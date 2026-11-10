@@ -2,8 +2,10 @@
 // may see and decide. Why: the phone is the owner away from the PC, but a weaker channel (design §5.5): its free text
 // only informs the Orchestrator (source {kind:'phone'}, never an ok), and its buttons decide only a simple Sì/No question
 // or a proposed Strategist plan that touches nothing reserved (shared/away.ts reservedText), and a permission one of the
-// user's own brain rules sent to them (ADR 0254: Sì allows it once). Other permissions, commands and anything else stay
-// for the PC («Serve il PC»). Every decision is checked again against the live chat when it arrives.
+// user's own brain rules sent to them (ADR 0254: Sì allows it once), and a command left by a chat (ADR 0259 §4: Sì runs
+// it on the PC, No lets it go) unless it touches production, a database, Azure or anything reserved (ask-text.ts
+// commandReserved). Other permissions and anything else stay for the PC («Serve il PC»). A question shows the same
+// parts as the PC's card (ask-text.ts questionLines). Every decision is checked again against the live chat when it arrives.
 // Built by the integrator in main's wiring with the ChatManager and the main Emitter; tests: test/unit/chats/phone.test.ts.
 import type { Answer, ChatItem, ChatSummary, EventChannel, EventMap, PendingRequest } from '../../shared/contract';
 import type { PhoneDecidable, PhoneDecideResult, PhonePort, PhoneOutcome } from '../../shared/contract/phone';
@@ -12,6 +14,7 @@ import { interviewNeedsPC } from '../../shared/strategy';
 import type { WorkRoleId } from '../../shared/roles';
 import { isYesNo, yesNoOf } from '../../shared/yes-no';
 import { errText, log } from '../log';
+import { briefFor, commandLines, commandReserved, commandShownWhole, questionLines } from './ask-text';
 import type { TurnEndInfo } from './manager-types';
 
 /** What the port needs from the ChatManager (structural, so tests pass a fake). */
@@ -25,6 +28,12 @@ export interface PhoneChats {
   answer(chatId: string, requestId: string, answer: Answer, by: 'pc' | 'phone'): Promise<void>;
   planDecide(chatId: string, decision: 'approve' | 'change', at: number, text: string | undefined, by: 'pc' | 'phone'): Promise<void>;
   onTurnEnded(fn: (info: TurnEndInfo) => void): () => void;
+}
+/** the commands the chats left (run/asks.ts): Sì runs one on the PC, No puts it aside; absent = commands stay on the PC */
+export interface PhoneCommands {
+  pending(): PendingRequest[];
+  run(chatId: string, requestId: string): void;
+  dismiss(chatId: string, requestId: string): void;
 }
 /** The main Emitter's tap (main/ipc.ts Emitter.tap). */
 export interface PhoneEvents { tap(fn: <K extends EventChannel>(channel: K, payload: EventMap[K]) => void): void }
@@ -59,7 +68,7 @@ export function phoneQuestionReserved(p: PendingRequest, readItems: () => ChatIt
   return p.type !== 'question' || !NATIVE_QUESTIONS.has(p.tool) || reservedText(words.join('\n'));
 }
 
-export function createPhonePort(chats: PhoneChats, events: PhoneEvents): PhonePort {
+export function createPhonePort(chats: PhoneChats, events: PhoneEvents, commands?: PhoneCommands): PhonePort {
   const labels = new Map<string, string>();
   let nextLabel = 0;
   const shown = new Map<string, PhoneDecidable>();
@@ -86,12 +95,22 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents): PhonePo
       return { chatId: c.id, ref: { kind: 'question', requestId: p.id }, role: role(c), neutralLabel: neutral(c),
         text: [`Permesso (regola «${p.heldBy.rule}»: ${p.heldBy.why})`, p.title, p.detail, 'Sì\nNo'].filter(Boolean).join('\n'), simple: true, reserved: false, orchestrator: true };
     }
+    if (p.type === 'command' && p.command) {
+      const text = commandLines(p, role(c)).join('\n');
+      return { chatId: c.id, ref: { kind: 'question', requestId: p.id }, role: role(c), neutralLabel: neutral(c), text,
+        // the short form only when it holds the whole command: a decision is never taken on a cut text
+        ...(p.command.code.includes('\n') ? {} : { short: `Eseguo sul PC? ${p.command.code}` }), recommended: 'yes', simple: !!commands && commandShownWhole(p), reserved: commandReserved(p), orchestrator: true };
+    }
     const simple = p.type === 'question' && NATIVE_QUESTIONS.has(p.tool) && qs.length === 1 && !!q && isYesNo(q);
     const reserved = phoneQuestionReserved(p, () => chats.items(p.chatId));
     const pick = simple ? q!.options.find(o => MARK.test(o.label)) : undefined;
     const recommended = pick ? yesNoOf(pick.label) ?? undefined : undefined;
+    // a question with its brief: the same parts as the PC's card (ADR 0259 §4)
+    let brief;
+    try { brief = simple ? briefFor(p, chats.items(p.chatId)) : undefined; } catch { brief = undefined; }
     // the engines put the question in the title and the detail too: each line once, so it fits the phone (#370)
-    const lines = [p.title, p.detail, ...qs.flatMap(q => [q.question, ...q.options.map(o => `${o.label}${o.description ? `: ${o.description}` : ''}`)])];
+    const lines = brief ? questionLines(q!.question, brief)
+      : [p.title, p.detail, ...qs.flatMap(q => [q.question, ...q.options.map(o => `${o.label}${o.description ? `: ${o.description}` : ''}`)])];
     const text = [...new Set(lines.flatMap(l => (l ?? '').split('\n')).map(l => l.trim()).filter(Boolean))].join('\n');
     return { chatId: c.id, ref: { kind: 'question', requestId: p.id }, role: role(c), neutralLabel: neutral(c),
       text, ...(simple ? { short: q!.question } : {}), ...(recommended ? { recommended } : {}), simple, reserved, orchestrator: true };
@@ -153,7 +172,7 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents): PhonePo
   function listDecidable(): PhoneDecidable[] {
     const list = chats.list().filter(c => !closed(c)), byId = new Map(list.map(c => [c.id, c]));
     const out: PhoneDecidable[] = [];
-    for (const p of chats.pending()) { const c = byId.get(p.chatId); if (c) out.push(ofRequest(p, c)); }
+    for (const p of [...chats.pending(), ...(commands?.pending() ?? [])]) { const c = byId.get(p.chatId); if (c) out.push(ofRequest(p, c)); }
     for (const c of list) { const d = ofPlan(c); if (d) out.push(d); }
     return out;
   }
@@ -161,7 +180,7 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents): PhonePo
   async function answerFromPhone(chatId: string, requestId: string, yes: boolean): Promise<PhoneDecideResult> {
     const k = qKey(chatId, requestId);
     const c = chatOf(chatId), p = chats.pending().find(x => x.chatId === chatId && x.id === requestId);
-    if (!p) return resolved.has(k) ? 'already' : 'gone';
+    if (!p) return commandFromPhone(chatId, requestId, yes);
     if (!c || closed(c)) return 'gone';
     // the same rules as the list, on the request as it is now
     const d = ofRequest(p, c), q = p.questions?.[0];
@@ -178,6 +197,24 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents): PhonePo
       // answered on the PC in the meantime (or the chat ended with it)
       if (!chats.pending().some(x => x.chatId === chatId && x.id === requestId)) return resolved.has(k) ? 'already' : 'gone';
       log.warn('phone', 'answer from the phone failed', { chat: chatId, cause: errText(e), hint: 'the question stays open on the PC' });
+      return 'gone';
+    }
+  }
+
+  /** Sì on a command: it runs on the PC (main's runner, the same checks as Esegui; production never: no second click
+   *  from here); No puts it aside. Checked again on the request as it is now. */
+  function commandFromPhone(chatId: string, requestId: string, yes: boolean): PhoneDecideResult {
+    const k = qKey(chatId, requestId), cmds = commands;
+    const c = chatOf(chatId), p = cmds?.pending().find(x => x.chatId === chatId && x.id === requestId);
+    if (!cmds || !p) return resolved.has(k) ? 'already' : 'gone';
+    if (!c || closed(c)) return 'gone';
+    if (commandReserved(p) || !commandShownWhole(p)) return 'gone';
+    try {
+      if (yes) cmds.run(chatId, requestId); else cmds.dismiss(chatId, requestId);
+      log.info('phone', yes ? 'command run from the phone' : 'command put aside from the phone', { chat: chatId, data: { request: requestId } });
+      return 'ok';
+    } catch (e) {
+      log.warn('phone', 'command from the phone failed', { chat: chatId, cause: errText(e), hint: 'the command stays on the PC with its Esegui' });
       return 'gone';
     }
   }

@@ -107,3 +107,52 @@ it('a question answered elsewhere first, or an old relay, takes no later «sì»
   expect(o.answered).toEqual([]);
   expect(w.told).toEqual([]);                                // answered on the PC: nothing was lost
 });
+
+// ADR 0259 §4: the same parts as the PC's card, and a command the chat left is relayed as «Eseguo sul PC?»
+const brief = (askId: string): ChatItem => ({ kind: 'artifact', id: 'b1', at: 1, askId, title: 'Brief', summary: '', ui: { component: 'brief', props: {
+  why: 'Il totale ordine sbaglia lo sconto.', done: ['Fix scritto'], todo: ['Apri il carrello di prova'], ifYes: 'faccio il commit', ifNo: 'lascio le modifiche', yesSteps: ['Commit', 'PR'] } } } as unknown as ChatItem);
+const cmd = (id: string, chatId: string, code: string, prod?: string): PendingRequest => ({
+  id, chatId, type: 'command', tool: 'Esegui', title: 'Comando da eseguire', detail: code, input: {}, at: 0,
+  command: { itemId: 'a1', code, lang: 'powershell', lead: 'Lancia i test:', ...(prod ? { prod } : {}) } } as PendingRequest);
+
+function withCommands(cmds: PendingRequest[], pending: PendingRequest[] = []) {
+  const ran: string[] = [], dismissed: string[] = [];
+  const chats = [chat({ id: 'orch', isOrchestrator: true, title: 'Orchestrator' }), chat({ id: 'dev', title: 'Dev' })];
+  const r = new QuestionRelay({ chats: () => chats, pending: () => pending, items: () => [], answer: async () => {},
+    commands: { pending: () => cmds, run: (_c, id) => { ran.push(id); cmds.splice(cmds.findIndex(x => x.id === id), 1); }, dismiss: (_c, id) => { dismissed.push(id); cmds.splice(cmds.findIndex(x => x.id === id), 1); } } });
+  return { r, ran, dismissed };
+}
+
+it('relays the brief\'s parts with the question', () => {
+  const w = world([yesNo('q1', 'dev', 'Faccio il commit del fix?')], [brief('q1')]);
+  const out = w.r.relay('orch', 'dev').write;
+  for (const part of ['Faccio il commit del fix?', 'Il totale ordine sbaglia lo sconto.', 'Tocca a te:', '1. Apri il carrello di prova', '• Fix scritto', 'Se Sì: Commit → PR', 'Se No: lascio le modifiche', 'Rispondi sì o no.']) expect(out).toContain(part);
+});
+
+it('a command is relayed first; «sì» runs it on the PC, «no» puts it aside', async () => {
+  const w = withCommands([cmd('c1', 'dev', 'npm test')], [yesNo('q1', 'dev')]);
+  const out = w.r.relay('orch', 'dev');
+  expect(out.question).toBe('Eseguo questo comando sul tuo PC?');
+  expect(out.write).toContain('npm test');
+  expect(await w.r.userSaid('orch', 'sì')).toBe(true);
+  expect(w.ran).toEqual(['c1']);
+  const n = withCommands([cmd('c2', 'dev', 'npm run lint')]);
+  n.r.relay('orch', 'dev');
+  expect(await n.r.userSaid('orch', 'no')).toBe(true);
+  expect(n.dismissed).toEqual(['c2']);
+});
+
+it('production, database and Azure commands are never relayed', () => {
+  for (const c of [cmd('c1', 'dev', 'npm run build', 'prod'), cmd('c2', 'dev', 'az webapp restart -n shop'), cmd('c3', 'dev', 'dotnet ef database update'), cmd('c4', 'dev', 'git push origin main')]) {
+    expect(() => withCommands([c]).r.relay('orch', 'dev')).toThrow(/stays on the PC/);
+  }
+});
+
+it('a reserved command does not block the chat\'s question; a «sì» from the phone never runs a command it could not show', async () => {
+  const w = withCommands([cmd('c1', 'dev', 'az group delete -n rg')], [yesNo('q1', 'dev')]);
+  expect(w.r.relay('orch', 'dev').question).toBe('Applico la migrazione al DB locale?');
+  const p = withCommands([cmd('c2', 'dev', 'npm test')]);
+  p.r.relay('orch', 'dev');
+  expect(await p.r.userSaid('orch', 'sì', 'phone')).toBe(false);
+  expect(p.ran).toEqual([]);
+});

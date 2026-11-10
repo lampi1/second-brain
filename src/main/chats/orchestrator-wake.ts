@@ -108,11 +108,15 @@ export function wakeMessage(events: WakeEvent[]): string {
 }
 
 /** How the user answers a worker's request away from the PC (#370): a single Sì/No question of an engine's own tool goes
- *  through relay_question (Remote Control, the phone's chat) and Telegram's Sì/No buttons; the rest waits for the PC. */
+ *  through relay_question (Remote Control, the phone's chat) and Telegram's Sì/No buttons, and so does a command a chat
+ *  left (ADR 0259 §4: «sì» runs it on the PC, never production, databases or Azure); the rest waits for the PC. */
 export function awayNote(p: Pick<PendingRequest, 'type' | 'tool' | 'questions' | 'chatId'>): string {
   const q = p.questions?.[0];
   if (isNativeQuestion(p) && p.questions?.length === 1 && q && isYesNo(q)) {
     return `Il pannello è nell’Orchestrator sul PC; Telegram, se collegato, mostra i pulsanti Sì/No quando la domanda non è riservata. Se l’utente è lontano dal PC (Remote Control, telefono), portagliela con relay_question {"chatId":"${p.chatId}"} e scrivi esattamente il testo che restituisce (una domanda alla volta, la più vecchia della chat); se relay_question la rifiuta, resta per il PC. Non rispondere tu.`;
+  }
+  if (p.type === 'command') {
+    return `Il comando aspetta il suo Esegui sul PC; Telegram, se collegato, mostra Sì/No quando non tocca produzione, database o Azure. Se l’utente è lontano dal PC (Remote Control, telefono), portaglielo con relay_question {"chatId":"${p.chatId}"} e scrivi esattamente il testo che restituisce: il suo «sì» lo lancia sul PC. Se relay_question lo rifiuta, resta per il PC. Non lanciarlo tu.`;
   }
   return 'Il pannello è nell’Orchestrator sul PC: questa richiesta si decide solo lì (o con i pulsanti Telegram, se li mostra). Resta in attesa, non chiedere una copia e non rispondere via testo agente.';
 }

@@ -145,7 +145,7 @@ const { setInterval, clearInterval } = timersFor('wiring/auto-close');
 import { attachAppTools, createLater, commandRunner, attachCommandAsks, attachOrchestratorWake, attachRunResults, attachArtifacts, createAppSource, createAgentCatalog } from './wiring-shared';
 import type { Ctx, Wired } from './wiring-types';
 import { buildLearn } from './wiring-builders';
-import { createPhonePort } from './chats/phone-port';
+import { createPhonePort, type PhoneCommands } from './chats/phone-port';
 export { toMcp, attachAppTools, createLater, commandRunner, attachCommandAsks, attachOrchestratorWake, attachRunResults, attachArtifacts, createAppSource, createAgentCatalog } from './wiring-shared';
 export type { Ctx, Wired } from './wiring-types';
 
@@ -691,9 +691,22 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools([wakeLater.tool()]);
   // single entry (ADR 0239): a work chat's Sì/No question goes to the user through the Orchestrator's conversation, and
   // the user's own «sì» / «no» there (PC, phone, Remote Control) answers it
+  // a command a chat left, decided away from the PC (ADR 0259 §4: Telegram's Sì, a relayed «sì»): the same run as Esegui
+  // (runner checks: a block of that message, never production without the PC's second click)
+  const awayCommands: PhoneCommands = {
+    pending: () => asks.pending(),
+    run: (chatId, requestId) => {
+      const c = asks.pending().find(p => p.chatId === chatId && p.id === requestId)?.command;
+      if (!c) throw new Error('Questa richiesta non è più aperta.');
+      const run = runner.start({ chatId, itemId: c.itemId, code: c.code, ...(c.lang ? { lang: c.lang } : {}) });
+      asks.ran(run.chatId, run.itemId, run.code, run.state !== 'running');
+    },
+    dismiss: (chatId, requestId) => asks.dismiss(chatId, requestId),
+  };
   const relay = new QuestionRelay({ chats: () => manager.list(), pending: () => manager.pending(), items: id => manager.items(id),
     answer: (chatId, requestId, a, by) => manager.answer(chatId, requestId, a, by),
-    notify: (orchestratorId, text) => { void manager.send(orchestratorId, text, undefined, false, 'App', false, { kind: 'app' }).catch(() => {}); } });
+    notify: (orchestratorId, text) => { void manager.send(orchestratorId, text, undefined, false, 'App', false, { kind: 'app' }).catch(() => {}); },
+    commands: awayCommands });
   addChatTools([relay.tool()]);
   ctx.emitter.tap((channel, payload) => {
     if (channel !== 'chat:item') return;
@@ -864,7 +877,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     morning,
     mcpServers,
     judging: { estimate: now => judgingEstimate(manager.runs.list(), now, { shares: judgeShares(), capUsd: Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD, lastBatch: judgeSampler.lastBatch() }) },
-    phonePort: createPhonePort(manager, ctx.emitter),
+    phonePort: createPhonePort(manager, ctx.emitter, awayCommands),
     worktreePool,
     chats, browser, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, modelLists, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, userCorrections,
     updateChats: {

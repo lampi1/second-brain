@@ -49,6 +49,24 @@ it («Sì, tutto»), the Esegui commands too, from Telegram and Remote Control (
   brief's `todo` («Tocca a te», shown above the evidence). The gate sends back vague questions («Fatto?», «Ok?»,
   «Procedo?»: `vagueQuestion` in `shared/yes-no.ts`).
 
+### 4. Telegram and Remote Control get the same card
+- `main/chats/ask-text.ts` writes a question away from the PC with the card's parts, one per line: the question, the
+  context sentence, before → after, «Tocca a te» steps, what was done, «Se Sì» / «Se No» with their steps. Telegram
+  (`phone-port.ts`) sends it with the Sì / No buttons (the question alone when the whole text does not fit, as before);
+  `relay_question` (Remote Control and the phone's chat, through the Orchestrator) hands the same text to write.
+- A command a chat left is decided away too (the owner, 2026-11-10: «Sì, tranne i riservati»): «Eseguo questo comando
+  sul tuo PC?» with the command whole. Telegram's Sì or a relayed «sì» runs it on the PC through the same runner as
+  Esegui (a block of that message only); No puts it aside. A relayed chat's command goes before its question.
+- Telegram's outgoing filter (`phone/filter.ts`) turns most command lines and paths into «[comando: eseguilo dal
+  PC]»; a command it would not show whole gets no buttons, and a relayed «sì» typed in the phone's chat does not run it
+  (`commandShownWhole`): the user never says sì to a command they cannot read. Remote Control shows it whole. The
+  filter is unchanged (relaxing it is the owner's call).
+- Reserved commands stay on the PC: production (the runner wants the PC's second click), reserved words
+  (`shared/away.ts`), databases and migrations, Azure and other cloud or cluster tools, bulk deletes, also with a path before the tool
+  (`commandReserved`). A reserved command does not block the chat's other relays. Checked again when the answer arrives.
+
 ## Consequences
 - A card can show a turn a few seconds old; the notice says so and one click updates it.
+- A command can now run while the user is away from the PC, by their own «sì»; the reserved list decides which. A
+  command that is risky but not on that list (a script that deletes, for example) runs if the user says sì from the phone.
 - A plain yes/no question can be answered by a run's result; the note in the answer says so, and the chat can ask again.

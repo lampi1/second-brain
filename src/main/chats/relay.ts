@@ -6,19 +6,26 @@
 // the app, never from the Orchestrator's: an agent's mail or the app's news never count. Any other message ends the
 // relay (a later bare «no» may answer something else). Only simple yes/no questions of the engines' own question
 // tools, never one touching production, deploys, pushes, secrets or messages to people (phone-port.ts
-// phoneQuestionReserved, checked again when the answer comes: those stay for the PC), never a permission or a command
-// (the user's click). One relay per Orchestrator at a time, for RELAY_MS; a question answered elsewhere first drops
+// phoneQuestionReserved, checked again when the answer comes: those stay for the PC), never a permission. A command a
+// chat left is relayed as «Eseguo sul PC?» (ADR 0259 §4): «sì» runs it on the PC, «no» puts it aside; production,
+// databases, Azure and reserved words stay for the PC (ask-text.ts commandReserved). The text carries the same parts
+// as the PC's card (ask-text.ts questionLines). One relay per Orchestrator at a time, for RELAY_MS; a question answered elsewhere first drops
 // it. A «sì»/«no» that cannot be delivered (the relay expired, the question changed, the delivery failed) is told to
 // the Orchestrator, never lost in silence. Used by wiring.ts (the tool and the emitter tap); pinned by
 // test/unit/chats/relay.test.ts.
 import type { Answer, ChatItem, ChatSummary, PendingRequest } from '../../shared/contract';
 import { isYesNo, yesNoOf } from '../../shared/yes-no';
-import { phoneQuestionReserved } from './phone-port';
+import { phoneQuestionReserved, type PhoneCommands } from './phone-port';
+import { briefFor, commandLines, commandReserved, commandShownWhole, questionLines } from './ask-text';
 import { errText, log } from '../log';
 import { callerOf } from '../mcp/caller';
 import type { McpTool } from '../mcp/server';
 
 export const RELAY_MS = 30 * 60_000;
+
+/** what the Orchestrator writes to the user, word for word: the card's parts, one per line, then «Rispondi sì o no» */
+const writeText = (title: string, lines: readonly string[]): string =>
+  `Write to the user, exactly${lines.length > 1 ? ', keeping the line breaks' : ''}: «${title} chiede: ${lines.join('\n')}${lines.length > 1 ? '\n' : ' '}Rispondi sì o no.» and ask nothing else in that message. Their next message, if it is only «sì» or «no», answers it: the app delivers it, you do nothing more; any other reply ends the relay (relay again if needed). If it cannot be delivered the app tells you. Never answer it yourself.`;
 
 export interface RelayDeps {
   chats(): ChatSummary[];
@@ -28,10 +35,12 @@ export interface RelayDeps {
   answer(chatId: string, requestId: string, answer: Answer, by: 'pc' | 'phone'): Promise<void>;
   /** an app line to the Orchestrator (its news path): a relayed answer that did not land */
   notify?(orchestratorId: string, text: string): void;
+  /** the commands the chats left (run/asks.ts); absent = a command is never relayed */
+  commands?: PhoneCommands;
   now?(): number;
 }
 
-interface Relay { orchestratorId: string; chatId: string; requestId: string; question: string; at: number }
+interface Relay { orchestratorId: string; chatId: string; requestId: string; question: string; at: number; command?: boolean }
 
 export class QuestionRelay {
   private relays = new Map<string, Relay>();
@@ -45,10 +54,16 @@ export class QuestionRelay {
     const chats = this.d.chats(), o = chats.find(c => c.id === orchestratorId), c = chats.find(x => x.id === chatId);
     if (!o?.isOrchestrator) throw new Error('Only the Orchestrator relays questions.');
     if (!c || c.isOrchestrator || c.closedAt) throw new Error('chatId: an open work chat (app_pending).');
-    const asks = this.d.pending().filter(p => p.chatId === chatId).sort((a, b) => a.at - b.at);
+    const cmds = (this.d.commands?.pending() ?? []).filter(p => p.chatId === chatId);
+    const asks = [...cmds, ...this.d.pending().filter(p => p.chatId === chatId)].sort((a, b) => a.at - b.at);
     if (!asks.length) throw new Error('That chat waits for no answer now (app_pending).');
+    // its command first: the PC's window shows it before the chat's question too (ADR 0259)
+    // a reserved one stays on the PC and does not block the rest
+    const cmd = cmds.find(x => !commandReserved(x));
+    if (cmd) return this.relayCommand(orchestratorId, c.title, cmd);
+    if (cmds.length && !asks.some(x => x.type === 'question')) this.relayCommand(orchestratorId, c.title, cmds[0]!); // throws: reserved
     const p = asks.find(x => x.type === 'question');
-    if (!p) throw new Error('Only a question is relayed: a permission or a command is the user\'s click on the PC (or Esegui). Tell the user it waits there.');
+    if (!p) throw new Error('Only a question or a command is relayed: a permission is the user\'s click on the PC. Tell the user it waits there.');
     const q = p.questions?.[0];
     if (p.questions?.length !== 1 || !q || !isYesNo(q)) throw new Error('Only a single Sì/No question is relayed; this one stays in its panel on the PC.');
     const armed = this.relays.get(orchestratorId);
@@ -57,11 +72,56 @@ export class QuestionRelay {
       throw new Error(`The user has not answered the question of «${other}» yet: one relayed question at a time. Relay this one after that answer.`);
     }
     if (phoneQuestionReserved(p, () => this.d.items(chatId))) throw new Error('This question touches something reserved to the user (production, a deploy, a push, a secret, a message to people) or is not the engine\'s own question: it stays in its panel on the PC. Tell the user it waits there.');
+    this.armed(orchestratorId);
     this.relays.set(orchestratorId, { orchestratorId, chatId, requestId: p.id, question: q.question, at: this.now() });
     this.ended.delete(orchestratorId);
     log.info('chats', 'question relayed through the Orchestrator', { chat: chatId, data: { request: p.id } });
-    return { question: q.question, chat: c.title,
-      write: `Write to the user, exactly: «${c.title} chiede: ${q.question} Rispondi sì o no.» and ask nothing else in that message. Their next message, if it is only «sì» or «no», answers it: the app delivers it, you do nothing more; any other reply ends the relay (relay again if needed). If it cannot be delivered the app tells you. Never answer it yourself.` };
+    let brief;
+    try { brief = briefFor(p, this.d.items(chatId)); } catch { brief = undefined; }
+    return { question: q.question, chat: c.title, write: writeText(c.title, questionLines(q.question, brief)) };
+  }
+
+  private armed(orchestratorId: string): void {
+    const armed = this.relays.get(orchestratorId);
+    if (armed && armed.command && this.now() - armed.at <= RELAY_MS && this.d.commands?.pending().some(x => x.chatId === armed.chatId && x.id === armed.requestId)) {
+      const other = this.d.chats().find(x => x.id === armed.chatId)?.title ?? armed.chatId;
+      throw new Error(`The user has not answered the command of «${other}» yet: one relayed question at a time. Relay this one after that answer.`);
+    }
+  }
+
+  private relayCommand(orchestratorId: string, title: string, p: PendingRequest): { question: string; chat: string; write: string } {
+    if (commandReserved(p)) throw new Error('This command touches production, a database, Azure or something reserved to the user: it stays on the PC with its Esegui. Tell the user it waits there.');
+    const armed = this.relays.get(orchestratorId);
+    if (armed && armed.requestId !== p.id && this.now() - armed.at <= RELAY_MS
+      && [...this.d.pending(), ...(this.d.commands?.pending() ?? [])].some(x => x.chatId === armed.chatId && x.id === armed.requestId)) {
+      const other = this.d.chats().find(x => x.id === armed.chatId)?.title ?? armed.chatId;
+      throw new Error(`The user has not answered the question of «${other}» yet: one relayed question at a time. Relay this one after that answer.`);
+    }
+    const question = 'Eseguo questo comando sul tuo PC?';
+    this.relays.set(orchestratorId, { orchestratorId, chatId: p.chatId, requestId: p.id, question, at: this.now(), command: true });
+    this.ended.delete(orchestratorId);
+    log.info('chats', 'command relayed through the Orchestrator', { chat: p.chatId, data: { request: p.id } });
+    return { question, chat: title, write: writeText(title, commandLines(p, title)) };
+  }
+
+  /** «sì» / «no» on a relayed command: run it on the PC or put it aside (checked again on the command as it is now) */
+  private commandSaid(r: Relay, said: 'yes' | 'no' | null, orchestratorId: string, via?: 'phone'): boolean {
+    const cmds = this.d.commands, p = cmds?.pending().find(x => x.chatId === r.chatId && x.id === r.requestId);
+    if (!cmds || !p) return false;                       // run or put aside elsewhere first
+    if (!said) { this.ended.set(orchestratorId, r); return false; }
+    const why = this.now() - r.at > RELAY_MS ? 'l\'inoltro era scaduto (30 min)' : commandReserved(p) ? 'il comando ora tocca qualcosa riservato all\'utente'
+      // the phone's chat shows a command as «[comando: eseguilo dal PC]» (phone/filter.ts): a «sì» from there never runs what it did not show
+      : via === 'phone' && said === 'yes' && !commandShownWhole(p) ? 'dal telefono il comando non si vede intero: si lancia dal PC o da Controllo remoto' : '';
+    if (why) { this.lost(r, said, why); return false; }
+    try {
+      if (said === 'yes') cmds.run(r.chatId, r.requestId); else cmds.dismiss(r.chatId, r.requestId);
+      log.info('chats', 'relayed command decided by the user', { chat: r.chatId, data: { request: r.requestId, answer: said } });
+      return true;
+    } catch (e) {
+      log.warn('chats', 'relayed command not run', { chat: r.chatId, cause: errText(e), hint: 'the command stays on the PC with its Esegui' });
+      this.lost(r, said, `non è partito (${errText(e)})`);
+      return false;
+    }
   }
 
   /** A user's own message in the Orchestrator chat (wiring.ts taps chat:item). True = it answered a relayed question. */
@@ -72,12 +132,13 @@ export class QuestionRelay {
       // a «sì»/«no» after a relay another message ended (it may have crossed the question): never lost in silence
       const e = this.ended.get(orchestratorId);
       this.ended.delete(orchestratorId);
-      if (e && said && this.now() - e.at <= RELAY_MS && this.d.pending().some(x => x.chatId === e.chatId && x.id === e.requestId)) {
+      if (e && said && this.now() - e.at <= RELAY_MS && [...this.d.pending(), ...(this.d.commands?.pending() ?? [])].some(x => x.chatId === e.chatId && x.id === e.requestId)) {
         this.lost(e, said, 'era arrivato prima un altro messaggio, che ha chiuso l\'inoltro');
       }
       return false;
     }
     this.relays.delete(orchestratorId);                  // the next own message: an answer or the end of the relay
+    if (r.command) return this.commandSaid(r, said, orchestratorId, via);
     const p = this.d.pending().find(x => x.chatId === r.chatId && x.id === r.requestId);
     if (!p) return false;                                // answered elsewhere first: nothing waits for this word
     if (!said) { this.ended.set(orchestratorId, r); return false; }   // something else: the Orchestrator reads it
@@ -110,7 +171,7 @@ export class QuestionRelay {
   tool(): McpTool {
     return {
       name: 'relay_question',
-      description: 'Bring a work chat\'s open Sì/No question to the user through THIS conversation (Remote Control, phone, PC): the app returns its exact text; write it to the user as told. Their next message that is only «sì» or «no» answers it (the app delivers it). Permissions, commands and questions about production, deploys, pushes, secrets or messages to people are refused: they stay for the user\'s click on the PC.',
+      description: 'Bring a work chat\'s open Sì/No question to the user through THIS conversation (Remote Control, phone, PC): the app returns its exact text; write it to the user as told. Their next message that is only «sì» or «no» answers it (the app delivers it). A command the chat left is relayed first, as «Eseguo sul PC?»: «sì» runs it on the PC. Permissions, and questions or commands about production, databases, Azure, deploys, pushes, secrets or messages to people are refused: they stay for the user\'s click on the PC.',
       inputSchema: { type: 'object', required: ['chatId'], additionalProperties: false, properties: { chatId: { type: 'string', description: 'the work chat that waits (app_pending)' } } },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
       run: (a, ctx) => JSON.stringify(this.relay(callerOf(ctx.params), String(a.chatId ?? ''))),

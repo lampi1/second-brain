@@ -295,8 +295,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Un tuo messaggio che inizia con «[nuova chat]» gli chiede di aprire una chat di lavoro nuova.',
         'A message of yours starting with "[nuova chat]" asks it to open a new work chat.'),
       // src/main/chats/orchestrator-delivery.ts
-      b('Errori subito; risultati, richieste originali e lavori approvati fermi da 15 min raggruppati (30 s); semplici avvii e avanzamenti silenziosi. Le decisioni restano nei pannelli originali, mai nelle risposte di un agente; fuori dal PC (Controllo remoto, telefono) ti porta lui la domanda Sì/No di un lavoro e rispondi «sì» o «no».',
-        'Errors arrive immediately; results, original requests and approved work stalled for 15 min are grouped (30 s); plain starts and progress stay quiet. Decisions remain in original panels, never agent replies; away from the PC (Remote Control, phone) it brings you a job\'s yes/no question and you answer «sì» or «no».'),
+      b('Errori subito; risultati, richieste originali e lavori approvati fermi da 15 min raggruppati (30 s); semplici avvii e avanzamenti silenziosi. Le decisioni restano nei pannelli originali, mai nelle risposte di un agente; fuori dal PC (Controllo remoto, telefono) ti porta lui la domanda Sì/No di un lavoro, o il comando che ha lasciato, e rispondi «sì» o «no» (sì su un comando lo lancia sul PC, mai produzione, database o Azure).',
+        'Errors arrive immediately; results, original requests and approved work stalled for 15 min are grouped (30 s); plain starts and progress stay quiet. Decisions remain in original panels, never agent replies; away from the PC (Remote Control, phone) it brings you a job\'s yes/no question, or the command it left, and you answer «sì» or «no» (sì on a command runs it on the PC, never production, databases or Azure).'),
       // src/main/chats/held-news.ts, src/renderer/components/HeldNews.tsx (#88)
       b('Quello che l’app gli tiene da parte lo vedi sopra il suo campo: «N novità in attesa»; un clic elenca chat, tipo, da quando e perché aspetta. Guardarlo non gli costa un turno.',
         'What the app holds back for it shows above its input: "N novità in attesa"; a click lists chat, kind, since when and why it waits. Looking costs it no turn.'),
@@ -1653,8 +1653,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('«Associa telefono» mostra un codice di 6 cifre che scade (poi «Nuovo codice» ne dà un altro): lo mandi al bot con /start e da quel momento risponde solo al tuo account Telegram. I tentativi sbagliati di altri account restano tra i messaggi scartati.',
         '"Pair phone" shows a 6-digit code that expires ("New code" then gives another): you send it to the bot with /start, and from then on it answers only your Telegram account. Wrong tries from other accounts show among the dropped messages.'),
       // src/main/ipc-handlers/phone.ts
-      b('Dal telefono rispondi solo alle domande Sì/No semplici e ai piani dello Strategist, con i pulsanti. Permessi, comandi, produzione e messaggi a persone restano sul PC; un testo scritto dal telefono non approva mai niente.',
-        'From the phone you answer only simple yes/no questions and the Strategist’s plans, with the buttons. Permissions, commands, production and messages to people stay on the PC; text typed on the phone never approves anything.'),
+      b('Dal telefono rispondi con i pulsanti alle domande Sì/No semplici, che arrivano con le stesse parti della scheda sul PC (contesto, cosa tocca a te, cosa succede con Sì e con No), e ai piani dello Strategist. Sì su un comando lo lancia sul PC e l’esito va alla chat, solo se Telegram può mostrarlo intero (il filtro nasconde quasi tutti i comandi: allora resta per il PC o per Controllo remoto). Permessi, produzione, database, Azure e messaggi a persone restano sul PC; un testo scritto dal telefono non approva mai niente.',
+        'From the phone you answer with the buttons simple yes/no questions, which arrive with the same parts as the card on the PC (context, what is up to you, what happens with Yes and with No), and the Strategist’s plans. Yes on a command runs it on the PC and the result goes to the chat, only if Telegram can show it whole (the filter hides most commands: then it stays for the PC or Remote Control). Permissions, production, databases, Azure and messages to people stay on the PC; text typed on the phone never approves anything.'),
       // src/renderer/lib/phone-voice.ts
       b('Un vocale dal telefono viene trascritto sul tuo PC come la voce dell’app, senza creare una registrazione.',
         'A voice note from the phone is transcribed on your PC like the app’s voice, without creating a recording.'),
@@ -1676,7 +1676,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
     ],
     anchors: {
       0: ['src/renderer/components/PhoneSettings.tsx', 'src/main/phone/token-store.ts'],
-      2: ['src/main/ipc-handlers/phone.ts'],
+      2: ['src/main/ipc-handlers/phone.ts', 'src/main/chats/ask-text.ts'],
       3: ['src/renderer/lib/phone-voice.ts'],
       4: ['src/renderer/lib/phone.ts#watchFocus'],
     },
