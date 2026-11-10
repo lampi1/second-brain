@@ -7,6 +7,11 @@
 // (RequestPanel.tsx for agents' questions, PlanApproval.tsx, WorkApproval.tsx). In voice mode the card is
 // read aloud and a spoken answer counts as the click (lib/voice.ts useVoiceQuestion, ADR 0152). BriefEvidence draws
 // a brief; it is also GenUi.tsx's view of one shown as a plain chat card.
+// «Bivio» (ADR 0259, the owner 2026-11-10: «le domande sono una parte core dell'app»): the short question, then one
+// plain sentence of context (`why`, else the agent's own lead), a before → after when there is one (`change`), the
+// evidence with what was done as numbered steps (no green ticks), and the two answers as roads: «Se Sì» / «Se No», what
+// happens next in numbered steps (`yesSteps` / `noSteps`, else ifYes / ifNo), the button at the bottom of each road
+// saying the action («Sì, faccio il commit»). The answers block is pinned to the bottom of the questions window.
 import { forwardRef, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { UiBrief } from '@shared/contract';
 import { t } from '../i18n';
@@ -29,6 +34,12 @@ export interface DecisionProps {
   /** the evidence block (brief, plan steps, a proposal's text…) */
   children?: ReactNode;
   ifYes?: string; ifNo?: string;
+  /** «Bivio» (ADR 0259): one plain sentence of context under the question (in place of `lead`) */
+  why?: string;
+  /** what happens next on each road, in order (else ifYes / ifNo as one sentence) */
+  yesSteps?: readonly string[]; noSteps?: readonly string[];
+  /** a measurable before → after, large above the evidence */
+  change?: { what?: string; before: string; after: string };
   yes: DecisionChoice; no: DecisionChoice;
   /** the free-text answer; absent = no box */
   write?: { onSend: (text: string, viaKey?: boolean) => void; onClose?: () => void; disabled?: boolean; hint?: string; initial?: string; onDraft?: (text: string) => void; testids?: { open?: string; input?: string; send?: string } };
@@ -73,7 +84,7 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
   // voice mode (ADR 0152): the card is read aloud and a spoken answer is the click (sì / no / «non voglio rispondere»,
   // anything longer is the written answer)
   const auto = useRef(`dc-${++cards}`).current;
-  useVoiceQuestion(busy ? null : p.voiceId ?? auto, { question: [p.lead, p.question].filter(Boolean).join(' '), done: p.speakDone, ifYes: p.ifYes, ifNo: p.ifNo, from: p.speakFrom }, a => {
+  useVoiceQuestion(busy ? null : p.voiceId ?? auto, { question: [p.question, p.why ?? p.lead].filter(Boolean).join(' '), done: p.speakDone, ifYes: p.ifYes, ifNo: p.ifNo, from: p.speakFrom }, a => {
     if (a.kind === 'yes') choose(p.yes);
     else if (a.kind === 'no') choose(p.no);
     else if (a.kind === 'skip') { if (p.skip && !busy) p.skip.onChoose(); else p.onLater?.(); }
@@ -97,34 +108,60 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
     if (done) { e.preventDefault(); e.stopPropagation(); }
   };
 
-  const answer = (c: DecisionChoice, kind: 'yes' | 'no', key: string) => (
+  const answer = (c: DecisionChoice, kind: 'yes' | 'no', key: string, inRoad = false) => (
     <button type="button" className={`dc-answer ${kind} ${c.recommended ? 'rec' : ''}`} onClick={() => choose(c)} disabled={busy || c.disabled} data-testid={c.testid}>
       <span className="dc-answer-icon" aria-hidden="true">{kind === 'yes' ? <IconCheck size={16} /> : <IconX size={16} />}</span>
       <strong>{c.label ?? t(kind === 'yes' ? 'genui.decision.yes' : 'genui.decision.no')}</strong>
-      {c.recommended && <span className="dc-rec">{t('tools.genui.recommended')}</span>}
+      {c.recommended && !inRoad && <span className="dc-rec">{t('tools.genui.recommended')}</span>}
       <span className="dc-key" aria-hidden="true" data-key={key} />
     </button>
   );
+
+  // «Bivio» (ADR 0259): each answer is a road, what happens next on it above its button
+  const road = (c: DecisionChoice, kind: 'yes' | 'no', key: string, fx?: string, steps?: readonly string[]) => (
+    <div className={`dc-road ${kind} ${c.recommended ? 'rec' : ''}`} data-testid={`${p.testBase}-road-${kind}`}>
+      <div className="dc-road-h">
+        {kind === 'yes' ? <IconCheck size={12} /> : <IconX size={12} />}
+        <span>{t(kind === 'yes' ? 'genui.decision.ifYes' : 'genui.decision.ifNo')}</span>
+        {c.recommended && <span className="dc-rec">{t('tools.genui.recommended')}</span>}
+      </div>
+      {steps?.length
+        ? <ol className="dc-steps">{steps.map((s, i) => <li key={i}><span className="dc-step-n" aria-hidden="true">{i + 1}</span><span>{s}</span></li>)}</ol>
+        : fx ? <p className="dc-road-fx">{fx}</p> : null}
+      {answer(c, kind, key, true)}
+    </div>
+  );
+  const roads = !!(p.ifYes || p.ifNo || p.yesSteps?.length || p.noSteps?.length);
+  const context = p.why ?? p.lead;
 
   return (
     <div ref={ref} tabIndex={0} role="group" onKeyDown={onKey} aria-busy={busy} aria-label={p.question}
       className={`dc ${p.compact ? 'compact' : ''} ${busy ? 'sent' : ''} ${p.className ?? ''}`} data-testid={p.testBase} data-decision="" {...p.rootProps}>
       <div className="dc-head">{p.head}</div>
-      {p.lead && <p className="dc-lead" data-testid={`${p.testBase}-ctx-lead`}>{p.lead}</p>}
       <h2 className="dc-q" data-testid={`${p.testBase}-q`}>{p.question}</h2>
-      {p.children && <div className="dc-evidence" data-testid={`${p.testBase}-evidence`}>{p.children}</div>}
-      {(p.ifYes || p.ifNo) && (
-        <dl className="dc-effects" data-testid={`${p.testBase}-effects`}>
-          {p.ifYes && <div className="dc-effect yes"><dt><IconCheck size={12} />{t('genui.decision.ifYes')}</dt><dd>{p.ifYes}</dd></div>}
-          {p.ifNo && <div className="dc-effect no"><dt><IconX size={12} />{t('genui.decision.ifNo')}</dt><dd>{p.ifNo}</dd></div>}
-        </dl>
+      {context && <p className="dc-ctx" data-testid={`${p.testBase}-ctx-lead`}>{context}</p>}
+      {p.change && (
+        <div className="dc-change" data-testid={`${p.testBase}-change`}>
+          {p.change.what && <span className="dc-change-what">{p.change.what}</span>}
+          <span className="dc-change-v before"><small>{t('genui.decision.before')}</small><s>{p.change.before}</s></span>
+          <span className="dc-change-arrow" aria-hidden="true">→</span>
+          <span className="dc-change-v after"><small>{t('genui.decision.after')}</small><b>{p.change.after}</b></span>
+        </div>
       )}
+      {p.children && <div className="dc-evidence" data-testid={`${p.testBase}-evidence`}>{p.children}</div>}
       {/* the answers stay in sight at the bottom of the questions window while the evidence above scrolls */}
       <div className="dc-actions" data-testid={`${p.testBase}-actions`}>
-      <div className="dc-answers">
-        {answer(p.yes, 'yes', t('genui.decision.yesKey'))}
-        {answer(p.no, 'no', t('genui.decision.noKey'))}
-      </div>
+      {roads ? (
+        <div className="dc-fork" data-testid={`${p.testBase}-effects`}>
+          {road(p.yes, 'yes', t('genui.decision.yesKey'), p.ifYes, p.yesSteps)}
+          {road(p.no, 'no', t('genui.decision.noKey'), p.ifNo, p.noSteps)}
+        </div>
+      ) : (
+        <div className="dc-answers">
+          {answer(p.yes, 'yes', t('genui.decision.yesKey'))}
+          {answer(p.no, 'no', t('genui.decision.noKey'))}
+        </div>
+      )}
       {writing && p.write ? (
         <div className="dc-write" data-testid={`${p.testBase}-other-box`}>
           <textarea ref={box} className="dc-write-input" autoFocus rows={p.compact ? 2 : 3} maxLength={2000} value={text} disabled={busy}
@@ -175,7 +212,7 @@ export function BriefEvidence({ brief, testBase, onFile, size = 'l' }: { brief: 
         {!!brief.images?.length && <AskImages images={brief.images.map(i => ({ path: i.path, caption: i.caption ?? i.path.split(/[\\/]/).pop() ?? '' }))} testBase={testBase} size={size} />}
         <div className="dc-brief-done">
           <div className="dc-brief-k">{t('genui.decision.done')}</div>
-          <ul className="dc-done">{brief.done.map((d, i) => <li key={i}><IconCheck size={13} /><span>{d}</span></li>)}</ul>
+          <ol className="dc-done">{brief.done.map((d, i) => <li key={i}><span className="dc-step-n" aria-hidden="true">{i + 1}</span><span>{d}</span></li>)}</ol>
           {!!brief.checks?.length && (
             <div className="dc-checks" data-testid={`${testBase}-checks`}>
               {brief.checks.map((c, i) => (

@@ -20,5 +20,19 @@ it («Sì, tutto»), the Esegui commands too, from Telegram and Remote Control (
 - The answers (Sì / No, write, skip) are one block (`.dc-act`) pinned to the bottom of the window's scrolling body, so a
   long context never pushes them out of sight.
 
+### 2. «Bivio»: a short question, one sentence of context, two roads
+- The brief (`UiBrief`, `shared/genui.ts`) gains optional fields: `why` (one plain sentence of context), `yesLabel` /
+  `noLabel` (what the buttons say: «Sì, faccio il commit»), `yesSteps` / `noSteps` (what happens next on each road,
+  up to 4 / 3 steps) and `change {what, before, after}` (a measurable result, shown large as Prima → Dopo).
+- `DecisionCard.tsx` draws: the question, the context sentence under it, the before → after, the evidence (what was
+  done as numbered steps, no green ticks; checks, screenshots, files), then the two roads «Se Sì» / «Se No», each with
+  its numbered next steps (or the ifYes / ifNo sentence) and its button. Plans and work approvals get the same roads.
+- A question without a brief shows the agent's own context sentence and keeps the chat's text folded (one click), never
+  open as a wall of text.
+- The rule every chat reads (`QUESTION_RULE`) asks for these fields, a question of at most 120 characters with no code
+  or paths, and never a question on whether the user ran a command. The engines' gate sends back a question longer than
+  `MAX_QUESTION_CHARS` (160) or with a code fence, like a non yes/no one (same retry limit: after two it is shown as
+  it is).
+
 ## Consequences
 - A card can show a turn a few seconds old; the notice says so and one click updates it.

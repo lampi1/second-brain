@@ -236,8 +236,15 @@ export interface UiDiffList { groups: { area: string; files: { path: string; why
 export interface UiBarChart { unit?: string; bars: { label: string; value: number; note?: string }[] }
 /** a question's brief (ADR 0150): what was done, its evidence and what Sì / No do, shown inside the question card so the
  *  question never leans on the chat text before it (only with target next-ask) */
+/** A question's card (ADR 0150, «Bivio» ADR 0259): why = one sentence of context; yesLabel / noLabel = what the buttons
+ *  say («Sì, faccio il commit»); yesSteps / noSteps = what happens next on each road, in order; change = a measurable
+ *  before → after (a value, a count) shown large above the roads. */
 export interface UiBrief {
   done: string[]; ifYes: string; ifNo: string;
+  why?: string;
+  yesLabel?: string; noLabel?: string;
+  yesSteps?: string[]; noSteps?: string[];
+  change?: { what?: string; before: string; after: string };
   checks?: { label: string; status: UiStatus; detail?: string }[];
   images?: { path: string; caption?: string }[];
   files?: { path: string; why?: string; added?: number; removed?: number; href?: string }[];

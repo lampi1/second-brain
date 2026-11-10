@@ -45,7 +45,8 @@ test('the plan to approve opens in the questions window with its steps; approvin
     await expect(card).toContainText('Piano da approvare');
     await expect(card).toContainText('Approvi questo piano?');
     await expect(page.getByTestId('qwin-plan-count')).toHaveText('4 step');
-    await expect(page.getByTestId('qwin-plan-approve')).toHaveText('SìConsigliata');
+    await expect(page.getByTestId('qwin-plan-approve')).toHaveText('Sì');
+    await expect(page.getByTestId('qwin-plan-road-yes')).toContainText('Consigliata'); // «Bivio»: the road says it (ADR 0259)
     await expect(page.getByTestId('qwin-plan-reject')).toHaveText('No');
     await expect(page.getByTestId('qwin-plan-effects')).toContainText('Se Sì');
     await shot(page, 'strategist-plan-popup-compact-dark');

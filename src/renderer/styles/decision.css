@@ -2,7 +2,8 @@
    line, the question large, the evidence in a soft panel (what was done as ✓ lines, screenshots, checks as chips,
    files), what Sì / No do, then Sì / No side by side (neutral surface, hue only on the icon, the recommended one with
    a thin colored border), «Scrivi una risposta…» dashed and «Non voglio rispondere» as a quiet link. Smaller in the
-   lane, a chat tile and the Strategist's strip (`compact`). */
+   lane, a chat tile and the Strategist's strip (`compact`). «Bivio» (ADR 0259): the context sentence under the
+   question, a before → after, numbered steps instead of ✓ lines, and Sì / No as two roads with their next steps. */
 .dc { display: flex; flex-direction: column; gap: 12px; outline: none; container-type: inline-size; }
 .dc.sent { opacity: .6; pointer-events: none; }
 .dc-head { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--fs-s, 12px); color: var(--text-2); }
@@ -32,8 +33,6 @@
 .dc-brief-main .ask-imgs-row:empty { display: none; }
 .dc-brief-k { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-3); }
 .dc-done { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.dc-done li { display: flex; gap: 8px; align-items: flex-start; line-height: 1.4; color: var(--text); }
-.dc-done li svg { flex: none; margin-top: 3px; color: var(--green); stroke-width: 2.6; }
 .dc-checks { display: flex; flex-wrap: wrap; gap: 6px; }
 .dc-check { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 12px; background: var(--surface); border: 1px solid var(--border-2); color: var(--text); }
 .dc-check > span { font-weight: 700; }
@@ -48,13 +47,31 @@ span.dc-file { color: var(--text); cursor: default; }
 .dc-file:hover { text-decoration: underline; }
 .dc-why { color: var(--text-2); }
 .dc-nobrief { margin: 0; font-size: 12px; color: var(--text-2); }
-.dc-effects { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.dc-effect { min-width: 0; }
-.dc-effect dt { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--text-3); }
-.dc-effect.yes dt svg { color: var(--green); }
-.dc-effect.no dt svg { color: var(--red); }
-.dc-effect dd { margin: 2px 0 0; line-height: 1.4; color: var(--text); }
 .dc-actions { display: flex; flex-direction: column; gap: 12px; }
+/* «Bivio» (ADR 0259): the context sentence, a before → after, and the two roads with their buttons */
+.dc-ctx { margin: -4px 0 0; color: var(--text-2); line-height: 1.5; overflow-wrap: anywhere; }
+.dc-change { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: stretch; }
+.dc-change-what { grid-column: 1 / -1; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-3); }
+.dc-change-v { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); min-width: 0; overflow-wrap: anywhere; }
+.dc-change-v small { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-3); }
+.dc-change-v s, .dc-change-v b { font-size: 22px; line-height: 1.15; font-weight: 700; }
+.dc-change-v s { color: var(--red); text-decoration-thickness: 2px; }
+.dc-change-v.after { border-color: color-mix(in srgb, var(--green) 55%, var(--border)); background: var(--green-bg); }
+.dc-change-v.after b { color: var(--green); }
+.dc-change-arrow { display: grid; place-items: center; color: var(--text-3); font-size: 18px; }
+.dc-fork { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dc-road { --yn: var(--green); --yn-bg: var(--green-bg); display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 10px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); }
+.dc-road.no { --yn: var(--red); --yn-bg: var(--red-bg); }
+.dc-road.rec { border-color: color-mix(in srgb, var(--yn) 55%, var(--border)); background: color-mix(in srgb, var(--yn-bg) 60%, var(--surface)); }
+.dc-road-h { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-2); }
+.dc-road-h svg { color: var(--yn); stroke-width: 2.6; }
+.dc-road-h .dc-rec { text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--surface); background: var(--yn); }
+.dc-road-fx { margin: 0; line-height: 1.45; color: var(--text); overflow-wrap: anywhere; }
+.dc-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.dc-steps li, .dc-done li { display: flex; gap: 8px; align-items: flex-start; line-height: 1.4; color: var(--text); overflow-wrap: anywhere; }
+.dc-step-n { flex: none; display: grid; place-items: center; width: 18px; height: 18px; margin-top: 1px; border-radius: 50%; border: 1.5px solid var(--border-3); font: 700 10px/1 var(--font); color: var(--text-2); }
+.dc-road .dc-answer { margin-top: auto; }
+.dc-road.rec .dc-answer { border-color: var(--yn); }
 .dc-answers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .dc-answer { --yn: var(--green); --yn-bg: var(--green-bg); position: relative; display: flex; align-items: center; justify-content: center; gap: 8px;
   min-height: 52px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--border-2); background: var(--surface); color: var(--text);
@@ -104,10 +121,11 @@ span.dc-file { color: var(--text); cursor: default; }
 .dc.compact .dc-write-open { padding-left: 12px; min-height: 34px; }
 .dc.compact .dc-more { grid-template-columns: 1fr 1fr; }
 .dc.compact .dc-more > .dc-write-open { grid-column: 1 / -1; }
-.dc.compact .dc-effects { grid-template-columns: 1fr; gap: 6px; }
+.dc.compact .dc-road { padding: 8px; gap: 6px; }
+.dc.compact .dc-change-v s, .dc.compact .dc-change-v b { font-size: 17px; }
 @container (max-width: 520px) { .dc-brief.has-img .dc-brief-main { grid-template-columns: 1fr; } }
 @container (max-width: 380px) {
-  .dc-effects { grid-template-columns: 1fr; }
+  .dc-fork { grid-template-columns: 1fr; }
   .dc-key { display: none; }
   .dc-write-open { padding-left: 12px; }
   .dc-more { grid-template-columns: 1fr 1fr; }

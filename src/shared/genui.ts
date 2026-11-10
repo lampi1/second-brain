@@ -89,6 +89,8 @@ const SCHEMAS: { [K in UiComponent]: V<Extract<UiSpec, { component: K }>['props'
   diffList: obj({ groups: arr(obj({ area: str(80), files: arr(obj({ path: str(300) }, { why: str(200), added: count, removed: count, href }), 100, 1) }, {}), 20, 1) }, {}),
   barChart: obj({ bars: arr(obj({ label: str(60), value: num }, { note: str(80) }), 40, 1) }, { unit: str(12) }),
   brief: obj({ done: (v, at) => arr(str(200), 5, 1)(typeof v === 'string' ? [v] : v, at), ifYes: str(200), ifNo: str(200) }, {
+    why: str(240), yesLabel: str(32), noLabel: str(32), yesSteps: arr(str(90), 4), noSteps: arr(str(90), 3),
+    change: obj({ before: str(24), after: str(24) }, { what: str(60) }),
     checks: arr(obj({ label: str(60), status }, { detail: str(120) }), 8),
     images: arr(obj({ path: str(1000) }, { caption: str(120) }), 4),
     files: arr(obj({ path: str(300) }, { why: str(200), added: count, removed: count, href }), 10),
@@ -170,11 +172,14 @@ export function textOfUi(spec: UiSpec, title?: string): string {
       break;
     case 'brief': {
       const p = spec.props;
+      if (p.why) out.push(p.why, '');
+      if (p.change) out.push(`${p.change.what ? `${p.change.what}: ` : ''}${p.change.before} → ${p.change.after}`, '');
       out.push('**Cosa ho fatto**', ...p.done.map(d => `- ${d}`));
       if (p.checks?.length) out.push('', ...p.checks.map(c => `- [${STATUS_IT[c.status]}] ${c.label}${c.detail ? `: ${c.detail}` : ''}`));
       if (p.images?.length) out.push('', ...p.images.map(i => `- ${i.caption ? `${i.caption}: ` : ''}${i.path}`));
       if (p.files?.length) out.push('', ...p.files.map(f => `- \`${f.path}\`${f.why ? `: ${f.why}` : ''}`));
-      out.push('', `**Se Sì:** ${p.ifYes}`, `**Se No:** ${p.ifNo}`);
+      const road = (s: string, steps?: string[]) => (steps?.length ? steps.join(' → ') : s);
+      out.push('', `**Se Sì:** ${road(p.ifYes, p.yesSteps)}`, `**Se No:** ${road(p.ifNo, p.noSteps)}`);
       break;
     }
   }

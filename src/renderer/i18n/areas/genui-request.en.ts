@@ -96,6 +96,8 @@ export const genuiRequestEn: typeof genuiRequestIt = {
   'genui.gist.tool': 'Uses tool',
   'genui.decision.label': ({ chat }: { chat: string }) => `Question from ${chat}`,
   'genui.decision.done': 'What I did',
+  'genui.decision.before': 'Before',
+  'genui.decision.after': 'After',
   'genui.decision.ifYes': 'If Yes',
   'genui.decision.ifNo': 'If No',
   'genui.decision.yes': 'Yes',

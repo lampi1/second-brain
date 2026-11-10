@@ -497,9 +497,9 @@ const AskDecision = forwardRef<HTMLDivElement, {
   return (
     <DecisionCard ref={ref} testBase={p.testBase} head={head} question={split?.ask ?? withoutImages(p.q.question)} lead={split?.lead} compact={p.compact} busy={p.sent}
       rootProps={{ 'data-request-key': p.keyAttr, 'data-kind': 'question', 'data-brief': b ? '' : undefined, 'aria-label': t('genui.decision.label', { chat: who }) }}
-      ifYes={b?.ifYes ?? desc('yes')} ifNo={b?.ifNo ?? desc('no')}
-      yes={{ onChoose: p.onYes, recommended: p.recommended === 'yes', testid: p.yesTestid }}
-      no={{ onChoose: p.onNo, recommended: p.recommended === 'no', testid: p.noTestid }}
+      ifYes={b?.ifYes ?? desc('yes')} ifNo={b?.ifNo ?? desc('no')} why={b?.why} yesSteps={b?.yesSteps} noSteps={b?.noSteps} change={b?.change}
+      yes={{ onChoose: p.onYes, recommended: p.recommended === 'yes', testid: p.yesTestid, label: b?.yesLabel }}
+      no={{ onChoose: p.onNo, recommended: p.recommended === 'no', testid: p.noTestid, label: b?.noLabel }}
       write={{ onSend: p.onWrite, initial: p.otherInitial, onDraft: p.onOtherDraft, onClose: p.onOtherClose }}
       skip={{ onChoose: p.onSkip, hint: t('genui.decision.skipHint') }}
       speakFrom={agent?.name ?? (who || undefined)} speakDone={b?.done.join('. ')} voiceId={`req:${p.req.chatId}/${p.req.id}/${p.q.question}`}
@@ -508,7 +508,7 @@ const AskDecision = forwardRef<HTMLDivElement, {
       {b && <BriefEvidence brief={b} testBase={p.testBase} size={p.compact ? 'm' : 'l'} onFile={onFile} />}
       {p.context && <AskArtifacts req={p.req} testBase={p.testBase} noBrief />}
       {!b && p.context && p.ctxOpen && <p className="dc-nobrief" data-testid={`${p.testBase}-nobrief`}>{t('genui.decision.noBrief')}</p>}
-      {p.context && <AskContext key={b ? 'brief' : 'none'} req={p.req} defaultOpen={!b && p.ctxOpen} testBase={p.testBase} noVisuals label={t('genui.decision.chatText')} />}
+      {p.context && <AskContext key={b ? 'brief' : 'none'} req={p.req} defaultOpen={false} testBase={p.testBase} noVisuals label={t('genui.decision.chatText')} />}
     </DecisionCard>
   );
 });

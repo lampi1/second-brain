@@ -29,6 +29,11 @@ describe('yes/no questions', () => {
     expect(yesNoShape([q('Sì', 'No'), q('A', 'B')])).toBe(false);
     expect(yesNoShape([])).toBe(false);
   });
+  it('a question too long or with code goes back: its context belongs in the brief (ADR 0259)', () => {
+    expect(yesNoShape([{ ...q('Sì', 'No'), question: 'Faccio il commit del fix?' }])).toBe(true);
+    expect(yesNoShape([{ ...q('Sì', 'No'), question: 'Ho trovato il bug. '.repeat(10) + 'Procedo?' }])).toBe(false);
+    expect(yesNoShape([{ ...q('Sì', 'No'), question: 'Lancio ```npm test```?' }])).toBe(false);
+  });
   it('the gate is on in a real profile, off in the test suites unless asked, SB_YESNO=0 turns it off', () => {
     expect(yesNoGateOn({})).toBe(true);
     expect(yesNoGateOn({ SB_YESNO: '0' })).toBe(false);

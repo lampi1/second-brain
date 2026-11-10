@@ -99,7 +99,7 @@ describe('PlanApproval.tsx', () => {
     expect(out).toMatch(/data-testid="qp-step-3" data-role="strategist".*Strategist/s);
     expect(out).toContain('I test passano');
     expect(out).toContain('Offerte');
-    expect(out).toMatch(/data-testid="qp-approve".*<strong>Sì<\/strong>.*Consigliata/s);
+    expect(out).toMatch(/data-testid="qp-road-yes".*Consigliata.*data-testid="qp-approve".*<strong>Sì<\/strong>/s); // «Bivio» (ADR 0259): the road says it
     expect(out).toMatch(/data-testid="qp-reject".*<strong>No<\/strong>/s);
     expect(out).toContain('Scrivi una risposta…');
     expect(out).toContain('Non voglio rispondere');
