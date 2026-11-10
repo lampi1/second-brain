@@ -112,9 +112,9 @@ function skillTexts(folder: string): { file: string; text: string }[] {
 /** «scripts/x.py» or the bare «x.py» (not a longer name, not already under another folder or ${CLAUDE_SKILL_DIR}; a
  *  full stop after it ends the sentence). */
 const END = '(?![\\w-]|\\.\\w)';
-// «scripts\x.ps1» too (Windows); names compare without case where the file system ignores it
+// «scripts\x.ps1» and «.\scripts\x.ps1» too (Windows); names compare without case where the file system ignores it
 const FLAGS = process.platform === 'linux' ? '' : 'i';
-const pathRef = (kind: Kind, name: string) => new RegExp(`(?<![\\w.\\-/\\\\$}])${esc(OLD_DIR[kind])}[\\\\/]${esc(name)}${END}`, `g${FLAGS}`);
+const pathRef = (kind: Kind, name: string) => new RegExp(`(?<![\\w.\\-/\\\\$}])(?:\\.[\\\\/])?${esc(OLD_DIR[kind])}[\\\\/]${esc(name)}${END}`, `g${FLAGS}`);
 const bareRef = (name: string) => new RegExp(`(?<![\\w.\\-/\\\\$}])${esc(name)}${END}`, FLAGS);
 const names = (texts: readonly { text: string }[], kind: Kind, name: string) => texts.some(t => pathRef(kind, name).test(t.text) || bareRef(name).test(t.text));
 

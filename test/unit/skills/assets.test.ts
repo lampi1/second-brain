@@ -139,6 +139,10 @@ describe('Windows paths and links', () => {
     write('scripts/backup.ps1', 'Write-Output ok\n');
     expect(migrateAssets(deps([deploy])).moved).toEqual(['scripts/backup.ps1 → deploy']);
     expect(read('.agents/skills/deploy/SKILL.md')).toContain('powershell -File ${CLAUDE_SKILL_DIR}/scripts/backup.ps1');
+    const ops = skill('ops', 'Avvia .\\scripts\\avvio.ps1 dalla cartella.');
+    write('scripts/avvio.ps1', 'Write-Output go\n');
+    expect(migrateAssets(deps([deploy, ops])).moved).toEqual(['scripts/avvio.ps1 → ops']);
+    expect(read('.agents/skills/ops/SKILL.md')).toContain('Avvia ${CLAUDE_SKILL_DIR}/scripts/avvio.ps1 dalla');
   });
 
   it('a path elsewhere that ends with the name is not a reference', () => {

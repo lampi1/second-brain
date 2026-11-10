@@ -114,6 +114,16 @@ describe('BrainScripts', () => {
     const add = history.all().at(-1)!;
     history.rollback(add.id, NO_AGENT);
     expect(s.wasDeleted('nuovo.sh', 'altro')).toBe(true);
+    // a brain under a link (a symlinked home, macOS /var): the log keeps real paths, the check still finds the delete
+    if (process.platform !== 'win32') {
+      const via = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-scripts-via-')), 'brain');
+      fs.symlinkSync(root, via);
+      const viaSkills: SkillPlace[] = skills.map(x => ({ ...x, folder: path.join(via, path.relative(root, x.folder)) }));
+      const s3 = new BrainScripts(() => via, undefined, () => viaSkills, () => history);
+      expect(s3.wasDeleted('nuovo.sh', 'altro')).toBe(true);
+      expect(s3.wasDeleted('run.sh', 'deploy')).toBe(true);
+      fs.rmSync(path.dirname(via), { recursive: true, force: true });
+    }
     // a scripts/ that links out of the skill is never written through
     if (process.platform !== 'win32') {
       const out = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-scripts-out-'));

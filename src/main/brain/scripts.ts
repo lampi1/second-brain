@@ -298,8 +298,11 @@ export class BrainScripts {
     if (!log) return false;
     // a removal from a skill's scripts/ (in that skill when one is named), or an add the user undid; the move out of the
     // old scripts/ is no delete
-    const folders = this.safeSkills().filter(s => s.origin === 'brain' && (!skill || s.name === skill)).map(s => foldPath(path.resolve(s.folder, SKILL_SCRIPTS, name)));
-    const here = (file: string) => folders.includes(foldPath(path.resolve(file)));
+    // the log keeps real paths (links resolved): compare the same way
+    const real = (p: string) => { try { return fs.realpathSync(p); } catch { return null; } };
+    const folders = this.safeSkills().filter(s => s.origin === 'brain' && (!skill || s.name === skill))
+      .map(s => foldPath(path.join(real(path.join(s.folder, SKILL_SCRIPTS)) ?? path.join(real(s.folder) ?? path.resolve(s.folder), SKILL_SCRIPTS), name)));
+    const here = (file: string) => folders.includes(foldPath(path.resolve(file))) || folders.includes(foldPath(path.join(real(path.dirname(file)) ?? path.dirname(path.resolve(file)), path.basename(file))));
     return log.all().some(c => c.files.some(f => here(f.file) && (c.rolledBackAt
       ? f.before === null && f.after !== null
       : c.action === 'remove' && f.after === null && f.before !== null)));
