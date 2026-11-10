@@ -4,7 +4,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AcpSession } from '../../../src/main/chats/acp';
 import { ClaudeSession } from '../../../src/main/chats/claude';
-import { asYesNo, engineLabel, mappedYesNo } from '../../../src/shared/yes-no';
+import { asYesNo, BRIEF_GRACE_MS, engineLabel, mappedYesNo } from '../../../src/shared/yes-no';
+import { phoneQuestionReserved } from '../../../src/main/chats/phone-port';
+import type { ChatItem, PendingRequest } from '../../../src/shared/contract';
 import { recSink } from './helpers';
 
 type Packet = Record<string, unknown>;
@@ -13,7 +15,7 @@ interface AcpWire { onAgentRequest(id: string, method: string, packet: Packet): 
 const Q = 'Approvi il piano del modulo Ordini?';
 const MAP = { yes: 'Approve Plan', no: 'Request Changes' };
 
-afterEach(() => { vi.restoreAllMocks(); });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('the option map', () => {
   it('matches only one short single-choice question with exactly the two declared labels', () => {
@@ -26,6 +28,9 @@ describe('the option map', () => {
     expect(mappedYesNo(q(['Approve Plan', 'Request Changes']), { yes: 'X', no: 'X' })).toBeNull();
     expect(asYesNo({ question: Q, options: [{ label: 'Request Changes', description: 'back to the plan' }, { label: 'Approve Plan' }] }, MAP).options)
       .toEqual([{ label: 'Sì' }, { label: 'No', description: 'back to the plan' }]);
+    // the recommended mark: matched without it, carried to Sì / No, never sent to the engine
+    expect(mappedYesNo(q(['Approve Plan (consigliato)', 'Request Changes']), MAP)).toEqual(MAP);
+    expect(asYesNo({ question: Q, options: [{ label: 'Approve Plan (consigliato)' }, { label: 'Request Changes' }] }, MAP).options.map(o => o.label)).toEqual(['Sì (consigliato)', 'No']);
     expect([engineLabel('Sì (consigliato)', MAP), engineLabel('No', MAP), engineLabel('Prima cambia il titolo', MAP)]).toEqual(['Approve Plan', 'Request Changes', 'Prima cambia il titolo']);
   });
 });
@@ -65,5 +70,30 @@ describe('the gates', () => {
     expect(p.questions?.[0]?.options.map(o => o.label)).toEqual(['Sì', 'No']);
     wire.answer(p.id, { kind: 'question', answers: { [Q]: 'No' } });
     expect(JSON.stringify(reply.mock.calls.at(-1))).toContain('"selectedOptionIds":["changes"]');
+  });
+
+  it('Claude: a mapped question sent before its brief waits the same moment, then is shown mapped', async () => {
+    vi.useFakeTimers();
+    const sink = recSink();
+    let brief: typeof MAP | null = null;
+    const wire = new ClaudeSession({ chatId: 'w', cwd: '.', yesNo: true, briefReady: () => !!brief, briefOptions: () => brief }, sink) as unknown as ClaudeWire;
+    const reply = vi.spyOn(wire, 'write').mockImplementation(() => {});
+    await wire.onControlRequest({ request_id: 'r1', request: { subtype: 'can_use_tool', tool_name: 'AskUserQuestion', tool_use_id: 't1',
+      input: { questions: [{ question: Q, options: [{ label: 'Approve Plan' }, { label: 'Request Changes' }] }] } } });
+    expect(reply).not.toHaveBeenCalled(); // not refused at once: its brief may be on its way
+    brief = MAP; // the show_ui sent in parallel lands
+    await vi.advanceTimersByTimeAsync(BRIEF_GRACE_MS);
+    expect(reply).not.toHaveBeenCalled();
+    expect(sink.pendings[0]?.questions?.[0]?.options.map(o => o.label)).toEqual(['Sì', 'No']);
+  });
+});
+
+describe('reserved questions', () => {
+  it('an engine label the brief maps counts for the reserved check (no phone button for «merge»)', () => {
+    const p = { id: 'q1', chatId: 'w', type: 'question', tool: 'AskUserQuestion', title: Q, detail: Q, input: {}, at: 1,
+      questions: [{ question: Q, options: [{ label: 'Sì' }, { label: 'No' }] }] } as unknown as PendingRequest;
+    const item = (yesOption: string) => [{ kind: 'artifact', askId: 'q1', title: 'Piano', summary: 'Il piano', ui: { component: 'brief', props: { done: ['Piano scritto'], ifYes: 'Parto', ifNo: 'Lo rivedo', yesOption, noOption: 'Request Changes' } } }] as unknown as ChatItem[];
+    expect(phoneQuestionReserved(p, () => item('Approve Plan'))).toBe(false);
+    expect(phoneQuestionReserved(p, () => item('Approve and merge'))).toBe(true);
   });
 });

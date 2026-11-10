@@ -51,7 +51,7 @@ import { AgentChildrenReporter } from './agent-children';
 import { bridgePatch, phoneText, readRemoteControlReply, type RemoteControlReply } from './remote-control';
 import type { ChildObservation } from '../../shared/agents';
 import { claudeMcp, claudeTools, suggestedAbove } from '../agents/tool-policy';
-import { asYesNo, BRIEF_GRACE_MS, BRIEF_REFUSAL, engineLabel, mappedYesNo, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape, type OptionMap } from '../../shared/yes-no';
+import { asYesNo, BRIEF_GRACE_MS, BRIEF_REFUSAL, engineLabel, mappedYesNo, twoOptionQuestion, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape, type OptionMap } from '../../shared/yes-no';
 import { mcpForm, mcpFormAnswer, type McpForm } from '../../shared/mcp-form';
 import { WriteBarrier } from './write-barrier';
 import { recordWire } from './wire-record';
@@ -894,8 +894,10 @@ export class ClaudeSession implements HarnessSession {
     const map = yesNoShape(qs) ? null : mappedYesNo(qs, await this.opts.briefOptions?.());
     if (map) this.optionMaps.set(id, map); else this.optionMaps.delete(id);
     const yesNo = yesNoShape(qs) || !!map;
-    // a yes/no question without its brief (ADR 0150): a moment for a show_ui called in parallel, then sent back
-    const noBrief = yesNo && !this.briefOff && !!this.opts.briefReady && !await this.opts.briefReady();
+    // a yes/no question without its brief (ADR 0150): a moment for a show_ui called in parallel, then sent back; a
+    // two-option one may be a mapped question whose brief (with its yesOption / noOption) is on its way: the same moment
+    const candidate = !yesNo && twoOptionQuestion(qs);
+    const noBrief = (yesNo || candidate) && !this.briefOff && !!this.opts.briefReady && !await this.opts.briefReady();
     if (this.exited || this.procExited) return true;
     if (this.withdrawn.has(id)) return true; // the CLI withdrew it during the check: no refusal, no later re-check
     if (generation !== this.brokerGeneration) { this.stoppedRefusal(id, toolUseId); return true; }
@@ -909,10 +911,11 @@ export class ClaudeSession implements HarnessSession {
       return true;
     }
     if (yesNo && !noBrief) { this.yesNoRefused = 0; return false; }
-    if (qs.length === 1 && this.yesNoRefused >= YESNO_RETRIES) { if (noBrief) this.briefOff = true; this.yesNoRefused = 0; return false; }
+    if (qs.length === 1 && this.yesNoRefused >= YESNO_RETRIES) { if (noBrief && yesNo) this.briefOff = true; this.yesNoRefused = 0; return false; }
     this.yesNoRefused++;
-    log.info('chats', noBrief ? 'question sent back: no brief' : 'question sent back: not yes/no', { chat: this.opts.chatId, data: { requestId: id, attempt: this.yesNoRefused } });
-    try { this.write({ type: 'control_response', response: { subtype: 'success', request_id: id, response: { behavior: 'deny', message: noBrief ? BRIEF_REFUSAL : YESNO_REFUSAL, toolUseID: toolUseId } } }); } catch { /* gone */ }
+    const briefMissing = noBrief && yesNo; // a two-option question without a brief is told how to ask, map included
+    log.info('chats', briefMissing ? 'question sent back: no brief' : 'question sent back: not yes/no', { chat: this.opts.chatId, data: { requestId: id, attempt: this.yesNoRefused } });
+    try { this.write({ type: 'control_response', response: { subtype: 'success', request_id: id, response: { behavior: 'deny', message: briefMissing ? BRIEF_REFUSAL : YESNO_REFUSAL, toolUseID: toolUseId } } }); } catch { /* gone */ }
     return true;
   }
 

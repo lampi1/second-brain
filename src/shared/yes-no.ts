@@ -98,19 +98,30 @@ export const yesNoShape = (qs: readonly { question?: string; options: readonly {
  *  still answers a Sì / No card. */
 export interface OptionMap { yes: string; no: string }
 
-/** The map, when the one short single-choice question has exactly the two labels the brief declared; else null. */
+/** An engine label without its «(consigliato)» mark: what the brief names and what the engine gets back. */
+export const bareLabel = (label: string): string => label.replace(MARK, ' ').replace(/\s+/g, ' ').trim();
+const marked = (label: string): boolean => new RegExp(MARK.source, 'i').test(label);
+
+/** One short single-choice question with two options: the shape a mapped question has (the brief may still come). */
+export const twoOptionQuestion = (qs: readonly { question?: string; options: readonly { label: string }[]; multiSelect?: boolean }[]): boolean =>
+  qs.length === 1 && !qs[0]!.multiSelect && qs[0]!.options.length === 2 && shortQuestion(qs[0]!.question ?? '');
+
+/** The map, when the one short single-choice question has exactly the two labels the brief declared (a «(consigliato)»
+ *  mark aside); else null. */
 export function mappedYesNo(qs: readonly { question?: string; options: readonly { label: string }[]; multiSelect?: boolean }[], map: OptionMap | null | undefined): OptionMap | null {
-  if (!map || qs.length !== 1) return null;
-  const q = qs[0]!, labels = q.options.map(o => o.label.trim());
-  if (q.multiSelect || labels.length !== 2 || map.yes.trim() === map.no.trim() || !shortQuestion(q.question ?? '')) return null;
-  return labels.includes(map.yes.trim()) && labels.includes(map.no.trim()) ? { yes: map.yes.trim(), no: map.no.trim() } : null;
+  if (!map || !twoOptionQuestion(qs)) return null;
+  const yes = bareLabel(map.yes), no = bareLabel(map.no), labels = qs[0]!.options.map(o => bareLabel(o.label));
+  if (!yes || !no || yes === no) return null;
+  return labels.includes(yes) && labels.includes(no) ? { yes, no } : null;
 }
 
-/** The question as the user sees it: the mapped options become Sì and No (descriptions kept, Sì first). */
+/** The question as the user sees it: the mapped options become Sì and No (descriptions and the «(consigliato)» mark
+ *  kept, Sì first). */
 export function asYesNo<Q extends { options: readonly { label: string; description?: string }[] }>(q: Q, map: OptionMap): Q {
-  const of = (label: string) => q.options.find(o => o.label.trim() === label);
+  const of = (label: string) => q.options.find(o => bareLabel(o.label) === label);
   const yes = of(map.yes), no = of(map.no);
-  return { ...q, options: [{ ...yes, label: 'Sì' }, { ...no, label: 'No' }] };
+  const as = (o: { label: string; description?: string } | undefined, word: string) => ({ ...o, label: o && marked(o.label) ? `${word} (consigliato)` : word });
+  return { ...q, options: [as(yes, 'Sì'), as(no, 'No')] };
 }
 
 /** The user's answer for the engine: Sì / No (any mark) become the engine's labels; a typed answer stays as it is. */

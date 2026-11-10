@@ -71,7 +71,7 @@ import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, ty
 import { AgentChildrenReporter } from './agent-children';
 import type { ChildObservation } from '../../shared/agents';
 import { recordWire } from './wire-record';
-import { asYesNo, BRIEF_GRACE_MS, BRIEF_REFUSAL, mappedYesNo, NOT_RAN_NOTE, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape } from '../../shared/yes-no';
+import { asYesNo, bareLabel, BRIEF_GRACE_MS, BRIEF_REFUSAL, mappedYesNo, NOT_RAN_NOTE, twoOptionQuestion, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoOf, yesNoShape } from '../../shared/yes-no';
 
 export interface AcpOptions extends SessionOptions {
   /** send a question that is not yes/no back to the agent (shared/yes-no.ts, ADR 0135); default: yesNoGateOn(env) */
@@ -1389,7 +1389,10 @@ export class AcpSession implements HarnessSession {
         const opts = arr(q.options).map(x => o(x)).filter(x => s(x.id));
         const labels = uniq(opts.map(x => s(x.label) || s(x.id)));
         const text = texts[i] ?? `Domanda ${i + 1}`;
-        acp.push({ text, id: s(q.id), byLabel: new Map(labels.map((l, j) => [l, s(opts[j]?.id)])) });
+        // each label to its own option's id (the first one when two share a label): never shifted by the dedupe
+        const byLabel = new Map<string, string>();
+        for (const x of opts) { const l = s(x.label) || s(x.id); if (!byLabel.has(l)) byLabel.set(l, s(x.id)); }
+        acp.push({ text, id: s(q.id), byLabel });
         questions.push({ question: text, ...(s(p.title) ? { header: cut(s(p.title), 30) } : {}), options: labels.map(label => ({ label })), multiSelect: q.allowMultiple === true });
       });
       // not yes/no (ADR 0135), or yes/no without its brief (ADR 0150, after a moment for a show_ui sent in parallel):
@@ -1397,14 +1400,17 @@ export class AcpSession implements HarnessSession {
       const gate = (this.opts.yesNo ?? yesNoGateOn(process.env)) && questions.length > 0;
       // the engine's own labels mapped to Sì / No by the brief (#378): the user answers Sì / No, the engine gets its option
       const map = gate && !yesNoShape(questions) ? mappedYesNo(questions, await this.opts.briefOptions?.()) : null;
-      if (map && acp[0]) {
-        const byLabel = acp[0].byLabel;
-        acp[0].byLabel = new Map([['Sì', byLabel.get(map.yes) ?? ''], ['No', byLabel.get(map.no) ?? '']]);
+      const idOf = (label: string) => [...(acp[0]?.byLabel ?? [])].find(([l]) => bareLabel(l) === label)?.[1];
+      const yesId = map ? idOf(map.yes) : undefined, noId = map ? idOf(map.no) : undefined;
+      if (map && acp[0] && yesId && noId) {
         questions[0] = asYesNo(questions[0]!, map);
+        acp[0].byLabel = new Map(questions[0].options.map(o => [o.label, yesNoOf(o.label) === 'yes' ? yesId : noId]));
       }
       const yesNo = yesNoShape(questions);
       const waited = this.briefWaited.get(id); // set when this is the re-check after the grace
-      const noBrief = gate && yesNo && !this.briefOff && !!this.opts.briefReady && !await this.opts.briefReady();
+      // a two-option question may be a mapped one whose brief is on its way: the same moment for it (#378)
+      const candidate = !yesNo && twoOptionQuestion(questions);
+      const noBrief = gate && (yesNo || candidate) && !this.briefOff && !!this.opts.briefReady && !await this.opts.briefReady();
       if (this.exited || this.procExited) return;
       // a stop during the re-check already answered it cancelled with the grace marker: never a second answer
       if (waited && this.briefWaited.get(id) !== waited) return;
@@ -1425,11 +1431,12 @@ export class AcpSession implements HarnessSession {
         this.briefWaited.set(id, { rpcId: id, timer });
         return;
       }
-      if (noBrief && this.yesNoRefused >= YESNO_RETRIES) this.briefOff = true;
+      const briefMissing = noBrief && yesNo; // a two-option question without a brief is told how to ask, map included
+      if (briefMissing && this.yesNoRefused >= YESNO_RETRIES) this.briefOff = true;
       if (gate && (!yesNo || noBrief) && (questions.length > 1 || this.yesNoRefused < YESNO_RETRIES)) {
         this.yesNoRefused++;
-        log.info('chats', noBrief ? 'question sent back: no brief' : 'question sent back: not yes/no', { chat: this.opts.chatId, data: { engine: this.engine, attempt: this.yesNoRefused } });
-        this.respond(id, { outcome: { outcome: 'skipped', reason: noBrief ? BRIEF_REFUSAL : YESNO_REFUSAL } });
+        log.info('chats', briefMissing ? 'question sent back: no brief' : 'question sent back: not yes/no', { chat: this.opts.chatId, data: { engine: this.engine, attempt: this.yesNoRefused } });
+        this.respond(id, { outcome: { outcome: 'skipped', reason: briefMissing ? BRIEF_REFUSAL : YESNO_REFUSAL } });
         return;
       }
       this.yesNoRefused = 0;

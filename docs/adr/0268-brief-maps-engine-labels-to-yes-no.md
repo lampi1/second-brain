@@ -15,6 +15,11 @@ in a form its tools accept as a real human reply») · Builds on: ADR 0135 (yes/
   one single-choice question, short.
 - **What the user sees:** the card shows the options as Sì and No (`asYesNo`), so the Orchestrator panel, the phone
   and relays work unchanged.
+  - A «(consigliato)» mark on an engine label is matched without it and carried to Sì or No, so the recommendation,
+    the night mode and the phone keep working. The engine always gets the bare label.
+  - The reserved check (`phoneQuestionReserved`: production, merges, secrets) reads `yesOption` / `noOption` too.
+- **The brief can come second:** a two-option question that arrives before its brief waits the same BRIEF_GRACE_MS
+  as a yes/no one, then is checked again.
 - **What the engine gets back:**
   - Claude: AskUserQuestion's answers carry the engine's label for the user's Sì / No (`engineLabel`). A typed answer
     stays as typed.
