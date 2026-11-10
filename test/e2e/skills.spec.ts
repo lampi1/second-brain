@@ -2,8 +2,8 @@
 // Claude skills, CLI agents that the page does not list, and a settings.json whose PreToolUse hook for Write refuses any
 // content with "VIETATO"): the skill list with "mai usata", search and the usage filter; a new skill from the form,
 // saved to ~/.claude/skills (no brain); the file editor refusing a broken SKILL.md and showing the hook's own message;
-// the skill's history; delete after a confirmation. Then the "/" list of a chat input (fake Claude CLI reporting its
-// commands): filtered, Tab completes. Screenshots dark and light.
+// the skill's history; delete after a confirmation; the sort and a pick from the end of the list in view. Then the "/"
+// list of a chat input (fake Claude CLI reporting its commands): filtered, Tab completes. Screenshots dark and light.
 import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -55,6 +55,16 @@ test('Skill: list and filters, create from the form, editor checks and hook refu
     await expect(pg.getByTestId('bm-skill-spiega')).toHaveCount(0);
     await expect(pg.getByTestId('sk-empty')).toBeVisible();
     await choose(pg.getByTestId('sl-usage'), 'all');
+    // the order (owner 2026-11-10): by name by default; nothing ran yet, so no «Le più usate» strip
+    const names = () => pg.locator('[data-testid="bm-skill-grid"] .sl-row .sl-row-name').allTextContents();
+    expect((await names()).indexOf('rivedi-pr')).toBeLessThan((await names()).indexOf('spiega'));
+    await choose(pg.getByTestId('sl-sort'), 'uses');
+    await expect(pg.getByTestId('sl-sort')).toHaveAttribute('data-value', 'uses');
+    await expect(pg.getByTestId('sl-top')).toHaveCount(0);
+    await choose(pg.getByTestId('sl-sort'), 'name');
+    // picking the last skill shows it at once, its title in view, without scrolling the page back up
+    await pg.locator('[data-testid="bm-skill-grid"] .sl-row').last().click();
+    await expect(pg.getByTestId('sk-ed-name')).toBeInViewport();
     await pg.getByTestId('sk-search').fill('pull request');
     await expect(pg.locator('[data-testid^="bm-skill-"]:not([data-testid="bm-skill-grid"])')).toHaveCount(1);
     await pg.getByTestId('sk-search').fill('');

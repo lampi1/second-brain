@@ -155,15 +155,39 @@ export class SkillLibrary {
 
   private find(name: string): Found | null { return this.found().find(f => f.name === name) ?? null; }
 
-  private info(f: Found, history: StoredChange[], runs: AgentRun[], roles: AgentProfile[]): LibSkill {
+  /** The latest live change of every skill folder the history wrote, by folder: one pass over the history, so the list
+   *  does not compare every change with every skill (the page stuttered on opening with a long history, 2026-11-10).
+   *  `known`: every name of the listed skills' folders (resolved and real: a linked skill folder is logged by its
+   *  target); a changed file counts for the nearest of them above it. */
+  private latestByFolder(history: StoredChange[], known: ReadonlySet<string>): Map<string, StoredChange> {
+    const out = new Map<string, StoredChange>();
+    for (const c of history) {
+      if (c.rolledBackAt) continue;
+      for (const x of c.files) {
+        let dir = path.dirname(path.resolve(x.file));
+        for (let up = 0; up <= MAX_DEPTH + 1 && path.dirname(dir) !== dir; up++, dir = path.dirname(dir)) {
+          if (known.has(dir)) { out.set(dir, c); break; }
+        }
+      }
+    }
+    return out;
+  }
+  /** Runs by the skills they loaded, built once per list. */
+  private static runsBySkill(runs: AgentRun[]): Map<string, AgentRun[]> {
+    const out = new Map<string, AgentRun[]>();
+    for (const r of runs) for (const name of new Set(r.tags?.skills ?? [])) { const l = out.get(name); if (l) l.push(r); else out.set(name, [r]); }
+    return out;
+  }
+
+  private info(f: Found, latestBy: Map<string, StoredChange>, bySkill: Map<string, AgentRun[]>, roles: AgentProfile[]): LibSkill {
     const skillMd = path.join(f.folder, 'SKILL.md');
     let text = '';
     try { text = fs.readFileSync(skillMd, 'utf8').slice(0, MAX_TEXT); } catch { /* listed with no description */ }
     const p = parseMd(text);
-    const mine = runs.filter(r => r.tags?.skills.includes(f.name));
+    const mine = bySkill.get(f.name) ?? [];
     const byRole = new Map<string, { uses: number; lastAt: number }>();
     for (const r of mine) { const u = byRole.get(r.agentId) ?? { uses: 0, lastAt: 0 }; u.uses++; u.lastAt = Math.max(u.lastAt, r.startedAt); byRole.set(r.agentId, u); }
-    const latest = [...history].reverse().find(c => !c.rolledBackAt && this.touches(c, f));
+    const latest = this.folders(f).map(d => latestBy.get(d)).filter((c): c is StoredChange => !!c).sort((a, b) => b.at - a.at)[0];
     let changedAt: number | null = null;
     try { changedAt = fs.statSync(skillMd).mtimeMs; } catch { /* gone */ }
     return {
@@ -191,7 +215,8 @@ export class SkillLibrary {
   async state(): Promise<SkillLibraryState> {
     await this.ready();
     const root = this.root(), history = this.d.changes().all(), runs = this.safe(() => this.d.runs(), []), roles = this.safe(() => this.d.roles(), []).filter(r => r.scope === 'role');
-    return { root, skills: this.found(root).map(f => this.info(f, history, runs, roles)).sort((a, b) => a.name.localeCompare(b.name)), roles: roles.map(r => ({ id: r.id, name: r.name })) };
+    const found = this.found(root), latestBy = this.latestByFolder(history, new Set(found.flatMap(f => this.folders(f)))), bySkill = SkillLibrary.runsBySkill(runs);
+    return { root, skills: found.map(f => this.info(f, latestBy, bySkill, roles)).sort((a, b) => a.name.localeCompare(b.name)), roles: roles.map(r => ({ id: r.id, name: r.name })) };
   }
   private safe<T>(fn: () => T, fallback: T): T { try { return fn(); } catch { return fallback; } }
 
@@ -202,7 +227,7 @@ export class SkillLibrary {
     await this.ready();
     const f = this.find(String(name));
     if (!f) throw new Error(`Skill non trovata: ${name}`);
-    return this.info(f, this.d.changes().all(), this.safe(() => this.d.runs(), []), this.safe(() => this.d.roles(), []).filter(r => r.scope === 'role'));
+    return this.info(f, this.latestByFolder(this.d.changes().all(), new Set(this.folders(f))), SkillLibrary.runsBySkill(this.safe(() => this.d.runs(), [])), this.safe(() => this.d.roles(), []).filter(r => r.scope === 'role'));
   }
 
   /** One file of a skill (a binary one comes back without text). */

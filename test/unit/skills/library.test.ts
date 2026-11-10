@@ -51,10 +51,26 @@ describe('SkillLibrary', () => {
     const h = await lib.history('report-mensile');
     expect(h.map(v => v.files.map(f => f.path))).toEqual([['scripts/build.mjs'], ['SKILL.md']]);
     expect(h[0]).toMatchObject({ canUndo: true, files: [{ before: null, after: 'export {}' }] });
+    // the list names the latest live change of each skill, a file deep in the package included (one pass over the history)
+    const latest = (await lib.state()).skills.find(k => k.name === 'report-mensile')!;
+    expect(latest).toMatchObject({ changedAt: h[0]!.at, madeBy: h[0]!.job });
     // the older one cannot be undone before the newer: here they touch different files, so both can
     await lib.undo('report-mensile', h[0]!.id);
     expect(fs.existsSync(path.join(root, '.agents/skills/report-mensile/scripts/build.mjs'))).toBe(false);
     expect((await lib.history('report-mensile'))[0]!.undoneAt).not.toBeNull();
+    expect((await lib.state()).skills.find(k => k.name === 'report-mensile')!.madeBy).toBe(h[1]!.job);
+  });
+
+  it('a skill folder that is a link keeps its latest change in the list (the log records the link\'s target)', async () => {
+    const { root, lib } = setup();
+    const target = tmp();
+    put(target, 'SKILL.md', md('collegata'));
+    fs.mkdirSync(path.join(root, '.agents/skills'), { recursive: true });
+    fs.symlinkSync(target, path.join(root, '.agents/skills/collegata'), 'junction');
+    const w = await lib.write({ skill: 'collegata', path: 'SKILL.md', text: md('collegata', 'Linked.') }, { who: 'tu' });
+    expect(w.ok).toBe(true);
+    const [v] = await lib.history('collegata');
+    expect((await lib.state()).skills.find(k => k.name === 'collegata')).toMatchObject({ changedAt: v!.at, madeBy: v!.job });
   });
 
   it('edits an app skill as a brain copy of its whole package; removing the copy restores the original', async () => {
