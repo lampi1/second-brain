@@ -56,13 +56,14 @@ import type { BrainService, ChatService } from './services';
 import { SkillsService } from './skills/service';
 import { SkillLibrary } from './skills/library';
 import { roleSkillName, SkillLessons } from './skills/lessons';
-import { ensureTools, isProduct } from './rules/tools';
+import { brainScript, ensureTools, isProduct } from './rules/tools';
 import { appSkillsIn } from './agents/pack/shared-skills';
 import { BrainModelService } from './brainmodel/service';
 import { CONVERSATIONS_MAX, issuesUrlOf, ResearchService } from './brainmodel/research';
 import { issueSnapshot } from './brainmodel/research-deep';
 import { ghRun, openIssue } from './brainmodel/issue-open';
 import { hiddenOpened, hiddenRun } from './window';
+import { writeFatto } from './brain/journal-line';
 import { saveAiIdea } from './brain/save-idea';
 import { researchTools } from './brainmodel/research-tools';
 import { createBrain } from './brain';
@@ -440,6 +441,12 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       return tool && fs.existsSync(tool) ? tool : null;
     },
     brainRoot: () => brain.info().brainRoot,
+    // #375: the app writes the journal's «fatto» line of a role's result, through the brain's mem.mjs (the app's copy
+    // for a product brain)
+    journalFatto: async entry => {
+      const root = brain.info().brainRoot;
+      await writeFatto({ tool: root ? brainScript(root, 'ops/tools/mem.mjs') : null, root, userData: ctx.userData, node: electronNode() }, entry);
+    },
   });
   const jobs = new Map<string, { usd: number; turns: number; prompt: string | undefined }>();
   // a routed chat's totals already in the ledger when this run first saw it (after a restart, or its predecessor's)

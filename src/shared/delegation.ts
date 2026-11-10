@@ -103,7 +103,9 @@ export interface ChatDelegation {
   /** the tool classes the contract narrowed it to (absent = its role's, bounded by the parent's) */
   tools?: ToolClass[];
   /** its agent_report, once given */
-  result?: { outcome: DelegationOutcome; summary: string; at: number; doneWhen?: { criterion: string; met: boolean }[]; noReport?: true; corrections?: number };
+  result?: { outcome: DelegationOutcome; summary: string; at: number; doneWhen?: { criterion: string; met: boolean }[]; noReport?: true; corrections?: number;
+    /** #375: this assignment's «fatto» line is due or written in the brain journal (kept through corrections) */
+    journaled?: true };
   /** the goal as the contract gave it, kept when the user changed it in the child's chat (goal is then the user's) */
   originalGoal?: string;
 }
@@ -339,7 +341,7 @@ export function readDelegation(v: unknown): ChatDelegation | null {
   const crit = Array.isArray(r?.doneWhen) ? (r!.doneWhen as unknown[]).filter((x): x is { criterion: string; met: boolean } => !!x && typeof (x as { criterion?: unknown }).criterion === 'string' && typeof (x as { met?: unknown }).met === 'boolean')
     .slice(0, CRITERIA_MAX).map(x => ({ criterion: x.criterion.slice(0, CRITERION_MAX), met: x.met })) : [];
   const result = r && (RESULT_OUTCOMES as readonly unknown[]).includes(r.outcome) && typeof r.summary === 'string' && typeof r.at === 'number'
-    ? { outcome: r.outcome as DelegationOutcome, summary: r.summary, at: r.at, ...(crit.length ? { doneWhen: crit } : {}), ...(r.noReport === true ? { noReport: true as const } : {}), ...(Number.isSafeInteger(r.corrections) && (r.corrections as number) > 0 ? { corrections: Math.min(r.corrections as number, MAX_CORRECTIONS) } : {}) } : undefined;
+    ? { outcome: r.outcome as DelegationOutcome, summary: r.summary, at: r.at, ...(crit.length ? { doneWhen: crit } : {}), ...(r.noReport === true ? { noReport: true as const } : {}), ...(Number.isSafeInteger(r.corrections) && (r.corrections as number) > 0 ? { corrections: Math.min(r.corrections as number, MAX_CORRECTIONS) } : {}), ...(r.journaled === true ? { journaled: true as const } : {}) } : undefined;
   const tools = Array.isArray(d.tools) && d.tools.every(c => (TOOL_CLASSES as readonly unknown[]).includes(c)) ? d.tools as ToolClass[] : undefined;
   return { role, goal: d.goal.slice(0, GOAL_MAX), doneWhen: (d.doneWhen as string[]).slice(0, CRITERIA_MAX), at: d.at, ...(tools ? { tools } : {}), ...(result ? { result } : {}), ...(typeof d.originalGoal === 'string' ? { originalGoal: d.originalGoal.slice(0, GOAL_MAX) } : {}) };
 }

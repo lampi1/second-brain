@@ -146,6 +146,9 @@ export interface ChatManagerOptions {
   runEveryMs?: number;
   /** absolute path of the brain's mem.mjs, when it has one: the hand-off request asks to update the now.md line too */
   memTool?: () => string | null;
+  /** writes one «fatto» line to the brain's journal (#375): a role's first agent_report done or partial of an assignment.
+   *  Its failure never fails the report (logged). Absent = nothing written. */
+  journalFatto?: (entry: { role: string; title: string; summary: string; outcome: 'done' | 'partial' }) => Promise<void>;
   /** the brain folder: a brain-write role (no edit) may edit only inside it (agents/role-gate.ts) */
   brainRoot?: () => string | null;
   /** how long a chat may take to write its hand-off before the app builds one itself (default 5 min) */

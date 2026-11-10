@@ -138,7 +138,9 @@ export interface AgentRunReport { canonical?: CanonicalResult; at: number; outco
    *  run-report block in a reply */
   via?: 'agent_report';
   /** how many corrections (agent_report amends: true) replaced the first result; absent = none */
-  corrections?: number }
+  corrections?: number;
+  /** #375: this assignment's «fatto» line is due or written in the brain journal (kept through corrections) */
+  journaled?: true }
 /** One shell command a run's agent ran (agents/receipts.ts): its text (cut), its exit code (null = the engine did not
  *  say), when it started; check = it runs a repo check (tests, typecheck, lint); masked = a pipe, `||`, `;` or `&`
  *  around it, so its exit code is not the check's. */

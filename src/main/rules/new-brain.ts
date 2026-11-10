@@ -60,5 +60,7 @@ export function memoryInstructions(runtime: string, root: string, tools?: string
     `Error: node "${cli}" error "${brain}" "agent" "verified error and prevention".\n` +
     `Agent memory (one per agent, when your instructions name your id): node "${cli}" agent "${brain}" "<id>" "one fact worth remembering".\n` +
     `Diagnostics: node "${cli}" lint "${brain}". Shell tools must preserve argument boundaries; never interpolate untrusted text.` +
-    (tools ? `\nBrain utilities: {tools} = ${tools.replace(/\\/g, '/')} (app-owned, rendered for this brain); e.g. node "${tools.replace(/\\/g, '/')}/ops/tools/mem.mjs" idea "…".` : '');
+    (tools ? `\nBrain utilities: {tools} = ${tools.replace(/\\/g, '/')} (app-owned, rendered for this brain); e.g. node "${tools.replace(/\\/g, '/')}/ops/tools/mem.mjs" idea "…".` : '') +
+    // #375: the app writes the «fatto» line of a result itself; a role adds what only it saw
+    `\nJournal (one line, today's file; the app already writes «fatto» when you report): node "${(tools ?? root).replace(/\\/g, '/')}/ops/tools/mem.mjs" journal --text "attrito|decisione|lezione · what happened and why".`;
 }

@@ -65,14 +65,15 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     // report is refused as before, and amends on the first report is just the first report
     const correction = this.correctionNumber(d.result ? d.result.corrections ?? 0 : null, result, 'delegation');
     if (!correction) delete result.amends;
+    const journal = journalMark(correction ? d.result?.journaled : undefined, result);
     const at = Math.max(Date.now(), (r.s.run?.report?.at ?? 0) + 1), met = result.doneWhen.filter(x => x.met).length;
     // the user changed the child's goal in its chat: the card shows the user's goal, the contract's stays as originalGoal
     const goal = result.goalChangedByUser && result.newGoal ? { goal: result.newGoal, originalGoal: d.originalGoal ?? d.goal } : {};
-    r.s.delegation = { ...d, ...goal, result: { outcome: result.outcome, summary: result.summary, at, doneWhen: result.doneWhen.map(x => ({ criterion: x.criterion, met: x.met })), ...(correction ? { corrections: correction } : {}) } };
+    r.s.delegation = { ...d, ...goal, result: { outcome: result.outcome, summary: result.summary, at, doneWhen: result.doneWhen.map(x => ({ criterion: x.criterion, met: x.met })), ...(correction ? { corrections: correction } : {}), ...(journal.mark ? { journaled: true as const } : {}) } };
     const run = r.s.run;
     if (run) {
       run.delivery = { policy: 'synthesize', reportedAt: at, attempts: 0, ownerNotice: true };
-      run.report = { at, outcome: result.outcome, verified: met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', summary: cut(result.summary, 140), via: 'agent_report', ...(correction ? { corrections: correction } : {}), canonical: { ...structuredClone(result), at, taskId: run.taskId ?? run.runId, runId: run.runId, taskVersion: run.taskVersion ?? 1 } };
+      run.report = { at, outcome: result.outcome, verified: met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', summary: cut(result.summary, 140), via: 'agent_report', ...(correction ? { corrections: correction } : {}), ...(journal.mark ? { journaled: true as const } : {}), canonical: { ...structuredClone(result), at, taskId: run.taskId ?? run.runId, runId: run.runId, taskVersion: run.taskVersion ?? 1 } };
       this.runSave();
     }
     r.report = { text: result.summary, at, final: true, ...(result.outcome === 'blocked' ? { blocked: true } : {}) };
@@ -98,8 +99,19 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     this.persist(true);
     if (!this.midTurn(r)) this.releaseResult(r);
     this.askUserAction(r, result);
+    if (journal.write) this.journalResult(r, result);
     log.info('chats', correction ? 'delegation result corrected' : 'delegation reported', { chat: chatId, data: { parent: parentId, outcome: result.outcome, met, criteria: result.doneWhen.length, ...(correction ? { correction } : {}) } });
     return { parentId, delivered: !!parent };
+  }
+
+  /** A role's result reaches the brain's journal as one «fatto» line, by the app, whatever the engine or model (#375;
+   *  when: journalMark). A failure is logged and never fails the report. */
+  private journalResult(r: Rec, result: DelegationResult): void {
+    if (!this.opts.journalFatto || (result.outcome !== 'done' && result.outcome !== 'partial')) return;
+    const id = r.s.agent?.id ?? r.s.delegation?.role;
+    const role = id && isWorkRole(id) ? ROLE_DEFAULTS[id].name : r.s.agent?.name ?? 'Agente';
+    void this.opts.journalFatto({ role, title: r.s.title, summary: result.summary, outcome: result.outcome })
+      .catch(e => log.warn('brain', 'journal line not written', { chat: r.s.id, cause: errText(e), hint: 'the report is kept; the brain journal misses this «fatto» line' }));
   }
 
   /** agent_ask_parent (agents/delegation.ts): the child waits for its parent's answer, not on its report (#152). */
@@ -257,11 +269,12 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     // notice (no Orchestrator turn of its own), synthesize asks for a synthesis again
     const correction = this.correctionNumber(reported ? (run.report?.via === 'agent_report' ? run.report.corrections ?? 0 : 0) : null, result, 'assignment');
     if (!correction) delete result.amends;
+    const journal = journalMark(correction ? run.report?.journaled : undefined, result);
     const at = Math.max(Date.now(), (run.report?.at ?? 0) + 1), met = result.doneWhen.filter(x => x.met).length;
     {
       const policy = run.startedBy === 'app' ? 'display' : this.deliveryPolicy(run.taskContract?.deliveryPolicy);
       run.delivery = { policy, reportedAt: at, attempts: 0, ...(policy === 'synthesize' ? { synthesisRequestedAt: at, synthesisPending: true } : {}) };
-      run.report = { at, outcome: result.outcome, verified: review ? result.verified! : !result.doneWhen.length ? 'no' : met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', ...(review ? { verdict: result.verdict! } : {}), summary: cut(result.summary, 140), via: 'agent_report', ...(correction ? { corrections: correction } : {}), canonical: { ...structuredClone(result), at, taskId: run.taskId ?? run.runId, runId: run.runId, taskVersion: run.taskVersion ?? 1 } };
+      run.report = { at, outcome: result.outcome, verified: review ? result.verified! : !result.doneWhen.length ? 'no' : met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', ...(review ? { verdict: result.verdict! } : {}), summary: cut(result.summary, 140), via: 'agent_report', ...(correction ? { corrections: correction } : {}), ...(journal.mark ? { journaled: true as const } : {}), canonical: { ...structuredClone(result), at, taskId: run.taskId ?? run.runId, runId: run.runId, taskVersion: run.taskVersion ?? 1 } };
       this.runSave();
     }
     r.report = { text: result.summary, at, final: true, ...(result.outcome === 'blocked' ? { blocked: true } : {}) };
@@ -291,6 +304,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
       if (!this.midTurn(r)) this.releaseResult(r);
     }
     this.askUserAction(r, result);
+    if (journal.write && !review) this.journalResult(r, result);
     log.info('chats', 'root chat reported', { chat: chatId, data: { orchestrator: orchestrator?.s.id ?? null, outcome: result.outcome, met, criteria: result.doneWhen.length, userWaits: waits, ...(correction ? { correction } : {}) } });
     return { orchestratorId: local ? null : orchestrator?.s.id ?? null, delivered: local || !!orchestrator };
   }
@@ -655,4 +669,12 @@ export abstract class ManagerDelegation extends ManagerContinuity {
   abstract send(chatId: string, text: string, images?: unknown, resumed?: boolean, from?: string, liveOnly?: boolean, source?: TaskSource, receipt?: SubmissionReceipt, appText?: boolean): Promise<void>;
   abstract list(): ChatSummary[];
   protected abstract autoActivity(r: Rec): void;
+}
+
+/** One «fatto» line per assignment (#375): at its first report done or partial, or at the correction that first makes a
+ *  blocked result done or partial; never again after (done → blocked → done included). The mark is saved with the
+ *  result (journaled), so a restart in between changes nothing; a new assignment starts without one. */
+function journalMark(had: true | undefined, result: DelegationResult): { write: boolean; mark: boolean } {
+  const counts = result.outcome === 'done' || result.outcome === 'partial';
+  return { write: counts && !had, mark: !!had || counts };
 }

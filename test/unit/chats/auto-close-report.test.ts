@@ -11,6 +11,8 @@ import { ChatManager } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import { AutoCloseService, autoCloseNow } from '../../../src/main/chats/auto-close';
 import { plainOwner } from '../../../src/main/agents/catalog';
+import { readRun } from '../../../src/main/agents/runs';
+import { readDelegation } from '../../../src/shared/delegation';
 import type { StrategyPlan } from '../../../src/shared/strategy';
 import type { Harness } from '../../../src/shared/contract';
 
@@ -22,13 +24,13 @@ const roots: string[] = [], managers: ChatManager[] = [];
 afterEach(async () => { for (const m of managers.splice(0)) await m.shutdown(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
 
 /** A turn of the fake engine: what it mails to its Orchestrator mid-turn, and its final answer. */
-interface Turn { mail?: string; report?: string; outcome?: 'done' | 'blocked'; answer: string; background?: boolean; question?: boolean }
+interface Turn { mail?: string; report?: string; outcome?: 'done' | 'partial' | 'blocked'; answer: string; background?: boolean; question?: boolean }
 
-function fixture(harness: Harness = 'claude') {
+function fixture(harness: Harness = 'claude', extra: Partial<ConstructorParameters<typeof ChatManager>[0]> = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-auto-report-')); roots.push(dir);
   const sinks = new Map<string, SessionSink>(), script = new Map<string, Turn[]>();
   let creating: SessionSink | null = null, seq = 0;
-  const m = new TestManager({ userData: dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0, env: { CLAUDE_CONFIG_DIR: path.join(dir, 'home') }, sessionFactory: (_h, _o, s) => {
+  const m = new TestManager({ ...extra, userData: dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0, env: { CLAUDE_CONFIG_DIR: path.join(dir, 'home') }, sessionFactory: (_h, _o, s) => {
     creating = s; let state = 'idle';
     const self = { harness, sessionId: null, pid: null, root: null, alive: true, get busy() { return state === 'running'; },
       start() { s.childrenCoverage?.('complete'); s.changed({ state: 'idle' }); },
@@ -304,5 +306,41 @@ describe('a worker that delivered its final report closes by itself (#86)', () =
     // the command run (or the hand-off over): the tag goes at once, without a new turn (#359)
     expect(['command', 'browser']).not.toContain(f.m.autoCloseCandidates(() => false).find(c => c.id === w.id)?.waitingFor);
     expect(f.m.autoCloseCandidates(() => false).find(c => c.id === w.id)).toMatchObject({ eligible: true });
+  });
+});
+
+describe('the brain journal gets a «fatto» line for every result (#375)', () => {
+  type Entry = { role: string; title: string; summary: string; outcome: 'done' | 'partial' };
+  it.each(['claude', 'codex', 'cursor'] as const)('%s: done and partial write one line each assignment, blocked none, a correction no second', async harness => {
+    const lines: Entry[] = [];
+    const f = fixture(harness, { journalFatto: async e => { lines.push(e); } }), r = await f.orchestrator();
+    const w = await f.worker(r.id, { report: 'Tre fonti trovate.', answer: 'Fatto.' });
+    expect(lines).toEqual([expect.objectContaining({ title: f.chat(w.id).title, summary: 'Tre fonti trovate.', outcome: 'done' })]);
+    // the same assignment corrected: still one line
+    f.m.reportRoot(w.id, { outcome: 'blocked', summary: 'Una fonte non regge.', output: 'x', doneWhen: [], amends: true });
+    f.m.reportRoot(w.id, { outcome: 'done', summary: 'Tre fonti, corrette.', output: 'x', doneWhen: [], amends: true });
+    expect(lines).toHaveLength(1); // done → blocked → done is one assignment
+    expect(f.chat(w.id).run?.report?.journaled).toBe(true); // saved with the result: a restart in between changes nothing
+    expect(readRun(JSON.parse(JSON.stringify(f.chat(w.id).run)))?.report?.journaled).toBe(true); // and read back after a restart
+    // a refused second report writes nothing either
+    expect(() => f.m.reportRoot(w.id, { outcome: 'done', summary: 'Di nuovo.', output: 'x', doneWhen: [] })).toThrow();
+    expect(lines).toHaveLength(1);
+    const p = await f.worker(r.id, { report: 'Metà fatta.', outcome: 'partial', answer: 'Parziale.' });
+    const b = await f.worker(r.id, { report: 'Manca l’accesso.', outcome: 'blocked', answer: 'Bloccato.' });
+    expect(lines.map(l => [l.title, l.outcome])).toEqual([[f.chat(w.id).title, 'done'], [f.chat(p.id).title, 'partial']]);
+    expect(f.chat(b.id).run?.report?.outcome).toBe('blocked');
+    // a delegated chat's mark is read back too
+    expect(readDelegation({ role: 'artisan', goal: 'g', doneWhen: [], at: 1, result: { outcome: 'done', summary: 's', at: 2, journaled: true } })?.result?.journaled).toBe(true);
+    // a blocked result corrected to done is the work done now: its line is written then, once
+    f.m.reportRoot(b.id, { outcome: 'done', summary: 'Accesso avuto, fatto.', output: 'x', doneWhen: [], amends: true });
+    f.m.reportRoot(b.id, { outcome: 'done', summary: 'Fatto, ricontrollato.', output: 'x', doneWhen: [], amends: true });
+    expect(lines.map(l => [l.title, l.outcome])).toEqual([[f.chat(w.id).title, 'done'], [f.chat(p.id).title, 'partial'], [f.chat(b.id).title, 'done']]);
+  });
+
+  it('a journal that cannot be written never fails the report', async () => {
+    const f = fixture('claude', { journalFatto: async () => { throw new Error('no mem.mjs'); } }), r = await f.orchestrator();
+    const w = await f.worker(r.id, { report: 'Fatto tutto.', answer: 'Fatto.' });
+    await new Promise(res => setImmediate(res));
+    expect(f.chat(w.id).run?.report).toMatchObject({ outcome: 'done', via: 'agent_report' });
   });
 });
