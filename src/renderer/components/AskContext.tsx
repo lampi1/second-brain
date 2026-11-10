@@ -13,7 +13,7 @@
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { PendingRequest } from '@shared/contract';
 import { useAskItems } from '../lib/askItems';
-import { askContext, withoutCommand, type ContextLink } from '../lib/askContext';
+import { askContext, lastThoughtOf, withoutCommand, type ContextLink, type ThinkingKept } from '../lib/askContext';
 import { markdownParts, renderMarkdown } from '../lib/markdown';
 import { isSendable } from '../lib/sendable';
 import { CodeBlock } from './CodeBlock';
@@ -79,10 +79,13 @@ function docsOf(pieces: readonly { id: string; kind: string; text: string }[]): 
     : []));
 }
 
-export const AskContext = memo(function AskContext({ req, defaultOpen, testBase, onToggle, layout = 'panel', question, lead, noVisuals, label }: {
+export const AskContext = memo(function AskContext({ req, defaultOpen, testBase, onToggle, layout = 'panel', question, lead, noVisuals, thinking, label }: {
   req: PendingRequest; defaultOpen: boolean; testBase: string; onToggle?: () => void; layout?: 'panel' | 'window';
   /** the decision card draws the attached visuals itself (ADR 0150) */
   noVisuals?: boolean;
+  /** the reasoning pieces kept (default all): the yes/no card keeps only the last one ('last', in its fold when it is
+   *  folded) or none ('none', when it shows that one itself with AskThought) */
+  thinking?: ThinkingKept;
   /** the toggle's name instead of «Contesto» */
   label?: string;
   /** the questions window: the question itself, drawn between the lead and the rest of the context */
@@ -91,7 +94,22 @@ export const AskContext = memo(function AskContext({ req, defaultOpen, testBase,
   lead?: string;
 }) {
   if (layout === 'window') return <WindowContext req={req} testBase={testBase} question={question} lead={lead} />;
-  return <PanelContext req={req} defaultOpen={defaultOpen} testBase={testBase} onToggle={onToggle} noVisuals={noVisuals} label={label} />;
+  return <PanelContext req={req} defaultOpen={defaultOpen} testBase={testBase} onToggle={onToggle} noVisuals={noVisuals} thinking={thinking} label={label} />;
+});
+
+/** The yes/no card's reasoning (lib/askContext.ts lastThoughtOf): the newest piece, open, right under the question. */
+export const AskThought = memo(function AskThought({ req, testBase }: { req: PendingRequest; testBase: string }) {
+  const items = useAskItems(req.chatId);
+  const closed = useApp(s => !!s.chats[req.chatId]?.closedAt);
+  useEffect(() => { if (items === undefined && !closed) void loadItems(req.chatId); }, [items, closed, req.chatId]);
+  const thought = useMemo(() => lastThoughtOf(items, req), [items, req]);
+  if (!thought) return null;
+  return (
+    <div className="ctx-piece thinking" data-testid={`${testBase}-thought`}>
+      <div className="ctx-from">{t('chat.context.thinking')}</div>
+      <div className="md" dangerouslySetInnerHTML={{ __html: renderMarkdown(thought.text) }} />
+    </div>
+  );
 });
 
 /** The questions window's context, always open (the owner, 2026-10-22: «tutto il contesto nella modale deve essere
@@ -159,11 +177,11 @@ function WindowContext({ req, testBase, question, lead }: { req: PendingRequest;
   );
 }
 
-const PanelContext = memo(function PanelContext({ req, defaultOpen, testBase, onToggle, noVisuals, label }: { req: PendingRequest; defaultOpen: boolean; testBase: string; onToggle?: () => void; noVisuals?: boolean; label?: string }) {
+const PanelContext = memo(function PanelContext({ req, defaultOpen, testBase, onToggle, noVisuals, thinking = 'all', label }: { req: PendingRequest; defaultOpen: boolean; testBase: string; onToggle?: () => void; noVisuals?: boolean; thinking?: ThinkingKept; label?: string }) {
   const items = useAskItems(req.chatId);
   const closed = useApp(s => !!s.chats[req.chatId]?.closedAt);
   useEffect(() => { if (items === undefined && !closed) void loadItems(req.chatId); }, [items, closed, req.chatId]);
-  const ctx = useMemo(() => askContext(items, req), [items, req]);
+  const ctx = useMemo(() => askContext(items, req, thinking), [items, req, thinking]);
   const previews = useMemo(() => (req.questions ?? []).flatMap(q => q.options.filter(o => o.preview?.trim()).map(o => ({ label: o.label, text: o.preview! }))), [req]);
   const [open, setOpen] = useState(defaultOpen);
   const hasBody = ctx.pieces.length > 0 || previews.length > 0;

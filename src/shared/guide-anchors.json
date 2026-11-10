@@ -197,6 +197,7 @@
     "src/renderer/components/andamento/AndamentoPage.tsx": "98bc2d47ef701415",
     "src/renderer/components/andamento/UsageTab.tsx": "c2279f1d5ebb59d9",
     "src/renderer/components/AppUpdateSettings.tsx": "d27688053f01e6cf",
+    "src/renderer/components/AskContext.tsx#AskThought": "bb34f15cae69dcb8",
     "src/renderer/components/AskImages.tsx": "caaf747e5363f28a",
     "src/renderer/components/AutoCloseNotice.tsx": "0d49e37306f2bbb8",
     "src/renderer/components/brain-model/ApprovedTab.tsx": "420c36ed544689ca",
@@ -258,6 +259,7 @@
     "src/renderer/i18n/LangRoot.tsx": "5d0c4fb2356b0e00",
     "src/renderer/lib/agent-order.ts": "51cf4c20a16b488d",
     "src/renderer/lib/andamento.ts": "c31a6c908f8b0df5",
+    "src/renderer/lib/askContext.ts#lastThoughtOf": "7eccedda54165c7a",
     "src/renderer/lib/brain-model-view.ts#linkGraph": "151735466bff5bfe",
     "src/renderer/lib/character-art.ts": "aae2d6202de8c956",
     "src/renderer/lib/child-requests.ts#requestHost": "066250fa73f368fd",
@@ -332,6 +334,7 @@
     "src/shared/waiting.ts": "9c948662b54ebc32",
     "src/shared/work-concepts.ts#builtinTask": "6cdbaf73c8063f60",
     "src/shared/work-concepts.ts#CONCEPTS": "ed0ee7dd56ca47f7",
-    "src/shared/work-concepts.ts#taskOf": "7b3b358955083778"
+    "src/shared/work-concepts.ts#taskOf": "7b3b358955083778",
+    "src/shared/yes-no.ts#mappedYesNo": "05f338299023a88e"
   }
 }

@@ -11,6 +11,8 @@ import { LOCAL_START } from './pathPatterns';
 
 export interface ContextPiece { id: string; kind: 'text' | 'thinking'; text: string }
 export interface ContextLink { kind: 'web' | 'file'; href: string; label: string }
+/** The reasoning pieces a context keeps: all, only the newest, or none (the yes/no card, the owner 2026-11-10). */
+export type ThinkingKept = 'all' | 'last' | 'none';
 /** again: the chat asks once more the question the user just answered (often after a free answer it replied to only
  *  in its reasoning); answer = what the user wrote then ('' when the result is not readable) */
 export interface AskContext { pieces: ContextPiece[]; links: ContextLink[]; again?: { answer: string } }
@@ -142,13 +144,15 @@ export function requestItems(items: readonly ChatItem[] | undefined, req: Pendin
 
 /** The context of a request from its chat's items: its own prose pieces (newest last), every link of the turn, and,
  *  when the chat asks again the question just answered, what the user answered then. */
-export function askContext(items: readonly ChatItem[] | undefined, req: PendingRequest): AskContext {
+export function askContext(items: readonly ChatItem[] | undefined, req: PendingRequest, thinking: ThinkingKept = 'all'): AskContext {
   const { span, turn, prevAsk } = requestItems(items, req);
-  const prose: ContextPiece[] = [];
+  let prose: ContextPiece[] = [];
   for (const it of span) {
     if (it.kind === 'assistant' && it.text.trim()) prose.push({ id: it.id, kind: 'text', text: it.text });
     else if (it.kind === 'thinking' && it.text.trim()) prose.push({ id: it.id, kind: 'thinking', text: it.text });
   }
+  // reasoning left out before the cap, so it never takes the place of the chat's own messages
+  if (thinking !== 'all') { const keep = thinking === 'last' ? lastThought(prose) : undefined; prose = prose.filter(p => p.kind !== 'thinking' || p === keep); }
   // the newest pieces, as much as fits (the oldest piece kept may be cut at its start)
   const pieces: ContextPiece[] = [];
   let room = MAX_CHARS;
@@ -163,6 +167,24 @@ export function askContext(items: readonly ChatItem[] | undefined, req: PendingR
   const asked = req.questions?.map(q => q.question).join('\n') ?? '';
   const again = prevAsk && asked && askedTexts(prevAsk.input) === asked ? { answer: answerIn(prevAsk.output) } : null;
   return { pieces, links, ...(again ? { again } : {}) };
+}
+
+/** The yes/no card's reasoning (the owner, 2026-11-10: «voglio vedere questo ultimo pezzo del ragionamento … subito come
+ *  contesto della domanda, gli altri pezzi … non li leggo mai toglili, anche perché non sono in lingua utente»): the
+ *  newest reasoning piece only. */
+export function lastThought(pieces: readonly ContextPiece[]): ContextPiece | undefined {
+  for (let i = pieces.length - 1; i >= 0; i--) if (pieces[i]!.kind === 'thinking') return pieces[i];
+  return undefined;
+}
+
+/** The request's newest reasoning piece, whatever came after it (cut at its start past MAX_CHARS). */
+export function lastThoughtOf(items: readonly ChatItem[] | undefined, req: PendingRequest): ContextPiece | undefined {
+  const { span } = requestItems(items, req);
+  for (let i = span.length - 1; i >= 0; i--) {
+    const it = span[i]!;
+    if (it.kind === 'thinking' && it.text.trim()) return { id: it.id, kind: 'thinking', text: it.text.length > MAX_CHARS ? `…${it.text.slice(-MAX_CHARS)}` : it.text };
+  }
+  return undefined;
 }
 
 /** Thinking blocks right before a question (no answer text nor another tool between them and the ask): shown open.

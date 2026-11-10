@@ -22,7 +22,7 @@ import { ago } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { claimFocus, reqKey } from '../actions';
 import { dismissCommand, runCommand, useApp } from '../store/store';
-import { AskContext } from './AskContext';
+import { AskContext, AskThought } from './AskContext';
 import { HarnessMark, IconAlert, IconArrowRight, IconCheck, IconCopy, IconPlay, IconTerminal } from './Icons';
 import { Kbd } from './ui';
 import { Gist } from './Gist';
@@ -142,7 +142,7 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
           </button>
         )}
       </div>
-      {withContext && <AskContext req={req} defaultOpen={false} testBase={testBase} onToggle={() => requestAnimationFrame(() => ref.current?.focus())} />}
+      {withContext && <AskContext req={req} defaultOpen={false} testBase={testBase} thinking="last" onToggle={() => requestAnimationFrame(() => ref.current?.focus())} />}
       {!small && replyField(false)}
       <div className="cmd-actions">
         <button type="button" className={`btn btn-primary ${small ? 'btn-s' : 'btn-m'} ${armed ? 'armed' : ''}`} onClick={() => { void run(); }} disabled={busy} data-testid={`${testBase}-run`}
@@ -208,7 +208,9 @@ function WindowCommand({ req, chatTitle, testBase, withContext, prod, armed, bus
         </div>
         <pre className="ask-cmd cmd-code" data-testid={`${testBase}-code`}>{code}</pre>
       </div>
-      {withContext && <AskContext req={req} defaultOpen={false} testBase={testBase} noVisuals label={t('genui.decision.chatText')} />}
+      {/* the yes/no card's reasoning (the owner, 2026-11-10): only the last piece, open; none in the fold */}
+      {withContext && <AskThought req={req} testBase={testBase} />}
+      {withContext && <AskContext req={req} defaultOpen={false} testBase={testBase} noVisuals thinking="none" label={t('genui.decision.chatText')} />}
     </DecisionCard>
   );
 }

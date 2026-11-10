@@ -37,7 +37,8 @@ import { engineOf } from '../lib/engines';
 import { answer, app, useApp } from '../store/store';
 import { claimFocus, focusChat, reqKey } from '../actions';
 import { CommandRequest, type CommandHandlers } from './CommandRequest';
-import { AskContext } from './AskContext';
+import { AskContext, AskThought } from './AskContext';
+import { askContext } from '../lib/askContext';
 import { useAskItems } from '../lib/askItems';
 import { qwinStats } from '../lib/questions';
 import { withoutImages } from '../lib/askImages';
@@ -476,6 +477,8 @@ const AskDecision = forwardRef<HTMLDivElement, {
   const chat = useApp(s => s.chats[p.req.chatId]);
   const brief = useMemo(() => (items ?? []).filter((i): i is Art => i.kind === 'artifact' && i.askId === p.req.id && i.ui.component === 'brief').pop(), [items, p.req.id]);
   const b = brief?.ui.component === 'brief' ? brief.ui.props as UiBrief : null;
+  // the fold under the note holds the chat's own messages only (its reasoning is shown above): say «below» only when there are some
+  const chatWrote = useMemo(() => askContext(items, p.req, 'none').pieces.length > 0, [items, p.req]);
   const desc = (label: 'yes' | 'no') => { const o = p.q.options.find(x => yesNoOf(x.label) === label); return o?.description ? cleanDescription(withoutImages(o.description)) : undefined; };
   const agent = chat?.agent;
   const who = chat?.title ?? p.chatTitle ?? '';
@@ -505,10 +508,13 @@ const AskDecision = forwardRef<HTMLDivElement, {
       speakFrom={agent?.name ?? (who || undefined)} speakDone={b?.done.join('. ')} voiceId={`req:${p.req.chatId}/${p.req.id}/${p.q.question}`}
       onLater={p.onLater} laterButton={!p.inWindow} className={p.inWindow ? 'wq' : undefined}
       footer={<>{p.commands}{p.keysTo && createPortal(<span>{t('genui.decision.keys')}</span>, p.keysTo)}</>}>
+      {/* only the chat's last reasoning piece, open where the card has room (the owner, 2026-11-10); the folded chat text
+          below has none. A small card (lane, compact) keeps that piece in its fold. */}
+      {p.context && p.ctxOpen && <AskThought req={p.req} testBase={p.testBase} />}
       {b && <BriefEvidence brief={b} testBase={p.testBase} size={p.compact ? 'm' : 'l'} onFile={onFile} />}
       {p.context && <AskArtifacts req={p.req} testBase={p.testBase} noBrief />}
-      {!b && p.context && p.ctxOpen && <p className="dc-nobrief" data-testid={`${p.testBase}-nobrief`}>{t('genui.decision.noBrief')}</p>}
-      {p.context && <AskContext key={b ? 'brief' : 'none'} req={p.req} defaultOpen={false} testBase={p.testBase} noVisuals label={t('genui.decision.chatText')} />}
+      {!b && p.context && p.ctxOpen && <p className="dc-nobrief" data-testid={`${p.testBase}-nobrief`}>{t(chatWrote ? 'genui.decision.noBrief' : 'genui.decision.noBriefOnly')}</p>}
+      {p.context && <AskContext key={b ? 'brief' : 'none'} req={p.req} defaultOpen={false} testBase={p.testBase} noVisuals thinking={p.ctxOpen ? 'none' : 'last'} label={t('genui.decision.chatText')} />}
     </DecisionCard>
   );
 });

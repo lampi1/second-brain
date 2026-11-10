@@ -110,6 +110,7 @@ export const genuiRequestEn: typeof genuiRequestIt = {
   'genui.decision.skipAnswer': 'The user does not want to answer this question. Do not ask it again: pick the safest way and go on, or stop if it cannot be done without an answer.',
   'genui.decision.chatText': 'Chat message',
   'genui.decision.noBrief': 'The agent sent no summary: what it wrote before asking is below, folded.',
+  'genui.decision.noBriefOnly': 'The agent sent no summary.',
   'genui.decision.keys': 'Y yes · N no · T write · Esc later',
   'genui.decision.send': 'Send',
   'genui.decision.cancel': 'Cancel',

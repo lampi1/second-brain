@@ -627,9 +627,10 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/components/QuestionsWindow.tsx
       b('Nella finestra puoi rispondere in qualsiasi ordine dalla colonna a sinistra; Esc vuol dire «Ci penso dopo», non «rifiuta». La scheda aperta non cambia mentre la leggi: se l’agente scrive altro compare un avviso, e «Mostra» lo aggiunge. Un comando lasciato dalla chat viene prima della sua domanda: «Sì, eseguilo» lo lancia qui e l’esito risponde da solo.',
         'In the window you can answer in any order from the left rail; Esc means "Think about it later", not "deny". The open card does not change while you read it: if the agent writes more a notice appears, and "Show" adds it. A command the chat left comes before its question: "Yes, run it" runs it here and the result answers by itself.'),
+      // src/renderer/lib/askContext.ts lastThoughtOf, src/renderer/components/AskContext.tsx AskThought (owner, 2026-11-10);
       // src/shared/yes-no.ts mappedYesNo; src/main/chats/claude.ts refuseNotYesNo; src/main/chats/acp.ts (#378)
-      b('Se uno strumento dell’agente accetta solo le sue etichette (per esempio «Approve Plan» e «Request Changes»), la scheda ti mostra comunque Sì e No e la tua risposta gli arriva come quell’etichetta, la stessa che avresti scelto tu nella sua chat.',
-        'When a tool of the agent accepts only its own labels (for example «Approve Plan» and «Request Changes»), the card still shows you Sì and No and your answer reaches it as that label, the same one you would have picked in its chat.'),
+      b('Nella scheda Sì/No vedi subito, sotto la domanda, l’ultimo pezzo del ragionamento della chat, di solito quello che spiega la domanda; i precedenti non ci sono e quello che la chat ha scritto resta chiuso in «Messaggio della chat». Se uno strumento dell’agente accetta solo le sue etichette (per esempio «Approve Plan» e «Request Changes»), la scheda ti mostra comunque Sì e No e la tua risposta gli arriva come quell’etichetta, la stessa che avresti scelto tu nella sua chat.',
+        'In the Yes/No card you see the chat’s last piece of reasoning right away, under the question, usually the one that explains the question; the earlier pieces are left out and what the chat wrote stays folded in «Chat message». When a tool of the agent accepts only its own labels (for example «Approve Plan» and «Request Changes»), the card still shows you Sì and No and your answer reaches it as that label, the same one you would have picked in its chat.'),
       // src/renderer/lib/questions.ts TYPING_IDLE_MS
       b('Se stai scrivendo, una domanda nuova aspetta come pillola e compare 2 secondi dopo che smetti.',
         'If you are typing, a new question waits as a pill and appears 2 seconds after you stop.'),
@@ -655,12 +656,13 @@ export const CONCEPTS: readonly ConceptCard[] = [
       0: ['src/renderer/store/state.ts'],
       1: ['src/renderer/lib/questions.ts', 'src/renderer/components/QuestionsWindow.tsx'],
       2: ['src/renderer/components/QuestionsWindow.tsx'],
-      3: ['src/renderer/lib/questions.ts#TYPING_IDLE_MS'],
-      4: ['src/renderer/lib/later.ts', 'src/main/later.ts'],
-      5: ['src/renderer/components/AskImages.tsx', 'src/main/ask-image.ts#SCREENSHOT_HINT'],
-      6: ['src/main/chats/orchestrator-wake.ts#QUIET'],
+      3: ['src/renderer/lib/askContext.ts#lastThoughtOf', 'src/renderer/components/AskContext.tsx#AskThought', 'src/shared/yes-no.ts#mappedYesNo'],
+      4: ['src/renderer/lib/questions.ts#TYPING_IDLE_MS'],
+      5: ['src/renderer/lib/later.ts', 'src/main/later.ts'],
+      6: ['src/renderer/components/AskImages.tsx', 'src/main/ask-image.ts#SCREENSHOT_HINT'],
+      7: ['src/main/chats/orchestrator-wake.ts#QUIET'],
     },
-    sources: ['src/renderer/store/state.ts', 'src/renderer/lib/questions.ts', 'src/renderer/components/QuestionsWindow.tsx', 'src/renderer/components/AskImages.tsx', 'src/main/ask-image.ts', 'src/renderer/lib/later.ts', 'src/main/later.ts', 'src/main/chats/orchestrator-wake.ts', 'src/shared/contract/chats.ts'],
+    sources: ['src/renderer/store/state.ts', 'src/renderer/lib/questions.ts', 'src/renderer/components/QuestionsWindow.tsx', 'src/renderer/lib/askContext.ts', 'src/renderer/components/AskContext.tsx', 'src/shared/yes-no.ts', 'src/renderer/components/AskImages.tsx', 'src/main/ask-image.ts', 'src/renderer/lib/later.ts', 'src/main/later.ts', 'src/main/chats/orchestrator-wake.ts', 'src/shared/contract/chats.ts'],
   },
   {
     id: 'grindhouse',

@@ -109,6 +109,7 @@ export const genuiRequestIt = {
   'genui.decision.skipAnswer': 'L’utente non vuole rispondere a questa domanda. Non riproporla: scegli tu la strada più prudente e vai avanti, oppure fermati se senza risposta non si può.',
   'genui.decision.chatText': 'Messaggio della chat',
   'genui.decision.noBrief': 'L’agente non ha mandato il riepilogo: quello che ha scritto prima di chiedere è qui sotto, chiuso.',
+  'genui.decision.noBriefOnly': 'L’agente non ha mandato il riepilogo.',
   'genui.decision.keys': 'S sì · N no · T scrivi · Esc ci penso dopo',
   'genui.decision.send': 'Invia',
   'genui.decision.cancel': 'Annulla',
