@@ -1,8 +1,10 @@
-// Lessons for skills (#365, ADR 0242): what a role learns no longer becomes a role note injected at launch. A line from
-// agent_report's `remember` or from memory_propose becomes a proposal to change a skill: the role's own skill
-// (`ruolo-<id>`, read at every start of that role) or the skill of the task. Davide decides each one in Memoria →
-// Proposte; an approved lesson is appended to the skill's «## Lezioni» section through the skill library (one change
-// with its Undo in the skill's History), a rejected one is kept as rejected so the same line is not asked again.
+// Lessons for skills (#365, ADR 0242; ADR 0257): what a role learns no longer becomes a role note injected at launch. A
+// line from agent_report's `remember` or from memory_propose is NOTED for the next Maintenance (state `noted`, never a
+// card): the maintenance research reads the noted lines with the chats and work threads since the previous maintenance
+// and, with the strongest model, proposes a skill change or a new skill only when it is really needed (research.ts,
+// section «lessons»); the lines it read are then `reviewed`. Davide (2026-11-10): one card per run was too many. An
+// `open` lesson (a card in Memoria → Proposte, approved into the skill's «## Lezioni» section through the skill library,
+// one change with its Undo) was made only before ADR 0257; those wait for Maintenance like the noted ones now.
 // Stored in the app's data folder (skill-lessons.json), bounded. Pinned by test/unit/skills/lessons.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -10,12 +12,9 @@ import { randomUUID } from 'node:crypto';
 import { SKILL_NAME } from '../../shared/skill-library';
 import { nearSame } from '../rules/memory-worth';
 import { errText, log } from '../log';
-import type { SkillLibrary } from './library';
 
 /** The role's own skill: read in full at every start of the role (agents/pack/flows.ts runtime). */
 export const roleSkillName = (roleId: string): string => `ruolo-${roleId}`;
-/** The section of a skill that approved lessons go to. */
-export const LESSONS_HEADING = '## Lezioni';
 const MAX_LINE = 300, MAX_OPEN = 200, MAX_KEPT = 600;
 
 export interface SkillLesson {
@@ -28,34 +27,20 @@ export interface SkillLesson {
   text: string;
   chatId?: string;
   runId?: string;
-  state: 'open' | 'approved' | 'rejected';
+  /** noted: waits for Maintenance (ADR 0257); reviewed: Maintenance read it; open: a card (only lessons made before
+   *  ADR 0257 were, and they read as noted now) */
+  state: 'noted' | 'reviewed' | 'open' | 'approved' | 'rejected';
+  /** how many times a run noted the same line (a signal for Maintenance) */
+  seen?: number;
   decidedAt?: number;
-  /** the change-log entry the approval wrote (its Undo) */
+  /** the change-log entry an approval wrote (before ADR 0257) */
   changeId?: string | null;
 }
 export interface LessonProposal { role: string; text: string; skill?: string; chatId?: string; runId?: string }
 export interface LessonsDeps {
   file: string;
-  library: () => SkillLibrary | null;
-  /** the role's display name, for the role skill's description */
-  roleName?: (roleId: string) => string;
   changed?: () => void;
   now?: () => number;
-}
-
-/** The skill text with one more lesson line in its «## Lezioni» section (added at the end when missing). */
-export function withLesson(text: string, line: string): string {
-  const body = text.replace(/\s+$/, '');
-  const lines = body.split('\n');
-  const at = lines.findIndex(l => l.trim() === LESSONS_HEADING);
-  if (at < 0) return `${body}\n\n${LESSONS_HEADING}\n\n- ${line}\n`;
-  let end = at + 1;
-  while (end < lines.length && !/^#{1,2}\s/.test(lines[end] ?? '')) end++;
-  let last = end - 1;
-  while (last > at && !lines[last]?.trim()) last--;
-  const insert = last === at ? ['', `- ${line}`] : [`- ${line}`];
-  lines.splice(last + 1, 0, ...insert);
-  return `${lines.join('\n')}\n`;
 }
 
 export class SkillLessons {
@@ -65,22 +50,40 @@ export class SkillLessons {
   all(): SkillLesson[] {
     try {
       const raw = JSON.parse(fs.readFileSync(this.d.file, 'utf8')) as { lessons?: SkillLesson[] };
-      return Array.isArray(raw.lessons) ? raw.lessons.filter(l => l && typeof l.id === 'string' && typeof l.text === 'string' && typeof l.skill === 'string') : [];
+      // a card from before ADR 0257 waits for Maintenance too: the user is no longer asked one line at a time
+      return Array.isArray(raw.lessons) ? raw.lessons.filter(l => l && typeof l.id === 'string' && typeof l.text === 'string' && typeof l.skill === 'string')
+        .map(l => (l.state === 'open' ? { ...l, state: 'noted' as const } : l)) : [];
     } catch { return []; }
   }
-  open(): SkillLesson[] { return this.all().filter(l => l.state === 'open'); }
+  /** what runs noted for the next Maintenance, least recently noted first */
+  noted(): SkillLesson[] { return this.all().filter(l => l.state === 'noted'); }
+  /** Maintenance read these (its research read the section and ended): they are not shown to it again. A line noted
+   *  again after the research took its copy (more `seen` than it was shown) came back meanwhile and keeps waiting. */
+  reviewed(shown: readonly Pick<SkillLesson, 'id' | 'seen'>[]): void {
+    if (!shown.length) return;
+    const seen = new Map(shown.map(l => [l.id, l.seen ?? 1])), at = this.now();
+    let count = 0;
+    this.save(this.all().map(l => {
+      if (l.state !== 'noted' || seen.get(l.id) !== (l.seen ?? 1)) return l;
+      count++;
+      return { ...l, state: 'reviewed', decidedAt: at };
+    }));
+    log.info('skills', 'lessons reviewed by maintenance', { data: { count } });
+  }
   private save(list: SkillLesson[]): void {
-    // decided lessons beyond the cap leave first (oldest first); open ones stay
-    const open = list.filter(l => l.state === 'open'), done = list.filter(l => l.state !== 'open').slice(-Math.max(0, MAX_KEPT - open.length));
-    const keep = list.filter(l => l.state === 'open' || done.includes(l));
+    // decided lessons beyond the cap leave first (oldest first); noted ones stay, the oldest beyond MAX_OPEN leave
+    // (the list is in noting order: a line noted again moves to the end, see propose)
+    const noted = list.filter(l => l.state === 'noted'), waiting = noted.slice(-MAX_OPEN), done = list.filter(l => l.state !== 'noted').slice(-Math.max(0, MAX_KEPT - waiting.length));
+    if (noted.length > waiting.length) log.warn('skills', 'oldest noted lessons dropped', { data: { count: noted.length - waiting.length, kept: MAX_OPEN }, hint: 'run Maintenance: it reads the noted lessons' });
+    const keep = list.filter(l => waiting.includes(l) || done.includes(l));
     fs.mkdirSync(path.dirname(this.d.file), { recursive: true });
     const tmp = `${this.d.file}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify({ schema: 1, lessons: keep }, null, 1));
     fs.renameSync(tmp, this.d.file);
   }
 
-  /** One proposed lesson. The same line already proposed for the same skill (open, approved or rejected) is not asked
-   *  again: its existing entry comes back. */
+  /** One noted lesson. The same line already noted for the same skill is the same entry: a waiting one counts one more
+   *  `seen`, one Maintenance read waits again; the oldest waiting lines leave beyond MAX_OPEN. */
   propose(p: LessonProposal): { lesson: SkillLesson; duplicate: boolean } {
     const role = String(p.role ?? '').trim();
     if (!role) throw new Error('A lesson needs the role that learned it.');
@@ -93,45 +96,21 @@ export class SkillLessons {
     const line = text.length > MAX_LINE ? `${text.slice(0, MAX_LINE - 1)}…` : text;
     const list = this.all();
     const same = list.find(l => l.skill === skill && nearSame(l.text, line, 0.9));
-    if (same) return { lesson: same, duplicate: true };
-    if (list.filter(l => l.state === 'open').length >= MAX_OPEN) throw new Error(`Too many lessons wait for the user (${MAX_OPEN}): propose this one later.`);
-    const lesson: SkillLesson = { id: randomUUID(), at: this.now(), role, skill, text: line, state: 'open', ...(p.chatId ? { chatId: p.chatId } : {}), ...(p.runId ? { runId: p.runId } : {}) };
+    if (same) {
+      // noted again: Maintenance sees how often it came back; one it already read comes back to it as new (the line
+      // returned after that pass); one the user decided before ADR 0257 stays decided
+      if (same.state === 'approved' || same.state === 'rejected') return { lesson: same, duplicate: true };
+      // `at`, chat and run are the latest noting (the research reads that chat); the entry moves to the end of the list
+      const latest = { at: this.now(), ...(p.chatId ? { chatId: p.chatId } : {}), ...(p.runId ? { runId: p.runId } : {}) };
+      const again: SkillLesson = same.state === 'reviewed' ? { ...same, ...latest, state: 'noted', seen: 1, decidedAt: undefined } : { ...same, ...latest, seen: (same.seen ?? 1) + 1 };
+      this.save([...list.filter(l => l.id !== same.id), again]);
+      return { lesson: again, duplicate: true };
+    }
+    const lesson: SkillLesson = { id: randomUUID(), at: this.now(), role, skill, text: line, state: 'noted', ...(p.chatId ? { chatId: p.chatId } : {}), ...(p.runId ? { runId: p.runId } : {}) };
     this.save([...list, lesson]);
-    log.info('skills', 'lesson proposed', { data: { id: lesson.id, role, skill } });
+    log.info('skills', 'lesson noted for maintenance', { data: { id: lesson.id, role, skill } });
     this.d.changed?.();
     return { lesson, duplicate: false };
-  }
-
-  /** The user's decision. Approve appends the line to the skill (creating the role's own skill when it is missing) as one
-   *  change with its Undo; the answer names that change. */
-  async decide(id: string, approve: boolean): Promise<string | null> {
-    const list = this.all(), l = list.find(x => x.id === id);
-    if (!l) throw new Error('Lezione non trovata.');
-    if (l.state !== 'open') throw new Error('Questa lezione è già stata decisa.');
-    let changeId: string | null = null;
-    if (approve) {
-      const lib = this.d.library();
-      if (!lib) throw new Error('Scegli prima la cartella del brain.');
-      let text: string, mtime: number | undefined;
-      if (await lib.has(l.skill)) {
-        const doc = await lib.read(l.skill, 'SKILL.md');
-        if (doc.text === null) throw new Error(`SKILL.md di «${l.skill}» non è leggibile.`);
-        // already there (a save that failed after the write): nothing to append again
-        text = doc.text.split(/\r?\n/).some(x => x.trim() === `- ${l.text}`) ? doc.text : withLesson(doc.text, l.text);
-        mtime = doc.mtime;
-      } else if (l.skill === roleSkillName(l.role)) {
-        const name = this.d.roleName?.(l.role) ?? l.role;
-        text = withLesson(`---\nname: ${l.skill}\ndescription: ${JSON.stringify(`Cosa sa il ruolo ${name}: letta per intero a ogni suo avvio.`)}\n---\n\n# ${name}\n`, l.text);
-      } else throw new Error(`La skill «${l.skill}» non c’è più: rifiuta la lezione o creala prima.`);
-      const r = await lib.write({ skill: l.skill, path: 'SKILL.md', text, ...(mtime !== undefined ? { mtime } : {}) }, { who: 'tu, approvando una lezione', reason: `Lezione di ${l.role} approvata in Proposte: ${l.text}` });
-      if (!r.ok) throw new Error(r.error);
-      changeId = r.changeId;
-    }
-    const at = this.now();
-    this.save(this.all().map(x => (x.id === id ? { ...x, state: approve ? 'approved' : 'rejected', decidedAt: at, changeId } : x)));
-    log.info('skills', `lesson ${approve ? 'approved' : 'rejected'}`, { data: { id, skill: l.skill, change: changeId } });
-    this.d.changed?.();
-    return changeId;
   }
 }
 

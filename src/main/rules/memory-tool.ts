@@ -1,7 +1,8 @@
 // Chat-local memory tools, including direct root chats. The host supplies scope and provenance; model arguments cannot
 // claim a different project, author, source or verification status. A case-specific fact is refused with what to save
 // instead (memory-worth.ts, ADR 0129). With `lessons` (#365, ADR 0242) memory_propose no longer writes a role note: it
-// proposes a lesson for a skill (the role's own skill, or the task's skill named by `skill`) that the user decides.
+// notes a lesson for a skill (the role's own skill, or the task's skill named by `skill`) for the next Maintenance,
+// which proposes the skill change only when it is really needed (ADR 0257).
 import { randomUUID } from 'node:crypto';
 import type { McpTool } from '../mcp/server';
 import { proposeMemory, recallMemory, type MemoryScope } from './memory-records';
@@ -12,7 +13,7 @@ import type { LessonProposal, SkillLesson } from '../skills/lessons';
 /** What memory_propose is for (ADR 0129): general, reusable knowledge, a specific finding generalized first. */
 export const MEMORY_PROPOSE_TEXT = 'Propose one durable, reusable piece of knowledge for this role and current project, including from a direct chat: a user preference, a procedure, a convention, a how-to, where something is kept, a dead end to skip. Save only something that will change how a future task is handled; leave it out when nothing new was learned. Generalize a specific finding before saving it: the rule or procedure behind it, without one-off values (URLs with ports, ticket / PR / commit ids, paths in a user folder, dates, branch names); e.g. "after login the local app runs on a port other than the default: read it from the launch profile", not the URL. Case-specific facts, task updates and acknowledgements are refused. New facts are saved without asking the user (maintenance merges them and keeps the most recent 40 per role); equivalent repeats return the original record and its existing status, including a dismissal. Never use for task results or to repeat a known or rejected fact.';
 /** The same tool once lessons are on: a proposal to change a skill, never a note read at launch. */
-export const LESSON_PROPOSE_TEXT = 'Propose one durable, reusable lesson for a skill: by default your role skill (read in full at every start of your role), or the skill of the task when you name it in `skill`. Good lessons: a user preference, a procedure, a convention, a how-to, where something is kept, a dead end to skip. Save only something that will change how a future task is handled. Generalize a specific finding first: the rule or procedure behind it, without one-off values (URLs with ports, ticket / PR / commit ids, paths in a user folder, dates, branch names). Case-specific facts, task results and acknowledgements are refused. The user approves or rejects each lesson in Memoria → Proposte; an approved one is added to the skill\'s «Lezioni» section. A lesson already proposed comes back as it is.';
+export const LESSON_PROPOSE_TEXT = 'Propose one durable, reusable lesson for a skill: by default your role skill (read in full at every start of your role), or the skill of the task when you name it in `skill`. Good lessons: a user preference, a procedure, a convention, a how-to, where something is kept, a dead end to skip. Save only something that will change how a future task is handled. Generalize a specific finding first: the rule or procedure behind it, without one-off values (URLs with ports, ticket / PR / commit ids, paths in a user folder, dates, branch names). Case-specific facts, task results and acknowledgements are refused. The lesson is noted for the next Maintenance, which reads it with the chats since the previous one and changes a skill only when it is really needed: the user is not asked about each lesson. A lesson already noted is counted once more, which tells Maintenance it came back.';
 export interface MemoryToolDeps {
   root(): string | null;
   /** lessons for skills (#365): memory_propose proposes one instead of writing a role note */
@@ -41,7 +42,7 @@ export function memoryTools(deps: MemoryToolDeps): McpTool[] {
         const roleId = context.scope.roleId;
         if (!roleId) throw new Error('Lessons need a role chat.');
         const r = deps.lessons({ role: roleId, text: factSentence(args.subject, args.predicate, args.value), ...(typeof args.skill === 'string' && args.skill.trim() ? { skill: args.skill } : {}), chatId: chatId!, runId: context.sourceRunId });
-        return JSON.stringify({ proposed: !r.duplicate, id: r.lesson.id, skill: r.lesson.skill, state: r.lesson.state, note: r.duplicate ? 'Already proposed: nothing new to ask.' : 'The user decides it in Memoria → Proposte.' });
+        return JSON.stringify({ proposed: !r.duplicate, id: r.lesson.id, skill: r.lesson.skill, state: r.lesson.state, note: !r.duplicate ? 'Noted for the next Maintenance.' : r.lesson.state === 'noted' ? 'Already noted: counted once more for Maintenance.' : 'Already decided before: nothing changes.' });
       }
       return JSON.stringify(proposeMemory(root, { scope: context.scope, sourceRunId: context.sourceRunId, sourceEventId: `memory-proposal:${randomUUID()}`, subject: args.subject, predicate: args.predicate, value: args.value, ...(typeof args.supersedes === 'string' ? { supersedes: args.supersedes } : {}) }));
     },

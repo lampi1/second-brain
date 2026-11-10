@@ -119,7 +119,7 @@ describe('role know-how at launch', () => {
     expect(runtime.context.memory).toMatchObject({ available: false, records: [] });
     expect(runtime.memory).toContain('Use memory_recall for scoped history');
     expect(runtime.memory).toContain('`remember` field of agent_report');
-    expect(runtime.memory).toContain('the user approves');
+    expect(runtime.memory).toContain('read by the next Maintenance'); // ADR 0257: no card per line
     expect(runtime.instructions).toContain(runtime.memory);
   });
   it('reads the role skill (ruolo-<id>) in full at every start, the Orchestrator\'s too', () => {

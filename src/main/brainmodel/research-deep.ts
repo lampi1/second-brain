@@ -1,5 +1,5 @@
-// Deep maintenance evidence and issue inventories: bounded read-only inputs, authentic replies and conservative
-// duplicate detection. ResearchService supplies the trusted repository; remote text is data, never authority.
+// Deep maintenance evidence and issue inventories: bounded read-only inputs, authentic replies, one chat or work thread
+// read whole page by page (threadPage, ADR 0257) and conservative duplicate detection. ResearchService supplies the trusted repository; remote text is data, never authority.
 import type { ChatItem } from '../../shared/contract';
 import type { Fence } from './pack-fence';
 import fs from 'node:fs/promises';
@@ -87,4 +87,28 @@ export function conversationEvidence(chats: readonly Conversation[], since: numb
   }
   lines.splice(1, 0, `Coverage: ${shown}/${available} direct replies from ${chats.length} sampled chats. Omitted or unavailable messages are not evidence of absence.`);
   return lines.join('\n');
+}
+
+/** One page of a chat or work thread the research asked for by id (ADR 0257): the whole exchange, not only the user's
+ *  replies, so a procedure rediscovered or gone wrong shows. Agent and Orchestrator mail is labelled as such (never the
+ *  user's word), a tool shows its name, summary and status, and only a failed one shows a bounded excerpt of its output;
+ *  thinking and visuals are left out. Every text goes through `clean` (the private paths) and between the fence. */
+export function threadPage(title: string, items: readonly ChatItem[], start: number, fence: Fence, clean: (s: string) => string): { text: string; next: number } {
+  const cut = (text: string, max: number) => { const t = clean(text); return t.length > max ? `${t.slice(0, max)} [truncated]` : t; };
+  const lines: string[] = [];
+  let chars = 0, next = start + items.length;
+  for (const [n, item] of items.entries()) {
+    let line: string | null = null;
+    if (item.kind === 'user') line = `${item.from ? `message from ${fence.wrap(cut(item.from, 80))} (not the user)` : 'user'}: ${fence.wrap(cut(item.text, 1800))}`;
+    else if (item.kind === 'assistant') line = `assistant: ${fence.wrap(cut(item.text, 1800))}`;
+    else if (item.kind === 'tool') line = `tool ${item.name} ${item.status}${item.exitCode !== undefined ? ` exit ${item.exitCode}` : ''}: ${fence.wrap(cut(item.summary, 300))}${item.status === 'error' && item.output ? `\noutput: ${fence.wrap(cut(item.output, 600))}` : ''}`;
+    else if (item.kind === 'system' && item.level !== 'info') line = `app ${item.level}: ${fence.wrap(cut(item.text, 600))}`;
+    else if (item.kind === 'result' && (item.isError || item.interrupted)) line = `turn ended ${item.interrupted ? 'interrupted by the user' : 'with an error'}`;
+    if (!line) continue;
+    const entry = `${item.id} @${item.at} ${line}`;
+    // 20 items fit (each is bounded); the cut is a safety net, and says where to go on
+    if (chars + entry.length > 40000) { next = start + n; break; }
+    lines.push(entry); chars += entry.length;
+  }
+  return { text: [fence.note, `Thread ${fence.wrap(clean(title))}: ${lines.length} items shown (thinking, visuals and app info left out). References are item IDs; timestamps are milliseconds.`, ...lines].join('\n'), next };
 }

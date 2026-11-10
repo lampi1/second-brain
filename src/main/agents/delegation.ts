@@ -73,7 +73,8 @@ export interface DelegationDeps {
   runs: () => readonly AgentRun[];
   /** the brain's skills with their tools: a part whose skill needs tools its role lacks is said in the answer (#93) */
   skillTools?: SkillToolsSource;
-  /** proposes one line as a lesson for the role's own skill (skills/lessons.ts, #365): agent_report's `remember`;
+  /** notes one line as a lesson for the role's own skill, for Maintenance (skills/lessons.ts, #365, ADR 0257):
+   *  agent_report's `remember`;
    *  absent = the field is refused */
   remember?: (roleId: string, line: string, chat: ChatSummary) => void;
   /** «Balanced mode» (agents/balanced-mode.ts, ADR 0218): each child's engine from the credits left; absent or off = the card */
@@ -511,7 +512,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
         properties: { kind: { type: 'string', enum: [...USER_ACTION_KINDS] }, text: { ...str, maxLength: USER_ACTION_TEXT_MAX, description: 'what the user must do, in the user\'s language' }, command: { ...str, maxLength: USER_ACTION_COMMAND_MAX, description: 'the exact command to run, if any' } } },
       goalChangedByUser: { type: 'boolean', description: 'true when the user wrote to you directly and changed your goal (you followed the user)' },
       newGoal: { ...str, description: 'with goalChangedByUser: the goal the user gave you' },
-      remember: { type: 'array', items: str, maxItems: REMEMBER_MAX, description: 'optional, up to 3 short lines (at most 300 characters each, a longer one is cut with …) proposed as lessons for YOUR role skill (read in full at every start of your role; the user approves each one in Proposte): general, reusable knowledge a future run would otherwise rediscover or ask again (a procedure, a convention, a how-to, where things are kept). Generalize a specific finding first (no URLs with ports, ticket / PR / commit ids, user paths, dates, branch names): a case-specific line refuses the report. Never the task result' },
+      remember: { type: 'array', items: str, maxItems: REMEMBER_MAX, description: 'optional, up to 3 short lines (at most 300 characters each, a longer one is cut with …) noted as lessons for YOUR role skill (read in full at every start of your role) and read by the next Maintenance, which changes the skill only when really needed: general, reusable knowledge a future run would otherwise rediscover or ask again (a procedure, a convention, a how-to, where things are kept). Generalize a specific finding first (no URLs with ports, ticket / PR / commit ids, user paths, dates, branch names): a case-specific line refuses the report. Never the task result' },
     } };
   return [{
     name: 'agent_delegate',
@@ -580,7 +581,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: (a, ctx) => JSON.stringify(taskEvents(a, callerOf(ctx.params))),
   }, {
     name: 'agent_report',
-    description: 'Your one result for the chat that started you (your parent, or the Orchestrator for a chat it opened): outcome (done | partial | blocked), summary (one or two sentences), output (the deliverable), doneWhen (every criterion of your contract, exactly as written, with met and evidence), optional questions, optional userAction (outcome partial or blocked because only the user can act: VPN, login/MFA, an Esegui command, a permission, a decision; never only in the text), optional remember (lines for your role\'s memory). It reaches your parent at once; call it once, at the end; to correct a result already given, call it again with amends: true (at most 2 corrections). The app shows output in your chat as your answer: do not write it in the chat too.',
+    description: 'Your one result for the chat that started you (your parent, or the Orchestrator for a chat it opened): outcome (done | partial | blocked), summary (one or two sentences), output (the deliverable), doneWhen (every criterion of your contract, exactly as written, with met and evidence), optional questions, optional userAction (outcome partial or blocked because only the user can act: VPN, login/MFA, an Esegui command, a permission, a decision; never only in the text), optional remember (lines noted for your role skill). It reaches your parent at once; call it once, at the end; to correct a result already given, call it again with amends: true (at most 2 corrections). The app shows output in your chat as your answer: do not write it in the chat too.',
     inputSchema: reportSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     // verdict / verified only where the report check accepts them: an app-owned independent review (#183); an engine

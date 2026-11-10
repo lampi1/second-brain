@@ -301,9 +301,8 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     changes: () => brainModel.log, undo: id => { brainModel.rollback(id); }, roles: () => agents.list().profiles, link: (s, r, on) => { brainModel.link(s, r, on); },
     runs: () => [...demoBrainRuns(now(), brainModel.skillList().map(s => s.name)), ...demoAgentRuns(now())], changed: () => ctx.emitter.emit('brainmodel:changed', undefined), unify: false,
     guard: async () => null });
-  // two lessons waiting in Proposte (#365): one for a role's own skill, one for a task skill
-  const skillLessons = new SkillLessons({ file: path.join(ctx.userData, 'skill-lessons.json'), library: () => skillLibrary, now,
-    roleName: id => agents.list().profiles.find(p => p.id === id)?.name ?? id, changed: () => ctx.emitter.emit('brainmodel:changed', undefined) });
+  // two lessons noted for the next Maintenance (#365, ADR 0257): one for a role's own skill, one for a task skill
+  const skillLessons = new SkillLessons({ file: path.join(ctx.userData, 'skill-lessons.json'), now, changed: () => ctx.emitter.emit('brainmodel:changed', undefined) });
   if (!skillLessons.all().length) {
     skillLessons.propose({ role: 'scout', text: 'Nei log del servizio la riga utile è quella con il codice di correlazione: filtra per quello prima di leggere il resto.' });
     skillLessons.propose({ role: 'artisan', skill: 'cercare-un-cliente-con-lookup', text: 'Se il cliente ha più licenze, chiedi quale prima di cercare nel database.' });

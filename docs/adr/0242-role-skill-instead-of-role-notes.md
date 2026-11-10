@@ -1,7 +1,8 @@
 # ADR 0242 · A role's know-how is its role skill; what it learns is a lesson the user approves
 
 Date: 2026-11-09 · Status: accepted (owner, issue #365, «risolvi tutte le issue aperte») · Builds on: ADR 0241 (skill
-packages and library), ADR 0129 (what is worth saving) · Changes: ADR 0150 (role memory facts written without cards)
+packages and library), ADR 0129 (what is worth saving) · Changes: ADR 0150 (role memory facts written without cards) ·
+Superseded in part by ADR 0257 (a lesson is no card: Maintenance reads it and proposes the skill change)
 
 ## Context
 Davide decided "no more notes": what a role knows goes into its role skill (always read at start) or into the skill of

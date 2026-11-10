@@ -59,7 +59,7 @@ import { SkillLessons } from './skills/lessons';
 import { ensureTools, isProduct } from './rules/tools';
 import { appSkillsIn } from './agents/pack/shared-skills';
 import { BrainModelService } from './brainmodel/service';
-import { issuesUrlOf, ResearchService } from './brainmodel/research';
+import { CONVERSATIONS_MAX, issuesUrlOf, ResearchService } from './brainmodel/research';
 import { issueSnapshot } from './brainmodel/research-deep';
 import { ghRun, openIssue } from './brainmodel/issue-open';
 import { hiddenOpened, hiddenRun } from './window';
@@ -242,10 +242,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // agent_learn_propose on a work chat's endpoint: only its own role's lessons, queued for the Orchestrator and the user
   const skillTools = () => brainModelRef.current?.skillTools() ?? [];
   addChatTools([agentCatalogTool(() => agents.list(), skillTools), chatLearnTool(agentPacks.learning, () => manager.runs.list()), brainSearchTool(async (q, o) => { await memoryReview.retryInvalidations(); return hybrid.query(q, o); }), brainScriptsTool(brainScripts), brainQueriesTool(brainQueries)]);
-  // what a role learns becomes a lesson for a skill, decided in Proposte (#365, ADR 0242); the library comes later
-  const lessonLib: { current: SkillLibrary | null } = { current: null };
-  const skillLessons = new SkillLessons({ file: path.join(ctx.userData, 'skill-lessons.json'), library: () => lessonLib.current,
-    roleName: id => agents.list().profiles.find(p => portableId(p.id) === id)?.name ?? id, changed: () => ctx.emitter.emit('brainmodel:changed', undefined) });
+  // what a role learns is noted for the next Maintenance, which proposes the skill changes (#365, ADR 0242, 0257)
+  const skillLessons = new SkillLessons({ file: path.join(ctx.userData, 'skill-lessons.json'), changed: () => ctx.emitter.emit('brainmodel:changed', undefined) });
   addChatTools(memoryTools({ root: () => agentPacks.packs.root(), lessons: p => skillLessons.propose(p), recall: (scope, query, options) => memoryReview.recall(scope, query, options), context: chatId => {
     const chat = manager.list().find(c => c.id === chatId);
     if (!chat || chat.agent?.source !== 'catalog' || chat.isOrchestrator || !chat.run) return null;
@@ -808,7 +806,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     appSkills: () => { const r = brain.info().brainRoot; if (!r || !isProduct(r)) return null; try { return appSkillsIn(ensureTools(r)); } catch { return null; } },
     changes: () => brainModel.log, undo: id => { brainModel.rollback(id); }, roles: () => agents.list().profiles, link: (s, r, on) => { brainModel.link(s, r, on); },
     runs: () => manager.runs.list(), changed: () => ctx.emitter.emit('brainmodel:changed', undefined), unify: !process.env.SB_TEST });
-  appDeps.skillLibrary = skillLibrary; lessonLib.current = skillLibrary;
+  appDeps.skillLibrary = skillLibrary;
   // the one-click maintenance (ADR 0132, 0153): the free cleanup, the invisible research chat, its cards in Proposte
   const issuesUrl = issuesUrlOf(app.getAppPath()), appIssuesUrl = () => issuesUrl;
   const research = new ResearchService({ guideRepo: () => repoRootOf(path.dirname(fileURLToPath(import.meta.url))), userData: ctx.userData, lang: uiLang, root: () => brain.info().brainRoot, appVersion: () => app.getVersion(), issuesUrl: appIssuesUrl, appDir: () => app.getAppPath(),
@@ -819,7 +817,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     bestModel: h => (engineOf(h)?.kind === 'claude' ? 'opus' : null),
     runs: () => manager.runs.list(), roles: () => agents.list().profiles.filter(p => p.scope === 'role'),
     openIssues: repo => issueSnapshot(repo, undefined, undefined, hiddenRun()),
-    conversationList: () => manager.list().filter(c => !c.research && c.updatedAt >= Date.now() - 30 * 86_400_000).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 40).map(c => ({ id: c.id, title: c.title })),
+    // every chat and work thread since the previous maintenance (ADR 0257), newest first
+    conversationList: since => manager.list().filter(c => !c.research && c.updatedAt >= since).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, CONVERSATIONS_MAX)
+      .map(c => ({ id: c.id, title: c.title, kind: c.isOrchestrator ? 'orchestrator' : c.parentId ? `work thread of ${c.parentId}` : 'chat' })),
+    lessons: { noted: () => skillLessons.noted(), reviewed: shown => { skillLessons.reviewed(shown); } },
     conversationRead: id => manager.items(id),
     brain: { state: () => brainModel.state(), apply: p => brainModel.applyResearch(p), noise: (key, known) => { brainModel.noise(key, known); }, maintain: () => brainModel.maintain(), outcomes: () => brainModel.checkOutcomes() },
     chats: { create: req => manager.create(req, 'app'), get: id => manager.list().find(c => c.id === id), stop: id => manager.stop(id) },

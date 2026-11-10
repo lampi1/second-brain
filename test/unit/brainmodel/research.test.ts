@@ -9,7 +9,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentRun } from '../../../src/shared/agents';
 import type { BrainModelState, BrainSkill, LogScan } from '../../../src/shared/brain-model';
-import type { ChatSummary, NewChat } from '../../../src/shared/contract';
+import type { ChatItem, ChatSummary, NewChat } from '../../../src/shared/contract';
 import type { MaintenanceDone } from '../../../src/shared/maintenance-research';
 import { APP_ISSUES_URL, isAppCard, issuesUrlOf, repoOf, ResearchService, scrub, type ResearchDeps } from '../../../src/main/brainmodel/research';
 import { ResearchStore } from '../../../src/main/brainmodel/research-store';
@@ -65,6 +65,15 @@ describe('scrub, issuesUrlOf, repoOf', () => {
   it('removes home folders, the user name, e-mails and tokens', () => {
     const out = scrub('C:\\Users\\you\\brain /home/user/x mario wrote a@example.com ghp_abcdefghijklmnopqrstuvwxyz12', { home: '/home/user', user: 'mario' });
     expect(out).toBe('~\\brain ~/x <user> wrote <email> <token>');
+  });
+  it('removes secrets from command lines and errors (ADR 0257: a work thread\'s tools are read too)', () => {
+    const p = { home: '/home/user', user: 'mario' };
+    expect(scrub('curl -H "Authorization: Bearer abc.def.ghi123456" x', p)).toBe('curl -H "Authorization: <secret>" x');
+    // built at run time: the repository's own secret guard would flag them as literals
+    const url = ['postgres://admin', 's3cr3t@db/x'].join(':'), jwt = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxMjM0NTY3ODkwIn0', 'dozjgNryP4J3jVmNHl0w5N'].join('.');
+    expect(scrub(`PGPASSWORD=hunter2 psql ${url} --password pw1`, p)).toBe('PGPASSWORD=<secret> psql postgres://admin:<secret>@db/x --password <secret>');
+    expect(scrub(`${jwt} api_key: "xyz" AccountKey=abc==;`, p)).toBe('<token> api_key: "<secret>" AccountKey=<secret>;');
+    expect(scrub('the tokens were fine; npm test exit 1', p)).toBe('the tokens were fine; npm test exit 1');
   });
   it('reads bugs.url from package.json and finds owner/name', () => {
     const d = tmp();
@@ -358,5 +367,97 @@ describe('ResearchStore', () => {
     expect(again.clickAt()).toBe(NOW - 5);
     expect(again.lastDone()).toMatchObject({ state: 'done', proposals: 2 });
     expect(again.all().map(p => p.id)).toEqual([b.id]);
+  });
+});
+
+// ADR 0257 (Davide, 2026-11-10): skill changes come only from the maintenance, which reads every chat and work thread
+// since the previous one and the lines roles noted, and proposes only what is really needed
+describe('the research reads the chats since the previous maintenance and the noted lessons', () => {
+  const noted = [
+    { id: 'l1', at: NOW - DAY, role: 'scout', skill: 'ruolo-scout', text: 'Nei log filtra per il codice di correlazione.', state: 'noted' as const, seen: 3, chatId: 'w1' },
+    { id: 'l2', at: NOW - DAY, role: 'artisan', skill: 'report-mensile', text: 'Il report parte dal primo del mese, in /home/user/x.', state: 'noted' as const },
+  ];
+  const end = async (t: ReturnType<typeof setup>, id: string) => {
+    t.svc.chatUpdated({ id, state: 'running', costUsd: 0 } as ChatSummary);
+    t.svc.chatUpdated({ id, state: 'idle', costUsd: 0 } as ChatSummary);
+    // finish clears the run and marks the lessons before its first await
+    expect(t.svc.status().research).toBeNull();
+    await Promise.resolve();
+  };
+  it('lists the chats since the last finished research, gives the lessons by skill, marks them read only when it read them and ended', async () => {
+    const since: number[] = [], reviewed: string[][] = [];
+    const thread: ChatItem[] = [
+      { kind: 'user', id: 'u1', at: NOW, text: 'Trova l\'errore nei log', from: 'Orchestrator' },
+      { kind: 'thinking', id: 'k1', at: NOW, text: 'pensiero privato' },
+      { kind: 'tool', id: 't1', at: NOW, name: 'Bash', summary: 'grep correlation /home/user/logs', input: {}, status: 'error', output: 'No such file /home/user/logs', exitCode: 2 },
+      { kind: 'assistant', id: 'a1', at: NOW, text: 'Ho filtrato per il codice di correlazione.' },
+    ];
+    const t = setup({
+      conversationList: s => { since.push(s); return [{ id: 'w1', title: 'Log del servizio', kind: 'work thread of o1' }, { id: 'o1', title: 'Orchestrator', kind: 'orchestrator' }]; },
+      conversationRead: id => (id === 'w1' ? thread : []),
+      lessons: { noted: () => noted, reviewed: shown => { reviewed.push(shown.map(l => l.id)); } },
+    });
+    await t.svc.start(opts);
+    expect(since).toEqual([NOW - 30 * DAY]);
+    expect(t.created[0]!.prompt).toContain('Skills (the main job of this pass)');
+    expect(t.created[0]!.prompt).toContain('Skill-writing standard');
+    const conv = t.svc.pack('c1', 'conversations');
+    expect(conv).toContain('since the previous maintenance (2026-09-23)');
+    expect(conv).toContain('work thread of o1');
+    // a work thread is read whole: the brief from the Orchestrator (not the user's word), the failed tool, the answer
+    const page = t.svc.pack('c1', 'conversations', 0, 'w1');
+    expect(page).toContain('message from');
+    expect(page).toContain('(not the user)');
+    expect(page).toContain('tool Bash error exit 2');
+    expect(page).toContain('No such file');
+    expect(page).toContain('Ho filtrato per il codice di correlazione.');
+    expect(page).not.toContain('pensiero privato');
+    expect(page).not.toContain('/home/user');
+    const lessons = t.svc.pack('c1', 'lessons');
+    expect(lessons).toContain('"skill":"ruolo-scout"');
+    expect(lessons).toContain('"times":3');
+    expect(lessons).not.toContain('/home/user');
+    expect(lessons.indexOf('ruolo-scout')).toBeLessThan(lessons.indexOf('report-mensile'));
+    // stopped by the user: nothing is marked read, the next pass shows the lines again
+    await t.svc.stop();
+    expect(reviewed).toEqual([]);
+    // a pass that ends done without opening the section leaves them waiting
+    await t.svc.start(opts);
+    expect(since[1]).toBe(NOW - 30 * DAY);
+    await end(t, 'c2');
+    expect(reviewed).toEqual([]);
+    // one that read them and ended done marks them read; the one after looks back to that pass's start
+    await t.svc.start(opts);
+    expect(since[2]).toBe(NOW);
+    t.svc.pack('c3', 'lessons');
+    await end(t, 'c3');
+    expect(reviewed).toEqual([['l1', 'l2']]);
+  });
+  it('a capped pass that read the lessons marks them and moves the window; a long chat starts at what is new', async () => {
+    const since: number[] = [], reviewed: string[][] = [];
+    const items: ChatItem[] = [{ kind: 'user', id: 'old', at: NOW - 60 * DAY, text: 'vecchio' }, { kind: 'user', id: 'new', at: NOW, text: 'nuovo' }];
+    const t = setup({
+      conversationList: s => { since.push(s); return [{ id: 'o1', title: 'Orchestrator', kind: 'orchestrator' }]; },
+      conversationRead: () => items,
+      lessons: { noted: () => noted, reviewed: shown => { reviewed.push(shown.map(l => l.id)); } },
+    });
+    await t.svc.start(opts);
+    const page = t.svc.pack('c1', 'conversations', undefined, 'o1');
+    expect(page).toContain('this page starts at 1');
+    expect(page).not.toContain('vecchio');
+    expect(t.svc.pack('c1', 'conversations', 0, 'o1')).toContain('vecchio');
+    t.svc.pack('c1', 'lessons');
+    t.svc.chatUpdated({ id: 'c1', state: 'running', costUsd: 999 } as ChatSummary);
+    expect(t.svc.status().research).toBeNull();
+    expect(reviewed).toEqual([['l1', 'l2']]);
+    await Promise.resolve();
+    await t.svc.start(opts);
+    expect(since).toEqual([NOW - 30 * DAY, NOW]);
+  });
+  it('without noted lines the section says so', async () => {
+    const t = setup({ lessons: { noted: () => [], reviewed: () => { throw new Error('not called'); } } });
+    await t.svc.start(opts);
+    expect(t.svc.pack('c1', 'lessons')).toBe('No lines noted since the previous maintenance.');
+    await end(t, 'c1');
   });
 });

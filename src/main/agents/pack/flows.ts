@@ -26,8 +26,8 @@ export interface PackFlowDeps {
   runtimeRoot?: string;
 }
 const tokenId = (): string => randomBytes(16).toString('hex');
-/** What a role chat proposes to learn (#365): the `remember` field of agent_report or memory_propose, as skill lessons. */
-export const REMEMBER_HINT = 'Propose only reusable know-how future runs would need to rediscover: use memory_propose or the `remember` field of agent_report (up to 3 short lines). Each line becomes a proposal to add a lesson to a skill (your role skill by default, or the task\'s skill with memory_propose `skill`), which the user approves. Generalize procedures, conventions or dead ends; omit task results and one-off URLs, identifiers, local paths, dates or branches. Propose nothing when there is no new reusable knowledge.';
+/** What a role chat proposes to learn (#365, ADR 0257): the `remember` field of agent_report or memory_propose, noted for Maintenance. */
+export const REMEMBER_HINT = 'Propose only reusable know-how future runs would need to rediscover: use memory_propose or the `remember` field of agent_report (up to 3 short lines). Each line is noted for a skill (your role skill by default, or the task\'s skill with memory_propose `skill`) and read by the next Maintenance, which changes a skill only when it is really needed; the user is not asked about each line. Generalize procedures, conventions or dead ends; omit task results and one-off URLs, identifiers, local paths, dates or branches. Propose nothing when there is no new reusable knowledge.';
 /** A skill is a package (#361): what `${CLAUDE_SKILL_DIR}` means to an engine that does not expand it (Codex, Cursor,
  *  OpenCode): Claude Code replaces it with the skill's folder itself. */
 export const SKILL_DIR_HINT = 'A skill is a folder: its SKILL.md, scripts/, references/ (read only when needed) and assets/. In a skill\'s text, ${CLAUDE_SKILL_DIR} (or a relative path such as scripts/x) means that skill\'s own folder: run its scripts from there, whatever your working folder is.';

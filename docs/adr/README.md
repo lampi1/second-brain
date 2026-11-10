@@ -261,3 +261,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0254](0254-permissions-from-the-brain.md) Permissions v3: everything is allowed, the only blocks are the user's brain rules — accepted
 - [0255](0255-phone-answers-worker-yes-no.md) Worker Sì/No questions answered from the phone (Telegram and Remote Control) — accepted
 - [0256](0256-live-model-lists.md) Live model lists: every engine lists its own models; models.json only overrides — accepted
+- [0257](0257-skill-changes-only-from-maintenance.md) Skill changes come only from Maintenance, never one card per run — accepted

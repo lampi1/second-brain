@@ -3,10 +3,9 @@
 // path, the same call its old page made (memory facts have no cards since ADR 0150: the maintenance saves them itself,
 // brainmodel/memory-tidy.ts, at most MEMORY_CAP per role, in the Log with Annulla); a skill candidate → learning:promote
 // / the rollback of the change that wrote it; a change the maintenance applied → Tieni (a reviewed mark) / brainmodel:rollback; an agent's protected setting → settings:confirm; a role trial → agents:trialDecide; a tier
-// suggestion → agents:lifecycleDecide; an improvement-loop policy → learn:act; a role's lesson for a skill (#365, ADR
-// 0242) → skills/lessons.ts decide.
+// suggestion → agents:lifecycleDecide; an improvement-loop policy → learn:act. A role's lesson for a skill
+// is no card (ADR 0257): Maintenance reads it and proposes the skill change itself (research cards).
 // Pure over injected ports (index.ts wires them to the handlers): unit-tested in test/unit/proposals/service.test.ts.
-import { roleSkillName, type SkillLesson } from '../skills/lessons';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
 import type { AgentLifecycleSnapshot } from '../../shared/agent-lifecycle';
@@ -39,8 +38,6 @@ export interface ProposalPorts {
   research?: { list(): ResearchProposal[]; approve(id: string): unknown; reject(id: string): unknown; repo?(): string | null;
     /** the open candidate brains (ADR 0195): one card each, decided through approve / reject by their id */
     candidates?(): BrainCandidateView[] };
-  /** lessons for skills a role proposed (#365, ADR 0242): approve adds the line to the skill, with its Undo */
-  lessons?: { open(): SkillLesson[]; decide(id: string, approve: boolean): Promise<string | null> };
   /** the reviewed marks (Tieni on an applied change) */
   reviewed: { has(id: string): boolean; mark(id: string): void };
 }
@@ -352,29 +349,6 @@ const research: Source = {
   },
 };
 
-/** A role's lesson for a skill (#365): its own skill (ruolo-<id>) or the task's; the line is the card's body. */
-const memory: Source = {
-  id: 'memory',
-  available: p => !!p.lessons,
-  async list(p) {
-    const chats = p.chats();
-    return p.lessons!.open().map(l => {
-      const chat = l.chatId ? chats.find(c => c.id === l.chatId) : undefined;
-      return card('memory', l.id, {
-        group: 'skill', applied: false, title: l.skill, content: l.text,
-        ask: { kind: 'lesson', skill: l.skill, role: l.role, own: l.skill === roleSkillName(l.role) },
-        facts: [{ key: 'target', value: l.skill }],
-        provenance: prov({ who: roleWho(l.role, { kind: 'app', id: 'agent' }), ...(chat ? { chat: { id: chat.id, title: chat.title } } : {}), ...(l.runId ? { runId: l.runId } : {}), at: iso(l.at), evidence: [] }),
-        canApprove: true, canReject: true,
-      });
-    });
-  },
-  async decide(p, c, decision) {
-    const made = await p.lessons!.decide(native(c), decision === 'approve');
-    return made ? [made] : [];
-  },
-};
-
-export const SOURCES: readonly Source[] = [candidate, change, setting, trial, tier, policy, research, memory];
+export const SOURCES: readonly Source[] = [candidate, change, setting, trial, tier, policy, research];
 /** A path shown short: relative to the brain when it is inside it. */
 export const shortPath = (file: string, root: string | null): string => (root && path.isAbsolute(file) && path.resolve(file).startsWith(path.resolve(root) + path.sep) ? path.relative(root, file).split(path.sep).join('/') : file);
