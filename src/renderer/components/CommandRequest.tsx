@@ -208,9 +208,9 @@ function WindowCommand({ req, chatTitle, testBase, withContext, prod, armed, bus
         </div>
         <pre className="ask-cmd cmd-code" data-testid={`${testBase}-code`}>{code}</pre>
       </div>
-      {/* the yes/no card's reasoning (the owner, 2026-11-10): only the last piece, open; none in the fold */}
+      {/* the chat's message open, its last reasoning piece folded under it (the owner, 2026-11-11) */}
+      {withContext && <AskContext req={req} defaultOpen testBase={testBase} noVisuals thinking="none" label={t('genui.decision.chatText')} />}
       {withContext && <AskThought req={req} testBase={testBase} />}
-      {withContext && <AskContext req={req} defaultOpen={false} testBase={testBase} noVisuals thinking="none" label={t('genui.decision.chatText')} />}
     </DecisionCard>
   );
 }

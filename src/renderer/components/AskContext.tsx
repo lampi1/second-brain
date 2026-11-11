@@ -83,8 +83,8 @@ export const AskContext = memo(function AskContext({ req, defaultOpen, testBase,
   req: PendingRequest; defaultOpen: boolean; testBase: string; onToggle?: () => void; layout?: 'panel' | 'window';
   /** the decision card draws the attached visuals itself (ADR 0150) */
   noVisuals?: boolean;
-  /** the reasoning pieces kept (default all): the yes/no card keeps only the last one ('last', in its fold when it is
-   *  folded) or none ('none', when it shows that one itself with AskThought) */
+  /** the reasoning pieces kept (default all): the yes/no card keeps only the last one ('last', a small card's single
+   *  fold) or none ('none', when AskThought folds that one apart) */
   thinking?: ThinkingKept;
   /** the toggle's name instead of «Contesto» */
   label?: string;
@@ -97,17 +97,28 @@ export const AskContext = memo(function AskContext({ req, defaultOpen, testBase,
   return <PanelContext req={req} defaultOpen={defaultOpen} testBase={testBase} onToggle={onToggle} noVisuals={noVisuals} thinking={thinking} label={label} />;
 });
 
-/** The yes/no card's reasoning (lib/askContext.ts lastThoughtOf): the newest piece, open, right under the question. */
+/** The yes/no card's reasoning (lib/askContext.ts lastThoughtOf): only the newest piece, folded under the chat's message
+ *  (the owner, 2026-11-11: «voglio vedere subito il messaggio dell'agente e se espando il ragionamento, il messaggio è
+ *  molto più importante»). */
 export const AskThought = memo(function AskThought({ req, testBase }: { req: PendingRequest; testBase: string }) {
   const items = useAskItems(req.chatId);
   const closed = useApp(s => !!s.chats[req.chatId]?.closedAt);
   useEffect(() => { if (items === undefined && !closed) void loadItems(req.chatId); }, [items, closed, req.chatId]);
   const thought = useMemo(() => lastThoughtOf(items, req), [items, req]);
+  const [open, setOpen] = useState(false);
   if (!thought) return null;
   return (
-    <div className="ctx-piece thinking" data-testid={`${testBase}-thought`}>
-      <div className="ctx-from">{t('chat.context.thinking')}</div>
-      <div className="md" dangerouslySetInnerHTML={{ __html: renderMarkdown(thought.text) }} />
+    <div className={`ask-ctx ${open ? 'open' : ''}`} data-testid={`${testBase}-thought`}>
+      <button type="button" className="ctx-toggle" onClick={() => setOpen(o => !o)} aria-expanded={open} data-testid={`${testBase}-thought-toggle`}>
+        <IconInfo size={12} /><b>{t('genui.decision.chatThought')}</b>
+        {!open && <span className="ctx-summary">{oneLine(thought.text)}</span>}
+        <IconChevronRight size={12} className="tool-chev" />
+      </button>
+      {open && (
+        <div className="ctx-body" data-testid={`${testBase}-thought-body`}>
+          <div className="ctx-piece thinking"><div className="md" dangerouslySetInnerHTML={{ __html: renderMarkdown(thought.text) }} /></div>
+        </div>
+      )}
     </div>
   );
 });

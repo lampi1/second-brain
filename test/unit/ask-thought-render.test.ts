@@ -1,6 +1,6 @@
-// The yes/no card's reasoning (the owner, 2026-11-10: only the last reasoning piece, in sight right away; the earlier
-// ones are not in the user's language and nobody reads them): AskThought draws the newest piece, and the folded chat
-// text under it (AskContext thinking 'none') keeps the chat's messages without any reasoning.
+// The yes/no card's context (the owner, 2026-11-10: only the last reasoning piece; 2026-11-11: the chat's message first
+// and open, the reasoning folded): AskContext thinking 'none' holds the chat's messages without any reasoning, and
+// AskThought folds the newest reasoning piece apart.
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it, vi } from 'vitest';
@@ -28,6 +28,9 @@ const req = { id: 'q', chatId: 'c', type: 'question', tool: 'AskUserQuestion', t
 
 it('shows only the newest reasoning piece, and the folded chat text has no reasoning', () => {
   const thought = renderToStaticMarkup(createElement(AskThought, { req, testBase: 'd' }));
+  expect(thought).toContain('Ragionamento della chat');
+  expect(thought).toContain('aria-expanded="false"');
+  expect(thought).not.toContain('d-thought-body');
   expect(thought).toContain('la scelta dell’istanza viene dopo');
   expect(thought).not.toContain('three caches');
   const rest = renderToStaticMarkup(createElement(AskContext, { req, defaultOpen: true, testBase: 'd', noVisuals: true, thinking: 'none' }));

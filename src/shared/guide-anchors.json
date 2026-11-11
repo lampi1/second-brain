@@ -197,7 +197,7 @@
     "src/renderer/components/andamento/AndamentoPage.tsx": "98bc2d47ef701415",
     "src/renderer/components/andamento/UsageTab.tsx": "c2279f1d5ebb59d9",
     "src/renderer/components/AppUpdateSettings.tsx": "d27688053f01e6cf",
-    "src/renderer/components/AskContext.tsx#AskThought": "bb34f15cae69dcb8",
+    "src/renderer/components/AskContext.tsx#AskThought": "682d7d34b2ff42f2",
     "src/renderer/components/AskImages.tsx": "caaf747e5363f28a",
     "src/renderer/components/AutoCloseNotice.tsx": "0d49e37306f2bbb8",
     "src/renderer/components/brain-model/ApprovedTab.tsx": "420c36ed544689ca",
