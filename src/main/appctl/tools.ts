@@ -648,6 +648,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
           if (refused) throw new Error(`messaggio bloccato: ${refused}`);
           if (!['running', 'waiting', 'idle'].includes(target.state)) throw new Error(`la chat ${name} non è attiva: un agente non la avvia (spenderebbe crediti ${name}); chiedi all’utente`);
         }
+        // a delegated chat paused on the user's step: his «fatto» goes to whoever owns that work (ADR 0269)
+        if (authed() && target?.parentId && d.chats.userStepDone?.(target.id, text)) return 'passato a chi segue il lavoro';
         await d.chats.send(String(a.chatId), `${voice()}\n\n${text}`, undefined, false, orchestrator?.title ?? 'Orchestrator', false, orchestrator ? { kind: 'chat', chatId: orchestrator.id } : { kind: 'app' });
         log.info('appctl', 'agent message sent to chat', { chat: String(a.chatId), data: { chars: text.length } });
         const q = d.chats.list().find(c => c.id === String(a.chatId))?.queued;

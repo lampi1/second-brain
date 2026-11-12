@@ -30,6 +30,8 @@ export interface RunnerDeps {
   itemText(chatId: string, itemId: string): string | null;
   /** the chat's working folder, or null */
   cwdOf(chatId: string): string | null;
+  /** the folder one item's block runs in, when it is not its chat's (the Orchestrator's note of a worker's step) */
+  cwdOfItem?(chatId: string, itemId: string): string | null;
   emit(run: RunInfo): void;
   /** test hook: the shell to start (default powershell.exe; $SHELL on macOS/Linux) */
   shell?: string;
@@ -89,7 +91,8 @@ export class CommandRunner {
     if ([...this.runs.values()].some(r => r.chatId === req.chatId && r.itemId === req.itemId && r.code === code && r.state === 'running')) {
       throw new Error('Questo comando è già in esecuzione.');
     }
-    const dir = this.cwdOf(req.chatId);
+    const own = this.d.cwdOfItem?.(req.chatId, req.itemId);
+    const dir = own && fs.existsSync(own) ? own : this.cwdOf(req.chatId);
     const env: NodeJS.ProcessEnv = {};
     for (const [k, v] of Object.entries(process.env)) if (!/^(SB_|ELECTRON_)/i.test(k)) env[k] = v;
     const id = `run-${Date.now().toString(36)}-${++this.seq}`;

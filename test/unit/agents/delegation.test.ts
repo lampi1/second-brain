@@ -141,6 +141,11 @@ describe('agent_delegate', () => {
     expect(f.m.items(o.id).some(i => i.kind === 'system' && i.code === 'userStep' && !i.params?.command)).toBe(true);
     expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).not.toContain('chat «Login»]');
     expect(f.m.list().find(c => c.id === child.id)!.delegation!.result!.outcome).toBe('blocked');
+    // the user's «fatto», passed on by the Orchestrator, reaches the parent that owns the work, once
+    expect(f.m.userStepDone(child.id, 'fatto')).toBe(true);
+    await vi.waitFor(() => expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).toContain('[l’utente dice di aver fatto il passo · chat «Login»]'));
+    expect(f.m.userStepDone(child.id, 'fatto')).toBe(false);
+    expect(f.m.autoCloseCandidates(() => false).find(c => c.id === child.id)?.waitingFor).not.toBe('answer');
   });
 
   it('a decision is never asked: the owner of the work decides it as the user would (ADR 0269)', async () => {

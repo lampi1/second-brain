@@ -62,6 +62,12 @@ describe('the Orchestrator answers for the user', () => {
     w.sink!.pending(ask('q3', 'Quale colore?', ['Rosso', 'Blu']));
     expect(() => m.answerForUser(chat.id, 'q3', { 'Quale colore?': 'Rosso' })).toThrow(/Sì\/No/);
     expect(w.answers).toEqual([]);
+    w.sink!.pending(ask('q5', 'Applico la migrazione al database?'));
+    expect(() => m.answerForUser(chat.id, 'q5', { 'Applico la migrazione al database?': 'Sì (consigliato)' })).toThrow(/solo dell’utente/);
+    // a short question whose request says what it does: read whole, as the phone bridge reads it
+    w.sink!.pending({ ...ask('q6', 'Procedo con il passo successivo?'), detail: 'push su main e deploy' });
+    expect(() => m.answerForUser(chat.id, 'q6', { 'Procedo con il passo successivo?': 'Sì (consigliato)' })).toThrow(/solo dell’utente/);
+    expect(w.answers).toEqual([]);
     const o = await m.create({ harness: 'anthropic', cwd: tmp(), orchestrator: true });
     w.sink!.pending(ask('q4', 'Tolgo il vecchio login?'));
     expect(() => m.answerForUser(o.id, 'q4', { 'Tolgo il vecchio login?': 'Sì (consigliato)' })).toThrow(/chat di lavoro/);

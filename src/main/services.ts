@@ -36,6 +36,8 @@ export interface ChatService {
   answer(chatId: string, requestId: string, answer: Answer, by?: 'pc' | 'phone' | 'relay'): Promise<void>;
   /** The Orchestrator answers a work chat's yes/no question for the user (ADR 0269); refused on what is the user's alone. */
   answerForUser(chatId: string, requestId: string, answers: Record<string, string>): void;
+  /** the user's «fatto» to a worker's step, passed on by the Orchestrator: true when a step waited (ADR 0269) */
+  userStepDone?(chatId: string, words: string): boolean;
   /** a Strategist's proposed plan: the user's «Approva e parti» or «Cambia qualcosa» (ADR 0108) */
   planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string): Promise<void>;
   stop(chatId: string, keepQueued?: boolean): Promise<void>;

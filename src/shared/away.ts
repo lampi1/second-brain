@@ -28,6 +28,11 @@ const RESERVED = /\b(deploy\w*|produzion\w*|production|prod|rilasci\w*|release|p
  *  plan with no buttons (src/main/chats/phone-port.ts). */
 export const reservedText = (text: string): boolean => RESERVED.test(text);
 
+/** What the Orchestrator never answers for the user (ADR 0269): RESERVED, plus databases, Azure/cloud and settings,
+ *  which the user may still answer from the phone himself. */
+const FOR_USER_ONLY = /\b(database\w*|db|sql|migrazion\w*|migration\w*|azure|cloud|impostazion\w*|settings)\b/i;
+export const userOnlyText = (text: string): boolean => RESERVED.test(text) || FOR_USER_ONLY.test(text);
+
 /** The option the app picks for an absent user: only the one the agent marked «(consigliato)» (the question rule asks
  *  for it); none marked, or a question about something reserved to the user, stays for the user (null). */
 export function recommendedOption(q: Pick<Question, 'options'> & { question?: string }): string | null {

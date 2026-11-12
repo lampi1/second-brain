@@ -328,13 +328,26 @@ export abstract class ManagerDelegation extends ManagerContinuity {
       return;
     }
     const at = Date.now();
-    this.addItem(orchestrator, { ...sysItem('userStep', userStepParams(r.s.title, ua), 'info'), id: `user-step-${r.s.run?.runId ?? r.s.id}-${at}` }, false);
+    this.addItem(orchestrator, { ...sysItem('userStep', userStepParams(r.s.title, ua, r.s.id), 'info'), id: `user-step-${r.s.run?.runId ?? r.s.id}-${at}` }, false);
     // the worker waits for the user's step (never auto-closed meanwhile); a command resumes it on its run alone (#371)
     r.userStepAt = at;
+    if (!ua.command) this.userSteps.set(r.s.id, { input, orchestratorId: orchestrator.s.id });
     if (ua.command) this.awaitingRun.set(`user-step-${r.s.id}-${at}`, { input, at, orchestratorId: orchestrator.s.id, runId: r.s.run?.runId ?? null });
     this.updated(orchestrator);
     this.updated(r);
     log.info('chats', 'user step shown in the Orchestrator', { chat: r.s.id, data: { kind: ua.kind, command: !!ua.command } });
+  }
+
+  /** A step without a command, waiting for the user's «fatto» (ADR 0269): worker → the step. In memory only. */
+  private readonly userSteps = new Map<string, { input: UserActionInput; orchestratorId: string }>();
+  /** The user's «fatto» to a worker's step, passed on by the Orchestrator (app_send_to_chat): whoever owns the work (its
+   *  parent while the parent's assignment is on) resumes it, so a delegated chat's parent hears it too. False: no step. */
+  userStepDone(chatId: string, words: string): boolean {
+    const step = this.userSteps.get(chatId);
+    if (!step || !this.chats.get(chatId)?.userStepAt) return false;
+    this.userSteps.delete(chatId);
+    this.resumeUserAction(step.input, { yes: true, words }, step.orchestratorId);
+    return true;
   }
 
   /** A worker's decision (ADR 0269): its parent while the parent's own assignment is on, else the Orchestrator, decides it. */
@@ -378,6 +391,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
   /** The worker works again (the user wrote to it, it was reassigned) or is closed: its step no longer waits for a run. */
   protected dropAwaitingRun(chatId: string): void {
     for (const [id, w] of this.awaitingRun) if (w.input.chatId === chatId) this.awaitingRun.delete(id);
+    this.userSteps.delete(chatId);
     const r = this.chats.get(chatId);
     if (r?.userStepAt) { delete r.userStepAt; this.updated(r); }
   }
@@ -397,7 +411,8 @@ export abstract class ManagerDelegation extends ManagerContinuity {
    *  assignment is still on (an ended one may not reassign: manager-work.ts), otherwise the Orchestrator. */
   private resumeUserAction(input: UserActionInput, reply: { yes: boolean; words?: string }, orchestratorChat: string, ran?: RunInfo): void {
     const worker = this.chats.get(input.chatId);
-    if (worker) delete worker.userStepAt;
+    this.userSteps.delete(input.chatId);
+    if (worker?.userStepAt) { delete worker.userStepAt; this.updated(worker); }
     const owner = this.ownerOfWork(input.chatId, orchestratorChat);
     if (!owner) { log.warn('chats', 'user action reply not delivered: nobody to resume the work', { chat: input.chatId }); return; }
     void this.send(owner.rec.s.id, userActionMessage(input, reply, owner.how, ran ? runResultText(ran) : undefined), undefined, false, 'App', false, { kind: 'app' })

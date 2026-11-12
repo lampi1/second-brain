@@ -7,6 +7,8 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { Answer, PendingRequest } from '../../shared/contract';
 import { backedAnswer } from './ran-check';
+
+const RESERVED_FOR_USER = 'bloccato: questa decisione è solo dell’utente (produzione, database, Azure/cloud, segreti, permessi o impostazioni, pubblicazione, messaggi a persone): resta nella sua riga nell’Orchestrator';
 import { errText, log } from '../log';
 import { engineOf } from '../engines/registry';
 import { allowsClass, COMMAND_TOOLS, commandsReadOnly, readOnlyCommand, toolClassOf, type ReadScripts } from '../agents/tool-policy';
@@ -14,7 +16,7 @@ import { readOnlyTools } from '../agents/read-tools';
 import { gateRequest, runtimePluginName } from '../agents/role-gate';
 import { autoPermit } from './auto-permit';
 import { loadPolicy, policyCovers } from './permit-policy';
-import { AWAY_PARKED, AWAY_PLAN_NOTE, recommendedAnswers, reservedText } from '../../shared/away';
+import { AWAY_PARKED, AWAY_PLAN_NOTE, recommendedAnswers, userOnlyText } from '../../shared/away';
 import { askingPlan, PLAN_APPROVED, type IntakeSource, type PlanIntake } from '../../shared/strategy';
 import type { SubmissionReceipt, Rec } from './manager-types';
 import { isNativeQuestion, isYesNo } from '../../shared/yes-no';
@@ -83,7 +85,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
   /** The Orchestrator answers a work chat's question for the user (ADR 0269, the owner 2026-11-12: «l'orchestrator deve
    *  poter fare il ruolo dell'utente»): only an engine's own yes/no question in a work chat (never the Orchestrator's,
    *  a Strategist's interview, an MCP form, a permission or a command), with one of its options, and never on what stays
-   *  the user's alone (shared/away.ts reservedText: production, secrets, permissions, publishing, messages to people).
+   *  the user's alone (shared/away.ts userOnlyText: production, secrets, permissions, settings, databases, Azure/cloud, publishing, messages to people; the whole request with its brief).
    *  Recorded as policy «orchestrator-for-user», never as the user's click; the chat's transcript says who answered. */
   answerForUser(chatId: string, requestId: string, answers: Record<string, string>): void {
     const r = this.need(chatId);
@@ -91,18 +93,24 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     if (!req) throw new Error('Questa richiesta non è più aperta.');
     if (r.s.isOrchestrator || r.s.plan || req.type !== 'question' || !isNativeQuestion(req) || !req.questions?.length) throw new Error('bloccato: l’Orchestrator risponde solo alle domande Sì/No di una chat di lavoro');
     if (!r.session) { this.dropPending(r, requestId); throw new Error('La chat non è più attiva: la richiesta è scaduta.'); }
+    // the whole request is read (title, detail, the brief's why / ifYes / steps), as the phone bridge reads it: a short
+    // «Procedo?» whose brief says «deploy in produzione» stays the user's
+    if (phoneQuestionReserved(req, () => { this.ensureHistory(r); return r.items; }, userOnlyText)) throw new Error(RESERVED_FOR_USER);
     const picks: string[] = [];
     for (const q of req.questions) {
       const pick = answers[q.question];
       if (!isYesNo(q) || q.multiSelect) throw new Error('bloccato: solo una domanda Sì/No');
       const opt = q.options.find(o => o.label === pick);
       if (!opt) throw new Error(`Rispondi con una delle opzioni: ${q.options.map(o => o.label).join(' / ')}`);
-      if (reservedText(`${q.question} ${q.header ?? ''} ${opt.label} ${opt.description ?? ''}`)) throw new Error('bloccato: questa decisione è solo dell’utente (produzione, segreti, permessi, pubblicazione o messaggi a persone): resta nella sua riga nell’Orchestrator');
+      if (userOnlyText(`${q.question} ${q.header ?? ''} ${opt.label} ${opt.description ?? ''}`)) throw new Error(RESERVED_FOR_USER);
       picks.push(opt.label);
     }
     if (Object.keys(answers).some(k => !req.questions!.some(q => q.question === k))) throw new Error('Rispondi alle domande della richiesta originale.');
     const choice = picks.join(', ');
-    this.policyAnswer(r, req, { kind: 'question', answers }, 'orchestrator-for-user', undefined, () => {
+    const given: Answer = { kind: 'question', answers };
+    // a Sì to «did you run it?» with no run since the question carries the NOT_RAN note, as the user's own does (#372)
+    const told = this.opts.runs ? backedAnswer(req, given, this.opts.runs(chatId)) : given;
+    this.policyAnswer(r, req, told, 'orchestrator-for-user', undefined, () => {
       this.addItem(r, sysItem('orchestratorAnswered', { choice }, 'info'), false);
       this.updated(r);
       log.info('chats', 'the Orchestrator answered for the user', { chat: r.s.id, data: { requestId, questions: picks.length } });

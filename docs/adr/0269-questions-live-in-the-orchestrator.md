@@ -30,7 +30,7 @@ tutto su main») · Supersedes: the always-on questions window of ADR 0049 / 013
   included. `app_resolve_question` answers a work chat's Sì/No question for him (`ChatManager.answerForUser`, policy
   «orchestrator-for-user», a line in the worker's chat). Any other caller keeps `AGENT_LABEL`.
 - **What stays his alone:** production, database writes, Azure/cloud, permissions or settings, messages to people
-  (`shared/away.ts` `reservedText`); permissions, commands, MCP forms, a Strategist's interview, the Orchestrator's own
+  (`shared/away.ts` `userOnlyText`, read over the whole request and its brief); permissions, commands, MCP forms, a Strategist's interview, the Orchestrator's own
   questions and delegated chats' questions are never answered for him.
 - **Every agent hears it once:** `DECISION_FLOW_RULE` opens with «Explain what you did and go on; ask only a choice
   that changes the user's goal or cannot be undone». The Orchestrator frame stays under 16,000 characters.

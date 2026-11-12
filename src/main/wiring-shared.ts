@@ -69,11 +69,21 @@ export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appC
 export const createLater = (ctx: Pick<Ctx, 'emitter' | 'userData'>): AnswerLaterStore =>
   new AnswerLaterStore(path.join(ctx.userData, 'answer-later.json'), st => ctx.emitter.emit('later:changed', st));
 
-/** The runner of "Esegui": blocks are checked against the chat's own assistant messages, run in the chat's folder. */
+/** The runner of "Esegui": blocks are checked against the chat's own assistant messages, run in the chat's folder; the
+ *  Orchestrator's note of a worker's step (sys «userStep», ADR 0269) runs its one command in that worker's folder. */
 export function commandRunner(ctx: Pick<Ctx, 'emitter'>, chats: ChatService, onRun?: (run: RunInfo) => void): CommandRunner {
+  const step = (chatId: string, itemId: string) => {
+    const it = chats.items(chatId).find(i => i.id === itemId);
+    return it?.kind === 'system' && it.code === 'userStep' && typeof it.params?.command === 'string' ? it.params : null;
+  };
+  const cwdOf = (chatId: string): string | null => chats.list().find(c => c.id === chatId)?.cwd ?? null;
   return new CommandRunner({
-    itemText: (chatId, itemId) => { const it = chats.items(chatId).find(i => i.id === itemId); return it?.kind === 'assistant' ? it.text : null; },
-    cwdOf: chatId => chats.list().find(c => c.id === chatId)?.cwd ?? null,
+    itemText: (chatId, itemId) => {
+      const it = chats.items(chatId).find(i => i.id === itemId);
+      return it?.kind === 'assistant' ? it.text : String(step(chatId, itemId)?.command ?? '') || null;
+    },
+    cwdOf,
+    cwdOfItem: (chatId, itemId) => { const w = step(chatId, itemId)?.worker; return typeof w === 'string' ? cwdOf(w) : null; },
     emit: run => { ctx.emitter.emit('run:updated', run); onRun?.(run); },
   });
 }

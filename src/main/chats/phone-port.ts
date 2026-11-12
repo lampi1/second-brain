@@ -54,7 +54,7 @@ const qKey = (chatId: string, requestId: string) => `${chatId}/q/${requestId}`;
 const pKey = (chatId: string, at: string) => `${chatId}/p/${at}`;
 const closed = (c: ChatSummary) => !!c.closedAt || c.state === 'closed';
 
-export function phoneQuestionReserved(p: PendingRequest, readItems: () => ChatItem[]): boolean {
+export function phoneQuestionReserved(p: PendingRequest, readItems: () => ChatItem[], reserved: (text: string) => boolean = reservedText): boolean {
   const qs = p.questions ?? [];
   let items: ChatItem[];
   try { items = readItems(); } catch { return true; }
@@ -66,7 +66,7 @@ export function phoneQuestionReserved(p: PendingRequest, readItems: () => ChatIt
       ...(b.files ?? []).flatMap(x => [x.path, x.why ?? '']), ...(b.images ?? []).map(x => x.caption ?? '')];
   });
   const words = [p.title, p.detail, ...qs.flatMap(x => [x.question, x.header ?? '', ...x.options.flatMap(o => [o.label, o.description ?? ''])]), ...brief];
-  return p.type !== 'question' || !NATIVE_QUESTIONS.has(p.tool) || reservedText(words.join('\n'));
+  return p.type !== 'question' || !NATIVE_QUESTIONS.has(p.tool) || reserved(words.join('\n'));
 }
 
 export function createPhonePort(chats: PhoneChats, events: PhoneEvents, commands?: PhoneCommands): PhonePort {

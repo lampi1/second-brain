@@ -53,9 +53,10 @@ export function userActionMessage(input: Pick<UserActionInput, 'title' | 'text' 
     : `[risposta dell’utente · chat «${input.title}»]\nAlla richiesta «${input.text}» l’utente ha risposto: «${reply.words}». Decidi tu come proseguire con quella chat.`;
 }
 
-/** The plain note's params (sys «userStep»): the chat, what the user does, the command to run when there is one. */
-export function userStepParams(title: string, ua: UserAction): { title: string; text: string; command?: string } {
-  return { title, text: ua.text, ...(ua.command ? { command: ua.command } : {}) };
+/** The plain note's params (sys «userStep»): the chat, what the user does, the command to run when there is one and
+ *  the worker it belongs to (Esegui runs it in that chat's folder: wiring-shared.ts commandRunner). */
+export function userStepParams(title: string, ua: UserAction, worker?: string): { title: string; text: string; command?: string; worker?: string } {
+  return { title, text: ua.text, ...(ua.command ? { command: ua.command, ...(worker ? { worker } : {}) } : {}) };
 }
 
 /** What the owner of the work (its parent, or the Orchestrator) reads when a worker stops on a decision (ADR 0269): it
