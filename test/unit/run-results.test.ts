@@ -3,7 +3,7 @@
 // together go in one message; off with the setting; a stopped run says so; long code and output are cut.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatSummary, RunInfo } from '../../src/shared/contract';
-import { ANSWERED_BY_RUN_NOTE, FOLLOWER_NOTE, RECENT_NOTE, RUN_RESULT_LABEL, RunResults, runResultText } from '../../src/main/run/results';
+import { ANSWERED_BY_RUN_NOTE, FOLLOWER_NOTE, RECENT_NOTE, RUN_RESULT_LABEL, RUNNING_NOTE, RunResults, runResultText } from '../../src/main/run/results';
 
 const chat = (p: Partial<ChatSummary> & { id: string }): ChatSummary => ({
   harness: 'claude', origin: 'app', title: p.id, cwd: 'C:/x', sessionId: null, model: null, effort: null, permissionMode: null,
@@ -122,6 +122,23 @@ describe('RunResults', () => {
     expect(sent[0]!.text).toContain('npm run check');
     setOn(false);
     expect(s.tell('c3', run({ id: 'r10' }))).toBe(false);
+  });
+
+  it('a block whose command still runs hears that it runs, then gets the result when it ends (#383)', async () => {
+    const { s, sent } = make({ followers: () => ['c3'] });
+    s.observe('chat:updated', chat({ id: 'c3' }));
+    const live = run({ id: 'r7', chatId: 'c9', state: 'running', exitCode: null, endedAt: undefined });
+    expect(s.tell('c3', live)).toBe(true);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).toContain(RUNNING_NOTE);
+    expect(sent[0]!.text).toContain('Esito: ancora in esecuzione, avviato alle ');
+    expect(sent[0]!.text).not.toContain(RECENT_NOTE);
+    s.observe('run:updated', run({ id: 'r7', chatId: 'c9' }));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(sent.map(m => m.chatId)).toEqual(['c3', 'c3']);
+    expect(sent[1]!.text).toContain(FOLLOWER_NOTE);
+    expect(sent[1]!.text).toContain('Esito: riuscito (exit code 0)');
   });
 });
 

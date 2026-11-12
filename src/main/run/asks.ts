@@ -16,6 +16,8 @@
 // sends the result to each). A run started on any chat's block answers every open ask of the same code and folder. A
 // block that already ran with success in the same folder within RECENT_OK_MS is not asked either, once per chat and
 // code: that chat gets the earlier result instead (alreadyRan); proposed again after that, it is asked as usual.
+// A block whose command is still running in the same folder (Esegui on a long deploy, #383) is not asked either: the
+// chat hears once that it runs and gets its result when it ends.
 // When an open ask leaves without a run ("Non serve", its chat went on), its first follower is asked in its place.
 // A block followed by a question in the same turn (ADR 0259, the owner 2026-11-10: «mi chiede se ho eseguito un comando
 // prima della modale esegui»): a question or a visual (AskUserQuestion, ask_user, show_ui) is not work, so the block stays
@@ -84,6 +86,8 @@ export class CommandAsks {
   private atQuestion = new Map<string, string>();
   /** chatId|code already told about a recent success: proposed again, it is asked */
   private toldRecent = new Set<string>();
+  /** chatId|runId already told that run is still going (#383): proposed again meanwhile, still not asked */
+  private toldRunning = new Set<string>();
 
   /** the run results (RunResults.tell), linked once both exist (wiring-shared.ts attachRunResults) */
   private teller?: (chatId: string, run: RunInfo) => boolean;
@@ -221,6 +225,20 @@ export class CommandAsks {
       const id = `cmd-${last.id}-${b.index}`;
       if (m.has(id) || this.dismissed.has(`${chatId}#${id}`) || this.d.ran(chatId, last.id, b.code)) continue;
       const code = sameCode(b.code), toldKey = `${chatId}|${code}`;
+      // the same command still running in the same folder (#383: a deploy of several minutes was proposed again while it
+      // ran): never asked; the chat hears once that it runs, and gets its result when it ends (it follows that run)
+      const running = cwd === undefined ? undefined : this.d.runs?.().filter(r => r.state === 'running' && r.cwd === cwd && sameCode(r.code) === code).at(-1);
+      if (running) {
+        const key = runKey(running.chatId, running.itemId, running.code);
+        const told = this.runFollowers.get(key) ?? new Set<string>();
+        if (running.chatId !== chatId) { told.add(chatId); this.runFollowers.set(key, told); }
+        const once = `${chatId}|${running.id}`;
+        if (this.toldRunning.has(once) || (this.d.alreadyRan ?? this.teller)?.(chatId, running)) {
+          this.toldRunning.add(once);
+          log.info('run', 'command not asked: the same command is still running', { chat: chatId, data: { id, run: running.id } });
+          continue;
+        }
+      }
       const recent = cwd === undefined || this.toldRecent.has(toldKey) ? undefined : this.d.runs?.().filter(r => r.state === 'ok' && r.cwd === cwd && sameCode(r.code) === code && (r.endedAt ?? 0) >= now - RECENT_OK_MS).at(-1);
       if (recent && (this.d.alreadyRan ?? this.teller)?.(chatId, recent)) {
         this.toldRecent.add(toldKey);

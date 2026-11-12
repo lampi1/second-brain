@@ -34,6 +34,7 @@ type Told = RunInfo & { note?: string };
 export const FOLLOWER_NOTE = 'Era lo stesso comando che avevi lasciato tu: l\'utente l\'ha lanciato una volta sola, per tutte le chat che lo chiedevano.';
 /** What answers a question the chat asked right after leaving a command, once the user ran it (ADR 0259). */
 export const ANSWERED_BY_RUN_NOTE = 'Non ho risposto alla tua domanda: ho lanciato con Esegui il comando che avevi lasciato, ecco l\'esito. Se la domanda serve ancora, rifalla.';
+export const RUNNING_NOTE = 'Questo comando è ancora in esecuzione: l\'utente l\'ha già lanciato con Esegui. Non riproporlo: il risultato ti arriva qui quando finisce.';
 export const RECENT_NOTE = 'Questo comando era già stato eseguito con successo di recente nella stessa cartella: non te lo chiedo di nuovo. Se va rieseguito, riproponilo spiegando perché.';
 
 type Seen = Pick<ChatSummary, 'state' | 'pending' | 'handoffBusy' | 'closedAt'>;
@@ -49,7 +50,8 @@ export function runResultText(r: Told): string {
   const lines = r.code.split('\n');
   const code = lines.length > MAX_CODE_LINES ? [...lines.slice(0, MAX_CODE_LINES), `… (${lines.length - MAX_CODE_LINES} righe in più)`].join('\n') : r.code;
   const secs = r.endedAt ? Math.max(0, Math.round((r.endedAt - r.startedAt) / 1000)) : null;
-  const how = r.state === 'ok' ? `riuscito (exit code ${r.exitCode ?? 0})`
+  const how = r.state === 'running' ? `ancora in esecuzione, avviato alle ${new Date(r.startedAt).toTimeString().slice(0, 5)}`
+    : r.state === 'ok' ? `riuscito (exit code ${r.exitCode ?? 0})`
     : r.state === 'stopped' ? 'fermato dall\'utente prima della fine'
     : `fallito${r.exitCode !== null ? ` (exit code ${r.exitCode})` : ''}`;
   const out = redact(r.output.trimEnd());
@@ -92,10 +94,11 @@ export class RunResults {
   /** What waits to be told, per chat (tests, diagnostics). */
   queued(chatId: string): Told[] { return this.queue.get(chatId) ?? []; }
 
-  /** A block not asked again (run/asks.ts alreadyRan): the chat gets the earlier run's result. False = results off. */
+  /** A block not asked again (run/asks.ts alreadyRan): the chat gets the earlier run's result, or hears that the same
+   *  command still runs (#383). False = results off. */
   tell(chatId: string, r: RunInfo): boolean {
     if (!this.d.enabled()) return false;
-    this.enqueue(chatId, { ...r, note: RECENT_NOTE });
+    this.enqueue(chatId, { ...r, note: r.state === 'running' ? RUNNING_NOTE : RECENT_NOTE });
     return true;
   }
 

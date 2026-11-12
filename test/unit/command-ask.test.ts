@@ -329,6 +329,24 @@ describe('CommandAsks: a command is asked of the user once (ADR 0239)', () => {
     off.turn('c1', [asst('a1', block('npm run db:migrate'))]);
     expect(off.s.pending()).toHaveLength(1);
   });
+
+  it('a block whose same command is still running is never asked: the chat is told once and follows the run (#383)', () => {
+    vi.useFakeTimers();
+    const live: RunInfo = { id: 'r2', chatId: 'c9', itemId: 'z', code: 'az deployment group create -g rg', cwd: 'C:/repo', state: 'running', exitCode: null, output: '', startedAt: 9_900_000 };
+    const w = world({ runs: [live] });
+    w.turn('c1', [asst('a1', block('az deployment group create -g rg'))]);
+    w.turn('c1', [asst('a2', block('az deployment group create -g rg\r\n'))]);
+    expect(w.s.pending()).toEqual([]);
+    expect(w.told).toEqual([{ chatId: 'c1', run: 'r2' }]);
+    expect(w.s.followersOf(live)).toEqual(['c1']);
+    // another folder, or results off: asked as usual
+    const other = world({ runs: [{ ...live, cwd: 'C:/other' }] });
+    other.turn('c1', [asst('a1', block('az deployment group create -g rg'))]);
+    expect(other.s.pending()).toHaveLength(1);
+    const off = world({ runs: [live], tell: false });
+    off.turn('c1', [asst('a1', block('az deployment group create -g rg'))]);
+    expect(off.s.pending()).toHaveLength(1);
+  });
 });
 
 describe('CommandAsks: a block followed by a question in the same turn (ADR 0259)', () => {
