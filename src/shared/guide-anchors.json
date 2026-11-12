@@ -86,7 +86,7 @@
     "src/main/brain/scripts.ts": "b1acc866b2215bc4",
     "src/main/brain/settings-schema.ts#COMPACT_WINDOW": "56846a4742ff7b4b",
     "src/main/brain/user-corrections.ts": "b623be1a15bf767c",
-    "src/main/brainmodel/brain-lint.ts": "b06d7d6582ef26fd",
+    "src/main/brainmodel/brain-lint.ts": "286c4aa7948099a4",
     "src/main/brainmodel/changes.ts": "0c2f9ce915ddc7a1",
     "src/main/brainmodel/changes.ts#rollback": "8d4023d64d95c9c0",
     "src/main/brainmodel/classifier-cards.ts": "a168c1d5a9522c90",

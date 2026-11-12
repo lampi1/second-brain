@@ -24,8 +24,8 @@ import type { MemoryRecord } from '../rules/memory-records';
 
 export const MAX_NOTES = 2000;
 const MAX_BYTES = 256 * 1024;
-/** folders that are not notes: the app's and the tools' own, the memory store, history */
-const SKIP_DIRS = /^(?:\..*|node_modules|ops|memory|agents|journal|reviews|scripts|queries|harness|worktrees|dev|dist|out|build|target|bin|obj)$/i;
+/** folders that are not notes: the app's and the tools' own, the memory store, history, scratch (tmp/, #382) */
+const SKIP_DIRS = /^(?:\..*|node_modules|ops|memory|agents|journal|reviews|scripts|queries|harness|worktrees|dev|dist|out|build|target|bin|obj|tmp|temp)$/i;
 /** index / hub files: entry points nobody has to link to */
 export const HUB = /^(?:index|hub|readme|start-here|agents|claude|home|moc|_index|changelog|license|contributing)\.md$/i;
 /** files the app writes at the brain's top: never orphans */

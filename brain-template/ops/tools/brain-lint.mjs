@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { brainRoot } from './brain-root.mjs';
 
 const arg = n => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : undefined; };
@@ -24,6 +25,41 @@ const read = p => { try { return fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n
 const rel = p => path.relative(root, p).replace(/\\/g, '/');
 const show = p => (under(p, root) ? '{{BRAIN_NAME}}/' + rel(p) : p.replace(home, '~')).replace(/\\/g, '/');
 const report = { fixed: [], fixedTotal: 0, overBudget: [], now: {}, duplicates: [], orphans: [], brokenRefs: [] };
+/** Folders the walk never enters: history, tools, other checkouts and scratch (#382: a brain had ~1455 .md files in
+ *  tmp/ and the lint never finished). Linked folders (symlinks, Windows junctions) are not entered either: readdir
+ *  reports them as links, not folders. */
+export const SKIP_DIR = /^(\.git|node_modules|worktrees|journal|reviews|ops|dev|\.cursor|tmp|temp)$/i;
+
+/** Sentence units of different files sharing ≥ `min` of the smaller one's word triples. Pairs come from an index of
+ *  the triples instead of comparing every pair (#382: quadratic, 15-30+ minutes on a big brain): a triple found in at
+ *  most `common` units proposes its pairs, and the same sentence repeated anywhere always pairs; each pair is then
+ *  scored on all its triples. */
+export function nearDuplicates(units, min = 0.6, common = 50) {
+  const byTri = new Map(), byText = new Map();
+  units.forEach((u, i) => {
+    for (const t of u.tri) { let l = byTri.get(t); if (!l) byTri.set(t, l = []); l.push(i); }
+    let l = byText.get(u.key); if (!l) byText.set(u.key, l = []); l.push(i);
+  });
+  const out = [], seen = new Set();
+  units.forEach((A, a) => {
+    const cand = new Set();
+    const add = list => { for (const b of list) if (b > a && units[b].file !== A.file) cand.add(b); };
+    for (const t of A.tri) { const l = byTri.get(t); if (l.length <= common) add(l); }
+    add(byText.get(A.key));
+    for (const b of cand) {
+      const B = units[b];
+      let shared = 0; for (const t of A.tri) if (B.tri.has(t)) shared++;
+      const score = shared / Math.min(A.tri.size, B.tri.size);
+      const key = [`${A.file}:${A.line}`, `${B.file}:${B.line}`].sort().join('|');
+      if (score >= min && !seen.has(key)) { seen.add(key); out.push({ score: Math.round(score * 100), a: `${A.file}:${A.line}`, b: `${B.file}:${B.line}`, text: A.text }); }
+    }
+  });
+  return out;
+}
+
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+if (isMain) main();
+function main() {
 
 // 1. Always-loaded context
 const seen = new Set();
@@ -47,7 +83,7 @@ report.fixedTotal = report.fixed.filter(f => !f.why.includes('when selected')).r
 const brainFiles = [];
 const walk = d => { for (const e of fs.readdirSync(d, { withFileTypes: true })) {
   const p = path.join(d, e.name);
-  if (e.isDirectory()) { if (!/^(\.git|node_modules|worktrees|journal|reviews|ops|dev|\.cursor)$/.test(e.name)) walk(p); }
+  if (e.isDirectory()) { if (!SKIP_DIR.test(e.name)) walk(p); }
   else if (e.name.endsWith('.md')) brainFiles.push(p);
 } };
 // a fresh brain (ADR 0072) has only brain.json: its rules are the app's
@@ -83,18 +119,10 @@ for (const p of ruleFiles) (read(p) || '').split('\n').forEach((l, i) => {
     const w = norm(s);
     if (w.length < 12) continue;
     const tri = new Set(w.slice(2).map((_, k) => w.slice(k, k + 3).join(' ')));
-    units.push({ file: show(p), line: i + 1, text: s.trim().slice(0, 110), tri });
+    units.push({ file: show(p), line: i + 1, text: s.trim().slice(0, 110), tri, key: w.join(' ') });
   }
 });
-const pairs = new Set();
-for (let a = 0; a < units.length; a++) for (let b = a + 1; b < units.length; b++) {
-  const A = units[a], B = units[b];
-  if (A.file === B.file) continue;
-  let shared = 0; for (const t of A.tri) if (B.tri.has(t)) shared++;
-  const score = shared / Math.min(A.tri.size, B.tri.size);
-  const key = [`${A.file}:${A.line}`, `${B.file}:${B.line}`].sort().join('|');
-  if (score >= 0.6 && !pairs.has(key)) pairs.add(key) && report.duplicates.push({ score: Math.round(score * 100), a: `${A.file}:${A.line}`, b: `${B.file}:${B.line}`, text: A.text });
-}
+report.duplicates.push(...nearDuplicates(units));
 
 // 5. Orphans and broken references
 const mapText = ['AGENTS.md', 'map.md'].map(f => read(path.join(root, f)) || '').join('\n');
@@ -122,3 +150,4 @@ console.log(`\n## Regole doppie: ${report.duplicates.length}`);
 for (const d of report.duplicates.sort((x, y) => y.score - x.score).slice(0, 25)) console.log(`- ${d.score}% ${d.a} ≈ ${d.b}: "${d.text}"`);
 console.log(`\n## Orfani (non nella mappa): ${report.orphans.length}${report.orphans.length ? '\n- ' + report.orphans.join('\n- ') : ''}`);
 console.log(`\n## Riferimenti rotti: ${report.brokenRefs.length}${report.brokenRefs.length ? '\n- ' + report.brokenRefs.join('\n- ') : ''}`);
+}
