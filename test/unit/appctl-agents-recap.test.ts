@@ -1,9 +1,10 @@
 // app_agents_recap (ADR 0260, src/main/appctl/agents-recap.ts): one short plain-text block per open agent with its last
 // steps (todo/plan list first, else the first sentence of its last messages), what it does now, what it waits for or
 // its report; delegated chats under their parent with their state only; the waiting ones first. isAgentsRecap tells
-// the phone the text is a recap.
+// the phone the text is a recap. Short by default (#384): one line per agent that works, waits or finished, no steps,
+// no closed list, at most SHORT_MAX lines; the blocks only with detail.
 import { expect, it } from 'vitest';
-import { agentsRecap, agentsRecapTool, isAgentsRecap, stepsOf, STEPS_MAX } from '../../src/main/appctl/agents-recap';
+import { agentsRecap, agentsRecapTool, isAgentsRecap, SHORT_MAX, stepsOf, STEPS_MAX } from '../../src/main/appctl/agents-recap';
 import type { ChatItem, ChatSummary, PendingRequest } from '../../src/shared/contract';
 import type { AgentRun } from '../../src/shared/agents';
 
@@ -50,7 +51,7 @@ it('writes one block per agent, the waiting ones first, delegates under their pa
   };
   const pending = [{ chatId: 'ask', type: 'question', title: 'q', questions: [{ question: 'Posso leggere i log di prod?' }], at: 1 }] as unknown as PendingRequest[];
   const runs = [{ runId: 'r', chatId: 'fin', report: { canonical: { summary: 'Mail inviata a Marco', at: 3, doneWhen: [] } } }] as unknown as AgentRun[];
-  const text = agentsRecap({ chats: () => chats, items: id => items[id] ?? [], pending: () => pending, runs: () => runs, now: () => 10_000 });
+  const text = agentsRecap({ chats: () => chats, items: id => items[id] ?? [], pending: () => pending, runs: () => runs, now: () => 10_000 }, { detail: true });
   expect(text).toBe([
     '🙋 Scout · Cerca log — aspetta te\n- 🙋 domanda «Posso leggere i log di prod?»',
     '🟢 Artisan · Fix login — al lavoro\n- ✓ trovato il bug\n- ▸ ora: scrive il test\n  - 🟢 Sentinel · Verifica — al lavoro',
@@ -70,11 +71,45 @@ it('never shows a delegate\'s question or error text, also when its parent is cl
     chat('s', { title: 'Ferma', lastResult: { at: 1, isError: false, interrupted: true } }),
   ];
   const pending = [{ chatId: 'q', type: 'question', title: 'secret question', questions: [{ question: 'secret question' }], at: 1 }] as unknown as PendingRequest[];
-  const text = agentsRecap({ chats: () => chats, items: id => id === 's' ? [] : [said('secret said')], pending: () => pending, runs: () => [], now: () => 1 });
+  const text = agentsRecap({ chats: () => chats, items: id => id === 's' ? [] : [said('secret said')], pending: () => pending, runs: () => [], now: () => 1 }, { detail: true });
   expect(text).not.toContain('secret');
   expect(text).toContain('🙋 Scout · Cerca — aspetta te\n- 🙋 una richiesta per te');
   expect(text).toContain('🔴 Sentinel · Verifica — ferma su un errore\n- ❗ errore');
   expect(text).toContain('✋ Ferma — fermata');
+});
+
+it('is short by default: one line per agent that works, waits or finished, no steps, no closed list (#384)', () => {
+  const chats = [
+    chat('orch', { isOrchestrator: true }),
+    chat('run', { ...role('Artisan'), title: 'Fix login', state: 'running', updatedAt: 5 }),
+    chat('ask', { ...role('Herald'), title: 'Connettore mail', state: 'waiting' }),
+    chat('kid', { ...role('Sentinel'), title: 'Verifica', parentId: 'fin', state: 'waiting' }),
+    chat('fin', { ...role('Scout'), title: 'Server tool', lastResult: { at: 1, isError: false } }),
+    chat('nap', { title: 'Ferma' }),
+    chat('gone', { title: 'Vecchia', closedAt: 9_000, state: 'closed' }),
+  ];
+  const items: Record<string, ChatItem[]> = { run: [todo([{ content: 'trovato il bug', status: 'completed' }, { content: 'prova il caso 3 sul server di test', status: 'in_progress' }])] };
+  const pending = [
+    { chatId: 'ask', type: 'question', title: 'q', questions: [{ question: 'Attivo il connettore?' }], at: 1 },
+    { chatId: 'kid', type: 'question', title: 'secret', questions: [{ question: 'secret question' }], at: 1 },
+  ] as unknown as PendingRequest[];
+  const d = { chats: () => chats, items: (id: string) => items[id] ?? [], pending: () => pending, runs: () => [], now: () => 10_000 };
+  const text = agentsRecap(d);
+  expect(text).toBe([
+    '🙋 Connettore mail — aspetta te: domanda «Attivo il connettore?»',
+    '🙋 Server tool — aspetta te',
+    '🟢 Fix login — prova il caso 3 sul server di test',
+  ].join('\n'));
+  expect(text).not.toContain('secret');
+  expect(isAgentsRecap(text)).toBe(true);
+  expect(agentsRecapTool(d).run({})).toBe(text);
+  expect(agentsRecapTool(d).run({ detail: true })).toContain('Chiuse nelle ultime 6 ore: Vecchia');
+  // many agents: at most SHORT_MAX lines, then how many more
+  const many = Array.from({ length: SHORT_MAX + 2 }, (_, i) => chat(`r${i}`, { title: `Lavoro ${i}`, state: 'running' }));
+  const lines = agentsRecap({ ...d, chats: () => many, pending: () => [] }).split('\n');
+  expect(lines).toHaveLength(SHORT_MAX + 1);
+  expect(lines.at(-1)).toBe('+ altri 2: chiedi il dettaglio per vederli tutti');
+  expect(agentsRecap({ ...d, chats: () => [chat('nap')], pending: () => [] })).toBe('Nessun agente al lavoro.');
 });
 
 it('says so when no agent is open, and the tool is read-only', () => {

@@ -274,3 +274,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0267](0267-installed-claude-code-and-registry-models.md) The installed Claude Code runs by default; every menu adds the registry's models — accepted
 - [0268](0268-brief-maps-engine-labels-to-yes-no.md) A brief maps an engine's own option labels to Sì / No — accepted
 - [0269](0269-questions-live-in-the-orchestrator.md) Questions live in the Orchestrator; it speaks for the user — accepted
+- [0270](0270-short-recap-by-default.md) The recap is short by default; the detail on request — accepted

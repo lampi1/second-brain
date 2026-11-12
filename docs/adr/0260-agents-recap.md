@@ -3,7 +3,7 @@
 Date: 2026-11-10 · Status: accepted (owner, 2026-11-10: «quando chiedo un resoconto all'Orchestrator voglio che mi dia
 un elenco puntato breve per ogni agente gli ultimi punti che ha fatto … anche da telefono so bene tutti gli agenti
 dell'app cosa stanno facendo e a che punto sono») · Amends: the Orchestrator's «Fai il punto» rule (ADR 0135), which
-said «never output a text recap or one line per job»
+said «never output a text recap or one line per job» · Amended by: ADR 0270 (short by default, the blocks with detail)
 
 ## Context
 

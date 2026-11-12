@@ -7,6 +7,9 @@
 // first sentence of its last messages; the open request, the error or the last report. A delegated chat shows only its
 // state and its report (ADR 0083, 0226): never its messages. Mounted on the Orchestrator's own endpoint by
 // appctl/tools.ts; pinned by test/unit/appctl-agents-recap.test.ts.
+// Short by default (#384, ADR 0270): the owner found the per-agent blocks (about 40 lines with ~35 closed chats)
+// unreadable and asked «in 2 parole»; the default is one short line per agent that works, waits or just finished, no
+// steps, no closed list, at most SHORT_MAX lines. The blocks only with detail: true, when the user asks for the detail.
 import type { ChatItem, ChatSummary, PendingRequest } from '../../shared/contract';
 import type { AgentRun } from '../../shared/agents';
 import { askLine } from './digest';
@@ -98,8 +101,13 @@ function reportOf(c: ChatSummary, runs: AgentRun[]): string | undefined {
 
 const roleOf = (c: ChatSummary) => c.agent?.name ? `${c.agent.name} · ` : '';
 
-/** The whole recap, plain text: one block per agent, the ones waiting for the user first. */
-export function agentsRecap(d: AgentsRecapDeps): string {
+/** the short recap names at most this many agents, then one line says how many more */
+export const SHORT_MAX = 5;
+const NONE = 'Nessun agente al lavoro.';
+
+/** The whole recap, plain text, the ones waiting for the user first: one short line per agent that works, waits or just
+ *  finished (default), or with detail one block per agent with its steps, sub-agents and the chats closed lately. */
+export function agentsRecap(d: AgentsRecapDeps, o: { detail?: boolean } = {}): string {
   const now = d.now?.() ?? Date.now();
   const all = d.chats().filter(c => !c.quick);
   const open = all.filter(c => !c.closedAt && c.state !== 'closed' && !c.isOrchestrator);
@@ -132,19 +140,39 @@ export function agentsRecap(d: AgentsRecapDeps): string {
     return [head, ...rows, ...sub];
   };
 
-  const sorted = [...roots].sort((a, b) => ORDER.indexOf(markOf(a, asks.get(a.id) ?? [])) - ORDER.indexOf(markOf(b, asks.get(b.id) ?? [])) || b.updatedAt - a.updatedAt);
+  // one line: a delegate waiting for the user makes its parent wait (its question stays the parent's, ADR 0083)
+  const lineOf = (c: ChatSummary, m: Mark): string | null => {
+    const rs = asks.get(c.id) ?? [];
+    const what = m === 'wait' ? (rs.length && !c.parentId ? `aspetta te: ${one(askLine(rs[0]!), 90)}` : 'aspetta te')
+      : m === 'error' ? 'ferma su un errore'
+      : m === 'queue' ? 'in coda'
+      : m === 'run' ? (() => { const s = c.parentId ? { done: [] } as Steps : stepsOf(d.items(c.id)); return one(s.now ?? s.done.at(-1), 70) || 'al lavoro'; })()
+      : m === 'done' ? one(reportOf(c, runs), 90) || 'ha finito'
+      : null;
+    return what ? `${ICON[m]} ${c.title} — ${what}` : null;
+  };
+  const markIn = (c: ChatSummary): Mark => { const m = markOf(c, asks.get(c.id) ?? []); return m !== 'wait' && (kids.get(c.id) ?? []).some(k => markOf(k, asks.get(k.id) ?? []) === 'wait') ? 'wait' : m; };
+
+  const marks = new Map(roots.map(c => [c.id, o.detail ? markOf(c, asks.get(c.id) ?? []) : markIn(c)] as const));
+  const sorted = [...roots].sort((a, b) => ORDER.indexOf(marks.get(a.id)!) - ORDER.indexOf(marks.get(b.id)!) || b.updatedAt - a.updatedAt);
+  if (!o.detail) {
+    const lines = sorted.map(c => lineOf(c, marks.get(c.id)!)).filter((l): l is string => !!l);
+    if (!lines.length) return NONE;
+    const more = lines.length - SHORT_MAX;
+    return [...lines.slice(0, more > 0 ? SHORT_MAX : lines.length), ...(more > 0 ? [`+ altri ${more}: chiedi il dettaglio per vederli tutti`] : [])].join('\n');
+  }
   const out = sorted.map(c => block(c).join('\n'));
   const closed = all.filter(c => c.closedAt && now - c.closedAt <= CLOSED_MS && !c.isOrchestrator && !c.parentId).map(c => c.title);
   if (closed.length) out.push(`Chiuse nelle ultime 6 ore: ${closed.join(', ')}`);
-  return out.length ? out.join('\n\n') : 'Nessun agente al lavoro.';
+  return out.length ? out.join('\n\n') : NONE;
 }
 
 export function agentsRecapTool(d: AgentsRecapDeps): Tool {
   return {
     name: 'app_agents_recap',
-    description: 'The recap for «fai il punto», «resoconto», «a che punto siamo», «cosa stanno facendo»: one short plain-text block per open agent (status mark, role, title, its last steps done, what it does now, what it waits for from the user, or its last report), the ones waiting for the user first; delegated chats under their parent with their state only. Zero tokens. Reply with this text as it is: it is written for the phone too.',
-    inputSchema: { type: 'object', properties: {}, required: [] },
+    description: `The recap for «fai il punto», «resoconto», «a che punto siamo», «cosa stanno facendo». By default short: one plain-text line per agent that works, waits for the user or just finished (status mark, title, what it does now, what it waits for, or its last report), the ones waiting for the user first, at most ${SHORT_MAX} lines. detail: true only when the user asks for the detail: one block per open agent with its last steps, delegated chats under their parent, the chats closed in the last 6 hours. Zero tokens. Reply with this text as it is: it is written for the phone too.`,
+    inputSchema: { type: 'object', properties: { detail: { type: 'boolean', description: 'true only when the user asks for the detail of every agent' } }, required: [] },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-    run: () => agentsRecap(d),
+    run: a => agentsRecap(d, { detail: a.detail === true }),
   };
 }
