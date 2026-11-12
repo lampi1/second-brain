@@ -53,7 +53,7 @@
     "src/main/agents/trials.ts#safe": "560835ed3d7591b8",
     "src/main/agents/versions.ts": "f9fb9c0b39dc89b9",
     "src/main/agents/versions.ts#versionedChanges": "71563d20bff8ba1a",
-    "src/main/agents/worktree-pool.ts": "7ea92db0ee4e65a9",
+    "src/main/agents/worktree-pool.ts": "52e6129cb6e55657",
     "src/main/agents/worktrees.ts": "85d5b5d8bd776500",
     "src/main/appctl/child-output.ts#childOutputTool": "c0d5c40215b6bc84",
     "src/main/appctl/config.ts": "9f13b6ec1a4205ba",

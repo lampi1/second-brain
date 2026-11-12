@@ -245,6 +245,7 @@ export class WorktreePool {
       const branch = poolBranch();
       const free = this.slotsOf(source.common).filter(s => isDir(s.root) && !this.leased(s.root) && !this.o.inUse(s.root) && keyOf(s.root) !== keyOf(source.root))
         .sort((a, b) => b.usedAt - a.usedAt);
+      let stuck = 0;
       for (const slot of free) {
         this.leases.set(keyOf(slot.root), this.now() + LEASE_MS);
         try {
@@ -254,6 +255,7 @@ export class WorktreePool {
             return { root: real(slot.root), branch, reused: true };
           }
         } catch (e) { log.info('agents', 'pool slot not reusable', { data: { slot: path.basename(slot.root), cause: errText(e) } }); }
+        stuck++;
         this.release(slot.root);
       }
       const root = fs.mkdtempSync(path.join(path.dirname(source.root), '.second-brain-delegate-'));
@@ -270,7 +272,13 @@ export class WorktreePool {
       this.slots.push({ root: real(root), common: real(source.common), createdAt: t, usedAt: t, branch });
       this.save();
       const { perRepo, total } = this.o.limits();
-      if (this.slotsOf(source.common).length > perRepo || this.slots.length > total) log.warn('agents', 'worktree pool above its limit', { data: { repo: path.basename(path.dirname(source.common)), slots: this.slotsOf(source.common).length, perRepo, total }, hint: 'the next cleanup removes the least used free slots' });
+      if (this.slotsOf(source.common).length > perRepo || this.slots.length > total) {
+        // over the limit because every slot is at work is the pool doing its job (#380: never refused, trimmed later);
+        // only free slots that could not be reused (uncommitted changes, commits of their own) are worth a warning
+        const data = { repo: path.basename(path.dirname(source.common)), slots: this.slotsOf(source.common).length, perRepo, total, notReusable: stuck };
+        if (stuck) log.warn('agents', 'worktree pool above its limit: free slots not reusable', { data, hint: 'Settings → Avanzate → worktree: the cleanup reports the slots it keeps and why' });
+        else log.info('agents', 'worktree pool above its limit while every slot is at work', { data, hint: 'the next cleanup removes the least used free slots' });
+      }
       return { root: real(root), branch, reused: false };
     });
   }
