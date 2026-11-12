@@ -229,12 +229,13 @@ export class CommandAsks {
       // ran): never asked; the chat hears once that it runs, and gets its result when it ends (it follows that run)
       const running = cwd === undefined ? undefined : this.d.runs?.().filter(r => r.state === 'running' && r.cwd === cwd && sameCode(r.code) === code).at(-1);
       if (running) {
-        const key = runKey(running.chatId, running.itemId, running.code);
-        const told = this.runFollowers.get(key) ?? new Set<string>();
-        if (running.chatId !== chatId) { told.add(chatId); this.runFollowers.set(key, told); }
         const once = `${chatId}|${running.id}`;
         if (this.toldRunning.has(once) || (this.d.alreadyRan ?? this.teller)?.(chatId, running)) {
           this.toldRunning.add(once);
+          if (running.chatId !== chatId) {   // results on only: with them off the block is asked as usual
+            const key = runKey(running.chatId, running.itemId, running.code);
+            this.runFollowers.set(key, (this.runFollowers.get(key) ?? new Set<string>()).add(chatId));
+          }
           log.info('run', 'command not asked: the same command is still running', { chat: chatId, data: { id, run: running.id } });
           continue;
         }
@@ -310,6 +311,7 @@ export class CommandAsks {
     this.atQuestion.delete(chatId);
     for (const k of [...this.dismissed]) if (k.startsWith(`${chatId}#`)) this.dismissed.delete(k);
     for (const k of [...this.toldRecent]) if (k.startsWith(`${chatId}|`)) this.toldRecent.delete(k);
+    for (const k of [...this.toldRunning]) if (k.startsWith(`${chatId}|`)) this.toldRunning.delete(k);
     this.turns.delete(chatId);
     this.chats.delete(chatId);
     this.handoff.delete(chatId);

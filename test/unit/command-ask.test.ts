@@ -346,6 +346,7 @@ describe('CommandAsks: a command is asked of the user once (ADR 0239)', () => {
     const off = world({ runs: [live], tell: false });
     off.turn('c1', [asst('a1', block('az deployment group create -g rg'))]);
     expect(off.s.pending()).toHaveLength(1);
+    expect(off.s.followersOf(live)).toEqual([]);   // results off: it does not follow the run
   });
 });
 

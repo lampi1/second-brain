@@ -140,6 +140,17 @@ describe('RunResults', () => {
     expect(sent[1]!.text).toContain(FOLLOWER_NOTE);
     expect(sent[1]!.text).toContain('Esito: riuscito (exit code 0)');
   });
+
+  it('a run that ends before the "still running" note is sent: only the result goes (#383)', async () => {
+    const { s, sent } = make({ followers: () => ['c3'] });
+    s.observe('chat:updated', chat({ id: 'c3' }));
+    s.tell('c3', run({ id: 'r8', chatId: 'c9', state: 'running', exitCode: null, endedAt: undefined }));
+    s.observe('run:updated', run({ id: 'r8', chatId: 'c9' }));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).not.toContain(RUNNING_NOTE);
+    expect(sent[0]!.text).toContain('Esito: riuscito (exit code 0)');
+  });
 });
 
 describe('RunResults answers the question the chat stopped on (ADR 0259)', () => {

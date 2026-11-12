@@ -109,6 +109,12 @@ export class RunResults {
     this.told.add(r.id);
     const followers = this.d.followers?.(r) ?? [];   // read even when off: a later run of the same block must not inherit them
     if (!this.d.enabled()) return;
+    // a chat told the run was still going (tell, #383) and not yet sent: the result replaces that note
+    for (const [chatId, q] of this.queue) {
+      const keep = q.filter(x => !(x.id === r.id && x.state === 'running'));
+      if (keep.length === q.length) continue;
+      if (keep.length) this.queue.set(chatId, keep); else this.queue.delete(chatId);
+    }
     this.enqueue(r.chatId, r);
     for (const chatId of followers) if (chatId !== r.chatId) this.enqueue(chatId, { ...r, note: FOLLOWER_NOTE });
   }
