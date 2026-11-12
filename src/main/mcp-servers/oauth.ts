@@ -268,13 +268,15 @@ export class McpOAuth {
       const next: OAuthSession = { ...s, ...tok, refresh: tok.refresh ?? s.refresh, who: tok.who ?? s.who };
       if (!tok.expiresAt) delete next.expiresAt;
       // «Esci» or a new login while it ran: that one stands, this answer is forgotten
-      if (!this.same(id, s) || !this.d.save(id, next)) return null;
+      if (!this.same(id, s)) return this.d.load(id)?.access ?? null;   // a newer login: its token
+      if (!this.d.save(id, next)) return null;
       log.info('mcp-servers', 'MCP OAuth token refreshed', { data: { server: id } });
       return next.access;
     } catch (e) {
       if (e instanceof McpClientError && e.code === 'auth') {
         log.warn('mcp-servers', 'MCP OAuth refresh refused: logged out', { data: { server: id }, cause: e.message, hint: 'the user presses «Accedi» on the connector card' });
-        if (this.same(id, s)) this.d.drop(id, 'L’accesso è scaduto o è stato revocato.');
+        if (!this.same(id, s)) return this.d.load(id)?.access ?? null;
+        this.d.drop(id, 'L’accesso è scaduto o è stato revocato.');
         return null;
       }
       // the login server is unreachable: the old token, if still valid, else nothing (the session stays for later)

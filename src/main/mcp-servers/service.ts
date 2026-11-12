@@ -249,7 +249,6 @@ export class McpServersService {
 
   /** The session forgotten; the card keeps its «Accedi» (a failed test that asks for the login). */
   private loggedOut(id: string, why: string): void {
-    this.oauth.cancel(id);
     this.store.deleteOAuthSession(id);
     this.store.recordTest(id, { ok: false, at: (this.opts.now ?? Date.now)(), ms: 0, tools: this.store.test(id)?.tools ?? [], error: { code: 'auth', message: why, fix: 'Premi «Accedi» sulla scheda per entrare di nuovo.', login: true } });
   }
@@ -257,6 +256,7 @@ export class McpServersService {
   /** «Esci»: the OAuth session forgotten (the server keeps its own until it ends). */
   logout(id: unknown): McpServersState {
     if (typeof id !== 'string' || !this.store.def(id)) throw new Error('Server MCP sconosciuto.');
+    this.oauth.cancel(id);
     this.loggedOut(id, 'Sei uscito.');
     log.info('mcp-servers', 'MCP OAuth logged out', { data: { server: id } });
     return this.changed(id);
