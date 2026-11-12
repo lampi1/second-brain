@@ -340,13 +340,17 @@ export abstract class ManagerDelegation extends ManagerContinuity {
 
   /** A step without a command, waiting for the user's «fatto» (ADR 0269): worker → the step. In memory only. */
   private readonly userSteps = new Map<string, { input: UserActionInput; orchestratorId: string }>();
-  /** The user's «fatto» to a worker's step, passed on by the Orchestrator (app_send_to_chat): whoever owns the work (its
-   *  parent while the parent's assignment is on) resumes it, so a delegated chat's parent hears it too. False: no step. */
+  /** The user's word on a worker's step, passed on by the Orchestrator (app_send_to_chat on a delegated chat): the
+   *  parent, while its assignment is on, reads his words and resumes the work. False: no step or no such parent (the
+   *  message then reaches the chat itself). */
   userStepDone(chatId: string, words: string): boolean {
     const step = this.userSteps.get(chatId);
     if (!step || !this.chats.get(chatId)?.userStepAt) return false;
+    // only a parent still on its assignment takes it; otherwise the message goes to the chat itself, as it would
+    if (this.ownerOfWork(chatId, step.orchestratorId)?.how !== 'parent') return false;
     this.userSteps.delete(chatId);
-    this.resumeUserAction(step.input, { yes: true, words }, step.orchestratorId);
+    // his words as he wrote them («fatto», «non riesco, usa l'account di test»): the parent reads them, never a bare Sì
+    this.resumeUserAction(step.input, { yes: false, words }, step.orchestratorId);
     return true;
   }
 
