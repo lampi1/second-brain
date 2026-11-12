@@ -359,6 +359,8 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
     case 'system': {
       if (item.continued) return <ColdDivider session={item.continued.session} />;
       if (item.code === 'resultReady') return <ResultReady item={item} />;
+      // a step only the user can do (ADR 0269): a plain message, its command with Esegui, never a question
+      if (item.code === 'userStep') return <div className="msg-assistant user-step" data-testid={`item-${item.id}`}><Message id={item.id} text={sysText(item)} /></div>;
       const recap = item.code === 'recap' || /^dove eravamo/i.test(item.text);
       return (
         <div className={`notice notice-${item.level} ${recap ? 'recap' : ''}`} role={item.level === 'error' ? 'alert' : undefined}>

@@ -16,7 +16,7 @@ import { APP_EVENT_LABEL } from './orchestrator-wake';
 import type { SubmissionReceipt, TurnEndInfo, Rec } from './manager-types';
 import { clearTimeout, sameChildResult, uniqueChildResults, turnReply, turnErrors, lastAnswer, sysItem, ORCHESTRATOR_OUTPUT_MAX, CHILD_RESULTS_MS, CHILD_RESULTS_CAP, supersededResult } from './manager-helpers';
 import { ManagerContinuity } from './manager-continuity';
-import { isUserActionRequest, sameCommand, userActionAnswer, userActionMessage, userActionRequest, type UserActionInput } from './user-action';
+import { isUserActionRequest, sameCommand, userActionAnswer, userActionMessage, userDecisionMessage, userStepParams, type UserActionInput } from './user-action';
 import { runResultText } from '../run/results';
 
 /** a Sì still waits for its command's run this long at most (#371) */
@@ -309,25 +309,40 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     return { orchestratorId: local ? null : orchestrator?.s.id ?? null, delivered: local || !!orchestrator };
   }
 
-  /** A partial / blocked report that names what only the user can do (#358): one yes/no question on the Orchestrator,
-   *  asked by the app now, whatever the Orchestrator is doing; a newer one for the same chat replaces it. */
+  /** A partial / blocked report that names what only the user can do (#358, ADR 0269): never a question. A step of
+   *  the user's is a plain note in the Orchestrator's chat (with its command, run by Esegui, which resumes the work by
+   *  itself); a decision goes to whoever owns the work, which decides as the user would. A newer report replaces it. */
   private askUserAction(r: Rec, result: DelegationResult): void {
-    // any later report of the chat (a correction, done, a block without userAction) replaces its earlier question, and
-    // a Sì still waiting for that chat's command run
+    // any later report of the chat (a correction, done, a block without userAction) replaces its earlier step, and a
+    // step still waiting for that chat's command run
     this.dropUserAsks((_, worker) => worker === r.s.id);
     this.dropAwaitingRun(r.s.id);
-    if (!result.userAction || result.outcome === 'done') return;
+    const ua = result.userAction;
+    if (!ua || result.outcome === 'done') return;
     const orchestrator = this.openOrchestrator();
-    if (!orchestrator) { log.warn('chats', 'user action not asked: no Orchestrator open', { chat: r.s.id, hint: 'the report text still carries it' }); return; }
-    const req: PendingRequest = { ...userActionRequest(Date.now(), { id: r.s.id, title: r.s.title, runId: r.s.run?.runId ?? null }, result.userAction), chatId: orchestrator.s.id };
-    r.userActionAsk = req.id;
-    this.userAsks.set(req.id, req);
-    this.opts.emitter.emit('pending:added', req);
-    // the same notice as an engine's question: the feed, the system notification
-    const on = this.opts.onWaiting;
-    if (on) this.hook('onWaiting', () => on(orchestrator.s.id, req));
+    if (!orchestrator) { log.warn('chats', 'user step not shown: no Orchestrator open', { chat: r.s.id, hint: 'the report text still carries it' }); return; }
+    const input: UserActionInput = { userAction: true, chatId: r.s.id, runId: r.s.run?.runId ?? null, title: r.s.title, text: ua.text, ...(ua.command ? { command: ua.command } : {}) };
+    if (ua.kind === 'decision' && !ua.command) {
+      this.decideForUser(input, orchestrator.s.id);
+      log.info('chats', 'user decision handed to the owner of the work', { chat: r.s.id });
+      return;
+    }
+    const at = Date.now();
+    this.addItem(orchestrator, { ...sysItem('userStep', userStepParams(r.s.title, ua), 'info'), id: `user-step-${r.s.run?.runId ?? r.s.id}-${at}` }, false);
+    // the worker waits for the user's step (never auto-closed meanwhile); a command resumes it on its run alone (#371)
+    r.userStepAt = at;
+    if (ua.command) this.awaitingRun.set(`user-step-${r.s.id}-${at}`, { input, at, orchestratorId: orchestrator.s.id, runId: r.s.run?.runId ?? null });
+    this.updated(orchestrator);
     this.updated(r);
-    log.info('chats', 'user action asked in the Orchestrator', { chat: r.s.id, data: { kind: result.userAction.kind } });
+    log.info('chats', 'user step shown in the Orchestrator', { chat: r.s.id, data: { kind: ua.kind, command: !!ua.command } });
+  }
+
+  /** A worker's decision (ADR 0269): its parent while the parent's own assignment is on, else the Orchestrator, decides it. */
+  private decideForUser(input: UserActionInput, orchestratorChat: string): void {
+    const owner = this.ownerOfWork(input.chatId, orchestratorChat);
+    if (!owner) { log.warn('chats', 'user decision not delivered: nobody owns the work', { chat: input.chatId }); return; }
+    void this.send(owner.rec.s.id, userDecisionMessage(input.title, input.text, owner.how), undefined, false, 'App', false, { kind: 'app' })
+      .catch(e => log.warn('chats', 'user decision not delivered', { chat: owner.rec.s.id, cause: errText(e), hint: 'the report text still carries it' }));
   }
 
   /** The user's answer to the app's own question (#358): Sì (or their words) goes to whoever owns the work, its parent
@@ -363,6 +378,8 @@ export abstract class ManagerDelegation extends ManagerContinuity {
   /** The worker works again (the user wrote to it, it was reassigned) or is closed: its step no longer waits for a run. */
   protected dropAwaitingRun(chatId: string): void {
     for (const [id, w] of this.awaitingRun) if (w.input.chatId === chatId) this.awaitingRun.delete(id);
+    const r = this.chats.get(chatId);
+    if (r?.userStepAt) { delete r.userStepAt; this.updated(r); }
   }
   /** A run of Esegui ended (wiring taps run:updated): the user steps whose command it is resume their work with it. */
   runEnded(run: RunInfo): void {
@@ -380,12 +397,21 @@ export abstract class ManagerDelegation extends ManagerContinuity {
    *  assignment is still on (an ended one may not reassign: manager-work.ts), otherwise the Orchestrator. */
   private resumeUserAction(input: UserActionInput, reply: { yes: boolean; words?: string }, orchestratorChat: string, ran?: RunInfo): void {
     const worker = this.chats.get(input.chatId);
+    if (worker) delete worker.userStepAt;
+    const owner = this.ownerOfWork(input.chatId, orchestratorChat);
+    if (!owner) { log.warn('chats', 'user action reply not delivered: nobody to resume the work', { chat: input.chatId }); return; }
+    void this.send(owner.rec.s.id, userActionMessage(input, reply, owner.how, ran ? runResultText(ran) : undefined), undefined, false, 'App', false, { kind: 'app' })
+      .catch(e => log.warn('chats', 'user action reply not delivered', { chat: owner.rec.s.id, cause: errText(e), hint: 'the user can write it in that chat' }));
+  }
+  /** Whoever owns a worker's work: its parent while the parent's own assignment is still on (an ended one may not
+   *  reassign: manager-work.ts), otherwise the Orchestrator. */
+  private ownerOfWork(chatId: string, orchestratorChat: string): { rec: Rec; how: 'parent' | 'orchestrator' } | null {
+    const worker = this.chats.get(chatId);
     const parent = worker?.s.parentId ? this.chats.get(worker.s.parentId) : undefined, run = parent?.s.run;
     const orchestrator = this.openOrchestrator() ?? this.chats.get(orchestratorChat);
     const owner = parent && !parent.s.closedAt && run && run.endedAt === undefined && run.report?.via !== 'agent_report' ? parent : orchestrator;
-    if (!owner || owner.s.closedAt) { log.warn('chats', 'user action reply not delivered: nobody to resume the work', { chat: input.chatId }); return; }
-    void this.send(owner.s.id, userActionMessage(input, reply, owner === parent ? 'parent' : 'orchestrator', ran ? runResultText(ran) : undefined), undefined, false, 'App', false, { kind: 'app' })
-      .catch(e => log.warn('chats', 'user action reply not delivered', { chat: owner.s.id, cause: errText(e), hint: 'the user can write it in that chat' }));
+    if (!owner || owner.s.closedAt) return null;
+    return { rec: owner, how: owner === parent ? 'parent' : 'orchestrator' };
   }
 
   /** Explicit user/Orchestrator request; child output remains private to its parent. Admission never acknowledges it. */

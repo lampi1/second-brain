@@ -95,7 +95,7 @@ describe('agent_delegate', () => {
     expect(stored.doneWhen[0]!.evidence).toBe('verified result');
   });
 
-  it('a block only the user can lift becomes the app\'s own Sì/No question in the Orchestrator; Sì tells the parent to resume (#358)', async () => {
+  it('a block only the user can lift becomes a plain note in the Orchestrator, never a question; its command\'s run resumes the work (#358, ADR 0269)', async () => {
     const f = fixture(), o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user'), parent = await f.root('strategist');
     await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Caso supporto')] });
     const child = f.m.list().find(c => c.parentId === parent.id)!;
@@ -104,70 +104,55 @@ describe('agent_delegate', () => {
     await expect(f.call('agent_report', child.id, base)).rejects.toThrow(/userAction/);
     await expect(f.call('agent_report', child.id, { ...base, outcome: 'done', doneWhen: [{ criterion: 'criterion A', met: true }], userAction: { kind: 'vpn', text: 'Accendi la VPN' } })).rejects.toThrow(/partial.*blocked/);
     await f.call('agent_report', child.id, { ...base, userAction: { kind: 'vpn', text: 'Accendi la VPN', command: 'vpn up' } });
-    const asks = f.m.pending().filter(r => r.chatId === o.id && r.tool === 'app_user_action');
-    expect(asks).toHaveLength(1);
-    const q = asks[0]!.questions![0]!;
-    expect(q.question).toContain('«Caso supporto» è fermo: Accendi la VPN. Lo riprendo quando il comando ha girato?');
-    expect(q.question).toContain('vpn up');
-    expect(q.options.map(x => x.label)).toEqual(['Sì', 'No']);
+    // no question anywhere: the user reads a plain note with the command
+    expect(f.m.pending().filter(r => r.chatId === o.id)).toHaveLength(0);
+    const note = f.m.items(o.id).find(i => i.kind === 'system' && i.code === 'userStep');
+    expect(note).toMatchObject({ params: { title: 'Caso supporto', text: 'Accendi la VPN', command: 'vpn up' } });
     // the reporting chat is held and tagged by it, never closed meanwhile
     expect(f.m.autoCloseCandidates(() => false).find(c => c.id === child.id)).toMatchObject({ eligible: false, waitingFor: 'answer' });
-    // outside the Orchestrator's own pending: its news, mail and input are not held while the user decides
-    expect(f.m.list().find(c => c.id === o.id)!.pending).toBe(0);
     const before = f.sent.get(parent.id)?.length ?? 0;
-    await f.m.answer(o.id, asks[0]!.id, { kind: 'question', answers: { [q.question]: 'Sì' } });
-    expect(f.m.pending().some(r => r.chatId === o.id && r.tool === 'app_user_action')).toBe(false);
-    // #371: the Sì alone is not the run: nothing resumes the work until «vpn up» runs with Esegui
+    f.m.runEnded({ id: 'x', chatId: o.id, itemId: 'i', code: 'other', cwd: f.dir, state: 'ok', exitCode: 0, output: '', startedAt: Date.now() + 1, endedAt: Date.now() + 2 });
     await Promise.resolve();
     expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).not.toContain('chat «Caso supporto»]');
-    f.m.runEnded({ id: 'x', chatId: child.id, itemId: 'i', code: 'other', cwd: f.dir, state: 'ok', exitCode: 0, output: '', startedAt: Date.now() + 1, endedAt: Date.now() + 2 });
-    f.m.runEnded({ id: 'r', chatId: child.id, itemId: 'i', code: 'vpn up\n', cwd: f.dir, state: 'ok', exitCode: 0, output: 'connected', startedAt: Date.now() + 1, endedAt: Date.now() + 2 });
+    f.m.runEnded({ id: 'r', chatId: o.id, itemId: 'i', code: 'vpn up\n', cwd: f.dir, state: 'ok', exitCode: 0, output: 'connected', startedAt: Date.now() + 1, endedAt: Date.now() + 2 });
     await vi.waitFor(() => expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).toContain('[comando dell’utente eseguito · chat «Caso supporto»]'));
     expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).toContain('connected');
-    expect(f.answers.some(a => a.id === asks[0]!.id)).toBe(false); // never reached an engine
   });
 
-  it('a Sì waiting for its command ends with the worker: a later run of the same command wakes nobody (#371)', async () => {
+  it('a step waiting for its command ends with the worker: a later run of the same command wakes nobody (#371)', async () => {
     const f = fixture(), o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user'), parent = await f.root('strategist');
     await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Caso login')] });
     const child = f.m.list().find(c => c.parentId === parent.id)!;
     await f.call('agent_report', child.id, { outcome: 'blocked', summary: 'Serve il login', output: 'Fermo.', doneWhen: [{ criterion: 'criterion A', met: false }], userAction: { kind: 'login', text: 'Fai il login', command: 'npm login' } });
-    const ask = f.m.pending().find(r => r.chatId === o.id && r.tool === 'app_user_action')!;
-    await f.m.answer(o.id, ask.id, { kind: 'question', answers: { [ask.questions![0]!.question]: 'Sì' } });
     await f.m.close(child.id);
     const before = [...f.sent.values()].flat().length;
-    f.m.runEnded({ id: 'r', chatId: 'other', itemId: 'i', code: 'npm login', cwd: f.dir, state: 'ok', exitCode: 0, output: 'ok', startedAt: Date.now() + 1, endedAt: Date.now() + 2 });
+    f.m.runEnded({ id: 'r', chatId: o.id, itemId: 'i', code: 'npm login', cwd: f.dir, state: 'ok', exitCode: 0, output: 'ok', startedAt: Date.now() + 1, endedAt: Date.now() + 2 });
     await Promise.resolve();
     expect([...f.sent.values()].flat().slice(before).join('\n')).not.toContain('chat «Caso login»]');
   });
 
-  it('Sì goes to the Orchestrator when the parent\'s assignment is over (#358)', async () => {
-    const f = fixture(), o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user'), parent = await f.root('strategist');
-    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Caso VPN')] });
-    const child = f.m.list().find(c => c.parentId === parent.id)!;
-    const blocked = { outcome: 'partial', summary: 'VPN off', output: 'Query pronte.', doneWhen: [{ criterion: 'criterion A', met: false }], userAction: { kind: 'vpn', text: 'Accendi la VPN' } };
-    await f.call('agent_report', child.id, blocked);
-    const ask = f.m.pending().find(r => r.chatId === o.id && r.tool === 'app_user_action')!;
-    // the parent reports and ends its assignment, but stays open: it may not reassign any more
-    await f.call('agent_report', parent.id, { outcome: 'partial', summary: 'Fermo: aspetta Caso', output: 'Vedi la sotto-chat.', doneWhen: [{ criterion: 'criterion A', met: false }] });
-    expect(f.m.list().find(c => c.id === parent.id)!.run?.report?.via).toBe('agent_report');
-    const toParent = f.sent.get(parent.id)?.length ?? 0, toOrchestrator = f.sent.get(o.id)?.length ?? 0;
-    await f.m.answer(o.id, ask.id, { kind: 'question', answers: { [ask.questions![0]!.question]: 'Sì' } });
-    await vi.waitFor(() => expect((f.sent.get(o.id) ?? []).slice(toOrchestrator).join('\n')).toContain('[l’utente dice di aver fatto il passo · chat «Caso VPN»]'));
-    expect((f.sent.get(parent.id) ?? []).slice(toParent).join('\n')).not.toContain('Caso VPN»]');
-  });
-
-  it('«No» to the app\'s question sends nothing and leaves the chat stopped (#358)', async () => {
+  it('a step with no command is a note that waits for the user\'s word: nothing is sent, the chat stays stopped (#358, ADR 0269)', async () => {
     const f = fixture(), o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user'), parent = await f.root('strategist');
     await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Login')] });
     const child = f.m.list().find(c => c.parentId === parent.id)!;
-    await f.call('agent_report', child.id, { outcome: 'blocked', summary: 'Serve il login con MFA', output: 'Fermo al login.', doneWhen: [{ criterion: 'criterion A', met: false }], userAction: { kind: 'login', text: 'Fai il login con MFA' } });
-    const ask = f.m.pending().find(r => r.chatId === o.id && r.tool === 'app_user_action')!;
     const before = f.sent.get(parent.id)?.length ?? 0;
-    await f.m.answer(o.id, ask.id, { kind: 'question', answers: { [ask.questions![0]!.question]: 'No' } });
+    await f.call('agent_report', child.id, { outcome: 'blocked', summary: 'Serve il login con MFA', output: 'Fermo al login.', doneWhen: [{ criterion: 'criterion A', met: false }], userAction: { kind: 'login', text: 'Fai il login con MFA' } });
     expect(f.m.pending().filter(r => r.chatId === o.id)).toHaveLength(0);
-    expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).not.toContain('azione dell’utente');
+    expect(f.m.items(o.id).some(i => i.kind === 'system' && i.code === 'userStep' && !i.params?.command)).toBe(true);
+    expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).not.toContain('chat «Login»]');
     expect(f.m.list().find(c => c.id === child.id)!.delegation!.result!.outcome).toBe('blocked');
+  });
+
+  it('a decision is never asked: the owner of the work decides it as the user would (ADR 0269)', async () => {
+    const f = fixture(), o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user'), parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Traduzione skill')] });
+    const child = f.m.list().find(c => c.parentId === parent.id)!;
+    const before = f.sent.get(parent.id)?.length ?? 0;
+    await f.call('agent_report', child.id, { outcome: 'partial', summary: 'Batch 1 fatto', output: 'Contratti pronti.', doneWhen: [{ criterion: 'criterion A', met: false }], userAction: { kind: 'decision', text: 'Avviare 6 chat Artisan per i batch 2-7?' } });
+    expect(f.m.pending().filter(r => r.chatId === o.id)).toHaveLength(0);
+    expect(f.m.items(o.id).some(i => i.kind === 'system' && i.code === 'userStep')).toBe(false);
+    await vi.waitFor(() => expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).toContain('[decisione da prendere · chat «Traduzione skill»]'));
+    expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).toContain('Avviare 6 chat Artisan per i batch 2-7');
   });
 
   it('an over-long summary and remember line are cut with the marker, not refused; the full summary stays in output', async () => {

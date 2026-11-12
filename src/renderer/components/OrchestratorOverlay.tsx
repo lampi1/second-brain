@@ -50,6 +50,10 @@ export function OrchestratorOverlay() {
   const [lane, setLane] = useState<typeof LANES[number]>('orchestrator');
   const focusReq = ui.use(s => (active && s.focusReq?.chatId === active ? s.focusReq.n : 0));
   useEffect(() => { if (focusReq) setLane('orchestrator'); }, [focusReq]);
+  // a question opened from anywhere (Ctrl+J, «Rispondi», the recap) shows in the Orchestrator's lane (ADR 0269)
+  const askCall = ui.use(s => s.qwin.call);
+  const askOpen = ui.use(s => s.qwin.open);
+  useEffect(() => { if (askCall || askOpen) setLane('orchestrator'); }, [askCall, askOpen]);
   const size = useColumnSize();
   const ref = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; w: number } | null>(null);

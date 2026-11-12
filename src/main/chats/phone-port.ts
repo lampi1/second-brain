@@ -7,6 +7,7 @@
 // commandReserved). Other permissions and anything else stay for the PC («Serve il PC»). A question shows the same
 // parts as the PC's card (ask-text.ts questionLines). Every decision is checked again against the live chat when it arrives.
 // Built by the integrator in main's wiring with the ChatManager and the main Emitter; tests: test/unit/chats/phone.test.ts.
+import { SYS_IT } from '../../shared/sys';
 import type { Answer, ChatItem, ChatSummary, EventChannel, EventMap, PendingRequest } from '../../shared/contract';
 import type { PhoneDecidable, PhoneDecideResult, PhonePort, PhoneOutcome } from '../../shared/contract/phone';
 import { reservedText } from '../../shared/away';
@@ -147,6 +148,12 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents, commands
       if (p.item.kind === 'system' && p.item.code === 'resultReady' && p.item.result && chatOf(p.chatId)?.isOrchestrator) {
         const r = p.item.result;
         for (const listener of outcomes) listener({ runId: r.runId, revision: r.at, text: `Orchestrator · Risultato di ${String(p.item.params?.role ?? '')} (testo dell’agente)\n${r.summary}\n\n${r.output}` });
+      }
+      // a step only the user can do (ADR 0269): the same plain message as on the PC, no buttons («fatto» answers it)
+      if (p.item.kind === 'system' && p.item.code === 'userStep' && chatOf(p.chatId)?.isOrchestrator) {
+        const q = p.item.params ?? {};
+        const text = SYS_IT['sys.userStep']({ title: String(q.title ?? ''), text: String(q.text ?? ''), ...(q.command ? { command: String(q.command) } : {}) });
+        for (const listener of outcomes) listener({ runId: p.item.id, revision: p.item.at, text: `Orchestrator · ${text}` });
       }
     } else if (ch === 'pending:added') {
       const p = payload as EventMap['pending:added'], c = chatOf(p.chatId);

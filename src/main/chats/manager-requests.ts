@@ -14,10 +14,10 @@ import { readOnlyTools } from '../agents/read-tools';
 import { gateRequest, runtimePluginName } from '../agents/role-gate';
 import { autoPermit } from './auto-permit';
 import { loadPolicy, policyCovers } from './permit-policy';
-import { AWAY_PARKED, AWAY_PLAN_NOTE, recommendedAnswers } from '../../shared/away';
+import { AWAY_PARKED, AWAY_PLAN_NOTE, recommendedAnswers, reservedText } from '../../shared/away';
 import { askingPlan, PLAN_APPROVED, type IntakeSource, type PlanIntake } from '../../shared/strategy';
 import type { SubmissionReceipt, Rec } from './manager-types';
-import { isNativeQuestion } from '../../shared/yes-no';
+import { isNativeQuestion, isYesNo } from '../../shared/yes-no';
 import { sysItem } from './manager-helpers';
 import { phoneTime } from './phone-reply';
 import { ManagerCheckpoints } from './manager-checkpoints';
@@ -78,6 +78,35 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       chat: r.s.id, cause: errText(e), hint: 'inspect the request receipt; do not retry the accepted decision', data: { policy },
     }));
     return true;
+  }
+
+  /** The Orchestrator answers a work chat's question for the user (ADR 0269, the owner 2026-11-12: «l'orchestrator deve
+   *  poter fare il ruolo dell'utente»): only an engine's own yes/no question in a work chat (never the Orchestrator's,
+   *  a Strategist's interview, an MCP form, a permission or a command), with one of its options, and never on what stays
+   *  the user's alone (shared/away.ts reservedText: production, secrets, permissions, publishing, messages to people).
+   *  Recorded as policy «orchestrator-for-user», never as the user's click; the chat's transcript says who answered. */
+  answerForUser(chatId: string, requestId: string, answers: Record<string, string>): void {
+    const r = this.need(chatId);
+    const req = r.pending.get(requestId);
+    if (!req) throw new Error('Questa richiesta non è più aperta.');
+    if (r.s.isOrchestrator || r.s.plan || req.type !== 'question' || !isNativeQuestion(req) || !req.questions?.length) throw new Error('bloccato: l’Orchestrator risponde solo alle domande Sì/No di una chat di lavoro');
+    if (!r.session) { this.dropPending(r, requestId); throw new Error('La chat non è più attiva: la richiesta è scaduta.'); }
+    const picks: string[] = [];
+    for (const q of req.questions) {
+      const pick = answers[q.question];
+      if (!isYesNo(q) || q.multiSelect) throw new Error('bloccato: solo una domanda Sì/No');
+      const opt = q.options.find(o => o.label === pick);
+      if (!opt) throw new Error(`Rispondi con una delle opzioni: ${q.options.map(o => o.label).join(' / ')}`);
+      if (reservedText(`${q.question} ${q.header ?? ''} ${opt.label} ${opt.description ?? ''}`)) throw new Error('bloccato: questa decisione è solo dell’utente (produzione, segreti, permessi, pubblicazione o messaggi a persone): resta nella sua riga nell’Orchestrator');
+      picks.push(opt.label);
+    }
+    if (Object.keys(answers).some(k => !req.questions!.some(q => q.question === k))) throw new Error('Rispondi alle domande della richiesta originale.');
+    const choice = picks.join(', ');
+    this.policyAnswer(r, req, { kind: 'question', answers }, 'orchestrator-for-user', undefined, () => {
+      this.addItem(r, sysItem('orchestratorAnswered', { choice }, 'info'), false);
+      this.updated(r);
+      log.info('chats', 'the Orchestrator answered for the user', { chat: r.s.id, data: { requestId, questions: picks.length } });
+    });
   }
 
   /** The user's answer. by = where they gave it: the PC (the panel) or the paired phone (phone bridge: only a question,

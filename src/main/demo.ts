@@ -590,6 +590,8 @@ export class DemoChats implements ChatService {
   /** every answer the UI sent, in order (e2e: what reached the chat, never a different text) */
   readonly answered: { chatId: string; requestId: string; answer: Answer }[] = [];
 
+  /** demo: the Orchestrator's answer for the user is the same as the user's own (no engine behind it) */
+  answerForUser(chatId: string, requestId: string, answers: Record<string, string>): void { void this.answer(chatId, requestId, { kind: 'question', answers }); }
   async answer(chatId: string, requestId: string, answer: Answer): Promise<void> {
     const req = this.pend.find(p => p.chatId === chatId && p.id === requestId);
     if (!req) throw new Error('Questa richiesta non è più aperta.');

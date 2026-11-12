@@ -1,10 +1,7 @@
 // An Orchestrator: one of the user's always-on coordinating chats, shown in the floating overlay (OrchestratorOverlay.tsx, one tab
 // per Orchestrator; ADR 0021), violet, with its own name. Its input has
-// the default focus; its own open questions show as a "decisione" card (a work chat's never show here: the Orchestrator is
-// for the state and for moving between chats, the user 2026-10-13), one card at a time, the oldest, the others named
-// on a "Poi:" line (the widget is a popup and at most one request popup is on screen; none while the questions window
-// or the layer's card is the one); Esc or "Rispondi dopo" postpones that request in this session (lib/later.ts): the card goes
-// unanswered, a "Da rispondere" line stays; its own messages' shell blocks have
+// the default focus; every chat's open questions, permissions, commands and plans show at its bottom as one row each,
+// opened in place (OrchestratorAsks, ADR 0269: no window over the page); its own messages' shell blocks have
 // "Esegui" too (the run and "Manda l'esito alla chat" belong to the Orchestrator). Completed results appear as compact
 // source-chat links in the transcript. Its ⋯ menu is the chat menu (ChatMenu) plus "Ricomincia da
 // capo", "Cambia motore" (both open the Nuovo Orchestrator confirm) and "Pulisci"; the eraser on its head is "Pulisci" in
@@ -21,9 +18,8 @@ import { isBusy, sameList } from '../store/state';
 import { ensureOrchestrator, stop, useApp } from '../store/store';
 import { openModal, setFocused, ui } from '../store/ui';
 import { t } from '../i18n';
-import { requestPostponed } from '../lib/later';
 import { pairHover, usePair } from '../lib/pairs';
-import { awaitingCard, clearOrchestratorNow, go, reqKey } from '../actions';
+import { awaitingCard, clearOrchestratorNow, go } from '../actions';
 import { ItemList, turnActivity, Typing } from './ChatItems';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMenu, TitleInput } from './ChatMenu';
@@ -38,7 +34,7 @@ import { MaintenanceButton } from './brain-model/MaintenanceButton';
 import { useFlash } from './ChatTile';
 import { StrategyPanel } from './StrategyPanel';
 import { planCards } from '../lib/plan-ask';
-import { InWindowLine } from './QuestionsWindow';
+import { OrchestratorAsks } from './QuestionsWindow';
 import { HarnessMark, IconEraser, IconList, IconMore, IconStop } from './Icons';
 import { IconButton, StatePill } from './ui';
 import { Select } from './Select';
@@ -87,9 +83,6 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
   const items = useApp(s => (id ? s.items[id] : undefined));
   const reqs = useApp(s => (id ? s.pending.filter(p => !s.chats[p.chatId]?.quick) : []), sameList);
   const plans = useApp(s => Object.values(s.chats).filter(c => c && !c.closedAt && c.plan && ['asking', 'revising', 'proposed'].includes(c.plan.phase)), sameList);
-  const postponed = ui.use(() => reqs.filter(r => requestPostponed(reqKey(r))), sameList);
-  // its open requests are answered in the questions window: the column names them and opens it
-  const open = reqs.filter(r => !postponed.includes(r)).sort((a, b) => a.at - b.at);
   const ready = useApp(s => s.ready);
   const isFocused = ui.use(s => s.focused === 'orchestrator');
   const focusReq = ui.use(s => (id && s.focusReq?.chatId === id ? s.focusReq.n : 0));
@@ -161,8 +154,8 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
       <MorningLine />
       {planCards(plans, reqs).map(({ chat: c, question }) => <StrategyPanel key={c.id} chat={c} question={question} />)}
       <ItemList chatId={chat.id} items={items ?? []} empty={t('dialogs.orchestrator.emptyPrompt')} footer={isBusy(chat) ? <Typing what={turnActivity(items)} testid="typing-orchestrator" items={items} /> : null} />
-      {postponed.length > 0 && <InWindowLine reqs={postponed} queued testid="orchestrator-queued" />}
-      {open.length > 0 && <InWindowLine reqs={open} testid="orchestrator-in-window" />}
+      {/* every chat's questions, permissions, commands and plans: one row each, opened in place (ADR 0269) */}
+      <OrchestratorAsks />
       {/* in the place of the old "Novità" feed (#88): what the app holds back for this Orchestrator */}
       <ChatInput ref={input} chat={chat} orchestrator testid="orchestrator-input" voice="orchestrator" />
       <ChatMenu chat={chat} anchor={menuBtn} open={menu} onClose={() => setMenu(false)} onRename={() => setRenaming(true)} orchestrator />

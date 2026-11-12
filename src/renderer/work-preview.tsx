@@ -1,4 +1,4 @@
-// Real proposal modal components with deterministic synthetic state for visual inspection. Every application write is refused.
+// Real proposal components (the Orchestrator's question rows, ADR 0269) with deterministic synthetic state for visual inspection. Every application write is refused.
 import { createRoot } from 'react-dom/client';
 import type { AppInfo, Bridge, ChatSummary, TasksState } from '@shared/contract';
 import type { WorkThread } from '@shared/workflows';
@@ -23,7 +23,7 @@ window.sb = { invoke: (channel: string) => {
 const { app } = await import('./store/store');
 const { tasks } = await import('./store/tasks');
 const { RecapButton } = await import('./components/WorkCockpit');
-const { QuestionsWindow } = await import('./components/QuestionsWindow');
+const { OrchestratorAsks } = await import('./components/QuestionsWindow');
 app.set(s => ({ ...s, info: { brainRoot: '/demo' } as AppInfo, chats: Object.fromEntries([
   { id: 'orchestrator', title: 'Orchestrator', isOrchestrator: true, state: 'idle', pending: 0 },
   { id: 'artisan', title: 'Artisan · ricerca', state: 'idle', pending: 0 },
@@ -34,5 +34,5 @@ document.body.style.overflow = 'auto';
 document.documentElement.dataset.theme = 'dark';
 createRoot(document.getElementById('root')!).render(<main style={{ maxWidth: 1200, margin: '0 auto', padding: 28 }}>
   <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}><div><h1 style={{ fontSize: 20 }}>second-brain</h1><p style={{ color: 'var(--text-3)', fontSize: 12 }}>Anteprima dei componenti reali · dati di esempio · azioni disabilitate</p></div><RecapButton /></header>
-  <QuestionsWindow />
+  <div style={{ maxWidth: 460 }}><OrchestratorAsks /></div>
 </main>);

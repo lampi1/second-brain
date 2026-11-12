@@ -1,38 +1,30 @@
-// The questions window (the user, 2026-10-12; always on since 2026-10-22, the owner: "popup sempre attivi"):
-// every open question, permission and command shows here, in front of everything (the Orchestrator overlay too, under the
-// dialogs), one at a time as a page read top to bottom (ADR 0049, the user 2026-10-14: "non lo trovo molto leggibile"):
-// who asks, a muted lead (context), the question large, a text to approve as a document, the options as large cards
-// (RequestPanel.tsx size `window`), a question with the shell blocks its chat gave in the same turn (each with "Esegui",
-// run as that chat's block: lib/orchestrator-route.ts commandsOfTurn), and the keys in the footer. With more than one request a
-// rail on the left lists them all in the order they came; a click answers that one now and the rest stay (any order,
-// ADR 0044). The chats' tiles and the Orchestrator keep one line each. It never takes the user's text (lib/questions.ts): while
-// they type a request waits as a pill, and when it shows it takes the keyboard only if no other field has it (a note
-// says so; Ctrl+J or a click anywhere on it, backdrop too, moves it here). Esc or "Rispondi dopo" turns "Rispondi dopo"
-// on that request (lib/later.ts): it stays in "Da rispondere", while other and new requests can still appear. The same window
-// is that queue's view: Ctrl+J or the top bar's counter call it with every open request. One modal, anchored near the top like a command palette: what loads late grows
-// downward and nothing on screen moves. There is no off switch anywhere. Answered with the keyboard, the next one takes the keyboard; when it closes,
-// the keyboard goes back to the field it came from. It renders only on its own requests' changes (selectors return
-// primitives or stable lists; counted in lib/questions.ts qwinStats). A Strategist's plan waiting for
-// the user's ok is one more card here (lib/plan-ask.ts, PlanApproval.tsx, ADR 0121), in the order it came, its strip only
-// pointing to it. Mounted by App.tsx; pinned by test/e2e/questions.spec.ts, questions-perf.spec.ts,
-// questions-gallery.spec.ts and strategist-plan-popup.spec.ts.
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { PendingRequest } from '@shared/contract';
+// The questions inside the Orchestrator (the owner, 2026-11-12: «le domande come tooltip nell'orchestrator, non come
+// modale così invadente, sempre espandibile»; ADR 0269). Every open question, permission, command and plan from every chat
+// sits at the bottom of the Orchestrator's column as one short row each (who asks, the question, Sì / No right on the row
+// for a yes/no question, ▾): a click opens that row as the full card (the same Bivio card the old window showed:
+// RequestPanel size `window`, PlanApproval, WorkApproval), one open at a time. Nothing floats over the page, nothing takes
+// the keyboard by itself. Ctrl+J, the top bar's counter, a strip's «aspetta te» and the Orchestrator's recap
+// (app_unblock) open the row they name here (store/ui.ts callQuestions → qwin.first / call). «Ci penso dopo» moves a
+// row into one folded line «N da rispondere dopo» (lib/later.ts). A chat's own tile never shows its requests: one line says they went to the Orchestrator
+// (InWindowLine). A command the chat left before its question comes first (ADR 0259). Mounted by OrchestratorTile.tsx.
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Harness, PendingRequest } from '@shared/contract';
+import { isYesNo, yesNoOf } from '@shared/yes-no';
 import { focusChat, reqKey } from '../actions';
-import { isEditable, qwinStats, typingLeft, writingElsewhere } from '../lib/questions';
+import { qwinStats } from '../lib/questions';
 import { commandsOfTurn } from '../lib/orchestrator-route';
 import { sameList } from '../store/state';
-import { useApp } from '../store/store';
-import { callQuestions, parkQuestions, setQuestionsAside, setQuestionsShown, ui } from '../store/ui';
+import { answer, app, useApp } from '../store/store';
+import { parkQuestions, ui } from '../store/ui';
 import { answerLater, openQueue, requestPostponed } from '../lib/later';
-import { HarnessMark, IconArrowRight, IconQuestion } from './Icons';
+import { HarnessMark, IconArrowRight, IconChevronDown, IconChevronRight, IconQuestion } from './Icons';
 import { ago } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { CodeBlock } from './CodeBlock';
 import { RequestPanel } from './RequestPanel';
 import { PlanApproval } from './PlanApproval';
 import { planAskKeys, planAskOf, withPlans, type PlanAsk } from '../lib/plan-ask';
-import { Kbd, Keys } from './ui';
+import { Kbd } from './ui';
 import { t } from '../i18n';
 import { durableAsks, withDurableAsks, type DurableAsk } from '../lib/work-ask';
 import { useWorkflows } from '../store/workflows';
@@ -57,220 +49,140 @@ type Ask = PendingRequest | PlanAsk | DurableAsk;
 const isHost = (ask: Ask): ask is DurableAsk => isDurable(ask);
 const isDurable = (ask: Ask): ask is DurableAsk => ask.type === 'work' || ask.type === 'lesson';
 
-export function QuestionsWindow() {
+export function OrchestratorAsks() {
   const hidden = ui.use(s => s.hidden, sameList);
   const q = ui.use(s => s.qwin);
-  const dialog = ui.use(s => s.modal !== null);
-  // Postponed requests stay in the store; only those keys are omitted until the queue is explicitly reopened.
-  const allPending = useApp(s => s.pending, sameList);
-  // the plans waiting for the user's ok
+  const allPending = useApp(s => s.pending.filter(p => !s.chats[p.chatId]?.quick), sameList);
   const planKeys = useApp(planAskKeys, sameList);
   const plans = useMemo(() => planKeys.map(planAskOf).filter((p): p is PlanAsk => !!p), [planKeys]);
   const { rows, lessons } = useWorkflows();
   const decisions = useMemo(() => durableAsks(rows, lessons), [rows, lessons]);
-  const pending: readonly Ask[] = [...withDurableAsks(withPlans(allPending, plans), decisions)].filter(p => (isHost(p) || !hidden.includes(p.chatId)) && !requestPostponed(reqKey(p)));
+  const pending: readonly Ask[] = [...withDurableAsks(withPlans(allPending, plans), decisions)].filter(p => isHost(p) || !hidden.includes(p.chatId));
   const queue = commandsFirst(pending);
-  if (q.first) { const i = queue.findIndex(p => reqKey(p) === q.first); if (i > 0) queue.unshift(...queue.splice(i, 1)); }
-  const cur = queue[0];
-  // the typing guard: shown once the user stops typing, or at once when they call it (Ctrl+J, "Apri")
-  const [calm, setCalm] = useState(false);
-  const calledAt = useRef(q.call);
-  const curKey = cur ? reqKey(cur) : null;
-  useEffect(() => {
-    if (!curKey) { setCalm(false); return; }
-    if (calledAt.current !== q.call) { calledAt.current = q.call; setCalm(true); return; }
-    if (calm) return;
-    let t: ReturnType<typeof setTimeout>;
-    const check = () => { const left = typingLeft(); if (left <= 0) setCalm(true); else t = setTimeout(check, left + 50); };
-    check();
-    return () => clearTimeout(t);
-  }, [curKey, q.call, calm]);
-  // a file link clicked in the window opened the viewer: the window waits as the pill while the viewer is on screen
-  // (Ctrl+J or the pill bring it back, nothing is answered or put off; store/ui.ts setQuestionsAside)
-  const onFile = ui.use(s => s.viewer.open);
-  const aside = !!q.aside && onFile;
-  useEffect(() => { if (q.aside && !onFile) setQuestionsAside(false); }, [q.aside, onFile]);
-  // under a dialog (Ctrl+K) the window stays mounted but hidden: a free answer being typed in it survives
-  const up = !!cur && calm && !aside;
-  const shown = up && !dialog;
-  useEffect(() => { setQuestionsShown(shown); }, [shown]);
-  useEffect(() => () => setQuestionsShown(false), []);
-  // the field the keyboard came from (Ctrl+J, a click in the window): it gets the keyboard back when the window closes
-  const back = useRef<HTMLElement | null>(null);
-  useEffect(() => {
-    const f = (e: FocusEvent) => {
-      const to = e.target as Element | null;
-      const from = e.relatedTarget as HTMLElement | null;
-      if (to?.closest?.('.qwin') && from && isEditable(from) && !from.closest('.qwin')) back.current = from;
-    };
-    document.addEventListener('focusin', f, true);
-    return () => document.removeEventListener('focusin', f, true);
-  }, []);
-  useEffect(() => {
-    if (shown) return;
-    const el = back.current;
-    back.current = null;
-    const a = document.activeElement;
-    if (el?.isConnected && (!a || a === document.body)) el.focus({ preventScroll: true });
-  }, [shown]);
-
-  // the keyboard: to the card when it shows (unless the user is in another field) and to the next one after an answer
+  const now = queue.filter(p => !requestPostponed(reqKey(p)));
+  const later = queue.filter(p => requestPostponed(reqKey(p)));
+  const ordered = [...now, ...later];
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const [laterOpen, setLaterOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
-  const openedAt = useRef(0);
-  const wasCalled = useRef(q.call);
-  useLayoutEffect(() => {
-    if (!shown || !curKey) return;
-    const called = wasCalled.current !== q.call;
-    wasCalled.current = q.call;
-    const el = box.current?.querySelector<HTMLElement>('[data-request-key]');
-    if (!el) return;
-    if (called || !writingElsewhere()) el.focus({ preventScroll: true });
-  }, [shown, curKey, q.call]);
-
-  // the queue called by hand: done once it is empty
-  const empty = q.open && !pending.length;
-  useEffect(() => { if (empty) parkQuestions(); }, [empty]);
-
-  if (!pending.length || !up) openedAt.current = 0;
-  if (!pending.length) return null;
-  if (dialog && !up) return null;
-  if (!up || !cur) {
-    return (
-      <button type="button" className="qwin-pill" onClick={() => callQuestions(aside ? curKey : null)} data-testid="qwin-pill" data-tip={`${t('chat.questions.open')}|Ctrl+J`}>
-        <IconQuestion size={13} />
-        <span>{`${queue.length === 1 ? t('chat.questions.one') : t('chat.questions.many', { n: queue.length })}: ${t(aside ? 'chat.questions.asideHint' : 'chat.questions.typingHint')}`}</span>
-        <Keys combo="Ctrl+J" />
-      </button>
-    );
-  }
-  if (!openedAt.current) openedAt.current = performance.now();
-  return <Window cur={cur} all={queue} boxRef={box} hidden={dialog} openedAt={openedAt} />;
+  // Ctrl+J, a «Rispondi» elsewhere, the recap: that row opens here (the first waiting one when none is named)
+  const lastCall = useRef(q.call);
+  useEffect(() => {
+    if (!q.open && lastCall.current === q.call) return;
+    const called = lastCall.current !== q.call;
+    lastCall.current = q.call;
+    const key = q.first ?? (now[0] ? reqKey(now[0]) : ordered[0] ? reqKey(ordered[0]) : null);
+    if (key) setOpenKey(key);
+    parkQuestions();
+    if (called && key) requestAnimationFrame(() => {
+      const el = box.current?.querySelector<HTMLElement>(`[data-ask-row="${CSS.escape(key)}"]`);
+      el?.scrollIntoView({ block: 'nearest' });
+      el?.querySelector<HTMLElement>('[data-request-key]')?.focus({ preventScroll: true });
+    });
+  }, [q.call, q.open, q.first]);
+  if (!ordered.length) return null;
+  const n = now.length;
+  // the ones set aside fold into one quiet line (opened by a click, or when one of them is called by name)
+  const shownLater = laterOpen || (!!openKey && later.some(p => reqKey(p) === openKey));
+  return (
+    <div ref={box} className="oasks" role="region" aria-label={t('chat.questions.pendingAriaLabel')} data-testid="orchestrator-asks">
+      {n > 0 && <div className="oasks-k">{n === 1 ? t('chat.questions.one') : t('chat.questions.many', { n })}</div>}
+      {now.map(a => {
+        const k = reqKey(a);
+        return <AskRow key={k} ask={a} open={openKey === k} later={false} onToggle={() => setOpenKey(o => (o === k ? null : k))} onClose={() => setOpenKey(null)} />;
+      })}
+      {later.length > 0 && (
+        <button type="button" className="oasks-later" onClick={() => setLaterOpen(v => !v)} aria-expanded={shownLater} data-testid="orchestrator-asks-later">
+          {shownLater ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />}
+          <span>{t('chat.questions.laterCount', { n: later.length })}</span>
+        </button>
+      )}
+      {shownLater && later.map(a => {
+        const k = reqKey(a);
+        return <AskRow key={k} ask={a} open={openKey === k} later onToggle={() => setOpenKey(o => (o === k ? null : k))} onClose={() => setOpenKey(null)} />;
+      })}
+    </div>
+  );
 }
 
-function Window({ cur, all, boxRef, hidden, openedAt }: { cur: Ask; all: readonly Ask[]; boxRef: React.RefObject<HTMLDivElement | null>; hidden: boolean; openedAt: React.RefObject<number> }) {
-  const [keysEl, setKeysEl] = useState<HTMLSpanElement | null>(null);
+/** the yes / no options of a one-step yes/no question, for the row's own buttons */
+function quickYesNo(ask: Ask): { question: string; yes: string; no: string } | null {
+  if (isDurable(ask) || ask.type !== 'question' || ask.questions?.length !== 1) return null;
+  const q = ask.questions[0]!;
+  if (q.multiSelect || !isYesNo(q)) return null;
+  const yes = q.options.find(o => yesNoOf(o.label) === 'yes'), no = q.options.find(o => yesNoOf(o.label) === 'no');
+  return yes && no ? { question: q.question, yes: yes.label, no: no.label } : null;
+}
+
+function AskRow({ ask, open, later, onToggle, onClose }: { ask: Ask; open: boolean; later: boolean; onToggle: () => void; onClose: () => void }) {
   qwinStats.renders++;
-  // primitives only: the asking chat's other changes (cost, last line) do not render the window
-  const name = useApp(s => isHost(cur) ? cur.title : (s.chats[cur.chatId]?.isOrchestrator ? 'Orchestrator' : (s.chats[cur.chatId]?.title ?? 'Chat')));
-  const harness = useApp(s => s.chats[cur.chatId]?.harness ?? 'claude');
-  const isOrchestrator = useApp(s => isHost(cur) || !!s.chats[cur.chatId]?.isOrchestrator);
-  const titles = useApp(s => all.map(p => isHost(p) ? p.title : (s.chats[p.chatId]?.isOrchestrator ? 'Orchestrator' : (s.chats[p.chatId]?.title ?? 'Chat'))), sameList);
-  const harnesses = useApp(s => all.map(p => `${s.chats[p.chatId]?.harness ?? 'claude'}${isHost(p) || s.chats[p.chatId]?.isOrchestrator ? ':r' : ''}`), sameList);
+  const name = useApp(s => isHost(ask) ? ask.title : (s.chats[ask.chatId]?.isOrchestrator ? 'Orchestrator' : (s.chats[ask.chatId]?.agent?.name || s.chats[ask.chatId]?.title || 'Chat')));
+  const harness = useApp(s => s.chats[ask.chatId]?.harness ?? 'claude');
+  const isOrchestrator = useApp(s => isHost(ask) || !!s.chats[ask.chatId]?.isOrchestrator);
   const now = useNow(30_000);
-  // a question brings the commands its chat gave in the same turn; a permission's command is the agent's own (never run twice)
-  // the card reads the chat as it was when it opened: what the chat writes later is one notice away (lib/askItems.tsx)
-  const frozen = useFrozenItems(cur.chatId, reqKey(cur));
-  const items = cur.type === 'question' ? frozen.items : undefined;
-  // the chat's command is already its own card (before this one): not repeated under the question
-  const ownCard = useApp(s => s.pending.some(p => p.chatId === cur.chatId && p.type === 'command'));
+  const k = reqKey(ask);
+  const yn = quickYesNo(ask);
+  const [sent, setSent] = useState(false);
+  const title = isDurable(ask) ? ask.title : ask.type === 'plan' ? t('tree.plan.ask.kicker')
+    : ask.type === 'permission' ? `${t('chat.questions.permission')}: ${ask.title}`
+    : ask.type === 'command' ? `${t('chat.questions.command')}: ${ask.title}`
+    : (ask.questions?.[0]?.question ?? ask.title).replace(/!\[[^\]]*\]\([^)]*\)/g, '').trim();
+  const quick = (label: string) => {
+    if (!yn || sent || isDurable(ask) || ask.type === 'plan') return;
+    setSent(true);
+    void answer(ask, { kind: 'question', answers: { [yn.question]: label } }).then(ok => { if (!ok) setSent(false); });
+  };
+  return (
+    <div className={`oask ${open ? 'open' : ''} ${later ? 'later' : ''}`} data-ask-row={k} data-testid="orchestrator-ask">
+      <div className="oask-row">
+        <button type="button" className="oask-main" onClick={onToggle} aria-expanded={open} data-testid="orchestrator-ask-toggle">
+          <span className="oask-who"><HarnessMark harness={harness} orchestrator={isOrchestrator} size={13} /><span>{name}</span><span className="oask-age">{ago(ask.at, now)}</span>{later && <span className="oask-later">{t('chat.questions.later')}</span>}</span>
+          <span className="oask-q">{title}</span>
+        </button>
+        {yn && !open && <>
+          <button type="button" className="oask-yn y" disabled={sent} onClick={() => quick(yn.yes)} data-testid="orchestrator-ask-yes">{t('chat.questions.yes')}</button>
+          <button type="button" className="oask-yn n" disabled={sent} onClick={() => quick(yn.no)} data-testid="orchestrator-ask-no">{t('chat.questions.no')}</button>
+        </>}
+        <button type="button" className="oask-chev" onClick={onToggle} aria-label={open ? t('chat.questions.close') : t('chat.questions.expand')} data-testid="orchestrator-ask-chev">{open ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}</button>
+      </div>
+      {open && <AskCard ask={ask} name={name} harness={harness} onLater={() => { answerLater(k); onClose(); }} />}
+    </div>
+  );
+}
+
+function AskCard({ ask, name, harness, onLater }: { ask: Ask; name: string; harness: Harness; onLater: () => void }) {
+  const [keysEl, setKeysEl] = useState<HTMLSpanElement | null>(null);
+  const k = reqKey(ask);
+  // the card reads the chat as it was when it opened (lib/askItems.tsx)
+  const frozen = useFrozenItems(ask.chatId, k);
+  const items = ask.type === 'question' ? frozen.items : undefined;
+  const ownCard = useApp(s => s.pending.some(p => p.chatId === ask.chatId && p.type === 'command'));
   const cmds = useMemo(() => (ownCard ? [] : commandsOfTurn(items)), [items, ownCard]);
   const commands = cmds.length ? (
     <div className="decision-cmds" data-testid="qwin-card-cmds">
-      {cmds.map((c, i) => <CodeBlock key={`${c.itemId}.${i}`} chatId={cur.chatId} itemId={c.itemId} lang={c.lang} code={c.code} />)}
+      {cmds.map((c, i) => <CodeBlock key={`${c.itemId}.${i}`} chatId={ask.chatId} itemId={c.itemId} lang={c.lang} code={c.code} />)}
     </div>
   ) : null;
-  const later = () => answerLater(reqKey(cur));
-  useEffect(() => {
-    const t0 = openedAt.current;
-    const f = requestAnimationFrame(() => { qwinStats.openMs = performance.now() - t0; });
-    return () => cancelAnimationFrame(f);
-  }, [openedAt]);
-  // the user's field still has the keyboard: the window says so (it stays the one modal in the middle)
-  const [elsewhere, setElsewhere] = useState(() => writingElsewhere());
-  useEffect(() => {
-    const f = () => setElsewhere(writingElsewhere());
-    const later = () => setTimeout(f, 0); // after a focusout the new focus is known only on the next task
-    document.addEventListener('focusin', f);
-    document.addEventListener('focusout', later);
-    // the card may have taken the keyboard before these listeners (the layout effect on open): else the note stays
-    f();
-    return () => { document.removeEventListener('focusin', f); document.removeEventListener('focusout', later); };
-  }, []);
-  // once shown for a card the note keeps its place, empty: a click on an option moves the keyboard here on the mousedown,
-  // and a note leaving then would move the options up under the pointer, the mouseup elsewhere, no click (the user,
-  // 2026-10-15: "devo premere 2 volte")
-  const curKey = reqKey(cur);
-  const [noteFor, setNoteFor] = useState<string | null>(null);
-  if (elsewhere && noteFor !== curKey) setNoteFor(curKey);
-  const noteSlot = elsewhere || noteFor === curKey;
-  const card = () => boxRef.current?.querySelector<HTMLElement>('[data-request-key]');
-  // a click on the window's own surface or on the backdrop (not a button, link or field) gives the card the keyboard
-  const onMouseDown = (e: React.MouseEvent) => {
-    if ((e.target as Element).closest('button, a, input, textarea, select, [tabindex], .md, .cb-code, .ask-cmd')) return;
-    e.preventDefault();
-    card()?.focus({ preventScroll: true });
-  };
-  // Tab stays inside the window once the keyboard is there
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key !== 'Tab') return;
-    const all = [...(boxRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input, textarea, select, summary, [tabindex]:not([tabindex="-1"])') ?? [])].filter(x => x.offsetParent !== null);
-    if (!all.length) return;
-    const i = all.indexOf(document.activeElement as HTMLElement);
-    const next = e.shiftKey ? (i <= 0 ? all[all.length - 1] : null) : (i === all.length - 1 ? all[0] : null);
-    if (next) { e.preventDefault(); next.focus(); }
-  };
-  const rail = all.length > 1;
   return (
-    <div className="qwin-backdrop" data-testid="qwin-backdrop" hidden={hidden} onMouseDown={onMouseDown}>
-      <div ref={boxRef} className={`qwin ${rail ? 'with-rail' : ''}`} role="dialog" aria-modal="true" aria-label={t('chat.questions.request', { chatTitle: name })} data-testid="qwin" onKeyDown={onKeyDown}>
-        {rail && (
-          <nav className="qwin-rail" aria-label={t('chat.questions.pendingAriaLabel')} data-testid="qwin-queue">
-            <div className="qwin-rail-k">{t('chat.questions.waiting')} <b data-testid="qwin-count">{all.length}</b></div>
-            <div className="qwin-rail-list">
-              {all.map((p, i) => {
-                const k = reqKey(p);
-                const [h, r] = harnesses[i]!.split(':');
-                const body = <><HarnessMark harness={h ?? 'claude'} orchestrator={r === 'r'} size={14} /><span className="qwin-rail-t"><b>{titles[i]}</b><span>{p.type === 'plan' ? t('tree.plan.ask.kicker') : p.type === 'permission' ? `${t('chat.questions.permission')}: ${p.title}` : p.title}</span></span></>;
-                return k === curKey
-                  ? <div key={k} className="qwin-rail-item cur" aria-current="true" data-testid="qwin-current">{body}</div>
-                  : <button key={k} type="button" className="qwin-rail-item" onClick={() => callQuestions(k)} data-testid="qwin-pick" data-key={k}
-                    data-tip={t('chat.questions.answerNowTip', { title: titles[i] ?? '' })}>{body}</button>;
-              })}
-            </div>
-          </nav>
-        )}
-        <div className="qwin-main">
-          <div className="qwin-head">
-            <HarnessMark harness={harness} orchestrator={isOrchestrator} size={16} />
-            <b className="qwin-chat" data-testid="qwin-chat">{name}</b>
-            <span className="qwin-age">{ago(cur.at, now)}</span>
-            <span className="sp" />
-            {!isOrchestrator && (
-              <button type="button" className="btn btn-subtle btn-s" onClick={() => { later(); focusChat(cur.chatId); }} data-testid="qwin-open-chat">{t('chat.questions.openChat')} <IconArrowRight size={12} /></button>
-            )}
-          </div>
-          {noteSlot && !elsewhere && <div className="qwin-note gone" aria-hidden="true" data-testid="qwin-elsewhere-slot">{t('chat.questions.note')} <Keys combo="Ctrl+J" /> {t('chat.questions.note2')}</div>}
-          {elsewhere && (
-            <div className="qwin-note" role="status" data-testid="qwin-elsewhere">{t('chat.questions.note')} <Keys combo="Ctrl+J" /> {t('chat.questions.note2')}</div>
-          )}
-          <div className="qwin-body">
-            {/* floats over the top of the card (a zero-height sticky slot): its arrival moves nothing under the pointer */}
-            {frozen.changed && !isHost(cur) && cur.type !== 'plan' && (
-              <div className="qwin-news-slot">
-                <button type="button" className="qwin-news" onClick={() => { frozen.refresh(); requestAnimationFrame(() => card()?.focus({ preventScroll: true })); }} data-testid="qwin-news">
-                  <span>{t('chat.questions.news')}</span><b>{t('chat.questions.newsShow')}</b>
-                </button>
-              </div>
-            )}
-            <AskItemsProvider chatId={cur.chatId} items={frozen.items}>
-            {isDurable(cur)
-              ? <WorkApproval key={curKey} ask={cur} onEscape={later} />
-              : cur.type === 'plan'
-              ? <PlanApproval key={curKey} ask={cur} chatTitle={name} onEscape={later} keysTo={keysEl} testid="qwin-plan" />
-              : <RequestPanel key={curKey} req={cur} variant="window" chatTitle={name} harness={harness} commands={commands} onEscape={later} keysTo={keysEl} testid="qwin-card" />}
-            </AskItemsProvider>
-          </div>
-          <div className="qwin-foot">
-            {/* a question's keys, written by the card for the step it shows (a permission's and a command's are on their buttons) */}
-            <span className="qwin-keys" ref={setKeysEl} />
-            <span className="sp" />
-            <button type="button" className="btn btn-ghost btn-m" onClick={later} data-testid="qwin-later" data-tip={t('chat.questions.laterTip')}>{t('chat.questions.later')} <Kbd>Esc</Kbd></button>
-          </div>
-        </div>
+    <div className="oask-card qwin-inline" data-testid="qwin">
+      <AskItemsProvider chatId={ask.chatId} items={frozen.items}>
+        {isDurable(ask)
+          ? <WorkApproval key={k} ask={ask} onEscape={onLater} />
+          : ask.type === 'plan'
+          ? <PlanApproval key={k} ask={ask} chatTitle={name} onEscape={onLater} keysTo={keysEl} testid="qwin-plan" />
+          : <RequestPanel key={k} req={ask} variant="window" chatTitle={name} harness={harness} commands={commands} onEscape={onLater} keysTo={keysEl} testid="qwin-card" />}
+      </AskItemsProvider>
+      <div className="oask-foot">
+        <span className="qwin-keys" ref={setKeysEl} />
+        <span className="sp" />
+        {!isOrchestratorChat(ask) && <button type="button" className="btn btn-ghost btn-s" onClick={() => focusChat(ask.chatId)} data-testid="qwin-open-chat">{t('chat.questions.openChat')} <IconArrowRight size={12} /></button>}
+        <button type="button" className="btn btn-ghost btn-s" onClick={onLater} data-testid="qwin-later" data-tip={t('chat.questions.laterTip')}>{t('chat.questions.later')} <Kbd>Esc</Kbd></button>
       </div>
     </div>
   );
 }
+
+const isOrchestratorChat = (ask: Ask): boolean => isHost(ask) || !!app.get().chats[ask.chatId]?.isOrchestrator;
 
 /** What a tile (or the Orchestrator) keeps of its requests while the window answers them, or while they wait in "Da
  *  rispondere" (`queued`, the chat stays blocked): one line, its button opens the window on the first of them. */

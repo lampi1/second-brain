@@ -34,6 +34,7 @@ export const toolsIt = {
   // SkillsPage
   // Foreign: item origin labels
   'tools.foreign.otherChat': "un'altra chat",
+  'tools.foreign.youViaOrchestrator': 'Tu, tramite l\'Orchestrator',
   'tools.foreign.anAgent': 'un agente',
   'tools.foreign.labelMail': 'Messaggio',
   'tools.foreign.labelAgent': 'Scritto da un agente',

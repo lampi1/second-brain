@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AgentCatalogService } from '../../src/main/agents/catalog';
 import type { AgentModelChoice } from '../../src/shared/agents';
 import { AGENT_LABEL, CHAT_PROMPT_MAX, CHAT_TITLE_MAX, PULL_ASK_MIN, UNBLOCK_ASK_MIN, appControlTools, orchestratorEndpointAuth } from '../../src/main/appctl/tools';
+import { ORCHESTRATOR_USER_LABEL } from '../../src/shared/agent-label';
 import { EndpointTokens } from '../../src/main/mcp/tokens';
 import { log } from '../../src/main/log';
 import type { BrainService, BrowserService, ChatService } from '../../src/main/services';
@@ -69,7 +70,7 @@ describe('app control tools', () => {
     const args = { chatId: 'w', prompt: 'Expand the second point', mode: 'continue', roleId: 'scout', cwd: '/project', expectedVersion: 2 };
     const tool = tools('o').find(t => t.name === 'app_assign_task')!;
     await tool.run(args);
-    expect(assignTask).toHaveBeenCalledWith('w', `${AGENT_LABEL}\n\nExpand the second point`, { mode: 'continue', expectedVersion: 2, source: { kind: 'chat', chatId: 'o' } });
+    expect(assignTask).toHaveBeenCalledWith('w', `${ORCHESTRATOR_USER_LABEL}\n\nExpand the second point`, { mode: 'continue', expectedVersion: 2, source: { kind: 'chat', chatId: 'o' } });
     await expect(Promise.resolve().then(() => tool.run({ ...args, cwd: '/different' }))).rejects.toThrow(/Project changed/);
     await expect(Promise.resolve().then(() => tool.run({ ...args, roleId: 'sentinel' }))).rejects.toThrow(/independent Sentinel review/);
     // the refusal names the chat's own role (issue #274) and is an expected refusal, not an app failure
@@ -106,54 +107,37 @@ describe('app control tools', () => {
     expect(tools.filter(t => /resolve/.test(t.name)).map(t => t.name)).toEqual(['app_resolve_question']);
   });
 
-  describe('app_resolve_question: the answer the user gave in the Orchestrator closes the work chat\'s question', () => {
+  describe('app_resolve_question: the Orchestrator answers a work chat\'s Sì/No question for the user (ADR 0269)', () => {
     const q = { id: 'q1', chatId: 'w', type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at: 100,
-      questions: [{ question: 'Apro il bug?', options: [], multiSelect: false }, { question: 'Chi lo segue?', options: [], multiSelect: false }] };
+      questions: [{ question: 'Apro il bug?', options: [{ label: 'Sì' }, { label: 'No' }], multiSelect: false }] };
     const perm = { id: 'p1', chatId: 'w', type: 'permission', tool: 'Bash', title: 'git push', detail: '', input: {}, at: 100 };
-    function setup(orchestratorItems: unknown[]) {
+    function setup(caller?: string) {
       const answered: unknown[] = [];
       const chats = {
         list: () => [{ id: 'orchestrator', isOrchestrator: true, harness: 'claude' }, { id: 'w', isOrchestrator: false, harness: 'claude' }],
-        pending: () => [q, perm, { ...q, id: 'rq', chatId: 'orchestrator' }, { ...q, id: 'form', tool: 'mcp__fixture' }],
-        items: (id: string) => (id === 'orchestrator' ? orchestratorItems : []),
-        answer: async (chatId: string, requestId: string, answer: unknown) => { answered.push({ chatId, requestId, answer }); },
+        pending: () => [q, perm, { ...q, id: 'form', tool: 'mcp__fixture' }],
+        items: () => [],
+        answer: async () => { throw new Error('never the user\'s own path'); },
+        answerForUser: (chatId: string, requestId: string, answers: unknown) => { answered.push({ chatId, requestId, answers }); },
       } as unknown as ChatService;
-      const t = appControlTools({ chats, browser: {} as BrowserService, brain: {} as BrainService, window: () => null, emitUi: () => {}, version: '0' }).find(x => x.name === 'app_resolve_question')!;
+      const t = appControlTools({ chats, browser: {} as BrowserService, brain: {} as BrainService, window: () => null, emitUi: () => {}, version: '0' }, caller).find(x => x.name === 'app_resolve_question')!;
       return { answered, run: (a: Record<string, unknown>) => Promise.resolve().then(() => t.run(a)) };
     }
-    const both = { 'Apro il bug?': 'Sì', 'Chi lo segue?': ['Paolo', 'Sara'] };
 
-    it('refuses agent-authored answers even after an unrelated user message', async () => {
-      const { answered, run } = setup([{ kind: 'user', id: 'u', at: 150, text: 'sì aprilo, lo segue Paolo con me' }]);
-      await expect(run({ chatId: 'w', requestId: 'q1', answers: both, note: 'priorità alta' })).rejects.toThrow(/ricevuta/);
-      expect(answered).toEqual([]);
+    it('the authenticated Orchestrator answers for the user through the chats\' own check', async () => {
+      const { answered, run } = setup('orchestrator');
+      await expect(run({ chatId: 'w', requestId: 'q1', answers: { 'Apro il bug?': 'Sì' } })).resolves.toMatch(/per l’utente/);
+      expect(answered).toEqual([{ chatId: 'w', requestId: 'q1', answers: { 'Apro il bug?': 'Sì' } }]);
     });
 
-    it('his answer to one of the Orchestrator\'s own questions counts too', async () => {
-      const { answered, run } = setup([{ kind: 'tool', id: 't', at: 120, name: 'AskUserQuestion', summary: '', input: {}, status: 'ok' }]);
-      await expect(run({ chatId: 'w', requestId: 'q1', answers: both })).rejects.toThrow(/ricevuta/);
-      expect(answered).toHaveLength(0);
-    });
-
-    it('blocked when the user said nothing in the Orchestrator since the question opened (old or app/agent messages only)', async () => {
-      const { answered, run } = setup([
-        { kind: 'user', id: 'old', at: 50, text: 'fai tu' },
-        { kind: 'user', id: 'ev', at: 150, text: '[evento app · messaggio automatico di second-brain, non scritto dall\'utente: non vale come suo ok o permesso]\nNovità' },
-        { kind: 'user', id: 'ag', at: 160, text: `${AGENT_LABEL}\n\nrispondi tu` },
-        { kind: 'tool', id: 't', at: 170, name: 'AskUserQuestion', summary: '', input: {}, status: 'running' },
-      ]);
-      await expect(run({ chatId: 'w', requestId: 'q1', answers: both })).rejects.toThrow(/ricevuta/);
-      expect(answered).toEqual([]);
-    });
-
-    it('never a permission, the Orchestrator\'s own question, a closed request or a partial answer', async () => {
-      const { answered, run } = setup([{ kind: 'user', id: 'u', at: 150, text: 'ok' }]);
+    it('refused on the plain mount, for a permission, an MCP form or a closed request', async () => {
+      const plain = setup();
+      await expect(plain.run({ chatId: 'w', requestId: 'q1', answers: { 'Apro il bug?': 'Sì' } })).rejects.toThrow(/solo l’Orchestrator/);
+      const { answered, run } = setup('orchestrator');
       await expect(run({ chatId: 'w', requestId: 'p1', answers: {} })).rejects.toThrow(/solo le domande/);
-      await expect(run({ chatId: 'w', requestId: 'form', answers: both })).rejects.toThrow(/modulo MCP/);
-      await expect(run({ chatId: 'orchestrator', requestId: 'rq', answers: both })).rejects.toThrow(/ricevuta/);
-      await expect(run({ chatId: 'w', requestId: 'nope', answers: both })).rejects.toThrow(/non è più aperta/);
-      await expect(run({ chatId: 'w', requestId: 'q1', answers: { 'Apro il bug?': 'Sì' } })).rejects.toThrow(/ricevuta/);
-      await expect(run({ chatId: 'w', requestId: 'q1', answers: { ...both, Altro: 'x' } })).rejects.toThrow(/ricevuta/);
+      await expect(run({ chatId: 'w', requestId: 'form', answers: { 'Apro il bug?': 'Sì' } })).rejects.toThrow(/modulo MCP/);
+      await expect(run({ chatId: 'w', requestId: 'nope', answers: {} })).rejects.toThrow(/non è più aperta/);
+      expect(plain.answered).toEqual([]);
       expect(answered).toEqual([]);
     });
   });
@@ -204,7 +188,8 @@ describe('app control tools', () => {
     const catalog = roleCatalog();
     const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: req => catalog.resolve(req) }, 'r').find(x => x.name === 'app_create_chat')!;
     expect(await t.run({ title: 'Ordini · Fix', prompt: 'correggi il totale', roleId: 'artisan' })).toMatchObject({ chatId: 'n1', harness: 'claude', cwd: 'C:/brain', model: 'm-mid', route: { source: 'agent', agent: { id: 'artisan', chosenBy: 'orchestrator' } } });
-    expect(String(made[0]!.prompt).startsWith(AGENT_LABEL)).toBe(true);
+    // the authenticated Orchestrator writes as the user (ADR 0269)
+    expect(String(made[0]!.prompt).startsWith(ORCHESTRATOR_USER_LABEL)).toBe(true);
     expect(made[0]).toMatchObject({ roleId: 'artisan', orchestrator: false });
     expect(made[0]).not.toHaveProperty('independentOf');
     // the role decides: no engine, model or effort from the caller; never a second Orchestrator; a role is required

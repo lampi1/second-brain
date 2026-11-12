@@ -4,6 +4,12 @@
 // only on real evidence, the run of that command with Esegui (its exit code and output go with the message; until then
 // the work waits), or the user's words in a chat; a step without a command is told as the user's own word, never as a
 // fact the app checked.
+// ADR 0269 (the owner, 2026-11-12: «a volte mi chiede solo hai fatto? mi dà un fastidio incredibile», «meno domande e più
+// spiegazioni», «le spiegazioni le voglio come messaggio semplice»): the app no longer asks «L'hai fatto tu?». A step only
+// the user can do is a plain note in the Orchestrator's chat (userStepParams → sys «userStep»: what to do, the command to
+// run with Esegui when there is one); its run resumes the work by itself, else the user's «fatto» to the Orchestrator does.
+// A «decision» is no user step at all: whoever owns the work decides it as the user would (userDecisionMessage) and asks
+// the user only what is his alone. userActionRequest / answerUserAction stay for questions asked before the change.
 // Pure builders, used by manager-delegation.ts (askUserAction, answerUserAction). Tests: test/unit/chats/user-action.test.ts.
 import type { Answer, PendingRequest } from '../../shared/contract';
 import type { UserAction } from '../../shared/delegation';
@@ -45,6 +51,18 @@ export function userActionMessage(input: Pick<UserActionInput, 'title' | 'text' 
   return reply.yes
     ? `[l’utente dice di aver fatto il passo · chat «${input.title}»]\nL’utente ha risposto Sì a «${input.text}»: è la sua parola, l’app non l’ha verificato. Riprendi il lavoro di quella chat (${resume} con il passo successivo) e come primo passo controlla che sia davvero fatto.`
     : `[risposta dell’utente · chat «${input.title}»]\nAlla richiesta «${input.text}» l’utente ha risposto: «${reply.words}». Decidi tu come proseguire con quella chat.`;
+}
+
+/** The plain note's params (sys «userStep»): the chat, what the user does, the command to run when there is one. */
+export function userStepParams(title: string, ua: UserAction): { title: string; text: string; command?: string } {
+  return { title, text: ua.text, ...(ua.command ? { command: ua.command } : {}) };
+}
+
+/** What the owner of the work (its parent, or the Orchestrator) reads when a worker stops on a decision (ADR 0269): it
+ *  decides as the user would, and asks the user only what is his alone. */
+export function userDecisionMessage(title: string, text: string, how: 'parent' | 'orchestrator'): string {
+  const resume = how === 'parent' ? 'agent_assign_task' : 'app_assign_task';
+  return `[decisione da prendere · chat «${title}»]\n«${title}» si è fermato su una decisione: ${text.replace(/[.\s]+$/, '')}.\nDecidi tu come la prenderebbe l'utente (il suo obiettivo, il brain, il piano) e riassegna la chat con ${resume}; poi scrivi all'utente una riga che dice cosa hai deciso. Chiedi all'utente (una sola domanda Sì/No con il brief) solo se tocca produzione, scritture su database, Azure/cloud, permessi o impostazioni, messaggi a persone, o se cambia il suo obiettivo.`;
 }
 
 /** The same command, whatever its surrounding blank space or line ends. */

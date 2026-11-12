@@ -22,6 +22,8 @@ type UserItem = Extract<ChatItem, { kind: 'user' }>;
 // chats/orchestrator-wake.ts APP_EVENT_LABEL, run/results.ts RUN_RESULT_LABEL, chats/manager.ts RESUME_TEXT)
 const MAIL = /^\[Messaggio dalla chat "(.*?)" tramite second-brain[^\n]*\]/;
 const AGENT = /^\[Messaggio di un agente tramite second-brain[^\n]*\]/;
+/** the Orchestrator writing for the user (shared/agent-label.ts ORCHESTRATOR_USER_LABEL, ADR 0269) */
+const FOR_USER = /^\[Messaggio dell'utente scritto dall'Orchestrator[^\n]*\]/;
 const EVENT = /^\[evento app[^\n]*\]/;
 const RUN = /^\[esito di Esegui[^\n]*\]/;
 /** The outcome of an Esegui run as main writes it for the chat (run/results.ts runResultText, in Italian: the chats read
@@ -61,6 +63,10 @@ export function foreignOf(item: UserItem): Foreign | null {
   if (AGENT.test(text)) {
     const body = after(text, AGENT).replace(/^(?:La tuo Orchestrator|Il tuo Orchestrator) è «[^»]*»[^\n]*\n*/, '').trim();
     return { kind: 'agent', sender: item.from ?? t('tools.foreign.anAgent'), summary: oneLine(firstLine(body)), body };
+  }
+  if (FOR_USER.test(text)) {
+    const body = after(text, FOR_USER);
+    return { kind: 'agent', sender: t('tools.foreign.youViaOrchestrator'), summary: oneLine(firstLine(body)), body };
   }
   if (EVENT.test(text)) {
     const body = after(text, EVENT);

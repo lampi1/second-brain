@@ -90,7 +90,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
       const finished = (c.state === 'idle' || ended) && !c.lastError &&
         !r.unfinished && ((result => result ? !result.isError && !result.interrupted : ended && !r.session && r.lastTurnAt > 0)(c.lastResult ?? r.savedResult));
       const eligible = !this.quitting && !updateActivity.frozen && !c.isOrchestrator && !c.quick && !held && finished &&
-        !r.working && !r.session?.busy && r.pending.size === 0 && !this.userAsks.has(r.userActionAsk ?? '') && !this.awaitsRun(c.id) && !workBehind(c) && !c.waitsOn && c.plan?.phase !== 'proposed' && !c.queued && !r.deliveryHolds &&
+        !r.working && !r.session?.busy && r.pending.size === 0 && !this.userAsks.has(r.userActionAsk ?? '') && !r.userStepAt && !this.awaitsRun(c.id) && !workBehind(c) && !c.waitsOn && c.plan?.phase !== 'proposed' && !c.queued && !r.deliveryHolds &&
         !r.opening && !r.releasing && !r.switching && !r.handoffTurn && (!r.archiving || r.autoClosing) && this.childrenDone(r);
       const waiting = eligible || c.isOrchestrator || c.quick ? undefined : this.waitingOf(r, held), waitingFor = waiting?.what;
       return { id: c.id, eligible: !!eligible, stamp: `${r.activityRevision ?? 0}:${r.lastTurnAt}:${c.lastResult?.at ?? 0}:${c.pending}:${c.model ?? ''}:${c.work?.status ?? ''}:${c.waitsOn ?? ''}`,
@@ -121,7 +121,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     if (external === 'command' || external === 'browser') return { what: external };
     if (r.session?.busy || r.working || c.state === 'running' || c.state === 'starting') return undefined;
     if (this.userAsks.has(r.userActionAsk ?? '')) return { what: 'answer' }; // #358: its question waits in the Orchestrator
-    if (this.awaitsRun(r.s.id)) return { what: 'answer' }; // #371: its Sì waits for the command's run
+    if (this.awaitsRun(r.s.id) || r.userStepAt) return { what: 'answer' }; // #371 / ADR 0269: its step waits for the user (a run or his «fatto»)
     const children = this.busyChildren(r);
     if (children > 0) return { what: 'children', n: children };
     if ((c.background ?? 0) > 0) return { what: 'background', n: c.background! };

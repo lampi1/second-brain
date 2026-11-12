@@ -8,6 +8,7 @@ import { render } from '../../src/main/chats/mail';
 import { wakeMessage } from '../../src/main/chats/orchestrator-wake';
 import { runResultMessage } from '../../src/main/run/results';
 import { AGENT_LABEL } from '../../src/main/appctl/tools';
+import { ORCHESTRATOR_USER_LABEL } from '../../src/shared/agent-label';
 import { RESUME_TEXT } from '../../src/main/chats/manager';
 
 type User = Extract<ChatItem, { kind: 'user' }>;
@@ -63,5 +64,12 @@ describe('foreignOf', () => {
     const f = foreignOf(user(`${AGENT_LABEL}\n\n${'parola '.repeat(60)}`))!;
     expect(f.summary.length).toBeLessThanOrEqual(120);
     expect(f.summary.endsWith('…')).toBe(true);
+  });
+
+  it('the Orchestrator writing for the user reads as the user\'s, via the Orchestrator (ADR 0269)', () => {
+    const f = foreignOf(user(`${ORCHESTRATOR_USER_LABEL}\n\nSistema il login: usa solo Google.`, { from: 'Orchestrator' }))!;
+    expect(f).toMatchObject({ kind: 'agent', summary: 'Sistema il login: usa solo Google.' });
+    expect(f.sender).not.toBe('Orchestrator');
+    expect(f.body).not.toMatch(/^\[Messaggio/);
   });
 });

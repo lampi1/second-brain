@@ -1,7 +1,8 @@
 // The app's own question for a run stopped on a step only the user can do (#358, chats/user-action.ts): what it says,
 // how a Sì, a No or the user's words are read, what the owner of the work is told; which report words name such a step.
 import { describe, expect, it } from 'vitest';
-import { isUserActionRequest, sameCommand, userActionAnswer, userActionMessage, userActionRequest } from '../../../src/main/chats/user-action';
+import { isUserActionRequest, sameCommand, userActionAnswer, userActionMessage, userActionRequest, userDecisionMessage, userStepParams } from '../../../src/main/chats/user-action';
+import { SYS_IT } from '../../../src/shared/sys';
 import { USER_ONLY_BLOCKER, checkResult } from '../../../src/shared/delegation';
 
 describe('user-action', () => {
@@ -39,5 +40,23 @@ describe('user-action', () => {
     expect(checkResult({ ...base, userAction: { kind: 'vpn', text: 'Accendi la VPN' } }, []).userAction).toEqual({ kind: 'vpn', text: 'Accendi la VPN' });
     expect(() => checkResult({ ...base, userAction: { kind: 'boh', text: 'x' } }, [])).toThrow(/userAction.kind/);
     expect(() => checkResult({ ...base, outcome: 'done', userAction: { kind: 'vpn', text: 'x' } }, [])).toThrow(/partial/);
+  });
+});
+
+describe('a user step and a decision without a question (ADR 0269)', () => {
+  it('the note says what to do and how it resumes: the command with Esegui, else his «fatto»', () => {
+    const cmd = SYS_IT['sys.userStep'](userStepParams('Deploy test', { kind: 'command', text: 'Lancia la build.', command: 'npm run build' }));
+    expect(cmd).toContain('«Deploy test» è in pausa: Lancia la build.');
+    expect(cmd).toContain('```powershell\nnpm run build\n```');
+    expect(cmd).not.toMatch(/fatto tu\?/);
+    const vpn = SYS_IT['sys.userStep'](userStepParams('Deploy test', { kind: 'vpn', text: 'Accendi la VPN' }));
+    expect(vpn).toBe('«Deploy test» è in pausa: Accendi la VPN.\n\nRiparte quando mi scrivi «fatto».');
+  });
+  it('a decision goes to the owner of the work, who decides as the user and asks only what is his alone', () => {
+    const m = userDecisionMessage('Traduzione skill', 'Avviare 6 chat Artisan?', 'orchestrator');
+    expect(m).toMatch(/^\[decisione da prendere · chat «Traduzione skill»\]/);
+    expect(m).toContain('app_assign_task');
+    expect(m).toContain('produzione');
+    expect(userDecisionMessage('X', 'y', 'parent')).toContain('agent_assign_task');
   });
 });

@@ -93,23 +93,31 @@ export async function launchDemo(opts: { freeze?: boolean; width?: number; heigh
   return l;
 }
 
-/** The questions window is always on (2026-10-22) and the demo starts with open requests: a test about something else
- *  sets them aside first with «Rispondi dopo», as the user would (each one stays in «Da rispondere»; Ctrl+J or the top
- *  bar's counter brings them back). `launchDemo({ questions: true })` keeps the window up. */
+/** The demo starts with open requests, each a row at the bottom of the Orchestrator (ADR 0269): a test about something
+ *  else sets them aside first with «Ci penso dopo», as the user would (they fold into one «N da rispondere dopo» line;
+ *  Ctrl+J or the top bar's counter brings them back). `launchDemo({ questions: true })` keeps them as rows. */
 export async function setQuestionsAside({ app, page }: Pick<Launched, 'app' | 'page'>): Promise<void> {
   const open = await app.evaluate(() => (globalThis as unknown as { __sbDemo?: { pending(): number } }).__sbDemo?.pending() ?? 0);
   if (!open) return;
-  const win = page.getByTestId('qwin');
-  await expect(win).toBeVisible({ timeout: 15_000 });
-  for (let i = 0; i < open && await win.count(); i++) await page.getByTestId('qwin-later').click();
-  await expect(win).toHaveCount(0);
+  const rows = page.locator('[data-testid="orchestrator-ask"]:not(.later)');
+  await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+  for (let i = 0; i < open + 5 && await rows.count(); i++) {
+    const row = rows.first();
+    if (!(await row.getByTestId('qwin-later').count())) await row.getByTestId('orchestrator-ask-toggle').click();
+    await row.getByTestId('qwin-later').click();
+  }
+  await expect(rows).toHaveCount(0);
 }
 
-/** The live demo (not frozen) keeps asking while a test about something else runs: every request the window shows is
- *  set aside with «Rispondi dopo» as soon as it shows, as a user busy elsewhere would (until the page reloads). */
+/** The live demo (not frozen) keeps asking while a test about something else runs: every new row is set aside with
+ *  «Ci penso dopo» as soon as it shows, as a user busy elsewhere would (until the page reloads). */
 export async function keepQuestionsAside(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const aside = () => document.querySelector<HTMLButtonElement>('[data-testid="qwin-later"]')?.click();
+    const aside = () => {
+      const later = document.querySelector<HTMLButtonElement>('[data-testid="orchestrator-ask"]:not(.later) [data-testid="qwin-later"]');
+      if (later) { later.click(); return; }
+      document.querySelector<HTMLButtonElement>('[data-testid="orchestrator-ask"]:not(.later) [data-testid="orchestrator-ask-toggle"]')?.click();
+    };
     new MutationObserver(aside).observe(document.body, { childList: true, subtree: true });
     aside();
   });

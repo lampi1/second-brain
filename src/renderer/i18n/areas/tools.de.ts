@@ -36,6 +36,7 @@ export const toolsDe: typeof toolsIt = {
   // SkillsPage
   // Foreign: item origin labels
   'tools.foreign.otherChat': "ein anderer Chat",
+  'tools.foreign.youViaOrchestrator': 'Du, über den Orchestrator',
   'tools.foreign.anAgent': 'ein Agent',
   'tools.foreign.labelMail': 'Nachricht',
   'tools.foreign.labelAgent': 'Von einem Agenten geschrieben',

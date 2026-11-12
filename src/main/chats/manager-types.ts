@@ -208,6 +208,8 @@ export interface Rec {
   rootReportAt?: number;
   /** its report's userAction is asked in the Orchestrator (#358): that request's id, until the user answers */
   userActionAsk?: string;
+  /** its report's user step is a plain note in the Orchestrator (ADR 0269): when it was shown, until the work resumes */
+  userStepAt?: number;
   /** the brain's permissions.json error already shown in this chat (ADR 0254): once per error */
   policyWarned?: string;
   /** a brain rule refused a request of an ACP engine in this turn (ADR 0254): told after the turn if it stopped there */

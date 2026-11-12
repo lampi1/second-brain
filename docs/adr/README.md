@@ -273,3 +273,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0266](0266-the-app-writes-the-journal-fatto-line.md) The app writes the journal's «fatto» line of every result — accepted
 - [0267](0267-installed-claude-code-and-registry-models.md) The installed Claude Code runs by default; every menu adds the registry's models — accepted
 - [0268](0268-brief-maps-engine-labels-to-yes-no.md) A brief maps an engine's own option labels to Sì / No — accepted
+- [0269](0269-questions-live-in-the-orchestrator.md) Questions live in the Orchestrator; it speaks for the user — accepted

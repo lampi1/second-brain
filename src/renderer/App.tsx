@@ -42,7 +42,6 @@ import { StatoDialog } from './components/StatoDialog';
 import { IconArrowLeft } from './components/Icons';
 import { Keys, TooltipLayer } from './components/ui';
 import { SettingsPage } from './components/SettingsPage';
-import { QuestionsWindow } from './components/QuestionsWindow';
 import { RunWatch } from './components/RunWatch';
 import { LaunchBanner } from './components/LaunchBanner';
 import { MemoryPage } from './components/brain-model/MemoryPage';
@@ -277,7 +276,6 @@ export function App() {
       )}
       <OrchestratorOverlay />{/* always: every page and the 3D map sit beside it, never over it */}
       {center && <NotificationCenter />}
-      <QuestionsWindow />
       <RunWatch />
       <LiveRegion />
       <TooltipLayer />

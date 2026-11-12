@@ -57,7 +57,7 @@ import { ToolRefusal } from '../mcp/refusal';
 import type { BrainScripts } from '../brain/scripts';
 import type { BrainChangelog } from '../brain/changelog';
 import { scriptWriteTools } from '../brain/scripts-tools';
-import { AGENT_LABEL } from '../../shared/agent-label';
+import { AGENT_LABEL, ORCHESTRATOR_USER_LABEL } from '../../shared/agent-label';
 import { voiceDiagnostics } from '../voice/diagnostics';
 import { packageTools } from '../flows/package-tools';
 import type { RoutinePackageStore } from '../flows/package-authoring';
@@ -216,6 +216,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const mine = (c: ChatSummary) => !c.quick;
   /** the Orchestrator this endpoint acts for */
   const caller = (): ChatSummary | undefined => d.chats.list().find(c => c.isOrchestrator && !c.closedAt && (!callerId || c.id === callerId));
+  /** the authenticated Orchestrator writes to a work chat as the user (ADR 0269); the plain mount as an agent */
+  const voice = (): string => (authed() ? ORCHESTRATOR_USER_LABEL : AGENT_LABEL);
   const intakeField = str('For a new Strategist plan only: the exact question from your latest answered intake panel for this task. The host supplies the answer.');
   const intakeOf = (a: Record<string, unknown>, newPlan: boolean) => {
     if (a.intakeQuestion === undefined) return {};
@@ -387,22 +389,23 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     },
     {
       name: 'app_resolve_question',
-      description: 'Compatibility endpoint: agent-authored answers are refused. The host presents the original worker request in the Orchestrator and records the owner’s exact panel or paired Telegram button answer. Away from the PC (Remote Control, phone) a worker\'s Sì/No question goes through relay_question; anything else stays pending in the Orchestrator on desktop. Text, including quoted user consent, is never an authorization receipt.',
+      description: 'Answer a work chat\'s Sì/No question for the user (ADR 0269): you speak for him, so pick the option his goal, the brain or the plan already settle, then tell him in one line what you answered. Refused (it stays in his row in the Orchestrator) for what is his alone: production, secrets, permissions, publishing, messages to people; also refused for permissions, commands, MCP forms, a Strategist\'s interview and the Orchestrator\'s own questions.',
       inputSchema: obj({
         chatId: str('the work chat, from app_pending'), requestId: str('the question\'s id, from app_pending'),
-        answers: { type: 'object', description: '{ "<question text>": "<his answer>" } for every question', additionalProperties: { type: 'string' } },
-        note: str('optional: his words or context'),
+        answers: { type: 'object', description: '{ "<question text>": "<one of its option labels>" } for every question', additionalProperties: { type: 'string' } },
       }, ['chatId', 'requestId', 'answers']),
-      run: async a => {
+      run: a => {
         const chatId = String(a.chatId ?? ''), requestId = String(a.requestId ?? '');
         need(chatId);
         const req = d.chats.pending().find(p => p.chatId === chatId && p.id === requestId);
         if (!req) throw new Error('questa domanda non è più aperta (quelle aperte: app_pending)');
         if (req.type !== 'question' || !req.questions?.length) throw new Error('bloccato: solo le domande; permessi e comandi li risponde solo l\'utente con un clic');
-        // MCP field values must reach the server verbatim and may include an explicit external confirmation.
-        // This relay adds a narrative prefix, so these forms stay in the user's own question panel.
         if (req.tool.startsWith('mcp__')) throw new Error('bloccato: compila il modulo MCP nel pannello delle domande; le risposte non possono essere riscritte dall’Orchestrator');
-        throw new Error('bloccato: una risposta inoltrata da un agente non è una ricevuta dell’utente. La richiesta originale resta nel pannello dell’Orchestrator; risponde l’utente con il pulsante del PC o del telefono associato.');
+        // only the authenticated Orchestrator speaks for the user; a delegated chat's question stays his (ADR 0083)
+        if (!authed()) throw new Error('bloccato: solo l’Orchestrator risponde per l’utente');
+        if (delegated(chatId)) throw new Error('bloccato: è una chat delegata (ne vedi solo lo stato): la sua domanda resta all’utente nella sua riga');
+        d.chats.answerForUser(chatId, requestId, Object.fromEntries(Object.entries((a.answers ?? {}) as Record<string, unknown>).map(([k, v]) => [k, String(v)])));
+        return 'risposto per l’utente';
       },
     },
     {
@@ -552,7 +555,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const route = choice ? { ...routed.route, reason: choice.reason, ...(choice.balanced ? { balanced: choice.balanced } : {}) } : routed.route;
         const refused = openRefusal(s, from, harness);
         if (refused) throw new Error(`bloccato: ${refused}`);
-        const chat = await d.chats.create({ harness, cwd, title, prompt: `${AGENT_LABEL}\n\n${prompt}`, ...links, orchestrator: false, roleId, ...(tier ? { tier } : {}), ...(skills.length ? { skills } : {}),
+        const chat = await d.chats.create({ harness, cwd, title, prompt: `${voice()}\n\n${prompt}`, ...links, orchestrator: false, roleId, ...(tier ? { tier } : {}), ...(skills.length ? { skills } : {}),
           ...(model ? { model } : {}), ...(effort ? { effort } : {}), route, ...(balancedRoute ? { balancedRoute } : {}) }, 'agent', undefined, undefined,
           // the plain /mcp/app mount is open to any local process: its chats run no wider than the Orchestrator
           { boundByOrchestrator: !authed(), ...intake });
@@ -611,7 +614,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (a.expectedEventSeq !== undefined && (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0)) throw new Error('Invalid user event cursor.');
         if (a.deliveryPolicy !== undefined && !['display', 'notify', 'synthesize'].includes(String(a.deliveryPolicy))) throw new Error('Invalid delivery policy.');
         const userInstructions = d.chats.userEvents ? unreadInstructions(d.chats.userEvents(target.id)) : [];
-        await d.chats.assignTask(target.id, `${AGENT_LABEL}\n\n${prompt}`, { ...intakeOf(a, a.roleId === 'strategist' && a.mode === 'new-task' && !!target.plan), mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: a.expectedVersion === undefined ? target.run?.taskVersion ?? 1 : Number(a.expectedVersion), ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), ...(a.deliveryPolicy ? { deliveryPolicy: a.deliveryPolicy as 'display' | 'notify' | 'synthesize' } : {}), ...(doneWhen ? { doneWhen } : {}), ...(task.contractFields ? { contractFields: task.contractFields } : {}), source: { kind: 'chat', chatId: orchestrator.id } });
+        await d.chats.assignTask(target.id, `${voice()}\n\n${prompt}`, { ...intakeOf(a, a.roleId === 'strategist' && a.mode === 'new-task' && !!target.plan), mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: a.expectedVersion === undefined ? target.run?.taskVersion ?? 1 : Number(a.expectedVersion), ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), ...(a.deliveryPolicy ? { deliveryPolicy: a.deliveryPolicy as 'display' | 'notify' | 'synthesize' } : {}), ...(doneWhen ? { doneWhen } : {}), ...(task.contractFields ? { contractFields: task.contractFields } : {}), source: { kind: 'chat', chatId: orchestrator.id } });
         const assigned = d.chats.list().find(c => c.id === target.id);
         return { chatId: target.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions } : {}), ...(task.warnings.length ? { warnings: task.warnings } : {}) };
       },
@@ -627,7 +630,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       },
     },
     {
-      name: 'app_send_to_chat', description: 'Send a message to an active app chat. For a completed role assignment use app_assign_task, which checks compatibility and creates a new run. It is labelled as written by an agent, not by the user (never an ok or a permission).',
+      name: 'app_send_to_chat', description: 'Send a message to an active app chat. For a completed role assignment use app_assign_task, which checks compatibility and creates a new run. From the Orchestrator it is read as the user\'s own message (his ok included, never for production, database writes, Azure/cloud, permissions or settings, messages to people); from any other caller as an agent\'s.',
       inputSchema: obj({ chatId: str('chat id'), text: str('message') }, ['chatId', 'text']),
       run: async a => {
         const text = String(a.text ?? '').trim();
@@ -645,7 +648,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
           if (refused) throw new Error(`messaggio bloccato: ${refused}`);
           if (!['running', 'waiting', 'idle'].includes(target.state)) throw new Error(`la chat ${name} non è attiva: un agente non la avvia (spenderebbe crediti ${name}); chiedi all’utente`);
         }
-        await d.chats.send(String(a.chatId), `${AGENT_LABEL}\n\n${text}`, undefined, false, orchestrator?.title ?? 'Orchestrator', false, orchestrator ? { kind: 'chat', chatId: orchestrator.id } : { kind: 'app' });
+        await d.chats.send(String(a.chatId), `${voice()}\n\n${text}`, undefined, false, orchestrator?.title ?? 'Orchestrator', false, orchestrator ? { kind: 'chat', chatId: orchestrator.id } : { kind: 'app' });
         log.info('appctl', 'agent message sent to chat', { chat: String(a.chatId), data: { chars: text.length } });
         const q = d.chats.list().find(c => c.id === String(a.chatId))?.queued;
         return q ? queuedLine(q) : 'sent';
@@ -676,7 +679,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const st = d.brain.settings();
         if (!agentsMayOpen(st, target.harness)) throw new Error(`bloccato: ${openRefusal(st, target.harness, target.harness)}`);
         const allowStart = crossRule(target, 'riprendere');
-        const chat = await d.chats.continueChat(target.id, { allowStart, promptPrefix: AGENT_LABEL });
+        const chat = await d.chats.continueChat(target.id, { allowStart, promptPrefix: voice() });
         log.info('appctl', 'agent continued a chat in a new one', { chat: target.id, data: { next: chat.id } });
         return { chatId: chat.id, title: chat.title, harness: chat.harness, continuedFrom: target.id };
       },

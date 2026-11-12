@@ -8,8 +8,10 @@
 // to send, Copia leaves "Copiato hh:mm" (the chat hears it with the user's next message: copying is not sending) and
 // Mandato leaves "Mandato ✓ hh:mm" and, after a few seconds to undo it, tells the chat "[Mandato] <first words…>"
 // (store/store.ts markSent). A text tagged md / mail / teams / comment shows formatted and Copia copies it formatted
-// (lib/richtext.ts). Used by ChatItems.tsx (assistant messages), OrchestratorTile.tsx and AskContext.tsx.
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+// (lib/richtext.ts). Inside a work chat's own tile there is no Esegui (ADR 0269, the owner 2026-11-12: «non voglio mai
+// domande o comandi nei singoli agenti»): the command waits in the Orchestrator and the block says so («Vai»).
+// Used by ChatItems.tsx (assistant messages), OrchestratorTile.tsx and AskContext.tsx.
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { RunInfo } from '@shared/contract';
 import { isRunnable, MAX_RUN_CODE, prodRisk, runReport } from '@shared/runnable';
 import { sb } from '../sb';
@@ -18,12 +20,19 @@ import { blockKey, hhmm, isSendable, UNDO_MS } from '../lib/sendable';
 import { useMark } from '../lib/marks';
 import { duration, folderName } from '../lib/format';
 import { useNow } from '../lib/clock';
-import { markCopied, markSent, send, undoSent, useApp } from '../store/store';
+import { app, markCopied, markSent, send, undoSent, useApp } from '../store/store';
 import { copyText } from '../brain/components/ui';
 import { renderMarkdown } from '../lib/markdown';
 import { clipboardHtml, copyRich, isRich } from '../lib/richtext';
 import { IconAlert, IconCheck, IconCopy, IconPlay, IconSend, IconSpinner, IconStop, IconTerminal, IconX } from './Icons';
 import { t } from '../i18n';
+import { openQueue } from '../lib/later';
+
+/** the key of the chat's first command waiting for Esegui in the Orchestrator, if any */
+const firstCommandAsk = (chatId: string | null): string | null => {
+  const r = app.get().pending.find(p => p.chatId === chatId && p.type === 'command');
+  return r ? `${r.chatId}/${r.id}` : null;
+};
 
 /** Did the automatic outcome of this run reach the chat (main/run/results.ts labels it "[esito di Esegui")? */
 const RUN_TOLD = /^\[esito di Esegui/;
@@ -85,6 +94,9 @@ function RunPanel({ run, chatId }: { run: RunInfo; chatId: string }) {
 }
 
 /** `label`: what the header calls the block instead of its language (the questions window: "Testo da approvare"). */
+/** false inside a work chat's own tile (ChatTile.tsx): commands are run from the Orchestrator only (ADR 0269) */
+export const RunHereCtx = createContext(true);
+
 export function CodeBlock({ chatId, itemId, lang, code, streaming, label }: { chatId: string | null; itemId: string; lang: string; code: string; streaming?: boolean; label?: string }) {
   const run = useBlockRun(chatId, itemId, code);
   const [copied, setCopied] = useState(false);
@@ -115,6 +127,7 @@ export function CodeBlock({ chatId, itemId, lang, code, streaming, label }: { ch
   }, [undoable]);
   const rich = isRich(lang);
   const doCopy = () => (rich ? copyRich(clipboardHtml(code), code) : copyText(code));
+  const runHere = useContext(RunHereCtx);
   const runnable = !!chatId && isRunnable(lang) && !streaming && !!code.trim();
   const tooLong = code.length > MAX_RUN_CODE;
   const running = run?.state === 'running';
@@ -152,7 +165,12 @@ export function CodeBlock({ chatId, itemId, lang, code, streaming, label }: { ch
             <IconSend size={11} /> {t('chat.codeblock.send')}
           </button>
         ))}
-        {runnable && (running ? null : (
+        {runnable && !runHere && !running && (
+          <button type="button" className="cb-btn" onClick={() => openQueue(firstCommandAsk(chatId))} data-testid="cb-in-orchestrator" data-tip={t('chat.codeblock.inOrchestratorTip')}>
+            <IconPlay size={11} /> {t('chat.codeblock.inOrchestrator')}
+          </button>
+        )}
+        {runnable && runHere && (running ? null : (
           <button type="button" className={`cb-btn cb-run-btn ${armed ? 'armed' : ''}`} onClick={() => { void doRun(); }} disabled={busy || tooLong} data-testid="cb-exec"
             data-tip={tooLong ? t('chat.codeblock.execTipLong', { max: MAX_RUN_CODE }) : armed ? undefined : t('chat.codeblock.execTip')}>
             {armed ? <><IconAlert size={12} /> {t('chat.codeblock.execConfirm', { warning: risk ?? '' })}</> : <><IconPlay size={11} /> {run ? t('chat.codeblock.execAgain') : t('chat.codeblock.execLabel')}</>}

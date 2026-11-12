@@ -232,10 +232,13 @@ test('README showcase: Memoria, agent levels, Orchestrator and Flash, reactions'
 
   // a thanks needs no answer: the Orchestrator's one-emoji reply sticks to the message as a reaction (her decision
   // answered first, so the message goes at once instead of queuing behind her turn)
-  await page.getByTestId('tile-orchestrator').getByRole('button', { name: 'Answer', exact: true }).click();
-  await page.getByTestId('qwin-card-opt-1').click();
-  // the other requests stay set aside
-  while (await page.getByTestId('qwin').count()) await page.getByTestId('qwin-later').click();
+  // (ADR 0269: her question is a row at the bottom of the Orchestrator, opened in place)
+  const asks = page.getByTestId('orchestrator-asks');
+  if (!(await asks.getByTestId('qwin-card-opt-1').count())) {
+    if (await asks.getByTestId('orchestrator-asks-later').count() && !(await asks.locator('[data-testid="orchestrator-ask"]').count())) await asks.getByTestId('orchestrator-asks-later').click();
+    await asks.locator('[data-testid="orchestrator-ask"]').filter({ hasText: 'Orchestrator' }).first().getByTestId('orchestrator-ask-toggle').click();
+  }
+  await asks.getByTestId('qwin-card-opt-1').click();
   await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('chat:list', undefined)).find(c => c.isOrchestrator && !c.closedAt)?.state), { timeout: 20_000 }).toBe('idle');
   await page.getByTestId('orchestrator-input').click();
   await page.keyboard.type('thanks!');
@@ -273,7 +276,7 @@ test('README screenshot: worktree pool', async () => {
   await save('worktrees');
 });
 
-test('README showcase: the Strategist\'s plan to approve in the questions window', async () => {
+test('README showcase: the Strategist\'s plan to approve in the Orchestrator', async () => {
   // Popup on: the plan to approve is one more card of the questions window, its steps numbered with their role
   await page.keyboard.press('Escape');
   await goPage(page, 'home');
@@ -289,11 +292,12 @@ test('README showcase: the Strategist\'s plan to approve in the questions window
     ],
     clarified: [{ q: 'Where', a: 'Cart, order and refund' }, { q: 'Offers', a: 'No, full price only' }] } as StrategyPlan;
   await demo('plan', 'tree-plan', plan);
-  await expect(page.getByTestId('qwin-backdrop')).toBeVisible();
-  const pick = page.locator(`[data-testid="qwin-pick"][data-key="tree-plan/plan@${at}"]`);
-  if (await pick.count()) await pick.click(); // not the window's current card yet
+  // ADR 0269: the plan is one more row at the bottom of the Orchestrator, opened in place
+  const row = page.locator(`[data-ask-row="tree-plan/plan@${at}"]`);
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await row.getByTestId('orchestrator-ask-toggle').click();
   await expect(page.getByTestId('qwin-plan')).toBeVisible();
-  await save('plan', page.getByTestId('qwin'));
+  await save('plan', row);
 });
 
 test('README showcase: voice, Log, recordings, classifiers, quality, learn, news, costs, trends, the maintenance notice', async () => {

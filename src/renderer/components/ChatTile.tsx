@@ -47,6 +47,7 @@ import { planQuestion } from '../lib/plan-ask';
 import { StrategyPanel } from './StrategyPanel';
 import { TaskContext } from './TaskContext';
 import { InWindowLine } from './QuestionsWindow';
+import { RunHereCtx } from './CodeBlock';
 import { childRequestsFor, requestHost, type ChildRequest } from '../lib/child-requests';
 import { IconAlert, IconChevronDown, IconGlobe, IconMaximize, IconMinimize, IconMore, IconStop, IconX } from './Icons';
 import { IconButton, StatePill, useSize } from './ui';
@@ -199,7 +200,8 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
       {!compact && <ChatLinks chat={chat} />}
       {expanded && <TaskContext chat={chat} onContinue={() => reveal(true)} />}
       {!compact && chat.handoffBusy && <ContextNotice chat={chat} />}
-      <ChatTranscript key={chatId} chatId={chatId} busy={busy} expanded={expanded} />
+      {/* no Esegui in a work chat: its commands wait in the Orchestrator (ADR 0269) */}
+      <RunHereCtx.Provider value={false}><ChatTranscript key={chatId} chatId={chatId} busy={busy} expanded={expanded} /></RunHereCtx.Provider>
       {/* every chat keeps its input (the owner, 2026-11-10: «permettimi anche di scrivere ad ogni agente … voglio
           comunque avere la possibilità»); the Orchestrator stays the usual way to talk to delegated work */}
       <ChatInput ref={input} chat={chat} testid={`chat-input-${chatId}`} />

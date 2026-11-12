@@ -123,7 +123,7 @@
       ]
     },
     "plan": {
-      "test": "README showcase: the Strategist's plan to approve in the questions window",
+      "test": "README showcase: the Strategist's plan to approve in the Orchestrator",
       "sources": [
         "src/renderer/components/QuestionsWindow.tsx",
         "src/renderer/components/PlanApproval.tsx",

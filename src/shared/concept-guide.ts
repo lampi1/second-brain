@@ -615,25 +615,25 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'questions',
     title: b('Domande e decisioni', 'Questions and decisions'),
-    summary: b('Quando una chat «ti aspetta», la domanda resta in attesa finché rispondi: nel riquadro della chat o nella finestra delle domande.',
-      'When a chat "waits for you", the question stays pending until you answer: in the chat’s tile or in the questions window.'),
+    summary: b('Quando una chat «ti aspetta», la domanda resta in attesa finché rispondi: in fondo all’Orchestrator, una riga per ognuna.',
+      'When a chat "waits for you", the question stays pending until you answer: at the bottom of the Orchestrator, one row each.'),
     points: [
       // src/renderer/store/state.ts pending; src/main/chats/manager.ts
       b('Ogni domanda, permesso o comando da rivedere entra nell’elenco «pending»; la chat resta ferma finché non rispondi.',
         'Every question, permission or command to review joins the "pending" list; the chat stays blocked until you answer.'),
-      // src/renderer/lib/questions.ts; src/renderer/components/QuestionsWindow.tsx
-      b('Si aprono sempre una alla volta in una finestra centrale: non c’è un interruttore per spegnerla.',
-        'They always open one at a time in a central window: there is no switch to turn it off.'),
+      // src/renderer/components/QuestionsWindow.tsx OrchestratorAsks (ADR 0269)
+      b('Ogni richiesta è una riga in fondo all’Orchestrator (chi chiede, la domanda e, per un Sì/No, i due bottoni): un clic la apre lì come scheda. Nessuna finestra sopra la pagina; nella chat dell’agente resta solo una riga «mandata all’Orchestrator · Vai».',
+        'Every request is a row at the bottom of the Orchestrator (who asks, the question and, for a Yes/No, its two buttons): a click opens it there as a card. No window over the page; the agent’s own chat keeps only a «sent to the Orchestrator · Go» line.'),
       // src/renderer/components/QuestionsWindow.tsx
-      b('Nella finestra puoi rispondere in qualsiasi ordine dalla colonna a sinistra; Esc vuol dire «Ci penso dopo», non «rifiuta». La scheda aperta non cambia mentre la leggi: se l’agente scrive altro compare un avviso, e «Mostra» lo aggiunge. Un comando lasciato dalla chat viene prima della sua domanda: «Sì, eseguilo» lo lancia qui e l’esito risponde da solo.',
-        'In the window you can answer in any order from the left rail; Esc means "Think about it later", not "deny". The open card does not change while you read it: if the agent writes more a notice appears, and "Show" adds it. A command the chat left comes before its question: "Yes, run it" runs it here and the result answers by itself.'),
+      b('Puoi rispondere in qualsiasi ordine; Esc vuol dire «Ci penso dopo», non «rifiuta»: la riga va in una sola riga chiusa «N da rispondere dopo». La scheda aperta non cambia mentre la leggi: se l’agente scrive altro compare un avviso, e «Mostra» lo aggiunge. Un comando lasciato dalla chat viene prima della sua domanda: «Sì, eseguilo» lo lancia qui e l’esito risponde da solo.',
+        'You can answer in any order; Esc means "Think about it later", not "deny": the row moves into one folded «N to answer later» line. The open card does not change while you read it: if the agent writes more a notice appears, and "Show" adds it. A command the chat left comes before its question: "Yes, run it" runs it here and the result answers by itself.'),
       // src/renderer/lib/askContext.ts lastThoughtOf, src/renderer/components/AskContext.tsx AskThought (owner, 2026-11-10);
       // src/shared/yes-no.ts mappedYesNo; src/main/chats/claude.ts refuseNotYesNo; src/main/chats/acp.ts (#378)
       b('Nella scheda Sì/No vedi subito, aperto sotto la domanda, il «Messaggio della chat»; il suo ragionamento è più sotto, chiuso in «Ragionamento della chat», e contiene solo l’ultimo pezzo. Se uno strumento dell’agente accetta solo le sue etichette (per esempio «Approve Plan» e «Request Changes»), la scheda ti mostra comunque Sì e No e la tua risposta gli arriva come quell’etichetta, la stessa che avresti scelto tu nella sua chat.',
         'In the Yes/No card you see the «Chat message» right away, open under the question; its reasoning is further down, folded in «Chat reasoning», and holds only the last piece. When a tool of the agent accepts only its own labels (for example «Approve Plan» and «Request Changes»), the card still shows you Sì and No and your answer reaches it as that label, the same one you would have picked in its chat.'),
-      // src/renderer/lib/questions.ts TYPING_IDLE_MS
-      b('Se stai scrivendo, una domanda nuova aspetta come pillola e compare 2 secondi dopo che smetti.',
-        'If you are typing, a new question waits as a pill and appears 2 seconds after you stop.'),
+      // src/main/chats/manager-requests.ts answerForUser; src/main/chats/user-action.ts (ADR 0269)
+      b('L’Orchestrator scrive agli agenti come se fossi tu e risponde da solo alle loro domande Sì/No quando il tuo obiettivo o il brain bastano, poi te lo dice in una riga; produzione, segreti, permessi, pubblicazioni e messaggi a persone restano solo tuoi. Un passo che puoi fare solo tu (VPN, login, un comando) arriva come messaggio semplice: se c’è un comando premi Esegui, altrimenti scrivi «fatto».',
+        'The Orchestrator writes to agents as if it were you and answers their Yes/No questions itself when your goal or the brain settle them, then tells you in one line; production, secrets, permissions, publishing and messages to people stay yours alone. A step only you can do (VPN, login, a command) arrives as a plain message: with a command press Run, without one write «fatto».'),
       // src/renderer/lib/later.ts, src/main/later.ts
       b('«Rispondi dopo» mette da parte solo quella richiesta in «Da rispondere»; Ctrl+J apre la prossima cosa che ti aspetta.',
         '"Answer later" sets only that request aside in "To answer"; Ctrl+J opens the next thing waiting for you.'),
@@ -646,7 +646,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
     ],
     analogy: b('Come i post-it sulla scrivania: restano lì finché non li togli tu, e puoi decidere di guardarli dopo pranzo.',
       'Like sticky notes on the desk: they stay until you remove them, and you can decide to look at them after lunch.'),
-    diagram: { kind: 'flow', steps: [b('Chat chiede', 'Chat asks'), b('In attesa', 'Pending'), b('Finestra delle domande', 'Questions window'), b('Risposta', 'Answer'), b('La chat riparte', 'Chat resumes')] },
+    diagram: { kind: 'flow', steps: [b('Chat chiede', 'Chat asks'), b('In attesa', 'Pending'), b('Riga nell’Orchestrator', 'Row in the Orchestrator'), b('Risposta', 'Answer'), b('La chat riparte', 'Chat resumes')] },
     tech: [
       tech(DATA, "Answer = { kind: 'permission', allow, always?, message? } | { kind: 'question', answers }.", "Answer = { kind: 'permission', allow, always?, message? } | { kind: 'question', answers }."),
       tech(FILES, 'Nessuna impostazione; le richieste messe da parte con «Rispondi dopo» restano in memoria fino alla risposta.', 'No setting; requests set aside with "Answer later" stay in memory until answered.'),
@@ -689,8 +689,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Un agente conclude l’incarico con un report finale esplicito, non con una mail di avanzamento. Quando non lavora più si chiude dopo il tempo scelto in Impostazioni (lo ritrovi con Ctrl+K). Se aspetta te, un permesso, i colleghi, figli o task in background resta aperto. Un piano non concluso lo tiene aperto fino al report finale, che chiude il piano (i passi rimasti diventano parziali).',
         'An agent completes its assignment with an explicit final report, not progress mail. Once idle it closes after the delay set in Settings (Ctrl+K finds it). It stays open while waiting for you, a permission, colleagues, children or background tasks. An unfinished plan keeps it open until its final report, which closes the plan (steps left become partial).'),
       // src/renderer/components/ChatTile.tsx
-      b('Una striscia chiusa mostra agente, stato, modello e ultima risposta; aprendola consulti la cronologia. Per i lavori delegati di solito scrivi all’Orchestrator, ma ogni chat, anche quella di un agente delegato, mantiene il suo campo di risposta e «Continua»: puoi sempre scrivere a un agente direttamente.',
-        'A collapsed strip shows agent, state, model and last answer; expand it to inspect the history. For delegated work you usually write to the Orchestrator, but every chat, a delegated agent’s too, keeps its reply field and Continue: you can always write to an agent directly.'),
+      b('Una striscia chiusa mostra agente, stato, modello e ultima risposta; aprendola consulti la cronologia. Per i lavori delegati di solito scrivi all’Orchestrator, ma ogni chat, anche quella di un agente delegato, mantiene il suo campo di risposta e «Continua»: puoi sempre scrivere a un agente direttamente. Le sue domande e i suoi comandi invece aspettano nell’Orchestrator: lì nella striscia trovi solo «Vai».',
+        'A collapsed strip shows agent, state, model and last answer; expand it to inspect the history. For delegated work you usually write to the Orchestrator, but every chat, a delegated agent’s too, keeps its reply field and Continue: you can always write to an agent directly. Its questions and commands wait in the Orchestrator instead: the strip only shows «Go».'),
     ],
     analogy: b('Come il banco di orchestrator di uno studio: un fader per ogni canale, e il monitor di ciascuno sotto.',
       'Like a studio mixing desk: one fader per channel, and each one’s monitor below it.'),
