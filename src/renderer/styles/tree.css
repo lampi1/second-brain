@@ -194,6 +194,9 @@
 
 .tree-parent > .kids-bar { margin-top: 0; padding: 4px 0 4px calc(var(--tree-step) - var(--tree-in)); border-left: 2px solid var(--thread); margin-left: var(--tree-in); }
 .tree-parent > .kids-bar .kids-toggle { border-top-left-radius: 0; }
+/* folded: no children under it, so no thread stub on its left (owner, 2026-11-12: «sta lineetta … fa schifo») */
+.tree-parent > .kids-bar[data-folded] { border-left-color: transparent; }
+.tree-parent > .kids-bar[data-folded] .kids-toggle { border-top-left-radius: var(--r-l); }
 /* a narrow column: the bar keeps its counts on one line and drops the faces and segments first */
 .kids-bar { container-type: inline-size; min-width: 0; }
 .kids-toggle { overflow: hidden; }
