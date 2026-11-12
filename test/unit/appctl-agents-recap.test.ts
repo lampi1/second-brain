@@ -83,27 +83,32 @@ it('is short by default: one line per agent that works, waits or finished, no st
     chat('orch', { isOrchestrator: true }),
     chat('run', { ...role('Artisan'), title: 'Fix login', state: 'running', updatedAt: 5 }),
     chat('ask', { ...role('Herald'), title: 'Connettore mail', state: 'waiting' }),
-    chat('kid', { ...role('Sentinel'), title: 'Verifica', parentId: 'fin', state: 'waiting' }),
-    chat('fin', { ...role('Scout'), title: 'Server tool', lastResult: { at: 1, isError: false } }),
+    chat('kid', { ...role('Sentinel'), title: 'Verifica', parentId: 'mid', state: 'running' }),
+    chat('grand', { title: 'Nipote', parentId: 'kid', state: 'waiting' }),
+    chat('mid', { ...role('Scout'), title: 'Server tool', state: 'running' }),
+    chat('fin', { title: 'Deploy test', lastResult: { at: 9_000, isError: false } }),
+    chat('old', { title: 'Vecchio lavoro', lastResult: { at: 1, isError: false } }),
     chat('nap', { title: 'Ferma' }),
     chat('gone', { title: 'Vecchia', closedAt: 9_000, state: 'closed' }),
   ];
   const items: Record<string, ChatItem[]> = { run: [todo([{ content: 'trovato il bug', status: 'completed' }, { content: 'prova il caso 3 sul server di test', status: 'in_progress' }])] };
   const pending = [
     { chatId: 'ask', type: 'question', title: 'q', questions: [{ question: 'Attivo il connettore?' }], at: 1 },
-    { chatId: 'kid', type: 'question', title: 'secret', questions: [{ question: 'secret question' }], at: 1 },
+    { chatId: 'grand', type: 'question', title: 'secret', questions: [{ question: 'secret question' }], at: 1 },
   ] as unknown as PendingRequest[];
-  const d = { chats: () => chats, items: (id: string) => items[id] ?? [], pending: () => pending, runs: () => [], now: () => 10_000 };
+  const d = { chats: () => chats, items: (id: string) => items[id] ?? [], pending: () => pending, runs: () => [], now: () => 6 * 3600_000 + 5_000 };
   const text = agentsRecap(d);
   expect(text).toBe([
     '🙋 Connettore mail — aspetta te: domanda «Attivo il connettore?»',
     '🙋 Server tool — aspetta te',
     '🟢 Fix login — prova il caso 3 sul server di test',
+    '✅ Deploy test — ha finito',
   ].join('\n'));
+  expect(text).not.toContain('Vecchio lavoro');   // a result older than 6 hours is not news
   expect(text).not.toContain('secret');
   expect(isAgentsRecap(text)).toBe(true);
   expect(agentsRecapTool(d).run({})).toBe(text);
-  expect(agentsRecapTool(d).run({ detail: true })).toContain('Chiuse nelle ultime 6 ore: Vecchia');
+  expect(agentsRecapTool(d).run({ detail: true })).toContain('✅ Vecchio lavoro — ha finito');
   // many agents: at most SHORT_MAX lines, then how many more
   const many = Array.from({ length: SHORT_MAX + 2 }, (_, i) => chat(`r${i}`, { title: `Lavoro ${i}`, state: 'running' }));
   const lines = agentsRecap({ ...d, chats: () => many, pending: () => [] }).split('\n');

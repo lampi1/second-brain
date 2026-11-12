@@ -9,7 +9,7 @@
 // appctl/tools.ts; pinned by test/unit/appctl-agents-recap.test.ts.
 // Short by default (#384, ADR 0270): the owner found the per-agent blocks (about 40 lines with ~35 closed chats)
 // unreadable and asked «in 2 parole»; the default is one short line per agent that works, waits or just finished, no
-// steps, no closed list, at most SHORT_MAX lines. The blocks only with detail: true, when the user asks for the detail.
+// steps, no closed list, at most SHORT_MAX lines; a result older than 6 hours is not «just finished». The blocks only with detail: true, when the user asks for the detail.
 import type { ChatItem, ChatSummary, PendingRequest } from '../../shared/contract';
 import type { AgentRun } from '../../shared/agents';
 import { askLine } from './digest';
@@ -151,12 +151,16 @@ export function agentsRecap(d: AgentsRecapDeps, o: { detail?: boolean } = {}): s
       : null;
     return what ? `${ICON[m]} ${c.title} — ${what}` : null;
   };
-  const markIn = (c: ChatSummary): Mark => { const m = markOf(c, asks.get(c.id) ?? []); return m !== 'wait' && (kids.get(c.id) ?? []).some(k => markOf(k, asks.get(k.id) ?? []) === 'wait') ? 'wait' : m; };
+  const waitsBelow = (c: ChatSummary, seen = new Set<string>()): boolean => !seen.has(c.id) && !!seen.add(c.id)
+    && (kids.get(c.id) ?? []).some(k => markOf(k, asks.get(k.id) ?? []) === 'wait' || waitsBelow(k, seen));
+  const markIn = (c: ChatSummary): Mark => { const m = markOf(c, asks.get(c.id) ?? []); return m !== 'wait' && waitsBelow(c) ? 'wait' : m; };
+  // «just finished»: a result older than the closed window is not news (the chat may stay open for hours)
+  const stale = (c: ChatSummary, m: Mark) => (m === 'done' || (m === 'error' && c.state !== 'error')) && now - (c.lastResult?.at ?? 0) > CLOSED_MS;
 
   const marks = new Map(roots.map(c => [c.id, o.detail ? markOf(c, asks.get(c.id) ?? []) : markIn(c)] as const));
   const sorted = [...roots].sort((a, b) => ORDER.indexOf(marks.get(a.id)!) - ORDER.indexOf(marks.get(b.id)!) || b.updatedAt - a.updatedAt);
   if (!o.detail) {
-    const lines = sorted.map(c => lineOf(c, marks.get(c.id)!)).filter((l): l is string => !!l);
+    const lines = sorted.filter(c => !stale(c, marks.get(c.id)!)).map(c => lineOf(c, marks.get(c.id)!)).filter((l): l is string => !!l);
     if (!lines.length) return NONE;
     const more = lines.length - SHORT_MAX;
     return [...lines.slice(0, more > 0 ? SHORT_MAX : lines.length), ...(more > 0 ? [`+ altri ${more}: chiedi il dettaglio per vederli tutti`] : [])].join('\n');
