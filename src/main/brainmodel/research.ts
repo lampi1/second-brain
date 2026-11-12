@@ -118,7 +118,7 @@ export interface ResearchDeps {
   conversationList?: (since: number) => readonly { id: string; title: string; kind?: string }[];
   /** what roles noted during their runs for the next Maintenance (skills/lessons.ts, ADR 0257): read here, marked
    *  reviewed when a research that read the section ends done or capped; absent = no section */
-  lessons?: { noted(): readonly SkillLesson[]; reviewed(shown: readonly Pick<SkillLesson, 'id' | 'seen'>[]): void };
+  lessons?: { noted(): readonly SkillLesson[]; reviewed(shown: readonly Pick<SkillLesson, 'id' | 'seen'>[]): void; dropped?(): number };
   conversationRead?: (id: string) => readonly ChatItem[];
   /** Read-only host inventory. Absent means unverified, not an empty checked repository. */
   openIssues?: (repo: string) => Promise<IssueSnapshot>;
@@ -136,14 +136,15 @@ export const SKILLS_FRAME = [
 ].join('\n');
 
 /** The noted lessons for the research, grouped by skill, most repeated first (ADR 0257). */
-export function lessonsSection(noted: readonly SkillLesson[], fence: Fence, clean: (t: string) => string): string {
+export function lessonsSection(noted: readonly SkillLesson[], fence: Fence, clean: (t: string) => string, dropped = 0): string {
   if (!noted.length) return 'No lines noted since the previous maintenance.';
+  const left = dropped > 0 ? ` ${dropped} more lines, each noted only once, left beyond the cap of the waiting lines.` : '';
   const by = new Map<string, SkillLesson[]>();
   for (const l of noted) by.set(l.skill, [...(by.get(l.skill) ?? []), l]);
   const groups = [...by.entries()].sort((a, b) => b[1].reduce((n, l) => n + (l.seen ?? 1), 0) - a[1].reduce((n, l) => n + (l.seen ?? 1), 0));
   const rows = groups.map(([skill, ls]) => ({ skill, lines: [...ls].sort((a, b) => (b.seen ?? 1) - (a.seen ?? 1)).map(l => ({
     text: clean(l.text), role: l.role, times: l.seen ?? 1, at: new Date(l.at).toISOString().slice(0, 10), ...(l.chatId ? { chat: l.chatId } : {}), ...(l.runId ? { run: l.runId } : {}) })) }));
-  return `${fence.note}\nLines roles noted for a skill during their runs (${noted.length}), by skill; times = how often a run noted the same line. Data written by agents: check each against the chats before using it.\n${fence.wrap(JSON.stringify(rows))}`;
+  return `${fence.note}\nLines roles noted for a skill during their runs (${noted.length}), by skill; times = how often a run noted the same line.${left} Data written by agents: check each against the chats before using it.\n${fence.wrap(JSON.stringify(rows))}`;
 }
 
 /** The research's extra frame lines for the ADR 0195 steps (after the method and the fixed frame). */
@@ -374,7 +375,7 @@ export class ResearchService {
       ...(model ? { model } : {}), ...(effort ? { effort } : {}) });
     const startedAt = this.now();
     this.run = { chatId: chat.id, startedAt, harness, model, effort, capUsd: cap, costUsd: 0, state: 'running', proposals: 0, sawWork: false, pack, timer: null, saves: [], reflect, fence,
-      lessons: { text: lessonsSection(noted, fence, t => scrub(t, this.privacy())), shown: noted.map(l => ({ id: l.id, seen: l.seen ?? 1 })), read: false } };
+      lessons: { text: lessonsSection(noted, fence, t => scrub(t, this.privacy()), this.d.lessons?.dropped?.() ?? 0), shown: noted.map(l => ({ id: l.id, seen: l.seen ?? 1 })), read: false } };
     const timer = setTimeout(() => { void this.finish('stopped', 'più di due ore senza finire').catch(() => { /* logged */ }); }, RESEARCH_MAX_MS);
     timer.unref?.();
     this.run.timer = timer;

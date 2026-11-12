@@ -62,6 +62,22 @@ describe('SkillLessons', () => {
     expect(left).toHaveLength(200);
     expect(left.some(l => l.id === 'old')).toBe(false);
     expect(left.at(-1)!.skill).toBe('skill-204');
+    expect(lessons.dropped()).toBe(6);
+  });
+
+  it('beyond the cap the lines noted only once leave first, never the one just noted; Maintenance resets the count (#381)', () => {
+    const { lessons } = setup();
+    const often = lessons.propose({ role: 'scout', skill: 'skill-often', text: 'La riga che torna spesso nei lavori.' }).lesson;
+    lessons.propose({ role: 'scout', skill: 'skill-often', text: 'La riga che torna spesso nei lavori.' });
+    for (let i = 0; i < 202; i++) lessons.propose({ role: 'scout', skill: `skill-${i}`, text: `Lezione numero ${i} sul passo ${i * 7}.` });
+    const left = lessons.noted();
+    expect(left).toHaveLength(200);
+    expect(left.some(l => l.id === often.id)).toBe(true);
+    expect(left.some(l => l.skill === 'skill-0' || l.skill === 'skill-1' || l.skill === 'skill-2')).toBe(false);
+    expect(left.at(-1)!.skill).toBe('skill-201');
+    expect(lessons.dropped()).toBe(3);
+    lessons.reviewed(left.map(l => ({ id: l.id, seen: l.seen })));
+    expect(lessons.dropped()).toBe(0);
   });
 
   it('the launch reads the role skill\'s text without its frontmatter', () => {

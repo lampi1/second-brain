@@ -47,13 +47,17 @@ export class SkillLessons {
   constructor(private readonly d: LessonsDeps) {}
   private now(): number { return this.d.now?.() ?? Date.now(); }
 
-  all(): SkillLesson[] {
+  all(): SkillLesson[] { return this.read().lessons; }
+  /** Lines noted once that left beyond MAX_OPEN since the last Maintenance read (#381): its section says how many. */
+  dropped(): number { return this.read().dropped; }
+  private read(): { lessons: SkillLesson[]; dropped: number } {
     try {
-      const raw = JSON.parse(fs.readFileSync(this.d.file, 'utf8')) as { lessons?: SkillLesson[] };
+      const raw = JSON.parse(fs.readFileSync(this.d.file, 'utf8')) as { lessons?: SkillLesson[]; dropped?: number };
+      const dropped = Number.isFinite(raw.dropped) && (raw.dropped ?? 0) > 0 ? Math.floor(raw.dropped!) : 0;
       // a card from before ADR 0257 waits for Maintenance too: the user is no longer asked one line at a time
-      return Array.isArray(raw.lessons) ? raw.lessons.filter(l => l && typeof l.id === 'string' && typeof l.text === 'string' && typeof l.skill === 'string')
-        .map(l => (l.state === 'open' ? { ...l, state: 'noted' as const } : l)) : [];
-    } catch { return []; }
+      return { dropped, lessons: Array.isArray(raw.lessons) ? raw.lessons.filter(l => l && typeof l.id === 'string' && typeof l.text === 'string' && typeof l.skill === 'string')
+        .map(l => (l.state === 'open' ? { ...l, state: 'noted' as const } : l)) : [] };
+    } catch { return { lessons: [], dropped: 0 }; }
   }
   /** what runs noted for the next Maintenance, least recently noted first */
   noted(): SkillLesson[] { return this.all().filter(l => l.state === 'noted'); }
@@ -67,18 +71,23 @@ export class SkillLessons {
       if (l.state !== 'noted' || seen.get(l.id) !== (l.seen ?? 1)) return l;
       count++;
       return { ...l, state: 'reviewed', decidedAt: at };
-    }));
+    }), 0);
     log.info('skills', 'lessons reviewed by maintenance', { data: { count } });
   }
-  private save(list: SkillLesson[]): void {
-    // decided lessons beyond the cap leave first (oldest first); noted ones stay, the oldest beyond MAX_OPEN leave
-    // (the list is in noting order: a line noted again moves to the end, see propose)
-    const noted = list.filter(l => l.state === 'noted'), waiting = noted.slice(-MAX_OPEN), done = list.filter(l => l.state !== 'noted').slice(-Math.max(0, MAX_KEPT - waiting.length));
-    if (noted.length > waiting.length) log.warn('skills', 'oldest noted lessons dropped', { data: { count: noted.length - waiting.length, kept: MAX_OPEN }, hint: 'run Maintenance: it reads the noted lessons' });
+  /** `dropped`: the count since the last Maintenance read (default: as stored). */
+  private save(list: SkillLesson[], dropped = this.dropped()): void {
+    // decided lessons beyond the cap leave first (oldest first). Beyond MAX_OPEN waiting lines, the ones noted only once
+    // leave, oldest first, never the line just noted: a line runs keep noting is the stronger signal (#381: 63 drops between two Maintenances,
+    // each a warning; bounded by design, so the count goes to Maintenance's section instead, logged once per cycle)
+    const noted = list.filter(l => l.state === 'noted');
+    const over = Math.max(0, noted.length - MAX_OPEN);
+    const leave = new Set(noted.slice(0, -1).map((l, i) => ({ l, i })).sort((a, b) => (a.l.seen ?? 1) - (b.l.seen ?? 1) || a.i - b.i).slice(0, over).map(x => x.l));
+    const waiting = noted.filter(l => !leave.has(l)), done = list.filter(l => l.state !== 'noted').slice(-Math.max(0, MAX_KEPT - waiting.length));
+    if (over && !dropped) log.info('skills', 'noted lessons over the cap: the least noted leave until the next Maintenance', { data: { kept: MAX_OPEN } });
     const keep = list.filter(l => waiting.includes(l) || done.includes(l));
     fs.mkdirSync(path.dirname(this.d.file), { recursive: true });
     const tmp = `${this.d.file}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify({ schema: 1, lessons: keep }, null, 1));
+    fs.writeFileSync(tmp, JSON.stringify({ schema: 1, lessons: keep, ...(dropped + over ? { dropped: dropped + over } : {}) }, null, 1));
     fs.renameSync(tmp, this.d.file);
   }
 
