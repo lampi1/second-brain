@@ -21,7 +21,12 @@ was useless soon after.
    - authorization code + PKCE S256 in the system browser (`shell.openExternal`), back on a one-shot listener on
      127.0.0.1 (a fixed `oauth.port` when the registered client needs one, else any free port), state checked,
      `resource` sent (RFC 8707), 5 minutes at most;
-   - every URL https (http only on this computer).
+   - every URL https (http only on this computer); the resource metadata must be about this server (same origin, its
+     path a prefix, RFC 9728 §3.3) and the authorization server's metadata must name the issuer asked for (RFC 8414
+     §3.3), else no login; a callback without the login's state is refused and the login keeps waiting;
+   - a new «Accedi», «Esci», or a change to the connector ends a login in progress; a session is saved only while the
+     connector still points at the origin the login was made for, and a refresh's answer only if the session is still
+     the one it renewed.
 2. The session (access, refresh, expiry, client, token endpoint, resource) is kept like a connector's token: encrypted
    with safeStorage in `mcp-secrets.json`, bound to the server's URL origin (an address that moves elsewhere drops it),
    never shown or returned to the renderer, every token added to the logs' redaction. «Connesso come …» is read from
@@ -30,7 +35,8 @@ was useless soon after.
    its end, and once more when the server answers 401 (single flight per connector). A refused refresh (400/401) drops
    the session: the card asks «Accedi» again; a login server that is down keeps the old token while it is valid.
 4. The card (Settings → Connettori): an «Accesso» row on a remote server that is logged in, set up for OAuth, or whose
-   test got a 401 with a Bearer challenge: «Accedi» (then a «Prova»), «Connesso come …», «Esci». «Modifica» has
+   test got a 401 with a Bearer challenge: «Accedi» (then a «Prova»), «Connesso come …», «Esci». «Esci» and a refused
+   refresh record a failed test that asks for the login, so «Accedi» stays on the card. «Modifica» has
    «Client ID OAuth» and «Porta di ritorno» for remote servers. A logged-in server needs no pasted Authorization token.
 5. Rule 2's exception for the connectors' tokens covers this login (docs/agents/rules.md).
 

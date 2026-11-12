@@ -11,6 +11,8 @@ import { McpServerStore } from '../../../src/main/mcp-servers/store';
 import { connect } from '../../../src/main/mcp-servers/client';
 import type { SecretCipher } from '../../../src/main/engines/secrets';
 import { tmp } from '../chats/helpers';
+import { McpServersService } from '../../../src/main/mcp-servers/service';
+import { McpServer } from '../../../src/main/mcp/server';
 
 const cipher: SecretCipher = { unavailable: () => null, encrypt: s => Buffer.from([...Buffer.from(s)].map(b => b ^ 0x5a)), decrypt: b => Buffer.from([...b].map(x => x ^ 0x5a)).toString() };
 const jwt = (claims: Record<string, unknown>) => `h.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.s`;
@@ -19,14 +21,14 @@ const json = (status: number, body: unknown, headers: Record<string, string> = {
 const MCP = 'https://mcp.example.com/mcp', KC = 'https://kc.example.com/realms/team';
 const AS = { issuer: KC, authorization_endpoint: `${KC}/protocol/openid-connect/auth`, token_endpoint: `${KC}/protocol/openid-connect/token`, code_challenge_methods_supported: ['S256'] };
 
-function world(o: { registration?: boolean; token?: (form: URLSearchParams) => Response } = {}) {
+function world(o: { registration?: boolean; token?: (form: URLSearchParams) => Response; resource?: string; issuer?: string } = {}) {
   const calls: { url: string; body?: string }[] = [];
   const fetchFn = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input), body = typeof init?.body === 'string' ? init.body : undefined;
     calls.push({ url, ...(body ? { body } : {}) });
     if (url === MCP) return new Response('', { status: 401, headers: { 'WWW-Authenticate': 'Bearer resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource/mcp", scope="mcp:tools"' } });
-    if (url === 'https://mcp.example.com/.well-known/oauth-protected-resource/mcp') return json(200, { resource: MCP, authorization_servers: [KC] });
-    if (url === `${KC}/.well-known/openid-configuration`) return json(200, { ...AS, ...(o.registration ? { registration_endpoint: `${KC}/clients-registrations/openid-connect` } : {}) });
+    if (url === 'https://mcp.example.com/.well-known/oauth-protected-resource/mcp') return json(200, { resource: o.resource ?? MCP, authorization_servers: [KC] });
+    if (url === `${KC}/.well-known/openid-configuration`) return json(200, { ...AS, ...(o.issuer ? { issuer: o.issuer } : {}), ...(o.registration ? { registration_endpoint: `${KC}/clients-registrations/openid-connect` } : {}) });
     if (url.endsWith('/clients-registrations/openid-connect')) return json(201, { client_id: 'dyn-1' });
     if (url === AS.token_endpoint) return (o.token ?? (() => json(200, { access_token: jwt({ preferred_username: 'davide' }), refresh_token: 'r1', expires_in: 300 })))(new URLSearchParams(body));
     return json(404, {});
@@ -41,7 +43,7 @@ function world(o: { registration?: boolean; token?: (form: URLSearchParams) => R
   };
   const listening: { give(c: string): void; port: number | undefined }[] = [];
   const oauth = new McpOAuth({
-    load: id => saved.get(id) ?? null, save: (id, s) => saved.set(id, s), drop: id => saved.delete(id),
+    load: id => saved.get(id) ?? null, save: (id, s) => { saved.set(id, s); return true; }, drop: id => { saved.delete(id); },
     openExternal: url => { opened = url; listening.at(-1)!.give('the-code'); }, fetch: fetchFn, now: () => now, listen,
   });
   return { oauth, calls, saved, opened: () => opened, listening, tick: (ms: number) => { now += ms; } };
@@ -81,13 +83,33 @@ describe('MCP OAuth: login', () => {
     expect(w.calls.some(c => c.url.includes('clients-registrations'))).toBe(false);
   });
 
+  it('refuses metadata about another server, or an authorization server with another issuer', async () => {
+    await expect(world({ resource: 'https://victim.example.com/mcp' }).oauth.login('kc', MCP, { clientId: 'c' })).rejects.toThrow(/altro indirizzo/);
+    await expect(world({ issuer: 'https://evil.example.com' }).oauth.login('kc', MCP, { clientId: 'c' })).rejects.toThrow(/altro nome/);
+  });
+
+  it('«Esci» while a refresh runs: the refresh answer is forgotten', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(r => { release = r; });
+    const w = world({ token: () => json(200, { access_token: 'late', expires_in: 300 }) });
+    const slow = w.oauth as unknown as { token: (...a: unknown[]) => Promise<unknown> };
+    const orig = slow.token.bind(w.oauth);
+    slow.token = async (...a: unknown[]) => { await gate; return orig(...a); };
+    w.saved.set('kc', { access: 'a1', refresh: 'r1', expiresAt: 1, clientId: 'c', tokenEndpoint: AS.token_endpoint, resource: MCP, origin: 'https://mcp.example.com', at: 1 });
+    const p = w.oauth.access('kc');
+    w.saved.delete('kc');
+    release();
+    expect(await p).toBeNull();
+    expect(w.saved.has('kc')).toBe(false);
+  });
+
   it('no registration and no client id: says to ask for one', async () => {
     await expect(world().oauth.login('kc', MCP)).rejects.toThrow(/registrare/);
   });
 });
 
 describe('MCP OAuth: the access token', () => {
-  const session = (o: Partial<OAuthSession> = {}): OAuthSession => ({ access: 'a1', refresh: 'r1', expiresAt: 1_000_000 + 600_000, clientId: 'c', tokenEndpoint: AS.token_endpoint, resource: MCP, at: 1, ...o });
+  const session = (o: Partial<OAuthSession> = {}): OAuthSession => ({ access: 'a1', refresh: 'r1', expiresAt: 1_000_000 + 600_000, clientId: 'c', tokenEndpoint: AS.token_endpoint, resource: MCP, origin: 'https://mcp.example.com', at: 1, ...o });
 
   it('fresh: as saved; about to end or forced: refreshed, the refresh token rotated', async () => {
     const w = world({ token: f => json(200, { access_token: `a-${f.get('refresh_token')}`, refresh_token: 'r2', expires_in: 300 }) });
@@ -168,5 +190,23 @@ describe('MCP OAuth: the store', () => {
     const st = new McpServerStore(tmp('mcp-oauth-bad'), cipher);
     expect(() => st.upsert({ id: 'a', label: 'A', transport: 'http', url: MCP, secrets: [], enabled: true, oauth: { port: 80 } })).toThrow(/Porta/);
     expect(() => st.upsert({ id: 'b', label: 'B', transport: 'http', url: MCP, secrets: [], enabled: true, oauth: { clientId: 'a b' } })).toThrow(/spazi/);
+  });
+});
+
+describe('MCP OAuth: the service', () => {
+  it('«Esci» keeps the login row (a test that asks for «Accedi»); a logged-in server sends its access token, no pasted one', async () => {
+    const eps: unknown[] = [];
+    const svc = new McpServersService({ userData: tmp('mcp-oauth-svc'), cipher, mcp: new McpServer({ name: 't', version: '1' }), context: () => null,
+      connect: ep => { eps.push(ep); return { serverInfo: undefined, tools: async () => [], call: async () => ({ content: [] }), close() {} }; } });
+    svc.save({ def: { id: 'kc', label: 'KC', transport: 'http', url: MCP, secrets: [{ where: 'header', name: 'Authorization', prefix: 'Bearer ' }], enabled: true } });
+    svc.store.setOAuthSession('kc', JSON.stringify({ access: 'acc', clientId: 'c', tokenEndpoint: AS.token_endpoint, resource: MCP, origin: 'https://mcp.example.com', at: 1 }), { who: 'davide', at: 1 });
+    await svc.test('kc');
+    const ep = eps[0] as { headers: Record<string, string>; auth?: (f: boolean) => Promise<string | null> };
+    expect(ep.headers.Authorization).toBeUndefined();
+    expect(await ep.auth!(false)).toBe('acc');
+    expect(svc.state().servers[0]!.login).toEqual({ who: 'davide', at: 1 });
+    const out = svc.logout('kc').servers[0]!;
+    expect(out.login).toBeNull();
+    expect(out.lastTest?.error).toMatchObject({ code: 'auth', login: true });
   });
 });

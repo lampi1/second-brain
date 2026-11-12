@@ -62,8 +62,13 @@ export class McpServersService {
     this.store = new McpServerStore(opts.userData, opts.cipher);
     this.oauth = new McpOAuth({
       load: id => { const j = this.store.oauthSession(id); if (!j) return null; try { return JSON.parse(j) as OAuthSession; } catch { return null; } },
-      save: (id, sess) => this.store.setOAuthSession(id, JSON.stringify(sess), { ...(sess.who ? { who: sess.who } : {}), at: sess.at }),
-      drop: id => { this.store.deleteOAuthSession(id); this.opts.emit?.(this.state()); },
+      save: (id, sess) => {
+        const def = this.store.def(id);
+        if (!def?.url || new URL(def.url).origin !== sess.origin) return false;
+        this.store.setOAuthSession(id, JSON.stringify(sess), { ...(sess.who ? { who: sess.who } : {}), at: sess.at });
+        return true;
+      },
+      drop: (id, why) => { this.loggedOut(id, why); this.opts.emit?.(this.state()); },
       openExternal: url => { if (!opts.openExternal) throw new Error('Il browser non si apre da qui.'); return opts.openExternal(url); },
       ...(opts.oauthFetch ? { fetch: opts.oauthFetch } : {}), ...(opts.now ? { now: opts.now } : {}),
     });
@@ -120,6 +125,7 @@ export class McpServersService {
     // the user's own save (the add form, the edit form, a card's switch): what they see is what they approve
     const raw = a?.def && typeof a.def === 'object' ? { ...(a.def as Record<string, unknown>) } : a?.def;
     if (raw && typeof raw === 'object') delete (raw as Record<string, unknown>).awaiting;
+    if (previousId) this.oauth.cancel(previousId);
     const def = this.store.upsert(raw, previousId);
     if (previousId && previousId !== def.id) this.gateway.reset(previousId);
     return this.changed(def.id);
@@ -127,6 +133,7 @@ export class McpServersService {
 
   remove(id: unknown): McpServersState {
     if (typeof id !== 'string') throw new Error('Server MCP non valido.');
+    this.oauth.cancel(id);
     this.store.remove(id);
     return this.changed(id);
   }
@@ -234,16 +241,23 @@ export class McpServersService {
     if (def.awaiting) throw new Error(`«${def.label}» aspetta «Attiva»: attivalo prima dalla sua scheda.`);
     const why = this.store.secretsAvailable();
     if (why) throw new Error(`Accesso non salvabile: ${why}.`);
-    try { await this.oauth.login(def.id, def.url, def.oauth ?? {}); }
+    try { await this.oauth.login(def.id, def.url, def.oauth ?? {}, { ...def.headers }); }
     catch (e) { log.warn('mcp-servers', 'MCP OAuth login failed', { data: { server: def.id }, cause: errText(e) }); const d = describeError(e); throw new Error(`${d.message} ${d.fix}`); }
     this.changed(def.id);
     return this.test(def.id);
   }
 
+  /** The session forgotten; the card keeps its «Accedi» (a failed test that asks for the login). */
+  private loggedOut(id: string, why: string): void {
+    this.oauth.cancel(id);
+    this.store.deleteOAuthSession(id);
+    this.store.recordTest(id, { ok: false, at: (this.opts.now ?? Date.now)(), ms: 0, tools: this.store.test(id)?.tools ?? [], error: { code: 'auth', message: why, fix: 'Premi «Accedi» sulla scheda per entrare di nuovo.', login: true } });
+  }
+
   /** «Esci»: the OAuth session forgotten (the server keeps its own until it ends). */
   logout(id: unknown): McpServersState {
     if (typeof id !== 'string' || !this.store.def(id)) throw new Error('Server MCP sconosciuto.');
-    this.store.deleteOAuthSession(id);
+    this.loggedOut(id, 'Sei uscito.');
     log.info('mcp-servers', 'MCP OAuth logged out', { data: { server: id } });
     return this.changed(id);
   }

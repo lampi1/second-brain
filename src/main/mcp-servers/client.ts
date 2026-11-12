@@ -142,7 +142,7 @@ class HttpUpstream extends Rpc {
     for (let attempt = 0; attempt < 2; attempt++) {
       if (this.ep.auth) {
         const token = await this.ep.auth(attempt > 0).catch(() => null);
-        if (!token) { this.aborts.delete(ac); throw new McpClientError('auth', 'Serve l’accesso al server.', 'Premi «Accedi» sulla scheda del connettore in Impostazioni → Connettori.'); }
+        if (!token) { this.aborts.delete(ac); throw new McpClientError('auth', 'Serve l’accesso al server.', 'Premi «Accedi» sulla scheda del connettore in Impostazioni → Connettori.', true); }
         headers.Authorization = `Bearer ${token}`;
         this.bearer = token;
       }

@@ -27,6 +27,8 @@ import { CLIENT_PROTOCOL } from './client';
 export interface OAuthSession {
   access: string; refresh?: string; expiresAt?: number;
   clientId: string; clientSecret?: string; tokenEndpoint: string; resource: string; scope?: string;
+  /** the MCP server's origin the login was made for: saved only while the connector still points there */
+  origin: string;
   /** «Connesso come …» */
   who?: string; at: number;
 }
@@ -34,8 +36,10 @@ export interface OAuthConfig { clientId?: string; port?: number }
 export interface OAuthDeps {
   /** the session saved for a connector, or null */
   load(id: string): OAuthSession | null;
-  save(id: string, s: OAuthSession): void;
-  drop(id: string): void;
+  /** saves it; false = the connector no longer points at s.origin (the address changed meanwhile): not saved */
+  save(id: string, s: OAuthSession): boolean;
+  /** forgets it; why = shown on the card (the login row stays, with «Accedi») */
+  drop(id: string, why: string): void;
   /** opens the system browser on the login page */
   openExternal(url: string): Promise<void> | void;
   fetch?: typeof fetch;
@@ -98,7 +102,7 @@ export interface Discovery { resource: string; as: AsMeta; scope?: string }
 
 export class McpOAuth {
   private refreshing = new Map<string, Promise<string | null>>();
-  private logins = new Map<string, Promise<OAuthSession>>();
+  private logins = new Map<string, { p: Promise<OAuthSession>; flow: { close(): void } }>();
   constructor(private readonly d: OAuthDeps) {}
 
   private get f(): typeof fetch { return this.d.fetch ?? fetch; }
@@ -113,13 +117,13 @@ export class McpOAuth {
   }
 
   /** Step 1: from the MCP server's URL to its authorization server's metadata. */
-  async discover(serverUrl: string): Promise<Discovery> {
+  async discover(serverUrl: string, headers: Record<string, string> = {}): Promise<Discovery> {
     const server = safeUrl(serverUrl, 'Server MCP');
     // the 401 tells where the resource metadata is (and maybe the scope)
     let ch: Record<string, string> = {};
     try {
       const res = await this.f(server.toString(), { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(FETCH_MS),
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', 'MCP-Protocol-Version': CLIENT_PROTOCOL },
+        headers: { ...headers, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', 'MCP-Protocol-Version': CLIENT_PROTOCOL },
         body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: CLIENT_PROTOCOL, capabilities: {}, clientInfo: { name: 'second-brain', version: '1' } } }) });
       ch = challenge(res.headers.get('www-authenticate'));
       await res.body?.cancel().catch(() => {});
@@ -133,7 +137,14 @@ export class McpOAuth {
       const servers = r?.status === 200 ? r.body?.authorization_servers : undefined;
       if (Array.isArray(servers) && typeof servers[0] === 'string') {
         issuer = servers[0];
-        if (typeof r!.body!.resource === 'string') resource = safeUrl(r!.body!.resource, 'Risorsa').toString();
+        if (typeof r!.body!.resource === 'string') {
+          // RFC 9728 §3.3: the metadata is about this server (same origin, its path a prefix of the server's), never
+          // another one whose tokens would come back here
+          const res = safeUrl(r!.body!.resource, 'Risorsa');
+          const base = res.pathname.replace(/\/+$/, '');
+          if (res.origin !== server.origin || !(server.pathname === base || server.pathname.startsWith(`${base}/`) || !base)) throw new McpClientError('auth', 'I metadati OAuth del server parlano di un altro indirizzo.', 'Il server non è configurato bene, o non è quello che pensi: non fare l’accesso e chiedi a chi lo gestisce.');
+          resource = res.toString();
+        }
         if (Array.isArray(r!.body!.scopes_supported)) scopes = (r!.body!.scopes_supported as unknown[]).filter((s): s is string => typeof s === 'string');
         break;
       }
@@ -144,7 +155,11 @@ export class McpOAuth {
     for (const u of metadataUrls(issuer)) {
       const r = await this.json(u).catch(() => null);
       const b = r?.status === 200 ? r.body : null;
-      if (b && typeof b.authorization_endpoint === 'string' && typeof b.token_endpoint === 'string') { as = b as unknown as AsMeta; break; }
+      if (b && typeof b.authorization_endpoint === 'string' && typeof b.token_endpoint === 'string') {
+        // RFC 8414 §3.3: the metadata names the issuer it was asked for
+        if (typeof b.issuer === 'string' && b.issuer.replace(/\/+$/, '') !== issuer.replace(/\/+$/, '')) throw new McpClientError('auth', 'Il server di login si presenta con un altro nome.', 'Non fare l’accesso e chiedi a chi gestisce il server.');
+        as = b as unknown as AsMeta; break;
+      }
     }
     if (!as) throw new McpClientError('auth', 'Il server non pubblica un login OAuth.', 'Non usa il login MCP: inserisci un token nel campo Token, o chiedi a chi lo gestisce.');
     safeUrl(as.authorization_endpoint, 'Pagina di login');
@@ -156,20 +171,34 @@ export class McpOAuth {
   }
 
   /** «Accedi»: the whole login, in the system browser. One at a time per connector. */
-  login(id: string, serverUrl: string, cfg: OAuthConfig = {}): Promise<OAuthSession> {
-    const running = this.logins.get(id);
-    if (running) return running;
-    const p = this.doLogin(id, serverUrl, cfg).finally(() => this.logins.delete(id));
-    this.logins.set(id, p);
+  login(id: string, serverUrl: string, cfg: OAuthConfig = {}, headers: Record<string, string> = {}): Promise<OAuthSession> {
+    // «Accedi» again (the tab was closed, the card redrawn): the old flow ends, a new one starts
+    this.cancel(id);
+    const flow = { close: () => {} };
+    const p = this.doLogin(id, serverUrl, cfg, headers, flow).finally(() => { if (this.logins.get(id)?.p === p) this.logins.delete(id); });
+    this.logins.set(id, { p, flow });
     return p;
   }
 
-  private async doLogin(id: string, serverUrl: string, cfg: OAuthConfig): Promise<OAuthSession> {
-    const disc = await this.discover(serverUrl);
+  /** Ends a login in progress («Esci», the connector changed or removed, a new «Accedi»). */
+  cancel(id: string): void {
+    const running = this.logins.get(id);
+    if (!running) return;
+    this.logins.delete(id);
+    running.flow.close();
+  }
+
+  private async doLogin(id: string, serverUrl: string, cfg: OAuthConfig, headers: Record<string, string>, flow: { close(): void }): Promise<OAuthSession> {
+    let cancelled = false;
+    flow.close = () => { cancelled = true; };
+    const disc = await this.discover(serverUrl, headers);
+    if (cancelled) throw new McpClientError('auth', 'Login interrotto.', 'Premi di nuovo «Accedi».');
     const verifier = b64url(crypto.randomBytes(32)), state = b64url(crypto.randomBytes(16));
     const challengeS256 = b64url(crypto.createHash('sha256').update(verifier).digest());
     const { port, redirect, code, close } = await (this.d.listen ?? ((st: string, p: number | undefined) => loopback(st, p, this.d.loginMs ?? LOGIN_MS)))(state, cfg.port);
+    flow.close = () => { cancelled = true; close(); };
     try {
+      if (cancelled) throw new McpClientError('auth', 'Login interrotto.', 'Premi di nuovo «Accedi».');
       let clientId = cfg.clientId?.trim(), clientSecret: string | undefined;
       if (!clientId) {
         if (!disc.as.registration_endpoint) throw new McpClientError('auth', 'Il server non permette di registrare l’app da sola.', 'Chiedi a chi lo gestisce un Client ID per second-brain e scrivilo in «Modifica» → Client ID OAuth.');
@@ -186,8 +215,9 @@ export class McpOAuth {
       await this.d.openExternal(auth.toString());
       const got = await code;
       const tok = await this.token(disc.as.token_endpoint, { grant_type: 'authorization_code', code: got, redirect_uri: redirect, client_id: clientId, code_verifier: verifier, resource: disc.resource, ...(clientSecret ? { client_secret: clientSecret } : {}) });
-      const s: OAuthSession = { ...tok, clientId, ...(clientSecret ? { clientSecret } : {}), tokenEndpoint: disc.as.token_endpoint, resource: disc.resource, ...(disc.scope ? { scope: disc.scope } : {}), at: this.now() };
-      this.d.save(id, s);
+      if (cancelled) throw new McpClientError('auth', 'Login interrotto.', 'Premi di nuovo «Accedi».');
+      const s: OAuthSession = { ...tok, clientId, ...(clientSecret ? { clientSecret } : {}), tokenEndpoint: disc.as.token_endpoint, resource: disc.resource, ...(disc.scope ? { scope: disc.scope } : {}), origin: new URL(serverUrl).origin, at: this.now() };
+      if (!this.d.save(id, s)) throw new McpClientError('auth', 'L’indirizzo del connettore è cambiato durante il login.', 'Premi di nuovo «Accedi».');
       log.info('mcp-servers', 'MCP OAuth login done', { data: { server: id, refresh: !!s.refresh, expiresIn: s.expiresAt ? Math.round((s.expiresAt - this.now()) / 1000) : null } });
       return s;
     } finally { close(); void code.catch(() => {}); }
@@ -223,24 +253,28 @@ export class McpOAuth {
     return p;
   }
 
+  /** the session saved now is still the one read (no «Esci», no new login since) */
+  private same(id: string, s: OAuthSession): boolean { const now = this.d.load(id); return !!now && now.at === s.at && now.refresh === s.refresh && now.access === s.access; }
+
   private async refresh(id: string, s: OAuthSession): Promise<string | null> {
     if (!s.refresh) {
       // nothing to renew it with: still good, or gone
       if (s.expiresAt && s.expiresAt > this.now()) return s.access;
-      this.d.drop(id);
+      if (this.same(id, s)) this.d.drop(id, 'L’accesso è scaduto.');
       return null;
     }
     try {
       const tok = await this.token(s.tokenEndpoint, { grant_type: 'refresh_token', refresh_token: s.refresh, client_id: s.clientId, resource: s.resource, ...(s.clientSecret ? { client_secret: s.clientSecret } : {}) });
       const next: OAuthSession = { ...s, ...tok, refresh: tok.refresh ?? s.refresh, who: tok.who ?? s.who };
       if (!tok.expiresAt) delete next.expiresAt;
-      this.d.save(id, next);
+      // «Esci» or a new login while it ran: that one stands, this answer is forgotten
+      if (!this.same(id, s) || !this.d.save(id, next)) return null;
       log.info('mcp-servers', 'MCP OAuth token refreshed', { data: { server: id } });
       return next.access;
     } catch (e) {
       if (e instanceof McpClientError && e.code === 'auth') {
         log.warn('mcp-servers', 'MCP OAuth refresh refused: logged out', { data: { server: id }, cause: e.message, hint: 'the user presses «Accedi» on the connector card' });
-        this.d.drop(id);
+        if (this.same(id, s)) this.d.drop(id, 'L’accesso è scaduto o è stato revocato.');
         return null;
       }
       // the login server is unreachable: the old token, if still valid, else nothing (the session stays for later)
@@ -255,12 +289,15 @@ export function loopback(state: string, fixed: number | undefined, loginMs: numb
   return new Promise((resolveListen, rejectListen) => {
     let settle!: (v: string) => void, fail!: (e: Error) => void;
     const code = new Promise<string>((res, rej) => { settle = res; fail = rej; });
+  code.catch(() => {});   // read by the login; never an unhandled rejection when it ends before
     const page = (ok: boolean, text: string) => `<!doctype html><meta charset="utf-8"><title>second-brain</title><body style="font:16px system-ui;margin:3em"><h1>${ok ? 'Accesso fatto' : 'Accesso non riuscito'}</h1><p>${text}</p></body>`;
     const server = http.createServer((req, res) => {
       const u = new URL(req.url ?? '/', 'http://127.0.0.1');
       if (u.pathname !== '/callback') { res.writeHead(404).end(); return; }
       const err = u.searchParams.get('error'), got = u.searchParams.get('code');
-      const ok = !err && !!got && u.searchParams.get('state') === state;
+      // RFC 8252: a request without this login's state (another page, an old tab) is refused and the login keeps waiting
+      if (u.searchParams.get('state') !== state) { res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' }).end('state'); return; }
+      const ok = !err && !!got;
       res.writeHead(ok ? 200 : 400, { 'Content-Type': 'text/html; charset=utf-8' }).end(page(ok, ok ? 'Puoi chiudere questa scheda e tornare a second-brain.' : 'Torna a second-brain e premi di nuovo «Accedi».'));
       done();
       if (ok) settle(got!);
@@ -269,7 +306,7 @@ export function loopback(state: string, fixed: number | undefined, loginMs: numb
     const timer = setTimeout(() => { done(); fail(new McpClientError('timeout', 'Il login nel browser non è finito in tempo.', 'Premi di nuovo «Accedi» e completa il login entro 5 minuti.')); }, loginMs);
     timer.unref?.();
     const done = () => { clearTimeout(timer); if (server.listening) server.close(); };
-    server.on('error', e => { clearTimeout(timer); rejectListen(new McpClientError('auth', `La porta di ritorno del login non si apre (${errText(e)}).`, 'Cambia la porta di ritorno in «Modifica», o lasciala vuota.')); });
+    server.on('error', e => { done(); fail(e instanceof Error ? e : new Error(String(e))); rejectListen(new McpClientError('auth', `La porta di ritorno del login non si apre (${errText(e)}).`, 'Cambia la porta di ritorno in «Modifica», o lasciala vuota.')); });
     server.listen(fixed ?? 0, '127.0.0.1', () => {
       const port = (server.address() as AddressInfo).port;
       resolveListen({ port, redirect: `http://127.0.0.1:${port}/callback`, code, close: () => { done(); fail(new McpClientError('auth', 'Login interrotto.', 'Premi di nuovo «Accedi».')); } });
