@@ -143,7 +143,7 @@ import { repoRootOf } from './guide/anchors';
 import { guideIndex } from './appctl/guide';
 const { setInterval, clearInterval } = timersFor('wiring/auto-close');
 
-import { attachAppTools, createLater, commandRunner, attachCommandAsks, attachOrchestratorWake, attachRunResults, attachArtifacts, createAppSource, createAgentCatalog } from './wiring-shared';
+import { attachAppTools, createLater, commandRunner, attachCommandAsks, attachOrchestratorWake, attachRunResults, attachProjectMaps, attachArtifacts, createAppSource, createAgentCatalog } from './wiring-shared';
 import type { CommandRunner } from './run/runner';
 import type { Ctx, Wired } from './wiring-types';
 import { buildLearn, buildNews } from './wiring-builders';
@@ -518,6 +518,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   runsRef.current = runner;
   // brain_script_add on every chat's own endpoint: a work chat saves the script it ran with success itself
   addChatTools([chatScriptAddTool(brainScripts, id => chats.list().find(c => c.id === id)?.title ?? null, roleSkillOf)]);
+  // the project maps (ADR 0271): drawn and kept current by the agents (their own endpoint), live state from the chats
+  const projectMaps = attachProjectMaps(ctx, chats, () => brain.info().brainRoot, addChatTools);
   // brain_query_add the same way: a query that ran and someone reruns goes to its skill's assets/queries/ (ADR 0124, 0263)
   addChatTools([chatQueryAddTool(brainQueries, id => chats.list().find(c => c.id === id)?.title ?? null, roleSkillOf)]);
   const asks = attachCommandAsks(ctx, runner, brain, undefined, chats);
@@ -745,7 +747,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
   // routine packages the Orchestrator authors (ADR 0175): <userData>/routines/<id>/routine.json, the Routine section's store
   const routinePackageStore = createFolderPackageStore(path.join(ctx.userData, 'routines'));
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, balancedMode, away: { on: awayOn, log: e => awayLog.add(e) }, routinePackages: () => routinePackageStore, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog },
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, balancedMode, away: { on: awayOn, log: e => awayLog.add(e) }, routinePackages: () => routinePackageStore, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps,
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },
@@ -906,7 +908,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     judging: { estimate: now => judgingEstimate(manager.runs.list(), now, { shares: judgeShares(), capUsd: Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD, lastBatch: judgeSampler.lastBatch() }) },
     phonePort: createPhonePort(manager, ctx.emitter, awayCommands),
     worktreePool,
-    chats, browser, recordings, learn, news, brain, mcp, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, modelLists, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, userCorrections,
+    chats, browser, recordings, learn, news, projectMaps, brain, mcp, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, modelLists, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, userCorrections,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : null),
       checkpoint: () => manager.checkpointForUpdate(),
@@ -914,7 +916,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { news.dispose(); routines.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (worktreeFirst) clearTimeout(worktreeFirst); if (worktreeTimer) clearInterval(worktreeTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); if (workDriverTimer) clearInterval(workDriverTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); modelLists.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { news.dispose(); projectMaps.stop(); routines.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (worktreeFirst) clearTimeout(worktreeFirst); if (worktreeTimer) clearInterval(worktreeTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); if (workDriverTimer) clearInterval(workDriverTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); modelLists.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { manager.killAll(); runner.shutdown(); },
   };
 }

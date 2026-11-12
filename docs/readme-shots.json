@@ -55,6 +55,14 @@
         "src/renderer/components/ChatItems.tsx"
       ]
     },
+    "project-map": {
+      "test": "README screenshots",
+      "sources": [
+        "src/renderer/components/project-map/",
+        "src/shared/project-map.ts",
+        "src/main/projectmap/demo.ts"
+      ]
+    },
     "brain-map": {
       "test": "README screenshots",
       "sources": [

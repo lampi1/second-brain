@@ -70,6 +70,8 @@ import { recordingTools, type RecordingsRead } from './recordings';
 import { imparaTools, type ImparaControl } from './impara';
 import { childOutputTool } from './child-output';
 import { agentsRecapTool } from './agents-recap';
+import { appProjectMapTool } from '../projectmap/tools';
+import type { ProjectMaps } from '../projectmap/service';
 import { skillTools } from './skills';
 import type { SkillLibrary } from '../skills/library';
 import type { RoutineTerminalExport, RoutineRunRef } from '../../shared/routines';
@@ -113,6 +115,8 @@ export interface AppCtlDeps {
   skillTools?: SkillToolsSource;
   /** the brain's scripts and changelog (ADR 0076): the Orchestrator's brain_script_save / _delete / brain_changelog_add */
   brainScripts?: { scripts: BrainScripts; changelog: BrainChangelog };
+  /** the project maps (ADR 0271): app_project_map on the Orchestrator's own endpoint */
+  projectMaps?: ProjectMaps;
   /** the call recordings (ADR 0154): app_recordings / app_recording_import on the Orchestrator's own endpoint */
   recordings?: RecordingsRead;
   /** the skill library (ADR 0241): app_skills / app_skill_write / app_skill_roles / app_skill_undo on the Orchestrator's own endpoint */
@@ -261,6 +265,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     ...(d.brainScripts && authed() ? scriptWriteTools(d.brainScripts.scripts, d.brainScripts.changelog, () => caller()?.title || 'Orchestrator') : []),
     ...(d.agents ? [toolDef(agentCatalogTool(d.agents, d.skillTools))] : []),
     ...(d.recordings && authed() ? recordingTools(d.recordings, d.emitUi) : []),
+    ...(d.projectMaps && authed() ? [appProjectMapTool(d.projectMaps, d.emitUi)] : []),
     ...(d.impara && authed() ? imparaTools(d.impara, d.emitUi, () => imparaAsked(callerId!)) : []),
     ...(d.skillLibrary && authed() ? skillTools(d.skillLibrary, () => caller()?.title || 'Orchestrator') : []),
     ...(authed() ? [childOutputTool({ chats: () => d.chats.list().filter(mine), runs: () => d.runFeedback?.runList() ?? [] }), agentsRecapTool({ chats: () => d.chats.list().filter(mine), items: id => d.chats.items(id), pending: () => [...d.chats.pending(), ...(d.commandAsks?.() ?? [])], runs: () => d.runFeedback?.runList() ?? [] })] : []),

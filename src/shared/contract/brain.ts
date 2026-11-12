@@ -1,6 +1,7 @@
 // Brain: the brain's data server, quality, comparisons, the learning loop, scripts, queries, the change log, memory and maintenance.
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
+import type { ProjectMapInfo, ProjectMapView } from '../project-map';
 import type { PackFinding } from '../agent-pack';
 import type { BrainModelState, ClassifiersState, MaintenanceJobId, MemoryDocs } from '../brain-model';
 import type { LearningEvidence, LearningReviewState, MemoryReviewRecord, ReplayComparison, ReplayRecord, SkillCandidateView } from '../learning-review';
@@ -102,6 +103,10 @@ export interface ModelRefreshOutcome { engine: Harness; ok: boolean; count: numb
 
 /** renderer → main, brain: each entry [argument, result]. Part of InvokeMap (src/shared/contract.ts). */
 export interface BrainInvokeMap {
+  /** the project maps (ADR 0271, main/projectmap/): the list, and one map with its history, agents and edit times
+   *  (version = one of the history's, the slider) */
+  'projectmap:list': [void, ProjectMapInfo[]];
+  'projectmap:view': [{ project: string; version?: number }, ProjectMapView | null];
   /** the shareable brain zip for colleagues (ADR 0088): rules, skills, roles, scripts, never memory; null = save dialog cancelled */
   'brain:share': [void, BrainShareResult | null];
   /** the Brain pages (ADR 0077, src/main/brainmodel): agents, skills and their links, rules, memory, the change log */

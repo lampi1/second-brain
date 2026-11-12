@@ -1955,12 +1955,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'brain-map',
     title: b('La Mappa del brain', 'The brain map'),
-    summary: b('Chi usa cosa nel tuo brain, come un grafo: agenti, skill, regole e memoria, oppure le note, anche in 3D mentre le chat lavorano.',
-      'Who uses what in your brain, as a graph: agents, skills, rules and memory, or the notes, also in 3D while the chats work.'),
+    summary: b('I tuoi progetti disegnati al posto del codice, con gli agenti al lavoro; e chi usa cosa nel tuo brain: agenti, skill, regole, memoria e note, anche in 3D.',
+      'Your projects drawn in place of their code, with the agents at work; and who uses what in your brain: agents, skills, rules, memory and notes, also in 3D.'),
     points: [
       // src/renderer/components/brain-model/MapPage.tsx MapPage
-      b('La pagina Mappa (G B) ha due viste: «Agenti e skill» e «Note del brain».',
-        'The Map page (G B) has two views: "Agents and skills" and "Brain notes".'),
+      b('La pagina Mappa (G B) ha tre viste: «Progetti», «Agenti e skill» e «Note del brain».',
+        'The Map page (G B) has three views: "Projects", "Agents and skills" and "Brain notes".'),
       // src/renderer/lib/brain-model-view.ts linkGraph
       b('«Agenti e skill» disegna ogni agente con le sue skill, le regole che riceve e la sua memoria; un clic apre l’ispettore, che porta alla pagina dell’agente, alla skill o al file.',
         '"Agents and skills" draws every agent with its skills, the rules it receives and its memory; a click opens the inspector, which leads to the agent’s page, the skill or the file.'),
@@ -1973,6 +1973,15 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/brain/lib/live.ts liveGraph; src/renderer/brain/map/engine.ts webglAvailable
       b('Contano solo i file dentro la cartella del brain: una chat che legge un repository di codice accende sé stessa, non la mappa. Senza WebGL la mappa 3D dice che non può disegnare.',
         'Only files inside the brain folder count: a chat reading a code repository lights itself, not the map. Without WebGL the 3D map says it cannot draw.'),
+      // src/renderer/components/project-map/ProjectMapView.tsx ProjectMapView; src/shared/project-map.ts levelOf
+      b('«Progetti» disegna un tuo progetto al posto del codice: persone, i tuoi sistemi, i sistemi esterni, ambienti e documenti, con i collegamenti e lo stato di ognuno; un clic su un sistema entra nelle sue parti e mostra intorno gli altri sistemi con cui parla. «Tu» segna quello che aspetta te.',
+        '"Projects" draws a project of yours in place of its code: people, your systems, external systems, environments and documents, with the links and the status of each; a click on a system opens its parts and shows around them the other systems they talk to. "You" marks what waits for you.'),
+      // src/main/projectmap/service.ts ProjectMaps; src/shared/project-map.ts shownStatus
+      b('La disegna un agente che legge il progetto: chiedila all’Orchestrator. Gli agenti al lavoro la tengono aggiornata e compaiono accanto alla mappa con i passi fatti e la domanda che ti fanno; uno stato che nessuno conferma da 2 ore, o i cui file sono cambiati, diventa «da verificare».',
+        'An agent that reads the project draws it: ask the Orchestrator. The agents at work keep it up to date and show beside the map with the steps done and the question they ask you; a status nobody confirmed for 2 hours, or whose files changed, turns "to check".'),
+      // src/main/projectmap/store.ts ProjectMapStore; src/main/projectmap/tools.ts appProjectMapTool
+      b('Ogni salvataggio è una versione: il cursore «Storia» ripercorre il progetto dalla prima mappa a oggi. La mappa sta nel brain (projects/), e l’Orchestrator la legge, la apre o la corregge per te.',
+        'Every save is a version: the "History" slider plays the project from its first map to now. The map lives in the brain (projects/), and the Orchestrator reads it, opens it or corrects it for you.'),
     ],
     analogy: b('Come la cartina della metropolitana con i treni in tempo reale: vedi le linee e dove si sta muovendo qualcosa adesso.',
       'Like a metro map with live trains: you see the lines and where something is moving right now.'),
@@ -1986,8 +1995,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       2: ['src/renderer/dashboard/BrainNotesMap.tsx#BrainNotesMap'],
       3: ['src/renderer/brain/map/BrainMap.tsx#BrainMapView', 'src/renderer/brain/lib/live.ts#liveGraph'],
       4: ['src/renderer/brain/map/engine.ts#webglAvailable'],
+      5: ['src/renderer/components/project-map/ProjectMapView.tsx#ProjectMapView', 'src/shared/project-map.ts#levelOf'],
+      6: ['src/main/projectmap/service.ts#ProjectMaps', 'src/shared/project-map.ts#shownStatus'],
+      7: ['src/main/projectmap/store.ts#ProjectMapStore', 'src/main/projectmap/tools.ts#appProjectMapTool'],
     },
-    sources: ['src/renderer/components/brain-model/MapPage.tsx', 'src/renderer/lib/brain-model-view.ts', 'src/renderer/dashboard/BrainNotesMap.tsx', 'src/renderer/brain/map/BrainMap.tsx', 'src/renderer/brain/map/engine.ts', 'src/renderer/brain/lib/live.ts'],
+    sources: ['src/renderer/components/brain-model/MapPage.tsx', 'src/renderer/components/project-map/ProjectMapView.tsx', 'src/shared/project-map.ts', 'src/main/projectmap/service.ts', 'src/main/projectmap/store.ts', 'src/main/projectmap/tools.ts', 'src/renderer/lib/brain-model-view.ts', 'src/renderer/dashboard/BrainNotesMap.tsx', 'src/renderer/brain/map/BrainMap.tsx', 'src/renderer/brain/map/engine.ts', 'src/renderer/brain/lib/live.ts'],
   },
 ];
 

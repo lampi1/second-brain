@@ -98,6 +98,7 @@ row and its line here in the same change.
 | `app_recordings` | Orchestrator only | The call recordings and their local transcripts, or the audio files found on the PC. |
 | `app_recording_import` | Orchestrator only | Import an audio or video file from the PC to be transcribed locally. |
 | `app_learn` | Orchestrator only | Start an Impara lesson the user asked for (an explanation or a quiz), or list the lessons. |
+| `app_project_map` | Orchestrator only | The user's project maps: list, read as text, open on screen, the brief for a Scout that draws one, the user's corrections. |
 | `app_agents_recap` | Orchestrator only | The recap: one short line per agent that works, waits or finished; with detail, one block per agent with its last steps. |
 | `app_child_output` | Orchestrator only | The latest report of a chat in its tree, delegates included: summary and criteria; full: the output, max 4,000 chars. |
 | `agent_metrics` | Orchestrator only | Success rate, cost, time and corrections per role and version (numbers only). |
@@ -127,6 +128,9 @@ row and its line here in the same change.
 | `brain_search` | work chats | Search the user's brain by meaning and words. |
 | `brain_scripts` | work chats | The brain's tested reusable scripts with usage. |
 | `brain_script_add` | work chats | Save a new script in the brain right after it ran and worked. |
+| `project_map_read` | work chats | The user's project maps: the list, or one map as text with statuses and agents. |
+| `project_map_save` | work chats | Draw or redraw a project's map (people, systems, parts, links, statuses, evidence files). |
+| `project_map_update` | work chats | Say which elements of a map you work on and update the status of what you finished. |
 | `brain_queries` | work chats | The brain's saved queries (SQL, KQL, GraphQL…). |
 | `brain_query_add` | work chats | Save a new query in the brain right after it gave the right answer. |
 | `maintenance_pack` | work chats | The data pack of a «Manutenzione» research, one section at a time. |

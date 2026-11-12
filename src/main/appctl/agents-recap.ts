@@ -69,6 +69,23 @@ export function stepsOf(items: ChatItem[]): Steps {
   return { done: said.slice(-STEPS_MAX) };
 }
 
+/** The latest todo or plan list as counts (the project map's agent cards, projectmap/service.ts): steps done, in all,
+ *  and the current one; null without a list. */
+export function progressOf(items: ChatItem[]): { done: number; total: number; now?: string } | null {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i]!;
+    let rows: { status: string; content: string }[] | null = null;
+    if (it.kind === 'tool' && it.name === 'TodoWrite') {
+      const todos = (it.input as { todos?: unknown } | null)?.todos;
+      if (Array.isArray(todos)) rows = todos.map(t => t as { status?: unknown; content?: unknown }).map(t => ({ status: String(t.status ?? ''), content: String(t.content ?? '') })).filter(t => t.content);
+    } else if (it.kind === 'system' && (it.code === 'todos' || it.code === 'plan') && typeof it.params?.list === 'string') rows = parseList(it.params.list);
+    if (!rows?.length) continue;
+    const now = rows.find(r => r.status === 'in_progress')?.content;
+    return { done: rows.filter(r => r.status === 'completed').length, total: rows.filter(r => r.status !== 'cancelled').length, ...(now ? { now: one(now) } : {}) };
+  }
+  return null;
+}
+
 type Mark = 'wait' | 'error' | 'run' | 'queue' | 'done' | 'stopped' | 'idle';
 const ICON: Record<Mark, string> = { wait: '🙋', error: '🔴', run: '🟢', queue: '⏳', done: '✅', stopped: '✋', idle: '💤' };
 const LABEL: Record<Mark, string> = { wait: 'aspetta te', error: 'ferma su un errore', run: 'al lavoro', queue: 'in coda', done: 'ha finito', stopped: 'fermata', idle: 'ferma' };
@@ -84,7 +101,7 @@ export function isAgentsRecap(text: string): boolean {
   return lines.slice(0, 2).some(head) && other.length <= 2 && other.length < lines.length / 2;
 }
 
-function markOf(c: ChatSummary, asks: PendingRequest[]): Mark {
+export function markOf(c: ChatSummary, asks: PendingRequest[]): Mark {
   if (asks.length || c.state === 'waiting') return 'wait';
   if (c.state === 'error') return 'error';
   if (c.queued) return 'queue';

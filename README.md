@@ -182,6 +182,15 @@ case 7 and caught a refund that ignores the original discount.
 
 <p align="center"><img src="docs/screenshots/recordings.webp" alt="The Recordings page: a call transcribed with You and Others lines, search, Ask the Orchestrator" width="640"></p>
 
+### Your projects, drawn
+
+**Map → Projects** shows a project instead of its code: who uses it, your systems and the external ones they talk to,
+environments and documents, with the links and a status on each. Click a system to step inside it; the agents at work
+sit beside the boxes they work on, with their steps and the question they wait on. An agent draws the map (ask the
+Orchestrator), the agents at work keep it current, and a slider replays it from the first drawing.
+
+<p align="center"><img src="docs/screenshots/project-map.webp" alt="A project map: people, the shop system, external systems and environments linked, with statuses, what waits for you and the agents at work" width="640"></p>
+
 ### The brain map
 
 Notes, chats, agents and tools as a 3D map you can spin, glowing along the links where the work is happening right now.

@@ -153,6 +153,15 @@ test('README screenshots', async () => {
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('brain-map')).toHaveCount(0);
 
+  // 5. A project drawn in place of its code (Map → Projects, ADR 0271): systems, links, statuses, the agents at work
+  await goPage(page, 'collegamenti');
+  await page.getByTestId('bm-map-page').getByRole('button', { name: 'Projects', exact: true }).click();
+  await expect(page.getByTestId('pm-node-negozio')).toBeVisible();
+  await setSize(app, 2000, 1250); // room for the agents column beside the map
+  await expect(page.getByTestId('pm-node-negozio')).toBeVisible();
+  await save('project-map', page.getByTestId('pm-view'));
+  await setSize(app, W, H);
+
 });
 
 /** The visible part of the scrolling frame around this element (the page's own column, without the rail and the

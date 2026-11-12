@@ -120,6 +120,8 @@ export interface EventMap {
   'voice:speech': VoiceSpeech;
   /** push to talk: everything said before the release is heard */
   'voice:committed': { session: string };
+  /** a project map, its agents or its edit times changed (ADR 0271): read projectmap:view again */
+  'projectmap:changed': { project: string };
   /** call recordings (ADR 0154): the list, the one running, a transcription's progress */
   'rec:changed': RecState;
   /** Impara (ADR 0185): the list changed, and the lesson that changed (whole) when there is one */
@@ -172,6 +174,7 @@ export const INVOKE_CHANNELS = [
   'proposals:shown', 'proposals:undoAuto',
   'guide:ask', 'guide:stale',
   'usecount:add', 'usecount:report',
+  'projectmap:list', 'projectmap:view',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'routines:progress', 'work:changed',
@@ -189,6 +192,7 @@ export const EVENT_CHANNELS = [
   'rec:changed',
   'impara:changed', 'impara:tutor',
   'news:changed',
+  'projectmap:changed',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;

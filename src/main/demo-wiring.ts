@@ -41,7 +41,8 @@ import { log, errText } from './log';
 import { McpServer, mcpPortFromEnv } from './mcp/server';
 import { demoMcpServers } from './mcp-servers/demo';
 import { recordMcpPort } from './health';
-import { attachArtifacts, attachCommandAsks, attachOrchestratorWake, attachRunResults, commandRunner, createAppSource, createLater, attachAppTools } from './wiring-shared';
+import { attachArtifacts, attachCommandAsks, attachOrchestratorWake, attachRunResults, commandRunner, createAppSource, createLater, attachAppTools, attachProjectMaps } from './wiring-shared';
+import { seedDemoMap } from './projectmap/demo';
 import type { Ctx, Wired } from './wiring-types';
 import { attachHeldNews } from './chats/held-news';
 import { SkillsService } from './skills/service';
@@ -222,7 +223,10 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     devops: () => { const t = tasks.get(); return { prs: t.prs, repoDirs: t.repoDirs }; },
     changed: (state, lesson) => ctx.emitter.emit('impara:changed', { state, ...(lesson ? { lesson } : {}) }),
     tutorText: (lesson, turn, text) => ctx.emitter.emit('impara:tutor', { lesson, turn, text }) });
-  attachAppTools(mcp, { recordings, impara: learn, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), resolveRole: req => agents.resolve(req), runFeedback, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd) }, source, true);
+  // the project maps (ADR 0271): the demo brain holds one, the shop the demo chats work on
+  const projectMaps = attachProjectMaps(ctx, chats, () => demoBrainRoot, undefined, now); // no chat endpoints in the demo
+  seedDemoMap(demoBrainRoot, projectMaps, now());
+  attachAppTools(mcp, { projectMaps, recordings, impara: learn, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), resolveRole: req => agents.resolve(req), runFeedback, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd) }, source, true);
   try { recordMcpPort(mcpPortFromEnv(), await mcp.listen(mcpPortFromEnv())); } catch (e) {
     log.warn('demo', 'MCP port busy, using a random one', { data: { error: errText(e) } });
     recordMcpPort(mcpPortFromEnv(), await mcp.listen(0), errText(e)); // the banner shows in the demo too (e2e)
@@ -329,7 +333,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   if (!news.state().items.length) void news.refresh();
 
   return {
-    morning, news,
+    morning, news, projectMaps,
     chats, browser, recordings, learn, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, engines, later: createLater(ctx),
     agents, runFeedback, agentLifecycle, agentPacks, brainModel, research, queries, memoryReview, learningReview,
     setup: new SetupService(ctx.userData, true, now),
@@ -338,7 +342,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     // the demo folders do not exist: made-up branches, so the "Stato" view shows one per chat
     branches: cwds => gitBranches(cwds, c => DEMO_BRANCHES[c.split(/[\\/]/).pop() ?? ''] ?? null),
     cli: () => ({ claude: demoCli('2.3.0 (demo)', 'demo@example.com'), cursor: demoCli('2026.10.01 (demo)', 'demo@example.com') }),
-    shutdown: async () => { news.dispose(); engines.stop(); artifacts.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), Promise.resolve(tasks.shutdown()), brain.shutdown(), mcp.close()]); },
+    shutdown: async () => { projectMaps.stop(); news.dispose(); engines.stop(); artifacts.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), Promise.resolve(tasks.shutdown()), brain.shutdown(), mcp.close()]); },
     killNow: () => {
       void chats.shutdown(); runner.shutdown(); // the demo starts no processes: stopping its timers is enough
       // SB_DEMO_QUIT_MS: a quit as slow as the real one's blocking taskkill of the CLIs (15-40 s on a loaded PC), so the

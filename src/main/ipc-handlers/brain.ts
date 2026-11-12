@@ -3,8 +3,11 @@
 // in ipc.ts keeps the set complete); each channel's shape is in src/shared/contract/*.ts.
 import type { HandlerContext, HandlersOf } from './context';
 
-export function brainHandlers({ s, emitter, research, requireReviewRoot, search, proposals }: HandlerContext): HandlersOf<'brain' | 'brainmodel' | 'queries' | 'classifiers' | 'memory' | 'learning' | 'proposals' | 'maintenance' | 'morning' | 'compare' | 'learn' | 'skills'> {
+export function brainHandlers({ s, emitter, research, requireReviewRoot, search, proposals }: HandlerContext): HandlersOf<'projectmap' | 'brain' | 'brainmodel' | 'queries' | 'classifiers' | 'memory' | 'learning' | 'proposals' | 'maintenance' | 'morning' | 'compare' | 'learn' | 'skills'> {
   return {
+    // the project maps (ADR 0271): read only from the page; agents draw and update them through their MCP tools
+    'projectmap:list': () => s.projectMaps?.list() ?? [],
+    'projectmap:view': a => s.projectMaps?.view(String(a?.project ?? ''), typeof a?.version === 'number' ? a.version : undefined) ?? null,
     'brain:share': () => s.agentPacks.share(),
     // the Brain pages (ADR 0077): read, the maintenance button, an undo, a skill toggle; Classificatori read-only
     'brainmodel:state': () => s.brainModel.stateAsync(),
