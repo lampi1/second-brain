@@ -28,6 +28,10 @@ import type { DecisionActor } from '../coordination/model';
 import type { AnswerPatch } from './session';
 import { CoordinationStore } from '../coordination/store';
 
+/** A question request's identity for #379: its questions and their options, in order. */
+const questionSig = (req: Pick<PendingRequest, 'questions'>): string =>
+  JSON.stringify((req.questions ?? []).map(q => [q.question.trim(), !!q.multiSelect, q.options.map(o => o.label.trim())]));
+
 /** Questions and permissions: the user's answer, the role gate, auto-permit, «Modalità notte», counted requests. */
 export abstract class ManagerRequests extends ManagerCheckpoints {
   private coordinationStore?: CoordinationStore;
@@ -65,6 +69,52 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     }
   }
 
+  /** #379 «questions sometimes reach me twice»: the same question again while its first copy is still open (an engine
+   *  retrying its ask, two asks in one message) waits behind the first, unseen, and takes the same answer. */
+  protected heldAsTwin(r: Rec, req: Omit<PendingRequest, 'chatId'>): boolean {
+    if (req.type !== 'question' || !req.questions?.length) return false;
+    const sig = questionSig(req);
+    const first = [...r.pending.values()].find(p => p.id !== req.id && p.type === 'question' && questionSig(p) === sig);
+    if (!first) return false;
+    this.registerRequest(r, req);
+    const twins = r.twins ??= new Map();
+    twins.set(first.id, [...(twins.get(first.id) ?? []), req]);
+    log.info('chats', 'the same question again while the first is open: it takes the first one\'s answer', { chat: r.s.id, data: { first: first.id, twin: req.id } });
+    return true;
+  }
+
+  /** The first copy's answer goes to its twins too (before the first, so its resolution never shows them). */
+  private answerTwins(r: Rec, firstId: string, answer: Answer, actor: DecisionActor): void {
+    const twins = r.twins?.get(firstId);
+    if (!twins) return;
+    r.twins!.delete(firstId);
+    for (const twin of twins) {
+      try {
+        void Promise.resolve(this.deliverAnswer(r, twin, answer, actor)).catch(e => log.warn('chats', 'twin question answer uncertain', { chat: r.s.id, cause: errText(e), hint: 'inspect the request receipt', data: { twin: twin.id } }));
+      } catch (e) { log.warn('chats', 'twin question not answered', { chat: r.s.id, cause: errText(e), hint: 'the engine may ask it again', data: { twin: twin.id } }); }
+    }
+  }
+
+  /** The engine resolved request `id`: a twin it withdrew leaves its list; when `id` is a first copy the engine withdrew
+   *  unanswered, its twins show now, the next one first. */
+  protected showTwins(r: Rec, firstId: string): void {
+    for (const [first, list] of r.twins ?? []) {
+      const left = list.filter(t => t.id !== firstId);
+      if (left.length !== list.length) { if (left.length) r.twins!.set(first, left); else r.twins!.delete(first); }
+    }
+    const twins = r.twins?.get(firstId);
+    if (!twins) return;
+    r.twins!.delete(firstId);
+    if (!r.session || r.s.closedAt) return;
+    const [next, ...rest] = twins;
+    const full: PendingRequest = { ...next!, chatId: r.s.id };
+    r.pending.set(full.id, full);
+    r.s.pending = r.pending.size;
+    if (rest.length) r.twins!.set(full.id, rest);
+    this.opts.emitter.emit('pending:added', full);
+    this.updated(r);
+  }
+
   /** True claims this request for policy handling; a remote delivery is still dispatching until its acknowledgement.
    *  Recaps and pending removal must wait too. Failure stays journaled and is never retried as user consent. */
   private policyAnswer(r: Rec, req: Omit<PendingRequest, 'chatId'>, answer: Answer, policy: string, patch?: AnswerPatch, consumed?: () => void): boolean {
@@ -74,6 +124,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       if (ok && this.chats.get(r.s.id) === r && r.session === session) { this.dropPending(r, req.id); consumed?.(); }
       return ok;
     };
+    this.answerTwins(r, req.id, answer, { kind: 'policy', policy });
     const result = this.deliverAnswer(r, req, answer, { kind: 'policy', policy }, patch);
     if (typeof result === 'boolean') return finish(result);
     void result.then(finish).catch(e => log.warn('chats', 'policy answer delivery uncertain', {
@@ -145,6 +196,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       // a Yes on «hai eseguito il comando?» that no run of this chat backs reaches it with the app's note (#372)
       const told = this.opts.runs ? backedAnswer(req, answer, this.opts.runs(chatId)) : answer;
       if (told !== answer) log.info('chats', 'a Yes on «did you run it?» with no run behind it: told to the chat', { chat: chatId, data: { requestId } });
+      this.answerTwins(r, requestId, told, { kind: 'user', channel: by });
       ok = await this.deliverAnswer(r, req, told, { kind: 'user', channel: by });
       // The RPC acknowledgement can precede the batched resolved event. Preserve phone provenance in either order.
       if (ok && sameChat()) this.dropPending(r, requestId);

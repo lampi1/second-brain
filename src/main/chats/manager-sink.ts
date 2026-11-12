@@ -61,6 +61,7 @@ export abstract class ManagerSink extends ManagerWork {
         // decided on the real input above; parked for night mode, shown and kept masked from here (ADR 0237)
         req = maskTypedRequest(req);
         if (this.awayAnswered(r, req)) return;
+        if (this.heldAsTwin(r, req)) return;
         this.hook('analytics', () => this.analytics.pending(r.s, req));
         this.autoActivity(r);
         const full: PendingRequest = { ...req, chatId };
@@ -89,7 +90,7 @@ export abstract class ManagerSink extends ManagerWork {
         if (reason === 'exit' && r.autoEnding && children.snapshot().coverage === 'complete' && children.snapshot().active === 0) return;
         children.coverage(coverage); r.s.agentChildren = children.snapshot(); this.persist(); this.updated(r);
       },
-      resolved: id => { if (this.chats.get(chatId) === r) this.dropPending(r, id); },
+      resolved: id => { if (this.chats.get(chatId) === r) { this.dropPending(r, id); this.showTwins(r, id); } },
       changed: p => {
         if (!live()) return;
         // kept as the replaying session: an engine that exits mid-replay leaves no flag on its successor

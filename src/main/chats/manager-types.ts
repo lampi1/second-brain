@@ -308,6 +308,8 @@ export interface Rec {
   lampoSeen?: { session: HarnessSession; cursor: LampoCursor } | undefined;
   items: ChatItem[];
   pending: Map<string, PendingRequest>;
+  /** the same question asked again while its first copy is open, by that copy's id: never shown, it takes the first's answer (#379) */
+  twins?: Map<string, Omit<PendingRequest, 'chatId'>[]>;
   session: HarnessSession | null;
   /** the "/" commands its engine reported (in memory: a new engine reports them again) */
   commands?: ChatCommand[];

@@ -129,10 +129,11 @@ describe('request receipts through ChatManager', () => {
   it('keeps phone provenance when a PC answer to another request finishes first', async () => {
     const phoneAck = acknowledgement(), pcAck = acknowledgement();
     const f = await fixture({ acks: new Map([[question.id, phoneAck.promise], ['second-question', pcAck.promise]]) });
-    f.sink().pending({ ...question, id: 'second-question', at: 101 });
+    // another question (the same one again would wait behind the first, #379)
+    f.sink().pending({ ...question, id: 'second-question', at: 101, title: 'Proceed again?', questions: [{ ...question.questions![0]!, question: 'Proceed again?' }] });
     const answer = { kind: 'question', answers: { 'Proceed?': 'No' } } as const;
     const phone = f.m.answer(f.chat.id, question.id, answer, 'phone');
-    const pc = f.m.answer(f.chat.id, 'second-question', answer, 'pc');
+    const pc = f.m.answer(f.chat.id, 'second-question', { kind: 'question', answers: { 'Proceed again?': 'No' } }, 'pc');
     pcAck.resolve(true); await pc;
     phoneAck.resolve(true); await phone;
     expect(f.resolved).toEqual([{ chatId: f.chat.id, requestId: 'second-question' }, { chatId: f.chat.id, requestId: question.id, by: 'phone' }]);

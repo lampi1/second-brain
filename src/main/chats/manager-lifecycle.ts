@@ -204,6 +204,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     if (sess) await sess.close();
     this.reapKept(r);
     for (const id of [...r.pending.keys()]) this.dropPending(r, id);
+    delete r.twins;
     this.dropUserAsks((q, worker) => q.chatId === chatId || worker === chatId);
     this.flushItems(chatId);
     this.endRunOf(r, 'closed');
@@ -261,6 +262,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     if (sess) await sess.close();
     this.reapKept(r);
     for (const p of [...r.pending.keys()]) this.dropPending(r, p);
+    delete r.twins;
     this.dropUserAsks((q, worker) => q.chatId === r.s.id || worker === r.s.id);
     if (r.s.closedBy !== 'user') { r.s.closedBy = 'user'; this.persist(); this.updated(r); }
   }
@@ -336,6 +338,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     // The user's ✕ leaves them to its final close (chat:close after the «Annulla» toast): an Annulla finds its dev server.
     if (!opts.undoable) this.reapKept(r);
     for (const id of [...r.pending.keys()]) this.dropPending(r, id);
+    delete r.twins;
     this.dropUserAsks((q, worker) => q.chatId === chatId || worker === chatId);
     this.flushItems(chatId);
     r.s.closedAt = Date.now();
