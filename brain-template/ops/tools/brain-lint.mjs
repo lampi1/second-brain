@@ -28,7 +28,7 @@ const report = { fixed: [], fixedTotal: 0, overBudget: [], now: {}, duplicates: 
 /** Folders the walk never enters: history, tools, other checkouts and scratch (#382: a brain had ~1455 .md files in
  *  tmp/ and the lint never finished). Linked folders (symlinks, Windows junctions) are not entered either: readdir
  *  reports them as links, not folders. */
-export const SKIP_DIR = /^(\.git|node_modules|worktrees|journal|reviews|ops|dev|\.cursor|tmp|temp)$/i;
+export const SKIP_DIR = /^(\.git|node_modules|worktrees|journal|reviews|ops|dev|\.cursor|tmp|temp|archive)$/i;
 
 /** Sentence units of different files sharing ≥ `min` of the smaller one's word triples. Pairs come from an index of
  *  the triples instead of comparing every pair (#382: quadratic, 15-30+ minutes on a big brain): a triple found in at

@@ -12,7 +12,7 @@ const words = (n: number, from = 0) => Array.from({ length: n }, (_, i) => `w${f
 
 describe('brain-lint template', () => {
   it('skips scratch and history folders', () => {
-    for (const d of ['tmp', 'temp', '.git', 'worktrees', 'journal']) expect(SKIP_DIR.test(d)).toBe(true);
+    for (const d of ['tmp', 'temp', 'archive', '.git', 'worktrees', 'journal']) expect(SKIP_DIR.test(d)).toBe(true);
     for (const d of ['rules', 'notes', 'tmpl']) expect(SKIP_DIR.test(d)).toBe(false);
   });
   it('pairs near-duplicates across files only, scored on all their triples', () => {
