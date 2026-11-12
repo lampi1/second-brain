@@ -37,7 +37,13 @@ work shown on the boxes they work on.
 5. **The Orchestrator reaches it** with `app_project_map`: `list`, `read` (the map as text with statuses and agents, to
    answer «a che punto è X»), `open` (the page on that project or zoomed into one element), `brief`, `correct` (the
    user's correction, kept in the map and shown to every later drawing).
-6. The Orchestrator and Flash do not see the chat-endpoint map tools (they have `app_project_map`, or nothing to draw).
+6. The Orchestrator does not see the chat-endpoint map tools (it has `app_project_map`); Flash sees only
+   `project_map_read` (it has nothing to draw or update).
+7. The brain is the user's folder: a file that is not a map reads as no map and never hides the others; a map's name
+   is its folder's. Parts are one level deep (a part sits in a system); a link's id is never an element's. A redraw
+   keeps the map's root unless the agent passes one: a chat in a worktree or a subfolder does not move it. A delegated
+   chat in an isolated worktree of the project's checkout (a sibling `.second-brain-*` folder, under a parent chat
+   working in the project) counts as working in the project.
 
 ## Consequences
 

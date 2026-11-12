@@ -126,7 +126,13 @@ export function ProjectMapView({ arg, onArg }: { arg: string | null; onArg: (arg
     return map.elements.some(x => x.parent === e.id) ? e.id : e.parent ?? null;
   }, [map, level]);
   const lv = useMemo(() => (map ? levelOf(map, shownLevel, now) : null), [map, shownLevel, now]);
-  useEffect(() => { if (level && shownLevel !== level && map?.elements.some(e => e.id === level)) setPicked(level); }, [level, shownLevel, map]);
+  // once per place (not on every live reload, which would undo what the user picked since)
+  const pickedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!map || pickedFor.current === level) return;
+    pickedFor.current = level;
+    if (level && shownLevel !== level && map.elements.some(e => e.id === level)) setPicked(level);
+  }, [level, shownLevel, map]);
   useEffect(() => {
     const el = box.current;
     if (!el || !lv) return;
@@ -154,8 +160,8 @@ export function ProjectMapView({ arg, onArg }: { arg: string | null; onArg: (arg
   const at = version === null ? hist.length - 1 : hist.findIndex(h => h.version === version);
   const go = (lvl: string | null) => onArg(`${project}${lvl ? `/${lvl}` : ''}`);
   const click = (n: LevelNode) => {
-    if (n.ctx) { go(null); setPicked(n.id); return; }
-    if (kids(n.id)) go(n.id); else setPicked(p => (p === n.id ? null : n.id));
+    // a box from outside: its own place (inside it if it has parts, else picked on its level)
+    if (n.ctx || kids(n.id)) go(n.id); else setPicked(p => (p === n.id ? null : n.id));
   };
   const sel = picked ? byId.get(picked) : undefined;
   const groups: ['wait' | 'work' | 'done', MapAgent[]][] = [['wait', agents.filter(a => a.mark === 'wait')], ['work', agents.filter(a => !DONE_MARKS.has(a.mark) && a.mark !== 'wait')], ['done', agents.filter(a => DONE_MARKS.has(a.mark))]];
@@ -235,7 +241,7 @@ export function ProjectMapView({ arg, onArg }: { arg: string | null; onArg: (arg
           <h4>{t(`pm.group.${g}`)}</h4>
           {list.map(a => <AgentCard key={a.chatId} a={a} names={names(a)} on={agentOn === a.chatId} onPick={() => setAgentOn(o => (o === a.chatId ? null : a.chatId))} />)}
         </section> : null))}
-        {map.corrections.length > 0 && <section className="pm-group"><h4>{t('pm.corrections')}</h4>{map.corrections.map(c => <p key={c} className="pm-muted">{c}</p>)}</section>}
+        {map.corrections.length > 0 && <section className="pm-group"><h4>{t('pm.corrections')}</h4>{map.corrections.map((c, i) => <p key={i} className="pm-muted">{c}</p>)}</section>}
       </aside>
     </div>
     {hist.length > 1 && <footer className="pm-history" data-testid="pm-history">

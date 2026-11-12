@@ -71,7 +71,7 @@ export function chatMapTools(d: ChatMapDeps): McpTool[] {
         properties: {
           project: { type: 'string', description: 'an existing map\'s name or id (redraw); omit for a new one and give title' },
           title: { type: 'string', description: 'the project\'s name, in the user\'s language (a new map)' },
-          root: { type: 'string', description: 'the project\'s folder on this PC (absolute); default: your folder' },
+          root: { type: 'string', description: 'the project\'s folder on this PC (absolute); default: the map\'s folder, or yours for a new map' },
           summary: { type: 'string', description: 'what this version changes, one line in the user\'s language' },
           elements: { type: 'array', items: ELEMENT },
           links: { type: 'array', items: LINK },
@@ -81,8 +81,8 @@ export function chatMapTools(d: ChatMapDeps): McpTool[] {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
       run: (a, ctx) => {
         const chatId = ctx.params.chatId;
-        const root = typeof a.root === 'string' && a.root.trim() ? a.root.trim() : chatId ? d.cwdOf(chatId) ?? undefined : undefined;
-        const m = d.maps.save({ ...(typeof a.project === 'string' ? { project: a.project } : {}), ...(typeof a.title === 'string' ? { title: a.title } : {}), ...(root ? { root } : {}),
+        const root = typeof a.root === 'string' && a.root.trim() ? a.root.trim() : undefined, cwd = chatId ? d.cwdOf(chatId) ?? undefined : undefined;
+        const m = d.maps.save({ ...(typeof a.project === 'string' ? { project: a.project } : {}), ...(typeof a.title === 'string' ? { title: a.title } : {}), ...(root ? { root } : {}), ...(cwd ? { defaultRoot: cwd } : {}),
           map: { elements: a.elements, links: a.links }, by: (chatId ? d.titleOf(chatId) : null) || 'agente', summary: typeof a.summary === 'string' ? a.summary : '' });
         return json({ ok: true, project: m.project, version: m.version, elements: m.elements.length, links: m.links.length, root: m.root ?? null });
       },

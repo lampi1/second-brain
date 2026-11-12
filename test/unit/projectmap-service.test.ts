@@ -46,6 +46,31 @@ describe('ProjectMaps', () => {
     expect(emitted).toEqual(['negozio-web']);
   });
 
+  it('a redraw keeps the root unless one is given; a root must be absolute', () => {
+    const m = make();
+    m.save({ title: 'shop', defaultRoot: 'C:\\repo\\shop', map: drawing, by: 'Scout', summary: '' });
+    expect(m.save({ project: 'shop', defaultRoot: 'C:\\repo\\.second-brain-delegate-x1', map: drawing, by: 'Artisan', summary: '' }).root).toBe('C:\\repo\\shop');
+    expect(m.save({ project: 'shop', root: 'D:\\shop', map: drawing, by: 'utente', summary: '' }).root).toBe('D:\\shop');
+    expect(() => m.save({ project: 'shop', root: 'shop', map: drawing, by: 'x', summary: '' })).toThrow('absolute');
+  });
+
+  it('a wrong change refuses the whole update, binding included', () => {
+    const m = make();
+    m.save({ title: 'shop', map: drawing, by: 'Scout', summary: '' });
+    expect(() => m.update('shop', { changes: [{ id: 'nope' }], workingOn: ['cart'], chatId: 'a1', by: 'x' })).toThrow('no element or link');
+    expect(m.agents('shop')).toEqual([]);
+  });
+
+  it('a delegated chat in an isolated worktree of the checkout counts as working in the project', () => {
+    chats = [chat({ id: 'lead', cwd: 'C:\\repo\\shop' }), chat({ id: 'kid', parentId: 'lead', cwd: 'C:\\repo\\.second-brain-delegate-ab12' }), chat({ id: 'other', cwd: 'C:\\repo\\.second-brain-delegate-zz' })];
+    const m = make();
+    m.save({ title: 'shop', root: 'C:\\repo\\shop', map: drawing, by: 'Scout', summary: '' });
+    const edit = (chatId: string, file: string) => m.observe('chat:item', { chatId, item: { kind: 'tool', id: 'e', at: now, name: 'Edit', summary: '', input: { file_path: file }, status: 'ok' } });
+    edit('kid', 'C:\\repo\\.second-brain-delegate-ab12\\src\\cart\\a.ts');
+    edit('other', 'C:\\repo\\.second-brain-delegate-zz\\src\\cart\\a.ts');
+    expect(m.agents('shop').map(a => a.chatId)).toEqual(['kid']);
+  });
+
   it('update: confirms statuses, binds the chat; correct: keeps the correction', () => {
     const m = make();
     m.save({ title: 'shop', map: drawing, by: 'Scout', summary: '' });

@@ -3,7 +3,7 @@
 // connessione utenti … e l'avanzamento di ogni agente con un colpo d'occhio»; «sia tutto sempre aggiornato, navigabile
 // dall'inizio alla fine e riconsultabile chiedendolo all'Orchestrator».
 // - Elements: people, systems (yours, external), environments, documents and the parts inside a system (parent = the
-//   system: clicking a system zooms into it). Links: who calls whom, with a label. Each element and link has a status
+//   system, one level deep: clicking a system zooms into it). Links: who calls whom, with a label. Each element and link has a status
 //   and when it was last confirmed; evidence = the project files it was read from (paths relative to the map's root).
 // - An agent draws it (project_map_save) and keeps it current (project_map_update); every save is a version, so the
 //   history plays the project from its first map to now. The app lays it out, binds the agents at work to the elements
@@ -141,6 +141,9 @@ export function checkMap(input: unknown, now: number, prev?: ProjectMap | null):
     if (!e.parent) continue;
     if (!ids.has(e.parent)) throw new Error(`element "${e.id}": parent "${e.parent}" is not an element`);
     if (e.kind !== 'part') throw new Error(`element "${e.id}": only a part has a parent (kind "part")`);
+    // one level of parts: a part sits in a system, a part inside a part is a redraw with smaller systems
+    const holder = elements.find(x => x.id === e.parent)!;
+    if (holder.kind !== 'system' && holder.kind !== 'external') throw new Error(`element "${e.id}": a part's parent is a system (kind "system" or "external"), not a ${holder.kind}`);
     // no cycles: a part's chain of parents ends at the top
     const seen = new Set<string>([e.id]);
     for (let p: string | undefined = e.parent; p; p = elements.find(x => x.id === p)?.parent) { if (seen.has(p)) throw new Error(`element "${e.id}": its parents loop`); seen.add(p); }
@@ -153,6 +156,7 @@ export function checkMap(input: unknown, now: number, prev?: ProjectMap | null):
     const id = l.id === undefined ? `${String(l.from)}--${String(l.to)}`.slice(0, 48) : l.id;
     if (!isMapId(id)) throw new Error(`${key}.id: lowercase letters, digits and dashes`);
     if (linkIds.has(id)) throw new Error(`links: id "${id}" twice (give each link an id)`);
+    if (ids.has(id)) throw new Error(`${key}.id: "${id}" is an element's id (a status update could not tell them apart)`);
     linkIds.add(id);
     if (!isMapId(l.from) || !ids.has(l.from)) throw new Error(`${key}.from: an element id`);
     if (!isMapId(l.to) || !ids.has(l.to)) throw new Error(`${key}.to: an element id`);

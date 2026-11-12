@@ -2,7 +2,9 @@
 // line per version, the whole map with who saved it and why), so the map lives with the rest of the user's knowledge,
 // every agent can read it, and the history plays the project from its first drawing to now. The history keeps its first
 // line and the last HISTORY_MAX - 1: a status update is a version too, and a long project must not grow the file
-// without end. Used by projectmap/service.ts; pinned by test/unit/projectmap-store.test.ts.
+// without end. The brain is the user's folder (edited by hand, synced): a file that is not a map reads as no map, never
+// breaks the others, and a map's name is always its folder's. Used by projectmap/service.ts; pinned by
+// test/unit/projectmap-store.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { MapVersionInfo, ProjectMap, ProjectMapInfo } from '@shared/project-map';
@@ -10,7 +12,32 @@ import type { MapVersionInfo, ProjectMap, ProjectMapInfo } from '@shared/project
 export const HISTORY_MAX = 400;
 const SLUG = /^[a-z0-9][a-z0-9-]{0,47}$/;
 
+const obj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+const str = (v: unknown): v is string => typeof v === 'string';
+const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+/** A parsed file as a map of `project` (its folder), or null when it is not one: the shape every reader relies on. */
+export function asMap(v: unknown, project: string): ProjectMap | null {
+  if (!obj(v) || !num(v.version) || !Array.isArray(v.elements)) return null;
+  const elements = v.elements.filter(e => obj(e) && str(e.id) && str(e.kind) && str(e.name) && str(e.status)).map(e => {
+    const x = e as Record<string, unknown>;
+    return { ...x, evidence: Array.isArray(x.evidence) ? x.evidence.filter(str) : [], confirmedAt: num(x.confirmedAt) ? x.confirmedAt : 0 };
+  }) as unknown as ProjectMap['elements'];
+  if (!elements.length) return null;
+  const ids = new Set(elements.map(e => e.id));
+  const links = (Array.isArray(v.links) ? v.links : []).filter(l => obj(l) && str(l.id) && str(l.from) && str(l.to) && ids.has(l.from) && ids.has(l.to) && str(l.status))
+    .map(l => ({ ...(l as Record<string, unknown>), label: str((l as Record<string, unknown>).label) ? (l as Record<string, unknown>).label : '', confirmedAt: num((l as Record<string, unknown>).confirmedAt) ? (l as Record<string, unknown>).confirmedAt : 0 })) as unknown as ProjectMap['links'];
+  return {
+    ...(v as unknown as ProjectMap), project, title: str(v.title) && v.title ? v.title : project,
+    updatedAt: num(v.updatedAt) ? v.updatedAt : 0, by: str(v.by) ? v.by : '', summary: str(v.summary) ? v.summary : '',
+    ...(str(v.root) && v.root ? { root: v.root } : { root: undefined }), elements, links,
+    corrections: Array.isArray(v.corrections) ? v.corrections.filter(str) : [],
+  };
+}
+
 export class ProjectMapStore {
+  /** the history's summaries per project, read again only when the file changed (the page reloads on every event) */
+  private cache = new Map<string, { key: string; infos: MapVersionInfo[] }>();
+
   constructor(private readonly brainRoot: () => string | null) {}
 
   /** <brain>/projects, or null without a brain */
@@ -35,7 +62,7 @@ export class ProjectMapStore {
   }
 
   get(project: string): ProjectMap | null {
-    try { return JSON.parse(fs.readFileSync(path.join(this.folder(project), 'map.json'), 'utf8')) as ProjectMap; } catch { return null; }
+    try { return asMap(JSON.parse(fs.readFileSync(path.join(this.folder(project), 'map.json'), 'utf8')), project); } catch { return null; }
   }
 
   private lines(project: string): string[] {
@@ -43,15 +70,21 @@ export class ProjectMapStore {
   }
 
   history(project: string): MapVersionInfo[] {
-    return this.lines(project).flatMap(l => {
-      try { const m = JSON.parse(l) as ProjectMap; return [{ version: m.version, at: m.updatedAt, by: m.by, summary: m.summary }]; } catch { return []; }
+    let key = '';
+    try { const st = fs.statSync(path.join(this.folder(project), 'history.jsonl')); key = `${st.mtimeMs}:${st.size}`; } catch { return []; }
+    const hit = this.cache.get(project);
+    if (hit?.key === key) return hit.infos;
+    const infos = this.lines(project).flatMap(l => {
+      try { const m = asMap(JSON.parse(l), project); return m ? [{ version: m.version, at: m.updatedAt, by: m.by, summary: m.summary }] : []; } catch { return []; }
     });
+    this.cache.set(project, { key, infos });
+    return infos;
   }
 
   /** One version as it was (the history's slider). */
   version(project: string, version: number): ProjectMap | null {
     for (const l of this.lines(project)) {
-      try { const m = JSON.parse(l) as ProjectMap; if (m.version === version) return m; } catch { /* a broken line is skipped */ }
+      try { const m = asMap(JSON.parse(l), project); if (m?.version === version) return m; } catch { /* a broken line is skipped */ }
     }
     return null;
   }

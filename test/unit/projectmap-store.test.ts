@@ -44,6 +44,17 @@ describe('ProjectMapStore', () => {
     expect(s.history('shop')).toHaveLength(1);
     expect(s.list()).toHaveLength(1);
   });
+  it('a file that is not a map reads as none and hides no other; the folder names the map', () => {
+    const root = brain(), s = new ProjectMapStore(() => root);
+    s.save(map(1));
+    fs.mkdirSync(path.join(root, 'projects', 'broken'));
+    fs.writeFileSync(path.join(root, 'projects', 'broken', 'map.json'), JSON.stringify({ project: 'broken', title: 'B', version: 1, elements: [] }));
+    fs.mkdirSync(path.join(root, 'projects', 'copy'));
+    fs.writeFileSync(path.join(root, 'projects', 'copy', 'map.json'), JSON.stringify({ project: 'shop', title: 'Copy', version: 3, elements: [{ id: 'web', kind: 'system', name: 'Web', status: 'ok' }] }));
+    expect(s.list().map(m => m.project).sort()).toEqual(['copy', 'shop']);
+    expect(s.get('broken')).toBeNull();
+    expect(s.get('copy')).toMatchObject({ project: 'copy', links: [], corrections: [], elements: [{ id: 'web', evidence: [], confirmedAt: 0 }] });
+  });
   it('refuses without a brain or with a bad name', () => {
     expect(() => new ProjectMapStore(() => null).save(map(1))).toThrow('nessun brain');
     expect(new ProjectMapStore(() => null).list()).toEqual([]);

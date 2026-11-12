@@ -1,6 +1,7 @@
 // The project maps, live (ADR 0271): the store (projectmap/store.ts) plus what the app adds without tokens.
 // - Which agents work on which element: a chat says so (project_map_update working_on), or the app sees it edit a file
-//   an element was read from (its evidence) and binds it. Each bound chat shows on the map with its state, its plan's
+//   an element was read from (its evidence) and binds it; a delegated chat in an isolated worktree of the project's
+//   checkout counts as working in the project (basesOf). Each bound chat shows on the map with its state, its plan's
 //   steps done and in all, its current step and the question it waits on (the same reads as app_agents_recap).
 // - When an element's files were last edited by an agent: a status confirmed before that edit reads «da verificare»
 //   (shared/project-map.ts shownStatus) until an agent confirms it again.
@@ -37,6 +38,23 @@ const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'edit'
 const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '');
 const isAbs = (p: string) => p.startsWith('/') || /^[a-z]:\//i.test(p);
 
+/** an isolated worktree the app made for a delegated chat: a sibling folder of the checkout (agents/worktrees.ts) */
+const WORKTREE = /^\.second-brain-[a-z]+-/;
+
+/** The folders that stand for a map's root for this chat: the root itself and, for a chat working in an isolated
+ *  worktree of that checkout (a sibling .second-brain-* folder) whose parent chats work in the root, that worktree. */
+export function basesOf(chat: ChatSummary, root: string, chats: readonly ChatSummary[]): string[] {
+  const r = norm(root), parent = r.slice(0, r.lastIndexOf('/')), cwd = norm(chat.cwd);
+  if (!cwd.toLowerCase().startsWith(`${parent.toLowerCase()}/`)) return [r];
+  const top = cwd.slice(parent.length + 1).split('/')[0] ?? '';
+  if (!WORKTREE.test(top)) return [r];
+  const inRoot = (c: ChatSummary) => { const d = norm(c.cwd).toLowerCase(); return d === r.toLowerCase() || d.startsWith(`${r.toLowerCase()}/`); };
+  for (let c = chat.parentId ? chats.find(x => x.id === chat.parentId) : undefined, n = 0; c && n < 10; n++, c = c.parentId ? chats.find(x => x.id === c!.parentId) : undefined) {
+    if (inRoot(c)) return [r, `${parent}/${top}`];
+  }
+  return [r];
+}
+
 export class ProjectMaps {
   private state: State = { focus: {}, changed: {} };
   private timers = new Map<string, NodeJS.Timeout>();
@@ -68,16 +86,20 @@ export class ProjectMaps {
   }
 
   /** A whole drawing (project_map_save): a new map, or the next version of an existing one. */
-  save(a: { project?: string; title?: string; root?: string; map: unknown; by: string; summary: string; corrections?: string[] }): ProjectMap {
+  /** root: the project's folder, given on purpose; defaultRoot: the caller's folder, used only for a new map (a redraw
+   *  from a worktree or a subfolder must not move the map's root there). */
+  save(a: { project?: string; title?: string; root?: string; defaultRoot?: string; map: unknown; by: string; summary: string; corrections?: string[] }): ProjectMap {
     const title = (a.title ?? '').trim().slice(0, MAP_LIMITS.title);
     const project = a.project ? (this.resolve(a.project) ?? projectSlug(a.project)) : title ? (this.resolve(title) ?? projectSlug(title)) : '';
     if (!project) throw new Error('project or title: required');
     const prev = this.d.store.get(project);
+    const root = a.root?.trim() || prev?.root || a.defaultRoot?.trim() || undefined;
+    if (root && !isAbs(norm(root))) throw new Error(`root: the project's folder as an absolute path, not «${root.slice(0, 80)}»`);
     const now = this.now();
     const { elements, links } = checkMap(a.map, now, prev);
     const summary = a.summary.trim().slice(0, MAP_LIMITS.summary) || (prev ? 'mappa ridisegnata' : 'prima mappa');
     const map: ProjectMap = {
-      project, title: title || prev?.title || project, ...(a.root || prev?.root ? { root: a.root || prev!.root } : {}),
+      project, title: title || prev?.title || project, ...(root ? { root } : {}),
       version: (prev?.version ?? 0) + 1, updatedAt: now, by: a.by, summary, elements, links,
       corrections: a.corrections ?? prev?.corrections ?? [],
     };
@@ -97,17 +119,19 @@ export class ProjectMaps {
   update(project: string, a: { changes?: unknown; workingOn?: unknown; chatId?: string; by: string; summary?: string }): { map: ProjectMap | null; touched: string[] } {
     const prev = this.d.store.get(project);
     if (!prev) throw new Error(`nessuna mappa «${project}»: disegnala prima con project_map_save`);
+    const now = this.now();
+    // the changes first: a wrong one refuses the whole call, binding included
+    const next = a.changes === undefined ? null : applyChanges(prev, a.changes, now);
     if (a.workingOn !== undefined) {
       if (!a.chatId) throw new Error('working_on: only a chat can say what it works on');
       if (!Array.isArray(a.workingOn) || a.workingOn.length > 20 || !a.workingOn.every(isMapId)) throw new Error('working_on: up to 20 element ids');
       const unknown = (a.workingOn as string[]).filter(id => !prev.elements.some(e => e.id === id));
       if (unknown.length) throw new Error(`working_on: no element ${unknown.join(', ')} (project_map_read lists them)`);
-      this.state.focus[a.chatId] = { project, elements: [...new Set(a.workingOn as string[])], at: this.now() };
+      this.state.focus[a.chatId] = { project, elements: [...new Set(a.workingOn as string[])], at: now };
       this.persist();
     }
-    if (a.changes === undefined) { this.changed(project); return { map: null, touched: [] }; }
-    const now = this.now();
-    const { elements, links, touched } = applyChanges(prev, a.changes, now);
+    if (!next) { this.changed(project); return { map: null, touched: [] }; }
+    const { elements, links, touched } = next;
     const map: ProjectMap = { ...prev, elements, links, version: prev.version + 1, updatedAt: now, by: a.by,
       summary: (a.summary ?? '').trim().slice(0, MAP_LIMITS.summary) || `stato di ${touched.join(', ')}` };
     this.d.store.save(map);
@@ -181,20 +205,24 @@ export class ProjectMaps {
     const chat = this.d.chats().find(c => c.id === chatId);
     if (!chat || chat.isOrchestrator) return;
     const maps = this.list().map(m => this.d.store.get(m.project)).filter((m): m is ProjectMap => !!m?.root);
+    const chats = this.d.chats();
     for (const file of files) {
       const abs = norm(isAbs(norm(file)) ? file : path.join(chat.cwd, file));
-      for (const m of maps) {
-        const root = norm(m.root!);
-        if (!abs.toLowerCase().startsWith(`${root.toLowerCase()}/`)) continue;
-        const el = elementOfFile(m.elements, abs.slice(root.length + 1));
-        if (!el) continue;
-        (this.state.changed[m.project] ??= {})[el] = item.at;
-        const f = this.state.focus[chatId];
-        if (!f || f.project !== m.project) this.state.focus[chatId] = { project: m.project, elements: [el], at: item.at };
-        else if (!f.elements.includes(el)) f.elements.push(el);
-        this.persist();
-        this.changed(m.project);
+      // the map whose folder holds the file (the deepest one when two nest), through the chat's worktree if it has one
+      let hit: { m: ProjectMap; base: string } | null = null;
+      for (const m of maps) for (const base of basesOf(chat, m.root!, chats)) {
+        if (abs.toLowerCase().startsWith(`${base.toLowerCase()}/`) && (!hit || base.length > hit.base.length)) hit = { m, base };
       }
+      if (!hit) continue;
+      const { m, base } = hit;
+      const el = elementOfFile(m.elements, abs.slice(base.length + 1));
+      if (!el) continue;
+      (this.state.changed[m.project] ??= {})[el] = item.at;
+      const f = this.state.focus[chatId];
+      if (!f || f.project !== m.project) this.state.focus[chatId] = { project: m.project, elements: [el], at: item.at };
+      else if (!f.elements.includes(el)) f.elements.push(el);
+      this.persist();
+      this.changed(m.project);
     }
   }
 
