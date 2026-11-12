@@ -268,7 +268,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // Claude <-> Cursor rule, so a local process may not take the Orchestrator's identity
   const orchestratorTokens = new EndpointTokens();
   // the user's MCP servers (ADR 0086): reached by every chat through the app's gateway, tokens only in main
-  const mcpServers: McpServersService = new McpServersService({ userData: ctx.userData, cipher: safeStorageCipher(safeStorage), mcp, context: (id): ChatMcpContext | null => manager.mcpContext(id), emit: st => ctx.emitter.emit('mcpservers:changed', st) });
+  const mcpServers: McpServersService = new McpServersService({ userData: ctx.userData, cipher: safeStorageCipher(safeStorage), mcp, context: (id): ChatMcpContext | null => manager.mcpContext(id), emit: st => ctx.emitter.emit('mcpservers:changed', st), openExternal: url => shell.openExternal(url) });
   // a chat that closes (archived or removed) ends its connector processes at once (gateway.closeChat)
   ctx.emitter.tap((ch, p) => {
     if (ch === 'chat:removed') mcpServers.gateway.closeChat((p as { chatId: string }).chatId);

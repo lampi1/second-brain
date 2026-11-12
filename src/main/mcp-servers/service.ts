@@ -19,6 +19,7 @@ import { McpServerStore, type McpServerSnapshot } from './store';
 import { McpGateway } from './gateway';
 import { McpClientError, connect, describeError, type Endpoint, type Upstream } from './client';
 import { scanImports } from './import';
+import { McpOAuth, type OAuthSession } from './oauth';
 import type { ChatMcpContext } from './access';
 
 export interface McpServersOptions {
@@ -37,6 +38,10 @@ export interface McpServersOptions {
   testTimeoutMs?: number;
   /** the clock of a test's time (the frozen demo) */
   now?: () => number;
+  /** «Accedi» (ADR 0273): opens the system browser on a connector's OAuth login page (electron shell.openExternal) */
+  openExternal?: (url: string) => Promise<void> | void;
+  /** tests: the network of the OAuth login */
+  oauthFetch?: typeof fetch;
 }
 
 /** One undoable change: the server's id before (`id`, '' for an add) and after (`now`), and how it was before. */
@@ -51,9 +56,17 @@ export class McpServersService {
    *  mcp-undo.json (definitions, access, tests: no secret; the snapshot's tokens are parked in the secret file) */
   private undos: UndoEntry[] = [];
   private readonly undoFile: string;
+  readonly oauth: McpOAuth;
 
   constructor(private readonly opts: McpServersOptions) {
     this.store = new McpServerStore(opts.userData, opts.cipher);
+    this.oauth = new McpOAuth({
+      load: id => { const j = this.store.oauthSession(id); if (!j) return null; try { return JSON.parse(j) as OAuthSession; } catch { return null; } },
+      save: (id, sess) => this.store.setOAuthSession(id, JSON.stringify(sess), { ...(sess.who ? { who: sess.who } : {}), at: sess.at }),
+      drop: id => { this.store.deleteOAuthSession(id); this.opts.emit?.(this.state()); },
+      openExternal: url => { if (!opts.openExternal) throw new Error('Il browser non si apre da qui.'); return opts.openExternal(url); },
+      ...(opts.oauthFetch ? { fetch: opts.oauthFetch } : {}), ...(opts.now ? { now: opts.now } : {}),
+    });
     this.gateway = new McpGateway({
       mcp: opts.mcp, servers: () => this.store.servers(), roleAccess: r => this.store.roleAccess(r),
       endpoint: id => this.endpoint(id), context: opts.context, ...(opts.connect ? { connect: opts.connect } : {}),
@@ -90,7 +103,7 @@ export class McpServersService {
   state(): McpServersState {
     const why = this.store.secretsAvailable();
     return {
-      servers: this.store.servers().map(s => ({ ...s, secretMasks: this.store.masks(s.id), lastTest: this.store.test(s.id) })),
+      servers: this.store.servers().map(s => ({ ...s, secretMasks: this.store.masks(s.id), lastTest: this.store.test(s.id), login: s.transport === 'http' ? this.store.oauthLabel(s.id) : null })),
       access: this.store.access(), secretsAvailable: why === null, ...(why ? { secretsWhy: why } : {}),
     };
   }
@@ -194,20 +207,45 @@ export class McpServersService {
   private endpoint(id: string): Endpoint {
     const def = this.store.def(id);
     if (!def) throw new McpClientError('invalid', 'Server sconosciuto.', 'Aggiungilo in Impostazioni → Connettori.');
+    // logged in with OAuth (ADR 0273): its access token takes the Authorization header, a pasted one there is not needed
+    const login = def.transport === 'http' && this.store.oauthLabel(id) !== null;
+    const slots = login ? def.secrets.filter(x => x.name.toLowerCase() !== 'authorization') : def.secrets;
     const values: Record<string, string> = {};
-    for (const slot of def.secrets) {
+    for (const slot of slots) {
       const v = this.store.secret(id, slot);
       if (!v) throw new McpClientError('secret', `Manca il token «${slot.name}».`, 'Inseriscilo nel campo Token della scheda del server: viene cifrato sul computer.');
       values[slotKey(slot)] = v;
     }
     if (def.transport === 'http') {
       const headers: Record<string, string> = { ...def.headers };
-      for (const slot of def.secrets) headers[slot.name] = `${slot.prefix ?? ''}${values[slotKey(slot)]}`;
-      return { transport: 'http', url: def.url!, headers };
+      for (const slot of slots) headers[slot.name] = `${slot.prefix ?? ''}${values[slotKey(slot)]}`;
+      return { transport: 'http', url: def.url!, headers, ...(login ? { auth: (force: boolean) => this.oauth.access(id, force) } : {}) };
     }
     const env: Record<string, string> = { ...def.env };
     for (const slot of def.secrets) env[slot.name] = values[slotKey(slot)]!;
     return { transport: 'stdio', command: def.command!, args: def.args ?? [], env, cwd: this.opts.home ?? os.homedir() };
+  }
+
+  /** «Accedi» (ADR 0273), the user's click: the MCP OAuth login in the system browser, then a «Prova». */
+  async login(id: unknown): Promise<McpServersState> {
+    const def = typeof id === 'string' ? this.store.def(id) : undefined;
+    if (!def) throw new Error('Server MCP sconosciuto.');
+    if (def.transport !== 'http' || !def.url) throw new Error('Il login OAuth vale solo per un server remoto.');
+    if (def.awaiting) throw new Error(`«${def.label}» aspetta «Attiva»: attivalo prima dalla sua scheda.`);
+    const why = this.store.secretsAvailable();
+    if (why) throw new Error(`Accesso non salvabile: ${why}.`);
+    try { await this.oauth.login(def.id, def.url, def.oauth ?? {}); }
+    catch (e) { log.warn('mcp-servers', 'MCP OAuth login failed', { data: { server: def.id }, cause: errText(e) }); const d = describeError(e); throw new Error(`${d.message} ${d.fix}`); }
+    this.changed(def.id);
+    return this.test(def.id);
+  }
+
+  /** «Esci»: the OAuth session forgotten (the server keeps its own until it ends). */
+  logout(id: unknown): McpServersState {
+    if (typeof id !== 'string' || !this.store.def(id)) throw new Error('Server MCP sconosciuto.');
+    this.store.deleteOAuthSession(id);
+    log.info('mcp-servers', 'MCP OAuth logged out', { data: { server: id } });
+    return this.changed(id);
   }
 
   /** "Prova": opens the server as a chat would, lists its tools, records the result. Never throws. */

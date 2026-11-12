@@ -79,8 +79,25 @@ export function checkDef(raw: unknown): McpServerDef {
     if (FORBIDDEN_HEADERS.has(k.toLowerCase())) throw new Error(`Intestazione ${k}: la imposta l’app.`);
     if (SECRET_NAME.test(k) || k.toLowerCase() === 'authorization' || secretLooking(headers![k]!)) throw new Error(`L’intestazione ${k} sembra un segreto: mettila nel campo Token, che la cifra.`);
   }
-  return { ...base, url: url.toString(), ...(headers ? { headers } : {}) };
+  const oauth = checkOAuth(d.oauth);
+  return { ...base, url: url.toString(), ...(headers ? { headers } : {}), ...(oauth ? { oauth } : {}) };
 }
+
+/** An http server's OAuth settings (ADR 0273): a client id and a loopback port, both optional. */
+function checkOAuth(v: unknown): McpServerDef['oauth'] {
+  if (v === undefined || v === null) return undefined;
+  if (typeof v !== 'object' || Array.isArray(v)) throw new Error('OAuth: non valido.');
+  const o = v as Record<string, unknown>;
+  const clientId = str(o.clientId, 200, 'Client ID OAuth', true)?.trim();
+  if (clientId && !/^[\x21-\x7e]+$/.test(clientId)) throw new Error('Client ID OAuth: senza spazi.');
+  if (o.port !== undefined && o.port !== null && o.port !== '' && (!Number.isInteger(o.port) || (o.port as number) < 1024 || (o.port as number) > 65535)) throw new Error('Porta di ritorno: un numero da 1024 a 65535.');
+  const port = typeof o.port === 'number' ? o.port : undefined;
+  return clientId || port ? { ...(clientId ? { clientId } : {}), ...(port ? { port } : {}) } : undefined;
+}
+
+/** The slot of a server's OAuth session in the secret file (never a def slot: masks() never shows it). */
+const OAUTH_KEY = 'oauth:session';
+const oauthBound = (def: McpServerDef): string => crypto.createHash('sha256').update(`oauth|${def.url ? new URL(def.url).origin : ''}`).digest('hex').slice(0, 32);
 
 function checkSlots(v: unknown, transport: 'stdio' | 'http'): McpSecretSlot[] {
   if (v === undefined || v === null) return [];
@@ -224,6 +241,9 @@ export class McpServerStore {
     if (old) {
       const kept: Record<string, Saved> = {};
       for (const slot of def.secrets) { const s = old[slotKey(slot)]; if (s && s.bound === fingerprint(def, slot)) kept[slotKey(slot)] = s; }
+      // the OAuth login stays while the address keeps its origin (ADR 0273)
+      const login = old[OAUTH_KEY];
+      if (login && def.transport === 'http' && login.bound === oauthBound(def)) kept[OAUTH_KEY] = login;
       if (previousId) delete this.secrets[previousId];
       if (Object.keys(kept).length) this.secrets[def.id] = kept;
       this.saveSecrets();
@@ -322,6 +342,29 @@ export class McpServerStore {
     this.saveSecrets();
     log.info('mcp-servers', 'MCP token deleted', { data: { server: id, slot: key } });
   }
+
+  /** The OAuth session of an http server (oauth.ts, ADR 0273), as JSON, encrypted as a whole; null = not logged in. */
+  oauthSession(id: string): string | null {
+    const def = this.def(id), s = this.secrets[id]?.[OAUTH_KEY];
+    if (!def || !s || s.bound !== oauthBound(def) || this.cipher.unavailable()) return null;
+    try { return this.cipher.decrypt(Buffer.from(s.cipher, 'base64')); }
+    catch (e) { log.warn('mcp-servers', 'MCP OAuth session could not be decrypted', { data: { server: id }, cause: (e as Error).message, hint: 'press «Accedi» again' }); return null; }
+  }
+  /** «Connesso come …» without decrypting anything: the mask holds the label. */
+  oauthLabel(id: string): { who: string | null; at: number } | null {
+    const def = this.def(id), s = this.secrets[id]?.[OAUTH_KEY];
+    if (!def || !s || s.bound !== oauthBound(def)) return null;
+    try { const m = JSON.parse(s.mask) as { who?: unknown; at?: unknown }; return { who: typeof m.who === 'string' ? m.who : null, at: typeof m.at === 'number' ? m.at : 0 }; } catch { return { who: null, at: 0 }; }
+  }
+  setOAuthSession(id: string, json: string, label: { who?: string; at: number }): void {
+    const def = this.def(id);
+    if (!def || def.transport !== 'http') throw new Error('Il login OAuth vale solo per un server remoto.');
+    const why = this.cipher.unavailable();
+    if (why) throw new Error(`Accesso non salvato: ${why}.`);
+    this.secrets[id] = { ...this.secrets[id], [OAUTH_KEY]: { cipher: this.cipher.encrypt(json).toString('base64'), mask: JSON.stringify({ who: label.who ?? null, at: label.at }), bound: oauthBound(def) } };
+    this.saveSecrets();
+  }
+  deleteOAuthSession(id: string): void { this.deleteSecret(id, OAUTH_KEY); }
 
   /** Main only, right before the gateway opens the server: the token, or null (missing, moved, or not decryptable). */
   secret(id: string, slot: McpSecretSlot): string | null {

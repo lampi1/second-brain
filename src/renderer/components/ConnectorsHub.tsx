@@ -53,6 +53,24 @@ function TokenRow({ server, slot, available, onSaved }: { server: McpServerView;
   </div>;
 }
 
+/** A remote server's MCP OAuth login (ADR 0273): «Accedi» opens the system browser; then «Connesso come …» and «Esci». */
+export function LoginRow({ server, onState }: { server: McpServerView; onState: (s: McpServersState) => void }) {
+  const [busy, setBusy] = useState(false);
+  const run = async (fn: () => Promise<McpServersState>) => { setBusy(true); try { onState(await fn()); } catch (e) { toast(e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : t('hub.error'), 'err'); } finally { setBusy(false); } };
+  const login = server.login ?? null;
+  return <div className="hub-token" data-testid={`hub-login-${server.id}`}>
+    <span className="hub-token-label"><span>{t('hub.loginTitle')}</span><HelpTip title={t('hub.loginTitle')} label={`${t('hub.loginTitle')} ${server.label}`}>{t('hub.loginTip')}</HelpTip></span>
+    <div className="hub-token-line">
+      <span className={login ? '' : 'hub-muted'}>{login ? (login.who ? t('hub.loginAs', { who: login.who }) : t('hub.loginDone')) : t('hub.loginNone')}</span>
+      <button type="button" className={`btn ${login ? 'btn-ghost' : 'btn-primary'} btn-s`} disabled={busy} aria-label={t('hub.loginName', { name: server.label })} onClick={() => void run(() => window.sb.invoke('mcpservers:login', { id: server.id }))}>{busy ? t('hub.logging') : t('hub.login')}</button>
+      {login && <button type="button" className="btn btn-ghost btn-s" disabled={busy} onClick={() => void run(() => window.sb.invoke('mcpservers:logout', { id: server.id }))}>{t('hub.logout')}</button>}
+    </div>
+  </div>;
+}
+
+/** Whether a card offers the OAuth login: a remote server logged in, set up for it, or whose test asked for it. */
+export const offersLogin = (s: McpServerView): boolean => s.transport === 'http' && !s.awaiting && (!!s.login || !!s.oauth || !!s.lastTest?.error?.login);
+
 /** One MCP server's card. */
 /** A server the Orchestrator added or re-pointed (ADR 0207): exactly what it will start, and the user's own «Attiva». */
 export function ActivateBox({ server, onState }: { server: Pick<McpServerView, 'id' | 'label' | 'transport' | 'command' | 'args' | 'env' | 'url'>; onState?: (s: McpServersState) => void }) {
@@ -93,7 +111,8 @@ export function ServerCard({ server, state, onEdit, onState, testing, onTest }: 
     <div className="hub-who"><span>{t('mcpadd.who')}</span><ServerRoles server={server.id} state={state} onState={onState} /></div>
     {test && !test.ok && test.error && <div className="hub-problem" role="note" data-testid={`hub-problem-${server.id}`}><b>{test.error.message}</b><p><span>{t('hub.fix')}</span> {test.error.fix}</p></div>}
     {status === 'untested' && <div className="hub-hint" role="note"><p>{t('hub.untestedHint')}</p></div>}
-    {server.secrets.map(slot => <TokenRow key={slotKey(slot)} server={server} slot={slot} available={state.secretsAvailable} onSaved={onState} />)}
+    {offersLogin(server) && <LoginRow server={server} onState={onState} />}
+    {server.secrets.filter(slot => !(server.login && slot.name.toLowerCase() === 'authorization')).map(slot => <TokenRow key={slotKey(slot)} server={server} slot={slot} available={state.secretsAvailable} onSaved={onState} />)}
     {tools.length > 0 && <details className="hub-details hub-tools"><summary>{t('hub.toolList', { n: tools.length })}</summary><ul>{tools.map(x => <li key={x.name} data-ro={x.readOnly}><i aria-hidden="true" /><code>{x.name}</code><span>{x.readOnly ? t('hub.read') : t('hub.write')}</span>{x.description && <small>{x.description}</small>}</li>)}</ul></details>}
     <footer className="hub-card-foot">
       {!server.awaiting && <button type="button" className="btn btn-primary btn-m" disabled={testing} onClick={onTest} aria-label={t('hub.testName', { name: server.label })}>{t('hub.test')}</button>}
@@ -138,6 +157,10 @@ export function ServerEditor({ server, onDone }: { server: McpServerView | null;
       </> : <>
         {field('url', t('hub.f.url'), { placeholder: 'https://example.com/mcp', mono: true, tip: t('hub.f.urlTip') })}
         {field('headers', t('hub.f.headers'), { area: true, mono: true, placeholder: 'X-Team: web', tip: t('hub.f.envTip') })}
+        <div className="hub-form-row">
+          {field('oauthClientId', t('hub.f.clientId'), { mono: true, placeholder: 'second-brain', tip: t('hub.f.clientIdTip') })}
+          {field('oauthPort', t('hub.f.port'), { mono: true, placeholder: '8765', tip: t('hub.f.portTip') })}
+        </div>
       </>}
       <div className="hub-form-row">
         {field('tokenName', t(f.transport === 'stdio' ? 'hub.f.tokenEnv' : 'hub.f.tokenHeader'), { mono: true, placeholder: f.transport === 'stdio' ? 'AZURE_DEVOPS_PAT' : 'Authorization', tip: t('hub.f.tokenTip') })}

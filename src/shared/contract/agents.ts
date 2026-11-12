@@ -59,6 +59,9 @@ export interface AgentsInvokeMap {
   'mcpservers:undo': [{ undo: string }, McpServersState];
   /** «Attiva» (ADR 0207): the user's click on a server the Orchestrator added or changed, naming what it runs */
   'mcpservers:activate': [{ id: string; runs: string }, McpServersState];
+  /** «Accedi» / «Esci» of a remote connector's MCP OAuth login (ADR 0273); login opens the system browser, then tests */
+  'mcpservers:login': [{ id: string }, McpServersState];
+  'mcpservers:logout': [{ id: string }, McpServersState];
   'agents:list': [void, AgentCatalog];
   /** the user's Annulla on a change the app applied (feed card, change log) */
   'agents:undo': [AgentUndo, AgentProfile];

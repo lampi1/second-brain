@@ -51,6 +51,19 @@ describe('cards', () => {
     expect(html).toContain('aria-label="Prova GitHub"');
     expect(html).toContain('6 su 7'); // the Orchestrator and the five roles; Flash is off until the user turns it on (ADR 0207)
   });
+  it('OAuth (ADR 0273): «Accedi» when the test asked for it; «Connesso come …», «Esci» and no Authorization token once logged in', () => {
+    const asks = card({ ...broken, secrets: [], secretMasks: {}, lastTest: { ...broken.lastTest!, error: { ...broken.lastTest!.error!, login: true } } });
+    expect(asks).toContain('aria-label="Accedi a GitHub"');
+    expect(asks).toContain('Non hai ancora fatto l’accesso.');
+    expect(card(broken)).not.toContain('Accedi a GitHub');
+    const inn = card({ ...broken, secretMasks: { 'header:Authorization': null }, login: { who: 'davide', at: 1 } });
+    expect(inn).toContain('Connesso come davide');
+    expect(inn).toContain('>Esci<');
+    expect(inn).not.toContain('type="password"');
+    expect(serverStatus({ ...broken, secretMasks: { 'header:Authorization': null }, login: { who: null, at: 1 } })).toBe('failed');
+    expect(defOf({ ...formOf(broken), oauthClientId: 'second-brain', oauthPort: '8765' }, broken).oauth).toEqual({ clientId: 'second-brain', port: 8765 });
+    expect(formOf({ ...broken, oauth: { clientId: 'x' } })).toMatchObject({ oauthClientId: 'x', oauthPort: '' });
+  });
   it('a working server splits its tools; the totals explain themselves; English too', () => {
     expect(card(ok)).toContain('1 lettura · 1 scrittura');
     const totals = renderToStaticMarkup(createElement(HubTotalsRow, { servers: state.servers, connectors: [] }));

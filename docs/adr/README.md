@@ -277,3 +277,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0270](0270-short-recap-by-default.md) The recap is short by default; the detail on request — accepted
 - [0271](0271-project-maps.md) Project maps: a project drawn in place of its code, kept current by its agents — accepted
 - [0272](0272-esegui-precheck.md) Esegui commands are checked before the user sees them; broken ones go back to the chat — accepted
+- [0273](0273-mcp-oauth-login.md) Remote MCP connectors log in with the MCP OAuth flow — accepted

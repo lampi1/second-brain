@@ -19,7 +19,10 @@ app (each CLI logs in itself) with these exceptions:
 - the API keys the user types in Settings → Motori, encrypted with safeStorage, write-only from the UI, given only to
   their own engine's process env or HTTP header (ADR 0046);
 - the tokens of the MCP servers added in Settings → Connettori, the same way, given only by the app's MCP gateway to
-  that server's own process env or request header, never to an engine or a chat (ADR 0086);
+  that server's own process env or request header, never to an engine or a chat (ADR 0086); an http server's MCP OAuth
+  login the same way: the user's «Accedi» in the system browser, the access and refresh tokens encrypted with
+  safeStorage, bound to the server's origin, refreshed by main, sent only in that server's Authorization header
+  (ADR 0273);
 - the Telegram bot token the user types in Settings → Telefono, encrypted with safeStorage in its own slot, write-only
   from the UI, used only by the main process in its calls to `api.telegram.org`, redacted from logs (`addRedaction`,
   `src/main/log.ts`), never given to an engine, a chat, an agent or a file (ADR 0219);

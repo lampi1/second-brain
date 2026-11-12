@@ -23,11 +23,13 @@ export interface Upstream {
 }
 /** How to reach one server, secrets already resolved (main memory only). */
 export type Endpoint =
-  | { transport: 'http'; url: string; headers: Record<string, string> }
+  | { transport: 'http'; url: string; headers: Record<string, string>; /** an OAuth login (oauth.ts, ADR 0273): the access
+     *  token to send, refreshed when force (the server said 401); null = not logged in */ auth?: (force: boolean) => Promise<string | null> }
   | { transport: 'stdio'; command: string; args: string[]; env: Record<string, string>; cwd?: string };
 
 export class McpClientError extends Error {
-  constructor(readonly code: McpErrorCode, message: string, readonly fix: string) { super(message); }
+  /** login: the server offers the MCP OAuth login (a 401 with a Bearer challenge): the card shows «Accedi» */
+  constructor(readonly code: McpErrorCode, message: string, readonly fix: string, readonly login = false) { super(message); }
 }
 
 interface Pending { resolve(v: unknown): void; reject(e: Error): void; timer: NodeJS.Timeout }
@@ -122,6 +124,8 @@ abstract class Rpc implements Upstream {
 class HttpUpstream extends Rpc {
   private session: string | null = null;
   private version: string | null = null;
+  /** the last OAuth access token sent (the session's DELETE carries it) */
+  private bearer: string | null = null;
   private readonly aborts = new Set<AbortController>();
   constructor(private readonly ep: Extract<Endpoint, { transport: 'http' }>, timeoutMs: number) { super(timeoutMs); }
   protected override onInitialized(version: string): void { this.version = version; }
@@ -133,13 +137,29 @@ class HttpUpstream extends Rpc {
     const headers: Record<string, string> = { ...this.ep.headers, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' };
     if (this.session) headers['Mcp-Session-Id'] = this.session;
     if (this.version) headers['MCP-Protocol-Version'] = this.version;
-    let res: Response;
-    try { res = await fetch(this.ep.url, { method: 'POST', headers, body: JSON.stringify(msg), signal: ac.signal, redirect: 'error' }); }
-    catch (e) { this.aborts.delete(ac); if (ac.signal.aborted) return; throw new McpClientError('network', `Server non raggiungibile (${hostOf(this.ep.url)}).`, `Controlla l’indirizzo, la rete o la VPN: ${errName(e)}.`); }
+    let res!: Response;
+    // an OAuth connector: its access token, and once more with a refreshed one when the server says 401 (ADR 0273)
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (this.ep.auth) {
+        const token = await this.ep.auth(attempt > 0).catch(() => null);
+        if (!token) { this.aborts.delete(ac); throw new McpClientError('auth', 'Serve l’accesso al server.', 'Premi «Accedi» sulla scheda del connettore in Impostazioni → Connettori.'); }
+        headers.Authorization = `Bearer ${token}`;
+        this.bearer = token;
+      }
+      try { res = await fetch(this.ep.url, { method: 'POST', headers, body: JSON.stringify(msg), signal: ac.signal, redirect: 'error' }); }
+      catch (e) { this.aborts.delete(ac); if (ac.signal.aborted) return; throw new McpClientError('network', `Server non raggiungibile (${hostOf(this.ep.url)}).`, `Controlla l’indirizzo, la rete o la VPN: ${errName(e)}.`); }
+      if (res.status !== 401 || !this.ep.auth || attempt > 0) break;
+      await res.body?.cancel().catch(() => {});
+    }
     const sid = res.headers.get('mcp-session-id');
     if (sid && /^[\x21-\x7e]{1,200}$/.test(sid)) this.session = sid;
     try {
-      if (res.status === 401 || res.status === 403) throw new McpClientError('auth', `Accesso rifiutato (HTTP ${res.status}).`, 'Il token manca, è scaduto o non ha i permessi: inseriscine uno valido nel campo Token.');
+      if (res.status === 401 || res.status === 403) {
+        // a server that offers the MCP OAuth login (a Bearer challenge on 401): the fix is «Accedi», not a pasted token
+        const oauth = res.status === 401 && /^\s*bearer\b/i.test(res.headers.get('www-authenticate') ?? '');
+        throw new McpClientError('auth', `Accesso rifiutato (HTTP ${res.status}).`, this.ep.auth ? 'L’accesso non vale più o non ha i permessi: premi «Accedi» sulla scheda del connettore.'
+          : oauth ? 'Il server usa il login OAuth: premi «Accedi» sulla scheda del connettore.' : 'Il token manca, è scaduto o non ha i permessi: inseriscine uno valido nel campo Token.', oauth || !!this.ep.auth);
+      }
       if (res.status === 404 && this.session && msg.method !== 'initialize') { this.session = null; throw new McpClientError('http', 'La sessione col server è scaduta.', 'Riprova: l’app ne apre una nuova.'); }
       if (res.status === 404 || res.status === 405) throw new McpClientError('http', `Indirizzo non valido per MCP (HTTP ${res.status}).`, 'Usa l’indirizzo Streamable HTTP del server (di solito termina con /mcp); i vecchi server solo SSE non sono supportati.');
       if (res.status >= 400) throw new McpClientError('http', `Il server ha risposto HTTP ${res.status}.`, 'Riprova tra poco; se continua, controlla lo stato del servizio.');
@@ -186,7 +206,7 @@ class HttpUpstream extends Rpc {
     this.failAll(new McpClientError('network', 'Collegamento chiuso.', 'Riprova.'));
     const session = this.session;
     this.session = null;
-    if (session) void fetch(this.ep.url, { method: 'DELETE', headers: { ...this.ep.headers, 'Mcp-Session-Id': session }, signal: AbortSignal.timeout(3000) }).catch(() => {});
+    if (session) void fetch(this.ep.url, { method: 'DELETE', headers: { ...this.ep.headers, ...(this.bearer ? { Authorization: `Bearer ${this.bearer}` } : {}), 'Mcp-Session-Id': session }, signal: AbortSignal.timeout(3000) }).catch(() => {});
   }
 }
 
@@ -260,8 +280,8 @@ export function connect(ep: Endpoint, timeoutMs = 30_000): Upstream {
 }
 
 /** Any error as the test's evidence: code, message and fix (never a token: messages are redacted). */
-export function describeError(e: unknown): { code: McpErrorCode; message: string; fix: string } {
-  if (e instanceof McpClientError) return { code: e.code, message: redact(e.message), fix: e.fix };
+export function describeError(e: unknown): { code: McpErrorCode; message: string; fix: string; login?: boolean } {
+  if (e instanceof McpClientError) return { code: e.code, message: redact(e.message), fix: e.fix, ...(e.login ? { login: true } : {}) };
   return { code: 'protocol', message: redact(e instanceof Error ? e.message : String(e)).slice(0, 300), fix: 'Riprova; se continua, guarda i log dell’app (npm run logs).' };
 }
 

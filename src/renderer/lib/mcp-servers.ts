@@ -13,7 +13,8 @@ export type ServerStatus = 'ok' | 'untested' | 'missing' | 'failed' | 'off';
 
 export function serverStatus(s: McpServerView): ServerStatus {
   if (!s.enabled) return 'off';
-  if (Object.values(s.secretMasks).some(m => m === null)) return 'missing';
+  // logged in with OAuth (ADR 0273): an empty Authorization token is not missing
+  if (Object.entries(s.secretMasks).some(([k, m]) => m === null && !(s.login && /^header:authorization$/i.test(k)))) return 'missing';
   if (!s.lastTest) return 'untested';
   return s.lastTest.ok ? 'ok' : 'failed';
 }
@@ -47,8 +48,10 @@ export function hubTotals(servers: readonly McpServerView[], connectors: readonl
 export interface ServerForm {
   label: string; transport: 'stdio' | 'http'; command: string; args: string; env: string; url: string; headers: string;
   tokenName: string; tokenPrefix: string; purpose: string; enabled: boolean;
+  /** the OAuth login's client id and return port (http, ADR 0273) */
+  oauthClientId: string; oauthPort: string;
 }
-export const emptyForm = (): ServerForm => ({ label: '', transport: 'stdio', command: '', args: '', env: '', url: '', headers: '', tokenName: '', tokenPrefix: 'Bearer ', purpose: '', enabled: true });
+export const emptyForm = (): ServerForm => ({ label: '', transport: 'stdio', command: '', args: '', env: '', url: '', headers: '', tokenName: '', tokenPrefix: 'Bearer ', purpose: '', enabled: true, oauthClientId: '', oauthPort: '' });
 
 export function formOf(s: McpServerDef): ServerForm {
   const slot = s.secrets[0];
@@ -57,6 +60,7 @@ export function formOf(s: McpServerDef): ServerForm {
     env: Object.entries(s.env ?? {}).map(([k, v]) => `${k}=${v}`).join('\n'), url: s.url ?? '',
     headers: Object.entries(s.headers ?? {}).map(([k, v]) => `${k}: ${v}`).join('\n'),
     tokenName: slot?.name ?? '', tokenPrefix: slot?.prefix ?? (s.transport === 'http' ? 'Bearer ' : ''), purpose: s.purpose ?? '', enabled: s.enabled,
+    oauthClientId: s.oauth?.clientId ?? '', oauthPort: s.oauth?.port ? String(s.oauth.port) : '',
   };
 }
 
@@ -76,7 +80,9 @@ export function defOf(f: ServerForm, base?: McpServerDef): McpServerDef {
     return { ...common, command: f.command.trim(), args: lines(f.args), ...(Object.keys(env).length ? { env } : {}) };
   }
   const headers = pairs(f.headers, /:/);
-  return { ...common, url: f.url.trim(), ...(Object.keys(headers).length ? { headers } : {}) };
+  const clientId = f.oauthClientId.trim(), port = f.oauthPort.trim() ? Number(f.oauthPort.trim()) : undefined;
+  const oauth = clientId || port !== undefined ? { ...(clientId ? { clientId } : {}), ...(port !== undefined ? { port } : {}) } : undefined;
+  return { ...common, url: f.url.trim(), ...(Object.keys(headers).length ? { headers } : {}), ...(oauth ? { oauth } : {}) };
 }
 
 /** "npx -y @azure-devops/mcp" or "api.githubcopilot.com": how the server starts, short. */
