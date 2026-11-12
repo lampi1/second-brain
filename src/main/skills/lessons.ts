@@ -48,7 +48,7 @@ export class SkillLessons {
   private now(): number { return this.d.now?.() ?? Date.now(); }
 
   all(): SkillLesson[] { return this.read().lessons; }
-  /** Lines noted once that left beyond MAX_OPEN since the last Maintenance read (#381): its section says how many. */
+  /** Waiting lines that left beyond MAX_OPEN since the last Maintenance read, the least noted first (#381): its section says how many. */
   dropped(): number { return this.read().dropped; }
   private read(): { lessons: SkillLesson[]; dropped: number } {
     try {
@@ -62,8 +62,9 @@ export class SkillLessons {
   /** what runs noted for the next Maintenance, least recently noted first */
   noted(): SkillLesson[] { return this.all().filter(l => l.state === 'noted'); }
   /** Maintenance read these (its research read the section and ended): they are not shown to it again. A line noted
-   *  again after the research took its copy (more `seen` than it was shown) came back meanwhile and keeps waiting. */
-  reviewed(shown: readonly Pick<SkillLesson, 'id' | 'seen'>[]): void {
+   *  again after the research took its copy (more `seen` than it was shown) came back meanwhile and keeps waiting.
+   *  `droppedShown`: the dropped count its section told; lines dropped while it ran stay counted for the next one. */
+  reviewed(shown: readonly Pick<SkillLesson, 'id' | 'seen'>[], droppedShown?: number): void {
     if (!shown.length) return;
     const seen = new Map(shown.map(l => [l.id, l.seen ?? 1])), at = this.now();
     let count = 0;
@@ -71,7 +72,7 @@ export class SkillLessons {
       if (l.state !== 'noted' || seen.get(l.id) !== (l.seen ?? 1)) return l;
       count++;
       return { ...l, state: 'reviewed', decidedAt: at };
-    }), 0);
+    }), Math.max(0, this.dropped() - (droppedShown ?? this.dropped())));
     log.info('skills', 'lessons reviewed by maintenance', { data: { count } });
   }
   /** `dropped`: the count since the last Maintenance read (default: as stored). */

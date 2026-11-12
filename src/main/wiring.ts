@@ -859,7 +859,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // every chat and work thread since the previous maintenance (ADR 0257), newest first
     conversationList: since => manager.list().filter(c => !c.research && c.updatedAt >= since).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, CONVERSATIONS_MAX)
       .map(c => ({ id: c.id, title: c.title, kind: c.isOrchestrator ? 'orchestrator' : c.parentId ? `work thread of ${c.parentId}` : 'chat' })),
-    lessons: { noted: () => skillLessons.noted(), reviewed: shown => { skillLessons.reviewed(shown); }, dropped: () => skillLessons.dropped() },
+    lessons: { noted: () => skillLessons.noted(), reviewed: (shown, droppedShown) => { skillLessons.reviewed(shown, droppedShown); }, dropped: () => skillLessons.dropped() },
     conversationRead: id => manager.items(id),
     brain: { state: () => brainModel.state(), apply: p => brainModel.applyResearch(p), noise: (key, known) => { brainModel.noise(key, known); }, maintain: () => brainModel.maintain(), outcomes: () => brainModel.checkOutcomes() },
     chats: { create: req => manager.create(req, 'app'), get: id => manager.list().find(c => c.id === id), stop: id => manager.stop(id) },

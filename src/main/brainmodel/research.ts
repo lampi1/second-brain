@@ -118,7 +118,7 @@ export interface ResearchDeps {
   conversationList?: (since: number) => readonly { id: string; title: string; kind?: string }[];
   /** what roles noted during their runs for the next Maintenance (skills/lessons.ts, ADR 0257): read here, marked
    *  reviewed when a research that read the section ends done or capped; absent = no section */
-  lessons?: { noted(): readonly SkillLesson[]; reviewed(shown: readonly Pick<SkillLesson, 'id' | 'seen'>[]): void; dropped?(): number };
+  lessons?: { noted(): readonly SkillLesson[]; reviewed(shown: readonly Pick<SkillLesson, 'id' | 'seen'>[], droppedShown?: number): void; dropped?(): number };
   conversationRead?: (id: string) => readonly ChatItem[];
   /** Read-only host inventory. Absent means unverified, not an empty checked repository. */
   openIssues?: (repo: string) => Promise<IssueSnapshot>;
@@ -138,7 +138,7 @@ export const SKILLS_FRAME = [
 /** The noted lessons for the research, grouped by skill, most repeated first (ADR 0257). */
 export function lessonsSection(noted: readonly SkillLesson[], fence: Fence, clean: (t: string) => string, dropped = 0): string {
   if (!noted.length) return 'No lines noted since the previous maintenance.';
-  const left = dropped > 0 ? ` ${dropped} more lines, each noted only once, left beyond the cap of the waiting lines.` : '';
+  const left = dropped > 0 ? ` ${dropped} more lines, the least often noted, left beyond the cap of the waiting lines.` : '';
   const by = new Map<string, SkillLesson[]>();
   for (const l of noted) by.set(l.skill, [...(by.get(l.skill) ?? []), l]);
   const groups = [...by.entries()].sort((a, b) => b[1].reduce((n, l) => n + (l.seen ?? 1), 0) - a[1].reduce((n, l) => n + (l.seen ?? 1), 0));
@@ -228,7 +228,7 @@ export class ResearchService {
   readonly store: ResearchStore;
   private run: (ResearchRunInfo & { sawWork: boolean; pack: Pack; timer: NodeJS.Timeout | null; saves: Promise<void>[]; reflect: ReflectPick | null; fence: Fence;
     /** the noted lessons shown in section «lessons» (ADR 0257): marked read when the research ends done */
-    lessons: { text: string; shown: Pick<SkillLesson, 'id' | 'seen'>[]; read: boolean } }) | null = null;
+    lessons: { text: string; shown: Pick<SkillLesson, 'id' | 'seen'>[]; dropped: number; read: boolean } }) | null = null;
   /** the candidate brain (ADR 0195), when the app gives its ports */
   readonly candidates: CandidateService | null;
   /** a start between its checks and its chat: a second start is refused */
@@ -370,12 +370,13 @@ export class ResearchService {
     const frame = researchFrame(lang, { web, capUsd: cap, brainRoot: root, issuesUrl: this.d.issuesUrl() });
     const reflect = this.d.roleTrial ? pickRole(this.d.runs(), this.d.roles(), this.now()) : null;
     const noted = this.d.lessons?.noted() ?? [];
+    const dropped = this.d.lessons?.dropped?.() ?? 0;
     const extra = [SKILLS_FRAME, ...(this.candidates ? [CANDIDATE_FRAME] : []), ...(this.d.roleTrial ? [REFLECT_FRAME] : [])];
     const chat = await this.d.chats.create({ harness, cwd: root, title: RESEARCH_TITLE, research: { web }, prompt: [researchMessage(method, frame), ...extra].join('\n'),
       ...(model ? { model } : {}), ...(effort ? { effort } : {}) });
     const startedAt = this.now();
     this.run = { chatId: chat.id, startedAt, harness, model, effort, capUsd: cap, costUsd: 0, state: 'running', proposals: 0, sawWork: false, pack, timer: null, saves: [], reflect, fence,
-      lessons: { text: lessonsSection(noted, fence, t => scrub(t, this.privacy()), this.d.lessons?.dropped?.() ?? 0), shown: noted.map(l => ({ id: l.id, seen: l.seen ?? 1 })), read: false } };
+      lessons: { text: lessonsSection(noted, fence, t => scrub(t, this.privacy()), dropped), shown: noted.map(l => ({ id: l.id, seen: l.seen ?? 1 })), dropped, read: false } };
     const timer = setTimeout(() => { void this.finish('stopped', 'più di due ore senza finire').catch(() => { /* logged */ }); }, RESEARCH_MAX_MS);
     timer.unref?.();
     this.run.timer = timer;
@@ -417,7 +418,7 @@ export class ResearchService {
     // the noted lessons it read are done with; one that never opened the section, or was stopped or failed, shows
     // them again next time
     if ((state === 'done' || state === 'capped') && r.lessons.read && r.lessons.shown.length) {
-      try { this.d.lessons?.reviewed(r.lessons.shown); } catch (e) { log.warn('brain', 'noted lessons not marked read', { cause: errText(e), hint: 'the next maintenance shows them again' }); }
+      try { this.d.lessons?.reviewed(r.lessons.shown, r.lessons.dropped); } catch (e) { log.warn('brain', 'noted lessons not marked read', { cause: errText(e), hint: 'the next maintenance shows them again' }); }
     }
     if (state !== 'done' && c && !c.closedAt && (c.state === 'running' || c.state === 'starting' || c.state === 'waiting')) {
       try { await this.d.chats.stop(r.chatId); } catch (e) { log.warn('brain', 'maintenance research not stopped', { chat: r.chatId, cause: errText(e), hint: 'stop it from its chat' }); }

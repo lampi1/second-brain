@@ -76,8 +76,12 @@ describe('SkillLessons', () => {
     expect(left.some(l => l.skill === 'skill-0' || l.skill === 'skill-1' || l.skill === 'skill-2')).toBe(false);
     expect(left.at(-1)!.skill).toBe('skill-201');
     expect(lessons.dropped()).toBe(3);
-    lessons.reviewed(left.map(l => ({ id: l.id, seen: l.seen })));
-    expect(lessons.dropped()).toBe(0);
+    // a line dropped while Maintenance ran stays counted for the next one
+    const shownDropped = lessons.dropped();
+    lessons.propose({ role: 'scout', skill: 'skill-late', text: 'Una lezione arrivata durante la manutenzione.' });
+    expect(lessons.dropped()).toBe(4);
+    lessons.reviewed(left.map(l => ({ id: l.id, seen: l.seen })), shownDropped);
+    expect(lessons.dropped()).toBe(1);
   });
 
   it('the launch reads the role skill\'s text without its frontmatter', () => {
