@@ -158,7 +158,9 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
       {!embedded && <header className="tile-head">
         <div className="th-row">
           <AgentAvatar avatar={chat.agent?.avatar} name={chat.agent?.name||chat.title} size={24}/>
-          <h3 className="th-title" title={(chat.agent?.purpose&&rolePurpose(chat.agent.id,chat.agent.purpose))||chat.title}>{chat.agent?.name||chat.title}</h3>
+          {/* a collapsed strip names the chat's title next to the agent, as the sidebar does (the owner, 2026-11-12); open,
+              the title is on its own row below */}
+          <h3 className="th-title" title={(chat.agent?.purpose&&rolePurpose(chat.agent.id,chat.agent.purpose))||chat.title}>{chat.agent?.name||chat.title}{!expanded&&chat.agent?.name&&chat.title&&chat.title!==chat.agent.name&&<span className="th-topic" title={chat.title} data-testid={`chat-topic-${chatId}`}>{chat.title}</span>}</h3>
           {/* the pill takes the state's place; the state stays in the DOM (hidden) as the strip's data-state hook */}
           {pillAside ? <span hidden><StatePill chat={chat} testid={`chat-state-${chatId}`} /></span> : <StatePill chat={chat} testid={`chat-state-${chatId}`} />}
           {first && <button type="button" className="strip-wait" onClick={() => openQueue(first)} aria-label={t('product.waitsYouOpen', { title: chat.agent?.name || chat.title })} data-testid={`chat-wait-${chatId}`} data-state={chat.state} {...(expanded ? {} : { 'data-waits-keys': reqs.map(reqKey).join(' ') })}>

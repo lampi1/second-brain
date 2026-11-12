@@ -671,8 +671,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'The home page: one strip per working agent, with the browsers it drives beside the expanded chat.'),
     points: [
       // src/renderer/brain/pages/Home.tsx
-      b('La pagina mostra le strisce degli agenti; le richieste in attesa sono raccolte nell’Orchestrator, mantenendo il collegamento al worker originale.',
-        'The page shows agent strips; pending requests are collected in the Orchestrator while keeping the link to the original worker.'),
+      b('La pagina mostra le strisce degli agenti, ognuna con il nome dell’agente e accanto il titolo della chat, come nella barra laterale; le richieste in attesa sono raccolte nell’Orchestrator, mantenendo il collegamento al worker originale.',
+        'The page shows agent strips, each with the agent’s name and the chat’s title next to it, as in the sidebar; pending requests are collected in the Orchestrator while keeping the link to the original worker.'),
       // src/renderer/lib/agent-order.ts
       b('Le strisce sono raggruppate per area, cioè l’ultima cartella del percorso di lavoro della chat.',
         'Strips are grouped by area, i.e. the last folder of the chat’s working path.'),

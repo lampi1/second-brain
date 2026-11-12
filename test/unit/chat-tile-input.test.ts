@@ -51,3 +51,13 @@ describe('chat tile input', () => {
     expect(html).toContain('>Continue here</button>');
   });
 });
+
+describe('chat strip head', () => {
+  it('a collapsed strip shows the chat title next to the agent name, as the sidebar does', () => {
+    const chat = { id: 'w', title: 'AI-DLC · U5 verifica', cwd: '', state: 'idle', harness: 'claude', lastText: '',
+      agent: { id: 'artisan', name: 'Artisan' } } as unknown as ChatSummary;
+    vi.mocked(useApp).mockImplementation(selector => selector({ chats: { w: chat }, pending: [], tabs: [] } as unknown as Parameters<typeof selector>[0]));
+    const html = renderToStaticMarkup(createElement(ChatTile, { chatId: 'w' }));
+    expect(html).toMatch(/Artisan<span class="th-topic"[^>]*>AI-DLC · U5 verifica<\/span>/);
+  });
+});

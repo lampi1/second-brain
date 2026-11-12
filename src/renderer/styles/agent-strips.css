@@ -51,6 +51,7 @@
 .agent-advanced > summary { cursor:pointer; padding:8px 0; }
 .chat-tile .th-row,.orchestrator-tile .th-row { height:auto; min-height:26px; row-gap:6px; align-items:center; }
 .chat-tile .th-title { flex:1 1 120px; }
+.chat-tile .th-topic { margin-left:8px; font-weight:400; color:var(--text-2); }
 .chat-header-actions { display:flex; align-items:center; justify-content:flex-end; gap:4px; flex:none; flex-wrap:wrap; max-width:100%; margin-left:auto; white-space:normal; }
 .chat-topic-row > .agent-identity { margin-left:auto; max-width:100%; }
 .chat-topic-row > .agent-identity > button { white-space:normal; text-align:right; }
