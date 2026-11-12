@@ -20,6 +20,7 @@ import { AWAY_PARKED, AWAY_PLAN_NOTE, recommendedAnswers, userOnlyText } from '.
 import { askingPlan, PLAN_APPROVED, type IntakeSource, type PlanIntake } from '../../shared/strategy';
 import type { SubmissionReceipt, Rec } from './manager-types';
 import { isNativeQuestion, isYesNo } from '../../shared/yes-no';
+import { answerableInWords, sameWords, wordsAnswer } from '../../shared/answer-in-words';
 import { sysItem } from './manager-helpers';
 import { phoneTime } from './phone-reply';
 import { ManagerCheckpoints } from './manager-checkpoints';
@@ -193,6 +194,30 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     });
   }
 
+  /** The user's own message to the Orchestrator answers a work chat's question (ADR 0274): the Orchestrator names the
+   *  question and quotes his words (`words`, checked against his last PC message, written after the question); his whole
+   *  message is what the chat gets, so an excerpt never turns his «non …» into a yes. Never the Orchestrator's own
+   *  question, a Strategist's interview, an MCP form, a permission or a command; never what stays his alone (that one
+   *  keeps its click). Recorded as policy «orchestrator-user-words», with a line in the chat. */
+  answerWithUserWords(chatId: string, requestId: string, words: string): void {
+    const r = this.need(chatId);
+    const req = r.pending.get(requestId);
+    if (!req) throw new Error('Questa richiesta non è più aperta.');
+    if (r.s.isOrchestrator || r.s.plan || !answerableInWords(req)) throw new Error('bloccato: le sue parole rispondono solo alla domanda di una chat di lavoro (non a un permesso, un comando, un modulo, un’intervista o una tua domanda)');
+    const said = this.openOrchestrator()?.userSaid;
+    if (!said || said.at < req.at || !sameWords(said.text, words)) throw new Error('bloccato: words deve essere copiato dal suo ultimo messaggio, scritto dopo la domanda; se non risponde a questa domanda lasciala aperta');
+    if (!r.session) { this.dropPending(r, requestId); throw new Error('La chat non è più attiva: la richiesta è scaduta.'); }
+    if (phoneQuestionReserved(req, () => { this.ensureHistory(r); return r.items; }, userOnlyText) || userOnlyText(said.text)) throw new Error(RESERVED_FOR_USER);
+    if (this.answering.get(r)?.has(requestId)) throw new Error('Request already answered; delivery is still pending.');
+    const text = said.text.trim();
+    const sent = this.policyAnswer(r, req, wordsAnswer(req, text), 'orchestrator-user-words', undefined, () => {
+      this.addItem(r, sysItem('orchestratorPassedWords', { words: text.length > 200 ? `${text.slice(0, 199)}…` : text }, 'info'), false);
+      this.updated(r);
+      log.info('chats', 'the Orchestrator passed the user\'s words on', { chat: r.s.id, data: { requestId } });
+    });
+    if (!sent) throw new Error('La risposta non è arrivata alla chat: la domanda resta nella sua riga.');
+  }
+
   /** The user's answer. by = where they gave it: the PC (the panel) or the paired phone (phone bridge: only a question,
    *  never a permission or a command; chats/phone-port.ts checks the rest before it calls this) */
   async answer(chatId: string, requestId: string, answer: Answer, by: 'pc' | 'phone' | 'relay' = 'pc'): Promise<void> {
@@ -226,6 +251,12 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       if (ok && sameChat()) this.answerTwins(r, requestId, told, { kind: 'user', channel: by });
       // The RPC acknowledgement can precede the batched resolved event. Preserve phone provenance in either order.
       if (ok && sameChat()) this.dropPending(r, requestId);
+      // the Orchestrator's own question answered in words typed on the PC (not an option clicked): they are his last
+      // message too, so the Orchestrator may pass them to a work chat's question they answer (ADR 0274)
+      if (ok && r.s.isOrchestrator && by === 'pc' && answer.kind === 'question') {
+        const typed = Object.entries(answer.answers).flatMap(([q, v]) => (Array.isArray(v) ? v : [v]).filter(x => !req.questions?.find(k => k.question === q)?.options.some(o => o.label === x)));
+        if (typed.length) r.userSaid = { text: typed.join('\n'), at: Date.now() };
+      }
     } finally {
       answering.delete(requestId);
       r.answeringFromPhone?.delete(requestId);

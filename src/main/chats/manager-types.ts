@@ -230,6 +230,9 @@ export interface Rec {
   /** the user's message being sent came from the paired phone (sendFromPhone): its text, so only that delivery is marked
    *  📱 and takes the phone reply line; voice = a transcribed voice note */
   phoneNext?: { text: string; voice: boolean };
+  /** the Orchestrator only: the user's last message typed to it (PC, never the phone): his words app_resolve_question
+   *  `words` must come from (shared/answer-in-words.ts, ADR 0274) */
+  userSaid?: { text: string; at: number };
   /** the requests being answered from the phone right now: their pending:resolved says by 'phone' (one per request:
    *  a PC answer finishing first must not erase a phone one still in delivery) */
   answeringFromPhone?: Set<string>;

@@ -103,6 +103,7 @@ export const genuiRequestIt = {
   'genui.decision.yes': 'Sì',
   'genui.decision.no': 'No',
   'genui.decision.write': 'Scrivi una risposta…',
+  'genui.decision.viaInput': 'Per rispondere con parole tue scrivi qui sotto, nel campo dell’Orchestrator.',
   'genui.decision.skip': 'Non voglio rispondere',
   'genui.decision.skipHint': 'L’agente sceglie da solo la strada più prudente',
   'genui.decision.skipDiscard': 'La proposta viene scartata, senza commento',

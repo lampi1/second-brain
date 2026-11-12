@@ -7,6 +7,9 @@
 // (app_unblock) open the row they name here (store/ui.ts callQuestions → qwin.first / call). «Ci penso dopo» moves a
 // row into one folded line «N da rispondere dopo» (lib/later.ts). A chat's own tile never shows its requests: one line says they went to the Orchestrator
 // (InWindowLine). A command the chat left before its question comes first (ADR 0259). Mounted by OrchestratorTile.tsx.
+import { WriteViaOrchestrator } from '../lib/write-via-orchestrator';
+import { answerableInWords } from '@shared/answer-in-words';
+import { userOnlyText } from '@shared/away';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Harness, PendingRequest } from '@shared/contract';
 import { isYesNo, yesNoOf } from '@shared/yes-no';
@@ -17,7 +20,7 @@ import { sameList } from '../store/state';
 import { answer, app, useApp } from '../store/store';
 import { parkQuestions, ui } from '../store/ui';
 import { answerLater, openQueue, requestPostponed } from '../lib/later';
-import { HarnessMark, IconArrowRight, IconChevronDown, IconChevronRight, IconQuestion } from './Icons';
+import { HarnessMark, IconArrowRight, IconChevronDown, IconChevronRight, IconQuestion, IconX } from './Icons';
 import { ago } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { CodeBlock } from './CodeBlock';
@@ -115,6 +118,7 @@ function quickYesNo(ask: Ask): { question: string; yes: string; no: string } | n
 }
 
 function AskRow({ ask, open, later, onToggle, onClose }: { ask: Ask; open: boolean; later: boolean; onToggle: () => void; onClose: () => void }) {
+  const onLater = () => { answerLater(reqKey(ask)); if (open) onClose(); };
   qwinStats.renders++;
   const name = useApp(s => isHost(ask) ? ask.title : (s.chats[ask.chatId]?.isOrchestrator ? 'Orchestrator' : (s.chats[ask.chatId]?.agent?.name || s.chats[ask.chatId]?.title || 'Chat')));
   const harness = useApp(s => s.chats[ask.chatId]?.harness ?? 'claude');
@@ -144,8 +148,10 @@ function AskRow({ ask, open, later, onToggle, onClose }: { ask: Ask; open: boole
           <button type="button" className="oask-yn n" disabled={sent} onClick={() => quick(yn.no)} data-testid="orchestrator-ask-no">{t('chat.questions.no')}</button>
         </>}
         <button type="button" className="oask-chev" onClick={onToggle} aria-label={open ? t('chat.questions.close') : t('chat.questions.expand')} data-testid="orchestrator-ask-chev">{open ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}</button>
+        {/* ✕ = «Ci penso dopo» (the owner, 2026-11-12): the row folds into «N da rispondere dopo» */}
+        {!later && <button type="button" className="oask-chev oask-x" onClick={onLater} aria-label={t('chat.questions.later')} data-tip={t('chat.questions.laterTip')} data-testid="orchestrator-ask-later"><IconX size={13} /></button>}
       </div>
-      {open && <AskCard ask={ask} name={name} harness={harness} onLater={() => { answerLater(k); onClose(); }} />}
+      {open && <AskCard ask={ask} name={name} harness={harness} onLater={onLater} />}
     </div>
   );
 }
@@ -153,6 +159,12 @@ function AskRow({ ask, open, later, onToggle, onClose }: { ask: Ask; open: boole
 function AskCard({ ask, name, harness, onLater }: { ask: Ask; name: string; harness: Harness; onLater: () => void }) {
   const [keysEl, setKeysEl] = useState<HTMLSpanElement | null>(null);
   const k = reqKey(ask);
+  // what the Orchestrator can pass on in the user's words (ADR 0274): a plan, an engine question (not a Strategist's
+  // interview); the rest (work proposals, commands, forms, the app's own steps) keeps its own box
+  const interview = useApp(s => !isHost(ask) && !s.chats[ask.chatId]?.isOrchestrator && !!s.chats[ask.chatId]?.plan);
+  // what is his alone keeps its own box: the Orchestrator never passes it on (shared/away.ts userOnlyText)
+  const viaOrchestrator = !isDurable(ask) && (ask.type === 'plan' || (answerableInWords(ask) && !interview
+    && !userOnlyText([ask.title, ask.detail, ...(ask.questions ?? []).flatMap(q => [q.question, q.header ?? '', ...q.options.map(o => `${o.label} ${o.description ?? ''}`)])].join(' '))));
   // the card reads the chat as it was when it opened (lib/askItems.tsx)
   const frozen = useFrozenItems(ask.chatId, k);
   const items = ask.type === 'question' ? frozen.items : undefined;
@@ -165,6 +177,8 @@ function AskCard({ ask, name, harness, onLater }: { ask: Ask; name: string; harn
   ) : null;
   return (
     <div className="oask-card qwin-inline" data-testid="qwin">
+      {/* its free answer is written to the Orchestrator, in its input under it (lib/write-via-orchestrator.ts) */}
+      <WriteViaOrchestrator.Provider value={viaOrchestrator}>
       <AskItemsProvider chatId={ask.chatId} items={frozen.items}>
         {isDurable(ask)
           ? <WorkApproval key={k} ask={ask} onEscape={onLater} />
@@ -172,6 +186,7 @@ function AskCard({ ask, name, harness, onLater }: { ask: Ask; name: string; harn
           ? <PlanApproval key={k} ask={ask} chatTitle={name} onEscape={onLater} keysTo={keysEl} testid="qwin-plan" />
           : <RequestPanel key={k} req={ask} variant="window" chatTitle={name} harness={harness} commands={commands} onEscape={onLater} keysTo={keysEl} testid="qwin-card" />}
       </AskItemsProvider>
+      </WriteViaOrchestrator.Provider>
       <div className="oask-foot">
         <span className="qwin-keys" ref={setKeysEl} />
         <span className="sp" />

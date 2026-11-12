@@ -30,6 +30,8 @@ import { engineLabel, engineOf } from '../engines/registry';
 import { agentsMayOpen, crossRefusal, openRefusal } from '../engines/policy';
 import type { BrainService, BrowserService, ChatService } from '../services';
 import { log, redact } from '../log';
+import { sameWords } from '../../shared/answer-in-words';
+import { isPlanApproval } from '../../shared/strategy';
 import { withPasswordsHidden } from '../browser/shot-mask';
 import { fmtFactor, previewOf } from '../browser/preview';
 import { healthSnapshot } from '../health';
@@ -394,20 +396,40 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     },
     {
       name: 'app_resolve_question',
-      description: 'Answer a work chat\'s Sì/No question for the user (ADR 0269): you speak for him, so pick the option his goal, the brain or the plan already settle, then tell him in one line what you answered. Refused (it stays in his row in the Orchestrator) for what is his alone: production, secrets, permissions, publishing, messages to people; also refused for permissions, commands, MCP forms, a Strategist\'s interview and the Orchestrator\'s own questions.',
+      description: 'Answer a work chat\'s Sì/No question for the user (ADR 0269): you speak for him, so pick the option his goal, the brain or the plan already settle, then tell him in one line what you answered. Refused (it stays in his row in the Orchestrator) for what is his alone: production, secrets, permissions, publishing, messages to people; also refused for permissions, commands, MCP forms, a Strategist\'s interview and the Orchestrator\'s own questions. When his own last message to you answers an open question or a proposed plan (ADR 0274), pass words (his exact words, quoted from it) instead of answers: his whole message reaches the chat; what is his alone keeps its click.',
       inputSchema: obj({
-        chatId: str('the work chat, from app_pending'), requestId: str('the question\'s id, from app_pending'),
+        chatId: str('the work chat, from app_pending'), requestId: str('the question\'s id, from app_pending; "plan" for a Strategist\'s proposed plan (words only)'),
         answers: { type: 'object', description: '{ "<question text>": "<one of its option labels>" } for every question', additionalProperties: { type: 'string' } },
-      }, ['chatId', 'requestId', 'answers']),
-      run: a => {
+        words: str('his exact words from his last message to you, when they answer this question (instead of answers)'),
+      }, ['chatId', 'requestId']),
+      run: async a => {
         const chatId = String(a.chatId ?? ''), requestId = String(a.requestId ?? '');
         need(chatId);
+        // a Strategist's proposed plan (requestId "plan"): his whole message is the change, or the ok when all of it is
+        // one and this is the only plan waiting (ADR 0274)
+        if (requestId === 'plan') {
+          if (!authed()) throw new Error('bloccato: solo l’Orchestrator risponde per l’utente');
+          const chats = d.chats.list(), plan = chats.find(c => c.id === chatId)?.plan;
+          if (!plan || plan.phase !== 'proposed') throw new Error('questo piano non aspetta più una risposta');
+          const said = d.chats.userSaid?.();
+          if (!said || said.at < plan.at || !sameWords(said.text, String(a.words ?? ''))) throw new Error('bloccato: words deve essere copiato dal suo ultimo messaggio, scritto dopo il piano; se non parla di questo piano lascialo aperto');
+          const only = chats.filter(c => c.plan?.phase === 'proposed').length === 1;
+          await d.chats.planDecide(chatId, only && isPlanApproval(said.text) ? 'approve' : 'change', plan.at, said.text.trim());
+          return 'consegnato al piano con il suo messaggio: la sua riga è chiusa';
+        }
         const req = d.chats.pending().find(p => p.chatId === chatId && p.id === requestId);
         if (!req) throw new Error('questa domanda non è più aperta (quelle aperte: app_pending)');
         if (req.type !== 'question' || !req.questions?.length) throw new Error('bloccato: solo le domande; permessi e comandi li risponde solo l\'utente con un clic');
         if (req.tool.startsWith('mcp__')) throw new Error('bloccato: compila il modulo MCP nel pannello delle domande; le risposte non possono essere riscritte dall’Orchestrator');
         // only the authenticated Orchestrator speaks for the user; a delegated chat's question stays his (ADR 0083)
         if (!authed()) throw new Error('bloccato: solo l’Orchestrator risponde per l’utente');
+        // his own message (ADR 0274): the chats check it is his, after the question, and not his alone
+        if (a.words !== undefined) {
+          if (!d.chats.answerWithUserWords) throw new Error('non disponibile');
+          d.chats.answerWithUserWords(chatId, requestId, String(a.words));
+          return 'consegnata con il suo messaggio: la sua riga è chiusa';
+        }
+        if (!a.answers || typeof a.answers !== 'object') throw new Error('answers (le opzioni) o words (le sue parole) servono');
         if (delegated(chatId)) throw new Error('bloccato: è una chat delegata (ne vedi solo lo stato): la sua domanda resta all’utente nella sua riga');
         d.chats.answerForUser(chatId, requestId, Object.fromEntries(Object.entries((a.answers ?? {}) as Record<string, unknown>).map(([k, v]) => [k, String(v)])));
         return 'risposto per l’utente';

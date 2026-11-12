@@ -142,6 +142,53 @@ describe('app control tools', () => {
     });
   });
 
+  describe('app_resolve_question words: his own message answers a question or a plan (ADR 0274)', () => {
+    const q = { id: 'q1', chatId: 'w', type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at: 100,
+      questions: [{ question: 'Quale colore?', options: [{ label: 'Rosso' }, { label: 'Blu' }], multiSelect: false }] };
+    function setup(said: { text: string; at: number } | null, plain = false, plans = 1) {
+      const passed: unknown[] = [], decided: unknown[] = [];
+      const chats = {
+        list: () => [{ id: 'orchestrator', isOrchestrator: true, harness: 'claude' }, { id: 'w', isOrchestrator: false, harness: 'claude' },
+          ...Array.from({ length: plans }, (_, n) => ({ id: n ? `s${n}` : 's', isOrchestrator: false, harness: 'claude', plan: { phase: 'proposed', at: 150, steps: [], clarified: [] } }))],
+        pending: () => [q, { ...q, id: 'p1', type: 'permission', tool: 'Bash', questions: undefined }],
+        items: () => [],
+        userSaid: () => said,
+        answerWithUserWords: (chatId: string, requestId: string, words: string) => { passed.push({ chatId, requestId, words }); },
+        answerForUser: () => { throw new Error('never the option path'); },
+        planDecide: async (chatId: string, decision: string, at: number, text: string) => { decided.push({ chatId, decision, at, text }); },
+      } as unknown as ChatService;
+      const t = appControlTools({ chats, browser: {} as BrowserService, brain: {} as BrainService, window: () => null, emitUi: () => {}, version: '0' }, plain ? undefined : 'orchestrator').find(x => x.name === 'app_resolve_question')!;
+      return { passed, decided, run: (a: Record<string, unknown>) => Promise.resolve().then(() => t.run(a)) };
+    }
+
+    it('a question: the chats check his words and pass his message on', async () => {
+      const { passed, run } = setup({ text: 'Fallo blu scuro', at: 200 });
+      await expect(run({ chatId: 'w', requestId: 'q1', words: 'blu scuro' })).resolves.toMatch(/suo messaggio/);
+      expect(passed).toEqual([{ chatId: 'w', requestId: 'q1', words: 'blu scuro' }]);
+      await expect(setup({ text: 'sì', at: 200 }).run({ chatId: 'w', requestId: 'p1', words: 'sì' })).rejects.toThrow(/solo le domande/);
+      await expect(setup({ text: 'Blu', at: 200 }, true).run({ chatId: 'w', requestId: 'q1', words: 'Blu' })).rejects.toThrow(/solo l’Orchestrator/);
+    });
+
+    it('a proposed plan: his whole message is the change, or the ok when all of it is one and it is the only plan', async () => {
+      const change = setup({ text: 'Prima i test, poi il widget', at: 200 });
+      await expect(change.run({ chatId: 's', requestId: 'plan', words: 'prima i test' })).resolves.toMatch(/piano/);
+      expect(change.decided).toEqual([{ chatId: 's', decision: 'change', at: 150, text: 'Prima i test, poi il widget' }]);
+      const ok = setup({ text: 'Approvo il piano', at: 200 });
+      await ok.run({ chatId: 's', requestId: 'plan', words: 'approvo il piano' });
+      expect(ok.decided).toEqual([{ chatId: 's', decision: 'approve', at: 150, text: 'Approvo il piano' }]);
+      // «approvo» inside «non approvo» is never an ok; nor one «parti» with two plans waiting
+      const no = setup({ text: 'non approvo', at: 200 });
+      await no.run({ chatId: 's', requestId: 'plan', words: 'approvo' });
+      expect(no.decided).toEqual([{ chatId: 's', decision: 'change', at: 150, text: 'non approvo' }]);
+      const two = setup({ text: 'parti', at: 200 }, false, 2);
+      await two.run({ chatId: 's', requestId: 'plan', words: 'parti' });
+      expect(two.decided).toEqual([{ chatId: 's', decision: 'change', at: 150, text: 'parti' }]);
+      await expect(setup({ text: 'Prima i test', at: 100 }).run({ chatId: 's', requestId: 'plan', words: 'Prima i test' })).rejects.toThrow(/dopo il piano/);
+      await expect(setup({ text: 'altro', at: 200 }).run({ chatId: 's', requestId: 'plan', words: 'Prima' })).rejects.toThrow(/ultimo messaggio/);
+      await expect(setup({ text: 'x', at: 200 }).run({ chatId: 'w', requestId: 'plan', words: 'x' })).rejects.toThrow(/non aspetta/);
+    });
+  });
+
   it('labels every message sent to a chat as written by an agent', async () => {
     const { tool, sent } = deps();
     await tool('app_send_to_chat').run({ chatId: 'c1', text: 'controlla i test' });

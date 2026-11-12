@@ -14,6 +14,7 @@ export const chatDe: typeof chatIt = {
   'chat.input.slashHelp': '↑↓ wählen · Tab ergänzen · Esc schließen',
   'chat.input.placeholderEnter': 'Nochmal drücken: letzte Nachricht aus der Warteschlange senden',
   'chat.input.placeholderOrchestrator': 'Was willst du tun?',
+  'chat.input.placeholderAnswer': 'Schreib deine Antwort…',
   'chat.input.placeholderPending': 'Oben antworten oder schreiben…',
   'chat.input.placeholderBusy': 'Schreib: kommt in die Warteschlange…',
   'chat.input.placeholderClosed': 'Schreib, um diesen Chat fortzusetzen…',

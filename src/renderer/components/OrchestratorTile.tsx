@@ -152,7 +152,8 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
       <ChildStrips chatId={chat.id} />
       {/* "Mentre eri via" in one line while strips (or another page) take the Grindhouse's place (ADR 0102) */}
       <MorningLine />
-      {planCards(plans, reqs).map(({ chat: c, question }) => <StrategyPanel key={c.id} chat={c} question={question} />)}
+      {/* a plan to approve is its row below (the same steps twice took the room of the open card and the input) */}
+      {planCards(plans, reqs).filter(({ chat: c }) => c.plan?.phase !== 'proposed').map(({ chat: c, question }) => <StrategyPanel key={c.id} chat={c} question={question} />)}
       <ItemList chatId={chat.id} items={items ?? []} empty={t('dialogs.orchestrator.emptyPrompt')} footer={isBusy(chat) ? <Typing what={turnActivity(items)} testid="typing-orchestrator" items={items} /> : null} />
       {/* every chat's questions, permissions, commands and plans: one row each, opened in place (ADR 0269) */}
       <OrchestratorAsks />

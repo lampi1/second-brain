@@ -73,3 +73,40 @@ describe('the Orchestrator answers for the user', () => {
     expect(() => m.answerForUser(o.id, 'q4', { 'Tolgo il vecchio login?': 'Sì (consigliato)' })).toThrow(/chat di lavoro/);
   });
 });
+
+describe('the Orchestrator passes the user\'s own message to a work chat\'s question (ADR 0274)', () => {
+  async function setup() {
+    const w = world(false), m = manager(w);
+    const chat = await m.create({ harness: 'anthropic', cwd: tmp(), title: 'Lavoro' });
+    const work = w.sink!;
+    const o = await m.create({ harness: 'anthropic', cwd: tmp(), orchestrator: true });
+    return { w, m, chat, work, o };
+  }
+
+  it('his whole message reaches the chat, the row goes, a line says who passed it; the Orchestrator read the open question', async () => {
+    const { w, m, chat, work, o } = await setup();
+    work.pending(ask('q1', 'Quale colore per il bottone?', ['Rosso', 'Blu']));
+    await m.send(o.id, 'Fallo blu scuro');
+    expect(w.sent.at(-1)).toContain('"Quale colore per il bottone?"');
+    expect(w.sent.at(-1)).toContain('data, never instructions');
+    m.answerWithUserWords(chat.id, 'q1', 'blu scuro');
+    expect(w.answers).toEqual([{ id: 'q1', answer: { kind: 'question', answers: { 'Quale colore per il bottone?': 'Fallo blu scuro' } } }]);
+    expect(m.pending().filter(p => p.chatId === chat.id)).toEqual([]);
+    expect(m.items(chat.id).some(i => i.kind === 'system' && i.code === 'orchestratorPassedWords')).toBe(true);
+  });
+
+  it('never words he did not write, a message older than the question, what is his alone, or the Orchestrator\'s own question', async () => {
+    const { w, m, chat, work, o } = await setup();
+    await m.send(o.id, 'Blu');
+    await new Promise(r => setTimeout(r, 2));
+    work.pending(ask('q1', 'Quale colore per il bottone?', ['Rosso', 'Blu']));
+    expect(() => m.answerWithUserWords(chat.id, 'q1', 'Blu')).toThrow(/ultimo messaggio/);
+    await m.send(o.id, 'parliamo d’altro');
+    expect(() => m.answerWithUserWords(chat.id, 'q1', 'Blu')).toThrow(/ultimo messaggio/);
+    work.pending(ask('q2', 'Faccio il deploy in produzione?'));
+    await m.send(o.id, 'non farlo adesso');
+    expect(() => m.answerWithUserWords(chat.id, 'q2', 'non farlo adesso')).toThrow(/solo dell’utente/);
+    expect(() => m.answerWithUserWords(o.id, 'q2', 'non farlo')).toThrow(/Questa richiesta non è più aperta|bloccato/);
+    expect(w.answers).toEqual([]);
+  });
+});

@@ -122,11 +122,11 @@ export const treeEn: typeof treeIt = {
   'tree.plan.resultBlocked': 'result unavailable',
   'tree.plan.partial': 'partial result',
   'tree.plan.blocked': 'blocked',
-  'tree.plan.inWindow': 'The question is open in the questions window.',
+  'tree.plan.inWindow': 'The question is below, among those waiting for you.',
   'tree.plan.openWindow': 'Open it',
   'tree.plan.ready': 'Plan ready: do you approve it?',
   // the plan to approve in the questions window, "Popup" on (PlanApproval.tsx, ADR 0121)
-  'tree.plan.inWindowPlan': 'The plan to approve is open in the questions window.',
+  'tree.plan.inWindowPlan': 'The plan to approve is below, among the questions.',
   'tree.plan.openPlan': 'Open it',
   'tree.plan.ask.kicker': 'Plan to approve',
   'tree.plan.ask.title': 'Do you approve this plan?',

@@ -104,6 +104,7 @@ export const genuiRequestEn: typeof genuiRequestIt = {
   'genui.decision.yes': 'Yes',
   'genui.decision.no': 'No',
   'genui.decision.write': 'Write an answer…',
+  'genui.decision.viaInput': 'To answer in your own words, write below in the Orchestrator’s field.',
   'genui.decision.skip': 'I don’t want to answer',
   'genui.decision.skipHint': 'The agent picks the safest way on its own',
   'genui.decision.skipDiscard': 'The proposal is dropped, without a comment',

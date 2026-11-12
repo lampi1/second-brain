@@ -621,12 +621,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/store/state.ts pending; src/main/chats/manager.ts
       b('Ogni domanda, permesso o comando da rivedere entra nell’elenco «pending»; la chat resta ferma finché non rispondi.',
         'Every question, permission or command to review joins the "pending" list; the chat stays blocked until you answer.'),
-      // src/renderer/components/QuestionsWindow.tsx OrchestratorAsks (ADR 0269)
-      b('Ogni richiesta è una riga in fondo all’Orchestrator (chi chiede, la domanda e, per un Sì/No, i due bottoni): un clic la apre lì come scheda. Nessuna finestra sopra la pagina; nella chat dell’agente resta solo una riga «mandata all’Orchestrator · Vai».',
-        'Every request is a row at the bottom of the Orchestrator (who asks, the question and, for a Yes/No, its two buttons): a click opens it there as a card. No window over the page; the agent’s own chat keeps only a «sent to the Orchestrator · Go» line.'),
+      // src/renderer/components/QuestionsWindow.tsx OrchestratorAsks (ADR 0269); src/shared/answer-in-words.ts
+      b('Ogni richiesta è una riga in fondo all’Orchestrator (chi chiede, la domanda e, per un Sì/No, i due bottoni): un clic la apre lì come scheda, che scorre fino in fondo con il campo dell’Orchestrator sempre visibile sotto: per rispondere con parole tue a una domanda o a un piano scrivi lì all’Orchestrator: se il messaggio risponde a una richiesta aperta le passa tutto il tuo messaggio e la riga sparisce, se parli d’altro resta; quello che è solo tuo (produzione, database, permessi…) resta da cliccare. Scritto nella chat di chi chiede, è la sua risposta. Le proposte di lavoro e i comandi tengono il loro campo. Nessuna finestra sopra la pagina; nella chat dell’agente resta solo una riga «mandata all’Orchestrator · Vai».',
+        'Every request is a row at the bottom of the Orchestrator (who asks, the question and, for a Yes/No, its two buttons): a click opens it there as a card, which scrolls to its end with the Orchestrator’s field always in sight below: to answer a question or a plan in your own words, write there to the Orchestrator: if the message answers an open request it passes your whole message on and the row goes, if you talk of other things it stays; what is yours alone (production, databases, permissions…) keeps its click. Written in the asking chat, it is its answer. Work proposals and commands keep their own field. No window over the page; the agent’s own chat keeps only a «sent to the Orchestrator · Go» line.'),
       // src/renderer/components/QuestionsWindow.tsx
-      b('Puoi rispondere in qualsiasi ordine; Esc vuol dire «Ci penso dopo», non «rifiuta»: la riga va in una sola riga chiusa «N da rispondere dopo». La scheda aperta non cambia mentre la leggi: se l’agente scrive altro compare un avviso, e «Mostra» lo aggiunge. Un comando lasciato dalla chat viene prima della sua domanda: «Sì, eseguilo» lo lancia qui e l’esito risponde da solo.',
-        'You can answer in any order; Esc means "Think about it later", not "deny": the row moves into one folded «N to answer later» line. The open card does not change while you read it: if the agent writes more a notice appears, and "Show" adds it. A command the chat left comes before its question: "Yes, run it" runs it here and the result answers by itself.'),
+      b('Puoi rispondere in qualsiasi ordine; Esc o la ✕ della riga vogliono dire «Ci penso dopo», non «rifiuta»: la riga va in una sola riga chiusa «N da rispondere dopo». La scheda aperta non cambia mentre la leggi: se l’agente scrive altro compare un avviso, e «Mostra» lo aggiunge. Un comando lasciato dalla chat viene prima della sua domanda: «Sì, eseguilo» lo lancia qui e l’esito risponde da solo.',
+        'You can answer in any order; Esc or the row’s ✕ mean "Think about it later", not "deny": the row moves into one folded «N to answer later» line. The open card does not change while you read it: if the agent writes more a notice appears, and "Show" adds it. A command the chat left comes before its question: "Yes, run it" runs it here and the result answers by itself.'),
       // src/renderer/lib/askContext.ts lastThoughtOf, src/renderer/components/AskContext.tsx AskThought (owner, 2026-11-10);
       // src/shared/yes-no.ts mappedYesNo; src/main/chats/claude.ts refuseNotYesNo; src/main/chats/acp.ts (#378)
       b('Nella scheda Sì/No vedi subito, aperto sotto la domanda, il «Messaggio della chat»; il suo ragionamento è più sotto, chiuso in «Ragionamento della chat», e contiene solo l’ultimo pezzo. Se uno strumento dell’agente accetta solo le sue etichette (per esempio «Approve Plan» e «Request Changes»), la scheda ti mostra comunque Sì e No e la tua risposta gli arriva come quell’etichetta, la stessa che avresti scelto tu nella sua chat.',
@@ -654,7 +654,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
     ],
     anchors: {
       0: ['src/renderer/store/state.ts'],
-      1: ['src/renderer/lib/questions.ts', 'src/renderer/components/QuestionsWindow.tsx'],
+      1: ['src/renderer/lib/questions.ts', 'src/renderer/components/QuestionsWindow.tsx', 'src/shared/answer-in-words.ts'],
       2: ['src/renderer/components/QuestionsWindow.tsx'],
       3: ['src/renderer/lib/askContext.ts#lastThoughtOf', 'src/renderer/components/AskContext.tsx#AskThought', 'src/shared/yes-no.ts#mappedYesNo'],
       4: ['src/renderer/lib/questions.ts#TYPING_IDLE_MS'],
@@ -662,7 +662,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       6: ['src/renderer/components/AskImages.tsx', 'src/main/ask-image.ts#SCREENSHOT_HINT'],
       7: ['src/main/chats/orchestrator-wake.ts#QUIET'],
     },
-    sources: ['src/renderer/store/state.ts', 'src/renderer/lib/questions.ts', 'src/renderer/components/QuestionsWindow.tsx', 'src/renderer/lib/askContext.ts', 'src/renderer/components/AskContext.tsx', 'src/shared/yes-no.ts', 'src/renderer/components/AskImages.tsx', 'src/main/ask-image.ts', 'src/renderer/lib/later.ts', 'src/main/later.ts', 'src/main/chats/orchestrator-wake.ts', 'src/shared/contract/chats.ts'],
+    sources: ['src/renderer/store/state.ts', 'src/renderer/lib/questions.ts', 'src/renderer/components/QuestionsWindow.tsx', 'src/shared/answer-in-words.ts', 'src/renderer/lib/askContext.ts', 'src/renderer/components/AskContext.tsx', 'src/shared/yes-no.ts', 'src/renderer/components/AskImages.tsx', 'src/main/ask-image.ts', 'src/renderer/lib/later.ts', 'src/main/later.ts', 'src/main/chats/orchestrator-wake.ts', 'src/shared/contract/chats.ts'],
   },
   {
     id: 'grindhouse',

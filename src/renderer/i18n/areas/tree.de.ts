@@ -122,11 +122,11 @@ export const treeDe: typeof treeIt = {
   'tree.plan.resultBlocked': 'Ergebnis nicht verfügbar',
   'tree.plan.partial': 'Teilergebnis',
   'tree.plan.blocked': 'blockiert',
-  'tree.plan.inWindow': 'Die Frage ist im Fragenfenster offen.',
+  'tree.plan.inWindow': 'Die Frage steht unten bei denen, die auf dich warten.',
   'tree.plan.openWindow': 'Öffnen',
   'tree.plan.ready': 'Plan fertig: gibst du ihn frei?',
   // the plan to approve in the questions window, "Popup" on (PlanApproval.tsx, ADR 0121)
-  'tree.plan.inWindowPlan': 'Der Plan zum Freigeben ist im Fragenfenster offen.',
+  'tree.plan.inWindowPlan': 'Der Plan zum Freigeben steht unten bei den Fragen.',
   'tree.plan.openPlan': 'Öffnen',
   'tree.plan.ask.kicker': 'Plan zum Freigeben',
   'tree.plan.ask.title': 'Gibst du diesen Plan frei?',

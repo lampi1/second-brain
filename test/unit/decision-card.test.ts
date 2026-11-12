@@ -20,6 +20,7 @@ vi.mock('react', async original => {
     },
     useRef: (initial: unknown) => (state.mock ? (state.refs[state.refCursor++] ??= { current: initial }) : real.useRef(initial)),
     useEffect: (f: () => void, d?: unknown[]) => (state.mock ? undefined : real.useEffect(f, d)),
+    useContext: (c: { _currentValue?: unknown }) => (state.mock ? c._currentValue : real.useContext(c as never)),
   };
 });
 vi.mock('../../src/renderer/sb', () => ({ sb: {} }));

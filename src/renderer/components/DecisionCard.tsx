@@ -12,13 +12,16 @@
 // evidence with what was done as numbered steps (no green ticks), and the two answers as roads: «Se Sì» / «Se No», what
 // happens next in numbered steps (`yesSteps` / `noSteps`, else ifYes / ifNo), the button at the bottom of each road
 // saying the action («Sì, faccio il commit»). The answers block is pinned to the bottom of the questions window.
-import { forwardRef, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+// Opened in the Orchestrator's column (WriteViaOrchestrator), the card has no box of its own: the user writes to the
+// Orchestrator, which passes his words on when they answer it (lib/write-via-orchestrator.ts, ADR 0274).
+import { forwardRef, useContext, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { UiBrief } from '@shared/contract';
 import { t } from '../i18n';
 import { AskImages } from './AskImages';
 import { IconCheck, IconEdit, IconX } from './Icons';
 import { Kbd } from './ui';
 import { useVoiceQuestion } from '../lib/voice';
+import { WriteViaOrchestrator } from '../lib/write-via-orchestrator';
 import '../styles/decision.css';
 
 /** onChoose(viaKey): true when the keyboard answered (a host moves the focus on only then) */
@@ -86,6 +89,8 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
   // voice mode (ADR 0152): the card is read aloud and a spoken answer is the click (sì / no / «non voglio rispondere»,
   // anything longer is the written answer)
   const auto = useRef(`dc-${++cards}`).current;
+  // in the Orchestrator's column the free answer is written to the Orchestrator, in its input under the card
+  const viaInput = useContext(WriteViaOrchestrator) && !!p.write;
   useVoiceQuestion(busy ? null : p.voiceId ?? auto, { question: [p.question, p.why ?? p.lead, ...(p.todo ?? [])].filter(Boolean).join(' '), done: p.speakDone, ifYes: p.ifYes, ifNo: p.ifNo, from: p.speakFrom }, a => {
     if (a.kind === 'yes') choose(p.yes);
     else if (a.kind === 'no') choose(p.no);
@@ -104,7 +109,7 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
     if (e.key === 'Escape' && p.onLater) p.onLater();
     else if (YES_KEYS.has(k)) choose(p.yes, true);
     else if (NO_KEYS.has(k)) choose(p.no, true);
-    else if (WRITE_KEYS.has(k) && p.write && !p.write.disabled) setWriting(true);
+    else if (WRITE_KEYS.has(k) && p.write && !p.write.disabled) { if (viaInput) document.querySelector<HTMLTextAreaElement>('[data-testid="orchestrator-input"]')?.focus(); else setWriting(true); }
     else if (e.key === 'Enter' && !e.shiftKey && (p.yes.recommended || p.no.recommended)) { if (!e.repeat) choose(p.yes.recommended ? p.yes : p.no, true); }
     else done = false;
     if (done) { e.preventDefault(); e.stopPropagation(); }
@@ -170,7 +175,7 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
           {answer(p.no, 'no', t('genui.decision.noKey'))}
         </div>
       )}
-      {writing && p.write ? (
+      {writing && p.write && !viaInput ? (
         <div className="dc-write" data-testid={`${p.testBase}-other-box`}>
           <textarea ref={box} className="dc-write-input" autoFocus rows={p.compact ? 2 : 3} maxLength={2000} value={text} disabled={busy}
             placeholder={t('genui.decision.write')} aria-label={t('genui.decision.write')} data-testid={p.write.testids?.input ?? `${p.testBase}-other-input`}
@@ -189,7 +194,8 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
         </div>
       ) : (
         <div className="dc-more">
-          {p.write && (
+          {viaInput && <span className="dc-via-input" data-testid={`${p.testBase}-via-input`}>{t('genui.decision.viaInput')}</span>}
+          {p.write && !viaInput && (
             <button ref={writeBtn} type="button" className="dc-write-open" onClick={() => setWriting(true)} disabled={busy || p.write.disabled} data-testid={p.write.testids?.open ?? `${p.testBase}-other`}>
               <IconEdit size={13} /><span>{t('genui.decision.write')}</span><span className="dc-key" aria-hidden="true" data-key="T" />
             </button>

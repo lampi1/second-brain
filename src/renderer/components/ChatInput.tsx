@@ -27,7 +27,8 @@ import { IMAGES_MAX_TOTAL, type ChatCommand, type ChatSummary, type ImageAttachm
 import { applyCommand, filterCommands, slashQuery } from '../lib/slash';
 import { fullSrc, imageFiles, pasteKind, roomFor, toAttachment } from '../lib/images';
 import { isBusy, type QueuedMsg } from '../store/state';
-import { app, onChatRemoved, send, sendQueuedNow, unqueue, useApp } from '../store/store';
+import { answer, app, onChatRemoved, send, sendQueuedNow, unqueue, useApp } from '../store/store';
+import { answerableInWords, wordsAnswer } from '@shared/answer-in-words';
 import { toast } from '../store/ui';
 import { IconBolt, IconBranch, IconSend, IconSpinner, IconX } from './Icons';
 import { ImageStrip } from './ImageStrip';
@@ -256,14 +257,27 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
     if (v.length) draftImages.set(chat.id, v); else draftImages.delete(chat.id);
     changed();
   };
+  // its own open question (the Orchestrator's included): what the user writes here is its answer (ADR 0274)
+  const ownAsk = useApp(s => s.pending.find(p => p.chatId === chat.id && answerableInWords(p)));
   const busy = isBusy(chat) || chat.state === 'waiting' || chat.pending > 0;
   const enterNow = queued.length > 0 && !text.trim() && !images.length; // Enter = "Invia subito" on the last queued
-  const placeholder = enterNow ? t('chat.input.placeholderEnter') : voiceOn ? t('voice.placeholder') : orchestrator && mode ? t('chat.input.placeholderPlan') : orchestrator ? t('chat.input.placeholderOrchestrator') : chat.pending > 0 ? t('chat.input.placeholderPending') : busy ? t('chat.input.placeholderBusy') : chat.state === 'closed' ? t('chat.input.placeholderClosed') : t('chat.input.placeholderDefault');
+  const placeholder = ownAsk && !orchestrator ? t('chat.input.placeholderAnswer') : enterNow ? t('chat.input.placeholderEnter') : voiceOn ? t('voice.placeholder') : orchestrator && mode ? t('chat.input.placeholderPlan') : orchestrator ? t('chat.input.placeholderOrchestrator') : chat.pending > 0 ? t('chat.input.placeholderPending') : busy ? t('chat.input.placeholderBusy') : chat.state === 'closed' ? t('chat.input.placeholderClosed') : t('chat.input.placeholderDefault');
   const ready = (text.trim() !== '' || images.length > 0) && reading === 0;
   const submit = (as = mode) => {
     if(updateIsFrozen())return;
     if (reading) return; // a screenshot is still being read: it goes with this message, so wait for it
     if (as && !text.trim()) { toast(t('chat.input.emptyMode'), 'info'); return; } // a mode needs a request in words
+    // the chat asks: his words answer it and its row goes (an image goes as a message, as always)
+    if (ownAsk && !as && text.trim() && !images.length) {
+      const words = text;
+      void answer(ownAsk, wordsAnswer(ownAsk, words)).then(ok => { if (!ok) setText(v => v || words); });
+      rememberPrompt(text);
+      history.current = null;
+      setGhost(null);
+      setText('');
+      drafts.delete(chat.id);
+      return;
+    }
     const r = send(chat.id, as && orchestrator ? withMode(as, text) : text, images);
     if (r === 'empty') return;
     if (orchestrator) setMode(null);

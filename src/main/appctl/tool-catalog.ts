@@ -25,7 +25,7 @@ export const TOOL_CATALOG: Readonly<Record<string, ToolInfo>> = {
   app_agent_context: t('app', 'The frozen launch context of one work chat: memories chosen, omissions, skill hashes.'),
   app_command_runs: t('app', 'The commands the user ran from a chat code block with «Esegui», read only.'),
   app_pending: t('app', 'Open questions, permissions and commands waiting for the user, read only.'),
-  app_resolve_question: t('app', 'The Orchestrator answers a work chat\'s Sì/No question for the user (ADR 0269); what is his alone (production, secrets, permissions, publishing, messages to people) stays in his row.'),
+  app_resolve_question: t('app', 'The Orchestrator answers a work chat\'s Sì/No question for the user (ADR 0269); what is his alone (production, secrets, permissions, publishing, messages to people) stays in his row. With words, his own message to it answers a question or a proposed plan (ADR 0274).'),
   app_feed: t('app', 'Recent live feed events (ideas, errors, chats done or waiting).'),
   app_logs: t('app', 'Recent structured log entries (redacted), filtered by level, scope, chat or text.'),
   app_screenshot: t('app', 'A screenshot of the app window and of each browser tab on screen.'),

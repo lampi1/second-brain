@@ -122,11 +122,11 @@ export const treeIt = {
   'tree.plan.resultBlocked': 'risultato non ottenuto',
   'tree.plan.partial': 'risultato parziale',
   'tree.plan.blocked': 'bloccato',
-  'tree.plan.inWindow': 'La domanda è aperta nella finestra delle domande.',
+  'tree.plan.inWindow': 'La domanda è qui sotto, tra quelle che aspettano te.',
   'tree.plan.openWindow': 'Aprila',
   'tree.plan.ready': 'Piano pronto: lo approvi?',
   // the plan to approve in the questions window, "Popup" on (PlanApproval.tsx, ADR 0121)
-  'tree.plan.inWindowPlan': 'Il piano da approvare è aperto nella finestra delle domande.',
+  'tree.plan.inWindowPlan': 'Il piano da approvare è qui sotto, tra le domande.',
   'tree.plan.openPlan': 'Aprilo',
   'tree.plan.ask.kicker': 'Piano da approvare',
   'tree.plan.ask.title': 'Approvi questo piano?',
