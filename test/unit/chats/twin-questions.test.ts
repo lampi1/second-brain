@@ -41,6 +41,7 @@ const world = (on: boolean): World => ({ sent: [], answers: [], away: { on }, lo
 const ask = (id: string, question: string, options = ['Sì (consigliato)', 'No']): Omit<PendingRequest, 'chatId'> => ({ id, type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at: Date.now(),
   questions: [{ question, multiSelect: false, options: options.map(label => ({ label })) }] });
 
+const tick = () => new Promise(r => setImmediate(r));
 const added = (w: World) => w.events.filter(e => e.ch === 'pending:added').map(e => e.p.id);
 
 describe('the same question twice', () => {
@@ -75,7 +76,44 @@ describe('the same question twice', () => {
     w.sink!.pending(ask('q3', 'Tolgo il vecchio login?'));
     w.sink!.resolved('q2');
     w.sink!.resolved('q1');
+    await tick();
     expect(added(w)).toEqual(['q1', 'q3']);
     expect(m.pending().filter(p => p.chatId === chat.id).map(p => p.id)).toEqual(['q3']);
+  });
+
+  it('an engine that exits resolves everything first: no copy flashes on screen', async () => {
+    const w = world(false), m = manager(w);
+    await m.create({ harness: 'anthropic', cwd: tmp(), title: 'Lavoro' });
+    w.sink!.pending(ask('q1', 'Tolgo il vecchio login?'));
+    w.sink!.pending(ask('q2', 'Tolgo il vecchio login?'));
+    w.sink!.resolved('q1'); w.sink!.resolved('q2');
+    w.sink!.exit({ code: 0, error: null });
+    await tick();
+    expect(added(w)).toEqual(['q1']);
+  });
+
+  it('a wrong first answer leaves the copy waiting; a question differing by a space is its own panel', async () => {
+    const w = world(false), m = manager(w);
+    const chat = await m.create({ harness: 'anthropic', cwd: tmp(), title: 'Lavoro' });
+    w.sink!.pending(ask('q1', 'Tolgo il vecchio login?'));
+    w.sink!.pending(ask('q2', 'Tolgo il vecchio login?'));
+    w.sink!.pending(ask('q3', 'Tolgo il vecchio login? '));
+    expect(added(w)).toEqual(['q1', 'q3']);
+    await expect(m.answer(chat.id, 'q1', { kind: 'question', answers: { 'Altro?': 'No' } })).rejects.toThrow();
+    await m.answer(chat.id, 'q1', { kind: 'question', answers: { 'Tolgo il vecchio login?': 'No' } });
+    expect(w.answers.map(a => a.id).sort()).toEqual(['q1', 'q2']);
+  });
+
+  it('the same ask again while a copy is about to show joins it: one panel', async () => {
+    const w = world(false), m = manager(w);
+    const chat = await m.create({ harness: 'anthropic', cwd: tmp(), title: 'Lavoro' });
+    w.sink!.pending(ask('q1', 'Tolgo il vecchio login?'));
+    w.sink!.pending(ask('q2', 'Tolgo il vecchio login?'));
+    w.sink!.resolved('q1');
+    w.sink!.pending(ask('q3', 'Tolgo il vecchio login?'));
+    await tick();
+    expect(added(w)).toEqual(['q1', 'q2']);
+    await m.answer(chat.id, 'q2', { kind: 'question', answers: { 'Tolgo il vecchio login?': 'No' } });
+    expect(w.answers.map(a => a.id).sort()).toEqual(['q2', 'q3']);
   });
 });

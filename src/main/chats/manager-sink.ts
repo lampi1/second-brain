@@ -21,6 +21,22 @@ import { maskTypedItem, maskTypedRequest } from './typed-text';
 
 /** What a session reports (items, requests, state patches) turned into the chat record and contract events. */
 export abstract class ManagerSink extends ManagerWork {
+  /** A request past the gates: answered by night mode, else shown (also a held twin whose first left, #379). */
+  protected exposeRequest(r: Rec, req: Omit<PendingRequest, 'chatId'>): void {
+    if (this.awayAnswered(r, req)) return;
+    this.hook('analytics', () => this.analytics.pending(r.s, req));
+    this.autoActivity(r);
+    const full: PendingRequest = { ...req, chatId: r.s.id };
+    this.countRequest(r, req);
+    if (r.s.isOrchestrator && isNativeQuestion(req) && req.questions?.length === 1) r.intakePanelId = req.id;
+    r.pending.set(req.id, full);
+    r.s.pending = r.pending.size;
+    this.opts.emitter.emit('pending:added', full);
+    this.updated(r);
+    const on = this.opts.onWaiting;
+    if (on) this.hook('onWaiting', () => on(r.s.id, full));
+  }
+
 
   /** The chat's side of a session: every report lands in r while current() is r's session. */
   protected override sinkFor(r: Rec, current: () => HarnessSession | null): SessionSink {
@@ -60,19 +76,8 @@ export abstract class ManagerSink extends ManagerWork {
         if (this.gated(r, req) || this.refusedCommand(r, req) || this.autoPermitted(r, req)) return;
         // decided on the real input above; parked for night mode, shown and kept masked from here (ADR 0237)
         req = maskTypedRequest(req);
-        if (this.awayAnswered(r, req)) return;
         if (this.heldAsTwin(r, req)) return;
-        this.hook('analytics', () => this.analytics.pending(r.s, req));
-        this.autoActivity(r);
-        const full: PendingRequest = { ...req, chatId };
-        this.countRequest(r, req);
-        if (r.s.isOrchestrator && isNativeQuestion(req) && req.questions?.length === 1) r.intakePanelId = req.id;
-        r.pending.set(req.id, full);
-        r.s.pending = r.pending.size;
-        this.opts.emitter.emit('pending:added', full);
-        this.updated(r);
-        const on = this.opts.onWaiting;
-        if (on) this.hook('onWaiting', () => on(chatId, full));
+        this.exposeRequest(r, req);
       },
       rateLimit: msg => { const on = this.opts.onRateLimit; if (live() && on) this.hook('onRateLimit', () => on(msg)); },
       commands: list => { if (live()) r.commands = list; },
