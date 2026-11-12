@@ -23,9 +23,13 @@
 // prima della modale esegui»): a question or a visual (AskUserQuestion, ask_user, show_ui) is not work, so the block stays
 // the turn's last message, and it is asked as soon as the chat waits on that question, not only once the turn ends; a
 // block put aside with «Non serve» is not asked again in the same turn.
+// Checked first (#388): a block that cannot even start (a placeholder left in, a program path that does not exist, a
+// shell waiting for the keyboard, a PowerShell 5.1 parse error: run/precheck.ts) is not shown; it goes back to its chat
+// with the reasons (CHECK_LABEL), so the user only sees commands that can start. After MAX_BOUNCES such returns in a row
+// the chat's next broken block is shown anyway, its problems written on the card (no endless loop of tokens).
 // Used by wiring.ts (attachCommandAsks, for the real app and the demo) and index.ts (chat:pending, run:*).
 import type { ChatItem, ChatState, ChatSummary, EventMap, PendingRequest, RunInfo } from '../../shared/contract';
-import { askedBlocks } from '../../shared/command-ask';
+import { askedBlocks, type AskedBlock } from '../../shared/command-ask';
 import { prodRisk } from '../../shared/runnable';
 import { log } from '../log';
 import { APP_EVENT_LABEL } from '../chats/orchestrator-wake';
@@ -48,6 +52,22 @@ export interface CommandAsksDeps {
   /** a block not asked because it ran with success recently: that run's result goes to the chat (RunResults.tell);
    *  false = it could not be told (results off): the block is asked as usual */
   alreadyRan?(chatId: string, run: RunInfo): boolean;
+  /** #388: what makes the block fail before it starts, in that folder ([] = none; run/precheck.ts) */
+  check?(code: string, cwd: string): Promise<string[]>;
+  /** #388: a block not shown because of check goes back to its chat with this message (labelled CHECK_LABEL) */
+  sendBack?(chatId: string, text: string): Promise<boolean>;
+}
+
+/** The first line of the message that sends a broken block back (renderer/lib/foreign.ts reads it as Esegui's). */
+export const CHECK_LABEL = "[controllo di Esegui · messaggio automatico di second-brain: il comando che hai lasciato all'utente non gli è stato mostrato perché non può partire; non è un messaggio dell'utente]";
+/** broken blocks sent back in a row by one chat before the next is shown anyway */
+export const MAX_BOUNCES = 3;
+
+/** The message that sends a broken block back to its chat (Italian: the chats speak Italian with the user). */
+export function checkMessage(blocks: readonly { code: string; problems: readonly string[] }[], cwd: string): string {
+  return [CHECK_LABEL, ...blocks.flatMap(b => [`Comando (PowerShell 5.1, cartella ${cwd}):`, '```powershell', b.code, '```',
+    `Esito: non mostrato all'utente: ${b.problems[0] ?? ''}`, ...b.problems.map(p => `- ${p}`), '']),
+    'Correggilo e riproponilo come ultimo blocco della risposta; se non puoi correggerlo, spiega all\'utente cosa manca.'].join('\n');
 }
 
 /** a block that ran with success within this time is not asked again (once per chat and code) */
@@ -67,7 +87,7 @@ const IN_TURN: ReadonlySet<ChatState> = new Set(['running', 'waiting']);
 export class CommandAsks {
   private asks = new Map<string, Map<string, PendingRequest>>();
   private turns = new Map<string, Turn>();
-  private chats = new Map<string, Pick<ChatSummary, 'state' | 'title' | 'closedAt' | 'handoffBusy'>>();
+  private chats = new Map<string, Pick<ChatSummary, 'state' | 'title' | 'closedAt' | 'handoffBusy' | 'pending'>>();
   private timers = new Map<string, NodeJS.Timeout>();
   /** chats whose current turn the app started with its news ("Eventi all'Orchestrator"): the user did not move on */
   private appTurn = new Set<string>();
@@ -88,6 +108,12 @@ export class CommandAsks {
   private toldRecent = new Set<string>();
   /** chatId|runId already told that run is still going (#383): proposed again meanwhile, still not asked */
   private toldRunning = new Set<string>();
+  /** chat → broken blocks sent back in a row (#388) */
+  private bounces = new Map<string, number>();
+  /** chat → the send-back waiting for the chat to be free (#388) */
+  private held = new Map<string, { itemId: string; text: string; blocks: { b: AskedBlock; key: string; problems: string[] }[] }>();
+  /** chatId#requestId being checked, or already sent back: a second read of the same message never checks it again */
+  private checked = new Set<string>();
 
   /** the run results (RunResults.tell), linked once both exist (wiring-shared.ts attachRunResults) */
   private teller?: (chatId: string, run: RunInfo) => boolean;
@@ -158,8 +184,8 @@ export class CommandAsks {
     if (item.kind === 'user') {
       // the app's own messages (news to the Orchestrator, a run's result) and the notes of the user's clicks (Mandato, Non
       // serve: ADR 0038) are no answer to the other commands it left: they stay
-      if (item.text.startsWith(APP_EVENT_LABEL) || item.text.startsWith(RUN_RESULT_LABEL) || isNotesOnly(item.text)) this.appTurn.add(chatId);
-      else { this.appTurn.delete(chatId); this.clear(chatId, 'new message'); }
+      if (item.text.startsWith(APP_EVENT_LABEL) || item.text.startsWith(RUN_RESULT_LABEL) || item.text.startsWith(CHECK_LABEL) || isNotesOnly(item.text)) this.appTurn.add(chatId);
+      else { this.appTurn.delete(chatId); this.clear(chatId, 'new message'); this.bounces.delete(chatId); this.held.delete(chatId); }
       this.turns.set(chatId, { last: null, ids: new Set([item.id]) });
       for (const k of [...this.dismissed]) if (k.startsWith(`${chatId}#`)) this.dismissed.delete(k);
       return;
@@ -180,8 +206,9 @@ export class CommandAsks {
 
   private updated(c: ChatSummary): void {
     const was = this.chats.get(c.id)?.state;
-    this.chats.set(c.id, { state: c.state, title: c.title, closedAt: c.closedAt, handoffBusy: c.handoffBusy });
-    if (c.closedAt) { this.clear(c.id, 'archived'); return; }
+    this.chats.set(c.id, { state: c.state, title: c.title, closedAt: c.closedAt, handoffBusy: c.handoffBusy, pending: c.pending });
+    if (c.closedAt) { this.clear(c.id, 'archived'); this.held.delete(c.id); return; }
+    if (this.held.has(c.id)) this.flushHeld(c.id);
     if (c.handoffBusy && !this.handoff.has(c.id)) {
       // a hand-off starts right after a turn: that turn's last message is read now, before the note's items arrive
       this.handoff.add(c.id);
@@ -221,6 +248,7 @@ export class CommandAsks {
     if (c.state === 'waiting') this.atQuestion.set(chatId, last.id);
     const m = this.asks.get(chatId) ?? new Map<string, PendingRequest>();
     const cwd = this.d.cwdOf?.(chatId), now = this.d.now?.() ?? Date.now();
+    const toCheck: { b: AskedBlock; id: string; key: string }[] = [];
     for (const b of askedBlocks(last.text)) {
       const id = `cmd-${last.id}-${b.index}`;
       if (m.has(id) || this.dismissed.has(`${chatId}#${id}`) || this.d.ran(chatId, last.id, b.code)) continue;
@@ -246,23 +274,85 @@ export class CommandAsks {
         log.info('run', 'command not asked again: it ran with success recently', { chat: chatId, data: { id, run: recent.id } });
         continue;
       }
-      const prod = prodRisk(b.code);
-      const req: PendingRequest = {
-        id, chatId, type: 'command', tool: 'Esegui', title: 'Comando da eseguire', detail: b.code,
-        input: { itemId: last.id, code: b.code, lang: b.lang }, at: this.d.now?.() ?? Date.now(),
-        command: { itemId: last.id, code: b.code, lang: b.lang, ...(prod ? { prod } : {}), ...(b.lead ? { lead: b.lead } : {}) },
-      };
-      const open = cwd === undefined ? undefined : this.pending().find(r => r.chatId !== chatId && r.command && sameCode(r.command.code) === code && this.d.cwdOf?.(r.chatId) === cwd);
-      if (open) {
-        // asked once: this chat follows the open ask, and gets the result of its run
-        const list = this.followers.get(reqKey(open)) ?? [];
-        if (!list.some(f => f.chatId === chatId)) list.push(req);
-        this.followers.set(reqKey(open), list);
-        log.info('run', 'command not asked twice: another chat asks the same', { chat: chatId, data: { id, follows: open.chatId } });
-        continue;
-      }
-      this.open(req, c.title);
+      if (!this.d.check || cwd === undefined) { this.offer(chatId, last.id, b, []); continue; }
+      const key = `${chatId}#${id}`;
+      if (this.checked.has(key)) continue;
+      this.checked.add(key);
+      toCheck.push({ b, id, key });
     }
+    if (toCheck.length && this.d.check && cwd !== undefined) void this.checkAll(chatId, last.id, cwd, toCheck);
+  }
+
+  /** #388: the message's blocks checked together; the good ones are offered first, then the broken ones go back in one
+   *  message (one bounce), held while the chat waits on a question or works. */
+  private async checkAll(chatId: string, itemId: string, cwd: string, list: { b: AskedBlock; id: string; key: string }[]): Promise<void> {
+    const check = this.d.check!;
+    const found = await Promise.all(list.map(x => check(x.b.code, cwd).catch(() => [] as string[])));
+    const cur = this.chats.get(chatId);
+    // the chat went on meanwhile: nothing to do
+    if (!cur || cur.closedAt || this.turns.get(chatId)?.last?.id !== itemId) return;
+    const live = list.map((x, i) => ({ ...x, problems: found[i] ?? [] }))
+      .filter(x => !this.has(chatId, x.id) && !this.dismissed.has(x.key) && !this.d.ran(chatId, itemId, x.b.code));
+    const broken = live.filter(x => x.problems.length);
+    for (const x of live) if (!x.problems.length) { this.checked.delete(x.key); this.offer(chatId, itemId, x.b, []); }
+    if (!broken.length) { if (live.length) this.bounces.delete(chatId); return; }
+    const n = this.bounces.get(chatId) ?? 0;
+    if (n >= MAX_BOUNCES || !this.d.sendBack) { this.showBroken(chatId, itemId, broken); return; }
+    this.bounces.set(chatId, n + 1);
+    log.info('run', 'command not shown: it cannot start, sent back to its chat', { chat: chatId, data: { ids: broken.map(x => x.id), problems: broken.flatMap(x => x.problems) } });
+    this.held.set(chatId, { itemId, text: checkMessage(broken.map(x => ({ code: x.b.code, problems: x.problems })), cwd), blocks: broken });
+    this.flushHeld(chatId);
+  }
+
+  /** shown anyway, the problems on the card (MAX_BOUNCES reached, or the chat could not be told) */
+  private showBroken(chatId: string, itemId: string, broken: { b: AskedBlock; key: string; problems: string[] }[]): void {
+    this.bounces.delete(chatId);
+    for (const x of broken) { this.checked.delete(x.key); this.offer(chatId, itemId, x.b, x.problems); }
+  }
+
+  /** The held send-back goes once the chat is free (idle, nothing open, no hand-off), like a run's result. */
+  private flushHeld(chatId: string): void {
+    const h = this.held.get(chatId), c = this.chats.get(chatId);
+    if (!h || !c) return;
+    // the agent wrote a newer message meanwhile: the old blocks are past, that message is read on its own
+    if (this.turns.get(chatId)?.last?.id !== h.itemId) {
+      this.held.delete(chatId);
+      this.bounces.set(chatId, Math.max(0, (this.bounces.get(chatId) ?? 1) - 1));
+      return;
+    }
+    if (c.state !== 'idle' || c.handoffBusy || c.pending) return;
+    this.held.delete(chatId);
+    void this.d.sendBack!(chatId, h.text).then(ok => {
+      if (ok) return;
+      // the chat could not be told: the user sees the blocks, with their problems
+      this.bounces.set(chatId, Math.max(0, (this.bounces.get(chatId) ?? 1) - 1));
+      if (this.turns.get(chatId)?.last?.id === h.itemId) this.showBroken(chatId, h.itemId, h.blocks);
+    });
+  }
+
+  /** The block becomes the user's request, or follows the same open one of another chat (asked once). problems = what
+   *  the check found, shown on the card when it was sent back MAX_BOUNCES times already. */
+  private offer(chatId: string, itemId: string, b: AskedBlock, problems: readonly string[]): void {
+    const c = this.chats.get(chatId);
+    if (!c) return;
+    const id = `cmd-${itemId}-${b.index}`, cwd = this.d.cwdOf?.(chatId), code = sameCode(b.code);
+    const prod = prodRisk(b.code);
+    const lead = [problems.length ? `⚠ Potrebbe non partire: ${problems.join('; ')}.` : '', b.lead].filter(Boolean).join(' ');
+    const req: PendingRequest = {
+      id, chatId, type: 'command', tool: 'Esegui', title: 'Comando da eseguire', detail: b.code,
+      input: { itemId, code: b.code, lang: b.lang }, at: this.d.now?.() ?? Date.now(),
+      command: { itemId, code: b.code, lang: b.lang, ...(prod ? { prod } : {}), ...(lead ? { lead } : {}) },
+    };
+    const open = cwd === undefined ? undefined : this.pending().find(r => r.chatId !== chatId && r.command && sameCode(r.command.code) === code && this.d.cwdOf?.(r.chatId) === cwd);
+    if (open) {
+      // asked once: this chat follows the open ask, and gets the result of its run
+      const list = this.followers.get(reqKey(open)) ?? [];
+      if (!list.some(f => f.chatId === chatId)) list.push(req);
+      this.followers.set(reqKey(open), list);
+      log.info('run', 'command not asked twice: another chat asks the same', { chat: chatId, data: { id, follows: open.chatId } });
+      return;
+    }
+    this.open(req, c.title);
   }
 
   private open(req: PendingRequest, title: string): void {
@@ -315,6 +405,9 @@ export class CommandAsks {
     this.turns.delete(chatId);
     this.chats.delete(chatId);
     this.handoff.delete(chatId);
+    this.bounces.delete(chatId);
+    this.held.delete(chatId);
+    for (const k of [...this.checked]) if (k.startsWith(`${chatId}#`)) this.checked.delete(k);
   }
 }
 

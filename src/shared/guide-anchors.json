@@ -270,7 +270,7 @@
     "src/renderer/lib/composer-suggest.ts#localSuggestion": "5cfcf3719210199d",
     "src/renderer/lib/correction.ts": "0f7e9ce78b938755",
     "src/renderer/lib/correction.ts#QUOTE_MAX": "5fe546c66feaed14",
-    "src/renderer/lib/foreign.ts": "125a39001e0d490c",
+    "src/renderer/lib/foreign.ts": "952eff8066a50c14",
     "src/renderer/lib/format.ts": "497e7a0749f1029d",
     "src/renderer/lib/grid.ts#workspaceTiles": "e8ed56ea44e222c7",
     "src/renderer/lib/guide-usage.ts#forYou": "65193edad13b1032",

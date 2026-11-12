@@ -23,6 +23,7 @@ import fs from 'node:fs';
 import { CommandRunner } from './run/runner';
 import { CommandAsks } from './run/asks';
 import { RunResults } from './run/results';
+import { precheckCommand } from './run/precheck';
 import { ProjectMapStore } from './projectmap/store';
 import { ProjectMaps } from './projectmap/service';
 import { chatMapTools } from './projectmap/tools';
@@ -93,7 +94,7 @@ export function commandRunner(ctx: Pick<Ctx, 'emitter'>, chats: ChatService, onR
 
 /** "Comando da eseguire" requests (run/asks.ts): they watch every event main sends to the page (the emitter is tapped
  *  here, for the real app and the demo alike) and notify through the feed like a question ("Domanda per te"). */
-export function attachCommandAsks(ctx: Pick<Ctx, 'emitter'>, runner: CommandRunner, brain: Pick<BrainService, 'publish'>, now?: () => number, chats?: Pick<ChatService, 'commandAsked' | 'commandDone'>): CommandAsks {
+export function attachCommandAsks(ctx: Pick<Ctx, 'emitter'>, runner: CommandRunner, brain: Pick<BrainService, 'publish'>, now?: () => number, chats?: Pick<ChatService, 'commandAsked' | 'commandDone'> & Partial<Pick<ChatService, 'send'>>): CommandAsks {
   const send = ctx.emitter.emit.bind(ctx.emitter);
   const asks = new CommandAsks({
     // through the emitter as it is when called: the taps added later (the Orchestrator's news) hear it too
@@ -105,6 +106,11 @@ export function attachCommandAsks(ctx: Pick<Ctx, 'emitter'>, runner: CommandRunn
     // asked once (ADR 0239): the same block in the same folder is asked of the user one time
     cwdOf: chatId => runner.cwdOf(chatId), runs: () => runner.list(),
     ...(now ? { now } : {}),
+    // #388: a block that cannot start goes back to its chat instead of showing (only where the app can write to chats)
+    ...(chats?.send ? {
+      check: (code: string, cwd: string) => precheckCommand(code, cwd),
+      sendBack: (chatId: string, text: string) => chats.send!(chatId, text, undefined, false, 'App', false, { kind: 'app' }).then(() => true, err => { log.warn('run', 'broken command not sent back to its chat', { chat: chatId, cause: errText(err), hint: 'shown to the user with its problems instead' }); return false; }),
+    } : {}),
     onAsk: (req, title) => {
       chats?.commandAsked?.(req.chatId, req.id);
       brain.publish([{ kind: 'question', title, detail: `Comando da eseguire: ${req.detail.split(/\r?\n/)[0] ?? ''}`, chatId: req.chatId }]);

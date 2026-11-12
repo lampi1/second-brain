@@ -19,13 +19,13 @@ export interface Foreign { kind: ForeignKind; sender: string; summary: string; b
 type UserItem = Extract<ChatItem, { kind: 'user' }>;
 
 // the label lines main writes as the first line (chats/mail.ts render, appctl/tools.ts AGENT_LABEL,
-// chats/orchestrator-wake.ts APP_EVENT_LABEL, run/results.ts RUN_RESULT_LABEL, chats/manager.ts RESUME_TEXT)
+// chats/orchestrator-wake.ts APP_EVENT_LABEL, run/results.ts RUN_RESULT_LABEL, run/asks.ts CHECK_LABEL, chats/manager.ts RESUME_TEXT)
 const MAIL = /^\[Messaggio dalla chat "(.*?)" tramite second-brain[^\n]*\]/;
 const AGENT = /^\[Messaggio di un agente tramite second-brain[^\n]*\]/;
 /** the Orchestrator writing for the user (shared/agent-label.ts ORCHESTRATOR_USER_LABEL, ADR 0269) */
 const FOR_USER = /^\[Messaggio dell'utente scritto dall'Orchestrator[^\n]*\]/;
 const EVENT = /^\[evento app[^\n]*\]/;
-const RUN = /^\[esito di Esegui[^\n]*\]/;
+const RUN = /^\[(?:esito|controllo) di Esegui[^\n]*\]/;
 /** The outcome of an Esegui run as main writes it for the chat (run/results.ts runResultText, in Italian: the chats read
  *  it) in the UI language: «riuscito (exit code 0)», «fallito (exit code 1)», «fermato dall'utente…», then « · N s» and the
  *  production mark. Anything else stays as written. */
