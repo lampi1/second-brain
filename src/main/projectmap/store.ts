@@ -23,6 +23,12 @@ export function asMap(v: unknown, project: string): ProjectMap | null {
     return { ...x, evidence: Array.isArray(x.evidence) ? x.evidence.filter(str) : [], confirmedAt: num(x.confirmedAt) ? x.confirmedAt : 0 };
   }) as unknown as ProjectMap['elements'];
   if (!elements.length) return null;
+  // a parent that is not a system on the top level (missing, a part, a loop: a hand-edited file) is dropped
+  const top = new Map(elements.map(e => [e.id, e]));
+  for (const e of elements) {
+    const p = e.parent === undefined ? undefined : top.get(e.parent);
+    if (e.parent !== undefined && (!p || (p.kind !== 'system' && p.kind !== 'external') || p.parent !== undefined)) delete (e as { parent?: string }).parent;
+  }
   const ids = new Set(elements.map(e => e.id));
   const links = (Array.isArray(v.links) ? v.links : []).filter(l => obj(l) && str(l.id) && str(l.from) && str(l.to) && ids.has(l.from) && ids.has(l.to) && str(l.status))
     .map(l => ({ ...(l as Record<string, unknown>), label: str((l as Record<string, unknown>).label) ? (l as Record<string, unknown>).label : '', confirmedAt: num((l as Record<string, unknown>).confirmedAt) ? (l as Record<string, unknown>).confirmedAt : 0 })) as unknown as ProjectMap['links'];

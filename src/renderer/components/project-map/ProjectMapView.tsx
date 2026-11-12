@@ -129,10 +129,11 @@ export function ProjectMapView({ arg, onArg }: { arg: string | null; onArg: (arg
   // once per place (not on every live reload, which would undo what the user picked since)
   const pickedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!map || pickedFor.current === level) return;
-    pickedFor.current = level;
+    const place = `${project}/${level ?? ''}`;
+    if (!map || map.project !== project || pickedFor.current === place) return;
+    pickedFor.current = place;
     if (level && shownLevel !== level && map.elements.some(e => e.id === level)) setPicked(level);
-  }, [level, shownLevel, map]);
+  }, [project, level, shownLevel, map]);
   useEffect(() => {
     const el = box.current;
     if (!el || !lv) return;

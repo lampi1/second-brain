@@ -241,7 +241,7 @@ export function levelOf(map: Pick<ProjectMap, 'elements' | 'links'>, parent: str
   };
   const own = map.elements.filter(e => (e.parent ?? null) === parent).map(e => e.id);
   const ctx = new Set<string>();
-  const outside = (id: string): string => { let e = byId.get(id); while (e?.parent) e = byId.get(e.parent); return e?.id ?? id; };
+  const outside = (id: string): string => { let e = byId.get(id); for (let n = 0; e?.parent && n < 50; n++) e = byId.get(e.parent); return e?.id ?? id; };
   const edges = new Map<string, LevelEdge>();
   for (const l of map.links) {
     let a = inside(l.from), b = inside(l.to);

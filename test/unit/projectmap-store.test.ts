@@ -53,6 +53,11 @@ describe('ProjectMapStore', () => {
     fs.writeFileSync(path.join(root, 'projects', 'copy', 'map.json'), JSON.stringify({ project: 'shop', title: 'Copy', version: 3, elements: [{ id: 'web', kind: 'system', name: 'Web', status: 'ok' }] }));
     expect(s.list().map(m => m.project).sort()).toEqual(['copy', 'shop']);
     expect(s.get('broken')).toBeNull();
+    fs.mkdirSync(path.join(root, 'projects', 'loop'));
+    fs.writeFileSync(path.join(root, 'projects', 'loop', 'map.json'), JSON.stringify({ version: 1, elements: [
+      { id: 's', kind: 'system', name: 'S', status: 'ok' }, { id: 'p', kind: 'part', name: 'P', status: 'ok', parent: 's' },
+      { id: 'd', kind: 'part', name: 'D', status: 'ok', parent: 'e' }, { id: 'e', kind: 'part', name: 'E', status: 'ok', parent: 'd' }] }));
+    expect(s.get('loop')!.elements.map(e => e.parent ?? '-')).toEqual(['-', 's', '-', '-']);
     expect(s.get('copy')).toMatchObject({ project: 'copy', links: [], corrections: [], elements: [{ id: 'web', evidence: [], confirmedAt: 0 }] });
   });
   it('refuses without a brain or with a bad name', () => {
