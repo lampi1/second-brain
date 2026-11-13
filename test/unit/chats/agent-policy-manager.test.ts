@@ -105,10 +105,17 @@ describe('agent policy on chats', () => {
     // as the Claude session sends it: the short input in the request, the whole one beside it
     f.sink().pending({ id: 'w1', type: 'permission', tool: 'Write', title: 'Write', detail: '', input: short, at: 1 }, whole);
     expect(f.answers).toEqual([{ id: 'w1', answer: expect.objectContaining({ kind: 'permission', allow: true }) }]);
-    // the shortened one alone is not what will run: it stays the user's call
+    // with no rule of the brain on the tool, nothing needs reading: the shortened one alone passes too (ADR 0294)
     f.sink().pending({ id: 'w2', type: 'permission', tool: 'Write', title: 'Write', detail: '', input: short, at: 1 });
-    expect(f.answers).toHaveLength(1);
-    expect(f.m.pending().some(p => p.id === 'w2')).toBe(true);
+    expect(f.answers).toHaveLength(2);
+    // under a rule that could hold the tool, the rules must read what will run: the shortened one alone is the user's call
+    const g = fixture({ brainRoot: () => path.join(__dirname, '..', '..', 'fixtures', 'brain-policy') });
+    await g.m.create({ harness: 'claude', cwd: g.dir, prompt: 'x' }, 'user');
+    g.sink().pending({ id: 'w3', type: 'permission', tool: 'Write', title: 'Write', detail: '', input: short, at: 1 });
+    expect(g.answers).toEqual([]);
+    expect(g.m.pending().some(p => p.id === 'w3')).toBe(true);
+    g.sink().pending({ id: 'w4', type: 'permission', tool: 'Write', title: 'Write', detail: '', input: short, at: 1 }, whole);
+    expect(g.answers).toEqual([{ id: 'w4', answer: expect.objectContaining({ kind: 'permission', allow: true }) }]);
   });
 
   it('a request the app leaves to the user shows the short input, though the app read the whole one (ADR 0290)', async () => {
@@ -232,7 +239,8 @@ describe('agent policy on chats', () => {
   it('under brain rules, nothing the user grants for a tool they could hold is «always» (ADR 0254)', async () => {
     const f = fixture({ brainRoot: () => path.join(__dirname, '..', '..', 'fixtures', 'brain-policy') });
     await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' });
-    f.sink().pending({ id: 's1', type: 'permission', tool: 'Bash', title: 'Bash', detail: '', input: { command: 'cp a .git/hooks/pre-commit' }, at: 1, alwaysRules: ['Bash(cp:*)'] });
+    // a request the rules cannot read whole (an engine cut it) reaches the user
+    f.sink().pending({ id: 's1', type: 'permission', tool: 'Bash', title: 'Bash', detail: '', input: { command: `cp a ${'b'.repeat(40)}… (+900)` }, at: 1, alwaysRules: ['Bash(cp:*)'] });
     expect(f.m.pending().find(p => p.id === 's1')).toMatchObject({ noAlways: true });
     expect(f.m.pending().find(p => p.id === 's1')?.alwaysRules).toBeUndefined();
   });

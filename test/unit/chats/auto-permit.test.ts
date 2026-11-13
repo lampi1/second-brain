@@ -2,7 +2,7 @@
 // #352): the app keeps no list of its own of what is dangerous. Everything passes, in or out of the chat's folder, with
 // or without a checkpoint, unless the user's brain rules hold it (permit-policy.test.ts), the user narrowed the role
 // («Chiede conferma», «Solo piano» ask all; «Accetta modifiche» asks what is neither a read nor an edit), it changes the
-// agents' own settings or hooks (AGENTS.md rule 6), or it is a plan to approve.
+// brain's rules file itself (ADR 0294: no guard of the app's own on settings and hooks), or it is a plan to approve.
 import { afterAll, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -43,77 +43,137 @@ describe('autoPermit: allow by default', () => {
   });
 });
 
-describe('autoPermit: the agents\' own settings and hooks (AGENTS.md rule 6)', () => {
-  it('asks before an edit of them, in the folder or out of it, even through a link', () => {
-    for (const f of ['.claude/settings.json', '.git/config', '.githooks/pre-commit', '.cursor/hooks.json', '.mcp.json', '.vscode/settings.json', '.guardallow']) {
-      expect(autoPermit(perm('Write', { file_path: path.join(cwd, f) }), ctx()).kind, f).toBe('ask');
+describe('autoPermit: no guard of the app on settings and hooks (ADR 0294)', () => {
+  it('lets what the old guard asked through: the user\'s brain is the only one that holds', () => {
+    for (const f of ['.claude/settings.json', '.claude/skills/x/SKILL.md', '.git/config', '.githooks/pre-commit', '.cursor/agents/a.md', '.mcp.json', '.vscode/settings.json']) {
+      expect(autoPermit(perm('Write', { file_path: path.join(cwd, f) }), ctx()).kind, f).toBe('allow');
     }
-    expect(autoPermit(perm('Edit', { file_path: path.join(os.homedir(), '.claude', 'settings.json') }), ctx()).kind).toBe('ask');
-    expect(autoPermit(perm('Write', { file_path: 'C:\\Users\\d\\AppData\\Roaming\\Claude\\claude_desktop_config.json' }), ctx()).kind).toBe('ask');
-    expect(autoPermit(perm('Edit', { files: [] }), ctx()).kind).toBe('ask'); // an edit that names no place
-    for (const input of [{ filePath: path.join(cwd, '.git', 'hooks', 'pre-commit') }, { target_file: '.git/hooks/pre-commit' }, { args: { path: '.claude/settings.json' } }]) {
-      expect(autoPermit(perm('Edit', input), ctx()).kind, JSON.stringify(input)).toBe('ask'); // any engine's shape
-    }
-    for (const f of ['.git.', '.git::$INDEX_ALLOCATION', '.opencode/plugin/x.ts', '.claude.json']) expect(autoPermit(perm('Write', { file_path: path.join(cwd, f) }), ctx()).kind, f).toBe('ask');
-    expect(autoPermit(perm('mcp__fs__write_file', { path: path.join(os.homedir(), '.claude', 'settings.json'), content: 'x' }), ctx()).kind).toBe('ask');
-    // its content may name a settings file without touching it
-    expect(autoPermit(perm('Write', { file_path: path.join(cwd, 'README.md'), content: 'see .claude/settings.json' }), ctx()).kind).toBe('allow');    const hooks = path.join(cwd, 'hooks-link');
-    fs.mkdirSync(path.join(root, '.claude'), { recursive: true });
-    try { fs.symlinkSync(path.join(root, '.claude'), hooks, 'dir'); } catch { return; }
-    expect(autoPermit(perm('Write', { file_path: path.join(hooks, 'settings.json') }), ctx()).kind).toBe('ask');
-  });
-
-  it('asks before a command that writes them; one that only reads them may look', () => {
-    for (const c of ['echo x > .git/hooks/pre-commit', 'cp a ~/.claude/settings.json', 'git config core.hooksPath x', 'git -c core.hooksPath=x commit',
-      'cp evil .gi?/hooks/pre-commit', "cp evil .g''it/hooks/pre-commit", 'cp evil .\\git/hooks/pre-commit', 'git config --global core.editor x', 'claude mcp add x -- node evil.js',
-      "cp evil .g'i't/hooks/pre-commit", 'agent mcp add x', "cp evil $'\\x2egit'/hooks/x", 'printf "\\x2egit" | xargs -I{} cp evil {}/hooks/x',
-      'cp evil $(echo .gi)t/hooks/x', 'cp evil .g`echo i`t/hooks/x']) expect(run(c), c).toBe('ask');
-    // a substitution that builds no path stays free
-    for (const c of ['TOKEN=$(az account get-access-token) node run.js', 'echo "built at $(date)" > out.txt', 'Copy-Item C:\\work\\2026\\a.csv .\\out\\',
-      'Write-Output "a`tb" > out.txt', 'echo start; Copy-Item C:\\work\\2026\\a.csv .\\out\\', 'echo hi > C:\\xampp\\htdocs\\x.txt', 'echo hi > C:\\work\\2026\\out.txt', 'echo "build ok" >> C:\\logs\\1.log', 'echo off > C:\\Temp\\0\\x.txt', 'echo "v1.0" > C:\\tmp\\1\\x.txt', "grep -v '^$' a.txt > b.txt", 'docker run -v $(pwd):/app node']) expect(run(c), c).toBe('allow');
-    for (const c of ['cp evil $(echo .gi)"t/hooks/pre-commit"', "printf '\\56git/hooks/x' | xargs -I{} cp evil {}", "cp evil $'.git/hooks/pre-commit'",
-      'Copy-Item evil .g`it/hooks/pre-commit', 'Copy-Item evil .c`laude/settings.json', `cp evil "$(echo -n -e '\\x2egit/hooks/x')"`, `cp evil "$(echo '\\056git/hooks/x')"`, 'cp evil $".git/hooks/x"',
-      "printf ';\\056git/hooks/x' | cut -c2- | xargs -I{} cp evil {}", `cp evil "$(printf '&\\056git/hooks/x' | cut -c2-)"`, "echo -e ';' '\\x2egit/hooks/x' | xargs -n1 | xargs -I{} cp evil {}",
-      'printf "a\\"b;\\056git/hooks/x" | cut -c5- | xargs -I{} cp e {}', "printf 'a'\\''b;\\056git/hooks/x' | cut -c5- | xargs -I{} cp e {}",
-      'printf a\\;\\\\056git/hooks/x | cut -c3- | xargs -I{} cp e {}', `echo -e 'a'\\''b;\\x2egit/hooks/x' | xargs -I{} cp e {}`,
-      "echo -e >n '\\x2egit/hooks/x'; xargs -a n -I{} cp evil {}", "echo -e 2>/dev/null '\\056git/hooks/x' | xargs -I{} cp evil {}",
-      "echo -e 2>&1 '\\x2egit/hooks/x' | xargs -I{} cp e {}", "echo -e &>n '\\x2egit/hooks/x'; xargs -a n -I{} cp e {}", "echo -e >| n '\\x2egit/hooks/x'; xargs -a n -I{} cp e {}",
-      "echo -e $(true|true) '\\x2egit/hooks/x' | xargs -I{} cp e {}",
-      "printf '\\56\\ngit/hooks/x' | paste -sd '' | xargs -I{} cp e {}", "printf '\\56 git/hooks/x' | tr -d ' ' | xargs -I{} cp e {}",
-      "printf 'x\\56.git/hooks/y' | cut -c3- | xargs -I{} cp e {}", "echo -e '\\56 git/hooks/x' | tr -d ' ' | xargs -I{} cp e {}",
-      'printf \\056git/hooks/x | % { Copy-Item evil $_ }', "xargs -0 printf <<EOF | xargs -I{} cp e {}\n\\056git/hooks/x\nEOF", "printf 'C:\\056git/hooks/x' | cut -c3- | xargs -I{} cp e {}", "echo -e 'C:\\x2egit/hooks/x' | cut -c3- | xargs -I{} cp e {}"]) expect(run(c), c).toBe('ask');
-    expect(autoPermit(perm('Shell', { command: 'echo x > hooks/pre-commit', cwd: '.git' }), ctx()).kind).toBe('ask');
-    for (const c of ['cat .claude/settings.json', 'ls .git', 'git status']) expect(run(c), c).toBe('allow');
+    expect(autoPermit(perm('Edit', { files: [] }), ctx()).kind).toBe('allow');
+    for (const c of ['DIR=$(pwd)/out; mkdir -p "$DIR"', 'cp "$(pwd)/a" b', 'ls $(git rev-parse --show-toplevel)/src', 'gh pr create --title x --body "$(cat <<\'EOF\'\n- a (b).\nEOF\n)"',
+      'mkdir .claude/skills/x && echo hi > .claude/skills/x/SKILL.md', 'rm .git/index.lock', 'code .vscode/launch.json', 'git config --global core.editor x',
+      'printf "\\x41" > out.txt', 'echo x > .git/hooks/pre-commit']) expect(run(c), c).toBe('allow');
   });
 });
 
-describe('autoPermit: what it cannot read whole is the user\'s call', () => {
-  it('asks for a request an engine cut, a command with no line, and Codex\'s session-long grantRoot', () => {
-    expect(run(`echo ${'x'.repeat(3990)}… (+42)`)).toBe('ask');
-    expect(autoPermit(perm('Edit', { files: [...Array.from({ length: 200 }, (_, i) => `src/f${i}.ts`)] }), ctx()).kind).toBe('ask');
-    expect(autoPermit(perm('Shell', {}), ctx()).kind).toBe('ask');
-    expect(autoPermit(perm('Shell', { title: 'printenv' }), ctx()).kind).toBe('ask');
-    expect(autoPermit(perm('Edit', { files: ['src/a.ts'], grantRoot: cwd }), ctx()).kind).toBe('ask');
-    // a cut deep in the input, in a place or in content, is still a cut
-    expect(autoPermit(perm('mcp__fs__write', { a: { b: { c: { path: `src/${'x'.repeat(10)}… (+9)` } } } }), ctx()).kind).toBe('ask');
-    expect(autoPermit(perm('Write', { file_path: 'src/a.ts', content: `x… (+9)` }), ctx()).kind).toBe('ask');
-    // an input that came whole (Claude, ADR 0290) carries no cut: the same signs are plain content
-    expect(autoPermit({ ...perm('Write', { file_path: 'src/a.ts', content: `x… (+9)` }), whole: true }, ctx()).kind).toBe('allow');
-    expect(autoPermit({ ...perm('Edit', { files: Array.from({ length: 200 }, (_, i) => `src/f${i}.ts`) }), whole: true }, ctx()).kind).toBe('allow');
-    expect(autoPermit({ ...perm('Edit', { files: [...Array.from({ length: 200 }, (_, i) => `src/f${i}.ts`), '.claude/settings.json'] }), whole: true }, ctx()).kind).toBe('ask'); // rule 6 still reads them all
-    // a place is read however long it is and on however many lines: a tool that tidies the path reaches the same file
-    for (const n of [500, 2100, 16_490, 40_000]) {
-      const far = `${'./'.repeat(n)}.claude/settings.json`;
-      expect(autoPermit({ ...perm('mcp__fs__write', { path: far, content: 'x' }), whole: true }, ctx()).kind, String(n)).toBe('ask');
-      expect(autoPermit({ ...perm('Edit', { file_path: far, old_string: 'a', new_string: 'b', note: 'src/a.ts' }), whole: true }, ctx()).kind, String(n)).toBe('ask');
+describe('autoPermit: the brain\'s rules file is the user\'s to change (ADR 0294)', () => {
+  const brain = path.join(root, 'brain');
+  fs.mkdirSync(brain, { recursive: true });
+  const rulesFile = path.join(brain, 'permissions.json');
+  fs.writeFileSync(rulesFile, JSON.stringify({ version: 1, rules: [] }));
+  const none: PermitContext['policy'] = { state: 'ok', rules: [] };
+  const inBrain = (over: Partial<PermitContext> = {}) => ctx({ cwd: brain, policy: none, rulesFile, ...over });
+
+  it('asks before an edit or a command that changes it; reading it, and any other file, is free', () => {
+    expect(autoPermit(perm('Write', { file_path: rulesFile, content: '{}' }), inBrain()).kind).toBe('ask');
+    expect(autoPermit(perm('Edit', { file_path: 'permissions.json', old_string: 'a', new_string: 'b' }), inBrain()).kind).toBe('ask');
+    expect(autoPermit(perm('mcp__fs__write', { path: path.join(brain, 'x', '..', 'permissions.json'), content: 'x' }), inBrain()).kind).toBe('ask');
+    expect(autoPermit(perm('Write', { file_path: rulesFile, content: '{}' }), ctx({ policy: none, rulesFile })).kind).toBe('ask');   // from another folder
+    for (const c of ['echo "{}" > permissions.json', `rm ${rulesFile}`, 'node -e "x" > ./permissions.json']) expect(run(c, { cwd: brain, policy: none, rulesFile }), c).toBe('ask');
+    expect(run(`cd ${brain} && echo x > permissions.json`, { policy: none, rulesFile })).toBe('ask');
+    for (const c of ['cat permissions.json', 'echo hi > notes.md', 'git status']) expect(run(c, { cwd: brain, policy: none, rulesFile }), c).toBe('allow');
+    expect(autoPermit(perm('Read', { file_path: rulesFile }), inBrain()).kind).toBe('allow');
+    expect(autoPermit(perm('Write', { file_path: path.join(brain, 'memory', 'a.md'), content: 'see permissions.json' }), inBrain()).kind).toBe('allow');
+    // another project's permissions.json is not the brain's
+    expect(autoPermit(perm('Write', { file_path: path.join(cwd, 'permissions.json'), content: '{}' }), ctx({ policy: none, rulesFile })).kind).toBe('allow');
+    expect(run('echo "{}" > permissions.json', { policy: none, rulesFile })).toBe('allow');
+    // a brain with no rules file yet: writing the first rules lifts nothing
+    expect(autoPermit(perm('Write', { file_path: rulesFile, content: '{}' }), ctx({ cwd: brain, policy: { state: 'none' }, rulesFile })).kind).toBe('allow');
+  });
+
+  it('follows the folder each command of the line runs in', () => {
+    const from = { policy: none, rulesFile };   // the chat sits in another project, with a permissions.json of its own
+    for (const c of [
+      `cd "${brain}" && echo x > permissions.json`, `cd ${root} && cd brain && rm permissions.json`, `pushd ${brain}; rm ./permissions.json`,
+      `(cd ${brain}; echo x > permissions.json)`, `cd -- ${brain} && echo x > permissions.json`, `Push-Location '${brain}'; Set-Content permissions.json x`,
+      `git -C ${brain} checkout -- permissions.json`, `git --git-dir=${brain}/.git --work-tree=${brain} checkout permissions.json`,
+      `bash -c "cd ${brain} && rm permissions.json"`, `cp new.json ${brain}/x/../permissions.json`, `Set-Content -Path:${brain}/permissions.json -Value x`,
+      `echo x > ${brain}/permissions\\.json`, `echo x >| ${brain}/permissions.json`, `builtin cd ${brain} && > permissions.json`,
+      `cat <<EOF > ${brain}/permissions.json\n{}\nEOF`, `[IO.File]::WriteAllText("${brain}/permissions.json","x")`, `cd ${brain}/memory && echo x > "$(pwd)/../permissions.json"`,
+      // the name on one word, the brain's folder on another: a copy or a move into the brain
+      `cp /tmp/new/permissions.json ${brain}/`, `mv permissions.json ${brain}`,
+    ]) expect(run(c, from), c).toBe('ask');
+    expect(autoPermit(perm('Move', { source: 'permissions.json', destination: brain }), ctx(from)).kind).toBe('ask');
+    for (const c of [
+      'cd src && git commit -m "mention permissions.json"', 'cd src && echo "{}" > permissions.json', `cd ${root}/elsewhere && rm permissions.json`,
+      `git -C ${cwd} add permissions.json`, 'cp a "$PWD/permissions.json"', 'echo x > "$(pwd)/config/permissions.json"',
+      // a word the app cannot read, or a move it cannot follow, is not a question
+      'cp permissions.json "$TMPDIR/permissions.json"', 'cd "$(git rev-parse --show-toplevel)" && git add config/permissions.json', 'cd - && git add permissions.json',
+      'curl -sL https://example.com/a%20b/permissions.json -o config/permissions.json', 'cd $HOME/x && rm -rf dist',
+      `cp permissions.json ${brain}/memory/`, `git -C ${brain} status && git add permissions.json`,
+    ]) expect(run(c, from), c).toBe('allow');
+  });
+
+  it('in the brain\'s own folder (the Orchestrator\'s chat) only a word that is the file asks, never a mention', () => {
+    const inside = { cwd: brain, policy: none, rulesFile };
+    for (const c of [
+      'git commit -m "docs: explain permissions.json rules"', 'echo "see permissions.json" >> NOTES.md',
+      'gh issue comment 12 --body "permissions.json is not loaded when `cwd` differs"',
+      'git commit -m "fix(permit): the rules file `permissions.json` asks"',
+      'cat > NOTES.md <<\'EOF\'\n# Notes\nThe app reads permissions.json from the brain.\nEOF',
+      'git commit -m "$(cat <<\'EOF\'\nfix: permissions.json\n\nbody\nEOF\n)"',
+      'git -C ../work status && git -C ../work add permissions.json', 'cd ..; cd work; git add permissions.json', 'tar -C /tmp -xzf a.tgz permissions.json',
+      'cat > README.md <<\'EOF\'\n1. cd a\n2. cd b\n3. cd c\n4. cd d\n5. cd e\n6. cd f\npermissions.json permissions.json permissions.json permissions.json\nEOF',
+    ]) expect(run(c, inside), c).toBe('allow');
+    for (const c of ['echo "{}" > permissions.json', 'git checkout -- permissions.json', 'sed -i s/a/b/ ./permissions.json', 'cp /tmp/permissions.json .', 'bash -c "rm permissions.json"'])
+      expect(run(c, inside), c).toBe('ask');
+  });
+
+  it('a line no real one looks like neither stalls the app nor throws', () => {
+    const from = { policy: none, rulesFile };
+    const t0 = Date.now();
+    expect(run('cd a; cd b; cd c; touch ' + 'a/permissions.json/'.repeat(111112), from)).toBe('allow');   // one word of 2 MB: longer than any path
+    expect(run(Array.from({ length: 2000 }, (_x, i) => `rm d${i}/permissions.json`).join('; '), from)).toBe('ask');   // more paths than the app will look up
+    expect(autoPermit({ type: 'permission', tool: 5 as unknown as string, input: {} }, ctx(from)).kind).toBe('ask');
+    expect(autoPermit({ type: 'permission', tool: 'Bash', title: 5 as unknown as string, input: { command: 'ls' } }, ctx(from)).kind).toBe('allow');
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(0);
+  });
+
+  it('reads home in its usual spellings', () => {
+    const keep = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+    process.env.HOME = root; process.env.USERPROFILE = root;
+    try {
+      for (const c of ['echo x > ~/brain/permissions.json', 'rm $HOME/brain/permissions.json', 'rm "${HOME}/brain/permissions.json"', 'cd ~/brain && rm permissions.json'])
+        expect(run(c, { policy: none, rulesFile }), c).toBe('ask');
+      expect(autoPermit(perm('Write', { file_path: '~/brain/permissions.json', content: '{}' }), ctx({ policy: none, rulesFile })).kind).toBe('ask');
+      expect(run('echo x > ~/elsewhere/permissions.json', { policy: none, rulesFile })).toBe('allow');
+    } finally {
+      for (const [k, v] of Object.entries(keep)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
     }
-    expect(autoPermit(perm('mcp__fs__write', { path: `${'./'.repeat(500)}.claude/settings.json`, content: 'x' }), ctx()).kind).toBe('ask');   // not whole, no cut mark
-    expect(autoPermit(perm('mcp__fs__write', { path: 'x\n/../.claude/settings.json', content: 'x' }), ctx()).kind).toBe('ask');
-    expect(autoPermit(perm('mcp__fs__write', { path: 'https://a/../../.claude/settings.json', content: 'x' }), ctx()).kind).toBe('ask');
-    // the same shapes on an ordinary place stay free, and so does a web address
-    expect(autoPermit({ ...perm('mcp__fs__write', { path: `${'./'.repeat(16_490)}src/a.ts`, content: 'x' }), whole: true }, ctx()).kind).toBe('allow');
-    expect(autoPermit(perm('mcp__fs__write', { path: 'src/a.ts', notes: 'prima riga\nseconda riga con src/b.ts', content: 'x' }), ctx()).kind).toBe('allow');
-    expect(autoPermit(perm('mcp__web__open', { url: 'https://example.com/a/.git/config' }), ctx()).kind).toBe('allow');
+  });
+
+  it('a session-wide grant of a folder that holds it asks, with no «always» on any ask about the file', () => {
+    const grant = (grantRoot: string) => autoPermit(perm('Edit', { files: [], grantRoot }), ctx({ policy: none, rulesFile }));
+    expect(grant(brain)).toEqual({ kind: 'ask', rulesFile: true });
+    expect(grant(root).kind).toBe('ask');
+    expect(grant(path.join(root, 'elsewhere')).kind).toBe('allow');
+    expect(autoPermit(perm('Write', { file_path: rulesFile, content: '{}' }), inBrain())).toEqual({ kind: 'ask', rulesFile: true });
+  });
+});
+
+describe('autoPermit: where a rule could hold the tool, the rules must read what will run', () => {
+  const all: PermitContext['policy'] = { state: 'ok', rules: [{ id: 'r', action: 'ask-user', why: 'w', tools: ['*'], match: [/NEVER-THERE/iu], unless: [] }] };
+  const commands: PermitContext['policy'] = { state: 'ok', rules: [{ id: 'r', action: 'ask-user', why: 'w', tools: ['command'], match: [/NEVER-THERE/iu], unless: [] }] };
+
+  it('asks for a request an engine cut, a command with no line and Codex\'s session-long grantRoot; with no rule on the tool they pass', () => {
+    const cutCommand = `echo ${'x'.repeat(3990)}… (+42)`;
+    expect(run(cutCommand, { policy: all })).toBe('ask');
+    expect(autoPermit(perm('Edit', { files: [...Array.from({ length: 200 }, (_, i) => `src/f${i}.ts`)] }), ctx({ policy: all })).kind).toBe('ask');
+    expect(autoPermit(perm('Shell', {}), ctx({ policy: all })).kind).toBe('ask');
+    expect(autoPermit(perm('Shell', { title: 'printenv' }), ctx({ policy: all })).kind).toBe('ask');
+    expect(autoPermit(perm('Edit', { files: ['src/a.ts'], grantRoot: cwd }), ctx({ policy: all })).kind).toBe('ask');
+    // a cut deep in the input, in a place or in content, is still a cut
+    expect(autoPermit(perm('mcp__fs__write', { a: { b: { c: { path: `src/${'x'.repeat(10)}… (+9)` } } } }), ctx({ policy: all })).kind).toBe('ask');
+    expect(autoPermit(perm('Write', { file_path: 'src/a.ts', content: `x… (+9)` }), ctx({ policy: all })).kind).toBe('ask');
+    // an input that came whole carries no cut: the same signs are plain content
+    expect(autoPermit({ ...perm('Write', { file_path: 'src/a.ts', content: `x… (+9)` }), whole: true }, ctx({ policy: all })).kind).toBe('allow');
+    expect(autoPermit({ ...perm('Edit', { files: Array.from({ length: 200 }, (_, i) => `src/f${i}.ts`) }), whole: true }, ctx({ policy: all })).kind).toBe('allow');
+    // no rule of the brain, or none on this tool: nothing needs reading, so all of them pass
+    expect(run(cutCommand)).toBe('allow');
+    expect(autoPermit(perm('Write', { file_path: 'src/a.ts', content: `x… (+9)` }), ctx()).kind).toBe('allow');
+    expect(autoPermit(perm('Write', { file_path: 'src/a.ts', content: `x… (+9)` }), ctx({ policy: commands })).kind).toBe('allow');
+    expect(autoPermit(perm('Edit', { files: ['src/a.ts'], grantRoot: cwd }), ctx({ policy: commands })).kind).toBe('allow');
+    expect(autoPermit(perm('Shell', {}), ctx()).kind).toBe('allow');
+    expect(run(cutCommand, { policy: commands })).toBe('ask');
   });
 });
 

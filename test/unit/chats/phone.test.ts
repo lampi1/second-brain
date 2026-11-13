@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { rulesBrain, rulesChange } from './helpers';
 import { ChatManager } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
 import { strategyTools } from '../../../src/main/agents/strategy-tools';
@@ -26,7 +27,7 @@ const roots: string[] = [], managers: ChatManager[] = [];
 afterEach(async () => { for (const m of managers.splice(0)) await m.shutdown(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
 type Tap = <K extends EventChannel>(channel: K, payload: EventMap[K]) => void;
-function fixture(brainRoot?: string) {
+function fixture(brainRoot: string = rulesBrain().root) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-phone-'));
   roots.push(dir);
   const taps: Tap[] = [], events: { ch: EventChannel; p: unknown }[] = [];
@@ -71,8 +72,8 @@ function fixture(brainRoot?: string) {
 const PLAN = { steps: [{ title: 'Trovo dove si calcola lo sconto', role: 'scout' }, { title: 'Applico lo sconto', role: 'artisan' }], doneWhen: 'I test passano' };
 const yesNo = (id: string, question = 'Apro la PR?', extra: Partial<PendingRequest> = {}): Omit<PendingRequest, 'chatId'> => ({ id, type: 'question', tool: 'AskUserQuestion', title: question, detail: '', input: {}, at: Date.now(),
   questions: [{ question, multiSelect: false, options: [{ label: 'Sì (consigliato)' }, { label: 'No' }] }], ...extra });
-// a permission that still reaches the user (an edit of the agents' settings, AGENTS.md rule 6: ADR 0254)
-const permission = (id: string): Omit<PendingRequest, 'chatId'> => ({ id, type: 'permission', tool: 'Write', title: 'Write · settings', detail: '.claude/settings.json', input: { file_path: '.claude/settings.json' }, at: Date.now() });
+// a permission that still reaches the user (an edit of the brain's rules file, ADR 0294)
+const permission = (id: string): Omit<PendingRequest, 'chatId'> => rulesChange(id);
 const tick = () => new Promise(res => setTimeout(res, 20));
 const userItems = (list: ChatItem[]) => list.filter((i): i is Extract<ChatItem, { kind: 'user' }> => i.kind === 'user');
 
@@ -195,7 +196,7 @@ describe('the actor phone on answers and plans', () => {
     expect(await f.port.answerFromPhone(c.id, 'm2', false)).toBe('ok');
     expect(f.answers.at(-1)).toMatchObject({ id: 'm2', answer: { kind: 'permission', allow: false, message: expect.stringMatching(/Go on/) } });
     // an engine cannot mark its own request as held by a rule
-    f.sinks.get(c.id)!.pending({ ...{ id: 'w1', type: 'permission', tool: 'Write', title: 'settings', detail: '', input: { file_path: '.claude/settings.json' }, at: Date.now() }, heldBy: { rule: 'x', why: 'y' } });
+    f.sinks.get(c.id)!.pending({ id: 'w1', type: 'permission', tool: 'Write', title: 'regole', detail: '', input: { file_path: path.join(__dirname, '..', '..', 'fixtures', 'brain-policy', 'permissions.json') }, at: Date.now(), heldBy: { rule: 'x', why: 'y' } });
     expect(f.m.pending().find(p => p.id === 'w1')?.heldBy).toBeUndefined();
     expect(await f.port.answerFromPhone(c.id, 'w1', true)).toBe('gone');
   });

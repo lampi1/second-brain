@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { rulesBrain } from './helpers';
 import { ChatManager, RUN_SAVE_MS, type ChatManagerOptions } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import { plainOwner } from '../../../src/main/agents/catalog';
@@ -247,9 +248,9 @@ describe('agent runs on chats', () => {
   });
 
   it('counts each request once by id, commands included', async () => {
-    const f = fixture();
+    const f = fixture({ brainRoot: () => rulesBrain().root });
     const c = await f.create();
-    const q = { id: 'p1', type: 'permission' as const, tool: 'Write', title: 'settings', detail: 'settings', input: { file_path: '.claude/settings.json' }, at: Date.now() };
+    const q = { id: 'p1', type: 'permission' as const, tool: 'Write', title: 'regole', detail: 'regole', input: { file_path: rulesBrain().file }, at: Date.now() };
     f.sink(c.id).pending(q);
     f.sink(c.id).pending(q);
     f.sink(c.id).resolved('p1');

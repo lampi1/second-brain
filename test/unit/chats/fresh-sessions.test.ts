@@ -7,7 +7,7 @@ import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/ma
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import { contextBudgetDue, FRESH_HANDOFF_MARK, FRESH_IDLE_MS, protectedHandoff } from '../../../src/main/chats/handoff';
 import { plainOwner } from '../../../src/main/agents/catalog';
-import { tmp } from './helpers';
+import { rulesBrain, tmp } from './helpers';
 import { exportRuns } from '../../../src/main/agents/runs-db';
 
 const managers: ChatManager[] = [];
@@ -132,8 +132,8 @@ describe('protected continuation', () => {
     expect(f.sent.at(-1)).toContain('PRIVATE_CHILD_MARKER'); expect(f.sent.at(-1)).toContain('Local');
   });
   it('keeps a permission denial with no message as a scoped private decision', async () => {
-    const f = fixture(), c = await f.create();
-    f.engines[0]!.sink.pending({ id: 'permit', type: 'permission', tool: 'Write', title: 'PRIVATE_PERMISSION_TARGET', detail: 'Specific target', input: { file_path: '.claude/settings.json' }, at: Date.now() });
+    const f = fixture({ brainRoot: () => rulesBrain().root }), c = await f.create();
+    f.engines[0]!.sink.pending({ id: 'permit', type: 'permission', tool: 'Write', title: 'PRIVATE_PERMISSION_TARGET', detail: 'Specific target', input: { file_path: rulesBrain().file }, at: Date.now() });
     await f.m.answer(c.id, 'permit', { kind: 'permission', allow: false });
     expect(JSON.stringify(f.m.userEvents(c.id))).not.toContain('PRIVATE_PERMISSION_TARGET');
     f.advance(); await f.m.send(c.id, 'Continue'); expect(f.sent.at(-1)).toContain('PRIVATE_PERMISSION_TARGET'); expect(f.sent.at(-1)).toContain('non autorizza nuove azioni');

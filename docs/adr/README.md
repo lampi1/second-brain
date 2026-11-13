@@ -252,7 +252,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0251](0251-chat-status-from-real-state.md) A chat tile has one short status, from real state only — accepted
 - [0252](0252-parent-assignment-is-approval.md) A parent's assignment is approval inside its scope — accepted
 - [0253](0253-user-only-blocks-ask-the-user.md) A run stopped on a step only the user can do asks the user at once — accepted, partly superseded by 0262
-- [0254](0254-permissions-from-the-brain.md) Permissions v3: everything is allowed, the only blocks are the user's brain rules — accepted
+- [0254](0254-permissions-from-the-brain.md) Permissions v3: everything is allowed, the only blocks are the user's brain rules — accepted, partly superseded by 0294
 - [0255](0255-phone-answers-worker-yes-no.md) Worker Sì/No questions answered from the phone (Telegram and Remote Control) — accepted, partly superseded by 0275
 - [0256](0256-live-model-lists.md) Live model lists: every engine lists its own models; models.json only overrides — accepted
 - [0257](0257-skill-changes-only-from-maintenance.md) Skill changes come only from Maintenance, never one card per run — accepted
@@ -285,13 +285,14 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0284](0284-performance-by-model.md) The level is the role's, the performance is the model's — accepted
 - [0285](0285-estimates-by-role-and-model.md) An estimate rests on the role and its model before the kind of work — accepted, partly superseded by 0291
 - [0286](0286-run-goal-close-cause-no-child-feedback.md) A run keeps its goal without the app's label and says why it was closed; `agent_child_feedback` is gone — accepted
-- [0287](0287-one-agent-window-one-full-screen.md) One agent window, one full screen, a quiet top bar — accepted, partly amended by 0292
+- [0287](0287-one-agent-window-one-full-screen.md) One agent window, one full screen, a quiet top bar — accepted
 - [0288](0288-maintenance-bug-cards-by-answers-one-lesson.md) The maintenance stays on the click: app-bug cards follow the user's answers, a report notes one lesson — accepted
 - [0289](0289-fewer-refusals-agents-learn-by-failing.md) Fewer refusals an agent learns only by failing: long outputs are cut, the tools' commands name the copy, a question has a place without an Orchestrator — accepted
-- [0290](0290-claude-chats-start-in-default-the-app-answers.md) A Claude chat starts in «default»: the app answers its requests, not the engine's own default mode — accepted
+- [0290](0290-claude-chats-start-in-default-the-app-answers.md) A Claude chat starts in «default»: the app answers its requests, not the engine's own default mode — accepted, partly superseded by 0294
 - [0291](0291-remove-kind-by-examples-and-classificatori.md) The kind of work by examples and the Classificatori section are removed — accepted
-- [0292](0292-strip-dot-time-and-cost-always.md) The strip: a state dot in front, time and cost against the estimate always in sight — accepted, partly amended by 0293
+- [0292](0292-strip-dot-time-and-cost-always.md) The strip: a state dot in front, time and cost against the estimate always in sight — accepted
 - [0293](0293-children-are-rows-face-back-on-the-strip.md) A delegated chat is one row like its parent; the role's face is back on the strip — accepted
+- [0294](0294-no-app-guard-on-settings-and-hooks.md) No permission question outside the brain's rules: the app's guard on settings and hooks is removed — accepted
 
 ## Replaced
 
