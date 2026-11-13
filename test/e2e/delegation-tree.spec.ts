@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { ChatItem, ChatSummary, PendingRequest } from '../../src/shared/contract';
-import { closeSetup, launch, setSize, shot } from './helpers';
+import { closeSetup, launch, openAsk, setSize, shot } from './helpers';
 
 const FAKE = path.resolve(import.meta.dirname, '..', 'fixtures', 'fake-claude.mjs');
 
@@ -141,7 +141,7 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
   }
 });
 
-test('a child\'s question waits in the questions window; a permission above the parent\'s is refused visibly', async () => {
+test('a child\'s question waits as a row in the Orchestrator; a permission above the parent\'s is refused visibly', async () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));
   const brain = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-brain-')); // the catalog is saved in a brain
   const { app, page, home } = await start(undefined, { SB_BRAIN: brain });
@@ -169,24 +169,27 @@ test('a child\'s question waits in the questions window; a permission above the 
     const pending: PendingRequest[] = await page.evaluate(() => window.sb.invoke('chat:pending', undefined));
     expect(pending.filter(p => p.chatId === shell.id)).toEqual([]);
 
-    // the Sentinel's question shows in the questions window (always on since 2026-10-22); the child waits
-    const win = page.getByTestId('qwin');
+    // the Sentinel's question is a row in the Orchestrator (ADR 0269), opened as its card; the child waits
+    const win = await openAsk(page, `${asker.id}/`);
     await expect(win).toContainText('Che colore?', { timeout: 20000 });
     const key = (await page.getByTestId('qwin-card').getAttribute('data-request-key'))!;
     expect(key.startsWith(`${asker.id}/`)).toBe(true);
     // one answerable panel in the whole window: never the Orchestrator, never a tile
     await expect(page.locator(`[data-request-key="${key}"]`)).toHaveCount(1);
-    await page.getByTestId('qwin-later').click(); // set aside: the child's card says what it waits for
+    await page.getByTestId('qwin-later').click(); // set aside: one folded line in the Orchestrator's column
     await page.getByTestId('nav-home').click();
-    const ask = page.getByTestId(`delegation-ask-${asker.id}`);
-    await expect(ask).toBeVisible({ timeout: 20000 });
-    await expect(ask).toContainText('Che colore?');
+    // the child's card says it waits for the user and hosts no second answer surface (lib/child-requests.ts requestHost)
+    const kid = page.getByTestId(`delegation-card-${asker.id}`);
+    await expect(kid).toContainText('Ti aspetta', { timeout: 20000 });
+    await expect(page.getByTestId(`delegation-ask-${asker.id}`)).toHaveCount(0);
+    await expect(page.locator(`[data-request-key="${key}"]`)).toHaveCount(0);
     await page.mouse.move(2, 2);
     await shot(page, 'delegation-child-question');
-    await page.getByTestId(`delegation-answer-${asker.id}`).click(); // back to the window, on that question
+    await page.getByTestId('orchestrator-asks-later').click(); // «1 da rispondere dopo»: its row again
+    await openAsk(page, key);
     await expect(page.getByTestId('qwin-card')).toHaveAttribute('data-request-key', key);
     await page.getByTestId('qwin-card-opt-1').click();
-    await expect(ask).toHaveCount(0);
+    await expect(page.locator(`[data-request-key="${key}"]`)).toHaveCount(0);
     // it goes on after the answer and reports to its parent
     await expect.poll(async () => (await items(page, parent.id)).some(i => i.kind === 'user' && textOf(i).includes('[risultato · Sentinel «Scelta ambiente»] Ambiente scelto e verificato')), { timeout: 20000 }).toBe(true);
     expect(JSON.stringify((await items(page, asker.id)).filter(i => i.kind === 'tool'))).toContain('Blu');

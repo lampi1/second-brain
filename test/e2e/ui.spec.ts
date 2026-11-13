@@ -32,25 +32,31 @@ test('agents workspace: one column of chat strips, each browser inside its chat\
   await app.close();
 });
 
-test('answering from the questions window with "1" resolves the request without opening the chat', async () => {
+test('answering from the Orchestrator\'s question rows with "1" resolves the request without opening the chat', async () => {
   const { page, app } = await launchDemo({ questions: true });
   const said = (chatId: string) => async () => JSON.stringify(await page.evaluate(id => window.sb.invoke('chat:items', { chatId: id }), chatId));
   const card = page.getByTestId('qwin-card');
-  await page.keyboard.press('Control+J'); // the oldest first: the Orchestrator's decision, with the keyboard
-  await expect(card).toHaveAttribute('data-request-key', 'orchestrator/orchestrator-q1');
-  await expect(card).toBeFocused();
+  // Ctrl+J opens the oldest waiting row as its card and gives it the keyboard; an answer closes it, and nothing
+  // opens by itself (ADR 0269): the next Ctrl+J brings the next one
+  const next = async (key: string) => {
+    await page.keyboard.press('Control+J');
+    await expect(card).toHaveCount(1);
+    await expect(card).toHaveAttribute('data-request-key', key);
+    await expect(card).toBeFocused();
+  };
+  await next('orchestrator/orchestrator-q1'); // the oldest first: the Orchestrator's decision
   await page.keyboard.press('1');
   await expect.poll(said('orchestrator')).toContain('Segnato: riparto da **QA rimborsi**');
-  // the next request takes the card and the keyboard: QA's question, then Feedback's permission
-  await expect(card).toHaveAttribute('data-request-key', 'qa/qa-q1');
-  await expect(card).toBeFocused();
+  await expect(page.locator('[data-request-key="orchestrator/orchestrator-q1"]')).toHaveCount(0);
+  await next('qa/qa-q1'); // then QA's question
   await page.keyboard.press('1');
   await expect.poll(said('qa')).toContain('Apro il bug');
-  await expect(card).toHaveAttribute('data-request-key', 'feedback/feedback-p1');
-  await expect(card).toBeFocused();
+  await expect(page.locator('[data-request-key="qa/qa-q1"]')).toHaveCount(0);
+  await next('feedback/feedback-p1'); // then Feedback's permission
   await page.keyboard.press('3'); // «Non procedere»
   await expect.poll(said('feedback')).toContain('non lancio i test');
   await expect(page.getByTestId('qwin')).toHaveCount(0);
+  await expect(page.getByTestId('orchestrator-asks')).toHaveCount(0);
   await expect(page.locator('[data-request-key]')).toHaveCount(0);
   await expect(page.getByTestId('maximized')).toHaveCount(0); // the chat was not opened
   await app.close();

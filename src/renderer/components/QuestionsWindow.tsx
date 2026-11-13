@@ -14,7 +14,7 @@ import type { Harness, PendingRequest } from '@shared/contract';
 import { isYesNo, yesNoOf } from '@shared/yes-no';
 import { focusChat, reqKey } from '../actions';
 import { qwinStats } from '../lib/questions';
-import { commandsOfTurn } from '../lib/orchestrator-route';
+import { commandsOfTurn, orchestratorIdOf } from '../lib/orchestrator-route';
 import { sameList } from '../store/state';
 import { answer, app, useApp } from '../store/store';
 import { parkQuestions, ui } from '../store/ui';
@@ -160,7 +160,9 @@ function AskCard({ ask, name, harness, onLater }: { ask: Ask; name: string; harn
   const k = reqKey(ask);
   // what the Orchestrator passes on in the user's words (ADR 0274, 0275): a plan, an engine question (a Strategist's
   // interview too); the rest (work proposals, commands, forms, the app's own steps) keeps its own box
-  const viaOrchestrator = !isDurable(ask) && (ask.type === 'plan' || answerableInWords(ask));
+  // with no Orchestrator yet there is no input under the card: it keeps its own free-answer box
+  const hasOrchestrator = useApp(s => orchestratorIdOf(s) !== null);
+  const viaOrchestrator = hasOrchestrator && !isDurable(ask) && (ask.type === 'plan' || answerableInWords(ask));
   // the card reads the chat as it was when it opened (lib/askItems.tsx)
   const frozen = useFrozenItems(ask.chatId, k);
   const items = ask.type === 'question' ? frozen.items : undefined;
