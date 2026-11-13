@@ -282,7 +282,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0284](0284-performance-by-model.md) The level is the role's, the performance is the model's — accepted
 - [0285](0285-estimates-by-role-and-model.md) An estimate rests on the role and its model before the kind of work — accepted, partly superseded by 0291
 - [0286](0286-run-goal-close-cause-no-child-feedback.md) A run keeps its goal without the app's label and says why it was closed; `agent_child_feedback` is gone — accepted
-- [0287](0287-one-agent-window-one-full-screen.md) One agent window, one full screen, a quiet top bar — accepted, partly amended by 0298
+- [0287](0287-one-agent-window-one-full-screen.md) One agent window, one full screen, a quiet top bar — accepted, partly amended by 0298, 0301
 - [0288](0288-maintenance-bug-cards-by-answers-one-lesson.md) The maintenance stays on the click: app-bug cards follow the user's answers, a report notes one lesson — accepted
 - [0289](0289-fewer-refusals-agents-learn-by-failing.md) Fewer refusals an agent learns only by failing: long outputs are cut, the tools' commands name the copy, a question has a place without an Orchestrator — accepted
 - [0290](0290-claude-chats-start-in-default-the-app-answers.md) A Claude chat starts in «default»: the app answers its requests, not the engine's own default mode — accepted, partly superseded by 0294
@@ -296,6 +296,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0298](0298-weekly-limit-on-the-top-bar.md) The weekly limit on the top bar, the 5-hour window from 70% — accepted
 - [0299](0299-one-command-one-panel.md) One command, one panel: an identical command never runs twice by accident — accepted
 - [0300](0300-quote-what-is-on-screen.md) Quote what is on screen: select a text, right click, it is in the prompt field — accepted
+- [0301](0301-maps-button-on-the-orchestrator-head.md) The project maps button is back on the Orchestrator's head — accepted
 - [0303](0303-little-people-speak.md) The little people speak: two words of nonsense, a character per role — accepted
 
 ## Replaced

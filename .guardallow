@@ -374,6 +374,11 @@ docs/screenshots/worktrees.webp binary-media sha256:502c9a099da00bc8ddcf1d9d36aa
 docs/screenshots/orchestrator-column.webp binary-media sha256:21f5b803047cf20926c0b1b8009e1b627016a03c562f88de2d25d621ae9050cf
 # ADR 0297: the little people a little bigger on the Grindhouse strips (2026-11-13)
 docs/screenshots/grindhouse.webp binary-media sha256:ccf622e1aaed5a08245d4002bdc8baaed72bc2b7b90be6faf2dcecdbe3772365
+# ADR 0301: the maps button back on the Orchestrator's head (2026-11-13)
+docs/screenshots/grindhouse.webp binary-media sha256:4e32163759bb4727e223074d76f41c0709688fb34dae350917c9d613a32f23a2
+docs/screenshots/agents.webp binary-media sha256:e6b334be65b280907cb055abc71dd3c16b4484223834f21a3f2e1681be2be3f0
+docs/screenshots/orchestrator.webp binary-media sha256:646430ec73ec90e5e8741d7d020d6a425a17a6ccf5b441d6002b7a70ba54cfae
+docs/screenshots/orchestrator-column.webp binary-media sha256:5a22a88c8c9151ea0f1b99cddacae01dd14ede5c8a2d46391419f9d84a6a9ebe
 # ADR 0292/0303: model and effort on the strips, the demo chats report their effort (2026-11-13)
 docs/screenshots/agents.webp binary-media sha256:b7c17210af07e4fd6d83fe24dba2558c18bf22138920554f2a9be07d143dd1d7
 docs/screenshots/browser.webp binary-media sha256:ad7418f8778664f0c74d038f622df2e292148b7b872ed609333a598972436c21

@@ -25,7 +25,7 @@ import { openQueue } from '../lib/later';
 import { HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconLogin, IconRefresh, IconSearch, IconSettings, IconStop } from './Icons';
 import { UsageBar } from './UsageBar';
 import { SyncStatus } from './SyncStatus';
-import { MapsButton } from './OrchestratorOverlay';
+import { MapsButton } from './MapsButton';
 import { MaintenanceButton } from './brain-model/MaintenanceButton';
 import { IconButton, Keys, MenuItem, MenuLabel, MenuSep, Popover } from './ui';
 

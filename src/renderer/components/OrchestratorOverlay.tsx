@@ -4,20 +4,12 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useApp } from '../store/store';
 import { setPrefs, ui } from '../store/ui';
-import { openMaps } from '../actions';
 import { registerOverlay, schedule } from '../lib/viewports';
 import { scheduleLayer } from '../lib/layer';
 import { columnSize, viewport, type Reserve } from '../lib/orchestrator-dock';
 import { OrchestratorTile } from './OrchestratorTile';
-import { IconMap } from './Icons';
-import { IconButton } from './ui';
 import { t } from '../i18n';
 import { orchestratorIdOf } from '../lib/orchestrator-route';
-
-/** The project maps (ADR 0275: in «Stato»'s place, which stays in the palette). */
-export function MapsButton() {
-  return <IconButton label={t('pm.mapsButton')} shortcut="Ctrl+Shift+S" onClick={() => openMaps()} testid="maps-btn"><IconMap size={16} /></IconButton>;
-}
 
 function useColumnSize() {
   const saved = ui.use(s => s.prefs.orchestratorSize);

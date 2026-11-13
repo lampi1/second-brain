@@ -250,7 +250,7 @@
     "src/renderer/components/skills/UnassignedPanel.tsx": "f508dacdf2924c0f",
     "src/renderer/components/SkillsPage.tsx": "8e48e3adc42414a8",
     "src/renderer/components/SuggestSettings.tsx": "0bebfb9b95fa2f94",
-    "src/renderer/components/TopBar.tsx": "a173bdc47698c8e3",
+    "src/renderer/components/TopBar.tsx": "8dce2da89f1eee83",
     "src/renderer/components/ui.tsx#Modal": "68df7f1eb564ae1a",
     "src/renderer/components/UsageBar.tsx": "393a406ed9b3ec97",
     "src/renderer/components/viewer/ViewerOverlay.tsx": "847e222249b7f26a",
