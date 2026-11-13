@@ -22,14 +22,16 @@ Orchestrator already does any request with the agents.
    nothing else by itself and never launches a routine package: ADR 0179 holds for packages unchanged.
 3. The clock is the app's existing one-minute timer (`tick`). The next time is stored **before** the hand-over, so a
    crash cannot repeat a run. A time missed while the app was closed runs **once** at the next start and the line says
-   how late it is; missed repeats are not replayed. A paused routine keeps its rule; resuming counts from now.
+   how late it is; missed repeats are not replayed. A paused routine keeps its rule; resuming counts from now (a `once` that already ran stays done). An
+   `every` counts from the hand-over, so it may slip by up to a minute per run.
 4. The last 20 hand-overs of each routine are kept with their outcome (delivered, or why not: no Orchestrator open).
    State lives in `userData/schedules.json`.
 5. The page Routine shows «Pianificate» above the terminal packages (`ScheduledRoutines.tsx`): one row per routine
    with the rule in words, the next run, the last hand-over, a switch, «Esegui ora», edit and delete; three examples
    to start from.
 6. The Orchestrator has `app_schedule` (list, create, update, pause, resume, delete, run): no approval, for the same
-   reason as point 2. A routine it made is marked «creata dall'Orchestrator».
+   reason as point 2. A routine it made is marked «creata dall'Orchestrator», and its line says so
+   instead of calling it the user's own request.
 
 ## Consequences
 

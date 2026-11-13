@@ -44,7 +44,11 @@ describe('the calendar', () => {
     expect(nextDue({ kind: 'manual' }, at(13, 7))).toBeNull();
   });
   it('checks a rule from outside', () => {
-    expect(parseWhen({ kind: 'daily', time: '08:05', days: [5, 1, 1, 9, 'x'] }, 0)).toEqual({ kind: 'daily', time: '08:05', days: [1, 5] });
+    expect(parseWhen({ kind: 'daily', time: '08:05', days: [5, 1, 1] }, 0)).toEqual({ kind: 'daily', time: '08:05', days: [1, 5] });
+    // a day that is not 0..6 is refused, never dropped (7 for Sunday would otherwise mean every day)
+    for (const days of [[7], [1, 9], ['x'], [null]]) expect(() => parseWhen({ kind: 'daily', time: '08:05', days }, 0)).toThrow(/0 \(Sunday\)/);
+    expect(scheduledText({ name: 'N', prompt: 'P', when: { kind: 'manual' }, by: 'orchestrator' }, 0)).toContain('You planned this request');
+    expect(scheduledText({ name: 'N', prompt: 'P', when: { kind: 'manual' }, by: 'user' }, 0)).toContain('The user planned this request');
     expect(parseWhen({ kind: 'daily', time: '08:05', days: [0, 1, 2, 3, 4, 5, 6] }, 0)).toEqual({ kind: 'daily', time: '08:05' });
     expect(parseWhen({ kind: 'once', at: new Date(at(14, 10)).toISOString() }, at(13, 7))).toEqual({ kind: 'once', at: at(14, 10) });
     for (const bad of [{ kind: 'daily', time: '8:00' }, { kind: 'daily', time: '24:00' }, { kind: 'every', minutes: 5 }, { kind: 'every', minutes: 'x' }, { kind: 'once', at: at(12, 0) }, { kind: 'cron' }, null]) expect(() => parseWhen(bad, at(13, 7))).toThrow();

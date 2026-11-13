@@ -224,7 +224,7 @@ describe('review fixes (ADR 0265)', () => {
 
   it('looks up a date only on a public https host', () => {
     expect(publicHttps('https://example.com/a')).toBe(true);
-    for (const u of ['http://example.com/a', 'https://127.0.0.1/x', 'https://localhost:3000/', 'https://192.168.1.4/', 'https://10.0.0.2/', 'https://172.20.0.1/', 'https://169.254.169.254/', 'https://[::1]/', 'https://intranet/', 'https://localhost./', 'https://printer.local./']) expect(publicHttps(u)).toBe(false);
+    for (const u of ['https://router.lan/', 'https://nas.home.arpa/x', 'https://[fe90::1]/', 'https://[64:ff9b::7f00:1]/', 'http://example.com/a', 'https://127.0.0.1/x', 'https://localhost:3000/', 'https://192.168.1.4/', 'https://10.0.0.2/', 'https://172.20.0.1/', 'https://169.254.169.254/', 'https://[::1]/', 'https://intranet/', 'https://localhost./', 'https://printer.local./']) expect(publicHttps(u)).toBe(false);
   });
 
   it('forgets a source removed while it was being read', async () => {
@@ -243,6 +243,31 @@ describe('editions (ADR 0279)', () => {
   const CARS_FEED = (n = 9) => `<rss><channel>${Array.from({ length: n }, (_, i) => `<item><title>${TITLES[i]}</title><link>https://cars.example.org/p/${i}</link><pubDate>${new Date(NOW - (i + 1) * 3_600_000).toUTCString()}</pubDate><description>Batteria e consumi misurati.</description></item>`).join('')}</channel></rss>`;
   const carsFetch = (base: NewsFetch): NewsFetch => async url => (url === 'https://cars.example.org/feed' ? { status: 200, contentType: 'application/rss+xml', text: CARS_FEED() } : base(url));
   const fit = (n: number): NewsAi => async prompt => ({ ok: true, text: JSON.stringify([...prompt.matchAll(/"id":\s*"([0-9a-f]{12})"/g)].map((m, i) => ({ id: m[1], summary: `Riassunto ${i}`, why: 'Conta', fit: i === 0 ? 0 : n, section: 'prove' }))), tokens: 1000, costUsd: 0.01 });
+
+  it('a section resent by its name keeps its id, and an edition changed during its refresh keeps the refresh', async () => {
+    let svcRef: ReturnType<typeof make>['svc'] | null = null;
+    // the edition is changed while its AI pass runs
+    const { svc } = make({ fetch: carsFetch(demoNewsFetch(() => NOW)), ai: async p => { svcRef!.editEdition({ op: 'update', id: 'auto', cap: 5 }); return fit(3)(p); } });
+    svcRef = svc;
+    svc.editEdition({ op: 'create', name: 'Auto', sections: [{ name: 'Prove su strada', words: ['prova'] }, { name: 'Ricarica' }] });
+    expect(svc.state().editions.find(e => e.id === 'auto')!.sections.map(x => x.id)).toEqual(['prove-su-strada', 'ricarica']);
+    svc.editEdition({ op: 'update', id: 'auto', sections: [{ id: 'prove-su-strada', name: 'Test' }, { name: 'ricarica', words: ['colonnin'] }] });
+    expect(svc.state().editions.find(e => e.id === 'auto')!.sections).toMatchObject([{ id: 'prove-su-strada', name: 'Test' }, { id: 'ricarica', words: ['colonnin'] }]);
+    svc.editSources({ op: 'add', edition: 'auto', url: 'https://cars.example.org/feed', name: 'Cars' });
+    const r = await svc.refresh('auto');
+    expect(r.fresh).toBe(9);
+    expect(svc.state().items.filter(i => i.edition === 'auto')).toHaveLength(9);
+    expect(svc.state().editions.find(e => e.id === 'auto')!.cap).toBe(5);
+  });
+
+  it('a refresh asked for another edition waits for the running one, then reads its own', async () => {
+    const { svc } = make({ fetch: carsFetch(demoNewsFetch(() => NOW)), ai: fit(3) });
+    svc.editEdition({ op: 'create', name: 'Auto' });
+    svc.editSources({ op: 'add', edition: 'auto', url: 'https://cars.example.org/feed', name: 'Cars' });
+    const [a, b] = await Promise.all([svc.refresh('ai'), svc.refresh('auto')]);
+    expect(a.edition).toBe('ai');
+    expect(b).toMatchObject({ edition: 'auto', fresh: 9 });
+  });
 
   it('a clean install has no edition and nothing to refresh', async () => {
     const { svc } = make({ empty: true });

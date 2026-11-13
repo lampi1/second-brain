@@ -45,6 +45,9 @@ function Form({ task, seed, onClose, onSaved }: { task?: ScheduledTask; seed?: {
   const [hours, setHours] = useState(w?.kind === 'every' ? Math.max(1, Math.round(w.minutes / 60)) : 2);
   const [once, setOnce] = useState(() => localInput(w?.kind === 'once' ? w.at : Date.now() + 3_600_000));
   const [busy, setBusy] = useState(false);
+  // an edit that leaves the rule alone does not send it: the next run stays where it was, and a rule the form cannot
+  // show exactly (every 90 minutes, made by the Orchestrator) is not rounded
+  const [ruleChanged, setRuleChanged] = useState(false);
   const when = (): ScheduleWhen => freq === 'manual' ? { kind: 'manual' } : freq === 'once' ? { kind: 'once', at: new Date(once).getTime() } : freq === 'hours' ? { kind: 'every', minutes: hours * 60 }
     : { kind: 'daily', time, ...(freq === 'weekdays' ? { days: WEEKDAYS } : freq === 'days' ? { days } : {}) };
   const ok = prompt.trim().length > 0 && (freq !== 'days' || days.length > 0);
@@ -52,7 +55,7 @@ function Form({ task, seed, onClose, onSaved }: { task?: ScheduledTask; seed?: {
     if (!ok || busy) return;
     setBusy(true);
     try {
-      onSaved(await sb.invoke('schedules:edit', task ? { op: 'update', id: task.id, name: name.trim() || task.name, prompt: prompt.trim(), when: when() } : { op: 'create', name: name.trim(), prompt: prompt.trim(), when: when() }));
+      onSaved(await sb.invoke('schedules:edit', task ? { op: 'update', id: task.id, name: name.trim() || task.name, prompt: prompt.trim(), ...(ruleChanged ? { when: when() } : {}) } : { op: 'create', name: name.trim(), prompt: prompt.trim(), when: when() }));
       onClose();
     } catch (e) { toast(plain(e), 'err'); } finally { setBusy(false); }
   };
@@ -66,7 +69,7 @@ function Form({ task, seed, onClose, onSaved }: { task?: ScheduledTask; seed?: {
         <label className="sch-f">{t('rs.sch.request')}
           <textarea value={prompt} onChange={e => setPrompt(e.target.value)} maxLength={4000} rows={5} placeholder={t('rs.sch.requestPh')} data-testid="schedule-prompt" autoFocus />
         </label>
-        <div className="sch-when">
+        <div className="sch-when" onChange={() => setRuleChanged(true)}>
           <label className="sch-f">{t('rs.sch.freq')}
             <select value={freq} onChange={e => setFreq(e.target.value as Freq)} data-testid="schedule-freq">
               {(['daily', 'weekdays', 'days', 'hours', 'once', 'manual'] as const).map(f => <option key={f} value={f}>{t(`rs.sch.freq.${f}`)}</option>)}
@@ -77,7 +80,7 @@ function Form({ task, seed, onClose, onSaved }: { task?: ScheduledTask; seed?: {
           {freq === 'once' && <label className="sch-f">{t('rs.sch.onceAt')}<input type="datetime-local" value={once} onChange={e => setOnce(e.target.value)} data-testid="schedule-once" /></label>}
         </div>
         {freq === 'days' && (
-          <div className="sch-days" role="group" aria-label={t('rs.sch.days')}>
+          <div className="sch-days" role="group" aria-label={t('rs.sch.days')} onClick={() => setRuleChanged(true)}>
             {DAY_ORDER.map(d => <button key={d} type="button" aria-pressed={days.includes(d)} className={days.includes(d) ? 'on' : ''} onClick={() => setDays(x => (x.includes(d) ? x.filter(y => y !== d) : [...x, d].sort((a, b) => a - b)))} data-testid={`schedule-day-${d}`}>{dayName(d)}</button>)}
           </div>
         )}

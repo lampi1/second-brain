@@ -75,14 +75,25 @@ const SEEN_MAX = 8000;
 const HISTORY_MAX = 60;
 const LESS_STEP = 0.05;
 
-/** The app's GET: a deadline, redirects followed, the body capped, a plain client name (never the user's). */
+/** The app's GET: a deadline, the body capped, a plain client name (never the user's). Redirects are followed by hand,
+ *  at most 5, and only to a public https link: a public source could otherwise point the app at the LAN. */
 export const netFetch: NewsFetch = async (url, opts) => {
-  // an article looked up for its date is fetched without following redirects (a public link could point to the LAN)
-  const r = await fetch(url, { redirect: opts?.follow === false ? 'manual' : 'follow', signal: AbortSignal.timeout(20_000), headers: { 'User-Agent': 'second-brain-news/1.0 (+https://github.com/lampi1/second-brain)', Accept: 'application/rss+xml, application/atom+xml, application/xml, application/json, text/markdown, text/html;q=0.9, */*;q=0.5' } });
-  const len = Number(r.headers.get('content-length') ?? 0);
-  if (len > MAX_BODY) throw new Error('pagina troppo grande');
-  const text = await r.text();
-  return { status: r.status, contentType: r.headers.get('content-type') ?? '', text: text.length > MAX_BODY ? text.slice(0, MAX_BODY) : text };
+  let at = url;
+  for (let hop = 0; ; hop++) {
+    const r = await fetch(at, { redirect: 'manual', signal: AbortSignal.timeout(20_000), headers: { 'User-Agent': 'second-brain-news/1.0 (+https://github.com/lampi1/second-brain)', Accept: 'application/rss+xml, application/atom+xml, application/xml, application/json, text/markdown, text/html;q=0.9, */*;q=0.5' } });
+    const to = r.status >= 300 && r.status < 400 ? r.headers.get('location') : null;
+    // an article looked up for its date is never followed
+    if (to && opts?.follow !== false) {
+      const next = new URL(to, at).toString();
+      if (hop >= 5 || !publicHttps(next)) throw new Error('rimando non seguito: non porta a un link https pubblico');
+      at = next;
+      continue;
+    }
+    const len = Number(r.headers.get('content-length') ?? 0);
+    if (len > MAX_BODY) throw new Error('pagina troppo grande');
+    const text = await r.text();
+    return { status: r.status, contentType: r.headers.get('content-type') ?? '', text: text.length > MAX_BODY ? text.slice(0, MAX_BODY) : text };
+  }
 };
 
 /** Whether a link may be fetched for its date: https on a public host (never loopback, the LAN or link-local). */
@@ -91,9 +102,9 @@ export function publicHttps(url: string): boolean {
     const u = new URL(url);
     if (u.protocol !== 'https:') return false;
     const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.+$/, ''); // «localhost.» is localhost
-    if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal') || !h.includes('.') && !h.includes(':')) return false;
-    if (/^(127\.|10\.|0\.|169\.254\.|192\.168\.)/.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h)) return false;
-    if (h.includes(':') && (h === '::1' || h === '::' || /^(fc|fd|fe80)/.test(h) || h.startsWith('::ffff:'))) return false;
+    if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal') || h.endsWith('.lan') || h.endsWith('.home.arpa') || !h.includes('.') && !h.includes(':')) return false;
+    if (/^(127\.|10\.|0\.|169\.254\.|192\.168\.|198\.1[89]\.)/.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h) || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(h)) return false;
+    if (h.includes(':') && (h === '::1' || h === '::' || /^(f[cd]|fe[89a-f])/.test(h) || h.startsWith('::ffff:') || h.startsWith('64:ff9b:'))) return false;
     return true;
   } catch { return false; }
 }
@@ -119,6 +130,8 @@ const titled = (title: string, s: NewsSource) => (/^v?\d+(\.\d+)+\S*$/.test(titl
 export class NewsService {
   private s: Saved;
   private running: Promise<NewsRefresh> | null = null;
+  /** the edition the running refresh reads (undefined = all) */
+  private runningFor: string | undefined;
   private progress: NewsProgress | null = null;
   private timer: unknown = null;
   private readonly file: string;
@@ -167,8 +180,11 @@ export class NewsService {
   state(): NewsState {
     // what one refresh of everything is expected to cost: each edition's mean of its last measured passes
     const per = this.s.editions.map(e => this.s.history.filter(h => h.edition === e.id && h.tokens !== null && h.summarized > 0).slice(-5));
+    // the single paper's refreshes (before the editions) stand in for the first edition until it has its own
     const old = this.s.history.filter(h => !h.edition && h.tokens !== null && h.summarized > 0).slice(-5);
-    const groups = [...per, old].filter(g => g.length);
+    const first = this.s.editions.findIndex(e => e.id === NEWS_AI_EDITION);
+    if (first >= 0 && !per[first]!.length) per[first] = old;
+    const groups = per.filter(g => g.length);
     const mean = (xs: number[]) => xs.reduce((a, x) => a + x, 0) / xs.length;
     const estimate = groups.length
       ? { tokens: Math.round(groups.reduce((a, g) => a + mean(g.map(h => h.tokens!)), 0)), usd: groups.some(g => g.some(h => h.costUsd !== null)) ? groups.reduce((a, g) => { const u = g.filter(h => h.costUsd !== null).map(h => h.costUsd!); return a + (u.length ? mean(u) : 0); }, 0) : null, measured: true }
@@ -248,7 +264,12 @@ export class NewsService {
   /** «Aggiorna»: read, merge, rank, summarize; one edition or all. One at a time: a second call joins the running one. */
   refresh(edition?: string): Promise<NewsRefresh> {
     if (edition !== undefined) this.edition(edition);
-    this.running ??= this.doRefresh(edition).finally(() => { this.running = null; this.progress = null; this.emit(); });
+    // a call for another edition waits for the running one, then reads its own
+    if (this.running && this.runningFor !== undefined && this.runningFor !== edition) return this.running.then(() => this.refresh(edition), () => this.refresh(edition));
+    if (!this.running) {
+      this.runningFor = edition;
+      this.running = this.doRefresh(edition).finally(() => { this.running = null; this.progress = null; this.emit(); });
+    }
     return this.running;
   }
 
@@ -372,7 +393,7 @@ export class NewsService {
       } catch (e) { aiError = why(e); }
     }
     // the edition was deleted while its AI pass ran: nothing of it is kept
-    if (!this.s.editions.includes(ed)) return { at: n.t0, edition: ed.id, durationMs: this.now() - n.t0, sources: n.sources, failed: n.failed, found: n.found, fresh: 0, merged: 0, summarized: 0, tokens, costUsd };
+    if (!this.s.editions.some(e => e.id === ed.id)) return { at: n.t0, edition: ed.id, durationMs: this.now() - n.t0, sources: n.sources, failed: n.failed, found: n.found, fresh: 0, merged: 0, summarized: 0, tokens, costUsd };
     // what the user did while this refresh ran (read, saved, a lesson, «meno così») is on the current stories: carry it over
     const now2 = new Map(mine().map(i => [i.id, i]));
     // (also from a story this refresh merged into another one: its link is now one of the «also» links)
@@ -427,7 +448,8 @@ export class NewsService {
     for (const r of (Array.isArray(raw) ? raw : []).slice(0, NEWS_SECTIONS_MAX)) {
       const name = line(r?.name, 40);
       if (!name) continue;
-      const base = (typeof r.id === 'string' && had.some(h => h.id === r.id) ? r.id : slug(name)) || `s${out.length + 1}`;
+      // a section keeps its id when it is named by it or still has its name: sources and stories point at the id
+      const base = (typeof r.id === 'string' && had.some(h => h.id === r.id) ? r.id : had.find(h => h.name.toLowerCase() === name.toLowerCase())?.id ?? slug(name)) || `s${out.length + 1}`;
       let id = base;
       for (let k = 2; out.some(o => o.id === id); k++) id = `${base}-${k}`;
       const words = wordList(r.words, 30);

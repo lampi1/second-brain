@@ -55,7 +55,7 @@ export function newsTools(news: NewsControl, emitUi: (cmd: EventMap['ui:command'
       const ed = find(a.edition);
       const items = st.items.filter(i => i.edition === ed.id && !i.less);
       const { front, more } = frontPage(items, ed.cap, now());
-      const row = (i: typeof items[number]) => ({ id: i.id, title: i.title, source: i.sourceName, date: day(i.at), section: i.section || null, ...(i.summary ? { summary: i.summary } : i.snippet ? { text: i.snippet } : {}), ...(i.why ? { why: i.why } : {}), ...(i.fit !== undefined ? { fit: i.fit } : {}), url: i.url, read: !!i.read, ...(i.also.length ? { alsoOn: i.also.map(x => x.name) } : {}) });
+      const row = (i: typeof items[number]) => ({ id: i.id, title: i.title, source: i.sourceName, date: day(i.at), section: i.section || null, ...(i.summary ? { summary: i.summary } : {}), ...(i.why ? { why: i.why } : {}), ...(i.fit !== undefined ? { fit: i.fit } : {}), url: i.url, read: !!i.read, ...(i.also.length ? { alsoOn: i.also.map(x => x.name) } : {}) });
       return {
         edition: { id: ed.id, name: ed.name, interest: ed.interest, frontPageCap: ed.cap, sections: ed.sections.map(s => ({ id: s.id, name: s.name, words: s.words })), core: ed.core, near: ed.near },
         frontPage: front.map(row), otherRecent: more.length, otherTitles: more.slice(0, 15).map(i => i.title),
@@ -72,7 +72,7 @@ export function newsTools(news: NewsControl, emitUi: (cmd: EventMap['ui:command'
       edition: { type: 'string', description: 'update, delete: the edition\'s id or name' },
       name: { type: 'string', description: 'the edition\'s name as the user says it («Auto elettriche»), at most 60 characters' },
       interest: { type: 'string', description: 'what the user wants from it, in their words, at most 400 characters' },
-      sections: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, words: { type: 'array', items: { type: 'string' } } }, required: ['name'] }, description: 'the edition\'s sections, in order (at most 8)' },
+      sections: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', description: 'on update: the section\'s id from app_news, to rename it and keep its sources and stories' }, name: { type: 'string' }, words: { type: 'array', items: { type: 'string' } } }, required: ['name'] }, description: 'the edition\'s sections, in order (at most 8)' },
       core: { type: 'array', items: { type: 'string' }, description: 'key words at the heart of the interest (at most 60)' },
       near: { type: 'array', items: { type: 'string' }, description: 'key words around it (at most 60)' },
       frontPageCap: { type: 'number', description: '3-12, default 7' },

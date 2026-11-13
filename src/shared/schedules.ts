@@ -71,7 +71,8 @@ export function parseWhen(raw: unknown, now: number): ScheduleWhen {
   }
   if (o.kind === 'daily') {
     if (typeof o.time !== 'string' || !TIME.test(o.time)) throw new Error('daily: time as "HH:MM" (24 hours, local time)');
-    const days = Array.isArray(o.days) ? [...new Set(o.days.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))].sort((a, b) => a - b) : [];
+    if (Array.isArray(o.days) && o.days.some(d => typeof d !== 'number' || !Number.isInteger(d) || d < 0 || d > 6)) throw new Error('daily: days as numbers 0 (Sunday) to 6 (Saturday)');
+    const days = Array.isArray(o.days) ? [...new Set(o.days as number[])].sort((a, b) => a - b) : [];
     return { kind: 'daily', time: o.time, ...(days.length && days.length < 7 ? { days } : {}) };
   }
   if (o.kind === 'once') {

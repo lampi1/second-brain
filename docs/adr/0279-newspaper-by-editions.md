@@ -7,7 +7,7 @@ rimuovere fonti») · Amends: ADR 0265 (the AI newspaper)
 
 ## Context
 
-ADR 0265 made one newspaper about one subject: 28 built-in sources on AI for people who build agents, five fixed
+ADR 0265 made one newspaper about one subject: 28 built-in sources on AI for people who build agents, four fixed
 sections and key words written in the code. A user with another interest could add a link, but the ranking and the
 sections still spoke about agents. The front page listed up to 30 summarized stories, and only the user could edit the
 sources, by hand.
@@ -28,12 +28,13 @@ sources, by hand.
    words decide.
 4. **A few stories.** The front page holds the best `cap` stories (7 by default) of the last 7 days, never one the AI
    pass judged off topic (`fit` 0) or the user refused (`frontPage`). The rest wait under «Altre». The AI pass runs once
-   per edition on at least 14 stories and gets the edition's name and sentence inside the fence, as data.
+   per edition on at most 14 stories (twice the front page when that is larger) and gets the edition's name and sentence inside the fence, as data.
 5. **«Meno così»** on a story hides it and lowers its source's weight by 0.05 (floor 0.2); the undo gives it back. No
    AI call, no profile of the user: the only thing that learns is the weight of a source.
 6. A source is a **public https link** only (`publicHttps`: no loopback, no LAN, no credentials in the link).
    `testSource` reads a link once at zero tokens and says how it will be read and how many stories it holds, before it
-   is added («Prova» in the panel). A link added as a feed that turns out to be a page is read as a page.
+   is added («Prova» in the panel). The app follows a source's redirects by hand, at most 5, and only to another
+   public https link. A link added as a feed that turns out to be a page is read as a page.
 7. **The Orchestrator edits the paper** (`src/main/appctl/news.ts`): `app_news` (read), `app_news_edition` (create,
    update, delete), `app_news_source` (try, add, remove, pause, resume), `app_news_refresh`. No approval and no
    «user turn» gate: the Orchestrator counts as the user (ADR 0275), the paper holds public links, and a deleted
@@ -47,7 +48,7 @@ sources, by hand.
 - A refresh of all editions costs one AI pass per edition; the cost is shown per refresh as before, and the daily
   refresh stays off by default.
 - What a source returns is public web text: it reaches the model only inside the fenced summary prompt, and the
-  Orchestrator's tools return titles and the app's own summaries.
+  Orchestrator's tools return titles and the app's own summaries, never a source's raw text.
 - The fixed section ids of ADR 0265 are gone from the types (`NewsSection`, `NEWS_SECTIONS`); a section is a string
   of its edition.
 

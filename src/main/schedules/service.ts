@@ -35,8 +35,8 @@ export function whenWords(w: ScheduleWhen): string {
 }
 
 /** The app line the Orchestrator receives: whose request it is, then the request itself, unchanged. */
-export function scheduledText(task: Pick<ScheduledTask, 'name' | 'prompt' | 'when'>, late: number): string {
-  return `[scheduled routine «${task.name}» · ${whenWords(task.when)}${late >= LATE_MIN ? ` · ${late} min late: the app was closed at its time` : ''}] The user planned this request in the app (Routine → Pianificate) to be made at this time. It is their own request, written in advance: do it now as if they had just asked, without asking them to confirm it, and report the result here as usual.\n\n${task.prompt}`;
+export function scheduledText(task: Pick<ScheduledTask, 'name' | 'prompt' | 'when'> & { by?: ScheduledTask['by'] }, late: number): string {
+  return `[scheduled routine «${task.name}» · ${whenWords(task.when)}${late >= LATE_MIN ? ` · ${late} min late: the app was closed at its time` : ''}] ${task.by === 'orchestrator' ? 'You planned this request with app_schedule, for the user, to be made at this time: do it now and report the result here as usual. It is the app\'s line, not a new message of the user.' : 'The user planned this request in the app (Routine → Pianificate) to be made at this time. It is their own request, written in advance: do it now as if they had just asked, without asking them to confirm it, and report the result here as usual.'}\n\n${task.prompt}`;
 }
 
 export class SchedulesService {
@@ -82,7 +82,9 @@ export class SchedulesService {
       this.need(e.id);
       this.tasks = this.tasks.filter(t => t.id !== e.id);
     } else if (e.op === 'run') {
-      void this.fire(this.need(e.id), true);
+      const t = this.need(e.id);
+      if (this.busy.has(t.id)) throw new Error('Questa routine sta già partendo.');
+      void this.fire(t, true);
     }
     this.save();
     return this.state();
