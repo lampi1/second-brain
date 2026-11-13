@@ -54,7 +54,7 @@ const isDurable = (ask: Ask): ask is DurableAsk => ask.type === 'work' || ask.ty
 export function OrchestratorAsks() {
   const hidden = ui.use(s => s.hidden, sameList);
   const q = ui.use(s => s.qwin);
-  const allPending = useApp(s => s.pending.filter(p => !s.chats[p.chatId]?.quick), sameList);
+  const allPending = useApp(s => s.pending, sameList);
   const planKeys = useApp(planAskKeys, sameList);
   const plans = useMemo(() => planKeys.map(planAskOf).filter((p): p is PlanAsk => !!p), [planKeys]);
   const { rows, lessons } = useWorkflows();

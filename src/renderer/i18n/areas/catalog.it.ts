@@ -72,7 +72,6 @@ export const catalogIt = {
   'catalog.purpose.artisan': 'Fa le modifiche: codice, file, configurazioni, documenti e note del cervello, con i controlli del repository.',
   'catalog.purpose.sentinel': 'Verifica: esegue test e controlli, o giudica il risultato dalle prove quando non c’è nulla da eseguire, e dice cosa passa e cosa no.',
   'catalog.purpose.herald': 'Prepara messaggi e bozze per persone e servizi esterni; ogni invio lo approvi tu.',
-  'catalog.purpose.flash': 'Risposte al volo accanto all’Orchestrator: vede la sua chat, legge, non cambia nulla',
   // the model tier's word, on the role card and in the studio
   'roles.tier.light': 'leggero', 'roles.tier.mid': 'medio', 'roles.tier.top': 'alto',
 };

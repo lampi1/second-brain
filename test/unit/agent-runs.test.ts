@@ -438,24 +438,19 @@ describe('agent run store: A6 fields and rollups', () => {
   });
 });
 
-describe('Flash outcomes and plan records in the run store (ADR 0131)', () => {
-  it('keeps Flash\'s answer outcomes across a restart; a flash block out of shape never refuses the file', () => {
+describe('plan records in the run store (ADR 0131)', () => {
+  it('reads a file that still carries the retired Flash block (ADR 0296) and drops it at the next save', () => {
     const dir = tmp(), s = new AgentRunStore(dir, JSON_ONLY);
     s.start(start());
-    s.flashEvent({ kind: 'asked', text: 'quanto costa il piano Pro di Claude?', at: 1000 });
-    s.flashEvent({ kind: 'answered', at: 2000 });
-    s.flashEvent({ kind: 'asked', text: 'no, è sbagliato', at: 3000 });
     s.flush();
+    const file = path.join(dir, 'agent-runs.json'), raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+    fs.writeFileSync(file, JSON.stringify({ ...raw, flash: { version: 1, open: null, done: [{ at: 1, verdict: 'pass' }] } }));
     const again = new AgentRunStore(dir, JSON_ONLY);
     expect(again.problem).toBeNull();
-    expect(again.flashLog().done).toEqual([{ at: 3000, verdict: 'fail', why: 'corrected' }]);
-    const file = path.join(dir, 'agent-runs.json'), raw = JSON.parse(fs.readFileSync(file, 'utf8'));
-    expect(JSON.stringify(raw.flash)).not.toContain('piano');
-    fs.writeFileSync(file, JSON.stringify({ ...raw, flash: { version: 1, open: 'x', done: [{ at: 'no' }] } }));
-    const lenient = new AgentRunStore(dir, JSON_ONLY);
-    expect(lenient.problem).toBeNull();
-    expect(lenient.list()).toHaveLength(1);
-    expect(lenient.flashLog().done).toEqual([]);
+    expect(again.list()).toHaveLength(1);
+    again.start(start());
+    again.flush();
+    expect(JSON.parse(fs.readFileSync(file, 'utf8')).flash).toBeUndefined();
   });
   it('reads a run\'s plan record, dropping one out of shape without refusing the run', () => {
     const run = new AgentRunStore(tmp()).start(start());

@@ -26,7 +26,7 @@ import { VisualBlock, isVisualLang } from './VisualBlock';
 import { explainTool } from '@shared/explain';
 import { useNow } from '../lib/clock';
 import { liveLine } from '../lib/typing-line';
-import { IconAlert, IconArrowDown, IconArrowRight, IconBell, IconBranch, IconCheck, IconChevronDown, IconChevronRight, IconInfo, IconLink, IconPlus, IconRefresh, IconSend, IconSparkle, IconSpinner, IconTerminal, IconX } from './Icons';
+import { IconAlert, IconArrowDown, IconArrowRight, IconBell, IconBolt, IconBranch, IconCheck, IconChevronDown, IconChevronRight, IconInfo, IconLink, IconPlus, IconRefresh, IconSend, IconSparkle, IconSpinner, IconTerminal, IconX } from './Icons';
 import { splitNotes } from '../lib/sendable';
 import { getForeignLabel, foreignOf, showsSender, type Foreign, type ForeignKind } from '../lib/foreign';
 import { ImageStrip } from './ImageStrip';
@@ -354,7 +354,7 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
         {item.from && <div className="msg-from" data-testid={`item-${item.id}-from`}>{t('chat.items.from', { source: item.from })}</div>}
         {/* sent from the paired phone (phone bridge): 📱, 🎙️ 📱 for a voice note */}
         {item.via === 'phone' && <div className="msg-phone" data-testid={`item-${item.id}-phone`} data-voice={item.voice ? '' : undefined}>{item.voice ? '🎙️ 📱' : '📱'} {t(item.voice ? 'chat.items.fromPhoneVoice' : 'chat.items.fromPhone')}</div>}
-        {nc?.mode && <div className="msg-newchat" data-testid={`item-${item.id}-mode`} data-tip={t(`chat.items.modeTip.${nc.mode}`)}>{nc.mode === 'plan' ? <IconBranch size={11} /> : <IconPlus size={11} />}{t(`chat.mode.${nc.mode}`)}</div>}
+        {nc?.mode && <div className="msg-newchat" data-testid={`item-${item.id}-mode`} data-tip={t(`chat.items.modeTip.${nc.mode}`)}>{nc.mode === 'plan' ? <IconBranch size={11} /> : nc.mode === 'fast' ? <IconBolt size={11} /> : <IconPlus size={11} />}{t(`chat.mode.${nc.mode}`)}</div>}
         {fix ? <CorrectionBubble quote={fix.quote} fix={fix.fix} /> : text && <div className="bubble">{text}</div>}
         {reaction && <div className="msg-react" data-testid={`item-${item.id}-reaction`} data-reaction="">{reaction}</div>}
         {own.notes.length > 0 && <div className="msg-notes" data-testid={`item-${item.id}-notes`} title={own.notes.join('\n')}><IconCheck size={11} /> {own.notes.join(' · ')}</div>}

@@ -19,7 +19,7 @@ Where the code lives. Moved from `AGENTS.md` (ADR 0198); the full picture is in 
   agent runs) → `sessions` (engines, warm pool, kill) → `checkpoints` (ADR 0103, receipts) → `requests` (questions,
   permissions, away mode) → `continuity` (hand-offs, cold notes) → `delegation` (reports, turn end) → `lifecycle` (stop,
   archive, auto-close, shutdown) → `work` (assignments, user events, plans) → `sink` (session reports) → `manager.ts`
-  (create, send, deliver, Flash, set). Shapes in `manager-types.ts` (`Rec`, options), constants in `manager-helpers.ts`.
+  (create, send, deliver, set). Shapes in `manager-types.ts` (`Rec`, options), constants in `manager-helpers.ts`.
   A method goes in the layer of its concern; one a lower layer calls is declared `abstract` there. Callers import only
   `./chats/manager`.
 - `src/preload/index.ts`: the allow-listed bridge `window.sb` (invoke/on). Nothing else crosses.

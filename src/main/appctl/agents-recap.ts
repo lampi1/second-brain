@@ -126,7 +126,7 @@ const NONE = 'Nessun agente al lavoro.';
  *  finished (default), or with detail one block per agent with its steps, sub-agents and the chats closed lately. */
 export function agentsRecap(d: AgentsRecapDeps, o: { detail?: boolean } = {}): string {
   const now = d.now?.() ?? Date.now();
-  const all = d.chats().filter(c => !c.quick);
+  const all = d.chats();
   const open = all.filter(c => !c.closedAt && c.state !== 'closed' && !c.isOrchestrator);
   const asks = new Map<string, PendingRequest[]>();
   for (const r of d.pending()) asks.set(r.chatId, [...(asks.get(r.chatId) ?? []), r]);

@@ -1,7 +1,7 @@
 // The README screenshots, generated from the frozen demo (SB_DEMO=1 SB_DEMO_FREEZE=1, the synthetic brain of
 // scripts/demo-brain.mjs) so they always show the current UI with fictional data only: English UI (SB_LANG=en), dark
 // theme, 1600x1000, saved as WebP (< 300 KB each) in docs/screenshots/: the whole window, one part of it, or two parts
-// side by side. The showcase (memory, agent-levels, brain-map, orchestrator-flash, reactions, plan), the app's own pages
+// side by side. The showcase (memory, agent-levels, brain-map, orchestrator-column, reactions, plan), the app's own pages
 // (voice, log, recordings, quality, learn, news, costs, maintenance) and the rest. Not part
 // of `npm run check`: run by `npm run shots` (its own Playwright config, playwright.shots.config.ts). The app runs hidden
 // (SB_HIDDEN, set by launch()). The 3D map needs WebGL: on a machine without a GPU set
@@ -174,7 +174,7 @@ const frameOf = (el: Locator): Promise<Clip> => el.evaluate(e => {
   return { x: Math.round(r.left), y: Math.round(y), width: Math.round(r.width), height: Math.round(b - y) };
 });
 
-test('README showcase: Memoria, agent levels, Orchestrator and Flash, reactions', async () => {
+test('README showcase: Memoria, agent levels, Orchestrator, reactions', async () => {
   test.setTimeout(180_000);
   await goPage(page, 'home');
 
@@ -214,30 +214,14 @@ test('README showcase: Memoria, agent levels, Orchestrator and Flash, reactions'
   await saveBuffers('agent-levels', cards);
   await setSize(app, W, H);
 
-  // the Orchestrator's column, then Flash beside it, side by side
+  // the Orchestrator's column
   await goPage(page, 'home');
   await openOrchestrator(page);
   await waitThumbs(page);
   const column = page.getByTestId('orchestrator-overlay');
   await page.mouse.move(2, 2);
   const cb0 = (await column.boundingBox())!;
-  const topPart = { x: Math.round(cb0.x), y: Math.round(cb0.y), width: Math.round(cb0.width), height: 745 };
-  const orch = await png(topPart);
-  // Flash beside it: a side question about the work in progress, answered read-only from the Orchestrator's chat
-  await page.getByTestId('lane-lampo').click();
-  await expect(page.getByTestId('tile-lampo')).toBeVisible();
-  await page.getByTestId('lampo-open').click();
-  await page.getByTestId('lampo-input').click();
-  await page.keyboard.type('btw, what is waiting for me?');
-  await page.keyboard.press('Enter');
-  await expect(page.getByTestId('tile-lampo')).toContainText('Make it a job', { timeout: 15_000 });
-  await expect(page.getByTestId('tile-lampo')).toContainText('From the Orchestrator’s chat', { timeout: 15_000 });
-  await page.mouse.move(2, 2);
-  await page.waitForTimeout(500);
-  const flash = await png(topPart);
-  await page.getByTestId('lane-orchestrator').click();
-  await expect(page.getByTestId('tile-orchestrator')).toBeVisible();
-  await saveBuffers('orchestrator-flash', [orch, flash]);
+  await saveBuffers('orchestrator-column', [await png({ x: Math.round(cb0.x), y: Math.round(cb0.y), width: Math.round(cb0.width), height: Math.round(cb0.height) })]);
 
   // a thanks needs no answer: the Orchestrator's one-emoji reply sticks to the message as a reaction (her decision
   // answered first, so the message goes at once instead of queuing behind her turn)

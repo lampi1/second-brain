@@ -148,7 +148,7 @@ export abstract class ManagerContinuity extends ManagerRequests {
   }
 
   protected freshReady(r: Rec, now: number): boolean {
-    return !!this.opts.freshSessions?.() && r.s.harness === 'claude' && !r.s.isOrchestrator && !r.s.quick
+    return !!this.opts.freshSessions?.() && r.s.harness === 'claude' && !r.s.isOrchestrator
       && !r.s.closedAt && !r.s.continuedBy && r.s.state === 'idle' && !r.working && !r.session?.busy
       && !r.pending.size && !r.commandsOpen?.size && !r.handoffTurn && !r.archiving && !r.autoClosing && !r.releasing && !r.opening && !r.s.queued && (r.deliveryHolds ?? 0) <= 1
       && !r.askedParentAt && !this.freshWorkBehind(r) && !r.s.waitsOn && r.s.plan?.phase !== 'proposed'

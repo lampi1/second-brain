@@ -167,7 +167,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
   /** true = recorded and checkpointed (chats.json written); false = not a chat that keeps the user's events. */
   override userWrote(chatId: string, text: string): boolean {
     const r = this.chats.get(chatId);
-    if (!r || r.s.isOrchestrator || r.s.quick) return false;
+    if (!r || r.s.isOrchestrator) return false;
     const ledger = r.userTaskEvents ?? { events: [], latestSeq: 0, acknowledgedSeq: 0 };
     if (ledger.latestSeq === Number.MAX_SAFE_INTEGER) throw new Error('The user event ledger is invalid; the instruction cannot be recorded safely.');
     const at = Date.now(), seq = ledger.latestSeq + 1, eventId = crypto.randomUUID();
@@ -316,7 +316,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     const metrics = runMetrics(runs, { rollups, live, ...(opts.since !== undefined ? { since: opts.since } : {}),
       filter: { ...(opts.skill !== undefined ? { skill: opts.skill } : {}), ...(opts.app !== undefined ? { app: opts.app } : {}), ...(opts.repo !== undefined ? { repo: opts.repo } : {}) } });
     // the card's level and performance are the agent's whole record, whatever the filter
-    const standing = standings(runs, rollups, Date.now(), this.runs.flashLog(), this.opts.priceOf ?? null);
+    const standing = standings(runs, rollups, Date.now(), this.opts.priceOf ?? null);
     return withStandings(metrics, standing);
   }
 
@@ -337,12 +337,15 @@ export abstract class ManagerWork extends ManagerLifecycle {
   }
 
   /** The user's pat (+1) or whip (-1) on the little person of this chat's run (ADR 0297; the UI's only, never an agent
-   *  tool): one per run, the last one stands, the run stays as it is. False = nothing changed (no run, the same sign). */
+   *  tool): one per run, the last one stands, the run and the chat's last activity stay as they are. False = nothing changed
+   *  (no run, the same sign). */
   touchRun(chatId: string, sign: 1 | -1): boolean {
     const r = this.need(chatId), run = r.s.run;
     if (!run || r.s.routineArchived || run.touch?.sign === sign) return false;
     run.touch = { sign, at: Date.now() };
-    this.runSave(); this.persist(); this.updated(r);
+    this.runSave(); this.persist();
+    // the page learns it, the chat's clock does not: a pat is no activity (it must not reset a stalled child's time)
+    this.opts.emitter.emit('chat:updated', { ...r.s });
     return true;
   }
 }

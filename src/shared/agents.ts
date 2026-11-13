@@ -76,8 +76,8 @@ export const BEHAVIOUR_FIELDS = ['instructions', 'engine', 'model', 'effort', 't
 export type AgentBehaviour = Pick<AgentDraft, (typeof BEHAVIOUR_FIELDS)[number]>;
 export interface AgentProfile extends AgentDraft {
   id: string; createdAt: number; updatedAt: number;
-  /** role = one of the six roles (the Orchestrator and the five work roles); background = Flash, a catalog entry that is never offered as a delegate */
-  scope: 'role' | 'background';
+  /** always a role: one of the six (the Orchestrator and the five work roles) */
+  scope: 'role';
   /** Highest version ever created. */
   version: number;
   /** The version new runs use; lower than `version` after a restore. The profile's behaviour fields are this version. */
@@ -211,13 +211,13 @@ export interface AgentMetrics { agentId: string; versions: VersionMetrics[]; all
   /** level and performance on the agent card (agents/standing.ts), over all its runs whatever the filter */
   standing?: AgentStanding }
 /** The card's «Lavori conclusi»: the agent's ended runs, or its standing's count when that is larger. The Orchestrator
- *  has no run of its own (its count is the ended root jobs it opened, ADR 0097) and Flash none at all (its answers,
- *  ADR 0131): reading only `all.ended` showed 0 for both however much they did. */
+ *  has no run of its own (its count is the ended root jobs it opened, ADR 0097): reading only `all.ended` showed 0
+ *  however much it did. */
 export const completedRuns = (m: AgentMetrics | null | undefined): number => Math.max(m?.all?.ended ?? 0, m?.standing?.runs ?? 0);
 /** The agent card's level (from the XP of its verified successful runs, ADR 0100, 0131) and performance % (a Bayesian
  *  estimate of its verdicts weighted by trust and recency): agents/standing.ts. */
 export interface AgentStanding {
-  /** ended runs (kept + rolled up); for Flash, its answers */
+  /** ended runs (kept + rolled up) */
   runs: number;
   /** verified successful runs (the user's verdict, a verified review's, the receipts', a verified parent's for a delegated
    *  child, the later outcome's for a Sentinel's review: standing.ts earnedVerdict, ADR 0125) */
@@ -237,8 +237,8 @@ export interface AgentStanding {
   evaluated: number; minRuns: number;
   /** where the verdicts came from: the user, an independent review, the app's receipts (ADR 0130), a review graded by what
    *  happened later, the facts, the Orchestrator, the Orchestrator's decision signals (ADR 0131), a verified parent
-   *  (chain), Flash's answer outcomes (quick), the agent itself (the last one is counted here but weighs nothing) */
-  sources: { human: number; review: number; receipts: number; graded: number; facts: number; orchestrator: number; decision: number; chain: number; quick: number; self: number };
+   *  (chain), the agent itself (the last one is counted here but weighs nothing) */
+  sources: { human: number; review: number; receipts: number; graded: number; facts: number; orchestrator: number; decision: number; chain: number; self: number };
   /** runs the user patted or whipped (ADR 0297): each weighs a twentieth of a verdict and never counts as one; absent = none */
   touches?: { pat: number; whip: number };
   /** the same runs by the model they ran on (ADR 0284), most runs first; only the runs still kept whole. Absent when
@@ -377,7 +377,7 @@ export interface AgentModelChoice {
   modelReason: string | null;
 }
 export interface AgentCatalog {
-  /** The six roles in their fixed order, then the background entry (Flash). */
+  /** The six roles in their fixed order. */
   profiles: AgentProfile[];
   models: AgentModelChoice[];
   problem: string | null;

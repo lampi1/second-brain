@@ -50,8 +50,7 @@ export function isOpenChat(id: string, v: OpenView): boolean {
   return v.expanded[id] === true;
 }
 /** The one chat whose view shows the requests of `chatId` as panels (see the header). */
-export function requestHost(chatId: string, chats: Readonly<Record<string, Pick<ChatSummary, 'parentId' | 'isOrchestrator' | 'closedAt' | 'quick'> | undefined>>, _v: OpenView): string {
-  if (chats[chatId]?.quick) return chatId;
+export function requestHost(chatId: string, chats: Readonly<Record<string, Pick<ChatSummary, 'parentId' | 'isOrchestrator' | 'closedAt'> | undefined>>, _v: OpenView): string {
   // Inspection, focus and tree expansion never create another decision surface. With no coordinator
   // open the host queue keeps the request; it must not silently fall back to a worker conversation.
   return Object.entries(chats).find(([, c]) => c?.isOrchestrator && !c.closedAt)?.[0] ?? 'orchestrator';

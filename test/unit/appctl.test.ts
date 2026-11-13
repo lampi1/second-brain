@@ -267,6 +267,45 @@ describe('app control tools', () => {
     expect(made).toHaveLength(2);
   });
 
+  it('userModel runs that one chat on the model the user named, the role\'s card unchanged; Fast refuses any delegation (ADR 0296)', async () => {
+    const made: Record<string, unknown>[] = [];
+    let items: unknown[] = [];
+    const chats = { list: () => [{ id: 'r', harness: 'claude', model: 'claude-opus-5-5', isOrchestrator: true, title: 'Orchestrator' }], items: () => items,
+      create: async (req: Record<string, unknown>) => { made.push(req); return { id: `n${made.length}`, title: req.title }; } } as unknown as ChatService;
+    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true, codex: true }, engines: { claude: true, codex: true }, orchestratorChats: { harness: 'claude' } }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
+    const models = (): AgentModelChoice[] => [
+      { engine: 'claude', label: 'Claude', enabled: true, trusted: true, effort: true, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [{ id: 'claude-opus-5-5', name: 'Opus 5.5', efforts: ['low', 'high', 'max'] }], installed: true, authenticated: true },
+      { engine: 'codex', label: 'Codex', enabled: true, trusted: true, effort: true, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [{ id: 'gpt-x', name: 'GPT X', efforts: ['low', 'high'] }], installed: true, authenticated: true }];
+    const catalog = new AgentCatalogService({ userData: fs.mkdtempSync(path.join(os.tmpdir(), 'sb-appctl-um-')), models, tierModel: (_e, tier) => `m-${tier}` });
+    const all = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: req => catalog.resolve(req) }, 'r');
+    const t = all.find(x => x.name === 'app_create_chat')!;
+    const card = catalog.list().profiles.find(p => p.id === 'artisan')!;
+    // the engine from the model's own list; the effort the model takes
+    expect(await t.run({ title: 'Ordini · Fix', prompt: 'p', roleId: 'artisan', userModel: { model: 'gpt-x', effort: 'high' } })).toMatchObject({ harness: 'codex', model: 'gpt-x', effort: 'high', route: { reason: expect.stringContaining('the user asked for gpt-x') } });
+    expect(made[0]).toMatchObject({ harness: 'codex', model: 'gpt-x', userModel: { engine: 'codex', model: 'gpt-x', effort: 'high' } });
+    // by its name too; the card is the same as before
+    expect(await t.run({ title: 'Ordini · Fix 2', prompt: 'p', roleId: 'artisan', userModel: { model: 'Opus 5.5' } })).toMatchObject({ harness: 'claude', model: 'claude-opus-5-5' });
+    expect(catalog.list().profiles.find(p => p.id === 'artisan')).toEqual(card);
+    // a model no engine lists, an unknown engine, a mix with balanced or tier: refused, nothing created
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan', userModel: { model: 'gpt-y' } }))).rejects.toThrow(/not in any engine/);
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan', userModel: { engine: 'claude', model: 'gpt-x' } }))).rejects.toThrow(/claude's model list/);
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan', userModel: { engine: 'nope', model: 'gpt-x' } }))).rejects.toThrow(/userModel.engine/);
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan', tier: 'top', userModel: { model: 'gpt-x' } }))).rejects.toThrow(/one or the other/);
+    expect(made).toHaveLength(2);
+    // agent_catalog lists each engine's models when asked
+    const rawCat = await all.find(x => x.name === 'agent_catalog')!.run({ models: true });
+    const cat = (typeof rawCat === 'string' ? JSON.parse(rawCat) : rawCat) as { engines: { engine: string; models: { id: string }[] }[] };
+    expect(cat.engines.find(e => e.engine === 'codex')!.models.map(m => m.id)).toEqual(['gpt-x']);
+    // Fast: the user's latest message is a [fast] one, so this turn opens and assigns nothing
+    items = [{ kind: 'user', at: 1, text: '[fast] Rispondi tu, subito.\n\nquanto costa?' }];
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan' }))).rejects.toThrow(/Fast mode/);
+    await expect(Promise.resolve(all.find(x => x.name === 'app_assign_task')!.run({ chatId: 'n1', mode: 'continue', roleId: 'artisan', cwd: 'C:/brain', prompt: 'p' }))).rejects.toBeInstanceOf(ToolRefusal);
+    expect(made).toHaveLength(2);
+    items = [{ kind: 'user', at: 2, text: 'fallo' }];
+    await t.run({ title: 'Ordini · Fix 3', prompt: 'p', roleId: 'artisan' });
+    expect(made).toHaveLength(3);
+  });
+
   it('app_create_chat takes the structured contract: rendered once, its criteria and fields reach the new chat (#355)', async () => {
     const made: Record<string, unknown>[] = [];
     const chats = { list: () => [{ id: 'r', harness: 'claude', model: 'claude-opus-5-5', isOrchestrator: true, title: 'Orchestrator' }], create: async (req: Record<string, unknown>) => { made.push(req); return { id: 'n1', title: req.title }; } } as unknown as ChatService;

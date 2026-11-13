@@ -1,6 +1,6 @@
 // «Chiedi alla Guida» (ADR 0196): which cards go into the prompt (within the one-shot's limit), the citations kept only
 // when they name a card or a file that was given, the answer split into pieces for the page, and the main service with a
-// fake engine: the question goes to Flash's engine at the light tier with no tools, the answer comes back with its cost;
+// fake engine: the question goes to the Scout's engine at the light tier with no tools, the answer comes back with its cost;
 // no engine, a failure and an invalid question are told apart. Plus the German report for the maintenance (G5).
 import { describe, expect, it, vi } from 'vitest';
 import { CONCEPTS, type ConceptCard } from '@shared/concept-guide';
@@ -54,11 +54,11 @@ describe('GuideService.ask (fake engine)', () => {
     const runOnce = vi.fn(async (_req: OneShotRequest) => r);
     return { runOnce, svc: new GuideService({ runOnce, index, repoRoot: null }) };
   };
-  it('asks Flash\'s engine at the light tier, no role text, and returns the cited answer with its cost', async () => {
+  it('asks the Scout\'s engine at the light tier, no role text, and returns the cited answer with its cost', async () => {
     const { runOnce, svc } = make(result());
     const a = await svc.ask({ question: 'Come delego un lavoro?', lang: 'it' });
     const req = runOnce.mock.calls[0]![0];
-    expect(req).toMatchObject({ agentId: 'flash', purpose: 'guide', light: true });
+    expect(req).toMatchObject({ agentId: 'scout', purpose: 'guide', light: true });
     expect(req.system).toContain('Answer in Italian');
     expect(req.prompt).toContain('Question: Come delego un lavoro?');
     expect(req.prompt).toContain('Left rail: Grindhouse');

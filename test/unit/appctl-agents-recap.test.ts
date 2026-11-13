@@ -42,7 +42,6 @@ it('writes one block per agent, the waiting ones first, delegates under their pa
     chat('ask', { ...role('Scout'), title: 'Cerca log', state: 'waiting' }),
     chat('kid', { ...role('Sentinel'), title: 'Verifica', parentId: 'run', state: 'running' }),
     chat('fin', { ...role('Herald'), title: 'Mail', lastResult: { at: 1, isError: false } }),
-    chat('flash', { quick: true } as Partial<ChatSummary>),
     chat('gone', { title: 'Vecchia', closedAt: 9_000, state: 'closed' }),
   ];
   const items: Record<string, ChatItem[]> = {

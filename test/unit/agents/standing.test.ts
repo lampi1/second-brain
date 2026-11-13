@@ -5,9 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { AgentRun } from '../../../src/shared/agents';
 import { HALF_LIFE_MS, MAX_SPREAD, MIN_EVALUATED, PRIOR, TOUCH_TRUST, TRUST, decisionSignals, decisionXp, estimate, earnIndex, earnedVerdict, levelOf, levelStart, orchestratorDecision, routeVerdict, standings, verdictOf, withStandings } from '../../../src/main/agents/standing';
 import { emptyTally, mergeTallies, rollUp, runMetrics } from '../../../src/main/agents/run-metrics';
-import { emptyFlashLog, flashAnswered, flashAsked } from '../../../src/main/agents/flash-outcomes';
-import { FLASH_XP, PLAN_XP } from '../../../src/main/agents/xp';
-import { FLASH_ID } from '../../../src/shared/roles';
+import { PLAN_XP } from '../../../src/main/agents/xp';
 import { completedRuns } from '../../../src/shared/agents';
 import { readTally } from '../../../src/main/agents/runs';
 
@@ -61,6 +59,11 @@ describe('standings', () => {
     expect(patted.performance!).toBeGreaterThan(base.performance!);
     expect(base.performance! - whipped.performance!).toBeLessThan((base.performance! - failed.performance!) / 10);
     expect(TOUCH_TRUST).toBe(TRUST.human / 20);
+    // the ± and the per-model rows come from the verdicts alone
+    expect(whipped.spread).toBe(base.spread);
+    const onModel = (touch?: { sign: 1 | -1; at: number }) => standings([...Array.from({ length: 3 }, () => run({ model: 'm1', outcome: human('success') })),
+      ...Array.from({ length: 20 }, () => run({ model: 'm1', ...(touch ? { touch } : {}) }))], [], NOW).get('scout')!.models![0]!;
+    expect(onModel({ sign: -1, at: NOW })).toEqual(onModel());
     // alone it shows nothing: the performance stays «in rodaggio»
     expect(standings(Array.from({ length: 9 }, () => run({ touch: { sign: 1, at: NOW } })), [], NOW).get('scout')).toMatchObject({ performance: null, evaluated: 0 });
   });
@@ -80,7 +83,7 @@ describe('standings', () => {
     const s = standings(runs, [], NOW + 3600_000).get('scout')!;
     // 5 × 1 + fact fail 0 + opinion 0.6 × 0.5, over 5 + 1 + 0.6 (same age for all)
     expect(s.performance).toBeCloseTo(estimate(5 + 0.3, 5.6).mean);
-    expect(s).toMatchObject({ evaluated: 6, sources: { human: 5, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 1, decision: 0, chain: 0, quick: 0, self: 3 } });
+    expect(s).toMatchObject({ evaluated: 6, sources: { human: 5, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 1, decision: 0, chain: 0, self: 3 } });
   });
   it('levels up only on verified successes: never on failed, unverified, provisional or self-reported runs (ADR 0100)', () => {
     const clean = (endedAt: number) => run({ endedAt, startedAt: endedAt - 1000, corrections: { tagged: 0, afterReport: 0 }, report: { at: endedAt, outcome: 'done', verified: 'yes', summary: 's', via: 'agent_report' } });
@@ -122,7 +125,7 @@ describe('the Orchestrator\'s standing (issue #112, ADR 0097)', () => {
       run({ startedBy: 'orchestrator', endedAt: undefined }),                            // still open
     ];
     const s = standings([...mine, ...others], [], NOW).get('orchestrator')!;
-    expect(s).toMatchObject({ runs: 5, wins: 4, level: 1, evaluated: 5, sources: { human: 5, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 0, decision: 0, chain: 0, quick: 0, self: 0 } });
+    expect(s).toMatchObject({ runs: 5, wins: 4, level: 1, evaluated: 5, sources: { human: 5, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 0, decision: 0, chain: 0, self: 0 } });
     expect(s.performance).toBeCloseTo(estimate(4, 5).mean);
     // the run still counts for its own role too
     expect(standings(mine, [], NOW).get('scout')!.runs).toBe(3);
@@ -133,7 +136,7 @@ describe('the Orchestrator\'s standing (issue #112, ADR 0097)', () => {
     const mine = [...Array(5)].map(() => run({ startedBy: 'orchestrator', outcome: opinion('success') }));
     const judged = [...Array(5)].map(() => run({ startedBy: 'orchestrator', outcome: human('fail') }));
     const s = standings([...mine, ...judged], [], NOW).get('orchestrator')!;
-    expect(s.sources).toEqual({ human: 5, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 0, decision: 0, chain: 0, quick: 0, self: 5 });
+    expect(s.sources).toEqual({ human: 5, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 0, decision: 0, chain: 0, self: 5 });
     expect(s).toMatchObject({ evaluated: 5, wins: 0 });
     expect(s.performance).toBeCloseTo(estimate(0, 5).mean); // its own word weighs nothing: only the 5 failures count
     // the role it rated keeps the Orchestrator's trust for that verdict
@@ -332,9 +335,9 @@ describe('the receipts\' verdict (ADR 0130)', () => {
   });
 });
 
-// ADR 0131 (owner, 2026-10-22: «livelli e performance veramente ben studiati e realistici»; Flash and the Orchestrator
-// never levelled up): XP by the size of the job, a Bayesian performance with its spread, the Orchestrator's decision
-// signals, the receipts no longer hidden by an opinion, and Flash's answers.
+// ADR 0131 (owner, 2026-10-22: «livelli e performance veramente ben studiati e realistici»; the Orchestrator never
+// levelled up): XP by the size of the job, a Bayesian performance with its spread, the Orchestrator's decision
+// signals and the receipts no longer hidden by an opinion.
 describe('XP, decision signals and the Bayesian performance (ADR 0131)', () => {
   const receipts = (exit = 0, files = 4): NonNullable<AgentRun['receipts']> => ({ commands: [{ cmd: 'npm test', exit, at: NOW - 3700_000, check: true }], more: 0,
     files: Array.from({ length: files }, (_, i) => `src/f${i}.ts`), filesMore: 0, filesKnown: true, filesGap: false, testsTouched: false, codeTouched: true, lastChangeAt: NOW - 3800_000,
@@ -412,15 +415,6 @@ describe('XP, decision signals and the Bayesian performance (ADR 0131)', () => {
     // pruning onto a legacy rollup keeps its floor and adds the new XP
     expect(rollUp([legacy], [r], [r], NOW).find(t => t.agentId === 'artisan')).toMatchObject({ xp: 3 + 4, decisionXp: 2 + 4 });
   });
-  it('Flash: its answers give it a level and, with enough of them, a low-trust performance', () => {
-    const log = emptyFlashLog();
-    for (let i = 0; i < 40; i++) { flashAsked(log, `domanda ${i} sul progetto numero ${i}`, NOW - 86_400_000 + i * 600_000); flashAnswered(log, NOW - 86_400_000 + i * 600_000 + 5000); }
-    const s = standings([], [], NOW, log).get(FLASH_ID)!;
-    expect(s).toMatchObject({ runs: 40, wins: 40, xp: 40 * FLASH_XP, sources: { quick: 40 } });
-    expect(s.performance).not.toBeNull();
-    expect(standings([], [], NOW, emptyFlashLog()).has(FLASH_ID)).toBe(false);
-    expect(TRUST.quick).toBeLessThan(TRUST.chain);
-  });
   it('the retired roles and the removed Battito\'s old \'pulse\' runs get no standing nor catalog stats; their runs stay readable (ADR 0186, 0201)', () => {
     const pulse = run({ agentId: 'pulse', source: 'oneshot', startedBy: 'orchestrator', oneshot: { engine: 'anthropic', job: 'pulse', fallback: false, costBasis: 'reported', ok: true }, outcome: human('success') });
     const judge = run({ agentId: 'judge', outcome: human('success') }), scribe = run({ agentId: 'scribe', outcome: human('success') });
@@ -428,13 +422,10 @@ describe('XP, decision signals and the Bayesian performance (ADR 0131)', () => {
     expect([...st.keys()]).toEqual([]);
     expect(runMetrics([pulse, judge, scribe]).map(m => m.agentId)).toEqual([]);
   });
-  it('the card counts the Orchestrator\'s and Flash\'s completed work, not 0', () => {
+  it('the card counts the Orchestrator\'s completed work, not 0', () => {
     const decisions = [run({ startedBy: 'orchestrator' }), run({ startedBy: 'orchestrator' }), run({ startedBy: 'orchestrator', agentId: 'artisan' })];
-    const log = emptyFlashLog();
-    for (let i = 0; i < 4; i++) { flashAsked(log, `domanda ${i} sul progetto numero ${i}`, NOW - 3600_000 + i * 600_000); flashAnswered(log, NOW - 3600_000 + i * 600_000 + 5000); }
-    const st = standings(decisions, [], NOW, log), metrics = withStandings([], st);
+    const st = standings(decisions, [], NOW), metrics = withStandings([], st);
     expect(completedRuns(metrics.find(m => m.agentId === 'orchestrator'))).toBe(3);
-    expect(completedRuns(metrics.find(m => m.agentId === FLASH_ID))).toBe(4);
     expect(completedRuns(undefined)).toBe(0);
   });
 });

@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- «Fast» beside «Plan» in the Orchestrator's input: it answers itself, at once and in a few lines, never delegates (the
+  app refuses a new chat or a task in that turn) and says in one line when the question needs real work (ADR 0296).
+- One task on the model the user names: `app_create_chat` takes `userModel` {engine?, model, effort?} for that chat
+  only, the role's card stays as it is; `agent_catalog` with `models: true` lists each engine's models (ADR 0296).
 - The «Giornale» goes by editions: any subject with its own sources, sections and key words, a front page of a few
   stories (7 by default), «Meno così», a source tried before it is added; the Orchestrator creates editions and adds
   or removes sources by itself (`app_news`, `app_news_edition`, `app_news_source`, `app_news_refresh`; ADR 0280).
@@ -134,6 +138,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   terminal routines.
 
 ### Removed
+- «Flash», the read-only tab beside the Orchestrator, with its card, level, MCP role and brief: the Orchestrator's «Fast»
+  mode does its job. Old Flash chats, its card, its MCP access and its log are dropped from the saved files (ADR 0296).
 - The Classificatori section of Andamento → Qualità and the kind of work by examples: they decided nothing and, on
   real runs, the kind of work did not make the estimates better. The old «classificatori» link opens Qualità; the G K
   key is gone (ADR 0291).

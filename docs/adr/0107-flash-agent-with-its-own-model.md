@@ -1,6 +1,6 @@
 # ADR 0107 · «Flash»: the quick lane is an agent with its own model; both columns show theirs
 
-Date: 2026-10-21 · Status: accepted (owner, 2026-10-21: «sia nel lampo che nell'orchestrator vorrei si capisse
+Date: 2026-10-21 · Status: superseded by ADR 0296 (Flash removed; the Orchestrator's «Fast» mode instead). Earlier accepted (owner, 2026-10-21: «sia nel lampo che nell'orchestrator vorrei si capisse
 chiaramente il modello che stanno usando come per le striscie. E poter scegliere un modello diverso per orechestrator e
 uno diverso per lampo. Quindi quasi quasi Lampo deve essere un agente e lo chiamerei flash ma un agente sempre come oggi,
 in sola lettura nella colonna dell'orchestrator») · Builds on: ADR 0105 (Lampo), ADR 0106 (Lampo is a "btw")

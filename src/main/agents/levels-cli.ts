@@ -13,7 +13,7 @@ import { diagnose, diagnoseFile, formatDiagnosis } from './level-diagnosis';
 import { readRunsSource } from './runs-db';
 import { judgingOffSince, type SamplerState } from '../../shared/judging';
 import type { SettingChange } from '../../shared/contract';
-import { demoAgentRuns, demoFlashLog, DEMO_NOW } from '../demo-agent-runs';
+import { demoAgentRuns, DEMO_NOW } from '../demo-agent-runs';
 
 const argv = process.argv.slice(2);
 const USAGE = 'usage: npm run levels -- [<app.db | agent-runs.json | userData folder>] [--dev] [--json] [--demo]';
@@ -37,7 +37,7 @@ const appData = process.platform === 'win32' ? process.env.APPDATA || path.join(
 function main(): number {
   if (flag('--help') || flag('-h')) { console.log(USAGE); return 0; }
   let d;
-  if (flag('--demo')) d = diagnose(demoAgentRuns(DEMO_NOW), [], DEMO_NOW, demoFlashLog(DEMO_NOW));
+  if (flag('--demo')) d = diagnose(demoAgentRuns(DEMO_NOW), [], DEMO_NOW);
   else {
     const target = argv.find(a => !a.startsWith('--')) ?? path.join(appData, flag('--dev') ? 'second-brain-dev' : 'second-brain');
     if (!fs.existsSync(target)) { console.error(`no file: ${target} (pass an app.db, an agent-runs.json or the app's userData folder)`); return 2; }

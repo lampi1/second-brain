@@ -1,5 +1,5 @@
 // «Chiedi alla Guida» (ADR 0196): the question box on top of the Guida page. The question goes to one light model with no
-// tools (main/guide/service.ts → agents/oneshot.ts, Flash's engine at its lightest tier), with the cards that match it
+// tools (main/guide/service.ts → agents/oneshot.ts, the Scout's engine at its lightest tier), with the cards that match it
 // in full, the list of every card and the app_guide index as context. This file is the pure half: the IPC shapes, which
 // cards go in (word overlap with the question, within the one-shot's prompt limit), the prompt, and the answer's
 // citations ([card:<id>] and `path`) checked against what was given, so a made-up card or file is never a link. Used

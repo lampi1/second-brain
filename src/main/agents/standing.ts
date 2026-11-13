@@ -20,7 +20,7 @@
 //   way item by item (gradableBatch, gradedBatch): every graded item agrees = success, any opposite = fail, else partial.
 // The performance (ADR 0131) is a Bayesian estimate: the verdicts, each weighted by how much it is trusted (TRUST: the
 // user and a review × 1, a graded review × 0.8, the receipts × 0.7, the Orchestrator × 0.6, a decision signal and a chain
-// × 0.5, a Flash outcome × 0.3, the agent's own report × 0) and by how recent it is (half weight every 30 days), update a
+// × 0.5, the agent's own report × 0) and by how recent it is (half weight every 30 days), update a
 // Beta(1, 1) prior (centred on 50%); the card shows the posterior mean with its 90% spread (±). Below MIN_EVALUATED
 // verdicts, or while the spread is wider than MAX_SPREAD, it stays null: "in rodaggio".
 // The Orchestrator has no run of its own (its chat is permanent, ADR 0083): each ended root run it opened (startedBy
@@ -31,19 +31,17 @@
 // halved when it was re-delegated or reworked. The decisions among pruned runs live on in the rollups
 // (RunTally.decisions, decisionWins, decisionXp; the chain, graded and receipts successes in earnedWins, all XP in xp).
 // The user's pat or whip on a run's little person (ADR 0297) is a nudge, not a verdict: it weighs TOUCH_TRUST (a
-// twentieth of a written verdict), once per run, earns no XP and never counts among the verdicts the performance
-// needs before it shows.
-// Flash records no run: its answers' outcomes (flash-outcomes.ts) give it a small XP and a low-trust performance. The
-// retired roles and the runs the removed Battito (Pulse, ADR 0201) left get no standing (unrated, ADR 0186).
+// twentieth of a written verdict), once per run, and moves the role's mean only: it earns no XP, is not one of the
+// verdicts the performance needs before it shows, does not narrow its ± and does not reach the per-model rows.
+// The retired roles and the runs of the removed Battito (Pulse) and Flash get no standing (unrated, ADR 0186, 0201).
 // Used by ChatManager.runMetrics (agents:metrics), run-metrics.ts rollUp, the levels diagnostic (level-diagnosis.ts) and
 // the demo; the card's "?" tips repeat these rules.
 import type { AgentMetrics, AgentRun, AgentRunTokens, AgentStanding, ModelStanding } from '../../shared/agents';
-import { FLASH_ID, isRetiredRoleId } from '../../shared/roles';
+import { isRetiredRoleId } from '../../shared/roles';
 import { reworkedWithin, reworkStartsOf, verifiedVerdict, type VerifiedBasis, type VerifiedVerdict } from '../../shared/run-verdict';
 import type { RunTally } from './run-metrics';
 import { receiptDecision } from './receipts';
-import { FLASH_XP, LEGACY_XP, PLAN_XP, XP_MAX, jobSignals, jobXp, levelOf } from './xp';
-import { settleDue, type FlashLog } from './flash-outcomes';
+import { LEGACY_XP, PLAN_XP, XP_MAX, jobSignals, jobXp, levelOf } from './xp';
 
 export { levelOf, levelStart, MAX_LEVEL } from './xp';
 /** verdicts needed before the performance can show (with a spread no wider than MAX_SPREAD) */
@@ -68,7 +66,7 @@ export function listCost(tokens: AgentRunTokens | null | undefined, price: Token
 /** a verdict this old weighs half of one given today */
 export const HALF_LIFE_MS = 30 * 86_400_000;
 /** how much each kind of verdict counts; the agent's own word (self) counts nothing (ADR 0100) */
-export const TRUST = { human: 1, review: 1, graded: 0.8, receipts: 0.7, facts: 0, orchestrator: 0.6, decision: 0.5, chain: 0.5, quick: 0.3, self: 0 } as const;
+export const TRUST = { human: 1, review: 1, graded: 0.8, receipts: 0.7, facts: 0, orchestrator: 0.6, decision: 0.5, chain: 0.5, self: 0 } as const;
 /** a pat or a whip on the little person (ADR 0297): a twentieth of the user's written verdict, one per run */
 export const TOUCH_TRUST = 0.05;
 const SCORE = { success: 1, partial: 0.5, fail: 0 } as const;
@@ -80,8 +78,9 @@ type Verdict = keyof typeof SCORE;
  *  a retired role's runs (Judge, Scribe, Router: ADR 0100) and the old runs of the removed Battito's 'pulse' entry (ADR
  *  0201) have no level (ADR 0186), their runs stay readable. */
 export const counts = (r: AgentRun): boolean => r.endedAt !== undefined && !r.oneshot?.fallback && r.oneshot?.job !== 'headline' && r.oneshot?.job !== 'guide' && !unrated(r.agentId);
-/** Ids that get no standing: the retired roles and 'pulse', the removed Battito's background job (ADR 0186, 0201). */
-export const unrated = (agentId: string): boolean => isRetiredRoleId(agentId) || agentId === 'pulse';
+/** Ids that get no standing: the retired roles, 'pulse' (the removed Battito's background job) and 'flash' (removed,
+ *  ADR 0296) (ADR 0186, 0201). */
+export const unrated = (agentId: string): boolean => isRetiredRoleId(agentId) || agentId === 'pulse' || agentId === 'flash';
 /** A root run the Orchestrator opened: one of its decisions (ADR 0097). */
 export const orchestratorDecision = (r: AgentRun): boolean => r.startedBy === 'orchestrator' && r.source !== 'oneshot' && !r.oneshot
   && !r.parentRunId && r.agentId !== 'orchestrator';
@@ -249,8 +248,9 @@ export function estimate(num: number, den: number, prior: { mean: number; weight
   return { mean: a / n, spread: Z90 * Math.sqrt(a * b / (n * n * (n + 1))) };
 }
 
-const noSources = (): AgentStanding['sources'] => ({ human: 0, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 0, decision: 0, chain: 0, quick: 0, self: 0 });
-interface Acc { runs: number; wins: number; xp: number; num: number; den: number; evaluated: number; sources: AgentStanding['sources']; pat: number; whip: number; models: Map<string, ModelAcc> }
+const noSources = (): AgentStanding['sources'] => ({ human: 0, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 0, decision: 0, chain: 0, self: 0 });
+/** tn, td: the nudges' weighted score and weights (ADR 0297), kept apart from the verdicts' num and den */
+interface Acc { runs: number; wins: number; xp: number; num: number; den: number; evaluated: number; sources: AgentStanding['sources']; pat: number; whip: number; tn: number; td: number; models: Map<string, ModelAcc> }
 interface ModelAcc { runs: number; wins: number; num: number; den: number; evaluated: number; cost: number; costRuns: number; estimated: number; unpriced: number; ms: number[]; lastAt: number }
 const median = (v: number[]): number | null => { if (!v.length) return null; const s = [...v].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2; };
 /** One model's row. Its estimate starts from the role's performance on its OTHER verdicts (`others`: the role's
@@ -273,8 +273,8 @@ function add(a: Acc, source: Source, verdict: Verdict, age: number): void {
   a.evaluated++; a.num += w * SCORE[verdict]; a.den += w;
 }
 
-/** Level and performance of each agent with at least one run (ended or rolled up) or Flash answer, by agent id. */
-export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[], now: number, flash: FlashLog | null = null, priceOf: PriceOf | null = null): Map<string, AgentStanding> {
+/** Level and performance of each agent with at least one run (ended or rolled up), by agent id. */
+export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[], now: number, priceOf: PriceOf | null = null): Map<string, AgentStanding> {
   // one price lookup per model, not per run (the lookup reads the brain's price table)
   const prices = new Map<string, TokenPrice | null>();
   const price = (model: string): TokenPrice | null => { if (!prices.has(model)) prices.set(model, priceOf ? priceOf(model) : null); return prices.get(model)!; };
@@ -282,7 +282,7 @@ export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[
   const acc = new Map<string, Acc>();
   const of = (id: string) => {
     let a = acc.get(id);
-    if (!a) acc.set(id, a = { runs: 0, wins: 0, xp: 0, num: 0, den: 0, evaluated: 0, sources: noSources(), pat: 0, whip: 0, models: new Map() });
+    if (!a) acc.set(id, a = { runs: 0, wins: 0, xp: 0, num: 0, den: 0, evaluated: 0, sources: noSources(), pat: 0, whip: 0, tn: 0, td: 0, models: new Map() });
     return a;
   };
   for (const t of rollups) {
@@ -305,8 +305,8 @@ export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[
     own.runs++;
     if (e?.verdict === 'success') { own.wins++; own.xp += runXp(r, ix); }
     if (v) add(own, v.source, v.verdict, age);
-    // a nudge beside the verdicts (ADR 0297): weight only, never one of the `evaluated`
-    if (r.touch) { const w = TOUCH_TRUST * 0.5 ** (Math.max(0, age) / HALF_LIFE_MS); own.num += r.touch.sign > 0 ? w : 0; own.den += w; if (r.touch.sign > 0) own.pat++; else own.whip++; }
+    // a nudge beside the verdicts (ADR 0297): its own sums, never one of the `evaluated`, never in a model's row
+    if (r.touch) { const w = TOUCH_TRUST * 0.5 ** (Math.max(0, age) / HALF_LIFE_MS); own.tn += r.touch.sign > 0 ? w : 0; own.td += w; if (r.touch.sign > 0) own.pat++; else own.whip++; }
     if (r.model) {
       let m = own.models.get(r.model);
       if (!m) own.models.set(r.model, m = { runs: 0, wins: 0, num: 0, den: 0, evaluated: 0, cost: 0, costRuns: 0, estimated: 0, unpriced: 0, ms: [], lastAt: 0 });
@@ -331,16 +331,6 @@ export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[
     const route = routeVerdict(decisionSignals(r, ix));
     if (route) add(o, 'decision', route, age);
   }
-  if (flash) {
-    const log = structuredClone(flash);
-    settleDue(log, now);
-    const settled = log.total.success + log.total.partial + log.total.fail;
-    if (settled + log.open.length > 0) {
-      const a = of(FLASH_ID);
-      a.runs += settled + log.open.length; a.wins += log.total.success; a.xp += log.total.success * FLASH_XP;
-      for (const d of log.done) add(a, 'quick', d.verdict, now - d.at);
-    }
-  }
   const out = new Map<string, AgentStanding>();
   for (const [id, a] of acc) {
     if (a.runs === 0) continue;
@@ -348,14 +338,16 @@ export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[
     const shown = !!est && a.evaluated >= MIN_EVALUATED && est.spread <= MAX_SPREAD;
     const xp = Math.round(a.xp * 100) / 100;
     const models = [...a.models].map(([model, m]) => modelRow(model, m, { num: a.num - m.num, den: a.den - m.den }, shown)).sort((x, y) => y.runs - x.runs || y.lastAt - x.lastAt || x.model.localeCompare(y.model, 'en'));
-    out.set(id, { runs: a.runs, wins: a.wins, xp, ...levelOf(xp), performance: shown ? est.mean : null, spread: est ? est.spread : null,
+    // the nudges move the mean only: whether it shows, and its ±, come from the verdicts alone
+    const mean = est && a.td > 0 ? estimate(a.num + a.tn, a.den + a.td).mean : est?.mean;
+    out.set(id, { runs: a.runs, wins: a.wins, xp, ...levelOf(xp), performance: shown ? mean! : null, spread: est ? est.spread : null,
       evaluated: a.evaluated, minRuns: MIN_EVALUATED, sources: a.sources, ...(a.pat + a.whip ? { touches: { pat: a.pat, whip: a.whip } } : {}), ...(models.length ? { models } : {}) });
   }
   return out;
 }
 
 /** The metrics with each agent's standing; an agent with a standing but no run of its own (the Orchestrator, rated by
- *  its decisions; Flash, by its answers) gets an entry without metrics, so its card shows its level too. */
+ *  its decisions) gets an entry without metrics, so its card shows its level too. */
 export function withStandings(metrics: readonly AgentMetrics[], standing: ReadonlyMap<string, AgentStanding>): AgentMetrics[] {
   const out = metrics.map(m => { const s = standing.get(m.agentId); return s ? { ...m, standing: s } : m; });
   for (const [agentId, s] of standing) if (!metrics.some(m => m.agentId === agentId)) out.push({ agentId, versions: [], all: null, open: 0, standing: s });

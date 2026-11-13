@@ -32,8 +32,6 @@ export abstract class ManagerCore {
   protected deliveries = new Map<string, Promise<void>>();
   protected synthesizing = new Set<string>();
   protected synthesisRetry = new Map<string, NodeJS.Timeout>();
-  /** Flash moving to its card's engine (flashFollow): the new chat's id, for a question sent meanwhile */
-  protected flashMoving: Promise<string> | undefined;
   /** notes for a chat's next message (the user wrote in one of its delegated children): they ride along, no turn of their own */
   protected notesFor = new Map<string, string[]>();
   protected userWroteListeners: ((n: UserWroteNote) => void)[] = [];

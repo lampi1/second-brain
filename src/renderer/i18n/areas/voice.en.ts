@@ -1,4 +1,4 @@
-// Voice mode (ADR 0152): the mic button, the bar under the Orchestrator's and Flash's input, Settings → Voice.
+// Voice mode (ADR 0152): the mic button, the bar under the Orchestrator's input, Settings → Voice.
 import type { voiceIt } from './voice.it';
 export const voiceEn: typeof voiceIt = {
   'voice.contextChanged': 'Your words are saved as a draft and have not been sent.',
@@ -18,7 +18,6 @@ export const voiceEn: typeof voiceIt = {
   'voice.speakFailed': ({ error }: { error: string }) => `The voice could not speak: ${error}`,
   'voice.engineDown': 'The voice engine is not answering: try again shortly.',
   'voice.noMic': ({ error }: { error: string }) => `Microphone not available: ${error}`,
-  'voice.noFlash': 'Open Flash to talk to it.',
   'voice.noOrchestrator': 'Open the Orchestrator to talk to it.',
   'voice.sample': 'Ciao! Sono la voce del tuo secondo cervello. Dimmi pure cosa vuoi fare.',
   'voice.group': 'Voice',

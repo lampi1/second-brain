@@ -1,11 +1,11 @@
 // The levels diagnostic (main/agents/level-diagnosis.ts, `npm run levels`, ADR 0131): per role, the verified successes
-// by basis and why the other runs earned no XP; the Orchestrator's decisions and signals; Flash's answers; the frozen
+// by basis and why the other runs earned no XP; the Orchestrator's decisions and signals; the frozen
 // demo, where every role but the new ones levels up.
 import { describe, expect, it } from 'vitest';
 import type { AgentRun } from '../../../src/shared/agents';
 import { diagnose, diagnoseFile, formatDiagnosis } from '../../../src/main/agents/level-diagnosis';
 import { emptyTally } from '../../../src/main/agents/run-metrics';
-import { DEMO_NOW, demoAgentRuns, demoFlashLog } from '../../../src/main/demo-agent-runs';
+import { DEMO_NOW, demoAgentRuns } from '../../../src/main/demo-agent-runs';
 
 const NOW = Date.UTC(2026, 9, 22, 12);
 let seq = 0;
@@ -52,13 +52,12 @@ describe('levels diagnostic', () => {
     expect(d).toMatchObject({ runs: 2, invalid: 2 });
     expect(d.roles.find(r => r.agentId === 'scout')?.standing).toMatchObject({ wins: 2, xp: 2 });
   });
-  it('on the frozen demo every veteran levels up, the Orchestrator above all, and Flash has its answers', () => {
-    const d = diagnose(demoAgentRuns(DEMO_NOW), [], DEMO_NOW, demoFlashLog(DEMO_NOW));
+  it('on the frozen demo every veteran levels up, the Orchestrator above all', () => {
+    const d = diagnose(demoAgentRuns(DEMO_NOW), [], DEMO_NOW);
     const by = new Map(d.roles.map(r => [r.agentId, r]));
     expect(by.get('orchestrator')!.standing!.level).toBeGreaterThan(by.get('artisan')!.standing!.level);
     expect(by.get('orchestrator')!.wins.receipts).toBeGreaterThan(0);  // the receipts under an opinion count now
     expect(by.get('orchestrator')!.signals!.redelegated).toBe(2);
-    expect(by.get('flash')!.standing!.level).toBeGreaterThanOrEqual(2);
     expect(by.get('scout')!.wins.chain).toBeGreaterThan(0);
     expect(by.get('herald')!.standing!.performance).toBeNull();
   });

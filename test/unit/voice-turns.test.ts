@@ -52,7 +52,7 @@ describe('complete spoken thoughts', () => {
   it('drops echoes and unknown/duplicate results without losing real dictation', () => {
     const { turns, deliver, draft } = make();
     turns.start(1, target, true); turns.finish(1, 'Sì'); turns.finish(2, 'unpaired');
-    const dictation = { ...target, chatId: 'flash', mode: 'dictate' as const, questionId: null };
+    const dictation = { ...target, chatId: 'impara', mode: 'dictate' as const, questionId: null };
     turns.start(3, dictation, false); turns.finish(3, 'real words'); turns.finish(3, 'duplicate');
     vi.advanceTimersByTime(1000);
     expect(deliver).not.toHaveBeenCalled(); expect(draft).toHaveBeenCalledExactlyOnceWith(dictation, 'real words');

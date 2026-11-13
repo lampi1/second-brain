@@ -34,7 +34,7 @@ export class ChatWatch {
   private remember(c: ChatSummary): Seen {
     const s: Seen = { title: c.title, who: this.who(c), ...(c.parentId ? { parentId: c.parentId } : {}), reportAt: c.run?.report?.at ?? 0,
       verdictAt: c.run?.outcome?.at ?? 0, closedAt: c.closedAt ?? 0, lastError: c.lastError ?? '', ...(c.run ? { runId: c.run.runId } : {}),
-      ...(c.run?.reviewOf ? { reviewOf: c.run.reviewOf } : {}), orchestrator: c.isOrchestrator || !!c.quick };
+      ...(c.run?.reviewOf ? { reviewOf: c.run.reviewOf } : {}), orchestrator: c.isOrchestrator };
     this.seen.set(c.id, s);
     if (c.run) this.runChat.set(c.run.runId, c.id);
     return s;
@@ -55,8 +55,8 @@ export class ChatWatch {
   }
 
   private base(c: ChatSummary): Pick<LogInput, 'chatId' | 'rootId' | 'parentId' | 'runId' | 'who' | 'task'> {
-    // the Orchestrator and Flash are not a task: their turns go to the stream only
-    if (c.isOrchestrator || c.quick) return { chatId: c.id, ...(c.run ? { runId: c.run.runId } : {}), who: this.who(c) };
+    // the Orchestrator is not a task: its turns go to the stream only
+    if (c.isOrchestrator) return { chatId: c.id, ...(c.run ? { runId: c.run.runId } : {}), who: this.who(c) };
     const rootId = this.rootOf(c.id);
     return { chatId: c.id, rootId, ...(c.parentId ? { parentId: c.parentId } : {}), ...(c.run ? { runId: c.run.runId } : {}), who: this.who(c), task: this.seen.get(rootId)?.title ?? c.title };
   }

@@ -13,7 +13,7 @@ const run = (over: Partial<AgentRun> = {}): AgentRun => ({ runId: `r_${String(++
   startedBy: 'user', startedAt: NOW - 7200_000, endedAt: NOW - 3600_000, endReason: 'completed',
   counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, costUsd: 1, tokens: null, ...over });
 const human = (verdict: 'success' | 'partial' | 'fail') => ({ verdict, basis: 'human' as const, at: NOW, by: 'user' });
-const of = (runs: AgentRun[], priceOf = tokenPriceOf(() => null)) => standings(runs, [], NOW, null, priceOf).get('artisan')!;
+const of = (runs: AgentRun[], priceOf = tokenPriceOf(() => null)) => standings(runs, [], NOW, priceOf).get('artisan')!;
 const registry = { models: [{ id: 'gpt-6-astra', harness: 'codex', price: { input: 2, cacheWrite5m: 2.5, cacheWrite1h: 2.5, cacheRead: 0.2, output: 10 } }] } as unknown as ModelRegistry;
 
 describe('standing by model', () => {

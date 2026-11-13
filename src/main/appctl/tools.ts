@@ -47,7 +47,8 @@ import type { PullResult } from '../update/source';
 import type { AgentCatalog } from '../../shared/agents';
 import { isWorkRole, MODEL_TIERS, ROLE_IDS, type ModelTier } from '../../shared/roles';
 import { contractField, taskPrompt } from './task-contract';
-import { agentCatalogTool, type SkillToolsSource } from '../agents/discovery';
+import { agentCatalogTool, userModelOf, type SkillToolsSource } from '../agents/discovery';
+import { splitMode } from '../../shared/newchat';
 import { gapLines, skillGaps } from '../agents/skill-needs';
 import type { ResolvedRole } from '../agents/catalog';
 import { BALANCED_ASK_SCHEMA, balancedAskOf, balancedStatusRun, balancedStatusTool, type BalancedMode } from '../agents/balanced-mode';
@@ -172,6 +173,8 @@ const lastDigest = new Map<string, number>();
 const obj = (props: Record<string, object> = {}, required: string[] = []) => ({ type: 'object', properties: props, required });
 const str = (description: string) => ({ type: 'string', description });
 const num = (description: string) => ({ type: 'number', description });
+/** what a Fast turn's delegation gets back (ADR 0296) */
+export const FAST_REFUSAL = 'Fast mode: the user wants your own answer now, no delegation. Answer yourself in a few lines with what you know or can read quickly; if it needs real work, say so in one line (he can resend it without Fast).';
 /** app_create_chat / app_assign_task limits: one constant for the schema the model reads and the handler's check (#172) */
 export const CHAT_PROMPT_MAX = 8000;
 export const CHAT_TITLE_MAX = 80;
@@ -227,8 +230,6 @@ export function orchestratorEndpointAuth(tokens: { check(key: string, token: str
 export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   /** true when this endpoint is the Orchestrator's own (/mcp/app/o/<id>/<token>, checked by orchestratorEndpointAuth) */
   const authed = () => !!callerId && d.chats.list().some(c => c.id === callerId && c.isOrchestrator && !c.closedAt);
-  // Flash (ADR 0105) is the user's own quick lane: never in the Orchestrator's picture
-  const mine = (c: ChatSummary) => !c.quick;
   /** the Orchestrator this endpoint acts for */
   const caller = (): ChatSummary | undefined => d.chats.list().find(c => c.isOrchestrator && !c.closedAt && (!callerId || c.id === callerId));
   /** the authenticated Orchestrator writes to a work chat as the user (ADR 0269); the plain mount as an agent */
@@ -244,11 +245,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   };
   const balanced = d.balancedMode;
   /** Chat visibility is shared; ownership checks remain on operations that require an owner. */
-  const other = (chatId: string) => d.chats.list().some(c => c.id === chatId && !mine(c));
-  const guard = (chatId: string) => { if (other(chatId)) throw new Error(`chat non trovata: ${chatId} (vedi app_chats)`); return chatId; };
   /** a chat another role delegated: the Orchestrator sees its state, never its content (ADR 0083) */
   const delegated = (chatId: string) => d.chats.list().some(c => c.id === chatId && !!c.parentId);
-  const contentOf = (chatId: string) => { guard(chatId); if (delegated(chatId)) throw new Error('chat delegata da un altro ruolo: il suo contenuto lo legge il genitore; tu ne vedi lo stato (app_chats, app_digest)'); return chatId; };
+  const contentOf = (chatId: string) => { if (delegated(chatId)) throw new Error('chat delegata da un altro ruolo: il suo contenuto lo legge il genitore; tu ne vedi lo stato (app_chats, app_digest)'); return chatId; };
   // app_guide's own list of the caller's tools is read when asked, so it names exactly what this endpoint offers
   const guideDeps = { window: d.window, settings: { schema: () => d.brain.settingsSchema(), get: () => d.brain.settings() },
     tools: () => tools.map(t => ({ name: t.name, description: t.description })), showValues: authed };
@@ -270,7 +269,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     }] : []),
     ...(d.config && authed() ? [configTool({ ...d.config, brain: d.brain, callerId: callerId!, userAsked: () => configAsked(callerId!) })] : []),
     ...(d.routinePackages && authed() ? packageTools({ store: d.routinePackages, brainRoot: () => d.brain.info().brainRoot, authed }) : []),
-    ...(d.workflows && authed() ? workflowTools(d.workflows, id => d.chats.list().some(c => c.id === id && mine(c) && !c.parentId && !c.isOrchestrator), id => d.chats.list().find(c => c.id === id), d.away) : []),
+    ...(d.workflows && authed() ? workflowTools(d.workflows, id => d.chats.list().some(c => c.id === id && !c.parentId && !c.isOrchestrator), id => d.chats.list().find(c => c.id === id), d.away) : []),
     ...(d.agentLearning ? [learnTool(d, callerId, authed())] : []),
     ...(d.agentLearning && authed() ? [toolDef(lessonReviewTool(d.agentLearning))] : []),
     ...(d.brainScripts && authed() ? scriptWriteTools(d.brainScripts.scripts, d.brainScripts.changelog, () => caller()?.title || 'Orchestrator') : []),
@@ -281,7 +280,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     ...(d.news && authed() ? newsTools(d.news, d.emitUi) : []),
     ...(d.schedules && authed() ? scheduleTools(d.schedules, d.emitUi) : []),
     ...(d.skillLibrary && authed() ? skillTools(d.skillLibrary, () => caller()?.title || 'Orchestrator') : []),
-    ...(authed() ? [childOutputTool({ chats: () => d.chats.list().filter(mine), runs: () => d.runFeedback?.runList() ?? [] }), agentsRecapTool({ chats: () => d.chats.list().filter(mine), items: id => d.chats.items(id), pending: () => [...d.chats.pending(), ...(d.commandAsks?.() ?? [])], runs: () => d.runFeedback?.runList() ?? [] })] : []),
+    ...(authed() ? [childOutputTool({ chats: () => d.chats.list(), runs: () => d.runFeedback?.runList() ?? [] }), agentsRecapTool({ chats: () => d.chats.list(), items: id => d.chats.items(id), pending: () => [...d.chats.pending(), ...(d.commandAsks?.() ?? [])], runs: () => d.runFeedback?.runList() ?? [] })] : []),
     ...(d.runFeedback && authed() ? [metricsTool(d.runFeedback)] : []),
     ...(d.runFeedback && authed() ? [estimateTool(() => d.runFeedback!.runList(), d.priceOf ?? null)] : []),
     {
@@ -302,7 +301,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       description:'Declare an explicit assignment or future-mailbox wait, or explicitly complete it. Holds prevent automatic archive and idle-session release across turns/restarts; they never approve actions or confirm a successful result. Completion never closes a chat immediately.',
       inputSchema:obj({chatId:str('chat id in your scope'),status:{type:'string',enum:['assigned','waiting-mail','completed']}},['chatId','status']),
       run:async a=>{
-        const id=guard(String(a.chatId??'')),target=d.chats.list().find(c=>c.id===id&&mine(c));
+        const id=String(a.chatId??''),target=d.chats.list().find(c=>c.id===id);
         const owner=caller();
         if(!target||!owner)throw new Error('Agente fuori dal tuo gruppo.');
         if(!['assigned','waiting-mail','completed'].includes(String(a.status)))throw new Error('Stato incarico non valido.');
@@ -314,19 +313,19 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       name: 'app_state', description: 'Overview of the app: version, brain folder, chats by state, open questions/permissions, browser tabs, today usage, context use of the Claude chats (calls over 200k, cold cache rewrites over 100k, compactions, cold hand-off notes written vs used, $ per call after a continuation vs after a compaction; ADR 0031), health (MCP port and whether it fell back to a random one, main-window renderer crashes/hangs/reloads, engines killed by force, Job Object guard) since the app started.',
       inputSchema: obj(),
       run: () => {
-        const chats = d.chats.list().filter(mine);
+        const chats = d.chats.list();
         const by: Record<string, number> = {};
         for (const c of chats) if (!c.closedAt) by[c.state] = (by[c.state] ?? 0) + 1;
         const q = d.chats.queueState();
-        const queue = q && { enabled: q.enabled, cpu: q.cpu, freeRam: q.freeRam, ...(q.slots ? { coldStarts: q.starting ?? 0, coldStartSlots: q.slots } : {}), waiting: q.waiting.filter(w => !other(w.chatId)).map(w => ({ chatId: w.chatId, kind: w.kind, position: w.position })) };
-        return { version: d.version, brainRoot: d.brain.info().brainRoot, chats: by, ...(queue ? { queue } : {}), closedChats: chats.filter(c => c.closedAt).length, pending: d.chats.pending().filter(r => !other(r.chatId)).length, tabs: d.browser.list().length, usage: d.brain.usage(), ...(d.chats.contextStats ? { context: d.chats.contextStats() } : {}), logs: log.folder, health: healthSnapshot(), timers: timerSnapshot() };
+        const queue = q && { enabled: q.enabled, cpu: q.cpu, freeRam: q.freeRam, ...(q.slots ? { coldStarts: q.starting ?? 0, coldStartSlots: q.slots } : {}), waiting: q.waiting.map(w => ({ chatId: w.chatId, kind: w.kind, position: w.position })) };
+        return { version: d.version, brainRoot: d.brain.info().brainRoot, chats: by, ...(queue ? { queue } : {}), closedChats: chats.filter(c => c.closedAt).length, pending: d.chats.pending().length, tabs: d.browser.list().length, usage: d.brain.usage(), ...(d.chats.contextStats ? { context: d.chats.contextStats() } : {}), logs: log.folder, health: healthSnapshot(), timers: timerSnapshot() };
       },
     },
     {
       name: 'app_chats', description: 'The chats in the app (Claude and Cursor engines): "app" = on the grid (state, open questions, model, cost, last line, background tasks still running, context size (long=true is a passive threshold observation, not a reason to change session), hand-off and "Riprendi" links, and for a role chat its run: run.runId, never the chat id); "closed" = finished chats that closed by themselves or by hand in the last 7 days (newest first): reopen one with app_reopen_chat, or just app_send_to_chat.',
       inputSchema: obj(),
       run: () => {
-        const all = d.chats.list().filter(mine);
+        const all = d.chats.list();
         const warn = d.brain.settings().contextWarnTokens;
         return {
           app: all.filter(c => !c.closedAt).map(c => brief(c, warn)),
@@ -348,8 +347,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         lastDigest.set(key, now);
         return digest({
           works: d.workflows?.projection(),
-          chats: d.chats.list().filter(mine).map(muted), pending: [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].filter(r => !other(r.chatId)).map(r => mutedRequest(r, delegated(r.chatId))),
-          runs: (d.runs?.() ?? []).filter(r => !other(r.chatId) && !delegated(r.chatId)), tasks: d.tasks?.() ?? null,
+          chats: d.chats.list().map(muted), pending: [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].map(r => mutedRequest(r, delegated(r.chatId))),
+          runs: (d.runs?.() ?? []).filter(r => !delegated(r.chatId)), tasks: d.tasks?.() ?? null,
           now, since, selfId: caller()?.id, warnTokens: d.brain.settings().contextWarnTokens, branch: gitBranch,
         });
       },
@@ -359,7 +358,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       inputSchema: obj({ chatId: str('chat id from app_chats "closed"') }, ['chatId']),
       run: async a => {
         const id = String(a.chatId ?? '');
-        if (!d.chats.list().some(c => c.id === id && mine(c))) throw new Error(`chat non trovata: ${id} (vedi app_chats)`);
+        if (!d.chats.list().some(c => c.id === id)) throw new Error(`chat non trovata: ${id} (vedi app_chats)`);
         const c = await d.chats.reopen(id);
         log.info('appctl', 'agent reopened a chat', { chat: id });
         return brief(c, d.brain.settings().contextWarnTokens);
@@ -373,7 +372,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const c = d.chats.list().find(x => x.id === id);
         // already closed (its tree's close took it, or the auto-close) or never the caller's: a stale id of the agent,
         // answered to it and logged at info (#306, #307)
-        if (!c || !mine(c)) throw new ToolRefusal(`chat non trovata o già chiusa: ${id} (vedi app_chats)`);
+        if (!c) throw new ToolRefusal(`chat non trovata o già chiusa: ${id} (vedi app_chats)`);
         // the close cancels the whole tree (ADR 0217): a descendant's open question would be withdrawn unanswered
         const refused = closeRefusal(c, d.chats.list());
         if (refused) throw new Error(refused);
@@ -398,12 +397,12 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       name: 'app_command_runs',
       description: 'Commands the user ran from a chat code block with "Esegui" (PowerShell 5.1 in the app): state, exit code, output tail. Read-only: only the user starts a run, by his click. Pass chatId to see the runs of one chat (yours: read the outcome of the command you proposed).',
       inputSchema: obj({ chatId: str('chat id from app_chats (optional)'), last: num('how many, newest last, default 5') }),
-      run: a => (d.runs?.(a.chatId ? contentOf(String(a.chatId)) : undefined) ?? []).filter(r => !other(r.chatId) && !delegated(r.chatId)).slice(-(Number(a.last) || 5))
+      run: a => (d.runs?.(a.chatId ? contentOf(String(a.chatId)) : undefined) ?? []).filter(r => !delegated(r.chatId)).slice(-(Number(a.last) || 5))
         .map(r => ({ id: r.id, chatId: r.chatId, state: r.state, exitCode: r.exitCode, code: redact(r.code.slice(0, 1500)), cwd: r.cwd, output: redact(r.output.slice(-4000)), startedAt: new Date(r.startedAt).toISOString(), endedAt: r.endedAt ? new Date(r.endedAt).toISOString() : null, ...(r.prod ? { prod: r.prod } : {}) })),
     },
     {
       name: 'app_pending', description: 'Open questions, permission requests and commands left for the user to run (type "command": a shell block waiting for his Esegui) waiting for the user. Answer them for him with app_resolve_question; a command goes to him with relay_question.',
-      inputSchema: obj(), run: () => [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].filter(r => !other(r.chatId)).map(r => mutedRequest(r, delegated(r.chatId))),
+      inputSchema: obj(), run: () => [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].map(r => mutedRequest(r, delegated(r.chatId))),
     },
     {
       name: 'app_resolve_question',
@@ -459,7 +458,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     },
     {
       name: 'app_feed', description: 'Recent live feed events (ideas, errors, chats done/waiting...).',
-      inputSchema: obj({ limit: num('default 30') }), run: a => d.brain.feed().filter(e => !e.chatId || (!other(e.chatId) && !delegated(e.chatId))).slice(0, Number(a.limit) || 30),
+      inputSchema: obj({ limit: num('default 30') }), run: a => d.brain.feed().filter(e => !e.chatId || !delegated(e.chatId)).slice(0, Number(a.limit) || 30),
     },
     {
       name: 'app_logs', description: 'Recent structured log entries of the app (redacted). Filters: level (debug|info|warn|error), scope, chat, grep.',
@@ -468,7 +467,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const order = { debug: 0, info: 1, warn: 2, error: 3 } as const;
         const min = order[(a.level as keyof typeof order) ?? 'debug'] ?? 0;
         const g = typeof a.grep === 'string' ? a.grep.toLowerCase() : null;
-        return log.recent.filter(e => (!e.chat || !other(e.chat)) && order[e.lvl] >= min && (!a.scope || e.scope === a.scope) && (!a.chat || e.chat === a.chat) && (!g || JSON.stringify(e).toLowerCase().includes(g)))
+        return log.recent.filter(e => order[e.lvl] >= min && (!a.scope || e.scope === a.scope) && (!a.chat || e.chat === a.chat) && (!g || JSON.stringify(e).toLowerCase().includes(g)))
           .slice(-(Number(a.tail) || 50));
       },
     },
@@ -521,7 +520,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     },
     {
       name: 'app_create_chat',
-      description: 'Delegate: create a work chat that runs one role (roleId, from agent_catalog) and start it with a self-contained prompt. Fast path first (task_estimate): a short question needs no chat; a quick one-part job is ONE chat that works alone; only several independent parts get a plan. The answer carries the estimate from similar past tasks; it shows under you in the sidebar tree and reports back to you. Never an Orchestrator: only the user picks it. Title "Area · cosa". The role decides engine, model and effort (its tier; `tier` asks a higher one up to the role\'s tierMax); nothing overrides it, except the user\'s «Balanced mode» setting: then read balanced_status and pass `balanced` {engine, model, effort?, why} (prefer its proposal unless its data say otherwise), or omit it and the formula follows the credits left on each provider (route.reason says who chose and why; suggestedRole = the role the work fits, a hint). `skills` = the brain skills the chat may use (their SKILL.md names; without a skill the role cannot use it; `warnings` in the answer names a skill that needs tools the role lacks). Its permissions are its role\'s (tools, ceiling) within the user\'s defaults, not yours: you plan, the chat does the work. reviewOf / reworkOf = the run it reviews or redoes; goal = the run\'s goal. The chat starts in the brain folder unless cwd is given (pick the repo or worktree from the task). The prompt is labelled as written by an agent.',
+      description: 'Delegate: create a work chat that runs one role (roleId, from agent_catalog) and start it with a self-contained prompt. Fast path first (task_estimate): a short question needs no chat; a quick one-part job is ONE chat that works alone; only several independent parts get a plan. The answer carries the estimate from similar past tasks; it shows under you in the sidebar tree and reports back to you. Never an Orchestrator: only the user picks it. Title "Area · cosa". The role decides engine, model and effort (its tier; `tier` asks a higher one up to the role\'s tierMax); only the user overrides it: `userModel` {engine?, model, effort?} when he named the model for THIS task (that chat only, the role\'s card stays as it is; never your own pick), or his «Balanced mode» setting: then read balanced_status and pass `balanced` {engine, model, effort?, why} (prefer its proposal unless its data say otherwise), or omit it and the formula follows the credits left on each provider (route.reason says who chose and why; suggestedRole = the role the work fits, a hint). `skills` = the brain skills the chat may use (their SKILL.md names; without a skill the role cannot use it; `warnings` in the answer names a skill that needs tools the role lacks). Its permissions are its role\'s (tools, ceiling) within the user\'s defaults, not yours: you plan, the chat does the work. reviewOf / reworkOf = the run it reviews or redoes; goal = the run\'s goal. The chat starts in the brain folder unless cwd is given (pick the repo or worktree from the task). The prompt is labelled as written by an agent.',
       inputSchema: obj({
         title: { ...str('"Area · cosa", e.g. "Ordini · Fix totale"'), maxLength: CHAT_TITLE_MAX }, contract: contractField, prompt: { ...str(`fallback when there is no contract: what the chat must do, self-contained; at most ${CHAT_PROMPT_MAX} characters`), maxLength: CHAT_PROMPT_MAX },
         roleId: { type: 'string', enum: ROLE_IDS.filter(r => r !== 'orchestrator'), description: 'the role the chat runs (agent_catalog)' },
@@ -534,6 +533,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         kind: str(`optional kind of task: ${TASK_KINDS.join(' | ')}; omitted: read from title and prompt`),
         cwd: str('optional absolute folder (repo or worktree); default: the brain folder'),
         balanced: BALANCED_ASK_SCHEMA,
+        userModel: { type: 'object', additionalProperties: false, required: ['model'], description: 'only when the user named the model for this task: that chat runs it, the role\'s card is not changed; engine omitted = the engine whose list has it (agent_catalog with models true)',
+          properties: { engine: { type: 'string' }, model: { type: 'string', maxLength: 128 }, effort: { type: 'string', enum: ['low', 'medium', 'high', 'xhigh', 'max'] } } },
       }, ['title']),
       run: async a => {
         // only the user chooses the Orchestrator (one at a time: a new one would take the role from the agent's own chat)
@@ -560,6 +561,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (!cwd) throw new Error('nessuna cartella: il brain non è collegato');
         // a chat in the app's code folder or one of its worktrees works on the app (routing area App)
         const app = await d.code?.inRepo?.(cwd) ?? false;
+        if (fastTurn(caller()?.id)) throw new ToolRefusal(FAST_REFUSAL);
         if (a.orchestrator !== undefined && a.orchestrator !== false) throw new Error('app_create_chat crea solo chat di lavoro: l’Orchestrator lo sceglie l’utente (Nuova chat → «È l’Orchestrator» o «Cambia motore»)');
         const title = String(a.title ?? '').trim().slice(0, CHAT_TITLE_MAX), prompt = task.prompt;
         if (!title || !prompt) throw new Error(!title ? 'title: required' : 'contract (or prompt): required');
@@ -586,11 +588,15 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         // «Balanced mode» on (ADR 0218): engine, model and effort from the credits left among the engines this caller may
         // start, the caller's own pick (`balanced`) when it passes one; off: the role's card decides engine, model (its
         // tier's when it names none) and effort (ADR 0210)
+        const userModel = d.agents ? userModelOf(a.userModel, d.agents().models, d.agents().profiles.find(p => p.id === roleId)?.engine ?? from) : undefined;
+        if (userModel && !authed()) throw new Error('userModel: only the authenticated Orchestrator passes the user\'s own pick.');
+        if (userModel && a.balanced !== undefined) throw new Error('userModel and balanced: one or the other (the user\'s pick wins, pass only userModel).');
+        if (userModel && a.tier !== undefined) throw new Error('userModel and tier: one or the other.');
         const asked = balancedAskOf(a.balanced, 'balanced');
         if (asked && !d.balancedMode) throw new Error('balanced: only with Balanced mode on; otherwise the role\'s card decides (Brain → Agenti).');
-        const choice = await d.balancedMode?.choose({ roleId, ...(tier ? { tier } : {}), title, prompt, canRun: h => !openRefusal(s, from, h), ...(asked ? { asked } : {}) }) ?? null;
+        const choice = userModel ? null : await d.balancedMode?.choose({ roleId, ...(tier ? { tier } : {}), title, prompt, canRun: h => !openRefusal(s, from, h), ...(asked ? { asked } : {}) }) ?? null;
         const balancedRoute = choice?.balancedRoute ?? undefined;
-        const resolved = d.resolveRole({ harness: from, cwd, roleId, title, prompt, ...(tier ? { tier } : {}), ...(links.roleVersion ? { roleVersion: links.roleVersion } : {}), ...(balancedRoute ? { balancedRoute } : {}) });
+        const resolved = d.resolveRole({ harness: from, cwd, roleId, title, prompt, ...(tier ? { tier } : {}), ...(links.roleVersion ? { roleVersion: links.roleVersion } : {}), ...(balancedRoute ? { balancedRoute } : {}), ...(userModel ? { userModel } : {}) });
         const profile = d.agents().profiles.find(p => p.id === roleId)!;
         const agent = { id: roleId, name: profile.name, version: profile.activeVersion, harness: resolved.request.harness, model: resolved.request.model ?? null, effort: resolved.request.effort ?? null,
           chosenBy: 'orchestrator' as const, ...(resolved.tier ? { tier: resolved.tier } : {}), stats: d.agentStats?.(roleId, profile.activeVersion) ?? null };
@@ -601,11 +607,12 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         });
         if ('error' in routed) throw new Error(`app_create_chat: ${routed.error}`);
         const { harness, model, effort } = routed;
-        const route = choice ? { ...routed.route, reason: choice.reason, ...(choice.balanced ? { balanced: choice.balanced } : {}) } : routed.route;
+        const route = userModel ? { ...routed.route, reason: `the user asked for ${userModel.model} on ${engineLabel(userModel.engine)} for this task (the role's card is unchanged)` }
+          : choice ? { ...routed.route, reason: choice.reason, ...(choice.balanced ? { balanced: choice.balanced } : {}) } : routed.route;
         const refused = openRefusal(s, from, harness);
         if (refused) throw new Error(`bloccato: ${refused}`);
         const chat = await d.chats.create({ harness, cwd, title, prompt: `${voice()}\n\n${prompt}`, ...links, orchestrator: false, roleId, ...(tier ? { tier } : {}), ...(skills.length ? { skills } : {}),
-          ...(model ? { model } : {}), ...(effort ? { effort } : {}), route, ...(balancedRoute ? { balancedRoute } : {}) }, 'agent', undefined, undefined,
+          ...(model ? { model } : {}), ...(effort ? { effort } : {}), route, ...(balancedRoute ? { balancedRoute } : {}), ...(userModel ? { userModel } : {}) }, 'agent', undefined, undefined,
           // the plain /mcp/app mount is open to any local process: its chats run no wider than the Orchestrator
           { boundByOrchestrator: !authed(), ...intake });
         d.balancedMode?.record(choice);
@@ -637,9 +644,10 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       }, ['chatId', 'mode', 'roleId', 'cwd']),
       run: async a => {
         const orchestrator = caller();
+        if (fastTurn(orchestrator?.id)) throw new ToolRefusal(FAST_REFUSAL);
         if (!authed() || !orchestrator || !d.chats.assignTask) throw new Error('app_assign_task requires an authenticated Orchestrator.');
         const target = d.chats.list().find(c => c.id === a.chatId);
-        if (!target || !mine(target) || target.parentId || target.isOrchestrator) throw new ToolRefusal('Work conversation not found; use app_chats.');
+        if (!target || target.parentId || target.isOrchestrator) throw new ToolRefusal('Work conversation not found; use app_chats.');
         // said with the chat's own role, so the next call is right (issue #274): a fresh chat, or this chat's role
         if (a.roleId === 'sentinel' || target.agent?.id === 'sentinel') throw new ToolRefusal('An independent Sentinel review always needs a fresh chat: use app_create_chat.');
         if (!isWorkRole(a.roleId) || target.agent?.id !== a.roleId) {
@@ -688,7 +696,6 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         // only when the user allows chats across engines (engines/policy.ts; inbox.mjs obeys the same switch) and only if
         // it is already running — an agent never starts a stopped engine of another kind (review 2026-10-11).
         const target = d.chats.list().find(c => c.id === String(a.chatId));
-        if (target && !mine(target)) throw new Error(`chat non trovata: ${target.id} (vedi app_chats)`);
         const orchestrator = caller();
         const from = orchestrator?.harness ?? 'claude';
         if (target && target.harness !== from) {
@@ -754,8 +761,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const orchestrator = caller();
         if (!orchestrator) throw new Error('bloccato: solo l’Orchestrator apre le richieste in attesa');
         if (!userTurn(orchestrator.id, Date.now() - UNBLOCK_ASK_MIN * 60_000)) throw new Error('bloccato: apri le richieste in attesa solo quando l’utente ti chiede un recap');
-        const asks = [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].filter(r => !other(r.chatId)).length;
-        const plans = d.chats.list().filter(c => !c.closedAt && !other(c.id) && c.plan?.phase === 'proposed').length;
+        const asks = [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].length;
+        const plans = d.chats.list().filter(c => !c.closedAt && c.plan?.phase === 'proposed').length;
         const workflows = d.workflows?.list().filter(r => r.status === 'approval' && r.proposal).length ?? 0;
         const lessons = d.agentLearning?.waiting().length ?? 0;
         if (!asks && !plans && !workflows && !lessons) return { waiting: 0, note: 'Niente aspetta l’utente: non c’è nulla da aprire.' };
@@ -826,6 +833,15 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     return last && userTurn(orchestratorId, Date.now() - LEARN_ASK_MIN * 60_000) ? { who: orchestratorId, at: last.at } : null;
   }
 
+  /** Fast mode (ADR 0296): the Orchestrator's latest message is a «[fast]» one, so this turn answers alone: no chat is
+   *  opened or assigned (the mode line asks it; this makes it hold even when the model forgets) */
+  function fastTurn(orchestratorId: string | undefined): boolean {
+    // a chat service without items (a partial one) has no turn to read: no Fast
+    const items = orchestratorId && typeof d.chats.items === 'function' ? d.chats.items(orchestratorId) : [];
+    const last = items.filter(i => i.kind === 'user').at(-1);
+    return !!last && last.kind === 'user' && splitMode(last.text).mode === 'fast';
+  }
+
   /** is this turn the user's: the Orchestrator's latest message is one he wrote (not app news, not an agent's mail), at
    *  or after `at`? (app_unblock: a turn woken by an agent can never open the requests) */
   function userTurn(orchestratorId: string, at: number): boolean {
@@ -834,7 +850,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   }
 
   function need(chatId: string): ChatSummary {
-    const c = d.chats.list().find(x => x.id === chatId && mine(x));
+    const c = d.chats.list().find(x => x.id === chatId);
     if (!c) throw new Error(`chat sconosciuta: ${chatId}`);
     return c;
   }

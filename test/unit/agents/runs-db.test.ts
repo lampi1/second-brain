@@ -20,33 +20,29 @@ const start = (o: Partial<RunStart> = {}): RunStart => ({ chatId: 'c1', agentId:
 const migrated = (dir: string) => fs.readdirSync(dir).filter(n => n.startsWith('agent-runs.json.migrated-'));
 const quiet = () => ({ error: vi.spyOn(log, 'error').mockImplementation(() => {}), warn: vi.spyOn(log, 'warn').mockImplementation(() => {}), info: vi.spyOn(log, 'info').mockImplementation(() => {}) });
 
-/** An agent-runs.json as the JSON store writes it: `n` runs (the last open), a rollup, prunedThrough and Flash's log. */
-function seedJson(dir: string, n = 30): { runs: ReturnType<AgentRunStore['list']>; body: string; flash: ReturnType<AgentRunStore['flashLog']> } {
+/** An agent-runs.json as the JSON store writes it: `n` runs (the last open), a rollup, prunedThrough and an old file's
+ *  Flash block (retired by ADR 0296: read past, never imported). */
+function seedJson(dir: string, n = 30): { runs: ReturnType<AgentRunStore['list']>; body: string } {
   const s = new AgentRunStore(dir, { db: false });
   for (let i = 0; i < n; i++) { const r = s.start(start({ chatId: `c${i}`, startedAt: 1000 + i }), false); if (i < n - 1) endRun(r, 'completed', 2000 + i); }
-  s.flashEvent({ kind: 'asked', text: 'quanto costa il piano Pro di Claude?', at: 1000 });
-  s.flashEvent({ kind: 'answered', at: 2000 });
-  s.flashEvent({ kind: 'asked', text: 'no, è sbagliato', at: 3000 });
   s.save();
   const file = path.join(dir, 'agent-runs.json');
   const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
-  raw.rollups = [emptyTally('coder', 1)]; raw.prunedThrough = 500;
+  raw.rollups = [emptyTally('coder', 1)]; raw.prunedThrough = 500; raw.flash = { version: 1, open: null, done: [{ at: 3000, verdict: 'fail', why: 'corrected' }] };
   const body = JSON.stringify(raw);
   fs.writeFileSync(file, body);
-  return { runs: s.list(), body, flash: s.flashLog() };
+  return { runs: s.list(), body };
 }
 
 describe('the move from agent-runs.json', () => {
-  it('imports every run, rollup, prunedThrough and Flash log in one go, then keeps the JSON renamed', () => {
-    const dir = tmp(), { runs, body, flash } = seedJson(dir);
+  it('imports every run, rollup and prunedThrough in one go (an old Flash block is left behind), then keeps the JSON renamed', () => {
+    const dir = tmp(), { runs, body } = seedJson(dir);
     const { info } = quiet();
     const s = new AgentRunStore(dir);
     expect(s.backend).toBe('sqlite');
     expect(s.problem).toBeNull();
     expect(s.list()).toEqual(runs);
     expect(s.rolledUp()).toEqual([emptyTally('coder', 1)]);
-    expect(s.flashLog()).toEqual(flash);
-    expect(flash.done).toHaveLength(1);
     expect(fs.existsSync(path.join(dir, 'agent-runs.json'))).toBe(false);
     const kept = migrated(dir);
     expect(kept).toHaveLength(1);
@@ -55,6 +51,7 @@ describe('the move from agent-runs.json', () => {
     const db = exportRuns(path.join(dir, 'app.db'))!;
     expect(db.runs).toHaveLength(runs.length); // counts equal
     expect(db.prunedThrough).toBe(500);
+    expect(JSON.stringify(db)).not.toContain('corrected');
     expect(info).toHaveBeenCalledWith('agents', 'agent runs moved to app.db', expect.objectContaining({ data: expect.objectContaining({ runs: runs.length, rollups: 1 }) }));
     // a restart reads the database; the migrated copy is never read again nor touched
     s.close();
@@ -183,7 +180,7 @@ describe('writes, prune and restart', () => {
     runs[7]!.costUsd = 0.5; s.touch();
     s.save();
     expect(write.mock.calls[1]![0].upsert.map(r => r.id)).toEqual([runs[7]!.runId]);
-    expect(write.mock.calls[1]![0].meta.size).toBe(0); // rollups, prunedThrough and Flash unchanged: not written
+    expect(write.mock.calls[1]![0].meta.size).toBe(0); // rollups and prunedThrough unchanged: not written
     s.flush(); // nothing pending: no write
     expect(write).toHaveBeenCalledTimes(2);
     endRun(runs[3]!, 'closed', 5000); s.save();
@@ -210,17 +207,15 @@ describe('writes, prune and restart', () => {
     expect(exportRuns(path.join(dir, 'app.db'))!.runs).toHaveLength(RUNS_MAX);
   });
 
-  it('reopens after a restart with the same runs in the same order, Flash included; a closed store opens again on its next save', () => {
+  it('reopens after a restart with the same runs in the same order; a closed store opens again on its next save', () => {
     const dir = tmp(), s = new AgentRunStore(dir);
     const a = s.start(start({ chatId: 'a' })), b = s.start(start({ chatId: 'b' }));
-    s.flashEvent({ kind: 'asked', text: 'x', at: 1 }); s.flashEvent({ kind: 'answered', at: 2 });
     s.flush();
     s.close();
     const c = s.start(start({ chatId: 'c' })); // reopens the connection
     const again = new AgentRunStore(dir);
     expect(again.list().map(r => r.chatId)).toEqual(['a', 'b', 'c']);
     expect(again.list()).toEqual([a, b, c]);
-    expect(again.flashLog()).toEqual(s.flashLog());
     expect(fs.existsSync(path.join(dir, 'agent-runs.json'))).toBe(false); // no JSON is ever written beside it
   });
 

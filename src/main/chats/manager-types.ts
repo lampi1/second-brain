@@ -12,7 +12,6 @@ import type { UserTaskEvents, AgentRun } from '../../shared/agents';
 import type { Checkpoint } from './checkpoints';
 import type { AwayEntry } from './away-log';
 import type { AgentChildrenReducer } from './agent-children';
-import type { LampoCursor } from './lampo-context';
 import type { Recall } from '../search/hybrid/recall';
 
 /** Internal outbox receipts are tied to engine submission, never CPU queue admission. */
@@ -321,8 +320,6 @@ export interface Rec {
   /** the chat was created with "Worktree separato": its work is in a worktree the CLI made, not in cwd */
   inWorktree?: boolean;
   costTotalUsd: number;
-  /** Flash (ADR 0106): the Orchestrator's items its engine already got, by engine (a new engine gets them again) */
-  lampoSeen?: { session: HarnessSession; cursor: LampoCursor } | undefined;
   items: ChatItem[];
   pending: Map<string, PendingRequest>;
   /** the same question asked again while its first copy is open, by that copy's id: never shown, it takes the first's answer (#379) */

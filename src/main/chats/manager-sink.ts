@@ -148,11 +148,11 @@ export abstract class ManagerSink extends ManagerWork {
 
   /** One recovery after an engine crashed mid-turn (ADR 0238; cloudroom: one recovery attempt after cleanup): the
    *  chat restarts on its own session with CRASH_RESUME_TEXT and re-reads its state; nothing of the crashed turn is
-   *  sent again. A second crash in the same turn, a chat the user closed, Flash and the maintenance research stay as
+   *  sent again. A second crash in the same turn, a chat the user closed and the maintenance research stay as
    *  they are (an error the user or the parent sees). */
   private recoverCrash(r: Rec): void {
     // a delegated child is not resumed: owedReport already gave its parent a blocked result, the parent decides (#152)
-    if (r.crashResumed || r.s.delegation || r.s.quick || r.s.research || r.s.routineArchived || this.closedByUser(r)) return;
+    if (r.crashResumed || r.s.delegation || r.s.research || r.s.routineArchived || this.closedByUser(r)) return;
     r.crashResumed = true;
     const chatId = r.s.id;
     setTimeout(() => {
@@ -263,8 +263,6 @@ export abstract class ManagerSink extends ManagerWork {
       // Engines publish result before accounting. Completion or reassignment can happen between the two.
       const owner = r.turnAccounting ? r.turnAccounting.pending.shift() : run;
       if (owner) { addTurn(owner, p.costKnown === false ? null : p.turnCostUsd, p.turnTokens, !!r.turnAccounting); this.runSaveSoon(); }
-      // Flash answered (a turn's result): what the user does next decides it (agents/flash-outcomes.ts, ADR 0131)
-      if (r.s.quick) this.runs.flashEvent({ kind: 'answered', at: Date.now() });
     }
     if (p.contextMaxTokens !== undefined) r.s.contextMaxTokens = p.contextMaxTokens;
     if (p.turnCostUsd !== undefined || p.liveCostUsd !== undefined) {

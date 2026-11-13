@@ -83,8 +83,6 @@ export interface StoredChat {
   /** null = never chosen by the user: the CLI follows settings.json (ADR 0002) */
   permissionMode: PermissionMode | null;
   isOrchestrator: boolean;
-  /** «Flash», the quick lane (ADR 0105, 0107) */
-  quick?: true;
   /** the maintenance research (ADR 0132) */
   research?: true;
   /** child results a quit held back from this parent, sent after the next start */
@@ -254,6 +252,8 @@ function valid(x: unknown): StoredChat | null {
   // a file written by a release before ADR 0083 marks the user's Orchestrator with the old coordinator key plus
   // `orchestrator: true`: it stays the Orchestrator (the one tolerant read; the other old coordinators are plain chats)
   const orchestrator = c.isOrchestrator === true || (c.isRegia === true && c.orchestrator === true);
+  // the side lane removed by ADR 0296 (`quick`): its chats are dropped, the app keeps no trace of it
+  if (c.quick === true && !orchestrator) return null;
   return {
     id: c.id, harness: c.harness as Harness, cwd: c.cwd,
     // only a plain session token survives (a UUID for Claude, else startSession replaces it): anything else is dropped
@@ -264,7 +264,6 @@ function valid(x: unknown): StoredChat | null {
     effort: EFFORTS.includes(String(c.effort)) ? (c.effort as Effort) : null,
     permissionMode: MODES.includes(String(c.permissionMode)) ? (c.permissionMode as PermissionMode) : null,
     isOrchestrator: orchestrator,
-    ...(c.quick === true && !orchestrator ? { quick: true as const } : {}),
     ...(c.research === true && !orchestrator ? { research: true as const } : {}),
     createdAt: typeof c.createdAt === 'number' ? c.createdAt : Date.now(),
     ...(typeof c.costTotalUsd === 'number' && Number.isFinite(c.costTotalUsd) ? { costTotalUsd: c.costTotalUsd } : {}),

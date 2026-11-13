@@ -3,8 +3,7 @@
 // cannot be used; runs a fallback session wrote there are merged in at the next start) after chats.json forgets the chat (60 closed chats). The pure lifecycle steps live here; ChatManager calls them on start,
 // end (completed / closed / stale), Brother's reopen, pending requests and settled turns. A run's receipts (what it did,
 // agents/receipts.ts, ADR 0130) are bounded there and read back here; ones out of shape are dropped, never the run.
-// The same file keeps Flash's answer outcomes (`flash`, agents/flash-outcomes.ts, ADR 0131: Flash records no run) and a
-// Strategist run's plan record (`plan`, a decision signal for the Orchestrator); both read leniently. The nightly batch review's run keeps its reviewed runs (`reviewBatch`, ADR 0203).
+// The same file keeps a Strategist run's plan record (`plan`, a decision signal for the Orchestrator); both read leniently. The nightly batch review's run keeps its reviewed runs (`reviewBatch`, ADR 0203).
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
@@ -12,9 +11,8 @@ import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, Agent
 import { ONE_SHOT_PURPOSES, RUN_END_CAUSES, type AgentRunEndCause } from '../../shared/agents';
 import { goalText } from '../../shared/agent-label';
 import { errText, log } from '../log';
-import { emptyFlashLog, flashAnswered, flashAsked, flashBriefed, flashHanded, readFlashLog, type FlashLog } from './flash-outcomes';
 import { MAX_CORRECTIONS, checkResult } from '../../shared/delegation';
-import { FLASH_BRIEF_TAG, MODEL_TIERS, type ModelTier } from '../../shared/roles';
+import { MODEL_TIERS, type ModelTier } from '../../shared/roles';
 import { SUMMARY_MAX } from './run-report';
 import { rollUp, SAMPLE_MAX, type RunTally, type TagTally } from './run-metrics';
 import { cleanOrphanTmps, readLocal, renameWithRetry, writeLocalText, writeLocalTextAsync } from './local-store';
@@ -332,15 +330,15 @@ function olderReadable(t: RunTally): RunTally {
 const mapValues = <T, U>(o: Record<string, T>, f: (v: T) => U): Record<string, U> => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, f(v)]));
 
 /** What a store holds once read with its checks: runs out of shape are skipped and counted, never the whole store. */
-interface RunsState { runs: AgentRun[]; rollups: RunTally[]; prunedThrough: number; flash: FlashLog; skipped: number }
-type RawRuns = { version?: unknown; runs?: unknown; rollups?: unknown; prunedThrough?: unknown; flash?: unknown };
+interface RunsState { runs: AgentRun[]; rollups: RunTally[]; prunedThrough: number; skipped: number }
+/** an older file's extra keys (a retired answer log, ADR 0296) are read past and dropped at the next write */
+type RawRuns = { version?: unknown; runs?: unknown; rollups?: unknown; prunedThrough?: unknown };
 
 /** agent-runs.json's content (or the database's, in the same shape) read with the store's checks; throws when the store
  *  as a whole is out of shape (a bad version, a bad rollup, two rollups of one version). */
 function readState(raw: RawRuns, maxRuns = RUNS_MAX): RunsState {
   if (raw.version !== 1 || !Array.isArray(raw.runs) || raw.runs.length > maxRuns || (raw.rollups !== undefined && !Array.isArray(raw.rollups)) || (raw.prunedThrough !== undefined && !time(raw.prunedThrough))) throw new Error('Invalid agent runs');
-  // Flash's outcomes (ADR 0131): out of shape = a fresh log, never a reason to refuse the store
-  const state: RunsState = { runs: [], rollups: [], prunedThrough: (raw.prunedThrough as number | undefined) ?? 0, flash: raw.flash !== undefined ? readFlashLog(raw.flash) : emptyFlashLog(), skipped: 0 };
+  const state: RunsState = { runs: [], rollups: [], prunedThrough: (raw.prunedThrough as number | undefined) ?? 0, skipped: 0 };
   const keys = new Set<string>();
   for (const v of (raw.rollups ?? []) as unknown[]) {
     const t = readTally(v);
@@ -390,13 +388,12 @@ export class AgentRunStore {
   private db: RunsDb | null = null;
   /** per run id, its JSON and bytes as the database holds them: a save writes only the runs whose JSON changed */
   private written = new Map<string, { json: string; bytes: number; endedAt?: number | undefined }>();
-  /** the meta values (rollups, prunedThrough, flash) as the database holds them */
+  /** the meta values (rollups, prunedThrough) as the database holds them */
   private writtenMeta = new Map<string, string>();
   private runs = new Map<string, AgentRun>();
   private rollups: RunTally[] = [];
   /** the latest end among the pruned runs: a chat mirror of an ended run up to it is already in the rollups, never adopted */
   private prunedThrough = 0;
-  private flash: FlashLog = emptyFlashLog();
   private unsaved = false;
   private rev = 0;
   /** Bumped by every change worth a write (dirty) and every run that leaves memory: the read worker keeps its copy of the
@@ -423,7 +420,7 @@ export class AgentRunStore {
 
   private use(s: RunsState): void {
     this.runs = new Map(s.runs.map(r => [r.runId, r]));
-    this.rollups = s.rollups; this.prunedThrough = s.prunedThrough; this.flash = s.flash;
+    this.rollups = s.rollups; this.prunedThrough = s.prunedThrough;
   }
 
   /** agent-runs.json as the store (the fallback): read as before the database. */
@@ -442,7 +439,7 @@ export class AgentRunStore {
         log.warn('agents', 'invalid agent run records skipped', { data: { skipped: s.skipped, kept: this.runs.size },
           hint: 'valid runs were recovered; new runs can still be recorded' });
       }
-    } catch { this.runs.clear(); this.rollups = []; this.prunedThrough = 0; this.flash = emptyFlashLog(); this.problem = UNREADABLE; }
+    } catch { this.runs.clear(); this.rollups = []; this.prunedThrough = 0; this.problem = UNREADABLE; }
   }
 
   /** Opens app.db and loads the runs from it, moving agent-runs.json in first when the database has none. false = the
@@ -463,7 +460,7 @@ export class AgentRunStore {
       if (!db.empty()) {
         try { this.loadDb(db); } catch (e) {
           db.close();
-          this.runs.clear(); this.rollups = []; this.prunedThrough = 0; this.flash = emptyFlashLog(); this.written.clear(); this.writtenMeta.clear();
+          this.runs.clear(); this.rollups = []; this.prunedThrough = 0; this.written.clear(); this.writtenMeta.clear();
           this.problem = UNREADABLE;
           log.error('agents', 'agent runs in app.db unreadable', { cause: errText(e), hint: 'app.db is kept as it is; no new run is recorded until it is repaired or moved aside' });
           return true;
@@ -492,8 +489,7 @@ export class AgentRunStore {
     const { rows, meta } = db.load();
     const raw: RawRuns = { version: 1, runs: rows.map(r => parseOrNull(r.json)),
       ...(meta.has('rollups') ? { rollups: parseOrNull(meta.get('rollups')!) } : {}),
-      ...(meta.has('prunedThrough') ? { prunedThrough: Number(meta.get('prunedThrough')) } : {}),
-      ...(meta.has('flash') ? { flash: parseOrNull(meta.get('flash')!) } : {}) };
+      ...(meta.has('prunedThrough') ? { prunedThrough: Number(meta.get('prunedThrough')) } : {}) };
     const s = readState(raw, Infinity);
     this.use(s);
     for (const r of rows) if (this.runs.has(r.id)) this.written.set(r.id, { json: r.json, bytes: Buffer.byteLength(r.json, 'utf8'), endedAt: this.runs.get(r.id)!.endedAt });
@@ -518,7 +514,7 @@ export class AgentRunStore {
       return false;
     }
     const rows = s.runs.map(r => rowOf(r, JSON.stringify(r)));
-    const meta = new Map([['rollups', JSON.stringify(s.rollups)], ['prunedThrough', String(s.prunedThrough)], ['flash', JSON.stringify(s.flash)]]);
+    const meta = new Map([['rollups', JSON.stringify(s.rollups)], ['prunedThrough', String(s.prunedThrough)]]);
     const target = own ? migratedName(this.file) : source;
     try {
       db.importAll(rows, meta, () => { if (own) renameWithRetry(this.file, target); }, () => {
@@ -540,7 +536,7 @@ export class AgentRunStore {
 
   /** agent-runs.json found beside an app.db that holds runs: the runs whose ids app.db lacks (written by a session that
    *  fell back to the JSON) are added in one transaction, then the file is renamed to agent-runs.json.migrated-<date>
-   *  (kept, never deleted). Rollups and Flash's log stay app.db's. A file out of shape is left as it is. */
+   *  (kept, never deleted). Rollups stay app.db's. A file out of shape is left as it is. */
   private mergeJson(db: RunsDb): void {
     let s: RunsState;
     try {
@@ -570,18 +566,7 @@ export class AgentRunStore {
   /** Releases the database connection (the quit, tests: on Windows an open file cannot be removed); a later save opens it again. */
   close(): void { clearTimeout(this.coldTimer); this.coldTimer = undefined; this.db?.close(); }
 
-  /** Flash's answer outcomes (flash-outcomes.ts, ADR 0131): a copy. */
-  flashLog(): FlashLog { return structuredClone(this.flash); }
-  /** The user asked Flash (a «Fanne un lavoro» brief hands its last answer over) / Flash answered / the user wrote to the
-   *  Orchestrator: written with the next flush. */
-  flashEvent(e: { kind: 'asked' | 'handed'; text: string; at: number } | { kind: 'answered'; at: number }): void {
-    if (this.problem) return;
-    if (e.kind === 'asked' && e.text.startsWith(FLASH_BRIEF_TAG)) flashBriefed(this.flash, e.at);
-    else if (e.kind === 'asked') flashAsked(this.flash, e.text, e.at);
-    else if (e.kind === 'handed') { if (!this.flash.open.length) return; flashHanded(this.flash, e.text, e.at); }
-    else flashAnswered(this.flash, e.at);
-    this.dirty = true;
-  }
+
 
   /** The live record (the chat's mirror is this same object). */
   get(runId: string): AgentRun | undefined { return this.runs.get(runId); }
@@ -828,9 +813,8 @@ export class AgentRunStore {
     if (this.problem) throw new Error(this.problem);
     const json = parts ?? all.map(r => JSON.stringify(r));
     const bytesOf = all.map((r, i) => { const w = this.written.get(r.runId); return w && w.json === json[i] ? w.bytes : Buffer.byteLength(json[i]!, 'utf8'); });
-    const flash = JSON.stringify(this.flash);
-    // the same budget agent-runs.json had: the runs' JSON, the rollups and Flash's log, about the file's size
-    const size = 64 + bytesOf.reduce((n, b) => n + b + 1, 0) + (this.rollupText()?.text.length ?? 0) + flash.length;
+    // the same budget agent-runs.json had: the runs' JSON and the rollups, about the file's size
+    const size = 64 + bytesOf.reduce((n, b) => n + b + 1, 0) + (this.rollupText()?.text.length ?? 0);
     let index: Map<AgentRun, number> | null = null;
     const bytesOfRun = (r: AgentRun) => bytesOf[(index ??= new Map(all.map((x, i) => [x, i]))).get(r)!]!;
     this.dirty = true; // stays set when the write fails: the next flush tries again
@@ -843,13 +827,15 @@ export class AgentRunStore {
     });
     const remove = [...p.drop].map(r => r.runId).filter(id => this.written.has(id));
     const meta = new Map<string, string | null>();
-    for (const [k, v] of [['rollups', this.rollupJson(p.rollups)], ['prunedThrough', String(p.prunedThrough)], ['flash', flash]] as const) if (this.writtenMeta.get(k) !== v) meta.set(k, v);
+    for (const [k, v] of [['rollups', this.rollupJson(p.rollups)], ['prunedThrough', String(p.prunedThrough)]] as const) if (this.writtenMeta.get(k) !== v) meta.set(k, v);
+    // the retired Flash's log (ADR 0296): deleted once; any other key stays as it is (a newer build's own)
+    if (this.writtenMeta.has('flash')) meta.set('flash', null);
     return {
       write: () => db.write({ upsert, remove, meta }),
       commit: () => {
         for (const [id, w] of fresh) this.written.set(id, w);
         for (const id of remove) this.written.delete(id);
-        for (const [k, v] of meta) if (v !== null) this.writtenMeta.set(k, v);
+        for (const [k, v] of meta) if (v !== null) this.writtenMeta.set(k, v); else this.writtenMeta.delete(k);
         this.commitPrune(p);
       },
     };
@@ -883,10 +869,8 @@ export class AgentRunStore {
     // the rollups change only when runs are pruned (commit): their text is kept per array, not rebuilt at every save
     const rollupText = this.rollupText();
     const record = (runs: readonly string[], rollups: string | null, prunedThrough: number) => {
-      // key order as JSON.stringify of { version, runs, rollups?, prunedThrough?, flash? } (older releases read the same file)
-      const rest = JSON.stringify({ ...(prunedThrough ? { prunedThrough } : {}),
-        // Flash's outcomes: bounded by flash-outcomes.ts (a few tens of KB at most), inside the same byte budget
-        ...(this.flash.open.length || this.flash.done.length || this.flash.asking || this.flash.total.success + this.flash.total.partial + this.flash.total.fail ? { flash: this.flash } : {}) });
+      // key order as JSON.stringify of { version, runs, rollups?, prunedThrough? } (older releases read the same file)
+      const rest = JSON.stringify({ ...(prunedThrough ? { prunedThrough } : {}) });
       return `{"version":1,"runs":${jsonArray(runs)}${rollups ? `,"rollups":${rollups}` : ''}${rest === '{}' ? '' : `,${rest.slice(1, -1)}`}}\n`;
     };
     const whole = record(json, rollupText?.text ?? null, this.prunedThrough);

@@ -26,8 +26,10 @@ click to count as a positive or negative feedback on the agent: a really small o
    writes nothing (the renderer does not even send it), so a hundred clicks weigh as one. A run the user reopens
    forgets it, like its verdict.
 4. The nudge weighs `TOUCH_TRUST` = 0.05 in the performance estimate: a twentieth of a verdict the user writes, with
-   the same ageing (half weight every 30 days). It is not a verdict: it is not counted among the verdicts the
-   performance needs before it shows, it earns no XP and no level, and it does not end the run. The card's «?»
+   the same ageing (half weight every 30 days). It is not a verdict: it moves the role's mean only. It is not
+   counted among the verdicts the performance needs before it shows, it does not narrow the ± (so clicks alone
+   never take a role out of «in rodaggio»), it does not reach the per-model rows, it earns no XP and no level, it
+   does not end the run and it is not chat activity (a stalled child stays stalled). The card's «?»
    on the performance says how many pats and whips the role has.
 5. `run:touch` is renderer IPC only, never an agent tool: a chat id and +1 or -1, nothing else.
 6. Where there is no run the person only reacts: the Orchestrator's working line (its chat is permanent, it is rated

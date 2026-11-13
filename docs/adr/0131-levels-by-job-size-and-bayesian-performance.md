@@ -1,6 +1,6 @@
 # ADR 0131 · Levels by job size, a Bayesian performance, the Orchestrator's choices and Flash's answers
 
-Date: 2026-10-22 · Status: accepted (owner approved: levels and performance must be "veramente ben studiata e
+Date: 2026-10-22 · Status: partly superseded by ADR 0296 (Flash's answers and its XP removed); accepted (owner approved: levels and performance must be "veramente ben studiata e
 realistica"; maximum level 100, reachable only after very long real use) · Builds on: ADR 0097 (the Orchestrator rated
 by its decisions), 0100 (XP = verified successes), 0105 (Flash), 0108 (the Strategist's plan), 0125 (every role levels
 up from outcomes), 0130 (run receipts)
