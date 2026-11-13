@@ -410,6 +410,8 @@ vendor/stockfish/stockfish-19-lite-single.wasm unscanned-binary sha256:ee4f115bd
 # The black queen of the Chessnut piece set (Apache 2.0): one SVG path on a single line, drawing only (checked 2026-11-13).
 src/renderer/assets/chess/chessnut/bQ.svg long-line-unscanned sha256:cf47f78c1ad9a99163e942f70365f8dd2b6d911011a5d8298be3d0596ad924a2
 # README capture of the Scacchi lobby from the frozen synthetic demo (six agents, fictional records), inspected 2026-11-13.
+docs/screenshots/chess.webp binary-media sha256:d55d39c7e80ac475a08a7d873be1394eea90df3c9387ec6dec3908e02314b47d
+# the same capture after the little people of ADR 0303 (asleep in the lobby), inspected 2026-11-13
 docs/screenshots/chess.webp binary-media sha256:0ff4106fe22b3d3656726d76e5f1868d37e4c24e2351be341db94e33a96891c4
 # The two README captures that show the whole left rail, retaken from the frozen synthetic demo after the rail gained
 # «Chess» (ADR 0304); inspected 2026-11-13.
