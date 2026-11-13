@@ -17,7 +17,7 @@ export const TREND_PAGES: Readonly<Record<string, TrendTab>> = {
   // Confronto modelli went (ADR 0201): its old links open the agents' quality
   confronto: 'qualita',
   apprendimento: 'apprendimento', learning: 'apprendimento',
-  // the Classificatori tab folded into Qualità (ADR 0210)
+  // the Classificatori tab folded into Qualità (ADR 0210) and its section left (ADR 0291): old links land on Qualità
   classificatori: 'qualita', classifiers: 'qualita',
   uso: 'uso', usage: 'uso', 'uso-app': 'uso',
 };

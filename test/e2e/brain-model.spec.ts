@@ -1,6 +1,6 @@
 // E2E of the Brain section (ADR 0077, #84, #81) on the frozen demo, whose made-up brain has the former runbook and
 // routines sections already migrated into skills: the Skill page (list, migration report, a role switched on from the
-// skill's Ruoli tab and off again), Sempre caricato, Memoria, Classificatori (read-only cards; each detail holds its tables, "nessun dato ancora" where there is none)
+// skill's Ruoli tab and off again), Sempre caricato, Memoria
 // and Mappa (agent → skills → rules → memory, plus the notes view), then the agent card's 3D flip (click, Esc back) and
 // its fade under reduced motion; Memoria's «Diario e note» searches the journal. Screenshots dark and light in test-results/shots/brain-*.png.
 import { expect, test, type Page } from '@playwright/test';
@@ -12,7 +12,7 @@ async function theme(page: Page, scheme: 'dark' | 'light') {
   await page.waitForTimeout(250);
 }
 
-test('Brain pages: skills with links and undo, rules, memory, classifiers, map; the agent card flips', async () => {
+test('Brain pages: skills with links and undo, rules, memory, map; the agent card flips', async () => {
   test.setTimeout(150_000);
   const { app, page } = await launchDemo();
   try {
@@ -66,19 +66,6 @@ test('Brain pages: skills with links and undo, rules, memory, classifiers, map; 
     await browser.getByTestId('mb-search').fill('rilascio test');
     await expect(browser.getByTestId('mb-text')).toBeVisible();
     await shot(page, 'brain-memory-dark');
-
-    // ── Classificatori (a section of Qualità since ADR 0210): read only
-    await goPage(page, 'classificatori');
-    const cls = page.getByTestId('bm-classifiers-page');
-    // a grid of cards (stats-cards.spec.ts covers them); the tables of before live in each classifier's detail
-    await expect(cls.getByTestId('cls-grid')).toBeVisible();
-    await expect(cls.locator('input, textarea, select')).toHaveCount(0);
-    await shot(page, 'brain-classifiers-dark');
-    // no model card since ADR 0210; the kind card's detail keeps its table
-    await expect(cls.getByTestId('cls-card-model')).toHaveCount(0);
-    await cls.getByTestId('cls-card-kind').locator('h3 button').click();
-    await expect(cls.getByTestId('bm-cls-kinds')).toBeVisible();
-    await cls.getByTestId('cls-back').click();
 
     // ── Mappa: agent → skills → rules → memory, with an inspector
     await goPage(page, 'collegamenti');
@@ -135,9 +122,6 @@ test('Brain pages: skills with links and undo, rules, memory, classifiers, map; 
     await goPage(page, 'memoria');
     await expect(page.getByTestId('bm-memory-page')).toBeVisible();
     await shot(page, 'brain-memory-light');
-    await goPage(page, 'classificatori');
-    await expect(page.getByTestId('cls-grid')).toBeVisible();
-    await shot(page, 'brain-classifiers-light');
     await goPage(page, 'collegamenti');
     await expect(page.getByTestId('bm-map-graph').locator('.dash-node').first()).toBeVisible();
     await shot(page, 'brain-map-light');

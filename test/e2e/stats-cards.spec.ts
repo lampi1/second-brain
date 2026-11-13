@@ -1,9 +1,7 @@
-// Statistics redesign (owner, 2026-10-19): Brain → Classificatori as a grid of classifier cards (numbers with a "?",
-// an 8-week trend, the learning meter toward 20 verified cases, a curious fact) with a detail per classifier (history,
-// slices, the routing table under "Scelta del modello"), and Qualità's app errors (once the Dashboard's Errori tab) with recurring errors grouped
-// into cards (cause, count, trend, where, what it means, what to do). Frozen demo with its made-up classifier history
-// (main/demo-classifiers.ts) and the brain-ui fixture (ai-errors.md). Screenshots dark and light in
-// test-results/shots/stats-*.png.
+// Statistics redesign (owner, 2026-10-19): Qualità's app errors (once the Dashboard's Errori tab) with recurring errors
+// grouped into cards (cause, count, trend, where, what it means, what to do), and the costs under Andamento → Costi.
+// The Classificatori grid this spec also covered left with ADR 0291. Frozen demo and the brain-ui fixture
+// (ai-errors.md). Screenshots dark and light in test-results/shots/stats-*.png.
 import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -18,55 +16,6 @@ function fixtureBrain(): string {
   fs.copyFileSync(path.join(fixture, 'brain-site.mjs'), path.join(tools, 'brain-site.mjs'));
   fs.copyFileSync(path.join(fixture, 'data.mjs'), path.join(tools, 'brain-ui-data.mjs'));
   return brain;
-}
-
-async function classifiers(page: Page, scheme: string): Promise<void> {
-  await goPage(page, 'classificatori');
-  const cls = page.getByTestId('bm-classifiers-page');
-  await expect(cls.getByTestId('cls-grid')).toBeVisible();
-  for (const id of ['kind', 'tasks', 'jobkind', 'mail', 'cmd']) await expect(cls.getByTestId(`cls-card-${id}`)).toBeVisible();
-  await expect(cls.getByTestId('cls-card-model')).toHaveCount(0); // the model routing is gone (ADR 0210)
-  await expect(cls.getByTestId('cls-card-estimates')).toHaveCount(0); // the brain's retired estimator (ADR 0053, 0101)
-  await expect(cls.getByTestId('cls-card-skills')).toHaveCount(0); // the skill suggester is gone (ADR 0186)
-  await expect(cls.getByTestId('cls-summary')).not.toContainText('Token spesi');
-  await expect(cls.getByTestId('cls-kind-decisions')).not.toContainText('nessun dato');
-  await expect(cls.getByTestId('cls-kind-hit')).toContainText(/\d+\/\d+/); // k/n beside the share
-  await expect(cls.locator('input, textarea, select')).toHaveCount(0);
-  await shot(page, `stats-classifiers-${scheme}`);
-  await cls.getByTestId('cls-card-jobkind').scrollIntoViewIfNeeded();
-  await shot(page, `stats-classifiers-more-${scheme}`);
-  // the kind of work by examples (ADR 0197): agreement with the words k/n and the confusion matrix on the held-out part
-  const km = cls.getByTestId('cls-card-kindmodel');
-  await km.scrollIntoViewIfNeeded();
-  await expect(km.getByTestId('cls-km-agree')).toContainText('24/29');
-  await expect(km.getByTestId('cls-km-matrix').locator('tbody tr')).toHaveCount(6);
-  await shot(page, `stats-classifiers-kindmodel-${scheme}`);
-  await cls.getByTestId('cls-summary').scrollIntoViewIfNeeded();
-  // every number explains itself
-  const help = cls.getByTestId('cls-kind-hit').locator('.help-tip');
-  await help.click();
-  await expect(page.locator('.help-bubble:not([hidden])')).toContainText('altro');
-  await shot(page, `stats-classifiers-help-${scheme}`);
-  await page.keyboard.press('Escape');
-  // the detail of "Tipo di lavoro"
-  await cls.getByTestId('cls-card-kind').getByRole('button', { name: /Tipo di lavoro/ }).click();
-  await expect(cls.getByTestId('cls-detail-kind')).toBeVisible();
-  await expect(cls.getByTestId('cls-learning').locator('svg')).toBeVisible();
-  await expect(cls.getByTestId('bm-cls-kinds')).toBeVisible();
-  await shot(page, `stats-classifier-detail-${scheme}`);
-  await cls.getByTestId('cls-slices').scrollIntoViewIfNeeded();
-  await shot(page, `stats-classifier-detail-charts-${scheme}`);
-  await cls.getByTestId('cls-back').click();
-  // the task estimator's weekly backtest (ADR 0087): its card and its learning curve
-  await expect(cls.getByTestId('cls-tasks-decisions')).not.toContainText('nessun dato');
-  await cls.getByTestId('cls-card-tasks').getByRole('button', { name: /Stima dai lavori simili/ }).click();
-  await expect(cls.getByTestId('cls-learning').locator('svg')).toBeVisible();
-  await shot(page, `stats-classifier-tasks-${scheme}`);
-  await cls.getByTestId('cls-back').click();
-  await cls.getByTestId('cls-card-kind').getByRole('button', { name: /Tipo di lavoro/ }).click();
-  await expect(cls.getByTestId('cls-detail-kind')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(cls.getByTestId('cls-grid')).toBeVisible();
 }
 
 async function errors(page: Page, scheme: string): Promise<void> {
@@ -88,30 +37,22 @@ async function errors(page: Page, scheme: string): Promise<void> {
 }
 
 for (const scheme of ['dark', 'light'] as const) {
-  test(`classifier cards and grouped errors (${scheme})`, async () => {
+  test(`grouped errors and costs (${scheme})`, async () => {
     const { app, page } = await launchDemo({ scheme, env: { SB_BRAIN: fixtureBrain() } });
     try {
       await page.evaluate(th => window.sb.invoke('settings:set', { theme: th }), scheme);
       await expect(page.locator(`html[data-theme="${scheme}"]`)).toHaveCount(1);
-      await classifiers(page, scheme);
       await errors(page, scheme);
     } finally { await app.close(); }
   });
 }
 
-test('a clean install shows friendly empty classifier cards and errors', async () => {
+test('a clean install shows a friendly empty errors section', async () => {
   const { app, page } = await launch();
   try {
     await setSize(app, 1600, 1000);
     await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
     await closeSetup(page);
-    await goPage(page, 'classificatori');
-    const cls = page.getByTestId('bm-classifiers-page');
-    await expect(cls.getByTestId('cls-clean')).toBeVisible();
-    await expect(cls.getByTestId('cls-card-kind')).toContainText('Nessuna chat registrata ancora');
-    await expect(cls.getByTestId('cls-card-kind').getByTestId('cls-fact-kind')).toHaveCount(0);
-    await expect(cls.getByTestId('cls-card-tasks')).toContainText('Nessun lavoro stimato ancora');
-    await shot(page, 'stats-classifiers-empty');
     await goPage(page, 'qualita');
     await expect(page.getByTestId('bx-q-app-errors').getByText('Nessun errore dell’app o degli strumenti')).toBeVisible();
     await shot(page, 'stats-errors-empty');

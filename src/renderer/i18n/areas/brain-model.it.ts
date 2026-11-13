@@ -1,4 +1,4 @@
-// Italian UI texts of the Brain section (ADR 0077): the Skill, Regole, Memoria, Classificatori and Mappa pages, the
+// Italian UI texts of the Brain section (ADR 0077): the Skill, Regole, Memoria and Mappa pages, the
 // maintenance panel with its change log and undo, the migration report and the agent card's back. Spread into it.ts;
 // brain-model.en.ts has the same keys (typed by this object).
 type N = { n: number };
@@ -48,13 +48,6 @@ export const brainModelIt = {
 
   // Memoria page
   'bm.mem.title': 'Memoria',
-
-  // Classificatori page
-  'bm.cls.col.kind': 'Lavoro',
-  'bm.cls.kinds': 'Esiti per tipo di lavoro',
-  'bm.cls.kindsLead': 'Le chat dell’app per tipo di lavoro, quante hanno un esito noto e quante sono riuscite.',
-  'bm.cls.col.chats': 'Chat', 'bm.cls.col.known': 'Esito noto', 'bm.cls.col.ok': 'Riuscite',
-  'bm.cls.kindsEmpty': 'Nessuna chat registrata ancora.',
 
   // Mappa page
   'bm.map.eyebrow': 'IL TUO BRAIN, COLLEGATO', 'bm.map.legendLabel': 'Legenda',

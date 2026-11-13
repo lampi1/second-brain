@@ -1,9 +1,9 @@
-// IPC handlers, Brain: the Brain pages (brainmodel, queries, classifiers), memory and learning review, Proposte, the
+// IPC handlers, Brain: the Brain pages (brainmodel, queries), memory and learning review, Proposte, the
 // maintenance, the morning block, comparisons, skills. Registered by src/main/index.ts with every other group (Handlers
 // in ipc.ts keeps the set complete); each channel's shape is in src/shared/contract/*.ts.
 import type { HandlerContext, HandlersOf } from './context';
 
-export function brainHandlers({ s, emitter, research, requireReviewRoot, search, proposals }: HandlerContext): HandlersOf<'projectmap' | 'brain' | 'brainmodel' | 'queries' | 'classifiers' | 'memory' | 'learning' | 'proposals' | 'maintenance' | 'morning' | 'compare' | 'learn' | 'skills'> {
+export function brainHandlers({ s, emitter, research, requireReviewRoot, search, proposals }: HandlerContext): HandlersOf<'projectmap' | 'brain' | 'brainmodel' | 'queries' | 'memory' | 'learning' | 'proposals' | 'maintenance' | 'morning' | 'compare' | 'learn' | 'skills'> {
   return {
     // the project maps (ADR 0271): read only from the page; agents draw and update them through their MCP tools
     'projectmap:list': () => s.projectMaps?.list() ?? [],
@@ -41,7 +41,6 @@ export function brainHandlers({ s, emitter, research, requireReviewRoot, search,
     'brainmodel:noise': a => { if (typeof a?.key !== 'string' || !a.key || a.key.length > 1000 || typeof a?.known !== 'boolean') throw new Error('Invalid log group'); return s.brainModel.noise(a.key, a.known); },
     'brainmodel:link': a => { if (typeof a?.skill !== 'string' || typeof a?.agentId !== 'string' || typeof a?.on !== 'boolean') throw new Error('Invalid skill link'); return s.brainModel.link(a.skill, a.agentId, a.on); },
     'brainmodel:remove': a => { if (!['skill', 'rule', 'script'].includes(a?.kind as string) || typeof a?.target !== 'string' || !a.target || a.target.length > 500) throw new Error('Invalid item to remove'); return s.brainModel.remove(a.kind, a.target); },
-    'classifiers:state': () => s.brainModel.classifiers(),
     // the morning block (ADR 0102): the renderer's presence, Ctrl+J's fallback, the user's Esc / Ok
     'morning:brief': a => s.morning ? s.morning.handle(a) : { history: false, show: false, brief: null },
     'brain:api': a => s.brain.api(a?.path),

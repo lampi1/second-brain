@@ -1,6 +1,6 @@
 # 0197 — The user's corrections counted by the app, the kind of work by examples, and PPI for role success
 
-Status: accepted. Builds on ADR 0037, ADR 0058, ADR 0068, ADR 0076, ADR 0125, ADR 0130 and ADR 0186.
+Status: partly superseded by ADR 0291 (part 2, the kind of work by examples, is removed); accepted. Builds on ADR 0037, ADR 0058, ADR 0068, ADR 0076, ADR 0125, ADR 0130 and ADR 0186.
 
 2026-10-29.
 

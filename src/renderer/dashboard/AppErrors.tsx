@@ -3,7 +3,7 @@
 // each (recurring errors, error events of this session), a row of curious facts, then the recurring app and tool errors
 // as cards (cause in plain words, how many times, a 14-day trend, last seen, where: chat, role and skills in use, one
 // example, what it means and what to do). It says what will appear when there is nothing yet. Grouping and causes:
-// errors.ts; live from the app's chats, their items and the feed. Styles: styles/classifiers.css (err-*).
+// errors.ts; live from the app's chats, their items and the feed. Styles: styles/app-errors.css.
 import { useEffect, useMemo } from 'react';
 import { goTarget } from '../actions';
 import { HelpTip } from '../components/HelpTip';
@@ -13,7 +13,7 @@ import { loadClosedErrors, useApp } from '../store/store';
 import { now as clockNow } from '../lib/clock';
 import { Discuss, Empty, Panel, Stat } from './parts';
 import { groupErrors, trendOf, type Cause } from './errors';
-import '../styles/classifiers.css';
+import '../styles/app-errors.css';
 
 
 const cause = (c: Cause, what: 't' | 'w' | 'f') => t(`stats.cause.${c}.${what}` as Parameters<typeof t>[0]);

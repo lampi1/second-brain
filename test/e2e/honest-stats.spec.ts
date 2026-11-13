@@ -1,10 +1,10 @@
 // UI acceptance of the classifiers and statistics cleanup (ADR 0186) on the frozen demo, no provider requests: the Agenti
 // card front shows the success share (or n/5 under the sample) with its "?", the reviews switch says when it is off,
-// Classificatori has no skills card, Apprendimento says how many lessons the agents proposed and that their evidence is
+// Apprendimento says how many lessons the agents proposed and that their evidence is
 // never causal, a role's versions show runs, verified outcomes and success ± (or «troppo pochi»). Screenshots dark and
 // light in test-results/shots/honest-*.png.
 import { expect, test, type Page } from '@playwright/test';
-import { goPage, launchDemo, openAgentOverview, openAgents, shot } from './helpers';
+import { launchDemo, openAgentOverview, openAgents, shot } from './helpers';
 
 /** G J: the Apprendimento tab of Memoria (as learning.spec.ts) */
 async function goLearning(page: Page) {
@@ -14,7 +14,7 @@ async function goLearning(page: Page) {
 }
 
 for (const scheme of ['dark', 'light'] as const) {
-  test(`honest statistics on the Agenti, Classificatori and Apprendimento pages (${scheme})`, async () => {
+  test(`honest statistics on the Agenti and Apprendimento pages (${scheme})`, async () => {
     test.setTimeout(150_000);
     const { app, page } = await launchDemo({ scheme, height: 1600, config: { theme: scheme } });
     try {
@@ -37,14 +37,6 @@ for (const scheme of ['dark', 'light'] as const) {
       await page.getByTestId('agent-versions').scrollIntoViewIfNeeded();
       await expect(page.getByTestId('agent-versions').getByTestId('version-stats').first()).toContainText(/run|Nessuna run|No finished run/);
       await shot(page, `honest-versions-${scheme}`);
-
-      // Classificatori: no skills card any more
-      await goPage(page, 'classificatori');
-      const cls = page.getByTestId('bm-classifiers-page');
-      await expect(cls.getByTestId('cls-grid')).toBeVisible();
-      await expect(cls.getByTestId('cls-card-skills')).toHaveCount(0);
-      await expect(cls.getByTestId('cls-card-jobkind')).toBeVisible();
-      await shot(page, `honest-classifiers-${scheme}`);
 
       // Apprendimento: the lessons, said honestly
       await goLearning(page);

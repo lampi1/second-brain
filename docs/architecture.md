@@ -82,13 +82,11 @@ layer classes in `chats/manager-*.ts` under `chats/manager.ts` (layout: `docs/ag
   3 or more (the 30 most recent), its middle half, a confidence and its parts, and a path (self / one-agent / tree). The
   Orchestrator reads it with `task_estimate` and in `app_create_chat`'s answer; IPC `agents:estimates`
   (`agents/run-estimates.ts`) gives the strips each run's estimate made before it started, its actual once ended, and
-  `agents/estimate-accuracy.ts`'s weekly backtest (`EstimateAccuracy`, also for Classificatori);
+  `agents/estimate-accuracy.ts`'s weekly backtest (`EstimateAccuracy`);
   `lib/run-estimates.ts` reads it once for every strip, `RunEstimate.tsx` draws the chip, its "?" and the Orchestrator's plan.
-- **The user's corrections, a kind by examples, PPI** (ADR 0197): `chat:send` → `brain/user-corrections.ts` classifies
+- **The user's corrections, PPI** (ADR 0197; its kind classifier by examples left with ADR 0291): `chat:send` → `brain/user-corrections.ts` classifies
   the user's message (tag, after-report, semantic detector or the hook's regex; counts per day, never the text) →
-  `/api/quality` → Qualità's «Errori che hai dovuto trovare tu». `brainmodel/kind-model.ts` trains a nearest-centroid
-  kind classifier on the local e5 embeddings of verified runs when Classificatori asks (`kind-centroids.ts`, word-rule
-  labels, held-out test). `agents/judge-agreement.ts` gives each role's all-versions metrics a prediction-powered success
+  `/api/quality` → Qualità's «Errori che hai dovuto trovare tu». `agents/judge-agreement.ts` gives each role's all-versions metrics a prediction-powered success
   estimate and the Sentinel's agreement with the user (`shared/ppi.ts`).
 - **Stop**: `chat:stop` → control `interrupt` (Claude) / `session/cancel` (Cursor); `chat:stopAll` = every running
   chat.

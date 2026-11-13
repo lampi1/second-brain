@@ -80,7 +80,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0074](0074-update-by-asking-and-local-release-drafts.md) A developer updates by asking the app; release drafts without GitHub Actions — accepted, partly superseded by 0231
 - [0075](0075-update-button-without-tests.md) "Aggiorna" in Settings: the latest version at once, without the test suite — accepted
 - [0076](0076-brain-scripts-and-changelog.md) The brain's scripts and its changelog, two sections under Brain — accepted, partly superseded by 0096, 0263
-- [0077](0077-agents-and-skills-only.md) Agents and skills only: a self-maintaining Brain section — accepted, partly superseded by 0083, 0125, 0153
+- [0077](0077-agents-and-skills-only.md) Agents and skills only: a self-maintaining Brain section — accepted, partly superseded by 0083, 0125, 0153, 0291
 - [0079](0079-remove-improve-section-and-rename-devops-to-task.md) "Migliora l'app" removed; DevOps renamed Task; Fatto becomes a log — accepted, partly superseded by 0181
 - [0081](0081-agent-screenshots-everywhere.md) Agent screenshots everywhere: a path is enough, nothing remote ever loads — accepted
 - [0082](0082-orchestrator-agent-changes-apply-and-learned-rules-in-regole.md) The Orchestrator changes agents by itself; learned rules live on the Regole page — accepted, partly superseded by 0243
@@ -185,7 +185,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0183](0183-one-read-only-file-viewer.md) One read-only in-app viewer for every file link — accepted
 - [0184](0184-user-pictures-for-roles.md) The user's own picture for a role — accepted
 - [0185](0185-impara-lessons.md) Impara: lessons on a blackboard — accepted
-- [0186](0186-honest-classifiers-and-statistics.md) Honest classifiers and statistics: one taxonomy, one success, fewer numbers — accepted, partly superseded by 0284, 0285
+- [0186](0186-honest-classifiers-and-statistics.md) Honest classifiers and statistics: one taxonomy, one success, fewer numbers — accepted, partly superseded by 0284, 0285, 0291
 - [0187](0187-end-of-day-smoothness.md) Closing chats frees what they started; repeated work stops growing with the day — accepted
 - [0188](0188-impara-research-and-animated-board.md) Impara: research and verification before teaching, the animated board, the user's teacher — accepted
 - [0189](0189-impara-subjects-and-spaced-review.md) Impara: subjects, verified review cards, spaced review — accepted
@@ -196,7 +196,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0194](0194-itemized-maintenance-lint-and-success-criteria.md) Maintenance quality: itemized changes, a brain lint and «riuscito se…» — accepted
 - [0195](0195-candidate-brain-and-role-reflection.md) The maintenance writes a candidate brain, and reflects on one role's text as a trial — accepted
 - [0196](0196-guide-knows-when-stale.md) The Guida knows when it is stale, answers questions, draws from the code and picks cards for the user — accepted
-- [0197](0197-corrections-kind-examples-and-ppi.md) The user's corrections counted by the app, the kind of work by examples, and PPI for role success — accepted
+- [0197](0197-corrections-kind-examples-and-ppi.md) The user's corrections counted by the app, the kind of work by examples, and PPI for role success — accepted, partly superseded by 0291
 - [0198](0198-developer-speed-typecheck-e2e-baseline-agents-map.md) Developer speed: TypeScript 7 typecheck, an e2e baseline of known reds, AGENTS.md as a map — accepted
 - [0199](0199-agent-runs-in-sqlite.md) The agent runs move from agent-runs.json to SQLite (userData/app.db) — accepted
 - [0200](0200-split-the-shared-files-by-area.md) Split the four shared files by area; ChatManager as a chain of layer classes — accepted
@@ -209,7 +209,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0207](0207-settings-redesign-and-easy-mcp.md) Settings redesign, MCP servers in one paste, the Orchestrator configures everything — accepted
 - [0208](0208-docs-keep-up-with-the-code.md) Docs keep up with the code: tool catalog, Guida coverage, README freshness — accepted
 - [0209](0209-strategist-asks-more-and-varied-reactions.md) The Strategist asks at least three questions; reactions fit the message; Flash writes the brief — accepted, partly superseded by 0220, 0223
-- [0210](0210-remove-model-routing.md) Remove the model-routing classifier: every agent runs on its own card's model — accepted
+- [0210](0210-remove-model-routing.md) Remove the model-routing classifier: every agent runs on its own card's model — accepted, partly superseded by 0291
 - [0211](0211-small-fixes-and-real-effort.md) Agent card picks model, effort and context; real effort names; owner's small fixes of 2026-10-31 — accepted
 - [0212](0212-remove-personal-browser.md) Remove the personal Browser page — accepted
 - [0213](0213-impara-active-study.md) 0213. Impara: exercises and an oral exam — accepted
@@ -289,6 +289,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0288](0288-maintenance-bug-cards-by-answers-one-lesson.md) The maintenance stays on the click: app-bug cards follow the user's answers, a report notes one lesson — accepted
 - [0289](0289-fewer-refusals-agents-learn-by-failing.md) Fewer refusals an agent learns only by failing: long outputs are cut, the tools' commands name the copy, a question has a place without an Orchestrator — accepted
 - [0290](0290-claude-chats-start-in-default-the-app-answers.md) A Claude chat starts in «default»: the app answers its requests, not the engine's own default mode — accepted
+- [0291](0291-remove-kind-by-examples-and-classificatori.md) The kind of work by examples and the Classificatori section are removed — accepted
 
 ## Replaced
 

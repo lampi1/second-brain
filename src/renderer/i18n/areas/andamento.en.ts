@@ -3,7 +3,7 @@
 import type { andamentoIt } from './andamento.it';
 type N = { n: number };
 export const andamentoEn: typeof andamentoIt = {
-  'brainPages.andamento.subtitle': 'Costs, quality with the classifiers, learning and the app’s own use, in tabs.',
+  'brainPages.andamento.subtitle': 'Costs, quality, learning and the app’s own use, in tabs.',
   'trend.lead': 'What you spend, how well it works, what the app learns and what you really use. Computed on your PC.',
   'trend.tabsLabel': 'Trends sections',
   'trend.tab.costi': 'Costs',

@@ -1,7 +1,7 @@
 # 0186 — Honest classifiers and statistics: one taxonomy, one success, fewer numbers
 
 Date: 2026-10-29 · Status: partly superseded by ADR 0284 (a model or tier change no longer makes a role version), ADR 0285
-(which past jobs are similar); accepted. Supersedes the exploration part of the routing ADRs (the `exploration` rate no longer drives any
+(which past jobs are similar), ADR 0291 (the Classificatori cards are removed); accepted. Supersedes the exploration part of the routing ADRs (the `exploration` rate no longer drives any
 chat), the skill suggester (#159 and the Classificatori «Skill» card) and the parts of ADR 0083 and ADR 0085 that made
 every permission save a new role version.
 

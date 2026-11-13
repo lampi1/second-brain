@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
-import type { BrainChange, BrainModelState, BrainRule, BrainSkill, ClassifiersState, LogScan, MaintenanceJobId, MaintenanceRun, LessonStub, MigrationReport, KindModelCard, MemoryDocs } from '../../shared/brain-model';
+import type { BrainChange, BrainModelState, BrainRule, BrainSkill, LogScan, MaintenanceJobId, MaintenanceRun, LessonStub, MigrationReport, MemoryDocs } from '../../shared/brain-model';
 import { changeCriteria, MAINTENANCE_JOBS } from '../../shared/brain-model';
 import type { AgentCatalogService } from '../agents/catalog';
 import type { AgentPackFlows } from '../agents/pack/flows';
@@ -12,7 +12,6 @@ import type { AgentPackLearning } from '../agents/pack/learning';
 import { readLocal, writeLocal } from '../agents/local-store';
 import { errText, log } from '../log';
 import { ChangeLog, type AgentRestorer, type AgentSnapshot } from './changes';
-import { classifiersState, readJobs } from './classifiers';
 import { seal, type IntervalCache } from './evidence';
 import { appendUnder, corrections, migrate, repeatedTask, skillText, type AgentWriter, type JobContext, type JobResult } from './jobs';
 import { ignoreWrite, sourceOfSkill } from './migration-ignore';
@@ -69,8 +68,6 @@ export interface BrainModelDeps {
   /** the brain's scripts (brain/scripts.ts): a script's file by its id, and the hook that tells the Script tab it changed;
    *  absent = scripts cannot be removed here (ADR 0122) */
   scripts?: { file: (id: string) => string; changed: () => void };
-  /** the kind-of-work classifier by examples (kind-model.ts, ADR 0197): its Classificatori card; absent = no card */
-  kindModel?: () => Promise<KindModelCard>;
   /** run the jobs by themselves (timers); false in the test suites */
   auto: boolean;
   now?: () => number;
@@ -504,10 +501,6 @@ export class BrainModelService {
   skillTools(): { name: string; tools: string[] }[] {
     const root = this.root();
     return readSkills(this.skillDirs(root), root, []).map(s => ({ name: s.name, tools: s.tools }));
-  }
-  classifiers(): Promise<ClassifiersState> {
-    return classifiersState({ root: this.root(), runs: (() => { try { return this.d.runs(); } catch { return []; } })(), profiles: this.profiles(),
-      jobs: () => readJobs(path.join(this.d.userData, 'jobs.jsonl')), ...(this.d.kindModel ? { kindModel: this.d.kindModel } : {}) }, this.now());
   }
 
   /** The structural migration once, a minute after the start. Nothing else runs by itself: the cleanup, the memory's

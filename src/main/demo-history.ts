@@ -1,13 +1,11 @@
-// The demo's classifier history (SB_DEMO=1), so the Classificatori grid and its detail views show eight weeks of made-up
-// work instead of empty cards: the routing ledger's predictions, actuals and known outcomes in the demo brain
-// (ops/state/improve/outcomes.jsonl, read by brainmodel/classifiers.ts), the role runs with their launch skills (the
-// skills card) and the cost ledger's jobs (userData/jobs.jsonl, the cost-kind card). A fixed pseudo-random sequence and
-// dates relative to `now`: the frozen demo draws the same numbers on every run. The "altro" share and the failures
-// shrink week by week, so the learning curve has something to show. Generic content only. Used by demo-wiring.ts.
+// The demo's work history (SB_DEMO=1): eight weeks of made-up work, so the demo's pages have something to show: the
+// outcome ledger's predictions, actuals and known outcomes in the demo brain (ops/state/improve/outcomes.jsonl), the
+// role runs with their launch skills (the Skill page's use counts) and the cost ledger's jobs (userData/jobs.jsonl).
+// A fixed pseudo-random sequence and dates relative to `now`: the frozen demo draws the same numbers on every run.
+// The "altro" share and the failures shrink week by week. Generic content only. Used by demo-wiring.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentRun } from '../shared/agents';
-import type { KindModelCard } from '../shared/brain-model';
 
 const DAY = 86400e3;
 /** a small deterministic generator (LCG): the same sequence every run */
@@ -42,10 +40,10 @@ const GOALS: Record<string, string[]> = {
   'ops-read': ['Leggi i log del servizio di test'],
 };
 
-export interface DemoClassifierData { runs: AgentRun[] }
+export interface DemoHistory { runs: AgentRun[] }
 
 /** Writes the demo ledger into the demo brain and the job ledger into userData (when it has none); returns the runs. */
-export function writeDemoClassifiers(brainRoot: string, userData: string, now: number, skills: string[]): DemoClassifierData {
+export function writeDemoHistory(brainRoot: string, userData: string, now: number, skills: string[]): DemoHistory {
   const r = rng(4242);
   const lines: object[] = [], runs: AgentRun[] = [];
   const n = 64;
@@ -93,14 +91,3 @@ export function writeDemoClassifiers(brainRoot: string, userData: string, now: n
   }
   return { runs };
 }
-
-/** The demo's kind-of-work-by-examples card (ADR 0197): fixed numbers, as a trained model on 140 runs would show them. */
-export function demoKindModel(now: number): KindModelCard {
-  const labels = ['app-feature', 'bug-fix', 'investigation', 'review', 'writing', 'altro'];
-  return { state: 'ready', examples: 140, minPerKind: 5, threshold: 0.81, at: now,
-    perKind: [{ kind: 'bug-fix', n: 46 }, { kind: 'app-feature', n: 31 }, { kind: 'review', n: 22 }, { kind: 'altro', n: 17 }, { kind: 'investigation', n: 14 }, { kind: 'writing', n: 10 }],
-    kinds: labels.slice(0, -1),
-    test: { n: 29, agree: 24, labels, matrix: [[6, 1, 0, 0, 0, 0], [0, 8, 1, 0, 0, 0], [0, 0, 2, 0, 0, 1], [0, 0, 0, 4, 0, 0], [0, 0, 0, 0, 2, 0], [1, 0, 0, 0, 1, 2]] },
-    altroProposed: { n: 2, of: 4 } };
-}
-

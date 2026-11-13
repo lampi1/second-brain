@@ -1,7 +1,7 @@
 // Andamento's places (ADR 0202, src/renderer/lib/andamento.ts): its tabs, the args that open one, and the old statistics
 // pages (costi, qualita, classificatori; Memoria's apprendimento) landing on their tab through go(), links, parseTarget
-// and the G-keys; the usage counter sees each tab as its own place. Classificatori folded into Qualità (ADR 0210): its
-// old ids and the old tab arg open Qualità.
+// and the G-keys; the usage counter sees each tab as its own place. Classificatori folded into Qualità (ADR 0210) and its
+// section left (ADR 0291): its old ids and the old tab arg still open Qualità.
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(), on: () => () => {} } }));
 import { DEFAULT_TREND_TAB, TREND_TABS, parseTrendArg, trendArg, trendRedirect } from '../../src/renderer/lib/andamento';
@@ -39,12 +39,13 @@ describe('the Andamento tabs', () => {
 });
 
 describe('one page, the old ids as aliases', () => {
-  it('lists Andamento once (G C) and no longer the four pages; G Q, G J and G K stay as aliases', () => {
+  it('lists Andamento once (G C) and no longer the four pages; G Q and G J stay as aliases', () => {
     const ids = BRAIN_PAGES.map(p => p.id) as string[];
     expect(ids).toContain('andamento');
     for (const old of ['costi', 'qualita', 'apprendimento', 'classificatori']) expect(ids).not.toContain(old);
     expect(BRAIN_PAGES.find(p => p.id === 'andamento')?.key).toBe('G C');
-    expect(GO_ALIASES).toEqual(expect.arrayContaining([{ id: 'qualita', key: 'G Q' }, { id: 'apprendimento', key: 'G J' }, { id: 'classificatori', key: 'G K' }]));
+    expect(GO_ALIASES).toEqual(expect.arrayContaining([{ id: 'qualita', key: 'G Q' }, { id: 'apprendimento', key: 'G J' }]));
+    expect(GO_ALIASES.map(a => a.key)).not.toContain('G K'); // left with the Classificatori section (ADR 0291)
     expect(HUB_TABS).not.toContain('apprendimento' as never);
   });
   it('go(), links and the brain pages\' targets land on the tab', () => {

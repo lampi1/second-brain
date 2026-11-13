@@ -115,6 +115,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   cards for Flash, the Orchestrator's app knowledge, voice, call recordings, the personal Browser, notices and
   terminal routines.
 
+### Removed
+- The Classificatori section of Andamento → Qualità and the kind of work by examples: they decided nothing and, on
+  real runs, the kind of work did not make the estimates better. The old «classificatori» link opens Qualità; the G K
+  key is gone (ADR 0291).
+
 ### Fixed
 - A question asked before any Orchestrator exists has its row in the Orchestrator's column (it had no place to be
   answered); `agent_delegate` no longer refuses a part that names `balanced`; the app-owned tools name their own commands in the app's copy, not in the brain folder («Cannot find

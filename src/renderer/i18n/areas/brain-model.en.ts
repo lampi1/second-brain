@@ -43,11 +43,6 @@ export const brainModelEn: typeof brainModelIt = {
 
   'bm.mem.title': 'Memory',
 
-  'bm.cls.col.kind': 'Work',
-  'bm.cls.kinds': 'Outcomes per kind of work',
-  'bm.cls.kindsLead': 'The app’s chats per kind of work, how many have a known outcome and how many succeeded.',
-  'bm.cls.col.chats': 'Chats', 'bm.cls.col.known': 'Known outcome', 'bm.cls.col.ok': 'Succeeded',
-  'bm.cls.kindsEmpty': 'No chat recorded yet.',
 
   'bm.map.eyebrow': 'YOUR BRAIN, CONNECTED', 'bm.map.legendLabel': 'Legend',
   'bm.map.title': 'Map',

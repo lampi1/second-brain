@@ -248,17 +248,14 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/components/brain-model/RulesPage.tsx, src/main/rules/tools.ts topicSkills, src/main/rules/runtime.ts (#366, ADR 0243)
       b('«Sempre caricato» mostra il nucleo fisso che ogni chat riceve all’avvio (me.md, AGENTS.md, lo stile e le regole fisse dell’app) con i caratteri sul budget; le vecchie regole per argomento non entrano più nelle chat: sono skill (regole-<argomento>). Memoria → Diario e note tiene Adesso, il diario, le idee, gli errori dell’AI e le note (le statistiche su regole e note non ci sono più) e ogni file si apre nel visore; Mappa mostra ruolo → skill → regole → memoria.',
         '"Always loaded" shows the fixed core every chat gets at its start (me.md, AGENTS.md, the style and the app’s fixed rules) with its characters against the budget; the old topic rules no longer enter chats: they are skills (regole-<topic>). Memoria → Journal & notes holds Now, the journal, the ideas, the AI’s errors and the notes (the statistics on rules and notes are gone) and every file opens in the viewer; Map shows role → skills → rules → memory.'),
-      // src/main/brainmodel/classifiers.ts
-      b('Classificatori (una scheda di Andamento), in sola lettura: una scheda per classificatore (tipo di lavoro, modello, stima dai task simili, tipo nel registro dei costi) con cosa decide, i suoi numeri, l’andamento per settimana, quanto ha imparato e una curiosità; un clic apre il dettaglio con la storia e le tabelle (la tabella del modello).',
-        'Classifiers (a Trends tab), read only: one card per classifier (kind of work, model, similar-task estimate, cost-ledger kind) with what it decides, its numbers, the weekly trend, how much it has learned and a curious fact; a click opens the detail with the history and the tables (the model table).'),
     ],
     analogy: b('Come una squadra con un manuale condiviso: le persone sono i ruoli, le pagine del manuale sono le skill, e qualcuno lo tiene in ordine ogni notte.',
       'Like a team with a shared manual: the people are the roles, the manual’s pages are the skills, and someone keeps it tidy every night.'),
     tech: [
       tech(DATA, 'Registro delle modifiche e resoconto della migrazione nella cartella dati dell’app; memoria di un ruolo in agents/<id>/memory.md, quella comune in memory/shared.md.',
         'Change log and migration report in the app’s data folder; a role’s memory in agents/<id>/memory.md, the shared one in memory/shared.md.'),
-      tech(WHERE, 'IPC brainmodel:state, :maintain, :rollback, :link e classifiers:state; pagine in src/renderer/components/brain-model/ (ADR 0077).',
-        'IPC brainmodel:state, :maintain, :rollback, :link and classifiers:state; pages in src/renderer/components/brain-model/ (ADR 0077).'),
+      tech(WHERE, 'IPC brainmodel:state, :maintain, :rollback e :link; pagine in src/renderer/components/brain-model/ (ADR 0077).',
+        'IPC brainmodel:state, :maintain, :rollback and :link; pages in src/renderer/components/brain-model/ (ADR 0077).'),
     ],
     anchors: {
       0: ['src/main/brainmodel/model.ts#readSkills', 'src/main/agents/pack/flows.ts#runtime'],
@@ -266,9 +263,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       3: ['src/main/brainmodel/changes.ts', 'src/main/agents/catalog.ts#maintain'],
       4: ['src/main/brainmodel/procedure-sources.ts', 'src/main/brainmodel/migration-move.ts'],
       5: ['src/renderer/components/brain-model/RulesPage.tsx', 'src/main/rules/tools.ts#topicSkills', 'src/main/rules/runtime.ts'],
-      6: ['src/main/brainmodel/classifiers.ts'],
     },
-    sources: ['src/main/brainmodel/service.ts', 'src/main/brainmodel/jobs.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/model.ts', 'src/main/brainmodel/procedure-sources.ts', 'src/main/brainmodel/migration-move.ts', 'src/main/brainmodel/classifiers.ts', 'src/main/agents/pack/rules.ts', 'src/renderer/components/SkillsPage.tsx', 'src/main/skills/library.ts', 'src/main/rules/tools.ts', 'src/renderer/components/brain-model/RulesPage.tsx', 'docs/adr/0077-agents-and-skills-only.md', 'docs/adr/0241-skill-packages-and-skill-library.md', 'docs/adr/0243-fixed-core-instead-of-rules.md', 'docs/adr/0244-migration-moves-sections-into-skills.md'],
+    sources: ['src/main/brainmodel/service.ts', 'src/main/brainmodel/jobs.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/model.ts', 'src/main/brainmodel/procedure-sources.ts', 'src/main/brainmodel/migration-move.ts', 'src/main/agents/pack/rules.ts', 'src/renderer/components/SkillsPage.tsx', 'src/main/skills/library.ts', 'src/main/rules/tools.ts', 'src/renderer/components/brain-model/RulesPage.tsx', 'docs/adr/0077-agents-and-skills-only.md', 'docs/adr/0241-skill-packages-and-skill-library.md', 'docs/adr/0243-fixed-core-instead-of-rules.md', 'docs/adr/0244-migration-moves-sections-into-skills.md'],
   },
   {
     id: 'orchestrator',
@@ -456,17 +452,17 @@ export const CONCEPTS: readonly ConceptCard[] = [
     diagram: { kind: 'cycle', steps: [b('Correzione', 'Correction'), b('ai-errors.md', 'ai-errors.md'), b('Raggruppa', 'Group'), b('Skill o controllo', 'Skill or check'), b('Ricompare?', 'Comes back?')] },
     tech: [
       tech(FILES, 'Nel brain: ai-errors.md (scritto da ops/tools/mem.mjs), politiche lette da /api/improve.', 'In the brain: ai-errors.md (written by ops/tools/mem.mjs), policies read from /api/improve.'),
-      // src/renderer/lib/correction.ts QUOTE_MAX; src/renderer/brain/lib/learn.ts MIN_N
-      tech(LIMITS, 'Citazione della correzione ≤ 400 caratteri; una politica si valuta da 20 esiti (MIN_N).', 'Correction quote ≤ 400 chars; a policy is judged from 20 outcomes (MIN_N).'),
+      // src/renderer/lib/correction.ts QUOTE_MAX
+      tech(LIMITS, 'Citazione della correzione ≤ 400 caratteri.', 'Correction quote ≤ 400 chars.'),
       tech(DATA, 'Messaggio: [Reasoning correction] / In your reasoning you wrote: «…» / Not like that: … ; «Al prossimo passo» solo con Claude.',
         'Message: [Reasoning correction] / In your reasoning you wrote: «…» / Not like that: … ; "At the next step" on Claude only.'),
     ],
     anchors: {
-      [-1]: ['src/renderer/lib/correction.ts#QUOTE_MAX', 'src/renderer/brain/lib/learn.ts#MIN_N'],
+      [-1]: ['src/renderer/lib/correction.ts#QUOTE_MAX'],
       0: ['src/renderer/brain/lib/stats.ts'],
       3: ['src/renderer/lib/correction.ts', 'src/renderer/components/CorrectThought.tsx'],
     },
-    sources: ['src/main/chats/manager.ts', 'src/main/agents/run-metrics.ts', 'src/renderer/brain/lib/stats.ts', 'src/renderer/lib/correction.ts', 'src/renderer/components/CorrectThought.tsx', 'src/renderer/brain/lib/learn.ts', 'docs/adr/0037-useful-errors-and-stats.md', 'docs/adr/0058-correct-the-thought.md'],
+    sources: ['src/main/chats/manager.ts', 'src/main/agents/run-metrics.ts', 'src/renderer/brain/lib/stats.ts', 'src/renderer/lib/correction.ts', 'src/renderer/components/CorrectThought.tsx', 'docs/adr/0037-useful-errors-and-stats.md', 'docs/adr/0058-correct-the-thought.md'],
   },
   {
     id: 'brain-scripts',
@@ -536,12 +532,6 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/shared/roles.ts ROLE_DEFAULTS.orchestrator
       b('Altri: messaggi non scritti da te (mostrati attenuati), «Aspetta un lavoro» sul testo, la coda degli avvii a freddo (di base metà dei core alla volta; freno d’emergenza con CPU > 95% o RAM libera < 10%; tutti e tre in Impostazioni → Avanzate). Permessi e domande non sono indovinati: arrivano strutturati dalla CLI. Smistare un lotto di lavoro (una inbox, una lista di ticket) lo fa invece l’Orchestrator, una chat per richiesta, quando glielo affidi.',
         'Others: messages you did not type (shown muted), "Waits for work" on the text, the cold-start queue (by default half the cores at once; emergency brake at CPU > 95% or free RAM < 10%; all three in Settings → Advanced). Permissions and questions are not guessed: they arrive structured from the CLI. Triaging a batch of work (an inbox, a list of tickets) is instead the Orchestrator’s, one chat per request, when you hand it one.'),
-      // src/renderer/components/brain-model/ClassifiersSection.tsx, src/main/brainmodel/classifier-cards.ts
-      b('Andamento → Qualità, in fondo, ne mostra tre come schede nella sezione Classificatori (era una scheda a sé): decisioni, quanto spesso «prendono» (tipo riconosciuto, tempo del task fra metà e doppio della stima), quante chat decise sono riuscite (verificate da te o da una revisione, mai l’autovalutazione; gli esiti automatici del brain sono contati a parte come non verificati), il costo medio e 8 settimane di andamento. Ogni numero ha un «?». La scheda «Scelta del modello» non c’è più.',
-        'Trends → Quality shows three of them as cards at the bottom, in the Classifiers section (once a tab of its own): decisions, how often they "get it" (kind recognised, task time between half and double the estimate), how many decided chats succeeded (verified by you or a review, never a self-report; the brain’s automatic outcomes count apart as unverified), the average cost and 8 weeks of trend. Every number has a "?". The «Model choice» card is gone.'),
-      // src/main/brainmodel/kind-model.ts, kind-centroids.ts; src/renderer/components/brain-model/KindModelCard.tsx (ADR 0197)
-      b('Tipo di lavoro per esempi (in prova): la richiesta va al tipo i cui esempi (i tuoi lavori conclusi e verificati, con il tipo dato dalle parole) le somigliano di più per significato, con il modello locale della ricerca e zero token; sotto una soglia dice «altro». La scheda mostra l’accordo con le parole sul 20% tenuto da parte e la matrice di confusione; il tipo delle chat resta quello delle parole.',
-        'Kind of work by examples (on trial): a request goes to the kind whose examples (your ended, verified runs, with the kind the words gave them) resemble it most in meaning, with the search’s local model and zero tokens; below a threshold it says «altro». Its card shows the agreement with the words on the 20% kept apart and the confusion matrix; the chats’ kind stays the words’ one.'),
     ],
     analogy: b('Come lo smistamento della posta in portineria: regole scritte, una casella «varie» quando non si capisce, e per un sacco intero di posta si chiama chi smista di mestiere.',
       'Like mail sorting at the front desk: written rules, a "misc" box when it is unclear, and for a whole sack of mail you call the person whose job is sorting.'),
@@ -558,10 +548,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       3: ['src/main/chats/orchestrator-delivery.ts#mailClassifier'],
       4: ['src/shared/runnable.ts#prodRisk', 'src/main/agents/tool-policy.ts#readOnlyCommand'],
       5: ['src/renderer/lib/foreign.ts', 'src/main/chats/admission.ts', 'src/shared/waiting.ts', 'src/shared/roles.ts'],
-      6: ['src/renderer/components/brain-model/ClassifiersSection.tsx', 'src/main/brainmodel/classifier-cards.ts'],
-      7: ['src/main/brainmodel/kind-centroids.ts'],
     },
-    sources: ['src/main/brainmodel/classifier-cards.ts', 'src/main/brainmodel/kind-model.ts', 'src/main/brainmodel/kind-centroids.ts', 'src/renderer/components/brain-model/ClassifiersSection.tsx', 'src/renderer/lib/classifier-view.ts', 'src/main/agents/discovery.ts', 'src/shared/work-concepts.ts', 'src/main/brain/routing.ts', 'src/main/brain/estimates.ts', 'src/shared/runnable.ts',
+    sources: ['src/main/agents/discovery.ts', 'src/shared/work-concepts.ts', 'src/main/brain/routing.ts', 'src/main/brain/estimates.ts', 'src/shared/runnable.ts',
       'src/main/agents/tool-policy.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/renderer/lib/foreign.ts', 'src/main/chats/admission.ts', 'src/shared/waiting.ts', 'src/shared/roles.ts'],
   },
   {
@@ -1526,15 +1514,15 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'trends',
     title: b('Andamento e uso dell’app', 'Trends and app usage'),
-    summary: b('Andamento: costi, qualità (con i classificatori), apprendimento e il tuo uso dell’app in una pagina a schede, ogni numero una volta sola.',
-      'Trends: costs, quality (with the classifiers), learning and your use of the app in one page of tabs, each number shown once.'),
+    summary: b('Andamento: costi, qualità, apprendimento e il tuo uso dell’app in una pagina a schede, ogni numero una volta sola.',
+      'Trends: costs, quality, learning and your use of the app in one page of tabs, each number shown once.'),
     points: [
       // src/renderer/components/andamento/AndamentoPage.tsx, src/renderer/components/Sidebar.tsx (ADR 0202)
-      b('Una voce sola nella barra (Andamento, G C) con quattro schede: Costi, Qualità, Apprendimento e Uso; i Classificatori sono una sezione in fondo a Qualità. Il titolo e le schede restano in vista mentre scorri.',
-        'One entry in the rail (Trends, G C) with four tabs: Costs, Quality, Learning and Usage; the Classifiers are a section at the bottom of Quality. The title and the tabs stay on screen while you scroll.'),
+      b('Una voce sola nella barra (Andamento, G C) con quattro schede: Costi, Qualità, Apprendimento e Uso. Il titolo e le schede restano in vista mentre scorri.',
+        'One entry in the rail (Trends, G C) with four tabs: Costs, Quality, Learning and Usage. The title and the tabs stay on screen while you scroll.'),
       // src/renderer/lib/andamento.ts, src/renderer/actions.ts go(), src/renderer/brain/index.tsx GO_ALIASES
-      b('Le vecchie pagine portano alla loro scheda: i link «costi/30», «qualita» e «memoria/apprendimento» e i tasti G Q e G J aprono la scheda giusta; «classificatori» e G K aprono Qualità.',
-        'The old pages lead to their tab: the links "costi/30", "qualita" and "memoria/apprendimento" and the keys G Q and G J open the right tab; "classificatori" and G K open Quality.'),
+      b('Le vecchie pagine portano alla loro scheda: i link «costi/30», «qualita» e «memoria/apprendimento» e i tasti G Q e G J aprono la scheda giusta; il vecchio link «classificatori» apre Qualità.',
+        'The old pages lead to their tab: the links "costi/30", "qualita" and "memoria/apprendimento" and the keys G Q and G J open the right tab; the old "classificatori" link opens Quality.'),
       // src/renderer/brain/components/States.tsx PageHead without a title
       b('Ogni scheda comincia con la stessa riga: cosa mostra a sinistra, periodo, ultimo aggiornamento e «Aggiorna» a destra. Le frasi di testa che ripetevano i numeri delle schede sono sparite.',
         'Every tab starts with the same line: what it shows on the left, period, last update and "Refresh" on the right. The lead sentences that repeated the tabs’ numbers are gone.'),

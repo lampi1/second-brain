@@ -205,7 +205,7 @@ const ALIAS: Record<string, string> = { oggi: 'task', adesso: 'task', dafare: 't
 export function go(place: Place, opts: { push?: boolean } = {}): void {
   // Skill, Regole, Script, Idee and Apprendimento are tabs of Memoria (ADR 0122): their ids, links and G-keys land there
   const aliased = (ALIAS[place.page] ?? place.page) as string;
-  // Costi, Qualità, Classificatori and Memoria's Apprendimento are tabs of Andamento (ADR 0202): same, before the hub
+  // Costi, Qualità and Memoria's Apprendimento are tabs of Andamento (ADR 0202): same, before the hub
   const trend = trendRedirect(aliased, place.arg);
   if (trend) place = { ...place, ...trend };
   const hub = trend ? null : hubRedirect(aliased, (place.page as string) === 'spunti' ? 'ia' : place.arg);

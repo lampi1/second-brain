@@ -8,7 +8,7 @@ describe('contract', () => {
     for (const channel of ['brain:share', 'agents:trialDecide']) expect(INVOKE_CHANNELS).toContain(channel);
   });
   it('serves the brain model (ADR 0077) and no longer the procedures or the learned-rule approvals', () => {
-    for (const channel of ['brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'brainmodel:link', 'classifiers:state']) expect(INVOKE_CHANNELS).toContain(channel);
+    for (const channel of ['brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'brainmodel:link']) expect(INVOKE_CHANNELS).toContain(channel);
     expect(EVENT_CHANNELS).toContain('brainmodel:changed');
     for (const gone of ['agents:learnList', 'agents:learnDecide', 'procedures:changed']) expect([...INVOKE_CHANNELS, ...EVENT_CHANNELS] as string[]).not.toContain(gone);
   });

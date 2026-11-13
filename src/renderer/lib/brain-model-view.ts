@@ -1,4 +1,4 @@
-// Pure view helpers of the Brain section (ADR 0077), shared by the Skill, Regole, Memoria, Classificatori and Mappa pages,
+// Pure view helpers of the Brain section (ADR 0077), shared by the Skill, Regole, Memoria and Mappa pages,
 // the maintenance panel and the agent card's back: one list of skills (the brain model's, plus the Cursor skills only the
 // skill editor sees), filters, the links graph agent → skills → rules → memory, the "same / different" of an agent
 // choice and the number formats where a missing value is "no data yet", never zero. No React, no IPC: unit-tested in
