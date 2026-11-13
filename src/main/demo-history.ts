@@ -1,10 +1,7 @@
-// The demo's work history (SB_DEMO=1): eight weeks of made-up work, so the demo's pages have something to show: the
-// outcome ledger's predictions, actuals and known outcomes in the demo brain (ops/state/improve/outcomes.jsonl), the
-// role runs with their launch skills (the Skill page's use counts) and the cost ledger's jobs (userData/jobs.jsonl).
-// A fixed pseudo-random sequence and dates relative to `now`: the frozen demo draws the same numbers on every run.
-// The "altro" share and the failures shrink week by week. Generic content only. Used by demo-wiring.ts.
-import fs from 'node:fs';
-import path from 'node:path';
+// The demo's work history (SB_DEMO=1): eight weeks of made-up role runs with their launch skills, verdicts and costs,
+// so the demo's pages have something to show (the Skill page's use counts among them). It writes no file. A fixed
+// pseudo-random sequence and dates relative to `now`: the frozen demo draws the same numbers on every run. The failures
+// shrink week by week. Generic content only. Used by demo-wiring.ts.
 import type { AgentRun } from '../shared/agents';
 
 const DAY = 86400e3;
@@ -42,28 +39,23 @@ const GOALS: Record<string, string[]> = {
 
 export interface DemoHistory { runs: AgentRun[] }
 
-/** Writes the demo ledger into the demo brain and the job ledger into userData (when it has none); returns the runs. */
-export function writeDemoHistory(brainRoot: string, userData: string, now: number, skills: string[]): DemoHistory {
+/** The demo's runs. Every draw of `r` stays in its place, also where its value is no longer used: the sequence decides the runs. */
+export function demoHistory(now: number, skills: string[]): DemoHistory {
   const r = rng(4242);
-  const lines: object[] = [], runs: AgentRun[] = [];
+  const runs: AgentRun[] = [];
   const n = 64;
   for (let k = 0; k < n; k++) {
     const age = (n - k) / n; // 1 = eight weeks ago, → 0 = today
     const at = Math.round(now - age * 55 * DAY - r() * DAY);
-    // early on the lexicon missed more requests ("altro"); it learns
+    // early on more requests had no recognised kind; those succeed less often
     const altro = r() < 0.04 + 0.22 * age;
     const k0 = pick(r, KINDS.map(x => [x, x[1]] as [typeof x, number]));
-    const kind = altro ? 'altro' : k0[0];
     const role = pick(r, k0[2]);
-    const source = pick(r, [['agent', 64], ['table', 26], ['default', 7], ['override', 3]] as [string, number][]);
-    const model = source === 'agent' && role === 'scout' ? 'claude-sonnet-5-5' : k0[3];
+    r(); // one draw, kept for the sequence
     const usd = Math.round(k0[4] * (0.5 + r()) * 1000) / 1000;
-    const id = `app:demo-cls-${k}`;
-    lines.push({ id, at, domain: 'routing', item: { harness: 'claude', model, effort: 'high', area: 'App', kind, promptChars: 200 }, predicted: { policy: 'routing', version: 3, value: { harness: 'claude', model, effort: 'high', source, reason: null } } });
     // most chats get a verdict; a recognised kind succeeds more often, and both improve with time
     const known = r() < 0.72;
     const ok = r() < (altro ? 0.5 : 0.62 + 0.3 * (1 - age));
-    lines.push({ id, domain: 'routing', actual: { usd, minutes: 12, turns: 6, ctxPeak: null, handoffs: 0 }, outcome: known ? { known: true, success: ok, source: 'agent-user', runId: `run-demo-${k}`, at: at + 3600e3 } : { known: false, source: 'measured' } });
     const goals = GOALS[k0[0]] ?? ['Lavoro'];
     const goal = goals[k % goals.length]!;
     // the launch skills: usually what the suggester would pick for the goal's words, sometimes another one
@@ -72,22 +64,6 @@ export function writeDemoHistory(brainRoot: string, userData: string, now: numbe
     runs.push({ runId: `run-demo-${k}`, chatId: `demo-cls-${k}`, agentId: role, version: 1, goal, startedBy: 'orchestrator', startedAt: at, endedAt: at + 3600e3, endReason: 'completed',
       ...(known ? { outcome: { verdict: ok ? 'success' : 'fail', basis: 'human', at: at + 3600e3, by: 'utente' } } : {}),
       counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, costUsd: usd, tokens: null, tags: { skills: used, app: 'App', repo: null } });
-  }
-  const dir = path.join(brainRoot, 'ops', 'state', 'improve');
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'outcomes.jsonl'), `${lines.map(l => JSON.stringify(l)).join('\n')}\n`);
-  // the cost ledger's kinds: "altro" shrinks over the weeks too
-  const jobs = path.join(userData, 'jobs.jsonl');
-  if (!fs.existsSync(jobs)) {
-    const JK: [string, number, number][] = [['bug-fix', 28, 1.8], ['investigation', 20, 1.2], ['app-feature', 12, 3.1], ['review', 12, 0.8], ['qa-run', 10, 1.0], ['writing', 12, 0.22]];
-    const out: string[] = [];
-    for (let k = 0; k < 90; k++) {
-      const age = (90 - k) / 90, at = Math.round(now - age * 55 * DAY - r() * DAY);
-      const j = pick(r, JK.map(x => [x, x[1]] as [typeof x, number]));
-      const kind = r() < 0.05 + 0.2 * age ? 'altro' : j[0];
-      out.push(JSON.stringify({ id: `demo-job-${k}`, at, harness: 'claude', model: null, effort: null, kind, promptChars: 180, actual: { usd: Math.round(j[2] * (0.4 + r() * 1.2) * 1000) / 1000, minutes: 10 + Math.round(r() * 40), turns: null }, source: 'app' }));
-    }
-    fs.writeFileSync(jobs, `${out.join('\n')}\n`);
   }
   return { runs };
 }

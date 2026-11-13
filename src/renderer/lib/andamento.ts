@@ -2,7 +2,7 @@
 // opens one ("andamento/<tab>[/<more>]", e.g. "andamento/costi/30"), and the old pages that became tabs: costi, qualita
 // and classificatori were pages of their own, apprendimento a tab of Memoria; their ids, links ("costi/30",
 // "memoria/apprendimento") and G-keys still exist and land on the matching tab. Classificatori was a tab too until the
-// routing table left (ADR 0210): its cards are a section of Qualità, and its old ids open Qualità. Pure: used by
+// routing table left (ADR 0210), then a section of Qualità until ADR 0291 removed it: its old ids open Qualità. Pure: used by
 // actions.ts go() and placeOf (the redirect), brain/index.tsx parseTarget, components/andamento/AndamentoPage.tsx (the
 // tab bar), lib/app-map.ts and lib/use-counter.ts (a tab counts as its own place). Tests: test/unit/andamento.test.ts.
 

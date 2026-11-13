@@ -116,7 +116,7 @@ export function claudeDefaultMode(cwd: string, env: NodeJS.ProcessEnv = process.
   let mode: PermissionMode = 'default';
   for (const file of [user, path.join(cwd, '.claude', 'settings.json'), path.join(cwd, '.claude', 'settings.local.json')]) {
     try {
-      const m = obj(obj(JSON.parse(fs.readFileSync(file, 'utf8')) as unknown).permissions).defaultMode;
+      const m = obj(obj(JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '')) as unknown).permissions).defaultMode;
       if (typeof m === 'string' && m in RANK) mode = m as PermissionMode;
     } catch { /* missing or unreadable: the next layer or the CLI default */ }
   }

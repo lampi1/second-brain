@@ -263,7 +263,7 @@
     "src/renderer/i18n/areas/lampo.it.ts": "a27d05163aa9a9ca",
     "src/renderer/i18n/LangRoot.tsx": "5d0c4fb2356b0e00",
     "src/renderer/lib/agent-order.ts": "51cf4c20a16b488d",
-    "src/renderer/lib/andamento.ts": "e81477fad22105ba",
+    "src/renderer/lib/andamento.ts": "af1d6c87fdf79c73",
     "src/renderer/lib/askContext.ts#lastThoughtOf": "7eccedda54165c7a",
     "src/renderer/lib/brain-model-view.ts#linkGraph": "151735466bff5bfe",
     "src/renderer/lib/character-art.ts": "aae2d6202de8c956",

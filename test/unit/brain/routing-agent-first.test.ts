@@ -13,7 +13,7 @@ const agent = (p: Partial<AgentChoice> = {}): AgentChoice => ({ id: 'artisan', n
 const dirs: string[] = [];
 const tmp = (): string => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-agent-first-')); dirs.push(d); return d; };
 afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
-/** The ledger's outcomes by id, folded as the app reads them (later line wins, a proxy never replaces a verified one). */
+/** The ledger's outcomes by id, folded by the ledger's rule (later line wins, a proxy never replaces a verified one). */
 const folded = (root: string): Map<string, LedgerOutcome> => {
   const m = new Map<string, LedgerOutcome>();
   for (const l of fs.readFileSync(path.join(root, 'ops', 'state', 'improve', 'outcomes.jsonl'), 'utf8').trim().split('\n')) {

@@ -228,6 +228,16 @@ it('an interrupt in flight when the host dies resolves, as one sent after it die
   await expect(stopping).resolves.toBeUndefined();
 });
 
+it('a request goes to main with the whole input beside it, when the engine sends one (ADR 0290)', async () => {
+  const f = fixture();
+  const req = { id: 'p1', type: 'permission' as const, tool: 'Write', title: 'Write', detail: '', input: { content: 'short' }, at: 1 };
+  f.engineSink.pending(req, { content: 'whole' });
+  f.engineSink.pending({ ...req, id: 'p2' });
+  await vi.advanceTimersByTimeAsync(50);
+  expect(vi.mocked(f.sink.pending).mock.calls).toEqual([[req, { content: 'whole' }], [{ ...req, id: 'p2' }]]);
+  f.proxy.hostDied();
+});
+
 it('a failure of main on one engine event is logged, never kills the engine; the batch goes on (#353 review)', async () => {
   const f = fixture();
   vi.mocked(f.sink.pending).mockImplementationOnce(() => { throw new Error('database is locked'); });

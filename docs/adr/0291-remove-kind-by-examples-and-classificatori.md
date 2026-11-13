@@ -2,7 +2,8 @@
 
 Date: 2026-11-13 · Status: accepted (owner, thread «Preparare la 1.0 con analisi profonda»: «Ma sui classificatori?»,
 then «Si fallo» to the proposal below) · Supersedes: part 2 of ADR 0197 (the kind of work by examples), the
-Classificatori section of ADR 0210 and ADR 0077, the Classificatori cards of ADR 0186
+Classificatori section of ADR 0210 and ADR 0077, the Classificatori cards of ADR 0186 and ADR 0095, the G K key of
+ADR 0202, the Classificatori wording of ADR 0285
 
 ## Context
 
@@ -35,6 +36,7 @@ What was left of the classifiers:
 
 - One section less to read and about 2,200 lines less to keep (code, tests and texts). No decision of the app changes: nothing read the
   removed model.
-- The weekly trend of the estimate's backtest is no longer drawn anywhere; its last count stays on the estimate
-  chip. `agents/estimate-accuracy.ts` still computes the series.
-- The outcome ledger and the job ledger are still written as before.
+- The weekly trend of the estimate's backtest is still drawn as weekly bars in the estimate chip's «?»
+  (`components/RunEstimate.tsx`), from the series of `agents/estimate-accuracy.ts`; only its card in the section went.
+- The outcome ledger and the job ledger are still written as before. The demo no longer writes its own copies of
+  them (`demo-history.ts` only returns the runs): nothing in the demo read them.

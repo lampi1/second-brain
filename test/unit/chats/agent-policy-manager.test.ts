@@ -105,11 +105,32 @@ describe('agent policy on chats', () => {
     // as the Claude session sends it: the short input in the request, the whole one beside it
     f.sink().pending({ id: 'w1', type: 'permission', tool: 'Write', title: 'Write', detail: '', input: short, at: 1 }, whole);
     expect(f.answers).toEqual([{ id: 'w1', answer: expect.objectContaining({ kind: 'permission', allow: true }) }]);
-    // the shortened one alone is not what will run: it stays the user's call, with the short input on the panel
+    // the shortened one alone is not what will run: it stays the user's call
     f.sink().pending({ id: 'w2', type: 'permission', tool: 'Write', title: 'Write', detail: '', input: short, at: 1 });
     expect(f.answers).toHaveLength(1);
-    const shown = f.m.pending().find(p => p.id === 'w2');
-    expect((shown?.input as typeof whole).content.length).toBeLessThan(whole.content.length);
+    expect(f.m.pending().some(p => p.id === 'w2')).toBe(true);
+  });
+
+  it('a request the app leaves to the user shows the short input, though the app read the whole one (ADR 0290)', async () => {
+    const f = fixture();
+    // a role limited to «default»: a Write is the user's call
+    await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' }, 'user', agent({ tools: null, ceiling: 'default' }));
+    const whole = { file_path: path.join(f.dir, 'notes.md'), content: 'riga di testo\n'.repeat(500) };
+    const short = trimInput(whole);
+    f.sink().pending({ id: 'w3', type: 'permission', tool: 'Write', title: 'Write', detail: '', input: short, at: 1 }, whole);
+    expect(f.answers).toEqual([]);
+    expect(f.m.pending().find(p => p.id === 'w3')?.input).toEqual(short);
+  });
+
+  it('a chat the user set to «default» bounds no child it opens; one set to «plan» does (ADR 0290)', async () => {
+    const f = fixture();
+    const parent = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' }, 'user');
+    const child = (goal: string) => f.m.create({ harness: 'claude', cwd: f.dir, parentId: parent.id, prompt: goal,
+      delegation: { role: 'artisan', goal, doneWhen: ['Fatto'], at: 1 } }, 'agent', { owner: { ...plainOwner('claude', null), id: 'artisan' }, instructions: 'Fai.', policy: null });
+    await f.m.set(parent.id, { permissionMode: 'default' });
+    expect(f.m.agentPolicy((await child('uno')).id)?.ceiling ?? null).toBeNull();
+    await f.m.set(parent.id, { permissionMode: 'plan' });
+    expect(f.m.agentPolicy((await child('due')).id)?.ceiling).toBe('plan');
   });
 
   it('a waiting engine starts with no mode and gets «default» when a chat takes it; another engine is left alone', async () => {

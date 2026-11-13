@@ -101,6 +101,8 @@ describe('autoPermit: what it cannot read whole is the user\'s call', () => {
     expect(autoPermit({ ...perm('Write', { file_path: 'src/a.ts', content: `x… (+9)` }), whole: true }, ctx()).kind).toBe('allow');
     expect(autoPermit({ ...perm('Edit', { files: Array.from({ length: 200 }, (_, i) => `src/f${i}.ts`) }), whole: true }, ctx()).kind).toBe('allow');
     expect(autoPermit({ ...perm('Edit', { files: [...Array.from({ length: 200 }, (_, i) => `src/f${i}.ts`), '.claude/settings.json'] }), whole: true }, ctx()).kind).toBe('ask'); // rule 6 still reads them all
+    // a place longer than the app reads on a cut input is read on a whole one: no cut mark says «longer than shown»
+    expect(autoPermit({ ...perm('mcp__fs__write', { path: `${'./'.repeat(2100)}.claude/settings.json`, content: 'x' }), whole: true }, ctx()).kind).toBe('ask');
   });
 });
 

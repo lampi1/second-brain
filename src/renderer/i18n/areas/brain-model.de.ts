@@ -6,7 +6,6 @@ export const brainModelDe: typeof brainModelIt = {
   'bm.loading': 'Lese das Brain…',
   'bm.noBrain': 'Wähl zuerst den Brain-Ordner.',
   'bm.open': 'Öffnen',
-  'bm.noData': 'noch keine Daten',
   'bm.lines': (p: N) => (p.n === 1 ? '1 Zeile' : `${p.n} Zeilen`),
   'bm.changed': (p: { at: string }) => `geändert ${p.at}`,
 

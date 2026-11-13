@@ -28,7 +28,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   own default mode: with «auto» as that default, its classifier refused the agents before the app was asked. A mode
   you pick on the chat still wins, and «Solo piano» as your Claude Code default stays. For Claude the app decides on
   the whole request, not on the copy shortened for the screen, and your rules read up to 100,000 characters of it
-  (20,000 before: under a rule on all tools a 10 KB file asked for your yes) (ADR 0290).
+  (20,000 before: under a rule on all tools a 10 KB file asked for your yes); a request your rules would take too
+  long to read asks you instead of holding the app (ADR 0290).
 - Maintenance: app-bug cards follow your own answers (turn down the last five issue cards, or approve only one, and
   the maintenance makes none for three months); an agent's report notes one lesson, not three, and a lesson tied to
   one case is left out instead of refusing the report (ADR 0288).
@@ -77,7 +78,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   summarize and open-agent icons; an Esegui request takes free text instead of running it.
 - Impara v3 and a leaner app (ADR 0201-0210): Battito, Confronto modelli, cloud agents, the judge audit, AI typing
   suggestions, the Orchestrator's «Veloce» lane and the model-routing classifier are gone (every agent uses its card's
-  model); Costi, Qualità, Apprendimento and Classificatori are tabs of one «Andamento» page with a local usage counter;
+  model); Costi, Qualità, Apprendimento and Classificatori (removed since, ADR 0291) are tabs of one «Andamento» page with a local usage counter;
   agent reviews are sampled and run as one hidden nightly batch; Impara has one multiline field with files, new quiz
   kinds, an honest score, a Studio, sequence/state/timeline/mind-map/code/formula/chart visuals, a quality gate and
   file-driven web research through filtered public queries; Settings redesigned with search and instant save; MCP
@@ -90,7 +91,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   external texts, issues, removals or reverts), with «Applicate da sole» and Annulla; maintenance changes go line by
   line, a zero-token brain lint, «riuscito se…» checked a week later, one candidate brain card with a diff per file, a
   role text proposed as a trial; the Guida marks stale cards, answers questions and draws diagrams from the code;
-  Qualità counts the corrections you actually made; kind of work by examples and estimates with every judgment; agent
+  Qualità counts the corrections you actually made; kind of work by examples (removed since, ADR 0291) and estimates with every judgment; agent
   runs in SQLite (userData/app.db); TypeScript 7 typecheck (~4 s); e2e read against known reds; AGENTS.md as a map;
   the four shared files split by area.
 - Impara tutor and entry points (ADR 0190): «Domanda» opens a tutor beside the lesson that answers word by word in

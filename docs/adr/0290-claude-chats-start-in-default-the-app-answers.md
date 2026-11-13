@@ -48,11 +48,17 @@ in every mode, and the policy file the app reads, `permissions.json`, where a br
    Before, a shortened input always went to the user: with every Claude request now reaching the app, each long
    Write or Edit would have become a panel. On a whole input the signs of a cut (a string ending «… (+N)», a list of
    200) are plain content. Codex and the ACP engines still send only the short copy.
-6. The rules of `permissions.json` read up to 100 000 characters of a request, part by part (ADR 0254 read 20 000 of
-   the whole). A file's text is in what they read twice, as text and inside the JSON: under a rule on all tools
+6. The rules of `permissions.json` read up to 100 000 characters of each part of a request (ADR 0254 read 20 000
+   of the whole). A file's text is in what they read twice, as text and inside the JSON: under a rule on all tools
    (the owner's «mail-teams») every Write of about 10 000 characters counted as «longer than the rules read» and
-   asked the user. Now each part is read on its own, and only a part over the limit asks. Measured on the owner's
-   example rules with a worst-case text: 7 ms at 20 000 characters, 123 ms at 100 000.
+   asked the user. Now only a part over the limit asks. A pattern still reads the parts as one text, so a rule
+   means the same on a short and on a long request (`policyRead`).
+   The rules run in the main process and a pattern cannot be stopped, so they have a time budget: 250 ms for one
+   request, and on a text over 20 000 characters each pattern is first timed on the first 20 000; when the whole
+   text would take over 500 ms at that pace (the time grows with the square of the length, at worst), the app
+   stops and asks. Measured on the owner's example rules with texts made to be slow (a command of «psql» lines, a
+   file of «mail» words): 63 and 208 ms at 20 000 characters; at 99 000 the app asks after 53 and 95 ms, where
+   reading on took 1.3 and 2.6 s. An ordinary command of 99 000 characters is read in about 17 ms.
 7. Other engines are not touched: their modes mean other things (a Codex «default» is a read-only sandbox).
 
 ## Consequences

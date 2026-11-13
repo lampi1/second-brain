@@ -96,7 +96,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0092](0092-cursor-effort-and-effective-effort-label.md) Cursor takes an effort; the tiles show the effort in use — accepted
 - [0093](0093-task-reader-in-the-app-and-remembered-connectors.md) The Task page's DevOps reader ships with the app; connector verification is remembered — accepted
 - [0094](0094-hybrid-brain-search.md) Hybrid brain search: BM25 + a local multilingual embedding model — accepted
-- [0095](0095-classifier-outcomes-from-the-ledger.md) Classifier outcomes come from the ledger too; verified and unverified stay apart — accepted
+- [0095](0095-classifier-outcomes-from-the-ledger.md) Classifier outcomes come from the ledger too; verified and unverified stay apart — accepted, partly superseded by 0291
 - [0096](0096-scripts-saved-without-the-orchestrator.md) Scripts are saved where the command ran, not by the Orchestrator alone — accepted, partly superseded by 0263
 - [0097](0097-judge-router-in-use-and-orchestrator-standing.md) The Judge's samples run in the user's own app; the Orchestrator points to Router and Judge and levels up by its decisions — accepted
 - [0098](0098-role-memory-through-agent-report.md) Role memory reaches Claude chats and is written through agent_report — accepted
@@ -201,7 +201,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0199](0199-agent-runs-in-sqlite.md) The agent runs move from agent-runs.json to SQLite (userData/app.db) — accepted
 - [0200](0200-split-the-shared-files-by-area.md) Split the four shared files by area; ChatManager as a chain of layer classes — accepted
 - [0201](0201-cuts-battito-compare-cloud-suggest-veloce.md) Cuts: Battito, model comparison, cloud agents, the composer's model suggestions, Veloce — accepted
-- [0202](0202-andamento-and-usage-counter.md) «Andamento»: the four statistics pages in one, and a local usage counter — accepted
+- [0202](0202-andamento-and-usage-counter.md) «Andamento»: the four statistics pages in one, and a local usage counter — accepted, partly superseded by 0291
 - [0203](0203-nightly-sampled-reviews.md) Agent levels: a nightly sample of reviews under a daily cap — accepted
 - [0204](0204-impara-one-field-quiz-kinds-and-score.md) Impara: one start field, more question kinds with instant feedback, an honest score — accepted
 - [0205](0205-impara-studio-visuals-and-quality.md) Impara: the «Studio» column, a visual for each piece, and a quality gate — accepted
@@ -283,7 +283,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0282](0282-first-turn-takes-its-checkpoint.md) A chat's first turn takes its checkpoint, and a follow-up turn has its own files — accepted
 - [0283](0283-longer-run-archive-cold-runs.md) A longer archive of runs, and a save that costs what the runs at work weigh — accepted
 - [0284](0284-performance-by-model.md) The level is the role's, the performance is the model's — accepted
-- [0285](0285-estimates-by-role-and-model.md) An estimate rests on the role and its model before the kind of work — accepted
+- [0285](0285-estimates-by-role-and-model.md) An estimate rests on the role and its model before the kind of work — accepted, partly superseded by 0291
 - [0286](0286-run-goal-close-cause-no-child-feedback.md) A run keeps its goal without the app's label and says why it was closed; `agent_child_feedback` is gone — accepted
 - [0287](0287-one-agent-window-one-full-screen.md) One agent window, one full screen, a quiet top bar — accepted
 - [0288](0288-maintenance-bug-cards-by-answers-one-lesson.md) The maintenance stays on the click: app-bug cards follow the user's answers, a report notes one lesson — accepted

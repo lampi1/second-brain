@@ -15,7 +15,7 @@ import { allowsClass, COMMAND_TOOLS, commandsReadOnly, readOnlyCommand, toolClas
 import { readOnlyTools } from '../agents/read-tools';
 import { gateRequest, runtimePluginName } from '../agents/role-gate';
 import { autoPermit } from './auto-permit';
-import { loadPolicy, policyCovers, policyHit } from './permit-policy';
+import { loadPolicy, policyCovers, policyRead } from './permit-policy';
 import { AWAY_PARKED, AWAY_PLAN_NOTE, recommendedAnswers } from '../../shared/away';
 import { askingPlan, PLAN_APPROVED, type IntakeSource, type PlanIntake } from '../../shared/strategy';
 import type { SubmissionReceipt, Rec } from './manager-types';
@@ -421,7 +421,8 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       // the user's rules (permissions.json) hold a skill they name, as in a plain chat; unreadable rules ask
       if (req.tool === 'Skill') {
         const policy = loadPolicy(this.opts.brainRoot?.() ?? null);
-        if (policy.state === 'broken' || policyHit(policy, req.tool, req.input, COMMAND_TOOLS, req.title)) return false;
+        const read = policyRead(policy, req.tool, req.input, COMMAND_TOOLS, req.title);
+        if (policy.state === 'broken' || read.rule || read.unread) return false;
       }
       this.policyAnswer(r, req, { kind: 'permission', allow: true }, 'role-gate', verdict.patch);
       log.info('chats', 'role gate allowed', { chat: r.s.id, data: { tool: req.tool, qualified: !!verdict.patch } });

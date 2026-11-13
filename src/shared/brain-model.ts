@@ -1,5 +1,5 @@
 // The brain model's shapes (ADR 0077), shared by main (src/main/brainmodel) and the Brain pages of the renderer
-// (Agenti, Skill, Regole, Memoria, Classificatori, Mappa). Two concepts only: an agent = who works (engine, model,
+// (Agenti, Skill, Regole, Memoria, Mappa). Two concepts only: an agent = who works (engine, model,
 // permissions, role); a skill = how a job is done, shared and loaded when the agent starts. Rules apply to every agent;
 // memory is the brain's knowledge and what happened, plus one memory per agent. Every change a maintenance job makes is
 // a BrainChange: logged, explained, and undone with one click (no approval: owner, 2026-10-19).

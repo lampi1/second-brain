@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { PermissionCeiling } from '../../shared/agents';
 import { COMMAND_TOOLS, readOnlyCommand, type ReadScripts } from '../agents/tool-policy';
-import { policyCovers, policyHit, policyTooLong, type BrainPolicy, type PolicyRule } from './permit-policy';
+import { policyCovers, policyRead, type BrainPolicy, type PolicyRule } from './permit-policy';
 
 /** title: the engine's one line; an ACP engine names an MCP tool only there (its tool is «Tool») */
 /** whole: the input is as the engine sent it (Claude, ADR 0290), not a copy an engine or the app shortened: the signs
@@ -30,6 +30,8 @@ export interface PermitContext {
   readScripts?: ReadScripts;
   /** the user's rules from the brain (permit-policy.ts loadPolicy); missing = none */
   policy?: BrainPolicy;
+  /** the clock of the rules' time budget (permit-policy.ts policyRead); the tests' own, else the real one */
+  now?: () => number;
 }
 export type PermitVerdict =
   | { kind: 'allow' }
@@ -90,7 +92,8 @@ function placesOf(input: unknown, whole = false): string[] | null {
   const walk = (v: unknown, depth: number): boolean => {
     if (typeof v === 'string') {
       if (!whole && CUT.test(v)) return false;
-      if (v.length <= 1000 && !/[\r\n]/.test(v) && !/^https?:\/\//i.test(v)) out.push(v.replace(/^file:\/\//i, ''));
+      // whole: no cut mark says «longer than shown», so a path as long as a system takes (32,767 on Windows) is read too
+      if (v.length <= (whole ? 33_000 : 1000) && !/[\r\n]/.test(v) && !/^https?:\/\//i.test(v)) out.push(v.replace(/^file:\/\//i, ''));
       return true;
     }
     if (depth > 20) return false;   // deeper than any engine's shape: not read whole
@@ -166,13 +169,14 @@ export function autoPermit(req: PermitRequest, ctx: PermitContext): PermitVerdic
   if (command && (typeof raw !== 'string' || !raw.trim())) return ASK;
   if (!req.whole && cut(req.input)) return ASK;
   if (req.whole && placesIn(req) === null) return ASK;   // deeper than any engine's shape
-  const rule = policyHit(policy, req.tool, req.input, COMMAND_TOOLS, req.title);
+  const { rule, unread } = policyRead(policy, req.tool, req.input, COMMAND_TOOLS, req.title, ctx.now);
   if (rule) {
     if (rule.action === 'ask-user') return { kind: 'ask', rule };
     return refusal(rule, typeof raw === 'string' ? raw.trim() : req.title?.trim() || req.tool, command);
   }
-  // no rule in what they read, but longer than that, for a tool they could hold: what they cannot see may be what they hold
-  if (policyCovers(policy, req.tool, COMMAND_TOOLS, req.title) && policyTooLong(req.tool, req.input, COMMAND_TOOLS, req.title)) return ASK;
+  // no rule in what they read, but they did not read it all (longer than their limit, or too slow to read): what they
+  // did not see may be what they hold. Only for a tool some rule could hold
+  if (unread && policyCovers(policy, req.tool, COMMAND_TOOLS, req.title)) return ASK;
   // looking never asks, whatever the role's limit (ADR 0278: the quick-answer role, limited to «Solo piano», asked the
   // user for Read, Glob and Grep)
   const reads = command ? readOnlyCommand(raw, ctx.readScripts) : READ_TOOLS.has(req.tool);

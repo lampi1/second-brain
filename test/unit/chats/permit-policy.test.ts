@@ -7,14 +7,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { autoPermit } from '../../../src/main/chats/auto-permit';
-import { loadPolicy, parsePolicy, POLICY_FILE } from '../../../src/main/chats/permit-policy';
+import { loadPolicy, parsePolicy, policyRead, POLICY_FILE } from '../../../src/main/chats/permit-policy';
 
 const FIXTURE = path.join(__dirname, '..', '..', 'fixtures', 'brain-policy');
 const tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-pp-')));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const owner = loadPolicy(FIXTURE);
-const ask = (tool: string, input: unknown, policy = owner) => autoPermit({ type: 'permission', tool, input }, { cwd: tmp, ceiling: null, policy });
+// a still clock: the rules' time budget never ends here, whatever the machine (its own test moves the clock)
+const ask = (tool: string, input: unknown, policy = owner) => autoPermit({ type: 'permission', tool, input }, { cwd: tmp, ceiling: null, policy, now: () => 0 });
 const cmd = (command: string, policy = owner) => ask('Bash', { command }, policy);
 const ruleOf = (v: ReturnType<typeof ask>) => (v.kind === 'deny' || v.kind === 'ask' ? v.rule?.id : undefined);
 
@@ -51,8 +52,8 @@ describe('the owner\'s policy', () => {
     expect(ruleOf(ask('mcp__mssql__execute_query', { query: 'DROP TABLE t' }, json))).toBe('j');
     // longer than the rules read: the user's call
     expect(ask('mcp__mssql__execute_query', { query: 'SELECT 1', params: 'p'.repeat(120_000) }).kind).toBe('ask');
-    // a long file is in what the rules read twice (its text, then the JSON): read part by part, it is «too long» only
-    // past the limit itself, not at half of it (ADR 0290: every Write of 10 KB asked the user under a rule on all tools)
+    // a long file is in what the rules read twice (its text, then the JSON): each is read up to the limit, so it is
+    // «too long» only past the limit itself, not at half of it (ADR 0290: every Write of 10 KB asked the user under a rule on all tools)
     expect(ask('Write', { file_path: 'docs/a.md', content: 'riga di testo\n'.repeat(5000) }).kind).toBe('allow'); // 70 000 characters
     expect(ask('Write', { file_path: 'docs/a.md', content: 'x'.repeat(120_000) }).kind).toBe('ask');
     // what a rule holds is found far into a long input, in either part
@@ -60,6 +61,38 @@ describe('the owner\'s policy', () => {
     const tail = parsePolicy(JSON.stringify({ version: 1, rules: [{ id: 'tail', action: 'esegui', why: 'w', tools: ['*'], match: ['FINE-DEL-FILE'] }] }));
     expect(ruleOf(ask('Write', { file_path: 'docs/a.md', content: `${'x'.repeat(70_000)} FINE-DEL-FILE` }, tail))).toBe('tail');
     expect(ask('mcp__mssql__execute_query', { query: 'SELECT 1' }).kind).toBe('allow');
+  });
+
+  it('a rule means the same on a short and on a long request: its patterns read one text (ADR 0290)', () => {
+    const rules = (r: object) => parsePolicy(JSON.stringify({ version: 1, rules: [{ id: 'r', action: 'esegui', why: 'w', tools: ['*'], ...r }] }));
+    // a pattern that starts in the text values and ends in the JSON
+    const cross = rules({ match: ['path: /prod/[\\s\\S]*"force":true'] });
+    for (const n of [10, 45_000, 60_000]) expect(ruleOf(ask('mcp__fs__write', { path: '/prod/a.txt', force: true, content: 'x'.repeat(n) }, cross)), String(n)).toBe('r');
+    // an exception anchored to the start of the text holds, or not, at any size
+    const anchored = rules({ match: ['segreto'], unless: ['^Write \\{"file_path":"docs/'] });
+    const kind = (n: number) => ask('Write', { file_path: 'docs/a.md', content: `segreto ${'x'.repeat(n)}` }, anchored).kind;
+    expect(kind(60_000)).toBe(kind(10));
+    expect(kind(45_000)).toBe(kind(10));
+  });
+
+  it('rules that would take too long ask instead of holding the app (ADR 0290)', () => {
+    const one = parsePolicy(JSON.stringify({ version: 1, rules: [{ id: 'one', action: 'esegui', why: 'w', tools: ['command'], match: ['DROP TABLE'] }] }));
+    // a clock that moves 30 ms at every look: one pattern on a short line is well inside the budget
+    let t = 0;
+    const step = () => (t += 30);
+    expect(policyRead(one, 'Bash', { command: 'ls' }, ['Bash'], undefined, step)).toEqual({ rule: null, unread: false });
+    expect(policyRead(one, 'Bash', { command: 'sqlcmd -Q "DROP TABLE t"' }, ['Bash'], undefined, step).rule?.id).toBe('one');
+    // 96,000 characters: at 30 ms for the first 20,000, the whole text would take too long, so it is not read
+    const long = 'ls -la docs\n'.repeat(8000);
+    expect(policyRead(one, 'Bash', { command: long }, ['Bash'], undefined, step)).toEqual({ rule: null, unread: true });
+    expect(autoPermit({ type: 'permission', tool: 'Bash', input: { command: long } }, { cwd: tmp, ceiling: null, policy: one, now: step }).kind).toBe('ask');
+    // with a still clock the same text is read, and free
+    expect(policyRead(one, 'Bash', { command: long }, ['Bash'], undefined, () => 0)).toEqual({ rule: null, unread: false });
+    // the budget of one request: with 300 ms between two looks it is gone before the first pattern
+    const jump = () => (t += 300);
+    expect(policyRead(owner, 'Bash', { command: 'ls' }, ['Bash'], undefined, jump)).toEqual({ rule: null, unread: true });
+    // a tool no rule looks at is not timed at all
+    expect(policyRead(one, 'Write', { file_path: 'a.md', content: 'x' }, ['Bash'], undefined, jump)).toEqual({ rule: null, unread: false });
   });
 
   it('holds production deploys and Azure writes for Esegui; Azure reads and test deploys are free', () => {

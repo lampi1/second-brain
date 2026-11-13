@@ -2,7 +2,7 @@
 // scripts/demo-brain.mjs) so they always show the current UI with fictional data only: English UI (SB_LANG=en), dark
 // theme, 1600x1000, saved as WebP (< 300 KB each) in docs/screenshots/: the whole window, one part of it, or two parts
 // side by side. The showcase (memory, agent-levels, brain-map, orchestrator-flash, reactions, plan), the app's own pages
-// (voice, log, recordings, classifiers, quality, learn, news, costs, maintenance) and the rest. Not part
+// (voice, log, recordings, quality, learn, news, costs, maintenance) and the rest. Not part
 // of `npm run check`: run by `npm run shots` (its own Playwright config, playwright.shots.config.ts). The app runs hidden
 // (SB_HIDDEN, set by launch()). The 3D map needs WebGL: on a machine without a GPU set
 // SB_E2E_ELECTRON_ARGS="--use-angle=swiftshader --enable-unsafe-swiftshader" (and xvfb-run on Linux).

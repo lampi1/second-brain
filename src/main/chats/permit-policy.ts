@@ -139,34 +139,52 @@ function subjectParts(tool: string, input: unknown, cls: string, title?: string)
   const head = `${tool}${title && title !== tool ? ` ${title}` : ''}`;
   return [[head, ...values].join('\n'), `${head} ${json}`];
 }
-/** What the rules are run on: the whole subject, or, when it is over the limit, each part cut at the limit. A long file
- *  is in the subject twice (its text, then the JSON): read part by part it is not «too long» at half the limit
- *  (ADR 0290). long: a part is over the limit, so some of it is not read. */
-function readable(tool: string, input: unknown, cls: string, title?: string): { texts: string[]; long: boolean } {
-  const parts = subjectParts(tool, input, cls, title), whole = parts.join('\n');
-  if (whole.length <= MAX_SUBJECT) return { texts: [whole], long: false };
-  return { texts: parts.map(p => p.slice(0, MAX_SUBJECT)), long: parts.some(p => p.length > MAX_SUBJECT) };
-}
-
-/** The request is longer than the rules read: what they cannot see may be what they hold (the caller asks). */
-export function policyTooLong(tool: string, input: unknown, commandTools: readonly string[], title?: string): boolean {
-  const cls = toolClass(tool, commandTools);
-  return readable(tool, input, cls, cls === 'mcp' ? title?.trim() : undefined).long;
+/** What the rules are run on: the whole subject, each part cut at the limit. A long file is in the subject twice (its
+ *  text, then the JSON), so a file of half the limit is not «too long»; a pattern still reads one text, whatever the
+ *  size, so a rule means the same on a short and on a long request (ADR 0290). long: a part is over the limit, so some
+ *  of it is not read. */
+function readable(tool: string, input: unknown, cls: string, title?: string): { text: string; long: boolean } {
+  const parts = subjectParts(tool, input, cls, title);
+  return { text: parts.map(p => p.slice(0, MAX_SUBJECT)).join('\n'), long: parts.some(p => p.length > MAX_SUBJECT) };
 }
 
 const ruleSees = (rule: PolicyRule, cls: string, name: string, title: string): boolean => rule.tools.some(t => t === '*' || t === cls || t === name || (!!title && t === title));
 
-/** The first rule that holds this request, or null. title: the engine's line, an ACP MCP tool's only name. */
-export function policyHit(policy: BrainPolicy, tool: string, input: unknown, commandTools: readonly string[], title?: string): PolicyRule | null {
-  if (policy.state !== 'ok') return null;
+/** What the rules say of a request. unread: they did not read it all (a part over the limit, or they would take too
+ *  long), so no rule found is not «no rule holds it»: the caller asks. */
+export interface PolicyRead { rule: PolicyRule | null; unread: boolean }
+
+// The rules run in the main process and a pattern cannot be stopped: one that goes back over the text for every match
+// (`psql[\s\S]*insert`, on a text full of «psql») takes seconds on 100,000 characters. So the rules have a time budget
+// for one request, and on a long text each pattern is first timed on the start of it: when the whole text would take
+// too long at that pace (the time grows with the square of the length, at worst), the app stops and asks.
+const BUDGET_MS = 250, PATTERN_MS = 500, PROBE = 20_000;
+
+/** The first rule that holds this request, and whether the rules read all of it. title: the engine's line, an ACP MCP
+ *  tool's only name. now: the clock (the tests' own). */
+export function policyRead(policy: BrainPolicy, tool: string, input: unknown, commandTools: readonly string[], title?: string, now: () => number = () => performance.now()): PolicyRead {
+  if (policy.state !== 'ok') return { rule: null, unread: false };
   const cls = toolClass(tool, commandTools), name = tool.toLowerCase(), t = (title ?? '').trim().toLowerCase();
-  const { texts } = readable(tool, input, cls, cls === 'mcp' ? title?.trim() : undefined);
-  const hit = (re: RegExp): boolean => texts.some(text => re.test(text));
+  const { text, long } = readable(tool, input, cls, cls === 'mcp' ? title?.trim() : undefined);
+  const start = now(), growth = (text.length / PROBE) ** 2;
+  let slow = false;
+  const hit = (re: RegExp): boolean => {
+    if (slow) return false;
+    const t0 = now();
+    if (t0 - start > BUDGET_MS) { slow = true; return false; }
+    if (text.length > PROBE) {
+      re.test(text.slice(0, PROBE));
+      if ((now() - t0) * growth > PATTERN_MS) { slow = true; return false; }
+    }
+    return re.test(text);
+  };
   for (const rule of policy.rules) {
     if (!ruleSees(rule, cls, name, t)) continue;
-    if (rule.match.some(hit) && !rule.unless.some(hit)) return rule;
+    const held = rule.match.some(hit) && !rule.unless.some(hit);
+    if (slow) return { rule: null, unread: true };
+    if (held) return { rule, unread: false };
   }
-  return null;
+  return { rule: null, unread: long };
 }
 
 /** Some rule could hold a request of this tool, or the policy cannot be read: no «always» on what the user grants for

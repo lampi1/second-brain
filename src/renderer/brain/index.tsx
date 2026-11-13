@@ -53,8 +53,8 @@ export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string
   page('skill', 'G S'),
   // not a brain page: the app's Settings (components/SettingsPage.tsx, rendered by App.tsx); listed here for places, links and G P
   page('impostazioni', 'G P'),
-  // the Brain section's own pages (ADR 0077: agents, skills, rules, memory, the map of their links; the classifiers are a
-  // tab of Andamento since ADR 0202), rendered by App.tsx PageFrame (components/brain-model/)
+  // the Brain section's own pages (ADR 0077: agents, skills, rules, memory, the map of their links; the classifiers'
+  // page is gone, ADR 0291), rendered by App.tsx PageFrame (components/brain-model/)
   page('regole', 'G L'),
   page('memoria', 'G Y'),
   page('collegamenti', 'G B'),

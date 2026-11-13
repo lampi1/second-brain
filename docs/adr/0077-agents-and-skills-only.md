@@ -1,6 +1,6 @@
 # ADR 0077 · Agents and skills only: a self-maintaining Brain section
 
-Date: 2026-10-19 · Status: partly superseded by ADR 0083, ADR 0125 (agent pack import/export) ADR 0153 (self-applying skill and rule changes, the timers) and ADR 0291 (the Classificatori page is removed); accepted · Replaces the approval parts of ADR 0073 for skills, agents and lessons (issues
+Date: 2026-10-19 · Status: partly superseded by ADR 0083, ADR 0125 (agent pack import/export), ADR 0153 (self-applying skill and rule changes, the timers) and ADR 0291 (the Classificatori page is removed); accepted · Replaces the approval parts of ADR 0073 for skills, agents and lessons (issues
 #84, #81) · Amended by: ADR 0082, ADR 0098, ADR 0101
 
 ## Context

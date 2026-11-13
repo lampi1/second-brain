@@ -1,6 +1,6 @@
 # ADR 0285 · An estimate rests on the role and its model before the kind of work
 
-Date: 2026-11-13 · Status: accepted (owner, thread «Preparare la 1.0 con analisi profonda»: «i classificatori secondo
+Date: 2026-11-13 · Status: partly superseded by ADR 0291 (the Classificatori page it names is removed, the estimate chip keeps the count); accepted (owner, thread «Preparare la 1.0 con analisi profonda»: «i classificatori secondo
 me non sono molto efficaci solo per le stime di tempo e costo, però il costo è problematico calcolarlo multi harness»,
 and the report's proposal «stime dallo storico di ruolo e modello», approved with «Approvo tutte le tue modifiche del
 report») · Amends: ADR 0087 (which past tasks are similar), ADR 0186 (the estimate's measure)
@@ -38,7 +38,8 @@ engines that report tokens only (Codex, OpenCode), so a role on those engines ha
 ## Consequences
 
 - Four estimates in ten hold, as before: a job's time depends on the job more than on who does it. The figure is an
-  order of magnitude; the Classificatori page keeps saying how often it held.
+  order of magnitude; the Classificatori page keeps saying how often it held (since ADR 0291 the
+  estimate chip's «?» does).
 - The kind of work still picks the path (a short question, one agent, a tree) and the calibration.
-- «Da ruolo e modello uguali» on the Classificatori page replaces «Da ruolo e tipo uguali».
+- «Da ruolo e modello uguali» on the Classificatori page replaces «Da ruolo e tipo uguali» (the page left with ADR 0291).
 - Tests: `test/unit/agents/task-estimate.test.ts`, `test/unit/agents/estimate-replay.test.ts`.
