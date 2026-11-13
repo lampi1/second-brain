@@ -83,7 +83,7 @@ export function busyState(state: ChildState, c: Pick<ChatSummary, 'background' |
   return busy ? 'run' : state;
 }
 
-/** Still on the delegated work (a full thread card); the others fold into a compact row. */
+/** Still on the delegated work (its row shows the live step); the others show their result's first words. */
 export const activeState = (s: ChildState): boolean => s !== 'done' && s !== 'partial' && s !== 'blocked' && s !== 'noreport' && s !== 'closed';
 /** A parent's children counted by state, one source for every counter (KidsBar, the sidebar tree, #152): working,
  *  waiting for the user, stopped (a turn ended without a result or a report, an error, a refused permission), finished. */

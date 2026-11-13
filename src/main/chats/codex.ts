@@ -176,7 +176,7 @@ export class CodexSession implements HarnessSession {
   private flushTimer: NodeJS.Timeout | null = null;
   private tools = new Map<string, ToolItem>();
   /** the input of each running tool as the engine sent it, by item id (`tools` keeps the copy shortened for the
-   *  screen): the app's own answer to a permission request reads what will run (ADR 0292) */
+   *  screen): the app's own answer to a permission request reads what will run (ADR 0294) */
   private wholeInputs = new Map<string, unknown>();
   private planItemId: string | null = null;
   private context: ContextUsage | null = null;
@@ -746,7 +746,7 @@ export class CodexSession implements HarnessSession {
       this.pending({
         id: rid, type: 'permission', tool: 'Shell', title: cut(command ? `Shell: ${stripAnsi(command)}` : 'Shell: permesso', 140), detail: cut(detail, 8000),
         input: trimInput({ command, cwd: s(p.cwd) || undefined, reason: s(p.reason) || undefined }), at, alwaysRules: ['questo tipo di comando, per questa sessione'],
-        // the whole command beside the copy shortened for the screen: the app's own answer reads what will run (ADR 0292)
+        // the whole command beside the copy shortened for the screen: the app's own answer reads what will run (ADR 0294)
       }, wholeCommand ? { command: wholeCommand, cwd: s(p.cwd) || undefined, reason: s(p.reason) || undefined } : undefined);
       return;
     }

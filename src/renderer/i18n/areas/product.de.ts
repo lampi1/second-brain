@@ -55,7 +55,7 @@ export const productDe:typeof productIt={
  'aw.views':'Was das Fenster zeigt','aw.view.chat':'Chat','aw.view.split':'Nebeneinander','aw.view.browser':'Browser',
  'aw.resizer':'Trenner zwischen Chat und Browser verschieben','aw.tabs':'Browser-Tabs','aw.tab':p=>`Tab ${p.n}`,
  'aw.full':'Vollbild','aw.fullExit':'Vollbild verlassen',
- 'aw.overTip':'Die Arbeit liegt über der Schätzung aus ähnlichen Aufgaben.','aw.overCost':p=>`${p.cost} · Schätzung ${p.estimate}`,'aw.overTime':p=>`über der Schätzung von ${p.estimate}`,
+ 'aw.overTip':'Die Arbeit liegt über der Schätzung aus ähnlichen Aufgaben.','aw.metaTip':'Arbeitszeit und Kosten bisher.','aw.metaTipEst':'Arbeitszeit und Kosten bisher, jeweils neben der Schätzung (~).',
  'aw.orchestratorShow':'Orchestrator daneben zeigen','aw.orchestratorHide':'Orchestrator ausblenden',
  'aw.facts':'Details: Modell, Kosten, Schätzung, Links',
 };

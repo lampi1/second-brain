@@ -2,7 +2,7 @@
 // #352): the app keeps no list of its own of what is dangerous. Everything passes, in or out of the chat's folder, with
 // or without a checkpoint, unless the user's brain rules hold it (permit-policy.test.ts), the user narrowed the role
 // («Chiede conferma», «Solo piano» ask all; «Accetta modifiche» asks what is neither a read nor an edit), it changes the
-// brain's rules file itself (ADR 0292: no guard of the app's own on settings and hooks), or it is a plan to approve.
+// brain's rules file itself (ADR 0294: no guard of the app's own on settings and hooks), or it is a plan to approve.
 import { afterAll, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -43,7 +43,7 @@ describe('autoPermit: allow by default', () => {
   });
 });
 
-describe('autoPermit: no guard of the app on settings and hooks (ADR 0292)', () => {
+describe('autoPermit: no guard of the app on settings and hooks (ADR 0294)', () => {
   it('lets what the old guard asked through: the user\'s brain is the only one that holds', () => {
     for (const f of ['.claude/settings.json', '.claude/skills/x/SKILL.md', '.git/config', '.githooks/pre-commit', '.cursor/agents/a.md', '.mcp.json', '.vscode/settings.json']) {
       expect(autoPermit(perm('Write', { file_path: path.join(cwd, f) }), ctx()).kind, f).toBe('allow');
@@ -55,7 +55,7 @@ describe('autoPermit: no guard of the app on settings and hooks (ADR 0292)', () 
   });
 });
 
-describe('autoPermit: the brain\'s rules file is the user\'s to change (ADR 0292)', () => {
+describe('autoPermit: the brain\'s rules file is the user\'s to change (ADR 0294)', () => {
   const brain = path.join(root, 'brain');
   fs.mkdirSync(brain, { recursive: true });
   const rulesFile = path.join(brain, 'permissions.json');

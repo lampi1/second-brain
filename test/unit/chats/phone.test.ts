@@ -72,7 +72,7 @@ function fixture(brainRoot: string = rulesBrain().root) {
 const PLAN = { steps: [{ title: 'Trovo dove si calcola lo sconto', role: 'scout' }, { title: 'Applico lo sconto', role: 'artisan' }], doneWhen: 'I test passano' };
 const yesNo = (id: string, question = 'Apro la PR?', extra: Partial<PendingRequest> = {}): Omit<PendingRequest, 'chatId'> => ({ id, type: 'question', tool: 'AskUserQuestion', title: question, detail: '', input: {}, at: Date.now(),
   questions: [{ question, multiSelect: false, options: [{ label: 'Sì (consigliato)' }, { label: 'No' }] }], ...extra });
-// a permission that still reaches the user (an edit of the brain's rules file, ADR 0292)
+// a permission that still reaches the user (an edit of the brain's rules file, ADR 0294)
 const permission = (id: string): Omit<PendingRequest, 'chatId'> => rulesChange(id);
 const tick = () => new Promise(res => setTimeout(res, 20));
 const userItems = (list: ChatItem[]) => list.filter((i): i is Extract<ChatItem, { kind: 'user' }> => i.kind === 'user');

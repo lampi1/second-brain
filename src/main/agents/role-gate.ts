@@ -124,7 +124,7 @@ function realOf(p: string): string | null {
 }
 /** The longest file path a brain-only edit may name. When an engine brings no whole input the gate sees the request's
  *  input after trimInput (chats/session.ts) cut each string to 4000 characters (Claude's comes whole, ADR 0290; Codex's
- *  and the ACP engines' when the request or its tool call carries it, ADR 0292), so a longer path could hide its
+ *  and the ACP engines' when the request or its tool call carries it, ADR 0294), so a longer path could hide its
  *  escaping tail (`./` x 2000 + `../x`). */
 export const BRAIN_PATH_MAX = 1024;
 /** True when `target` is a file inside the brain folder: absolute, already normalized (no "." or ".." segment, no

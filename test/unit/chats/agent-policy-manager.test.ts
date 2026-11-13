@@ -105,7 +105,7 @@ describe('agent policy on chats', () => {
     // as the Claude session sends it: the short input in the request, the whole one beside it
     f.sink().pending({ id: 'w1', type: 'permission', tool: 'Write', title: 'Write', detail: '', input: short, at: 1 }, whole);
     expect(f.answers).toEqual([{ id: 'w1', answer: expect.objectContaining({ kind: 'permission', allow: true }) }]);
-    // with no rule of the brain on the tool, nothing needs reading: the shortened one alone passes too (ADR 0292)
+    // with no rule of the brain on the tool, nothing needs reading: the shortened one alone passes too (ADR 0294)
     f.sink().pending({ id: 'w2', type: 'permission', tool: 'Write', title: 'Write', detail: '', input: short, at: 1 });
     expect(f.answers).toHaveLength(2);
     // under a rule that could hold the tool, the rules must read what will run: the shortened one alone is the user's call

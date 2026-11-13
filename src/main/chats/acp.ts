@@ -507,7 +507,7 @@ export class AcpSession implements HarnessSession {
   private flushTimer: NodeJS.Timeout | null = null;
   private tools = new Map<string, ToolItem>();
   /** the input of each running tool as the engine sent it, by tool call id (`tools` keeps the copy shortened for the
-   *  screen): the app's own answer to a permission request reads what will run (ADR 0292) */
+   *  screen): the app's own answer to a permission request reads what will run (ADR 0294) */
   private wholeInputs = new Map<string, unknown>();
   /** running subagents (Task tool calls) by toolCallId, for the subagent hooks */
   private subagents = new Map<string, { at: number; type: string; task: string; description: string; model: string | null }>();
@@ -1388,7 +1388,7 @@ export class AcpSession implements HarnessSession {
         // an empty rawInput (OpenCode's shape) falls back to the earlier tool call's input: the rules must read the arguments
         input: trimInput({ ...o(tc.rawInput && Object.keys(o(tc.rawInput)).length ? tc.rawInput : known?.input ?? tc.rawInput ?? tc), ...(tc.locations !== undefined ? { locations: tc.locations } : {}) }), at, noAlways: true,
         // the whole input beside the copy shortened for the screen: the request's own, or the earlier tool call's kept
-        // whole (OpenCode's request comes with an empty rawInput). The app's own answer reads what will run (ADR 0292)
+        // whole (OpenCode's request comes with an empty rawInput). The app's own answer reads what will run (ADR 0294)
       }, acpWhole(tc, this.wholeInputs.get(s(tc.toolCallId))));
       return;
     }

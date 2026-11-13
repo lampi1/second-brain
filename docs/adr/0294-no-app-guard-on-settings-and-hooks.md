@@ -1,4 +1,4 @@
-# ADR 0292 · No permission question outside the brain's rules: the app's guard on settings and hooks is removed
+# ADR 0294 · No permission question outside the brain's rules: the app's guard on settings and hooks is removed
 
 Date: 2026-11-13 · Status: accepted (owner, thread «Preparare la 1.0 con analisi profonda», after ADR 0290 went to
 his PC: «adesso che hai tolto l'auto mi compaiono un sacco di domande non ti avevo detto basta sempre permessi

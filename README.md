@@ -14,7 +14,7 @@
   <a href="CONTRIBUTING.md"><img alt="Pull requests welcome" src="https://img.shields.io/badge/PRs-welcome-8A2BE2.svg"></a>
 </p>
 
-![The Grindhouse: a Strategist's work as a tree of thread cards, the Orchestrator's column on the right](docs/screenshots/grindhouse.webp)
+![The Grindhouse: a Strategist's work as a tree of one-line rows, the Orchestrator's column on the right](docs/screenshots/grindhouse.webp)
 
 ## What it is
 

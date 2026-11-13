@@ -1,4 +1,4 @@
-// What Codex and the ACP engines hand the app as the whole input of a permission request (ADR 0292): the app's own
+// What Codex and the ACP engines hand the app as the whole input of a permission request (ADR 0294): the app's own
 // answer reads what will run, never the copy shortened for the screen. No whole input known = undefined, and the app
 // then judges the short copy (which asks only where a rule of the brain could hold the tool and the copy is cut).
 import { describe, expect, it } from 'vitest';

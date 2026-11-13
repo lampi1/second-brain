@@ -6,6 +6,7 @@ test('agent owner and team observability are available before entering the trans
   const {app,page}=await launchDemo();
   try{
     await expandChats(page,'fix');
+    await page.getByTestId('chat-facts-fix').click(); // the details row opens from the ⓘ (ADR 0292)
     const identity=page.getByTestId('agent-identity-fix');
     await expect(identity).toBeVisible();
     await expect(page.getByTestId('agent-team-fix')).toContainText('Dettagli e collaboratori');

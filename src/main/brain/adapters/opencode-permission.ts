@@ -36,11 +36,11 @@ export interface ClaudeRules {
 export const NO_CLAUDE_RULES: ClaudeRules = { bash: { deny: [], ask: [] }, read: { deny: [], ask: [] }, edit: { deny: [], ask: [] }, guardedDirs: [], tools: {}, unexpressed: [] };
 
 /** The agents' own settings and hooks and the repository's internals: an edit there asks, so it reaches the app,
- *  which answers it with the user's brain rules (auto-permit.ts; no guard of the app's own since ADR 0292). Each in both forms: OpenCode names an edit by its path relative to the
+ *  which answers it with the user's brain rules (auto-permit.ts; no guard of the app's own since ADR 0294). Each in both forms: OpenCode names an edit by its path relative to the
  *  worktree (`.git/config`), or absolute. */
 const ASK_EDITS: readonly string[] = ['.git/*', '.claude/*', '.cursor/*', '.codex/*', '.githooks/*', '.husky/*', '.vscode/*', '.idea/*', '.opencode/*',
   '.gitconfig', '.mcp.json', '.guardallow', 'opencode.json*', 'claude_desktop_config.json',
-  // the brain's rules file is the user's to change (ADR 0292): its edit reaches the app, which asks only for the brain's own
+  // the brain's rules file is the user's to change (ADR 0294): its edit reaches the app, which asks only for the brain's own
   'permissions.json']
   .flatMap(p => [p, `*/${p}`]);
 

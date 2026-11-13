@@ -8,7 +8,7 @@
 //   modifiche» lets reads and edits through and asks the rest;
 // - it would change the brain's rules file itself (permissions.json): an agent that may rewrite the rules has none;
 // - it is a plan to approve (ExitPlanMode): the user's call by its nature.
-// The app keeps no guard of its own on settings or hooks (ADR 0292; a user who wants one writes it as a rule).
+// The app keeps no guard of its own on settings or hooks (ADR 0294; a user who wants one writes it as a rule).
 // Pure (the file system only to resolve links); used by ChatManager's sink.pending after the role gate; pinned by
 // test/unit/chats/auto-permit.test.ts and permit-policy.test.ts.
 import fs from 'node:fs';
@@ -105,7 +105,7 @@ const NAME = /permissions\\?\.json/i;
  *  moved it (`git -C x` for that command alone); home in its usual spellings (`~`, `$HOME`, `%USERPROFILE%`, Git Bash
  *  `/c/…` on Windows). Only a word that is the file counts: a mention inside a message, a heredoc or a web address
  *  does not, and neither does a word the app cannot read (a variable, a move it cannot follow). What only reads has
- *  passed already. A net by name, not a wall (ADR 0292). */
+ *  passed already. A net by name, not a wall (ADR 0294). */
 function namesRules(req: PermitRequest, command: boolean, cwd: string, file: string): boolean {
   if (!path.isAbsolute(cwd)) return false;
   const win = process.platform === 'win32';

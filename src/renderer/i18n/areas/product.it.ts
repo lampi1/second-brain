@@ -54,7 +54,7 @@ export const productIt={
  'aw.views':'Cosa mostra la finestra','aw.view.chat':'Chat','aw.view.split':'Affiancati','aw.view.browser':'Browser',
  'aw.resizer':'Sposta il divisore tra chat e browser','aw.tabs':'Schede del browser','aw.tab':(p:{n:number})=>`Scheda ${p.n}`,
  'aw.full':'Schermo intero','aw.fullExit':'Esci dallo schermo intero',
- 'aw.overTip':'Il lavoro ha superato la stima fatta dai lavori simili.','aw.overCost':(p:{cost:string;estimate:string})=>`${p.cost} · stima ${p.estimate}`,'aw.overTime':(p:{estimate:string})=>`oltre la stima di ${p.estimate}`,
+ 'aw.overTip':'Il lavoro ha superato la stima fatta dai lavori simili.','aw.metaTip':'Tempo di lavoro e costo finora.','aw.metaTipEst':'Tempo di lavoro e costo finora, ciascuno accanto alla sua stima (~).',
  'aw.orchestratorShow':'Mostra l’Orchestrator accanto','aw.orchestratorHide':'Nascondi l’Orchestrator',
  'aw.facts':'Dettagli: modello, costo, stima, link',
 };

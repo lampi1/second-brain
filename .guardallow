@@ -337,3 +337,11 @@ docs/screenshots/trends.webp binary-media sha256:39a64b769841c02db4023162216232b
 docs/screenshots/voice-talk.webp binary-media sha256:40b4e510c74218d0fcd49526d13cebe0af245ba4caa146b10406569221772693
 docs/screenshots/voice.webp binary-media sha256:c5d7c4d13a577e1f2e4a3ea5687a59edd1892052772df12107dbbc0b204ffb73
 docs/screenshots/worktrees.webp binary-media sha256:5c5ca893ec0f8566c7b130fa2cc7a69749259c41451ae399641cd53c79a5c500
+# README screenshots retaken 2026-11-13 for ADR 0292 (the strip: state dot, time and cost against the estimate)
+docs/screenshots/grindhouse.webp binary-media sha256:a4da654b178aa79529046c600cd9466f6ccbb6f6001d35ab7f9b5e206c9a37cb
+docs/screenshots/browser.webp binary-media sha256:0a1b4e387bbe312b238f75b4133129fdc1eda65b4982ac8e1f8ce177cfaff785
+docs/screenshots/orchestrator.webp binary-media sha256:1b3b7e4b40ffa52ad7d967ce279de59037e901bdaffcdfe81a3e68537f589084
+docs/screenshots/orchestrator-flash.webp binary-media sha256:5c6c19684184ad2644b5f54609b4ff2d1659cc6668e74b1ac99071498326a147
+# README screenshots retaken 2026-11-13 for ADR 0293 (children as rows, the face back on the strip)
+docs/screenshots/grindhouse.webp binary-media sha256:ffd8346ceb012ebb97c818de44295f384ea4b49c20414439df440480d4242f85
+docs/screenshots/browser.webp binary-media sha256:0a1b4e387bbe312b238f75b4133129fdc1eda65b4982ac8e1f8ce177cfaff785

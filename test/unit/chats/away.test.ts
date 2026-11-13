@@ -41,7 +41,7 @@ function manager(w: World, brainRoot: string = rulesBrain().root): ChatManager {
 const world = (on: boolean): World => ({ sent: [], answers: [], away: { on }, log: [] });
 const question = (id: string): Omit<PendingRequest, 'chatId'> => ({ id, type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at: Date.now(),
   questions: [{ question: 'Apro la PR?', multiSelect: false, options: [{ label: 'No' }, { label: 'Sì (consigliato)' }] }] });
-// a permission that still reaches the user (an edit of the brain's rules file, ADR 0292)
+// a permission that still reaches the user (an edit of the brain's rules file, ADR 0294)
 const permission = (id: string): Omit<PendingRequest, 'chatId'> => rulesChange(id);
 
 describe('Modalità notte in the chats', () => {

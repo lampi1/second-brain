@@ -28,7 +28,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   file under `.claude`, `.cursor`, `.vscode` or `.git`). What still reaches you: what a rule of your
   `permissions.json` holds, what a role you limited asks, a plan to approve, and a change of `permissions.json`
   itself. Codex, Cursor and OpenCode now send the app the whole request too, so a long one is no longer yours to
-  answer only because it was shortened for the screen (ADR 0292).
+  answer only because it was shortened for the screen (ADR 0294).
+- Grindhouse: a delegated chat is one row like its parent (its steps and result open with a click); the role's
+  character is back on every strip, with the state dot on its corner (ADR 0293).
+- Grindhouse strips: a state dot in front, time and cost so far next to the estimate always on the row, rows edge
+  to edge with a hairline; the open window's details (model, full estimate, links) open from the ⓘ (ADR 0292).
 - A Claude chat with no mode of its own starts in «default», so the app answers its permission requests (they pass
   unless a rule of your brain or a role's limit holds them) instead of Claude Code's
   own default mode: with «auto» as that default, its classifier refused the agents before the app was asked. A mode

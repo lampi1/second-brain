@@ -19,7 +19,7 @@ export function cursorLog(file: string): CursorLog[] {
 }
 
 /** A brain with a rules file that holds nothing: the one permission the app still leaves to the user with no rule and
- *  no role limit is a change of that file (ADR 0292). Tests that need a permission to reach the user use it. */
+ *  no role limit is a change of that file (ADR 0294). Tests that need a permission to reach the user use it. */
 let rules: { root: string; file: string } | undefined;
 export function rulesBrain(): { root: string; file: string } {
   if (!rules) {

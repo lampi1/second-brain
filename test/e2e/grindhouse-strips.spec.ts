@@ -16,8 +16,11 @@ test('strips: collapsed with their facts, click to expand and collapse, "Ti aspe
     await expect(page.locator('[data-testid^="home-request-"]')).toHaveCount(0);
     for (const id of ['qa', 'fix', 'sms', 'feedback']) {
       await expect(page.getByTestId(`chat-expand-${id}`)).toHaveAttribute('aria-expanded', 'false');
-      await expect(page.getByTestId(`chat-sub-${id}`)).toHaveCount(0); // one line (ADR 0287): model, cost and context show once it is open
+      await expect(page.getByTestId(`chat-sub-${id}`)).toHaveCount(0); // one line (ADR 0287): model and context are in the open window's details
     }
+    // time and cost so far, against the estimate, always on the strip (ADR 0292)
+    await expect(page.getByTestId('chat-meta-qa')).toContainText(/\d+ min \/ ~\d+ min/);
+    await expect(page.getByTestId('chat-meta-fix')).toContainText('$');
     await expect(page.getByTestId('chat-input-fix')).toBeHidden();
     // a strip's browser is folded: a globe among the strip's controls opens it beside the chat
     await expect(page.getByTestId('tile-browser-tab-sms')).toHaveCount(0);
