@@ -1548,10 +1548,10 @@ export const CONCEPTS: readonly ConceptCard[] = [
   },
   {
     id: 'fast',
-    title: b('Fast e Plan, e un modello per un solo lavoro',
-      'Fast and Plan, and a model for one job'),
-    summary: b('Sotto il campo dell’Orchestrator, «Fast» chiede una risposta subito, breve e senza deleghe; «Plan» passa la richiesta a uno Strategist. E puoi far partire un agente con il modello che nomini, senza toccare la sua carta.',
-      'Under the Orchestrator’s field, "Fast" asks for an answer right away, short and with no delegation; "Plan" hands the request to a Strategist. And you can start an agent on the model you name, without touching its card.'),
+    title: b('Il campo dell’Orchestrator: Fast, Plan, un modello per un lavoro, citare un testo',
+      'The Orchestrator’s field: Fast, Plan, a model for one job, quoting a text'),
+    summary: b('Sotto il campo dell’Orchestrator, «Fast» chiede una risposta subito, breve e senza deleghe; «Plan» passa la richiesta a uno Strategist. E puoi far partire un agente con il modello che nomini, senza toccare la sua carta. Un testo selezionato si cita con il clic destro.',
+      'Under the Orchestrator’s field, "Fast" asks for an answer right away, short and with no delegation; "Plan" hands the request to a Strategist. And you can start an agent on the model you name, without touching its card. A selected text is quoted with a right click.'),
     points: [
       // src/shared/newchat.ts MODE_LINES; src/renderer/components/ChatInput.tsx (ADR 0296)
       b('«Fast» acceso: l’Orchestrator risponde lui, in poche righe, prima la risposta. Usa solo ciò che sa o legge al momento; se non lo sa o serve un lavoro vero, lo dice in una riga invece di inventare.',
@@ -1565,6 +1565,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/catalog.ts resolve userModel (ADR 0296)
       b('«Fallo con Opus», «usa gpt-5 per questo»: l’Orchestrator avvia quel solo agente con il modello che nomini. La carta del ruolo non cambia e il lavoro dopo torna al suo modello.',
         '"Do it with Opus", "use gpt-5 for this": the Orchestrator starts that one agent on the model you name. The role’s card does not change and the next job goes back to its model.'),
+      // src/renderer/lib/quote.ts quoteAt; src/renderer/actions.ts startQuote (ADR 0300)
+      b('Per rispondere su un punto preciso: seleziona un testo dove vuoi nell’app e fai clic destro sopra. Finisce citato nel campo dell’Orchestrator, non inviato, e scrivi sotto. Il testo di una chat di lavoro aperta va nel campo di quella chat.',
+        'To answer about one precise point: select a text anywhere in the app and right-click on it. It lands quoted in the Orchestrator’s field, not sent, and you write under it. The text of an open work chat goes in that chat’s own field.'),
     ],
     analogy: b('Come dire a un collega «dimmelo al volo» oppure «organizzalo tu»; e come chiedere a un idraulico di usare per una volta un attrezzo diverso, senza cambiargli la cassetta.',
       'Like telling a colleague "just tell me quickly" or "you organise it"; and like asking a plumber to use another tool this once, without changing their toolbox.'),
@@ -1578,8 +1581,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       1: ['src/main/appctl/tools.ts#fastTurn'],
       2: ['src/shared/newchat.ts#MODE_LINES'],
       3: ['src/main/agents/catalog.ts#resolve'],
+      4: ['src/renderer/lib/quote.ts#quoteAt'],
     },
-    sources: ['src/shared/newchat.ts', 'src/renderer/components/ChatInput.tsx', 'src/main/appctl/tools.ts', 'src/main/agents/catalog.ts', 'src/main/agents/discovery.ts'],
+    sources: ['src/shared/newchat.ts', 'src/renderer/components/ChatInput.tsx', 'src/main/appctl/tools.ts', 'src/main/agents/catalog.ts', 'src/main/agents/discovery.ts', 'src/renderer/lib/quote.ts'],
   },
   {
     id: 'orchestrator-app',

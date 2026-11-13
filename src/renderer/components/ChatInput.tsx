@@ -7,7 +7,8 @@
 // with the message (also queued ones), up to IMAGE_MAX_COUNT; a paste with no image item asks main for the clipboard's
 // image (lib/images.ts pasteKind). Drafts and their images survive view switches and
 // remounts (kept per chat in memory); setDraft puts a ready text in a chat's input from elsewhere (a brain page's
-// "Discuti"), with a callback when the user sends it. "/" at the start opens the chat's commands and skills (ADR 0018:
+// "Discuti"), with a callback when the user sends it. quoteInDraft adds a text the user selected on screen and
+// right-clicked, as quote lines (ADR 0300). "/" at the start opens the chat's commands and skills (ADR 0018:
 // ↑↓ choose, Tab or Invio completes "/<name> ", Esc closes; lib/slash.ts), read from main ('chat:commands') when the
 // list opens. An Orchestrator's input also has «Fast» and «Plan» (ADR 0034, 0296): ticked, the message goes with the
 // line that asks for a quick answer of its own without delegating, or for a Strategist's plan (shared/newchat.ts); one
@@ -36,6 +37,7 @@ import { Kbd } from './ui';
 import { t } from '../i18n';
 import {validateRecoveryRaster} from '../lib/recovery-raster';
 import {updateIsFrozen} from '../lib/update-barrier';
+import { draftWithQuote } from '../lib/quote';
 import { reviewedContextDraft, withReviewedContext } from '../lib/reviewed-context';
 import { ReviewedContextPreview } from './ReviewedContextPreview';
 import { MicButton, VoiceBar } from './VoiceControls';
@@ -63,6 +65,17 @@ export function setDraft(chatId: string, text: string, onSent?: () => void): voi
   if (onSent) onSentHooks.set(chatId, { fn: onSent, sig }); else onSentHooks.delete(chatId);
   freshDrafts.add(chatId);
   for (const fn of draftSubs) fn(chatId);
+}
+/** A text selected on screen and right-clicked (ADR 0300, lib/quote.ts): it goes at the end of the chat's input as
+ *  «> » lines, with an empty line under it for the answer; nothing is sent. False when nothing was added. */
+export function quoteInDraft(chatId: string, selected: string): boolean {
+  if (updateIsFrozen()) return false;
+  const old = drafts.get(chatId) ?? '', next = draftWithQuote(old, selected);
+  if (next === old) return false;
+  drafts.set(chatId, next);
+  freshDrafts.add(chatId);
+  for (const fn of draftSubs) fn(chatId);
+  return true;
 }
 /** Dictation (lib/voice.ts, the mic button): the words go at the end of the input, nothing is sent. */
 onDictated((chatId, text) => {
