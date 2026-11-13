@@ -109,6 +109,16 @@ export async function setQuestionsAside({ app, page }: Pick<Launched, 'app' | 'p
   await expect(rows).toHaveCount(0);
 }
 
+/** Opens the Orchestrator's row of the request whose key starts with `prefix` (a chat id and '/', or a whole key) as
+ *  its full card, as a click on the row does (ADR 0269: nothing opens by itself). Returns the row. */
+export async function openAsk(page: Page, prefix: string, timeout = 20_000): Promise<Locator> {
+  const row = page.locator(`[data-testid="orchestrator-ask"][data-ask-row^="${prefix}"]`).first();
+  await expect(row).toBeVisible({ timeout });
+  if (!(await row.getByTestId('qwin').count())) await row.getByTestId('orchestrator-ask-toggle').click();
+  await expect(row.getByTestId('qwin')).toBeVisible();
+  return row;
+}
+
 /** The live demo (not frozen) keeps asking while a test about something else runs: every new row is set aside with
  *  «Ci penso dopo» as soon as it shows, as a user busy elsewhere would (until the page reloads). */
 export async function keepQuestionsAside(page: Page): Promise<void> {

@@ -79,25 +79,30 @@ try {
       ],
     });
   });
-  // The frozen demo starts with several requests. Keep a capture of the real modal, then defer each request
-  // through its visible control so the plan beneath it is reachable without answering or disabling popups.
-  const questions = page.getByTestId('qwin');
-  await questions.waitFor();
+  // The frozen demo starts with several requests: each is one row at the bottom of the Orchestrator's column, and a
+  // click opens it as the full card, one at a time (QuestionsWindow.tsx, ADR 0269). Nothing covers the page, so the
+  // plan beneath needs no request answered or put off.
+  const asks = page.getByTestId('orchestrator-asks');
+  await asks.waitFor();
   await capture('request-queue');
-  for (let deferred = 0; await questions.isVisible(); deferred++) {
-    if (deferred >= 20) throw new Error('Demo request queue did not clear after postponing 20 requests');
-    const key = await questions.locator('[data-request-key]').getAttribute('data-request-key');
-    if (!key) throw new Error('Visible request has no identity');
-    await questions.getByTestId('qwin-later').click();
-    await page.waitForFunction(previous => document.querySelector('[data-testid="qwin"] [data-request-key]')?.getAttribute('data-request-key') !== previous, key);
-  }
-  await page.getByTestId('qwin-backdrop').waitFor({ state: 'hidden' });
+  const questions = page.getByTestId('qwin');
+  await asks.getByTestId('orchestrator-ask-toggle').first().click();
+  await questions.waitFor();
+  await capture('request-open');
+  const key = await questions.locator('[data-request-key]').first().getAttribute('data-request-key');
+  if (!key) throw new Error('Visible request has no identity');
+  // «Ci penso dopo» closes the card and moves its row into the folded line
+  await questions.getByTestId('qwin-later').click();
+  await questions.waitFor({ state: 'hidden' });
+  await asks.getByTestId('orchestrator-asks-later').waitFor();
   // Inspect the MCP form shell separately from narrative agent decisions; no connector or provider is called.
   await app.evaluate(() => {
     void globalThis.__sbDemo.ask('qa', { type: 'question', tool: 'mcp__fixture', title: 'MCP fixture: conferma pubblicazione',
       detail: 'Server: fixture\nConfermi la pubblicazione del documento dimostrativo?', input: {}, noAlways: true,
       questions: [{ question: 'Numero di copie', header: 'Obbligatorio · Numero intero · Minimo: 1 · Massimo: 3', multiSelect: false, options: [] }] });
   });
+  const form = asks.getByTestId('orchestrator-ask').filter({ hasText: 'Numero di copie' });
+  await form.getByTestId('orchestrator-ask-toggle').click();
   await questions.locator('[data-testid$="-form-context"]').waitFor();
   await questions.locator('[data-testid$="-form-refuse"]').waitFor();
   await capture('mcp-form-context');
@@ -105,7 +110,7 @@ try {
   await questions.locator('textarea').fill('2');
   await capture('mcp-form-editing');
   await questions.locator('[data-testid$="-form-refuse"]').click();
-  await questions.waitFor({ state: 'hidden' });
+  await form.waitFor({ state: 'hidden' });
   await page.getByTestId('plan-toggle-tree-plan').waitFor();
   await page.getByTestId('tile-chat-tree-plan').scrollIntoViewIfNeeded();
   await capture('plan-compact');
@@ -241,13 +246,14 @@ try {
   if (!records.some(record => record.memoryId === 'synthetic-visual-memory' && record.sourceRunId === 'synthetic-run')) throw new Error('Synthetic memory provenance missing');
   await memory.scrollIntoViewIfNeeded();
   await capture('memory-saved-fact-synthetic');
-  // Review panels were replaced by hub tabs; capture the current learning view without running an evaluation.
-  await page.getByTestId('mh-tab-apprendimento').click();
+  // The learning view is a tab of Andamento (once a Memoria tab); captured without running an evaluation.
+  await page.getByTestId('nav-andamento').click();
+  await page.getByTestId('an-tab-apprendimento').click();
   const learning = page.getByTestId('learning-page');
   await learning.getByTestId('lr-counter').waitFor();
   await learning.scrollIntoViewIfNeeded();
   await capture('learning-cold-start-synthetic');
-  manifest.reviewFixture = 'Real services; synthetic saved fact in Approvate and empty learning history in Apprendimento; no decisions, replay or provider launched';
+  manifest.reviewFixture = 'Real services; synthetic saved fact in Approvate and empty learning history in Andamento → Apprendimento; no decisions, replay or provider launched';
   if (manifest.rendererErrors.length) throw new Error('Renderer errors; inspect manifest.json');
   console.log(`Captured ${manifest.captures.length} dev views in ${output}`);
 } catch (error) {

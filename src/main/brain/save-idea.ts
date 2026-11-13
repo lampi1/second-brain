@@ -5,12 +5,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { electronNode, runNode } from './node';
+import { brainScript } from '../rules/tools';
 
 /** The brain's idea tool, null when the brain has none (an old or foreign brain). */
 export const ideaTool = (root: string | null): string | null => {
   if (!root) return null;
-  const file = path.join(root, 'ops', 'tools', 'mem.mjs');
-  return fs.existsSync(file) ? file : null;
+  // the app's copy for a product brain (its folder holds no tools), the brain's own file for a legacy one
+  const file = brainScript(root, 'ops/tools/mem.mjs');
+  return file && fs.existsSync(file) ? file : null;
 };
 
 /** `source`: where it was born, after «IA ·» (e.g. «Manutenzione»). */

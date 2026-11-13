@@ -8,7 +8,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn() }, errText: (e: unknown) => String(e instanceof Error ? e.message : e) }));
 import { DecisionLedger, LEDGER_FILE, LEDGER_MAX, readLedger, type DecisionEntry } from '../../../src/main/proposals/ledger';
-import { allPolicies, autoNow, groupPolicy, neverAuto, POLICY, reversible, savedThisWeek, textNever, weekStart, whyAsked } from '../../../src/main/proposals/policy';
+import { ISSUE_ASK, issueCardsWanted, allPolicies, autoNow, groupPolicy, neverAuto, POLICY, reversible, savedThisWeek, textNever, weekStart, whyAsked } from '../../../src/main/proposals/policy';
 import { buildPack, PACK_SECTIONS } from '../../../src/main/brainmodel/research-pack';
 import { AUTO_GROUPS, type Proposal, type ProposalGroup } from '../../../src/shared/proposals';
 
@@ -182,6 +182,27 @@ describe('proposals policy (ADR 0193)', () => {
     expect(whyAsked(card(), groupPolicy('rule', [...many(2, 'rule', 'reject'), ...many(4, 'rule')]))).toEqual({ code: 'rejected', no: 2, n: 6 });
   });
 
+  it('issue cards stop for a user who keeps turning them down, and come back when those answers are old', () => {
+    const at = (i: number) => ({ at: NOW - 10 * 864e5 + i });
+    expect(issueCardsWanted([], NOW)).toBe(true); // nobody decided one yet
+    expect(issueCardsWanted(many(4, 'issue', 'reject', at(0)), NOW)).toBe(true); // too few answers to tell
+    expect(issueCardsWanted(many(ISSUE_ASK.last, 'issue', 'reject', at(0)), NOW)).toBe(false);
+    // one yes among the last five is still a no; two keep them
+    expect(issueCardsWanted([...many(4, 'issue', 'reject', at(0)), entry('issue', 'approve', at(1))], NOW)).toBe(false);
+    expect(issueCardsWanted([...many(3, 'issue', 'reject', at(0)), entry('issue', 'approve', at(1)), entry('issue', 'approve', at(2))], NOW)).toBe(true);
+    // an approval taken back is a no; other groups never count; only the newest five do
+    expect(issueCardsWanted([...many(3, 'issue', 'reject', at(0)), entry('issue', 'approve', at(1)), entry('issue', 'approve', { ...at(2), undoneAt: NOW })], NOW)).toBe(false);
+    expect(issueCardsWanted([...many(9, 'skill', 'reject', at(0)), ...many(2, 'issue', 'approve', at(1))], NOW)).toBe(true);
+    expect(issueCardsWanted([...many(40, 'issue', 'approve', at(0)), ...many(5, 'issue', 'reject', at(1))], NOW)).toBe(false);
+    expect(issueCardsWanted([...many(5, 'issue', 'reject', at(0)), ...many(5, 'issue', 'approve', at(1))], NOW)).toBe(true);
+    // the pause is counted from the newest answer, not from each answer's own age
+    const spread = [80, 60, 40, 20, 1].map(d => entry('issue', 'reject', { at: NOW - d * 864e5 }));
+    expect(issueCardsWanted(spread, NOW)).toBe(false);
+    expect(issueCardsWanted(spread, NOW + 60 * 864e5)).toBe(false);
+    expect(issueCardsWanted(spread, NOW + ISSUE_ASK.days * 864e5)).toBe(true);
+    // older than the window: asked again
+    expect(issueCardsWanted(many(5, 'issue', 'reject', { at: NOW - (ISSUE_ASK.days + 1) * 864e5 }), NOW)).toBe(true);
+  });
   it('counts the cards saved since Monday, not those taken back', () => {
     const monday = weekStart(NOW);
     expect(new Date(monday).getDay()).toBe(1);

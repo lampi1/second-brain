@@ -36,7 +36,7 @@ import { journal } from '../activity/journal';
 import { JOURNAL_DIR } from '../log-digest';
 import type { LogEvent } from '../../shared/activity-log';
 import { readLedger } from '../proposals/ledger';
-import { allPolicies } from '../proposals/policy';
+import { allPolicies, issueCardsWanted } from '../proposals/policy';
 import { defaultPrompt, MAX_PROMPT, researchFrame, researchMessage } from './research-prompt';
 import { ResearchStore } from './research-store';
 import { CandidateService, isCandidateFinding, type CandidatePorts } from './research-candidate';
@@ -367,7 +367,7 @@ export class ResearchService {
     this.conversationIndex = this.d.conversationList?.(since).slice(0, CONVERSATIONS_MAX) ?? [];
     this.conversationSince = since;
     if (this.d.conversationList) pack.conversations = `${fence.note}\nThe chats and work threads active since the previous maintenance (${new Date(since).toISOString().slice(0, 10)}), newest first${this.conversationIndex.length >= CONVERSATIONS_MAX ? `, the newest ${CONVERSATIONS_MAX} only` : ''}. Read each one with section=conversations, chat=<id> (without offset it starts at the first item since then); continue nextOffset. No history is loaded until requested.\n${fence.wrap(JSON.stringify(this.conversationIndex.map(c => ({ ...c, title: scrub(c.title, this.privacy()) }))))}`;
-    const frame = researchFrame(lang, { web, capUsd: cap, brainRoot: root, issuesUrl: this.d.issuesUrl() });
+    const frame = researchFrame(lang, { web, capUsd: cap, brainRoot: root, issuesUrl: this.d.issuesUrl(), bugCards: this.issuesWanted() });
     const reflect = this.d.roleTrial ? pickRole(this.d.runs(), this.d.roles(), this.now()) : null;
     const noted = this.d.lessons?.noted() ?? [];
     const dropped = this.d.lessons?.dropped?.() ?? 0;
@@ -466,6 +466,8 @@ export class ResearchService {
     const r = this.mine(chatId);
     const kind = a.kind as ResearchKind;
     if (!(RESEARCH_TOOL_KINDS as readonly string[]).includes(kind)) throw new Error(`kind: one of ${RESEARCH_TOOL_KINDS.join(', ')}.`);
+    // a user who keeps turning the issue cards down gets no new one (policy.ts issueCardsWanted); an idea still lands in Idee
+    if (kind === 'app-bug' && !this.issuesWanted()) throw new Error('Not proposed: the user turned down the last issue cards, so app bugs are not carded for now. Go on with the other findings.');
     const card = this.card(kind, a, chatId);
     const fam = familyOf(kind), mine = this.store.all().filter(p => p.chatId === chatId);
     if (this.usedCards(chatId) >= RESEARCH_TOTAL_CAP) throw new Error('Limit reached: at most 7 ranked proposals per research.');
@@ -566,6 +568,8 @@ export class ResearchService {
     return { title: scrub(str(o.title, 120, 'issue.title'), p), body: scrub(str(o.body, 8000, 'issue.body'), p), ...(labels.length ? { labels } : {}), ...(duplicateOf ? { duplicateOf } : {}) };
   }
 
+  private issuesWanted(): boolean { return issueCardsWanted(readLedger(this.d.userData), this.now()); }
+
   // ── the free cleanup's own cards (zero tokens) ───────────────────────────────────────────────────────────────────
   /** After the pass the user started: one app bug per new log group (never one already carded or dismissed), and the
    *  brain skills no job used in 60 days (never one already proposed in the last 90 days). */
@@ -574,7 +578,9 @@ export class ResearchService {
     let bugs = 0, forget = 0;
     // Reserve five of the seven slots for deep findings when a research engine is available.
     const budget = this.d.engines().length ? 2 : RESEARCH_TOTAL_CAP;
-    for (const g of logs.groups.filter(x => !x.known).sort((a, b) => Number(b.lvl === 'error') - Number(a.lvl === 'error') || b.count - a.count)) {
+    // only while this user still opens them (their own last answers on issue cards, policy.ts issueCardsWanted)
+    const wanted = this.issuesWanted();
+    for (const g of (wanted ? logs.groups.filter(x => !x.known) : []).sort((a, b) => Number(b.lvl === 'error') - Number(a.lvl === 'error') || b.count - a.count)) {
       if (all.some(x => x.logKey === g.key) || bugs >= RESEARCH_CAPS.app || bugs >= budget) continue;
       const where = `${g.scope} · ${g.msg}`;
       if (matchingIssue(scrub(`${g.scope}: ${g.msg}`, p).slice(0, 120), this.inventory)) continue;

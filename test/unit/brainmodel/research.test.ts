@@ -225,6 +225,21 @@ describe('ResearchService', () => {
     expect(t.applied).toEqual([]); // Finding an obsolete skill never authorizes deleting it.
   });
 
+  it('makes no bug card for a user who turned the last issue cards down; an idea is still taken (owner, 2026-11-13)', async () => {
+    const t = setup();
+    const no = Array.from({ length: 5 }, (_, i) => ({ id: `e${i}`, card: `research:${i}`, at: NOW - DAY + i, source: 'research', group: 'issue', ask: 'research', title: 't', applied: false, reversible: false, evidence: false, size: 10, decision: 'reject', by: 'user' }));
+    fs.writeFileSync(path.join(t.deps.userData, 'proposal-decisions.json'), JSON.stringify({ entries: no }));
+    const logs: LogScan = { since: null, files: [], groups: [{ key: 'k1', lvl: 'error', scope: 's', msg: 'boom', cause: '', count: 4, sample: 'boom' }] };
+    expect(t.svc.afterPass(logs)).toMatchObject({ bugs: 0 });
+    await t.svc.start(opts);
+    expect(t.created[0]!.prompt).toContain('propose NO app-bug');
+    expect(() => t.svc.propose('c1', { kind: 'app-bug', title: 'Boom on save', removes: 'The crash.', why: 'Seen twice.', evidence: ['log k1 ×4'], issue: { title: 'Save crashes', body: 'Steps…' } })).toThrow(/turned down the last issue cards/);
+    expect(t.svc.propose('c1', { kind: 'app-idea', title: 'A calmer save', adds: 'An autosave.', why: 'Seen twice.', evidence: ['chat c9'], issue: { title: 'Autosave', body: 'Context…' } }).id).toBeTruthy();
+    // with the answers gone the cards are made again
+    fs.rmSync(path.join(t.deps.userData, 'proposal-decisions.json'));
+    expect(t.svc.afterPass(logs)).toMatchObject({ bugs: 1 });
+  });
+
   it('lets a research rewrite the log step\'s card of the same group', async () => {
     const t = setup();
     t.svc.afterPass({ since: null, files: [], groups: [{ key: 'k1', lvl: 'error', scope: 's', msg: 'boom', cause: '', count: 2, sample: 'boom' }] });

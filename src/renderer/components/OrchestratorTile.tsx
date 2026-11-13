@@ -114,6 +114,8 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
             <div className="skeleton"><i /><i /><i className="short" /></div>
           )}
         </div>
+        {/* a chat can ask before any Orchestrator exists: its question still needs a place to be answered (2026-11-13) */}
+        <OrchestratorAsks />
       </section>
     );
   }

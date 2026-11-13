@@ -7,7 +7,8 @@ import path from 'node:path';
 import { useAssets } from '../../../src/main/rules/delivery';
 
 const fakeAssets = { dir: '' };
-const { useTemplateRoot, useToolsHome, ensureTools, topicSkillName } = await import('../../../src/main/rules/tools');
+const { useTemplateRoot, useToolsHome, ensureTools, topicSkillName, codeReferences } = await import('../../../src/main/rules/tools');
+const { ideaTool } = await import('../../../src/main/brain/save-idea');
 const { appSkillsIn } = await import('../../../src/main/agents/pack/shared-skills');
 const { toolReferences } = await import('../../../src/main/rules/new-brain');
 const { journalOf, migrate, recoverMigration } = await import('../../../src/main/rules/migration');
@@ -78,6 +79,25 @@ describe('product topic rules as app skills (#366, ADR 0243)', () => {
 });
 
 describe('template reference migration', () => {
+  it('the copy\'s own code names its commands in the copy, never in the brain folder that holds no tools', () => {
+    const root = brain(), tools = ensureTools(root), B = root.replace(/\\/g, '/'), T = tools.replace(/\\/g, '/');
+    for (const rel of ['.claude/hooks/compact-now.mjs', 'ops/tools/chat-prompt.mjs', 'harness/cursor/correction-log.mjs']) {
+      const text = fs.readFileSync(path.join(tools, rel), 'utf8');
+      expect(text, rel).toContain(`${T}/ops/tools/mem.mjs`);
+      expect(text, rel).not.toContain(`${B}/ops/tools/mem.mjs`);
+    }
+    // the brain's own files stay brain paths, and a personal script is not the app's
+    expect(codeReferences(`node "${B}/ops/tools/devops-me.mjs"; read ${B}/now.md`, root, tools)).toBe(`node "${B}/ops/tools/devops-me.mjs"; read ${B}/now.md`);
+    // the hook installer's paths are data it writes and looks for: left as they were
+    expect(fs.readFileSync(path.join(tools, 'ops/tools/install-inbox-hooks.mjs'), 'utf8')).toContain(`${B}/ops/tools/inbox.mjs`);
+    // inside JavaScript the paths carry render's escaping, on both sides
+    const esc = (v: string) => v.replace(/['"`$]/g, '\\$&');
+    expect(codeReferences("x = 'node \"C:/o\\'brien (x86)+\\$1/ops/tools/mem.mjs\"'", "C:/o'brien (x86)+$1", "C:/app data/$&/t'ools", esc)).toBe("x = 'node \"C:/app data/\\$&/t\\'ools/ops/tools/mem.mjs\"'");
+    // the AI's ideas are written with the copy's tool (a product brain has none of its own)
+    expect(ideaTool(root)).toBe(path.join(tools, 'ops', 'tools', 'mem.mjs'));
+    expect(ideaTool(brain('legacy', false))).toBeNull();
+  });
+
   it('rewrites template code references only, absolute (both separators) or brain-relative', () => {
     const root = 'C:/Users/me/my brain';
     const text = [

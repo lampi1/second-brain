@@ -69,9 +69,11 @@ function values(root: string): Record<string, string> {
   for (const [k, v] of Object.entries(out)) if (/[\x00-\x1f]/.test(v)) throw new Error(`Invalid template value ${k}.`);
   return out;
 }
+/** A value inside JavaScript text: quotes, backticks and `$` escaped. */
+const jsSafe = (v: string): string => v.replace(/['"`$]/g, '\\$&');
 /** Same substitution as install.mjs: inside JavaScript the values are escaped for quotes, backticks and `$`. */
 export function render(text: string, V: Record<string, string>, js: boolean): string {
-  const safe = (k: string, v: string) => k === 'BRAIN_RE' ? v.replace(/['"`]/g, '\\$&') : v.replace(/['"`$]/g, '\\$&');
+  const safe = (k: string, v: string) => k === 'BRAIN_RE' ? v.replace(/['"`]/g, '\\$&') : jsSafe(v);
   return text.replace(/\{\{([A-Z_]+)\}\}/g, (m, k: string) => (k in V ? (js ? safe(k, V[k]!) : V[k]!) : m));
 }
 function codeFiles(dir: string, base = dir): string[] {
@@ -120,6 +122,15 @@ function appText(text: string, brain: string, target: string, own: ReadonlySet<s
     .replace(new RegExp(`${B}/([\\w./-]+\\.(?:md|json))`, 'g'), (m, rel: string) => own.has(rel) ? `{tools}/${rel}` : m)
     .replace(/\{tools\}/g, () => fwd(target));
 }
+/** Template code names its own commands by the brain's path (`node "{{BRAIN}}/ops/tools/mem.mjs" now me …`, in a tool's
+ * prompt or a hook's message). In the copy those files are in the copy, not in the brain: the command an agent reads
+ * must name the copy (33 «Cannot find module <brain>/ops/tools/mem.mjs» in a month of the owner's chats, 2026-11-13).
+ * Only absolute references to shipped code; `esc` is the escaping render gave the brain's path in that file. */
+export function codeReferences(text: string, brain: string, target: string, esc: (v: string) => string = v => v): string {
+  const B = esc(fwd(brain)).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const code = String.raw`((?:ops/tools|harness/(?:claude|cursor|compare)|\.claude/hooks)/[\w./-]+\.m?js)`;
+  return text.replace(new RegExp(`${B}/${code}`, 'g'), (m, rel: string) => shipped(rel) ? `${esc(fwd(target))}/${rel}` : m);
+}
 /** A release manifest (brain-template.manifest.json next to the template) must match every copied file. */
 function verified(source: string, files: string[]): void {
   const manifest = path.join(path.dirname(source), 'brain-template.manifest.json');
@@ -166,7 +177,7 @@ export function ensureTools(root: string): string {
   // every midnight under running chats (issue #278)
   let storedToday = false;
   try { storedToday = typeof (JSON.parse(read(real, 'brain.json') || '{}') as { template?: TemplateValues }).template?.TODAY === 'string'; } catch { /* values() already refused it */ }
-  const digest = createHash('sha256').update('render-v4').update(JSON.stringify(storedToday ? V : { ...V, TODAY: '' })).update(hash).digest('hex');
+  const digest = createHash('sha256').update('render-v5').update(JSON.stringify(storedToday ? V : { ...V, TODAY: '' })).update(hash).digest('hex');
   const target = toolsDir(root);
   const marker = path.join(target, '.sb-tools.json');
   const current = () => { try { return (JSON.parse(fs.readFileSync(marker, 'utf8')) as { sig?: string }).sig === digest; } catch { return false; } };
@@ -181,7 +192,13 @@ export function ensureTools(root: string): string {
       const buf = fs.readFileSync(path.join(source, rel));
       if (buf.subarray(0, 8000).includes(0)) fs.copyFileSync(path.join(source, rel), out);
       else if (own.has(rel)) fs.writeFileSync(out, appText(render(buf.toString('utf8'), V, false), V.BRAIN!, target, own));
-      else fs.writeFileSync(out, render(buf.toString('utf8'), V, /\.(m?js|cjs)$/.test(rel)));
+      else {
+        const js = /\.(m?js|cjs)$/.test(rel);
+        const text = render(buf.toString('utf8'), V, js);
+        // install-inbox-hooks.mjs is the one file whose paths are data, not words for an agent: what it writes to the
+        // user's own Claude settings and looks for when it removes them (owner-run only; the app never runs it)
+        fs.writeFileSync(out, rel === 'ops/tools/install-inbox-hooks.mjs' ? text : codeReferences(text, V.BRAIN!, target, js ? jsSafe : undefined));
+      }
     }
     // the product's topic rules are no longer injected (#366, ADR 0243): each one is also an app skill (regole-<name>),
     // visible and editable on the Skill page and loaded when its description fits, like every other skill
