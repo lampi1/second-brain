@@ -20,6 +20,7 @@ import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { slug } from './inbox.mjs';
 import { pack as ctxPack } from './ctx.mjs';
+import { brainDocRel } from './brain-doc.mjs';
 
 export const OPS = '{{BRAIN_JS}}';
 const REPOS = '{{REPOS_JS}}';
@@ -33,6 +34,13 @@ export const READ = {
   os: ['map.md', 'brain-rules.md', 'harness\\tools.md'],
   research: ['map.md'],
 };
+/** The kind's files where this brain really keeps them (brain-doc: root or the `brain-rules` skill); a file the brain
+ *  no longer has is left out, so a new chat is never sent to read a missing file (ADR 0277). A brain folder that is
+ *  not on disk cannot be checked: the names stay as they are. */
+export function readList(kind, root = OPS) {
+  if (!fs.existsSync(root)) return READ[kind];
+  return READ[kind].map(f => brainDocRel(root, f)?.replace(/\//g, '\\')).filter(Boolean);
+}
 const KIND_RULES = {
   code: 'Lavoro sul codice con code workflow nel repo indicato; prima di dire "fatto" o di un commit, la skill `code-review` sul diff (code.md). A che punto è il ramo (status, base, commit, merge in corso): `node "{{BRAIN}}/ops/tools/repo-state.mjs" <cartella>`, una chiamata.',
   qa: 'QA: scenario esatto dei test case, mai cambiato per aggirare un bug (resta Blocked); risultati sul tracker solo dopo l\'ok di {{OWNER}}.',
@@ -55,7 +63,7 @@ export function buildPrompt({ title, kind, harness = 'claude', repo, words, job,
   const err = checkTitle(title) ?? (!READ[kind] ? `--kind deve essere uno tra ${Object.keys(READ).join(', ')}` : null) ?? (!job?.trim() ? 'manca il lavoro (--job o --job-file)' : null);
   if (err) throw new Error(err);
   const repoPath = repo ? (/^[A-Za-z]:[\\/]/.test(repo) ? repo : `${REPOS}\\${repo}`) : null;
-  const read = [`${OPS}\\AGENTS.md`, ...READ[kind].map(f => `${OPS}\\${f}`)];
+  const read = [`${OPS}\\AGENTS.md`, ...readList(kind).map(f => `${OPS}\\${f}`)];
   const L = [];
   // Cursor: the Agents Window agent names its own chat with the built-in rename_chat tool, only when asked (tested 10/10)
   if (harness === 'cursor') L.push(`Prima cosa: rinomina questa chat in "${title}" con lo strumento rename_chat.`);
