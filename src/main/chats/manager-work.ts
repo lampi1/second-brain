@@ -9,7 +9,7 @@ import type { UserTaskEvents, AgentRun, AgentRunOutcome } from '../../shared/age
 import { ownerSource, type TaskAssignmentOptions } from '../../shared/delegation';
 import { PLAN_APPROVED, planChange, askingPlan, strategyPrompt, withAdded, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
 import { runMetrics } from '../agents/run-metrics';
-import { standings, withStandings } from '../agents/standing';
+import { standings, withStandings, type TokenPrice } from '../agents/standing';
 import { isCorrection } from '../../shared/correction';
 import type { SubmissionReceipt, Rec, CleanReportNote, UserWroteNote, TurnEndInfo } from './manager-types';
 import { sysItem, userNoteLine } from './manager-helpers';
@@ -298,6 +298,13 @@ export abstract class ManagerWork extends ManagerLifecycle {
     if (!run?.corrections) return;
     run.corrections.afterReport++;
     this.runSave(); this.persist();
+  }
+
+  /** The list price of each of these models that has one (ADR 0284): a plain table for the read worker's estimates. */
+  listPrices(models: readonly string[]): Record<string, TokenPrice> {
+    const out: Record<string, TokenPrice> = {};
+    for (const m of new Set(models)) { const p = m ? this.opts.priceOf?.(m) : null; if (p) out[m] = p; }
+    return out;
   }
 
   /** The §5 metrics per agent and version (A6): runs kept plus the rollups of the pruned ones. */

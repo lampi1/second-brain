@@ -4,7 +4,8 @@ import type { AgentRun } from '../shared/agents';
 import type { BrainModelState } from '../shared/brain-model';
 import type { RunEstimates } from '../shared/task-estimate';
 import type { BrainViewInput } from './brainmodel/view';
-export type ReadRequest = { op: 'brain'; input: BrainViewInput } | { op: 'estimates'; runs: AgentRun[]; runIds: string[]; now: number };
+import type { TokenPrice } from './agents/standing';
+export type ReadRequest = { op: 'brain'; input: BrainViewInput } | { op: 'estimates'; runs: AgentRun[]; runIds: string[]; now: number; prices?: Record<string, TokenPrice> };
 export interface ReadResults { brain: BrainModelState; estimates: RunEstimates }
 /** The message to the worker: `runsKey` = the runs it carries are stored under this key, per kind of read (`op`);
  *  `runsJson` = those runs as JSON text (read-work.ts builds it in slices; the request's own runs are then empty);

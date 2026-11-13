@@ -64,6 +64,8 @@ export interface ChatService {
   userWrote?(chatId: string, text: string): void;
   /** the agent metrics (AGENTS-DESIGN §5, A6) */
   runMetrics?(opts?: { since?: number; skill?: string; app?: string; repo?: string }): AgentMetrics[];
+  /** the list price of each of these models that has one (ADR 0284), for the estimates the read worker computes */
+  listPrices?(models: readonly string[]): Record<string, { input: number; cacheRead: number; cacheWrite: number; output: number }>;
   /** Explicit user verdict from renderer IPC only; never exposed through agent tools. */
   markRun?(chatId: string, verdict: AgentRunOutcome['verdict'], note?: string): ChatSummary;
   /** a "Comando da eseguire" request was opened in this chat (run/asks.ts): its agent run counts it once (A5) */

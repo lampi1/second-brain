@@ -21,7 +21,7 @@ parentPort!.on('message', ({ id, request, runsKey, runsJson, cached }: ReadMessa
       runs.set(op, { key: runsKey, list: runsOf(request) });
     }
     const value = request.op === 'brain' ? readBrainView(request.input, undefined, intervals)
-      : estimatesState(request.runs, request.runIds, request.now);
+      : estimatesState(request.runs, request.runIds, request.now, request.prices);
     parentPort!.postMessage({ id, op, value });
   } catch (e) { runs.delete(op); parentPort!.postMessage({ id, op, error: e instanceof Error ? e.message : String(e) }); }
 });

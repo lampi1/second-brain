@@ -310,10 +310,12 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     runs: () => manager.runs.list() });
   // the runs of Esegui, built after the manager (#371, #372): a Yes and a user step are read against them
   const runsRef: { current: CommandRunner | null } = { current: null };
+  // list prices for the runs whose engine reported tokens and no cost (ADR 0284): the standings and the estimates
+  const priceOf = tokenPriceOf(() => brain.modelRegistry());
   const manager = new ChatManager({
     runs: chatId => runsRef.current?.list(chatId) ?? [],
     writeDelayMs: 250, // chats.json and agent-runs.json: one asynchronous write per burst (the main-process freezes, 2026-10-27)
-    priceOf: tokenPriceOf(() => brain.modelRegistry()),
+    priceOf,
     briefReady: chatId => briefRef.current?.hasBrief(chatId) ?? true,
     briefOptions: chatId => briefRef.current?.briefOptions(chatId) ?? null,
     prepareDelegation: delegateWorktrees.prepare,
@@ -350,7 +352,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // the estimate task_estimate would give, under the user's request (one model round trip less, ADR 0087)
     requestEstimate: text => {
       if (!runFeedbackRef.current) return null;
-      const e = estimateTask(new SimilarIndex(runFeedbackRef.current.runList()), { text });
+      const e = estimateTask(new SimilarIndex(runFeedbackRef.current.runList(), priceOf), { text });
       for (const r of estimateRecords(e, text, 'per la tua richiesta')) logEvent(r); // the Log page (ADR 0111)
       return estimateLine(e);
     },
@@ -761,7 +763,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
   // routine packages the Orchestrator authors (ADR 0175): <userData>/routines/<id>/routine.json, the Routine section's store
   const routinePackageStore = createFolderPackageStore(path.join(ctx.userData, 'routines'));
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, balancedMode, away: { on: awayOn, log: e => awayLog.add(e) }, routinePackages: () => routinePackageStore, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, schedules, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps,
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, balancedMode, away: { on: awayOn, log: e => awayLog.add(e) }, routinePackages: () => routinePackageStore, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, schedules, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps,
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },

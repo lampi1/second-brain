@@ -7,6 +7,7 @@ import type { AgentRun } from '../../shared/agents';
 import type { RunEstimates } from '../../shared/task-estimate';
 import { RUN_ID } from './runs';
 import { runEstimates, SimilarIndex } from './task-estimate';
+import type { TokenPrice } from './standing';
 import { estimateAccuracy } from './estimate-accuracy';
 
 export const RUN_IDS_MAX = 200;
@@ -25,8 +26,9 @@ export function mergeRuns(stored: readonly AgentRun[], mirrors: readonly (AgentR
   return [...byId.values()];
 }
 
-export function estimatesState(runs: readonly AgentRun[], runIds: readonly string[], now: number): RunEstimates {
-  const index = new SimilarIndex(runs);
+/** `prices` = the list price of each model whose runs report no cost (a plain table: the read worker takes no function). */
+export function estimatesState(runs: readonly AgentRun[], runIds: readonly string[], now: number, prices: Record<string, TokenPrice> = {}): RunEstimates {
+  const index = new SimilarIndex(runs, model => prices[model] ?? null);
   return { runs: runEstimates(runs, runIds, index), accuracy: estimateAccuracy(runs, now, undefined, index) };
 }
 

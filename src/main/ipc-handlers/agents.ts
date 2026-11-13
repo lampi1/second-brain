@@ -54,7 +54,9 @@ export function agentsHandlers({ s, demo, agentImages, workflows, orchestrator, 
       const runs = mergeRuns(demo ? demoEstimateRuns(now) : s.agentRuns?.list() ?? [], s.chats.list().map(c => c.run));
       // the chats' runs are the store's own records (adopted ones too): its revision plus the count covers both
       const key = !demo && s.agentRuns ? `store:${s.agentRuns.revision}/${runs.length}` : undefined;
-      return readWorker.call({ op: 'estimates', runs, runIds: checkRunIds(a?.runIds), now }, key);
+      // a run with tokens and no cost counts at list price (ADR 0284): the table of those runs' models goes with the request
+      const prices = s.chats.listPrices?.(runs.flatMap(r => r.costUsd === null && r.model ? [r.model] : [])) ?? {};
+      return readWorker.call({ op: 'estimates', runs, runIds: checkRunIds(a?.runIds), now, prices }, key);
     },
     'agents:judgingEstimate': () => {
       const now = demo && process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now();
