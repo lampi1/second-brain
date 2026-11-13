@@ -172,17 +172,18 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
   // a Strategist's open question: the strip points to the window, set aside too («Basta domande» stays reachable)
   const planAsk = planQuestion(chat, reqs, false);
   const ownReqs = activeOwn;
-  // out of the norm, so on the closed strip too: the work is past its estimate, or the context is long
+  // past its estimate a figure of the strip turns amber (ADR 0292); a long context shows its meter on the head
   const estimate = chat.run ? estimates?.runs[chat.run.runId]?.estimate ?? null : null;
-  const runOpen = !!chat.run && chat.run.endedAt === undefined;
-  const overTime = runOpen && !!estimate && estimate.timeMs !== null && work !== null && (busy || chat.state === 'waiting') && work > estimate.timeMs;
-  const overCost = runOpen && !!estimate && estimate.costUsd !== null && (chat.costUsd ?? 0) > estimate.costUsd * 1.5;
+  // the cost as chatCost reads it: the ledger's for an engine that reports none, nothing when it is unknown or zero
+  const costNow = chat.costLedgerUsd ?? (chat.costKnown === false ? null : chat.costUsd || null);
+  const overTime = !!estimate && estimate.timeMs !== null && work !== null && work > estimate.timeMs;
+  const overCost = !!estimate && estimate.costUsd !== null && costNow !== null && costNow > estimate.costUsd * 1.5;
   const longContext = isLong(chat, warn);
   const name = chat.agent?.name || chat.title, topic = chat.agent?.name && chat.title && chat.title !== chat.agent.name ? chat.title : '';
-  // one state on the right: «Ti aspetta» (opens the question), else a dot and what it is doing with its time
+  // one state: «Ti aspetta» (opens the question), else the dot in front and, when words are needed, a pill
   const stateText = waitText && st.tone !== 'err' && st.label !== t('ui.state.queued') ? waitText : st.label;
   // the plain states are the leading dot alone (its word stays for screen readers); anything else is said in words
-  const plainState = stateText === st.label && (st.tone === 'run' || st.tone === 'done');
+  const plainState = !focus && stateText === st.label && (st.tone === 'run' || st.tone === 'done');
   const est = estimate ? estimateText(estimate) : null;
   const cost = chatCost(chat);
   const drag = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -223,12 +224,12 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
               data-testid={`chat-resumed-${chatId}`}>{auditText('audit.ChatTile.resumedAfterRestart')}</span>
           )}
           {/* time and cost so far, each against its estimate: always on the strip (the owner, 2026-11-13) */}
-          {(work !== null || !!chat.costUsd) && <span className="strip-meta" data-testid={`chat-meta-${chatId}`} data-tip={t(est ? 'aw.metaTipEst' : 'aw.metaTip')}>
+          {(work !== null || costNow !== null) && <span className="strip-meta" data-testid={`chat-meta-${chatId}`} data-tip={t((work !== null && est?.time) || (costNow !== null && est?.cost) ? 'aw.metaTipEst' : 'aw.metaTip')}>
             {work !== null && <span className={overTime ? 'over' : undefined}>{minutes(work)}{est?.time && <i> / {est.time}</i>}</span>}
-            {!!chat.costUsd && <span className={overCost ? 'over' : undefined}>{cost}{est?.cost && <i> / {est.cost}</i>}</span>}
+            {costNow !== null && <span className={overCost ? 'over' : undefined}>{cost}{est?.cost && <i> / {est.cost}</i>}</span>}
             {(overTime || overCost) && <span className="sr-only" data-testid={`chat-over-${chatId}`}>{t('aw.overTip')}</span>}
           </span>}
-          {!expanded && longContext && <ContextMeter chat={chat} warn={warn} />}
+          {(!expanded || !facts) && longContext && <ContextMeter chat={chat} warn={warn} />}
           {viewSwitch}
           {/* the state stays in the DOM as the strip's data-state hook; one thing is shown: the wait or the state */}
           <span hidden><StatePill chat={chat} testid={`chat-state-${chatId}`} /></span>

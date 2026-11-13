@@ -207,7 +207,7 @@
     "src/renderer/components/brain-model/MapPage.tsx#MapPage": "c5e13c15fba36a75",
     "src/renderer/components/brain-model/MemoryBrowser.tsx": "4d91a2dbafb2d340",
     "src/renderer/components/brain-model/RulesPage.tsx": "e96dea64948c1516",
-    "src/renderer/components/ChatTile.tsx": "c3e0d0afe809e875",
+    "src/renderer/components/ChatTile.tsx": "182536df8db945ba",
     "src/renderer/components/ChildStrips.tsx": "29067075c4c458db",
     "src/renderer/components/ConnectorsHub.tsx": "21c5287ff873f500",
     "src/renderer/components/ContextBar.tsx": "29e55a926c219803",

@@ -14,6 +14,7 @@ test('a chat tile shows its DevOps links as chips; a click opens them in the sys
   const { app, page } = await launchDemo();
   try {
     await expandChats(page, 'qa'); // a folded strip is compact: its chips show on the open strip (ChatTile.tsx)
+    await page.getByTestId('chat-facts-qa').click(); // the details row opens from the ⓘ (ADR 0292)
     const chips = page.getByTestId('chat-devlinks-qa');
     await expect(chips).toBeVisible();
     // newest first: the build and the PR of the last message, then the PR and the bug read by the tools

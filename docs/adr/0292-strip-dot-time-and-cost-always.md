@@ -27,11 +27,11 @@ ADR 0287 showed a strip's numbers only out of the norm. The owner wants them alw
    is a panel between two hairlines, no card and no focus border.
 5. The open window's details row (version, model, the full estimate chip, context, links) opens from the ⓘ, in the
    column as in full screen.
-6. A sub-agent's state under a strip is plain coloured words, not a second pill.
+6. A sub-agent's state, under a strip and in the Orchestrator's column, is plain coloured words, not a second pill.
 
 ## Consequences
 
 - The amber «0,35 $ · stima 0,14 $» text of ADR 0287 is gone: the same fact is the amber figure in the pill.
 - The estimate chip with its «?» is one click further (ⓘ).
-- The top bar, the sidebar and the Orchestrator's column are unchanged.
+- The top bar and the sidebar are unchanged; in the Orchestrator's column only the sub-agents' state changes (point 6).
 - Demo chats carry a work time, so the screenshots show both figures.

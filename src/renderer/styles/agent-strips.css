@@ -55,7 +55,7 @@
 .chat-tile .th-topic { margin-left:8px; font-weight:400; color:var(--text-2); }
 .chat-header-actions { display:flex; align-items:center; justify-content:flex-end; gap:4px; flex:none; flex-wrap:wrap; max-width:100%; margin-left:auto; white-space:normal; }
 /* The closed strip: one row, no card (the page is the card; a card inside it only adds a frame). The whole row is
-   the click target; the state on the right is a dot and one word or time; the three controls keep their room, so the
+   the click target; the state is the dot in front, a pill on the right only when words are needed; the three controls keep their room, so the
    states of every row line up, and show on hover or keyboard focus (the ⋯ stays faintly visible). */
 .chat-tile.is-strip { cursor:pointer; border-color:transparent; background:transparent; border-radius:var(--r-m); overflow:visible; }
 .chat-tile.is-strip:hover, .chat-tile.is-strip:focus-within { background:var(--surface-2); }
@@ -74,13 +74,8 @@
 .chat-tile.is-strip .th-topic + .chat-strip-line:not(:empty)::before { content:"· "; color:var(--text-4); }
 .strip-state { flex:none; display:inline-flex; align-items:center; gap:6px; font-size:var(--fs-s); color:var(--text-3); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .strip-dot { width:7px; height:7px; border-radius:50%; background:var(--text-4); }
-.strip-state.tone-run .strip-dot { background:var(--accent); }
-.strip-state.tone-done .strip-dot { background:var(--green); }
 .strip-state.tone-err { color:var(--red); }
-.strip-state.tone-err .strip-dot { background:var(--red); }
 .strip-state.tone-wait { color:var(--amber); }
-.strip-state.tone-wait .strip-dot { background:var(--amber); }
-.strip-alert { flex:none; font-size:var(--fs-s); font-weight:600; color:var(--amber); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .chat-tile.is-strip .th-ctx { margin-left:0; }
 .chat-tile.is-strip .chat-header-actions { min-width:86px; flex-wrap:nowrap; margin-left:0; }
 .chat-tile.is-strip .chat-header-actions > .icon-btn { opacity:0; transition:opacity var(--dur-fast) var(--ease); }
@@ -214,8 +209,8 @@
 .strip-meta .over, .strip-meta .over i { color:var(--amber); }
 .strip-wait { background:none; }
 .agent-strips .agent-pane:not(.strip-pane):not(.browser-pane) { margin:0; border-bottom:1px solid var(--border); }
-.agent-strips .chat-tile.is-expanded { border:0; border-radius:0; background:var(--surface); }
-.agent-strips .chat-tile.is-expanded.focused { border:0; }
+.agent-strips .chat-tile.is-expanded:not(.is-embedded) { border:0; border-radius:0; background:var(--surface); }
+.agent-strips .chat-tile.is-expanded:not(.is-embedded).focused { border:0; }
 .agent-strips .chat-tile.is-expanded > .tile-head { padding:7px 4px 7px 10px; border-bottom:1px solid var(--border); }
 .strip-facts { padding-left:20px; margin-top:4px; }
 .workspace-area { margin:16px 10px 6px; font:600 10.5px var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--text-3); }
