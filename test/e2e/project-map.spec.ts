@@ -40,7 +40,7 @@ test('the project map draws the project, zooms into a system and plays its histo
   } finally { await app.close(); }
 });
 
-// ADR 0276: «Mappe» (top bar, the Orchestrator's head, Ctrl+Shift+S, app_project_map open) opens the map as a page beside
+// ADR 0276: «Mappe» (top bar, the Orchestrator's head (ADR 0301), Ctrl+Shift+S, app_project_map open) opens the map as a page beside
 // the Orchestrator's column, never over it: the user talks to the Orchestrator while he looks at the map
 test('the project maps open beside the Orchestrator and step into a system', async () => {
   const { app, page } = await launchDemo();
@@ -95,7 +95,7 @@ test('a plan is drawn on the map: steps in their box, a planned piece, approval 
 test('the maps go real full screen, Esc leaves it, and a box is discussed with the Orchestrator in one click', async () => {
   const { app, page } = await launchDemo();
   try {
-    await page.getByTestId('maps-btn').click();
+    await page.getByTestId('orchestrator-maps').click();
     const view = page.getByTestId('pm-view');
     await view.getByTestId('pm-node-negozio').click();
     await expect(view.getByTestId('pm-node-rimborsi')).toBeVisible();

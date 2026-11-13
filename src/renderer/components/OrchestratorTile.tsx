@@ -7,7 +7,7 @@
 // capo", "Cambia motore" (both open the Nuovo Orchestrator confirm) and "Pulisci"; the eraser on its head is "Pulisci" in
 // one click, without the confirm (clearOrchestratorNow, the quick /clear). With no Orchestrator yet it offers to create
 // one. In its head, one line with its model, the chats it started today by state and the cost apart, its own and theirs (#153,
-// lib/orchestrator-tally.ts), and its details; «Manutenzione» and the project maps are on the top bar (ADR 0287); on its head the moon of «Modalità notte» with its line while on (AwayToggle.tsx, ADR 0191); the phone of «Controllo remoto» with the claude.ai link while on (RemoteControl.tsx, ADR 0229); the morning block's line while strips are open (no plan panel: the strips carry each estimate, #124) (MorningBlock.tsx, ADR 0102). When it drives a browser, it wears that pair's accent like any chat (lib/pairs.ts). Used by OrchestratorOverlay.tsx.
+// lib/orchestrator-tally.ts), and its details; «Manutenzione» is on the top bar (ADR 0287); the project maps button is on the top bar and on its head (ADR 0301); on its head the moon of «Modalità notte» with its line while on (AwayToggle.tsx, ADR 0191); the phone of «Controllo remoto» with the claude.ai link while on (RemoteControl.tsx, ADR 0229); the morning block's line while strips are open (no plan panel: the strips carry each estimate, #124) (MorningBlock.tsx, ADR 0102). When it drives a browser, it wears that pair's accent like any chat (lib/pairs.ts). Used by OrchestratorOverlay.tsx.
 import { AwayButton, AwayLine } from './AwayToggle';
 import { RemoteButton, RemoteLine } from './RemoteControl';
 import { memo, useEffect, useRef, useState } from 'react';
@@ -30,6 +30,7 @@ import { ORCHESTRATOR_ROLE_ID } from '@shared/roles';
 import { AgentIdentity } from './AgentIdentity';
 import {AgentAvatar}from'./AgentAvatar';
 import { ChildStrips } from './ChildStrips';
+import { MapsButton } from './MapsButton';
 import { MorningLine } from './MorningBlock';
 import { useFlash } from './ChatTile';
 import { StrategyPanel } from './StrategyPanel';
@@ -136,6 +137,8 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
           <span className="sp" />
           <AwayButton />
           <RemoteButton chat={chat} reveal={() => setRemoteHidden(false)} />
+          {/* the project maps from the Orchestrator's head too (ADR 0301): they open where the user talks to it */}
+          <MapsButton testid="orchestrator-maps" size={14} />
           {busy && <IconButton label={t('dialogs.orchestrator.stopLabel')} shortcut={t('dialogs.orchestrator.stopShortcut')} tone="danger" onClick={() => void stop(chat.id)} testid="orchestrator-stop"><IconStop size={14} /></IconButton>}
           <IconButton label={t('chat.clearContext')} disabled={busy} onClick={() => void clearOrchestratorNow(chat.id)} testid="orchestrator-clear"><IconEraser size={14} /></IconButton>
           <IconButton ref={menuBtn} label={t('dialogs.orchestrator.menuLabel')} onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid="orchestrator-menu"><IconMore /></IconButton>
