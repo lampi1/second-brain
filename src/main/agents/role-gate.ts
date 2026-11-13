@@ -1,9 +1,9 @@
 // The gate every permission request of a role chat passes before it reaches the user (ChatManager's sink.pending):
-// a Skill call is allowed at once when the launch gave that skill (the user's standing grant through the role) and
-// it is named through the launch's own runtime plugin (`agent-<hash16>:<name>`, agents/pack/flows.ts runtime()), and
-// refused otherwise: another prefix could be a user, project or plugin skill of the same name. A bare name of a skill the
-// launch gave is allowed with its input rewritten to the qualified name (rewrite: an engine that runs a changed input,
-// Claude; issue #101), so it always loads the launch's own copy; any other bare name is refused. An engine sub-agent (Claude's Agent/Task) is allowed only for a quick read-only search (Explore),
+// a Skill call is always allowed at once, never asked and never refused (ADR 0278; owner, 2026-11-13: «voglio libertà»,
+// «tutto consentito da subito»): the skills the launch gave, named through the launch's own runtime plugin
+// (`agent-<hash16>:<name>`, agents/pack/flows.ts runtime()), and any other skill the engine can load (its own, the user's,
+// a project's). A bare name of a skill the launch gave is allowed with its input rewritten to the qualified name
+// (rewrite: an engine that runs a changed input, Claude; issue #101), so it loads the launch's own copy. An engine sub-agent (Claude's Agent/Task) is allowed only for a quick read-only search (Explore),
 // or, in a project with the AI-DLC harness, for that project's own aidlc-* agents (its flow dispatches them, ADR 0083
 // amendment); any other type is refused because delegated work runs in a visible chat (agent_delegate); and a request of a
 // delegated chat whose tool class goes beyond its parent's permissions is refused (under a parent that may only read
@@ -29,10 +29,10 @@ export interface GateChat {
   role?: { id: string; name: string };
   /** the skills its launch gave it (role defaults ∪ the delegation's) */
   skills: readonly string[];
-  /** the launch's runtime plugin name (runtimePluginName); absent = no plugin: every skill is refused */
+  /** the launch's runtime plugin name (runtimePluginName); absent = no plugin: nothing to qualify */
   plugin?: string;
   /** its engine runs an allowed call with a changed input (Claude's updatedInput): a granted bare skill name is
-   *  allowed as "<plugin>:<name>" instead of refused */
+   *  allowed as "<plugin>:<name>", the launch's own copy */
   rewrite?: boolean;
   /** the delegating chat's policy and title (absent = a root chat) */
   parent?: { policy: AgentPolicy | null; title: string };
@@ -153,17 +153,13 @@ export function isReadToolsList(brainRoot: string, target: string): boolean {
 export function gateRequest(req: GateRequest, chat: GateChat): GateVerdict {
   if (!chat.role || req.type !== 'permission') return { kind: 'pass' };
   if (req.tool === 'Skill') {
-    // only "<launch plugin>:<name>" is the skill the launch gave: a bare name or another prefix may resolve to a user,
-    // project or other plugin skill that merely shares the name
     const key = SKILL_KEYS.find(k => field(req.input, k)) ?? 'skill';
-    const raw = field(req.input, ...SKILL_KEYS), cut = raw.indexOf(':');
-    const prefix = cut < 0 ? '' : raw.slice(0, cut), name = cut < 0 ? raw : raw.slice(cut + 1);
-    if (chat.plugin && prefix === chat.plugin && name && chat.skills.includes(name)) return { kind: 'allow' };
-    // a granted skill by its bare name: run as the launch's own copy, never a user or project skill of that name
-    if (chat.plugin && chat.rewrite && cut < 0 && name && chat.skills.includes(name)) return { kind: 'allow', patch: { [key]: `${chat.plugin}:${name}` } };
-    const hint = chat.plugin && name && chat.skills.includes(name) ? ` Call it as «${chat.plugin}:${name}».` : '';
-    return { kind: 'deny', code: 'skillRefused', params: { skill: raw || '?', role: chat.role.name },
-      message: `The skill «${raw || '?'}» is not assigned to your role (${chat.role.name}): use only the skills you were given, or tell your parent which one you need.${hint}` };
+    const raw = field(req.input, ...SKILL_KEYS);
+    // a granted skill by its bare name: run as the launch's own copy, where the engine runs a changed input
+    if (chat.plugin && chat.rewrite && raw && !raw.includes(':') && chat.skills.includes(raw)) return { kind: 'allow', patch: { [key]: `${chat.plugin}:${raw}` } };
+    // any other skill (the engine's own, the user's, a project's) runs too: a role is free to use what is installed
+    // (owner, 2026-11-13: «voglio libertà», «tutto consentito da subito»; ADR 0278)
+    return { kind: 'allow' };
   }
   if (SUBAGENT_TOOLS.has(req.tool)) {
     const refused = subagentRefusal(req.input, chat.cwd);

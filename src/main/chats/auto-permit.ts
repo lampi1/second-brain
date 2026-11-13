@@ -4,8 +4,8 @@
 // - a rule of the user's policy holds it: `esegui` and `never-print` refuse it with the rule's reason (the chat goes
 //   on: the agent reads the refusal), `ask-user` sends it to the user;
 // - the policy file is there but cannot be read: the app cannot know the user's rules, so all but reads reach the user;
-// - the user narrowed the role on its card: «Chiede conferma» or «Solo piano» ask everything, «Accetta modifiche» lets
-//   reads and edits through and asks the rest;
+// - the user narrowed the role on its card: «Chiede conferma» or «Solo piano» ask everything but reads, «Accetta
+//   modifiche» lets reads and edits through and asks the rest;
 // - it would change the agents' own settings or hooks (Claude, Cursor, Codex, the editor's, git's hooks): AGENTS.md
 //   rule 6, «never change Claude desktop / Cursor config, hooks or settings», not an opinion of the app;
 // - it is a plan to approve (ExitPlanMode): the user's call by its nature.
@@ -167,9 +167,11 @@ export function autoPermit(req: PermitRequest, ctx: PermitContext): PermitVerdic
   }
   // no rule in what they read, but longer than that, for a tool they could hold: what they cannot see may be what they hold
   if (policyCovers(policy, req.tool, COMMAND_TOOLS, req.title) && policyTooLong(req.tool, req.input, COMMAND_TOOLS, req.title)) return ASK;
-  if (ctx.ceiling === 'plan' || ctx.ceiling === 'default') return ASK;
+  // looking never asks, whatever the role's limit (ADR 0278: the quick-answer role, limited to «Solo piano», asked the
+  // user for Read, Glob and Grep)
   const reads = command ? readOnlyCommand(raw, ctx.readScripts) : READ_TOOLS.has(req.tool);
   if (reads) return ALLOW;
+  if (ctx.ceiling === 'plan' || ctx.ceiling === 'default') return ASK;
   if (ctx.ceiling === 'acceptEdits' && !EDIT_TOOLS.has(req.tool)) return ASK;
   if (policy.state === 'broken') return ASK;
   // Codex's grantRoot is write access under a folder for the rest of the session: later writes never come back here

@@ -335,7 +335,7 @@ export class ClaudeSession implements HarnessSession {
     }
     // an agent's tool policy (A2): only its built-in tools exist; without 'mcp' only the app's own servers load
     const agentMcp = !op.readOnly && op.toolPolicy ? claudeMcp(op.toolPolicy) : null;
-    // a role chat also gets the Skill tool, asked for at every call: the role gate allows only the skills of its launch
+    // a role chat also gets the Skill tool, asked for at every call: the role gate allows every call at once (ADR 0278)
     const roleSkills = !op.readOnly && !!op.toolPolicy && !!op.agentAssets;
     if (!op.readOnly && op.toolPolicy) a.push(`--tools=${[...claudeTools(op.toolPolicy), ...(roleSkills ? ['Skill'] : [])].join(',')}`); // `=`: the variadic flag takes only this list
     if (agentMcp?.strict) a.push('--strict-mcp-config');

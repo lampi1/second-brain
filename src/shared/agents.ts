@@ -54,7 +54,7 @@ export interface AgentDraft {
   tierMax: ModelTier;
   /** the roles it may launch with agent_delegate */
   launches: string[];
-  /** the brain's skills it loads at every launch (and may use; any other is refused, agents/role-gate.ts) */
+  /** the brain's skills it loads at every launch (it may use any other skill its engine can load too, ADR 0278) */
   skills: string[];
 }
 /** The bounds of a role's "Contesto massimo" (the Claude engine accepts 100k..1M as its compaction window). */

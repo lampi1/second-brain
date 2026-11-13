@@ -60,7 +60,7 @@ describe('agent policy on chats', () => {
     expect(f.modes).toEqual(['plan']);
   });
 
-  it('a role that may only read commands: a writing command is refused visibly, a reading one reaches the user without always', async () => {
+  it('a role that may only read commands: a writing command is refused visibly, a reading one runs without asking (ADR 0278)', async () => {
     const f = fixture();
     const c = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' }, 'user', agent({ tools: { allow: ['read', 'shell-read'] }, ceiling: 'default' }));
     const ask = (id: string, command: string) => f.sink().pending({ id, type: 'permission', tool: 'Bash', title: `Bash: ${command}`, detail: command, input: { command }, at: 1, alwaysRules: ['Bash(git:*)'] });
@@ -69,9 +69,8 @@ describe('agent policy on chats', () => {
     expect(f.m.pending().filter(p => p.chatId === c.id)).toEqual([]);
     expect(f.m.items(c.id).some(i => i.kind === 'system' && i.code === 'commandReadOnly')).toBe(true);
     ask('p2', 'git status');
-    expect(f.answers).toHaveLength(1);
-    expect(f.m.pending().find(p => p.id === 'p2')).toMatchObject({ noAlways: true });
-    expect(f.m.pending().find(p => p.id === 'p2')?.alwaysRules).toBeUndefined();
+    expect(f.answers.find(a => a.id === 'p2')?.answer).toMatchObject({ kind: 'permission', allow: true });
+    expect(f.m.pending().some(p => p.id === 'p2')).toBe(false);
   });
 
   it('the app answers itself (ADR 0254): all passes but what the brain\'s rules hold, refused visibly or sent to the user without «always»', async () => {

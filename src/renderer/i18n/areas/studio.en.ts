@@ -33,7 +33,7 @@ export const studioEn: typeof studioIt = {
   'studio.launchesHint': 'With agent_delegate, in visible chats under its own. A child never has more permissions than its parent.',
   'studio.launchesNone': 'None',
   'studio.skills': 'Skills loaded at every launch',
-  'studio.skillsHint': 'The role uses only the skills it is given: these, plus the ones its launcher passes.',
+  'studio.skillsHint': 'The role always starts with these, plus the ones its launcher passes. It may use the engine\'s own skills and your personal ones too.',
   'studio.skillAdd': 'Add skill',
   'studio.skillName': 'Skill name',
   'studio.skillRemove': ({ name }: { name: string }) => `Remove ${name}`,

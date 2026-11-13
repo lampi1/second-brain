@@ -518,8 +518,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Where the app sorts something by itself without spending tokens: the kind of work, the Orchestrator’s mail, sensitive commands.'),
     points: [
       // src/main/agents/discovery.ts agent_catalog (ADR 0186: the suggester is gone)
-      b('Skill per un compito: nessun suggeritore (ADR 0186: 3 consigli giusti su 4129); l’Orchestrator, o il ruolo che delega, passa per nome le skill che servono. Un ruolo usa solo le skill che il suo avvio gli dà.',
-        'Skills for a task: no suggester (ADR 0186: 3 right suggestions in 4129); the Orchestrator, or the role that delegates, passes the skills it needs by name. A role uses only the skills its launch gives it.'),
+      b('Skill per un compito: nessun suggeritore (ADR 0186: 3 consigli giusti su 4129); l’Orchestrator, o il ruolo che delega, passa per nome le skill che servono. Un ruolo parte con le skill che il suo avvio gli dà e può usare anche quelle del motore e le tue personali, senza chiedere.',
+        'Skills for a task: no suggester (ADR 0186: 3 right suggestions in 4129); the Orchestrator, or the role that delegates, passes the skills it needs by name. A role starts with the skills its launch gives it and may use the engine’s own and your personal ones too, without asking.'),
       // src/shared/work-concepts.ts CONCEPTS
       b('Italiano e inglese si incontrano: un piccolo lessico di lavori («correggi» = fix, «revisiona» = review, «fonti» = sources…) unisce le richieste in italiano e le skill scritte in inglese.',
         'Italian and English meet: a small lexicon of kinds of work ("correggi" = fix, "revisiona" = review, "fonti" = sources…) joins Italian requests and skills written in English.'),

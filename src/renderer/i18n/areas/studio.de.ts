@@ -33,7 +33,7 @@ export const studioDe: typeof studioIt = {
   'studio.launchesHint': 'Mit agent_delegate, in sichtbaren Chats unter ihrem eigenen. Ein Kind hat nie mehr Berechtigungen als sein Elternchat.',
   'studio.launchesNone': 'Keine',
   'studio.skills': 'Bei jedem Start geladene Skills',
-  'studio.skillsHint': 'Die Rolle nutzt nur die Skills, die sie bekommt: diese plus die, die ihr Starter mitgibt.',
+  'studio.skillsHint': 'Die Rolle startet immer mit diesen, plus denen, die ihr Starter mitgibt. Sie darf auch die Skills der Engine und deine persönlichen nutzen.',
   'studio.skillAdd': 'Skill hinzufügen',
   'studio.skillName': 'Name des Skills',
   'studio.skillRemove': ({ name }: { name: string }) => `${name} entfernen`,

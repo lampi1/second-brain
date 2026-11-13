@@ -15,7 +15,7 @@ import { allowsClass, COMMAND_TOOLS, commandsReadOnly, readOnlyCommand, toolClas
 import { readOnlyTools } from '../agents/read-tools';
 import { gateRequest, runtimePluginName } from '../agents/role-gate';
 import { autoPermit } from './auto-permit';
-import { loadPolicy, policyCovers } from './permit-policy';
+import { loadPolicy, policyCovers, policyHit } from './permit-policy';
 import { AWAY_PARKED, AWAY_PLAN_NOTE, recommendedAnswers } from '../../shared/away';
 import { askingPlan, PLAN_APPROVED, type IntakeSource, type PlanIntake } from '../../shared/strategy';
 import type { SubmissionReceipt, Rec } from './manager-types';
@@ -404,9 +404,10 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     if (!r.commandsOpen.size && !r.pending.size) this.idleAgain(r);
   }
 
-  /** The role gate (agents/role-gate.ts) on a request before it reaches the user: an assigned skill is allowed at once,
-   *  an unassigned one, an engine sub-agent other than a search and a request beyond the delegating chat's permissions
-   *  are refused, visibly. True = answered here. */
+  /** The role gate (agents/role-gate.ts) on a request before it reaches the user: a skill is allowed at once (ADR 0278;
+   *  one the user's own rules name, or any while those rules cannot be read, goes on to autoPermitted), an engine
+   *  sub-agent other than a search and a request beyond the delegating chat's permissions are refused, visibly.
+   *  True = answered here. */
   protected gated(r: Rec, req: Omit<PendingRequest, 'chatId'>): boolean {
     const owner = r.s.agent, parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
     if (owner?.source !== 'catalog' || (r.s.isOrchestrator && req.tool !== 'Skill')) return false;
@@ -417,6 +418,11 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       ...(r.s.parentId ? { parent: { policy: parent ? parent.policy ?? null : r.policy ?? null, title: parent?.s.title ?? r.s.parentId } } : {}) });
     if (verdict.kind === 'pass') return false;
     if (verdict.kind === 'allow') {
+      // the user's rules (permissions.json) hold a skill they name, as in a plain chat; unreadable rules ask
+      if (req.tool === 'Skill') {
+        const policy = loadPolicy(this.opts.brainRoot?.() ?? null);
+        if (policy.state === 'broken' || policyHit(policy, req.tool, req.input, COMMAND_TOOLS, req.title)) return false;
+      }
       this.policyAnswer(r, req, { kind: 'permission', allow: true }, 'role-gate', verdict.patch);
       log.info('chats', 'role gate allowed', { chat: r.s.id, data: { tool: req.tool, qualified: !!verdict.patch } });
       return true;

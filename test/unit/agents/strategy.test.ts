@@ -237,7 +237,7 @@ describe('a Strategist\'s plan with the user', () => {
     expect(planOf(f, stopped.id).phase).toBe('proposed');
   });
 
-  it('gates Orchestrator Skill calls to its assigned runtime namespace', async () => {
+  it('the Orchestrator\'s Skill calls are never refused; a granted bare name runs as its launch copy (ADR 0278)', async () => {
     const f = fixture();
     const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true, prompt: 'Pianifica uno sconto' });
     const ask = (skill: string) => f.sinks.get(o.id)!.pending({ id: skill, type: 'permission', tool: 'Skill', title: 'Skill', detail: '', input: { skill }, at: Date.now() });
@@ -245,7 +245,7 @@ describe('a Strategist\'s plan with the user', () => {
     expect(f.answers.at(-1)).toMatchObject({ answer: { allow: true }, patch: { skill: 'agent-p:work-intake' } });
     for (const name of ['foreign:work-intake', 'agent-p:draft-update']) {
       ask(name);
-      expect(f.answers.at(-1)).toMatchObject({ id: name, answer: { allow: false } });
+      expect(f.answers.at(-1)).toMatchObject({ id: name, answer: { allow: true } });
     }
   });
 
