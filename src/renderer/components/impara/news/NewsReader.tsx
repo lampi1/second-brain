@@ -1,14 +1,14 @@
-// One story of the News, read in place (ADR 0265): its section, title, source and date, «Perché conta per te», the AI
-// summary (or the source's own few words until the next refresh writes it), the actions (Spiegamelo, Salva, letta /
-// da leggere, Apri la fonte) and every link to it: the primary first, then the other sources that carried it. A line
-// at the bottom says why it is where it is (the four parts of its score). Used by NewsPage.tsx; styles news.css.
-import type { NewsItem } from '@shared/news';
-import { explainStory, markNews } from '../../../lib/news';
+// One story of the «Giornale», read in place (ADR 0265, 0279): its section, title, source and date, «Perché conta per
+// te», the AI summary (or the source's own few words until the next refresh writes it), the actions (Impara, Salva,
+// letta / da leggere, Meno così, Apri la fonte) and every link to it: the primary first, then the other sources that
+// carried it. «Perché è qui» at the bottom gives the four parts of its score. Used by NewsPage.tsx; styles news.css.
+import type { NewsEdition, NewsItem } from '@shared/news';
+import { explainStory, lessLikeThis, markNews } from '../../../lib/news';
 import { go } from '../../../actions';
 import { locale, t } from '../../../i18n';
 import { now as clockNow } from '../../../lib/clock';
 import { Button, Kbd } from '../../ui';
-import { IconBook, IconExternal, IconStar } from '../../Icons';
+import { IconBook, IconExternal, IconStar, IconX } from '../../Icons';
 import { useState } from 'react';
 
 export function fullDate(at: number): string {
@@ -26,19 +26,20 @@ export function shortWhen(at: number, now = clockNow()): string {
 
 const pct = (n: number) => Math.round(n * 100);
 
-export function NewsReader({ it }: { it: NewsItem }) {
+export function NewsReader({ it, ed }: { it: NewsItem; ed: NewsEdition }) {
   const [busy, setBusy] = useState(false);
   const explain = async () => {
     if (busy) return;
     setBusy(true);
-    const id = await explainStory(it);
+    const id = await explainStory(it, ed.name);
     setBusy(false);
     if (id) go({ page: 'impara', arg: id });
   };
+  const secAt = ed.sections.findIndex(x => x.id === it.section);
   const host = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
   return (
     <div className="nw-story" data-testid="news-reader" data-id={it.id}>
-      <span className={`nw-sec ${it.section}`}>{t(`news.section.${it.section}`)}</span>
+      {secAt >= 0 && <span className={`nw-sec t${secAt % 6}`}>{ed.sections[secAt]!.name}</span>}
       <h2 className="nw-h">{it.title}</h2>
       <div className="nw-meta">
         <span className="nw-src">{it.sourceName}</span>
@@ -60,6 +61,9 @@ export function NewsReader({ it }: { it: NewsItem }) {
         <Button onClick={() => void markNews(it.id, { read: !it.read })} testid="news-read">
           {it.read ? t('news.markUnread') : t('news.markRead')} <Kbd>U</Kbd>
         </Button>
+        <Button variant="ghost" onClick={() => void lessLikeThis(it)} testid="news-less">
+          <IconX size={13} />{t('news.less')} <Kbd>X</Kbd>
+        </Button>
         <a className="btn btn-ghost btn-m nw-open" href={it.url} target="_blank" rel="noopener noreferrer" data-testid="news-open">
           <IconExternal size={13} />{t('news.open')} <Kbd>O</Kbd>
         </a>
@@ -71,6 +75,7 @@ export function NewsReader({ it }: { it: NewsItem }) {
         ))}
       </div>
       <div className="nw-rank" data-tip={t('news.rankTip')}>
+        <b>{t('news.rankWhy')}</b>
         <span>{t('news.rank', { n: pct(it.score) })}</span>
         <span>{t('news.rankRecency')} <i>{pct(it.rank.recency)}</i></span>
         <span>{t('news.rankSource')} <i>{pct(it.rank.source)}</i></span>

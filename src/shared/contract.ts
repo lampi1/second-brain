@@ -20,6 +20,7 @@ import type { BudgetAlert, SettingChange, SettingProposal, Settings, SettingsInv
 import type { AnswerLater, HeldNewsState, OverlayAction, OverlayModel, SearchIndexStatus, SyncState, UiInvokeMap } from './contract/ui';
 import type { ImparaState, Lesson } from './lesson';
 import type { NewsState } from './news';
+import type { SchedulesState } from './schedules';
 import type { MaintenanceDone } from './maintenance-research';
 import type { McpServersState } from './mcp-servers';
 import type { RecState } from './recordings';
@@ -128,8 +129,10 @@ export interface EventMap {
   'impara:changed': { state: ImparaState; lesson?: Lesson };
   /** a tutor answer so far, as it streams (ADR 0190); the lesson brings the whole answer when it ends */
   'impara:tutor': { lesson: string; turn: string; text: string };
-  /** Impara «News» (ADR 0265): the paper changed (a refresh's progress, a story marked, a source edited) */
+  /** the «Giornale» (ADR 0265, 0279): the paper changed (a refresh's progress, a story marked, an edition or a source edited) */
   'news:changed': NewsState;
+  /** scheduled routines (ADR 0280): the list changed (an edit, a run, a next time) */
+  'schedules:changed': SchedulesState;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -139,6 +142,7 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
+  'schedules:state', 'schedules:edit',
   'routines:list', 'routines:import', 'routines:export', 'routines:setSecrets', 'routines:watch', 'routines:unwatch', 'routines:convert',
   'routines:image',
   'routines:archive',
@@ -168,7 +172,7 @@ export const INVOKE_CHANNELS = [
   'voice:state', 'voice:prepare', 'voice:listen', 'voice:audio', 'voice:commit', 'voice:speak', 'voice:cancelSpeech',
   'rec:state', 'rec:arm', 'rec:start', 'rec:chunk', 'rec:stop', 'rec:transcribe', 'rec:rename', 'rec:remove', 'rec:transcript', 'rec:find', 'rec:readFound', 'rec:open',
   'impara:state', 'impara:get', 'impara:start', 'impara:move', 'impara:ask', 'impara:answer', 'impara:explain', 'impara:retry', 'impara:clarify', 'impara:topics', 'impara:remove', 'impara:queue', 'impara:grade', 'impara:subject', 'impara:tutor', 'impara:tutorWarm', 'impara:studio',
-  'news:state', 'news:refresh', 'news:mark', 'news:sources', 'news:schedule',
+  'news:state', 'news:refresh', 'news:edition', 'news:test', 'news:mark', 'news:sources', 'news:schedule',
   'orchestrator:held', 'orchestrator:heldSeen',
   'log:renderer',
   'proposals:shown', 'proposals:undoAuto',
@@ -191,7 +195,7 @@ export const EVENT_CHANNELS = [
   'voice:changed', 'voice:heard', 'voice:speech', 'voice:committed',
   'rec:changed',
   'impara:changed', 'impara:tutor',
-  'news:changed',
+  'news:changed', 'schedules:changed',
   'projectmap:changed',
 ] as const satisfies readonly EventChannel[];
 

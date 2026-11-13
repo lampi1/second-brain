@@ -23,7 +23,7 @@ describe('Orchestrator context ownership', () => {
   it('keeps single-entry routing, exact approvals and production boundaries even with a custom role', () => {
     const frame = orchestratorRole('My coordination preference');
     for (const rule of [
-      'Routines execute only in the user terminal',
+      'Routine packages execute only in the user terminal',
       'no routine scans in generic recaps',
       'Never write or ask for a password or PAT',
       'Production and shared-system operations stay with the user',

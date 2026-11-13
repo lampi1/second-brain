@@ -256,13 +256,15 @@ as a card: how many decisions, how often it got them right, and the last 8 weeks
 
 ### A newspaper from your sources
 
-**Learn** opens on the **News** tab: a short newspaper built from the sources you choose. It ships with about 28 of
-them for people who build agents (lab blogs, release notes, harness changelogs, a few newsletters); pause, remove or
-add one by pasting its link. **Refresh** reads them at zero tokens, merges the same story told by several sources,
-ranks the paper, and one AI pass writes a short summary and "why it matters to you" for the best 30. Three columns
-with keys (J/K, S save, U read, E learn it, O open the source).
+**Learn** opens on the **News** tab: a newspaper of your own, by **editions**. An edition is any subject you follow
+(AI for people who build agents, electric cars, your own field) with its sources, sections and key words; make one
+by pasting links, from the ready-made AI edition, or ask the Orchestrator to find and try the sources for you.
+**Refresh** reads them at zero tokens, merges the same story told by several sources, ranks the paper, and one AI pass
+per edition writes a short summary and "why it matters to you". The front page holds a few stories only (7 by
+default); "Less like this" drops one and its source weighs less. Three columns with keys (J/K, S save, U read, E learn
+it, O open the source).
 
-<p align="center"><img src="docs/screenshots/news.webp" alt="The News tab: sections with unread counts, the ranked stories, and the open story with why it matters, its summary and links" width="640"></p>
+<p align="center"><img src="docs/screenshots/news.webp" alt="The News tab: the editions on top, the sections with unread counts, the short front page, and the open story with why it matters, its summary and links" width="640"></p>
 
 ### Understand what your agents built
 
@@ -300,8 +302,10 @@ Parakeet or Whisper hears you and Piper speaks, all on your PC: no audio leaves 
   per role. Remote servers log in with the MCP OAuth flow.
 - **Settings that find themselves.** One page with a section list, search that highlights the matching row, instant
   save with Undo.
-- **Routines, run from the terminal.** Prepare a routine package with the Orchestrator, export it, and run it anywhere
-  with `routine run`, `watch` or `resume` ([packages/routine-runtime](packages/routine-runtime/README.md)).
+- **Routines on a schedule.** Write a request once and choose when (every day at a time, every few hours, once): the
+  Orchestrator receives it at that time and does it with the agents. Or just tell the Orchestrator "every morning at 8".
+- **Routines as packages, run from the terminal.** Prepare a routine package with the Orchestrator, export it, and run it
+  anywhere with `routine run`, `watch` or `resume` ([packages/routine-runtime](packages/routine-runtime/README.md)).
 - **Tasks.** The Task page lists your Azure DevOps work items and PRs, with builds, votes and QA results.
 - **A guide inside.** Every concept of the app as a card in the **Guide**: how it works, an everyday analogy, the
   source files. **Discuss** sends the card to the Orchestrator.

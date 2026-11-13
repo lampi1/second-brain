@@ -12,11 +12,16 @@ import type { GuideAnswer, GuideAskRequest, GuideStaleState } from '../guide-ask
 import type { McpImportCandidate, McpServerDef, McpServersState, McpToolAccess } from '../mcp-servers';
 import type { RoleId } from '../roles';
 import type { RoutineRunDetail, RoutineRunRef, RoutineTerminalExport, RoutinesSnapshot } from '../routines';
+import type { ScheduleEdit, SchedulesState } from '../schedules';
 import type { RunEstimates } from '../task-estimate';
 import type { WorkDecision, WorkThread } from '../workflows';
 
 /** renderer → main, agents: each entry [argument, result]. Part of InvokeMap (src/shared/contract.ts). */
 export interface AgentsInvokeMap {
+  /** scheduled routines (ADR 0280, main/schedules/): the user's planned requests; an edit creates, changes, pauses,
+   *  deletes or runs one now ('schedules:changed' follows every change and run) */
+  'schedules:state': [void, SchedulesState];
+  'schedules:edit': [ScheduleEdit, SchedulesState];
   // the Routine section (ADR 0175, 0176): packages, their trigger and secrets, runs read from the run folders
   'routines:list': [void, RoutinesSnapshot];
   'routines:import': [{ data: string }, RoutinesSnapshot];

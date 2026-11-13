@@ -78,6 +78,7 @@ import { createBrowserModule, mcpPortFromEnv } from './browser/service';
 import { Workflows } from './workflows/service';
 import { WorkDriver } from './workflows/driver';
 import { WakeLater } from './chats/wake-later';
+import { SchedulesService, scheduledText } from './schedules/service';
 import { QuestionRelay } from './chats/relay';
 import { CoordinationStore } from './coordination/store';
 import { createRoutines } from './routines/service';
@@ -713,6 +714,15 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const wakeLater = new WakeLater({ file: path.join(ctx.userData, 'wake-later.json'), chats: () => manager.list(),
     send: (chatId, text) => manager.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }) });
   addChatTools([wakeLater.tool()]);
+  // scheduled routines (ADR 0280): the user's planned requests go to the Orchestrator at their time, by the same minute
+  // tick; a time missed while the app was closed runs once at the first tick
+  const schedules = new SchedulesService({ file: path.join(ctx.userData, 'schedules.json'), changed: st => ctx.emitter.emit('schedules:changed', st),
+    run: async (task, late) => {
+      const o = manager.list().find(c => c.isOrchestrator && !c.closedAt);
+      if (!o) throw new Error('Nessun Orchestrator aperto.');
+      await manager.send(o.id, scheduledText(task, late), undefined, false, 'App', false, { kind: 'app' });
+      return { chatId: o.id };
+    } });
   // single entry (ADR 0239): a work chat's Sì/No question goes to the user through the Orchestrator's conversation, and
   // the user's own «sì» / «no» there (PC, phone, Remote Control) answers it
   // a command a chat left, decided away from the PC (ADR 0259 §4: Telegram's Sì, a relayed «sì»): the same run as Esegui
@@ -741,7 +751,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     void relay.userSaid(chatId, item.text, item.via === 'phone' ? 'phone' : undefined);
   });
   const workDriverTimer = prodPollers ? setInterval(() => {
-    try { wakeLater.tick(); workDriver.tick(); } catch (e) { log.warn('workflows', 'approved-work check failed', { cause: errText(e), hint: 'the next minute retries' }); }
+    try { wakeLater.tick(); schedules.tick(); workDriver.tick(); } catch (e) { log.warn('workflows', 'approved-work check failed', { cause: errText(e), hint: 'the next minute retries' }); }
   }, 60_000) : null;
   workDriverTimer?.unref();
   // a role chat's route says how its active version has done so far
@@ -749,7 +759,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
   // routine packages the Orchestrator authors (ADR 0175): <userData>/routines/<id>/routine.json, the Routine section's store
   const routinePackageStore = createFolderPackageStore(path.join(ctx.userData, 'routines'));
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, balancedMode, away: { on: awayOn, log: e => awayLog.add(e) }, routinePackages: () => routinePackageStore, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps,
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, balancedMode, away: { on: awayOn, log: e => awayLog.add(e) }, routinePackages: () => routinePackageStore, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, schedules, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps,
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },
@@ -910,7 +920,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     judging: { estimate: now => judgingEstimate(manager.runs.list(), now, { shares: judgeShares(), capUsd: Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD, lastBatch: judgeSampler.lastBatch() }) },
     phonePort: createPhonePort(manager, ctx.emitter, awayCommands),
     worktreePool,
-    chats, browser, recordings, learn, news, projectMaps, brain, mcp, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, modelLists, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, userCorrections,
+    chats, browser, recordings, learn, news, schedules, projectMaps, brain, mcp, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, modelLists, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, userCorrections,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : null),
       checkpoint: () => manager.checkpointForUpdate(),

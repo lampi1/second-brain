@@ -1365,49 +1365,53 @@ export const CONCEPTS: readonly ConceptCard[] = [
   },
   {
     id: 'impara-news',
-    title: b('Impara: il Giornale dell’AI', 'Learn: the AI News'),
-    summary: b('Un giornale breve dell’AI per chi costruisce agenti: fonti scelte lette senza token, la stessa notizia unita, in ordine per te, poi un riassunto con «Perché conta per te» e il costo in token.',
-      'A short AI newspaper for people who build agents: chosen sources read at zero tokens, the same story merged, ranked for you, then a summary with «Why it matters to you» and the cost in tokens.'),
+    title: b('Impara: il Giornale a edizioni', 'Learn: the News, by editions'),
+    summary: b('Un giornale tuo, a edizioni: ogni edizione è un argomento che scegli, con le sue fonti lette senza token, la stessa notizia unita, poche notizie in prima pagina e un riassunto con «Perché conta per te».',
+      'A newspaper of your own, by editions: each edition is a subject you choose, its sources read at zero tokens, the same story merged, a few stories on the front page and a summary with «Why it matters to you».'),
     points: [
-      // src/renderer/components/impara/ImparaTabs.tsx
-      b('Impara ha tre schede: «Giornale», «Pull Request» e «Lezioni»; G X apre l’ultima usata, la prima volta il Giornale.',
-        'Learn has three tabs: «News», «Pull requests» and «Lessons»; G X opens the one used last, the News the first time.'),
-      // src/main/news/service.ts#refresh, src/main/news/sources.ts
-      b('«Aggiorna» (R) legge circa 28 fonti scelte, senza token: blog e note di rilascio dei laboratori, Claude Code, Codex, Cursor e gli altri harness, le specifiche MCP e Agent Skills, alcune newsletter, Hacker News e Hugging Face Papers per ciò che manca. Perché ciascuna: ADR 0265.',
-        '«Refresh» (R) reads about 28 chosen sources at zero tokens: lab blogs and release notes, Claude Code, Codex, Cursor and the other harnesses, the MCP and Agent Skills specs, a few newsletters, Hacker News and Hugging Face Papers for what is missing. Why each one: ADR 0265.'),
+      // src/renderer/components/impara/ImparaTabs.tsx, src/renderer/components/impara/ImparaPrTab.tsx
+      b('Impara ha tre schede: «Giornale», «Pull Request» e «Lezioni»; G X apre l’ultima usata, la prima volta il Giornale. «Impara» su una notizia o su una PR (stesse tre colonne) crea la solita lezione; la notizia ricorda la sua.',
+        'Learn has three tabs: «News», «Pull requests» and «Lessons»; G X opens the one used last, the News the first time. «Learn» on a story or a PR (the same three columns) makes the usual lesson; the story remembers its own.'),
+      // src/renderer/components/impara/news/NewsNewEdition.tsx, src/main/news/sources.ts
+      b('Un’edizione è un argomento qualsiasi (l’AI per chi costruisce agenti, le auto elettriche, il tuo settore): un nome, una frase su cosa ti interessa, le sue sezioni e le sue fonti. All’inizio non ce n’è nessuna: «Nuova edizione» chiede all’Orchestrator di trovare e provare le fonti, ne crea una vuota, oppure parte da un’edizione pronta.',
+        'An edition is any subject (AI for people who build agents, electric cars, your own field): a name, a sentence on what interests you, its sections and its sources. At first there is none: «New edition» asks the Orchestrator to find and try the sources, makes an empty one, or starts from a ready-made edition.'),
       // src/main/news/dedup.ts, src/main/news/rank.ts
-      b('La stessa notizia data da più fonti diventa una sola, con la fonte primaria in testa e le altre come link. L’ordine somma novità, peso della fonte, attinenza al tuo lavoro ed eco; sotto ogni notizia «perché è qui» mostra le quattro parti.',
-        'The same story told by several sources becomes one, the primary source first and the others as links. The order adds up recency, the source’s weight, relevance to your work and echo; under each story «why it is here» shows the four parts.'),
+      b('«Aggiorna» (R) legge le fonti dell’edizione senza token. La stessa notizia data da più fonti diventa una sola, con la fonte primaria in testa. L’ordine somma novità, peso della fonte, attinenza alle parole dell’edizione ed eco; «Perché è qui» mostra le quattro parti.',
+        '«Refresh» (R) reads the edition’s sources at zero tokens. The same story told by several sources becomes one, the primary source first. The order adds up recency, the source’s weight, relevance to the edition’s words and echo; «Why it is here» shows the four parts.'),
+      // src/shared/news.ts#frontPage
+      b('La prima pagina tiene poche notizie: le migliori 7 degli ultimi 7 giorni (il numero lo scegli per edizione), mai una che l’AI ha giudicato fuori tema; le altre aspettano sotto «Altre». «Meno così» (X) toglie una notizia e fa pesare un po’ meno la sua fonte.',
+        'The front page holds a few stories: the best 7 of the last 7 days (you choose the number per edition), never one the AI judged off topic; the others wait under «More». «Less like this» (X) removes a story and makes its source weigh a little less.'),
       // src/main/news/summarize.ts
-      b('Poi una sola passata AI (Claude, nessuno strumento) scrive riassunto, «Perché conta per te» e quanto conta per le 30 notizie migliori che non ce l’hanno. In alto quanti token e dollari è costato l’ultimo aggiornamento; con Claude spento le notizie arrivano senza riassunto.',
-        'Then one AI pass (Claude, no tool) writes the summary, «Why it matters to you» and how much it matters for the 30 best stories that lack one. At the top, how many tokens and dollars the last refresh cost; with Claude off the stories arrive without a summary.'),
+      b('Poi una sola passata AI per edizione (Claude, nessuno strumento) scrive riassunto, «Perché conta per te» e quanto conta, per le notizie migliori che non ce l’hanno. In alto quanti token e dollari è costato l’ultimo aggiornamento; con Claude spento le notizie arrivano senza riassunto.',
+        'Then one AI pass per edition (Claude, no tool) writes the summary, «Why it matters to you» and how much it matters, for the best stories that lack one. At the top, how many tokens and dollars the last refresh cost; with Claude off the stories arrive without a summary.'),
       // src/renderer/components/impara/news/NewsPage.tsx
-      b('Tre colonne: sezioni (Prima pagina, Modelli e benchmark, Harness e tool, Skill e agenti, Ricerca, Salvate) con le non lette, le notizie, la notizia aperta con data, fonte e link. J/K si muove, S salva, U letta o da leggere, E «Impara», O apre la fonte; una notizia aperta per un attimo diventa letta.',
-        'Three columns: sections (Front page, Models and benchmarks, Harness and tools, Skills and agents, Research, Saved) with the unread ones, the stories, the open story with date, source and links. J/K moves, S saves, U read or unread, E «Learn», O opens the source; a story open for a moment becomes read.'),
+      b('In alto le edizioni, sotto tre colonne: le sezioni dell’edizione con le non lette, le notizie con la prima in evidenza, la notizia aperta con data, fonte e link. J/K si muove, 1-9 cambia sezione, [ e ] cambiano edizione, S salva, U letta o da leggere, E «Impara», O apre la fonte.',
+        'The editions at the top, three columns below: the edition’s sections with the unread ones, the stories with the first one large, the open story with date, source and links. J/K moves, 1-9 changes section, [ and ] change edition, S saves, U read or unread, E «Learn», O opens the source.'),
       // src/renderer/components/impara/news/NewsSources.tsx
-      b('«Fonti» (,) elenca ogni fonte con come la leggo e la sua ultima lettura o l’errore: mettila in pausa, toglila o aggiungine una incollando il link (GitHub, feed o pagina); «Ripristina» riporta l’elenco di base. L’aggiornamento giornaliero è spento finché non lo accendi, con la stima del costo.',
-        '«Sources» (,) lists every source with how it is read and its last reading or the error: pause it, remove it or add one by pasting its link (GitHub, feed or page); «Reset» brings back the default list. The daily refresh is off until you turn it on, with its estimated cost.'),
-      // src/renderer/components/impara/ImparaPrTab.tsx, src/renderer/lib/news.ts#explainStory
-      b('«Impara» su una notizia o su una PR (scheda «Pull Request»: stesse tre colonne, filtri da studiare, a metà, studiate) crea la solita lezione; la notizia ricorda la sua.',
-        '«Learn» on a story or a PR («Pull requests» tab: the same three columns, filters to study, half studied, studied) makes the usual lesson; the story remembers its own.'),
+      b('«Fonti» (,) è il pannello dell’edizione: nome, cosa ti interessa, sezioni (una per riga, con le parole che ci mandano una notizia), quante notizie in prima pagina, e ogni fonte con la sua ultima lettura o l’errore. Incolla un link (GitHub, feed o pagina) e «Prova» dice quante notizie ci trova prima di aggiungerlo; una fonte è solo un link https pubblico.',
+        '«Sources» (,) is the edition’s panel: name, what interests you, sections (one per line, with the words that send a story there), how many stories on the front page, and every source with its last reading or the error. Paste a link (GitHub, feed or page) and «Try» says how many stories it finds there before adding it; a source is a public https link only.'),
+      // src/main/appctl/news.ts
+      b('L’Orchestrator fa tutto questo da solo quando glielo chiedi: crea e cambia edizioni, prova un link, aggiunge, toglie o mette in pausa una fonte, aggiorna. Non chiede conferme: sono link pubblici e ogni cosa si rifà in un minuto.',
+        'The Orchestrator does all of this by itself when you ask: it makes and changes editions, tries a link, adds, removes or pauses a source, refreshes. It asks no confirmation: these are public links and everything is redone in a minute.'),
     ],
-    analogy: b('Come una rassegna stampa preparata ogni mattina da un collega che legge le fonti giuste e ti segna cosa conta per il tuo lavoro.',
-      'Like a press review a colleague prepares each morning from the right sources, marking what matters for your work.'),
+    analogy: b('Come un’edicola dove ogni testata la componi tu: scegli l’argomento, e ogni mattina trovi in prima pagina solo quello che vale la pena leggere.',
+      'Like a newsstand where you compose each paper: you choose the subject, and each morning the front page holds only what is worth reading.'),
     tech: [
-      tech(FILES, 'userData/news/state.json: fonti, ultima lettura di ciascuna, al massimo 400 notizie per 30 giorni (le salvate sempre), ultimi 20 aggiornamenti; solo titoli, riassunti brevi e link.', 'userData/news/state.json: sources, each one’s last reading, at most 400 stories for 30 days (saved ones always), the last 20 refreshes; only titles, short summaries and links.'),
-      tech(WHERE, 'Pagina G X, scheda Giornale; IPC news:state, news:refresh, news:mark, news:sources, news:schedule, evento news:changed; le letture partono dal processo principale (6 alla volta, 20 s, 4 MB al massimo).', 'Page G X, News tab; IPC news:state, news:refresh, news:mark, news:sources, news:schedule, event news:changed; the readings run in the main process (6 at a time, 20 s, 4 MB at most).'),
-      tech(LIMITS, 'Riassunti per al massimo 30 notizie degli ultimi 14 giorni per aggiornamento; novità dimezzata ogni 36 ore; Hacker News da 150 punti, Hugging Face Papers da 25 voti.', 'Summaries for at most 30 stories of the last 14 days per refresh; recency halves every 36 hours; Hacker News from 150 points, Hugging Face Papers from 25 votes.'),
+      tech(FILES, 'userData/news/state.json: edizioni, fonti con l’ultima lettura, al massimo 400 notizie per 30 giorni (le salvate sempre), ultimi 60 aggiornamenti; solo titoli, riassunti brevi e link.', 'userData/news/state.json: editions, sources with their last reading, at most 400 stories for 30 days (saved ones always), the last 60 refreshes; only titles, short summaries and links.'),
+      tech(WHERE, 'Pagina G X, scheda Giornale; IPC news:state, news:refresh, news:mark, news:edition, news:sources, news:test, news:schedule, evento news:changed; strumenti app_news, app_news_edition, app_news_source, app_news_refresh.', 'Page G X, News tab; IPC news:state, news:refresh, news:mark, news:edition, news:sources, news:test, news:schedule, event news:changed; tools app_news, app_news_edition, app_news_source, app_news_refresh.'),
+      tech(LIMITS, 'Al massimo 12 edizioni e 8 sezioni per edizione; riassunti per almeno 14 notizie degli ultimi 14 giorni per edizione; novità dimezzata ogni 36 ore; l’aggiornamento giornaliero è spento finché non lo accendi.', 'At most 12 editions and 8 sections per edition; summaries for at least 14 stories of the last 14 days per edition; recency halves every 36 hours; the daily refresh is off until you turn it on.'),
     ],
     anchors: {
-      0: ['src/renderer/components/impara/ImparaTabs.tsx'],
-      1: ['src/main/news/sources.ts'],
+      0: ['src/renderer/components/impara/ImparaTabs.tsx', 'src/renderer/components/impara/ImparaPrTab.tsx'],
+      1: ['src/renderer/components/impara/news/NewsNewEdition.tsx', 'src/main/news/sources.ts'],
       2: ['src/main/news/dedup.ts', 'src/main/news/rank.ts'],
-      3: ['src/main/news/summarize.ts'],
-      4: ['src/renderer/components/impara/news/NewsPage.tsx'],
-      5: ['src/renderer/components/impara/news/NewsSources.tsx'],
-      6: ['src/renderer/components/impara/ImparaPrTab.tsx'],
+      3: ['src/shared/news.ts#frontPage'],
+      4: ['src/main/news/summarize.ts'],
+      5: ['src/renderer/components/impara/news/NewsPage.tsx'],
+      6: ['src/renderer/components/impara/news/NewsSources.tsx'],
+      7: ['src/main/appctl/news.ts'],
     },
-    sources: ['src/shared/news.ts', 'src/main/news/service.ts', 'src/main/news/parse.ts', 'src/main/news/sources.ts', 'src/main/news/dedup.ts', 'src/main/news/rank.ts', 'src/main/news/summarize.ts', 'src/renderer/components/impara/news/NewsPage.tsx', 'src/renderer/components/impara/news/NewsReader.tsx', 'src/renderer/components/impara/news/NewsSources.tsx', 'src/renderer/components/impara/ImparaPrTab.tsx', 'src/renderer/components/impara/ImparaTabs.tsx', 'docs/adr/0265-impara-ai-newspaper.md'],
+    sources: ['src/shared/news.ts', 'src/main/news/service.ts', 'src/main/news/parse.ts', 'src/main/news/sources.ts', 'src/main/news/dedup.ts', 'src/main/news/rank.ts', 'src/main/news/summarize.ts', 'src/main/appctl/news.ts', 'src/renderer/components/impara/news/NewsPage.tsx', 'src/renderer/components/impara/news/NewsReader.tsx', 'src/renderer/components/impara/news/NewsSources.tsx', 'src/renderer/components/impara/news/NewsNewEdition.tsx', 'src/renderer/components/impara/ImparaPrTab.tsx', 'src/renderer/components/impara/ImparaTabs.tsx', 'docs/adr/0265-impara-ai-newspaper.md', 'docs/adr/0279-newspaper-by-editions.md'],
   },
   {
     id: 'held-news',
@@ -1818,29 +1822,35 @@ export const CONCEPTS: readonly ConceptCard[] = [
   },
   {
     id: 'routines',
-    title: b('Le routine, dal terminale',
-      'Routines, from the terminal'),
-    summary: b('Una routine è un pacchetto di passi che gira dal terminale con il comando routine; l’app aiuta a prepararlo e mostra le run quando le apri.',
-      'A routine is a package of steps that runs from the terminal with the routine command; the app helps you prepare it and shows the runs when you open them.'),
+    title: b('Le routine: pianificate nell’app, o dal terminale',
+      'Routines: scheduled in the app, or from the terminal'),
+    summary: b('Due tipi: una routine pianificata è una richiesta che l’Orchestrator riceve all’ora che scegli; un pacchetto è una serie di passi che gira dal terminale con il comando routine.',
+      'Two kinds: a scheduled routine is a request the Orchestrator receives at the time you choose; a package is a series of steps that runs from the terminal with the routine command.'),
     points: [
+      // src/renderer/components/ScheduledRoutines.tsx, src/shared/schedules.ts#nextDue
+      b('«Pianificate»: scrivi la richiesta come la scriveresti all’Orchestrator e scegli quando (ogni giorno a un’ora, giorni feriali o scelti, ogni tot ore, una volta, solo a mano). All’ora scelta l’Orchestrator la riceve e la fa con gli agenti, come se l’avessi scritta tu. Pausa, «Esegui ora», modifica ed elimina sono sulla riga.',
+        '«Scheduled»: write the request as you would write it to the Orchestrator and choose when (every day at a time, weekdays or chosen days, every few hours, once, by hand only). At that time the Orchestrator receives it and does it with the agents, as if you had written it. Pause, «Run now», edit and delete are on the row.'),
+      // src/main/schedules/service.ts#tick
+      b('Una routine pianificata parte con l’app aperta. Se all’ora scelta l’app era chiusa, parte una volta sola alla prima apertura e dice di quanto è in ritardo. La riga mostra la prossima esecuzione e l’ultima consegna.',
+        'A scheduled routine starts while the app is open. If the app was closed at that time, it starts once at the next opening and says how late it is. The row shows the next run and the last hand-over.'),
+      // src/main/appctl/schedules.ts
+      b('Puoi anche dirlo all’Orchestrator («ogni mattina alle 8 aggiorna il giornale»): crea, cambia, mette in pausa ed elimina le routine pianificate da solo, senza conferme.',
+        'You can also tell the Orchestrator («every morning at 8 refresh the news»): it makes, changes, pauses and deletes scheduled routines by itself, with no confirmation.'),
       // packages/routine-runtime/README.md
-      b('Il terminale è l’unico esecutore: routine run fa una run, routine resume la riprende dal passo non finito, routine watch segue il trigger DevOps e avvia una run per ogni work item nuovo.',
-        'The terminal is the only executor: routine run does one run, routine resume continues it from the step that did not finish, routine watch follows the DevOps trigger and starts one run per new work item.'),
+      b('Per i pacchetti il terminale è l’unico esecutore: routine run fa una run, routine resume la riprende dal passo non finito, routine watch segue il trigger DevOps e avvia una run per ogni work item nuovo.',
+        'For packages the terminal is the only executor: routine run does one run, routine resume continues it from the step that did not finish, routine watch follows the DevOps trigger and starts one run per new work item.'),
       // packages/routine-runtime/README.md
       b('Ogni passo è una sessione Claude Code; quando serve una persona, il runtime chiede in un commento DevOps e aspetta la risposta lì.',
         'Each step is a Claude Code session; when a person is needed, the runtime asks in a DevOps comment and waits for the answer there.'),
       // src/renderer/brain/pages/Routines.tsx (ADR 0179)
-      b('Nell’app prepari il pacchetto con l’Orchestrator, inserisci le credenziali e lo esporti; la pagina Routine non avvia, non riprova e non pianifica niente.',
-        'In the app you prepare the package with the Orchestrator, enter its credentials and export it; the Routines page starts, retries and schedules nothing.'),
+      b('Nell’app prepari il pacchetto con l’Orchestrator, inserisci le credenziali e lo esporti; la pagina Routine non avvia e non riprova mai un pacchetto.',
+        'In the app you prepare the package with the Orchestrator, enter its credentials and export it; the Routines page never starts or retries a package.'),
       // src/renderer/brain/pages/Routines.tsx RunPage
-      b('Aprendo una run vedi dal vivo passi, azioni, screenshot, prove e rapporto; chiudendo la vista l’osservazione si ferma.',
-        'Opening a run shows its steps, actions, screenshots, evidence and report live; closing the view stops the watching.'),
-      // src/renderer/components/LegacyRoutineHistory.tsx
-      b('Le vecchie run fatte dall’app restano un archivio in sola lettura.',
-        'The old runs made by the app stay a read-only archive.'),
+      b('Aprendo una run vedi dal vivo passi, azioni, screenshot, prove e rapporto; chiudendo la vista l’osservazione si ferma. Le vecchie run fatte dall’app restano un archivio in sola lettura.',
+        'Opening a run shows its steps, actions, screenshots, evidence and report live; closing the view stops the watching. The old runs made by the app stay a read-only archive.'),
       // src/main/appctl/tools.ts app_routine_status
-      b('L’Orchestrator legge stato e prove di una run solo quando glielo chiedi, e non la esegue mai.',
-        'The Orchestrator reads a run’s state and evidence only when you ask, and never executes it.'),
+      b('L’Orchestrator legge stato e prove di una run di pacchetto solo quando glielo chiedi, e non la esegue mai.',
+        'The Orchestrator reads a package run’s state and evidence only when you ask, and never executes it.'),
     ],
     analogy: b('Come una ricetta scritta per la cucina: la prepari a tavolino, poi in cucina la segue chi è ai fornelli; tu guardi dalla finestrella quando vuoi.',
       'Like a recipe written for the kitchen: you prepare it at the desk, then whoever is at the stove follows it; you look through the hatch when you want.'),
@@ -1848,16 +1858,20 @@ export const CONCEPTS: readonly ConceptCard[] = [
     tech: [
       tech(WHERE, 'Pagina Routine (barra a sinistra, o G U); runtime in packages/routine-runtime (comando routine).',
         'Routines page (left rail, or G U); runtime in packages/routine-runtime (the routine command).'),
-      tech(LIMITS, 'Nessun timer, polling o scansione all’avvio nell’app: solo una run aperta osserva i suoi file (run.json, events.jsonl, report.md).',
-        'No timers, polling or startup scans in the app: only an open run watches its files (run.json, events.jsonl, report.md).'),
+      tech(FILES, 'userData/schedules.json: le routine pianificate, la prossima esecuzione e le ultime 20 consegne di ciascuna.',
+        'userData/schedules.json: the scheduled routines, each one’s next run and its last 20 hand-overs.'),
+      tech(LIMITS, 'Al massimo 50 routine pianificate, intervallo da 15 minuti a 7 giorni, controllo una volta al minuto. Per i pacchetti nessun timer o scansione nell’app: solo una run aperta osserva i suoi file (run.json, events.jsonl, report.md).',
+        'At most 50 scheduled routines, interval from 15 minutes to 7 days, checked once a minute. For packages no timer or scan in the app: only an open run watches its files (run.json, events.jsonl, report.md).'),
     ],
     anchors: {
-      2: ['src/renderer/brain/pages/Routines.tsx'],
-      3: ['src/renderer/brain/pages/Routines.tsx#RunPage'],
-      4: ['src/renderer/components/LegacyRoutineHistory.tsx'],
-      5: ['src/main/appctl/tools.ts#app_routine_status'],
+      0: ['src/renderer/components/ScheduledRoutines.tsx', 'src/shared/schedules.ts#nextDue'],
+      1: ['src/main/schedules/service.ts'],
+      2: ['src/main/appctl/schedules.ts'],
+      5: ['src/renderer/brain/pages/Routines.tsx'],
+      6: ['src/renderer/brain/pages/Routines.tsx#RunPage', 'src/renderer/components/LegacyRoutineHistory.tsx'],
+      7: ['src/main/appctl/tools.ts#app_routine_status'],
     },
-    sources: ['packages/routine-runtime/README.md', 'src/renderer/brain/pages/Routines.tsx', 'src/renderer/components/LegacyRoutineHistory.tsx', 'src/main/appctl/tools.ts', 'docs/adr/0179-terminal-only-routines.md'],
+    sources: ['packages/routine-runtime/README.md', 'src/renderer/brain/pages/Routines.tsx', 'src/renderer/components/LegacyRoutineHistory.tsx', 'src/main/appctl/tools.ts', 'docs/adr/0179-terminal-only-routines.md', 'src/shared/schedules.ts', 'src/main/schedules/service.ts', 'src/main/appctl/schedules.ts', 'src/renderer/components/ScheduledRoutines.tsx', 'docs/adr/0280-scheduled-routines.md'],
   },
   {
     id: 'settings',

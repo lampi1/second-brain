@@ -69,6 +69,8 @@ import { guideTool, screenOutline } from './guide';
 import { CONFIG_ASK_MIN, CONFIG_TURN_MIN, configTool, type ConfigDeps } from './config';
 import { lastAnswered, lastTyped, userAsked } from './user-words';
 import { recordingTools, type RecordingsRead } from './recordings';
+import { newsTools, type NewsControl } from './news';
+import { scheduleTools, type SchedulesControl } from './schedules';
 import { imparaTools, type ImparaControl } from './impara';
 import { childOutputTool } from './child-output';
 import { agentsRecapTool } from './agents-recap';
@@ -125,6 +127,10 @@ export interface AppCtlDeps {
   skillLibrary?: SkillLibrary;
   /** Impara (ADR 0190): app_learn on the Orchestrator's own endpoint */
   impara?: ImparaControl;
+  /** the «Giornale» (ADR 0279): app_news, app_news_edition, app_news_source, app_news_refresh on the Orchestrator's own endpoint */
+  news?: NewsControl;
+  /** scheduled routines (ADR 0280): app_schedule on the Orchestrator's own endpoint */
+  schedules?: SchedulesControl;
   /** the configuration the Orchestrator changes for the user (app_config, ADR 0149); settings come from `brain` */
   config?: Omit<ConfigDeps, 'callerId' | 'userAsked' | 'brain'>;
   /** the Routine section's packages (routines/service.ts): app_routine_export on the Orchestrator's own endpoint */
@@ -269,6 +275,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     ...(d.recordings && authed() ? recordingTools(d.recordings, d.emitUi) : []),
     ...(d.projectMaps && authed() ? [appProjectMapTool(d.projectMaps, d.emitUi)] : []),
     ...(d.impara && authed() ? imparaTools(d.impara, d.emitUi, () => imparaAsked(callerId!)) : []),
+    ...(d.news && authed() ? newsTools(d.news, d.emitUi) : []),
+    ...(d.schedules && authed() ? scheduleTools(d.schedules, d.emitUi) : []),
     ...(d.skillLibrary && authed() ? skillTools(d.skillLibrary, () => caller()?.title || 'Orchestrator') : []),
     ...(authed() ? [childOutputTool({ chats: () => d.chats.list().filter(mine), runs: () => d.runFeedback?.runList() ?? [] }), agentsRecapTool({ chats: () => d.chats.list().filter(mine), items: id => d.chats.items(id), pending: () => [...d.chats.pending(), ...(d.commandAsks?.() ?? [])], runs: () => d.runFeedback?.runList() ?? [] })] : []),
     ...(d.runFeedback && authed() ? [metricsTool(d.runFeedback)] : []),

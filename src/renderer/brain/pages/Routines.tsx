@@ -1,5 +1,6 @@
-// Terminal routine packages, commands, history and the explicitly opened live run (ADR 0179).
-// No starts, triggers, approvals or polling. Only RunPage owns an fs.watch subscription; closing it releases it.
+// The Routine page: the scheduled routines on top (ADR 0280, components/ScheduledRoutines.tsx: requests the app hands
+// to the Orchestrator at their time), then the terminal routine packages, commands, history and the explicitly opened
+// live run (ADR 0179). For packages: no starts, triggers, approvals or polling. Only RunPage owns an fs.watch subscription; closing it releases it.
 // Package credentials and import/export remain explicit user actions. Old routine chats are readable archives.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RoutineRunDetail, RoutineRunRef, RoutineRunSummary, RoutineSummary, RoutinesSnapshot } from '@shared/routines';
@@ -14,6 +15,7 @@ import { RoutineChat } from '../../components/RoutineChat';
 import { readRoutineChatArg, routinePlacements } from '../../lib/routine-chats';
 import { LegacyRoutineHistory } from '../../components/LegacyRoutineHistory';
 import { RoutineRunView, statusLabel, statusTone } from '../../components/RoutineRun';
+import { ScheduledRoutines } from '../../components/ScheduledRoutines';
 import '../../styles/routines.css';
 
 const plain = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
@@ -191,6 +193,7 @@ export function Routines() {
           <input ref={fileInput} type="file" accept=".zip,application/zip" hidden onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importZip(f); }} data-testid="routine-import-file" />
           <button type="button" className="btn btn-ghost btn-m" onClick={() => fileInput.current?.click()} data-testid="routine-import">{t('rs.import')}</button>
         </header>
+        <ScheduledRoutines />
         {(error ?? snapshot?.error) && <p className="rs-error" role="alert">{error ?? snapshot?.error}</p>}
         {!snapshot && !error && <p role="status" className="rs-muted">{t('rs.loading')}</p>}
         {snapshot && snapshot.legacy.length > 0 && <section className="rs-card">
@@ -201,7 +204,8 @@ export function Routines() {
           </div>)}
         </section>}
         {snapshot && <>
-          <h3 className="rs-section">{t('rs.routines')}</h3>
+          <h3 className="rs-section">{t('rs.packages')}</h3>
+          <p className="rs-muted">{t('rs.terminalOnly')}</p>
           {snapshot.routines.length === 0 ? <p className="rs-muted" data-testid="routines-empty">{t('rs.empty')}</p>
             : <div className="rs-cards">{snapshot.routines.map(r => {
               const runs = snapshot.runs.filter(x => x.routineId === r.id), waiting = runs.filter(x => x.status === 'waiting-human' || x.status === 'needs-human').length;

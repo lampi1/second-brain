@@ -1,26 +1,36 @@
-// Impara «News» (ADR 0265): the order of the paper and each story's section, at zero tokens. A story's score is a sum
-// of four parts, each 0..1 and shown to the user as «perché è qui»: recency (half life 36 hours), its source's weight,
-// relevance to this user (a developer who builds agents, skills and harnesses: words of that work in the title and
-// snippet, and the AI pass's own 0-3 judgement once it ran) and echo (how many other sources carry it, Hacker News points, paper votes). The section comes from the
-// story's words when they are clear, else from its source; the AI pass may still move it. A pure module: tests in
+// The «Giornale» (ADR 0265, editions ADR 0279): the order of an edition's paper and each story's section, at zero
+// tokens. A story's score is a sum of four parts, each 0..1 and shown to the user as «perché è qui»: recency (half
+// life 36 hours), its source's weight, relevance to the edition (its key words in the title and snippet: `core` the
+// heart of the user's interest, `near` its surroundings; and the AI pass's own 0-3 judgement once it ran) and echo
+// (how many other sources carry it, Hacker News points, paper votes). The section comes from the story's words when
+// they are clear, else from its source; the AI pass may still move it. A pure module: tests in
 // test/unit/news-rank.test.ts.
-import type { NewsItem, NewsSection, NewsSource } from '@shared/news';
+import { wordPattern, type NewsEdition, type NewsItem, type NewsSource } from '@shared/news';
 
 export const WEIGHTS = { recency: 0.4, source: 0.2, relevance: 0.28, echo: 0.12 } as const;
 const HALF_LIFE_H = 36;
 export const UNDATED_RECENCY = 0.15;
 
-/** Words of the user's work, by strength: the first list is the core (agents, harnesses, skills, MCP), the second the
- *  near (models, evals, coding). Matched on whole words, case-insensitive. */
-const CORE = /\b(agent(s|ic)?|sub-?agents?|harness(es)?|claude code|codex|cursor|opencode|gemini cli|skills?|mcp|model context protocol|tool[- ]?use|tool calling|computer use|context (window|engineering)|compaction|memory|orchestrat\w*|workflows?|hooks?|sdk|coding agents?|autonom\w*|self[- ]improv\w*)\b/gi;
-const NEAR = /\b(claude|fable|opus|sonnet|haiku|mythos|gpt[\w.-]*|gemini|llama|mistral|qwen|deepseek|model(s)?|benchmark(s)?|evals?|swe-?bench|leaderboard|reasoning|prompt\w*|api|release|changelog|open[- ]weights?|fine-?tun\w*|post-?training|rl\b|inference|latency|pricing|tokens?)\b/gi;
-const count = (re: RegExp, s: string) => (s.match(re) ?? []).length;
+type Words = Pick<NewsEdition, 'core' | 'near' | 'sections'>;
+interface Compiled { core: RegExp | null; near: RegExp | null; sections: [string, RegExp][] }
+const compiled = new WeakMap<object, Compiled>();
+/** An edition's words as patterns, built once per edition object (the service replaces the object on every edit). */
+function patterns(ed: Words): Compiled {
+  let c = compiled.get(ed);
+  if (!c) {
+    c = { core: wordPattern(ed.core), near: wordPattern(ed.near), sections: ed.sections.flatMap(s => { const re = wordPattern(s.words); return re ? [[s.id, re] as [string, RegExp]] : []; }) };
+    compiled.set(ed, c);
+  }
+  return c;
+}
+const count = (re: RegExp | null, s: string) => (re ? (s.match(re) ?? []).length : 0);
+const has = (re: RegExp, s: string) => { re.lastIndex = 0; return re.test(s); };
 
-/** 0..1: how much a story speaks of the user's work. */
-export function relevance(title: string, snippet: string): number {
+/** 0..1: how much a story speaks of the edition's subject. */
+export function relevance(title: string, snippet: string, ed: Words): number {
+  const p = patterns(ed);
   const t = `${title} ${title} ${snippet}`; // the title counts twice
-  const core = count(CORE, t), near = count(NEAR, t);
-  return Math.min(1, core * 0.22 + near * 0.08);
+  return Math.min(1, count(p.core, t) * 0.22 + count(p.near, t) * 0.08);
 }
 
 /** 0..1, by age: 1 now, 0.5 after 36 hours, never below 0. */
@@ -35,22 +45,17 @@ export function echo(it: Pick<NewsItem, 'also' | 'signal' | 'source'>, sources: 
   return Math.min(1, others * 0.3 + sig);
 }
 
-const SECTION_WORDS: [NewsSection, RegExp][] = [
-  ['skills', /\b(skills?|mcp|model context protocol|agent skills|sub-?agents?|multi-agent|agent sdk|a2a)\b/i],
-  ['harness', /\b(claude code|codex( cli)?|cursor|opencode|gemini cli|copilot|cli|ide|harness|changelog|release notes)\b/i],
-  ['research', /\b(paper|arxiv|study|we (find|show)|interpretability|alignment|theorem|dataset)\b/i],
-  ['models', /\b(model(s)?|benchmark(s)?|evals?|leaderboard|swe-?bench|open[- ]weights?|gpt[\w.-]*|gemini \d|llama|qwen|deepseek|fable|opus|sonnet|haiku|mythos|system card)\b/i],
-];
-/** The section a story's own words point to, else its source's. */
-export function sectionOf(title: string, snippet: string, fallback: NewsSection): NewsSection {
-  const t = `${title} ${snippet.slice(0, 160)}`;
-  // a source's section wins over a weak word (a harness changelog that mentions a model stays a harness story)
-  if (fallback === 'harness' || fallback === 'research') return fallback;
-  return SECTION_WORDS.find(([, re]) => re.test(title))?.[0] ?? SECTION_WORDS.find(([, re]) => re.test(t))?.[0] ?? fallback;
+/** The section a story's own words point to, else its source's (a pinned source keeps its own). */
+export function sectionOf(title: string, snippet: string, src: Pick<NewsSource, 'section' | 'pin'>, ed: Words): string {
+  const known = (id: string) => ed.sections.some(s => s.id === id);
+  const fallback = known(src.section) ? src.section : '';
+  if (src.pin && fallback) return fallback;
+  const p = patterns(ed), t = `${title} ${snippet.slice(0, 160)}`;
+  return p.sections.find(([, re]) => has(re, title))?.[0] ?? p.sections.find(([, re]) => has(re, t))?.[0] ?? fallback;
 }
 
-/** Scores every story and sorts the paper: the best first; a story already read sinks a little, a saved one never. */
-export function rank(items: readonly NewsItem[], sources: readonly NewsSource[], now: number): NewsItem[] {
+/** Scores every story of one edition and sorts its paper: the best first; a story already read sinks a little, a saved one never. */
+export function rank(items: readonly NewsItem[], sources: readonly NewsSource[], now: number, ed: Words): NewsItem[] {
   const byId = new Map(sources.map(s => [s.id, s]));
   return items.map(it => {
     const parts = {
@@ -58,7 +63,7 @@ export function rank(items: readonly NewsItem[], sources: readonly NewsSource[],
       recency: it.undated ? UNDATED_RECENCY : recency(it.at, now),
       source: byId.get(it.source)?.weight ?? 0.5,
       // the AI pass's judgement (fit 0..3) weighs more than the words, once there is one
-      relevance: it.fit !== undefined ? 0.35 * relevance(it.title, `${it.summary ?? ''} ${it.snippet}`) + 0.65 * (it.fit / 3) : relevance(it.title, `${it.summary ?? ''} ${it.snippet}`),
+      relevance: it.fit !== undefined ? 0.35 * relevance(it.title, `${it.summary ?? ''} ${it.snippet}`, ed) + 0.65 * (it.fit / 3) : relevance(it.title, `${it.summary ?? ''} ${it.snippet}`, ed),
       echo: echo(it, byId),
     };
     const score = parts.recency * WEIGHTS.recency + parts.source * WEIGHTS.source + parts.relevance * WEIGHTS.relevance + parts.echo * WEIGHTS.echo;

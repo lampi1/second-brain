@@ -1,4 +1,6 @@
-// The demo's News (ADR 0265): no network and no engine. A few real stories (titles, links and the sources' own first
+// The demo's «Giornale» (ADR 0265, editions ADR 0279): no network and no engine. Two editions: «AI per chi costruisce
+// agenti» (the ready-made one) and «Auto elettriche», a made-up subject with two made-up sources on example.org, to
+// show a paper on anything (its stories are invented and say «demo» in their source's name). A few real stories (titles, links and the sources' own first
 // words, as read live on 2026-11-10; dates moved to be relative to the demo's clock) are served as the sources' own
 // formats (RSS, a news page, the Hacker News and Hugging Face Papers APIs), so «Aggiorna» runs the real pipeline
 // (parse, dedup, rank); every other source answers with an empty list. The AI pass is a fake that returns the
@@ -7,7 +9,8 @@ import { createHash } from 'node:crypto';
 import type { Lang } from '@shared/contract';
 import { DEFAULT_SOURCES } from './sources';
 import { canonicalUrl } from './dedup';
-import type { NewsAi, NewsFetch } from './service';
+import { NEWS_AI_EDITION } from '@shared/news';
+import type { NewsAi, NewsFetch, NewsService } from './service';
 
 const H = 3_600_000;
 
@@ -22,7 +25,9 @@ interface DemoStory {
   summary: { it: string; en: string };
   why: { it: string; en: string };
   fit: number;
-  section: 'models' | 'harness' | 'skills' | 'research';
+  section: string;
+  /** the edition it belongs to (default: the AI one) */
+  edition?: string;
 }
 
 const S: DemoStory[] = [
@@ -76,7 +81,36 @@ const S: DemoStory[] = [
     why: { it: 'Le skill dei tuoi agenti seguono questo standard: le prossime versioni arriveranno da lì.', en: 'Your agents\' skills follow this standard: its next versions will come from there.' }, fit: 3, section: 'skills' },
 ];
 
-const idOf = (url: string) => createHash('sha1').update(canonicalUrl(url)).digest('hex').slice(0, 12);
+const CARS = 'auto-elettriche';
+/** the made-up edition's sources (served by demoNewsFetch) and stories */
+const CAR_SOURCES = [
+  { id: 'demo-colonnine', name: 'Colonnine Oggi (demo)', url: 'https://example.org/colonnine/feed.xml', section: 'ricarica' },
+  { id: 'demo-volt', name: 'Volt Magazine (demo)', url: 'https://example.org/volt/rss', section: 'prove-su-strada' },
+] as const;
+const C: DemoStory[] = [
+  { edition: CARS, source: 'demo-volt', title: 'Batterie allo stato solido: le prime 500 auto di serie consegnate ai clienti', url: 'https://example.org/volt/stato-solido-prime-consegne', hoursAgo: 3,
+    snippet: 'Il costruttore dichiara 900 km di autonomia e una ricarica dal 10 all\'80% in 12 minuti. Mancano prove indipendenti.',
+    summary: { it: 'Le prime 500 auto con batteria allo stato solido sono state consegnate. I dati di autonomia (900 km) e di ricarica (10-80% in 12 minuti) sono del produttore; la prima prova indipendente è attesa entro il mese.', en: 'The first 500 cars with a solid-state battery were delivered. Range (900 km) and charging (10-80% in 12 minutes) are the maker\'s own figures; the first independent test is expected within the month.' },
+    why: { it: 'È la prima consegna a clienti, non un annuncio: quello che avevi chiesto di sapere.', en: 'It is the first delivery to customers, not an announcement: what you asked to know.' }, fit: 3, section: 'novita' },
+  { edition: CARS, source: 'demo-colonnine', title: 'Ricarica rapida in autostrada: nuove tariffe da gennaio', url: 'https://example.org/colonnine/tariffe-autostrada-gennaio', hoursAgo: 20,
+    snippet: 'Il prezzo al kWh scende nelle ore notturne e sale nelle ore di punta; cambiano anche gli abbonamenti mensili.',
+    summary: { it: 'Da gennaio la ricarica rapida in autostrada avrà prezzi diversi per fascia oraria: meno di notte, di più nelle ore di punta. Cambiano anche gli abbonamenti mensili.', en: 'From January, fast charging on motorways is priced by time of day: less at night, more at peak hours. Monthly plans change too.' },
+    why: { it: 'Cambia quanto spendi nei viaggi lunghi.', en: 'It changes what long trips cost you.' }, fit: 3, section: 'ricarica' },
+  { edition: CARS, source: 'demo-volt', title: 'Prova: 1.000 km in inverno con una compatta da 30.000 €', url: 'https://example.org/volt/prova-1000-km-inverno', hoursAgo: 27,
+    snippet: 'Consumi reali a -2 °C, tempi di ricarica misurati e quanto si perde rispetto al dato dichiarato.',
+    summary: { it: 'Una prova di 1.000 km a -2 °C con una compatta da 30.000 €: consumi reali, tempi di ricarica misurati e il 24% di autonomia in meno rispetto al dato dichiarato.', en: 'A 1,000 km test at -2 °C with a €30,000 compact: real consumption, measured charging times and 24% less range than declared.' },
+    why: { it: 'Una prova indipendente con numeri misurati, come le volevi.', en: 'An independent test with measured numbers, as you wanted.' }, fit: 3, section: 'prove-su-strada' },
+  { edition: CARS, source: 'demo-colonnine', title: 'Mappa aggiornata: 1.200 nuove colonnine nel terzo trimestre', url: 'https://example.org/colonnine/mappa-terzo-trimestre', hoursAgo: 49,
+    snippet: 'Quasi metà delle nuove installazioni è in tre regioni del nord; restano scoperte molte statali del sud.',
+    summary: { it: 'Nel terzo trimestre sono state installate 1.200 nuove colonnine, quasi metà in tre regioni del nord. Molte statali del sud restano scoperte.', en: '1,200 new chargers were installed in the third quarter, almost half in three northern regions. Many southern roads are still uncovered.' },
+    why: { it: 'Utile se viaggi fuori dalle autostrade.', en: 'Useful if you travel off the motorways.' }, fit: 2, section: 'ricarica' },
+  { edition: CARS, source: 'demo-volt', title: 'Il costruttore annuncia una nuova tinta per il modello di punta', url: 'https://example.org/volt/nuova-tinta', hoursAgo: 30,
+    snippet: 'Disponibile da marzo come optional.',
+    summary: { it: 'Una nuova tinta optional per il modello di punta, da marzo.', en: 'A new optional colour for the flagship model, from March.' },
+    why: { it: 'Poco rilevante per quello che segui.', en: 'Of little relevance to what you follow.' }, fit: 0, section: 'novita' },
+];
+
+const idOf = (url: string, edition?: string) => createHash('sha1').update((edition ? `${edition}\n` : '') + canonicalUrl(url)).digest('hex').slice(0, 12);
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 function rss(items: DemoStory[], now: number): string {
@@ -90,6 +124,8 @@ function page(items: DemoStory[], now: number): string {
 /** The demo's network: the stories above in each source's own format, an empty list for the rest. */
 export function demoNewsFetch(now: () => number): NewsFetch {
   return async url => {
+    const car = CAR_SOURCES.find(s => s.url === url);
+    if (car) return { status: 200, contentType: 'application/rss+xml', text: rss(C.filter(i => i.source === car.id), now()) };
     const src = DEFAULT_SOURCES.find(s => s.url === url);
     const mine = S.filter(i => i.source === src?.id);
     const n = now();
@@ -105,7 +141,7 @@ export function demoNewsFetch(now: () => number): NewsFetch {
 
 /** The demo's AI pass: the summaries above for the ids asked, a fixed measured cost. */
 export function demoNewsAi(lang: () => Lang): NewsAi {
-  const byId = new Map(S.filter(i => i.summary.en).map(i => [idOf(i.url), i]));
+  const byId = new Map([...S, ...C].filter(i => i.summary.en).map(i => [idOf(i.url, i.edition), i]));
   return async prompt => {
     const ids = [...prompt.matchAll(/"id":\s*"([0-9a-f]{12})"/g)].map(m => m[1]!);
     const l = lang() === 'it' ? 'it' : 'en';
@@ -115,4 +151,15 @@ export function demoNewsAi(lang: () => Lang): NewsAi {
     });
     return { ok: true, text: JSON.stringify(out), tokens: 900 + ids.length * 410, costUsd: Math.round((900 + ids.length * 410) * 0.0000062 * 1000) / 1000 };
   };
+}
+
+/** The demo's editions, made once on an empty paper: the ready-made AI one and the made-up «Auto elettriche». */
+export function seedDemoNews(news: Pick<NewsService, 'state' | 'editEdition' | 'editSources'>): void {
+  if (news.state().editions.length) return;
+  news.editEdition({ op: 'create', name: '', template: NEWS_AI_EDITION });
+  news.editEdition({ op: 'create', name: 'Auto elettriche', interest: 'Mi interessa quando cambia davvero l\'autonomia, i prezzi della ricarica e le prove su strada indipendenti. Niente comunicati stampa.',
+    core: ['autonomia', 'batteri', 'ricarica', 'colonnin', 'elettric'], near: ['prova', 'prezzo', 'tariff', 'kwh', 'consum'],
+    sections: [{ name: 'Novità', words: ['consegn', 'modello', 'annunci'] }, { name: 'Prove su strada', words: ['prova', 'test', 'km'] }, { name: 'Ricarica', words: ['ricarica', 'colonnin', 'tariff', 'kwh'] }] });
+  const id = news.state().editions.find(e => e.name === 'Auto elettriche')!.id;
+  for (const s of CAR_SOURCES) news.editSources({ op: 'add', edition: id, url: s.url, name: s.name, section: s.section, pin: s.section === 'ricarica' });
 }

@@ -70,7 +70,8 @@ import { AgentLifecycle } from './agents/lifecycle';
 import { createLifecycleApi, mountLifecycleApi } from './agents/lifecycle-api';
 import { MorningService } from './morning/service';
 import { NewsService } from './news/service';
-import { demoNewsAi, demoNewsFetch } from './news/demo';
+import { demoNewsAi, demoNewsFetch, seedDemoNews } from './news/demo';
+import { SchedulesService, scheduledText } from './schedules/service';
 import { demoWorktreePool } from './demo-worktrees';
 import { demoAgentRuns } from './demo-agent-runs';
 
@@ -226,7 +227,8 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   // the project maps (ADR 0271): the demo brain holds one, the shop the demo chats work on
   const projectMaps = attachProjectMaps(ctx, chats, () => demoBrainRoot, undefined, now); // no chat endpoints in the demo
   seedDemoMap(demoBrainRoot, projectMaps, now());
-  attachAppTools(mcp, { projectMaps, recordings, impara: learn, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), resolveRole: req => agents.resolve(req), runFeedback, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd) }, source, true);
+  const schedulesRef: { current: SchedulesService | null } = { current: null };
+  attachAppTools(mcp, { projectMaps, recordings, impara: learn, schedules: { state: () => schedulesRef.current!.state(), edit: (e, by) => schedulesRef.current!.edit(e, by) }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), resolveRole: req => agents.resolve(req), runFeedback, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd) }, source, true);
   try { recordMcpPort(mcpPortFromEnv(), await mcp.listen(mcpPortFromEnv())); } catch (e) {
     log.warn('demo', 'MCP port busy, using a random one', { data: { error: errText(e) } });
     recordMcpPort(mcpPortFromEnv(), await mcp.listen(0), errText(e)); // the banner shows in the demo too (e2e)
@@ -335,10 +337,20 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   // Impara «News» (ADR 0265): the real pipeline over a few real stories served offline (news/demo.ts), a fake AI pass
   const news = new NewsService({ dir: path.join(ctx.userData, 'news'), fetch: demoNewsFetch(now), ai: demoNewsAi(uiLang), noAi: () => null, lang: uiLang, now,
     changed: state => ctx.emitter.emit('news:changed', state) });
+  // scheduled routines (ADR 0280): the real service, no clock in the demo; «Esegui ora» writes to the demo's Orchestrator
+  schedulesRef.current = new SchedulesService({ file: path.join(ctx.userData, 'schedules.json'), now, changed: st => ctx.emitter.emit('schedules:changed', st),
+    run: async (task, late) => {
+      const o = chats.list().find(c => c.isOrchestrator && !c.closedAt);
+      if (!o) throw new Error('Nessun Orchestrator aperto.');
+      await chats.send(o.id, scheduledText(task, late));
+      return { chatId: o.id };
+    } });
+  const schedules = schedulesRef.current;
+  seedDemoNews(news);
   if (!news.state().items.length) void news.refresh();
 
   return {
-    morning, news, projectMaps,
+    morning, news, schedules, projectMaps,
     chats, browser, recordings, learn, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, engines, later: createLater(ctx),
     agents, runFeedback, agentLifecycle, agentPacks, brainModel, research, queries, memoryReview, learningReview,
     setup: new SetupService(ctx.userData, true, now),

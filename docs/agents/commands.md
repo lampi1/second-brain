@@ -98,6 +98,11 @@ row and its line here in the same change.
 | `app_recordings` | Orchestrator only | The call recordings and their local transcripts, or the audio files found on the PC. |
 | `app_recording_import` | Orchestrator only | Import an audio or video file from the PC to be transcribed locally. |
 | `app_learn` | Orchestrator only | Start an Impara lesson the user asked for (an explanation or a quiz), or list the lessons. |
+| `app_news` | Orchestrator only | The user's newspaper by editions: the editions, or one edition's front page, sections and sources with their last reading. |
+| `app_news_edition` | Orchestrator only | Create, change or delete an edition of the newspaper: name, what the user wants from it, sections, key words. |
+| `app_news_source` | Orchestrator only | Try a link at zero tokens, then add, remove, pause or resume a source of an edition. |
+| `app_news_refresh` | Orchestrator only | Refresh one edition or all now: reads the sources, one AI pass per edition, returns what it brought and its cost. |
+| `app_schedule` | Orchestrator only | The user's scheduled routines: list, create (daily at a time, every N minutes, once), change, pause, resume, delete or run one now. |
 | `app_project_map` | Orchestrator only | The user's project maps: list, read as text, open in the maps window (ADR 0275), the brief for a Scout that draws one, the user's corrections, piece-by-piece edits from the talk with the user and undo (ADR 0276). |
 | `app_agents_recap` | Orchestrator only | The recap: one short line per agent that works, waits or finished; with detail, one block per agent with its last steps. |
 | `app_child_output` | Orchestrator only | The latest report of a chat in its tree, delegates included: summary and criteria; full: the output, max 4,000 chars. |

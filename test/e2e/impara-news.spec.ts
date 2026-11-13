@@ -1,11 +1,12 @@
-// E2E of Impara's «Giornale» and «Pull Request» tabs (ADR 0265) on the frozen demo, whose News reads a few real stories
-// served offline (src/main/news/demo.ts) and summarizes them with a fake AI: the three columns, the sections with their
-// unread counts, a story read in place (why it matters, summary, links), J/K and S, the sources panel with each
-// source's last reading, the daily refresh off by default, and the PR tab with its filters and «Impara».
+// E2E of Impara's «Giornale» and «Pull Request» tabs (ADR 0265, editions ADR 0279) on the frozen demo, whose paper has
+// two editions read offline (src/main/news/demo.ts) and summarized by a fake AI: the editions on top, the three
+// columns, a short front page, a story read in place (why it matters, summary, links), J/K, S and the edition keys ([ and ]),
+// the edition's panel with its sources and «Prova», a new edition from the form, the daily refresh off by default, and
+// the PR tab with its filters and «Impara».
 import { expect, test } from '@playwright/test';
 import { goImpara, goPage, launchDemo, shot } from './helpers';
 
-test('the News: three columns, a story read in place, keys, the sources panel, the PR tab', async () => {
+test('the News: editions, three columns, a story read in place, keys, the edition panel, the PR tab', async () => {
   test.setTimeout(90_000);
   const { app, page } = await launchDemo();
   try {
@@ -15,7 +16,10 @@ test('the News: three columns, a story read in place, keys, the sources panel, t
     await expect(page.getByTestId('news-page')).toBeVisible();
     const items = page.getByTestId('news-list').getByTestId('news-item');
     await expect(items.first()).toBeVisible({ timeout: 30_000 });
-    expect(await items.count()).toBeGreaterThanOrEqual(10);
+    // a few stories only: the front page holds at most the edition's cap (7)
+    expect(await items.count()).toBeGreaterThanOrEqual(3);
+    expect(await items.count()).toBeLessThanOrEqual(7);
+    await expect(page.getByTestId('news-edition-ai')).toHaveAttribute('aria-pressed', 'true');
     // the first story is open: the launch carried by the lab, Hacker News and more, with its summary and why
     const reader = page.getByTestId('news-reader');
     await expect(reader.locator('.nw-h')).toHaveText('Introducing Claude Fable 5.2 and Claude Mythos 5.2');
@@ -39,10 +43,12 @@ test('the News: three columns, a story read in place, keys, the sources panel, t
     await page.getByTestId('news-view-harness').click();
     await expect(page.getByTestId('news-list')).toContainText('Claude Code 2.1.321');
 
-    // the sources: each with how it is read and its last reading; the daily refresh is off
+    // the edition's panel: the edition itself, each source with how it is read and its last reading; the daily refresh is off
     await page.getByTestId('news-sources-btn').click();
     const panel = page.getByTestId('news-sources');
     await expect(panel).toBeVisible();
+    await expect(panel.getByTestId('news-ed-name')).toHaveValue('AI per chi costruisce agenti');
+    await expect(panel.getByTestId('news-ed-cap')).toHaveValue('7');
     await expect(panel.getByTestId('news-src-claude-code')).toContainText('RSS');
     await expect(panel.getByTestId('news-src-claude-code').locator('.ok')).toBeVisible();
     await expect(panel.getByTestId('news-auto')).toHaveAttribute('aria-checked', 'false');
@@ -50,6 +56,23 @@ test('the News: three columns, a story read in place, keys, the sources panel, t
     await shot(page, 'news-sources-dark');
     await page.keyboard.press('Escape');
     await expect(panel).toHaveCount(0);
+
+    // the second edition is another subject, with its own sections and stories (key ])
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press(']');
+    await expect(page.getByTestId('news-editions').locator('[aria-pressed="true"]')).toContainText('Auto elettriche');
+    await expect(page.getByTestId('news-list')).toContainText('autonomia');
+    await expect(page.getByTestId('news-view-ricarica')).toBeVisible();
+    await shot(page, 'news-cars-dark');
+
+    // a new edition from the form, made empty: it has no source yet
+    await page.getByTestId('news-edition-new').click();
+    const form = page.getByTestId('news-new');
+    await form.getByTestId('news-new-name').fill('Vela');
+    await form.getByTestId('news-new-interest').fill('Regate oceaniche e nuove barche a foil.');
+    await shot(page, 'news-new-dark');
+    await form.getByTestId('news-new-empty').click();
+    await expect(page.getByTestId('news-editions').locator('[aria-pressed="true"]')).toContainText('Vela');
 
     // the PR tab: the same three columns, the user's PRs and «Impara»
     await goImpara(page, 'pr');

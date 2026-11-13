@@ -6,10 +6,10 @@ import type { NewsItem, NewsSource } from '@shared/news';
 import { canonicalUrl, dedupe, sameStory, titleWords } from '../../src/main/news/dedup';
 
 const T = Date.UTC(2026, 10, 9, 12);
-const src = (id: string, primary: boolean, weight: number): NewsSource => ({ id, name: id, url: `https://${id}.test/feed`, read: 'feed', section: 'models', weight, primary, on: true, builtin: true });
+const src = (id: string, primary: boolean, weight: number): NewsSource => ({ id, name: id, url: `https://${id}.test/feed`, edition: 'ai', read: 'feed', section: 'models', weight, primary, on: true, builtin: true });
 const SOURCES = [src('lab', true, 1), src('blog', false, 0.75), src('hn', true, 0.45), src('cc', true, 0.95), src('gh', true, 0.9)];
 const item = (id: string, source: string, title: string, url: string, at = T, more: Partial<NewsItem> = {}): NewsItem => ({
-  id, title, url, source, sourceName: source, at, seenAt: at, snippet: '', section: 'models', also: [], score: 0, rank: { recency: 0, source: 0, relevance: 0, echo: 0 }, ...more,
+  id, edition: 'ai', title, url, source, sourceName: source, at, seenAt: at, snippet: '', section: 'models', also: [], score: 0, rank: { recency: 0, source: 0, relevance: 0, echo: 0 }, ...more,
 });
 
 describe('canonicalUrl', () => {

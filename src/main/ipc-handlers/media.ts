@@ -1,22 +1,39 @@
-// IPC handlers, Voice mode (ADR 0152), call recordings (ADR 0154), Impara lessons (ADR 0185) and Impara «News» (ADR 0265). Registered by
+// IPC handlers, Voice mode (ADR 0152), call recordings (ADR 0154), Impara lessons (ADR 0185) and the «Giornale» (ADR 0265, 0279). Registered by
 // src/main/index.ts with every other group (Handlers in ipc.ts keeps the set complete); each channel's shape is in
 // src/shared/contract/*.ts.
 import { armLoopback } from '../window';
 import { shell } from 'electron';
 import { tutorModeOf } from '@shared/lesson';
 import { VOICE_NAMES, type VoiceName } from '@shared/voice';
-import type { NewsSourceEdit } from '@shared/news';
+import type { NewsEditionEdit, NewsEditionFields, NewsSourceEdit } from '@shared/news';
 import type { HandlerContext, HandlersOf } from './context';
 
 /** A «Fonti» edit from the renderer, checked field by field. */
 function newsEdit(a: unknown): NewsSourceEdit {
   const o = a && typeof a === 'object' ? a as Record<string, unknown> : {};
   const id = String(o.id ?? '').slice(0, 80);
-  if (o.op === 'add') return { op: 'add', url: String(o.url ?? '').slice(0, 2000), ...(typeof o.name === 'string' ? { name: o.name.slice(0, 60) } : {}) };
+  if (o.op === 'add') return { op: 'add', edition: String(o.edition ?? '').slice(0, 80), url: String(o.url ?? '').slice(0, 2000), ...(typeof o.name === 'string' ? { name: o.name.slice(0, 60) } : {}), ...(typeof o.section === 'string' ? { section: o.section.slice(0, 80) } : {}) };
   if (o.op === 'remove') return { op: 'remove', id };
   if (o.op === 'toggle') return { op: 'toggle', id, on: o.on === true };
-  if (o.op === 'reset') return { op: 'reset' };
+  if (o.op === 'reset') return { op: 'reset', edition: String(o.edition ?? '').slice(0, 80) };
   throw new Error('modifica delle fonti non valida');
+}
+
+/** An edition edit from the renderer, checked field by field (the service cleans names, words and sections). */
+function newsEditionEdit(a: unknown): NewsEditionEdit {
+  const o = a && typeof a === 'object' ? a as Record<string, unknown> : {};
+  const id = String(o.id ?? '').slice(0, 80);
+  const words = (v: unknown) => (Array.isArray(v) ? v.filter((w): w is string => typeof w === 'string').slice(0, 80) : undefined);
+  const fields: NewsEditionFields = {
+    ...(typeof o.name === 'string' ? { name: o.name } : {}), ...(typeof o.interest === 'string' ? { interest: o.interest } : {}), ...(typeof o.cap === 'number' ? { cap: o.cap } : {}),
+    ...(words(o.core) ? { core: words(o.core)! } : {}), ...(words(o.near) ? { near: words(o.near)! } : {}),
+    ...(Array.isArray(o.sections) ? { sections: o.sections.slice(0, 12).map(x => { const r = x && typeof x === 'object' ? x as Record<string, unknown> : {}; return { ...(typeof r.id === 'string' ? { id: r.id } : {}), name: String(r.name ?? ''), ...(words(r.words) ? { words: words(r.words)! } : {}) }; }) } : {}),
+  };
+  if (o.op === 'create') return { op: 'create', ...fields, name: String(o.name ?? ''), ...(typeof o.template === 'string' ? { template: o.template.slice(0, 40) } : {}) };
+  if (o.op === 'update') return { op: 'update', id, ...fields };
+  if (o.op === 'delete') return { op: 'delete', id };
+  if (o.op === 'move') return { op: 'move', id, to: Number(o.to) || 0 };
+  throw new Error('modifica dell\'edizione non valida');
 }
 
 export function mediaHandlers({ s, voice, recordings, learn, news }: HandlerContext): HandlersOf<'voice' | 'rec' | 'impara' | 'news'> {
@@ -65,8 +82,10 @@ export function mediaHandlers({ s, voice, recordings, learn, news }: HandlerCont
     'impara:tutorWarm': a => learn().tutorWarm(String(a?.id ?? '')),
     'impara:studio': a => learn().studio(String(a?.id ?? ''), a?.kind),
     'news:state': () => news().state(),
-    'news:refresh': () => news().refresh(),
-    'news:mark': a => news().mark({ id: String(a?.id ?? ''), ...(typeof a?.read === 'boolean' ? { read: a.read } : {}), ...(typeof a?.saved === 'boolean' ? { saved: a.saved } : {}), ...(typeof a?.lesson === 'string' ? { lesson: a.lesson } : {}) }),
+    'news:refresh': a => news().refresh(a && typeof a.edition === 'string' ? a.edition : undefined),
+    'news:edition': a => news().editEdition(newsEditionEdit(a)),
+    'news:test': a => news().testSource(String(a?.url ?? '').slice(0, 2000)),
+    'news:mark': a => news().mark({ id: String(a?.id ?? ''), ...(typeof a?.read === 'boolean' ? { read: a.read } : {}), ...(typeof a?.saved === 'boolean' ? { saved: a.saved } : {}), ...(typeof a?.lesson === 'string' ? { lesson: a.lesson } : {}), ...(typeof a?.less === 'boolean' ? { less: a.less } : {}) }),
     'news:sources': a => news().editSources(newsEdit(a)),
     'news:schedule': a => news().setSchedule({ ...(typeof a?.on === 'boolean' ? { on: a.on } : {}), ...(typeof a?.hour === 'number' ? { hour: a.hour } : {}) }),
   };
