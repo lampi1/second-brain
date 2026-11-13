@@ -30,17 +30,21 @@ On the other engines a second cause: the app judged the copy of the input shorte
    a role the user limited on its card asks, a plan to approve, a real question of the agent.
 3. One thing is the user's by its nature: a change of the brain's rules file itself, when the brain has one. An
    agent that may rewrite the rules has none, and «except the brain's» would mean nothing. It asks, with no
-   «always»: a tool that names the file; a command with it among its words, read from the chat's folder and from
-   the folders the line itself moves to (`cd x`, `git -C x`), home in its usual spellings (`~`, `$HOME`,
-   `%USERPROFILE%`, Git Bash `/c/…` on Windows); a word that ends in `permissions.json` through a variable or a
-   move the app cannot read (it does not know where it lands); Codex's session-long grant of a folder that holds
-   the file; on OpenCode an edit of any `permissions.json` reaches the app, which asks only for the brain's.
-   Reading it with a reader the app knows is free; writing the first rules of a brain that has none is free. The
-   Orchestrator may answer this request for the user, as any other (ADR 0275).
-   It is a net by name, not a wall. Not seen: a command that reaches the file without naming it (`git checkout --
-   .`, `git stash`, `rm -f *.json` in the brain's folder), a later command after an earlier one moved the shell
-   there, an edit Codex makes inside its own workspace without asking. The brain is a git repository: a change of
-   the file shows in its history.
+   «always»: a tool that names the file; a command with a word that is the file, each command of the line read from
+   the folder it runs in (the chat's, then wherever a literal `cd` moved it, `git -C x` for that command alone),
+   home in its usual spellings (`~`, `$HOME`, `%USERPROFILE%`, Git Bash `/c/…` on Windows); the file's name on one
+   word and the brain's folder on another (a copy or a move into the brain); Codex's session-long grant of a folder
+   that holds the file; on OpenCode an edit of any `permissions.json` reaches the app, which asks only for the
+   brain's. Reading it with a reader the app knows is free; writing the first rules of a brain that has none is
+   free. The Orchestrator may answer this request for the user, as any other (ADR 0275).
+   It is a net by name, not a wall, and it leans to not asking: the Orchestrator's chat runs in the brain's folder,
+   and a question for every mention would be the noise this ADR removes. Not a question: the name inside a message,
+   a heredoc or a web address; a word the app cannot read (a variable other than home and the current folder, a
+   move it cannot follow); a command that reaches the file without naming it (`git checkout -- .`, `git stash`,
+   `rm -f *.json` in the brain's folder); a later command after an earlier one moved the shell; code that builds
+   the path (`node -e`); an edit Codex makes inside its own workspace without asking. In the brain's folder a
+   command that is no reader and has the bare name as a word still asks, also where it only reads it (`tar czf b.tgz
+   permissions.json`). The brain is a git repository: a change of the file shows in its history.
 4. The checks that exist only so the rules can read what will run (a command with no line, a request an engine cut,
    Codex's session-long `grantRoot`) ask only where some rule could hold that tool. With no rule on it they pass.
 5. Codex (commands, file changes, MCP calls) and the ACP engines (Cursor, OpenCode) send the whole input beside

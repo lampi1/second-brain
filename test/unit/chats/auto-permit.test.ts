@@ -80,20 +80,52 @@ describe('autoPermit: the brain\'s rules file is the user\'s to change (ADR 0292
     expect(autoPermit(perm('Write', { file_path: rulesFile, content: '{}' }), ctx({ cwd: brain, policy: { state: 'none' }, rulesFile })).kind).toBe('allow');
   });
 
-  it('follows the folders the line itself moves to, and asks where it cannot tell where the file lands', () => {
-    const from = { policy: none, rulesFile };   // the chat sits in another project
+  it('follows the folder each command of the line runs in', () => {
+    const from = { policy: none, rulesFile };   // the chat sits in another project, with a permissions.json of its own
     for (const c of [
       `cd "${brain}" && echo x > permissions.json`, `cd ${root} && cd brain && rm permissions.json`, `pushd ${brain}; rm ./permissions.json`,
-      `git -C ${brain} checkout -- permissions.json`, `bash -c "cd ${brain} && rm permissions.json"`, `cp new.json ${brain}/x/../permissions.json`,
-      'echo x > $BRAIN/permissions.json', 'rm "$(git rev-parse --show-toplevel)/permissions.json"', 'cd $BRAIN && rm permissions.json', 'Remove-Item $env:BRAIN\\permissions.json',
+      `(cd ${brain}; echo x > permissions.json)`, `cd -- ${brain} && echo x > permissions.json`, `Push-Location '${brain}'; Set-Content permissions.json x`,
+      `git -C ${brain} checkout -- permissions.json`, `git --git-dir=${brain}/.git --work-tree=${brain} checkout permissions.json`,
+      `bash -c "cd ${brain} && rm permissions.json"`, `cp new.json ${brain}/x/../permissions.json`, `Set-Content -Path:${brain}/permissions.json -Value x`,
+      `echo x > ${brain}/permissions\\.json`, `echo x >| ${brain}/permissions.json`, `builtin cd ${brain} && > permissions.json`,
+      `cat <<EOF > ${brain}/permissions.json\n{}\nEOF`, `[IO.File]::WriteAllText("${brain}/permissions.json","x")`, `cd ${brain}/memory && echo x > "$(pwd)/../permissions.json"`,
+      // the name on one word, the brain's folder on another: a copy or a move into the brain
+      `cp /tmp/new/permissions.json ${brain}/`, `mv permissions.json ${brain}`,
     ]) expect(run(c, from), c).toBe('ask');
-    // a move to a known folder that is not the brain, a mention in a message, another project's file: free
+    expect(autoPermit(perm('Move', { source: 'permissions.json', destination: brain }), ctx(from)).kind).toBe('ask');
     for (const c of [
       'cd src && git commit -m "mention permissions.json"', 'cd src && echo "{}" > permissions.json', `cd ${root}/elsewhere && rm permissions.json`,
-      'git commit -m "docs: how permissions.json works"', 'echo "see permissions.json" >> notes.md', `git -C ${cwd} add permissions.json`,
+      `git -C ${cwd} add permissions.json`, 'cp a "$PWD/permissions.json"', 'echo x > "$(pwd)/config/permissions.json"',
+      // a word the app cannot read, or a move it cannot follow, is not a question
+      'cp permissions.json "$TMPDIR/permissions.json"', 'cd "$(git rev-parse --show-toplevel)" && git add config/permissions.json', 'cd - && git add permissions.json',
+      'curl -sL https://example.com/a%20b/permissions.json -o config/permissions.json', 'cd $HOME/x && rm -rf dist',
+      `cp permissions.json ${brain}/memory/`, `git -C ${brain} status && git add permissions.json`,
     ]) expect(run(c, from), c).toBe('allow');
-    // nothing about the rules file: a move the app cannot follow asks nothing
-    expect(run('cd $HOME/x && rm -rf dist', from)).toBe('allow');
+  });
+
+  it('in the brain\'s own folder (the Orchestrator\'s chat) only a word that is the file asks, never a mention', () => {
+    const inside = { cwd: brain, policy: none, rulesFile };
+    for (const c of [
+      'git commit -m "docs: explain permissions.json rules"', 'echo "see permissions.json" >> NOTES.md',
+      'gh issue comment 12 --body "permissions.json is not loaded when `cwd` differs"',
+      'git commit -m "fix(permit): the rules file `permissions.json` asks"',
+      'cat > NOTES.md <<\'EOF\'\n# Notes\nThe app reads permissions.json from the brain.\nEOF',
+      'git commit -m "$(cat <<\'EOF\'\nfix: permissions.json\n\nbody\nEOF\n)"',
+      'git -C ../work status && git -C ../work add permissions.json', 'cd ..; cd work; git add permissions.json', 'tar -C /tmp -xzf a.tgz permissions.json',
+      'cat > README.md <<\'EOF\'\n1. cd a\n2. cd b\n3. cd c\n4. cd d\n5. cd e\n6. cd f\npermissions.json permissions.json permissions.json permissions.json\nEOF',
+    ]) expect(run(c, inside), c).toBe('allow');
+    for (const c of ['echo "{}" > permissions.json', 'git checkout -- permissions.json', 'sed -i s/a/b/ ./permissions.json', 'cp /tmp/permissions.json .', 'bash -c "rm permissions.json"'])
+      expect(run(c, inside), c).toBe('ask');
+  });
+
+  it('a line no real one looks like neither stalls the app nor throws', () => {
+    const from = { policy: none, rulesFile };
+    const t0 = Date.now();
+    expect(run('cd a; cd b; cd c; touch ' + 'a/permissions.json/'.repeat(111112), from)).toBe('allow');   // one word of 2 MB: longer than any path
+    expect(run(Array.from({ length: 2000 }, (_x, i) => `rm d${i}/permissions.json`).join('; '), from)).toBe('ask');   // more paths than the app will look up
+    expect(autoPermit({ type: 'permission', tool: 5 as unknown as string, input: {} }, ctx(from)).kind).toBe('ask');
+    expect(autoPermit({ type: 'permission', tool: 'Bash', title: 5 as unknown as string, input: { command: 'ls' } }, ctx(from)).kind).toBe('allow');
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(0);
   });
 
   it('reads home in its usual spellings', () => {

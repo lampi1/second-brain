@@ -762,7 +762,8 @@ export class CodexSession implements HarnessSession {
       this.pending({
         id: rid, type: 'permission', tool: 'Edit', title: cut(grantRoot ? `Scrivere in ${grantRoot} per tutta la sessione` : files.length ? `Modifica: ${files.join(', ')}` : 'Modifica di file', 140), detail: cut(detail, 8000),
         input: trimInput({ files, reason: s(p.reason) || undefined, grantRoot: grantRoot || undefined }), at, ...(grantRoot ? {} : { alwaysRules: ['modifiche ai file, per questa sessione'] }),
-      }, { files, reason: s(p.reason) || undefined, grantRoot: grantRoot || undefined });
+        // whole only when the change's item is known: its files are then all there (paths as the chat's folder reads them)
+      }, known ? { files, reason: s(p.reason) || undefined, grantRoot: grantRoot || undefined } : undefined);
       return;
     }
     if (method === 'item/tool/requestUserInput') {

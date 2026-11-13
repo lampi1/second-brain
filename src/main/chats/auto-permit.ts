@@ -92,76 +92,132 @@ function placesOf(input: unknown, whole = false): string[] | null {
     : depth > 20 ? false : Array.isArray(v) ? (whole || v.length < 200) && v.every(x => cutFree(x, depth + 1)) : v && typeof v === 'object' ? Object.values(v).every(x => cutFree(x, depth + 1)) : true;
   return walk(input, 0) ? out : null;
 }
-/** A shell line as words: quoted stretches stay inside their word, separators and redirections end one. */
-const WORDS = /(?:"[^"]*"|'[^']*'|[^\s;&|<>"'])+/g;
-const MOVES = /^(cd|pushd|chdir|set-location|sl)$/i;
-/** The request names the brain's rules file: a tool with it among its places (or a session-wide grant of a folder that
- *  holds it), or a command with it among its words. The words are read from the chat's folder and from every folder
- *  the line itself moves to (`cd x`, `git -C x`); home is read in its usual spellings (`~`, `$HOME`, `%USERPROFILE%`,
- *  Git Bash `/c/…` on Windows). A word that ends in the file's name through a variable the app cannot read, or after
- *  a move it cannot follow, counts too: the app does not know where it lands. What only reads has passed already.
- *  A net by name, not a wall: a command that reaches the file without naming it is not seen (ADR 0292). */
+/** A shell line in pieces: a separator between commands, or a word (quoted stretches stay inside their word;
+ *  redirections and blanks end one). */
+const PIECES = /(\r?\n|;|&&|\|\||\||&)|((?:"[^"]*"|'[^']*'|[^\s;&|<>"'])+)/g;
+const MOVES = /^(cd|pushd|chdir|set-location|push-location|sl)$/i;
+/** the word before a quoted stretch that is a command line of its own (bash -c "…", cmd /c "…", pwsh -Command "…") */
+const RUNS = /^(-l?c|-command|\/c|\/k|eval)$/i;
+const NAME = /permissions\\?\.json/i;
+/** The request names the brain's rules file. A tool: the file among its places, the file's name among them beside its
+ *  folder (a copy or a move into the brain), or a session-wide grant of a folder that holds it. A command: the same,
+ *  word by word, each command of the line read from the folder it runs in: the chat's, then wherever a literal `cd`
+ *  moved it (`git -C x` for that command alone); home in its usual spellings (`~`, `$HOME`, `%USERPROFILE%`, Git Bash
+ *  `/c/…` on Windows). Only a word that is the file counts: a mention inside a message, a heredoc or a web address
+ *  does not, and neither does a word the app cannot read (a variable, a move it cannot follow). What only reads has
+ *  passed already. A net by name, not a wall (ADR 0292). */
 function namesRules(req: PermitRequest, command: boolean, cwd: string, file: string): boolean {
   if (!path.isAbsolute(cwd)) return false;
   const win = process.platform === 'win32';
-  const fold = (p: string): string => win ? p.toLowerCase() : p;
-  let target: string;
-  try { target = fold(realish(path.resolve(file))); } catch { return false; }
+  const fold = (p: string): string => win || process.platform === 'darwin' ? p.toLowerCase() : p;   // disks that fold case
+  let target: string, folder: string;
+  try { target = fold(realish(path.resolve(file))); folder = path.dirname(target); } catch { return false; }
   const home = os.homedir();
-  const plain = (p: string): string => {
-    let out = p.replace(/^file:\/\//i, '').replace(/^(~|\$HOME|\$\{HOME\}|\$env:USERPROFILE|\$env:HOME|%USERPROFILE%|%HOME%)(?=$|[\\/])/i, () => home);
-    if (win) out = out.replace(/^\/(?:mnt\/)?([a-z])\/(?!\/)/i, (_m, d: string) => `${d}:/`);
-    return out;
+  /** A word as a path from `base` (null = the app lost where the line is): null when it cannot be read as one. */
+  const at = (base: string | null, word: string): string | null => {
+    let p = word.replace(/^file:\/\//i, '');
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(p)) return null;   // a web address is no place
+    if (!win) p = p.replace(/\\(.)/g, '$1'); else p = p.replace(/^\\\\\?\\/, '');
+    p = p.replace(/^(~|\$HOME|\$\{HOME\}|\$env:USERPROFILE|\$env:HOME|%USERPROFILE%|%HOME%)(?=$|[\\/])/i, () => home);
+    if (base) p = p.replace(/^(\$PWD|\$\{PWD\}|\$\(pwd\)|%CD%|\$_PWD_)(?=$|[\\/])/i, () => base);
+    if (win) p = p.replace(/^\/(?:mnt\/)?([a-z])\/(?!\/)/i, (_m, d: string) => `${d}:/`);
+    if (/[$`%*?]|^~/.test(p) || p.includes('\0')) return null;
+    if (!path.isAbsolute(p) && !base) return null;
+    const full = path.resolve(base ?? '/', p);
+    return full.length > 32_768 ? null : full;   // longer than any path a disk holds
   };
-  const open = (p: string): boolean => /[$`%]|^~/.test(p);
-  // each look reads the disk: a line that names the file more times than any real one asks instead of stalling the app
-  let looks = 0;
-  const same = (base: string, p: string): boolean => {
-    if (++looks > 400) return true;
-    try { return fold(realish(path.resolve(base, p))) === target; } catch { return true; }
+  // each look reads the disk: asked once per path, and a line with more paths than any real one asks instead of stalling
+  const seen = new Map<string, string | null>();
+  const real = (full: string): string | null => {
+    let r = seen.get(full);
+    if (r === undefined) {
+      if (seen.size >= 400) return target;
+      try { r = fold(realish(full)); } catch { r = null; }
+      seen.set(full, r);
+    }
+    return r;
+  };
+  /** the words of one command (or the places of one tool): the file itself, or its name beside its folder */
+  const hit = (paths: (string | null)[]): boolean => {
+    if (!paths.some(f => f && NAME.test(f))) return false;   // a command that never names it costs no look
+    let named = false, inFolder = false;
+    for (const full of paths) {
+      if (!full) continue;
+      const isName = NAME.test(path.basename(full)) && fold(path.basename(full)) === path.basename(target);
+      if (!isName && named && inFolder) continue;
+      const r = real(full);
+      if (r === target) return true;
+      named ||= isName;
+      inFolder ||= r === folder;
+    }
+    return named && inFolder;
   };
   const input = obj(req.input);
   if (!command) {
-    if ((placesOf(req.input, true) ?? []).some(p => /permissions\.json/i.test(p) && same(cwd, plain(p)))) return true;
+    const places = placesOf(req.input, true) ?? [];
+    if (places.some(p => NAME.test(p)) && hit(places.map(p => at(cwd, p)))) return true;
     // a grant of a whole folder for the session (Codex) frees every later edit under it, the rules file among them
-    const root = typeof input.grantRoot === 'string' && input.grantRoot ? input.grantRoot : null;
-    if (!root) return false;
-    try { const r = fold(realish(path.resolve(cwd, plain(root)))); return target === r || target.startsWith(r.endsWith(path.sep) ? r : r + path.sep); } catch { return true; }
+    const root = typeof input.grantRoot === 'string' && input.grantRoot ? at(cwd, input.grantRoot) : null;
+    const r = root ? real(root) : null;
+    return !!r && (target === r || target.startsWith(r.endsWith(path.sep) ? r : r + path.sep));
   }
   const line = typeof input.command === 'string' ? input.command : '';
-  const start = typeof input.cwd === 'string' && input.cwd ? path.resolve(cwd, input.cwd) : cwd;
-  const scan = (whole: string, from: string[], depth: number): boolean => {
-    if (!/permissions\.json/i.test(whole)) return false;
-    const bases = [...from];
-    let lost = false;   // the line moved somewhere the app cannot follow
-    // a substitution ($(…), `…`) stands in its word as a variable the app cannot read; what it runs is read on its own
+  const own = [input.cwd, input.workdir, input.working_directory].find((x): x is string => typeof x === 'string' && !!x);
+  const start = own ? path.resolve(cwd, own) : cwd;
+  const scan = (whole: string, from: string | null, depth: number): boolean => {
+    if (!NAME.test(whole)) return false;
+    // a heredoc's body is text, not words of the command; a substitution ($(…), `…`) is read as a line of its own
+    // and stands in its word as something the app cannot read ($(pwd) is the folder it is in)
     const inner: string[] = [];
-    const text = whole.replace(/\$\(([^()]*)\)|`([^`]*)`/g, (_m, a?: string, b?: string) => { inner.push(a ?? b ?? ''); return '$_'; });
-    if (depth < 3 && inner.some(x => scan(x, bases, depth + 1))) return true;
-    const words = (text.match(WORDS) ?? []).map(w => w.replace(/["'`]/g, m => m === '`' ? m : ''));
-    for (let i = 0; i < words.length; i++) {
-      const w = words[i]!;
-      if (MOVES.test(w) || w === '-C') {
-        let j = i + 1;
-        while (MOVES.test(w) && j < words.length && /^-\w/.test(words[j]!)) j++;   // Set-Location -Path x
-        const to = j < words.length ? plain(words[j]!) : '';
-        if (!to || open(to) || to === '-' || bases.length > 32) lost = true;
-        else bases.push(...bases.map(b => path.resolve(b, to)));
+    const text = whole.replace(/<<-?\s*(['"]?)([A-Za-z_]\w*)\1([^\n]*)\n[\s\S]*?\n[ \t]*\2(?=\s|$)/g, (_m, _q, _tag, rest: string) => ` ${rest} `)
+      .replace(/\$\(\s*pwd\s*\)/gi, '$_PWD_')
+      .replace(/\$\(([^()]*)\)|`([^`]*)`/g, (_m, a?: string, b?: string) => { inner.push(a ?? b ?? ''); return '$_'; });
+    if (depth < 3 && inner.some(x => scan(x, from, depth + 1))) return true;
+    let base = from;                    // where the next command of the line runs
+    let here = base;                    // where this one does (git -C x, tar -C x)
+    let words: (string | null)[] = [];
+    let first = true, prev = '';
+    const pieces = [...text.matchAll(PIECES)];
+    for (let i = 0; i <= pieces.length; i++) {
+      const m = pieces[i];
+      if (!m || m[1]) {                 // the command ends
+        if (hit(words)) return true;
+        words = []; here = base; first = true; prev = '';
         continue;
       }
-      if (!/permissions\.json/i.test(w)) continue;
-      // a quoted stretch with its own words (bash -c "…", a commit message): read as a line of its own
-      if (/\s/.test(w)) { if (depth < 3 && scan(w, bases, depth + 1)) return true; continue; }
-      for (const piece of new Set([w, ...w.split(/[(){}=,]+/)])) {
-        if (!/permissions\.json/i.test(piece)) continue;
-        const p = plain(piece);
-        if (/permissions\.json$/i.test(p) && (open(p) || (lost && !path.isAbsolute(p)))) return true;
-        if (bases.some(b => same(b, p))) return true;
+      const quoted = m[2]!;
+      const w = quoted.replace(/["']/g, '').replace(/^[({]+/, '');
+      if (!w) continue;
+      if (first && MOVES.test(w)) {
+        // the folder the rest of the line runs in: the first word that is no option
+        let j = i + 1, to: string | null = null;
+        for (; j < pieces.length && !pieces[j]![1]; j++) {
+          const x = pieces[j]![2]!.replace(/["']/g, '');
+          if (/^(--|\/d|-\w[\w-]*)$/i.test(x)) continue;
+          to = x.replace(/[)}]+$/, ''); break;
+        }
+        base = to === null ? null : at(base, to);
+        here = base; i = j; first = false; prev = '';
+        continue;
       }
+      if (first && /^(builtin|command|sudo|time|nohup|env)$/i.test(w)) continue;
+      // a bare first word is the program (or a name between backticks in a message), not a place, unless a
+      // redirection writes there
+      const program = first && !/[\\/()]/.test(w) && !/>[|&]?\s*$/.test(text.slice(Math.max(0, m.index - 8), m.index));
+      first = false;
+      if (program) { prev = w; continue; }
+      const dir = /^(-C|--work-tree|--directory)$/.test(prev) ? w : /^(--work-tree|--directory)=(.+)$/.exec(w)?.[2];
+      if (dir !== undefined) { here = at(here, dir); if (here) words.push(here); prev = w; continue; }
+      if (NAME.test(w) || words.length < 64) {
+        // a quoted stretch with blanks is a message, unless what comes before runs it as a line of its own
+        if (/\s/.test(w)) { if (RUNS.test(prev) && depth < 3 && scan(w, here, depth + 1)) return true; }
+        else for (const piece of new Set([w, ...w.replace(/^-[\w-]+:/, '').split(/[(){}=,]+/)])) if (piece) words.push(at(here, piece));
+      }
+      prev = w;
     }
     return false;
   };
-  return scan(line, [start], 0);
+  return scan(line, start, 0);
 }
 
 /** An engine cut the request (session.ts trimInput): what runs is not what the rules would read. */
@@ -176,7 +232,8 @@ function refusal(rule: PolicyRule, shown: string, command: boolean): PermitVerdi
 }
 
 export function autoPermit(req: PermitRequest, ctx: PermitContext): PermitVerdict {
-  if (req.type !== 'permission' || req.tool === 'ExitPlanMode') return ASK;
+  if (req.type !== 'permission' || typeof req.tool !== 'string' || req.tool === 'ExitPlanMode') return ASK;
+  if (req.title !== undefined && typeof req.title !== 'string') req = { ...req, title: String(req.title) };
   const policy = ctx.policy ?? { state: 'none' };
   const command = COMMAND_TOOLS.includes(req.tool);
   const raw = obj(req.input).command;
@@ -204,6 +261,10 @@ export function autoPermit(req: PermitRequest, ctx: PermitContext): PermitVerdic
   // so where a rule could hold an edit the grant is the user's call
   if (obj(req.input).grantRoot !== undefined && covered) return ASK;
   // the rules file is the user's to change: no «always» on it either
-  if (ctx.rulesFile && policy.state !== 'none' && namesRules(req, command, ctx.cwd, ctx.rulesFile)) return { kind: 'ask', rulesFile: true };
+  if (ctx.rulesFile && policy.state !== 'none') {
+    let names: boolean;
+    try { names = namesRules(req, command, ctx.cwd, ctx.rulesFile); } catch { names = true; }   // a text it cannot read is the user's call
+    if (names) return { kind: 'ask', rulesFile: true };
+  }
   return ALLOW;
 }
