@@ -1,0 +1,856 @@
+// App control tools: the app itself, usable by AI (the user, 2026-10-11: "l'IA deve sapere perfettamente come testarla da
+// sola ... perché dovrà usarla al meglio"). Mounted on the local MCP server at /mcp/app (127.0.0.1 only, Host/Origin
+// checked). An agent (the Orchestrator, a test agent) can read the app's state, chats, pending requests, feed and logs, take
+// screenshots of the whole window, and steer the UI. Rules (ADR 0006):
+// - It can NEVER answer a permission or start a command: only the user's click in the app is their ok. One exception
+//   for questions (ADR 0017): app_resolve_question closes a work chat's question panel with the answer the user gave
+//   the Orchestrator, marked "Risposto nell’Orchestrator dall'utente", and only if he wrote to the Orchestrator or answered it since the
+//   question opened (the user, 2026-10-12: "anche se rispondi te alle chat, rimane la UI della domanda nella chat").
+// - Messages it sends to chats are labelled as not written by the user (like mail between chats).
+// - No production, no secrets: the logs it returns are already redacted by log.ts.
+// - It can close a chat like the user's ✕ (app_close_chat), never an Orchestrator nor a chat waiting for the user.
+// - Several Orchestrators (ADR 0021): each calls on its own endpoint, so the tools know the caller (appControlTools callerId).
+// - Long chats: it can ask a chat's hand-off and "Riprendi" it in a new chat (app_handoff_chat, app_continue_chat),
+//   under the same rule for chats across engines as messages (engines/policy.ts; an agent never starts a stopped
+//   chat on another engine).
+// - Both mounts see the shared Grindhouse. Only an Orchestrator's own mount brings the app's code folder up to date
+//   when the user asks (app_update_code, ADR 0074); no tool promotes or restarts the app (only the user's click on
+//   "Aggiorna" in Settings, ADR 0075).
+// - After a recap the user asked for, an Orchestrator's own mount opens the questions window with everything waiting
+//   for him (app_unblock, ADR 0135); it never answers any of it.
+// - The user's call recordings and their local transcripts (app_recordings, ADR 0154): the Orchestrator's mount only.
+// - A lesson in Impara when the user asks to understand something (app_learn, ADR 0190): the Orchestrator's mount only.
+// - The latest report of any chat in its tree, delegates included (app_child_output, ADR 0226); the recap (app_agents_recap, 0260).
+// - The skill library (app_skills, app_skill_write, app_skill_roles, app_skill_undo, ADR 0241): the Orchestrator's mount only.
+import path from 'node:path';
+import type { BrowserWindow } from 'electron';
+import type { ChatItem, ChatSummary, TasksState, Effort, EventMap, NewChat, PendingRequest, RunInfo, TaskKind } from '../../shared/contract';
+import { TASK_KINDS } from '../../shared/contract';
+import { engineLabel, engineOf } from '../engines/registry';
+import { agentsMayOpen, crossRefusal, openRefusal } from '../engines/policy';
+import type { BrainService, BrowserService, ChatService } from '../services';
+import { log, redact } from '../log';
+import { sameWords } from '../../shared/answer-in-words';
+import { isPlanApproval } from '../../shared/strategy';
+import { withPasswordsHidden } from '../browser/shot-mask';
+import { fmtFactor, previewOf } from '../browser/preview';
+import { healthSnapshot } from '../health';
+import { timerSnapshot } from '../timers';
+import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
+import { isLongChat } from '../../shared/context';
+import { describeUi } from '../../shared/genui';
+import { digest } from './digest';
+import { gitBranch } from '../chats/branch';
+import { closeRefusal } from '../chats/close-rules';
+import { unreadInstructions } from '../../shared/user-events';
+import type { PullResult } from '../update/source';
+import type { AgentCatalog } from '../../shared/agents';
+import { isWorkRole, MODEL_TIERS, ROLE_IDS, type ModelTier } from '../../shared/roles';
+import { contractField, taskPrompt } from './task-contract';
+import { agentCatalogTool, type SkillToolsSource } from '../agents/discovery';
+import { gapLines, skillGaps } from '../agents/skill-needs';
+import type { ResolvedRole } from '../agents/catalog';
+import { BALANCED_ASK_SCHEMA, balancedAskOf, balancedStatusRun, balancedStatusTool, type BalancedMode } from '../agents/balanced-mode';
+import { metricsTool, type RunFeedback } from '../agents/run-feedback';
+import { estimateTool, estimateTask, SimilarIndex } from '../agents/task-estimate';
+import { agentLearnTool, lessonReviewTool, type AgentPackLearning } from '../agents/pack/learning';
+import type { McpTool } from '../mcp/server';
+import { ToolRefusal } from '../mcp/refusal';
+import type { BrainScripts } from '../brain/scripts';
+import type { BrainChangelog } from '../brain/changelog';
+import { scriptWriteTools } from '../brain/scripts-tools';
+import { AGENT_LABEL, ORCHESTRATOR_USER_LABEL } from '../../shared/agent-label';
+import { voiceDiagnostics } from '../voice/diagnostics';
+import { packageTools } from '../flows/package-tools';
+import type { RoutinePackageStore } from '../flows/package-authoring';
+import { workflowTools, type WorkAway } from '../workflows/tools';
+import type { Workflows } from '../workflows/service';
+import { guideTool, screenOutline } from './guide';
+import { CONFIG_ASK_MIN, CONFIG_TURN_MIN, configTool, type ConfigDeps } from './config';
+import { lastAnswered, lastTyped, userAsked } from './user-words';
+import { recordingTools, type RecordingsRead } from './recordings';
+import { newsTools, type NewsControl } from './news';
+import { scheduleTools, type SchedulesControl } from './schedules';
+import { imparaTools, type ImparaControl } from './impara';
+import { childOutputTool } from './child-output';
+import { agentsRecapTool } from './agents-recap';
+import { appProjectMapTool } from '../projectmap/tools';
+import type { ProjectMaps } from '../projectmap/service';
+import { skillTools } from './skills';
+import type { SkillLibrary } from '../skills/library';
+import type { RoutineTerminalExport, RoutineRunRef } from '../../shared/routines';
+
+export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
+export interface ToolDef { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(args: Record<string, unknown>): Promise<ToolOut> | ToolOut }
+
+export interface AppCtlDeps {
+  workflows?: Workflows;
+  /** «Modalità notte» (ADR 0191): proposals approved for the absent user (workflows/tools.ts) */
+  away?: WorkAway;
+  /** the routine package store (ADR 0175): app_routine_save saves there; absent = no package authoring tools */
+  routinePackages?: () => RoutinePackageStore;
+  agentLearning?: AgentPackLearning;
+  agents?: () => AgentCatalog;
+  /** the catalog's resolve (agents/catalog.ts): the engine, model and effort a role chat starts with */
+  resolveRole?: (req: NewChat) => ResolvedRole;
+  /** agent_metrics for the Orchestrator's own endpoint */
+  runFeedback?: RunFeedback;
+  /** when a chat's context last began again (a new session or a compaction): app_digest since "last" answers in full
+   *  after it, because the summary may have dropped what the earlier digests said */
+  contextSince?: (chatId: string) => number | undefined;
+  chats: ChatService; browser: BrowserService; brain: BrainService;
+  window: () => BrowserWindow | null;
+  emitUi: (cmd: EventMap['ui:command']) => void;
+  version: string;
+  /** the code blocks the user ran with "Esegui" (read-only: no tool starts a run) */
+  runs?: (chatId?: string) => RunInfo[];
+  /** the "Comando da eseguire" requests (shell blocks left for the user), listed with the other open requests */
+  commandAsks?: () => PendingRequest[];
+  /** the app's code folder (update/source.ts): a chat there works on the app (routing area App); pull = app_update_code */
+  code?: { repo: () => string | null; inRepo?: (dir: string) => Promise<boolean>; pull?: () => Promise<PullResult> };
+  /** the Task page's last read (the user's PRs, unread news) for app_digest; absent = not shown */
+  tasks?: () => TasksState | null;
+  /** a role version's results line for its route's reason ("12 run, 9 con esito, 78% riuscite"); absent = none */
+  agentStats?: (agentId: string, version: number) => string | null;
+  /** «Balanced mode» (agents/balanced-mode.ts, ADR 0218): picks a role chat's engine from the credits left; absent or off = the card */
+  balancedMode?: Pick<BalancedMode, 'choose' | 'record' | 'status'>;
+  /** the brain's skills with the tools each calls: app_create_chat and agent_catalog warn about a skill a role lacks
+   *  the tools for (agents/skill-needs.ts, issue #93); absent = no warnings */
+  skillTools?: SkillToolsSource;
+  /** the brain's scripts and changelog (ADR 0076): the Orchestrator's brain_script_save / _delete / brain_changelog_add */
+  brainScripts?: { scripts: BrainScripts; changelog: BrainChangelog };
+  /** the project maps (ADR 0271): app_project_map on the Orchestrator's own endpoint */
+  projectMaps?: ProjectMaps;
+  /** the call recordings (ADR 0154): app_recordings / app_recording_import on the Orchestrator's own endpoint */
+  recordings?: RecordingsRead;
+  /** the skill library (ADR 0241): app_skills / app_skill_write / app_skill_roles / app_skill_undo on the Orchestrator's own endpoint */
+  skillLibrary?: SkillLibrary;
+  /** Impara (ADR 0190): app_learn on the Orchestrator's own endpoint */
+  impara?: ImparaControl;
+  /** the «Giornale» (ADR 0280): app_news, app_news_edition, app_news_source, app_news_refresh on the Orchestrator's own endpoint */
+  news?: NewsControl;
+  /** scheduled routines (ADR 0281): app_schedule on the Orchestrator's own endpoint */
+  schedules?: SchedulesControl;
+  /** the configuration the Orchestrator changes for the user (app_config, ADR 0149); settings come from `brain` */
+  config?: Omit<ConfigDeps, 'callerId' | 'userAsked' | 'brain'>;
+  /** the Routine section's packages (routines/service.ts): app_routine_export on the Orchestrator's own endpoint */
+  routines?: { has(id: string): boolean; exportForTerminal(id: string): RoutineTerminalExport; snapshot(): object; archive?(): object; run(ref: RoutineRunRef): Promise<object> };
+}
+
+/** app_routine_export: the filled package zip for the terminal; the answer names secrets, never carries a value. */
+export function routineExportTool(r: NonNullable<AppCtlDeps['routines']>): ToolDef {
+  return {
+    name: 'app_routine_export',
+    description: 'Export a routine package (Routine section) for the terminal `routine` CLI: the app first fills every <set-by-user> secret it already holds (DevOps token from the Azure DevOps connector, site logins from the routine site passwords, the test-only SQL login for a test DB), then writes the zip only to %LOCALAPPDATA%/routine-runtime/packages/<id>/. Returns only the zip path and the names of the filled and missing secrets with the reason: never a value. Never copy the zip into a repository or the brain.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string', description: 'the package id (its folder name on the Routine page)' } }, required: ['id'] },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    run: a => {
+      const id = typeof a.id === 'string' ? a.id.trim() : '';
+      if (!id || !r.has(id)) throw new Error(`Routine non trovata: ${id.slice(0, 64)} (l'id è il nome del pacchetto nella sezione Routine)`);
+      const out = r.exportForTerminal(id);
+      return { path: out.path, filled: out.filled, missing: out.missing };
+    },
+  };
+}
+
+/** agent_learn_propose on the app endpoints: all proposals require a renderer user decision before application;
+ *  on any other app endpoint the lesson waits like a work chat's (no rule). */
+function learnTool(d: AppCtlDeps, callerId: string | undefined, authenticated: boolean): ToolDef {
+  return toolDef(authenticated && callerId ? agentLearnTool(d.agentLearning!) : agentLearnTool(d.agentLearning!, `app:${callerId ?? 'orchestrator'}`.slice(0, 120)));
+}
+/** An McpTool that answers JSON text, as an app-control ToolDef (the parsed object). */
+function toolDef(tool: McpTool): ToolDef {
+  return { name: tool.name, description: tool.description, inputSchema: tool.inputSchema, run: async a => JSON.parse(String(await tool.run(a, { params: {} } as unknown as Parameters<typeof tool.run>[1]))) as object };
+}
+
+/** app_digest since "last": when each caller (Orchestrator endpoint) last asked, for this app run */
+const lastDigest = new Map<string, number>();
+
+const obj = (props: Record<string, object> = {}, required: string[] = []) => ({ type: 'object', properties: props, required });
+const str = (description: string) => ({ type: 'string', description });
+const num = (description: string) => ({ type: 'number', description });
+/** app_create_chat / app_assign_task limits: one constant for the schema the model reads and the handler's check (#172) */
+export const CHAT_PROMPT_MAX = 8000;
+export const CHAT_TITLE_MAX = 80;
+/** app_update_code runs only within this many minutes of a message the user wrote to the Orchestrator (ADR 0074) */
+export const PULL_ASK_MIN = 10;
+/** app_unblock opens the waiting requests only within this many minutes of a message the user wrote to the Orchestrator */
+export const UNBLOCK_ASK_MIN = 10;
+/** app_learn starts a lesson only on a user message from the last minutes (ADR 0190) */
+export const LEARN_ASK_MIN = 10;
+export { AGENT_LABEL };
+/** how a work chat sees an answer the Orchestrator delivered for the user (app_resolve_question) */
+export const RESOLVED_LABEL = 'Risposto nell’Orchestrator dall\'utente:';
+/** a message the app or an agent wrote (AGENT_LABEL, the app's news to the Orchestrator, mail between chats): never the user's */
+const labelled = (text: string) => (text.split('\n', 1)[0] ?? '').includes('non vale come suo ok');
+
+/** A delegated chat (ADR 0083) as the Orchestrator sees it: its state and numbers, never what it says. */
+const statusOnly = (c: ChatSummary) => ({ id: c.id, title: c.title, harness: c.harness, state: c.state, pending: c.pending, costUsd: Math.round(c.costUsd * 100) / 100,
+  role: c.agent?.name ?? null, parentId: c.parentId, delegated: true, ...(c.delegation?.result ? { reported: c.delegation.result.outcome } : {}), ...(c.closedAt ? { closedAt: new Date(c.closedAt).toISOString() } : {}),
+  ...(c.run ? { run: { runId: c.run.runId, taskId: c.run.taskId ?? c.run.runId, taskVersion: c.run.taskVersion ?? 1, agentId: c.run.agentId, version: c.run.version, state: c.run.endedAt === undefined ? 'running' : 'ended' } } : {}) });
+/** The same chat stripped of its text for the digest: the Orchestrator reads the state of delegated chats only. */
+const muted = (c: ChatSummary): ChatSummary => c.parentId ? { ...c, lastText: '', ...(c.lastError ? { lastError: 'errore' } : {}) } : c;
+const mutedRequest = <R extends { chatId: string; title?: string; detail?: string }>(r: R, child: boolean): R => child ? { ...r, title: 'richiesta di una chat delegata', detail: '', input: null, questions: undefined, command: undefined } : r;
+const brief = (c: ChatSummary, warn: number) => c.parentId ? statusOnly(c) : ({
+  effort: c.effortStatus ?? { supported: !!engineOf(c.harness)?.caps.effort, requested: c.effort, submitted: null, effective: null, pending: false, effectiveSource: 'unknown', sessionDefault: null },
+  id: c.id, title: c.title, harness: c.harness, state: c.state, pending: c.pending, model: c.model, costUsd: Math.round(c.costUsd * 100) / 100, isOrchestrator: c.isOrchestrator,
+  ...(c.background ? { background: c.background } : {}),
+  ...(c.work ? {work:c.work} : {}), last: c.lastText.slice(0, 200),
+  ...(c.userEvents ? { userEvents: c.userEvents } : {}),
+  ...(c.contextTokens ? { contextTokens: c.contextTokens, ...(c.contextEstimated ? { contextEstimated: true } : {}), long: isLongChat(c, warn) } : {}),
+  ...(c.handoffAt ? { handoffAt: new Date(c.handoffAt).toISOString() } : {}),
+  ...(c.continuedBy ? { continuedBy: c.continuedBy.id } : {}), ...(c.continuedFrom ? { continuedFrom: c.continuedFrom.id } : {}),
+  ...(c.queued ? { queued: queuedLine(c.queued) } : {}),
+  // a role chat's run: its runId is what agent_metrics and agent_children show (never the chat id)
+  ...(c.run ? { run: { runId: c.run.runId, taskId: c.run.taskId ?? c.run.runId, taskVersion: c.run.taskVersion ?? 1, agentId: c.run.agentId, version: c.run.version, state: c.run.endedAt === undefined ? 'running' : 'ended' } } : {}),
+});
+/** "queued (CPU 92%, RAM 40% free, 7/7 cold starts, position 1)": an agent's cold start waiting for a slot or for the
+ *  emergency brake (ADR 0222) */
+export const queuedLine = (q: NonNullable<ChatSummary['queued']>): string => `queued (CPU ${q.cpu}%, RAM ${q.freeRam}% free${q.slots ? `, ${q.starting ?? 0}/${q.slots} cold starts` : ''}, position ${q.position})`;
+/** closed (archived) chats the Orchestrator may reopen: the last 7 days, newest first, at most 20 */
+const RECENT_CLOSED_MS = 7 * 24 * 3600_000;
+export function recentClosed(list: ChatSummary[], now = Date.now()): ChatSummary[] {
+  return list.filter(c => c.closedAt && now - c.closedAt <= RECENT_CLOSED_MS).sort((a, b) => (b.closedAt ?? 0) - (a.closedAt ?? 0)).slice(0, 20);
+}
+
+/** The Orchestrator's endpoint /mcp/app/o/:chatId/:token answers only the open Orchestrator presenting its own token: the id
+ *  names the caller, whose engine decides the rule for chats across engines, so it may not be picked by anyone else. */
+export function orchestratorEndpointAuth(tokens: { check(key: string, token: string): boolean }, list: () => Pick<ChatSummary, 'id' | 'isOrchestrator'>[]) {
+  return (p: Record<string, string>): boolean => !!p.chatId && !!p.token && tokens.check(p.chatId, p.token) && list().some(c => c.id === p.chatId && c.isOrchestrator);
+}
+
+/** callerId = the Orchestrator calling on its own endpoint (/mcp/app/o/<id>/<token>); none = /mcp/app (test agents), which acts
+ *  for the Orchestrator without its write tools. Its messages are signed with its title. */
+export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
+  /** true when this endpoint is the Orchestrator's own (/mcp/app/o/<id>/<token>, checked by orchestratorEndpointAuth) */
+  const authed = () => !!callerId && d.chats.list().some(c => c.id === callerId && c.isOrchestrator && !c.closedAt);
+  // Flash (ADR 0105) is the user's own quick lane: never in the Orchestrator's picture
+  const mine = (c: ChatSummary) => !c.quick;
+  /** the Orchestrator this endpoint acts for */
+  const caller = (): ChatSummary | undefined => d.chats.list().find(c => c.isOrchestrator && !c.closedAt && (!callerId || c.id === callerId));
+  /** the authenticated Orchestrator writes to a work chat as the user (ADR 0269); the plain mount as an agent */
+  const voice = (): string => (authed() ? ORCHESTRATOR_USER_LABEL : AGENT_LABEL);
+  const intakeField = str('For a new Strategist plan only: the exact question from your latest answered intake panel for this task. The host supplies the answer.');
+  const intakeOf = (a: Record<string, unknown>, newPlan: boolean) => {
+    if (a.intakeQuestion === undefined) return {};
+    const source = caller();
+    if (!authed() || !source || !newPlan || typeof a.intakeQuestion !== 'string' || !a.intakeQuestion.trim() || !d.chats.bindPlanIntake) {
+      throw new Error('intakeQuestion requires an authenticated Orchestrator starting a new Strategist plan.');
+    }
+    return { intake: d.chats.bindPlanIntake(source.id, a.intakeQuestion) };
+  };
+  const balanced = d.balancedMode;
+  /** Chat visibility is shared; ownership checks remain on operations that require an owner. */
+  const other = (chatId: string) => d.chats.list().some(c => c.id === chatId && !mine(c));
+  const guard = (chatId: string) => { if (other(chatId)) throw new Error(`chat non trovata: ${chatId} (vedi app_chats)`); return chatId; };
+  /** a chat another role delegated: the Orchestrator sees its state, never its content (ADR 0083) */
+  const delegated = (chatId: string) => d.chats.list().some(c => c.id === chatId && !!c.parentId);
+  const contentOf = (chatId: string) => { guard(chatId); if (delegated(chatId)) throw new Error('chat delegata da un altro ruolo: il suo contenuto lo legge il genitore; tu ne vedi lo stato (app_chats, app_digest)'); return chatId; };
+  // app_guide's own list of the caller's tools is read when asked, so it names exactly what this endpoint offers
+  const guideDeps = { window: d.window, settings: { schema: () => d.brain.settingsSchema(), get: () => d.brain.settings() },
+    tools: () => tools.map(t => ({ name: t.name, description: t.description })), showValues: authed };
+  const tools: ToolDef[] = [
+    guideTool(guideDeps),
+    ...(authed() ? [{ name: 'app_voice_diagnostics', description: 'Read local content-free voice diagnostics: rolling recognition/synthesis timing samples, stale events, cancellations and failures. No audio or transcript content. Coverage explicitly excludes end-to-end latency and accuracy. Unknown values stay null; small-sample p95 is not a reliability claim.', inputSchema: obj(), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }, run: () => { if (!authed()) throw new Error('Authenticated Orchestrator required'); return { diagnostics: voiceDiagnostics() }; } }] : []),
+    ...(d.routines && authed() ? [routineExportTool(d.routines), {
+      name: 'app_routine_status', description: 'Read routine packages and run history only when the user asks about routines. Supply source (terminal or app), routineId and runId for the live progress and evidence of one run; omit all three for the list. archive: true reads the old state.json history (including unresolved writes). Never executes, resumes, reconciles or cleans up a run. Old app runs are archived. Execution belongs to the terminal routine CLI.',
+      inputSchema: obj({ archive: { type: 'boolean' }, source: { type: 'string', enum: ['terminal', 'app'] }, routineId: { type: 'string' }, runId: { type: 'string' } }),
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      run: (a: Record<string, unknown>) => { if (!authed()) throw new Error('Authenticated Orchestrator required');
+        if (a.archive === true) {
+          if (a.source !== undefined || a.routineId !== undefined || a.runId !== undefined) throw new Error('Archive cannot be combined with a run reference');
+          return d.routines!.archive?.() ?? { runs: [] };
+        }
+        if (a.source === undefined && a.routineId === undefined && a.runId === undefined) return d.routines!.snapshot();
+        if (!['terminal', 'app'].includes(String(a.source)) || typeof a.routineId !== 'string' || typeof a.runId !== 'string') throw new Error('Supply source, routineId and runId together');
+        return d.routines!.run({ source: a.source as 'terminal' | 'app', routineId: a.routineId, runId: a.runId }); },
+    }] : []),
+    ...(d.config && authed() ? [configTool({ ...d.config, brain: d.brain, callerId: callerId!, userAsked: () => configAsked(callerId!) })] : []),
+    ...(d.routinePackages && authed() ? packageTools({ store: d.routinePackages, brainRoot: () => d.brain.info().brainRoot, authed }) : []),
+    ...(d.workflows && authed() ? workflowTools(d.workflows, id => d.chats.list().some(c => c.id === id && mine(c) && !c.parentId && !c.isOrchestrator), id => d.chats.list().find(c => c.id === id), d.away) : []),
+    ...(d.agentLearning ? [learnTool(d, callerId, authed())] : []),
+    ...(d.agentLearning && authed() ? [toolDef(lessonReviewTool(d.agentLearning))] : []),
+    ...(d.brainScripts && authed() ? scriptWriteTools(d.brainScripts.scripts, d.brainScripts.changelog, () => caller()?.title || 'Orchestrator') : []),
+    ...(d.agents ? [toolDef(agentCatalogTool(d.agents, d.skillTools))] : []),
+    ...(d.recordings && authed() ? recordingTools(d.recordings, d.emitUi) : []),
+    ...(d.projectMaps && authed() ? [appProjectMapTool(d.projectMaps, d.emitUi)] : []),
+    ...(d.impara && authed() ? imparaTools(d.impara, d.emitUi, () => imparaAsked(callerId!)) : []),
+    ...(d.news && authed() ? newsTools(d.news, d.emitUi) : []),
+    ...(d.schedules && authed() ? scheduleTools(d.schedules, d.emitUi) : []),
+    ...(d.skillLibrary && authed() ? skillTools(d.skillLibrary, () => caller()?.title || 'Orchestrator') : []),
+    ...(authed() ? [childOutputTool({ chats: () => d.chats.list().filter(mine), runs: () => d.runFeedback?.runList() ?? [] }), agentsRecapTool({ chats: () => d.chats.list().filter(mine), items: id => d.chats.items(id), pending: () => [...d.chats.pending(), ...(d.commandAsks?.() ?? [])], runs: () => d.runFeedback?.runList() ?? [] })] : []),
+    ...(d.runFeedback && authed() ? [metricsTool(d.runFeedback)] : []),
+    ...(d.runFeedback && authed() ? [estimateTool(() => d.runFeedback!.runList())] : []),
+    {
+      name: 'app_set_chat_effort',
+      description: 'Select the reasoning effort for one running app chat, for this conversation only (a role\'s lasting effort is the user\'s, in Brain → Agenti). Changes the next turn, never approvals, sandbox, model or a running turn. Returns requested, submitted, provider-reported effective and pending separately; null is unknown/default, never medium.',
+      inputSchema: obj({ chatId: str('chat id from app_chats'), effort: { type: 'string', enum: ['low', 'medium', 'high', 'xhigh', 'max'] } }, ['chatId', 'effort']),
+      run: async a => {
+        const chatId = typeof a.chatId === 'string' ? a.chatId : '';
+        if (!chatId || typeof a.effort !== 'string' || !['low', 'medium', 'high', 'xhigh', 'max'].includes(a.effort)) throw new Error('chatId ed effort validi sono obbligatori.');
+        const target = need(chatId);
+        if (!engineOf(target.harness)?.caps.effort) throw new Error('Questo motore non supporta la scelta dell’effort.');
+        const updated = await d.chats.set(target.id, { effort: a.effort as Effort });
+        return { chatId: updated.id, effort: updated.effortStatus ?? { supported: true, requested: updated.effort, submitted: null, effective: null, pending: true, effectiveSource: 'unknown', sessionDefault: null } };
+      },
+    },
+    {
+      name: 'app_set_chat_work',
+      description:'Declare an explicit assignment or future-mailbox wait, or explicitly complete it. Holds prevent automatic archive and idle-session release across turns/restarts; they never approve actions or confirm a successful result. Completion never closes a chat immediately.',
+      inputSchema:obj({chatId:str('chat id in your scope'),status:{type:'string',enum:['assigned','waiting-mail','completed']}},['chatId','status']),
+      run:async a=>{
+        const id=guard(String(a.chatId??'')),target=d.chats.list().find(c=>c.id===id&&mine(c));
+        const owner=caller();
+        if(!target||!owner)throw new Error('Agente fuori dal tuo gruppo.');
+        if(!['assigned','waiting-mail','completed'].includes(String(a.status)))throw new Error('Stato incarico non valido.');
+        const result=await d.chats.set(id,{workStatus:a.status as 'assigned'|'waiting-mail'|'completed'});
+        return {chatId:id,work:result.work};
+      },
+    },
+    {
+      name: 'app_state', description: 'Overview of the app: version, brain folder, chats by state, open questions/permissions, browser tabs, today usage, context use of the Claude chats (calls over 200k, cold cache rewrites over 100k, compactions, cold hand-off notes written vs used, $ per call after a continuation vs after a compaction; ADR 0031), health (MCP port and whether it fell back to a random one, main-window renderer crashes/hangs/reloads, engines killed by force, Job Object guard) since the app started.',
+      inputSchema: obj(),
+      run: () => {
+        const chats = d.chats.list().filter(mine);
+        const by: Record<string, number> = {};
+        for (const c of chats) if (!c.closedAt) by[c.state] = (by[c.state] ?? 0) + 1;
+        const q = d.chats.queueState();
+        const queue = q && { enabled: q.enabled, cpu: q.cpu, freeRam: q.freeRam, ...(q.slots ? { coldStarts: q.starting ?? 0, coldStartSlots: q.slots } : {}), waiting: q.waiting.filter(w => !other(w.chatId)).map(w => ({ chatId: w.chatId, kind: w.kind, position: w.position })) };
+        return { version: d.version, brainRoot: d.brain.info().brainRoot, chats: by, ...(queue ? { queue } : {}), closedChats: chats.filter(c => c.closedAt).length, pending: d.chats.pending().filter(r => !other(r.chatId)).length, tabs: d.browser.list().length, usage: d.brain.usage(), ...(d.chats.contextStats ? { context: d.chats.contextStats() } : {}), logs: log.folder, health: healthSnapshot(), timers: timerSnapshot() };
+      },
+    },
+    {
+      name: 'app_chats', description: 'The chats in the app (Claude and Cursor engines): "app" = on the grid (state, open questions, model, cost, last line, background tasks still running, context size (long=true is a passive threshold observation, not a reason to change session), hand-off and "Riprendi" links, and for a role chat its run: run.runId, never the chat id); "closed" = finished chats that closed by themselves or by hand in the last 7 days (newest first): reopen one with app_reopen_chat, or just app_send_to_chat.',
+      inputSchema: obj(),
+      run: () => {
+        const all = d.chats.list().filter(mine);
+        const warn = d.brain.settings().contextWarnTokens;
+        return {
+          app: all.filter(c => !c.closedAt).map(c => brief(c, warn)),
+          closed: recentClosed(all).map(c => ({ ...brief(c, warn), closedAt: new Date(c.closedAt!).toISOString(), closedBy: c.closedBy ?? 'auto' })),
+        };
+      },
+    },
+    {
+      name: 'app_digest',
+      description: `The status in ONE call, zero tokens: every open chat with its state, what it waits for from the user (question text, permission, command), errors, last line, git branch, long context; chats closed and commands the user ran; the user's PRs (build, votes, QA failures) and unread Task news from the app's last Task read (Azure DevOps). Use it for "stato" and when woken, instead of app_chats + app_chat_items per chat + app_pending; read a chat's items only when its line is not enough. since: "last" (what changed since your previous app_digest), an ISO time, or omit for everything; chats waiting or failed are always named, with their text when it is new since then (call without since for all of it).`,
+      inputSchema: obj({ since: str('"last", an ISO time, or omit') }),
+      run: a => {
+        const key = `app:${callerId ?? ''}`;
+        const now = Date.now();
+        const raw = typeof a.since === 'string' ? a.since.trim() : '';
+        const prev = lastDigest.get(key), restarted = callerId ? d.contextSince?.(callerId) : undefined;
+        const since = raw === 'last' ? (prev !== undefined && !(restarted !== undefined && restarted > prev) ? prev : null) : raw ? Date.parse(raw) : null;
+        if (since !== null && Number.isNaN(since)) throw new Error('since: "last" oppure un orario ISO (es. 2026-10-13T18:00:00Z)');
+        lastDigest.set(key, now);
+        return digest({
+          works: d.workflows?.projection(),
+          chats: d.chats.list().filter(mine).map(muted), pending: [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].filter(r => !other(r.chatId)).map(r => mutedRequest(r, delegated(r.chatId))),
+          runs: (d.runs?.() ?? []).filter(r => !other(r.chatId) && !delegated(r.chatId)), tasks: d.tasks?.() ?? null,
+          now, since, selfId: caller()?.id, warnTokens: d.brain.settings().contextWarnTokens, branch: gitBranch,
+        });
+      },
+    },
+    {
+      name: 'app_reopen_chat', description: 'Reopen a closed (archived) chat listed under "closed" by app_chats: it goes back on the grid with its whole history and its session resumes (--resume) on the next message. Sending it a message with app_send_to_chat reopens it too, except a chat the user closed with ✕ (its work was cancelled): only this tool reopens that one, and only when the user asks.',
+      inputSchema: obj({ chatId: str('chat id from app_chats "closed"') }, ['chatId']),
+      run: async a => {
+        const id = String(a.chatId ?? '');
+        if (!d.chats.list().some(c => c.id === id && mine(c))) throw new Error(`chat non trovata: ${id} (vedi app_chats)`);
+        const c = await d.chats.reopen(id);
+        log.info('appctl', 'agent reopened a chat', { chat: id });
+        return brief(c, d.brain.settings().contextWarnTokens);
+      },
+    },
+    {
+      name: 'app_close_chat', description: 'Close an app chat for the user, like his ✕ / Ctrl+W: it leaves the grid and its engine ends with every tool it started (MCP servers, shells, dev servers); the transcript stays. Its delegation tree stops with it (ADR 0217). Never an Orchestrator; refused while the chat or an open descendant waits for the user (his open questions are his).',
+      inputSchema: obj({ chatId: str('chat id from app_chats "app"') }, ['chatId']),
+      run: async a => {
+        const id = String(a.chatId ?? '');
+        const c = d.chats.list().find(x => x.id === id);
+        // already closed (its tree's close took it, or the auto-close) or never the caller's: a stale id of the agent,
+        // answered to it and logged at info (#306, #307)
+        if (!c || !mine(c)) throw new ToolRefusal(`chat non trovata o già chiusa: ${id} (vedi app_chats)`);
+        // the close cancels the whole tree (ADR 0217): a descendant's open question would be withdrawn unanswered
+        const refused = closeRefusal(c, d.chats.list());
+        if (refused) throw new Error(refused);
+        await d.chats.close(id);
+        log.info('appctl', 'agent closed a chat', { chat: id, data: { title: c.title, state: c.state } });
+        d.brain.publish([{ kind: 'chat-closed', title: c.title, detail: 'chiusa dall’Orchestrator', chatId: id, who: c.harness }]);
+        return 'closed';
+      },
+    },
+    {
+      name: 'app_agent_context', description: 'Read the frozen launch context manifest for one visible work chat: selected memory IDs/provenance, omission reasons, skill hashes and estimated host-instruction size. No fact values, no live archive injection, no vendor-system prompt. Lexical scores are not probabilities; token estimates are characters/3. Legacy chats return unknown; sealed routines load no ambient memory.',
+      inputSchema: obj({ chatId: str('chat id') }, ['chatId']),
+      run: a => { const id = contentOf(String(a.chatId)); const chat = d.chats.list().find(c => c.id === id); if (!chat) throw new Error('Chat unavailable'); return { manifest: chat.launchContext ?? null, known: !!chat.launchContext }; },
+    },
+    {
+      name: 'app_chat_items', description: 'Last items of one app chat (messages, tool rows, results), texts truncated.',
+      inputSchema: obj({ chatId: str('chat id from app_chats'), last: num('how many, default 30') }, ['chatId']),
+      // image previews stay out (base64, up to 10 per message): the count `images` says enough to an agent
+      run: a => d.chats.items(contentOf(String(a.chatId))).slice(-(Number(a.last) || 30)).map(({ thumbs: _thumbs, ...i }: ChatItem & { thumbs?: unknown }) => ({ ...i, ...('text' in i ? { text: i.text.slice(0, 1500) } : {}), ...('output' in i && i.output ? { output: i.output.slice(0, 800) } : {}), ...(i.kind === 'artifact' ? { ui: describeUi(i.ui) } : {}) })),
+    },
+    {
+      name: 'app_command_runs',
+      description: 'Commands the user ran from a chat code block with "Esegui" (PowerShell 5.1 in the app): state, exit code, output tail. Read-only: only the user starts a run, by his click. Pass chatId to see the runs of one chat (yours: read the outcome of the command you proposed).',
+      inputSchema: obj({ chatId: str('chat id from app_chats (optional)'), last: num('how many, newest last, default 5') }),
+      run: a => (d.runs?.(a.chatId ? contentOf(String(a.chatId)) : undefined) ?? []).filter(r => !other(r.chatId) && !delegated(r.chatId)).slice(-(Number(a.last) || 5))
+        .map(r => ({ id: r.id, chatId: r.chatId, state: r.state, exitCode: r.exitCode, code: redact(r.code.slice(0, 1500)), cwd: r.cwd, output: redact(r.output.slice(-4000)), startedAt: new Date(r.startedAt).toISOString(), endedAt: r.endedAt ? new Date(r.endedAt).toISOString() : null, ...(r.prod ? { prod: r.prod } : {}) })),
+    },
+    {
+      name: 'app_pending', description: 'Open questions, permission requests and commands left for the user to run (type "command": a shell block waiting for his Esegui) waiting for the user. Answer them for him with app_resolve_question; a command goes to him with relay_question.',
+      inputSchema: obj(), run: () => [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].filter(r => !other(r.chatId)).map(r => mutedRequest(r, delegated(r.chatId))),
+    },
+    {
+      name: 'app_resolve_question',
+      description: 'Answer for the user (ADR 0269, 0275): what you answer counts as his own, always. Any chat\'s open question (an option label or free words, every question of the request), any permission (allow true/false, message), a Strategist\'s proposed plan (requestId "plan", decision approve/change, text). Pick what his goal, the brain or the plan settle, then tell him in one line what you answered. The one exception: a permission that runs on production, a database or Azure — show him what it runs, and only after his yes pass confirmed true. A command waiting for Esegui: relay_question shows it to him and his «sì» runs it. When his last message to you answers a request, pass words (quoted from it) instead: his whole message reaches the chat.',
+      inputSchema: obj({
+        chatId: str('the chat, from app_pending'), requestId: str('the request\'s id, from app_pending; "plan" for a Strategist\'s proposed plan'),
+        answers: { type: 'object', description: '{ "<question text>": "<an option label, or free words>" } for every question', additionalProperties: { type: 'string' } },
+        allow: { type: 'boolean', description: 'a permission: true allows it once, false refuses it' },
+        message: str('a refused permission: what the chat should do instead'),
+        confirmed: { type: 'boolean', description: 'a permission on production, a database or Azure: true only after the user said yes to it in his last message' },
+        decision: str('a plan: approve or change'), text: str('a plan change: what to change'),
+        words: str('his exact words from his last message to you, when they answer this request (instead of answers)'),
+      }, ['chatId', 'requestId']),
+      run: async a => {
+        const chatId = String(a.chatId ?? ''), requestId = String(a.requestId ?? '');
+        need(chatId);
+        if (!authed()) throw new Error('bloccato: solo l’Orchestrator risponde per l’utente');
+        // a delegated chat: you see its state only (ADR 0083); its parent answers it, or the user in his row
+        if (delegated(chatId)) throw new Error('bloccato: è una chat delegata (ne vedi solo lo stato): la risponde la chat che l’ha delegata, o l’utente nella sua riga');
+        // a Strategist's proposed plan: his own words, or the Orchestrator's decision for him (ADR 0274, 0275)
+        if (requestId === 'plan') {
+          const chats = d.chats.list(), plan = chats.find(c => c.id === chatId)?.plan;
+          if (!plan || plan.phase !== 'proposed') throw new Error('questo piano non aspetta più una risposta');
+          if (a.words !== undefined) {
+            const said = d.chats.userSaid?.();
+            if (!said || said.at < plan.at || !sameWords(said.text, String(a.words))) throw new Error('bloccato: words deve essere copiato dal suo ultimo messaggio, scritto dopo il piano; se non parla di questo piano lascialo aperto');
+            const only = chats.filter(c => c.plan?.phase === 'proposed').length === 1;
+            await d.chats.planDecide(chatId, only && isPlanApproval(said.text) ? 'approve' : 'change', plan.at, said.text.trim());
+            return 'consegnato al piano con il suo messaggio: la sua riga è chiusa';
+          }
+          const decision = a.decision === 'approve' ? 'approve' : a.decision === 'change' ? 'change' : null;
+          if (!decision) throw new Error('decision: approve o change');
+          await d.chats.planDecide(chatId, decision, plan.at, decision === 'change' ? String(a.text ?? '') : undefined);
+          return decision === 'approve' ? 'piano approvato per l’utente' : 'modifica mandata allo Strategist';
+        }
+        const req = d.chats.pending().find(p => p.chatId === chatId && p.id === requestId);
+        if (!req) throw new Error('questa richiesta non è più aperta (quelle aperte: app_pending; un comando si mostra all’utente con relay_question e parte al suo sì)');
+        // his own message (ADR 0274): the chats check it is his and after the request
+        if (a.words !== undefined) {
+          if (!d.chats.answerWithUserWords) throw new Error('non disponibile');
+          d.chats.answerWithUserWords(chatId, requestId, String(a.words));
+          return 'consegnata con il suo messaggio: la sua riga è chiusa';
+        }
+        if (req.type === 'permission') {
+          if (typeof a.allow !== 'boolean') throw new Error('è un permesso: allow true o false');
+          d.chats.answerForUser(chatId, requestId, { kind: 'permission', allow: a.allow, ...(a.message ? { message: String(a.message) } : {}) }, a.confirmed === true);
+          return a.allow ? 'consentito per l’utente' : 'negato per l’utente';
+        }
+        if (!a.answers || typeof a.answers !== 'object') throw new Error('answers (un’opzione o parole per ogni domanda) o words (le sue parole) servono');
+        d.chats.answerForUser(chatId, requestId, { kind: 'question', answers: Object.fromEntries(Object.entries(a.answers as Record<string, unknown>).map(([k, v]) => [k, String(v)])) });
+        return 'risposto per l’utente';
+      },
+    },
+    {
+      name: 'app_feed', description: 'Recent live feed events (ideas, errors, chats done/waiting...).',
+      inputSchema: obj({ limit: num('default 30') }), run: a => d.brain.feed().filter(e => !e.chatId || (!other(e.chatId) && !delegated(e.chatId))).slice(0, Number(a.limit) || 30),
+    },
+    {
+      name: 'app_logs', description: 'Recent structured log entries of the app (redacted). Filters: level (debug|info|warn|error), scope, chat, grep.',
+      inputSchema: obj({ level: str('minimum level'), scope: str('module scope, e.g. chats'), chat: str('chat id'), grep: str('text'), tail: num('default 50') }),
+      run: a => {
+        const order = { debug: 0, info: 1, warn: 2, error: 3 } as const;
+        const min = order[(a.level as keyof typeof order) ?? 'debug'] ?? 0;
+        const g = typeof a.grep === 'string' ? a.grep.toLowerCase() : null;
+        return log.recent.filter(e => (!e.chat || !other(e.chat)) && order[e.lvl] >= min && (!a.scope || e.scope === a.scope) && (!a.chat || e.chat === a.chat) && (!g || JSON.stringify(e).toLowerCase().includes(g)))
+          .slice(-(Number(a.tail) || 50));
+      },
+    },
+    {
+      name: 'app_screenshot', description: 'Screenshot of the app window (the UI) plus each browser tab visible on screen with its position. Images scaled to a long side of ~1000 px (the text gives each factor). To know what the app shows, try app_state, app_chats or app_chat_items first (far fewer tokens); take a screenshot only to really see the UI.',
+      inputSchema: obj(),
+      run: async () => {
+        const win = d.window();
+        if (!win) return 'no window';
+        const images: { data: string; mimeType: string; caption: string }[] = [];
+        const left: string[] = [];
+        const ui = await win.webContents.capturePage();
+        const p = previewOf(ui);
+        images.push({ data: p.data, mimeType: p.mimeType, caption: `app UI ${ui.getSize().width}x${ui.getSize().height}, image ${p.width}x${p.height} (UI px = image px × ${fmtFactor(p.factor)})` });
+        for (const v of win.contentView.children) {
+          const wc = (v as { webContents?: Electron.WebContents }).webContents;
+          if (!wc) continue;
+          const b = v.getBounds();
+          // an agent tab may show a password ("show password"): hidden for the capture, or the tab is left out
+          let img = await withPasswordsHidden(wc.mainFrame?.framesInSubtree ?? [], frameRun, () => wc.capturePage()).catch(() => null);
+          if (!img) { left.push(`browser tab ${redact(wc.getURL())} not captured: its password fields could not be hidden`); continue; }
+          // an agent tab drawn scaled (browser/tabs.ts emulate) captures a desktop-size surface with the view in its corner
+          const k = ui.getSize().width / Math.max(1, win.getContentSize()[0]!), s = img.getSize();
+          if (s.width > Math.round(b.width * k) + 1) img = img.crop({ x: 0, y: 0, width: Math.min(s.width, Math.round(b.width * k)), height: Math.min(s.height, Math.round(b.height * k)) });
+          const t = previewOf(img);
+          images.push({ data: t.data, mimeType: t.mimeType, caption: `browser tab ${redact(wc.getURL())} at x=${b.x} y=${b.y} ${b.width}x${b.height}, image ${t.width}x${t.height} (capture px = image px × ${fmtFactor(t.factor)})` });
+        }
+        return { text: [`${images.length} images`, ...left].join('; '), images };
+      },
+    },
+    {
+      name: 'app_ui', description: 'Steer the UI (visual only, never the keyboard focus): action "maximize" (chat id), "restore", "page" (value: a page id from app_guide, optionally with a tab or section: "memoria/skill", "impostazioni/notifications"), "palette", or "outline" (read only: what is on screen now, one line per heading, tab and control with its state, section and position, the ones in view first; value = optional words to keep only one section of a long page; chats show only title and state).',
+      inputSchema: obj({ action: str('maximize|restore|page|palette|outline'), value: str('argument of the action') }, ['action']),
+      // only visual steering: never actions that move the keyboard focus (next, focus…): an agent must not be able to
+      // put the user's next keystroke on a permission or into another chat's input (review 2026-10-11)
+      run: a => {
+        const action = String(a.action);
+        if (action === 'outline') return screenOutline(guideDeps, a.value === undefined ? '' : String(a.value));
+        if (!['maximize', 'restore', 'page', 'palette'].includes(action)) throw new Error(`app_ui: action not allowed for agents: ${action} (maximize|restore|page|palette|outline)`);
+        // a root chat and its browser can be maximized; a delegated chat's (or its browser's) cannot: maximize then
+        // app_screenshot would show the Orchestrator its content (ADR 0083: it sees only the state)
+        if (action === 'maximize' && a.value !== undefined) {
+          const v = String(a.value).replace(/^(chat|browser):/, '');
+          const tab = d.browser.list().find(t => t.id === v);
+          contentOf(tab?.ownerChatId ?? v);
+        }
+        d.emitUi({ action, value: a.value === undefined ? undefined : String(a.value) });
+        return 'ok';
+      },
+    },
+    {
+      name: 'app_create_chat',
+      description: 'Delegate: create a work chat that runs one role (roleId, from agent_catalog) and start it with a self-contained prompt. Fast path first (task_estimate): a short question needs no chat; a quick one-part job is ONE chat that works alone; only several independent parts get a plan. The answer carries the estimate from similar past tasks; it shows under you in the sidebar tree and reports back to you. Never an Orchestrator: only the user picks it. Title "Area · cosa". The role decides engine, model and effort (its tier; `tier` asks a higher one up to the role\'s tierMax); nothing overrides it, except the user\'s «Balanced mode» setting: then read balanced_status and pass `balanced` {engine, model, effort?, why} (prefer its proposal unless its data say otherwise), or omit it and the formula follows the credits left on each provider (route.reason says who chose and why; suggestedRole = the role the work fits, a hint). `skills` = the brain skills the chat may use (their SKILL.md names; without a skill the role cannot use it; `warnings` in the answer names a skill that needs tools the role lacks). Its permissions are its role\'s (tools, ceiling) within the user\'s defaults, not yours: you plan, the chat does the work. reviewOf / reworkOf = the run it reviews or redoes; goal = the run\'s goal. The chat starts in the brain folder unless cwd is given (pick the repo or worktree from the task). The prompt is labelled as written by an agent.',
+      inputSchema: obj({
+        title: { ...str('"Area · cosa", e.g. "Ordini · Fix totale"'), maxLength: CHAT_TITLE_MAX }, contract: contractField, prompt: { ...str(`fallback when there is no contract: what the chat must do, self-contained; at most ${CHAT_PROMPT_MAX} characters`), maxLength: CHAT_PROMPT_MAX },
+        roleId: { type: 'string', enum: ROLE_IDS.filter(r => r !== 'orchestrator'), description: 'the role the chat runs (agent_catalog)' },
+        roleVersion: { type: 'integer', description: 'Expected active role version; refused if it changed.' },
+        doneWhen: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 300 } },
+        deliveryPolicy: { type: 'string', enum: ['display', 'notify', 'synthesize'], description: 'display expands the full result without AI; notify also adds quiet news; synthesize requests an AI integration turn' },
+        tier: { type: 'string', enum: [...MODEL_TIERS], description: 'optional model tier, at most the role\'s tierMax; omitted = the role\'s own' },
+        skills: { type: 'array', items: { type: 'string' }, maxItems: 16, description: 'the brain skills this chat may use (their SKILL.md names)' },
+        intakeQuestion: intakeField, reviewOf: str('Run being reviewed'), reworkOf: str('Run being reworked'), goal: str('Run goal, up to 2000 characters'),
+        kind: str(`optional kind of task: ${TASK_KINDS.join(' | ')}; omitted: read from title and prompt`),
+        cwd: str('optional absolute folder (repo or worktree); default: the brain folder'),
+        balanced: BALANCED_ASK_SCHEMA,
+      }, ['title']),
+      run: async a => {
+        // only the user chooses the Orchestrator (one at a time: a new one would take the role from the agent's own chat)
+        const intake = intakeOf(a, a.roleId === 'strategist'), task = taskPrompt(a, String(a.roleId ?? ''));
+        const links: { reviewOf?: string; reworkOf?: string; goal?: string; roleVersion?: number; doneWhen?: string[]; deliveryPolicy?: 'display' | 'notify' | 'synthesize'; contractFields?: string[] } = {};
+        Object.assign(links, task.doneWhen ? { doneWhen: task.doneWhen, contractFields: task.contractFields } : {});
+        if (a.doneWhen !== undefined) {
+          if (!Array.isArray(a.doneWhen) || a.doneWhen.length > 12 || !a.doneWhen.every(c => typeof c === 'string' && c.trim() && c.length <= 300)) throw new Error('Invalid doneWhen criteria.');
+          links.doneWhen = a.doneWhen as string[];
+        }
+        if (a.deliveryPolicy !== undefined) {
+          if (!['display', 'notify', 'synthesize'].includes(String(a.deliveryPolicy))) throw new Error('Invalid delivery policy.');
+          links.deliveryPolicy = a.deliveryPolicy as 'display' | 'notify' | 'synthesize';
+        }
+        for (const key of ['reviewOf', 'reworkOf', 'goal'] as const) if (a[key] !== undefined) {
+          if (!authed() || typeof a[key] !== 'string' || !a[key].trim() || a[key].length > (key === 'goal' ? 2000 : 80)) throw new Error('Invalid or unauthorized run link/goal.');
+          links[key] = a[key];
+        }
+        if (a.roleVersion !== undefined) {
+          if (!Number.isSafeInteger(a.roleVersion) || Number(a.roleVersion) < 1) throw new Error('Invalid role version.');
+          links.roleVersion = Number(a.roleVersion);
+        }
+        const cwd = typeof a.cwd === 'string' && a.cwd.trim() ? a.cwd.trim() : d.brain.info().brainRoot;
+        if (!cwd) throw new Error('nessuna cartella: il brain non è collegato');
+        // a chat in the app's code folder or one of its worktrees works on the app (routing area App)
+        const app = await d.code?.inRepo?.(cwd) ?? false;
+        if (a.orchestrator !== undefined && a.orchestrator !== false) throw new Error('app_create_chat crea solo chat di lavoro: l’Orchestrator lo sceglie l’utente (Nuova chat → «È l’Orchestrator» o «Cambia motore»)');
+        const title = String(a.title ?? '').trim().slice(0, CHAT_TITLE_MAX), prompt = task.prompt;
+        if (!title || !prompt) throw new Error(!title ? 'title: required' : 'contract (or prompt): required');
+        if (prompt.length > CHAT_PROMPT_MAX) throw new Error(`${task.what}: at most ${CHAT_PROMPT_MAX} characters (this one has ${prompt.length})`);
+        // a former Orchestrator's title is the Orchestrator's mail box: a new chat may not take its mail
+        if (title.trim().toLowerCase() === ORCHESTRATOR_TITLE.toLowerCase()) throw new Error(`The title «${title}» is reserved for the Orchestrator's mail: choose another.`);
+        const s = d.brain.settings();
+        // the cloud agents (where "cloud", ADR 0080) were removed by ADR 0201: every chat is local
+        if (a.where !== undefined && a.where !== 'local') throw new Error('where: only "local" (the cloud agents were removed)');
+        const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+        const kind = text(a.kind);
+        if (kind && !(TASK_KINDS as readonly string[]).includes(kind)) throw new Error(`kind sconosciuto: ${kind} (${TASK_KINDS.join(' | ')})`);
+        for (const key of ['harness', 'model', 'effort'] as const) if (a[key] !== undefined) throw new Error(`${key}: the role decides it (Brain → Agenti).`);
+        if (typeof a.roleId !== 'string' || !isWorkRole(a.roleId)) throw new Error(`roleId required: ${ROLE_IDS.filter(r => r !== 'orchestrator').join(' | ')} (agent_catalog).`);
+        if (a.tier !== undefined && !(MODEL_TIERS as readonly unknown[]).includes(a.tier)) throw new Error(`tier: ${MODEL_TIERS.join(' | ')}`);
+        const skills = a.skills === undefined ? [] : Array.isArray(a.skills) && a.skills.length <= 16 && a.skills.every(x => typeof x === 'string' && /^[a-z0-9][a-z0-9_-]{0,79}$/.test(x)) ? [...new Set(a.skills as string[])] : null;
+        if (!skills) throw new Error('skills: up to 16 skill names (SKILL.md names).');
+        if (!d.resolveRole || !d.agents) throw new Error('Catalogo dei ruoli non disponibile.');
+        // the caller is the Orchestrator (the only chat given these tools), on any engine: a chat on another engine spends that
+        // engine's tokens, so it starts only when the user allows chats across engines (engines/policy.ts)
+        const orchestrator = caller();
+        const from = orchestrator?.harness ?? 'claude';
+        const roleId = a.roleId, tier = a.tier as ModelTier | undefined;
+        // «Balanced mode» on (ADR 0218): engine, model and effort from the credits left among the engines this caller may
+        // start, the caller's own pick (`balanced`) when it passes one; off: the role's card decides engine, model (its
+        // tier's when it names none) and effort (ADR 0210)
+        const asked = balancedAskOf(a.balanced, 'balanced');
+        if (asked && !d.balancedMode) throw new Error('balanced: only with Balanced mode on; otherwise the role\'s card decides (Brain → Agenti).');
+        const choice = await d.balancedMode?.choose({ roleId, ...(tier ? { tier } : {}), title, prompt, canRun: h => !openRefusal(s, from, h), ...(asked ? { asked } : {}) }) ?? null;
+        const balancedRoute = choice?.balancedRoute ?? undefined;
+        const resolved = d.resolveRole({ harness: from, cwd, roleId, title, prompt, ...(tier ? { tier } : {}), ...(links.roleVersion ? { roleVersion: links.roleVersion } : {}), ...(balancedRoute ? { balancedRoute } : {}) });
+        const profile = d.agents().profiles.find(p => p.id === roleId)!;
+        const agent = { id: roleId, name: profile.name, version: profile.activeVersion, harness: resolved.request.harness, model: resolved.request.model ?? null, effort: resolved.request.effort ?? null,
+          chosenBy: 'orchestrator' as const, ...(resolved.tier ? { tier: resolved.tier } : {}), stats: d.agentStats?.(roleId, profile.activeVersion) ?? null };
+        const routed = d.brain.route({
+          agent, canRun: h => !openRefusal(s, from, h),
+          title, prompt, ...(kind ? { kind: kind as TaskKind } : {}), appCode: app, ask: {},
+          defaults: { harness: s.orchestratorChats.harness, models: { claude: s.orchestratorChats.claudeModel || null, cursor: s.orchestratorChats.cursorModel || null }, effort: s.orchestratorChats.claudeEffort || null },
+        });
+        if ('error' in routed) throw new Error(`app_create_chat: ${routed.error}`);
+        const { harness, model, effort } = routed;
+        const route = choice ? { ...routed.route, reason: choice.reason, ...(choice.balanced ? { balanced: choice.balanced } : {}) } : routed.route;
+        const refused = openRefusal(s, from, harness);
+        if (refused) throw new Error(`bloccato: ${refused}`);
+        const chat = await d.chats.create({ harness, cwd, title, prompt: `${voice()}\n\n${prompt}`, ...links, orchestrator: false, roleId, ...(tier ? { tier } : {}), ...(skills.length ? { skills } : {}),
+          ...(model ? { model } : {}), ...(effort ? { effort } : {}), route, ...(balancedRoute ? { balancedRoute } : {}) }, 'agent', undefined, undefined,
+          // the plain /mcp/app mount is open to any local process: its chats run no wider than the Orchestrator
+          { boundByOrchestrator: !authed(), ...intake });
+        d.balancedMode?.record(choice);
+        log.info('appctl', 'agent created a chat', { chat: chat.id, data: { harness, title, model: model || null, effort, route: route.source, kind: route.kind, area: route.area, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } });
+        // a skill whose tools the role lacks (issue #93): said now, so the Orchestrator can pick another role or ask the user
+        const known = d.skillTools ? new Map(d.skillTools().map(x => [x.name, x.tools])) : null;
+        const warnings = [...(known ? gapLines(profile.name, skillGaps([...new Set([...resolved.skills, ...skills])], n => known.get(n), resolved.policy)) : []), ...task.warnings];
+        if (warnings.length) log.info('appctl', 'chat started with a skill its role lacks tools for', { chat: chat.id, data: { role: roleId, warnings: warnings.length } });
+        // the machine is busy: the chat exists, its first turn waits in the cold-start queue (ADR 0222)
+        // the estimate from similar past tasks (ADR 0087): the same figure the strip shows, so the plan is checked with data
+        const estimate = d.runFeedback ? estimateTask(new SimilarIndex(d.runFeedback.runList()), { text: task.estimate, agentId: roleId }) : null;
+        return { chatId: chat.id, title: chat.title, harness, cwd, model: model || null, effort, ...(warnings.length ? { warnings } : {}), ...(chat.queued ? { status: queuedLine(chat.queued) } : {}),
+          ...(estimate ? { estimate: { timeMs: estimate.timeMs, costUsd: estimate.costUsd, n: estimate.n, confidence: estimate.confidence, parts: estimate.parts, path: estimate.path } } : {}), route: { source: route.source, kind: route.kind, area: route.area, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}), ...(route.balanced ? { balanced: route.balanced } : {}) },
+          ...(choice?.suggestedRole ? { suggestedRole: choice.suggestedRole } : {}) };
+      },
+    },
+    // Balanced mode's data for the Orchestrator's own pick (ADR 0218): the engines it may start, read locally
+    ...(balanced ? [{ ...balancedStatusTool(balanced, () => () => false),
+      run: (a: Record<string, unknown>) => balancedStatusRun(balanced, a, h => !openRefusal(d.brain.settings(), caller()?.harness ?? 'claude', h)) }] : []),
+    {
+      name: 'app_assign_task',
+      description: 'Continue a compatible work conversation with a distinct measured run. Use continue for related follow-ups, new-task for a distinct assignment in the same scope, rework only for an explicit correction. Requires the same role and project folder; the current task version (app_chats) is used when expectedVersion is omitted. The user\'s messages and answers in that chat you have not seen come back readable (userInstructions): the chat already has them, so they are not repeated in its prompt; account for them, and correct it or ask the user where your prompt disagrees. expectedEventSeq is optional. Refused only while the chat works or has queued work. Independent Sentinel reviews always need a fresh chat. Does not change tools or permissions.',
+      inputSchema: obj({ intakeQuestion: intakeField, chatId: str('Existing conversation ID'), contract: contractField, prompt: { ...str(`Fallback when there is no contract: self-contained assignment, up to ${CHAT_PROMPT_MAX} characters`), maxLength: CHAT_PROMPT_MAX },
+        doneWhen: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 300 }, description: 'Checkable criteria for this assignment' },
+        mode: { type: 'string', enum: ['continue', 'new-task', 'rework'] }, roleId: str('Existing work role'), cwd: str('Same absolute project folder'),
+        expectedVersion: { type: 'integer', minimum: 1, description: 'Current taskVersion from app_chats' },
+        expectedEventSeq: { type: 'integer', minimum: 0, description: 'optional: latestSeq from app_task_events you have read' },
+        deliveryPolicy: { type: 'string', enum: ['display', 'notify', 'synthesize'] },
+      }, ['chatId', 'mode', 'roleId', 'cwd']),
+      run: async a => {
+        const orchestrator = caller();
+        if (!authed() || !orchestrator || !d.chats.assignTask) throw new Error('app_assign_task requires an authenticated Orchestrator.');
+        const target = d.chats.list().find(c => c.id === a.chatId);
+        if (!target || !mine(target) || target.parentId || target.isOrchestrator) throw new ToolRefusal('Work conversation not found; use app_chats.');
+        // said with the chat's own role, so the next call is right (issue #274): a fresh chat, or this chat's role
+        if (a.roleId === 'sentinel' || target.agent?.id === 'sentinel') throw new ToolRefusal('An independent Sentinel review always needs a fresh chat: use app_create_chat.');
+        if (!isWorkRole(a.roleId) || target.agent?.id !== a.roleId) {
+          const asked = String(a.roleId).slice(0, 40), runs = target.agent?.id ?? 'no role';
+          throw new ToolRefusal(`Role mismatch: this chat runs ${runs}, not ${asked}. Assign ${target.agent?.id ?? 'its role'} work here, or use app_create_chat for ${asked}.`);
+        }
+        if (typeof a.cwd !== 'string' || !path.isAbsolute(a.cwd) || path.resolve(a.cwd) !== path.resolve(target.cwd)) throw new ToolRefusal('Project changed: create a fresh chat.');
+        if (!d.agents) throw new Error('app_assign_task: the role catalog is not available.');
+        const profile = d.agents().profiles.find(p => p.id === a.roleId);
+        // the revision too: tools, permissions and limits change the version in use in place (ADR 0186)
+        if (!profile || profile.activeVersion !== target.agent.version || profile.updatedAt !== target.agent.revision) throw new ToolRefusal('Role configuration changed: create a fresh chat.');
+        if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || (a.expectedVersion !== undefined && (!Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1))) throw new ToolRefusal('Invalid assignment mode/version.');
+        const task = taskPrompt(a, String(a.roleId ?? '')), prompt = task.prompt;
+        if (!prompt) throw new Error('contract (or prompt): required');
+        if (prompt.length > CHAT_PROMPT_MAX) throw new Error(`${task.what}: at most ${CHAT_PROMPT_MAX} characters (this one has ${prompt.length})`);
+        const doneWhen = task.doneWhen ?? (a.doneWhen === undefined ? undefined : Array.isArray(a.doneWhen) && a.doneWhen.length <= 12 && a.doneWhen.every(c => typeof c === 'string' && c.trim() && c.length <= 300) ? a.doneWhen as string[] : null);
+        if (doneWhen === null) throw new Error('Invalid doneWhen criteria.');
+        const refused = crossRefusal(d.brain.settings(), orchestrator.harness, target.harness);
+        if (refused) throw new Error(`messaggio bloccato: ${refused}`);
+        if (target.harness !== orchestrator.harness && !['running', 'waiting', 'idle'].includes(target.state)) throw new Error('A stopped engine of another kind requires the user.');
+        if (a.expectedEventSeq !== undefined && (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0)) throw new Error('Invalid user event cursor.');
+        if (a.deliveryPolicy !== undefined && !['display', 'notify', 'synthesize'].includes(String(a.deliveryPolicy))) throw new Error('Invalid delivery policy.');
+        const userInstructions = d.chats.userEvents ? unreadInstructions(d.chats.userEvents(target.id)) : [];
+        await d.chats.assignTask(target.id, `${voice()}\n\n${prompt}`, { ...intakeOf(a, a.roleId === 'strategist' && a.mode === 'new-task' && !!target.plan), mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: a.expectedVersion === undefined ? target.run?.taskVersion ?? 1 : Number(a.expectedVersion), ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), ...(a.deliveryPolicy ? { deliveryPolicy: a.deliveryPolicy as 'display' | 'notify' | 'synthesize' } : {}), ...(doneWhen ? { doneWhen } : {}), ...(task.contractFields ? { contractFields: task.contractFields } : {}), source: { kind: 'chat', chatId: orchestrator.id } });
+        const assigned = d.chats.list().find(c => c.id === target.id);
+        return { chatId: target.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions } : {}), ...(task.warnings.length ? { warnings: task.warnings } : {}) };
+      },
+    },
+    {
+      name: 'app_task_events', description: 'Read the complete ordered user decisions for a root work task. Optional before app_assign_task, which returns the unread ones itself. No model turn is started.',
+      inputSchema: obj({ chatId: str('Root work chat ID'), afterSeq: { type: 'integer', minimum: 0 } }, ['chatId']),
+      run: a => {
+        if (!authed() || !caller() || !d.chats.userEvents) throw new Error('An authenticated Orchestrator is required.');
+        const id = contentOf(String(a.chatId));
+        if (a.afterSeq !== undefined && (!Number.isSafeInteger(a.afterSeq) || Number(a.afterSeq) < 0)) throw new Error('Invalid cursor.');
+        return d.chats.userEvents(id, Number(a.afterSeq ?? 0));
+      },
+    },
+    {
+      name: 'app_send_to_chat', description: 'Send a message to an active app chat. For a completed role assignment use app_assign_task, which checks compatibility and creates a new run. From the Orchestrator it is read as the user\'s own message (his ok included, never for production, database writes, Azure/cloud, permissions or settings, messages to people); from any other caller as an agent\'s. A chat at work reads it at its next step (an addition: nothing is thrown away); now = true stops what it is doing first (a change of course, «fermati», «stai sbagliando»): you choose from the user\'s sentence and say which you did.',
+      inputSchema: obj({ chatId: str('chat id'), text: str('message'), now: { type: 'boolean', description: 'interrupt its current step first' } }, ['chatId', 'text']),
+      run: async a => {
+        const text = String(a.text ?? '').trim();
+        if (!text || text.length > 4000) throw new Error('text empty or longer than 4000 chars');
+        // A chat on another engine than the caller's (the Orchestrator's) spends that engine's tokens: an agent may write to one
+        // only when the user allows chats across engines (engines/policy.ts; inbox.mjs obeys the same switch) and only if
+        // it is already running — an agent never starts a stopped engine of another kind (review 2026-10-11).
+        const target = d.chats.list().find(c => c.id === String(a.chatId));
+        if (target && !mine(target)) throw new Error(`chat non trovata: ${target.id} (vedi app_chats)`);
+        const orchestrator = caller();
+        const from = orchestrator?.harness ?? 'claude';
+        if (target && target.harness !== from) {
+          const name = engineLabel(target.harness);
+          const refused = crossRefusal(d.brain.settings(), from, target.harness);
+          if (refused) throw new Error(`messaggio bloccato: ${refused}`);
+          if (!['running', 'waiting', 'idle'].includes(target.state)) throw new Error(`la chat ${name} non è attiva: un agente non la avvia (spenderebbe crediti ${name}); chiedi all’utente`);
+        }
+        // a delegated chat paused on the user's step: his «fatto» goes to whoever owns that work (ADR 0269)
+        if (authed() && target?.parentId && d.chats.userStepDone?.(target.id, text)) return 'passato a chi segue il lavoro';
+        const busy = target?.state === 'running';
+        // a change of course (ADR 0276): its current step stops, what it understood stays, this message is its next turn
+        if (a.now === true && busy && authed()) await d.chats.stop(String(a.chatId), true).catch(e => log.info('appctl', 'interrupt before a change of course failed', { chat: String(a.chatId), data: String(e) }));
+        await d.chats.send(String(a.chatId), `${voice()}\n\n${text}`, undefined, false, orchestrator?.title ?? 'Orchestrator', false, orchestrator ? { kind: 'chat', chatId: orchestrator.id } : { kind: 'app' });
+        // on the project map the agent shows the change until it takes it (zero tokens)
+        if (authed()) d.projectMaps?.sent(String(a.chatId), text, busy && a.now !== true);
+        log.info('appctl', 'agent message sent to chat', { chat: String(a.chatId), data: { chars: text.length } });
+        const q = d.chats.list().find(c => c.id === String(a.chatId))?.queued;
+        return q ? queuedLine(q) : 'sent';
+      },
+    },
+    {
+      name: 'app_handoff_chat',
+      description: 'A chat writes its hand-off note now (state, files and worktree, decisions, tried and dropped, next step), saved by the app; returns the note and its path. Refused while the chat works or waits for the user. A stopped Cursor chat is never started: the app builds the note itself.',
+      inputSchema: obj({ chatId: str('chat id from app_chats') }, ['chatId']),
+      run: async a => {
+        // a delegated chat's note is its content: only its parent reads it (ADR 0083)
+        const target = need(contentOf(String(a.chatId)));
+        // an engine switched off in the settings is never started for this: the app builds the note itself
+        const allowStart = crossRule(target, 'leggere') && agentsMayOpen(d.brain.settings(), target.harness);
+        const h = await d.chats.handoff(target.id, { reason: 'manual', allowStart });
+        log.info('appctl', 'agent asked a hand-off', { chat: target.id, data: { source: h.source } });
+        return { chatId: h.chatId, path: h.path, source: h.source, at: new Date(h.at).toISOString(), text: h.text };
+      },
+    },
+    {
+      name: 'app_continue_chat',
+      description: '"Riprendi": explicitly opens a NEW chat on the same engine and folder from the old chat\'s hand-off (written first if missing or stale); the old chat stops and stays readable, linked both ways. Use only for an intentional new task/session or requested handoff, never merely because context is long. The engine manages native compaction. Not for the Orchestrator.',
+      inputSchema: obj({ chatId: str('chat id from app_chats') }, ['chatId']),
+      run: async a => {
+        // a delegated chat goes on under its parent, which reads its hand-off (ADR 0083): not the Orchestrator's to continue
+        const target = need(contentOf(String(a.chatId)));
+        // the engine first (on, and the Orchestrators allowed there), then the rule across engines with the engine named
+        const st = d.brain.settings();
+        if (!agentsMayOpen(st, target.harness)) throw new Error(`bloccato: ${openRefusal(st, target.harness, target.harness)}`);
+        const allowStart = crossRule(target, 'riprendere');
+        const chat = await d.chats.continueChat(target.id, { allowStart, promptPrefix: voice() });
+        log.info('appctl', 'agent continued a chat in a new one', { chat: target.id, data: { next: chat.id } });
+        return { chatId: chat.id, title: chat.title, harness: chat.harness, continuedFrom: target.id };
+      },
+    },
+  ];
+  // only the authenticated Orchestrator mount: the questions window comes up with everything that waits for the user
+  // (ADR 0135: he unblocks the work from the Orchestrator's recap, never from the agents' chats); only right after he
+  // wrote to it, so an agent cannot bring a permission under his keystrokes at any moment (review 2026-10-11)
+  if (authed()) {
+    tools.push({
+      name: 'app_unblock',
+      description: `After a recap the user asked for: opens the app's questions window with everything that waits for him from every chat (questions, permissions, commands to run, Strategist plans, workflow proposals and learned rules), the ones he set aside with «Ci penso dopo» too, one after the other, ready to answer there (Sì / No / his own words) without opening the chats. Returns how many wait. Refused unless the Orchestrator's latest message is the user's own, written in the last ${UNBLOCK_ASK_MIN} minutes (never on a turn woken by app news or an agent). The window never takes his keyboard while he types.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+      inputSchema: obj(),
+      run: () => {
+        const orchestrator = caller();
+        if (!orchestrator) throw new Error('bloccato: solo l’Orchestrator apre le richieste in attesa');
+        if (!userTurn(orchestrator.id, Date.now() - UNBLOCK_ASK_MIN * 60_000)) throw new Error('bloccato: apri le richieste in attesa solo quando l’utente ti chiede un recap');
+        const asks = [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].filter(r => !other(r.chatId)).length;
+        const plans = d.chats.list().filter(c => !c.closedAt && !other(c.id) && c.plan?.phase === 'proposed').length;
+        const workflows = d.workflows?.list().filter(r => r.status === 'approval' && r.proposal).length ?? 0;
+        const lessons = d.agentLearning?.waiting().length ?? 0;
+        if (!asks && !plans && !workflows && !lessons) return { waiting: 0, note: 'Niente aspetta l’utente: non c’è nulla da aprire.' };
+        d.emitUi({ action: 'unblock' });
+        return { waiting: asks + plans + workflows + lessons, questionsAndPermissions: asks, plans, workflows, lessons, note: 'La finestra delle domande è aperta con tutte le richieste in attesa.' };
+      },
+    });
+  }
+  // only the authenticated Orchestrator mount (/mcp/app/o/<id>/<token>): the plain mount is open to local processes
+  if (d.code?.pull && authed()) {
+    const pull = d.code.pull;
+    tools.push({
+      name: 'app_update_code',
+      description: `Only when the user asked in their own words to update the app ("aggiornati", "aggiorna l'app"): brings the app's code folder up to date with GitHub (scripts/pull.mjs: fetch main, fast-forward only, never merges or drops local work, never pushes), reinstalls the pinned dependencies if the lockfile changed and builds. It never promotes or restarts. Refused unless the user wrote to the Orchestrator in the last ${PULL_ASK_MIN} minutes. Then tell the user the result: a dev app run from the checkout picks it up when restarted; to switch at once, the user presses «Aggiorna» in Impostazioni → Aggiornamenti.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      inputSchema: obj(),
+      run: async () => {
+        const orchestrator = caller();
+        if (!authed() || !orchestrator) throw new Error('bloccato: solo l’Orchestrator aggiorna il codice dell’app, quando l’utente lo chiede');
+        if (!decidedSince(orchestrator.id, Date.now() - PULL_ASK_MIN * 60_000)) throw new Error('bloccato: l’utente non ha chiesto di aggiornare l’app. Aggiorna solo se te lo chiede lui');
+        return pull();
+      },
+    });
+  }
+  return tools;
+
+  /** did the user write to the Orchestrator, or answer one of its questions, at or after `at`? (his decision, not the agent's;
+   *  text from the paired phone is never a decision: phone bridge, design §5.5) */
+  function decidedSince(orchestratorId: string, at: number): boolean {
+    const items = d.chats.items(orchestratorId);
+    const phone = phoneAnswered(items);
+    return items.some(i => i.at >= at && (
+      i.kind === 'user' ? !labelled(i.text) && i.via !== 'phone' : i.kind === 'tool' && /question/i.test(i.name) && i.status === 'ok' && !phone.has(i.id)));
+  }
+
+  /** the question tool items answered with the phone's buttons, bound by id, never by time (an ACP tool item can be
+   *  stamped after the answer). Each «Risposto dal telefono» line (manager-requests.ts answer) names its tool item when
+   *  the engine shares the id (Claude: t-<toolUseId>); otherwise it claims the unclaimed answered question nearest to
+   *  the time the request was asked (a line without that time: its own time) */
+  function phoneAnswered(items: ChatItem[]): Set<string> {
+    const asks = items.filter(i => i.kind === 'tool' && /question/i.test(i.name) && i.status === 'ok');
+    const claimed = new Set<string>();
+    for (const l of items) {
+      if (l.kind !== 'system' || l.code !== 'phoneDecided' || l.params?.what !== 'question') continue;
+      const tool = l.params.tool;
+      if (typeof tool === 'string' && tool) { claimed.add(tool); continue; }
+      const asked = typeof l.params.asked === 'number' ? l.params.asked : l.at;
+      let best: ChatItem | undefined;
+      for (const q of asks) if (!claimed.has(q.id) && (!best || Math.abs(q.at - asked) < Math.abs(best.at - asked))) best = q;
+      if (best) claimed.add(best.id);
+    }
+    return claimed;
+  }
+
+  /** app_config's proof (ADR 0149): the user typed to this very Orchestrator in the last minutes, and its latest
+   *  message is that one (not app news or an agent's mail, which also land as 'user' items) */
+  function configAsked(orchestratorId: string): boolean {
+    const typed = lastTyped(orchestratorId), answered = lastAnswered(orchestratorId);
+    if (typed === undefined && answered === undefined) return false;
+    const last = d.chats.items(orchestratorId).filter(i => i.kind === 'user').at(-1);
+    const chat = d.chats.list().find(c => c.id === orchestratorId);
+    return userAsked({ typed, answered, lastUserItem: last?.at, lastResult: chat?.lastResult?.at, now: Date.now(), freshMs: CONFIG_ASK_MIN * 60_000, turnMs: CONFIG_TURN_MIN * 60_000 });
+  }
+
+  /** app_learn's proof (ADR 0190): the time of the user's own latest message when this turn is his, else null */
+  function imparaAsked(orchestratorId: string): { who: string; at: number } | null {
+    const last = d.chats.items(orchestratorId).filter(i => i.kind === 'user').at(-1);
+    return last && userTurn(orchestratorId, Date.now() - LEARN_ASK_MIN * 60_000) ? { who: orchestratorId, at: last.at } : null;
+  }
+
+  /** is this turn the user's: the Orchestrator's latest message is one he wrote (not app news, not an agent's mail), at
+   *  or after `at`? (app_unblock: a turn woken by an agent can never open the requests) */
+  function userTurn(orchestratorId: string, at: number): boolean {
+    const last = d.chats.items(orchestratorId).filter(i => i.kind === 'user').at(-1);
+    return !!last && last.kind === 'user' && last.at >= at && !labelled(last.text) && last.via !== 'phone';
+  }
+
+  function need(chatId: string): ChatSummary {
+    const c = d.chats.list().find(x => x.id === chatId && mine(x));
+    if (!c) throw new Error(`chat sconosciuta: ${chatId}`);
+    return c;
+  }
+
+  /** A chat on another engine than the caller's (the Orchestrator's, as in app_send_to_chat) spends that engine's credits:
+   *  allowed only as engines/policy.ts says, and a stopped one is never started (false = only if already running; the
+   *  hand-off then gets a token-free note from the app). Chats of the caller's own engine: true. */
+  function crossRule(c: ChatSummary, verb: string): boolean {
+    const from = caller()?.harness ?? 'claude';
+    if (c.harness === from) return true;
+    const refused = crossRefusal(d.brain.settings(), from, c.harness);
+    if (refused) throw new Error(`bloccato: un agente non può ${verb} una chat ${engineLabel(c.harness)}: ${refused}`);
+    return ['running', 'waiting', 'idle'].includes(c.state);
+  }
+}
+
+/** A frame script for the screenshot's password mask, with a deadline (a page blocked by a dialog never answers). */
+function frameRun(frame: Electron.WebFrameMain, script: string): Promise<unknown> {
+  let timer: NodeJS.Timeout | undefined;
+  return Promise.race([frame.executeJavaScript(script) as Promise<unknown>,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('the page did not answer')), 3000); })]).finally(() => clearTimeout(timer));
+}

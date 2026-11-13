@@ -1,0 +1,235 @@
+/* Design tokens: the one place for colors, type, spacing (4/8 px grid), radii, motion. Dark by default; light follows
+   Windows (prefers-color-scheme) unless the user picked a theme (data-theme on <html>); density (data-density) scales
+   paddings. Every component uses these variables (styles/app.css); contrast checked for WCAG 2.2 AA on --surface.
+   The light theme is written twice (media query, data-theme): both blocks define the same tokens, checked with the
+   contrasts by test/unit/tokens-contrast.test.ts. */
+:root {
+  --bg: #101114;
+  --bg-2: #141519;
+  --surface: #191a1f;
+  --surface-2: #1e2026;
+  --surface-3: #272930;
+  --surface-4: #30333c;
+  --border: #20242d;
+  --border-2: #2a2f3a;
+  --border-3: #3a404d;
+  --border-control: #707788; /* borders of inputs, selects, switches: >= 3:1 on --surface and --surface-2 */
+  --text: #eceef3;
+  --text-2: #b9bfcb;
+  --text-3: #8d94a4;
+  --text-4: var(--text-3); /* was #7b8293: 4.23:1 on --surface-2, under AA */
+  --md-text: #d7dae2;
+
+  /* one accent for actions, links, selection and focus; --violet is only the Orchestrator's identity */
+  --accent: #8fa3ff;
+  --accent-strong: #a9b8ff;
+  --accent-bg: rgba(143, 163, 255, 0.14);
+  --accent-line: rgba(143, 163, 255, 0.5);
+  /* deprecated aliases for the CSS not yet migrated (Impara): removed at the end of the restyle */
+  --blue: var(--accent);
+  --blue-strong: var(--accent-strong);
+  --blue-bg: var(--accent-bg);
+  --blue-line: var(--accent-line);
+  --amber: #f2b64c;
+  --amber-bg: rgba(242, 182, 76, 0.09);
+  --amber-line: rgba(242, 182, 76, 0.5);
+  --green: #4fd18b;
+  --green-bg: rgba(79, 209, 139, 0.11);
+  --red: #ff6b7a;
+  --red-bg: rgba(255, 107, 122, 0.11);
+  --violet: #b892ff;
+  --violet-bg: rgba(184, 146, 255, 0.12);
+  --orchestrator-bg: #17181d;
+  --orchestrator-surface: #1e1f27;
+  --orchestrator-input: #202128;
+  --orchestrator-line: #2b2c35;
+  --orchestrator-line-2: #454251;
+  --claude: #e2805a;
+  --claude-fg: #fff6f1;
+  --cursor-bg: #e3e6ed;
+  --cursor-fg: #14161b;
+  --page-bg: #f3f5f9;
+  --focus: var(--accent);
+  --on-accent: #0b0d14;
+  --on-amber: #1b1304; /* text on a solid --amber badge */
+  --add-bg: rgba(79, 209, 139, 0.1);
+  --add-fg: #92e4b6;
+  --del-bg: rgba(255, 107, 122, 0.1);
+  --del-fg: #ffa3ad;
+  --tooltip-bg: #232731;
+  --backdrop: rgba(5, 6, 9, 0.62);
+  --scroll: rgba(255, 255, 255, 0.09);
+  --scroll-hover: rgba(255, 255, 255, 0.16);
+  /* chat ↔ browser pairs (lib/pairs.ts): away from the status hues (blue accent, amber wait, red error, green done, violet Orchestrator) */
+  --pair-0: #3fc1c9;
+  --pair-1: #ff7ab6;
+  --pair-2: #dcdc5a;
+  --pair-3: #a3d95b;
+  --pair-4: #5cc8ff;
+  --pair-5: #f07ae2;
+  --pair-6: #2fd6b0;
+  --pair-7: #d4b483;
+
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-small: "Segoe UI Variable Small", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --mono: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+  --fs-xs: 11px;
+  --fs-s: 12px;
+  --fs-m: 13px;
+  --fs-l: 14px;
+  --fs-xl: 16px;
+  --fs-2xl: 22px;
+
+  --r-xs: 6px;
+  --r-s: 8px;
+  --r-m: 10px;
+  --r-l: 12px;
+  --r-xl: 14px;
+
+  /* density-dependent spacing */
+  --topbar-h: 52px;
+  --pad: 12px;
+  --pad-s: 8px;
+  --row-gap: 8px;
+  --gap: 8px;
+  /* one page gutter (ADR 0101): every page's title starts at the same x, whatever its container */
+  --page-gutter: 28px;
+  --page-top: 22px;
+
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 150ms;
+  --dur-slow: 180ms;
+  --shadow-pop: 0 18px 44px -10px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
+}
+
+:root[data-density="compact"] {
+  --topbar-h: 46px;
+  --pad: 10px;
+  --pad-s: 6px;
+  --row-gap: 6px;
+  --fs-m: 12.5px;
+}
+
+/* light: when Windows is light (and the user did not force dark), or when the user picked light */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f3f4f7;
+    --bg-2: #eceef2;
+    --surface: #ffffff;
+    --surface-2: #f6f7f9;
+    --surface-3: #eceef2;
+    --surface-4: #e2e5eb;
+    --border: #e2e5eb;
+    --border-2: #d5d9e1;
+    --border-3: #c2c8d2;
+    --border-control: #80889a;
+    --text: #13161d;
+    --text-2: #3a4050;
+    --text-3: #596173;
+    --text-4: var(--text-3);
+    --md-text: #252a35;
+    --accent: #3a5ce0;
+    --accent-strong: #2c4cc8;
+    --accent-bg: rgba(58, 92, 224, 0.09);
+    --accent-line: rgba(58, 92, 224, 0.45);
+    --amber: #93580a;
+    --amber-bg: rgba(214, 140, 22, 0.08);
+    --amber-line: rgba(196, 126, 14, 0.5);
+    --green: #157a45;
+    --green-bg: rgba(21, 122, 69, 0.09);
+    --red: #cc3343;
+    --red-bg: rgba(204, 51, 67, 0.08);
+    --violet: #7246d0;
+    --violet-bg: rgba(114, 70, 208, 0.09);
+    --orchestrator-bg: #faf7ff;
+    --orchestrator-surface: #f2ebff;
+    --orchestrator-input: #ffffff;
+    --orchestrator-line: #e6dcfa;
+    --orchestrator-line-2: #cfbcf4;
+    --cursor-bg: #1d2027;
+    --cursor-fg: #ffffff;
+    --focus: var(--accent);
+    --on-accent: #ffffff;
+    --on-amber: #ffffff;
+    --add-bg: rgba(21, 122, 69, 0.08);
+    --add-fg: #0f6136;
+    --del-bg: rgba(204, 51, 67, 0.08);
+    --del-fg: #a3202f;
+    --tooltip-bg: #1d2129;
+    --backdrop: rgba(20, 24, 33, 0.32);
+    --scroll: rgba(0, 0, 0, 0.12);
+    --scroll-hover: rgba(0, 0, 0, 0.22);
+    --pair-0: #0e8f96;
+    --pair-1: #c2357a;
+    --pair-2: #7a7a00;
+    --pair-3: #4d7c0f;
+    --pair-4: #0a74b8;
+    --pair-5: #b0279e;
+    --pair-6: #0b8a6e;
+    --pair-7: #8a6a2f;
+    --shadow-pop: 0 18px 44px -12px rgba(20, 24, 33, 0.28), 0 2px 8px rgba(20, 24, 33, 0.08);
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f3f4f7;
+  --bg-2: #eceef2;
+  --surface: #ffffff;
+  --surface-2: #f6f7f9;
+  --surface-3: #eceef2;
+  --surface-4: #e2e5eb;
+  --border: #e2e5eb;
+  --border-2: #d5d9e1;
+  --border-3: #c2c8d2;
+  --border-control: #80889a;
+  --text: #13161d;
+  --text-2: #3a4050;
+  --text-3: #596173;
+  --text-4: var(--text-3);
+  --md-text: #252a35;
+  --accent: #3a5ce0;
+  --accent-strong: #2c4cc8;
+  --accent-bg: rgba(58, 92, 224, 0.09);
+  --accent-line: rgba(58, 92, 224, 0.45);
+  --amber: #93580a;
+  --amber-bg: rgba(214, 140, 22, 0.08);
+  --amber-line: rgba(196, 126, 14, 0.5);
+  --green: #157a45;
+  --green-bg: rgba(21, 122, 69, 0.09);
+  --red: #cc3343;
+  --red-bg: rgba(204, 51, 67, 0.08);
+  --violet: #7246d0;
+  --violet-bg: rgba(114, 70, 208, 0.09);
+  --orchestrator-bg: #faf7ff;
+  --orchestrator-surface: #f2ebff;
+  --orchestrator-input: #ffffff;
+  --orchestrator-line: #e6dcfa;
+  --orchestrator-line-2: #cfbcf4;
+  --cursor-bg: #1d2027;
+  --cursor-fg: #ffffff;
+  --focus: var(--accent);
+  --on-accent: #ffffff;
+  --on-amber: #ffffff;
+  --add-bg: rgba(21, 122, 69, 0.08);
+  --add-fg: #0f6136;
+  --del-bg: rgba(204, 51, 67, 0.08);
+  --del-fg: #a3202f;
+  --tooltip-bg: #1d2129;
+  --backdrop: rgba(20, 24, 33, 0.32);
+  --scroll: rgba(0, 0, 0, 0.12);
+  --scroll-hover: rgba(0, 0, 0, 0.22);
+  --pair-0: #0e8f96;
+  --pair-1: #c2357a;
+  --pair-2: #7a7a00;
+  --pair-3: #4d7c0f;
+  --pair-4: #0a74b8;
+  --pair-5: #b0279e;
+  --pair-6: #0b8a6e;
+  --pair-7: #8a6a2f;
+  --shadow-pop: 0 18px 44px -12px rgba(20, 24, 33, 0.28), 0 2px 8px rgba(20, 24, 33, 0.08);
+  color-scheme: light;
+}
+:root[data-theme="dark"] { color-scheme: dark; }

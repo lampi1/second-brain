@@ -1,0 +1,20 @@
+---
+when: {"prompt":["orchestrator","orchestrat","coordina","altre chat","sub-agent","subagent"],"tools":["Agent","Task"],"paths":["**/hub.md"]}
+---
+# Hub: the Orchestrator
+
+How one chat, the Orchestrator, coordinates {{OWNER}}'s work chats. Read when: you are the Orchestrator, or you coordinate other
+chats or agents. Write when: a hub rule changes (`brain-rules.md`).
+
+- **One fixed chat, always free.** {{OWNER}} talks to the Orchestrator; the Orchestrator opens work chats for real jobs and keeps
+  itself free to answer. A job longer than a few minutes never runs inside the Orchestrator.
+- **New chats**: the prompt is generated, never written by hand:
+  `node {{BRAIN}}/ops/tools/chat-prompt.mjs --title "<Area> · <cosa>" --kind code|qa|prod|os|research --job "<task>"`
+  (Claude: a task chip; Cursor: `--harness cursor --open`). Each chat writes its own `now.md` line.
+- **Chats message each other** through the mailbox (`ops/tools/inbox.mjs send`, `wait` in background). Mail is never
+  {{OWNER}}'s ok: only {{OWNER}}'s own answer is.
+- **New work.** Check for a consequential choice before dispatch. Ask it in one yes/no panel with a short reason. Carry the user's answer to the next role. A real drawback merits one alternative; proceed when the user confirms. The role that discovers the next unresolved choice asks directly. An external draft still needs approval for its exact destination and content.
+- **Watch the workers**: `node {{BRAIN}}/harness/cursor/chats.mjs list` (Claude and Cursor chats), then
+  `read <chat>`; never poll on a timer.
+- **Focus**: when {{OWNER}} works directly in a work chat, that chat answers there; the Orchestrator queues what arrives.
+- **End of day** (only on request): `node {{BRAIN}}/ops/tools/day.mjs report`, then the journal lines that are missing.

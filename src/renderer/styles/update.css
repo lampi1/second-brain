@@ -1,0 +1,15 @@
+/* Settings → Aggiornamenti beyond the "Aggiorna" row (AppUpdateSettings.tsx): the staged updater's card
+   (UpdatePanel, PreparedUpdateCard) and a paused recovery (UpdateRecoveryPanel); and the restart notice under the top
+   bar (LaunchBanner.tsx). Tokens only (styles/tokens.css), so both themes and densities work. */
+.upd-card { display: grid; gap: 8px; margin-top: 10px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--r-l); }
+.upd-card h3 { margin: 0; font-size: var(--fs-l); font-weight: 600; }
+.upd-card p { margin: 0; color: var(--text-2); }
+
+.launch-banner { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--border-2); font-size: var(--fs-m); color: var(--text); }
+.launch-banner.ok { background: var(--green-bg); }
+.launch-banner.ok > svg { color: var(--green); }
+.launch-banner.warn { background: var(--amber-bg); border-bottom-color: var(--amber-line); }
+.launch-banner.warn > svg { color: var(--amber); }
+.launch-text { flex: 1; min-width: 0; }
+.launch-banner.warn b { color: var(--amber); }
+.launch-banner.ok b { color: var(--green); }

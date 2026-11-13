@@ -1,0 +1,294 @@
+// The harness-neutral contract between ChatManager and one running CLI process (one chat = at most one session).
+// Why: the manager must not know which engine a chat runs on (Claude Code: claude.ts, stream-json control protocol; an
+// ACP engine: acp.ts, JSON-RPC); each adapter implements HarnessSession and reports through a SessionSink. Used by manager.ts (creates sessions, owns items/pending/persistence) and by every harness module.
+import type { OptionMap } from '../../shared/yes-no';
+import type { Root } from './proctree';
+import type { RemoteControlReply } from './remote-control';
+import { RESULT_OUTPUT_MAX } from '../../shared/delegation';
+import type { AgentChildren, AgentToolPolicy, ChildObservation, PermissionCeiling } from '../../shared/agents';
+import type { Answer, ChatCommand, ChatItem, ChatState, Effort, Harness, ImageAttachment, PendingRequest, PermissionMode, SeenModel } from '../../shared/contract';
+
+/** What a harness tells its owner. The owner (ChatManager) turns these into contract events. */
+export interface SessionSink {
+  /** A new item (replace = false) or a newer version of an item already sent with the same id (replace = true). */
+  item(item: ChatItem, replace: boolean): void;
+  /** A question or permission the CLI is blocked on (chatId is filled in by the owner). */
+  pending(req: Omit<PendingRequest, 'chatId'>): void;
+  /** A pending request is gone: answered, or withdrawn by the CLI (interrupt, another answer path). */
+  resolved(requestId: string): void;
+  /** Session facts changed (only the fields present). */
+  changed(patch: SessionPatch): void;
+  /** The process is gone. error = null for a normal end (stdin closed, close() asked); otherwise why, in Italian.
+   *  refusal: the CLI's whole «Cannot use this model: X. Available models: …» line when it refused the model (error
+   *  keeps 600 characters, too few for Cursor's 190 ids: learn/accepted-models.ts reads the list from here). */
+  exit(info: { code: number | null; error: string | null; refusal?: string }): void;
+  /** Plan rate-limit info as the CLI sent it (Claude: a stream-json `rate_limit_event`), for the brain's usage meter. */
+  rateLimit?(msg: unknown): void;
+  /** The models the CLI offers (ACP: models.availableModels of session/new or session/load; Codex: model/list; Claude
+   *  Code: initialize), the live list of the model pickers (ADR 0256). */
+  models?(list: SeenModel[]): void;
+  /** The commands "/<name>" the engine offers in this chat (skills, its own commands), for the input's "/" list. */
+  commands?(list: ChatCommand[]): void;
+  /** Provider observations only: an absent callback or event is not a zero child census. */
+  children?(observation: ChildObservation): void;
+  childrenCoverage?(coverage: AgentChildren['coverage'], reason?: 'exit'): void;
+}
+
+/** An engine's command list → ChatCommand[]: Claude ({name, description, argumentHint}: initialize, commands_changed),
+ *  ACP ({name, description, input: {hint}}: available_commands_update). Names with spaces (Claude's "x (MCP)") cannot be
+ *  typed: left out. skill = a skill of the user or a project (in `skills`, or Claude's "(user)"/"(project)" label). */
+export function toCommands(list: unknown, skills?: ReadonlySet<string>): ChatCommand[] {
+  const out: ChatCommand[] = [];
+  const seen = new Set<string>();
+  for (const v of Array.isArray(list) ? list : []) {
+    const c = v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
+    const name = typeof c.name === 'string' ? c.name.trim().replace(/^\//, '') : '';
+    if (!name || /\s/.test(name) || seen.has(name) || name.length > 120) continue;
+    seen.add(name);
+    const raw = typeof c.description === 'string' ? c.description.trim() : '';
+    const tag = /\s*\((user|project)\)$/.exec(raw);
+    const input = c.input && typeof c.input === 'object' ? (c.input as Record<string, unknown>) : {};
+    const hint = typeof c.argumentHint === 'string' ? c.argumentHint : typeof input.hint === 'string' ? input.hint : '';
+    out.push({ name, description: cut(tag ? raw.slice(0, tag.index) : raw, 400), ...(hint.trim() ? { hint: hint.trim() } : {}), ...(tag || skills?.has(name) ? { skill: true } : {}) });
+  }
+  return out;
+}
+
+export interface SessionPatch {
+  /** Explicit provider event metadata only; configured/default values must not populate these. */
+  modelObserved?: string | null;
+  effortObserved?: string | null;
+  /** Outgoing next-turn parameter, not a provider-resolved effective value. */
+  effortSubmitted?: string | null;
+  /** Resolved by a supported thread/start or thread/resume response; not the current turn. */
+  effortSessionDefault?: string | null;
+  /** The engine never answered the user's stop: end it now and resume the same session on a new one; these messages
+   *  had not reached it yet and go to the new one (ACP: acp.ts interrupt). */
+  restart?: { text: string; images: readonly ImageAttachment[] }[];
+  /** true while a resume replays the session's past as items (ACP session/load, Codex thread/resume, an HTTP model's
+   *  history), false after: those items are no answer of the engine, so they never end its cold start. Sent alone. */
+  replaying?: boolean;
+  state?: ChatState;
+  sessionId?: string;          // the CLI's own session id (learned at init, or new after a fork)
+  model?: string;              // the model actually in use (from init)
+  permissionMode?: PermissionMode;
+  effort?: Effort | null;
+  contextTokens?: number;
+  contextMaxTokens?: number;
+  /** true: contextTokens is an estimate (the engine reports none); false: a real count replaced the estimate */
+  contextEstimated?: boolean;
+  /** cost of the turn that just ended (USD, API-equivalent) and the CLI's running total for the session */
+  turnCostUsd?: number;
+  totalCostUsd?: number;
+  /** estimate of the turn still running (USD, from token usage); 0 when it ended: turnCostUsd then holds the real cost */
+  liveCostUsd?: number;
+  /** false: the engine reports no usage, so turnCostUsd is 0 for lack of data (Cursor over ACP today) */
+  costKnown?: boolean;
+  lastText?: string;
+  /** background tasks (agents, shell commands) still running after the turn; 0 = none */
+  background?: number;
+  version?: string;            // CLI version
+  /** one API call of the main thread, once per response id (ADR 0031 counters): its context (input + cache read +
+   *  cache write), the cache it re-wrote, its list-price cost */
+  call?: { context: number; cacheWrite: number; usd: number; /** read from the prompt cache, and sent uncached */ cacheRead?: number; input?: number };
+  /** the tokens of the turn that just ended, when the engine reports them (Claude's result usage, ACP's prompt usage,
+   *  an HTTP model's usage); absent = unknown. Read by compare/headless.ts for a run's total. */
+  turnTokens?: TokenUsage;
+  /** Remote Control's bridge changed (system/bridge_state, ADR 0229) */
+  remote?: { status: 'ready' | 'connected' | 'failed'; error?: string };
+  /** the engine compacted the context (compact_boundary) */
+  compacted?: { pre: number | null; post: number | null };
+}
+
+export interface ContextUsage { totalTokens: number; maxTokens: number; percentage: number }
+/** A turn's token counts by kind (input = not from the cache). */
+export interface TokenUsage { input: number; cacheRead: number; cacheWrite: number; output: number }
+
+/** A usage object's counts (non-negative finite numbers, else 0), or undefined when it reports none at all. */
+export function tokenUsage(input: unknown, cacheRead: unknown, cacheWrite: unknown, output: unknown): TokenUsage | undefined {
+  const n = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
+  const u = { input: n(input), cacheRead: n(cacheRead), cacheWrite: n(cacheWrite), output: n(output) };
+  return u.input + u.cacheRead + u.cacheWrite + u.output > 0 ? u : undefined;
+}
+
+/** Options common to every harness. */
+export interface SessionOptions {
+  /** a brief (show_ui brief, next-ask) waits for this chat's next question (ADR 0150); absent = never asked for */
+  briefReady?: () => boolean | Promise<boolean>;
+  /** the engine's own Sì / No labels the waiting brief declares (yesOption / noOption, #378); null = none */
+  briefOptions?: () => OptionMap | null | Promise<OptionMap | null>;
+  /** Main-generated immutable agent skill package, never supplied by the renderer. */
+  agentAssets?: { pluginDir: string; skillRoot: string };
+  chatId: string;
+  cwd: string;
+  model?: string | null;
+  effort?: Effort | null;
+  permissionMode?: PermissionMode | null;
+  title?: string | null;
+  /** new session: use this id; resume: the id to resume */
+  sessionId?: string | null;
+  resume?: boolean;
+  fork?: boolean;
+  worktree?: boolean;
+  /** --mcp-config value: a file path or an inline JSON string */
+  mcpConfig?: string | null;
+  /** running total cost already restored for this session (for per-turn deltas after a resume) */
+  costBaseUsd?: number;
+  /** Claude: the auto-compact window of this process (inline --settings env, beats a folder's own settings; ADR 0031);
+   *  0 or absent = the user's settings decide */
+  compactWindowTokens?: number;
+  env?: NodeJS.ProcessEnv;
+  extraArgs?: string[];
+  /** a hidden run that must change nothing (the comparison's side b, compare/headless.ts): each adapter adds its own
+   *  read-only means (Claude: plan mode, read tools only, no MCP, no hooks, no transcript; ACP: its read-only mode,
+   *  the engine's allow rules left out). Its owner still answers every permission itself. */
+  readOnly?: boolean;
+  /** with readOnly, Claude only: the run searches and reads the web and never a file (Impara's web research, ADR 0188) */
+  webOnly?: boolean;
+  /** Output cap for HTTP one-shot sessions; CLI adapters may only enforce a soft cap. */
+  maxTokens?: number;
+  /** with readOnly: absolute folders the run may never read (the comparison's other side and verdicts); each adapter
+   *  turns them into deny rules (Claude: Read(//…/**) in its session settings; ACP/Cursor: Read(…/**) in its config
+   *  copy). Its owner refuses a read there too when the engine asks. */
+  denyRead?: string[];
+  /** an agent's tool allow-list (A2, tool-policy.ts): Claude keeps only these built-in tools and narrows MCP; Codex
+   *  narrows its sandbox. null/absent = the engine's defaults. */
+  toolPolicy?: AgentToolPolicy | null;
+  /** an agent's permission ceiling: Codex asks for every action at or below 'default'; ACP runs 'plan' in its
+   *  read-only mode or not at all. Claude gets it through permissionMode (manager modeFor). */
+  ceiling?: PermissionCeiling | null;
+  /** Claude only: a PreToolUse hook the app answers in-process (registered at initialize, asked with hook_callback;
+   *  session-only, no settings file). The Orchestrator's turn budget (agents/orchestrator-budget.ts, ADR 0090). */
+  preToolUse?: PreToolHook | null;
+  /** Claude only: a product brain's hooks the session answers in process (rules/runtime.ts runHook) instead of a node
+   *  process per call: UserPromptSubmit, PreToolUse, PostToolUse (Stop stays in the plugin's hooks.json, ADR 0103) */
+  productHooks?: { root: string; state: string; launch: { tools?: string; correctionHook?: boolean } } | null;
+  /** Claude only: the chat may turn on Remote Control (the Orchestrator, ADR 0229): the engine echoes every user message
+   *  it queues (--replay-user-messages), so the ones typed on the phone show in the chat */
+  remoteControl?: boolean;
+}
+
+/** Main-only, never from the renderer: string fields set on the asked call's own input when it is allowed (the role
+ *  gate's qualified skill name, issue #101). Only an engine that can run a changed input takes it (Claude). */
+export type AnswerPatch = Readonly<Record<string, string>>;
+
+/** A tool call the engine is about to run, as its PreToolUse hook sees it (agentId: a sub-agent's call). */
+export interface PreToolCall { tool: string; input: unknown; agentId?: string }
+/** An in-process PreToolUse hook: decide() refuses a call with a message for the model (null = no say); turnEnded()
+ *  runs when a turn's result arrives. */
+export interface PreToolHook {
+  decide(call: PreToolCall): { deny: string } | null | Promise<{ deny: string } | null>;
+  turnEnded(): void;
+}
+
+/** A yes/no question asked through the app's ask_user tool (askUser): the option marked «(consigliato)» is the one recommended. */
+export interface AppAsk { question: string; header?: string; recommended: 'yes' | 'no' }
+
+export interface HarnessSession {
+  readonly harness: Harness;
+  readonly state: ChatState;
+  readonly sessionId: string | null;
+  readonly pid: number | null;
+  /** its Job Object (jobguard.ts), null when it has none (not Windows, helper not ready, tests) */
+  readonly jobHandle?: number | null;
+  /** exited or its job terminated: the quit's last resort leaves it alone (no taskkill on a pid that may be reused) */
+  readonly gone?: boolean;
+  /** The process once it exited (pid, start, exit time): the manager reaps a kept one's tools at the real close. */
+  readonly root: Root | null;
+  /** when we spawned the process (ms; 0 before): the quit's detached reaper (proctree.ts reapAfterQuit) needs it */
+  readonly startedAt?: number;
+  /** working: a turn in flight (queued ones too), a question open, or booting */
+  readonly busy: boolean;
+  /** resolves when the engine's session is open or failed (engines that replay a resumed past: Cursor) */
+  readonly ready?: Promise<void>;
+  start(): void;
+  /** text may be empty when images are attached (already checked by the manager: images.ts checkImages) */
+  send(text: string, images?: readonly ImageAttachment[]): void;
+  /** ADR 0228: the turn's checkpoint is being recorded; the session holds every call that may write until `until`
+   *  settles and returns true. Absent or false: it cannot stop a tool before it runs (Codex and ACP engines write
+   *  without asking), so the manager waits for the snapshot before send. */
+  holdWrites?(until: Promise<unknown>): boolean;
+  /** false when the request is unknown (already answered or withdrawn). Throws on an answer of the wrong kind. */
+  answer(requestId: string, answer: Answer, patch?: AnswerPatch): boolean;
+  /** Remote adapters acknowledge consumption asynchronously; callers must prefer this over answer when present.
+   *  A rejected acknowledgement is uncertain, never permission to retry the same decision. */
+  answerConsumed?(requestId: string, answer: Answer, patch?: AnswerPatch): Promise<boolean>;
+  /** keepQueued: only the running turn stops; messages the session already queued still go after it; byUser: the
+   *  user's Stop / "Invia subito" (the turn ends as "Interrotto da te", not an error), never the app's own interrupt */
+  interrupt(opts?: { keepQueued?: boolean; byUser?: boolean }): Promise<void>;
+  /** the running turn is not retried by itself after a network error (Cursor only: a failed hand-off turn) */
+  noRetry?(): void;
+  /** An engine with no question tool of its own (OpenCode over ACP): the app's ask_user MCP tool puts a yes/no question
+   *  on this chat; the user's answer comes back as the user's next message. A string = refused, with how to ask. */
+  askUser?(q: AppAsk): Promise<string | null>;
+  setModel(model: string | null): Promise<void>;
+  setPermissionMode(mode: PermissionMode): Promise<void>;
+  setEffort(effort: Effort | null): Promise<void>;
+  rename(title: string): Promise<void>;
+  /** Claude only (ADR 0229): Remote Control on (the claude.ai link and bridge id; reattach = the bridge of an earlier
+   *  engine of the same chat) or off (null). Throws with the engine's own words when it refuses. */
+  setRemoteControl?(enabled: boolean, opts?: { name?: string; reattach?: string | null }): Promise<RemoteControlReply | null>;
+  contextUsage(): Promise<ContextUsage | null>;
+  /** The CLI's own usage report (Claude: get_usage, plan windows included), raw; null when not supported. */
+  usage(): Promise<unknown>;
+  /** Graceful end: stdin closed, killed after graceMs. Resolves when the process is gone. The tools it left running
+   *  are reaped after the exit (proctree.ts), unless `keepChildren`: the chat goes on in a new process (model or Orchestrator
+   *  change, continued elsewhere) and a dev server it started stays for the next turn. */
+  close(graceMs?: number, keepChildren?: boolean): Promise<void>;
+  /** Kill the process tree now, without blocking (the exit is reported through the sink). */
+  killNow(): void;
+  /** the process is running (not yet exited) */
+  readonly alive: boolean;
+}
+
+// ---- small shared helpers ----
+
+/** CLI session ids are UUIDs; only those are ever passed to --resume / --session-id or used in a path. */
+export const isUuid = (s: unknown): s is string => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+/** An engine's opaque session id (ACP session/load, Codex thread/resume): OpenCode's are `ses_…`, not UUIDs. A UUID or
+ *  one plain token (letters, digits, _ and -, never a dot or a slash): it is only ever sent back to that engine. */
+export const isSessionId = (s: unknown): s is string => isUuid(s) || (typeof s === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(s));
+
+let seq = 0;
+/** Unique item id inside this app run (prefix = item kind). */
+export function nextId(prefix: string): string {
+  seq += 1;
+  return `${prefix}-${Date.now().toString(36)}-${seq.toString(36)}`;
+}
+
+/** Shortens long strings inside a tool input before it crosses IPC (the full input stays in the session). An
+ *  agent_report's output (any engine: known by its outcome/doneWhen/output fields) stays whole up to its own limit: the
+ *  chat shows it as the agent's answer, written only there. */
+export function trimInput(input: unknown, max = 4000): unknown {
+  if (input && typeof input === 'object' && !Array.isArray(input)) {
+    const o = input as Record<string, unknown>;
+    if (typeof o.output === 'string' && typeof o.outcome === 'string' && Array.isArray(o.doneWhen) && max < RESULT_OUTPUT_MAX) {
+      const { output, ...rest } = o;
+      return { ...(trimInput(rest, max) as Record<string, unknown>), output: trimInput(output, RESULT_OUTPUT_MAX) };
+    }
+  }
+  if (typeof input === 'string') return input.length > max ? `${input.slice(0, max)}… (+${input.length - max})` : input;
+  if (Array.isArray(input)) return input.slice(0, 200).map(v => trimInput(v, max));
+  if (input && typeof input === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(input as Record<string, unknown>)) out[k] = trimInput(v, max);
+    return out;
+  }
+  return input;
+}
+
+export function cut(s: string, n: number): string {
+  const one = s.replace(/\s+/g, ' ').trim();
+  return one.length > n ? `${one.slice(0, n - 1)}…` : one;
+}
+
+/** Last non-empty line of a text, for collapsed tiles and the needs-you lane. */
+export function lastLine(text: string, n = 200): string {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  return cut(lines.at(-1) ?? '', n);
+}
+
+/** Removes ANSI escapes the CLI may put in reasons and errors. */
+export function stripAnsi(s: string): string {
+  return s.replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/\u001b\][^\u0007]*\u0007/g, '');
+}

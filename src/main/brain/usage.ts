@@ -1,0 +1,283 @@
+// Usage for the top bar and for the spending limits. Why: the user wants to see at a glance what today costs and how
+// close they are to their plan limits, without spending tokens. Sources (all read-only, no model call):
+// - Claude $ today: the brain's ops/tools/cost.mjs --days 1 --json (transcripts priced at API list price; on a
+//   subscription an equivalent cost), run as an Electron-node child, cached, refreshed every 3 min. It also carries
+//   Cursor's real cost from its usage export CSV (known only up to the export time: older than today = unknown).
+// - Plan windows (5 h / 7 d %): not readable at rest. Three sources, newest wins: (1) a running app Claude chat's
+//   stream-json `rate_limit_event` (utilization as a 0-1 fraction, resets in unix seconds), (2) a `get_usage` control
+//   response (0-100, ISO resets; needs a running CLI process but no model call), both pushed by the chat manager via
+//   BrainService.ingestRateLimits; (3) Claude Code's own cache `cachedUsageUtilization` in ~/.claude.json (written when
+//   /usage or get_usage ran; trusted for 1 hour, as Claude Code itself does). Nothing found = null + limitsNote.
+// Used by brain/index.ts ('app:usage', 'usage' events, budget.ts input).
+import { timersFor } from '../timers';
+const { setInterval, clearInterval } = timersFor('brain/usage');
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import type { Usage } from '../../shared/contract';
+import { log } from '../log';
+import { romeDay } from './live';
+import { runNode, type NodeRunner } from './node';
+import { brainScript } from '../rules/tools';
+import type { ChatSpend, Spend } from './budget';
+import type { CursorDay } from './cursor-ledger';
+import { uiLocale } from '../locale';
+import type { InputRevision } from './input-revision';
+
+// Checked 2026-10-11 (cursor-cost research note §1, §3, outside the repo): no documented usage API for a personal account (the
+// Admin API is for team admins), the CLI's ACP mode sends no tokens (bug confirmed by Cursor), the dashboard's internal
+// endpoints would need the user's session token and fall under the ToS ban on extracting data. So: said, never guessed.
+export const CURSOR_PLAN_NOTE = "Cursor non offre un'API d'uso per gli account personali (solo agli amministratori del team): la quota del piano non si vede. Il costo è stimato dai token di ogni turno (hook stop di Cursor) e diventa esatto quando un export CSV è in Download (dashboard Cursor → Usage → Export CSV).";
+
+export interface Limits { fiveHourPct: number | null; fiveHourResetsAt: number | null; weekPct: number | null; weekResetsAt: number | null; source: 'stream' | 'get_usage' | 'claude-cache'; at: number }
+/** at = when cost.mjs started reading (set by UsageMonitor.refresh): what the app's chats spend after it is not in todayUsd */
+export interface CostSnapshot { todayUsd: number; chats: ChatSpend[]; cursorTodayUsd: number | null; cursorNote: string; costKnown: boolean; costNote: string; at?: number }
+
+/** cost.mjs's sessions shipped to the renderer, at most this many (the list of the day's chats by cost) */
+const MAX_CHATS = 200;
+
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const ddmm = (t: number) => new Intl.DateTimeFormat(uiLocale(), { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit' }).format(new Date(t));
+const hhmm = (t: number) => new Intl.DateTimeFormat(uiLocale(), { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }).format(new Date(t));
+
+/** cost.mjs --json → today's Claude $, per-chat $ (key = Claude session id), Cursor's $ when its export covers today. */
+export function parseCost(j: unknown, today: string): CostSnapshot {
+  if (!isObj(j)) return { todayUsd: 0, chats: [], cursorTodayUsd: null, cursorNote: 'costi non disponibili', costKnown: false, costNote: 'cost.mjs: risposta non valida' };
+  const byDay = isObj(j.byDay) ? j.byDay : {};
+  const day = isObj(byDay[today]) ? (byDay[today] as Record<string, unknown>) : null;
+  const todayUsd = num(day?.usd) ?? (Object.keys(byDay).length ? 0 : num(j.total) ?? 0);
+  const chats: ChatSpend[] = isObj(j.chats)
+    ? Object.entries(j.chats).flatMap(([id, c]) => (isObj(c) && (num(c.usd) ?? 0) > 0 ? [{ id, title: String(c.title ?? id.slice(0, 8)), usd: num(c.usd)! }] : []))
+    : [];
+  let cursorTodayUsd: number | null = null, cursorNote: string;
+  const cur = isObj(j.cursor) ? j.cursor : null;
+  const downloaded = cur && typeof cur.downloaded === 'string' ? Date.parse(cur.downloaded) : NaN;
+  if (!cur || !cur.file) cursorNote = 'Cursor: costo sconosciuto (nessun export: dashboard Cursor → Usage → Export CSV)';
+  else if (!Number.isFinite(downloaded) || romeDay(downloaded) !== today) cursorNote = `Cursor: oggi sconosciuto (export del ${Number.isFinite(downloaded) ? ddmm(downloaded) : '?'})`;
+  else {
+    const cd = isObj(cur.byDay) && isObj(cur.byDay[today]) ? (cur.byDay[today] as Record<string, unknown>) : null;
+    cursorTodayUsd = num(cd?.usd) ?? 0;
+    cursorNote = `Cursor: fino alle ${hhmm(downloaded)} (ora dell'export)`;
+  }
+  return { todayUsd, chats, cursorTodayUsd, cursorNote, costKnown: true, costNote: 'Claude a prezzo di listino API (su abbonamento è un costo equivalente)' };
+}
+
+const readWindow = (w: unknown, scale: number, resetsKey: string, resetsScale: 'iso' | 'unix'): { pct: number | null; resets: number | null } => {
+  if (!isObj(w)) return { pct: null, resets: null };
+  const u = num(w.utilization);
+  const r = w[resetsKey];
+  const resets = resetsScale === 'iso' ? (typeof r === 'string' ? Date.parse(r) : null) : (num(r) !== null ? num(r)! * 1000 : null);
+  return { pct: u === null ? null : Math.round(u * scale * 10) / 10, resets: resets !== null && Number.isFinite(resets) ? resets : null };
+};
+
+/** A rate-limit message from Claude (stream event, get_usage answer, or Claude Code's cache) → plan windows, or null. */
+export function parseRateLimits(msg: unknown, now = Date.now()): Limits | null {
+  if (!isObj(msg)) return null;
+  // (1) stream-json: {type:'rate_limit_event', rate_limit_info:{rateLimitType, utilization 0-1, resetsAt s, unifiedWindows?}}
+  if (msg.type === 'rate_limit_event' && isObj(msg.rate_limit_info)) {
+    const i = msg.rate_limit_info;
+    const uw = isObj(i.unifiedWindows) ? i.unifiedWindows : {};
+    let f = readWindow(uw.five_hour, 100, 'resetsAt', 'unix'), w = readWindow(uw.seven_day, 100, 'resetsAt', 'unix');
+    const one = readWindow({ utilization: i.utilization, resetsAt: i.resetsAt }, 100, 'resetsAt', 'unix');
+    if (f.pct === null && i.rateLimitType === 'five_hour') f = one;
+    if (w.pct === null && i.rateLimitType === 'seven_day') w = one;
+    if (f.pct === null && w.pct === null) return null;
+    return { fiveHourPct: f.pct, fiveHourResetsAt: f.resets, weekPct: w.pct, weekResetsAt: w.resets, source: 'stream', at: now };
+  }
+  // (2) get_usage control response (maybe wrapped: {response:{...}}): rate_limits.{five_hour,seven_day}.{utilization 0-100, resets_at ISO}
+  const body = isObj(msg.response) ? msg.response : msg;
+  if (isObj(body.rate_limits)) {
+    const f = readWindow(body.rate_limits.five_hour, 1, 'resets_at', 'iso'), w = readWindow(body.rate_limits.seven_day, 1, 'resets_at', 'iso');
+    if (f.pct === null && w.pct === null) return null;
+    return { fiveHourPct: f.pct, fiveHourResetsAt: f.resets, weekPct: w.pct, weekResetsAt: w.resets, source: 'get_usage', at: now };
+  }
+  // (3) Claude Code's cache: {fetchedAtMs, utilization:{five_hour:{utilization 0-100, resets_at}, seven_day:{...}}}
+  if (num(msg.fetchedAtMs) !== null && isObj(msg.utilization)) {
+    const f = readWindow(msg.utilization.five_hour, 1, 'resets_at', 'iso'), w = readWindow(msg.utilization.seven_day, 1, 'resets_at', 'iso');
+    if (f.pct === null && w.pct === null) return null;
+    return { fiveHourPct: f.pct, fiveHourResetsAt: f.resets, weekPct: w.pct, weekResetsAt: w.resets, source: 'claude-cache', at: num(msg.fetchedAtMs)! };
+  }
+  return null;
+}
+
+/** Newer limits on top of older ones: a message about one window (a five_hour-only rate_limit_event) keeps the other. */
+export function mergeLimits(newer: Limits, older: Limits | null): Limits {
+  if (!older) return newer;
+  const five = newer.fiveHourPct !== null ? { fiveHourPct: newer.fiveHourPct, fiveHourResetsAt: newer.fiveHourResetsAt } : { fiveHourPct: older.fiveHourPct, fiveHourResetsAt: older.fiveHourResetsAt };
+  const week = newer.weekPct !== null ? { weekPct: newer.weekPct, weekResetsAt: newer.weekResetsAt } : { weekPct: older.weekPct, weekResetsAt: older.weekResetsAt };
+  return { ...newer, ...five, ...week };
+}
+
+/** Claude Code's global config (only the cachedUsageUtilization key is read; nothing else is kept or logged). */
+export function claudeConfigFile(env: NodeJS.ProcessEnv = process.env): string {
+  return env.CLAUDE_CONFIG_DIR ? path.join(env.CLAUDE_CONFIG_DIR, '.claude.json') : path.join(os.homedir(), '.claude.json');
+}
+export const CACHE_TTL_MS = 3600e3;
+/** cost.mjs reads every transcript of the day: on a busy day it took over the old 120 s (#184); a run still going is
+ *  never doubled (UsageMonitor.running) */
+export const COST_TIMEOUT_MS = 300e3;
+/** a cost.mjs timeout is logged at most this often (it repeats every 3 min on a busy day) */
+const TIMEOUT_WARN_MS = 3600e3;
+export function readClaudeCache(file: string, now = Date.now()): Limits | null {
+  try {
+    const j = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
+    const l = parseRateLimits(j.cachedUsageUtilization, now);
+    return l && now - l.at >= 0 && now - l.at <= CACHE_TTL_MS ? l : null;
+  } catch { return null; }
+}
+
+/** Snapshot for the top bar from the last cost and the freshest limits. Windows past their reset become unknown. */
+export function composeUsage(cost: CostSnapshot | null, limits: Limits | null, now = Date.now(), cursor: CursorDay | null = null): Usage {
+  const u: Usage = { todayUsd: cost?.todayUsd ?? 0, fiveHourPct: null, fiveHourResetsAt: null, weekPct: null, weekResetsAt: null, limitsSource: null, limitsAt: null, at: now,
+    costKnown: !!cost?.costKnown, costNote: cost?.costNote ?? 'costi in calcolo…', cursorTodayUsd: cost?.cursorTodayUsd ?? null, cursorNote: cost?.cursorNote ?? '', cursorPlanNote: CURSOR_PLAN_NOTE };
+  if (cost?.costKnown && cost.at !== undefined) {
+    u.costAt = cost.at;
+    u.claudeChats = [...cost.chats].sort((a, b) => b.usd - a.usd).slice(0, MAX_CHATS).map(c => ({ sessionId: c.id, title: c.title, usd: c.usd }));
+  }
+  // the app's own Cursor figure (ledger + CSV) replaces cost.mjs's, which knows only the CSV
+  if (cursor && (cursor.turns > 0 || cursor.exact)) {
+    u.cursorTodayUsd = cursor.usd; u.cursorNote = cursor.note; u.cursorExact = cursor.exact; u.cursorMarginPct = Math.round(cursor.margin * 100); u.cursorChats = cursor.chats; u.cursorChatsToday = cursor.todayChats;
+    if (cursor.unpricedChats?.length || cursor.unpricedModels?.length) u.cursorUnpriced = { chats: cursor.unpricedChats ?? [], models: cursor.unpricedModels ?? [] };
+  } else if (cursor && u.cursorTodayUsd == null) u.cursorNote = cursor.note;
+  if (!limits) {
+    u.limitsNote = 'Limiti 5 ore / 7 giorni non disponibili: arrivano da una chat Claude aperta nell\'app (o, per un\'ora, da /usage in Claude Code)';
+    return u;
+  }
+  const live = (pct: number | null, resets: number | null) => (resets !== null && resets < now ? null : pct);
+  u.fiveHourPct = live(limits.fiveHourPct, limits.fiveHourResetsAt);
+  u.fiveHourResetsAt = u.fiveHourPct === null ? null : limits.fiveHourResetsAt;
+  u.weekPct = live(limits.weekPct, limits.weekResetsAt);
+  u.weekResetsAt = u.weekPct === null ? null : limits.weekResetsAt;
+  u.limitsSource = limits.source;
+  u.limitsAt = limits.at;
+  const age = Math.round((now - limits.at) / 6e4);
+  u.limitsNote = `${limits.source === 'claude-cache' ? 'Da Claude Code' : 'Da una chat Claude'}, ${age <= 1 ? 'adesso' : `${age} min fa`}`;
+  return u;
+}
+
+export interface UsageMonitorOptions {
+  root: string | null;
+  node: NodeRunner;
+  everyMs?: number;              // default 3 min
+  claudeConfig?: string | null;  // null = do not read Claude Code's cache (tests)
+  cursor?: () => CursorDay;      // today's Cursor ledger (brain/cursor-ledger.ts cursorToday); absent = cost.mjs's CSV only
+  cursorEveryMs?: number;        // default 30 s
+  costTimeoutMs?: number;        // cost.mjs's time limit, default COST_TIMEOUT_MS
+  now?: () => number;            // clock (tests)
+  costInputs?: InputRevision;    // only known shipped inputs; failed watches retain the normal poll
+  onUsage(u: Usage, spend: Spend): void;
+}
+
+export class UsageMonitor {
+  private cost: CostSnapshot | null = null;
+  private cursor: CursorDay | null = null;
+  private limits: Limits | null = null;
+  private timer: NodeJS.Timeout | null = null;
+  private cursorTimer: NodeJS.Timeout | null = null;
+  private running = false;
+  private warned = false;
+  private timeoutWarnAt = -Infinity;
+  private costRevision: string | null = null;
+  private stopped = false;
+
+  constructor(private o: UsageMonitorOptions) {}
+
+  start(): void {
+    void this.refresh(false);
+    this.timer = setInterval(() => void this.refresh(false), this.o.everyMs ?? 180e3);
+    // Re-read the local Cursor ledger so a turn appears within half a minute.
+    if (this.o.cursor) this.cursorTimer = setInterval(() => { if (this.readCursor()) this.o.onUsage(this.get(), this.spend()); }, this.o.cursorEveryMs ?? 30e3);
+  }
+
+  stop(): void {
+    this.stopped = true;
+    this.o.costInputs?.stop();
+    if (this.timer) clearInterval(this.timer);
+    if (this.cursorTimer) clearInterval(this.cursorTimer);
+    this.timer = null; this.cursorTimer = null;
+  }
+
+  /** true when today's Cursor figure changed */
+  private readCursor(): boolean {
+    if (!this.o.cursor) return false;
+    try {
+      const next = this.o.cursor();
+      if (next === this.cursor) return false;
+      const changed = JSON.stringify(next) !== JSON.stringify(this.cursor);
+      this.cursor = next;
+      return changed;
+    } catch (e) { log.warn('brain', 'cursor ledger unreadable', { data: { error: String(e) } }); return false; }
+  }
+
+  get(): Usage { return composeUsage(this.cost, this.freshest(), Date.now(), this.cursor); }
+
+  spend(): Spend {
+    const u = this.get();
+    return {
+      day: romeDay(),
+      claude: { dayUsd: this.cost?.costKnown ? this.cost.todayUsd : null, chats: this.cost?.chats ?? [], fiveHourPct: u.fiveHourPct, fiveHourResetsAt: u.fiveHourResetsAt, weekPct: u.weekPct, weekResetsAt: u.weekResetsAt ?? null },
+      cursor: { dayUsd: u.cursorTodayUsd ?? null, chats: [] },
+    };
+  }
+
+  ingest(msg: unknown): boolean {
+    const l = parseRateLimits(msg);
+    if (!l) return false;
+    this.limits = !this.limits || l.at >= this.limits.at ? mergeLimits(l, this.limits) : mergeLimits(this.limits, l);
+    this.o.onUsage(this.get(), this.spend());
+    return true;
+  }
+
+  private freshest(): Limits | null {
+    const cached = this.o.claudeConfig ? readClaudeCache(this.o.claudeConfig) : null;
+    if (!cached) return this.limits;
+    if (!this.limits) return cached;
+    return cached.at > this.limits.at ? mergeLimits(cached, this.limits) : mergeLimits(this.limits, cached);
+  }
+
+  async refresh(force = true): Promise<void> {
+    if (this.running || this.stopped) return;
+    this.running = true;
+    try {
+      const script = this.o.root ? brainScript(this.o.root, 'ops/tools/cost.mjs') : null;
+      if (!script || !fs.existsSync(script)) {
+        this.costRevision = null;
+        if (!this.warned) log.warn('brain', 'no cost.mjs in this brain: usage without $', { data: { script } });
+        this.warned = true;
+        this.cost = { todayUsd: 0, chats: [], cursorTodayUsd: null, cursorNote: 'Cursor: costo sconosciuto', costKnown: false, costNote: 'costi non disponibili: il brain non ha ops/tools/cost.mjs' };
+      } else {
+        const revision = await this.o.costInputs?.revision() ?? null;
+        const token = revision === null ? null : `${romeDay(this.o.now?.() ?? Date.now())}:${script}:${revision}`;
+        if (this.stopped) return;
+        if (!force && token !== null && token === this.costRevision) {
+          this.readCursor(); this.o.onUsage(this.get(), this.spend());
+          return;
+        }
+        const at = Date.now(); // before the run: what a chat spends while cost.mjs reads may count twice until the next run, never lost
+        const limit = this.o.costTimeoutMs ?? COST_TIMEOUT_MS;
+        const r = await runNode(this.o.node, script, ['--days', '1', '--json', '--summary'], this.o.root!, limit);
+        if (this.stopped) return;
+        let j: unknown = null;
+        try { j = JSON.parse(r.stdout); } catch { /* below */ }
+        if (j) {
+          this.cost = { ...parseCost(j, romeDay()), at };
+          this.costRevision = !r.error && this.cost.costKnown && (j as { complete?: boolean }).complete === true ? token : null;
+        }
+        else {
+          this.costRevision = null;
+          if (r.killed) {
+            const now = this.o.now?.() ?? Date.now();
+            if (now - this.timeoutWarnAt >= TIMEOUT_WARN_MS) {
+              this.timeoutWarnAt = now;
+              log.warn('brain', `cost.mjs timed out after ${Math.round(limit / 1000)} s`, { data: { signal: r.signal ?? null }, cause: 'the day has more chat transcripts than cost.mjs reads in time', hint: 'costs stay at the last reading; the next run retries in 3 minutes (logged once an hour)' });
+            }
+          } else log.warn('brain', 'cost.mjs gave no JSON', { data: { code: r.code, error: r.error, stderr: r.stderr.slice(0, 300) }, cause: r.error ?? 'empty or invalid output', hint: 'run the brain\'s ops/tools/cost.mjs --days 1 --json by hand to see its error' });
+          if (!this.cost) this.cost = { todayUsd: 0, chats: [], cursorTodayUsd: null, cursorNote: '', costKnown: false, costNote: r.killed ? 'cost.mjs è troppo lento oggi: riprovo tra 3 minuti' : 'cost.mjs non ha risposto: riprovo tra 3 minuti' };
+        }
+      }
+      this.readCursor();
+      this.o.onUsage(this.get(), this.spend());
+    } finally { this.running = false; }
+  }
+}

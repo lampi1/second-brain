@@ -1,0 +1,92 @@
+// IPC handlers, Voice mode (ADR 0152), call recordings (ADR 0154), Impara lessons (ADR 0185) and the «Giornale» (ADR 0265, 0280). Registered by
+// src/main/index.ts with every other group (Handlers in ipc.ts keeps the set complete); each channel's shape is in
+// src/shared/contract/*.ts.
+import { armLoopback } from '../window';
+import { shell } from 'electron';
+import { tutorModeOf } from '@shared/lesson';
+import { VOICE_NAMES, type VoiceName } from '@shared/voice';
+import type { NewsEditionEdit, NewsEditionFields, NewsSourceEdit } from '@shared/news';
+import type { HandlerContext, HandlersOf } from './context';
+
+/** A «Fonti» edit from the renderer, checked field by field. */
+function newsEdit(a: unknown): NewsSourceEdit {
+  const o = a && typeof a === 'object' ? a as Record<string, unknown> : {};
+  const id = String(o.id ?? '').slice(0, 80);
+  if (o.op === 'add') return { op: 'add', edition: String(o.edition ?? '').slice(0, 80), url: String(o.url ?? '').slice(0, 2000), ...(typeof o.name === 'string' ? { name: o.name.slice(0, 60) } : {}), ...(typeof o.section === 'string' ? { section: o.section.slice(0, 80) } : {}) };
+  if (o.op === 'remove') return { op: 'remove', id };
+  if (o.op === 'toggle') return { op: 'toggle', id, on: o.on === true };
+  if (o.op === 'reset') return { op: 'reset', edition: String(o.edition ?? '').slice(0, 80) };
+  throw new Error('modifica delle fonti non valida');
+}
+
+/** An edition edit from the renderer, checked field by field (the service cleans names, words and sections). */
+function newsEditionEdit(a: unknown): NewsEditionEdit {
+  const o = a && typeof a === 'object' ? a as Record<string, unknown> : {};
+  const id = String(o.id ?? '').slice(0, 80);
+  const words = (v: unknown) => (Array.isArray(v) ? v.filter((w): w is string => typeof w === 'string').slice(0, 80) : undefined);
+  const fields: NewsEditionFields = {
+    ...(typeof o.name === 'string' ? { name: o.name } : {}), ...(typeof o.interest === 'string' ? { interest: o.interest } : {}), ...(typeof o.cap === 'number' ? { cap: o.cap } : {}),
+    ...(words(o.core) ? { core: words(o.core)! } : {}), ...(words(o.near) ? { near: words(o.near)! } : {}),
+    ...(Array.isArray(o.sections) ? { sections: o.sections.slice(0, 12).map(x => { const r = x && typeof x === 'object' ? x as Record<string, unknown> : {}; return { ...(typeof r.id === 'string' ? { id: r.id } : {}), name: String(r.name ?? ''), ...(words(r.words) ? { words: words(r.words)! } : {}) }; }) } : {}),
+  };
+  if (o.op === 'create') return { op: 'create', ...fields, name: String(o.name ?? ''), ...(typeof o.template === 'string' ? { template: o.template.slice(0, 40) } : {}) };
+  if (o.op === 'update') return { op: 'update', id, ...fields };
+  if (o.op === 'delete') return { op: 'delete', id };
+  if (o.op === 'move') return { op: 'move', id, to: Number(o.to) || 0 };
+  throw new Error('modifica dell\'edizione non valida');
+}
+
+export function mediaHandlers({ s, voice, recordings, learn, news }: HandlerContext): HandlersOf<'voice' | 'rec' | 'impara' | 'news'> {
+  return {
+    'voice:state': () => voice.state(),
+    'voice:prepare': a => voice.prepare(a && VOICE_NAMES.includes(a.voice as VoiceName) ? a.voice : undefined),
+    'voice:listen': a => voice.listen(a?.on === true, a?.session, a?.talk === true),
+    'voice:audio': a => voice.audio(a?.samples, a?.session),
+    'voice:commit': a => voice.commit(a?.session),
+    'voice:cancelSpeech': () => voice.cancelSpeech(),
+    'voice:speak': a => voice.speak(String(a?.text ?? ''), a?.voice && ['paola', 'miro', 'dii'].includes(a.voice) ? a.voice : undefined),
+    'rec:state': () => recordings.state(),
+    'rec:arm': () => armLoopback(),
+    'rec:start': a => recordings.start({ source: a?.source === 'file' ? 'file' : 'call', channels: a?.channels === 2 ? 2 : 1, title: typeof a?.title === 'string' ? a.title : undefined,
+        from: typeof a?.from === 'string' ? a.from : undefined, fromPath: typeof a?.fromPath === 'string' ? a.fromPath : undefined, systemAudio: a?.systemAudio === true }),
+    'rec:chunk': a => recordings.chunk(String(a?.id ?? ''), a?.pcm),
+    'rec:stop': a => recordings.stop(String(a?.id ?? '')),
+    'rec:transcribe': a => recordings.queue(String(a?.id ?? '')),
+    'rec:rename': a => recordings.rename(String(a?.id ?? ''), String(a?.title ?? '')),
+    'rec:remove': a => recordings.remove(String(a?.id ?? '')),
+    'rec:transcript': a => recordings.transcript(String(a?.id ?? '')),
+    'rec:find': () => recordings.findOnPc(),
+    'rec:readFound': a => recordings.readFound(String(a?.path ?? '')),
+    'rec:open': async a => {
+      const id = String(a?.id ?? '');
+      if (!s.recordings.get(id)) throw new Error('registrazione sconosciuta');
+      if (a?.what === 'folder') { shell.showItemInFolder(s.recordings.wav(id)); return; }
+      const err = await shell.openPath(a?.what === 'text' ? s.recordings.textFile(id) : s.recordings.wav(id));
+      if (err) throw new Error(err);
+    },
+    'impara:state': () => learn().state(),
+    'impara:get': a => learn().get(String(a?.id ?? '')),
+    'impara:start': a => learn().start(a),
+    'impara:move': a => learn().move(String(a?.id ?? ''), String(a?.at ?? '')),
+    'impara:ask': a => learn().ask(String(a?.id ?? ''), a?.kind, String(a?.at ?? ''), typeof a?.text === 'string' ? a.text : undefined),
+    'impara:answer': a => learn().answer(String(a?.id ?? ''), String(a?.checkId ?? ''), Array.isArray(a?.choice) ? a.choice.map(Number) : Number(a?.choice), a?.confidence),
+    'impara:explain': a => learn().explain(String(a?.id ?? ''), String(a?.text ?? '')),
+    'impara:retry': a => learn().retry(String(a?.id ?? '')),
+    'impara:clarify': a => learn().clarify(String(a?.id ?? ''), a?.answers),
+    'impara:topics': a => learn().topics(String(a?.id ?? ''), { drop: a?.drop, go: a?.go === true }),
+    'impara:remove': a => learn().remove(String(a?.id ?? '')),
+    'impara:queue': a => learn().queue(a?.mode, typeof a?.subject === 'string' ? a.subject : undefined, typeof a?.lesson === 'string' ? a.lesson : undefined),
+    'impara:grade': a => learn().gradeCard(String(a?.card ?? ''), Number(a?.grade)),
+    'impara:subject': a => learn().setSubject(String(a?.id ?? ''), a?.subject),
+    'impara:tutor': a => learn().tutor(String(a?.id ?? ''), String(a?.at ?? ''), String(a?.q ?? ''), tutorModeOf(a?.mode)),
+    'impara:tutorWarm': a => learn().tutorWarm(String(a?.id ?? '')),
+    'impara:studio': a => learn().studio(String(a?.id ?? ''), a?.kind),
+    'news:state': () => news().state(),
+    'news:refresh': a => news().refresh(a && typeof a.edition === 'string' ? a.edition : undefined),
+    'news:edition': a => news().editEdition(newsEditionEdit(a)),
+    'news:test': a => news().testSource(String(a?.url ?? '').slice(0, 2000)),
+    'news:mark': a => news().mark({ id: String(a?.id ?? ''), ...(typeof a?.read === 'boolean' ? { read: a.read } : {}), ...(typeof a?.saved === 'boolean' ? { saved: a.saved } : {}), ...(typeof a?.lesson === 'string' ? { lesson: a.lesson } : {}), ...(typeof a?.less === 'boolean' ? { less: a.less } : {}) }),
+    'news:sources': a => news().editSources(newsEdit(a)),
+    'news:schedule': a => news().setSchedule({ ...(typeof a?.on === 'boolean' ? { on: a.on } : {}), ...(typeof a?.hour === 'number' ? { hour: a.hour } : {}) }),
+  };
+}

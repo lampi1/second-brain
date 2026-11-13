@@ -1,0 +1,36 @@
+{
+  "items": [
+    {
+      "kind": "thinking",
+      "text": "Penso a cosa rispondere."
+    },
+    {
+      "kind": "assistant",
+      "text": "Ciao da Codex",
+      "streaming": false
+    },
+    {
+      "kind": "result",
+      "costUsd": 0,
+      "turns": 1,
+      "isError": false
+    },
+    {
+      "kind": "system",
+      "text": "Piano:\n✓ Leggi\n✓ Scrivi",
+      "level": "info"
+    },
+    {
+      "kind": "assistant",
+      "text": "Piano fatto",
+      "streaming": false
+    },
+    {
+      "kind": "result",
+      "costUsd": 0,
+      "turns": 1,
+      "isError": false
+    }
+  ],
+  "pendings": []
+}

@@ -1,0 +1,33 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Bash|PowerShell", "hooks": [
+        { "type": "command", "command": "node \"{{BRAIN}}/.claude/hooks/vendor-guard.mjs\"", "timeout": 10 } ] },
+      { "matcher": "Edit|Write|MultiEdit", "hooks": [
+        { "type": "command", "command": "node \"{{BRAIN}}/.claude/hooks/brain-limits.mjs\"", "timeout": 10 } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "AskUserQuestion", "hooks": [
+        { "type": "command", "command": "node \"{{BRAIN}}/.claude/hooks/panel-dismissed.mjs\"", "timeout": 10 } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [
+        { "type": "command", "command": "node \"{{BRAIN}}/.claude/hooks/correction-catch.mjs\"", "timeout": 10 },
+        { "type": "command", "command": "node \"{{BRAIN}}/.claude/hooks/chat-feed.mjs\"", "timeout": 10 } ] }
+    ],
+    "Stop": [
+      { "hooks": [
+        { "type": "command", "command": "node \"{{BRAIN}}/.claude/hooks/chat-feed.mjs\"", "timeout": 10 },
+        { "type": "command", "command": "node \"{{BRAIN}}/ops/tools/inbox.mjs\" hook claude", "timeout": 10 } ] }
+    ],
+    "Notification": [
+      { "matcher": "permission_prompt", "hooks": [
+        { "type": "command", "command": "node \"{{BRAIN}}/.claude/hooks/chat-feed.mjs\"", "timeout": 10 } ] }
+    ],
+    "SessionStart": [
+      { "matcher": "compact", "hooks": [
+        { "type": "command", "command": "node \"{{BRAIN}}/.claude/hooks/compact-now.mjs\"", "timeout": 10 } ] }
+    ]
+  },
+  "outputStyle": "{{OWNER}}"
+}

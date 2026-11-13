@@ -1,0 +1,127 @@
+// Dashboard truthfulness and graph behaviour: unknowns, real message activity and bounded navigation.
+import { describe, expect, it } from 'vitest';
+import type { ChatSummary } from '../../src/shared/contract';
+import { cursorCoverage } from '../../src/renderer/brain/lib/cost-facts';
+import { brainChecks, chatName, contextLevel, contextRatio, fitLayout, layout, neighbourhood, observedErrors, placeLabels } from '../../src/renderer/dashboard/data';
+import { columnSize } from '../../src/renderer/lib/orchestrator-dock';
+
+it.each([900, 1280, 1920])('reserves a visible coordinator and usable Dashboard at %i pixels', W => {
+  const viewport = { W, H: 900, top: 52, left: 196 };
+  for (const saved of [null, { w: 900, h: 848 }]) {
+    const column = columnSize(saved, viewport, false);
+    expect(column.w).toBeGreaterThanOrEqual(280);
+    expect(W - viewport.left - column.w).toBeGreaterThanOrEqual(360);
+    expect(column.h).toBe(848);
+  }
+});
+
+it('groups distinct brain diagnostics without inventing checks for a new brain', () => {
+  expect(brainChecks(null)).toEqual([]);
+  expect(brainChecks({ warnings: [], problems: [] })).toEqual([]);
+  expect(brainChecks({ warnings: ['flow reference missing', ''], problems: ['flow reference missing', 'missing file'] })).toEqual(['flow reference missing', 'missing file']);
+});
+
+const chat = (id: string, patch: Partial<ChatSummary> = {}): ChatSummary => ({
+  id, title: id, harness: 'codex', origin: 'app', cwd: '', sessionId: null, model: null, effort: null,
+  permissionMode: null, state: 'idle', costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: 0,
+  browserTabIds: [], ...patch,
+});
+describe('dashboard sources', () => {
+  it('distinguishes unknown context from a measured zero and keeps overflow', () => {
+    expect(contextRatio(chat('a'))).toBeNull();
+    expect(contextRatio(chat('a', { contextTokens: 0, contextMaxTokens: 100 }))).toBe(0);
+    expect(contextRatio(chat('a', { contextTokens: 120, contextMaxTokens: 100 }))).toBe(1.2);
+  });
+  it('reports an unmeasured context as unknown, never below threshold', () => {
+    expect(contextLevel(chat('a'), 100)).toBe('unknown');
+    expect(contextLevel(chat('a', { contextTokens: 0 }), 100)).toBe('below');
+    expect(contextLevel(chat('a', { contextTokens: 500 }), 100)).toBe('above');
+  });
+  it('derives Cursor coverage from the Rome day of the export download, not the last usage row', () => {
+    const stale = { downloaded: '2026-10-16T09:00:00Z', lastRow: '2026-10-17' }, fresh = { downloaded: '2026-10-17T08:00:00Z', lastRow: '2026-10-09' };
+    expect(cursorCoverage(stale, '2026-10-17')).toBe(false);
+    expect(cursorCoverage(fresh, '2026-10-17')).toBe(true);
+    expect(cursorCoverage({ downloaded: '2026-10-16T22:30:00Z' }, '2026-10-17')).toBe(true);
+    expect(cursorCoverage({}, '2026-10-17')).toBeNull();
+    expect(cursorCoverage({ downloaded: 'garbage' }, '2026-10-17')).toBeNull();
+  });
+  it('names the Orchestrator chat Orchestrator, whatever its title', () => {
+    expect(chatName(chat('o', { isOrchestrator: true, title: 'Orchestrator' }))).toBe('Orchestrator');
+    expect(chatName(chat('a', { title: 'Worker' }))).toBe('Worker');
+  });
+  it('labels retained errors without treating a user interruption as failure', () => {
+    const rows = observedErrors([chat('a')], { a: [
+      { kind: 'system', id: '1', at: 1, level: 'error', text: 'Connection failed' },
+      { kind: 'result', id: '2', at: 2, isError: true, interrupted: true, costUsd: 0, durationMs: 0, turns: 0 },
+    ] }, []);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.detail).toBe('Connection failed');
+  });
+});
+describe('dashboard graph', () => {
+  const nodes = Array.from({ length: 130 }, (_, i) => ({ id: String(i), label: `Note ${i}`, kind: 'file', layer: 'brain' }));
+  const edges = [{ from: '120', to: '3', kind: 'link', label: '' }];
+  it('search reaches nodes outside the initial cap and includes their neighbours', () => {
+    expect(neighbourhood(nodes, edges, '', null)).toHaveLength(100);
+    expect(neighbourhood(nodes, edges, 'Note 120', null).map(n => n.id)).toEqual(['120', '3']);
+    expect(neighbourhood(nodes, edges, '', '3').map(n => n.id)).toEqual(['3', '120']);
+  });
+  it('places neighbouring labels without overlapping each other or the dots', () => {
+    const items = [{ id: 'a', x: 400, y: 260, r: 11, text: 'Posta tra chat' }, { id: 'b', x: 410, y: 285, r: 11, text: 'Chat di lavoro' }, { id: 'c', x: 395, y: 240, r: 11, text: 'Orchestrator' }];
+    const spots = placeLabels(items, items.map(i => ({ x: i.x, y: i.y, r: 6 })), 14, { x: 400, y: 260 });
+    const boxes = [...spots.values()].map(s => { const x0 = s.anchor === 'start' ? s.x : s.anchor === 'end' ? s.x - s.w : s.x - s.w / 2; return { x0, x1: x0 + s.w, y0: s.y - s.h / 2, y1: s.y + s.h / 2 }; });
+    expect(boxes).toHaveLength(3);
+    for (const [i, a] of boxes.entries()) {
+      for (const b of boxes.slice(i + 1)) expect(a.x1 <= b.x0 || b.x1 <= a.x0 || a.y1 <= b.y0 || b.y1 <= a.y0).toBe(true);
+      for (const dot of items) expect(a.x1 <= dot.x - 6 || dot.x + 6 <= a.x0 || a.y1 <= dot.y - 6 || dot.y + 6 <= a.y0).toBe(true);
+    }
+  });
+  it('returns a deterministic layout pinned on its centre, including disconnected notes', () => {
+    const result = layout(nodes.slice(0, 30), edges, '0');
+    expect(result).toEqual(layout(nodes.slice(0, 30), edges, '0'));
+    expect(result.get('0')).toEqual({ x: 0, y: 0 });
+    expect(result.size).toBe(30);
+    for (const point of result.values()) { expect(Number.isFinite(point.x)).toBe(true); expect(Number.isFinite(point.y)).toBe(true); }
+  });
+  // issue #77: the map used to clump in a fixed 800x520 box, off centre, whatever the panel looked like
+  const box = (points: Map<string, { x: number; y: number }>) => {
+    const p = [...points.values()];
+    return { x0: Math.min(...p.map(q => q.x)), x1: Math.max(...p.map(q => q.x)), y0: Math.min(...p.map(q => q.y)), y1: Math.max(...p.map(q => q.y)) };
+  };
+  const nearest = (points: Map<string, { x: number; y: number }>) => { const p = [...points.values()]; return Math.min(...p.map((a, i) => Math.min(...p.filter((_, j) => j !== i).map(b => Math.hypot(a.x - b.x, a.y - b.y))))); };
+  it('fits a large map to the whole panel, centred, at any aspect, with no two dots touching', () => {
+    const big = nodes.slice(0, 120), links = big.slice(1).map((n, i) => ({ from: String(i % 9 === 0 ? 0 : i - (i % 9)), to: n.id }));
+    const raw = layout(big, links, '0');
+    for (const [w, h] of [[900, 470], [430, 600], [1400, 400]] as const) {
+      const fitted = fitLayout(raw, w, h, { x: 40, y: 30 }, 22), b = box(fitted);
+      expect((b.x1 - b.x0) / w, `${w}x${h}`).toBeGreaterThan(.8);
+      expect((b.y1 - b.y0) / h, `${w}x${h}`).toBeGreaterThan(.75);
+      expect(Math.abs((b.x0 + b.x1) / 2 - w / 2)).toBeLessThan(w * .03);
+      expect(Math.abs((b.y0 + b.y1) / 2 - h / 2)).toBeLessThan(h * .03);
+      expect(b.x0).toBeGreaterThanOrEqual(20); expect(b.x1).toBeLessThanOrEqual(w - 20);
+      expect(nearest(fitted)).toBeGreaterThan(21);
+    }
+  });
+  it('spreads disconnected notes instead of piling them on the walls', () => {
+    const fitted = fitLayout(layout(nodes.slice(0, 100), [], undefined), 900, 470, { x: 40, y: 30 });
+    expect(nearest(fitted)).toBeGreaterThan(20);
+  });
+  it('centres a single node or a line instead of dividing by zero', () => {
+    expect([...fitLayout(new Map([['a', { x: 3, y: 4 }]]), 800, 400, { x: 40, y: 30 }).values()]).toEqual([{ x: 400, y: 200 }]);
+    const line = fitLayout(new Map([['a', { x: 0, y: 0 }], ['b', { x: 2, y: 0 }]]), 800, 400, { x: 40, y: 30 });
+    expect(line.get('a')).toEqual({ x: 40, y: 200 });
+    expect(line.get('b')).toEqual({ x: 760, y: 200 });
+    expect(fitLayout(new Map(), 800, 400, { x: 0, y: 0 }).size).toBe(0);
+  });
+  it('hides a minor label that has no free spot, keeps a required one, and keeps labels inside the bounds', () => {
+    const items = [{ id: 'a', x: 50, y: 50, r: 6, text: 'Selezionato' }, { id: 'b', x: 50, y: 50, r: 6, text: 'Minore' }];
+    const crowd = Array.from({ length: 400 }, (_, i) => ({ x: (i % 20) * 6, y: Math.floor(i / 20) * 6, r: 4 }));
+    const bounds = { x0: 0, y0: 0, x1: 120, y1: 120 };
+    const spots = placeLabels(items, crowd, 14, undefined, { bounds, required: new Set(['a']) });
+    expect([...spots.keys()]).toEqual(['a']);
+    const edge = placeLabels([{ id: 'e', x: 795, y: 200, r: 6, text: 'Un nome lungo sul bordo' }], [], 14, { x: 400, y: 200 }, { bounds: { x0: 0, y0: 0, x1: 800, y1: 400 }, required: new Set() });
+    const s = edge.get('e')!;
+    const left = s.anchor === 'start' ? s.x : s.anchor === 'end' ? s.x - s.w : s.x - s.w / 2;
+    expect(left + s.w).toBeLessThanOrEqual(800);
+  });
+});

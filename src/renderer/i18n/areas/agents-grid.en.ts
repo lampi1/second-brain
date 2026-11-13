@@ -1,0 +1,42 @@
+// Role cards of the Agenti catalogue: English labels; parity checked against the Italian source (agents-grid.it.ts).
+import type { agentsGridIt } from './agents-grid.it';
+export const agentsGridEn: typeof agentsGridIt = {
+  'agentsGrid.runs': 'Ended', 'agentsGrid.open': 'Open', 'agentsGrid.cost': 'Cost',
+  'agentsGrid.working': 'Working','agentsGrid.openProfile': 'Edit the role', 'agentsGrid.count': ({ n }) => n === 1 ? '1 role' : `${n} roles`,
+  'agentsGrid.workingCount': ({ n }) => `${n} working`,
+  'agentsGrid.trialCount': ({ n }) => `${n} on trial`,
+  'agentsGrid.level': 'Level', 'agentsGrid.levelShort': ({ n }) => `Lv ${n}`,
+  'agentsGrid.levelTitle': ({ n }) => n >= 100 ? 'Myth' : n >= 75 ? 'Legend' : n >= 50 ? 'Grandmaster' : n >= 35 ? 'Master' : n >= 20 ? 'Veteran' : n >= 10 ? 'Expert' : n >= 5 ? 'Practitioner' : n >= 2 ? 'Apprentice' : 'Recruit',
+  'agentsGrid.levelWins': ({ n }) => n === 1 ? '1 verified success' : `${n} verified successes`,
+  'agentsGrid.levelXp': ({ n }) => `${n} XP`,
+  'agentsGrid.levelNext': ({ left, next }) => `${left} XP to Lv ${next}`,
+  'agentsGrid.levelTop': 'Top level',
+  'agentsGrid.levelHelpTitle': 'How the level is computed',
+  'agentsGrid.levelHelp1': 'The level grows only with verified successful runs: your verdict, an independent review, the app\'s receipts (the project\'s tests passed after the last change). Never with the agent\'s verdict on itself, never with silence.',
+  'agentsGrid.levelHelp2': 'A successful run is worth 1 to 5 XP by its size: turns, working time, files changed, delegated chats. Lv 2 at 6 XP (about 3 runs), Lv 10 at 202, Lv 50 at 3,037, Lv 100 (the top) at 9,358. At a typical pace (4 verified runs a day): a week to Lv 5, a month to Lv 10, about 4 years to Lv 100.',
+  'agentsGrid.levelHelp3': 'Titles: Recruit (Lv 1), Apprentice (2–4), Practitioner (5–9), Expert (10–19), Veteran (20–34), Master (35–49), Grandmaster (50–74), Legend (75–99), Myth (100).',
+  'agentsGrid.levelHelpOrchestrator': 'Orchestrator: earns with the runs it started that are verified successes, plus 1 XP for a plan approved with no change. Half the XP when the task went to another role or was redone.',
+  'agentsGrid.levelHelpFlash': 'Flash: 0.25 XP for each answer that holds, that is when within 5 minutes you do not correct it, ask it again or hand it to the Orchestrator.',
+  'agentsGrid.levelHelpEx': ({ xp, wins, runs, level, next, left }) =>
+    `${xp} XP from ${wins} verified ${wins === 1 ? 'success' : 'successes'} out of ${runs} ${runs === 1 ? 'run' : 'runs'} ended: Lv ${level}` + (next === null ? ', the top.' : `; ${left} XP more for Lv ${next}.`),
+  'agentsGrid.perf': 'Performance',
+  'agentsGrid.perfBand': ({ v }) => v >= 0.85 ? 'Excellent' : v >= 0.7 ? 'Good' : v >= 0.5 ? 'Fair' : 'Needs work',
+  'agentsGrid.perfWarmup': 'Warming up',
+  'agentsGrid.perfWarmupCount': ({ n }) => n === 1 ? '1 verdict, too few' : `${n} verdicts, too few`,
+  'agentsGrid.perfJudged': ({ n }) => n === 1 ? '1 verdict' : `${n} verdicts`,
+  'agentsGrid.perfSpread': ({ v }) => `±${v}`,
+  'agentsGrid.perfSpreadTip': ({ v }) => `Uncertainty: ±${v} points`,
+  'agentsGrid.perfHelpTitle': 'How the performance is computed',
+  'agentsGrid.perfHelp1': 'An estimate from the verdicts on its runs (success 100%, partial 50%, failure 0%). It starts at 50% and moves with the verdicts: a few move it a little. The ± says how uncertain it still is.',
+  'agentsGrid.perfHelp2': 'Each verdict weighs by who gave it: you and an independent review × 1, a Sentinel\'s review graded by what happened × 0.8, the app\'s receipts × 0.7, the Orchestrator × 0.6, a signal on the Orchestrator\'s choices (a task handed to another role, a plan approved) and a verified parent × 0.5, the outcome of a Flash answer × 0.3; the agent on itself does not count. A 30-day-old verdict weighs half.',
+  'agentsGrid.perfHelp3': ({ min, spread }) => `It shows with at least ${min} verdicts and an uncertainty of at most ±${spread}; before that it is "warming up". Bands: 85% and up excellent, 70–84% good, 50–69% fair, below 50% needs work.`,
+  'agentsGrid.perfSources': ({ human, review, receipts, graded, orchestrator, decision, chain, quick, self }) =>
+    `Verdicts so far: ${human} yours, ${review} from independent reviews, ${receipts} from test receipts, ${graded} reviews graded by what happened, ${chain} from a verified parent, ${orchestrator} from the Orchestrator`
+    + (decision ? `, ${decision} on its choices` : '') + (quick ? `, ${quick} answer outcomes` : '') + (self ? `; ${self} only from the agent itself, which do not count.` : '.'),
+  'agentsGrid.success': 'Success',
+  'agentsGrid.successFew': ({ n, min }: { n: number; min: number }) => `Too few verified outcomes: ${n} of ${min}`,
+  'agentsGrid.successNote': ({ n, min }: { n: number; min: number }) => `verified: ${n} of ${min} needed`,
+  'agentsGrid.successHelp': ({ min }: { min: number }) => `The share of ended jobs with a verified outcome, yours or an independent review's, that succeeded; a partial counts half. Below ${min} verified outcomes no percentage: only how many of ${min}. Different from Performance, which also weighs the Orchestrator's and reviewers' votes.`,
+  'agentsGrid.costHelp': 'The median cost of an ended run: half the runs cost less, half more. Only runs whose engine reports a cost count.',
+  'agentsGrid.noRuns': 'No verified success yet: the first one moves it towards Lv 2.',
+};

@@ -1,0 +1,912 @@
+// Role runs (AGENTS-DESIGN §1.2, §5): one record per chat started from a role, kept in userData/app.db (one row per run,
+// runs-db.ts, ADR 0199; agent-runs.json until then, moved in once at start and still the fallback when the database
+// cannot be used; runs a fallback session wrote there are merged in at the next start) after chats.json forgets the chat (60 closed chats). The pure lifecycle steps live here; ChatManager calls them on start,
+// end (completed / closed / stale), Brother's reopen, pending requests and settled turns. A run's receipts (what it did,
+// agents/receipts.ts, ADR 0130) are bounded there and read back here; ones out of shape are dropped, never the run.
+// The same file keeps Flash's answer outcomes (`flash`, agents/flash-outcomes.ts, ADR 0131: Flash records no run) and a
+// Strategist run's plan record (`plan`, a decision signal for the Orchestrator); both read leniently. The nightly batch review's run keeps its reviewed runs (`reviewBatch`, ADR 0203).
+import path from 'node:path';
+import fs from 'node:fs';
+import crypto from 'node:crypto';
+import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunPlan, AgentRunReport, AgentRunTags, AgentRunTokens, ReviewBatchEntry } from '../../shared/agents';
+import { ONE_SHOT_PURPOSES } from '../../shared/agents';
+import { errText, log } from '../log';
+import { emptyFlashLog, flashAnswered, flashAsked, flashBriefed, flashHanded, readFlashLog, type FlashLog } from './flash-outcomes';
+import { MAX_CORRECTIONS, checkResult } from '../../shared/delegation';
+import { FLASH_BRIEF_TAG, MODEL_TIERS, type ModelTier } from '../../shared/roles';
+import { SUMMARY_MAX } from './run-report';
+import { rollUp, SAMPLE_MAX, type RunTally, type TagTally } from './run-metrics';
+import { cleanOrphanTmps, readLocal, renameWithRetry, writeLocalText, writeLocalTextAsync } from './local-store';
+import { APP_DB, openAppDb, type OpenedDb } from '../app-db';
+import { RunsDb, type RunRow } from './runs-db';
+import { readReceipts } from './receipts';
+import { XP_MAX } from './xp';
+import { slowStep } from '../perf';
+import { jsonArray, stringifyEach } from '../chunked-json';
+
+export const RUNS_MAX = 5000;
+/** Below the local store's 8 MB cap, with headroom for the run being added. */
+export const RUNS_BYTES = 7_000_000;
+/** The runs' budget in app.db, which writes only the rows that changed: more than twice the days of work stay whole
+ *  (ADR 0283). Bounded by what is held in memory and copied to the read worker, not by the file. */
+export const RUNS_DB_BYTES = 16_000_000;
+/** A run that ended this long ago is cold: a deferred save into app.db takes its JSON as last written instead of
+ *  building it again (ADR 0283). */
+export const COLD_AFTER_MS = 10 * 60_000;
+/** After a deferred save that skipped the cold runs, one that looks at all of them follows within this long. */
+export const COLD_PASS_MS = 15_000;
+/** A full pass a newer save superseded is started again after this long at the earliest. */
+export const FULL_RETRY_MS = 2_000;
+export const GOAL_MAX = 2000;
+/** a run with no turn and nothing waiting on Brother for this long ends as stale (first guess, AGENTS-DESIGN §7) */
+export const STALE_MS = 72 * 3600_000;
+/** the rollups' share of RUNS_BYTES: past it, the largest samples are halved (counts and sums stay exact) */
+export const ROLLUP_BYTES = 1_000_000;
+
+const ENDS: readonly AgentRunEnd[] = ['completed', 'closed', 'stale'];
+const VERDICTS: readonly AgentRunOutcome['verdict'][] = ['success', 'partial', 'fail', 'unknown'];
+const STARTED_BY: readonly AgentRun['startedBy'][] = ['user', 'orchestrator', 'parent', 'app'];
+const BASES: readonly AgentRunOutcome['basis'][] = ['human', 'reviewed-evidence', 'receipts', 'orchestrator-opinion', 'self-report', 'unknown'];
+export const RUN_ID = /^r_[a-f0-9]{12}$/;
+const AGENT_ID = /^[a-z][a-z0-9_-]{0,79}$/;
+const count = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) >= 0;
+const time = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0;
+const str = (v: unknown, max: number): v is string => typeof v === 'string' && !!v && v.length <= max;
+
+export const newRunId = (): string => `r_${crypto.randomBytes(6).toString('hex')}`;
+
+/** The one answer to a runId that names no run (agent_feedback, agent_run_report): what the caller passed, and the id to
+ *  use. A chat id is never taken as a run id (one shape): its run, when it has one, is named so the caller retries with
+ *  it. chat = the chat with that id (its run mirror) or undefined; runs = the store, which outlives chats.json. */
+export function unknownRunError(id: string, runs: readonly AgentRun[], chat?: (id: string) => { run?: Pick<AgentRun, 'runId'> } | undefined): Error {
+  const c = chat?.(id);
+  const own = runs.filter(r => r.chatId === id).sort((a, b) => b.startedAt - a.startedAt)[0];
+  const runId = c?.run?.runId ?? own?.runId;
+  if (runId) return new Error(`${id} is a chat id, not a run id: pass runId "${runId}" (the agent run of that chat, listed by app_chats as run.runId).`);
+  if (c) return new Error(`chat ${id} is not an agent run (plain chat or Orchestrator): feedback only applies to runs of catalog agents.`);
+  return new Error(`no agent run with id ${id} (it may have been pruned): use the runId listed by app_chats.`);
+}
+
+// Run tags (AGENTS-DESIGN §4.8)
+export const SKILL_ID = /^[a-z0-9][a-z0-9_-]{0,79}$/;
+export const SKILLS_MAX = 16;
+export const APP_MAX = 40;
+export const REPO_MAX = 120;
+const CONTROL = /[\u0000-\u001f\u007f]/;
+/** An app or repo name: a non-empty single line, bounded. */
+export const tagName = (v: unknown, max: number): v is string => typeof v === 'string' && v.trim() === v && !!v && v.length <= max && !CONTROL.test(v);
+/** Stored or given skills: valid ids, unique, at most SKILLS_MAX. */
+export const skillList = (v: unknown): v is string[] => Array.isArray(v) && v.length <= SKILLS_MAX && v.every(x => typeof x === 'string' && SKILL_ID.test(x)) && new Set(v).size === v.length;
+function readTags(v: unknown): AgentRunTags | null {
+  const t = v as Record<string, unknown> | null;
+  if (!t || typeof t !== 'object' || !skillList(t.skills) || !(t.app === null || tagName(t.app, APP_MAX)) || !(t.repo === null || tagName(t.repo, REPO_MAX))) return null;
+  return { skills: [...t.skills], app: t.app as string | null, repo: t.repo as string | null };
+}
+/** A skill the run's engine loaded while it was open (Claude's Skill tool): added once, up to SKILLS_MAX; frozen at the end.
+ *  `name` may be a plugin-qualified `plugin:skill`: the part after the last colon is the id. */
+export function addSkill(run: AgentRun, name: unknown): boolean {
+  if (run.endedAt !== undefined || !run.tags || typeof name !== 'string') return false;
+  const id = name.slice(name.lastIndexOf(':') + 1).trim().toLowerCase();
+  if (!SKILL_ID.test(id) || run.tags.skills.includes(id) || run.tags.skills.length >= SKILLS_MAX) return false;
+  run.tags.skills.push(id);
+  return true;
+}
+
+function readOutcome(v: unknown): AgentRunOutcome | null {
+  const o = v as Partial<AgentRunOutcome> | null;
+  if (!o || typeof o !== 'object' || !VERDICTS.includes(o.verdict!) || !BASES.includes(o.basis!) || !time(o.at) || !str(o.by, 80) || (o.note !== undefined && (typeof o.note !== 'string' || o.note.length > 600))) return null;
+  return { verdict: o.verdict!, basis: o.basis!, at: o.at, by: o.by, ...(o.note !== undefined ? { note: o.note } : {}) };
+}
+function readTokens(v: unknown): AgentRunTokens | null {
+  const t = v as Partial<AgentRunTokens> | null;
+  return t && typeof t === 'object' && count(t.input) && count(t.cacheRead) && count(t.cacheWrite) && count(t.output) ? { input: t.input, cacheRead: t.cacheRead, cacheWrite: t.cacheWrite, output: t.output } : null;
+}
+
+function readReport(v: unknown): AgentRunReport | null {
+  const r = v as Record<string, unknown> | null;
+  if (!r || typeof r !== 'object' || !time(r.at)) return null;
+  if (!['done', 'partial', 'blocked'].includes(r.outcome as string) || !['yes', 'partial', 'no'].includes(r.verified as string) || !str(r.summary, SUMMARY_MAX)
+    || (r.findings !== undefined && !count(r.findings)) || (r.blocking !== undefined && !count(r.blocking)) || (count(r.findings) && count(r.blocking) && r.blocking > r.findings)) return null;
+  let canonical: AgentRunReport['canonical'];
+  if (r.canonical !== undefined) {
+    const c = r.canonical as NonNullable<AgentRunReport['canonical']>;
+    if (!c || !time(c.at) || !str(c.taskId, 80) || !RUN_ID.test(c.runId) || !count(c.taskVersion) || c.taskVersion < 1 || !Array.isArray(c.doneWhen)) return null;
+    const { at, taskId, runId, taskVersion, ...result } = c;
+    try { canonical = { ...checkResult(result, c.doneWhen.map(d => d.criterion)), at, taskId, runId, taskVersion }; } catch { return null; }
+  }
+  return { ...(canonical ? { canonical } : {}), at: r.at, outcome: r.outcome as 'done', verified: r.verified as 'yes', summary: r.summary,
+    ...(r.findings !== undefined ? { findings: r.findings as number } : {}), ...(r.blocking !== undefined ? { blocking: r.blocking as number } : {}),
+    ...(['success', 'partial', 'fail'].includes(r.verdict as string) ? { verdict: r.verdict as 'success' } : {}), ...(r.via === 'agent_report' ? { via: 'agent_report' as const } : {}),
+    ...(count(r.corrections) && r.corrections > 0 ? { corrections: Math.min(r.corrections, MAX_CORRECTIONS) } : {}), ...(r.journaled === true ? { journaled: true as const } : {}) };
+}
+function readCorrections(v: unknown): AgentRunCorrections | null {
+  const c = v as Partial<AgentRunCorrections> | null;
+  return c && typeof c === 'object' && count(c.tagged) && count(c.afterReport) ? { tagged: c.tagged, afterReport: c.afterReport } : null;
+}
+
+/** The nightly batch review's entries (judge-sample.ts, ADR 0203): run ids with an optional verdict and verification. */
+export const REVIEW_BATCH_MAX = 40;
+function readReviewBatch(v: unknown): ReviewBatchEntry[] | null {
+  if (!Array.isArray(v) || !v.length || v.length > REVIEW_BATCH_MAX) return null;
+  const out: ReviewBatchEntry[] = [];
+  for (const x of v as Partial<ReviewBatchEntry>[]) {
+    if (!x || typeof x !== 'object' || typeof x.runId !== 'string' || !RUN_ID.test(x.runId)) return null;
+    if (x.verdict !== undefined && !['success', 'partial', 'fail'].includes(x.verdict)) return null;
+    if (x.verified !== undefined && !['yes', 'partial', 'no'].includes(x.verified)) return null;
+    out.push({ runId: x.runId, ...(x.verdict ? { verdict: x.verdict } : {}), ...(x.verified ? { verified: x.verified } : {}) });
+  }
+  return out;
+}
+/** A stored run, or null when any field is out of shape (the store skips that record; chats.json drops the mirror). */
+export function readRun(v: unknown): AgentRun | null {
+  const r = v as Record<string, unknown> | null;
+  if (!r || typeof r !== 'object' || !str(r.runId, 20) || !RUN_ID.test(r.runId) || !str(r.chatId, 80) || !str(r.agentId, 80) || !AGENT_ID.test(r.agentId)
+    || !count(r.version) || typeof r.goal !== 'string' || r.goal.length > GOAL_MAX || !STARTED_BY.includes(r.startedBy as AgentRun['startedBy']) || !time(r.startedAt)) return null;
+  for (const k of ['parentRunId', 'reviewOf', 'reworkOf', 'continuedFrom'] as const) if (r[k] !== undefined && !(typeof r[k] === 'string' && RUN_ID.test(r[k]))) return null;
+  if (r.tier !== undefined && !MODEL_TIERS.includes(r.tier as ModelTier) || r.model !== undefined && r.model !== null && !str(r.model, 120)) return null;
+  if ((r.endedAt === undefined) !== (r.endReason === undefined) || (r.endedAt !== undefined && !time(r.endedAt)) || (r.endReason !== undefined && !ENDS.includes(r.endReason as AgentRunEnd))) return null;
+  const outcome = r.outcome === undefined ? undefined : readOutcome(r.outcome);
+  if (r.source !== undefined && r.source !== 'chat' && r.source !== 'oneshot') return null;
+  if (r.requestOrigin !== undefined && !['user', 'agent', 'app'].includes(r.requestOrigin as string)) return null;
+  const oneshot = r.oneshot as AgentRun['oneshot'];
+  if (oneshot !== undefined && (!oneshot || typeof oneshot !== 'object' || !str(oneshot.engine, 80)
+    || !ONE_SHOT_PURPOSES.includes(oneshot.job) || typeof oneshot.fallback !== 'boolean'
+    || !['reported', 'estimated', 'unknown'].includes(oneshot.costBasis) || (oneshot.ok !== undefined && typeof oneshot.ok !== 'boolean'))) return null;
+  if (outcome === null) return null;
+  const c = r.counters as Record<string, unknown> | null;
+  if (!c || typeof c !== 'object' || !count(c.questions) || !count(c.permissions) || !count(c.commands) || !count(c.reopened) || !(c.contextPeak === null || count(c.contextPeak))) return null;
+  if (!(r.costUsd === null || time(r.costUsd))) return null;
+  const tokens = r.tokens === null ? null : readTokens(r.tokens);
+  if (r.tokens !== null && !tokens) return null;
+  // a report without its fields (a turn whose block was out of shape) counts as no report
+  const report = r.report === undefined || (r.report as { ok?: unknown } | null)?.ok === false ? undefined : readReport(r.report);
+  const corrections = r.corrections === undefined ? undefined : readCorrections(r.corrections);
+  const tags = r.tags === undefined ? undefined : readTags(r.tags);
+  const receipts = r.receipts === undefined ? null : readReceipts(r.receipts);
+  if (report === null || corrections === null || tags === null || (r.executionMs !== undefined && !time(r.executionMs))) return null;
+  const delivery = r.delivery as AgentRun['delivery'];
+  if (delivery !== undefined) {
+    if (!delivery || !['display', 'notify', 'synthesize'].includes(delivery.policy) || !time(delivery.reportedAt) || !count(delivery.attempts)) return null;
+    for (const stamp of [delivery.deliveredAt, delivery.displayedAt, delivery.synthesisSubmittedAt, delivery.synthesisRequestedAt]) if (stamp !== undefined && (!time(stamp) || stamp < delivery.reportedAt)) return null;
+    if (delivery.synthesisPending !== undefined && typeof delivery.synthesisPending !== 'boolean') return null;
+    if (delivery.ownerNotice !== undefined && delivery.ownerNotice !== true) return null;
+    if (delivery.synthesisBatchId !== undefined && !str(delivery.synthesisBatchId, 160)) return null;
+    if (delivery.synthesisSubmittedAt !== undefined && !delivery.synthesisBatchId) return null;
+    if (delivery.policy !== 'synthesize' && (delivery.synthesisSubmittedAt !== undefined || delivery.synthesisBatchId !== undefined)) return null;
+  }
+  if (r.turns !== undefined && !count(r.turns)) return null;
+  const plan = readPlan(r.plan);
+  const scope = r.scope as AgentRun['scope'];
+  if (scope !== undefined && (!scope || typeof scope.brainRoot !== 'string' || !path.isAbsolute(scope.brainRoot) || typeof scope.projectRoot !== 'string' || !path.isAbsolute(scope.projectRoot) || scope.brainRoot.length > 4000 || scope.projectRoot.length > 4000)) return null;
+  const contract = r.taskContract as AgentRun['taskContract'];
+  if (contract?.reportExpected !== undefined && typeof contract.reportExpected !== 'boolean') return null;
+  if (contract?.deliveryPolicy !== undefined && !['display', 'notify', 'synthesize'].includes(contract.deliveryPolicy) || contract?.fields !== undefined && !(Array.isArray(contract.fields) && contract.fields.length <= 16 && contract.fields.every(f => typeof f === 'string' && f.length <= 40))) return null;
+  const snapshot = r.skillSuggestions as AgentRun['skillSuggestions'];
+  if (snapshot !== undefined && (!snapshot || !time(snapshot.at) || !skillList(snapshot.suggested) || !skillList(snapshot.used))) return null;
+  if (r.taskId !== undefined && !str(r.taskId, 80) || r.taskVersion !== undefined && (!count(r.taskVersion) || r.taskVersion < 1)) return null;
+  if (report?.canonical && (report.canonical.runId !== r.runId || report.canonical.taskId !== r.taskId || report.canonical.taskVersion !== r.taskVersion)) return null;
+  const batch = r.reviewBatch === undefined ? undefined : readReviewBatch(r.reviewBatch);
+  if (batch === null) return null;
+  return {
+    ...(r.taskId ? { taskId: r.taskId as string } : {}), ...(r.taskVersion ? { taskVersion: r.taskVersion as number } : {}),
+    ...(scope ? { scope: { brainRoot: scope.brainRoot, projectRoot: scope.projectRoot } } : {}),
+    ...(r.turns !== undefined ? { turns: r.turns as number } : {}),
+    ...(delivery ? { delivery: structuredClone(delivery) } : {}),
+    ...(snapshot ? { skillSuggestions: { at: snapshot.at, suggested: [...snapshot.suggested], used: [...snapshot.used] } } : {}),
+    ...(r.taskContract && typeof r.taskContract === 'object' && typeof (r.taskContract as { goal?: unknown }).goal === 'string' && Array.isArray((r.taskContract as { doneWhen?: unknown }).doneWhen) && (r.taskContract as { doneWhen: unknown[] }).doneWhen.every(x => typeof x === 'string') ? { taskContract: r.taskContract as AgentRun['taskContract'] } : {}),
+    runId: r.runId, chatId: r.chatId, agentId: r.agentId, version: r.version, goal: r.goal, startedBy: r.startedBy as AgentRun['startedBy'], startedAt: r.startedAt,
+    ...(r.parentRunId ? { parentRunId: r.parentRunId as string } : {}),
+    ...(r.tier ? { tier: r.tier as ModelTier } : {}), ...(r.model !== undefined ? { model: r.model as string | null } : {}),
+    ...(r.reviewOf ? { reviewOf: r.reviewOf as string } : {}), ...(r.reworkOf ? { reworkOf: r.reworkOf as string } : {}),
+    ...(r.continuedFrom ? { continuedFrom: r.continuedFrom as string } : {}),
+    ...(batch ? { reviewBatch: batch } : {}),
+    ...(r.endedAt !== undefined ? { endedAt: r.endedAt, endReason: r.endReason as AgentRunEnd } : {}),
+    ...(outcome ? { outcome } : {}),
+    ...(r.source ? { source: r.source as AgentRun['source'] } : {}),
+    ...(r.requestOrigin ? { requestOrigin: r.requestOrigin as AgentRun['requestOrigin'] } : {}),
+    ...(oneshot ? { oneshot: { engine: oneshot.engine, job: oneshot.job, fallback: oneshot.fallback, costBasis: oneshot.costBasis, ...(oneshot.ok !== undefined ? { ok: oneshot.ok } : {}) } } : {}),
+    counters: { questions: c.questions, permissions: c.permissions, commands: c.commands, reopened: c.reopened, contextPeak: c.contextPeak as number | null },
+    costUsd: r.costUsd as number | null, tokens,
+    ...(report ? { report } : {}), ...(corrections ? { corrections } : {}), ...(r.executionMs !== undefined ? { executionMs: r.executionMs as number } : {}),
+    ...(tags ? { tags } : {}),
+    // receipts out of shape are dropped, never the run (ADR 0130)
+    ...(receipts ? { receipts } : {}),
+    // a plan record out of shape is dropped, never the run (ADR 0131)
+    ...(plan ? { plan } : {}),
+  };
+}
+/** A run's plan record (ADR 0131), or null when absent or out of shape. */
+function readPlan(v: unknown): AgentRunPlan | null {
+  const p = v as Record<string, unknown> | null;
+  if (!p || typeof p !== 'object' || !count(p.proposals) || !count(p.changes) || (p.approvedAt !== undefined && !time(p.approvedAt))) return null;
+  return { proposals: p.proposals, changes: p.changes, ...(p.approvedAt !== undefined ? { approvedAt: p.approvedAt as number } : {}) };
+}
+
+/** Ends an open run; false when it had already ended (the first end wins). */
+export function endRun(run: AgentRun, reason: AgentRunEnd, at: number): boolean {
+  if (run.endedAt !== undefined) return false;
+  run.endedAt = at; run.endReason = reason;
+  return true;
+}
+/** Brother goes on with an ended run: it is open again, its old verdict no longer holds, and it counts as reworked. */
+export function reopenRun(run: AgentRun): boolean {
+  if (run.endedAt === undefined) return false;
+  delete run.endedAt; delete run.endReason; delete run.outcome;
+  if (run.receipts) delete run.receipts.verdict; // decided again at its next end
+  run.counters.reopened++;
+  return true;
+}
+/** No turn and nothing waiting on Brother for STALE_MS (a pending request pauses the clock: `idleSince` restarts when it is answered). */
+export const staleDue = (run: AgentRun, idleSince: number, waiting: boolean, now: number): boolean => run.endedAt === undefined && !waiting && now - idleSince >= STALE_MS;
+/** A settled turn; an explicit result receipt may arrive after completion. Missing engine cost/tokens stay unknown. */
+export function addTurn(run: AgentRun, usd: number | null, tokens: AgentRunTokens | undefined, settledReceipt = false): void {
+  if (run.endedAt !== undefined && !settledReceipt) return;
+  if (run.turns !== undefined) run.turns++;
+  run.costUsd = usd === null || run.costUsd === null ? null : Math.round((run.costUsd + usd) * 1e6) / 1e6;
+  if (!tokens || !run.tokens) { run.tokens = null; return; }
+  for (const k of ['input', 'cacheRead', 'cacheWrite', 'output'] as const) run.tokens[k] += tokens[k];
+}
+
+/** Links a new run may carry: the delegating chat's run (agent_delegate), the run an independent review (a Sentinel) reviews, the run it reworks;
+ *  each must name a run the store knows. */
+export interface RunLinks { parentRunId?: string; reviewOf?: string; reworkOf?: string }
+export interface RunStart extends RunLinks { chatId: string; agentId: string; version: number; goal: string; startedBy: AgentRun['startedBy']; requestOrigin?: AgentRun['requestOrigin']; startedAt: number; costKnown: boolean; tags?: AgentRunTags; tier?: ModelTier; model?: string | null }
+
+const sample = (v: unknown): boolean => { const s = v as { n?: unknown; values?: unknown; sum?: unknown } | null; return !!s && count(s.n) && Array.isArray(s.values) && s.values.length <= SAMPLE_MAX && s.values.length <= s.n && s.values.every(time)
+  && (s.sum === undefined || typeof s.sum === 'number' && Number.isFinite(s.sum) && s.sum >= 0); };
+const verdicts = (v: unknown): boolean => { const x = v as Record<string, unknown> | null; return !!x && count(x.success) && count(x.partial) && count(x.fail); };
+/** the ai-errors-per-run count of an older rollup (ADR 0186 dropped it): still read, then deleted */
+const aiErrors = (v: unknown): boolean => { const a = v as Record<string, unknown> | null; return !!a && typeof a === 'object' && count(a.runs) && count(a.lines); };
+const counts = (v: unknown): v is TagTally => {
+  const t = v as Record<string, unknown> | null, c = t?.corrections as Record<string, unknown> | null;
+  return !!t && typeof t === 'object' && count(t.ended) && verdicts(t.verdicts) && verdicts(t.opinion) && verdicts(t.selfReport) && count(t.reworked) && count(t.questions) && (t.permissions === undefined || count(t.permissions)) && count(t.commands)
+    && !!c && count(c.runs) && count(c.tagged) && count(c.afterReport) && (t.aiErrors === undefined || aiErrors(t.aiErrors));
+};
+const bucket = (v: unknown, key: (k: string) => boolean): boolean => !!v && typeof v === 'object' && !Array.isArray(v) && Object.entries(v).every(([k, t]) => key(k) && counts(t));
+const tagTallies = (v: unknown): boolean => {
+  const t = v as Record<string, unknown> | null;
+  const combinedKey = (k: string): boolean => {
+    try {
+      const a: unknown = JSON.parse(k);
+      return Array.isArray(a) && a.length === 3 && a.filter(x => x !== null).length >= 2
+        && (a[0] === null || typeof a[0] === 'string' && SKILL_ID.test(a[0]))
+        && (a[1] === null || tagName(a[1], APP_MAX)) && (a[2] === null || tagName(a[2], REPO_MAX)) && JSON.stringify(a) === k;
+    } catch { return false; }
+  };
+  return !!t && typeof t === 'object' && bucket(t.skills, k => SKILL_ID.test(k)) && bucket(t.apps, k => tagName(k, APP_MAX)) && bucket(t.repos, k => tagName(k, REPO_MAX))
+    && (t.combined === undefined || bucket(t.combined, combinedKey));
+};
+/** A stored rollup, or null when out of shape (the store then refuses the file, like a bad run). */
+export function readTally(v: unknown): RunTally | null {
+  const t = v as Record<string, unknown> | null;
+  if (!t || typeof t !== 'object' || !str(t.agentId, 80) || !AGENT_ID.test(t.agentId) || !count(t.version) || !count(t.ended) || !verdicts(t.verdicts) || !verdicts(t.opinion) || !verdicts(t.selfReport)
+    || !count(t.reworked) || !count(t.questions) || (t.permissions !== undefined && !count(t.permissions)) || !count(t.commands)) return null;
+  const c = t.corrections as Record<string, unknown> | null, k = t.tokens as Record<string, unknown> | null;
+  if (!c || !count(c.runs) || !count(c.tagged) || !count(c.afterReport) || (t.aiErrors !== undefined && !aiErrors(t.aiErrors)) || !k || !['input', 'output', 'cacheRead', 'cacheWrite'].every(x => sample(k[x]))
+    || ![t.cost, t.elapsed, t.execution].every(sample) || (t.contextPeak !== undefined && !sample(t.contextPeak))) return null;
+  const reviews = t.reviews as Record<string, Record<string, unknown>> | null;
+  if (!reviews || typeof reviews !== 'object' || Array.isArray(reviews) || !Object.entries(reviews).every(([key, r]) => /^[a-z][a-z0-9_-]{0,79}\/\d+$/.test(key) && r && count(r.runs) && r.runs > 0 && count(r.findings) && count(r.blockingRuns) && count(r.blocking))) return null;
+  if (t.decisions !== undefined && !count(t.decisions)) return null;
+  if (t.decisionWins !== undefined && (!count(t.decisionWins) || t.decisionWins > ((t.decisions as number | undefined) ?? 0))) return null;
+  if (t.earnedWins !== undefined && (!count(t.earnedWins) || t.earnedWins > (t.ended as number))) return null;
+  // XP (ADR 0131): at most XP_MAX a run; a rollup saved before it has none (its successes count at their floor)
+  const xpOk = (v: unknown, max: number) => v === undefined || (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= max);
+  if (!xpOk(t.xp, XP_MAX * (t.ended as number)) || !xpOk(t.decisionXp, XP_MAX * ((t.decisions as number | undefined) ?? 0))) return null;
+  if ((t.tags !== undefined && !tagTallies(t.tags)) || (t.tagsLost !== undefined && t.tagsLost !== true) || (t.tags !== undefined && t.tagsLost !== undefined)) return null;
+  const result = structuredClone(t) as unknown as RunTally;
+  // the permissions count, the context peak and the ai-errors count are gone (ADR 0186): an older rollup's are dropped, its tags' too
+  const old = result as unknown as { permissions?: number; contextPeak?: unknown; aiErrors?: unknown };
+  delete old.permissions; delete old.contextPeak; delete old.aiErrors;
+  for (const bucket of Object.values(result.tags ?? {})) for (const tag of Object.values(bucket as Record<string, TagTally>)) { delete (tag as { permissions?: number }).permissions; delete (tag as { aiErrors?: unknown }).aiErrors; }
+  if (result.verdictSchema !== 2) {
+    // Old rollups mix self-reported silence with independent outcomes. Counts remain, quality is unknown.
+    result.verdicts = { success: 0, partial: 0, fail: 0 };
+    result.decisionWins = 0;
+    result.earnedWins = 0;
+    delete result.xp; delete result.decisionXp;
+    for (const bucket of Object.values(result.tags ?? {})) for (const tag of Object.values(bucket as Record<string, TagTally>)) tag.verdicts = { success: 0, partial: 0, fail: 0 };
+    result.verdictSchema = 2;
+  }
+  return result;
+}
+
+/** A rollup as written: with zeroed placeholders of the counters ADR 0186 dropped, so a rollback to an older release
+ *  (`npm run rollback`, same userData) still reads the file; this build deletes them on load (readTally). */
+const LEGACY_ZERO = { permissions: 0, aiErrors: { runs: 0, lines: 0 } };
+function olderReadable(t: RunTally): RunTally {
+  const tag = (x: TagTally) => ({ ...x, ...LEGACY_ZERO });
+  const tags = t.tags && { ...t.tags, skills: mapValues(t.tags.skills, tag), apps: mapValues(t.tags.apps, tag), repos: mapValues(t.tags.repos, tag),
+    ...(t.tags.combined ? { combined: mapValues(t.tags.combined, tag) } : {}) };
+  return { ...t, ...LEGACY_ZERO, contextPeak: { n: 0, values: [] }, ...(tags ? { tags } : {}) } as RunTally;
+}
+const mapValues = <T, U>(o: Record<string, T>, f: (v: T) => U): Record<string, U> => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, f(v)]));
+
+/** What a store holds once read with its checks: runs out of shape are skipped and counted, never the whole store. */
+interface RunsState { runs: AgentRun[]; rollups: RunTally[]; prunedThrough: number; flash: FlashLog; skipped: number }
+type RawRuns = { version?: unknown; runs?: unknown; rollups?: unknown; prunedThrough?: unknown; flash?: unknown };
+
+/** agent-runs.json's content (or the database's, in the same shape) read with the store's checks; throws when the store
+ *  as a whole is out of shape (a bad version, a bad rollup, two rollups of one version). */
+function readState(raw: RawRuns, maxRuns = RUNS_MAX): RunsState {
+  if (raw.version !== 1 || !Array.isArray(raw.runs) || raw.runs.length > maxRuns || (raw.rollups !== undefined && !Array.isArray(raw.rollups)) || (raw.prunedThrough !== undefined && !time(raw.prunedThrough))) throw new Error('Invalid agent runs');
+  // Flash's outcomes (ADR 0131): out of shape = a fresh log, never a reason to refuse the store
+  const state: RunsState = { runs: [], rollups: [], prunedThrough: (raw.prunedThrough as number | undefined) ?? 0, flash: raw.flash !== undefined ? readFlashLog(raw.flash) : emptyFlashLog(), skipped: 0 };
+  const keys = new Set<string>();
+  for (const v of (raw.rollups ?? []) as unknown[]) {
+    const t = readTally(v);
+    if (!t || keys.has(`${t.agentId}/${t.version}`)) throw new Error('Invalid agent run rollup');
+    keys.add(`${t.agentId}/${t.version}`); state.rollups.push(t);
+  }
+  const ids = new Set<string>();
+  for (const v of raw.runs) {
+    const run = readRun(v);
+    if (!run || ids.has(run.runId)) { state.skipped++; continue; }
+    ids.add(run.runId); state.runs.push(run);
+  }
+  return state;
+}
+const rowOf = (r: AgentRun, json: string): RunRow => ({ id: r.runId, agentId: r.agentId, startedAt: r.startedAt, endedAt: r.endedAt ?? null, json });
+const parseOrNull = (s: string): unknown => { try { return JSON.parse(s) as unknown; } catch { return null; } };
+/** agent-runs.json.migrated-<date>: where the JSON goes once its runs are in app.db (kept, never deleted). */
+function migratedName(file: string): string {
+  const base = `${file}.migrated-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+  let name = base;
+  for (let i = 2; fs.existsSync(name); i++) name = `${base}-${i}`;
+  return name;
+}
+/** The newest agent-runs.json.migrated-* beside `file`, or null. */
+function latestMigrated(file: string): string | null {
+  const prefix = `${path.basename(file)}.migrated-`;
+  let names: string[] = [];
+  try { names = fs.readdirSync(path.dirname(file)).filter(n => n.startsWith(prefix)).sort(); } catch { /* no folder */ }
+  return names.length ? path.join(path.dirname(file), names.at(-1)!) : null;
+}
+
+const UNREADABLE = 'Il registro delle esecuzioni degli Agenti non è leggibile. Il file è conservato; le nuove esecuzioni non vengono registrate.';
+
+export interface RunStoreOptions {
+  /** false: agent-runs.json only, app.db is never opened (the fallback path, and its own tests) */
+  db?: boolean;
+}
+
+/** The agent runs, bounded by count and bytes; only ended runs are ever pruned, oldest end first, and only after they are
+ *  folded into their (agentId, version) rollup. A review is pruned with the run it reviews. Kept in userData/app.db (one row
+ *  per run, only changed runs written, ADR 0199); agent-runs.json `{version:1, runs, rollups}` is moved there once at
+ *  start and stays the store only when the database cannot be used (the fallback). */
+export class AgentRunStore {
+  private readonly file: string;
+  private readonly dbFile: string;
+  /** the database the runs live in (ADR 0199); null = agent-runs.json, the fallback */
+  private db: RunsDb | null = null;
+  /** per run id, its JSON and bytes as the database holds them: a save writes only the runs whose JSON changed */
+  private written = new Map<string, { json: string; bytes: number; endedAt?: number | undefined }>();
+  /** the meta values (rollups, prunedThrough, flash) as the database holds them */
+  private writtenMeta = new Map<string, string>();
+  private runs = new Map<string, AgentRun>();
+  private rollups: RunTally[] = [];
+  /** the latest end among the pruned runs: a chat mirror of an ended run up to it is already in the rollups, never adopted */
+  private prunedThrough = 0;
+  private flash: FlashLog = emptyFlashLog();
+  private unsaved = false;
+  private rev = 0;
+  /** Bumped by every change worth a write (dirty) and every run that leaves memory: the read worker keeps its copy of the
+   *  runs while it holds (read-work.ts), so a Memoria or estimate read does not copy thousands of runs again (#276, #277). */
+  get revision(): number { return this.rev; }
+  private get dirty(): boolean { return this.unsaved; }
+  private set dirty(v: boolean) { if (v) this.rev++; this.unsaved = v; }
+  /** Exact preimage retained until an exclusive recovery copy is durable; repair never discards malformed rows. */
+  private recoverySource: Buffer | null = null;
+  /** the runs just pruned (folded into the rollups): ChatManager drops their chat mirrors */
+  onPrune?: (runIds: Set<string>) => void;
+  /** set when the store cannot be read: it is kept as it is and no run is recorded until Brother fixes or moves it */
+  problem: string | null = null;
+  /** where the runs are kept: 'sqlite' (userData/app.db) or 'json' (agent-runs.json, the fallback) */
+  get backend(): 'sqlite' | 'json' { return this.db ? 'sqlite' : 'json'; }
+
+  constructor(userData: string, opts: RunStoreOptions = {}) {
+    this.file = path.join(userData, 'agent-runs.json');
+    this.dbFile = path.join(userData, APP_DB);
+    cleanOrphanTmps(this.file);
+    if (opts.db !== false && this.openDb()) return;
+    this.loadJson();
+  }
+
+  private use(s: RunsState): void {
+    this.runs = new Map(s.runs.map(r => [r.runId, r]));
+    this.rollups = s.rollups; this.prunedThrough = s.prunedThrough; this.flash = s.flash;
+  }
+
+  /** agent-runs.json as the store (the fallback): read as before the database. */
+  private loadJson(): void {
+    try {
+      const raw = readLocal(this.file) as RawRuns | undefined;
+      if (raw === undefined) return;
+      const s = readState(raw);
+      this.use(s);
+      if (s.skipped) {
+        // Preserve the original before the next repaired write; a concurrent file change refuses recovery.
+        const source = fs.readFileSync(this.file);
+        if (JSON.stringify(JSON.parse(source.toString('utf8'))) !== JSON.stringify(raw)) throw new Error('Run file changed during recovery');
+        this.recoverySource = source;
+        this.dirty = true;
+        log.warn('agents', 'invalid agent run records skipped', { data: { skipped: s.skipped, kept: this.runs.size },
+          hint: 'valid runs were recovered; new runs can still be recorded' });
+      }
+    } catch { this.runs.clear(); this.rollups = []; this.prunedThrough = 0; this.flash = emptyFlashLog(); this.problem = UNREADABLE; }
+  }
+
+  /** Opens app.db and loads the runs from it, moving agent-runs.json in first when the database has none. false = the
+   *  database cannot be used (it stays as it is): the caller reads agent-runs.json as before. */
+  private openDb(): boolean {
+    const keep = 'the runs stay in agent-runs.json this session; app.db is left as it is';
+    let opened: OpenedDb;
+    try { opened = openAppDb(this.dbFile); } catch (e) { log.error('agents', 'agent runs database not opened', { cause: errText(e), hint: keep }); return false; }
+    let db: RunsDb;
+    try { db = new RunsDb(opened.db, this.dbFile); } catch (e) {
+      try { opened.db.close(); } catch { /* already closed */ }
+      log.error('agents', 'agent runs database schema not ready', { cause: errText(e), hint: keep });
+      return false;
+    }
+    if (opened.aside) log.error('agents', 'app database damaged: moved aside and created again', { cause: opened.cause ?? 'corrupt',
+      hint: `the damaged file is kept as ${path.basename(opened.aside)}; the runs are read again from the newest agent-runs.json.migrated-* copy (runs recorded after it are only in the damaged file)` });
+    try {
+      if (!db.empty()) {
+        try { this.loadDb(db); } catch (e) {
+          db.close();
+          this.runs.clear(); this.rollups = []; this.prunedThrough = 0; this.flash = emptyFlashLog(); this.written.clear(); this.writtenMeta.clear();
+          this.problem = UNREADABLE;
+          log.error('agents', 'agent runs in app.db unreadable', { cause: errText(e), hint: 'app.db is kept as it is; no new run is recorded until it is repaired or moved aside' });
+          return true;
+        }
+        this.db = db;
+        // agent-runs.json beside a database with runs: a session that fell back to the JSON (app.db not usable then)
+        // recorded runs there; the ones app.db lacks are merged in, then the file goes aside like the first move
+        if (fs.existsSync(this.file)) this.mergeJson(db);
+        return true;
+      }
+      // an empty database and no agent-runs.json: the newest migrated copy, whether app.db was moved aside or the app
+      // stopped between the JSON's rename and the import's commit (the rename is undone on a failed commit, not on a crash)
+      const source = fs.existsSync(this.file) ? this.file : latestMigrated(this.file);
+      // agent-runs.json that cannot be moved stays the store (fallback); a migrated copy that cannot be read is kept, the new database starts empty
+      if (source && !this.importJson(db, source) && source === this.file) { db.close(); return false; }
+      this.db = db;
+      return true;
+    } catch (e) {
+      db.close();
+      log.error('agents', 'agent runs database not usable', { cause: errText(e), hint: keep });
+      return false;
+    }
+  }
+
+  private loadDb(db: RunsDb): void {
+    const { rows, meta } = db.load();
+    const raw: RawRuns = { version: 1, runs: rows.map(r => parseOrNull(r.json)),
+      ...(meta.has('rollups') ? { rollups: parseOrNull(meta.get('rollups')!) } : {}),
+      ...(meta.has('prunedThrough') ? { prunedThrough: Number(meta.get('prunedThrough')) } : {}),
+      ...(meta.has('flash') ? { flash: parseOrNull(meta.get('flash')!) } : {}) };
+    const s = readState(raw, Infinity);
+    this.use(s);
+    for (const r of rows) if (this.runs.has(r.id)) this.written.set(r.id, { json: r.json, bytes: Buffer.byteLength(r.json, 'utf8'), endedAt: this.runs.get(r.id)!.endedAt });
+    this.writtenMeta = meta;
+    // a row out of shape is never deleted: it stays in app.db as it is, out of the store
+    if (s.skipped) log.warn('agents', 'invalid agent run records skipped', { data: { skipped: s.skipped, kept: this.runs.size }, hint: 'their rows stay in app.db untouched; the valid runs are used and new runs are recorded' });
+  }
+
+  /** Moves agent-runs.json (or, after a damaged database, its newest migrated copy) into the empty database: one
+   *  transaction, counts checked, the JSON renamed to agent-runs.json.migrated-<date> before the commit (kept, never
+   *  deleted). false = nothing imported (the file stays where and as it was). */
+  private importJson(db: RunsDb, source: string): boolean {
+    const own = source === this.file;
+    let s: RunsState;
+    try {
+      const raw = readLocal(source) as RawRuns | undefined;
+      if (raw === undefined) return true; // gone meanwhile: nothing to move
+      s = readState(raw);
+    } catch (e) {
+      // agent-runs.json out of shape: loadJson keeps it and reports the problem, as before the database
+      if (!own) log.error('agents', 'migrated agent runs copy not readable', { cause: errText(e), hint: `${path.basename(source)} is kept; the new database starts empty` });
+      return false;
+    }
+    const rows = s.runs.map(r => rowOf(r, JSON.stringify(r)));
+    const meta = new Map([['rollups', JSON.stringify(s.rollups)], ['prunedThrough', String(s.prunedThrough)], ['flash', JSON.stringify(s.flash)]]);
+    const target = own ? migratedName(this.file) : source;
+    try {
+      db.importAll(rows, meta, () => { if (own) renameWithRetry(this.file, target); }, () => {
+        try { renameWithRetry(target, this.file); } catch (e) { log.error('agents', 'agent-runs.json not renamed back', { cause: errText(e), hint: `rename ${path.basename(target)} back to agent-runs.json by hand` }); }
+      });
+    } catch (e) {
+      log.error('agents', 'agent runs not moved to app.db', { cause: errText(e),
+        hint: own ? 'agent-runs.json is kept and used as before; the move is tried again at the next start' : `${path.basename(source)} is kept; the new database starts empty` });
+      return false;
+    }
+    this.use(s);
+    for (const r of rows) this.written.set(r.id, { json: r.json, bytes: Buffer.byteLength(r.json, 'utf8'), endedAt: r.endedAt ?? undefined });
+    this.writtenMeta = meta;
+    if (s.skipped) log.warn('agents', 'invalid agent run records skipped', { data: { skipped: s.skipped, kept: this.runs.size },
+      hint: `the valid runs are in app.db; the original file is kept as ${path.basename(target)}` });
+    log.info('agents', own ? 'agent runs moved to app.db' : 'agent runs read again from a migrated copy', { data: { runs: rows.length, rollups: s.rollups.length, kept: path.basename(target) } });
+    return true;
+  }
+
+  /** agent-runs.json found beside an app.db that holds runs: the runs whose ids app.db lacks (written by a session that
+   *  fell back to the JSON) are added in one transaction, then the file is renamed to agent-runs.json.migrated-<date>
+   *  (kept, never deleted). Rollups and Flash's log stay app.db's. A file out of shape is left as it is. */
+  private mergeJson(db: RunsDb): void {
+    let s: RunsState;
+    try {
+      const raw = readLocal(this.file) as RawRuns | undefined;
+      if (raw === undefined) return;
+      s = readState(raw);
+    } catch (e) {
+      log.warn('agents', 'agent-runs.json beside app.db not readable', { cause: errText(e), hint: 'kept untouched and not read; the runs come from app.db' });
+      return;
+    }
+    const fresh = s.runs.filter(r => !this.runs.has(r.runId));
+    const rows = fresh.map(r => rowOf(r, JSON.stringify(r)));
+    try { db.write({ upsert: rows, remove: [], meta: new Map() }); } catch (e) {
+      log.error('agents', 'agent runs from agent-runs.json not merged into app.db', { cause: errText(e), hint: 'agent-runs.json is kept untouched; the merge is tried again at the next start' });
+      return;
+    }
+    for (const [i, r] of fresh.entries()) { this.runs.set(r.runId, r); this.written.set(r.runId, { json: rows[i]!.json, bytes: Buffer.byteLength(rows[i]!.json, 'utf8'), endedAt: r.endedAt }); }
+    if (fresh.length) this.rev++;
+    const target = migratedName(this.file);
+    try { renameWithRetry(this.file, target); } catch (e) {
+      log.warn('agents', 'agent-runs.json not moved aside after the merge', { cause: errText(e), data: { merged: fresh.length }, hint: 'the next start reads it again and adds nothing twice (runs are matched by id)' });
+      return;
+    }
+    log.info('agents', 'agent runs merged from agent-runs.json into app.db', { data: { merged: fresh.length, alreadyThere: s.runs.length - fresh.length, skipped: s.skipped, kept: path.basename(target) } });
+  }
+
+  /** Releases the database connection (the quit, tests: on Windows an open file cannot be removed); a later save opens it again. */
+  close(): void { clearTimeout(this.coldTimer); this.coldTimer = undefined; this.db?.close(); }
+
+  /** Flash's answer outcomes (flash-outcomes.ts, ADR 0131): a copy. */
+  flashLog(): FlashLog { return structuredClone(this.flash); }
+  /** The user asked Flash (a «Fanne un lavoro» brief hands its last answer over) / Flash answered / the user wrote to the
+   *  Orchestrator: written with the next flush. */
+  flashEvent(e: { kind: 'asked' | 'handed'; text: string; at: number } | { kind: 'answered'; at: number }): void {
+    if (this.problem) return;
+    if (e.kind === 'asked' && e.text.startsWith(FLASH_BRIEF_TAG)) flashBriefed(this.flash, e.at);
+    else if (e.kind === 'asked') flashAsked(this.flash, e.text, e.at);
+    else if (e.kind === 'handed') { if (!this.flash.open.length) return; flashHanded(this.flash, e.text, e.at); }
+    else flashAnswered(this.flash, e.at);
+    this.dirty = true;
+  }
+
+  /** The live record (the chat's mirror is this same object). */
+  get(runId: string): AgentRun | undefined { return this.runs.get(runId); }
+  list(): AgentRun[] { return [...this.runs.values()]; }
+  /** What the pruned runs left (runMetrics merges them in). */
+  rolledUp(): RunTally[] { return structuredClone(this.rollups); }
+  /** Open runs delegated by this one (agent_delegate). */
+  children(runId: string): AgentRun[] { return this.list().filter(r => r.parentRunId === runId && r.endedAt === undefined); }
+
+  /** Refuses links to unknown runs. */
+  checkLinks(l: RunLinks): void {
+    for (const k of ['parentRunId', 'reviewOf', 'reworkOf'] as const) if (l[k] !== undefined && !this.runs.has(l[k])) throw new Error(`Esecuzione collegata non trovata: ${String(l[k])}`);
+  }
+
+  /** save = false: the caller writes once after several starts. */
+  start(s: RunStart, save = true): AgentRun {
+    if (this.problem) throw new Error(this.problem);
+    if (!AGENT_ID.test(s.agentId) || !str(s.chatId, 80) || !count(s.version) || (s.tags !== undefined && !readTags(s.tags))) throw new Error('Esecuzione non valida.');
+    this.checkLinks(s);
+    const run: AgentRun = {
+      runId: newRunId(), chatId: s.chatId, agentId: s.agentId, version: s.version, goal: s.goal.trim().slice(0, GOAL_MAX), startedBy: s.startedBy, startedAt: s.startedAt,
+      requestOrigin: s.requestOrigin ?? (s.startedBy === 'user' ? 'user' : s.startedBy === 'app' ? 'app' : 'agent'),
+      ...(s.parentRunId ? { parentRunId: s.parentRunId } : {}),
+      ...(s.tier ? { tier: s.tier } : {}), ...(s.model !== undefined ? { model: s.model } : {}),
+      ...(s.reviewOf ? { reviewOf: s.reviewOf } : {}), ...(s.reworkOf ? { reworkOf: s.reworkOf } : {}),
+      counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null },
+      costUsd: s.costKnown ? 0 : null, turns: 0, tokens: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 },
+      corrections: { tagged: 0, afterReport: 0 }, executionMs: 0,
+      ...(s.tags ? { tags: readTags(s.tags)! } : {}),
+    };
+    this.runs.set(run.runId, run);
+    if (!save) { this.dirty = true; return run; }
+    try { this.save(run); } catch (e) { this.runs.delete(run.runId); this.rev++; throw e; }
+    return run;
+  }
+  /** A run known only from a chat's mirror (written before a lost or reset store): taken back as it is; undefined = an
+   *  ended run already pruned into the rollups (adopting it would count it twice). */
+  adopt(run: AgentRun): AgentRun | undefined {
+    if (this.problem) throw new Error(this.problem);
+    const known = this.runs.get(run.runId);
+    if (known) return known;
+    if (run.endedAt !== undefined && run.endedAt <= this.prunedThrough) return undefined;
+    this.runs.set(run.runId, run); this.dirty = true;
+    return run;
+  }
+  /** Something changed in a record that is worth a write on the next flush (cost, tokens, context peak). */
+  touch(): void { this.dirty = true; }
+  /** A deferred write still in flight counts as unsaved: the quit's flush writes synchronously over it. */
+  flush(): void { if (this.dirty || this.inflight || this.coldTimer) this.save(); } // every run: no cold one is skipped
+  /** something is waiting to be written (dirty) or being written (a deferred write in flight) */
+  get pending(): boolean { return this.dirty || this.inflight > 0 || this.coldTimer !== undefined; }
+
+  /** bumped by every write started: a deferred write that sees a newer one drops itself and commits nothing */
+  private gen = 0;
+  private inflight = 0;
+
+  /** Writes now, on the caller's step. With `changed` (the run the caller just started, ended or judged) app.db gets the
+   *  runs at work and that one, like a deferred save (ADR 0283): building every run's JSON at 16 MB is a step the
+   *  window feels, and a one-shot saves three times. Without it every run is looked at (the quit's flush). */
+  save(changed?: AgentRun): void {
+    const t = performance.now(), db = this.db;
+    try {
+      if (db) {
+        // something else was waiting to be written: it may be a cold run's change, which this save skips
+        const owed = this.unsaved;
+        const all = this.list(), parts = changed ? Array.from(this.coldParts(all, changed).parts, (json, i) => json ?? JSON.stringify(all[i])) : undefined;
+        const w = this.prepareDb(db, all, parts);
+        this.gen++; w.write(); this.dirty = false; w.commit();
+        if (!parts) this.fullDone(); else if (owed) this.coldPassSoon();
+      }
+      else { const w = this.prepare(); this.gen++; writeLocalText(this.file, w.body); this.dirty = false; w.commit(); }
+    } finally { slowStep(db ? 'agent runs write (app.db)' : 'agent-runs.json write', performance.now() - t); }
+  }
+
+  /** The deferred save (ChatManager with writeDelayMs). In app.db: saveDbAsync. In agent-runs.json (the fallback):
+   *  serialized now, written asynchronously (tmp + rename with retries that never block the main process). Its prune (if
+   *  any) is committed only when its own body landed and no newer write was started meanwhile; a failure leaves the store
+   *  dirty. Never throws: false = not saved (the caller schedules a retry), true = written, nothing to write or superseded. */
+  async saveAsync(): Promise<boolean> {
+    if (!this.dirty || this.problem) return true;
+    if (this.db) return this.saveDbAsync(this.db);
+    // a pending recovery copy is a rare, synchronous, one-off path
+    if (this.recoverySource) { try { this.save(); return true; } catch (e) { log.warn('agents', 'agent runs not saved', { cause: errText(e), hint: 'retried shortly' }); return false; } }
+    // The runs are serialized one by one in slices (chunked-json.ts): one JSON.stringify of the whole file froze the window
+    // 100+ ms at every run event (#297). A change during the slices sets dirty again (the next save writes it); a sync save
+    // started meanwhile bumps gen, and this one then drops itself.
+    // in flight from the first slice: the quit's flush (pending) writes synchronously over a save still being built
+    const gen = ++this.gen, all = this.list();
+    this.dirty = false;
+    this.inflight++;
+    try {
+      let w: { body: string; commit: () => void };
+      try {
+        const parts = await stringifyEach(all);
+        if (this.gen !== gen) return true; // superseded by a newer save: it writes the newer state
+        const t = performance.now(), changed = this.unsaved;
+        try { w = this.prepare(all, parts); } finally { slowStep('agent-runs.json serialize', performance.now() - t); }
+        // prepare marks the store dirty for the sync path; here only a change made during the slices keeps it dirty
+        this.unsaved = changed;
+      } catch (e) {
+        if (this.gen === gen) this.dirty = true;
+        log.warn('agents', 'agent runs not saved', { cause: errText(e), hint: 'retried shortly' });
+        return false;
+      }
+      try {
+        // a sync save may have run (and pruned) during the await: committing this older prune would roll it back
+        if (await writeLocalTextAsync(this.file, w.body, () => this.gen === gen) && this.gen === gen) w.commit();
+        return true;
+      } catch (e) {
+        if (this.gen === gen) this.dirty = true;
+        log.warn('agents', 'agent runs not saved (deferred)', { cause: errText(e), hint: 'retried shortly; the quit writes them too' });
+        return this.gen !== gen;
+      }
+    } finally { this.inflight--; }
+  }
+
+  /** The deferred save into app.db: the runs' JSON is built in slices (to see which runs changed without one long step,
+   *  #297), then only the changed rows are written, in one short transaction. */
+  private async saveDbAsync(db: RunsDb): Promise<boolean> {
+    const gen = ++this.gen, all = this.list();
+    // every COLD_PASS_MS at most all the runs are looked at; in between only the open and the just ended ones. A full
+    // pass a newer save superseded (run events every 250 ms while it was built) is not tried again at once: the next
+    // saves are short and land, and the full one waits FULL_RETRY_MS, else nothing would be written until a pause
+    const clock = performance.now(), full = clock - this.fullAt >= COLD_PASS_MS && clock - this.fullTriedAt >= FULL_RETRY_MS;
+    if (full) this.fullTriedAt = clock;
+    this.dirty = false;
+    this.inflight++;
+    try {
+      let parts: string[];
+      try { parts = await this.dbParts(all, full); } catch (e) {
+        if (this.gen === gen) this.dirty = true;
+        log.warn('agents', 'agent runs not saved', { cause: errText(e), hint: 'retried shortly' });
+        return false;
+      }
+      // superseded by a newer save: it writes the newer state, the cold runs left out unless it was a full one. So a
+      // full pass is asked again: this save may have taken a cold run's change with it (it cleared `dirty`)
+      if (this.gen !== gen) { if (this.fullAt < clock) this.coldPassSoon(); return true; }
+      const t = performance.now(), changed = this.unsaved;
+      try {
+        const w = this.prepareDb(db, all, parts);
+        w.write(); w.commit();
+      } catch (e) {
+        this.dirty = true;
+        log.warn('agents', 'agent runs not saved (app.db)', { cause: errText(e), hint: 'retried shortly; the quit writes them too' });
+        return false;
+      } finally { slowStep('agent runs write (app.db)', performance.now() - t); }
+      // prepareDb marks the store dirty for the sync path; here only a change made during the slices keeps it dirty
+      this.unsaved = changed;
+      if (full) this.fullDone(); else this.coldPassSoon();
+      return true;
+    } finally { this.inflight--; }
+  }
+
+  /** when the last save that looked at every run ended, and when one was last started (performance.now) */
+  private fullAt = -Infinity;
+  private fullTriedAt = -Infinity;
+  private coldTimer: NodeJS.Timeout | undefined;
+  private fullDone(): void { this.fullAt = performance.now(); clearTimeout(this.coldTimer); this.coldTimer = undefined; }
+  /** The JSON a save can take as last written: a cold run's (ended more than COLD_AFTER_MS ago, in the database as
+   *  ended at that same time), never `changed`'s. The others (`hot`, by their index) are built by the caller. */
+  private coldParts(all: readonly AgentRun[], changed?: AgentRun): { parts: (string | undefined)[]; hot: number[] } {
+    const now = Date.now(), parts = new Array<string | undefined>(all.length), hot: number[] = [];
+    all.forEach((r, i) => {
+      const w = r !== changed && r.endedAt !== undefined && now - r.endedAt > COLD_AFTER_MS ? this.written.get(r.runId) : undefined;
+      if (w && w.endedAt === r.endedAt) parts[i] = w.json; else hot.push(i);
+    });
+    return { parts, hot };
+  }
+  /** The runs' JSON for a deferred save into app.db. Not full: a cold run keeps the JSON last written (coldParts), so a
+   *  save costs what the runs at work weigh and not the whole archive (7 MB took 60 ms of the main process at every
+   *  burst of run events). A change to a cold run (a late verdict, a review) is written by the next full pass,
+   *  COLD_PASS_MS later at most, or by the quit's flush (the armed timer counts as something still to write). */
+  private async dbParts(all: AgentRun[], full: boolean): Promise<string[]> {
+    if (full) return stringifyEach(all);
+    const { parts, hot } = this.coldParts(all);
+    (await stringifyEach(hot.map(i => all[i]!))).forEach((json, k) => { parts[hot[k]!] = json; });
+    return parts as string[];
+  }
+  /** After a save that skipped the cold runs: one that looks at all of them, when it is due. A save that fails or is
+   *  superseded asks again, so a cold run's change never waits for the next run event. */
+  private coldPassSoon(): void {
+    if (this.coldTimer) return;
+    const clock = performance.now();
+    this.coldTimer = setTimeout(() => {
+      this.coldTimer = undefined;
+      if (!this.db || this.problem) return;
+      this.unsaved = true; // nothing changed for the readers: the save itself bumps the revision, as every save does
+      void this.saveAsync().then(ok => { if (!ok && this.db && !this.problem) this.coldPassSoon(); });
+    }, Math.max(0, COLD_PASS_MS - (clock - this.fullAt), FULL_RETRY_MS - (clock - this.fullTriedAt)));
+    this.coldTimer.unref?.();
+  }
+
+  private rollupCache: { of: RunTally[]; text: string; bytes: number } | null = null;
+  /** The rollups as written to agent-runs.json (olderReadable) and their size as measured for the budget; null = none. */
+  private rollupText(): { text: string; bytes: number } | null {
+    if (!this.rollups.length) return null;
+    if (this.rollupCache?.of !== this.rollups) {
+      const text = JSON.stringify(this.rollups.map(olderReadable));
+      this.rollupCache = { of: this.rollups, text, bytes: Buffer.byteLength(JSON.stringify(this.rollups), 'utf8') };
+    }
+    return this.rollupCache;
+  }
+  private rollupJsonCache: { of: RunTally[]; text: string } | null = null;
+  /** The rollups as the database keeps them (plain JSON: no older release reads it), built once per array. */
+  private rollupJson(rollups: RunTally[]): string {
+    if (this.rollupJsonCache?.of !== rollups) this.rollupJsonCache = { of: rollups, text: JSON.stringify(rollups) };
+    return this.rollupJsonCache.text;
+  }
+
+  /** Which ended runs leave memory now, folded into their rollups, so the store fits RUNS_MAX and its byte budget. */
+  private prunePlan(all: AgentRun[], size: number, bytesOfRun: (r: AgentRun) => number): { drop: Set<AgentRun>; rollups: RunTally[]; prunedThrough: number } {
+    // the rollups only grow when runs are pruned: their budget is checked with the runs about to go
+    const budget = (this.db ? RUNS_DB_BYTES : RUNS_BYTES) - Math.min(ROLLUP_BYTES, this.rollupText()?.bytes ?? 0);
+    const drop = new Set<AgentRun>();
+    let bytes = size;
+    const over = () => all.length - drop.size > RUNS_MAX || bytes > budget;
+    if (!over()) return { drop, rollups: this.rollups, prunedThrough: this.prunedThrough };
+    const ended = all.filter(r => r.endedAt !== undefined).sort((a, b) => a.endedAt! - b.endedAt! || a.startedAt - b.startedAt);
+    const take = (r: AgentRun) => { if (!drop.has(r)) { drop.add(r); bytes -= bytesOfRun(r) + 1; } };
+    // a review goes with the run it reviews (its findings count there); then, if still over, any ended run
+    for (const r of ended) {
+      if (!over()) break;
+      if (r.reviewOf && this.runs.has(r.reviewOf)) continue;
+      if (all.some(v => v.reviewOf === r.runId && v.endedAt === undefined)) continue; // its review is still being written
+      take(r);
+      for (const v of ended) if (v.reviewOf === r.runId) take(v);
+    }
+    for (const r of ended) { if (!over()) break; take(r); }
+    const rollups = drop.size ? fitRollups(rollUp(this.rollups, [...drop], all)) : this.rollups;
+    const prunedThrough = Math.max(this.prunedThrough, ...[...drop].map(r => r.endedAt!));
+    return { drop, rollups, prunedThrough };
+  }
+  /** Once a save with a prune landed: the pruned runs leave memory, the rollups grow, the chat mirrors are told. */
+  private commitPrune(p: { drop: Set<AgentRun>; rollups: RunTally[]; prunedThrough: number }): void {
+    for (const r of p.drop) this.runs.delete(r.runId);
+    if (p.drop.size) this.rev++;
+    this.rollups = p.rollups; this.prunedThrough = p.prunedThrough;
+    if (p.drop.size) this.onPrune?.(new Set([...p.drop].map(r => r.runId)));
+  }
+
+  /** The rows to write to app.db now (the runs whose JSON changed, the pruned ones to delete, the meta that changed) and
+   *  what to apply once they are written. `all` + `parts`: the runs and their JSON, already built in slices by saveDbAsync. */
+  private prepareDb(db: RunsDb, all: AgentRun[] = this.list(), parts?: readonly string[]): { write: () => void; commit: () => void } {
+    if (this.problem) throw new Error(this.problem);
+    const json = parts ?? all.map(r => JSON.stringify(r));
+    const bytesOf = all.map((r, i) => { const w = this.written.get(r.runId); return w && w.json === json[i] ? w.bytes : Buffer.byteLength(json[i]!, 'utf8'); });
+    const flash = JSON.stringify(this.flash);
+    // the same budget agent-runs.json had: the runs' JSON, the rollups and Flash's log, about the file's size
+    const size = 64 + bytesOf.reduce((n, b) => n + b + 1, 0) + (this.rollupText()?.text.length ?? 0) + flash.length;
+    let index: Map<AgentRun, number> | null = null;
+    const bytesOfRun = (r: AgentRun) => bytesOf[(index ??= new Map(all.map((x, i) => [x, i]))).get(r)!]!;
+    this.dirty = true; // stays set when the write fails: the next flush tries again
+    const p = this.prunePlan(all, size, bytesOfRun);
+    const upsert: RunRow[] = [], fresh = new Map<string, { json: string; bytes: number; endedAt?: number | undefined }>();
+    all.forEach((r, i) => {
+      if (p.drop.has(r) || this.written.get(r.runId)?.json === json[i]) return;
+      const row = rowOf(r, json[i]!);
+      upsert.push(row); fresh.set(r.runId, { json: json[i]!, bytes: bytesOf[i]!, endedAt: row.endedAt ?? undefined });
+    });
+    const remove = [...p.drop].map(r => r.runId).filter(id => this.written.has(id));
+    const meta = new Map<string, string | null>();
+    for (const [k, v] of [['rollups', this.rollupJson(p.rollups)], ['prunedThrough', String(p.prunedThrough)], ['flash', flash]] as const) if (this.writtenMeta.get(k) !== v) meta.set(k, v);
+    return {
+      write: () => db.write({ upsert, remove, meta }),
+      commit: () => {
+        for (const [id, w] of fresh) this.written.set(id, w);
+        for (const id of remove) this.written.delete(id);
+        for (const [k, v] of meta) if (v !== null) this.writtenMeta.set(k, v);
+        this.commitPrune(p);
+      },
+    };
+  }
+
+  /** The agent-runs.json body to write now (the fallback) and what to apply once it is on disk (the pruned runs leave
+   *  memory, the rollups grow). `all` + `parts`: the runs and their JSON, already serialized in slices by saveAsync. */
+  private prepare(all: AgentRun[] = this.list(), parts?: readonly string[]): { body: string; commit: () => void } {
+    if (this.problem) throw new Error(this.problem);
+    if (this.recoverySource) {
+      const stat = fs.lstatSync(this.file);
+      if (!stat.isFile() || stat.nlink !== 1 || !fs.readFileSync(this.file).equals(this.recoverySource)) throw new Error('Il registro è cambiato durante il recupero: riapri l’app prima di salvare.');
+      const hash = crypto.createHash('sha256').update(this.recoverySource).digest('hex');
+      const recovered = path.join(path.dirname(this.file), `agent-runs-recovery-${hash}.json`);
+      let fd: number | undefined;
+      try {
+        fd = fs.openSync(recovered, 'wx', 0o600);
+        fs.writeFileSync(fd, this.recoverySource); fs.fsyncSync(fd);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+        const saved = fs.lstatSync(recovered);
+        if (!saved.isFile() || saved.nlink !== 1 || !fs.readFileSync(recovered).equals(this.recoverySource)) throw new Error('La copia del registro recuperato non è valida; originale conservato.');
+      } finally { if (fd !== undefined) fs.closeSync(fd); }
+      this.recoverySource = null;
+    }
+    // Runs on the main process at every run event: the file (up to RUNS_BYTES) is written compact and serialized once
+    // when nothing has to go; only a store over its budget measures runs one by one.
+    const json = parts ?? all.map(r => JSON.stringify(r));
+    let index: Map<AgentRun, number> | null = null;
+    const bytesOfRun = (r: AgentRun) => Buffer.byteLength(json[(index ??= new Map(all.map((x, i) => [x, i]))).get(r)!]!, 'utf8');
+    // the rollups change only when runs are pruned (commit): their text is kept per array, not rebuilt at every save
+    const rollupText = this.rollupText();
+    const record = (runs: readonly string[], rollups: string | null, prunedThrough: number) => {
+      // key order as JSON.stringify of { version, runs, rollups?, prunedThrough?, flash? } (older releases read the same file)
+      const rest = JSON.stringify({ ...(prunedThrough ? { prunedThrough } : {}),
+        // Flash's outcomes: bounded by flash-outcomes.ts (a few tens of KB at most), inside the same byte budget
+        ...(this.flash.open.length || this.flash.done.length || this.flash.asking || this.flash.total.success + this.flash.total.partial + this.flash.total.fail ? { flash: this.flash } : {}) });
+      return `{"version":1,"runs":${jsonArray(runs)}${rollups ? `,"rollups":${rollups}` : ''}${rest === '{}' ? '' : `,${rest.slice(1, -1)}`}}\n`;
+    };
+    const whole = record(json, rollupText?.text ?? null, this.prunedThrough);
+    this.dirty = true; // stays set when the write fails: the next flush tries again
+    const p = this.prunePlan(all, Buffer.byteLength(whole, 'utf8'), bytesOfRun);
+    if (!p.drop.size) return { body: whole, commit: () => {} };
+    const next = all.flatMap((r, i) => p.drop.has(r) ? [] : [json[i]!]);
+    return {
+      body: record(next, p.rollups.length ? JSON.stringify(p.rollups.map(olderReadable)) : null, p.prunedThrough),
+      commit: () => this.commitPrune(p),
+    };
+  }
+}
+
+/** Past ROLLUP_BYTES, first drops the per-tag counts of the rollup with the most tags (filters then leave it out), then
+ *  halves the samples of the largest rollup until they fit: medians then rest on fewer, newest values. */
+export function fitRollups(rollups: RunTally[]): RunTally[] {
+  const out = structuredClone(rollups);
+  const tagCount = (t: RunTally) => t.tags ? Object.keys(t.tags.skills).length + Object.keys(t.tags.apps).length + Object.keys(t.tags.repos).length + Object.keys(t.tags.combined ?? {}).length + 1 : 0;
+  while (Buffer.byteLength(JSON.stringify(out, null, 2), 'utf8') > ROLLUP_BYTES) {
+    const big = out.reduce((a, b) => tagCount(b) > tagCount(a) ? b : a, out[0]!);
+    if (!big || tagCount(big) === 0) break;
+    delete big.tags; big.tagsLost = true;
+  }
+  const samples = (t: RunTally) => [t.cost, t.elapsed, t.execution, ...Object.values(t.tokens)];
+  const size = (t: RunTally) => samples(t).reduce((n, s) => n + s.values.length, 0);
+  while (Buffer.byteLength(JSON.stringify(out, null, 2), 'utf8') > ROLLUP_BYTES) {
+    const big = out.reduce((a, b) => size(b) > size(a) ? b : a, out[0]!);
+    if (!big || size(big) === 0) break;
+    for (const s of samples(big)) s.values = s.values.slice(Math.ceil(s.values.length / 2));
+  }
+  return out;
+}

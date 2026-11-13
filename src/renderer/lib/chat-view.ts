@@ -1,0 +1,91 @@
+// How a chat's items are laid out on screen (the owner, 2026-10-20). In an Orchestrator, its reasoning and tool rows
+// fold behind one "Ragionamento" row (seen only when opened); a reply of one or two emoji (shared/reaction.ts) right
+// after the user's own message sticks to that bubble as a small reaction, WhatsApp style. Anywhere else it means "noted,
+// nothing for you" and is not drawn at all (the owner, 2026-10-20: «non deve rispondere un cazzo a un messaggio dell'app
+// che non dice niente»): with it go the app news or mail it answered, the folded work of that turn and its "Turno
+// finito" line, so a turn that had nothing for the user leaves no trace. A long transcript draws only its tail
+// (tailStart: the last TAIL_ITEMS items, from a turn's start; «Mostra precedenti» reveals more), so a chat open all day
+// does not lay out and re-render up to 600 rows on every streamed word. The app's automatic result delivery to the
+// Orchestrator is never drawn: the result card above it already shows the result (#351). Pure, so the layout is unit tested. Used by
+// ChatItems.tsx (ItemListFor); resultLine gives the folded result card its one line.
+import type { ChatItem } from '@shared/contract';
+import { isReaction } from '@shared/reaction';
+import { foreignOf, isResultDelivery } from './foreign';
+import { toolChatRef } from './chatrefs';
+
+/** The items a transcript draws by default, counted from its end. */
+export const TAIL_ITEMS = 120;
+/** How far past the cut a turn's first message is looked for (the window starts at a turn when it can). */
+const TURN_SLACK = 30;
+
+/** Where the drawn tail of `items` starts for at most `limit` items: 0 = everything; else the first user message
+ *  within TURN_SLACK items after the plain cut (a turn is never cut in half when it can be helped), or the plain cut. */
+export function tailStart(items: readonly ChatItem[], limit: number): number {
+  if (!(items.length > limit)) return 0;
+  const cut = items.length - limit;
+  for (let i = cut, end = Math.min(items.length, cut + TURN_SLACK); i < end; i++) if (items[i]!.kind === 'user') return i;
+  return cut;
+}
+
+export type ViewItem =
+  | { kind: 'item'; item: ChatItem; reaction?: string }
+  | { kind: 'process'; id: string; items: ChatItem[] };
+
+/** The rows to draw: items in order, with reactions attached and (when foldProcess) thinking/tool runs grouped. */
+export function chatView(items: readonly ChatItem[], { foldProcess }: { foldProcess: boolean }): ViewItem[] {
+  const out: ViewItem[] = [];
+  // the last own user message drawn, while nothing but folded process rows came after it
+  let target: Extract<ViewItem, { kind: 'item' }> | null = null;
+  // the turn just dropped: its "Turno finito" line goes too
+  let dropResult = false;
+  for (const item of items) {
+    // An emoji prefix may still grow into prose. Wait for finalization rather than flashing an assistant bubble
+    // that will move to the user (or disappear for app news). Keep the eligible target intact in the meantime.
+    if (item.kind === 'assistant' && item.streaming && isReaction(item.text)) continue;
+    if (dropResult && item.kind === 'result') {
+      dropResult = false;
+      // Only successful acknowledgements are silent; failures and interruptions still need the user's attention.
+      if (!item.isError && !item.interrupted) continue;
+    }
+    if (foldProcess && (item.kind === 'thinking' || item.kind === 'tool')) {
+      const prev = out[out.length - 1];
+      if (prev?.kind === 'process') prev.items.push(item);
+      else out.push({ kind: 'process', id: `process-${item.id}`, items: [item] });
+      continue;
+    }
+    if (item.kind === 'assistant' && !item.streaming && isReaction(item.text) && target && !target.reaction) {
+      target.reaction = item.text.trim();
+      target = null;
+      continue;
+    }
+    if (item.kind === 'assistant' && !item.streaming && isReaction(item.text)) {
+      // a silent turn: drop what it answered (news, mail) and its folded work, back to the last thing drawn; work that
+      // opened or wrote to a chat keeps its "Apri" chip, and then the turn stays
+      while (out.length) {
+        const last = out[out.length - 1]!;
+        if (last.kind === 'process' ? !last.items.some(i => i.kind === 'tool' && toolChatRef(i)) : last.item.kind === 'user' && !!foreignOf(last.item)) out.pop();
+        else break;
+      }
+      target = null;
+      dropResult = true;
+      continue;
+    }
+    dropResult = false;
+    // the app's automatic result delivery to the Orchestrator: for the model only, the result card shows it (#351)
+    // (it still ends the user's own turn: a reaction after it never sticks to the message before it)
+    if (item.kind === 'user' && isResultDelivery(item)) { target = null; continue; }
+    const row: Extract<ViewItem, { kind: 'item' }> = { kind: 'item', item };
+    out.push(row);
+    target = item.kind === 'user' && !item.from && !foreignOf(item) ? row : null;
+  }
+  return out;
+}
+
+/** The first line of a result, as plain text (headings, emphasis and list marks dropped), for the folded row. */
+export function resultLine(output: string): string {
+  const first = output.split('\n').filter(l => !/^\s*(?:```|\||-{3,}\s*$)/.test(l))
+    .map(l => l.replace(/^\s*(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+|>\s*)/, '').replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/`+|\*{1,3}(?=\S)|(?<=\S)\*{1,3}|(?<![\w])_{1,3}(?=\S)|(?<=\S)_{1,3}(?![\w])/g, '').trim()).find(Boolean) ?? '';
+  const chars = [...first];
+  return chars.length > 160 ? `${chars.slice(0, 159).join('')}…` : first;
+}

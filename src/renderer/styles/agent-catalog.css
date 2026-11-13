@@ -1,0 +1,204 @@
+/* Agenti catalogue (AgentCatalogPage, AgentCatalogCard, CatalogRun): page header, team summary and a responsive grid of
+   role cards in the Dashboard's language (gradient surfaces, 12px radii, tabular numbers, a hairline in each role's
+   character colour). Only theme tokens (tokens.css), so dark and light follow the app; motion is off under reduced
+   motion; readable down to narrow windows (one column, metrics two by two). */
+.agent-overview{max-width:1400px;margin:auto;padding:28px 32px 48px;overflow-wrap:anywhere;color:var(--text)}
+/* agent-strips.css styles a chat strip's own .agent-overview (grid, 12px, one-line paragraphs): undone for this page */
+section.agent-overview{display:block;border-bottom:0;font-size:var(--fs-m);padding:28px 28px 48px;width:100%;box-sizing:border-box;container:catalog/inline-size}
+section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
+
+/* header (markup owned by the page: title, subtitle, create buttons) */
+.catalog-head{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:22px}
+.catalog-head>div{flex:1;min-width:220px}
+.catalog-head h2{font-family:var(--font-display);font-size:30px;font-weight:600;letter-spacing:-1.1px;line-height:1.15;margin:0 0 6px}
+.catalog-head p,.catalog-note{color:var(--text-3);font-size:var(--fs-m);line-height:1.6;margin:0}
+.catalog-intro,.catalog-create{padding:18px 20px;border:1px solid var(--border);border-radius:var(--r-l);background:linear-gradient(145deg,var(--surface-2),var(--surface));margin:0 0 18px;color:var(--text-2);line-height:1.6}
+.catalog-create{display:grid;gap:12px;max-width:700px}.catalog-create h3{margin:0;font-size:var(--fs-l)}.catalog-create p{margin:0}.catalog-create textarea,.catalog-create input{width:100%}
+
+/* filter toolbar */
+
+/* team summary above the grid */
+.catalog-summary{display:flex;align-items:baseline;justify-content:space-between;gap:8px 24px;flex-wrap:wrap;margin:22px 0 14px}
+.catalog-count{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0;font-size:var(--fs-m);color:var(--text-2)}
+.catalog-count strong{font-size:var(--fs-xl);font-weight:600;letter-spacing:-.3px;color:var(--text)}
+.catalog-count span{display:inline-flex;align-items:center;gap:6px}
+.catalog-summary .catalog-note{font-size:var(--fs-s);max-width:72ch}
+.catalog-count i,.catalog-badge i{width:7px;height:7px;border-radius:50%;flex:none;background:var(--green)}
+[data-state=trial]>i{background:var(--amber)}
+[data-state=working]>i{box-shadow:0 0 0 3px var(--green-bg),0 0 10px var(--green);animation:catalog-beat 2.2s ease-in-out infinite}
+
+/* the grid of cards */
+.catalog-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:14px;align-items:start}
+/* the role cards (owner, 2026-10-31: «le card degli agenti non sono simmetriche»): a flip card is as tall as its longer
+   face, the back, whose prompt and skills differ per role, so cards side by side ended at different heights. Every card
+   of a row takes the row's height and the front keeps its numbers on the bottom line; nothing is cut */
+.catalog-roles{align-items:stretch}
+.catalog-roles>.catalog-card>.bm-flip-inner{flex:1}
+.catalog-roles .bm-face-front>.catalog-stats{margin-top:auto}
+.catalog-card{--tone:var(--accent);position:relative;min-width:0;display:flex;flex-direction:column;gap:14px;padding:18px 18px 14px;border:1px solid var(--border);border-radius:var(--r-l);background:linear-gradient(160deg,var(--surface-2),var(--surface) 62%);container-type:inline-size;transition:border-color var(--dur-slow),transform var(--dur-slow) var(--ease),box-shadow var(--dur-slow)}
+.catalog-card::before{content:"";position:absolute;inset:0 0 auto;height:2px;border-radius:var(--r-l) var(--r-l) 0 0;background:linear-gradient(90deg,var(--tone),transparent 85%);opacity:.75;pointer-events:none}
+.catalog-card:hover,.catalog-card:focus-within{border-color:var(--border-3);transform:translateY(-2px);box-shadow:0 16px 36px -22px var(--tone)}
+
+.catalog-card-head{display:flex;align-items:center;gap:12px;min-width:0}
+.catalog-avatar{display:grid;place-items:center;flex:none;width:48px;height:48px;border-radius:50%;background:color-mix(in srgb,var(--tone) 12%,var(--surface-3));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tone) 30%,transparent),0 0 24px -12px var(--tone)}
+.catalog-card-id{flex:1;min-width:0}
+.catalog-card h3{margin:0;font-size:var(--fs-xl);font-weight:600;letter-spacing:-.25px;line-height:1.3}
+.catalog-card h3 button{font:inherit;color:inherit;text-align:left;background:none;border:0;padding:0;cursor:pointer;display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.catalog-card h3 button::after{content:"";position:absolute;inset:0;border-radius:var(--r-l)}
+.catalog-card h3 button:focus-visible{outline:none}.catalog-card:has(h3 button:focus-visible){outline:2px solid var(--focus);outline-offset:2px}
+.agent-overview .catalog-role{margin:3px 0 0;font-size:var(--fs-s);color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.catalog-badge{display:inline-flex;align-items:center;gap:6px;flex:none;align-self:flex-start;font-size:var(--fs-xs);font-weight:550;color:var(--text-2);border:1px solid var(--border-2);background:var(--surface-2);border-radius:20px;padding:3px 9px 3px 8px;white-space:nowrap}
+.catalog-badge[data-state=working]{color:var(--green);border-color:color-mix(in srgb,var(--green) 40%,transparent);background:var(--green-bg)}
+.catalog-badge[data-state=trial]{color:var(--amber);border-color:var(--amber-line);background:var(--amber-bg)}
+
+.agent-overview .catalog-purpose{margin:-4px 0 0;min-height:calc(2 * 1.55em);font-size:var(--fs-m);line-height:1.55;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.catalog-chips{display:flex;gap:6px;flex-wrap:wrap;min-width:0}
+.catalog-chip{max-width:100%;font-size:var(--fs-xs);color:var(--text-2);border:1px solid var(--border-2);background:var(--surface-3);border-radius:var(--r-xs);padding:3px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.catalog-chip[data-kind=model]{font-family:var(--mono);font-size:10.5px;color:var(--text-3);background:transparent}
+
+.catalog-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:0;border:1px solid var(--border);border-radius:var(--r-m);background:color-mix(in srgb,var(--bg) 45%,transparent)}
+.catalog-stats>div{min-width:0;padding:10px 10px 9px;border-left:1px solid var(--border)}.catalog-stats>div:first-child{border-left:0}
+.catalog-stats dt{font-size:var(--fs-xs);color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.catalog-stats dd{margin:4px 0 0;font-size:var(--fs-xl);font-weight:600;letter-spacing:-.3px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.catalog-stats dd>[aria-hidden=true]{color:var(--text-4);font-weight:500}
+@container (max-width:290px){.catalog-stats{grid-template-columns:1fr 1fr}.catalog-stats>div:nth-child(3){border-left:0}.catalog-stats>div:nth-child(n+3){border-top:1px solid var(--border)}}
+
+/* the front (owner, 19/10: "l'icona più grande e centrale"): origin and status on top, the character large and centred
+   on a soft halo in its colour, the level as a medal on the badge, then name, purpose, chips, level and performance */
+.catalog-front-top{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;margin-bottom:-6px}
+.agent-overview .catalog-origin{font-size:var(--fs-xs);color:var(--text-3);letter-spacing:.06em;text-transform:uppercase;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.catalog-hero{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;min-width:0}
+.catalog-hero-avatar{position:relative;display:grid;place-items:center;width:132px;height:132px;margin-bottom:4px;border-radius:50%;
+  background:radial-gradient(circle at 50% 45%,color-mix(in srgb,var(--tone) 26%,transparent),color-mix(in srgb,var(--tone) 7%,transparent) 62%,transparent 71%)}
+.catalog-hero-avatar::before{content:"";position:absolute;inset:8px;border-radius:50%;border:1px dashed color-mix(in srgb,var(--tone) 38%,transparent);pointer-events:none}
+.catalog-hero-avatar>.agent-avatar{filter:drop-shadow(0 10px 18px color-mix(in srgb,var(--tone) 35%,transparent));transition:transform var(--dur-slow) var(--ease)}
+.bm-face-front:hover .catalog-hero-avatar>.agent-avatar{transform:translateY(-2px) scale(1.03)}
+.catalog-level-medal{position:absolute;left:50%;bottom:2px;transform:translateX(-50%);display:grid;place-items:center;height:24px;padding:0 10px;box-sizing:border-box;border-radius:12px;white-space:nowrap;
+  background:linear-gradient(145deg,color-mix(in srgb,var(--tone) 92%,#000),color-mix(in srgb,var(--tone) 68%,#000));color:#fff;font-weight:700;font-size:var(--fs-s);letter-spacing:.02em;font-variant-numeric:tabular-nums;
+  border:2px solid var(--surface);box-shadow:0 4px 10px -4px rgba(0,0,0,.5);text-shadow:0 1px 1px rgba(0,0,0,.25)}
+.catalog-hero h3 button{text-align:center;margin:auto}
+.agent-overview .catalog-hero .catalog-purpose{margin:0;max-width:34ch}
+.catalog-hero+.catalog-chips{justify-content:center}
+
+/* level and performance, side by side (stacked in a narrow card) */
+.catalog-standing{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:10px}
+.catalog-standing>section{min-width:0;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-m);background:color-mix(in srgb,var(--bg) 45%,transparent)}
+.catalog-standing h4{display:flex;align-items:center;margin:0;font-size:var(--fs-xs);font-weight:600;color:var(--text-3)}
+.catalog-standing .help-tip{z-index:1;margin-left:5px}
+.agent-overview .catalog-standing p{margin:3px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.catalog-standing b{font-size:var(--fs-xl);font-weight:650;letter-spacing:-.3px;font-variant-numeric:tabular-nums;color:var(--text)}
+.catalog-standing p span{font-size:var(--fs-s);color:var(--text-2)}
+/* «Lv 7 Praticante · 124 XP»: the XP beside the level wraps under it in a narrow card (ADR 0100, 0131) */
+.agent-overview .catalog-standing p.catalog-level-value{white-space:normal}
+.catalog-standing .catalog-level-wins{white-space:nowrap;font-variant-numeric:tabular-nums}
+.catalog-standing small{display:block;margin-top:5px;font-size:var(--fs-xs);color:var(--text-3);line-height:1.35}
+.catalog-level-bar{height:6px;margin-top:7px;border-radius:3px;background:var(--surface-3);overflow:hidden}
+.catalog-level-bar>i{display:block;height:100%;min-width:3px;border-radius:inherit;background:linear-gradient(90deg,color-mix(in srgb,var(--tone) 65%,var(--surface)),var(--tone));transition:width 600ms var(--ease)}
+.catalog-perf{display:flex;align-items:center;gap:10px}
+.catalog-perf-text{min-width:0;flex:1}
+.catalog-gauge{flex:none;width:46px;height:46px}
+.catalog-gauge circle{fill:none;stroke-width:6}
+.catalog-gauge .track{stroke:var(--surface-3)}
+.catalog-gauge .fill{stroke:var(--perf,var(--text-4));stroke-linecap:round;transition:stroke-dasharray 600ms var(--ease)}
+.catalog-perf[data-band=top]{--perf:var(--green)}.catalog-perf[data-band=good]{--perf:var(--accent)}
+.catalog-perf[data-band=fair]{--perf:var(--amber)}.catalog-perf[data-band=low]{--perf:var(--red)}
+.catalog-perf[data-band=warmup] .fill{stroke:var(--text-3)}
+.catalog-perf[data-band] p span{color:var(--perf,var(--text-2));font-weight:550}
+.catalog-perf .warmup{font-size:var(--fs-m)!important;color:var(--text-2)!important}
+/* the estimate's uncertainty beside the % (ADR 0131): small and quiet, never the band's colour */
+.catalog-perf[data-band] p .catalog-perf-spread{margin-left:3px;font-size:var(--fs-xs);font-weight:500;color:var(--text-3);font-variant-numeric:tabular-nums}
+.catalog-stats dt .help-tip{position:relative;z-index:1;margin-left:4px}
+.catalog-stats:has(>div:nth-child(3):last-child){grid-template-columns:repeat(3,minmax(0,1fr))}
+.help-bubble .catalog-help-now{padding-top:6px;margin-top:7px!important;border-top:1px solid var(--border);color:var(--text)}
+@container (max-width:440px){.catalog-standing{grid-template-columns:1fr;gap:8px}}
+
+/* footer: Avvia (CatalogRun) on the left, Dettagli on the right; the run form and the details open full width below */
+.catalog-card-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.catalog-run{display:contents}
+.catalog-card-foot .btn{position:relative;z-index:1}
+.catalog-card-foot .catalog-run>.btn{height:28px;padding:0 12px;font-size:var(--fs-s)}
+.catalog-run form{order:3;flex-basis:100%;position:relative;z-index:1;display:grid;gap:12px;margin-top:4px;padding-top:12px;border-top:1px solid var(--border)}
+.catalog-run input,.catalog-run textarea{width:100%}
+.catalog-more{margin-left:auto;color:var(--text-2)}
+.catalog-more-chevron{display:inline-block;transition:transform var(--dur) var(--ease)}
+.catalog-more[aria-expanded=true] .catalog-more-chevron{transform:rotate(180deg)}
+/* the details float under their card, over the cards below: opening them never moves a neighbour (owner, 18/10) */
+.catalog-card[data-expanded=true]{z-index:20;border-color:var(--border-3);border-bottom-left-radius:0;border-bottom-right-radius:0;transform:none;box-shadow:0 22px 50px -24px rgba(0,0,0,.55)}
+.catalog-details{position:absolute;z-index:20;top:calc(100% - 1px);left:-1px;right:-1px;display:grid;gap:12px;padding:14px 18px 16px;max-height:min(64vh,560px);overflow:auto;overscroll-behavior:contain;border:1px solid var(--border-3);border-top:1px solid var(--border);border-radius:0 0 var(--r-l) var(--r-l);background:var(--surface-2);box-shadow:0 28px 50px -22px rgba(0,0,0,.6);cursor:auto;animation:catalog-details-open 180ms var(--ease) both}
+@keyframes catalog-details-open{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.catalog-details[hidden]{display:none}
+.catalog-prompt h4{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 0 8px;font-size:var(--fs-xs);letter-spacing:.08em;text-transform:uppercase;font-weight:650;color:var(--text-3)}
+.catalog-prompt h4 small{letter-spacing:0;text-transform:none;font-weight:500;color:var(--text-4);font-variant-numeric:tabular-nums}
+.catalog-prompt pre{margin:0;max-height:240px;overflow:auto;padding:10px 12px;border:1px solid var(--border);border-left:2px solid var(--tone);border-radius:var(--r-s);background:color-mix(in srgb,var(--bg) 55%,transparent);font-family:var(--mono);font-size:11.5px;line-height:1.65;color:var(--md-text);white-space:pre-wrap;overflow-wrap:anywhere}
+.catalog-prompt pre:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.agent-overview .catalog-prompt p{margin:0;font-size:var(--fs-s);color:var(--text-3)}
+.catalog-details dl{display:grid;gap:7px;margin:0;padding-top:10px;border-top:1px solid var(--border)}
+.catalog-details dl>div{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:var(--fs-s)}
+.catalog-details dt{color:var(--text-3)}.catalog-details dd{margin:0;text-align:right;color:var(--text);font-variant-numeric:tabular-nums}
+.catalog-details small{display:block;color:var(--text-3);font-size:var(--fs-xs)}
+.catalog-details>.btn{justify-self:start}
+
+@media(max-width:600px){section.agent-overview{padding:18px 16px 32px}}
+@container catalog (max-width:560px){.catalog-head h2{font-size:26px}.catalog-filters .field{max-width:none}.catalog-filters>.btn{margin-left:0}
+  .agent-lifecycle>h3,.agent-lifecycle>h3+p{padding-right:0}div:has(>.agent-lifecycle)>.btn{position:static;margin-bottom:14px}}
+
+/* entrance, live dot and launch confirmation; none of it under reduced motion */
+.catalog-card{animation:catalog-row-enter 320ms var(--ease) both;animation-delay:calc(var(--row-index,0)*40ms)}
+@keyframes catalog-row-enter{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes catalog-beat{50%{opacity:.45}}
+.run-confirmed .run-mark{display:inline-block;animation:run-check 220ms ease-out}
+@keyframes run-check{from{transform:scale(.6) rotate(-20deg);opacity:.3}to{transform:scale(1) rotate(0);opacity:1}}
+@media(prefers-reduced-motion:reduce){.catalog-level-bar>i,.catalog-gauge .fill,.catalog-hero-avatar>.agent-avatar{transition:none}.catalog-card,.catalog-details,.run-confirmed .run-mark,[data-state=working]>i{animation:none}.catalog-card,.catalog-card:hover,.catalog-card:focus-within{transform:none}.catalog-more-chevron{transition:none}}
+/* the back's costs (#125): two figures, each with its sample, and one line when one is missing (beats .bm-face-back dl) */
+.catalog-costs{padding-top:10px;border-top:1px solid var(--border)}
+.catalog-costs h4{display:flex;align-items:center;gap:6px;margin:0 0 8px;font-size:var(--fs-xs);letter-spacing:.08em;text-transform:uppercase;font-weight:650;color:var(--text-3)}
+.catalog-costs h4 small{margin-left:auto;letter-spacing:0;text-transform:none;font-weight:500;color:var(--text-4);font-variant-numeric:tabular-nums}
+.bm-face-back dl.catalog-costs-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0;padding:0;border:0}
+.bm-face-back .catalog-costs-grid>div{display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch;gap:3px;min-width:0;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-s);background:color-mix(in srgb,var(--bg) 55%,transparent)}
+.bm-face-back .catalog-costs-grid dt{font-size:11px;line-height:1.3;color:var(--text-3)}
+.bm-face-back .catalog-costs-grid dd{text-align:left;font-size:16px;font-weight:650;color:var(--text);white-space:nowrap;overflow-wrap:normal}
+.bm-face-back .catalog-costs-grid dd small{margin-top:2px;font-size:11px;font-weight:500;color:var(--text-4);white-space:normal}
+.catalog-costs-note{margin:6px 0 0;font-size:11.5px;color:var(--text-3)}
+/* the review switch on top of Agenti (JudgingSwitch.tsx): one row, its cost a day under the description */
+.judging-switch { display: flex; align-items: center; gap: 16px; margin: 0 0 16px; padding: 14px 18px; border: 1px solid var(--border); border-radius: var(--r-l); background: linear-gradient(145deg, var(--surface-2), var(--surface)); }
+.judging-switch[data-on="true"] { border-color: color-mix(in srgb, var(--green) 40%, var(--border)); }
+.judging-text { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.judging-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 650; color: var(--text); }
+.judging-desc { margin: 0; color: var(--text-2); font-size: var(--fs-s); line-height: 1.5; }
+.judging-cost { margin: 0; color: var(--text-3); font-size: var(--fs-s); font-variant-numeric: tabular-nums; }
+.judging-off { margin: 0; padding: 4px 8px; border-left: 2px solid var(--amber-line); background: var(--amber-bg); color: var(--amber); font-size: var(--fs-s); border-radius: 4px; }
+.judging-switch[data-on="true"] .judging-cost { color: var(--text-2); }
+.judging-toggle { flex: none; position: relative; width: 42px; height: 24px; border-radius: 12px; border: 1px solid var(--border-control); background: var(--surface-4); cursor: pointer; padding: 0; transition: background var(--dur-fast) var(--ease); }
+.judging-toggle .judging-knob { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--text-2); transition: transform var(--dur-fast) var(--ease); }
+.judging-toggle.on { background: var(--green); border-color: var(--green); }
+.judging-toggle.on .judging-knob { transform: translateX(18px); background: #fff; }
+.judging-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.judging-toggle:disabled { opacity: .6; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .judging-toggle, .judging-toggle .judging-knob { transition: none; } }
+.catalog-stats .catalog-stat-note{display:block;margin-top:2px;font-size:var(--fs-xs);color:var(--text-3);white-space:normal;line-height:1.3}
+/* the daily cap beside the switch and the last nightly batch (ADR 0203) */
+.judging-last { margin: 0; color: var(--text-3); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.judging-controls { flex: none; display: flex; align-items: center; gap: 14px; }
+.judging-cap { display: grid; gap: 4px; justify-items: end; }
+.judging-cap-label { font-size: var(--fs-xs); color: var(--text-3); }
+.judging-cap-seg { display: inline-flex; padding: 2px; gap: 2px; border: 1px solid var(--border-2); border-radius: 999px; background: var(--surface-3); }
+.judging-cap-seg button { min-width: 40px; height: 24px; padding: 0 9px; border: 0; border-radius: 999px; background: transparent; color: var(--text-2); font: inherit; font-size: var(--fs-xs); font-variant-numeric: tabular-nums; cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.judging-cap-seg button:hover:not(:disabled) { color: var(--text); }
+.judging-cap-seg button.on { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .18); }
+.judging-cap-seg button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.judging-cap-seg button:disabled { cursor: default; opacity: .55; }
+.judging-switch { flex-wrap: wrap; row-gap: 12px; }
+.judging-switch > .judging-text { flex: 1 1 340px; }
+.judging-controls { margin-left: auto; }
+.catalog-standing small.catalog-updated { display: flex; align-items: center; gap: 5px; margin-top: 3px; }
+.catalog-standing small.catalog-updated::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: color-mix(in srgb, var(--tone, var(--green)) 70%, transparent); }
+
+/* the back's «Modello, effort, contesto» pickers (AgentCardModel.tsx, ADR 0211) */
+.catalog-model{position:relative;z-index:1;display:flex;flex-direction:column;gap:7px;margin:0 0 14px;padding:10px 12px;border:1px solid var(--border);border-left:2px solid var(--tone);border-radius:var(--r-s);background:color-mix(in srgb,var(--bg) 55%,transparent)}
+.catalog-model h4{margin:0 0 2px;font-size:var(--fs-xs);letter-spacing:.08em;text-transform:uppercase;font-weight:650;color:var(--text-3)}
+.catalog-model-row{display:grid;grid-template-columns:110px minmax(0,1fr);align-items:center;gap:10px;font-size:12px;color:var(--text-2)}
+.catalog-model-row>button{min-width:0;width:100%}
+.catalog-model-note{margin:0;font-size:11px;color:var(--amber)}
+/* the role's engine, model and effort on one line: a button that opens the shared picker (AgentCardModel.tsx) */
+.catalog-model-button{justify-content:flex-start;gap:6px}
+.catalog-model-button-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}

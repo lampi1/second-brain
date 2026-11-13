@@ -1,0 +1,71 @@
+// The images a question shows (the user, 2026-10-14: "mi piacerebbe che le immagini si potessero vedere direttamente
+// nella domanda"): a chat names a local PNG, JPG or WebP in its question, an option or the turn's prose, and the panel
+// shows it as a thumbnail that opens large. The path comes from a model's text, so it is untrusted: an absolute local
+// path (open-path.ts rules: a drive letter or a /-rooted path, never a network share, real path checked again), inside one of the allowed
+// folders (the app's evidence and profile folders, the brain, the app's code and its worktrees), with an image
+// extension AND the matching magic bytes, at most MAX_ASK_IMAGE bytes. It is handed to the renderer as a data: URL (the
+// CSP already allows img-src data:; no file: URL ever reaches the page). Nothing is written, run or sent anywhere.
+// Used by index.ts (app:askImage); pinned by test/unit/ask-image.test.ts.
+import fs from 'node:fs';
+import path from 'node:path';
+import type { AskImageResult } from '../shared/contract';
+import { linksToShare, localPath } from './open-path';
+
+export const MAX_ASK_IMAGE = 4_000_000;
+
+/** How an agent shows the user a screenshot (issue #83), the same everywhere: a path is enough. Quoted in the chat
+ *  MCP instructions, the browser's screenshot tool and show_ui (browser/service.ts, browser/tools.ts, genui/artifacts.ts). */
+export const SCREENSHOT_HINT = 'Screenshots for the user: save a PNG, JPG or WebP (max 4 MB) under your chat\'s evidence folder (screenshot save_to), the brain, the app\'s repo or a worktree, then write its absolute path (C:\\…\\after.png, or ![Dopo](C:/…/after.png) for a caption) in your message, in the AskUserQuestion question or an option\'s description (before/after: one path each, named x-before.png and x-after.png, so the app shows them as a pair in its viewer, side by side or with a slider), or in a report (Markdown ![](shots/x.png) or HTML <img src="shots/x.png"> relative to the report, or base64 data: PNGs). The app shows it as a thumbnail; a click opens it large. Never an http URL: remote images are not loaded.';
+const MIME: Record<string, 'image/png' | 'image/jpeg' | 'image/webp'> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
+
+/** Do the first bytes say what the extension says? */
+export function magicMatches(mime: string, head: Buffer): boolean {
+  if (mime === 'image/png') return head.length >= 8 && head.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  if (mime === 'image/jpeg') return head.length >= 3 && head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
+  if (mime === 'image/webp') return head.length >= 12 && head.toString('latin1', 0, 4) === 'RIFF' && head.toString('latin1', 8, 12) === 'WEBP';
+  return false;
+}
+
+/** Is `p` the folder `root` or inside it (whole path segments; case-insensitive on Windows and macOS, whose disks are
+ *  by default, case-sensitive on Linux)? */
+export function isInside(p: string, root: string, platform: NodeJS.Platform = process.platform): boolean {
+  const lib = platform === 'win32' ? path.win32 : path.posix;
+  // macOS: APFS ignores case and Unicode form (é composed or decomposed), so both are folded; Linux keeps both
+  const fold = platform === 'linux' ? (s: string) => s : platform === 'darwin' ? (s: string) => s.normalize('NFC').toLowerCase() : (s: string) => s.toLowerCase();
+  const norm = (x: string) => fold(lib.resolve(x).replace(/[\\/]+$/, ''));
+  const a = norm(p);
+  const b = norm(root);
+  return a === b || a.startsWith(`${b}${lib.sep}`);
+}
+
+const realOr = (p: string) => { try { return fs.realpathSync.native(p); } catch { return p; } };
+
+export function readAskImage(raw: string, roots: readonly string[]): AskImageResult {
+  const p = localPath(raw);
+  if (!p) return { kind: 'refused', reason: `Solo immagini di questo PC, con il percorso completo (${process.platform === 'win32' ? 'C:\\…' : '/…'}).` };
+  const mime = MIME[path.extname(p).toLowerCase()];
+  if (!mime) return { kind: 'refused', reason: 'Solo immagini PNG, JPG o WebP.' };
+  if (linksToShare(p)) return { kind: 'refused', reason: 'Il percorso porta a una cartella di rete.' };
+  let real: string;
+  let st: fs.Stats;
+  try { real = fs.realpathSync.native(p); st = fs.statSync(real); } catch { return { kind: 'missing', reason: `L'immagine non c'è: ${p}`, path: p }; }
+  if (/^[\\/]{2}/.test(real)) return { kind: 'refused', reason: 'Il percorso porta a una cartella di rete.' };
+  if (!roots.some(r => isInside(real, realOr(r)))) return { kind: 'refused', reason: 'Fuori dalle cartelle ammesse (evidence, brain, codice dell’app).', path: real };
+  if (!st.isFile()) return { kind: 'refused', reason: 'Non è un file.', path: real };
+  if (st.size > MAX_ASK_IMAGE) return { kind: 'refused', reason: 'Immagine troppo grande per l’anteprima (oltre 4 MB).', path: real };
+  let buf: Buffer;
+  try { buf = fs.readFileSync(real); } catch { return { kind: 'missing', reason: `L'immagine non si legge adesso (in uso?): ${p}`, path: p }; }
+  if (buf.length > MAX_ASK_IMAGE) return { kind: 'refused', reason: 'Immagine troppo grande per l’anteprima (oltre 4 MB).', path: real };
+  if (!magicMatches(mime, buf.subarray(0, 12))) return { kind: 'refused', reason: 'Il file non è l’immagine che dice di essere.', path: real };
+  return { kind: 'image', path: real, dataUrl: `data:${mime};base64,${buf.toString('base64')}` };
+}
+
+/** The allowed folders: the evidence and profile of both instances, the current profile, the brain, the app's code and
+ *  the folder of its worktrees beside it. Missing ones are simply never matched. */
+export function askImageRoots(o: { userData: string; appData?: string; brainRoot?: string | null; repos: readonly (string | null | undefined)[] }): string[] {
+  const out = [o.userData];
+  if (o.appData) out.push(path.join(o.appData, 'second-brain', 'evidence'), path.join(o.appData, 'second-brain-dev', 'evidence'));
+  if (o.brainRoot) out.push(o.brainRoot);
+  for (const r of o.repos) if (r) out.push(r, path.join(path.dirname(r), 'second-brain-wt'));
+  return out;
+}

@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="it">
+<head><meta charset="utf-8"><title>Popup</title></head>
+<body style="font-family: system-ui, sans-serif">
+  <h1>Popup</h1>
+  <p id="op"></p>
+  <button id="hi" onclick="document.getElementById('op').textContent += ' / ciao'">Saluta</button>
+  <button id="close" onclick="window.close()">Chiudi</button>
+  <script>document.getElementById('op').textContent = 'opener: ' + (window.opener ? 'si' : 'no');</script>
+</body>
+</html>

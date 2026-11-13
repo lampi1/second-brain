@@ -1,0 +1,138 @@
+// A Strategist's plan to approve as a card of the questions window (ADR 0121): which plans wait (proposed, open chats,
+// oldest first; put in among the requests where they came), the key's shape (`${chatId}/plan@${at}`, as reqKey builds keys) and back, and the card's markup in
+// every language: the steps numbered with their role and detail, when it is finished, what is clear, yes/no/free-text actions and the collapsed complete plan;
+// nothing for a plan that no longer waits or a newer proposal than the one asked. Rendered without a browser.
+import { createElement } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ChatSummary, PendingRequest } from '../../src/shared/contract';
+import type { StrategyPlan } from '../../src/shared/strategy';
+vi.mock('../../src/renderer/components/GenUi', () => ({ openFile: async () => {} }));
+vi.mock('../../src/renderer/sb', () => ({ sb: {} }));
+vi.mock('../../src/renderer/actions', () => ({ claimFocus: () => false }));
+let chats: Record<string, Partial<ChatSummary>> = {};
+vi.mock('../../src/renderer/store/store', () => ({ useApp: <T,>(pick: (s: { chats: typeof chats }) => T) => pick({ chats }), planDecide: async () => true }));
+import { renderToStaticMarkup } from 'react-dom/server';
+import { planCards, planQuestion, planAskKey, planAskKeys, planAskOf, planWaits, withPlans } from '../../src/renderer/lib/plan-ask';
+import { PlanApproval } from '../../src/renderer/components/PlanApproval';
+import { setLang } from '../../src/renderer/i18n';
+
+afterEach(() => setLang('it'));
+const plan = (p: Partial<StrategyPlan> = {}): StrategyPlan => ({ phase: 'proposed', at: 42, clarified: [{ q: 'Offerte', a: 'No' }], doneWhen: 'I test passano',
+  steps: [{ title: 'Trovo dove', detail: 'carrello e reso', role: 'scout', state: 'todo' }, { title: 'Applico lo sconto', role: 'artisan', state: 'todo' }, { title: 'Riassumo', state: 'todo' }], ...p });
+const html = (at = 42) => renderToStaticMarkup(createElement(PlanApproval, { ask: { type: 'plan', id: `plan@${at}`, chatId: 's/1', at }, chatTitle: 'Sconti', onEscape: () => {}, testid: 'qp' }));
+
+describe('lib/plan-ask.ts', () => {
+  it('targets only the native single Plan question when a connector form also waits', () => {
+    const chat = { plan: plan({ phase: 'asking' }) };
+    const ask = (tool: string, n: number) => ({ type: 'question', tool, questions: Array.from({ length: n }, () => ({ question: 'Test?' })) }) as PendingRequest;
+    const form = ask('mcp__connector', 1), group = ask('AskQuestion', 2), native = ask('AskUserQuestion', 1);
+    expect(planQuestion(chat, [form, group], false)).toBeUndefined();
+    expect(planQuestion(chat, [form, group, native], false)).toBe(native);
+  });
+  it('lists the plans waiting for the user, oldest first, as keys that read back', () => {
+    const s = { chats: {
+      b: { id: 'b', plan: plan({ at: 20 }) }, a: { id: 'a', plan: plan({ at: 10 }) },
+      run: { id: 'run', plan: plan({ phase: 'running' }) }, gone: { id: 'gone', closedAt: 5, plan: plan() }, none: { id: 'none' },
+    } } as unknown as { chats: Record<string, ChatSummary> };
+    expect(planAskKeys(s)).toEqual(['a/plan@10', 'b/plan@20']);
+    expect(planAskKey('a', 10)).toBe('a/plan@10');
+    expect(planAskOf('a/plan@10')).toEqual({ type: 'plan', id: 'plan@10', chatId: 'a', at: 10 });
+    expect(planAskOf('c/x/plan@7')).toMatchObject({ chatId: 'c/x', at: 7 });
+    expect(planAskOf('a/q1')).toBeNull();
+    expect(planAskOf('a/plan@x')).toBeNull();
+    expect(planWaits(undefined)).toBe(false);
+    expect(planWaits({ plan: plan({ phase: 'revising' }) })).toBe(false);
+  });
+  it('puts the plans in where they came, the requests keeping their own order', () => {
+    const r = (id: string, at: number) => ({ type: 'question', id, at });
+    const p = (at: number) => planAskOf(`s/plan@${at}`)!;
+    expect(withPlans([r('a', 30), r('b', 10), r('c', 50)], [p(40), p(60)]).map(x => x.id)).toEqual(['a', 'b', 'plan@40', 'c', 'plan@60']);
+    expect(withPlans([r('a', 30)], [p(5)]).map(x => x.id)).toEqual(['plan@5', 'a']);
+    expect(withPlans([], [])).toEqual([]);
+  });
+});
+
+describe('planCards: the Orchestrator\'s plan cards (#351)', () => {
+  const native = { type: 'question', tool: 'AskUserQuestion', chatId: 's/1', questions: [{ question: 'Offerte?' }] } as PendingRequest;
+  const c = (id: string, p: Partial<StrategyPlan>, extra: Partial<ChatSummary> = {}) => ({ id, plan: plan(p), ...extra }) as ChatSummary;
+  it('shows «Prima di partire» only while an interview question is open', () => {
+    expect(planCards([c('s/1', { phase: 'asking' })], [])).toEqual([]);
+    const [card] = planCards([c('s/1', { phase: 'asking' })], [native]);
+    expect(card?.question).toBe(native);
+    expect(planCards([c('s/1', { phase: 'asking' })], [{ ...native, chatId: 's/2' }])).toEqual([]);
+    // a group of questions is open too: the card stays (the questions window answers it)
+    const group = { ...native, questions: [{ question: 'A?' }, { question: 'B?' }] } as PendingRequest;
+    const [g] = planCards([c('s/1', { phase: 'asking' })], [group]);
+    expect(g?.chat.id).toBe('s/1');
+    expect(g?.question).toBeUndefined();
+  });
+  it('never twice for one chat, never for a closed chat, always for a plan to approve', () => {
+    const a = c('s/1', { phase: 'asking' });
+    expect(planCards([a, a], [native])).toHaveLength(1);
+    expect(planCards([c('s/1', { phase: 'asking' }, { closedAt: 5 })], [native])).toEqual([]);
+    expect(planCards([c('s/1', { phase: 'proposed' })], [])).toHaveLength(1);
+    expect(planCards([c('s/1', { phase: 'running' })], [native])).toEqual([]);
+  });
+});
+
+describe('PlanApproval.tsx', () => {
+  it('keeps the pending card after user chat activity and presents only the latest proposal key', () => {
+    chats = { 's/1': { id: 's/1', plan: plan(), state: 'running', updatedAt: 100 } };
+    const state = { chats } as { chats: Record<string, ChatSummary> };
+    expect(planAskKeys(state)).toEqual(['s/1/plan@42']);
+    expect(html()).toContain('data-testid="qp-approve"');
+    chats['s/1']!.plan = plan({ at: 101 });
+    expect(planAskKeys(state)).toEqual(['s/1/plan@101']);
+    expect(html()).toBe('');
+    expect(html(101)).toContain('data-testid="qp-approve"');
+  });
+  it('is the decision card: question, steps always open, what Sì / No do, the four answers (ADR 0150)', () => {
+    chats = { 's/1': { id: 's/1', plan: plan() } };
+    const out = html();
+    expect(out).toContain('data-request-key="s/1/plan@42"');
+    expect(out).toContain('Piano da approvare');
+    expect(out).toContain('Approvi questo piano?');
+    expect(out).toContain('3 passi proposti. Niente parte senza il tuo ok.');
+    expect(out.match(/class="pa-step"/g)).toHaveLength(3);
+    expect(out).toMatch(/pa-n[^>]*>1<.*Trovo dove.*carrello e reso.*Scout/s);
+    expect(out).toMatch(/data-testid="qp-step-2" data-role="artisan".*Artisan/s);
+    expect(out).toMatch(/data-testid="qp-step-3" data-role="strategist".*Strategist/s);
+    expect(out).toContain('I test passano');
+    expect(out).toContain('Offerte');
+    expect(out).toMatch(/data-testid="qp-road-yes".*Consigliata.*data-testid="qp-approve".*<strong>Sì<\/strong>/s); // «Bivio» (ADR 0259): the road says it
+    expect(out).toMatch(/data-testid="qp-reject".*<strong>No<\/strong>/s);
+    expect(out).toContain('Scrivi una risposta…');
+    expect(out).toContain('Non voglio rispondere');
+    expect(out).toContain('Se Sì');
+    expect(out).not.toContain('<details');
+    expect(out.indexOf('qp-q')).toBeLessThan(out.indexOf('qp-steps'));
+    expect(out.indexOf('qp-steps')).toBeLessThan(out.indexOf('qp-approve'));
+  });
+  it('keeps report links and screenshot previews visible outside the full plan disclosure', () => {
+    chats = { 's/1': { id: 's/1', plan: plan({ doneWhen: 'See [Report](file:///C:/reports/plan.md) and https://example.com/review',
+      clarified: [{ q: 'Preview', a: '![Before](C:/reports/before.png)' }] }) } };
+    const out = html();
+    expect(out).toContain('data-testid="qp-link-0"');
+    expect(out).toContain('href="https://example.com/review"');
+    expect(out).toContain('rel="noopener noreferrer"');
+    expect(out).toContain('data-testid="qp-imgs"');
+    expect(out.indexOf('qp-imgs')).toBeLessThan(out.indexOf('qp-approve'));
+    expect(out.indexOf('qp-links')).toBeLessThan(out.indexOf('qp-approve'));
+  });
+  it('speaks the user\'s language', () => {
+    chats = { 's/1': { id: 's/1', plan: plan() } };
+    setLang('en');
+    expect(html()).toContain('Do you approve this plan?');
+    setLang('de');
+    expect(html()).toContain('Gibst du diesen Plan frei?');
+    expect(html()).toContain('<strong>Ja</strong>');
+  });
+  it('renders nothing once the plan no longer waits, or for an older proposal than the one shown', () => {
+    chats = { 's/1': { id: 's/1', plan: plan({ phase: 'running' }) } };
+    expect(html()).toBe('');
+    chats = { 's/1': { id: 's/1', plan: plan({ at: 43 }) } };
+    expect(html(42)).toBe('');
+    chats = {};
+    expect(html()).toBe('');
+  });
+});

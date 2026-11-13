@@ -1,0 +1,160 @@
+/* Mappa → Progetti (ADR 0271): the project drawing, the agents column, the history slider. Tokens only (tokens.css). */
+.pm { display: flex; flex-direction: column; gap: 10px; min-height: 0; flex: 1; container-type: inline-size; }
+.pm .sp { flex: 1; }
+.pm-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pm-bar h3 { margin: 0; font-size: 16px; }
+.pm-pick { background: var(--surface-2); color: var(--text); border: 1px solid var(--border-2); border-radius: var(--r-m); padding: 5px 10px; font: inherit; font-weight: 600; }
+.pm-trail { display: flex; align-items: center; gap: 4px; color: var(--text-3); font-size: 13px; }
+.pm-trail button { background: none; border: 0; color: var(--text-2); font: inherit; padding: 2px 4px; border-radius: 6px; cursor: pointer; }
+.pm-trail button:hover { color: var(--text); background: var(--surface-3); }
+.pm-trail button[aria-current] { color: var(--text); font-weight: 600; }
+.pm-waiting { background: var(--amber); color: #1a1405; font-weight: 700; font-size: 12.5px; padding: 4px 12px; border-radius: 999px; }
+.pm-updated { color: var(--text-3); font-size: 12.5px; border: 1px solid var(--border-2); padding: 4px 10px; border-radius: 999px; }
+.pm-past { display: flex; align-items: center; gap: 10px; background: var(--accent-bg); border: 1px solid var(--accent-line); color: var(--text); padding: 7px 12px; border-radius: var(--r-m); font-size: 13px; }
+.pm-past .btn { margin-left: auto; }
+
+.pm-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; min-height: 420px; flex: 1; }
+.pm-canvas { position: relative; overflow: hidden; border: 1px solid var(--border); border-radius: var(--r-l); background-color: var(--bg-2);
+  background-image: radial-gradient(var(--surface-4) 1px, transparent 1px); background-size: 22px 22px; min-height: 520px;
+  cursor: grab; touch-action: none; user-select: none; }
+.pm-canvas.dragging { cursor: grabbing; }
+.pm-canvas.dragging .pm-node, .pm-canvas.dragging .pm-talk { cursor: grabbing; }
+.pm-stage { position: absolute; inset: 0; }
+/* back up one level: always at the canvas' top left while inside a system */
+.pm-up { position: absolute; z-index: 3; left: 10px; top: 10px; gap: 6px; box-shadow: var(--shadow-pop); }
+.pm-plane { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.pm-edges { position: absolute; inset: 0; overflow: visible; }
+.pm-edge { stroke-width: 2; fill: none; }
+.pm-edge.s-ok { stroke: var(--green); } .pm-arrow.s-ok { fill: var(--green); }
+.pm-edge.s-work { stroke: var(--accent); } .pm-arrow.s-work { fill: var(--accent); }
+.pm-edge.s-blocked { stroke: var(--red); } .pm-arrow.s-blocked { fill: var(--red); }
+.pm-edge.s-unknown, .pm-edge.s-stale { stroke: var(--text-3); stroke-dasharray: 6 5; } .pm-arrow.s-unknown, .pm-arrow.s-stale { fill: var(--text-3); }
+.pm-label { position: absolute; transform: translate(-50%, -50%); background: var(--surface); border: 1px solid var(--border-2); color: var(--text-2);
+  font-size: 12px; padding: 2px 9px; border-radius: 999px; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.pm-label.s-blocked { border-color: var(--red); }
+.pm-label em { font-style: normal; margin-left: 6px; }
+
+.pm-node { position: absolute; display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 10px 13px; border-radius: var(--r-l);
+  background: var(--surface); border: 1.5px solid var(--border-2); color: var(--text); font: inherit; cursor: pointer; overflow: hidden; transition: box-shadow .15s, border-color .15s; }
+.pm-node:hover { box-shadow: 0 0 0 3px var(--surface-3); }
+.pm-node.s-ok { border-color: color-mix(in srgb, var(--green) 70%, transparent); }
+.pm-node.s-work { border-color: var(--accent); }
+.pm-node.s-blocked { border-color: var(--red); }
+.pm-node.s-unknown, .pm-node.s-stale { border-style: dashed; border-color: var(--text-3); }
+.pm-node.k-system { background: var(--surface-2); }
+.pm-node.k-person { border-radius: 26px; text-align: center; align-items: center; }
+.pm-node.k-person .pm-foot { justify-content: center; }
+.pm-node.k-person .pm-st { flex: none; }
+.pm-node.ctx { opacity: .72; background: var(--bg-2); }
+.pm-node.picked { box-shadow: 0 0 0 3px var(--accent-line); }
+.pm-node.lit { box-shadow: 0 0 0 4px var(--accent-bg), 0 0 0 1.5px var(--accent); }
+.pm-kind { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
+.pm-name { font-size: 15px; line-height: 1.2; }
+.pm-desc { flex: none; font-size: 12.5px; color: var(--text-2); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pm-node.s-blocked .pm-desc { color: var(--text); }
+.pm-foot { margin-top: auto; display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-2); width: 100%; }
+.pm-st { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pm-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; flex: none; }
+.pm-dot.s-ok { background: var(--green); } .pm-dot.s-work { background: var(--accent); } .pm-dot.s-blocked { background: var(--red); }
+.pm-dot.s-unknown, .pm-dot.s-stale { background: none; border: 1.5px dashed var(--text-3); }
+.pm-who { width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 11px; font-weight: 700; background: var(--accent); color: var(--bg); }
+.pm-who.more { background: var(--surface-4); color: var(--text-2); }
+.pm-who[data-mark='wait'] { background: var(--amber); }
+.pm-who[data-mark='error'] { background: var(--red); }
+.pm-who[data-mark='done'], .pm-who[data-mark='idle'] { background: var(--surface-4); color: var(--text-2); }
+.pm-you { font-style: normal; background: var(--amber); color: #1a1405; font-weight: 700; font-size: 11px; padding: 1px 7px; border-radius: 6px; margin-right: 6px; }
+
+.pm-tools { position: absolute; z-index: 3; right: 10px; bottom: 10px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.pm-pct { font-size: 11px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.pm-tools .btn { width: 32px; justify-content: center; }
+.pm-legend { position: absolute; z-index: 3; left: 10px; bottom: 10px; display: inline-flex; gap: 14px; align-items: center; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-m); padding: 6px 12px; font-size: 12px; color: var(--text-2); cursor: default; }
+
+.pm-side { display: flex; flex-direction: column; gap: 10px; overflow: auto; min-height: 0; }
+.pm-side-head { display: flex; align-items: baseline; justify-content: space-between; }
+.pm-side-head h3 { margin: 0; font-size: 15px; }
+.pm-side-head span, .pm-muted { color: var(--text-3); font-size: 12.5px; }
+.pm-group { display: flex; flex-direction: column; gap: 8px; }
+.pm-group h4 { margin: 4px 0 0; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); font-weight: 600; }
+.pm-group[data-g='wait'] h4 { color: var(--amber); }
+.pm-agent { display: flex; flex-direction: column; gap: 7px; padding: 10px 12px; border-radius: var(--r-l); background: var(--surface); border: 1px solid var(--border-2); cursor: pointer; }
+.pm-agent[data-mark='wait'] { border-color: var(--amber-line); background: var(--amber-bg); }
+.pm-agent.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
+.pm-agent p { margin: 0; font-size: 12.5px; color: var(--text-2); }
+.pm-agent p b { color: var(--text); }
+.pm-agent .btn { align-self: flex-start; }
+.pm-agent-head { display: flex; align-items: center; gap: 10px; }
+.pm-agent-name { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.pm-agent-name b { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-agent-name span { font-size: 12px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-ring circle { fill: none; stroke-width: 3.5; }
+.pm-ring-bg { stroke: var(--surface-4); }
+.pm-ring-fg { stroke: var(--accent); stroke-linecap: round; }
+.pm-ring text { fill: var(--text); font-size: 10.5px; font-weight: 600; }
+.pm-steps { display: flex; gap: 4px; }
+.pm-steps i { flex: 1; height: 5px; border-radius: 3px; background: var(--surface-4); }
+.pm-steps i[data-s='done'] { background: var(--green); }
+.pm-steps i[data-s='now'] { background: var(--accent); }
+.pm-detail { padding: 10px 12px; border-radius: var(--r-l); background: var(--surface-2); border: 1px solid var(--border-2); }
+.pm-detail h3 { margin: 2px 0 4px; font-size: 15px; }
+.pm-detail p { margin: 4px 0; font-size: 12.5px; color: var(--text-2); }
+
+.pm-history { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--text-2); padding: 6px 4px; }
+.pm-history input { flex: 0 1 320px; accent-color: var(--accent); }
+.pm-hist-at { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-empty p { color: var(--text-2); }
+.pm-example { font-family: var(--mono, monospace); background: var(--surface-2); padding: 8px 12px; border-radius: var(--r-m); display: inline-block; }
+
+/* a narrow page (the Orchestrator column open): the map takes the whole width, the agents go under it */
+@container (max-width: 980px) {
+  .pm-body { grid-template-columns: 1fr; }
+  /* the map at its full height, then the agents side by side under it */
+  .pm-body { flex: none; }
+  .pm-canvas { height: max(520px, calc(100vh - 360px)); }
+  .pm-side { overflow: visible; }
+  .pm-group { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+  .pm-group h4 { grid-column: 1 / -1; }
+}
+
+/* «Discuti» on a box (ADR 0275): a quiet corner button, clear on hover or keyboard focus */
+.pm-talk { position: absolute; z-index: 2; transform-origin: top right; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 1px solid var(--border-2);
+  border-radius: var(--r-s); background: var(--surface-2); color: var(--text-2); cursor: pointer; opacity: .7; transition: opacity .15s, color .15s, border-color .15s; }
+.pm-talk:hover, .pm-talk:focus-visible { opacity: 1; color: var(--violet); border-color: var(--violet); outline: none; }
+.pm-detail .btn { margin-top: 6px; gap: 6px; }
+.pm-fullbtn { gap: 6px; }
+/* the real full screen: the whole window at once (and the screen, when the OS grants it), the drawing fits it */
+.pm.pm-full { position: fixed; inset: 0; z-index: 2147483000; background: var(--bg); padding: 16px 20px; box-sizing: border-box; }
+.pm.pm-full .pm-body { min-height: 0; }
+.pm.pm-full .pm-canvas { min-height: 0; }
+.pm.pm-full .pm-side { min-height: 0; overflow: auto; }
+/* room for the «Discuti» corner button: the box's first lines never run under it */
+.pm-node { padding-right: 34px; }
+
+/* Planning (ADR 0276): a piece that does not exist yet, the plan's steps inside a box, the plan in the side column */
+.pm-node.s-planned { border: 1.5px dashed var(--violet); background: var(--violet-bg); }
+.pm-dot.s-planned { background: none; border: 1.5px solid var(--violet); }
+.pm-edge.s-planned { stroke: var(--violet); stroke-dasharray: 6 5; } .pm-arrow.s-planned { fill: var(--violet); }
+.pm-label.s-planned { border-color: color-mix(in srgb, var(--violet) 50%, transparent); }
+.pm-works { display: flex; flex-direction: column; gap: 2px; min-height: 0; flex: 1; overflow: hidden; font-size: var(--fs-s); color: var(--text-2); }
+.pm-works > span { display: flex; gap: 6px; align-items: baseline; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pm-works i, .pm-worklist i { font-style: normal; flex: none; width: 12px; text-align: center; color: var(--text-3); }
+.pm-works [data-s='now'] i, .pm-worklist [data-s='now'] i { color: var(--accent); }
+.pm-works [data-s='done'] i, .pm-worklist [data-s='done'] i { color: var(--green); }
+.pm-works [data-s='blocked'] i, .pm-worklist [data-s='blocked'] i { color: var(--red); }
+.pm-works [data-s='done'], .pm-worklist [data-s='done'] > span { color: var(--text-3); }
+.pm-works-more { color: var(--text-3); font-size: var(--fs-xs); }
+.pm-new { font-style: normal; font-size: 10px; font-weight: 700; line-height: 1; padding: 3px 5px; border-radius: 5px; background: var(--violet); color: var(--bg); margin-left: 6px; }
+.pm-worklist { list-style: none; margin: 4px 0 8px; padding: 8px 0 0; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px; font-size: var(--fs-m); }
+.pm-worklist li { display: flex; gap: 8px; align-items: baseline; }
+.pm-worklist li > span { flex: 1; min-width: 0; }
+.pm-worklist small { color: var(--text-3); font-size: var(--fs-xs); text-transform: capitalize; }
+/* a plan sits over the drawing, one line: its «Approva e parti» is in sight without scrolling */
+.pm-plan { border: 1px solid var(--border-2); border-radius: var(--r-l); padding: 8px 14px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; background: var(--surface); }
+.pm-plan-n { flex: 1; min-width: 120px; }
+.pm-plan[data-phase='proposed'] { border-color: var(--violet); background: var(--violet-bg); }
+.pm-plan h3 { margin: 0; font-size: var(--fs-l); }
+.pm-plan p { margin: 0; }
+.pm-plan-act { display: flex; gap: 8px; flex-wrap: wrap; }
+.pm-agent-change { color: var(--amber); }
+.pm-agent-change[data-seen] { color: var(--text-2); }
+.pm-agent-change[data-seen] b { color: var(--green); }

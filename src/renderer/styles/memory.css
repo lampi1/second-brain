@@ -1,0 +1,30 @@
+/* The one-click "Manutenzione" button (MaintenanceButton.tsx) and the Brain pages' frame; the Memoria statistics left
+   with the Statistiche tab (ADR 0248). Theme tokens only (tokens.css), so dark and light follow the app. Prefix mm-. */
+
+/* agent-strips.css styles a chat strip's own .agent-overview (a grid sized by its widest child, one-line paragraphs):
+   undone for the Brain pages that carry the Manutenzione button (Skill, Regole, Memoria), which overflowed sideways */
+div.bm-page.agent-overview{display:block;min-width:0;padding:28px 32px 48px;font-size:var(--fs-m)}
+.mm-page.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
+@media(max-width:600px){div.bm-page.agent-overview{padding:18px 16px 32px}}
+
+/* ── the Manutenzione button (top bar, Orchestrator head, Memoria hero) ── */
+.mm-maint{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mm-maint-btn{position:relative;display:inline-flex;align-items:center;gap:7px;font-weight:600;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent)}
+.mm-maint-btn svg{width:15px;height:15px}
+.mm-maint-last{font-size:var(--fs-xs);color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:min(52ch,60vw)}
+@keyframes mm-pulse{50%{opacity:.35}}
+/* working (ADR 0153): the sparkle turns slowly and breathes; the hero's button wears a soft moving sheen */
+@keyframes mm-spin{to{transform:rotate(360deg)}}
+@keyframes mm-sheen{from{background-position:-160% 0}to{background-position:260% 0}}
+.mm-maint .busy svg{color:var(--accent);animation:mm-spin 2.4s linear infinite,mm-pulse 1.4s ease-in-out infinite}
+.mm-maint-btn.busy{background-image:linear-gradient(100deg,transparent 30%,color-mix(in srgb,#fff 28%,transparent) 50%,transparent 70%);background-size:60% 100%;background-repeat:no-repeat;animation:mm-sheen 1.8s ease-in-out infinite}
+/* done: one burst of light around the sparkle, then calm */
+@keyframes mm-burst{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--green) 55%,transparent)}70%{box-shadow:0 0 0 12px transparent}100%{box-shadow:0 0 0 0 transparent}}
+@keyframes mm-pop{0%{transform:scale(1)}35%{transform:scale(1.35) rotate(18deg)}100%{transform:scale(1)}}
+.mm-maint .done{animation:mm-burst 1.1s ease-out 2;border-radius:var(--r-s)}
+.mm-maint .done svg{color:var(--green);animation:mm-pop .7s cubic-bezier(.3,1.6,.5,1) 2}
+.mm-maint.compact{display:contents}
+/* the top bar's button (ADR 0132): a ghost button like «Nuovo browser» */
+.mm-maint.bar{display:contents}
+.mm-maint-bar{display:inline-flex;align-items:center;gap:6px}
+@media (prefers-reduced-motion:reduce){.mm-maint .busy svg,.mm-maint-btn.busy,.mm-maint .done,.mm-maint .done svg{animation:none}}

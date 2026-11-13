@@ -1,0 +1,193 @@
+// E2E of the agent cards' front (owner, 2026-10-19): on the frozen demo (made-up runs, main/demo-agent-runs.ts) every
+// card shows the character large and centred, a level with its XP beside it («Lv 7 Praticante · 124 XP», ADR 0100,
+// 0131) and its way to the next one, and a performance % with its ± — or "In rodaggio" with too few verdicts — each
+// with a "?" whose bubble gives the formula; the Orchestrator and Flash level up too (ADR 0131); a role with no runs is a Lv 1 with the empty-state line; the
+// model tier chip reads «Modello: …», never «Livello». The flip to the back still works, and the back holds the
+// agent's costs (#125): median per run and per verified success, with their counts, never a raw timestamp. «Modifica il ruolo» on the back opens the role's editor; Esc and «Chiudi senza salvare» come back (#126).
+// Screenshots dark and light: test-results/shots/agent-cards-*.png.
+import { expect, test, type Page } from '@playwright/test';
+import { goPage, launchDemo, shot } from './helpers';
+
+/** the demo's questions window is open at launch and would take the clicks: «Rispondi dopo» */
+async function laterQuestions(page: Page) {
+  const later = page.getByTestId('qwin-later'), backdrop = page.getByTestId('qwin-backdrop');
+  await backdrop.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+  for (let i = 0; i < 10 && await backdrop.count(); i++) {
+    if (await later.isVisible()) await later.click(); else await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+  }
+  await expect(backdrop).toHaveCount(0);
+}
+
+async function theme(page: Page, scheme: 'dark' | 'light') {
+  await page.evaluate(t => window.sb.invoke('settings:set', { theme: t }), scheme);
+  await page.emulateMedia({ colorScheme: scheme });
+  await page.waitForTimeout(250);
+}
+
+test('agent cards: big centred character, level and performance with their "?" formulas, dark and light', async () => {
+  test.setTimeout(90_000);
+  const { app, page } = await launchDemo({ width: 1440, height: 1000 });
+  try {
+    await laterQuestions(page);
+    await goPage(page, 'agenti');
+    const overview = page.getByTestId('agent-overview');
+    await expect(overview.getByTestId('catalog-card-artisan')).toBeVisible();
+
+    // a veteran: a level past 1 and a performance %
+    const artisan = overview.getByTestId('catalog-card-artisan');
+    await expect(artisan.getByTestId('catalog-level-artisan')).toContainText(/Lv \d+/);
+    expect(Number(await artisan.getByTestId('catalog-level-artisan').getAttribute('data-level'))).toBeGreaterThan(1);
+    await expect(artisan.getByTestId('catalog-perf-artisan')).toContainText('%');
+    await expect(artisan.getByTestId('catalog-level-wins-artisan')).toContainText(/\d+ XP/);
+    await expect(artisan.getByTestId('catalog-perf-spread-artisan')).toContainText(/±\d+/);
+    // ADR 0131: the Orchestrator (its decisions) and Flash (its answers) level up too
+    expect(Number(await overview.getByTestId('catalog-level-orchestrator').getAttribute('data-level'))).toBeGreaterThan(1);
+    expect(Number(await overview.getByTestId('catalog-level-flash').getAttribute('data-level'))).toBeGreaterThan(1);
+    await expect(artisan.locator('.catalog-chip[data-kind="model"]')).toContainText('Modello:');
+    const big = await artisan.locator('.catalog-hero .agent-avatar').boundingBox();
+    expect(big!.width).toBeGreaterThanOrEqual(96);
+    // a new role: still warming up; the Battito's card is gone (ADR 0201)
+    await expect(overview.getByTestId('catalog-perf-herald')).toContainText('In rodaggio');
+    await expect(overview.getByTestId('catalog-perf-herald')).toHaveAttribute('data-band', 'warmup');
+    await expect(overview.getByTestId('catalog-card-pulse')).toHaveCount(0);
+
+    // the "?" give the formulas, with the agent's own numbers
+    await artisan.getByTestId('catalog-level-help-artisan').click();
+    const lv = page.getByTestId('catalog-level-help-artisan-bubble');
+    await expect(lv).toBeVisible();
+    await expect(lv).toContainText('Lv 100 (il massimo) a 9.358');
+    await expect(lv).toContainText('riusciti verificati su');
+    await expect(lv).toContainText('solo con lavori riusciti e verificati');
+    // ADR 0125: every role levels up without the user's verdicts; the Sentinel's reviews are judged by what happened
+    await expect(lv).toContainText('per un lavoro delegato, il lavoro del genitore riuscito verificato');
+    // ADR 0203: the nightly review is judged by the user's votes on the same runs or a promoted run later redone
+    await expect(lv).toContainText('il tuo voto sugli stessi lavori o un lavoro promosso e poi rifatto');
+    await expect(artisan).toHaveAttribute('data-flipped', 'false'); // the "?" does not flip the card
+    await shot(page, 'agent-cards-level-help-dark');
+    await page.keyboard.press('Escape');
+    await artisan.getByTestId('catalog-perf-help-artisan').click();
+    const pf = page.getByTestId('catalog-perf-help-artisan-bubble');
+    await expect(pf).toContainText('30 giorni');
+    await expect(pf).toContainText('Voti finora');
+    await expect(pf).toContainText('dal genitore verificato');
+    await shot(page, 'agent-cards-perf-help-dark');
+    await page.keyboard.press('Escape');
+    await expect(pf).toBeHidden();
+
+    await overview.getByTestId('catalog-card-flash').scrollIntoViewIfNeeded();
+    await page.mouse.move(2, 2);
+    await page.waitForTimeout(300);
+    await shot(page, 'agent-cards-new-dark');
+    await overview.evaluate(el => { for (let e: Element | null = el; e; e = e.parentElement) e.scrollTop = 0; });
+    await page.waitForTimeout(300);
+    await shot(page, 'agent-cards-dark');
+    // the flip still works from the front; the back has the agent's costs (#125)
+    await artisan.getByTestId('catalog-flip-artisan').click();
+    await expect(artisan).toHaveAttribute('data-flipped', 'true');
+    const costs = artisan.getByTestId('catalog-costs-artisan');
+    await expect(costs).toContainText(/\d+ lavori conclusi/);
+    await expect(artisan.getByTestId('catalog-cost-median-artisan')).toContainText(/\d+,\d\d\s\$/);
+    await expect(costs).not.toContainText(/\d{10,}/); // no timestamp read as a count
+    await expect(costs).not.toContainText('Equivalente di listino');
+    await costs.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(700);
+    await shot(page, 'agent-cards-back-costs-dark');
+    await page.keyboard.press('Escape');
+    await expect(artisan).toHaveAttribute('data-flipped', 'false');
+
+    // «Modifica il ruolo» on the back lands in the editor, focus in the instructions; Esc and «Chiudi senza salvare» go back (#126)
+    const studio = page.getByTestId('agent-studio');
+    const instructions = page.getByTestId('agent-instructions');
+    await artisan.getByTestId('catalog-flip-artisan').click();
+    await expect(artisan.getByTestId('catalog-open-artisan')).toHaveText('Modifica il ruolo');
+    await artisan.getByTestId('catalog-open-artisan').click();
+    await expect(page.getByTestId('agent-editor')).toBeVisible();
+    await expect(instructions).toBeFocused();
+    const saved = await instructions.inputValue();
+    await instructions.fill(`${saved} bozza da buttare`);
+    await page.keyboard.press('Escape');
+    await expect(overview.getByTestId('catalog-card-artisan')).toBeVisible();
+    await expect(studio).toHaveCount(0);
+    await overview.getByTestId('catalog-flip-artisan').click();
+    await overview.getByTestId('catalog-open-artisan').click();
+    await expect(instructions).toHaveValue(saved); // nothing kept from the dropped edit
+    await expect(page.getByTestId('agent-edit')).toBeVisible(); // the role's page stays around the editor
+    await page.getByTestId('agent-tier').click(); // Esc in an open dropdown closes the dropdown, not the editor
+    await expect(page.getByTestId('agent-tier')).toHaveAttribute('aria-expanded', 'true');
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('agent-tier')).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByTestId('agent-editor')).toBeVisible();
+    await shot(page, 'agent-cards-edit-dark');
+    await page.getByTestId('agent-editor').getByRole('button', { name: 'Chiudi senza salvare' }).click();
+    await expect(overview.getByTestId('catalog-card-artisan')).toBeVisible();
+    await expect(studio).toHaveCount(0);
+
+    await theme(page, 'light');
+    await goPage(page, 'agenti');
+    await expect(page.getByTestId('catalog-card-artisan')).toBeVisible();
+    await page.mouse.move(2, 2);
+    await page.getByTestId('agent-overview').evaluate(el => { for (let e: Element | null = el; e; e = e.parentElement) e.scrollTop = 0; });
+    await page.waitForTimeout(400);
+    await shot(page, 'agent-cards-light');
+    // the new roles further down: warming up
+    await page.getByTestId('catalog-card-flash').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
+    await shot(page, 'agent-cards-new-light');
+    await page.getByTestId('catalog-perf-help-scout').click();
+    await expect(page.getByTestId('catalog-perf-help-scout-bubble')).toBeVisible();
+    await shot(page, 'agent-cards-perf-help-light');
+    await page.keyboard.press('Escape');
+    await page.getByTestId('catalog-level-help-scout').click();
+    await expect(page.getByTestId('catalog-level-help-scout-bubble')).toContainText('Verificato vuol dire');
+    await shot(page, 'agent-cards-level-help-light');
+    await page.keyboard.press('Escape');
+    // the Orchestrator's and Flash's own rules in their "?" (ADR 0131)
+    await page.getByTestId('catalog-card-orchestrator').scrollIntoViewIfNeeded();
+    await page.getByTestId('catalog-level-help-orchestrator').click();
+    await expect(page.getByTestId('catalog-level-help-orchestrator-bubble')).toContainText('piano approvato senza modifiche');
+    await shot(page, 'agent-cards-orchestrator-level-light');
+    await page.keyboard.press('Escape');
+    await page.getByTestId('catalog-card-flash').scrollIntoViewIfNeeded();
+    await page.getByTestId('catalog-level-help-flash').click();
+    await expect(page.getByTestId('catalog-level-help-flash-bubble')).toContainText('0,25 XP');
+    await shot(page, 'agent-cards-flash-level-light');
+  } finally { await app.close(); }
+});
+
+test('"?" explanations across the app: Orchestrator, strips, Agenti summary, Settings, Skill', async () => {
+  test.setTimeout(90_000);
+  const { app, page } = await launchDemo({ width: 1440, height: 1000 });
+  const open = async (id: string, text: string | RegExp, name: string) => {
+    const mark = page.getByTestId(id).first();
+    await mark.scrollIntoViewIfNeeded();
+    await mark.click();
+    const bubble = page.getByTestId(`${id}-bubble`).first();
+    await expect(bubble).toBeVisible();
+    await expect(bubble).toContainText(text);
+    await shot(page, name);
+    await page.keyboard.press('Escape');
+    await expect(bubble).toBeHidden();
+  };
+  try {
+    await laterQuestions(page);
+    await open('orchestrator-help', 'coordina il lavoro', 'explain-orchestrator-dark');
+    const strip = page.locator('[data-testid^="chat-help-"]').first();
+    await expect(strip).toBeVisible();
+    const id = (await strip.getAttribute('data-testid'))!;
+    await open(id, 'senza le attese', 'explain-strip-dark');
+    await expect(page.locator('section.chat-tile.is-expanded')).toHaveCount(0); // the "?" did not expand the strip
+    await goPage(page, 'agenti');
+    await open('catalog-summary-help', 'In prova', 'explain-agents-dark');
+    await open('judging-help', 'peso pieno', 'explain-agents-judging-dark');
+    await goPage(page, 'impostazioni');
+    await expect(page.getByTestId('settings-page')).toBeVisible();
+    await open('st-toasts-help', 'Urgenti', 'explain-settings-toasts-dark');
+    await open('st-stall-help', 'agent_children', 'explain-settings-stall-dark');
+    await open('st-tiers-help', 'leggero', 'explain-settings-tiers-dark');
+    await theme(page, 'light');
+    await goPage(page, 'skill');
+    await expect(page.getByTestId('skills-page')).toBeVisible();
+    await open('sk-help', 'SKILL.md', 'explain-skills-light');
+  } finally { await app.close(); }
+});

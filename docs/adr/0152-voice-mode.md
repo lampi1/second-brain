@@ -1,0 +1,116 @@
+<!-- Voice mode in the Orchestrator and Flash: local, free speech in and out; owner 2026-10-24. -->
+# 0152 — Voice mode: talk to the Orchestrator and Flash, hear the answers
+
+Date: 2026-10-24 · Status: accepted
+
+## Context
+
+The owner (2026-10-24): «voglio … parlare al posto di scrivere il prompt solo nell'Orchestrator e su Flash», «togli la
+label invio … per fare spazio al microfono», «il classico pallino rosso», then «o microfono muto oppure modalità full»:
+the app listens all the time, answers aloud in proper Italian, reads its questions and takes a spoken answer «tanto
+quanto un click». Not now: the app speaking on its own initiative (recaps). The tools must be the best free ones.
+
+## Decision
+
+- **Two states only**: muted, or voice mode. Ctrl+M (or the mic button that replaced the «Invio» hint in the
+  Orchestrator's and Flash's inputs) toggles. On: a red frame, a steady red dot «In ascolto», volume bars while the user
+  talks, «Trascrivo…», «Ti sto rispondendo» (Esc silences). Each utterance is sent to that chat as the user's message;
+  the chat's reply to it is read aloud (`turnToSpeak`: only turns that follow the user's own message since voice went
+  on, never one the app or another chat started). While the app speaks the microphone is ignored (no echo loop).
+- **Questions by voice**: a question card on screen registers with `useVoiceQuestion` (renderer `lib/voice.ts`). In
+  voice mode the app reads it, the bar says «In ascolto della tua risposta», and the next utterance goes to the card,
+  never to the chat: a short yes / no / «non voglio rispondere» is the click, a longer sentence is the written answer.
+  Several open: the newest first, the next is read when it closes. A card is the app's question, so it takes the words
+  whichever input the mic belongs to (Orchestrator or Flash); while one is open nothing said reaches the chat. A reply that ends while a question waits stays in
+  the chat, unread.
+- **Engine: sherpa-onnx** (`sherpa-onnx-node` 1.13.8, Apache-2.0, prebuilt for win-x64): Silero VAD cuts the 16 kHz
+  stream into utterances, **Whisper** transcribes in Italian (Veloce = small int8, 374 MB; Precisa = turbo int8, ~1 GB),
+  **Piper** speaks (Italian voices Paola, Miro, Dii; Paola default: the owner wants a female voice, Paola is one Italian speaker, dataset paolapersico1/Voice-Dataset-Italian; «Prova» lets him check). All local and offline: audio never leaves
+  the PC and is never written to disk. Kokoro was set aside (its own VOICES.md grades its Italian voices C); voices
+  with clearly better quality (VoxCPM2, Chatterbox) need an ~8 GB GPU and a Python stack, a possible later option.
+- **Own process**: the engine runs in an Electron utility process (`main/voice/worker.ts` → `out/main/voice-worker.js`).
+  sherpa-onnx ships its own onnxruntime, which must not share a process with the hybrid search's onnxruntime-node
+  (same DLL name on Windows), and its CPU work stays out of main's event loop.
+- **Models downloaded once, pinned**: `main/voice/catalog.ts` lists every file with its source and hash — Hugging Face
+  files by commit and sha256 (or the git blob id for the small vocabulary file), the k2-fsa GitHub release archives by
+  the sha256 GitHub publishes. A mismatch deletes the file; a part gets its `.ok` marker only when all its files pass.
+  `.ok` holds the hashes it vouches for, so a catalog change makes the part missing again and it is fetched clean.
+  Downloads run beside the transcribe/speak queue (voice keeps working meanwhile); a speech request times out at 30 s.
+  The first Ctrl+M downloads what is missing (Settings → Voce shows progress and has «Scarica» and «Prova»).
+- **Permission**: the app window grants `media` only when it asks for audio alone, from the app's own page
+  (`window.ts micAllowed`); camera, screen capture and everything else stay refused. The request layer's view (overlay.ts)
+  has its own in-memory session (`partition: 'overlay'`) with its deny-all handler: on the shared default session that
+  handler replaced the window's and the microphone was refused everywhere (fixed 2026-10-24, e2e `mic-permission.spec.ts`).
+- Settings `voiceAsr` (fast | accurate) and `voiceName` (paola | miro | dii), not protected: local and free.
+- `SB_VOICE_FAKE=1` (and the demo) swaps the engine for a fake that "hears" one sentence per session: e2e
+  `test/e2e/voice.spec.ts` (runs on main, per ADR 0027).
+
+## Dependencies
+
+- `sherpa-onnx-node` 1.13.8 (+ its per-platform optional package, copied to `out/node_modules` by `scripts/build.mjs`):
+  speech recognition, VAD and TTS in one well-known package, no install scripts.
+- `seek-bzip` 2.0.0 (pure JS, MIT): unpacks the Piper voices' `.tar.bz2`; bundled into the voice worker.
+
+## Consequences
+
+- First use costs a one-time download (about 440 MB with Veloce + one voice) and some CPU while transcribing.
+- Speed on the owner's PC is not measured yet: the Linux container cannot download the models. Veloce is the default.
+- The decision card (ADR 0150) registers with `useVoiceQuestion` itself (since ADR 0154's change): every question,
+  plan and approval it draws is read and answered by voice; a request shown twice (its strip and the questions window)
+  shares an id and is read once.
+- Which microphone (owner, 2026-10-24: «vorrei anche che rilevasse il mio microfono usb»): Settings → Voce lists the
+  PC's inputs and follows plug / unplug (`devicechange`, `src/renderer/lib/mic.ts`). A microphone plugged in while the
+  app runs is used at once (toast with «Annulla»), voice mode reopens on it; an unplugged choice falls back to the
+  system default and comes back by itself (matched by id, else by name). Call recording uses the same choice; a call
+  keeps its microphone until it stops. The choice is per PC (device ids are), so it is kept in localStorage, not in the
+  brain's settings. Pinned by `test/unit/mic.test.ts` and `test/e2e/mic-permission.spec.ts`.
+- Dictation and conversation split, faster and interruptible (owner, 2026-10-24, after a real try: «lentissima, non
+  posso interrompere l'ia mentre parla … il pulsante microfono già presente deve essere quello per sola trascrizione,
+  la modalità voce continua invece dalle impostazioni»; he asked to look at how documented voice agents do it first):
+  - The mic button / Ctrl+M only dictates: the words go into that input, nothing is sent or read aloud. The spoken
+    conversation with the Orchestrator is the «Conversazione a voce» switch in Settings → Voce (not saved: the mic
+    never opens by itself at start).
+  - The reply is read while it streams (`turnToSpeak` + `settledText`): each finished sentence is synthesized at once,
+    the next one while the current one plays (`speechChunks`), instead of waiting for the whole turn and its whole
+    synthesis. Same idea as the voice-agent pipelines that send LLM text to TTS by sentence
+    (https://simbavoice.ai/resources/streaming-llm-outputs-to-voice-the-engineering) and prefetch the next segment
+    (https://www.vellum.ai/blog/vellum-assistant-ai-speech-pipeline-explained).
+  - Barge-in: the mic keeps listening while the app speaks (echo cancellation on; Chromium's AEC also covers WebAudio
+    output, https://devforum.zoom.us/t/issupportchromewideaec-sniffs-browser-name-version-breaking-echo-cancellation-on-microsoft-edge/145288).
+    Speech the VAD confirms (≥ 250 ms) and louder than `BARGE_LEVEL` stops the voice at once and drops the rest of that
+    reply; quieter speech while it talks is taken as its own echo and dropped. Pipecat stops TTS and drains playback on
+    a user turn start (https://docs.pipecat.ai/pipecat/fundamentals/interruptions); Vellum yields only to about 250 ms of
+    sustained speech so its own echo does not cut it off. `BARGE_LEVEL` is not calibrated on the owner's PC yet.
+  - Turn end: the VAD closes an utterance after 0.5 s of silence (0.8 before; 500 ms is the value in OpenAI's Realtime
+    VAD example, https://developers.openai.com/api/docs/guides/realtime-vad), and a conversation holds what was heard
+    0.7 s more for the rest of the thought before sending (like Pipecat's speech timeout after silence,
+    https://docs.pipecat.ai/guides/learn/speech-input). No semantic end-of-turn model yet.
+  - The engine loads Whisper (and, for a conversation, the voice) when listening starts; the voice has its own queue,
+    so a sentence never waits behind Whisper and the user's words never wait behind a long reply; Whisper gets more
+    cores.
+- Replies made to be heard (owner, 2026-10-25: the Italian voice said English terms badly and the replies were hard
+  to follow; he asked to copy the best documented practice):
+  - A message said in the conversation reaches the engine with an engine-only line (`chats/voice-reply.ts`, through
+    `chat:send` `voice` → `ChatManager.spokenNext`): 1-3 short sentences, plain spoken Italian with full stops, no
+    lists, code, links or symbols, Italian words instead of English ones and acronyms, numbers as said, actions not
+    reasoning, the essentials and an offer to go on. The rules come once per context, then a ~25-token reminder per
+    spoken turn; typed messages carry nothing. From OpenAI's voice prompting guide
+    (https://developers.openai.com/api/docs/guides/voice-prompting) and ElevenLabs' advice to have the LLM write
+    speech-ready text (https://elevenlabs.io/docs/best-practices/prompting/normalization).
+  - What is still English is respelled for the voice only (`forEar`, the chat keeps the text): a small pronunciation
+    dictionary (GitHub, merge, pull request, file…), acronyms letter by letter with Italian letter names, arrows,
+    percent, slashes, parentheses and colons said as words or pauses. Like the reference pronunciations in OpenAI's
+    guide and ElevenLabs' alias dictionaries. The respellings are not tried on the owner's PC yet.
+  - Ctrl+Shift+Space turns the conversation on and off (Ctrl+M stays dictation).
+- Push to talk in the conversation (owner, 2026-10-29: «nella modalità chat continua ci fosse il push to talk»):
+  - Settings → Voce «Premi per parlare» (`voicePtt`, off by default). On: the microphone counts only while Ctrl+Space
+    (or the «Parla» button in the voice bar) is held; nothing heard outside a press is sent. Hold Ctrl+Space is Teams'
+    press-to-unmute key (Microsoft Support, «Keyboard shortcuts for Microsoft Teams»).
+  - Pressing interrupts the voice and opens the turn; releasing closes it at once (`voice:commit`: the worker flushes
+    Silero, drains, and answers `voice:committed` after the last transcript), so no 0.5 s silence + 0.7 s hold; Esc
+    while holding drops it. These are LiveKit's manual turns (start_turn / end_turn / cancel_turn,
+    https://docs.livekit.io/agents/build/turns) and OpenAI Realtime with `turn_detection: null` and
+    `input_audio_buffer.commit` (https://developers.openai.com/api/docs/guides/realtime-vad).
+  - The release waits 120 ms for the last audio block (Discord's push-to-talk release delay, 20 ms by default,
+    https://beebom.com/how-enable-configure-push-to-talk-discord/amp/); pressing again within it continues the turn.
+    Echo detection is off under push to talk: a press is always the user. Not tried on the owner's PC yet.

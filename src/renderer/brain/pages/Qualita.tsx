@@ -1,0 +1,197 @@
+// Qualità: three numbers about how well the AI works, each with its source and the dates it covers, and the next step
+// (the user, 2026-10-13: "la sezione qualità sia veramente utile e veritiera"; few, true, actionable). 1) corrections he
+// had to make per 100 turns (his messages the app recognised as corrections, «Correggi il pensiero», after-report
+// corrections, ai-errors.md rows he saw: ADR 0197, with «Come lo conto»; ÷ the app's finished turns, same days only); 2) his
+// active PRs held by a failed build or QA; 3) his resolved bugs sent back to an open state. The rules whose error came
+// back left with the rules (ADR 0248).
+// The improvement proposals are one row. Praise, notebooks and measures are gone until they have real data. Below the
+// numbers, the errors that repeat, grouped by pattern (ADR 0037: count, last seen, chats, this week against the
+// one before; no rule line since ADR 0248). Every number and every pattern has its reading and the discussion bar ("Discuti", to the Orchestrator).
+// Data: /api/tables (the brain: tables.errors, tables.quality, proposals) and /api/quality (main: turns, PRs, reopened
+// bugs); computations in lib/quality.ts and lib/stats.ts. Since the Dashboard left (ADR 0122), below the patterns: the
+// app's and the tools' own errors of this session (dashboard/AppErrors.tsx) and the errors grouped by meaning
+// (dashboard/Themes.tsx), the two parts of its Errori and Temi tabs Qualità did not have. A tab of Andamento since ADR
+// 0202 (`embedded`: no title and no lead, which only repeated the four cards' numbers). Last, the Classificatori
+// (components/brain-model/ClassifiersSection.tsx), once a tab of their own: the routing table left and the small
+// sorters that remain measure the quality of the app's own automatic choices (ADR 0210).
+import { lazy, Suspense, type ReactNode } from 'react';
+import { normAppQuality, normTables } from '../types';
+import { FeedbackOrigins } from '../components/FeedbackOrigins';
+import { useBrain } from '../api';
+import { fmt } from '../lib/format';
+import { ownerOf, short } from '../lib/text';
+import { caughtPer100, caughtWeeks, rate, reopenShare, type Caught } from '../lib/quality';
+import { errorPatterns, trend, type Trend } from '../lib/stats';
+import type { Quote } from '../lib/discuss';
+import { Async, Explain, PageHead } from '../components/States';
+import { HelpTip } from '../../components/HelpTip';
+import { DiscussBar } from '../components/Discuss';
+import { ErrorPatterns, PatternsHelp, Reading } from '../components/Stats';
+import { ExtLink, Section, type Navigate } from '../components/ui';
+import { locale, t as tr } from '../../i18n';
+import '../../styles/memory-hub.css';
+// app-side parts (they read the app's live store and actions): loaded when shown, so the brain pages stay importable alone
+const AppErrors = lazy(() => import('../../dashboard/AppErrors').then(m => ({ default: m.AppErrors })));
+const ThemesPanel = lazy(() => import('../../dashboard/Themes').then(m => ({ default: m.ThemesPanel })));
+const ClassifiersSection = lazy(() => import('../../components/brain-model/ClassifiersSection').then(m => ({ default: m.ClassifiersSection })));
+
+const range = (from: string | null | undefined, to: string | null | undefined) => (from && to ? (from === to ? tr('brainText.qualita.rangeOne', { day: fmt.day(from) }) : tr('brainText.qualita.rangeSpan', { from: fmt.day(from), to: fmt.day(to) })) : tr('brainText.qualita.noData'));
+const num = (n: number) => n.toLocaleString(locale());
+
+function Metric({ id, title, help, value, unit, tone, reading, find, next, source, quote, children }: {
+  id: string; title: string; help?: ReactNode; value: ReactNode; unit?: ReactNode; tone?: 'warn' | 'bad'; reading?: Trend | null; find?: ReactNode; next?: ReactNode; source: ReactNode;
+  quote?: Quote; children?: ReactNode;
+}) {
+  return (
+    <section className={`bx-card bx-q ${tone ?? ''}`} data-testid={`bx-q-${id}`} aria-labelledby={`bx-q-${id}-h`}>
+      <h2 className="bx-eyebrow"><span id={`bx-q-${id}-h`}>{title}</span>{help && <HelpTip label={title} guide="quality" testid={`bx-q-${id}-help`}>{help}</HelpTip>}</h2>
+      <p className="bx-q-v"><span className="bx-big">{value}</span>{unit && <span className="u"> {unit}</span>}</p>
+      {reading && <Reading t={reading} testId={`bx-q-${id}-reading`} />}
+      <Explain find={find} next={next} />
+      <p className="bx-q-src"><b>{tr('brainText.qualita.source')}</b> {source}</p>
+      {children}
+      {quote && <DiscussBar topic={{ kind: 'quote', quote }} testId={`bx-q-${id}-discuss`} />}
+    </section>
+  );
+}
+
+/** The card's reading of its number (ADR 0197): his corrections with their parts, the errors others caught, the rows
+ *  nobody signed; «Nessun dato» when nothing was measured, never a zero. counted = this main counts his messages. */
+function CaughtFind({ c, counted }: { c: Caught; counted: boolean }) {
+  const parts = [
+    c.tagged ? tr('brainText.qualita.caught.partTagged', { n: c.tagged }) : '',
+    c.afterReport ? tr('brainText.qualita.caught.partAfter', { n: c.afterReport }) : '',
+    c.recognized ? tr('brainText.qualita.caught.partRecognized', { n: c.recognized }) + (c.semantic ? tr('brainText.qualita.caught.semantic', { n: c.semantic }) : '') : '',
+    c.fromRuns ? tr('brainText.qualita.caught.partRuns', { n: c.fromRuns }) : '',
+    c.fromErrors ? tr('brainText.qualita.caught.partErrors', { n: c.fromErrors }) : '',
+  ].filter(Boolean);
+  if (c.per100 === null && c.turns) return <span data-testid="bx-q-trovati-nodata">{tr('brainText.qualita.caught.noData')}</span>;
+  return <>
+    {range(c.from, c.to)}: <b>{tr('brainText.qualita.caught.mine', { n: c.caught, turns: fmt.int(c.turns) })}</b>{parts.length ? `: ${parts.join(', ')}` : ''}
+    {tr('brainText.qualita.caught.othersRest', { n: c.others })}
+    {c.unknown ? tr('brainText.qualita.caught.unknownRows', { n: c.unknown, matched: c.matched }) : null}
+    {!counted ? <> {tr('brainText.qualita.caught.oldMain')}</> : c.since && c.from && c.since > c.from ? tr('brainText.qualita.caught.sinceNote', { day: fmt.day(c.since) }) : null}
+  </>;
+}
+
+export function Qualita({ nav, embedded = false }: { arg?: string; nav: Navigate; embedded?: boolean }) {
+  const t = useBrain('/api/tables', normTables);
+  const a = useBrain('/api/quality', normAppQuality);
+  const d = t.data, app = a.data, q = d?.quality ?? null;
+  const reload = () => { t.reload(); a.reload(true); }; // fresh: main reads DevOps again now (brain/quality.ts)
+
+  const caught = q && app ? caughtPer100(q.seenByDay, app.turns, app.corrections, d?.errors ?? []) : null;
+  const share = app ? reopenShare(app.reopen) : null;
+  const weeks = caught ? caughtWeeks(caught) : null;
+  const caughtReading = weeks && weeks.cur !== null
+    ? trend(weeks.cur, weeks.prev, { what: tr('brainText.qualita.per100'), now: tr('brainText.common.last7'), before: tr('brainText.common.prev7') }) : null;
+  const patterns = d ? errorPatterns(d.errors, d.today, ownerOf(d.ideas)) : null;
+  const errReading = patterns && patterns.to ? trend(patterns.week, patterns.prevWeek, { what: tr('brainText.qualita.errLogged', { n: patterns.week }), now: tr('brainText.common.last7'), before: tr('brainText.common.prev7') }) : null;
+  const applied = d?.proposals.filter(p => p.stato === 'applicata').length ?? 0;
+  const measured = d?.proposals.filter(p => /confermata|inutile|peggiorata/.test(p.stato)).length ?? 0;
+
+  return (
+    <>
+      <PageHead title={embedded ? undefined : tr('brainText.qualita.title')} at={t.at} onRefresh={reload} refreshing={app?.reopen.refreshing}
+        lead={caught && app ? <>
+          {caught.per100 !== null ? <><b>{tr('brainText.qualita.leadCaught', { n: num(caught.per100) })}</b>{tr('brainText.qualita.leadCaughtRest')}</> : <>{tr('brainText.qualita.leadNotMeasured')}</>}; {app.prs.at ? <><b>{tr('brainText.qualita.leadPrs', { n: app.prs.blocked.length })}</b></> : <>{tr('brainText.qualita.leadPrsUnread')}</>}; {app.reopen.at ? <><b>{tr('brainText.qualita.leadBugs', { n: app.reopen.bugs.length })}</b>{tr('brainText.qualita.leadBugsRest', { days: app.reopen.days })}</> : <>{tr('brainText.qualita.leadBugsUnread')}</>}.
+        </> : undefined}
+        what={tr('brainText.qualita.what')} guide="quality" />
+      <Async loading={t.loading && !d} error={d ? null : t.error} onRetry={reload} lines={6} block>
+        {() => d && (
+          <div className="bx-section" data-testid="bx-quality">
+            {!q && <p className="bx-warnline" role="note">{tr('brainText.qualita.noQuality')}</p>}
+            <div className="bx-grid-2 bx-q-grid">
+              {q && <Metric id="trovati" title={tr('brainText.qualita.caught.title')}
+                help={tr('brainText.qualita.caught.help')}
+                value={caught?.per100 != null ? num(caught.per100) : '—'} unit={tr('brainText.qualita.per100')} tone={caught?.per100 ? 'warn' : undefined}
+                reading={caughtReading}
+                quote={caught?.per100 != null ? { id: 'q|trovati', what: 'numero', title: tr('brainText.qualita.caught.quoteTitle'), source: tr('brainText.qualita.caught.quoteSource'),
+                  facts: [tr('brainText.qualita.caught.fact', { per100: num(caught.per100), range: range(caught.from, caught.to), caught: caught.caught, turns: caught.turns, others: caught.others }),
+                    caughtReading ? caughtReading.text : '', tr('brainText.qualita.caught.factOutside')],
+                  question: tr('brainText.qualita.caught.question') } : undefined}
+                find={caught && caught.from ? <CaughtFind c={caught} counted={!!app?.corrections} /> : <>{tr('brainText.qualita.caught.noTurns')}</>}
+                next={caught?.caught ? <>{tr('brainText.qualita.caught.nextOpen')}<button type="button" className="bx-go" onClick={() => nav('esplora/ai-errors.md')}>ai-errors.md</button>{tr('brainText.qualita.caught.nextRest')}</> : undefined}
+                source={<>{tr('brainText.qualita.caught.source', { range: range(app?.turns.from, app?.turns.to) })}{caught?.before ? <>{tr('brainText.qualita.caught.before', { n: caught.before })}</> : null}</>}>
+                <details className="bx-q-more" data-testid="bx-q-trovati-how"><summary>{tr('brainText.qualita.caught.how')}</summary>
+                  <ul className="bx-list compact">
+                    {(['how1', 'how2', 'how3', 'how4'] as const).map(k => <li key={k}><span className="t">{tr(`brainText.qualita.caught.${k}`)}</span></li>)}
+                  </ul>
+                </details>
+                {caught && caught.days.length > 0 && (
+                  <details className="bx-q-more"><summary>{tr('brainText.qualita.caught.byDay')}</summary>
+                    <ul className="bx-list compact" data-testid="bx-q-trovati-days">
+                      {caught.days.map(x => <li key={x.date}><span className="meta">{fmt.day(x.date)}</span><span className="t">{tr('brainText.qualita.caught.dayRow', { caught: x.caught, turns: fmt.int(x.turns) })}</span><span className="meta">{rate(x.caught, x.turns)} / 100</span></li>)}
+                    </ul>
+                  </details>
+                )}
+              </Metric>}
+
+              {app && <Metric id="pr" title={tr('brainText.qualita.pr.title')}
+                help={tr('brainText.qualita.pr.help')}
+                value={app.prs.blocked.length} unit={tr('brainText.qualita.pr.unit', { total: app.prs.total })} tone={app.prs.blocked.length ? 'bad' : undefined}
+                quote={app.prs.blocked.length ? { id: 'q|pr', what: 'numero', title: tr('brainText.qualita.pr.quoteTitle'), source: tr('brainText.qualita.pr.quoteSource', { when: app.prs.at ? fmt.when(app.prs.at) : '' }),
+                  facts: [tr('brainText.qualita.pr.fact', { n: app.prs.blocked.length, total: app.prs.total }), ...app.prs.blocked.slice(0, 5).map(p => `${p.title} (${p.repo}): ${p.reasons.join(', ')}`)],
+                  question: tr('brainText.qualita.pr.question') } : undefined}
+                find={app.prs.blocked.length ? <><b>{tr('brainText.qualita.pr.find', { n: app.prs.blocked.length })}</b>{tr('brainText.qualita.pr.findRest')}</> : app.prs.total ? <>{tr('brainText.qualita.pr.noneBlocked')}</> : <>{tr('brainText.qualita.pr.noneActive')}</>}
+                next={app.prs.blocked.length ? <>{tr('brainText.qualita.pr.next')}</> : undefined}
+                source={<>{tr('brainText.qualita.pr.source')}{app.prs.at ? <>, {fmt.when(app.prs.at)}</> : <>{tr('brainText.qualita.pr.neverRead')}</>}{tr('brainText.qualita.pr.sourceRest')}</>}>
+                {app.prs.error && <p className="bx-warnline" role="note">{app.prs.error}</p>}
+                {app.prs.blocked.length > 0 && (
+                  <ul className="bx-list" data-testid="bx-q-pr-list">
+                    {app.prs.blocked.map(p => <li key={p.id}><span className="t"><ExtLink href={p.url}>{p.title}</ExtLink><br /><span className="meta">{p.reasons.join(' · ')}</span></span><span className="meta">{p.repo}</span></li>)}
+                  </ul>
+                )}
+              </Metric>}
+
+              {app && <Metric id="riaperti" title={tr('brainText.qualita.reopen.title')}
+                help={tr('brainText.qualita.reopen.help')}
+                value={app.reopen.at ? app.reopen.reopened : '—'} unit={app.reopen.at ? <>{tr('brainText.qualita.reopen.unit', { n: app.reopen.resolved, share })}</> : undefined} tone={app.reopen.reopened ? 'warn' : undefined}
+                quote={app.reopen.reopened ? { id: 'q|riaperti', what: 'numero', title: tr('brainText.qualita.reopen.quoteTitle'), source: tr('brainText.qualita.reopen.quoteSource', { days: app.reopen.days }),
+                  facts: [tr('brainText.qualita.reopen.fact', { n: app.reopen.reopened, of: app.reopen.resolved, share }),
+                    ...app.reopen.bugs.slice(0, 5).map(b => `${b.title}: ${b.reopened.map(r => tr('brainText.qualita.reopen.reopenedOn', { day: fmt.day(r.reopenedAt.slice(0, 10)), by: r.by || null })).join(', ')}`)],
+                  question: tr('brainText.qualita.reopen.question') } : undefined}
+                find={app.reopen.at ? (app.reopen.reopened ? <><b>{tr('brainText.qualita.reopen.find', { n: app.reopen.bugs.length })}</b>{tr('brainText.qualita.reopen.findRest')}</> : <>{tr('brainText.qualita.reopen.none')}</>)
+                  : app.reopen.refreshing ? <>{tr('brainText.qualita.reopen.reading')}</> : <>{tr('brainText.qualita.reopen.notRead')}</>}
+                next={app.reopen.reopened ? <>{tr('brainText.qualita.reopen.next')}</> : undefined}
+                source={<>{tr('brainText.qualita.reopen.source', { days: app.reopen.days })}{app.reopen.at ? <>{tr('brainText.qualita.reopen.readAt', { when: fmt.when(app.reopen.at) })}</> : null}{tr('brainText.qualita.reopen.sourceRest')}</>}>
+                {app.reopen.error && <p className="bx-warnline" role="note">{app.reopen.error}</p>}
+                {app.reopen.bugs.length > 0 && (
+                  <ul className="bx-list" data-testid="bx-q-riaperti-list">
+                    {[...app.reopen.bugs].sort((x, y) => (y.reopened.at(-1)?.reopenedAt ?? '').localeCompare(x.reopened.at(-1)?.reopenedAt ?? '')).slice(0, 6).map(b => (
+                      <li key={b.id}><span className="t"><ExtLink href={b.url || undefined}>{short(b.title, 90)}</ExtLink><br />
+                        <span className="meta">{b.reopened.map(r => tr('brainText.qualita.reopen.row', { resolved: fmt.day(r.resolvedAt.slice(0, 10)), reopened: fmt.day(r.reopenedAt.slice(0, 10)), by: r.by || null })).join(' · ')}</span></span>
+                        <span className="meta">{b.state}</span></li>
+                    ))}
+                  </ul>
+                )}
+              </Metric>}
+            </div>
+            {a.error && !app && <p className="bx-warnline" role="note">{tr('brainText.qualita.appError', { error: a.error })}</p>}
+
+            {patterns && (
+              <Section title={tr('brainText.qualita.patterns.title')} count={patterns.recurring.length} testId="bx-q-errori" actions={<PatternsHelp />}
+                note={<>{tr('brainText.qualita.patterns.note', { range: range(patterns.from, patterns.to) })}</>}>
+                {errReading && <Reading t={errReading} testId="bx-q-errori-reading" />}
+                <ErrorPatterns p={patterns} nav={nav} />
+              </Section>
+            )}
+
+            <Suspense fallback={null}><ThemesPanel kind="errors" /></Suspense>
+
+            <FeedbackOrigins rows={d.wins} />
+            <p className="bx-q-row" data-testid="bx-q-proposte">
+              <b>{tr('brainText.qualita.proposals')}</b>{tr('brainText.qualita.proposalsRest', { n: d.proposals.length, applied, measured })}
+              {' '}<button type="button" className="bx-go" onClick={() => nav('memoria/proposte')}>{tr('brainText.qualita.openProposals')}</button>
+            </p>
+          </div>
+        )}
+      </Async>
+      {/* the app's and the tools' own errors need no brain data: they show even when the brain's server is not there */}
+      <Suspense fallback={null}>
+        <Section title={tr('mh.q.appErrors')} note={tr('mh.q.appErrorsNote')} testId="bx-q-app-errors"><AppErrors /></Section>
+      </Suspense>
+      <Suspense fallback={null}><ClassifiersSection /></Suspense>
+    </>
+  );
+}

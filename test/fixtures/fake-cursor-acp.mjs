@@ -1,0 +1,443 @@
+#!/usr/bin/env node
+// A fake Cursor CLI in ACP mode (`agent [--model X] acp`) for tests: JSON-RPC 2.0, one JSON per line on stdio, with
+// the shapes of Cursor CLI 2026.07.23's own ACP code (initialize result with loadSession + http MCP + cursor_login,
+// session/new → {sessionId, modes, models}, session/request_permission with allow-once / allow-always / reject-once,
+// cursor/ask_question {toolCallId, title, questions[{id, prompt, options[{id,label}], allowMultiple}]} → outcome
+// answered/skipped/cancelled, cursor/create_plan → accepted/rejected/cancelled, session/cancel → stopReason cancelled).
+// No model, no network, no Cursor credits: the app's tests and e2e use ONLY this (the real engine is refused).
+// What a prompt does is chosen by words in it:
+//   perm → a shell tool call that asks permission (allow-always offered) · locked → the same without allow-always
+//   ask → cursor/ask_question (one single-choice and one multi-choice question; asksn: one yes/no question) · plan → cursor/create_plan
+//   edit → an edit tool call with a diff · todo → a plan update · slow → streams until cancelled · deafcancel → ignores cancel (FAKE_ACP_DEAF_MS)
+//   nocredit → OpenCode's provider refusal: an ERROR log line on stderr, no ACP output until cancelled · streamhiccup →
+//   the same line, then the turn goes on (quotahiccup, stallstop, retryslow, retrygiveup: variants, at the branch)
+//   think → streams reasoning ("Penso di usare la libreria vecchia. Passo 1. …", FAKE_CURSOR_THINK_TICKS) until cancelled
+//   readgate[=<path>] → a read tool call (of a.txt, or that path relative to the cwd) that asks permission, its
+//   location in the request too: "Letto a.txt" when allowed · writegate[=<path>] → an edit tool call that
+//   asks permission: "Scritto a.txt" when allowed; either says "<kind> rifiutato" otherwise
+//   stream → thought + 24 text chunks, then a read tool call pending → in_progress → completed
+//   extensions → cursor/update_todos and cursor/task sent as requests (as the real CLI does)
+//   acpcost → usage_update notifications with a cumulative cost mid-turn
+//   usage → the prompt result carries usage tokens · garbage → non-JSON lines · crash → stderr + exit 3
+//   a line `mcpcall <server> <tool> <json args>` → calls that tool for real (HTTP, MCP initialize + tools/call) on the
+//   server of that name passed in session/new or session/load, shown as a tool call; one call per such line
+//   neterr → like Cursor's network drop: some text, then "Error: RetriableError: [aborted] read ECONNRESET" as the
+//   assistant's last text and a normal end_turn; the app's automatic retry ("Il turno si è interrotto per un errore di
+//   rete…") fails the same way while FAKE_CURSOR_NETERR (default 1) failures are left, then answers "Ripreso dopo la rete"
+//   (FAKE_CURSOR_NETERR_TEXT: another error after "Error: ", e.g. "RetriableError: [unavailable] PING timed out")
+//   big → a read tool call with ~1M characters of raw output (the app's context estimate goes over 200k)
+//   the app's hand-off request (<<<PASSAGGIO) → a hand-off between the markers (FAKE_CURSOR_HANDOFF=off: plain text)
+//   "Riprendi un lavoro…" (a chat continuing another) → "Ripreso dal passaggio…"; both ignore the words above
+//   anything else → a thought, then "Ciao dal motore" streamed in chunks.
+// Env: FAKE_CURSOR_LOG (one JSON line per start {argv}, per request {method, params}, per answer {answer}),
+// FAKE_CURSOR_NO_AUTH=1 (not logged in: session/new fails -32000), FAKE_CURSOR_NO_LOAD=1 (no loadSession),
+// FAKE_CURSOR_DELAY (ms between chunks), FAKE_CURSOR_NO_IMAGE=1 (promptCapabilities.image false),
+// FAKE_CURSOR_NETERR_HANDOFF=1 (the hand-off turn ends with Cursor's network error), FAKE_CURSOR_MODES=agent (no
+// read-only mode offered), FAKE_CURSOR_SET_MODE_FAILS=1 (session/set_mode answers an error),
+// FAKE_CURSOR_DIE_ON_LOAD=<file> (the first engine, while that file does not exist yet, creates it and exits mid-replay;
+// the next engines offer no loadSession, so the chat goes on in a new session),
+// FAKE_ACP_OPENCODE=1 (OpenCode 1.19.5's shapes: session/new|load answer only configOptions, a model picker of category
+// model, a mode picker build|plan and an effort of category thought_level only on a model that has one; a load goes
+// back to the default model; session/set_mode is refused so the app must use the mode option).
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import readline from 'node:readline';
+
+const argv = process.argv.slice(2);
+if (argv.includes('--version') || argv.includes('-v')) { process.stdout.write('2026.07.23-fake000\n'); process.exit(0); }
+const log = obj => { if (process.env.FAKE_CURSOR_LOG) fs.appendFileSync(process.env.FAKE_CURSOR_LOG, `${JSON.stringify({ pid: process.pid, ...obj })}\n`); };
+// the config it was started with (cli-config.json in CURSOR_CONFIG_DIR, as the real CLI reads it): the tests check a
+// read-only run's rules even after the app removed that folder
+const cliConfig = (() => { try { return JSON.parse(fs.readFileSync(`${process.env.CURSOR_CONFIG_DIR}/cli-config.json`, 'utf8')); } catch { return null; } })();
+log({ argv, cwd: process.cwd(), configDir: process.env.CURSOR_CONFIG_DIR ?? null, cliConfig });
+// like the real CLI (handleInitialModel → updateConfig): a --model is written into the config folder it runs with
+if (process.env.CURSOR_CONFIG_DIR && argv.includes('--model')) {
+  const f = `${process.env.CURSOR_CONFIG_DIR}/cli-config.json`;
+  let cfg = {};
+  try { cfg = JSON.parse(fs.readFileSync(f, 'utf8')); } catch { /* none yet */ }
+  fs.writeFileSync(f, JSON.stringify({ ...cfg, model: { modelId: argv[argv.indexOf('--model') + 1] }, hasChangedDefaultModel: true }));
+}
+// OpenCode's start (engines/registry.ts) adds its flags after `acp` (`acp --print-logs`)
+if (argv.at(-1) !== 'acp' && !(argv.at(-2) === 'acp' && argv.at(-1) === '--print-logs')) { process.stderr.write('fake: only `acp` is supported\n'); process.exit(2); }
+const mi = argv.indexOf('--model');
+let model = mi >= 0 ? argv[mi + 1] : 'auto';
+// `--model sb-list-models` (Impara's probe, learn/accepted-models.ts): refused like CLI 2026.10 refuses an unknown id,
+// with 190 ids on one stderr line (more than a chat's 600-character exit error keeps), then exit 1
+if (model === 'sb-list-models') {
+  const ids = ['auto', ...Array.from({ length: 189 }, (_, i) => `fake-model-${i + 1}-high`)];
+  process.stderr.write(`Starting agent…\nError: Cannot use this model: ${model}. Available models: ${ids.join(', ')}\n`);
+  process.exit(1);
+}
+let mode = 'agent';
+// model parameters like CLI 2026.07.23 offers them to a client with _meta.parameterizedModelPicker (grok-4.7's set);
+// FAKE_CURSOR_NO_MEDIUM=1: a model without a medium reasoning (the app must warn); FAKE_CURSOR_NO_THOUGHT=1: a model
+// with no reasoning parameter at all (an effort is refused in words)
+let picker = false;
+const params = { context: '256k', reasoning_effort: 'high', fast: 'true' };
+const paramDefs = () => [
+  { id: 'context', name: 'Context', category: 'model_config', values: ['256k', '500k'] },
+  { id: 'reasoning_effort', name: 'Effort', category: 'thought_level', values: process.env.FAKE_CURSOR_NO_MEDIUM === '1' ? ['low', 'high'] : ['low', 'medium', 'high', 'xhigh'] },
+  { id: 'fast', name: 'Fast', category: 'model_config', values: ['false', 'true'] },
+].filter(d => process.env.FAKE_CURSOR_NO_THOUGHT !== '1' || d.category !== 'thought_level');
+// OpenCode's shape (FAKE_ACP_OPENCODE=1): everything is a config option
+const OPENCODE = process.env.FAKE_ACP_OPENCODE === '1';
+const OC_DEFAULT = 'opencode/big-pickle';
+const ocModels = [OC_DEFAULT, 'openrouter/qwen/qwen3-coder', 'anthropic/claude-sonnet-5-5'];
+const ocState = { model: OC_DEFAULT, mode: 'build', effort: 'medium' };
+const ocOptions = () => [
+  { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: ocState.model, options: ocModels.map(value => ({ value, name: `Name of ${value}` })) },
+  ...(ocState.model === OC_DEFAULT ? [] : [{ id: 'effort', name: 'Effort', category: 'thought_level', type: 'select', currentValue: ocState.effort, options: ['low', 'medium', 'high', 'max'].map(value => ({ value, name: value })) }]),
+  { id: 'mode', name: 'Session Mode', category: 'mode', type: 'select', currentValue: ocState.mode, options: ['build', 'plan'].map(value => ({ value, name: value })) },
+];
+const configOptions = () => OPENCODE ? ocOptions() : picker ? paramDefs().map(d => ({ id: d.id, name: d.name, category: d.category, type: 'select', currentValue: params[d.id], options: d.values.map(value => ({ value, name: value })) })) : undefined;
+
+process.stdout.on('error', () => {});
+const out = obj => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...obj })}\n`);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const delay = () => sleep(Number(process.env.FAKE_CURSOR_DELAY ?? 5));
+const sessions = new Set();
+// OpenCode 1.19.5 permission/index.ts keeps approved rules at instance scope; matching rules suppress Asked.
+// Only the trailing-wildcard shell case needed by these tests is modelled; no shell command is executed.
+const rememberedPermissions = new Set(process.env.FAKE_ACP_APPROVED_PATTERN ? [process.env.FAKE_ACP_APPROVED_PATTERN] : []);
+const mcpBySession = new Map(); // sessionId → the mcpServers list it was opened with
+const waiting = new Map(); // our request id → resolve(result)
+let seq = 1000;
+let turn = null; // { cancelled }
+let netErrLeft = Number(process.env.FAKE_CURSOR_NETERR ?? 1);
+const FAKE_HANDOFF = 'Ecco il passaggio.\n<<<PASSAGGIO\n## Stato\nRiprodotto il bug finto.\n## File e worktree\n- b.ts\n## Decisioni prese\n- niente patch al volo\n## Provato e scartato\n- il riavvio: inutile\n## Prossimo passo\nScrivere il test.\nPASSAGGIO>>>';
+
+const update = (sessionId, u) => out({ method: 'session/update', params: { sessionId, update: u } });
+const say = async (sessionId, kind, parts) => { for (const p of parts) { if (turn?.cancelled) return; update(sessionId, { sessionUpdate: kind, content: { type: 'text', text: p } }); await delay(); } };
+function ask(method, params) {
+  const id = ++seq;
+  out({ id, method, params });
+  return new Promise(resolve => waiting.set(id, resolve));
+}
+const modelsState = () => ({ currentModelId: model, availableModels: [{ modelId: 'auto', name: 'Auto' }, { modelId: 'gpt-5.6-sol', name: 'GPT-5.6 Sol' }, { modelId: 'claude-sonnet-5.5', name: 'Sonnet 5.5' }] });
+// FAKE_CURSOR_MODES=agent: only the agent mode (no read-only one) · FAKE_CURSOR_SET_MODE_FAILS=1: session/set_mode errors
+const modesState = () => ({ currentModeId: mode, availableModes: process.env.FAKE_CURSOR_MODES === 'agent' ? [{ id: 'agent', name: 'Agent' }] : [{ id: 'agent', name: 'Agent' }, { id: 'plan', name: 'Plan' }, { id: 'ask', name: 'Ask' }] });
+const opt = (optionId, name, kind) => ({ optionId, name, kind });
+
+async function prompt(id, p) {
+  const sid = p.sessionId;
+  // the app's Orchestrator role text and the "[app estimate · …]" line it ends a message with are not the user's: their words trigger nothing
+  const text = (p.prompt ?? []).map(b => b.text ?? '').join('\n').replace(/\[Role supplied by the app: [^\]\n]*\][\s\S]*?End role\]\n*/, '').replace(/\n*\[app estimate · [^\]\n]*\][^\n]*$/, '');
+  turn = { cancelled: false };
+  // the app's hand-off request and the first message of a chat that continues another: answered as such, whatever
+  // words they contain (FAKE_CURSOR_HANDOFF=off: an answer without the markers, so the app falls back to its own note)
+  const handoffAsk = text.includes('<<<PASSAGGIO'), resumed = text.startsWith('Riprendi un lavoro') || text.includes('\n\nRiprendi un lavoro');
+  if (handoffAsk && process.env.FAKE_CURSOR_NETERR_HANDOFF === '1') {
+    // the hand-off turn cut by Cursor's network error
+    await say(sid, 'agent_message_chunk', ['<<<PASSAGGIO\n## Stato\nFatto il', '\n\nError: RetriableError: [aborted] read ECONNRESET']);
+    turn = null;
+    return out({ id, result: { stopReason: 'end_turn' } });
+  }
+  if (handoffAsk || resumed) {
+    const reply = !handoffAsk ? 'Ripreso dal passaggio di consegne: verifico lo stato reale.'
+      : process.env.FAKE_CURSOR_HANDOFF === 'off' ? 'Non so scrivere passaggi.' : FAKE_HANDOFF;
+    await say(sid, 'agent_message_chunk', [reply.slice(0, 10), reply.slice(10)]);
+    turn = null;
+    return out({ id, result: { stopReason: 'end_turn' } });
+  }
+  if (/deafcancel/.test(text)) {
+    // an engine that ignores session/cancel (OpenCode answered a cancelled prompt after 55 s, 2026-10-31)
+    update(sid, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'lavoro sordo' } });
+    await sleep(Number(process.env.FAKE_ACP_DEAF_MS ?? 60000));
+    update(sid, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: ' in ritardo' } });
+    turn = null;
+    return out({ id, result: { stopReason: 'cancelled' } });
+  }
+  if (/nocredit|streamhiccup|quotahiccup|stallstop|retryslow|retrygiveup/.test(text)) {
+    // OpenCode 1.19.5 (`opencode acp --print-logs`, real run 2026-11-01): the provider refuses, the error goes only to its
+    // log on stderr, nothing comes over ACP and session/prompt stays open until session/cancel (then end_turn, no text).
+    // streamhiccup: the same error line, then the turn goes on (a retry that worked) · quotahiccup: the same with a
+    // rate limit worded as quota/billing (Gemini free) · stallstop: an error, then end_turn only FAKE_ACP_STALL_MS after
+    // the cancel · retryslow: an error, a retry, another error, a retry after FAKE_ACP_STALL_MS, then the turn goes on ·
+    // retrygiveup: an error, a retry, another error, then OpenCode's give-up line (real log 2026-11-01 08:46)
+    const line = (small, error) => `timestamp=2026-11-01T10:27:56.898Z level=ERROR run=a1c27bd8 message="stream error" providerID=opencode modelID=deepseek-v4.1-flash-free session.id=${sid} small=${small} agent=${small ? 'title' : 'build'} mode=primary error.error="${error}"\n`;
+    const retry = () => process.stderr.write(`timestamp=2026-11-01T08:44:48.731Z level=INFO run=7c96a4af message=stream providerID=openai modelID=gpt-6-astra-fast session.id=${sid} small=false agent=build mode=primary\n`);
+    const stall = Number(process.env.FAKE_ACP_STALL_MS ?? 300);
+    process.stderr.write('timestamp=2026-11-01T10:27:56.800Z level=INFO run=a1c27bd8 message=stream providerID=opencode\n');
+    if (/streamhiccup|quotahiccup|retryslow/.test(text)) {
+      process.stderr.write(line(false, /quotahiccup/.test(text) ? 'AI_APICallError: You exceeded your current quota, please check your plan and billing details.' : 'AI_APICallError: Service Unavailable'));
+      await sleep(20);
+      if (/retryslow/.test(text)) {
+        retry();
+        await sleep(20);
+        process.stderr.write(line(false, 'AI_APICallError: Service Unavailable'));
+        await sleep(stall);
+        retry();
+      }
+      await say(sid, 'agent_message_chunk', ['Ripreso ', 'dopo il riprovo']);
+      turn = null;
+      return out({ id, result: { stopReason: 'end_turn' } });
+    }
+    if (/retrygiveup/.test(text)) {
+      process.stderr.write(line(false, 'AI_APICallError: Service Unavailable'));
+      await sleep(20);
+      retry();
+      await sleep(20);
+      process.stderr.write(line(false, 'AI_APICallError: Service Unavailable'));
+      await sleep(20);
+      process.stderr.write(`timestamp=2026-11-01T08:46:04.930Z level=ERROR run=7c96a4af message=process session.id=${sid} messageID=msg_1 error="Service Unavailable" stack="AI_APICallError: Service Unavailable\\n  at x"\n`);
+    }
+    if (/stallstop/.test(text)) {
+      process.stderr.write(line(false, 'AI_APICallError: Service Unavailable'));
+      while (!turn.cancelled) await sleep(10);
+      await sleep(stall);
+      update(sid, { sessionUpdate: 'usage_update', used: 0, size: 200000, cost: { amount: 0, currency: 'USD' } });
+      turn = null;
+      return out({ id, result: { stopReason: 'end_turn' } });
+    }
+    if (/nocredit/.test(text)) {
+      process.stderr.write(line(false, 'AI_APICallError: Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going: https://opencode.ai/go'));
+      process.stderr.write(line(true, 'AI_RetryError: Failed after 3 attempts. Last error: Free usage limit reached.'));
+    }
+    while (!turn.cancelled) await sleep(10);
+    update(sid, { sessionUpdate: 'usage_update', used: 0, size: 200000, cost: { amount: 0, currency: 'USD' } });
+    turn = null;
+    return out({ id, result: { stopReason: 'end_turn', usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } } });
+  }
+  const netRetry = text.startsWith('Il turno si è interrotto per un errore di rete');
+  if (/neterr/.test(text) || netRetry) {
+    const fail = netErrLeft > 0;
+    if (fail) netErrLeft -= 1;
+    const reply = fail ? ['Sto lavorando', '\n\nError: ', process.env.FAKE_CURSOR_NETERR_TEXT ?? 'RetriableError: [aborted] read ECONNRESET'] : ['Ripreso ', 'dopo la rete'];
+    await say(sid, 'agent_message_chunk', reply);
+    turn = null;
+    return out({ id, result: { stopReason: 'end_turn' } });
+  }
+  if (/\bbig\b/.test(text)) {
+    // a tool that read a lot: ~1M characters of output (≈ 250k tokens by the app's estimate), never shown in full
+    update(sid, { sessionUpdate: 'tool_call', toolCallId: 'tc_big', title: 'Read big.log', kind: 'read', status: 'pending', rawInput: { path: 'big.log' } });
+    update(sid, { sessionUpdate: 'tool_call_update', toolCallId: 'tc_big', status: 'completed', rawOutput: { content: 'x'.repeat(1_000_000) } });
+  }
+  if (/crash/.test(text)) { process.stderr.write('fatal: fake cursor crash\n'); process.exit(3); }
+  if (/garbage/.test(text)) process.stdout.write('not json at all\n{"jsonrpc":\n');
+  let final = 'Ciao dal motore';
+  if (text === 'opaquegate' || text === 'rawlocationsgate') {
+    const opaque = text === 'opaquegate';
+    log({ answer: await ask('session/request_permission', { sessionId: sid,
+      toolCall: opaque
+        ? { toolCallId: 'opaque', title: 'Read a safe file', locations: [{ path: 'safe.txt' }] }
+        : { toolCallId: 'read', kind: 'read', rawInput: { path: 'local.txt' }, locations: [{ path: '../outside.txt' }] },
+      options: [...(opaque ? [opt('once', 'Allow once', 'allow_once')] : []), opt('always', 'Always', 'allow_always')],
+    }) });
+  }
+  // appgate=<name>: the same OpenCode MCP permission for the tool OpenCode names <name> (its server and tool joined by
+  // "_", e.g. second-brain_agent_report); says "<name> eseguito" when allowed, "<name> rifiutato" otherwise
+  const appgate = /^appgate=(\S+)$/.exec(text)?.[1];
+  if (appgate) {
+    const tcId = 'call_app';
+    update(sid, { sessionUpdate: 'tool_call', toolCallId: tcId, title: appgate, kind: 'other', status: 'pending', rawInput: {} });
+    const r = await ask('session/request_permission', { sessionId: sid,
+      toolCall: { toolCallId: tcId, title: appgate, kind: 'other', status: 'pending', rawInput: {}, locations: [] },
+      options: [opt('once', 'Allow once', 'allow_once'), opt('always', 'Always allow', 'allow_always'), opt('reject', 'Reject', 'reject_once')],
+    });
+    log({ answer: r });
+    const allowed = r?.outcome?.outcome === 'selected' && r.outcome.optionId === 'once';
+    update(sid, { sessionUpdate: 'tool_call_update', toolCallId: tcId, status: allowed ? 'completed' : 'failed' });
+    final = `${appgate} ${allowed ? 'eseguito' : 'rifiutato'}`;
+  }
+  if (text === 'mcpgate' || text === 'outsidegate') {
+    // OpenCode 1.19.5 (acp/agent.ts): the tool_call carries the real input; the permission then sends kind "other",
+    // the permission name as title, its (often empty) metadata as rawInput and the once/always/reject options.
+    const mcp = text === 'mcpgate';
+    const tcId = mcp ? 'call_mcp' : 'call_ext';
+    const title = mcp ? 'github_search_issues' : 'external_directory';
+    update(sid, { sessionUpdate: 'tool_call', toolCallId: tcId, title, kind: 'other', status: 'pending', rawInput: mcp ? { query: 'acp cancel', repo: 'lampi1/second-brain-app' } : {} });
+    log({ answer: await ask('session/request_permission', { sessionId: sid,
+      toolCall: { toolCallId: tcId, title: mcp ? title : '/home/u/other', kind: 'other', status: 'pending', rawInput: mcp ? {} : { filepath: '/home/u/other/a.txt', parentDir: '/home/u/other' }, locations: mcp ? [] : [{ path: '/home/u/other/a.txt' }] },
+      options: [opt('once', 'Allow once', 'allow_once'), opt('always', 'Always allow', 'allow_always'), opt('reject', 'Reject', 'reject_once')],
+    }) });
+  }
+  if (/perm|locked/.test(text)) {
+    const command = text.includes('push-perm') ? (text.includes('force') ? 'git push --force origin topic' : 'git push origin topic') : 'npm test';
+    // tool/shell.ts collect + permission/arity.ts: git has arity 2, so BOTH pushes match git push *.
+    const alwaysPattern = command.split(' ').slice(0, 2).join(' ') + ' *';
+    const tc = { toolCallId: 'tc_shell', title: `\`${command}\``, kind: 'execute', status: 'pending', rawInput: { command } };
+    update(sid, { sessionUpdate: 'tool_call', ...tc });
+    const options = [opt('allow-once', 'Allow once', 'allow_once'), ...(/locked/.test(text) ? [] : [opt('allow-always', 'Allow `npm test` always', 'allow_always')]), opt('reject-once', 'Reject', 'reject_once')];
+    const cached = process.env.FAKE_ACP_OPENCODE && [...rememberedPermissions].some(pattern => command.startsWith(pattern.slice(0, -1)));
+    const r = cached
+      ? { outcome: { outcome: 'selected', optionId: 'allow-always' } }
+      : await ask('session/request_permission', { sessionId: sid, toolCall: { toolCallId: tc.toolCallId, title: `Run \`${command}\``, kind: 'execute', status: 'pending', content: [{ type: 'content', content: { type: 'text', text: 'Esegue i test' } }] }, options });
+    log({ answer: r });
+    const o = r?.outcome ?? {};
+    if (process.env.FAKE_ACP_OPENCODE && o.outcome === 'selected' && o.optionId === 'allow-always') rememberedPermissions.add(alwaysPattern);
+    log({ method: 'fake/permission-result', params: { command, alwaysPattern, cached: !!cached, allowed: o.outcome === 'selected' && o.optionId.startsWith('allow') } });
+    if (o.outcome === 'selected' && o.optionId.startsWith('allow')) {
+      update(sid, { sessionUpdate: 'tool_call_update', toolCallId: tc.toolCallId, status: 'in_progress' });
+      update(sid, { sessionUpdate: 'tool_call_update', toolCallId: tc.toolCallId, status: 'completed', content: [{ type: 'content', content: { type: 'text', text: `3 passed (${o.optionId})` } }] });
+      final = 'Test verdi.';
+    } else {
+      update(sid, { sessionUpdate: 'tool_call_update', toolCallId: tc.toolCallId, status: 'failed', content: [{ type: 'content', content: { type: 'text', text: `rejected: ${o.outcome}` } }] });
+      final = o.outcome === 'cancelled' ? '' : 'Ok, non lo eseguo.';
+    }
+  }
+  for (const [word, kind, title] of [['readgate', 'read', 'Read a.txt'], ['writegate', 'edit', 'Edit a.txt']]) {
+    if (!text.includes(word) || turn.cancelled) continue;
+    const tcId = `tc_${word}`;
+    const rel = new RegExp(`${word}=(\\S+)`).exec(text)?.[1];
+    const locations = [{ path: rel ? path.resolve(process.cwd(), rel) : `${process.cwd()}/a.txt` }];
+    update(sid, { sessionUpdate: 'tool_call', toolCallId: tcId, title, kind, status: 'pending', locations });
+    const r = await ask('session/request_permission', { sessionId: sid, toolCall: { toolCallId: tcId, title, kind, status: 'pending', locations }, options: [opt('allow-once', 'Allow once', 'allow_once'), opt('reject-once', 'Reject', 'reject_once')] });
+    log({ answer: r });
+    const allowed = r?.outcome?.outcome === 'selected' && r.outcome.optionId === 'allow-once';
+    update(sid, { sessionUpdate: 'tool_call_update', toolCallId: tcId, status: allowed ? 'completed' : 'failed' });
+    final = allowed ? (kind === 'read' ? 'Letto a.txt' : 'Scritto a.txt') : `${kind} rifiutato`;
+  }
+  // "ask cmd": a command for the user, then the question with no tool call in between (the Orchestrator's card shows the command)
+  if (/ask cmd/.test(text)) await say(sid, 'agent_message_chunk', ['Lancia:\n```powershell\n', 'Get-Date\n```\n']);
+  if (/ask/.test(text) && !turn.cancelled) {
+    const r = await ask('cursor/ask_question', /asksn/.test(text) ? { toolCallId: 'tc_ask', title: 'Pubblica', questions: [
+      { id: 'q_pub', prompt: 'Lo pubblico?', options: [{ id: 'o_yes', label: 'Sì' }, { id: 'o_no', label: 'No' }], allowMultiple: false },
+    ] } : { toolCallId: 'tc_ask', title: 'Due domande', questions: [
+      { id: 'q_color', prompt: 'Che colore?', options: [{ id: 'o_blue', label: 'Blu' }, { id: 'o_red', label: 'Rosso' }], allowMultiple: false },
+      { id: 'q_files', prompt: 'Quali file?', options: [{ id: 'f_a', label: 'a.ts' }, { id: 'f_b', label: 'b.ts' }, { id: 'f_c', label: 'c.ts' }], allowMultiple: true },
+    ] });
+    log({ answer: r });
+    const o = r?.outcome ?? {};
+    final = o.outcome === 'answered' ? `Risposte: ${o.answers.map(a => `${a.questionId}=${a.selectedOptionIds.join(',')}`).join('; ')}` : `Domande: ${o.outcome}${o.reason ? ` (${o.reason})` : ''}`;
+  }
+  if (/plan/.test(text) && !turn.cancelled) {
+    const r = await ask('cursor/create_plan', { toolCallId: 'tc_plan', name: 'Piano di prova', overview: 'Due passi', plan: '# Piano\n1. Leggi\n2. Scrivi', todos: [{ id: 't1', content: 'Leggi', status: 'pending' }, { id: 't2', content: 'Scrivi', status: 'pending' }] });
+    log({ answer: r });
+    final = `Piano: ${r?.outcome?.outcome}${r?.outcome?.reason ? ` (${r.outcome.reason})` : ''}`;
+  }
+  if (/edit/.test(text) && !turn.cancelled) {
+    update(sid, { sessionUpdate: 'tool_call', toolCallId: 'tc_edit', title: 'Edit a.txt', kind: 'edit', status: 'in_progress', locations: [{ path: `${process.cwd()}/a.txt` }] });
+    update(sid, { sessionUpdate: 'tool_call_update', toolCallId: 'tc_edit', status: 'completed', content: [{ type: 'diff', path: `${process.cwd()}/a.txt`, oldText: 'a\nb\nc', newText: 'a\nB\nc\nd' }] });
+  }
+  if (/todo/.test(text)) update(sid, { sessionUpdate: 'plan', entries: [{ content: 'Leggi', priority: 'high', status: 'completed' }, { content: 'Scrivi', priority: 'medium', status: 'in_progress' }] });
+  if (/extensions/.test(text) && !turn.cancelled) {
+    // like the real CLI: these "non-blocking" extensions travel as requests (extMethod) and wait for an answer
+    const a = await ask('cursor/update_todos', { toolCallId: 'tc_todos', todos: [{ id: 't1', content: 'Leggi', status: 'completed' }, { id: 't2', content: 'Scrivi', status: 'in_progress' }], merge: false });
+    log({ answer: { outcome: { method: 'cursor/update_todos', result: a } } });
+    const b = await ask('cursor/task', { toolCallId: 'tc_task', description: 'Esplora il repo', prompt: 'trova i test', subagentType: 'explore' });
+    log({ answer: { outcome: { method: 'cursor/task', result: b } } });
+  }
+  if (/subagent/.test(text) && !turn.cancelled) {
+    // like the real CLI over ACP: a Task tool call (raw args), cursor/task with the model, the completed update
+    update(sid, { sessionUpdate: 'tool_call', toolCallId: 'tc_sub', title: 'Task: Rivedi il commit', kind: 'other', status: 'pending', rawInput: { _toolName: 'task', prompt: 'rivedi HEAD di repo X', description: 'Rivedi il commit', subagentType: 'reviewer' } });
+    await delay();
+    await ask('cursor/task', { toolCallId: 'tc_sub', description: 'Rivedi il commit', prompt: 'rivedi HEAD di repo X', subagentType: { custom: 'reviewer' }, model: 'grok-4.7', durationMs: 1234 });
+    update(sid, { sessionUpdate: 'tool_call_update', toolCallId: 'tc_sub', status: 'completed', rawOutput: { durationMs: 1234 } });
+  }
+  if (/stream/.test(text) && !turn.cancelled) {
+    await say(sid, 'agent_thought_chunk', Array.from({ length: 8 }, (_, i) => `idea${i} `));
+    await say(sid, 'agent_message_chunk', Array.from({ length: 24 }, (_, i) => `parola${i} `));
+    update(sid, { sessionUpdate: 'tool_call', toolCallId: 'tc_after', title: 'Read b.txt', kind: 'read', status: 'pending' });
+    await delay();
+    update(sid, { sessionUpdate: 'tool_call_update', toolCallId: 'tc_after', status: 'in_progress' });
+    await delay();
+    update(sid, { sessionUpdate: 'tool_call_update', toolCallId: 'tc_after', status: 'completed', content: [{ type: 'content', content: { type: 'text', text: 'letto' } }] });
+  }
+  for (const [, server, tool, args] of text.matchAll(/^mcpcall (\S+) (\S+) (.+)$/gm)) {
+    if (turn.cancelled) break;
+    const tcId = `tc_mcp_${++seq}`;
+    update(sid, { sessionUpdate: 'tool_call', toolCallId: tcId, title: `${server}: ${tool}`, kind: 'other', status: 'in_progress', rawInput: JSON.parse(args) });
+    const r = await mcpCall(mcpBySession.get(sid) ?? [], server, tool, JSON.parse(args));
+    log({ mcpcall: { server, tool, ok: r.ok, text: r.text } });
+    update(sid, { sessionUpdate: 'tool_call_update', toolCallId: tcId, status: r.ok ? 'completed' : 'failed', content: [{ type: 'content', content: { type: 'text', text: r.text } }] });
+    final = r.ok ? `Fatto: ${tool}` : `Errore: ${r.text}`;
+  }
+  if (/acpcost/.test(text)) {
+    // ACP's usage_update with the session's cumulative cost (Cursor's CLI does not send it yet; the protocol has it)
+    update(sid, { sessionUpdate: 'usage_update', used: 5000, size: 200000, cost: { amount: 0.12, currency: 'USD' } });
+    await delay(); await delay();
+    update(sid, { sessionUpdate: 'usage_update', used: 6000, size: 200000, cost: { amount: 0.2, currency: 'USD' } });
+    await delay();
+  }
+  // reasoning streamed until cancelled ("Correggi il pensiero" selects its first sentence)
+  if (/think/.test(text) && !turn.cancelled) await say(sid, 'agent_thought_chunk', ['Penso di usare la libreria vecchia. ', ...Array.from({ length: Number(process.env.FAKE_CURSOR_THINK_TICKS ?? 200) }, (_, i) => `Passo ${i + 1}. `)]);
+  if (/slow/.test(text)) await say(sid, 'agent_message_chunk', Array.from({ length: Number(process.env.FAKE_CURSOR_SLOW_TICKS ?? 300) }, () => 'tick '));
+  else if (!turn.cancelled && final) {
+    await say(sid, 'agent_thought_chunk', ['Penso ', 'un attimo']);
+    await say(sid, 'agent_message_chunk', [final.slice(0, 4), final.slice(4)]);
+  }
+  const cancelled = turn.cancelled;
+  turn = null;
+  const usage = /usage/.test(text) ? { inputTokens: 1000, outputTokens: 500, cachedReadTokens: 2000, cachedWriteTokens: 0, totalTokens: 3500 } : undefined;
+  out({ id, result: { stopReason: cancelled ? 'cancelled' : 'end_turn', ...(usage ? { usage } : {}) } });
+}
+
+// a minimal MCP client over HTTP (what the real agent does with an http server from session/new)
+async function mcpCall(servers, name, tool, args) {
+  const srv = servers.find(x => x.name === name && x.type === 'http');
+  if (!srv) return { ok: false, text: `no MCP server ${name}` };
+  const post = async (body, sidHeader) => {
+    const res = await fetch(srv.url, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', ...(sidHeader ? { 'mcp-session-id': sidHeader } : {}) }, body: JSON.stringify(body) });
+    return { sid: res.headers.get('mcp-session-id'), json: await res.json() };
+  };
+  try {
+    const init = await post({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'fake-cursor', version: '0' } } });
+    const r = (await post({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: tool, arguments: args } }, init.sid)).json;
+    const text = r.error ? r.error.message : (r.result?.content ?? []).map(c => c.text ?? '').join('\n');
+    return { ok: !r.error && !r.result?.isError, text };
+  } catch (e) { return { ok: false, text: String(e?.message ?? e) }; }
+}
+
+function request(id, method, p) {
+  log({ method, params: p });
+  switch (method) {
+    case 'initialize':
+      picker = p.clientCapabilities?._meta?.parameterizedModelPicker === true;
+      return out({ id, result: { protocolVersion: 1, agentCapabilities: { loadSession: process.env.FAKE_CURSOR_NO_LOAD !== '1' && !(process.env.FAKE_CURSOR_DIE_ON_LOAD && fs.existsSync(process.env.FAKE_CURSOR_DIE_ON_LOAD)), mcpCapabilities: { http: true, sse: true }, promptCapabilities: { audio: false, embeddedContext: false, image: process.env.FAKE_CURSOR_NO_IMAGE !== '1' }, sessionCapabilities: { list: {} } }, authMethods: [{ id: 'cursor_login', name: 'Cursor Login', description: "Authenticate using existing Cursor login credentials. Run 'agent login' first if not logged in." }] } });
+    case 'authenticate': return out({ id, error: { code: -32602, message: 'fake: authenticate must never be called by second-brain' } });
+    case 'session/new': {
+      if (process.env.FAKE_CURSOR_NO_AUTH === '1') return out({ id, error: { code: -32000, message: "Authentication required. Please run 'agent login' first, then call authenticate() with methodId 'cursor_login'." } });
+      // OpenCode's own ids are not UUIDs (ses_ + 26 base62 chars, OpenCode 1.19.5)
+      const sessionId = OPENCODE ? `ses_${crypto.randomBytes(13).toString('hex')}` : crypto.randomUUID();
+      sessions.add(sessionId);
+      mcpBySession.set(sessionId, p.mcpServers ?? []);
+      if (OPENCODE) return out({ id, result: { sessionId, configOptions: configOptions() } });
+      return out({ id, result: { sessionId, modes: modesState(), models: modelsState(), configOptions: configOptions() } });
+    }
+    case 'session/load': {
+      sessions.add(p.sessionId);
+      mcpBySession.set(p.sessionId, p.mcpServers ?? []);
+      // like the real agent: the past is replayed as updates before the answer
+      update(p.sessionId, { sessionUpdate: 'user_message_chunk', content: { type: 'text', text: 'vecchia domanda' } });
+      update(p.sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'vecchia risposta' } });
+      // FAKE_CURSOR_DIE_ON_LOAD=<file>: the first engine (no such file yet) dies in the middle of the replay
+      const dieMark = process.env.FAKE_CURSOR_DIE_ON_LOAD;
+      if (dieMark && !fs.existsSync(dieMark)) { fs.writeFileSync(dieMark, ''); process.stdout.write('', () => process.exit(4)); return; }
+      if (OPENCODE) { ocState.model = OC_DEFAULT; ocState.mode = 'build'; return out({ id, result: { configOptions: configOptions() } }); }
+      return out({ id, result: { modes: modesState(), models: modelsState(), configOptions: configOptions() } });
+    }
+    // the real one writes the user's global CLI config (cli-config.json): second-brain must never call it
+    case 'session/set_model': return out({ id, error: { code: -32602, message: 'fake: session/set_model must never be called by second-brain' } });
+    case 'session/set_mode': if (OPENCODE || process.env.FAKE_CURSOR_SET_MODE_FAILS === '1') return out({ id, error: { code: -32603, message: 'fake: mode not available' } });
+      mode = p.modeId; update(p.sessionId, { sessionUpdate: 'current_mode_update', currentModeId: mode }); return out({ id, result: {} });
+    case 'session/set_config_option': {
+      if (OPENCODE) {
+        const o = ocOptions().find(x => x.id === p.configId);
+        if (!o || !o.options.some(x => x.value === p.value)) return out({ id, error: { code: -32602, message: `Invalid params: ${p.configId} not found: ${p.value}` } });
+        ocState[p.configId] = p.value;
+        return out({ id, result: { configOptions: configOptions() } });
+      }
+      const d = paramDefs().find(x => x.id === p.configId);
+      if (!picker || !d || !d.values.includes(p.value)) return out({ id, error: { code: -32602, message: `Invalid value for ${p.configId}: ${p.value}` } });
+      params[d.id] = p.value;
+      return out({ id, result: { configOptions: configOptions() } });
+    }
+    case 'session/prompt':
+      if (!sessions.has(p.sessionId)) return out({ id, error: { code: -32602, message: `unknown session ${p.sessionId}` } });
+      return void prompt(id, p);
+    default: return out({ id, error: { code: -32601, message: `Method not found: ${method}` } });
+  }
+}
+
+const rl = readline.createInterface({ input: process.stdin });
+rl.on('line', line => {
+  if (!line.trim()) return;
+  let m;
+  try { m = JSON.parse(line); } catch { process.stderr.write(`bad line: ${line}\n`); return; }
+  if (m.method && m.id !== undefined) return request(m.id, m.method, m.params ?? {});
+  if (m.method === 'session/cancel') { log({ method: 'session/cancel', params: m.params }); if (turn) turn.cancelled = true; return; }
+  if (m.method) return log({ method: m.method, params: m.params });
+  if (m.id !== undefined && waiting.has(m.id)) { const w = waiting.get(m.id); waiting.delete(m.id); w(m.result ?? null); }
+});
+rl.on('close', () => { log({ exit: 'stdin closed' }); process.exit(0); });

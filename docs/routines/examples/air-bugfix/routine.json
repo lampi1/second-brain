@@ -1,0 +1,66 @@
+{
+  "format": "second-brain-routine",
+  "schemaVersion": 1,
+  "routine": {
+    "id": "air-bugfix",
+    "title": "Air · correzione bug ai-fixable",
+    "description": "For each new Air bug tagged ai-fixable: reproduce it on the Air test site, fix it on a local branch with a test, comment the result on the bug and move it to Active. Asks the contact on the bug when the repro steps are not enough.",
+    "inputs": [
+      { "name": "repoPath", "label": "Local clone of the Air repository", "required": true },
+      { "name": "baseBranch", "label": "Base branch", "default": "main" }
+    ],
+    "steps": [
+      {
+        "id": "reproduce",
+        "title": "Riproduci il bug",
+        "prompt": "Reproduce the bug {{work-item-id}} ({{work-item-url}}) on the Air test site.\n\nThe browser is already logged into the Air test site (https://air.example.test). Read the bug's repro steps (in this prompt) and its comments and attachments with the routine-devops tools. Follow the repro steps in the browser exactly as written; take a screenshot of the wrong behaviour and one of the expected place where it should differ.\n\nDone = you saw the wrong behaviour and your summary lists: the page, the exact actions, what happened, what was expected. If the steps are missing or ambiguous, or the behaviour does not show after two careful tries, answer needs-human with one precise question for the reporter (what data, which practice, which page).",
+        "model": "claude-sonnet-5",
+        "effort": "medium",
+        "allowedTools": ["Read", "mcp__routine-devops__*", "mcp__routine-browser__*"],
+        "browser": true,
+        "maxAttempts": 2
+      },
+      {
+        "id": "fix",
+        "title": "Correggi con un test",
+        "prompt": "Fix the bug {{work-item-id}} in the repository at {{repoPath}}, using the reproduction from the previous step.\n\n1. git fetch, then create the branch bugfix/{{work-item-id}} from origin/{{baseBranch}}.\n2. Find the root cause (not the symptom); keep the change as small as the fix needs.\n3. Add or extend an automated test that fails without the fix and passes with it.\n4. Build and run the tests of the projects you touched.\n5. Commit on the branch with a message in English: \"fix: <what> (AB#{{work-item-id}})\". Never push, never open a pull request.\n\nDone = the commit exists and the tests pass; the summary names the root cause, the files changed, the test and the commit sha. If the fix needs a product decision (two valid behaviours), answer needs-human with the two options.",
+        "model": "claude-opus-5-5",
+        "effort": "high",
+        "allowedTools": ["Read", "Edit", "Write", "Grep", "Glob", "Bash(git *)", "Bash(dotnet *)", "Bash(npm *)"],
+        "timeoutMs": 3600000,
+        "maxAttempts": 2
+      },
+      {
+        "id": "report",
+        "title": "Commenta sul bug",
+        "prompt": "Report the fix of bug {{work-item-id}} on the bug itself.\n\nWrite one comment in Italian for the team, short: cause, fix, test, branch bugfix/{{work-item-id}} and the commit sha (from the earlier steps' summaries). Then move the bug to Active.\n\nDone = step-result.json lists exactly two devopsWrites: the comment and the state Active. Change nothing else.",
+        "model": "claude-sonnet-5",
+        "effort": "low",
+        "allowedTools": ["Read"],
+        "maxAttempts": 2
+      }
+    ],
+    "trigger": {
+      "kind": "devops",
+      "everyMinutes": 15,
+      "organization": "contoso",
+      "project": "Air",
+      "areaPath": "Air",
+      "workItemType": "Bug",
+      "states": ["New"],
+      "includeExisting": false,
+      "includeTags": ["ai-fixable"],
+      "maxPerHour": 4
+    },
+    "devops": { "organization": "contoso", "projects": ["Air"], "ops": ["comment", "state"], "fields": [] },
+    "escalation": { "contact": "00000000-0000-4000-8000-000000000000", "contactName": "the routine owner", "pollMinutes": 10 },
+    "browser": { "origins": ["https://air.example.test"] },
+    "loginSuccess": [
+      { "loginUrl": "https://air.example.test/Account/Login?mode=local", "success": { "urlNotContaining": "/Account/Login" } }
+    ]
+  },
+  "credentials": [
+    { "loginUrl": "https://air.example.test/Account/Login?mode=local", "user": "qa-user", "password": "<set-by-user>" }
+  ],
+  "secrets": { "devopsPat": "<set-by-user>" }
+}

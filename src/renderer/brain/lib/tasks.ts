@@ -1,0 +1,108 @@
+// Pure rules of the Task page (pages/Task.tsx), computed locally from what the brain's script read (zero tokens):
+// who a PR is waiting for, how long a work item has not moved, the test cases' outcomes in one line. Why: the user, 2026-10-12, "falla figa e usabile ... con
+// info aggiuntive sempre a costo 0 token". Pinned by test/unit/brain-ui/task-view.test.ts.
+import type { DevopsDetail, DevopsItem, DevopsPr, DevopsTest } from '@shared/contract';
+import type { Tone } from '../components/ui';
+import { t } from '../../i18n';
+
+const DAY = 864e5;
+/** Whole days since an ISO date (null when missing or unreadable). */
+export function daysSince(iso: string | null | undefined, now = Date.now()): number | null {
+  const t = iso ? Date.parse(iso) : NaN;
+  return Number.isNaN(t) ? null : Math.max(0, Math.floor((now - t) / DAY));
+}
+/** "da oggi" · "da ieri" · "da 4 giorni" */
+export function sinceLabel(days: number): string { return days === 0 ? t('brainText.tasks.sinceToday') : days === 1 ? t('brainText.tasks.sinceYesterday') : t('brainText.tasks.sinceDays', { n: days }); }
+
+/** A work item has not moved for this many days: "fermo". */
+export const STUCK_DAYS = 3;
+export function stuckDays(w: DevopsItem, now = Date.now()): number | null {
+  const d = daysSince(w.changedAt, now);
+  return d !== null && d >= STUCK_DAYS ? d : null;
+}
+
+export interface Wait { who: 'me' | 'others' | 'none'; tone: Tone; text: string }
+/** "Giulia Bianchi" / "Bianchi, Giulia <guid\mail>" → "Giulia" */
+export function firstName(n: string): string {
+  const clean = n.replace(/\s*<.*$/, '').trim();
+  const m = clean.match(/^([^,]+),\s*(.+)$/);
+  return (m ? m[2]! : clean).split(' ')[0] || n;
+}
+
+/** Who the PR is waiting for, the most blocking reason first. */
+export function prWait(p: DevopsPr): Wait {
+  if (p.draft) return { who: 'me', tone: 'outline', text: t('brainText.tasks.wait.draft') };
+  const rejected = p.reviewers.filter(r => r.vote <= -10);
+  if (rejected.length) return { who: 'me', tone: 'bad', text: t('brainText.tasks.wait.rejected', { names: rejected.map(r => firstName(r.name)).join(', ') }) };
+  if (p.build?.result === 'failed') return { who: 'me', tone: 'bad', text: t('brainText.tasks.wait.buildFailed') };
+  if (p.build?.result === 'canceled') return { who: 'me', tone: 'warn', text: t('brainText.tasks.wait.buildCanceled') };
+  const changes = p.reviewers.filter(r => r.vote === -5);
+  if (changes.length) return { who: 'me', tone: 'warn', text: t('brainText.tasks.wait.changes', { names: changes.map(r => firstName(r.name)).join(', '), n: changes.length }) };
+  if (p.activeThreads) return { who: 'me', tone: 'warn', text: t('brainText.tasks.wait.threads', { n: p.activeThreads }) };
+  const missing = p.reviewers.filter(r => r.required && r.vote === 0);
+  if (missing.length) return { who: 'others', tone: 'blue', text: t('brainText.tasks.wait.vote', { names: missing.map(r => firstName(r.name)).join(', ') }) };
+  if (p.build && p.build.status !== 'completed') return { who: 'others', tone: 'blue', text: t('brainText.tasks.wait.build') };
+  if (!p.reviewers.some(r => r.vote >= 5)) return { who: 'others', tone: 'blue', text: t('brainText.tasks.wait.first') };
+  return p.autoComplete
+    ? { who: 'none', tone: 'good', text: t('brainText.tasks.wait.auto') }
+    : { who: 'me', tone: 'good', text: t('brainText.tasks.wait.complete') };
+}
+
+/** A build's result or status in words ("failed" → "fallita"); getters, so each read is in the current language. */
+export const BUILD_WORDS: Record<string, string> = {
+  get failed() { return t('brainText.tasks.build.failed'); }, get partiallySucceeded() { return t('brainText.tasks.build.partiallySucceeded'); },
+  get succeeded() { return t('brainText.tasks.build.succeeded'); }, get canceled() { return t('brainText.tasks.build.canceled'); },
+  get inProgress() { return t('brainText.tasks.build.inProgress'); }, get notStarted() { return t('brainText.tasks.build.notStarted'); },
+  get cancelling() { return t('brainText.tasks.build.cancelling'); }, get postponed() { return t('brainText.tasks.build.postponed'); },
+};
+
+export interface TestSum { passed: number; failed: number; other: number; never: number; total: number; tone: Tone; text: string }
+/** "3 test: 2 passati, 1 fallito" with the worst outcome's tone. */
+export function testSummary(tests: readonly DevopsTest[]): TestSum | null {
+  if (!tests.length) return null;
+  const n = (f: (t: DevopsTest) => boolean) => tests.filter(f).length;
+  const passed = n(t => t.outcome === 'Passed');
+  const failed = n(t => t.outcome === 'Failed');
+  const never = n(t => !t.outcome || /^(None|Unspecified|NotExecuted)$/i.test(t.outcome));
+  const other = tests.length - passed - failed - never;
+  const parts = [passed && t('brainText.tasks.sum.passed', { n: passed }), failed && t('brainText.tasks.sum.failed', { n: failed }),
+    other && t('brainText.tasks.sum.other', { n: other }), never && t('brainText.tasks.sum.never', { n: never })].filter(Boolean);
+  const tone: Tone = failed ? 'bad' : other || never ? 'warn' : 'good';
+  return { passed, failed, other, never, total: tests.length, tone, text: t('brainText.tasks.sum.total', { n: tests.length, parts: parts.join(', ') }) };
+}
+
+export function outcomeLabel(o: string | null): { label: string; tone: Tone } {
+  if (o === 'Passed') return { label: t('brainText.tasks.outcome.passed'), tone: 'good' };
+  if (o === 'Failed') return { label: t('brainText.tasks.outcome.failed'), tone: 'bad' };
+  if (o === 'Blocked') return { label: t('brainText.tasks.outcome.blocked'), tone: 'warn' };
+  if (o === 'NotApplicable') return { label: t('brainText.tasks.outcome.na'), tone: 'outline' };
+  if (!o || /^(None|Unspecified|NotExecuted)$/i.test(o)) return { label: t('brainText.tasks.outcome.toRun'), tone: 'outline' };
+  return { label: o, tone: 'warn' };
+}
+
+export function stateTone(state: string): Tone {
+  if (/^(Active|In Progress|Committed|Doing|Approved)$/i.test(state)) return 'blue';
+  if (/^(Resolved|Done|Closed|Completed)$/i.test(state)) return 'good';
+  if (/^New$/i.test(state)) return 'outline';
+  return '';
+}
+
+/** The last comment by someone else (what is worth reading first), else the last one. */
+export function lastComment(d: DevopsDetail | undefined): DevopsDetail['comments'][number] | null {
+  if (!d?.comments.length) return null;
+  return d.comments.find(c => !c.mine) ?? d.comments[0] ?? null;
+}
+
+/** "Giulia Bianchi" → "GB": the avatar of a comment. */
+export function initials(name: string | null | undefined): string {
+  const clean = (name ?? '').replace(/\s*<.*$/, '').trim();
+  const m = clean.match(/^([^,]+),\s*(.+)$/);
+  const parts = (m ? `${m[2]} ${m[1]}` : clean).split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? '?') + (parts[1]?.[0] ?? '')).toUpperCase();
+}
+/** A stable avatar color (1..8 of the brain's categorical palette) from a name. */
+export function hue(name: string | null | undefined): number {
+  let h = 0;
+  for (const c of name ?? '') h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return (h % 8) + 1;
+}

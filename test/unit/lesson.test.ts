@@ -1,0 +1,254 @@
+// Impara's shared rules (ADR 0185, src/shared/lesson.ts): the node ids a flowchart declares (labels and edge text left
+// out), the lit piece added by the app only on known ids, the play order (a piece, its extras, its checks, the end),
+// progress and how each piece went, the model's answers checked and capped, the spoken commands and choices; the
+// research (ADR 0188): facts with a source, the questions, the check's verdicts, a piece's beats and citations; the kind
+// of lesson (ADR 0230): explain by default for a new one, quiz for an old one, no checks and no graded end in explain.
+import { describe, expect, it } from 'vitest';
+import {
+  applyVerdicts, beatsOf, diagramNodes, doneNodes, factLines, jsonIn, parseExtra, parseFacts, parseGrade, parseLessonCommand, parsePlan, parseQuestions, parseSpokenChoice, parseStep, pieceScores, playlist, progressOf, rootOf, summaryOf, withFocus,
+  DEFAULT_LESSON_MODE, LESSON_MODES, endsHere, heardIsExplainBack, modeOf, toldRole, withoutAsking,
+  type FocusColors, type Lesson, type LessonCheck, type LessonFact, type LessonStep,
+} from '../../src/shared/lesson';
+
+const COLORS: FocusColors = { now: { fill: '#111111', stroke: '#222222', text: '#333333' }, done: { fill: '#444444', stroke: '#555555', text: '#666666' }, dim: { fill: '#777777', stroke: '#888888', text: '#999999' } };
+const step = (id: string, extra?: LessonStep['extra'], focus: string[] = []): LessonStep => ({ id, title: id, say: id, text: id, focus, ...(extra ? { extra } : {}) });
+const check = (id: string, after: string, answer?: number): LessonCheck => ({ id, after, kind: 'choice', q: id, options: ['a', 'b'], correct: 0, why: 'w', ...(answer !== undefined ? { answer: { choice: answer, at: 1 } } : {}) });
+const lesson = (p: Partial<Lesson>): Lesson => ({
+  id: '20261029-100000-abcd', title: 't', kind: 'topic', ask: 'a', depth: 'lesson', level: 'basics', createdAt: 1, updatedAt: 1, state: 'ready', diagram: 'flowchart LR\n a --> b',
+  outline: [], steps: [], checks: [], at: '', costUsd: null, engine: null, model: null, sources: [], ...p,
+});
+
+describe('diagramNodes', () => {
+  it('finds shaped nodes and edge ends, never labels or keywords', () => {
+    const src = 'flowchart LR\n  engine["Motore<br/>CLI"] -->|"pezzi di testo"| manager("Chat Manager")\n  manager --> ipc{IPC}\n  ipc -.-> store[[Store]]\n  classDef x fill:#fff\n  class engine x';
+    expect(diagramNodes(src).sort()).toEqual(['engine', 'ipc', 'manager', 'store']);
+  });
+  it('drops the text written between an edge\'s dashes and keeps the node after an asymmetric shape', () => {
+    expect(diagramNodes('graph TD\n A -- some text --> B\n C>flag] --> D').sort()).toEqual(['A', 'B', 'C', 'D']);
+    expect(diagramNodes('flowchart LR\n A --- B\n B ==> C').sort()).toEqual(['A', 'B', 'C']);
+  });
+  it('ignores subgraph ids and comments', () => {
+    expect(diagramNodes('flowchart LR\n subgraph main["Main"]\n a --> b\n end\n %% c --> d').sort()).toEqual(['a', 'b']);
+  });
+});
+
+describe('withFocus', () => {
+  const src = 'flowchart LR\n a --> b\n b --> c';
+  it('lights the piece, calms the seen ones, dims the rest', () => {
+    const out = withFocus(src, ['b'], ['a'], COLORS);
+    expect(out).toContain('class b sbNow');
+    expect(out).toContain('class a sbDone');
+    expect(out).toContain('class c sbDim');
+    expect(out).toContain('classDef sbNow fill:#111111,stroke:#222222,stroke-width:3px,color:#333333');
+  });
+  it('uses only ids the diagram declares and never a colour that is not hex', () => {
+    const out = withFocus(src, ['b;click b call x', 'zz'], [], { ...COLORS, now: { fill: 'rgba(1,2,3,.5)', stroke: '#222222', text: '#333333' } });
+    expect(out).not.toContain('click');
+    expect(out).not.toContain('zz');
+    expect(out).not.toContain('rgba');
+    expect(out).not.toMatch(/^class .* sbDim$/m); // nothing lit: nothing dimmed
+  });
+});
+
+describe('play order and progress', () => {
+  const l = lesson({
+    steps: [step('p1', undefined, ['a']), step('p2', undefined, ['b']), step('x1', { kind: 'better', of: 'p1' }), step('x2', { kind: 'example', of: 'x1' })],
+    checks: [check('q1', 'p1', 1), check('qx', 'x1', 0), check('q2', 'p2')], outline: ['p1', 'p2', 'p3'],
+  });
+  it('goes piece, its extras (each with its own extras and checks), its checks, then the end', () => {
+    expect(playlist(l).map(p => p.key)).toEqual(['s:p1', 's:x1', 's:x2', 'c:qx', 'c:q1', 's:p2', 'c:q2', 'end']);
+    expect(playlist({ ...l, state: 'more' }).map(p => p.key).at(-1)).toBe('c:q2');
+  });
+  it('finds the main piece of an extra and of a check', () => {
+    expect(rootOf(l, 's:x2')?.id).toBe('p1');
+    expect(rootOf(l, 'c:qx')?.id).toBe('p1');
+    expect(rootOf(l, 'c:q2')?.id).toBe('p2');
+  });
+  it('counts seen pieces, right answers and extras', () => {
+    expect(progressOf({ ...l, at: 's:x2' })).toMatchObject({ seen: 1, total: 3, right: 1, answered: 2, checks: 3, asked: 2 });
+    expect(progressOf({ ...l, at: 'end' }).seen).toBe(2);
+    expect(summaryOf({ ...l, at: 'end', doneAt: 5 })).toMatchObject({ steps: 2, planned: 3, done: true });
+  });
+  it('scores a piece by its checks (an extra\'s too) and lowers it a little for each extra it needed', () => {
+    const s = pieceScores(l);
+    expect(s[0]).toMatchObject({ id: 'p1' });
+    expect(s[0]!.score).toBeCloseTo(0.5 - 0.2);
+    expect(s[1]).toMatchObject({ id: 'p2', score: null });
+  });
+  it('the nodes seen before a piece, in play order', () => {
+    expect(doneNodes(l, 's:p2')).toEqual(['a']);
+  });
+});
+
+describe('reading the model', () => {
+  const plan = {
+    title: 'T', diagram: 'flowchart LR\n a["A"] --> b["B"]', outline: ['one', 'two', 'three'],
+    steps: [{ title: 'one', say: 's1', text: 't1', focus: ['a', 'nope'] }, { title: 'broken' }, { title: 'two', say: 's2', focus: ['b'], code: { file: 'x.ts', diff: '+a' }, words: [{ term: 'w', meaning: 'm' }, { term: '' }] }],
+    checks: [{ afterStep: 2, kind: 'predict', q: 'q?', options: ['x', 'y'], correct: 1, why: 'because' }, { afterStep: 9, q: 'q', options: ['x', 'y'], correct: 0, why: 'w' }, { afterStep: 1, q: 'q', options: ['x'], correct: 0, why: 'w' }],
+    explain: 'Explain it',
+  };
+  it('keeps the valid pieces, drops focus on unknown nodes, ties checks to the answer\'s pieces', () => {
+    const p = parsePlan(plan, { now: 1 });
+    expect(p.steps.map(s => s.title)).toEqual(['one', 'two']);
+    expect(p.steps[0]!.focus).toEqual(['a']);
+    expect(p.steps[1]!.code).toEqual({ file: 'x.ts', diff: '+a' });
+    expect(p.steps[1]!.words).toEqual([{ term: 'w', meaning: 'm' }]);
+    expect(p.checks).toHaveLength(1);
+    expect(p.checks[0]).toMatchObject({ after: p.steps[1]!.id, kind: 'predict', correct: 1 });
+    expect(p.explainQ).toBe('Explain it');
+  });
+  it('refuses a diagram that is not a flowchart, and an answer with no valid piece', () => {
+    expect(() => parsePlan({ ...plan, diagram: 'sequenceDiagram\n a->>b: x' })).toThrow(/flowchart/);
+    expect(() => parsePlan({ ...plan, steps: [{}] })).toThrow(/nessun pezzo/);
+  });
+  it('the rest keeps the lesson\'s diagram', () => {
+    const p = parsePlan({ steps: [{ title: 'three', say: 's3', focus: ['b'] }], checks: [] }, { base: plan.diagram });
+    expect(p.diagram).toBe(plan.diagram);
+    expect(p.steps[0]!.focus).toEqual(['b']);
+  });
+  it('an extra piece hangs on its piece, its check too', () => {
+    const e = parseExtra({ step: { title: 'again', say: 'simpler' }, check: { q: 'q', options: ['a', 'b'], correct: 0, why: 'w' } }, ['a'], 'p1', 'better', undefined, 1);
+    expect(e.step.extra).toEqual({ kind: 'better', of: 'p1' });
+    expect(e.check?.after).toBe('p1');
+  });
+  it('a grade is ok, partial or miss', () => {
+    expect(parseGrade({ grade: 'ok', feedback: 'f' })).toEqual({ grade: 'ok', feedback: 'f' });
+    expect(parseGrade({ grade: 'great', feedback: 'f', missing: 'm' })).toEqual({ grade: 'miss', feedback: 'f', missing: 'm' });
+  });
+  it('finds the JSON in a fence or in plain text', () => {
+    expect(jsonIn('Here:\n```json\n{"a":1}\n```')).toEqual({ a: 1 });
+    expect(jsonIn('ok {"a":{"b":2}} done')).toEqual({ a: { b: 2 } });
+    expect(() => jsonIn('nothing')).toThrow();
+  });
+});
+
+describe('the research (ADR 0188)', () => {
+  it('a web fact needs a web address; a files fact is from a file (with its path) or from the model', () => {
+    const web = parseFacts({ facts: [{ claim: 'A', url: 'https://example.org/a', quote: 'q' }, { claim: 'B', url: 'javascript:alert(1)' }, { claim: 'C' }, { claim: '', url: 'https://x.org' }] }, true);
+    expect(web).toEqual([{ id: 'f1', claim: 'A', from: 'web', ref: 'https://example.org/a', quote: 'q', check: 'unsure' }]);
+    const files = parseFacts({ facts: [{ claim: 'D', from: 'file', ref: 'src/a.ts:3' }, { claim: 'E', from: 'file' }, { claim: 'F', from: 'known', ref: 'ignored' }] }, false, 2);
+    expect(files.map(f => [f.id, f.from, f.ref])).toEqual([['f2', 'file', 'src/a.ts:3'], ['f3', 'known', ''], ['f4', 'known', '']]);
+    expect(parseFacts({ facts: Array.from({ length: 40 }, (_, i) => ({ claim: `c${i}`, from: 'known' })) }, false)).toHaveLength(24);
+  });
+  it('at most two questions, each with 2 to 4 options', () => {
+    expect(parseQuestions({ questions: [{ q: 'A?', options: ['x', 'y', 'z', 'w', 'v'] }, { q: 'B?', options: ['only'] }, { q: 'C?', options: ['a', 'b'] }, { q: 'D?', options: ['a', 'b'] }] }))
+      .toEqual([{ q: 'A?', options: ['x', 'y', 'z', 'w'] }]);
+    expect(parseQuestions({})).toEqual([]);
+  });
+  it('the check keeps, fixes, drops or leaves unsure; a fix keeps a web source only when it is an address', () => {
+    const facts: LessonFact[] = [
+      { id: 'f1', claim: 'a', from: 'web', ref: 'https://a.org', check: 'unsure' }, { id: 'f2', claim: 'b', from: 'web', ref: 'https://b.org', check: 'unsure' },
+      { id: 'f3', claim: 'c', from: 'file', ref: 'x.ts:1', check: 'unsure' }, { id: 'f4', claim: 'd', from: 'known', ref: '', check: 'unsure' }, { id: 'f5', claim: 'e', from: 'web', ref: 'https://e.org', check: 'unsure' },
+    ];
+    const out = applyVerdicts(facts, { verdicts: [{ id: 'f1', verdict: 'ok' }, { id: 'f2', verdict: 'wrong', fix: 'b2', ref: 'not a url' }, { id: 'f3', verdict: 'wrong', fix: 'c2', ref: 'x.ts:9' }, { id: 'f4', verdict: 'wrong' }, { id: 'f9', verdict: 'ok' }] });
+    expect(out.dropped).toBe(1);
+    expect(out.facts.map(f => [f.id, f.check, f.claim, f.ref])).toEqual([['f1', 'ok', 'a', 'https://a.org'], ['f2', 'fixed', 'b2', 'https://b.org'], ['f3', 'fixed', 'c2', 'x.ts:9'], ['f5', 'unsure', 'e', 'https://e.org']]);
+    expect(factLines(out.facts.slice(0, 2))).toBe('f1 [verified; https://a.org] a\nf2 [verified; https://b.org] b2');
+    expect(factLines([out.facts[3]!])).toContain('NOT CONFIRMED');
+  });
+  it('a piece\'s beats name known nodes and arrows; its say is their sentences; its citations only known facts', () => {
+    const s = parseStep({ title: 'T', text: 'x', cites: ['f1', 'f9', 'f1'], beats: [
+      { say: 'Uno.', focus: ['a', 'zz'], note: 'qui' }, { say: 'Due.', focus: ['b'], flow: { from: 'a', to: 'b' } }, { say: '' }, { say: 'Tre.', flow: { from: 'a', to: 'nope' } },
+    ] }, ['a', 'b'], 'p1', ['f1', 'f2']);
+    expect(s.say).toBe('Uno. Due. Tre.');
+    expect(s.beats).toEqual([{ say: 'Uno.', focus: ['a'], note: 'qui' }, { say: 'Due.', focus: ['b'], flow: { from: 'a', to: 'b' } }, { say: 'Tre.', focus: [] }]);
+    expect(s.focus).toEqual(['a', 'b']);
+    expect(s.cites).toEqual(['f1']);
+    expect(() => parseStep({ title: 'T', beats: [] }, ['a'], 'p2')).toThrow(/say/);
+  });
+  it('a piece without beats plays its sentences one by one, the note on the first', () => {
+    expect(beatsOf({ say: 'Prima frase. Seconda! E la terza…', focus: ['a'], note: 'n' })).toEqual([
+      { say: 'Prima frase.', focus: ['a'], note: 'n' }, { say: 'Seconda!', focus: ['a'] }, { say: 'E la terza…', focus: ['a'] }]);
+    expect(beatsOf({ say: 'Senza punto', focus: [] })).toEqual([{ say: 'Senza punto', focus: [] }]);
+  });
+});
+
+describe('what the user says', () => {
+  it('short commands, in Italian and English', () => {
+    expect(parseLessonCommand('Avanti')).toBe('next');
+    expect(parseLessonCommand('ok, vai avanti per favore')).toBe('next');
+    expect(parseLessonCommand('non ho capito')).toBe('better');
+    expect(parseLessonCommand('fammi un esempio')).toBe('example');
+    expect(parseLessonCommand('mostrami il codice')).toBe('code');
+    expect(parseLessonCommand('ripeti')).toBe('repeat');
+    expect(parseLessonCommand('torna indietro')).toBe('back');
+    expect(parseLessonCommand('zitto')).toBe('pause');
+    expect(parseLessonCommand('go on')).toBe('next');
+  });
+  it('anything else is not a command (a question)', () => {
+    expect(parseLessonCommand('perché proprio sedici millisecondi e non zero')).toBeNull();
+    expect(parseLessonCommand('')).toBeNull();
+  });
+  it('a spoken choice by letter, number or ordinal', () => {
+    expect(parseSpokenChoice('la b', 4)).toBe(1);
+    expect(parseSpokenChoice('risposta 3', 4)).toBe(2);
+    expect(parseSpokenChoice('la seconda', 4)).toBe(1);
+    expect(parseSpokenChoice("l'ultima", 3)).toBeNull();
+    expect(parseSpokenChoice('ultima', 3)).toBe(2);
+    expect(parseSpokenChoice('d', 2)).toBeNull();
+    expect(parseSpokenChoice('non lo so proprio davvero', 4)).toBeNull();
+  });
+});
+
+describe('the kind of lesson (ADR 0230)', () => {
+  it('a new lesson explains by default; one saved before the modes is a quiz', () => {
+    expect(DEFAULT_LESSON_MODE).toBe('explain');
+    expect(LESSON_MODES).toEqual(['explain', 'quiz']);
+    expect(modeOf({})).toBe('quiz');
+    expect(modeOf({ mode: 'explain' })).toBe('explain');
+    expect(modeOf({ mode: 'quiz' })).toBe('quiz');
+  });
+  it('an explanation drops the plan checks and its «Spiegalo tu»; a quiz keeps them', () => {
+    const p = { steps: [step('p1')], checks: [check('q1', 'p1')], explainQ: 'Explain it' };
+    expect(withoutAsking(p, { mode: 'explain' })).toMatchObject({ checks: [], explainQ: '' });
+    expect(withoutAsking(p, { mode: 'quiz' })).toBe(p);
+    expect(withoutAsking(p, {})).toBe(p);
+    // the rest has no explainQ: none is added
+    expect('explainQ' in withoutAsking({ checks: [check('q1', 'p1')] }, { mode: 'explain' })).toBe(false);
+  });
+  it('an explanation has no graded end until «Spiegalo tu» is opened; a quiz always has it', () => {
+    const l = lesson({ steps: [step('p1'), step('p2')], checks: [] });
+    expect(playlist({ ...l, mode: 'explain' }).map(p => p.key)).toEqual(['s:p1', 's:p2']);
+    expect(playlist({ ...l, mode: 'explain', explain: { q: '' } }).map(p => p.key).at(-1)).toBe('end');
+    expect(playlist({ ...l, mode: 'quiz' }).map(p => p.key).at(-1)).toBe('end');
+    expect(playlist(l).map(p => p.key).at(-1)).toBe('end');
+  });
+  it('an explanation tells a half-done or practice piece as a worked one, in the plan and in the rest; a quiz keeps them', () => {
+    const roles = (ss: LessonStep[] | undefined) => ss?.map(s => s.role);
+    const steps: LessonStep[] = [{ ...step('p1'), role: 'worked' }, { ...step('p2'), role: 'faded' }, { ...step('p3'), role: 'practice' }, step('p4')];
+    expect(roles(withoutAsking({ steps, checks: [], explainQ: 'Q' }, { mode: 'explain' }).steps)).toEqual(['worked', 'worked', 'worked', undefined]);
+    expect(roles(withoutAsking({ steps, checks: [] }, { mode: 'explain' }).steps)).toEqual(['worked', 'worked', 'worked', undefined]);
+    expect(roles(withoutAsking({ steps, checks: [] }, { mode: 'quiz' }).steps)).toEqual(['worked', 'faded', 'practice', undefined]);
+    expect(toldRole(steps[0]!)).toBe(steps[0]);
+    expect(toldRole(steps[1]!).role).toBe('worked');
+  });
+  it('an explanation ends on its last item: the recap, an extra asked on it, a one-piece lesson; a quiz never here', () => {
+    const l = lesson({ mode: 'explain', steps: [step('p1'), step('p2')], at: 's:p2' });
+    expect(endsHere(l)).toBe(true);
+    expect(endsHere({ ...l, at: 's:p1' })).toBe(false);
+    expect(endsHere({ ...l, state: 'preparing' })).toBe(false);
+    expect(endsHere({ ...l, mode: 'quiz' })).toBe(false);
+    expect(endsHere({ ...l, mode: undefined })).toBe(false);
+    // an extra asked on the recap is the new last item
+    const x = { ...l, steps: [...l.steps, step('x1', { kind: 'better', of: 'p2' })] };
+    expect(endsHere(x)).toBe(false);
+    expect(endsHere({ ...x, at: 's:x1' })).toBe(true);
+    // a one-piece lesson ends where it starts
+    expect(endsHere(lesson({ mode: 'explain', steps: [step('p1')], at: 's:p1' }))).toBe(true);
+    // «Spiegalo tu» opened: its end is the last item
+    expect(endsHere({ ...l, explain: { q: '' }, at: 'end' })).toBe(true);
+  });
+  it('a dictation goes into «Spiegalo tu» on the end or in the panel opened from the recap, until it is answered', () => {
+    expect(heardIsExplainBack(true, false, {})).toBe(true);
+    expect(heardIsExplainBack(false, true, {})).toBe(true);
+    expect(heardIsExplainBack(false, true, { explain: { q: '' } })).toBe(true);
+    expect(heardIsExplainBack(false, false, {})).toBe(false);
+    expect(heardIsExplainBack(false, true, { explain: { q: '', answer: 'detto' } })).toBe(false);
+    expect(heardIsExplainBack(true, false, { explain: { q: '', answer: 'detto' } })).toBe(false);
+  });
+  it('an explanation asks at most one question before it starts', () => {
+    const qs = { questions: [{ q: 'A?', options: ['x', 'y'] }, { q: 'B?', options: ['a', 'b'] }] };
+    expect(parseQuestions(qs, 1)).toEqual([{ q: 'A?', options: ['x', 'y'] }]);
+    expect(parseQuestions(qs)).toHaveLength(2);
+  });
+});

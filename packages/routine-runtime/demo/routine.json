@@ -1,0 +1,31 @@
+{
+  "format": "second-brain-routine",
+  "schemaVersion": 1,
+  "routine": {
+    "id": "demo",
+    "title": "Demo: Air login and a DevOps work item",
+    "description": "Two steps: the routine browser signs in to the Air test site and saves a screenshot; then the work item is read from DevOps with the package's PAT. Replace every <set-by-user> value before running.",
+    "inputs": [{ "name": "workItem", "label": "DevOps work item id", "default": "126308" }],
+    "browser": { "origins": ["https://dent-1.test.air.orisline.com"] },
+    "devops": { "organization": "orislineweb", "projects": ["Planning"], "ops": [], "fields": [] },
+    "steps": [
+      {
+        "id": "air-login",
+        "title": "Air login and screenshot",
+        "browser": true,
+        "timeoutMs": 600000,
+        "prompt": "Open https://dent-1.test.air.orisline.com/ with the routine-browser navigate tool. The runtime signs in by itself: never type a password. When the Air home page is shown, call the screenshot tool with the name air-home, then write the page title in the summary."
+      },
+      {
+        "id": "work-item",
+        "title": "Read the DevOps work item",
+        "timeoutMs": 600000,
+        "prompt": "Read work item {{workItem}} with the routine-devops get_work_item tool. Save its title, type and state in evidence/work-item.md and write them in the summary. Change nothing on DevOps."
+      }
+    ]
+  },
+  "credentials": [
+    { "loginUrl": "https://dent-1.test.air.orisline.com/Account/Login?mode=local", "user": "<set-by-user>", "password": "<set-by-user>" }
+  ],
+  "secrets": { "devopsPat": "<set-by-user>" }
+}

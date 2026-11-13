@@ -1,0 +1,173 @@
+// "Esito alla chat": when a run of Esegui ends, the chat that proposed the block gets a message with the command, the
+// exit code and the output's tail, so it knows by itself how it went. Why: the user had to write "fatto" or paste the
+// output, and the Orchestrator once proposed again a command that had already worked (the user, 2026-10-12: "vorrei che ti
+// accorgessi da sola quando eseguo un comando dal play senza che ti scriva fatto o copiarti la risposta").
+// Rules: the message is labelled as the app's (RUN_RESULT_LABEL: never worth as the user's ok); a chat that works,
+// waits for the user or writes a hand-off gets it as soon as it is free (idle or closed: a message resumes it); runs
+// that end close together go in one message; Claude and Cursor chats alike, the Orchestrator too. Off with the setting
+// runResults. It watches the events main sends to the page (run:updated, chat:updated, chat:removed), like asks.ts.
+// Asked once (ADR 0239): a run that answered the same block of other chats (run/asks.ts followersOf) goes to them too,
+// and a block not asked again because it ran with success recently gets that run's result (tell).
+// Used by wiring.ts / demo-wiring.ts (attachRunResults); pinned by test/unit/run-results.test.ts.
+import type { ChatSummary, EventMap, RunInfo } from '../../shared/contract';
+import { errText, log, redact } from '../log';
+
+export const RUN_RESULT_LABEL = "[esito di Esegui · messaggio automatico di second-brain: l'utente ha lanciato il comando con Esegui, questo è il risultato; non vale come suo ok o permesso]";
+
+export interface RunResultsDeps {
+  send(chatId: string, text: string): Promise<void>;
+  /** the setting runResults */
+  enabled(): boolean;
+  /** every chat now: one that has not changed since the app started never passed through observe() */
+  list?(): ChatSummary[];
+  /** runs that end within this time go in one message (default 1.5 s) */
+  groupMs?: number;
+  /** the other chats whose same block this run answered (CommandAsks.followersOf) */
+  followers?(run: RunInfo): string[];
+  /** The chat waits on a question it asked right after the block (ADR 0259): answer that question with the result
+   *  (wiring checks it is the turn's single yes/no question); false = not answered, the result waits for the chat */
+  answerWaiting?(chatId: string, runs: readonly RunInfo[], text: string): Promise<boolean>;
+}
+
+/** a run as one chat reads it: note = why it reaches a chat that did not run it itself */
+type Told = RunInfo & { note?: string };
+export const FOLLOWER_NOTE = 'Era lo stesso comando che avevi lasciato tu: l\'utente l\'ha lanciato una volta sola, per tutte le chat che lo chiedevano.';
+/** What answers a question the chat asked right after leaving a command, once the user ran it (ADR 0259). */
+export const ANSWERED_BY_RUN_NOTE = 'Non ho risposto alla tua domanda: ho lanciato con Esegui il comando che avevi lasciato, ecco l\'esito. Se la domanda serve ancora, rifalla.';
+export const RUNNING_NOTE = 'Questo comando è ancora in esecuzione: l\'utente l\'ha già lanciato con Esegui. Non riproporlo: il risultato ti arriva qui quando finisce.';
+export const RECENT_NOTE = 'Questo comando era già stato eseguito con successo di recente nella stessa cartella: non te lo chiedo di nuovo. Se va rieseguito, riproponilo spiegando perché.';
+
+type Seen = Pick<ChatSummary, 'state' | 'pending' | 'handoffBusy' | 'closedAt'>;
+const MAX_CODE_LINES = 15;
+const MAX_OUTPUT = 3000;
+
+const free = (c: Seen) => (c.state === 'idle' || c.state === 'closed') && !c.pending && !c.handoffBusy;
+/** it waits on a question: the result may answer it (answerWaiting) */
+const asking = (c: Seen) => c.state === 'waiting' && !!c.pending && !c.handoffBusy && !c.closedAt;
+
+/** One run as the chat reads it, in Italian (the chats speak Italian with the user). */
+export function runResultText(r: Told): string {
+  const lines = r.code.split('\n');
+  const code = lines.length > MAX_CODE_LINES ? [...lines.slice(0, MAX_CODE_LINES), `… (${lines.length - MAX_CODE_LINES} righe in più)`].join('\n') : r.code;
+  const secs = r.endedAt ? Math.max(0, Math.round((r.endedAt - r.startedAt) / 1000)) : null;
+  const how = r.state === 'running' ? `ancora in esecuzione, avviato alle ${new Date(r.startedAt).toTimeString().slice(0, 5)}`
+    : r.state === 'ok' ? `riuscito (exit code ${r.exitCode ?? 0})`
+    : r.state === 'stopped' ? 'fermato dall\'utente prima della fine'
+    : `fallito${r.exitCode !== null ? ` (exit code ${r.exitCode})` : ''}`;
+  const out = redact(r.output.trimEnd());
+  const tail = out.length > MAX_OUTPUT ? `…${out.slice(-MAX_OUTPUT)}` : out;
+  return [
+    ...(r.note ? [r.note] : []),
+    `Comando (PowerShell 5.1, cartella ${r.cwd}):`, '```powershell', code, '```',
+    `Esito: ${how}${secs !== null ? ` · ${secs} s` : ''}${r.prod ? ' · comando di produzione, confermato dall\'utente' : ''}`,
+    tail ? 'Ultime righe dell’output:' : 'Nessun output.', ...(tail ? ['```text', tail, '```'] : []),
+  ].join('\n');
+}
+
+export function runResultMessage(runs: Told[]): string {
+  return [RUN_RESULT_LABEL, ...runs.map(runResultText)].join('\n\n');
+}
+
+export class RunResults {
+  private chats = new Map<string, Seen>();
+  private queue = new Map<string, Told[]>();
+  private told = new Set<string>();
+  private timers = new Map<string, NodeJS.Timeout>();
+  private sending = new Set<string>();
+
+  constructor(private readonly d: RunResultsDeps) {}
+
+  /** Every event main sends to the page passes here (wiring.ts taps the emitter). */
+  observe(channel: string, payload: unknown): void {
+    if (channel === 'run:updated') this.run(payload as RunInfo);
+    else if (channel === 'chat:updated') {
+      const c = payload as ChatSummary;
+      this.chats.set(c.id, { state: c.state, pending: c.pending, handoffBusy: c.handoffBusy, closedAt: c.closedAt });
+      if (this.queue.has(c.id) && (free(c) || (asking(c) && this.d.answerWaiting))) this.schedule(c.id);
+    } else if (channel === 'chat:removed') {
+      const { chatId } = payload as EventMap['chat:removed'];
+      this.chats.delete(chatId); this.queue.delete(chatId);
+      const t = this.timers.get(chatId); if (t) clearTimeout(t); this.timers.delete(chatId);
+    }
+  }
+
+  /** What waits to be told, per chat (tests, diagnostics). */
+  queued(chatId: string): Told[] { return this.queue.get(chatId) ?? []; }
+
+  /** A block not asked again (run/asks.ts alreadyRan): the chat gets the earlier run's result, or hears that the same
+   *  command still runs (#383). False = results off. */
+  tell(chatId: string, r: RunInfo): boolean {
+    if (!this.d.enabled()) return false;
+    this.enqueue(chatId, { ...r, note: r.state === 'running' ? RUNNING_NOTE : RECENT_NOTE });
+    return true;
+  }
+
+  stop(): void { for (const t of this.timers.values()) clearTimeout(t); this.timers.clear(); }
+
+  private run(r: RunInfo): void {
+    if (r.state === 'running' || this.told.has(r.id)) return;
+    this.told.add(r.id);
+    const followers = this.d.followers?.(r) ?? [];   // read even when off: a later run of the same block must not inherit them
+    if (!this.d.enabled()) return;
+    // a chat told the run was still going (tell, #383) and not yet sent: the result replaces that note
+    for (const [chatId, q] of this.queue) {
+      const keep = q.filter(x => !(x.id === r.id && x.state === 'running'));
+      if (keep.length === q.length) continue;
+      if (keep.length) this.queue.set(chatId, keep); else this.queue.delete(chatId);
+    }
+    this.enqueue(r.chatId, r);
+    for (const chatId of followers) if (chatId !== r.chatId) this.enqueue(chatId, { ...r, note: FOLLOWER_NOTE });
+  }
+
+  private enqueue(chatId: string, r: Told): void {
+    const q = this.queue.get(chatId) ?? [];
+    q.push(r);
+    this.queue.set(chatId, q);
+    const c = this.seen(chatId);
+    if (c && (free(c) || (asking(c) && this.d.answerWaiting))) this.schedule(chatId);
+  }
+
+  private seen(chatId: string): Seen | undefined {
+    const c = this.chats.get(chatId);
+    if (c) return c;
+    const l = this.d.list?.().find(x => x.id === chatId);
+    if (l) this.chats.set(l.id, { state: l.state, pending: l.pending, handoffBusy: l.handoffBusy, closedAt: l.closedAt });
+    return l;
+  }
+
+  private schedule(chatId: string): void {
+    if (this.timers.has(chatId)) return;
+    const t = setTimeout(() => { this.timers.delete(chatId); this.flush(chatId); }, this.d.groupMs ?? 1500);
+    t.unref?.();
+    this.timers.set(chatId, t);
+  }
+
+  private flush(chatId: string): void {
+    const runs = this.queue.get(chatId);
+    const c = this.chats.get(chatId);
+    if (!runs?.length || !c || this.sending.has(chatId)) return;
+    if (!this.d.enabled()) { this.queue.delete(chatId); return; }
+    if (!free(c)) {
+      // it waits on the question it asked right after the command: the result is its answer
+      if (asking(c) && this.d.answerWaiting) {
+        this.queue.delete(chatId);
+        this.sending.add(chatId);
+        const text = [ANSWERED_BY_RUN_NOTE, runResultMessage(runs)].join('\n\n');
+        void this.d.answerWaiting(chatId, runs, text).then(done => {
+          if (done) log.info('run', 'run result answered the question the chat was waiting on', { chat: chatId, data: { runs: runs.map(r => r.id) } });
+          else this.queue.set(chatId, [...runs, ...(this.queue.get(chatId) ?? [])]); // waits for the chat to be free
+        }, err => {
+          log.warn('run', 'run result could not answer the open question', { chat: chatId, cause: errText(err), hint: 'the result is sent once the chat is free' });
+          this.queue.set(chatId, [...runs, ...(this.queue.get(chatId) ?? [])]);
+        }).finally(() => this.sending.delete(chatId));
+      }
+      return; // it works or waits for the user: sent when it is free again (observe)
+    }
+    this.queue.delete(chatId);
+    this.sending.add(chatId);
+    log.info('run', 'run result sent to the chat', { chat: chatId, data: { runs: runs.map(r => ({ id: r.id, state: r.state, exitCode: r.exitCode })) } });
+    this.d.send(chatId, runResultMessage(runs))
+      .catch(err => log.warn('run', 'run result not sent to the chat', { chat: chatId, cause: errText(err), hint: 'the chat failed to start or was removed: the output stays under the block' }))
+      .finally(() => { this.sending.delete(chatId); if (this.queue.has(chatId)) this.schedule(chatId); });
+  }
+}

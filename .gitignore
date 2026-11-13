@@ -1,0 +1,10 @@
+node_modules/
+out/
+test-results/
+tmp/
+playwright-report/
+*.log
+.env
+*.env
+packages/routine-runtime/dist/
+.claude/worktrees/

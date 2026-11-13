@@ -1,0 +1,155 @@
+// Brain lint: READ-ONLY health report of {{BRAIN_NAME}} (sizes, duplicates, stale threads, orphans, broken refs).
+// Never writes anything; proposals only. Run only when {{OWNER}} asks: "fai manutenzione", a review (routines.md).
+// Usage: node ops/tools/brain-lint.mjs [--root <{{BRAIN_NAME}} dir>] [--json]
+// Checks:
+//  1. Always-loaded context (every chat): ~/.claude/CLAUDE.md + its @imports + AGENTS.md (via CLAUDE.md) + output styles.
+//  2. Files over budget (lines) among the brain's markdown (not ops/ data, not journal/reviews history).
+//  3. now.md: lines > 250 chars, older than 7 days, control characters.
+//  4. Near-duplicate rules across rule files (same sentence or ≥ 60% shared word triples).
+//  5. Top-level .md files and rules/*.md not named in the memory map (orphans); backticked paths that don't exist.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { brainRoot } from './brain-root.mjs';
+import { brainDoc } from './brain-doc.mjs';
+
+const arg = n => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : undefined; };
+const root = path.resolve(arg('--root') ?? brainRoot(import.meta.url));
+const home = os.homedir();
+const live = '{{BRAIN}}'; // imports of the live brain are read from --root (worktree = after)
+const under = (p, d) => path.resolve(p).toLowerCase().startsWith(path.resolve(d).toLowerCase() + path.sep);
+const redirect = p => under(p, live) && !under(p, root) ? path.join(root, path.relative(live, p)) : p;
+const BUDGET = { fixedChars: 15000, fileLines: 200, agentsLines: 145, nowLine: 250, staleDays: 7 };
+const read = p => { try { return fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n'); } catch { return null; } };
+const rel = p => path.relative(root, p).replace(/\\/g, '/');
+const show = p => (under(p, root) ? '{{BRAIN_NAME}}/' + rel(p) : p.replace(home, '~')).replace(/\\/g, '/');
+const report = { fixed: [], fixedTotal: 0, overBudget: [], now: {}, duplicates: [], orphans: [], brokenRefs: [] };
+/** Folders the walk never enters: history, tools, other checkouts and scratch (#382: a brain had ~1455 .md files in
+ *  tmp/ and the lint never finished). Linked folders (symlinks, Windows junctions) are not entered either: readdir
+ *  reports them as links, not folders. */
+export const SKIP_DIR = /^(\.git|node_modules|worktrees|journal|reviews|ops|dev|\.cursor|tmp|temp|archive)$/i;
+
+/** Sentence units of different files sharing ≥ `min` of the smaller one's word triples. Pairs come from an index of
+ *  the triples instead of comparing every pair (#382: quadratic, 15-30+ minutes on a big brain): a triple found in at
+ *  most `common` units proposes its pairs, and the same sentence repeated anywhere always pairs; each pair is then
+ *  scored on all its triples. */
+export function nearDuplicates(units, min = 0.6, common = 50) {
+  const byTri = new Map(), byText = new Map();
+  units.forEach((u, i) => {
+    for (const t of u.tri) { let l = byTri.get(t); if (!l) byTri.set(t, l = []); l.push(i); }
+    let l = byText.get(u.key); if (!l) byText.set(u.key, l = []); l.push(i);
+  });
+  const out = [], seen = new Set();
+  units.forEach((A, a) => {
+    const cand = new Set();
+    const add = list => { for (const b of list) if (b > a && units[b].file !== A.file) cand.add(b); };
+    for (const t of A.tri) { const l = byTri.get(t); if (l.length <= common) add(l); }
+    add(byText.get(A.key));
+    for (const b of cand) {
+      const B = units[b];
+      let shared = 0; for (const t of A.tri) if (B.tri.has(t)) shared++;
+      const score = shared / Math.min(A.tri.size, B.tri.size);
+      const key = [`${A.file}:${A.line}`, `${B.file}:${B.line}`].sort().join('|');
+      if (score >= min && !seen.has(key)) { seen.add(key); out.push({ score: Math.round(score * 100), a: `${A.file}:${A.line}`, b: `${B.file}:${B.line}`, text: A.text }); }
+    }
+  });
+  return out;
+}
+
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+if (isMain) main();
+function main() {
+
+// 1. Always-loaded context
+const seen = new Set();
+const load = (p, why) => {
+  const full = redirect(path.resolve(p.replace(/^~/, home)));
+  if (seen.has(full)) return;
+  const text = read(full);
+  if (text === null) return;
+  seen.add(full);
+  report.fixed.push({ file: show(full), chars: text.length, why });
+  for (const m of text.matchAll(/^@(\S+)/gm)) load(path.resolve(path.dirname(full), m[1].replace(/^~/, home)), `@import in ${path.basename(full)}`);
+};
+load(path.join(home, '.claude', 'CLAUDE.md'), 'user CLAUDE.md');
+load(path.join(root, 'CLAUDE.md'), 'project CLAUDE.md (chats in {{BRAIN_NAME}})');
+const style = (read(path.join(home, '.claude', 'settings.json')) || '').match(/"outputStyle"\s*:\s*"([^"]+)"/)?.[1];
+for (const s of fs.existsSync(path.join(home, '.claude', 'output-styles')) ? fs.readdirSync(path.join(home, '.claude', 'output-styles')) : [])
+  load(path.join(home, '.claude', 'output-styles', s), s.replace(/\.md$/, '').toLowerCase() === (style || '').toLowerCase() ? 'default output style' : 'output style (when selected)');
+report.fixedTotal = report.fixed.filter(f => !f.why.includes('when selected')).reduce((a, f) => a + f.chars, 0);
+
+// 2. Files over budget
+const brainFiles = [];
+const walk = d => { for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+  const p = path.join(d, e.name);
+  if (e.isDirectory()) { if (!SKIP_DIR.test(e.name)) walk(p); }
+  else if (e.name.endsWith('.md')) brainFiles.push(p);
+} };
+// a fresh brain (ADR 0072) has only brain.json: its rules are the app's
+if (!fs.existsSync(path.join(root, 'AGENTS.md')) && !fs.existsSync(path.join(root, 'brain.json'))) { console.error(`Not a brain folder (no AGENTS.md): ${root}`); process.exit(1); }
+// gitignored files (credentials, logs) exist only in the live checkout: a worktree may reference them
+const ignoredLive = r => fs.existsSync(path.join(live, r)) && spawnSync('git', ['-C', root, 'check-ignore', '-q', r]).status === 0;
+walk(root);
+for (const p of [...brainFiles, path.join(root, 'ops', 'AGENTS.md')]) {
+  const lines = (read(p) || '').split('\n').length;
+  const max = path.basename(p) === 'AGENTS.md' && path.dirname(p) === root ? BUDGET.agentsLines : BUDGET.fileLines;
+  if (lines > max) report.overBudget.push({ file: rel(p), lines, max });
+}
+
+// 3. now.md
+const now = read(path.join(root, 'now.md')) || '';
+const cutoff = new Date(Date.now() - BUDGET.staleDays * 864e5).toISOString().slice(0, 10);
+const nl = now.split('\n');
+report.now = {
+  lines: nl.filter(l => l.startsWith('- ')).length,
+  long: nl.map((l, i) => [i + 1, l.length]).filter(([, n]) => n > BUDGET.nowLine).map(([i, n]) => `${i} (${n})`),
+  stale: nl.map((l, i) => [i + 1, [...l.matchAll(/\((?:updated )?(\d{4}-\d{2}-\d{2})\)/g)].pop()?.[1]]).filter(([, d]) => d && d < cutoff).map(([i, d]) => `${i} (${d})`),
+  control: nl.map((l, i) => [i + 1, l]).filter(([, l]) => /[\x00-\x08\x0b-\x1f]/.test(l)).map(([i]) => i),
+};
+
+// 4. Near-duplicate rules (bullets/sentences ≥ 12 words) across rule files
+const ruleFiles = [...new Set([...report.fixed.map(f => f.file.replace(/^~/, home)), ...brainFiles.filter(p => !/now\.md$|ideas\.md$|bug-log\.md$|ai-errors\.md$/.test(p)),
+  path.join(root, 'ops', 'AGENTS.md'), ...['stato', 'messaggi', 'urgente', '{{BRAIN_NAME}}'].map(s => path.join(home, '.claude', 'skills', s, 'SKILL.md'))])]
+  .map(redirect).filter(p => fs.existsSync(p));
+const norm = s => s.toLowerCase().replace(/[`*_"'()[\]]/g, ' ').replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+const units = [];
+for (const p of ruleFiles) (read(p) || '').split('\n').forEach((l, i) => {
+  for (const s of l.replace(/^\s*[-|>]\s*/, '').split(/(?<=[.;:])\s+(?=[A-Z*])/)) {
+    const w = norm(s);
+    if (w.length < 12) continue;
+    const tri = new Set(w.slice(2).map((_, k) => w.slice(k, k + 3).join(' ')));
+    units.push({ file: show(p), line: i + 1, text: s.trim().slice(0, 110), tri, key: w.join(' ') });
+  }
+});
+report.duplicates.push(...nearDuplicates(units));
+
+// 5. Orphans and broken references
+const mapFile = brainDoc(root, 'map.md') ?? path.join(root, 'map.md'); // root, or the brain-rules skill (ADR 0277)
+const mapText = [path.join(root, 'AGENTS.md'), mapFile].map(f => read(f) || '').join('\n');
+for (const p of brainFiles.filter(p => path.dirname(p) === root || path.dirname(p) === path.join(root, 'rules'))) {
+  const r = rel(p);
+  if (!/^(AGENTS|CLAUDE|README|map)\.md$/.test(r) && !mapText.includes(r) && !mapText.includes(`\`${path.basename(r)}\``)) report.orphans.push(r);
+}
+for (const p of [path.join(root, 'AGENTS.md'), mapFile, path.join(root, 'routines.md')].filter(fs.existsSync))
+  for (const m of (read(p) || '').matchAll(/`((?:ops|rules|journal|reviews|dev|\.claude)\/[^`*<>\s]+?)`/g))
+    if (!/AAAA|YYYY|<|\{/.test(m[1]) && !fs.existsSync(path.join(root, m[1])) && !ignoredLive(m[1])) report.brokenRefs.push(`${rel(p)}: ${m[1]}`);
+
+
+if (process.argv.includes('--json')) { console.log(JSON.stringify(report, null, 1)); process.exit(0); }
+const k = n => `${(n / 1000).toFixed(1)}k`;
+console.log(`# Brain lint ${new Date().toISOString().slice(0, 10)} (${root.replace(/\\/g, '/')})\n`);
+console.log(`## Contesto fisso: ${k(report.fixedTotal)} caratteri (~${k(report.fixedTotal / 4)} token), budget ${k(BUDGET.fixedChars)}${report.fixedTotal > BUDGET.fixedChars ? ' → SOPRA' : ' ok'}`);
+for (const f of report.fixed) console.log(`- ${f.file}: ${k(f.chars)} (${f.why})`);
+console.log(`\n## File oltre budget: ${report.overBudget.length}`);
+for (const f of report.overBudget) console.log(`- ${f.file}: ${f.lines} righe (max ${f.max}) → dividere in cartella + indice`);
+console.log(`\n## now.md: ${report.now.lines} fili`);
+console.log(`- righe > ${BUDGET.nowLine} caratteri: ${report.now.long.length}${report.now.long.length ? ` (righe ${report.now.long.join(', ')})` : ''}`);
+console.log(`- ferme da > ${BUDGET.staleDays} giorni: ${report.now.stale.length}${report.now.stale.length ? ` (righe ${report.now.stale.join(', ')})` : ''}`);
+if (report.now.control.length) console.log(`- caratteri di controllo: righe ${report.now.control.join(', ')}`);
+console.log(`\n## Regole doppie: ${report.duplicates.length}`);
+for (const d of report.duplicates.sort((x, y) => y.score - x.score).slice(0, 25)) console.log(`- ${d.score}% ${d.a} ≈ ${d.b}: "${d.text}"`);
+console.log(`\n## Orfani (non nella mappa): ${report.orphans.length}${report.orphans.length ? '\n- ' + report.orphans.join('\n- ') : ''}`);
+console.log(`\n## Riferimenti rotti: ${report.brokenRefs.length}${report.brokenRefs.length ? '\n- ' + report.brokenRefs.join('\n- ') : ''}`);
+}

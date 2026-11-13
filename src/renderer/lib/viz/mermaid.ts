@@ -1,0 +1,126 @@
+// Draws a ```mermaid block of an agent's reply as a diagram. Loaded only by a dynamic import from
+// components/VisualBlock.tsx: mermaid (and the diagram types it splits out itself) are their own chunks, never parsed
+// by the first screen. The model's text is untrusted, so: securityLevel 'strict' (labels sanitized by mermaid's
+// DOMPurify, no click handlers or links run; an %%{init}%% directive cannot change it, it is one of mermaid's secure
+// keys), size caps (maxTextSize, maxEdges), and the result is never put into the page's DOM: the SVG is serialized
+// as well-formed XML and shown as an <img src="data:image/svg+xml,…"> (an image cannot run script, read the page or
+// load anything; img-src already allows data:). No eval: mermaid's parsers are precompiled (CSP script-src 'self').
+// The theme is mermaid's 'base' fed with the app's tokens read at draw time; VisualBlock redraws when the theme changes.
+// A box the model coloured itself gets a text colour that reads on it (mermaid-contrast.ts, ADR 0275).
+import mermaid from 'mermaid';
+import { parseFlowLayout, type FlowLayout } from './flow-layout';
+import { readableMermaid } from './mermaid-contrast';
+
+let seq = 0;
+let queue: Promise<unknown> = Promise.resolve();
+let themed = '';
+
+const css = (name: string, fallback: string): string => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+
+const SCALE = ['--blue', '--violet', '--green', '--amber'];
+
+/** A bigger, tighter drawing (Impara's blackboard, ADR 0185): larger labels, less space between the nodes. */
+export interface DrawOptions {
+  fontSize?: number; nodeSpacing?: number; rankSpacing?: number;
+  /** the SVG's id prefix (ADR 0230): a compare's two sides each their own, so their arrowheads never collide */
+  idPrefix?: string;
+}
+
+function configure(o: DrawOptions = {}): void {
+  const vars = {
+    background: css('--surface', '#191a1f'),
+    primaryColor: css('--surface-3', '#272930'),
+    primaryTextColor: css('--text', '#eceef3'),
+    primaryBorderColor: css('--accent', '#8fa3ff'),
+    secondaryColor: css('--surface-2', '#1e2026'),
+    secondaryTextColor: css('--text-2', '#b9bfcb'),
+    secondaryBorderColor: css('--border-3', '#3a404d'),
+    tertiaryColor: css('--surface-4', '#30333c'),
+    tertiaryTextColor: css('--text-2', '#b9bfcb'),
+    tertiaryBorderColor: css('--border-3', '#3a404d'),
+    lineColor: css('--text-3', '#8d94a4'),
+    textColor: css('--text-2', '#b9bfcb'),
+    mainBkg: css('--surface-3', '#272930'),
+    clusterBkg: css('--surface-2', '#1e2026'),
+    clusterBorder: css('--border-3', '#3a404d'),
+    noteBkgColor: css('--surface-4', '#30333c'),
+    noteTextColor: css('--text', '#eceef3'),
+    noteBorderColor: css('--amber', '#f2b64c'),
+    actorBkg: css('--surface-3', '#272930'),
+    actorBorder: css('--accent', '#8fa3ff'),
+    actorTextColor: css('--text', '#eceef3'),
+    signalColor: css('--text-2', '#b9bfcb'),
+    signalTextColor: css('--text', '#eceef3'),
+    edgeLabelBackground: css('--surface', '#191a1f'),
+    fontFamily: css('--font', 'system-ui, sans-serif'),
+    fontSize: `${o.fontSize ?? 13}px`,
+    // the branches of a mind map and the periods of a timeline (ADR 0205): the app's accents, the page's background as
+    // their text (pastel with dark text in the dark theme, deep with light text in the light one)
+    ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`cScale${i}`, css(SCALE[i % SCALE.length]!, '#a59bff')])),
+    ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`cScaleLabel${i}`, css('--bg', '#0f1014')])),
+  };
+  const flowchart = { nodeSpacing: o.nodeSpacing ?? 50, rankSpacing: o.rankSpacing ?? 50 };
+  const key = JSON.stringify([vars, flowchart]);
+  if (key === themed) return;
+  themed = key;
+  mermaid.initialize({
+    startOnLoad: false, securityLevel: 'strict', theme: 'base', themeVariables: vars, fontFamily: vars.fontFamily,
+    // SVG text labels: the diagram is shown as an image, where HTML labels inside foreignObject would add nothing
+    htmlLabels: false, flowchart: { ...flowchart, htmlLabels: false }, suppressErrorRendering: true, maxTextSize: 20_000, maxEdges: 400, deterministicIds: true,
+    deterministicIDSeed: 'sb',
+    // edge labels on an opaque chip (mermaid's own is half transparent: a line showed through the text), rounder boxes
+    themeCSS: `.edgeLabel rect, .labelBkg { opacity: 1 !important; fill: ${vars.background} !important; } .node rect { rx: 6px; ry: 6px; }`
+      // a mind map's root as the app's own node (mermaid fills it with the git palette, black on the dark theme, and its
+      // label, measured before the drawing becomes an image, started at the centre)
+      + ` .section-root circle, .section-root rect, .section-root path, .section-root polygon { fill: ${vars.primaryColor} !important; stroke: ${vars.primaryBorderColor}; stroke-width: 2px; } .section-root text { fill: ${vars.primaryTextColor} !important; text-anchor: middle; }`,
+  });
+}
+
+/** Normalizes mermaid's SVG markup into a standalone image: well-formed XML with explicit pixel size. */
+function toImage(svg: string): { src: string; width: number; height: number } {
+  const doc = new DOMParser().parseFromString(svg, 'text/html');
+  const el = doc.querySelector('svg');
+  if (!el) throw new Error('no svg');
+  const vb = (el.getAttribute('viewBox') ?? '').split(/[\s,]+/).map(Number);
+  const width = Math.ceil(vb[2] || parseFloat(el.style.maxWidth) || 600), height = Math.ceil(vb[3] || 400);
+  el.setAttribute('width', String(width)); el.setAttribute('height', String(height));
+  el.removeAttribute('style');
+  el.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  const xml = new XMLSerializer().serializeToString(el);
+  return { src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(xml)}`, width, height };
+}
+
+/** The diagram as an image data URL, or a rejection (bad syntax, too big): the caller then shows the code. One at a
+ *  time (mermaid keeps global state while it draws). */
+export function drawMermaid(code: string, opts?: DrawOptions): Promise<{ src: string; width: number; height: number }> {
+  const run = queue.then(async () => {
+    configure(opts);
+    const id = `${opts?.idPrefix ?? 'sb-mermaid'}-${++seq}`;
+    try {
+      const { svg } = await mermaid.render(id, readableMermaid(code));
+      return toImage(svg);
+    } finally {
+      // mermaid's scratch nodes, if a failure left them behind
+      document.getElementById(id)?.remove(); document.getElementById(`d${id}`)?.remove();
+    }
+  });
+  queue = run.catch(() => undefined);
+  return run;
+}
+
+/** A flowchart's layout (lib/viz/flow-layout.ts) for Impara's board, which draws it itself; null when the code is not a
+ *  flowchart mermaid could lay out. Same queue and limits as drawMermaid; the SVG is parsed inertly, never shown. */
+export function layoutMermaid(code: string, opts?: DrawOptions): Promise<FlowLayout | null> {
+  const run = queue.then(async () => {
+    configure(opts);
+    const id = `${opts?.idPrefix ?? 'sb-mermaid'}-${++seq}`;
+    try {
+      const { svg } = await mermaid.render(id, readableMermaid(code));
+      return parseFlowLayout(svg, id);
+    } finally {
+      document.getElementById(id)?.remove(); document.getElementById(`d${id}`)?.remove();
+    }
+  });
+  queue = run.catch(() => undefined);
+  return run;
+}

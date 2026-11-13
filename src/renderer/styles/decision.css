@@ -1,0 +1,145 @@
+/* The decision card (DecisionCard.tsx, ADR 0150): one calm layout for every question and approval. Who asks on one
+   line, the question large, the evidence in a soft panel (what was done as ✓ lines, screenshots, checks as chips,
+   files), what Sì / No do, then Sì / No side by side (neutral surface, hue only on the icon, the recommended one with
+   a thin colored border), «Scrivi una risposta…» dashed and «Non voglio rispondere» as a quiet link. Smaller in the
+   lane, a chat tile and the Strategist's strip (`compact`). «Bivio» (ADR 0259): the context sentence under the
+   question, a before → after, numbered steps instead of ✓ lines, and Sì / No as two roads with their next steps. */
+.dc { display: flex; flex-direction: column; gap: 12px; outline: none; container-type: inline-size; }
+.dc.sent { opacity: .6; pointer-events: none; }
+.dc-head { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--fs-s, 12px); color: var(--text-2); }
+.dc-head:empty { display: none; }
+.dc-who { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.dc-agent { color: var(--text-2); white-space: nowrap; }
+.dc-agent, .dc-chip { min-width: 0; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; }
+/* long paths and URLs wrap inside the card (it is an inline-size container: it never grows to fit) */
+.dc-q, .dc-lead, .dc-done li span, .dc-effect dd, .dc-why, .dc-check, .dc-nobrief { overflow-wrap: anywhere; }
+.dc-agent + .dc-who::before { content: '·'; margin-right: 8px; color: var(--text-3); font-weight: 400; }
+.dc-chip { padding: 1px 8px; border-radius: 999px; background: var(--surface-3); color: var(--text-2); white-space: nowrap; font-size: 11px; }
+.dc-age { color: var(--text-3); white-space: nowrap; }
+.dc-head .sp { flex: 1; }
+.dc-q { margin: 0; font-size: 19px; line-height: 1.3; font-weight: 600; color: var(--text); text-wrap: pretty; }
+.dc-evidence { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); min-width: 0; }
+.dc-evidence:empty { display: none; }
+.dc-evidence .gu-ask, .dc-evidence .ask-ctx { margin: 0; }
+.dc-brief { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.dc-brief-main, .dc-brief-done { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* a screenshot sits left of what was done (mock A), one column when the card is narrow */
+.dc-brief.has-img .dc-brief-main { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 14px; align-items: start; }
+.dc-brief-main .ask-imgs { margin: 0; }
+.dc.compact .dc-brief.has-img .dc-brief-main { grid-template-columns: 1fr; }
+/* no screenshot could be shown: no empty column, the "not shown" line goes under what was done, full width */
+.dc-brief.has-img .dc-brief-main:has(.ask-imgs-row:empty) { grid-template-columns: 1fr; }
+.dc-brief-main:has(.ask-imgs-row:empty) .ask-imgs { order: 2; }
+.dc-brief-main .ask-imgs-row:empty { display: none; }
+.dc-brief-k { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-3); }
+.dc-done { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.dc-checks { display: flex; flex-wrap: wrap; gap: 6px; }
+.dc-check { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 12px; background: var(--surface); border: 1px solid var(--border-2); color: var(--text); }
+.dc-check > span { font-weight: 700; }
+.dc-check.gu-ok > span { color: var(--green); }
+.dc-check.gu-fail > span, .dc-check.gu-blocked > span { color: var(--red); }
+.dc-check.gu-warn > span { color: var(--amber); }
+.dc-check em { font-style: normal; color: var(--text-2); }
+.dc-files { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
+.dc-files li { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; min-width: 0; }
+.dc-file { padding: 0; border: 0; background: none; color: var(--accent); cursor: pointer; overflow-wrap: anywhere; text-align: left; font-size: 12px; }
+span.dc-file { color: var(--text); cursor: default; }
+.dc-file:hover { text-decoration: underline; }
+.dc-why { color: var(--text-2); }
+.dc-nobrief { margin: 0; font-size: 12px; color: var(--text-2); }
+.dc-actions { display: flex; flex-direction: column; gap: 12px; }
+/* «Bivio» (ADR 0259): the context sentence, a before → after, and the two roads with their buttons */
+.dc-ctx { margin: -4px 0 0; color: var(--text-2); line-height: 1.5; overflow-wrap: anywhere; }
+.dc-change { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: stretch; }
+.dc-change-what { grid-column: 1 / -1; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-3); }
+.dc-change-v { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); min-width: 0; overflow-wrap: anywhere; }
+.dc-change-v small { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-3); }
+.dc-change-v s, .dc-change-v b { font-size: 22px; line-height: 1.15; font-weight: 700; }
+.dc-change-v s { color: var(--red); text-decoration-thickness: 2px; }
+.dc-change-v.after { border-color: color-mix(in srgb, var(--green) 55%, var(--border)); background: var(--green-bg); }
+.dc-change-v.after b { color: var(--green); }
+.dc-change-arrow { display: grid; place-items: center; color: var(--text-3); font-size: 18px; }
+.dc-todo { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--amber) 55%, var(--border)); background: var(--amber-bg); }
+.dc-todo .dc-brief-k { color: var(--amber); }
+.dc-todo .dc-step-n { border-color: var(--amber); color: var(--amber); }
+.dc-fork { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dc-road { --yn: var(--green); --yn-bg: var(--green-bg); display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 10px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); }
+.dc-road.no { --yn: var(--red); --yn-bg: var(--red-bg); }
+.dc-road.rec { border-color: color-mix(in srgb, var(--yn) 55%, var(--border)); background: color-mix(in srgb, var(--yn-bg) 60%, var(--surface)); }
+.dc-road-h { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-2); }
+.dc-road-h svg { color: var(--yn); stroke-width: 2.6; }
+.dc-road-h .dc-rec { text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--surface); background: var(--yn); }
+.dc-road-fx { margin: 0; line-height: 1.45; color: var(--text); overflow-wrap: anywhere; }
+.dc-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.dc-steps li, .dc-done li { display: flex; gap: 8px; align-items: flex-start; line-height: 1.4; color: var(--text); overflow-wrap: anywhere; }
+.dc-step-n { flex: none; display: grid; place-items: center; width: 18px; height: 18px; margin-top: 1px; border-radius: 50%; border: 1.5px solid var(--border-3); font: 700 10px/1 var(--font); color: var(--text-2); }
+.dc-road .dc-answer { margin-top: auto; }
+.dc-road.rec .dc-answer { border-color: var(--yn); }
+.dc-answers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dc-answer { --yn: var(--green); --yn-bg: var(--green-bg); position: relative; display: flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 52px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--border-2); background: var(--surface); color: var(--text);
+  font: inherit; cursor: pointer; transition: border-color 140ms ease, background-color 140ms ease; }
+.dc-answer.no { --yn: var(--red); --yn-bg: var(--red-bg); }
+.dc-answer strong { font-size: 15px; font-weight: 600; }
+.dc-answer-icon { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; color: var(--yn); background: var(--yn-bg); }
+.dc-answer-icon svg { stroke-width: 2.6; }
+.dc-answer.rec { border-color: color-mix(in srgb, var(--yn) 60%, var(--border-2)); }
+.dc-answer.rec .dc-answer-icon { color: var(--surface); background: var(--yn); }
+.dc-answer:hover:not(:disabled) { border-color: color-mix(in srgb, var(--yn) 70%, var(--border-2)); background: var(--surface-2); }
+.dc-answer:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus-ring); }
+.dc-answer:disabled { cursor: default; opacity: .55; }
+.dc-rec { font-size: 11px; padding: 1px 7px; border-radius: 999px; color: var(--text-2); background: var(--surface-3); }
+.dc-key { position: absolute; left: 9px; top: 50%; translate: 0 -50%; display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 4px; border-radius: 5px;
+  font: 600 10.5px/1 var(--mono); color: var(--text-3); border: 1px solid var(--border-3); border-bottom-width: 2px; background: var(--surface-2); }
+.dc-key::before { content: attr(data-key); }
+.dc-lead { margin: 0 0 -6px; color: var(--text-2); line-height: 1.45; }
+.dc-more { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; }
+.dc-more > :only-child { grid-column: 1 / -1; }
+.dc-write-open { position: relative; width: 100%; display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 6px 12px 6px 38px; border-radius: 10px;
+  border: 1px dashed var(--border-3); background: transparent; color: var(--text-2); font: inherit; cursor: pointer; text-align: left; }
+.dc-write-open .dc-key { left: 9px; }
+.dc-write-open svg { flex: none; }
+.dc-write-open:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
+.dc-write-open:focus-visible, .dc-skip:focus-visible, .dc-later:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus-ring); }
+.dc-skip, .dc-later { padding: 6px 10px; border: 0; border-radius: 8px; background: none; color: var(--text-2); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.dc-skip:hover:not(:disabled), .dc-later:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.dc-later { display: inline-flex; align-items: center; gap: 6px; }
+.dc-write { display: flex; flex-direction: column; gap: 8px; }
+.dc-write-input { width: 100%; resize: vertical; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border-control); background: var(--surface); color: var(--text); font: inherit; line-height: 1.45; }
+.dc-write-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-glow); }
+.dc-write-foot { display: flex; align-items: center; gap: 8px; }
+.dc-write-foot .sp { flex: 1; }
+.dc-hint { font-size: 12px; color: var(--text-2); }
+.gu-brief { display: flex; flex-direction: column; gap: 8px; }
+.gu-brief-fx { margin: 0; font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
+
+/* the smaller hosts: the lane, a chat's compact card, the Strategist's strip */
+.dc.compact { gap: 9px; }
+.dc.compact .dc-q { font-size: 15px; }
+.dc.compact .dc-evidence { padding: 9px 11px; gap: 8px; }
+.dc.compact .dc-answer { min-height: 42px; }
+.dc.compact .dc-answer strong { font-size: 14px; }
+.dc.compact .dc-answer-icon { width: 22px; height: 22px; }
+.dc.compact .dc-key { display: none; }
+.dc.compact .dc-write-open { padding-left: 12px; min-height: 34px; }
+.dc.compact .dc-more { grid-template-columns: 1fr 1fr; }
+.dc.compact .dc-more > .dc-write-open { grid-column: 1 / -1; }
+.dc.compact .dc-road { padding: 8px; gap: 6px; }
+.dc.compact .dc-change-v s, .dc.compact .dc-change-v b { font-size: 17px; }
+@container (max-width: 520px) { .dc-brief.has-img .dc-brief-main { grid-template-columns: 1fr; } }
+@container (max-width: 380px) {
+  .dc-fork { grid-template-columns: 1fr; }
+  .dc-key { display: none; }
+  .dc-write-open { padding-left: 12px; }
+  .dc-more { grid-template-columns: 1fr 1fr; }
+  .dc-more > .dc-write-open { grid-column: 1 / -1; }
+}
+@media (prefers-reduced-motion: reduce) { .dc-answer { transition: none; } }
+
+/* a command in the questions window (CommandRequest.tsx WindowCommand, ADR 0259): the whole command with its folder */
+.cmd-box { display: flex; flex-direction: column; min-width: 0; border-radius: 10px; border: 1px solid var(--border); overflow: hidden; background: var(--surface); }
+.cmd-box-h { display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 12px; font-size: 12px; color: var(--text-2); background: var(--surface-2); border-bottom: 1px solid var(--border); min-width: 0; }
+.cmd-box-h > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cmd-box-h .sp { flex: 1; }
+.cmd-box .ask-cmd { margin: 0; padding: 10px 12px; border: 0; border-radius: 0; max-height: 40vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.5 var(--mono); background: var(--code-bg, var(--bg-2)); color: var(--text); }
+.dc.cmd-ask.armed .dc-road.yes { --yn: var(--red); --yn-bg: var(--red-bg); }

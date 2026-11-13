@@ -1,0 +1,139 @@
+/* The first-run setup (components/FirstInterview.tsx, SetupLanguage.tsx, SetupEngines.tsx, SetupStage.tsx; ADR 0279):
+   one fixed-size modal in two halves. Left: the current moment (a thin three-dot progress, a display title, a few
+   controls, the footer's actions). Right: the stage, in the Orchestrator's violet: a fixed preview of the team at work
+   that becomes the real Orchestrator chat in the third moment. The modal keeps its size between moments so moving on
+   never feels like a new window, and its two halves fit the app's smallest window (1000 × 640). Shared tokens only, light and dark; motion is off for reduced-motion users. Scoped
+   under .sw / .modal-setup. */
+.modal.modal-setup { width: min(1080px, calc(100vw - 32px)); height: min(700px, calc(100vh - 48px)); max-height: none; }
+.modal.modal-setup-wait { height: auto; width: min(460px, calc(100vw - 32px)); }
+.sw-loading { padding: 26px 26px 22px; display: flex; flex-direction: column; gap: 16px; font-size: 13px; color: var(--text-2); }
+.sw-loading p { margin: 0; }
+.sw-loading-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+.sw { display: grid; grid-template-columns: minmax(0, 11fr) minmax(0, 10fr); height: 100%; min-height: 0; }
+.sw[data-step="first"] { grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); }
+.sw :is(button, input, textarea):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* ---- left: the moment */
+.sw-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.sw-top { display: flex; align-items: center; gap: 10px; min-height: 50px; padding: 20px 36px 0; }
+.sw-back { appearance: none; display: grid; place-items: center; width: 28px; height: 28px; margin-left: -8px; border: 0; border-radius: var(--r-s); background: transparent; color: var(--text-2); cursor: pointer; }
+.sw-back:hover:not(:disabled) { background: var(--surface-3); color: var(--text); }
+.sw-brand { font: 600 13px/1 var(--font-display); letter-spacing: -.2px; color: var(--text-2); }
+.sw-dots { list-style: none; margin: 0 0 0 auto; padding: 0; display: flex; gap: 6px; }
+.sw-dots li { width: 22px; height: 4px; border-radius: 2px; background: var(--surface-4); transition: background-color var(--dur) var(--ease), width var(--dur) var(--ease); }
+.sw-dots li.is-done { background: color-mix(in srgb, var(--accent) 50%, var(--surface-4)); }
+.sw-dots li.is-current { width: 38px; background: var(--accent); }
+.sw-count { font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--text-3); }
+/* the title keeps its place while the controls under it grow (a sign-in note, more engines): top-anchored, never centred */
+.sw-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 26px; padding: min(92px, 11vh) 36px 24px; }
+.sw[data-step="first"] .sw-body { padding-top: 30px; padding-bottom: 0; }
+.sw[data-step="first"] .sw-fields { flex: 1; }
+.sw[data-step="first"] .sw-ideas { flex: 1; }
+.sw-intro { animation: sw-in 260ms var(--ease) both; }
+.sw-intro h2 { margin: 0 0 10px; font: 600 32px/1.14 var(--font-display); letter-spacing: -1px; color: var(--text); outline: none; overflow-wrap: anywhere; text-wrap: balance; }
+.sw-intro h2:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: 4px; }
+.sw-intro p { margin: 0; max-width: 46ch; font-size: 14px; line-height: 1.6; color: var(--text-2); }
+.sw[data-step="first"] .sw-intro h2 { font-size: 26px; letter-spacing: -.7px; }
+.sw-fields { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 18px; animation: sw-in 260ms 60ms var(--ease) both; }
+.sw-foot { display: flex; align-items: center; gap: 8px; min-height: 68px; padding: 14px 36px 18px; }
+.sw-foot .btn-subtle { margin-left: -10px; }
+.sw-foot .btn-subtle + .btn-subtle { margin-left: 0; }
+.sw-foot .btn-primary { height: 38px; padding: 0 16px; font-size: 13.5px; }
+.sw[data-step="first"] :is(.sw-top, .sw-body, .sw-foot) { padding-left: 28px; padding-right: 24px; }
+.sw-foot .sp { flex: 1; }
+/* «Bozza salvata»: said to screen readers only, the footer keeps room for the actions */
+.sw-saved { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.sw-hint { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-3); }
+.sw-kicker { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; font-weight: 650; color: var(--text-3); }
+.sw-error { margin: 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--red) 45%, transparent); border-radius: var(--r-m); background: var(--red-bg); color: var(--red); font-size: 12.5px; }
+.sw-field-error { color: var(--red); font-size: 12px; margin: 0; }
+.sw-warn { display: flex; gap: 6px; align-items: flex-start; margin-top: 4px; color: var(--amber); }
+.sw-warn svg { flex: none; margin-top: 2px; }
+.sw-known { margin: 0; font-size: 14px; color: var(--text-2); }
+
+/* ---- welcome: the language in a row, the name */
+.sw-langs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.sw-lang { appearance: none; display: flex; align-items: center; gap: 10px; min-width: 0; padding: 10px 12px; border: 1px solid var(--border-2); border-radius: var(--r-l); background: var(--surface-2); color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease); }
+.sw-lang:hover:not(:disabled) { border-color: var(--border-3); }
+.sw-lang:disabled { cursor: default; }
+.sw-lang.is-on { border-color: var(--accent); background: var(--accent-bg); }
+.sw-lang-code { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--surface-3); font-size: 10.5px; font-weight: 700; letter-spacing: .04em; color: var(--text-2); }
+.sw-lang.is-on .sw-lang-code { background: var(--accent); color: var(--on-accent); }
+.sw-lang-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.sw-lang-text b { font-size: 14px; font-weight: 600; }
+.sw-lang-text small { font-size: 11px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sw-name input { height: 46px; font-size: 17px; }
+
+/* ---- your AI: one row per engine found on this computer */
+.sw-ais { display: flex; flex-direction: column; gap: 12px; }
+.sw-ai-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sw-ai { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; padding: 12px 14px; border: 1px solid var(--border-2); border-radius: var(--r-l); background: var(--surface-2); transition: border-color var(--dur) var(--ease), background-color var(--dur) var(--ease); }
+.sw-ai.is-primary { border-color: var(--accent); background: var(--accent-bg); }
+.sw-ai.is-waiting { border-color: var(--accent-line); }
+.sw-ai[data-phase="missing"] { opacity: .6; }
+.sw-ai-pick { display: flex; align-items: center; gap: 12px; min-width: 0; cursor: pointer; }
+.sw-ai-pick:has(input:disabled) { cursor: default; }
+.sw-ai-pick input { flex: none; margin: 0; width: 16px; height: 16px; accent-color: var(--accent); }
+.sw-ai-pick .mark { flex: none; display: grid; place-items: center; border-radius: 9px; background: var(--surface-3); }
+.sw-ai-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sw-ai-text b { font-size: 14.5px; font-weight: 600; }
+.sw-ai-text small { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-3); overflow-wrap: anywhere; }
+.sw-ai-actions { display: flex; align-items: center; gap: 6px; }
+.sw-ai-note { grid-column: 1 / -1; margin: 10px 0 0; padding-top: 10px; border-top: 1px solid var(--border); font-size: 12px; line-height: 1.5; color: var(--text-2); }
+.sw-ready { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 600; white-space: nowrap; color: var(--green); background: var(--green-bg); }
+.sw-ai-none { padding: 18px; border: 1px dashed var(--border-3); border-radius: var(--r-l); font-size: 14px; }
+.sw-ai-none p { margin: 6px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--text-3); }
+.sw-ai-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; }
+.sw-ai-foot p { margin: 0; font-size: 12px; color: var(--text-3); }
+
+/* ---- first request: ideas that fill the Orchestrator's input */
+.sw-ideas { display: flex; flex-direction: column; gap: 8px; }
+.sw-idea { appearance: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 12px 11px 14px; border: 1px solid var(--border-2); border-radius: var(--r-l); background: var(--surface-2); color: var(--text); font: inherit; font-size: 13px; line-height: 1.4; text-align: left; cursor: pointer; transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease); }
+.sw-idea:hover { border-color: var(--accent); background: var(--accent-bg); }
+.sw-idea svg { flex: none; color: var(--text-3); }
+.sw-ideas .sw-hint { margin-top: 6px; }
+.sw-where { margin: auto 0 0; padding-top: 14px; border-top: 1px solid var(--border); font-size: 11.5px; line-height: 1.5; color: var(--text-3); }
+.sw-where code { display: block; margin-top: 3px; font-family: var(--mono); font-size: 11px; color: var(--text-2); overflow-wrap: anywhere; }
+
+/* ---- right: the stage (a preview, then the real Orchestrator) */
+.sw-stage { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--orchestrator-bg); border-left: 1px solid var(--orchestrator-line); }
+.sw-stage-head { display: flex; align-items: center; gap: 10px; padding: 18px 22px 12px; font: 600 15px/1 var(--font-display); letter-spacing: -.2px; color: var(--text); }
+.sw-stage-tag { margin-left: auto; padding: 3px 9px; border: 1px solid var(--orchestrator-line-2); border-radius: 20px; font: 600 10.5px/1.3 var(--font); letter-spacing: .08em; text-transform: uppercase; color: var(--violet); }
+.sw-stage-head .pill { margin-left: auto; }
+.sw-team { list-style: none; margin: 0; padding: 2px 22px 16px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; border-bottom: 1px solid var(--orchestrator-line); }
+.sw-role { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; padding: 10px 4px 8px; border: 1px solid transparent; border-radius: var(--r-l); opacity: .55; transition: opacity var(--dur) var(--ease), border-color var(--dur) var(--ease), background-color var(--dur) var(--ease); }
+.sw-role span { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 0; line-height: 1.2; }
+.sw-role b { font-size: 11.5px; font-weight: 600; color: var(--text); }
+.sw-role small { font-size: 10.5px; color: var(--text-3); }
+.sw-role.is-working { opacity: 1; border-color: var(--orchestrator-line-2); background: var(--orchestrator-surface); }
+.sw-role.is-working small { color: var(--violet); }
+.sw-role.is-done { opacity: 1; }
+.sw-role.is-done small { color: var(--green); }
+.sw-stage > .items-wrap { flex: 1 1 0; min-height: 0; }
+.sw-stage-wait { margin: auto; font-size: 13px; color: var(--text-3); }
+.sw-stage-ask { margin: 0 16px 10px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 9px 9px 14px; border: 1px solid var(--accent-line); border-radius: var(--r-l); background: var(--accent-bg); font-size: 13px; color: var(--text); }
+.sw-stage-input { position: relative; margin: 0 16px 16px; }
+.sw-stage-input textarea { display: block; width: 100%; min-height: 62px; max-height: 160px; resize: none; padding: 12px 52px 12px 14px; border: 1px solid var(--orchestrator-line-2); border-radius: var(--r-l); background: var(--orchestrator-input); color: var(--text); font: inherit; font-size: 14px; line-height: 1.5; }
+.sw-stage-input textarea:focus { outline: none; border-color: var(--violet); box-shadow: 0 0 0 3px var(--violet-bg); }
+.sw-send { appearance: none; position: absolute; right: 10px; bottom: 10px; display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 50%; background: var(--violet); color: var(--orchestrator-bg); cursor: pointer; transition: opacity var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease); }
+.sw-send:hover:not(:disabled) { transform: scale(1.06); }
+.sw-send:disabled { opacity: .35; cursor: default; }
+.sw-send.is-stop { background: var(--surface-4); color: var(--text); }
+
+/* the preview: one request, the answer, a role at work */
+.sw-demo { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 14px; padding: 18px 22px 20px; overflow: hidden; }
+.sw-demo p { margin: 0; font-size: 13.5px; line-height: 1.55; }
+.sw-demo-user { align-self: flex-end; max-width: 82%; padding: 9px 14px; border-radius: 14px 14px 4px 14px; background: var(--surface-3); color: var(--text); animation: sw-in 360ms 200ms var(--ease) both; }
+.sw-demo-orch { display: flex; align-items: flex-start; gap: 10px; max-width: 92%; color: var(--text); animation: sw-in 360ms 520ms var(--ease) both; }
+.sw-demo-orch .agent-avatar { flex: none; margin-top: 1px; }
+.sw-demo-work { display: flex; align-items: center; gap: 9px; margin-left: 32px; padding: 8px 12px 8px 8px; border: 1px solid var(--orchestrator-line-2); border-radius: var(--r-l); background: var(--orchestrator-surface); font-size: 12.5px; color: var(--text-2); animation: sw-in 360ms 840ms var(--ease) both; }
+.sw-demo-work span { flex: 1; min-width: 0; }
+.sw-demo-work b { margin-right: 6px; color: var(--text); }
+.sw-demo-work i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--violet); animation: sw-pulse 1.6s ease-in-out infinite; }
+.sw-demo-input { margin: 0 16px; padding: 12px 14px; min-height: 48px; border: 1px dashed var(--orchestrator-line-2); border-radius: var(--r-l); font-size: 14px; color: var(--text-3); opacity: .7; }
+.sw-stage-caption { margin: 0; padding: 10px 22px 16px; font-size: 12px; text-align: center; color: var(--text-3); }
+
+@keyframes sw-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes sw-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.8); } }
+@media (prefers-reduced-motion: reduce) { .sw-intro, .sw-fields, .sw-demo-user, .sw-demo-orch, .sw-demo-work, .sw-demo-work i { animation: none; } .sw-dots li, .sw-back, .sw-lang, .sw-ai, .sw-idea, .sw-role, .sw-send { transition: none; } }

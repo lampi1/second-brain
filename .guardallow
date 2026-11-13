@@ -1,0 +1,318 @@
+# Known false positives of tools/guard/scan.mjs: `<path glob> <rule> [sha256:<hex>]`. A hash pins the exact content.
+# Stage 4 README captures: inspected frozen synthetic demo, central decisions and expanded outcomes.
+docs/screenshots/grindhouse.webp binary-media sha256:4ad892e4179ee03cba11888a10dcc6d2a89422431762ccb075338420f955f504
+docs/screenshots/orchestrator.webp binary-media sha256:5a7c75c9a5eb9212b36e9d5b1bf7e95929498e011c65dbccda200f6b57eee5b2
+docs/screenshots/browser.webp binary-media sha256:4682d65ed0f66c07898da84c9a02f182f5bf16a4d2651ad16c02af4a683b172f
+docs/screenshots/orchestrator-flash.webp binary-media sha256:65bfa9c7aa9de76aff6f95f64b35c9ef6dff433bf834982631963e34a497a7ed
+docs/screenshots/reactions.webp binary-media sha256:027c0eb59928e14354bd3cf9602f261e8f9ad44ff38004876ceff88830f6c402
+docs/screenshots/voice-talk.webp binary-media sha256:82b6736780d37d3a97f2c5b116b1a952b76a9c874b6871f7d95ad5ae6758d8d4
+# Installer's public application identifier and Windows API DLL import (not an address), reviewed in this exact file.
+build/windows.iss guid sha256:e8749175ed1c50de2478aa6e805a9c8398dd99e74039a1b9879f5ae728b32ff3
+build/windows.iss email sha256:e8749175ed1c50de2478aa6e805a9c8398dd99e74039a1b9879f5ae728b32ff3
+# Same public AppId and Windows DLL import; only literal shortcut filename placement changed for ISCC syntax.
+build/windows.iss guid sha256:be2f6db1732a34ceede3e44b5b9530539b242740a4ffb4939faf382d73b86b86
+build/windows.iss email sha256:be2f6db1732a34ceede3e44b5b9530539b242740a4ffb4939faf382d73b86b86
+# Public AppId and fixed kernel32 API imports in the common release-writer protocol installer/uninstaller.
+build/windows.iss guid sha256:f3d882346e1b5cac4b2c4f6b9315d281059051a72ee3f928ab5e94b87c9eac0a
+build/windows.iss email sha256:f3d882346e1b5cac4b2c4f6b9315d281059051a72ee3f928ab5e94b87c9eac0a
+# Same public installer AppId and fixed kernel32 imports; shortened staging and explicit Setup initialization failure status.
+build/windows.iss guid sha256:bdd339a072e4c739253dea4ae3d3c04be71ce6f67a2b1f8f7af556969b43323d
+build/windows.iss email sha256:bdd339a072e4c739253dea4ae3d3c04be71ce6f67a2b1f8f7af556969b43323d
+# App icon, generated from build/icon.svg by scripts/make-icon.cjs: 10 PNG images (16-256 px), chunks IHDR/IDAT/IEND
+# only, no text or metadata (checked 2026-10-11). A new icon blocks the sync until someone checks it and ADDS a line
+# with its hash; never remove an old line: the public history keeps the old icon and the history scan checks it.
+build/icon.ico unscanned-binary sha256:72db3b5f51cc876de4c697ec6cdaeeb67dc76f4946cc6d1022f216a9e4e3bcc9
+# prodRisk tests: a made-up server "x" on the Azure SQL and Kudu domains proves that a production command asks a
+# second click; no real host (checked 2026-10-13). A changed file blocks again. Comments here never spell a host: this
+# file is published and the history scan reads it too (2026-10-14).
+test/unit/runner.test.ts internal-host sha256:ce2a98829d67f4655b51dde1c9c6847a5d302a4f7a9d1644aadeddbd0d1cfc0a
+# Same public Azure-host fixtures; assertion uses PowerShell's language-independent structured error identifier.
+test/unit/runner.test.ts internal-host sha256:9b7a97db1e8bc04e3910dfd3363f2cca94d8434584e0937de42b9d71dc5b85c3
+# Same made-up Azure-host fixtures, unchanged; three Windows PowerShell tests with a 30 s deadline removed (2026-11-09).
+test/unit/runner.test.ts internal-host sha256:3973fe13228fc962d820a9417bd029458a8398daae5c90ae3c4aeeea42bef424
+# devlinks tests: the legacy DevOps host shape on a made-up org ("acme", "o") and the new host with org "o"; no real
+# org (checked 2026-10-13; second hash 2026-10-14, the linkKey test added, same made-up orgs, owner ok). A changed
+# file blocks again.
+test/unit/devlinks.test.ts internal-host sha256:128d7a93c6830392ddd97e4783cfcee729b526874b72955e64bbb53f0cad6470
+test/unit/devlinks.test.ts internal-host sha256:a054b1641bd592db1e477cdf1eea0ff18e377c9e13d33b286e4e4fa57cf9fee9
+test/unit/devlinks.test.ts internal-host sha256:974ab533bae25ea7152e28b9ec64355944f72f462b6e1a5cc1a281507f406497
+# Images the product needs, each looked at by a human (2026-10-13): the app icon PNG (build/icon.svg rendered by
+# scripts/make-icon.cjs, chunks IHDR/IDAT/IEND only), the e2e visual baselines and the README screenshots (frozen demo,
+# fictional data). `npm run shots` prints the lines for new screenshots; never remove an old line (history scan).
+build/icon.png binary-media sha256:0691c84c8ed70ceccdeb0fbcc5e11dbd8338b91d3ae8df4c2320df513608890d
+test/e2e/ui.spec.ts-snapshots/corsie-win32.png binary-media sha256:97793138e68c6c56f785faa6fe8097e0d6989a1426180c8486a32dfe7d07078b
+test/e2e/ui.spec.ts-snapshots/maximized-win32.png binary-media sha256:ca70e6a40fdefe37117d16a811ea0f82cad98654c11f711ec0fe04dff6ec0670
+test/e2e/ui.spec.ts-snapshots/mosaico-win32.png binary-media sha256:35964be95b689c1334aff2b7aad08b85301fb03780191872522d86bd821585c9
+test/e2e/ui.spec.ts-snapshots/palette-win32.png binary-media sha256:762bc2f1d639e52311f28c9e946623969eff7209da2252e0a7909cc98d382984
+docs/screenshots/brain-map.webp binary-media sha256:5d5d6bec96e783a638e350c0c2bb1608409d2ed5804fed544fa16f490dcf9288
+docs/screenshots/browser.webp binary-media sha256:cbe07bfc68bc7f772986202dd54a90c846976433d6f295b32a6da2c40e47542d
+docs/screenshots/devops.webp binary-media sha256:2b5964949e48f74e3ef170a3275d30bceb1202ca00145bde003b33945070075f
+docs/screenshots/mosaic.webp binary-media sha256:2a6c7ab702f263fb64556cc1f706bfb2b119a941a8160070e9d29191848345b2
+docs/screenshots/quality.webp binary-media sha256:474c5ebfed73c278fc04214dde23bbd7a044b05bf822541b61e26bda278a6abc
+docs/screenshots/regia.webp binary-media sha256:d14a0829c3114cfd94af10e84f9faf42eb3e06e72439883bc4b6af75c872421c
+test/e2e/ui.spec.ts-snapshots/mosaico-win32.png binary-media sha256:74a8ac98ac4adbcde2e77beea32d931cdb55459e803194f1c0476b8248da327f
+# Public GitHub SSH clone syntax in the publication-boundary fixture, not an email address or private identity.
+test/unit/proposals.test.ts email sha256:2f375d787fe797df16643e8faeba511d710e2a8a73384493e1663bd8f8b1fafc
+# Same two public GitHub SSH clone literals after reviewed publication regression additions; no private email.
+test/unit/proposals.test.ts email sha256:62c51e8ad51e3e2f4332a47438bf33467c5e194fa5c378f05f90f7e3103c6423
+docs/screenshots/mosaic.webp binary-media sha256:64488cc4a941c5203a4285044ebf7769934ddb848c5a79e1a7b572ac667e3058
+docs/screenshots/agents.webp binary-media sha256:9157f889c644fc7b556e87d995ae4cdc4c21082a61072f2a4766819fa138f443
+# The previous agents.webp and agent-levels.webp, already published and pinned: merge commits pushed after the
+# model-picker change still carry them, and the push guard scans every pushed commit.
+docs/screenshots/agents.webp binary-media sha256:6400d8c75af1ae734630edc65a688674f686604f9646086afd83aadecb9b3697
+docs/screenshots/agent-levels.webp binary-media sha256:e789a19626c6a427e147d74aea5c5221ef0ad3da81beba5a63c362bc446fdd62
+docs/screenshots/regia.webp binary-media sha256:466bdd32763b936b6c86a52e9104529c8e82b6ee7074c301b126ca2515db364e
+docs/screenshots/browser.webp binary-media sha256:4bfacd4cbed7b501f48647d62cda84b458528d603bf0f0ad01c8615a902433ed
+docs/screenshots/devops.webp binary-media sha256:4d1542b862694104f8ab72df150849a88900206e450fc13589355c3f88dbeee8
+docs/screenshots/quality.webp binary-media sha256:b2825f78505187746926e722bc0e6ce72ed1951581f2485440467ee65393d29e
+docs/screenshots/task.webp binary-media sha256:856458e036b9e613d52738bca0fd66532377e544c0d2657fc409f9a7271a7c61
+test/fixtures/cloud/remotes.txt email sha256:af86953a27a80122223b02780563b5e78f933a6358b561cc11aad083fec41721
+test/fixtures/cloud/remotes.txt internal-host sha256:af86953a27a80122223b02780563b5e78f933a6358b561cc11aad083fec41721
+# README screenshots renamed to today's words (ADR 0082): the Grindhouse and the Orchestrator, same bytes as mosaic/regia.webp
+docs/screenshots/grindhouse.webp binary-media sha256:85971de89000699dfe0757f32cf1a644e50e15c69ea1fc3a4c3f3ea318b51f98
+docs/screenshots/orchestrator.webp binary-media sha256:5cdefa44ef732e6d4c17ba05f9c2d55e34f4f71f95e96c549c82a514c9485ea4
+docs/screenshots/brain-scripts.webp binary-media sha256:219292f3a95f9b1c37895edfb598342ee71e565241dd08981d61b1a531d7869e
+docs/screenshots/agent-avatars/dark.png binary-media sha256:179f08ef10ed1ef6940e5b4b4c73d55177f7f73e72362ab75f7d65fa769872f6
+docs/screenshots/agent-avatars/light.png binary-media sha256:a9d836f58877f6e6017a4f61b1ee8ab1ddd4fd0b40648338b06ea12174537386
+docs/screenshots/connectors.webp binary-media sha256:ca5e64447bee48ea5dbfc1da5cd5aa850b1bc522b38a487b085f15dca0d095c0
+# The Task page's own DevOps reader (ADR 0093): the public Azure DevOps profile/accounts API host (app.vssps), the
+# documented endpoint that lists the signed-in user's organizations; no customer host (checked 2026-10-20). Re-pinned 2026-10-29: only the PR's source branch added (ADR 0185).
+src/main/tasks/devops-me.mjs internal-host sha256:33ae30909b6e62ece6dc4ada9b65c7f3524b3d1a9dc108bc541ec987a6ffc8af
+# README screenshots regenerated 2026-10-20 (npm run shots on main c4ce2b0 + the Mappa path fix), looked at before pinning
+docs/screenshots/browser.webp binary-media sha256:63a805b7e9f6a34039fe5a48a20e7695ddb7fb63163e1ae078275c57c23968e1
+docs/screenshots/task.webp binary-media sha256:e878e51ad7e9a2697230fbe6da38992e2307303290509547360264dcecee3001
+docs/screenshots/quality.webp binary-media sha256:bf2caa5f53fc6e9cd1bfe0c35a95503861a0715a93dc4071e097ddebbdeb162b
+# README v2 (2026-10-20): screenshots with the delegation tree, the crew strip cut from agent-avatars/dark.png; looked at before pinning
+docs/screenshots/browser.webp binary-media sha256:58fb7d562de23b6fb4173ac6a9aa8c0de7e4384da4ca318f7b472896e21e1d84
+docs/screenshots/task.webp binary-media sha256:56180ba8e9cf5309a37dd8ce99c55ab6f6f4096638398603e07791c50a8c58d5
+docs/screenshots/quality.webp binary-media sha256:4ed97811d53aaee62bebf898792e0e75323fcccd40a841dfaea07e928bd3a5b2
+docs/screenshots/crew.webp binary-media sha256:a59c51dccdd15d65a8f72a37493c625cfad3ecf8bc55e482e7867a1c63d3778f
+# README v3 (2026-10-21): npm run shots after ADR 0099-0105 (Lampo tab, Andamento, five roles); crew strip cut to the six roles; looked at before pinning
+docs/screenshots/browser.webp binary-media sha256:5f5e570d3661c0bba2d222b3833894eb8fe6122e466909e24014c33e7ce7e492
+docs/screenshots/task.webp binary-media sha256:a2107817dba0710d9a40ea86b6a51064e32cafdbeebe09de5803a7ccf6fca813
+docs/screenshots/quality.webp binary-media sha256:8050997997e728ba23e9730ba7bbfce05b412a699ff5f174060aa1d82329f6cd
+docs/screenshots/crew.webp binary-media sha256:f6ce7ecb9397e0fb8fd85e0250c408a1331cfb161cb4efd134b1c9e415a4d32d
+# README screenshots regenerated 2026-10-22 in English, dark (npm run shots: the showcase memory, agent-levels, brain-map, orchestrator-flash, reactions, plan and the rest), looked at before pinning
+docs/screenshots/browser.webp binary-media sha256:e337b76dec59f24e83c126dddac37edb8ae1104947bd6fbdf369eeb3147f9e3d
+docs/screenshots/task.webp binary-media sha256:6fa147958ed07c21780a97bba0340d6e4d13ce6f06284664b72ceae45d5d9193
+docs/screenshots/quality.webp binary-media sha256:f8c8594a9609bf8c2f7c79182f948734b912a05fcc3ecc493f9073bbe8e265ce
+docs/screenshots/memory.webp binary-media sha256:ac1c511d360bb3b3709e3fa893714559b961a42d64d119d59226ca61db256bcd
+docs/screenshots/memory.webp binary-media sha256:0c706e002fcacb16d11f634a0312d69ace3ede038d4fef835b6b895c8441bfa1
+docs/screenshots/agent-levels.webp binary-media sha256:965cccd625c8d7bbcd568a93f3faaa4928c09f7179451d891de1b0f04718a63f
+docs/screenshots/orchestrator-flash.webp binary-media sha256:30a98436eeff0c92e844673474a6a0a849482462367e4f063d2be7f4d3b1a34d
+docs/screenshots/reactions.webp binary-media sha256:1b23957bfab76bfab8fd23ce8b6697c692decf8e1b54216e39cc843da713de02
+docs/screenshots/plan.webp binary-media sha256:6b4b191a1aa2a2d328d1de06086f011b79a5241b4880c6a5e99f1d35b8a2c0f2
+# README screenshots regenerated again 2026-10-22, fully in English, dark: English demo content and UI labels (map legend, role purposes, Flash btw answer); looked at before pinning. The block above stays: commit b706f88f carries those blobs and the pre-push scan checks them
+docs/screenshots/browser.webp binary-media sha256:f24526e8382c2f1ca54b6e837760e21df2968158c5bb9069d4db8d008a02aa5f
+docs/screenshots/task.webp binary-media sha256:87d5ff8e70625825fbc57039fa1e54deebc9dc29d1d1b30ac24e5d65ff63bae6
+docs/screenshots/quality.webp binary-media sha256:36dfbf2fb7704399a3323101630aa8e3456c70b2858ea22e4dd17f59cab7eb98
+docs/screenshots/plan.webp binary-media sha256:7a29ced495ab88ba4ffcfb27346dad33be6eb03a04166569506f0421f84133e0
+# memory-worth tests: a made-up user "mario" in a Windows and a home path proves the memory gate flags user paths
+# (checked 2026-10-22). These two hashes pin the branch's earlier versions of the file; the current one builds the paths
+# from parts and is clean.
+test/unit/brainmodel/memory-worth.test.ts user-path sha256:7178a6995eb09661d5368d9c056bb00d430a7d080ae2e328ab7b6f55d8ca4e65
+test/unit/brainmodel/memory-worth.test.ts home-path sha256:7178a6995eb09661d5368d9c056bb00d430a7d080ae2e328ab7b6f55d8ca4e65
+test/unit/brainmodel/memory-worth.test.ts user-path sha256:2db3faeff757af65a1eeeb802a49294ec722dc3bd7cf6dcb1fe7531b46f71d63
+test/unit/brainmodel/memory-worth.test.ts home-path sha256:2db3faeff757af65a1eeeb802a49294ec722dc3bd7cf6dcb1fe7531b46f71d63
+# Routine page mockups (docs/mockups/routines, static HTML on fictional data) and the current page from the e2e demo
+# (fictional data), 2026-10-24: Playwright screenshots, no text chunks.
+docs/mockups/routines/png/a-quadro-1-dark.png binary-media sha256:f3d0cf2c881f4751190094c07981b6154d149410b188fdcb4831c0ffa479886b
+docs/mockups/routines/png/a-quadro-2-dark.png binary-media sha256:530c30a326059266e70ca473b584a6641ea2aac9368d29adc7b382d7af2ac5de
+docs/mockups/routines/png/a-quadro-3-dark.png binary-media sha256:de5362d75106e57d5f3d953ba66afada3c026379a4db119374e1d7454e6593fc
+docs/mockups/routines/png/a-quadro-4-dark.png binary-media sha256:e1d32559c187e9236ff5fa0d86d9049c28571c7b67ca948b90c9cf9f24e8faf1
+docs/mockups/routines/png/b-una-cosa-1-dark.png binary-media sha256:d167db5445c1a99af2529b469eb849bcec75c79386f31faab48284675b26b385
+docs/mockups/routines/png/b-una-cosa-2-dark.png binary-media sha256:dbf1fc3ec9903a3aca07e26ba3cc4e262f0987a240fc09377bf6bdf45333c207
+docs/mockups/routines/png/b-una-cosa-3-dark.png binary-media sha256:8b7936644f09a39b8b342098fb0e54d7af62c63dd1caf435d811e0686186332b
+docs/mockups/routines/png/b-una-cosa-4-dark.png binary-media sha256:e540039052016daad6cbeb42a15496be43efb10c9aaaaea778e0aa9a59281b1b
+docs/mockups/routines/png/b-una-cosa-5-dark.png binary-media sha256:81478802c6b6581f80ad4999fe2f54d974f60da62f30a3d16cf757c5d824c4a3
+docs/mockups/routines/png/b-una-cosa-6-dark.png binary-media sha256:ece16fd8c71ce602b4394ec51dd7e68fdc41c963afcb86e1a1299f3bd45bc14b
+docs/mockups/routines/png/c-binari-1-dark.png binary-media sha256:7d599a0999e414d40c442faf2a70206e2391564c27e0b954a314dd1d8f8e875e
+docs/mockups/routines/png/c-binari-2-dark.png binary-media sha256:2171e8ff3fc53e75567b498604be15eb7f8216291724df4ec9476477c27f5850
+docs/mockups/routines/png/c-binari-3-dark.png binary-media sha256:9974dbdec1f95ab2529c72bdf745aab09910bad1e5af8fb9531c5c23d7f55e8c
+docs/mockups/routines/png/c-binari-4-dark.png binary-media sha256:c8b4e97415f2ea7b1151e0abe04f034b256eb8e8870827ed8f8f951862bc1693
+docs/mockups/routines/png/prima-app-reale.png binary-media sha256:986b9c30068e4dbeeb568a6ea7d9ce8df906f1dcbf4ca472c85c2de0e0ccbef0
+# Earlier versions of the Routine mockup frames (kept for the history scan).
+docs/mockups/routines/png/b-una-cosa-1-dark.png binary-media sha256:3eb66d0373072bbdf010eecce4bad1f243b24bac5af162ced58ca4b237a32f2d
+docs/mockups/routines/png/b-una-cosa-2-dark.png binary-media sha256:09dc8974903bf0c4bccbd9c49b4ec4fd3c842f9d0ba99c5379d7a179b645f52d
+docs/mockups/routines/png/b-una-cosa-3-dark.png binary-media sha256:8535c65b86ddcd0066a3340d3d63b1cef90fbb25a1303129b759b39da48c0750
+docs/mockups/routines/png/b-una-cosa-4-dark.png binary-media sha256:bea24f86c25569c9b98adf374a3c1dc7a14e94b21fd41dde773dc6e33c2bb219
+docs/mockups/routines/png/app-flow-step-agent.png binary-media sha256:828187b0ab69b9ca28fd8d57f1278c6063a7fa462469e67b89a1d0c246457c07
+docs/mockups/routines/png/app-routine-detail.png binary-media sha256:0bda7a3183844e4cb34f684b8ca5bfab9c29ab7858765db04c91f178235724da
+docs/mockups/routines/png/app-routine-dry-run.png binary-media sha256:7b1dbcb41fb896ee727728350372a2534f48dd80492161a57201d44b1ed43752
+docs/mockups/routines/png/app-routine-history.png binary-media sha256:38bf036351f0bc88cbc94934f16a2ffb42c2d66157597218ec06a71cb4758b5d
+docs/mockups/routines/png/app-routine-list.png binary-media sha256:9c689db32d3143a6682fc8e9302388183299b8251c09ecd6ac62b4fffad8b685
+docs/mockups/routines/png/app-routine-now.png binary-media sha256:c784be164e27e15eaf49834fe6c780cb66d13d0da5fa46cecd4b8aac6426120e
+docs/mockups/routines/png/app-routine-start.png binary-media sha256:64f77589bdda5f681fd9dc1f12727e881bb3d2e76fda8b934b2e41eb8cb4d659
+docs/mockups/routines/png/app-package-export.png binary-media sha256:3c6da75033cc368cd7df33186b64032067321f6fd89937f7b2122172c663e71f
+docs/mockups/routines/png/app-package-import.png binary-media sha256:327972341e1f866ac692455b1176589098c8c1d2517dae6f6cc41741fda74fb3
+
+# Mocked routine safety tests: public example organizations, adversarial dummy URL credentials and dummy secrets.
+# Independent security review verified exact bytes; no real endpoint, credential or personal data.
+test/unit/flows/devops-content.test.ts internal-host sha256:c8427ff5aec71f2f7196456134b59d8a968461b16717f0dc702b9d5c1c99022a
+test/unit/flows/devops-content.test.ts url-credentials sha256:c8427ff5aec71f2f7196456134b59d8a968461b16717f0dc702b9d5c1c99022a
+test/unit/flows/devops-content.test.ts email sha256:c8427ff5aec71f2f7196456134b59d8a968461b16717f0dc702b9d5c1c99022a
+test/unit/flows/devops-resources.test.ts internal-host sha256:178d3a9560eb20175c97f673c0ca9b9f8830e404128de52a3cd8aab2cca8e01f
+test/unit/flows/package.test.ts conn-string-password sha256:a28b83365b0e21aa4a7aa98d4dc3bdba4597132f01309da3b27a5e5c7dcad86a
+test/unit/flows/package.test.ts assigned-secret sha256:a28b83365b0e21aa4a7aa98d4dc3bdba4597132f01309da3b27a5e5c7dcad86a
+# Canonical cross-platform temp roots and explicit dangling-link regression; same synthetic values.
+test/unit/flows/devops-content.test.ts internal-host sha256:99774515df44c129fd74d7ff5b19da302fb4cba65612b96b690e2b354b9cbedf
+test/unit/flows/devops-content.test.ts url-credentials sha256:99774515df44c129fd74d7ff5b19da302fb4cba65612b96b690e2b354b9cbedf
+test/unit/flows/devops-content.test.ts email sha256:99774515df44c129fd74d7ff5b19da302fb4cba65612b96b690e2b354b9cbedf
+test/unit/flows/devops-resources.test.ts internal-host sha256:b895c996e0ea67edfcbe41ffbf29423244ab4f476f35e49544b11c3f1d188609
+test/unit/flows/package.test.ts conn-string-password sha256:e15458704bfd8fa940168660391acb3310f99f23277c8996c3f58eb9c9873330
+test/unit/flows/package.test.ts assigned-secret sha256:e15458704bfd8fa940168660391acb3310f99f23277c8996c3f58eb9c9873330
+
+# Public Microsoft App Service task/build-policy IDs; synthetic fixtures and pre-existing dummy redaction secrets.
+# Exact content reviewed for unattended routine contracts; no company configuration or credentials.
+docs/routine-test-targets.md guid sha256:b250b7d1d6e18cced61cf9b0fa2df8902bdbf261312ec018d3ee703c70449452
+src/main/flows/app-service-target.ts guid sha256:9ed7622aa6b6f39a05e06cbe9f365e3f6f0e4a481dfbde656bf22b0c5257004a
+src/main/flows/pr-validation.ts guid sha256:6d55b300535fa39b90a78d9780f41cb87ad9ad64f4eba4bb43b37b0201e4d3af
+# Same public Azure DevOps Build policy type id; only sameArtifact became exported for link-pr.
+src/main/flows/pr-validation.ts guid sha256:de5446a0a6a06d3b059562a82d24af3598815140cf778a50a96da64a49c83dea
+# Same public Azure DevOps Build policy type id; a queued evaluation without a buildId is now requeued.
+src/main/flows/pr-validation.ts guid sha256:48342db8dc9e7eeaf2c489fb7008e17b62ff19dab62f203b16238a3b9472f720
+test/fixtures/routine-consent.ts guid sha256:68c6eb32cc76e52855fee636e3bdbd670d33ea57b556f3d1f6d563302339570b
+test/unit/flows/package.test.ts conn-string-password sha256:ecd42e13247c45eb6b3ac3ba33c0273d97a093472a5fb8bf65fff37aabf68287
+test/unit/flows/package.test.ts assigned-secret sha256:ecd42e13247c45eb6b3ac3ba33c0273d97a093472a5fb8bf65fff37aabf68287
+test/unit/flows/package.test.ts internal-host sha256:ecd42e13247c45eb6b3ac3ba33c0273d97a093472a5fb8bf65fff37aabf68287
+test/unit/flows/pr-validation.test.ts guid sha256:d45ab90bace8a26e22c0e4360c5092617e1ad33b343d953b8a9f43f885132257
+
+# Same public Microsoft App Service v4 task ID; parameter-resolution compatibility, no private target values.
+src/main/flows/app-service-target.ts guid sha256:51c98379263f9453378786e0647215e8f9ede426734dd83ea35fa9acd23402b7
+# Synthetic contoso test URLs retained in the routine write-retry regression fixture (ADR 0164).
+test/unit/flows/devops-resources.test.ts internal-host sha256:ac6e8e3ba68a27cebcf8ff9833f704a00d27336abcf8450e7a4a93a7d2a34f7b
+test/unit/flows/devops-resources.test.ts internal-host sha256:892d482a816636b60c0c8d259656a0c23a5ddf35df651bdeb1319ee66d5a4a94
+
+test/unit/flows/devops-resources.test.ts internal-host sha256:3614449f7df98c8e010c88a7ee5fcca148b4a7d6cbd398016a4c2efc8a78d574
+test/unit/flows/devops-resources.test.ts internal-host sha256:6568f12429dbdb43a9ed26d7dd811dbbf57693f4ff203a20f65eb1f4a8481591
+
+# Synthetic browser origin/credential fixtures, never real accounts (ADR 0165).
+test/unit/browser-routine-policy.test.ts url-credentials sha256:4884b5d25de13e0540b2a99e3d3ee341b97b9bcf2e8ecf52fe1981f7b2953d3a
+test/unit/browser-routine-policy.test.ts email sha256:4884b5d25de13e0540b2a99e3d3ee341b97b9bcf2e8ecf52fe1981f7b2953d3a
+test/unit/browser-site-vault.test.ts assigned-secret sha256:9fb301d404967ad951504c0b61b99883e216ca43653bf98b8f1848e01f6890ee
+test/unit/flows/browser-write.test.ts url-credentials sha256:3bb14568f2bb15b549647e85f6ab429da2eac66daae0bbd7d6a4e8f5f303149b
+test/unit/flows/browser-write.test.ts email sha256:3bb14568f2bb15b549647e85f6ab429da2eac66daae0bbd7d6a4e8f5f303149b
+test/unit/log.test.ts assigned-secret sha256:6bc1441b9e4d2e63366cef188a6de7414e5c7a344871d328bd51a4906b85abef
+test/unit/browser-site-vault.test.ts assigned-secret sha256:d775d7d97fdce3f9018dd34ca46e13543afa2401420f98850ed43a4965cc1bd0
+packages/routine-runtime/src/devops-host/app-service-target.ts guid sha256:bd1fb5655f951e404f8ab0b800720f7ad5be1a8a8e73d682606d8f3d404839a1
+packages/routine-runtime/src/devops-host/pr-validation.ts guid sha256:d5b439c4cd2a35d3eb76afaa80cf4410dcfb409c059aed8d2db717896cc8e740
+docs/screenshots/browser.webp binary-media sha256:5ac0906fa5ed67bb9a4deb199551c7cf20a7e8e0b2a37bf409cdf666c2a5ec82
+docs/screenshots/plan.webp binary-media sha256:c3a2737eb6c09195f6f3c84f32903f4e2670119b33526509424b62af229fb1d5
+docs/screenshots/costs.webp binary-media sha256:c2e6d6733dafe8e3aba50a5f8d71a8fe01e304d65db927b9baa526505a0956bc
+docs/screenshots/log.webp binary-media sha256:bf886acf340ca87e8333357bca9e40a6e6ba4576bd1f09b08c51097da748de19
+docs/screenshots/maintenance.webp binary-media sha256:31b8c57c2566d1c12f8dead6636ce248a4e6076e8ba237243945298d753d0a5c
+docs/screenshots/recordings.webp binary-media sha256:0e59c548704e07ea65a8127cd82faf8e98c790e4f284daf846b5b6855ab62b2c
+docs/screenshots/voice.webp binary-media sha256:dfef5aa0b0c398e368da97ff687b3adf306815a8f6a17f52ad5437464e72acd6
+docs/screenshots/browser.webp binary-media sha256:5eaff58a351e5ac3c99c37c116111c3d312d9446a0eccbf39ebb50b7285f049f
+docs/screenshots/quality.webp binary-media sha256:84d7c0e4556c286c007a96e6ea20a464dff969fa2f3cae4cd7e6f2f29c55ef67
+docs/screenshots/classifiers.webp binary-media sha256:c373af9f5cea7ae768d995d9ae1d8dc02629d61c5046781a7d8f41680070f192
+docs/screenshots/learn.webp binary-media sha256:f924f87635f8a3f314c3e84d0f7ab087d4ef858439abd7ff646a7060f2925556
+docs/screenshots/voice-talk.webp binary-media sha256:0e15064bc3745001380ea1eba658c6ca0ffd199e72b1bab1b0d1f09d92c0a2c5
+docs/screenshots/browser.webp binary-media sha256:38a04f70c5a5844bfb81c169cc8548fda7140bc0865c8636eccc83271fdd3b93
+docs/screenshots/costs.webp binary-media sha256:2da424a34ded09107c96ad25ae2ab87e32811031351733c09fcbb929ebef2a1b
+docs/screenshots/plan.webp binary-media sha256:44f62f43c8475cb3ce56083475d6f683736df7cf8af957a81ef8f532b449bda1
+docs/screenshots/quality.webp binary-media sha256:193a6b6456bb7face63726135e53ba0b2cd050ecba130d5aa471c5383ccb69ca
+docs/screenshots/settings.webp binary-media sha256:744a4afd60d25b6469b8f7038bef2518a839d8ac8be534d8fd215a58042126f3
+docs/screenshots/trends.webp binary-media sha256:22647d387d134c1c062554bf3ec3f44846750de62ab7f2f24bbc02c7dfc4803c
+docs/screenshots/orchestrator.webp binary-media sha256:cc2e77678aa56c212252c0f42134192cc39548ee8fabdd5f2e68d20dd541532d
+docs/screenshots/browser.webp binary-media sha256:a664370ea1b01a69287a81aaefd09abaa858df0e88aed5f1f88dec8e8be5f9a5
+docs/screenshots/orchestrator-flash.webp binary-media sha256:e0ca9ac3115b7d51698347d1527f6ae9d8a4d472d5aedf73262a0a1d9c23c59d
+docs/screenshots/reactions.webp binary-media sha256:33be0c39021249d06e49b44ada583d9bed2a2dc9d05d6b0c2fd6c0b55969a143
+docs/screenshots/voice.webp binary-media sha256:a55d6cb78bc29942028674bc8c4fc55c747440326555c505252284a8a89a6f67
+docs/screenshots/voice-talk.webp binary-media sha256:4fdb22c888c83c2d065e89c7c82c30f1c94557ae1c81a9ff0d50102038d2cc2a
+# The previous connectors.webp, settings.webp and learn.webp, already published on main: the Impara explain-mode
+# branch commits made before its merge of main still carry them, and the push guard scans every pushed commit.
+docs/screenshots/connectors.webp binary-media sha256:374fe4d1533fbe1f0836b33036c0f8de358c39f83c1f8537bcc550b279e38a7e
+docs/screenshots/settings.webp binary-media sha256:5c40b9865aaf4dcc90d13da075f957bd29da31fa6c43f073fd4a8c2b45700138
+docs/screenshots/learn.webp binary-media sha256:33fa3921352e4b8e35de5cc881d03ca3cd230d935537ffc01fbaad9a5e10e0de
+# The README shots retaken on main with the WCAG AA contrast tokens.
+docs/screenshots/classifiers.webp binary-media sha256:474c5ebfed73c278fc04214dde23bbd7a044b05bf822541b61e26bda278a6abc
+docs/screenshots/learn.webp binary-media sha256:4986355edfcf100038c81d33f2a77c0dfecfa2095b983330c158dd6a0c4f4af6
+docs/screenshots/voice-talk.webp binary-media sha256:8190b88aa981a2fd0ebf04453e86ed6e4a73aceebbb178f5491826e213c2a221
+docs/screenshots/browser.webp binary-media sha256:38a04f70c5a5844bfb81c169cc8548fda7140bc0865c8636eccc83271fdd3b93
+docs/screenshots/costs.webp binary-media sha256:1ba3f6ebf22d7bd95edf6325f2ff9aef356500158e62822ca2587b9feb9b4a97
+docs/screenshots/plan.webp binary-media sha256:8ea7246d76bd61e319b9c58c168a3065e143867d317debf206d6f04a7a595d7f
+docs/screenshots/quality.webp binary-media sha256:165e620973a561e44277efe0023a72f40023a678065f8289176d642caee57efa
+docs/screenshots/settings.webp binary-media sha256:68b4dff50f89d640945652f5955f8aba57c140738bb1689fe64c4ca290ccd865
+docs/screenshots/trends.webp binary-media sha256:977fd7a015792356975118893d2306a784ef8f5ae7c51ed14ccbf3dc58ede4ad
+docs/screenshots/orchestrator.webp binary-media sha256:e24063bb4008af0ca80f0f764fc2c6c60f1dd28a18a2140f84072da04ec0754b
+docs/screenshots/browser.webp binary-media sha256:2f35624ec4e7928dfa421935af71894b2d816f3aa057e0770ba8e6057a061275
+docs/screenshots/orchestrator-flash.webp binary-media sha256:86364429f0c78c7044005f8203be716cb75228f284442d6d66b526221ae47d94
+docs/screenshots/reactions.webp binary-media sha256:1f2638fbfbecce19cb4fb022ae6354ffcfa2a12dcfb5d44f18c3d1a929fa169f
+docs/screenshots/voice.webp binary-media sha256:dfef5aa0b0c398e368da97ff687b3adf306815a8f6a17f52ad5437464e72acd6
+docs/screenshots/voice-talk.webp binary-media sha256:385bc1171df566c750990e0061f4c111e1118eb645280e903b0b9ef34edd6f7b
+docs/screenshots/connectors.webp binary-media sha256:c8c97354da596f47219b9a8be3e5dfabacc2edac6a69ecdd9c5d2cc60ec264f5
+docs/screenshots/settings.webp binary-media sha256:051f83ae302cb5ff61b3444114a8605646d74be38bc1281192fae072e91620f7
+docs/screenshots/worktrees.webp binary-media sha256:02d0aac0e008948664f3b71f187c42bb396b5e9ce555f12b76d81960efee8555
+docs/screenshots/agent-levels.webp binary-media sha256:cf683fded2380504efeb5f1f235db8cbd909c712be19911e1f2b710956b9fc82
+docs/screenshots/agents.webp binary-media sha256:c2a472fe7d7700e9e05d976b84b0d8b294b97bfd9c6fc047b1678c3c9f2b87fe
+docs/screenshots/brain-map.webp binary-media sha256:3c3157a27a4883c0d630f76e7d7a692adeae1b70433245c02fe0b69478ee357b
+docs/screenshots/brain-scripts.webp binary-media sha256:a690bb6467ea9b5988fca0b7cdba5121dc7742ae35bb1224ced741478e7d8e4d
+docs/screenshots/connectors.webp binary-media sha256:293b652bafbd9aa72f2dd14bcf4dc0b85cceb3af262c9dddd32e0076d92fd5aa
+docs/screenshots/grindhouse.webp binary-media sha256:74a358add7fb091323db21104564c99673cb6a565103a5200c909a39d379753a
+docs/screenshots/log.webp binary-media sha256:3dd48ced6db57bb8321da8ba2c64151f4146acc9a7e7b97303218fa7dcc973ff
+docs/screenshots/maintenance.webp binary-media sha256:66a65875bab0d49175b0b7ce5eb45ee4cada1c1b8981b4e7371f892a7dfba3b8
+docs/screenshots/memory.webp binary-media sha256:9729674b75f23ee900a040151d58e4a02c5708b87253b8360faf0547e7dd0600
+docs/screenshots/recordings.webp binary-media sha256:78ce822901ee69147556607fc00bdda7bc72afab7e42499c2d42ea6509430013
+docs/screenshots/agent-levels.webp binary-media sha256:cf683fded2380504efeb5f1f235db8cbd909c712be19911e1f2b710956b9fc82
+docs/screenshots/agents.webp binary-media sha256:c2a472fe7d7700e9e05d976b84b0d8b294b97bfd9c6fc047b1678c3c9f2b87fe
+docs/screenshots/brain-map.webp binary-media sha256:3c3157a27a4883c0d630f76e7d7a692adeae1b70433245c02fe0b69478ee357b
+docs/screenshots/brain-scripts.webp binary-media sha256:a690bb6467ea9b5988fca0b7cdba5121dc7742ae35bb1224ced741478e7d8e4d
+docs/screenshots/connectors.webp binary-media sha256:293b652bafbd9aa72f2dd14bcf4dc0b85cceb3af262c9dddd32e0076d92fd5aa
+docs/screenshots/grindhouse.webp binary-media sha256:74a358add7fb091323db21104564c99673cb6a565103a5200c909a39d379753a
+docs/screenshots/log.webp binary-media sha256:3dd48ced6db57bb8321da8ba2c64151f4146acc9a7e7b97303218fa7dcc973ff
+docs/screenshots/maintenance.webp binary-media sha256:66a65875bab0d49175b0b7ce5eb45ee4cada1c1b8981b4e7371f892a7dfba3b8
+docs/screenshots/memory.webp binary-media sha256:9729674b75f23ee900a040151d58e4a02c5708b87253b8360faf0547e7dd0600
+docs/screenshots/recordings.webp binary-media sha256:78ce822901ee69147556607fc00bdda7bc72afab7e42499c2d42ea6509430013
+docs/screenshots/agent-levels.webp binary-media sha256:cf683fded2380504efeb5f1f235db8cbd909c712be19911e1f2b710956b9fc82
+docs/screenshots/agents.webp binary-media sha256:c2a472fe7d7700e9e05d976b84b0d8b294b97bfd9c6fc047b1678c3c9f2b87fe
+docs/screenshots/brain-map.webp binary-media sha256:3c3157a27a4883c0d630f76e7d7a692adeae1b70433245c02fe0b69478ee357b
+docs/screenshots/brain-scripts.webp binary-media sha256:a690bb6467ea9b5988fca0b7cdba5121dc7742ae35bb1224ced741478e7d8e4d
+docs/screenshots/connectors.webp binary-media sha256:293b652bafbd9aa72f2dd14bcf4dc0b85cceb3af262c9dddd32e0076d92fd5aa
+docs/screenshots/grindhouse.webp binary-media sha256:74a358add7fb091323db21104564c99673cb6a565103a5200c909a39d379753a
+docs/screenshots/log.webp binary-media sha256:3dd48ced6db57bb8321da8ba2c64151f4146acc9a7e7b97303218fa7dcc973ff
+docs/screenshots/maintenance.webp binary-media sha256:66a65875bab0d49175b0b7ce5eb45ee4cada1c1b8981b4e7371f892a7dfba3b8
+docs/screenshots/memory.webp binary-media sha256:9729674b75f23ee900a040151d58e4a02c5708b87253b8360faf0547e7dd0600
+docs/screenshots/recordings.webp binary-media sha256:78ce822901ee69147556607fc00bdda7bc72afab7e42499c2d42ea6509430013
+# Same synthetic redaction fixtures; tests that spawned a real process removed (2026-11-09).
+test/unit/log.test.ts assigned-secret sha256:a1a3e8c4470edaaf8b683fb5e89a8fe08eb78ee05d9499b33c08d0456e05205d
+# runner.test.ts again: an unused 30 s polling helper removed (2026-11-09).
+test/unit/runner.test.ts internal-host sha256:df848e1333e97c486cc6dfc50b3fa84541606fdc62344278b0d3d0884db5e714
+docs/screenshots/memory.webp binary-media sha256:965ede68b03b7af852ab146fbef9b0c0babc8ecade1f768c09323b98510871ff
+docs/screenshots/brain-scripts.webp binary-media sha256:9291948818c2ffecc86e044c0a644c63441faa1515fccd627bb7dfea9f503da5
+docs/screenshots/maintenance.webp binary-media sha256:c72672504fda2586138d85bde21728c2a1670b3361cabfa5e5dea8710d9f5083
+docs/screenshots/memory.webp binary-media sha256:d51550ba279e32002ac02357150729295c08e82f7aa0719be900470a4c9289f5
+docs/screenshots/plan.webp binary-media sha256:8e886403966dc526be0a2032137f8db0435396783928db92bc209fd6210e8228
+docs/screenshots/plan.webp binary-media sha256:ad85834de866b0516a3bdbf011ddf6ef6b860930c81d37908b0ed58d285d8784
+# The README shots of the AI News (ADR 0265): the News tab, and Learn retaken with the Impara tabs.
+docs/screenshots/learn.webp binary-media sha256:ad46b388f5cf9056d7eed8a4dd7ac1446936e0353de3404d2c3c175a27c1799f
+docs/screenshots/news.webp binary-media sha256:30729ff776c39b084b34619d2b47f91b14c7c12325b9c30e0f0ae7bf7242a06e
+# The News test checks that article lookups refuse private addresses: the addresses are the test data.
+test/unit/news-service.test.ts ipv4-private
+docs/screenshots/agent-levels.webp binary-media sha256:5616144d6d53c120025bb64881100a61050a2687a15790d9f7cce23a82e918cb
+docs/screenshots/agents.webp binary-media sha256:6b5689c9eff52ef4dd981026df4a8c91a695350077aa38ef77efa7b78f09d31c
+docs/screenshots/brain-map.webp binary-media sha256:00b9cd04574a952e8a9414723d8edad0aae505e88dbe2a43d633cfd4a5d66626
+docs/screenshots/browser.webp binary-media sha256:a41f4a3e25cf5d7e04c85ab2c64c20f014b628ab94b36908cf96a0113b35c0b1
+docs/screenshots/classifiers.webp binary-media sha256:1e64f2a5b2f3448858c90a1bccec76e79e194dc65115a2accac0ed01998003cc
+docs/screenshots/connectors.webp binary-media sha256:382614d87fb7200edc2d24e4684a10b3fc5a9bf0dec2d7005aa451257fb350c1
+docs/screenshots/costs.webp binary-media sha256:b2944c600dcfc1bb617870969f425b9cd4d83c3a7362c8d083cf8fdcea2b0c14
+docs/screenshots/grindhouse.webp binary-media sha256:95b311da319082bff44a667da7a3b707ad31f7b5acd0bd1d5efc667f26dfd3c0
+docs/screenshots/log.webp binary-media sha256:f7b0d5d04648f191b400ba8d5ccf805e02478e645e842d35551870da525a4e41
+docs/screenshots/maintenance.webp binary-media sha256:f1ec5a8b351c02c638e34447922879c91dc264fb0ca100cebf077d8f11e0a012
+docs/screenshots/memory.webp binary-media sha256:9e22ed4da48a63e4f66a1bf0867b04daef4ce78a9f4c280ff7ccc4374dc459fc
+docs/screenshots/news.webp binary-media sha256:121bced6e501fdd88f759b0b62daa8d6911e471d87cedb9411ef4f2fbb7f9156
+docs/screenshots/news.webp binary-media sha256:c0722943eded9d220425cd03f6fa0ad4db9dc1029b47f1a48d70eff7c60d2bbb
+docs/screenshots/orchestrator-flash.webp binary-media sha256:ded6841cd342dd1d538119dda9c55be17c1146eee5708bd8c66685dad1e52b59
+docs/screenshots/orchestrator.webp binary-media sha256:925c9a78deaeada2a5acc3bc53dd7b27d69a12ca37ed45635eb04da239f76f6f
+docs/screenshots/plan.webp binary-media sha256:d67da03458111194c07f55797fb30412383b85918bd8111a5705ce30d5357f5f
+docs/screenshots/reactions.webp binary-media sha256:910605748f938055ea6f5f4b35fb9fb5a989841cfdaa763d04a84e03c6d4274f
+docs/screenshots/recordings.webp binary-media sha256:6641fd6042f6190a02a3ecaaddd87decd72df107b87fcb2484728791254502bd
+docs/screenshots/settings.webp binary-media sha256:4e404d6b90ec931197bf860a61b5af6e11809f97986b2f6094b4892a7a97e53d
+docs/screenshots/trends.webp binary-media sha256:511c95023143641cf3d428a2d8b286e1008912a0cc3a4485bd930cb115b4156e
+docs/screenshots/voice-talk.webp binary-media sha256:00abb85508230183e39ec804fe87df215b398720074c913551bdfb4a495159f4
+docs/screenshots/voice.webp binary-media sha256:ca53e0b09d67417ddc43ad386bee49af695eeb3bee826215cee06210202559e3
+docs/screenshots/worktrees.webp binary-media sha256:bbc8057105c6de786c22fc727f6add750f304be660b6918b96c43fac266d8fe9
+docs/screenshots/quality.webp binary-media sha256:1e64f2a5b2f3448858c90a1bccec76e79e194dc65115a2accac0ed01998003cc
+docs/screenshots/grindhouse.webp binary-media sha256:f1391752d5cb1edfef4052d0a025b98ea7f1b59e3612318ed0b445a8039292bd
+docs/screenshots/project-map.webp binary-media sha256:feaa080b8edb644f7247c1067a89ec6ec3bd09b6472c0f2a734847af99ae791d
+docs/screenshots/project-map.webp binary-media sha256:dd3173b14a81503fdbf8512df4bbdabf60cb8e291665dcd9440b48c1aeea911b

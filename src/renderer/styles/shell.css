@@ -1,0 +1,149 @@
+/* Styles of the navigation shell, built on styles/tokens.css: the left navigation with badges, back/forward and the
+   bell in the top bar, the frame of brain pages, the docked Orchestrator, the full-screen map layer, the highlight of an
+   element reached through a link, the notification center, and the event toasts of the global layer.
+   Imported once by main.tsx (after app.css). */
+
+/* ---------------------------------------------------------------- navigation shell */
+.shell { flex: 1; min-height: 0; display: flex; }
+.main-col { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.sidebar {
+  flex: none; width: 196px; display: flex; flex-direction: column; gap: 2px; padding: 8px 6px; background: var(--bg-2); border-right: 1px solid var(--border);
+  min-height: 0; transition: width var(--dur) var(--ease);
+}
+.nav-group { display: flex; flex-direction: column; gap: 1px; }
+.nav-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+.nav-title { padding: 6px 10px 4px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-4); }
+.nav-sep { height: 1px; background: var(--border); margin: 6px 4px; }
+.nav-item {
+  position: relative; display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 8px 0 10px; border: 0; border-radius: var(--r-s); background: none;
+  color: var(--text-2); font-size: 13px; cursor: pointer; text-align: left; min-width: 0; white-space: nowrap; transition: background-color var(--dur-fast), color var(--dur-fast);
+}
+.nav-item:hover { background: var(--surface-2); color: var(--text); }
+.nav-item.on { background: var(--surface-3); color: var(--text); font-weight: 500; }
+.nav-item.on::before { content: ""; position: absolute; left: -6px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
+.nav-icon { width: 18px; flex: none; display: grid; place-items: center; color: inherit; }
+.nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.nav-badge { flex: none; display: inline-grid; place-items: center; min-width: 18px; height: 17px; padding: 0 5px; border-radius: 99px; background: var(--accent-bg); color: var(--accent); font-size: 10.5px; font-weight: 700; }
+.nav-badge.amber { background: var(--amber); color: var(--on-amber); }
+.nav-badge.warn { background: var(--amber-bg); color: var(--amber); box-shadow: inset 0 0 0 1px var(--amber-line); }
+.hist-nav { display: inline-flex; gap: 0; flex: none; }
+.hist-nav .icon-btn:disabled { opacity: 0.35; cursor: default; }
+.hist-nav .icon-btn:disabled:hover { background: none; color: var(--text-3); }
+.bell { position: relative; width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: var(--r-s); border: 0; background: none; color: var(--text-3); cursor: pointer; }
+.bell:hover, .bell.on { background: var(--surface-2); color: var(--text); }
+.bell-n { position: absolute; top: 2px; right: 1px; min-width: 16px; height: 15px; padding: 0 4px; border-radius: 99px; background: var(--accent); color: var(--on-accent); font-size: 10px; font-weight: 700; display: grid; place-items: center; }
+.bell-dnd { position: absolute; bottom: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--violet); box-shadow: 0 0 0 2px var(--bg-2); }
+.workspace.no-orchestrator { grid-template-columns: minmax(0, 1fr); }
+/* ------------------------------------------------- the Orchestrator widget, docked bottom-right (OrchestratorOverlay.tsx, ADR 0028) */
+/* its room (--orchestrator-r expanded, --orchestrator-b collapsed; App.tsx) is left free by the workspace, the map and the questions window */
+.workspace { padding-right: calc(var(--gap) + var(--orchestrator-r, 0px)); padding-bottom: calc(var(--gap) + var(--orchestrator-b, 0px)); }
+.map-layer { padding-right: var(--orchestrator-r, 0px); padding-bottom: var(--orchestrator-b, 0px); }
+.orchestrator-dock { position: fixed; right: 8px; bottom: 8px; z-index: 35; }
+.orchestrator-dock.collapsed { display: flex; justify-content: flex-end; }
+.orchestrator-dock-bar {
+  display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px 0 9px; border-radius: var(--r-m);
+  border: 1px solid var(--orchestrator-line-2); background: var(--orchestrator-bg); color: var(--violet); font: inherit; font-size: 13px; font-weight: 600;
+  box-shadow: var(--shadow-pop); cursor: pointer; animation: dockIn var(--dur-slow) var(--ease);
+}
+.orchestrator-dock-bar:hover { background: var(--orchestrator-surface); }
+.orchestrator-dock-bar:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus-ring); }
+.orchestrator-dock-bar.waits { border-color: var(--amber-line); }
+.orchestrator-dock-bar > svg:last-child { color: var(--text-3); }
+.orchestrator-unread { height: 18px; padding: 0 7px; border-radius: 99px; background: var(--violet-bg); color: var(--violet); font-size: 11px; font-weight: 600; display: inline-grid; place-items: center; white-space: nowrap; }
+.orchestrator-ov {
+  display: flex; flex-direction: column; min-width: 0; border-radius: var(--r-l);
+  background: var(--orchestrator-bg); border: 1px solid var(--orchestrator-line-2); box-shadow: var(--shadow-pop);
+  opacity: var(--orchestrator-op, 1); transition: opacity var(--dur) var(--ease); animation: dockIn var(--dur-slow) var(--ease);
+}
+.orchestrator-ov:hover, .orchestrator-ov:focus-within, .orchestrator-ov.moving { opacity: 1; }
+.orchestrator-ov.moving { user-select: none; transition: none; }
+.orchestrator-bar { flex: none; display: flex; align-items: center; gap: 4px; padding: 4px 6px 0 18px; }
+.orchestrator-grip { min-width: 28px; align-self: stretch; } /* always room to double-click */
+.orchestrator-badge { min-width: 17px; height: 16px; padding: 0 5px; border-radius: 99px; background: var(--amber); color: var(--bg); font-size: 10.5px; font-weight: 700; display: inline-grid; place-items: center; }
+.orchestrator-body { flex: 1; min-height: 0; display: flex; }
+.orchestrator-body > .tile { flex: 1; border-radius: 0 0 var(--r-l) var(--r-l); border-left: 0; border-right: 0; border-bottom: 0; }
+.orchestrator-resize { position: absolute; left: 0; top: 0; width: 16px; height: 16px; cursor: nwse-resize; touch-action: none;
+  background: linear-gradient(135deg, transparent 21%, var(--orchestrator-line-2) 21%, var(--orchestrator-line-2) 28%, transparent 28%, transparent 38%, var(--orchestrator-line-2) 38%, var(--orchestrator-line-2) 45%, transparent 45%); border-radius: var(--r-l) 0 0 0; }
+@keyframes dockIn { from { opacity: 0; transform: translateY(6px); } to { opacity: var(--orchestrator-op, 1); transform: none; } }
+
+/* ---------------------------------------------------------------- brain pages frame (the pages: src/renderer/brain) */
+.page-frame { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-l); overflow: hidden; animation: zoomIn var(--dur-slow) var(--ease); }
+.page-bar { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); min-width: 0; }
+.page-bar h2 { margin: 0; font: 600 15px var(--font-display); white-space: nowrap; }
+.page-hint { font-size: 11.5px; color: var(--text-3); display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
+.page-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.page-body > .brain-page { flex: 1; padding: 16px; }
+.map-layer { position: fixed; inset: 0; z-index: 30; background: var(--bg); display: flex; animation: fadeIn var(--dur) var(--ease); }
+/* the brain map is fixed full-window on its own; in the layer it fills the padded box, beside the Orchestrator column */
+.map-layer > .bx-map { flex: 1; min-width: 0; position: relative; inset: auto; }
+
+/* an element reached through a link: a short, calm pulse */
+.sb-highlight { animation: sbHighlight 1500ms var(--ease) !important; }
+@keyframes sbHighlight {
+  0%, 60% { box-shadow: 0 0 0 3px var(--accent-line), 0 0 0 7px color-mix(in srgb, var(--accent) 14%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* ---------------------------------------------------------------- notification center */
+.center {
+  position: fixed; z-index: 45; top: calc(var(--topbar-h) + 6px); right: 8px; bottom: 8px; width: min(440px, calc(100vw - 24px)); display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--r-xl); box-shadow: var(--shadow-pop); animation: dockIn var(--dur-slow) var(--ease); overflow: hidden;
+}
+.nc-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 10px 8px 16px; }
+.nc-head h2 { margin: 0; font: 600 15px var(--font-display); }
+.nc-dnd { position: relative; }
+.nc-dnd-menu { position: absolute; right: 0; top: 30px; z-index: 2; display: flex; flex-direction: column; min-width: 160px; padding: 4px; border-radius: var(--r-m); background: var(--surface-2); border: 1px solid var(--border-2); box-shadow: var(--shadow-pop); }
+.nc-dnd-menu button { height: 30px; text-align: left; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--text); cursor: pointer; }
+.nc-dnd-menu button:hover { background: var(--surface-4); }
+.nc-filters { flex: none; display: flex; gap: 4px; flex-wrap: wrap; padding: 0 14px 10px; border-bottom: 1px solid var(--border); }
+.nc-filters button { height: 24px; padding: 0 9px; border-radius: 99px; border: 1px solid var(--border-2); background: none; color: var(--text-2); font-size: 12px; cursor: pointer; display: inline-flex; gap: 5px; align-items: center; }
+.nc-filters button.on { background: var(--accent-bg); border-color: var(--accent-line); color: var(--text); }
+.nc-n { color: var(--text-4); font-size: 11px; }
+.nc-list { flex: 1; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 6px; }
+.nc-item { position: relative; display: flex; align-items: stretch; border-radius: var(--r-s); }
+.nc-item:hover { background: var(--surface-2); }
+.nc-item.unread::before { content: ""; position: absolute; left: 4px; top: 16px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.nc-main { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 10px; padding: 9px 6px 9px 16px; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; border-radius: var(--r-s); }
+.nc-kind { flex: none; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 99px; background: var(--surface-3); margin-top: 1px; color: var(--text-2); }
+.nc-kind.tone-blue { color: var(--blue); }
+.nc-kind.tone-red { color: var(--red); }
+.nc-kind.tone-green { color: var(--green); }
+.nc-kind.tone-amber { color: var(--amber); }
+.nc-kind.tone-violet { color: var(--violet); }
+.nc-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.nc-text b { font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nc-item:not(.unread) .nc-text b { color: var(--text-2); }
+.nc-text span { font-size: 12px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nc-age { flex: none; font-size: 11px; color: var(--text-4); padding-top: 2px; }
+.nc-tools { flex: none; display: flex; align-items: center; padding-right: 4px; opacity: 0; transition: opacity var(--dur-fast); }
+.nc-item:hover .nc-tools, .nc-item:focus-within .nc-tools { opacity: 1; }
+.nc-empty { margin: 0; padding: 32px 20px; text-align: center; color: var(--text-3); }
+.nc-foot { flex: none; padding: 8px 16px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--text-3); display: flex; gap: 6px; align-items: center; }
+
+/* ---------------------------------------------------------------- event toasts in the global layer (tier b) */
+/* drawn as the app's one notice card: styles/notif.css */
+
+/* ---------------------------------------------------------------- live turn: the spark and what the chat does now */
+.typing { flex: none; max-width: 100%; display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-3); padding: 2px 2px 0; }
+/* a turning, breathing spark (lib/typing-line.ts has the words: what the chat does now): transform and opacity only, so the compositor draws it
+   without restyling the page (the "Lag nell'app" rule of lib/beat.ts); paused while the window is hidden, still with
+   reduced motion */
+.typing-spark { flex: none; display: inline-grid; place-items: center; width: 14px; height: 14px; color: var(--amber); will-change: transform; animation: typing-spark 1.6s cubic-bezier(.45,.05,.55,.95) infinite; }
+.typing-spark svg { filter: drop-shadow(0 0 3px color-mix(in srgb, var(--amber) 55%, transparent)); }
+@keyframes typing-spark { 0% { transform: rotate(0deg) scale(.78); opacity: .7; } 50% { transform: rotate(180deg) scale(1.08); opacity: 1; } 100% { transform: rotate(360deg) scale(.78); opacity: .7; } }
+.typing-line { animation: typing-line 420ms cubic-bezier(.2,.8,.2,1) both; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* a long step never widens its strip */
+@keyframes typing-line { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+html[data-hidden] .typing-spark, html[data-hidden] .spin { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .typing-spark, .typing-line, .spin { animation: none; } }
+
+/* ---------------------------------------------------------------- review fixes */
+/* a long command or question never pushes the layer's buttons out of view */
+.layer-card .ask-cmd { max-height: 160px; overflow: auto; }
+.layer-card .ask-q { max-height: 110px; overflow: auto; }
+.layer-card .ask-opts { max-height: 300px; overflow-y: auto; }
+/* a browser tab without a snapshot (the real browser module has none yet): its title and address, not a spinner */
+.viewport-info { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 4px; padding: 16px; text-align: center; color: #4b5568; }
+.viewport-info b { font-size: 13px; color: #1b2433; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.viewport-info span { font: 11.5px var(--mono); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* one toast area: the brain pages' own toasts are relayed into the app's (App.tsx) */
+.app .bx-toast, .map-layer .bx-toast { display: none !important; }

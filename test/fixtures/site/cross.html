@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="it">
+<head><meta charset="utf-8"><title>Esterno</title></head>
+<body style="font-family: system-ui, sans-serif; background: #eef6ff">
+  <h3>Frame esterno</h3>
+  <label for="code">Codice</label> <input id="code">
+  <button id="ok" onclick="fetch('/api/cross?c=' + encodeURIComponent(code.value)).then(r => r.json()).then(j => { out.textContent = 'Codice: ' + j.code; })">Conferma codice</button>
+  <button id="xconfirm" onclick="out.textContent = 'Frame conferma: ' + confirm('Confermi dal frame?')">Conferma nel frame</button>
+  <p id="out"></p>
+</body>
+</html>

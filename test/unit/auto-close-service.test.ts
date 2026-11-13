@@ -1,0 +1,128 @@
+// Main lifecycle deadline regression tests: injected clock, no timers, models or actual chat closure.
+import { describe, expect, it } from 'vitest';
+import { AUTO_CLOSE_WARNING_MS as WARNING, AutoCloseService, type AutoCloseCandidate, type AutoCloseDeps } from '../../src/main/chats/auto-close';
+import type { AutoClosePresence } from '../../src/shared/auto-close';
+
+function fixture(opts: { away?: boolean } = {}) {
+  let now = 1_000_000;
+  let candidate: AutoCloseCandidate = { id: 'agent', stamp: 'turn-1', activityAt: now - 900_000, eligible: true };
+  const archived: string[] = [];
+  const deps: AutoCloseDeps = { now: () => now, delayMs: () => 120_000, candidates: () => [candidate], emit: () => {}, away: () => !!opts.away, archive: async (id, _expected, valid) => { if (!valid()) return false; archived.push(id); return true; } };
+  const service = new AutoCloseService(deps);
+  const presence = (patch: Partial<AutoClosePresence> = {}) => {
+    service.setPresence([{ chatId: 'agent', draft: false, shown: false, browser: false, queued: 0, touchedAt: 0, ...patch }]);
+  };
+  const advance = (ms: number) => { now += ms; };
+  const heartbeatUntil = async (at: number) => { while (now < at) { advance(Math.min(5_000, at - now)); presence(); await service.tick(); } };
+  return { service, deps, archived, presence, advance, heartbeatUntil, now: () => now, change: (p: Partial<AutoCloseCandidate>) => { candidate = { ...candidate, ...p }; } };
+}
+
+describe('backend automatic-close warning', () => {
+  it('never closes an old restored result immediately, and gives it a full two-minute warning', async () => {
+    const f = fixture(); f.presence();
+    const first = f.service.state()[0]!;
+    expect(first.deadline).toBe(f.now() + WARNING); expect(first.warningStartedAt).toBe(f.now());
+    await f.heartbeatUntil(first.deadline! - 1); expect(f.archived).toEqual([]);
+    await f.heartbeatUntil(first.deadline!); expect(f.archived).toEqual(['agent']);
+  });
+  it('closes when the warning ends even if nobody looked at it (owner, 2026-10-23)', async () => {
+    const f = fixture(); f.presence(); const deadline = f.service.state()[0]!.deadline!;
+    await f.heartbeatUntil(deadline); expect(f.archived).toEqual(['agent']);
+  });
+  it('closes with the window hidden: a throttled renderer keeps its last holds instead of suspending the close', async () => {
+    const away = fixture({ away: true }); away.presence(); const deadline = away.service.state()[0]!.deadline!;
+    away.advance(deadline - away.now()); await away.service.tick(); expect(away.archived).toEqual(['agent']);
+    const draft = fixture({ away: true }); draft.presence({ draft: true }); draft.advance(WARNING * 3); await draft.service.tick();
+    expect(draft.archived).toEqual([]); expect(draft.service.state()[0]!.deadline).toBe(null);
+  });
+  it('fails closed when renderer heartbeat is lost or clock moves backwards', async () => {
+    const f = fixture(); f.presence(); f.advance(WARNING + 1); await f.service.tick();
+    expect(f.archived).toEqual([]); expect(f.service.state()[0]!.deadline).toBe(null);
+    f.advance(-WARNING * 2); await f.service.tick(); expect(f.archived).toEqual([]);
+  });
+  it.each(['draft', 'shown', 'browser'] as const)('cancels deadline for %s and grants a fresh warning afterwards', async hold => {
+    const f = fixture(); f.presence(); f.advance(100_000);
+    f.presence({ [hold]: true }); expect(f.service.state()[0]!.deadline).toBe(null);
+    f.presence(); expect(f.service.state()[0]!.deadline).toBeGreaterThanOrEqual(f.now() + WARNING);
+  });
+  it('keep-open invalidates stale archive reservations and a fresh warning follows', async () => {
+    const f = fixture(); f.presence();
+    f.service.keepOpen('agent'); expect(f.service.state()[0]!.keptOpen).toBe(true);
+    await f.heartbeatUntil(f.now() + WARNING * 2); expect(f.archived).toEqual([]);
+    f.service.keepOpen('agent', false); f.presence();
+    expect(f.service.state()[0]!.deadline).toBeGreaterThanOrEqual(f.now() + WARNING);
+  });
+  it('cancels on backend work/tool/child/mail/delivery guard changes', async () => {
+    const f = fixture(); f.presence();
+    f.change({ eligible: false, reason: 'Mail delivery in progress', stamp: 'delivery-1' }); await f.service.tick();
+    expect(f.service.state()[0]!.deadline).toBe(null); expect(f.archived).toEqual([]);
+  });
+  it('rechecks touch/draft acquired while archive awaits, without trusting the old renderer fade', async () => {
+    const f = fixture(); f.presence();
+    let resume: (() => void) | undefined;
+    f.deps.archive = async (_id, _reservation, valid) => { await new Promise<void>(resolve => { resume = resolve; }); if (valid()) f.archived.push('agent'); return valid(); };
+    await f.heartbeatUntil(f.now() + WARNING - 1);
+    f.advance(1); f.presence(); const closing = f.service.tick();
+    f.presence({ draft: true, touchedAt: f.now() }); resume?.(); await closing;
+    expect(f.archived).toEqual([]);
+  });
+  it('rejects backend stamp changes while the manager prepares a handoff', async () => {
+    const f = fixture(); f.presence();
+    f.deps.archive = async (_id, _reservation, valid) => { f.change({ stamp: 'new-mail', eligible: false }); expect(valid()).toBe(false); return false; };
+    await f.heartbeatUntil(f.now() + WARNING); expect(f.archived).toEqual([]);
+  });
+  it('stamps interaction on receipt and cannot move it backwards using a stale renderer timestamp', () => {
+    const f = fixture(); f.presence({ touchedAt: 9e12 });
+    const first = f.service.state()[0]!;
+    expect(first.deadline).toBe(f.now() + WARNING);
+    f.advance(1000); f.presence({ touchedAt: 0 });
+    expect(f.service.state()[0]!.deadline).toBe(first.deadline);
+  });
+  it('holds UI queue and never creates an IPC feedback loop for unchanged heartbeat state', () => {
+    const f = fixture(); let events = 0; f.deps.emit = () => { events++; };
+    f.presence(); const first = events;
+    f.presence(); f.presence(); expect(events).toBe(first);
+    f.presence({ queued: 1 }); expect(f.service.state()[0]!.deadline).toBe(null);
+  });
+  it('renews on a new positive interaction marker after renderer restart or backward wall-clock change', () => {
+    const f = fixture(); f.presence({ touchedAt: 9e12 }); const previous = f.service.state()[0]!.deadline!;
+    f.advance(1_000); f.presence({ touchedAt: 1 });
+    expect(f.service.state()[0]!.deadline).toBe(previous + 1_000);
+  });
+  it('names what a held chat waits for, and drops the label once it is eligible or kept open (ADR 0084)', () => {
+    const f = fixture();
+    f.change({ eligible: false, waitingFor: 'children', waitingN: 2, reason: 'Aspetta le sue sotto-chat' }); f.presence();
+    expect(f.service.state()[0]).toMatchObject({ deadline: null, waitingFor: 'children', waitingN: 2, reason: 'Aspetta le sue sotto-chat' });
+    f.change({ eligible: false, waitingFor: 'children', waitingN: 1 }); f.presence();
+    expect(f.service.state()[0]).toMatchObject({ waitingFor: 'children', waitingN: 1 });
+    f.change({ eligible: false, waitingFor: 'answer', waitingN: undefined }); f.presence();
+    expect(f.service.state()[0]?.waitingN).toBeUndefined();
+    f.service.keepOpen('agent'); expect(f.service.state()[0]?.waitingFor).toBeUndefined();
+    f.service.keepOpen('agent', false); expect(f.service.state()[0]?.waitingFor).toBe('answer');
+    f.change({ eligible: true, waitingFor: undefined, stamp: 'turn-2' }); f.presence();
+    expect(f.service.state()[0]?.waitingFor).toBeUndefined();
+    expect(f.service.state()[0]?.deadline).not.toBeNull();
+  });
+
+  it('never closes a parent while a deeper chat of its tree is still open (a child would jump out on its own)', async () => {
+    let now = 1_000_000;
+    const open = new Set(['parent', 'child']);
+    const all: AutoCloseCandidate[] = [
+      { id: 'parent', stamp: 'p', activityAt: now - 900_000, eligible: true, depth: 0, tree: 'parent' },
+      { id: 'child', stamp: 'c', activityAt: now - 900_000, eligible: true, depth: 1, tree: 'parent' },
+    ];
+    const archived: string[] = [];
+    const service = new AutoCloseService({ now: () => now, delayMs: () => 120_000, candidates: () => all.filter(c => open.has(c.id)), emit: () => {},
+      archive: async (id, _e, valid) => { if (!valid()) return false; archived.push(id); open.delete(id); return true; } });
+    let childDraft = true; // the user writes in the child: it is held, the parent is due alone
+    const beat = () => service.setPresence([...open].map(id => {
+      return { chatId: id, draft: id === 'child' && childDraft, shown: false, browser: false, queued: 0, touchedAt: 0};
+    }));
+    for (let i = 0; i < 40; i++) { beat(); await service.tick(); now += 5_000; }
+    expect(archived).toEqual([]);
+    childDraft = false;
+    for (let i = 0; i < 80 && open.size; i++) { beat(); await service.tick(); now += 5_000; }
+    expect(archived).toEqual(['child', 'parent']);
+  });
+});
+

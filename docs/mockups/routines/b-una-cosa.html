@@ -1,0 +1,410 @@
+<!doctype html>
+<!-- Routine page mockup B, "Una cosa alla volta": v2 after the owner picked B: tabs Adesso / Routine / Storico, one card
+     only for what needs him, runs that heal themselves, every routine explained. Static proposal, no app code. -->
+<html lang="it"><head><meta charset="utf-8"><title>Routine · proposta B</title>
+<link rel="stylesheet" href="mockup.css">
+<style>
+.focus { align-self: center; width: 860px; position: relative; }
+.focus .decision { padding: 18px 22px; }
+.pager { display: flex; justify-content: center; gap: 6px; align-items: center; color: var(--text-4); font-size: var(--fs-s); margin-top: 8px; }
+.pager i { width: 7px; height: 7px; border-radius: 50%; background: var(--surface-4); display: inline-block; }
+.pager i.on { background: var(--amber); width: 18px; border-radius: 4px; }
+.deck-shadow { position: absolute; left: 14px; right: 14px; bottom: 22px; height: 20px; border-radius: var(--r-xl); background: var(--surface-2); border: 1px solid var(--border); z-index: -1; }
+.run-btn { height: 44px; border-radius: var(--r-m); background: var(--red); color: #fff; font: 700 var(--fs-l) var(--font); display: flex; align-items: center; justify-content: center; gap: 8px; }
+.split { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 330px; gap: 16px; padding-bottom: 16px; }
+.runcard { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.segs { display: flex; gap: 3px; }
+.segs i { flex: 1; height: 6px; border-radius: 3px; background: var(--surface-4); }
+.segs i.g { background: var(--green); } .segs i.b { background: var(--blue); } .segs i.r { background: var(--red); } .segs i.p { background: repeating-linear-gradient(45deg, var(--red) 0 4px, transparent 4px 8px); opacity: .7; }
+.acc { border-top: 1px solid var(--border); padding-top: 6px; }
+.ast { display: grid; grid-template-columns: 18px 1fr auto; gap: 0 10px; padding: 6px 0; align-items: center; }
+.ast .n { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border-3); }
+.ast.done .n { background: var(--green); border-color: var(--green); }
+.ast.now .n { border-color: var(--blue); box-shadow: 0 0 0 4px var(--blue-bg); }
+.ast.prod .n { border-color: var(--red); }
+.open { margin: 2px 0 6px 28px; padding: 10px 12px; border-left: 2px solid var(--blue-line); background: var(--surface-2); border-radius: 0 var(--r-m) var(--r-m) 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: var(--fs-s); }
+.tile { padding: 12px; display: flex; gap: 10px; align-items: center; }
+.tile .ic { width: 34px; height: 34px; border-radius: var(--r-m); display: grid; place-items: center; background: var(--blue-bg); color: var(--blue); font-size: 16px; }
+.rrow { display: grid; grid-template-columns: 34px 1fr auto; gap: 4px 8px; padding: 9px 4px; border-bottom: 1px solid var(--border); align-items: center; }
+.rrow .sub { grid-column: 2 / 4; font-size: var(--fs-s); color: var(--text-3); display: flex; gap: 4px; flex-wrap: wrap; }
+.steps { display: flex; gap: 0; align-items: center; }
+.steps span { display: flex; align-items: center; gap: 6px; font-size: var(--fs-s); color: var(--text-3); }
+.steps span b { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-3); font-size: 11px; }
+.steps span.on { color: var(--text); font-weight: 600; } .steps span.on b { background: var(--blue); color: var(--on-accent); }
+.steps span.ok b { background: var(--green); color: var(--on-accent); }
+.steps hr { width: 36px; border: 0; border-top: 1px solid var(--border-3); margin: 0 8px; }
+table { border-collapse: collapse; width: 100%; font-size: var(--fs-s); }
+td, th { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); }
+th { color: var(--text-4); font-weight: 600; }
+.pipe { display: flex; flex-direction: column; gap: 0; width: 820px; align-self: center; }
+.pst { display: grid; grid-template-columns: 30px 1fr; gap: 0 12px; }
+.pst .rail { display: flex; flex-direction: column; align-items: center; }
+.pst .rail b { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-3); font-size: 12px; }
+.pst .rail i { flex: 1; width: 2px; background: var(--border-2); }
+.pst.prod .rail b { background: var(--red-bg); color: var(--red); border: 1.5px solid var(--red); }
+.pst .card { padding: 10px 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; }
+.pst.prod .card { border-color: color-mix(in srgb, var(--red) 45%, transparent); }
+</style></head><body>
+<style>
+.tabsb { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+.tabsb span { padding: 8px 14px; font-weight: 600; color: var(--text-3); border-bottom: 2px solid transparent; display: flex; gap: 6px; align-items: center; }
+.tabsb span.on { color: var(--text); border-color: var(--blue); }
+.intro { color: var(--text-3); font-size: var(--fs-s); margin-top: -8px; }
+.sec-h { display: flex; align-items: baseline; gap: 8px; }
+.sec-h .label { font-size: 11px; }
+.sec-h .why { color: var(--text-4); font-size: var(--fs-s); }
+.legend { display: flex; gap: 14px; font-size: var(--fs-s); color: var(--text-3); align-items: center; }
+.legend span { display: flex; gap: 6px; align-items: center; }
+.heal { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--r-m); background: var(--blue-bg); color: var(--text-2); font-size: var(--fs-s); }
+.heal b { color: var(--blue); }
+.ast.fail .n { background: var(--amber); border-color: var(--amber); }
+.loop { margin-left: 6px; border-left: 2px dashed var(--amber-line); padding: 2px 0 2px 18px; font-size: var(--fs-s); color: var(--amber); }
+.calm { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: var(--r-l); border: 1px dashed var(--border-2); color: var(--text-3); }
+.rgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.rcard { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px 10px; font-size: var(--fs-s); align-items: center; }
+.kv .k { color: var(--text-4); }
+.kv .v { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.cfg { display: grid; grid-template-columns: 1fr 360px; gap: 16px; flex: 1; min-height: 0; padding-bottom: 16px; }
+.cst { display: grid; grid-template-columns: 30px 1fr; gap: 0 12px; }
+.cst .rail { display: flex; flex-direction: column; align-items: center; }
+.cst .rail b { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-3); font-size: 12px; }
+.cst .rail i { flex: 1; width: 2px; background: var(--border-2); }
+.cst.prod .rail b { background: var(--red-bg); color: var(--red); border: 1.5px solid var(--red); }
+.cst .card { padding: 9px 12px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 5px; font-size: var(--fs-s); }
+.qrow { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: var(--fs-s); }
+</style>
+
+<p class="caption">Proposta B v2 · «Adesso»: solo ciò che serve a te, il resto lavora da solo</p>
+<div class="frame">
+  <div class="topbar"><span class="logo"></span><span class="search">Cerca chat… <span class="kbd">Ctrl K</span></span><span class="spacer"></span>
+    <span class="pill amber">⚡ Prossima cosa per te <b>1</b></span><span class="pill">● 3 routine attive</span><span class="pill">IT</span></div>
+  <div class="body">
+    <nav class="side">
+      <div class="it">Grindhouse <span class="badge">3</span></div>
+      <div class="sec">LAVORO</div>
+      <div class="it">Task</div>
+      <div class="it on">Routine <span class="badge">1</span></div>
+      <div class="it">Fatto e standup</div>
+      <div class="sec">BRAIN</div>
+      <div class="it">Agenti</div><div class="it">Memoria</div><div class="it">Classificatori</div><div class="it">Mappa</div>
+      <div class="sec">ANDAMENTO</div>
+      <div class="it">Costi</div><div class="it">Qualità</div>
+      <div class="sec">APP</div>
+      <div class="it">Log</div><div class="it">Guida</div>
+    </nav>
+    <main class="page">
+      <div class="head"><h1>Routine</h1><span class="grow"></span><span class="btn">📎 Avvia con allegato</span><span class="btn primary">▶ Avvia su un work item</span></div>
+      <div class="intro">Procedure che l'app porta avanti da sola, anche a finestra chiusa. Ti chiama solo quando serve la tua mano.</div>
+      <div class="tabsb"><span class="on">Adesso <span class="chip red">1</span></span><span>Routine <span class="chip">4</span></span><span>Storico</span></div>
+
+      <div class="sec-h"><span class="label">Tocca a te · 1</span><span class="why">uno step di produzione: per regola li esegui sempre tu</span></div>
+      <div class="decision redhot" style="padding:16px 20px">
+        <div class="who"><span class="av r">R</span><b>Spostamento licenze</b> · step 2 di 3 · <span class="chip prod">prod</span><span class="grow"></span>attende da 6 min</div>
+        <p class="q">Sposta le 37 licenze in produzione: il comando è pronto, lo esegui tu.</p>
+        <div class="row" style="align-items:stretch;gap:14px">
+          <div class="grow" style="display:flex;flex-direction:column;gap:6px">
+            <div class="cmd">pwsh move-licenses.ps1 -Env <span class="p">prod</span> -From <span class="p">"Team Air"</span> -To <span class="p">"Team Fly"</span> -List <span class="p">licenze.csv</span></div>
+            <div class="proof"><span class="ok">Step 1 in test: 37 licenze su 37 spostate e verificate</span><span class="ok">Script approvato, non cambiato (sha 2be4…91)</span></div>
+          </div>
+          <div style="width:230px;display:flex;flex-direction:column;gap:8px">
+            <div class="run-btn">▶ Esegui</div>
+            <div class="yn-what"><b>Poi</b><span>mi dici com'è andata: la routine riparte da sola</span></div>
+            <div class="yn-more" style="grid-template-columns:1fr"><span style="border-style:solid;color:var(--text-2);text-align:center">Ci penso dopo</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec-h"><span class="label">Al lavoro da sole · 2</span><span class="why">non serve niente da te</span><span class="grow"></span>
+        <div class="legend"><span><span class="dot green"></span>fatto</span><span><span class="dot blue"></span>al lavoro</span><span><span class="dot amber"></span>riprova da sola</span><span><span class="dot red"></span>serve te</span></div></div>
+      <div class="card runcard">
+        <div class="row"><span class="dot blue"></span><b class="grow">Login SSO fallisce su Edge dopo il redirect</b><span class="faint">Bugfix automatico · Bug 48213 ↗</span></div>
+        <div class="heal">↻ <span class="grow">La Verifica ha trovato 2 test rossi: l'app ha <b>rimandato da sola il lavoro alla Correzione</b> con l'errore. Tentativo 2 di 3.</span><span class="faint">Ti chiamo solo se fallisce anche il 3°</span></div>
+        <div class="acc" style="border:0;padding:0">
+          <div class="ast done"><span class="n"></span><span>1 · Analisi <span class="faint">· Scout · Sonnet 5.5 · 4 min</span></span><span class="chip green">fatto</span></div>
+          <div class="ast fail"><span class="n"></span><span>3 · Verifica (1° giro) <span class="faint">· 146/148 test · run-tests.ps1 exit 1</span></span><span class="chip amber">rimandato</span></div>
+          <div class="loop">↺ torna allo step 2 con «cookie di sessione perso su Edge»</div>
+          <div class="ast now"><span class="n"></span><span><b>2 · Correzione (2° giro)</b> <span class="faint">· Artisan · Opus 5.5 · da 3 min</span></span><span class="chip blue">al lavoro</span></div>
+          <div class="ast"><span class="n"></span><span class="muted">poi: 3 · Verifica → 4 · Revisione PR → 5 · Aggiorna work item</span><span class="faint">da fare</span></div>
+        </div>
+        <div class="row"><span class="btn ghost">Apri timeline completa</span><span class="grow"></span><span class="btn">⏸ Pausa</span><span class="btn ghost">Annulla</span><span class="faint">aggiornata 20 s fa</span></div>
+      </div>
+      <div class="card runcard" style="flex-direction:row;align-items:center;gap:12px">
+        <span class="dot blue"></span><b>Export CSV tronca le righe oltre 10k</b><span class="faint grow">Bug 48190 · step 1 Analisi · da 2 min</span>
+        <div class="segs" style="width:180px"><i class="b"></i><i></i><i></i><i></i><i></i></div></div>
+    </main>
+  </div>
+</div>
+
+<p class="caption">Proposta B v2 · «Routine»: ogni routine spiegata, accesa o in pausa</p>
+<div class="frame">
+  <div class="topbar"><span class="logo"></span><span class="search">Cerca chat… <span class="kbd">Ctrl K</span></span><span class="spacer"></span>
+    <span class="pill amber">⚡ Prossima cosa per te <b>1</b></span><span class="pill">● 3 routine attive</span><span class="pill">IT</span></div>
+  <div class="body">
+    <nav class="side">
+      <div class="it">Grindhouse <span class="badge">3</span></div>
+      <div class="sec">LAVORO</div>
+      <div class="it">Task</div>
+      <div class="it on">Routine <span class="badge">1</span></div>
+      <div class="it">Fatto e standup</div>
+      <div class="sec">BRAIN</div>
+      <div class="it">Agenti</div><div class="it">Memoria</div><div class="it">Classificatori</div><div class="it">Mappa</div>
+      <div class="sec">ANDAMENTO</div>
+      <div class="it">Costi</div><div class="it">Qualità</div>
+      <div class="sec">APP</div>
+      <div class="it">Log</div><div class="it">Guida</div>
+    </nav>
+    <main class="page">
+      <div class="head"><h1>Routine</h1><span class="grow"></span><span class="btn">✦ Nuova routine con l'Orchestrator</span><span class="btn primary">▶ Avvia su un work item</span></div>
+      <div class="tabsb"><span>Adesso <span class="chip red">1</span></span><span class="on">Routine <span class="chip">4</span></span><span>Storico</span></div>
+      <div class="rgrid">
+        <div class="card rcard">
+          <div class="row"><span class="toggle on"></span><b class="grow" style="font-size:var(--fs-l)">Bugfix automatico</b><span class="chip green">attiva</span><span class="chip">v7</span></div>
+          <div class="muted" style="font-size:var(--fs-s)">Prende i bug marcati, li corregge, apre la PR e aggiorna il work item.</div>
+          <div class="kv">
+            <span class="k">Quando parte</span><span class="v">nuovo bug DevOps in <span class="chip">Air\Backend</span></span>
+            <span class="k">Solo se</span><span class="v"><span class="chip green">+ ai-ok</span><span class="chip red">− ai-needs-human</span><span class="chip">max 4/ora</span></span>
+            <span class="k">In attesa</span><span class="v"><span class="chip amber">92 eventi</span><span class="btn ghost" style="height:24px">Svuota…</span></span>
+            <span class="k">Ultima</span><span class="v">12 min fa ✓ · 2 in corso</span>
+          </div>
+        </div>
+        <div class="card rcard">
+          <div class="row"><span class="toggle on"></span><b class="grow" style="font-size:var(--fs-l)">Spostamento licenze</b><span class="chip green">attiva</span><span class="chip">v2</span></div>
+          <div class="muted" style="font-size:var(--fs-s)">Sposta una lista di licenze tra team: prima in test, poi in prod (lo esegui tu).</div>
+          <div class="kv">
+            <span class="k">Quando parte</span><span class="v">solo a mano, con allegato .csv</span>
+            <span class="k">Prod</span><span class="v"><span class="chip prod">1 step: lo esegui tu</span></span>
+            <span class="k">In attesa</span><span class="v">nulla</span>
+            <span class="k">Ultima</span><span class="v">ieri 17:40 ✓ · 1 aspetta te</span>
+          </div>
+        </div>
+        <div class="card rcard">
+          <div class="row"><span class="toggle"></span><b class="grow" style="font-size:var(--fs-l)">Deploy prod</b><span class="chip">solo prova</span><span class="chip">v1</span></div>
+          <div class="muted" style="font-size:var(--fs-s)">Query pre-deploy, migrazioni DB e release Azure. Oggi gira solo a vuoto.</div>
+          <div class="kv"><span class="k">Quando parte</span><span class="v">solo a mano</span><span class="k">Prod</span><span class="v"><span class="chip prod">3 step: li esegui tu</span></span></div>
+        </div>
+        <div class="card rcard">
+          <div class="row"><span class="toggle"></span><b class="grow muted" style="font-size:var(--fs-l)">Note di rilascio</b><span class="chip">in pausa</span><span class="chip">v3</span></div>
+          <div class="muted" style="font-size:var(--fs-s)">Scrive le note di rilascio dalle PR della settimana.</div>
+          <div class="kv"><span class="k">Quando parte</span><span class="v">ogni venerdì alle 16:00</span><span class="k">Ultima</span><span class="v">17/10 ✓</span></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<p class="caption">Proposta B v2 · una routine aperta: trigger, filtri, passaggi con modello, cosa fare se fallisce, coda</p>
+<div class="frame">
+  <div class="topbar"><span class="logo"></span><span class="search">Cerca chat… <span class="kbd">Ctrl K</span></span><span class="spacer"></span>
+    <span class="pill amber">⚡ Prossima cosa per te <b>1</b></span><span class="pill">● 3 routine attive</span><span class="pill">IT</span></div>
+  <div class="body">
+    <nav class="side">
+      <div class="it">Grindhouse <span class="badge">3</span></div>
+      <div class="sec">LAVORO</div>
+      <div class="it">Task</div>
+      <div class="it on">Routine <span class="badge">1</span></div>
+      <div class="it">Fatto e standup</div>
+      <div class="sec">BRAIN</div>
+      <div class="it">Agenti</div><div class="it">Memoria</div><div class="it">Classificatori</div><div class="it">Mappa</div>
+      <div class="sec">ANDAMENTO</div>
+      <div class="it">Costi</div><div class="it">Qualità</div>
+      <div class="sec">APP</div>
+      <div class="it">Log</div><div class="it">Guida</div>
+    </nav>
+    <main class="page">
+      <div class="head"><span class="btn ghost">‹ Routine</span><span class="toggle on"></span><h1>Bugfix automatico</h1><span class="chip">v7</span><span class="grow"></span>
+        <span class="btn ghost">⇪ Esporta</span><span class="btn">◎ Prova a vuoto</span><span class="btn">✎ Modifica con l'Orchestrator</span><span class="btn primary">▶ Avvia su un work item</span></div>
+      <div class="cfg">
+        <div style="display:flex;flex-direction:column;gap:8px;min-height:0">
+          <span class="label">Passaggi · ognuno con chi lo fa, il modello e cosa succede se fallisce</span>
+          <div class="cst"><div class="rail"><b>1</b><i></i></div><div class="card">
+            <div class="row"><b class="grow">Analisi</b><span class="av s" style="width:18px;height:18px">S</span>Scout<span class="chip">Sonnet 5.5 · medio</span></div>
+            <div class="row"><span class="chip out">query bug-context.sql · test · sola lettura · sha a1d4…</span></div></div></div>
+          <div class="cst"><div class="rail"><b>2</b><i></i></div><div class="card">
+            <div class="row"><b class="grow">Correzione</b><span class="av a" style="width:18px;height:18px">A</span>Artisan<span class="chip">Opus 5.5 · alto</span></div>
+            <div class="faint">Lavora su un ramo, mai su main.</div></div></div>
+          <div class="cst"><div class="rail"><b>3</b><i></i></div><div class="card">
+            <div class="row"><b class="grow">Verifica</b><span class="av n" style="width:18px;height:18px">S</span>Sentinel<span class="chip">Opus 5.5 · alto</span></div>
+            <div class="row"><span class="chip out">script run-tests.ps1 · sha 9c1e…a7 ✓</span><span class="chip">-Filter <i>dal bug</i> · -Env test</span></div>
+            <div class="row"><span class="chip amber">se fallisce: torna allo step 2, max 3 volte, poi chiama te</span></div></div></div>
+          <div class="cst"><div class="rail"><b>4</b><i></i></div><div class="card">
+            <div class="row"><b class="grow">Revisione PR</b><span class="av n" style="width:18px;height:18px">S</span>Sentinel<span class="chip">Opus 5.5 · alto</span></div></div></div>
+          <div class="cst"><div class="rail"><b>5</b></div><div class="card">
+            <div class="row"><b class="grow">Aggiorna work item</b><span class="av r" style="width:18px;height:18px">H</span>Herald<span class="chip">Haiku 5.5 · basso</span></div>
+            <div class="faint">Commento + stato «Resolved». Solo DevOps, nessuna produzione.</div></div></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="card rcard">
+            <span class="label">Quando parte</span>
+            <div class="kv">
+              <span class="k">Evento</span><span class="v">nuovo bug o nuova revisione</span>
+              <span class="k">Area</span><span class="v"><span class="chip">Air\Backend</span><span class="chip">Sprint corrente</span></span>
+              <span class="k">Tag richiesti</span><span class="v"><span class="chip green">+ ai-ok</span></span>
+              <span class="k">Tag esclusi</span><span class="v"><span class="chip red">− ai-needs-human</span></span>
+              <span class="k">Solo questi id</span><span class="v faint">tutti</span>
+              <span class="k">Limite</span><span class="v">max 4 all'ora · 1 run per work item</span>
+            </div>
+          </div>
+          <div class="card rcard">
+            <div class="row"><span class="label grow">In attesa · 92</span><span class="btn danger" style="height:26px">Svuota 92…</span></div>
+            <div class="qrow"><span>Bug 48240 · Timeout sul login</span><span class="faint">arrivato 09:12</span></div>
+            <div class="qrow"><span>Bug 48238 · Totale IVA errato</span><span class="faint">09:05</span></div>
+            <div class="qrow"><span>Bug 48231 · PDF fattura arrotonda</span><span class="faint">08:58</span></div>
+            <span class="faint" style="font-size:var(--fs-s)">… altri 89 · partono quando la routine è attiva, max 4 all'ora</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<p class="caption">Proposta B v2 · Avvia con allegato (procedura in 3 passi)</p>
+<div class="frame">
+  <div class="topbar"><span class="logo"></span><span class="search">Cerca chat… <span class="kbd">Ctrl K</span></span><span class="spacer"></span>
+    <span class="pill amber">⚡ Prossima cosa per te <b>1</b></span><span class="pill">● 3 routine attive</span><span class="pill">IT</span></div>
+  <div class="body">
+    <nav class="side">
+      <div class="it">Grindhouse <span class="badge">3</span></div>
+      <div class="sec">LAVORO</div>
+      <div class="it">Task</div>
+      <div class="it on">Routine <span class="badge">1</span></div>
+      <div class="it">Fatto e standup</div>
+      <div class="sec">BRAIN</div>
+      <div class="it">Agenti</div><div class="it">Memoria</div><div class="it">Classificatori</div><div class="it">Mappa</div>
+      <div class="sec">ANDAMENTO</div>
+      <div class="it">Costi</div><div class="it">Qualità</div>
+      <div class="sec">APP</div>
+      <div class="it">Log</div><div class="it">Guida</div>
+    </nav>
+    <main class="page" style="align-items:center">
+      <div class="steps" style="margin-top:6px"><span class="ok"><b>✓</b>Routine</span><hr><span class="on"><b>2</b>Cosa lavorare</span><hr><span><b>3</b>Controlla e avvia</span></div>
+      <div class="card" style="width:860px;padding:20px;display:flex;flex-direction:column;gap:14px">
+        <div class="row"><h2 style="margin:0;font:600 var(--fs-xl) var(--font-display)" class="grow">Spostamento licenze · v2</h2><span class="chip prod">step 2 prod: lo esegui tu</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div style="display:flex;flex-direction:column;gap:6px"><span class="label">Work item (facoltativo)</span><div class="field mono">48102</div>
+            <div class="row" style="font-size:var(--fs-s)"><span class="chip">Task</span><span class="ell">Spostare licenze Team Air → Team Fly</span></div></div>
+          <div style="display:flex;flex-direction:column;gap:6px"><span class="label">Parametri</span>
+            <div class="row"><span class="field grow">Da: <b>Team Air</b></span><span class="field grow">A: <b>Team Fly</b></span></div>
+            <div class="row"><span class="chip out">Ambiente</span><span class="chip">test</span><span class="chip prod">prod ●</span></div></div>
+        </div>
+        <span class="label">Allegato · lista incollata</span>
+        <div style="display:grid;grid-template-columns:1fr 280px;gap:12px">
+          <table><tr><th>#</th><th>Licenza</th><th>Utente</th><th>Prodotto</th></tr>
+            <tr><td>1</td><td class="mono">LIC-20931</td><td>m.rossi</td><td>Visual Studio Pro</td></tr>
+            <tr><td>2</td><td class="mono">LIC-20932</td><td>a.bianchi</td><td>Visual Studio Pro</td></tr>
+            <tr><td>3</td><td class="mono">LIC-20940</td><td>g.verdi</td><td>Test Plans</td></tr>
+            <tr><td colspan="4" class="faint">… altre 34 righe</td></tr></table>
+          <div class="card" style="padding:12px;display:flex;flex-direction:column;gap:6px;font-size:var(--fs-s)">
+            <b>licenze.csv</b><span class="mono faint">sha256 3f9a…c2</span>
+            <span class="chip green">✓ 37 righe valide</span><span class="chip amber">2 doppioni tolti</span>
+            <span class="muted">Gli step lo leggono come parametro <span class="mono">-List</span>. Resta salvato con la run.</span>
+          </div>
+        </div>
+        <div class="row"><span class="btn ghost">‹ Indietro</span><span class="grow"></span><span class="btn">Prova a vuoto</span><span class="btn primary big">Avanti ›</span></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<p class="caption">Proposta B v2 · Prova a vuoto (dry-run) a tutta pagina</p>
+<div class="frame">
+  <div class="topbar"><span class="logo"></span><span class="search">Cerca chat… <span class="kbd">Ctrl K</span></span><span class="spacer"></span>
+    <span class="pill amber">⚡ Prossima cosa per te <b>1</b></span><span class="pill">● 3 routine attive</span><span class="pill">IT</span></div>
+  <div class="body">
+    <nav class="side">
+      <div class="it">Grindhouse <span class="badge">3</span></div>
+      <div class="sec">LAVORO</div>
+      <div class="it">Task</div>
+      <div class="it on">Routine <span class="badge">1</span></div>
+      <div class="it">Fatto e standup</div>
+      <div class="sec">BRAIN</div>
+      <div class="it">Agenti</div><div class="it">Memoria</div><div class="it">Classificatori</div><div class="it">Mappa</div>
+      <div class="sec">ANDAMENTO</div>
+      <div class="it">Costi</div><div class="it">Qualità</div>
+      <div class="sec">APP</div>
+      <div class="it">Log</div><div class="it">Guida</div>
+    </nav>
+    <main class="page">
+      <div class="head"><span class="btn ghost">‹ Routine</span><h1>Prova a vuoto · Deploy prod</h1><span class="chip green">non esegue nulla</span><span class="grow"></span>
+        <span class="chip">1 automatico</span><span class="chip prod">3 li esegui tu</span><span class="btn" style="opacity:.55">Avvio reale spento: solo prova</span></div>
+      <div class="pipe">
+        <div class="pst prod"><div class="rail"><b>1</b><i></i></div><div class="card">
+          <div class="row"><b class="grow">Controllo pre-deploy</b><span class="chip prod">prod · lo esegui tu</span></div>
+          <div class="cmd">sqlcmd -S <span class="p">air-prod-sql</span> -d <span class="p">Air</span> -i pre-deploy-check.sql</div>
+          <div class="row faint" style="font-size:var(--fs-s)">query sha 51ab…0e ✓ · sola lettura (anche questa la esegui tu)</div></div></div>
+        <div class="pst prod"><div class="rail"><b>2</b><i></i></div><div class="card">
+          <div class="row"><b class="grow">Migrazioni DB</b><span class="chip violet">📎 migrazioni.txt · 4 righe</span><span class="chip prod">prod · lo esegui tu</span></div>
+          <div class="cmd">sqlcmd -S <span class="p">air-prod-sql</span> -d <span class="p">Air</span> -i <span class="p">2026-10-24_01_fatture.sql</span>
+sqlcmd … -i <span class="p">2026-10-24_02_indici.sql</span>   <span class="faint">(+2)</span></div></div></div>
+        <div class="pst"><div class="rail"><b>3</b><i></i></div><div class="card">
+          <div class="row"><b class="grow">Smoke test</b><span class="chip green">automatico</span></div>
+          <div class="cmd">pwsh smoke.ps1 -Env <span class="p">test</span> -Build <span class="p">20261024.3</span></div></div></div>
+        <div class="pst prod"><div class="rail"><b>4</b></div><div class="card">
+          <div class="row"><b class="grow">Release Azure</b><span class="chip prod">prod · lo esegui tu</span></div>
+          <div class="cmd">az pipelines release create --project <span class="p">Air</span> --definition-name <span class="p">"Air-Prod"</span> --artifact-metadata-list <span class="p">air-build=20261024.3</span></div></div></div>
+      </div>
+    </main>
+  </div>
+</div>
+<p class="caption">Proposta B v2 · Esporta per un cloud agent (pagina)</p>
+<div class="frame">
+  <div class="topbar"><span class="logo"></span><span class="search">Cerca chat… <span class="kbd">Ctrl K</span></span><span class="spacer"></span>
+    <span class="pill amber">⚡ Prossima cosa per te <b>1</b></span><span class="pill">● 3 routine attive</span><span class="pill">IT</span></div>
+  <div class="body">
+    <nav class="side">
+      <div class="it">Grindhouse <span class="badge">3</span></div>
+      <div class="sec">LAVORO</div>
+      <div class="it">Task</div>
+      <div class="it on">Routine <span class="badge">1</span></div>
+      <div class="it">Fatto e standup</div>
+      <div class="sec">BRAIN</div>
+      <div class="it">Agenti</div><div class="it">Memoria</div><div class="it">Classificatori</div><div class="it">Mappa</div>
+      <div class="sec">ANDAMENTO</div>
+      <div class="it">Costi</div><div class="it">Qualità</div>
+      <div class="sec">APP</div>
+      <div class="it">Log</div><div class="it">Guida</div>
+    </nav>
+    <main class="page" style="align-items:center">
+      <div class="card" style="width:960px;padding:20px;display:flex;flex-direction:column;gap:14px;margin-top:10px">
+      <div class="row"><h2 class="grow" style="margin:0;font:600 var(--fs-xl) var(--font-display)">Esporta routine · Bugfix automatico v7</h2><span class="chip green">nessun segreto dentro</span></div>
+      <div class="exp">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span class="label">Cosa contiene</span>
+          <ul>
+            <li>Passaggi, istruzioni, criteri di uscita, evidenze richieste</li>
+            <li>Per ogni step: ruolo, motore, modello e sforzo fissati</li>
+            <li>Skill usate (SKILL.md) con hash</li>
+            <li>Script e query con hash e parametri tipizzati</li>
+            <li>Strumenti MCP richiesti (solo i nomi)</li>
+            <li>Trigger e filtri (tag, id, area, max/ora)</li>
+            <li>Step prod marcati: fuori dall'app restano «lo esegui tu»</li>
+            <li class="no">Token, password, connessioni: chiesti all'avvio</li>
+          </ul>
+          <span class="label">Dove deve girare</span>
+          <div class="target"><span class="on">Questa app</span><span class="on">Claude Code (cloud)</span><span>Cursor Cloud Agents</span><span>Codex cloud</span></div>
+          <div class="row" style="font-size:var(--fs-s)"><span class="chip green">✓ Claude Code: stessi modelli</span><span class="chip amber">Cursor: step 5 senza Haiku 5.5</span></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;min-width:0">
+          <span class="label">Anteprima</span>
+          <div class="tree">bugfix-automatico.routine/<br>├ routine.yaml<br>├ lock.json <span class="faint">(hash di tutto)</span><br>├ skills/bug-triage/SKILL.md<br>├ scripts/run-tests.ps1<br>├ queries/bug-context.sql<br>└ README.md <span class="faint">(come avviarla)</span></div>
+<div class="yaml"><span class="k">routine</span>: bugfix-automatico
+<span class="k">version</span>: 7
+<span class="k">steps</span>:
+  - <span class="k">id</span>: analyze
+    <span class="k">role</span>: Scout
+    <span class="k">engine</span>: claude-code
+    <span class="k">model</span>: claude-sonnet-5-5
+    <span class="k">effort</span>: medium
+    <span class="k">skills</span>: [bug-triage@41c0e2]
+  - <span class="k">id</span>: verify
+    <span class="k">run</span>: scripts/run-tests.ps1@9c1ea7
+    <span class="k">params</span>: { Filter: Auth, Env: test }
+  <span class="c"># … 3 passaggi</span></div>
+        </div>
+      </div>
+      <div class="row"><span class="faint grow" style="font-size:var(--fs-s)">Reimportabile qui o in un'altra installazione: stesso risultato con gli stessi modelli.</span><span class="btn">Copia prompt di avvio</span><span class="btn primary big">⇩ Scarica .zip</span></div>
+      </div>
+    </main>
+  </div>
+</div>
+</body></html>

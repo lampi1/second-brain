@@ -1,0 +1,101 @@
+// End-to-end: the «Guida» page (components/GuidePage.tsx, content in src/shared/concept-guide.ts) in the frozen demo.
+// It opens from the left rail and from Ctrl+K, shows the prominent card «Ogni compito passa da un ruolo» first as a
+// hero and the other cards in a multi-column grid (not full-width strips), a card opens a reading panel with its
+// numbered points, analogy, technical details and sources that Esc closes (focus back on the card), and «Discuti»
+// docks the Orchestrator with a draft that carries the card and asks it to explain (a Scout reads the code if needed),
+// NOT sent.
+// Screenshots: test-results/shots/concept-guide-*.png.
+import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
+import { launchDemo, shot } from './helpers';
+
+let app: ElectronApplication, page: Page;
+test.beforeAll(async () => { ({ app, page } = await launchDemo({ orchestrator: true })); });
+test.afterAll(async () => { await app?.close(); });
+
+test('Guida opens from the left rail and from Ctrl+K, with the prominent card first', async () => {
+  await page.getByTestId('nav-guida').click();
+  await expect(page.getByTestId('guide-page')).toBeVisible();
+  const first = page.getByTestId('guide-page').locator('article').first();
+  await expect(first).toHaveAttribute('data-testid', 'guide-card-every-task-agent');
+  await expect(first).toContainText('Ogni compito passa da un ruolo');
+  await expect(first.getByTestId('guide-diagram')).toBeVisible(); // the prominent card shows its diagram collapsed
+  await expect(page.getByTestId('guide-body-runs')).toHaveCount(0);
+  const card = await page.getByTestId('guide-card-runs').boundingBox();
+  const hero = await first.boundingBox();
+  expect(card!.width).toBeLessThan(hero!.width / 2 + 1); // a grid of cards, not full-width strips
+  await shot(page, 'concept-guide-collapsed');
+
+  await page.getByTestId('nav-home').click();
+  await page.keyboard.press('Control+k');
+  await page.keyboard.type('guida');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('guide-page')).toBeVisible();
+});
+
+test('a card opens a panel with points, analogy, technical details and sources; Esc closes it; the filter narrows the cards', async () => {
+  const toggle = page.getByTestId('guide-toggle-runs');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  const body = page.getByTestId('guide-body-runs');
+  await expect(body.locator('ol.guide-points > li')).toHaveCount(8);
+  await expect(body).toContainText('In pratica è come');
+  await expect(body).toContainText('Dettagli tecnici');
+  await expect(body).toContainText('src/main/agents/runs.ts');
+  await expect(body.getByTestId('guide-target')).toHaveCount(0); // the runs card has no open target (the costs card has one)
+  await expect(page.getByTestId('guide-panel')).toContainText('Le run dei ruoli');
+  await shot(page, 'concept-guide-expanded');
+
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('guide-panel')).toHaveCount(0);
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toBeFocused();
+  await expect(page.getByTestId('guide-page')).toBeVisible(); // Esc closed the panel, not the page
+
+  // the routing card is gone (ADR 0210): «classificatori» keeps the classifiers card and drops the runs one
+  await page.getByTestId('guide-filter').fill('classificatori');
+  await expect(page.getByTestId('guide-card-classifiers')).toBeVisible();
+  await expect(page.getByTestId('guide-card-runs')).toHaveCount(0);
+  await page.getByTestId('guide-filter').fill('');
+});
+
+test('«Discuti» docks the Orchestrator with the card as an unsent draft', async () => {
+  await page.getByTestId('guide-discuss-runs').click();
+  const input = page.getByTestId('orchestrator-input');
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue(/Voglio discutere il concetto «Le run dei ruoli»/);
+  await expect(input).toHaveValue(/delega la lettura a uno Scout/);
+  await expect(input).toHaveValue(/# Le run dei ruoli/);
+  await expect(input).toHaveValue(/src\/main\/agents\/runs\.ts/);
+  await expect(page.getByTestId('guide-page')).toBeVisible(); // the page stays
+  await shot(page, 'concept-guide-discuss');
+  await input.fill(''); // never sent
+});
+
+// ADR 0196: «Chiedi alla Guida» (the demo has no engine: the box says so), «Per te» from the local counters, and the
+// diagram drawn from the code in the delegation card's panel, in both themes.
+test('«Chiedi alla Guida», «Per te» and the diagram from the code', async () => {
+  await page.evaluate(() => localStorage.setItem('sb.guideUsage.v1', JSON.stringify({ help: { permissions: 3 }, open: { delegation: 1 }, asked: ['come funziona la Grindhouse?'] })));
+  await page.getByTestId('nav-home').click();
+  await page.getByTestId('nav-guida').click();
+  const mine = page.getByTestId('guide-foryou');
+  await expect(mine).toBeVisible();
+  await expect(mine.locator('button')).toHaveCount(3);
+  await expect(mine.locator('button').first()).toHaveAttribute('data-testid', 'guide-foryou-permissions');
+
+  await page.getByTestId('guide-ask-input').fill('Come delego un lavoro?');
+  await page.getByTestId('guide-ask-send').click();
+  await expect(page.getByTestId('guide-ask-error')).toBeVisible();
+  await shot(page, 'concept-guide-ask-foryou');
+
+  await page.getByTestId('guide-foryou-delegation').click();
+  const diagram = page.getByTestId('guide-code-diagram-delegation');
+  await expect(diagram.locator('img')).toBeVisible({ timeout: 15_000 });
+  await shot(page, 'concept-guide-code-diagram');
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await expect(diagram.locator('img')).toBeVisible();
+  await shot(page, 'concept-guide-code-diagram-light');
+  await page.keyboard.press('Escape');
+  await shot(page, 'concept-guide-ask-foryou-light');
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+});

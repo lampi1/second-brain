@@ -1,0 +1,175 @@
+/* The «Guida» page (components/GuidePage.tsx): a responsive grid of concept cards on the shared tokens, the same
+   surfaces, gradients and motion as the Dashboard (dashboard/dashboard.css). The prominent card is a wide hero on top;
+   each card carries its own accent (--guide-accent, a token color) for its glyph tile and hover glow. Opening a card
+   slides a reading panel in from the right, over a dimmed grid, inside the page (it never covers the rail or the
+   Orchestrator); on a narrow page it takes the whole width. Diagrams are plain CSS boxes and arrows (no package):
+   horizontal in the hero, a vertical timeline in the panel. Motion is off for reduced-motion users. */
+.guide{position:relative;height:100%;overflow:hidden;background:var(--bg);color:var(--text);container-type:inline-size}
+.guide-scroll{height:100%;overflow:auto;padding:var(--page-top) var(--page-gutter) 56px}
+.guide-header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin:0 0 26px;flex-wrap:wrap}
+.guide-eyebrow{font-size:10px;letter-spacing:.16em;font-weight:650;color:var(--text-3)}
+.guide-header h1{font-size:30px;letter-spacing:-1.2px;font-weight:600;margin:7px 0 8px}
+.guide-header p{color:var(--text-3);font-size:13px;line-height:1.6;margin:0;max-width:680px}
+.guide-filter{display:flex;flex-direction:column;gap:6px;width:min(340px,100%)}
+.guide-filter-box{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-m);padding:0 12px;color:var(--text-3);transition:border-color 180ms,box-shadow 180ms}
+.guide-filter-box:focus-within{border-color:var(--accent-line);box-shadow:0 0 0 3px var(--focus-glow)}
+.guide-filter input{flex:1;min-width:0;background:transparent;border:0;color:var(--text);font:inherit;font-size:12px;padding:9px 0}
+.guide-filter input:focus,.guide-filter input:focus-visible{outline:none}
+.guide-filter small{font-size:10px;color:var(--text-3);text-align:right}
+.guide-none{color:var(--text-3);font-size:13px}
+
+/* the grid: as many columns as fit, never a full-width strip except the hero */
+.guide-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.guide-card{--guide-accent:var(--accent);position:relative;isolation:isolate;display:flex;flex-direction:column;gap:9px;min-width:0;padding:18px 18px 12px;background:linear-gradient(160deg,var(--surface-2),var(--surface) 62%);border:1px solid var(--border);border-radius:var(--r-xl);overflow:hidden;transition:border-color 180ms,transform 180ms,box-shadow 180ms;animation:guide-enter 380ms var(--ease) both}
+.guide-card::before{content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(120% 70% at 0% 0%,color-mix(in srgb,var(--guide-accent) 13%,transparent),transparent 62%);opacity:.55;transition:opacity 220ms}
+.guide-card:hover,.guide-card:focus-within{border-color:var(--border-3);transform:translateY(-2px);box-shadow:0 14px 34px -22px var(--guide-accent)}
+.guide-card:hover::before,.guide-card.open::before{opacity:1}
+.guide-card.open{border-color:color-mix(in srgb,var(--guide-accent) 60%,var(--border-2));box-shadow:0 0 0 1px color-mix(in srgb,var(--guide-accent) 35%,transparent),0 14px 34px -22px var(--guide-accent)}
+.guide-grid>.guide-card:nth-child(2){animation-delay:40ms}
+.guide-grid>.guide-card:nth-child(3){animation-delay:80ms}
+.guide-grid>.guide-card:nth-child(4){animation-delay:120ms}
+.guide-grid>.guide-card:nth-child(n+5){animation-delay:160ms}
+.guide-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:3px}
+.guide-glyph{flex:none;display:grid;place-items:center;width:38px;height:38px;border-radius:var(--r-m);color:var(--guide-accent,var(--accent));background:color-mix(in srgb,var(--guide-accent,var(--accent)) 14%,transparent);border:1px solid color-mix(in srgb,var(--guide-accent,var(--accent)) 30%,transparent)}
+.guide-card h3{font-size:14.5px;font-weight:600;margin:0;letter-spacing:-.2px;line-height:1.35}
+.guide-summary{margin:0;font-size:12.5px;line-height:1.6;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.guide-badges{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px}
+.guide-badge{font-size:10px;color:var(--amber);background:var(--amber-bg);border:1px solid var(--amber-line);border-radius:20px;padding:2px 8px;white-space:nowrap}
+.guide-badge-coming{color:var(--accent);background:var(--accent-bg);border-color:var(--accent-line)}
+.guide-card-foot{display:flex;align-items:center;gap:10px;padding-top:10px;border-top:1px solid var(--border)}
+.guide-meta{margin-top:auto;font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
+/* the whole card is the toggle's hit area; «Discuti» stays above it */
+.guide-toggle{appearance:none;background:none;border:0;padding:4px 0;font:inherit;font-size:11.5px;font-weight:550;color:var(--guide-accent);display:inline-flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap}
+.guide-toggle::after{content:'';position:absolute;inset:0;z-index:0;border-radius:inherit}
+.guide-toggle svg{transition:transform 180ms var(--ease)}
+.guide-card:hover .guide-toggle svg,.guide-toggle[aria-expanded=true] svg{transform:translateX(3px)}
+.guide .guide-toggle:focus-visible{outline:none}
+.guide .guide-toggle:focus-visible::after{outline:2px solid var(--focus);outline-offset:-2px;border-radius:var(--r-xl)}
+.guide-discuss{position:relative;z-index:1;font-size:11px!important;white-space:nowrap;color:var(--text-2)}
+.guide-discuss>span{color:var(--accent);display:inline-block;transition:transform 180ms}
+.guide-discuss:hover>span{transform:translate(2px,-2px)}
+.guide-learn{position:relative;z-index:1;font-size:11px!important;white-space:nowrap;color:var(--text-2)}
+.guide-learn:hover{color:var(--accent)}
+
+/* the hero: the prominent card, wide, its diagram always visible */
+.guide-prominent{grid-column:1/-1;padding:24px 26px 14px;gap:10px;background:linear-gradient(135deg,color-mix(in srgb,var(--guide-accent) 9%,var(--surface-2)),var(--surface) 70%);border-color:var(--accent-line);box-shadow:0 18px 44px -32px var(--accent)}
+.guide-prominent::before{background:radial-gradient(60% 120% at 100% 0%,color-mix(in srgb,var(--violet) 16%,transparent),transparent 60%),radial-gradient(50% 90% at 0% 100%,color-mix(in srgb,var(--accent) 12%,transparent),transparent 60%);opacity:1}
+.guide-prominent .guide-glyph{width:46px;height:46px;border-radius:var(--r-l)}
+.guide-hero-eyebrow{font-size:10px;letter-spacing:.14em;font-weight:650;color:var(--guide-accent);text-transform:uppercase}
+.guide-prominent h3{font-size:20px;letter-spacing:-.5px}
+.guide-prominent .guide-summary{font-size:13.5px;max-width:760px;-webkit-line-clamp:unset}
+.guide-prominent .guide-diagram{margin:6px 0 6px}
+
+/* the reading panel: the shared side panel (app.css .modal-side) in the card's accent */
+.guide-panel{--guide-accent:var(--accent);position:relative}
+.guide-panel::before{content:'';position:absolute;inset:0 0 auto;height:160px;pointer-events:none;background:radial-gradient(90% 100% at 0% 0%,color-mix(in srgb,var(--guide-accent) 14%,transparent),transparent 70%)}
+.guide-panel .modal-head{position:relative}
+.guide-panel .modal-icon{width:auto;height:auto;background:none}
+.guide-panel .guide-badges{justify-content:flex-start;margin-top:6px}
+.guide-panel .guide-panel-summary{margin:0 0 18px;line-height:1.6;color:var(--text-2)}
+.guide-body{display:flex;flex-direction:column;gap:18px}
+.guide-sec h4,.guide-tech h4,.guide-target h4,.guide-coming h4{font-size:10.5px;font-weight:650;margin:0 0 10px;color:var(--text-3);letter-spacing:.1em;text-transform:uppercase}
+.guide-points{list-style:none;counter-reset:pt;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;font-size:13px;line-height:1.55}
+.guide-points li{counter-increment:pt;position:relative;padding-left:32px}
+.guide-points li::before{content:counter(pt);position:absolute;left:0;top:0;width:21px;height:21px;border-radius:50%;display:grid;place-items:center;font-size:10.5px;font-weight:650;font-variant-numeric:tabular-nums;color:var(--guide-accent);background:color-mix(in srgb,var(--guide-accent) 14%,transparent)}
+.guide-analogy{background:var(--violet-bg);border:1px solid var(--border);border-left:3px solid var(--violet);border-radius:var(--r-m);padding:12px 14px}
+.guide-analogy strong{font-size:11px;color:var(--violet);font-weight:600}
+.guide-analogy p{margin:5px 0 0;font-size:13px;line-height:1.55;color:var(--text-2)}
+.guide-tech{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-m);padding:12px 14px}
+.guide-tech h5{font-size:10px;font-weight:600;margin:14px 0 6px;color:var(--text-3);letter-spacing:.06em;text-transform:uppercase}
+.guide-tech dl{margin:0;display:flex;flex-direction:column;gap:10px}
+.guide-tech dl>div{display:flex;flex-direction:column;gap:3px}
+.guide-tech dt{font-size:11px;color:var(--text-3)}
+.guide-tech dd{margin:0;font-size:11.5px;line-height:1.55;font-family:var(--mono);color:var(--text-2);overflow-wrap:anywhere}
+.guide-sources{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.guide-sources code{font-family:var(--mono);font-size:10.5px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-s);padding:2px 7px}
+.guide-coming{background:var(--accent-bg);border:1px solid var(--accent-line);border-radius:var(--r-m);padding:12px 14px}
+.guide-coming h4{color:var(--accent)}
+.guide-coming ul{margin:0;padding-left:18px;font-size:12.5px;line-height:1.5;color:var(--text-2)}
+.guide-target{background:var(--amber-bg);border:1px solid var(--amber-line);border-radius:var(--r-m);padding:12px 14px}
+.guide-target h4{color:var(--amber)}
+.guide-target ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:5px;font-size:12.5px;line-height:1.5;color:var(--text-2)}
+
+/* diagram: numbered boxes joined by arrows; a cycle adds the way back under them */
+.guide-diagram{margin:2px 0}
+.guide-diagram ol{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;align-items:center;gap:8px 26px}
+.guide-diagram li{position:relative;display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--text);background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--r-m);padding:7px 11px;white-space:nowrap}
+.guide-diagram li+li::before{content:'';position:absolute;left:-21px;top:50%;width:14px;height:1px;background:var(--accent)}
+.guide-diagram li+li::after{content:'';position:absolute;left:-10px;top:calc(50% - 3px);border:3px solid transparent;border-left:4px solid var(--accent)}
+.guide-step-n{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;background:var(--accent-bg);color:var(--accent);font-size:9.5px;font-weight:650;flex:none}
+.guide-diagram-back{margin-top:8px;font-size:10.5px;color:var(--text-3);display:flex;align-items:center;gap:6px}
+.guide-diagram-back span{color:var(--accent);font-size:13px}
+/* in the panel the diagram is a vertical timeline */
+.guide-panel .guide-diagram ol{flex-direction:column;align-items:stretch;gap:14px}
+.guide-panel .guide-diagram li{white-space:normal;background:var(--bg-2)}
+.guide-panel .guide-diagram li+li::before{left:18px;top:-15px;width:1px;height:12px;background:var(--guide-accent)}
+.guide-panel .guide-diagram li+li::after{left:15px;top:-6px;border:3px solid transparent;border-top:4px solid var(--guide-accent)}
+.guide-panel .guide-step-n{color:var(--guide-accent);background:color-mix(in srgb,var(--guide-accent) 14%,transparent)}
+
+/* «Chiedi alla Guida» (ADR 0196): a wide question bar under the header, the answer as a card under it */
+.guide-ask{margin:0 0 22px;display:flex;flex-direction:column;gap:10px}
+.guide-ask-box{display:flex;align-items:center;gap:10px;padding:6px 6px 6px 14px;background:linear-gradient(135deg,color-mix(in srgb,var(--violet) 7%,var(--surface)),var(--surface) 60%);border:1px solid var(--border-2);border-radius:var(--r-l);transition:border-color 180ms,box-shadow 180ms}
+.guide-ask-box:focus-within{border-color:var(--accent-line);box-shadow:0 0 0 3px var(--focus-glow)}
+.guide-ask-icon{color:var(--violet);display:grid;place-items:center}
+.guide-ask-box input{flex:1;min-width:0;background:transparent;border:0;color:var(--text);font:inherit;font-size:13px;padding:8px 0}
+.guide-ask-box input:focus,.guide-ask-box input:focus-visible{outline:none}
+.guide-ask-box input::placeholder{color:var(--text-3)}
+.guide-ask-hint{margin:0 2px;font-size:11px;color:var(--text-3)}
+.guide-ask-answer{position:relative;display:flex;flex-direction:column;gap:10px;padding:14px 16px 12px;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--violet);border-radius:var(--r-m);animation:guide-enter 260ms var(--ease) both}
+.guide-ask-answer.is-error{border-left-color:var(--red)}
+.guide-ask-answer.is-error p{margin:0;font-size:12.5px;color:var(--text-2)}
+.guide-ask-answer.is-error .btn{align-self:flex-start}
+.guide-ask-q{font-size:11px;font-weight:600;color:var(--text-3);letter-spacing:.02em}
+.guide-ask-text{display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:1.6;color:var(--text)}
+.guide-ask-text p{margin:0}
+.guide-ask-text ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.guide-ask-text code{font-family:var(--mono);font-size:11px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-s);padding:1px 5px}
+.guide-ask-cite{appearance:none;font:inherit;font-size:11px;font-weight:550;color:var(--accent);background:var(--accent-bg);border:1px solid var(--accent-line);border-radius:20px;padding:0 8px;margin:0 2px;cursor:pointer;vertical-align:1px;transition:background 150ms}
+.guide-ask-cite:hover{background:color-mix(in srgb,var(--accent) 18%,transparent)}
+.guide-ask-foot{display:flex;flex-wrap:wrap;gap:6px 14px;padding-top:8px;border-top:1px solid var(--border);font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.guide-ask-skel{display:block;height:10px;width:92%;border-radius:6px;background:linear-gradient(90deg,var(--surface-2),var(--surface-3),var(--surface-2));background-size:200% 100%;animation:guide-shimmer 1.2s linear infinite}
+.guide-ask-skel.short{width:60%}
+@keyframes guide-shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+
+/* «Per te»: three compact cards, picked from what this user uses */
+.guide-foryou{margin:0 0 22px}
+.guide-foryou h2{display:flex;align-items:baseline;gap:10px;margin:0 0 10px;font-size:12px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;color:var(--text-2)}
+.guide-foryou h2 small{font-size:11px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--text-3)}
+.guide-foryou-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.guide-foryou-item{--guide-accent:var(--accent);appearance:none;font:inherit;text-align:left;display:flex;align-items:center;gap:12px;padding:10px 12px;color:var(--text);background:linear-gradient(160deg,color-mix(in srgb,var(--guide-accent) 8%,var(--surface-2)),var(--surface) 70%);border:1px solid var(--border);border-radius:var(--r-l);cursor:pointer;transition:border-color 180ms,transform 180ms}
+.guide-foryou-item:hover{border-color:color-mix(in srgb,var(--guide-accent) 55%,var(--border-2));transform:translateY(-1px)}
+.guide-foryou-item .guide-glyph{width:32px;height:32px}
+.guide-foryou-item>span:last-child{display:flex;flex-direction:column;gap:2px;min-width:0}
+.guide-foryou-item strong{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.guide-foryou-item small{font-size:10.5px;color:var(--text-3)}
+
+/* «da verificare»: the card's code changed after its text */
+.guide-badge-stale{color:var(--red);background:var(--red-bg);border-color:color-mix(in srgb,var(--red) 45%,transparent)}
+.guide-stale-note{margin:0 0 18px;padding:12px 14px;background:var(--red-bg);border:1px solid color-mix(in srgb,var(--red) 40%,transparent);border-radius:var(--r-m)}
+.guide-stale-note strong{font-size:11px;color:var(--red);font-weight:650}
+.guide-stale-note p{margin:5px 0 8px;font-size:12.5px;line-height:1.5;color:var(--text-2)}
+.guide-stale-note ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.guide-stale-note code{font-family:var(--mono);font-size:10.5px;color:var(--text-2);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-s);padding:2px 7px}
+.guide-points li.is-stale::after{content:'';position:absolute;left:-10px;top:4px;bottom:4px;width:2px;border-radius:2px;background:var(--red)}
+
+/* the diagram drawn from the code: an image (lib/viz/mermaid.ts) on the panel's quiet surface */
+.guide-code-diagram figure{margin:0;display:flex;flex-direction:column;gap:8px;padding:12px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-m)}
+.guide-code-img{appearance:none;background:none;border:0;padding:0;cursor:zoom-in;display:flex;justify-content:center}
+.guide-code-img img{display:block;height:auto}
+.guide-code-src{margin:0;font-family:var(--mono);font-size:10.5px;color:var(--text-2);white-space:pre-wrap}
+.guide-code-wait{font-size:11px;color:var(--text-3)}
+.guide-code-diagram figcaption{font-size:10.5px;color:var(--text-3)}
+
+.guide :focus-visible{outline:2px solid var(--focus);outline-offset:3px}
+@container (max-width:640px){
+  .guide-scroll{padding:22px 16px 40px}
+  .guide-prominent{padding:20px 18px 14px}
+}
+@keyframes guide-enter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){
+  .guide-card,.guide-ask-answer{animation:none}
+  .guide-ask-skel{animation:none}
+  .guide-foryou-item,.guide-foryou-item:hover{transform:none;transition:none}
+  .guide-card,.guide-card:hover,.guide-card:focus-within{transform:none;transition:none}
+  .guide-discuss>span,.guide-toggle svg{transition:none}
+}

@@ -1,0 +1,24 @@
+/* The task estimate (components/RunEstimate.tsx, ADR 0087): the strip chip's extra parts (its base, .th-estimate, is in
+   agent-strips.css), the accuracy note with its weekly bars, and the Orchestrator's plan block. Theme tokens only. */
+.th-estimate .help-tip { margin-left: 0; }
+.th-estimate .help-tip-mark { width: 13px; height: 13px; font-size: 8.5px; }
+.th-estimate-text { overflow: hidden; text-overflow: ellipsis; color: var(--text-2); }
+.th-estimate-mark { font-weight: 700; }
+.th-estimate.est-held { border-color: color-mix(in srgb, var(--green) 45%, transparent); }
+.th-estimate.est-held .th-estimate-mark, .th-estimate-mark.est-held { color: var(--green); }
+.th-estimate.est-missed { border-color: var(--amber-line); }
+.th-estimate.est-missed .th-estimate-mark, .th-estimate-mark.est-missed { color: var(--amber); }
+
+.est-acc { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.est-acc-k { font-weight: 600; color: var(--text-2); }
+.est-acc-none { margin: 4px 0 0; color: var(--text-3); font-size: 11.5px; }
+.est-bars { flex: none; overflow: visible; }
+.est-bars .est-bar { fill: color-mix(in srgb, var(--accent) 45%, transparent); }
+.est-bars .est-bar-last { fill: var(--accent); }
+.est-bars .est-bar-none { fill: var(--border-3); }
+.help-bubble .est-tip-acc { margin-top: 8px !important; padding-top: 7px; border-top: 1px solid var(--border); }
+.help-bubble .est-tip-specific { color: var(--text-3); font-size: 11.5px; }
+
+/* on a narrow strip the model · cost · folder line gives way first: the estimate stays readable */
+.chat-tile .strip-facts .th-sub-text { flex-shrink: 8; }
+.chat-tile .strip-facts .th-estimate { flex-shrink: 1; }

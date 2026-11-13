@@ -1,0 +1,7 @@
+/* Compact draft context: data first, exact agent payload on demand. No motion or overlay. */
+.reviewed-context-preview{padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px;min-width:0}
+.reviewed-context-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.reviewed-context-preview dl{margin:6px 0;display:grid;gap:4px;max-height:150px;overflow:auto}
+.reviewed-context-preview dl>div{display:grid;grid-template-columns:minmax(80px,25%) 1fr;gap:8px}
+.reviewed-context-preview dt{opacity:.7}.reviewed-context-preview dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.reviewed-context-preview details{font-size:11px}.reviewed-context-preview pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:160px;overflow:auto}

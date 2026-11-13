@@ -1,0 +1,19 @@
+{
+  "name": "routine-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Runs second-brain routine packages from a terminal: routine run | resume | watch (ADR 0175).",
+  "type": "module",
+  "bin": { "routine": "dist/routine.mjs" },
+  "files": ["dist", "demo", "README.md"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "1.63.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "config": { "rootDir": "/repo/test/e2e" },
+  "suites": [
+    {
+      "title": "settings.spec.ts",
+      "file": "settings.spec.ts",
+      "specs": [
+        { "title": "known red that still fails", "file": "settings.spec.ts", "tests": [
+          { "projectName": "parallel", "status": "unexpected", "results": [{ "status": "failed", "error": { "message": "\u001b[31mError: element(s) not found\u001b[39m\nmore" } }] }
+        ] },
+        { "title": "known red that now passes", "file": "settings.spec.ts", "tests": [
+          { "projectName": "parallel", "status": "expected", "results": [{ "status": "passed" }] }
+        ] },
+        { "title": "a green test", "file": "settings.spec.ts", "tests": [
+          { "projectName": "parallel", "status": "expected", "results": [{ "status": "passed" }] }
+        ] }
+      ]
+    },
+    {
+      "title": "browser.spec.ts",
+      "file": "browser.spec.ts",
+      "specs": [],
+      "suites": [
+        { "title": "internal browser over MCP", "file": "browser.spec.ts", "specs": [
+          { "title": "a new red", "file": "browser.spec.ts", "tests": [
+            { "projectName": "parallel", "status": "unexpected", "results": [{ "status": "timedOut", "errors": [{ "message": "Test timeout of 60000ms exceeded." }] }] }
+          ] },
+          { "title": "a skipped one", "file": "browser.spec.ts", "tests": [
+            { "projectName": "parallel", "status": "skipped", "results": [] }
+          ] },
+          { "title": "known flaky", "file": "browser.spec.ts", "tests": [
+            { "projectName": "parallel", "status": "flaky", "results": [{ "status": "failed" }, { "status": "passed" }] }
+          ] }
+        ] }
+      ]
+    }
+  ],
+  "errors": []
+}

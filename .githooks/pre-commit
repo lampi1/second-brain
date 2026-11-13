@@ -1,0 +1,5 @@
+#!/bin/sh
+# pre-commit (ADR 0061): scans the staged content with tools/guard/scan.mjs before the commit is made, and checks the
+# commit identity against guard.email; scripts/guard-commit.mjs does the work. Installed by `npm run setup`
+# (core.hooksPath .githooks). POSIX sh, so it runs under Git for Windows too. No node on PATH -> the commit is blocked.
+exec node "$(dirname "$0")/../scripts/guard-commit.mjs"

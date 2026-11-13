@@ -1,0 +1,126 @@
+// Authenticated decision reads preserve exact host scope and feedback, never revive stale assignments or grants; a later
+// version of the same task keeps its approval and a chat with no assignment gets an empty answer (#349).
+import { describe, expect, it } from 'vitest';
+import type { ChatSummary } from '../../../src/shared/contract';
+import type { WorkThread } from '../../../src/shared/workflows';
+import type { McpTool } from '../../../src/main/mcp/server';
+import { workDecisionTools } from '../../../src/main/agents/work-decisions';
+
+const chat = (id: string, patch: Partial<ChatSummary> = {}): ChatSummary => ({ id, run: { runId: `run-${id}`, startedAt: 10, taskVersion: 1 }, ...patch } as ChatSummary);
+const thread = (id: string, chatIds: string[]): WorkThread => ({ id, version: 4, stage: 'plan', status: 'active', chatIds,
+  approvedProposal: { id: `proposal-${id}`, text: 'Update the selected file' },
+  events: [{ at: 20, stage: 'plan', kind: 'approved', text: 'Update the selected file\nUser condition: only the test workspace' }] } as WorkThread);
+function fixture() {
+  const parent = chat('parent');
+  const child = chat('child', { parentId: 'parent', run: { runId: 'run-child', startedAt: 30, parentRunId: 'run-parent', taskVersion: 1 } as ChatSummary['run'] });
+  const chats = [parent, child, chat('other')], threads = [thread('own', ['parent']), thread('private', ['other'])];
+  const started = new Map<string, number>([['run-parent', 10], ['run-child', 30]]);
+  const tool = workDecisionTools({ chats: { list: () => chats }, workflows: { list: () => structuredClone(threads) }, runs: { get: id => started.has(id) ? { startedAt: started.get(id)! } : undefined } })[0]!;
+  const read = async (id = 'child', args = {}, mount = 'browser-chat') => JSON.parse(await tool.run(args, { mount, params: { chatId: id }, sessionId: '', signal: new AbortController().signal, progress: () => false } as Parameters<McpTool['run']>[1]) as string);
+  return { parent, child, chats, threads, read, started };
+}
+
+describe('agent_work_decisions', () => {
+  it('reads current parent decisions with their exact scope, identity, version and user conditions', async () => {
+    const f = fixture();
+    expect(await f.read()).toMatchObject({ source: 'host-recorded-user-decisions', chatId: 'child', runId: 'run-child', taskVersion: 1, permissionsChanged: false,
+      threads: [{ id: 'own', version: 4, approvedProposal: { id: 'proposal-own', text: 'Update the selected file' }, decision: { kind: 'approved', text: expect.stringContaining('only the test workspace') } }] });
+    expect((await f.read()).threads).toHaveLength(1);
+  });
+  it('rejects caller-selected scopes and non-worker endpoints', async () => {
+    const f = fixture();
+    await expect(f.read('child', { chatId: 'other' })).rejects.toThrow(/No arguments/);
+    await expect(f.read('child', {}, 'app')).rejects.toThrow(/own endpoint/);
+    await expect(f.read('child', {}, 'browser')).rejects.toThrow(/own endpoint/);
+    await expect(f.read('child', {}, 'chat')).rejects.toThrow(/own endpoint/);
+    await expect(f.read('missing')).rejects.toThrow(/active work assignment/);
+    f.child.isOrchestrator = true;
+    await expect(f.read()).rejects.toThrow(/active work assignment/);
+  });
+  it('refreshes the version and drops former approval on reproposal, blocking, or completion', async () => {
+    const f = fixture(), row = f.threads[0]!;
+    row.version++;
+    row.proposal = { id: 'replacement', text: 'Changed target' };
+    row.status = 'approval';
+    expect((await f.read()).threads[0]).toMatchObject({ version: 5, proposal: { id: 'replacement' } });
+    expect((await f.read()).threads[0].approvedProposal).toBeUndefined();
+    delete row.proposal;
+    row.status = 'blocked';
+    expect((await f.read()).threads[0].approvedProposal).toBeUndefined();
+    row.status = 'done';
+    expect((await f.read()).threads).toEqual([]);
+  });
+  it('does not inherit decisions through a replaced parent run or a closed ancestor', async () => {
+    const f = fixture();
+    f.parent.run!.runId = 'new-parent-run';
+    expect((await f.read()).threads).toEqual([]);
+    f.parent.run!.runId = 'run-parent';
+    f.parent.closedAt = 25;
+    expect((await f.read()).threads).toEqual([]);
+  });
+  it('preserves historical user scope across advancement and a later linked root without declaring a current grant', async () => {
+    const f = fixture(), row = f.threads[0]!;
+    row.stage = 'develop';
+    row.version = 5;
+    delete row.approvedProposal;
+    row.chatIds.push('other');
+    f.chats[2]!.run!.startedAt = 40;
+    const result = await f.read('other');
+    const own = result.threads.find((r: { id: string }) => r.id === 'own');
+    expect(own).toMatchObject({ stage: 'develop', version: 5,
+      decisionHistory: { currentAuthorization: false, events: [{ stage: 'plan', kind: 'approved', text: expect.stringContaining('only the test workspace') }] } });
+    expect(own.approvedProposal).toBeUndefined();
+    expect(own.decision).toBeUndefined();
+  });
+  it('does not apply an old approval to a new assignment in the same linked chat', async () => {
+    const f = fixture();
+    f.parent.run!.runId = 'new-parent-run';
+    f.parent.run!.startedAt = 25;
+    f.parent.run!.taskVersion = 2;
+    expect(await f.read('parent')).toMatchObject({ runId: 'new-parent-run', taskVersion: 2, threads: [{ id: 'own', version: 4 }] });
+    expect((await f.read('parent')).threads[0].approvedProposal).toBeUndefined();
+    f.parent.run!.endedAt = 30;
+    expect((await f.read('parent')).threads[0].approvedProposal).toBeUndefined();
+  });
+  it('keeps read-only decision context available after a worker reports without reopening its assignment', async () => {
+    const f = fixture();
+    f.child.run!.endedAt = 40;
+    f.child.run!.report = { via: 'agent_report' } as NonNullable<ChatSummary['run']>['report'];
+    const before = structuredClone(f.child);
+    expect(await f.read()).toMatchObject({ chatId: 'child', runId: 'run-child', permissionsChanged: false,
+      threads: [{ id: 'own', decisionHistory: { currentAuthorization: false } }] });
+    expect(f.child).toEqual(before);
+  });
+  it('shows only current assignment plans and terminates cyclic ancestry', async () => {
+    const f = fixture();
+    f.parent.plan = { phase: 'running', at: 20, clarified: [], steps: [{ title: 'Approved scope', state: 'todo' }] };
+    f.parent.run!.plan = { proposals: 1, changes: 0, approvedAt: 20 };
+    f.parent.parentId = 'child';
+    f.parent.run!.parentRunId = 'run-child';
+    expect((await f.read()).plans).toMatchObject([{ chatId: 'parent', runId: 'run-parent', plan: { at: 20 } }]);
+    delete f.parent.run!.plan;
+    f.parent.plan.at = 40; // plan_update can move a retained plan after reassignment; it is not new consent
+    expect((await f.read()).plans).toEqual([]);
+    f.parent.plan.at = 1;
+    expect((await f.read()).plans).toEqual([]);
+  });
+  it('keeps the approval current for a later version of the same task, never for a new task in the same chat (#349)', async () => {
+    const f = fixture();
+    // continued: a new run of the task the user decided on (taskId = its first run), started after the decision
+    Object.assign(f.parent.run!, { runId: 'run-parent-2', startedAt: 25, taskVersion: 2, taskId: 'run-parent' });
+    f.child.run!.parentRunId = 'run-parent-2';
+    expect((await f.read('parent')).threads[0]).toMatchObject({ approvedProposal: { id: 'proposal-own' }, decision: { kind: 'approved' } });
+    expect((await f.read()).threads[0]?.approvedProposal).toMatchObject({ id: 'proposal-own' });
+    // a new task in the reused chat: its own start, after the decision
+    Object.assign(f.parent.run!, { runId: 'run-parent-3', startedAt: 26, taskVersion: 3, taskId: 'run-parent-3' });
+    expect((await f.read('parent')).threads[0].approvedProposal).toBeUndefined();
+    // a task whose first run is unknown never inherits
+    Object.assign(f.parent.run!, { taskId: 'run-unknown' });
+    expect((await f.read('parent')).threads[0].approvedProposal).toBeUndefined();
+  });
+  it('answers a chat with no linked assignment with nothing recorded, not an error (#349)', async () => {
+    const f = fixture();
+    delete (f.child as { run?: unknown }).run;
+    expect(await f.read()).toMatchObject({ chatId: 'child', runId: null, threads: [], plans: [], permissionsChanged: false, note: expect.stringContaining('No linked assignment') });
+  });
+});

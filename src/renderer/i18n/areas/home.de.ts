@@ -1,0 +1,14 @@
+// German (de-AT) counterparts of the Home dashboard dictionary (home.it.ts).
+import type { homeIt } from './home.it';
+export const homeDe: typeof homeIt = {
+
+  'home.emptyAgents': 'Sag dem Orchestrator, was du tun willst, oder erstell deinen ersten Agenten.',
+  'home.startHere': 'Dein Ausgangspunkt',
+  'home.orchestratorWidth': 'Breite des Orchestrators', 'home.orchestratorStart': 'Womit fangen wir an?',
+  'home.orchestratorIntro': 'Ein Ort für deine Ideen, Agenten und den nächsten Schritt. Dein Orchestrator bleibt hier, während du arbeitest.',
+  'home.orchestrator': 'Orchestrator',
+  'home.agents': 'Agenten', 'home.manageAgents': 'Agenten verwalten', 'home.back': 'Zurück zum Grindhouse', 'home.workspace': 'Deine Agenten bei der Arbeit und der Orchestrator',
+  'home.chooseEngine': 'Engine des Orchestrators wählen', 
+
+  'home.works': 'Was funktioniert', 
+};

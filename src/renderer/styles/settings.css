@@ -1,0 +1,245 @@
+/* The Settings page (components/SettingsPage.tsx, ProfileSettings.tsx and the parts they host: WorkProfilePreferences,
+   CodexAutonomy, AppearancePreview, the onboarding connector cards). Layout (ADR 0207, after macOS System Settings and
+   VS Code): a sticky left column (search, then the sections in labelled groups with a coloured icon tile each, the one
+   in view marked) and on the right every section as a header and a card of rows, the text left and the control right.
+   Buttons keep one hierarchy: primary (the action), ghost (secondary), subtle (dismiss), danger. Only the app's tokens
+   (tokens.css): light and dark follow the theme by themselves; a narrow window puts the navigation on top as one
+   scrolling line and stacks each row (container queries on the page). */
+.st-page { display: grid; gap: 20px; max-width: 1120px; width: 100%; margin: 0 auto; container-type: inline-size; container-name: st; min-width: 0; }
+.st-shell { grid-template-columns: 212px minmax(0, 1fr); gap: 32px; align-items: start; }
+.st-main { display: grid; gap: 18px; min-width: 0; }
+
+/* the left column: sticky under the page's own scroll */
+.st-side { position: sticky; top: 0; display: grid; gap: 14px; align-content: start; max-height: calc(100vh - 140px); overflow: auto; padding: 6px 2px 12px; scrollbar-width: thin; }
+.st-search { min-width: 0; display: grid; gap: 6px; }
+.st-search-line { position: relative; display: flex; align-items: center; }
+.st-search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-3); display: grid; pointer-events: none; }
+.st-search-icon svg { width: 14px; height: 14px; }
+.st-search-line > .st-input { flex: 1; width: 100%; min-width: 0; height: 32px; padding: 0 28px 0 31px; text-align: left; font-size: var(--fs-s); background: var(--surface);
+  border-radius: 8px; transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+.st-search-line > .st-input::-webkit-search-cancel-button { display: none; }
+.st-search-line > .st-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-glow); }
+.st-search-clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0;
+  border-radius: 50%; background: var(--surface-4); color: var(--text-2); cursor: pointer; }
+.st-search-clear:hover { background: var(--border-3); color: var(--text); }
+.st-search-clear:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+.st-nav { display: grid; gap: 14px; }
+.st-nav-group { display: grid; gap: 1px; }
+.st-nav-label { padding: 0 10px 4px; font-size: 10.5px; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-4); }
+.st-nav-item { display: flex; align-items: center; gap: 10px; width: 100%; height: 32px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--text-2);
+  font: 500 var(--fs-s) var(--font); text-align: left; cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.st-nav-item:hover:not(:disabled) { background: var(--surface-3); color: var(--text); }
+.st-nav-item[aria-current="true"] { background: var(--surface-3); color: var(--text); font-weight: 600; box-shadow: inset 0 0 0 1px var(--border-2); }
+.st-nav-item:disabled { opacity: 0.38; cursor: default; }
+.st-nav-item:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.st-nav-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-nav-icon { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: var(--tone); color: #fff;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.18); }
+.st-nav-icon svg { width: 13px; height: 13px; }
+.st-nav-count { flex: none; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent-bg); color: var(--accent); font-size: 10.5px; font-weight: 650;
+  display: grid; place-items: center; font-variant-numeric: tabular-nums; }
+[data-tone] { --tone: var(--accent); }
+[data-tone="purple"] { --tone: var(--violet); }
+[data-tone="red"] { --tone: var(--red); }
+[data-tone="amber"] { --tone: var(--amber); }
+[data-tone="green"], [data-tone="teal"] { --tone: var(--green); }
+[data-tone="pink"] { --tone: var(--claude); }
+[data-tone="slate"] { --tone: var(--text-3); }
+
+/* the page header: title, one line, the quiet «Salvato» */
+.st-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 4px 0 2px; min-height: 64px; }
+.st-hero-text { min-width: 0; }
+.st-hero h1 { font: 600 28px/1.15 var(--font-display); letter-spacing: -0.9px; margin: 0 0 6px; color: var(--text); }
+.st-hero p { margin: 0; color: var(--text-3); font-size: 13px; line-height: 1.6; }
+.st-saved { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 6px 0 8px; border-radius: 999px; font-size: var(--fs-s); color: var(--text-2);
+  border: 1px solid transparent; opacity: 0; transform: translateY(2px); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+.st-saved[data-on="true"] { opacity: 1; transform: none; border-color: var(--border-2); background: var(--surface); }
+.st-saved-mark { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--green-bg); color: var(--green); }
+.st-saved-undo { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border: 0; border-radius: 999px; background: var(--surface-3); color: var(--text);
+  font: 600 var(--fs-xs) var(--font); cursor: pointer; }
+.st-saved-undo:hover { background: var(--surface-4); }
+.st-saved-undo:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+/* sections: a header, then a card of rows */
+.st-results { display: grid; gap: 28px; min-width: 0; }
+.st-results > [hidden] { display: none; }
+.st-card > [data-st-miss] { display: none !important; }
+::highlight(st-hit) { background-color: var(--amber-bg); color: var(--amber); text-decoration: underline; text-decoration-color: var(--amber-line); text-underline-offset: 3px; }
+.st-group { display: grid; gap: 10px; min-width: 0; scroll-margin-top: 12px; }
+.st-group-head { display: flex; align-items: center; gap: 12px; padding: 0 4px; }
+.st-group-icon { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--tone); color: #fff;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.18); }
+.st-group-icon svg { width: 15px; height: 15px; }
+.st-group-head h2 { font: 600 var(--fs-xl)/1.25 var(--font-display); letter-spacing: -0.2px; margin: 0 0 2px; color: var(--text); }
+.st-group-head h2:focus { outline: none; }
+.st-group-head h2:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.st-group-head p { margin: 0; color: var(--text-3); font-size: var(--fs-s); line-height: 1.45; max-width: 70ch; }
+.st-group-h { display: flex; align-items: center; }
+.st-card { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.st-card > * + * { border-top: 1px solid var(--border); }
+.st-card > [data-st-miss] + *, .st-card > :first-child:is([data-st-miss]) + * { border-top: 0; }
+.st-protected { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; height: 18px; padding: 0 7px; border-radius: 999px; border: 1px solid var(--amber-line);
+  background: var(--amber-bg); color: var(--amber); font-size: 10.5px; font-weight: 650; letter-spacing: 0.02em; white-space: nowrap; cursor: help; }
+
+/* rows: text left, control right */
+.st-row { display: flex; align-items: center; gap: 16px; padding: 14px 20px; min-height: 60px; }
+.st-row-block { display: block; min-height: 0; padding: 4px 20px 12px; }
+.st-row { flex-wrap: wrap; }
+.st-text { flex: 1 1 240px; min-width: 0; display: grid; gap: 3px; }
+.st-title { font-weight: 600; color: var(--text); font-size: var(--fs-m); }
+.st-title-line { display: flex; align-items: center; min-width: 0; } /* a title and its "?" (HelpTip) on one line */
+.st-desc { margin: 0; color: var(--text-3); font-size: var(--fs-s); line-height: 1.5; }
+.st-desc b { color: var(--text-2); font-weight: 600; }
+.st-desc.st-warn { color: var(--text-2); background: var(--amber-bg); border: 1px solid var(--amber-line); border-radius: 6px; padding: 6px 8px; } /* the app's own Claude copy stands in (ADR 0267) */
+.st-desc[data-testid^="st-version-"] { overflow-wrap: anywhere; }
+.st-meta { color: var(--text-4); font-size: var(--fs-xs); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.st-ctl { flex: 0 1 auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; max-width: 100%; }
+.st-tool > .st-row, .st-catalog-row > .st-row { flex-wrap: nowrap; }
+/* Account e strumenti: the ACP catalog's proposals (AcpCatalogSettings.tsx) */
+.st-catalog { display: grid; gap: 4px; padding: 14px 20px 4px; border-top: 1px solid var(--border); }
+.st-catalog > .st-catalog-row > .st-row { padding: 10px 0; min-height: 0; }
+.st-catalog code { font-family: var(--mono); font-size: 0.92em; color: var(--text-2); }
+.st-row.dim .st-title, .st-row.dim .st-desc { opacity: 0.6; }
+.st-foot { color: var(--text-4); font-size: var(--fs-xs); margin: 0; }
+.st-inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.st-empty { margin: 0; padding: 28px 20px; text-align: center; color: var(--text-3); font-size: var(--fs-m); border: 1px dashed var(--border-2); border-radius: var(--r-l); background: var(--surface); }
+
+/* an experiment and its agents */
+.st-sub { margin: 0 16px 12px 16px; border: 1px solid var(--border); border-radius: var(--r-m); background: var(--surface-2); }
+.st-sub-head { padding: 8px 12px 0; font-size: var(--fs-xs); font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.st-sub-head span { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.st-sub .st-row { padding: 8px 12px; min-height: 44px; }
+.st-sub .st-row + .st-row { border-top: 1px solid var(--border); }
+.st-sub .mono { font-family: var(--mono); font-size: 0.92em; }
+
+/* switch */
+.st-switch { position: relative; width: 38px; height: 22px; border-radius: 11px; border: 1px solid var(--border-control); background: var(--surface-4); cursor: pointer; padding: 0;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+.st-switch .st-knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--text-2); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform var(--dur) var(--ease), background var(--dur) var(--ease); }
+.st-switch.on { background: var(--accent); border-color: var(--accent); }
+.st-switch.on .st-knob { transform: translateX(16px); background: var(--on-accent); }
+.st-switch[aria-busy="true"] { opacity: 0.6; cursor: progress; }
+.st-switch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* segmented choice */
+.st-seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: var(--r-s); border: 1px solid var(--border-2); background: var(--surface-2); }
+.st-seg button { border: 0; background: transparent; color: var(--text-2); font: 550 var(--fs-s) var(--font); height: 26px; padding: 0 12px; border-radius: 6px; cursor: pointer; white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.st-seg button:hover { color: var(--text); background: var(--surface-3); }
+.st-seg button.on { background: var(--surface-4); color: var(--text); box-shadow: 0 0 0 1px var(--border-3) inset; }
+.st-seg button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+/* a list of choices (models, effort) */
+.st-select { min-width: 220px; max-width: 320px; height: 30px; padding: 0 8px; border-radius: var(--r-s); border: 1px solid var(--border-control); background: var(--surface-2);
+  color: var(--text); font: 500 var(--fs-s) var(--font); cursor: pointer; }
+.st-select:hover { border-color: var(--text-3); }
+.st-select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.st-select option { background: var(--surface); color: var(--text); }
+
+@media (prefers-reduced-motion: reduce) { .st-switch, .st-switch .st-knob, .st-seg button { transition: none; } }
+
+
+
+/* inputs, selects and read-only values */
+.st-input { width: 110px; height: 32px; padding: 0 10px; border-radius: var(--r-s); border: 1px solid var(--border-control); background: var(--surface-2); color: var(--text);
+  font: 500 var(--fs-s) var(--font); text-align: right; font-variant-numeric: tabular-nums; }
+.st-input::placeholder { color: var(--text-4); }
+.st-input:hover { border-color: var(--text-3); }
+.st-input:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-glow); }
+.st-input.st-path { width: 38ch; max-width: 100%; }
+.st-usd { display: inline-flex; align-items: center; gap: 6px; color: var(--text-3); font-size: var(--fs-s); }
+.st-value { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); font-size: var(--fs-s);
+  padding: 5px 10px; border-radius: var(--r-s); background: var(--surface-2); border: 1px solid var(--border); }
+.st-value.mono { font-family: var(--mono); }
+.st-essential select { max-width: 100%; min-height: 32px; }
+/* a plain .btn inside the page (hosted parts) reads as secondary, never as the browser's grey button */
+.st-essential .btn:not(.btn-primary):not(.btn-ghost):not(.btn-subtle):not(.btn-danger):not(.btn-danger-solid):not(.btn-amber) {
+  background: var(--surface-2); border-color: var(--border-2); color: var(--text); }
+.st-essential .btn:not(.btn-s):not(.btn-m):not(.btn-l) { min-height: 32px; padding: 0 12px; font-size: var(--fs-m); }
+.st-essential .btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Account e strumenti: one row per engine, its connection panel under it */
+.st-state { display: inline-flex; align-items: center; gap: 6px; color: var(--text-3); font-size: var(--fs-s); }
+.st-state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--text-4); }
+.st-state.on { color: var(--green); }
+.st-state.on::before { background: var(--green); box-shadow: 0 0 8px var(--green-bg); }
+.st-expand[aria-expanded="true"] { background: var(--surface-3); border-color: var(--border-3); }
+.st-tool-connection { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 8px; padding: 14px 20px 18px; background: var(--surface-2); border-top: 1px solid var(--border); }
+.st-tool-connection > p { margin: 0; color: var(--text-2); font-size: var(--fs-s); line-height: 1.5; }
+.st-tool-connection code { font-family: var(--mono); font-size: var(--fs-s); color: var(--text-2); padding: 8px 10px; border-radius: var(--r-s); background: var(--surface); border: 1px solid var(--border); overflow-wrap: anywhere; }
+.st-tool-connection > :not(.btn):not(.st-inline) { flex-basis: 100%; }
+.st-tool-connection > .st-inline { display: contents; }
+.st-key { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.st-key label { display: grid; gap: 6px; font-size: var(--fs-s); font-weight: 600; color: var(--text-2); }
+.st-key .st-input { width: 30ch; max-width: 100%; text-align: left; background: var(--surface); }
+.st-key .st-desc { align-self: center; }
+
+/* Il mio spazio: the work profile picker (WorkProfilePreferences.tsx) */
+.st-card > section.st-tool { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 16px 20px; }
+.st-card > section.st-tool > :not(label):not(.btn) { flex-basis: 100%; }
+.st-card > section.st-tool h3 { margin: 0; font-size: var(--fs-m); font-weight: 600; color: var(--text); }
+.st-card > section.st-tool h4 { margin: 8px 0 2px; font-size: var(--fs-s); font-weight: 600; color: var(--text-2); }
+.st-card > section.st-tool p { margin: 0; font-size: var(--fs-s); color: var(--text-2); line-height: 1.5; }
+.st-card > section.st-tool p.st-desc { color: var(--text-3); }
+.st-card > section.st-tool p[role="status"]:empty { display: none; }
+.st-card > section.st-tool label { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-s); color: var(--text-2); font-weight: 500; }
+.st-card > section.st-tool [data-testid="work-profile-pages"] { display: grid; gap: 6px; width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-m); background: var(--surface-2); }
+
+/* Codex: repository-scoped consent (CodexAutonomy.tsx), readable with long Windows paths */
+.st-autonomy { display: grid; gap: 10px; justify-items: start; padding: 16px 20px 18px; border-top: 1px solid var(--border); }
+.st-autonomy h3 { margin: 0; font-size: var(--fs-m); font-weight: 600; color: var(--text); }
+.st-autonomy p { margin: 0; font-size: var(--fs-s); color: var(--text-2); line-height: 1.5; max-width: 80ch; }
+.st-autonomy p.st-desc { color: var(--text-3); }
+.st-autonomy ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; width: 100%; }
+.st-autonomy li { display: flex; align-items: center; gap: 12px; padding: 6px 6px 6px 10px; border: 1px solid var(--border); border-radius: var(--r-s); background: var(--surface-2); overflow-wrap: anywhere; }
+.st-autonomy li code { flex: 1; min-width: 0; font-family: var(--mono); font-size: var(--fs-s); }
+.st-autonomy-confirm { display: grid; gap: 10px; width: 100%; padding: 12px 14px; border: 1px solid var(--accent-line); border-radius: var(--r-m); background: var(--accent-bg); }
+.st-autonomy-confirm .btn { justify-self: start; }
+
+/* Connettori: the hub (ConnectorsHub.tsx) has its own styles, styles/connectors-hub.css */
+.st-card > .hub { padding: 18px 20px 22px; }
+
+/* Aspetto e lingua: the appearance preview (AppearancePreview.tsx) */
+.st-card .appearance-picker { margin: 0; }
+.st-card .appearance-picker > summary { color: var(--text-2); font-weight: 600; padding: 8px 0; }
+.st-card .appearance-picker > summary:hover { color: var(--text); }
+.st-card .appearance-controls { background: var(--surface-2); border-color: var(--border); }
+
+/* narrow: the navigation goes on top as one scrolling line, rows stack, the controls go under their text */
+@container st (max-width: 720px) {
+  .st-shell { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .st-side { position: static; max-height: none; overflow: visible; padding: 0; }
+  .st-nav { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
+  .st-nav-group { display: contents; }
+  .st-nav-label { display: none; }
+  .st-nav-item { flex: none; width: auto; padding: 0 10px 0 6px; }
+}
+@container st (max-width: 640px) {
+  .st-hero h1 { font-size: 24px; }
+  .st-row { padding: 14px 16px; }
+  .st-tool-connection { padding: 14px 16px 16px; }
+  .st-autonomy, .st-card > section.st-tool, .st-card > .app-connectors { padding-left: 16px; padding-right: 16px; }
+  .st-row-block { padding: 4px 16px 12px; }
+  .st-value { max-width: 100%; }
+}
+@container st (max-width: 420px) { .st-group-icon { display: none; } }
+@media (prefers-reduced-motion: reduce) { .st-nav-item, .st-saved, .st-search-line > .st-input { transition: none; } }
+
+/* Aggiornamenti (AppUpdateSettings.tsx): the new commits from GitHub */
+.st-update-list { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; color: var(--text-2); font-size: 13px; }
+.st-update-list code { font-size: 12px; opacity: .75; margin-right: 4px; }
+/* Ruoli e deleghe: the model of each tier per engine (DelegationSettings.tsx) */
+.st-tiers { display:grid; gap:6px; width:100%; margin-top:8px; }
+.st-tiers-row { display:grid; grid-template-columns:minmax(90px, 140px) repeat(3, minmax(0, 1fr)); gap:8px; align-items:center; }
+.st-tiers-head { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--text-3); }
+.st-tiers-engine { font-weight:600; color:var(--text-2); }
+.st-tier-input { width:100%; min-width:0; font-family:var(--mono); font-size:12px; }
+
+/* Settings → Telefono (components/PhoneSettings.tsx, ADR 0219) */
+.st-phone-token { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.st-phone-token input { flex: 1; min-width: 180px; text-align: left; }
+.st-phone-quiet { display: flex; gap: 8px; align-items: center; }
+.st-phone-recent, .st-phone-checks { margin: 6px 0 0; padding-left: 20px; color: var(--text-2); font-size: 12.5px; line-height: 1.6; }
+.st-phone-recent time { font-variant-numeric: tabular-nums; }

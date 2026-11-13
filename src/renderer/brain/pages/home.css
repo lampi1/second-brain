@@ -1,0 +1,5 @@
+/* The Grindhouse: only the agents' strips (styles/agent-strips.css), the page gives them the width. */
+.home-page { width: 100%; min-width: 0; max-width: 1040px; margin: 0 auto; color: var(--text); padding: 12px 16px 24px; box-sizing: border-box; }
+.home-calm { color: var(--text-3); border: 1px dashed var(--border-2); border-radius: 8px; padding: 20px; font-size: 12px; line-height: 1.7; }
+[data-testid="brain-page-home"] > .bx-inner { max-width: none; min-width: 0; grid-template-columns: minmax(0, 1fr); padding: 16px 20px 32px; }
+@media (max-width: 1100px) { .home-page { padding: 0 4px 16px; } }
