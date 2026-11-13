@@ -233,6 +233,9 @@ export interface Rec {
   /** the Orchestrator only: the user's last message typed to it (PC, never the phone): his words app_resolve_question
    *  `words` must come from (shared/answer-in-words.ts, ADR 0274) */
   userSaid?: { text: string; at: number };
+  /** what the user has on screen (ADR 0276): the place his next message was sent from, and the last one the Orchestrator was told */
+  whereNow?: string;
+  whereTold?: string;
   /** the requests being answered from the phone right now: their pending:resolved says by 'phone' (one per request:
    *  a PC answer finishing first must not erase a phone one still in delivery) */
   answeringFromPhone?: Set<string>;

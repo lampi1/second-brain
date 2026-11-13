@@ -69,6 +69,7 @@ export interface UiState {
   orchestratorRenew: { chatId: string; to: Harness } | null; // the new-Orchestrator dialog: which Orchestrator, which engine preselected
   handoffChat: string | null;    // the chat whose hand-off the 'handoff' dialog shows
   mapsArg: string | null;        // the 'maps' dialog's place: <project>/<system> (ADR 0275), null = the first project
+  mapPicked: string | null;      // the box selected on the project map on screen (ADR 0276: the Orchestrator is told)
   handoffSession: string | null; // set: the note one cold continuation started from (read only, ADR 0031)
   ctxHidden: Record<string, number>; // long-chat notice hidden by the user, per chat: the context size when hidden
   page: BrainPageId;             // the page on screen; 'home' (the Grindhouse) holds the agents' strips and focus mode
@@ -160,7 +161,7 @@ function readPrefs(): Prefs {
 }
 
 export const ui = createStore<UiState>({
-  prefs: readPrefs(), maximized: null, focusMode: null, focused: null, modal: null, confirm: null, orchestratorRenew: null, handoffChat: null, mapsArg: null, handoffSession: null, ctxHidden: {}, page: 'home',
+  prefs: readPrefs(), maximized: null, focusMode: null, focused: null, modal: null, confirm: null, orchestratorRenew: null, handoffChat: null, mapsArg: null, mapPicked: null, handoffSession: null, ctxHidden: {}, page: 'home',
   lanePeek: false, toasts: [], flash: null, focusReq: null, hidden: [], hiddenTabs: [], closing: [], later: false, announce: '', qwin: { open: false, first: null, call: 0, shown: false }, viewer: emptyViewer,
   map: false, pageArg: null, mapArg: null, history: [{ page: 'home' }], hist: 0, center: false, read: readRead(), highlight: null, toastDismissed: [],
 });
@@ -215,6 +216,7 @@ export const askConfirm = (confirm: ConfirmSpec) => ui.set(s => ({ ...s, modal: 
 /** The project maps in a window (ADR 0275: in place of «Stato»), at a project or a system inside it. */
 export const openMaps = (arg?: string | null) => ui.set(s => ({ ...s, modal: 'maps', mapsArg: arg ?? s.mapsArg }));
 export const setMapsArg = (arg: string | null) => ui.set(s => ({ ...s, mapsArg: arg }));
+export const setMapPicked = (id: string | null) => ui.set(s => (s.mapPicked === id ? s : { ...s, mapPicked: id }));
 export const openHandoff = (chatId: string, session?: string) => ui.set(s => ({ ...s, modal: 'handoff', handoffChat: chatId, handoffSession: session ?? null }));
 export const setMaximized = (key: string | null) => ui.set(s => ({ ...s, maximized: key }));
 export const setFocused = (key: string | null) => { if (ui.get().focused !== key) ui.set(s => ({ ...s, focused: key })); };

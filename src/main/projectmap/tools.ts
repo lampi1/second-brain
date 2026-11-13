@@ -6,10 +6,11 @@
 // - app_project_map on the Orchestrator's own endpoint: list, read (the map as text with its agents, to answer «a che
 //   punto è X»), open (the Mappa page on that project, optionally zoomed into a system), brief (the self-contained task
 //   for a Scout chat that draws or redraws it: the Orchestrator starts it with app_create_chat), correct (the user's
-//   correction, kept for every later drawing).
+//   correction, kept for every later drawing), edit (ADR 0276: pieces added, changed, removed and linked from what the
+//   user said, no redraw; a new piece is «previsto») and undo (the version before comes back).
 // Used by wiring-shared.ts (chat tools) and appctl/tools.ts (the Orchestrator's); pinned by test/unit/projectmap-tools.test.ts.
 import type { EventMap } from '@shared/contract';
-import { MAP_ACTORS, MAP_KINDS, MAP_STATES, mapText, type ProjectMap } from '@shared/project-map';
+import { EDIT_OPS, MAP_ACTORS, MAP_KINDS, MAP_STATES, mapText, type ProjectMap } from '@shared/project-map';
 import type { McpTool } from '../mcp/server';
 import type { ProjectMaps } from './service';
 
@@ -89,7 +90,7 @@ export function chatMapTools(d: ChatMapDeps): McpTool[] {
     },
     {
       name: 'project_map_update',
-      description: `Keep a project's map current while you work: working_on = the element ids you work on now (you show on the map beside them, with your progress); changes = the new status of what you finished, broke or found blocked (each confirmed now; a status nobody confirms for 2 hours, or whose files changed after it, reads «da verificare»). Call it when you start on a mapped project and before your report. statuses: ${STATES}; actor (who must act when blocked): ${ACTORS}. A structural change (a new system, part or link) is a redraw: project_map_save.`,
+      description: `Keep a project's map current while you work: working_on = the element ids you work on now (you show on the map beside them, with your progress); changes = the new status of what you finished, broke or found blocked (each confirmed now; a status nobody confirms for 2 hours, or whose files changed after it, reads «da verificare»). Call it when you start on a mapped project and before your report. statuses: ${STATES} (planned = a piece of a plan, not there yet); actor (who must act when blocked): ${ACTORS}. A step of a plan drawn on the map moves its element by itself: no call needed for it. A structural change (a new system, part or link) is a redraw: project_map_save.`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -128,14 +129,18 @@ export function drawBrief(title: string, root: string, prev: ProjectMap | null):
 export function appProjectMapTool(maps: ProjectMaps, emitUi: (cmd: EventMap['ui:command']) => void): Tool {
   return {
     name: 'app_project_map',
-    description: 'The user\'s project maps (Mappa page → Progetti, ADR 0271): each project drawn as people, systems, parts, environments and links, with their status, who must act, the agents at work on each part and the history from the first drawing. Use it when the user asks how a project is built, where it stands, or for its map, diagram, schema, lines («fili»): open shows the real map in a window (never draw your own diagram of a project with app_show_ui); none drawn yet → brief a Scout. action: list | read (the map as text, to answer) | open (the maps window on screen, at project, element = a system to step into; no project = the maps window as it is) | brief (the task for a Scout chat that draws or redraws it: pass title and root for a new one, then start the Scout with app_create_chat, cwd = root) | correct (text = the user\'s correction, kept for every later drawing; then brief a redraw if the drawing must change).',
+    description: 'The user\'s project maps (Mappa page → Progetti, ADR 0271): each project drawn as people, systems, parts, environments and links, with their status, who must act, the agents at work on each part and the history from the first drawing. Use it when the user asks how a project is built, where it stands, or for its map, diagram, schema, lines («fili»): open shows the real map in a window (never draw your own diagram of a project with app_show_ui); none drawn yet → brief a Scout. action: list | read (the map as text, to answer) | open (the maps window on screen, at project, element = a system to step into; no project = the maps window as it is) | brief (the task for a Scout chat that draws or redraws it: pass title and root for a new one, then start the Scout with app_create_chat, cwd = root) | correct (text = the user\'s correction, kept for every later drawing; then brief a redraw if the drawing must change) | edit (ops = the pieces the talk with the user adds, changes or removes, at once and without a redraw: only you change a map, the user never does by hand; a new piece is «previsto», dashed, until work starts on it; read first for the ids; say what changed in one line) | undo (the last change comes back). The user\'s message says which map and box he looks at ([app · the user looks at …]): «qui», «questo» mean that one. Work planned in Plan mode is drawn by its Strategist; to change a plan under way, write to that Strategist (app_send_to_chat).',
     inputSchema: { type: 'object', properties: {
-      action: { type: 'string', enum: ['list', 'read', 'open', 'brief', 'correct'] },
+      action: { type: 'string', enum: ['list', 'read', 'open', 'brief', 'correct', 'edit', 'undo'] },
       project: { type: 'string', description: 'the map\'s name or id' },
       element: { type: 'string', description: 'open: a system to zoom into' },
       title: { type: 'string', description: 'brief: the new project\'s name' },
       root: { type: 'string', description: 'brief: the project\'s folder on this PC' },
       text: { type: 'string', description: 'correct: the user\'s correction, in their words' },
+      ops: { type: 'array', maxItems: 40, description: 'edit: the changes, in order', items: { type: 'object', required: ['op'], properties: {
+        op: { type: 'string', enum: [...EDIT_OPS], description: 'add (name, kind, parent for a part) | set (id + what changes) | remove (id; its parts and links go too) | link (from, to, label) | unlink (id)' },
+        id: { type: 'string' }, name: { type: 'string' }, kind: { type: 'string', enum: [...MAP_KINDS] }, description: { type: 'string' }, parent: { type: 'string' },
+        status: { type: 'string', enum: [...MAP_STATES] }, note: { type: 'string' }, actor: { type: 'string', enum: [...MAP_ACTORS] }, from: { type: 'string' }, to: { type: 'string' }, label: { type: 'string' } } } },
     }, required: ['action'] },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: a => {
@@ -159,7 +164,9 @@ export function appProjectMapTool(maps: ProjectMaps, emitUi: (cmd: EventMap['ui:
         return 'ok';
       }
       if (action === 'correct') { const m = maps.correct(project, typeof a.text === 'string' ? a.text : ''); return { ok: true, version: m.version, corrections: m.corrections.length }; }
-      throw new Error('action: list | read | open | brief | correct');
+      if (action === 'edit') { const r = maps.edit(project, a.ops, 'Orchestrator'); return { ok: true, version: r.map.version, changed: r.did, added: r.added }; }
+      if (action === 'undo') { const m = maps.undo(project, 'Orchestrator'); return { ok: true, version: m.version, summary: m.summary }; }
+      throw new Error('action: list | read | open | brief | correct | edit | undo');
     },
   };
 }

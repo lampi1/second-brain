@@ -415,7 +415,9 @@ export interface ChatsInvokeMap {
   'chat:createRouted': [RoutedNewChat, ChatSummary];
   /** text may be empty when images are attached */
   /** voice: said in the voice conversation: the engine is asked for a reply made to be heard (ADR 0152) */
-  'chat:send': [{ chatId: string; text: string; images?: ImageAttachment[]; voice?: boolean; diagnostic?: RuntimeDiagnostic }, void];
+  /** where = what the user has on screen as he sends it (page, place inside it, open window: lib/where.ts, ADR 0276):
+   *  the Orchestrator is told when it changed, so «qui» and «questo» need no explaining */
+  'chat:send': [{ chatId: string; text: string; images?: ImageAttachment[]; voice?: boolean; diagnostic?: RuntimeDiagnostic; where?: string }, void];
   'chat:answer': [{ chatId: string; requestId: string; answer: Answer }, void];
   /** a Strategist's proposed plan: «Approva e parti», or «Cambia qualcosa» with what to change (ADR 0108) */
   /** at = the proposal the user read (StrategyPlan.at): a newer one is refused, never approved unseen */

@@ -668,8 +668,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       },
     },
     {
-      name: 'app_send_to_chat', description: 'Send a message to an active app chat. For a completed role assignment use app_assign_task, which checks compatibility and creates a new run. From the Orchestrator it is read as the user\'s own message (his ok included, never for production, database writes, Azure/cloud, permissions or settings, messages to people); from any other caller as an agent\'s.',
-      inputSchema: obj({ chatId: str('chat id'), text: str('message') }, ['chatId', 'text']),
+      name: 'app_send_to_chat', description: 'Send a message to an active app chat. For a completed role assignment use app_assign_task, which checks compatibility and creates a new run. From the Orchestrator it is read as the user\'s own message (his ok included, never for production, database writes, Azure/cloud, permissions or settings, messages to people); from any other caller as an agent\'s. A chat at work reads it at its next step (an addition: nothing is thrown away); now = true stops what it is doing first (a change of course, «fermati», «stai sbagliando»): you choose from the user\'s sentence and say which you did.',
+      inputSchema: obj({ chatId: str('chat id'), text: str('message'), now: { type: 'boolean', description: 'interrupt its current step first' } }, ['chatId', 'text']),
       run: async a => {
         const text = String(a.text ?? '').trim();
         if (!text || text.length > 4000) throw new Error('text empty or longer than 4000 chars');
@@ -688,7 +688,12 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         }
         // a delegated chat paused on the user's step: his «fatto» goes to whoever owns that work (ADR 0269)
         if (authed() && target?.parentId && d.chats.userStepDone?.(target.id, text)) return 'passato a chi segue il lavoro';
+        const busy = target?.state === 'running';
+        // a change of course (ADR 0276): its current step stops, what it understood stays, this message is its next turn
+        if (a.now === true && busy && authed()) await d.chats.stop(String(a.chatId), true).catch(e => log.info('appctl', 'interrupt before a change of course failed', { chat: String(a.chatId), data: String(e) }));
         await d.chats.send(String(a.chatId), `${voice()}\n\n${text}`, undefined, false, orchestrator?.title ?? 'Orchestrator', false, orchestrator ? { kind: 'chat', chatId: orchestrator.id } : { kind: 'app' });
+        // on the project map the agent shows the change until it takes it (zero tokens)
+        if (authed()) d.projectMaps?.sent(String(a.chatId), text, busy && a.now !== true);
         log.info('appctl', 'agent message sent to chat', { chat: String(a.chatId), data: { chars: text.length } });
         const q = d.chats.list().find(c => c.id === String(a.chatId))?.queued;
         return q ? queuedLine(q) : 'sent';

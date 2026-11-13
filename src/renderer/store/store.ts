@@ -23,6 +23,7 @@ import { now as clockNow } from '../lib/clock';
 import { costHistory } from '../lib/live-costs';
 import { errText } from '../lib/ipc-error';
 import { noteOrchestratorText } from '../lib/guide-usage';
+import { whereNow } from '../lib/where';
 
 export const app = createStore<AppState>(initialState, { batch: true });
 /** How often streamed text reaches the screen (startStore): one frame, so words show as they come. */
@@ -219,7 +220,7 @@ async function sendNow(chatId: string, msg: QueuedMsg, before?: ChatSummary, opt
   inFlight.set(chatId, (inFlight.get(chatId) ?? 0) + 1);
   const done = () => { const n = (inFlight.get(chatId) ?? 1) - 1; if (n > 0) inFlight.set(chatId, n); else inFlight.delete(chatId); };
   try {
-    await sb.invoke('chat:send', { chatId, text: msg.text, ...(msg.images?.length ? { images: [...msg.images] } : {}), ...(msg.voice ? { voice: true } : {}) });
+    await sb.invoke('chat:send', { chatId, text: msg.text, ...(msg.images?.length ? { images: [...msg.images] } : {}), ...(msg.voice ? { voice: true } : {}), ...(app.get().chats[chatId]?.isOrchestrator ? { where: whereNow(id => app.get().chats[id]?.title) } : {}) });
     done();
     // a question to the Orchestrator feeds the Guida's «Per te» (lib/guide-usage.ts, ADR 0196; text kept locally only)
     if (app.get().chats[chatId]?.isOrchestrator) noteOrchestratorText(msg.text);

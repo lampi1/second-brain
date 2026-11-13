@@ -7,7 +7,7 @@ import type { ChatSummary } from '../../shared/contract';
 import { errText, log } from '../log';
 import type { UserTaskEvents, AgentRun, AgentRunOutcome } from '../../shared/agents';
 import { ownerSource, type TaskAssignmentOptions } from '../../shared/delegation';
-import { PLAN_APPROVED, planChange, askingPlan, strategyPrompt, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
+import { PLAN_APPROVED, planChange, askingPlan, strategyPrompt, withAdded, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
 import { runMetrics } from '../agents/run-metrics';
 import { standings, withStandings } from '../agents/standing';
 import { isCorrection } from '../../shared/correction';
@@ -51,14 +51,14 @@ export abstract class ManagerWork extends ManagerLifecycle {
   }
 
   /** plan_propose (agents/strategy-tools.ts): the Strategist's plan waits for the user's ok on its strip. */
-  planPropose(chatId: string, steps: PlanStep[], doneWhen?: string): StrategyPlan {
+  planPropose(chatId: string, steps: PlanStep[], doneWhen?: string, map?: string): StrategyPlan {
     const r = this.need(chatId), plan = r.s.plan;
     if (!plan) throw new Error('plan_propose: only a Strategist the Orchestrator or the user started has a plan with the user.');
     if (plan.phase === 'running' || plan.phase === 'done') throw new Error('plan_propose: the plan is approved and under way; update its steps with plan_update.');
     // «Modalità notte» (ADR 0191): nobody will click «Approva e parti», so the plan starts as proposed (its recommended
     // choice) and the tool says so; the recap tells the user
     const away = !!this.opts.away?.();
-    const proposed: StrategyPlan = { phase: away ? 'running' : 'proposed', clarified: plan.clarified, ...(plan.pcOnly ? { pcOnly: true } : {}), ...(plan.asked ? { asked: plan.asked } : {}), ...(plan.enough ? { enough: true } : {}), steps, ...(doneWhen ? { doneWhen } : {}), at: Math.max(Date.now(), plan.at + 1) };
+    const proposed: StrategyPlan = { phase: away ? 'running' : 'proposed', clarified: plan.clarified, ...(plan.pcOnly ? { pcOnly: true } : {}), ...(plan.asked ? { asked: plan.asked } : {}), ...(plan.enough ? { enough: true } : {}), steps, ...(doneWhen ? { doneWhen } : {}), ...(map ? { map } : {}), at: Math.max(Date.now(), plan.at + 1) };
     const store = this.coordination;
     const key = this.planRequestKey(r, proposed);
     const prior = store.original(r.s.id, key.originalRequestId);
@@ -88,6 +88,17 @@ export abstract class ManagerWork extends ManagerLifecycle {
     r.s.plan = withStep(plan, i, state, Date.now());
     this.persist();
     this.updated(r);
+    return structuredClone(r.s.plan);
+  }
+
+  /** plan_update add (ADR 0276): a piece found on the way joins the approved plan as one more step; no new approval. */
+  planAdd(chatId: string, step: PlanStep): StrategyPlan {
+    const r = this.need(chatId), plan = r.s.plan;
+    if (!plan) throw new Error('plan_update add: only a Strategist with a plan approved by the user has steps.');
+    r.s.plan = withAdded(plan, step, Date.now());
+    this.persist();
+    this.updated(r);
+    log.info('chats', 'plan step added on the way', { chat: chatId, data: { steps: r.s.plan.steps.length } });
     return structuredClone(r.s.plan);
   }
 

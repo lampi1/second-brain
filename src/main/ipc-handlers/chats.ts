@@ -25,6 +25,7 @@ export function chatsHandlers({ s, activity, orchestrator, clip }: HandlerContex
     'chat:createRouted': a => createRoutedChat({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h), create: r => s.chats.create(r) }, a, { byUser: true }),
     'chat:send': async a => {
       noteUserTyped(a.chatId);
+      s.chats.userWhere?.(a.chatId, a.where);
       const spoken = a.voice === true && typeof a.text === 'string';
       if (spoken) s.chats.spokenNext?.(a.chatId, a.text);
       const said = s.userCorrections && typeof a.text === 'string' ? s.chats.correctionContext?.(a.chatId) ?? null : null; // ADR 0197

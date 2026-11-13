@@ -424,7 +424,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
       this.runs.flashEvent({ kind: r.s.quick ? 'asked' : 'handed', text, at: Date.now() });
     }
     // what the engine must know for agent_report goes to the engine only, never into the user's bubble (#158, #170)
-    const hint = !resumed && !liveOnly ? this.taskHint(r, text, source) + (r.s.isOrchestrator && from === undefined && ownerSource(source) && !appText ? this.openAsksHint() : '') : '';
+    const hint = !resumed && !liveOnly ? this.taskHint(r, text, source) + (r.s.isOrchestrator && from === undefined && ownerSource(source) && !appText ? this.whereHint(r, phone) + this.openAsksHint() : '') : '';
     // a new assignment from the Orchestrator: whether the user waits for it is decided again (#123)
     if (from !== undefined && !r.s.parentId && !r.s.isOrchestrator && r.s.run?.startedBy === 'orchestrator' && source?.kind === 'chat' && source.chatId === this.openOrchestrator()?.s.id) r.userWaits = this.orchestratorAnswering();
     if (!this.admission) return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint, phoneVia, relayed);
@@ -514,6 +514,22 @@ export class ChatManager extends ManagerRemote implements ChatService {
     }
     if ((run.taskVersion ?? 1) > 1 && source?.kind !== 'app') lines.push(`Task version ${run.taskVersion}: include taskVersion: ${run.taskVersion} in agent_report.`);
     return lines.length ? `\n\n[${lines.join('\n')}]` : '';
+  }
+
+  /** What the user has on screen when he writes from the PC (ADR 0276; chat:send's `where`, written by the renderer). */
+  userWhere(chatId: string, where: unknown): void {
+    const r = this.chats.get(chatId);
+    if (!r?.s.isOrchestrator) return;
+    r.whereNow = typeof where === 'string' && where.trim() ? where.replace(/[\[\]\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300) : undefined;
+  }
+
+  /** One line for the Orchestrator, only when the place changed since it was last told (the owner: «deve sempre sapere
+   *  dove è l'utente e che mappa sta visualizzando»); a phone message says he is not at the PC. Engine only, never the bubble. */
+  private whereHint(r: Rec, phone: boolean): string {
+    const where = phone ? 'il telefono (non è al PC)' : r.whereNow;
+    if (!where || where === r.whereTold) return '';
+    r.whereTold = where;
+    return `\n\n[app · the user looks at: ${where}]`;
   }
 
   /** The user writes to the Orchestrator while work chats wait on his answer (ADR 0274): it reads which, so his words

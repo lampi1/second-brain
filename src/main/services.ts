@@ -55,6 +55,8 @@ export interface ChatService {
   resumedByUser?(chatId: string, text?: string): void;
   /** ADR 0197: the chat's title and its reported run before a user message; the after-report correction of that run */
   correctionContext?(chatId: string): { title: string; reportedRunId: string | null } | null;
+  /** what the user has on screen as he writes to the Orchestrator (ADR 0276) */
+  userWhere?(chatId: string, where: unknown): void;
   correctedAfterReport?(runId: string): void;
   /** the user's next message to this chat was said in the voice conversation: the reply is made to be heard */
   spokenNext?(chatId: string, text: string | null): void;

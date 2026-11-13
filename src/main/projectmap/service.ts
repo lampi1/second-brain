@@ -7,11 +7,16 @@
 //   (shared/project-map.ts shownStatus) until an agent confirms it again.
 // It watches the events main sends to the page (chat:item, chat:updated, chat:removed), like run/results.ts, and tells
 // the page 'projectmap:changed' (debounced). The bindings and the edit times live in userData/project-map.json.
+// - Planning (ADR 0276), all without tokens: a Strategist's plan drawn on a map (planDraw) shows its steps as works on
+//   their elements (view), binds the chats delegated for a step to that element and moves the element's status with the
+//   steps (syncPlan, on every chat:updated: under way → work, every step done → ok, one blocked → blocked). The
+//   Orchestrator changes a drawing piece by piece (edit) and takes its last change back (undo). A change the
+//   Orchestrator sends to an agent at work shows on the map until the agent takes it at its next turn (sent).
 // Used by wiring-shared.ts attachProjectMaps; pinned by test/unit/projectmap-service.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ChatItem, ChatSummary, PendingRequest } from '@shared/contract';
-import { applyChanges, checkMap, elementOfFile, isMapId, MAP_LIMITS, projectSlug, type MapAgent, type ProjectMap, type ProjectMapInfo, type ProjectMapView } from '@shared/project-map';
+import { applyChanges, applyEdit, checkMap, elementOfFile, isMapId, MAP_LIMITS, projectSlug, type MapAgent, type MapPlan, type MapState, type MapWork, type ProjectMap, type ProjectMapInfo, type ProjectMapView } from '@shared/project-map';
 import { askLine } from '../appctl/digest';
 import { markOf, progressOf } from '../appctl/agents-recap';
 import { errText, log } from '../log';
@@ -31,7 +36,8 @@ export interface ProjectMapsDeps {
 }
 
 interface Focus { project: string; elements: string[]; at: number }
-interface State { focus: Record<string, Focus>; changed: Record<string, Record<string, number>> }
+interface Sent { text: string; at: number; seenAt?: number }
+interface State { focus: Record<string, Focus>; changed: Record<string, Record<string, number>>; sent?: Record<string, Sent> }
 /** a chat that ended stays on its map this long, as «finito» */
 const ENDED_MS = 12 * 3600_000;
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'edit', 'write', 'apply_patch']);
@@ -63,7 +69,7 @@ export class ProjectMaps {
   constructor(private readonly d: ProjectMapsDeps) {
     try {
       const s = JSON.parse(fs.readFileSync(d.stateFile, 'utf8')) as Partial<State>;
-      this.state = { focus: s.focus && typeof s.focus === 'object' ? s.focus : {}, changed: s.changed && typeof s.changed === 'object' ? s.changed : {} };
+      this.state = { focus: s.focus && typeof s.focus === 'object' ? s.focus : {}, changed: s.changed && typeof s.changed === 'object' ? s.changed : {}, sent: s.sent && typeof s.sent === 'object' ? s.sent : {} };
     } catch { /* first start: nothing bound yet */ }
   }
 
@@ -82,7 +88,145 @@ export class ProjectMaps {
   view(project: string, version?: number): ProjectMapView | null {
     const map = version === undefined ? this.d.store.get(project) : this.d.store.version(project, version);
     if (!map) return null;
-    return { map, history: this.d.store.history(project), agents: this.agents(project), changed: this.state.changed[project] ?? {} };
+    const { works, plans } = version === undefined ? this.works(project) : { works: {}, plans: [] };
+    // a step under way vouches for its element now: the app sees it, so the status never reads «da verificare» meanwhile
+    const now = this.now();
+    const live = map.elements.some(e => works[e.id]?.some(w => w.state === 'now')) ? { ...map, elements: map.elements.map(e => (works[e.id]?.some(w => w.state === 'now') ? { ...e, confirmedAt: now } : e)) } : map;
+    return { map: live, history: this.d.store.history(project), agents: this.agents(project), changed: this.state.changed[project] ?? {}, works, plans };
+  }
+
+  /** The plans drawn on a project's map and their steps, per element: read from the chats, never saved (ADR 0276). */
+  private works(project: string): { works: Record<string, MapWork[]>; plans: MapPlan[] } {
+    const works: Record<string, MapWork[]> = {}, plans: MapPlan[] = [], now = this.now();
+    for (const c of this.d.chats()) {
+      const p = c.plan;
+      if (!p || p.map !== project || p.phase === 'asking') continue;
+      if ((c.closedAt || c.state === 'closed') && (p.phase !== 'done' && p.phase !== 'running' || now - (c.closedAt ?? c.updatedAt) > ENDED_MS)) continue;
+      plans.push({ chatId: c.id, title: c.title, phase: p.phase, at: p.at, steps: p.steps.length, done: p.steps.filter(x => x.state === 'done').length, ...(p.doneWhen ? { doneWhen: p.doneWhen } : {}) });
+      p.steps.forEach((x, i) => { if (x.on) (works[x.on] ??= []).push({ title: x.title, state: x.state, ...(x.role ? { role: x.role } : {}), chatId: c.id, step: i + 1, chatIds: x.chatIds ?? [], ...(x.added ? { added: true } : {}) }); });
+    }
+    return { works, plans: plans.sort((a, b) => b.at - a.at) };
+  }
+
+  elementsOf(project: string): string[] { return this.d.store.get(project)?.elements.map(e => e.id) ?? []; }
+
+  /** A piece-by-piece change (ADR 0276): the Orchestrator's, from what the user said, or a plan's. One version. */
+  edit(project: string, ops: unknown, by: string, plan?: string): { map: ProjectMap; did: string[]; added: string[] } {
+    const prev = this.d.store.get(project);
+    if (!prev) throw new Error(`nessuna mappa «${project}»`);
+    const now = this.now();
+    const { elements, links, did, added } = applyEdit(prev, ops, now, plan);
+    const map: ProjectMap = { ...prev, elements, links, version: prev.version + 1, updatedAt: now, by, summary: did.join(' · ').slice(0, MAP_LIMITS.summary) };
+    this.d.store.save(map);
+    const ids = new Set(elements.map(e => e.id));
+    for (const f of Object.values(this.state.focus)) if (f.project === project) f.elements = f.elements.filter(id => ids.has(id));
+    this.persist();
+    this.changed(project);
+    return { map, did, added };
+  }
+
+  /** «Annulla»: the drawing of the version before the current one comes back, as a new version (the history keeps both). */
+  undo(project: string, by: string): ProjectMap {
+    const cur = this.d.store.get(project);
+    if (!cur) throw new Error(`nessuna mappa «${project}»`);
+    const before = cur.version > 1 ? this.d.store.version(project, cur.version - 1) : null;
+    if (!before) throw new Error('niente da annullare: la mappa ha una sola versione');
+    const map: ProjectMap = { ...cur, elements: before.elements, links: before.links, corrections: before.corrections, version: cur.version + 1, updatedAt: this.now(), by, summary: `annullato: ${cur.summary}`.slice(0, MAP_LIMITS.summary) };
+    this.d.store.save(map);
+    this.changed(project);
+    return map;
+  }
+
+  /** plan_propose / plan_update add with a map (agents/strategy-tools.ts): the plan's new pieces go on the project's map,
+   *  dashed; the unstarted pieces of this chat's earlier proposal leave first (keep = false). A project with no map
+   *  gets one made of these pieces only: nobody waits for a Scout to read the whole project. */
+  planDraw(chatId: string, a: { project?: unknown; title?: unknown; add?: unknown; links?: unknown; keep?: unknown }): { project: string; elements: string[]; added: string[] } {
+    const chat = this.d.chats().find(c => c.id === chatId);
+    const by = chat?.title || 'Strategist';
+    const name = typeof a.project === 'string' && a.project.trim() ? a.project.trim() : typeof a.title === 'string' ? a.title.trim() : '';
+    if (!name) throw new Error('map: project (an existing map) or title (a new one).');
+    const add = a.add === undefined ? [] : a.add, links = a.links === undefined ? [] : a.links;
+    if (!Array.isArray(add) || add.length > 20 || !Array.isArray(links) || links.length > 20) throw new Error('map: add and links are lists of up to 20.');
+    let project = this.resolve(name);
+    if (!project) {
+      if (!add.length) throw new Error(`map: no map «${name.slice(0, 80)}» yet (maps: ${this.list().map(m => m.project).join(', ') || 'none'}). Give title and, in add, the pieces this work touches.`);
+      const first = this.save({ title: name, ...(chat?.cwd ? { defaultRoot: chat.cwd } : {}), by, summary: 'mappa nata da un piano',
+        map: { elements: add.map(x => ({ status: 'planned', ...(x as object), evidence: [], id: (x as { id?: unknown }).id ?? projectSlug(String((x as { name?: unknown }).name ?? '')) })), links } });
+      project = first.project;
+      const mine = first.elements.map(e => ({ ...e, plan: chatId, addedAt: first.updatedAt }));
+      this.d.store.save({ ...first, elements: mine });
+      return { project, elements: mine.map(e => e.id), added: mine.map(e => e.id) };
+    }
+    const prev = this.d.store.get(project)!;
+    const stale = a.keep === true ? [] : prev.elements.filter(e => e.plan === chatId && e.status === 'planned').map(e => e.id);
+    // parts go with their system: remove the holders first, then what is left
+    const gone = new Set<string>();
+    const ops: unknown[] = [];
+    for (const id of stale) { const e = prev.elements.find(x => x.id === id)!; if (e.parent && (gone.has(e.parent) || stale.includes(e.parent))) continue; gone.add(id); ops.push({ op: 'remove', id }); }
+    for (const x of add) ops.push({ ...(x && typeof x === 'object' ? x : {}), op: 'add' });
+    for (const l of links) ops.push({ ...(l && typeof l === 'object' ? l : {}), op: 'link' });
+    if (!ops.length) return { project, elements: prev.elements.map(e => e.id), added: [] };
+    const r = this.edit(project, ops, by, chatId);
+    return { project, elements: r.map.elements.map(e => e.id), added: r.added };
+  }
+
+  /** The unstarted pieces of a plan that will never run (its chat was removed, or closed before the user's ok) leave the maps. */
+  private dropPlan(chatId: string): void {
+    for (const info of this.list()) {
+      const m = this.d.store.get(info.project);
+      const ids = m?.elements.filter(e => e.plan === chatId && e.status === 'planned').map(e => e.id) ?? [];
+      if (!m || !ids.length) continue;
+      const tops = ids.filter(id => { const e = m.elements.find(x => x.id === id)!; return !e.parent || !ids.includes(e.parent); });
+      try { this.edit(info.project, tops.map(id => ({ op: 'remove', id })), 'app'); } catch (err) { log.warn('projectmap', 'planned pieces not removed', { cause: errText(err), hint: 'they stay dashed on the map; ask the Orchestrator to remove them' }); }
+    }
+  }
+
+  /** A plan drawn on a map moved (chat:updated): its delegated chats show on their step's element, and the element's
+   *  status follows its steps. Zero tokens: the app already holds all of it. A version only when a status really changes. */
+  private syncPlan(c: ChatSummary): void {
+    const p = c.plan;
+    if (!p?.map) return;
+    if ((c.closedAt || c.state === 'closed') && (p.phase === 'proposed' || p.phase === 'revising')) { this.dropPlan(c.id); return; }
+    const map = this.d.store.get(p.map);
+    if (!map) return;
+    const now = this.now(), ids = new Set(map.elements.map(e => e.id));
+    let bound = false;
+    const bind = (chatId: string, el: string) => {
+      const f = this.state.focus[chatId];
+      if (!f || f.project !== p.map) { this.state.focus[chatId] = { project: p.map!, elements: [el], at: now }; bound = true; }
+      else if (!f.elements.includes(el)) { f.elements.push(el); bound = true; }
+    };
+    const by = new Map<string, string[]>();
+    for (const s of p.steps) {
+      if (!s.on || !ids.has(s.on)) continue;
+      by.set(s.on, [...(by.get(s.on) ?? []), s.state]);
+      for (const id of s.chatIds ?? []) bind(id, s.on);
+      // a step the Strategist does itself
+      if (s.state === 'now' && !s.chatIds?.length) bind(c.id, s.on);
+    }
+    if (bound) this.persist();
+    const changes: { id: string; status: MapState }[] = [];
+    if (p.phase === 'running' || p.phase === 'done') for (const [id, states] of by) {
+      const want: MapState | null = states.includes('blocked') ? 'blocked' : states.every(x => x === 'done') ? 'ok' : states.some(x => x !== 'todo') ? 'work' : null;
+      if (want && map.elements.find(e => e.id === id)!.status !== want) changes.push({ id, status: want });
+    }
+    if (changes.length) {
+      const name = (id: string) => map.elements.find(e => e.id === id)?.name ?? id;
+      const label = { ok: 'funziona', work: 'in lavorazione', blocked: 'bloccato', unknown: 'da capire', planned: 'previsto' } as const;
+      try { this.update(p.map, { changes, by: 'app', summary: changes.map(x => `${name(x.id)}: ${label[x.status]}`).join(' · ') }); }
+      catch (err) { log.warn('projectmap', 'plan not mirrored on its map', { cause: errText(err), hint: 'the map keeps its last statuses; the next plan change retries' }); }
+    } else this.changed(p.map);
+  }
+
+  /** The Orchestrator sent a change to an agent at work (app_send_to_chat): the map shows it on that agent until the
+   *  agent takes it. busy = it is mid-turn (it reads the message at its next turn); otherwise it has it now. */
+  sent(chatId: string, text: string, busy: boolean): void {
+    const f = this.state.focus[chatId];
+    if (!f) return;
+    const at = this.now();
+    (this.state.sent ??= {})[chatId] = { text: text.replace(/\s+/g, ' ').trim().slice(0, 120), at, ...(busy ? {} : { seenAt: at }) };
+    this.persist();
+    this.changed(f.project);
   }
 
   /** A whole drawing (project_map_save): a new map, or the next version of an existing one. */
@@ -176,6 +320,7 @@ export class ProjectMaps {
         // a delegated chat's question is its parent's (ADR 0083): only that it waits
         ...(mark === 'wait' && rs[0] && !c.parentId ? { ask: askLine(rs[0]) } : {}),
         since: f.at, elements: f.elements,
+        ...(this.state.sent?.[chatId] && now - this.state.sent[chatId]!.at < ENDED_MS ? { change: this.state.sent[chatId]! } : {}),
       });
     }
     const order = ['wait', 'error', 'run', 'queue', 'idle', 'done'];
@@ -186,15 +331,20 @@ export class ProjectMaps {
   observe(channel: string, payload: unknown): void {
     try {
       if (channel === 'chat:item') this.item(payload as { chatId: string; item: ChatItem });
-      else if (channel === 'chat:updated') { const f = this.state.focus[(payload as ChatSummary).id]; if (f) this.changed(f.project); }
+      else if (channel === 'chat:updated') { const c = payload as ChatSummary; this.syncPlan(c); const f = this.state.focus[c.id]; if (f) this.changed(f.project); }
       else if (channel === 'chat:removed') {
         const id = (payload as { chatId: string }).chatId, f = this.state.focus[id];
+        this.dropPlan(id);
+        if (this.state.sent?.[id]) delete this.state.sent[id];
         if (f) { delete this.state.focus[id]; this.persist(); this.changed(f.project); }
       }
     } catch (err) { log.warn('projectmap', 'project map event not read', { cause: errText(err), hint: 'the map keeps its last state; the next event retries' }); }
   }
 
   private item({ chatId, item }: { chatId: string; item: ChatItem }): void {
+    // a turn ended: the change that waited behind it is the agent's now
+    const sent = this.state.sent?.[chatId];
+    if (item.kind === 'result' && sent && !sent.seenAt && item.at >= sent.at) { sent.seenAt = item.at; this.persist(); const f = this.state.focus[chatId]; if (f) this.changed(f.project); }
     if (item.kind !== 'tool' || item.status !== 'ok') return;
     const files = [...(item.diff?.map(x => x.path) ?? [])];
     if (!files.length && EDIT_TOOLS.has(item.name)) {

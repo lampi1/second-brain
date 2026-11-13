@@ -30,6 +30,10 @@ export interface PlanStep {
   chatIds?: string[];
   startedAt?: number;
   endedAt?: number;
+  /** the element of the project's map it works on (ADR 0276): the map shows the step there, live */
+  on?: string;
+  /** added while the plan was under way (plan_update add): the user approved the plan without it */
+  added?: true;
 }
 /** One answer the user gave while it asked: what was asked (the question's short header, else the question) and the answer. */
 export interface Clarified {
@@ -56,8 +60,12 @@ export interface StrategyPlan {
   asked?: number;
   /** the user answered «Basta domande»: the plan may come now, whatever the count */
   enough?: boolean;
+  /** the project map this plan is drawn on (its folder name, ADR 0276) */
+  map?: string;
 }
 
+/** a plan under way may grow by the pieces it discovers (plan_update add), up to this many steps in all */
+export const STEPS_ALL_MAX = 16;
 export const STEPS_MIN = 1, STEPS_MAX = 8, STEP_TITLE_MAX = 120, STEP_DETAIL_MAX = 200, QUESTIONS_MIN = 3, QUESTIONS_MAX = 8, DONE_WHEN_MAX = 200, CLARIFIED_MAX = 8, CLARIFIED_TEXT_MAX = 120;
 /** what the user's «Approva e parti» sends to the Strategist (also how its transcript shows the click) */
 export const PLAN_APPROVED = 'Piano approvato: parti.';
@@ -78,8 +86,8 @@ export const ENOUGH_QUESTIONS = 'Basta domande: proponi ora il piano con quello 
 export const STRATEGY_FLOW = [
   '[app · how you work with the user here]',
   `1. Use the existing question panel, one concrete yes/no question at a time. Check the evidence before asking; cover the goal, scope, constraints or acceptance criteria that still matter. Offer Sì / No with a short reason for the recommended choice and accept a typed answer. Count at least ${QUESTIONS_MIN} answered questions, including the intake answer when supplied. Never repeat a settled choice. Stop at ${QUESTIONS_MAX}, or sooner when the user says «Basta domande». A concrete drawback warrants one counterproposal; if the user confirms their choice, proceed with it.`,
-  `2. Then propose the plan with plan_propose: 2 to 6 steps, each one short plain line in the user's language with the role that does it (and, if useful, a short \`detail\`); no jargon, no sub-steps. The user's approval is required, always: end your turn and wait; the user approves with the panel ("${PLAN_APPROVED}") or an explicit typed approval, or writes what to change, and then you propose again. The app refuses agent_delegate and agent_assign_task until the user approved.`,
-  '3. Once approved, inspect agent_children and reuse a compatible child with agent_assign_task, or delegate new work with agent_delegate, giving its number as `step` (independent steps in parallel). A step you do yourself: plan_update it to "now", then to "done". The user follows the steps on your strip. At the end, agent_report as usual.',
+  `2. Then propose the plan with plan_propose: 2 to 6 steps, each one short plain line in the user's language with the role that does it (and, if useful, a short \`detail\`); no jargon, no sub-steps. When the work is on a project (its code or systems), draw the plan on the project's map: pass \`map\` (the project; \`add\` = the pieces that do not exist yet) and each step's \`on\` (the element it works on; one element may hold several steps and agents). The user reads the map, not a list. The user's approval is required, always: end your turn and wait; the user approves with the panel ("${PLAN_APPROVED}") or an explicit typed approval, or writes what to change, and then you propose again. The app refuses agent_delegate and agent_assign_task until the user approved.`,
+  '3. Once approved, inspect agent_children and reuse a compatible child with agent_assign_task, or delegate new work with agent_delegate, giving its number as `step` (independent steps in parallel). A step you do yourself: plan_update it to "now", then to "done". A piece you discover on the way: plan_update `add` it and go on, no new approval. The user follows the steps on your strip and on the map. At the end, agent_report as usual.',
 ].join('\n');
 
 const line = (v: unknown, max: number, what: string): string => {
@@ -96,15 +104,19 @@ export function checkProposal(a: Record<string, unknown>): { steps: PlanStep[]; 
   const steps = raw.map((v, i): PlanStep => {
     const s = v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : null;
     if (!s) throw new Error(`steps[${i}]: object required.`);
-    const extra = Object.keys(s).find(k => k !== 'title' && k !== 'role' && k !== 'detail');
+    const extra = Object.keys(s).find(k => k !== 'title' && k !== 'role' && k !== 'detail' && k !== 'on');
+    if (s.on !== undefined && !(typeof s.on === 'string' && /^[a-z0-9][a-z0-9-]{0,47}$/.test(s.on))) throw new Error(`steps[${i}].on: a map element id.`);
     if (extra) throw new Error(`steps[${i}]: unknown field ${extra}.`);
     if (s.role !== undefined && !isWorkRole(s.role)) throw new Error(`steps[${i}].role: one of the work roles, or leave it out for a step you do yourself.`);
     const detail = s.detail === undefined || s.detail === '' ? undefined : line(s.detail, STEP_DETAIL_MAX, `steps[${i}].detail`);
-    return { title: line(s.title, STEP_TITLE_MAX, `steps[${i}].title`), ...(detail ? { detail } : {}), ...(s.role !== undefined ? { role: s.role as WorkRoleId } : {}), state: 'todo' };
+    return { title: line(s.title, STEP_TITLE_MAX, `steps[${i}].title`), ...(detail ? { detail } : {}), ...(s.role !== undefined ? { role: s.role as WorkRoleId } : {}), state: 'todo', ...(s.on !== undefined ? { on: s.on as string } : {}) };
   });
   const doneWhen = a.doneWhen === undefined ? undefined : line(a.doneWhen, DONE_WHEN_MAX, 'doneWhen');
   return { steps, ...(doneWhen ? { doneWhen } : {}) };
 }
+
+/** One step given on the way (plan_update add), checked like a proposed one. */
+export function checkStep(v: unknown): PlanStep { return checkProposal({ steps: [v] }).steps[0]!; }
 
 export function interviewNeedsPC(plan: StrategyPlan): boolean {
   return !!plan.pcOnly || (plan.asked ?? 0) > plan.clarified.length || plan.clarified.some(line =>
@@ -163,6 +175,14 @@ export function withStep(plan: StrategyPlan, i: number, state: StepState, now: n
   return { ...plan, steps, ...(done ? { phase: 'done' as const, at: now } : plan.phase === 'done' ? { phase: 'running' as const, at: now } : {}) };
 }
 
+/** A piece the Strategist found while the plan was under way (plan_update `add`, ADR 0276; the owner: «lo aggiunge e va avanti»):
+ *  one more step, to do, marked as added. */
+export function withAdded(plan: StrategyPlan, step: PlanStep, now: number): StrategyPlan {
+  if (plan.phase !== 'running' && plan.phase !== 'done') throw new Error('plan_update add: only a plan the user approved grows; before that, propose it again with plan_propose.');
+  if (plan.steps.length >= STEPS_ALL_MAX) throw new Error(`plan_update add: a plan holds at most ${STEPS_ALL_MAX} steps.`);
+  return { ...plan, phase: 'running', at: plan.phase === 'done' ? now : plan.at, steps: [...plan.steps, { ...step, state: 'todo', added: true }] };
+}
+
 /** Step i got these delegated chats: it is under way. */
 export function withDelegated(plan: StrategyPlan, i: number, chatIds: string[], now: number): StrategyPlan {
   const s = plan.steps[i]!;
@@ -210,16 +230,17 @@ export function readPlan(v: unknown): StrategyPlan | null {
   const time = (x: unknown) => x === undefined || (typeof x === 'number' && Number.isFinite(x) && x > 0);
   if (!Array.isArray(p.clarified) || p.clarified.length > CLARIFIED_MAX || !p.clarified.every(c => c && str(c.q, CLARIFIED_TEXT_MAX) && str(c.a, CLARIFIED_TEXT_MAX))) return null;
   if (p.asked !== undefined && !(Number.isSafeInteger(p.asked) && (p.asked as number) >= 0)) return null;
-  if (!Array.isArray(p.steps) || p.steps.length > STEPS_MAX || !p.steps.every(s => s && str(s.title, STEP_TITLE_MAX) && (s.detail === undefined || str(s.detail, STEP_DETAIL_MAX)) && (s.role === undefined || isWorkRole(s.role))
+  if (!Array.isArray(p.steps) || p.steps.length > STEPS_ALL_MAX || !p.steps.every(s => s && str(s.title, STEP_TITLE_MAX) && (s.detail === undefined || str(s.detail, STEP_DETAIL_MAX)) && (s.role === undefined || isWorkRole(s.role))
     && (s.outcome === undefined || ['done', 'partial', 'blocked'].includes(s.outcome)) && STEP_STATES.includes(s.state) && (s.chatIds === undefined || Array.isArray(s.chatIds) && s.chatIds.length <= 10 && s.chatIds.every((id: unknown) => typeof id === 'string' && /^[\w-]{1,80}$/.test(id)))
-    && time(s.startedAt) && time(s.endedAt))) return null;
+    && time(s.startedAt) && time(s.endedAt) && (s.on === undefined || str(s.on, 48)))) return null;
+  if (p.map !== undefined && !str(p.map, 48)) return null;
   if (p.doneWhen !== undefined && !str(p.doneWhen, DONE_WHEN_MAX)) return null;
   return {
     phase: p.phase as PlanPhase, at: p.at as number, clarified: (p.clarified as Clarified[]).map(c => ({ q: c.q, a: c.a, ...(typeof c.pcOnly === 'boolean' ? { pcOnly: c.pcOnly } : {}), ...(typeof c.questionHash === 'string' && /^[0-9a-f]{64}$/.test(c.questionHash) ? { questionHash: c.questionHash } : {}) })),
     ...(p.pcOnly === true ? { pcOnly: true } : {}), ...(p.asked ? { asked: p.asked as number } : {}), ...(p.enough === true ? { enough: true } : {}),
     steps: (p.steps as PlanStep[]).map(s => ({ title: s.title, ...(s.detail ? { detail: s.detail } : {}), ...(s.role ? { role: s.role } : {}), state: s.state, ...(s.outcome ? { outcome: s.outcome } : {}), ...(s.chatIds ? { chatIds: [...s.chatIds] } : {}),
-      ...(s.startedAt ? { startedAt: s.startedAt } : {}), ...(s.endedAt ? { endedAt: s.endedAt } : {}) })),
-    ...(p.doneWhen ? { doneWhen: p.doneWhen as string } : {}),
+      ...(s.startedAt ? { startedAt: s.startedAt } : {}), ...(s.endedAt ? { endedAt: s.endedAt } : {}), ...(s.on ? { on: s.on } : {}), ...(s.added === true ? { added: true as const } : {}) })),
+    ...(p.doneWhen ? { doneWhen: p.doneWhen as string } : {}), ...(p.map ? { map: p.map as string } : {}),
   };
 }
 

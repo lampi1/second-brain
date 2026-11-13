@@ -661,7 +661,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), balancedMode, label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools,
     remember: (roleId, line, chat) => { skillLessons.propose({ role: portableId(roleId), text: line, chatId: chat.id, ...(chat.run?.runId ? { runId: chat.run.runId } : {}) }); } }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
-  addChatTools(strategyTools(manager, awayOn));
+  addChatTools(strategyTools(manager, awayOn, projectMaps));
   // the yes/no question of a chat whose engine has no question tool of its own (OpenCode over ACP)
   addChatTools(askTools(manager));
   addChatTools(workDecisionTools({ chats: manager, workflows, runs: manager.runs }));
