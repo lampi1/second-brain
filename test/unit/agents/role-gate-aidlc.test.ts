@@ -58,7 +58,10 @@ describe('AI-DLC sub-agents', () => {
     fs.writeFileSync(path.join(root, '.claude', 'evil.md'), 'x');
     for (const t of ['aidlc-../evil', 'aidlc-developer-agent/../../evil', 'AIDLC-developer-agent', 'aidlc-', 'xaidlc-developer-agent', 'aidlc-developer-agent.md'])
       expect(aidlcSubagent(root, t), t).toBe(false);
-    expect(aidlcSubagent(path.relative(process.cwd(), root), 'aidlc-developer-agent')).toBe(false);
+    // A temp folder on another drive (Windows) has no relative path from here: path.relative gives the absolute one back.
+    const rel = path.relative(process.cwd(), root);
+    if (!path.isAbsolute(rel)) expect(aidlcSubagent(rel, 'aidlc-developer-agent')).toBe(false);
+    expect(aidlcSubagent(path.join('no-such-folder', 'here'), 'aidlc-developer-agent')).toBe(false);
     expect(aidlcSubagent(root, 'aidlc-developer-agent')).toBe(true);
   });
 
