@@ -81,6 +81,7 @@ export const brainModelIt = {
   'pm.mapsButton': 'Mappe dei progetti',
   'pm.fullPage': 'Apri a tutta pagina',
   'pm.fullscreen': 'Schermo intero',
+  'pm.upTip': 'Torna su di un livello · Backspace · doppio clic sullo sfondo',
   'pm.talk': 'Discuti con l’Orchestrator',
   'pm.talkOn': (p: { name: string }) => `Discuti «${p.name}» con l’Orchestrator`,
   'pm.noOrchestrator': 'Nessun Orchestrator aperto: aprilo e riprova',

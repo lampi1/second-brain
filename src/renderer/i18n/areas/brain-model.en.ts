@@ -72,6 +72,7 @@ export const brainModelEn: typeof brainModelIt = {
   'pm.mapsButton': 'Project maps',
   'pm.fullPage': 'Open full page',
   'pm.fullscreen': 'Full screen',
+  'pm.upTip': 'Back up one level · Backspace · double click on the background',
   'pm.talk': 'Discuss with the Orchestrator',
   'pm.talkOn': (p: { name: string }) => `Discuss «${p.name}» with the Orchestrator`,
   'pm.noOrchestrator': 'No Orchestrator open: open it and try again',

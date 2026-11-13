@@ -12,14 +12,14 @@
 // Rendered by brain-model/MapPage.tsx (view «Progetti», pageArg progetti/<project>/<system>) and by ProjectMapsDialog.tsx
 // (the window that took «Stato»'s place, ADR 0275): a chat opened from a card closes that window first.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { BOX, levelOf, pathTo, shownStatus, type Level, type LevelEdge, type LevelNode, type MapAgent, type MapElement, type MapState, type ProjectMapInfo, type ProjectMapView as View } from '@shared/project-map';
+import { levelOf, pathTo, shownStatus, type Level, type LevelEdge, type LevelNode, type MapAgent, type MapElement, type MapState, type ProjectMapInfo, type ProjectMapView as View } from '@shared/project-map';
 import { brainBridge, openChatRef } from '../../actions';
 import { t } from '../../i18n';
 import { useNow } from '../../lib/clock';
 import { ago } from '../../lib/format';
 import { useApp } from '../../store/store';
 import { closeModal, toast, ui } from '../../store/ui';
-import { IconChat, IconMaximize, IconMinimize } from '../Icons';
+import { IconArrowLeft, IconChat, IconMaximize, IconMinimize } from '../Icons';
 import { AgentAvatar } from '../AgentAvatar';
 import './project-map.css';
 
@@ -72,25 +72,43 @@ function AgentCard({ a, names, on, onPick }: { a: MapAgent; names: string; on: b
   </div>;
 }
 
-/** Where each arrow's label sits: nearer the end with fewer arrows (the labels around a busy box do not pile up); for
- *  an arrow across more than one gap, in the first gap beside the box it leaves (never on a box); a label that would
- *  cover one placed before moves along its arrow's direction, a row at a time. */
-function placeLabels(lv: Level): { e: LevelEdge; left: number; top: number; flat: boolean }[] {
+/** Where each arrow's label sits: the clearest spot near its arrow. A label never covers a box or another label (the
+ *  owner 2026-11-13: «alcune sono in sovrapposizione»): points along the curve and offsets around them are tried, each
+ *  scored by what it covers and by how far it strays from the arrow; the best wins. Busy boxes first get their labels
+ *  nearer the end with fewer arrows. */
+function placeLabels(lv: Level): { e: LevelEdge; left: number; top: number }[] {
   const deg = new Map<string, number>();
   for (const e of lv.edges) for (const id of [e.from, e.to]) deg.set(id, (deg.get(id) ?? 0) + 1);
   const placed: { x: number; y: number; w: number }[] = [];
+  const H = 24, PAD = 6;
+  const cover = (ax: number, ay: number, aw: number, ah: number, bx: number, by: number, bw: number, bh: number) =>
+    Math.max(0, Math.min(ax + aw, bx + bw) - Math.max(ax, bx)) * Math.max(0, Math.min(ay + ah, by + bh) - Math.max(ay, by));
+  const covered = (x: number, y: number, w: number) => {
+    const lx = x - w / 2 - PAD, ly = y - H / 2 - PAD, lw = w + 2 * PAD, lh = H + 2 * PAD;
+    let c = 0;
+    for (const n of lv.nodes) c += cover(lx, ly, lw, lh, n.x, n.y, n.w, n.h);
+    for (const q of placed) c += cover(lx, ly, lw, lh, q.x - q.w / 2, q.y - H / 2, q.w, H);
+    return c;
+  };
+  const FS = [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8, 0.12, 0.88];
+  const DX = [0, -40, 40, -80, 80], DY = [0, -18, 18, -36, 36, -60, 60, -90, 90];
   return lv.edges.flatMap(e => {
     const a = lv.nodes.find(n => n.id === e.from), b = lv.nodes.find(n => n.id === e.to);
     if (!a || !b) return [];
-    const p = ends(a, b), flat = p.y1 === p.y2, long = Math.abs(p.y2 - p.y1) > BOX.gy + 20;
-    const da = deg.get(e.from) ?? 1, db = deg.get(e.to) ?? 1, f = Math.min(0.7, Math.max(0.3, da / (da + db)));
-    const at = long ? { left: p.x1, top: p.y1 + Math.sign(p.y2 - p.y1) * BOX.gy / 2 } : along(p, f);
-    const left = at.left;
-    let top = at.top;
-    const w = Math.min(220, e.label.length * 6.6 + 30), dir = Math.sign(p.y2 - p.y1) || 1;
-    for (let i = 0; i < 3 && placed.some(q => Math.abs(q.x - left) < (q.w + w) / 2 && Math.abs(q.y - top) < 24); i++) top += 26 * dir;
-    placed.push({ x: left, y: top, w });
-    return [{ e, left, top, flat }];
+    const p = ends(a, b);
+    const da = deg.get(e.from) ?? 1, db = deg.get(e.to) ?? 1, want = Math.min(0.7, Math.max(0.3, da / (da + db)));
+    const w = Math.min(220, e.label.length * 6.6 + 30);
+    let best = { left: 0, top: 0, cost: Infinity };
+    for (const f of FS) {
+      const at = along(p, f);
+      for (const dy of DY) for (const dx of DX) {
+        const left = at.left + dx, top = at.top + dy;
+        const cost = covered(left, top, w) * 50 + Math.hypot(dx, dy) + Math.abs(f - want) * 60;
+        if (cost < best.cost) best = { left, top, cost };
+      }
+    }
+    placed.push({ x: best.left, y: best.top, w });
+    return [{ e, left: best.left, top: best.top }];
   });
 }
 
@@ -103,8 +121,14 @@ export function ProjectMapView({ arg, onArg, fitAll = false, full: fullProp, onF
   const [version, setVersion] = useState<number | null>(null); // null = now
   const [picked, setPicked] = useState<string | null>(null);
   const [agentOn, setAgentOn] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1);
-  const [fit, setFit] = useState(1);
+  // the view on the drawing, like a design canvas (the owner 2026-11-13: «control + rotella zummasse e il drag … per
+  // spostare la view, non spostare i riquadri ma spostarsi sul workspace tipo figma»): scale and offset of the plane;
+  // fitted (centred, whole level in sight) until the user zooms or drags, then his own until the level changes
+  const [cam, setCam] = useState<{ s: number; x: number; y: number }>({ s: 1, x: 0, y: 0 });
+  const moved = useRef(false);
+  const drag = useRef<{ x: number; y: number; cx: number; cy: number; far: boolean } | null>(null);
+  const dragged = useRef(false);
+  const fitNow = useRef<() => void>(() => {});
   const box = useRef<HTMLDivElement>(null);
   // the real full screen (the owner 2026-11-13: «tutto schermo davvero»): the whole view, the window's chrome gone
   const root = useRef<HTMLDivElement>(null);
@@ -150,7 +174,7 @@ export function ProjectMapView({ arg, onArg, fitAll = false, full: fullProp, onF
   useEffect(load, [load]);
   useEffect(() => window.sb.on('projectmap:changed', p => { loadList(); if (p.project === project && version === null) load(); }), [project, version, load, loadList]);
   useEffect(() => { setVersion(null); setPicked(null); setAgentOn(null); }, [project]);
-  useEffect(() => { setPicked(null); setZoom(1); }, [level]);
+  useEffect(() => { setPicked(null); moved.current = false; }, [level]);
 
   const map = view?.map ?? null;
   const live = version === null;
@@ -162,6 +186,8 @@ export function ProjectMapView({ arg, onArg, fitAll = false, full: fullProp, onF
     return map.elements.some(x => x.parent === e.id) ? e.id : e.parent ?? null;
   }, [map, level]);
   const lv = useMemo(() => (map ? levelOf(map, shownLevel, now) : null), [map, shownLevel, now]);
+  // placed once per level, not on every pan or zoom tick
+  const labels = useMemo(() => (lv ? placeLabels(lv) : []), [lv]);
   // once per place (not on every live reload, which would undo what the user picked since)
   const pickedFor = useRef<string | null>(null);
   useEffect(() => {
@@ -173,13 +199,56 @@ export function ProjectMapView({ arg, onArg, fitAll = false, full: fullProp, onF
   useEffect(() => {
     const el = box.current;
     if (!el || !lv) return;
-    // the legend and the zoom buttons take ≈68 px at the bottom of the canvas
-    const measure = () => setFit(Math.min(1, Math.max(0.35, Math.min((el.clientWidth - 24) / lv.width, fitAll || full ? (el.clientHeight - 68) / lv.height : Infinity))));
+    // fitted: the whole level in sight, centred (the legend takes ≈56 px at the bottom); never above 100 %
+    const measure = () => {
+      if (moved.current) return;
+      const w = el.clientWidth, h = el.clientHeight;
+      const sc = Math.min(1, Math.max(0.2, Math.min((w - 48) / lv.width, (h - 88) / lv.height)));
+      setCam({ s: sc, x: (w - lv.width * sc) / 2, y: Math.max(16, (h - 56 - lv.height * sc) / 2) });
+    };
+    fitNow.current = () => { moved.current = false; measure(); };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
   }, [lv, fitAll, full]);
+  // Ctrl + wheel (or a trackpad pinch) zooms toward the pointer; the wheel alone moves the view (Shift: sideways).
+  // A native listener: React's wheel handler is passive and could not keep the page from zooming or scrolling.
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const wheel = (e: WheelEvent) => {
+      e.preventDefault();
+      moved.current = true;
+      const r = el.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+      if (e.ctrlKey || e.metaKey) {
+        setCam(c => { const s2 = Math.min(3, Math.max(0.15, c.s * Math.exp(-e.deltaY * 0.0022))); return { s: s2, x: px - (px - c.x) * (s2 / c.s), y: py - (py - c.y) * (s2 / c.s) }; });
+      } else {
+        const dx = e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX, dy = e.shiftKey && !e.deltaX ? 0 : e.deltaY;
+        setCam(c => ({ ...c, x: c.x - dx, y: c.y - dy }));
+      }
+    };
+    el.addEventListener('wheel', wheel, { passive: false });
+    return () => el.removeEventListener('wheel', wheel);
+  }, [lv]);
+
+  // Backspace goes up one level while the map has the keyboard (not in a field)
+  useEffect(() => {
+    if (!shownLevel || !map) return;
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== 'Backspace' || e.ctrlKey || e.altKey || e.metaKey || e.repeat || e.defaultPrevented) return;
+      // another window over the map has the keyboard
+      if (ui.get().modal && !root.current?.closest('.modal-body')) return;
+      const a = document.activeElement as HTMLElement | null;
+      if (a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return;
+      if (a && a !== document.body && !root.current?.contains(a)) return;
+      e.preventDefault();
+      const parent = map.elements.find(x => x.id === shownLevel)?.parent ?? null;
+      onArg(`${project}${parent ? `/${parent}` : ''}`);
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [shownLevel, map, project, onArg]);
 
   if (maps === null) return <div className="dash-empty">{t('bm.loading')}</div>;
   if (!maps.length || !project) return <section className="dash-panel pm-empty" data-testid="pm-empty"><h3>{t('pm.emptyTitle')}</h3><p>{t('pm.emptyLead')}</p><p className="pm-example">{t('pm.emptyExample')}</p></section>;
@@ -192,11 +261,48 @@ export function ProjectMapView({ arg, onArg, fitAll = false, full: fullProp, onF
   const lit = new Set(agentOn ? agents.find(a => a.chatId === agentOn)?.elements.flatMap(x => pathTo(map, x).map(p => p.id)) ?? [] : []);
   const st = (e: MapElement) => shown(shownStatus(e, now, view!.changed[e.id]));
   const waiting = [...map.elements, ...map.links].filter(x => x.status === 'blocked' && x.actor === 'user').length;
-  const scale = fit * zoom;
+  const scale = cam.s;
+  /** zoom by a factor around the canvas centre (the + / − buttons) */
+  const zoomBy = (f: number) => {
+    const el = box.current; if (!el) return;
+    moved.current = true;
+    const px = el.clientWidth / 2, py = el.clientHeight / 2;
+    setCam(c => { const s2 = Math.min(3, Math.max(0.15, c.s * f)); return { s: s2, x: px - (px - c.x) * (s2 / c.s), y: py - (py - c.y) * (s2 / c.s) }; });
+  };
+  const refit = () => fitNow.current();
+  // drag anywhere on the canvas moves the view (a box is clicked only when the pointer did not travel)
+  const down = (e: React.PointerEvent) => {
+    if (e.button !== 0 && e.button !== 1) return;
+    dragged.current = false;
+    if ((e.target as HTMLElement).closest('.pm-tools, .pm-legend, .pm-talk, .pm-up')) return;
+    drag.current = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y, far: false };
+    const move = (m: PointerEvent) => {
+      const d = drag.current; if (!d) return;
+      if (m.buttons === 0) { up(); return; }
+      const dx = m.clientX - d.x, dy = m.clientY - d.y;
+      if (!d.far && Math.hypot(dx, dy) < 4) return;
+      d.far = true; dragged.current = true; moved.current = true;
+      box.current?.classList.add('dragging');
+      setCam(c => ({ ...c, x: d.cx + dx, y: d.cy + dy }));
+    };
+    const up = () => {
+      drag.current = null; box.current?.classList.remove('dragging');
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+      // the click that follows this release is the one swallowed; none follows on some releases, so the flag ends here
+      setTimeout(() => { dragged.current = false; }, 0);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
   const trail = pathTo(map, shownLevel);
   const hist = view!.history;
   const at = version === null ? hist.length - 1 : hist.findIndex(h => h.version === version);
   const go = (lvl: string | null) => onArg(`${project}${lvl ? `/${lvl}` : ''}`);
+  // back up one level, fast (the owner: «quando entro in un riquadro un modo veloce per tornare indietro»): the ← button
+  // on the canvas, Backspace, the mouse's back button, a double click on the empty canvas
+  const parentOf = shownLevel ? byId.get(shownLevel)?.parent ?? null : null;
+  const up = () => { if (shownLevel) go(parentOf); };
   const click = (n: LevelNode) => {
     // a box from outside: its own place (inside it if it has parts, else picked on its level)
     if (n.ctx || kids(n.id)) go(n.id); else setPicked(p => (p === n.id ? null : n.id));
@@ -231,9 +337,15 @@ export function ProjectMapView({ arg, onArg, fitAll = false, full: fullProp, onF
     </header>
     {!live && <div className="pm-past" data-testid="pm-past">{t('pm.past', { v: map.version, at: since(map.updatedAt, now), by: map.by })} · {map.summary}<button type="button" className="btn btn-s" onClick={() => setVersion(null)}>{t('pm.backNow')}</button></div>}
     <div className="pm-body">
-      <div className="pm-canvas" ref={box}>
-        <div className="pm-stage" style={{ width: lv.width * scale, height: lv.height * scale }}>
-          <div className="pm-plane" style={{ width: lv.width, height: lv.height, transform: `scale(${scale})` }}>
+      <div className="pm-canvas" ref={box} onPointerDown={down} data-testid="pm-canvas" data-scale={scale.toFixed(3)}
+        style={{ backgroundPosition: `${cam.x}px ${cam.y}px`, backgroundSize: `${22 * scale}px ${22 * scale}px` }}
+        onClickCapture={e => { if (dragged.current) { e.stopPropagation(); e.preventDefault(); dragged.current = false; } }}
+        onDoubleClick={e => { if (!(e.target as HTMLElement).closest('.pm-node, .pm-talk, .pm-tools, .pm-legend, .pm-up, .pm-label')) up(); }}
+        onMouseUp={e => { if (e.button === 3) { e.preventDefault(); e.stopPropagation(); up(); } }}>
+        {shownLevel && <button type="button" className="btn btn-s pm-up" onClick={up} data-testid="pm-up" data-tip={t('pm.upTip')}>
+          <IconArrowLeft size={13} />{parentOf ? byId.get(parentOf)?.name : t('pm.top')}</button>}
+        <div className="pm-stage">
+          <div className="pm-plane" style={{ width: lv.width, height: lv.height, transform: `translate(${cam.x}px, ${cam.y}px) scale(${scale})` }}>
             <svg className="pm-edges" width={lv.width} height={lv.height} aria-hidden>
               <defs>{(['ok', 'work', 'blocked', 'unknown', 'stale'] as const).map(s => <marker key={s} id={`pm-arrow-${s}`} viewBox="0 0 10 10" refX={9} refY={5} markerWidth={7} markerHeight={7} orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" className={`pm-arrow s-${s}`} /></marker>)}</defs>
               {lv.edges.map(e => {
@@ -263,15 +375,16 @@ export function ProjectMapView({ arg, onArg, fitAll = false, full: fullProp, onF
             {lv.nodes.map(n => <button type="button" key={`talk-${n.id}`} className="pm-talk" style={{ left: n.x + n.w - 30, top: n.y + 6, transform: `scale(${1 / scale})` }}
               onClick={() => talk(byId.get(n.id)!)} aria-label={t('pm.talkOn', { name: byId.get(n.id)!.name })} data-tip={t('pm.talk')} data-testid={`pm-talk-${n.id}`}><IconChat size={13} /></button>)}
             {/* the labels above the boxes: a label in a narrow gap is never hidden under one */}
-            {placeLabels(lv).map(({ e, left, top, flat }) => <div key={`l${e.from}>${e.to}`} className={`pm-label s-${shown(e)}${flat ? ' flat' : ''}`} style={{ left, top }} title={e.note}>
+            {labels.map(({ e, left, top }) => <div key={`l${e.from}>${e.to}`} className={`pm-label s-${shown(e)}`} style={{ left, top }} title={e.note}>
               {e.label}{e.count > 1 ? ` +${e.count - 1}` : ''}{e.status === 'blocked' && e.actor === 'user' && live && <em>{t('pm.you')}</em>}
             </div>)}
           </div>
         </div>
         <div className="pm-tools">
-          <button type="button" className="btn btn-s" onClick={() => setZoom(z => Math.min(2.5, z * 1.25))} aria-label={t('pm.zoomIn')}>+</button>
-          <button type="button" className="btn btn-s" onClick={() => setZoom(z => Math.max(0.4, z / 1.25))} aria-label={t('pm.zoomOut')}>−</button>
-          <button type="button" className="btn btn-s" onClick={() => setZoom(1)} aria-label={t('pm.fit')}>⤢</button>
+          <button type="button" className="btn btn-s" onClick={() => zoomBy(1.25)} aria-label={t('pm.zoomIn')} data-testid="pm-zoom-in">+</button>
+          <span className="pm-pct" data-testid="pm-pct">{Math.round(scale * 100)}%</span>
+          <button type="button" className="btn btn-s" onClick={() => zoomBy(1 / 1.25)} aria-label={t('pm.zoomOut')} data-testid="pm-zoom-out">−</button>
+          <button type="button" className="btn btn-s" onClick={refit} aria-label={t('pm.fit')} data-tip={t('pm.fit')} data-testid="pm-fit">⤢</button>
         </div>
         <div className="pm-legend" aria-label={t('bm.map.legendLabel')}>
           {(['ok', 'work', 'blocked', 'stale'] as const).map(s => <span key={s}><i className={`pm-dot s-${s}`} />{t(`pm.state.${s}`)}</span>)}

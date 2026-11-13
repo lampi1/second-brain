@@ -236,7 +236,7 @@
     "src/renderer/components/ModelPicker.tsx#ModelPicker": "c6736ea42c0606ff",
     "src/renderer/components/Notice.tsx": "fc393ed92aad44c1",
     "src/renderer/components/PhoneSettings.tsx": "72fb63c9f0a65a81",
-    "src/renderer/components/project-map/ProjectMapView.tsx#ProjectMapView": "25a380b27010c7ac",
+    "src/renderer/components/project-map/ProjectMapView.tsx#ProjectMapView": "b0bd1168be9b8d9a",
     "src/renderer/components/QuestionsWindow.tsx": "86849318cc7f1629",
     "src/renderer/components/QueueSettings.tsx#QueueSettings": "705578b93799a67d",
     "src/renderer/components/RolePermissions.tsx": "976634466b3c5cfd",

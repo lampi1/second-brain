@@ -51,3 +51,13 @@ ADR 0269, 0274; supersedes the «reserved» parts of ADR 0239/0255/0259 §4
   project, the box's path, kind, status, note and description; not sent, the user adds his words.
 - **Question rows** (`qwin.css`): under a long Orchestrator chat the rows keep their height (up to 45%) and the
   messages take what is left; an open card is the column's panel above a 72 px strip of messages.
+
+## Addendum (2026-11-13, owner: «control + rotella zummasse e il drag … per spostare la view … tipo figma» · «le chip … alcune sono in sovrapposizione»)
+- **A design canvas** (`ProjectMapView` `cam`): Ctrl/⌘+wheel zooms toward the pointer (15–300 %), a plain wheel pans
+  (Shift sideways), dragging the background or a box moves the view (a drag never opens a box), + / − / ⤢ and the
+  percentage sit at the bottom right. The level is fitted until the user zooms or drags, then stays his until the
+  level changes.
+- **Quick back**: inside a system a «←» button at the canvas' top left goes up one level; Backspace (outside fields),
+  a double click on the background and the mouse's back button do the same.
+- **Edge labels never on a box** (`placeLabels`): spots along each arrow and offsets around them are scored by the
+  area they cover (boxes, labels placed before) and their distance from the arrow; the lowest wins.

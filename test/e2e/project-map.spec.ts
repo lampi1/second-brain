@@ -35,7 +35,7 @@ test('the project map draws the project, zooms into a system and plays its histo
     await expect(view.getByTestId('pm-node-notifiche')).toBeVisible();
 
     // breadcrumbs back to the whole project
-    await view.getByRole('button', { name: 'Tutto il progetto' }).click();
+    await view.locator('.pm-trail').getByRole('button', { name: 'Tutto il progetto' }).click();
     await expect(view.getByTestId('pm-node-carrello')).toHaveCount(0);
   } finally { await app.close(); }
 });
@@ -60,7 +60,7 @@ test('the project maps open in a window from the Orchestrator and step into a sy
     // it reopens where the user left it (Ctrl+Shift+S), and the breadcrumbs go back up
     await page.keyboard.press('Control+Shift+KeyS');
     await expect(view.getByTestId('pm-node-rimborsi')).toBeVisible();
-    await view.getByRole('button', { name: 'Tutto il progetto' }).click();
+    await view.locator('.pm-trail').getByRole('button', { name: 'Tutto il progetto' }).click();
     await expect(view.getByTestId('pm-node-carrello')).toHaveCount(0);
     // the Orchestrator opens it at a system (app_project_map open → ui:command 'maps')
     await page.keyboard.press('Escape');
@@ -101,5 +101,61 @@ test('the maps go real full screen, Esc leaves it, and a box is discussed with t
     await expect(input).toHaveValue(/Mappa «Alfa · negozio online» \(Negozio web\): Parte «Rimborsi», stato bloccato/);
     await expect(input).toHaveValue(/Voglio parlarne: $/);
     await shot(page, 'project-maps-talk');
+  } finally { await app.close(); }
+});
+
+// The owner 2026-11-13: «control + rotella zummasse e il drag si potesse fare per spostare la view, non spostare i
+// riquadri ma spostarsi sul workspace tipo figma e poi quando entro in un riquadro un modo veloce per tornare indietro»
+test('the map moves like a design canvas: Ctrl+wheel zooms at the pointer, a drag pans, ← / Backspace go back up', async () => {
+  const { app, page } = await launchDemo();
+  try {
+    await page.getByTestId('maps-btn').click();
+    const view = page.getByTestId('maps').getByTestId('pm-view'), canvas = view.getByTestId('pm-canvas');
+    const shop = view.getByTestId('pm-node-negozio');
+    await expect(shop).toBeVisible();
+    const scale = async () => Number(await canvas.getAttribute('data-scale'));
+    await view.getByTestId('pm-fit').click(); // the fitted scale, not the first frame's
+    const s0 = await scale();
+    // Ctrl + wheel over the shop: bigger, and the shop stays under the pointer
+    const b0 = (await shop.boundingBox())!;
+    await page.mouse.move(b0.x + b0.width / 2, b0.y + b0.height / 2);
+    await page.keyboard.down('Control');
+    await page.mouse.wheel(0, -300);
+    await page.keyboard.up('Control');
+    await expect.poll(scale).toBeGreaterThan(s0 * 1.2);
+    const b1 = (await shop.boundingBox())!;
+    expect(Math.abs(b1.x + b1.width / 2 - (b0.x + b0.width / 2))).toBeLessThan(4);
+    await expect(view.getByTestId('pm-pct')).not.toHaveText(`${Math.round(s0 * 100)}%`);
+    // a drag (even starting on a box) moves the view, never the box, and does not open it
+    const c = (await canvas.boundingBox())!;
+    await page.mouse.move(b1.x + 20, b1.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(b1.x + 20 - 150, b1.y + 20 - 80, { steps: 6 });
+    await page.mouse.up();
+    const b2 = (await shop.boundingBox())!;
+    expect(Math.round(b2.x - b1.x)).toBe(-150);
+    expect(Math.round(b2.y - b1.y)).toBe(-80);
+    await expect(view.getByTestId('pm-up')).toHaveCount(0); // still the top level: the drag opened nothing
+    await shot(page, 'project-maps-zoomed');
+    // ⤢ fits it again
+    await view.getByTestId('pm-fit').click();
+    await expect.poll(scale).toBeCloseTo(s0, 2);
+    expect(c.width).toBeGreaterThan(0);
+
+    // into the shop, then back: the ← button, Backspace, a double click on the empty canvas
+    await shop.click();
+    await expect(view.getByTestId('pm-node-rimborsi')).toBeVisible();
+    await expect(view.getByTestId('pm-up')).toContainText('Tutto il progetto');
+    await shot(page, 'project-maps-inside');
+    await view.getByTestId('pm-up').click();
+    await expect(view.getByTestId('pm-node-rimborsi')).toHaveCount(0);
+    await shop.click();
+    await expect(view.getByTestId('pm-node-rimborsi')).toBeVisible();
+    await page.keyboard.press('Backspace');
+    await expect(view.getByTestId('pm-node-rimborsi')).toHaveCount(0);
+    await shop.click();
+    await expect(view.getByTestId('pm-node-rimborsi')).toBeVisible();
+    await canvas.dblclick({ position: { x: 30, y: c.height - 120 } });
+    await expect(view.getByTestId('pm-node-rimborsi')).toHaveCount(0);
   } finally { await app.close(); }
 });

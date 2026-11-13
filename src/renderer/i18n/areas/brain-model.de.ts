@@ -72,6 +72,7 @@ export const brainModelDe: typeof brainModelIt = {
   'pm.mapsButton': 'Projektkarten',
   'pm.fullPage': 'Ganzseitig öffnen',
   'pm.fullscreen': 'Vollbild',
+  'pm.upTip': 'Eine Ebene zurück · Rücktaste · Doppelklick auf den Hintergrund',
   'pm.talk': 'Mit dem Orchestrator besprechen',
   'pm.talkOn': (p: { name: string }) => `„${p.name}“ mit dem Orchestrator besprechen`,
   'pm.noOrchestrator': 'Kein Orchestrator offen: öffne ihn und versuch es erneut',

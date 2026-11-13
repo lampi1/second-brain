@@ -14,9 +14,14 @@
 .pm-past .btn { margin-left: auto; }
 
 .pm-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; min-height: 420px; flex: 1; }
-.pm-canvas { position: relative; overflow: auto; border: 1px solid var(--border); border-radius: var(--r-l); background-color: var(--bg-2);
-  background-image: radial-gradient(var(--surface-4) 1px, transparent 1px); background-size: 22px 22px; padding: 12px 12px 56px; }
-.pm-stage { position: relative; margin: 0 auto; }
+.pm-canvas { position: relative; overflow: hidden; border: 1px solid var(--border); border-radius: var(--r-l); background-color: var(--bg-2);
+  background-image: radial-gradient(var(--surface-4) 1px, transparent 1px); background-size: 22px 22px; min-height: 520px;
+  cursor: grab; touch-action: none; user-select: none; }
+.pm-canvas.dragging { cursor: grabbing; }
+.pm-canvas.dragging .pm-node, .pm-canvas.dragging .pm-talk { cursor: grabbing; }
+.pm-stage { position: absolute; inset: 0; }
+/* back up one level: always at the canvas' top left while inside a system */
+.pm-up { position: absolute; z-index: 3; left: 10px; top: 10px; gap: 6px; box-shadow: var(--shadow-pop); }
 .pm-plane { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 .pm-edges { position: absolute; inset: 0; overflow: visible; }
 .pm-edge { stroke-width: 2; fill: none; }
@@ -28,8 +33,6 @@
   font-size: 12px; padding: 2px 9px; border-radius: 999px; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .pm-label.s-blocked { border-color: var(--red); }
 .pm-label em { font-style: normal; margin-left: 6px; }
-/* an arrow along one row: its label sits above the line, the gap between the boxes is too short for it */
-.pm-label.flat { transform: translate(-50%, -135%); }
 
 .pm-node { position: absolute; display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 10px 13px; border-radius: var(--r-l);
   background: var(--surface); border: 1.5px solid var(--border-2); color: var(--text); font: inherit; cursor: pointer; overflow: hidden; transition: box-shadow .15s, border-color .15s; }
@@ -61,10 +64,11 @@
 .pm-who[data-mark='done'], .pm-who[data-mark='idle'] { background: var(--surface-4); color: var(--text-2); }
 .pm-you { font-style: normal; background: var(--amber); color: #1a1405; font-weight: 700; font-size: 11px; padding: 1px 7px; border-radius: 6px; margin-right: 6px; }
 
-.pm-tools { position: sticky; float: right; bottom: 8px; display: flex; flex-direction: column; gap: 6px; margin-top: -120px; }
+.pm-tools { position: absolute; z-index: 3; right: 10px; bottom: 10px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.pm-pct { font-size: 11px; color: var(--text-2); font-variant-numeric: tabular-nums; }
 .pm-tools .btn { width: 32px; justify-content: center; }
-.pm-legend { position: sticky; left: 0; bottom: 0; display: inline-flex; gap: 14px; align-items: center; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--r-m); padding: 6px 12px; font-size: 12px; color: var(--text-2); margin-top: 8px; }
+.pm-legend { position: absolute; z-index: 3; left: 10px; bottom: 10px; display: inline-flex; gap: 14px; align-items: center; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-m); padding: 6px 12px; font-size: 12px; color: var(--text-2); cursor: default; }
 
 .pm-side { display: flex; flex-direction: column; gap: 10px; overflow: auto; min-height: 0; }
 .pm-side-head { display: flex; align-items: baseline; justify-content: space-between; }
@@ -120,6 +124,7 @@
 /* the real full screen: the whole window at once (and the screen, when the OS grants it), the drawing fits it */
 .pm.pm-full { position: fixed; inset: 0; z-index: 2147483000; background: var(--bg); padding: 16px 20px; box-sizing: border-box; }
 .pm.pm-full .pm-body { min-height: 0; }
-.pm.pm-full .pm-canvas, .pm.pm-full .pm-side { min-height: 0; overflow: auto; }
+.pm.pm-full .pm-canvas { min-height: 0; }
+.pm.pm-full .pm-side { min-height: 0; overflow: auto; }
 /* room for the «Discuti» corner button: the box's first lines never run under it */
 .pm-node { padding-right: 34px; }
