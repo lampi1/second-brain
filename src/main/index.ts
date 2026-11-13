@@ -312,6 +312,8 @@ app.whenReady().then(async () => {
     quitting = true;
     void connectors.service.cancelLogin();
     readWorker.stop();
+    // Stockfish goes with the app: this path ends in app.exit, which emits no will-quit (ADR 0304)
+    chessEngine.stop();
     stopTaskbar(); proposals.stop();
     log.info('app', 'quit started');
     // the stable launcher (scripts/release.mjs) waits for a quitting app to go before starting again; an open one it leaves be
@@ -325,6 +327,7 @@ app.whenReady().then(async () => {
         // app.exit skips Chromium's own shutdown: the app page's localStorage (layout, Orchestrator widget state) written in
         // the last seconds would be lost without this
         session.defaultSession.flushStorageData();
+        chessGames.close();
         // the process ends only once each of its threads and its Chromium children ran: on a busy CPU that took 20-130 s;
         // the job guard's helper starts a booster that outlives our code and raises them all (jobguard.ts Boost)
         await jobGuard.quit(process.pid).catch(() => {});

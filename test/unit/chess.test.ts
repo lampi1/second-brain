@@ -108,6 +108,13 @@ describe('the history', () => {
     expect(isStreakRecord(game({ id: 2 }), best)).toBe(true);
     expect(isStreakRecord(game({ id: 1 }), chessHistory([game({ id: 1 })]))).toBe(false); // one win is not a row
     expect(isStreakRecord(game({ id: 2, result: 'loss' }), best)).toBe(false);
+    // a row that only equals the old record is not a new one; the game that passes it is
+    const tie = [game({ id: 1 }), game({ id: 2 }), game({ id: 3, result: 'loss' }), game({ id: 4 }), game({ id: 5 })];
+    expect(chessHistory(tie).bots.scout).toMatchObject({ streak: 2, bestStreak: 2, bestStreakId: 2 });
+    expect(isStreakRecord(game({ id: 5 }), chessHistory(tie))).toBe(false);
+    const past = chessHistory([...tie, game({ id: 6 })]);
+    expect(isStreakRecord(game({ id: 6 }), past)).toBe(true);
+    expect(past.bots.scout).toMatchObject({ streak: 3, bestStreak: 3, bestStreakId: 6 });
     expect(STREAK_MIN).toBe(2);
   });
   it('is empty without games', () => {

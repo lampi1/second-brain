@@ -14,7 +14,7 @@ Third-party program, **not** part of second-brain's MIT-licensed code. Licence: 
   build script that produce these two files); upstream engine: <https://github.com/official-stockfish/Stockfish>.
 - How the app uses it: `scripts/build.mjs` copies this folder to `out/chess-engine/`; `src/main/chess/engine.ts`
   starts the script as a separate process and talks to it only in UCI text over its pipes. No file of the app links,
-  imports or bundles it, and the app's own code stays under the MIT licence (ADR 0302).
+  imports or bundles it, and the app's own code stays under the MIT licence (ADR 0304).
 - `package.json` here is ours (two fields, no code): it tells Node that the engine's script is CommonJS, because the
   repository's own `package.json` says `"type": "module"`.
 - Only these two of the package's nine engine files are kept (the full builds are about 100 MB each).

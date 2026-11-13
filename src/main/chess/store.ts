@@ -45,6 +45,7 @@ export class ChessStore {
       return this.db;
     } catch (e) {
       log.error('chess', 'chess games database not opened', { cause: errText(e), hint: 'the games of this session stay in memory until the app quits; nothing else is affected' });
+      try { if (this.db?.isOpen) this.db.close(); } catch { /* nothing to close */ }
       this.file = null; this.db = null;
       return null;
     }
@@ -79,9 +80,12 @@ export class ChessStore {
       try {
         const info = db.prepare('insert into chess_games(at, bot, color, result, ending, moves, ms, undos) values(?, ?, ?, ?, ?, ?, ?, ?)').run(at, g.bot, g.color, g.result, g.ending, g.moves, g.ms, g.undos);
         rowId = Number(info.lastInsertRowid);
-        db.prepare('delete from chess_games where id <= ?').run(rowId - KEEP_GAMES);
       } catch (e) {
         log.error('chess', 'chess game not saved', { cause: errText(e), hint: 'this game is kept in memory; the next ones try the database again' });
+      }
+      if (rowId !== null) {
+        try { db.prepare('delete from chess_games where id <= ?').run(rowId - KEEP_GAMES); }
+        catch (e) { log.warn('chess', 'old chess games not pruned', { cause: errText(e), hint: 'the game is saved; the next save prunes again' }); }
       }
     }
     if (rowId === null) { this.mem.push({ ...g, id: this.nextId++, at }); if (this.mem.length > KEEP_GAMES) this.mem.shift(); }

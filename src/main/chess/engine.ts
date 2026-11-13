@@ -9,6 +9,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
 import { CHESS_BOTS, bestMove, cleanMoves, goLines, isChessBot, type ChessMoveReply } from '../../shared/chess';
 import { errText, log } from '../log';
 
@@ -151,11 +152,23 @@ export const ENGINE_WASM = 'stockfish-19-lite-single.wasm';
 /** Starts Stockfish as its own process: Electron's binary as plain Node running the engine's script, UCI on its
  *  pipes. Null when the script is not there. */
 export function spawnStockfish(script: string): EngineProc | null {
-  if (!fs.existsSync(script)) {
-    log.error('chess', 'the chess engine is missing', { cause: `no file ${script}`, hint: 'npm run build copies vendor/stockfish to out/chess-engine; Scacchi cannot play until then' });
+  const missing = [script, path.join(path.dirname(script), ENGINE_WASM)].find(f => !fs.existsSync(f));
+  if (missing) {
+    log.error('chess', 'the chess engine is missing', { cause: `no file ${missing}`, hint: 'npm run build copies vendor/stockfish to out/chess-engine; Scacchi cannot play until then' });
     return null;
   }
   const child = spawn(process.execPath, [script], { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true });
+  // listened to from the first moment: a start that fails (no more file handles) must never be an unhandled 'error'
+  let failed: string | null = null;
+  const exits: ((cause: string) => void)[] = [];
+  const tell = (cause: string) => { if (failed === null) { failed = cause; for (const fn of exits) fn(cause); } };
+  child.once('error', e => tell(errText(e)));
+  child.once('exit', (code, signal) => tell(signal ? `signal ${signal}` : `exit code ${code}`));
+  if (!child.stdout || !child.stdin) {
+    log.error('chess', 'the chess engine did not start', { cause: failed ?? 'no pipes to the process', hint: 'Scacchi asks again at the next move' });
+    try { child.kill(); } catch { /* never started */ }
+    return null;
+  }
   // thinking never takes the CPU from the window (the engine uses one core at most)
   if (child.pid) { try { os.setPriority(child.pid, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch { /* it runs at normal priority */ } }
   let rest = '';
@@ -170,12 +183,8 @@ export function spawnStockfish(script: string): EngineProc | null {
   return {
     write: line => { if (child.stdin.writable) child.stdin.write(`${line}\n`); },
     onLine: fn => { lines.push(fn); },
-    onExit: fn => {
-      let told = false;
-      const tell = (cause: string) => { if (!told) { told = true; fn(cause); } };
-      child.once('error', e => tell(errText(e)));
-      child.once('exit', (code, signal) => tell(signal ? `signal ${signal}` : `exit code ${code}`));
-    },
+    // told at once when it ended before anyone asked
+    onExit: fn => { if (failed !== null) fn(failed); else exits.push(fn); },
     kill: () => { try { child.kill(); } catch { /* already gone */ } },
   };
 }

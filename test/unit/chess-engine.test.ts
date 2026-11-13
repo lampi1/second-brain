@@ -1,8 +1,8 @@
 // The chess engine's service (ADR 0304, src/main/chess/engine.ts) against a fake process: started at the first move,
 // the request sent after `readyok`, one answer per request, a newer request supersedes, the timeout and the idle stop
-// (fake timers), a process that dies or is missing.
+// (fake timers), a process that dies or is missing; and the written game of the e2e tests (scriptedProc).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChessEngine, GRACE_MS, IDLE_MS, type EngineProc } from '../../src/main/chess/engine';
+import { ChessEngine, GRACE_MS, IDLE_MS, scriptedProc, type EngineProc } from '../../src/main/chess/engine';
 import { CHESS_BOTS } from '../../src/shared/chess';
 
 class FakeProc implements EngineProc {
@@ -112,5 +112,31 @@ describe('the chess engine', () => {
   it('answers «missing» when the engine is not there or does not start', async () => {
     expect(await new ChessEngine({ start: () => null }).move({ bot: 'scout', moves: [] })).toEqual({ move: null, error: 'missing' });
     expect(await new ChessEngine({ start: () => { throw new Error('spawn ENOENT'); } }).move({ bot: 'scout', moves: [] })).toEqual({ move: null, error: 'missing' });
+  });
+});
+
+describe('the written game (scriptedProc)', () => {
+  it('answers readyok, then the move written for the number of plies played, «(none)» past the end', async () => {
+    const p = scriptedProc(['e2e4', 'e7e5', 'g1f3']);
+    const heard: string[] = [];
+    p.onLine(l => heard.push(l));
+    p.write('isready');
+    p.write('position startpos'); p.write('go movetime 200');
+    p.write('position startpos moves e2e4 e7e5'); p.write('go movetime 200 depth 1');
+    p.write('position startpos moves e2e4 e7e5 g1f3'); p.write('go movetime 200');
+    await Promise.resolve();
+    expect(heard).toEqual(['readyok', 'bestmove e2e4', 'bestmove g1f3', 'bestmove (none)']);
+  });
+  it('plays through the engine service like the real one, and says nothing once killed', async () => {
+    vi.useRealTimers();
+    const engine = new ChessEngine({ start: () => scriptedProc(['a2a3', 'a7a6']) });
+    expect(await engine.move({ bot: 'scout', moves: ['e2e4'] })).toEqual({ move: 'a7a6' });
+    engine.stop();
+    const p = scriptedProc(['a2a3']);
+    const heard: string[] = [];
+    p.onLine(l => heard.push(l));
+    p.kill(); p.write('isready');
+    await Promise.resolve();
+    expect(heard).toEqual([]);
   });
 });

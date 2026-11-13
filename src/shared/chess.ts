@@ -128,6 +128,8 @@ export interface ChessBotRecord {
   streak: number;
   /** the longest such row ever */
   bestStreak: number;
+  /** the game that made the row that long (the first to reach it: a later row of the same length is not a record), or null */
+  bestStreakId: number | null;
 }
 export interface ChessHistory {
   total: number;
@@ -147,14 +149,14 @@ const shorter = (a: ChessGame, b: ChessGame): number => a.moves - b.moves || a.m
 
 /** The history page's numbers from every stored game. */
 export function chessHistory(games: readonly ChessGame[]): ChessHistory {
-  const bots = Object.fromEntries(CHESS_BOT_IDS.map(id => [id, { wins: 0, losses: 0, draws: 0, fastest: null, shortest: null, streak: 0, bestStreak: 0 }])) as Record<ChessBotId, ChessBotRecord>;
+  const bots = Object.fromEntries(CHESS_BOT_IDS.map(id => [id, { wins: 0, losses: 0, draws: 0, fastest: null, shortest: null, streak: 0, bestStreak: 0, bestStreakId: null }])) as Record<ChessBotId, ChessBotRecord>;
   // oldest first: the rows of wins are read in the order the games ended
   for (const g of [...games].sort((a, b) => a.id - b.id)) {
     const r = bots[g.bot];
     if (!r) continue;
     if (g.result === 'win') r.wins++; else if (g.result === 'loss') r.losses++; else r.draws++;
     r.streak = g.result === 'win' ? r.streak + 1 : 0;
-    if (r.streak > r.bestStreak) r.bestStreak = r.streak;
+    if (r.streak > r.bestStreak) { r.bestStreak = r.streak; r.bestStreakId = g.id; }
     if (!isClean(g)) continue;
     if (!r.fastest || faster(g, r.fastest) < 0) r.fastest = g;
     if (!r.shortest || shorter(g, r.shortest) < 0) r.shortest = g;
@@ -171,10 +173,11 @@ export const isRecord = (g: ChessGame, h: ChessHistory): boolean => isClean(g) &
 
 /** From this many wins in a row the page speaks of a streak (one win is not a row). */
 export const STREAK_MIN = 2;
-/** Whether `g`, just stored, made the longest row of wins against its bot (the «serie record» of the end card). */
+/** Whether `g`, just stored, made the longest row of wins against its bot (the «serie record» of the end card): a
+ *  row that only equals the old record is not one. */
 export function isStreakRecord(g: ChessGame, h: ChessHistory): boolean {
   const r = h.bots[g.bot];
-  return g.result === 'win' && !!r && r.streak >= STREAK_MIN && r.streak === r.bestStreak;
+  return g.result === 'win' && !!r && r.streak >= STREAK_MIN && r.bestStreakId === g.id;
 }
 
 /** 754000 → "12:34"; an hour or more → "1:02:03". */

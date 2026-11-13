@@ -39,7 +39,8 @@ Third-party programs and art distributed with this repository (ADR 0304, the Sca
 Stockfish.js 19 (https://github.com/nmrugg/stockfish.js), (c) 2026 Chess.com, LLC, based on Stockfish
 (https://github.com/official-stockfish/Stockfish) by Tord Romstad, Marco Costalba, Joona Kiiski, Gary Linscott and the
 Stockfish contributors.
-Licensed under the GNU General Public License, version 3 (vendor/stockfish/COPYING.txt).
+Licensed under the GNU General Public License, version 3 (vendor/stockfish/COPYING.txt; in a built app, the folder
+chess-engine/ is that folder as it is, with COPYING.txt and README.md).
 Files: vendor/stockfish/stockfish-19-lite-single.js and stockfish-19-lite-single.wasm, unmodified, from the npm package
 stockfish@19.0.1; corresponding source at the tag v19.0.1 of the first repository above (vendor/stockfish/README.md has
 the hashes). A separate program: the app starts it as its own process and exchanges UCI text with it; no code of
@@ -47,11 +48,12 @@ second-brain links to it or includes it, and second-brain's own code stays under
 
 ------------------------------------------------------------------------------------------------------------------------
 Chessnut chess pieces (https://github.com/LexLuengas/chessnut-pieces), by Alexis Luengas
-Licensed under the Apache License, Version 2.0 (src/renderer/assets/chess/chessnut/LICENSE.txt).
+Licensed under the Apache License, Version 2.0 (src/renderer/assets/chess/chessnut/LICENSE.txt; in a built app,
+licenses/CHESSNUT-PIECES-LICENSE.txt).
 Files: the twelve SVGs in src/renderer/assets/chess/chessnut/, unmodified, as distributed by lichess-org/lila
 (public/piece/chessnut).
 
 ------------------------------------------------------------------------------------------------------------------------
 chess.js 1.4.0 (https://github.com/jhlywa/chess.js), by Jeff Hlywa
 BSD 2-Clause License. An npm dependency (node_modules/chess.js, with its LICENSE) bundled into the renderer for the
-rules of chess; the build copies its licence beside the bundle (out/chess-engine/CHESS-JS-LICENSE.txt).
+rules of chess; in a built app its licence is licenses/CHESS-JS-LICENSE.txt.
