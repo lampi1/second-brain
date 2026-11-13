@@ -9,7 +9,7 @@ import { rulesBrain } from './helpers';
 import { ChatManager, RUN_SAVE_MS, type ChatManagerOptions } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import { plainOwner } from '../../../src/main/agents/catalog';
-import { DEMO_NOW, demoAgentRuns, demoFlashLog } from '../../../src/main/demo-agent-runs';
+import { DEMO_NOW, demoAgentRuns } from '../../../src/main/demo-agent-runs';
 import { standings } from '../../../src/main/agents/standing';
 import { emptyTally } from '../../../src/main/agents/run-metrics';
 import { diagnoseFile } from '../../../src/main/agents/level-diagnosis';
@@ -100,20 +100,19 @@ describe('agent runs on chats', () => {
     expect(recovered.m.items(orchestrator.id)).toContainEqual(expect.objectContaining({ code: 'resultReady' }));
   });
 
-  it('restores the card levels, pruned XP, Orchestrator decisions and Flash after partial store recovery', () => {
+  it('restores the card levels, pruned XP and Orchestrator decisions after partial store recovery', () => {
     vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(DEMO_NOW);
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-level-recovery-')); roots.push(dir);
-    const runs = demoAgentRuns(DEMO_NOW), flash = demoFlashLog(DEMO_NOW);
+    const runs = demoAgentRuns(DEMO_NOW);
     const phrases = { ...runs[0]!, runId: 'r_ffffffffffff', agentId: 'herald', source: 'oneshot' as const,
       oneshot: { engine: 'claude', job: 'phrases' as const, fallback: false, costBasis: 'reported' as const },
       outcome: { verdict: 'unknown' as const, basis: 'unknown' as const, at: DEMO_NOW, by: 'app' }, receipts: undefined, report: undefined };
     runs.push(phrases);
     const rollups = [{ ...emptyTally('artisan', 0), ended: 2, verdicts: { success: 2, partial: 0, fail: 0 }, xp: 6 }];
-    const expected = standings(runs, rollups, DEMO_NOW, flash);
+    const expected = standings(runs, rollups, DEMO_NOW);
     expect(expected.get('artisan')!.level).toBeGreaterThan(1);
     expect(expected.get('orchestrator')!.level).toBeGreaterThan(1);
-    expect(expected.get('flash')!.level).toBeGreaterThan(1);
-    const raw = { version: 1, runs: [null, runs[0], runs[0], ...runs.slice(1), { runId: 'bad' }], rollups, flash };
+    const raw = { version: 1, runs: [null, runs[0], runs[0], ...runs.slice(1), { runId: 'bad' }], rollups };
     fs.writeFileSync(path.join(dir, 'agent-runs.json'), JSON.stringify(raw));
     const f = fixture({ userData: dir });
     const actual = new Map(f.m.runMetrics().map(m => [m.agentId, m.standing]));

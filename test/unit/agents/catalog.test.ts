@@ -1,4 +1,4 @@
-// The role catalog (main/agents/catalog.ts): exactly the Orchestrator, the five work roles and Flash; every shipped
+// The role catalog (main/agents/catalog.ts): exactly the Orchestrator and the five work roles; every shipped
 // role survives a restart; edits are versions; "Ripristina predefinito"; a tolerant read of roles.json (an id this
 // build does not know is left out, a broken file is kept and blocks writes); a roles.json of the nine-role catalog still
 // loads (ADR 0100); resolve() for role, Orchestrator and plain chats.
@@ -22,18 +22,31 @@ function setup() {
 const edit = (p: AgentProfile, patch: Partial<AgentProfile>) => ({ instructions: p.instructions, engine: p.engine, model: p.model, tools: p.tools, permissionCeiling: p.permissionCeiling,
   tier: p.tier, tierMax: p.tierMax, launches: p.launches, skills: p.skills, ...patch });
 
-describe('Flash and the Orchestrator have their own model (ADR 0107)', () => {
-  it('Flash runs on its card: its model, else its tier\'s; read only whatever is saved; never delegated', () => {
-    const { catalog } = setup();
-    const flash = catalog.list().profiles.find(p => p.id === 'flash')!;
-    expect(catalog.resolve({ harness: 'claude', cwd: '/x', quick: true } as never)).toMatchObject({ request: { harness: 'claude', model: 'm-mid' }, owner: { source: 'plain', name: 'Flash' }, policy: { tools: { allow: ['read', 'web'] }, ceiling: 'plan' } });
-    const saved = catalog.save(edit(flash, { model: 'm-top', tools: { allow: ['read', 'edit', 'command'] } as never, permissionCeiling: null }), 'flash');
-    expect(saved).toMatchObject({ model: 'm-top', tools: { allow: ['read', 'web'] }, permissionCeiling: 'plan' });
-    expect(catalog.resolve({ harness: 'claude', cwd: '/x', quick: true } as never).request.model).toBe('m-top');
-    expect(() => catalog.save(edit(saved, { launches: ['scout'] }), 'flash')).toThrow(/Flash non avvia/);
-    expect(() => catalog.resolve({ harness: 'claude', roleId: 'flash' } as never)).toThrow(/Ruolo sconosciuto/);
+describe('the user\'s model for one task (ADR 0296)', () => {
+  const two = (): AgentModelChoice[] => [...models(), { engine: 'codex', label: 'Codex', enabled: true, trusted: true, effort: true, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed',
+    models: [{ id: 'gpt-x', name: 'GPT X', efforts: ['low', 'high'] }], installed: true, authenticated: true }];
+  const make = (list: () => AgentModelChoice[]) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-catalog-um-')); roots.push(dir);
+    return new AgentCatalogService({ userData: dir, models: list, tierModel: (_e, tier) => (tier === 'top' ? 'm-top' : 'm-mid') });
+  };
+  it('runs that chat on the model the user named, past tierMax, and leaves the role\'s card as it is', () => {
+    const catalog = make(two), before = catalog.list().profiles.find(p => p.id === 'scout')!;
+    const r = catalog.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout', userModel: { engine: 'codex', model: 'gpt-x', effort: 'max' } });
+    expect(r.request).toMatchObject({ harness: 'codex', model: 'gpt-x', effort: 'high' }); // max is not a level of gpt-x: the nearest lower one
+    expect(r.request).not.toHaveProperty('userModel');
+    expect(catalog.list().profiles.find(p => p.id === 'scout')).toEqual(before);
+    expect(catalog.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout' }).request.harness).toBe(before.engine);
   });
+  it('refuses an engine that is off or that cannot pick a model, with the model in the words', () => {
+    const off = make(() => two().map(m => (m.engine === 'codex' ? { ...m, enabled: false } : m)));
+    expect(() => off.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout', userModel: { engine: 'codex', model: 'gpt-x' } })).toThrow(/gpt-x non può partire/);
+    const fixed = make(() => two().map(m => (m.engine === 'codex' ? { ...m, modelSelectable: false, modelReason: null } : m)));
+    expect(() => fixed.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout', userModel: { engine: 'codex', model: 'gpt-x' } })).toThrow(/non può applicare/);
+    expect(() => off.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout', userModel: { engine: 'nope' as never, model: 'x' } })).toThrow(/Motore sconosciuto/);
+  });
+});
 
+describe('the Orchestrator has its own model (ADR 0107)', () => {
   it('the Orchestrator takes its card\'s model on the card\'s engine, else the session\'s', () => {
     const { catalog } = setup();
     expect(catalog.resolve({ harness: 'claude', orchestrator: true, model: 'm-mid' } as never).request.model).toBe('m-mid');
@@ -44,11 +57,10 @@ describe('Flash and the Orchestrator have their own model (ADR 0107)', () => {
 });
 
 describe('role catalog', () => {
-  it('holds exactly the Orchestrator, the five work roles and Flash, with English names', () => {
+  it('holds exactly the Orchestrator and the five work roles, with English names', () => {
     const { catalog } = setup(), list = catalog.list();
     expect(list.problem).toBeNull();
-    expect(list.profiles.map(p => p.id)).toEqual([...ROLE_IDS, 'flash']);
-    expect(list.profiles.find(p => p.id === 'flash')).toMatchObject({ name: 'Flash', scope: 'background', tier: 'mid', launches: [], tools: { allow: ['read', 'web'] }, permissionCeiling: 'plan' });
+    expect(list.profiles.map(p => p.id)).toEqual([...ROLE_IDS]);
     expect(list.profiles.filter(p => p.scope === 'role').map(p => p.name)).toEqual(['Orchestrator', 'Strategist', 'Scout', 'Artisan', 'Sentinel', 'Herald']);
     expect(list.profiles.every(p => p.avatar.kind === 'character')).toBe(true);
   });

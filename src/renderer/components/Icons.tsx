@@ -106,7 +106,7 @@ export function HarnessMark({ harness, orchestrator, size = 20 }: { harness: Har
     </span>
   );
 }
-// voice mode (ADR 0152): the mic button in the Orchestrator's and Flash's input, the voice preview in Settings
+// voice mode (ADR 0152): the mic button in the Orchestrator's input, the voice preview in Settings
 export const IconMic = (p: P) => <Svg {...p}><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></Svg>;
 /** Impostazioni → Telefono (ADR 0219): a phone */
 export const IconPhone = (p: P) => <Svg {...p}><rect x="6.5" y="2.5" width="11" height="19" rx="2.5" /><path d="M10.5 18.5h3" /></Svg>;

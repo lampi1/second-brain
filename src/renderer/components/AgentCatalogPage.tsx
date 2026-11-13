@@ -1,4 +1,4 @@
-// The Agenti page: the six roles (the Orchestrator first, then the five work roles) and Flash, each a card that flips
+// The Agenti page: the six roles (the Orchestrator first, then the five work roles), each a card that flips
 // to its instructions and skills (#81) and opens the role's own page (AgentStudio: the editor, its versions).
 // The decisions that change a role's reach or cost (a trial to keep, a tier suggestion: ADR 0083) are cards of Memoria →
 // Proposte (ADR 0123): a line on top points there, only while one waits. The cards come first (ADR 0287): the count sits

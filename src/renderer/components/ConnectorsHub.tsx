@@ -7,8 +7,8 @@
 // (ToolCatalog.tsx: account and server together, tested at once, ADR 0119); the technical form (command, args, env,
 // headers) and "Importa da Claude e Cursor" (their configs read once, read only, imported without any secret) live in
 // Settings → Avanzate (McpAdvanced, below). «Aggiungi server MCP» (McpAddPanel.tsx, ADR 0207): paste JSON, a command or
-// a URL, or pick a popular server; each card's «Chi lo usa» chips turn it on or off for the Orchestrator, each role and
-// Flash. Clean install: a friendly empty state saying what will appear. Styles: styles/connectors-hub.css.
+// a URL, or pick a popular server; each card's «Chi lo usa» chips turn it on or off for the Orchestrator and each
+// role. Clean install: a friendly empty state saying what will appear. Styles: styles/connectors-hub.css.
 import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
 import type { ConnectorState } from '@shared/connectors';
 import type { McpImportCandidate, McpServerView, McpServersState } from '@shared/mcp-servers';

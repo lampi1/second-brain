@@ -17,7 +17,6 @@ export const agentsGridIt = {
   'agentsGrid.levelHelp2': 'Un lavoro riuscito vale da 1 a 5 XP secondo quanto è grande: turni, tempo di lavoro, file cambiati, chat delegate. Lv 2 a 6 XP (circa 3 lavori), Lv 10 a 202, Lv 50 a 3.037, Lv 100 (il massimo) a 9.358. A un ritmo tipico (4 lavori verificati al giorno): una settimana per il Lv 5, un mese per il Lv 10, circa 4 anni per il Lv 100.',
   'agentsGrid.levelHelp3': 'Titoli: Recluta (Lv 1), Apprendista (2–4), Praticante (5–9), Esperto (10–19), Veterano (20–34), Maestro (35–49), Gran maestro (50–74), Leggenda (75–99), Mito (100).',
   'agentsGrid.levelHelpOrchestrator': 'Orchestrator: guadagna con i lavori che ha avviato e sono riusciti verificati, più 1 XP per un piano approvato senza modifiche. XP dimezzati se il compito è passato a un altro ruolo o è stato rifatto.',
-  'agentsGrid.levelHelpFlash': 'Flash: 0,25 XP per ogni risposta che regge, cioè se nei 5 minuti dopo non la correggi, non rifai la domanda e non la passi all\'Orchestrator.',
   'agentsGrid.levelHelpEx': ({ xp, wins, runs, level, next, left }: { xp: number; wins: number; runs: number; level: number; next: number | null; left: number }) =>
     `${xp} XP da ${wins} ${wins === 1 ? 'riuscito verificato' : 'riusciti verificati'} su ${runs} ${runs === 1 ? 'lavoro concluso' : 'lavori conclusi'}: Lv ${level}` + (next === null ? ', il massimo.' : `; mancano ${left} XP per il Lv ${next}.`),
   'agentsGrid.perf': 'Performance',
@@ -29,11 +28,11 @@ export const agentsGridIt = {
   'agentsGrid.perfSpreadTip': ({ v }: { v: number }) => `Margine di incertezza: ±${v} punti`,
   'agentsGrid.perfHelpTitle': 'Come si calcola la performance',
   'agentsGrid.perfHelp1': 'È una stima dai voti ai suoi lavori (riuscito 100%, in parte 50%, fallito 0%). Parte dal 50% e si sposta coi voti: pochi voti la muovono poco. Il ± dice quanto è ancora incerta.',
-  'agentsGrid.perfHelp2': 'Ogni voto pesa per chi l\'ha dato: tu e una revisione indipendente × 1, una revisione del Sentinel giudicata dai fatti × 0,8, le ricevute dell\'app × 0,7, l\'Orchestrator × 0,6, un segnale sulle scelte dell\'Orchestrator (compito passato a un altro ruolo, piano approvato) e il genitore verificato × 0,5, l\'esito di una risposta di Flash × 0,3; l\'agente su sé stesso non conta. Un voto di 30 giorni fa pesa la metà.',
+  'agentsGrid.perfHelp2': 'Ogni voto pesa per chi l\'ha dato: tu e una revisione indipendente × 1, una revisione del Sentinel giudicata dai fatti × 0,8, le ricevute dell\'app × 0,7, l\'Orchestrator × 0,6, un segnale sulle scelte dell\'Orchestrator (compito passato a un altro ruolo, piano approvato) e il genitore verificato × 0,5; l\'agente su sé stesso non conta. Un voto di 30 giorni fa pesa la metà.',
   'agentsGrid.perfHelp3': ({ min, spread }: { min: number; spread: number }) => `Compare con almeno ${min} voti e un margine non oltre ±${spread}; prima è «in rodaggio». Fasce: 85% e oltre ottima, 70–84% buona, 50–69% discreta, sotto il 50% da rivedere.`,
-  'agentsGrid.perfSources': ({ human, review, receipts, graded, orchestrator, decision, chain, quick, self }: { human: number; review: number; receipts: number; graded: number; facts: number; orchestrator: number; decision: number; chain: number; quick: number; self: number }) =>
+  'agentsGrid.perfSources': ({ human, review, receipts, graded, orchestrator, decision, chain, self }: { human: number; review: number; receipts: number; graded: number; facts: number; orchestrator: number; decision: number; chain: number; self: number }) =>
     `Voti finora: ${human} tuoi, ${review} di revisioni indipendenti, ${receipts} dalle ricevute dei test, ${graded} revisioni giudicate dai fatti, ${chain} dal genitore verificato, ${orchestrator} dell'Orchestrator`
-    + (decision ? `, ${decision} sulle sue scelte` : '') + (quick ? `, ${quick} esiti di risposte` : '') + (self ? `; ${self} solo dell'agente stesso, che non contano.` : '.'),
+    + (decision ? `, ${decision} sulle sue scelte` : '') + (self ? `; ${self} solo dell'agente stesso, che non contano.` : '.'),
   'agentsGrid.success': 'Riuscite',
   'agentsGrid.successFew': ({ n, min }: { n: number; min: number }) => `Troppo pochi esiti verificati: ${n} su ${min}`,
   'agentsGrid.successNote': ({ n, min }: { n: number; min: number }) => `verificati: ${n} su ${min} necessari`,

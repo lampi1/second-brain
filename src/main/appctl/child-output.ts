@@ -17,15 +17,14 @@ export const truncMarker = (total: number) => `\n…[troncato: ${CHILD_OUTPUT_MA
 interface Tool { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(a: Record<string, unknown>): object }
 export interface ChildOutputDeps { chats(): ChatSummary[]; runs(): AgentRun[] }
 
-/** The chat when it is a work chat of the Orchestrator's tree: not Flash (ADR 0105), not an Orchestrator, every ancestor
- *  known and not Flash. */
+/** The chat when it is a work chat of the Orchestrator's tree: not an Orchestrator, every ancestor known. */
 export function inTree(list: ChatSummary[], chatId: string): ChatSummary | undefined {
   const byId = new Map(list.map(c => [c.id, c]));
   const target = byId.get(chatId);
   if (!target || target.isOrchestrator) return undefined;
   const seen = new Set<string>();
   for (let c: ChatSummary | undefined = target; c; c = c.parentId ? byId.get(c.parentId) : undefined) {
-    if (c.quick || seen.has(c.id)) return undefined;
+    if (seen.has(c.id)) return undefined;
     seen.add(c.id);
     if (c.parentId && !byId.has(c.parentId)) return undefined;
   }

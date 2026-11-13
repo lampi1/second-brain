@@ -1,5 +1,5 @@
 // Voice's controls (ADR 0152, mockup /mnt/project-files/ui-review/voce/mockup-voce.png): the mic button that takes the
-// place of the «Invio» hint in the Orchestrator's and Flash's input (dictation into that input, on ↔ off, Ctrl+M), and
+// place of the «Invio» hint in the Orchestrator's input (dictation into that input, on ↔ off, Ctrl+M), and
 // the bar under that input while the mic is on: a steady red dot «Detta» or «In ascolto» (the conversation switched on
 // in Settings → Voce), the volume bars while you talk, «Trascrivo…», «Ti sto rispondendo» (Esc or talking over it
 // silences it), the first-time download. Used by ChatInput.tsx. State: lib/voice.ts.

@@ -19,7 +19,7 @@ export function serverStatus(s: McpServerView): ServerStatus {
   return s.lastTest.ok ? 'ok' : 'failed';
 }
 
-/** The roles (and Flash) that may use at least one of the server's tools (by their card; the role's tool classes aside). */
+/** The roles that may use at least one of the server's tools (by their card; the role's tool classes aside). */
 export function rolesWith(state: McpServersState, id: string): string[] {
   return MCP_ACCESS_ROLES.filter(r => accessOn(r, state.access[r]?.servers[id]));
 }

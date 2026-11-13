@@ -1,6 +1,6 @@
 // The persistent Orchestrator column on the demo (ADR 0068, superseding the collapsible widget of ADR 0021): always open
 // on the right, from under the top bar to the bottom edge, never over the chats or a page (1366 and 1920 wide); one
-// Orchestrator (no tabs of Orchestrators), only the two lanes Orchestrator / Flash (ADR 0105, 0107); Ctrl+R
+// Orchestrator (no tabs: its title in the bar, ADR 0296); Ctrl+R
 // puts the keyboard in its input, Esc never hides it; resized from its left edge (pointer and arrow keys), the width
 // surviving a restart, double-click back to the default; "Pulisci" with its confirm. Screenshots in test-results/shots/orchestrator-ov-*.png.
 import { expect, test, type Page } from '@playwright/test';
@@ -14,10 +14,9 @@ test('always open on the right, no collapse and no tabs; Ctrl+R focuses its inpu
   const ov = page.getByTestId('orchestrator-overlay');
   await expect(ov).toBeVisible();
   await expect(page.getByTestId('tile-orchestrator')).toBeVisible();
-  // no tabs of Orchestrators: the only tabs are the two lanes (ADR 0105), the Orchestrator's selected
-  await expect(ov.getByRole('tab')).toHaveCount(2);
-  await expect(ov.getByRole('tab', { name: 'Orchestrator' })).toHaveAttribute('aria-selected', 'true');
-  await expect(ov.getByRole('tab', { name: 'Flash' })).toHaveAttribute('aria-selected', 'false');
+  // no tabs at all: one Orchestrator, its title in the column's bar (Flash's lane is gone, ADR 0296)
+  await expect(ov.getByRole('tab')).toHaveCount(0);
+  await expect(ov.getByTestId('orchestrator-column-title')).toHaveText(/Orchestrator/);
   for (const gone of ['orchestrator-pill', 'orchestrator-collapse', 'orchestrator-tab-new']) await expect(page.getByTestId(gone)).toHaveCount(0);
   const b = await box(page);
   const top = (await page.getByTestId('topbar').boundingBox())!;

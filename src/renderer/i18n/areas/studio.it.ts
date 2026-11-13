@@ -89,8 +89,6 @@ export const studioIt = {
   'studio.versionRestore': 'Usa questa',
   'studio.versionRestored': ({ v }: { v: number }) => `Le prossime chat useranno la v${v}.`,
   'studio.versionsError': 'Versioni non disponibili.',
-  'studio.background': 'Lavoro di sfondo: non si avvia da qui e non riceve deleghe.',
-  'studio.flash': 'Sta nella colonna dell’Orchestrator, vede la sua chat e risponde al volo: solo lettura, non cambia nulla e non riceve deleghe.',
   // the «Modello» block on the back of an agent card (AgentCardModel.tsx, ADR 0211)
   'agentCard.modelTitle': 'Modello, effort, contesto',
   'agentCard.tierModel': ({ tier }: { tier: string }) => `Modello del livello (${tier})`,

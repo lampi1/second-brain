@@ -125,9 +125,6 @@ export interface ChatSummary {
   route?: RouteDecision;
   /** ADR 0103: when the checkpoint before its last turn was taken (its files can go back to it); absent = none */
   checkpointAt?: number;
-  /** «Flash», once «Lampo» (ADR 0105, 0107): the always-on quick lane beside the Orchestrator: reads and answers, changes nothing, starts no
-   *  work; never a strip, never news for the Orchestrator, never closed by itself */
-  quick?: true;
   /** the maintenance research chat (ADR 0132): reads and proposes cards, changes nothing */
   research?: true;
   /** Claude Code Remote Control of the Orchestrator (ADR 0229); absent = never turned on */
@@ -328,6 +325,8 @@ export interface RunInfo {
 export interface BalancedRoute { engine: Harness; model: string; effort?: Effort; pool: string }
 /** What a delegating agent passes in «Balanced mode» (app_create_chat, agent_delegate): its own pick after reading
  *  balanced_status, and why in a few words. The app checks only the hard limits (ADR 0218 §4). */
+/** A model the user asked for one run by name (app_create_chat `userModel`, ADR 0296). */
+export interface UserModelPick { engine: Harness; model: string; effort?: Effort }
 export interface BalancedAsk { engine: Harness; model: string; effort?: Effort; why: string }
 export interface NewChat {
   deliveryPolicy?: TaskDeliveryPolicy;
@@ -358,8 +357,6 @@ export interface NewChat {
   fork?: boolean;             // resume as a copy: never two writers on one session
   /** the Orchestrator (created only by the user: OrchestratorService.ensure, Ricomincia da capo, Cambia motore, Pulisci) */
   orchestrator?: boolean;
-  /** «Flash», the quick lane (ADR 0105, 0107): only the user; one at a time (the open one is returned) */
-  quick?: boolean;
   /** the maintenance research (ADR 0132): only the app; reads the brain (and the web when `web`), proposes through
    *  maintenance_propose, changes nothing */
   research?: { web: boolean };
@@ -370,6 +367,9 @@ export interface NewChat {
   /** main only («Balanced mode», ADR 0218): the engine, model and effort picked from the credits left; the role's resolve
    *  uses them instead of its card's engine when that engine is on and trusted. chat:create drops it */
   balancedRoute?: BalancedRoute;
+  /** the model the user named for this one run (ADR 0296): engine, model and effort for this chat only; the role's card
+   *  keeps its own. Wins over the card's tier and «Balanced mode»; the engine must be on and able to pick a model. */
+  userModel?: UserModelPick;
   /** run tags (AGENTS-DESIGN §4.8): the skill ids the chat starts with (`^[a-z0-9][a-z0-9_-]{0,79}$`, at most 16) */
   skills?: string[];
   /** run tags: the product the work is about, up to 40 characters */

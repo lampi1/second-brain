@@ -1,6 +1,6 @@
 // The agent runs' tables in userData/app.db (ADR 0199): one row per run (id, agent, start and end as indexed columns, the
-// run's JSON) and a small key/value table for what is not a run (the rollups of pruned runs, prunedThrough, Flash's
-// outcomes). AgentRunStore (runs.ts) keeps the runs in memory as before and writes here only the runs whose JSON changed,
+// run's JSON) and a small key/value table for what is not a run (the rollups of pruned runs, prunedThrough).
+// AgentRunStore (runs.ts) keeps the runs in memory as before and writes here only the runs whose JSON changed,
 // in one transaction; the one-time move from agent-runs.json is an import in one transaction whose counts are checked
 // before it commits. `exportRuns` gives the old file's shape back, read only (the levels CLI via readRunsSource, tests).
 import fs from 'node:fs';
@@ -110,10 +110,10 @@ export class RunsDb {
   close(): void { try { if (this.handle?.isOpen) this.handle.close(); } catch { /* already closed */ } this.handle = null; }
 }
 
-/** The agent runs of an app.db in agent-runs.json's shape `{version: 1, runs, rollups?, prunedThrough?, flash?}`, read
+/** The agent runs of an app.db in agent-runs.json's shape `{version: 1, runs, rollups?, prunedThrough?}`, read
  *  only (the levels CLI while the app runs, tests). null = the database holds no agent runs. A run whose JSON does not
  *  parse is passed on as null, so the reader counts it as out of shape. */
-export function exportRuns(file: string): { version: 1; runs: unknown[]; rollups?: unknown[]; prunedThrough?: number; flash?: unknown } | null {
+export function exportRuns(file: string): { version: 1; runs: unknown[]; rollups?: unknown[]; prunedThrough?: number } | null {
   const db = openAppDbReadOnly(file);
   try {
     if (areaVersion(db, AREA) < 1) return null;
@@ -124,8 +124,7 @@ export function exportRuns(file: string): { version: 1; runs: unknown[]; rollups
     const rollups = meta.has('rollups') ? parse(meta.get('rollups')!) : undefined;
     return { version: 1, runs,
       ...(rollups !== undefined ? { rollups: rollups as unknown[] } : {}),
-      ...(meta.has('prunedThrough') ? { prunedThrough: Number(meta.get('prunedThrough')) } : {}),
-      ...(meta.has('flash') ? { flash: parse(meta.get('flash')!) } : {}) };
+      ...(meta.has('prunedThrough') ? { prunedThrough: Number(meta.get('prunedThrough')) } : {}) };
   } finally { db.close(); }
 }
 

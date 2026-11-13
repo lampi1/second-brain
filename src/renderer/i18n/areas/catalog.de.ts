@@ -72,7 +72,6 @@ export const catalogDe: typeof catalogIt = {
   'catalog.purpose.artisan': 'Macht die Änderungen: Code, Dateien, Konfiguration, Dokumente und Notizen im Gedächtnis, mit den Prüfungen des Repositorys.',
   'catalog.purpose.sentinel': 'Prüft: führt Tests und Kontrollen aus oder beurteilt das Ergebnis anhand der Belege, wenn nichts auszuführen ist, und sagt, was besteht und was nicht.',
   'catalog.purpose.herald': 'Bereitet Nachrichten und Entwürfe für Personen und externe Dienste vor; jeden Versand genehmigst du.',
-  'catalog.purpose.flash': 'Schnelle Antworten neben dem Orchestrator: sieht seinen Chat, liest, ändert nichts',
   // the model tier's word, on the role card and in the studio
   'roles.tier.light': 'leicht', 'roles.tier.mid': 'mittel', 'roles.tier.top': 'hoch',
 };

@@ -52,7 +52,6 @@ import { homeEn } from './areas/home.en';
 import { guideEn } from './areas/guide.en';
 import { treeEn } from './areas/tree.en';
 import { aliveEn } from './areas/alive.en';
-import { lampoEn } from './areas/lampo.en';
 import { modelPickerEn } from './areas/model-picker.en';
 import { awayEn } from './areas/away.en';
 import { queueSettingsEn } from './areas/queue-settings.en';
@@ -85,7 +84,6 @@ export const en: Dict = {
   ...guideEn,
   ...treeEn,
   ...aliveEn,
-  ...lampoEn,
   ...modelPickerEn,
   ...awayEn,
   ...queueSettingsEn,

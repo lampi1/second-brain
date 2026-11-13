@@ -146,7 +146,7 @@ layer classes in `chats/manager-*.ts` under `chats/manager.ts` (layout: `docs/ag
   main decrypts a key when its engine needs it. This is separate from unencrypted API conversation history.
 - Agent profiles, frozen chat owners and their instructions, and local setup preferences are private profile data
   (`agents.json`, `chats.json`, `setup.json`).
-- The agent runs (one record per role chat, the rollups of pruned runs, Flash's outcomes) are in `userData/app.db`, a
+- The agent runs (one record per role chat, the rollups of pruned runs) are in `userData/app.db`, a
   SQLite database on `node:sqlite` (WAL, one row per run, only changed runs written; `main/app-db.ts`,
   `main/agents/runs-db.ts`, ADR 0199). At the first start of a release with it, `agent-runs.json` is imported in one
   transaction and kept as `agent-runs.json.migrated-<date>`; when the database cannot be used the store stays on

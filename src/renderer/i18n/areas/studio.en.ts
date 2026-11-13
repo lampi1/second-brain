@@ -88,8 +88,6 @@ export const studioEn: typeof studioIt = {
   'studio.versionRestore': 'Use this one',
   'studio.versionRestored': ({ v }: { v: number }) => `The next chats use v${v}.`,
   'studio.versionsError': 'Versions not available.',
-  'studio.background': 'Background job: it does not start from here and receives no delegation.',
-  'studio.flash': 'It sits in the Orchestrator’s column, sees its chat and answers on the spot: read only, it changes nothing and receives no delegation.',
   'agentCard.modelTitle': 'Model, effort, context',
   'agentCard.tierModel': ({ tier }: { tier: string }) => `Tier model (${tier})`,
   'agentCard.effortDefault': 'Model default',

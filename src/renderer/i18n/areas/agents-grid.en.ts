@@ -16,7 +16,6 @@ export const agentsGridEn: typeof agentsGridIt = {
   'agentsGrid.levelHelp2': 'A successful run is worth 1 to 5 XP by its size: turns, working time, files changed, delegated chats. Lv 2 at 6 XP (about 3 runs), Lv 10 at 202, Lv 50 at 3,037, Lv 100 (the top) at 9,358. At a typical pace (4 verified runs a day): a week to Lv 5, a month to Lv 10, about 4 years to Lv 100.',
   'agentsGrid.levelHelp3': 'Titles: Recruit (Lv 1), Apprentice (2–4), Practitioner (5–9), Expert (10–19), Veteran (20–34), Master (35–49), Grandmaster (50–74), Legend (75–99), Myth (100).',
   'agentsGrid.levelHelpOrchestrator': 'Orchestrator: earns with the runs it started that are verified successes, plus 1 XP for a plan approved with no change. Half the XP when the task went to another role or was redone.',
-  'agentsGrid.levelHelpFlash': 'Flash: 0.25 XP for each answer that holds, that is when within 5 minutes you do not correct it, ask it again or hand it to the Orchestrator.',
   'agentsGrid.levelHelpEx': ({ xp, wins, runs, level, next, left }) =>
     `${xp} XP from ${wins} verified ${wins === 1 ? 'success' : 'successes'} out of ${runs} ${runs === 1 ? 'run' : 'runs'} ended: Lv ${level}` + (next === null ? ', the top.' : `; ${left} XP more for Lv ${next}.`),
   'agentsGrid.perf': 'Performance',
@@ -28,11 +27,11 @@ export const agentsGridEn: typeof agentsGridIt = {
   'agentsGrid.perfSpreadTip': ({ v }) => `Uncertainty: ±${v} points`,
   'agentsGrid.perfHelpTitle': 'How the performance is computed',
   'agentsGrid.perfHelp1': 'An estimate from the verdicts on its runs (success 100%, partial 50%, failure 0%). It starts at 50% and moves with the verdicts: a few move it a little. The ± says how uncertain it still is.',
-  'agentsGrid.perfHelp2': 'Each verdict weighs by who gave it: you and an independent review × 1, a Sentinel\'s review graded by what happened × 0.8, the app\'s receipts × 0.7, the Orchestrator × 0.6, a signal on the Orchestrator\'s choices (a task handed to another role, a plan approved) and a verified parent × 0.5, the outcome of a Flash answer × 0.3; the agent on itself does not count. A 30-day-old verdict weighs half.',
+  'agentsGrid.perfHelp2': 'Each verdict weighs by who gave it: you and an independent review × 1, a Sentinel\'s review graded by what happened × 0.8, the app\'s receipts × 0.7, the Orchestrator × 0.6, a signal on the Orchestrator\'s choices (a task handed to another role, a plan approved) and a verified parent × 0.5; the agent on itself does not count. A 30-day-old verdict weighs half.',
   'agentsGrid.perfHelp3': ({ min, spread }) => `It shows with at least ${min} verdicts and an uncertainty of at most ±${spread}; before that it is "warming up". Bands: 85% and up excellent, 70–84% good, 50–69% fair, below 50% needs work.`,
-  'agentsGrid.perfSources': ({ human, review, receipts, graded, orchestrator, decision, chain, quick, self }) =>
+  'agentsGrid.perfSources': ({ human, review, receipts, graded, orchestrator, decision, chain, self }) =>
     `Verdicts so far: ${human} yours, ${review} from independent reviews, ${receipts} from test receipts, ${graded} reviews graded by what happened, ${chain} from a verified parent, ${orchestrator} from the Orchestrator`
-    + (decision ? `, ${decision} on its choices` : '') + (quick ? `, ${quick} answer outcomes` : '') + (self ? `; ${self} only from the agent itself, which do not count.` : '.'),
+    + (decision ? `, ${decision} on its choices` : '') + (self ? `; ${self} only from the agent itself, which do not count.` : '.'),
   'agentsGrid.success': 'Success',
   'agentsGrid.successFew': ({ n, min }: { n: number; min: number }) => `Too few verified outcomes: ${n} of ${min}`,
   'agentsGrid.successNote': ({ n, min }: { n: number; min: number }) => `verified: ${n} of ${min} needed`,

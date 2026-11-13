@@ -1,6 +1,6 @@
 // app_child_output (ADR 0226, src/main/appctl/child-output.ts): the Orchestrator reads the latest agent_report of a chat in
 // its tree, delegates of other roles included: summary + doneWhen by default, the output only with full: true and cut at
-// 4,000 characters with a visible marker; never a Flash chat, an Orchestrator or a chat whose ancestry is unknown; read
+// 4,000 characters with a visible marker; never an Orchestrator or a chat whose ancestry is unknown; read
 // only (it never touches the chats or runs it is given).
 import { expect, it } from 'vitest';
 import { CHILD_OUTPUT_MAX, childOutputTool, inTree } from '../../src/main/appctl/child-output';
@@ -13,8 +13,6 @@ const chats: ChatSummary[] = [
   chat('root', { agent: { name: 'Strategist' } as ChatSummary['agent'] }),
   chat('kid', { parentId: 'root', agent: { name: 'Scout' } as ChatSummary['agent'] }),
   chat('grand', { parentId: 'kid', state: 'done' as ChatSummary['state'], delegation: { role: 'sentinel', goal: 'g', doneWhen: ['a'], at: 1, result: { outcome: 'partial', summary: 'only the result', at: 5, doneWhen: [{ criterion: 'a', met: false }] } } as ChatSummary['delegation'] }),
-  chat('flash', { quick: true } as Partial<ChatSummary>),
-  chat('underFlash', { parentId: 'flash' }),
   chat('orphan', { parentId: 'gone' }),
   chat('quiet'),
 ];
@@ -59,8 +57,8 @@ it('falls back to the delegation result (no output) and says when there is no re
   expect(tool.run({ chatId: 'quiet' })).toMatchObject({ report: null });
 });
 
-it('reads only chats of the tree: never an Orchestrator, a Flash chat or its children, an orphan, an unknown id', () => {
-  for (const id of ['orch', 'flash', 'underFlash', 'orphan', 'nope', '']) expect(() => tool.run({ chatId: id })).toThrow(/albero/);
+it('reads only chats of the tree: never an Orchestrator, an orphan, an unknown id', () => {
+  for (const id of ['orch', 'orphan', 'nope', '']) expect(() => tool.run({ chatId: id })).toThrow(/albero/);
   expect(inTree(chats, 'grand')?.id).toBe('grand');
   const loop = [chat('a', { parentId: 'b' }), chat('b', { parentId: 'a' })];
   expect(inTree(loop, 'a')).toBeUndefined();

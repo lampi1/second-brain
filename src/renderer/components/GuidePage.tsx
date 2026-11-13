@@ -57,7 +57,6 @@ const GLYPHS: Record<string, ReactNode> = {
   'file-viewer': <><path d="M7 3h7l5 5v13H7z" /><path d="M14 3v5h5M10 13h6M10 17h4" /></>,
   costs: <><circle cx="12" cy="12" r="9" /><path d="M14.6 9.3c-.4-.9-1.4-1.5-2.6-1.5-1.5 0-2.6.8-2.6 2s1 1.7 2.6 2 2.6.8 2.6 2-1.1 2-2.6 2c-1.2 0-2.2-.6-2.6-1.5M12 6.3v1.5M12 16.2v1.5" /></>,
   updates: <><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14" /></>,
-  flash: <><path d="M13 3L5 13.5h6L10 21l8-10.5h-6z" /></>,
   'orchestrator-app': <><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></>,
   voice: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></>,
   recordings: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3.5" /></>,

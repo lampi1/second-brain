@@ -17,8 +17,6 @@ export const XP_POWER = 1.6;
 export const XP_MIN = 1, XP_MAX = 5;
 /** a verified success pruned before XP was kept (a rollup without `xp`): its floor */
 export const LEGACY_XP = XP_MIN;
-/** one Flash answer that held (flash-outcomes.ts): a small share of a job */
-export const FLASH_XP = 0.25;
 /** an Orchestrator decision whose Strategist plan the user approved with no change (ADR 0131) */
 export const PLAN_XP = 1;
 

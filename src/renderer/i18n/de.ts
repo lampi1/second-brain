@@ -53,7 +53,6 @@ import { homeDe } from './areas/home.de';
 import { guideDe } from './areas/guide.de';
 import { treeDe } from './areas/tree.de';
 import { aliveDe } from './areas/alive.de';
-import { lampoDe } from './areas/lampo.de';
 import { modelPickerDe } from './areas/model-picker.de';
 import { awayDe } from './areas/away.de';
 import { queueSettingsDe } from './areas/queue-settings.de';
@@ -85,7 +84,6 @@ export const de: Dict = {
   ...guideDe,
   ...treeDe,
   ...aliveDe,
-  ...lampoDe,
   ...modelPickerDe,
   ...awayDe,
   ...queueSettingsDe,

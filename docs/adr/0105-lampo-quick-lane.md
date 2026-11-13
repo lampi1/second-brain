@@ -1,6 +1,6 @@
 # ADR 0105 · «Lampo», the quick lane beside the Orchestrator
 
-Date: 2026-10-20 · Status: partly superseded by ADR 0107 (renamed «Flash», an agent with its own model); accepted (owner, 2026-10-20: «forse manca una fast chat: la velocità di risposta non è la
+Date: 2026-10-20 · Status: superseded by ADR 0296 (Flash removed; the Orchestrator's «Fast» mode instead). Earlier: partly superseded by ADR 0107 (renamed «Flash», an agent with its own model); accepted (owner, 2026-10-20: «forse manca una fast chat: la velocità di risposta non è la
 stessa di Claude Code o Codex») · Builds on: ADR 0083 (work starts only from the Orchestrator), ADR 0099 (warm engines)
 
 ## Context

@@ -10,7 +10,6 @@ import { AGENT_LABEL } from '../../../src/shared/agent-label';
 import { APP_NOTE_LABEL } from '../../../src/main/chats/reply-rules';
 import { APP_EVENT_LABEL } from '../../../src/main/chats/orchestrator-wake';
 import { RUN_RESULT_LABEL } from '../../../src/main/run/results';
-import { LAMPO_CONTEXT_END, LAMPO_CONTEXT_LABEL } from '../../../src/main/chats/lampo-context';
 import { roleFrame } from '../../../src/main/agents/orchestrator-role';
 import { USER_NOTES_LABEL } from '../../../src/main/chats/manager';
 import { estimateLine } from '../../../src/shared/task-estimate';
@@ -24,8 +23,6 @@ describe('app-text copies', () => {
     expect(t.APP_NOTE_LABEL).toBe(APP_NOTE_LABEL);
     expect(t.APP_EVENT_LABEL).toBe(APP_EVENT_LABEL);
     expect(t.RUN_RESULT_LABEL).toBe(RUN_RESULT_LABEL);
-    expect(t.LAMPO_CONTEXT_LABEL).toBe(LAMPO_CONTEXT_LABEL);
-    expect(t.LAMPO_CONTEXT_END).toBe(LAMPO_CONTEXT_END);
     const frame = roleFrame('Sentinel', 'Non va bene: basta.');
     expect(frame.startsWith(t.ROLE_OPEN!)).toBe(true);
     expect(frame.endsWith(t.ROLE_CLOSE!)).toBe(true);
@@ -42,7 +39,6 @@ describe('ownText', () => {
   it('keeps the owner words around the role frame, the notes and the estimate line', () => {
     const prompt = `${roleFrame('Orchestrator', 'Basta domande. Non va mai fatto.')}\n\n${USER_NOTES_LABEL}\n- nota\n\nfai il deploy\n\n${estimateLine({ path: 'tree', why: 'then also' })}`;
     expect(t.ownText(prompt)).toBe('fai il deploy');
-    expect(t.ownText(`${LAMPO_CONTEXT_LABEL}\nUser: non va\n${LAMPO_CONTEXT_END}\ncome stai?`)).toBe('come stai?');
   });
 });
 

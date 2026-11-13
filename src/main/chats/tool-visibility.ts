@@ -20,8 +20,8 @@ const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['agent_work_decisions'
 const DELEGATING_ONLY: ReadonlySet<string> = new Set(['agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_children', 'agent_answer_child', 'agent_close_child', 'agent_catalog', 'balanced_status']);
 /** the Strategist's plan tools (agents/strategy-tools.ts): shown only where a plan with the user exists */
 const PLAN_TOOLS: ReadonlySet<string> = new Set(['plan_propose', 'plan_update']);
-/** the chat-endpoint tools Flash never sees (chatToolShown), beside every agent_* tool */
-const LAMPO_HIDDEN: ReadonlySet<string> = new Set([...APP_CHAT_TOOLS, 'brain_script_add', 'brain_query_add', 'project_map_save', 'project_map_update']);
+/** the chat-endpoint tools the maintenance research never sees (chatToolShown), beside every agent_* tool */
+const RESEARCH_HIDDEN: ReadonlySet<string> = new Set([...APP_CHAT_TOOLS, 'brain_script_add', 'brain_query_add', 'project_map_save', 'project_map_update']);
 /** the maintenance research's tools (ADR 0132, 0195, brainmodel/research-tools.ts) */
 const RESEARCH_TOOLS: ReadonlySet<string> = new Set(['maintenance_pack', 'maintenance_propose', 'maintenance_role_trial']);
 
@@ -41,15 +41,13 @@ export function toolShownToWarm(warm: NonNullable<WarmLaunch['view']>, tool: str
 
 /** A chat of the app: `launches` = the roles it may launch (undefined = unknown); `appAsks` = its engine has no
  *  question tool of its own (engines/registry.ts appAsks), so it asks with ask_user. */
-export function toolShownToChat(s: Pick<ChatSummary, 'research' | 'isOrchestrator' | 'quick' | 'parentId' | 'plan' | 'run'>, launches: readonly string[] | undefined, tool: string, appAsks = false): boolean {
+export function toolShownToChat(s: Pick<ChatSummary, 'research' | 'isOrchestrator' | 'parentId' | 'plan' | 'run'>, launches: readonly string[] | undefined, tool: string, appAsks = false): boolean {
   if (tool === ASK_TOOL) return appAsks && !s.research;
   // the maintenance research (ADR 0132): its two tools and nothing of the app's mail, delegation or plans
-  if (s.research) return RESEARCH_TOOLS.has(tool) || (!LAMPO_HIDDEN.has(tool) && !tool.startsWith('agent_'));
+  if (s.research) return RESEARCH_TOOLS.has(tool) || (!RESEARCH_HIDDEN.has(tool) && !tool.startsWith('agent_'));
   if (RESEARCH_TOOLS.has(tool)) return false;
   if (s.isOrchestrator) return !ORCHESTRATOR_HIDDEN.has(tool);
   if (ORCHESTRATOR_ONLY.has(tool)) return false;
-  // Flash starts no work (ADR 0105): no mail to other chats, no delegation, no report, no saved script
-  if (s.quick) return !LAMPO_HIDDEN.has(tool) && !tool.startsWith('agent_');
   if (tool === 'agent_ask_parent' && !s.parentId) return false;
   // the plan with the user: only a Strategist root chat has one (ADR 0108)
   if (PLAN_TOOLS.has(tool)) return !!s.plan;

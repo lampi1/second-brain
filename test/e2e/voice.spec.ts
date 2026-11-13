@@ -1,6 +1,6 @@
 // E2E of voice (ADR 0152) on the frozen demo, whose voice engine is the fake one (main/voice/service.ts: no models, no
-// microphone needed, it "hears" one sentence per listening session and speaks a short silence). The Orchestrator's and
-// Flash's inputs show the mic and no «Invio» hint; Ctrl+M turns dictation on (red border, «Detta»), the heard sentence
+// microphone needed, it "hears" one sentence per listening session and speaks a short silence). The Orchestrator's
+// input shows the mic and no «Invio» hint; Ctrl+M turns dictation on (red border, «Detta»), the heard sentence
 // is written into the input and NOT sent, Ctrl+M turns it off again. Settings → Voce «Conversazione a voce» is the
 // spoken conversation: the heard sentence goes to the Orchestrator as the user's message. Screenshots dark.
 import { expect, test } from '@playwright/test';

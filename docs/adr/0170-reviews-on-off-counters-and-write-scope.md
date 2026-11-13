@@ -1,6 +1,6 @@
 # ADR 0170 — Reviews on/off, honest counters for the Orchestrator, Flash and Pulse, reconcilable writes without a grant
 
-Status: partly superseded by ADR 0203; accepted. Date: 2026-10-27. Owner request (thread «Fix revisioni, contatori e riconciliazione»).
+Status: partly superseded by ADR 0203, ADR 0296 (Flash's counter removed); accepted. Date: 2026-10-27. Owner request (thread «Fix revisioni, contatori e riconciliazione»).
 
 ## Reviews
 

@@ -1,12 +1,11 @@
 // The Guida's main side (ADR 0196): «Chiedi alla Guida» (IPC guide:ask) and the cards «da verificare» (IPC guide:stale).
 // ask: the question with the matching cards and the app_guide index (shared/guide-ask.ts) goes to one light model with
-// no tools through agents/oneshot.ts (Flash's engine at its lightest tier: no role text, no files, no permission
+// no tools through agents/oneshot.ts (the Scout's engine at its lightest tier: no role text, no files, no permission
 // prompt; the run is kept like the other one-shot jobs', job 'guide'); the answer comes back with its checked citations and its cost.
 // stale: the anchored code of the cards hashed in the repo the app runs from (main/guide/anchors.ts), at most once a
 // minute, against the repo's own src/shared/guide-anchors.json (the bundled copy only when that one cannot be read);
 // a packaged build has no repo and answers checked: false. A runOnce that throws answers a clean reason. Built by wiring.ts; handlers in index.ts.
 import type { OneShotRequest, OneShotResult } from '../agents/oneshot';
-import { FLASH_ID } from '../../shared/roles';
 import { GUIDE_SYSTEM, QUESTION_MAX, citations, guidePrompt, type GuideAnswer, type GuideAskRequest, type GuideStaleState } from '../../shared/guide-ask';
 import { errText, log } from '../log';
 import { CONCEPTS } from '../../shared/concept-guide';
@@ -38,7 +37,7 @@ export class GuideService {
     try { index = await this.d.index(lang); } catch { /* the cards alone still answer */ }
     const { prompt, given } = guidePrompt(question, lang, index);
     let r: OneShotResult;
-    try { r = await this.d.runOnce({ agentId: FLASH_ID, purpose: 'guide', light: true, system: GUIDE_SYSTEM(lang), prompt, maxOutputTokens: 900, timeoutMs: 60_000 }); }
+    try { r = await this.d.runOnce({ agentId: 'scout', purpose: 'guide', light: true, system: GUIDE_SYSTEM(lang), prompt, maxOutputTokens: 900, timeoutMs: 60_000 }); }
     catch (e) {
       // the engine threw instead of answering: a clean reason for the card, the cause in the log
       log.warn('guide', 'guide question not answered', { cause: errText(e), hint: 'try again; npm run logs -- --scope guide' });

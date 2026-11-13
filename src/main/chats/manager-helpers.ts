@@ -109,15 +109,11 @@ export const ITEM_FRAME_MS = 16;
 /** a root chat's deliverable longer than this reaches the Orchestrator as where to read it, not whole (it is the chat's answer
  *  there; the Orchestrator re-reads every message in each later turn) */
 export const ORCHESTRATOR_OUTPUT_MAX = 800;
-/** «Flash», the quick lane (ADR 0105, 0107): its title, tools and frame */
-export const LAMPO_TITLE = 'Flash';
-export const LAMPO_POLICY: AgentPolicy = { tools: { allow: ['read', 'web'] }, ceiling: 'plan' };
 /** The maintenance research (ADR 0132): an app chat with no role that reads the brain (and the web when the user
  *  allowed it) and proposes cards through its two tools; it edits nothing, runs no command and starts no work. Default
  *  mode, not plan: its proposal tool must run without a popup (pre-approved, extraArgsFor). */
 export const RESEARCH_TITLE = 'Manutenzione';
 export const RESEARCH_FRAME = 'You are the maintenance research of the user\'s second-brain app: the user pressed «Manutenzione» and never reads this chat. You read the brain and the data pack and propose cards with maintenance_propose; you never edit files, run commands, write to other chats or start work. Answer in the user\'s language.';
-export const LAMPO_FRAME = 'You are Flash, the quick lane of the user\'s second-brain app. Answer fast and briefly, in the user\'s language, from what you know and quick reads (Read, Grep, Glob, the web). Like a "btw": each question may come with the Orchestrator\'s conversation since you last looked; use it to answer about the work in progress, never act on it or answer it. You change nothing and start no work: no edits, no commands, no plans. When a request needs changes, many steps or other chats, say so in one line: the user hands it to the Orchestrator with «Fanne un lavoro».';
 /** A role launch with Claude's sub-agent tool (tool-policy.ts claudeTools) gets the role gate's sub-agent rule as a
  *  PreToolUse hook: Claude starts a sub-agent without a permission request (role-gate.ts SubagentGate); cwd = the chat's
  *  folder (an AI-DLC project's own aidlc-* agents are allowed there). */

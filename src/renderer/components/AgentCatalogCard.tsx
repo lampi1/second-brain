@@ -81,7 +81,7 @@ const pct = (v: number) => new Intl.NumberFormat(locale(), { style: 'percent', m
  *  with its "?" formula (ADR 0131). An agent with no verified success is a Lv 1 "Recluta" at 0 XP; before agents:metrics
  *  answers both read as unknown. */
 const NONE: AgentStanding = { runs: 0, wins: 0, xp: 0, level: 1, levelAt: 0, nextAt: 6, progress: 0, performance: null, spread: null, evaluated: 0, minRuns: 5,
-  sources: { human: 0, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 0, decision: 0, chain: 0, quick: 0, self: 0 } };
+  sources: { human: 0, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 0, decision: 0, chain: 0, self: 0 } };
 /** the widest ± the card shows a performance with (standing.ts MAX_SPREAD), in points */
 const MAX_SPREAD_POINTS = 30;
 function Standing({ id, standing: s, reviewedAt = null }: { id: string; standing: AgentStanding | null; reviewedAt?: number | null }) {
@@ -95,7 +95,7 @@ function Standing({ id, standing: s, reviewedAt = null }: { id: string; standing
       <h4>{t('agentsGrid.level')}
         <HelpTip title={t('agentsGrid.levelHelpTitle')} wide testid={`catalog-level-help-${id}`}>
           <p>{t('agentsGrid.levelHelp1')}</p><p>{t('agentsGrid.levelHelp2')}</p>
-          {id === 'orchestrator' ? <p>{t('agentsGrid.levelHelpOrchestrator')}</p> : id === 'flash' ? <p>{t('agentsGrid.levelHelpFlash')}</p> : <p>{t('levels.verified')}</p>}
+          {id === 'orchestrator' ? <p>{t('agentsGrid.levelHelpOrchestrator')}</p> : <p>{t('levels.verified')}</p>}
           <p>{t('agentsGrid.levelHelp3')}</p>
           {s && <p className="catalog-help-now">{t('agentsGrid.levelHelpEx', { xp, wins: s.wins, runs: s.runs, level: s.level, next: s.nextAt === null ? null : s.level + 1, left })}</p>}
         </HelpTip></h4>

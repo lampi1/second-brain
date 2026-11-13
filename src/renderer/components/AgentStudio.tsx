@@ -14,7 +14,7 @@ import { Select } from './Select';
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { completedRuns, MAX_CONTEXT_RANGE, type AgentDraft, type AgentMetrics, type AgentProfile, type AgentVersion, type VersionMetrics } from '@shared/agents';
 import { MIN_SUCCESS_SAMPLE, successInterval } from '@shared/success';
-import { MODEL_TIERS, WORK_ROLE_IDS, FLASH_ID, isRoleId, roleName, tierRank, type ModelTier } from '@shared/roles';
+import { MODEL_TIERS, WORK_ROLE_IDS, isRoleId, roleName, tierRank, type ModelTier } from '@shared/roles';
 import { characterOf } from '@shared/characters';
 import { agentHistory, refreshAgents, resetAgent, restoreAgentVersion, saveAgent, useAgents } from '../store/agents';
 import { toast, ui } from '../store/ui';
@@ -283,7 +283,6 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
     { label: t('catalog.last'), value: last },
   ];
   const instructions = profile.instructions.trim();
-  const background = profile.scope === 'background';
   const config: [string, string][] = [
     [t('catalog.engine'), engine],
     [t('studio.model'), profile.model ?? `${t('studio.tierModel')} · ${tierLabel(profile.tier)}`],
@@ -292,7 +291,7 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
     [t('studio.maxContext'), profile.maxContext ? t('studio.maxContextValue', { n: Math.round(profile.maxContext / 1000) }) : t('studio.maxContextDefault')],
     [t('studio.tools'), profile.tools && !profile.tools.allow.length ? t('agentDetail.toolsNone') : permissionSummary(profile).text],
     [t('studio.ceiling'), profile.permissionCeiling ? t(`studio.ceiling.${profile.permissionCeiling}`) : t('studio.ceilingNone')],
-    ...(background ? [] : [[t('studio.launches'), profile.launches.map(roleName).join(', ') || t('studio.launchesNone')] as [string, string]]),
+    [t('studio.launches'), profile.launches.map(roleName).join(', ') || t('studio.launchesNone')],
     [t('agentDetail.version'), profile.activeVersion === profile.version ? `v${profile.activeVersion}` : `v${profile.activeVersion} / v${profile.version}`],
     [t('agentDetail.updated'), new Date(profile.updatedAt).toLocaleString(locale(), { dateStyle: 'medium', timeStyle: 'short' })],
   ];
@@ -320,7 +319,6 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
       {resetting && <div className="ad-banner" role="group" aria-label={t('studio.reset')} data-testid="agent-reset-confirm"><span>{t('studio.resetConfirm')}</span>
         <button type="button" className="btn btn-primary btn-s" disabled={busy} onClick={onResetConfirm} autoFocus>{t('studio.resetDo')}</button>
         <button type="button" className="btn btn-ghost btn-s" onClick={onResetCancel}>{t('studio.cancel')}</button></div>}
-      {background && <p className="ad-hint">{t(profile.id === FLASH_ID ? 'studio.flash' : 'studio.background')}</p>}
       {status}
       <dl className="ad-stats" aria-label={t('agentDetail.results')}>
         {numbers.map(n => <div key={n.label} title={[n.label, n.value ?? unknown, n.note].filter(Boolean).join(' · ')}>
@@ -328,7 +326,7 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
       </dl>
       <p className="ad-hint">{t('catalog.measurementNote')}</p>
       {editor}
-      {!background && <RolePermissions profile={profile} />}
+      <RolePermissions profile={profile} />
       <div className="ad-grid">
         <section className="ad-card ad-prompt" aria-labelledby={`ad-prompt-${profile.id}`}>
           <header className="ad-card-head"><h3 id={`ad-prompt-${profile.id}`}>{t('agentDetail.prompt')}</h3>{instructions && <span className="ad-meta">{t('agentDetail.promptSize', { n: instructions.length })}</span>}</header>

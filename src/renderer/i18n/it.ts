@@ -53,7 +53,6 @@ import { homeIt } from './areas/home.it';
 import { guideIt } from './areas/guide.it';
 import { treeIt } from './areas/tree.it';
 import { aliveIt } from './areas/alive.it';
-import { lampoIt } from './areas/lampo.it';
 import { modelPickerIt } from './areas/model-picker.it';
 import { awayIt } from './areas/away.it';
 import { queueSettingsIt } from './areas/queue-settings.it';
@@ -86,7 +85,6 @@ export const it = {
   ...guideIt,
   ...treeIt,
   ...aliveIt,
-  ...lampoIt,
   ...modelPickerIt,
   ...awayIt,
   ...queueSettingsIt,

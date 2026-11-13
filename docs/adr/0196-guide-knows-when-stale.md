@@ -1,6 +1,6 @@
 # 0196 — The Guida knows when it is stale, answers questions, draws from the code and picks cards for the user
 
-Status: accepted. Builds on ADR 0057, ADR 0070, ADR 0101, ADR 0117 and ADR 0149.
+Status: partly superseded by ADR 0296 (the Guide's one-shot runs on the Scout's engine, Flash is gone); accepted. Builds on ADR 0057, ADR 0070, ADR 0101, ADR 0117 and ADR 0149.
 
 2026-10-29.
 

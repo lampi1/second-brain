@@ -18,7 +18,6 @@ export const voiceDe: typeof voiceIt = {
   'voice.speakFailed': ({ error }: { error: string }) => `Die Stimme konnte nicht sprechen: ${error}`,
   'voice.engineDown': 'Die Sprach-Engine antwortet nicht: versuch es gleich nochmal.',
   'voice.noMic': ({ error }: { error: string }) => `Mikrofon nicht verfügbar: ${error}`,
-  'voice.noFlash': 'Öffne Flash, um mit ihm zu reden.',
   'voice.noOrchestrator': 'Öffne den Orchestrator, um mit ihm zu reden.',
   'voice.sample': 'Ciao! Sono la voce del tuo secondo cervello. Dimmi pure cosa vuoi fare.',
   'voice.group': 'Stimme',

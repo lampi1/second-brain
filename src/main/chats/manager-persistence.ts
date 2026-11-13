@@ -17,7 +17,7 @@ import { AgentChildrenReducer } from './agent-children';
 import { initialEffort } from './effort';
 import { pausedState } from './remote-control';
 import type { Rec } from './manager-types';
-import { clearTimeout, workBehind, storedResult, coldDivider, LAMPO_TITLE, MAX_ARCHIVED, RUN_SAVE_MS, restoredOwner } from './manager-helpers';
+import { clearTimeout, workBehind, storedResult, coldDivider, MAX_ARCHIVED, RUN_SAVE_MS, restoredOwner } from './manager-helpers';
 import { receiptsReading } from './receipt-reads';
 import { ManagerCore } from './manager-core';
 
@@ -185,8 +185,8 @@ export abstract class ManagerPersistence extends ManagerCore {
         ...(c.work ? {work:c.work} : {}),
         effortStatus: initialEffort(!!engineOf(c.harness)?.caps.effort, c.effort),
         agentChildren: children.snapshot(),
-        id: c.id, harness: c.harness, origin: 'app', title: c.quick ? LAMPO_TITLE : c.title, cwd: c.cwd, sessionId: c.sessionId, model: c.model, effort: c.effort,
-        permissionMode: c.permissionMode, state: 'closed', costUsd: 0, pending: 0, isOrchestrator: c.isOrchestrator, ...(c.quick ? { quick: true } : {}), ...(c.research ? { research: true } : {}), lastText: '', updatedAt: c.closedAt ?? c.createdAt, browserTabIds: [],
+        id: c.id, harness: c.harness, origin: 'app', title: c.title, cwd: c.cwd, sessionId: c.sessionId, model: c.model, effort: c.effort,
+        permissionMode: c.permissionMode, state: 'closed', costUsd: 0, pending: 0, isOrchestrator: c.isOrchestrator, ...(c.research ? { research: true } : {}), lastText: '', updatedAt: c.closedAt ?? c.createdAt, browserTabIds: [],
         ...(engineOf(c.harness)?.caps.cost ? {} : { costKnown: false as const }),
         ...(c.context ? { contextTokens: c.context.tokens, ...(c.context.max ? { contextMaxTokens: c.context.max } : {}), ...(c.context.estimated ? { contextEstimated: true } : {}) } : {}),
         ...(c.handoffAt ? { handoffAt: c.handoffAt, handoffSource: c.handoffSource ?? 'chat' } : {}),
@@ -262,7 +262,6 @@ export abstract class ManagerPersistence extends ManagerCore {
       ...(r.s.agentChildren ? { agentChildren: r.s.agentChildren } : {}),
       ...(r.s.work ? {work:r.s.work} : {}),
       title: r.s.title, model: r.choice.model, effort: r.choice.effort, permissionMode: r.choice.permissionMode, isOrchestrator: r.s.isOrchestrator,
-      ...(r.s.quick ? { quick: true as const } : {}),
       ...(r.s.research ? { research: true as const } : {}),
       createdAt: r.createdAt, costTotalUsd: r.costTotalUsd, ...(r.inWorktree ? { inWorktree: true } : {}),
       ...(r.lastTurnAt ? { lastTurnAt: r.lastTurnAt } : {}),

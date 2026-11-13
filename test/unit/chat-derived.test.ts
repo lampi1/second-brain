@@ -25,7 +25,6 @@ const chats: Record<string, ChatSummary> = {
   k2: chat('k2', { parentId: 'r', delegation: { role: 'scout', goal: 'g', doneWhen: [], at: 1 } as unknown as ChatSummary['delegation'], queued: { position: 1 } as ChatSummary['queued'] }),
   gone: chat('gone', { closedAt: 5, state: 'closed' }),
   w: chat('w', { routineArchived: true } as Partial<ChatSummary>),
-  q: chat('q', { quick: true } as Partial<ChatSummary>),
 };
 const order = Object.keys(chats);
 const tabs = [{ id: 't1', ownerChatId: 'r', url: 'https://x', title: 'x' }, { id: 't2', url: 'https://y', title: 'y' }] as BrowserTab[];
@@ -38,7 +37,7 @@ describe('derived once per chats object, same as the pure functions', () => {
     expect(stripTree(order, { ...chats })).not.toBe(tree);
     expect(stripTiles(order, chats, tabs).map(t => t.id)).toContain('t1');
     expect(stripTiles(order, chats, tabs)).toBe(stripTiles(order, chats, tabs));
-    expect(sidebarTree(order, chats)).toEqual(chatTree(['r', 'k1', 'k2', 'gone'], chats)); // no Orchestrator, Flash or routine worker
+    expect(sidebarTree(order, chats)).toEqual(chatTree(['r', 'k1', 'k2', 'gone'], chats)); // no Orchestrator or routine worker
     expect(routineIdList(chats)).toEqual(['w']);
     expect(tabOwners(tabs)).toEqual({ t1: 'r' });
     expect(chatList(chats)).toBe(chatList(chats));

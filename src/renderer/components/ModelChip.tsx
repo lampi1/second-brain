@@ -1,9 +1,8 @@
-// The model a column runs on, always in sight (ADR 0107; owner, 2026-10-21: «sia nel lampo che nell'orchestrator vorrei si
-// capisse chiaramente il modello che stanno usando come per le strisce. E poter scegliere un modello diverso per
-// orchestrator e uno diverso per lampo»): the engine's mark, the model and effort, like a strip's facts line. A click opens
+// The model the Orchestrator's column runs on, always in sight (ADR 0107; owner, 2026-10-21: «vorrei si capisse
+// chiaramente il modello che stanno usando come per le strisce»): the engine's mark, the model and effort, like a strip's facts line. A click opens
 // the shared picker (ModelPicker.tsx, owner 2026-10-31: one selector everywhere) on this chat with the agent's card:
 // «Solo questa chat» and the card's default are two separate actions, nothing is saved by a mere pick. Used by
-// OrchestratorTile and LampoTile.
+// OrchestratorTile.
 import { useRef, useState } from 'react';
 import type { ChatSummary } from '@shared/contract';
 import { modelWithEffort } from '../lib/format';

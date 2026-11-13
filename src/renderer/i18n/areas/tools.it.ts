@@ -82,7 +82,7 @@ export const toolsIt = {
   'tools.keys.talkWhat': 'Conversazione a voce con l’Orchestrator: accendi o spegni',
   'tools.keys.pttKey': 'Ctrl Spazio (tieni premuto)',
   'tools.keys.pttWhat': 'Conversazione a voce con «Premi per parlare»: parla mentre tieni premuto, al rilascio parte',
-  'tools.keys.voiceWhat': 'Dettatura: accendi o spegni il microfono nel campo (Orchestrator e Flash)',
+  'tools.keys.voiceWhat': 'Dettatura: accendi o spegni il microfono nel campo (Orchestrator)',
   'tools.keys.stopChatKey': 'Ctrl .',
   'tools.keys.stopChatWhat': 'Ferma la chat selezionata',
   'tools.keys.closeChatKey': 'Ctrl W',

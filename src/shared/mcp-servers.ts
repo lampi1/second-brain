@@ -4,7 +4,7 @@
 // slots (an env variable or a header) and the renderer only ever sees a mask. Used by main/mcp-servers/* (store,
 // gateway, service), the Settings → Connettori section and the agent card's MCP section.
 
-import { FLASH_ID, ROLE_IDS } from './roles';
+import { ROLE_IDS } from './roles';
 
 export type McpTransport = 'stdio' | 'http';
 /** Where a server's token goes: an environment variable of its process (stdio) or a request header (http). */
@@ -102,10 +102,8 @@ export function idFrom(label: string): string {
   return s && !RESERVED_IDS.includes(s) ? s : 'server';
 }
 
-/** Whether the access lets this tool through. `role`: Flash never gets a writing tool, whatever the access says
- *  (a tool list included; ADR 0207). */
-export function toolAllowed(access: McpToolAccess | undefined, tool: Pick<McpToolInfo, 'name' | 'readOnly'>, role?: string | null): boolean {
-  if (role === 'flash' && !tool.readOnly) return false;
+/** Whether the access lets this tool through. */
+export function toolAllowed(access: McpToolAccess | undefined, tool: Pick<McpToolInfo, 'name' | 'readOnly'>): boolean {
   if (access === undefined || access === 'all') return true;
   if (access === 'none') return false;
   if (access === 'read') return tool.readOnly;
@@ -117,27 +115,21 @@ export const serverOffered = (access: McpToolAccess | undefined): boolean =>
 
 /** A chat's levels, its own role first, then each parent's: a tool passes only when every level lets it through, so a
  *  child never gets more than its parent. A level without a role (a plain chat) is undefined = no limit. */
-export function chainAllows(levels: readonly (RoleMcpAccess | undefined)[], server: string, tool: Pick<McpToolInfo, 'name' | 'readOnly'>, roles?: readonly (string | null)[]): boolean {
-  return levels.every((l, i) => toolAllowed(l?.servers[server], tool, roles?.[i]));
+export function chainAllows(levels: readonly (RoleMcpAccess | undefined)[], server: string, tool: Pick<McpToolInfo, 'name' | 'readOnly'>): boolean {
+  return levels.every(l => toolAllowed(l?.servers[server], tool));
 }
 export const chainOffers = (levels: readonly (RoleMcpAccess | undefined)[], server: string): boolean =>
   levels.every(l => serverOffered(l?.servers[server]));
 
-/** Flash (ADR 0107) uses the app's MCP servers only when the user turns a server on for it, and only its reading tools
- *  (ADR 0207: Flash stays read-only). Its access lives beside the roles' under this key. */
-export const FLASH_MCP_ROLE = FLASH_ID;
-/** Everyone whose MCP access the user sets: the Orchestrator, the five work roles, Flash. */
-export const MCP_ACCESS_ROLES: readonly string[] = [...ROLE_IDS, FLASH_MCP_ROLE];
-/** What a role gets from a server nobody set: every tool, Flash none. */
-export const defaultAccess = (role: string): McpToolAccess => (role === FLASH_MCP_ROLE ? 'none' : 'all');
-/** The access that holds for a role: the stored value or its default; Flash never more than the reading tools. */
-export function effectiveAccess(role: string, stored: McpToolAccess | undefined): McpToolAccess {
-  const v = stored ?? defaultAccess(role);
-  return role === FLASH_MCP_ROLE && v === 'all' ? 'read' : v;
-}
+/** Everyone whose MCP access the user sets: the Orchestrator and the five work roles. */
+export const MCP_ACCESS_ROLES: readonly string[] = [...ROLE_IDS];
+/** What a role gets from a server nobody set: every tool. */
+export const defaultAccess = (_role: string): McpToolAccess => 'all';
+/** The access that holds for a role: the stored value or its default. */
+export const effectiveAccess = (role: string, stored: McpToolAccess | undefined): McpToolAccess => stored ?? defaultAccess(role);
 /** The simple on/off a per-role toggle shows (on = at least one tool offered) and the value it sets. */
 export const accessOn = (role: string, stored: McpToolAccess | undefined): boolean => serverOffered(effectiveAccess(role, stored));
-export const toggleAccess = (role: string, on: boolean): McpToolAccess => (on ? (role === FLASH_MCP_ROLE ? 'read' : 'all') : 'none');
+export const toggleAccess = (_role: string, on: boolean): McpToolAccess => (on ? 'all' : 'none');
 
 /** Exactly what a server starts: its variables, command and arguments, or its address (shown on «Attiva»). */
 export function runsOf(def: Pick<McpServerDef, 'transport' | 'command' | 'args' | 'env' | 'url'>): string {

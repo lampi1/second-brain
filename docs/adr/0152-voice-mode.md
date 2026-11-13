@@ -1,7 +1,7 @@
 <!-- Voice mode in the Orchestrator and Flash: local, free speech in and out; owner 2026-10-24. -->
 # 0152 — Voice mode: talk to the Orchestrator and Flash, hear the answers
 
-Date: 2026-10-24 · Status: accepted
+Date: 2026-10-24 · Status: partly superseded by ADR 0296 (Flash's input removed: voice is the Orchestrator's and Impara's); accepted
 
 ## Context
 

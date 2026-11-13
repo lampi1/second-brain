@@ -8,7 +8,7 @@
 //   undo = the previous version; tools, permissions and limits change the version in use, undo = set the old value, ADR 0186);
 // - connector: the MCP servers of Settings → Connettori (ADR 0207; the owner, 2026-10-30: «MCP deve essere facilissimo
 //   configurarlo anche per l'Orchestrator»): add (a definition, or what the user pasted: JSON, command line or URL),
-//   edit a field, on/off, a role's access (Flash and the Orchestrator too), remove, test, each undoable («Annulla» on
+//   edit a field, on/off, a role's access (the Orchestrator too), remove, test, each undoable («Annulla» on
 //   the feed card it posts, or action undo); "form" opens the add form prefilled for the user. Token values never: a
 //   pasted secret is dropped before anything is kept or answered, the user types tokens in Settings; the accounts'
 //   logins stay the user's;

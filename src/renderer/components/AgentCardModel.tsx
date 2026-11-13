@@ -38,7 +38,7 @@ export function AgentCardModel({ profile }: { profile: AgentProfile }) {
   };
   const id = profile.id;
   // «Balanced mode» on (ADR 0218): the delegating agent picks; the card's own choice is kept for when it goes off. Only
-  // work roles: the Orchestrator and Flash always run on their card
+  // work roles: the Orchestrator always runs on its card
   const balanced = useApp(s => s.settings?.balancedMode === true) && isWorkRole(profile.id);
   return <section className="catalog-model" aria-label={t('studio.model')} data-testid={`catalog-model-${id}`}>
     <h4>{t('agentCard.modelTitle')}</h4>

@@ -106,9 +106,6 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0102](0102-the-app-shows-what-it-does-by-itself.md) The app shows what it does by itself — accepted
 - [0103](0103-safety-without-popups.md) Safety without popups: a checkpoint before every turn — accepted, partly superseded by 0254
 - [0104](0104-evidence-before-a-change-is-kept.md) Evidence before a change is kept: intervals, checkpoints, one primary metric — accepted
-- [0105](0105-lampo-quick-lane.md) «Lampo», the quick lane beside the Orchestrator — accepted, partly superseded by 0107
-- [0106](0106-lampo-sees-the-orchestrator.md) «Lampo» is a "btw": it sees the Orchestrator's conversation — accepted, partly superseded by 0107
-- [0107](0107-flash-agent-with-its-own-model.md) «Flash»: the quick lane is an agent with its own model; both columns show theirs — accepted
 - [0108](0108-strategist-plans-with-the-user.md) The Strategist plans with the user: questions, a short plan to approve, its steps on the strip — accepted
 - [0109](0109-evidence-claim-on-every-brain-change.md) An evidence claim on every brain change, and the Apprendimento page — accepted
 - [0110](0110-conversation-results-and-evidence.md) Conversation continuity, canonical results and honest evidence — accepted
@@ -131,7 +128,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0128](0128-diagrams-charts-and-the-opening-splash.md) Diagrams and charts in replies, and the opening splash — accepted
 - [0129](0129-memory-keeps-reusable-knowledge.md) Memory keeps reusable knowledge: a worth gate, fewer cards, a maintenance that generalizes — accepted
 - [0130](0130-run-receipts-before-reviews.md) Run receipts: deterministic checks before a Sentinel review — accepted
-- [0131](0131-levels-by-job-size-and-bayesian-performance.md) Levels by job size, a Bayesian performance, the Orchestrator's choices and Flash's answers — accepted
+- [0131](0131-levels-by-job-size-and-bayesian-performance.md) Levels by job size, a Bayesian performance, the Orchestrator's choices and Flash's answers — accepted, partly superseded by 0296
 - [0132](0132-maintenance-with-research-and-app-ideas.md) The maintenance with research, the «Idee dell'app» tab and the phrases of the day — accepted, partly superseded by 0153, 0173, 0258
 - [0134](0134-finished-chats-close-by-default.md) Finished chats close by default, reliably — accepted
 - [0135](0135-yes-no-questions-and-the-recap.md) Yes/no questions only, «Ci penso dopo», and a recap that unblocks everything — accepted, partly superseded by 0269
@@ -151,7 +148,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0149](0149-orchestrator-knows-and-configures-the-app.md) The Orchestrator knows the app and changes its configuration — accepted
 - [0150](0150-decision-card-and-automatic-facts.md) One decision card with the chat's brief; memory facts need no approval — accepted
 - [0151](0151-one-notice-card-and-sounds.md) One notice card, one sound per kind — accepted
-- [0152](0152-voice-mode.md) Voice mode: talk to the Orchestrator and Flash, hear the answers — accepted
+- [0152](0152-voice-mode.md) Voice mode: talk to the Orchestrator and Flash, hear the answers — accepted, partly superseded by 0296
 - [0153](0153-one-click-maintenance.md) One-click «Manutenzione»: proposals only on the user's click, issues opened from a card — accepted, partly superseded by 0258
 - [0154](0154-call-recordings.md) Call recordings: PC audio + microphone, transcribed on the PC, known to the Orchestrator — accepted
 - [0155](0155-app-owned-routine-runner.md) The app runs routines; the Orchestrator observes — accepted, partly superseded by 0179
@@ -169,7 +166,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0167](0167-user-write-reconciliation.md) User reconciliation of uncertain routine writes — accepted, partly superseded by 0169, 0179
 - [0168](0168-routine-test-deploy-started-release.md) A routine test deploy creates one started release; a stuck draft is deleted — accepted, partly superseded by 0179
 - [0169](0169-proposed-write-reconciliation.md) Proposed write reconciliation and same-run recovery — accepted, partly superseded by 0179
-- [0170](0170-reviews-on-off-counters-and-write-scope.md) Reviews on/off, honest counters for the Orchestrator, Flash and Pulse, reconcilable writes without a grant — accepted, partly superseded by 0203
+- [0170](0170-reviews-on-off-counters-and-write-scope.md) Reviews on/off, honest counters for the Orchestrator, Flash and Pulse, reconcilable writes without a grant — accepted, partly superseded by 0203, 0296
 - [0171](0171-main-process-stalls-deferred-store-writes.md) Main-process stalls: per-second work kept linear, store writes deferred and asynchronous — accepted
 - [0172](0172-engines-below-normal-priority.md) Engines run below normal CPU priority; stalls say whether the app was working or waiting — accepted
 - [0173](0173-working-line-shows-real-activity.md) The working line shows what the chat really does — accepted
@@ -195,7 +192,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0193](0193-proposals-ask-only-when-not-obvious.md) Proposte asks only when the answer is not obvious — accepted
 - [0194](0194-itemized-maintenance-lint-and-success-criteria.md) Maintenance quality: itemized changes, a brain lint and «riuscito se…» — accepted
 - [0195](0195-candidate-brain-and-role-reflection.md) The maintenance writes a candidate brain, and reflects on one role's text as a trial — accepted
-- [0196](0196-guide-knows-when-stale.md) The Guida knows when it is stale, answers questions, draws from the code and picks cards for the user — accepted
+- [0196](0196-guide-knows-when-stale.md) The Guida knows when it is stale, answers questions, draws from the code and picks cards for the user — accepted, partly superseded by 0296
 - [0197](0197-corrections-kind-examples-and-ppi.md) The user's corrections counted by the app, the kind of work by examples, and PPI for role success — accepted, partly superseded by 0291
 - [0198](0198-developer-speed-typecheck-e2e-baseline-agents-map.md) Developer speed: TypeScript 7 typecheck, an e2e baseline of known reds, AGENTS.md as a map — accepted
 - [0199](0199-agent-runs-in-sqlite.md) The agent runs move from agent-runs.json to SQLite (userData/app.db) — accepted
@@ -206,9 +203,9 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0204](0204-impara-one-field-quiz-kinds-and-score.md) Impara: one start field, more question kinds with instant feedback, an honest score — accepted
 - [0205](0205-impara-studio-visuals-and-quality.md) Impara: the «Studio» column, a visual for each piece, and a quality gate — accepted
 - [0206](0206-impara-file-driven-web-research.md) Impara: web research driven by the user's files, through a deterministic filter — accepted
-- [0207](0207-settings-redesign-and-easy-mcp.md) Settings redesign, MCP servers in one paste, the Orchestrator configures everything — accepted
+- [0207](0207-settings-redesign-and-easy-mcp.md) Settings redesign, MCP servers in one paste, the Orchestrator configures everything — accepted, partly superseded by 0296
 - [0208](0208-docs-keep-up-with-the-code.md) Docs keep up with the code: tool catalog, Guida coverage, README freshness — accepted
-- [0209](0209-strategist-asks-more-and-varied-reactions.md) The Strategist asks at least three questions; reactions fit the message; Flash writes the brief — accepted, partly superseded by 0220, 0223
+- [0209](0209-strategist-asks-more-and-varied-reactions.md) The Strategist asks at least three questions; reactions fit the message; Flash writes the brief — accepted, partly superseded by 0220, 0223, 0296
 - [0210](0210-remove-model-routing.md) Remove the model-routing classifier: every agent runs on its own card's model — accepted, partly superseded by 0291
 - [0211](0211-small-fixes-and-real-effort.md) Agent card picks model, effort and context; real effort names; owner's small fixes of 2026-10-31 — accepted
 - [0212](0212-remove-personal-browser.md) Remove the personal Browser page — accepted
@@ -290,10 +287,11 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0289](0289-fewer-refusals-agents-learn-by-failing.md) Fewer refusals an agent learns only by failing: long outputs are cut, the tools' commands name the copy, a question has a place without an Orchestrator — accepted
 - [0290](0290-claude-chats-start-in-default-the-app-answers.md) A Claude chat starts in «default»: the app answers its requests, not the engine's own default mode — accepted, partly superseded by 0294
 - [0291](0291-remove-kind-by-examples-and-classificatori.md) The kind of work by examples and the Classificatori section are removed — accepted
-- [0292](0292-strip-dot-time-and-cost-always.md) The strip: a state dot in front, time and cost against the estimate always in sight — accepted, partly amended by 0293
-- [0293](0293-children-are-rows-face-back-on-the-strip.md) A delegated chat is one row like its parent; the role's face is back on the strip — accepted, partly amended by 0295
+- [0292](0292-strip-dot-time-and-cost-always.md) The strip: a state dot in front, time and cost against the estimate always in sight — accepted
+- [0293](0293-children-are-rows-face-back-on-the-strip.md) A delegated chat is one row like its parent; the role's face is back on the strip — accepted
 - [0294](0294-no-app-guard-on-settings-and-hooks.md) No permission question outside the brain's rules: the app's guard on settings and hooks is removed — accepted
 - [0295](0295-little-people-as-sprites.md) The roles are little people at work on the strips — accepted
+- [0296](0296-fast-mode-user-model-per-task-flash-removed.md) «Fast» beside «Plan», one task on the model the user names, Flash removed — accepted
 
 ## Replaced
 
@@ -307,5 +305,8 @@ Kept for the history only: the record named on each line holds the current decis
 - [0070](0070-brain-pulse-addendum.md) Battito v0.1.0 isolation decisions — superseded by 0201
 - [0078](0078-agent-first-routing.md) Agent first: the profile decides, the table only fills a missing model — superseded by 0210
 - [0080](0080-cloud-agents.md) Cloud agents in the Grindhouse (Cursor, Codex, Claude Code) — superseded by 0201
+- [0105](0105-lampo-quick-lane.md) «Lampo», the quick lane beside the Orchestrator — superseded by 0296
+- [0106](0106-lampo-sees-the-orchestrator.md) «Lampo» is a "btw": it sees the Orchestrator's conversation — superseded by 0296
+- [0107](0107-flash-agent-with-its-own-model.md) «Flash»: the quick lane is an agent with its own model; both columns show theirs — superseded by 0296
 - [0115](0115-fatto-lists-macro-tasks.md) Fatto lists the work the user asked for, with what it cost in all — superseded by 0181
 - [0133](0133-personal-browser.md) A personal browser for the user, apart from the agents' browsers — superseded by 0212

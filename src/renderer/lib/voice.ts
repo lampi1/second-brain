@@ -1,6 +1,6 @@
 // Voice in the renderer (ADR 0152). Two separate uses (owner, 2026-10-24: «il pulsante microfono già presente deve
 // essere quello per sola trascrizione, la modalità voce continua invece dalle impostazioni»):
-// - dictation: the mic button in the Orchestrator's and Flash's input (or Ctrl+M) writes what you say into that input,
+// - dictation: the mic button in the Orchestrator's input (or Ctrl+M) writes what you say into that input,
 //   nothing is sent, nothing is read aloud;
 // - conversation («talk»): switched on from Settings → Voce; what you say goes to the Orchestrator as a message, its
 //   reply is read aloud while it is still being written (sentence by sentence, the next one synthesized while the
@@ -25,7 +25,7 @@ import { track } from './use-counter';
 import { micAudio, onMicChange, openMicStream } from './mic';
 import { VOICE_RATE, forEar, isNoise, parseSpokenAnswer, settledText, speakable, speechChunks, spokenQuestion, turnToSpeak, type SpokenAnswer, type SpokenQuestionInput, type VoiceName, type VoiceState, type VoiceHeard, type VoiceSpeech } from '@shared/voice';
 
-export type VoiceTarget = 'orchestrator' | 'flash' | 'impara';
+export type VoiceTarget = 'orchestrator' | 'impara';
 /** Impara's dictation target: not a chat, its words go to onImparaHeard */
 export const IMPARA_TARGET = 'impara';
 /** dictate = the words go into the input; talk = a spoken conversation with the Orchestrator */
@@ -51,11 +51,11 @@ let ptt = false, pttHeld = false, pttClosing = false, pttDrop = false, spaceHeld
 let releasing: ReturnType<typeof setTimeout> | null = null, releaseDrop = false;
 const pttOn = () => ptt && voice.get().mode === 'talk' && voice.get().phase !== 'off';
 
-/** The chat a target writes to: the open Orchestrator or the open Flash chat. */
+/** The chat a target writes to: the open Orchestrator. */
 export function targetChat(target: VoiceTarget): string | null {
   if (target === 'impara') return IMPARA_TARGET;
   const chats = Object.values(app.get().chats);
-  const c = target === 'flash' ? chats.find(x => x?.quick && !x.closedAt) : chats.find(x => x?.isOrchestrator && !x.closedAt);
+  const c = chats.find(x => x?.isOrchestrator && !x.closedAt);
   return c?.id ?? null;
 }
 
@@ -145,7 +145,7 @@ export async function setTalk(on: boolean): Promise<void> {
 }
 
 async function startListening(mode: VoiceMode, target: VoiceTarget): Promise<void> {
-  if (!targetChat(target)) { toast(t(target === 'flash' ? 'voice.noFlash' : 'voice.noOrchestrator'), 'info'); return; }
+  if (!targetChat(target)) { toast(t('voice.noOrchestrator'), 'info'); return; }
   const no = blocked();
   if (no) { toast(no, 'info'); return; }
   // leaves «off» before the first await: a second click or Ctrl+M meanwhile turns it off instead of opening twice
@@ -186,14 +186,13 @@ export function shortcutTalk(): void {
   void setTalk(!(s.mode === 'talk' && s.phase !== 'off'));
 }
 
-/** Ctrl+M: on → off; off → dictation into Flash when the focus is in Flash's tile, into the lesson on screen, else into the Orchestrator. */
+/** Ctrl+M: on → off; off → dictation into the lesson on screen, else into the Orchestrator. */
 export function shortcutVoice(): void {
   if (voice.get().phase !== 'off') { stopVoice(); return; }
-  const inFlash = !!(document.activeElement as HTMLElement | null)?.closest?.('[data-testid="tile-lampo"]');
   // a lesson's board on screen (Impara) and the focus not in the Orchestrator beside it: its «Rispondo a voce»
   const inOrch = !!(document.activeElement as HTMLElement | null)?.closest?.('[data-orchestrator-overlay]');
-  const inLesson = !inFlash && !inOrch && !!document.querySelector('[data-testid="impara-player"][data-at]');
-  void toggleVoice(inFlash ? 'flash' : inLesson ? 'impara' : 'orchestrator');
+  const inLesson = !inOrch && !!document.querySelector('[data-testid="impara-player"][data-at]');
+  void toggleVoice(inLesson ? 'impara' : 'orchestrator');
 }
 
 // ── the microphone ──
@@ -378,7 +377,7 @@ function speech({ active, utterance }: VoiceSpeech): void {
   if (['off', 'preparing', 'starting'].includes(s.phase)) return;
   if (active) {
     const target = targetNow();
-    if (!target) { toast(t(s.target === 'flash' ? 'voice.noFlash' : 'voice.noOrchestrator'), 'info'); stopVoice(true); return; }
+    if (!target) { toast(t('voice.noOrchestrator'), 'info'); stopVoice(true); return; }
     if (ptt && !pttHeld && !pttClosing) return; // push to talk: what the engine heard outside a press does not count
     // a press is the user's own turn: never the app's echo
     const echo = !ptt && (speakingNow() || Date.now() < quietUntil) && loudLately() < BARGE_LEVEL && !s.engine?.fake;

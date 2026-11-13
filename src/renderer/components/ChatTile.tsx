@@ -97,10 +97,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
   const treeCollapsed = ui.use(s => s.prefs.treeCollapsed);
   const view = { expanded: expandedAll, focusMode: focusModeId, maximized: maxKey, treeCollapsed };
   const childReqs = useApp(s => childRequestsFor(chatId, s.chats, s.pending).filter(c => requestHost(c.req.chatId, s.chats, view) === chatId), sameAsks);
-  const hostsOwn = useApp(s => !!s.chats[chatId]?.quick);
-  const postponedOwn = ui.use(() => reqs.filter(r => requestPostponed(reqKey(r))), sameList);
   const postponedChildren = ui.use(() => childReqs.filter(c => requestPostponed(reqKey(c.req))), sameAsks);
-  const activeOwn = reqs.filter(r => !postponedOwn.includes(r));
   const activeChildren = childReqs.filter(c => !requestPostponed(reqKey(c.req)));
   const key = `chat:${chatId}`;
   const isFocused = ui.use(s => s.focused === key);
@@ -171,7 +168,6 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
   const waitText = waitingLabel(waitRow), userWait = !!waitRow?.waitingFor && USER_WAITS.has(waitRow.waitingFor);
   // a Strategist's open question: the strip points to the window, set aside too («Basta domande» stays reachable)
   const planAsk = planQuestion(chat, reqs, false);
-  const ownReqs = activeOwn;
   const longContext = isLong(chat, warn);
   const name = chat.agent?.name || chat.title, topic = chat.agent?.name && chat.title && chat.title !== chat.agent.name ? chat.title : '';
   // one state: «Ti aspetta» (opens the question), else the little person in front and, when words are needed, a pill
@@ -274,8 +270,6 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
         <BrowserTile key={tabShown} tabId={tabShown} embedded />
       </div>}
       </div>
-      {expanded && hostsOwn && postponedOwn.length > 0 && <InWindowLine reqs={postponedOwn} queued testid={`chat-queued-${chatId}`} />}
-      {expanded && hostsOwn && ownReqs.length > 0 && <InWindowLine reqs={ownReqs} testid={`chat-in-window-${chatId}`} />}
       {expanded && postponedChildren.length > 0 && <InWindowLine reqs={postponedChildren.map(c => c.req)} queued testid={`chat-child-queued-${chatId}`} />}
       {expanded && activeChildren.length > 0 && <InWindowLine reqs={activeChildren.map(c => c.req)} testid={`chat-child-in-window-${chatId}`} />}
       {chat.queued && !chat.closedAt && (

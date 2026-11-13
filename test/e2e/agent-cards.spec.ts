@@ -1,7 +1,7 @@
 // E2E of the agent cards' front (owner, 2026-10-19): on the frozen demo (made-up runs, main/demo-agent-runs.ts) every
 // card shows the character large and centred, a level with its XP beside it («Lv 7 Praticante · 124 XP», ADR 0100,
 // 0131) and its way to the next one, and a performance % with its ± — or "In rodaggio" with too few verdicts — each
-// with a "?" whose bubble gives the formula; the Orchestrator and Flash level up too (ADR 0131); a role with no runs is a Lv 1 with the empty-state line; the
+// with a "?" whose bubble gives the formula; the Orchestrator levels up too (ADR 0131); a role with no runs is a Lv 1 with the empty-state line; the
 // model tier chip reads «Modello: …», never «Livello». The flip to the back still works, and the back holds the
 // agent's costs (#125): median per run and per verified success, with their counts, never a raw timestamp. «Modifica il ruolo» on the back opens the role's editor; Esc and «Chiudi senza salvare» come back (#126).
 // Screenshots dark and light: test-results/shots/agent-cards-*.png.
@@ -41,9 +41,8 @@ test('agent cards: big centred character, level and performance with their "?" f
     await expect(artisan.getByTestId('catalog-perf-artisan')).toContainText('%');
     await expect(artisan.getByTestId('catalog-level-wins-artisan')).toContainText(/\d+ XP/);
     await expect(artisan.getByTestId('catalog-perf-spread-artisan')).toContainText(/±\d+/);
-    // ADR 0131: the Orchestrator (its decisions) and Flash (its answers) level up too
+    // ADR 0131: the Orchestrator (its decisions) levels up too
     expect(Number(await overview.getByTestId('catalog-level-orchestrator').getAttribute('data-level'))).toBeGreaterThan(1);
-    expect(Number(await overview.getByTestId('catalog-level-flash').getAttribute('data-level'))).toBeGreaterThan(1);
     await expect(artisan.locator('.catalog-chip[data-kind="model"]')).toHaveText(/\S/); // the model it last ran on, else its tier
     const big = await artisan.locator('.catalog-hero .agent-sprite').boundingBox(); // the role's little person (ADR 0295)
     expect(big!.width).toBeGreaterThanOrEqual(96);
@@ -75,7 +74,7 @@ test('agent cards: big centred character, level and performance with their "?" f
     await page.keyboard.press('Escape');
     await expect(pf).toBeHidden();
 
-    await overview.getByTestId('catalog-card-flash').scrollIntoViewIfNeeded();
+    await overview.getByTestId('catalog-card-herald').scrollIntoViewIfNeeded();
     await page.mouse.move(2, 2);
     await page.waitForTimeout(300);
     await shot(page, 'agent-cards-new-dark');
@@ -131,7 +130,7 @@ test('agent cards: big centred character, level and performance with their "?" f
     await page.waitForTimeout(400);
     await shot(page, 'agent-cards-light');
     // the new roles further down: warming up
-    await page.getByTestId('catalog-card-flash').scrollIntoViewIfNeeded();
+    await page.getByTestId('catalog-card-herald').scrollIntoViewIfNeeded();
     await page.waitForTimeout(300);
     await shot(page, 'agent-cards-new-light');
     await page.getByTestId('catalog-perf-help-scout').click();
@@ -142,16 +141,11 @@ test('agent cards: big centred character, level and performance with their "?" f
     await expect(page.getByTestId('catalog-level-help-scout-bubble')).toContainText('Verificato vuol dire');
     await shot(page, 'agent-cards-level-help-light');
     await page.keyboard.press('Escape');
-    // the Orchestrator's and Flash's own rules in their "?" (ADR 0131)
+    // the Orchestrator's own rules in its "?" (ADR 0131)
     await page.getByTestId('catalog-card-orchestrator').scrollIntoViewIfNeeded();
     await page.getByTestId('catalog-level-help-orchestrator').click();
     await expect(page.getByTestId('catalog-level-help-orchestrator-bubble')).toContainText('piano approvato senza modifiche');
     await shot(page, 'agent-cards-orchestrator-level-light');
-    await page.keyboard.press('Escape');
-    await page.getByTestId('catalog-card-flash').scrollIntoViewIfNeeded();
-    await page.getByTestId('catalog-level-help-flash').click();
-    await expect(page.getByTestId('catalog-level-help-flash-bubble')).toContainText('0,25 XP');
-    await shot(page, 'agent-cards-flash-level-light');
   } finally { await app.close(); }
 });
 

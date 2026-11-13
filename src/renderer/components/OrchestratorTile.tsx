@@ -81,7 +81,7 @@ function TallyLine({ chat }: { chat: Parameters<typeof chatCost>[0] }) {
 export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: { chatId: string | null }) {
   const chat = useApp(s => (id ? s.chats[id] : undefined));
   const items = useApp(s => (id ? s.items[id] : undefined));
-  const reqs = useApp(s => (id ? s.pending.filter(p => !s.chats[p.chatId]?.quick) : []), sameList);
+  const reqs = useApp(s => (id ? s.pending : []), sameList);
   const plans = useApp(s => Object.values(s.chats).filter(c => c && !c.closedAt && c.plan && ['asking', 'revising', 'proposed'].includes(c.plan.phase)), sameList);
   const ready = useApp(s => s.ready);
   // the conductor on the working line, unless the user gave the Orchestrator a picture of their own (then the spark)
@@ -137,7 +137,7 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
           <AwayButton />
           <RemoteButton chat={chat} reveal={() => setRemoteHidden(false)} />
           {busy && <IconButton label={t('dialogs.orchestrator.stopLabel')} shortcut={t('dialogs.orchestrator.stopShortcut')} tone="danger" onClick={() => void stop(chat.id)} testid="orchestrator-stop"><IconStop size={14} /></IconButton>}
-          <IconButton label={t('lampo.clear')} disabled={busy} onClick={() => void clearOrchestratorNow(chat.id)} testid="orchestrator-clear"><IconEraser size={14} /></IconButton>
+          <IconButton label={t('chat.clearContext')} disabled={busy} onClick={() => void clearOrchestratorNow(chat.id)} testid="orchestrator-clear"><IconEraser size={14} /></IconButton>
           <IconButton ref={menuBtn} label={t('dialogs.orchestrator.menuLabel')} onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid="orchestrator-menu"><IconMore /></IconButton>
         </div>
         {/* one quiet line: its model, what it started today with the cost, its details (ADR 0287: its name is said once) */}

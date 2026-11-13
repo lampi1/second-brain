@@ -4,12 +4,11 @@
 // time, the Artisan's changed files in its receipts, ADR 0130, 0131), so the XP differs by job; the Artisan's runs the
 // user did not judge are decided by their receipts (checks passed after the last change), also under an Orchestrator's
 // opinion; some Strategist runs carry a plan the user approved and a delegated Scout; two tasks were handed to another
-// role (a decision signal against the Orchestrator); Flash has a few weeks of answer outcomes (flash-outcomes.ts).
+// role (a decision signal against the Orchestrator).
 // Used by DemoChats.runMetrics (demo.ts), demo-wiring.ts and the levels diagnostic (`npm run levels -- --demo`).
 import type { AgentMetrics, AgentRun, AgentRunOutcome, AgentRunReceipts } from '../shared/agents';
 import { runMetrics } from './agents/run-metrics';
 import { standings, withStandings } from './agents/standing';
-import { emptyFlashLog, type FlashLog, type FlashVerdict, type FlashWhy } from './agents/flash-outcomes';
 
 /** the frozen demo's clock (demo.ts FROZEN_EPOCH): 2026-10-11 10:30 Rome */
 export const DEMO_NOW = Date.UTC(2026, 9, 11, 8, 30, 0);
@@ -83,20 +82,8 @@ export function demoAgentRuns(now: number): AgentRun[] {
   return out;
 }
 
-/** Flash's answers over the last weeks: most held, a few corrected, asked again or handed to the Orchestrator. */
-export function demoFlashLog(now: number): FlashLog {
-  const rand = lcg(7), log = emptyFlashLog();
-  for (let i = 0; i < 60; i++) {
-    const at = now - Math.round((i + 0.5) * 0.4 * 86_400_000 * (0.6 + 0.8 * rand())), roll = rand();
-    const [verdict, why]: [FlashVerdict, FlashWhy] = roll < 0.82 ? ['success', 'held'] : roll < 0.88 ? ['fail', 'corrected'] : roll < 0.93 ? ['fail', 'reasked'] : ['partial', 'handed'];
-    log.done.unshift({ at, verdict, why });
-    log.total[verdict]++;
-  }
-  return log;
-}
-
 /** The agents:metrics answer of the demo: the §5 metrics plus each card's standing. */
 export function demoAgentMetrics(now: number): AgentMetrics[] {
-  const runs = demoAgentRuns(now), standing = standings(runs, [], now, demoFlashLog(now));
+  const runs = demoAgentRuns(now), standing = standings(runs, [], now);
   return withStandings(runMetrics(runs, { now }), standing);
 }
