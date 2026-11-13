@@ -1,16 +1,16 @@
 // One agent's window (ADR 0287): a chat as a one-line strip in the Grindhouse (AgentStrips.tsx), open in the column, or in
-// full screen (FullScreen.tsx). The strip answers three things on one row: who it is, what it does now, whether the
-// user must act (avatar, role, title · current step, then one state: a dot with the work time, «fatto», or the amber
-// «Ti aspetta» that opens its question); a number shows there only out of the norm (work past its estimate, a long
-// context); three controls appear on hover (stop, full screen, the ⋯ menu
-// with rename / model / permissions / hand-off / close; Ctrl+W closes too). A click anywhere on the strip opens it; open,
-// a click on the head closes it. Open, one details row carries the rest (version, model, cost, work time, folder, the
-// estimate: RunEstimate.tsx, ADR 0087; context size; the DevOps links: ChatLinkChips.tsx), then the body. A chat that
+// full screen (FullScreen.tsx). The strip is one row (ADR 0292, the look the owner chose): a dot for its state, who it
+// is, the title · current step, then on the right its work time and cost so far, each next to its estimate («22 min /
+// ~19 min · 1,84 $ / ~0,60 $», amber once past it), and a pill only when words are needed («Ti aspetta» opens its
+// question, an error, a queue); a long context shows its meter; three controls appear on hover (stop, full screen, the
+// ⋯ menu with rename / model / permissions / hand-off / close; Ctrl+W closes too). A click anywhere on the strip opens
+// it; open, a click on the head closes it. Open, the ⓘ shows one details row (version, model, cost, work time, folder,
+// the estimate: RunEstimate.tsx, ADR 0087; context size) and the DevOps links (ChatLinkChips.tsx), then the body. A chat that
 // drives browser tabs is ONE window with three views (Chat · Affiancati · Browser, prefs.agentView): its tabs sit
 // beside the transcript behind a divider the user drags (prefs.agentSplit, per chat), several tabs are small tabs over
 // the address bar, and the browser alone keeps the input under it. A tab waiting for the user (a login hand-off) is
 // always shown. In full screen the head is the window's one bar: back (Esc), who it is, the view switch, how many
-// questions wait elsewhere and the Orchestrator (Ctrl+R); its details row opens from the ⓘ. The transcript, the inline question/permission line (the
+// questions wait elsewhere and the Orchestrator (Ctrl+R). The transcript, the inline question/permission line (the
 // Orchestrator holds the panels, ADR 0269; lib/later.ts), an error bar with one action and the always-mounted input
 // stay as they were; an open chat also shows the open requests of the chats it delegated (lib/child-requests.ts,
 // ADR 0083) and a Strategist's plan (StrategyPanel.tsx, ADR 0108). Selectors read only this chat, so other chats
@@ -18,7 +18,7 @@
 import { t as auditText } from '../i18n';
 import { memo, useEffect, useRef, useState } from 'react';
 import type { PendingRequest } from '@shared/contract';
-import { chatCost, formatCost, queueReason, folderName, minutes, permissionBadge, modelWithEffort, stateInfo, workTime } from '../lib/format';
+import { chatCost, queueReason, folderName, minutes, permissionBadge, modelWithEffort, stateInfo, workTime } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { COMPACT_TILE_H } from '../lib/grid';
 import { isBusy, sameList } from '../store/state';
@@ -29,7 +29,7 @@ import {schedule,suspendViews}from'../lib/viewports';
 import { openQueue, requestPostponed } from '../lib/later';
 import { admitNow, reqKey, toggleMaximize } from '../actions';
 import { useHandoffTabs } from '../store/handoffs';
-import { useRunEstimates } from '../lib/run-estimates';
+import { estimateText, useRunEstimates } from '../lib/run-estimates';
 import { BrowserTile } from './BrowserTile';
 import { FullTools } from './FullTools';
 import { selectedHere } from '../lib/strip-click';
@@ -112,7 +112,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
   const menuBtn = useRef<HTMLButtonElement>(null);
   const [menu, setMenu] = useState(false);
   const [renaming, setRenaming] = useState(false);
-  const [facts, setFacts] = useState(false); // full screen: the details row is asked for, the bar stays one line
+  const [facts, setFacts] = useState(false); // the details row is asked for (ⓘ), the head stays one line
   const expandedChoice=ui.use(s=>s.prefs.chatExpanded[chatId]===true);
   const expanded=!!focus||!!embedded||expandedChoice;
   const expansionButton=useRef<HTMLButtonElement>(null);
@@ -173,13 +173,18 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
   const planAsk = planQuestion(chat, reqs, false);
   const ownReqs = activeOwn;
   // out of the norm, so on the closed strip too: the work is past its estimate, or the context is long
-  const estimate = chat.run && chat.run.endedAt === undefined ? estimates?.runs[chat.run.runId]?.estimate : null;
-  const overTime = !!estimate && estimate.timeMs !== null && work !== null && (busy || chat.state === 'waiting') && work > estimate.timeMs;
-  const overCost = !!estimate && estimate.costUsd !== null && (chat.costUsd ?? 0) > estimate.costUsd * 1.5;
+  const estimate = chat.run ? estimates?.runs[chat.run.runId]?.estimate ?? null : null;
+  const runOpen = !!chat.run && chat.run.endedAt === undefined;
+  const overTime = runOpen && !!estimate && estimate.timeMs !== null && work !== null && (busy || chat.state === 'waiting') && work > estimate.timeMs;
+  const overCost = runOpen && !!estimate && estimate.costUsd !== null && (chat.costUsd ?? 0) > estimate.costUsd * 1.5;
   const longContext = isLong(chat, warn);
   const name = chat.agent?.name || chat.title, topic = chat.agent?.name && chat.title && chat.title !== chat.agent.name ? chat.title : '';
   // one state on the right: «Ti aspetta» (opens the question), else a dot and what it is doing with its time
-  const stateText = waitText && st.tone !== 'err' && st.label !== t('ui.state.queued') ? waitText : busy && work !== null ? minutes(work) : st.label;
+  const stateText = waitText && st.tone !== 'err' && st.label !== t('ui.state.queued') ? waitText : st.label;
+  // the plain states are the leading dot alone (its word stays for screen readers); anything else is said in words
+  const plainState = stateText === st.label && (st.tone === 'run' || st.tone === 'done');
+  const est = estimate ? estimateText(estimate) : null;
+  const cost = chatCost(chat);
   const drag = (e: React.PointerEvent<HTMLDivElement>) => {
     const el = e.currentTarget, box = body.current?.getBoundingClientRect();
     if (!box || e.button !== 0) return;
@@ -203,7 +208,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
       {!embedded && <header className="tile-head">
         <div className="th-row">
           {focus && <button type="button" className="btn btn-ghost btn-s aw-back" onClick={() => toggleMaximize(key)} data-testid="focus-exit" aria-label={t('aw.fullExit')}><IconArrowLeft size={13} /><Kbd>Esc</Kbd></button>}
-          <AgentAvatar avatar={chat.agent?.avatar} name={name} size={24}/>
+          {focus ? <AgentAvatar avatar={chat.agent?.avatar} name={name} size={24}/> : <span className={`strip-dot lead tone-${first ? 'wait' : st.tone}`} aria-hidden="true" />}
           {/* the name is the strip's own button (keyboard, screen readers); a click anywhere on the strip does the same */}
           <h3 className="th-title" title={(chat.agent?.purpose&&rolePurpose(chat.agent.id,chat.agent.purpose))||chat.title}>
             {strip ? <button ref={expansionButton} type="button" className="strip-name" aria-expanded={expanded} aria-controls={`chat-work-${chatId}`} data-tip={t(expanded?'product.collapse':'product.expand')} onClick={()=>setChatExpanded(chatId,!expanded)} data-testid={`chat-expand-${chatId}`}>{name}</button> : name}
@@ -217,14 +222,19 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
             <span className="th-resumed" data-tip={auditText('audit.ChatTile.itsTurnWasInterruptedByThe')}
               data-testid={`chat-resumed-${chatId}`}>{auditText('audit.ChatTile.resumedAfterRestart')}</span>
           )}
-          {!expanded && (overTime || overCost) && <span className="strip-alert" data-testid={`chat-over-${chatId}`} data-tip={t('aw.overTip')}>{overCost ? t('aw.overCost', { cost: chatCost(chat), estimate: formatCost(estimate!.costUsd!) }) : t('aw.overTime', { estimate: minutes(estimate!.timeMs!) })}</span>}
+          {/* time and cost so far, each against its estimate: always on the strip (the owner, 2026-11-13) */}
+          {(work !== null || !!chat.costUsd) && <span className="strip-meta" data-testid={`chat-meta-${chatId}`} data-tip={t(est ? 'aw.metaTipEst' : 'aw.metaTip')}>
+            {work !== null && <span className={overTime ? 'over' : undefined}>{minutes(work)}{est?.time && <i> / {est.time}</i>}</span>}
+            {!!chat.costUsd && <span className={overCost ? 'over' : undefined}>{cost}{est?.cost && <i> / {est.cost}</i>}</span>}
+            {(overTime || overCost) && <span className="sr-only" data-testid={`chat-over-${chatId}`}>{t('aw.overTip')}</span>}
+          </span>}
           {!expanded && longContext && <ContextMeter chat={chat} warn={warn} />}
           {viewSwitch}
           {/* the state stays in the DOM as the strip's data-state hook; one thing is shown: the wait or the state */}
           <span hidden><StatePill chat={chat} testid={`chat-state-${chatId}`} /></span>
           {first ? <button type="button" className="strip-wait" onClick={() => openQueue(first)} aria-label={t('product.waitsYouOpen', { title: name })} data-testid={`chat-wait-${chatId}`} data-state={chat.state} {...(expanded ? {} : { 'data-waits-keys': reqs.map(reqKey).join(' ') })}>
             <span className="strip-wait-dot" aria-hidden="true" />{waitText && userWait ? waitText : t('product.waitsYou')}{reqs.length > 1 && <b>{reqs.length}</b>}
-          </button> : <span className={`strip-state tone-${st.tone}`} data-testid={`chat-status-${chatId}`} title={st.label}><span className="strip-dot" aria-hidden="true" />{stateText}</span>}
+          </button> : <span className={`strip-state tone-${st.tone}${plainState ? ' sr-only' : ''}`} data-testid={`chat-status-${chatId}`} title={st.label}>{stateText}</span>}
           {focus && <FullTools chatId={chatId} />}
           <div className="chat-header-actions">
           {(busy || chat.state === 'waiting') && (
@@ -233,11 +243,11 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
           {/* a closed strip that drives a browser: one click opens it with the page beside the chat */}
           {tabs.length > 0 && !expanded && <IconButton label={t('aw.view.split')} aria-pressed={false} onClick={() => { setAgentView(chatId, 'split'); setChatExpanded(chatId, true); }} testid={`chat-browser-${chatId}`}><IconGlobe size={14} /></IconButton>}
           {(strip || focus) && <IconButton label={focus ? t('aw.fullExit') : t('aw.full')} shortcut="F11" onClick={() => toggleMaximize(key)} testid={`chat-max-${chatId}`}><IconMaximize size={14} /></IconButton>}
-          {focus && <IconButton label={t('aw.facts')} onClick={() => setFacts(v => !v)} aria-expanded={facts} testid={`chat-facts-${chatId}`}><IconInfo size={14} /></IconButton>}
+          {expanded && <IconButton label={t('aw.facts')} onClick={() => setFacts(v => !v)} aria-expanded={facts} testid={`chat-facts-${chatId}`}><IconInfo size={14} /></IconButton>}
           <IconButton ref={menuBtn} label={t('chat.tile.menu')} onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid={`chat-menu-${chatId}`}><IconMore /></IconButton>
           </div>
         </div>
-        {expanded && (!focus || facts) && <div className="th-sub strip-facts" data-testid={`chat-sub-${chatId}`}>
+        {expanded && facts && <div className="th-sub strip-facts" data-testid={`chat-sub-${chatId}`}>
           {chat.run && <RunChips run={chat.run} />}
           <span className="th-sub-text">{sub}{work !== null && <>{' · '}<span className="th-work" data-testid={`chat-work-${chatId}`} data-tip={auditText('audit.ChatTile.actualWorkTimeExcludingWaitsFor')}>{auditText('audit.ChatTile.work')}{' '}{minutes(work)}</span></>}{folder ? ` · ${folder}` : ''}</span>
           {chat.run && <StripEstimate chat={chat} busy={busy || chat.state === 'waiting'} workMs={work} />}
@@ -245,7 +255,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
           <ContextMeter chat={chat} warn={warn} />
           <AgentIdentity chat={chat}/>
         </div>}
-        {!compact && (!focus || facts) && <ChatLinkChips chatId={chatId} />}
+        {!compact && facts && <ChatLinkChips chatId={chatId} />}
       </header>}
       <AutoCloseNotice chatId={chatId} hideUser={!!first} />
       {/* in full screen the subagents at work stay in sight, as under the strip in the Grindhouse */}

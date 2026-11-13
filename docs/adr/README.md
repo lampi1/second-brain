@@ -285,11 +285,12 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0284](0284-performance-by-model.md) The level is the role's, the performance is the model's — accepted
 - [0285](0285-estimates-by-role-and-model.md) An estimate rests on the role and its model before the kind of work — accepted, partly superseded by 0291
 - [0286](0286-run-goal-close-cause-no-child-feedback.md) A run keeps its goal without the app's label and says why it was closed; `agent_child_feedback` is gone — accepted
-- [0287](0287-one-agent-window-one-full-screen.md) One agent window, one full screen, a quiet top bar — accepted
+- [0287](0287-one-agent-window-one-full-screen.md) One agent window, one full screen, a quiet top bar — accepted, partly amended by 0292
 - [0288](0288-maintenance-bug-cards-by-answers-one-lesson.md) The maintenance stays on the click: app-bug cards follow the user's answers, a report notes one lesson — accepted
 - [0289](0289-fewer-refusals-agents-learn-by-failing.md) Fewer refusals an agent learns only by failing: long outputs are cut, the tools' commands name the copy, a question has a place without an Orchestrator — accepted
 - [0290](0290-claude-chats-start-in-default-the-app-answers.md) A Claude chat starts in «default»: the app answers its requests, not the engine's own default mode — accepted
 - [0291](0291-remove-kind-by-examples-and-classificatori.md) The kind of work by examples and the Classificatori section are removed — accepted
+- [0292](0292-strip-dot-time-and-cost-always.md) The strip: a state dot in front, time and cost against the estimate always in sight — accepted
 
 ## Replaced
 

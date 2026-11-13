@@ -16,6 +16,9 @@ test('strips show readable estimates from similar tasks, with their accuracy', a
   const { app, page } = await launchDemo({ width: 1600, height: 1000, orchestrator: true });
   try {
     // the QA run: the same agent on the same model; the SMS run (another model): the same agent on any model (ADR 0285)
+    // closed, the strip itself carries time and cost against the estimate (ADR 0292); the chip is in the details (ⓘ)
+    await expect(page.getByTestId('chat-meta-qa')).toContainText(/\d+ min \/ ~\d+ min/);
+    for (const id of ['qa', 'sms']) { await page.getByTestId(`chat-expand-${id}`).click(); await page.getByTestId(`chat-facts-${id}`).click(); }
     const qa = page.getByTestId('chat-estimate-qa');
     await expect(qa).toBeVisible();
     await expect(qa).toContainText(/~\d+ min · ~\d+,\d\d\s\$ · su \d+ lavori simili/);
@@ -41,6 +44,7 @@ test('strips show readable estimates from similar tasks, with their accuracy', a
     // a run that ends: estimate → actual
     await page.getByTestId('tile-chat-mappa').click();
     await page.getByTestId('tile-chat-mappa').getByTestId('run-outcome-success').click();
+    await page.getByTestId('chat-facts-mappa').click();
     const mappa = page.getByTestId('chat-estimate-mappa');
     await expect(mappa).toContainText('→');
     await expect(mappa).toHaveAttribute('data-hit', /true|false/);

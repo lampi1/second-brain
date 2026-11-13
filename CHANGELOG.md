@@ -23,6 +23,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   OpenCode, OpenRouter included; the chat's model and plan mode go through OpenCode's session options (ADR 0216).
 
 ### Changed
+- Grindhouse strips: a state dot in front, time and cost so far next to the estimate always on the row, rows edge
+  to edge with a hairline; the open window's details (model, full estimate, links) open from the ⓘ (ADR 0292).
 - A Claude chat with no mode of its own starts in «default», so the app answers its permission requests (they pass
   unless a rule of your brain, a role's limit or the settings-and-hooks guard holds them) instead of Claude Code's
   own default mode: with «auto» as that default, its classifier refused the agents before the app was asked. A mode

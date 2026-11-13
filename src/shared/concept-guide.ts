@@ -663,8 +663,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'The home page: one strip per working agent, with the browsers it drives beside the expanded chat.'),
     points: [
       // src/renderer/brain/pages/Home.tsx
-      b('La pagina mostra una striscia per agente, su una riga sola: il personaggio, il nome, cosa sta facendo adesso e lo stato. I comandi (ferma, schermo intero, menu) compaiono al passaggio del mouse; le richieste in attesa sono raccolte nell’Orchestrator, mantenendo il collegamento al worker originale.',
-        'The page shows one strip per agent, on a single line: the character, the name, what it is doing now and its state. The controls (stop, full screen, menu) appear under the pointer; pending requests are collected in the Orchestrator while keeping the link to the original worker.'),
+      b('La pagina mostra una striscia per agente, su una riga sola: un punto colorato per lo stato, il nome, cosa sta facendo adesso e, a destra, tempo e costo finora accanto alla stima (in ambra se la superano). I dettagli (modello, stima completa, link) si aprono dalla ⓘ della finestra aperta. I comandi (ferma, schermo intero, menu) compaiono al passaggio del mouse; le richieste in attesa sono raccolte nell’Orchestrator, mantenendo il collegamento al worker originale.',
+        'The page shows one strip per agent, on a single line: a coloured dot for its state, the name, what it is doing now and, on the right, time and cost so far next to the estimate (amber once past it). The details (model, full estimate, links) open from the ⓘ of the open window. The controls (stop, full screen, menu) appear under the pointer; pending requests are collected in the Orchestrator while keeping the link to the original worker.'),
       // src/renderer/lib/agent-order.ts
       b('Le strisce sono raggruppate per area, cioè l’ultima cartella del percorso di lavoro della chat.',
         'Strips are grouped by area, i.e. the last folder of the chat’s working path.'),
