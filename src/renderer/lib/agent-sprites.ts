@@ -227,6 +227,8 @@ export type SpriteReaction = 'pat' | 'whip';
 export const REACTION_S: Record<SpriteReaction, number> = { pat: 1.3, whip: 1.4 };
 const HEART = 'M0 3.6C-4.6 0.4 -4 -3.4 -1.6 -3.4C-0.6 -3.4 0 -2.6 0 -2C0 -2.6 0.6 -3.4 1.6 -3.4C4 -3.4 4.6 0.4 0 3.6Z';
 const STAR = 'M0 -5L1.2 -1.2L5 0L1.2 1.2L0 5L-1.2 1.2L-5 0L-1.2 -1.2Z';
+/** the patting hand's glove: a warm yellow that reads on a light and on a dark strip */
+const GLOVE = '#ffd98a';
 const REACT: Record<SpriteReaction, () => Pose> = {
   // a gloved hand comes down from the top right and pats the head twice: the head sinks and springs back, then a
   // happy wiggle and a small hop, hearts rising
@@ -242,9 +244,10 @@ const REACT: Record<SpriteReaction, () => Pose> = {
         k(74, { dy: -1.4, e: 'in' }), k(82, { sy: 0.97, e: 'out' }), k(90, {})]),
       armL: { a: 12, go: lift(1) }, armR: { a: -12, go: lift(-1) },
       front: [
-        J(40, 12, -18, [rr(2.4, -6, 5.6, 3.4, 1.3, '#ff6b7d'), E(0, 0, 5, 3.7, WHITE), C(-4.9, -1.2, 1.8, WHITE), C(-3.5, 1.9, 1.9, WHITE), C(-0.5, 2.7, 2, WHITE), C(2.5, 2.2, 1.9, WHITE)],
+        J(40, 12, -18, [rr(2.4, -6, 5.6, 3.4, 1.3, '#e2483d'), E(0, 0, 5, 3.7, GLOVE), C(-4.9, -1.2, 1.8, GLOVE), C(-3.5, 1.9, 1.9, GLOVE), C(-0.5, 2.7, 2, GLOVE), C(2.5, 2.2, 1.9, GLOVE),
+          S('M-2 0.6V2.6M1 1V3', '#d9a25e', 0.7)],
           once(T, [k(0, { o: 0, dx: 16, dy: -12, e: 'hold' }), k(4, { o: 1, dx: 16, dy: -12, e: 'out' }), k(16, { o: 1, dx: 2, dy: -4, e: 'in' }), k(24, { o: 1, dx: -1, dy: 5, sy: 0.85, e: 'out' }), k(34, { o: 1, dx: 1, dy: -3, e: 'in' }),
-            k(44, { o: 1, dx: -1, dy: 5, sy: 0.85, e: 'out' }), k(54, { o: 1, dx: 2, dy: -3, e: 'in' }), k(68, { o: 1, dx: 14, dy: -11 }), k(74, { o: 0, dx: 16, dy: -12 }), k(100, { o: 0 })]), 1.2, 0),
+            k(44, { o: 1, dx: -1, dy: 5, sy: 0.85, e: 'out' }), k(54, { o: 1, dx: 2, dy: -3, e: 'in' }), k(68, { o: 1, dx: 14, dy: -11 }), k(74, { o: 0, dx: 16, dy: -12 }), k(100, { o: 0 })]), 1.35, 0),
         heart(19, 21, 24, -5), heart(50, 25, 44, 6), heart(27, 10, 50, -2)],
     };
   },
