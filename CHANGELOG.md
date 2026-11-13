@@ -75,6 +75,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   terminal routines.
 
 ### Fixed
+- Brain tools find the memory map, the brain's rules and its behaviour tests at the root or inside the `brain-rules`
+  skill, so a brain can keep a root like a fresh install; a new chat is no longer told to read a missing file (ADR 0277).
 - An agent writing in the brain no longer freezes the window every ~2 s: the undoable-changes list rereads a file
   only once it changed, reads the memory store once per list, and the Proposte recount runs at most every 5 s.
 - A main-process hang of 5 s or more logs its JS stack from a worker thread (`perf` «main process hung»).
