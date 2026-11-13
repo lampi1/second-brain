@@ -111,7 +111,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ### Fixed
 - A question asked before any Orchestrator exists has its row in the Orchestrator's column (it had no place to be
-  answered); the app-owned tools name their own commands in the app's copy, not in the brain folder («Cannot find
+  answered); `agent_delegate` no longer refuses a part that names `balanced`; the app-owned tools name their own commands in the app's copy, not in the brain folder («Cannot find
   module …/ops/tools/mem.mjs»), and the maintenance's app ideas reach «Idee» on a fresh brain (ADR 0289).
 - A chat's first turn records the files it changed: before, six runs in ten ended as «files unknown» and could not
   count for the role's level, and «Annulla l'ultimo turno» had nothing to undo there. A message queued mid-turn gets

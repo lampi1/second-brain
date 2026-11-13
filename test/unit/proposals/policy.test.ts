@@ -195,6 +195,11 @@ describe('proposals policy (ADR 0193)', () => {
     expect(issueCardsWanted([...many(9, 'skill', 'reject', at(0)), ...many(2, 'issue', 'approve', at(1))], NOW)).toBe(true);
     expect(issueCardsWanted([...many(40, 'issue', 'approve', at(0)), ...many(5, 'issue', 'reject', at(1))], NOW)).toBe(false);
     expect(issueCardsWanted([...many(5, 'issue', 'reject', at(0)), ...many(5, 'issue', 'approve', at(1))], NOW)).toBe(true);
+    // the pause is counted from the newest answer, not from each answer's own age
+    const spread = [80, 60, 40, 20, 1].map(d => entry('issue', 'reject', { at: NOW - d * 864e5 }));
+    expect(issueCardsWanted(spread, NOW)).toBe(false);
+    expect(issueCardsWanted(spread, NOW + 60 * 864e5)).toBe(false);
+    expect(issueCardsWanted(spread, NOW + ISSUE_ASK.days * 864e5)).toBe(true);
     // older than the window: asked again
     expect(issueCardsWanted(many(5, 'issue', 'reject', { at: NOW - (ISSUE_ASK.days + 1) * 864e5 }), NOW)).toBe(true);
   });

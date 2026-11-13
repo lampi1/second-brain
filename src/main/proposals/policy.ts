@@ -57,12 +57,13 @@ export function groupPolicy(group: ProposalGroup, ledger: readonly DecisionEntry
 }
 /** Whether the app's «Apro la issue?» cards still serve this user (owner, 2026-11-13: «card dei bug dell'app solo se
  *  servono a chi usa l'app»). Nothing in the app tells who develops it from who only uses it; their own answers do:
- *  the cards stop once the last `last` issue cards they decided, within `days`, hold at most `yes` approvals, and come
- *  back by themselves when those decisions are older than `days`. With fewer decisions the cards are still made. */
+ *  the cards stop once the last `last` issue cards they decided hold at most `yes` approvals, and come back by
+ *  themselves `days` after the newest of those answers. With fewer decisions the cards are still made. */
 export const ISSUE_ASK = { last: 5, yes: 1, days: 90 } as const;
 export function issueCardsWanted(ledger: readonly DecisionEntry[], now: number): boolean {
-  const recent = ledger.filter(e => e.group === 'issue' && e.at >= now - ISSUE_ASK.days * 864e5).sort((a, b) => a.at - b.at).slice(-ISSUE_ASK.last);
-  return recent.length < ISSUE_ASK.last || recent.filter(e => said(e) === 'yes').length > ISSUE_ASK.yes;
+  const last = ledger.filter(e => e.group === 'issue').sort((a, b) => a.at - b.at).slice(-ISSUE_ASK.last);
+  // counted from the newest answer: counting each answer's own age ended the pause when the oldest one aged out
+  return last.length < ISSUE_ASK.last || last.at(-1)!.at < now - ISSUE_ASK.days * 864e5 || last.filter(e => said(e) === 'yes').length > ISSUE_ASK.yes;
 }
 
 /** Every (group, source) pair the ledger holds decisions for, each with its own policy (the pack's «decisions»). */

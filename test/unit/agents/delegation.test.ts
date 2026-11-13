@@ -209,6 +209,29 @@ describe('agent_delegate', () => {
     expect(stored.output).toMatch(/…$/);
   });
 
+  it('a lesson in an odd shape never refuses the report: a bare string is the line, line breaks become spaces, a non-text entry is left out', async () => {
+    const remembered: [string, string][] = [];
+    const f = fixture({}, undefined, undefined, undefined, {}, remembered);
+    const parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log'), f.task('scout', 'Ordini · Numeri')] });
+    const [a, b] = f.m.list().filter(c => c.parentId === parent.id);
+    const ok = { outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }] };
+    expect(await f.call('agent_report', a!.id, { ...ok, remember: 'Logs are\nin D:/logs' })).toMatchObject({ reported: true, remembered: 1 });
+    expect(remembered).toEqual([['scout', 'Logs are in D:/logs']]);
+    const odd = await f.call('agent_report', b!.id, { ...ok, remember: [42, 'x'] });
+    expect(odd).toMatchObject({ reported: true, warnings: [expect.stringContaining('1 left out'), expect.stringContaining('remember: not noted, it must be one line of text')] });
+    expect(remembered).toHaveLength(1);
+  });
+
+  it('a part that names `balanced` is not refused: with Balanced mode off it is left out with a warning', async () => {
+    const f = fixture();
+    const parent = await f.root('strategist');
+    const r = await f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Ordini · Log'), balanced: { engine: 'claude', model: 'sonnet', why: 'cheap read' } }] });
+    expect(r.children[0]).toMatchObject({ role: 'scout', warnings: expect.arrayContaining([expect.stringContaining('balanced left out')]) });
+    await expect(f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Ordini · Altro'), balanced: { engine: 'claude' } }] })).rejects.toThrow(/balanced/);
+    await expect(f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Ordini · Altro'), bilanced: 1 }] })).rejects.toThrow(/unknown field bilanced/);
+  });
+
   it('agent_report remember writes to the reporting role\'s memory, only once the report is accepted', async () => {
     const remembered: [string, string][] = [];
     const f = fixture({}, undefined, undefined, undefined, {}, remembered);
@@ -216,8 +239,6 @@ describe('agent_delegate', () => {
     await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log')] });
     const scout = f.m.list().find(c => c.parentId === parent.id)!;
     await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [], remember: ['Logs are in D:/logs'] })).rejects.toThrow(/criterion A/);
-    await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }], remember: ['a\nb'] })).rejects.toThrow(/single line, without line breaks/);
-    await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }], remember: 'a' })).rejects.toThrow(/a list with one line/);
     // a case-specific line or a task update (ADR 0129) is left out with its reason: the report goes through
     await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Statistiche'), f.task('scout', 'Ordini · Test')] });
     const [stats, tests] = f.m.list().filter(c => c.parentId === parent.id && c.id !== scout.id);
@@ -691,6 +712,9 @@ describe('the pure parts', () => {
     expect(props.summary!.maxLength).toBeUndefined();
     expect(props.summary!.description).toContain('300');
     expect(props.remember!.items!.maxLength).toBeUndefined();
+    expect((props.remember as { maxItems?: number }).maxItems).toBeUndefined();
+    expect(props.output!.maxLength).toBeUndefined();
+    expect(props.output!.description).toContain('12000');
     expect(props.remember!.description).toContain('300');
     expect(props.amends).toMatchObject({ type: 'boolean' });
     expect(props.doneWhen!.items!.properties!.criterion!.maxLength).toBe(300);

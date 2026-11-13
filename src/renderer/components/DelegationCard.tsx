@@ -241,7 +241,7 @@ export function KidsBar({ chatId }: { chatId: string }) {
   if (!kids.length) return null;
   const states = kids.map(k => childState(k));
   const { run, wait, stuck, done } = kidCounts(states);
-  return <div className="kids-bar" data-testid={`tree-kids-${chatId}`} data-folded={folded || undefined}>
+  return <div className="kids-bar" data-testid={`tree-kids-${chatId}`} data-folded={folded || undefined} data-run={run}>
     <button type="button" className="kids-toggle" aria-expanded={!folded} data-testid={`tree-toggle-${chatId}`} aria-label={t(folded ? 'tree.unfold' : 'tree.fold', { title })} onClick={() => setTreeCollapsed(chatId, !folded)}>
       <span className="kids-chev" aria-hidden="true">{folded ? <IconChevronRight size={13} /> : <IconChevronDown size={13} />}</span>
       <b>{t('tree.kids', { n: kids.length })}</b>

@@ -88,6 +88,11 @@ describe('template reference migration', () => {
     }
     // the brain's own files stay brain paths, and a personal script is not the app's
     expect(codeReferences(`node "${B}/ops/tools/devops-me.mjs"; read ${B}/now.md`, root, tools)).toBe(`node "${B}/ops/tools/devops-me.mjs"; read ${B}/now.md`);
+    // the hook installer's paths are data it writes and looks for: left as they were
+    expect(fs.readFileSync(path.join(tools, 'ops/tools/install-inbox-hooks.mjs'), 'utf8')).toContain(`${B}/ops/tools/inbox.mjs`);
+    // inside JavaScript the paths carry render's escaping, on both sides
+    const esc = (v: string) => v.replace(/['"`$]/g, '\\$&');
+    expect(codeReferences("x = 'node \"C:/o\\'brien (x86)+\\$1/ops/tools/mem.mjs\"'", "C:/o'brien (x86)+$1", "C:/app data/$&/t'ools", esc)).toBe("x = 'node \"C:/app data/\\$&/t\\'ools/ops/tools/mem.mjs\"'");
     // the AI's ideas are written with the copy's tool (a product brain has none of its own)
     expect(ideaTool(root)).toBe(path.join(tools, 'ops', 'tools', 'mem.mjs'));
     expect(ideaTool(brain('legacy', false))).toBeNull();

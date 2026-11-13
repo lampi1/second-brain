@@ -25,14 +25,16 @@ useless lessons.
 
 1. Nothing starts by itself: no nightly pass (ADR 0153 stands).
 2. App-bug cards follow the user's own answers (`proposals/policy.ts issueCardsWanted`): when the last 5 decisions
-   on issue cards in 90 days hold at most 1 approval, the maintenance makes no app-bug card (neither the zero-token
+   on issue cards hold at most 1 approval, the maintenance makes no app-bug card (neither the zero-token
    ones from the logs nor the research's: `maintenance_propose` refuses the kind and the research's frame says so).
-   An app idea still passes. Fewer than 5 decisions: cards as before. Old decisions leave the count after 90 days,
-   so the cards come back by themselves.
+   An app idea still passes. Fewer than 5 decisions: cards as before. 90 days after the newest of those answers the
+   cards come back by themselves.
 3. A report notes one lesson, not three (`REMEMBER_MAX = 1`): further lines are left out with a warning. The tool's
    description and the role's text say that most runs teach nothing and that the line is for a wrong turn or a
    search the next run would be spared.
-4. A lesson line the worth gate refuses is left out with its reason in `warnings`; the report is accepted.
+4. A lesson never refuses a report. A line the worth gate turns down is left out with its reason in `warnings`; a
+   bare string is taken as the line, line breaks become spaces, an entry that is not text or a chat with no role is
+   a warning.
 
 ## Consequences
 

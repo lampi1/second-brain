@@ -20,16 +20,17 @@ export async function captureRoutineWorkbench(app, page, capture) {
   const publish = chat => app.evaluate(({ BrowserWindow }, chat) => { const w = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:') && !w.webContents.getURL().includes('#overlay')); w.webContents.send('chat:updated', chat); }, chat);
   await publish(idle);
   await page.waitForFunction(id => document.querySelector(`[data-testid="delegation-card-${id}"]`)?.getAttribute('data-child-state') === 'stall', child.id);
-  const segments = page.getByTestId(`tree-kids-${child.parentId}`).locator('.kids-segs .seg-run');
-  const before = await segments.count();
+  // the parent's bar counts its children at work (data-run): a child with background work is one more, then one less
+  const runs = () => page.getByTestId(`tree-kids-${child.parentId}`).getAttribute('data-run').then(Number);
+  const before = await runs();
   await publish({ ...idle, background: 1 });
   await page.waitForFunction(({ id, parent, count }) => document.querySelector(`[data-testid="delegation-card-${id}"]`)?.getAttribute('data-child-state') === 'run'
-    && document.querySelectorAll(`[data-testid="tree-kids-${parent}"] .kids-segs .seg-run`).length === count, { id: child.id, parent: child.parentId, count: before + 1 });
+    && Number(document.querySelector(`[data-testid="tree-kids-${parent}"]`)?.getAttribute('data-run')) === count, { id: child.id, parent: child.parentId, count: before + 1 });
   await page.getByTestId(`delegation-card-${child.id}`).scrollIntoViewIfNeeded();
   await capture('delegation-background-work');
   await publish(idle);
   await page.waitForFunction(({ id, parent, count }) => document.querySelector(`[data-testid="delegation-card-${id}"]`)?.getAttribute('data-child-state') === 'stall'
-    && document.querySelectorAll(`[data-testid="tree-kids-${parent}"] .kids-segs .seg-run`).length === count, { id: child.id, parent: child.parentId, count: before });
+    && Number(document.querySelector(`[data-testid="tree-kids-${parent}"]`)?.getAttribute('data-run')) === count, { id: child.id, parent: child.parentId, count: before });
   await publish(child);
   const chat = await page.evaluate(async () => (await window.sb.invoke('chat:list', undefined)).find(c => !c.isOrchestrator && !c.closedAt && !c.parentId));
   if (!chat) throw new Error('Synthetic work chat missing for context capture');

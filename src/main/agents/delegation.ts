@@ -168,7 +168,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     const plans = raw.map((value, i) => {
       const t = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
       if (!t) throw new Error(`tasks[${i}]: object required.`);
-      const extra = Object.keys(t).find(k => !['role', 'title', 'contract', 'cwd', 'step'].includes(k));
+      const extra = Object.keys(t).find(k => !['role', 'title', 'contract', 'cwd', 'step', 'balanced'].includes(k));
       if (extra) throw new Error(`tasks[${i}]: unknown field ${extra}.`);
       const role = t.role;
       if (!isWorkRole(role)) throw new Error(`tasks[${i}].role: one of ${WORK_ROLE_IDS.join(', ')}.`);
@@ -194,9 +194,12 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       if (refused) throw new Error(`tasks[${i}]: ${profile.name} runs on ${profile.engine}: ${refused}`);
       if (t.step !== undefined && !plan) throw new Error(`tasks[${i}].step: only a plan approved by the user has steps; leave it out.`);
       const step = t.step !== undefined && plan ? stepIndex(plan, t.step, `tasks[${i}].step`) : null;
-      const asked = balancedAskOf(t.balanced, `tasks[${i}].balanced`);
-      if (asked && !d.balancedMode?.enabled) throw new Error(`tasks[${i}].balanced: only with Balanced mode on; otherwise the role's card decides (Brain → Agenti).`);
-      return { role, title, contract, cwd, profile, step, asked };
+      // `balanced` was in the schema but not among the known fields: every part that named it was refused («unknown
+      // field balanced», 13 times in the owner's chats, growing). With the mode off it is left out with a warning:
+      // a refusal would make the parent send every contract again for a field that changes nothing.
+      const offered = balancedAskOf(t.balanced, `tasks[${i}].balanced`);
+      const asked = d.balancedMode?.enabled ? offered : undefined;
+      return { role, title, contract, cwd, profile, step, asked, balancedOff: !!offered && !asked };
     });
     reserved.set(parent.id, (reserved.get(parent.id) ?? 0) + plans.length);
     try {
@@ -228,7 +231,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       const known = d.skillTools ? new Map(d.skillTools().map(x => [x.name, x.tools])) : null;
       // a skill whose tools the child lacks (its own policy, already narrowed by yours)
       const warnings = (i: number, chatId: string): { warnings?: string[] } => {
-        const p = plans[i]!, lines = [...(known ? gapLines(p.profile.name, skillGaps([...new Set([...p.profile.skills, ...(p.contract.skills ?? [])])], n => known.get(n), d.chats.agentPolicy(chatId))) : []), ...contractWarnings(p.contract)];
+        const p = plans[i]!, lines = [...(known ? gapLines(p.profile.name, skillGaps([...new Set([...p.profile.skills, ...(p.contract.skills ?? [])])], n => known.get(n), d.chats.agentPolicy(chatId))) : []), ...contractWarnings(p.contract), ...(p.balancedOff ? ['balanced left out: Balanced mode is off, the role\'s card decided (Brain → Agenti).'] : [])];
         return lines.length ? { warnings: lines } : {};
       };
       settled.forEach((s, i) => { if (s.status === 'fulfilled') d.balancedMode?.record(choices[i] ?? null); });
@@ -349,14 +352,16 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
   function rememberLines(a: Record<string, unknown>, self: ChatSummary | undefined, warnings: string[]): (() => number) {
     if (a.remember === undefined) return () => 0;
     if (self?.routine || self?.routinePackage) throw new Error('Archived routine chats cannot submit new work; use the terminal CLI.');
-    // each refusal says its own reason: the length is never one (a long line is cut below)
-    if (!Array.isArray(a.remember)) throw new Error('agent_report: remember = a list with one line.');
-    if (!a.remember.every(l => typeof l === 'string' && l.trim())) throw new Error('agent_report: remember lines must be non-empty text.');
-    // the first line is the lesson: the others are left out, and the report is never refused for them
-    if (a.remember.length > REMEMBER_MAX) warnings.push(`remember: only the first line was noted (one line per report); ${a.remember.length - REMEMBER_MAX} left out.`);
-    const kept = (a.remember as string[]).slice(0, REMEMBER_MAX);
-    if (kept.some(l => /[\x00-\x1f\x7f]/.test(l))) throw new Error('agent_report: the remember line must be a single line, without line breaks or control characters.');
-    const lines = kept.map(l => l.trim());
+    // The lesson is one line of text. A bare string is that line; of a list only the first entry counts, the others
+    // are left out with a warning and never checked; line breaks become spaces. None of these refuses the report.
+    const given: unknown[] = typeof a.remember === 'string' ? [a.remember] : Array.isArray(a.remember) ? a.remember : [null];
+    if (given.length > REMEMBER_MAX) warnings.push(`remember: only the first line was noted (one line per report); ${given.length - REMEMBER_MAX} left out.`);
+    const first = given[0];
+    if (typeof first !== 'string' || !first.trim()) {
+      if (given.length) warnings.push('remember: not noted, it must be one line of text. The report itself is accepted: do not send it again for this.');
+      return () => 0;
+    }
+    const lines = [first.replace(/[\x00-\x1f\x7f]+/g, ' ').trim()];
     // a line over REMEMBER_LINE is cut with the marker «…», never refused (P8)
     lines.forEach((line, i) => { if (line.length > REMEMBER_LINE) { lines[i] = capText(line, REMEMBER_LINE); warnings.push(`remember line ${i + 1} cut to ${REMEMBER_LINE} characters (marker …).`); } });
     // the worth gate (ADR 0129): a line tied to one case is left out with its reason, and the report goes through. It
@@ -367,7 +372,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     });
     if (!worth.length) return () => 0;
     const roleId = self?.agent?.source === 'catalog' ? self.agent.id : null;
-    if (!roleId || !d.remember) throw new Error('agent_report: remember works only in a role chat with a brain; leave it out.');
+    if (!roleId || !d.remember) { warnings.push('remember: not noted, it works only in a role chat with a brain.'); return () => 0; }
     // the report is already delivered when this runs: a failed write is logged, never turned into a refused report
     return () => {
       let written = 0;
@@ -389,9 +394,9 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     // A longer output is cut the same way: a refusal made the agent write the whole result again (33 times in a month
     // of the owner's chats). The marker shows the parent that text is missing; the agent can amend with a shorter one.
     if (typeof a.output === 'string' && a.output.length > RESULT_OUTPUT_MAX) {
-      const over = a.output.length - RESULT_OUTPUT_MAX;
-      a.output = capText(a.output, RESULT_OUTPUT_MAX);
-      warnings.push(`output cut to ${RESULT_OUTPUT_MAX} characters (marker …): its last ${over} or so were left out. Only if they matter, report once more with amends: true and a shorter output.`);
+      const full = a.output.length, cut = capText(a.output, RESULT_OUTPUT_MAX);
+      a.output = cut;
+      warnings.push(`output cut to ${RESULT_OUTPUT_MAX} characters (marker …): its last ${full - (cut.length - 1)} were left out. Only if they matter, report once more with amends: true and a shorter output.`);
     }
     if (typeof a.summary === 'string' && a.summary.trim().length > SUMMARY_MAX) {
       const full = a.summary.trim();
@@ -526,7 +531,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
         properties: { kind: { type: 'string', enum: [...USER_ACTION_KINDS] }, text: { ...str, maxLength: USER_ACTION_TEXT_MAX, description: 'what the user must do, in the user\'s language' }, command: { ...str, maxLength: USER_ACTION_COMMAND_MAX, description: 'the exact command to run, if any' } } },
       goalChangedByUser: { type: 'boolean', description: 'true when the user wrote to you directly and changed your goal (you followed the user)' },
       newGoal: { ...str, description: 'with goalChangedByUser: the goal the user gave you' },
-      remember: { type: 'array', items: str, maxItems: REMEMBER_MAX, description: 'Usually left out: most runs teach nothing a future run needs. ONE short line (at most 300 characters, a longer one is cut with …), only when this run cost you a wrong turn or a search that the line would spare the next run of your role: it is noted as a lesson for YOUR role skill (read in full at every start of your role) and read by the next Maintenance, which changes the skill only when really needed. General, reusable knowledge (a procedure, a convention, a how-to, where things are kept). Generalize a specific finding first (no URLs with ports, ticket / PR / commit ids, user paths, dates, branch names): a case-specific line is left out. Never the task result, never what you did' },
+      remember: { type: 'array', items: str, description: 'Usually left out: most runs teach nothing a future run needs. ONE short line (at most 300 characters, a longer one is cut with …), only when this run cost you a wrong turn or a search that the line would spare the next run of your role: it is noted as a lesson for YOUR role skill (read in full at every start of your role) and read by the next Maintenance, which changes the skill only when really needed. General, reusable knowledge (a procedure, a convention, a how-to, where things are kept). Generalize a specific finding first (no URLs with ports, ticket / PR / commit ids, user paths, dates, branch names): a case-specific line is left out. Never the task result, never what you did' },
     } };
   return [{
     name: 'agent_delegate',

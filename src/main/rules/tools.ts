@@ -194,7 +194,10 @@ export function ensureTools(root: string): string {
       else if (own.has(rel)) fs.writeFileSync(out, appText(render(buf.toString('utf8'), V, false), V.BRAIN!, target, own));
       else {
         const js = /\.(m?js|cjs)$/.test(rel);
-        fs.writeFileSync(out, codeReferences(render(buf.toString('utf8'), V, js), V.BRAIN!, target, js ? jsSafe : undefined));
+        const text = render(buf.toString('utf8'), V, js);
+        // install-inbox-hooks.mjs is the one file whose paths are data, not words for an agent: what it writes to the
+        // user's own Claude settings and looks for when it removes them (owner-run only; the app never runs it)
+        fs.writeFileSync(out, rel === 'ops/tools/install-inbox-hooks.mjs' ? text : codeReferences(text, V.BRAIN!, target, js ? jsSafe : undefined));
       }
     }
     // the product's topic rules are no longer injected (#366, ADR 0243): each one is also an app skill (regole-<name>),
