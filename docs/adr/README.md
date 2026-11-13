@@ -295,6 +295,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0297](0297-click-reactions-and-touch-nudge.md) A click on a little person: a pat or a whack of the stick, and a nudge on the run — accepted
 - [0298](0298-weekly-limit-on-the-top-bar.md) The weekly limit on the top bar, the 5-hour window from 70% — accepted
 - [0299](0299-one-command-one-panel.md) One command, one panel: an identical command never runs twice by accident — accepted
+- [0300](0300-quote-what-is-on-screen.md) Quote what is on screen: select a text, right click, it is in the prompt field — accepted
 
 ## Replaced
 

@@ -38,6 +38,7 @@ export const andamentoIt = {
   'use.action.next-thing': 'Prossima cosa (Ctrl+J)',
   'use.action.new-browser': 'Nuovo browser',
   'use.action.discuss': 'Discuti',
+  'use.action.quote': 'Cita un testo',
   'use.action.file-open': 'Apri un file',
   'use.action.palette': 'Palette (Ctrl+K)',
   'use.action.maintenance': 'Manutenzione',

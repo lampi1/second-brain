@@ -4,7 +4,7 @@
 // maximize, focus mode, Esc backing out one level, the floating Orchestrator and its tabs (ADR 0021), a new Orchestrator in place of
 // one ("Ricomincia da capo" on the same engine, "Cambia motore" on the other, optionally starting from a handoff of the
 // old one; "Pulisci" = the same engine, started empty), "Riprendi" of a long chat
-// in a new one, the brain pages' bridge ("Discuti") and the ui:command event from main. Page opens and the main actions
+// in a new one, the brain pages' bridge ("Discuti"), the quote of a selected text on a right click (startQuote, ADR 0300) and the ui:command event from main. Page opens and the main actions
 // count in the local usage counter (lib/use-counter.ts, ADR 0202).
 // Used by App.tsx (keyboard), the command palette, the sidebar, the notification center, the top bar and the tiles.
 import { openMcpDraft } from './lib/mcp-servers';
@@ -14,7 +14,8 @@ import { routineChatIds, routineChatArg } from './lib/routine-chats';
 import { nextPriority } from '@shared/morning';
 import { morningBriefNow } from './store/morning';
 import type { DiscussBridge } from './brain';
-import { setDraft } from './components/ChatInput';
+import { quoteInDraft, setDraft } from './components/ChatInput';
+import { quoteAt } from './lib/quote';
 import { sb } from './sb';
 import { t, locale } from './i18n';
 import { fileReference, fileViewArg,normalizeFileArg } from '@shared/file-view';
@@ -311,6 +312,38 @@ export const brainBridge: DiscussBridge = {
   },
   showChat: id => focusChat(id),
 };
+
+/** Quote what is on screen (ADR 0300): a right click on a selected text puts it, as quote lines, in a prompt field:
+ *  the field of the chat the text is in, the Orchestrator's for everything else (a page, the brain, a panel). The
+ *  Orchestrator's column opens if it was closed. A text in a dialog that covers the field is added without moving the
+ *  keyboard out of the dialog, and a notice says where it went. Heard before every other right click (capture), so
+ *  with a selection under the pointer the quote wins; without one the click goes on as usual (a little person's
+ *  whack, ADR 0297). */
+export function startQuote(): void {
+  let pressed: string | null = null; // what was selected when the right button went down (lib/quote.ts quoteAt)
+  document.addEventListener('mousedown', e => { if (e.button === 2) pressed = window.getSelection()?.toString() ?? ''; }, true);
+  document.addEventListener('contextmenu', e => {
+    const hit = quoteAt(window.getSelection(), e.target, e.clientX, e.clientY, pressed);
+    pressed = null;
+    if (!hit) return;
+    const orch = orchestratorId();
+    const chatId = hit.chatId && app.get().chats[hit.chatId] ? hit.chatId : orch;
+    if (!chatId) return;
+    // a dialog covers the page: the field takes the keyboard only when it is in the dialog too (a chat opened there)
+    const dialog = e.target instanceof Element ? e.target.closest('.backdrop') : null;
+    const covered = !!dialog && !dialog.querySelector(`textarea[data-testid="${chatId === orch ? 'orchestrator-input' : `chat-input-${CSS.escape(chatId)}`}"]`);
+    if (!quoteInDraft(chatId, hit.text, covered)) return; // nothing added (an update is freezing the drafts): a plain click
+    e.preventDefault(); e.stopPropagation();
+    track('quote');
+    window.getSelection()?.removeAllRanges(); // the text is in the field now: the next right click is a plain one
+    if (covered) { toast(t(chatId === orch ? 'appText.actions.quotedOrchestrator' : 'appText.actions.quotedChat'), 'ok'); return; }
+    if (chatId !== orch) return; // a chat's own field is beside its text: it takes the caret by itself
+    const u = ui.get();
+    if (((u.focusMode && u.page === 'home') || u.maximized) && !u.map) setFullOrch(true);
+    setOrchestratorOpen(true);
+    focusChat(chatId);
+  }, true);
+}
 
 // ---------------------------------------------------------------- chats and requests
 

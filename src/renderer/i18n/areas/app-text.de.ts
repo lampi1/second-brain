@@ -14,6 +14,8 @@ export const appTextDe: typeof appTextIt = {
   'appText.actions.clearConfirm': 'Leeren',
   'appText.actions.unknownPage': (p: { page: string }) => `Unbekannte Seite: ${p.page}`,
   'appText.actions.linkCopied': (p: { link: string }) => `Link kopiert: ${p.link}`,
+  'appText.actions.quotedOrchestrator': 'Im Feld des Orchestrators zitiert: du findest es, wenn du dieses Fenster schließt',
+  'appText.actions.quotedChat': 'Im Feld des Chats zitiert: du findest es, wenn du dieses Fenster schließt',
   'appText.actions.chatGone': 'Diesen Chat gibt es nicht mehr.',
   'appText.actions.closed': (p: { title: string }) => `Geschlossen: ${p.title}`,
   'appText.actions.reopen': 'Wieder öffnen',
