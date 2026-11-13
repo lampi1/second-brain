@@ -13,7 +13,7 @@ test('one window per agent: three views, a line to drag, one full screen over th
     // a strip is one line: no ✕, no "?", the views only once it has a browser to show
     await expect(page.getByTestId('chat-expand-sms')).toHaveAttribute('aria-expanded', 'false');
     await expect(page.locator('[data-testid^="chat-x-"], [data-testid^="chat-help-"]')).toHaveCount(0);
-    expect((await page.getByTestId('tile-chat-sms').boundingBox())!.height).toBeLessThan(48);
+    expect((await page.getByTestId('tile-chat-sms').boundingBox())!.height).toBeLessThan(64); // one row, as tall as the role's little person (ADR 0294)
     await expect(page.getByTestId('tile-browser-tab-sms')).toHaveCount(0); // an owned browser is never a row of its own
     await page.mouse.move(2, 2);
     await shot(page, 'agent-window-strips');
