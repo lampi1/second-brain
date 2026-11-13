@@ -34,6 +34,7 @@
     "src/main/agents/run-report.ts#parseRunReport": "479fe026262c69fc",
     "src/main/agents/runs.ts#addTurn": "cdd0436e22bb336a",
     "src/main/agents/runs.ts#RUNS_BYTES": "1c3334347cd6e61d",
+    "src/main/agents/runs.ts#RUNS_DB_BYTES": "a4c90a810596f6e1",
     "src/main/agents/runs.ts#RUNS_MAX": "2daeb161e358342e",
     "src/main/agents/runs.ts#STALE_MS": "2a3a95e9f35a00d4",
     "src/main/agents/skill-needs.ts": "ad9ecaa8cdb699de",

@@ -323,3 +323,46 @@ describe('schema and export', () => {
     expect(() => readRunsSource(empty)).toThrow(/no agent runs/);
   });
 });
+
+describe('a longer archive at the cost of the runs at work (ADR 0280)', () => {
+  const stored = (dir: string) => new Map((exportRuns(path.join(dir, 'app.db'))!.runs as { runId: string; costUsd: number | null }[]).map(r => [r.runId, r]));
+
+  it('between two full passes a deferred save writes the runs at work and takes a cold run as last written', async () => {
+    const dir = tmp(), s = new AgentRunStore(dir);
+    const cold = s.start(start({ chatId: 'old' }), false);
+    endRun(cold, 'completed', 2000);
+    const open = s.start(start({ chatId: 'now', startedAt: Date.now() }), false);
+    expect(await s.saveAsync()).toBe(true); // the first deferred save looks at every run
+    cold.costUsd = 9; open.costUsd = 3; s.touch();
+    expect(await s.saveAsync()).toBe(true);
+    expect(stored(dir).get(open.runId)!.costUsd).toBe(3);
+    expect(stored(dir).get(cold.runId)!.costUsd).not.toBe(9);
+    // the cold run's change is still owed: the quit's flush writes it, and nothing is pending after it
+    expect(s.pending).toBe(true);
+    s.flush();
+    expect(stored(dir).get(cold.runId)!.costUsd).toBe(9);
+    expect(s.pending).toBe(false);
+    s.close();
+  });
+
+  it('a run that just ended is not cold: its late changes go with the next deferred save', async () => {
+    const dir = tmp(), s = new AgentRunStore(dir);
+    const run = s.start(start({ startedAt: Date.now() - 60_000 }), false);
+    endRun(run, 'completed', Date.now() - 1000);
+    expect(await s.saveAsync()).toBe(true);
+    run.costUsd = 4; s.touch();
+    expect(await s.saveAsync()).toBe(true);
+    expect(stored(dir).get(run.runId)!.costUsd).toBe(4);
+    s.close();
+  });
+
+  it('app.db keeps runs past the 7 MB the JSON file is held to', () => {
+    const goal = 'x'.repeat(2000), n = 4000; // about 9 MB of runs
+    const fill = (s: AgentRunStore) => { for (let i = 0; i < n; i++) endRun(s.start(start({ chatId: `c${i}`, goal }), false), 'closed', 1000 + i); s.save(); };
+    const inDb = new AgentRunStore(tmp()), inJson = new AgentRunStore(tmp(), { db: false });
+    fill(inDb); fill(inJson);
+    expect(inDb.list()).toHaveLength(n);
+    expect(inJson.list().length).toBeLessThan(n);
+    inDb.close();
+  });
+});
