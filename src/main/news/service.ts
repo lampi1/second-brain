@@ -1,4 +1,4 @@
-// The «Giornale» in main (ADR 0265, editions ADR 0279): keeps the user's newspaper, one EDITION per subject they follow.
+// The «Giornale» in main (ADR 0265, editions ADR 0280): keeps the user's newspaper, one EDITION per subject they follow.
 // A refresh («Aggiorna», the Orchestrator's app_news_refresh, or the optional daily one) reads every source that is on,
 // at zero tokens and at most 6 at a time (fetch with a deadline and a size cap, through the app's own network like
 // every other main-process request), parses it (parse.ts), dates a page's new stories from their own article when the

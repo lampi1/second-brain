@@ -1,4 +1,4 @@
-// The «Giornale» (ADR 0265, editions ADR 0279): the app's ready-made editions and how a pasted source is recognised.
+// The «Giornale» (ADR 0265, editions ADR 0280): the app's ready-made editions and how a pasted source is recognised.
 // A clean install has no edition; «AI per chi costruisce agenti» is the one template: its sections, key words and the
 // sources chosen and justified in ADR 0265 (each opened on 2026-11-10). A template is data: once the user starts from
 // it the edition is theirs (they pause, remove or add sources; «Ripristina» brings the template's list back). weight:

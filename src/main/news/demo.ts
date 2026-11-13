@@ -1,4 +1,4 @@
-// The demo's «Giornale» (ADR 0265, editions ADR 0279): no network and no engine. Two editions: «AI per chi costruisce
+// The demo's «Giornale» (ADR 0265, editions ADR 0280): no network and no engine. Two editions: «AI per chi costruisce
 // agenti» (the ready-made one) and «Auto elettriche», a made-up subject with two made-up sources on example.org, to
 // show a paper on anything (its stories are invented and say «demo» in their source's name). A few real stories (titles, links and the sources' own first
 // words, as read live on 2026-11-10; dates moved to be relative to the demo's clock) are served as the sources' own

@@ -1,4 +1,4 @@
-// One story of the «Giornale», read in place (ADR 0265, 0279): its section, title, source and date, «Perché conta per
+// One story of the «Giornale», read in place (ADR 0265, 0280): its section, title, source and date, «Perché conta per
 // te», the AI summary (or the source's own few words until the next refresh writes it), the actions (Impara, Salva,
 // letta / da leggere, Meno così, Apri la fonte) and every link to it: the primary first, then the other sources that
 // carried it. «Perché è qui» at the bottom gives the four parts of its score. Used by NewsPage.tsx; styles news.css.

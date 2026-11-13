@@ -1,4 +1,4 @@
-// Scheduled routines in main (ADR 0280): the user's planned requests and their clock. A scheduled routine is a request
+// Scheduled routines in main (ADR 0281): the user's planned requests and their clock. A scheduled routine is a request
 // in the user's words and a rule (every N minutes, at a time on some week days, once, or only by hand). `tick()` is
 // called by the app's minute timer (wiring.ts): every routine whose time has come is handed to the Orchestrator through
 // `run` (one app line into its conversation: it then works with the agents as for any request) and its next time is

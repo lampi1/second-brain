@@ -1,4 +1,4 @@
-// An edition's panel of the «Giornale» (ADR 0265, 0279). First the edition itself: its name, the sentence on what the
+// An edition's panel of the «Giornale» (ADR 0265, 0280). First the edition itself: its name, the sentence on what the
 // user wants from it (the AI pass reads it), how many stories the front page holds, its sections (one per line,
 // «Nome: parola, parola») and «Elimina edizione» (asked twice). Then every source with how it is read (RSS/Atom,
 // GitHub, API, page), its last reading (ok with how many stories and how many new, or the error), a switch to pause

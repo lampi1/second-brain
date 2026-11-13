@@ -1,4 +1,4 @@
-// The «Giornale» in the renderer (ADR 0265, editions ADR 0279): main's paper (news:changed keeps it current), its
+// The «Giornale» in the renderer (ADR 0265, editions ADR 0280): main's paper (news:changed keeps it current), its
 // actions (each a news:* call, a failure said in a toast), which stories a view of an edition lists (the front page
 // holds a few, the rest wait under «Altre»), the request to the Orchestrator for a new edition (it looks for the
 // sources, tries them and builds it) and «Impara», which starts an Impara lesson on a story (a topic lesson whose ask

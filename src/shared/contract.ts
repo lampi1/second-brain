@@ -129,9 +129,9 @@ export interface EventMap {
   'impara:changed': { state: ImparaState; lesson?: Lesson };
   /** a tutor answer so far, as it streams (ADR 0190); the lesson brings the whole answer when it ends */
   'impara:tutor': { lesson: string; turn: string; text: string };
-  /** the «Giornale» (ADR 0265, 0279): the paper changed (a refresh's progress, a story marked, an edition or a source edited) */
+  /** the «Giornale» (ADR 0265, 0280): the paper changed (a refresh's progress, a story marked, an edition or a source edited) */
   'news:changed': NewsState;
-  /** scheduled routines (ADR 0280): the list changed (an edit, a run, a next time) */
+  /** scheduled routines (ADR 0281): the list changed (an edit, a run, a next time) */
   'schedules:changed': SchedulesState;
 }
 

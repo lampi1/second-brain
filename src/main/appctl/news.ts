@@ -1,4 +1,4 @@
-// The Orchestrator and the «Giornale» (ADR 0279; owner 2026-11-13: «l'orchestrator deve poter aggiungere e rimuovere
+// The Orchestrator and the «Giornale» (ADR 0280; owner 2026-11-13: «l'orchestrator deve poter aggiungere e rimuovere
 // fonti … deve essere proprio il padrone dell'app»): four tools on the Orchestrator's own endpoint, each calling the
 // same NewsService methods as the page.
 //   app_news           reads: the editions, or one edition's front page, sections and sources with their last reading

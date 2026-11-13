@@ -1,4 +1,4 @@
-// E2E of Impara's «Giornale» and «Pull Request» tabs (ADR 0265, editions ADR 0279) on the frozen demo, whose paper has
+// E2E of Impara's «Giornale» and «Pull Request» tabs (ADR 0265, editions ADR 0280) on the frozen demo, whose paper has
 // two editions read offline (src/main/news/demo.ts) and summarized by a fake AI: the editions on top, the three
 // columns, a short front page, a story read in place (why it matters, summary, links), J/K, S and the edition keys ([ and ]),
 // the edition's panel with its sources and «Prova», a new edition from the form, the daily refresh off by default, and

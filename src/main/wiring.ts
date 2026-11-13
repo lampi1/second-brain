@@ -714,7 +714,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const wakeLater = new WakeLater({ file: path.join(ctx.userData, 'wake-later.json'), chats: () => manager.list(),
     send: (chatId, text) => manager.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }) });
   addChatTools([wakeLater.tool()]);
-  // scheduled routines (ADR 0280): the user's planned requests go to the Orchestrator at their time, by the same minute
+  // scheduled routines (ADR 0281): the user's planned requests go to the Orchestrator at their time, by the same minute
   // tick; a time missed while the app was closed runs once at the first tick
   const schedules = new SchedulesService({ file: path.join(ctx.userData, 'schedules.json'), changed: st => ctx.emitter.emit('schedules:changed', st),
     run: async (task, late) => {

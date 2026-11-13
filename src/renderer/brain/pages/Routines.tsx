@@ -1,4 +1,4 @@
-// The Routine page: the scheduled routines on top (ADR 0280, components/ScheduledRoutines.tsx: requests the app hands
+// The Routine page: the scheduled routines on top (ADR 0281, components/ScheduledRoutines.tsx: requests the app hands
 // to the Orchestrator at their time), then the terminal routine packages, commands, history and the explicitly opened
 // live run (ADR 0179). For packages: no starts, triggers, approvals or polling. Only RunPage owns an fs.watch subscription; closing it releases it.
 // Package credentials and import/export remain explicit user actions. Old routine chats are readable archives.

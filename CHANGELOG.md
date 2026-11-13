@@ -8,9 +8,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ### Added
 - The «Giornale» goes by editions: any subject with its own sources, sections and key words, a front page of a few
   stories (7 by default), «Meno così», a source tried before it is added; the Orchestrator creates editions and adds
-  or removes sources by itself (`app_news`, `app_news_edition`, `app_news_source`, `app_news_refresh`; ADR 0279).
+  or removes sources by itself (`app_news`, `app_news_edition`, `app_news_source`, `app_news_refresh`; ADR 0280).
 - Scheduled routines: a request written once that the Orchestrator receives at its time (daily, every few hours,
-  once), on the Routine page above the terminal packages or through the Orchestrator (`app_schedule`; ADR 0280).
+  once), on the Routine page above the terminal packages or through the Orchestrator (`app_schedule`; ADR 0281).
 - Impara «News»: an AI newspaper from 28 chosen sources (merged, ranked, one AI summary pass with its token cost), in
   three columns beside a «Pull Request» tab with the same layout; sources editable in the app (ADR 0265).
 - Episodic memory: a role starts with up to 2 short examples of its own verified past successes on similar tasks in

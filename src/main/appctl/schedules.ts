@@ -1,4 +1,4 @@
-// The Orchestrator and the scheduled routines (ADR 0280; owner 2026-11-13: routines planned inside the app like
+// The Orchestrator and the scheduled routines (ADR 0281; owner 2026-11-13: routines planned inside the app like
 // Claude's scheduled tasks, «senza blocchi di permessi»): app_schedule on the Orchestrator's own endpoint lists the
 // user's planned requests and creates, changes, pauses, resumes, deletes or runs one now, through the same
 // SchedulesService as the Routine page. No approval: the Orchestrator counts as the user (ADR 0275), and a planned

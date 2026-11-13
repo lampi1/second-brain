@@ -64,7 +64,7 @@ export interface MediaInvokeMap {
   'impara:tutorWarm': [{ id: string }, void];
   /** a «Studio» tile (ADR 0205): one short run over the lesson's verified facts; the output lands on the lesson */
   'impara:studio': [{ id: string; kind: StudioKind }, Lesson];
-  /** The «Giornale» (ADR 0265, editions ADR 0279, main/news/): the paper, «Aggiorna» (one edition or all: reads the
+  /** The «Giornale» (ADR 0265, editions ADR 0280, main/news/): the paper, «Aggiorna» (one edition or all: reads the
    *  sources, one AI pass per edition; 'news:changed' brings the progress), read / saved / «meno così» / the lesson of
    *  a story, the editions (create, change, delete), the sources («Fonti», and a link tried before adding it), the
    *  daily refresh */

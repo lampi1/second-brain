@@ -18,7 +18,7 @@ import type { WorkDecision, WorkThread } from '../workflows';
 
 /** renderer → main, agents: each entry [argument, result]. Part of InvokeMap (src/shared/contract.ts). */
 export interface AgentsInvokeMap {
-  /** scheduled routines (ADR 0280, main/schedules/): the user's planned requests; an edit creates, changes, pauses,
+  /** scheduled routines (ADR 0281, main/schedules/): the user's planned requests; an edit creates, changes, pauses,
    *  deletes or runs one now ('schedules:changed' follows every change and run) */
   'schedules:state': [void, SchedulesState];
   'schedules:edit': [ScheduleEdit, SchedulesState];

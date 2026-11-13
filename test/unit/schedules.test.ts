@@ -1,4 +1,4 @@
-// Scheduled routines (ADR 0280): the calendar (shared/schedules.ts nextDue and parseWhen, in the PC's local time), the
+// Scheduled routines (ADR 0281): the calendar (shared/schedules.ts nextDue and parseWhen, in the PC's local time), the
 // service (main/schedules/service.ts: a due routine goes to the Orchestrator once, its next time is set before the
 // hand-over, a time missed while the app was closed runs once and says how late, pause never fires for the paused
 // time, a failed hand-over is recorded) and the Orchestrator's app_schedule tool. A fake clock, a temp file, no timer.

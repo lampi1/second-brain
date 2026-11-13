@@ -76,7 +76,7 @@ export const routinesEn = {
   'rs.status.cancelled': "Stopped",
   'rs.status.pending': "Queued",
 
-  // scheduled routines (ADR 0280)
+  // scheduled routines (ADR 0281)
   'rs.sch.title': 'Scheduled',
   'rs.sch.lead': 'A request written once, which the Orchestrator receives at the time you choose and does with the agents.',
   'rs.sch.new': 'New scheduled routine',

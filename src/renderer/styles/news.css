@@ -1,4 +1,4 @@
-/* Impara's «Giornale» (by editions, ADR 0279: .nw-eds the mastheads, .nw-item.lead the opening story, .nwn-* the
+/* Impara's «Giornale» (by editions, ADR 0280: .nw-eds the mastheads, .nw-item.lead the opening story, .nwn-* the
    new-edition form) and «Pull Request» tabs (ADR 0265; owner 2026-11-10 picked the «Rassegna a 3 colonne», «un po'
    più margine e padding»): the tabs on top (.ip-tabs), the head with title, date, cost and buttons (.nw-head), the
    progress line, then three columns (.nw-cols): the sections or filters (sticky), the list of stories or PRs, and the
@@ -28,7 +28,7 @@
 .nw-empty h2{margin:0 0 8px;font-family:var(--font-display);font-size:20px}
 .nw-empty p{margin:0 auto 20px;max-width:520px;color:var(--text-3);font-size:13.5px;line-height:1.55}
 
-/* the editions as mastheads (ADR 0279): one per subject, the open one underlined; «Nuova edizione» at the end */
+/* the editions as mastheads (ADR 0280): one per subject, the open one underlined; «Nuova edizione» at the end */
 .nw-eds{display:flex;align-items:flex-end;gap:2px 22px;flex-wrap:wrap;margin-top:-6px;border-bottom:1px solid var(--border-2)}
 .nw-eds button{appearance:none;background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:8px 2px 11px;font:inherit;font-family:var(--font-display);font-size:17px;font-weight:600;letter-spacing:-.005em;color:var(--text-3);cursor:pointer;display:inline-flex;align-items:center;gap:8px}
 .nw-eds button:hover{color:var(--text)}

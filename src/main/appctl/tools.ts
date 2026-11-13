@@ -127,9 +127,9 @@ export interface AppCtlDeps {
   skillLibrary?: SkillLibrary;
   /** Impara (ADR 0190): app_learn on the Orchestrator's own endpoint */
   impara?: ImparaControl;
-  /** the «Giornale» (ADR 0279): app_news, app_news_edition, app_news_source, app_news_refresh on the Orchestrator's own endpoint */
+  /** the «Giornale» (ADR 0280): app_news, app_news_edition, app_news_source, app_news_refresh on the Orchestrator's own endpoint */
   news?: NewsControl;
-  /** scheduled routines (ADR 0280): app_schedule on the Orchestrator's own endpoint */
+  /** scheduled routines (ADR 0281): app_schedule on the Orchestrator's own endpoint */
   schedules?: SchedulesControl;
   /** the configuration the Orchestrator changes for the user (app_config, ADR 0149); settings come from `brain` */
   config?: Omit<ConfigDeps, 'callerId' | 'userAsked' | 'brain'>;

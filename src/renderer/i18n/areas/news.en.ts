@@ -1,4 +1,4 @@
-// The «Giornale» (ADR 0265, editions ADR 0279) in English: the same keys as news.it.ts.
+// The «Giornale» (ADR 0265, editions ADR 0280) in English: the same keys as news.it.ts.
 export const newsEn = {
   'impara.tab.giornale': 'News',
   'impara.tab.pr': 'Pull requests',
@@ -85,7 +85,7 @@ export const newsEn = {
   'news.src.perMonth': 'per month',
   'news.src.free': 'Reading the sources costs no tokens. Only the summary of new stories does, at most 14 per edition each time; a story is never summarized twice.',
 
-  // editions (ADR 0279)
+  // editions (ADR 0280)
   'news.editions': 'Editions',
   'news.lead': 'Top story',
   'news.moreShow': ({ n }: { n: number }) => `${n} more ${n === 1 ? 'story' : 'stories'} read and left off the front page`,

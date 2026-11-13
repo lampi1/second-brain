@@ -1,4 +1,4 @@
-// The «Giornale» (ADR 0265, editions ADR 0279): the «Giornale» and «Pull Request» tabs, the sources panel, the refresh and its cost.
+// The «Giornale» (ADR 0265, editions ADR 0280): the «Giornale» and «Pull Request» tabs, the sources panel, the refresh and its cost.
 export const newsIt = {
   'impara.tab.giornale': 'Giornale',
   'impara.tab.pr': 'Pull Request',
@@ -85,7 +85,7 @@ export const newsIt = {
   'news.src.perMonth': 'al mese',
   'news.src.free': 'Leggere le fonti non costa token. Costa solo il riassunto delle storie nuove, al massimo 14 per edizione ogni volta; una storia non si riassume due volte.',
 
-  // editions (ADR 0279)
+  // editions (ADR 0280)
   'news.editions': 'Edizioni',
   'news.lead': 'In apertura',
   'news.moreShow': ({ n }: { n: number }) => `Altre ${n} ${n === 1 ? 'notizia letta e lasciata' : 'notizie lette e lasciate'} fuori dalla prima pagina`,

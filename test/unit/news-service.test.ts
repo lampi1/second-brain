@@ -1,4 +1,4 @@
-// The News service (src/main/news/service.ts, ADR 0265, editions ADR 0279) over the demo's offline sources and fake AI (news/demo.ts): a
+// The News service (src/main/news/service.ts, ADR 0265, editions ADR 0280) over the demo's offline sources and fake AI (news/demo.ts): a
 // refresh fills the paper, merges the same launch across sources, summarizes and measures the tokens; a failing source
 // shows its error without stopping the others; marks, source edits and the daily refresh (fake clock, off by default)
 // are kept in the state file. No network, no engine, no real timer.
@@ -238,7 +238,7 @@ describe('review fixes (ADR 0265)', () => {
   });
 });
 
-describe('editions (ADR 0279)', () => {
+describe('editions (ADR 0280)', () => {
   const TITLES = ['Prova invernale della compatta', 'Tariffe di ricarica in autostrada', 'Batterie allo stato solido consegnate', 'Colonnine: la mappa del trimestre', 'Incentivi regionali rinnovati', 'Richiamo software per il SUV', 'Autonomia reale misurata a 130 km/h', 'Pneumatici a bassa resistenza', 'Garanzia estesa sugli accumulatori'];
   const CARS_FEED = (n = 9) => `<rss><channel>${Array.from({ length: n }, (_, i) => `<item><title>${TITLES[i]}</title><link>https://cars.example.org/p/${i}</link><pubDate>${new Date(NOW - (i + 1) * 3_600_000).toUTCString()}</pubDate><description>Batteria e consumi misurati.</description></item>`).join('')}</channel></rss>`;
   const carsFetch = (base: NewsFetch): NewsFetch => async url => (url === 'https://cars.example.org/feed' ? { status: 200, contentType: 'application/rss+xml', text: CARS_FEED() } : base(url));

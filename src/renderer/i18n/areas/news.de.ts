@@ -1,4 +1,4 @@
-// The «Giornale» (ADR 0265, editions ADR 0279) auf Deutsch (Österreich): dieselben Schlüssel wie news.it.ts.
+// The «Giornale» (ADR 0265, editions ADR 0280) auf Deutsch (Österreich): dieselben Schlüssel wie news.it.ts.
 export const newsDe = {
   'impara.tab.giornale': 'News',
   'impara.tab.pr': 'Pull Requests',
@@ -85,7 +85,7 @@ export const newsDe = {
   'news.src.perMonth': 'pro Monat',
   'news.src.free': 'Das Lesen der Quellen kostet keine Tokens. Nur die Zusammenfassung neuer Meldungen, höchstens 14 pro Ausgabe und Durchgang; keine Meldung wird zweimal zusammengefasst.',
 
-  // editions (ADR 0279)
+  // editions (ADR 0280)
   'news.editions': 'Ausgaben',
   'news.lead': 'Aufmacher',
   'news.moreShow': ({ n }: { n: number }) => `${n} weitere ${n === 1 ? 'Meldung' : 'Meldungen'} gelesen und nicht auf der Titelseite`,

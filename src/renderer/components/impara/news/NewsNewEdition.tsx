@@ -1,4 +1,4 @@
-// «Nuova edizione» of the «Giornale» (ADR 0279): a name and one sentence on what the user wants from it, then three
+// «Nuova edizione» of the «Giornale» (ADR 0280): a name and one sentence on what the user wants from it, then three
 // ways to make it. «Trova le fonti con l'Orchestrator» hands both to the Orchestrator, which looks for the best
 // sources, tries each one live, builds the edition with its sections and says what it left out (the default: nobody
 // should have to hunt for feeds). «Crea vuota» makes the edition now, for the user's own links. A ready-made edition

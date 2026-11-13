@@ -337,7 +337,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   // Impara «News» (ADR 0265): the real pipeline over a few real stories served offline (news/demo.ts), a fake AI pass
   const news = new NewsService({ dir: path.join(ctx.userData, 'news'), fetch: demoNewsFetch(now), ai: demoNewsAi(uiLang), noAi: () => null, lang: uiLang, now,
     changed: state => ctx.emitter.emit('news:changed', state) });
-  // scheduled routines (ADR 0280): the real service, no clock in the demo; «Esegui ora» writes to the demo's Orchestrator
+  // scheduled routines (ADR 0281): the real service, no clock in the demo; «Esegui ora» writes to the demo's Orchestrator
   schedulesRef.current = new SchedulesService({ file: path.join(ctx.userData, 'schedules.json'), now, changed: st => ctx.emitter.emit('schedules:changed', st),
     run: async (task, late) => {
       const o = chats.list().find(c => c.isOrchestrator && !c.closedAt);

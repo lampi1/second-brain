@@ -1,4 +1,4 @@
-// «Pianificate» on the Routine page (ADR 0280; owner 2026-11-13: «pianificarne una tipo i pianificati di Claude
+// «Pianificate» on the Routine page (ADR 0281; owner 2026-11-13: «pianificarne una tipo i pianificati di Claude
 // direttamente dentro l'app»): the user's scheduled routines. Each is a request in their words and when to make it;
 // at its time the app hands it to the Orchestrator, which works on it with the agents. A row says the routine, when
 // it runs (in words), its next time and how the last run went, with a switch to pause it, «Esegui ora», «Modifica»

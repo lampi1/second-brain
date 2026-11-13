@@ -1,4 +1,4 @@
-// The Orchestrator's newspaper tools (src/main/appctl/news.ts, ADR 0279) over the real NewsService with a fake network
+// The Orchestrator's newspaper tools (src/main/appctl/news.ts, ADR 0280) over the real NewsService with a fake network
 // and a fake AI: it creates an edition on any subject, tries a link before adding it, adds, pauses and removes sources
 // by id, name or part of the link, refreshes one edition, reads its front page, and deletes it. No network, no engine.
 import fs from 'node:fs';

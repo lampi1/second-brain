@@ -278,8 +278,8 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0277](0277-brain-documents-in-the-brain-rules-skill.md) The brain tools find the brain's own documents at the root or in the `brain-rules` skill — accepted
 - [0278](0278-roles-use-any-installed-skill.md) A role may use any installed skill, and looking never asks — accepted
 - [0279](0279-onboarding-in-three-moments.md) Onboarding in three moments: language and name, your AI, the first real request — accepted
-- [0279](0279-newspaper-by-editions.md) The newspaper goes by editions: any subject, a few stories, the Orchestrator edits it — accepted
-- [0280](0280-scheduled-routines.md) Scheduled routines: a request the Orchestrator receives at its time — accepted
+- [0280](0280-newspaper-by-editions.md) The newspaper goes by editions: any subject, a few stories, the Orchestrator edits it — accepted
+- [0281](0281-scheduled-routines.md) Scheduled routines: a request the Orchestrator receives at its time — accepted
 
 ## Replaced
 

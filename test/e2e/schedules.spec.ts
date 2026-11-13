@@ -1,4 +1,4 @@
-// E2E of the scheduled routines (ADR 0280) on the frozen demo: «Pianificate» above the terminal packages on the
+// E2E of the scheduled routines (ADR 0281) on the frozen demo: «Pianificate» above the terminal packages on the
 // Routine page, a routine made from an example with its rule in words and its next run, paused and resumed with the
 // switch, and deleted with two clicks. No engine: nothing is handed to an Orchestrator here.
 import { expect, test } from '@playwright/test';

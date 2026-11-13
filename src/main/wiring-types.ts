@@ -89,7 +89,7 @@ export interface Wired {
   projectMaps?: ProjectMaps;
   /** Impara «News» (ADR 0265, news/service.ts): the AI newspaper; absent = the news:* channels say it is not available */
   news?: NewsService;
-  /** scheduled routines (ADR 0280, schedules/service.ts); absent = the schedules:* channels say it is not available */
+  /** scheduled routines (ADR 0281, schedules/service.ts); absent = the schedules:* channels say it is not available */
   schedules?: SchedulesService;
   /** the engines of the brain, which definitions the user turned on, the API keys (ADR 0046) */
   engines: EnginesApi;

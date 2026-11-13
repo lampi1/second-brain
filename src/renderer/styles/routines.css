@@ -70,7 +70,7 @@
 .rs-archive-chat { height: 70vh; min-height: 300px; display: flex; }
 .rs-archive-chat .chat-transcript { flex: 1; min-width: 0; }
 
-/* «Pianificate» (ADR 0280, components/ScheduledRoutines.tsx): the scheduled routines above the packages */
+/* «Pianificate» (ADR 0281, components/ScheduledRoutines.tsx): the scheduled routines above the packages */
 .sch { display: flex; flex-direction: column; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
 .sch-head { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
 .sch-head p { margin: 4px 0 0; }

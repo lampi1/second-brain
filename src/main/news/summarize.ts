@@ -1,4 +1,4 @@
-// The «Giornale» (ADR 0265, editions ADR 0279): the one AI pass of an edition's refresh. The new stories (at most
+// The «Giornale» (ADR 0265, editions ADR 0280): the one AI pass of an edition's refresh. The new stories (at most
 // NEWS_SUMMARY_MAX, the best ranked) go to a model in one prompt, with no tool and no file: for each it writes two or
 // three sentences of summary, one on why it matters to this reader (the edition's own sentence, in the user's words),
 // how much it fits (0-3) and its section among the edition's. The stories' text is the web's, and the edition's

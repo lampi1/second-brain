@@ -1,4 +1,4 @@
-// Scheduled routines (ADR 0280; owner 2026-11-13: «pianificarne una tipo i pianificati di Claude direttamente dentro
+// Scheduled routines (ADR 0281; owner 2026-11-13: «pianificarne una tipo i pianificati di Claude direttamente dentro
 // l'app»): the shapes shared by main (main/schedules/service.ts), the Routine page («Pianificate») and the
 // Orchestrator's app_schedule tool. A scheduled routine is a request in the user's words plus when to make it: at its
 // time the app hands the request to the Orchestrator, which does it with the agents like any other request. `nextDue`

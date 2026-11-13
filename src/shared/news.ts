@@ -1,4 +1,4 @@
-// The «Giornale» (ADR 0265, by editions since ADR 0279): the newspaper's shapes, shared by main (main/news/: fetch,
+// The «Giornale» (ADR 0265, by editions since ADR 0280): the newspaper's shapes, shared by main (main/news/: fetch,
 // parse, dedup, rank, the AI pass, the store), the renderer (components/impara/news/) and the Orchestrator's tools
 // (main/appctl/news.ts). An EDITION is one subject the user follows («AI per chi costruisce agenti», «Auto
 // elettriche»): a name, one sentence on what interests them, its own sources, sections and key words. A source is
@@ -122,7 +122,7 @@ export interface NewsItem {
 /** One refresh: what it cost (tokens measured by the engine; null = the engine gave none) and what it brought. */
 export interface NewsRefresh {
   at: number;
-  /** the edition it refreshed; absent = every edition (and the refreshes of the single paper before ADR 0279) */
+  /** the edition it refreshed; absent = every edition (and the refreshes of the single paper before ADR 0280) */
   edition?: string;
   durationMs: number;
   sources: number;

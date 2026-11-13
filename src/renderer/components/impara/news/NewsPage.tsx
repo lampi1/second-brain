@@ -1,4 +1,4 @@
-// Impara's «Giornale» tab (ADR 0265; by editions, ADR 0279; owner 2026-11-13: «un giornale figo, navigabilissimo, con
+// Impara's «Giornale» tab (ADR 0265; by editions, ADR 0280; owner 2026-11-13: «un giornale figo, navigabilissimo, con
 // notizie poche ma le migliori», on any subject). On top the editions as mastheads (one per subject the user follows)
 // and «Nuova edizione» (NewsNewEdition.tsx); below, the owner's three columns: the edition's sections (Prima pagina,
 // its own sections, Salvate) with how many stories are unread and its sources; the stories; the open story

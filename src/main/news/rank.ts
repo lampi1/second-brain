@@ -1,4 +1,4 @@
-// The «Giornale» (ADR 0265, editions ADR 0279): the order of an edition's paper and each story's section, at zero
+// The «Giornale» (ADR 0265, editions ADR 0280): the order of an edition's paper and each story's section, at zero
 // tokens. A story's score is a sum of four parts, each 0..1 and shown to the user as «perché è qui»: recency (half
 // life 36 hours), its source's weight, relevance to the edition (its key words in the title and snippet: `core` the
 // heart of the user's interest, `near` its surroundings; and the AI pass's own 0-3 judgement once it ran) and echo

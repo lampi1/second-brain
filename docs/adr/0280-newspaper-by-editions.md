@@ -1,4 +1,4 @@
-# ADR 0279 · The newspaper goes by editions: any subject, a few stories, the Orchestrator edits it
+# ADR 0280 · The newspaper goes by editions: any subject, a few stories, the Orchestrator edits it
 
 Date: 2026-11-13 · Status: accepted (owner, thread «Preparare la 1.0 con analisi profonda»: «la sezione apprendimento
 generalizzata, ognuno si può mettere le fonti che vuole anche di macchine volendo o altri topic, deve essere proprio un

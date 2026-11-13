@@ -1411,7 +1411,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       6: ['src/renderer/components/impara/news/NewsSources.tsx'],
       7: ['src/main/appctl/news.ts'],
     },
-    sources: ['src/shared/news.ts', 'src/main/news/service.ts', 'src/main/news/parse.ts', 'src/main/news/sources.ts', 'src/main/news/dedup.ts', 'src/main/news/rank.ts', 'src/main/news/summarize.ts', 'src/main/appctl/news.ts', 'src/renderer/components/impara/news/NewsPage.tsx', 'src/renderer/components/impara/news/NewsReader.tsx', 'src/renderer/components/impara/news/NewsSources.tsx', 'src/renderer/components/impara/news/NewsNewEdition.tsx', 'src/renderer/components/impara/ImparaPrTab.tsx', 'src/renderer/components/impara/ImparaTabs.tsx', 'docs/adr/0265-impara-ai-newspaper.md', 'docs/adr/0279-newspaper-by-editions.md'],
+    sources: ['src/shared/news.ts', 'src/main/news/service.ts', 'src/main/news/parse.ts', 'src/main/news/sources.ts', 'src/main/news/dedup.ts', 'src/main/news/rank.ts', 'src/main/news/summarize.ts', 'src/main/appctl/news.ts', 'src/renderer/components/impara/news/NewsPage.tsx', 'src/renderer/components/impara/news/NewsReader.tsx', 'src/renderer/components/impara/news/NewsSources.tsx', 'src/renderer/components/impara/news/NewsNewEdition.tsx', 'src/renderer/components/impara/ImparaPrTab.tsx', 'src/renderer/components/impara/ImparaTabs.tsx', 'docs/adr/0265-impara-ai-newspaper.md', 'docs/adr/0280-newspaper-by-editions.md'],
   },
   {
     id: 'held-news',
@@ -1871,7 +1871,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       6: ['src/renderer/brain/pages/Routines.tsx#RunPage', 'src/renderer/components/LegacyRoutineHistory.tsx'],
       7: ['src/main/appctl/tools.ts#app_routine_status'],
     },
-    sources: ['packages/routine-runtime/README.md', 'src/renderer/brain/pages/Routines.tsx', 'src/renderer/components/LegacyRoutineHistory.tsx', 'src/main/appctl/tools.ts', 'docs/adr/0179-terminal-only-routines.md', 'src/shared/schedules.ts', 'src/main/schedules/service.ts', 'src/main/appctl/schedules.ts', 'src/renderer/components/ScheduledRoutines.tsx', 'docs/adr/0280-scheduled-routines.md'],
+    sources: ['packages/routine-runtime/README.md', 'src/renderer/brain/pages/Routines.tsx', 'src/renderer/components/LegacyRoutineHistory.tsx', 'src/main/appctl/tools.ts', 'docs/adr/0179-terminal-only-routines.md', 'src/shared/schedules.ts', 'src/main/schedules/service.ts', 'src/main/appctl/schedules.ts', 'src/renderer/components/ScheduledRoutines.tsx', 'docs/adr/0281-scheduled-routines.md'],
   },
   {
     id: 'settings',

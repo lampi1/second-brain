@@ -76,7 +76,7 @@ export const routinesIt = {
   'rs.status.cancelled': "Fermata",
   'rs.status.pending': "In coda",
 
-  // scheduled routines (ADR 0280)
+  // scheduled routines (ADR 0281)
   'rs.sch.title': 'Pianificate',
   'rs.sch.lead': 'Una richiesta scritta una volta, che l\'Orchestrator riceve all\'ora che scegli e fa con gli agenti.',
   'rs.sch.new': 'Nuova routine pianificata',
