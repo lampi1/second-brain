@@ -28,8 +28,9 @@ Measured on the owner's 683 runs of 13 days:
    chat), `agent` (its parent with `agent_close_child`, or the Orchestrator with `app_close_chat`), `auto` (the app
    archived it), `replaced` (a new task took its place), `parent` (it went with the chat or the run above it),
    `no-report` (its chat ended with no `agent_report`). `agent_children` (`delegation.ts children`) shows it to the
-   parent. No page shows it yet: it is on the run for the diagnostics and for the parent.
-   The task contract's goal of a reassigned task loses the label too (`manager-work.ts assignTask`).
+   parent for a child that stays among the closed chats (a chat an agent closed is removed: its cause is on the run
+   only). No page shows it yet.
+   The task contract's goal of a reassigned task loses the label too (`manager-work.ts beginAssignment`).
 3. `agent_child_feedback` is removed. The opinions already stored still count; a child is judged by what happens
    to its work (the parent's verified result, a rework, a review), as ADR 0125 and 0131 already do.
 4. The task contract stays preferred, not mandatory: the data gives no reason to refuse a bare prompt.

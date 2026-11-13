@@ -462,7 +462,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   setChatToolFilter((id, tool) => manager.chatToolShown(id, tool));
   // a closed chat's browser tabs go away and its per-chat MCP token stops working
   const closeChat = manager.close.bind(manager);
-  manager.close = async (chatId: string) => { await closeChat(chatId); browser.forgetChat(chatId); };
+  // every argument goes on as it came: who closed it (ADR 0286) is the second one
+  manager.close = async (...args: Parameters<typeof closeChat>) => { await closeChat(...args); browser.forgetChat(args[0]); };
   // an archived chat's browser tabs close too; its MCP token and the environment's sign-in stay, so a reopen continues
   const archiveChat = manager.archive.bind(manager);
   manager.archive = async (chatId, o) => {

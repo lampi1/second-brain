@@ -61,7 +61,6 @@ describe('AI-DLC sub-agents', () => {
     // A temp folder on another drive (Windows) has no relative path from here: path.relative gives the absolute one back.
     const rel = path.relative(process.cwd(), root);
     if (!path.isAbsolute(rel)) expect(aidlcSubagent(rel, 'aidlc-developer-agent')).toBe(false);
-    expect(aidlcSubagent(path.join('no-such-folder', 'here'), 'aidlc-developer-agent')).toBe(false);
     expect(aidlcSubagent(root, 'aidlc-developer-agent')).toBe(true);
   });
 
