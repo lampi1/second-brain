@@ -706,8 +706,9 @@ export class AgentRunStore {
         log.warn('agents', 'agent runs not saved', { cause: errText(e), hint: 'retried shortly' });
         return false;
       }
-      // superseded by a newer save: it writes the newer state (a full pass is asked again unless that save was one)
-      if (this.gen !== gen) { if (full && this.fullAt < clock) this.coldPassSoon(); return true; }
+      // superseded by a newer save: it writes the newer state, the cold runs left out unless it was a full one. So a
+      // full pass is asked again: this save may have taken a cold run's change with it (it cleared `dirty`)
+      if (this.gen !== gen) { if (this.fullAt < clock) this.coldPassSoon(); return true; }
       const t = performance.now(), changed = this.unsaved;
       try {
         const w = this.prepareDb(db, all, parts);

@@ -367,6 +367,21 @@ describe('a longer archive at the cost of the runs at work (ADR 0283)', () => {
     s.close();
   });
 
+  it('a deferred save overtaken by a save that names a run still owes the cold runs their full pass', async () => {
+    clock();
+    const { dir, s, cold, open } = await twoRuns();
+    await vi.advanceTimersByTimeAsync(1000);
+    cold.costUsd = 9; s.touch();
+    const deferred = s.saveAsync(); // takes the change with it, the cold run left out
+    s.save(open); // lands first: nothing looked owed to it
+    expect(await deferred).toBe(true);
+    expect(stored(dir).get(cold.runId)!.costUsd).not.toBe(9);
+    expect(s.pending).toBe(true);
+    await vi.advanceTimersByTimeAsync(COLD_PASS_MS);
+    await vi.waitFor(() => expect(stored(dir).get(cold.runId)!.costUsd).toBe(9));
+    s.close();
+  });
+
   it('closing the store drops the pending full pass', async () => {
     clock();
     const { s, open } = await twoRuns();
