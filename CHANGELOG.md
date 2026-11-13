@@ -147,6 +147,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   key is gone (ADR 0291).
 
 ### Fixed
+- The project maps button is back on the Orchestrator's head, beside the top bar's one (ADR 0301).
 - A question asked before any Orchestrator exists has its row in the Orchestrator's column (it had no place to be
   answered); `agent_delegate` no longer refuses a part that names `balanced`; the app-owned tools name their own commands in the app's copy, not in the brain folder («Cannot find
   module …/ops/tools/mem.mjs»), and the maintenance's app ideas reach «Idee» on a fresh brain (ADR 0289).

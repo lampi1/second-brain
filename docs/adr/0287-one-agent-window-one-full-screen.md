@@ -1,6 +1,6 @@
 # ADR 0287 · One agent window, one full screen, a quiet top bar
 
-Date: 2026-11-13 · Status: accepted, partly amended by ADR 0292 (the strip's row, the details row behind the ⓘ) and ADR 0298 (the week on the top bar) (owner, thread of 2026-11-13: «possiamo fare tutto molto meglio e molto più pulito,
+Date: 2026-11-13 · Status: accepted, partly amended by ADR 0292 (the strip's row, the details row behind the ⓘ), ADR 0298 (the week on the top bar) and ADR 0301 (the maps button back on the Orchestrator's head) (owner, thread of 2026-11-13: «possiamo fare tutto molto meglio e molto più pulito,
 specialmente l'affiancamento con il browser, poi il full screen deve essere veramente full screen sia per browser che
 per chat e ci sono molte info e cose che si possono rimuovere che fanno solo rumore e confusione»; «rivedi anche le card
 degli agenti devono essere perfette»; «UI dei pannelli delle domande dell'orchestrator pulitissima»; the proposals of
