@@ -246,13 +246,14 @@ try {
   if (!records.some(record => record.memoryId === 'synthetic-visual-memory' && record.sourceRunId === 'synthetic-run')) throw new Error('Synthetic memory provenance missing');
   await memory.scrollIntoViewIfNeeded();
   await capture('memory-saved-fact-synthetic');
-  // Review panels were replaced by hub tabs; capture the current learning view without running an evaluation.
-  await page.getByTestId('mh-tab-apprendimento').click();
+  // The learning view is a tab of Andamento (once a Memoria tab); captured without running an evaluation.
+  await page.getByTestId('nav-andamento').click();
+  await page.getByTestId('an-tab-apprendimento').click();
   const learning = page.getByTestId('learning-page');
   await learning.getByTestId('lr-counter').waitFor();
   await learning.scrollIntoViewIfNeeded();
   await capture('learning-cold-start-synthetic');
-  manifest.reviewFixture = 'Real services; synthetic saved fact in Approvate and empty learning history in Apprendimento; no decisions, replay or provider launched';
+  manifest.reviewFixture = 'Real services; synthetic saved fact in Approvate and empty learning history in Andamento → Apprendimento; no decisions, replay or provider launched';
   if (manifest.rendererErrors.length) throw new Error('Renderer errors; inspect manifest.json');
   console.log(`Captured ${manifest.captures.length} dev views in ${output}`);
 } catch (error) {
