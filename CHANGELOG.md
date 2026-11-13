@@ -36,8 +36,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   fifty. Saving them while agents work takes a tenth of the time: only the runs at work are looked at, the others
   every 15 s (ADR 0283).
 - A run's stored goal no longer begins with the app's label line («[Messaggio di un agente…»): recap, estimates and
-  examples read the request itself. A run closed before it finished says why (closed by you, archived, replaced by a
-  new task, its parent ended, no report). The tool `agent_child_feedback`, never used, is removed (ADR 0286).
+  examples read the request itself. A run closed before it finished says why (closed by you, closed by an agent,
+  archived, replaced by a new task, closed with its parent, no report); a parent reads it in `agent_children`. The tool `agent_child_feedback`, never used, is removed (ADR 0286).
 - An estimate rests on the past jobs of the same role on the same model, then the same role, then the same kind of
   work (on real data the kind added nothing to the role). A job that reports only tokens counts at list price, so
   a role on Codex or OpenCode has a cost estimate too (ADR 0285).

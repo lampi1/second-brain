@@ -109,7 +109,7 @@ row and its line here in the same change.
 | `agent_metrics` | Orchestrator only | Success rate, cost, time and corrections per role and version (numbers only). |
 | `task_estimate` | Orchestrator only | Estimate a request: kind of work, size, role, time and cost. |
 | `agent_delegate` | work chats | Delegate independent parts of the task to other roles as visible child chats. |
-| `agent_children` | work chats | The chats you delegated: role, state, goal, result, open requests, cost. |
+| `agent_children` | work chats | The chats you delegated: role, state, goal, result, open requests, cost, and why a task was closed early (`endCause`). |
 | `agent_ask_parent` | work chats | Ask the chat that delegated you, before the user. |
 | `agent_answer_child` | work chats | Answer a question one of your delegated chats asked you. |
 | `agent_report` | work chats | Your one final result for the chat that started you; `amends: true` corrects it (at most 2 corrections, ADR 0224). |

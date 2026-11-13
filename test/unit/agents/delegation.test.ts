@@ -736,6 +736,21 @@ describe('stalled children ("Ferma dopo", delegation.stallMin)', () => {
     clock = () => Date.now() + 60_000;
     expect((await f.call('agent_children', parent.id, {})).children[0].stalled).toBeUndefined();
   });
+  it('agent_children says why a child was closed before it reported; a tree closed with its chat ends as «parent» (ADR 0286)', async () => {
+    const f = fixture();
+    const parent = await f.root('strategist');
+    const out = await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Uno'), f.task('scout', 'Due')] });
+    const [one, two]: string[] = out.children.map((c: { chatId: string }) => c.chatId);
+    const cause = (chatId: string) => f.m.runs.list().find(r => r.chatId === chatId)?.endCause;
+    await f.m.archive(one!); // the user's ✕ on the child
+    const rows = (await f.call('agent_children', parent.id, {})).children as { chatId: string; state: string; endCause?: string }[];
+    expect(rows.find(c => c.chatId === one)).toMatchObject({ state: 'closed', endCause: 'user' });
+    expect(rows.find(c => c.chatId === two)).not.toHaveProperty('endCause');
+    await f.m.archive(parent.id); // the user's ✕ on the parent: the child still open goes with it
+    expect(cause(two!)).toBe('parent');
+    expect(cause(one!)).toBe('user');
+    expect(f.tool('agent_child_feedback')).toBeUndefined();
+  });
 });
 
 

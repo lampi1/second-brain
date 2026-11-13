@@ -25,8 +25,11 @@ Measured on the owner's 683 runs of 13 days:
 1. `AgentRunStore.start` stores the goal without the app's label line (`shared/agent-label.ts goalText`: the four
    label wordings, first line only). Old runs keep theirs; `task-estimate.ts requestText` still reads past it.
 2. A run closed before completion records `endCause` (`shared/agents.ts RUN_END_CAUSES`): `user` (he closed the
-   chat), `auto` (the app archived it), `replaced` (a new task took its place), `parent` (the run that delegated it
-   ended), `no-report` (its chat ended with no `agent_report`). `agent_children` shows it to the parent.
+   chat), `agent` (its parent with `agent_close_child`, or the Orchestrator with `app_close_chat`), `auto` (the app
+   archived it), `replaced` (a new task took its place), `parent` (it went with the chat or the run above it),
+   `no-report` (its chat ended with no `agent_report`). `agent_children` (`delegation.ts children`) shows it to the
+   parent. No page shows it yet: it is on the run for the diagnostics and for the parent.
+   The task contract's goal of a reassigned task loses the label too (`manager-work.ts assignTask`).
 3. `agent_child_feedback` is removed. The opinions already stored still count; a child is judged by what happens
    to its work (the parent's verified result, a rework, a review), as ADR 0125 and 0131 already do.
 4. The task contract stays preferred, not mandatory: the data gives no reason to refuse a bare prompt.
@@ -37,4 +40,5 @@ Measured on the owner's 683 runs of 13 days:
 - Not done, by choice: one `<agent-message>` envelope for every engine (ADR 0261 is Claude only) and English for the
   app's own notes to agents. Neither has a measured problem behind it; both touch what every engine reads back from
   its transcript.
-- Tests: `test/unit/agent-runs.test.ts`, `test/unit/chats/role-primed.test.ts`.
+- Tests: `test/unit/agent-runs.test.ts`, `test/unit/chats/agent-runs-manager.test.ts`, `test/unit/agents/delegation.test.ts`, `test/unit/agents/close-child.test.ts`,
+  `test/unit/chats/role-primed.test.ts`.

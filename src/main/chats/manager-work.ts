@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { ChatSummary } from '../../shared/contract';
 import { errText, log } from '../log';
 import type { UserTaskEvents, AgentRun, AgentRunOutcome } from '../../shared/agents';
+import { goalText } from '../../shared/agent-label';
 import { ownerSource, type TaskAssignmentOptions } from '../../shared/delegation';
 import { PLAN_APPROVED, planChange, askingPlan, strategyPrompt, withAdded, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
 import { runMetrics } from '../agents/run-metrics';
@@ -252,7 +253,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     if (brainRoot) next.scope = { brainRoot: path.resolve(brainRoot), projectRoot: path.resolve(r.s.cwd) };
     next.taskId = mode === 'new-task' ? next.runId : previous.taskId ?? previous.runId;
     next.taskVersion = (previous.taskVersion ?? 1) + 1;
-    next.taskContract = { ...(previous.taskContract?.reportExpected ? { reportExpected: true } : {}), deliveryPolicy: this.deliveryPolicy(options.deliveryPolicy ?? previous.taskContract?.deliveryPolicy, !!r.s.parentId), goal: prompt, doneWhen: options.doneWhen ?? (mode === 'new-task' ? [] : previous.taskContract?.doneWhen ?? r.s.delegation?.doneWhen ?? []), ...(options.contractFields?.length ? { fields: options.contractFields } : {}) };
+    next.taskContract = { ...(previous.taskContract?.reportExpected ? { reportExpected: true } : {}), deliveryPolicy: this.deliveryPolicy(options.deliveryPolicy ?? previous.taskContract?.deliveryPolicy, !!r.s.parentId), goal: goalText(prompt), doneWhen: options.doneWhen ?? (mode === 'new-task' ? [] : previous.taskContract?.doneWhen ?? r.s.delegation?.doneWhen ?? []), ...(options.contractFields?.length ? { fields: options.contractFields } : {}) };
     if (mode === 'continue') next.continuedFrom = previous.runId;
     r.s.run = next;
     this.coordination.cancelOtherAssignments(r.s.id, next.runId);

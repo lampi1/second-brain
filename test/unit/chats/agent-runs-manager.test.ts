@@ -17,6 +17,7 @@ import { DELEGATION_DEFAULTS } from '../../../src/shared/roles';
 import { AgentRunStore, STALE_MS } from '../../../src/main/agents/runs';
 import { exportRuns } from '../../../src/main/agents/runs-db';
 import type { AgentOwnerSnapshot } from '../../../src/shared/agents';
+import { AGENT_LABEL } from '../../../src/shared/agent-label';
 
 const roots: string[] = [], managers: ChatManager[] = [];
 afterEach(async () => { vi.useRealTimers(); for (const m of managers.splice(0)) await m.shutdown(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
@@ -141,12 +142,18 @@ describe('agent runs on chats', () => {
     const id = f.run(b.id)!.runId;
     await f.m.close(b.id);
     expect(f.m.runs.get(id)).toMatchObject({ endReason: 'closed', endCause: 'user' });
+    // closed by its parent or by the Orchestrator (agent_close_child, app_close_chat): not the user's close
+    const d = await f.create('agent'), closedByAgent = f.run(d.id)!.runId;
+    await f.m.close(d.id, 'agent');
+    expect(f.m.runs.get(closedByAgent)).toMatchObject({ endReason: 'closed', endCause: 'agent' });
     // a new task in the same chat takes the place of a run that never reported
     const c = await f.create('agent');
     const first = f.run(c.id)!.runId;
-    await f.m.assignTask(c.id, 'Un altro lavoro', { mode: 'new-task' });
+    await f.m.assignTask(c.id, `${AGENT_LABEL}\nUn altro lavoro`, { mode: 'new-task' });
     expect(f.m.runs.get(first)).toMatchObject({ endReason: 'closed', endCause: 'replaced' });
     expect(f.run(c.id)!.runId).not.toBe(first);
+    // the new task's goal and its contract's goal are the request, without the app's label
+    expect(f.run(c.id)).toMatchObject({ goal: 'Un altro lavoro', taskContract: { goal: 'Un altro lavoro' } });
   });
 
   it('the user’s verdict ends an open run as completed with a human basis', async () => {

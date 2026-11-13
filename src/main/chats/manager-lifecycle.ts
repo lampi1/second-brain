@@ -2,6 +2,7 @@
 // archive and reopen, the automatic close (ADR 0084: candidates, what each waits for), stale agent runs, turns a
 // restart cut (resumeInterrupted) and the app's shutdown.
 import type { ChatSummary } from '../../shared/contract';
+import type { AgentRunEndCause } from '../../shared/agents';
 import { errText, log } from '../log';
 import { reapEnabled, reapEngine, snapshotTrees } from './proctree';
 import { jobGuard } from './jobguard';
@@ -194,7 +195,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
 
   /** Removes the chat from the app (its process ends; the transcript stays where the CLI keeps it). Its delegation tree
    *  is cancelled first, like the ✕'s archive (cancelTree), and stays among the closed chats. */
-  async close(chatId: string): Promise<void> {
+  async close(chatId: string, by: 'user' | 'agent' = 'user'): Promise<void> {
     const r = this.need(chatId);
     r.userClosing = true;
     this.dropAwaitingRun(chatId);
@@ -207,7 +208,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     delete r.twins;
     this.dropUserAsks((q, worker) => q.chatId === chatId || worker === chatId);
     this.flushItems(chatId);
-    this.endRunOf(r, 'closed', undefined, r.s.closedBy === 'auto' ? 'auto' : 'user');
+    this.endRunOf(r, 'closed', undefined, r.s.closedBy === 'auto' ? 'auto' : by);
     this.chats.delete(chatId);
     this.persist();
     await tree;
@@ -253,7 +254,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     if (q?.timer) clearTimeout(q.timer);
     this.childResults.delete(id);
     if (this.chats.get(id) !== r) return;
-    if (!r.s.closedAt) { await this.archiveOne(id, {}); return; }
+    if (!r.s.closedAt) { await this.archiveOne(id, { cause: 'parent' }); return; }
     // already closed (by itself): an engine still kept (its cold note) and what it left behind go too
     if (r.archiving) await r.archiving.catch(() => {});
     this.admission?.drop(id);
@@ -301,7 +302,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     return summary;
   }
 
-  private async archiveOne(chatId: string, opts: { auto?: boolean; undoable?: boolean }): Promise<ChatSummary> {
+  private async archiveOne(chatId: string, opts: { auto?: boolean; undoable?: boolean; cause?: AgentRunEndCause }): Promise<ChatSummary> {
     const r = this.need(chatId);
     // the Orchestrator never closes (its title is the mail address the brain's rules and the chats write to)
     if (r.s.isOrchestrator) throw new Error('L’Orchestrator non si chiude: per ripartire usa Pulisci.');
@@ -347,7 +348,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
       const at = r.s.closedAt;
       const t = setTimeout(() => { if (this.chats.get(chatId) === r && r.s.closedAt === at) this.endRunOf(r, 'closed', at, 'user'); }, 15_000);
       t.unref?.();
-    } else this.endRunOf(r, 'closed', r.s.closedAt, opts.auto ? 'auto' : 'user');
+    } else this.endRunOf(r, 'closed', r.s.closedAt, opts.cause ?? (opts.auto ? 'auto' : 'user'));
     r.working = false;
     if (keep) r.closeAfterCold = true;
     if (r.s.state !== 'error') r.s.state = 'closed';

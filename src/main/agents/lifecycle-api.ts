@@ -77,15 +77,6 @@ export function createLifecycleApi(service: AgentLifecycle, runById: (id: string
       if (!runById(args.runId)) throw unknown(args.runId);
       return stored(args, callerId);
     },
-    /** The runs whose parent is a run of this chat (newest first): what agent_children shows the parent. */
-    children(callerChatId: string, all: readonly AgentRun[]) {
-      const mine = new Set(all.filter(r => r.chatId === callerChatId).map(r => r.runId));
-      return all.filter(r => !!r.parentRunId && mine.has(r.parentRunId) && r.chatId !== callerChatId)
-        .sort((a, b) => b.startedAt - a.startedAt).slice(0, 50)
-        .map(r => ({ runId: r.runId, chatId: r.chatId, agentId: r.agentId, version: r.version, goal: r.goal.slice(0, 300), parentRunId: r.parentRunId!,
-          state: r.endedAt === undefined ? 'open' : 'ended', endReason: r.endReason ?? null, ...(r.endCause ? { endCause: r.endCause } : {}), outcome: r.outcome ? { verdict: r.outcome.verdict, basis: r.outcome.basis } : null,
-          costUsd: r.costUsd, questions: r.counters.questions }));
-    },
     /** The user's decision on one queue entry (agents:lifecycleDecide only). Returns the queue as it is after it. */
     async decide(value: unknown): Promise<AgentLifecycleSnapshot> {
       const { key, decision } = lifecycleDecideArgs(value);

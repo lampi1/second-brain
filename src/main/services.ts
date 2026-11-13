@@ -46,7 +46,7 @@ export interface ChatService {
   planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string): Promise<void>;
   stop(chatId: string, keepQueued?: boolean): Promise<void>;
   stopAll(): Promise<number>;
-  close(chatId: string): Promise<void>;
+  close(chatId: string, by?: 'user' | 'agent'): Promise<void>;
   /** archive a finished chat (closedAt; out of the grid, reopenable); auto = the auto-close, refused if it went back to work */
   archive(chatId: string, opts?: { auto?: boolean; undoable?: boolean }): Promise<ChatSummary>;
   /** an archived chat back on the grid; its session resumes on the next message */

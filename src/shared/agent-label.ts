@@ -16,7 +16,7 @@ export const ORCHESTRATOR_USER_LABEL = "[Messaggio dell'utente scritto dall'Orch
 
 /** The app's own first line of a message between chats, any wording of it: an agent's label, the Orchestrator's for
  *  the user, mail from a chat, the app's own note. */
-const LABEL_LINE = /^\s*\[(?:Messaggio di un agente tramite second-brain|Messaggio dell'utente scritto dall'Orchestrator|Messaggio dalla chat "[^"\n]{0,200}" tramite second-brain|Messaggio dell'app second-brain)[^\]\n]{0,400}\]\s*/;
+const LABEL_LINE = /^\s*\[(?:Messaggio di un agente tramite second-brain|Messaggio dell'utente scritto dall'Orchestrator|Messaggio dalla chat "[^\n]{0,300}?" tramite second-brain|Messaggio dell'app second-brain)[^\]\n]{0,400}\]\s*/;
 /** A request without the app's label line (ADR 0286): what a run keeps as its goal. Who wrote it is the run's own
  *  field (requestOrigin, startedBy); with the label in front, 489 of the owner's 683 goals began with the same
  *  sentence and lost 100 to 270 of their 2000 characters to it. Any other text, brackets included, is left as it is. */

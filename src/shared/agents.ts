@@ -122,7 +122,7 @@ export interface AgentOwnerSnapshot {
 export type AgentRunEnd = 'completed' | 'closed' | 'stale';
 /** Why a run was closed before its work was marked completed (ADR 0286): the user closed its chat, the app archived
  *  it, a new task took its place in the chat, the run that delegated it ended, or its chat ended with no report. */
-export const RUN_END_CAUSES = ['user', 'auto', 'replaced', 'parent', 'no-report'] as const;
+export const RUN_END_CAUSES = ['user', 'agent', 'auto', 'replaced', 'parent', 'no-report'] as const;
 export type AgentRunEndCause = (typeof RUN_END_CAUSES)[number];
 /** Only `human` and `reviewed-evidence` count for keep-or-rollback (AGENTS-DESIGN §1.2, §4.4). `receipts` = the app's
  *  deterministic verdict from what the run did (agents/receipts.ts, ADR 0130): repo checks run after the last change. */
