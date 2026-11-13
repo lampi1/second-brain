@@ -14,7 +14,11 @@ const PAD = 4;
 export function quoteBlock(selected: string): string {
   let text = selected.replace(/\r\n?/g, '\n').replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').replace(/^\n+|\n+$/g, '');
   if (!text.trim()) return '';
-  if (text.length > QUOTE_MAX) text = `${text.slice(0, QUOTE_MAX).trimEnd()} […]`;
+  if (text.length > QUOTE_MAX) {
+    const cut = text.slice(0, QUOTE_MAX);
+    // never half of a character made of two (an emoji on the limit)
+    text = `${(/[\ud800-\udbff]$/.test(cut) ? cut.slice(0, -1) : cut).trimEnd()} […]`;
+  }
   return text.split('\n').map(line => (line ? `> ${line}` : '>')).join('\n');
 }
 
@@ -35,7 +39,7 @@ export interface SelectionLike {
   isCollapsed: boolean;
   rangeCount: number;
   toString(): string;
-  getRangeAt(index: number): { commonAncestorContainer: unknown; getClientRects(): ArrayLike<RectLike> };
+  getRangeAt(index: number): { commonAncestorContainer: unknown; getClientRects(): ArrayLike<RectLike>; intersectsNode(node: never): boolean };
 }
 export interface QuoteHit { text: string; /** the chat the selected text is in, when it is inside one */ chatId: string | null }
 
@@ -46,14 +50,19 @@ const elementOf = (node: unknown): NodeLike | null => {
 };
 
 /** A right click at (x, y) on `target`: the quote it asks for, or null when it is a click like any other. It is a quote
- *  only when a text is selected, the click is on one of its lines and not in a field the user types in: a selection
- *  left somewhere else never takes the click of another thing (a little person's right click stays its own, ADR 0297). */
-export function quoteAt(selection: SelectionLike | null, target: unknown, x: number, y: number): QuoteHit | null {
+ *  only when a text is selected, the click is on it (the thing clicked is part of the selection and the pointer is on
+ *  one of its lines) and not in a field the user types in: a selection left somewhere else, or scrolled under another
+ *  thing, never takes that thing's click (a little person's right click stays its own, ADR 0297). `pressed` is what
+ *  was selected when the right button went down: where the press itself selects the word under it (macOS), that word
+ *  is not a quote the user asked for. */
+export function quoteAt(selection: SelectionLike | null, target: unknown, x: number, y: number, pressed: string | null): QuoteHit | null {
   if (!selection || selection.isCollapsed || selection.rangeCount < 1) return null;
-  if (elementOf(target)?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return null;
+  const clicked = elementOf(target);
+  if (!clicked || clicked.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return null;
   const text = selection.toString();
-  if (!text.trim()) return null;
+  if (!text.trim() || text !== pressed) return null;
   const range = selection.getRangeAt(0);
+  if (!range.intersectsNode(target as never)) return null;
   const rects = Array.from(range.getClientRects());
   if (!rects.some(r => x >= r.left - PAD && x <= r.right + PAD && y >= r.top - PAD && y <= r.bottom + PAD)) return null;
   const chat = elementOf(range.commonAncestorContainer)?.closest?.('[data-chat-id]') as NodeLike | null | undefined;

@@ -51,7 +51,7 @@ let recoveredDrafts=false,draftStorageProblem=false;
 const drafts = new CheckpointMap<string, string>();
 /** per chat: what to run when the draft set by setDraft is sent, and a piece of it that must still be in the message */
 const onSentHooks = new Map<string, { fn: () => void; sig: string }>();
-const draftSubs = new Set<(chatId: string) => void>();
+const draftSubs = new Set<(chatId: string, quiet?: boolean) => void>(); // quiet: the text changes, the focus stays where it is
 const freshDrafts = new Set<string>(); // set from elsewhere, not yet shown: the input takes the focus with the caret at the end
 const modeOn = new CheckpointMap<string, SendMode>(); // the Orchestrators with "Strategist" ticked (kept across a remount, like the draft)
 
@@ -67,14 +67,15 @@ export function setDraft(chatId: string, text: string, onSent?: () => void): voi
   for (const fn of draftSubs) fn(chatId);
 }
 /** A text selected on screen and right-clicked (ADR 0300, lib/quote.ts): it goes at the end of the chat's input as
- *  «> » lines, with an empty line under it for the answer; nothing is sent. False when nothing was added. */
-export function quoteInDraft(chatId: string, selected: string): boolean {
+ *  «> » lines, with an empty line under it for the answer; nothing is sent. `quiet`: the input does not take the
+ *  focus (it is under a dialog). False when nothing was added. */
+export function quoteInDraft(chatId: string, selected: string, quiet = false): boolean {
   if (updateIsFrozen()) return false;
   const old = drafts.get(chatId) ?? '', next = draftWithQuote(old, selected);
   if (next === old) return false;
   drafts.set(chatId, next);
-  freshDrafts.add(chatId);
-  for (const fn of draftSubs) fn(chatId);
+  if (!quiet) freshDrafts.add(chatId);
+  for (const fn of draftSubs) fn(chatId, quiet);
   return true;
 }
 /** Dictation (lib/voice.ts, the mic button): the words go at the end of the input, nothing is sent. */
@@ -248,11 +249,12 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
   useEffect(() => { if (pushing !== null && (queued[0]?.id !== pushing || settled)) setPushing(null); }, [queued, pushing, settled]);
   useImperativeHandle(handle, () => ({ focus: () => ta.current?.focus() }), []);
   useEffect(() => {
-    const fn = (id: string) => {
+    const fn = (id: string, quiet?: boolean) => {
       if (id !== chat.id) return;
-      freshDrafts.delete(id);
       const t = drafts.get(id) ?? '';
       setText(t);
+      if (quiet) return;
+      freshDrafts.delete(id);
       requestAnimationFrame(() => { const el = ta.current; if (el) { el.focus(); el.setSelectionRange(t.length, t.length); el.scrollTop = el.scrollHeight; } });
     };
     draftSubs.add(fn);

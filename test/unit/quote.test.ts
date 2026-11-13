@@ -20,6 +20,9 @@ describe('quoteBlock', () => {
     const block = quoteBlock('a'.repeat(QUOTE_MAX + 500));
     expect(block).toBe(`> ${'a'.repeat(QUOTE_MAX)} […]`);
   });
+  it('the cut never leaves half of an emoji', () => {
+    expect(quoteBlock(`${'a'.repeat(QUOTE_MAX - 1)}😀 dopo`)).toBe(`> ${'a'.repeat(QUOTE_MAX - 1)} […]`);
+  });
 });
 
 describe('draftWithQuote', () => {
@@ -49,36 +52,46 @@ describe('quoteAt', () => {
     closest: (selector: string) => selector === '[data-chat-id]' ? (chatId ? { getAttribute: () => chatId } : null) : editable ? {} : null,
   });
   const textIn = (parent: unknown) => ({ nodeType: 3, parentElement: parent });
-  const selection = (text: string, within: unknown, rects = [{ left: 100, right: 300, top: 50, bottom: 70 }]): SelectionLike => ({
+  /** a selection of `text` inside `within`; `outside`: a thing on screen that is not part of it */
+  const selection = (text: string, within: unknown, rects = [{ left: 100, right: 300, top: 50, bottom: 70 }], outside?: unknown): SelectionLike => ({
     isCollapsed: !text, rangeCount: 1, toString: () => text,
-    getRangeAt: () => ({ commonAncestorContainer: within, getClientRects: () => rects }),
+    getRangeAt: () => ({ commonAncestorContainer: within, getClientRects: () => rects, intersectsNode: (node: unknown) => node !== outside }),
   });
 
   it('a right click on the selected text inside a chat quotes it for that chat', () => {
-    expect(quoteAt(selection('ciao', textIn(el('c1'))), el('c1'), 150, 60)).toEqual({ text: 'ciao', chatId: 'c1' });
+    expect(quoteAt(selection('ciao', textIn(el('c1'))), el('c1'), 150, 60, 'ciao')).toEqual({ text: 'ciao', chatId: 'c1' });
   });
   it('a text outside every chat (a page) has no chat: the caller sends it to the Orchestrator', () => {
-    expect(quoteAt(selection('ciao', el(null)), el(null), 150, 60)).toEqual({ text: 'ciao', chatId: null });
+    expect(quoteAt(selection('ciao', el(null)), el(null), 150, 60, 'ciao')).toEqual({ text: 'ciao', chatId: null });
   });
   it('a selection of several lines: a click on any of them', () => {
     const lines = [{ left: 200, right: 400, top: 50, bottom: 70 }, { left: 100, right: 250, top: 70, bottom: 90 }];
-    expect(quoteAt(selection('due righe', el('c1'), lines), el('c1'), 120, 80)?.text).toBe('due righe');
-    expect(quoteAt(selection('due righe', el('c1'), lines), el('c1'), 120, 55)).toBeNull();
+    expect(quoteAt(selection('due righe', el('c1'), lines), el('c1'), 120, 80, 'due righe')?.text).toBe('due righe');
+    expect(quoteAt(selection('due righe', el('c1'), lines), el('c1'), 120, 55, 'due righe')).toBeNull();
   });
   it('a click away from the selection is a click like any other (the whack of a little person)', () => {
-    expect(quoteAt(selection('ciao', el('c1')), el(null), 600, 400)).toBeNull();
+    expect(quoteAt(selection('ciao', el('c1')), el(null), 600, 400, 'ciao')).toBeNull();
+  });
+  it('a selection scrolled under another thing does not take that thing\'s click', () => {
+    const person = el(null);
+    expect(quoteAt(selection('ciao', el('c1'), undefined, person), person, 150, 60, 'ciao')).toBeNull();
   });
   it('a few pixels around the lines still count', () => {
-    expect(quoteAt(selection('ciao', el('c1')), el('c1'), 303, 72)).not.toBeNull();
+    expect(quoteAt(selection('ciao', el('c1')), el('c1'), 303, 72, 'ciao')).not.toBeNull();
   });
   it('no selection, a collapsed or a blank one: nothing', () => {
-    expect(quoteAt(null, el('c1'), 150, 60)).toBeNull();
-    expect(quoteAt(selection('', el('c1')), el('c1'), 150, 60)).toBeNull();
-    expect(quoteAt(selection(' \n ', el('c1')), el('c1'), 150, 60)).toBeNull();
-    expect(quoteAt({ ...selection('ciao', el('c1')), rangeCount: 0 }, el('c1'), 150, 60)).toBeNull();
+    expect(quoteAt(null, el('c1'), 150, 60, 'ciao')).toBeNull();
+    expect(quoteAt(selection('', el('c1')), el('c1'), 150, 60, '')).toBeNull();
+    expect(quoteAt(selection(' \n ', el('c1')), el('c1'), 150, 60, ' \n ')).toBeNull();
+    expect(quoteAt({ ...selection('ciao', el('c1')), rangeCount: 0 }, el('c1'), 150, 60, 'ciao')).toBeNull();
+  });
+  it('only a text that was already selected when the button went down (the press may select a word by itself)', () => {
+    expect(quoteAt(selection('parola', el('c1')), el('c1'), 150, 60, '')).toBeNull();
+    expect(quoteAt(selection('parola', el('c1')), el('c1'), 150, 60, null)).toBeNull();
+    expect(quoteAt(selection('parola', el('c1')), el('c1'), 150, 60, 'altro testo')).toBeNull();
   });
   it('never in a field the user types in: its own right click stays', () => {
-    expect(quoteAt(selection('ciao', el('c1')), el('c1', true), 150, 60)).toBeNull();
-    expect(quoteAt(selection('ciao', el('c1')), textIn(el('c1', true)), 150, 60)).toBeNull();
+    expect(quoteAt(selection('ciao', el('c1')), el('c1', true), 150, 60, 'ciao')).toBeNull();
+    expect(quoteAt(selection('ciao', el('c1')), textIn(el('c1', true)), 150, 60, 'ciao')).toBeNull();
   });
 });

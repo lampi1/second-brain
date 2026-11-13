@@ -2,7 +2,8 @@
 // lines, in a prompt field, not sent. A text of the Orchestrator goes in the Orchestrator's field, a text of an open
 // work chat in that chat's own field, a text of a brain page in the Orchestrator's. With no selection under the
 // pointer the right click stays what it was: a little person still gets its whack of the stick (ADR 0297), also while
-// a text is selected somewhere else. Screenshot in test-results/shots/quote-selection-*.png.
+// a text is selected somewhere else. A text in a dialog over the field is quoted with a notice, the keyboard stays in
+// the dialog. Screenshot in test-results/shots/quote-selection-*.png.
 import { expect, test, type Locator } from '@playwright/test';
 import { expandChats, launchDemo, shot } from './helpers';
 
@@ -55,5 +56,19 @@ test('a right click on a selected text quotes it in the prompt field', async () 
     await input.selectText();
     await input.click({ button: 'right' });
     await expect(input).toHaveValue(`su questo punto:\n\n> ${text}\n\nnon mi torna`);
+
+    // a text in a dialog that covers the field (here a paragraph put in the palette's dialog): quoted without taking
+    // the keyboard out of the dialog, and a notice says where it went
+    await page.keyboard.press('Control+k');
+    const dialog = page.getByTestId('palette');
+    await expect(dialog).toBeVisible();
+    await dialog.evaluate(el => { const p = document.createElement('p'); p.className = 'md'; p.id = 'quote-probe'; p.textContent = 'testo in una finestra'; el.append(p); });
+    const probe = page.locator('#quote-probe');
+    await select(probe);
+    await probe.click({ button: 'right', position: { x: 20, y: 8 } }); // on its words, not on the empty rest of the line
+    await expect(input).toHaveValue(`su questo punto:\n\n> ${text}\n\nnon mi torna\n\n> testo in una finestra\n\n`);
+    await expect(input).not.toBeFocused();
+    await expect(page.getByText('Citato nel campo dell’Orchestrator')).toBeVisible();
+    await expect(dialog).toBeVisible();
   } finally { await app.close(); }
 });

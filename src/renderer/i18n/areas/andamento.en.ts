@@ -39,6 +39,7 @@ export const andamentoEn: typeof andamentoIt = {
   'use.action.next-thing': 'Next thing (Ctrl+J)',
   'use.action.new-browser': 'New browser',
   'use.action.discuss': 'Discuss',
+  'use.action.quote': 'Quote a text',
   'use.action.file-open': 'Open a file',
   'use.action.palette': 'Palette (Ctrl+K)',
   'use.action.maintenance': 'Maintenance',

@@ -315,25 +315,28 @@ export const brainBridge: DiscussBridge = {
 
 /** Quote what is on screen (ADR 0300): a right click on a selected text puts it, as quote lines, in a prompt field:
  *  the field of the chat the text is in, the Orchestrator's for everything else (a page, the brain, a panel). The
- *  Orchestrator's column opens if it was closed. Heard before every other right click (capture), so with a selection
- *  under the pointer the quote wins; without one the click goes on as usual (a little person's whack, ADR 0297). */
+ *  Orchestrator's column opens if it was closed. A text in a dialog that covers the field is added without moving the
+ *  keyboard out of the dialog, and a notice says where it went. Heard before every other right click (capture), so
+ *  with a selection under the pointer the quote wins; without one the click goes on as usual (a little person's
+ *  whack, ADR 0297). */
 export function startQuote(): void {
-  // what was selected when the right button went down: where the press itself selects the word under it (macOS), that
-  // word is not a quote the user asked for
-  let pressed: string | null = null;
+  let pressed: string | null = null; // what was selected when the right button went down (lib/quote.ts quoteAt)
   document.addEventListener('mousedown', e => { if (e.button === 2) pressed = window.getSelection()?.toString() ?? ''; }, true);
   document.addEventListener('contextmenu', e => {
-    const hit = quoteAt(window.getSelection(), e.target, e.clientX, e.clientY);
-    const before = pressed;
+    const hit = quoteAt(window.getSelection(), e.target, e.clientX, e.clientY, pressed);
     pressed = null;
-    if (!hit || hit.text !== before) return;
+    if (!hit) return;
     const orch = orchestratorId();
     const chatId = hit.chatId && app.get().chats[hit.chatId] ? hit.chatId : orch;
     if (!chatId) return;
+    // a dialog covers the page: the field takes the keyboard only when it is in the dialog too (a chat opened there)
+    const dialog = e.target instanceof Element ? e.target.closest('.backdrop') : null;
+    const covered = !!dialog && !dialog.querySelector(`textarea[data-testid="${chatId === orch ? 'orchestrator-input' : `chat-input-${CSS.escape(chatId)}`}"]`);
+    if (!quoteInDraft(chatId, hit.text, covered)) return; // nothing added (an update is freezing the drafts): a plain click
     e.preventDefault(); e.stopPropagation();
-    if (!quoteInDraft(chatId, hit.text)) return;
     track('quote');
     window.getSelection()?.removeAllRanges(); // the text is in the field now: the next right click is a plain one
+    if (covered) { toast(t(chatId === orch ? 'appText.actions.quotedOrchestrator' : 'appText.actions.quotedChat'), 'ok'); return; }
     if (chatId !== orch) return; // a chat's own field is beside its text: it takes the caret by itself
     const u = ui.get();
     if (((u.focusMode && u.page === 'home') || u.maximized) && !u.map) setFullOrch(true);
