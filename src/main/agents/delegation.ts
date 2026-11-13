@@ -12,7 +12,7 @@
 // with the slots reserved synchronously (two calls at once cannot both pass the last slot) and a refusal shows in the
 // parent's chat. A child may run on another engine only when the user allows chats across engines. Used by wiring.ts.
 import path from 'node:path';
-import type { ChatSummary, Harness, NewChat } from '../../shared/contract';
+import type { ChatSummary, Harness, NewChat, PermissionMode } from '../../shared/contract';
 import type { AgentCatalog, AgentRun, UserTaskEvents } from '../../shared/agents';
 import { canLaunch, isWorkRole, launchGap, ROLE_DEFAULTS, WORK_ROLE_IDS, type DelegationSettings } from '../../shared/roles';
 import { oneLine } from '../../shared/agent-label';
@@ -41,6 +41,8 @@ export interface DelegationChats {
   userEvents?(chatId: string, afterSeq?: number): UserTaskEvents;
   create(req: NewChat, by: 'agent'): Promise<ChatSummary>;
   agentPolicy(chatId: string): AgentPolicy | null;
+  /** the mode that bounds a chat's children (its user's choice or its ceiling); absent = the mode the chat shows */
+  chosenMode?(chatId: string): PermissionMode | null;
   reportDelegation(chatId: string, result: DelegationResult): { parentId: string; delivered: boolean };
   /** a root role chat the Orchestrator opened reports to it (issue #93); absent = refused as before */
   reportRoot?(chatId: string, result: DelegationResult): { orchestratorId: string | null; delivered: boolean };
@@ -284,7 +286,10 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     const parentPolicy = d.chats.agentPolicy(parent.id), childPolicy = d.chats.agentPolicy(child.id);
     if (launchGap(profile.tools?.allow ?? [], parentPolicy?.tools?.allow ?? null).length) throw new Error('Child role needs permissions your current policy does not allow.');
     const normalized = (policy: AgentPolicy | null) => JSON.stringify({ ceiling: policy?.ceiling ?? null, tools: policy?.tools ? { allow: [...policy.tools.allow].sort(), mcp: policy.tools.mcp ? [...policy.tools.mcp].sort() : null } : null });
-    if (normalized(childPolicy) !== normalized(belowParent(childPolicy, parentPolicy, parent.permissionMode))) throw new Error('Child permissions exceed your current policy or mode: delegate a fresh narrowed chat.');
+    // the mode that bounds a child: the parent's own choice or ceiling, as when the child was created, not the mode
+    // the app starts every Claude chat with (ADR 0290). A parent really in plan bounds it however it got there
+    const parentMode = parent.permissionMode === 'plan' ? 'plan' : d.chats.chosenMode ? d.chats.chosenMode(parent.id) : parent.permissionMode ?? null;
+    if (normalized(childPolicy) !== normalized(belowParent(childPolicy, parentPolicy, parentMode))) throw new Error('Child permissions exceed your current policy or mode: delegate a fresh narrowed chat.');
     const refused = d.engineRefusal(parent.harness, child.harness);
     if (refused) throw new Error(`agent_assign_task: ${refused}`);
     if (child.harness !== parent.harness && (child.closedAt || !['running', 'waiting', 'idle'].includes(child.state))) throw new Error('A stopped engine of another kind requires the user.');

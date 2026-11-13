@@ -28,7 +28,7 @@ export type BrainPolicy =
   | { state: 'ok'; rules: PolicyRule[] }
   | { state: 'broken'; error: string };
 
-const MAX_RULES = 200, MAX_PATTERN = 500, MAX_PATTERNS = 50, MAX_FILE = 256 * 1024, MAX_SUBJECT = 20_000;
+const MAX_RULES = 200, MAX_PATTERN = 500, MAX_PATTERNS = 50, MAX_FILE = 256 * 1024, MAX_SUBJECT = 100_000;
 const ID = /^[a-z0-9][a-z0-9._-]{0,63}$/i;
 
 const COMMAND = new Set(['bash', 'powershell', 'shell', 'execute', 'terminal', 'run_terminal_cmd', 'exec_command', 'local_shell']);
@@ -123,8 +123,13 @@ export function loadPolicy(brainRoot: string | null | undefined): BrainPolicy {
 /** What a rule is matched against: a command's own line; any other tool's name (and title), its input as JSON, then
  *  each top-level text value as `key: value` lines (a query that starts on a new line reads as written). */
 export function policySubject(tool: string, input: unknown, cls: string, title?: string): string {
+  return subjectParts(tool, input, cls, title).join('\n');
+}
+/** The subject in the parts that each say everything: a command's line alone; for any other tool the name with the
+ *  text values, then the name with the JSON (it repeats the values). */
+function subjectParts(tool: string, input: unknown, cls: string, title?: string): string[] {
   const o = isObj(input) ? input : {};
-  if (cls === 'command' && typeof o.command === 'string') return o.command;
+  if (cls === 'command' && typeof o.command === 'string') return [o.command];
   let json = '';
   try { json = JSON.stringify(input ?? {}); } catch { /* circular: the name alone */ }
   // text values first, one level down too (Codex's {server, tool, arguments}): a long JSON cannot push them out
@@ -132,13 +137,21 @@ export function policySubject(tool: string, input: unknown, cls: string, title?:
     : isObj(v) ? Object.entries(v).filter(([, x]) => typeof x === 'string').map(([k2, x]) => `${k2}: ${x as string}`) : []);
   // first line: the name; last line: the name and the JSON on one line, as a rule on `tool + JSON input` reads it
   const head = `${tool}${title && title !== tool ? ` ${title}` : ''}`;
-  return [head, ...values, `${head} ${json}`].join('\n');
+  return [[head, ...values].join('\n'), `${head} ${json}`];
+}
+/** What the rules are run on: the whole subject, or, when it is over the limit, each part cut at the limit. A long file
+ *  is in the subject twice (its text, then the JSON): read part by part it is not «too long» at half the limit
+ *  (ADR 0290). long: a part is over the limit, so some of it is not read. */
+function readable(tool: string, input: unknown, cls: string, title?: string): { texts: string[]; long: boolean } {
+  const parts = subjectParts(tool, input, cls, title), whole = parts.join('\n');
+  if (whole.length <= MAX_SUBJECT) return { texts: [whole], long: false };
+  return { texts: parts.map(p => p.slice(0, MAX_SUBJECT)), long: parts.some(p => p.length > MAX_SUBJECT) };
 }
 
 /** The request is longer than the rules read: what they cannot see may be what they hold (the caller asks). */
 export function policyTooLong(tool: string, input: unknown, commandTools: readonly string[], title?: string): boolean {
   const cls = toolClass(tool, commandTools);
-  return policySubject(tool, input, cls, cls === 'mcp' ? title?.trim() : undefined).length > MAX_SUBJECT;
+  return readable(tool, input, cls, cls === 'mcp' ? title?.trim() : undefined).long;
 }
 
 const ruleSees = (rule: PolicyRule, cls: string, name: string, title: string): boolean => rule.tools.some(t => t === '*' || t === cls || t === name || (!!title && t === title));
@@ -147,10 +160,11 @@ const ruleSees = (rule: PolicyRule, cls: string, name: string, title: string): b
 export function policyHit(policy: BrainPolicy, tool: string, input: unknown, commandTools: readonly string[], title?: string): PolicyRule | null {
   if (policy.state !== 'ok') return null;
   const cls = toolClass(tool, commandTools), name = tool.toLowerCase(), t = (title ?? '').trim().toLowerCase();
-  const subject = policySubject(tool, input, cls, cls === 'mcp' ? title?.trim() : undefined).slice(0, MAX_SUBJECT);
+  const { texts } = readable(tool, input, cls, cls === 'mcp' ? title?.trim() : undefined);
+  const hit = (re: RegExp): boolean => texts.some(text => re.test(text));
   for (const rule of policy.rules) {
     if (!ruleSees(rule, cls, name, t)) continue;
-    if (rule.match.some(re => re.test(subject)) && !rule.unless.some(re => re.test(subject))) return rule;
+    if (rule.match.some(hit) && !rule.unless.some(hit)) return rule;
   }
   return null;
 }

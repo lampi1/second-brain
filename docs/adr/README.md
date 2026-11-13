@@ -288,6 +288,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0287](0287-one-agent-window-one-full-screen.md) One agent window, one full screen, a quiet top bar — accepted
 - [0288](0288-maintenance-bug-cards-by-answers-one-lesson.md) The maintenance stays on the click: app-bug cards follow the user's answers, a report notes one lesson — accepted
 - [0289](0289-fewer-refusals-agents-learn-by-failing.md) Fewer refusals an agent learns only by failing: long outputs are cut, the tools' commands name the copy, a question has a place without an Orchestrator — accepted
+- [0290](0290-claude-chats-start-in-default-the-app-answers.md) A Claude chat starts in «default»: the app answers its requests, not the engine's own default mode — accepted
 
 ## Replaced
 

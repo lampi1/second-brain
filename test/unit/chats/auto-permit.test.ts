@@ -97,6 +97,10 @@ describe('autoPermit: what it cannot read whole is the user\'s call', () => {
     // a cut deep in the input, in a place or in content, is still a cut
     expect(autoPermit(perm('mcp__fs__write', { a: { b: { c: { path: `src/${'x'.repeat(10)}… (+9)` } } } }), ctx()).kind).toBe('ask');
     expect(autoPermit(perm('Write', { file_path: 'src/a.ts', content: `x… (+9)` }), ctx()).kind).toBe('ask');
+    // an input that came whole (Claude, ADR 0290) carries no cut: the same signs are plain content
+    expect(autoPermit({ ...perm('Write', { file_path: 'src/a.ts', content: `x… (+9)` }), whole: true }, ctx()).kind).toBe('allow');
+    expect(autoPermit({ ...perm('Edit', { files: Array.from({ length: 200 }, (_, i) => `src/f${i}.ts`) }), whole: true }, ctx()).kind).toBe('allow');
+    expect(autoPermit({ ...perm('Edit', { files: [...Array.from({ length: 200 }, (_, i) => `src/f${i}.ts`), '.claude/settings.json'] }), whole: true }, ctx()).kind).toBe('ask'); // rule 6 still reads them all
   });
 });
 

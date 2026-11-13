@@ -104,7 +104,7 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, orchestrator }
           <MenuSep />
           <MenuLabel>{t('chat.menu.permissionLabel')}</MenuLabel>
           {PERMISSION_MODES.map(p => (
-            <MenuItem key={p} checked={chat.permissionMode === p} danger={p === 'bypassPermissions'} onSelect={pick(() => void setChat(id, { permissionMode: p }))} testid={`chat-perm-${id}-${p}`}>{permissionLabel(p)}</MenuItem>
+            <MenuItem key={p} checked={chat.permissionMode === p} danger={p === 'bypassPermissions'} onSelect={pick(() => { if (chat.permissionMode !== p) void setChat(id, { permissionMode: p }); })} testid={`chat-perm-${id}-${p}`}>{permissionLabel(p)}</MenuItem>
           ))}
         </>
       )}

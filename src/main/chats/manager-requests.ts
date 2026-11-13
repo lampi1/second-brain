@@ -453,7 +453,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
   /** ADR 0103, 0254: the app answers a permission request itself (chats/auto-permit.ts): everything passes but what the
    *  user's brain rules hold (permissions.json: refused visibly with the rule's reason, or sent to the user) and what
    *  the user's own role limits keep for them. True = answered. */
-  protected autoPermitted(r: Rec, req: Omit<PendingRequest, 'chatId'>): boolean {
+  protected autoPermitted(r: Rec, req: Omit<PendingRequest, 'chatId'>, whole = false): boolean {
     const policy = loadPolicy(this.opts.brainRoot?.() ?? null);
     if (policy.state === 'broken' && r.policyWarned !== policy.error) {
       r.policyWarned = policy.error;
@@ -472,7 +472,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     const command = (req.input as { command?: unknown } | null)?.command;
     if (r.policy?.tools && c && !allowsClass(r.policy, c)) return toUser();
     if (COMMAND_TOOLS.includes(req.tool) && commandsReadOnly(r.policy) && !readOnlyCommand(command, this.readScripts(r))) return toUser();
-    const v = autoPermit(req, { cwd: r.s.cwd, ceiling: r.policy?.ceiling ?? null, readScripts: this.readScripts(r), policy });
+    const v = autoPermit(whole ? { ...req, whole } : req, { cwd: r.s.cwd, ceiling: r.policy?.ceiling ?? null, readScripts: this.readScripts(r), policy });
     if (v.kind === 'ask') {
       // held by the user's rule: no «always» (a saved rule would let the next ones through unasked); the phone may answer
       if (v.rule) { req.noAlways = true; delete req.alwaysRules; req.heldBy = { rule: v.rule.id, why: v.rule.why }; log.info('chats', 'brain rule asks the user', { chat: r.s.id, data: { tool: req.tool, rule: v.rule.id } }); }

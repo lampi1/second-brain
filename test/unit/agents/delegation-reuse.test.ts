@@ -63,6 +63,20 @@ describe('parent child task continuity',()=>{
     expect(prompt).not.toContain('Keep the user requirement');
     expect(prompt).not.toContain('ultimi 7 giorni');
   });
+  it('a parent the app started in «default» still reuses its child: only the mode the user chose bounds a child (ADR 0290)',async()=>{
+    const f=fixture();
+    // the engine reports the mode the app started it with; the user chose none
+    f.parent.permissionMode='default';f.chats.chosenMode=()=>null;
+    expect(await f.call('agent_assign_task',f.args())).toMatchObject({taskVersion:2});
+    // a narrowing mode the user chose (the manager gives «plan» or «acceptEdits», never a picked «default») bounds the child as before
+    const g=fixture();
+    g.parent.permissionMode='acceptEdits';g.chats.chosenMode=()=>'acceptEdits';
+    await expect(g.call('agent_assign_task',g.args())).rejects.toThrow(/exceed your current policy or mode/);
+    // a parent really in plan bounds its child however it got there (its engine's default, EnterPlanMode)
+    const h=fixture();
+    h.parent.permissionMode='plan';h.chats.chosenMode=()=>null;
+    await expect(h.call('agent_assign_task',h.args())).rejects.toThrow(/exceed your current policy or mode/);
+  });
   it('refuses other parents, bad cursors and changing a reused contract policy',async()=>{
     const f=fixture();
     f.child.parentId='other';

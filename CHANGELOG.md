@@ -23,6 +23,12 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   OpenCode, OpenRouter included; the chat's model and plan mode go through OpenCode's session options (ADR 0216).
 
 ### Changed
+- A Claude chat with no mode of its own starts in «default», so the app answers its permission requests (they pass
+  unless a rule of your brain, a role's limit or the settings-and-hooks guard holds them) instead of Claude Code's
+  own default mode: with «auto» as that default, its classifier refused the agents before the app was asked. A mode
+  you pick on the chat still wins, and «Solo piano» as your Claude Code default stays. For Claude the app decides on
+  the whole request, not on the copy shortened for the screen, and your rules read up to 100,000 characters of it
+  (20,000 before: under a rule on all tools a 10 KB file asked for your yes) (ADR 0290).
 - Maintenance: app-bug cards follow your own answers (turn down the last five issue cards, or approve only one, and
   the maintenance makes none for three months); an agent's report notes one lesson, not three, and a lesson tied to
   one case is left out instead of refusing the report (ADR 0288).

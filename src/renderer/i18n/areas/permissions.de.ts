@@ -46,7 +46,7 @@ export const permissionsDe: typeof permissionsIt = {
   'perm.sec.ceiling.hint': 'Der höchste Modus, in dem die Rolle arbeiten darf. Ein Modus über dem Limit wird darauf zurückgesetzt.',
   'perm.ceiling.none': 'Kein Limit',
   'perm.ceiling.none.badge': 'Standard',
-  'perm.ceiling.none.help': 'Die Rolle nutzt deinen Modus: den im Chat gewählten oder, wenn du keinen wählst, den deiner Engine-Einstellungen (auch Automatisch oder Ohne Berechtigungen).',
+  'perm.ceiling.none.help': 'Keine Grenze durch die Rolle. Bei Claude nutzt der Chat den Modus, den du wählst; ohne Wahl startet er in „Jedes Mal fragen“ und die App beantwortet die Anfragen nach den Regeln deines Brains. Andere Engines nutzen ihre eigenen Einstellungen.',
   'perm.ceiling.acceptEdits.help': 'Dateiänderungen gehen ohne Nachfrage durch; Befehle und andere Aktionen brauchen dein Okay.',
   'perm.ceiling.default.help': 'Jede Änderung und jeder Befehl braucht dein Okay, einzeln.',
   'perm.ceiling.plan.help': 'Liest und schlägt einen Plan vor; ändert keine Datei und führt keinen Befehl aus.',

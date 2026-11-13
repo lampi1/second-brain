@@ -581,6 +581,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/shared/contract/chats.ts PermissionMode; src/renderer/lib/format.ts labels
       b('Modalità: Chiedi ogni volta, Accetta le modifiche, Automatico, Solo piano, Senza permessi; si sceglie all’avvio o dal menu ⋯ (solo Claude).',
         'Modes: Ask every time, Accept edits, Automatic, Plan only, No permissions; chosen at start or from the ⋯ menu (Claude only).'),
+      // src/main/chats/manager-sessions.ts launchMode (ADR 0290); src/main/chats/auto-permit.ts
+      b('Una chat di Claude senza una modalità scelta da te parte in «Chiedi ogni volta», ma a rispondere è l’app: una richiesta passa, se non la trattiene una regola del tuo brain (per esempio Esegui per la produzione), il limite del ruolo o la protezione di impostazioni e hook. Così non decide il classificatore della modalità automatica di Claude Code. Se scegli tu una modalità sulla chat, vale la tua; «Solo piano» come predefinito del tuo Claude Code resta.',
+        'A Claude chat with no mode chosen by you starts in "Ask every time", but the app is the one that answers: a request passes unless a rule of your brain (for example Esegui for production), the role’s limit or the protection of settings and hooks holds it. So the classifier of Claude Code’s automatic mode does not decide. A mode you choose on the chat wins; "Plan only" as your Claude Code default stays.'),
       // src/shared/agents.ts PERMISSION_CEILINGS; src/main/agents/tool-policy.ts
       b('Il tetto di un ruolo può essere plan, default o acceptEdits (lo cambi nella pagina Agenti, dopo la tua approvazione): una modalità più alta viene abbassata al tetto.',
         'A role’s ceiling can be plan, default or acceptEdits (changed on the Agenti page, after your approval): a higher mode is lowered to the ceiling.'),
@@ -606,11 +609,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
     ],
     anchors: {
       0: ['src/main/chats/claude.ts#onControlRequest'],
-      2: ['src/shared/contract/chats.ts#PermissionMode', 'src/renderer/lib/format.ts'],
-      3: ['src/shared/agents.ts#PERMISSION_CEILINGS'],
-      5: ['src/main/agents/tool-policy.ts#FAIL_CLOSED'],
+      3: ['src/shared/contract/chats.ts#PermissionMode', 'src/renderer/lib/format.ts'],
+      4: ['src/main/chats/manager-sessions.ts#launchMode'],
+      5: ['src/shared/agents.ts#PERMISSION_CEILINGS'],
+      7: ['src/main/agents/tool-policy.ts#FAIL_CLOSED'],
     },
-    sources: ['src/main/chats/claude.ts', 'src/main/chats/acp.ts', 'src/main/chats/codex.ts', 'src/shared/contract/chats.ts', 'src/shared/agents.ts', 'src/main/agents/tool-policy.ts', 'src/main/chats/manager.ts', 'src/renderer/lib/format.ts'],
+    sources: ['src/main/chats/claude.ts', 'src/main/chats/acp.ts', 'src/main/chats/codex.ts', 'src/shared/contract/chats.ts', 'src/shared/agents.ts', 'src/main/agents/tool-policy.ts', 'src/main/chats/manager.ts', 'src/main/chats/manager-sessions.ts', 'src/main/chats/auto-permit.ts', 'src/renderer/lib/format.ts'],
   },
   {
     id: 'questions',

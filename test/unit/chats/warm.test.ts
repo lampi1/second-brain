@@ -63,6 +63,9 @@ describe('warm Claude engine', () => {
     expect(s.patch).toMatchObject({ state: 'idle', version: '1' });
     b.changed({ state: 'running' });
     expect(s.trace).toEqual(['state:idle', 'state:running']);
+    // a request goes on with the whole input beside it (ADR 0290)
+    b.pending({ id: 'p1', type: 'permission', tool: 'Write', title: 'Write', detail: '', input: { content: 'short' }, at: 1 }, { content: 'whole' });
+    expect(s.wholes).toEqual([{ content: 'whole' }]);
     b.exit({ code: 0, error: null });
     expect(s.exited).toEqual({ code: 0, error: null });
     expect(orphan).toBe(0);

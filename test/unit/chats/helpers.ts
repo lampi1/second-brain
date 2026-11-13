@@ -70,6 +70,8 @@ export interface RecSink extends SessionSink {
   trace: string[];
   events: { item: ChatItem; replace: boolean }[];
   pendings: Omit<PendingRequest, 'chatId'>[];
+  /** the whole input sent beside each pending request (undefined: none), same order as pendings */
+  wholes: unknown[];
   resolvedIds: string[];
   patch: SessionPatch;
   patches: SessionPatch[];
@@ -81,10 +83,10 @@ export interface RecSink extends SessionSink {
 
 export function recSink(): RecSink {
   const sink: RecSink = {
-    items: new Map(), trace: [], events: [], pendings: [], resolvedIds: [], patch: {}, patches: [], exited: null, modelLists: [],
+    items: new Map(), trace: [], events: [], pendings: [], wholes: [], resolvedIds: [], patch: {}, patches: [], exited: null, modelLists: [],
     models(list) { sink.modelLists.push(list); },
     item(item, replace) { sink.events.push({ item, replace }); sink.items.set(item.id, item); if (item.kind === 'result') sink.trace.push('result'); },
-    pending(req) { sink.pendings.push(req); },
+    pending(req, whole) { sink.pendings.push(req); sink.wholes.push(whole); },
     resolved(id) { sink.resolvedIds.push(id); },
     changed(p) { sink.patches.push(p); Object.assign(sink.patch, p); if (p.state) sink.trace.push(`state:${p.state}`); },
     exit(info) { sink.exited = info; },

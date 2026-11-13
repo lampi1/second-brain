@@ -122,8 +122,9 @@ function realOf(p: string): string | null {
     at = up;
   }
 }
-/** The longest file path a brain-only edit may name. The gate sees the request's input after trimInput (chats/session.ts)
- *  cut each string to 4000 characters, so a longer path could hide its escaping tail (`./` x 2000 + `../x`). */
+/** The longest file path a brain-only edit may name. For an engine other than Claude the gate sees the request's input
+ *  after trimInput (chats/session.ts) cut each string to 4000 characters (Claude's comes whole, ADR 0290), so a longer
+ *  path could hide its escaping tail (`./` x 2000 + `../x`). */
 export const BRAIN_PATH_MAX = 1024;
 /** True when `target` is a file inside the brain folder: absolute, already normalized (no "." or ".." segment, no
  *  doubled separator), at most BRAIN_PATH_MAX characters and never cut by trimInput, its real path (links resolved)

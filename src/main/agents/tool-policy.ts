@@ -123,6 +123,24 @@ export function claudeDefaultMode(cwd: string, env: NodeJS.ProcessEnv = process.
   return mode;
 }
 
+/** What the user's own Claude settings name as the default mode for a folder, for the one caller that replaces it
+ *  (ChatManager.launchMode, ADR 0290): a mode this app knows, null when no layer names one, 'unknown' when the last
+ *  word is a mode this app does not know («dontAsk») or a layer that exists cannot be read as JSON (the app cannot
+ *  tell what the user asked for, so it leaves the engine alone). */
+export function claudeDefaultSetting(cwd: string, env: NodeJS.ProcessEnv = process.env): PermissionMode | 'unknown' | null {
+  const user = env.CLAUDE_CONFIG_DIR ? path.join(env.CLAUDE_CONFIG_DIR, 'settings.json') : path.join(os.homedir(), '.claude', 'settings.json');
+  let mode: PermissionMode | 'unknown' | null = null;
+  for (const file of [user, path.join(cwd, '.claude', 'settings.json'), path.join(cwd, '.claude', 'settings.local.json')]) {
+    let text: string;
+    try { text = fs.readFileSync(file, 'utf8'); } catch { continue; } // no such layer
+    try {
+      const m = obj(obj(JSON.parse(text.replace(/^\uFEFF/, '')) as unknown).permissions).defaultMode;
+      if (m !== undefined) mode = typeof m === 'string' && m in RANK ? m as PermissionMode : 'unknown';
+    } catch { mode = 'unknown'; }
+  }
+  return mode;
+}
+
 /** Claude built-in tools per class. Always kept: planning and asking Brother. Subagents (Agent/Task) only with every
  *  class (claudeTools): their tools are not bounded by `--tools`. Names checked against the embedded CLI (2026-10-17). */
 const CLAUDE_BASE = ['TodoWrite', 'AskUserQuestion', 'ExitPlanMode', 'EnterPlanMode', 'ToolSearch'];

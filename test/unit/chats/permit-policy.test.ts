@@ -50,7 +50,15 @@ describe('the owner\'s policy', () => {
     const json = parsePolicy(JSON.stringify({ version: 1, rules: [{ id: 'j', action: 'esegui', why: 'w', tools: ['mcp'], match: ['execute_query \\{"query":"\\s*drop'] }] }));
     expect(ruleOf(ask('mcp__mssql__execute_query', { query: 'DROP TABLE t' }, json))).toBe('j');
     // longer than the rules read: the user's call
-    expect(ask('mcp__mssql__execute_query', { query: 'SELECT 1', params: 'p'.repeat(30000) }).kind).toBe('ask');
+    expect(ask('mcp__mssql__execute_query', { query: 'SELECT 1', params: 'p'.repeat(120_000) }).kind).toBe('ask');
+    // a long file is in what the rules read twice (its text, then the JSON): read part by part, it is «too long» only
+    // past the limit itself, not at half of it (ADR 0290: every Write of 10 KB asked the user under a rule on all tools)
+    expect(ask('Write', { file_path: 'docs/a.md', content: 'riga di testo\n'.repeat(5000) }).kind).toBe('allow'); // 70 000 characters
+    expect(ask('Write', { file_path: 'docs/a.md', content: 'x'.repeat(120_000) }).kind).toBe('ask');
+    // what a rule holds is found far into a long input, in either part
+    expect(ruleOf(ask('mcp__mssql__execute_query', { params: 'p'.repeat(60_000), query: 'DROP TABLE t' }))).toBe('db-write-tools');
+    const tail = parsePolicy(JSON.stringify({ version: 1, rules: [{ id: 'tail', action: 'esegui', why: 'w', tools: ['*'], match: ['FINE-DEL-FILE'] }] }));
+    expect(ruleOf(ask('Write', { file_path: 'docs/a.md', content: `${'x'.repeat(70_000)} FINE-DEL-FILE` }, tail))).toBe('tail');
     expect(ask('mcp__mssql__execute_query', { query: 'SELECT 1' }).kind).toBe('allow');
   });
 

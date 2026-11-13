@@ -56,7 +56,8 @@ export interface RoleDefaults {
   /** what the role returns: the default `output` of a delegation contract */
   output: string;
   tools: ToolClass[];
-  /** null = no ceiling: the run takes the user's own mode (the chat's choice, else their engine settings) */
+  /** null = no ceiling: the run takes the chat's chosen mode; with none a Claude chat starts in «default» and the app
+   *  answers (ADR 0290), another engine follows its own settings */
   ceiling: PermissionCeiling | null;
   tier: ModelTier;
   /** the highest tier a delegation may ask for */

@@ -314,7 +314,7 @@ export interface Rec {
   eventAt?: number;
   /** its engine is ending because it sat idle: the chat stays 'idle', the next message waits for it, then resumes */
   releasing?: Promise<void> | undefined;
-  /** permissionMode null = no choice: the CLI follows the user's settings.json (ADR 0002) */
+  /** permissionMode null = no choice: a Claude chat is launched in «default» and the app answers (launchMode, ADR 0290) */
   choice: { model: string | null; effort: Effort | null; permissionMode: PermissionMode | null };
   forkFrom?: string;
   worktree: boolean;

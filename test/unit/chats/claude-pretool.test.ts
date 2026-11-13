@@ -89,3 +89,15 @@ it('the same tool request arriving again while the first is still checked shows 
   await Promise.all([first, second]);
   expect(sink.pendings.map(p => p.id)).toEqual(['req-q']);
 });
+
+it('a tool request goes to the app with its whole input beside the one shortened for the screen (ADR 0290)', async () => {
+  const sink = recSink();
+  const s = new ClaudeSession({ chatId: 'c_whole', cwd: '.', sessionId: 'abc12345' }, sink);
+  const raw = s as unknown as { write(obj: unknown): void; onControlRequest(m: Record<string, unknown>): Promise<void> };
+  raw.write = () => {};
+  const input = { file_path: 'notes.md', content: 'riga di testo\n'.repeat(500) };
+  await raw.onControlRequest({ type: 'control_request', request_id: 'req-w', request: { subtype: 'can_use_tool', tool_name: 'Write', tool_use_id: 'tu-w', input } });
+  expect(sink.pendings.map(p => p.id)).toEqual(['req-w']);
+  expect((sink.pendings[0]!.input as typeof input).content).toMatch(/… \(\+\d+\)$/);
+  expect(sink.wholes).toEqual([input]);
+});
