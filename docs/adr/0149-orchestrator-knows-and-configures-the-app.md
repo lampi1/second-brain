@@ -1,7 +1,7 @@
 <!-- How the Orchestrator learns the app and changes its configuration for the user; for maintainers of appctl and the renderer's app map. -->
 # 0149 — The Orchestrator knows the app and changes its configuration
 
-Date: 2026-10-24
+Date: 2026-10-24 · Status: accepted
 
 ## Context
 

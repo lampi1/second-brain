@@ -2,7 +2,7 @@
 
 Date: 2026-10-20 · Status: accepted (owner, 2026-10-20: «risparmio di token come priorità, non cambiando modelli:
 inefficienze del meccanismo di orchestrazione e messaggistica»; «la velocità di risposta non è la stessa di Claude Code»)
-· Builds on: ADR 0025, 0031, 0083, 0087, 0089, 0090
+· Builds on: ADR 0025, 0031, 0083, 0087, 0089, 0090 · Amended by: ADR 0224
 
 ## Context
 An audit of the flow (2026-10-20) measured the fixed context of each call and traced the path from Enter to the first

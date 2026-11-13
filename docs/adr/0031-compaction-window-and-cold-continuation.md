@@ -1,6 +1,6 @@
 # ADR 0031 · Compaction window per process, and the invisible continuation of cold chats
 
-Date: 2026-10-13 · Status: accepted · Replaces the automatic hand-off of ADR 0014 (the rest of 0014 stays)
+Date: 2026-10-13 · Status: accepted · Replaces the automatic hand-off of ADR 0014 (the rest of 0014 stays) · Amended by: ADR 0051, ADR 0056
 
 ## Context
 The owner's measured analysis (13/10, 79 app Claude chats, Opus 5.5 prices):

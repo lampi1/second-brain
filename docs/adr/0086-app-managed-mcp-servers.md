@@ -3,7 +3,7 @@
 Date: 2026-10-19 · Status: accepted (owner, issue #91 and its comment; owner, 2026-10-19 evening: "by default every
 role has every permission, including all MCP servers; the user narrows per agent from the agent card") · Builds on:
 the local MCP server (ADR 0006), per-Orchestrator mounts and endpoint tokens (ADR 0021), engine API keys with
-safeStorage (ADR 0046), the agent tool policy, Settings → Connettori (account connectors). Extends AGENTS.md rule 2.
+safeStorage (ADR 0046), the agent tool policy, Settings → Connettori (account connectors). Extends AGENTS.md rule 2. · Amended by: ADR 0273
 
 ## Context
 Each engine keeps its own MCP configuration (Claude's `~/.claude.json`, Cursor's `~/.cursor/mcp.json`, Codex's

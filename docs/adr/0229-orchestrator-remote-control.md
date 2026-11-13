@@ -1,7 +1,6 @@
 # 0229. «Controllo remoto»: Claude Code Remote Control of the Orchestrator
 
-Date: 2026-11-07. Status: proposed (built by an Artisan on `feat/orchestrator-remote-control`; the owner decides the
-merge).
+Date: 2026-11-07. Status: accepted (merged 2026-11-08; written as a proposal).
 
 ## Context
 

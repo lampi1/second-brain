@@ -1,7 +1,7 @@
 <!-- Host-enforced cancellation and replay decisions for routine maintainers; preserves history and exact approval. -->
 # 0147 — Recover routine executions without restarting the application
 
-Date: 2026-10-24
+Date: 2026-10-24 · Status: accepted
 
 ## Context
 

@@ -1,7 +1,7 @@
 <!-- One notification design for the app and the global layer, and one sound per kind of notice. -->
 # 0151 — One notice card, one sound per kind
 
-Date: 2026-10-24
+Date: 2026-10-24 · Status: accepted
 
 The user asked (2026-10-24) to review every notification, make them all one hyper-clean style, give them nicer sounds
 that change with the kind of notice, and show a great notice when the maintenance ends.

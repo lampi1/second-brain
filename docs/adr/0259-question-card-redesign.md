@@ -1,7 +1,7 @@
 # ADR 0259 · The question card, redesigned: still while open, «Bivio», Esegui as a question
 
-Date: 2026-11-10 · Status: accepted (owner, thread «Rendere chiare le domande degli agenti») · Builds on: ADR 0049
-(questions window), ADR 0135 (yes/no questions), ADR 0150 (decision card), ADR 0255 (phone answers)
+Date: 2026-11-10 · Status: partly superseded by ADR 0275, ADR 0269 (the card lives in the Orchestrator); accepted (owner, thread «Rendere chiare le domande degli agenti») · Builds on: ADR 0049
+(questions window), ADR 0135 (yes/no questions), ADR 0150 (decision card), ADR 0255 (phone answers) · Amended by: ADR 0272
 
 ## Context
 The owner (2026-11-10): questions are a core part of the app and they «non spiegano bene la domanda e sono formattate

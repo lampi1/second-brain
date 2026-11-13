@@ -1,6 +1,6 @@
 # second-brain app: agent guide
 
-Desktop cockpit (Electron, Windows first) where the user runs their Claude Code and Cursor agents (a strip each in the
+Desktop cockpit (Electron, Windows first) where the user runs their Claude Code, Codex, Cursor and OpenCode agents (a strip each in the
 Grindhouse, coordinated by the Orchestrator), answers their questions and permissions as panels, watches internal
 browsers that agents drive over MCP, and sees their brain (a brain folder chosen at setup) update live.
 UI language Italian; code, comments, commits and docs English.
@@ -49,9 +49,9 @@ Details, flags and ADR references of each: `docs/agents/commands.md`.
 
 ## Verify a change
 
-While working, only the targeted tests → the branch's gate, no e2e and no lock (owner, 2026-11-08: "fanculo i test
-e2e"): `npm run check:quick` green + a clean independent Sentinel + the guard, rebase on main, plain push (rule 8) → look at a
-visible change in the dev app → on a runtime failure `npm run logs -- --level warn --since 15m`, then `npm run
+While working, only the targeted tests → the branch's gate, no e2e and no lock (owner, 2026-11-08): `npm run
+check:quick` green + a clean independent Sentinel + the guard, rebase on main, plain push (rule 8) → look at a visible
+change in the dev app → on a runtime failure `npm run logs -- --level warn --since 15m`, then `npm run
 doctor`. The non-e2e parts of `npm run check` run once on main after a batch of merges; whoever breaks main fixes it
 on main. Details: `docs/agents/rules.md` §7.
 Never start, test or kill the stable instance (`docs/agents/stable-dev.md`).

@@ -1,6 +1,6 @@
 # 0188 — Impara: research and verification before teaching, the animated board, the user's teacher
 
-Status: accepted. Builds on ADR 0185.
+Status: accepted. Builds on ADR 0185. · Amended by: ADR 0206
 
 2026-10-29.
 

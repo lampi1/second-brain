@@ -1,6 +1,6 @@
 # 0223 — Plain turn ends and starts are quiet news for the Orchestrator
 
-Accepted (2026-11-07, cloudroom comms proposal 1). Supersedes the hidden 👍 of `WAKE_RULE` kept in ADR 0209.
+Status: accepted (2026-11-07, cloudroom comms proposal 1). Supersedes the hidden 👍 of `WAKE_RULE` kept in ADR 0209.
 
 ## Sole-conversation amendment (2026-11-08)
 

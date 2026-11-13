@@ -1,6 +1,6 @@
 # ADR 0079 · "Migliora l'app" removed; DevOps renamed Task; Fatto becomes a log
 
-Date: 2026-10-19 · Status: accepted · Supersedes the section of ADR 0020; amends ADR 0016, 0029, 0045
+Date: 2026-10-19 · Status: partly superseded by ADR 0181 (Fatto removed); accepted · Supersedes the section of ADR 0020; amends ADR 0016, 0029, 0045
 
 ## Context
 The owner (issue #82, part 2): remove the "Migliora l'app" / "Personalizza l'app" section completely: page, entry

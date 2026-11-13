@@ -4,7 +4,7 @@
 Date: 2026-10-19 · Status: partly superseded by ADR 0096 (point 3) and ADR 0263 (scripts live in their skills); accepted (owner, 19/10: "una sezione dedicata agli script, tutti gli script creati e
 riutilizzabili provati che funzionano, piena libertà all'orchestratore per modificarli, aggiungerne, correggerli o
 eliminarli … i cambiamenti finiscono nel changelog del brain che farei una sezione a parte … voglio rendere il brain più
-visibile in assoluto all'utente") · Builds on: ADR 0072 (a fresh brain starts empty), ADR 0094 (hybrid brain search)
+visibile in assoluto all'utente") · Builds on: ADR 0072 (a fresh brain starts empty), ADR 0094 (hybrid brain search) · Amended by: ADR 0111
 
 ## Decision
 1. **Scripts live in the brain**, in `scripts/`, flat, one file each (`.mjs .js .cjs .ts .py .sh .ps1 .rb .sql .cmd

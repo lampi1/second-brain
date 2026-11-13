@@ -1,6 +1,6 @@
 # 0216. OpenCode as a built-in ACP engine
 
-Date: 2026-10-31. Status: accepted.
+Date: 2026-10-31. Status: accepted. · Amended by: ADR 0232
 
 ## Context
 

@@ -1,7 +1,7 @@
 # ADR 0044 · The questions window is one centered modal, no waiting strip, answers in any order
 
-Date: 2026-10-14 · Status: accepted · Amends: ADR 0035 (the waiting strip), ADR 0019/the questions window's
-"not modal while the user types" placement
+Date: 2026-10-14 · Status: partly superseded by ADR 0269 (questions live in the Orchestrator, no modal); accepted · Amends: ADR 0035 (the waiting strip), ADR 0019/the questions window's
+"not modal while the user types" placement · Amended by: ADR 0049
 
 ## Context
 The user, 14/10: "basta la modale centrale non anche quella in alto a sx che se clicco mi apre la modale centrale",

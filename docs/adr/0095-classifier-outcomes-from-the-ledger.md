@@ -1,7 +1,7 @@
 # ADR 0095 · Classifier outcomes come from the ledger too; verified and unverified stay apart
 
 Date: 2026-10-20 · Status: accepted (issue #110) · Builds on: ADR 0032 (routing ledger), ADR 0047 (the brain settles
-works: judge beats proxy), ADR 0077 (Classificatori page), ADR 0078 (known outcomes of agent runs on the ledger)
+works: judge beats proxy), ADR 0077 (Classificatori page), ADR 0078 (known outcomes of agent runs on the ledger) · Amended by: ADR 0100
 
 ## Context
 The Classificatori page showed "Esiti verificati" 0 and "nessun dato ancora" on every card while

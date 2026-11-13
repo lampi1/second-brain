@@ -1,6 +1,6 @@
 # ADR 0082 · The Orchestrator changes agents by itself; learned rules live on the Regole page
 
-Date: 2026-10-19 · Status: accepted (owner, issue #84 leftovers: "agent and skill definition changes apply directly,
+Date: 2026-10-19 · Status: partly superseded by ADR 0243 (rules became skills); accepted (owner, issue #84 leftovers: "agent and skill definition changes apply directly,
 with a log and rollback"; issue #76: texts that describe old behaviour) · Amends: ADR 0077 (the `maxContext` line),
 ADR 0078 (`agent_update` as "a proposal the user approves"), ADR 0073 (the agent approval queue), ADR 0030 (the
 Miglioramento page)

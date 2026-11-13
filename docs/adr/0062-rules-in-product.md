@@ -5,7 +5,7 @@ live tests, migration all at once) · Source: the owner's request (16/10): centr
 the user's brain only the personal content; weaker models skip on-demand files, so rules are enforced by tools and
 hooks where possible · Builds on: ADR 0059 (brain domains), ADR 0060 (per-launch rules: plugin folder, adapters),
 ADR 0061 (one app repo, `brain-template/` in it; on `feat/one-app-repo`, not on main yet), ADR 0063 (browser rules
-enforced by the tools; on `feat/tool-rules`, not on main yet)
+enforced by the tools; on `feat/tool-rules`, not on main yet) · Amended by: ADR 0277
 
 ## Context
 Today the owner's brain carries two things mixed together:

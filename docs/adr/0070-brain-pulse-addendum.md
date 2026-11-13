@@ -1,6 +1,8 @@
 <!-- Battito implementation addendum for maintainers; supplements the design on docs/brain-pulse. -->
 # 0070 — Battito v0.1.0 isolation decisions
 
+Status: superseded by ADR 0201 (Battito was cut) · Amended by: ADR 0102
+
 Date: 2026-10-18. Supplements ADR 0070 at `25e76d5` on `docs/brain-pulse`.
 The coordinator supplied these implementation decisions on 2026-10-18.
 

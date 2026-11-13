@@ -4,7 +4,7 @@ Date: 2026-11-12 · Status: accepted (owner, 2026-11-12: «le domande come toolt
 invadente, sempre espandibile», «meno domande e più spiegazioni», «non voglio mai domande o comandi nei singoli agenti»,
 «l'orchestrator deve poter fare il ruolo dell'utente come se l'avesse scritto l'utente quando scrive agli agenti, questo
 è fondamentale», «anche nell'app le spiegazioni le voglio come messaggio semplice»; mockups approved with «ok mergia
-tutto su main») · Supersedes: the always-on questions window of ADR 0049 / 0135 · Builds on: ADR 0150, 0259, 0083
+tutto su main») · Supersedes: the always-on questions window of ADR 0049 / 0135 · Builds on: ADR 0150, 0259, 0083 · Amended by: ADR 0274, ADR 0275
 
 ## Context
 - Every question, permission, command and plan opened a modal window over the page.

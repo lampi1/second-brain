@@ -2,6 +2,8 @@
 classifier, and a threshold calibrated on the user's confirmed runs that applies only on the user's click. -->
 # ADR 0174: Classifiers learn from confirmed outcomes, under the user's approval
 
+Status: accepted
+
 Numbered 0074 until 2026-10-29, when duplicate ADR numbers were removed.
 
 Date: 2026-10-18

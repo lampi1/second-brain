@@ -2,7 +2,7 @@
 brain's declared read-only node tools; agent_report from a root chat; skill-tool warnings at launch (issue #93). -->
 # ADR 0085 · Every role may do everything by default; the user narrows it from its card
 
-Date: 2026-10-19 · Status: accepted (owner, 2026-10-19 evening: «di default devono essere attivi i popup e i permessi
+Date: 2026-10-19 · Status: partly superseded by ADR 0186; accepted (owner, 2026-10-19 evening: «di default devono essere attivi i popup e i permessi
 tutti hanno tutto all'inizio di default e l'utente può modificarli facilmente dalle card degli agenti ma tutti hanno il
 permesso di tutto seppur mantengono ruoli definiti»; issue #93) · Changes: ADR 0083 §1 (each role's default tools and
 ceiling), §3 (the planners' launches, `launchGap` as a rule for the defaults) · Builds on: ADR 0083 (roles,

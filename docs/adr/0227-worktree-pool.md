@@ -1,6 +1,6 @@
 # 0227. Reused worktree pool per repository, and warm engines in the most used folders
 
-Date: 2026-11-07. Status: proposed (waiting for the owner's review).
+Date: 2026-11-07. Status: accepted (merged 2026-11-08; written as a proposal).
 
 ## Context
 

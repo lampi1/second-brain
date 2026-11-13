@@ -1,13 +1,13 @@
 # ADR 0083 · Nine fixed roles, direct parent-to-child delegation in visible chats
 
-Date: 2026-10-19 · Status: accepted (owner, issue #89: «un lavoro divino»; the tree design "variant A, thread cards",
+Date: 2026-10-19 · Status: partly superseded by ADR 0125, ADR 0186, ADR 0100 (five work roles in place of nine); accepted (owner, issue #89: «un lavoro divino»; the tree design "variant A, thread cards",
 the questions rule and "the Orchestrator column is the only way to start work" confirmed by the owner on 2026-10-19)
 · Amended by ADR 0085 (2026-10-19 evening: every role has every permission by default and the user narrows it from
 its card; the planners launch the writing roles again; §1's default tools and ceilings and §3's "planners launch only
 Scout and Judge" no longer hold, the narrowing rules do) · Amended by ADR 0091 (2026-10-20, issue #99: no `independent` field and no model switch; a
 review's independence is its clean new session, §9's Judge reviews on any model) · Amended by ADR 0226 (2026-11-07: the Orchestrator reads the latest agent_report of any chat in its tree with `app_child_output`; §6 holds for everything else) · Replaces: the editable agent catalog with Italian presets and routed `legacy-*` profiles (ADR 0077, 0078), the
 Orchestrator-only sub-agent launch (`agent_start_subagent`), the brain's agent pointers, playbooks and specialist
-notebooks · Builds on: ADR 0006 (app MCP), 0021 (per-chat endpoints), 0068 (Grindhouse), 0082 (agent changes)
+notebooks · Builds on: ADR 0006 (app MCP), 0021 (per-chat endpoints), 0068 (Grindhouse), 0082 (agent changes) · Amended by: ADR 0097, ADR 0102, ADR 0104, ADR 0224
 
 ## Context
 Work was split among agents the user had to compose (a catalog of presets, routed profiles, owner-added pointers in the

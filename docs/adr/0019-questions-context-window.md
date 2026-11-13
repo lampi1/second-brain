@@ -1,6 +1,6 @@
 # ADR 0019 · Questions carry their context; the typing field keeps the keyboard; questions in a window (optional)
 
-Date: 2026-10-12 · Status: accepted
+Date: 2026-10-12 · Status: accepted · Amended by: ADR 0044
 
 ## Context
 The user (12/10): "quando mi fai le domande voglio sempre il contesto e il contenuto magari in un qualcosa di

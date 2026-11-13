@@ -1,6 +1,6 @@
 # 0181 — Fatto e standup removed
 
-2026-10-29. Accepted. Supersedes the Fatto parts of ADR 0041 (addendum), ADR 0079 and issue #160.
+Date: 2026-10-29 · Status: accepted. Supersedes the Fatto parts of ADR 0041 (addendum), ADR 0079 and issue #160.
 
 ## Context
 

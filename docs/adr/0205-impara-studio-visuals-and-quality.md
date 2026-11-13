@@ -1,6 +1,6 @@
 # 0205 — Impara: the «Studio» column, a visual for each piece, and a quality gate
 
-Status: accepted. Builds on ADR 0185, ADR 0188, ADR 0189 and ADR 0190.
+Status: accepted. Builds on ADR 0185, ADR 0188, ADR 0189 and ADR 0190. · Amended by: ADR 0230
 
 2026-10-30.
 

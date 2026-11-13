@@ -1,6 +1,6 @@
 # ADR 0018 · Skills and agents: a section to list, create, edit and delete them; "/" in every chat input
 
-Date: 2026-10-12 · Status: accepted
+Date: 2026-10-12 · Status: partly superseded by ADR 0083 (agents are fixed roles, not created or deleted); accepted
 
 ## Context
 The user (12/10): "aggiungi il supporto per le skill, deve anche essere facile dall'app creare e modificare skill una

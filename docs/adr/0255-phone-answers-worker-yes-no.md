@@ -1,6 +1,6 @@
 # ADR 0255 · Worker Sì/No questions answered from the phone (Telegram and Remote Control)
 
-Date: 2026-11-10 · Status: accepted (owner, issue #370) · Builds on: ADR 0219 (Telegram phone bridge), ADR 0229
+Date: 2026-11-10 · Status: partly superseded by ADR 0275; accepted (owner, issue #370) · Builds on: ADR 0219 (Telegram phone bridge), ADR 0229
 (Remote Control), ADR 0239 (relay_question)
 
 ## Context

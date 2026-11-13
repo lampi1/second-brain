@@ -2,7 +2,7 @@
 
 Date: 2026-11-09 · Status: accepted (owner, issues #361, #362, #363, #364, «risolvi tutte le issue aperte», «vorrei che
 anche quelle dell'app stessa fossero visibili ed editabili») · Builds on: ADR 0073 / 0077 (changes with log and
-rollback), ADR 0076 (brain Script + Changelog pages) · Changes: ADR 0072 for the app's skills (now visible)
+rollback), ADR 0076 (brain Script + Changelog pages) · Changes: ADR 0072 for the app's skills (now visible) · Amended by: ADR 0277
 
 ## Context
 Davide moves the brain to "skills only": rules shrink to a small fixed core and every "how to" lives in one skill.

@@ -59,7 +59,7 @@ read-only; an external session is resumed only as a fork (never two writers).
 
 Every module has unit tests; every user-visible feature has an e2e test with a screenshot. While working an agent runs
 only the targeted tests (`npx vitest run <files>`; owner, 2026-11-07: "rifai i test mille volte"). A branch's gate
-before the merge, with no e2e (owner, 2026-11-08: "fai finire tutto, fanculo i test e2e"): `npm run check:quick` green
+before the merge, with no e2e (owner, 2026-11-08): `npm run check:quick` green
 on the branch's commit + a clean independent Sentinel review (rule 9) + the guard scan + a rebase on `main` right
 before the merge, then a plain `git push origin main` (rule 8; never a force push). A visible change is still looked at in the
 dev app. No e2e run and no machine lock gate a branch; `npm run check:branch` is no longer needed per branch. Never
