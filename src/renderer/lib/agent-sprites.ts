@@ -4,7 +4,8 @@
 // glass, the Artisan hammers on an anvil, the Sentinel scans with binoculars beside its shield, the Herald blows its
 // horn; a chat without a role types on a laptop. The other states are shared: thinking (a hand at the chin,
 // a thought), waiting for the user (a wave, a hop, an amber «!»), done (two jumps with the arms up, then still under a
-// green tick), error (the head down, a sigh, a drop of sweat, a red «!»), idle (asleep, nodding off). Every scene is a
+// green tick), error (the head down, a sigh, a drop of sweat, a red «!»), idle (asleep, nodding off). A click plays a
+// reaction once over any of them (ADR 0297): a pat on the head, a crack of the whip. Every scene is a
 // small piece of acting written as tracks of keys (lib/sprite-rig.ts): a move loads, strikes, overshoots and settles,
 // the body squashes when it lands, the head follows a moment late. Drawn by components/AgentSprite.tsx.
 import type { CharacterId } from '../../shared/characters';
@@ -219,12 +220,75 @@ const SHARED: Record<Exclude<SpriteState, 'work'>, () => Pose> = {
   }),
 };
 
+// ── what the user's click does to it (ADR 0297) ─────────────────────────────────────────────────────────────────────
+/** A pat (the left click) or a crack of the whip (the right one): played once over whatever it was doing. */
+export type SpriteReaction = 'pat' | 'whip';
+/** How long each lasts, in seconds: then the person goes back to its state. */
+export const REACTION_S: Record<SpriteReaction, number> = { pat: 1.3, whip: 1.4 };
+const HEART = 'M0 3.6C-4.6 0.4 -4 -3.4 -1.6 -3.4C-0.6 -3.4 0 -2.6 0 -2C0 -2.6 0.6 -3.4 1.6 -3.4C4 -3.4 4.6 0.4 0 3.6Z';
+const STAR = 'M0 -5L1.2 -1.2L5 0L1.2 1.2L0 5L-1.2 1.2L-5 0L-1.2 -1.2Z';
+const REACT: Record<SpriteReaction, () => Pose> = {
+  // a gloved hand comes down from the top right and pats the head twice: the head sinks and springs back, then a
+  // happy wiggle and a small hop, hearts rising
+  pat: () => {
+    const T = REACTION_S.pat;
+    const heart = (x: number, y: number, at: number, dx: number): Node =>
+      J(x, y, 0, [P(HEART, '#ff5d7a')], once(T, [k(0, { o: 0, sx: 0.2, sy: 0.2, e: 'hold' }), k(at, { o: 0, sx: 0.2, sy: 0.2, e: 'back' }), k(at + 10, { o: 1 }), k(at + 42, { o: 0, dx, dy: -13, sx: 1.25, sy: 1.25 }), k(100, { o: 0 })]), 1, 0);
+    const lift = (m: 1 | -1): Track => once(T, [k(0), k(50), k(58, { a: 46 * m, e: 'back' }), k(70, { a: 30 * m }), k(80, { a: 46 * m }), k(92, {})]);
+    return {
+      eyes: 'happy', mouth: 'grin',
+      head: { go: once(T, [k(0), k(20, { e: 'in' }), k(24, { dy: 1.8, sy: 0.92, sx: 1.04, e: 'out' }), k(34, { a: -4 }), k(40, { a: -4, e: 'in' }), k(44, { dy: 1.8, sy: 0.92, sx: 1.04, e: 'out' }), k(56, { a: 5 }), k(68, { a: -4 }), k(80, { a: 3 }), k(92, {})]) },
+      go: once(T, [k(0), k(20, { e: 'in' }), k(24, { sy: 0.96, sx: 1.02, e: 'out' }), k(34, {}), k(40, { e: 'in' }), k(44, { sy: 0.96, sx: 1.02, e: 'out' }), k(56, { dy: -2.6, sy: 1.03, e: 'in' }), k(66, { sy: 0.94, sx: 1.04, e: 'out' }),
+        k(74, { dy: -1.4, e: 'in' }), k(82, { sy: 0.97, e: 'out' }), k(90, {})]),
+      armL: { a: 12, go: lift(1) }, armR: { a: -12, go: lift(-1) },
+      front: [
+        J(40, 12, -18, [rr(2.4, -6, 5.6, 3.4, 1.3, '#ff6b7d'), E(0, 0, 5, 3.7, WHITE), C(-4.9, -1.2, 1.8, WHITE), C(-3.5, 1.9, 1.9, WHITE), C(-0.5, 2.7, 2, WHITE), C(2.5, 2.2, 1.9, WHITE)],
+          once(T, [k(0, { o: 0, dx: 16, dy: -12, e: 'hold' }), k(4, { o: 1, dx: 16, dy: -12, e: 'out' }), k(16, { o: 1, dx: 2, dy: -4, e: 'in' }), k(24, { o: 1, dx: -1, dy: 5, sy: 0.85, e: 'out' }), k(34, { o: 1, dx: 1, dy: -3, e: 'in' }),
+            k(44, { o: 1, dx: -1, dy: 5, sy: 0.85, e: 'out' }), k(54, { o: 1, dx: 2, dy: -3, e: 'in' }), k(68, { o: 1, dx: 14, dy: -11 }), k(74, { o: 0, dx: 16, dy: -12 }), k(100, { o: 0 })]), 1.2, 0),
+        heart(19, 21, 24, -5), heart(50, 25, 44, 6), heart(27, 10, 50, -2)],
+    };
+  },
+  // a whip winds up over the head from the right and cracks at its side: a star where it lands, the person jumps away
+  // with its arms up, lands squashed, trembles, and comes back to its place
+  whip: () => {
+    const T = REACTION_S.whip;
+    const up = (m: 1 | -1): Track => once(T, [k(0), k(28, { e: 'out' }), k(38, { a: 150 * m }), k(50, { a: 118 * m }), k(62, { a: 20 * m }), k(72, { a: 36 * m }), k(86, {})]);
+    const drop = (x: number, y: number, dx: number, dy: number): Node =>
+      J(x, y, 0, [P('M0 -2.4C1.6 -0.4 1.9 0.5 1.9 1.3A1.9 1.9 0 0 1 -1.9 1.3C-1.9 0.5 -1.6 -0.4 0 -2.4Z', SKY)], once(T, [k(0, { o: 0, e: 'hold' }), k(31, { o: 0, e: 'hold' }), k(32, { o: 1, e: 'out' }), k(52, { o: 0, dx, dy }), k(100, { o: 0 })]), 1, 0);
+    const mark = (x: number, y: number, d: string): Node =>
+      J(x, y, 0, [ink([S(d, WHITE, 1.5)])], once(T, [k(0, { o: 0, e: 'hold' }), k(28, { o: 0, e: 'hold' }), k(29, { o: 1, e: 'out' }), k(44, { o: 0, dx: 3 }), k(100, { o: 0 })]), 1, 0);
+    return {
+      eyes: 'sad', mouth: 'o',
+      go: once(T, [k(0), k(27, { e: 'out' }), k(30, { sy: 0.94, sx: 1.05, e: 'out' }), k(40, { dx: -2, dy: -9, sy: 1.1, sx: 0.94, a: -7, e: 'in' }), k(52, { dx: -3, sy: 0.86, sx: 1.1, a: -3, e: 'out' }), k(60, { dx: -3, sy: 1.03 }),
+        k(66, { dx: -4.2 }), k(70, { dx: -2 }), k(74, { dx: -3.8 }), k(78, { dx: -2.4 }), k(90, {})]),
+      head: { go: once(T, [k(0), k(28, { e: 'out' }), k(34, { a: -10, dy: -1.5 }), k(46, { a: 6 }), k(56, { a: -4 }), k(66, { a: 3 }), k(80, {})]) },
+      armL: { a: 8, go: up(1) }, armR: { a: -8, go: up(-1) },
+      front: [
+        J(79, 22, 40, [S('M0 0C-12 -7 -27 3 -37 24', '#8a5a2e', 1.6), S('M-37 24L-39.8 27.6', GOLD, 1.3), S('M-1 0.5L6 -3', '#4a2c14', 3)],
+          once(T, [k(0, { o: 0, dx: 10, e: 'hold' }), k(3, { o: 1, dx: 10, e: 'out' }), k(14, { o: 1, a: 64, sx: 0.86 }), k(22, { o: 1, a: 71, sx: 0.82, e: 'in' }), k(28, { o: 1, a: -12, sx: 1.06, e: 'out' }), k(34, { o: 1, a: -4 }), k(48, { o: 1, a: 34, e: 'in' }),
+            k(58, { o: 0, a: 44, dx: 10 }), k(100, { o: 0 })]), 1, 0),
+        J(45.5, 53, 0, [P(STAR, GOLD), C(0, 0, 1.3, WHITE)], once(T, [k(0, { o: 0, sx: 0.2, sy: 0.2, e: 'hold' }), k(27.6, { o: 0, sx: 0.2, sy: 0.2, e: 'hold' }), k(28, { o: 1, sx: 0.6, sy: 0.6, e: 'out' }), k(34, { o: 1, sx: 1.6, sy: 1.6, a: 20 }),
+          k(44, { o: 0, sx: 2, sy: 2, a: 38 }), k(100, { o: 0 })]), 1, 0),
+        mark(51, 48.5, 'M0 0L4 -2.6'), mark(52.4, 53.4, 'M0 0H4.6'), mark(50.6, 58, 'M0 0L3.8 2.4'),
+        drop(22, 21, -8, -6), drop(40, 17, 6, -8), drop(19, 30, -9, 1)],
+    };
+  },
+};
+export const SPRITE_REACTIONS: readonly SpriteReaction[] = ['pat', 'whip'];
+
 const cache = new Map<string, SpriteScene>();
 /** The scene of a role in a state (built once). */
 export function spriteScene(id: SpriteId, state: SpriteState): SpriteScene {
   const key = `${id}:${state}`;
   let s = cache.get(key);
   if (!s) cache.set(key, s = { nodes: person(lookOf(id), (state === 'work' ? WORK[id] : SHARED[state])()) });
+  return s;
+}
+/** A role's reaction to a click (built once): the same acting for everyone, in the role's own looks. */
+export function reactionScene(id: SpriteId, kind: SpriteReaction): SpriteScene {
+  const key = `${id}:${kind}`;
+  let s = cache.get(key);
+  if (!s) cache.set(key, s = { nodes: person(lookOf(id), REACT[kind]()) });
   return s;
 }
 export const SPRITE_IDS = Object.keys(WORK) as readonly SpriteId[];

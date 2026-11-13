@@ -42,6 +42,9 @@ export const productDe:typeof productIt={
  'product.appearance':'Aussehen und Layout','product.style':'Stil','product.standard':'Schlicht','product.calm':'Ruhig','product.catalog':'Agentenkatalog','product.grid':'Karten','product.list':'Liste','product.preview':'Vorschau','product.apply':'Anwenden','product.reset':'Aussehen zurücksetzen',
  'product.research':'Recherche','product.researchPurpose':'Quellen und Zusammenfassungen für deine Arbeit','product.organization':'Planung','product.organizationPurpose':'Prioritäten und nächste Schritte',
  'product.avatar':p=>`Symbol für ${p.name}`,
+ // the little person's tooltip (AgentSprite.tsx, ADR 0297): what a click does; on a strip, what it counts for
+ 'sprite.tip':'Klick: ein Klaps · Rechtsklick: ein Peitschenknall','sprite.tipRun':'Klick: ein Klaps · Rechtsklick: ein Peitschenknall. Zählt nur ganz wenig für die Bewertung dieser Arbeit, ein einziges Mal.',
+ 'sprite.tipPat':'Klaps für diese Arbeit gegeben (zählt ganz wenig). Rechtsklick: Peitsche.','sprite.tipWhip':'Peitsche für diese Arbeit gegeben (zählt ganz wenig). Klick: Klaps.',
  'product.expand':'Arbeit öffnen','product.waitsYou':'Wartet auf dich','product.waitsYouOpen':(p:{title:string})=>`Entscheidung von ${p.title} öffnen`,'product.collapse':'Zur Leiste einklappen','product.write':'Schreiben','product.details':'Details und Mitwirkende','product.profiles':'Profile','product.purpose':'Zweck','product.model':'Modell',
  'product.workAssigned':'Offene Aufgabe','product.workWaiting':'Wartet auf Post','product.workCompleted':'Aufgabe erledigt','product.workDeclare':'Arbeitsstatus','product.workUnset':'Status nicht gesetzt','product.noTask':'Aufgabe nicht gemeldet',
  'product.teamUnknown':'Subagenten: Daten nicht verfügbar','product.teamComplete':p=>`Subagenten: ${p.active} aktiv · ${p.total} gesamt`,'product.teamPartial':p=>`Beobachtet: ${p.active} aktiv · ${p.total} gesamt · Teildaten`,

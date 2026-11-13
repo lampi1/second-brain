@@ -68,6 +68,8 @@ export interface ChatService {
   listPrices?(models: readonly string[]): Record<string, { input: number; cacheRead: number; cacheWrite: number; output: number }>;
   /** Explicit user verdict from renderer IPC only; never exposed through agent tools. */
   markRun?(chatId: string, verdict: AgentRunOutcome['verdict'], note?: string): ChatSummary;
+  /** The user's pat or whip on a run's little person (ADR 0297), renderer IPC only; false = nothing changed. */
+  touchRun?(chatId: string, sign: 1 | -1): boolean;
   /** a "Comando da eseguire" request was opened in this chat (run/asks.ts): its agent run counts it once (A5) */
   commandAsked?(chatId: string, requestId: string): void;
   /** that request left (run, dismissed, the chat went on) */

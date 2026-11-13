@@ -335,4 +335,14 @@ export abstract class ManagerWork extends ManagerLifecycle {
     this.hook('agent lifecycle', () => this.opts.onRunOutcome?.(structuredClone(run)));
     return { ...r.s };
   }
+
+  /** The user's pat (+1) or whip (-1) on the little person of this chat's run (ADR 0297; the UI's only, never an agent
+   *  tool): one per run, the last one stands, the run stays as it is. False = nothing changed (no run, the same sign). */
+  touchRun(chatId: string, sign: 1 | -1): boolean {
+    const r = this.need(chatId), run = r.s.run;
+    if (!run || r.s.routineArchived || run.touch?.sign === sign) return false;
+    run.touch = { sign, at: Date.now() };
+    this.runSave(); this.persist(); this.updated(r);
+    return true;
+  }
 }

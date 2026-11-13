@@ -294,6 +294,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0293](0293-children-are-rows-face-back-on-the-strip.md) A delegated chat is one row like its parent; the role's face is back on the strip — accepted, partly amended by 0295
 - [0294](0294-no-app-guard-on-settings-and-hooks.md) No permission question outside the brain's rules: the app's guard on settings and hooks is removed — accepted
 - [0295](0295-little-people-as-sprites.md) The roles are little people at work on the strips — accepted
+- [0297](0297-click-reactions-and-touch-nudge.md) A click on a little person: a pat or a crack of the whip, and a nudge on the run — accepted
 
 ## Replaced
 

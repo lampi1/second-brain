@@ -22,4 +22,11 @@ describe('demo human verdicts', () => {
     expect(() => chats.markRun('mappa', 'success')).toThrow('busy');
     expect(chats.list().find(c => c.id === 'mappa')?.run?.outcome).toBeUndefined();
   });
+  it('keeps a pat or a whip on the demo run, once per sign (ADR 0297)', () => {
+    const chats = new DemoChats(() => {}, { freeze: true }, seed(FROZEN_EPOCH));
+    expect(chats.touchRun('mappa', -1)).toBe(true);
+    expect(chats.touchRun('mappa', -1)).toBe(false);
+    expect(chats.list().find(c => c.id === 'mappa')?.run?.touch).toEqual({ sign: -1, at: FROZEN_EPOCH });
+    expect(chats.touchRun('fix', 1)).toBe(false);
+  });
 });

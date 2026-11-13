@@ -8,7 +8,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
-import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunPlan, AgentRunReport, AgentRunTags, AgentRunTokens, ReviewBatchEntry } from '../../shared/agents';
+import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunPlan, AgentRunReport, AgentRunTags, AgentRunTokens, AgentRunTouch, ReviewBatchEntry } from '../../shared/agents';
 import { ONE_SHOT_PURPOSES, RUN_END_CAUSES, type AgentRunEndCause } from '../../shared/agents';
 import { goalText } from '../../shared/agent-label';
 import { errText, log } from '../log';
@@ -215,7 +215,14 @@ export function readRun(v: unknown): AgentRun | null {
     ...(receipts ? { receipts } : {}),
     // a plan record out of shape is dropped, never the run (ADR 0131)
     ...(plan ? { plan } : {}),
+    // a pat or a whip out of shape is dropped, never the run (ADR 0297)
+    ...(readTouch(r.touch) ? { touch: readTouch(r.touch)! } : {}),
   };
+}
+/** The user's pat or whip on a run (ADR 0297), or null when absent or out of shape. */
+function readTouch(v: unknown): AgentRunTouch | null {
+  const p = v as Record<string, unknown> | null;
+  return p && typeof p === 'object' && (p.sign === 1 || p.sign === -1) && time(p.at) ? { sign: p.sign, at: p.at } : null;
 }
 /** A run's plan record (ADR 0131), or null when absent or out of shape. */
 function readPlan(v: unknown): AgentRunPlan | null {
@@ -234,7 +241,7 @@ export function endRun(run: AgentRun, reason: AgentRunEnd, at: number, cause?: A
 /** Brother goes on with an ended run: it is open again, its old verdict no longer holds, and it counts as reworked. */
 export function reopenRun(run: AgentRun): boolean {
   if (run.endedAt === undefined) return false;
-  delete run.endedAt; delete run.endReason; delete run.endCause; delete run.outcome;
+  delete run.endedAt; delete run.endReason; delete run.endCause; delete run.outcome; delete run.touch;
   if (run.receipts) delete run.receipts.verdict; // decided again at its next end
   run.counters.reopened++;
   return true;

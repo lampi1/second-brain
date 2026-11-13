@@ -5,7 +5,7 @@ import { agentsMayOpen, engineOn } from '../engines/policy';
 import { chatItemsReply } from '../../shared/chat-window';
 import { createRoutedChat } from '../chats/routed';
 import { gitBranches } from '../chats/branch';
-import { markRunOutcome } from '../run/outcome';
+import { markRunOutcome, touchRunOf } from '../run/outcome';
 import { noteUserAnswered, noteUserTyped, saysYes } from '../appctl/user-words';
 import { readClipboardImage } from '../clipboard-image';
 import type { HandlerContext, HandlersOf } from './context';
@@ -16,6 +16,7 @@ export function chatsHandlers({ s, activity, orchestrator, clip }: HandlerContex
     'chat:autoClosePresence': a => s.autoClose.setPresence(Array.isArray(a?.holds) ? a.holds : []),
     'chat:autoCloseKeep': a => { if (typeof a?.chatId !== 'string' || typeof a.keep !== 'boolean') throw new Error('Richiesta non valida.'); s.autoClose.keepOpen(a.chatId, a.keep); },
     'run:outcome': a => markRunOutcome(s.chats, a),
+    'run:touch': a => touchRunOf(s.chats, a),
     'chat:list': () => s.chats.list(),
     'chat:items': a => chatItemsReply(s.chats.items(a.chatId), a),
     'chat:pending': () => [...s.chats.pending(), ...s.asks.pending()].sort((a, b) => a.at - b.at),

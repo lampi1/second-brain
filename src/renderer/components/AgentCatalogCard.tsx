@@ -117,6 +117,7 @@ function Standing({ id, standing: s, reviewedAt = null }: { id: string; standing
           <HelpTip title={t('agentsGrid.perfHelpTitle')} wide testid={`catalog-perf-help-${id}`}>
             <p>{t('agentsGrid.perfHelp1')}</p><p>{t('agentsGrid.perfHelp2')}</p><p>{t('agentsGrid.perfHelp3', { min: s?.minRuns ?? 5, spread: MAX_SPREAD_POINTS })}</p>
             {s && (s.evaluated > 0 || s.sources.self > 0) && <p className="catalog-help-now">{t('agentsGrid.perfSources', s.sources)}</p>}
+            {s?.touches && <p className="catalog-help-now" data-testid={`catalog-perf-touches-${id}`}>{t('agentsGrid.perfTouches', s.touches)}</p>}
           </HelpTip></h4>
         <p className="catalog-perf-value">{perf !== null ? <><b>{pct(perf)}</b>{spread !== null && <span className="catalog-perf-spread" title={t('agentsGrid.perfSpreadTip', { v: spread })}
           data-testid={`catalog-perf-spread-${id}`}>{t('agentsGrid.perfSpread', { v: spread })}</span>} <span>{t('agentsGrid.perfBand', { v: perf })}</span></>
@@ -192,7 +193,7 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
         </div>}
         <header className="catalog-hero">
           <span className="catalog-hero-avatar" data-person={person ? true : undefined}>
-            {person ? <AgentSprite id={person} state="work" height={128} label={t('product.avatar', { name: profile.name })} />
+            {person ? <AgentSprite id={person} state="work" height={128} label={t('product.avatar', { name: profile.name })} tip={t('sprite.tip')} />
               : <AgentAvatar avatar={profile.avatar} name={profile.name} size={104} />}
             {standing && <span className="catalog-level-medal" aria-hidden="true">{t('agentsGrid.levelShort', { n: standing.level })}</span>}</span>
           <h3><button ref={front} type="button" onClick={() => flip(true)} aria-expanded={flipped} aria-controls={backId} aria-describedby={`${backId}-f`} data-testid={`catalog-flip-${profile.id}`}>{profile.name}</button></h3>

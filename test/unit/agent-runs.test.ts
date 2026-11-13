@@ -63,6 +63,16 @@ describe('agent run store', () => {
     }
     expect(readRun({ ...run, endReason: 'closed', endCause: 'whatever' })).not.toHaveProperty('endCause');
   });
+  it('keeps the user\'s pat or whip on a run (ADR 0297), drops a malformed one, forgets it when the run reopens', () => {
+    const run = new AgentRunStore(tmp()).start(start());
+    run.touch = { sign: -1, at: 1500 };
+    expect(readRun(structuredClone(run))?.touch).toEqual({ sign: -1, at: 1500 });
+    for (const bad of [{ sign: 2, at: 1 }, { sign: 1 }, { sign: '1', at: 1 }, 'pat', null])
+      expect(readRun({ ...structuredClone(run), touch: bad }), JSON.stringify(bad)).not.toHaveProperty('touch');
+    endRun(run, 'completed', 2000);
+    reopenRun(run);
+    expect(run).not.toHaveProperty('touch');
+  });
   it('keeps a nightly batch review\'s runs and verdicts (ADR 0203) and refuses malformed ones', () => {
     const run = new AgentRunStore(tmp()).start(start({ agentId: 'sentinel', startedBy: 'app' }));
     run.source = 'oneshot'; run.oneshot = { engine: 'claude', job: 'review', fallback: false, costBasis: 'reported' };

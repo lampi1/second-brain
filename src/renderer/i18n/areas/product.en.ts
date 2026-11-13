@@ -42,6 +42,9 @@ export const productEn:typeof productIt={
  'product.appearance':'Appearance and layout','product.style':'Style','product.standard':'Essential','product.calm':'Calm','product.catalog':'Agent catalog','product.grid':'Cards','product.list':'List','product.preview':'Preview','product.apply':'Apply','product.reset':'Reset appearance',
  'product.research':'Research','product.researchPurpose':'Sources and summaries for your work','product.organization':'Planning','product.organizationPurpose':'Priorities and next steps',
  'product.avatar':p=>`Icon for ${p.name}`,
+ // the little person's tooltip (AgentSprite.tsx, ADR 0297): what a click does; on a strip, what it counts for
+ 'sprite.tip':'Click: a pat · right click: a crack of the whip','sprite.tipRun':'Click: a pat · right click: a crack of the whip. It counts very little on this job’s rating, only once.',
+ 'sprite.tipPat':'Pat given to this job (it counts very little). Right click: the whip.','sprite.tipWhip':'Whip given to this job (it counts very little). Click: a pat.',
  'product.expand':'Open work','product.waitsYou':'Waiting for you','product.waitsYouOpen':(p:{title:string})=>`Open the decision of ${p.title}`,'product.collapse':'Collapse to strip','product.write':'Write','product.details':'Details and collaborators','product.profiles':'Profiles','product.purpose':'Purpose','product.model':'Model',
  'product.workAssigned':'Open assignment','product.workWaiting':'Waiting for mail','product.workCompleted':'Assignment completed','product.workDeclare':'Work status','product.workUnset':'Status not set','product.noTask':'Task not reported',
  'product.teamUnknown':'Subagents: data unavailable','product.teamComplete':p=>`Subagents: ${p.active} active · ${p.total} total`,'product.teamPartial':p=>`Observed: ${p.active} active · ${p.total} total · partial data`,

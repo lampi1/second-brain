@@ -3,7 +3,7 @@
 // rodaggio" threshold and the exclusions shared with the §5 metrics.
 import { describe, expect, it } from 'vitest';
 import type { AgentRun } from '../../../src/shared/agents';
-import { HALF_LIFE_MS, MAX_SPREAD, MIN_EVALUATED, PRIOR, TRUST, decisionSignals, decisionXp, estimate, earnIndex, earnedVerdict, levelOf, levelStart, orchestratorDecision, routeVerdict, standings, verdictOf, withStandings } from '../../../src/main/agents/standing';
+import { HALF_LIFE_MS, MAX_SPREAD, MIN_EVALUATED, PRIOR, TOUCH_TRUST, TRUST, decisionSignals, decisionXp, estimate, earnIndex, earnedVerdict, levelOf, levelStart, orchestratorDecision, routeVerdict, standings, verdictOf, withStandings } from '../../../src/main/agents/standing';
 import { emptyTally, mergeTallies, rollUp, runMetrics } from '../../../src/main/agents/run-metrics';
 import { emptyFlashLog, flashAnswered, flashAsked } from '../../../src/main/agents/flash-outcomes';
 import { FLASH_XP, PLAN_XP } from '../../../src/main/agents/xp';
@@ -46,6 +46,24 @@ describe('verdictOf', () => {
 });
 
 describe('standings', () => {
+  it('counts a pat or a whip as a nudge (ADR 0297): a twentieth of a verdict, never a verdict, never XP', () => {
+    const judged = () => Array.from({ length: MIN_EVALUATED }, () => run({ outcome: human('success') }));
+    const base = standings(judged(), [], NOW).get('scout')!;
+    const whipped = standings([...judged(), run({ touch: { sign: -1, at: NOW } })], [], NOW).get('scout')!;
+    const patted = standings([...judged(), run({ touch: { sign: 1, at: NOW } })], [], NOW).get('scout')!;
+    // the run counts, the nudge is not one of the verdicts and earns nothing
+    expect(whipped).toMatchObject({ runs: MIN_EVALUATED + 1, evaluated: MIN_EVALUATED, wins: base.wins, xp: base.xp, touches: { pat: 0, whip: 1 } });
+    expect(patted.touches).toEqual({ pat: 1, whip: 0 });
+    expect(base.touches).toBeUndefined();
+    // it moves the estimate, a little: far less than the user's written verdict would
+    const failed = standings([...judged(), run({ outcome: human('fail') })], [], NOW).get('scout')!;
+    expect(whipped.performance!).toBeLessThan(base.performance!);
+    expect(patted.performance!).toBeGreaterThan(base.performance!);
+    expect(base.performance! - whipped.performance!).toBeLessThan((base.performance! - failed.performance!) / 10);
+    expect(TOUCH_TRUST).toBe(TRUST.human / 20);
+    // alone it shows nothing: the performance stays «in rodaggio»
+    expect(standings(Array.from({ length: 9 }, () => run({ touch: { sign: 1, at: NOW } })), [], NOW).get('scout')).toMatchObject({ performance: null, evaluated: 0 });
+  });
   it('stays "in rodaggio" (null) below the minimum of judged runs', () => {
     const runs = Array.from({ length: MIN_EVALUATED - 1 }, () => run({ outcome: human('success') }));
     const s = standings([...runs, run(), run()], [], NOW).get('scout')!;

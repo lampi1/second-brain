@@ -167,6 +167,19 @@ describe('agent runs on chats', () => {
     expect(() => f.m.markRun(c.id, 'great' as never)).toThrow(/Esito non valido/);
   });
 
+  it('the user’s pat or whip is kept on the open run, once per sign, and does not end it (ADR 0297)', async () => {
+    const f = fixture();
+    const c = await f.create();
+    expect(f.m.touchRun(c.id, 1)).toBe(true);
+    expect(f.m.touchRun(c.id, 1)).toBe(false); // the same sign again: nothing to write
+    expect(f.run(c.id)).toMatchObject({ touch: { sign: 1 } });
+    expect(f.run(c.id)!.endedAt).toBeUndefined();
+    expect(f.m.touchRun(c.id, -1)).toBe(true); // the last one stands
+    expect(f.m.runs.get(f.run(c.id)!.runId)).toMatchObject({ touch: { sign: -1 } });
+    const plain = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' });
+    expect(f.m.touchRun(plain.id, 1)).toBe(false); // no run: the person reacts, nothing is recorded
+  });
+
   it('goes stale after 72 h without a turn, but not while a request waits on the user', async () => {
     const f = fixture();
     const c = await f.create(), d = await f.create();

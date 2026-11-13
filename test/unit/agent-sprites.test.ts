@@ -9,7 +9,7 @@ vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(), on: vi.fn() } }
 import { CHARACTER_IDS } from '../../src/shared/characters';
 import { WORK_ROLE_IDS } from '../../src/shared/roles';
 import type { ChatItem } from '../../src/shared/contract';
-import { SPRITE_IDS, SPRITE_STATES, spriteScene } from '../../src/renderer/lib/agent-sprites';
+import { REACTION_S, SPRITE_IDS, SPRITE_REACTIONS, SPRITE_STATES, reactionScene, spriteScene } from '../../src/renderer/lib/agent-sprites';
 import { J, VIEW, jointStyle, keyframeRules, keyframesCss, nodeSvg, trackName, walk, type Group } from '../../src/renderer/lib/sprite-rig';
 import { AgentSprite, spriteIdOf } from '../../src/renderer/components/AgentSprite';
 import { isThinking, spriteStateOf } from '../../src/renderer/components/StripFace';
@@ -69,6 +69,15 @@ describe('the little people', () => {
   it('writes the shared states once for all the roles', () => {
     const css = SPRITE_IDS.map(id => keyframesCss(spriteScene(id, 'idle').nodes));
     expect(new Set(css).size).toBe(1);
+  });
+  it('reacts to a click the same way in every role: a pat and a whip, each played once and as long as it says', () => {
+    for (const id of SPRITE_IDS) for (const kind of SPRITE_REACTIONS) {
+      const tracks = walk(reactionScene(id, kind).nodes).flatMap(n => ('g' in n && n.track ? [n.track] : []));
+      expect(tracks.length, `${id} ${kind}`).toBeGreaterThan(6);
+      expect(tracks.every(t => t.n === 1 && t.t === REACTION_S[kind]), `${id} ${kind}`).toBe(true);
+    }
+    expect(reactionScene('scout', 'pat')).toBe(reactionScene('scout', 'pat'));
+    expect(reactionScene('scout', 'pat').nodes.map(nodeSvg).join('')).not.toBe(reactionScene('scout', 'whip').nodes.map(nodeSvg).join(''));
   });
   it('builds a scene once', () => {
     expect(spriteScene('artisan', 'work')).toBe(spriteScene('artisan', 'work'));

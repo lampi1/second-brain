@@ -41,6 +41,9 @@ export const productIt={
  'product.appearance':'Aspetto e disposizione','product.style':'Stile','product.standard':'Essenziale','product.calm':'Calmo','product.catalog':'Catalogo agenti','product.grid':'Schede','product.list':'Elenco','product.preview':'Anteprima','product.apply':'Applica','product.reset':'Ripristina aspetto',
  'product.research':'Ricerca','product.researchPurpose':'Fonti e sintesi per il tuo lavoro','product.organization':'Organizzazione','product.organizationPurpose':'Priorità e prossimi passi',
  'product.avatar':(p:{name:string})=>`Icona di ${p.name}`,
+ // the little person's tooltip (AgentSprite.tsx, ADR 0297): what a click does; on a strip, what it counts for
+ 'sprite.tip':'Clic: un buffetto · clic destro: una frustata','sprite.tipRun':'Clic: un buffetto · clic destro: una frustata. Conta pochissimo sul giudizio di questo lavoro, una volta sola.',
+ 'sprite.tipPat':'Buffetto dato a questo lavoro (conta pochissimo). Clic destro: frustata.','sprite.tipWhip':'Frustata data a questo lavoro (conta pochissimo). Clic: buffetto.',
  'product.expand':'Apri lavoro','product.waitsYou':'Ti aspetta','product.waitsYouOpen':(p:{title:string})=>`Apri la decisione di ${p.title}`,'product.collapse':'Riduci a striscia','product.write':'Scrivi','product.details':'Dettagli e collaboratori','product.profiles':'Profili','product.purpose':'Scopo','product.model':'Modello',
  'product.workAssigned':'Incarico aperto','product.workWaiting':'In attesa di posta','product.workCompleted':'Incarico concluso','product.workDeclare':'Stato del lavoro','product.workUnset':'Stato non impostato','product.noTask':'Compito non riportato',
  'product.teamUnknown':'Sottoagenti: dati non disponibili','product.teamComplete':(p:{active:number;total:number})=>`Sottoagenti: ${p.active} attivi · ${p.total} totali`,'product.teamPartial':(p:{active:number;total:number})=>`Osservati: ${p.active} attivi · ${p.total} totali · dati parziali`,

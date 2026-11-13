@@ -4,7 +4,7 @@
    joint turns around its own origin; its rest pose and its animation are inline (lib/sprite-rig.ts jointStyle), the
    @keyframes come from the scene (keyframesCss). Transforms and opacity only. Still (the rest pose, a whole picture)
    without motion; paused while the window is hidden. */
-.agent-sprite { flex:none; display:inline-flex; line-height:0; color:var(--text-2); }
+.agent-sprite { flex:none; display:inline-flex; line-height:0; color:var(--text-2); cursor:pointer; -webkit-user-select:none; user-select:none; }
 .agent-sprite > svg { display:block; overflow:visible; filter:drop-shadow(0 0 .55px color-mix(in srgb, var(--text) 62%, transparent)); }
 .agent-sprite .sp-j { transform-origin:0 0; }
 .agent-sprite .sp-ink > :is(path, ellipse, circle):not([fill="none"]) { fill:currentColor; }
