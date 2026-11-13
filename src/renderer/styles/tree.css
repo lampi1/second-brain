@@ -24,7 +24,7 @@
 /* ---------------------------------------------------------------- a delegated chat's row */
 /* One row like the parent's strip (ADR 0293): no card, a hairline under it; the state is the dot on the face and, when
    words are needed, a pill; open, it is a quiet panel with its steps, its result and its chat. */
-.delegation-card { --dc-pad: 10px; --dc-text: 52px; position: relative; min-width: 0; padding: 3px 4px 3px var(--dc-pad); border-bottom: 1px solid var(--border); cursor: pointer; --dc-tone: var(--text-4); }
+.delegation-card { --dc-pad: 10px; --dc-text: 48px; position: relative; min-width: 0; padding: 3px 4px 3px var(--dc-pad); border-bottom: 1px solid var(--border); cursor: pointer; --dc-tone: var(--text-4); }
 .delegation-card:hover { background: var(--surface-2); }
 .delegation-card.is-open { cursor: default; background: var(--surface); padding-bottom: 9px; }
 .delegation-card.is-open .dc-summary { cursor: pointer; }

@@ -346,4 +346,4 @@ docs/screenshots/orchestrator-flash.webp binary-media sha256:5c6c19684184ad2644b
 docs/screenshots/grindhouse.webp binary-media sha256:ffd8346ceb012ebb97c818de44295f384ea4b49c20414439df440480d4242f85
 docs/screenshots/browser.webp binary-media sha256:0a1b4e387bbe312b238f75b4133129fdc1eda65b4982ac8e1f8ce177cfaff785
 # README screenshot retaken 2026-11-13 for ADR 0294 (the roles as little people on the strips)
-docs/screenshots/grindhouse.webp binary-media sha256:74b277eaf8b9d8804f2f0f8ebdd40071659fe97319da958c622054f378f26807
+docs/screenshots/grindhouse.webp binary-media sha256:ab3fc971131aa44a2161967f8c1e38ea6410edba5c9754ea87ddfcc2c70d401a

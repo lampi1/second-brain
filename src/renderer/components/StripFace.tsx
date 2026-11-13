@@ -28,10 +28,10 @@ export function isThinking(items: readonly ChatItem[] | undefined): boolean {
   return !last || last.kind === 'thinking' || last.kind === 'user';
 }
 
-export function StripFace({ chatId, avatar, name, tone, size, scale = 2, ...o }: { chatId: string; avatar: Avatar | undefined; name: string; tone: string; size: number; scale?: number; waitsUser: boolean; error: boolean; busy: boolean; done: boolean; pending?: boolean }) {
+export function StripFace({ chatId, avatar, name, tone, size, height = 32, ...o }: { chatId: string; avatar: Avatar | undefined; name: string; tone: string; size: number; height?: number; waitsUser: boolean; error: boolean; busy: boolean; done: boolean; pending?: boolean }) {
   const images = useAgentImages();
   const thinking = useApp(s => o.busy && isThinking(s.items[chatId]));
   const own = avatar?.kind === 'character' && isRoleId(avatar.value) && !!images[avatar.value];
   if (own) return <span className="strip-face"><AgentAvatar avatar={avatar} name={name} size={size} /><span className={`strip-dot lead tone-${tone}`} aria-hidden="true" /></span>;
-  return <span className="strip-face"><AgentSprite id={spriteIdOf(avatar)} state={spriteStateOf({ ...o, thinking })} scale={scale} label={t('product.avatar', { name })} /></span>;
+  return <span className="strip-face"><AgentSprite id={spriteIdOf(avatar)} state={spriteStateOf({ ...o, thinking })} height={height} label={t('product.avatar', { name })} /></span>;
 }

@@ -224,4 +224,4 @@
    working line leaves the strip (the person already moves). */
 .chat-tile.is-strip .tile-head, .agent-strips .chat-tile.is-expanded > .tile-head { padding-top:4px; padding-bottom:4px; }
 .chat-strip-line .typing-spark, .dc-now .typing-spark { display:none; }
-.strip-facts { padding-left:72px; }
+.strip-facts { padding-left:68px; }

@@ -201,7 +201,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
       {!embedded && <header className="tile-head">
         <div className="th-row">
           {focus && <button type="button" className="btn btn-ghost btn-s aw-back" onClick={() => toggleMaximize(key)} data-testid="focus-exit" aria-label={t('aw.fullExit')}><IconArrowLeft size={13} /><Kbd>Esc</Kbd></button>}
-          {focus ? <AgentAvatar avatar={chat.agent?.avatar} name={name} size={24}/> : <StripFace chatId={chatId} avatar={chat.agent?.avatar} name={name} size={26} scale={3} tone={first ? 'wait' : st.tone}
+          {focus ? <AgentAvatar avatar={chat.agent?.avatar} name={name} size={24}/> : <StripFace chatId={chatId} avatar={chat.agent?.avatar} name={name} size={26} height={48} tone={first ? 'wait' : st.tone}
             waitsUser={!!first || userWait} error={st.tone === 'err'} busy={busy} done={st.tone === 'done'} pending={st.tone === 'run' || st.tone === 'wait'} />}
           {/* the name is the strip's own button (keyboard, screen readers); a click anywhere on the strip does the same */}
           <h3 className="th-title" title={(chat.agent?.purpose&&rolePurpose(chat.agent.id,chat.agent.purpose))||chat.title}>

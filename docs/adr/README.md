@@ -292,7 +292,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0291](0291-remove-kind-by-examples-and-classificatori.md) The kind of work by examples and the Classificatori section are removed — accepted
 - [0292](0292-strip-dot-time-and-cost-always.md) The strip: a state dot in front, time and cost against the estimate always in sight — accepted, partly amended by 0293
 - [0293](0293-children-are-rows-face-back-on-the-strip.md) A delegated chat is one row like its parent; the role's face is back on the strip — accepted, partly amended by 0294
-- [0294](0294-little-people-as-sprites.md) The roles are little people at work, drawn as sprites — accepted
+- [0294](0294-little-people-as-sprites.md) The roles are little people at work on the strips — accepted
 
 ## Replaced
 

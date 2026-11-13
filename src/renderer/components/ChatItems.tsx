@@ -162,7 +162,7 @@ export function Typing({ what, testid, items, children }: { what: 'scrive' | 'pe
  *  ADR 0294), the spark elsewhere. */
 function WorkingMark({ what }: { what: 'scrive' | 'pensa' | 'lavora' }) {
   const id = useContext(SpriteCtx);
-  return id ? <AgentSprite id={id} state={what === 'pensa' ? 'think' : 'work'} scale={3} /> : <TypingSpark />;
+  return id ? <AgentSprite id={id} state={what === 'pensa' ? 'think' : 'work'} height={48} /> : <TypingSpark />;
 }
 
 /** The working mark: a four-point spark that turns and breathes (transform and opacity only: the compositor draws it). */

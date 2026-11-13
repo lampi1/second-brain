@@ -1,75 +1,101 @@
 // The roles' little people (lib/agent-sprites.ts on lib/sprite-rig.ts, ADR 0294): every role has every state, each
-// animation moves, each frame is a whole 20 × 16 picture with a body in it, the «done» one plays once; the SVG path of a
-// frame covers exactly its pixels; and what a strip's person does follows the chat (components/StripFace.tsx).
+// scene is a whole person with something that moves, a track compiles to one @keyframes rule that starts and ends on
+// the rest pose, the same movement is written once, the «done» scene stops by itself; and what a strip's person does
+// follows the chat (components/StripFace.tsx).
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(), on: vi.fn() } }));
 import { CHARACTER_IDS } from '../../src/shared/characters';
 import type { ChatItem } from '../../src/shared/contract';
-import { SPRITE_IDS, SPRITE_STATES, spriteAnim } from '../../src/renderer/lib/agent-sprites';
-import { SPRITE_H, SPRITE_W, framePaths, type Frame } from '../../src/renderer/lib/sprite-rig';
+import { SPRITE_IDS, SPRITE_STATES, spriteScene } from '../../src/renderer/lib/agent-sprites';
+import { J, VIEW, jointStyle, keyframesCss, nodeSvg, trackName, walk, type Group } from '../../src/renderer/lib/sprite-rig';
 import { AgentSprite, spriteIdOf } from '../../src/renderer/components/AgentSprite';
 import { isThinking, spriteStateOf } from '../../src/renderer/components/StripFace';
 
-const key = (f: Frame) => f.map(r => r.join(',')).join('\n');
-const filled = (f: Frame) => f.reduce((n, r) => n + r.filter(Boolean).length, 0);
+const groups = (id: (typeof SPRITE_IDS)[number], state: (typeof SPRITE_STATES)[number]) => walk(spriteScene(id, state).nodes).filter((n): n is Group => 'g' in n);
 
 describe('the little people', () => {
   it('has one for every character, and a plain one', () => {
     expect([...SPRITE_IDS].sort()).toEqual([...CHARACTER_IDS, 'plain'].sort());
   });
-  it('gives every role every state, as whole frames that move', () => {
+  it('gives every role every state: a whole person, with joints that move', () => {
     for (const id of SPRITE_IDS) for (const state of SPRITE_STATES) {
-      const a = spriteAnim(id, state);
-      expect(a.frames.length, `${id} ${state}`).toBeGreaterThanOrEqual(2);
-      expect(a.ms).toBeGreaterThan(0);
-      for (const f of a.frames) {
-        expect(f.length).toBe(SPRITE_H);
-        for (const row of f) expect(row.length).toBe(SPRITE_W);
-        // a head and a body at least: the first frame is what a still window shows
-        expect(filled(f), `${id} ${state}`).toBeGreaterThan(60);
-      }
-      expect(new Set(a.frames.map(key)).size, `${id} ${state} moves`).toBeGreaterThan(1);
-      expect(!!a.once).toBe(state === 'done');
+      const all = walk(spriteScene(id, state).nodes);
+      // two legs, a torso, a head with its face and hair, two arms of two parts each
+      expect(all.filter(n => !('g' in n)).length, `${id} ${state}`).toBeGreaterThan(24);
+      expect(groups(id, state).filter(g => g.track).length, `${id} ${state} moves`).toBeGreaterThanOrEqual(3);
+    }
+  });
+  it('keeps every key inside its loop, in a time a person can watch', () => {
+    for (const id of SPRITE_IDS) for (const state of SPRITE_STATES) for (const g of groups(id, state)) {
+      if (!g.track) continue;
+      expect(g.track.t, `${id} ${state}`).toBeGreaterThan(0.1);
+      expect(g.track.t).toBeLessThanOrEqual(6);
+      for (const key of g.track.keys) { expect(key.at, `${id} ${state}`).toBeGreaterThanOrEqual(0); expect(key.at, `${id} ${state}`).toBeLessThanOrEqual(100); }
     }
   });
   it('makes each role work in its own way', () => {
-    const first = SPRITE_IDS.map(id => key(spriteAnim(id, 'work').frames[0]!));
-    expect(new Set(first).size).toBe(SPRITE_IDS.length);
+    const work = SPRITE_IDS.map(id => spriteScene(id, 'work').nodes.map(nodeSvg).join(''));
+    expect(new Set(work).size).toBe(SPRITE_IDS.length);
   });
-  it('builds an animation once', () => {
-    expect(spriteAnim('artisan', 'work')).toBe(spriteAnim('artisan', 'work'));
+  it('lets the end stop by itself (the blink aside), and nothing else', () => {
+    for (const id of SPRITE_IDS) for (const state of SPRITE_STATES) {
+      const tracks = groups(id, state).flatMap(g => (g.track ? [g.track] : []));
+      expect(tracks.every(t => t.n === 1), `${id} ${state}`).toBe(state === 'done');
+      if (state !== 'done') expect(tracks.every(t => t.n === undefined), `${id} ${state}`).toBe(true);
+    }
+  });
+  it('writes the shared states once for all the roles', () => {
+    const css = SPRITE_IDS.map(id => keyframesCss(spriteScene(id, 'idle').nodes));
+    expect(new Set(css).size).toBe(1);
+  });
+  it('builds a scene once', () => {
+    expect(spriteScene('artisan', 'work')).toBe(spriteScene('artisan', 'work'));
   });
 });
 
-describe('a frame as SVG paths', () => {
-  it('covers each pixel once, one path per colour', () => {
-    const f = spriteAnim('sentinel', 'work').frames[0]!;
-    const paths = framePaths(f, SPRITE_W);
-    expect(new Set(paths.map(p => p.fill)).size).toBe(paths.length);
-    let area = 0;
-    for (const p of paths) for (const m of p.d.matchAll(/M(\d+) (\d+)h(\d+)v1h-\d+z/g)) {
-      expect(Number(m[1])).toBeGreaterThanOrEqual(SPRITE_W); // shifted along the strip
-      area += Number(m[3]);
-    }
-    expect(area).toBe(filled(f));
+describe('a joint', () => {
+  it('rests at its place, angle and scale', () => {
+    const j = J(3, 4, 20, []);
+    expect(jointStyle(j)).toEqual({ transform: 'translate(3px,4px) rotate(20deg) scale(1,1)' });
+    expect(nodeSvg(J(1, 2, 0, [{ c: [0, 0, 1], f: '#ffffff' }]))).toBe('<g class="sp-j" style="transform:translate(1px,2px) rotate(0deg) scale(1,1)"><circle cx="0" cy="0" r="1" fill="#ffffff"/></g>');
+  });
+  it('compiles its track to keyframes that start and end on the rest pose, each key with its own easing', () => {
+    const j = J(0, 5, -10, [], { t: 0.9, keys: [{ at: 40, a: -90, dy: -2, sy: 1.1, e: 'in' }, { at: 50, e: 'out' }] });
+    const name = trackName(j.j!, j.track!);
+    expect(name).toMatch(/^spk-[0-9a-z]+$/);
+    expect(jointStyle(j).animation).toBe(`${name} 0.9s linear 0s infinite both`);
+    const css = keyframesCss([j]);
+    expect(css).toBe(`@keyframes ${name}{`
+      + '0%{transform:translate(0px,5px) rotate(-10deg) scale(1,1);animation-timing-function:cubic-bezier(.45,0,.55,1)}'
+      + '40%{transform:translate(0px,3px) rotate(-90deg) scale(1,1.1);animation-timing-function:cubic-bezier(.6,0,1,.5)}'
+      + '50%{transform:translate(0px,5px) rotate(-10deg) scale(1,1);animation-timing-function:cubic-bezier(0,.5,.4,1)}'
+      + '100%{transform:translate(0px,5px) rotate(-10deg) scale(1,1);animation-timing-function:cubic-bezier(.45,0,.55,1)}}');
+  });
+  it('fades only where a key or the rest pose asks for it, and plays a counted track that many times', () => {
+    const j = J(0, 0, 0, [], { t: 2, n: 1, d: -0.5, keys: [{ at: 0, o: 0 }, { at: 50, o: 1 }] }, 1, 0);
+    expect(jointStyle(j).opacity).toBe('0');
+    expect(jointStyle(j).animation).toMatch(/ 2s linear -0\.5s 1 both$/);
+    expect(keyframesCss([j])).toContain('opacity:1');
+    expect(keyframesCss([J(0, 0, 0, [], { t: 1, keys: [{ at: 50, a: 5 }] })])).not.toContain('opacity');
+  });
+  it('writes the same movement once', () => {
+    const a = J(1, 1, 0, [], { t: 1, keys: [{ at: 50, a: 9 }] }), b = J(1, 1, 0, [], { t: 1, keys: [{ at: 50, a: 9 }] });
+    expect(keyframesCss([a, b]).match(/@keyframes/g)).toHaveLength(1);
   });
 });
 
 describe('the sprite on the page', () => {
-  it('draws the frames side by side and steps through them', () => {
-    const html = renderToStaticMarkup(createElement(AgentSprite, { id: 'artisan', state: 'work', label: 'Artisan' }));
-    const n = spriteAnim('artisan', 'work').frames.length;
+  it('draws the scene free on the page at the asked height', () => {
+    const html = renderToStaticMarkup(createElement(AgentSprite, { id: 'artisan', state: 'work', height: 48, label: 'Artisan' }));
     expect(html).toContain('data-sprite="artisan"');
     expect(html).toContain('data-sprite-state="work"');
     expect(html).toContain('aria-label="Artisan"');
-    expect(html).toContain(`steps(${n}, jump-none)`);
-    expect(html).toContain(`--sprite-end:${-(n - 1) * SPRITE_W}px`);
-    expect(html).toContain('animation-iteration-count:infinite');
-  });
-  it('plays the end once', () => {
-    expect(renderToStaticMarkup(createElement(AgentSprite, { id: 'scout', state: 'done' }))).toContain('animation-iteration-count:1');
+    expect(html).toContain(`viewBox="${VIEW.x} ${VIEW.y} ${VIEW.w} ${VIEW.h}"`);
+    expect(html).toContain('width="60" height="48"');
+    expect(html).not.toContain('background');
+    expect(html).toMatch(/class="sp-j" style="transform:[^"]*;animation:spk-/);
   });
   it('picks the person of the role, the plain one without a role', () => {
     expect(spriteIdOf({ kind: 'character', value: 'herald' })).toBe('herald');
