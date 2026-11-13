@@ -1,27 +1,29 @@
-/* The agents' strips in the Grindhouse: one column in the Orchestrator's order (AgentStrips.tsx), an area heading before
-   each group, each browser right under its chat. A collapsed chat is a short strip; an expanded chat and a browser get
-   a fixed share of the window, so the transcript scrolls inside and the native page view has a stable rect. */
+/* The agents' strips in the Grindhouse and the agent window (ADR 0287; AgentStrips.tsx, ChatTile.tsx, FullScreen.tsx):
+   one column in the Orchestrator's order, an area heading before each group. A closed chat is ONE borderless row (who,
+   what it does now, one state; its numbers show only out of the norm; three controls on hover); an open chat is a
+   window with a fixed share of the page, so the transcript scrolls inside and a native page view has a stable rect.
+   A chat that drives browsers is one window with three views (chat, side by side behind a divider, browser with the
+   input); full screen covers the whole app window (.full-layer), the Orchestrator one key away beside it. */
 .agent-strips { min-width:0; }
-.workspace-column { display:flex; flex-direction:column; gap:8px; min-width:0; padding-bottom:12px; }
+.workspace-column { display:flex; flex-direction:column; gap:2px; min-width:0; padding-bottom:12px; }
 .agent-pane-wrap { min-width:0; animation:strip-enter 260ms var(--ease) both; animation-delay:calc(var(--row-index, 0) * 30ms); }
 @keyframes strip-enter { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
 @media (prefers-reduced-motion: reduce) { .agent-pane-wrap { animation:none; } }
-.workspace-area { margin:10px 2px 2px; font:600 var(--fs-s) var(--font-display); color:var(--text-3); text-transform:uppercase; letter-spacing:.04em; }
+.workspace-area { margin:14px 8px 4px; font:600 var(--fs-s) var(--font-display); color:var(--text-3); }
 .agent-pane-wrap:first-child > .workspace-area { margin-top:2px; }
-.agent-pane { display:flex; flex-direction:column; position:relative; min-width:0; min-height:0; height:clamp(360px, 62vh, 720px); }
-.agent-pane.strip-pane { height:auto; }
+.agent-pane { display:flex; flex-direction:column; position:relative; min-width:0; min-height:0; height:clamp(380px, 66vh, 780px); margin:6px 0; }
+.agent-pane.strip-pane { height:auto; margin:0; }
 .agent-pane.browser-pane { height:clamp(320px, 55vh, 640px); }
 .agent-pane-content { flex:1; min-height:0; min-width:0; }
 .agent-pane-content > .tile { height:100%; width:100%; min-height:0; }
-/* Pair identity keeps its border/stripe; a large blur on hover costs raster time on long columns. */
-.agent-strips .tile.pair-hot { box-shadow:none; }
 .agent-strips .tile { transition:none; }
-.workspace-max { min-height:calc(100vh - 190px - var(--orchestrator-t,0px)); max-width:none; }
-.workspace-max .agent-pane { height:calc(100vh - 190px - var(--orchestrator-t,0px)); }
 .chat-tile .tile-head { padding:8px 10px; }
 .chat-tile .th-row { min-width:0; gap:6px; flex-wrap:wrap; }
-.orch-tally { display:flex; flex-wrap:wrap; gap:4px 12px; font-size:var(--fs-s); color:var(--text-3); min-width:0; }
-.chat-topic-row { display:flex; align-items:center; gap:8px; min-width:0; justify-content:space-between; min-height:18px; flex-wrap:wrap; row-gap:4px; }
+.orch-tally { flex:1 1 0; display:flex; gap:10px; font-size:var(--fs-s); color:var(--text-3); min-width:0; overflow:hidden; white-space:nowrap; }
+.orch-tally > span { overflow:hidden; text-overflow:ellipsis; }
+.orch-meta { display:flex; align-items:center; gap:8px; min-width:0; min-height:22px; }
+.orch-meta > .agent-identity { margin-left:auto; flex:none; }
+.orch-meta > .agent-identity > button { white-space:nowrap; }
 .chat-topic { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-2); font-size:var(--fs-s); }
 .chat-strip-line { display:flex; align-items:center; gap:12px; padding:0 10px 8px; min-width:0; font-size:var(--fs-s); color:var(--text-2); }
 .chat-strip-line > .link-btn { margin-left:auto; flex:none; }
@@ -32,7 +34,6 @@
 .chat-work.expanded .items-wrap { min-height:0; flex:1; }
 .chat-work:not(.expanded) .chat-work-inner { visibility:hidden; content-visibility:hidden; } /* a collapsed strip keeps its DOM, scroll and draft, but its transcript costs no style, layout or paint */
 .chat-work:not(.expanded) .spin { animation-play-state:paused; }
-.chat-expand { white-space:nowrap; }
 .chat-tile.is-strip .tile-requests { max-height:180px; overflow:auto; }
 .workspace,.workspace.no-orchestrator { padding-top:calc(var(--gap) + var(--orchestrator-t,0px)); }
 .orchestrator-resize:focus-visible { outline:2px solid var(--focus); }
@@ -53,35 +54,122 @@
 .chat-tile .th-title { flex:1 1 120px; }
 .chat-tile .th-topic { margin-left:8px; font-weight:400; color:var(--text-2); }
 .chat-header-actions { display:flex; align-items:center; justify-content:flex-end; gap:4px; flex:none; flex-wrap:wrap; max-width:100%; margin-left:auto; white-space:normal; }
-.chat-topic-row > .agent-identity { margin-left:auto; max-width:100%; }
-.chat-topic-row > .agent-identity > button { white-space:normal; text-align:right; }
-/* The strip (Brother, 18/10): the whole collapsed strip is the click target; its facts stay on one dense line; a
-   decision waiting is a discreet amber pill (ChatTile.tsx), the panels only on the expanded strip. */
-.chat-tile.is-strip { cursor:pointer; }
-.chat-tile.is-strip:hover { border-color:var(--border-2); background:var(--surface-2); }
-.chat-tile.is-expanded .tile-head { cursor:pointer; }
-.chat-tile.is-strip .chat-strip-line { cursor:pointer; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; display:block; color:var(--text-3); }
-.strip-facts { padding-left:30px; margin-top:2px; flex-wrap:nowrap; }
+/* The closed strip: one row, no card (the page is the card; a card inside it only adds a frame). The whole row is
+   the click target; the state on the right is a dot and one word or time; the three controls keep their room, so the
+   states of every row line up, and show on hover or keyboard focus (the ⋯ stays faintly visible). */
+.chat-tile.is-strip { cursor:pointer; border-color:transparent; background:transparent; border-radius:var(--r-m); overflow:visible; }
+.chat-tile.is-strip:hover, .chat-tile.is-strip:focus-within { background:var(--surface-2); }
+.chat-tile.is-strip.focused { border-color:transparent; background:var(--surface-2); }
+.chat-tile.is-strip.tone-wait { border-color:transparent; }
+.chat-tile.is-strip .tile-head { padding:5px 4px 5px 8px; border-bottom:0; }
+.chat-tile.is-strip .th-row { flex-wrap:nowrap; gap:8px; min-height:26px; }
+.chat-tile .th-title { flex:none; max-width:42%; }
+.strip-name { all:unset; cursor:pointer; font:inherit; color:inherit; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; border-radius:4px; }
+.strip-name:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
+.strip-now { flex:1 1 0; min-width:0; display:flex; align-items:baseline; gap:8px; overflow:hidden; white-space:nowrap; font-size:var(--fs-s); }
+.chat-tile .th-topic { flex:0 1 auto; min-width:0; margin:0; overflow:hidden; text-overflow:ellipsis; font-size:13px; font-weight:400; color:var(--text-2); }
+.chat-tile .chat-topic { flex:0 1 auto; }
+.chat-tile.is-strip .chat-strip-line { flex:1 1 0; min-width:0; display:block; padding:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:var(--text-3); cursor:pointer; }
+.chat-tile.is-strip .chat-strip-line .typing { padding:0; vertical-align:bottom; }
+.chat-tile.is-strip .th-topic + .chat-strip-line:not(:empty)::before { content:"· "; color:var(--text-4); }
+.strip-state { flex:none; display:inline-flex; align-items:center; gap:6px; font-size:var(--fs-s); color:var(--text-3); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.strip-dot { width:7px; height:7px; border-radius:50%; background:var(--text-4); }
+.strip-state.tone-run .strip-dot { background:var(--accent); }
+.strip-state.tone-done .strip-dot { background:var(--green); }
+.strip-state.tone-err { color:var(--red); }
+.strip-state.tone-err .strip-dot { background:var(--red); }
+.strip-state.tone-wait { color:var(--amber); }
+.strip-state.tone-wait .strip-dot { background:var(--amber); }
+.strip-alert { flex:none; font-size:var(--fs-s); font-weight:600; color:var(--amber); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.chat-tile.is-strip .th-ctx { margin-left:0; }
+.chat-tile.is-strip .chat-header-actions { min-width:86px; flex-wrap:nowrap; margin-left:0; }
+.chat-tile.is-strip .chat-header-actions > .icon-btn { opacity:0; transition:opacity var(--dur-fast) var(--ease); }
+.chat-tile.is-strip .chat-header-actions > .icon-btn:last-child { opacity:.45; }
+.chat-tile.is-strip:hover .chat-header-actions > .icon-btn, .chat-tile.is-strip:focus-within .chat-header-actions > .icon-btn, .chat-tile.is-strip .chat-header-actions > .icon-btn[aria-expanded="true"] { opacity:1; }
+@media (prefers-reduced-motion: reduce) { .chat-tile.is-strip .chat-header-actions > .icon-btn { transition:none; } }
+/* the open window's head: the same row; a click on it closes the window (not in full screen) */
+.chat-tile.is-expanded:not(.is-full) .tile-head { cursor:pointer; }
+.chat-tile.is-expanded .th-row { flex-wrap:nowrap; gap:8px; }
+.chat-tile.is-expanded .strip-now { font-size:13px; }
+.strip-facts { padding-left:32px; margin-top:2px; flex-wrap:nowrap; }
 .strip-facts .th-sub-text { flex:0 1 auto; }
-.chat-expand svg { transition:transform var(--dur) var(--ease); }
-.chat-expand[aria-expanded="true"] svg { transform:rotate(180deg); }
+.strip-facts > .agent-identity { margin-left:auto; flex:none; }
+.strip-facts > .agent-identity > button { white-space:nowrap; }
+.strip-facts > .th-ctx { margin-left:0; }
+/* Three views of one agent window (ChatTile.tsx): a quiet segmented switch in the head. */
+.aw-views { flex:none; display:inline-flex; padding:2px; gap:1px; border-radius:8px; background:var(--surface-2); border:1px solid var(--border); }
+.aw-view { display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 8px; border:0; border-radius:6px; background:none; color:var(--text-3); font:500 12px var(--font); cursor:pointer; white-space:nowrap; }
+.aw-view:hover { color:var(--text); }
+.aw-view.on { background:var(--surface-4); color:var(--text); }
+.chat-tile.is-embedded > .aw-views { align-self:flex-start; margin:6px 10px 0; }
+@container (max-width: 640px) { .aw-view > span { display:none; } }
+@container (max-width: 1040px) { .full-tools .kbd, .aw-back .kbd { display:none; } }
+.aw-body { display:flex; flex:none; min-width:0; min-height:0; }
+.chat-tile.is-expanded > .aw-body { flex:1; }
+.aw-body > .chat-work { min-width:0; }
+.aw-body > .chat-work.expanded { flex:1 1 0; display:flex; }
+.aw-body > .chat-work.expanded > .chat-work-inner { flex:1; min-width:0; }
+.aw-browser { flex:1 1 0; min-width:0; min-height:0; display:flex; flex-direction:column; }
+.aw-browser > .tile { flex:1; height:auto; border:0; border-radius:0; background:none; }
+.aw-divider { flex:none; width:9px; margin:0 -4px; position:relative; z-index:3; cursor:col-resize; touch-action:none; }
+.aw-divider::before { content:""; position:absolute; top:0; bottom:0; left:4px; width:1px; background:var(--border); }
+.aw-divider::after { content:""; position:absolute; top:calc(50% - 16px); height:32px; left:3px; width:3px; border-radius:2px; background:var(--border-3); transition:background-color var(--dur-fast) var(--ease); }
+.aw-divider:hover::after, .aw-divider:active::after, .aw-divider:focus-visible::after { background:var(--accent); }
+.aw-divider:focus-visible { outline:none; }
+/* the browser alone: the page above, of the chat only its input */
+.aw-body.view-browser { flex-direction:column; }
+.aw-body.view-browser > .aw-browser { order:0; }
+.aw-body.view-browser > .chat-work.expanded { order:1; flex:none; }
+.aw-body.view-browser > .chat-work .chat-work-inner > :not(.composer) { display:none; }
+.aw-tabs { flex:none; display:flex; gap:2px; padding:6px 8px 0; min-width:0; overflow-x:auto; }
+.aw-tab { flex:0 1 180px; min-width:60px; height:24px; padding:0 10px; border:1px solid transparent; border-bottom:0; border-radius:7px 7px 0 0; background:none; color:var(--text-3); font:500 12px var(--font); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
+.aw-tab:hover { color:var(--text); background:var(--surface-2); }
+.aw-tab.on { color:var(--text); background:var(--surface-2); border-color:var(--border); }
+/* a narrow window puts the two one over the other, the chat first */
+@container (max-width: 520px) {
+  .aw-body.view-split { flex-direction:column; }
+  .aw-body.view-split > .aw-divider { display:none; }
+  .aw-body.view-split > .aw-browser { border-top:1px solid var(--border); }
+}
+/* A browser as the address bar only (BrowserTile.tsx): inside an agent window, and as a tile of its own. */
+.browser-tile .tile-head { padding:6px 8px; }
+.browser-tile .th-row { flex-wrap:nowrap; }
+.browser-tile .last-action { flex:0 1 auto; margin-left:0; padding-left:0; max-width:34%; min-width:0; white-space:nowrap; }
+.browser-tile.is-embedded .tile-head { border-bottom:0; padding-bottom:0; }
+/* Full screen (FullScreen.tsx, ADR 0287): the whole app window, over the top bar, the navigation and the Orchestrator
+   column; with the Orchestrator asked for (Ctrl+R), the window leaves it its column, full height. */
+.full-layer { position:fixed; inset:0; z-index:36; display:flex; background:var(--bg); animation:fadeIn var(--dur) var(--ease); }
+.app.full-orch .full-layer { right:var(--orchestrator-r, 0px); }
+/* in full screen the browser's own ⤢ would only repeat the «Browser» view */
+.chat-tile.is-full .browser-max { display:none; }
+.full-layer > .tile { flex:1; height:auto; border:0; border-radius:0; }
+.full-layer > .tile > .tile-head { padding:6px 10px; background:var(--bg-2); }
+.full-layer > .chat-tile .th-title { font-size:14px; }
+.app.is-full .orchestrator-dock { visibility:hidden; }
+/* what the full screen covers leaves the tab order too */
+.app.is-full > .topbar, .app.is-full .sidebar { visibility:hidden; }
+.app.is-full.full-orch .orchestrator-dock { visibility:visible; top:0 !important; height:100vh !important; z-index:37; border-radius:0; }
+.aw-back { flex:none; gap:6px; padding:0 6px 0 8px; background:none; border-color:transparent; color:var(--text-2); }
+.aw-back:hover:not(:disabled) { background:var(--surface-3); border-color:transparent; color:var(--text); }
+.full-tools { flex:none; display:inline-flex; align-items:center; gap:6px; }
+.full-orch-btn { gap:6px; background:none; border-color:transparent; color:var(--text-2); }
+.full-orch-btn .orchestrator-column-mark { color:var(--violet); }
+.full-orch-btn.on { background:var(--surface-3); color:var(--text); }
+@media (prefers-reduced-motion: reduce) { .full-layer { animation:none; } }
 .strip-wait { display:inline-flex; align-items:center; gap:6px; height:20px; padding:0 8px; border-radius:99px; border:1px solid var(--amber-line); background:var(--amber-bg); color:var(--amber); font:inherit; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap; flex:none; }
 .strip-wait:hover { background:color-mix(in srgb, var(--amber) 18%, transparent); }
 .strip-wait:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
 .strip-wait b { font-weight:700; }
 .strip-wait-dot { width:6px; height:6px; border-radius:50%; background:var(--amber); }
-@media (prefers-reduced-motion: reduce) { .chat-expand svg { transition:none; } }
-.agent-strips-actions { display:flex; justify-content:flex-end; margin-bottom:6px; }
 /* The sub-agents of a chat (ChildStrips.tsx): short indented strips hanging under their parent on the same connector
    as an owned browser (.owned-pane below); a running one carries the pulsing dot of a running chat. */
-.child-strips { position:relative; display:flex; flex-direction:column; gap:4px; margin:4px 0 0 18px; padding-left:12px; min-width:0; }
-.child-strips::before { content:''; position:absolute; left:0; top:-8px; bottom:12px; width:2px; border-radius:2px; background:var(--pair, var(--border-2)); }
-.child-strip { position:relative; display:flex; flex-wrap:wrap; align-items:center; gap:8px; min-width:0; min-height:26px; padding:3px 10px; border:1px solid var(--border); border-radius:8px; background:var(--surface); font-size:var(--fs-s); color:var(--text-2); }
-.child-strip::before { content:''; position:absolute; left:-12px; top:50%; width:10px; height:2px; background:var(--pair, var(--border-2)); }
-.child-strip.is-active { border-color:color-mix(in srgb, var(--accent) 30%, var(--border)); }
+.child-strips { position:relative; display:flex; flex-direction:column; gap:0; margin:0 0 2px 19px; padding-left:12px; min-width:0; }
+.child-strips::before { content:''; position:absolute; left:0; top:-2px; bottom:13px; width:1px; background:var(--border-2); }
+.child-strip { position:relative; display:flex; align-items:center; gap:8px; min-width:0; min-height:26px; padding:2px 8px; border-radius:8px; font-size:var(--fs-s); color:var(--text-2); }
+.child-strip::before { content:''; position:absolute; left:-12px; top:50%; width:10px; height:1px; background:var(--border-2); }
 .child-strip.is-ended { color:var(--text-3); }
 .child-strip-mark { flex:none; color:var(--text-4); }
-.child-strip-kind { flex:none; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--text-3); }
+.child-strip-kind { flex:none; color:var(--text-3); }
 .child-strip-task { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
 .child-strip.is-ended .child-strip-task { color:var(--text-2); }
 .child-strip-state { flex:none; }
@@ -91,23 +179,6 @@
 .agent-pane-wrap.owned-pane { position:relative; margin:-4px 0 0 18px; padding-left:12px; }
 .agent-pane-wrap.owned-pane::before { content:''; position:absolute; left:0; top:-6px; bottom:12px; width:2px; border-radius:2px; background:var(--pair, var(--border-2)); }
 .agent-pane-wrap.owned-pane::after { content:''; position:absolute; left:0; top:22px; width:10px; height:2px; background:var(--pair, var(--border-2)); }
-/* An expanded strip with its browsers: chat left, browsers right, one frame on the strip's accent (AgentStrips.tsx); a
-   narrow column stacks them, the chat sized to its content. */
-.strip-solo { display:contents; }
-.strip-pair { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:8px; padding:6px; border:1px solid color-mix(in srgb, var(--pair, var(--border-2)) 60%, transparent); border-radius:12px; background:color-mix(in srgb, var(--pair, transparent) 5%, transparent); }
-.strip-pair > .agent-pane { height:clamp(360px, 62vh, 720px); }
-.strip-pair-side { display:flex; flex-direction:column; gap:8px; min-width:0; height:clamp(360px, 62vh, 720px); }
-.strip-pair-side > .agent-pane.browser-pane { flex:1; height:auto; min-height:0; }
-.agent-strips.is-narrow .strip-pair { grid-template-columns:minmax(0, 1fr); }
-.agent-strips.is-narrow .strip-pair > .agent-pane { height:auto; max-height:clamp(360px, 62vh, 720px); }
-.agent-strips.is-narrow .strip-pair-side { height:auto; }
-.agent-strips.is-narrow .strip-pair-side > .agent-pane.browser-pane { flex:none; height:clamp(320px, 55vh, 640px); }
-/* The globe of a strip that drives browsers (ChatTile.tsx): quiet until pressed, then on the strip's pair accent; its
-   browsers are folded until then (owner, 18/10). */
-.chat-browser-toggle { position:relative; width:auto; min-width:26px; padding:0 6px; gap:3px; color:var(--pair, var(--text-3)); opacity:.75; }
-.chat-browser-toggle:hover { opacity:1; }
-.chat-browser-toggle.on { opacity:1; color:var(--pair, var(--accent)); background:color-mix(in srgb, var(--pair, var(--accent)) 14%, transparent); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--pair, var(--accent)) 45%, transparent); }
-.chat-browser-n { font-size:10px; font-weight:650; font-variant-numeric:tabular-nums; }
 /* A run's live estimate (ChatTile.tsx RunEstimateChip): dashed and labelled "stima", never mistaken for the run's own
    time and cost beside it; amber once the run is past it. */
 .th-estimate { display:inline-flex; align-items:center; gap:6px; flex:0 3 auto; min-width:0; overflow:hidden; height:18px; padding:0 7px; border:1px dashed var(--border-3); border-radius:99px; color:var(--text-3); font-size:11px; font-variant-numeric:tabular-nums; white-space:nowrap; }

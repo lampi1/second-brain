@@ -14,6 +14,4 @@ export const agentDetailIt = {
   'agentDetail.version': 'Versione',
   'agentDetail.updated': 'Ultima modifica',
   'agentDetail.closeEditor': 'Chiudi senza salvare',
-  'agentDetail.browserOn': ({ n }: { n: number }) => n === 1 ? 'Nascondi il browser' : `Nascondi i ${n} browser`,
-  'agentDetail.browserOff': ({ n }: { n: number }) => n === 1 ? 'Mostra il browser agganciato' : `Mostra i ${n} browser agganciati`,
 };

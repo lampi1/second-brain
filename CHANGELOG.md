@@ -26,6 +26,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - The first-run setup is three moments in one window instead of six steps: language and name, your AI (found on the
   computer by itself, OpenCode included), then the first real request to the Orchestrator typed inside the setup.
   Tools, folders and goals are no longer asked: the Orchestrator proposes them when needed (ADR 0279).
+- Grindhouse: a strip is one line (agent, what it is doing, state); an agent's chat and browser are one window with
+  three views (Chat, Affiancati, Browser) and a line to drag between them; full screen (F11 or Ctrl+Shift+F) covers the
+  whole app for chats and browsers, with the Orchestrator beside it on Ctrl+R. The top bar keeps the controls of every
+  minute and moves the rest under the gear; the Orchestrator's questions and the role cards lost their boxes and
+  marks (ADR 0287).
 - README rewritten around the two things the app is (multi-harness orchestration, a brain of skills and memory), with
   a plain quick start; `SECURITY.md` added; the ADR index lists the decisions in force first and every replaced or
   amended record names the record that changed it.

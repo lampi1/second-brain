@@ -26,10 +26,10 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     // "…" is on the bar at any width with Credenziali; it left the bar (the popups switch is on it).
     // The hide-browsers switch is gone (#82); "Migliora l'app" is gone (ADR 0079): no entry anywhere.
     for (const off of ['topbar-browsers', 'topbar-credentials', 'topbar-improve']) await expect(page.getByTestId(off)).toHaveCount(0);
-    await page.getByTestId('topbar-more').click();
+    await page.getByTestId('settings').click();
     await expect(page.getByTestId('more-credentials')).toBeVisible();
     for (const id of ['more-browsers', 'more-improve']) await expect(page.getByTestId(id)).toHaveCount(0);
-    await expect(page.getByTestId('topbar-more-pop')).not.toContainText('Migliora');
+    await expect(page.getByTestId('settings-pop')).not.toContainText('Migliora');
     await shot(page, 'menus-more');
     await page.keyboard.press('Escape');
 

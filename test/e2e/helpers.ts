@@ -146,7 +146,7 @@ export async function expandChats(page: Page, ...ids: string[]): Promise<void> {
   }
 }
 
-/** Expands the strips and opens their browsers beside them (folded until the strip's globe is pressed: ChatTile.tsx). */
+/** Expands the strips and puts each on its «Affiancati» view, chat and browser side by side (ChatTile.tsx, ADR 0287). */
 export async function showBrowsers(page: Page, ...ids: string[]): Promise<void> {
   await expandChats(page, ...ids);
   for (const id of ids) {
@@ -236,11 +236,11 @@ export async function openNotesMap(page: Page): Promise<void> {
   await expect(page.getByTestId('dash-map')).toBeVisible();
 }
 
-/** Runs an action of the top bar's "…" menu (Credenziali: TopBar.tsx MoreButton). */
-export async function moreAction(page: Page, item: 'more-credentials'): Promise<void> {
-  await page.getByTestId('topbar-more').click();
+/** Runs an action of the top bar's gear menu (TopBar.tsx: new browser, maintenance, credentials; ADR 0287). */
+export async function moreAction(page: Page, item: 'more-credentials' | 'topbar-new-browser' | 'topbar-maint-run'): Promise<void> {
+  await page.getByTestId('settings').click();
   await page.getByTestId(item).click();
-  await expect(page.getByTestId('topbar-more-pop')).toHaveCount(0);
+  await expect(page.getByTestId('settings-pop')).toHaveCount(0);
 }
 
 export async function shot(page: Page, name: string): Promise<string> {

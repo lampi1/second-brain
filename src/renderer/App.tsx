@@ -1,11 +1,11 @@
-// The app shell: top bar, the left navigation (the Grindhouse, brain sections, the map), the needs-you lane (focus mode's
-// peek), a brain page (the Grindhouse holds the agents' vertical strips; focus mode replaces it with one chat), the full-screen 3D map, the
+// The app shell: top bar, the left navigation (the Grindhouse, brain sections, the map), a brain page (the Grindhouse
+// holds the agents' strips; a full screen takes its place and covers the whole window: FullScreen.tsx, ADR 0287), the full-screen 3D map, the
 // persistent Orchestrator column on the right (always, on every page, the 3D map included: the user,
 // 2026-10-18, «io voglio sempre l'orchestratore a destra»; OrchestratorOverlay.tsx, ADR 0068), the notification center, toasts, the live
 // region, tooltips, the questions window ("Domande in finestra") and dialogs. It owns the global keyboard map
 // (lib/keys.ts → actions.ts, G-letter go-to sequences), theme and density, highlights the element a link points to, and
 // tells the browser-view reporter when something covers everything. Mounted by main.tsx.
-import { lazy, Suspense, useEffect, type CSSProperties } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react';
 import{t}from'./i18n';
 import { BRAIN_PAGES, BrainMap, BrainPage, GO_ALIASES } from './brain';
 import { relayToasts } from './brain/components/ui';
@@ -15,7 +15,7 @@ import { liveSource } from './lib/liveSource';
 import { sameList } from './store/state';
 import { routinePlacements } from './lib/routine-chats';
 import { useApp } from './store/store';
-import { openModal, closeModal, pageLabel, setMap, setPrefs, toast, ui } from './store/ui';
+import { openModal, closeModal, pageLabel, setFullOrch, setMap, setPrefs, toast, ui } from './store/ui';
 import {
   back, brainBridge, closeViewer, escapeOne, toggleViewerFull, viewerStep, focusChat, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, closeFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleOrchestrator, askRenewOrchestrator, newRequest,
   openMaps } from './actions';
@@ -24,11 +24,11 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { BrainSetupBanner } from './components/BrainSetupBanner';
 import { HealthBanner } from './components/HealthBanner';
 import { Sidebar } from './components/Sidebar';
-import { NeedsLane, LiveRegion } from './components/NeedsLane';
+import { LiveRegion } from './components/NeedsLane';
 import { OrchestratorOverlay, useDockReserve } from './components/OrchestratorOverlay';
 import {UpdateCheckpointStatus} from './components/UpdateCheckpointStatus';
 
-import { FocusView } from './components/FocusView';
+import { FullScreen } from './components/FullScreen';
 import { NotificationCenter } from './components/NotificationCenter';
 import { AutoCloser } from './components/AutoCloser';
 import { CommandPalette } from './components/CommandPalette';
@@ -173,12 +173,23 @@ function useHighlight(): void {
 
 /** A brain page (built in src/renderer/brain) with a thin frame: back to the chats and its title (links are copied from the command palette); the Orchestrator
  *  widget sits in the bottom-right corner, over the page too. */
+let homeScroll = 0;
 function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
   const arg = ui.use(s => s.pageArg);
   const home = id === 'home'; // the Grindhouse is where every way back leads (Esc, Ctrl+1): no back button on it
   // a page that became a Memoria tab (ADR 0122) reached without go() (an old saved place): moved to its tab
   const hub = hubRedirect(id, arg);
   useEffect(() => { if (hub) go(hub, { push: false }); }, [hub?.arg]);
+  // the Grindhouse comes back where it was scrolled after a full screen (which takes the page's place, ADR 0287)
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = bodyRef.current;
+    if (!home || !el) return;
+    let frame = requestAnimationFrame(() => { frame = requestAnimationFrame(() => { el.scrollTop = homeScroll; }); });
+    const onScroll = () => { homeScroll = el.scrollTop; };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => { cancelAnimationFrame(frame); el.removeEventListener('scroll', onScroll); };
+  }, [home]);
   return (
     <div className="page-frame" data-testid={`page-${id}`}>
       <div className="page-bar">
@@ -188,7 +199,7 @@ function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
         {!home && <span className="page-hint"><Keys combo="Esc" /> {pageLabel('home')}</span>}
       </div>
       {/* keyed by the page: every page change replays the entry (linear.css panel-enter), no hard cut */}
-      <div className="page-body" key={id}>
+      <div className="page-body" key={id} ref={bodyRef}>
         <ErrorBoundary where={id}>
         {hub ? null : id === 'log' ? <LogPage /> : id === 'guida' ? <Suspense fallback={null}><GuidePage arg={arg ?? undefined} /></Suspense> : id === 'registrazioni' ? <RecordingsPage /> : id === 'impara' ? <ImparaPage /> : id === 'agenti' ? <AgentCatalogPage /> : id === 'impostazioni'
           ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.settings')}><div className="bx-inner"><SettingsPage /></div></div>
@@ -215,7 +226,7 @@ export function App() {
   const appearance=ui.use(s=>s.prefs.appearance);
   const maximized = ui.use(s => s.maximized);
   const focusMode = ui.use(s => s.focusMode);
-  const lanePeek = ui.use(s => s.lanePeek);
+  const fullOrch = ui.use(s => s.fullOrch);
   const page = ui.use(s => s.page);
   const map = ui.use(s => s.map);
   const mapArg = ui.use(s => s.mapArg);
@@ -238,18 +249,20 @@ export function App() {
   const viewerOpen = ui.use(s => s.viewer.open);
   useEffect(() => { setBlocked(modal !== null || map || qShown); }, [modal, map, qShown]);
   useEffect(() => { setKnownTabs(tabIds); }, [tabIds]);
-  useEffect(() => { schedule(420); }, [maximized, focusMode, page, density, lanePeek, center, dock.right, dock.bottom]);
+  useEffect(() => { schedule(420); }, [maximized, focusMode, fullOrch, page, density, center, dock.right, dock.bottom]);
   useEffect(() => { if (focused) setPrefs({ lastFocus: focused }); }, [focused]);
   useEffect(() => { if (!focusChatExists) ui.set(s => ({ ...s, focusMode: null })); }, [focusChatExists]);
 
-  const inFocus = !!focusMode && !routineFocus && page === 'home';
-  // the Grindhouse has no "Ti aspettano" strip any more (the user, 2026-10-12: "togli le domande che compaiono in alto ti
-  // aspettano, adesso me le fa l’Orchestrator"): each request is in its tile, the Orchestrator or the global layer; focus mode keeps
-  // its Ctrl+J peek
-  const showLane = inFocus && lanePeek;
+  // full screen (ADR 0287): one chat's window, or a browser tab without a strip, over the whole app window
+  const fullChat = !!focusMode && !routineFocus && page === 'home' && !map ? focusMode : null;
+  const fullTab = !fullChat && maximized?.startsWith('browser:') && page === 'home' && !map && tabIds.includes(maximized.slice(8)) ? maximized.slice(8) : null;
+  const full = !!fullChat || !!fullTab;
+  // the column beside a full screen belongs to that full screen: however it ended (a closed chat or tab, a page), the next one starts without it
+  useEffect(() => { if (!full && fullOrch) setFullOrch(false); }, [full, fullOrch]);
+  useEffect(() => { if (maximized && !fullTab && !fullChat) ui.set(s => (s.maximized ? { ...s, maximized: null } : s)); }, [maximized, fullTab, fullChat]);
   return (
     // the Orchestrator column's room: the workspace, the map and the questions window leave it free (shell.css)
-    <div className="app" data-testid="app" style={{ '--orchestrator-r': `${dock.right}px`, '--orchestrator-b': `${dock.bottom}px`,'--orchestrator-t':`${dock.top??0}px` } as CSSProperties}>
+    <div className={`app${full ? ' is-full' : ''}${full && fullOrch ? ' full-orch' : ''}`} data-testid="app" style={{ '--orchestrator-r': `${dock.right}px`, '--orchestrator-b': `${dock.bottom}px`,'--orchestrator-t':`${dock.top??0}px` } as CSSProperties}>
       <TopBar />
       <Toasts />
       <BrainSetupBanner />
@@ -258,10 +271,9 @@ export function App() {
       <div className="shell">
         <Sidebar />
         <div className="main-col">
-          {showLane && <NeedsLane peek={lanePeek} />}
           <main className="workspace no-orchestrator" data-testid="workspace">
             <div className="view-area">
-              {inFocus ? <ErrorBoundary where="focus" key={`focus-${focusMode}`}><FocusView chatId={focusMode} /></ErrorBoundary> : <PageFrame id={page} />}
+              {full ? <ErrorBoundary where="focus" key={`focus-${fullChat ?? fullTab}`}><FullScreen chatId={fullChat} tabId={fullTab} /></ErrorBoundary> : <PageFrame id={page} />}
             </div>
           </main>
         </div>

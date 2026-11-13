@@ -16,19 +16,18 @@ test('each browser beside its chat, folded by its globe; a saved hide-browsers c
   const column = page.getByTestId('view-agents');
   await expect(column.locator('[data-testid^="tile-browser-"]')).toHaveCount(2);
   await expect(column.getByTestId('tile-chat-qa')).toBeVisible();
-  // each browser follows the chat that drives it
-  const panes = await column.locator('[data-workspace-pane]').evaluateAll(els => els.map(e => e.getAttribute('data-workspace-pane')));
-  for (const [chat, tab] of [['qa', 'tab-qa'], ['sms', 'tab-sms']]) expect(panes.indexOf(`browser:${tab}`)).toBe(panes.indexOf(`chat:${chat}`) + 1);
+  // each browser is inside the window of the chat that drives it (ADR 0287)
+  for (const [chat, tab] of [['qa', 'tab-qa'], ['sms', 'tab-sms']]) await expect(page.getByTestId(`strip-pair-${chat}`).getByTestId(`tile-browser-${tab}`)).toBeVisible();
   await shot(page, 'zones-agents');
 
-  // the strip's globe folds its browser again; the strip stays open
-  await page.getByTestId('chat-browser-qa').click();
+  // the «Chat» view folds its browser again; the strip stays open
+  await page.getByTestId('chat-view-chat-qa').click();
   await expect(page.getByTestId('chat-browser-qa')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.getByTestId('tile-browser-tab-qa')).toHaveCount(0);
   await expect(page.getByTestId('chat-expand-qa')).toHaveAttribute('aria-expanded', 'true');
 
   // the retired "Nascondi browser" switch (#82): no menu item, no shortcut, a saved "on" no longer hides anything
-  await page.getByTestId('topbar-more').click();
+  await page.getByTestId('settings').click();
   await expect(page.getByTestId('more-browsers')).toHaveCount(0);
   await page.keyboard.press('Escape');
   await page.keyboard.press('Control+Shift+B');

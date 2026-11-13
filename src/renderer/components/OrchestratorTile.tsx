@@ -6,8 +6,8 @@
 // source-chat links in the transcript. Its ⋯ menu is the chat menu (ChatMenu) plus "Ricomincia da
 // capo", "Cambia motore" (both open the Nuovo Orchestrator confirm) and "Pulisci"; the eraser on its head is "Pulisci" in
 // one click, without the confirm (clearOrchestratorNow, the quick /clear). With no Orchestrator yet it offers to create
-// one. Under its head, a line with the chats it started today by state and the cost apart, its own and theirs (#153,
-// lib/orchestrator-tally.ts); on its head the one «Manutenzione» for every page (#150, MaintenanceButton compact) and the moon of «Modalità notte» with its line while on (AwayToggle.tsx, ADR 0191); the phone of «Controllo remoto» with the claude.ai link while on (RemoteControl.tsx, ADR 0229); the morning block's line while strips are open (no plan panel: the strips carry each estimate, #124) (MorningBlock.tsx, ADR 0102). When it drives a browser, it wears that pair's accent like any chat (lib/pairs.ts). Used by OrchestratorOverlay.tsx.
+// one. In its head, one line with its model, the chats it started today by state and the cost apart, its own and theirs (#153,
+// lib/orchestrator-tally.ts), and its details; «Manutenzione» and the project maps are on the top bar (ADR 0287); on its head the moon of «Modalità notte» with its line while on (AwayToggle.tsx, ADR 0191); the phone of «Controllo remoto» with the claude.ai link while on (RemoteControl.tsx, ADR 0229); the morning block's line while strips are open (no plan panel: the strips carry each estimate, #124) (MorningBlock.tsx, ADR 0102). When it drives a browser, it wears that pair's accent like any chat (lib/pairs.ts). Used by OrchestratorOverlay.tsx.
 import { AwayButton, AwayLine } from './AwayToggle';
 import { RemoteButton, RemoteLine } from './RemoteControl';
 import { memo, useEffect, useRef, useState } from 'react';
@@ -19,23 +19,21 @@ import { ensureOrchestrator, stop, useApp } from '../store/store';
 import { setFocused, ui } from '../store/ui';
 import { t } from '../i18n';
 import { pairHover, usePair } from '../lib/pairs';
-import { awaitingCard, clearOrchestratorNow, go, openMaps } from '../actions';
+import { awaitingCard, clearOrchestratorNow, go } from '../actions';
 import { ItemList, turnActivity, Typing } from './ChatItems';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMenu, TitleInput } from './ChatMenu';
 import { ModelChip } from './ModelChip';
 import { ORCHESTRATOR_ROLE_ID } from '@shared/roles';
 import { AgentIdentity } from './AgentIdentity';
-import { HelpTip } from './HelpTip';
 import {AgentAvatar}from'./AgentAvatar';
 import { ChildStrips } from './ChildStrips';
 import { MorningLine } from './MorningBlock';
-import { MaintenanceButton } from './brain-model/MaintenanceButton';
 import { useFlash } from './ChatTile';
 import { StrategyPanel } from './StrategyPanel';
 import { planCards } from '../lib/plan-ask';
 import { OrchestratorAsks } from './QuestionsWindow';
-import { HarnessMark, IconEraser, IconMap, IconMore, IconStop } from './Icons';
+import { HarnessMark, IconEraser, IconMore, IconStop } from './Icons';
 import { IconButton, StatePill } from './ui';
 import { Select } from './Select';
 import { requestFocus } from '../store/ui';
@@ -129,20 +127,17 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
           <AgentAvatar avatar={chat.agent?.avatar} name={chat.agent?.name||chat.title} size={24}/>
           {renaming ? <TitleInput chat={chat} onDone={() => setRenaming(false)} /> : <h3 className="th-title orchestrator-name" onDoubleClick={() => setRenaming(true)}>{chat.agent?.name||chat.title}</h3>}
           <StatePill chat={chat} testid="orchestrator-state" />
-          <HelpTip title={t('explain.orch.title')} guide="orchestrator" testid="orchestrator-help"><p>{t('explain.orch.p1')}</p><p>{t('explain.orch.p2')}</p><p>{t('explain.orch.p3')}</p></HelpTip>
           <span className="sp" />
-          <MaintenanceButton compact testId="orchestrator-maint" />
           <AwayButton />
           <RemoteButton chat={chat} reveal={() => setRemoteHidden(false)} />
-          <IconButton label={t('pm.mapsButton')} shortcut={t('dialogs.orchestrator.statusShortcut')} onClick={() => openMaps()} testid="orchestrator-maps"><IconMap size={14} /></IconButton>
           {busy && <IconButton label={t('dialogs.orchestrator.stopLabel')} shortcut={t('dialogs.orchestrator.stopShortcut')} tone="danger" onClick={() => void stop(chat.id)} testid="orchestrator-stop"><IconStop size={14} /></IconButton>}
           <IconButton label={t('lampo.clear')} disabled={busy} onClick={() => void clearOrchestratorNow(chat.id)} testid="orchestrator-clear"><IconEraser size={14} /></IconButton>
           <IconButton ref={menuBtn} label={t('dialogs.orchestrator.menuLabel')} onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid="orchestrator-menu"><IconMore /></IconButton>
         </div>
-        <div className="chat-topic-row"><ModelChip chat={chat} profileId={ORCHESTRATOR_ROLE_ID} testid="orchestrator-model" /><span className="chat-topic">{chat.title}</span><AgentIdentity chat={chat}/></div>
+        {/* one quiet line: its model, what it started today with the cost, its details (ADR 0287: its name is said once) */}
+        <div className="orch-meta"><ModelChip chat={chat} profileId={ORCHESTRATOR_ROLE_ID} testid="orchestrator-model" />{chat.title.trim() !== (chat.agent?.name || 'Orchestrator') && chat.title.trim() !== 'Orchestrator' && <span className="chat-topic">{chat.title}</span>}<TallyLine chat={chat} /><AgentIdentity chat={chat}/></div>
         <AwayLine />
         {!remoteHidden && <RemoteLine chat={chat} dismiss={() => setRemoteHidden(true)} />}
-        <TallyLine chat={chat} />
         <div className="th-sub sr-only" data-testid="orchestrator-sub">
           <span className="th-engine" data-tip={t('dialogs.orchestrator.engineTip', { name: engineName(chat.harness) })} aria-label={t('dialogs.orchestrator.engineTip', { name: engineName(chat.harness) })} role="img" data-engine={chat.harness} data-testid="orchestrator-engine"><HarnessMark harness={chat.harness} size={14} /></span>
           <span className="th-sub-text">{[!['Orchestrator', 'Orchestrator'].includes(chat.title.trim()) ? chat.title : '', modelWithEffort(chat), chatCost(chat)].filter(Boolean).join(' · ')}</span>

@@ -6,14 +6,13 @@
 // one «versione candidata del brain» card with its diff (ADR 0195). Screenshots:
 // test-results/shots/maintenance-one-click-*.png.
 import { expect, test } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { launchDemo, moreAction, shot } from './helpers';
 
 test('Manutenzione: one click, invisible research, end notice, issue cards in Proposte', async () => {
   test.setTimeout(150_000);
   const { app, page } = await launchDemo({ orchestrator: true, height: 1100 });
   try {
-    const btn = page.getByTestId('topbar-maint-run');
-    await btn.click();
+    await moreAction(page, 'topbar-maint-run'); // under the gear (ADR 0287)
     await expect(page.getByTestId('topbar-maint-dialog')).toHaveCount(0);
     await expect(page.getByTestId('toast').filter({ hasText: 'Manutenzione avviata' })).toBeVisible();
     // the end notice: celebrate, with chips and «Apri Memoria»
@@ -21,7 +20,6 @@ test('Manutenzione: one click, invisible research, end notice, issue cards in Pr
     await expect(notice).toBeVisible({ timeout: 30_000 });
     await expect(notice).toContainText('Manutenzione finita');
     await expect(notice.locator('.notif-chip').first()).toBeVisible();
-    await expect(page.getByTestId('topbar-maint')).toHaveAttribute('data-state', 'done');
     await page.mouse.move(2, 2);
     await shot(page, 'maintenance-one-click-done-dark');
     // the research chat stayed out of sight

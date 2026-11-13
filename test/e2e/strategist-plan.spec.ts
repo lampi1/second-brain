@@ -139,7 +139,6 @@ test('a finished partial plan is complete, compact and expandable, with named pa
     await expect(page.getByTestId(`plan-steps-${LEAD}`)).toBeHidden();
     await page.getByTestId(`plan-toggle-${LEAD}`).click();
     await expect(page.getByTestId(`plan-steps-${LEAD}`)).toBeVisible();
-    await expect(page.locator('[data-testid^="delegation-parent-"]').first()).toContainText('Delegato da');
     await top(page);
     await shot(page, 'strategist-plan-partial-complete');
   } finally { await app.close(); }

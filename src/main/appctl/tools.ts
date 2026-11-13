@@ -500,7 +500,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       },
     },
     {
-      name: 'app_ui', description: 'Steer the UI (visual only, never the keyboard focus): action "maximize" (chat id), "restore", "page" (value: a page id from app_guide, optionally with a tab or section: "memoria/skill", "impostazioni/notifications"), "palette", or "outline" (read only: what is on screen now, one line per heading, tab and control with its state, section and position, the ones in view first; value = optional words to keep only one section of a long page; chats show only title and state).',
+      name: 'app_ui', description: 'Steer the UI (visual only, never the keyboard focus): action "maximize" (a chat id or a browser tab id: full screen over the whole app; a chat and its browser are one window), "restore", "page" (value: a page id from app_guide, optionally with a tab or section: "memoria/skill", "impostazioni/notifications"), "palette", or "outline" (read only: what is on screen now, one line per heading, tab and control with its state, section and position, the ones in view first; value = optional words to keep only one section of a long page; chats show only title and state).',
       inputSchema: obj({ action: str('maximize|restore|page|palette|outline'), value: str('argument of the action') }, ['action']),
       // only visual steering: never actions that move the keyboard focus (next, focus…): an agent must not be able to
       // put the user's next keystroke on a permission or into another chat's input (review 2026-10-11)

@@ -14,6 +14,4 @@ export const agentDetailEn: typeof agentDetailIt = {
   'agentDetail.version': 'Version',
   'agentDetail.updated': 'Last edited',
   'agentDetail.closeEditor': 'Close without saving',
-  'agentDetail.browserOn': ({ n }) => n === 1 ? 'Hide the browser' : `Hide the ${n} browsers`,
-  'agentDetail.browserOff': ({ n }) => n === 1 ? 'Show the attached browser' : `Show the ${n} attached browsers`,
 };

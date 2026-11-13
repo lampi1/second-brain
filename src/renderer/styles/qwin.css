@@ -214,9 +214,11 @@
 .oasks-later { display: flex; align-items: center; gap: 5px; padding: 3px 4px; border: 0; background: none; color: var(--text-2); font: 12px var(--font); cursor: pointer; text-align: left; }
 .oasks-later:hover { color: var(--text); }
 .oasks-k { font-size: 12px; font-weight: 600; color: var(--text-2); padding: 2px 2px 0; }
-.oask { border: 1px solid var(--border); border-left: 3px solid var(--violet); border-radius: var(--r-m); background: var(--surface-2); }
-.oask.later { border-left-color: var(--border-2); opacity: .8; }
-.oask.open { background: var(--surface); }
+/* no coloured side stripe (ADR 0287): a row is a quiet card; the open one is the panel, on a stronger border */
+.oask { border: 1px solid var(--border); border-radius: var(--r-m); background: var(--surface-2); transition: border-color var(--dur-fast) var(--ease); }
+.oask:not(.open):hover { border-color: var(--border-3); }
+.oask.later { opacity: .8; }
+.oask.open { background: var(--surface); border-color: var(--border-3); }
 .oask.open .oask-q { display: none; } /* the card under it says the question */
 .oask-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; }
 .oask-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
@@ -242,4 +244,6 @@
 /* the chat's long message above a question scrolls in its own box: the question's answers come right after it */
 .oask-card .wctx-body { max-height: 120px; overflow-y: auto; scrollbar-width: thin; }
 .oask-foot { display: flex; align-items: center; gap: 8px; padding-top: 8px; margin-top: 8px; border-top: 1px solid var(--border); }
+/* the keys still work (1-9, arrows, Enter, Esc); their legend only repeated the numbers on the options */
+.oask-foot .qwin-keys { display: none; }
 .dc-via-input { font-size: 12px; color: var(--text-3); }

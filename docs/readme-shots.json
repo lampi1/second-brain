@@ -49,7 +49,7 @@
     "browser": {
       "test": "README screenshots",
       "sources": [
-        "src/renderer/components/FocusView.tsx",
+        "src/renderer/components/FullScreen.tsx",
         "src/renderer/components/BrowserTile.tsx",
         "src/renderer/components/ChatTile.tsx",
         "src/renderer/components/ChatItems.tsx"

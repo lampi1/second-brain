@@ -111,8 +111,8 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     await expect(page.getByTestId(`chat-input-${sentinelChat.id}`)).toBeVisible();
     // "Vai alla chat" opens it in focus mode
     await page.getByTestId(`delegation-open-${scout.id}`).click();
-    await expect(page.getByTestId('focus-view')).toBeVisible();
-    await expect(page.getByTestId('focus-view').getByTestId(`chat-input-${scout.id}`)).toBeVisible();
+    await expect(page.getByTestId('maximized')).toBeVisible();
+    await expect(page.getByTestId('maximized').getByTestId(`chat-input-${scout.id}`)).toBeVisible();
     await page.getByTestId('focus-exit').click();
 
     // folding the parent hides its children in both views

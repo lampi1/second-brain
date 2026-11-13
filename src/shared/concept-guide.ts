@@ -139,8 +139,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Il figlio chiede al genitore i fatti mancanti. Le tue scelte arrivano nel pannello originale dell’Orchestrator, anche per interviste e piani; il testo di un agente non vale come consenso.',
         'A child asks its parent for missing facts. Your choices use the original Orchestrator panel, including interviews and plans; agent text never counts as consent.'),
       // src/renderer/components/DelegationCard.tsx; src/renderer/lib/run-steps.ts
-      b('Nella Grindhouse ogni figlio è una scheda sul filo del genitore: compito, personaggio, skill, modello, i passi veri (il piano del motore e le sue azioni), lo stato. Un clic la apre nella chat intera; «Vai alla chat» la mette a fuoco.',
-        'In the Grindhouse each child is a card on its parent’s thread: task, character, skills, model, its real steps (the engine’s plan and its actions), its state. A click opens it into the whole chat; "Vai alla chat" puts it in focus.'),
+      b('Nella Grindhouse ogni figlio è una scheda sul filo del genitore: compito, personaggio, skill, modello, i passi veri (il piano del motore e le sue azioni), lo stato. Un clic la apre nella chat intera; «Vai alla chat» la porta a schermo intero. Sopra i figli una riga sola dice quanti sono e quanti ti aspettano; un clic li piega.',
+        'In the Grindhouse each child is a card on its parent’s thread: task, character, skills, model, its real steps (the engine’s plan and its actions), its state. A click opens it into the whole chat; "Vai alla chat" takes it full screen. Above the children one line says how many they are and how many wait for you; a click folds them.'),
       // src/main/chats/manager-work.ts userWrote; src/main/chats/orchestrator-wake.ts user-message
       b('Scrivi all’Orchestrator: le cronologie dei figli restano consultabili, senza un altro campo di conversazione. Le istruzioni storiche scritte nei figli restano conservate.',
         'Write to the Orchestrator: child histories remain inspectable without another conversation input. Historical instructions written in children remain preserved.'),
@@ -671,14 +671,14 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'The home page: one strip per working agent, with the browsers it drives beside the expanded chat.'),
     points: [
       // src/renderer/brain/pages/Home.tsx
-      b('La pagina mostra le strisce degli agenti, ognuna con il nome dell’agente e accanto il titolo della chat, come nella barra laterale; le richieste in attesa sono raccolte nell’Orchestrator, mantenendo il collegamento al worker originale.',
-        'The page shows agent strips, each with the agent’s name and the chat’s title next to it, as in the sidebar; pending requests are collected in the Orchestrator while keeping the link to the original worker.'),
+      b('La pagina mostra una striscia per agente, su una riga sola: il personaggio, il nome, cosa sta facendo adesso e lo stato. I comandi (ferma, schermo intero, menu) compaiono al passaggio del mouse; le richieste in attesa sono raccolte nell’Orchestrator, mantenendo il collegamento al worker originale.',
+        'The page shows one strip per agent, on a single line: the character, the name, what it is doing now and its state. The controls (stop, full screen, menu) appear under the pointer; pending requests are collected in the Orchestrator while keeping the link to the original worker.'),
       // src/renderer/lib/agent-order.ts
       b('Le strisce sono raggruppate per area, cioè l’ultima cartella del percorso di lavoro della chat.',
         'Strips are grouped by area, i.e. the last folder of the chat’s working path.'),
-      // src/renderer/lib/grid.ts workspaceTiles
-      b('Una striscia con un browser agganciato mostra un piccolo globo. I browser restano chiusi finché non premi il globo: il globo apre anche la striscia, se è chiusa, e i browser stanno accanto alla chat, oppure sotto se lo spazio è stretto, e ognuno si può mettere a tutto schermo. Restano visibili sempre quelli che richiedono il tuo intervento o sono massimizzati. Un browser chiuso con il globo continua a lavorare fuori schermo.',
-        'A strip with an attached browser shows a small globe. Its browsers stay folded until you press the globe: the globe also expands a collapsed strip, and the browsers sit beside the chat, or below in a narrow space, and each can go full screen. Those awaiting your intervention or maximized always show. A browser folded with the globe keeps working off screen.'),
+      // src/renderer/components/ChatTile.tsx (the three views), FullScreen.tsx (ADR 0287)
+      b('Chat e browser di un agente sono una finestra sola con tre viste: «Chat», «Affiancati» e «Browser». In «Affiancati» trascini la linea tra i due per dare più spazio a uno (doppio clic la rimette al centro), e più pagine dello stesso agente sono schede sopra il browser. Lo schermo intero (F11 o Ctrl+Shift+F) copre tutta l’app, per la chat e per il browser, con le stesse tre viste; Ctrl+R mostra o nasconde l’Orchestrator accanto, Esc esce. Un browser che richiede il tuo intervento si apre da solo; uno non in vista continua a lavorare fuori schermo.',
+        'An agent’s chat and browser are one window with three views: "Chat", "Side by side" and "Browser". In "Side by side" you drag the line between them to give one more room (a double click centres it again), and several pages of the same agent are tabs above the browser. Full screen (F11 or Ctrl+Shift+F) covers the whole app, for the chat and for the browser, with the same three views; Ctrl+R shows or hides the Orchestrator beside it, Esc leaves. A browser that needs you opens by itself; one out of view keeps working off screen.'),
       // src/renderer/components/ChildStrips.tsx
       b('Sotto ogni striscia compaiono i sottoagenti e i comandi ancora al lavoro, ciascuno con il nome dell’agente dell’app con cui gira, o con il tipo del motore («Explore · sola lettura» per la ricerca in sola lettura, l’unico permesso nelle chat dei ruoli; «nessun agente» solo se il motore non lo dice); quelli finiti spariscono subito (l’elenco completo resta in «Dettagli e collaboratori»). Finché un sottoagente lavora, la striscia madre dice «in attesa», non «finito».',
         'Under each strip appear the subagents and commands still at work, each with the name of the app agent it runs as, or the engine’s type ("Explore · read-only" for the read-only search, the only one allowed in role chats; "no agent" only when the engine names none); finished ones leave at once (the full list stays in "Details and collaborators"). While a subagent works, the parent strip says "waiting", not "finished".'),
@@ -689,20 +689,20 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Un agente conclude l’incarico con un report finale esplicito, non con una mail di avanzamento. Quando non lavora più si chiude dopo il tempo scelto in Impostazioni (lo ritrovi con Ctrl+K). Se aspetta te, un permesso, i colleghi, figli o task in background resta aperto. Un piano non concluso lo tiene aperto fino al report finale, che chiude il piano (i passi rimasti diventano parziali).',
         'An agent completes its assignment with an explicit final report, not progress mail. Once idle it closes after the delay set in Settings (Ctrl+K finds it). It stays open while waiting for you, a permission, colleagues, children or background tasks. An unfinished plan keeps it open until its final report, which closes the plan (steps left become partial).'),
       // src/renderer/components/ChatTile.tsx
-      b('Una striscia chiusa mostra agente, stato, modello e ultima risposta; aprendola consulti la cronologia. Per i lavori delegati di solito scrivi all’Orchestrator, ma ogni chat, anche quella di un agente delegato, mantiene il suo campo di risposta e «Continua»: puoi sempre scrivere a un agente direttamente. Le sue domande e i suoi comandi invece aspettano nell’Orchestrator: lì nella striscia trovi solo «Vai».',
-        'A collapsed strip shows agent, state, model and last answer; expand it to inspect the history. For delegated work you usually write to the Orchestrator, but every chat, a delegated agent’s too, keeps its reply field and Continue: you can always write to an agent directly. Its questions and commands wait in the Orchestrator instead: the strip only shows «Go».'),
+      b('Una striscia chiusa mostra agente, attività e stato; aprendola trovi modello, costi e cronologia. Per i lavori delegati di solito scrivi all’Orchestrator, ma ogni chat, anche quella di un agente delegato, mantiene il suo campo di risposta e «Continua»: puoi sempre scrivere a un agente direttamente. Le sue domande e i suoi comandi invece aspettano nell’Orchestrator: lì nella striscia trovi solo «Vai». Chiudi una chat dal suo menu o con Ctrl+W.',
+        'A collapsed strip shows agent, activity and state; expand it for the model, the costs and the history. For delegated work you usually write to the Orchestrator, but every chat, a delegated agent’s too, keeps its reply field and Continue: you can always write to an agent directly. Its questions and commands wait in the Orchestrator instead: the strip only shows «Go». Close a chat from its menu or with Ctrl+W.'),
     ],
     analogy: b('Come il banco di orchestrator di uno studio: un fader per ogni canale, e il monitor di ciascuno sotto.',
       'Like a studio mixing desk: one fader per channel, and each one’s monitor below it.'),
     tech: [
       tech(WHERE, 'Pagina «home» (brain/pages/Home.tsx), strisce in components/AgentStrips.tsx, ordine in lib/agent-order.ts; ADR 0068.',
         'Page "home" (brain/pages/Home.tsx), strips in components/AgentStrips.tsx, order in lib/agent-order.ts; ADR 0068.'),
-      tech(DATA, 'Una striscia è aperta se prefs.chatExpanded[id], i suoi browser se anche prefs.browserOpen[id]; nessun ordine salvato, nessun trascinamento.', 'A strip is expanded if prefs.chatExpanded[id], its browsers if prefs.browserOpen[id] too; no saved order, no dragging.'),
+      tech(DATA, 'Una striscia è aperta se prefs.chatExpanded[id]; la vista è prefs.agentView[id] (chat, split, browser) e la proporzione prefs.agentSplit[id]; nessun ordine salvato, nessun trascinamento. ADR 0287.', 'A strip is expanded if prefs.chatExpanded[id]; its view is prefs.agentView[id] (chat, split, browser) and the ratio prefs.agentSplit[id]; no saved order, no dragging. ADR 0287.'),
     ],
     anchors: {
       0: ['src/renderer/brain/pages/Home.tsx'],
       1: ['src/renderer/lib/agent-order.ts'],
-      2: ['src/renderer/lib/grid.ts#workspaceTiles'],
+      2: ['src/renderer/components/ChatTile.tsx', 'src/renderer/components/FullScreen.tsx'],
       3: ['src/renderer/components/ChildStrips.tsx'],
       4: ['src/renderer/components/RunEstimate.tsx', 'src/main/agents/task-estimate.ts'],
       5: ['src/main/chats/manager-delegation.ts#settleReport', 'src/main/chats/auto-close.ts', 'src/renderer/components/AutoCloseNotice.tsx'],
@@ -956,8 +956,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'The top bar shows today’s spend and the plan’s windows; spending limits warn, they do not stop.'),
     points: [
       // src/renderer/components/UsageBar.tsx
-      b('In alto: spesa di oggi, finestra di 5 ore, settimana e le chat di oggi dalla più cara; verde sotto 70%, ambra da 70%, rosso da 90%.',
-        'At the top: today’s spend, 5-hour window, week and today’s chats from the most expensive; green below 70%, amber from 70%, red from 90%.'),
+      b('In alto: spesa di oggi e finestra di 5 ore; la settimana compare nella barra solo da 70% in su. Un clic apre il dettaglio con settimana e chat di oggi dalla più cara; verde sotto 70%, ambra da 70%, rosso da 90%.',
+        'At the top: today’s spend and the 5-hour window; the week shows in the bar only from 70% up. A click opens the details with the week and today’s chats from the most expensive; green below 70%, amber from 70%, red from 90%.'),
       // src/renderer/brain/pages/Costi.tsx (#125)
       b('Andamento → Costi è l’unica pagina dei costi: le chat di oggi dal vivo, il periodo con il confronto, qualche curiosità (il giorno più caro, il modello che pesa di più), dove risparmiare, i grafici per giorno, tipo, modello e area e ogni chat. I costi per agente sono sul retro della sua carta in Agenti.',
         'Andamento → Costi is the one costs page: today’s chats live, the period with its comparison, a few curious facts (the priciest day, the model that weighs most), where to save, charts by day, kind, model and area, and every chat. Per-agent costs are on the back of its card in Agenti.'),

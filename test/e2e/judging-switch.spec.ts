@@ -29,7 +29,10 @@ test('one switch with its daily cost turns the reviews on and off', async () => 
     const before = Date.now();
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-checked', 'true');
-    await expect(box).toContainText('una volta al giorno un Sentinel nascosto');
+    // what it does is behind the switch's "?" (ADR 0287: one row, no paragraph on the page)
+    await page.getByTestId('judging-help').click();
+    await expect(page.locator('.help-bubble').filter({ hasText: 'una volta al giorno un Sentinel nascosto' })).toBeVisible();
+    await page.keyboard.press('Escape');
     const s = await page.evaluate(() => window.sb.invoke('settings:get', undefined));
     expect(s.judging).toBe(true);
     expect(s.judgingSince).toBeGreaterThanOrEqual(before - 60_000);

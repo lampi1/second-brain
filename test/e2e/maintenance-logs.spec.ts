@@ -4,7 +4,7 @@
 // Orchestrator gets no message. Rejecting a log bug's card marks its group known. Also the Orchestrator card's line
 // (#153): today's chats and the cost. Screenshot: test-results/shots/maintenance-logs-dark.png.
 import { expect, test } from '@playwright/test';
-import { launchDemo, shot } from './helpers';
+import { launchDemo, moreAction, shot } from './helpers';
 
 test('Manutenzione from the Orchestrator: brain jobs, log bugs as issue cards', async () => {
   test.setTimeout(120_000);
@@ -13,7 +13,7 @@ test('Manutenzione from the Orchestrator: brain jobs, log bugs as issue cards', 
     const tile = page.getByTestId('tile-orchestrator');
     await expect(tile.getByTestId('orchestrator-tally-cost')).toContainText('Costo:');
     await shot(page, 'orchestrator-tally-dark');
-    await tile.getByTestId('orchestrator-maint-run').click();
+    await moreAction(page, 'topbar-maint-run');
     await expect(page.locator('.notif.tone-celebrate')).toBeVisible({ timeout: 30_000 });
     await expect(tile).not.toContainText('GitHub issue');
     await page.locator('.notif.tone-celebrate').getByTestId('toast-action').click();

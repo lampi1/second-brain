@@ -52,4 +52,10 @@ export const productEn:typeof productIt={
  'product.restoreLayout':'Back to the column','product.noArea':'No project',
  'product.advanced':'Advanced details',
  'product.agents':'Your agents','product.agentsPurpose':'A clear role for each job.','product.setup':'Set up your work',
+ 'aw.views':'What the window shows','aw.view.chat':'Chat','aw.view.split':'Side by side','aw.view.browser':'Browser',
+ 'aw.resizer':'Move the divider between chat and browser','aw.tabs':'Browser tabs','aw.tab':p=>`Tab ${p.n}`,
+ 'aw.full':'Full screen','aw.fullExit':'Leave full screen',
+ 'aw.overTip':'The work is past the estimate made from similar jobs.','aw.overCost':p=>`${p.cost} · estimate ${p.estimate}`,'aw.overTime':p=>`past the ${p.estimate} estimate`,
+ 'aw.orchestratorShow':'Show the Orchestrator beside it','aw.orchestratorHide':'Hide the Orchestrator',
+ 'aw.facts':'Details: model, cost, estimate, links',
 };

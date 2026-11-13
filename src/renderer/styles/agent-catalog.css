@@ -1,6 +1,6 @@
 /* Agenti catalogue (AgentCatalogPage, AgentCatalogCard, CatalogRun): page header, team summary and a responsive grid of
-   role cards in the Dashboard's language (gradient surfaces, 12px radii, tabular numbers, a hairline in each role's
-   character colour). Only theme tokens (tokens.css), so dark and light follow the app; motion is off under reduced
+   role cards in the Dashboard's language (gradient surfaces, 12px radii, tabular numbers). A card's front is one quiet
+   surface (ADR 0287): no boxes inside the box, hairlines between its parts, the "?" marks only under the pointer. Only theme tokens (tokens.css), so dark and light follow the app; motion is off under reduced
    motion; readable down to narrow windows (one column, metrics two by two). */
 .agent-overview{max-width:1400px;margin:auto;padding:28px 32px 48px;overflow-wrap:anywhere;color:var(--text)}
 /* agent-strips.css styles a chat strip's own .agent-overview (grid, 12px, one-line paragraphs): undone for this page */
@@ -8,21 +8,20 @@ section.agent-overview{display:block;border-bottom:0;font-size:var(--fs-m);paddi
 section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 
 /* header (markup owned by the page: title, subtitle, create buttons) */
-.catalog-head{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:22px}
+.catalog-head{display:flex;align-items:flex-end;gap:10px 24px;flex-wrap:wrap;margin-bottom:20px}
 .catalog-head>div{flex:1;min-width:220px}
 .catalog-head h2{font-family:var(--font-display);font-size:30px;font-weight:600;letter-spacing:-1.1px;line-height:1.15;margin:0 0 6px}
-.catalog-head p,.catalog-note{color:var(--text-3);font-size:var(--fs-m);line-height:1.6;margin:0}
-.catalog-intro,.catalog-create{padding:18px 20px;border:1px solid var(--border);border-radius:var(--r-l);background:linear-gradient(145deg,var(--surface-2),var(--surface));margin:0 0 18px;color:var(--text-2);line-height:1.6}
+.catalog-head p{color:var(--text-3);font-size:var(--fs-m);line-height:1.6;margin:0}
+.catalog-create{padding:18px 20px;border:1px solid var(--border);border-radius:var(--r-l);background:linear-gradient(145deg,var(--surface-2),var(--surface));margin:0 0 18px;color:var(--text-2);line-height:1.6}
 .catalog-create{display:grid;gap:12px;max-width:700px}.catalog-create h3{margin:0;font-size:var(--fs-l)}.catalog-create p{margin:0}.catalog-create textarea,.catalog-create input{width:100%}
 
 /* filter toolbar */
 
-/* team summary above the grid */
-.catalog-summary{display:flex;align-items:baseline;justify-content:space-between;gap:8px 24px;flex-wrap:wrap;margin:22px 0 14px}
-.catalog-count{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0;font-size:var(--fs-m);color:var(--text-2)}
-.catalog-count strong{font-size:var(--fs-xl);font-weight:600;letter-spacing:-.3px;color:var(--text)}
+/* team count in the header, beside the title */
+.catalog-count{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 2px;font-size:var(--fs-m);color:var(--text-2)}
+.catalog-count strong{font-weight:600;color:var(--text)}
 .catalog-count span{display:inline-flex;align-items:center;gap:6px}
-.catalog-summary .catalog-note{font-size:var(--fs-s);max-width:72ch}
+.agent-overview>.pd-pointer{margin-bottom:14px}
 .catalog-count i,.catalog-badge i{width:7px;height:7px;border-radius:50%;flex:none;background:var(--green)}
 [data-state=trial]>i{background:var(--amber)}
 [data-state=working]>i{box-shadow:0 0 0 3px var(--green-bg),0 0 10px var(--green);animation:catalog-beat 2.2s ease-in-out infinite}
@@ -34,9 +33,15 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
    of a row takes the row's height and the front keeps its numbers on the bottom line; nothing is cut */
 .catalog-roles{align-items:stretch}
 .catalog-roles>.catalog-card>.bm-flip-inner{flex:1}
-.catalog-roles .bm-face-front>.catalog-stats{margin-top:auto}
 .catalog-card{--tone:var(--accent);position:relative;min-width:0;display:flex;flex-direction:column;gap:14px;padding:18px 18px 14px;border:1px solid var(--border);border-radius:var(--r-l);background:linear-gradient(160deg,var(--surface-2),var(--surface) 62%);container-type:inline-size;transition:border-color var(--dur-slow),transform var(--dur-slow) var(--ease),box-shadow var(--dur-slow)}
-.catalog-card::before{content:"";position:absolute;inset:0 0 auto;height:2px;border-radius:var(--r-l) var(--r-l) 0 0;background:linear-gradient(90deg,var(--tone),transparent 85%);opacity:.75;pointer-events:none}
+/* the front gives the card its height; the longer back (prompt, skills, costs) scrolls inside it, so a card is never
+   stretched by what its hidden face holds. No coloured line on top: the character carries the role's colour */
+.catalog-card .bm-face::before{display:none}
+.catalog-card .bm-face-back{position:absolute;inset:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+/* the "?" marks wait for the pointer or the keyboard: a card at rest shows the role and its numbers only */
+.bm-face-front .help-tip{opacity:0;transition:opacity var(--dur-fast)}
+.bm-face-front:hover .help-tip,.bm-face-front .help-tip:focus-visible,.bm-face-front .help-tip[aria-expanded=true]{opacity:1}
+@media(hover:none){.bm-face-front .help-tip{opacity:1}}
 .catalog-card:hover,.catalog-card:focus-within{border-color:var(--border-3);transform:translateY(-2px);box-shadow:0 16px 36px -22px var(--tone)}
 
 .catalog-card-head{display:flex;align-items:center;gap:12px;min-width:0}
@@ -51,23 +56,25 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .catalog-badge[data-state=working]{color:var(--green);border-color:color-mix(in srgb,var(--green) 40%,transparent);background:var(--green-bg)}
 .catalog-badge[data-state=trial]{color:var(--amber);border-color:var(--amber-line);background:var(--amber-bg)}
 
-.agent-overview .catalog-purpose{margin:-4px 0 0;min-height:calc(2 * 1.55em);font-size:var(--fs-m);line-height:1.55;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.catalog-chips{display:flex;gap:6px;flex-wrap:wrap;min-width:0}
-.catalog-chip{max-width:100%;font-size:var(--fs-xs);color:var(--text-2);border:1px solid var(--border-2);background:var(--surface-3);border-radius:var(--r-xs);padding:3px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.catalog-chip[data-kind=model]{font-family:var(--mono);font-size:10.5px;color:var(--text-3);background:transparent}
+.agent-overview .catalog-purpose{margin:-4px 0 0;min-height:calc(2 * 1.55em);font-size:var(--fs-m);line-height:1.55;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+/* engine · model · skills: one quiet line of text */
+.agent-overview .catalog-chips{display:flex;justify-content:center;flex-wrap:wrap;min-width:0;margin:0;font-size:var(--fs-s);color:var(--text-3)}
+.catalog-chip{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.catalog-chip+.catalog-chip::before{content:"·";margin:0 7px;color:var(--text-4)}
 
-.catalog-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:0;border:1px solid var(--border);border-radius:var(--r-m);background:color-mix(in srgb,var(--bg) 45%,transparent)}
-.catalog-stats>div{min-width:0;padding:10px 10px 9px;border-left:1px solid var(--border)}.catalog-stats>div:first-child{border-left:0}
+.catalog-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0 12px;margin:0;padding-top:12px;border-top:1px solid var(--border)}
+.catalog-stats>div{min-width:0}
 .catalog-stats dt{font-size:var(--fs-xs);color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .catalog-stats dd{margin:4px 0 0;font-size:var(--fs-xl);font-weight:600;letter-spacing:-.3px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .catalog-stats dd>[aria-hidden=true]{color:var(--text-4);font-weight:500}
-@container (max-width:290px){.catalog-stats{grid-template-columns:1fr 1fr}.catalog-stats>div:nth-child(3){border-left:0}.catalog-stats>div:nth-child(n+3){border-top:1px solid var(--border)}}
+@container (max-width:290px){.catalog-stats{grid-template-columns:1fr 1fr;row-gap:10px}}
 
 /* the front (owner, 19/10: "l'icona più grande e centrale"): origin and status on top, the character large and centred
    on a soft halo in its colour, the level as a medal on the badge, then name, purpose, chips, level and performance */
-.catalog-front-top{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;margin-bottom:-6px}
+.catalog-front-top{position:absolute;inset:14px 14px auto;z-index:1;display:flex;align-items:center;gap:8px;min-width:0;pointer-events:none}
+.catalog-front-top>.catalog-badge{margin-left:auto}
 .agent-overview .catalog-origin{font-size:var(--fs-xs);color:var(--text-3);letter-spacing:.06em;text-transform:uppercase;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.catalog-hero{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;min-width:0}
+.catalog-hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:6px;min-width:0}
 .catalog-hero-avatar{position:relative;display:grid;place-items:center;width:132px;height:132px;margin-bottom:4px;border-radius:50%;
   background:radial-gradient(circle at 50% 45%,color-mix(in srgb,var(--tone) 26%,transparent),color-mix(in srgb,var(--tone) 7%,transparent) 62%,transparent 71%)}
 .catalog-hero-avatar::before{content:"";position:absolute;inset:8px;border-radius:50%;border:1px dashed color-mix(in srgb,var(--tone) 38%,transparent);pointer-events:none}
@@ -78,25 +85,24 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
   border:2px solid var(--surface);box-shadow:0 4px 10px -4px rgba(0,0,0,.5);text-shadow:0 1px 1px rgba(0,0,0,.25)}
 .catalog-hero h3 button{text-align:center;margin:auto}
 .agent-overview .catalog-hero .catalog-purpose{margin:0;max-width:34ch}
-.catalog-hero+.catalog-chips{justify-content:center}
 
 /* level and performance, side by side (stacked in a narrow card) */
-.catalog-standing{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:10px}
-.catalog-standing>section{min-width:0;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-m);background:color-mix(in srgb,var(--bg) 45%,transparent)}
+.catalog-standing{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:10px 18px;padding-top:12px;border-top:1px solid var(--border)}
+.catalog-standing>section{min-width:0}
 .catalog-standing h4{display:flex;align-items:center;margin:0;font-size:var(--fs-xs);font-weight:600;color:var(--text-3)}
 .catalog-standing .help-tip{z-index:1;margin-left:5px}
 .agent-overview .catalog-standing p{margin:3px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .catalog-standing b{font-size:var(--fs-xl);font-weight:650;letter-spacing:-.3px;font-variant-numeric:tabular-nums;color:var(--text)}
 .catalog-standing p span{font-size:var(--fs-s);color:var(--text-2)}
 /* «Lv 7 Praticante · 124 XP»: the XP beside the level wraps under it in a narrow card (ADR 0100, 0131) */
-.agent-overview .catalog-standing p.catalog-level-value{white-space:normal}
+.agent-overview .catalog-standing p.catalog-level-value,.agent-overview .catalog-standing p.catalog-perf-value{white-space:normal}
 .catalog-standing .catalog-level-wins{white-space:nowrap;font-variant-numeric:tabular-nums}
 .catalog-standing small{display:block;margin-top:5px;font-size:var(--fs-xs);color:var(--text-3);line-height:1.35}
 .catalog-level-bar{height:6px;margin-top:7px;border-radius:3px;background:var(--surface-3);overflow:hidden}
 .catalog-level-bar>i{display:block;height:100%;min-width:3px;border-radius:inherit;background:linear-gradient(90deg,color-mix(in srgb,var(--tone) 65%,var(--surface)),var(--tone));transition:width 600ms var(--ease)}
 .catalog-perf{display:flex;align-items:center;gap:10px}
 .catalog-perf-text{min-width:0;flex:1}
-.catalog-gauge{flex:none;width:46px;height:46px}
+.catalog-gauge{flex:none;width:40px;height:40px}
 .catalog-gauge circle{fill:none;stroke-width:6}
 .catalog-gauge .track{stroke:var(--surface-3)}
 .catalog-gauge .fill{stroke:var(--perf,var(--text-4));stroke-linecap:round;transition:stroke-dasharray 600ms var(--ease)}
@@ -110,7 +116,7 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .catalog-stats dt .help-tip{position:relative;z-index:1;margin-left:4px}
 .catalog-stats:has(>div:nth-child(3):last-child){grid-template-columns:repeat(3,minmax(0,1fr))}
 .help-bubble .catalog-help-now{padding-top:6px;margin-top:7px!important;border-top:1px solid var(--border);color:var(--text)}
-@container (max-width:440px){.catalog-standing{grid-template-columns:1fr;gap:8px}}
+@container (max-width:310px){.catalog-standing{grid-template-columns:1fr;gap:8px}}
 
 /* footer: Avvia (CatalogRun) on the left, Dettagli on the right; the run form and the details open full width below */
 .catalog-card-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
@@ -129,7 +135,7 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .catalog-details[hidden]{display:none}
 .catalog-prompt h4{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 0 8px;font-size:var(--fs-xs);letter-spacing:.08em;text-transform:uppercase;font-weight:650;color:var(--text-3)}
 .catalog-prompt h4 small{letter-spacing:0;text-transform:none;font-weight:500;color:var(--text-4);font-variant-numeric:tabular-nums}
-.catalog-prompt pre{margin:0;max-height:240px;overflow:auto;padding:10px 12px;border:1px solid var(--border);border-left:2px solid var(--tone);border-radius:var(--r-s);background:color-mix(in srgb,var(--bg) 55%,transparent);font-family:var(--mono);font-size:11.5px;line-height:1.65;color:var(--md-text);white-space:pre-wrap;overflow-wrap:anywhere}
+.catalog-prompt pre{margin:0;max-height:240px;overflow:auto;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-s);background:color-mix(in srgb,var(--bg) 55%,transparent);font-family:var(--mono);font-size:11.5px;line-height:1.65;color:var(--md-text);white-space:pre-wrap;overflow-wrap:anywhere}
 .catalog-prompt pre:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .agent-overview .catalog-prompt p{margin:0;font-size:var(--fs-s);color:var(--text-3)}
 .catalog-details dl{display:grid;gap:7px;margin:0;padding-top:10px;border-top:1px solid var(--border)}
@@ -160,13 +166,11 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .bm-face-back .catalog-costs-grid dd small{margin-top:2px;font-size:11px;font-weight:500;color:var(--text-4);white-space:normal}
 .catalog-costs-note{margin:6px 0 0;font-size:11.5px;color:var(--text-3)}
 /* the review switch on top of Agenti (JudgingSwitch.tsx): one row, its cost a day under the description */
-.judging-switch { display: flex; align-items: center; gap: 16px; margin: 0 0 16px; padding: 14px 18px; border: 1px solid var(--border); border-radius: var(--r-l); background: linear-gradient(145deg, var(--surface-2), var(--surface)); }
-.judging-switch[data-on="true"] { border-color: color-mix(in srgb, var(--green) 40%, var(--border)); }
+.judging-switch { display: flex; align-items: center; gap: 16px; margin: 22px 0 0; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--r-l); background: var(--surface); }
 .judging-text { flex: 1; min-width: 0; display: grid; gap: 4px; }
 .judging-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 650; color: var(--text); }
-.judging-desc { margin: 0; color: var(--text-2); font-size: var(--fs-s); line-height: 1.5; }
 .judging-cost { margin: 0; color: var(--text-3); font-size: var(--fs-s); font-variant-numeric: tabular-nums; }
-.judging-off { margin: 0; padding: 4px 8px; border-left: 2px solid var(--amber-line); background: var(--amber-bg); color: var(--amber); font-size: var(--fs-s); border-radius: 4px; }
+.judging-off { margin: 0; color: var(--amber); font-size: var(--fs-s); }
 .judging-switch[data-on="true"] .judging-cost { color: var(--text-2); }
 .judging-toggle { flex: none; position: relative; width: 42px; height: 24px; border-radius: 12px; border: 1px solid var(--border-control); background: var(--surface-4); cursor: pointer; padding: 0; transition: background var(--dur-fast) var(--ease); }
 .judging-toggle .judging-knob { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--text-2); transition: transform var(--dur-fast) var(--ease); }
@@ -194,7 +198,7 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .catalog-standing small.catalog-updated::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: color-mix(in srgb, var(--tone, var(--green)) 70%, transparent); }
 
 /* the back's «Modello, effort, contesto» pickers (AgentCardModel.tsx, ADR 0211) */
-.catalog-model{position:relative;z-index:1;display:flex;flex-direction:column;gap:7px;margin:0 0 14px;padding:10px 12px;border:1px solid var(--border);border-left:2px solid var(--tone);border-radius:var(--r-s);background:color-mix(in srgb,var(--bg) 55%,transparent)}
+.catalog-model{position:relative;z-index:1;display:flex;flex-direction:column;gap:7px;margin:0 0 14px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-s);background:color-mix(in srgb,var(--bg) 55%,transparent)}
 .catalog-model h4{margin:0 0 2px;font-size:var(--fs-xs);letter-spacing:.08em;text-transform:uppercase;font-weight:650;color:var(--text-3)}
 .catalog-model-row{display:grid;grid-template-columns:110px minmax(0,1fr);align-items:center;gap:10px;font-size:12px;color:var(--text-2)}
 .catalog-model-row>button{min-width:0;width:100%}

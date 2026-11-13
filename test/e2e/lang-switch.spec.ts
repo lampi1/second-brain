@@ -1,5 +1,5 @@
-// End-to-end: the language switch in the top bar (ADR 0120, issue #163). It shows the language in force (IT on the
-// Italian test Windows), its menu has the Settings options (system, it, en, de); a pick re-draws the UI live, is saved,
+// End-to-end: the language switch in the top bar's gear menu (ADR 0120, issue #163; under the gear since ADR 0287).
+// The menu has the Settings options (system, it, en, de); a pick re-draws the UI live, is saved,
 // rewrites the brain profile's `Language:` line and shows in Settings' select (and the other way round). In a narrow
 // window it stays on screen (the bar's end group) and still works. Screenshots: test-results/shots/lang-switch-*.png,
 // dark and light.
@@ -12,18 +12,16 @@ import { choose, launchDemo, setSize, shot } from './helpers';
 const ME = '# Tu\n\n## Who\n\nTu, developer. Language: italiano in chat; code, commits and PR texts in English.\n\n## How to work with Tu\n\n- **Reply style**: short.\n';
 const language = (root: string) => /Language: (\S+)/.exec(fs.readFileSync(path.join(root, 'me.md'), 'utf8'))?.[1];
 
-test('Lingua nella barra: same options as Settings, live, saved, the profile follows, also in a narrow window', async () => {
+test('Lingua nel menu dell\'ingranaggio: same options as Settings, live, saved, the profile follows, also in a narrow window', async () => {
   const brainRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-brain-'));
   fs.writeFileSync(path.join(brainRoot, 'me.md'), ME);
   const { app, page } = await launchDemo({ config: { brainRoot } });
-  const button = page.getByTestId('topbar-lang');
+  const button = page.getByTestId('settings');
   await expect(button).toBeVisible();
-  await expect(button).toHaveText('IT');
-  await expect(button).toHaveAttribute('data-mode', 'system');
   await shot(page, 'lang-switch-bar-dark');
 
   await button.click();
-  const menu = page.getByTestId('topbar-lang-pop');
+  const menu = page.getByTestId('settings-pop');
   await expect(menu.getByRole('menuitemradio')).toHaveCount(4);
   await expect(page.getByTestId('topbar-lang-system')).toHaveAttribute('aria-checked', 'true');
   await shot(page, 'lang-switch-menu-dark');
@@ -31,7 +29,6 @@ test('Lingua nella barra: same options as Settings, live, saved, the profile fol
   // German: the UI re-draws, the setting is saved, me.md says Deutsch
   await page.getByTestId('topbar-lang-de').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'de');
-  await expect(button).toHaveText('DE');
   await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).language)).toBe('de');
   await expect.poll(() => language(brainRoot)).toBe('Deutsch');
   await button.click();
@@ -47,7 +44,6 @@ test('Lingua nella barra: same options as Settings, live, saved, the profile fol
   await expect(select).toHaveAttribute('data-value', 'de');
   await choose(page.getByTestId('st-language-select'), 'en');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-  await expect(button).toHaveText('EN');
   await expect.poll(() => language(brainRoot)).toBe('English');
 
   // the narrowest window (minWidth 1000): the switch stays on screen and still works
@@ -57,12 +53,10 @@ test('Lingua nella barra: same options as Settings, live, saved, the profile fol
   await expect(button).toBeVisible();
   const box = await button.boundingBox(), width = await page.evaluate(() => window.innerWidth);
   expect(box && box.x + box.width).toBeLessThanOrEqual(width);
-  await expect(page.getByTestId('topbar')).toHaveAttribute('data-fit', /\d/); // some fit steps on (no more the last: the bar lost its questions switch, 2026-10-22)
   await shot(page, 'lang-switch-narrow-dark');
   await button.click();
   await page.getByTestId('topbar-lang-system').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'it');
-  await expect(button).toHaveText('IT');
   await expect.poll(() => language(brainRoot)).toBe('italiano');
 
   await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));

@@ -130,14 +130,14 @@ test('README screenshots', async () => {
   await save('orchestrator', page.getByTestId('orchestrator-overlay'));
 
   // 3. A browser driven by an agent for an automated test: the QA chat and its test-environment tab side by side
-  // (focus mode on the chat, a wider window so the whole test page shows), cut to the two of them
-  await setSize(app, 2200, H);
+  // (the chat in full screen, a wider window so the whole test page shows)
+  await setSize(app, 1900, H);
   await page.getByTestId('tile-chat-qa').locator('.tile-head').click();
   await page.keyboard.press('Control+Shift+F');
-  await expect(page.getByTestId('focus-view')).toBeVisible();
+  await expect(page.getByTestId('maximized')).toBeVisible();
   await waitThumbs(page);
   await page.waitForTimeout(600); // the tab follows the new size
-  await save('browser', page.getByTestId('focus-view'));
+  await save('browser', page.getByTestId('maximized'));
   await page.getByTestId('focus-exit').click();
   await setSize(app, W, H);
 
@@ -399,6 +399,7 @@ test('README showcase: voice, Log, recordings, classifiers, quality, learn, news
   await page.getByTestId('nav-memoria').click();
   await expect(page.getByTestId('bm-memory-page')).toBeVisible();
   for (const x of await page.getByTestId('toast-close').all()) await x.click();
+  await page.getByTestId('settings').click();
   await page.getByTestId('topbar-maint-run').click();
   const notice = page.locator('.notif.tone-celebrate');
   await expect(notice).toBeVisible({ timeout: 40_000 });

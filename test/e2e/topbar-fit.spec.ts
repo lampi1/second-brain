@@ -31,12 +31,12 @@ async function settingsWork(page: Page): Promise<void> {
 /** "…" is always on screen and lists the actions used now and then. */
 const ALWAYS_MORE = ['more-credentials'];
 async function everyHiddenListed(page: Page): Promise<void> {
-  await expect(page.getByTestId('topbar-more')).toBeInViewport({ ratio: 1 });
-  await page.getByTestId('topbar-more').click();
-  await expect(page.getByTestId('topbar-more-pop')).toBeVisible();
+  await expect(page.getByTestId('settings')).toBeInViewport({ ratio: 1 });
+  await page.getByTestId('settings').click();
+  await expect(page.getByTestId('settings-pop')).toBeVisible();
   for (const item of ALWAYS_MORE) await expect(page.getByTestId(item)).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('topbar-more-pop')).toHaveCount(0);
+  await expect(page.getByTestId('settings-pop')).toHaveCount(0);
 }
 
 const fullScreen =(app: ElectronApplication, on: boolean) => app.evaluate(({ BrowserWindow }, v) => BrowserWindow.getAllWindows()[0]!.setFullScreen(v), on);
@@ -56,21 +56,21 @@ test('settings and every action stay reachable at 1280, 1366 and 1920 px, window
     // the narrowest window (1000 px, also at 110 % zoom = 909 px): every action off the bar is listed in "…", which
     // still drives it
     await setSize(app, 1000, 700);
-    await expect(page.getByTestId('topbar-more')).toBeVisible();
+    await expect(page.getByTestId('settings')).toBeVisible();
     await settingsWork(page);
     expect(await allOnScreen(page)).toEqual([]);
     await everyHiddenListed(page);
-    await page.getByTestId('topbar-more').click();
+    await page.getByTestId('settings').click();
     await shot(page, 'topbar-fit-1000-more');
     await page.keyboard.press('Escape');
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.webContents.setZoomFactor(1.1));
     await settingsWork(page);
     expect(await allOnScreen(page)).toEqual([]);
     await everyHiddenListed(page);
-    await page.getByTestId('topbar-more').click();
+    await page.getByTestId('settings').click();
     await shot(page, 'topbar-fit-909-more');
     await page.keyboard.press('Escape');
-    await expect(page.getByTestId('topbar-more-pop')).toHaveCount(0);
+    await expect(page.getByTestId('settings-pop')).toHaveCount(0);
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.webContents.setZoomFactor(1));
     // real full screen (F11-like): whatever the display, the bar fits it
     await fullScreen(app, true);

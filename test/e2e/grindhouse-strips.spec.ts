@@ -16,10 +16,10 @@ test('strips: collapsed with their facts, click to expand and collapse, "Ti aspe
     await expect(page.locator('[data-testid^="home-request-"]')).toHaveCount(0);
     for (const id of ['qa', 'fix', 'sms', 'feedback']) {
       await expect(page.getByTestId(`chat-expand-${id}`)).toHaveAttribute('aria-expanded', 'false');
-      await expect(page.getByTestId(`chat-sub-${id}`)).toBeVisible(); // model, cost, work time, context: collapsed too
+      await expect(page.getByTestId(`chat-sub-${id}`)).toHaveCount(0); // one line (ADR 0287): model, cost and context show once it is open
     }
     await expect(page.getByTestId('chat-input-fix')).toBeHidden();
-    // a strip's browser is folded: a quiet globe on the strip says it has one
+    // a strip's browser is folded: a globe among the strip's controls opens it beside the chat
     await expect(page.getByTestId('tile-browser-tab-sms')).toHaveCount(0);
     await expect(page.getByTestId('chat-browser-sms')).toHaveAttribute('aria-pressed', 'false');
     await expect(page.getByTestId('chat-browser-fix')).toHaveCount(0);
@@ -66,8 +66,8 @@ test('a click expands a strip every time: repeated, on any part of it, with text
   try {
     const expand = page.getByTestId('chat-expand-fix');
     await expect(expand).toHaveAttribute('aria-expanded', 'false');
-    // the strip's title, its facts line, its last-answer line: each click on a collapsed strip expands it
-    for (const part of ['.th-title', '.strip-facts', '.chat-strip-line']) {
+    // the strip's title, what it is doing, its last-activity line: each click on a collapsed strip expands it
+    for (const part of ['.th-title', '.strip-now', '.chat-strip-line']) {
       await page.getByTestId('tile-chat-fix').locator(part).first().click();
       await expect(expand, part).toHaveAttribute('aria-expanded', 'true');
       await expect(page.getByTestId('chat-input-fix')).toBeVisible();
@@ -97,91 +97,6 @@ test('a click expands a strip every time: repeated, on any part of it, with text
     await expect(page.getByTestId('chat-expand-fix')).toHaveAttribute('aria-expanded', 'true');
     await page.mouse.move(2, 2);
     await shot(page, 'strips-expand-every-time');
-  } finally {
-    await app.close();
-  }
-});
-
-test('an expanded strip opens its own browser beside its chat from its globe, each with its own full-screen control', async () => {
-  // a wide window: under 640 px of strips column (AgentStrips.tsx NARROW_PX; at 1600 px beside the Orchestrator's
-  // column it is ~630) the browser stacks under its chat instead
-  const { app, page } = await launchDemo({ width: 1920, height: 900 });
-  try {
-    await page.getByTestId('tile-chat-sms').locator('.chat-strip-line').click();
-    await page.getByTestId('chat-browser-sms').click();
-    await expect(page.getByTestId('chat-browser-sms')).toHaveAttribute('aria-pressed', 'true');
-    const browser = page.getByTestId('tile-browser-tab-sms');
-    await expect(browser).toBeVisible();
-    // one frame on the strip's accent: chat left, browser right, both in view
-    const pair = page.getByTestId('strip-pair-sms');
-    await expect(pair.getByTestId('tile-chat-sms')).toBeVisible();
-    await expect(pair.getByTestId('tile-browser-tab-sms')).toBeVisible();
-    await expect(page.getByTestId('browser-owner-tab-sms')).toContainText('Bug notifiche SMS');
-    await pair.scrollIntoViewIfNeeded();
-    const chatBox = (await page.getByTestId('tile-chat-sms').boundingBox())!, browserBox = (await browser.boundingBox())!;
-    expect(browserBox.x).toBeGreaterThanOrEqual(chatBox.x + chatBox.width - 1);
-    expect(Math.abs(browserBox.y - chatBox.y)).toBeLessThan(2);
-    expect(chatBox.y + chatBox.height).toBeLessThanOrEqual(900);
-    await expect(page.getByTestId('chat-max-sms')).toHaveAttribute('aria-label', /Chat a tutto schermo/);
-    await expect(page.getByTestId('browser-max-tab-sms')).toHaveAttribute('aria-label', /Browser a tutto schermo/);
-    await page.mouse.move(2, 2);
-    await shot(page, 'strips-owned-browser');
-    // each one goes full screen on its own, and back
-    await page.getByTestId('browser-max-tab-sms').click();
-    await expect(page.getByTestId('maximized')).toHaveAttribute('data-key', 'browser:tab-sms');
-    await page.getByTestId('browser-max-tab-sms').click();
-    await page.getByTestId('chat-max-sms').click();
-    await expect(page.getByTestId('maximized')).toHaveAttribute('data-key', 'chat:sms');
-  } finally {
-    await app.close();
-  }
-});
-
-test('the globe of a collapsed strip opens the strip and shows its browser; a second click hides it (#74)', async () => {
-  const { app, page } = await launchDemo({ width: 1600, height: 900 });
-  try {
-    // the old "Nascondi browser" switch left on (#82, the cause of #74): it is dropped and hides nothing
-    await page.waitForTimeout(300);
-    await page.evaluate(() => { const p = JSON.parse(localStorage.getItem('sb.prefs.v1') ?? '{}'); localStorage.setItem('sb.prefs.v1', JSON.stringify({ ...p, browsersHidden: true })); });
-    await page.reload();
-    await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
-    await setQuestionsAside({ app, page }); // a reload forgets «Rispondi dopo»
-    await expect(page.getByTestId('chat-expand-sms')).toHaveAttribute('aria-expanded', 'false');
-    const globe = page.getByTestId('chat-browser-sms');
-    await globe.click();
-    await expect(globe).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByTestId('chat-expand-sms')).toHaveAttribute('aria-expanded', 'true');
-    await expect(page.getByTestId('strip-pair-sms').getByTestId('tile-browser-tab-sms')).toBeVisible();
-    await page.mouse.move(2, 2);
-    await shot(page, 'strips-globe-from-collapsed');
-    await globe.click();
-    await expect(globe).toHaveAttribute('aria-pressed', 'false');
-    await expect(page.getByTestId('tile-browser-tab-sms')).toHaveCount(0);
-    // collapsed again with its browser left on: the globe reads off, one click shows the browser again
-    await globe.click();
-    await page.getByTestId('tile-chat-sms').locator('.th-title').click();
-    await expect(page.getByTestId('chat-expand-sms')).toHaveAttribute('aria-expanded', 'false');
-    await expect(globe).toHaveAttribute('aria-pressed', 'false');
-    await globe.click();
-    await expect(page.getByTestId('tile-browser-tab-sms')).toBeVisible();
-  } finally {
-    await app.close();
-  }
-});
-
-test('a narrow column stacks an expanded strip with its browser: the browser goes under its chat', async () => {
-  const { app, page } = await launchDemo({ width: 1100, height: 900 });
-  try {
-    await expect(page.locator('.agent-strips.is-narrow')).toHaveCount(1);
-    await page.getByTestId('tile-chat-sms').locator('.chat-strip-line').click();
-    await page.getByTestId('chat-browser-sms').click();
-    const browser = page.getByTestId('strip-pair-sms').getByTestId('tile-browser-tab-sms');
-    await expect(browser).toBeVisible();
-    const chatBox = (await page.getByTestId('tile-chat-sms').boundingBox())!, browserBox = (await browser.boundingBox())!;
-    expect(browserBox.y).toBeGreaterThanOrEqual(chatBox.y + chatBox.height - 1);
-    await browser.scrollIntoViewIfNeeded();
-    await page.mouse.move(2, 2);
-    await shot(page, 'strips-owned-browser-narrow');
   } finally {
     await app.close();
   }

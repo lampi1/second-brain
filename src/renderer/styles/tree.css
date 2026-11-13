@@ -116,7 +116,7 @@
 
 /* ---------------------------------------------------------------- the parent's KidsBar */
 .kids-bar { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
-.kids-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 5px 12px; border: 1px solid var(--border); border-radius: var(--r-l); background: color-mix(in srgb, var(--surface-2) 60%, transparent); color: var(--text-2); font: 12px var(--font); text-align: left; cursor: pointer; }
+.kids-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 2px 8px; border: 0; border-radius: var(--r-s); background: none; color: var(--text-3); font: inherit; font-size: var(--fs-s); cursor: pointer; text-align: left; }
 .kids-toggle:hover { background: var(--surface-2); }
 .kids-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .kids-toggle b { color: var(--text); font-weight: 600; }
@@ -131,13 +131,6 @@
 .kids-stack { display: inline-flex; }
 .kids-stack > * { border-radius: 50%; box-shadow: 0 0 0 2px var(--surface); }
 .kids-stack > * + * { margin-left: -5px; }
-.kids-segs { display: inline-flex; gap: 2px; }
-.kids-segs i { width: 14px; height: 4px; border-radius: 2px; background: var(--surface-4); }
-.kids-segs .seg-run { background: var(--accent); }
-.kids-segs .seg-wait { background: var(--amber); }
-.kids-segs .seg-done { background: var(--green); }
-.kids-segs .seg-err { background: var(--red); }
-.kids-fold { margin-left: auto; color: var(--text-3); }
 .tree-limit { flex: none; }
 
 /* ---------------------------------------------------------------- a child's pause panel in its parent's chat */
@@ -188,9 +181,6 @@
 .tn-kids .kids-stack > * { box-shadow: 0 0 0 2px var(--bg-2); }
 
 /* Name the parent even when it has scrolled away; preserve the visible thread. */
-.dc-parent { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0; border: 0; background: none; color: var(--violet); font: inherit; font-size: 11px; cursor: pointer; }
-.dc-parent:hover { text-decoration: underline; text-underline-offset: 2px; }
-.kids-parent { max-width: 35%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); font-weight: 600; }
 
 .tree-parent > .kids-bar { margin-top: 0; padding: 4px 0 4px calc(var(--tree-step) - var(--tree-in)); border-left: 2px solid var(--thread); margin-left: var(--tree-in); }
 .tree-parent > .kids-bar .kids-toggle { border-top-left-radius: 0; }
@@ -200,6 +190,5 @@
 /* a narrow column: the bar keeps its counts on one line and drops the faces and segments first */
 .kids-bar { container-type: inline-size; min-width: 0; }
 .kids-toggle { overflow: hidden; }
-.kids-toggle b, .kids-fold, .kids-parent { white-space: nowrap; flex: none; }
-.kids-parent { flex: 0 1 auto; min-width: 0; }
-@container (max-width: 480px) { .kids-stack, .kids-segs, .kids-parent { display: none; } }
+.kids-toggle b { white-space: nowrap; flex: none; }
+@container (max-width: 480px) { .kids-stack { display: none; } }

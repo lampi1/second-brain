@@ -62,7 +62,6 @@ test('Brain pages: skills with links and undo, rules, memory, classifiers, map; 
     await browser.getByTestId('mb-shelf-errors').click();
     await expect(browser.getByTestId('mb-row-ai-errors.md')).toBeVisible();
     await expect(memory.getByTestId('bm-maint-memory').getByTestId('bm-run')).toHaveCount(0);
-    await expect(page.getByTestId('topbar-maint')).toBeVisible();
     await browser.getByTestId('mb-shelf-all').click();
     await browser.getByTestId('mb-search').fill('rilascio test');
     await expect(browser.getByTestId('mb-text')).toBeVisible();

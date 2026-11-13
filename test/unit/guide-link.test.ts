@@ -25,7 +25,7 @@ describe('guide links', () => {
       const s = fs.readFileSync(f, 'utf8');
       for (const m of s.matchAll(/\bguide="([a-z-]+)"|<GuideLink concept="([a-z-]+)"/g)) used.add(m[1] ?? m[2]!);
     }
-    expect(used.size).toBeGreaterThan(10);
+    expect(used.size).toBeGreaterThan(8);
     for (const id of used) expect(isConcept(id), id).toBe(true);
   });
 

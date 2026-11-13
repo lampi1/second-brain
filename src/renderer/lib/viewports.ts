@@ -86,7 +86,8 @@ function clippedBounds(el:HTMLElement):{left:number;top:number;right:number;bott
 export function measure(): ViewLayout[] {
   const ids = new Set([...known, ...views.keys()]);
   if (!ids.size) return []; // no browser view: nothing to place (and no forced layout for the overlay rects)
-  const overRects = [...overlays].filter(o => o.isConnected).map(o => o.getBoundingClientRect());
+  // an overlay that is not drawn covers nothing (the Orchestrator column hidden under a full screen, ADR 0287)
+  const overRects = [...overlays].filter(o => o.isConnected && getComputedStyle(o).visibility !== 'hidden').map(o => o.getBoundingClientRect());
   const out: ViewLayout[] = [];
   for (const tabId of [...ids].sort()) {
     const el = views.get(tabId);

@@ -5,8 +5,8 @@
 // a finished one shows its result and the delegation's criteria met or not. A click on the card expands it in place
 // into the whole chat (conversation and input, writable like any strip; the card's head and steps stay as its summary),
 // a click on the head folds it again; the state is prefs.chatExpanded, kept across restarts like every strip's.
-// "Vai alla chat" opens it in focus mode. KidsBar is the parent's summary at the foot of its strip ("4 figli · 2 in
-// corso · 1 ti aspetta", the children's characters, one bar segment each, Comprimi / Espandi: prefs.treeCollapsed).
+// "Vai alla chat" opens it in full screen. KidsBar is the parent's one quiet line over its children ("4 figli · 2 in
+// corso · 1 ti aspetta"), a click folds and unfolds them (prefs.treeCollapsed).
 // Mounted by AgentStrips.tsx; the sidebar tree (SidebarTree.tsx) brings a card on screen with focusChat.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import type { ChatItem, ChatSummary, PendingRequest } from '@shared/contract';
@@ -17,7 +17,7 @@ import { activeState, childState, kidCounts, type ChildState, type TreeNode } fr
 import { runSteps, type RunStep, type StepMark } from '../lib/run-steps';
 import { requestHost } from '../lib/child-requests';
 import { openKidsOf } from '../lib/chat-derived';
-import { focusChat, reqKey } from '../actions';
+import { reqKey } from '../actions';
 import { useNow } from '../lib/clock';
 import { formatCost, modelWithEffort } from '../lib/format';
 import { selectedHere } from '../lib/strip-click';
@@ -78,8 +78,8 @@ export function TreeRails({ node, state }: { node: TreeNode; state: ChildState }
 
 /** The card's one head row (owner, 2026-10-22: «vista più compatta … pur vedendo tutti gli step e tutte le info»):
  *  the role's face, the task, who runs it with its skills and model, the time, the state, "Vai alla chat"; the line
- *  under it names the parent (it may have scrolled away) and what the work cost. */
-function Head({ chat, state, parent }: { chat: ChatSummary; state: ChildState; parent: string }) {
+ *  under it says what the work cost (the thread line already says whose child it is, ADR 0287). */
+function Head({ chat, state }: { chat: ChatSummary; state: ChildState }) {
   const now = useNow(5_000);
   const role = chat.agent?.name ?? chat.delegation?.role ?? '';
   const skills = chat.run?.tags?.skills ?? [];
@@ -104,7 +104,6 @@ function Head({ chat, state, parent }: { chat: ChatSummary; state: ChildState; p
       </button>
     </div>
     <div className="dc-sub">
-      {chat.parentId && <button type="button" className="dc-parent" data-testid={`delegation-parent-${chat.id}`} onClick={() => focusChat(chat.parentId!)}>{t('tree.parentLink', { parent })}</button>}
       <span className="dc-cost">{cost || t('tree.cleanContext')}</span>
     </div>
   </>;
@@ -206,7 +205,7 @@ export function DelegationCard({ chatId }: { chatId: string }) {
     data-state={chat.state} data-child-state={state} data-open={open || undefined}
     onClick={onClick} onPointerDown={() => { down.current = window.getSelection()?.toString() ?? ''; }}>
     <div className="dc-summary" title={t(open ? 'tree.foldCard' : 'tree.openCard')}>
-      <Head chat={chat} state={state} parent={`${c.parent} · ${c.parentTitle}`} />
+      <Head chat={chat} state={state} />
       {state !== 'queued' && (!ended || open || stepsOpen) && <Steps chat={chat} items={c.items} state={state} />}
     </div>
     {ended && !open && state !== 'queued' && <button type="button" className="dc-more dc-fold-steps" data-testid={`delegation-fold-${chatId}`} aria-expanded={stepsOpen} onClick={() => setStepsOpen(!stepsOpen)}>
@@ -245,14 +244,11 @@ export function KidsBar({ chatId }: { chatId: string }) {
   return <div className="kids-bar" data-testid={`tree-kids-${chatId}`} data-folded={folded || undefined}>
     <button type="button" className="kids-toggle" aria-expanded={!folded} data-testid={`tree-toggle-${chatId}`} aria-label={t(folded ? 'tree.unfold' : 'tree.fold', { title })} onClick={() => setTreeCollapsed(chatId, !folded)}>
       <span className="kids-chev" aria-hidden="true">{folded ? <IconChevronRight size={13} /> : <IconChevronDown size={13} />}</span>
-      <span className="kids-parent" title={title}>{title}</span><b>{t('tree.kids', { n: kids.length })}</b><span className="kids-sep">·</span>
+      <b>{t('tree.kids', { n: kids.length })}</b>
       {run > 0 && <span className="kid-sum"><span className="kid-dot run" />{t('tree.kidsRun', { n: run })}</span>}
       {wait > 0 && <span className="kid-sum"><span className="kid-dot wait" />{t('tree.kidsWait', { n: wait })}</span>}
       {stuck > 0 && <span className="kid-sum" data-testid={`tree-kids-stuck-${chatId}`}><span className="kid-dot err" />{t('tree.kidsStuck', { n: stuck })}</span>}
       {done > 0 && <span className="kid-sum"><span className="kid-dot done" />{t('tree.kidsDone', { n: done })}</span>}
-      <span className="kids-stack" aria-hidden="true">{kids.slice(0, 5).map(k => <AgentAvatar key={k.id} avatar={k.agent?.avatar} name={k.agent?.name ?? ''} size={18} />)}</span>
-      <span className="kids-segs" aria-hidden="true">{states.map((s, i) => <i key={i} className={`seg-${LINE[s]}`} />)}</span>
-      <span className="kids-fold">{t(folded ? 'tree.expand' : 'tree.collapse')}</span>
     </button>
     {limit && <span className="pill pill-wait tree-limit" data-testid={`tree-limit-${chatId}`}>{t(`tree.limit.${limit.kind}`, { limit: limit.limit })}</span>}
   </div>;

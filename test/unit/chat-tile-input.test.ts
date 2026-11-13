@@ -6,16 +6,20 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ChatSummary } from '../../src/shared/contract';
 vi.mock('../../src/renderer/sb', () => ({ sb: {} }));
 vi.mock('../../src/renderer/store/store', () => ({ useApp: vi.fn(), closeChat: vi.fn(), send: vi.fn(), stop: vi.fn() }));
-vi.mock('../../src/renderer/store/ui', () => ({ ui: { use: (fn: (s: unknown) => unknown) => fn({ prefs: { chatExpanded: {}, treeCollapsed: {}, browserOpen: {} }, closing: [] }) }, setFocused: vi.fn(), setChatExpanded: vi.fn() }));
+vi.mock('../../src/renderer/store/ui', () => ({ ui: { use: (fn: (s: unknown) => unknown) => fn({ prefs: { chatExpanded: {}, treeCollapsed: {}, agentView: {}, agentSplit: {} }, closing: [] }) }, setFocused: vi.fn(), setChatExpanded: vi.fn(), setAgentView: vi.fn(), setAgentSplit: vi.fn(), DEFAULT_SPLIT: 0.42 }));
+vi.mock('../../src/renderer/lib/run-estimates', () => ({ useRunEstimates: () => null }));
+vi.mock('../../src/renderer/lib/viewports', () => ({ schedule: vi.fn(), suspendViews: vi.fn() }));
+vi.mock('../../src/renderer/store/handoffs', () => ({ useHandoffTabs: () => [] }));
+vi.mock('../../src/renderer/components/BrowserTile', () => ({ BrowserTile: () => null }));
+vi.mock('../../src/renderer/components/FullTools', () => ({ FullTools: () => null }));
 vi.mock('../../src/renderer/actions', () => ({ admitNow: vi.fn(), reqKey: vi.fn(), toggleMaximize: vi.fn() }));
 vi.mock('../../src/renderer/lib/later', () => ({ openQueue: vi.fn(), requestPostponed: () => false }));
 vi.mock('../../src/renderer/lib/clock', () => ({ useNow: () => 1000 }));
-vi.mock('../../src/renderer/lib/pairs', () => ({ usePair: () => ({ cls: '' }), pairHover: () => ({}) }));
 vi.mock('../../src/renderer/lib/child-requests', () => ({ childRequestsFor: () => [], requestHost: () => null }));
 vi.mock('../../src/renderer/components/ChatInput', () => ({ ChatInput: ({ testid }: { testid: string }) => createElement('textarea', { 'data-testid': testid }), setDraft: vi.fn() }));
 vi.mock('../../src/renderer/components/ChatTranscript', () => ({ ChatTranscript: () => null }));
 vi.mock('../../src/renderer/components/ChatMenu', () => ({ ChatMenu: () => null, TitleInput: () => null }));
-vi.mock('../../src/renderer/components/ContextBar', () => ({ ChatLinks: () => null, ContextMeter: () => null, ContextNotice: () => null, useWarnTokens: () => 200000 }));
+vi.mock('../../src/renderer/components/ContextBar', () => ({ ChatLinks: () => null, ContextMeter: () => null, ContextNotice: () => null, isLong: () => false, useWarnTokens: () => 200000 }));
 vi.mock('../../src/renderer/components/AutoCloseNotice', () => ({ AutoCloseNotice: () => null }));
 vi.mock('../../src/renderer/components/RunSurface', () => ({ RunChips: () => null, RunOutcomeControl: () => null }));
 vi.mock('../../src/renderer/components/RunEstimate', () => ({ StripEstimate: () => null }));
@@ -53,11 +57,13 @@ describe('chat tile input', () => {
 });
 
 describe('chat strip head', () => {
-  it('a collapsed strip shows the chat title next to the agent name, as the sidebar does', () => {
+  it('a collapsed strip is one line: the agent name, then what the chat is about', () => {
     const chat = { id: 'w', title: 'AI-DLC · U5 verifica', cwd: '', state: 'idle', harness: 'claude', lastText: '',
       agent: { id: 'artisan', name: 'Artisan' } } as unknown as ChatSummary;
     vi.mocked(useApp).mockImplementation(selector => selector({ chats: { w: chat }, pending: [], tabs: [] } as unknown as Parameters<typeof selector>[0]));
     const html = renderToStaticMarkup(createElement(ChatTile, { chatId: 'w' }));
-    expect(html).toMatch(/Artisan<span class="th-topic"[^>]*>AI-DLC · U5 verifica<\/span>/);
+    expect(html).toMatch(/Artisan<\/button>.*<span class="strip-now"><span class="th-topic"[^>]*>AI-DLC · U5 verifica<\/span>/);
+    // the noise is gone (ADR 0287): no close cross, no help mark on a strip
+    expect(html).not.toContain('chat-x-w'); expect(html).not.toContain('chat-help-w');
   });
 });

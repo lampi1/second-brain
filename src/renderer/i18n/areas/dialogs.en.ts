@@ -119,7 +119,6 @@ export const dialogsEn: typeof dialogsIt = {
   'dialogs.orchestrator.name': 'Orchestrator',
   'dialogs.orchestrator.empty': 'No Orchestrator yet',
   'dialogs.orchestrator.createButton': 'Create Orchestrator',
-  'dialogs.orchestrator.statusShortcut': 'Ctrl+Shift+S',
   'dialogs.orchestrator.stopLabel': 'Stop',
   'dialogs.orchestrator.stopShortcut': 'Ctrl+.',
   'dialogs.orchestrator.menuLabel': 'Engine, model, Clean and more',

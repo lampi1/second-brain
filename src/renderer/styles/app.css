@@ -113,13 +113,6 @@ input, textarea, .md, .bubble, .tool-pre, .diff-patch, .ask-cmd, .thinking-text 
    their words (the switch and the dots stay) */
 .topbar[data-fit~="4"] [data-testid="usage-cursor"], .topbar[data-fit~="4"] .usagebar .ub-sep:has(+ [data-testid="usage-cursor"]) { display: none; }
 .topbar[data-fit~="5"] .connectors-label, .topbar[data-fit~="5"] .connector-mark small { display: none; }
-/* the language switch (LangSwitch.tsx, ADR 0120): globe + code like the CLI marks; 6 = the code only, a square button */
-.lang-btn { height: 32px; min-width: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 8px; border-radius: var(--r-s); border: 0; background: transparent; color: var(--text-3); cursor: pointer; flex: none; }
-.lang-btn:hover, .lang-btn[aria-expanded="true"] { background: var(--surface-2); color: var(--text); }
-.lang-code { font: 600 11.5px/1 var(--font-display); letter-spacing: 0.04em; color: var(--text-2); }
-.lang-btn:hover .lang-code, .lang-btn[aria-expanded="true"] .lang-code { color: var(--text); }
-.topbar[data-fit~="6"] .lang-btn { padding: 0; }
-.topbar[data-fit~="6"] .lang-btn svg { display: none; }
 /* 6 the narrowest windows: the search is its icon (Ctrl+K still opens it) and the actions sit closer */
 .topbar[data-fit~="6"] .search .keys { display: none; }
 .topbar[data-fit~="6"], .topbar[data-fit~="6"] .topbar-main, .topbar[data-fit~="6"] .topbar-end { gap: 6px; }
@@ -133,6 +126,10 @@ input, textarea, .md, .bubble, .tool-pre, .diff-patch, .ask-cmd, .thinking-text 
 .connector-mark small { font-size: 11.5px; color: var(--text-2); }
 .cli-dot.warn { background: var(--amber); }
 .topbar[data-fit~="1"] .new-browser > span, .topbar[data-fit~="1"] .mm-maint-bar > span { display: none; }
+/* «Ferma tutti» with nothing running: only its quiet icon (ADR 0287) */
+.stop-all.is-idle { border-color: transparent; opacity: .45; padding-inline: 8px; }
+.stop-all.is-idle > span { display: none; }
+.usagebar .ub-today + .ub-group { padding-left: 2px; }
 .brand { display: flex; align-items: center; gap: 9px; font: 600 14px var(--font-display); letter-spacing: -0.005em; padding-right: 4px; white-space: nowrap; }
 
 .brand-mark { width: 14px; height: 14px; border-radius: 3.5px; background: linear-gradient(135deg, var(--accent), var(--violet)); transform: rotate(45deg); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 40%, transparent); }
@@ -826,31 +823,14 @@ button.lc-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 1
   .chat-tile .th-sub > .pill-sub { display: inline-flex; height: 17px; padding: 0 6px; font-size: 10.5px; }
 }
 
-/* ---------------------------------------------------------------- Workspace and focus view */
-/* a maximized or focused chat keeps a readable column, like a desktop chat app */
-.workspace-max .chat-tile .items, .workspace-max .chat-tile .tile-requests, .workspace-max .chat-tile .composer,
-.focus-body > .chat-tile .items, .focus-body > .chat-tile .tile-requests, .focus-body > .chat-tile .composer {
+/* ---------------------------------------------------------------- Workspace and full screen */
+/* a chat in full screen keeps a readable column, like a desktop chat app */
+.full-layer > .chat-tile .items, .full-layer > .chat-tile .tile-requests, .full-layer > .chat-tile .composer {
   padding-left: max(var(--pad), calc((100% - 880px) / 2)); padding-right: max(var(--pad), calc((100% - 880px) / 2));
 }
-.splitter { position: absolute; z-index: 5; touch-action: none; }
-.splitter.v { cursor: col-resize; }
-.splitter::after { content: ""; position: absolute; border-radius: 2px; background: var(--accent); opacity: 0; transition: opacity var(--dur) var(--ease); }
-.splitter.v::after { top: 14px; bottom: 14px; left: calc(50% - 1px); width: 2px; }
-.splitter:hover::after, .splitter:focus-visible::after, .splitter:active::after { opacity: 0.75; }
-.splitter:focus-visible { outline: none; }
-.splitter.static { position: relative; }
 .view-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 32px; text-align: center; border: 1px dashed var(--border-2); border-radius: var(--r-l); }
 .view-empty .empty-text { margin-bottom: 10px; }
 
-.focus-view { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--gap); }
-.focus-body { flex: 1; min-height: 0; display: grid; animation: zoomIn var(--dur-slow) var(--ease); }
-.focus-body > .tile { min-height: 0; }
-.focus-bar { flex: none; display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 6px 0 12px; border-radius: var(--r-m); background: var(--surface); border: 1px solid var(--border); font-size: 12.5px; color: var(--text-3); }
-.focus-bar svg { color: var(--accent); }
-.focus-title { color: var(--text); font-weight: 600; }
-.focus-calm { color: var(--green); font-size: 12px; }
-.focus-browsers { min-height: 0; display: flex; flex-direction: column; gap: var(--gap); }
-.focus-browsers > .tile { flex: 1; }
 
 /* ---------------------------------------------------------------- brain pages */
 .brain-page { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-l); overflow: hidden; animation: zoomIn var(--dur-slow) var(--ease); }

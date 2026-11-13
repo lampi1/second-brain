@@ -35,7 +35,7 @@ import { workflowState } from './store/workflows';
 import { engineLabel } from './lib/engines';
 import {
   askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
-  openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, callQuestions, setQuestionsAside, setChatExpanded, setTreeCollapsed, setBrowserOpen, setViewer, type Place,type BrainPageId,
+  openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, callQuestions, setQuestionsAside, setChatExpanded, setTreeCollapsed, setBrowserOpen, setAgentView, setFullOrch, setViewer, type Place,type BrainPageId,
 } from './store/ui';
 import { currentEntry, pushEntry, stepEntry, type Shot, type ViewerEntry } from './lib/viewer-stack';
 import { applyViewPrefs } from './lib/view-prefs';
@@ -298,6 +298,12 @@ export async function copyLink(link: string = currentLink()): Promise<void> {
  *  3D map included): its input takes the keyboard. */
 export function toggleOrchestrator(): void {
   track('orchestrator');
+  // in full screen the column is under the window: the key shows it beside the window, and hides it again (ADR 0287)
+  const u = ui.get();
+  if (((u.focusMode && u.page === 'home') || u.maximized) && !u.map) {
+    setFullOrch(!u.fullOrch);
+    if (u.fullOrch) return;
+  }
   setOrchestratorOpen(true);
   const r = orchestratorId();
   if (r) requestFocus(r);
@@ -354,15 +360,24 @@ export function showTab(tabId: string): void {
   if (ownerId && routineChatIds(state.chats).has(ownerId)) { setFocusMode(null); setMaximized(null); go({ page: 'flussi', arg: routineChatArg(ownerId, tabId) }); return; }
   const u = ui.get();
   if (u.page !== 'home' || u.map) go({ page: 'home' });
-  if (u.focusMode) setFocusMode(null);
-  const maximized = ui.get().maximized;
-  if (!maximized || maximized === 'orchestrator') {
-    // a strip's browser is folded until opened: open it beside its (expanded) strip
-    const owner = app.get().tabs.find(tab => tab.id === tabId)?.ownerChatId;
-    if (owner) setBrowserOpen(owner, true);
+  // a strip's browser is inside its agent's window (ADR 0287): shown beside the chat, in the column or in full screen
+  const owner = stripOwner(tabId);
+  if (owner) {
+    if (u.focusMode && u.focusMode !== owner) setFocusMode(null);
+    if (ui.get().maximized) setMaximized(null);
+    setBrowserOpen(owner, true);
     flashTile(`browser:${tabId}`); return;
   }
-  setMaximized(`browser:${tabId}`);
+  // a tab without a strip: behind a full-screen window it takes the full screen, else it is a row of the Grindhouse
+  const full = !!u.focusMode || !!ui.get().maximized;
+  if (u.focusMode) setFocusMode(null);
+  if (full) setMaximized(`browser:${tabId}`); else flashTile(`browser:${tabId}`);
+}
+
+/** The chat whose strip holds this browser tab in its window, or null (the user's own tab, the Orchestrator's, a closed chat's). */
+export function stripOwner(tabId: string): string | null {
+  const s = app.get(), id = s.tabs.find(tab => tab.id === tabId)?.ownerChatId, c = id ? s.chats[id] : undefined;
+  return c && !c.isOrchestrator && !c.closedAt ? c.id : null;
 }
 
 /** A link's peek "Apri nel browser dell'app" (LinkPeek): a new tab of the user's, on screen. */
@@ -568,19 +583,45 @@ export function stopAllAsk(): void {
   });
 }
 
+/** Full screen on and off (F11, a strip's or a browser's ⤢; ADR 0287): a chat's whole window, a strip's browser inside
+ *  that window, a browser without a strip by itself. Without a key: leave the full screen that is on, else the
+ *  selected tile. */
 export function toggleMaximize(key?: string | null): void {
-  const k = key ?? ui.get().focused ?? ui.get().prefs.lastFocus;
+  const u = ui.get();
+  if (!key && (u.focusMode || u.maximized)) { setFocusMode(null); return; }
+  const k = key ?? u.focused ?? u.prefs.lastFocus;
   if (!k) { toast(t('appText.actions.selectTile'), 'info'); return; }
   const state = app.get(), routineId = k.startsWith('chat:') ? k.slice(5) : k.startsWith('browser:') ? state.tabs.find(tab => tab.id === k.slice(8))?.ownerChatId : null;
   if (routineId && routineChatIds(state.chats).has(routineId)) { if (k.startsWith('browser:')) showTab(k.slice(8)); else focusChat(routineId); return; }
   if (k === 'orchestrator') { toast(t('appText.actions.orchestratorResize'), 'info'); return; }
-  setMaximized(ui.get().maximized === k ? null : k);
+  track('focus-mode');
+  if (k.startsWith('chat:')) {
+    const id = k.slice(5), c = state.chats[id];
+    if (!c || c.closedAt || c.isOrchestrator) { toast(t('appText.actions.selectFocus'), 'info'); return; }
+    if (u.focusMode === id) { setFocusMode(null); flashTile(k); return; }
+    if (u.page !== 'home' || u.map) go({ page: 'home' });
+    setFocusMode(id);
+    requestFocus(id);
+    return;
+  }
+  const owner = k.startsWith('browser:') ? stripOwner(k.slice(8)) : null;
+  if (owner) {
+    // a strip's browser: its agent's window in full screen, on the browser
+    if (u.page !== 'home' || u.map) go({ page: 'home' });
+    setAgentView(owner, 'browser');
+    setFocusMode(owner);
+    flashTile(k);
+    return;
+  }
+  if (u.maximized === k) { setMaximized(null); flashTile(k); return; }
+  if (u.page !== 'home' || u.map) go({ page: 'home' });
+  setMaximized(k);
 }
 
 export function toggleFocusMode(): void {
   track('focus-mode');
   const u = ui.get();
-  if (u.focusMode) { setFocusMode(null); return; }
+  if (u.focusMode || u.maximized) { setFocusMode(null); return; } // one mode: the key leaves a browser's full screen too
   const s = app.get();
   // Never focus an archived chat.
   const open = (x: string | null | undefined): x is string => !!x && !!s.chats[x] && !s.chats[x]!.closedAt;
@@ -601,7 +642,10 @@ export function escapeOne(): boolean {
   if (u.viewer.open) { closeViewer(); return true; }
   if (u.map) { setMap(false); return true; }
   if (u.lanePeek) { setLanePeek(false); return true; }
+  // full screen: the Orchestrator beside it closes first, then the full screen itself
+  if (u.fullOrch && (u.maximized || (u.focusMode && u.page === 'home'))) { setFullOrch(false); return true; }
   if (u.maximized) { const k = u.maximized; setMaximized(null); flashTile(k); return true; }
+  if (u.focusMode && u.page === 'home') { const id = u.focusMode; setFocusMode(null); flashTile(`chat:${id}`); return true; }
   if (u.page !== 'home') { go({ page: 'home' }); return true; }
   if (u.focusMode) { setFocusMode(null); return true; }
   return false;
@@ -636,14 +680,24 @@ export function uiCommand(cmd: EventMap['ui:command']): void {
     case 'focus': focusChat(v); break;
     case 'maximize': {
       const s = app.get();
+      // the user writing to the Orchestrator keeps it: its column stays beside the full screen, the keyboard in it
+      const inOrchestrator = !!document.activeElement?.closest('[data-orchestrator-overlay]');
       setFocusMode(null);
       if (s.chats[v]?.isOrchestrator) {
         // the Orchestrator is the overlay: it opens (visual only, app_ui never moves the keyboard)
         setOrchestratorOpen(true);
         flashTile('orchestrator');
       }
-      else if (s.chats[v]) { if (routineChatIds(s.chats).has(v)) focusChat(v); else setMaximized(`chat:${v}`); }
-      else if (s.tabs.some(t => t.id === v)) { const owner = s.tabs.find(t => t.id === v)?.ownerChatId; if (owner && routineChatIds(s.chats).has(owner)) showTab(v); else setMaximized(`browser:${v}`); }
+      // one full screen (ADR 0287): a chat is its agent's window in full screen, a strip's browser the same window on
+      // its «Browser» view, a browser with no strip alone. Visual only: the keyboard stays where it is
+      else if (s.chats[v] && s.chats[v]!.closedAt) break; // never an archived chat
+      else if (s.chats[v]) { if (routineChatIds(s.chats).has(v)) focusChat(v); else { setMaximized(null); if (ui.get().page !== 'home' || ui.get().map) go({ page: 'home' }); setFocusMode(v); } }
+      else if (s.tabs.some(t => t.id === v)) {
+        const owner = s.tabs.find(t => t.id === v)?.ownerChatId, strip = stripOwner(v);
+        if (owner && routineChatIds(s.chats).has(owner)) showTab(v);
+        else { if (ui.get().page !== 'home' || ui.get().map) go({ page: 'home' }); if (strip) { setMaximized(null); setAgentView(strip, 'browser'); setFocusMode(strip); } else setMaximized(`browser:${v}`); }
+      }
+      if (inOrchestrator && (ui.get().focusMode || ui.get().maximized)) setFullOrch(true);
       break;
     }
     case 'restore': setMaximized(null); setFocusMode(null); go({ page: 'home' }); break;

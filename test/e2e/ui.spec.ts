@@ -5,7 +5,7 @@
 import { expect, test } from '@playwright/test';
 import { choose, demoLayout, expandChats, showBrowsers, launch, launchDemo, setSize, shot, waitThumbs } from './helpers';
 
-test('agents workspace: one column of chat strips, each browser right under its chat', async () => {
+test('agents workspace: one column of chat strips, each browser inside its chat\'s window', async () => {
   const { app, page } = await launchDemo();
   await expandChats(page, 'feedback'); await showBrowsers(page, 'qa', 'sms'); // open strips: their transcripts and browsers in sight
   await expect(page.getByTestId('view-agents')).toBeVisible();
@@ -18,10 +18,9 @@ test('agents workspace: one column of chat strips, each browser right under its 
   await expect(page.getByTestId('folded-dock')).toHaveCount(0);
   // the Orchestrator column is always open beside the Grindhouse (ADR 0068)
   await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
-  // one column: each browser follows the chat that drives it
-  const panes = await page.locator('[data-workspace-pane]').evaluateAll(els => els.map(e => e.getAttribute('data-workspace-pane')));
-  expect(panes.indexOf('browser:tab-qa')).toBe(panes.indexOf('chat:qa') + 1);
-  expect(panes.indexOf('browser:tab-sms')).toBe(panes.indexOf('chat:sms') + 1);
+  // one window per agent (ADR 0287): each browser is inside the strip of the chat that drives it
+  await expect(page.getByTestId('strip-pair-qa').getByTestId('tile-browser-tab-qa')).toBeVisible();
+  await expect(page.getByTestId('strip-pair-sms').getByTestId('tile-browser-tab-sms')).toBeVisible();
   // a native view is placed while its tile is in the window (the column scrolls): each one, brought into view
   const rect = (tabId: string) => async () => (await demoLayout(app)).find(l => l.tabId === tabId)?.rect ?? null;
   await page.getByTestId('tile-browser-tab-sms').scrollIntoViewIfNeeded();
@@ -90,34 +89,6 @@ test('Ferma tutto asks to confirm when more than one chat runs, then stops them'
   await expandChats(page, 'fix');
   await expect(page.getByTestId('tile-chat-fix')).toContainText('Interrotto da te');
   await expect(page.getByTestId('topbar-stopall')).toBeDisabled();
-  await app.close();
-});
-
-test('⤢ maximizes a tile, Esc restores it; F11 maximizes the focused tile', async () => {
-  const { page, app } = await launchDemo();
-  await page.getByTestId('chat-max-fix').click();
-  await expect(page.getByTestId('maximized')).toHaveAttribute('data-key', 'chat:fix');
-  await expect(page.getByTestId('tile-chat-qa')).toHaveCount(0);
-  await expect.poll(async () => (await demoLayout(app)).every(l => l.rect === null)).toBe(true);
-  await page.mouse.move(2, 2);
-  await shot(page, 'maximized');
-  await page.keyboard.press('Escape');
-  await expect(page.getByTestId('maximized')).toHaveCount(0);
-  await expect(page.getByTestId('tile-chat-qa')).toBeVisible();
-  await showBrowsers(page, 'sms'); // its browser unfolds under its strip (folded until its globe is pressed)
-  const sms = async () => (await demoLayout(app)).find(l => l.tabId === 'tab-sms')?.rect ?? null;
-  await page.getByTestId('tile-browser-tab-sms').scrollIntoViewIfNeeded();
-  await expect.poll(sms).not.toBeNull();
-  const before = (await sms())!;
-  await page.getByTestId('browser-url-tab-sms').focus();
-  await page.keyboard.press('F11');
-  await expect(page.getByTestId('maximized')).toHaveAttribute('data-key', 'browser:tab-sms');
-  // maximized, the page takes the Grindhouse's whole height and width (the Orchestrator column keeps its side, ADR 0068)
-  await expect.poll(async () => (await sms())?.height ?? 0).toBeGreaterThan(before.height + 100);
-  expect((await sms())!.width).toBeGreaterThanOrEqual(before.width);
-  expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(w => w.isFullScreen()))).toBe(false);
-  await page.keyboard.press('Escape');
-  await expect(page.getByTestId('maximized')).toHaveCount(0);
   await app.close();
 });
 
@@ -195,7 +166,7 @@ test('the live demo streams text and finishes running tools', async () => {
   await expect.poll(async () => rows.count(), { timeout: 10_000 }).toBeGreaterThan(n);
   await page.getByTestId('tile-browser-tab-sms').scrollIntoViewIfNeeded();
   // A narrow split card intentionally hides this caption; inspect it in the user's expanded browser view.
-  await page.getByTestId('browser-max-tab-sms').click();
+  await page.getByTestId('chat-view-browser-sms').click();
   await expect(page.getByTestId('browser-action-tab-sms')).toBeVisible();
   await expect(page.getByTestId('browser-action-tab-sms')).not.toHaveText('click ref_12 · «Attività»', { timeout: 10_000 });
   // and the permission it asks for is an open request (the questions window shows it; set aside here, launchDemo)

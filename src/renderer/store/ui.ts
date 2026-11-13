@@ -29,14 +29,22 @@ export const placeLabel = (p: Place): string => {const file=p.page==='file'||p.p
  *  highlight there (a chat or tab strip in the Grindhouse). */
 export interface Place { page: 'mappa' | 'esplora' | BrainPageId; arg?: string | null; element?: string | null }
 
+/** What an agent window shows (ADR 0287): its chat, chat and browser side by side, or the browser with the input. */
+export type AgentView = 'chat' | 'split' | 'browser';
+export const DEFAULT_SPLIT = 0.42;
+export const clampSplit = (n: number): number => Math.min(0.75, Math.max(0.25, n));
+
 export interface Prefs {
   /** the work profile's id (shared/work-profiles.ts): which Brain pages the sidebar shows; absent = all of them */
   workProfile?: string;
   appearance:AppearancePreference;
   chatPanelsV:0|1|2;
   chatExpanded:Record<string,boolean>;
-  /** an expanded strip shows its browsers beside it only when the user opened them (owner, 18/10: collapsed by default) */
-  browserOpen:Record<string,boolean>;
+  /** what an open agent window shows when its chat drives browsers (ADR 0287): the chat, both side by side, or the
+   *  browser alone (the input stays); absent = the chat (owner, 18/10: the browsers stay folded until asked for) */
+  agentView:Record<string,AgentView>;
+  /** the chat's share of a side-by-side agent window, per chat (absent = DEFAULT_SPLIT) */
+  agentSplit:Record<string,number>;
   /** parents whose delegated children are folded, in the Grindhouse and the sidebar tree alike (lib/chat-tree.ts) */
   treeCollapsed:Record<string,boolean>;
   density: Density;
@@ -48,8 +56,6 @@ export interface Prefs {
   /** the default size's version the saved orchestratorSize was made under (lib/orchestrator-dock.ts DEFAULT_V): an older one is dropped */
   orchestratorSizeV: number;
   orchestratorSeenAt: number;
-  /** chat | browser split of the focus mode */
-  pairSplit: number;
   newChat: { harness: Harness; cwd: string; model: string; effort: Effort | ''; permissionMode: PermissionMode | '' };
   lastFocus: string | null;
 }
@@ -61,8 +67,9 @@ export interface ConfirmSpec { title: string; body: string; items?: string[]; co
 
 export interface UiState {
   prefs: Prefs;
-  maximized: string | null;      // tile key: 'orchestrator' | 'chat:<id>' | 'browser:<id>'
-  focusMode: string | null;      // chat id
+  maximized: string | null;      // a browser tab without a strip in full screen: 'browser:<id>' (a chat's full screen is focusMode)
+  focusMode: string | null;      // chat id: the chat in full screen (F11, Ctrl+Shift+F: one mode, ADR 0287)
+  fullOrch: boolean;             // full screen: the Orchestrator column is open beside it (Ctrl+R)
   focused: string | null;        // tile key that has the keyboard focus
   modal: Modal | null;
   confirm: ConfirmSpec | null;
@@ -104,8 +111,8 @@ export interface QWin { open: boolean; first: string | null; call: number; shown
 
 const PREFS_KEY = 'sb.prefs.v1';
 export const defaultPrefs: Prefs = {
-  appearance:readAppearance(null),chatPanelsV:2,chatExpanded:{},browserOpen:{},treeCollapsed:{},
-  density: 'comfortable', theme: 'dark', orchestratorOpen: true, orchestratorSize: null, orchestratorSizeV: DEFAULT_V, orchestratorSeenAt: 0, pairSplit: 0.42,
+  appearance:readAppearance(null),chatPanelsV:2,chatExpanded:{},agentView:{},agentSplit:{},treeCollapsed:{},
+  density: 'comfortable', theme: 'dark', orchestratorOpen: true, orchestratorSize: null, orchestratorSizeV: DEFAULT_V, orchestratorSeenAt: 0,
   newChat: { harness: 'claude', cwd: '', model: '', effort: '', permissionMode: '' }, lastFocus: null,
 };
 const READ_KEY = 'sb.read.v1';
@@ -121,6 +128,12 @@ function readRead(): ReadState {
 /** A remembered per-chat on/off map: valid ids and booleans only, the latest 1000. */
 const flags=(raw:unknown):Record<string,boolean>=>raw&&typeof raw==='object'&&!Array.isArray(raw)?Object.fromEntries(Object.entries(raw).filter(([id,value])=>/^[a-zA-Z0-9_-]{1,120}$/.test(id)&&typeof value==='boolean').slice(-1000)):{};
 
+const ID=/^[a-zA-Z0-9_-]{1,120}$/;
+const record=(raw:unknown):[string,unknown][]=>raw&&typeof raw==='object'&&!Array.isArray(raw)?Object.entries(raw).filter(([id])=>ID.test(id)).slice(-1000):[];
+/** The remembered agent-window views and splits: valid ids and values only, the latest 1000. */
+const views=(raw:unknown):Record<string,AgentView>=>Object.fromEntries(record(raw).filter((e):e is [string,AgentView]=>e[1]==='chat'||e[1]==='split'||e[1]==='browser'));
+const splits=(raw:unknown):Record<string,number>=>Object.fromEntries(record(raw).filter((e):e is [string,number]=>typeof e[1]==='number'&&Number.isFinite(e[1])).map(([id,n])=>[id,clampSplit(n)]));
+
 /** The remembered prefs, each field checked; `at` = now, the unread count's start when none was saved. */
 export function loadPrefs(raw: string | null, at = Date.now()): Prefs {
   if (!raw) return { ...defaultPrefs, orchestratorSeenAt: at };
@@ -128,15 +141,17 @@ export function loadPrefs(raw: string | null, at = Date.now()): Prefs {
     // Retired and dropped: orchestratorRect (the floating panel before ADR 0028); view, cols, rows, browserZone (the Mosaico and
     // Corsie views); navCollapsed (the icon-only sidebar); orchestratorPlacement, orchestratorTopHeight (the Orchestrator at the top);
     // browsersHidden (the retired "hide browsers" switch, #82: an opened browser always shows); feedOpen (the Orchestrator's
-    // "Novità" feed, replaced by "N novità in attesa", #88); role (a composition of pages and agents, now workProfile).
-    const { orchestratorRect: _a, view: _b, cols: _c, rows: _d, browserZone: _e, navCollapsed: _f, orchestratorPlacement: _g, orchestratorTopHeight: _h, browsersHidden: _i, feedOpen: _j, role: _k, workProfile, ...p } =
-      JSON.parse(raw) as Partial<Prefs> & Record<'orchestratorRect' | 'view' | 'cols' | 'rows' | 'browserZone' | 'navCollapsed' | 'orchestratorPlacement' | 'orchestratorTopHeight' | 'browsersHidden' | 'feedOpen' | 'role', unknown>;
+    // "Novità" feed, replaced by "N novità in attesa", #88); role (a composition of pages and agents, now workProfile);
+    // pairSplit (focus mode's one split, now agentSplit per chat) and browserOpen (now agentView: an opened one is 'split'), ADR 0287.
+    const { orchestratorRect: _a, view: _b, cols: _c, rows: _d, browserZone: _e, navCollapsed: _f, orchestratorPlacement: _g, orchestratorTopHeight: _h, browsersHidden: _i, feedOpen: _j, role: _k, pairSplit: _l, browserOpen, workProfile, ...p } =
+      JSON.parse(raw) as Partial<Prefs> & Record<'orchestratorRect' | 'view' | 'cols' | 'rows' | 'browserZone' | 'navCollapsed' | 'orchestratorPlacement' | 'orchestratorTopHeight' | 'browsersHidden' | 'feedOpen' | 'role' | 'pairSplit' | 'browserOpen', unknown>;
     return {
       ...defaultPrefs, ...p,
       appearance:readAppearance(p.appearance),
       chatPanelsV:p.chatPanelsV===2?2:p.chatPanelsV===1?1:0,
       chatExpanded:flags(p.chatExpanded),
-      browserOpen:flags(p.browserOpen),
+      agentView:{...Object.fromEntries(Object.keys(flags(browserOpen)).filter(id=>flags(browserOpen)[id]).map(id=>[id,'split' as const])),...views(p.agentView)},
+      agentSplit:splits(p.agentSplit),
       treeCollapsed:flags(p.treeCollapsed),
       density: p.density === 'compact' ? 'compact' : 'comfortable',
       theme: p.theme === 'light' || p.theme === 'dark' ? p.theme : 'system',
@@ -161,7 +176,7 @@ function readPrefs(): Prefs {
 }
 
 export const ui = createStore<UiState>({
-  prefs: readPrefs(), maximized: null, focusMode: null, focused: null, modal: null, confirm: null, orchestratorRenew: null, handoffChat: null, mapsArg: null, mapPicked: null, handoffSession: null, ctxHidden: {}, page: 'home',
+  prefs: readPrefs(), maximized: null, focusMode: null, fullOrch: false, focused: null, modal: null, confirm: null, orchestratorRenew: null, handoffChat: null, mapsArg: null, mapPicked: null, handoffSession: null, ctxHidden: {}, page: 'home',
   lanePeek: false, toasts: [], flash: null, focusReq: null, hidden: [], hiddenTabs: [], closing: [], later: false, announce: '', qwin: { open: false, first: null, call: 0, shown: false }, viewer: emptyViewer,
   map: false, pageArg: null, mapArg: null, history: [{ page: 'home' }], hist: 0, center: false, read: readRead(), highlight: null, toastDismissed: [],
 });
@@ -195,10 +210,21 @@ export function saveWorkProfile(id: string | undefined, expected: string | undef
 export function setChatExpanded(id:string,expanded:boolean):void{
   setPrefs({chatExpanded:{...ui.get().prefs.chatExpanded,[id]:expanded}});
 }
-/** Show or hide a strip's own browsers beside it; showing them expands the strip too. */
+/** What a chat's agent window shows (ADR 0287); a view with the browser opens the strip too. */
+export function setAgentView(id:string,view:AgentView):void{
+  const {chatExpanded,agentView}=ui.get().prefs;
+  setPrefs({agentView:{...agentView,[id]:view},...(view!=='chat'&&chatExpanded[id]!==true?{chatExpanded:{...chatExpanded,[id]:true}}:{})});
+}
+/** Show or hide a strip's own browsers beside its chat; showing them opens the strip too. A view that already shows
+ *  them (the browser alone) stays. */
 export function setBrowserOpen(id:string,open:boolean):void{
-  const {chatExpanded,browserOpen}=ui.get().prefs;
-  setPrefs({browserOpen:{...browserOpen,[id]:open},...(open&&chatExpanded[id]!==true?{chatExpanded:{...chatExpanded,[id]:true}}:{})});
+  const now=ui.get().prefs.agentView[id]??'chat';
+  if(open?now==='chat':now!=='chat')setAgentView(id,open?'split':'chat');
+  else if(open&&ui.get().prefs.chatExpanded[id]!==true)setChatExpanded(id,true);
+}
+/** The chat's share of its side-by-side window, remembered for that chat. */
+export function setAgentSplit(id:string,share:number):void{
+  setPrefs({agentSplit:{...ui.get().prefs.agentSplit,[id]:clampSplit(share)}});
 }
 /** Fold or unfold a parent's delegated children (saved: the tree comes back as it was after a restart). */
 export function setTreeCollapsed(id:string,collapsed:boolean):void{
@@ -216,10 +242,12 @@ export const askConfirm = (confirm: ConfirmSpec) => ui.set(s => ({ ...s, modal: 
 export const setMapsArg = (arg: string | null) => ui.set(s => ({ ...s, mapsArg: arg }));
 export const setMapPicked = (id: string | null) => ui.set(s => (s.mapPicked === id ? s : { ...s, mapPicked: id }));
 export const openHandoff = (chatId: string, session?: string) => ui.set(s => ({ ...s, modal: 'handoff', handoffChat: chatId, handoffSession: session ?? null }));
-export const setMaximized = (key: string | null) => ui.set(s => ({ ...s, maximized: key }));
+export const setMaximized = (key: string | null) => ui.set(s => ({ ...s, maximized: key, ...(key ? { focusMode: null } : {}), ...(key || s.focusMode ? {} : { fullOrch: false }) }));
+/** Full screen: the Orchestrator column beside it, open or shut (Ctrl+R). */
+export const setFullOrch = (fullOrch: boolean) => ui.set(s => (s.fullOrch === fullOrch ? s : { ...s, fullOrch }));
 export const setFocused = (key: string | null) => { if (ui.get().focused !== key) ui.set(s => ({ ...s, focused: key })); };
 /** Low level: show a page without touching the history (use actions.go). */
-export const openPage = (page: BrainPageId, arg: string | null = null) => ui.set(s => ({ ...s, page, pageArg: arg, map: false, maximized: null }));
+export const openPage = (page: BrainPageId, arg: string | null = null) => ui.set(s => ({ ...s, page, pageArg: arg, map: false, maximized: null, ...(s.focusMode ? {} : { fullOrch: false }) }));
 export const setMap = (map: boolean, arg: string | null = null) => ui.set(s => ({ ...s, map, mapArg: map ? arg : null }));
 export const setCenter = (center: boolean) => ui.set(s => ({ ...s, center }));
 /** The Orchestrator widget expanded (the panel) or collapsed (the bar); remembered. Both ways its replies count as seen: what
@@ -229,7 +257,7 @@ export const setOrchestratorOpen = (orchestratorOpen: boolean) => { if (ui.get()
 let hlN = 0;
 export const highlight = (id: string) => ui.set(s => ({ ...s, highlight: { id, n: ++hlN } }));
 export const dismissEventToasts = (ids: string[]) => ui.set(s => ({ ...s, toastDismissed: [...new Set([...s.toastDismissed, ...ids])].slice(-500) }));
-export const setFocusMode = (chatId: string | null) => ui.set(s => ({ ...s, focusMode: chatId, maximized: null, lanePeek: false }));
+export const setFocusMode = (chatId: string | null) => ui.set(s => ({ ...s, focusMode: chatId, maximized: null, lanePeek: false, ...(chatId ? {} : { fullOrch: false }) }));
 export const setLanePeek = (lanePeek: boolean) => ui.set(s => ({ ...s, lanePeek }));
 export const announce = (text: string) => ui.set(s => ({ ...s, announce: text }));
 

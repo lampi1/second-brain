@@ -1,20 +1,21 @@
-// E2E of the quick close (demo): the ✕ in a chat tile's header and Ctrl+W on the selected chat close it at once (main
+// E2E of the quick close (demo): «Chiudi chat» in a strip's menu (no ✕ on a strip, ADR 0287) and Ctrl+W on the selected chat close it at once (main
 // archives it at once, #168) with the usual "Chiusa «…» · Annulla" (6 s); Annulla reopens it. The Orchestrator has no ✕ and Ctrl+W never closes it;
-// a double click or a held Ctrl+W closes one chat; a maximized chat leaves that view and comes back maximized with Annulla; Ctrl+W under a dialog or in the requests
+// a held Ctrl+W closes one chat; a chat in full screen leaves that view and comes back in full screen with Annulla; Ctrl+W under a dialog or in the requests
 // layer never closes the app window (Electron's default menu would).
 // Screenshots in test-results/shots/close-fast-*.
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { ctrlWHandled, launchDemo, shot } from './helpers';
 
-test('the ✕ and Ctrl+W close a chat with Annulla; never the Orchestrator, never the window', async () => {
+const closeByMenu = async (page: Page) => { await page.getByTestId('chat-menu-fix').click(); await page.getByTestId('chat-close-fix').click(); };
+
+test('the menu and Ctrl+W close a chat with Annulla; never the Orchestrator, never the window', async () => {
   const { app, page } = await launchDemo({ orchestrator: true });
   await expect(page.getByTestId('tile-chat-fix')).toBeVisible();
-  await expect(page.getByTestId('chat-x-fix')).toBeVisible();
-  await expect(page.getByTestId('tile-orchestrator').locator('[data-testid^="chat-x-"]')).toHaveCount(0);
+  await expect(page.locator('[data-testid^="chat-x-"]')).toHaveCount(0); // no ✕ on a strip
   await shot(page, 'close-fast-1-x');
 
-  // ✕: gone at once, Annulla brings it back
-  await page.getByTestId('chat-x-fix').click();
+  // «Chiudi chat»: gone at once, Annulla brings it back
+  await closeByMenu(page);
   await expect(page.getByTestId('tile-chat-fix')).toHaveCount(0);
   const toast = page.getByTestId('toast').filter({ hasText: 'Chiusa «Fix totale ordine»' });
   await expect(toast).toBeVisible();
@@ -26,24 +27,16 @@ test('the ✕ and Ctrl+W close a chat with Annulla; never the Orchestrator, neve
   await expect(page.getByTestId('tile-chat-fix')).toBeVisible();
   await expect.poll(closedAt).toBeNull(); // Annulla reopened it, with its history
 
-  // a double click on the ✕ closes one chat: the next tile's ✕, which slides under the pointer, ignores the second click;
-  // right after Annulla, so a ✕ soon after a close counts (no time window swallows it)
-  const tiles = page.locator('[data-testid^="tile-chat-"]');
-  const n = await tiles.count();
-  await page.getByTestId('chat-x-fix').dblclick();
-  await expect(page.getByTestId('tile-chat-fix')).toHaveCount(0);
-  await page.waitForTimeout(300);
-  await expect(tiles).toHaveCount(n - 1);
-  await page.getByTestId('toast').filter({ hasText: 'Chiusa «Fix totale ordine»' }).getByTestId('toast-action').click();
-  await expect(tiles).toHaveCount(n);
-
-  // ✕ on a maximized chat: it leaves the maximized view too; Annulla brings it back maximized
+  // a chat in full screen: closing it leaves the full screen too; Annulla brings it back in full screen
+  await page.getByTestId('tile-chat-fix').hover();
   await page.getByTestId('chat-max-fix').click();
-  await page.getByTestId('chat-x-fix').click();
+  await expect(page.getByTestId('maximized')).toHaveAttribute('data-key', 'chat:fix');
+  await closeByMenu(page);
   await expect(page.getByTestId('tile-chat-fix')).toHaveCount(0);
   await page.getByTestId('toast').filter({ hasText: 'Chiusa «Fix totale ordine»' }).getByTestId('toast-action').click();
-  await expect(page.getByTestId('chat-max-fix')).toHaveAttribute('aria-label', /Ripristina/);
-  await page.getByTestId('chat-max-fix').click();
+  await expect(page.getByTestId('maximized')).toHaveAttribute('data-key', 'chat:fix');
+  await page.getByTestId('focus-exit').click();
+  await expect(page.getByTestId('maximized')).toHaveCount(0);
 
   // Ctrl+W on the selected chat, held down (auto-repeat) then pressed again while it is closing: one close, no other
   // toast that would push "Annulla" out

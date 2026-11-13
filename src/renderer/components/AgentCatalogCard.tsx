@@ -6,7 +6,8 @@
 // far the user narrowed it, with "Modifica permessi" to its permissions card, where its MCP servers are too, ADR 0085,
 // 0086), the run facts, its costs (median per run, per verified success, over how many runs: the only per-agent costs in
 // the app since Costi dropped its per-agent blocks, #125) and "Apri". A second click, or Esc, flips it back; the hidden face is inert, so
-// keyboard and screen readers only reach the visible one. Under prefers-reduced-motion the faces fade instead of turning.
+// keyboard and screen readers only reach the visible one. The front stays quiet (ADR 0287): the origin only when the user
+// changed the role, the status only while it works or is on trial, the "?" marks only under the pointer or the focus. Under prefers-reduced-motion the faces fade instead of turning.
 // Authoritative run metrics keep their sample sizes and unknown values: a missing value is shown as a dash with "Non
 // disponibile" for screen readers and in its tooltip, never as zero. Styles: styles/agent-catalog.css (card) and
 // styles/brain-model.css (flip).
@@ -166,6 +167,9 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
   // «Balanced mode» on (ADR 0218): a work role's engine and model are picked per delegation, so the card names no fixed one
   const balanced = useApp(s => s.settings?.balancedMode === true) && isWorkRole(profile.id);
   const tier = t('studio.tierChip', { tier: t(`roles.tier.${profile.tier}`) });
+  // the model the role really ran on last (its newest «Per modello» row, ADR 0284): the tier's name may not match it
+  const lastModel = standing?.models?.reduce<{ model: string; lastAt: number } | null>((best, m) => (!best || m.lastAt > best.lastAt ? m : best), null)?.model;
+  const shownModel = profile.model ?? lastModel ?? tier;
   const engineModel = balanced ? t('mp.balanced.card') : `${engine} · ${profile.model ?? tier}`;
   const skills = profile.skills;
   const last = lastStart === null ? unknown : new Date(lastStart).toLocaleString(locale());
@@ -175,11 +179,11 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
     style={{ '--row-index': Math.min(index, 8), '--tone': characterTone(characterOf(profile.id)) } as CSSProperties}>
     <div className="bm-flip-inner">
       <div className="bm-face bm-face-front" inert={flipped} aria-hidden={flipped || undefined} data-testid={`catalog-front-${profile.id}`}>
-        <div className="catalog-front-top">
-          <span className="catalog-origin">{origin}</span>
-          <span className="catalog-badge" data-state={state}>
-            <i aria-hidden="true" />{trial ? t('studio.trial') : working ? t('agentsGrid.working') : t('catalog.active')}</span>
-        </div>
+        {(profile.userLocked || state !== 'active') && <div className="catalog-front-top">
+          {profile.userLocked && <span className="catalog-origin">{origin}</span>}
+          {state !== 'active' && <span className="catalog-badge" data-state={state}>
+            <i aria-hidden="true" />{trial ? t('studio.trial') : t('agentsGrid.working')}</span>}
+        </div>}
         <header className="catalog-hero">
           <span className="catalog-hero-avatar"><AgentAvatar avatar={profile.avatar} name={profile.name} size={104} />
             {standing && <span className="catalog-level-medal" aria-hidden="true">{t('agentsGrid.levelShort', { n: standing.level })}</span>}</span>
@@ -187,12 +191,12 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
           <span id={`${backId}-f`} className="sr-only">{t('bm.card.flip', { name: profile.name })}</span>
           <p className="catalog-purpose" title={rolePurpose(profile.id, profile.purpose) || undefined}>{rolePurpose(profile.id, profile.purpose)}</p>
         </header>
-        <div className="catalog-chips">
+        <p className="catalog-chips">
           {balanced ? <span className="catalog-chip" data-kind="engine" data-balanced="true">{t('mp.balanced.card')}</span> : <>
             <span className="catalog-chip" data-kind="engine">{engine}</span>
-            <span className="catalog-chip" data-kind="model" title={profile.model ?? tier}>{profile.model ?? tier}</span></>}
+            <span className="catalog-chip" data-kind="model" title={shownModel}>{shownModel}</span></>}
           <span className="catalog-chip" data-kind="skills">{t('bm.map.agentSkills', { n: skills.length })}</span>
-        </div>
+        </p>
         <Standing id={profile.id} standing={standing} reviewedAt={reviewedAt} />
         <dl className="catalog-stats">
           <Metric label={t('agentsGrid.runs')} full={t('catalog.runs')} value={values.runs} unknown={unknown} />

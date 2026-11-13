@@ -145,9 +145,6 @@ test('back/forward, recents, Ctrl+1, G-letter keys, the persistent Orchestrator 
   await expect(page.getByTestId('view-agents')).toBeVisible();
   await page.keyboard.press('Alt+ArrowRight');
   await expect(page.getByTestId('an-panel-costi')).toBeVisible();
-  await page.getByTestId('nav-recent').click();
-  await expect(page.getByTestId('nav-recent-pop')).toContainText('Idee');
-  await page.keyboard.press('Escape');
   await page.keyboard.press('Control+1');
   await expect(page.getByTestId('view-agents')).toBeVisible();
   // G then a letter, outside text fields

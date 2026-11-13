@@ -1,32 +1,33 @@
-// The app action bar: history, search, observed status, requests, browsers and stop controls.
-// Settings owns appearance and connectors; its gear menu only links to settings and shortcuts.
-// Used by App.tsx; fit steps keep the final action group reachable at narrow widths. «Manutenzione» sits here for every
-// page (ADR 0132). The end group holds the language
-// switch (LangSwitch.tsx, ADR 0120), so it is always reachable.
+// The app's top bar, kept to what is used all the time (ADR 0287): history, the project maps, search, ONE usage figure
+// (today's spend and the plan window; the rest on click: UsageBar.tsx), «Da rispondere», «Ferma tutti», the bell and one
+// menu (the gear). Everything used now and then lives in that menu: a new browser, «Manutenzione» (ADR 0132), the
+// language (ADR 0120), the engines' sign-in state, the environment credentials, the shortcuts, the settings. What is out
+// of the norm comes back on the bar by itself: an engine signed out, chats queued for the machine's load, a work queue
+// that failed to load, the brain sync when it is on, a recording, a maintenance at work. Used by App.tsx; fit steps
+// keep the actions reachable in a narrow window.
 import { useWorkflows, reloadWorkflows, reloadLessons } from '../store/workflows';
 import { durableAsks } from '../lib/work-ask';
 import { planAskKeys } from '../lib/plan-ask';
 import { t as auditText } from '../i18n';
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
-import{t}from'../i18n';
-import type { CliStatus, EngineInfo } from '@shared/contract';
+import{lang,t}from'../i18n';
+import { LANGS, type CliStatus, type EngineInfo, type LanguageMode } from '@shared/contract';
 import { useNow } from '../lib/clock';
 import { useEngines } from '../lib/engines';
 import { firstQueuedOf, queuedOf, runningOf } from '../lib/chat-derived';
-import { cliCheck, cliLogin, useApp } from '../store/store';
-import { openModal, ui } from '../store/ui';
-import { back, focusChat, forward, go, newBrowser, nextThing, recentPlaces, stopAllAsk, toggleCenter } from '../actions';
+import { cliCheck, cliLogin, setSetting, useApp } from '../store/store';
+import { runMaintenanceNow, useMaintenance } from '../store/maintenance';
+import { openModal, toast, ui } from '../store/ui';
+import { back, focusChat, forward, go, newBrowser, nextThing, stopAllAsk, toggleCenter } from '../actions';
 import { RecPill } from './RecordingsPage';
 import { bellCount } from '../lib/notify';
-import { placeLabel } from '../store/ui';
 import { openQueue } from '../lib/later';
-import { HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconGlobe, IconHistory, IconLogin, IconMore, IconRefresh, IconSearch, IconSettings, IconStop } from './Icons';
+import { HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconLogin, IconRefresh, IconSearch, IconSettings, IconStop } from './Icons';
 import { UsageBar } from './UsageBar';
 import { SyncStatus } from './SyncStatus';
 import { MapsButton } from './OrchestratorOverlay';
-import { LangSwitch } from './LangSwitch';
 import { MaintenanceButton } from './brain-model/MaintenanceButton';
-import { IconButton, Keys, MenuItem, MenuLabel, Popover } from './ui';
+import { IconButton, Keys, MenuItem, MenuLabel, MenuSep, Popover } from './ui';
 
 function CliRow({ engine: { id: harness, name }, st }: { engine: EngineInfo; st: CliStatus | undefined }) {
   const ok = !!st?.found && st.loggedIn !== false;
@@ -56,6 +57,7 @@ function CliStatusButton() {
   const ref = useRef<HTMLButtonElement>(null);
   const bad = shown.some(e => { const c = cli?.[e.id]; return !!c?.found && c.loggedIn === false; });
   const label = !cli ? t('appText.topBar.cliChecking') : bad ? t('appText.topBar.cliLogin') : t('appText.topBar.cliReady');
+  if (!bad) return null; // the engines' state is in the gear menu; here only when one needs a sign-in
   return (
     <>
       <button ref={ref} type="button" className={`cli-btn ${bad ? 'bad' : ''}`} onClick={() => setOpen(o => !o)} aria-label={label} data-tip={label} aria-expanded={open} data-testid="cli-status">
@@ -78,37 +80,49 @@ function CliStatusButton() {
   );
 }
 
-// Settings has one destination; appearance controls live on that page.
+/** The one menu of the bar: what is used now and then, then the engines, the language and the settings. */
 function SettingsButton() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
+  const run = (f: () => void) => () => { setOpen(false); f(); };
+  const engines = useEngines();
+  const cli = useApp(s => s.info?.cli ?? null);
+  const mode = useApp(s => s.settings?.language ?? 'system');
+  const system = useApp(s => s.info?.systemLang);
+  const langName = (m: LanguageMode) => m === 'system' ? t('langSwitch.system', { name: t(`settings.language.${system ?? lang()}`) }) : t(`settings.language.${m}`);
+  const { status } = useMaintenance();
+  const maintain = async () => {
+    if (status?.running) return;
+    const err = await runMaintenanceNow();
+    toast(err ?? t('mm.one.started'), err ? 'err' : 'info');
+  };
   return <>
     <IconButton ref={ref} label={auditText('audit.TopBar.settings')} onClick={() => setOpen(value => !value)} aria-expanded={open} aria-haspopup="menu" testid="settings"><IconSettings /></IconButton>
-    <Popover anchor={ref} open={open} onClose={() => setOpen(false)} testid="settings-pop" width={248}>
-      <MenuItem onSelect={() => { setOpen(false); openModal('shortcuts'); }} shortcut="Ctrl+/" testid="settings-shortcuts">{auditText('audit.TopBar.keyboardShortcuts')}</MenuItem>
-      <MenuItem onSelect={() => { setOpen(false); go({ page: 'impostazioni' }); }} shortcut="Ctrl+," testid="settings-all">{auditText('audit.TopBar.allSettings')}</MenuItem>
+    <Popover anchor={ref} open={open} onClose={() => setOpen(false)} testid="settings-pop" width={320}>
+      <MenuItem onSelect={run(() => void newBrowser())} testid="topbar-new-browser">{t('ui.newBrowser')}</MenuItem>
+      <MenuItem onSelect={run(() => void maintain())} disabled={!!status?.running} testid="topbar-maint-run">{status?.running ? t('mm.maint.running') : t('mm.maint.button')}</MenuItem>
+      <MenuItem onSelect={run(() => openModal('credentials'))} testid="more-credentials">{auditText('audit.TopBar.environmentCredentials')}</MenuItem>
+      <MenuSep />
+      <MenuLabel>{auditText('audit.TopBar.theClisUsedByTheApp')}</MenuLabel>
+      <div data-testid="cli-pop">{engines.map(e => <CliRow key={e.id} engine={e} st={cli?.[e.id]} />)}</div>
+      <MenuSep />
+      <MenuLabel>{t('langSwitch.heading')}</MenuLabel>
+      {LANG_MODES.map(m => <MenuItem key={m} checked={m === mode} onSelect={run(() => { if (m !== mode) void setSetting({ language: m }); })} testid={`topbar-lang-${m}`}>{langName(m)}</MenuItem>)}
+      <MenuSep />
+      <MenuItem onSelect={run(() => openModal('shortcuts'))} shortcut="Ctrl+/" testid="settings-shortcuts">{auditText('audit.TopBar.keyboardShortcuts')}</MenuItem>
+      <MenuItem onSelect={run(() => go({ page: 'impostazioni' }))} shortcut="Ctrl+," testid="settings-all">{auditText('audit.TopBar.allSettings')}</MenuItem>
     </Popover>
   </>;
 }
+const LANG_MODES: readonly LanguageMode[] = ['system', ...LANGS];
 
 function HistoryNav() {
   const hist = ui.use(s => s.hist);
   const len = ui.use(s => s.history.length);
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLButtonElement>(null);
   return (
     <span className="hist-nav">
       <IconButton label={auditText('audit.TopBar.back')} shortcut="Alt+←" onClick={back} disabled={hist <= 0} testid="nav-back"><IconArrowLeft size={14} /></IconButton>
       <IconButton label={auditText('audit.TopBar.forward')} shortcut="Alt+→" onClick={forward} disabled={hist >= len - 1} testid="nav-forward"><IconArrowRight size={14} /></IconButton>
-      <IconButton ref={ref} label={auditText('audit.TopBar.recentPlaces')} onClick={() => setOpen(o => !o)} aria-expanded={open} aria-haspopup="menu" testid="nav-recent"><IconHistory size={14} /></IconButton>
-      <Popover anchor={ref} open={open} onClose={() => setOpen(false)} align="start" testid="nav-recent-pop" width={260}>
-        <MenuLabel>{auditText('audit.TopBar.recent')}</MenuLabel>
-        {recentPlaces().map((p, i) => (
-          <MenuItem key={`${p.page}-${p.element ?? ''}-${i}`} onSelect={() => { setOpen(false); go(p); }} testid={`recent-${i}`}>
-            {placeLabel(p)}
-          </MenuItem>
-        ))}
-      </Popover>
     </span>
   );
 }
@@ -128,23 +142,6 @@ function Bell() {
       {n > 0 && <span className="bell-n" data-testid="bell-count">{n > 99 ? '99+' : n}</span>}
       {dnd && <span className="bell-dnd" aria-hidden="true" />}
     </button>
-  );
-}
-
-/** "…": the actions used now and then, always here (2026-10-15, before they moved in and out with the width):
- *  Credenziali. */
-function MoreButton() {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLButtonElement>(null);
-  const run = (f: () => void) => () => { setOpen(false); f(); };
-  const toggle = () => setOpen(o => !o);
-  return (
-    <span className="topbar-more">
-      <IconButton ref={ref} label={auditText('auditExpression.TopBar.text188')} data-tip={auditText('auditExpression.TopBar.text190')} onClick={toggle} aria-expanded={open} aria-haspopup="menu" testid="topbar-more"><IconMore /></IconButton>
-      <Popover anchor={ref} open={open} onClose={() => setOpen(false)} testid="topbar-more-pop" width={300}>
-        <MenuItem onSelect={run(() => openModal('credentials'))} testid="more-credentials">{auditText('audit.TopBar.environmentCredentials')}</MenuItem>
-      </Popover>
-    </span>
   );
 }
 
@@ -193,6 +190,7 @@ export function TopBar() {
   const queued = useApp(s => queuedOf(s.chats));
   const firstQueued = useApp(s => firstQueuedOf(s.chats));
   const version = useApp(s => s.info?.version);
+  const maintaining = !!useMaintenance().status?.running;
   const head = useRef<HTMLElement>(null);
   const main = useRef<HTMLDivElement>(null);
   useFit(head, main);
@@ -225,10 +223,9 @@ export function TopBar() {
         <IconBolt size={14} /><span className="next-label">{inQueue ? auditText('auditExpression.TopBar.text204') : paused ? auditText('auditExpression.TopBar.text205') : waiting ? auditText('auditExpression.TopBar.text206') : auditText('auditExpression.TopBar.text207')}</span>
         {waiting > 0 && <span className="count-badge" data-testid="topbar-next-count">{waiting}</span>}
       </button>
-      <button type="button" className="btn btn-ghost btn-m new-browser" onClick={() => void newBrowser()} data-testid="topbar-new-browser" aria-label={t('ui.newBrowser')} data-tip={t('ui.newBrowser')}><IconGlobe size={14}/><span>{t('ui.newBrowser')}</span></button>
-      {/* the one «Manutenzione», always here (owner, 2026-10-23, ADR 0132): its dialog picks the free cleanup or a research */}
-      <MaintenanceButton bar testId="topbar-maint" />
-      <button type="button" className="btn btn-danger btn-m" onClick={stopAllAsk} disabled={running === 0} data-testid="topbar-stopall" data-tip={auditText('audit.TopBar.stopAllWorkingChatsCtrlShift')}
+      {/* «Manutenzione» is in the gear menu; while one works it shows here (ADR 0132, 0278) */}
+      {maintaining && <MaintenanceButton bar testId="topbar-maint" />}
+      <button type="button" className={`btn btn-danger btn-m stop-all${running === 0 ? ' is-idle' : ''}`} onClick={stopAllAsk} disabled={running === 0} data-testid="topbar-stopall" data-tip={auditText('audit.TopBar.stopAllWorkingChatsCtrlShift')}
         aria-label={auditText('auditExpression.TopBar.text208', { v0: running })}>
         <IconStop size={13} /><span>{auditText('audit.TopBar.stopAll')}</span>{running > 0 && <span className="count-badge red">{running}</span>}
       </button>
@@ -236,8 +233,6 @@ export function TopBar() {
       <div className="topbar-end">
         {/* a call being recorded (ADR 0154): on every page, never shrunk away */}
         <RecPill onOpen={() => go({ page: 'registrazioni' })} />
-        <LangSwitch />
-        <MoreButton />
         <Bell />
         <SettingsButton />
       </div>

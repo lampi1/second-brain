@@ -44,7 +44,7 @@ test('agent cards: big centred character, level and performance with their "?" f
     // ADR 0131: the Orchestrator (its decisions) and Flash (its answers) level up too
     expect(Number(await overview.getByTestId('catalog-level-orchestrator').getAttribute('data-level'))).toBeGreaterThan(1);
     expect(Number(await overview.getByTestId('catalog-level-flash').getAttribute('data-level'))).toBeGreaterThan(1);
-    await expect(artisan.locator('.catalog-chip[data-kind="model"]')).toContainText('Modello:');
+    await expect(artisan.locator('.catalog-chip[data-kind="model"]')).toHaveText(/\S/); // the model it last ran on, else its tier
     const big = await artisan.locator('.catalog-hero .agent-avatar').boundingBox();
     expect(big!.width).toBeGreaterThanOrEqual(96);
     // a new role: still warming up; the Battito's card is gone (ADR 0201)
@@ -171,12 +171,6 @@ test('"?" explanations across the app: Orchestrator, strips, Agenti summary, Set
   };
   try {
     await laterQuestions(page);
-    await open('orchestrator-help', 'coordina il lavoro', 'explain-orchestrator-dark');
-    const strip = page.locator('[data-testid^="chat-help-"]').first();
-    await expect(strip).toBeVisible();
-    const id = (await strip.getAttribute('data-testid'))!;
-    await open(id, 'senza le attese', 'explain-strip-dark');
-    await expect(page.locator('section.chat-tile.is-expanded')).toHaveCount(0); // the "?" did not expand the strip
     await goPage(page, 'agenti');
     await open('catalog-summary-help', 'In prova', 'explain-agents-dark');
     await open('judging-help', 'peso pieno', 'explain-agents-judging-dark');

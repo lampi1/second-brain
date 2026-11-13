@@ -75,8 +75,6 @@ export function OrchestratorOverlay() {
             if (next !== null) { event.preventDefault(); setLane(LANES[next]!); document.getElementById(`lane-tab-${LANES[next]}`)?.focus(); }
           }}>{id === 'orchestrator' ? <><span className="orchestrator-column-mark" aria-hidden="true">✦</span>{t('lampo.tabOrchestrator')}</> : <><span aria-hidden="true">⚡</span>{t('lampo.tab')}</>}</button>)}
       </div>
-      {/* Flash's hint lives in its tile header only */}
-      <span className="sp" />{lane === 'orchestrator' && <span className="orchestrator-column-hint">{t('home.startHere')}</span>}
     </div>
     <div className="orchestrator-body" id="orchestrator-panel" role="tabpanel" aria-labelledby={`lane-tab-${lane}`}><ErrorBoundary where={lane === 'lampo' ? 'lampo' : 'orchestrator'} compact key={`${lane}-${active ?? 'none'}`}>{lane === 'lampo' ? <LampoTile onWork={() => setLane('orchestrator')} /> : <OrchestratorTile key={active ?? 'none'} chatId={active} />}</ErrorBoundary></div>
     <div className="orchestrator-column-resize" role="separator" tabIndex={0} aria-label={t('home.orchestratorWidth')} aria-orientation="vertical"

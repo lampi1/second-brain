@@ -2,7 +2,6 @@
 export const homeIt = {
 
   'home.emptyAgents': 'Racconta all’Orchestrator cosa vuoi fare, oppure crea il tuo primo agente.',
-  'home.startHere': 'Il tuo punto di partenza',
   'home.orchestratorWidth': 'Larghezza Orchestrator', 'home.orchestratorStart': 'Da dove partiamo?',
   'home.orchestratorIntro': 'Un solo posto per le tue idee, gli agenti e il prossimo passo. L’Orchestrator rimane qui mentre lavori.',
   'home.orchestrator': 'Orchestrator',

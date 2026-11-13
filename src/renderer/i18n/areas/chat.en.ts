@@ -206,11 +206,7 @@ export const chatEn: typeof chatIt = {
   'chat.command.replyLabel': 'Free answer to the chat',
   'chat.command.replySend': 'Send',
   // FocusView
-  'chat.focus.title': 'Focus mode',
   'chat.focus.waiting': (p: { n: number }) => `${p.n} waiting for you`,
-  'chat.focus.calm': 'Nothing waiting for you',
-  'chat.focus.exit': 'Exit',
-  'chat.focus.resizer': 'Resize',
 
   // AskContext
   'chat.context.thinking': 'from the chat\'s reasoning',
@@ -257,8 +253,6 @@ export const chatEn: typeof chatIt = {
   'chat.tile.stop': 'Stop',
   'chat.tile.close': 'Close chat',
   'chat.tile.menu': 'Rename, model, permissions and more',
-  'chat.tile.restore': 'Restore',
-  'chat.tile.maximize': 'Full-screen chat',
   'chat.correct.pickTip': 'Correct this sentence (Ctrl+Shift+X)',
   'chat.correct.stoppingToast': 'Stopping the turn: it restarts from your correction',
   'chat.correct.stepToast': 'Correction sent: Claude reads it at the next step',

@@ -204,11 +204,7 @@ export const chatIt = {
   'chat.command.replyLabel': 'Risposta libera alla chat',
   'chat.command.replySend': 'Invia',
   // FocusView
-  'chat.focus.title': 'Modalità focus',
   'chat.focus.waiting': (p: { n: number }) => `${p.n} ti aspettano`,
-  'chat.focus.calm': 'Niente ti aspetta',
-  'chat.focus.exit': 'Esci',
-  'chat.focus.resizer': 'Ridimensiona',
 
   // AskContext
   'chat.context.thinking': 'dal ragionamento della chat',
@@ -255,8 +251,6 @@ export const chatIt = {
   'chat.tile.stop': 'Ferma',
   'chat.tile.close': 'Chiudi chat',
   'chat.tile.menu': 'Rinomina, modello, permessi e altro',
-  'chat.tile.restore': 'Ripristina',
-  'chat.tile.maximize': 'Chat a tutto schermo',
   'chat.correct.pickTip': 'Correggi questa frase (Ctrl+Maiusc+X)',
   'chat.correct.stoppingToast': 'Fermo il turno: riparte dalla tua correzione',
   'chat.correct.stepToast': 'Correzione mandata: Claude la legge al prossimo passo',

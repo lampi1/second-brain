@@ -151,7 +151,7 @@ test('a screenshot pasted in one chat stays there when focus mode swaps to anoth
   await expandChats(page, 'qa'); // the input is on the open strip
   await page.getByTestId('chat-input-qa').click();
   await page.keyboard.press('Control+Shift+F');
-  const focus = page.getByTestId('focus-view');
+  const focus = page.getByTestId('maximized');
   await expect(focus).toBeVisible();
   await putImages(page, 'chat-input-qa', 1, 'paste', 330);
   await expect(page.getByTestId('chat-input-qa-images-0')).toBeVisible();

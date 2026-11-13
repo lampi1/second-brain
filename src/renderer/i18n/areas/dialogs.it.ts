@@ -117,7 +117,6 @@ export const dialogsIt = {
   'dialogs.orchestrator.name': 'Orchestrator',
   'dialogs.orchestrator.empty': 'Nessun Orchestrator ancora',
   'dialogs.orchestrator.createButton': 'Crea l’Orchestrator',
-  'dialogs.orchestrator.statusShortcut': 'Ctrl+Shift+S',
   'dialogs.orchestrator.stopLabel': 'Ferma',
   'dialogs.orchestrator.stopShortcut': 'Ctrl+.',
   'dialogs.orchestrator.menuLabel': 'Motore, modello, Pulisci e altro',

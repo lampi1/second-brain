@@ -249,8 +249,14 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
   useLayoutEffect(() => {
     const el = ta.current;
     if (!el) return;
-    el.style.height = '0px';
-    el.style.height = `${Math.min(el.scrollHeight, 168)}px`;
+    const fit = () => { el.style.height = '0px'; el.style.height = `${Math.min(el.scrollHeight, 168)}px`; };
+    fit();
+    // its width changes without its text (a strip opening, the agent window's divider, ADR 0287): the lines wrap anew
+    if (typeof ResizeObserver === 'undefined') return;
+    let width = el.clientWidth;
+    const observer = new ResizeObserver(() => { if (el.clientWidth !== width) { width = el.clientWidth; fit(); } });
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [text]);
   const setImages = (next: (cur: readonly ImageAttachment[]) => ImageAttachment[]) => {
     const v = next(draftImages.get(chat.id) ?? NO_IMAGES);
