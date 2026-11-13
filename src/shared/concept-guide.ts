@@ -948,8 +948,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'The top bar shows today’s spend and the plan’s windows; spending limits warn, they do not stop.'),
     points: [
       // src/renderer/components/UsageBar.tsx
-      b('In alto: spesa di oggi e finestra di 5 ore; la settimana compare nella barra solo da 70% in su. Un clic apre il dettaglio con settimana e chat di oggi dalla più cara; verde sotto 70%, ambra da 70%, rosso da 90%.',
-        'At the top: today’s spend and the 5-hour window; the week shows in the bar only from 70% up. A click opens the details with the week and today’s chats from the most expensive; green below 70%, amber from 70%, red from 90%.'),
+      b('In alto: spesa di oggi e limite settimanale; la finestra di 5 ore compare nella barra solo da 70% in su. Un clic apre il dettaglio con la settimana, le 5 ore e le chat di oggi dalla più cara; verde sotto 70%, ambra da 70%, rosso da 90%.',
+        'At the top: today’s spend and the weekly limit; the 5-hour window shows in the bar only from 70% up. A click opens the details with the week, the 5 hours and today’s chats from the most expensive; green below 70%, amber from 70%, red from 90%.'),
       // src/renderer/brain/pages/Costi.tsx (#125)
       b('Andamento → Costi è l’unica pagina dei costi: le chat di oggi dal vivo, il periodo con il confronto, qualche curiosità (il giorno più caro, il modello che pesa di più), dove risparmiare, i grafici per giorno, tipo, modello e area e ogni chat. I costi per agente sono sul retro della sua carta in Agenti.',
         'Andamento → Costi is the one costs page: today’s chats live, the period with its comparison, a few curious facts (the priciest day, the model that weighs most), where to save, charts by day, kind, model and area, and every chat. Per-agent costs are on the back of its card in Agenti.'),
