@@ -18,6 +18,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   OpenCode, OpenRouter included; the chat's model and plan mode go through OpenCode's session options (ADR 0216).
 
 ### Changed
+- The first-run setup is three moments in one window instead of six steps: language and name, your AI (found on the
+  computer by itself, OpenCode included), then the first real request to the Orchestrator typed inside the setup.
+  Tools, folders and goals are no longer asked: the Orchestrator proposes them when needed (ADR 0279).
 - README rewritten around the two things the app is (multi-harness orchestration, a brain of skills and memory), with
   a plain quick start; `SECURITY.md` added; the ADR index lists the decisions in force first and every replaced or
   amended record names the record that changed it.

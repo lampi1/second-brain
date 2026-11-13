@@ -119,7 +119,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0116](0116-brain-upgrade-follows-the-layout.md) The brain follows the app's layout by itself, with a log and an undo — accepted
 - [0117](0117-german-de-at.md) German as the third UI language: code 'de', locale de-AT — accepted
 - [0118](0118-composer-inline-suggestion.md) The chat composer's inline suggestion: local first, a small model after a pause — accepted
-- [0119](0119-simple-onboarding.md) Simple onboarding: the language first, six steps, tool tiles — accepted
+- [0119](0119-simple-onboarding.md) Simple onboarding: the language first, six steps, tool tiles — accepted, partly superseded by 0279
 - [0120](0120-one-language-for-ui-and-ai.md) One language for the UI and the AI, switched from the top bar — accepted
 - [0121](0121-strategist-really-asks.md) The Strategist really asks: a question before the plan, the plan's approval in the questions window — accepted
 - [0122](0122-memoria-hub.md) Memoria is the hub: one page with tabs, no Dashboard — accepted, partly superseded by 0243, 0263
@@ -277,6 +277,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0276](0276-planning-on-the-project-maps.md) Planning on the project maps: the Strategist proposes a map, the app keeps it live — accepted
 - [0277](0277-brain-documents-in-the-brain-rules-skill.md) The brain tools find the brain's own documents at the root or in the `brain-rules` skill — accepted
 - [0278](0278-roles-use-any-installed-skill.md) A role may use any installed skill, and looking never asks — accepted
+- [0279](0279-onboarding-in-three-moments.md) Onboarding in three moments: language and name, your AI, the first real request — accepted
 
 ## Replaced
 

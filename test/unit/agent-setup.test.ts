@@ -1,5 +1,6 @@
 // The first-run interview without implicit connections or provider calls: the interview ⇄ me.md mapping and the local
 // validation of the interview answers.
+import { SETUP_ENGINES } from '../../src/renderer/lib/setup-wizard';
 import { expect, it } from 'vitest';
 import type { OwnerProfile } from '@shared/profile';
 import { REPLY_PRESETS } from '@shared/profile';
@@ -8,6 +9,8 @@ import { checkSetup } from '../../src/main/agents/setup';
 it('keeps engine preferences resumable without accepting arbitrary engines or trust flags', () => {
   expect(checkSetup({ ...emptySetup(), engines: ['codex', 'cursor', 'codex'], trusted: true })).toMatchObject({ engines: ['codex', 'cursor'] });
   expect(checkSetup({ ...emptySetup(), engines: [] }).engines).toEqual([]);
+  // every engine the setup looks for can be saved, OpenCode included (ADR 0279): a refused draft would lock the modal
+  expect(checkSetup({ ...emptySetup(), engines: [...SETUP_ENGINES] }).engines).toEqual(['claude', 'codex', 'cursor', 'opencode']);
   expect(checkSetup({ ...emptySetup(), engines: ['claude'], trusted: true })).not.toHaveProperty('trusted');
   expect(() => checkSetup({ ...emptySetup(), engines: ['unknown'] })).toThrow();
   expect(() => checkSetup({ ...emptySetup(), engines: [['codex']] })).toThrow();
