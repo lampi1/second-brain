@@ -364,12 +364,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'AgentRun { runId, chatId, agentId, version, goal, startedBy, startedAt, endedAt?, endReason?, outcome?, counters, costUsd | null, tokens | null, report?, tier?, parentRunId?, reviewOf?, reworkOf?, continuedFrom?, tags? }.',
         'AgentRun { runId, chatId, agentId, version, goal, startedBy, startedAt, endedAt?, endReason?, outcome?, counters, costUsd | null, tokens | null, report?, tier?, parentRunId?, reviewOf?, reworkOf?, continuedFrom?, tags? }.'),
       tech(FILES, 'userData/app.db (SQLite, una riga per run; prima dell’ADR 0199 agent-runs.json, conservato come agent-runs.json.migrated-<data>) è la fonte; ChatSummary.run ne è una copia; i giudizi in run-feedback.json.', 'userData/app.db (SQLite, one row per run; agent-runs.json before ADR 0199, kept as agent-runs.json.migrated-<date>) is the source; ChatSummary.run mirrors it; verdicts in run-feedback.json.'),
-      // src/main/agents/runs.ts RUNS_MAX, RUNS_BYTES, STALE_MS
-      tech(LIMITS, 'RUNS_MAX = 5000, RUNS_BYTES = 7 000 000, STALE_MS = 72 h.', 'RUNS_MAX = 5000, RUNS_BYTES = 7,000,000, STALE_MS = 72 h.'),
+      // src/main/agents/runs.ts RUNS_MAX, RUNS_DB_BYTES, RUNS_BYTES, STALE_MS
+      tech(LIMITS, 'RUNS_MAX = 5000, RUNS_DB_BYTES = 16 000 000 (app.db; 7 000 000 nel file JSON di riserva), STALE_MS = 72 h.', 'RUNS_MAX = 5000, RUNS_DB_BYTES = 16,000,000 (app.db; 7,000,000 in the fallback JSON file), STALE_MS = 72 h.'),
       tech(TOOLS, 'Il rapporto finale è lo strumento agent_report del ruolo.', 'The final report is the role’s agent_report tool.'),
     ],
     anchors: {
-      [-1]: ['src/shared/agents.ts#AgentRun', 'src/main/agents/runs.ts#RUNS_MAX', 'src/main/agents/runs.ts#RUNS_BYTES', 'src/main/agents/runs.ts#STALE_MS'],
+      [-1]: ['src/shared/agents.ts#AgentRun', 'src/main/agents/runs.ts#RUNS_MAX', 'src/main/agents/runs.ts#RUNS_DB_BYTES', 'src/main/agents/runs.ts#RUNS_BYTES', 'src/main/agents/runs.ts#STALE_MS'],
       0: ['src/main/chats/manager-persistence.ts#startRun'],
       1: ['src/main/chats/manager.ts#create'],
       2: ['src/main/chats/manager-requests.ts#countRequest'],

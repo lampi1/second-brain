@@ -123,7 +123,7 @@ export const GUIDE_DE: Readonly<Record<string, string>> = {
   "Outcome": "Ergebnis",
   "AgentRun { runId, chatId, agentId, version, goal, startedBy, startedAt, endedAt?, endReason?, outcome?, counters, costUsd | null, tokens | null, report?, tier?, parentRunId?, reviewOf?, reworkOf?, continuedFrom?, tags? }.": "AgentRun { runId, chatId, agentId, version, goal, startedBy, startedAt, endedAt?, endReason?, outcome?, counters, costUsd | null, tokens | null, report?, tier?, parentRunId?, reviewOf?, reworkOf?, continuedFrom?, tags? }.",
   "userData/app.db (SQLite, one row per run; agent-runs.json before ADR 0199, kept as agent-runs.json.migrated-<date>) is the source; ChatSummary.run mirrors it; verdicts in run-feedback.json.": "userData/app.db (SQLite, eine Zeile pro Run; vor ADR 0199 agent-runs.json, aufbewahrt als agent-runs.json.migrated-<Datum>) ist die Quelle; ChatSummary.run spiegelt sie; Urteile in run-feedback.json.",
-  "RUNS_MAX = 5000, RUNS_BYTES = 7,000,000, STALE_MS = 72 h.": "RUNS_MAX = 5000, RUNS_BYTES = 7.000.000, STALE_MS = 72 h.",
+  "RUNS_MAX = 5000, RUNS_DB_BYTES = 16,000,000 (app.db; 7,000,000 in the fallback JSON file), STALE_MS = 72 h.": "RUNS_MAX = 5000, RUNS_DB_BYTES = 16.000.000 (app.db; 7.000.000 in der JSON-Ersatzdatei), STALE_MS = 72 h.",
   "The final report is the role’s agent_report tool.": "Der Abschlussbericht ist das Tool agent_report der Rolle.",
   "Agent metrics and statistics": "Agenten-Metriken und Statistiken",
   "Each agent’s metrics from its ended runs: runs, verified successes, costs, level and performance on its card.": "Die Metriken jedes Agenten aus seinen beendeten Runs: Runs, geprüfte Erfolge, Kosten, Level und Leistung auf seiner Karte.",

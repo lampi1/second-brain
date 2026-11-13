@@ -77,7 +77,7 @@ export class OneShotService {
       agentId: agent.id, version: agent.activeVersion, goal: req.purpose, startedBy: 'orchestrator', startedAt, costKnown: false });
     run.source = 'oneshot';
     run.oneshot = { engine: engine.id, job: req.purpose, fallback: engine.id !== agent.engine, costBasis: 'unknown' };
-    this.d.runs.save();
+    this.d.runs.save(run);
     let result: OneShotResult = { ...failed('Esecuzione non completata'), runId: run.runId, engine: engine.id, model };
     let cwd: string | undefined;
     try {
@@ -117,7 +117,7 @@ export class OneShotService {
       run.oneshot.costBasis = result.costBasis;
       run.oneshot.ok = result.ok; // whether the job answered, kept on the run (stored data)
       run.outcome = { verdict: 'unknown', basis: 'unknown', at: now(), by: 'oneshot' };
-      endRun(run, 'completed', now()); this.d.runs.save();
+      endRun(run, 'completed', now()); this.d.runs.save(run);
     }
     return result;
   }

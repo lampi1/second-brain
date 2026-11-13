@@ -27,6 +27,16 @@ import { jsonArray, stringifyEach } from '../chunked-json';
 export const RUNS_MAX = 5000;
 /** Below the local store's 8 MB cap, with headroom for the run being added. */
 export const RUNS_BYTES = 7_000_000;
+/** The runs' budget in app.db, which writes only the rows that changed: more than twice the days of work stay whole
+ *  (ADR 0283). Bounded by what is held in memory and copied to the read worker, not by the file. */
+export const RUNS_DB_BYTES = 16_000_000;
+/** A run that ended this long ago is cold: a deferred save into app.db takes its JSON as last written instead of
+ *  building it again (ADR 0283). */
+export const COLD_AFTER_MS = 10 * 60_000;
+/** After a deferred save that skipped the cold runs, one that looks at all of them follows within this long. */
+export const COLD_PASS_MS = 15_000;
+/** A full pass a newer save superseded is started again after this long at the earliest. */
+export const FULL_RETRY_MS = 2_000;
 export const GOAL_MAX = 2000;
 /** a run with no turn and nothing waiting on Brother for this long ends as stale (first guess, AGENTS-DESIGN §7) */
 export const STALE_MS = 72 * 3600_000;
@@ -369,7 +379,7 @@ export class AgentRunStore {
   /** the database the runs live in (ADR 0199); null = agent-runs.json, the fallback */
   private db: RunsDb | null = null;
   /** per run id, its JSON and bytes as the database holds them: a save writes only the runs whose JSON changed */
-  private written = new Map<string, { json: string; bytes: number }>();
+  private written = new Map<string, { json: string; bytes: number; endedAt?: number | undefined }>();
   /** the meta values (rollups, prunedThrough, flash) as the database holds them */
   private writtenMeta = new Map<string, string>();
   private runs = new Map<string, AgentRun>();
@@ -476,7 +486,7 @@ export class AgentRunStore {
       ...(meta.has('flash') ? { flash: parseOrNull(meta.get('flash')!) } : {}) };
     const s = readState(raw, Infinity);
     this.use(s);
-    for (const r of rows) if (this.runs.has(r.id)) this.written.set(r.id, { json: r.json, bytes: Buffer.byteLength(r.json, 'utf8') });
+    for (const r of rows) if (this.runs.has(r.id)) this.written.set(r.id, { json: r.json, bytes: Buffer.byteLength(r.json, 'utf8'), endedAt: this.runs.get(r.id)!.endedAt });
     this.writtenMeta = meta;
     // a row out of shape is never deleted: it stays in app.db as it is, out of the store
     if (s.skipped) log.warn('agents', 'invalid agent run records skipped', { data: { skipped: s.skipped, kept: this.runs.size }, hint: 'their rows stay in app.db untouched; the valid runs are used and new runs are recorded' });
@@ -510,7 +520,7 @@ export class AgentRunStore {
       return false;
     }
     this.use(s);
-    for (const r of rows) this.written.set(r.id, { json: r.json, bytes: Buffer.byteLength(r.json, 'utf8') });
+    for (const r of rows) this.written.set(r.id, { json: r.json, bytes: Buffer.byteLength(r.json, 'utf8'), endedAt: r.endedAt ?? undefined });
     this.writtenMeta = meta;
     if (s.skipped) log.warn('agents', 'invalid agent run records skipped', { data: { skipped: s.skipped, kept: this.runs.size },
       hint: `the valid runs are in app.db; the original file is kept as ${path.basename(target)}` });
@@ -537,7 +547,7 @@ export class AgentRunStore {
       log.error('agents', 'agent runs from agent-runs.json not merged into app.db', { cause: errText(e), hint: 'agent-runs.json is kept untouched; the merge is tried again at the next start' });
       return;
     }
-    for (const [i, r] of fresh.entries()) { this.runs.set(r.runId, r); this.written.set(r.runId, { json: rows[i]!.json, bytes: Buffer.byteLength(rows[i]!.json, 'utf8') }); }
+    for (const [i, r] of fresh.entries()) { this.runs.set(r.runId, r); this.written.set(r.runId, { json: rows[i]!.json, bytes: Buffer.byteLength(rows[i]!.json, 'utf8'), endedAt: r.endedAt }); }
     if (fresh.length) this.rev++;
     const target = migratedName(this.file);
     try { renameWithRetry(this.file, target); } catch (e) {
@@ -548,7 +558,7 @@ export class AgentRunStore {
   }
 
   /** Releases the database connection (the quit, tests: on Windows an open file cannot be removed); a later save opens it again. */
-  close(): void { this.db?.close(); }
+  close(): void { clearTimeout(this.coldTimer); this.coldTimer = undefined; this.db?.close(); }
 
   /** Flash's answer outcomes (flash-outcomes.ts, ADR 0131): a copy. */
   flashLog(): FlashLog { return structuredClone(this.flash); }
@@ -594,7 +604,7 @@ export class AgentRunStore {
     };
     this.runs.set(run.runId, run);
     if (!save) { this.dirty = true; return run; }
-    try { this.save(); } catch (e) { this.runs.delete(run.runId); this.rev++; throw e; }
+    try { this.save(run); } catch (e) { this.runs.delete(run.runId); this.rev++; throw e; }
     return run;
   }
   /** A run known only from a chat's mirror (written before a lost or reset store): taken back as it is; undefined = an
@@ -610,18 +620,28 @@ export class AgentRunStore {
   /** Something changed in a record that is worth a write on the next flush (cost, tokens, context peak). */
   touch(): void { this.dirty = true; }
   /** A deferred write still in flight counts as unsaved: the quit's flush writes synchronously over it. */
-  flush(): void { if (this.dirty || this.inflight) this.save(); }
+  flush(): void { if (this.dirty || this.inflight || this.coldTimer) this.save(); } // every run: no cold one is skipped
   /** something is waiting to be written (dirty) or being written (a deferred write in flight) */
-  get pending(): boolean { return this.dirty || this.inflight > 0; }
+  get pending(): boolean { return this.dirty || this.inflight > 0 || this.coldTimer !== undefined; }
 
   /** bumped by every write started: a deferred write that sees a newer one drops itself and commits nothing */
   private gen = 0;
   private inflight = 0;
 
-  save(): void {
+  /** Writes now, on the caller's step. With `changed` (the run the caller just started, ended or judged) app.db gets the
+   *  runs at work and that one, like a deferred save (ADR 0283): building every run's JSON at 16 MB is a step the
+   *  window feels, and a one-shot saves three times. Without it every run is looked at (the quit's flush). */
+  save(changed?: AgentRun): void {
     const t = performance.now(), db = this.db;
     try {
-      if (db) { const w = this.prepareDb(db); this.gen++; w.write(); this.dirty = false; w.commit(); }
+      if (db) {
+        // something else was waiting to be written: it may be a cold run's change, which this save skips
+        const owed = this.unsaved;
+        const all = this.list(), parts = changed ? Array.from(this.coldParts(all, changed).parts, (json, i) => json ?? JSON.stringify(all[i])) : undefined;
+        const w = this.prepareDb(db, all, parts);
+        this.gen++; w.write(); this.dirty = false; w.commit();
+        if (!parts) this.fullDone(); else if (owed) this.coldPassSoon();
+      }
       else { const w = this.prepare(); this.gen++; writeLocalText(this.file, w.body); this.dirty = false; w.commit(); }
     } finally { slowStep(db ? 'agent runs write (app.db)' : 'agent-runs.json write', performance.now() - t); }
   }
@@ -672,16 +692,23 @@ export class AgentRunStore {
    *  #297), then only the changed rows are written, in one short transaction. */
   private async saveDbAsync(db: RunsDb): Promise<boolean> {
     const gen = ++this.gen, all = this.list();
+    // every COLD_PASS_MS at most all the runs are looked at; in between only the open and the just ended ones. A full
+    // pass a newer save superseded (run events every 250 ms while it was built) is not tried again at once: the next
+    // saves are short and land, and the full one waits FULL_RETRY_MS, else nothing would be written until a pause
+    const clock = performance.now(), full = clock - this.fullAt >= COLD_PASS_MS && clock - this.fullTriedAt >= FULL_RETRY_MS;
+    if (full) this.fullTriedAt = clock;
     this.dirty = false;
     this.inflight++;
     try {
       let parts: string[];
-      try { parts = await stringifyEach(all); } catch (e) {
+      try { parts = await this.dbParts(all, full); } catch (e) {
         if (this.gen === gen) this.dirty = true;
         log.warn('agents', 'agent runs not saved', { cause: errText(e), hint: 'retried shortly' });
         return false;
       }
-      if (this.gen !== gen) return true; // superseded by a newer save: it writes the newer state
+      // superseded by a newer save: it writes the newer state, the cold runs left out unless it was a full one. So a
+      // full pass is asked again: this save may have taken a cold run's change with it (it cleared `dirty`)
+      if (this.gen !== gen) { if (this.fullAt < clock) this.coldPassSoon(); return true; }
       const t = performance.now(), changed = this.unsaved;
       try {
         const w = this.prepareDb(db, all, parts);
@@ -693,8 +720,48 @@ export class AgentRunStore {
       } finally { slowStep('agent runs write (app.db)', performance.now() - t); }
       // prepareDb marks the store dirty for the sync path; here only a change made during the slices keeps it dirty
       this.unsaved = changed;
+      if (full) this.fullDone(); else this.coldPassSoon();
       return true;
     } finally { this.inflight--; }
+  }
+
+  /** when the last save that looked at every run ended, and when one was last started (performance.now) */
+  private fullAt = -Infinity;
+  private fullTriedAt = -Infinity;
+  private coldTimer: NodeJS.Timeout | undefined;
+  private fullDone(): void { this.fullAt = performance.now(); clearTimeout(this.coldTimer); this.coldTimer = undefined; }
+  /** The JSON a save can take as last written: a cold run's (ended more than COLD_AFTER_MS ago, in the database as
+   *  ended at that same time), never `changed`'s. The others (`hot`, by their index) are built by the caller. */
+  private coldParts(all: readonly AgentRun[], changed?: AgentRun): { parts: (string | undefined)[]; hot: number[] } {
+    const now = Date.now(), parts = new Array<string | undefined>(all.length), hot: number[] = [];
+    all.forEach((r, i) => {
+      const w = r !== changed && r.endedAt !== undefined && now - r.endedAt > COLD_AFTER_MS ? this.written.get(r.runId) : undefined;
+      if (w && w.endedAt === r.endedAt) parts[i] = w.json; else hot.push(i);
+    });
+    return { parts, hot };
+  }
+  /** The runs' JSON for a deferred save into app.db. Not full: a cold run keeps the JSON last written (coldParts), so a
+   *  save costs what the runs at work weigh and not the whole archive (7 MB took 60 ms of the main process at every
+   *  burst of run events). A change to a cold run (a late verdict, a review) is written by the next full pass,
+   *  COLD_PASS_MS later at most, or by the quit's flush (the armed timer counts as something still to write). */
+  private async dbParts(all: AgentRun[], full: boolean): Promise<string[]> {
+    if (full) return stringifyEach(all);
+    const { parts, hot } = this.coldParts(all);
+    (await stringifyEach(hot.map(i => all[i]!))).forEach((json, k) => { parts[hot[k]!] = json; });
+    return parts as string[];
+  }
+  /** After a save that skipped the cold runs: one that looks at all of them, when it is due. A save that fails or is
+   *  superseded asks again, so a cold run's change never waits for the next run event. */
+  private coldPassSoon(): void {
+    if (this.coldTimer) return;
+    const clock = performance.now();
+    this.coldTimer = setTimeout(() => {
+      this.coldTimer = undefined;
+      if (!this.db || this.problem) return;
+      this.unsaved = true; // nothing changed for the readers: the save itself bumps the revision, as every save does
+      void this.saveAsync().then(ok => { if (!ok && this.db && !this.problem) this.coldPassSoon(); });
+    }, Math.max(0, COLD_PASS_MS - (clock - this.fullAt), FULL_RETRY_MS - (clock - this.fullTriedAt)));
+    this.coldTimer.unref?.();
   }
 
   private rollupCache: { of: RunTally[]; text: string; bytes: number } | null = null;
@@ -717,7 +784,7 @@ export class AgentRunStore {
   /** Which ended runs leave memory now, folded into their rollups, so the store fits RUNS_MAX and its byte budget. */
   private prunePlan(all: AgentRun[], size: number, bytesOfRun: (r: AgentRun) => number): { drop: Set<AgentRun>; rollups: RunTally[]; prunedThrough: number } {
     // the rollups only grow when runs are pruned: their budget is checked with the runs about to go
-    const budget = RUNS_BYTES - Math.min(ROLLUP_BYTES, this.rollupText()?.bytes ?? 0);
+    const budget = (this.db ? RUNS_DB_BYTES : RUNS_BYTES) - Math.min(ROLLUP_BYTES, this.rollupText()?.bytes ?? 0);
     const drop = new Set<AgentRun>();
     let bytes = size;
     const over = () => all.length - drop.size > RUNS_MAX || bytes > budget;
@@ -758,10 +825,11 @@ export class AgentRunStore {
     const bytesOfRun = (r: AgentRun) => bytesOf[(index ??= new Map(all.map((x, i) => [x, i]))).get(r)!]!;
     this.dirty = true; // stays set when the write fails: the next flush tries again
     const p = this.prunePlan(all, size, bytesOfRun);
-    const upsert: RunRow[] = [], fresh = new Map<string, { json: string; bytes: number }>();
+    const upsert: RunRow[] = [], fresh = new Map<string, { json: string; bytes: number; endedAt?: number | undefined }>();
     all.forEach((r, i) => {
       if (p.drop.has(r) || this.written.get(r.runId)?.json === json[i]) return;
-      upsert.push(rowOf(r, json[i]!)); fresh.set(r.runId, { json: json[i]!, bytes: bytesOf[i]! });
+      const row = rowOf(r, json[i]!);
+      upsert.push(row); fresh.set(r.runId, { json: json[i]!, bytes: bytesOf[i]!, endedAt: row.endedAt ?? undefined });
     });
     const remove = [...p.drop].map(r => r.runId).filter(id => this.written.has(id));
     const meta = new Map<string, string | null>();

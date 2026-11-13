@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { AgentRunStore, RUNS_MAX, endRun, type RunStart } from '../../../src/main/agents/runs';
+import { AgentRunStore, COLD_PASS_MS, RUNS_MAX, endRun, type RunStart } from '../../../src/main/agents/runs';
 import { RunsDb, exportRuns, isSqliteFile, readRunsSource, AREA } from '../../../src/main/agents/runs-db';
 import { areaVersion, closeAppDbs, migrate, openAppDb } from '../../../src/main/app-db';
 import { emptyTally } from '../../../src/main/agents/run-metrics';
@@ -321,5 +321,120 @@ describe('schema and export', () => {
     expect(diagnoseFile(readRunsSource(path.join(dir, migrated(dir)[0]!)).content, 5000)).toEqual(jsonDiag);
     const empty = tmp();
     expect(() => readRunsSource(empty)).toThrow(/no agent runs/);
+  });
+});
+
+describe('a longer archive at the cost of the runs at work (ADR 0283)', () => {
+  const stored = (dir: string) => new Map((exportRuns(path.join(dir, 'app.db'))!.runs as { runId: string; costUsd: number | null }[]).map(r => [r.runId, r]));
+  // the clock is the test's: the 15 s between two full passes never depend on how fast the machine is
+  const clock = () => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance', 'Date'], now: Date.UTC(2026, 10, 13, 12) });
+  afterEach(() => { vi.useRealTimers(); });
+  /** a store with a run that ended long ago and one still open, both written by a first full deferred save */
+  async function twoRuns() {
+    const dir = tmp(), s = new AgentRunStore(dir);
+    const cold = s.start(start({ chatId: 'old' }), false);
+    endRun(cold, 'completed', 2000);
+    const open = s.start(start({ chatId: 'now', startedAt: Date.now() }), false);
+    expect(await s.saveAsync()).toBe(true);
+    return { dir, s, cold, open };
+  }
+
+  it('between two full passes a deferred save writes the runs at work and takes a cold run as last written', async () => {
+    clock();
+    const { dir, s, cold, open } = await twoRuns();
+    cold.costUsd = 9; open.costUsd = 3; s.touch();
+    expect(await s.saveAsync()).toBe(true);
+    expect(stored(dir).get(open.runId)!.costUsd).toBe(3);
+    expect(stored(dir).get(cold.runId)!.costUsd).not.toBe(9);
+    // the cold run's change is still owed: the quit's flush writes it, and nothing is pending after it
+    expect(s.pending).toBe(true);
+    s.flush();
+    expect(stored(dir).get(cold.runId)!.costUsd).toBe(9);
+    expect(s.pending).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+    s.close();
+  });
+
+  it('a cold run\'s change is written by itself when the full pass is due, with no other run event', async () => {
+    clock();
+    const { dir, s, cold } = await twoRuns();
+    cold.costUsd = 9; s.touch();
+    expect(await s.saveAsync()).toBe(true);
+    expect(stored(dir).get(cold.runId)!.costUsd).not.toBe(9);
+    await vi.advanceTimersByTimeAsync(COLD_PASS_MS);
+    await vi.waitFor(() => expect(stored(dir).get(cold.runId)!.costUsd).toBe(9));
+    await vi.waitFor(() => expect(s.pending).toBe(false));
+    s.close();
+  });
+
+  it('a deferred save overtaken by a save that names a run still owes the cold runs their full pass', async () => {
+    clock();
+    const { dir, s, cold, open } = await twoRuns();
+    await vi.advanceTimersByTimeAsync(1000);
+    cold.costUsd = 9; s.touch();
+    const deferred = s.saveAsync(); // takes the change with it, the cold run left out
+    s.save(open); // lands first: nothing looked owed to it
+    expect(await deferred).toBe(true);
+    expect(stored(dir).get(cold.runId)!.costUsd).not.toBe(9);
+    expect(s.pending).toBe(true);
+    await vi.advanceTimersByTimeAsync(COLD_PASS_MS);
+    await vi.waitFor(() => expect(stored(dir).get(cold.runId)!.costUsd).toBe(9));
+    s.close();
+  });
+
+  it('closing the store drops the pending full pass', async () => {
+    clock();
+    const { s, open } = await twoRuns();
+    open.costUsd = 3; s.touch();
+    expect(await s.saveAsync()).toBe(true);
+    expect(vi.getTimerCount()).toBe(1);
+    s.close();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('a run that just ended is not cold: its late changes go with the next deferred save', async () => {
+    clock();
+    const dir = tmp(), s = new AgentRunStore(dir);
+    const run = s.start(start({ startedAt: Date.now() - 60_000 }), false);
+    endRun(run, 'completed', Date.now() - 1000);
+    expect(await s.saveAsync()).toBe(true);
+    run.costUsd = 4; s.touch();
+    expect(await s.saveAsync()).toBe(true);
+    expect(stored(dir).get(run.runId)!.costUsd).toBe(4);
+    s.close();
+  });
+
+  it('a run written open and ended since, however long ago, is written with its end', async () => {
+    clock();
+    const { dir, s, open } = await twoRuns();
+    endRun(open, 'completed', Date.now() - 3_600_000); s.touch();
+    expect(await s.saveAsync()).toBe(true);
+    expect((stored(dir).get(open.runId) as { endedAt?: number }).endedAt).toBe(Date.now() - 3_600_000);
+    s.close();
+  });
+
+  it('a save that names the run it changed writes that run, cold or not, and leaves the other cold ones', async () => {
+    clock();
+    const { dir, s, cold } = await twoRuns();
+    const other = s.start(start({ chatId: 'older' }), false);
+    endRun(other, 'completed', 3000);
+    s.save();
+    cold.costUsd = 9; other.costUsd = 7; s.touch();
+    s.save(cold);
+    expect(stored(dir).get(cold.runId)!.costUsd).toBe(9);
+    expect(stored(dir).get(other.runId)!.costUsd).not.toBe(7);
+    s.flush();
+    expect(stored(dir).get(other.runId)!.costUsd).toBe(7);
+    s.close();
+  });
+
+  it('app.db keeps runs past the 7 MB the JSON file is held to', () => {
+    const goal = 'x'.repeat(2000), n = 4000; // about 9 MB of runs
+    const fill = (s: AgentRunStore) => { for (let i = 0; i < n; i++) endRun(s.start(start({ chatId: `c${i}`, goal }), false), 'closed', 1000 + i); s.save(); };
+    const inDb = new AgentRunStore(tmp()), inJson = new AgentRunStore(tmp(), { db: false });
+    fill(inDb); fill(inJson);
+    expect(inDb.list()).toHaveLength(n);
+    expect(inJson.list().length).toBeLessThan(n);
+    inDb.close();
   });
 });

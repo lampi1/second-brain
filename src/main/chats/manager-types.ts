@@ -265,7 +265,16 @@ export interface Rec {
    *  still being read (the verdict waits for them) */
   receiptRows?: Set<string>;
   receiptCp?: Checkpoint;
-  receiptsBusy?: boolean;
+  /** the files' tree at the end of the last turn read for the receipts: a follow-up turn under the same checkpoint (a
+   *  message queued mid-turn takes none) changed what differs from it (ADR 0282) */
+  receiptTree?: string;
+  /** the turn now running began the moment the one before it ended (a message queued mid-turn): only then is the
+   *  difference from that end its own files */
+  turnChained?: boolean;
+  /** the receipts' reads of the turns' files, one after the other */
+  receiptChain?: Promise<void>;
+  /** the engine session the last message went to: a booting engine that got none has no turn in flight */
+  sentTo?: unknown;
   undoNote?: string;
   /** the roles this chat's role may launch (resolved at creation; absent = unknown, e.g. a chat saved before) */
   launches?: string[];
