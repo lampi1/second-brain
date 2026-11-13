@@ -78,7 +78,7 @@ export const brainModelIt = {
   'pm.noOrchestrator': 'Nessun Orchestrator aperto: aprilo e riprova',
   'pm.talkDraft': (p: { project: string; where: string; kind: string; name: string; state: string; note: string; desc: string }) => `Mappa «${p.project}»${p.where}: ${p.kind} «${p.name}», stato ${p.state}${p.note}.${p.desc} Voglio parlarne: `,
   'pm.projects': 'Progetti', 'pm.flow': 'I passi del piano, in ordine', 'pm.together': 'insieme', 'pm.runningNow': 'ci lavorano ora',
-  'pm.turn': (p: N) => `Passo del turno ${p.n}: parte quando il turno prima è finito`, 'pm.turnPar': (p: N) => `Turno ${p.n}: va insieme ad altri passi, in parallelo`,
+  'pm.turn': (p: N) => `Turno ${p.n}: parte quando il turno prima è finito`, 'pm.turnPar': (p: N) => `Turno ${p.n}: va insieme ad altri passi, in parallelo`,
   'pm.project': 'Progetto', 'pm.trail': 'Dove sei nella mappa', 'pm.top': 'Tutto il progetto',
   'pm.waiting': (p: N) => (p.n === 1 ? '1 aspetta te' : `${p.n} aspettano te`),
   'pm.updated': (p: { at: string }) => `Aggiornata ${p.at}`,

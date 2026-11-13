@@ -208,7 +208,7 @@
 
 /* ADR 0302 · what is being worked on right now: the box breathes, its dot beats, a mark travels along a line under work */
 .pm-node.running { animation: pm-breathe 2.4s ease-out infinite; }
-.pm-node.running.picked, .pm-node.running.lit { animation: none; }
+.pm-node.running.picked, .pm-node.running.lit, .pm-node.running:hover { animation: none; }
 .pm-node.running .pm-foot > .pm-dot, .pm-dot.run { animation: pm-beat 1.6s ease-in-out infinite; }
 .pm-step[data-s='now'] > i { animation: pm-beat 1.6s ease-in-out infinite; }
 .pm-edge-run { fill: none; stroke: var(--text); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 4 96; opacity: .75; animation: pm-travel 2.2s linear infinite; }
@@ -223,13 +223,14 @@
 .pm-plane.zooming .pm-level { transition: opacity .2s ease-in; opacity: .15; }
 .pm-level[data-enter='in'] { animation: pm-in .26s cubic-bezier(.2, .8, .2, 1) both; }
 .pm-level[data-enter='out'] { animation: pm-out .26s cubic-bezier(.2, .8, .2, 1) both; }
-.pm-node.came { animation: pm-came 1.4s ease-out both; }
+.pm-node.came { animation: pm-came 1.4s ease-out; }
 @keyframes pm-in { from { opacity: 0; transform: scale(.82); } to { opacity: 1; transform: none; } }
 @keyframes pm-out { from { opacity: 0; transform: scale(1.14); } to { opacity: 1; transform: none; } }
 @keyframes pm-came { 0% { box-shadow: 0 0 0 5px var(--accent-line); } 100% { box-shadow: 0 0 0 0 transparent; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .pm-node.running { animation: none; box-shadow: 0 0 0 3px var(--accent-bg); }
+  .pm-node.running { animation: none; }
+  .pm-node.running:not(.picked):not(.lit):not(:hover) { box-shadow: 0 0 0 3px var(--accent-bg); }
   .pm-node.running .pm-foot > .pm-dot, .pm-dot.run, .pm-step[data-s='now'] > i, .pm-node.came { animation: none; }
   .pm-edge-run { display: none; }
   .pm-level[data-enter] { animation: none; }

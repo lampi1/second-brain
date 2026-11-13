@@ -229,15 +229,20 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   }, [map, level]);
   const lv = useMemo(() => (map ? levelOf(map, shownLevel, now) : null), [map, shownLevel, now]);
   // which way the level changed: deeper (in) or back up (out, from the system just left)
-  const lastLevel = useRef<{ project: string | null; level: string | null; depth: number } | null>(null);
+  const lastLevel = useRef<{ project: string | null; level: string | null; path: string[] } | null>(null);
   useEffect(() => {
     if (!map || map.project !== project) return;
-    const depth = pathTo(map, shownLevel).length, last = lastLevel.current;
-    if (last && last.project === project && last.level !== shownLevel) setEnter({ dir: depth < last.depth ? 'out' : 'in', from: depth < last.depth ? last.level : null });
-    else if (!last || last.project !== project) setEnter(null);
-    lastLevel.current = { project, level: shownLevel, depth };
+    const path = pathTo(map, shownLevel).map(e => e.id), last = lastLevel.current;
+    if (last && last.project === project && last.level !== shownLevel) {
+      const out = path.length < last.path.length;
+      // back up, even several levels at once: the box left is the one on this level that held where the user was
+      setEnter({ dir: out ? 'out' : 'in', from: out ? last.path[path.length] ?? null : null });
+    } else if (!last || last.project !== project) setEnter(null);
+    lastLevel.current = { project, level: shownLevel, path };
     setZooming(false);
   }, [map, project, shownLevel]);
+  // the place changed while the view was zooming into a box (Backspace, another project): that zoom is dropped
+  useEffect(() => { if (zoomTimer.current) { clearTimeout(zoomTimer.current); zoomTimer.current = null; } setZooming(false); }, [project, level]);
   // placed once per level, not on every pan or zoom tick
   const labels = useMemo(() => (lv ? placeLabels(lv) : []), [lv]);
   // once per place (not on every live reload, which would undo what the user picked since)
@@ -374,6 +379,8 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
     // a box from outside: its own place (inside it if it has parts, else picked on its level)
     if (kids(n.id) && !n.ctx) enterBox(n); else if (n.ctx || kids(n.id)) go(n.id); else setPicked(p => (p === n.id ? null : n.id));
   };
+  /** a plan's step shows the box it works on: its place (go picks it there), or picked again when already there */
+  const show = (id: string) => { if (level === id && !kids(id)) setPicked(id); else go(id); };
   const sel = picked ? byId.get(picked) : undefined;
   // «Discuti» on a box (the owner 2026-11-13: «ogni riquadro devo poterlo discutere con l'orchestrator in un click»):
   // the full screen and the maps window step aside, the Orchestrator gets a ready draft that quotes the box, not sent
@@ -410,7 +417,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
         <button type="button" className="btn btn-ghost btn-s" onClick={() => change(p)} data-testid="pm-plan-change">{t('pm.planChange')}</button>
       </div>}
       <button type="button" className="btn btn-ghost btn-s" onClick={() => { closeModal(); openChatRef(p.chatId); }}>{t('pm.openChat')}</button>
-      {p.flow.length > 1 && <PlanFlow flow={p.flow} onShow={go} />}
+      {p.flow.length > 1 && <PlanFlow flow={p.flow} onShow={show} />}
     </section>)}
     <div className={`pm-body${maps.length > 1 ? ' with-nav' : ''}`}>
       {/* the projects, a list beside the drawing like the newspaper's sections (ADR 0302: no menu to open) */}
@@ -449,7 +456,8 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
               const running = live && (worksOf(e.id).some(w => w.state === 'now') || who.some(a => a.mark === 'run'));
               const style: CSSProperties = { left: n.x, top: n.y, width: n.w, height: n.h };
               return <button type="button" key={n.id} className={`pm-node k-${e.kind} s-${s}${n.ctx ? ' ctx' : ''}${picked === e.id ? ' picked' : ''}${lit.has(e.id) ? ' lit' : ''}${running ? ' running' : ''}${enter?.from === e.id ? ' came' : ''}`}
-                style={style} onClick={() => click(n)} data-testid={`pm-node-${e.id}`} data-running={running ? '' : undefined} title={e.description}>
+                style={style} onClick={() => click(n)} data-testid={`pm-node-${e.id}`} data-running={running ? '' : undefined} title={e.description}
+                onAnimationEnd={ev => { if (ev.animationName === 'pm-came') setEnter(x => (x ? { ...x, from: null } : x)); }}>
                 <span className="pm-kind">{t(`pm.kind.${e.kind}`)}{k && !n.ctx ? ` · ${t('pm.parts', { n: k })}` : ''}</span>
                 <b className="pm-name">{e.name}</b>
                 {!n.ctx && (ws.length && !(e.status === 'blocked' && e.note)

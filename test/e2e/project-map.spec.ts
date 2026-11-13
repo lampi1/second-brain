@@ -222,7 +222,7 @@ test('the map shows what moves, the order of the steps, the passage into a syste
     await nav.getByTestId('pm-nav-alfa-shop').click();
     await view.getByTestId('pm-fullscreen').click();
     await expect(view).toHaveClass(/pm-full/);
-    await page.waitForTimeout(400);
+    await expect(view.getByTestId('pm-node-negozio')).toBeInViewport();
     await shot(page, 'project-map-moving-full');
   } finally { await app.close(); }
 });
