@@ -19,7 +19,7 @@ sent new chats to `code.md`, `rules\qa.md` and `harness\tools.md`, which his bra
 2. `brain-lint.mjs` and `brain-map.mjs` read the memory map through it.
 3. `chat-prompt.mjs` builds a new chat's «leggi» list through it (`readList`): each file is named where the brain
    keeps it, and a file the brain no longer has is left out. A brain folder that is not on disk cannot be checked, so
-   the names stay.
+   the names stay. `AGENTS.md` follows the same rule: a fresh brain has none (ADR 0072), so it is not named there.
 
 ## Consequences
 

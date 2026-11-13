@@ -63,14 +63,16 @@ export function buildPrompt({ title, kind, harness = 'claude', repo, words, job,
   const err = checkTitle(title) ?? (!READ[kind] ? `--kind deve essere uno tra ${Object.keys(READ).join(', ')}` : null) ?? (!job?.trim() ? 'manca il lavoro (--job o --job-file)' : null);
   if (err) throw new Error(err);
   const repoPath = repo ? (/^[A-Za-z]:[\\/]/.test(repo) ? repo : `${REPOS}\\${repo}`) : null;
-  const read = [`${OPS}\\AGENTS.md`, ...readList(kind).map(f => `${OPS}\\${f}`)];
+  // a fresh brain has no AGENTS.md (ADR 0072): it is named only where the brain has it
+  const read = [...(!fs.existsSync(OPS) || fs.existsSync(path.join(OPS, 'AGENTS.md')) ? ['AGENTS.md'] : []), ...readList(kind)].map(f => `${OPS}\\${f}`);
   const L = [];
   // Cursor: the Agents Window agent names its own chat with the built-in rename_chat tool, only when asked (tested 10/10)
   if (harness === 'cursor') L.push(`Prima cosa: rinomina questa chat in "${title}" con lo strumento rename_chat.`);
   L.push(`Sei la chat di lavoro "${title}" del cervello di {{OWNER}} (${OPS}). Italiano con {{OWNER}}; codice, commit e PR in inglese.`);
   if (harness === 'cursor') L.push(`Questa chat parte in ${OPS}${repoPath ? `; il repo di lavoro è ${repoPath} (usalo con percorsi assoluti e \`git -C\`, {{OWNER}} non apre quella cartella)` : ''}.`);
   else if (repoPath) L.push(`Repo di lavoro: ${repoPath}.`);
-  L.push(`Prima di tutto leggi ${read.join(', ')}.`, '');
+  if (read.length) L.push(`Prima di tutto leggi ${read.join(', ')}.`, '');
+  else L.push('');
   if (words?.trim()) L.push(`Parole di {{OWNER}} (${date}): "${words.trim()}"`, '');
   L.push('Compito:', job.trim(), '');
   if (context?.trim()) L.push(`Contesto del filo (ctx.mjs, letto dai file veri al lancio: parti da qui, i file interi solo se servono):`, context.trim(), '');
