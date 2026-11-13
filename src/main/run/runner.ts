@@ -10,12 +10,20 @@
 // - powershell.exe -NoProfile -NonInteractive -Command - with a one-line bootstrap on stdin that decodes the block
 //   (base64 UTF-16: no quoting issues, accents kept; -EncodedCommand would print errors as CLIXML), in the chat's folder,
 //   without the app's own SB_* / ELECTRON_* variables; Stop kills the whole process tree; quitting the app kills all.
+// - One command, one run (ADR 0299): an identical command (shared/command-dupes.ts normCommand) still running in any
+//   chat never starts again: start returns that run with already 'running' (its live output, who started it). One that
+//   ended in the last RERUN_MS, or in this app session for a production, database or Azure command (prodRisk,
+//   chats/ask-text.ts touchesProdDbAzure), starts again only with confirmRerun: before, start returns the ended run with
+//   already 'done'. This is main's guard, so Esegui under a block, on a card, from Telegram and from Remote Control
+//   all meet it. A re-run carries duplicateOf, the id of the first run of that command.
 // Used by index.ts (IPC run:*), wiring.ts / demo-wiring.ts (built with the chat service), appctl/tools.ts (read-only).
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
-import type { RunInfo } from '../../shared/contract';
+import type { RunInfo, RunStart } from '../../shared/contract';
 import { MAX_RUN_CODE, prodRisk } from '../../shared/runnable';
+import { normCommand, RERUN_MS } from '../../shared/command-dupes';
+import { touchesProdDbAzure } from '../chats/ask-text';
 import { killTrees } from '../chats/cli';
 import { ownProcessGroup, userShell } from '../platform';
 import { errText, log } from '../log';
@@ -35,7 +43,15 @@ export interface RunnerDeps {
   emit(run: RunInfo): void;
   /** test hook: the shell to start (default powershell.exe; $SHELL on macOS/Linux) */
   shell?: string;
+  /** test hook: starts the process (default node's spawn) */
+  spawn?: typeof spawn;
+  /** test hook: the clock */
+  now?(): number;
 }
+
+/** production, a database or Azure (the app's own classifications, unchanged): its re-run asks a confirmation for the
+ *  whole app session, not only within RERUN_MS (ADR 0299 §3) */
+export const flaggedCommand = (code: string): boolean => prodRisk(code) !== null || touchesProdDbAzure(code);
 
 /** Lines compared without their indentation (marked strips the indent of a fenced block inside a list). */
 const flat = (s: string): string => s.replace(/\r\n/g, '\n').split('\n').map(l => l.trim()).join('\n').trim();
@@ -63,6 +79,8 @@ export class CommandRunner {
   private procs = new Map<string, ChildProcess>();
   private timers = new Map<string, NodeJS.Timeout>();
   private seq = 0;
+  /** normalized command → its first run and its last ended run in this app session (ADR 0299) */
+  private seen = new Map<string, { first: string; last?: RunInfo }>();
 
   constructor(private readonly d: RunnerDeps) {}
 
@@ -76,7 +94,19 @@ export class CommandRunner {
     return [...this.runs.values()].filter(r => !chatId || r.chatId === chatId).sort((a, b) => a.startedAt - b.startedAt);
   }
 
-  start(req: { chatId: string; itemId: string; code: string; lang?: string; confirmProd?: boolean }): RunInfo {
+  private now(): number { return this.d.now?.() ?? Date.now(); }
+
+  /** The identical command's run going on now (any chat), or null (ADR 0299). */
+  runningLike(code: string): RunInfo | null {
+    const want = normCommand(code);
+    for (const r of this.runs.values()) if (r.state === 'running' && normCommand(r.code) === want) return { ...r };
+    return null;
+  }
+
+  /** The id of the first run of the identical command in this app session, or undefined. */
+  firstRunOf(code: string): string | undefined { return this.seen.get(normCommand(code))?.first; }
+
+  start(req: { chatId: string; itemId: string; code: string; lang?: string; confirmProd?: boolean; confirmRerun?: boolean }): RunStart {
     updateActivity.assertOpen();
     const code = String(req.code ?? '').replace(/\r\n/g, '\n').trimEnd();
     if (!code.trim()) throw new Error('Blocco vuoto: niente da eseguire.');
@@ -88,15 +118,23 @@ export class CommandRunner {
     }
     const risk = prodRisk(code);
     if (risk && !req.confirmProd) throw new Error(`Comando di produzione (${risk}): conferma con un secondo clic.`);
-    if ([...this.runs.values()].some(r => r.chatId === req.chatId && r.itemId === req.itemId && r.code === code && r.state === 'running')) {
-      throw new Error('Questo comando è già in esecuzione.');
+    // one command, one run (ADR 0299): the identical command still going, in any chat, never starts a second process
+    const norm = normCommand(code), live = this.runningLike(code);
+    if (live) {
+      log.info('run', 'not started: the identical command is still running', { chat: req.chatId, data: { run: live.id, owner: live.chatId } });
+      return { ...live, already: 'running' };
+    }
+    const seen = this.seen.get(norm), last = seen?.last;
+    if (last && !req.confirmRerun && (flaggedCommand(code) || this.now() - (last.endedAt ?? last.startedAt) < RERUN_MS)) {
+      log.info('run', 'not started: the identical command ended recently, a confirmation first', { chat: req.chatId, data: { run: last.id } });
+      return { ...(this.runs.get(last.id) ?? last), already: 'done' };
     }
     const own = this.d.cwdOfItem?.(req.chatId, req.itemId);
     const dir = own && fs.existsSync(own) ? own : this.cwdOf(req.chatId);
     const env: NodeJS.ProcessEnv = {};
     for (const [k, v] of Object.entries(process.env)) if (!/^(SB_|ELECTRON_)/i.test(k)) env[k] = v;
     const id = `run-${Date.now().toString(36)}-${++this.seq}`;
-    const run: RunInfo = { id, chatId: req.chatId, itemId: req.itemId, code, cwd: dir, state: 'running', exitCode: null, output: '', startedAt: Date.now(), ...(risk ? { prod: risk } : {}) };
+    const run: RunInfo = { id, chatId: req.chatId, itemId: req.itemId, code, cwd: dir, state: 'running', exitCode: null, output: '', startedAt: this.now(), ...(risk ? { prod: risk } : {}), ...(seen ? { duplicateOf: seen.first } : {}) };
     this.runs.set(id, run);
     this.trim();
     const sh = userShell(code);
@@ -104,7 +142,7 @@ export class CommandRunner {
     log.info('run', 'start', { chat: req.chatId, data: { id, cwd: dir, chars: code.length, prod: risk ?? null } });
     let p: ChildProcess;
     try {
-      p = spawn(shell, sh.args, { cwd: dir, env, windowsHide: true, detached: ownProcessGroup(), stdio: ['pipe', 'pipe', 'pipe'] });
+      p = (this.d.spawn ?? spawn)(shell, sh.args, { cwd: dir, env, windowsHide: true, detached: ownProcessGroup(), stdio: ['pipe', 'pipe', 'pipe'] });
     } catch (e) {
       return this.end(id, 'error', null, `\nNon parte: ${errText(e)}`);
     }
@@ -163,8 +201,15 @@ export class CommandRunner {
     if (run.state === 'running') {
       run.state = state;
       run.exitCode = exitCode;
-      run.endedAt = Date.now();
+      run.endedAt = this.now();
       if (tail) run.output += tail;
+      // the guard remembers what ran (a shell that could not even start ran nothing), without the output
+      // (the first run that really ran is the one duplicateOf names)
+      if (state !== 'error' || exitCode !== null) {
+        const k = normCommand(run.code), s = this.seen.get(k) ?? { first: run.id };
+        s.last = { ...run, output: '' };
+        this.seen.set(k, s);
+      }
       log.info('run', 'end', { chat: run.chatId, data: { id, state, exitCode, ms: run.endedAt - run.startedAt } });
     }
     this.d.emit({ ...run });

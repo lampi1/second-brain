@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it, vi } from 'vitest';
 vi.mock('../../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(), on: vi.fn() } }));
-vi.mock('../../../src/renderer/lib/runs', () => ({ useBlockRun: () => null }));
+vi.mock('../../../src/renderer/lib/runs', () => ({ useBlockRun: () => null, useCommandRef: () => null, useRunById: () => null }));
 vi.mock('../../../src/renderer/lib/marks', () => ({ useMark: () => null }));
 import { ItemList } from '../../../src/renderer/components/ChatItems';
 import type { ChatItem } from '../../../src/shared/contract';

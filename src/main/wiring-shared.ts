@@ -104,7 +104,7 @@ export function attachCommandAsks(ctx: Pick<Ctx, 'emitter'>, runner: CommandRunn
     },
     ran: (chatId, itemId, code) => runner.list(chatId).some(r => r.itemId === itemId && r.code === code),
     // asked once (ADR 0239): the same block in the same folder is asked of the user one time
-    cwdOf: chatId => runner.cwdOf(chatId), runs: () => runner.list(),
+    cwdOf: chatId => runner.cwdOf(chatId), runs: () => runner.list(), firstRunOf: code => runner.firstRunOf(code),
     ...(now ? { now } : {}),
     // #388: a block that cannot start goes back to its chat instead of showing (only where the app can write to chats)
     ...(chats?.send ? {

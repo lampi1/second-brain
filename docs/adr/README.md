@@ -234,7 +234,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0236](0236-episodic-memory-past-run-examples.md) Episodic memory: a role starts with examples of its own verified past successes — accepted
 - [0237](0237-agents-type-passwords-on-every-host.md) Agents type passwords on every host — accepted
 - [0238](0238-approved-work-continues-by-itself.md) Approved work goes on by itself: stalls, crashes, waits and pushes need no human nudge — accepted
-- [0239](0239-single-entry-through-the-orchestrator.md) Single entry: the user talks only with the Orchestrator, and a command is asked once — accepted, partly superseded by 0275
+- [0239](0239-single-entry-through-the-orchestrator.md) Single entry: the user talks only with the Orchestrator, and a command is asked once — accepted, partly superseded by 0275, 0299
 - [0240](0240-idle-engines-end-and-unsaved-work-holds.md) Idle engines end with their tools; a chat with unsaved git work does not close by itself — accepted
 - [0241](0241-skill-packages-and-skill-library.md) A skill is a package in .agents/skills, with its own page, history and roles — accepted
 - [0242](0242-role-skill-instead-of-role-notes.md) A role's know-how is its role skill; what it learns is a lesson the user approves — accepted, partly superseded by 0257
@@ -294,6 +294,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0296](0296-fast-mode-user-model-per-task-flash-removed.md) «Fast» beside «Plan», one task on the model the user names, Flash removed — accepted
 - [0297](0297-click-reactions-and-touch-nudge.md) A click on a little person: a pat or a crack of the whip, and a nudge on the run — accepted
 - [0298](0298-weekly-limit-on-the-top-bar.md) The weekly limit on the top bar, the 5-hour window from 70% — accepted
+- [0299](0299-one-command-one-panel.md) One command, one panel: an identical command never runs twice by accident — accepted
 
 ## Replaced
 

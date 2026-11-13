@@ -11,13 +11,15 @@
 // chats/orchestrator-wake.ts, and a run's result, run/results.ts, are not the chat going on). It never blocks the chat:
 // ChatSummary.pending does not count it, so messages are never queued behind it. Nothing is persisted: after a
 // restart the chats are closed and their blocks keep their Esegui in the chat.
-// Asked once (ADR 0239, single entry): a block with the same code, in the same folder, as one another chat already left
+// Asked once (ADR 0239, single entry; ADR 0299: the same command in any chat and folder, compared as
+// shared/command-dupes.ts normCommand: trimmed, whitespace folded): a block with the same code as one another chat already left
 // open is not asked again: that chat follows the open one, and the one run answers both (followersOf, run/results.ts
-// sends the result to each). A run started on any chat's block answers every open ask of the same code and folder. A
+// sends the result to each). A run started on any chat's block answers every open ask of the same code. A
 // block that already ran with success in the same folder within RECENT_OK_MS is not asked either, once per chat and
 // code: that chat gets the earlier result instead (alreadyRan); proposed again after that, it is asked as usual.
-// A block whose command is still running in the same folder (Esegui on a long deploy, #383) is not asked either: the
-// chat hears once that it runs and gets its result when it ends.
+// A block whose command is still running in any folder (Esegui on a long deploy, #383; ADR 0299) is not asked either: the
+// chat hears once that it runs and gets its result when it ends. A request whose command already ran in this app session
+// carries duplicateOf, that first run's id (app_pending shows it to the agents).
 // When an open ask leaves without a run ("Non serve", its chat went on), its first follower is asked in its place.
 // A block followed by a question in the same turn (ADR 0259, the owner 2026-11-10: «mi chiede se ho eseguito un comando
 // prima della modale esegui»): a question or a visual (AskUserQuestion, ask_user, show_ui) is not work, so the block stays
@@ -31,6 +33,7 @@
 import type { ChatItem, ChatState, ChatSummary, EventMap, PendingRequest, RunInfo } from '../../shared/contract';
 import { askedBlocks, type AskedBlock } from '../../shared/command-ask';
 import { prodRisk } from '../../shared/runnable';
+import { normCommand } from '../../shared/command-dupes';
 import { log } from '../log';
 import { APP_EVENT_LABEL } from '../chats/orchestrator-wake';
 import { RUN_RESULT_LABEL } from './results';
@@ -52,6 +55,8 @@ export interface CommandAsksDeps {
   /** a block not asked because it ran with success recently: that run's result goes to the chat (RunResults.tell);
    *  false = it could not be told (results off): the block is asked as usual */
   alreadyRan?(chatId: string, run: RunInfo): boolean;
+  /** ADR 0299: the id of the first run of the identical command in this app session (CommandRunner.firstRunOf) */
+  firstRunOf?(code: string): string | undefined;
   /** #388: what makes the block fail before it starts, in that folder ([] = none; run/precheck.ts) */
   check?(code: string, cwd: string): Promise<string[]>;
   /** #388: a block not shown because of check goes back to its chat with this message (labelled CHECK_LABEL) */
@@ -154,11 +159,11 @@ export class CommandAsks {
    *  ended = the run was already over when start returned (it could not start): only its own request leaves, and a
    *  chat that followed it is asked in its place. */
   ran(chatId: string, itemId: string, code: string, ended = false): void {
-    const key = runKey(chatId, itemId, code), cwd = this.d.cwdOf?.(chatId), want = sameCode(code);
+    const key = runKey(chatId, itemId, code), want = normCommand(code);
     for (const [cid, m] of [...this.asks]) for (const r of [...m.values()]) {
       if (!r.command) continue;
       const own = cid === chatId && r.command.itemId === itemId && r.command.code === code;
-      const twin = cid !== chatId && sameCode(r.command.code) === want && this.d.cwdOf?.(cid) === cwd;
+      const twin = cid !== chatId && normCommand(r.command.code) === want;
       // a run that ended as it started (the shell could not start): it answered its own block, and no other chat
       if (ended) { if (own) this.drop(cid, r.id); continue; }
       if (!own && !twin) continue;
@@ -252,10 +257,11 @@ export class CommandAsks {
     for (const b of askedBlocks(last.text)) {
       const id = `cmd-${last.id}-${b.index}`;
       if (m.has(id) || this.dismissed.has(`${chatId}#${id}`) || this.d.ran(chatId, last.id, b.code)) continue;
-      const code = sameCode(b.code), toldKey = `${chatId}|${code}`;
+      const code = sameCode(b.code), toldKey = `${chatId}|${code}`, norm = normCommand(b.code);
       // the same command still running in the same folder (#383: a deploy of several minutes was proposed again while it
       // ran): never asked; the chat hears once that it runs, and gets its result when it ends (it follows that run)
-      const running = cwd === undefined ? undefined : this.d.runs?.().filter(r => r.state === 'running' && r.cwd === cwd && sameCode(r.code) === code).at(-1);
+      // ADR 0299: in any folder (one command, one run)
+      const running = this.d.runs?.().filter(r => r.state === 'running' && normCommand(r.code) === norm).at(-1);
       if (running) {
         const once = `${chatId}|${running.id}`;
         if (this.toldRunning.has(once) || (this.d.alreadyRan ?? this.teller)?.(chatId, running)) {
@@ -335,15 +341,18 @@ export class CommandAsks {
   private offer(chatId: string, itemId: string, b: AskedBlock, problems: readonly string[]): void {
     const c = this.chats.get(chatId);
     if (!c) return;
-    const id = `cmd-${itemId}-${b.index}`, cwd = this.d.cwdOf?.(chatId), code = sameCode(b.code);
+    const id = `cmd-${itemId}-${b.index}`, code = normCommand(b.code);
     const prod = prodRisk(b.code);
+    // ADR 0299: the first run of this command in the app session, when it already ran
+    const duplicateOf = this.d.firstRunOf?.(b.code);
     const lead = [problems.length ? `⚠ Potrebbe non partire: ${problems.join('; ')}.` : '', b.lead].filter(Boolean).join(' ');
     const req: PendingRequest = {
       id, chatId, type: 'command', tool: 'Esegui', title: 'Comando da eseguire', detail: b.code,
       input: { itemId, code: b.code, lang: b.lang }, at: this.d.now?.() ?? Date.now(),
-      command: { itemId, code: b.code, lang: b.lang, ...(prod ? { prod } : {}), ...(lead ? { lead } : {}) },
+      command: { itemId, code: b.code, lang: b.lang, ...(prod ? { prod } : {}), ...(lead ? { lead } : {}), ...(duplicateOf ? { duplicateOf } : {}) },
     };
-    const open = cwd === undefined ? undefined : this.pending().find(r => r.chatId !== chatId && r.command && sameCode(r.command.code) === code && this.d.cwdOf?.(r.chatId) === cwd);
+    // one command, one panel (ADR 0299): the same command waiting in any chat, whatever its folder
+    const open = this.pending().find(r => r.chatId !== chatId && r.command && normCommand(r.command.code) === code);
     if (open) {
       // asked once: this chat follows the open ask, and gets the result of its run
       const list = this.followers.get(reqKey(open)) ?? [];

@@ -22,6 +22,7 @@ import { estimateRecords } from './activity/records';
 import { logEvent } from './activity/journal';
 import { reviewPack } from './agents/review-pack';
 import { estimateLine } from '../shared/task-estimate';
+import { alreadyRunningText, rerunText } from '../shared/command-dupes';
 import { agentCatalogTool, roleCatalogBrief } from './agents/discovery';
 import { SetupService } from './agents/setup';
 import { uiLang } from './locale';
@@ -728,12 +729,21 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the user's own «sì» / «no» there (PC, phone, Remote Control) answers it
   // a command a chat left, decided away from the PC (ADR 0259 §4: Telegram's Sì, a relayed «sì»): the same run as Esegui
   // (runner checks: a block of that message; production only after the user saw it whole and said yes, ADR 0275)
+  // the run-time guard (ADR 0299) away from the PC: an identical command still running is never started, its words go
+  // back; one that ended recently runs on the user's second «sì» to the same request (his one confirmation)
+  const rerunAsked = new Map<string, number>();
   const awayCommands: PhoneCommands = {
     pending: () => asks.pending(),
     run: (chatId, requestId, confirmProd) => {
       const c = asks.pending().find(p => p.chatId === chatId && p.id === requestId)?.command;
       if (!c) throw new Error('Questa richiesta non è più aperta.');
-      const run = runner.start({ chatId, itemId: c.itemId, code: c.code, ...(c.lang ? { lang: c.lang } : {}), ...(confirmProd ? { confirmProd: true } : {}) });
+      for (const [k, at] of rerunAsked) if (Date.now() - at > 30 * 60_000) rerunAsked.delete(k);
+      const key = `${chatId}#${requestId}`, asked = rerunAsked.get(key);
+      const confirmRerun = asked !== undefined && Date.now() - asked < 30 * 60_000;
+      const run = runner.start({ chatId, itemId: c.itemId, code: c.code, ...(c.lang ? { lang: c.lang } : {}), ...(confirmProd ? { confirmProd: true } : {}), ...(confirmRerun ? { confirmRerun: true } : {}) });
+      if (run.already === 'running') throw new Error(alreadyRunningText(run, manager.list().find((x: ChatSummary) => x.id === run.chatId)?.title ?? run.chatId, Date.now()));
+      if (run.already === 'done') { rerunAsked.set(key, Date.now()); throw new Error(`${rerunText(run, Date.now())} Un altro «sì» lo rilancia.`); }
+      rerunAsked.delete(key);
       asks.ran(run.chatId, run.itemId, run.code, run.state !== 'running');
     },
     dismiss: (chatId, requestId) => asks.dismiss(chatId, requestId),
