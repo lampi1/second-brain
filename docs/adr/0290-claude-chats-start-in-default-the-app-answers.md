@@ -54,11 +54,17 @@ in every mode, and the policy file the app reads, `permissions.json`, where a br
    asked the user. Now only a part over the limit asks. A pattern still reads the parts as one text, so a rule
    means the same on a short and on a long request (`policyRead`).
    The rules run in the main process and a pattern cannot be stopped, so they have a time budget: 250 ms for one
-   request, and on a text over 20 000 characters each pattern is first timed on the first 20 000; when the whole
-   text would take over 500 ms at that pace (the time grows with the square of the length, at worst), the app
-   stops and asks. Measured on the owner's example rules with texts made to be slow (a command of «psql» lines, a
-   file of «mail» words): 63 and 208 ms at 20 000 characters; at 99 000 the app asks after 53 and 95 ms, where
-   reading on took 1.3 and 2.6 s. An ordinary command of 99 000 characters is read in about 17 ms.
+   request, and on a text over 20 000 characters each pattern is first timed on every 20 000 characters of it; when
+   the whole text would take over 250 ms at that pace (a pattern that goes back over the text scans from each match
+   to the end, so a slow stretch weighs as much as the text after it is long), the app stops and asks. Measured on
+   the owner's example rules with texts made to be slow («psql», «prd», «swap» or «mail» thousands of times, from
+   the start or after 20 000 plain characters): the app asks after 40 to 320 ms at 99 000 characters, where reading
+   on took up to 5.6 s; the slowest case found is 534 ms, at 20 001. An ordinary file or command of 90 000
+   characters is read in 8 to 33 ms. On a machine with every core busy, 3 of 2000 ordinary 98 KB files asked for
+   time alone.
+   The settings-and-hooks guard reads every place a tool names, however long and on however many lines (it read
+   one-line values up to 1000 characters): `./` thousands of times before `.claude/settings.json`, or a line break
+   before `/..`, reaches the same file in a tool that tidies the path.
 7. Other engines are not touched: their modes mean other things (a Codex «default» is a read-only sandbox).
 
 ## Consequences

@@ -29,7 +29,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   you pick on the chat still wins, and «Solo piano» as your Claude Code default stays. For Claude the app decides on
   the whole request, not on the copy shortened for the screen, and your rules read up to 100,000 characters of it
   (20,000 before: under a rule on all tools a 10 KB file asked for your yes); a request your rules would take too
-  long to read asks you instead of holding the app (ADR 0290).
+  long to read asks you within about half a second instead of holding the app, and the settings-and-hooks guard
+  reads a place however long it is written (ADR 0290).
 - Maintenance: app-bug cards follow your own answers (turn down the last five issue cards, or approve only one, and
   the maintenance makes none for three months); an agent's report notes one lesson, not three, and a lesson tied to
   one case is left out instead of refusing the report (ADR 0288).

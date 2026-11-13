@@ -75,14 +75,14 @@ describe('the owner\'s policy', () => {
     expect(kind(45_000)).toBe(kind(10));
   });
 
-  it('rules that would take too long ask instead of holding the app (ADR 0290)', () => {
+  it('rules that would take too long are not read to the end: the app asks (ADR 0290)', () => {
     const one = parsePolicy(JSON.stringify({ version: 1, rules: [{ id: 'one', action: 'esegui', why: 'w', tools: ['command'], match: ['DROP TABLE'] }] }));
     // a clock that moves 30 ms at every look: one pattern on a short line is well inside the budget
     let t = 0;
     const step = () => (t += 30);
     expect(policyRead(one, 'Bash', { command: 'ls' }, ['Bash'], undefined, step)).toEqual({ rule: null, unread: false });
     expect(policyRead(one, 'Bash', { command: 'sqlcmd -Q "DROP TABLE t"' }, ['Bash'], undefined, step).rule?.id).toBe('one');
-    // 96,000 characters: at 30 ms for the first 20,000, the whole text would take too long, so it is not read
+    // 96,000 characters: at 30 ms for every 20,000, the whole text would take too long, so it is not read
     const long = 'ls -la docs\n'.repeat(8000);
     expect(policyRead(one, 'Bash', { command: long }, ['Bash'], undefined, step)).toEqual({ rule: null, unread: true });
     expect(autoPermit({ type: 'permission', tool: 'Bash', input: { command: long } }, { cwd: tmp, ceiling: null, policy: one, now: step }).kind).toBe('ask');
@@ -91,6 +91,11 @@ describe('the owner\'s policy', () => {
     // the budget of one request: with 300 ms between two looks it is gone before the first pattern
     const jump = () => (t += 300);
     expect(policyRead(owner, 'Bash', { command: 'ls' }, ['Bash'], undefined, jump)).toEqual({ rule: null, unread: true });
+    // the budget ends after a pattern held and before its exception is read: not «held», not «free»
+    const dry = parsePolicy(JSON.stringify({ version: 1, rules: [{ id: 'dry', action: 'esegui', why: 'w', tools: ['command'], match: ['DROP TABLE'], unless: ['dry run'] }] }));
+    let looks = 0;
+    const late = () => (++looks > 2 ? 1000 : 0);   // the start and the first pattern at 0, the exception at 1000 ms
+    expect(policyRead(dry, 'Bash', { command: 'sqlcmd -Q "DROP TABLE t"' }, ['Bash'], undefined, late)).toEqual({ rule: null, unread: true });
     // a tool no rule looks at is not timed at all
     expect(policyRead(one, 'Write', { file_path: 'a.md', content: 'x' }, ['Bash'], undefined, jump)).toEqual({ rule: null, unread: false });
   });

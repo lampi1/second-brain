@@ -156,9 +156,31 @@ export interface PolicyRead { rule: PolicyRule | null; unread: boolean }
 
 // The rules run in the main process and a pattern cannot be stopped: one that goes back over the text for every match
 // (`psql[\s\S]*insert`, on a text full of «psql») takes seconds on 100,000 characters. So the rules have a time budget
-// for one request, and on a long text each pattern is first timed on the start of it: when the whole text would take
-// too long at that pace (the time grows with the square of the length, at worst), the app stops and asks.
-const BUDGET_MS = 250, PATTERN_MS = 500, PROBE = 20_000;
+// for one request, and on a long text each pattern is first timed on every 20,000 characters of it: when the whole
+// text would take too long at that pace, the app stops and asks.
+const BUDGET_MS = 250, PATTERN_MS = 250, PROBE = 20_000, NOISE_MS = 25;
+
+/** A pattern is quick enough on the whole text, judged by its time on each stretch of PROBE characters. A pattern that
+ *  goes back over the text scans from each match to the end, so a slow stretch weighs as much as the text after it is
+ *  long (all of it slow: the square of the length). spent: the request's time so far is over its budget. */
+function quick(re: RegExp, text: string, now: () => number, spent: () => boolean): boolean {
+  let whole = 0;
+  for (let at = 0; at < text.length; at += PROBE) {
+    if (spent()) return false;
+    const stretch = text.slice(at, at + PROBE), weight = Math.max(1, 2 * (text.length - at) / PROBE - 1);
+    // a short time that would stop the pattern is taken again, the fastest of three: one look alone also measures
+    // what else the machine was doing; a long one is the pattern's own
+    let ms = Infinity;
+    for (let look = 0; look < 3 && whole + ms * weight > PATTERN_MS && (look === 0 || ms <= NOISE_MS); look++) {
+      const t0 = now();
+      re.test(stretch);
+      ms = Math.min(ms, now() - t0);
+    }
+    whole += ms * weight;
+    if (whole > PATTERN_MS) return false;
+  }
+  return true;
+}
 
 /** The first rule that holds this request, and whether the rules read all of it. title: the engine's line, an ACP MCP
  *  tool's only name. now: the clock (the tests' own). */
@@ -166,16 +188,11 @@ export function policyRead(policy: BrainPolicy, tool: string, input: unknown, co
   if (policy.state !== 'ok') return { rule: null, unread: false };
   const cls = toolClass(tool, commandTools), name = tool.toLowerCase(), t = (title ?? '').trim().toLowerCase();
   const { text, long } = readable(tool, input, cls, cls === 'mcp' ? title?.trim() : undefined);
-  const start = now(), growth = (text.length / PROBE) ** 2;
+  const start = now(), spent = (): boolean => now() - start > BUDGET_MS;
   let slow = false;
   const hit = (re: RegExp): boolean => {
     if (slow) return false;
-    const t0 = now();
-    if (t0 - start > BUDGET_MS) { slow = true; return false; }
-    if (text.length > PROBE) {
-      re.test(text.slice(0, PROBE));
-      if ((now() - t0) * growth > PATTERN_MS) { slow = true; return false; }
-    }
+    if (spent() || (text.length > PROBE && !quick(re, text, now, spent))) { slow = true; return false; }
     return re.test(text);
   };
   for (const rule of policy.rules) {

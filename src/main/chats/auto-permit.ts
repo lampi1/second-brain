@@ -84,16 +84,17 @@ function settingsPath(p: string, cwd: string): boolean {
   try { return settingsSegments(realish(path.resolve(cwd, p))); } catch { return false; }
 }
 
-/** The places a tool names: every short one-line string value that is not its content (any engine's shape: file_path,
- *  filePath, target_file, Codex files, ACP locations), one level down too. null = it cannot be read whole (an engine cut
+/** The places a tool may name: every string value that is not its content (any engine's shape: file_path, filePath,
+ *  target_file, Codex files, ACP locations), one level down too. null = it cannot be read whole (an engine cut
  *  it, or a list too long to be all there). */
 function placesOf(input: unknown, whole = false): string[] | null {
   const out: string[] = [];
   const walk = (v: unknown, depth: number): boolean => {
     if (typeof v === 'string') {
       if (!whole && CUT.test(v)) return false;
-      // whole: no cut mark says «longer than shown», so a path as long as a system takes (32,767 on Windows) is read too
-      if (v.length <= (whole ? 33_000 : 1000) && !/[\r\n]/.test(v) && !/^https?:\/\//i.test(v)) out.push(v.replace(/^file:\/\//i, ''));
+      // however long and on however many lines: a tool that tidies a path before it opens it reaches the same file
+      // through `./` twenty thousand times or a line break before `/..`. A web address is no place, unless it climbs
+      if (!/^https?:\/\/\S*$/i.test(v) || /(^|[\\/])\.\.([\\/]|$)/.test(v)) out.push(v.replace(/^file:\/\//i, ''));
       return true;
     }
     if (depth > 20) return false;   // deeper than any engine's shape: not read whole
@@ -186,7 +187,9 @@ export function autoPermit(req: PermitRequest, ctx: PermitContext): PermitVerdic
   if (policy.state === 'broken') return ASK;
   // Codex's grantRoot is write access under a folder for the rest of the session: later writes never come back here
   if (obj(req.input).grantRoot !== undefined) return ASK;
-  if (EDIT_TOOLS.has(req.tool) && !placesIn(req)?.some(pathLike) && !placesIn(req)?.some(p => /^[\w.-]+\.\w+$/.test(p))) return ASK; // an edit that names no file
+  // an edit that names no file: a short one-line value that reads as a path or a file name
+  const files = (placesIn(req) ?? []).filter(p => p.length <= 1000 && !/[\r\n]/.test(p));
+  if (EDIT_TOOLS.has(req.tool) && !files.some(pathLike) && !files.some(p => /^[\w.-]+\.\w+$/.test(p))) return ASK;
   if (touchesSettings(req, command, ctx.cwd)) return ASK;
   return ALLOW;
 }

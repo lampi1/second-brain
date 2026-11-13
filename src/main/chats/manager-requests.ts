@@ -422,7 +422,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       if (req.tool === 'Skill') {
         const policy = loadPolicy(this.opts.brainRoot?.() ?? null);
         const read = policyRead(policy, req.tool, req.input, COMMAND_TOOLS, req.title);
-        if (policy.state === 'broken' || read.rule || read.unread) return false;
+        if (policy.state === 'broken' || read.rule || (read.unread && policyCovers(policy, req.tool, COMMAND_TOOLS, req.title))) return false;
       }
       this.policyAnswer(r, req, { kind: 'permission', allow: true }, 'role-gate', verdict.patch);
       log.info('chats', 'role gate allowed', { chat: r.s.id, data: { tool: req.tool, qualified: !!verdict.patch } });
