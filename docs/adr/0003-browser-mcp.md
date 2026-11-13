@@ -1,6 +1,6 @@
 # ADR 0003 · Internal browsers exposed to agents as a hand-written local MCP server
 
-Date: 2026-10-11 · Status: accepted; partly superseded by ADR 0237 (agents type passwords on every host)
+Date: 2026-10-11 · Status: accepted; partly superseded by ADR 0237 (agents type passwords on every host) · Amended by: ADR 0050
 
 ## Context
 Claude in Chrome is blocked by corporate policy; agents need a browser for QA (Angular SPA with iframes and logins).

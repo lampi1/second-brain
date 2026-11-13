@@ -1,6 +1,6 @@
 # ADR 0114 · One switch turns on the judging of every run, with its daily cost
 
-Date: 2026-10-22 · Status: accepted (owner, 22/10: "un toggle semplice nella schermata agenti «Abilita controllo livello
+Date: 2026-10-22 · Status: partly superseded by ADR 0203; accepted (owner, 22/10: "un toggle semplice nella schermata agenti «Abilita controllo livello
 e performance», a ogni iterazione, con una stima del costo al giorno") · Supersedes: the daily review count of the
 delegation settings (JudgeSampler `daily`) · Builds on: ADR 0100 (levels from verified successes)
 

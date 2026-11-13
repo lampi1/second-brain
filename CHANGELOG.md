@@ -18,6 +18,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   OpenCode, OpenRouter included; the chat's model and plan mode go through OpenCode's session options (ADR 0216).
 
 ### Changed
+- README rewritten around the two things the app is (multi-harness orchestration, a brain of skills and memory), with
+  a plain quick start; `SECURITY.md` added; the ADR index lists the decisions in force first and every replaced or
+  amended record names the record that changed it.
 - A delegation from the brain folder is no longer refused for pending edits to now.md, ai-errors.md or ai-wins.md,
   the notes the app and the brain rules keep writing (#324).
 - The model-list probe's expected refusal is logged as info, not as an engine error (#328); a role set to a model the

@@ -19,9 +19,13 @@ function statusOf(header) {
   const para = header.slice(at + 'Status:'.length).split(/\n\s*\n/)[0].replace(/\s+/g, ' ').trim();
   const whole = /^superseded by ADR (\d{4})/i.exec(para);
   if (whole) return `superseded by ${whole[1]}`;
-  const own = para.split(/\b(?:Supersedes|supersedes|Builds on|Amends|Amended by|Replaces)\b/)[0];
+  const partly = /^partly superseded/i.test(para);
+  const cut = para.split(/\b(?:Supersedes|supersedes|Builds on|Amends|Amended by|Replaces)\b/)[0];
+  const own = cut;
   const from = own.search(/\b(?:superseded|replaced|removed)\b/i);
-  const by = from < 0 ? [] : [...new Set([...own.slice(from).matchAll(/\b(0\d{3})\b/g)].map(m => m[1]))];
+  // "partly superseded by ADR N (…), ADR M; accepted …": the replacing records are the ones before the first ";".
+  const named = partly && own.includes(';') ? own.slice(0, own.indexOf(';')) : own.slice(Math.max(from, 0));
+  const by = from < 0 ? [] : [...new Set([...named.matchAll(/\b(0\d{3})\b/g)].map(m => m[1]))];
   const state = /^partly superseded/i.test(own) ? own.slice(own.indexOf(';') + 1).trim() : own;
   const word = /^[A-Za-z]+/.exec(state)?.[0].toLowerCase() ?? 'not stated';
   return by.length ? `${word}, partly superseded by ${by.join(', ')}` : word;
@@ -35,13 +39,17 @@ function titleOf(text, num) {
 
 const files = readdirSync(dir).filter(f => /^\d{4}-.*\.md$/.test(f)).sort();
 const seen = new Map();
-const lines = files.map(f => {
+const records = files.map(f => {
   const num = f.slice(0, 4);
   seen.set(num, [...(seen.get(num) ?? []), f]);
   const text = readFileSync(path.join(dir, f), 'utf8');
   const header = text.split(/^## /m)[0];
-  return `- [${num}](${f}) ${titleOf(text, num)} — ${statusOf(header)}`;
+  const status = statusOf(header);
+  return { line: `- [${num}](${f}) ${titleOf(text, num)} — ${status}`, replaced: /^superseded by/.test(status) };
 });
+const current = records.filter(r => !r.replaced).map(r => r.line);
+const replaced = records.filter(r => r.replaced).map(r => r.line);
+const lines = [...current, ...replaced];
 const dupes = [...seen].filter(([, fs]) => fs.length > 1);
 
 const index = [
@@ -54,7 +62,17 @@ const index = [
   'Numbers are unique (`node scripts/adr-index.mjs --check` fails otherwise). The designs numbered 0069 (agent packs)',
   'and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no file here, 0070 only its addendum.',
   '',
-  ...lines,
+  '## In force',
+  '',
+  'Read these for how the app works today. "Partly superseded" records name the later record that changed a part.',
+  '',
+  ...current,
+  '',
+  '## Replaced',
+  '',
+  'Kept for the history only: the record named on each line holds the current decision.',
+  '',
+  ...replaced,
   '',
 ].join('\n');
 

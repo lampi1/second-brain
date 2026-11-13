@@ -1,6 +1,6 @@
 # ADR 0080 · Cloud agents in the Grindhouse (Cursor, Codex, Claude Code)
 
-Date: 2026-10-19 · Status: accepted with the defaults below (the owner may change any of them) · Issue: #79 ·
+Date: 2026-10-19 · Status: superseded by ADR 0201 (cloud agents were cut); before that: accepted with the defaults below (the owner may change any of them) · Issue: #79 ·
 Builds on: ADR 0046 (engines, API keys), ADR 0055 (CLI contracts), ADR 0068/0071 (every worker in the Grindhouse) ·
 Amends: AGENTS.md rules 2 and 4 (wording), ADR 0046 §2 (the key list)
 

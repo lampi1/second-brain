@@ -1,6 +1,6 @@
 # ADR 0074 · A developer updates by asking the app; release drafts without GitHub Actions
 
-Date: 2026-10-18 · Status: accepted (owner, 18/10: "un dev che ha già una versione dell'app deve essere semplicissimo
+Date: 2026-10-18 · Status: partly superseded by ADR 0231; accepted (owner, 18/10: "un dev che ha già una versione dell'app deve essere semplicissimo
 per lui aggiornare: basta che chieda alla stessa app di aggiornarsi"; "il readme deve avere il download per ogni
 versione") · Builds on: ADR 0007 (stable vs dev), ADR 0020 ("Migliora l'app"), ADR 0027 (checks), ADR 0061 (one repo)
 

@@ -1,6 +1,6 @@
 # ADR 0049 · The questions window reads as a page: question large, why folded, options as cards, a rail for the queue
 
-Date: 2026-10-14 · Status: accepted · Amends: ADR 0044 (placement, the "Altre in attesa" row)
+Date: 2026-10-14 · Status: partly superseded by ADR 0269; accepted · Amends: ADR 0044 (placement, the "Altre in attesa" row)
 
 ## Context
 The user, 14/10: "voglio che fai partire un agente per ottimizzare la UI delle domande non mi piace in generale non lo

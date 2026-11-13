@@ -1,12 +1,12 @@
 # ADR 0135 · Yes/no questions only, «Ci penso dopo», and a recap that unblocks everything
 
-Date: 2026-10-23 · Status: accepted (owner, 2026-10-23: «vorrei che l'orchestrator e in generale sempre io avessi solo
+Date: 2026-10-23 · Status: partly superseded by ADR 0269; accepted (owner, 2026-10-23: «vorrei che l'orchestrator e in generale sempre io avessi solo
 domande con risposta sì no o campo di testo per altro. Anche opzione ci penso dopo dove semplicemente poi
 l'orchestrator quando gli chiedo un recap dei lavori in corso me la ripropone … io devo fare il meno possibile, nella
 domanda si deve capire cosa è stato fatto, screen ecc»; «vorrei poter sbloccare tutte le cose in corso semplicemente
 chiedendo un recap all'orchestrator e non guardare le varie chat degli agenti») · Builds on: ADR 0017
 (app_resolve_question), 0049 (the questions window), 0083 (questions go to the parent first), 0108/0121 (the
-Strategist's questions and plan)
+Strategist's questions and plan) · Amended by: ADR 0260
 
 ## Context
 Agents asked with any options they liked (two to four choices, multi-select, long labels), so each answer meant

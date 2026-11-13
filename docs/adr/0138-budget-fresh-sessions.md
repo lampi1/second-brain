@@ -1,5 +1,7 @@
 # 0138 — Fresh engine sessions at an observed idle boundary
 
+Status: accepted
+
 The persistent chat, its task/run, event ledger and workflow are the identity of the work. A provider session is
 replaceable context, not a new work item. Budget freshness is enabled by the host and never reports a measured loss
 of quality: its input is the provider's actual context usage and budget (at least 50,000 tokens and 80% of budget).

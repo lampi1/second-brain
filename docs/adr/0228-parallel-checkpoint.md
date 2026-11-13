@@ -1,6 +1,6 @@
 # 0228 — The checkpoint runs while the message goes; the first write waits for it; a restart resumes only recent turns
 
-Accepted. Refines [ADR 0103](0103-safety-without-popups.md) (a checkpoint before every turn). The undo stays exact. What changes is where the wait happens.
+Status: accepted. Refines [ADR 0103](0103-safety-without-popups.md) (a checkpoint before every turn). The undo stays exact. What changes is where the wait happens.
 
 ## Context
 

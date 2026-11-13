@@ -2,7 +2,7 @@
 
 Date: 2026-10-21 · Status: accepted (owner, 2026-10-21: «chiama pure la sezione Log e non diagnostica», «togli pure la
 changelog», «in una chat ad albero dopo 2 minuti che hanno finito tutti») · Builds on: ADR 0076 (brain changelog),
-ADR 0084 (finished workers close by themselves), ADR 0109 (evidence) · Amends: ADR 0076 (the Changelog page is gone)
+ADR 0084 (finished workers close by themselves), ADR 0109 (evidence) · Amends: ADR 0076 (the Changelog page is gone) · Amended by: ADR 0134
 
 ## Context
 The owner could not see why a task went the way it did: which role the Orchestrator chose and why, what each agent

@@ -3,7 +3,7 @@
 Date: 2026-10-19 · Status: accepted (owner, 2026-10-19 evening: «deve esserci una soluzione per le chat veloci,
 l'orchestratore deve essere bravo a capire se può cavarsela in fretta anche con le stime per task simile … stime
 leggibili e poi il progresso dei classificatori nelle stime») · Builds on: agent runs (A5, `agents/runs.ts`), the
-keyword classifier (`brain/estimates.ts` `classify`), ADR 0083 (roles and direct delegation) · Revisits: ADR 0053
+keyword classifier (`brain/estimates.ts` `classify`), ADR 0083 (roles and direct delegation) · Revisits: ADR 0053 · Amended by: ADR 0101
 
 ## Context
 Since ADR 0083 the Orchestrator's rules said "use app_create_chat for every task", and a role could delegate any part

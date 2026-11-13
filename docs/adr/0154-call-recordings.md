@@ -1,7 +1,7 @@
 <!-- Call recordings with local transcripts, read by the Orchestrator; owner 2026-10-24. -->
 # 0154 — Call recordings: PC audio + microphone, transcribed on the PC, known to the Orchestrator
 
-Date: 2026-10-24
+Date: 2026-10-24 · Status: accepted
 
 ## Context
 

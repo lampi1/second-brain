@@ -4,7 +4,7 @@ Date: 2026-11-13 · Status: accepted (owner, 2026-11-13: «ciò che dice l'orche
 io SEMPRE» · «da telefono a volte non va perché dice sempre che devo scrivere nella chat dell'agente ma non deve
 accadere» · decision card: «Resta solo Esegui su prod/DB/Azure» · «l'orchestrator mi deve mostrare i comandi e
 rispondere per me dopo la conferma» · «al posto di quello stato che non uso mai devo poter vedere le nuove mappe … in cui
-si può entrare sui livelli più deep» · «gli schemi che fa fanno cagare, la mappa e i fili li voglio aprire») · Amends:
+si può entrare sui livelli più deep» · «la mappa e i fili li voglio aprire», the drawn diagrams being unreadable) · Amends:
 ADR 0269, 0274; supersedes the «reserved» parts of ADR 0239/0255/0259 §4
 
 ## Context

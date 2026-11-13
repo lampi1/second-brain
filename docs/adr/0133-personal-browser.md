@@ -2,7 +2,7 @@
 
 Superseded by ADR 0212 (2026-10-31: the owner had the page removed).
 
-Date: 2026-10-23 · Status: accepted (owner, 2026-10-23: «una sezione per far usare all'utente il browser proprio per
+Date: 2026-10-23 · Status: superseded by ADR 0212 (the personal Browser page was removed); before that: accepted (owner, 2026-10-23: «una sezione per far usare all'utente il browser proprio per
 tutti i giorni … con la possibilità di salvare sessioni e preferiti, avere le google password manager ecc, ma slegato
 dai browser che aprono gli agenti»; he chose the browser inside the app over a Chrome profile launched by it) ·
 Builds on: ADR 0003 (tabs as WebContentsViews), 0012 (credentials never in an agent's context), 0046 (safeStorage)

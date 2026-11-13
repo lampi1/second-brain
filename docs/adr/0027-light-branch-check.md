@@ -1,6 +1,6 @@
 # ADR 0027 · Light check on branches, full check only on main
 
-Date: 2026-10-13 · Status: accepted · Amended 2026-10-15 (no e2e on branches, below)
+Date: 2026-10-13 · Status: partly superseded by ADR 0231 (a branch's gate has no e2e since 2026-11-08); accepted · Amended 2026-10-15 (no e2e on branches, below) · Amended by: ADR 0075
 
 ## Context
 Every branch ran the full `npm run check` (typecheck, lint, all unit tests, the whole e2e suite) before it could be

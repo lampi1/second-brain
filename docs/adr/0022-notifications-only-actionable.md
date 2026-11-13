@@ -1,6 +1,6 @@
 # ADR 0022 · Only what needs the user interrupts; the rest is a list he reads when he wants
 
-Date: 2026-10-13 · Status: accepted
+Date: 2026-10-13 · Status: accepted · Amended by: ADR 0102
 
 ## Context
 The user (13/10): "le notifiche sono troppe e non le guardo mai". Measured on 12/10: 627 "chat finita" toasts (every

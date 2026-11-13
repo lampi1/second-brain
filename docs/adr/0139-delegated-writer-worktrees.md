@@ -1,5 +1,7 @@
 # 0139 — Isolate delegated writers and stage integration
 
+Status: accepted
+
 Writing child chats must not race with their parent or siblings in a shared checkout. The host creates a unique Git
 worktree after ChatManager computes the child's effective policy. `edit`, unrestricted `shell`, `brain-write`, external
 `mcp` and unknown policies are treated as potentially writing; `read` and `shell-read` alone can share a folder. Role

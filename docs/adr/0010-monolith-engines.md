@@ -1,6 +1,6 @@
 # ADR 0010 · A monolith with two engines: Claude embedded, Cursor CLI the only external piece
 
-Date: 2026-10-11 · Status: accepted (supersedes the coexistence parts of ADR 0002 and phases.md)
+Date: 2026-10-11 · Status: accepted (supersedes the coexistence parts of ADR 0002 and phases.md) · Amended by: ADR 0267
 
 ## Context
 The user: "se costa tanta complessità mantenere la retrocompatibilità con claude desktop o cursor al posto della cli lascia

@@ -1,6 +1,6 @@
 # 0180 — Requested statistics and durable forgotten skills
 
-2026-10-28. Accepted.
+Date: 2026-10-28 · Status: accepted.
 
 ## Decision
 

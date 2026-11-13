@@ -1,7 +1,7 @@
 <!-- Host-driven step transitions for maintainers; preserves existing execution authority and manual recovery tools. -->
 # 0148 — Advance routine agent steps in the host
 
-Date: 2026-10-24
+Date: 2026-10-24 · Status: accepted
 
 Canonical `agent_report` persistence now notifies the routine runtime for every root-report outcome. The runtime uses the bound agent run's `report.at` and the existing host completion checks, including immutable task identity, successful verified outcome, exact required evidence labels and independent Sentinel review. Success advances without an Orchestrator model turn. Invalid results leave an explicit blocked reason and notify the owning Orchestrator.
 

@@ -1,7 +1,7 @@
 <!-- Decision record for the agents' improvement loop: what runs by itself, what only proposes, and what costs tokens. -->
 # ADR 0073: The agents' improvement loop runs under the user's approval
 
-Date: 2026-10-18 · Status: partly superseded by ADR 0077 (the approval parts for skills, agents and lessons); accepted
+Date: 2026-10-18 · Status: partly superseded by ADR 0153 (proposals only on the user's click), ADR 0077 (the approval parts for skills, agents and lessons); accepted · Amended by: ADR 0082, ADR 0104
 
 The owner (2026-10-18): "l'automiglioramento e correzione degli agenti in base al costo, tempo, come sono andati,
 sempre sotto approvazione". No definition, version, trial or probation decision applies without an explicit user action.

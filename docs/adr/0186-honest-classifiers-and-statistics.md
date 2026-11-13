@@ -1,6 +1,6 @@
 # 0186 — Honest classifiers and statistics: one taxonomy, one success, fewer numbers
 
-2026-10-29. Accepted. Supersedes the exploration part of the routing ADRs (the `exploration` rate no longer drives any
+Date: 2026-10-29 · Status: accepted. Supersedes the exploration part of the routing ADRs (the `exploration` rate no longer drives any
 chat), the skill suggester (#159 and the Classificatori «Skill» card) and the parts of ADR 0083 and ADR 0085 that made
 every permission save a new role version.
 

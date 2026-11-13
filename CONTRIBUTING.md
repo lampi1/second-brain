@@ -6,14 +6,14 @@ follow [AGENTS.md](AGENTS.md), a short map of the same rules; their full text is
 ## Set up
 
 ```powershell
-git clone <repo url>; cd second-brain
+git clone https://github.com/lampi1/second-brain.git; cd second-brain
 npm run setup          # npm ci with install scripts off (.npmrc) + Electron's checksummed binary + the guard hooks
 npm run demo           # build + the app on fictional data: no CLI, no login, no tokens
 npm run doctor         # what is missing on this machine (Electron, build, CLIs, logins, brain, MCP port)
 ```
 
-Windows 10/11 and Node.js 22+. To use real chats you need the Claude Code CLI and/or the Cursor CLI (`agent`), logged
-in with your own account; the demo and every test except `test/live` need neither.
+Windows 10/11 first (macOS and Linux work too) and Node.js 22+. To use real chats you need at least one of the Claude
+Code, Codex, Cursor (`agent`) or OpenCode CLIs, logged in with your own account; the demo and every test except `test/live` need neither.
 
 Useful environment variables: `SB_DEMO=1` (fake services), `SB_DEMO_FREEZE=1` (fixed clock and data),
 `SB_HIDDEN=1` (window off screen and never focused: agents and tests), `SB_USER_DATA=<dir>` (an isolated profile),
@@ -38,7 +38,7 @@ git config user.email "<you>@users.noreply.github.com"
 A deny list that is set but missing blocks every commit and push (it is never skipped). A block prints the file, the
 line and the rule, never the matched text, and how to fix it: edit the line, or, only for a proven false positive, add
 the printed line (`path rule sha256:…`) to `.guardallow`, which is reviewed like code. Commit messages and identities
-are never silenced. Do not bypass the hooks with `--no-verify`: CI scans the whole history again. `npm run doctor`
+are never silenced. Do not bypass the hooks with `--no-verify`. `npm run doctor`
 shows whether the hooks are on and the config is readable.
 
 ## Workflow
@@ -134,5 +134,5 @@ more demo data for a page that looks empty in `npm run demo`, an e2e spec for a 
 
 ## Reporting bugs and security issues
 
-Bugs and ideas: open an issue with the template. Security problems: do not open a public issue; report them
-privately from the repository's **Security** tab ("Report a vulnerability") and give the maintainer time to fix them.
+Bugs and ideas: open an issue with the template. Security problems: do not open a public issue; see
+[SECURITY.md](SECURITY.md).

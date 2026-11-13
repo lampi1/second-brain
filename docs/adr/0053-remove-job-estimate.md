@@ -1,6 +1,6 @@
 # ADR 0053 · Remove the per-job cost/time estimate ("Quanto costerà?")
 
-Date: 2026-10-15 · Status: accepted · Supersedes: ADR 0030's "one estimator in the app"
+Date: 2026-10-15 · Status: accepted · Supersedes: ADR 0030's "one estimator in the app" · Amended by: ADR 0101
 
 ## Context
 

@@ -1,6 +1,6 @@
 # ADR 0115 · Fatto lists the work the user asked for, with what it cost in all
 
-Date: 2026-10-22 · Status: accepted (owner, issue #160) · Builds on: ADR 0101 (one money format)
+Date: 2026-10-22 · Status: superseded by ADR 0181 (the Fatto page was removed); before that: accepted (owner, issue #160) · Builds on: ADR 0101 (one money format)
 
 ## Decision
 - A macro task is a top-level run (no parent in the store: the Orchestrator's, the user's, the app's own) together with

@@ -1,6 +1,6 @@
 # ADR 0061 · One app repo for every PC: product only, guarded before each push
 
-Date: 2026-10-16 · Status: accepted (owner, panel 16/10) · Source: the owner's words (16/10): on the personal PC "lavorare all'app second
+Date: 2026-10-16 · Status: partly superseded by ADR 0231; accepted (owner, panel 16/10) · Source: the owner's words (16/10): on the personal PC "lavorare all'app second
 brain e averla aggiornata anche in questo pc", "mi va bene avere i dati vuoti, senza informazioni personali mie, anche
 per provarla come la proverebbe un futuro utente da zero", "simulare un altro dev che lavora sull'app per l'app e anche
 ad altre sue cose", "anche a costo di stravolgere tutto"; "una chiara distinzione tra parte del prodotto app, parte

@@ -1,6 +1,8 @@
 <!-- Why reusable flows are a separate, empty, governed catalog; for maintainers. -->
 # 0142 — Orchestrator-owned reusable flows
 
+Status: accepted
+
 ## Context
 
 Scattered memory rules cannot reliably encode reusable execution state, evidence, or one-time decisions. Company procedures are not known to the product. The user must build them inside the app from their own brain through short native questions. The Orchestrator remains the only entry point.

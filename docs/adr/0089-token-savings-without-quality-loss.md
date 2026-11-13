@@ -1,7 +1,7 @@
 # ADR 0089 · Token savings that keep the same content
 
 Date: 2026-10-20 · Status: accepted (owner, 2026-10-20: proposals 1, 2, 4, 5 of the token plan, «ottimizza
-l'ottimizzabile senza perdere qualità», no new permission prompts) · Builds on: ADR 0031, 0083, 0087
+l'ottimizzabile senza perdere qualità», no new permission prompts) · Builds on: ADR 0031, 0083, 0087 · Amended by: ADR 0209
 
 ## Context
 A read of the flow found tokens spent on text the model already had or did not need: the role text sent again at every

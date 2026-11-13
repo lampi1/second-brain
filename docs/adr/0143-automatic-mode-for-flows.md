@@ -1,6 +1,8 @@
 <!-- Decision: opt-in automatic flow triggers and background execution, for maintainers and UI integrators. -->
 # 0143 — Automatic mode belongs to Flussi
 
+Status: accepted
+
 ## Context
 
 Repeatable work needs deterministic detection without spending model tokens on empty polls. A separate routines catalog would duplicate flow definitions and hide their ownership, approvals and execution state. The Orchestrator remains the only entry point for defining and coordinating work.

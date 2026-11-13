@@ -5,11 +5,11 @@
 > Amended by ADR 0125 (2026-10-22): the agent pack import/export this ADR builds on is gone; the shareable brain zip
 > stays, with the parts it shares (`pack/zip.ts`, `toml.ts`, `rules.ts packRules`, the guard scan).
 
-Date: 2026-10-20 · Status: accepted (owner, 2026-10-20: «vorrei che il brain fosse esportabile e condivisibile con i
+Date: 2026-10-20 · Status: partly superseded by ADR 0125; accepted (owner, 2026-10-20: «vorrei che il brain fosse esportabile e condivisibile con i
 colleghi che magari lo usano anche loro dalla loro harness magari slegata da quest'app … che si esportasse uno zip che
 il brain fosse semplice da usare anche su Cursor o Claude Code o Codex senza per forza passare dall'app»; «vorrei anche
 che si potesse da GitHub scaricare e usare solo il brain partendo da zero») · Builds on: ADR 0069/0077 (agent packs:
-skills, rules, TOOLS.md, never memory), ADR 0072 (a fresh brain starts empty), ADR 0076 (brain scripts)
+skills, rules, TOOLS.md, never memory), ADR 0072 (a fresh brain starts empty), ADR 0076 (brain scripts) · Amended by: ADR 0156
 
 ## Context
 The brain is already a folder of Markdown files with an `AGENTS.md` index, the file Codex and Cursor read by

@@ -1,6 +1,6 @@
 # 0230. Impara: «Spiegazione», a lesson with pictures and no quiz
 
-Date: 2026-11-07. Status: proposed. Amends 0185, 0205 and 0213.
+Date: 2026-11-07. Status: accepted (merged 2026-11-08; written as a proposal). Amends 0185, 0205 and 0213.
 
 ## Context
 

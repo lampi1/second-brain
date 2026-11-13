@@ -1,7 +1,7 @@
 # ADR 0097 · The Judge's samples run in the user's own app; the Orchestrator points to Router and Judge and levels up by its decisions
 
 Date: 2026-10-20 · Status: accepted (owner, issue #112) · Amends: ADR 0083 §9 ("only in the stable app") and the
-agent standing of `agents/standing.ts` (issue #81)
+agent standing of `agents/standing.ts` (issue #81) · Amended by: ADR 0100
 
 ## Context
 Issue #112: after days of use Judge and Router had never run, the daily Judge sampling (`delegation.judgeDaily = 3`)

@@ -1,6 +1,6 @@
 # ADR 0078 · Agent first: the profile decides, the table only fills a missing model
 
-Date: 2026-10-19 · Status: accepted · Replaces the routing parts of ADR 0032, 0047, 0051 and 0066 (issues #70, #72,
+Date: 2026-10-19 · Status: superseded by ADR 0210 (the model-routing classifier was removed); before that: accepted · Replaces the routing parts of ADR 0032, 0047, 0051 and 0066 (issues #70, #72,
 #73, #80; #71 rides along)
 
 ## Context

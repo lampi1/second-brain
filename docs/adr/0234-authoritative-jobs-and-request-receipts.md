@@ -1,7 +1,7 @@
 <!-- Coordination ownership, durable authorization facts and recovery semantics for the runtime integrator and maintainers. -->
 # 0234 — One job projection and exact request receipts
 
-Status: implemented core; integration verification and independent persistence/authorization review pending.
+Status: accepted (core implemented; integration verification and an independent persistence/authorization review were still pending when written).
 
 ## Context
 

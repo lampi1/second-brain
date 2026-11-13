@@ -1,6 +1,6 @@
 # ADR 0006 · The app is AI-driven: self-test, logs, doctor, and an app-control MCP
 
-Date: 2026-10-11 · Status: accepted
+Date: 2026-10-11 · Status: accepted · Amended by: ADR 0050
 
 ## Context
 The user: "rendila AI driven e l'IA deve sapere perfettamente come testarla da sola vedere i log ecc ecc perchè dovrà

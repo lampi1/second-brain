@@ -1,6 +1,6 @@
 # 0182 — Task page: one strip per record, detail beside it
 
-2026-10-29. Accepted. Supersedes the Task layout of ADR 0041 and issue #160 (tiles, section bar, stacked sections).
+Date: 2026-10-29 · Status: accepted. Supersedes the Task layout of ADR 0041 and issue #160 (tiles, section bar, stacked sections).
 
 ## Context
 

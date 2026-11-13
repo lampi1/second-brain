@@ -1,6 +1,6 @@
 # ADR 0125 · Every role levels up from outcomes; no copy-link bar button, no agent packs
 
-Date: 2026-10-22 · Status: accepted (owner, 22/10: "assicurati che tutti gli agenti riescano a progredire di livello,
+Date: 2026-10-22 · Status: partly superseded by ADR 0203; accepted (owner, 22/10: "assicurati che tutti gli agenti riescano a progredire di livello,
 tipo il Sentinel che è quello che giudica: da chi viene giudicato? Deve progredire anche senza giudizi manuali";
 "i pulsanti copia link in cima alle pagine non servono a una sega, e anche importa/esporta agente") · Builds on: ADR
 0100 (XP = verified successes), 0114 (the judging switch) · Supersedes: the agent pack import/export (ADR 0077

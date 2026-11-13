@@ -3,7 +3,7 @@
 Date: 2026-10-19 · Status: accepted (owner, issue #86: "When a worker chat has sent its final report to the
 Orchestrator and is idle, the app marks its work as done and closes it by itself") · Builds on: the main-owned
 auto-close scheduler (`chats/auto-close.ts`), the explicit work holds (`ChatSummary.work`, `app_set_chat_work`),
-agent runs (A5), `shared/waiting.ts` (2026-10-16)
+agent runs (A5), `shared/waiting.ts` (2026-10-16) · Amended by: ADR 0134
 
 ## Context
 Every chat an agent opens starts with `work: assigned`, an explicit hold that only `app_set_chat_work completed`

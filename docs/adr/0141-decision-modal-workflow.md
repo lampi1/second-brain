@@ -1,5 +1,7 @@
 # 0141 — Agent-only Home and a decision-driven workflow
 
+Status: accepted
+
 The owner rejected the persistent Regia overview on 2026-10-23: Home is exclusively for agents, and all human work decisions must use Sì, No or a free response, with little but explanatory text. This supersedes the Home board and prose recap parts of ADR 0136 and 0140; persistent threads, evidence, exact approvals and deterministic observations remain.
 
 Workflow proposals and learned-rule proposals join QuestionsWindow after existing questions, permissions and plans. They stay reachable after their chats close, participate in the top-bar queue count and retain request-local postponement. Reopening the queue includes these decisions; app_unblock counts them even without a pending chat request. Workflow keys carry version and proposal identity, lesson keys their exact text; stale reads cannot resurrect an answered proposal.

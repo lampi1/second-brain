@@ -1,7 +1,7 @@
 <!-- Decision record for chat visibility, persistence compatibility and source-code launch checks. -->
 # ADR 0071: Every worker lives in the Grindhouse
 
-Date: 2026-10-18
+Date: 2026-10-18 · Status: accepted
 
 The `app` chat partition hid workers created by the Orchestrator from the Grindhouse.
 All workers now share the same grid, browser placement, requests, focus and maximize actions.

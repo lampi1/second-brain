@@ -1,6 +1,6 @@
 # ADR 0041 · Procedure replaces Comunicazione: the brain's procedures, read-only, copy only
 
-Date: 2026-10-13 · Status: accepted
+Date: 2026-10-13 · Status: partly superseded by ADR 0181, ADR 0182; accepted
 
 ## Context
 The owner (2026-10-13): "una sezione visibile delle procedure tipo attivazione [di un progetto], deploy, query con

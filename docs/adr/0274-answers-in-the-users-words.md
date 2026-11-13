@@ -5,7 +5,7 @@ in fondo» · «da espansa voglio vedere sempre l'input dell'orchestrator scrivi
 metterlo anche nel pannello delle domande» · «vorrei ci fosse anche un X per chiudere la domanda che equivale a rispondo
 dopo» · «se rispondo direttamente all'orchestrator o all'agente il pannello deve sparire, però … se la risposta che do
 all'orchestrator è della domanda non di altre robe» · «l'utente parla sempre e solo con l'orchestrator») · Amends:
-ADR 0269
+ADR 0269 · Amended by: ADR 0275
 
 ## Context
 - An opened row (a long plan above all) took the column: the card was cut at the bottom and the Orchestrator's input

@@ -1,6 +1,6 @@
 # ADR 0007 · Developing the app from the app: stable release + dev instance, promotion with green tests
 
-Date: 2026-10-11 · Status: accepted
+Date: 2026-10-11 · Status: partly superseded by ADR 0075 («Aggiorna» no longer waits for the test suite); accepted
 
 ## Context
 The user: "sarebbe possibile lavorare all'app direttamente dall'app?" From phase 1 on, the app is developed by chats

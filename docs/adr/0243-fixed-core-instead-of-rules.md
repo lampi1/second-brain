@@ -2,7 +2,7 @@
 
 Date: 2026-11-09 · Status: accepted (owner, issue #366, «risolvi tutte le issue aperte») · Builds on: ADR 0241 (skill
 packages and library), ADR 0242 (role skill) · Changes: ADR 0077 (Regole page), ADR 0082 («Regole imparate» on the
-Regole page), ADR 0062 (topic rules injected by the hooks)
+Regole page), ADR 0062 (topic rules injected by the hooks) · Amended by: ADR 0277
 
 ## Context
 Davide decided that rules disappear. In his brain the hooks injected 11 topic files (`when:` frontmatter, about 300,800

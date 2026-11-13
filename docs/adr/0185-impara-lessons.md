@@ -1,6 +1,6 @@
 # 0185 — Impara: lessons on a blackboard
 
-2026-10-29. Accepted.
+Date: 2026-10-29 · Status: accepted. · Amended by: ADR 0230
 
 ## Decision
 

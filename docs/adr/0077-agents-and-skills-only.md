@@ -1,7 +1,7 @@
 # ADR 0077 · Agents and skills only: a self-maintaining Brain section
 
-Date: 2026-10-19 · Status: partly superseded by ADR 0125 (agent pack import/export) and ADR 0153 (self-applying skill and rule changes, the timers); accepted · Replaces the approval parts of ADR 0073 for skills, agents and lessons (issues
-#84, #81)
+Date: 2026-10-19 · Status: partly superseded by ADR 0083, ADR 0125 (agent pack import/export) and ADR 0153 (self-applying skill and rule changes, the timers); accepted · Replaces the approval parts of ADR 0073 for skills, agents and lessons (issues
+#84, #81) · Amended by: ADR 0082, ADR 0098, ADR 0101
 
 ## Context
 The app had three overlapping ideas of "how a job is done": procedures (the Procedure page reading runbooks and
