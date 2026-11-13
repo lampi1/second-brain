@@ -415,11 +415,19 @@ export async function planDecide(chatId: string, decision: 'approve' | 'change',
 /** "Comando da eseguire" → Esegui: the block runs in the chat that proposed it (main checks it is a block of that
  *  message; confirmProd = the second click on a production one). main resolves the request when the run starts; the
  *  output stays under the block in that chat. Resolves true when it started. */
-export async function runCommand(req: PendingRequest, confirmProd = false, restore = true): Promise<boolean> {
+export async function runCommand(req: PendingRequest, confirmProd = false, restore = true, confirmRerun = false): Promise<boolean> {
   const c = req.command;
   if (!c) return false;
   try {
-    await sb.invoke('run:start', { chatId: req.chatId, itemId: c.itemId, code: c.code, lang: c.lang, ...(confirmProd ? { confirmProd: true } : {}) });
+    const r = await sb.invoke('run:start', { chatId: req.chatId, itemId: c.itemId, code: c.code, lang: c.lang, ...(confirmProd ? { confirmProd: true } : {}), ...(confirmRerun ? { confirmRerun: true } : {}) });
+    // main's guard (ADR 0299): nothing started; the card stays, and says why
+    if (r?.already) {
+      const who = app.get().chats[r.chatId], now = Date.now();
+      if (r.already === 'running') toast(t('chat.codeblock.guard.running', { secs: Math.max(0, Math.round((now - r.startedAt) / 1000)), chat: who?.isOrchestrator ? 'Orchestrator' : who?.title ?? r.chatId }), 'info');
+      else toast(t('chat.codeblock.guard.done', { mins: Math.max(1, Math.round((now - (r.endedAt ?? r.startedAt)) / 60_000)), exit: r.state === 'stopped' ? t('chat.codeblock.guard.stopped') : `exit ${r.exitCode ?? '?'}` }), 'info',
+        { label: t('chat.codeblock.guard.rerun'), run: () => { void runCommand(req, confirmProd, restore, true); } }, 15_000);
+      return false;
+    }
     const chat = app.get().chats[req.chatId];
     toast(t('appText.store.commandStarted', { chat: chat?.isOrchestrator ? 'Orchestrator' : `«${chat?.title ?? ''}»` }), 'ok');
     return true;

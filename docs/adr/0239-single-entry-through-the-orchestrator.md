@@ -1,6 +1,6 @@
 # ADR 0239 · Single entry: the user talks only with the Orchestrator, and a command is asked once
 
-Date: 2026-11-09 · Status: partly superseded by ADR 0275 (the «reserved» answers, and every agent chat keeps its own input again); accepted (owner, project thread on total agent autonomy, 2026-11-09: «idealmente un utente
+Date: 2026-11-09 · Status: partly superseded by ADR 0275 (the «reserved» answers, and every agent chat keeps its own input again) and ADR 0299 (the same command is asked once in any folder); accepted (owner, project thread on total agent autonomy, 2026-11-09: «idealmente un utente
 la userà principalmente da telegram o remote control quindi tutto deve essere fatto parlando solo con
 l'orchestrator») · Builds on: ADR 0017 (command requests, run results), ADR 0219 (Telegram bridge), ADR 0229 (Remote
 Control), ADR 0083 (requests hosted by the nearest open chat) · Pattern source: davidondrej/cloudroom (a child's
