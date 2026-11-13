@@ -18,7 +18,7 @@ describe('judging state', () => {
     expect(samplerOffLine({ on: false, offSince: off }, day)).toBe('Controllo spento dal 2026-10-27: nessuna revisione indipendente, contano solo i tuoi voti.');
     expect(samplerOffLine({ on: false, offSince: null }, day)).toBe('Controllo spento: nessuna revisione indipendente, contano solo i tuoi voti.');
     expect(samplerOffLine({ on: true, offSince: null }, day)).toBe('');
-    expect(formatDiagnosis(diagnose([], [], off, null, 0, { on: false, offSince: off }))).toContain('Controllo spento dal 2026-10-27');
-    expect(formatDiagnosis(diagnose([], [], off, null, 0, { on: true, offSince: null }))).not.toContain('Controllo spento');
+    expect(formatDiagnosis(diagnose([], [], off, 0, { on: false, offSince: off }))).toContain('Controllo spento dal 2026-10-27');
+    expect(formatDiagnosis(diagnose([], [], off, 0, { on: true, offSince: null }))).not.toContain('Controllo spento');
   });
 });

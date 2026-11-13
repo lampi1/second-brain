@@ -11,8 +11,7 @@ import crypto from 'node:crypto';
 import { addRedaction, log } from '../log';
 import type { SecretCipher } from '../engines/secrets';
 import { maskOf } from '../engines/secrets';
-import { isRetiredRoleId } from '../../shared/roles';
-import { FLASH_MCP_ROLE, MCP_ID, RESERVED_IDS, SECRET_NAME, checkAccess, defaultAccess, effectiveAccess, secretLooking, slotKey, type McpSecretSlot, type McpServerDef, type McpTestResult, type McpToolAccess, type RoleMcpAccess } from '../../shared/mcp-servers';
+import { MCP_ACCESS_ROLES, MCP_ID, RESERVED_IDS, SECRET_NAME, checkAccess, defaultAccess, secretLooking, slotKey, type McpSecretSlot, type McpServerDef, type McpTestResult, type McpToolAccess, type RoleMcpAccess } from '../../shared/mcp-servers';
 
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
 const HEADER_NAME = /^[A-Za-z0-9-]{1,64}$/;
@@ -163,10 +162,10 @@ export class McpServerStore {
       const access: Record<string, RoleMcpAccess> = {};
       for (const [role, a] of Object.entries(raw.access ?? {})) {
         if (!/^[a-z][a-z0-9-]{0,40}$/.test(role)) continue;
-        // a role ADR 0100 retired (Router, Judge, Scribe) runs no chat any more: its entry is dropped, never merged into
-        // its successor, whose own narrowing is the user's for its own job (a Scribe narrowed off a server must not take
-        // that server away from every Artisan)
-        if (isRetiredRoleId(role)) continue;
+        // an entry that is not one of the six roles runs no chat any more (a role ADR 0100 retired, a removed lane): it is
+        // dropped, never merged into a successor, whose own narrowing is the user's for its own job (a Scribe narrowed off
+        // a server must not take that server away from every Artisan)
+        if (!MCP_ACCESS_ROLES.includes(role)) continue;
         const out: RoleMcpAccess = { servers: {} };
         // an unreadable access entry narrows to none: a damaged file never widens a role
         for (const [server, v] of Object.entries((a as RoleMcpAccess | undefined)?.servers ?? {})) { if (MCP_ID.test(server)) { try { out.servers[server] = checkAccess(v); } catch { out.servers[server] = 'none'; } } }
@@ -215,12 +214,8 @@ export class McpServerStore {
   servers(): McpServerDef[] { return structuredClone(this.data.servers); }
   def(id: string): McpServerDef | undefined { return this.data.servers.find(s => s.id === id); }
   access(): Record<string, RoleMcpAccess> { return structuredClone(this.data.access); }
-  /** A role's access as the gateway applies it; Flash's spelled out for every server (its default is none, ADR 0207). */
-  roleAccess(role: string): RoleMcpAccess | undefined {
-    if (role !== FLASH_MCP_ROLE) return this.data.access[role];
-    const raw = this.data.access[role];
-    return { servers: Object.fromEntries(this.data.servers.map(s => [s.id, effectiveAccess(role, raw?.servers[s.id])])) };
-  }
+  /** A role's access as the gateway applies it. */
+  roleAccess(role: string): RoleMcpAccess | undefined { return this.data.access[role]; }
   test(id: string): McpTestResult | null { return this.data.tests[id] ?? null; }
 
   /** Adds or replaces a server (`previousId`: the one being edited, which may be renamed). Tokens whose place changed are dropped. */
@@ -290,16 +285,9 @@ export class McpServerStore {
   }
 
   setAccess(role: string, server: string, value: unknown): void {
-    if (!/^[a-z][a-z0-9-]{0,40}$/.test(role)) throw new Error('Ruolo non valido.');
+    if (!MCP_ACCESS_ROLES.includes(role)) throw new Error('Ruolo non valido.');
     if (!this.def(server)) throw new Error(`Server MCP «${server}» sconosciuto.`);
-    let access = checkAccess(value);
-    // Flash reads only (ADR 0207): "all" is stored as "read", a tool list only with tools the last test saw as reading
-    if (role === FLASH_MCP_ROLE && access === 'all') access = 'read';
-    if (role === FLASH_MCP_ROLE && typeof access === 'object') {
-      const seen = this.data.tests[server]?.tools ?? [];
-      const bad = access.tools.filter(n => !seen.some(t => t.name === n && t.readOnly));
-      if (bad.length) throw new Error(`Flash usa solo strumenti di lettura: ${bad.slice(0, 5).join(', ')} ${seen.length ? 'scrive o non è tra quelli provati' : 'non è ancora stato provato (usa «Prova»)'}.`);
-    }
+    const access = checkAccess(value);
     const a = this.data.access[role] ?? { servers: {} };
     if (JSON.stringify(access) === JSON.stringify(defaultAccess(role))) delete a.servers[server]; else a.servers[server] = access;
     if (Object.keys(a.servers).length) this.data.access[role] = a; else delete this.data.access[role];

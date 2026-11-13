@@ -32,10 +32,10 @@ export const stripTree = memoLast((order: readonly string[], chats: Chats): Tree
 /** The Grindhouse's tiles in tree order, browsers under their chats (lib/grid.ts). */
 export const stripTiles = memoLast((order: readonly string[], chats: Chats, tabs: readonly BrowserTab[]): TileRef[] =>
   workspaceTiles(stripTree(order, chats).map(n => n.id), chats, tabs, routineIds(chats)));
-/** The sidebar's tree (SidebarTree.tsx): no Orchestrator, no Flash, no routine worker. */
+/** The sidebar's tree (SidebarTree.tsx): no Orchestrator, no routine worker. */
 export const sidebarTree = memoLast((order: readonly string[], chats: Chats): TreeNode[] => {
   const routines = routineIds(chats);
-  return chatTree(order.filter(id => !routines.has(id) && !chats[id]?.isOrchestrator && !chats[id]?.quick), chats);
+  return chatTree(order.filter(id => !routines.has(id) && !chats[id]?.isOrchestrator), chats);
 });
 /** browser tab id → the chat that drives it */
 export const tabOwners = memoLast((tabs: readonly BrowserTab[]): Readonly<Record<string, string>> =>

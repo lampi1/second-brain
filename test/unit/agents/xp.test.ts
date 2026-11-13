@@ -2,7 +2,7 @@
 // changed, delegated chats), bounded 1..5, a missing signal adding nothing; the curve quick at first (Lv 2 after about 3
 // typical jobs) and long at the top (Lv 100 after years of real use).
 import { describe, expect, it } from 'vitest';
-import { FLASH_XP, MAX_LEVEL, XP_MAX, XP_MIN, jobSignals, jobXp, levelOf, levelStart } from '../../../src/main/agents/xp';
+import { MAX_LEVEL, XP_MAX, XP_MIN, jobSignals, jobXp, levelOf, levelStart } from '../../../src/main/agents/xp';
 import type { AgentRun } from '../../../src/shared/agents';
 
 const receipts = (files: number): NonNullable<AgentRun['receipts']> => ({ commands: [], more: 0, files: Array.from({ length: Math.min(files, 15) }, (_, i) => `f${i}.ts`), filesMore: Math.max(0, files - 15),
@@ -42,9 +42,5 @@ describe('level curve', () => {
     expect(levelOf(levelStart(MAX_LEVEL) - 0.5)).toMatchObject({ level: MAX_LEVEL - 1 });
     expect(levelOf(-3)).toMatchObject({ level: 1 });
     expect(levelOf(Number.NaN)).toMatchObject({ level: 1 });
-  });
-  it('a Flash answer is a small share of a job', () => {
-    expect(FLASH_XP).toBeLessThan(XP_MIN);
-    expect(FLASH_XP).toBeGreaterThan(0);
   });
 });

@@ -74,7 +74,7 @@
       ]
     },
     "memory": {
-      "test": "README showcase: Memoria, agent levels, Orchestrator and Flash, reactions",
+      "test": "README showcase: Memoria, agent levels, Orchestrator, reactions",
       "sources": [
         "src/renderer/components/brain-model/MemoryPage.tsx",
         "src/renderer/components/brain-model/ProposalsDeck.tsx",
@@ -84,24 +84,23 @@
       ]
     },
     "agent-levels": {
-      "test": "README showcase: Memoria, agent levels, Orchestrator and Flash, reactions",
+      "test": "README showcase: Memoria, agent levels, Orchestrator, reactions",
       "sources": [
         "src/renderer/components/AgentCatalogCard.tsx",
         "src/renderer/components/AgentAvatar.tsx",
         "src/renderer/styles/agent-catalog.css"
       ]
     },
-    "orchestrator-flash": {
-      "test": "README showcase: Memoria, agent levels, Orchestrator and Flash, reactions",
+    "orchestrator-column": {
+      "test": "README showcase: Memoria, agent levels, Orchestrator, reactions",
       "sources": [
         "src/renderer/components/OrchestratorOverlay.tsx",
         "src/renderer/components/OrchestratorTile.tsx",
-        "src/renderer/components/LampoTile.tsx",
         "src/renderer/components/ChatItems.tsx"
       ]
     },
     "reactions": {
-      "test": "README showcase: Memoria, agent levels, Orchestrator and Flash, reactions",
+      "test": "README showcase: Memoria, agent levels, Orchestrator, reactions",
       "sources": [
         "src/renderer/components/OrchestratorTile.tsx",
         "src/renderer/components/ChatItems.tsx"

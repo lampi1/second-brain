@@ -9,20 +9,20 @@
 // remounts (kept per chat in memory); setDraft puts a ready text in a chat's input from elsewhere (a brain page's
 // "Discuti"), with a callback when the user sends it. "/" at the start opens the chat's commands and skills (ADR 0018:
 // ↑↓ choose, Tab or Invio completes "/<name> ", Esc closes; lib/slash.ts), read from main ('chat:commands') when the
-// list opens. An Orchestrator's input also has "Strategist" (ADR 0034, 2026-10-20): ticked, the message goes with the
-// line that asks her for a Strategist's plan (shared/newchat.ts); it resets after a send. "Veloce" is gone (#124): quick
-// questions go to Flash (ADR 0105).
+// list opens. An Orchestrator's input also has «Fast» and «Plan» (ADR 0034, 0296): ticked, the message goes with the
+// line that asks for a quick answer of its own without delegating, or for a Strategist's plan (shared/newchat.ts); one
+// at a time, it resets after a send.
 // The inline suggestion (issue #167, ADR 0118): grey text after the caret, from local sources first (past prompts,
 // "/" commands, roles, skills, chat titles, the chat's files: lib/composer-suggest.ts, zero tokens; the model part was
 // removed, ADR 0201). Tab accepts it, Esc hides it, any other key goes on as usual; with no suggestion Tab moves the focus as always.
-// The Orchestrator's and Flash's inputs have the mic instead of the «Invio» hint (voice mode, ADR 0152: components/
+// The Orchestrator's input has the mic instead of the «Invio» hint (voice mode, ADR 0152: components/
 // VoiceControls.tsx, lib/voice.ts; owner 2026-10-24: «togli la label invio … per fare spazio al microfono»).
 // Used by ChatTile and OrchestratorTile (also the Orchestrator docked with Ctrl+R).
 import { t as auditText } from '../i18n';
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent } from 'react';
 import { ROLE_DEFAULTS, ROLE_IDS } from '@shared/roles';
 import { continueCached, filesOf, localSuggestion, promptsOf, rememberPrompt, savedPrompts, type LocalSources } from '../lib/composer-suggest';
-import { splitMode, withMode, type SendMode } from '@shared/newchat';
+import { SEND_MODES, splitMode, withMode, type SendMode } from '@shared/newchat';
 import { IMAGES_MAX_TOTAL, type ChatCommand, type ChatSummary, type ImageAttachment } from '@shared/contract';
 import { applyCommand, filterCommands, slashQuery } from '../lib/slash';
 import { fullSrc, imageFiles, pasteKind, roomFor, toAttachment } from '../lib/images';
@@ -141,7 +141,7 @@ export const hasDraft = (chatId: string): boolean =>
   !!drafts.get(chatId)?.trim() || !!draftImages.get(chatId)?.length || (readingN.get(chatId) ?? 0) > 0;
 
 export interface ChatInputHandle { focus(): void }
-/** voice: the input has the mic (the Orchestrator's and Flash's only, ADR 0152) and no «Invio» hint */
+/** voice: the input has the mic (the Orchestrator's only, ADR 0152) and no «Invio» hint */
 type Props = { chat: ChatSummary; orchestrator?: boolean; testid: string; voice?: VoiceTarget };
 
 // keyed by chat: a view that swaps the chat in place (focus mode) gets a fresh input, never the other chat's draft
@@ -267,7 +267,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
   const ownAsk = useApp(s => s.pending.find(p => p.chatId === chat.id && answerableInWords(p)));
   const busy = isBusy(chat) || chat.state === 'waiting' || chat.pending > 0;
   const enterNow = queued.length > 0 && !text.trim() && !images.length; // Enter = "Invia subito" on the last queued
-  const placeholder = ownAsk && !orchestrator ? t('chat.input.placeholderAnswer') : enterNow ? t('chat.input.placeholderEnter') : voiceOn ? t('voice.placeholder') : orchestrator && mode ? t('chat.input.placeholderPlan') : orchestrator ? t('chat.input.placeholderOrchestrator') : chat.pending > 0 ? t('chat.input.placeholderPending') : busy ? t('chat.input.placeholderBusy') : chat.state === 'closed' ? t('chat.input.placeholderClosed') : t('chat.input.placeholderDefault');
+  const placeholder = ownAsk && !orchestrator ? t('chat.input.placeholderAnswer') : enterNow ? t('chat.input.placeholderEnter') : voiceOn ? t('voice.placeholder') : orchestrator && mode ? t(mode === 'fast' ? 'chat.input.placeholderFast' : 'chat.input.placeholderPlan') : orchestrator ? t('chat.input.placeholderOrchestrator') : chat.pending > 0 ? t('chat.input.placeholderPending') : busy ? t('chat.input.placeholderBusy') : chat.state === 'closed' ? t('chat.input.placeholderClosed') : t('chat.input.placeholderDefault');
   const ready = (text.trim() !== '' || images.length > 0) && reading === 0;
   const submit = (as = mode) => {
     if(updateIsFrozen())return;
@@ -422,11 +422,11 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
           />
           {ghostText && <span id={`${testid}-ghost-hint`} className="sr-only">{t('suggest.srHint', { text: ghostText })}</span>}
           </div>
-          {orchestrator && (
-            <button type="button" className={`newchat-toggle ${mode === 'plan' ? 'on' : ''}`} aria-pressed={mode === 'plan'} onClick={() => { setMode(mode === 'plan' ? null : 'plan'); ta.current?.focus(); }}
-              data-tip={mode === 'plan' ? t('chat.input.modeTipOff') : t('chat.input.planTip')}
-              data-testid={`${testid}-mode-plan`}><IconBranch size={12} /><span>{t('chat.mode.plan')}</span></button>
-          )}
+          {orchestrator && SEND_MODES.map(m => (
+            <button key={m} type="button" className={`newchat-toggle ${mode === m ? 'on' : ''}`} aria-pressed={mode === m} onClick={() => { setMode(mode === m ? null : m); ta.current?.focus(); }}
+              data-tip={mode === m ? t('chat.input.modeTipOff') : t(m === 'fast' ? 'chat.input.fastTip' : 'chat.input.planTip')}
+              data-testid={`${testid}-mode-${m}`}>{m === 'fast' ? <IconBolt size={12} /> : <IconBranch size={12} />}<span>{t(`chat.mode.${m}`)}</span></button>
+          ))}
           {ready ? (
             <button type="button" className="send" onClick={() => submit()} aria-label={mode ? t(busy ? 'chat.input.queueAsMode' : 'chat.input.sendAsMode', { mode: t(`chat.mode.${mode}`) }) : busy ? t('chat.input.queue') : t('chat.input.send')} data-tip={mode ? t(busy ? 'chat.input.queueAsModeTip' : 'chat.input.sendAsModeTip', { mode: t(`chat.mode.${mode}`) }) : busy ? t('chat.input.queueShort') : t('chat.input.sendShort')} data-testid={`${testid}-send`}><IconSend size={14} /></button>
           ) : voice ? (
@@ -460,7 +460,7 @@ export function validateChatDraftCopy(value:unknown):ChatDraftCopy{
   if(!copy||copy.version!==1||!Array.isArray(copy.entries)||copy.entries.length>1000)throw Error(auditText('cmp.chatInput.invalidCopy'));
   const ids=new Set<string>();
   for(const entry of copy.entries){
-    if(!entry||typeof entry.id!=='string'||!entry.id||entry.id.length>160||ids.has(entry.id)||typeof entry.text!=='string'||entry.text.length>1000000||typeof entry.newChat!=='boolean'||entry.mode!==undefined&&entry.mode!=='quick'&&entry.mode!=='plan'||!Array.isArray(entry.images)||entry.images.length>10)throw Error(auditText('cmp.chatInput.invalidCopy'));
+    if(!entry||typeof entry.id!=='string'||!entry.id||entry.id.length>160||ids.has(entry.id)||typeof entry.text!=='string'||entry.text.length>1000000||typeof entry.newChat!=='boolean'||entry.mode!==undefined&&entry.mode!=='quick'&&entry.mode!=='plan'&&entry.mode!=='fast'||!Array.isArray(entry.images)||entry.images.length>10)throw Error(auditText('cmp.chatInput.invalidCopy'));
     ids.add(entry.id);
     for(const image of entry.images){if(!image||!['image/png','image/jpeg','image/gif','image/webp'].includes(image.mimeType)||typeof image.data!=='string'||image.data.length>5000000||!/^[A-Za-z0-9+/]*={0,2}$/.test(image.data)||image.thumb!==undefined&&(typeof image.thumb!=='string'||image.thumb.length>120000||!/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/]*={0,2}$/.test(image.thumb)))throw Error(auditText('cmp.chatInput.invalidAttachment'));}
     for(const image of entry.images){validateRecoveryRaster(`data:${image.mimeType};base64,${image.data}`,1920,1,3750000);if(image.thumb)validateRecoveryRaster(image.thumb,240,1,90000);}
@@ -471,7 +471,7 @@ export function restoreChatDraftCopy(value:unknown):void{
   const copy=validateChatDraftCopy(value);recoveredDrafts=false;
   drafts.clear();draftImages.clear();modeOn.clear();
   // an older copy's "Veloce" (or its newChat, the quick path before the modes) is gone (#124): the draft comes back without a mode
-  for(const entry of copy.entries){drafts.set(entry.id,entry.text);if(entry.images.length)draftImages.set(entry.id,entry.images);if(entry.mode==='plan')modeOn.set(entry.id,'plan');}
+  for(const entry of copy.entries){drafts.set(entry.id,entry.text);if(entry.images.length)draftImages.set(entry.id,entry.images);if(entry.mode==='plan'||entry.mode==='fast')modeOn.set(entry.id,entry.mode);}
   recoveredDrafts=true;persistChatRecovery();
 }
 function persistChatRecovery():void{

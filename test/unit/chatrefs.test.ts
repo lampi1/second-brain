@@ -15,15 +15,19 @@ const chat = (id: string, title: string, more: Partial<ChatSummary> = {}): ChatS
 
 describe('mode line', () => {
   it('goes first, says its meaning, and comes off again', () => {
-    for (const mode of ['plan'] as const) {
+    for (const mode of ['plan', 'fast'] as const) {
       const t = withMode(mode, '  Controlla i log  ');
       expect(t.startsWith(`${MODE_TAGS[mode]} `)).toBe(true);
-      expect(t).toContain('app_create_chat');
       expect(t).toBe(`${MODE_LINES[mode]}\n\nControlla i log`);
       expect(splitMode(t)).toEqual({ mode, text: 'Controlla i log' });
     }
-    expect(Object.keys(MODE_LINES)).toEqual(['plan']); // no "Veloce" any more (#124)
-    expect(Object.keys(MODE_TAGS)).toEqual(['plan', 'new']); // nor its tag (ADR 0201)
+    expect(MODE_LINES.plan).toContain('app_create_chat');
+    expect(Object.keys(MODE_LINES)).toEqual(['plan', 'fast']); // no "Veloce" any more (#124); Fast is the Orchestrator's own quick answer (ADR 0296)
+    expect(Object.keys(MODE_TAGS)).toEqual(['plan', 'fast', 'new']); // nor its tag (ADR 0201)
+    // Fast: no delegation, short, nothing invented
+    expect(MODE_LINES.fast).toMatch(/senza delegare/);
+    expect(MODE_LINES.fast).toMatch(/niente supposizioni/);
+    expect(SEND_MODE_RULE).toContain('[fast]');
     expect(SEND_MODE_RULE).not.toContain('[veloce]');
     expect(MODE_LINES.plan).toContain('"strategist"');
   });
@@ -32,6 +36,8 @@ describe('mode line', () => {
     expect(splitMode('[veloce] Via rapida…\n\nfai X')).toEqual({ mode: null, text: 'fai X' }); // Veloce is gone: no badge (ADR 0201)
     expect(splitMode('ciao [veloce]')).toEqual({ mode: null, text: 'ciao [veloce]' });
     expect(splitMode('[strategist]')).toEqual({ mode: 'plan', text: '' });
+    expect(splitMode('[fast]')).toEqual({ mode: 'fast', text: '' });
+    expect(splitMode('dimmi [fast]')).toEqual({ mode: null, text: 'dimmi [fast]' });
   });
   it('the Orchestrator\'s MCP instructions name every tag', () => {
     for (const tag of Object.values(MODE_TAGS)) expect(SEND_MODE_RULE).toContain(tag);

@@ -72,7 +72,6 @@ export const catalogEn: typeof catalogIt = {
   'catalog.purpose.artisan': 'Makes the changes: code, files, configuration, documents and brain notes, with the repository’s checks.',
   'catalog.purpose.sentinel': 'Verifies: runs tests and checks, or judges the result from the evidence when there is nothing to run, and says what passes and what does not.',
   'catalog.purpose.herald': 'Prepares messages and drafts for people and outside services; you approve every send.',
-  'catalog.purpose.flash': 'Quick answers beside the Orchestrator: sees its conversation, reads, changes nothing',
   // the model tier's word, on the role card and in the studio
   'roles.tier.light': 'light', 'roles.tier.mid': 'mid', 'roles.tier.top': 'top',
 };

@@ -1,6 +1,6 @@
 # 0209 — The Strategist asks at least three questions; reactions fit the message; Flash writes the brief
 
-Status: partly superseded by ADR 0220, ADR 0223; accepted. Raises ADR 0121 (the Strategist really asks) and ADR 0108; amends ADR 0089 (emoji reactions).
+Status: partly superseded by ADR 0220, ADR 0223, ADR 0296 (Flash's brief removed); accepted. Raises ADR 0121 (the Strategist really asks) and ADR 0108; amends ADR 0089 (emoji reactions).
 
 2026-10-30.
 

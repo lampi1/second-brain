@@ -1,16 +1,16 @@
 // Adding an MCP server the easy way (ADR 0207): a pasted JSON (Claude Desktop / Cursor / VS Code shapes), command line
 // or URL becomes a definition whose secrets are token slots (their values apart, never in the definition); the popular
-// catalog; Flash's access (off by default, reading tools only); undoable changes (snapshot / restore with the tokens
+// catalog; the per-role toggles (every tool by default, an old Flash entry dropped); undoable changes (snapshot / restore with the tokens
 // still encrypted); app_config's connector actions for the Orchestrator (add, edit, remove, undo, test, form), gated by
 // the user's words and never answering a secret; the add panel's form helpers and the Orchestrator's drafts.
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { MCP_CATALOG, SECRET_MASK, catalogDraft, maskSnippet, nameFromPackage, parseMcpSnippet, publicDraft, readPaste, shellWords } from '../../../src/shared/mcp-paste';
-import { FLASH_MCP_ROLE, MCP_ACCESS_ROLES, accessOn, effectiveAccess, runsOf, toggleAccess, toolAllowed } from '../../../src/shared/mcp-servers';
+import { MCP_ACCESS_ROLES, accessOn, effectiveAccess, runsOf, toggleAccess, toolAllowed } from '../../../src/shared/mcp-servers';
 import { McpServerStore, checkDef } from '../../../src/main/mcp-servers/store';
 import { McpServersService } from '../../../src/main/mcp-servers/service';
-import { serversFor, toolFor } from '../../../src/main/mcp-servers/access';
+import { serversFor } from '../../../src/main/mcp-servers/access';
 import { McpServer } from '../../../src/main/mcp/server';
 import { configTool, type ConfigDeps } from '../../../src/main/appctl/config';
 import { addFormOf, commandLine, defOfAdd, emptyAddForm, onMcpDraft, openMcpDraft, takeMcpDraft } from '../../../src/renderer/lib/mcp-servers';
@@ -114,42 +114,24 @@ describe('parseMcpSnippet', () => {
   });
 });
 
-describe('Flash and the per-role toggles', () => {
-  it('Flash is off by default and never more than reading; the others default to every tool', () => {
-    expect(MCP_ACCESS_ROLES).toEqual(['orchestrator', 'strategist', 'scout', 'artisan', 'sentinel', 'herald', 'flash']);
-    expect(effectiveAccess(FLASH_MCP_ROLE, undefined)).toBe('none');
-    expect(effectiveAccess(FLASH_MCP_ROLE, 'all')).toBe('read');
+describe('the per-role toggles', () => {
+  it('every role defaults to every tool; the toggle sets all or none', () => {
+    expect(MCP_ACCESS_ROLES).toEqual(['orchestrator', 'strategist', 'scout', 'artisan', 'sentinel', 'herald']);
     expect(effectiveAccess('orchestrator', undefined)).toBe('all');
+    expect(effectiveAccess('scout', 'read')).toBe('read');
     expect(accessOn('orchestrator', undefined)).toBe(true);
-    expect(accessOn(FLASH_MCP_ROLE, undefined)).toBe(false);
-    expect(toggleAccess(FLASH_MCP_ROLE, true)).toBe('read');
+    expect(toggleAccess('scout', true)).toBe('all');
     expect(toggleAccess('scout', false)).toBe('none');
+    expect(toolAllowed({ tools: ['write'] }, { name: 'write', readOnly: false })).toBe(true);
+    expect(toolAllowed('read', { name: 'write', readOnly: false })).toBe(false);
   });
-  it('the store keeps Flash explicit and the gateway gives it only reading tools of servers turned on for it', () => {
-    const s = new McpServerStore(tmp('easy-flash'), cipher);
-    s.upsert({ id: 'docs', label: 'Docs', transport: 'stdio', command: 'npx', args: ['-y', 'docs-mcp'], secrets: [], enabled: true });
-    const ctx = { roles: [FLASH_MCP_ROLE], policy: null };
-    expect(serversFor(s.servers(), ctx, r => s.roleAccess(r))).toEqual([]);
-    s.setAccess(FLASH_MCP_ROLE, 'docs', 'read');
-    expect(s.access().flash?.servers.docs).toBe('read');
-    expect(serversFor(s.servers(), ctx, r => s.roleAccess(r))).toEqual(['docs']);
-    expect(toolFor(ctx, r => s.roleAccess(r), 'docs', { name: 'search', readOnly: true })).toBe(true);
-    expect(toolFor(ctx, r => s.roleAccess(r), 'docs', { name: 'write', readOnly: false })).toBe(false);
-    // a tool list for Flash: refused unless every tool is one the last test saw as reading
-    expect(() => s.setAccess(FLASH_MCP_ROLE, 'docs', { tools: ['write'] })).toThrow(/solo strumenti di lettura/);
-    s.recordTest('docs', { ok: true, at: 1, ms: 1, tools: [{ name: 'search', description: '', readOnly: true }, { name: 'write', description: '', readOnly: false }] } as never);
-    expect(() => s.setAccess(FLASH_MCP_ROLE, 'docs', { tools: ['search', 'write'] })).toThrow(/write/);
-    s.setAccess(FLASH_MCP_ROLE, 'docs', { tools: ['search'] });
-    s.setAccess(FLASH_MCP_ROLE, 'docs', 'all');
-    expect(s.access().flash?.servers.docs).toBe('read');
-    // and the gateway refuses a writing tool to Flash whatever is stored (an old file, a hand edit), at any level
-    const forced = () => ({ servers: { docs: { tools: ['write'] } } });
-    expect(toolFor(ctx, forced, 'docs', { name: 'write', readOnly: false })).toBe(false);
-    expect(toolFor({ roles: ['scout', FLASH_MCP_ROLE], policy: null }, () => ({ servers: { docs: 'all' } }), 'docs', { name: 'write', readOnly: false })).toBe(false);
-    expect(toolAllowed({ tools: ['write'] }, { name: 'write', readOnly: false }, FLASH_MCP_ROLE)).toBe(false);
-    expect(toolAllowed({ tools: ['write'] }, { name: 'write', readOnly: false }, 'scout')).toBe(true);
-    s.setAccess(FLASH_MCP_ROLE, 'docs', 'none');
-    expect(s.access().flash).toBeUndefined();
+  it('an old file\'s entry for the retired Flash (ADR 0296) is dropped on load and can no longer be set', () => {
+    const dir = tmp('easy-old');
+    fs.writeFileSync(path.join(dir, 'mcp-servers.json'), JSON.stringify({ version: 1, servers: [{ id: 'docs', label: 'Docs', transport: 'stdio', command: 'npx', args: ['-y', 'docs-mcp'], secrets: [], enabled: true }],
+      access: { flash: { servers: { docs: 'read' } }, scout: { servers: { docs: 'none' } } }, tests: {} }));
+    const s = new McpServerStore(dir, cipher);
+    expect(Object.keys(s.access())).toEqual(['scout']);
+    expect(() => s.setAccess('flash', 'docs', 'read')).toThrow(/Ruolo non valido/);
     // the Orchestrator: every tool by default, off by its toggle
     expect(serversFor(s.servers(), { roles: ['orchestrator'], policy: null }, r => s.roleAccess(r))).toEqual(['docs']);
     s.setAccess('orchestrator', 'docs', 'none');
@@ -241,8 +223,8 @@ describe('app_config connector actions (the Orchestrator)', () => {
     expect(svc.store.def('github')).toMatchObject({ enabled: true });
     expect(svc.store.def('github')?.awaiting).toBeUndefined();
     expect(await tool.run({ action: 'test', area: 'connector', server: 'github' })).toMatchObject({ ok: false, error: { code: 'secret' } });
-    await tool.run({ action: 'set', area: 'connector', server: 'github', key: 'access', role: 'flash', value: 'all' });
-    expect((await tool.run({ action: 'get', area: 'connector' }) as { servers: { roles: Record<string, unknown> }[] }).servers[0]!.roles.flash).toBe('read');
+    await tool.run({ action: 'set', area: 'connector', server: 'github', key: 'access', role: 'scout', value: 'read' });
+    expect((await tool.run({ action: 'get', area: 'connector' }) as { servers: { roles: Record<string, unknown> }[] }).servers[0]!.roles.scout).toBe('read');
     await tool.run({ action: 'set', area: 'connector', server: 'github', key: 'purpose', value: 'PR e issue' });
     expect(svc.store.def('github')?.purpose).toBe('PR e issue');
     await expect(Promise.resolve().then(() => tool.run({ action: 'set', area: 'connector', server: 'github', key: 'env', value: { GITHUB_TOKEN: TOKEN } }))).rejects.toThrow(/segreto/);
@@ -298,7 +280,8 @@ describe('the add panel form', () => {
     const f = addFormOf(r.drafts[0]!);
     expect(f.line).toBe('npx -y @modelcontextprotocol/server-filesystem "C:\\My files"');
     expect(f.tokens).toEqual([{ name: 'GITHUB_TOKEN', value: TOKEN }]);
-    expect(f.roles).toMatchObject({ orchestrator: true, flash: false });
+    expect(f.roles).toMatchObject({ orchestrator: true, scout: true });
+    expect(f.roles).not.toHaveProperty('flash');
     const def = defOfAdd(f)!;
     expect(def).toMatchObject({ command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', 'C:\\My files'], secrets: [{ where: 'env', name: 'GITHUB_TOKEN' }] });
     expect(JSON.stringify(def)).not.toContain(TOKEN);

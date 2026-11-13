@@ -3,13 +3,13 @@
 // http(s) URL) and the form fills itself (shared/mcp-paste.ts), or pick a popular server with one click. The form: name,
 // local command (one line) or remote address, plain variables or headers, the tokens as masked fields (a pasted value
 // lands there and the paste box shows ••• in its place, never in the definition; it goes only to the app's secret store, mcpservers:setSecret), what it is for,
-// and who may use it (the Orchestrator, the five roles, Flash: RoleAccessChips). «Salva e prova» saves, stores the
+// and who may use it (the Orchestrator and the five roles: RoleAccessChips). «Salva e prova» saves, stores the
 // tokens, sets the roles and opens the server as a chat would: «Funziona: N strumenti» or the error and its fix. A draft
 // the Orchestrator opened (app_config action form) arrives prefilled, its tokens still to type. Shown in Settings →
 // Connettori (ConnectorsHub.tsx). Styles: styles/connectors-hub.css (.mcp-add).
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import type { McpServerDef, McpServersState, McpTestResult } from '@shared/mcp-servers';
-import { FLASH_MCP_ROLE, MCP_ACCESS_ROLES, accessOn, defaultAccess, toggleAccess } from '@shared/mcp-servers';
+import { MCP_ACCESS_ROLES, accessOn, defaultAccess, toggleAccess } from '@shared/mcp-servers';
 import { MCP_CATALOG, catalogDraft, maskSnippet, readPaste, type McpDraft, type McpPasteResult } from '@shared/mcp-paste';
 import { roleName } from '@shared/roles';
 import { addFormOf, defOfAdd, emptyAddForm, type AddForm } from '../lib/mcp-servers';
@@ -18,16 +18,14 @@ import { t } from '../i18n';
 import { HelpTip } from './HelpTip';
 import { IconAlert, IconCheck, IconSpinner, IconX } from './Icons';
 
-const who = (r: string) => (r === FLASH_MCP_ROLE ? 'Flash' : roleName(r));
-
-/** Who may use one server: a toggle chip each for the Orchestrator, the five roles and Flash (reading tools only).
+/** Who may use one server: a toggle chip each for the Orchestrator and the five roles.
  *  `onToggle` saves at once on a card; in the add form it only changes the form. A role narrowed on its agent card to
  *  «solo lettura» or chosen tools shows as on, marked partial. */
 export function RoleAccessChips({ value, partial = [], onToggle, label, disabled }: { value: Record<string, boolean>; partial?: readonly string[]; onToggle: (role: string, on: boolean) => void; label: string; disabled?: boolean }) {
   return <div className="mcp-roles" role="group" aria-label={label}>
     {MCP_ACCESS_ROLES.map(r => <button key={r} type="button" className="mcp-role" aria-pressed={value[r] === true} data-partial={partial.includes(r) || undefined} disabled={disabled}
-      title={r === FLASH_MCP_ROLE ? t('mcpadd.flashTip') : partial.includes(r) ? t('mcpadd.partialTip') : undefined} data-testid={`mcp-role-${r}`} onClick={() => onToggle(r, value[r] !== true)}>
-      <i aria-hidden="true">{value[r] ? <IconCheck size={11} /> : null}</i>{who(r)}{r === FLASH_MCP_ROLE && <small>{t('mcpadd.readOnly')}</small>}
+      title={partial.includes(r) ? t('mcpadd.partialTip') : undefined} data-testid={`mcp-role-${r}`} onClick={() => onToggle(r, value[r] !== true)}>
+      <i aria-hidden="true">{value[r] ? <IconCheck size={11} /> : null}</i>{roleName(r)}
     </button>)}
   </div>;
 }
@@ -36,7 +34,7 @@ export function RoleAccessChips({ value, partial = [], onToggle, label, disabled
 export function ServerRoles({ server, state, onState }: { server: string; state: McpServersState; onState: (s: McpServersState) => void }) {
   const [busy, setBusy] = useState(false);
   const value = Object.fromEntries(MCP_ACCESS_ROLES.map(r => [r, accessOn(r, state.access[r]?.servers[server])]));
-  const partial = MCP_ACCESS_ROLES.filter(r => { const a = state.access[r]?.servers[server]; return a !== undefined && a !== 'none' && a !== 'all' && !(r === FLASH_MCP_ROLE && a === 'read'); });
+  const partial = MCP_ACCESS_ROLES.filter(r => { const a = state.access[r]?.servers[server]; return a !== undefined && a !== 'none' && a !== 'all'; });
   const toggle = async (role: string, on: boolean) => {
     setBusy(true);
     try { onState(await window.sb.invoke('mcpservers:setAccess', { role, server, access: toggleAccess(role, on) })); } finally { setBusy(false); }

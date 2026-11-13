@@ -545,12 +545,6 @@ export class DemoChats implements ChatService {
       if (current && req.replaces !== current.id) return current;
       req = { ...req, orchestrator: true };
     }
-    // Flash (was Lampo), like the real manager: one at a time, plan mode (ADR 0105, 0107)
-    if (req.quick) {
-      const current = [...this.chats.values()].find(c => c.quick && !c.closedAt);
-      if (current) return current;
-      req = { ...req, title: 'Flash', permissionMode: 'plan' };
-    }
     // the maintenance research (ADR 0132), like the real manager: the app's own chat
     if (req.research) {
       if (by !== 'app') throw new Error('The maintenance research is the app\'s own chat.');
@@ -565,7 +559,7 @@ export class DemoChats implements ChatService {
       id, harness: req.harness, origin: 'app', title: req.orchestrator ? 'Orchestrator' : req.title?.trim() || titleFrom(req.prompt) || 'Nuova chat', cwd: req.cwd, sessionId: null,
       model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null, state: req.prompt ? 'starting' : 'idle', costUsd: 0,
       pending: 0, isOrchestrator: !!req.orchestrator, lastText: '', updatedAt: this.now(), browserTabIds: [],
-      ...(req.route ? { route: req.route } : {}), ...(req.quick ? { quick: true as const } : {}), ...(req.research ? { research: true as const } : {}),
+      ...(req.route ? { route: req.route } : {}), ...(req.research ? { research: true as const } : {}),
     };
     this.chats.set(id, c);
     this.itemsOf.set(id, []);
@@ -582,7 +576,7 @@ export class DemoChats implements ChatService {
     if (c.resumedAt) this.patch(chatId, { resumedAt: undefined }); // the user's message clears "ripresa dopo il riavvio"
     if (this.runs.has(chatId)) { this.sends.set(chatId, [...(this.sends.get(chatId) ?? []), text]); return; }
     const thumbs = (images ?? []).flatMap(im => (im.thumb ? [im.thumb] : []));
-    this.startRun(chatId, async run => { run.user(text, thumbs); await (c.isOrchestrator ? orchestratorReply(run, text, this) : c.quick ? flashReply(run, this) : genericReply(run, text)); });
+    this.startRun(chatId, async run => { run.user(text, thumbs); await (c.isOrchestrator ? orchestratorReply(run, text, this) : genericReply(run, text)); });
   }
 
   /** e2e: the next answer fails like a broken connection (the request stays open). */
@@ -883,19 +877,6 @@ async function genericReply(run: Run, text: string): Promise<void> {
   await run.tool('Read', 'README.md', { file_path: 'README.md' }, 1400, { output: '64 righe' });
   await run.say('Fatto. Il progetto è in ordine: dimmi tu da dove partire.');
   run.result(0.06, 20_000, 1);
-}
-
-/** Flash (ADR 0106, 0107): a "btw" on the Orchestrator's chat, read only: who waits, who works, its last answer. */
-async function flashReply(run: Run, d: DemoChats): Promise<void> {
-  await run.sleep(300);
-  await run.think('Leggo la chat dell\'Orchestrator e lo stato delle chat, senza toccare nulla.');
-  const all = d.list().filter(c => !c.isOrchestrator && !c.quick && !c.closedAt);
-  const waiting = all.filter(c => c.state === 'waiting' || c.pending > 0).map(c => c.title);
-  const working = all.filter(c => c.state === 'running' || c.state === 'starting').map(c => c.title);
-  const last = d.list().find(c => c.isOrchestrator && !c.closedAt)?.lastText;
-  await run.say(['Dalla chat dell\'Orchestrator, senza toccare nulla:', '', `- **Ti aspetta**: ${waiting.join(', ') || 'nessuna'}`, `- **Al lavoro**: ${working.join(', ') || 'nessuna'}`,
-    ...(last ? [`- **Ultima risposta dell'Orchestrator**: ${last}`] : []), '', 'Per cambiare qualcosa, «Fanne un lavoro» lo passa all\'Orchestrator.'].join('\n'));
-  run.result(0.01, 4000, 1);
 }
 
 async function orchestratorReply(run: Run, text: string, d: DemoChats): Promise<void> {

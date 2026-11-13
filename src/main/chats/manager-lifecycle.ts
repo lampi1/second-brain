@@ -90,10 +90,10 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
       const ended = c.state === 'closed' && (!r.session || r.autoClosing);
       const finished = (c.state === 'idle' || ended) && !c.lastError &&
         !r.unfinished && ((result => result ? !result.isError && !result.interrupted : ended && !r.session && r.lastTurnAt > 0)(c.lastResult ?? r.savedResult));
-      const eligible = !this.quitting && !updateActivity.frozen && !c.isOrchestrator && !c.quick && !held && finished &&
+      const eligible = !this.quitting && !updateActivity.frozen && !c.isOrchestrator && !held && finished &&
         !r.working && !r.session?.busy && r.pending.size === 0 && !this.userAsks.has(r.userActionAsk ?? '') && !r.userStepAt && !this.awaitsRun(c.id) && !workBehind(c) && !c.waitsOn && c.plan?.phase !== 'proposed' && !c.queued && !r.deliveryHolds &&
         !r.opening && !r.releasing && !r.switching && !r.handoffTurn && (!r.archiving || r.autoClosing) && this.childrenDone(r);
-      const waiting = eligible || c.isOrchestrator || c.quick ? undefined : this.waitingOf(r, held), waitingFor = waiting?.what;
+      const waiting = eligible || c.isOrchestrator ? undefined : this.waitingOf(r, held), waitingFor = waiting?.what;
       return { id: c.id, eligible: !!eligible, stamp: `${r.activityRevision ?? 0}:${r.lastTurnAt}:${c.lastResult?.at ?? 0}:${c.pending}:${c.model ?? ''}:${c.work?.status ?? ''}:${c.waitsOn ?? ''}`,
         activityAt: r.autoActivityAt ??= autoCloseNow(), ...(waitingFor ? { waitingFor } : {}), ...(waiting?.n ? { waitingN: waiting.n } : {}),
         reason: waitingFor ? WAITING_REASON[waitingFor] : !this.childrenDone(r) ? 'Sottoagenti ancora al lavoro' : 'Attività o stato da verificare' };
@@ -271,10 +271,10 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
   /** The chat goes on in a new process: the old one ends, but a dev server it started stays for the next turn
    *  (owner, 2026-10-12); its tools are reaped when the chat really closes (reapKept). */
   protected override closeKeeping(r: Rec, sess: HarnessSession): Promise<void> {
-    // the Orchestrator and Flash never close, so nothing would ever reap what their old engines left: MCP servers and
-    // shells piled up all day (2026-10-29). Their tools end with the engine, unless a background command still runs
+    // the Orchestrator never closes, so nothing would ever reap what its old engines left: MCP servers and
+    // shells piled up all day (2026-10-29). Its tools end with the engine, unless a background command still runs
     // (a check it started): that engine is kept until their next engine change, which reaps the ones kept before.
-    if (r.s.isOrchestrator || r.s.quick) {
+    if (r.s.isOrchestrator) {
       this.reapKept(r);
       if (!(r.s.background ?? 0)) return sess.close();
     }

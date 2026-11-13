@@ -117,19 +117,18 @@ Finish with a three-line summary: where the code lives, how I start the app, and
 
 <p align="center"><img src="docs/screenshots/crew.webp" alt="The six roles: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald" width="544"></p>
 
-### The Orchestrator and Flash
+### The Orchestrator
 
 The **Orchestrator** is where work starts: it plans, hands each job to the right role, answers their mail and tells you
 what is waiting. Worker questions, permissions, Strategist interviews and plan approvals show up in its column. Every
 chat keeps its own reply field, so you can still write to any agent directly. Ask for a recap in your own words and
 you get a short list per agent.
 
-**Flash**, the tab next to it, is the "btw": a quick read-only agent on its own model that sees the Orchestrator's
-conversation and answers side questions in seconds, without touching it. When the talk turns into real work, "Make it
-a job" has Flash write a proper brief (goal, context, what to do, constraints, done when) and drops it in the
-Orchestrator's input, unsent.
+Two switches sit beside its input. **Fast** makes it answer you itself, at once and in a few lines, without delegating
+or guessing: if the question needs real work, it says so. **Plan** has it draw the plan first and wait for your OK. Name
+a model in your request ("do it with GPT-5 high") and that one job runs on it, without touching the role's card.
 
-<p align="center"><img src="docs/screenshots/orchestrator-flash.webp" alt="The Orchestrator's column with its subagents and a decision, and Flash beside it" width="760"></p>
+<p align="center"><img src="docs/screenshots/orchestrator-column.webp" alt="The Orchestrator's column with its subagents and a decision" width="380"></p>
 
 The Orchestrator also knows the app inside out. "Where is the spending limit?", "turn notifications off", "give the
 Scout the GitHub connector", "add this MCP server": it reads the app's live map and changes the setting for you, with
@@ -269,7 +268,7 @@ honest score and review cards.
 
 ## Voice, calls and the phone
 
-- **Dictation.** Hit **Ctrl+M** and speak into the Orchestrator or Flash: it types, you send.
+- **Dictation.** Hit **Ctrl+M** and speak into the Orchestrator: it types, you send.
 - **Voice conversation.** **Ctrl+Shift+Space** and just talk: the answer is read out loud while it is still being
   written. Talk over it and it stops and listens. A spoken "yes" or "no" counts as the click.
 - **Recordings.** **Record call** grabs your mic and the PC's audio (Teams, Meet, whatever) and writes the transcript

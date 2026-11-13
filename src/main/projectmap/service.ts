@@ -331,7 +331,7 @@ export class ProjectMaps {
     for (const [chatId, f] of Object.entries(this.state.focus)) {
       if (f.project !== project || !f.elements.length) continue;
       const c = chats.get(chatId);
-      if (!c || c.quick) continue;
+      if (!c) continue;
       const ended = !!c.closedAt || c.state === 'closed';
       if (ended && now - (c.closedAt ?? c.updatedAt) > ENDED_MS) continue;
       const rs = asks.filter(r => r.chatId === chatId);

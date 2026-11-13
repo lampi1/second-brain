@@ -25,7 +25,6 @@ import { initialEffort } from './effort';
 import type { Rec } from './manager-types';
 import { PREWARM_UNUSED_MS, workBehind, subagentGateFor } from './manager-helpers';
 import { ManagerPersistence } from './manager-persistence';
-import { FLASH_MCP_ROLE } from '../../shared/mcp-servers';
 
 /** A work chat that delivered its result releases its idle engine after this long (#360). */
 export const DELIVERED_RELEASE_MS = 5 * 60_000;
@@ -54,7 +53,7 @@ export abstract class ManagerSessions extends ManagerPersistence {
       const sess = r.session;
       // sub-agents as the auto-close counts them (childrenDone): the CLI engines never report a complete census, so
       // asking for one (unsettledChildren) kept every Claude engine alive forever (#360: 34 idle claude processes, 7 GB)
-      if (!sess?.alive || sess.busy || r.releasing || r.archiving || r.opening || r.switching || r.autoClosing || (r.deliveryHolds ?? 0) > 0 || !this.childrenDone(r) || this.observedChildrenBusy(r) || r.handoffTurn || r.s.closedAt || r.s.isOrchestrator || r.s.quick) continue;
+      if (!sess?.alive || sess.busy || r.releasing || r.archiving || r.opening || r.switching || r.autoClosing || (r.deliveryHolds ?? 0) > 0 || !this.childrenDone(r) || this.observedChildrenBusy(r) || r.handoffTurn || r.s.closedAt || r.s.isOrchestrator) continue;
       if (r.s.state !== 'idle' || r.pending.size > 0 || workBehind(r.s)) continue;
       // a work chat that delivered its result has nothing left to do: its engine goes after a few minutes, not the
       // setting's half hour (#360), even when something else keeps the chat itself open
@@ -163,9 +162,6 @@ export abstract class ManagerSessions extends ManagerPersistence {
 
   /** Starts the open Orchestrator's engine (a resume, no message) when it has none: what the user writes first finds it up. */
   protected override prewarmOrchestrator(): void {
-    const lampo = [...this.chats.values()].find(x => x.s.quick && !x.s.closedAt);
-    if (lampo && !lampo.session && !this.quitting && engineOf(lampo.s.harness)?.caps.warm && this.opts.engineOn?.(lampo.s.harness) !== false && fs.existsSync(lampo.s.cwd))
-      this.ensureSession(lampo).catch(e => log.warn('chats', 'Lampo engine not started ahead', { chat: lampo.s.id, cause: errText(e), hint: 'it starts with the first message' }));
     const r = [...this.chats.values()].find(x => x.s.isOrchestrator && !x.s.closedAt);
     if (!r || r.session || this.quitting || updateActivity.frozen || !engineOf(r.s.harness)?.caps.warm || this.opts.engineOn?.(r.s.harness) === false || !fs.existsSync(r.s.cwd)) return;
     log.info('chats', 'Orchestrator engine started ahead of the first message', { chat: r.s.id });
@@ -288,8 +284,6 @@ export abstract class ManagerSessions extends ManagerPersistence {
       if (warm?.view && (this.warmChat === chatId || this.warm.has(chatId))) return { roles: [warm.view.role, ...(warm.view.child?.ancestors ?? [])], policy: { tools: warm.toolPolicy ?? null, ceiling: warm.ceiling ?? null } };
       return this.warmChat === chatId || this.warm.has(chatId) ? { roles: [null], policy: null } : null;
     }
-    // Flash (a quick chat): its own MCP access, the servers the user turned on for it, reading tools only (ADR 0207)
-    if (r.s.quick) return { roles: [FLASH_MCP_ROLE], policy: null };
     const policy = r.policy ?? null, own = r.s.agent?.source === 'catalog' ? r.s.agent.id : null;
     if (!r.s.parentId) return { roles: [own], policy };
     // a child is bounded by its ancestors' roles: the chain frozen at its creation, else (saved before it existed) the
@@ -365,7 +359,7 @@ export abstract class ManagerSessions extends ManagerPersistence {
   private extraArgsFor(harness: Harness, chatId: string, r: Rec | undefined): string[] | null {
     const allowed = !engineOf(harness)?.caps.preAllow ? [] : [
       ...(this.appMcpFor(r) ? ['mcp__second-brain-app'] : []),
-      ...(this.opts.mcpUrlFor?.(chatId) && !r?.s.quick ? APP_CHAT_TOOLS.map(t => `mcp__second-brain__${t}`) : []),
+      ...(this.opts.mcpUrlFor?.(chatId) ? APP_CHAT_TOOLS.map(t => `mcp__second-brain__${t}`) : []),
     ];
     // the managed MCP servers this chat may not use: refused by name, also when the user's own Claude config has one so named
     const denied = engineOf(harness)?.kind === 'claude' ? (this.opts.extMcp?.(chatId).denied ?? []).map(id => `mcp__${id}`) : [];

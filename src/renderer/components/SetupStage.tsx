@@ -66,7 +66,7 @@ export function StageLive({ chatId, text, onText: setText, input, onAnswer }: { 
   const items = useApp(s => s.items[chatId]);
   // the open chats this Orchestrator delegated (a setup repeated later shows no role «done» from old, closed work)
   const all = useApp(s => Object.values(s.chats).filter((c): c is ChatSummary => !!c && !c.closedAt && descendsFrom(s.chats, c, chatId)), sameList);
-  const asks = useApp(s => s.pending.filter(p => !s.chats[p.chatId]?.quick).length);
+  const asks = useApp(s => s.pending.length);
   const box = useRef<HTMLTextAreaElement | null>(null);
   const states = useMemo(() => teamStates(all), [all]);
   useEffect(() => { box.current?.focus(); }, [!!chat]);

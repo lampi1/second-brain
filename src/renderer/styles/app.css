@@ -1241,7 +1241,7 @@ html.overlay body:focus-within .layer-hint { display: none; }
 .result-synth-btn:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
 .result-synth-btn:disabled { cursor: default; background: var(--surface-3); color: var(--text-3); box-shadow: none; }
 
-/* voice mode (ADR 0152, components/VoiceControls.tsx): the mic in the Orchestrator's and Flash's input, and the bar
+/* voice mode (ADR 0152, components/VoiceControls.tsx): the mic in the Orchestrator's input, and the bar
    under it while voice is on — a steady red dot, the volume bars while you talk, the wave while the app answers */
 .mic-btn { width: 26px; height: 26px; flex: none; border-radius: 7px; border: 1px solid var(--border); background: transparent; color: var(--text-3); display: grid; place-items: center; cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
 .mic-btn:hover { color: var(--text); border-color: var(--border-3); }

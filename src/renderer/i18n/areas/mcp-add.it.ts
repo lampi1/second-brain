@@ -1,5 +1,5 @@
 // «Aggiungi server MCP» (ADR 0207): the paste box, the popular servers, the form's tokens and who may use a server
-// (the Orchestrator, the roles, Flash), the test's result. Used by McpAddPanel.tsx and ConnectorsHub.tsx.
+// (the Orchestrator, the roles), the test's result. Used by McpAddPanel.tsx and ConnectorsHub.tsx.
 export const mcpAddIt = {
   'mcpadd.open': 'Aggiungi server MCP', 'mcpadd.title': 'Aggiungi un server MCP',
   'mcpadd.lead': 'Incolla quello che mostra il suo README, oppure scegline uno qui sotto: il modulo si compila da sé.',
@@ -20,8 +20,8 @@ export const mcpAddIt = {
   'mcpadd.badLine': 'Il comando non si legge: controlla le virgolette.',
   'mcpadd.tokens': 'Token', 'mcpadd.tokensTip': 'Chiavi e token sono cifrati sul computer e dati solo a questo server: mai nei file, nei log o agli agenti.',
   'mcpadd.tokenName': 'Nome del token', 'mcpadd.tokenValue': 'Valore (nascosto)', 'mcpadd.addToken': 'Aggiungi token',
-  'mcpadd.who': 'Chi lo usa', 'mcpadd.whoTip': 'Acceso: quel ruolo può usare gli strumenti del server. Flash usa solo quelli di lettura. Sulla carta di ogni agente scegli anche strumento per strumento.',
-  'mcpadd.flashTip': 'Flash è di sola lettura: usa solo gli strumenti che leggono.', 'mcpadd.partialTip': 'Ristretto sulla carta dell’agente (sola lettura o alcuni strumenti).', 'mcpadd.readOnly': 'lettura',
+  'mcpadd.who': 'Chi lo usa', 'mcpadd.whoTip': 'Acceso: quel ruolo può usare gli strumenti del server. Sulla carta di ogni agente scegli anche strumento per strumento.',
+  'mcpadd.partialTip': 'Ristretto sulla carta dell’agente (sola lettura o alcuni strumenti).',
   'mcpadd.saveTest': 'Salva e prova', 'mcpadd.saveOnly': 'Salva',
   'mcpadd.missing': (p: { list: string }) => `Manca: ${p.list}. Puoi salvarlo e scriverlo dopo nella sua scheda.`,
   'mcpadd.works': (p: { n: number }) => (p.n === 1 ? 'Funziona: 1 strumento' : `Funziona: ${p.n} strumenti`),

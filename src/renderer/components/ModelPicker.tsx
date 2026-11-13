@@ -3,10 +3,9 @@
 // groups (lib/model-catalog.ts: the current engine first, its state and why it cannot take a model, where the list comes
 // from), each model with its context window and effort levels, the effort for the chosen row (what a run really gets
 // when the model lacks the level asked) and the actions of its scope, each saying what it changes:
-// - a chat (the Orchestrator's and Flash's chip, a strip's ⋯ menu): «Solo questa chat» changes that chat only (its own
-//   engine: a chat never moves engine); on the Orchestrator «Predefinito dell'Orchestrator» saves engine and model on its
-//   card instead (the next Orchestrator on that engine starts with it, catalog.ts resolve); Flash follows its card at
-//   every question (ChatManager.flashFollow), so its only action is «Predefinito di Flash»;
+// - a chat (the Orchestrator's chip, a strip's ⋯ menu): «Solo questa chat» changes that chat only (its own engine: a
+//   chat never moves engine); on the Orchestrator «Predefinito dell'Orchestrator» saves engine and model on its card
+//   instead (the next Orchestrator on that engine starts with it, catalog.ts resolve);
 // - a role (the back of an Agenti card): «Salva nel ruolo», the default of the role's new chats.
 // The default row says which default it is: «Predefinito della CLI» on a chat (the engine picks), «Modello del livello»
 // on a role (resolved at launch from the tier). Loading, error (with «Riprova»), no engine and no match are always said.
@@ -17,7 +16,7 @@
 import { useEffect, useMemo, useState, type KeyboardEvent, type RefObject } from 'react';
 import type { ChatSummary, Effort } from '@shared/contract';
 import type { AgentProfile } from '@shared/agents';
-import { FLASH_ID, ORCHESTRATOR_ROLE_ID } from '@shared/roles';
+import { ORCHESTRATOR_ROLE_ID } from '@shared/roles';
 import { EFFORTS } from '../lib/format';
 import { engineName } from '../lib/engines';
 import { agentDraftOf } from '../lib/agent-drafts';
@@ -29,18 +28,16 @@ import { Popover } from './ui';
 import { t } from '../i18n';
 import '../styles/model-picker.css';
 
-/** What the picker changes: one chat (with, on the Orchestrator and Flash, their card as the lasting default), or a role. */
+/** What the picker changes: one chat (with, on the Orchestrator, its card as the lasting default), or a role. */
 export type PickerScope =
   | { kind: 'chat'; chat: ChatSummary; card?: AgentProfile | null }
   | { kind: 'role'; profile: AgentProfile };
 
 interface Pick { engine: ChatSummary['harness']; id: string | null; effort: Effort | null }
 
-/** Where the picker starts: what the scope runs on now (Flash: its card, which it follows). */
+/** Where the picker starts: what the scope runs on now. */
 export function startOf(scope: PickerScope): Pick {
   if (scope.kind === 'role') return { engine: scope.profile.engine, id: scope.profile.model, effort: scope.profile.effort ?? null };
-  // a card without an effort leaves the chat's (flashFollow): show what runs now
-  if (scope.card?.id === FLASH_ID) return { engine: scope.card.engine, id: scope.card.model, effort: scope.card.effort ?? scope.chat.effort ?? null };
   return { engine: scope.chat.harness, id: scope.chat.model || null, effort: scope.chat.effort ?? null };
 }
 
@@ -66,16 +63,12 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
   };
 
   const card = scope.kind === 'chat' ? scope.card ?? null : null;
-  const flash = card?.id === FLASH_ID;
   const orchestrator = card?.id === ORCHESTRATOR_ROLE_ID;
   const balanced = useApp(s => s.settings?.balancedMode === true);
-  // a chat can be changed by itself everywhere but on Flash (it follows its card)
-  const chatApply = scope.kind === 'chat' && !flash;
+  const chatApply = scope.kind === 'chat';
   // only a card may move engine: a strip without one keeps its engine
   const engineFree = scope.kind === 'role' || !!card;
-  const defaultName = scope.kind === 'role' || flash
-    ? t('mp.tierDefault', { tier: t(`roles.tier.${(scope.kind === 'role' ? scope.profile : card!).tier}`) })
-    : t('mp.cliDefault');
+  const defaultName = scope.kind === 'role' ? t('mp.tierDefault', { tier: t(`roles.tier.${scope.profile.tier}`) }) : t('mp.cliDefault');
   const current = startOf(scope);
   const groups = useMemo(() => catalogGroups(catalog?.models ?? [], { engine: current.engine, model: current.id }, defaultName),
     [catalog, current.engine, current.id, defaultName]);
@@ -88,7 +81,6 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
     return { engine: g.engine, id: r.id, effort: g.effort ? p.effort : null };
   });
   // a chat's effort cannot go back to nothing (chat:set): «Predefinito» only where it can mean something
-  // Flash too: its open chat keeps an effort it has, a card without one does not reset it (flashFollow)
   const effortDefault = scope.kind === 'role' || !(scope.kind === 'chat' && scope.chat.effort);
   const real = realEffort(pick.effort, row);
 
@@ -106,8 +98,6 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
     const { effort: _old, ...base } = agentDraftOf(p); void _old;
     const effort = withEffort ? pick.effort : p.effort ?? null;
     await saveAgent({ ...base, engine: pick.engine, model: pick.id, ...(effort && group?.effort ? { effort } : {}) }, p.id);
-    // Flash on its engine takes the effort at once (its model follows the card at the next question)
-    if (flash && scope.kind === 'chat' && pick.engine === scope.chat.harness && pick.effort) await setChat(scope.chat.id, { effort: pick.effort });
   });
 
   // ↑/↓ move between the rows (the radios), like a list; Tab leaves the list
@@ -132,7 +122,7 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
   };
 
   const title = scope.kind === 'role' ? t('mp.scope.role', { name: scope.profile.name })
-    : flash ? t('mp.scope.flash') : t('mp.scope.chat', { title: scope.chat.title });
+    : t('mp.scope.chat', { title: scope.chat.title });
   return <Popover anchor={anchor} open={open} onClose={onClose} testid={`${testid}-pop`} width={380} kind="dialog" label={t('studio.model')}>
     <div className="mp" data-testid={`${testid}-picker`}>
       {/* «Balanced mode» (ADR 0218): its main switch, one click, for every role (Settings → Ruoli e deleghe mirrors it) */}
@@ -168,7 +158,7 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
           {g.block === 'not-selectable' && g.reason && <p className="mp-note">{g.reason}</p>}
           {g.rows.map(r => {
             const on = pick.engine === g.engine && pick.id === r.id;
-            const meta = r.id === null ? (scope.kind === 'role' || flash ? t('mp.tierDefaultMeta') : t('mp.cliDefaultMeta'))
+            const meta = r.id === null ? (scope.kind === 'role' ? t('mp.tierDefaultMeta') : t('mp.cliDefaultMeta'))
               : [r.contextWindow ? t('mp.context', { size: kTokens(r.contextWindow) }) : '',
                  r.efforts ? (r.efforts.length ? t('mp.efforts', { list: r.efforts.join(' · ') }) : t('mp.noEffort')) : '',
                  r.price === null ? t('mp.priceUnknown') : r.price ? t('mp.price', { input: usd(r.price.input), output: usd(r.price.output) }) : '',
@@ -199,10 +189,10 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
         {chatApply && <button type="button" className="mp-btn primary" disabled={busy || !catalog || pick.engine !== chatEngine}
           title={pick.engine !== chatEngine ? t('mp.otherEngine', { engine: engineName(chatEngine!) }) : undefined}
           onClick={() => void applyChat()} data-testid={`${testid}-apply-chat`}>{t('mp.apply.chat')}</button>}
-        {card && <button type="button" className={`mp-btn${flash ? ' primary' : ''}`} disabled={busy || !catalog || !group || group.block === 'off' || group.block === 'untrusted'}
-          title={t(orchestrator ? 'mp.apply.orchestratorTip' : 'mp.apply.flashTip')}
-          onClick={() => void saveCard(card, !orchestrator)} data-testid={`${testid}-apply-default`}>
-          {t(orchestrator ? 'mp.apply.orchestrator' : 'mp.apply.flash')}</button>}
+        {card && orchestrator && <button type="button" className="mp-btn" disabled={busy || !catalog || !group || group.block === 'off' || group.block === 'untrusted'}
+          title={t('mp.apply.orchestratorTip')}
+          onClick={() => void saveCard(card, false)} data-testid={`${testid}-apply-default`}>
+          {t('mp.apply.orchestrator')}</button>}
         {scope.kind === 'role' && <button type="button" className="mp-btn primary" disabled={busy || !catalog || !group || group.block === 'off' || group.block === 'untrusted'}
           onClick={() => void saveCard(scope.profile, true)} data-testid={`${testid}-apply-role`}>{t('mp.apply.role')}</button>}
       </div>

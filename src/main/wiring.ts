@@ -819,7 +819,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     settings: () => brain.settings(), registry: () => brain.modelRegistry(),
     hasKey: id => engines.hasKey(id), addApiSpend: (id, usd) => engines.addSpend(id, usd), fallback: () => brain.settings().jobs?.fallback ?? 'auto',
     headless, text: engines.text, runs: manager.runs });
-  // «Chiedi alla Guida» (ADR 0196): one light one-shot on Flash's engine; the anchors are checked only in a run from the repo
+  // «Chiedi alla Guida» (ADR 0196): one light one-shot on the Scout's engine; the anchors are checked only in a run from the repo
   const guide = new GuideService({ runOnce: r => oneShot.runOnce(r), repoRoot: repoRootOf(path.dirname(fileURLToPath(import.meta.url))),
     index: lang => guideIndex({ window: ctx.window, settings: { schema: () => brain.settingsSchema(), get: () => brain.settings() }, tools: () => [], showValues: () => false }, lang) });
 

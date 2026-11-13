@@ -7,7 +7,7 @@ const h = vi.hoisted(() => ({
   listeners: new Map<string, (event: never) => void>(), plays: [] as { onended?: () => void }[],
   invokes: vi.fn(), send: vi.fn(), toast: vi.fn(), micChanged: null as null | (() => void),
   effects: [] as (() => void)[],
-  chats: { orchestrator: { id: 'orchestrator', isOrchestrator: true }, flash: { id: 'flash', quick: true } },
+  chats: { orchestrator: { id: 'orchestrator', isOrchestrator: true } },
 }));
 vi.mock('react', async original => ({ ...await original<typeof React>(),
   useRef: (current: unknown) => ({ current }), useEffect: (fn: () => void) => { h.effects.push(fn); },
@@ -75,12 +75,13 @@ describe('voice question lifecycle', () => {
     expect(answer).toHaveBeenCalledExactlyOnceWith({ kind: 'yes' });
   });
   it('drops a late old session transcript when dictation changes target', async () => {
-    const drafted = vi.fn(); v.onDictated(drafted); await v.toggleVoice('orchestrator'); const old = capture();
+    const drafted = vi.fn(), heard = vi.fn(); v.onDictated(drafted); v.onImparaHeard(heard); await v.toggleVoice('orchestrator'); const old = capture();
     emit('voice:speech', { session: old, utterance: 1, active: true });
-    await v.toggleVoice('flash');
+    await v.toggleVoice('impara');
     emit('voice:heard', { session: old, utterance: 1, text: 'wrong target', ms: 800 });
     expect(drafted).not.toHaveBeenCalled();
-    utterance('right target'); expect(drafted).toHaveBeenCalledExactlyOnceWith('flash', 'right target');
+    utterance('right target'); expect(heard).toHaveBeenCalledExactlyOnceWith('right target');
+    expect(drafted).not.toHaveBeenCalled(); v.onImparaHeard(null);
   });
   it('preserves completed held words on a capture restart without sending them', async () => {
     const drafted = vi.fn(); v.onDictated(drafted); await v.setTalk(true);

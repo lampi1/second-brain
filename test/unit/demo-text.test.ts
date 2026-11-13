@@ -1,6 +1,6 @@
 // Unit tests of the demo's content in the UI language (src/main/demo-text.ts): Italian stays as written (the default:
 // what the e2e specs read), English goes through the one table: the seed's chats, items and open requests, the
-// Strategist's tree, the scripted answers built with names (patterns, line by line), Flash's read-only "btw" answer and
+// Strategist's tree, the scripted answers built with names (patterns, line by line) and
 // the browser tabs' pages carry no Italian left.
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
@@ -44,7 +44,7 @@ describe('demo text', () => {
     expect(tr('not in the table')).toBe('not in the table');
   });
 
-  it('answers in English as the scripts run: a thanks, a decision, Flash\'s read-only "btw"', async () => {
+  it('answers in English as the scripts run: a thanks, a decision', async () => {
     setDemoLang('en');
     const s = seed(FROZEN_EPOCH);
     const chats = new DemoChats(() => {}, { freeze: true }, s);
@@ -52,14 +52,7 @@ describe('demo text', () => {
     await flush();
     const said = chats.items('orchestrator').filter(i => i.kind === 'assistant').at(-1);
     expect(said && 'text' in said ? said.text : '').toBe('Noted: I’ll pick up from **Refunds QA**.');
-    const flash = await chats.create({ harness: 'claude', cwd: 'C:\\demo', quick: true });
-    await chats.send(flash.id, 'What is waiting for me?');
-    await flush();
-    const answer = chats.items(flash.id).filter(i => i.kind === 'assistant').map(i => ('text' in i ? i.text : '')).join('\n');
-    expect(answer).toContain('From the Orchestrator’s chat, without touching anything:');
-    expect(answer).toContain('**Waiting for you**');
-    expect(answer).toContain('«Make it a job»');
-    expect(answer.split('\n').filter(l => ITALIAN.test(l))).toEqual([]);
+    expect(said && 'text' in said ? said.text.split('\n').filter(l => ITALIAN.test(l)) : []).toEqual([]);
   });
 
   it('draws the browser tabs\' pages and writes the demo brain in English', () => {

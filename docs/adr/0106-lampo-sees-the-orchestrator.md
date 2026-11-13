@@ -1,6 +1,6 @@
 # ADR 0106 · «Lampo» is a "btw": it sees the Orchestrator's conversation
 
-Date: 2026-10-21 · Status: partly superseded by ADR 0107 (renamed «Flash», an agent with its own model); accepted (owner, 2026-10-21: «il lampo vorrei che funzionasse proprio come funziona un btw
+Date: 2026-10-21 · Status: superseded by ADR 0296 (Flash removed; the Orchestrator's «Fast» mode instead). Earlier: partly superseded by ADR 0107 (renamed «Flash», an agent with its own model); accepted (owner, 2026-10-21: «il lampo vorrei che funzionasse proprio come funziona un btw
 su claude cursor o codex che ha comunque il contesto delle cose») · Builds on: ADR 0105 (Lampo, the quick lane)
 
 ## Context

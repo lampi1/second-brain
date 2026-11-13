@@ -2,16 +2,13 @@
 // card (standing.ts) and says, per role, how many runs it has, its verified successes by basis and their XP, and why the
 // other runs earned nothing (no verdict, only its own word, only an opinion, an unverified review, a broken chain, the
 // receipts' reason, one-shots and open runs left out...), and whether the review sampler is off (no verified outcome
-// arrives, ADR 0186); the retired roles and Pulse have no level. For the Orchestrator, the same over its decisions plus the
-// decision signals; for Flash, its answer outcomes. Read only, pure: diagnose() and formatDiagnosis() are used by
+// arrives, ADR 0186); only the six roles have a level. For the Orchestrator, the same over its decisions plus the
+// decision signals. Read only, pure: diagnose() and formatDiagnosis() are used by
 // levels-cli.ts (`npm run levels -- <agent-runs.json>`) and pinned by test/unit/agents/level-diagnosis.test.ts.
 import type { AgentRun, AgentStanding } from '../../shared/agents';
-import { FLASH_ID } from '../../shared/roles';
 import { readRun, readTally } from './runs';
 import type { RunTally } from './run-metrics';
 import { runReceiptVerdict } from './receipts';
-import { readFlashLog, settleDue, type FlashLog } from './flash-outcomes';
-import { FLASH_XP } from './xp';
 import { chainBlock, counts, decisionSignals, decisionXp, earnIndex, earnedVerdict, gradableBatch, gradableReview, orchestratorDecision, runXp, standings, unrated, type EarnIndex } from './standing';
 import { samplerOffLine, type SamplerState } from '../../shared/judging';
 
@@ -31,8 +28,6 @@ export interface RoleDiagnosis {
   rolled: { ended: number; wins: number; xp: number | null; decisions?: number; decisionWins?: number; decisionXp?: number | null };
   /** the Orchestrator's decision signals */
   signals?: { redelegated: number; reworked: number; planClean: number; planChanged: number; planMany: number };
-  /** Flash's answers */
-  flash?: { open: number; held: number; corrected: number; reasked: number; handed: number; total: FlashLog['total'] };
   standing: AgentStanding | null;
 }
 /** sampler = the review switch, when the caller knows it (levels-cli.ts reads the app's settings next to the file) */
@@ -57,11 +52,11 @@ const blank = (agentId: string): RoleDiagnosis => ({ agentId, counted: 0, open: 
 const bump = <K extends string>(rec: Partial<Record<K, number>>, k: K, n = 1): void => { rec[k] = (rec[k] ?? 0) + n; };
 const r2 = (n: number): number => Math.round(n * 100) / 100;
 
-export function diagnose(runs: readonly AgentRun[], rollups: readonly RunTally[], now: number, flash: FlashLog | null = null, invalid = 0, sampler?: SamplerState): Diagnosis {
+export function diagnose(runs: readonly AgentRun[], rollups: readonly RunTally[], now: number, invalid = 0, sampler?: SamplerState): Diagnosis {
   const ix = earnIndex(runs), roles = new Map<string, RoleDiagnosis>();
   const of = (id: string) => { let d = roles.get(id); if (!d) roles.set(id, d = blank(id)); return d; };
   for (const t of rollups) {
-    if (unrated(t.agentId)) continue; // the retired roles and Pulse have no level (ADR 0186)
+    if (unrated(t.agentId)) continue; // only the six roles have a level (ADR 0186)
     const d = of(t.agentId);
     d.rolled.ended += t.ended; d.rolled.wins += t.verdicts.success + (t.earnedWins ?? 0);
     if (t.xp !== undefined) d.rolled.xp = r2((d.rolled.xp ?? 0) + t.xp);
@@ -92,23 +87,14 @@ export function diagnose(runs: readonly AgentRun[], rollups: readonly RunTally[]
     else if (xp > 0) bump(o.wins, 'plan');
     if (e?.verdict !== 'success') bump(o.noXp, noXpReason(r, ix));
   }
-  if (flash) {
-    const log = structuredClone(flash);
-    settleDue(log, now);
-    const f = of(FLASH_ID), why = (w: string) => log.done.filter(x => x.why === w).length;
-    f.flash = { open: log.open.length, held: why('held'), corrected: why('corrected'), reasked: why('reasked'), handed: why('handed'), total: log.total };
-    f.counted = log.total.success + log.total.partial + log.total.fail;
-    if (log.total.success) bump(f.wins, 'held', log.total.success);
-    f.xp = log.total.success * FLASH_XP;
-  }
-  const st = standings(runs, rollups, now, flash);
+  const st = standings(runs, rollups, now);
   for (const d of roles.values()) { d.xp = r2(d.xp); d.standing = st.get(d.agentId) ?? null; }
   return { runs: runs.length, invalid, rollups: rollups.length, now, ...(sampler ? { sampler } : {}), roles: [...roles.values()].sort((a, b) => (a.agentId === 'orchestrator' ? -1 : b.agentId === 'orchestrator' ? 1 : a.agentId.localeCompare(b.agentId, 'en'))) };
 }
 
 /** An agent-runs.json's content (parsed JSON) read with the store's own checks; runs out of shape are counted, not used. */
 export function diagnoseFile(raw: unknown, now: number, sampler?: SamplerState): Diagnosis {
-  const f = raw as { version?: unknown; runs?: unknown; rollups?: unknown; flash?: unknown } | null;
+  const f = raw as { version?: unknown; runs?: unknown; rollups?: unknown } | null;
   if (!f || typeof f !== 'object' || f.version !== 1 || !Array.isArray(f.runs)) throw new Error('not an agent-runs.json (version 1 with a runs list)');
   const runs: AgentRun[] = [];
   let invalid = 0;
@@ -119,7 +105,7 @@ export function diagnoseFile(raw: unknown, now: number, sampler?: SamplerState):
     seen.add(r.runId); runs.push(r);
   }
   const rollups = (Array.isArray(f.rollups) ? f.rollups : []).map(readTally).filter((t): t is RunTally => !!t);
-  return diagnose(runs, rollups, now, f.flash === undefined ? null : readFlashLog(f.flash), invalid, sampler);
+  return diagnose(runs, rollups, now, invalid, sampler);
 }
 
 const REASONS: Record<string, string> = {
@@ -141,13 +127,12 @@ export function formatDiagnosis(d: Diagnosis): string {
   for (const r of d.roles) {
     const s = r.standing;
     out.push(`${r.agentId}: ${s ? `Lv ${s.level} · ${s.xp} XP${s.nextAt !== null ? ` (Lv ${s.level + 1} at ${s.nextAt})` : ''} · ${s.wins} verified successes · performance ${pct(s.performance)}${s.spread !== null ? ` ±${Math.round(s.spread * 100)}` : ''} on ${s.evaluated} verdicts` : 'no standing'}`);
-    const label = r.agentId === 'orchestrator' ? 'decisions' : r.agentId === FLASH_ID ? 'answers settled' : 'runs counted';
+    const label = r.agentId === 'orchestrator' ? 'decisions' : 'runs counted';
     out.push(`  ${label}: ${r.counted}${r.open ? ` · open ${r.open}` : ''}${r.oneshots ? ` · one-shots left out ${r.oneshots}` : ''}`);
     const wins = Object.entries(r.wins);
-    out.push(`  XP${r.agentId === FLASH_ID ? '' : ' from kept runs'}: ${r.xp}${wins.length ? ` · successes by basis: ${wins.map(([k, n]) => `${k} ${n}`).join(', ')}` : ' · no verified success'}`);
+    out.push(`  XP from kept runs: ${r.xp}${wins.length ? ` · successes by basis: ${wins.map(([k, n]) => `${k} ${n}`).join(', ')}` : ' · no verified success'}`);
     if (r.rolled.ended || r.rolled.decisions) out.push(`  pruned (rollups): ${r.rolled.ended} runs, ${r.rolled.wins} successes, ${r.rolled.xp ?? 'XP not kept (counted at 1 each)'}${r.rolled.decisions ? ` · decisions ${r.rolled.decisions}, ${r.rolled.decisionWins ?? 0} successes, XP ${r.rolled.decisionXp ?? 'not kept'}` : ''}`);
     if (r.signals) out.push(`  decision signals: re-delegated ${r.signals.redelegated}, reopened/reworked ${r.signals.reworked}, plan approved as proposed ${r.signals.planClean}, after changes ${r.signals.planChanged + r.signals.planMany}`);
-    if (r.flash) out.push(`  answers: held ${r.flash.held}, corrected ${r.flash.corrected}, asked again ${r.flash.reasked}, handed to the Orchestrator ${r.flash.handed}, still open ${r.flash.open} (recent list; totals ${r.flash.total.success}/${r.flash.total.partial}/${r.flash.total.fail})`);
     const why = (Object.entries(r.noXp) as [string, number][]).sort((a, b) => b[1] - a[1]);
     if (why.length) { out.push('  no XP because:'); for (const [k, n] of why) out.push(`    ${String(n).padStart(4)}  ${reason(k)}`); }
     out.push('');

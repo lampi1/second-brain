@@ -350,3 +350,5 @@ docs/screenshots/grindhouse.webp binary-media sha256:ab3fc971131aa44a2161967f8c1
 # README screenshots retaken 2026-11-13 for ADR 0295 (the little person on the front of the role cards)
 docs/screenshots/agents.webp binary-media sha256:8627192c0b8deeed198a832f8da0b4afb8515008ac71adb3fa5c8277020e7c2c
 docs/screenshots/agent-levels.webp binary-media sha256:0b70e7770a9ce7df06ce30fc2105b9751e81869eaec072e2f2857de02186e049
+# README screenshot of the Orchestrator column with Fast and Plan (ADR 0296), looked at before pinning
+docs/screenshots/orchestrator-column.webp binary-media sha256:44d36d02af6181395479d873fe25d5ed8926febddec1627889474b94dc877500
