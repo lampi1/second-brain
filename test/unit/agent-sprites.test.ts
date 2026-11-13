@@ -10,7 +10,7 @@ import { CHARACTER_IDS } from '../../src/shared/characters';
 import { WORK_ROLE_IDS } from '../../src/shared/roles';
 import type { ChatItem } from '../../src/shared/contract';
 import { SPRITE_IDS, SPRITE_STATES, spriteScene } from '../../src/renderer/lib/agent-sprites';
-import { J, VIEW, jointStyle, keyframesCss, nodeSvg, trackName, walk, type Group } from '../../src/renderer/lib/sprite-rig';
+import { J, VIEW, jointStyle, keyframeRules, keyframesCss, nodeSvg, trackName, walk, type Group } from '../../src/renderer/lib/sprite-rig';
 import { AgentSprite, spriteIdOf } from '../../src/renderer/components/AgentSprite';
 import { isThinking, spriteStateOf } from '../../src/renderer/components/StripFace';
 
@@ -46,6 +46,24 @@ describe('the little people', () => {
       const tracks = groups(id, state).flatMap(g => (g.track ? [g.track] : []));
       expect(tracks.every(t => t.n === 1), `${id} ${state}`).toBe(state === 'done');
       if (state !== 'done') expect(tracks.every(t => t.n === undefined), `${id} ${state}`).toBe(true);
+    }
+  });
+  it('keeps the sparks and the notes hidden when their loop starts and ends', () => {
+    for (const id of ['artisan', 'orchestrator', 'herald'] as const) {
+      const rules = keyframeRules(spriteScene(id, 'work').nodes);
+      const puffs = groups(id, 'work').filter(g => g.j && g.track?.keys.some(k => k.o === 0 && k.e === 'hold'));
+      expect(puffs.length, id).toBeGreaterThan(1);
+      for (const g of puffs) {
+        const rule = rules.get(trackName(g.j!, g.track!))!;
+        expect(rule, id).toMatch(/\{0%\{[^}]*opacity:0[;}]/);
+        expect(rule, id).toMatch(/100%\{[^}]*opacity:0[;}]/);
+      }
+    }
+  });
+  it('never writes two blocks for the same moment of a rule', () => {
+    for (const id of SPRITE_IDS) for (const state of SPRITE_STATES) for (const rule of keyframeRules(spriteScene(id, state).nodes).values()) {
+      const at = [...rule.matchAll(/([\d.]+)%\{/g)].map(m => m[1]);
+      expect(new Set(at).size, `${id} ${state} ${at.join(" ")}`).toBe(at.length);
     }
   });
   it('writes the shared states once for all the roles', () => {

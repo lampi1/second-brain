@@ -9,7 +9,7 @@
 import { createContext, useInsertionEffect, useMemo, type CSSProperties, type ReactElement } from 'react';
 import type { AgentAvatar as Avatar } from '@shared/agents';
 import { isSpriteId, spriteScene, type SpriteId, type SpriteState } from '../lib/agent-sprites';
-import { VIEW, jointStyle, keyframesCss, type Node } from '../lib/sprite-rig';
+import { VIEW, jointStyle, keyframeRules, type Node } from '../lib/sprite-rig';
 import '../styles/agent-sprite.css';
 
 /** The little person a transcript's working line shows instead of the spark (ChatItems.tsx Typing); null = the spark. */
@@ -17,14 +17,18 @@ export const SpriteCtx = createContext<SpriteId | null>(null);
 /** The little person of a chat's role; a chat without a role is the plain one at a laptop. */
 export const spriteIdOf = (avatar: Avatar | undefined): SpriteId => (avatar?.kind === 'character' && isSpriteId(avatar.value) ? avatar.value : 'plain');
 
-const written = new Set<string>();
-/** The scene's @keyframes, added once to the page's one <style> for the sprites. */
+const scenes = new Set<string>(), rules = new Set<string>();
+/** The scene's @keyframes, each rule once (the roles share most of them) in the page's one <style> for the sprites. */
 function writeKeyframes(key: string, nodes: readonly Node[]): void {
-  if (written.has(key) || typeof document === 'undefined') return;
-  written.add(key);
+  if (typeof document === 'undefined') return;
   let el = document.getElementById('agent-sprite-keyframes');
-  if (!el) { el = document.createElement('style'); el.id = 'agent-sprite-keyframes'; document.head.append(el); }
-  el.append(keyframesCss(nodes) + '\n');
+  // the element went away (a reloaded page keeps this module): everything is written again
+  if (!el) { el = document.createElement('style'); el.id = 'agent-sprite-keyframes'; document.head.append(el); scenes.clear(); rules.clear(); }
+  if (scenes.has(key)) return;
+  scenes.add(key);
+  let css = '';
+  for (const [name, rule] of keyframeRules(nodes)) if (!rules.has(name)) { rules.add(name); css += rule + '\n'; }
+  if (css) el.append(css);
 }
 
 function draw(n: Node, key: number): ReactElement {
@@ -37,12 +41,12 @@ function draw(n: Node, key: number): ReactElement {
   return <circle key={key} cx={n.c[0]} cy={n.c[1]} r={n.c[2]} fill={n.f} opacity={n.o} />;
 }
 
-/** `height` in px; the picture is 5 : 4. */
-export function AgentSprite({ id, state, height = 32, label }: { id: SpriteId; state: SpriteState; height?: number; label?: string }) {
+/** `height` in px; the picture is 5 : 4. `still`: the scene's last picture without its movement (a «done» already seen). */
+export function AgentSprite({ id, state, height = 32, label, still }: { id: SpriteId; state: SpriteState; height?: number; label?: string; still?: boolean }) {
   const scene = spriteScene(id, state);
   useInsertionEffect(() => writeKeyframes(`${id}:${state}`, scene.nodes), [id, state, scene]);
   const body = useMemo(() => scene.nodes.map(draw), [scene]);
-  return <span className="agent-sprite" data-sprite={id} data-sprite-state={state} {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })}>
+  return <span className={still ? 'agent-sprite is-still' : 'agent-sprite'} data-sprite={id} data-sprite-state={state} {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })}>
     {/* the key restarts the movements when the state changes */}
     <svg key={`${id}:${state}`} viewBox={`${VIEW.x} ${VIEW.y} ${VIEW.w} ${VIEW.h}`} width={height * VIEW.w / VIEW.h} height={height} aria-hidden="true">{body}</svg>
   </span>;

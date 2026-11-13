@@ -55,7 +55,7 @@
 .chat-tile .th-topic { margin-left:8px; font-weight:400; color:var(--text-2); }
 .chat-header-actions { display:flex; align-items:center; justify-content:flex-end; gap:4px; flex:none; flex-wrap:wrap; max-width:100%; margin-left:auto; white-space:normal; }
 /* The closed strip: one row, no card (the page is the card; a card inside it only adds a frame). The whole row is
-   the click target; the state is the dot in front, a pill on the right only when words are needed; the three controls keep their room, so the
+   the click target; the state is what the little person in front does, a pill on the right only when words are needed; the three controls keep their room, so the
    states of every row line up, and show on hover or keyboard focus (the ⋯ stays faintly visible). */
 .chat-tile.is-strip { cursor:pointer; border-color:transparent; background:transparent; border-radius:var(--r-m); overflow:visible; }
 .chat-tile.is-strip:hover, .chat-tile.is-strip:focus-within { background:var(--surface-2); }
@@ -223,5 +223,6 @@
 /* The little person is the strip's face (StripFace.tsx, ADR 0295): the row grows a little for it, and the spark of the
    working line leaves the strip (the person already moves). */
 .chat-tile.is-strip .tile-head, .agent-strips .chat-tile.is-expanded > .tile-head { padding-top:4px; padding-bottom:4px; }
-.chat-strip-line .typing-spark, .dc-now .typing-spark { display:none; }
-.strip-facts { padding-left:68px; }
+/* only beside a person: a portrait (the user's own picture) keeps the spark and the old indent */
+.strip-face[data-person] ~ * .typing-spark { display:none; }
+.th-row:has(> .strip-face[data-person]) ~ .strip-facts { padding-left:68px; }

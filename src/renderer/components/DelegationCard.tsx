@@ -72,7 +72,7 @@ export function TreeRails({ node, state }: { node: TreeNode; state: ChildState }
   </span>;
 }
 
-/** The row (ADR 0293): the role's face with its state dot, the task, who runs it and what it does now (closed: the
+/** The row (ADR 0293): the role's little person in its state (StripFace.tsx), the task, who runs it and what it does now (closed: the
  *  live step, or the result's first words once ended; open: its skills and model), time and cost, the state in words
  *  only when the dot is not enough, "Vai alla chat". */
 function Head({ chat, state, open }: { chat: ChatSummary; state: ChildState; open: boolean }) {

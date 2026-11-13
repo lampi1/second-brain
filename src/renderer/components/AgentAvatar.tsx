@@ -2,7 +2,8 @@
 // content), from 16 px in the sidebar tree to 96 px in the role editor: below 24 px the small variant (closer frame,
 // no prop), from 24 px the full one. A role the user gave a picture of their own (lib/agent-images.ts, chosen on the
 // role's page) shows that picture instead. A chat without a role gets a neutral badge with its initial. Used by the
-// Grindhouse strips, the sidebar tree, the child cards, the catalog and the role editor.
+// sidebar tree, the full screen, the back of the role cards and the role editor; on a Grindhouse strip and on a card's
+// front only for a picture of the user's own (elsewhere there the role is its little person, AgentSprite.tsx).
 import { useId, type ReactElement } from 'react';
 import type { AgentAvatar as Avatar } from '@shared/agents';
 import { isCharacterId } from '@shared/characters';

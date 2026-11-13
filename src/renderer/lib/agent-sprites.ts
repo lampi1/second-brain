@@ -49,9 +49,13 @@ const lookOf = (id: SpriteId): Look => {
 const k = (at: number, p: Omit<Key, 'at'> = {}): Key => ({ at, ...p });
 const loop = (t: number, keys: Key[], d = 0): Track => ({ t, keys, d });
 const once = (t: number, keys: Key[]): Track => ({ t, keys, n: 1 });
-/** Hidden, then there at `at` (% of the loop) and away while it fades over `len` %: a spark, a note, a puff. */
-const puff = (t: number, at: number[], len: number, dx: number, dy: number, s = 1, a?: number): Track =>
-  loop(t, at.flatMap(h => [k(Math.max(0, h - 0.2), { o: 0, e: 'hold' }), k(h, { o: 1, e: 'out' }), k(h + len, { o: 0, dx, dy, sx: s, sy: s, ...(a === undefined ? {} : { a }) }), k(Math.min(100, h + len + 0.2), { o: 0, e: 'hold' })]));
+/** Hidden, then there at `at` (% of the loop) and away while it fades over `len` %: a spark, a note, a puff. Hidden
+ *  from the loop's start to its first moment and after its last one too (at rest, without motion, it is in sight). */
+const puff = (t: number, at: number[], len: number, dx: number, dy: number, s = 1, a?: number): Track => {
+  const keys = at.flatMap(h => [k(Math.max(0, h - 0.2), { o: 0, e: 'hold' }), k(h, { o: 1, e: 'out' }), k(Math.min(100, h + len), { o: 0, dx, dy, sx: s, sy: s, ...(a === undefined ? {} : { a }) }),
+    ...(h + len + 0.2 < 100 ? [k(h + len + 0.2, { o: 0, e: 'hold' as Ease })] : [])]);
+  return loop(t, [...(keys[0]!.at > 0 ? [k(0, { o: 0, e: 'hold' as Ease })] : []), ...keys, ...(keys[keys.length - 1]!.at < 100 ? [k(100, { o: 0 })] : [])]);
+};
 /** Grows from nothing past its size and settles, stays, fades: a thought, a sparkle. */
 const pop = (t: number, at: number, until: number): Track =>
   loop(t, [k(0, { sx: 0, sy: 0, o: 0, e: 'hold' }), k(at, { sx: 0.2, sy: 0.2, o: 0, e: 'back' }), k(at + 9, { o: 1 }), k(until, { o: 1 }), k(until + 6, { o: 0 }), k(100, { o: 0, sx: 0, sy: 0 })]);

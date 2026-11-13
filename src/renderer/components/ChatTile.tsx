@@ -174,9 +174,9 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
   const ownReqs = activeOwn;
   const longContext = isLong(chat, warn);
   const name = chat.agent?.name || chat.title, topic = chat.agent?.name && chat.title && chat.title !== chat.agent.name ? chat.title : '';
-  // one state: «Ti aspetta» (opens the question), else the dot in front and, when words are needed, a pill
+  // one state: «Ti aspetta» (opens the question), else the little person in front and, when words are needed, a pill
   const stateText = waitText && st.tone !== 'err' && st.label !== t('ui.state.queued') ? waitText : st.label;
-  // the plain states are the leading dot alone (its word stays for screen readers); anything else is said in words
+  // the plain states are the little person alone (its word stays for screen readers); anything else is said in words
   const plainState = !focus && stateText === st.label && (st.tone === 'run' || st.tone === 'done');
   const drag = (e: React.PointerEvent<HTMLDivElement>) => {
     const el = e.currentTarget, box = body.current?.getBoundingClientRect();
@@ -202,7 +202,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
         <div className="th-row">
           {focus && <button type="button" className="btn btn-ghost btn-s aw-back" onClick={() => toggleMaximize(key)} data-testid="focus-exit" aria-label={t('aw.fullExit')}><IconArrowLeft size={13} /><Kbd>Esc</Kbd></button>}
           {focus ? <AgentAvatar avatar={chat.agent?.avatar} name={name} size={24}/> : <StripFace chatId={chatId} avatar={chat.agent?.avatar} name={name} size={26} height={48} tone={first ? 'wait' : st.tone}
-            waitsUser={!!first || userWait} error={st.tone === 'err'} busy={busy} done={st.tone === 'done'} pending={st.tone === 'run' || st.tone === 'wait'} />}
+            waitsUser={!!first || userWait || st.tone === 'wait'} error={st.tone === 'err'} busy={busy} done={st.tone === 'done'} pending={st.tone === 'run'} />}
           {/* the name is the strip's own button (keyboard, screen readers); a click anywhere on the strip does the same */}
           <h3 className="th-title" title={(chat.agent?.purpose&&rolePurpose(chat.agent.id,chat.agent.purpose))||chat.title}>
             {strip ? <button ref={expansionButton} type="button" className="strip-name" aria-expanded={expanded} aria-controls={`chat-work-${chatId}`} data-tip={t(expanded?'product.collapse':'product.expand')} onClick={()=>setChatExpanded(chatId,!expanded)} data-testid={`chat-expand-${chatId}`}>{name}</button> : name}

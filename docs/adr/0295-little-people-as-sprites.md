@@ -34,9 +34,10 @@ owner wants whole little people who do things, readable when small, one per role
    Transforms and opacity only; no image, no dependency, no timer, no script per frame.
 5. On a strip the person replaces the portrait and its state dot, free on the row: 60 × 48 px on a root strip (the
    row grows from about 44 to about 56 px), 40 × 32 px on a delegated row. A thin rim in the theme's text colour
-   keeps its white and black parts readable on a light and on a dark strip; notes, «z», speed lines and thoughts
+   keeps its white and black parts readable on a light and on a dark strip; notes, «z» and thoughts
    are drawn in the theme's text colour. It thinks on a thought or before the first step and keeps at its work
-   between two steps. A role the user gave a picture of their own keeps that picture with the dot.
+   between two steps. A role the user gave a picture of their own keeps that picture with the dot, the
+   spark on its line and the old indents; so does a character without a person.
 6. The Orchestrator has no strip: its person replaces the spark on its chat's working line. Every other working
    line keeps the spark (in a strip it is hidden: the person already moves). Flash gets no person: the owner
    removes that agent (2026-11-13).
@@ -50,7 +51,11 @@ owner wants whole little people who do things, readable when small, one per role
 - The state is read from the person, without a legend; the words stay beside it (pill, tooltip, screen reader label).
 - A root strip is about 12 px taller.
 - Each visible person runs five to ten small animations inside its SVG; they are painted by the page, not by the
-  compositor. Not measured on a slow PC.
+  compositor, and only «done» stops by itself. Measured in the demo (11 people, 59 animations, software
+  rendering, 10 s each): the page's process 2.5 % of a core moving against 2.2 % paused, the GPU process the same
+  within its noise (62 to 67 %, 59 % with no person at all). Not measured on a real or a slow PC.
+- A «done» the user has already seen stands still when its row is drawn again (coming back to the page,
+  unfolding the children): it celebrates once per end.
 - This is the level code can reach (the owner asked for «tripla A»): files made by an animator (Rive, Lottie)
   would need a runtime dependency and could replace a scene behind the same `AgentSprite` (role, state).
 - Tried in the demo only, not on a real PC.

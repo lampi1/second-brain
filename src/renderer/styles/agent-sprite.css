@@ -1,6 +1,6 @@
 /* The little people of the roles (AgentSprite.tsx, ADR 0295): free on the strip, no tile. Their colours are fixed, like
    the portraits'; a thin rim in the theme's text colour keeps the white and the black parts readable on a light and on
-   a dark strip, and what is drawn «in ink» (notes, a «z», speed lines, a thought) takes the theme's text colour. Every
+   a dark strip, and what is drawn «in ink» (notes, a «z», a thought) takes the theme's text colour. Every
    joint turns around its own origin; its rest pose and its animation are inline (lib/sprite-rig.ts jointStyle), the
    @keyframes come from the scene (keyframesCss). Transforms and opacity only. Still (the rest pose, a whole picture)
    without motion; paused while the window is hidden. */
@@ -15,4 +15,6 @@
 .agent-sprite .sp-blink { transform-box:fill-box; transform-origin:50% 50%; animation:sp-blink 3.8s infinite; }
 @keyframes sp-blink { 0%, 93%, 100% { transform:scaleY(1); } 96% { transform:scaleY(.1); } }
 html[data-hidden] .agent-sprite * { animation-play-state:paused !important; }
+/* still: the rest pose, which is every scene's last picture too */
+.agent-sprite.is-still * { animation:none !important; }
 @media (prefers-reduced-motion: reduce) { .agent-sprite * { animation:none !important; } }

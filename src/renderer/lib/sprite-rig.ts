@@ -20,7 +20,7 @@ export interface Key { at: number; a?: number; dx?: number; dy?: number; sx?: nu
 /** A movement: seconds per round, its keys, a delay (negative = already on its way), how many rounds (none = for ever). */
 export interface Track { t: number; keys: Key[]; d?: number; n?: number }
 export interface Rest { x: number; y: number; a: number; s: number; o: number }
-export interface Group { g: Node[]; cls?: string; v?: Record<string, string>; j?: Rest; track?: Track }
+export interface Group { g: Node[]; cls?: string; j?: Rest; track?: Track }
 export type Node = Shape | Group;
 
 const P = (p: string, f: string, o?: number): Shape => (o === undefined ? { p, f } : { p, f, o });
@@ -33,7 +33,7 @@ export const sh = { P, S, C, E };
 export function J(x: number, y: number, a: number, g: Node[], track?: Track, s = 1, o = 1): Group {
   return { g, j: { x, y, a, s, o }, ...(track ? { track } : {}) };
 }
-/** Children drawn in the theme's ink (notes, a «z», speed lines) or its paper: they read on a light and on a dark strip. */
+/** Children drawn in the theme's ink (notes, a «z», a thought) or its paper: they read on a light and on a dark strip. */
 export const ink = (g: Node[]): Group => ({ g, cls: 'sp-ink' });
 /** Eyes that blink (the only movement around a shape's own centre). */
 export const blinking = (g: Node[]): Group => ({ g, cls: 'sp-blink' });
@@ -45,7 +45,8 @@ const pose = (r: Rest, k: Partial<Key>, withO: boolean) =>
 const fades = (r: Rest, t?: Track) => r.o !== 1 || !!t?.keys.some(k => k.o !== undefined);
 /** The body of a joint's @keyframes rule: every key, the rest pose where the track does not start or end by itself. */
 function frames(r: Rest, t: Track): string {
-  const keys = [...t.keys].sort((p, q) => p.at - q.at), withO = fades(r, t);
+  // two keys at the same moment (a move that ends where the next one starts): the later one stands
+  const keys = [...t.keys].sort((p, q) => p.at - q.at).filter((k, i, all) => all[i + 1]?.at !== k.at), withO = fades(r, t);
   if (keys[0]?.at !== 0) keys.unshift({ at: 0 });
   if (keys[keys.length - 1]!.at !== 100) keys.push({ at: 100 });
   return keys.map(k => `${n2(k.at)}%{${pose(r, k, withO)};animation-timing-function:${EASE[k.e ?? 'io']}}`).join('');
@@ -59,18 +60,19 @@ function hash(s: string): string {
 export const trackName = (r: Rest, t: Track): string => `spk-${hash(frames(r, t))}`;
 /** A joint's own style: its rest pose and, with a track, its animation. */
 export function jointStyle(n: Group): Record<string, string> {
-  if (!n.j) return n.v ?? {};
+  if (!n.j) return {};
   const out: Record<string, string> = { transform: pose(n.j, {}, false).slice('transform:'.length) };
   if (fades(n.j, n.track)) out.opacity = n2(n.j.o);
   if (n.track) out.animation = `${trackName(n.j, n.track)} ${n2(n.track.t)}s linear ${n2(n.track.d ?? 0)}s ${n.track.n ?? 'infinite'} both`;
   return out;
 }
-/** Every @keyframes rule a tree needs, each once. */
-export function keyframesCss(nodes: readonly Node[]): string {
+/** Every @keyframes rule a tree needs, each once, by its name. */
+export function keyframeRules(nodes: readonly Node[]): Map<string, string> {
   const seen = new Map<string, string>();
-  for (const n of walk(nodes)) if ('g' in n && n.j && n.track) seen.set(trackName(n.j, n.track), frames(n.j, n.track));
-  return [...seen].map(([name, body]) => `@keyframes ${name}{${body}}`).join('\n');
+  for (const n of walk(nodes)) if ('g' in n && n.j && n.track) { const body = frames(n.j, n.track); seen.set(`spk-${hash(body)}`, `@keyframes spk-${hash(body)}{${body}}`); }
+  return seen;
 }
+export const keyframesCss = (nodes: readonly Node[]): string => [...keyframeRules(nodes).values()].join('\n');
 
 /** There and back for ever: `t` seconds one way. */
 export const sway = (a: number, t: number, d = 0, e: Ease = 'io'): Track => ({ t: t * 2, d, keys: [{ at: 0, e }, { at: 50, a, e }] });
@@ -104,9 +106,9 @@ export interface Look {
   wear?: Node[];
 }
 
-export const SHOULDER = { l: 25.6, r: 38.4, y: 46.6 }, HIP = { l: 28.3, r: 35.7, y: 57 };
+const SHOULDER = { l: 25.6, r: 38.4, y: 46.6 }, HIP = { l: 28.3, r: 35.7, y: 57 };
 /** The hand of an arm seen from its elbow: where a held thing starts. */
-export const HAND = 5.4;
+const HAND = 5.4;
 
 function face(look: Look, eyes: Eyes, mouth: Mouth, blink: boolean): Node[] {
   const out: Node[] = [];
@@ -174,7 +176,7 @@ export function bubble(colour: string, mark: '!' | 'ok', track?: Track, o = 1): 
 export const quaver = (c: string): Node[] => [E(0, 0, 2.2, 1.7, c), S('M1.9 -0.4V-7.4L5.4 -6', c, 1.4)];
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-/** A node as SVG markup (the preview sheets; AgentSprite draws the same tree as React elements). */
+/** A node as SVG markup (the unit test compares scenes with it; AgentSprite draws the same tree as React elements). */
 export function nodeSvg(n: Node): string {
   if (!('g' in n)) return shapeSvg(n);
   const style = Object.entries(jointStyle(n)).map(([k, v]) => `${k}:${v}`).join(';');

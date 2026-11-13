@@ -22,6 +22,7 @@ import { pairHover, usePair } from '../lib/pairs';
 import { awaitingCard, clearOrchestratorNow, go } from '../actions';
 import { ItemList, turnActivity, Typing } from './ChatItems';
 import { SpriteCtx } from './AgentSprite';
+import { useOwnPicture } from '../lib/agent-images';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMenu, TitleInput } from './ChatMenu';
 import { ModelChip } from './ModelChip';
@@ -83,6 +84,8 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
   const reqs = useApp(s => (id ? s.pending.filter(p => !s.chats[p.chatId]?.quick) : []), sameList);
   const plans = useApp(s => Object.values(s.chats).filter(c => c && !c.closedAt && c.plan && ['asking', 'revising', 'proposed'].includes(c.plan.phase)), sameList);
   const ready = useApp(s => s.ready);
+  // the conductor on the working line, unless the user gave the Orchestrator a picture of their own (then the spark)
+  const ownPicture = useOwnPicture(chat?.agent?.avatar);
   const isFocused = ui.use(s => s.focused === 'orchestrator');
   const focusReq = ui.use(s => (id && s.focusReq?.chatId === id ? s.focusReq.n : 0));
   const flash = useFlash('orchestrator');
@@ -152,7 +155,7 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
       <MorningLine />
       {/* a plan to approve is its row below (the same steps twice took the room of the open card and the input) */}
       {planCards(plans, reqs).filter(({ chat: c }) => c.plan?.phase !== 'proposed').map(({ chat: c, question }) => <StrategyPanel key={c.id} chat={c} question={question} />)}
-      <ItemList chatId={chat.id} items={items ?? []} empty={t('dialogs.orchestrator.emptyPrompt')} footer={isBusy(chat) ? <SpriteCtx.Provider value="orchestrator"><Typing what={turnActivity(items)} testid="typing-orchestrator" items={items} /></SpriteCtx.Provider> : null} />
+      <ItemList chatId={chat.id} items={items ?? []} empty={t('dialogs.orchestrator.emptyPrompt')} footer={isBusy(chat) ? <SpriteCtx.Provider value={ownPicture ? null : 'orchestrator'}><Typing what={turnActivity(items)} testid="typing-orchestrator" items={items} /></SpriteCtx.Provider> : null} />
       {/* every chat's questions, permissions, commands and plans: one row each, opened in place (ADR 0269) */}
       <OrchestratorAsks />
       {/* in the place of the old "Novità" feed (#88): what the app holds back for this Orchestrator */}
