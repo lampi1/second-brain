@@ -13,6 +13,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { brainRoot } from './brain-root.mjs';
+import { brainDoc } from './brain-doc.mjs';
 
 const arg = n => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : undefined; };
 const root = path.resolve(arg('--root') ?? brainRoot(import.meta.url));
@@ -125,12 +126,13 @@ for (const p of ruleFiles) (read(p) || '').split('\n').forEach((l, i) => {
 report.duplicates.push(...nearDuplicates(units));
 
 // 5. Orphans and broken references
-const mapText = ['AGENTS.md', 'map.md'].map(f => read(path.join(root, f)) || '').join('\n');
+const mapFile = brainDoc(root, 'map.md') ?? path.join(root, 'map.md'); // root, or the brain-rules skill (ADR 0277)
+const mapText = [path.join(root, 'AGENTS.md'), mapFile].map(f => read(f) || '').join('\n');
 for (const p of brainFiles.filter(p => path.dirname(p) === root || path.dirname(p) === path.join(root, 'rules'))) {
   const r = rel(p);
   if (!/^(AGENTS|CLAUDE|README|map)\.md$/.test(r) && !mapText.includes(r) && !mapText.includes(`\`${path.basename(r)}\``)) report.orphans.push(r);
 }
-for (const p of [path.join(root, 'AGENTS.md'), path.join(root, 'map.md'), path.join(root, 'routines.md')].filter(fs.existsSync))
+for (const p of [path.join(root, 'AGENTS.md'), mapFile, path.join(root, 'routines.md')].filter(fs.existsSync))
   for (const m of (read(p) || '').matchAll(/`((?:ops|rules|journal|reviews|dev|\.claude)\/[^`*<>\s]+?)`/g))
     if (!/AAAA|YYYY|<|\{/.test(m[1]) && !fs.existsSync(path.join(root, m[1])) && !ignoredLive(m[1])) report.brokenRefs.push(`${rel(p)}: ${m[1]}`);
 

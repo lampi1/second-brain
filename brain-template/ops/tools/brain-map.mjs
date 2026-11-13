@@ -13,6 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { brainDoc } from './brain-doc.mjs';
 
 export const DEFAULT_ROOT = '{{BRAIN}}';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -244,7 +245,7 @@ export function collect({ root = DEFAULT_ROOT, home = os.homedir(), usage = null
   for (const [event, list] of Object.entries(ch?.hooks ?? {})) for (const h of list) wire('harness:cursor', event, h.command, 'harness/cursor/hooks.json');
 
   // Memory and rules from map.md, output styles and the fixed context.
-  for (const r of mapRows(read(path.join(root, 'map.md')))) {
+  for (const r of mapRows(read(brainDoc(root, 'map.md') ?? path.join(root, 'map.md')))) {
     const abs = path.join(root, r.file);
     const isDir = r.file.endsWith('/');
     const layer = RULE_FILES.has(r.file) ? 'regole' : 'memoria';

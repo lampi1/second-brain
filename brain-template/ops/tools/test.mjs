@@ -201,7 +201,7 @@ T('chat-prompt', () => {
   ok(c.includes('Suite di test pesanti') && c.includes('`sb-tests`') && c.includes('`release` sempre'), 'chat-prompt: heavy-suite turn line missing (code.md "Heavy test suites")');
   ok(c.includes('Parole di {{OWNER}} (2026-10-10): "fai la review"') && c.includes(job), 'chat-prompt: words and job');
   const k = buildPrompt({ title: 'B · QA', kind: 'qa', harness: 'cursor', repo: 'my-app', job });
-  ok(k.includes('Questa chat parte in {{BRAIN_JS}}') && k.includes('AskQuestion') && !k.includes('SendMessage') && k.includes('rules\\qa.md'), 'chat-prompt: cursor variant');
+  ok(k.includes('Questa chat parte in {{BRAIN_JS}}') && k.includes('AskQuestion') && !k.includes('SendMessage'), 'chat-prompt: cursor variant'); // the read list depends on the brain's files: test/unit/brain/brain-doc.test.ts
   ok(k.startsWith('Prima cosa: rinomina questa chat in "B · QA" con lo strumento rename_chat.') && !c.includes('rename_chat'), 'chat-prompt: rename_chat line only first and only in Cursor');
   const url = promptLink('a & b "c" · d');
   ok(url === 'cursor://anysphere.cursor-deeplink/prompt?text=a%20%26%20b%20%22c%22%20%C2%B7%20d', `chat-prompt: link encoding: ${url}`);
