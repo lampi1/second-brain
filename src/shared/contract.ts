@@ -16,6 +16,7 @@ import type { ChatItem, ChatSummary, PendingRequest, RunInfo, ChatsInvokeMap } f
 import type { EngineInfo, Harness, EnginesInvokeMap } from './contract/engines';
 import type { FeedEvent, TasksState, FeedInvokeMap } from './contract/feed';
 import type { MediaInvokeMap } from './contract/media';
+import type { ChessInvokeMap } from './contract/chess';
 import type { BudgetAlert, SettingChange, SettingProposal, Settings, SettingsInvokeMap } from './contract/settings';
 import type { AnswerLater, HeldNewsState, OverlayAction, OverlayModel, SearchIndexStatus, SyncState, UiInvokeMap } from './contract/ui';
 import type { ImparaState, Lesson } from './lesson';
@@ -38,6 +39,7 @@ export * from './contract/brain';
 export * from './contract/ui';
 export * from './contract/agents';
 export * from './contract/media';
+export * from './contract/chess';
 export * from './contract/phone';
 export * from './contract/phone-ipc';
 // Internal identity only: exporting its data type adds no renderer channel or authority.
@@ -46,7 +48,7 @@ export type { RuntimeIdentity, RuntimeOutcome } from './agent-runtime';
 /** renderer → main. Each entry: [argument, result]. One interface per area (src/shared/contract/*.ts). */
 export interface InvokeMap extends
   EnginesInvokeMap, ChatsInvokeMap, BrowserInvokeMap, FeedInvokeMap, AppInvokeMap,
-  SettingsInvokeMap, BrainInvokeMap, UiInvokeMap, AgentsInvokeMap, MediaInvokeMap {}
+  SettingsInvokeMap, BrainInvokeMap, UiInvokeMap, AgentsInvokeMap, MediaInvokeMap, ChessInvokeMap {}
 
 /** main → renderer. */
 export interface EventMap {
@@ -179,6 +181,7 @@ export const INVOKE_CHANNELS = [
   'guide:ask', 'guide:stale',
   'usecount:add', 'usecount:report',
   'projectmap:list', 'projectmap:view',
+  'chess:move', 'chess:stop', 'chess:save', 'chess:history',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'routines:progress', 'work:changed',

@@ -22,6 +22,12 @@ Where the code lives. Moved from `AGENTS.md` (ADR 0198); the full picture is in 
   (create, send, deliver, set). Shapes in `manager-types.ts` (`Rec`, options), constants in `manager-helpers.ts`.
   A method goes in the layer of its concern; one a lower layer calls is declared `abstract` there. Callers import only
   `./chats/manager`.
+- `src/main/chess/` + `vendor/stockfish/` (ADR 0304): the Scacchi page's engine. `vendor/stockfish/` holds Stockfish's
+  two unmodified files (GPLv3, a separate program: never import it); the build copies it to `out/chess-engine/` and
+  `chess/engine.ts` runs it as its own process, UCI over pipes. `chess/store.ts` = the finished games (`app.db`). The
+  rules (chess.js), the game and the bots' lines are in the renderer: `lib/chess-game.ts`, `chess-play.ts`,
+  `chess-lines*.ts`, `components/chess/`. E2E: `SB_CHESS_SCRIPT="<uci> <uci> …"` (with `SB_TEST=1`) makes the bot play
+  those moves by ply instead of asking Stockfish.
 - `src/preload/index.ts`: the allow-listed bridge `window.sb` (invoke/on). Nothing else crosses.
 - `src/renderer/`: React UI. Never imports main, preload, Node or Electron (lint enforces it).
 - `test/unit` (Vitest, node), `test/e2e` (Playwright `_electron`; `known-red.json` = the baseline of tests red on main,

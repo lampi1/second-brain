@@ -9,6 +9,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - Project maps: the box somebody works on right now pulses quietly, a plan shows its steps in order with the
   parallel ones together (`par` on a step of `plan_propose`), entering a system zooms into it, and the projects are a
   list at the side in place of the menu (ADR 0302).
+- «Scacchi»: chess against the six agents, each with its own strength (Scout ~600 to the Orchestrator at 2200+,
+  full-strength Stockfish), its little person thinking and its lines about what happens on the board (fixed text, zero
+  tokens); the history of wins, the fastest ones and the win streak against each agent; premoves. Stockfish runs as
+  a separate program only during a game (ADR 0304).
 - Quote what is on screen: select a text anywhere in the app and right-click on it; it goes, as quote lines, in the
   prompt field of its chat, or in the Orchestrator's, not sent (ADR 0300).
 - «Fast» beside «Plan» in the Orchestrator's input: it answers itself, at once and in a few lines, never delegates (the

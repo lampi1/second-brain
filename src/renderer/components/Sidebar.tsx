@@ -13,7 +13,7 @@ import { useTasks } from '../store/tasks';
 import { ui } from '../store/ui';
 import { go } from '../actions';
 import {
-  IconLearn, IconBrain, IconBranch, IconChart, IconGrid, IconHistory, IconLayers, IconLightbulb, IconList, IconMap, IconMic, IconQuestion, IconSettings, IconShield, IconSparkle, IconTerminal, IconTicket,
+  IconLearn, IconBrain, IconChess, IconBranch, IconChart, IconGrid, IconHistory, IconLayers, IconLightbulb, IconList, IconMap, IconMic, IconQuestion, IconSettings, IconShield, IconSparkle, IconTerminal, IconTicket,
 } from './Icons';
 import { t } from '../i18n';
 import {workProfile} from '../../shared/work-profiles';
@@ -26,7 +26,7 @@ const ICON: Record<BrainPageId, ReactNode> = {
   agenti: <IconLayers />,
   idee: <IconLightbulb />,
   andamento: <IconChart />, script: <IconTerminal />, log: <IconList />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
-  guida: <IconQuestion />, registrazioni: <IconMic />, impara: <IconLearn />,
+  guida: <IconQuestion />, registrazioni: <IconMic />, impara: <IconLearn />, scacchi: <IconChess />,
   regole: <IconShield />, memoria: <IconHistory />, collegamenti: <IconMap />,
 };
 
@@ -50,7 +50,7 @@ export function Sidebar() {
   const saved=ui.use(s=>s.prefs.workProfile);
   const composition=workProfile(saved,BRAIN_PAGES.map(page=>page.id));
   const show=(id:BrainPageId)=>!composition||composition.pageIds.includes(id);
-  const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','log','guida','registrazioni','impara','task','flussi','impostazioni',...BRAIN_CORE,...TRENDS,...IN_MEMORIA].includes(id)):BRAIN_GROUP;
+  const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','log','guida','registrazioni','impara','scacchi','task','flussi','impostazioni',...BRAIN_CORE,...TRENDS,...IN_MEMORIA].includes(id)):BRAIN_GROUP;
   const page = ui.use(s => s.page);
   const map = ui.use(s => s.map);
   const read = ui.use(s => s.read);
@@ -96,6 +96,7 @@ export function Sidebar() {
         {title(t('dialogs.sidebar.app'), 'app')}
         {page1('log')}
         {page1('guida')}
+        {page1('scacchi')}
       </div>
     </nav>
   );

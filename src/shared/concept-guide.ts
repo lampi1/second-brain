@@ -1766,6 +1766,63 @@ export const CONCEPTS: readonly ConceptCard[] = [
     sources: ['src/renderer/lib/recorder.ts', 'src/main/recordings/service.ts', 'src/main/recordings/store.ts', 'src/main/recordings/find.ts', 'src/main/appctl/recordings.ts', 'src/renderer/components/RecordingsPage.tsx'],
   },
   {
+    id: 'chess',
+    title: b('Scacchi contro gli agenti',
+      'Chess against the agents'),
+    summary: b('Giochi a scacchi contro i sei agenti, ognuno con la sua forza e il suo carattere; il motore è Stockfish, sul tuo PC, a zero token.',
+      'You play chess against the six agents, each with its own strength and character; the engine is Stockfish, on your PC, at zero tokens.'),
+    points: [
+      // src/shared/chess.ts CHESS_BOTS
+      b('Sei avversari, dal più debole al più forte: Scout ~600, Herald ~900, Artisan 1400, Sentinel 1700, Strategist 2000 e l’Orchestrator, che gioca senza limiti (2200+). I due più deboli ogni tanto giocano una mossa a caso.',
+        'Six opponents, weakest first: Scout ~600, Herald ~900, Artisan 1400, Sentinel 1700, Strategist 2000 and the Orchestrator, which plays without a limit (2200+). The two weakest play a random move now and then.'),
+      // src/renderer/components/chess/ChessLobby.tsx
+      b('Scegli l’avversario e il colore (bianco, nero o a caso), poi «Gioca contro …». Su ogni agente vedi vittorie, sconfitte, patte e la tua vittoria più veloce contro di lui.',
+        'Pick the opponent and the colour (white, black or random), then "Play against …". Each agent shows your wins, losses, draws and your fastest win against it.'),
+      // src/renderer/components/chess/ChessBoard.tsx
+      b('Muovi con un clic sul pezzo e uno sulla casa, trascinando, o con frecce e Invio. La scacchiera segna le case possibili, l’ultima mossa e lo scacco; quando un pedone arriva in fondo scegli tu il pezzo. Mentre l’avversario pensa puoi già fare la tua mossa (premove): parte appena lui ha mosso, se è ancora legale (un pedone che arriva in fondo così diventa donna); Esc o un clic destro la toglie.',
+        'Move with a click on the piece and one on the square, by dragging, or with the arrows and Enter. The board marks the possible squares, the last move and a check; when a pawn reaches the last rank you pick the piece. While the opponent thinks you can already make your move (a premove): it is played as soon as it has moved, if it is still legal (a pawn that reaches the last rank this way becomes a queen); Esc or a right click drops it.'),
+      // src/renderer/lib/chess-game.ts
+      b('Le regole ci sono tutte: arrocco, en passant, promozione, scacco matto, stallo, patta per ripetizione, per le cinquanta mosse e per materiale insufficiente.',
+        'All the rules are there: castling, en passant, promotion, checkmate, stalemate, draws by repetition, by the fifty-move rule and by insufficient material.'),
+      // src/renderer/lib/chess-lines.ts, src/renderer/components/chess/ChessGame.tsx
+      b('L’avversario si vede pensare e commenta quello che succede davvero (un pezzo preso, uno scacco, un arrocco, chi sta vincendo) con il suo carattere. Sono frasi già scritte, scelte dalla posizione: nessun modello viene chiamato.',
+        'The opponent is seen thinking and comments on what really happens (a piece taken, a check, a castling, who is winning) in its own character. The lines are written beforehand and chosen by the position: no model is called.'),
+      // src/renderer/lib/chess-play.ts
+      b('«Annulla mossa» toglie la tua ultima mossa e la risposta; «Abbandona» è una sconfitta. Se cambi pagina la partita resta e il motore si ferma; quando torni riprende.',
+        '"Take back" removes your last move and the answer; "Resign" is a loss. If you change page the game stays and the engine stops; when you come back it goes on.'),
+      // src/main/chess/store.ts, src/shared/chess.ts chessHistory
+      b('Ogni partita finita resta nello storico, solo sul tuo PC: le vittorie più veloci, le ultime partite e, per ogni agente, le vittorie di fila (la serie in corso e il record). Una vittoria con mosse annullate è salvata ma non vale come record di tempo.',
+        'Every finished game stays in the history, only on your PC: the fastest wins, the last games and, for each agent, the wins in a row (the current streak and the record). A win with moves taken back is saved but never counts as a speed record.'),
+      // src/main/chess/engine.ts
+      b('Il motore parte alla prima mossa, come programma a parte e a bassa priorità, e si spegne quando esci dalla pagina o dopo tre minuti senza mosse: fuori dalle partite non usa né memoria né processore.',
+        'The engine starts at the first move, as a separate program at low priority, and stops when you leave the page or after three minutes without a move: outside a game it uses no memory and no processor.'),
+    ],
+    analogy: b('Come il circolo degli scacchi sotto casa: sei soci, dal principiante che si distrae al maestro che non perdona, e ognuno ha la battuta pronta.',
+      'Like the chess club down the road: six members, from the beginner who gets distracted to the master who forgives nothing, each with a line ready.'),
+    diagram: { kind: 'cycle', steps: [b('La tua mossa', 'Your move'), b('Stockfish pensa', 'Stockfish thinks'), b('Mossa e battuta', 'Move and line'), b('Storico', 'History')] },
+    tech: [
+      tech(DATA, 'Una partita è l’elenco delle sue mosse UCI dalla posizione iniziale. Una partita finita: avversario, colore, risultato, come è finita, mosse tue, tempo, mosse annullate.',
+        'A game is the list of its UCI moves from the start position. A finished game: opponent, colour, result, how it ended, your moves, time, moves taken back.'),
+      tech(FILES, 'Storico: tabella chess_games di userData/app.db (al massimo 5000 partite). Motore: out/chess-engine (da vendor/stockfish, Stockfish 19 lite, GPLv3, non modificato). Pezzi: Chessnut di Alexis Luengas (Apache 2.0).',
+        'History: table chess_games of userData/app.db (at most 5000 games). Engine: out/chess-engine (from vendor/stockfish, Stockfish 19 lite, GPLv3, unmodified). Pieces: Chessnut by Alexis Luengas (Apache 2.0).'),
+      tech(LIMITS, 'Tempo per mossa del motore: da 0,2 s (Scout) a 1,2 s (Orchestrator). Da 1400 a 2000 la forza è l’UCI_Elo di Stockfish; sotto 1320 è una nostra stima. Una mossa senza risposta 15 s oltre il suo tempo ferma il motore e la pagina offre «Riprova».',
+        'Engine time per move: from 0.2 s (Scout) to 1.2 s (Orchestrator). From 1400 to 2000 the strength is Stockfish’s UCI_Elo; under 1320 it is our estimate. A move not answered 15 s past its time stops the engine and the page offers "Try again".'),
+      tech(WHERE, 'Pagina Scacchi (barra a sinistra, o G K); IPC chess:move, chess:stop, chess:save, chess:history.',
+        'Chess page (left rail, or G K); IPC chess:move, chess:stop, chess:save, chess:history.'),
+    ],
+    anchors: {
+      0: ['src/shared/chess.ts#CHESS_BOTS'],
+      1: ['src/renderer/components/chess/ChessLobby.tsx'],
+      2: ['src/renderer/components/chess/ChessBoard.tsx'],
+      3: ['src/renderer/lib/chess-game.ts'],
+      4: ['src/renderer/lib/chess-lines.ts', 'src/renderer/components/chess/ChessGame.tsx'],
+      5: ['src/renderer/lib/chess-play.ts'],
+      6: ['src/main/chess/store.ts', 'src/shared/chess.ts#chessHistory'],
+      7: ['src/main/chess/engine.ts'],
+    },
+    sources: ['src/shared/chess.ts', 'src/main/chess/engine.ts', 'src/main/chess/store.ts', 'src/main/ipc-handlers/chess.ts', 'src/renderer/lib/chess-game.ts', 'src/renderer/lib/chess-play.ts', 'src/renderer/lib/chess-lines.ts', 'src/renderer/components/chess/ChessPage.tsx', 'src/renderer/components/chess/ChessLobby.tsx', 'src/renderer/components/chess/ChessGame.tsx', 'src/renderer/components/chess/ChessBoard.tsx', 'vendor/stockfish/README.md', 'docs/adr/0304-chess-against-the-agents.md'],
+  },
+  {
     id: 'notifications',
     title: b('Avvisi e suoni',
       'Notices and sounds'),
