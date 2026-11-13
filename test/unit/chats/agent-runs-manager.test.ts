@@ -166,7 +166,7 @@ describe('agent runs on chats', () => {
     expect(() => f.m.markRun(c.id, 'great' as never)).toThrow(/Esito non valido/);
   });
 
-  it('the user’s pat or whip is kept on the open run, once per sign, and does not end it (ADR 0297)', async () => {
+  it('the user’s pat or whack is kept on the open run, once per sign, and does not end it (ADR 0297)', async () => {
     const sent: string[] = [];
     const f = fixture({ emitter: { emit: (channel: string) => { sent.push(channel); } } });
     const c = await f.create();

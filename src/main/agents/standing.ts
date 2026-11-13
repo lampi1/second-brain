@@ -30,7 +30,7 @@
 // success (and PLAN_XP), with one or two changes a partial. A decision's XP is its job's size (with its delegated chats),
 // halved when it was re-delegated or reworked. The decisions among pruned runs live on in the rollups
 // (RunTally.decisions, decisionWins, decisionXp; the chain, graded and receipts successes in earnedWins, all XP in xp).
-// The user's pat or whip on a run's little person (ADR 0297) is a nudge, not a verdict: it weighs TOUCH_TRUST (a
+// The user's pat or whack on a run's little person (ADR 0297) is a nudge, not a verdict: it weighs TOUCH_TRUST (a
 // twentieth of a written verdict), once per run, all of a role's nudges together at most TOUCH_CAP (half a verdict,
 // however many runs were clicked), and moves the role's mean only: it earns no XP, is not one of the
 // verdicts the performance needs before it shows, does not narrow its ± and does not reach the per-model rows.
@@ -68,7 +68,7 @@ export function listCost(tokens: AgentRunTokens | null | undefined, price: Token
 export const HALF_LIFE_MS = 30 * 86_400_000;
 /** how much each kind of verdict counts; the agent's own word (self) counts nothing (ADR 0100) */
 export const TRUST = { human: 1, review: 1, graded: 0.8, receipts: 0.7, facts: 0, orchestrator: 0.6, decision: 0.5, chain: 0.5, self: 0 } as const;
-/** a pat or a whip on the little person (ADR 0297): a twentieth of the user's written verdict, one per run */
+/** a pat or a whack on the little person (ADR 0297): a twentieth of the user's written verdict, one per run */
 export const TOUCH_TRUST = 0.05;
 /** all the nudges of one role together weigh at most this much: half a written verdict, for a user who clicks a lot */
 export const TOUCH_CAP = 0.5;
@@ -253,7 +253,7 @@ export function estimate(num: number, den: number, prior: { mean: number; weight
 
 const noSources = (): AgentStanding['sources'] => ({ human: 0, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 0, decision: 0, chain: 0, self: 0 });
 /** tn, td: the nudges' weighted score and weights (ADR 0297), kept apart from the verdicts' num and den */
-interface Acc { runs: number; wins: number; xp: number; num: number; den: number; evaluated: number; sources: AgentStanding['sources']; pat: number; whip: number; tn: number; td: number; models: Map<string, ModelAcc> }
+interface Acc { runs: number; wins: number; xp: number; num: number; den: number; evaluated: number; sources: AgentStanding['sources']; pat: number; whack: number; tn: number; td: number; models: Map<string, ModelAcc> }
 interface ModelAcc { runs: number; wins: number; num: number; den: number; evaluated: number; cost: number; costRuns: number; estimated: number; unpriced: number; ms: number[]; lastAt: number }
 const median = (v: number[]): number | null => { if (!v.length) return null; const s = [...v].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2; };
 /** One model's row. Its estimate starts from the role's performance on its OTHER verdicts (`others`: the role's
@@ -285,7 +285,7 @@ export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[
   const acc = new Map<string, Acc>();
   const of = (id: string) => {
     let a = acc.get(id);
-    if (!a) acc.set(id, a = { runs: 0, wins: 0, xp: 0, num: 0, den: 0, evaluated: 0, sources: noSources(), pat: 0, whip: 0, tn: 0, td: 0, models: new Map() });
+    if (!a) acc.set(id, a = { runs: 0, wins: 0, xp: 0, num: 0, den: 0, evaluated: 0, sources: noSources(), pat: 0, whack: 0, tn: 0, td: 0, models: new Map() });
     return a;
   };
   for (const t of rollups) {
@@ -309,7 +309,7 @@ export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[
     if (e?.verdict === 'success') { own.wins++; own.xp += runXp(r, ix); }
     if (v) add(own, v.source, v.verdict, age);
     // a nudge beside the verdicts (ADR 0297): its own sums, never one of the `evaluated`, never in a model's row
-    if (r.touch) { const w = TOUCH_TRUST * 0.5 ** (Math.max(0, age) / HALF_LIFE_MS); own.tn += r.touch.sign > 0 ? w : 0; own.td += w; if (r.touch.sign > 0) own.pat++; else own.whip++; }
+    if (r.touch) { const w = TOUCH_TRUST * 0.5 ** (Math.max(0, age) / HALF_LIFE_MS); own.tn += r.touch.sign > 0 ? w : 0; own.td += w; if (r.touch.sign > 0) own.pat++; else own.whack++; }
     if (r.model) {
       let m = own.models.get(r.model);
       if (!m) own.models.set(r.model, m = { runs: 0, wins: 0, num: 0, den: 0, evaluated: 0, cost: 0, costRuns: 0, estimated: 0, unpriced: 0, ms: [], lastAt: 0 });
@@ -346,7 +346,7 @@ export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[
     const cap = a.td > TOUCH_CAP ? TOUCH_CAP / a.td : 1;
     const mean = est && a.td > 0 ? estimate(a.num + a.tn * cap, a.den + a.td * cap).mean : est?.mean;
     out.set(id, { runs: a.runs, wins: a.wins, xp, ...levelOf(xp), performance: shown ? mean! : null, spread: est ? est.spread : null,
-      evaluated: a.evaluated, minRuns: MIN_EVALUATED, sources: a.sources, ...(a.pat + a.whip ? { touches: { pat: a.pat, whip: a.whip } } : {}), ...(models.length ? { models } : {}) });
+      evaluated: a.evaluated, minRuns: MIN_EVALUATED, sources: a.sources, ...(a.pat + a.whack ? { touches: { pat: a.pat, whack: a.whack } } : {}), ...(models.length ? { models } : {}) });
   }
   return out;
 }

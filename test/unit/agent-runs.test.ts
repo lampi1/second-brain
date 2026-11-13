@@ -63,7 +63,7 @@ describe('agent run store', () => {
     }
     expect(readRun({ ...run, endReason: 'closed', endCause: 'whatever' })).not.toHaveProperty('endCause');
   });
-  it('keeps the user\'s pat or whip on a run (ADR 0297), drops a malformed one, forgets it when the run reopens', () => {
+  it('keeps the user\'s pat or whack on a run (ADR 0297), drops a malformed one, forgets it when the run reopens', () => {
     const run = new AgentRunStore(tmp()).start(start());
     run.touch = { sign: -1, at: 1500 };
     expect(readRun(structuredClone(run))?.touch).toEqual({ sign: -1, at: 1500 });

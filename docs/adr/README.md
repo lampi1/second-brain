@@ -292,7 +292,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0294](0294-no-app-guard-on-settings-and-hooks.md) No permission question outside the brain's rules: the app's guard on settings and hooks is removed — accepted
 - [0295](0295-little-people-as-sprites.md) The roles are little people at work on the strips — accepted
 - [0296](0296-fast-mode-user-model-per-task-flash-removed.md) «Fast» beside «Plan», one task on the model the user names, Flash removed — accepted
-- [0297](0297-click-reactions-and-touch-nudge.md) A click on a little person: a pat or a crack of the whip, and a nudge on the run — accepted
+- [0297](0297-click-reactions-and-touch-nudge.md) A click on a little person: a pat or a whack of the stick, and a nudge on the run — accepted
 - [0298](0298-weekly-limit-on-the-top-bar.md) The weekly limit on the top bar, the 5-hour window from 70% — accepted
 
 ## Replaced

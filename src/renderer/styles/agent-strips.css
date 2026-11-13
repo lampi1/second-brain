@@ -225,4 +225,4 @@
 .chat-tile.is-strip .tile-head, .agent-strips .chat-tile.is-expanded > .tile-head { padding-top:4px; padding-bottom:4px; }
 /* only beside a person: a portrait (the user's own picture) keeps the spark and the old indent */
 .strip-face[data-person] ~ * .typing-spark { display:none; }
-.th-row:has(> .strip-face[data-person]) ~ .strip-facts { padding-left:68px; }
+.th-row:has(> .strip-face[data-person]) ~ .strip-facts { padding-left:83px; }

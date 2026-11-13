@@ -406,7 +406,7 @@ export interface ChatsInvokeMap {
   'chat:autoCloseKeep': [{ chatId: string; keep: boolean }, void];
   /** Brother's verdict on a settled agent run (Home strip); renderer only, never an agent tool. */
   'run:outcome': [{ chatId: string; verdict: 'success' | 'partial' | 'fail' }, ChatSummary];
-  /** Brother's pat (+1) or whip (-1) on the little person of a chat's run (ADR 0297): a nudge a twentieth of a verdict,
+  /** Brother's pat (+1) or whack (-1) on the little person of a chat's run (ADR 0297): a nudge a twentieth of a verdict,
    *  one per run; true = recorded. Renderer only, never an agent tool. */
   'run:touch': [{ chatId: string; sign: 1 | -1 }, boolean];
   /** Explicit user review of provenance-bearing memory and skill candidates; never exposed as model approval. */

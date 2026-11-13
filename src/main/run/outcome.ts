@@ -1,6 +1,6 @@
 // `run:outcome` (renderer IPC only, never an agent tool): Brother's verdict on a settled agent run. The renderer sends
 // only chat and verdict; basis, author and time are fixed by ChatManager.markRun. `run:touch` (the same rule): his pat
-// or whip on the run's little person (ADR 0297), a nudge a twentieth of a verdict, at any moment of the run.
+// or whack on the run's little person (ADR 0297), a nudge a twentieth of a verdict, at any moment of the run.
 import type { ChatSummary } from '../../shared/contract';
 import type { ChatService } from '../services';
 

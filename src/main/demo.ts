@@ -537,7 +537,7 @@ export class DemoChats implements ChatService {
     return this.patch(chatId, { run })!;
   }
 
-  /** the pat or whip on a demo run's little person (ADR 0297): kept on the chat's run, like the real manager */
+  /** the pat or whack on a demo run's little person (ADR 0297): kept on the chat's run, like the real manager */
   touchRun(chatId: string, sign: 1 | -1): boolean {
     const chat = this.chats.get(chatId);
     if (!chat?.run || chat.run.touch?.sign === sign) return false;

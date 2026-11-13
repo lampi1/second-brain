@@ -213,11 +213,11 @@ export function readRun(v: unknown): AgentRun | null {
     ...(receipts ? { receipts } : {}),
     // a plan record out of shape is dropped, never the run (ADR 0131)
     ...(plan ? { plan } : {}),
-    // a pat or a whip out of shape is dropped, never the run (ADR 0297)
+    // a pat or a whack out of shape is dropped, never the run (ADR 0297)
     ...(readTouch(r.touch) ? { touch: readTouch(r.touch)! } : {}),
   };
 }
-/** The user's pat or whip on a run (ADR 0297), or null when absent or out of shape. */
+/** The user's pat or whack on a run (ADR 0297), or null when absent or out of shape. */
 function readTouch(v: unknown): AgentRunTouch | null {
   const p = v as Record<string, unknown> | null;
   return p && typeof p === 'object' && (p.sign === 1 || p.sign === -1) && time(p.at) ? { sign: p.sign, at: p.at } : null;

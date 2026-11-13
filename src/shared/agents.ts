@@ -131,7 +131,7 @@ export interface AgentRunOutcome {
   basis: 'human' | 'reviewed-evidence' | 'receipts' | 'orchestrator-opinion' | 'self-report' | 'unknown';
   at: number; by: string; note?: string;
 }
-/** The user's pat (+1) or whip (-1) on the agent's little person for this run (ADR 0297): the last one stands, and it
+/** The user's pat (+1) or whack (-1) on the agent's little person for this run (ADR 0297): the last one stands, and it
  *  weighs a twentieth of a written verdict (standing.ts TOUCH_TRUST). */
 export interface AgentRunTouch { sign: 1 | -1; at: number }
 export interface AgentRunCounters { questions: number; permissions: number; commands: number; reopened: number; contextPeak: number | null }
@@ -239,8 +239,8 @@ export interface AgentStanding {
    *  happened later, the facts, the Orchestrator, the Orchestrator's decision signals (ADR 0131), a verified parent
    *  (chain), the agent itself (the last one is counted here but weighs nothing) */
   sources: { human: number; review: number; receipts: number; graded: number; facts: number; orchestrator: number; decision: number; chain: number; self: number };
-  /** runs the user patted or whipped (ADR 0297): each weighs a twentieth of a verdict, all together half a verdict at most, and never counts as one; absent = none */
-  touches?: { pat: number; whip: number };
+  /** runs the user patted or whacked (ADR 0297): each weighs a twentieth of a verdict, all together half a verdict at most, and never counts as one; absent = none */
+  touches?: { pat: number; whack: number };
   /** the same runs by the model they ran on (ADR 0284), most runs first; only the runs still kept whole. Absent when
    *  no kept run names its model. */
   models?: ModelStanding[];
@@ -326,7 +326,7 @@ export interface AgentRun {
   /** a Strategist's plan with the user on this run (ADR 0108, 0131): plans proposed, «Cambia qualcosa» asked, when the
    *  user approved one; a decision signal for the Orchestrator */
   plan?: AgentRunPlan;
-  /** the user's pat or whip on this run's little person (ADR 0297); one per run, the last one stands */
+  /** the user's pat or whack on this run's little person (ADR 0297); one per run, the last one stands */
   touch?: AgentRunTouch;
   /** the nightly batch review's own run (agents/judge-sample.ts, ADR 0203): the runs it reviewed, each with the verdict
    *  and verification the Sentinel gave it (absent = it gave none); written by the app from the parsed answer */

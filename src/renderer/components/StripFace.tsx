@@ -1,7 +1,7 @@
 // The face of a strip (ADR 0295): the role's little person doing what the chat does (AgentSprite.tsx), in place of the
 // portrait and its state dot. A role the user gave a picture of their own keeps that picture with the dot (the sprite
 // could not look like it). Used by ChatTile.tsx (a root strip) and DelegationCard.tsx (a delegated row); also maps a
-// chat's state to the animation (spriteStateOf), and sends the user's pat or whip on the person to the chat's run
+// chat's state to the animation (spriteStateOf), and sends the user's pat or whack on the person to the chat's run
 // (run:touch, ADR 0297).
 import type { AgentAvatar as Avatar } from '@shared/agents';
 import type { ChatItem } from '@shared/contract';
@@ -34,7 +34,7 @@ export function isThinking(items: readonly ChatItem[] | undefined): boolean {
  *  page does not celebrate again, a new end after more work does. */
 const celebrated = new Map<string, string>();
 
-export function StripFace({ chatId, avatar, name, tone, size, height = 32, ...o }: { chatId: string; avatar: Avatar | undefined; name: string; tone: string; size: number; height?: number; waitsUser: boolean; error: boolean; busy: boolean; done: boolean; pending?: boolean }) {
+export function StripFace({ chatId, avatar, name, tone, size, height = 40, ...o }: { chatId: string; avatar: Avatar | undefined; name: string; tone: string; size: number; height?: number; waitsUser: boolean; error: boolean; busy: boolean; done: boolean; pending?: boolean }) {
   const thinking = useApp(s => o.busy && isThinking(s.items[chatId]));
   const own = useOwnPicture(avatar);
   const state = spriteStateOf({ ...o, thinking });
@@ -45,7 +45,7 @@ export function StripFace({ chatId, avatar, name, tone, size, height = 32, ...o 
     if (state === 'done') { celebrated.set(chatId, mark); return; }
     celebrated.delete(chatId); setSeen(false);
   }, [chatId, state, mark]);
-  // the user's pat or whip is a nudge on this chat's run (ADR 0297): sent when it changes, never at every click
+  // the user's pat or whack is a nudge on this chat's run (ADR 0297): sent when it changes, never at every click
   const hasRun = useApp(s => !!s.chats[chatId]?.run), touched = useApp(s => s.chats[chatId]?.run?.touch?.sign);
   const onTouch = (sign: 1 | -1) => {
     if (state === 'done') setSeen(true); // after its reaction a finished person stands still: no second celebration
@@ -55,5 +55,5 @@ export function StripFace({ chatId, avatar, name, tone, size, height = 32, ...o 
   if (own || (avatar?.kind === 'character' && !isSpriteId(avatar.value)))
     return <span className="strip-face"><AgentAvatar avatar={avatar} name={name} size={size} /><span className={`strip-dot lead tone-${tone}`} aria-hidden="true" /></span>;
   return <span className="strip-face" data-person><AgentSprite id={spriteIdOf(avatar)} state={state} still={state === 'done' && seen} height={height} label={t('product.avatar', { name })}
-    onTouch={onTouch} tip={t(!hasRun ? 'sprite.tip' : touched === 1 ? 'sprite.tipPat' : touched === -1 ? 'sprite.tipWhip' : 'sprite.tipRun')} /></span>;
+    onTouch={onTouch} tip={t(!hasRun ? 'sprite.tip' : touched === 1 ? 'sprite.tipPat' : touched === -1 ? 'sprite.tipWhack' : 'sprite.tipRun')} /></span>;
 }

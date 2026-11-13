@@ -33,7 +33,8 @@ owner wants whole little people who do things, readable when small, one per role
    late. A track compiles to one CSS `@keyframes` rule, written once into the page when its scene is first drawn.
    Transforms and opacity only; no image, no dependency, no timer, no script per frame.
 5. On a strip the person replaces the portrait and its state dot, free on the row: 60 × 48 px on a root strip (the
-   row grows from about 44 to about 56 px), 40 × 32 px on a delegated row. A thin rim in the theme's text colour
+   row grows from about 44 to about 56 px), 40 × 32 px on a delegated row (a little bigger since ADR 0297 point 7:
+   75 × 60 and 50 × 40 px). A thin rim in the theme's text colour
    keeps its white and black parts readable on a light and on a dark strip; notes, «z» and thoughts
    are drawn in the theme's text colour. It thinks on a thought or before the first step and keeps at its work
    between two steps. A role the user gave a picture of their own keeps that picture with the dot, the

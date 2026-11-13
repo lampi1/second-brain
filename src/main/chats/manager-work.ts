@@ -336,7 +336,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     return { ...r.s };
   }
 
-  /** The user's pat (+1) or whip (-1) on the little person of this chat's run (ADR 0297; the UI's only, never an agent
+  /** The user's pat (+1) or whack (-1) on the little person of this chat's run (ADR 0297; the UI's only, never an agent
    *  tool): one per run, the last one stands, the run and the chat's last activity stay as they are. False = nothing changed
    *  (no run, the same sign). */
   touchRun(chatId: string, sign: 1 | -1): boolean {

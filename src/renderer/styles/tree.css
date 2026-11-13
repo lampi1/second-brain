@@ -26,7 +26,7 @@
    when words are needed, a pill; open, it is a quiet panel with its steps, its result and its chat. */
 .delegation-card { --dc-pad: 10px; --dc-text: 30px; position: relative; min-width: 0; padding: 3px 4px 3px var(--dc-pad); border-bottom: 1px solid var(--border); cursor: pointer; --dc-tone: var(--text-4); }
 /* beside a little person (ADR 0295) what opens under the row starts further in */
-.delegation-card:has(> .dc-summary > .dc-head > .strip-face[data-person]) { --dc-text: 48px; }
+.delegation-card:has(> .dc-summary > .dc-head > .strip-face[data-person]) { --dc-text: 58px; }
 .delegation-card:hover { background: var(--surface-2); }
 .delegation-card.is-open { cursor: default; background: var(--surface); padding-bottom: 9px; }
 .delegation-card.is-open .dc-summary { cursor: pointer; }

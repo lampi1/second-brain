@@ -70,14 +70,14 @@ describe('the little people', () => {
     const css = SPRITE_IDS.map(id => keyframesCss(spriteScene(id, 'idle').nodes));
     expect(new Set(css).size).toBe(1);
   });
-  it('reacts to a click the same way in every role: a pat and a whip, each played once and as long as it says', () => {
+  it('reacts to a click the same way in every role: a pat and a whack, each played once and as long as it says', () => {
     for (const id of SPRITE_IDS) for (const kind of SPRITE_REACTIONS) {
       const tracks = walk(reactionScene(id, kind).nodes).flatMap(n => ('g' in n && n.track ? [n.track] : []));
       expect(tracks.length, `${id} ${kind}`).toBeGreaterThan(6);
       expect(tracks.every(t => t.n === 1 && t.t === REACTION_S[kind]), `${id} ${kind}`).toBe(true);
     }
     expect(reactionScene('scout', 'pat')).toBe(reactionScene('scout', 'pat'));
-    expect(reactionScene('scout', 'pat').nodes.map(nodeSvg).join('')).not.toBe(reactionScene('scout', 'whip').nodes.map(nodeSvg).join(''));
+    expect(reactionScene('scout', 'pat').nodes.map(nodeSvg).join('')).not.toBe(reactionScene('scout', 'whack').nodes.map(nodeSvg).join(''));
   });
   it('builds a scene once', () => {
     expect(spriteScene('artisan', 'work')).toBe(spriteScene('artisan', 'work'));

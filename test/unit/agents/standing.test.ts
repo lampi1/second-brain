@@ -44,34 +44,34 @@ describe('verdictOf', () => {
 });
 
 describe('standings', () => {
-  it('counts a pat or a whip as a nudge (ADR 0297): a twentieth of a verdict, never a verdict, never XP', () => {
+  it('counts a pat or a whack as a nudge (ADR 0297): a twentieth of a verdict, never a verdict, never XP', () => {
     const judged = () => Array.from({ length: MIN_EVALUATED }, () => run({ outcome: human('success') }));
     const base = standings(judged(), [], NOW).get('scout')!;
-    const whipped = standings([...judged(), run({ touch: { sign: -1, at: NOW } })], [], NOW).get('scout')!;
+    const whacked = standings([...judged(), run({ touch: { sign: -1, at: NOW } })], [], NOW).get('scout')!;
     const patted = standings([...judged(), run({ touch: { sign: 1, at: NOW } })], [], NOW).get('scout')!;
     // the run counts, the nudge is not one of the verdicts and earns nothing
-    expect(whipped).toMatchObject({ runs: MIN_EVALUATED + 1, evaluated: MIN_EVALUATED, wins: base.wins, xp: base.xp, touches: { pat: 0, whip: 1 } });
-    expect(patted.touches).toEqual({ pat: 1, whip: 0 });
+    expect(whacked).toMatchObject({ runs: MIN_EVALUATED + 1, evaluated: MIN_EVALUATED, wins: base.wins, xp: base.xp, touches: { pat: 0, whack: 1 } });
+    expect(patted.touches).toEqual({ pat: 1, whack: 0 });
     expect(base.touches).toBeUndefined();
     // it moves the estimate, a little: far less than the user's written verdict would
     const failed = standings([...judged(), run({ outcome: human('fail') })], [], NOW).get('scout')!;
-    expect(whipped.performance!).toBeLessThan(base.performance!);
+    expect(whacked.performance!).toBeLessThan(base.performance!);
     expect(patted.performance!).toBeGreaterThan(base.performance!);
-    expect(base.performance! - whipped.performance!).toBeLessThan((base.performance! - failed.performance!) / 10);
+    expect(base.performance! - whacked.performance!).toBeLessThan((base.performance! - failed.performance!) / 10);
     expect(TOUCH_TRUST).toBe(TRUST.human / 20);
     // the ± and the per-model rows come from the verdicts alone
-    expect(whipped.spread).toBe(base.spread);
+    expect(whacked.spread).toBe(base.spread);
     const onModel = (touch?: { sign: 1 | -1; at: number }) => standings([...Array.from({ length: 3 }, () => run({ model: 'm1', outcome: human('success') })),
       ...Array.from({ length: 20 }, () => run({ model: 'm1', ...(touch ? { touch } : {}) }))], [], NOW).get('scout')!.models![0]!;
     expect(onModel({ sign: -1, at: NOW })).toEqual(onModel());
-    // a user who clicks a lot: two hundred whipped runs weigh as TOUCH_CAP, half a written verdict, never more
+    // a user who clicks a lot: two hundred whacked runs weigh as TOUCH_CAP, half a written verdict, never more
     const many = (n: number) => standings([...judged(), ...Array.from({ length: n }, () => run({ touch: { sign: -1, at: NOW } }))], [], NOW).get('scout')!;
     expect(many(400).performance!).toBeCloseTo(many(200).performance!, 10);
     expect(many(200).performance!).toBeLessThan(many(1).performance!);
     expect(base.performance! - many(200).performance!).toBeLessThan(base.performance! - failed.performance!);
     expect(TOUCH_CAP).toBe(TRUST.human / 2);
-    // past the cap the balance is kept: as many pats as whips pull the mean towards the middle, a little, and
-    // never below what the whips alone would do
+    // past the cap the balance is kept: as many pats as whacks pull the mean towards the middle, a little, and
+    // never below what the whacks alone would do
     const mixed = standings([...judged(), ...Array.from({ length: 200 }, (_, i) => run({ touch: { sign: i % 2 ? 1 : -1, at: NOW } }))], [], NOW).get('scout')!;
     expect(mixed.performance!).toBeGreaterThan(many(200).performance!);
     expect(mixed.performance!).toBeLessThan(base.performance!);

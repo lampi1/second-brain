@@ -6,7 +6,7 @@
 // (AgentCatalogCard.tsx) and by the working line of the Orchestrator's transcript (ChatItems.tsx Typing, in place of
 // the spark). Without motion
 // (prefers-reduced-motion, a hidden window) it is the rest pose, which every state draws complete. A click on it plays
-// a reaction (ADR 0297: a pat, a crack of the whip) and tells its owner, which may record it as a nudge on the run.
+// a reaction (ADR 0297: a pat, a whack of the stick) and tells its owner, which may record it as a nudge on the run.
 import { createContext, useEffect, useInsertionEffect, useMemo, useState, type CSSProperties, type MouseEvent, type ReactElement } from 'react';
 import type { AgentAvatar as Avatar } from '@shared/agents';
 import { REACTION_S, isSpriteId, reactionScene, spriteScene, type SpriteId, type SpriteReaction, type SpriteState } from '../lib/agent-sprites';
@@ -44,7 +44,7 @@ function draw(n: Node, key: number): ReactElement {
 
 /** `height` in px; the picture is 5 : 4. `still`: the scene's last picture without its movement (a «done» already seen).
  *  A click on the person plays a reaction once over its state (ADR 0297): the left one a pat on the head, the right
- *  one a crack of the whip; `onTouch` hears which (+1 the pat, -1 the whip), `tip` is its tooltip. The click stays on
+ *  one a whack of the stick; `onTouch` hears which (+1 the pat, -1 the whack), `tip` is its tooltip. The click stays on
  *  the person: it never opens the strip or the card under it. */
 export function AgentSprite({ id, state, height = 32, label, still, onTouch, tip }: { id: SpriteId; state: SpriteState; height?: number; label?: string; still?: boolean; onTouch?: (sign: 1 | -1) => void; tip?: string }) {
   // `n` counts the clicks: each one starts its reaction from the top
@@ -60,7 +60,7 @@ export function AgentSprite({ id, state, height = 32, label, still, onTouch, tip
   const body = useMemo(() => scene.nodes.map(draw), [scene]);
   const touch = (sign: 1 | -1) => (e: MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
-    setReact(r => ({ kind: sign > 0 ? 'pat' : 'whip', n: (r?.n ?? 0) + 1 }));
+    setReact(r => ({ kind: sign > 0 ? 'pat' : 'whack', n: (r?.n ?? 0) + 1 }));
     onTouch?.(sign);
   };
   return <span className={`agent-sprite${still && !react ? ' is-still' : ''}`} data-sprite={id} data-sprite-state={state} data-react={react?.kind} title={tip}

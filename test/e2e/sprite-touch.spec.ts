@@ -1,5 +1,5 @@
 // E2E of the clicks on a role's little person (ADR 0297), on the frozen demo: a left click on the person of a strip
-// plays the pat, a right click the crack of the whip, and neither opens the strip; the chat's run keeps the last one
+// plays the pat, a right click the whack of the stick, and neither opens the strip; the chat's run keeps the last one
 // (its tooltip says so, the second same click writes nothing new); the person on the front of a role card reacts too
 // and the card does not turn. Screenshot in test-results/shots/sprite-touch-*.png.
 import { expect, test, type Locator } from '@playwright/test';
@@ -15,7 +15,7 @@ async function watch(person: Locator): Promise<() => Promise<string[]>> {
   return () => person.evaluate(el => (el as unknown as { seen: string[] }).seen);
 }
 
-test('the little person reacts to a click: a pat, a whip, and the run keeps the last one', async () => {
+test('the little person reacts to a click: a pat, a whack, and the run keeps the last one', async () => {
   const { app, page } = await launchDemo({ width: 1600, height: 900 });
   try {
     const strip = page.getByTestId('tile-chat-mappa'), person = strip.locator('.strip-face .agent-sprite');
@@ -26,8 +26,8 @@ test('the little person reacts to a click: a pat, a whip, and the run keeps the 
     await shot(page, 'sprite-touch-pat');
     await expect(person).toHaveAttribute('title', /Buffetto dato/);
     await person.click({ button: 'right' });
-    await expect.poll(seen).toEqual(['pat', 'whip']);
-    await expect(person).toHaveAttribute('title', /Frustata data/);
+    await expect.poll(seen).toEqual(['pat', 'whack']);
+    await expect(person).toHaveAttribute('title', /Bastonata data/);
     // the clicks stayed on the person: the strip is still closed, no menu opened
     await expect(page.getByTestId('chat-expand-mappa')).toHaveAttribute('aria-expanded', 'false');
     // the role card: the person reacts, the card does not turn
@@ -36,7 +36,7 @@ test('the little person reacts to a click: a pat, a whip, and the run keeps the 
     await expect(hero).toBeVisible();
     const heroSeen = await watch(hero);
     await hero.click({ button: 'right' });
-    await expect.poll(heroSeen).toEqual(['whip']);
+    await expect.poll(heroSeen).toEqual(['whack']);
     await expect(card).toHaveAttribute('data-flipped', 'false');
   } finally { await app.close(); }
 });
