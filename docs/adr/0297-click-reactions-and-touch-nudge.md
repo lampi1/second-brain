@@ -27,12 +27,12 @@ click to count as a positive or negative feedback on the agent: a really small o
    chat opens a new run, which can take a mark of its own; the ended one keeps its.
 4. The nudge weighs `TOUCH_TRUST` = 0.05 in the performance estimate: a twentieth of a verdict the user writes, with
    the same ageing (half weight every 30 days). All the nudges of one role together weigh at most `TOUCH_CAP` = 0.5,
-   half a written verdict: past ten clicked runs they are scaled down and keep only their balance, so a user who
-   clicks on every run moves the number as little as one who clicks on ten. It is not a verdict: it moves the
-   role's mean only. It is not counted among the verdicts the performance needs before it shows, it does not narrow the ± (so clicks alone
-   never take a role out of «in rodaggio»), it does not reach the per-model rows, it earns no XP and no level, it
-   does not end the run and it is not chat activity (a stalled child stays stalled). The card's «?»
-   on the performance says how many pats and whips the role has.
+   half a written verdict: past that (ten fresh clicked runs, more when they are old) they are scaled down and keep
+   only their balance, so a user who clicks on every run moves the number as little as one who clicks on ten. It is
+   not a verdict: it moves the role's mean only. It is not counted among the verdicts the performance needs before
+   it shows, it does not narrow the ± (so clicks alone never take a role out of «in rodaggio»), it does not reach
+   the per-model rows, it earns no XP and no level, it does not end the run and it is not chat activity (a stalled
+   child stays stalled). The card's «?» on the performance says how many pats and whips the role has.
 5. `run:touch` is renderer IPC only, never an agent tool: a chat id and +1 or -1, nothing else.
 6. Where there is no run the person only reacts: the Orchestrator's working line (its chat is permanent, it is rated
    by the runs it opens), the front of a role card, a chat without a role.
@@ -40,7 +40,7 @@ click to count as a positive or negative feedback on the agent: a really small o
 ## Consequences
 
 - The estimate moves a little with something the user does without thinking: this is what he asked for, and the
-  weight and the one-per-run rule keep it small. A written verdict on the same run weighs twenty times more.
+  weight, the one-per-run rule and the cap on a role's total keep it small. A written verdict on the same run weighs twenty times more.
 - A nudge on a run that is later pruned into the rollups is lost with it.
 - The reactions are not reachable from the keyboard: they are a toy on top of the state the row already says in
   words; the tooltip says what a click does and, on a strip, what the run keeps.

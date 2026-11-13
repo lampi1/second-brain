@@ -239,7 +239,7 @@ export interface AgentStanding {
    *  happened later, the facts, the Orchestrator, the Orchestrator's decision signals (ADR 0131), a verified parent
    *  (chain), the agent itself (the last one is counted here but weighs nothing) */
   sources: { human: number; review: number; receipts: number; graded: number; facts: number; orchestrator: number; decision: number; chain: number; self: number };
-  /** runs the user patted or whipped (ADR 0297): each weighs a twentieth of a verdict and never counts as one; absent = none */
+  /** runs the user patted or whipped (ADR 0297): each weighs a twentieth of a verdict, all together half a verdict at most, and never counts as one; absent = none */
   touches?: { pat: number; whip: number };
   /** the same runs by the model they ran on (ADR 0284), most runs first; only the runs still kept whole. Absent when
    *  no kept run names its model. */

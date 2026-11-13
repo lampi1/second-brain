@@ -173,17 +173,18 @@ describe('agent runs on chats', () => {
     const before = { updatedAt: f.m.list().find(x => x.id === c.id)!.updatedAt, eventAt: f.m.lastEventAt(c.id) };
     // the clicks come a minute later, on a clock of the test's own: a clock that moved would show
     const clock = vi.spyOn(Date, 'now').mockReturnValue(before.updatedAt + 60_000);
-    sent.length = 0;
-    expect(f.m.touchRun(c.id, 1)).toBe(true);
-    expect(sent).toEqual(['chat:updated']); // the page learns it
-    expect(f.m.touchRun(c.id, 1)).toBe(false); // the same sign again: nothing to write
-    expect(f.run(c.id)).toMatchObject({ touch: { sign: 1 } });
-    expect(f.run(c.id)!.endedAt).toBeUndefined();
-    expect(f.m.touchRun(c.id, -1)).toBe(true); // the last one stands
-    expect(f.m.runs.get(f.run(c.id)!.runId)).toMatchObject({ touch: { sign: -1 } });
-    // a pat is no activity: the chat's clock (a stalled child's time) did not move
-    expect({ updatedAt: f.m.list().find(x => x.id === c.id)!.updatedAt, eventAt: f.m.lastEventAt(c.id) }).toEqual(before);
-    clock.mockRestore();
+    try {
+      sent.length = 0;
+      expect(f.m.touchRun(c.id, 1)).toBe(true);
+      expect(sent).toEqual(['chat:updated']); // the page learns it
+      expect(f.m.touchRun(c.id, 1)).toBe(false); // the same sign again: nothing to write
+      expect(f.run(c.id)).toMatchObject({ touch: { sign: 1 } });
+      expect(f.run(c.id)!.endedAt).toBeUndefined();
+      expect(f.m.touchRun(c.id, -1)).toBe(true); // the last one stands
+      expect(f.m.runs.get(f.run(c.id)!.runId)).toMatchObject({ touch: { sign: -1 } });
+      // a pat is no activity: the chat's clock (a stalled child's time) did not move
+      expect({ updatedAt: f.m.list().find(x => x.id === c.id)!.updatedAt, eventAt: f.m.lastEventAt(c.id) }).toEqual(before);
+    } finally { clock.mockRestore(); }
     const plain = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' });
     expect(f.m.touchRun(plain.id, 1)).toBe(false); // no run: the person reacts, nothing is recorded
   });

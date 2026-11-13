@@ -70,6 +70,11 @@ describe('standings', () => {
     expect(many(200).performance!).toBeLessThan(many(1).performance!);
     expect(base.performance! - many(200).performance!).toBeLessThan(base.performance! - failed.performance!);
     expect(TOUCH_CAP).toBe(TRUST.human / 2);
+    // past the cap the balance is kept: as many pats as whips pull the mean towards the middle, a little, and
+    // never below what the whips alone would do
+    const mixed = standings([...judged(), ...Array.from({ length: 200 }, (_, i) => run({ touch: { sign: i % 2 ? 1 : -1, at: NOW } }))], [], NOW).get('scout')!;
+    expect(mixed.performance!).toBeGreaterThan(many(200).performance!);
+    expect(mixed.performance!).toBeLessThan(base.performance!);
     // alone it shows nothing: the performance stays «in rodaggio»
     expect(standings(Array.from({ length: 9 }, () => run({ touch: { sign: 1, at: NOW } })), [], NOW).get('scout')).toMatchObject({ performance: null, evaluated: 0 });
   });
