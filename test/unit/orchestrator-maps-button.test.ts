@@ -41,7 +41,9 @@ describe('the project maps button on the Orchestrator', () => {
   it('is on the Orchestrator\'s head, with the maps shortcut', () => {
     const html = render();
     expect(html).toContain('orchestrator-name');
-    const head = html.slice(0, html.indexOf('data-testid="orchestrator-menu"'));
+    const menu = html.indexOf('data-testid="orchestrator-menu"');
+    expect(menu).toBeGreaterThan(0);
+    const head = html.slice(0, menu);
     expect(head).toContain('data-testid="orchestrator-maps"');
   });
   it('opens the maps on click, like the top bar\'s button', () => {
