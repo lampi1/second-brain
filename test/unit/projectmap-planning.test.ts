@@ -147,6 +147,33 @@ describe('ProjectMaps planning', () => {
     m.observe('chat:removed', { chatId: 's1' });
     expect(m.view('shop')!.map.elements.map(e => e.id)).toEqual(['web', 'cart', 'pay']);
   });
+  it('keeps a planned system whose part already started, and a status set after the mirror', () => {
+    const m = make();
+    m.save({ title: 'Shop', root: '/repo/shop', map: drawing, by: 'Scout', summary: 'prima' });
+    m.planDraw('s1', { project: 'shop', add: [{ name: 'Resi', kind: 'system' }] });
+    m.planDraw('s1', { project: 'shop', add: [{ name: 'Storni', parent: 'resi' }], keep: true });
+    const steps: StrategyPlan['steps'] = [{ title: 'Scrivo gli storni', role: 'artisan', state: 'done', on: 'storni' }];
+    chats[0] = chat({ id: 's1', title: 'Strategist · Resi', plan: plan({ phase: 'done', map: 'shop', steps }) });
+    m.observe('chat:updated', chats[0]);
+    expect(m.view('shop')!.map.elements.find(e => e.id === 'storni')!.status).toBe('ok');
+    // an agent finds it broken later: the finished plan does not paint it green again
+    m.update('shop', { changes: [{ id: 'storni', status: 'blocked', note: 'test rossi' }], by: 'Sentinel', summary: 'storni rotti' });
+    m.observe('chat:updated', chats[0]);
+    expect(m.view('shop')!.map.elements.find(e => e.id === 'storni')!.status).toBe('blocked');
+    // the plan's chat goes: the system it drew holds a piece that started, so both stay
+    m.observe('chat:removed', { chatId: 's1' });
+    expect(m.view('shop')!.map.elements.map(e => e.id)).toEqual(['web', 'cart', 'pay', 'resi', 'storni']);
+  });
+  it('undoes the last edit somebody made, past the statuses the app mirrored since', () => {
+    const m = make();
+    m.save({ title: 'Shop', root: '/repo/shop', map: drawing, by: 'Scout', summary: 'prima' });
+    m.edit('shop', [{ op: 'add', name: 'Produzione', kind: 'env' }], 'Orchestrator');
+    m.update('shop', { changes: [{ id: 'cart', status: 'work' }], by: 'app', summary: 'Carrello: in lavorazione' });
+    const back = m.undo('shop', 'Orchestrator');
+    expect(back.elements.map(e => e.id)).toEqual(['web', 'cart', 'pay']);
+    expect(back.elements.find(e => e.id === 'cart')!.status).toBe('work');
+    expect(back.summary).toBe('annullato: + Produzione');
+  });
   it('lets the Orchestrator edit piece by piece and undo', () => {
     const m = make();
     m.save({ title: 'Shop', root: '/repo/shop', map: drawing, by: 'Scout', summary: 'prima' });

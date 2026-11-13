@@ -58,6 +58,14 @@ describe('plan_update add', () => {
     const f = fixture({ phase: 'proposed', map: 'shop', steps: [{ title: 'a', state: 'todo' }] });
     await expect(f.call('plan_update', { add: { title: 'Altro' } })).rejects.toThrow(/only a plan the user approved grows/);
   });
+  it('draws nothing for a call that is refused', async () => {
+    const early = fixture({ phase: 'proposed', map: 'shop', steps: [{ title: 'a', state: 'todo' }] });
+    await expect(early.call('plan_update', { add: { title: 'Altro', piece: { name: 'Log' } } })).rejects.toThrow(/only a plan the user approved grows/);
+    expect(early.drawn).toEqual([]);
+    const late = fixture({ phase: 'running', map: 'shop', steps: [{ title: 'a', state: 'now' }] });
+    await expect(late.call('plan_propose', { steps: [{ title: 'x' }], map: { project: 'shop', add: [{ name: 'Log' }] } })).rejects.toThrow(/approved and under way/);
+    expect(late.drawn).toEqual([]);
+  });
 });
 
 describe('where the user is', () => {

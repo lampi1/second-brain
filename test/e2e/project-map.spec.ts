@@ -80,7 +80,6 @@ test('a plan is drawn on the map: steps in their box, a planned piece, approval 
     await view.getByTestId('pm-node-negozio').click();
     await expect(view.getByTestId('pm-works-ordini')).toContainText('Trovo dove si calcola lo sconto oggi');
     await expect(view.getByTestId('pm-works-ordini')).toContainText('1/3 fatti');
-    await page.waitForTimeout(300);
     await shot(page, 'project-map-plan');
     // a plan that waits for the user: the pieces dashed, the approval on the map
     await app.evaluate(() => { const d = (globalThis as unknown as { __sbDemo: { plan(id: string, p: unknown): void } }).__sbDemo; d.plan('tree-plan', { phase: 'proposed', at: 5, map: 'alfa-shop', clarified: [], steps: [{ title: 'Scrivo i resi parziali', role: 'artisan', state: 'todo', on: 'rimborsi' }] }); });

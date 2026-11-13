@@ -8,7 +8,7 @@
 import { AWAY_PLAN_NOTE } from '../../shared/away';
 import type { McpTool } from '../mcp/server';
 import { callerOf } from '../mcp/caller';
-import { checkProposal, checkStep, proposalGate, STEP_STATES, stepIndex, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
+import { checkProposal, checkStep, proposalGate, STEP_STATES, stepIndex, type PlanStep, type StepState, type StrategyPlan, withAdded } from '../../shared/strategy';
 import { WORK_ROLE_IDS } from '../../shared/roles';
 
 /** What the plan tools need from the chats (ChatManager). */
@@ -61,6 +61,9 @@ export function strategyTools(chats: StrategyChats, away: () => boolean = () => 
       if (mapArg !== undefined) {
         if (!maps) throw new Error('plan_propose: project maps are not available here; leave map out.');
         if (!mapArg || typeof mapArg !== 'object' || Array.isArray(mapArg)) throw new Error('map: object required.');
+        // nothing is drawn for a proposal that will be refused
+        if (!plan) throw new Error('plan_propose: only a Strategist the Orchestrator or the user started has a plan with the user.');
+        if (plan.phase === 'running' || plan.phase === 'done') throw new Error('plan_propose: the plan is approved and under way; update its steps with plan_update.');
         const drawn = maps.planDraw(id, mapArg as Record<string, unknown>);
         onCheck(steps, drawn.elements, 'steps[].on');
         map = drawn.project;
@@ -84,6 +87,7 @@ export function strategyTools(chats: StrategyChats, away: () => boolean = () => 
       if (a.add !== undefined) {
         const { piece, ...raw } = (a.add && typeof a.add === 'object' ? a.add : {}) as Record<string, unknown>;
         let step = checkStep(raw);
+        withAdded(plan, step, 0); // refused before anything is drawn
         if (plan.map && maps) {
           if (piece !== undefined) { const drawn = maps.planDraw(id, { project: plan.map, add: [piece], keep: true }); step = { ...step, on: drawn.added[0]! }; }
           onCheck([step], maps.elementsOf(plan.map), 'add.on');
