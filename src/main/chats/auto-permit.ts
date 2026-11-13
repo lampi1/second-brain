@@ -117,7 +117,8 @@ function namesRules(req: PermitRequest, command: boolean, cwd: string, file: str
   const at = (base: string | null, word: string): string | null => {
     let p = word.replace(/^file:\/\//i, '');
     if (/^[a-z][a-z0-9+.-]*:\/\//i.test(p)) return null;   // a web address is no place
-    if (!win) p = p.replace(/\\(.)/g, '$1'); else p = p.replace(/^\\\\\?\\/, '');
+    // a shell's escapes: every one where a backslash is no separator, the name's own dot everywhere
+    if (!win) p = p.replace(/\\(.)/g, '$1'); else p = p.replace(/^\\\\\?\\/, '').replace(/(permissions)\\(\.json)/gi, '$1$2');
     p = p.replace(/^(~|\$HOME|\$\{HOME\}|\$env:USERPROFILE|\$env:HOME|%USERPROFILE%|%HOME%)(?=$|[\\/])/i, () => home);
     if (base) p = p.replace(/^(\$PWD|\$\{PWD\}|\$\(pwd\)|%CD%|\$_PWD_)(?=$|[\\/])/i, () => base);
     if (win) p = p.replace(/^\/(?:mnt\/)?([a-z])\/(?!\/)/i, (_m, d: string) => `${d}:/`);
