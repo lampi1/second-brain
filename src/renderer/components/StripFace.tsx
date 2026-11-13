@@ -47,7 +47,10 @@ export function StripFace({ chatId, avatar, name, tone, size, height = 32, ...o 
   }, [chatId, state, mark]);
   // the user's pat or whip is a nudge on this chat's run (ADR 0297): sent when it changes, never at every click
   const hasRun = useApp(s => !!s.chats[chatId]?.run), touched = useApp(s => s.chats[chatId]?.run?.touch?.sign);
-  const onTouch = (sign: 1 | -1) => { if (hasRun && sign !== touched) void sb.invoke('run:touch', { chatId, sign }).catch(() => undefined); };
+  const onTouch = (sign: 1 | -1) => {
+    if (state === 'done') setSeen(true); // after its reaction a finished person stands still: no second celebration
+    if (hasRun && sign !== touched) void sb.invoke('run:touch', { chatId, sign }).catch(() => undefined);
+  };
   // a picture of the user's own, or a character without a person, stays a portrait with its state dot
   if (own || (avatar?.kind === 'character' && !isSpriteId(avatar.value)))
     return <span className="strip-face"><AgentAvatar avatar={avatar} name={name} size={size} /><span className={`strip-dot lead tone-${tone}`} aria-hidden="true" /></span>;

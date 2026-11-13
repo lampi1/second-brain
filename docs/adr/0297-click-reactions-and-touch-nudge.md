@@ -23,11 +23,13 @@ click to count as a positive or negative feedback on the agent: a really small o
 2. The click stays on the person: it does not open or fold the strip, turn the card or open a menu.
 3. On a strip or a delegated row whose chat is an agent run, the click is also a nudge on that run: `AgentRun.touch`
    keeps the sign (+1 the pat, -1 the whip) and the time. One per run: the last one stands, the same sign again
-   writes nothing (the renderer does not even send it), so a hundred clicks weigh as one. A run the user reopens
-   forgets it, like its verdict.
+   writes nothing (the renderer does not even send it), so a hundred clicks weigh as one. A new request to the same
+   chat opens a new run, which can take a mark of its own; the ended one keeps its.
 4. The nudge weighs `TOUCH_TRUST` = 0.05 in the performance estimate: a twentieth of a verdict the user writes, with
-   the same ageing (half weight every 30 days). It is not a verdict: it moves the role's mean only. It is not
-   counted among the verdicts the performance needs before it shows, it does not narrow the ± (so clicks alone
+   the same ageing (half weight every 30 days). All the nudges of one role together weigh at most `TOUCH_CAP` = 0.5,
+   half a written verdict: past ten clicked runs they are scaled down and keep only their balance, so a user who
+   clicks on every run moves the number as little as one who clicks on ten. It is not a verdict: it moves the
+   role's mean only. It is not counted among the verdicts the performance needs before it shows, it does not narrow the ± (so clicks alone
    never take a role out of «in rodaggio»), it does not reach the per-model rows, it earns no XP and no level, it
    does not end the run and it is not chat activity (a stalled child stays stalled). The card's «?»
    on the performance says how many pats and whips the role has.

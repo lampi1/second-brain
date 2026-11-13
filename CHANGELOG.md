@@ -35,7 +35,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   answer only because it was shortened for the screen (ADR 0294).
 - The little people react to a click: a pat on the head with the left button, a crack of the whip with the right
   one. On a strip the click is also a tiny nudge on that job in the role's performance: a twentieth of a verdict of
-  yours, once per job, never XP (ADR 0297).
+  yours, once per job, all of a role's together half a verdict at most, never XP (ADR 0297).
 - Grindhouse: each role is a little animated person, free on the strip, who plays its own scene while the chat
   works (the Artisan gives three hammer blows, the Scout walks and brings its lens to the eye) and changes with the
   state; it replaces the portrait and the state dot, and the spark on the Orchestrator's «thinking» line;

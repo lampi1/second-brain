@@ -37,7 +37,7 @@
     "src/main/agents/runs.ts#RUNS_MAX": "2daeb161e358342e",
     "src/main/agents/runs.ts#STALE_MS": "2a3a95e9f35a00d4",
     "src/main/agents/skill-needs.ts": "ad9ecaa8cdb699de",
-    "src/main/agents/standing.ts": "c51e932dfe97755d",
+    "src/main/agents/standing.ts": "13e3ac186f9201ba",
     "src/main/agents/standing.ts#decisionSignals": "6095c9035f24b53d",
     "src/main/agents/standing.ts#decisionXp": "8189e3dd368d8ed2",
     "src/main/agents/standing.ts#earnedVerdict": "9e5072047314a407",

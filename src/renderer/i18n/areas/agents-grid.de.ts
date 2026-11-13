@@ -33,7 +33,7 @@ export const agentsGridDe: typeof agentsGridIt = {
     `Urteile bisher: ${human} von dir, ${review} aus unabhängigen Prüfungen, ${receipts} aus Testbelegen, ${graded} am Geschehenen gemessene Prüfungen, ${chain} vom geprüften Eltern-Run, ${orchestrator} vom Orchestrator`
     + (decision ? `, ${decision} zu seinen Entscheidungen` : '') + (self ? `; ${self} nur vom Agenten selbst, die nicht zählen.` : '.'),
   // the user's pats and whips on the role's little person (ADR 0297)
-  'agentsGrid.perfTouches': ({ pat, whip }) => `Klapse und Peitschenknalle auf sein Männchen: ${pat} und ${whip}. Jeder wiegt ein Zwanzigstel einer Bewertung von dir, einmal pro Arbeit, und zählt nicht zu den Bewertungen.`,
+  'agentsGrid.perfTouches': ({ pat, whip }) => `Klapse und Peitschenknalle auf sein Männchen: ${pat} und ${whip}. Jeder wiegt ein Zwanzigstel einer Bewertung von dir, einmal pro Arbeit, alle zusammen höchstens eine halbe Bewertung, und zählt nicht zu den Bewertungen.`,
   'agentsGrid.success': 'Erfolg',
   'agentsGrid.successFew': ({ n, min }: { n: number; min: number }) => `Zu wenige geprüfte Ergebnisse: ${n} von ${min}`,
   'agentsGrid.successNote': ({ n, min }: { n: number; min: number }) => `geprüft: ${n} von ${min} nötig`,

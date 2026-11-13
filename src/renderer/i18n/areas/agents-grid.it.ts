@@ -34,7 +34,7 @@ export const agentsGridIt = {
     `Voti finora: ${human} tuoi, ${review} di revisioni indipendenti, ${receipts} dalle ricevute dei test, ${graded} revisioni giudicate dai fatti, ${chain} dal genitore verificato, ${orchestrator} dell'Orchestrator`
     + (decision ? `, ${decision} sulle sue scelte` : '') + (self ? `; ${self} solo dell'agente stesso, che non contano.` : '.'),
   // the user's pats and whips on the role's little person (ADR 0297)
-  'agentsGrid.perfTouches': ({ pat, whip }: { pat: number; whip: number }) => `Buffetti e frustate sull'omino: ${pat} e ${whip}. Ognuno pesa un ventesimo di un tuo voto, una volta per lavoro, e non conta tra i voti.`,
+  'agentsGrid.perfTouches': ({ pat, whip }: { pat: number; whip: number }) => `Buffetti e frustate sull'omino: ${pat} e ${whip}. Ognuno pesa un ventesimo di un tuo voto, una volta per lavoro, tutti insieme al massimo mezzo voto, e non conta tra i voti.`,
   'agentsGrid.success': 'Riuscite',
   'agentsGrid.successFew': ({ n, min }: { n: number; min: number }) => `Troppo pochi esiti verificati: ${n} su ${min}`,
   'agentsGrid.successNote': ({ n, min }: { n: number; min: number }) => `verificati: ${n} su ${min} necessari`,

@@ -33,7 +33,7 @@ export const agentsGridEn: typeof agentsGridIt = {
     `Verdicts so far: ${human} yours, ${review} from independent reviews, ${receipts} from test receipts, ${graded} reviews graded by what happened, ${chain} from a verified parent, ${orchestrator} from the Orchestrator`
     + (decision ? `, ${decision} on its choices` : '') + (self ? `; ${self} only from the agent itself, which do not count.` : '.'),
   // the user's pats and whips on the role's little person (ADR 0297)
-  'agentsGrid.perfTouches': ({ pat, whip }) => `Pats and whips on its little person: ${pat} and ${whip}. Each weighs a twentieth of a verdict of yours, once per job, and is not counted among the verdicts.`,
+  'agentsGrid.perfTouches': ({ pat, whip }) => `Pats and whips on its little person: ${pat} and ${whip}. Each weighs a twentieth of a verdict of yours, once per job, all together half a verdict at most, and is not counted among the verdicts.`,
   'agentsGrid.success': 'Success',
   'agentsGrid.successFew': ({ n, min }: { n: number; min: number }) => `Too few verified outcomes: ${n} of ${min}`,
   'agentsGrid.successNote': ({ n, min }: { n: number; min: number }) => `verified: ${n} of ${min} needed`,

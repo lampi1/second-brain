@@ -31,7 +31,8 @@
 // halved when it was re-delegated or reworked. The decisions among pruned runs live on in the rollups
 // (RunTally.decisions, decisionWins, decisionXp; the chain, graded and receipts successes in earnedWins, all XP in xp).
 // The user's pat or whip on a run's little person (ADR 0297) is a nudge, not a verdict: it weighs TOUCH_TRUST (a
-// twentieth of a written verdict), once per run, and moves the role's mean only: it earns no XP, is not one of the
+// twentieth of a written verdict), once per run, all of a role's nudges together at most TOUCH_CAP (half a verdict,
+// however many runs were clicked), and moves the role's mean only: it earns no XP, is not one of the
 // verdicts the performance needs before it shows, does not narrow its ± and does not reach the per-model rows.
 // The retired roles and the runs of the removed Battito (Pulse) and Flash get no standing (unrated, ADR 0186, 0201).
 // Used by ChatManager.runMetrics (agents:metrics), run-metrics.ts rollUp, the levels diagnostic (level-diagnosis.ts) and
@@ -69,6 +70,8 @@ export const HALF_LIFE_MS = 30 * 86_400_000;
 export const TRUST = { human: 1, review: 1, graded: 0.8, receipts: 0.7, facts: 0, orchestrator: 0.6, decision: 0.5, chain: 0.5, self: 0 } as const;
 /** a pat or a whip on the little person (ADR 0297): a twentieth of the user's written verdict, one per run */
 export const TOUCH_TRUST = 0.05;
+/** all the nudges of one role together weigh at most this much: half a written verdict, for a user who clicks a lot */
+export const TOUCH_CAP = 0.5;
 const SCORE = { success: 1, partial: 0.5, fail: 0 } as const;
 const REPORTED = { done: 'success', partial: 'partial', blocked: 'fail' } as const;
 type Source = keyof typeof TRUST;
@@ -339,7 +342,9 @@ export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[
     const xp = Math.round(a.xp * 100) / 100;
     const models = [...a.models].map(([model, m]) => modelRow(model, m, { num: a.num - m.num, den: a.den - m.den }, shown)).sort((x, y) => y.runs - x.runs || y.lastAt - x.lastAt || x.model.localeCompare(y.model, 'en'));
     // the nudges move the mean only: whether it shows, and its ±, come from the verdicts alone
-    const mean = est && a.td > 0 ? estimate(a.num + a.tn, a.den + a.td).mean : est?.mean;
+    // and all together never more than TOUCH_CAP: past it they are scaled down, their balance kept
+    const cap = a.td > TOUCH_CAP ? TOUCH_CAP / a.td : 1;
+    const mean = est && a.td > 0 ? estimate(a.num + a.tn * cap, a.den + a.td * cap).mean : est?.mean;
     out.set(id, { runs: a.runs, wins: a.wins, xp, ...levelOf(xp), performance: shown ? mean! : null, spread: est ? est.spread : null,
       evaluated: a.evaluated, minRuns: MIN_EVALUATED, sources: a.sources, ...(a.pat + a.whip ? { touches: { pat: a.pat, whip: a.whip } } : {}), ...(models.length ? { models } : {}) });
   }

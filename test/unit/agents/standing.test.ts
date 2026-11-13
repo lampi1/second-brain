@@ -3,7 +3,7 @@
 // rodaggio" threshold and the exclusions shared with the §5 metrics.
 import { describe, expect, it } from 'vitest';
 import type { AgentRun } from '../../../src/shared/agents';
-import { HALF_LIFE_MS, MAX_SPREAD, MIN_EVALUATED, PRIOR, TOUCH_TRUST, TRUST, decisionSignals, decisionXp, estimate, earnIndex, earnedVerdict, levelOf, levelStart, orchestratorDecision, routeVerdict, standings, verdictOf, withStandings } from '../../../src/main/agents/standing';
+import { HALF_LIFE_MS, MAX_SPREAD, MIN_EVALUATED, PRIOR, TOUCH_CAP, TOUCH_TRUST, TRUST, decisionSignals, decisionXp, estimate, earnIndex, earnedVerdict, levelOf, levelStart, orchestratorDecision, routeVerdict, standings, verdictOf, withStandings } from '../../../src/main/agents/standing';
 import { emptyTally, mergeTallies, rollUp, runMetrics } from '../../../src/main/agents/run-metrics';
 import { PLAN_XP } from '../../../src/main/agents/xp';
 import { completedRuns } from '../../../src/shared/agents';
@@ -64,6 +64,12 @@ describe('standings', () => {
     const onModel = (touch?: { sign: 1 | -1; at: number }) => standings([...Array.from({ length: 3 }, () => run({ model: 'm1', outcome: human('success') })),
       ...Array.from({ length: 20 }, () => run({ model: 'm1', ...(touch ? { touch } : {}) }))], [], NOW).get('scout')!.models![0]!;
     expect(onModel({ sign: -1, at: NOW })).toEqual(onModel());
+    // a user who clicks a lot: two hundred whipped runs weigh as TOUCH_CAP, half a written verdict, never more
+    const many = (n: number) => standings([...judged(), ...Array.from({ length: n }, () => run({ touch: { sign: -1, at: NOW } }))], [], NOW).get('scout')!;
+    expect(many(400).performance!).toBeCloseTo(many(200).performance!, 10);
+    expect(many(200).performance!).toBeLessThan(many(1).performance!);
+    expect(base.performance! - many(200).performance!).toBeLessThan(base.performance! - failed.performance!);
+    expect(TOUCH_CAP).toBe(TRUST.human / 2);
     // alone it shows nothing: the performance stays «in rodaggio»
     expect(standings(Array.from({ length: 9 }, () => run({ touch: { sign: 1, at: NOW } })), [], NOW).get('scout')).toMatchObject({ performance: null, evaluated: 0 });
   });
