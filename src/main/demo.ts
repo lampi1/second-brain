@@ -138,7 +138,7 @@ export function demoTree(E: number): { chats: ChatSummary[]; items: Record<strin
       { title: 'Trovo dove si calcola lo sconto oggi', role: 'scout', state: 'done', on: 'ordini', chatIds: [scout.id], startedAt: E - 16 * MIN, endedAt: E - 11 * MIN },
       { title: 'Applico lo sconto % sul prezzo pieno, un solo arrotondamento', role: 'artisan', state: 'now', on: 'ordini', chatIds: [artisan.id], startedAt: E - 10 * MIN },
       { title: 'Verifico con la suite ordini', role: 'sentinel', state: 'todo', on: 'ordini' },
-      { title: 'Scrivo le note di rilascio', role: 'herald', state: 'now', on: 'note-di-rilascio', chatIds: [herald.id], startedAt: E - 1 * MIN },
+      { title: 'Scrivo le note di rilascio', role: 'herald', state: 'now', on: 'note-di-rilascio', chatIds: [herald.id], startedAt: E - 1 * MIN, par: true },
     ] };
   const chats = [lead, scout, artisan, sentinel, probe, herald];
   // what each did, as tool rows: the cards' steps (lib/run-steps.ts)

@@ -70,6 +70,8 @@ export const brainModelEn: typeof brainModelIt = {
   'pm.talkOn': (p: { name: string }) => `Discuss «${p.name}» with the Orchestrator`,
   'pm.noOrchestrator': 'No Orchestrator open: open it and try again',
   'pm.talkDraft': (p: { project: string; where: string; kind: string; name: string; state: string; note: string; desc: string }) => `Map «${p.project}»${p.where}: ${p.kind} «${p.name}», status ${p.state}${p.note}.${p.desc} I want to talk about it: `,
+  'pm.projects': 'Projects', 'pm.flow': 'The plan\'s steps, in order', 'pm.together': 'together', 'pm.runningNow': 'being worked on now',
+  'pm.turn': (p: N) => `Turn ${p.n}: it starts when the turn before is finished`, 'pm.turnPar': (p: N) => `Turn ${p.n}: it goes together with other steps, in parallel`,
   'pm.project': 'Project', 'pm.trail': 'Where you are on the map', 'pm.top': 'Whole project',
   'pm.waiting': (p: N) => (p.n === 1 ? '1 waits for you' : `${p.n} wait for you`),
   'pm.updated': (p: { at: string }) => `Updated ${p.at}`,

@@ -41,6 +41,7 @@ export function strategyTools(chats: StrategyChats, away: () => boolean = () => 
         title: { ...str, description: 'one short plain line, e.g. "Trovo dove si calcola lo sconto"' }, role: { type: 'string', enum: [...WORK_ROLE_IDS] },
         detail: { ...str, description: 'optional: one short line on what the step covers, e.g. "carrello, ordine e reso"' },
         on: { ...str, description: 'the map element this step works on (an existing id, or one you add in map.add)' },
+        par: { type: 'boolean', description: 'true = it goes together with the step before it, in parallel; leave out for a step that waits for it' },
       } } },
       map: { type: 'object', additionalProperties: false, description: 'the project map the plan is drawn on', properties: {
         project: { ...str, description: 'an existing map\'s name or id' }, title: { ...str, description: 'the project\'s name, when it has no map yet: only the pieces this work touches get drawn' },
@@ -78,7 +79,7 @@ export function strategyTools(chats: StrategyChats, away: () => boolean = () => 
     inputSchema: { type: 'object', additionalProperties: false, properties: {
       step: { type: 'integer', minimum: 1, description: 'the step number, from 1' }, state: { type: 'string', enum: [...STEP_STATES] },
       add: { type: 'object', required: ['title'], additionalProperties: false, description: 'instead of step and state: a new step', properties: { title: str, role: { type: 'string', enum: [...WORK_ROLE_IDS] }, detail: str,
-        on: { ...str, description: 'the map element it works on' }, piece: { type: 'object', required: ['name'], additionalProperties: false, description: 'a new map piece for it (then leave `on` out)', properties: { name: str, kind: str, description: str, parent: str } } } },
+        on: { ...str, description: 'the map element it works on' }, par: { type: 'boolean', description: 'true = together with the step before it' }, piece: { type: 'object', required: ['name'], additionalProperties: false, description: 'a new map piece for it (then leave `on` out)', properties: { name: str, kind: str, description: str, parent: str } } } },
     } },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: async (a, ctx) => {

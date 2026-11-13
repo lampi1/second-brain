@@ -297,6 +297,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0299](0299-one-command-one-panel.md) One command, one panel: an identical command never runs twice by accident — accepted
 - [0300](0300-quote-what-is-on-screen.md) Quote what is on screen: select a text, right click, it is in the prompt field — accepted
 - [0301](0301-maps-button-on-the-orchestrator-head.md) The project maps button is back on the Orchestrator's head — accepted
+- [0302](0302-maps-show-what-moves-and-the-order.md) The maps show what moves, the order of the steps, and the passage between levels — accepted
 - [0303](0303-little-people-speak.md) The little people speak: two words of nonsense, a character per role — accepted
 
 ## Replaced

@@ -379,6 +379,8 @@ docs/screenshots/grindhouse.webp binary-media sha256:4e32163759bb4727e223074d76f
 docs/screenshots/agents.webp binary-media sha256:e6b334be65b280907cb055abc71dd3c16b4484223834f21a3f2e1681be2be3f0
 docs/screenshots/orchestrator.webp binary-media sha256:646430ec73ec90e5e8741d7d020d6a425a17a6ccf5b441d6002b7a70ba54cfae
 docs/screenshots/orchestrator-column.webp binary-media sha256:5a22a88c8c9151ea0f1b99cddacae01dd14ede5c8a2d46391419f9d84a6a9ebe
+# ADR 0302: the maps show what moves, the steps in order, the projects at the side (2026-11-13)
+docs/screenshots/project-map.webp binary-media sha256:9bc165356fa7d12f167be2a928e2c3959658ab8f5231375b2294d99780b9f8d0
 # ADR 0292/0303: model and effort on the strips, the demo chats report their effort (2026-11-13)
 docs/screenshots/agents.webp binary-media sha256:b7c17210af07e4fd6d83fe24dba2558c18bf22138920554f2a9be07d143dd1d7
 docs/screenshots/browser.webp binary-media sha256:ad7418f8778664f0c74d038f622df2e292148b7b872ed609333a598972436c21

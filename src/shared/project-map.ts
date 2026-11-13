@@ -83,9 +83,17 @@ export interface MapWork {
   chatIds: string[];
   /** added while the plan was under way */
   added?: boolean;
+  /** its turn in the plan, from 1 (strategy.ts planWaves, ADR 0302) */
+  wave: number;
+  /** it goes in parallel with another step: they share a turn, or both are under way now */
+  par?: boolean;
 }
+/** A plan's step in the order of the plan (ADR 0302): the map shows which come one after the other and which together. */
+export interface MapFlowStep { step: number; title: string; state: MapWork['state']; wave: number; par?: boolean; on?: string; role?: string }
 /** A Strategist's plan drawn on this map: `proposed` waits for the user's «Approva e parti». */
-export interface MapPlan { chatId: string; title: string; phase: 'proposed' | 'revising' | 'running' | 'done'; at: number; steps: number; done: number; doneWhen?: string }
+export interface MapPlan { chatId: string; title: string; phase: 'proposed' | 'revising' | 'running' | 'done'; at: number; steps: number; done: number; doneWhen?: string;
+  /** every step in order, with its turn (ADR 0302) */
+  flow: MapFlowStep[] }
 export interface ProjectMapView {
   map: ProjectMap;
   history: MapVersionInfo[];
