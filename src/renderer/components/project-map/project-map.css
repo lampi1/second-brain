@@ -3,7 +3,6 @@
 .pm .sp { flex: 1; }
 .pm-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .pm-bar h3 { margin: 0; font-size: 16px; }
-.pm-pick { background: var(--surface-2); color: var(--text); border: 1px solid var(--border-2); border-radius: var(--r-m); padding: 5px 10px; font: inherit; font-weight: 600; }
 .pm-trail { display: flex; align-items: center; gap: 4px; color: var(--text-3); font-size: 13px; }
 .pm-trail button { background: none; border: 0; color: var(--text-2); font: inherit; padding: 2px 4px; border-radius: 6px; cursor: pointer; }
 .pm-trail button:hover { color: var(--text); background: var(--surface-3); }
@@ -158,3 +157,84 @@
 .pm-agent-change { color: var(--amber); }
 .pm-agent-change[data-seen] { color: var(--text-2); }
 .pm-agent-change[data-seen] b { color: var(--green); }
+
+/* ADR 0302 · the projects as a list beside the drawing (the newspaper's sections, news.css .nw-nav), never a menu */
+.pm-body.with-nav { grid-template-columns: 190px minmax(0, 1fr) 320px; }
+.pm-nav { display: flex; flex-direction: column; gap: 3px; align-self: start; padding: 12px 8px; border: 1px solid var(--border); border-radius: var(--r-l); background: var(--surface); min-width: 0; }
+.pm-nav-lbl { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); font-weight: 600; padding: 0 10px 6px; }
+.pm-nav button { appearance: none; display: flex; align-items: center; gap: 4px; width: 100%; min-width: 0; text-align: left; background: none; border: 0; border-radius: var(--r-m); padding: 8px 10px; font: inherit; font-size: 13px; color: var(--text-2); cursor: pointer; }
+.pm-nav button > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-nav button:hover { background: var(--surface-2); color: var(--text); }
+.pm-nav button.on { background: var(--accent-bg); color: var(--text); font-weight: 600; }
+.pm-nav button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.pm-nav .pm-you { margin: 0; }
+.pm-dot.s-wait { background: var(--amber); }
+/* beside the Orchestrator's column the list stays at the side and the agents go under the drawing */
+@container (max-width: 980px) {
+  .pm-body.with-nav { grid-template-columns: 172px minmax(0, 1fr); }
+  .pm-body.with-nav .pm-side { grid-column: 1 / -1; }
+  .pm-step { max-width: 190px; }
+}
+/* a really narrow page: the projects are a row of pills over the drawing */
+@container (max-width: 700px) {
+  .pm-body.with-nav { grid-template-columns: 1fr; }
+  .pm-nav { flex-direction: row; flex-wrap: wrap; align-items: center; align-self: stretch; padding: 0; border: 0; background: none; }
+  .pm-nav-lbl { padding: 0 6px 0 4px; }
+  .pm-nav button { width: auto; max-width: 260px; padding: 6px 10px; }
+}
+
+/* ADR 0302 · the plan's steps in order: the turns left to right, an arrow between them, the steps of one turn stacked */
+.pm-flow { list-style: none; margin: 4px 0 2px; padding: 0; flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 0; min-width: 0; }
+.pm-turn { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; max-width: 100%; }
+.pm-turn + .pm-turn { margin-left: 30px; }
+.pm-turn + .pm-turn::before { content: '→'; position: absolute; left: -22px; top: 50%; transform: translateY(-50%); color: var(--text-3); font-size: 14px; }
+.pm-turn[data-par] { padding: 5px 6px 6px 8px; border-left: 2px solid var(--accent-line); border-radius: var(--r-s); background: var(--surface-2); }
+.pm-together { font-style: normal; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); font-weight: 600; }
+.pm-step { appearance: none; display: inline-flex; align-items: center; gap: 7px; max-width: 250px; min-width: 0; padding: 4px 10px 4px 4px; border: 1px solid var(--border-2); border-radius: 999px; background: var(--surface); color: var(--text-2); font: inherit; font-size: 12.5px; cursor: pointer; }
+.pm-step:disabled { cursor: default; }
+.pm-step:not(:disabled):hover { color: var(--text); border-color: var(--text-3); }
+.pm-step:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.pm-step > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-step > i { font-style: normal; flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--surface-4); color: var(--text-2); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pm-step[data-s='done'] { color: var(--text-3); }
+.pm-step[data-s='done'] > i { background: color-mix(in srgb, var(--green) 22%, transparent); color: var(--green); }
+.pm-step[data-s='blocked'] { border-color: var(--red); }
+.pm-step[data-s='blocked'] > i { background: var(--red); color: var(--bg); }
+.pm-step[data-s='now'] { border-color: var(--accent); color: var(--text); }
+.pm-step[data-s='now'] > i { background: var(--accent); color: var(--bg); }
+/* a step's turn on a box and in the detail list: «2», «2∥» when it goes together with another */
+.pm-turn-n { flex: none; font-size: 10.5px; font-weight: 700; line-height: 1; padding: 2px 4px; border-radius: 4px; background: var(--surface-4); color: var(--text-2); font-variant-numeric: tabular-nums; align-self: center; }
+.pm-turn-n[data-par] { background: var(--accent-bg); color: var(--accent); }
+
+/* ADR 0302 · what is being worked on right now: the box breathes, its dot beats, a mark travels along a line under work */
+.pm-node.running { animation: pm-breathe 2.4s ease-out infinite; }
+.pm-node.running.picked, .pm-node.running.lit, .pm-node.running:hover { animation: none; }
+.pm-node.running .pm-foot > .pm-dot, .pm-dot.run { animation: pm-beat 1.6s ease-in-out infinite; }
+.pm-step[data-s='now'] > i { animation: pm-beat 1.6s ease-in-out infinite; }
+.pm-edge-run { fill: none; stroke: var(--text); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 4 96; opacity: .75; animation: pm-travel 2.2s linear infinite; }
+@keyframes pm-breathe { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); } 70%, 100% { box-shadow: 0 0 0 9px transparent; } }
+@keyframes pm-beat { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.8); } }
+@keyframes pm-travel { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+
+/* ADR 0302 · from a level to the one inside it: the view zooms into the box, the level inside grows from the middle;
+   coming back the level settles from larger and the box left shows for a moment */
+.pm-level { position: absolute; inset: 0; transform-origin: 50% 50%; }
+.pm-plane.zooming { transition: transform .2s cubic-bezier(.4, 0, 1, 1); }
+.pm-plane.zooming .pm-level { transition: opacity .2s ease-in; opacity: .15; }
+.pm-level[data-enter='in'] { animation: pm-in .26s cubic-bezier(.2, .8, .2, 1) both; }
+.pm-level[data-enter='out'] { animation: pm-out .26s cubic-bezier(.2, .8, .2, 1) both; }
+.pm-node.came { animation: pm-came 1.4s ease-out; }
+@keyframes pm-in { from { opacity: 0; transform: scale(.82); } to { opacity: 1; transform: none; } }
+@keyframes pm-out { from { opacity: 0; transform: scale(1.14); } to { opacity: 1; transform: none; } }
+@keyframes pm-came { 0% { box-shadow: 0 0 0 5px var(--accent-line); } 100% { box-shadow: 0 0 0 0 transparent; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .pm-node.running { animation: none; }
+  .pm-node.running:not(.picked):not(.lit):not(:hover) { box-shadow: 0 0 0 3px var(--accent-bg); }
+  .pm-node.running .pm-foot > .pm-dot, .pm-dot.run, .pm-step[data-s='now'] > i, .pm-node.came { animation: none; }
+  .pm-edge-run { display: none; }
+  .pm-level[data-enter] { animation: none; }
+  .pm-plane.zooming, .pm-plane.zooming .pm-level { transition: none; }
+}
+/* the legend never runs under the zoom buttons in a narrow drawing */
+.pm-legend { max-width: calc(100% - 72px); gap: 4px 14px; }

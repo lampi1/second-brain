@@ -103,6 +103,23 @@ describe('ProjectMaps planning', () => {
     expect(map.root).toBe('/repo/shop');
     expect(map.elements.every(e => e.status === 'planned' && e.plan === 's1')).toBe(true);
   });
+  it('tells which steps go one after the other and which together (ADR 0302)', () => {
+    const m = make();
+    m.save({ title: 'Shop', root: '/repo/shop', map: drawing, by: 'Scout', summary: 'prima' });
+    // the plan says steps 2 and 3 go together; step 4 waits for them
+    const steps: StrategyPlan['steps'] = [{ title: 'Leggo', state: 'done', on: 'web' }, { title: 'Carrello', state: 'todo', on: 'cart' }, { title: 'Pagamenti', state: 'todo', on: 'pay', par: true }, { title: 'Provo', state: 'todo' }];
+    chats[0] = chat({ id: 's1', title: 'S', plan: plan({ map: 'shop', steps }) });
+    let v = m.view('shop')!;
+    expect(v.plans[0]!.flow.map(f => [f.step, f.wave, !!f.par])).toEqual([[1, 1, false], [2, 2, true], [3, 2, true], [4, 3, false]]);
+    expect(v.plans[0]!.flow[3]).toEqual({ step: 4, title: 'Provo', state: 'todo', wave: 3 }); // a step on no box is still in the order
+    expect(v.works.cart).toMatchObject([{ step: 2, wave: 2, par: true }]);
+    expect(v.works.web![0]!.par).toBeUndefined();
+    // two steps under way at the same moment go together, whatever the plan said
+    steps[1] = { ...steps[1]!, state: 'done' }; steps[2] = { title: 'Pagamenti', state: 'now', on: 'pay' }; steps[3] = { title: 'Provo', state: 'now', on: 'web' };
+    chats[0] = chat({ id: 's1', title: 'S', plan: plan({ map: 'shop', steps }) });
+    v = m.view('shop')!;
+    expect(v.plans[0]!.flow.map(f => [f.wave, !!f.par])).toEqual([[1, false], [2, false], [3, true], [4, true]]);
+  });
   it('shows the steps as works and moves statuses and agents with them, without a tool call', () => {
     const m = make();
     m.save({ title: 'Shop', root: '/repo/shop', map: drawing, by: 'Scout', summary: 'prima' });
@@ -111,7 +128,9 @@ describe('ProjectMaps planning', () => {
     chats[0] = chat({ id: 's1', title: 'Strategist · Resi', plan: plan({ phase: 'proposed', map: 'shop', steps }) });
     m.observe('chat:updated', chats[0]);
     let v = m.view('shop')!;
-    expect(v.plans).toEqual([{ chatId: 's1', title: 'Strategist · Resi', phase: 'proposed', at: 1, steps: 3, done: 0 }]);
+    expect(v.plans).toEqual([{ chatId: 's1', title: 'Strategist · Resi', phase: 'proposed', at: 1, steps: 3, done: 0, flow: [
+      { step: 1, title: 'Scrivo i resi', state: 'todo', wave: 1, on: 'resi', role: 'artisan' }, { step: 2, title: 'Provo i resi', state: 'todo', wave: 2, on: 'resi', role: 'sentinel' },
+      { step: 3, title: 'Ritocco il carrello', state: 'todo', wave: 3, on: 'cart', role: 'artisan' }] }]);
     expect(v.works.resi!.map(w => [w.step, w.title, w.state])).toEqual([[1, 'Scrivo i resi', 'todo'], [2, 'Provo i resi', 'todo']]);
     expect(v.map.elements.find(e => e.id === 'resi')!.status).toBe('planned'); // nothing moves before the user's ok
     // approved, step 1 delegated

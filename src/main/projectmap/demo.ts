@@ -1,4 +1,4 @@
-// The demo's project map (ADR 0271): the made-up shop the demo chats work on, drawn in four versions (so the history
+// The demo's project maps (ADR 0271): a small second project nobody works on (ADR 0302) and the made-up shop the demo chats work on, drawn in four versions (so the history
 // slider plays it from the first drawing to now), with the demo's chats bound to the parts they work on. Written into the
 // demo brain once (a map already there is left alone). Used by demo-wiring.ts.
 import type { MapElement, MapLink, ProjectMap } from '@shared/project-map';
@@ -57,6 +57,17 @@ export function seedDemoMap(brainRoot: string, maps: ProjectMaps, now: number): 
   v5 = set(v5, 'rimborsi', { status: 'blocked', actor: 'user', note: 'Il test case 7 fallisce anche su master: decidi tu', confirmedAt: now - 4 * MIN });
   v5 = set(v5, 'operatore--rimborsi', { status: 'blocked', actor: 'user', note: 'Rimborso senza sconto', confirmedAt: now - 4 * MIN });
   for (const m of [v1, v2, v3, v4, v5]) store.save(m);
+  // a second, quiet project: with more than one the view lists them beside the drawing (ADR 0302)
+  const old = now - 5 * 24 * H, at = <T extends { confirmedAt: number }>(x: T): T => ({ ...x, confirmedAt: old });
+  store.save({ project: 'beta-crm', title: 'Beta · gestionale clienti', root: 'C:\\progetti\\beta-crm', corrections: [], version: 1, updatedAt: old, by: 'Scout · Mappa Beta', summary: 'prima mappa: anagrafica, contratti, posta',
+    elements: [
+      el('commerciale', 'person', 'Commerciale', { description: 'Segue i clienti e i contratti' }),
+      el('crm', 'system', 'Gestionale clienti', { description: 'Anagrafica, contratti e scadenze', evidence: ['src/'] }),
+      el('anagrafica', 'part', 'Anagrafica', { parent: 'crm', description: 'Clienti, sedi e contatti', evidence: ['src/Customers/'] }),
+      el('contratti', 'part', 'Contratti', { parent: 'crm', description: 'Contratti, rinnovi e scadenze', evidence: ['src/Contracts/'] }),
+      el('posta', 'external', 'Posta', { description: 'Invia i promemoria di scadenza' }),
+    ].map(at),
+    links: [ln('commerciale', 'anagrafica', 'cerca e aggiorna'), ln('anagrafica', 'contratti', 'intesta'), ln('contratti', 'posta', 'manda i promemoria')].map(at) });
   bind(maps);
 }
 

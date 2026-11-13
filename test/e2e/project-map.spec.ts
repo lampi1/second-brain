@@ -78,7 +78,7 @@ test('a plan is drawn on the map: steps in their box, a planned piece, approval 
     await expect(view.getByTestId('pm-plan')).toContainText('1 di 4 passi fatti');
     await expect(view.getByTestId('pm-node-note-di-rilascio')).toBeVisible();
     await view.getByTestId('pm-node-negozio').click();
-    await expect(view.getByTestId('pm-works-ordini')).toContainText('Trovo dove si calcola lo sconto oggi');
+    await expect(view.getByTestId('pm-works-ordini')).toContainText('Applico lo sconto % sul prezzo pieno'); // the step under way first (ADR 0302)
     await expect(view.getByTestId('pm-works-ordini')).toContainText('1/3 fatti');
     await shot(page, 'project-map-plan');
     // a plan that waits for the user: the pieces dashed, the approval on the map
@@ -175,5 +175,54 @@ test('the map moves like a design canvas: Ctrl+wheel zooms at the pointer, a dra
     await expect(view.getByTestId('pm-node-rimborsi')).toBeVisible();
     await canvas.dblclick({ position: { x: 30, y: c.height - 120 } });
     await expect(view.getByTestId('pm-node-rimborsi')).toHaveCount(0);
+  } finally { await app.close(); }
+});
+
+// ADR 0302 (the owner 2026-11-13): the part being worked on moves, quietly; the plan's steps read in order, the ones of
+// one turn together; entering a system and coming back are a passage, not a cut; the projects are a list at the side
+test('the map shows what moves, the order of the steps, the passage into a system and the projects at the side', async () => {
+  const { app, page } = await launchDemo();
+  try {
+    await app.evaluate(() => (globalThis as unknown as { __sbDemo: { tree(): void } }).__sbDemo.tree());
+    await page.getByTestId('maps-btn').click();
+    const view = page.getByTestId('pm-view');
+    // the plan's steps in order: three turns, the third holds two steps that go together
+    const flow = view.getByTestId('pm-flow');
+    await expect(flow.getByTestId('pm-step-2')).toHaveAttribute('data-s', 'now');
+    await expect(flow.getByTestId('pm-turn-3')).toHaveAttribute('data-par', '');
+    await expect(flow.getByTestId('pm-turn-3')).toContainText('insieme');
+    await expect(flow.getByTestId('pm-turn-4')).toHaveCount(0);
+    // somebody works on the shop and on the notes right now; nobody on the payments
+    await expect(view.getByTestId('pm-node-negozio')).toHaveAttribute('data-running', '');
+    await expect(view.getByTestId('pm-node-note-di-rilascio')).toHaveAttribute('data-running', '');
+    await expect(view.getByTestId('pm-node-pagamenti')).not.toHaveAttribute('data-running', '');
+    await expect(view.getByTestId('pm-legend-run')).toBeVisible();
+    await shot(page, 'project-map-moving');
+    // into the shop: the level inside comes in; back up: the box left is marked
+    await view.getByTestId('pm-node-negozio').click();
+    await expect(view.getByTestId('pm-node-ordini')).toBeVisible();
+    await expect(view.getByTestId('pm-level')).toHaveAttribute('data-enter', 'in');
+    await expect(view.getByTestId('pm-works-ordini')).toContainText('2∥');
+    await shot(page, 'project-map-inside');
+    await view.getByTestId('pm-up').click();
+    await expect(view.getByTestId('pm-level')).toHaveAttribute('data-enter', 'out');
+    await expect(view.getByTestId('pm-node-negozio')).toHaveClass(/came/);
+    // a step of the plan shows the box it works on
+    await flow.getByTestId('pm-step-4').click();
+    await expect(view.getByTestId('pm-detail')).toContainText('Note di rilascio');
+    // the projects are a list beside the drawing, not a menu
+    const nav = view.getByTestId('pm-nav');
+    await expect(nav.getByRole('button')).toHaveCount(2);
+    await expect(nav.getByTestId('pm-nav-alfa-shop')).toHaveAttribute('aria-pressed', 'true');
+    await nav.getByTestId('pm-nav-beta-crm').click();
+    await expect(view.getByTestId('pm-node-crm')).toBeVisible();
+    await expect(view.getByTestId('pm-flow')).toHaveCount(0);
+    await shot(page, 'project-map-projects');
+    // full screen: the list at the side, the drawing, the agents
+    await nav.getByTestId('pm-nav-alfa-shop').click();
+    await view.getByTestId('pm-fullscreen').click();
+    await expect(view).toHaveClass(/pm-full/);
+    await expect(view.getByTestId('pm-node-negozio')).toBeInViewport();
+    await shot(page, 'project-map-moving-full');
   } finally { await app.close(); }
 });
