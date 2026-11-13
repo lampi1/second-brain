@@ -15,10 +15,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { PermissionCeiling } from '../../shared/agents';
 import { COMMAND_TOOLS, readOnlyCommand, type ReadScripts } from '../agents/tool-policy';
-import { policyCovers, policyHit, policyTooLong, type BrainPolicy, type PolicyRule } from './permit-policy';
+import { policyCovers, policyRead, type BrainPolicy, type PolicyRule } from './permit-policy';
 
 /** title: the engine's one line; an ACP engine names an MCP tool only there (its tool is «Tool») */
-export interface PermitRequest { type: string; tool: string; input?: unknown; title?: string }
+/** whole: the input is as the engine sent it (Claude, ADR 0290), not a copy an engine or the app shortened: the signs
+ *  of a cut (a string ending «… (+N)», a list of 200) are then plain content */
+export interface PermitRequest { type: string; tool: string; input?: unknown; title?: string; whole?: boolean }
 export interface PermitContext {
   /** the chat's folder: relative paths are read from here */
   cwd: string;
@@ -28,6 +30,8 @@ export interface PermitContext {
   readScripts?: ReadScripts;
   /** the user's rules from the brain (permit-policy.ts loadPolicy); missing = none */
   policy?: BrainPolicy;
+  /** the clock of the rules' time budget (permit-policy.ts policyRead); the tests' own, else the real one */
+  now?: () => number;
 }
 export type PermitVerdict =
   | { kind: 'allow' }
@@ -80,25 +84,27 @@ function settingsPath(p: string, cwd: string): boolean {
   try { return settingsSegments(realish(path.resolve(cwd, p))); } catch { return false; }
 }
 
-/** The places a tool names: every short one-line string value that is not its content (any engine's shape: file_path,
- *  filePath, target_file, Codex files, ACP locations), one level down too. null = it cannot be read whole (an engine cut
+/** The places a tool may name: every string value that is not its content (any engine's shape: file_path, filePath,
+ *  target_file, Codex files, ACP locations), one level down too. null = it cannot be read whole (an engine cut
  *  it, or a list too long to be all there). */
-function placesOf(input: unknown): string[] | null {
+function placesOf(input: unknown, whole = false): string[] | null {
   const out: string[] = [];
   const walk = (v: unknown, depth: number): boolean => {
     if (typeof v === 'string') {
-      if (CUT.test(v)) return false;
-      if (v.length <= 1000 && !/[\r\n]/.test(v) && !/^https?:\/\//i.test(v)) out.push(v.replace(/^file:\/\//i, ''));
+      if (!whole && CUT.test(v)) return false;
+      // however long and on however many lines: a tool that tidies a path before it opens it reaches the same file
+      // through `./` twenty thousand times or a line break before `/..`. A web address is no place, unless it climbs
+      if (!/^https?:\/\/\S*$/i.test(v) || /(^|[\\/])\.\.([\\/]|$)/.test(v)) out.push(v.replace(/^file:\/\//i, ''));
       return true;
     }
     if (depth > 20) return false;   // deeper than any engine's shape: not read whole
-    if (Array.isArray(v)) return v.length < 200 && v.every(x => walk(x, depth + 1));
+    if (Array.isArray(v)) return (whole || v.length < 200) && v.every(x => walk(x, depth + 1));
     if (v && typeof v === 'object') return Object.entries(v).every(([k, x]) => CONTENT_KEYS.has(k) ? cutFree(x, depth + 1) : walk(x, depth + 1));
     return true;
   };
   /** content is not a place, but a cut in it still hides what runs */
-  const cutFree = (v: unknown, depth: number): boolean => typeof v === 'string' ? !CUT.test(v)
-    : depth > 20 ? false : Array.isArray(v) ? v.length < 200 && v.every(x => cutFree(x, depth + 1)) : v && typeof v === 'object' ? Object.values(v).every(x => cutFree(x, depth + 1)) : true;
+  const cutFree = (v: unknown, depth: number): boolean => typeof v === 'string' ? whole || !CUT.test(v)
+    : depth > 20 ? false : Array.isArray(v) ? (whole || v.length < 200) && v.every(x => cutFree(x, depth + 1)) : v && typeof v === 'object' ? Object.values(v).every(x => cutFree(x, depth + 1)) : true;
   return walk(input, 0) ? out : null;
 }
 const pathLike = (p: string): boolean => /[\\/]/.test(p) || p.startsWith('.') || p.startsWith('~');
@@ -133,15 +139,18 @@ function touchesSettings(req: PermitRequest, command: boolean, cwd: string): boo
     const base = typeof o.cwd === 'string' && o.cwd ? path.resolve(cwd, o.cwd) : cwd;
     const words = [...raw.split(/[\s'"`;&|<>(){}=,]+/), ...plain.split(/[\s'"`;&|<>(){}=,]+/)].filter(w => /[\\/]/.test(w) || w.startsWith('.') || w.startsWith('~'));
     if (words.some(w => /[*?[]/.test(w) && /(^|[\\/])\.[^\\/]*[*?[]|[*?[][^\\/]*[\\/]/.test(w))) return true;
-    return words.some(w => settingsPath(w, base)) || (typeof o.cwd === 'string' && settingsPath(o.cwd, cwd));
+    // each word once: a long script repeats its paths, and each check resolves links on disk
+    return [...new Set(words)].some(w => settingsPath(w, base)) || (typeof o.cwd === 'string' && settingsPath(o.cwd, cwd));
   }
-  const places = placesOf(o);
+  const places = placesOf(o, req.whole);
   if (!places) return true;
   return places.filter(pathLike).some(p => settingsPath(p, cwd));
 }
 
 /** An engine cut the request (session.ts trimInput): what runs is not what the rules would read. */
 const cut = (input: unknown): boolean => placesOf(input) === null || Object.values(obj(input)).some(v => typeof v === 'string' && CUT.test(v));
+/** The places of a request's input (null: not read whole, see placesOf). */
+const placesIn = (req: PermitRequest): string[] | null => placesOf(req.input, req.whole);
 
 function refusal(rule: PolicyRule, shown: string, command: boolean): PermitVerdict {
   const message = rule.action === 'esegui' && !command
@@ -159,14 +168,16 @@ export function autoPermit(req: PermitRequest, ctx: PermitContext): PermitVerdic
   const raw = obj(req.input).command;
   // the rules and rule 6 must read what will run: a command with no line, or one an engine cut, is the user's call
   if (command && (typeof raw !== 'string' || !raw.trim())) return ASK;
-  if (cut(req.input)) return ASK;
-  const rule = policyHit(policy, req.tool, req.input, COMMAND_TOOLS, req.title);
+  if (!req.whole && cut(req.input)) return ASK;
+  if (req.whole && placesIn(req) === null) return ASK;   // deeper than any engine's shape
+  const { rule, unread } = policyRead(policy, req.tool, req.input, COMMAND_TOOLS, req.title, ctx.now);
   if (rule) {
     if (rule.action === 'ask-user') return { kind: 'ask', rule };
     return refusal(rule, typeof raw === 'string' ? raw.trim() : req.title?.trim() || req.tool, command);
   }
-  // no rule in what they read, but longer than that, for a tool they could hold: what they cannot see may be what they hold
-  if (policyCovers(policy, req.tool, COMMAND_TOOLS, req.title) && policyTooLong(req.tool, req.input, COMMAND_TOOLS, req.title)) return ASK;
+  // no rule in what they read, but they did not read it all (longer than their limit, or too slow to read): what they
+  // did not see may be what they hold. Only for a tool some rule could hold
+  if (unread && policyCovers(policy, req.tool, COMMAND_TOOLS, req.title)) return ASK;
   // looking never asks, whatever the role's limit (ADR 0278: the quick-answer role, limited to «Solo piano», asked the
   // user for Read, Glob and Grep)
   const reads = command ? readOnlyCommand(raw, ctx.readScripts) : READ_TOOLS.has(req.tool);
@@ -176,7 +187,9 @@ export function autoPermit(req: PermitRequest, ctx: PermitContext): PermitVerdic
   if (policy.state === 'broken') return ASK;
   // Codex's grantRoot is write access under a folder for the rest of the session: later writes never come back here
   if (obj(req.input).grantRoot !== undefined) return ASK;
-  if (EDIT_TOOLS.has(req.tool) && !placesOf(req.input)?.some(pathLike) && !placesOf(req.input)?.some(p => /^[\w.-]+\.\w+$/.test(p))) return ASK; // an edit that names no file
+  // an edit that names no file: a short one-line value that reads as a path or a file name
+  const files = (placesIn(req) ?? []).filter(p => p.length <= 1000 && !/[\r\n]/.test(p));
+  if (EDIT_TOOLS.has(req.tool) && !files.some(pathLike) && !files.some(p => /^[\w.-]+\.\w+$/.test(p))) return ASK;
   if (touchesSettings(req, command, ctx.cwd)) return ASK;
   return ALLOW;
 }

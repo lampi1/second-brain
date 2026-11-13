@@ -45,7 +45,7 @@ export const permissionsIt = {
   'perm.sec.ceiling.hint': 'La modalità più alta in cui il ruolo può lavorare. Una modalità sopra il limite viene riportata al limite.',
   'perm.ceiling.none': 'Nessun limite',
   'perm.ceiling.none.badge': 'predefinito',
-  'perm.ceiling.none.help': 'Il ruolo usa la tua modalità: quella scelta nella chat o, se non la scegli, quella delle impostazioni del motore (anche Automatica o Senza permessi).',
+  'perm.ceiling.none.help': 'Nessun limite dal ruolo. Su Claude la chat usa la modalità che scegli; se non la scegli parte in «Chiedi ogni volta» e alle richieste risponde l’app con le regole del tuo brain. Gli altri motori usano le loro impostazioni.',
   'perm.ceiling.acceptEdits.help': 'Le modifiche ai file passano senza chiedere; i comandi e le altre azioni chiedono il tuo ok.',
   'perm.ceiling.default.help': 'Ogni modifica e ogni comando chiede il tuo ok, uno per uno.',
   'perm.ceiling.plan.help': 'Legge e propone un piano; non modifica file e non esegue comandi.',

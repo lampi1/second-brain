@@ -321,7 +321,8 @@ export class ClaudeSession implements HarnessSession {
       // without it, -p stream-json leaves the display to the server, which streams no thinking text: the Ragionamento
       // block stays empty and "Correggi il pensiero" has nothing to select (ADR 0058, probe 16/10)
       '--thinking-display', 'summarized'];
-    // no choice = the user's settings.json decides (defaultMode, e.g. auto); the CLI reports the mode at init (ADR 0002);
+    // no mode = the user's settings.json decides (defaultMode); the manager passes «default» for a chat with no choice
+    // (launchMode, ADR 0290), a waiting engine starts with none; the CLI reports the mode at init (ADR 0002);
     // a read-only run is always in plan mode
     const mode = op.readOnly ? 'plan' : op.permissionMode;
     if (mode) a.push('--permission-mode', mode);
@@ -873,7 +874,8 @@ export class ClaudeSession implements HarnessSession {
     if (call.toolUseId) req.toolUseId = call.toolUseId;
     log.info('chats', 'can_use_tool', { chat: this.opts.chatId, op: 'execute_tool', ...(call.toolUseId ? { step: call.toolUseId } : {}), data: { requestId: id, tool, type: req.type, toolUseId: call.toolUseId || null } });
     this.setState('waiting');
-    this.sink.pending(req);
+    // a permission is decided on the whole input: shortened, a long Write or command could only be asked to the user
+    this.sink.pending(req, question ? undefined : input);
   }
 
   /** A tool call (a question too) that arrived before a stop and was still being checked across the broker when the stop

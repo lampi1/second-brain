@@ -2,7 +2,7 @@
 // scripts/demo-brain.mjs) so they always show the current UI with fictional data only: English UI (SB_LANG=en), dark
 // theme, 1600x1000, saved as WebP (< 300 KB each) in docs/screenshots/: the whole window, one part of it, or two parts
 // side by side. The showcase (memory, agent-levels, brain-map, orchestrator-flash, reactions, plan), the app's own pages
-// (voice, log, recordings, classifiers, quality, learn, news, costs, maintenance) and the rest. Not part
+// (voice, log, recordings, quality, learn, news, costs, maintenance) and the rest. Not part
 // of `npm run check`: run by `npm run shots` (its own Playwright config, playwright.shots.config.ts). The app runs hidden
 // (SB_HIDDEN, set by launch()). The 3D map needs WebGL: on a machine without a GPU set
 // SB_E2E_ELECTRON_ARGS="--use-angle=swiftshader --enable-unsafe-swiftshader" (and xvfb-run on Linux).
@@ -309,7 +309,7 @@ test('README showcase: the Strategist\'s plan to approve in the Orchestrator', a
   await save('plan', row);
 });
 
-test('README showcase: voice, Log, recordings, classifiers, quality, learn, news, costs, trends, the maintenance notice', async () => {
+test('README showcase: voice, Log, recordings, quality, learn, news, costs, trends, the maintenance notice', async () => {
   test.setTimeout(180_000);
   // the plan's questions window is done: every request from here on is set aside, as a user busy elsewhere would
   await keepQuestionsAside(page);
@@ -350,15 +350,6 @@ test('README showcase: voice, Log, recordings, classifiers, quality, learn, news
   await expect(page.getByTestId('rec-lines').locator('.rec-line')).toHaveCount(4, { timeout: 15_000 });
   const db = (await page.getByTestId('rec-detail').boundingBox())!;
   await save('recordings', { ...column, height: Math.round(Math.min(column.height, db.y + db.height + 14 - column.y)) });
-
-  // Classifiers: the small sorters that decide by themselves at zero tokens, each card with its numbers (a section of
-  // Qualità since ADR 0210; the old id lands there)
-  await goPage(page, 'classificatori');
-  await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 });
-  const cls = page.getByTestId('an-panel-qualita').getByTestId('cls-summary');
-  await cls.scrollIntoViewIfNeeded({ timeout: 30_000 });
-  await page.waitForTimeout(800);
-  await save('classifiers', await frameOf(cls));
 
   // Quality: four measured numbers about the AI's mistakes, each with its source
   await goPage(page, 'qualita');

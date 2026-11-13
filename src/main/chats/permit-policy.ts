@@ -28,7 +28,7 @@ export type BrainPolicy =
   | { state: 'ok'; rules: PolicyRule[] }
   | { state: 'broken'; error: string };
 
-const MAX_RULES = 200, MAX_PATTERN = 500, MAX_PATTERNS = 50, MAX_FILE = 256 * 1024, MAX_SUBJECT = 20_000;
+const MAX_RULES = 200, MAX_PATTERN = 500, MAX_PATTERNS = 50, MAX_FILE = 256 * 1024, MAX_SUBJECT = 100_000;
 const ID = /^[a-z0-9][a-z0-9._-]{0,63}$/i;
 
 const COMMAND = new Set(['bash', 'powershell', 'shell', 'execute', 'terminal', 'run_terminal_cmd', 'exec_command', 'local_shell']);
@@ -123,8 +123,13 @@ export function loadPolicy(brainRoot: string | null | undefined): BrainPolicy {
 /** What a rule is matched against: a command's own line; any other tool's name (and title), its input as JSON, then
  *  each top-level text value as `key: value` lines (a query that starts on a new line reads as written). */
 export function policySubject(tool: string, input: unknown, cls: string, title?: string): string {
+  return subjectParts(tool, input, cls, title).join('\n');
+}
+/** The subject in the parts that each say everything: a command's line alone; for any other tool the name with the
+ *  text values, then the name with the JSON (it repeats the values). */
+function subjectParts(tool: string, input: unknown, cls: string, title?: string): string[] {
   const o = isObj(input) ? input : {};
-  if (cls === 'command' && typeof o.command === 'string') return o.command;
+  if (cls === 'command' && typeof o.command === 'string') return [o.command];
   let json = '';
   try { json = JSON.stringify(input ?? {}); } catch { /* circular: the name alone */ }
   // text values first, one level down too (Codex's {server, tool, arguments}): a long JSON cannot push them out
@@ -132,27 +137,71 @@ export function policySubject(tool: string, input: unknown, cls: string, title?:
     : isObj(v) ? Object.entries(v).filter(([, x]) => typeof x === 'string').map(([k2, x]) => `${k2}: ${x as string}`) : []);
   // first line: the name; last line: the name and the JSON on one line, as a rule on `tool + JSON input` reads it
   const head = `${tool}${title && title !== tool ? ` ${title}` : ''}`;
-  return [head, ...values, `${head} ${json}`].join('\n');
+  return [[head, ...values].join('\n'), `${head} ${json}`];
 }
-
-/** The request is longer than the rules read: what they cannot see may be what they hold (the caller asks). */
-export function policyTooLong(tool: string, input: unknown, commandTools: readonly string[], title?: string): boolean {
-  const cls = toolClass(tool, commandTools);
-  return policySubject(tool, input, cls, cls === 'mcp' ? title?.trim() : undefined).length > MAX_SUBJECT;
+/** What the rules are run on: the whole subject, each part cut at the limit. A long file is in the subject twice (its
+ *  text, then the JSON), so a file of half the limit is not «too long»; a pattern still reads one text, whatever the
+ *  size, so a rule means the same on a short and on a long request (ADR 0290). long: a part is over the limit, so some
+ *  of it is not read. */
+function readable(tool: string, input: unknown, cls: string, title?: string): { text: string; long: boolean } {
+  const parts = subjectParts(tool, input, cls, title);
+  return { text: parts.map(p => p.slice(0, MAX_SUBJECT)).join('\n'), long: parts.some(p => p.length > MAX_SUBJECT) };
 }
 
 const ruleSees = (rule: PolicyRule, cls: string, name: string, title: string): boolean => rule.tools.some(t => t === '*' || t === cls || t === name || (!!title && t === title));
 
-/** The first rule that holds this request, or null. title: the engine's line, an ACP MCP tool's only name. */
-export function policyHit(policy: BrainPolicy, tool: string, input: unknown, commandTools: readonly string[], title?: string): PolicyRule | null {
-  if (policy.state !== 'ok') return null;
+/** What the rules say of a request. unread: they did not read it all (a part over the limit, or they would take too
+ *  long), so no rule found is not «no rule holds it»: the caller asks. */
+export interface PolicyRead { rule: PolicyRule | null; unread: boolean }
+
+// The rules run in the main process and a pattern cannot be stopped: one that goes back over the text for every match
+// (`psql[\s\S]*insert`, on a text full of «psql») takes seconds on 100,000 characters. So the rules have a time budget
+// for one request, and on a long text each pattern is first timed on every 20,000 characters of it: when the whole
+// text would take too long at that pace, the app stops and asks.
+const BUDGET_MS = 250, PATTERN_MS = 250, PROBE = 20_000, NOISE_MS = 25;
+
+/** A pattern is quick enough on the whole text, judged by its time on each stretch of PROBE characters. A pattern that
+ *  goes back over the text scans from each match to the end, so a slow stretch weighs as much as the text after it is
+ *  long (all of it slow: the square of the length). spent: the request's time so far is over its budget. */
+function quick(re: RegExp, text: string, now: () => number, spent: () => boolean): boolean {
+  let whole = 0;
+  for (let at = 0; at < text.length; at += PROBE) {
+    if (spent()) return false;
+    const stretch = text.slice(at, at + PROBE), weight = Math.max(1, 2 * (text.length - at) / PROBE - 1);
+    // a short time that would stop the pattern is taken again, the fastest of three: one look alone also measures
+    // what else the machine was doing; a long one is the pattern's own
+    let ms = Infinity;
+    for (let look = 0; look < 3 && whole + ms * weight > PATTERN_MS && (look === 0 || ms <= NOISE_MS); look++) {
+      const t0 = now();
+      re.test(stretch);
+      ms = Math.min(ms, now() - t0);
+    }
+    whole += ms * weight;
+    if (whole > PATTERN_MS) return false;
+  }
+  return true;
+}
+
+/** The first rule that holds this request, and whether the rules read all of it. title: the engine's line, an ACP MCP
+ *  tool's only name. now: the clock (the tests' own). */
+export function policyRead(policy: BrainPolicy, tool: string, input: unknown, commandTools: readonly string[], title?: string, now: () => number = () => performance.now()): PolicyRead {
+  if (policy.state !== 'ok') return { rule: null, unread: false };
   const cls = toolClass(tool, commandTools), name = tool.toLowerCase(), t = (title ?? '').trim().toLowerCase();
-  const subject = policySubject(tool, input, cls, cls === 'mcp' ? title?.trim() : undefined).slice(0, MAX_SUBJECT);
+  const { text, long } = readable(tool, input, cls, cls === 'mcp' ? title?.trim() : undefined);
+  const start = now(), spent = (): boolean => now() - start > BUDGET_MS;
+  let slow = false;
+  const hit = (re: RegExp): boolean => {
+    if (slow) return false;
+    if (spent() || (text.length > PROBE && !quick(re, text, now, spent))) { slow = true; return false; }
+    return re.test(text);
+  };
   for (const rule of policy.rules) {
     if (!ruleSees(rule, cls, name, t)) continue;
-    if (rule.match.some(re => re.test(subject)) && !rule.unless.some(re => re.test(subject))) return rule;
+    const held = rule.match.some(hit) && !rule.unless.some(hit);
+    if (slow) return { rule: null, unread: true };
+    if (held) return { rule, unread: false };
   }
-  return null;
+  return { rule: null, unread: long };
 }
 
 /** Some rule could hold a request of this tool, or the policy cannot be read: no «always» on what the user grants for

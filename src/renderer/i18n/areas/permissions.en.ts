@@ -46,7 +46,7 @@ export const permissionsEn: typeof permissionsIt = {
   'perm.sec.ceiling.hint': 'The highest mode the role may work in. A mode above the limit is brought back to it.',
   'perm.ceiling.none': 'No limit',
   'perm.ceiling.none.badge': 'default',
-  'perm.ceiling.none.help': 'The role uses your mode: the one chosen in the chat or, if you choose none, your engine settings\' (Auto or Bypass permissions too).',
+  'perm.ceiling.none.help': 'No limit from the role. On Claude the chat uses the mode you choose; with none it starts in "Ask every time" and the app answers its requests by your brain’s rules. Other engines use their own settings.',
   'perm.ceiling.acceptEdits.help': 'File edits go through without asking; commands and other actions ask for your ok.',
   'perm.ceiling.default.help': 'Every edit and every command asks for your ok, one by one.',
   'perm.ceiling.plan.help': 'Reads and proposes a plan; edits no file and runs no command.',

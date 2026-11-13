@@ -97,6 +97,23 @@ describe('autoPermit: what it cannot read whole is the user\'s call', () => {
     // a cut deep in the input, in a place or in content, is still a cut
     expect(autoPermit(perm('mcp__fs__write', { a: { b: { c: { path: `src/${'x'.repeat(10)}… (+9)` } } } }), ctx()).kind).toBe('ask');
     expect(autoPermit(perm('Write', { file_path: 'src/a.ts', content: `x… (+9)` }), ctx()).kind).toBe('ask');
+    // an input that came whole (Claude, ADR 0290) carries no cut: the same signs are plain content
+    expect(autoPermit({ ...perm('Write', { file_path: 'src/a.ts', content: `x… (+9)` }), whole: true }, ctx()).kind).toBe('allow');
+    expect(autoPermit({ ...perm('Edit', { files: Array.from({ length: 200 }, (_, i) => `src/f${i}.ts`) }), whole: true }, ctx()).kind).toBe('allow');
+    expect(autoPermit({ ...perm('Edit', { files: [...Array.from({ length: 200 }, (_, i) => `src/f${i}.ts`), '.claude/settings.json'] }), whole: true }, ctx()).kind).toBe('ask'); // rule 6 still reads them all
+    // a place is read however long it is and on however many lines: a tool that tidies the path reaches the same file
+    for (const n of [500, 2100, 16_490, 40_000]) {
+      const far = `${'./'.repeat(n)}.claude/settings.json`;
+      expect(autoPermit({ ...perm('mcp__fs__write', { path: far, content: 'x' }), whole: true }, ctx()).kind, String(n)).toBe('ask');
+      expect(autoPermit({ ...perm('Edit', { file_path: far, old_string: 'a', new_string: 'b', note: 'src/a.ts' }), whole: true }, ctx()).kind, String(n)).toBe('ask');
+    }
+    expect(autoPermit(perm('mcp__fs__write', { path: `${'./'.repeat(500)}.claude/settings.json`, content: 'x' }), ctx()).kind).toBe('ask');   // not whole, no cut mark
+    expect(autoPermit(perm('mcp__fs__write', { path: 'x\n/../.claude/settings.json', content: 'x' }), ctx()).kind).toBe('ask');
+    expect(autoPermit(perm('mcp__fs__write', { path: 'https://a/../../.claude/settings.json', content: 'x' }), ctx()).kind).toBe('ask');
+    // the same shapes on an ordinary place stay free, and so does a web address
+    expect(autoPermit({ ...perm('mcp__fs__write', { path: `${'./'.repeat(16_490)}src/a.ts`, content: 'x' }), whole: true }, ctx()).kind).toBe('allow');
+    expect(autoPermit(perm('mcp__fs__write', { path: 'src/a.ts', notes: 'prima riga\nseconda riga con src/b.ts', content: 'x' }), ctx()).kind).toBe('allow');
+    expect(autoPermit(perm('mcp__web__open', { url: 'https://example.com/a/.git/config' }), ctx()).kind).toBe('allow');
   });
 });
 

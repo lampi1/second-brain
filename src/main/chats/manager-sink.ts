@@ -68,12 +68,17 @@ export abstract class ManagerSink extends ManagerWork {
         if (item.kind === 'tool' && r.s.run) this.noteReceipt(r, item);
         if (item.kind === 'result' && !replace) { delete r.crashResumed; this.turnEnded(r, item); }
       },
-      pending: req => {
+      pending: (req, whole) => {
         if (!live()) return;
         this.coldStarted(r);
         // only the app's gate says a brain rule holds a request (it may then be answered from the phone): never an engine
         if ('heldBy' in req) { req = { ...req }; delete req.heldBy; }
-        if (this.gated(r, req) || this.refusedCommand(r, req) || this.autoPermitted(r, req)) return;
+        // the gates read the input as the engine sent it (ADR 0290): the one in the request is shortened for the screen
+        const shown = req.input;
+        if (whole !== undefined) req = { ...req, input: whole };
+        if (this.gated(r, req) || this.refusedCommand(r, req) || this.autoPermitted(r, req, whole !== undefined)) return;
+        // what the gates marked on the request (no «always», the rule that holds it) stays; its input is the short one again
+        if (whole !== undefined) req = { ...req, input: shown };
         // decided on the real input above; parked for night mode, shown and kept masked from here (ADR 0237)
         req = maskTypedRequest(req);
         if (this.heldAsTwin(r, req)) return;

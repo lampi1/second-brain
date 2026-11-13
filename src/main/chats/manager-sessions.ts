@@ -16,7 +16,7 @@ import { AgentMayNotWake } from '../engines/policy';
 import { appAsks, engineOf, engineOrThrow } from '../engines/registry';
 import { sessionFor } from '../engines/sessions';
 import { findTranscript } from './transcript';
-import { aboveCeiling, browserAccess, claudeDefaultMode, type AgentPolicy, type BrowserAccess } from '../agents/tool-policy';
+import { aboveCeiling, browserAccess, claudeDefaultMode, claudeDefaultSetting, type AgentPolicy, type BrowserAccess } from '../agents/tool-policy';
 import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { toolShownToChat, toolShownToUnknown, toolShownToWarm } from './tool-visibility';
@@ -207,13 +207,40 @@ export abstract class ManagerSessions extends ManagerPersistence {
     return true;
   }
 
-  /** min(ceiling, Brother's mode) for this start. Claude without a chat choice follows his settings, so their default is
-   *  read here (passing --permission-mode replaces it); other engines narrow through their own options (ceiling). */
+  /** The mode a session really starts with (ADR 0290). A Claude chat with no mode of its own starts in «default»,
+   *  never in the engine's own default: there every request reaches the app, which lets it through unless a rule of
+   *  the user's brain holds it (auto-permit.ts, ADR 0254). Left to the engine, a user whose Claude Code default is
+   *  «auto» had its classifier refuse the agents before the app was asked (about 600 refusals in a month of the
+   *  owner's chats, 128 of the 136 sessions with one were in auto). A mode the user picks on the chat still wins,
+   *  and so does «plan» as their engine default; this default is not a choice, so it never narrows a child (modeFor
+   *  is what the delegation reads). A waiting engine starts with no mode and gets this one when a chat takes it. */
+  protected launchMode(r: Rec): PermissionMode | null {
+    const mode = this.modeFor(r);
+    if (mode || engineOf(r.s.harness)?.kind !== 'claude') return mode;
+    // only over a default the app knows and that asks no less than «default». «plan», a mode it does not know
+    // («dontAsk») or settings it cannot read stay the engine's: there the user asked for less, or the app cannot tell
+    const own = claudeDefaultSetting(r.s.cwd, { ...process.env, ...this.opts.env });
+    if (own !== 'plan' && own !== 'unknown') return 'default';
+    log.info('chats', 'chat left in the engine\'s own default mode', { chat: r.s.id, data: { default: own } });
+    return null;
+  }
+
+  /** The chat's mode as chosen: min(ceiling, Brother's mode), null = no choice and nothing to clamp. Brother's mode is
+   *  the chat's choice, or for Claude the default of his settings (a ceiling clamps that too); other engines narrow
+   *  through their own options (ceiling). What a session starts with is launchMode. */
   protected modeFor(r: Rec): PermissionMode | null {
     const ceiling = r.policy?.ceiling ?? null, chosen = r.choice.permissionMode;
     if (!ceiling) return chosen;
     const brother = chosen ?? (engineOf(r.s.harness)?.kind === 'claude' ? claudeDefaultMode(r.s.cwd, { ...process.env, ...this.opts.env }) : null);
     return brother && aboveCeiling(brother, ceiling) ? ceiling : chosen;
+  }
+
+  /** The mode of r that bounds its children (ADR 0085, 0290): its chosen mode or its ceiling's clamp, but never a
+   *  «default» picked on the chat. That pick narrows nothing for the chat itself (the app answers its requests, ADR
+   *  0254), so it narrows no child; a role limited to «Chiede conferma» still does, through its policy. */
+  protected boundMode(r: Rec): PermissionMode | null {
+    const mode = this.modeFor(r);
+    return mode === 'default' ? null : mode;
   }
 
   /** Which of the app's browser tools the chat's role may use (tool-policy.ts browserAccess): the per-chat MCP serves
@@ -304,7 +331,7 @@ export abstract class ManagerSessions extends ManagerPersistence {
     r.s.agentChildren = r.children.snapshot();
     const extraArgs = this.extraArgsFor(r.s.harness, chatId, r);
     const opts: SessionOptions = {
-      chatId, cwd: r.s.cwd, model: r.choice.model, effort: r.choice.effort, permissionMode: this.modeFor(r), title: r.s.title,
+      chatId, cwd: r.s.cwd, model: r.choice.model, effort: r.choice.effort, permissionMode: this.launchMode(r), title: r.s.title,
       ...(r.policy ? { toolPolicy: r.policy.tools, ceiling: r.policy.ceiling } : {}),
       ...(r.agentAssets ? { agentAssets: r.agentAssets } : {}),
       // the Orchestrator's turn stays short: a few workspace calls, then it delegates (ADR 0090, issue #98)
@@ -432,9 +459,10 @@ export abstract class ManagerSessions extends ManagerPersistence {
         await sess.ready;
         if (c.model) await sess.setModel(c.model);
         if (c.effort) await sess.setEffort(c.effort);
-        // the mode the chat would be launched with (its choice, or the user's default clamped to its ceiling: a
-        // delegated chat's is its parent's mode), never the waiting engine's default above that ceiling
-        const mode = this.modeFor(r);
+        // the mode the chat would be launched with (launchMode: its choice, the ceiling's clamp, or «default» for a
+        // chat with no choice); null leaves the waiting engine in the user's own default («plan», or one the app
+        // cannot read)
+        const mode = this.launchMode(r);
         if (mode) await sess.setPermissionMode(mode);
       } catch (e) {
         log.warn('chats', 'warm engine refused the chat choices: starting a fresh one', { chat: r.s.id, data: errText(e) });

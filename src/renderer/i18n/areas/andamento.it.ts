@@ -1,8 +1,8 @@
-// Italian UI texts of the Andamento page (ADR 0202: Costi, Qualità, Apprendimento, Classificatori and Uso as tabs,
+// Italian UI texts of the Andamento page (ADR 0202: Costi, Qualità, Apprendimento and Uso as tabs,
 // components/andamento/) and of the local usage counter's «Uso» tab (UsageTab.tsx). en/de follow these keys.
 type N = { n: number };
 export const andamentoIt = {
-  'brainPages.andamento.subtitle': 'Costi, qualità con i classificatori, apprendimento e uso dell’app, in schede.',
+  'brainPages.andamento.subtitle': 'Costi, qualità, apprendimento e uso dell’app, in schede.',
   'trend.lead': 'Quanto spendi, quanto funziona, cosa impara l’app e cosa usi davvero. Calcolato sul tuo PC.',
   'trend.tabsLabel': 'Sezioni di Andamento',
   'trend.tab.costi': 'Costi',

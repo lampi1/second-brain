@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/manager';
-import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
+import { trimInput, type HarnessSession, type SessionOptions, type SessionSink } from '../../../src/main/chats/session';
 import { plainOwner } from '../../../src/main/agents/catalog';
 import { FAIL_CLOSED, type AgentPolicy } from '../../../src/main/agents/tool-policy';
 import type { PermissionMode } from '../../../src/shared/contract';
@@ -50,6 +50,115 @@ describe('agent policy on chats', () => {
     fs.writeFileSync(path.join(f.home, 'settings.json'), JSON.stringify({ permissions: { defaultMode: 'plan' } }));
     await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'y' }, 'user', agent(reviewer));
     expect(f.starts.at(-1)?.permissionMode).toBeNull(); // below the ceiling: his settings decide, as for any chat
+  });
+
+  it('a Claude chat with no mode of its own starts in «default», so the app answers its requests, not the engine\'s own default (ADR 0290)', async () => {
+    const f = fixture();
+    fs.mkdirSync(f.home, { recursive: true });
+    // the engine's default is «auto»: its classifier would decide before the app
+    fs.writeFileSync(path.join(f.home, 'settings.json'), JSON.stringify({ permissions: { defaultMode: 'auto' } }));
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' }, 'user');
+    expect(f.starts.at(-1)?.permissionMode).toBe('default');
+    // not a choice of the user: nothing is stored as one, and it bounds no child
+    expect(f.m.chosenMode(c.id)).toBeNull();
+    // a «default» the user picks is the same for a child: the app answers this chat without asking, so it bounds none;
+    // «plan» picked on the chat does, and so does a role limited to «default», through its policy
+    await f.m.set(c.id, { permissionMode: 'default' });
+    expect(f.m.chosenMode(c.id)).toBeNull();
+    await f.m.set(c.id, { permissionMode: 'plan' });
+    expect(f.m.chosenMode(c.id)).toBe('plan');
+    const limited = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'r' }, 'user', agent(reviewer));
+    expect(f.m.chosenMode(limited.id)).toBeNull();
+    expect(f.m.agentPolicy(limited.id)?.ceiling).toBe('default');
+    // the user's own pick still wins, «auto» included
+    await f.m.create({ harness: 'claude', cwd: f.dir, permissionMode: 'auto', prompt: 'y' }, 'user');
+    expect(f.starts.at(-1)?.permissionMode).toBe('auto');
+    // no settings at all: the same «default»
+    fs.rmSync(path.join(f.home, 'settings.json'));
+    await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'z' }, 'user');
+    expect(f.starts.at(-1)?.permissionMode).toBe('default');
+    // «plan» as the user's engine default is less than «default»: it stays theirs
+    const withDefault = async (settings: string, where = path.join(f.home, 'settings.json')) => {
+      fs.mkdirSync(path.dirname(where), { recursive: true });
+      fs.writeFileSync(where, settings);
+      await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'w' }, 'user');
+      return f.starts.at(-1)?.permissionMode;
+    };
+    expect(await withDefault(JSON.stringify({ permissions: { defaultMode: 'plan' } }))).toBeNull();
+    // so does a mode the app does not know, and settings it cannot read: it cannot tell what the user asked for
+    expect(await withDefault(JSON.stringify({ permissions: { defaultMode: 'dontAsk' } }))).toBeNull();
+    expect(await withDefault('{ "permissions": { "defaultMode": "auto" }, }')).toBeNull();
+    // the other modes it knows ask no less than «default»: the app answers there too
+    expect(await withDefault(JSON.stringify({ permissions: { defaultMode: 'bypassPermissions' } }))).toBe('default');
+    expect(await withDefault(JSON.stringify({ permissions: { defaultMode: 'acceptEdits' } }))).toBe('default');
+    expect(await withDefault(`\uFEFF${JSON.stringify({ permissions: { defaultMode: 'auto' } })}`)).toBe('default'); // a BOM is not «cannot read»
+    // the project's own settings are the last word, as for the CLI
+    expect(await withDefault(JSON.stringify({ permissions: { defaultMode: 'plan' } }), path.join(f.dir, '.claude', 'settings.json'))).toBeNull();
+  });
+
+  it('the app decides on the whole input: a long Write is answered, not left to the user because its text was shortened for the screen', async () => {
+    const f = fixture();
+    await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' }, 'user');
+    const whole = { file_path: path.join(f.dir, 'notes.md'), content: 'riga di testo\n'.repeat(500) };
+    const short = trimInput(whole);
+    expect((short as typeof whole).content).toMatch(/… \(\+\d+\)$/);
+    // as the Claude session sends it: the short input in the request, the whole one beside it
+    f.sink().pending({ id: 'w1', type: 'permission', tool: 'Write', title: 'Write', detail: '', input: short, at: 1 }, whole);
+    expect(f.answers).toEqual([{ id: 'w1', answer: expect.objectContaining({ kind: 'permission', allow: true }) }]);
+    // the shortened one alone is not what will run: it stays the user's call
+    f.sink().pending({ id: 'w2', type: 'permission', tool: 'Write', title: 'Write', detail: '', input: short, at: 1 });
+    expect(f.answers).toHaveLength(1);
+    expect(f.m.pending().some(p => p.id === 'w2')).toBe(true);
+  });
+
+  it('a request the app leaves to the user shows the short input, though the app read the whole one (ADR 0290)', async () => {
+    const f = fixture();
+    // a role limited to «default»: a Write is the user's call
+    await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' }, 'user', agent({ tools: null, ceiling: 'default' }));
+    const whole = { file_path: path.join(f.dir, 'notes.md'), content: 'riga di testo\n'.repeat(500) };
+    const short = trimInput(whole);
+    f.sink().pending({ id: 'w3', type: 'permission', tool: 'Write', title: 'Write', detail: '', input: short, at: 1 }, whole);
+    expect(f.answers).toEqual([]);
+    expect(f.m.pending().find(p => p.id === 'w3')?.input).toEqual(short);
+  });
+
+  it('a chat the user set to «default» bounds no child it opens; one set to «plan» does (ADR 0290)', async () => {
+    const f = fixture();
+    const parent = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' }, 'user');
+    const child = (goal: string) => f.m.create({ harness: 'claude', cwd: f.dir, parentId: parent.id, prompt: goal,
+      delegation: { role: 'artisan', goal, doneWhen: ['Fatto'], at: 1 } }, 'agent', { owner: { ...plainOwner('claude', null), id: 'artisan' }, instructions: 'Fai.', policy: null });
+    await f.m.set(parent.id, { permissionMode: 'default' });
+    expect(f.m.agentPolicy((await child('uno')).id)?.ceiling ?? null).toBeNull();
+    await f.m.set(parent.id, { permissionMode: 'plan' });
+    expect(f.m.agentPolicy((await child('due')).id)?.ceiling).toBe('plan');
+  });
+
+  it('a waiting engine starts with no mode and gets «default» when a chat takes it; another engine is left alone', async () => {
+    vi.useFakeTimers();
+    try {
+      const f = fixture({ prewarm: true, prewarmDelayMs: 0 });
+      await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' }, 'user');
+      await vi.advanceTimersByTimeAsync(10);
+      const waiting = f.starts.length;
+      expect(waiting).toBe(2);
+      expect(f.starts.at(-1)?.permissionMode).toBeNull();   // a user whose default is «plan» keeps it on this engine
+      await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'y' }, 'user');
+      await vi.advanceTimersByTimeAsync(10);
+      expect(f.starts.filter(o => o.permissionMode === 'default')).toHaveLength(1);   // the second chat started no engine of its own
+      expect(f.modes).toEqual(['default']);
+      // a user whose engine default is «plan»: the chat that takes the next waiting engine sends it no mode
+      fs.mkdirSync(f.home, { recursive: true });
+      fs.writeFileSync(path.join(f.home, 'settings.json'), '\uFEFF' + JSON.stringify({ permissions: { defaultMode: 'plan' } })); // a BOM, as Windows editors write
+      await vi.advanceTimersByTimeAsync(10);
+      const before = f.starts.length;
+      await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'z' }, 'user');
+      await vi.advanceTimersByTimeAsync(10);
+      expect(f.starts.slice(before).filter(o => o.permissionMode !== null)).toEqual([]);
+      expect(f.modes).toEqual(['default']);
+    } finally { vi.useRealTimers(); }
+    const g = fixture();
+    await g.m.create({ harness: 'codex', cwd: g.dir, prompt: 'x' }, 'user');
+    expect(g.starts.at(-1)?.permissionMode).toBeNull();
   });
 
   it('refuses a mode above the ceiling and allows one within it', async () => {

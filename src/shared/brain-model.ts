@@ -1,5 +1,5 @@
 // The brain model's shapes (ADR 0077), shared by main (src/main/brainmodel) and the Brain pages of the renderer
-// (Agenti, Skill, Regole, Memoria, Classificatori, Mappa). Two concepts only: an agent = who works (engine, model,
+// (Agenti, Skill, Regole, Memoria, Mappa). Two concepts only: an agent = who works (engine, model,
 // permissions, role); a skill = how a job is done, shared and loaded when the agent starts. Rules apply to every agent;
 // memory is the brain's knowledge and what happened, plus one memory per agent. Every change a maintenance job makes is
 // a BrainChange: logged, explained, and undone with one click (no approval: owner, 2026-10-19).
@@ -237,59 +237,3 @@ export interface BrainModelState {
   learning?: LearningState;
 }
 
-// ── Classificatori (read-only, a section of Qualità since ADR 0210): the small sorters that decide at zero tokens ───
-export interface ClassifiersState {
-  /** per kind of work: the app's chats in the ledger, how many have a known outcome and how many succeeded */
-  kinds: { kind: string; chats: number; known: number; ok: number }[];
-  /** one card per classifier that keeps a record (main/brainmodel/classifier-cards.ts); the page draws them as a grid */
-  cards?: ClassifierCard[];
-  /** the kind of work by examples (main/brainmodel/kind-model.ts, ADR 0197); absent from an older main or the demo */
-  kindModel?: KindModelCard;
-}
-/** The kind-of-work classifier by examples (ADR 0197): nearest centroid over the local e5 embeddings of the user's own
- *  ended runs with a verified outcome, labelled by the word rule (taskOf), with «altro» below a calibrated similarity.
- *  state: ready = trained and tested; few = under MIN_PER_KIND examples for two kinds (the word rule decides); no-model =
- *  the local embedder is not ready (the word rule decides); busy = embedding the examples now, at low pace. */
-export interface KindModelCard {
-  state: 'ready' | 'few' | 'no-model' | 'busy';
-  /** labelled runs (verified outcome, a goal) and their count per kind of the word rule, «altro» included */
-  examples: number;
-  perKind: { kind: string; n: number }[];
-  /** the kinds with enough examples, which have a centroid */
-  kinds: string[];
-  minPerKind: number;
-  /** cosine below which it answers «altro», calibrated on 20% of the examples kept apart from the test */
-  threshold: number | null;
-  /** on the 20% held out (by run id, never trained on): rows = the word rule's kind, columns = the classifier's; labels
-   *  = the trained kinds then «altro». agree = the diagonal; it measures agreement with the word rule, not the truth */
-  test: { n: number; agree: number; labels: string[]; matrix: number[][] } | null;
-  /** of the held-out runs the word rule called «altro», how many the classifier gives a kind (unverifiable: shown apart) */
-  altroProposed: { n: number; of: number } | null;
-  at: number;
-}
-// ── Classifier cards: each classifier's numbers, its weeks and its slices, for the Classificatori grid ───────────────
-/** A share with the count it rests on; value null = no case yet (never zero). */
-export interface ClassifierStat { value: number | null; n: number }
-/** One ISO week of a classifier: its decisions, how many it "got" (its own hit measure), the verified outcomes. */
-export interface ClassifierWeek { week: string; decisions: number; hits: number; known: number; ok: number; avgCostUsd: number | null }
-/** One value it decided (a kind, a model): how often, with what outcome and cost, and who ran it most. */
-export interface ClassifierSlice { key: string; count: number; known: number; ok: number; avgCostUsd: number | null; top?: { key: string; count: number } }
-export type ClassifierCardId = 'kind' | 'jobkind';
-export interface ClassifierCard {
-  id: ClassifierCardId;
-  decisions: number;
-  /** its own measure: kind/jobkind = recognised (not "altro"); model = decided by the table */
-  hit: ClassifierStat;
-  /** verified success of the chats it decided (the user's or a review's verdict; never a self-report) */
-  success: ClassifierStat;
-  /** the cases whose only known outcome is unverified (the brain's proxy "closed without an error line", the
-   *  Orchestrator's opinion): their success share, shown apart and never counted in `success` (ADR 0095) */
-  unverified?: ClassifierStat;
-  avgCostUsd: number | null;
-  /** last 8 ISO weeks, oldest first */
-  weeks: ClassifierWeek[];
-  slices: ClassifierSlice[];
-  /** success when it hit versus when it missed (null: no verified case on either side) */
-  compare: { hit: ClassifierStat; miss: ClassifierStat } | null;
-  lastAt: number | null;
-}

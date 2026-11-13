@@ -1,6 +1,6 @@
 // The Brain section's view helpers and pages (ADR 0077): one skill list from the brain model and the skill editor,
-// filters, the Mappa links graph, the agent-choice match, "no data yet" instead of zero, and the Regole / Memoria /
-// Classificatori pages rendered from a fixed state in both languages.
+// filters, the Mappa links graph, the agent-choice match, "no data yet" instead of zero, and the Regole / Memoria
+// pages rendered from a fixed state in both languages.
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';

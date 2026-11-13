@@ -23,6 +23,14 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   OpenCode, OpenRouter included; the chat's model and plan mode go through OpenCode's session options (ADR 0216).
 
 ### Changed
+- A Claude chat with no mode of its own starts in «default», so the app answers its permission requests (they pass
+  unless a rule of your brain, a role's limit or the settings-and-hooks guard holds them) instead of Claude Code's
+  own default mode: with «auto» as that default, its classifier refused the agents before the app was asked. A mode
+  you pick on the chat still wins, and «Solo piano» as your Claude Code default stays. For Claude the app decides on
+  the whole request, not on the copy shortened for the screen, and your rules read up to 100,000 characters of it
+  (20,000 before: under a rule on all tools a 10 KB file asked for your yes); a request your rules would take too
+  long to read asks you within about half a second instead of holding the app, and the settings-and-hooks guard
+  reads a place however long it is written (ADR 0290).
 - Maintenance: app-bug cards follow your own answers (turn down the last five issue cards, or approve only one, and
   the maintenance makes none for three months); an agent's report notes one lesson, not three, and a lesson tied to
   one case is left out instead of refusing the report (ADR 0288).
@@ -71,7 +79,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   summarize and open-agent icons; an Esegui request takes free text instead of running it.
 - Impara v3 and a leaner app (ADR 0201-0210): Battito, Confronto modelli, cloud agents, the judge audit, AI typing
   suggestions, the Orchestrator's «Veloce» lane and the model-routing classifier are gone (every agent uses its card's
-  model); Costi, Qualità, Apprendimento and Classificatori are tabs of one «Andamento» page with a local usage counter;
+  model); Costi, Qualità, Apprendimento and Classificatori (removed since, ADR 0291) are tabs of one «Andamento» page with a local usage counter;
   agent reviews are sampled and run as one hidden nightly batch; Impara has one multiline field with files, new quiz
   kinds, an honest score, a Studio, sequence/state/timeline/mind-map/code/formula/chart visuals, a quality gate and
   file-driven web research through filtered public queries; Settings redesigned with search and instant save; MCP
@@ -84,7 +92,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   external texts, issues, removals or reverts), with «Applicate da sole» and Annulla; maintenance changes go line by
   line, a zero-token brain lint, «riuscito se…» checked a week later, one candidate brain card with a diff per file, a
   role text proposed as a trial; the Guida marks stale cards, answers questions and draws diagrams from the code;
-  Qualità counts the corrections you actually made; kind of work by examples and estimates with every judgment; agent
+  Qualità counts the corrections you actually made; kind of work by examples (removed since, ADR 0291) and estimates with every judgment; agent
   runs in SQLite (userData/app.db); TypeScript 7 typecheck (~4 s); e2e read against known reds; AGENTS.md as a map;
   the four shared files split by area.
 - Impara tutor and entry points (ADR 0190): «Domanda» opens a tutor beside the lesson that answers word by word in
@@ -108,6 +116,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - README back to a short, playful tour with 14 screenshots (`npm run shots` fixed and extended); the Guide gains
   cards for Flash, the Orchestrator's app knowledge, voice, call recordings, the personal Browser, notices and
   terminal routines.
+
+### Removed
+- The Classificatori section of Andamento → Qualità and the kind of work by examples: they decided nothing and, on
+  real runs, the kind of work did not make the estimates better. The old «classificatori» link opens Qualità; the G K
+  key is gone (ADR 0291).
 
 ### Fixed
 - A question asked before any Orchestrator exists has its row in the Orchestrator's column (it had no place to be

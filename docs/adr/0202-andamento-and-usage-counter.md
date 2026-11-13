@@ -1,6 +1,6 @@
 # 0202 — «Andamento»: the four statistics pages in one, and a local usage counter
 
-Status: accepted. Builds on ADR 0101, ADR 0109, ADR 0122, ADR 0149, ADR 0197 and ADR 0199; block 2 of the report
+Status: partly superseded by ADR 0291 (the Classificatori section and the G K key are removed); accepted. Builds on ADR 0101, ADR 0109, ADR 0122, ADR 0149, ADR 0197 and ADR 0199; block 2 of the report
 «Cosa tenere, cosa togliere, e Impara v3» (2026-10-30, «Da accorpare» and A0), approved by the owner («Procedi con
 tutte le modifiche»).
 
@@ -35,7 +35,7 @@ background costs). It proposed A0: a local, zero-token counter of page opens and
   list shows the verdict and «Mostra tutti»).
 - **Aliases**: the ids `costi`, `qualita`, `apprendimento`, `classificatori` and the Memoria tab `memoria/apprendimento`
   are redirected by `go()` / `placeOf()` / `parseTarget()` to their tab, keeping their arg (`costi/30` →
-  `andamento/costi/30`); G Q, G J and G K stay as go-to aliases (`GO_ALIASES`), G C is Andamento. The feed badges of
+  `andamento/costi/30`); G Q, G J and G K stay as go-to aliases (`GO_ALIASES`; G K left with ADR 0291), G C is Andamento. The feed badges of
   errors, wins, proposals and budget count on `andamento`. Work profiles QA and CTO list `andamento`.
 - Data and IPC are unchanged: every tab reads what its page read (`/api/cost`, `/api/tables`, `/api/quality`,
   `classifiers:state`, the brain model's learning).

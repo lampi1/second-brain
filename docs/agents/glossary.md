@@ -16,7 +16,7 @@ there points to this page.
   permissions (not a per-chat choice or a routing row, ADR 0078, 0083).
 - **skill** = how a job is done (`SKILL.md`, shared, loaded on demand; there are no "procedures", ADR 0077).
 - **Brain** section = Agenti, Memoria (the hub: Proposte, Approvate, Skill, Regole, Idee, File as tabs; no Dashboard,
-  ADR 0122; scripts and queries are files of their skill, ADR 0263), Classificatori, Mappa.
+  ADR 0122; scripts and queries are files of their skill, ADR 0263), Mappa.
 - **brain** = the user's folder of notes, rules and tools the agents read and write (a template ships in the product;
   a fresh install starts empty).
 - **Task** = the page of the user's work items and PRs (Azure DevOps, read only; called DevOps before ADR 0079).

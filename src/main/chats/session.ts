@@ -12,8 +12,10 @@ import type { Answer, ChatCommand, ChatItem, ChatState, Effort, Harness, ImageAt
 export interface SessionSink {
   /** A new item (replace = false) or a newer version of an item already sent with the same id (replace = true). */
   item(item: ChatItem, replace: boolean): void;
-  /** A question or permission the CLI is blocked on (chatId is filled in by the owner). */
-  pending(req: Omit<PendingRequest, 'chatId'>): void;
+  /** A question or permission the CLI is blocked on (chatId is filled in by the owner). `whole` = the request's input
+   *  as the engine sent it, when `req.input` was shortened for the screen (trimInput): the app's own answer reads what
+   *  will really run, the user and the store get the short one. */
+  pending(req: Omit<PendingRequest, 'chatId'>, whole?: unknown): void;
   /** A pending request is gone: answered, or withdrawn by the CLI (interrupt, another answer path). */
   resolved(requestId: string): void;
   /** Session facts changed (only the fields present). */

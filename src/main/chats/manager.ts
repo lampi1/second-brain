@@ -121,6 +121,9 @@ export class ChatManager extends ManagerRemote implements ChatService {
 
   /** The tool policy and ceiling this chat runs with (null = none: the engine's own gates); agent_delegate bounds a child by it. */
   agentPolicy(chatId: string): AgentPolicy | null { const p = this.chats.get(chatId)?.policy; return p ? structuredClone(p) : null; }
+  /** The mode that bounds a chat's children: the user's own choice or the role's ceiling, never the mode the app
+   *  starts a session with by default (manager-sessions.ts launchMode) nor one the engine reports. */
+  chosenMode(chatId: string): PermissionMode | null { const r = this.chats.get(chatId); return r ? this.boundMode(r) : null; }
   /** the user's last message typed to the open Orchestrator (ADR 0274) */
   userSaid(): { text: string; at: number } | null { return this.openOrchestrator()?.userSaid ?? null; }
   /** a message he typed on the phone into the Orchestrator through Remote Control (its engine echoes it, ADR 0275) */
@@ -186,7 +189,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     // a delegated chat: its role's policy, below its parent's, narrowed again by the contract's tool classes. A chat from
     // the unauthenticated mount reads only, in plan mode, whatever the Orchestrator may (ADR 0085: the Orchestrator's
     // default is every permission, the mount is any local process)
-    const policy = delegator ? narrowest(belowParent(agent.policy, delegator.policy, this.modeFor(delegator)), req.delegation?.tools ? { tools: { allow: req.delegation.tools }, ceiling: null } : null)
+    const policy = delegator ? narrowest(belowParent(agent.policy, delegator.policy, this.boundMode(delegator)), req.delegation?.tools ? { tools: { allow: req.delegation.tools }, ceiling: null } : null)
       : narrowest(agent.policy, parent === bound && bound ? narrowest(bound.policy, FAIL_CLOSED) : parent?.policy);
     let bindDelegation: ((childId: string) => void) | undefined;
     if (delegator && this.opts.prepareDelegation) {

@@ -15,7 +15,7 @@ import { allowsClass, COMMAND_TOOLS, commandsReadOnly, readOnlyCommand, toolClas
 import { readOnlyTools } from '../agents/read-tools';
 import { gateRequest, runtimePluginName } from '../agents/role-gate';
 import { autoPermit } from './auto-permit';
-import { loadPolicy, policyCovers, policyHit } from './permit-policy';
+import { loadPolicy, policyCovers, policyRead } from './permit-policy';
 import { AWAY_PARKED, AWAY_PLAN_NOTE, recommendedAnswers } from '../../shared/away';
 import { askingPlan, PLAN_APPROVED, type IntakeSource, type PlanIntake } from '../../shared/strategy';
 import type { SubmissionReceipt, Rec } from './manager-types';
@@ -421,7 +421,8 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       // the user's rules (permissions.json) hold a skill they name, as in a plain chat; unreadable rules ask
       if (req.tool === 'Skill') {
         const policy = loadPolicy(this.opts.brainRoot?.() ?? null);
-        if (policy.state === 'broken' || policyHit(policy, req.tool, req.input, COMMAND_TOOLS, req.title)) return false;
+        const read = policyRead(policy, req.tool, req.input, COMMAND_TOOLS, req.title);
+        if (policy.state === 'broken' || read.rule || (read.unread && policyCovers(policy, req.tool, COMMAND_TOOLS, req.title))) return false;
       }
       this.policyAnswer(r, req, { kind: 'permission', allow: true }, 'role-gate', verdict.patch);
       log.info('chats', 'role gate allowed', { chat: r.s.id, data: { tool: req.tool, qualified: !!verdict.patch } });
@@ -453,7 +454,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
   /** ADR 0103, 0254: the app answers a permission request itself (chats/auto-permit.ts): everything passes but what the
    *  user's brain rules hold (permissions.json: refused visibly with the rule's reason, or sent to the user) and what
    *  the user's own role limits keep for them. True = answered. */
-  protected autoPermitted(r: Rec, req: Omit<PendingRequest, 'chatId'>): boolean {
+  protected autoPermitted(r: Rec, req: Omit<PendingRequest, 'chatId'>, whole = false): boolean {
     const policy = loadPolicy(this.opts.brainRoot?.() ?? null);
     if (policy.state === 'broken' && r.policyWarned !== policy.error) {
       r.policyWarned = policy.error;
@@ -472,7 +473,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     const command = (req.input as { command?: unknown } | null)?.command;
     if (r.policy?.tools && c && !allowsClass(r.policy, c)) return toUser();
     if (COMMAND_TOOLS.includes(req.tool) && commandsReadOnly(r.policy) && !readOnlyCommand(command, this.readScripts(r))) return toUser();
-    const v = autoPermit(req, { cwd: r.s.cwd, ceiling: r.policy?.ceiling ?? null, readScripts: this.readScripts(r), policy });
+    const v = autoPermit(whole ? { ...req, whole } : req, { cwd: r.s.cwd, ceiling: r.policy?.ceiling ?? null, readScripts: this.readScripts(r), policy });
     if (v.kind === 'ask') {
       // held by the user's rule: no «always» (a saved rule would let the next ones through unasked); the phone may answer
       if (v.rule) { req.noAlways = true; delete req.alwaysRules; req.heldBy = { rule: v.rule.id, why: v.rule.why }; log.info('chats', 'brain rule asks the user', { chat: r.s.id, data: { tool: req.tool, rule: v.rule.id } }); }

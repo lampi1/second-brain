@@ -62,7 +62,7 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     expect(ix('nav-group-brain')).toBeLessThan(ix('nav-memoria'));
     expect(ix('nav-group-trends')).toBe(-1);
     for (const gone of ['nav-dashboard', 'nav-skill', 'nav-regole', 'nav-script', 'nav-idee', 'nav-apprendimento']) expect(ix(gone)).toBe(-1);
-    // one Andamento entry (ADR 0202), under Brain: Costi, Qualità, Apprendimento, Classificatori and Uso are its tabs
+    // one Andamento entry (ADR 0202), under Brain: Costi, Qualità, Apprendimento and Uso are its tabs
     expect(ix('nav-andamento')).toBeGreaterThan(ix('nav-memoria'));
     expect(ix('nav-andamento')).toBeLessThan(ix('nav-group-app'));
     for (const gone of ['nav-costi', 'nav-qualita', 'nav-classificatori']) expect(ix(gone)).toBe(-1);

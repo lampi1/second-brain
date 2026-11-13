@@ -1,5 +1,5 @@
 // The labels of the kinds of work (shared/work-concepts.ts TaskKind, the one taxonomy of ADR 0186), read at use time in
-// the current language. Used by lib/classifier-view.ts, components/RunEstimate.tsx and brain-model/KindModelCard.tsx.
+// the current language. Used by components/RunEstimate.tsx.
 import type { TaskKind } from '@shared/contract';
 import { t } from '../i18n';
 

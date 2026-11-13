@@ -6,7 +6,6 @@ export const brainModelDe: typeof brainModelIt = {
   'bm.loading': 'Lese das Brain…',
   'bm.noBrain': 'Wähl zuerst den Brain-Ordner.',
   'bm.open': 'Öffnen',
-  'bm.noData': 'noch keine Daten',
   'bm.lines': (p: N) => (p.n === 1 ? '1 Zeile' : `${p.n} Zeilen`),
   'bm.changed': (p: { at: string }) => `geändert ${p.at}`,
 
@@ -43,11 +42,6 @@ export const brainModelDe: typeof brainModelIt = {
 
   'bm.mem.title': 'Gedächtnis',
 
-  'bm.cls.col.kind': 'Arbeit',
-  'bm.cls.kinds': 'Ergebnisse nach Art der Arbeit',
-  'bm.cls.kindsLead': 'Die Chats der App nach Art der Arbeit, wie viele ein bekanntes Ergebnis haben und wie viele erfolgreich waren.',
-  'bm.cls.col.chats': 'Chats', 'bm.cls.col.known': 'Ergebnis bekannt', 'bm.cls.col.ok': 'Erfolgreich',
-  'bm.cls.kindsEmpty': 'Noch kein Chat erfasst.',
 
   'bm.map.eyebrow': 'DEIN BRAIN, VERNETZT', 'bm.map.legendLabel': 'Legende',
   'bm.map.title': 'Karte',

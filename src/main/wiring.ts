@@ -127,7 +127,6 @@ import { COMPACT_WINDOW } from './brain/settings-schema';
 import { setRecorder } from './chats/drift';
 import { HybridSearch, workerFileNextTo } from './search/hybrid/service';
 import { UserCorrectionStore } from './brain/user-corrections';
-import { KindModel } from './brainmodel/kind-model';
 import { apiSearch, brainSearchTool } from './search/hybrid/tool';
 import { BrainScripts, touchesScripts } from './brain/scripts';
 import { BrainChangelog } from './brain/changelog';
@@ -832,9 +831,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   }
 
   // the Brain pages (ADR 0077): skills and their agents, rules, memory; maintenance jobs with a change log and undo
-  // the kind of work by examples (ADR 0197): trained on the local embeddings only when Classificatori asks
-  const kindModel = new KindModel({ runs: () => manager.runs.list(), embed: texts => hybrid.embed(texts, 'query'), ready: () => hybrid.status().model.state === 'ready' });
-  const brainModel = new BrainModelService({ userData: ctx.userData, root: () => brain.info().brainRoot, home: process.env.SB_SKILLS_HOME || os.homedir(), kindModel: () => kindModel.state(),
+  const brainModel = new BrainModelService({ userData: ctx.userData, root: () => brain.info().brainRoot, home: process.env.SB_SKILLS_HOME || os.homedir(),
     catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning, runs: () => manager.runs.list(), runsRevision: () => manager.runs.revision,
     correctionsSince: () => userCorrections.afterReportSince(),
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: !process.env.SB_TEST || process.env.SB_BRAIN_JOBS === '1',

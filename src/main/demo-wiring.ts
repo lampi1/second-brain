@@ -27,7 +27,7 @@ import { BrainModelService } from './brainmodel/service';
 import { ResearchService } from './brainmodel/research';
 import { DEMO_LIVE, writeDemoResearch } from './brainmodel/research-demo';
 import { writeDemoLogs } from './brainmodel/log-scan';
-import { demoKindModel, writeDemoClassifiers, type DemoClassifierData } from './demo-classifiers';
+import { demoHistory, type DemoHistory } from './demo-history';
 import { demoDevopsRun } from './tasks/demo';
 import { TaskService } from './tasks/service';
 import { writeDemoScripts } from './brain/scripts-demo';
@@ -130,9 +130,9 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   mountLifecycleApi(brain, agentLifecycle);
   // the Brain pages (ADR 0077): a made-up brain in the demo agent packs' folder, its former runbook sections moved into
   // skills by the real migration at start (masking included); the other jobs run on the Manutenzione button
-  // the Classificatori grid's eight weeks of made-up history (demo-classifiers.ts), written on the first read; it never
+  // eight weeks of made-up work history (demo-history.ts), drawn on the first read; it never
   // loads pulizia-ambiente, the demo brain's never-used skill on the Memoria page
-  let demoCls: DemoClassifierData | undefined;
+  let demoCls: DemoHistory | undefined;
   const demoBrainRoot = writeDemoBrain(path.join(ctx.userData, 'demo-agent-brain'), now());
   // the Apprendimento page (ADR 0109): past changes with their claims and runs with the user's corrections
   writeDemoChanges(ctx.userData, now());
@@ -140,8 +140,8 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   writeDemoProposals(ctx.userData, demoBrainRoot, now());
   const demoLogs = writeDemoLogs(path.join(ctx.userData, 'demo-logs'), path.join(ctx.userData, 'maintenance-noise.json'), now());
   const brainModel: BrainModelService = new BrainModelService({ userData: ctx.userData, root: () => demoBrainRoot, home: null, catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning,
-    runs: (): AgentRun[] => [...demoBrainRuns(now(), brainModel.skillList().map(s => s.name)), ...demoLearningRuns(now()), ...(demoCls ??= writeDemoClassifiers(demoBrainRoot, ctx.userData, now(), brainModel.skillList().map((x: { name: string }) => x.name).filter(n => n !== 'pulizia-ambiente'))).runs], now,
-    emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: false, kindModel: async () => demoKindModel(now()),
+    runs: (): AgentRun[] => [...demoBrainRuns(now(), brainModel.skillList().map(s => s.name)), ...demoLearningRuns(now()), ...(demoCls ??= demoHistory(now(), brainModel.skillList().map((x: { name: string }) => x.name).filter(n => n !== 'pulizia-ambiente'))).runs], now,
+    emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: false,
     scripts: { file: id => demoScripts.get(id).path, changed: () => { demoScripts.invalidate(); ctx.emitter.emit('scripts:changed', undefined); } },
     // the log step of the Manutenzione (#150): made-up logs, whose new groups become app bug cards (ADR 0132)
     logDir: () => demoLogs,

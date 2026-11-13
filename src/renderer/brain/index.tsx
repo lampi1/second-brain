@@ -42,8 +42,8 @@ export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string
   // Idee, Skill, Regole and Script are tabs of Memoria (ADR 0122): their ids, keys and links stay and land on the tab
   // (actions.ts go() → lib/memory-hub.ts); the sidebar no longer lists them
   page('idee', 'G I'),
-  // Andamento (ADR 0202): Costi, Qualità, Apprendimento, Classificatori and Uso as tabs (components/andamento/), rendered
-  // by App.tsx PageFrame; the old ids and their keys (G Q, G J, G K below in GO_ALIASES) open the matching tab
+  // Andamento (ADR 0202): Costi, Qualità, Apprendimento and Uso as tabs (components/andamento/), rendered
+  // by App.tsx PageFrame; the old ids and their keys (G Q, G J below in GO_ALIASES) open the matching tab
   page('andamento', 'G C'),
   // the brain's scripts (ADR 0076): a Memoria tab; the app's Log, which also holds the brain's changelog since the
   // Changelog page left (ADR 0111), is rendered by App.tsx PageFrame
@@ -53,8 +53,8 @@ export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string
   page('skill', 'G S'),
   // not a brain page: the app's Settings (components/SettingsPage.tsx, rendered by App.tsx); listed here for places, links and G P
   page('impostazioni', 'G P'),
-  // the Brain section's own pages (ADR 0077: agents, skills, rules, memory, the map of their links; the classifiers are a
-  // tab of Andamento since ADR 0202), rendered by App.tsx PageFrame (components/brain-model/)
+  // the Brain section's own pages (ADR 0077: agents, skills, rules, memory, the map of their links; the classifiers'
+  // page is gone, ADR 0291), rendered by App.tsx PageFrame (components/brain-model/)
   page('regole', 'G L'),
   page('memoria', 'G Y'),
   page('collegamenti', 'G B'),
@@ -75,10 +75,10 @@ export const PAGE_ALIAS: Record<string, BrainPageId> = { fatto: 'log', diario: '
   // the four statistics pages merged into Andamento (ADR 0202); parseTarget and go() keep the tab they name
   costi: 'andamento', qualita: 'andamento', apprendimento: 'andamento', classificatori: 'andamento' };
 /** Their old go-to keys still work: G R (the old Regole imparate, gone with #366) opens «Sempre caricato» (the old Regole);
- *  G D (the Dashboard, gone with ADR 0122: its parts live in Memoria, Andamento and Idee) opens Memoria; G Q, G J and G K
- *  (Qualità, Apprendimento, Classificatori) open their Andamento tab (ADR 0202: go() redirects the old id; G C = Andamento
- *  itself, which opens on Costi); G K opens Qualità, where the Classificatori section lives since ADR 0210. */
-export const GO_ALIASES: { id: string; key: string }[] = [{ id: 'regole', key: 'G R' }, { id: 'memoria', key: 'G D' }, { id: 'qualita', key: 'G Q' }, { id: 'apprendimento', key: 'G J' }, { id: 'classificatori', key: 'G K' }];
+ *  G D (the Dashboard, gone with ADR 0122: its parts live in Memoria, Andamento and Idee) opens Memoria; G Q and G J
+ *  (Qualità, Apprendimento) open their Andamento tab (ADR 0202: go() redirects the old id; G C = Andamento itself, which
+ *  opens on Costi). G K left with the Classificatori section (ADR 0291); its old id still lands on Qualità. */
+export const GO_ALIASES: { id: string; key: string }[] = [{ id: 'regole', key: 'G R' }, { id: 'memoria', key: 'G D' }, { id: 'qualita', key: 'G Q' }, { id: 'apprendimento', key: 'G J' }];
 
 /** "esplora/ops/x.md" → { id: 'esplora', arg: 'ops/x.md' }; "mappa/tutto" → { map: true, full: true }. */
 export function parseTarget(t: string): { map: true; full: boolean; focus?: string } | { map: false; id: BrainPageId; arg?: string } | null {

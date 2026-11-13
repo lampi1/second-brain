@@ -34,7 +34,7 @@ export class BufferedSink implements SessionSink {
   }
 
   item: SessionSink['item'] = (item, replace) => this.to(s => s.item(item, replace));
-  pending: SessionSink['pending'] = req => this.to(s => s.pending(req));
+  pending: SessionSink['pending'] = (req, whole) => this.to(s => s.pending(req, whole));
   resolved: SessionSink['resolved'] = id => this.to(s => s.resolved(id));
   changed: SessionSink['changed'] = patch => this.to(s => s.changed(patch));
   rateLimit: NonNullable<SessionSink['rateLimit']> = msg => this.to(s => s.rateLimit?.(msg));

@@ -1,6 +1,6 @@
 // The app rail groups work, the Brain (ADR 0077: Agenti, Memoria and the Mappa of their links; Memoria is the one hub of
 // the brain's content since ADR 0122, with Skill, Regole and Idee as its tabs, and carries the count of
-// proposals waiting for the user), Andamento (one page since ADR 0202: Costi, Qualità, Apprendimento, Classificatori, Uso) and app
+// proposals waiting for the user), Andamento (one page since ADR 0202: Costi, Qualità, Apprendimento, Uso) and app
 // tools (Log = everything the app did, live, ADR 0111, Guida; the Dashboard is gone, ADR 0122). Role-specific pages
 // exclude destinations already supplied by the shell. Under the Grindhouse entry, the open agents as a delegation
 // tree (SidebarTree.tsx). Used by App.tsx.
@@ -35,7 +35,7 @@ const BRAIN_GROUP: BrainPageId[] = [];
 /** The Brain section: always shown, whatever the role (ADR 0077; the owner, 2026-10-19: the brain must be visible; its
  *  changelog is on the Log page, ADR 0111). Skill, Regole, Script and Idee are Memoria's tabs (ADR 0122). */
 const BRAIN_CORE: BrainPageId[] = ['agenti', 'memoria', 'collegamenti'];
-/** Andamento: how the work goes (money, quality, learning, classifiers, the app's own use) in one page; always shown
+/** Andamento: how the work goes (money, quality, learning, the app's own use) in one page; always shown
  *  (ADR 0101, 0109, 0202), last entry of the Brain group (owner, 2026-10-31: no group of its own for one entry). */
 const TRENDS: BrainPageId[] = ['andamento'];
 /** The pages that are Memoria's tabs now: never an entry of their own, whatever the work profile lists. */

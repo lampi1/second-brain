@@ -31,7 +31,7 @@ import { useAppChats } from '../lib/app-chats';
 import { LiveCostList } from '../../components/LiveCosts';
 import { costRows } from '../../lib/live-costs';
 import { t } from '../../i18n';
-import '../../styles/classifiers.css'; // the facts' err-fact cards
+import '../../styles/app-errors.css'; // the facts' err-fact cards
 import '../../styles/memory-hub.css'; // «Contesto adesso» (mh-ctx)
 // app-side parts (they read the app's live store): loaded when shown, so the brain pages stay importable alone
 const ContextNow = lazy(() => import('../../components/ContextNow'));

@@ -1,6 +1,6 @@
 # 0210 — Remove the model-routing classifier: every agent runs on its own card's model
 
-Status: accepted. Supersedes ADR 0032, ADR 0047 and ADR 0078. Changes ADR 0052 and ADR 0091 (see below). Builds on ADR
+Status: partly superseded by ADR 0291 (the Classificatori section it folded into Qualità is removed); accepted. Supersedes ADR 0032, ADR 0047 and ADR 0078. Changes ADR 0052 and ADR 0091 (see below). Builds on ADR
 0077, ADR 0083, ADR 0186 and ADR 0202.
 
 2026-10-30.

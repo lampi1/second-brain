@@ -1,5 +1,5 @@
 // The one taxonomy of the kinds of work (ADR 0186): the chats' routes and the ledger of outcomes, the job ledger (userData/jobs.jsonl), the
-// task estimates and the Classificatori cards all name a job with the same WORK_KINDS, read by the same rule (taskOf).
+// task estimates all name a job with the same WORK_KINDS, read by the same rule (taskOf).
 // Before, the job ledger had its own seven kinds and its own keyword classifier (brain/estimates.ts classify), so the
 // same chat could be "fix" in one place and "bug-fix" in the other; old ledger rows are read through fromLedgerKind.
 // Under it, a small bilingual (Italian + English) lexicon: each concept is a set of word beginnings that mean the same

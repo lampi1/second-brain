@@ -2,7 +2,7 @@
 // app's own use. A sticky head keeps the title and the tab bar on screen while a tab scrolls; each tab starts with the
 // same toolbar (what it shows on the left, period / refresh / guide on the right, brain/components/States.tsx PageHead
 // without a title) and shows each number once. Tabs: Costi (brain/pages/Costi.tsx), Qualità (brain/pages/Qualita.tsx,
-// with the Classificatori section since ADR 0210, once a tab here and before that a Brain page), Apprendimento
+// whose Classificatori section left with ADR 0291), Apprendimento
 // (brain-model/LearningPage.tsx, once a Memoria tab) and Uso (UsageTab.tsx, the local usage counter). The page arg "andamento/<tab>[/<more>]" picks the
 // tab (lib/andamento.ts); the old ids, links and G-keys land here (actions.ts go()). Data and IPC are each tab's own,
 // unchanged. Rendered by App.tsx PageFrame for 'andamento'; styles: styles/andamento.css.

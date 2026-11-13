@@ -1,6 +1,6 @@
 # ADR 0002 · Chats run through the official CLIs, spoken to directly (no SDK runtime dependency)
 
-Date: 2026-10-11 · Status: partly superseded by ADR 0010 (the coexistence parts); accepted
+Date: 2026-10-11 · Status: partly superseded by ADR 0010 (the coexistence parts); accepted · amended by ADR 0290 (a Claude chat with no mode of its own is launched in «default» and the app answers its requests)
 
 ## Context
 The user wants to keep Claude desktop and Cursor closed and log in "nelle loro cli". Claude Code's Agent SDK
@@ -21,6 +21,8 @@ and pulls `@anthropic-ai/sdk`, `@modelcontextprotocol/sdk` and `zod` as peers. C
   chose a mode for that chat; with no choice ("Come da impostazioni") the CLI applies `defaultMode` from the user's
   `settings.json` (e.g. `auto`), and the mode shown is the one the CLI reports at `system/init`. A forced `default`
   overrode the user's settings and made every command ask ("perchè tutti questi comandi mi proponi non va in automode?").
+  Amended by ADR 0290: with no choice a Claude chat is launched in `default` again, and the app answers each request
+  itself (ADR 0254), so commands do not ask.
 
 ## Consequences
 - Same version, login, settings, hooks, skills, agents, CLAUDE.md and output style as the user's terminal; zero

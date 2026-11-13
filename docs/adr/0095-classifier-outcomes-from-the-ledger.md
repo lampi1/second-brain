@@ -1,6 +1,6 @@
 # ADR 0095 · Classifier outcomes come from the ledger too; verified and unverified stay apart
 
-Date: 2026-10-20 · Status: accepted (issue #110) · Builds on: ADR 0032 (routing ledger), ADR 0047 (the brain settles
+Date: 2026-10-20 · Status: partly superseded by ADR 0291 (the Classificatori cards are removed, the ledger's outcome rule stays); accepted (issue #110) · Builds on: ADR 0032 (routing ledger), ADR 0047 (the brain settles
 works: judge beats proxy), ADR 0077 (Classificatori page), ADR 0078 (known outcomes of agent runs on the ledger) · Amended by: ADR 0100
 
 ## Context

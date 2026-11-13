@@ -48,7 +48,8 @@ export class HostSession {
     this.adapter = create({
       item: (item, replace) => { try { this.batcher.item(item, replace); } catch { this.fail(); } },
       changed: patch => event({ method: 'changed', args: [patch] }),
-      pending: request => event({ method: 'pending', args: [request] }),
+      // the whole input goes with it when the adapter gives one (Claude): main decides on it (ADR 0290)
+      pending: (request, whole) => event({ method: 'pending', args: whole === undefined ? [request] : [request, whole] }),
       resolved: id => event({ method: 'resolved', args: [id] }),
       exit: info => event({ method: 'exit', args: [info] }),
       rateLimit: value => event({ method: 'rateLimit', args: [value] }),

@@ -244,14 +244,6 @@ whom, what it cost, which answer was a duplicate. Both read local data and spend
 
 <p align="center"><img src="docs/screenshots/trends.webp" alt="Trends, the Usage tab: the pages and actions opened in the last 14 days, most used first" width="640"></p>
 
-### Classifiers: small decisions, zero tokens
-
-Not everything needs a model. Small sorters on your PC decide the kind of work, how long and how much a job will
-probably take, and which mail the Orchestrator reads now or later. The Classifiers section of Quality shows each one
-as a card: how many decisions, how often it got them right, and the last 8 weeks.
-
-<p align="center"><img src="docs/screenshots/classifiers.webp" alt="The Classifiers section: decisions made, verified outcomes, and the Kind of work card with its 8-week trend" width="640"></p>
-
 ## Learn
 
 ### A newspaper from your sources
