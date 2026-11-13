@@ -110,3 +110,16 @@
   .pm-group { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
   .pm-group h4 { grid-column: 1 / -1; }
 }
+
+/* «Discuti» on a box (ADR 0275): a quiet corner button, clear on hover or keyboard focus */
+.pm-talk { position: absolute; z-index: 2; transform-origin: top right; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 1px solid var(--border-2);
+  border-radius: var(--r-s); background: var(--surface-2); color: var(--text-2); cursor: pointer; opacity: .7; transition: opacity .15s, color .15s, border-color .15s; }
+.pm-talk:hover, .pm-talk:focus-visible { opacity: 1; color: var(--violet); border-color: var(--violet); outline: none; }
+.pm-detail .btn { margin-top: 6px; gap: 6px; }
+.pm-fullbtn { gap: 6px; }
+/* the real full screen: the whole window at once (and the screen, when the OS grants it), the drawing fits it */
+.pm.pm-full { position: fixed; inset: 0; z-index: 2147483000; background: var(--bg); padding: 16px 20px; box-sizing: border-box; }
+.pm.pm-full .pm-body { min-height: 0; }
+.pm.pm-full .pm-canvas, .pm.pm-full .pm-side { min-height: 0; overflow: auto; }
+/* room for the «Discuti» corner button: the box's first lines never run under it */
+.pm-node { padding-right: 34px; }

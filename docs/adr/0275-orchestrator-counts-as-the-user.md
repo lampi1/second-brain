@@ -42,3 +42,12 @@ ADR 0269, 0274; supersedes the «reserved» parts of ADR 0239/0255/0259 §4
 - A wrong pick by the Orchestrator is now the user's own answer: the line it writes in the chat says what it answered.
 - ADR 0083 stays: delegated chats are answered by the chat that delegated them, or by the user in his row.
 - Herald's messages to people and secrets no longer wait for a click; the owner chose this (decision card, 2026-11-13).
+
+## Addendum (2026-11-13, owner: «le voglio mettere a tutto schermo davvero» · «ogni riquadro devo poterlo discutere con l'orchestrator in un click»)
+- **Full screen** (`ProjectMapView` `full`): «Schermo intero» covers the whole window at once and asks the OS full screen
+  (best effort); Esc leaves the full screen first, then the window. The drawing fits the screen.
+- **Discuss a box in one click**: a bubble at each box's corner (and «Discuti con l'Orchestrator» in the box's
+  detail) leaves the full screen and the maps window and puts a draft in the Orchestrator's input that quotes the
+  project, the box's path, kind, status, note and description; not sent, the user adds his words.
+- **Question rows** (`qwin.css`): under a long Orchestrator chat the rows keep their height (up to 45%) and the
+  messages take what is left; an open card is the column's panel above a 72 px strip of messages.

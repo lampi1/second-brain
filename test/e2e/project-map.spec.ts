@@ -71,3 +71,35 @@ test('the project maps open in a window from the Orchestrator and step into a sy
     await expect(page.getByTestId('pm-view').getByTestId('pm-node-rimborsi')).toBeVisible();
   } finally { await app.close(); }
 });
+
+// The owner 2026-11-13: «le voglio poter mettere a tutto schermo, tutto schermo davvero» · «ogni riquadro devo poterlo
+// discutere con l'orchestrator in un click»
+test('the maps go real full screen, Esc leaves it, and a box is discussed with the Orchestrator in one click', async () => {
+  const { app, page } = await launchDemo();
+  try {
+    await page.getByTestId('maps-btn').click();
+    const win = page.getByTestId('maps'), view = win.getByTestId('pm-view');
+    await view.getByTestId('pm-node-negozio').click();
+    await expect(view.getByTestId('pm-node-rimborsi')).toBeVisible();
+    await view.getByTestId('pm-fullscreen').click();
+    await expect(view.getByTestId('pm-fullscreen')).toHaveAttribute('aria-pressed', 'true');
+    // the whole window (the OS full screen is asked too; a headless window may not get it)
+    const vp = page.viewportSize() ?? await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+    const b = (await view.boundingBox())!;
+    expect([b.x, b.y, Math.round(b.width), Math.round(b.height)]).toEqual([0, 0, vp.width, vp.height]);
+    await page.waitForTimeout(500);
+    await shot(page, 'project-maps-fullscreen');
+    await page.keyboard.press('Escape');
+    await expect(view.getByTestId('pm-fullscreen')).toHaveAttribute('aria-pressed', 'false');
+    await expect(win).toBeVisible(); // Esc left the full screen, not the window
+    await page.waitForTimeout(450);
+
+    // one click on a box's corner: the window steps aside, the Orchestrator has a draft that quotes the box
+    await view.getByTestId('pm-talk-rimborsi').click();
+    await expect(win).toBeHidden();
+    const input = page.getByTestId('orchestrator-input');
+    await expect(input).toHaveValue(/Mappa «Alfa · negozio online» \(Negozio web\): Parte «Rimborsi», stato bloccato/);
+    await expect(input).toHaveValue(/Voglio parlarne: $/);
+    await shot(page, 'project-maps-talk');
+  } finally { await app.close(); }
+});

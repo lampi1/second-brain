@@ -43,6 +43,7 @@ export const IconKeyboard = (p: P) => <Svg {...p}><rect x="2.5" y="6" width="19"
 export const IconBrain = (p: P) => <Svg {...p}><path d="M9 4.5a3 3 0 0 0-3 3 3 3 0 0 0-2 5.2A3.2 3.2 0 0 0 7.5 18 2.8 2.8 0 0 0 12 19.5V6a2.5 2.5 0 0 0-3-1.5zM15 4.5a3 3 0 0 1 3 3 3 3 0 0 1 2 5.2 3.2 3.2 0 0 1-3.5 5.3 2.8 2.8 0 0 1-4.5 1.5V6a2.5 2.5 0 0 1 3-1.5z" /></Svg>;
 export const IconSettings = (p: P) => <Svg {...p}><path d="M4 7h9M17 7h3M4 17h3M11 17h9" /><circle cx="15" cy="7" r="2.2" /><circle cx="9" cy="17" r="2.2" /></Svg>;
 export const IconSend = (p: P) => <Svg {...p}><path d="M12 19V6M6.5 11.5 12 6l5.5 5.5" /></Svg>;
+export const IconChat = (p: P) => <Svg {...p}><path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H10l-4 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" /></Svg>;
 export const IconQuestion = (p: P) => <Svg {...p}><circle cx="12" cy="12" r="8.5" /><path d="M9.6 9.6a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.7-.9 1.3v.4M12 16.6v.1" /></Svg>;
 export const IconShield = (p: P) => <Svg {...p}><path d="M12 3.5 19 6v5.5c0 4.3-2.9 7.6-7 9-4.1-1.4-7-4.7-7-9V6z" /><path d="m9 12 2.2 2.2L15.5 10" /></Svg>;
 export const IconList = (p: P) => <Svg {...p}><path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.1M4.5 12h.1M4.5 17.5h.1" /></Svg>;

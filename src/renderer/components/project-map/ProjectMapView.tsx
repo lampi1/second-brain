@@ -13,12 +13,13 @@
 // (the window that took «Stato»'s place, ADR 0275): a chat opened from a card closes that window first.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { BOX, levelOf, pathTo, shownStatus, type Level, type LevelEdge, type LevelNode, type MapAgent, type MapElement, type MapState, type ProjectMapInfo, type ProjectMapView as View } from '@shared/project-map';
-import { openChatRef } from '../../actions';
+import { brainBridge, openChatRef } from '../../actions';
 import { t } from '../../i18n';
 import { useNow } from '../../lib/clock';
 import { ago } from '../../lib/format';
 import { useApp } from '../../store/store';
-import { closeModal } from '../../store/ui';
+import { closeModal, toast, ui } from '../../store/ui';
+import { IconChat, IconMaximize, IconMinimize } from '../Icons';
 import { AgentAvatar } from '../AgentAvatar';
 import './project-map.css';
 
@@ -93,8 +94,9 @@ function placeLabels(lv: Level): { e: LevelEdge; left: number; top: number; flat
   });
 }
 
-/** fitAll: the whole level fits the canvas, height too (the maps window, ADR 0275); otherwise the width alone (the page scrolls). */
-export function ProjectMapView({ arg, onArg, fitAll = false }: { arg: string | null; onArg: (arg: string | null) => void; fitAll?: boolean }) {
+/** fitAll: the whole level fits the canvas, height too (the maps window, ADR 0275); otherwise the width alone (the page scrolls).
+ *  full / onFull: the full screen, held by the caller when it must see it (the maps window's Esc leaves it first). */
+export function ProjectMapView({ arg, onArg, fitAll = false, full: fullProp, onFull }: { arg: string | null; onArg: (arg: string | null) => void; fitAll?: boolean; full?: boolean; onFull?: (on: boolean) => void }) {
   const now = useNow(30_000);
   const [maps, setMaps] = useState<ProjectMapInfo[] | null>(null);
   const [view, setView] = useState<View | null>(null);
@@ -104,6 +106,36 @@ export function ProjectMapView({ arg, onArg, fitAll = false }: { arg: string | n
   const [zoom, setZoom] = useState(1);
   const [fit, setFit] = useState(1);
   const box = useRef<HTMLDivElement>(null);
+  // the real full screen (the owner 2026-11-13: «tutto schermo davvero»): the whole view, the window's chrome gone
+  const root = useRef<HTMLDivElement>(null);
+  // the view covers the whole window at once, and asks the screen too (best effort: the OS full screen may be refused)
+  const [fullOwn, setFullOwn] = useState(false);
+  const full = fullProp ?? fullOwn;
+  const setFull = useCallback((on: boolean) => { if (onFull) onFull(on); else setFullOwn(on); }, [onFull]);
+  const toggleFull = () => setFull(!full);
+  useEffect(() => {
+    const el = root.current;
+    if (full && el && document.fullscreenElement !== el) void el.requestFullscreen().catch(() => {});
+    if (!full && el && document.fullscreenElement === el) void document.exitFullscreen().catch(() => {});
+  }, [full]);
+  // the OS full screen left by itself (Esc, F11): the view leaves it too
+  const wasScreen = useRef(false);
+  useEffect(() => {
+    const on = () => { const now = !!root.current && document.fullscreenElement === root.current; if (wasScreen.current && !now) setFull(false); wasScreen.current = now; };
+    document.addEventListener('fullscreenchange', on);
+    return () => document.removeEventListener('fullscreenchange', on);
+  }, [setFull]);
+  // a window opened over it (Ctrl+K, Ctrl+Shift+S…) would sit under the full screen: the full screen steps aside
+  const modal = ui.use(s => s.modal);
+  const modalAt = useRef(modal);
+  useEffect(() => { if (modal !== modalAt.current && modal !== null && full) setFull(false); modalAt.current = modal; }, [modal, full, setFull]);
+  // on the page (no window around it) Esc leaves the full screen here
+  useEffect(() => {
+    if (!full || onFull) return;
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setFull(false); } };
+    window.addEventListener('keydown', key, true);
+    return () => window.removeEventListener('keydown', key, true);
+  }, [full, onFull, setFull]);
   const [argProject, argLevel] = (arg ?? '').split('/');
   // a project no longer drawn (or a stale place) falls back to the first one instead of «loading» for ever
   const project = (argProject && (!maps || maps.some(m => m.project === argProject)) ? argProject : maps?.[0]?.project) || null;
@@ -142,12 +174,12 @@ export function ProjectMapView({ arg, onArg, fitAll = false }: { arg: string | n
     const el = box.current;
     if (!el || !lv) return;
     // the legend and the zoom buttons take ≈68 px at the bottom of the canvas
-    const measure = () => setFit(Math.min(1, Math.max(0.35, Math.min((el.clientWidth - 24) / lv.width, fitAll ? (el.clientHeight - 68) / lv.height : Infinity))));
+    const measure = () => setFit(Math.min(1, Math.max(0.35, Math.min((el.clientWidth - 24) / lv.width, fitAll || full ? (el.clientHeight - 68) / lv.height : Infinity))));
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [lv, fitAll]);
+  }, [lv, fitAll, full]);
 
   if (maps === null) return <div className="dash-empty">{t('bm.loading')}</div>;
   if (!maps.length || !project) return <section className="dash-panel pm-empty" data-testid="pm-empty"><h3>{t('pm.emptyTitle')}</h3><p>{t('pm.emptyLead')}</p><p className="pm-example">{t('pm.emptyExample')}</p></section>;
@@ -170,10 +202,20 @@ export function ProjectMapView({ arg, onArg, fitAll = false }: { arg: string | n
     if (n.ctx || kids(n.id)) go(n.id); else setPicked(p => (p === n.id ? null : n.id));
   };
   const sel = picked ? byId.get(picked) : undefined;
+  // «Discuti» on a box (the owner 2026-11-13: «ogni riquadro devo poterlo discutere con l'orchestrator in un click»):
+  // the full screen and the maps window step aside, the Orchestrator gets a ready draft that quotes the box, not sent
+  const talk = (e: MapElement) => {
+    const s = st(e), where = pathTo(map, e.parent ?? null).map(x => x.name);
+    const text = t('pm.talkDraft', { project: map.title, name: e.name, kind: t(`pm.kind.${e.kind}`), where: where.length ? ` (${where.join(' › ')})` : '',
+      state: t(`pm.state.${s}`), note: e.note ? `: ${e.note.replace(/[.\s]+$/, '')}` : '', desc: e.description ? ` ${e.description}.` : '' });
+    setFull(false);
+    closeModal();
+    if (!brainBridge.draftToOrchestrator(text, () => {})) toast(t('pm.noOrchestrator'), 'warn');
+  };
   const groups: ['wait' | 'work' | 'done', MapAgent[]][] = [['wait', agents.filter(a => a.mark === 'wait')], ['work', agents.filter(a => !DONE_MARKS.has(a.mark) && a.mark !== 'wait')], ['done', agents.filter(a => DONE_MARKS.has(a.mark))]];
   const names = (a: MapAgent) => a.elements.map(id => byId.get(id)?.name ?? id).join(', ');
 
-  return <div className="pm" data-testid="pm-view">
+  return <div className={`pm${full ? ' pm-full' : ''}`} ref={root} data-testid="pm-view">
     <header className="pm-bar">
       {maps.length > 1
         ? <select className="pm-pick" value={project} onChange={e => onArg(e.target.value)} aria-label={t('pm.project')}>{maps.map(m => <option key={m.project} value={m.project}>{m.title}</option>)}</select>
@@ -185,6 +227,7 @@ export function ProjectMapView({ arg, onArg, fitAll = false }: { arg: string | n
       <span className="sp" />
       {live && waiting > 0 && <span className="pm-waiting" data-testid="pm-waiting">{t('pm.waiting', { n: waiting })}</span>}
       <span className="pm-updated">{t('pm.updated', { at: since(map.updatedAt, now) })}</span>
+      <button type="button" className="btn btn-s pm-fullbtn" onClick={toggleFull} aria-pressed={full} data-testid="pm-fullscreen">{full ? <IconMinimize size={14} /> : <IconMaximize size={14} />}{t('pm.fullscreen')}</button>
     </header>
     {!live && <div className="pm-past" data-testid="pm-past">{t('pm.past', { v: map.version, at: since(map.updatedAt, now), by: map.by })} · {map.summary}<button type="button" className="btn btn-s" onClick={() => setVersion(null)}>{t('pm.backNow')}</button></div>}
     <div className="pm-body">
@@ -216,6 +259,9 @@ export function ProjectMapView({ arg, onArg, fitAll = false }: { arg: string | n
                 </span>}
               </button>;
             })}
+            {/* «Discuti» on every box: its own button at the box's corner (a button never sits inside another) */}
+            {lv.nodes.map(n => <button type="button" key={`talk-${n.id}`} className="pm-talk" style={{ left: n.x + n.w - 30, top: n.y + 6, transform: `scale(${1 / scale})` }}
+              onClick={() => talk(byId.get(n.id)!)} aria-label={t('pm.talkOn', { name: byId.get(n.id)!.name })} data-tip={t('pm.talk')} data-testid={`pm-talk-${n.id}`}><IconChat size={13} /></button>)}
             {/* the labels above the boxes: a label in a narrow gap is never hidden under one */}
             {placeLabels(lv).map(({ e, left, top, flat }) => <div key={`l${e.from}>${e.to}`} className={`pm-label s-${shown(e)}${flat ? ' flat' : ''}`} style={{ left, top }} title={e.note}>
               {e.label}{e.count > 1 ? ` +${e.count - 1}` : ''}{e.status === 'blocked' && e.actor === 'user' && live && <em>{t('pm.you')}</em>}
@@ -240,6 +286,7 @@ export function ProjectMapView({ arg, onArg, fitAll = false }: { arg: string | n
           <p><i className={`pm-dot s-${st(sel)}`} />{t(`pm.state.${st(sel)}`)}{sel.note ? `: ${sel.note}` : ''}</p>
           <p className="pm-muted">{t('pm.confirmed', { at: since(sel.confirmedAt, now) })}</p>
           {sel.evidence.length > 0 && <p className="pm-muted">{t('pm.files')} {sel.evidence.join(', ')}</p>}
+          <button type="button" className="btn btn-s" onClick={() => talk(sel)} data-testid="pm-detail-talk"><IconChat size={13} />{t('pm.talk')}</button>
         </section>}
         <div className="pm-side-head"><h3>{t('pm.agents')}</h3><span>{live ? t('pm.agentsCount', { n: agents.length, run: agents.filter(a => a.mark === 'run').length }) : t('pm.agentsPast')}</span></div>
         {live && !agents.length && <p className="pm-muted">{t('pm.noAgents')}</p>}
