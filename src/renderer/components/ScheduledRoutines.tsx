@@ -103,7 +103,11 @@ export function ScheduledRoutines() {
   const edit = async (e: ScheduleEdit) => { try { const s = await sb.invoke('schedules:edit', e); setState(s); return s; } catch (err) { toast(plain(err), 'err'); return null; } };
   const run = async (task: ScheduledTask) => { if (await edit({ op: 'run', id: task.id })) toast(t('rs.sch.started', { name: task.name }), 'ok'); };
   const tasks = state?.tasks ?? [];
-  const examples = [1, 2, 3].map(n => ({ name: t(`rs.sch.ex${n}.name` as 'rs.sch.ex1.name'), prompt: t(`rs.sch.ex${n}.prompt` as 'rs.sch.ex1.prompt') }));
+  const examples = [
+    { name: t('rs.sch.ex1.name'), prompt: t('rs.sch.ex1.prompt') },
+    { name: t('rs.sch.ex2.name'), prompt: t('rs.sch.ex2.prompt') },
+    { name: t('rs.sch.ex3.name'), prompt: t('rs.sch.ex3.prompt') },
+  ];
   return (
     <section className="sch" data-testid="schedules">
       <header className="sch-head">
