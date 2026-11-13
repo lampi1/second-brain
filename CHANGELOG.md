@@ -35,6 +35,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - The agent runs kept whole more than double (16 MB in app.db): about two weeks at a hundred runs a day, a month at
   fifty. Saving them while agents work takes a tenth of the time: only the runs at work are looked at, the others
   every 15 s (ADR 0283).
+- A change of model, effort or tier no longer makes a new role version: only the role's text and its skills do. The
+  role's page shows a «Per modello» table (runs, performance, cost of one verified success, working time); a run that
+  reports only tokens is priced at list price and marked «stima» (ADR 0284).
 - A delegation from the brain folder is no longer refused for pending edits to now.md, ai-errors.md or ai-wins.md,
   the notes the app and the brain rules keep writing (#324).
 - The model-list probe's expected refusal is logged as info, not as an engine error (#328); a role set to a model the

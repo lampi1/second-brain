@@ -74,6 +74,7 @@ import { syncBeforeCreate } from './brain/sync';
 import { agentStatsLine, knownOutcome, predictionLine } from './brain/routing';
 import { runMetrics } from './agents/run-metrics';
 import { listPrice, priceTableSource, registryModels, setPriceTable } from './chats/live-cost';
+import { tokenPriceOf } from './agents/list-price';
 import { createBrowserModule, mcpPortFromEnv } from './browser/service';
 import { Workflows } from './workflows/service';
 import { WorkDriver } from './workflows/driver';
@@ -312,6 +313,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const manager = new ChatManager({
     runs: chatId => runsRef.current?.list(chatId) ?? [],
     writeDelayMs: 250, // chats.json and agent-runs.json: one asynchronous write per burst (the main-process freezes, 2026-10-27)
+    priceOf: tokenPriceOf(() => brain.modelRegistry()),
     briefReady: chatId => briefRef.current?.hasBrief(chatId) ?? true,
     briefOptions: chatId => briefRef.current?.briefOptions(chatId) ?? null,
     prepareDelegation: delegateWorktrees.prepare,

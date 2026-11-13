@@ -27,6 +27,7 @@ import { RolePermissions, permissionSummary } from './RolePermissions';
 import { holdUpdate } from '../lib/update-barrier';
 import { back, go } from '../actions';
 import { locale, t } from '../i18n';
+import { ModelStandings } from './ModelStandings';
 import { AgentAvatar } from './AgentAvatar';
 import { useWorkingChats } from './AgentCatalogCard';
 import { AgentImagePicker } from './AgentImagePicker';
@@ -345,6 +346,7 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
             {profile.skills.length ? <div className="bm-chips">{profile.skills.map(s => <button key={s} type="button" className="bm-chip" onClick={() => go({ page: 'skill', arg: s })}>{s}</button>)}</div> : <p>{t('studio.skillsNone')}</p>}
             <button type="button" className="link-btn" onClick={() => go({ page: 'skill' })}>{t('bm.studio.manage')}</button>
           </section>
+          <ModelStandings id={profile.id} standing={metrics?.standing} inUse={profile.model} />
           <Versions profile={profile} metrics={metrics} />
         </div>
       </div>

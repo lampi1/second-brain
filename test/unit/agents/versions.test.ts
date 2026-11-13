@@ -15,7 +15,7 @@ afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true
 const entry = (p: Partial<AgentVersion> = {}): AgentVersion => ({ agentId: 'scout', version: 1, parentVersion: null, behaviour: base, author: 'default', reason: 'r', at: 1, state: 'active', ...p });
 
 describe('versionedChanges', () => {
-  it('names text, skills, model and tier, and nothing for tools, launches or limits', () => {
+  it('names text and skills, and nothing for model, tier, tools, launches or limits (ADR 0284)', () => {
     expect(versionedChanges(base, { ...base, tools: { allow: ['read', 'edit'] }, launches: ['scout'], maxContext: 100_000, permissionCeiling: 'plan' })).toEqual([]);
     expect(versionedChanges(base, { ...base, skills: ['b', 'a'] })).toEqual([]); // same skills, other order
     const knowhow: NonNullable<AgentBehaviour['knowhow']> = { folder: 'agents/scout/skills', hash: 'a'.repeat(64), linked: [] };
@@ -23,9 +23,10 @@ describe('versionedChanges', () => {
     expect(versionedChanges({ ...base, knowhow }, { ...base, knowhow: { ...knowhow, hash: 'b'.repeat(64) } })).toEqual(['skills']);
     expect(versionedChanges(base, { ...base, knowhow: { ...knowhow, linked: ['review'] } })).toEqual(['skills']); // a linked skill is a change
     expect(versionedChanges(base, { ...base, instructions: 'y', skills: ['a'] })).toEqual(['text', 'skills']);
-    expect(versionedChanges(base, { ...base, engine: 'cursor' })).toEqual(['model']);
-    expect(versionedChanges(base, { ...base, effort: 'high' })).toEqual(['model']);
-    expect(versionedChanges(base, { ...base, tierMax: 'mid' })).toEqual(['tier']);
+    // every run names its own model and tier: a change of them updates the version in use
+    expect(versionedChanges(base, { ...base, engine: 'cursor' })).toEqual([]);
+    expect(versionedChanges(base, { ...base, model: 'claude-fable-5-2', effort: 'high' })).toEqual([]);
+    expect(versionedChanges(base, { ...base, tier: 'top', tierMax: 'top' })).toEqual([]);
   });
 });
 

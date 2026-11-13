@@ -99,9 +99,10 @@ export interface AgentVersion {
   amended?: { at: number; by: AgentAuthor; reason: string }[];
 }
 export const AMENDS_KEPT = 5;
-/** The only changes that make a new role version (ADR 0186): its text, its skills (and know-how), its model (engine,
- *  model, effort), its tier (and ceiling). Tools, permissions, launches and limits change the active version in place,
- *  and so do the app's migrations and engine rebinds: a version's runs then compare what the role does. */
+/** The changes a version of the history can carry (ADR 0186). Since ADR 0284 only the role's text and its skills (and
+ *  know-how) make a new one (versions.ts versionedChanges): model, effort and tier now change the active version in
+ *  place, like tools, permissions, launches, limits, the app's migrations and engine rebinds. 'model' and 'tier' name
+ *  the versions older releases made. */
 export const VERSIONED_CHANGES = ['text', 'skills', 'model', 'tier'] as const;
 export type VersionedChange = (typeof VERSIONED_CHANGES)[number];
 /** The Orchestrator's role: it shapes the Orchestrator chat only and never starts a work chat. */
@@ -231,6 +232,27 @@ export interface AgentStanding {
    *  happened later, the facts, the Orchestrator, the Orchestrator's decision signals (ADR 0131), a verified parent
    *  (chain), Flash's answer outcomes (quick), the agent itself (the last one is counted here but weighs nothing) */
   sources: { human: number; review: number; receipts: number; graded: number; facts: number; orchestrator: number; decision: number; chain: number; quick: number; self: number };
+  /** the same runs by the model they ran on (ADR 0284), most runs first; only the runs still kept whole. Absent when
+   *  no kept run names its model. */
+  models?: ModelStanding[];
+}
+/** A role's results on one model (ADR 0284): the level is the role's, the performance is the model's. */
+export interface ModelStanding {
+  model: string;
+  /** ended runs on this model, and the verified successful ones */
+  runs: number; wins: number;
+  /** as AgentStanding: the estimate starts from the role's own performance instead of 50% (null = «in rodaggio») */
+  performance: number | null; spread: number | null; evaluated: number; minRuns: number;
+  /** what one verified success cost: every run's cost over the successes; null without a success or a cost */
+  costPerWin: number | null;
+  /** part of the cost is list price × tokens (the engine reported none) or an average over the runs with a cost: «stima» */
+  costEstimated: boolean;
+  /** runs with no cost at all: no engine figure, and no list price for the model («prezzo sconosciuto») */
+  unpriced: number;
+  /** median working time of a run, ms; null = none measured */
+  medianMs: number | null;
+  /** when the newest of these runs ended */
+  lastAt: number;
 }
 /** One run = a chat started from a role (agent-runs.json is the source of truth; the chat keeps a mirror). */
 /** App delivery observations. Engine submission is recorded only after session.send succeeds. */

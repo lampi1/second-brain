@@ -424,11 +424,14 @@ export class AgentCatalogService {
     const entry = this.store.get(id, version);
     if (!entry) throw new Error('Questa versione non è più nella cronologia.');
     const { knowhow: _k, effort: _e, maxContext: _m, ...rest } = p; void _k; void _e; void _m;
-    // a version is its text, skills, model and tier (ADR 0186): going back to one keeps today's tools, permission
-    // ceiling, launches and limits, so an undo never widens what the user narrowed since (they change in place)
-    const kept = { tools: p.tools, permissionCeiling: p.permissionCeiling, launches: p.launches, ...(typeof p.maxContext === 'number' ? { maxContext: p.maxContext } : {}) };
+    // a version is its text and skills (ADR 0186, 0284): going back to one keeps today's tools, permission ceiling,
+    // launches and limits, so an undo never widens what the user narrowed since, and today's engine, model, effort and
+    // tier (they all change in place)
+    const kept = { tools: p.tools, permissionCeiling: p.permissionCeiling, launches: p.launches, ...(typeof p.maxContext === 'number' ? { maxContext: p.maxContext } : {}),
+      engine: p.engine, model: p.model, tier: p.tier, tierMax: p.tierMax, ...(p.effort !== undefined ? { effort: p.effort } : {}) };
     const target = { ...(entry.behaviour as unknown as Record<string, unknown>), ...kept };
     if (typeof p.maxContext !== 'number') delete target.maxContext;
+    if (p.effort === undefined) delete target.effort;
     const profile: AgentProfile = { ...rest, ...this.behaviour(target, id, true, rest as Behaviour, false), activeVersion: version,
       updatedAt: Math.max(this.now(), p.updatedAt + 1), lastEditedBy: by, ...(by === 'user' ? { userLocked: true } : {}) };
     this.commit(this.profiles.map(x => x.id === id ? profile : x), [], [{ agentId: id, version: p.activeVersion, state: 'superseded' }, { agentId: id, version, state: 'active' }]);

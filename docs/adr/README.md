@@ -282,6 +282,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0281](0281-scheduled-routines.md) Scheduled routines: a request the Orchestrator receives at its time — accepted
 - [0282](0282-first-turn-takes-its-checkpoint.md) A chat's first turn takes its checkpoint, and a follow-up turn has its own files — accepted
 - [0283](0283-longer-run-archive-cold-runs.md) A longer archive of runs, and a save that costs what the runs at work weigh — accepted
+- [0284](0284-performance-by-model.md) The level is the role's, the performance is the model's — accepted
 
 ## Replaced
 

@@ -34,7 +34,7 @@
 // retired roles and the runs the removed Battito (Pulse, ADR 0201) left get no standing (unrated, ADR 0186).
 // Used by ChatManager.runMetrics (agents:metrics), run-metrics.ts rollUp, the levels diagnostic (level-diagnosis.ts) and
 // the demo; the card's "?" tips repeat these rules.
-import type { AgentMetrics, AgentRun, AgentStanding } from '../../shared/agents';
+import type { AgentMetrics, AgentRun, AgentRunTokens, AgentStanding, ModelStanding } from '../../shared/agents';
 import { FLASH_ID, isRetiredRoleId } from '../../shared/roles';
 import { reworkedWithin, reworkStartsOf, verifiedVerdict, type VerifiedBasis, type VerifiedVerdict } from '../../shared/run-verdict';
 import type { RunTally } from './run-metrics';
@@ -50,6 +50,18 @@ export const MAX_SPREAD = 0.3;
 /** the Beta prior the verdicts update: Beta(1, 1), centred on 50%, worth two verdicts */
 export const PRIOR = { mean: 0.5, weight: 2 } as const;
 const Z90 = 1.645;
+/** A model's performance starts from the role's own (ADR 0284), worth this many verdicts, and shows after this many:
+ *  a role that changes model often would otherwise never leave «in rodaggio» on any of them. */
+export const MODEL_PRIOR_WEIGHT = 4;
+export const MODEL_MIN_EVALUATED = 3;
+/** List USD per million tokens of a model; null = not known. */
+export interface TokenPrice { input: number; cacheRead: number; cacheWrite: number; output: number }
+export type PriceOf = (model: string) => TokenPrice | null;
+/** What a run's tokens cost at list price (the engine reported no cost): null without tokens or a price. */
+export function listCost(tokens: AgentRunTokens | null | undefined, price: TokenPrice | null): number | null {
+  if (!tokens || !price || tokens.input + tokens.output + tokens.cacheRead + tokens.cacheWrite === 0) return null;
+  return (tokens.input * price.input + tokens.cacheRead * price.cacheRead + tokens.cacheWrite * price.cacheWrite + tokens.output * price.output) / 1e6;
+}
 /** a verdict this old weighs half of one given today */
 export const HALF_LIFE_MS = 30 * 86_400_000;
 /** how much each kind of verdict counts; the agent's own word (self) counts nothing (ADR 0100) */
@@ -227,13 +239,25 @@ export function verdictOf(run: AgentRun, reviews: readonly AgentRun[] = [], _ver
 
 /** The posterior of the weighted verdicts (num = weighted score, den = weights) over the Beta prior: its mean and its
  *  90% spread (±, normal approximation). */
-export function estimate(num: number, den: number): { mean: number; spread: number } {
-  const a = PRIOR.mean * PRIOR.weight + num, b = (1 - PRIOR.mean) * PRIOR.weight + (den - num), n = a + b;
+export function estimate(num: number, den: number, prior: { mean: number; weight: number } = PRIOR): { mean: number; spread: number } {
+  const a = prior.mean * prior.weight + num, b = (1 - prior.mean) * prior.weight + (den - num), n = a + b;
   return { mean: a / n, spread: Z90 * Math.sqrt(a * b / (n * n * (n + 1))) };
 }
 
 const noSources = (): AgentStanding['sources'] => ({ human: 0, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 0, decision: 0, chain: 0, quick: 0, self: 0 });
-interface Acc { runs: number; wins: number; xp: number; num: number; den: number; evaluated: number; sources: AgentStanding['sources'] }
+interface Acc { runs: number; wins: number; xp: number; num: number; den: number; evaluated: number; sources: AgentStanding['sources']; models: Map<string, ModelAcc> }
+interface ModelAcc { runs: number; wins: number; num: number; den: number; evaluated: number; cost: number; costRuns: number; estimated: number; ms: number[]; lastAt: number }
+const median = (v: number[]): number | null => { if (!v.length) return null; const s = [...v].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2; };
+/** One model's row: its estimate starts from the role's (roleMean), its cost per success counts every run's cost. */
+function modelRow(model: string, m: ModelAcc, roleMean: number): ModelStanding {
+  const est = m.evaluated > 0 ? estimate(m.num, m.den, { mean: roleMean, weight: MODEL_PRIOR_WEIGHT }) : null;
+  const shown = !!est && m.evaluated >= MODEL_MIN_EVALUATED && est.spread <= MAX_SPREAD;
+  // a run without a cost counts as the average of those with one: the figure is then an estimate
+  const total = m.costRuns ? m.cost / m.costRuns * m.runs : null;
+  return { model, runs: m.runs, wins: m.wins, performance: shown ? est.mean : null, spread: est ? est.spread : null, evaluated: m.evaluated, minRuns: MODEL_MIN_EVALUATED,
+    costPerWin: total !== null && m.wins ? Math.round(total / m.wins * 100) / 100 : null, costEstimated: m.estimated > 0 || (m.costRuns > 0 && m.costRuns < m.runs),
+    unpriced: m.runs - m.costRuns, medianMs: median(m.ms), lastAt: m.lastAt };
+}
 function add(a: Acc, source: Source, verdict: Verdict, age: number): void {
   a.sources[source]++;
   if (TRUST[source] === 0) return;
@@ -242,12 +266,12 @@ function add(a: Acc, source: Source, verdict: Verdict, age: number): void {
 }
 
 /** Level and performance of each agent with at least one run (ended or rolled up) or Flash answer, by agent id. */
-export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[], now: number, flash: FlashLog | null = null): Map<string, AgentStanding> {
+export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[], now: number, flash: FlashLog | null = null, priceOf: PriceOf | null = null): Map<string, AgentStanding> {
   const ix = earnIndex(runs), { reviews, starts } = ix;
   const acc = new Map<string, Acc>();
   const of = (id: string) => {
     let a = acc.get(id);
-    if (!a) acc.set(id, a = { runs: 0, wins: 0, xp: 0, num: 0, den: 0, evaluated: 0, sources: noSources() });
+    if (!a) acc.set(id, a = { runs: 0, wins: 0, xp: 0, num: 0, den: 0, evaluated: 0, sources: noSources(), models: new Map() });
     return a;
   };
   for (const t of rollups) {
@@ -270,6 +294,18 @@ export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[
     own.runs++;
     if (e?.verdict === 'success') { own.wins++; own.xp += runXp(r, ix); }
     if (v) add(own, v.source, v.verdict, age);
+    if (r.model) {
+      let m = own.models.get(r.model);
+      if (!m) own.models.set(r.model, m = { runs: 0, wins: 0, num: 0, den: 0, evaluated: 0, cost: 0, costRuns: 0, estimated: 0, ms: [], lastAt: 0 });
+      m.runs++; m.lastAt = Math.max(m.lastAt, r.endedAt!);
+      if (e?.verdict === 'success') m.wins++;
+      if (v && TRUST[v.source] > 0) { const w = TRUST[v.source] * 0.5 ** (Math.max(0, age) / HALF_LIFE_MS); m.evaluated++; m.num += w * SCORE[v.verdict]; m.den += w; }
+      // the engine's own figure, else list price × tokens (Codex, OpenCode and Cursor report tokens only)
+      const listed = r.costUsd === null && priceOf ? listCost(r.tokens, priceOf(r.model)) : null;
+      if (r.costUsd !== null) { m.cost += r.costUsd; m.costRuns++; } else if (listed !== null) { m.cost += listed; m.costRuns++; m.estimated++; }
+      const ms = r.executionMs ?? r.endedAt! - r.startedAt;
+      if (ms > 0) m.ms.push(ms);
+    }
     if (!orchestratorDecision(r)) continue;
     const o = of('orchestrator');
     o.runs++;
@@ -296,8 +332,9 @@ export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[
     const est = a.evaluated > 0 ? estimate(a.num, a.den) : null;
     const shown = !!est && a.evaluated >= MIN_EVALUATED && est.spread <= MAX_SPREAD;
     const xp = Math.round(a.xp * 100) / 100;
+    const models = [...a.models].map(([model, m]) => modelRow(model, m, est?.mean ?? PRIOR.mean)).sort((x, y) => y.runs - x.runs || y.lastAt - x.lastAt || x.model.localeCompare(y.model, 'en'));
     out.set(id, { runs: a.runs, wins: a.wins, xp, ...levelOf(xp), performance: shown ? est.mean : null, spread: est ? est.spread : null,
-      evaluated: a.evaluated, minRuns: MIN_EVALUATED, sources: a.sources });
+      evaluated: a.evaluated, minRuns: MIN_EVALUATED, sources: a.sources, ...(models.length ? { models } : {}) });
   }
   return out;
 }

@@ -308,7 +308,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     const metrics = runMetrics(runs, { rollups, live, ...(opts.since !== undefined ? { since: opts.since } : {}),
       filter: { ...(opts.skill !== undefined ? { skill: opts.skill } : {}), ...(opts.app !== undefined ? { app: opts.app } : {}), ...(opts.repo !== undefined ? { repo: opts.repo } : {}) } });
     // the card's level and performance are the agent's whole record, whatever the filter
-    const standing = standings(runs, rollups, Date.now(), this.runs.flashLog());
+    const standing = standings(runs, rollups, Date.now(), this.runs.flashLog(), this.opts.priceOf ?? null);
     return withStandings(metrics, standing);
   }
 
