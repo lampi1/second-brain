@@ -103,8 +103,9 @@ describe('autoPermit: what it cannot read whole is the user\'s call', () => {
 describe('autoPermit: the user\'s own role limits', () => {
   it('«Chiede conferma» and «Solo piano» are always asked', () => {
     for (const ceiling of ['default', 'plan'] as const) {
-      expect(run('git status', { ceiling })).toBe('ask');
-      expect(autoPermit(perm('Read', { file_path: 'src/a.ts' }), ctx({ ceiling })).kind).toBe('ask');
+      expect(run('git status', { ceiling })).toBe('allow'); // looking never asks (ADR 0278)
+      expect(autoPermit(perm('Read', { file_path: 'src/a.ts' }), ctx({ ceiling })).kind).toBe('allow');
+      expect(run('npm install', { ceiling })).toBe('ask');
       expect(autoPermit(perm('Edit', { file_path: 'src/a.ts' }), ctx({ ceiling })).kind).toBe('ask');
     }
   });

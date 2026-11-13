@@ -326,7 +326,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       const resolved = agents.resolve(req);
       const roleId = req.orchestrator ? 'orchestrator' : req.roleId;
       if (!roleId || (req.orchestrator && !brain.info().brainRoot)) return resolved;
-      // only the skills this launch gives exist in its plugin (the role gate refuses the others)
+      // only the brain skills this launch gives exist in its plugin
       const runtime = agentPacks.packs.runtime(roleId, req.skills ?? [], { query: req.goal ?? req.prompt ?? '', project: req.cwd });
       const resolvedHarness = resolved.request.harness;
       // episodic memory (ADR 0236): verified past successes of this role on similar tasks in this repository

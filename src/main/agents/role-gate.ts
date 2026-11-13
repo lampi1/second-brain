@@ -32,7 +32,7 @@ export interface GateChat {
   /** the launch's runtime plugin name (runtimePluginName); absent = no plugin: nothing to qualify */
   plugin?: string;
   /** its engine runs an allowed call with a changed input (Claude's updatedInput): a granted bare skill name is
-   *  allowed as "<plugin>:<name>" instead of refused */
+   *  allowed as "<plugin>:<name>", the launch's own copy */
   rewrite?: boolean;
   /** the delegating chat's policy and title (absent = a root chat) */
   parent?: { policy: AgentPolicy | null; title: string };

@@ -1,4 +1,4 @@
-# ADR 0278 · A role may use any installed skill, without asking
+# ADR 0278 · A role may use any installed skill, and looking never asks
 
 Date: 2026-11-13 · Status: accepted (owner, thread «Preparare la 1.0 con analisi profonda», with a screenshot of
 «Skill «dataviz» non assegnata al ruolo Artisan: rifiutata»: «voglio libertà, gli agenti con identità devono portare
@@ -20,7 +20,14 @@ decided that roles get every permission by default (2026-10-19).
    `skillRefused` and its three texts are removed.
 2. A bare name of a skill the launch gave is still rewritten to `<launch plugin>:<name>` on an engine that runs a
    changed input (Claude, issue #101), so the role's own copy wins over a same-named skill elsewhere.
-3. The Agent Studio hint and the Guida say it: a role starts with its skills and may use the other installed ones.
+3. The user's own rules still hold: a skill a rule of `permissions.json` names goes to that rule as in a plain chat,
+   and while that file cannot be read a skill is asked. The roles' frame (`ROLE_PREAMBLE`) says they may use any skill
+   the chat can load.
+4. Looking never asks. A role the user limited to «Chiede conferma» or «Solo piano» (the quick-answer role is «Solo
+   piano» by default) no longer sends `Read`, `Glob`, `Grep` or a read-only command to the user
+   (`src/main/chats/auto-permit.ts`): in four days of the owner's data these were the only permission requests that
+   reached him (8, all reads). A rule of his own policy (`permissions.json`) still holds what it names.
+5. The Agent Studio hint and the Guida say it: a role starts with its skills and may use the other installed ones.
 
 ## Consequences
 
@@ -29,4 +36,4 @@ decided that roles get every permission by default (2026-10-19).
   The app's other guards (destructive commands, production actions waiting for «Esegui») do not depend on this gate.
 - Not changed: which skills a launch loads. A role chat still starts without the brain's whole skill folder
   (`engines/sessions.ts`); making every brain skill visible to every role is a separate choice.
-- Tests: `test/unit/agents/role-gate.test.ts`, `test/unit/agents/delegation.test.ts`.
+- Tests: `test/unit/agents/role-gate.test.ts`, `test/unit/agents/delegation.test.ts`, `test/unit/chats/auto-permit.test.ts`.
