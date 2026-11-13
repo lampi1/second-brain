@@ -75,6 +75,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   terminal routines.
 
 ### Fixed
+- A role may use any installed skill (the engine's own, yours, a plugin's) without asking: «Skill … non assegnata al
+  ruolo …: rifiutata» is gone (ADR 0278).
 - Brain tools find the memory map, the brain's rules and its behaviour tests at the root or inside the `brain-rules`
   skill, so a brain can keep a root like a fresh install; a new chat is no longer told to read a missing file (ADR 0277).
 - An agent writing in the brain no longer freezes the window every ~2 s: the undoable-changes list rereads a file

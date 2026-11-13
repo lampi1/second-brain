@@ -369,21 +369,20 @@ describe('agent_delegate', () => {
     expect(f.m.items(scout.id).some(i => i.kind === 'system' && i.code === 'commandReadOnly')).toBe(true);
   });
 
-  it('a skill works only when the launch gave it', async () => {
+  it('a skill call is never refused; a granted bare name runs as the launch copy', async () => {
     const f = fixture();
     const parent = await f.root('strategist');
     const child = (await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Log', { skills: ['log-search'] })] })).children[0].chatId;
     f.sinks.get(child)!.pending({ id: 's1', type: 'permission', tool: 'Skill', title: 'Skill', detail: '', input: { skill: 'agent-p:log-search' }, at: 1 });
     expect(f.answers.find(a => a.id === 's1')?.answer).toMatchObject({ allow: true });
     f.sinks.get(child)!.pending({ id: 's2', type: 'permission', tool: 'Skill', title: 'Skill', detail: '', input: { skill: 'deploy-prod' }, at: 2 });
-    expect(f.answers.find(a => a.id === 's2')?.answer).toMatchObject({ allow: false });
-    expect(f.m.items(child).some(i => i.kind === 'system' && i.code === 'skillRefused')).toBe(true);
+    expect(f.answers.find(a => a.id === 's2')?.answer).toMatchObject({ allow: true }); // a skill it was not given runs too (ADR 0278)
     // a granted skill by its bare name runs as the launch plugin's copy, never refused first (issue #101)
     f.sinks.get(child)!.pending({ id: 's1b', type: 'permission', tool: 'Skill', title: 'Skill', detail: '', input: { skill: 'log-search' }, at: 2 });
     expect(f.answers.find(a => a.id === 's1b')).toMatchObject({ answer: { allow: true }, patch: { skill: 'agent-p:log-search' } });
     const other = (await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Senza skill')] })).children[0].chatId;
     f.sinks.get(other)!.pending({ id: 's3', type: 'permission', tool: 'Skill', title: 'Skill', detail: '', input: { skill: 'agent-p:log-search' }, at: 3 });
-    expect(f.answers.find(a => a.id === 's3')?.answer).toMatchObject({ allow: false });
+    expect(f.answers.find(a => a.id === 's3')?.answer).toMatchObject({ allow: true });
   });
 
   it('the parent and the delegation survive a restart', async () => {

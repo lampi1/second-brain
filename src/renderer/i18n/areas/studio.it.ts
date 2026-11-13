@@ -33,7 +33,7 @@ export const studioIt = {
   'studio.launchesHint': 'Con agent_delegate, in chat visibili sotto la sua. Un figlio non ha mai più permessi del genitore.',
   'studio.launchesNone': 'Nessuno',
   'studio.skills': 'Skill caricate a ogni avvio',
-  'studio.skillsHint': 'Il ruolo usa solo le skill che riceve: queste, più quelle che gli passa chi lo avvia.',
+  'studio.skillsHint': 'Il ruolo parte sempre con queste, più quelle che gli passa chi lo avvia. Può usare anche le altre skill installate.',
   'studio.skillAdd': 'Aggiungi skill',
   'studio.skillName': 'Nome della skill',
   'studio.skillRemove': ({ name }: { name: string }) => `Togli ${name}`,

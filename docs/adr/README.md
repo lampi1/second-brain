@@ -282,3 +282,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0275](0275-orchestrator-counts-as-the-user.md) What the Orchestrator says counts as the user's own, always; the project maps take «Stato»'s place — accepted
 - [0276](0276-planning-on-the-project-maps.md) Planning on the project maps: the Strategist proposes a map, the app keeps it live — accepted
 - [0277](0277-brain-documents-in-the-brain-rules-skill.md) The brain tools find the brain's own documents at the root or in the `brain-rules` skill — accepted
+- [0278](0278-roles-use-any-installed-skill.md) A role may use any installed skill, without asking — accepted
