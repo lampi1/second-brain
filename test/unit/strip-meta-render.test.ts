@@ -1,5 +1,6 @@
 // Render a strip's figures (components/StripMeta.tsx, ADR 0292): time and cost so far, each next to its estimate, the
-// "past the estimate" marks, the cost of an engine that reports none read from the ledger, nothing without figures.
+// "past the estimate" marks, the cost of an engine that reports none read from the ledger, no pill without figures;
+// before them the model and the effort the chat runs with.
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -40,6 +41,13 @@ describe('strip figures', () => {
     estimates.value = null;
     expect(render(chat({ harness: 'cursor', costUsd: 0, costLedgerUsd: 0.3 } as Partial<ChatSummary>), 2 * MIN)).toMatch(/≈ 0,30\s\$/);
     expect(render(chat({ costUsd: 0.4, costKnown: false } as Partial<ChatSummary>), 2 * MIN)).not.toContain('$');
-    expect(render(chat({ costUsd: 0 }), null)).toBe('');
+    expect(render(chat({ costUsd: 0 }), null)).not.toContain('chat-meta-c');
+  });
+  it('says the model and the effort the chat runs with, before the figures and without them', () => {
+    estimates.value = null;
+    const running = chat({ model: 'claude-opus-5-5', effortStatus: { effective: 'high' } } as Partial<ChatSummary>);
+    expect(render(running, 8 * MIN)).toMatch(/data-testid="chat-model-c"[^>]*>Opus 5\.5 · high<\/span><span class="strip-meta"/);
+    // no figures yet: the model alone; an effort only asked for is not shown as if it ran
+    expect(render(chat({ model: 'claude-sonnet-5-5', effort: 'low', costUsd: 0 } as Partial<ChatSummary>), null)).toMatch(/^<span class="strip-model"[^>]*>Sonnet 5\.5<\/span>$/);
   });
 });

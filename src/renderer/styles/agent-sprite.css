@@ -4,7 +4,7 @@
    joint turns around its own origin; its rest pose and its animation are inline (lib/sprite-rig.ts jointStyle), the
    @keyframes come from the scene (keyframesCss). Transforms and opacity only. Still (the rest pose, a whole picture)
    without motion; paused while the window is hidden. */
-.agent-sprite { flex:none; display:inline-flex; line-height:0; color:var(--text-2); cursor:pointer; -webkit-user-select:none; user-select:none; }
+.agent-sprite { position:relative; flex:none; display:inline-flex; line-height:0; color:var(--text-2); cursor:pointer; -webkit-user-select:none; user-select:none; }
 .agent-sprite > svg { display:block; overflow:visible; filter:drop-shadow(0 0 .55px color-mix(in srgb, var(--text) 62%, transparent)); }
 .agent-sprite .sp-j { transform-origin:0 0; }
 .agent-sprite .sp-ink > :is(path, ellipse, circle):not([fill="none"]) { fill:currentColor; }
@@ -18,3 +18,9 @@ html[data-hidden] .agent-sprite * { animation-play-state:paused !important; }
 /* still: the rest pose, which is every scene's last picture too */
 .agent-sprite.is-still * { animation:none !important; }
 @media (prefers-reduced-motion: reduce) { .agent-sprite * { animation:none !important; } }
+/* What it says (ADR 0302): a small bubble at the head, its corner pointing at the mouth, that pops in and fades by
+   itself (lib/quips.ts QUIP_MS sets how long). Over the row's text for that moment; it takes no click. */
+.agent-sprite > .quip { position:absolute; left:76%; top:-5px; z-index:3; padding:3px 8px 4px; border-radius:10px 10px 10px 2px; background:var(--text); color:var(--bg);
+  font:600 11px/1.25 var(--font); letter-spacing:0; white-space:nowrap; pointer-events:none; box-shadow:0 2px 8px rgb(0 0 0 / .28); transform-origin:0 100%; animation:quip-pop 2600ms both; }
+@keyframes quip-pop { 0% { opacity:0; transform:scale(.5) translateY(4px); } 6% { opacity:1; transform:scale(1.07); } 11%, 86% { opacity:1; transform:none; } 100% { opacity:0; transform:translateY(-3px) scale(.94); } }
+@media (prefers-reduced-motion: reduce) { .agent-sprite > .quip { animation:none; } }

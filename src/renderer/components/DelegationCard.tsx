@@ -20,7 +20,7 @@ import { requestHost } from '../lib/child-requests';
 import { openKidsOf } from '../lib/chat-derived';
 import { reqKey } from '../actions';
 import { useNow } from '../lib/clock';
-import { modelWithEffort, workTime } from '../lib/format';
+import { workTime } from '../lib/format';
 import { selectedHere } from '../lib/strip-click';
 import { t, locale } from '../i18n';
 import { openQueue } from '../lib/later';
@@ -73,13 +73,12 @@ export function TreeRails({ node, state }: { node: TreeNode; state: ChildState }
 }
 
 /** The row (ADR 0293): the role's little person in its state (StripFace.tsx), the task, who runs it and what it does now (closed: the
- *  live step, or the result's first words once ended; open: its skills and model), time and cost, the state in words
+ *  live step, or the result's first words once ended; open: its skills), the model and effort, time and cost, the state in words
  *  only when the dot is not enough, "Vai alla chat". */
 function Head({ chat, state, open }: { chat: ChatSummary; state: ChildState; open: boolean }) {
   const now = useNow(15_000);
   const role = chat.agent?.name ?? chat.delegation?.role ?? '';
   const skills = chat.run?.tags?.skills ?? [];
-  const model = modelWithEffort(chat);
   const live = state === 'run' || state === 'start';
   const plain = live || state === 'done';
   const said = chat.delegation?.result?.summary || chat.lastText;
@@ -92,7 +91,6 @@ function Head({ chat, state, open }: { chat: ChatSummary; state: ChildState; ope
       <span className="dc-role">{role}</span>
       {open ? <>
         {skills.slice(0, 2).map(s => <span key={s} className="dc-chip">{s}</span>)}
-        {model && <span className="dc-model">{model}</span>}
       </> : <span className="dc-now" data-testid={`delegation-now-${chat.id}`}>{isBusy(chat) ? <StripActivity chatId={chat.id} /> : said.split('\n')[0]!.slice(0, 140)}</span>}
     </span>
     <StripMeta chat={chat} workMs={chat.queued ? null : workTime(chat, now) ?? chat.run?.executionMs ?? null} />

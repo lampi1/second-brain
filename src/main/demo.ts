@@ -97,13 +97,17 @@ export const DEMO_DIFF: FileDiff[] = [
   { path: 'test/Shop.Tests/Orders/OrderTotalsTests.cs', added: 15, removed: 0, patch: patchTest },
 ];
 
+/** A demo chat runs with the effort it was given, as an engine would report it (the strips say «Opus 5.5 · high»). */
+const ran = (c: ChatSummary): ChatSummary => (c.effort && !c.effortStatus
+  ? { ...c, effortStatus: { supported: true, requested: c.effort, submitted: c.effort, effective: c.effort, pending: false, effectiveSource: 'provider', sessionDefault: null } } : c);
+
 /** A delegation tree (ADR 0083) for the README shots (test/shots/readme.spec.ts adds it through __sbDemo.tree, so the
  *  seed every other test reads stays as it is): a Strategist the Orchestrator started, its Scout (done, result sent
  *  back), its Artisan with a Sentinel of its own (and that one's Scout), and a Herald waiting for its turn. */
 export function demoTree(E: number): { chats: ChatSummary[]; items: Record<string, ChatItem[]> } {
   const cwd = 'C:\\progetti\\alfa-shop';
   const role = (id: WorkRoleId, name: string): ChatSummary['agent'] => ({ id, name, purpose: ROLE_DEFAULTS[id].summary, avatar: { kind: 'character', value: id }, engine: 'claude', model: 'claude-opus-5-5', revision: 1, version: 1, source: 'catalog' });
-  const node = (id: string, r: WorkRoleId, name: string, title: string, goal: string, ago: number, extra: Partial<ChatSummary>, parentId?: string, doneWhen: string[] = []): ChatSummary => ({
+  const node = (id: string, r: WorkRoleId, name: string, title: string, goal: string, ago: number, extra: Partial<ChatSummary>, parentId?: string, doneWhen: string[] = []): ChatSummary => ran({
     id, title, harness: 'claude', origin: 'app', cwd, sessionId: `demo-${id}`, model: 'claude-opus-5-5', effort: 'high', permissionMode: 'default', state: 'running',
     costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: E - 30_000, browserTabIds: [], agent: role(r, name), workMs: ago * MIN,
     run: { runId: `r_tree_${id}`, chatId: id, agentId: r, version: 1, goal, startedBy: parentId ? 'parent' : 'orchestrator', startedAt: E - ago * MIN, costUsd: extra.costUsd ?? null, tokens: null,
@@ -163,7 +167,7 @@ export interface Seed { chats: ChatSummary[]; items: Record<string, ChatItem[]>;
 
 export function seed(E: number): Seed {
   const closedBy = (at: number) => ({ state: 'closed' as const, closedAt: at, closedBy: 'auto' as const });
-  const chat = (c: Partial<ChatSummary> & Pick<ChatSummary, 'id' | 'title'>): ChatSummary => ({
+  const chat = (c: Partial<ChatSummary> & Pick<ChatSummary, 'id' | 'title'>): ChatSummary => ran({
     harness: 'claude', origin: 'app', cwd: 'C:\\progetti\\brain', sessionId: `demo-${c.id}`, model: 'claude-opus-5-5', effort: 'high', permissionMode: 'default',
     state: 'idle', costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: E, browserTabIds: [], ...c,
   });

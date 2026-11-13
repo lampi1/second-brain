@@ -2,13 +2,15 @@
 // portrait and its state dot. A role the user gave a picture of their own keeps that picture with the dot (the sprite
 // could not look like it). Used by ChatTile.tsx (a root strip) and DelegationCard.tsx (a delegated row); also maps a
 // chat's state to the animation (spriteStateOf), and sends the user's pat or whack on the person to the chat's run
-// (run:touch, ADR 0297).
+// (run:touch, ADR 0297). The person also speaks by itself now and then about what the chat is really doing: its state,
+// or the tool it is using with the real file or command (ADR 0302, lib/quips.ts quipMoment); once about an end.
 import type { AgentAvatar as Avatar } from '@shared/agents';
 import type { ChatItem } from '@shared/contract';
 import { useEffect, useState } from 'react';
 import { isSpriteId, type SpriteState } from '../lib/agent-sprites';
+import { quipMoment, type QuipMoment } from '../lib/quips';
 import { useOwnPicture } from '../lib/agent-images';
-import { useApp } from '../store/store';
+import { app, useApp } from '../store/store';
 import { sb } from '../sb';
 import { t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
@@ -33,6 +35,8 @@ export function isThinking(items: readonly ChatItem[] | undefined): boolean {
 /** The end of each chat the user has already seen play (its run, turns and cost when it ended): coming back to the
  *  page does not celebrate again, a new end after more work does. */
 const celebrated = new Map<string, string>();
+/** The end of each chat its person has already spoken about: it says so once, then keeps quiet until more work. */
+const boasted = new Map<string, string>();
 
 export function StripFace({ chatId, avatar, name, tone, size, height = 40, ...o }: { chatId: string; avatar: Avatar | undefined; name: string; tone: string; size: number; height?: number; waitsUser: boolean; error: boolean; busy: boolean; done: boolean; pending?: boolean }) {
   const thinking = useApp(s => o.busy && isThinking(s.items[chatId]));
@@ -51,9 +55,14 @@ export function StripFace({ chatId, avatar, name, tone, size, height = 40, ...o 
     if (state === 'done') setSeen(true); // after its reaction a finished person stands still: no second celebration
     if (hasRun && sign !== touched) void sb.invoke('run:touch', { chatId, sign }).catch(() => undefined);
   };
+  // what it speaks about when its turn comes: read then, from the transcript the app already has
+  const mood = (): QuipMoment | null => {
+    if (state === 'done') { if (boasted.get(chatId) === mark) return null; boasted.set(chatId, mark); }
+    return quipMoment(state, app.get().items[chatId]);
+  };
   // a picture of the user's own, or a character without a person, stays a portrait with its state dot
   if (own || (avatar?.kind === 'character' && !isSpriteId(avatar.value)))
     return <span className="strip-face"><AgentAvatar avatar={avatar} name={name} size={size} /><span className={`strip-dot lead tone-${tone}`} aria-hidden="true" /></span>;
   return <span className="strip-face" data-person><AgentSprite id={spriteIdOf(avatar)} state={state} still={state === 'done' && seen} height={height} label={t('product.avatar', { name })}
-    onTouch={onTouch} tip={t(!hasRun ? 'sprite.tip' : touched === 1 ? 'sprite.tipPat' : touched === -1 ? 'sprite.tipWhack' : 'sprite.tipRun')} /></span>;
+    mood={mood} onTouch={onTouch} tip={t(!hasRun ? 'sprite.tip' : touched === 1 ? 'sprite.tipPat' : touched === -1 ? 'sprite.tipWhack' : 'sprite.tipRun')} /></span>;
 }

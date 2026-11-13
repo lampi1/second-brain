@@ -1,8 +1,10 @@
 // E2E of the clicks on a role's little person (ADR 0297), on the frozen demo: a left click on the person of a strip
 // plays the pat, a right click the whack of the stick, and neither opens the strip; the chat's run keeps the last one
 // (its tooltip says so, the second same click writes nothing new); the person on the front of a role card reacts too
-// and the card does not turn. Screenshot in test-results/shots/sprite-touch-*.png.
+// and the card does not turn. At each click the person says a line of its own in a small bubble (ADR 0302).
+// Screenshot in test-results/shots/sprite-touch-*.png.
 import { expect, test, type Locator } from '@playwright/test';
+import { quips } from '../../src/shared/agent-quips';
 import { goPage, launchDemo, shot } from './helpers';
 
 /** Every reaction the person shows from now on, as they come (an observer: the reaction lasts about a second). */
@@ -23,10 +25,14 @@ test('the little person reacts to a click: a pat, a whack, and the run keeps the
     const seen = await watch(person);
     await person.click();
     await expect.poll(seen).toEqual(['pat']);
+    // it says one of its own lines for a pat, in a bubble (the demo's «mappa» chat is the Artisan's)
+    const said = (await strip.locator('.quip').textContent())!;
+    expect(quips('artisan', 'pat', 'it')).toContain(said);
     await shot(page, 'sprite-touch-pat');
     await expect(person).toHaveAttribute('title', /Buffetto dato/);
     await person.click({ button: 'right' });
     await expect.poll(seen).toEqual(['pat', 'whack']);
+    expect(quips('artisan', 'whack', 'it')).toContain(await strip.locator('.quip').textContent());
     await expect(person).toHaveAttribute('title', /Bastonata data/);
     // the clicks stayed on the person: the strip is still closed, no menu opened
     await expect(page.getByTestId('chat-expand-mappa')).toHaveAttribute('aria-expanded', 'false');

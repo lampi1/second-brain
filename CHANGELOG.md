@@ -33,6 +33,13 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   `permissions.json` holds, what a role you limited asks, a plan to approve, and a change of `permissions.json`
   itself. Codex, Cursor and OpenCode now send the app the whole request too, so a long one is no longer yours to
   answer only because it was shortened for the screen (ADR 0294).
+- Grindhouse: every strip and every delegated row says the model and the effort the chat runs with, before its time
+  and cost («Opus 5.5 · high»).
+- The little people speak: two words of nonsense in a small bubble that goes away by itself, each role in its own
+  character (a pompous conductor, a paranoid guard, a gruff craftsman…), at every click and now and then by
+  themselves on the Grindhouse strips, where the line is about what the chat is really doing: the file it reads or
+  edits, the command it runs, the tests, the wait for you, the error. No tokens: fixed lines picked by the state and
+  the tool. One set for the whole app, in Italian, English and German (ADR 0302).
 - The little people react to a click: an open-handed pat on the head with the left button, a whack of the stick with
   the right one; they are a little bigger on the Grindhouse strips. On a strip the click is also a tiny nudge on that job in the role's performance: a twentieth of a verdict of
   yours, once per job, all of a role's together half a verdict at most, never XP (ADR 0297).

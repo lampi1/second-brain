@@ -207,6 +207,8 @@
 .strip-state:not(.sr-only) { height:20px; padding:0 8px; border:1px solid var(--border-2); border-radius:99px; font-size:11px; }
 .strip-state.tone-err { border-color:var(--red); }
 .strip-state.tone-wait { border-color:var(--amber-line); }
+/* the model and the effort the chat runs with, in plain words before its figures (the owner, 2026-11-13) */
+.strip-model { flex:none; font-size:11px; color:var(--text-3); white-space:nowrap; font-variant-numeric:tabular-nums; }
 .strip-meta { flex:none; display:inline-flex; align-items:center; gap:6px; height:20px; padding:0 8px; border:1px solid var(--border-2); border-radius:99px; font-size:11px; color:var(--text-2); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .strip-meta > span + span:not(.sr-only)::before { content:"· "; color:var(--text-3); }
 .strip-meta i { font-style:normal; color:var(--text-3); }

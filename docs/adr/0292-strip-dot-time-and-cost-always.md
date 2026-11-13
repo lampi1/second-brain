@@ -20,7 +20,10 @@ ADR 0287 showed a strip's numbers only out of the norm. The owner wants them alw
    full screen, on the cards of the delegation tree and in the sidebar.
 2. On the right the strip always shows the work time and the cost so far, each next to its estimate when there is
    one: «22 min / ~19 min · 1,84 $ / ~0,60 $». A figure past its estimate turns amber (time: past it; cost: past 1.5
-   times, as before). The estimate is shown for an ended run too.
+   times, as before). The estimate is shown for an ended run too. Since 2026-11-13 (the owner: «voglio vedere il
+   modello e effort nelle striscioline degli agenti») the model and the effort the chat runs with stand before the
+   figures in plain words, on a root strip and on a delegated row: «Opus 5.5 · high» (`StripMeta.tsx`; the effort
+   as the engine reports it or as the last turn sent it, never the one only asked for).
 3. The state is a pill only when words are needed (waiting, error, queued). «Al lavoro» and «finito» are the dot; the
    word stays for screen readers.
 4. Rows run edge to edge of the page with a hairline between them; the area heading is a small label. The open window
