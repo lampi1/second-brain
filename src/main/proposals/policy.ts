@@ -55,6 +55,16 @@ export function groupPolicy(group: ProposalGroup, ledger: readonly DecisionEntry
   const mode = !allowed ? 'never' : n >= POLICY.min && low !== null && low >= threshold ? 'auto' : 'ask';
   return { group, ...(source ? { source } : {}), mode, n, yes, no: n - yes, undone, low, threshold, autoN: recent.length, autoUndone };
 }
+/** Whether the app's «Apro la issue?» cards still serve this user (owner, 2026-11-13: «card dei bug dell'app solo se
+ *  servono a chi usa l'app»). Nothing in the app tells who develops it from who only uses it; their own answers do:
+ *  the cards stop once the last `last` issue cards they decided, within `days`, hold at most `yes` approvals, and come
+ *  back by themselves when those decisions are older than `days`. With fewer decisions the cards are still made. */
+export const ISSUE_ASK = { last: 5, yes: 1, days: 90 } as const;
+export function issueCardsWanted(ledger: readonly DecisionEntry[], now: number): boolean {
+  const recent = ledger.filter(e => e.group === 'issue' && e.at >= now - ISSUE_ASK.days * 864e5).sort((a, b) => a.at - b.at).slice(-ISSUE_ASK.last);
+  return recent.length < ISSUE_ASK.last || recent.filter(e => said(e) === 'yes').length > ISSUE_ASK.yes;
+}
+
 /** Every (group, source) pair the ledger holds decisions for, each with its own policy (the pack's «decisions»). */
 export function allPolicies(ledger: readonly DecisionEntry[]): ProposalGroupPolicy[] {
   const pairs = new Map<string, [ProposalGroup, ProposalSource]>();

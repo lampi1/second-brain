@@ -45,7 +45,7 @@ export const defaultPrompt = (lang: Lang): string => (lang === 'it' ? IT : EN);
 export const MAX_PROMPT = 12_000;
 
 /** The fixed part after the method: never edited by the user. */
-export function researchFrame(lang: Lang, o: { web: boolean; capUsd: number; brainRoot: string; issuesUrl: string | null }): string {
+export function researchFrame(lang: Lang, o: { web: boolean; capUsd: number; brainRoot: string; issuesUrl: string | null; bugCards?: boolean }): string {
   const c = RESEARCH_CAPS;
   return [
     '--- The app\'s fixed rules (always added after the method) ---',
@@ -61,6 +61,7 @@ export function researchFrame(lang: Lang, o: { web: boolean; capUsd: number; bra
     'A change never grants permissions, never weakens a safety rule and never touches settings or hooks: those the tool refuses.',
     'A change is item by item: change.text is the lines to add; the app appends them and refuses any write that would drop a line it was not told to remove. Give each brain change a success criterion (fewer-corrections, more-verified, fewer-log-errors, skill-used).',
     `Issues (app-idea, app-bug): no private data in title or body (no home paths, user names, e-mails, server or company names, tokens, text quoted from the user's work); the app removes what it recognizes, you write it clean. ${o.web && o.issuesUrl ? `Look at the open issues first (${o.issuesUrl}): if one covers it, pass duplicateOf.` : ''}`,
+    ...(o.bugCards === false ? ['App bugs: propose NO app-bug in this run (the method\'s point 8 does not apply to bugs): the user turned down the last issue cards, the tool refuses them. An app-idea is still welcome when it is strong.'] : []),
     `Budget: the app stops this chat at ${o.capUsd.toFixed(2)} $. Spend it on depth: read the evidence behind each candidate card in full (the chats it comes from, the skill it changes) before proposing; skip what cannot lead to a card.`,
     'When you are done, reply with one short line: how many proposals you made. The user reads them as cards, not in this chat.',
   ].join('\n');

@@ -85,7 +85,7 @@ export interface DelegationDeps {
 
 export const TASKS_MAX = 10;
 const TITLE_MAX = 80;
-const QUESTION_MAX = 1000, OPTIONS_MAX = 6, ANSWER_MAX = 4000, REMEMBER_MAX = 3, REMEMBER_LINE = 300;
+const QUESTION_MAX = 1000, OPTIONS_MAX = 6, ANSWER_MAX = 4000, REMEMBER_MAX = 1, REMEMBER_LINE = 300;
 
 /** An app-owned independent review run (the Judge's sample, ADR 0100): the only report that carries verdict / verified. */
 export function independentReview(c: ChatSummary | undefined): boolean {
@@ -342,30 +342,36 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     return d.chats.userEvents(child.id, 0);
   }
 
-  /** agent_report's `remember`: up to 3 short lines for the reporting chat's role memory, checked before the report and
-   *  written once it is accepted (a refused report writes nothing, so a retry does not count twice) */
+  /** agent_report's `remember`: ONE short line for the reporting chat's role skill, checked before the report and written
+   *  once it is accepted (a refused report writes nothing, so a retry does not count twice). One, not three (owner,
+   *  2026-11-13, «meno lezioni inutili»): in four days 242 runs noted 447 lines, two a run on average, no line ever
+   *  noted twice, about one skill change per Maintenance. Further lines are left out with a warning, never a refusal. */
   function rememberLines(a: Record<string, unknown>, self: ChatSummary | undefined, warnings: string[]): (() => number) {
     if (a.remember === undefined) return () => 0;
     if (self?.routine || self?.routinePackage) throw new Error('Archived routine chats cannot submit new work; use the terminal CLI.');
     // each refusal says its own reason: the length is never one (a long line is cut below)
-    if (!Array.isArray(a.remember) || a.remember.length > REMEMBER_MAX) throw new Error(`agent_report: remember = a list of up to ${REMEMBER_MAX} lines.`);
+    if (!Array.isArray(a.remember)) throw new Error('agent_report: remember = a list with one line.');
     if (!a.remember.every(l => typeof l === 'string' && l.trim())) throw new Error('agent_report: remember lines must be non-empty text.');
-    if (a.remember.some(l => /[\x00-\x1f\x7f]/.test(l as string))) throw new Error('agent_report: each remember line must be a single line, without line breaks or control characters.');
-    const lines = (a.remember as string[]).map(l => l.trim());
+    // the first line is the lesson: the others are left out, and the report is never refused for them
+    if (a.remember.length > REMEMBER_MAX) warnings.push(`remember: only the first line was noted (one line per report); ${a.remember.length - REMEMBER_MAX} left out.`);
+    const kept = (a.remember as string[]).slice(0, REMEMBER_MAX);
+    if (kept.some(l => /[\x00-\x1f\x7f]/.test(l))) throw new Error('agent_report: the remember line must be a single line, without line breaks or control characters.');
+    const lines = kept.map(l => l.trim());
     // a line over REMEMBER_LINE is cut with the marker «…», never refused (P8)
     lines.forEach((line, i) => { if (line.length > REMEMBER_LINE) { lines[i] = capText(line, REMEMBER_LINE); warnings.push(`remember line ${i + 1} cut to ${REMEMBER_LINE} characters (marker …).`); } });
-    if (!lines.length) return () => 0;
-    // the worth gate (ADR 0129) before the report is accepted: the agent generalizes the line or leaves it out
-    lines.forEach((line, i) => {
-      try { checkMemoryWorth('setup', 'note', line); }
-      catch (e) { throw new Error(`agent_report: remember line ${i + 1}: ${e instanceof Error ? e.message : String(e)}`); }
+    // the worth gate (ADR 0129): a line tied to one case is left out with its reason, and the report goes through. It
+    // was a refusal: 51 reports sent again whole in a month of the owner's chats for a line nobody had asked for.
+    const worth = lines.filter(line => {
+      try { checkMemoryWorth('setup', 'note', line); return true; }
+      catch (e) { warnings.push(`remember: line not noted (${e instanceof Error ? e.message : String(e)}) The report itself is accepted: do not send it again for this.`); return false; }
     });
+    if (!worth.length) return () => 0;
     const roleId = self?.agent?.source === 'catalog' ? self.agent.id : null;
     if (!roleId || !d.remember) throw new Error('agent_report: remember works only in a role chat with a brain; leave it out.');
     // the report is already delivered when this runs: a failed write is logged, never turned into a refused report
     return () => {
       let written = 0;
-      try { for (const line of lines) { d.remember!(roleId, line, self!); written++; } }
+      try { for (const line of worth) { d.remember!(roleId, line, self!); written++; } }
       catch (e) { log.warn('agents', 'role lessons not proposed', { chat: self!.id, data: { role: roleId, written }, cause: e instanceof Error ? e.message : String(e), hint: 'Check that a brain folder is chosen and writable' }); return written; }
       log.info('agents', 'role lessons proposed', { chat: self!.id, data: { role: roleId, lines: written } });
       return written;
@@ -380,6 +386,13 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     // Small cosmetic overflows must not require another model turn. Full evidence stays in output/doneWhen;
     // neither outcome nor the host's completion criteria are repaired or relaxed.
     // A longer summary is cut with the marker «…», never refused; its full text stays in output (P8, cloudroom comms).
+    // A longer output is cut the same way: a refusal made the agent write the whole result again (33 times in a month
+    // of the owner's chats). The marker shows the parent that text is missing; the agent can amend with a shorter one.
+    if (typeof a.output === 'string' && a.output.length > RESULT_OUTPUT_MAX) {
+      const over = a.output.length - RESULT_OUTPUT_MAX;
+      a.output = capText(a.output, RESULT_OUTPUT_MAX);
+      warnings.push(`output cut to ${RESULT_OUTPUT_MAX} characters (marker …): its last ${over} or so were left out. Only if they matter, report once more with amends: true and a shorter output.`);
+    }
     if (typeof a.summary === 'string' && a.summary.trim().length > SUMMARY_MAX) {
       const full = a.summary.trim();
       a.summary = capText(full, SUMMARY_MAX);
@@ -502,7 +515,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
 
   const str = { type: 'string' };
   const reportSchema: Record<string, unknown> = { type: 'object', required: ['outcome', 'summary', 'output', 'doneWhen'], additionalProperties: false, properties: {
-      outcome: { type: 'string', enum: ['done', 'partial', 'blocked'] }, summary: { ...str, description: `one or two sentences, up to ${SUMMARY_MAX} characters (a longer one is cut with …)` }, output: { ...str, maxLength: RESULT_OUTPUT_MAX },
+      outcome: { type: 'string', enum: ['done', 'partial', 'blocked'] }, summary: { ...str, description: `one or two sentences, up to ${SUMMARY_MAX} characters (a longer one is cut with …)` }, output: { ...str, description: `the result, up to ${RESULT_OUTPUT_MAX} characters (a longer one is cut with …): long material goes in a file, its path here` },
       amends: { type: 'boolean', description: `true only to correct the result you already reported for this assignment: the new version replaces it and reaches the same reader, marked as a correction; at most ${MAX_CORRECTIONS} corrections` },
       verdict: { type: 'string', enum: ['success', 'partial', 'fail'], description: 'Only app-owned independent reviews: assessment of the reviewed work, separate from completion of your review.' },
       verified: { type: 'string', enum: ['yes', 'partial', 'no'], description: 'Only with verdict: yes only when you independently checked the evidence; never inferred from completing the review.' },
@@ -513,7 +526,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
         properties: { kind: { type: 'string', enum: [...USER_ACTION_KINDS] }, text: { ...str, maxLength: USER_ACTION_TEXT_MAX, description: 'what the user must do, in the user\'s language' }, command: { ...str, maxLength: USER_ACTION_COMMAND_MAX, description: 'the exact command to run, if any' } } },
       goalChangedByUser: { type: 'boolean', description: 'true when the user wrote to you directly and changed your goal (you followed the user)' },
       newGoal: { ...str, description: 'with goalChangedByUser: the goal the user gave you' },
-      remember: { type: 'array', items: str, maxItems: REMEMBER_MAX, description: 'optional, up to 3 short lines (at most 300 characters each, a longer one is cut with …) noted as lessons for YOUR role skill (read in full at every start of your role) and read by the next Maintenance, which changes the skill only when really needed: general, reusable knowledge a future run would otherwise rediscover or ask again (a procedure, a convention, a how-to, where things are kept). Generalize a specific finding first (no URLs with ports, ticket / PR / commit ids, user paths, dates, branch names): a case-specific line refuses the report. Never the task result' },
+      remember: { type: 'array', items: str, maxItems: REMEMBER_MAX, description: 'Usually left out: most runs teach nothing a future run needs. ONE short line (at most 300 characters, a longer one is cut with …), only when this run cost you a wrong turn or a search that the line would spare the next run of your role: it is noted as a lesson for YOUR role skill (read in full at every start of your role) and read by the next Maintenance, which changes the skill only when really needed. General, reusable knowledge (a procedure, a convention, a how-to, where things are kept). Generalize a specific finding first (no URLs with ports, ticket / PR / commit ids, user paths, dates, branch names): a case-specific line is left out. Never the task result, never what you did' },
     } };
   return [{
     name: 'agent_delegate',

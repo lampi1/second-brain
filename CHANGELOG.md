@@ -23,6 +23,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   OpenCode, OpenRouter included; the chat's model and plan mode go through OpenCode's session options (ADR 0216).
 
 ### Changed
+- Maintenance: app-bug cards follow your own answers (turn down the last five issue cards, or approve only one, and
+  the maintenance makes none for three months); an agent's report notes one lesson, not three, and a lesson tied to
+  one case is left out instead of refusing the report (ADR 0288).
+- `agent_report`: an output over 12,000 characters is cut with «…» and a warning, no longer refused (ADR 0289).
 - The first-run setup is three moments in one window instead of six steps: language and name, your AI (found on the
   computer by itself, OpenCode included), then the first real request to the Orchestrator typed inside the setup.
   Tools, folders and goals are no longer asked: the Orchestrator proposes them when needed (ADR 0279).
@@ -106,6 +110,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   terminal routines.
 
 ### Fixed
+- A question asked before any Orchestrator exists has its row in the Orchestrator's column (it had no place to be
+  answered); the app-owned tools name their own commands in the app's copy, not in the brain folder («Cannot find
+  module …/ops/tools/mem.mjs»), and the maintenance's app ideas reach «Idee» on a fresh brain (ADR 0289).
 - A chat's first turn records the files it changed: before, six runs in ten ended as «files unknown» and could not
   count for the role's level, and «Annulla l'ultimo turno» had nothing to undo there. A message queued mid-turn gets
   its own files too (ADR 0282).
