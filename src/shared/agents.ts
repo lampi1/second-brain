@@ -120,6 +120,10 @@ export interface AgentOwnerSnapshot {
 }
 /** How a run ended: its work was marked completed (by agent_report, the Orchestrator or the user), its chat was closed, or it sat idle. */
 export type AgentRunEnd = 'completed' | 'closed' | 'stale';
+/** Why a run was closed before its work was marked completed (ADR 0286): the user closed its chat, the app archived
+ *  it, a new task took its place in the chat, the run that delegated it ended, or its chat ended with no report. */
+export const RUN_END_CAUSES = ['user', 'agent', 'auto', 'replaced', 'parent', 'no-report'] as const;
+export type AgentRunEndCause = (typeof RUN_END_CAUSES)[number];
 /** Only `human` and `reviewed-evidence` count for keep-or-rollback (AGENTS-DESIGN §1.2, §4.4). `receipts` = the app's
  *  deterministic verdict from what the run did (agents/receipts.ts, ADR 0130): repo checks run after the last change. */
 export interface AgentRunOutcome {
@@ -296,6 +300,8 @@ export interface AgentRun {
   /** the run of the chat this one continues (the hand-off "Continua in una nuova chat"): does not imply correction or rework */
   continuedFrom?: string;
   endedAt?: number; endReason?: AgentRunEnd;
+  /** only with endReason 'closed', on runs closed since ADR 0286 */
+  endCause?: AgentRunEndCause;
   outcome?: AgentRunOutcome;
   counters: AgentRunCounters;
   /** settled turns while the run was open; null = its engine reports no cost */

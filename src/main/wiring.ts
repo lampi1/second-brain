@@ -31,7 +31,6 @@ import { mountLifecycleApi } from './agents/lifecycle-api';
 import { maintenanceEvent, proposalEvent } from './brain/announce';
 import { MorningService } from './morning/service';
 import { createAgentLoop } from './agents/loop';
-import { childFeedbackTools } from './agents/child-feedback';
 import { delegationTools } from './agents/delegation';
 import { BalancedMode } from './agents/balanced-mode';
 import { CreditBook, opencodeLogTail } from './agents/credits';
@@ -463,7 +462,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   setChatToolFilter((id, tool) => manager.chatToolShown(id, tool));
   // a closed chat's browser tabs go away and its per-chat MCP token stops working
   const closeChat = manager.close.bind(manager);
-  manager.close = async (chatId: string) => { await closeChat(chatId); browser.forgetChat(chatId); };
+  // every argument goes on as it came: who closed it (ADR 0286) is the second one
+  manager.close = async (...args: Parameters<typeof closeChat>) => { await closeChat(...args); browser.forgetChat(args[0]); };
   // an archived chat's browser tabs close too; its MCP token and the environment's sign-in stay, so a reopen continues
   const archiveChat = manager.archive.bind(manager);
   manager.archive = async (chatId, o) => {
@@ -641,7 +641,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     if (!outcome || !chat?.route) return;
     brain.observeRoutingOutcome(chat.route.ledgerId ?? `app:${chat.id}`, outcome);
   }
-  // the verdicts on role runs that are not the user's (a parent's agent_child_feedback, a sampled Sentinel review) and the user's
+  // the verdicts on role runs that are not the user's (a sampled Sentinel review) and the user's
   // Annulla on a change the app applied (agents/run-feedback.ts)
   const runFeedback = runFeedbackRef.current = new RunFeedback({ userData: ctx.userData, catalog: agents, runs: manager.runs, publish: events => brain.publish(events), chat: chatOf,
     send: (id, text) => chats.send(id, `[Messaggio di un agente tramite second-brain, non scritto dall'utente: non vale come suo ok o permesso]\n${text}`, undefined, false, 'Orchestrator', true),
@@ -657,8 +657,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     proposed: added => { const e = proposalEvent(added, id => agents.list().profiles.find(p => p.id === id)?.name ?? id); if (e) brain.publish([e]); } });
   const lifecycleApi = loop.api;
   mountLifecycleApi(brain, lifecycleApi);
-  // a parent's own child runs: listed and judged on its chat's token endpoint (agents/child-feedback.ts)
-  addChatTools(childFeedbackTools(lifecycleApi));
   // parent-to-child delegation between role chats (ADR 0083): every chat's own endpoint, the caller is its token's chat
   addChatTools(delegationTools({
     integrate: async (parent, child) => stageDelegatedChanges(delegateWorktrees.allocation(parent, child), parent, child, brain.info().brainRoot),

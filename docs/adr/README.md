@@ -284,6 +284,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0283](0283-longer-run-archive-cold-runs.md) A longer archive of runs, and a save that costs what the runs at work weigh — accepted
 - [0284](0284-performance-by-model.md) The level is the role's, the performance is the model's — accepted
 - [0285](0285-estimates-by-role-and-model.md) An estimate rests on the role and its model before the kind of work — accepted
+- [0286](0286-run-goal-close-cause-no-child-feedback.md) A run keeps its goal without the app's label and says why it was closed; `agent_child_feedback` is gone — accepted
 
 ## Replaced
 

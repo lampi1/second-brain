@@ -109,7 +109,7 @@ row and its line here in the same change.
 | `agent_metrics` | Orchestrator only | Success rate, cost, time and corrections per role and version (numbers only). |
 | `task_estimate` | Orchestrator only | Estimate a request: kind of work, size, role, time and cost. |
 | `agent_delegate` | work chats | Delegate independent parts of the task to other roles as visible child chats. |
-| `agent_children` | work chats | The chats you delegated: role, state, goal, result, open requests, cost. |
+| `agent_children` | work chats | The chats you delegated: role, state, goal, result, open requests, cost, and why a task was closed early (`endCause`). |
 | `agent_ask_parent` | work chats | Ask the chat that delegated you, before the user. |
 | `agent_answer_child` | work chats | Answer a question one of your delegated chats asked you. |
 | `agent_report` | work chats | Your one final result for the chat that started you; `amends: true` corrects it (at most 2 corrections, ADR 0224). |
@@ -120,7 +120,6 @@ row and its line here in the same change.
 | `agent_task_events` | work chats | The ordered user instructions for your direct child (optional before reassigning it). |
 | `agent_integrate_child` | work chats | Stage one finished child's commits in a fresh detached worktree. |
 | `agent_integrate_children` | work chats | Combine several finished children's commits in one staging worktree. |
-| `agent_child_feedback` | work chats | Your verdict on a delegated child's run, with evidence. |
 | `agent_work_decisions` | work chats | The user's recorded decisions for your latest assignment, readable after reporting without reopening it. Historical decisions remain context, not new grants. |
 | `ask_user` | work chats | Ask the user one Sì/No question as a panel (engines whose question tool may not reach the model: OpenCode, Cursor). |
 | `plan_propose` | work chats | Show the user your short plan for approval (Strategist); on a project it is drawn on the project's map (`map`, each step's `on`: ADR 0276). |

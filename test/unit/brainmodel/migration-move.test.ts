@@ -144,7 +144,8 @@ describe('migration v2: move, not copy', () => {
     put(w.root, 'runbook/x/win.ps1', 'Write-Host win\n');
     put(w.root, 'runbook/x/ok.sql', 'SELECT 1;\n');
     const item = migrate(w).report!.items[0]!;
-    expect(item.note).toBe('1 script spostati con lei');
+    // Windows has no exec bit, so run.sh moves too (the line below already says so).
+    expect(item.note).toBe(`${process.platform === 'win32' ? 2 : 1} script spostati con lei`);
     for (const f of ['run.sh', 'calc.py', 'chiamata.ps1', 'win.ps1']) expect(fs.existsSync(path.join(w.root, 'runbook/x', f))).toBe(process.platform === 'win32' && f === 'run.sh' ? false : true);
     expect(fs.existsSync(path.join(w.root, 'runbook/x/ok.sql'))).toBe(false);
   });

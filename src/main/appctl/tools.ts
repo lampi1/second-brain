@@ -377,7 +377,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         // the close cancels the whole tree (ADR 0217): a descendant's open question would be withdrawn unanswered
         const refused = closeRefusal(c, d.chats.list());
         if (refused) throw new Error(refused);
-        await d.chats.close(id);
+        await d.chats.close(id, 'agent');
         log.info('appctl', 'agent closed a chat', { chat: id, data: { title: c.title, state: c.state } });
         d.brain.publish([{ kind: 'chat-closed', title: c.title, detail: 'chiusa dall’Orchestrator', chatId: id, who: c.harness }]);
         return 'closed';

@@ -7,9 +7,9 @@ import { APP_CHAT_TOOLS } from './app-tool-approval';
 import type { WarmLaunch } from './warm';
 
 /** chat-endpoint tools the Orchestrator can never use (chatToolShown): it does not delegate, report, ask a parent or
- *  rate a child (its chats are roots: agent_child_feedback takes only a child's run), and
+ *  list children (its chats are roots), and
  *  agent_catalog / agent_learn_propose are on its own endpoint already */
-const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['agent_work_decisions', 'plan_propose', 'plan_update', 'agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_report', 'agent_ask_parent', 'agent_answer_child', 'agent_close_child', 'agent_children', 'agent_child_feedback', 'agent_catalog', 'balanced_status', 'agent_learn_propose',
+const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['agent_work_decisions', 'plan_propose', 'plan_update', 'agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_report', 'agent_ask_parent', 'agent_answer_child', 'agent_close_child', 'agent_children', 'agent_catalog', 'balanced_status', 'agent_learn_propose',
   // it saves scripts with brain_script_save on its own endpoint
   'brain_script_add',
   // it reads, opens and corrects the project maps with app_project_map, and has a Scout draw them (ADR 0271)
@@ -17,7 +17,7 @@ const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['agent_work_decisions'
 ]);
 /** the tools only a chat that may delegate can use (chatToolShown): a role that launches no role (Scout, Judge) never
  *  sees them (~1 500 tokens of schemas in every call, each call refused) */
-const DELEGATING_ONLY: ReadonlySet<string> = new Set(['agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_children', 'agent_answer_child', 'agent_close_child', 'agent_child_feedback', 'agent_catalog', 'balanced_status']);
+const DELEGATING_ONLY: ReadonlySet<string> = new Set(['agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_children', 'agent_answer_child', 'agent_close_child', 'agent_catalog', 'balanced_status']);
 /** the Strategist's plan tools (agents/strategy-tools.ts): shown only where a plan with the user exists */
 const PLAN_TOOLS: ReadonlySet<string> = new Set(['plan_propose', 'plan_update']);
 /** the chat-endpoint tools Flash never sees (chatToolShown), beside every agent_* tool */

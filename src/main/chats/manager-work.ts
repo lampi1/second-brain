@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { ChatSummary } from '../../shared/contract';
 import { errText, log } from '../log';
 import type { UserTaskEvents, AgentRun, AgentRunOutcome } from '../../shared/agents';
+import { goalText } from '../../shared/agent-label';
 import { ownerSource, type TaskAssignmentOptions } from '../../shared/delegation';
 import { PLAN_APPROVED, planChange, askingPlan, strategyPrompt, withAdded, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
 import { runMetrics } from '../agents/run-metrics';
@@ -241,7 +242,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     this.deliveryPolicy(options.deliveryPolicy, !!r.s.parentId);
     if (options.doneWhen && (options.doneWhen.length > 12 || options.doneWhen.some(x => typeof x !== 'string' || !x.trim() || x.length > 300))) throw new Error('Invalid task criteria.');
     const newPlan = mode === 'new-task' && r.s.plan ? askingPlan(at, options.intake && this.planIntake(options.intake)) : undefined;
-    this.finishRun(previous, previous.report ? 'completed' : 'closed', at);
+    this.finishRun(previous, previous.report ? 'completed' : 'closed', at, 'replaced');
     const next = this.runs.start({ chatId: r.s.id, agentId: previous.agentId, version: previous.version,
       goal: prompt, startedBy: previous.startedBy, startedAt: at, costKnown: previous.costUsd !== null,
       requestOrigin: mode === 'new-task' ? (options.source?.kind === 'chat' ? 'agent' : options.source?.kind === 'app' ? 'app' : 'user') : previous.requestOrigin ?? 'app',
@@ -252,7 +253,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     if (brainRoot) next.scope = { brainRoot: path.resolve(brainRoot), projectRoot: path.resolve(r.s.cwd) };
     next.taskId = mode === 'new-task' ? next.runId : previous.taskId ?? previous.runId;
     next.taskVersion = (previous.taskVersion ?? 1) + 1;
-    next.taskContract = { ...(previous.taskContract?.reportExpected ? { reportExpected: true } : {}), deliveryPolicy: this.deliveryPolicy(options.deliveryPolicy ?? previous.taskContract?.deliveryPolicy, !!r.s.parentId), goal: prompt, doneWhen: options.doneWhen ?? (mode === 'new-task' ? [] : previous.taskContract?.doneWhen ?? r.s.delegation?.doneWhen ?? []), ...(options.contractFields?.length ? { fields: options.contractFields } : {}) };
+    next.taskContract = { ...(previous.taskContract?.reportExpected ? { reportExpected: true } : {}), deliveryPolicy: this.deliveryPolicy(options.deliveryPolicy ?? previous.taskContract?.deliveryPolicy, !!r.s.parentId), goal: goalText(prompt), doneWhen: options.doneWhen ?? (mode === 'new-task' ? [] : previous.taskContract?.doneWhen ?? r.s.delegation?.doneWhen ?? []), ...(options.contractFields?.length ? { fields: options.contractFields } : {}) };
     if (mode === 'continue') next.continuedFrom = previous.runId;
     r.s.run = next;
     this.coordination.cancelOtherAssignments(r.s.id, next.runId);
@@ -261,7 +262,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
       if (options.intake) delete this.need(options.intake.chatId).intakeKey;
     }
     r.s.work = { status: 'assigned', updatedAt: at };
-    if (r.s.delegation) r.s.delegation = { ...r.s.delegation, goal: prompt, doneWhen: next.taskContract.doneWhen, at, result: undefined };
+    if (r.s.delegation) r.s.delegation = { ...r.s.delegation, goal: next.goal, doneWhen: next.taskContract.doneWhen, at, result: undefined };
     delete r.rootReportAt; delete r.report; delete r.autoCompleted; delete r.runSeen;
     r.idleSince = at;
     if (r.s.state === 'running' && !r.handoffTurn) r.runningSince = at;

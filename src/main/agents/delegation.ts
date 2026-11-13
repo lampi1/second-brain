@@ -55,7 +55,7 @@ export interface DelegationChats {
   /** the child now waits for its parent's answer, not on its own report (#152) */
   askedParent?(chatId: string): void;
   /** closes a chat and cancels its tree (ChatManager.close, ADR 0217): agent_close_child; absent = the tool refuses */
-  close?(chatId: string): Promise<void>;
+  close?(chatId: string, by?: 'user' | 'agent'): Promise<void>;
 }
 export interface DelegationDeps {
   chats: DelegationChats;
@@ -329,7 +329,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (child.closedAt) return { closed: child.title, already: true };
     const refused = closeRefusal(child, all);
     if (refused) throw new Error(`agent_close_child: ${refused}`);
-    await d.chats.close(id);
+    await d.chats.close(id, 'agent');
     log.info('agents', 'parent closed a child', { chat: parent.id, data: { child: id, state: child.state } });
     return { closed: child.title };
   }
@@ -428,6 +428,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     const quiet = (c: ChatSummary) => stalledMin(c, Math.max(d.chats.lastEventAt?.(c.id) ?? 0, c.updatedAt), now, stallMin);
     return { children: d.chats.list().filter(c => c.parentId === callerId).map(c => ({
       chatId: c.id, title: c.title, role: c.delegation?.role ?? c.agent?.id ?? null, state: c.closedAt ? 'closed' : c.state,
+      ...(c.run?.endCause ? { endCause: c.run.endCause } : {}),
       cwd: c.cwd, ...(c.userEvents ? { userEvents: c.userEvents } : {}),
       ...(c.run ? { runId: c.run.runId, taskId: c.run.taskId ?? c.run.runId, taskVersion: c.run.taskVersion ?? 1 } : {}),
       goal: c.delegation?.goal ?? null, result: c.delegation?.result ?? null, pending: c.pending,
@@ -610,7 +611,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: async (a, ctx) => JSON.stringify(await closeChild(a, callerOf(ctx.params))),
   }, {
     name: 'agent_children',
-    description: 'The chats you delegated (agent_delegate): role, title, state, goal, their result once reported, open requests and cost; runId is what agent_child_feedback takes. stalled: true (with quietMin) = a working child silent for longer than the user\'s "Ferma dopo" limit: nudge it with a message or close it.',
+    description: 'The chats you delegated (agent_delegate): role, title, state, goal, their result once reported, open requests and cost. endCause on a closed child says why its task ended before it was completed: user (the user closed it), auto (the app archived it), parent (closed with the chat above it), no-report (it ended with no agent_report). stalled: true (with quietMin) = a working child silent for longer than the user\'s "Ferma dopo" limit: nudge it with a message or close it.',
     inputSchema: { type: 'object', additionalProperties: false, properties: {} },
     annotations: { readOnlyHint: true, openWorldHint: false },
     run: (_a, ctx) => JSON.stringify(children(callerOf(ctx.params))),

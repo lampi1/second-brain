@@ -23,7 +23,7 @@ The agents' improvement loop now runs from run start to the user's decision (ADR
   verdicts become `probation:<id>` proposals. A new sender-checked IPC `agents:lifecycleDecide` approves or dismisses a
   "Da approvare" entry (trial keep/rollback, probation keep/retire, model trial, drafting request to the Orchestrator);
   `agents:lifecycleChanged` tells the page to read again. `/api/agents/lifecycle` now also returns `learned` and `drafts`.
-- **Sub-agents**: `agent_children` and `agent_child_feedback` on every chat's own endpoint: a parent agent lists and judges
+- **Sub-agents**: `agent_children` and `agent_child_feedback` (removed later, ADR 0286) on every chat's own endpoint: a parent agent lists and judges
   only the runs whose `parentRunId` is one of its own runs; same store, metrics and proposals as the Orchestrator's.
 - **Bug fixed (red first)**: a trial proposed a revert as soon as five runs had ended, before the user could rate them
   (coverage < 60 %, too few comparable runs). Inside the 21-day window missing evidence now waits.

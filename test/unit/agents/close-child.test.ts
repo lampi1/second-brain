@@ -54,6 +54,7 @@ describe('agent_close_child', () => {
     expect(await f.call('p', 'g')).toEqual({ closed: 'T-g' });
     expect(await f.call('p', 'c')).toEqual({ closed: 'T-c' });
     expect(f.close.mock.calls.map(c => c[0])).toEqual(['g', 'c']);
+    expect(f.close.mock.calls.every(c => (c as unknown[])[1] === 'agent')).toBe(true); // the run's endCause is 'agent', not the user's close
     expect(await f.call('p', 'c')).toEqual({ closed: 'T-c', already: true });
     expect(f.close).toHaveBeenCalledTimes(2);
   });

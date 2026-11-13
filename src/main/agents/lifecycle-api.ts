@@ -1,7 +1,6 @@
 // Validated lifecycle API facade. Renderer reads go through the existing sender-checked brain:api IPC (GET only); the
 // user's decisions on the "Da approvare" queue come only from the sender-checked agents:lifecycleDecide IPC (index.ts);
-// feedback writes come only from a parent on its own children's runs (agent_child_feedback on the chat's own token
-// endpoint) and from the app's independent reviews (agents/judge-sample.ts, a Sentinel since ADR 0100), never renderer-supplied run records.
+// feedback writes come only from the app's independent reviews (agents/judge-sample.ts, a Sentinel since ADR 0100), never renderer-supplied run records.
 import type { AgentFeedback, AgentFeedbackArgs, AgentLifecycleDecide, AgentLifecycleQuery, AgentLifecycleSnapshot } from '../../shared/agent-lifecycle';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
 import type { ModelTier } from '../../shared/roles';
@@ -77,27 +76,6 @@ export function createLifecycleApi(service: AgentLifecycle, runById: (id: string
       const args = parseAgentFeedbackArgs(value);
       if (!runById(args.runId)) throw unknown(args.runId);
       return stored(args, callerId);
-    },
-    /** A parent's opinion of a run it delegated: only a run whose parentRunId is a run of the caller's own chat, never its
-     *  own run nor a sibling's. callerChatId comes from the chat's token endpoint. The record is an opinion (basis
-     *  orchestrator-opinion unless a verified independent review backs it). */
-    async childFeedback(value: unknown, callerChatId: string): Promise<AgentFeedback> {
-      const args = parseAgentFeedbackArgs(value);
-      if (args.sendToRun) throw Error('sendToRun is not available here: write to the child with send_to_chat.');
-      const child = runById(args.runId);
-      if (!child) throw unknown(args.runId);
-      const parent = child.parentRunId ? runById(child.parentRunId) : undefined;
-      if (!parent || parent.chatId !== callerChatId || child.chatId === callerChatId) throw Error('Feedback only on the runs of your own children (agent_children lists them).');
-      return stored(args, callerChatId);
-    },
-    /** The runs whose parent is a run of this chat (newest first): what agent_children shows the parent. */
-    children(callerChatId: string, all: readonly AgentRun[]) {
-      const mine = new Set(all.filter(r => r.chatId === callerChatId).map(r => r.runId));
-      return all.filter(r => !!r.parentRunId && mine.has(r.parentRunId) && r.chatId !== callerChatId)
-        .sort((a, b) => b.startedAt - a.startedAt).slice(0, 50)
-        .map(r => ({ runId: r.runId, chatId: r.chatId, agentId: r.agentId, version: r.version, goal: r.goal.slice(0, 300), parentRunId: r.parentRunId!,
-          state: r.endedAt === undefined ? 'open' : 'ended', endReason: r.endReason ?? null, outcome: r.outcome ? { verdict: r.outcome.verdict, basis: r.outcome.basis } : null,
-          costUsd: r.costUsd, questions: r.counters.questions }));
     },
     /** The user's decision on one queue entry (agents:lifecycleDecide only). Returns the queue as it is after it. */
     async decide(value: unknown): Promise<AgentLifecycleSnapshot> {
