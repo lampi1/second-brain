@@ -22,7 +22,7 @@
     "src/main/agents/lifecycle.ts": "7a39b3ac3fe47a94",
     "src/main/agents/loop.ts": "fe15f50b68ed3851",
     "src/main/agents/model-tier.ts#tierModel": "ccdf6258b00724c4",
-    "src/main/agents/orchestrator-role.ts": "b891f7e5468e39ee",
+    "src/main/agents/orchestrator-role.ts": "fae6f797d63a6480",
     "src/main/agents/pack/flows.ts#runtime": "c5e8440d0c3552cb",
     "src/main/agents/pack/lesson-evidence.ts": "d413e90460ff78a3",
     "src/main/agents/receipts.ts": "d6a9f1c2064bc435",

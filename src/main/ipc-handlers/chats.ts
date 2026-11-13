@@ -66,8 +66,14 @@ export function chatsHandlers({ s, activity, orchestrator, clip }: HandlerContex
       const cwds = Array.isArray(a?.cwds) ? a.cwds.filter(c => typeof c === 'string' && known.has(c) && !/^[\\/]{2}/.test(c)) : [];
       return (s.branches ?? gitBranches)(cwds);
     },
-    // a run answers the "Comando da eseguire" request of that block (Esegui on the card or under the block)
-    'run:start': a => { if (s.chats.list().some(c => c.id === a.chatId && c.routineArchived)) throw new Error('Archived routine chats are read-only.'); const run = s.runner.start(a); s.asks.ran(run.chatId, run.itemId, run.code, run.state !== 'running'); return run; },
+    // a run answers the "Comando da eseguire" request of that block (Esegui on the card or under the block); a run that
+    // did not start (already: the identical command runs, or ended recently and needs a yes, ADR 0299) answers nothing
+    'run:start': a => {
+      if (s.chats.list().some(c => c.id === a.chatId && c.routineArchived)) throw new Error('Archived routine chats are read-only.');
+      const run = s.runner.start({ chatId: a.chatId, itemId: a.itemId, code: a.code, ...(a.lang ? { lang: a.lang } : {}), confirmProd: a.confirmProd === true, confirmRerun: a.confirmRerun === true });
+      if (!run.already) s.asks.ran(run.chatId, run.itemId, run.code, run.state !== 'running');
+      return run;
+    },
     'run:dismiss': a => s.asks.dismiss(a.chatId, a.requestId),
     'run:stop': a => s.runner.stop(a.runId),
     'run:list': a => s.runner.list(a?.chatId),

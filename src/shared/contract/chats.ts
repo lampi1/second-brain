@@ -291,7 +291,9 @@ export interface PendingRequest {
 /** The block a command request is about: the assistant message it is in, its code (as Esegui runs it) and language;
  *  prod = why it looks like production (Esegui asks a second click, shared/runnable.ts prodRisk); lead = the chat's
  *  explanation right before the block, plain text (shared/command-ask.ts), shown on the card without a click. */
-export interface CommandAsk { itemId: string; code: string; lang: string; prod?: string; lead?: string }
+export interface CommandAsk { itemId: string; code: string; lang: string; prod?: string; lead?: string;
+  /** ADR 0299: the id of the first run of the identical command in this app session, when it already ran */
+  duplicateOf?: string }
 export type OpenPathResult = { how: 'folder' } | { how: 'missing' | 'refused'; reason: string };
 /** what the viewer's copy icon put on the clipboard (main/file-copy.ts) */
 export type CopyFileResult = { how: 'text' | 'image' | 'file' } | { how: 'missing' | 'refused'; reason: string };
@@ -319,7 +321,13 @@ export interface RunInfo {
   startedAt: number;
   endedAt?: number;
   prod?: string;
+  /** ADR 0299: the id of the first run of the identical command in this app session, when this one re-ran it */
+  duplicateOf?: string;
 }
+
+/** What Esegui (run:start) answers: the run it started, or, with `already`, the identical run that made it not start:
+ *  'running' = still going (nothing started, never overridden), 'done' = ended recently, start again with confirmRerun. */
+export type RunStart = RunInfo & { already?: 'running' | 'done' };
 
 /** The engine, model and effort «Balanced mode» picked for one role chat, and the credit pool it spends (ADR 0218). */
 export interface BalancedRoute { engine: Harness; model: string; effort?: Effort; pool: string }
@@ -451,8 +459,9 @@ export interface ChatsInvokeMap {
   'chat:undoTurn': [{ chatId: string }, { restored: number; removed: number }];
   /** the "Stato" view: the git branch checked out in each chat folder, read from disk (null = not a git folder) */
   'chat:branches': [{ cwds: string[] }, Record<string, string | null>];
-  /** the user clicked "Esegui" under a shell block (never an agent): confirmProd = the second click on a production one */
-  'run:start': [{ chatId: string; itemId: string; code: string; lang?: string; confirmProd?: boolean }, RunInfo];
+  /** the user clicked "Esegui" under a shell block (never an agent): confirmProd = the second click on a production one;
+   *  confirmRerun = his yes to «Eseguito N min fa… Rieseguire?» (ADR 0299) */
+  'run:start': [{ chatId: string; itemId: string; code: string; lang?: string; confirmProd?: boolean; confirmRerun?: boolean }, RunStart];
   'run:stop': [{ runId: string }, void];
   'run:list': [{ chatId?: string }, RunInfo[]];
   /** "Non serve" on a command request: it leaves "Ti aspettano" without running (the block stays in the chat) */

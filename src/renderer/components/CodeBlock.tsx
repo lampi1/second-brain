@@ -10,12 +10,17 @@
 // (store/store.ts markSent). A text tagged md / mail / teams / comment shows formatted and Copia copies it formatted
 // (lib/richtext.ts). Inside a work chat's own tile there is no Esegui (ADR 0269, the owner 2026-11-12: «non voglio mai
 // domande o comandi nei singoli agenti»): the command waits in the Orchestrator and the block says so («Vai»).
+// One command, one panel (ADR 0299): a block whose command another block already left for Esegui, or runs now, gets no
+// Esegui: it is a reference to that one, with its state («in attesa», «in corso», «finito, exit N»), «Apri», and the
+// original's live output. When main's guard refuses a click (the identical command runs: «Già in corso da N s, avviato
+// da «chat»», with its live output; or it ended recently: «Eseguito N min fa, exit X. Rieseguire?» + «Riesegui»), the
+// block says so in place.
 // Used by ChatItems.tsx (assistant messages), OrchestratorTile.tsx and AskContext.tsx.
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { RunInfo } from '@shared/contract';
+import type { RunInfo, RunStart } from '@shared/contract';
 import { isRunnable, MAX_RUN_CODE, prodRisk, runReport } from '@shared/runnable';
 import { sb } from '../sb';
-import { useBlockRun } from '../lib/runs';
+import { useBlockRun, useCommandRef, useRunById, type CommandRef } from '../lib/runs';
 import { blockKey, hhmm, isSendable, UNDO_MS } from '../lib/sendable';
 import { useMark } from '../lib/marks';
 import { duration, folderName } from '../lib/format';
@@ -24,9 +29,42 @@ import { app, markCopied, markSent, send, undoSent, useApp } from '../store/stor
 import { copyText } from '../brain/components/ui';
 import { renderMarkdown } from '../lib/markdown';
 import { clipboardHtml, copyRich, isRich } from '../lib/richtext';
-import { IconAlert, IconCheck, IconCopy, IconPlay, IconSend, IconSpinner, IconStop, IconTerminal, IconX } from './Icons';
+import { IconAlert, IconArrowRight, IconCheck, IconCopy, IconPlay, IconSend, IconSpinner, IconStop, IconTerminal, IconX } from './Icons';
 import { t } from '../i18n';
 import { openQueue } from '../lib/later';
+import { openChatRef } from '../actions';
+
+/** a chat as the user reads it in one line */
+const chatTitle = (chatId: string): string => { const c = app.get().chats[chatId]; return c?.isOrchestrator ? 'Orchestrator' : c?.title ?? chatId; };
+const chatName = (chatId: string): string => (app.get().chats[chatId]?.isOrchestrator ? 'Orchestrator' : `«${chatTitle(chatId)}»`);
+
+/** ADR 0299: main's guard did not start the click: the identical command runs, or it ended recently (one yes first) */
+function GuardLine({ guard, busy, onRerun }: { guard: RunStart; busy: boolean; onRerun: () => void }) {
+  const now = useNow(1000);
+  return (
+    <div className="cb-err cb-guard" role="status" data-testid="cb-guard" data-already={guard.already}>
+      {guard.already === 'running'
+        ? t('chat.codeblock.guard.running', { secs: Math.max(0, Math.round((now - guard.startedAt) / 1000)), chat: chatTitle(guard.chatId) })
+        : <>{t('chat.codeblock.guard.done', { mins: Math.max(1, Math.round((now - (guard.endedAt ?? guard.startedAt)) / 60_000)), exit: guard.state === 'stopped' ? t('chat.codeblock.guard.stopped') : `exit ${guard.exitCode ?? '?'}` })}
+          {' '}<button type="button" className="cb-btn" disabled={busy} onClick={onRerun} data-testid="cb-rerun"><IconPlay size={11} /> {t('chat.codeblock.guard.rerun')}</button></>}
+    </div>
+  );
+}
+
+/** ADR 0299: the line of a repeated block, in place of its Esegui */
+function RefLine({ cref }: { cref: CommandRef }) {
+  const o = cref.original, chat = chatName(o.chatId), r = cref.run;
+  const text = cref.ask ? t('chat.codeblock.ref.waiting', { chat })
+    : r?.state === 'running' ? t('chat.codeblock.ref.running', { chat })
+      : r?.state === 'stopped' ? t('chat.codeblock.ref.stopped', { chat }) : t('chat.codeblock.ref.done', { chat, code: r?.exitCode });
+  const open = () => { if (cref.ask) openQueue(`${cref.ask.chatId}/${cref.ask.id}`); else openChatRef(o.chatId); };
+  return (
+    <span className="cb-ref" data-testid="cb-ref" data-state={cref.ask ? 'waiting' : r?.state ?? ''} title={t('chat.codeblock.ref.tip')}>
+      <IconTerminal size={11} /> {text}
+      <button type="button" className="cb-btn" onClick={open} data-testid="cb-ref-open"><IconArrowRight size={11} /> {t('chat.codeblock.ref.open')}</button>
+    </span>
+  );
+}
 
 /** the key of the chat's first command waiting for Esegui in the Orchestrator, if any */
 const firstCommandAsk = (chatId: string | null): string | null => {
@@ -131,14 +169,26 @@ export function CodeBlock({ chatId, itemId, lang, code, streaming, label }: { ch
   const runnable = !!chatId && isRunnable(lang) && !streaming && !!code.trim();
   const tooLong = code.length > MAX_RUN_CODE;
   const running = run?.state === 'running';
+  // ADR 0299: a repeat of another block's command (waiting or running) is a reference, never a second Esegui
+  const pending = useApp(s => s.pending);
+  const cref = useCommandRef(chatId, itemId, code, pending, !runnable || !!run);
+  // main's guard refused the click: the identical run going on, or one that ended recently (a yes first)
+  const [guard, setGuard] = useState<(RunStart & { at: number }) | null>(null);
+  const guardRun = useRunById(guard?.already === 'running' ? guard.id : null);
+  // the run it pointed to ended, or this block ran since the click: the notice is past
+  const guardLive = !!guard && (!run || run.startedAt < guard.at) && !(guard.already === 'running' && guardRun && guardRun.state !== 'running');
+  useEffect(() => { if (guard && !guardLive) setGuard(null); }, [guard, guardLive]);
   useEffect(() => { if (!armed) return; const t = setTimeout(() => setArmed(false), 8000); return () => clearTimeout(t); }, [armed]);
   useEffect(() => { if (!copied) return; const t = setTimeout(() => setCopied(false), 1600); return () => clearTimeout(t); }, [copied]);
 
-  const doRun = async () => {
+  const doRun = async (confirmRerun = false) => {
     if (!chatId || busy) return;
-    if (risk && !armed) { setArmed(true); return; }
-    setArmed(false); setErr(null); setBusy(true);
-    try { await sb.invoke('run:start', { chatId, itemId, code, lang, ...(risk ? { confirmProd: true } : {}) }); }
+    if (risk && !armed && !confirmRerun) { setArmed(true); return; }
+    setArmed(false); setErr(null); setBusy(true); setGuard(null);
+    try {
+      const r = await sb.invoke('run:start', { chatId, itemId, code, lang, ...(risk ? { confirmProd: true } : {}), ...(confirmRerun ? { confirmRerun: true } : {}) });
+      if (r?.already) setGuard({ ...r, at: Date.now() });
+    }
     catch (e) { setErr(String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')); }
     finally { setBusy(false); }
   };
@@ -165,12 +215,13 @@ export function CodeBlock({ chatId, itemId, lang, code, streaming, label }: { ch
             <IconSend size={11} /> {t('chat.codeblock.send')}
           </button>
         ))}
-        {runnable && !runHere && !running && (
+        {cref && <RefLine cref={cref} />}
+        {runnable && !cref && !runHere && !running && (
           <button type="button" className="cb-btn" onClick={() => openQueue(firstCommandAsk(chatId))} data-testid="cb-in-orchestrator" data-tip={t('chat.codeblock.inOrchestratorTip')}>
             <IconPlay size={11} /> {t('chat.codeblock.inOrchestrator')}
           </button>
         )}
-        {runnable && runHere && (running ? null : (
+        {runnable && !cref && runHere && (running ? null : (
           <button type="button" className={`cb-btn cb-run-btn ${armed ? 'armed' : ''}`} onClick={() => { void doRun(); }} disabled={busy || tooLong} data-testid="cb-exec"
             data-tip={tooLong ? t('chat.codeblock.execTipLong', { max: MAX_RUN_CODE }) : armed ? undefined : t('chat.codeblock.execTip')}>
             {armed ? <><IconAlert size={12} /> {t('chat.codeblock.execConfirm', { warning: risk ?? '' })}</> : <><IconPlay size={11} /> {run ? t('chat.codeblock.execAgain') : t('chat.codeblock.execLabel')}</>}
@@ -181,6 +232,9 @@ export function CodeBlock({ chatId, itemId, lang, code, streaming, label }: { ch
         ? <div className="cb-rich md" data-testid="cb-rich" dangerouslySetInnerHTML={{ __html: renderMarkdown(code, !streaming) }} />
         : <pre className="cb-code"><code>{code}</code></pre>}
       {err && <div className="cb-err" role="alert" data-testid="cb-err">{err}</div>}
+      {guard && guardLive && <GuardLine guard={guard} busy={busy} onRerun={() => { void doRun(true); }} />}
+      {guard && guardLive && guardRun && guardRun.id !== run?.id && <RunPanel run={guardRun} chatId={guardRun.chatId} />}
+      {!guard && cref?.run && !run && <RunPanel run={cref.run} chatId={cref.run.chatId} />}
       {run && chatId && <RunPanel run={run} chatId={chatId} />}
     </div>
   );
