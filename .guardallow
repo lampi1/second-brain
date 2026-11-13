@@ -402,3 +402,12 @@ docs/screenshots/orchestrator-column.webp binary-media sha256:fd9be1cc48fb71b729
 docs/screenshots/orchestrator.webp binary-media sha256:63d41d66f08b6e3234d2e12feb9ccb59aadd5eebea718cc320f0474bee24b261
 docs/screenshots/settings.webp binary-media sha256:6f619afafa2c30ea74e09522aa684d69b9e4c344f069258661e1498d1a689d38
 docs/screenshots/worktrees.webp binary-media sha256:5e6f3ea5e8b417f194d5b034c08e6ef940233d59f5c4d7d22fba5b221c53e54d
+# Chess (ADR 0304). Stockfish 19 lite, single-threaded: the two unmodified files of the npm package stockfish@19.0.1
+# (GPLv3, vendor/stockfish/README.md has the same hashes and the source link; test/unit/chess-vendor.test.ts checks
+# them): a minified script with one long line and its WebAssembly binary, run as a separate process (checked 2026-11-13).
+vendor/stockfish/stockfish-19-lite-single.js long-line-unscanned sha256:ccb130d7ff29408531c47d859a49f91d59d4f482d05a53eb1a3231a4f624c91a
+vendor/stockfish/stockfish-19-lite-single.wasm unscanned-binary sha256:ee4f115bdb2d32cadf96cada104a05b5ec257d7ad6f57582190b49bc71f096de
+# The black queen of the Chessnut piece set (Apache 2.0): one SVG path on a single line, drawing only (checked 2026-11-13).
+src/renderer/assets/chess/chessnut/bQ.svg long-line-unscanned sha256:cf47f78c1ad9a99163e942f70365f8dd2b6d911011a5d8298be3d0596ad924a2
+# README capture of the Scacchi lobby from the frozen synthetic demo (six agents, fictional records), inspected 2026-11-13.
+docs/screenshots/chess.webp binary-media sha256:d55d39c7e80ac475a08a7d873be1394eea90df3c9387ec6dec3908e02314b47d

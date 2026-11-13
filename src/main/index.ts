@@ -21,6 +21,10 @@ import { startStallWatch } from './perf';
 import { runtimePerformance } from './runtime-performance';
 import { RendererErrors } from './renderer-errors';
 import { demoUseCounts, useCounts } from './use-counter';
+import { cleanMoves } from '../shared/chess';
+import { ChessEngine, ENGINE_JS, scriptedProc, spawnStockfish } from './chess/engine';
+import { DEMO_CHESS_GAMES, chessGames } from './chess/store';
+import { chessHandlers } from './ipc-handlers/chess';
 import { APP_ID, ensureShortcuts, taskbarDetails } from './shortcuts';
 import { installAppMenu } from './app-menu';
 import { agentsMayOpen, engineOn } from './engines/policy';
@@ -202,7 +206,14 @@ app.whenReady().then(async () => {
   const recPageGone = () => { if (s.recordings.openIds().length) recordings.abandonOpen(); };
   win?.webContents.on('did-start-navigation', d => { if (d.isMainFrame && !d.isSameDocument) recPageGone(); });
   win?.webContents.on('render-process-gone', recPageGone);
-  app.on('will-quit', () => { recordings.dispose(); voice.dispose(); useCounts.close(); });
+  // Scacchi (ADR 0304): Stockfish as its own process, started at a game's first move and stopped with the page; the
+  // finished games in app.db (the demo's in memory, from a made-up history)
+  // SB_CHESS_SCRIPT (tests only): the bot plays these moves by ply instead of asking Stockfish, so a spec can reach
+  // an en passant, a castling and a promotion
+  const chessScript = process.env.SB_TEST === '1' ? cleanMoves((process.env.SB_CHESS_SCRIPT ?? '').split(/\s+/).filter(Boolean)) : null;
+  const chessEngine = new ChessEngine({ start: () => (chessScript?.length ? scriptedProc(chessScript) : spawnStockfish(path.join(outDir, 'chess-engine', ENGINE_JS))) });
+  chessGames.init(demo ? { userData: null, seed: DEMO_CHESS_GAMES, ...(process.env.SB_DEMO_FREEZE === '1' ? { now: () => FROZEN_EPOCH } : {}) } : { userData: app.getPath('userData') });
+  app.on('will-quit', () => { recordings.dispose(); voice.dispose(); useCounts.close(); chessEngine.stop(); chessGames.close(); });
   // the phone bridge (ADR 0219): only the stable instance polls Telegram; dev gets a fake server from SB_PHONE_TEST_API
   // (loopback only) or stays 'dev-disabled'; the demo has no chats port, so its page shows a disabled controller
   const phoneTokens = initPhoneTokenStore(app.getPath('userData'), safeStorageCipher(safeStorage));
@@ -239,6 +250,7 @@ app.whenReady().then(async () => {
     ...brainHandlers(ctx),
     ...agentsHandlers(ctx),
     ...mediaHandlers(ctx),
+    ...chessHandlers(chessEngine, chessGames),
   };
   // the deck's sources call the same handlers their old pages called (never a second path to the same write)
   const call = <K extends InvokeChannel>(ch: K, arg: InvokeArg<K>): Promise<InvokeResult<K>> =>

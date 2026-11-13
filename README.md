@@ -298,10 +298,16 @@ Parakeet or Whisper hears you and Piper speaks, all on your PC: no audio leaves 
 - **Routines as packages, run from the terminal.** Prepare a routine package with the Orchestrator, export it, and run it
   anywhere with `routine run`, `watch` or `resume` ([packages/routine-runtime](packages/routine-runtime/README.md)).
 - **Tasks.** The Task page lists your Azure DevOps work items and PRs, with builds, votes and QA results.
+- **Chess against your agents.** The **Chess** page seats the six agents as opponents, from the Scout (about 600) to
+  the Orchestrator (2200 and up, full-strength Stockfish). They think, they trash-talk about what really happens on the
+  board, and the weak ones answer at once, so you can premove through a bullet game. Your fastest wins and your win
+  streak against each one go on record. The engine runs on your PC as a separate program, only while you play.
 - **A guide inside.** Every concept of the app as a card in the **Guide**: how it works, an everyday analogy, the
   source files. **Discuss** sends the card to the Orchestrator.
 - **Three languages.** The UI speaks Italian, English and German.
 - **Just the brain.** The template works without the app: `node brain-template/install.mjs`.
+
+<p align="center"><img src="docs/screenshots/chess.webp" alt="The Chess page: the six agents as opponents with their ratings, your record and win streak against each, the colour to play and the Play button" width="640"></p>
 
 ## Documentation
 
@@ -327,4 +333,5 @@ subscription.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Third-party notices are in [NOTICE](NOTICE): the chess engine, Stockfish, is a separate GPLv3 program
+shipped unmodified in `vendor/stockfish/`.

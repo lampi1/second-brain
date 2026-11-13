@@ -28,7 +28,7 @@ import {
   toggleMaximize, toggleOrchestrator, askRenewOrchestrator, askClearOrchestrator, orchestratorId, newBrowser, newRequest,
   openMaps } from '../actions';
 import {
-  HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconLearn, IconBranch, IconFile, IconBrain, IconChart, IconShield, IconFocus, IconGlobe,
+  HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconLearn, IconChess, IconBranch, IconFile, IconBrain, IconChart, IconShield, IconFocus, IconGlobe,
   IconHistory, IconKeyboard, IconLayers, IconLightbulb, IconLink, IconList, IconLogin, IconMap, IconMaximize, IconMic, IconPlus, IconQuestion, IconSearch, IconSettings, IconStop,
   IconSparkle, IconTerminal, IconTicket,
 } from './Icons';
@@ -45,7 +45,7 @@ const PAGE_ICON: Record<BrainPageId, ReactNode> = {
   agenti: <IconLayers />,
   idee: <IconLightbulb />,
   andamento: <IconChart />, script: <IconTerminal />, log: <IconList />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
-  guida: <IconQuestion />, registrazioni: <IconMic />, impara: <IconLearn />,
+  guida: <IconQuestion />, registrazioni: <IconMic />, impara: <IconLearn />, scacchi: <IconChess />,
   regole: <IconShield />, memoria: <IconHistory />, collegamenti: <IconMap />,
 };
 

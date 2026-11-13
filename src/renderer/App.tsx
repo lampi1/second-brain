@@ -53,6 +53,8 @@ import { LogPage } from './components/LogPage';
 import { RecordingsPage } from './components/RecordingsPage';
 import { ImparaPage } from './components/impara/ImparaPage';
 import { shortcutTalk, shortcutVoice } from './lib/voice';
+// chess.js and the pieces load when Scacchi is first opened (ADR 0304)
+const ChessPage = lazy(() => import('./components/chess/ChessPage').then(m => ({ default: m.ChessPage })));
 const GuidePage = lazy(() => import('./components/GuidePage').then(m => ({ default: m.GuidePage })));
 // the file viewer overlay loads when a file is first opened
 const ViewerOverlay = lazy(() => import('./components/viewer/ViewerOverlay').then(m => ({ default: m.ViewerOverlay })));
@@ -201,7 +203,7 @@ function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
       {/* keyed by the page: every page change replays the entry (linear.css panel-enter), no hard cut */}
       <div className="page-body" key={id} ref={bodyRef}>
         <ErrorBoundary where={id}>
-        {hub ? null : id === 'log' ? <LogPage /> : id === 'guida' ? <Suspense fallback={null}><GuidePage arg={arg ?? undefined} /></Suspense> : id === 'registrazioni' ? <RecordingsPage /> : id === 'impara' ? <ImparaPage /> : id === 'agenti' ? <AgentCatalogPage /> : id === 'impostazioni'
+        {hub ? null : id === 'log' ? <LogPage /> : id === 'guida' ? <Suspense fallback={null}><GuidePage arg={arg ?? undefined} /></Suspense> : id === 'registrazioni' ? <RecordingsPage /> : id === 'impara' ? <ImparaPage /> : id === 'scacchi' ? <Suspense fallback={null}><ChessPage /></Suspense> : id === 'agenti' ? <AgentCatalogPage /> : id === 'impostazioni'
           ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.settings')}><div className="bx-inner"><SettingsPage /></div></div>
           : id === 'memoria'
             ? <div className="bx bx-page bx-scroll" role="region" aria-label={pageLabel(id)}><div className="bx-inner mh-inner"><MemoryPage /></div></div>

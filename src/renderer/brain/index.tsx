@@ -30,7 +30,7 @@ export type { DiscussBridge };
 export type { LiveSnapshot, LiveSource, LiveTool } from './lib/live';
 export { FADE_MS } from './lib/live';
 
-export type BrainPageId = 'home' | 'flussi' | 'task' | 'idee' | 'andamento' | 'script' | 'log' | 'file' | 'skill' | 'impostazioni' | 'agenti' | 'guida' | 'registrazioni' | 'impara' | 'regole' | 'memoria' | 'collegamenti';
+export type BrainPageId = 'home' | 'flussi' | 'task' | 'idee' | 'andamento' | 'script' | 'log' | 'file' | 'skill' | 'impostazioni' | 'agenti' | 'guida' | 'registrazioni' | 'impara' | 'regole' | 'memoria' | 'collegamenti' | 'scacchi';
 
 /** label is a getter (ADR 0057): read at use time, so it follows the current language */
 const page = (id: BrainPageId, key: string): { id: BrainPageId; readonly label: string; key: string } => ({ id, key, get label() { return id==='file'?t('viewer.title'):t(`brainPages.nav.${id}`); } });
@@ -64,6 +64,8 @@ export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string
   page('registrazioni', 'G V'),
   // not a brain page either: the lessons the user asks for to master a PR or a topic (components/impara/, ADR 0185)
   page('impara', 'G X'),
+  // not a brain page either: chess against the agents (components/chess/, ADR 0304)
+  page('scacchi', 'G K'),
 ];
 const IDS = new Set<string>(['file',...BRAIN_PAGES.map(p => p.id)]);
 export const isBrainPage = (s: string): s is BrainPageId => IDS.has(s);
@@ -77,7 +79,7 @@ export const PAGE_ALIAS: Record<string, BrainPageId> = { fatto: 'log', diario: '
 /** Their old go-to keys still work: G R (the old Regole imparate, gone with #366) opens «Sempre caricato» (the old Regole);
  *  G D (the Dashboard, gone with ADR 0122: its parts live in Memoria, Andamento and Idee) opens Memoria; G Q and G J
  *  (Qualità, Apprendimento) open their Andamento tab (ADR 0202: go() redirects the old id; G C = Andamento itself, which
- *  opens on Costi). G K left with the Classificatori section (ADR 0291); its old id still lands on Qualità. */
+ *  opens on Costi). G K left with the Classificatori section (ADR 0291; its old id still lands on Qualità) and is Scacchi's now (ADR 0304). */
 export const GO_ALIASES: { id: string; key: string }[] = [{ id: 'regole', key: 'G R' }, { id: 'memoria', key: 'G D' }, { id: 'qualita', key: 'G Q' }, { id: 'apprendimento', key: 'G J' }];
 
 /** "esplora/ops/x.md" → { id: 'esplora', arg: 'ops/x.md' }; "mappa/tutto" → { map: true, full: true }. */
@@ -117,7 +119,7 @@ export function BrainPage({ id, arg, onNavigate, bridge }: { id: BrainPageId; ar
     case 'flussi': page = <Suspense fallback={null}><Routines /></Suspense>; break;
     case 'idee': page = <Idee arg={cur.arg} nav={nav} />; break;
     case 'file': page = <FileViewer arg={cur.arg}/>; break;
-    case 'impostazioni': case 'skill': case 'guida': case 'registrazioni': case 'impara': case 'regole': case 'memoria': case 'collegamenti': case 'script': case 'log': page = null; break; // rendered by the app (App.tsx PageFrame)
+    case 'impostazioni': case 'skill': case 'guida': case 'registrazioni': case 'impara': case 'scacchi': case 'regole': case 'memoria': case 'collegamenti': case 'script': case 'log': page = null; break; // rendered by the app (App.tsx PageFrame)
     case 'task': page = <TaskPage />; break;
     // in the app Andamento is App.tsx PageFrame's (components/andamento/); alone (the test route) its two brain tabs show
     // as the full pages they were

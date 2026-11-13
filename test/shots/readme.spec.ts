@@ -2,7 +2,7 @@
 // scripts/demo-brain.mjs) so they always show the current UI with fictional data only: English UI (SB_LANG=en), dark
 // theme, 1600x1000, saved as WebP (< 300 KB each) in docs/screenshots/: the whole window, one part of it, or two parts
 // side by side. The showcase (memory, agent-levels, brain-map, orchestrator-column, reactions, plan), the app's own pages
-// (voice, log, recordings, quality, learn, news, costs, maintenance) and the rest. Not part
+// (voice, log, recordings, quality, learn, news, costs, maintenance, chess) and the rest. Not part
 // of `npm run check`: run by `npm run shots` (its own Playwright config, playwright.shots.config.ts). The app runs hidden
 // (SB_HIDDEN, set by launch()). The 3D map needs WebGL: on a machine without a GPU set
 // SB_E2E_ELECTRON_ARGS="--use-angle=swiftshader --enable-unsafe-swiftshader" (and xvfb-run on Linux).
@@ -384,4 +384,15 @@ test('README showcase: voice, Log, recordings, quality, learn, news, costs, tren
   await page.waitForTimeout(1500); // the sparkle burst is over
   const mem = await frameOf(page.getByTestId('bm-memory-page'));
   await saveBuffers('maintenance', [await png({ x: mem.x, y: 52, width: mem.width, height: 560 })]);
+});
+
+test('README screenshot: Chess', async () => {
+  // Chess: the six agents as opponents with their ratings and the demo's record against each (ADR 0304)
+  await keepQuestionsAside(page);
+  await goPage(page, 'scacchi');
+  await expect(page.getByTestId('chess-lobby')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('chess-recent').getByTestId('chess-history-row')).toHaveCount(9);
+  await page.getByTestId('chess-bot-orchestrator').click();
+  const bots = (await page.locator('.chess-lobby > section').first().boundingBox())!;
+  await save('chess', { x: Math.round(bots.x - 12), y: Math.round(bots.y - 12), width: Math.round(bots.width + 24), height: Math.round(bots.height + 24) });
 });

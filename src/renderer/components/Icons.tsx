@@ -111,4 +111,6 @@ export const IconMic = (p: P) => <Svg {...p}><rect x="9" y="3" width="6" height=
 /** Impostazioni → Telefono (ADR 0219): a phone */
 export const IconPhone = (p: P) => <Svg {...p}><rect x="6.5" y="2.5" width="11" height="19" rx="2.5" /><path d="M10.5 18.5h3" /></Svg>;
 /** Impara (ADR 0185): a graduation cap */
+/** a pawn: the Scacchi page (ADR 0304) */
+export const IconChess = (p: P) => <Svg {...p}><circle cx="12" cy="6.5" r="3" /><path d="M9.5 10.5h5M10.5 10.5c0 3-1 5-3 6.5h9c-2-1.5-3-3.5-3-6.5M6.5 20.5h11V19a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2z" /></Svg>;
 export const IconLearn = (p: P) => <Svg {...p}><path d="M2.5 9.5 12 5l9.5 4.5L12 14z" /><path d="M6.5 11.5v4.2c1.4 1.4 3.3 2.1 5.5 2.1s4.1-.7 5.5-2.1v-4.2" /><path d="M21.5 9.5v5" /></Svg>;

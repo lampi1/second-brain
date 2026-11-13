@@ -216,6 +216,14 @@
         "src/renderer/styles/news.css",
         "src/main/news/demo.ts"
       ]
+    },
+    "chess": {
+      "test": "README screenshot: Chess",
+      "sources": [
+        "src/renderer/components/chess/",
+        "src/renderer/styles/chess.css",
+        "src/shared/chess.ts"
+      ]
     }
   },
   "pages": {
@@ -269,6 +277,9 @@
     ],
     "impara": [
       "Learn"
+    ],
+    "scacchi": [
+      "Chess"
     ]
   },
   "pending": {
