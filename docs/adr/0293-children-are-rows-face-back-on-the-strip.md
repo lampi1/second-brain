@@ -1,6 +1,6 @@
 # ADR 0293 · A delegated chat is one row like its parent; the role's face is back on the strip
 
-Date: 2026-11-13 · Status: accepted (owner, thread «Rifare la UI della Grindhouse», after ADR 0292: «voglio l'iconcina
+Date: 2026-11-13 · Status: accepted, partly amended by ADR 0294 (point 1: the portrait and its dot became the role's little person) (owner, thread «Rifare la UI della Grindhouse», after ADR 0292: «voglio l'iconcina
 nella strisciolina e che sia bella visibile», «le striscioline dei figli le voglio più discrete come quelle del
 padre, sono troppo grandi rispetto alle altre») · Amends: ADR 0292 point 1 (the dot alone), ADR 0083 and the compact
 card of 2026-10-22 (the delegated chat as a thread card)

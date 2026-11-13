@@ -1,6 +1,6 @@
 // The delegation tree in the Grindhouse (ADR 0083; made quiet by ADR 0293, the owner 2026-11-13: «le striscioline dei
 // figli le voglio più discrete come quelle del padre»): every delegated chat is ONE row under its parent, on a thread
-// line tinted by its state (TreeRails), drawn like its parent's strip: the role's character with a state dot, the
+// line tinted by its state (TreeRails), drawn like its parent's strip: the role's little person doing what it does (StripFace.tsx, ADR 0294), the
 // task, who runs it and what it does now (its result once ended), its time and cost against the estimate
 // (StripMeta.tsx), a pill only when words are needed, ↗ for full screen. What needs the user stays in sight under the
 // row (a permission to answer here, its error, the limit it hit, a nudge when it stalled). A click on the row opens
@@ -24,10 +24,10 @@ import { modelWithEffort, workTime } from '../lib/format';
 import { selectedHere } from '../lib/strip-click';
 import { t, locale } from '../i18n';
 import { openQueue } from '../lib/later';
-import { AgentAvatar } from './AgentAvatar';
 import { ChatTile, useFlash } from './ChatTile';
 import { StripActivity } from './StripActivity';
 import { StripMeta } from './StripMeta';
+import { StripFace } from './StripFace';
 import { IconChevronDown, IconChevronRight } from './Icons';
 import '../styles/tree.css';
 
@@ -84,7 +84,8 @@ function Head({ chat, state, open }: { chat: ChatSummary; state: ChildState; ope
   const plain = live || state === 'done';
   const said = chat.delegation?.result?.summary || chat.lastText;
   return <div className="dc-head">
-    <span className="strip-face"><AgentAvatar avatar={chat.agent?.avatar} name={role} size={22} /><span className={`strip-dot lead tone-${LINE[state]}`} aria-hidden="true" /></span>
+    <StripFace chatId={chat.id} avatar={chat.agent?.avatar} name={role} size={22} tone={LINE[state]} waitsUser={state === 'wait'} error={LINE[state] === 'err'}
+      busy={isBusy(chat)} done={state === 'done' || state === 'partial'} pending={live} />
     {/* the task is the row's own button (keyboard, screen readers), as on the root strip; a click anywhere on the row does the same */}
     <h4 className="dc-title" title={chat.delegation?.goal ?? chat.title}><button type="button" className="strip-name" aria-expanded={open} data-testid={`delegation-expand-${chat.id}`} onClick={() => setChatExpanded(chat.id, !open)}>{chat.title}</button></h4>
     <span className="dc-who">

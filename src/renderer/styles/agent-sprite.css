@@ -1,0 +1,8 @@
+/* The little people of the roles (AgentSprite.tsx, ADR 0294): a small dark stage in both themes (the sprites' colours
+   are fixed, like the characters' badges), the frames stepped by one transform animation; still without motion. */
+.agent-sprite { flex:none; display:inline-flex; padding:2px 2px 1px; border-radius:7px; background:#1b1e2b; overflow:hidden; line-height:0; }
+.agent-sprite > svg { display:block; overflow:hidden; }
+.agent-sprite-frames { animation-name:agent-sprite; animation-fill-mode:forwards; will-change:transform; }
+@keyframes agent-sprite { to { transform:translateX(var(--sprite-end)); } }
+html[data-hidden] .agent-sprite-frames { animation-play-state:paused; }
+@media (prefers-reduced-motion: reduce) { .agent-sprite-frames { animation:none; } }

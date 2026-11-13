@@ -1,6 +1,6 @@
 // One agent's window (ADR 0287): a chat as a one-line strip in the Grindhouse (AgentStrips.tsx), open in the column, or in
-// full screen (FullScreen.tsx). The strip is one row (ADR 0292, 0293): the role's face with a dot for its state, who it
-// is, the title · current step, then on the right its work time and cost so far, each next to its estimate («22 min /
+// full screen (FullScreen.tsx). The strip is one row (ADR 0292-0294): the role's little person doing what the chat does
+// (StripFace.tsx), who it is, the title · current step, then on the right its work time and cost so far, each next to its estimate («22 min /
 // ~19 min · 1,84 $ / ~0,60 $», amber once past it), and a pill only when words are needed («Ti aspetta» opens its
 // question, an error, a queue); a long context shows its meter; three controls appear on hover (stop, full screen, the
 // ⋯ menu with rename / model / permissions / hand-off / close; Ctrl+W closes too). A click anywhere on the strip opens
@@ -30,6 +30,7 @@ import { openQueue, requestPostponed } from '../lib/later';
 import { admitNow, reqKey, toggleMaximize } from '../actions';
 import { useHandoffTabs } from '../store/handoffs';
 import { StripMeta } from './StripMeta';
+import { StripFace } from './StripFace';
 import { BrowserTile } from './BrowserTile';
 import { FullTools } from './FullTools';
 import { selectedHere } from '../lib/strip-click';
@@ -200,7 +201,8 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
       {!embedded && <header className="tile-head">
         <div className="th-row">
           {focus && <button type="button" className="btn btn-ghost btn-s aw-back" onClick={() => toggleMaximize(key)} data-testid="focus-exit" aria-label={t('aw.fullExit')}><IconArrowLeft size={13} /><Kbd>Esc</Kbd></button>}
-          <span className="strip-face"><AgentAvatar avatar={chat.agent?.avatar} name={name} size={focus ? 24 : 26}/>{!focus && <span className={`strip-dot lead tone-${first ? 'wait' : st.tone}`} aria-hidden="true" />}</span>
+          {focus ? <AgentAvatar avatar={chat.agent?.avatar} name={name} size={24}/> : <StripFace chatId={chatId} avatar={chat.agent?.avatar} name={name} size={26} scale={3} tone={first ? 'wait' : st.tone}
+            waitsUser={!!first || userWait} error={st.tone === 'err'} busy={busy} done={st.tone === 'done'} pending={st.tone === 'run' || st.tone === 'wait'} />}
           {/* the name is the strip's own button (keyboard, screen readers); a click anywhere on the strip does the same */}
           <h3 className="th-title" title={(chat.agent?.purpose&&rolePurpose(chat.agent.id,chat.agent.purpose))||chat.title}>
             {strip ? <button ref={expansionButton} type="button" className="strip-name" aria-expanded={expanded} aria-controls={`chat-work-${chatId}`} data-tip={t(expanded?'product.collapse':'product.expand')} onClick={()=>setChatExpanded(chatId,!expanded)} data-testid={`chat-expand-${chatId}`}>{name}</button> : name}

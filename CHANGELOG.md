@@ -23,6 +23,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   OpenCode, OpenRouter included; the chat's model and plan mode go through OpenCode's session options (ADR 0216).
 
 ### Changed
+- Grindhouse: each role is a little person drawn as a sprite who does its job on the strip while the chat works
+  (the Artisan hammers, the Sentinel scans with binoculars) and changes with the state; it replaces the portrait and
+  the state dot, and the spark on the Orchestrator's and Flash's «thinking» line; root strips are a little taller
+  (ADR 0294).
 - Grindhouse: a delegated chat is one row like its parent (its steps and result open with a click); the role's
   character is back on every strip, with the state dot on its corner (ADR 0293).
 - Grindhouse strips: a state dot in front, time and cost so far next to the estimate always on the row, rows edge

@@ -21,6 +21,7 @@ import { t } from '../i18n';
 import { pairHover, usePair } from '../lib/pairs';
 import { awaitingCard, clearOrchestratorNow, go } from '../actions';
 import { ItemList, turnActivity, Typing } from './ChatItems';
+import { SpriteCtx } from './AgentSprite';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMenu, TitleInput } from './ChatMenu';
 import { ModelChip } from './ModelChip';
@@ -151,7 +152,7 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
       <MorningLine />
       {/* a plan to approve is its row below (the same steps twice took the room of the open card and the input) */}
       {planCards(plans, reqs).filter(({ chat: c }) => c.plan?.phase !== 'proposed').map(({ chat: c, question }) => <StrategyPanel key={c.id} chat={c} question={question} />)}
-      <ItemList chatId={chat.id} items={items ?? []} empty={t('dialogs.orchestrator.emptyPrompt')} footer={isBusy(chat) ? <Typing what={turnActivity(items)} testid="typing-orchestrator" items={items} /> : null} />
+      <ItemList chatId={chat.id} items={items ?? []} empty={t('dialogs.orchestrator.emptyPrompt')} footer={isBusy(chat) ? <SpriteCtx.Provider value="orchestrator"><Typing what={turnActivity(items)} testid="typing-orchestrator" items={items} /></SpriteCtx.Provider> : null} />
       {/* every chat's questions, permissions, commands and plans: one row each, opened in place (ADR 0269) */}
       <OrchestratorAsks />
       {/* in the place of the old "Novità" feed (#88): what the app holds back for this Orchestrator */}

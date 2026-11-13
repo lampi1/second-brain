@@ -40,6 +40,7 @@ import { isRoleId, ROLE_DEFAULTS, ROLE_IDS } from '@shared/roles';
 import { isReaction } from '@shared/reaction';
 import { chatView, TAIL_ITEMS, tailStart, resultLine } from '../lib/chat-view';
 import { AgentAvatar } from './AgentAvatar';
+import { AgentSprite, SpriteCtx } from './AgentSprite';
 import { NamedChatRefs, ToolChatRef } from './ChatRefChips';
 import { openHandoff } from '../store/ui';
 import { openChatRef } from '../actions';
@@ -149,12 +150,19 @@ const Message = memo(function Message({ id, text, streaming }: { id: string; tex
   );
 });
 
-/** The running turn's line: a turning spark and what the chat does now (lib/typing-line.ts: the tool or command running,
+/** The running turn's line: a turning spark (the Orchestrator's and Flash's little person instead: WorkingMark) and what the chat does now (lib/typing-line.ts: the tool or command running,
  *  the plan item in progress, else "sta pensando…"), "sta scrivendo…" while it writes. `children` replaces the words with
  *  a collapsed strip's step and silence (StripActivity.tsx); the data-what hook stays. */
 export function Typing({ what, testid, items, children }: { what: 'scrive' | 'pensa' | 'lavora'; testid?: string; items?: readonly ChatItem[]; children?: ReactNode }) {
   const line = children ? null : liveLine(items, what);
-  return <div className="typing" role="status" aria-live="off" data-testid={testid} data-what={what}><TypingSpark />{children ?? (line && <span key={line.text + (line.code ?? '')} className="typing-line">{line.text}{line.code && <> <code>{line.code}</code></>}</span>)}</div>;
+  return <div className="typing" role="status" aria-live="off" data-testid={testid} data-what={what}><WorkingMark what={what} />{children ?? (line && <span key={line.text + (line.code ?? '')} className="typing-line">{line.text}{line.code && <> <code>{line.code}</code></>}</span>)}</div>;
+}
+
+/** The mark of a working line: the chat's little person at work or thinking where the transcript names one (SpriteCtx,
+ *  ADR 0294), the spark elsewhere. */
+function WorkingMark({ what }: { what: 'scrive' | 'pensa' | 'lavora' }) {
+  const id = useContext(SpriteCtx);
+  return id ? <AgentSprite id={id} state={what === 'pensa' ? 'think' : 'work'} scale={3} /> : <TypingSpark />;
 }
 
 /** The working mark: a four-point spark that turns and breathes (transform and opacity only: the compositor draws it). */
