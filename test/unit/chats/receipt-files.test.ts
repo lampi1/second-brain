@@ -1,4 +1,4 @@
-// The files a run's turns changed (ADR 0130, ADR 0279): the first message of a chat that starts its engine takes its own
+// The files a run's turns changed (ADR 0130, ADR 0282): the first message of a chat that starts its engine takes its own
 // checkpoint although the booting engine counts as busy, and a follow-up turn under the same checkpoint (a message
 // queued mid-turn takes none) still knows its files: what changed since the previous turn's end. git is mocked.
 import { afterEach, describe, expect, it, vi } from 'vitest';

@@ -280,6 +280,8 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0279](0279-onboarding-in-three-moments.md) Onboarding in three moments: language and name, your AI, the first real request — accepted
 - [0280](0280-newspaper-by-editions.md) The newspaper goes by editions: any subject, a few stories, the Orchestrator edits it — accepted
 - [0281](0281-scheduled-routines.md) Scheduled routines: a request the Orchestrator receives at its time — accepted
+- [0282](0282-first-turn-takes-its-checkpoint.md) A chat's first turn takes its checkpoint, and a follow-up turn has its own files — accepted
+- [0283](0283-longer-run-archive-cold-runs.md) A longer archive of runs, and a save that costs what the runs at work weigh — accepted
 
 ## Replaced
 

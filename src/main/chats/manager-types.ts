@@ -266,7 +266,7 @@ export interface Rec {
   receiptRows?: Set<string>;
   receiptCp?: Checkpoint;
   /** the files' tree at the end of the last turn read for the receipts: a follow-up turn under the same checkpoint (a
-   *  message queued mid-turn takes none) changed what differs from it (ADR 0279) */
+   *  message queued mid-turn takes none) changed what differs from it (ADR 0282) */
   receiptTree?: string;
   /** the turn now running began the moment the one before it ended (a message queued mid-turn): only then is the
    *  difference from that end its own files */

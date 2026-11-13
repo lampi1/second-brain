@@ -151,7 +151,7 @@ export abstract class ManagerCheckpoints extends ManagerSessions {
     const own = !r.inWorktree && (seq === undefined ? !!r.turnCheckpoint : !!cp && turnOf.get(cp) === seq);
     // a follow-up turn under the checkpoint already read (a message queued mid-turn takes none): what changed since the
     // previous turn's end is its own, but only when it began the moment that one ended (`chained`: after an idle gap
-    // the difference would also hold what the user or another chat changed meanwhile) (ADR 0279)
+    // the difference would also hold what the user or another chat changed meanwhile) (ADR 0282)
     const followUp = own && !!cp && r.receiptCp === cp && !cp.afterUncertain && chained;
     if (!own || !cp || (r.receiptCp === cp && !followUp)) { noteTurnFiles(rc, turnFilesWithoutGit(turn), turnAt ?? end, end); this.receiptsIn(run); return; }
     r.receiptCp = cp;

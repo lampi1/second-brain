@@ -152,7 +152,7 @@ export abstract class ManagerCore {
   }
   /** A turn is really in flight. An engine that is only booting is `busy` (stop and quit count it) but has taken no
    *  message yet: the first message of a chat that starts its engine begins a turn of its own, with its own checkpoint
-   *  (ADR 0279: 60% of the runs had no record of their files because this first turn took none). */
+   *  (ADR 0282: 60% of the runs had no record of their files because this first turn took none). */
   protected turnInFlight(r: Rec): boolean {
     if (!this.midTurn(r)) return false;
     return !(r.s.state === 'starting' && !r.working && r.session !== undefined && r.sentTo !== r.session);

@@ -1,4 +1,4 @@
-// Per run, the reads of its turns' files still under way (manager-checkpoints.ts receiptTurn, ADR 0279): the run's
+// Per run, the reads of its turns' files still under way (manager-checkpoints.ts receiptTurn, ADR 0282): the run's
 // deterministic verdict waits for them, and only for its own (a chat may already be reading a newer run's). A module
 // of its own because both the turn's end (manager-checkpoints.ts) and the run's end (manager-persistence.ts) ask.
 import type { AgentRun } from '../../shared/agents';

@@ -108,7 +108,7 @@ export async function turnFiles(cp: Checkpoint): Promise<string[]> {
 }
 
 /** The repo-relative paths that differ between two recorded trees of the repository at root (a follow-up turn's files:
- *  the previous turn's end against its own end, ADR 0279). */
+ *  the previous turn's end against its own end, ADR 0282). */
 export async function treeFiles(root: string, from: string, to: string): Promise<string[]> {
   return from === to ? [] : (await changes(root, from, to)).map(c => c.file);
 }

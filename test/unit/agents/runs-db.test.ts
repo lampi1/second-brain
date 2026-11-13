@@ -324,7 +324,7 @@ describe('schema and export', () => {
   });
 });
 
-describe('a longer archive at the cost of the runs at work (ADR 0280)', () => {
+describe('a longer archive at the cost of the runs at work (ADR 0283)', () => {
   const stored = (dir: string) => new Map((exportRuns(path.join(dir, 'app.db'))!.runs as { runId: string; costUsd: number | null }[]).map(r => [r.runId, r]));
   // the clock is the test's: the 15 s between two full passes never depend on how fast the machine is
   const clock = () => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance', 'Date'], now: Date.UTC(2026, 10, 13, 12) });

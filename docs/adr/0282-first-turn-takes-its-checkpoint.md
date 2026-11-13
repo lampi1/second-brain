@@ -1,4 +1,4 @@
-# ADR 0279 · A chat's first turn takes its checkpoint, and a follow-up turn has its own files
+# ADR 0282 · A chat's first turn takes its checkpoint, and a follow-up turn has its own files
 
 Date: 2026-11-13 · Status: accepted (owner, thread «Preparare la 1.0 con analisi profonda»: the report's proposal
 «numeri veri dei livelli», approved with «Approvo tutte le tue modifiche del report») · Amends: ADR 0103 (checkpoints),

@@ -1,4 +1,4 @@
-# ADR 0280 · A longer archive of runs, and a save that costs what the runs at work weigh
+# ADR 0283 · A longer archive of runs, and a save that costs what the runs at work weigh
 
 Date: 2026-11-13 · Status: accepted (owner, thread «Preparare la 1.0 con analisi profonda»: the report's proposal
 «archivio dei lavori a 30 giorni», approved with «Approvo tutte le tue modifiche del report») · Amends: ADR 0199 (runs

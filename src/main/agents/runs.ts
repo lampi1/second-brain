@@ -28,10 +28,10 @@ export const RUNS_MAX = 5000;
 /** Below the local store's 8 MB cap, with headroom for the run being added. */
 export const RUNS_BYTES = 7_000_000;
 /** The runs' budget in app.db, which writes only the rows that changed: more than twice the days of work stay whole
- *  (ADR 0280). Bounded by what is held in memory and copied to the read worker, not by the file. */
+ *  (ADR 0283). Bounded by what is held in memory and copied to the read worker, not by the file. */
 export const RUNS_DB_BYTES = 16_000_000;
 /** A run that ended this long ago is cold: a deferred save into app.db takes its JSON as last written instead of
- *  building it again (ADR 0280). */
+ *  building it again (ADR 0283). */
 export const COLD_AFTER_MS = 10 * 60_000;
 /** After a deferred save that skipped the cold runs, one that looks at all of them follows within this long. */
 export const COLD_PASS_MS = 15_000;
@@ -629,7 +629,7 @@ export class AgentRunStore {
   private inflight = 0;
 
   /** Writes now, on the caller's step. With `changed` (the run the caller just started, ended or judged) app.db gets the
-   *  runs at work and that one, like a deferred save (ADR 0280): building every run's JSON at 16 MB is a step the
+   *  runs at work and that one, like a deferred save (ADR 0283): building every run's JSON at 16 MB is a step the
    *  window feels, and a one-shot saves three times. Without it every run is looked at (the quit's flush). */
   save(changed?: AgentRun): void {
     const t = performance.now(), db = this.db;
