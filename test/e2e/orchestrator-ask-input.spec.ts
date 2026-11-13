@@ -53,3 +53,38 @@ test('an open question keeps the Orchestrator input in sight; its ✕ answers la
     await expect(input).toHaveValue('');
   } finally { await app.close(); }
 });
+
+// The owner 2026-11-13: «le domande dall'orchestratore sono tagliatissime illeggibili»: under a LONG Orchestrator chat
+// the rows kept a strip of 90 px (flex shrinks by content size). Closed: every row whole, its Sì / No in sight; open:
+// the card is the column's panel, the last messages a strip above it, the answers and the input in sight.
+test('under a long Orchestrator chat the question rows stay whole and an open one is the column\'s panel', async () => {
+  const { app, page } = await launchDemo({ width: 1600, height: 830 });
+  const say = (text: string) => app.evaluate((_e, t) => { (globalThis as unknown as { __sbDemo: { say(c: string, t: string): void } }).__sbDemo.say('orchestrator', t); }, text);
+  try {
+    for (let i = 0; i < 30; i++) await say(`Messaggio ${i + 1} dell'Orchestrator: un paragrafo abbastanza lungo da occupare più righe nella colonna, come in una giornata di lavoro vera con tanti agenti che riportano.`);
+    // the demo's requests wait folded in «N da rispondere dopo»: unfolded, they are rows like new ones
+    await page.getByTestId('orchestrator-asks-later').click();
+    const rows = page.getByTestId('orchestrator-ask');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    const asks = page.getByTestId('orchestrator-asks');
+    // every row whole: the list is as tall as its rows (up to its cap), its Sì / No in sight
+    await page.waitForTimeout(300);
+    await shot(page, 'orchestrator-asks-long-chat');
+    const box = await asks.boundingBox();
+    expect(box!.height).toBeGreaterThan(110);
+    const yes = page.getByTestId('orchestrator-ask-yes').first();
+    if (await yes.count()) await expect(yes).toBeInViewport({ ratio: 1 });
+
+    await rows.first().getByTestId('orchestrator-ask-toggle').click();
+    const card = page.getByTestId('qwin');
+    await expect(card).toBeVisible();
+    await page.waitForTimeout(400);
+    await shot(page, 'orchestrator-asks-long-chat-open');
+    const column = await page.getByTestId('tile-orchestrator').boundingBox();
+    const panel = await asks.boundingBox();
+    expect(panel!.height).toBeGreaterThan(column!.height * 0.5);
+    // its answers in sight without scrolling: the chat's long message scrolls in its own box
+    await expect(card.getByRole('button', { name: /^QA rimborsi/ })).toBeInViewport({ ratio: 1 });
+    await expect(page.getByTestId('orchestrator-input')).toBeInViewport();
+  } finally { await app.close(); }
+});
