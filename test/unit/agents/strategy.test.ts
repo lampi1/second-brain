@@ -25,7 +25,7 @@ import type { AgentCatalog } from '../../../src/shared/agents';
 import type { NewChat } from '../../../src/shared/contract';
 import type { McpTool } from '../../../src/main/mcp/server';
 import type { PermissionCeiling, ToolClass } from '../../../src/shared/agents';
-import { finishPlan, afterReport, isPlanApproval, checkProposal, delegationGate, proposalGate, ENOUGH_QUESTIONS, PLAN_APPROVED, readPlan, STRATEGY_FLOW, stopsQuestions, withDelegated, withStep, type StrategyPlan } from '../../../src/shared/strategy';
+import { finishPlan, afterReport, isPlanApproval, checkProposal, delegationGate, proposalGate, ENOUGH_QUESTIONS, PLAN_APPROVED, planWaves, readPlan, STRATEGY_FLOW, stopsQuestions, withDelegated, withStep, type StrategyPlan } from '../../../src/shared/strategy';
 
 /** Roles a user narrowed: tools, ceiling and launches per role (the rest stays the default). */
 type Narrowed = Partial<Record<RoleId, { tools: ToolClass[]; ceiling: PermissionCeiling | null; launches: string[] }>>;
@@ -455,6 +455,17 @@ describe('shared/strategy.ts', () => {
     expect(() => checkProposal({ steps: [{ title: 'x'.repeat(121) }] })).toThrow(/120/);
     expect(() => checkProposal({ steps: [{ title: 'x', owner: 'me' }] })).toThrow(/unknown field owner/);
     expect(() => checkProposal({ steps: [{ title: 'x' }], doneWhen: 3 })).toThrow(/doneWhen/);
+  });
+  it('a step marked par shares the turn of the step before it (ADR 0302)', () => {
+    const steps = checkProposal({ steps: [{ title: 'a' }, { title: 'b', par: true }, { title: 'c' }, { title: 'd', par: true }, { title: 'e', par: true }, { title: 'f', par: false }] }).steps;
+    expect(steps.map(x => x.par)).toEqual([undefined, true, undefined, true, true, undefined]);
+    expect(planWaves(steps)).toEqual([1, 1, 2, 2, 2, 3]);
+    expect(planWaves([{ par: true }, {}])).toEqual([1, 2]); // the first step has no step before it
+    expect(planWaves([])).toEqual([]);
+    expect(() => checkProposal({ steps: [{ title: 'x', par: 'yes' }] })).toThrow(/par/);
+    // saved and read back with its mark
+    const plan: StrategyPlan = { phase: 'running', at: 1, clarified: [], steps };
+    expect(readPlan(JSON.parse(JSON.stringify(plan)))!.steps.map(x => x.par)).toEqual([undefined, true, undefined, true, true, undefined]);
   });
   it('the gates, pure: proposal before any question, delegation before the ok', () => {
     const asking: StrategyPlan = { phase: 'asking', at: 1, clarified: [], steps: [] };

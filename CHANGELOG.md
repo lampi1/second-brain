@@ -6,6 +6,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- Project maps: the box somebody works on right now pulses quietly, a plan shows its steps in order with the
+  parallel ones together (`par` on a step of `plan_propose`), entering a system zooms into it, and the projects are a
+  list at the side in place of the menu (ADR 0302).
 - Quote what is on screen: select a text anywhere in the app and right-click on it; it goes, as quote lines, in the
   prompt field of its chat, or in the Orchestrator's, not sent (ADR 0300).
 - «Fast» beside «Plan» in the Orchestrator's input: it answers itself, at once and in a few lines, never delegates (the

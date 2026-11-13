@@ -17,6 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { ChatItem, ChatSummary, PendingRequest } from '@shared/contract';
 import { applyChanges, applyEdit, checkMap, elementOfFile, isMapId, MAP_LIMITS, projectSlug, type MapAgent, type MapElement, type MapPlan, type MapState, type MapWork, type ProjectMap, type ProjectMapInfo, type ProjectMapView } from '@shared/project-map';
+import { planWaves, type PlanStep } from '@shared/strategy';
 import { askLine } from '../appctl/digest';
 import { markOf, progressOf } from '../appctl/agents-recap';
 import { errText, log } from '../log';
@@ -114,8 +115,12 @@ export class ProjectMaps {
       const p = c.plan;
       if (!p || p.map !== project || p.phase === 'asking') continue;
       if ((c.closedAt || c.state === 'closed') && (p.phase !== 'done' && p.phase !== 'running' || now - (c.closedAt ?? c.updatedAt) > ENDED_MS)) continue;
-      plans.push({ chatId: c.id, title: c.title, phase: p.phase, at: p.at, steps: p.steps.length, done: p.steps.filter(x => x.state === 'done').length, ...(p.doneWhen ? { doneWhen: p.doneWhen } : {}) });
-      p.steps.forEach((x, i) => { if (x.on) (works[x.on] ??= []).push({ title: x.title, state: x.state, ...(x.role ? { role: x.role } : {}), chatId: c.id, step: i + 1, chatIds: x.chatIds ?? [], ...(x.added ? { added: true } : {}) }); });
+      // which steps go together (ADR 0302): the ones that share a turn, and the ones under way at the same moment
+      const waves = planWaves(p.steps), running = p.steps.filter(x => x.state === 'now').length;
+      const par = (x: PlanStep, i: number) => waves.filter(w => w === waves[i]).length > 1 || (x.state === 'now' && running > 1);
+      plans.push({ chatId: c.id, title: c.title, phase: p.phase, at: p.at, steps: p.steps.length, done: p.steps.filter(x => x.state === 'done').length, ...(p.doneWhen ? { doneWhen: p.doneWhen } : {}),
+        flow: p.steps.map((x, i) => ({ step: i + 1, title: x.title, state: x.state, wave: waves[i]!, ...(par(x, i) ? { par: true } : {}), ...(x.on ? { on: x.on } : {}), ...(x.role ? { role: x.role } : {}) })) });
+      p.steps.forEach((x, i) => { if (x.on) (works[x.on] ??= []).push({ title: x.title, state: x.state, ...(x.role ? { role: x.role } : {}), chatId: c.id, step: i + 1, chatIds: x.chatIds ?? [], ...(x.added ? { added: true } : {}), wave: waves[i]!, ...(par(x, i) ? { par: true } : {}) }); });
     }
     return { works, plans: plans.sort((a, b) => b.at - a.at) };
   }
