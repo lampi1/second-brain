@@ -13,6 +13,8 @@ export const appTextIt = {
   'appText.actions.clearConfirm': 'Pulisci',
   'appText.actions.unknownPage': (p: { page: string }) => `Pagina sconosciuta: ${p.page}`,
   'appText.actions.linkCopied': (p: { link: string }) => `Link copiato: ${p.link}`,
+  'appText.actions.quotedOrchestrator': 'Citato nel campo dell’Orchestrator: lo trovi quando chiudi questa finestra',
+  'appText.actions.quotedChat': 'Citato nel campo della chat: lo trovi quando chiudi questa finestra',
   'appText.actions.chatGone': 'Questa chat non c’è più.',
   'appText.actions.closed': (p: { title: string }) => `Chiusa: ${p.title}`,
   'appText.actions.reopen': 'Riapri',

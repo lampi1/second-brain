@@ -13,7 +13,7 @@ import { startViewports } from './lib/viewports';
 import { startBeat } from './lib/beat';
 import { startInputLag } from './lib/inputlag';
 import { startUiErrors } from './lib/ui-errors';
-import { nextThing, openLink, uiCommand } from './actions';
+import { nextThing, openLink, startQuote, uiCommand } from './actions';
 import { checkDnd, startStore } from './store/store';
 import { startVoice } from './lib/voice';
 import { startRecs } from './lib/recorder';
@@ -74,6 +74,7 @@ if (isBrainTestRoute()) {
   startInputLag(); // key → letter on screen, one summary a minute to the `perf` log while the user types
   startFocusKeeper();
   startTypingWatch();
+  startQuote(); // a right click on a selected text quotes it in a prompt field (ADR 0300)
   installAppMap(); // the Orchestrator's app map and live screen outline (app_guide, app_ui outline)
   installUseCounter(); // the local usage counter's data-track clicks and its flush on hide (ADR 0202)
   setInterval(() => checkDnd(now()), 60_000);

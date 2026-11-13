@@ -14,6 +14,8 @@ export const appTextEn: typeof appTextIt = {
   'appText.actions.clearConfirm': 'Clear',
   'appText.actions.unknownPage': (p: { page: string }) => `Unknown page: ${p.page}`,
   'appText.actions.linkCopied': (p: { link: string }) => `Link copied: ${p.link}`,
+  'appText.actions.quotedOrchestrator': 'Quoted in the Orchestrator’s field: you find it when you close this window',
+  'appText.actions.quotedChat': 'Quoted in the chat’s field: you find it when you close this window',
   'appText.actions.chatGone': 'This chat is gone.',
   'appText.actions.closed': (p: { title: string }) => `Closed: ${p.title}`,
   'appText.actions.reopen': 'Reopen',

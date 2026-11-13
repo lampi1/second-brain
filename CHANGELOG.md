@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- Quote what is on screen: select a text anywhere in the app and right-click on it; it goes, as quote lines, in the
+  prompt field of its chat, or in the Orchestrator's, not sent (ADR 0300).
 - «Fast» beside «Plan» in the Orchestrator's input: it answers itself, at once and in a few lines, never delegates (the
   app refuses a new chat or a task in that turn) and says in one line when the question needs real work (ADR 0296).
 - One task on the model the user names: `app_create_chat` takes `userModel` {engine?, model, effort?} for that chat
