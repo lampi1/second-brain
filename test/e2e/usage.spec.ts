@@ -17,7 +17,7 @@ async function clip(page: Page, name: string, testid: string): Promise<void> {
 }
 
 for (const scheme of ['dark', 'light'] as const) {
-  test(`usage strip always shows today, Claude 5 h / week with resets and Cursor (${scheme})`, async () => {
+  test(`usage strip always shows today, Claude week (5 h from 70%) and Cursor (${scheme})`, async () => {
     const { app, page } = await launchDemo({ scheme });
     if (scheme === 'light') { // the app's own theme setting (default dark), in Settings → Aspetto e lingua
       await page.keyboard.press('Control+Comma');
@@ -29,9 +29,8 @@ for (const scheme of ['dark', 'light'] as const) {
     const bar = page.getByTestId('usage');
     await expect(bar).toBeVisible();
     await expect(page.getByTestId('usage-today')).toHaveText(/\d+,\d\d \$/);
-    await expect(page.getByTestId('usage-5h')).toContainText('42%');
-    await expect(page.getByTestId('usage-5h')).toContainText('↻');
-    await expect(page.getByTestId('usage-week')).toContainText('31%');
+    await expect(page.getByTestId('usage-week')).toContainText('31%'); // the week always (ADR 0298)
+    await expect(page.getByTestId('usage-5h')).toHaveCount(0); // 42% < 70%: the 5-hour window waits in the popup
     await expect(page.getByTestId('usage-cursor')).toContainText('≈ 1,84 $');
     expect(await page.getByTestId('topbar').evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0); // nothing pushed out
     await clip(page, `usage-bar-${scheme}`, 'topbar');
@@ -59,7 +58,6 @@ for (const scheme of ['dark', 'light'] as const) {
 test('usage strip fits the top bar at 1280 px', async () => {
   const { app, page } = await launchDemo({ width: 1280, height: 800 });
   await setSize(app, 1280, 800);
-  await expect(page.getByTestId('usage-5h')).toContainText('42%');
   await expect(page.getByTestId('usage-week')).toContainText('31%');
   const overflow = await page.getByTestId('topbar').evaluate(el => el.scrollWidth - el.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
