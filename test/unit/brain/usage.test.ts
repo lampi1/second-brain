@@ -41,6 +41,16 @@ describe('usage', () => {
     expect(g).toMatchObject({ fiveHourPct: 37.5, fiveHourResetsAt: Date.parse('2026-10-11T14:00:00Z'), weekPct: 12, source: 'get_usage' });
     const c = parseRateLimits({ fetchedAtMs: 5, utilization: { five_hour: { utilization: 20, resets_at: '2026-10-11T14:00:00Z' }, seven_day: null } })!;
     expect(c).toMatchObject({ fiveHourPct: 20, weekPct: null, source: 'claude-cache', at: 5 });
+    // no all-models week (ADR 0298): the highest other weekly window stands in
+    const scoped = parseRateLimits({ response: { rate_limits: { five_hour: null, seven_day: null, seven_day_sonnet: { utilization: 22, resets_at: '2026-10-15T08:00:00Z' },
+      model_scoped: [{ display_name: 'Fable', utilization: 48, resets_at: '2026-10-16T08:00:00Z' }] } } })!;
+    expect([scoped.fiveHourPct, scoped.weekPct, scoped.weekResetsAt]).toEqual([null, 48, Date.parse('2026-10-16T08:00:00Z')]);
+    const opus = parseRateLimits({ type: 'rate_limit_event', rate_limit_info: { status: 'allowed', rateLimitType: 'seven_day_opus', utilization: 0.3, resetsAt: 1792000000 } })!;
+    expect([opus.fiveHourPct, opus.weekPct, opus.weekScoped]).toEqual([null, 30, true]);
+    // ...but it never replaces an all-models week still in its window
+    const all = parseRateLimits({ response: { rate_limits: { seven_day: { utilization: 60, resets_at: '2099-01-01T00:00:00Z' } } } }, 1000)!;
+    expect(mergeLimits(opus, all).weekPct).toBe(60);
+    expect(mergeLimits(all, opus).weekPct).toBe(60);
     expect(parseRateLimits({ type: 'assistant' })).toBeNull();
     expect(parseRateLimits({ rate_limits: null })).toBeNull();
     expect(parseRateLimits(null)).toBeNull();

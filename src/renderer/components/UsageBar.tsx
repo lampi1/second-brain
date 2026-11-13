@@ -1,5 +1,5 @@
-// The usage figure in the top bar (ADR 0287): today's spend and the Claude 5-hour window (the week from 70%), always
-// visible; the resets, the week, Cursor usage today and every chat's cost in a detail panel on click. Why: the user wants their subscriptions' usage in sight at
+// The usage figure in the top bar (ADR 0287, ADR 0298): today's spend and the Claude weekly limit (the 5-hour window
+// from 70%), always visible; the resets, the week, Cursor usage today and every chat's cost in a detail panel on click. Why: the user wants their subscriptions' usage in sight at
 // all times (2026-10-11), and an honest "n/d" with the reason where a number does not exist (Cursor's plan usage has no
 // source; see Usage.cursorPlanNote). Data: the 'usage' snapshot from the main process (brain/usage.ts) and the chats'
 // own costs (live estimate included): today's total moves at each message and the popup lists every chat of the day by
@@ -99,8 +99,8 @@ function Details({ usage, chats, now, close }: { usage: Usage | null; chats: Cha
       </section>
       <section className="ub-sec">
         <div className="ub-sec-head"><span><HarnessMark harness="claude" size={16} />{' '}{auditText('audit.UsageBar.claudePlan')}</span>{usage?.limitsAt ? <small>{auditText('audit.UsageBar.read')}{' '}{ago(usage.limitsAt, now)}</small> : null}</div>
-        <PlanRow title={auditText('audit.UsageBar.5HourWindow')} pct={usage?.fiveHourPct} resets={usage?.fiveHourResetsAt} now={now} testid="usage-pop-5h" />
         <PlanRow title={auditText('audit.UsageBar.week')} pct={usage?.weekPct} resets={usage?.weekResetsAt} now={now} testid="usage-pop-week" />
+        <PlanRow title={auditText('audit.UsageBar.5HourWindow')} pct={usage?.fiveHourPct} resets={usage?.fiveHourResetsAt} now={now} testid="usage-pop-5h" />
         {usage?.fiveHourPct == null && usage?.weekPct == null && usage?.limitsNote ? <p className="ub-note">{usage.limitsNote}</p> : null}
       </section>
       <section className="ub-sec">
@@ -127,19 +127,20 @@ export function UsageBar() {
   const tip = [
     total ? auditText(total.partial ? 'cmp.usage.todayPartial' : 'cmp.usage.today', { cost: `${total.estimated ? '≈ ' : ''}${formatCost(total.usd)}` }) : auditText('cmp.usage.todayUnavailable'),
     usage?.cursorTodayUsd != null ? `Cursor ${cursorText(usage, true)}${usage.cursorExact === false ? auditText('cmp.usage.estimateSuffix') : ''}` : null,
-    usage?.fiveHourPct != null ? auditText('cmp.usage.fiveHour', { pct: pctText(usage.fiveHourPct) }) : null,
     usage?.weekPct != null ? auditText('cmp.usage.week', { pct: pctText(usage.weekPct) }) : null,
+    usage?.fiveHourPct != null ? auditText('cmp.usage.fiveHour', { pct: pctText(usage.fiveHourPct) }) : null,
     auditText('cmp.usage.cursorPlanUnavailable'),
   ].filter(Boolean).join(' · ');
   return (
     <>
-      {/* one figure on the bar (ADR 0287): today's spend and the 5-hour window; the week shows by itself from 70%; the
-          resets, Cursor and every chat's cost are one click away */}
+      {/* one figure on the bar (ADR 0287): today's spend and the weekly limit (ADR 0298: the owner's plan is weekly;
+          some plans send no 5-hour window at all); the 5-hour window shows by itself from 70%; the resets, Cursor and
+          every chat's cost are one click away */}
       <button ref={ref} type="button" className="usagebar" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-haspopup="dialog" aria-label={auditText('auditExpression.UsageBar.text226', { v0: tip })} data-tip={tip} data-testid="usage">
         <span className="ub-today"><b className="ub-v" data-testid="usage-today">{total ? `${total.estimated ? '≈ ' : ''}${formatCost(total.usd)}` : 'n/d'}</b></span>
         <span className="ub-group" data-testid="usage-claude">
-          <Window label="5h" pct={usage?.fiveHourPct} resets={null} now={now} testid="usage-5h" />
-          {(usage?.weekPct ?? 0) >= 70 && <Window label="7g" pct={usage?.weekPct} resets={null} now={now} testid="usage-week" />}
+          <Window label="7g" pct={usage?.weekPct} resets={null} now={now} testid="usage-week" />
+          {(usage?.fiveHourPct ?? 0) >= 70 && <Window label="5h" pct={usage?.fiveHourPct} resets={null} now={now} testid="usage-5h" />}
         </span>
       </button>
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} testid="usage-pop" width={360}>
