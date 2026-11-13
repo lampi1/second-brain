@@ -34,7 +34,7 @@ import { durableAsks, withDurableAsks } from './lib/work-ask';
 import { workflowState } from './store/workflows';
 import { engineLabel } from './lib/engines';
 import {
-  askConfirm, closeModal, flashTile, highlight, isBrainPage, openMaps, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
+  askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
   openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, callQuestions, setQuestionsAside, setChatExpanded, setTreeCollapsed, setBrowserOpen, setViewer, type Place,type BrainPageId,
 } from './store/ui';
 import { currentEntry, pushEntry, stepEntry, type Shot, type ViewerEntry } from './lib/viewer-stack';
@@ -182,6 +182,14 @@ export function placeOf(target: string): Place | null {
   if (page === 'home') return { page: 'home', element: arg };
   if (page === 'mappa' || isBrainPage(page)) return { page: page as Place['page'], arg };
   return null;
+}
+
+/** The project maps (ADR 0276; the owner: «mi piace che rimanga la chat dell'orchestrator a destra»): the Mappa → Progetti
+ *  page, beside the Orchestrator's column and never over it; at a project or a system inside it, else where the user left it. */
+export function openMaps(arg?: string | null): void {
+  const at = arg ?? ui.get().mapsArg;
+  if (ui.get().modal) closeModal();
+  go({ page: 'collegamenti', arg: at ? `progetti/${at}` : 'progetti' });
 }
 
 /** onNavigate of the brain pages and of the map: every move goes through the history. */
@@ -645,7 +653,7 @@ export function uiCommand(cmd: EventMap['ui:command']): void {
     case 'back': back(); break;
     case 'forward': forward(); break;
     case 'palette': openModal('palette'); break;
-    case 'maps': openMaps(v || null); break; // app_project_map open (ADR 0275): the maps window at <project>/<system>
+    case 'maps': openMaps(v || null); break; // app_project_map open: the map at <project>/<system>, beside the Orchestrator (ADR 0276)
     case 'next': nextThing(); break;
     case 'clock': freezeClock(Number(v)); break;
     case 'layout': setReporting(v !== 'off'); break;

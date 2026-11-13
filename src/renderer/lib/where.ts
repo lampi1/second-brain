@@ -16,8 +16,7 @@ const mapPlace = (arg: string | null, picked: string | null): string => {
 export function whereNow(titleOf: (chatId: string) => string | undefined = () => undefined): string {
   const s = ui.get();
   const parts: string[] = [];
-  if (s.modal === 'maps') parts.push(`window ${mapPlace(s.mapsArg, s.mapPicked)}`);
-  else if (s.modal && s.modal !== 'palette') parts.push(`window "${s.modal}"`);
+  if (s.modal && s.modal !== 'palette') parts.push(`window "${s.modal}"`);
   if (s.map) parts.push('the 3D brain map');
   else if (s.page === 'collegamenti' && (s.pageArg ?? '').startsWith('progetti')) parts.push(`page ${mapPlace((s.pageArg ?? '').split('/').slice(1).join('/') || null, s.mapPicked)}`);
   else parts.push(`page "${s.page}${s.pageArg ? `/${s.pageArg}` : ''}"`);

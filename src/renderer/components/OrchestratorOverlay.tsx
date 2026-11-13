@@ -3,7 +3,8 @@
 import { ErrorBoundary } from './ErrorBoundary';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useApp } from '../store/store';
-import { openMaps, setPrefs, ui } from '../store/ui';
+import { setPrefs, ui } from '../store/ui';
+import { openMaps } from '../actions';
 import { registerOverlay, schedule } from '../lib/viewports';
 import { scheduleLayer } from '../lib/layer';
 import { columnSize, viewport, type Reserve } from '../lib/orchestrator-dock';

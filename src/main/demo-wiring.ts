@@ -273,7 +273,12 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     resumed: (chatId: string) => chats.patch(chatId, { resumedAt: now() }),
     clearThumbs: () => browser.clearThumbs(),
     /** a delegation tree under a Strategist (README shots: the Grindhouse's thread cards) */
-    tree: () => { const t = demoTree(now()); chats.add(t.chats, t.items); },
+    tree: () => {
+      const t = demoTree(now());
+      // its plan's new piece goes on the shop's map first, as plan_propose does (ADR 0276)
+      try { projectMaps.planDraw('tree-plan', { project: 'alfa-shop', add: [{ name: 'Note di rilascio', kind: 'doc', description: 'Cosa cambia per chi usa gli sconti' }], links: [{ from: 'ordini', to: 'note-di-rilascio', label: 'descritto in' }] }); } catch { /* a demo map edited by hand: the plan shows without it */ }
+      chats.add(t.chats, t.items);
+    },
     /** a Strategist's plan with the user as it would be at a moment (e2e: its strip asking, proposing, under way) */
     plan: (chatId: string, plan: StrategyPlan | null) => chats.patch(chatId, { plan: plan ?? undefined }),
     /** a feed event, as the brain would publish it (e2e: toasts, notification center, badges) */

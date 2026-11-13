@@ -15,10 +15,10 @@ import { liveSource } from './lib/liveSource';
 import { sameList } from './store/state';
 import { routinePlacements } from './lib/routine-chats';
 import { useApp } from './store/store';
-import { openModal, openMaps, closeModal, pageLabel, setMap, setPrefs, toast, ui } from './store/ui';
+import { openModal, closeModal, pageLabel, setMap, setPrefs, toast, ui } from './store/ui';
 import {
   back, brainBridge, closeViewer, escapeOne, toggleViewerFull, viewerStep, focusChat, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, closeFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleOrchestrator, askRenewOrchestrator, newRequest,
-} from './actions';
+  openMaps } from './actions';
 import { TopBar } from './components/TopBar';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { BrainSetupBanner } from './components/BrainSetupBanner';
@@ -39,7 +39,6 @@ import { ConfirmDialog, ShortcutsDialog, Toasts } from './components/Overlays';
 import { HandoffDialog } from './components/HandoffDialog';
 import { CredentialsDialog } from './components/LoginsDialog';
 import { StatoDialog } from './components/StatoDialog';
-import { ProjectMapsDialog } from './components/ProjectMapsDialog';
 import { IconArrowLeft } from './components/Icons';
 import { Keys, TooltipLayer } from './components/ui';
 import { SettingsPage } from './components/SettingsPage';
@@ -125,7 +124,7 @@ function onKey(e: KeyboardEvent): void {
     case 'settings': go({ page: 'impostazioni' }); break;
     case 'voice': if (!e.repeat) shortcutVoice(); break;
     case 'talk': if (!e.repeat) shortcutTalk(); break;
-    case 'stato': openMaps(); break; // Ctrl+Shift+S: the project maps took «Stato»'s place (ADR 0275); Stato stays in the palette
+    case 'stato': openMaps(); break; // Ctrl+Shift+S: the project maps took «Stato»'s place (ADR 0275), beside the Orchestrator (ADR 0276)
     case 'escape': if (!escapeOne()) return; break;
   }
   e.preventDefault();
@@ -291,7 +290,6 @@ export function App() {
       {modal === 'handoff' && <HandoffDialog />}
       {modal === 'credentials' && <CredentialsDialog />}
       {modal === 'stato' && <StatoDialog />}
-      {modal === 'maps' && <ProjectMapsDialog />}
     </div>
   );
 }

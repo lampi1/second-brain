@@ -110,6 +110,7 @@
   .pm-body { grid-template-columns: 1fr; }
   /* the map at its full height, then the agents side by side under it */
   .pm-body { flex: none; }
+  .pm-canvas { height: max(520px, calc(100vh - 360px)); }
   .pm-side { overflow: visible; }
   .pm-group { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
   .pm-group h4 { grid-column: 1 / -1; }
@@ -128,3 +129,32 @@
 .pm.pm-full .pm-side { min-height: 0; overflow: auto; }
 /* room for the «Discuti» corner button: the box's first lines never run under it */
 .pm-node { padding-right: 34px; }
+
+/* Planning (ADR 0276): a piece that does not exist yet, the plan's steps inside a box, the plan in the side column */
+.pm-node.s-planned { border: 1.5px dashed var(--violet); background: var(--violet-bg); }
+.pm-dot.s-planned { background: none; border: 1.5px solid var(--violet); }
+.pm-edge.s-planned { stroke: var(--violet); stroke-dasharray: 6 5; } .pm-arrow.s-planned { fill: var(--violet); }
+.pm-label.s-planned { border-color: color-mix(in srgb, var(--violet) 50%, transparent); }
+.pm-works { display: flex; flex-direction: column; gap: 2px; min-height: 0; flex: 1; overflow: hidden; font-size: var(--fs-s); color: var(--text-2); }
+.pm-works > span { display: flex; gap: 6px; align-items: baseline; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pm-works i, .pm-worklist i { font-style: normal; flex: none; width: 12px; text-align: center; color: var(--text-3); }
+.pm-works [data-s='now'] i, .pm-worklist [data-s='now'] i { color: var(--accent); }
+.pm-works [data-s='done'] i, .pm-worklist [data-s='done'] i { color: var(--green); }
+.pm-works [data-s='blocked'] i, .pm-worklist [data-s='blocked'] i { color: var(--red); }
+.pm-works [data-s='done'], .pm-worklist [data-s='done'] > span { color: var(--text-3); }
+.pm-works-more { color: var(--text-3); font-size: var(--fs-xs); }
+.pm-new { font-style: normal; font-size: 10px; font-weight: 700; line-height: 1; padding: 3px 5px; border-radius: 5px; background: var(--violet); color: var(--bg); margin-left: 6px; }
+.pm-worklist { list-style: none; margin: 4px 0 8px; padding: 8px 0 0; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px; font-size: var(--fs-m); }
+.pm-worklist li { display: flex; gap: 8px; align-items: baseline; }
+.pm-worklist li > span { flex: 1; min-width: 0; }
+.pm-worklist small { color: var(--text-3); font-size: var(--fs-xs); text-transform: capitalize; }
+/* a plan sits over the drawing, one line: its «Approva e parti» is in sight without scrolling */
+.pm-plan { border: 1px solid var(--border-2); border-radius: var(--r-l); padding: 8px 14px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; background: var(--surface); }
+.pm-plan-n { flex: 1; min-width: 120px; }
+.pm-plan[data-phase='proposed'] { border-color: var(--violet); background: var(--violet-bg); }
+.pm-plan h3 { margin: 0; font-size: var(--fs-l); }
+.pm-plan p { margin: 0; }
+.pm-plan-act { display: flex; gap: 8px; flex-wrap: wrap; }
+.pm-agent-change { color: var(--amber); }
+.pm-agent-change[data-seen] { color: var(--text-2); }
+.pm-agent-change[data-seen] b { color: var(--green); }

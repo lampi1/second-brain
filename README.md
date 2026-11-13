@@ -187,7 +187,9 @@ case 7 and caught a refund that ignores the original discount.
 **Map → Projects** shows a project instead of its code: who uses it, your systems and the external ones they talk to,
 environments and documents, with the links and a status on each. Click a system to step inside it; the agents at work
 sit beside the boxes they work on, with their steps and the question they wait on. An agent draws the map (ask the
-Orchestrator), the agents at work keep it current, and a slider replays it from the first drawing.
+Orchestrator), the agents at work keep it current, and a slider replays it from the first drawing. With Plan mode the
+Strategist proposes the plan on the map itself: the pieces to build show as planned, each box holds its works, you
+approve from the map and the boxes turn green as the agents finish.
 
 <p align="center"><img src="docs/screenshots/project-map.webp" alt="A project map: people, the shop system, external systems and environments linked, with statuses, what waits for you and the agents at work" width="640"></p>
 

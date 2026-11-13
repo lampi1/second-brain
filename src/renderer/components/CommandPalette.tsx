@@ -18,7 +18,7 @@ import { fuzzyScore } from '../lib/fuzzy';
 import { closedTime, folderName, sameDay, stateInfo } from '../lib/format';
 import { engineName, otherEngine } from '../lib/engines';
 import { app } from '../store/store';
-import { BRAIN_PAGES, closeModal, openMaps, openModal, pageLabel, placeLabel, setMaximized, setPrefs, setOrchestratorOpen, ui, type BrainPageId } from '../store/ui';
+import { BRAIN_PAGES, closeModal, openModal, pageLabel, placeLabel, setMaximized, setPrefs, setOrchestratorOpen, ui, type BrainPageId } from '../store/ui';
 import { linkOfEvent, parseLink } from '../lib/notify';
 import { settingsSections } from '../lib/settings-sections';
 import { closedChats } from '../lib/autoclose';
@@ -26,7 +26,7 @@ import { now } from '../lib/clock';
 import {
   back, copyLink, currentLink, focusChat, reopenChat, focusRequest, focusTile, forward, go, nextThing, openLink, recentPlaces, stopAllAsk, stopFocused, toggleCenter, toggleFocusMode,
   toggleMaximize, toggleOrchestrator, askRenewOrchestrator, askClearOrchestrator, orchestratorId, newBrowser, newRequest,
-} from '../actions';
+  openMaps } from '../actions';
 import {
   HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconLearn, IconBranch, IconFile, IconBrain, IconChart, IconShield, IconFocus, IconGlobe,
   IconHistory, IconKeyboard, IconLayers, IconLightbulb, IconLink, IconList, IconLogin, IconMap, IconMaximize, IconMic, IconPlus, IconQuestion, IconSearch, IconSettings, IconStop,

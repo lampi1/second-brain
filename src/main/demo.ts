@@ -127,13 +127,14 @@ export function demoTree(E: number): { chats: ChatSummary[]; items: Record<strin
   const probe = node('tree-probe', 'scout', 'Scout', 'Perché il test 42 fallisce', 'Trova perché il test 42 fallisce.', 2,
     { costUsd: 0.03, lastText: 'Leggo il log del test 42.' }, sentinel.id, ['Causa con la riga']);
   // its plan, approved by the user: what it asked, the steps and how far they got (ADR 0108)
-  lead.plan = { phase: 'running', at: E - 15 * MIN, doneWhen: 'I test ordini passano e le note sono pronte.',
+  // drawn on the shop's map (ADR 0276): three steps on «Ordini e sconti», the notes on a piece that is not there yet
+  lead.plan = { phase: 'running', at: E - 15 * MIN, map: 'alfa-shop', doneWhen: 'I test ordini passano e le note sono pronte.',
     clarified: [{ q: 'Dove', a: 'Carrello, ordine e reso' }, { q: 'Offerte', a: 'No, solo a prezzo pieno' }],
     steps: [
-      { title: 'Trovo dove si calcola lo sconto oggi', role: 'scout', state: 'done', chatIds: [scout.id], startedAt: E - 16 * MIN, endedAt: E - 11 * MIN },
-      { title: 'Applico lo sconto % sul prezzo pieno, un solo arrotondamento', role: 'artisan', state: 'now', chatIds: [artisan.id], startedAt: E - 10 * MIN },
-      { title: 'Verifico con la suite ordini', role: 'sentinel', state: 'todo' },
-      { title: 'Scrivo le note di rilascio', role: 'herald', state: 'now', chatIds: [herald.id], startedAt: E - 1 * MIN },
+      { title: 'Trovo dove si calcola lo sconto oggi', role: 'scout', state: 'done', on: 'ordini', chatIds: [scout.id], startedAt: E - 16 * MIN, endedAt: E - 11 * MIN },
+      { title: 'Applico lo sconto % sul prezzo pieno, un solo arrotondamento', role: 'artisan', state: 'now', on: 'ordini', chatIds: [artisan.id], startedAt: E - 10 * MIN },
+      { title: 'Verifico con la suite ordini', role: 'sentinel', state: 'todo', on: 'ordini' },
+      { title: 'Scrivo le note di rilascio', role: 'herald', state: 'now', on: 'note-di-rilascio', chatIds: [herald.id], startedAt: E - 1 * MIN },
     ] };
   const chats = [lead, scout, artisan, sentinel, probe, herald];
   // what each did, as tool rows: the cards' steps (lib/run-steps.ts)

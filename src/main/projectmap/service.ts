@@ -29,6 +29,8 @@ export interface ProjectMapsDeps {
   pending(): PendingRequest[];
   /** tells the page a map or its agents changed */
   emit(project: string): void;
+  /** puts a project's map on screen (ADR 0276: a plan just proposed on it waits there for the user's ok) */
+  show?(project: string): void;
   /** userData/project-map.json */
   stateFile: string;
   now?: () => number;
@@ -64,6 +66,8 @@ export function basesOf(chat: ChatSummary, root: string, chats: readonly ChatSum
 export class ProjectMaps {
   private state: State = { focus: {}, changed: {} };
   private timers = new Map<string, NodeJS.Timeout>();
+  /** chat → the proposal (its plan's `at`) already put on screen */
+  private shown = new Map<string, number>();
   private saveTimer: NodeJS.Timeout | null = null;
 
   constructor(private readonly d: ProjectMapsDeps) {
@@ -189,6 +193,8 @@ export class ProjectMaps {
     if ((c.closedAt || c.state === 'closed') && (p.phase === 'proposed' || p.phase === 'revising')) { this.dropPlan(c.id); return; }
     const map = this.d.store.get(p.map);
     if (!map) return;
+    // the owner: «quando lo stratega ha finito con le domande si apra la mappa del piano e l'utente può premere approva»
+    if (p.phase === 'proposed' && this.shown.get(c.id) !== p.at) { this.shown.set(c.id, p.at); this.d.show?.(p.map); }
     const now = this.now(), ids = new Set(map.elements.map(e => e.id));
     let bound = false;
     const bind = (chatId: string, el: string) => {

@@ -40,35 +40,54 @@ test('the project map draws the project, zooms into a system and plays its histo
   } finally { await app.close(); }
 });
 
-// ADR 0275: the maps in a window, in «Stato»'s place (top bar, the Orchestrator's head, Ctrl+Shift+S, app_project_map open)
-test('the project maps open in a window from the Orchestrator and step into a system', async () => {
+// ADR 0276: «Mappe» (top bar, the Orchestrator's head, Ctrl+Shift+S, app_project_map open) opens the map as a page beside
+// the Orchestrator's column, never over it: the user talks to the Orchestrator while he looks at the map
+test('the project maps open beside the Orchestrator and step into a system', async () => {
   const { app, page } = await launchDemo();
   try {
     await page.getByTestId('maps-btn').click();
-    const win = page.getByTestId('maps');
-    await expect(win).toBeVisible();
-    const view = win.getByTestId('pm-view');
+    const view = page.getByTestId('pm-view');
     await expect(view.getByTestId('pm-node-negozio')).toBeVisible();
+    await expect(page.getByTestId('orchestrator-input')).toBeVisible();
     await page.waitForTimeout(300);
-    await shot(page, 'project-maps-window');
+    await shot(page, 'project-maps-page');
     await view.getByTestId('pm-node-negozio').click();
     await expect(view.getByTestId('pm-node-rimborsi')).toBeVisible();
-    await page.waitForTimeout(300);
-    await shot(page, 'project-maps-window-zoom');
-    await page.keyboard.press('Escape');
-    await expect(win).toBeHidden();
-    // it reopens where the user left it (Ctrl+Shift+S), and the breadcrumbs go back up
+    // it comes back where the user left it (Ctrl+Shift+S from another page)
+    await goPage(page, 'task');
+    await expect(view).toHaveCount(0);
     await page.keyboard.press('Control+Shift+KeyS');
     await expect(view.getByTestId('pm-node-rimborsi')).toBeVisible();
     await view.locator('.pm-trail').getByRole('button', { name: 'Tutto il progetto' }).click();
     await expect(view.getByTestId('pm-node-carrello')).toHaveCount(0);
     // the Orchestrator opens it at a system (app_project_map open → ui:command 'maps')
-    await page.keyboard.press('Escape');
     await app.evaluate(({ BrowserWindow }) => { for (const w of BrowserWindow.getAllWindows()) if (w.webContents.getURL().startsWith('file:')) w.webContents.send('ui:command', { action: 'maps', value: 'alfa-shop/negozio' }); });
     await expect(view.getByTestId('pm-node-rimborsi')).toBeVisible();
-    await win.getByTestId('maps-full').click();
-    await expect(win).toBeHidden();
-    await expect(page.getByTestId('pm-view').getByTestId('pm-node-rimborsi')).toBeVisible();
+  } finally { await app.close(); }
+});
+
+// ADR 0276: a Strategist's plan drawn on the map: its steps inside the box they work on, the piece that is not there
+// yet, the plan in the side column with «Approva e parti» while it waits for the user
+test('a plan is drawn on the map: steps in their box, a planned piece, approval from the map', async () => {
+  const { app, page } = await launchDemo();
+  try {
+    await app.evaluate(() => (globalThis as unknown as { __sbDemo: { tree(): void } }).__sbDemo.tree());
+    await page.getByTestId('maps-btn').click();
+    const view = page.getByTestId('pm-view');
+    await expect(view.getByTestId('pm-plan')).toContainText('Sconti in percentuale');
+    await expect(view.getByTestId('pm-plan')).toContainText('1 di 4 passi fatti');
+    await expect(view.getByTestId('pm-node-note-di-rilascio')).toBeVisible();
+    await view.getByTestId('pm-node-negozio').click();
+    await expect(view.getByTestId('pm-works-ordini')).toContainText('Trovo dove si calcola lo sconto oggi');
+    await expect(view.getByTestId('pm-works-ordini')).toContainText('1/3 fatti');
+    await page.waitForTimeout(300);
+    await shot(page, 'project-map-plan');
+    // a plan that waits for the user: the pieces dashed, the approval on the map
+    await app.evaluate(() => { const d = (globalThis as unknown as { __sbDemo: { plan(id: string, p: unknown): void } }).__sbDemo; d.plan('tree-plan', { phase: 'proposed', at: 5, map: 'alfa-shop', clarified: [], steps: [{ title: 'Scrivo i resi parziali', role: 'artisan', state: 'todo', on: 'rimborsi' }] }); });
+    await expect(view.getByTestId('pm-plan-approve')).toBeVisible();
+    await shot(page, 'project-map-plan-proposed');
+    await view.getByTestId('pm-plan-approve').click();
+    await expect(view.getByTestId('pm-plan-approve')).toHaveCount(0);
   } finally { await app.close(); }
 });
 
@@ -78,7 +97,7 @@ test('the maps go real full screen, Esc leaves it, and a box is discussed with t
   const { app, page } = await launchDemo();
   try {
     await page.getByTestId('maps-btn').click();
-    const win = page.getByTestId('maps'), view = win.getByTestId('pm-view');
+    const view = page.getByTestId('pm-view');
     await view.getByTestId('pm-node-negozio').click();
     await expect(view.getByTestId('pm-node-rimborsi')).toBeVisible();
     await view.getByTestId('pm-fullscreen').click();
@@ -91,12 +110,12 @@ test('the maps go real full screen, Esc leaves it, and a box is discussed with t
     await shot(page, 'project-maps-fullscreen');
     await page.keyboard.press('Escape');
     await expect(view.getByTestId('pm-fullscreen')).toHaveAttribute('aria-pressed', 'false');
-    await expect(win).toBeVisible(); // Esc left the full screen, not the window
+    await expect(view).toBeVisible(); // Esc left the full screen, not the page
     await page.waitForTimeout(450);
 
-    // one click on a box's corner: the window steps aside, the Orchestrator has a draft that quotes the box
+    // one click on a box's corner: the Orchestrator, beside the map, has a draft that quotes the box
     await view.getByTestId('pm-talk-rimborsi').click();
-    await expect(win).toBeHidden();
+    await expect(view).toBeVisible();
     const input = page.getByTestId('orchestrator-input');
     await expect(input).toHaveValue(/Mappa «Alfa · negozio online» \(Negozio web\): Parte «Rimborsi», stato bloccato/);
     await expect(input).toHaveValue(/Voglio parlarne: $/);
@@ -110,7 +129,7 @@ test('the map moves like a design canvas: Ctrl+wheel zooms at the pointer, a dra
   const { app, page } = await launchDemo();
   try {
     await page.getByTestId('maps-btn').click();
-    const view = page.getByTestId('maps').getByTestId('pm-view'), canvas = view.getByTestId('pm-canvas');
+    const view = page.getByTestId('pm-view'), canvas = view.getByTestId('pm-canvas');
     const shop = view.getByTestId('pm-node-negozio');
     await expect(shop).toBeVisible();
     const scale = async () => Number(await canvas.getAttribute('data-scale'));

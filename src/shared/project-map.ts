@@ -257,7 +257,9 @@ export function applyEdit(map: ProjectMap, ops: unknown, now: number, plan?: str
     if (o.op === 'link') {
       const id = o.id === undefined ? `${String(o.from)}--${String(o.to)}`.slice(0, 48) : o.id;
       if (links.some(l => l.id === id)) throw new Error(`${key}: the link "${String(id)}" is already on the map`);
-      links.push({ id, from: o.from, to: o.to, label: o.label, ...(o.status ? { status: o.status } : {}) });
+      // an arrow to a piece that is not there yet is not there either
+      const dashed = [o.from, o.to].some(x => els.find(e => e.id === x)?.status === 'planned' || added.includes(x as string));
+      links.push({ id, from: o.from, to: o.to, label: o.label, ...(o.status ? { status: o.status } : dashed ? { status: 'planned' } : {}) });
       did.push(`+ ${nameOf(o.from)} → ${nameOf(o.to)}`);
       return;
     }
