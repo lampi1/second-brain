@@ -16,7 +16,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0003](0003-browser-mcp.md) Internal browsers exposed to agents as a hand-written local MCP server — accepted, partly superseded by 0237
 - [0004](0004-brain-and-product.md) The brain is a folder the app points to; the product never contains personal data — accepted
 - [0006](0006-ai-driven.md) The app is AI-driven: self-test, logs, doctor, and an app-control MCP — accepted
-- [0007](0007-self-hosting.md) Developing the app from the app: stable release + dev instance, promotion with green tests — accepted, partly superseded by 0075
+- [0007](0007-self-hosting.md) Developing the app from the app: stable release + dev instance, promotion with green tests — accepted
 - [0008](0008-live-changes.md) Live changes: settings as data, silent updates, a change log; never silent on protected things — accepted, partly superseded by 0020
 - [0009](0009-brain-settings-budget-estimates.md) Settings as data with agent proposals; calm toasts; spending limits that never stop; honest estimates — accepted
 - [0010](0010-monolith-engines.md) A monolith with two engines: Claude embedded, Cursor CLI the only external piece — accepted
@@ -27,7 +27,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0015](0015-chat-mail-real-time.md) Mail between chats delivered by the app in real time; the user's interrupt is not an error — accepted
 - [0016](0016-devops-single-page.md) One DevOps page with the content inside; Oggi and Adesso removed — accepted
 - [0017](0017-commands-news-regia-answers.md) Commands left for the user, the Regia's news, questions answered in the Regia — accepted
-- [0018](0018-skills-agents.md) Skills and agents: a section to list, create, edit and delete them; "/" in every chat input — accepted, partly superseded by 0083, 0241
+- [0018](0018-skills-agents.md) Skills and agents: a section to list, create, edit and delete them; "/" in every chat input — accepted, partly superseded by 0083
 - [0019](0019-questions-context-window.md) Questions carry their context; the typing field keeps the keyboard; questions in a window (optional) — accepted
 - [0021](0021-regia-overlay-and-several-regie.md) The Regia as a floating overlay; several Regie in tabs; "Pulisci" — accepted, partly superseded by 0028, 0035, 0068, 0071
 - [0022](0022-notifications-only-actionable.md) Only what needs the user interrupts; the rest is a list he reads when he wants — accepted
@@ -76,7 +76,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0068](0068-persistent-coordinator-column.md) The Grindhouse beside one persistent Orchestrator column — accepted
 - [0071](0071-all-workers-in-grindhouse.md) Every worker lives in the Grindhouse — accepted
 - [0072](0072-fresh-brain-starts-empty.md) A fresh brain starts empty: the app's rules, tools and agents stay in the app — accepted
-- [0073](0073-agent-loop-under-approval.md) The agents' improvement loop runs under the user's approval — accepted, partly superseded by 0153, 0077
+- [0073](0073-agent-loop-under-approval.md) The agents' improvement loop runs under the user's approval — accepted, partly superseded by 0077
 - [0074](0074-update-by-asking-and-local-release-drafts.md) A developer updates by asking the app; release drafts without GitHub Actions — accepted, partly superseded by 0231
 - [0075](0075-update-button-without-tests.md) "Aggiorna" in Settings: the latest version at once, without the test suite — accepted
 - [0076](0076-brain-scripts-and-changelog.md) The brain's scripts and its changelog, two sections under Brain — accepted, partly superseded by 0096, 0263
@@ -104,7 +104,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0100](0100-five-roles-automatic-verdict-honest-levels.md) Five work roles, a verdict from facts, honest levels — accepted
 - [0101](0101-honest-stats-one-vocabulary.md) Honest statistics, one vocabulary, explanations in place — accepted
 - [0102](0102-the-app-shows-what-it-does-by-itself.md) The app shows what it does by itself — accepted
-- [0103](0103-safety-without-popups.md) Safety without popups: a checkpoint before every turn — accepted
+- [0103](0103-safety-without-popups.md) Safety without popups: a checkpoint before every turn — accepted, partly superseded by 0254
 - [0104](0104-evidence-before-a-change-is-kept.md) Evidence before a change is kept: intervals, checkpoints, one primary metric — accepted
 - [0105](0105-lampo-quick-lane.md) «Lampo», the quick lane beside the Orchestrator — accepted, partly superseded by 0107
 - [0106](0106-lampo-sees-the-orchestrator.md) «Lampo» is a "btw": it sees the Orchestrator's conversation — accepted, partly superseded by 0107
@@ -240,7 +240,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0239](0239-single-entry-through-the-orchestrator.md) Single entry: the user talks only with the Orchestrator, and a command is asked once — accepted, partly superseded by 0275
 - [0240](0240-idle-engines-end-and-unsaved-work-holds.md) Idle engines end with their tools; a chat with unsaved git work does not close by itself — accepted
 - [0241](0241-skill-packages-and-skill-library.md) A skill is a package in .agents/skills, with its own page, history and roles — accepted
-- [0242](0242-role-skill-instead-of-role-notes.md) A role's know-how is its role skill; what it learns is a lesson the user approves — accepted
+- [0242](0242-role-skill-instead-of-role-notes.md) A role's know-how is its role skill; what it learns is a lesson the user approves — accepted, partly superseded by 0257
 - [0243](0243-fixed-core-instead-of-rules.md) Rules are gone: a fixed core is always loaded, everything else is a skill — accepted
 - [0244](0244-migration-moves-sections-into-skills.md) The migration moves a section into its skill, it no longer copies it — accepted
 - [0245](0245-memory-browser.md) Memoria shows the memory outside skills as one searchable shelf — accepted

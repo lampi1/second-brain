@@ -1,6 +1,6 @@
 # ADR 0103 · Safety without popups: a checkpoint before every turn
 
-Date: 2026-10-20 · Status: accepted (owner, 2026-10-20: «di default hanno tutti i permessi perché se no i popup compaiono
+Date: 2026-10-20 · Status: partly superseded by ADR 0254 (the refusal and ask lists, the checkpoint and undo stay); accepted (owner, 2026-10-20: «di default hanno tutti i permessi perché se no i popup compaiono
 ogni 2 secondi») · Builds on: ADR 0085 · Refined by: ADR 0228 (the snapshot runs while the message goes; the first
 write waits for it) · Superseded in part by: ADR 0254 (its refusal and ask lists: the user's brain rules decide)
 

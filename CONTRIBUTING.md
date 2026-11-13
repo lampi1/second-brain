@@ -38,7 +38,7 @@ git config user.email "<you>@users.noreply.github.com"
 A deny list that is set but missing blocks every commit and push (it is never skipped). A block prints the file, the
 line and the rule, never the matched text, and how to fix it: edit the line, or, only for a proven false positive, add
 the printed line (`path rule sha256:…`) to `.guardallow`, which is reviewed like code. Commit messages and identities
-are never silenced. Do not bypass the hooks with `--no-verify`. `npm run doctor`
+are never silenced. Do not bypass the hooks with `--no-verify`: CI scans the whole history again. `npm run doctor`
 shows whether the hooks are on and the config is readable.
 
 ## Workflow

@@ -20,8 +20,7 @@ function statusOf(header) {
   const whole = /^superseded by ADR (\d{4})/i.exec(para);
   if (whole) return `superseded by ${whole[1]}`;
   const partly = /^partly superseded/i.test(para);
-  const cut = para.split(/\b(?:Supersedes|supersedes|Builds on|Amends|Amended by|Replaces)\b/)[0];
-  const own = cut;
+  const own = para.split(/\b(?:Supersedes|supersedes|Builds on|Amends|Amended by|Replaces)\b/)[0];
   const from = own.search(/\b(?:superseded|replaced|removed)\b/i);
   // "partly superseded by ADR N (…), ADR M; accepted …": the replacing records are the ones before the first ";".
   const named = partly && own.includes(';') ? own.slice(0, own.indexOf(';')) : own.slice(Math.max(from, 0));

@@ -14,12 +14,13 @@ Only `main` is supported: fixes land there.
 second-brain starts AI agents that run commands, edit files and drive a browser with your own accounts. That is its
 job, not a bug. What counts as a vulnerability is anything that gets around the lines below:
 
-- The renderer runs with context isolation, a sandbox and a strict CSP; every IPC call is checked for its sender.
+- The renderer runs with context isolation, a sandbox and a CSP; every IPC call is checked for its sender.
 - The local MCP server listens on 127.0.0.1 only, with a token per chat.
-- Secrets never go to files or logs; the app handles credentials only in the cases its rules list
-  (`docs/agents/rules.md`, rule 2).
+- Secrets never go to logs or to plain files; the app handles credentials only in the cases its rules list
+  (`docs/agents/rules.md`, rule 2), encrypted with the system keychain.
 - The app never changes the settings, hooks or config of Claude Code, Codex, Cursor or OpenCode.
-- A command that touches production, a database or Azure waits for the user's yes, whatever the brain's rules allow.
+- The Orchestrator never grants, on the user's behalf, a permission that touches production, a database or Azure
+  without the user's own yes (ADR 0275).
 - An MCP server added by an agent stays off until the user reads its command and activates it.
 
 ## The guard

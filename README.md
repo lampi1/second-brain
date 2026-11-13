@@ -4,7 +4,7 @@
 
 <p align="center">
   <b>One Orchestrator for all your coding agents, and a brain that remembers what they learn.</b><br>
-  Claude Code, Codex, Cursor, OpenCode and any ACP agent on one screen, with your own logins.
+  Claude Code, Codex, Cursor, OpenCode and other ACP agents on one screen, with your own logins.
 </p>
 
 <p align="center">
@@ -165,8 +165,8 @@ repository takes.
 
 Agents may do everything by default. What stops them is a `permissions.json` file in your brain: a rule holds a
 command for your click, asks you (from the phone too), or forbids printing a secret. After a refusal the agent goes on
-with the rest. No file, no blocks (ADR 0254). Whatever the rules say, a command that touches production, a database
-or Azure waits for your yes.
+with the rest. No file, no blocks (ADR 0254). The Orchestrator answers the agents for you, except for what touches
+production, a database or Azure: that waits for your own yes.
 
 ### Agents that drive a real browser
 
@@ -182,7 +182,7 @@ navigates, clicks, fills forms and takes screenshots on its own, and every step 
 
 Everything the agents learn lands as a card: a fact, a skill, a rule, a setting. Swipe right to keep it, left to drop
 it (or the arrow keys, with Z to undo), and every card says who proposed it, in which chat and when. Behind the deck,
-**Memory** is one hub with tabs (Approved, Skills, Rules, Ideas, Files, Statistics). **Skills** follow the Agent Skills
+**Memory** is one hub with tabs (Proposals, Approved, Skills, the Rules always loaded, Ideas, Files). **Skills** follow the Agent Skills
 format: each one is a package with its own Scripts, saved queries, references and assets.
 
 <p align="center"><img src="docs/screenshots/memory.webp" alt="Memory: the live header with its counters, the tabs, and a proposal card swiped toward APPROVE" width="560"></p>

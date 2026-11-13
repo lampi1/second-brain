@@ -3,7 +3,7 @@
   "productName": "second-brain",
   "version": "0.1.0",
   "private": true,
-  "description": "One Orchestrator for all your coding agents (Claude Code, Codex, Cursor, OpenCode, ACP) and a brain of skills and memory in plain Markdown that remembers what they learn.",
+  "description": "One Orchestrator for all your coding agents (Claude Code, Codex, Cursor, OpenCode, other ACP agents) and a brain of skills and memory in plain Markdown that remembers what they learn.",
   "keywords": [
     "claude-code",
     "codex",

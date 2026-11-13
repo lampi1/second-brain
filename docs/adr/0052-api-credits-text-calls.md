@@ -1,6 +1,6 @@
 # ADR 0052 · The Max plan's API credits: the judge and text-only calls through the app
 
-Date: 2026-10-14 · Status: accepted · Builds on: ADR 0046 (generic engines, API keys in Settings), ADR 0032 (routing table)
+Date: 2026-10-14 · Status: accepted · Amended by: ADR 0210 · Builds on: ADR 0046 (generic engines, API keys in Settings), ADR 0032 (routing table)
 
 ## Context
 Since 2026-10-07 the Claude Max plan includes monthly API credits (100 $ with Max 5x, 200 $ with Max 20x), redeemed
