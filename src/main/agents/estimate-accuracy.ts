@@ -2,7 +2,7 @@
 // stime»): a backtest of the same estimator (task-estimate.ts) on every ended run of the last weeks, each one estimated
 // only from the runs that had ended before it started, as it would have been shown then. Per week: how many runs had an
 // estimate, the share whose real time (the job's elapsed time, ADR 0186) fell between half and double it, the median relative error, and the share
-// resting on the most specific match (same agent and same kind: it grows as the classifier sees more tasks). A small
+// resting on the most specific match (the same agent on the same model, ADR 0285). A small
 // module of its own so the Classificatori page can read the series too (IPC agents:estimates returns
 // it as `accuracy`). Pure. Used by index.ts (agents:estimates).
 import type { AgentRun } from '../../shared/agents';
@@ -28,14 +28,14 @@ export function estimateAccuracy(runs: readonly AgentRun[], now: number, weeks =
     if (r.endedAt === undefined || r.endedAt < first || r.endedAt > now) continue;
     const actual = index.actual(r.runId) ?? actualOf(r);
     if (actual?.timeMs == null) continue;
-    const e = estimateTask(index, { text: r.goal, agentId: r.agentId, before: r.startedAt });
+    const e = estimateTask(index, { text: r.goal, agentId: r.agentId, model: r.model, before: r.startedAt });
     if (e.timeMs === null || !(e.timeMs > 0)) continue;
     const b = buckets.get(weekStart(r.endedAt));
     if (!b) continue;
     b.n++;
     if (held(e.timeMs, actual.timeMs)) b.hits++;
     b.errs.push(Math.abs(actual.timeMs - e.timeMs) / e.timeMs);
-    if (e.basis === 'agent-kind') b.specific++;
+    if (e.basis === 'agent-model') b.specific++;
   }
   const points: AccuracyPoint[] = [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([at, b]) => ({
     weekStart: at, n: b.n,

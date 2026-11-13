@@ -28,9 +28,12 @@ export function sameBehaviour(a: AgentBehaviour, b: AgentBehaviour): boolean {
 const sameLinked = (a?: { linked?: readonly string[] }, b?: { linked?: readonly string[] }): boolean =>
   JSON.stringify([...(a?.linked ?? [])].sort()) === JSON.stringify([...(b?.linked ?? [])].sort());
 
-/** The fields behind each versioned change (ADR 0186). */
+/** The fields behind each versioned change (ADR 0186). Since ADR 0284 a change of model (engine, model, effort) or of
+ *  tier updates the active version in place: every run names its own model and tier, and a version per model left none
+ *  with enough runs to say anything (the owner's roles: 102 versions of 145 came from a model change alone). 'model'
+ *  and 'tier' stay as names for the versions already in the history. */
 const VERSIONED_FIELDS: Record<VersionedChange, readonly (typeof BEHAVIOUR_FIELDS)[number][]> = {
-  text: ['instructions'], skills: ['skills', 'knowhow'], model: ['engine', 'model', 'effort'], tier: ['tier', 'tierMax'],
+  text: ['instructions'], skills: ['skills', 'knowhow'], model: [], tier: [],
 };
 /** What changed between two behaviours that makes a new version; empty = the active version is updated in place. */
 export function versionedChanges(a: AgentBehaviour, b: AgentBehaviour): VersionedChange[] {

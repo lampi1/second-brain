@@ -2,7 +2,7 @@
 // 96 px, English name, what it is for, engine, model tier, trial and customized chips, Avvia), its run numbers, the
 // permissions card (RolePermissions: tool classes and ceiling, each with its "?", ADR 0085), the instructions it runs
 // with, its configuration (tools, permission ceiling, the roles it may launch), the skills it loads at every launch, its
-// versions (a new one only for text, skills, model or tier; each with its runs, verified outcomes and success ±, ADR
+// versions (a new one only for text or skills, ADR 0284; each with its runs, verified outcomes and success ±, ADR
 // 0186). "Modifica" opens the editor in place: only the
 // behaviour is editable (instructions, engine, model, tier, launches, skills, context; the permissions on their own
 // card); name and summary belong to the role; the character can be swapped for the user's own picture
@@ -27,6 +27,7 @@ import { RolePermissions, permissionSummary } from './RolePermissions';
 import { holdUpdate } from '../lib/update-barrier';
 import { back, go } from '../actions';
 import { locale, t } from '../i18n';
+import { ModelStandings } from './ModelStandings';
 import { AgentAvatar } from './AgentAvatar';
 import { useWorkingChats } from './AgentCatalogCard';
 import { AgentImagePicker } from './AgentImagePicker';
@@ -345,6 +346,7 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
             {profile.skills.length ? <div className="bm-chips">{profile.skills.map(s => <button key={s} type="button" className="bm-chip" onClick={() => go({ page: 'skill', arg: s })}>{s}</button>)}</div> : <p>{t('studio.skillsNone')}</p>}
             <button type="button" className="link-btn" onClick={() => go({ page: 'skill' })}>{t('bm.studio.manage')}</button>
           </section>
+          <ModelStandings id={profile.id} standing={metrics?.standing} inUse={profile.model} />
           <Versions profile={profile} metrics={metrics} />
         </div>
       </div>

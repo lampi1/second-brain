@@ -1,4 +1,4 @@
-// The task estimate (ADR 0087): similar tasks in three tiers, the parts of a request, the fast path, the strips' view
+// The task estimate (ADR 0087): similar tasks in three tiers (agent and model, agent, kind: ADR 0285), the parts of a request, the fast path, the strips' view
 // (an estimate made before the run started), the weekly accuracy backtest, the demo history and the Orchestrator's tool.
 import { describe, expect, it } from 'vitest';
 import type { AgentRun } from '../../../src/shared/agents';
@@ -13,7 +13,7 @@ const run = (p: Partial<AgentRun> & { agentId: string; goal: string; min?: numbe
   const endedAt = p.at ?? 1_000 * DAY + seq * MIN;
   const ms = (p.min ?? 4) * MIN;
   return { runId: id, chatId: `c${seq}`, version: 1, startedBy: 'orchestrator', startedAt: endedAt - ms - MIN, endedAt, endReason: 'completed', executionMs: ms,
-    costUsd: p.usd ?? 0.12, tokens: null, counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, ...p } as AgentRun;
+    model: 'm-mid', costUsd: p.usd ?? 0.12, tokens: null, counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, ...p } as AgentRun;
 };
 const fixes = (n: number, agentId = 'artisan', min = 4) => Array.from({ length: n }, (_, i) => run({ agentId, goal: `Correggi il bug ${i} del totale`, min: min + (i % 3) }));
 
@@ -48,9 +48,9 @@ describe('parts of a request', () => {
 });
 
 describe('estimate from similar tasks', () => {
-  it('uses the same agent and kind first, with median, middle half and confidence', () => {
-    const e = estimateTask(new SimilarIndex(fixes(12)), { text: 'Correggi il bug dello sconto', agentId: 'artisan' });
-    expect(e).toMatchObject({ kind: 'bug-fix', basis: 'agent-kind', n: 12, parts: 1, confidence: 'high', path: 'one-agent', quick: true });
+  it('uses the same agent on the same model first, with median, middle half and confidence', () => {
+    const e = estimateTask(new SimilarIndex(fixes(12)), { text: 'Correggi il bug dello sconto', agentId: 'artisan', model: 'M-Mid[1m]' });
+    expect(e).toMatchObject({ kind: 'bug-fix', basis: 'agent-model', n: 12, parts: 1, confidence: 'high', path: 'one-agent', quick: true });
     // elapsed 5..7 min (ADR 0186), times the kind's past actual/estimate ratio
     expect(e.timeMs).toBeGreaterThanOrEqual(5 * MIN);
     expect(e.timeMs).toBeLessThanOrEqual(8 * MIN);
@@ -59,11 +59,16 @@ describe('estimate from similar tasks', () => {
     expect(e.costUsd).toBeCloseTo(0.12);
     expect(e.why).toMatch(/ONE agent/);
   });
-  it('falls back to the kind on any agent, then to the agent on any kind, else gives no figure', () => {
-    const runs = [...fixes(4, 'artisan'), ...Array.from({ length: 3 }, (_, i) => run({ agentId: 'sentinel', goal: `Esegui i test case ${i} in staging` }))];
+  it('falls back to the agent on any model, then to the kind on any agent, else gives no figure', () => {
+    const runs = [...fixes(4, 'artisan'), ...Array.from({ length: 3 }, (_, i) => run({ agentId: 'sentinel', goal: `Esegui i test case ${i} in staging`, min: 9 })),
+      ...Array.from({ length: 2 }, (_, i) => run({ agentId: 'scout', goal: `Correggi il bug ${i} del resto` }))];
     const idx = new SimilarIndex(runs);
-    expect(estimateTask(idx, { text: 'Correggi il bug', agentId: 'sentinel' })).toMatchObject({ basis: 'kind', n: 4, confidence: 'high' }); // a tight spread
-    expect(estimateTask(idx, { text: 'Scrivi la nota di rilascio', agentId: 'sentinel' })).toMatchObject({ basis: 'agent', n: 3 });
+    // a model the agent never ran on, or none named: the agent's jobs on any model, whatever their kind
+    expect(estimateTask(idx, { text: 'Correggi il bug', agentId: 'sentinel', model: 'm-top' })).toMatchObject({ basis: 'agent', n: 3, timeMs: 10 * MIN });
+    expect(estimateTask(idx, { text: 'Correggi il bug', agentId: 'sentinel' })).toMatchObject({ basis: 'agent', n: 3 });
+    // an agent with fewer than 3 jobs: the kind on any agent, one step less sure (a tight spread would be high)
+    expect(estimateTask(idx, { text: 'Correggi il bug', agentId: 'scout', model: 'm-mid' })).toMatchObject({ basis: 'kind', n: 6, confidence: 'medium' });
+    expect(estimateTask(idx, { text: 'Correggi il bug' })).toMatchObject({ basis: 'kind', n: 6, confidence: 'high' });
     const none = estimateTask(idx, { text: 'Scrivi la nota di rilascio', agentId: 'herald' });
     expect(none).toMatchObject({ basis: null, n: 0, timeMs: null, costUsd: null, confidence: null, path: 'one-agent' });
   });
@@ -92,6 +97,21 @@ describe('estimate from similar tasks', () => {
     expect(actualOf(r, 0.5)).toEqual({ timeMs: 5 * MIN, costUsd: 0.5 }); // the tree's cost
     const kid = { ...run({ agentId: 'scout', goal: 'y', usd: 0.3 }), parentRunId: r.runId }, grandkid = { ...run({ agentId: 'scout', goal: 'z', usd: 0.1 }), parentRunId: kid.runId };
     expect(treeCosts([r, kid, grandkid]).get(r.runId)).toBeCloseTo(0.52);
+    // an engine that reports tokens and no cost: the list price of its model, when there is one (ADR 0284)
+    const tokens = { input: 1_000_000, output: 100_000, cacheRead: 0, cacheWrite: 0 }, price = { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 };
+    const free = { ...run({ agentId: 'scout', goal: 'w' }), costUsd: null, tokens, model: 'gpt-x', parentRunId: r.runId };
+    expect(treeCosts([r, free]).get(r.runId)).toBeCloseTo(0.12);
+    expect(treeCosts([r, free], m => m === 'gpt-x' ? price : null).get(r.runId)).toBeCloseTo(0.12 + 3);
+    expect(new SimilarIndex([free], m => m === 'gpt-x' ? price : null).actual(free.runId)).toMatchObject({ costUsd: 3 });
+    // one lookup per model, however many runs (the lookup reads the brain's price table)
+    let asked = 0;
+    treeCosts(Array.from({ length: 5 }, () => ({ ...free, runId: run({ agentId: 'scout', goal: 'w' }).runId })), m => { asked++; return m === 'gpt-x' ? price : null; });
+    expect(asked).toBe(1);
+    // the read worker gets the prices as a table (run-estimates.ts estimatesState)
+    const five = Array.from({ length: 5 }, (_, i) => ({ ...run({ agentId: 'scout', goal: `Cerca ${i}`, at: 1_500 * DAY + i * MIN * 10 }), costUsd: null, tokens, model: 'gpt-x' }));
+    const view = estimatesState(five, [five[4]!.runId], 1_600 * DAY, { 'gpt-x': price }).runs[five[4]!.runId]!;
+    expect(view).toMatchObject({ estimate: { basis: 'agent-model', costUsd: 3 }, actual: { costUsd: 3 } });
+    expect(estimatesState(five, [five[4]!.runId], 1_600 * DAY).runs[five[4]!.runId]!.estimate).toMatchObject({ costUsd: null });
     expect(actualOf({ ...r, endedAt: undefined })).toBeNull();
     expect(actualOf({ ...r, source: 'oneshot' })).toBeNull();
     expect(actualOf({ ...r, executionMs: undefined, endReason: 'stale', costUsd: null })).toBeNull();
@@ -108,7 +128,7 @@ describe('the strips\' view', () => {
     const openRun = { ...open, endedAt: undefined, endReason: undefined };
     const ended = run({ agentId: 'artisan', goal: 'Correggi un altro bug', min: 30, at: 2_001 * DAY });
     const views = runEstimates([...past, openRun, ended], [openRun.runId, ended.runId, 'r_ffffffffffff']);
-    expect(views[openRun.runId]).toMatchObject({ actual: null, hit: null, estimate: { basis: 'agent-kind', n: 5 } });
+    expect(views[openRun.runId]).toMatchObject({ actual: null, hit: null, estimate: { basis: 'agent-model', n: 5 } });
     expect(views[ended.runId]).toMatchObject({ actual: { timeMs: 31 * MIN }, hit: false, estimate: { n: 5 } }); // itself not counted
     expect(views['r_ffffffffffff']).toBeUndefined();
     expect(runEstimates(past.slice(0, 1), [past[0]!.runId])[past[0]!.runId]).toMatchObject({ estimate: null });
@@ -162,7 +182,7 @@ describe('task_estimate', () => {
   it('answers with the estimate and refuses bad input', async () => {
     const tool = estimateTool(() => fixes(6));
     expect(tool.annotations?.readOnlyHint).toBe(true);
-    expect(await tool.run({ request: 'Correggi il bug', agentId: 'artisan' })).toMatchObject({ basis: 'agent-kind', n: 6, path: 'one-agent' });
+    expect(await tool.run({ request: 'Correggi il bug', agentId: 'artisan' })).toMatchObject({ basis: 'agent', n: 6, path: 'one-agent' });
     expect(() => tool.run({ request: '' })).toThrow();
     expect(() => tool.run({ request: 'x', agentId: 'Bad Id' })).toThrow();
   });

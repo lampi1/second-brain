@@ -1,13 +1,14 @@
 // The shapes of the task estimate (ADR 0087): how long and how much a request should take, read from the agent runs
-// of similar past tasks (same agent and same kind first), with how many tasks it rests on, how sure it is, how many
+// of similar past tasks (same agent and same model first, ADR 0285), with how many tasks it rests on, how sure it is, how many
 // parts the request has and the path that follows (the Orchestrator answers itself, starts one agent, or plans a tree).
 // Also the estimate's measured accuracy week by week (a backtest of the same estimator on the past runs). Computed in
 // main (src/main/agents/task-estimate.ts, estimate-accuracy.ts); read by the Grindhouse strips and the Orchestrator's plan
 // (renderer lib/run-estimates.ts) over IPC agents:estimates, and by the Orchestrator through the task_estimate tool.
 import type { TaskKind } from './contract';
 
-/** Which past runs the estimate rests on: same agent and same kind, same kind on any agent, the same agent on any kind. */
-export type EstimateBasis = 'agent-kind' | 'kind' | 'agent';
+/** Which past runs the estimate rests on: the same agent on the same model, the same agent on any model, the same kind
+ *  of work on any agent (ADR 0285). */
+export type EstimateBasis = 'agent-model' | 'agent' | 'kind';
 export type EstimateConfidence = 'high' | 'medium' | 'low';
 /** self = the Orchestrator answers itself; one-agent = one chat, no children; tree = a plan of several parts */
 export type FastPath = 'self' | 'one-agent' | 'tree';
@@ -55,7 +56,7 @@ export interface AccuracyPoint {
   hitRate: number | null;
   /** median |real − estimate| / estimate, 0..∞ */
   medianErr: number | null;
-  /** share of the estimates that rested on the same agent and the same kind (the most specific match) */
+  /** share of the estimates that rested on the same agent on the same model (the most specific match) */
   specificShare: number | null;
 }
 

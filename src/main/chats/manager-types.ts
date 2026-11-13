@@ -25,6 +25,8 @@ export interface ChatManagerOptions {
    *  of changes, never blocking the main process on the disk); strict checkpoints, the quit and the exit write at once.
    *  0 / absent: every save is synchronous (unit tests read the files right after an action). */
   writeDelayMs?: number;
+  /** a model's list price, for the runs whose engine reported tokens but no cost (agents/list-price.ts, ADR 0284) */
+  priceOf?: (model: string) => { input: number; cacheRead: number; cacheWrite: number; output: number } | null;
   /** first wait before a failed deferred write is tried again (doubles up to 60 s; default 2 s) */
   writeRetryMs?: number;
   /** a brief waits for this chat's next question (genui/artifacts.ts hasBrief, ADR 0150); absent = none asked for */

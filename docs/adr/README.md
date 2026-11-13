@@ -185,7 +185,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0183](0183-one-read-only-file-viewer.md) One read-only in-app viewer for every file link — accepted
 - [0184](0184-user-pictures-for-roles.md) The user's own picture for a role — accepted
 - [0185](0185-impara-lessons.md) Impara: lessons on a blackboard — accepted
-- [0186](0186-honest-classifiers-and-statistics.md) Honest classifiers and statistics: one taxonomy, one success, fewer numbers — accepted
+- [0186](0186-honest-classifiers-and-statistics.md) Honest classifiers and statistics: one taxonomy, one success, fewer numbers — accepted, partly superseded by 0284, 0285
 - [0187](0187-end-of-day-smoothness.md) Closing chats frees what they started; repeated work stops growing with the day — accepted
 - [0188](0188-impara-research-and-animated-board.md) Impara: research and verification before teaching, the animated board, the user's teacher — accepted
 - [0189](0189-impara-subjects-and-spaced-review.md) Impara: subjects, verified review cards, spaced review — accepted
@@ -282,6 +282,8 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0281](0281-scheduled-routines.md) Scheduled routines: a request the Orchestrator receives at its time — accepted
 - [0282](0282-first-turn-takes-its-checkpoint.md) A chat's first turn takes its checkpoint, and a follow-up turn has its own files — accepted
 - [0283](0283-longer-run-archive-cold-runs.md) A longer archive of runs, and a save that costs what the runs at work weigh — accepted
+- [0284](0284-performance-by-model.md) The level is the role's, the performance is the model's — accepted
+- [0285](0285-estimates-by-role-and-model.md) An estimate rests on the role and its model before the kind of work — accepted
 
 ## Replaced
 

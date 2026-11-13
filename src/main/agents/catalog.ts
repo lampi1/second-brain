@@ -312,7 +312,7 @@ export class AgentCatalogService {
     this.writable(); const old = this.find(id);
     return { ...this.face(id), ...this.behaviour(obj(value), id, true, old) };
   }
-  /** A new version when the role's text, skills, model or tier change (ADR 0186), recording which; any other change, and
+  /** A new version when the role's text or skills change (ADR 0186, 0284), recording which; any other change, and
    *  every migration (`migration`), updates the active version in place: its number, and so its run statistics, stay. */
   private version(old: AgentProfile, next: Behaviour, author: AgentAuthor, reason: string, state: 'active' | 'trial' = 'active', migration = false): AgentProfile {
     const at = Math.max(this.now(), old.updatedAt + 1), changed = migration ? [] : versionedChanges(old, next);
@@ -328,6 +328,8 @@ export class AgentCatalogService {
       return structuredClone(profile);
     }
     const version = old.version + 1;
+    // a trial of a model or a tier alone is still a version (it is compared with its baseline): it keeps those names
+    if (!changed.length && state === 'trial') changed.push(...(old.engine !== next.engine || (old.model ?? null) !== (next.model ?? null) || old.effort !== next.effort ? ['model' as const] : []), ...(old.tier !== next.tier || old.tierMax !== next.tierMax ? ['tier' as const] : []));
     const profile: AgentProfile = { ...this.face(old.id), ...next, id: old.id, scope: old.scope, createdAt: old.createdAt, updatedAt: at, version, activeVersion: version, ...who,
       ...(state === 'trial' ? { trial: { version, baseline: old.activeVersion, startedAt: at } } : {}) };
     this.commit(this.profiles.map(p => p.id === old.id ? profile : p), [{ agentId: old.id, version, parentVersion: old.activeVersion, behaviour: behaviourOf(profile), author, reason: text(reason, 600, 'Motivo'), at, state, changed }],
@@ -424,14 +426,20 @@ export class AgentCatalogService {
     const entry = this.store.get(id, version);
     if (!entry) throw new Error('Questa versione non è più nella cronologia.');
     const { knowhow: _k, effort: _e, maxContext: _m, ...rest } = p; void _k; void _e; void _m;
-    // a version is its text, skills, model and tier (ADR 0186): going back to one keeps today's tools, permission
-    // ceiling, launches and limits, so an undo never widens what the user narrowed since (they change in place)
-    const kept = { tools: p.tools, permissionCeiling: p.permissionCeiling, launches: p.launches, ...(typeof p.maxContext === 'number' ? { maxContext: p.maxContext } : {}) };
+    // a version is its text and skills (ADR 0186, 0284): going back to one keeps today's tools, permission ceiling,
+    // launches and limits, so an undo never widens what the user narrowed since, and today's engine, model, effort and
+    // tier (they all change in place)
+    const kept = { tools: p.tools, permissionCeiling: p.permissionCeiling, launches: p.launches, ...(typeof p.maxContext === 'number' ? { maxContext: p.maxContext } : {}),
+      engine: p.engine, model: p.model, tier: p.tier, tierMax: p.tierMax, ...(p.effort !== undefined ? { effort: p.effort } : {}) };
     const target = { ...(entry.behaviour as unknown as Record<string, unknown>), ...kept };
     if (typeof p.maxContext !== 'number') delete target.maxContext;
-    const profile: AgentProfile = { ...rest, ...this.behaviour(target, id, true, rest as Behaviour, false), activeVersion: version,
+    if (p.effort === undefined) delete target.effort;
+    const profile: AgentProfile = { ...rest, ...this.behaviour(target, id, true, rest as Behaviour), activeVersion: version,
       updatedAt: Math.max(this.now(), p.updatedAt + 1), lastEditedBy: by, ...(by === 'user' ? { userLocked: true } : {}) };
-    this.commit(this.profiles.map(x => x.id === id ? profile : x), [], [{ agentId: id, version: p.activeVersion, state: 'superseded' }, { agentId: id, version, state: 'active' }]);
+    // the version's own record takes what was kept, as any in-place change of the active version does: a trial's
+    // rollback and the nightly sampling read that record, and it would still say the model and tools of long ago
+    const amends = sameBehaviour(entry.behaviour, profile) ? [] : [{ agentId: id, version, behaviour: behaviourOf(profile), at: profile.updatedAt, by, reason: 'Versione ripristinata: modello, livello, strumenti e limiti restano quelli di oggi' }];
+    this.commit(this.profiles.map(x => x.id === id ? profile : x), [], [{ agentId: id, version: p.activeVersion, state: 'superseded' }, { agentId: id, version, state: 'active' }], amends);
     this.knowhowChanged(p, profile);
     if (by === 'user') this.d.onCustomized?.();
     return structuredClone(profile);

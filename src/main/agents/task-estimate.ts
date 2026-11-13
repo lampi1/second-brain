@@ -1,9 +1,11 @@
 // The task estimate (ADR 0087; owner, 2026-10-19: «l'orchestratore deve essere bravo a capire se può cavarsela in fretta
 // anche con le stime per task simile»): how long and how much a request should take, from the agent runs of similar past
 // tasks, and the path that follows: the Orchestrator answers a small question itself, starts ONE agent with no children
-// for a quick single-part job, and plans a delegation tree only for work of several parts. Similar = same agent and same
-// kind of work (shared/work-concepts.ts taskOf on the run's goal, the one taxonomy of kinds), else the same kind on any agent, else the same
-// agent on any kind; the most recent MAX_SIMILAR of the first group with MIN_SIMILAR or more. ADR 0186 (10 days of real
+// for a quick single-part job, and plans a delegation tree only for work of several parts. Similar (ADR 0285) = the
+// same agent on the same model, else the same agent on any model, else the same kind of work on any agent
+// (shared/work-concepts.ts taskOf on the run's goal); a request with no agent yet rests on its kind. The most recent
+// MAX_SIMILAR of the first group with MIN_SIMILAR or more. A run whose engine reported tokens and no cost counts at
+// list price (standing.ts listCost), so an estimate has a cost on every engine. ADR 0186 (10 days of real
 // data: held 41% of the time, actual/estimate median 2.01): a job is measured as the user lives it, the run's elapsed
 // time (start to end) and the cost of the whole tree it started (its delegated children too), not one run's execution
 // time; the figure is then multiplied by the median actual/estimate ratio of the past jobs of the same kind (a
@@ -17,6 +19,7 @@ import type { AgentRun } from '../../shared/agents';
 import type { TaskKind } from '../../shared/contract';
 import { MAX_SIMILAR, MIN_SIMILAR, QUICK_MS, QUICK_USD, type EstimateActual, type EstimateBasis, type EstimateConfidence, type FastPath, type RunEstimateView, type TaskEstimate } from '../../shared/task-estimate';
 import { taskOf } from '../../shared/work-concepts';
+import { listCost, type PriceOf } from './standing';
 import type { ToolDef } from '../appctl/tools';
 import { estimateRecords } from '../activity/records';
 import { logEvent } from '../activity/journal';
@@ -65,14 +68,21 @@ export function actualOf(r: AgentRun, treeCostUsd?: number | null): EstimateActu
   return timeMs === null && costUsd === null ? null : { timeMs, costUsd };
 }
 
-/** Each run's tree cost: its own reported cost plus its delegated children's, down the parentRunId links. */
-export function treeCosts(runs: readonly AgentRun[]): Map<string, number> {
+/** The model as the groups name it: lower case, without the context suffix ("claude-opus-5-5[1m]" = "claude-opus-5-5"). */
+export const modelKey = (model: string | null | undefined): string => String(model ?? '').toLowerCase().replace(/\[.*\]$/, '').trim();
+
+/** Each run's tree cost: its own cost (reported, else its tokens at list price when `priceOf` knows the model) plus
+ *  its delegated children's, down the parentRunId links. */
+export function treeCosts(runs: readonly AgentRun[], priceOf: PriceOf | null = null): Map<string, number> {
   const kids = new Map<string, AgentRun[]>(), out = new Map<string, number>();
+  // one price lookup per model, not per run (the lookup reads the brain's price table)
+  const prices = new Map<string, ReturnType<PriceOf>>();
+  const price = (model: string): ReturnType<PriceOf> => { if (!prices.has(model)) prices.set(model, priceOf!(model)); return prices.get(model)!; };
   for (const r of runs) if (r.parentRunId) kids.set(r.parentRunId, [...(kids.get(r.parentRunId) ?? []), r]);
   const sum = (r: AgentRun, depth: number): number => {
     const hit = out.get(r.runId);
     if (hit !== undefined) return hit;
-    const own = typeof r.costUsd === 'number' && r.costUsd > 0 ? r.costUsd : 0;
+    const own = typeof r.costUsd === 'number' && r.costUsd > 0 ? r.costUsd : (priceOf && r.model ? listCost(r.tokens, price(r.model)) : null) ?? 0;
     const total = own + (depth > 16 ? 0 : (kids.get(r.runId) ?? []).reduce((n, k) => n + sum(k, depth + 1), 0));
     out.set(r.runId, total);
     return total;
@@ -82,13 +92,14 @@ export function treeCosts(runs: readonly AgentRun[]): Map<string, number> {
 }
 
 /** The ended runs grouped the three ways a task can be similar, each group sorted by end time; and, per kind, the
- *  backtested actual/estimate ratios that calibrate the figure (ADR 0186). */
+ *  backtested actual/estimate ratios that calibrate the figure (ADR 0186). `priceOf` = list prices for the runs whose
+ *  engine reported no cost. */
 export class SimilarIndex {
   private groups = new Map<string, Sample[]>();
   private ratios = new Map<TaskKind, Ratio[]>();
   private actuals = new Map<string, EstimateActual | null>();
-  constructor(runs: readonly AgentRun[]) {
-    const costs = treeCosts(runs);
+  constructor(runs: readonly AgentRun[], priceOf: PriceOf | null = null) {
+    const costs = treeCosts(runs, priceOf);
     const ended: { r: AgentRun; a: EstimateActual; kind: TaskKind }[] = [];
     for (const r of runs) {
       const a = actualOf(r, costs.get(r.runId));
@@ -96,7 +107,8 @@ export class SimilarIndex {
       if (!a) continue;
       const kind = kindOfRun(r), s: Sample = { endedAt: r.endedAt!, ...a };
       ended.push({ r, a, kind });
-      for (const key of [`ak:${r.agentId}:${kind}`, `k:${kind}`, `a:${r.agentId}`]) {
+      const model = modelKey(r.model);
+      for (const key of [...(model ? [`am:${r.agentId}:${model}`] : []), `a:${r.agentId}`, `k:${kind}`]) {
         const g = this.groups.get(key);
         if (g) g.push(s); else this.groups.set(key, [s]);
       }
@@ -104,7 +116,7 @@ export class SimilarIndex {
     for (const g of this.groups.values()) g.sort((x, y) => x.endedAt - y.endedAt);
     // the backtest: each job against the raw figure it would have had at its start
     for (const { r, a, kind } of ended) {
-      const raw = rawFigures(this, kind, r.agentId, r.startedAt);
+      const raw = rawFigures(this, kind, r.agentId, r.model, r.startedAt);
       const time = raw.t && a.timeMs !== null && raw.t.mid > 0 ? a.timeMs / raw.t.mid : null;
       const cost = raw.c && a.costUsd !== null && raw.c.mid > 0 ? a.costUsd / raw.c.mid : null;
       if (time === null && cost === null) continue;
@@ -148,10 +160,13 @@ export function quantile(sorted: readonly number[], q: number): number {
 const spread = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return { mid: quantile(s, 0.5), low: quantile(s, 0.25), high: quantile(s, 0.75) }; };
 type Spread = ReturnType<typeof spread>;
 
-/** The similar samples and their uncalibrated figures (median, middle half) for a kind and an agent at `before`. */
-function rawFigures(index: SimilarIndex, kind: TaskKind, agentId: string | undefined, before: number): { basis: EstimateBasis | null; samples: Sample[]; t: Spread | null; c: Spread | null } {
+/** The similar samples and their uncalibrated figures (median, middle half) for a kind, an agent and its model at
+ *  `before`. The model comes before the kind (ADR 0285: on 632 real jobs the kind of work added nothing to the agent,
+ *  the model a little: held 43% against 40% for the time, 55% against 49% for the cost). */
+function rawFigures(index: SimilarIndex, kind: TaskKind, agentId: string | undefined, model: string | null | undefined, before: number): { basis: EstimateBasis | null; samples: Sample[]; t: Spread | null; c: Spread | null } {
+  const m = modelKey(model);
   const tiers: [EstimateBasis, string][] = agentId
-    ? [['agent-kind', `ak:${agentId}:${kind}`], ['kind', `k:${kind}`], ['agent', `a:${agentId}`]]
+    ? [...(m ? [['agent-model', `am:${agentId}:${m}`] as [EstimateBasis, string]] : []), ['agent', `a:${agentId}`], ['kind', `k:${kind}`]]
     : [['kind', `k:${kind}`]];
   let basis: EstimateBasis | null = null, samples: Sample[] = [];
   for (const [b, key] of tiers) {
@@ -193,12 +208,12 @@ export function partsOf(text: string): number {
 }
 
 /** The confidence from the spread of the similar jobs' actuals (ADR 0186: the old "30 similar jobs" was the cap, not a
- *  quality signal): the middle half within ×2 = high, within ×4 medium, else low; one step lower when only the agent
- *  matched (another kind of work). */
-function confidenceOf(basis: EstimateBasis, s: Spread | null): EstimateConfidence {
+ *  quality signal): the middle half within ×2 = high, within ×4 medium, else low; one step lower when an agent was
+ *  named and only other agents' jobs of the kind matched. */
+function confidenceOf(basis: EstimateBasis, s: Spread | null, otherAgents: boolean): EstimateConfidence {
   const width = s && s.low > 0 ? s.high / s.low : Infinity;
   const level = width <= 2 ? 2 : width <= 4 ? 1 : 0;
-  return (['low', 'medium', 'high'] as const)[Math.max(0, level - (basis === 'agent' ? 1 : 0))]!;
+  return (['low', 'medium', 'high'] as const)[Math.max(0, level - (otherAgents ? 1 : 0))]!;
 }
 
 /** A short follow-up in an ongoing chat ("sì", "ok", "vai", "continua", an answer under FOLLOW_UP_CHARS): not a new
@@ -218,6 +233,8 @@ export interface EstimateInput {
   text: string;
   /** the agent (catalog role) that would run it; omitted = any agent */
   agentId?: string;
+  /** the model it would run on; omitted = the agent on any model */
+  model?: string | null;
   /** only runs ended before this time (a run's own start, for the strips and the backtest) */
   before?: number;
 }
@@ -226,7 +243,7 @@ export interface EstimateInput {
 export function estimateTask(index: SimilarIndex, input: EstimateInput): TaskEstimate {
   const text = requestText(input.text);
   const kind = taskOf('', ownRequest(text) || text, undefined), before = input.before ?? Infinity;
-  const { basis, samples, t, c } = rawFigures(index, kind, input.agentId, before);
+  const { basis, samples, t, c } = rawFigures(index, kind, input.agentId, input.model, before);
   const cal = index.calibration(kind, before);
   const parts = partsOf(text);
   const timeMs = t ? Math.round(t.mid * cal.time) : null, costUsd = c ? Math.round(c.mid * cal.cost * 1000) / 1000 : null;
@@ -247,7 +264,7 @@ export function estimateTask(index: SimilarIndex, input: EstimateInput): TaskEst
     kind, basis, n: samples.length,
     timeMs, timeLowMs: t ? scale(t.low, cal.time) : null, timeHighMs: t ? scale(t.high, cal.time) : null,
     costUsd, costLowUsd: c ? Math.round(c.low * cal.cost * 1000) / 1000 : null, costHighUsd: c ? Math.round(c.high * cal.cost * 1000) / 1000 : null,
-    confidence: basis ? confidenceOf(basis, t) : null, parts, quick, path, why,
+    confidence: basis ? confidenceOf(basis, t, basis === 'kind' && !!input.agentId) : null, parts, quick, path, why,
   };
 }
 
@@ -259,7 +276,7 @@ export function runEstimates(runs: readonly AgentRun[], runIds: readonly string[
   const want = new Set(runIds), out: Record<string, RunEstimateView> = {};
   for (const r of runs) {
     if (!want.has(r.runId) || r.source === 'oneshot') continue;
-    const estimate = estimateTask(index, { text: r.goal, agentId: r.agentId, before: r.startedAt });
+    const estimate = estimateTask(index, { text: r.goal, agentId: r.agentId, model: r.model, before: r.startedAt });
     const actual = index.actual(r.runId) ?? actualOf(r);
     const hit = estimate.timeMs !== null && actual?.timeMs != null ? held(estimate.timeMs, actual.timeMs) : null;
     out[r.runId] = { runId: r.runId, estimate: estimate.basis ? estimate : null, actual, hit };
@@ -268,10 +285,10 @@ export function runEstimates(runs: readonly AgentRun[], runIds: readonly string[
 }
 
 /** task_estimate for the Orchestrator: numbers only, never another run's content. */
-export function estimateTool(runs: () => readonly AgentRun[]): ToolDef {
+export function estimateTool(runs: () => readonly AgentRun[], priceOf: PriceOf | null = null): ToolDef {
   return {
     name: 'task_estimate',
-    description: 'Estimate a request (a user\'s message already ends with this estimate as "[app estimate · …]": call it only for another wording or a given role) from similar past tasks (same agent and kind first): median work time, cost, the middle-half range, how many similar tasks it rests on (n), confidence, the independent parts it has, and the path: "self" = a short question you answer yourself; "one-agent" = start ONE chat with app_create_chat that does it alone (no agent_delegate children); "tree" = several parts, plan them. Numbers only, never a run\'s content.',
+    description: 'Estimate a request (a user\'s message already ends with this estimate as "[app estimate · …]": call it only for another wording or a given role) from similar past tasks (the same agent first, then the same kind): median work time, cost, the middle-half range, how many similar tasks it rests on (n), confidence, the independent parts it has, and the path: "self" = a short question you answer yourself; "one-agent" = start ONE chat with app_create_chat that does it alone (no agent_delegate children); "tree" = several parts, plan them. Numbers only, never a run\'s content.',
     inputSchema: { type: 'object', required: ['request'], additionalProperties: false, properties: {
       request: { type: 'string', description: 'the user\'s request, as you would give it to the agent' },
       agentId: { type: 'string', description: 'optional: the role that would run it (agent_catalog); omitted = any agent' },
@@ -281,7 +298,7 @@ export function estimateTool(runs: () => readonly AgentRun[]): ToolDef {
       const request = typeof a.request === 'string' ? a.request.trim() : '';
       if (!request || request.length > 8000) throw new Error('task_estimate: request = 1 to 8000 characters.');
       if (a.agentId !== undefined && (typeof a.agentId !== 'string' || !/^[a-z][a-z0-9_-]{0,79}$/.test(a.agentId))) throw new Error('task_estimate: agentId = a role id from agent_catalog.');
-      const e = estimateTask(new SimilarIndex(runs()), { text: request, ...(a.agentId ? { agentId: a.agentId as string } : {}) });
+      const e = estimateTask(new SimilarIndex(runs(), priceOf), { text: request, ...(a.agentId ? { agentId: a.agentId as string } : {}) });
       for (const r of estimateRecords(e, request, 'chiesta dall’Orchestrator')) logEvent(r); // the Log page (ADR 0111)
       return e;
     },

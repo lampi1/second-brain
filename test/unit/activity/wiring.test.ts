@@ -34,7 +34,7 @@ describe('activity mapping', () => {
   });
 
   it('writes estimates and the mail class readably', () => {
-    const e: TaskEstimate = { kind: 'review', basis: 'agent-kind', n: 9, timeMs: 360_000, timeLowMs: 1, timeHighMs: 2, costUsd: 0.21, costLowUsd: 0.1, costHighUsd: 0.3, confidence: 'medium', parts: 1, quick: false, path: 'one-agent', why: 'One part.' } as TaskEstimate;
+    const e: TaskEstimate = { kind: 'review', basis: 'agent-model', n: 9, timeMs: 360_000, timeLowMs: 1, timeHighMs: 2, costUsd: 0.21, costLowUsd: 0.1, costHighUsd: 0.3, confidence: 'medium', parts: 1, quick: false, path: 'one-agent', why: 'One part.' } as TaskEstimate;
     const [cls, est] = estimateRecords(e, 'Analizza la PR', 'per la tua richiesta');
     expect(cls).toMatchObject({ kind: 'classifier', title: 'Classificatore stime: «review»', text: '1 parte nella richiesta' });
     expect(est!.title).toBe('Stima (per la tua richiesta): ~6 min · ~$0.21 · 9 lavori simili, affidabilità media');

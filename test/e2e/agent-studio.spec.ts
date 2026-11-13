@@ -1,5 +1,5 @@
 // UI acceptance for a role's page and its editor (AgentStudio.tsx), demo services only, no provider requests: Modifica
-// opens the editor and a draft survives page navigation; an edit (a skill, the tier, a launch) is a new version that
+// opens the editor and a draft survives page navigation; an edit (a skill, the tier, a launch) is a new version (the skill makes it) that
 // survives a restart; "Ripristina predefinito" brings the shipped role back. Screenshots dark and light.
 import { expect, test } from '@playwright/test';
 import { choose, launchDemo, openAgents, shot } from './helpers';
@@ -11,6 +11,7 @@ test('a role page opens its editor on Modifica and the draft survives page navig
     const studio = page.getByTestId('agent-studio'); await expect(studio).toBeVisible();
     await expect(studio.getByRole('heading', { name: 'Scout', exact: true })).toBeVisible();
     await expect(page.getByTestId('agent-prompt')).toBeVisible(); // the role's instructions, in full
+    await expect(page.getByTestId('agent-models')).toContainText('Opus 5.5'); // its results by model (ADR 0284), from the demo's runs
     await expect(page.getByTestId('agent-editor')).toBeVisible(); // openAgents chose Modifica il ruolo
     await shot(page, 'role-page-dark');
     await page.getByTestId('agent-instructions').fill('Cerca prima nel repository, poi sul web.');

@@ -334,7 +334,7 @@ describe('app control tools', () => {
     const deps = { chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: (req: NewChat) => catalog.resolve(req), runFeedback };
     expect(appControlTools(deps, 'r').some(x => x.name === 'task_estimate')).toBe(true);
     expect(appControlTools(deps).some(x => x.name === 'task_estimate')).toBe(false);
-    expect(await appControlTools(deps, 'r').find(x => x.name === 'task_estimate')!.run({ request: 'Correggi il bug dello sconto', agentId: 'artisan' })).toMatchObject({ basis: 'agent-kind', n: 4, path: 'one-agent', quick: true });
+    expect(await appControlTools(deps, 'r').find(x => x.name === 'task_estimate')!.run({ request: 'Correggi il bug dello sconto', agentId: 'artisan' })).toMatchObject({ basis: 'agent', n: 4, path: 'one-agent', quick: true });
     const created = await appControlTools(deps, 'r').find(x => x.name === 'app_create_chat')!.run({ title: 'Ordini · Fix', prompt: 'Correggi il bug dello sconto', roleId: 'artisan' });
     // elapsed time (start to end) and four equal past jobs: no spread, high confidence (ADR 0186)
     expect(created).toMatchObject({ estimate: { timeMs: 300_000, n: 4, parts: 1, path: 'one-agent', confidence: 'high' } });

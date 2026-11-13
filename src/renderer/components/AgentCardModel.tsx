@@ -1,7 +1,7 @@
 // The «Modello» block on the back of an agent card (owner, 2026-10-31: «nel retro della card degli agenti si possa
 // scegliere già lì le info principali, cioè modello, effort e context window», ADR 0211): engine, model and effort in the
 // shared picker (ModelPicker.tsx, the same one the Orchestrator and the strips use; «Salva nel ruolo» saves the card,
-// agents:save, a new version like every model change), the context window in its own list, saved at once and stopping at
+// agents:save, the active version updated in place: ADR 0284), the context window in its own list, saved at once and stopping at
 // the model's window; the line under them says what a run really gets when the model lacks the effort asked
 // (shared/agents.ts effortOn: the same rule the launch applies). Used by AgentCatalogCard. Styles:
 // styles/agent-catalog.css (.catalog-model). With «Balanced mode» on the button reads «Balanced» (ADR 0218).

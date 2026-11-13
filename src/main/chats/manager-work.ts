@@ -9,7 +9,7 @@ import type { UserTaskEvents, AgentRun, AgentRunOutcome } from '../../shared/age
 import { ownerSource, type TaskAssignmentOptions } from '../../shared/delegation';
 import { PLAN_APPROVED, planChange, askingPlan, strategyPrompt, withAdded, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
 import { runMetrics } from '../agents/run-metrics';
-import { standings, withStandings } from '../agents/standing';
+import { standings, withStandings, type TokenPrice } from '../agents/standing';
 import { isCorrection } from '../../shared/correction';
 import type { SubmissionReceipt, Rec, CleanReportNote, UserWroteNote, TurnEndInfo } from './manager-types';
 import { sysItem, userNoteLine } from './manager-helpers';
@@ -300,6 +300,13 @@ export abstract class ManagerWork extends ManagerLifecycle {
     this.runSave(); this.persist();
   }
 
+  /** The list price of each of these models that has one (ADR 0284): a plain table for the read worker's estimates. */
+  listPrices(models: readonly string[]): Record<string, TokenPrice> {
+    const out: Record<string, TokenPrice> = {};
+    for (const m of new Set(models)) { const p = m ? this.opts.priceOf?.(m) : null; if (p) out[m] = p; }
+    return out;
+  }
+
   /** The §5 metrics per agent and version (A6): runs kept plus the rollups of the pruned ones. */
   runMetrics(opts: { since?: number; skill?: string; app?: string; repo?: string } = {}): ReturnType<typeof runMetrics> {
     // Metrics read the current in-memory record; reading must not force a synchronous archive write.
@@ -308,7 +315,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     const metrics = runMetrics(runs, { rollups, live, ...(opts.since !== undefined ? { since: opts.since } : {}),
       filter: { ...(opts.skill !== undefined ? { skill: opts.skill } : {}), ...(opts.app !== undefined ? { app: opts.app } : {}), ...(opts.repo !== undefined ? { repo: opts.repo } : {}) } });
     // the card's level and performance are the agent's whole record, whatever the filter
-    const standing = standings(runs, rollups, Date.now(), this.runs.flashLog());
+    const standing = standings(runs, rollups, Date.now(), this.runs.flashLog(), this.opts.priceOf ?? null);
     return withStandings(metrics, standing);
   }
 

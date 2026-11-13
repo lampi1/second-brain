@@ -52,6 +52,8 @@ export function demoAgentRuns(now: number): AgentRun[] {
       const runId = next();
       out.push({ runId, chatId: `demo-run-${id}`, agentId, version: 1, goal: 'Demo', startedBy: 'orchestrator',
         startedAt: endedAt - dur, endedAt, endReason: 'completed', turns, ...(outcome ? { outcome } : {}),
+        // the model each run used (ADR 0284: the role's page compares them)
+        model: i % 4 === 1 ? 'claude-sonnet-5-5' : i % 9 === 0 ? 'claude-fable-5-2' : 'claude-opus-5-5',
         ...(report ? { report: { at: endedAt, outcome: verdict === 'success' ? 'done' : verdict === 'partial' ? 'partial' : 'blocked', verified: 'yes', summary: 'Demo', via: 'agent_report' } as const } : {}),
         // the Artisan's code work: its receipts (a failed check where the job did not succeed)
         ...(artisan ? { receipts: receipts(1 + Math.floor(rand() * 12), endedAt, verdict === 'success' ? 0 : 1) } : {}),

@@ -215,7 +215,7 @@ describe('default engine (issue #96)', () => {
     expect(w.catalog.list().profiles.find(p => p.id === 'artisan')).toMatchObject({ engine: 'cursor', version: 1, activeVersion: 1 });
     expect(w.catalog.history('artisan')[0]).toMatchObject({ version: 1, behaviour: { engine: 'cursor' }, amended: [expect.objectContaining({ reason: 'Motore disponibile' })] });
   });
-  it('makes a new version only for the role\'s text, skills, model or tier, and records which (ADR 0186)', () => {
+  it('makes a new version only for the role\'s text or skills, and records which (ADR 0186, 0284)', () => {
     const { catalog } = setup(), scout = catalog.list().profiles.find(p => p.id === 'scout')!;
     const tools = catalog.save(edit(scout, { tools: { allow: ['read'] } as never, maxContext: 200_000 }), 'scout');
     expect(tools).toMatchObject({ version: 1, activeVersion: 1, userLocked: true, lastEditedBy: 'user', tools: { allow: ['read'] } });
@@ -223,15 +223,24 @@ describe('default engine (issue #96)', () => {
     expect(catalog.history('scout')[0]).toMatchObject({ behaviour: { tools: { allow: ['read'] } }, amended: [expect.objectContaining({ by: 'user' })] });
     const text = catalog.save(edit(tools, { instructions: 'Read first.', tier: 'top' }), 'scout');
     expect(text).toMatchObject({ version: 2, activeVersion: 2 });
-    expect(catalog.history('scout')[0]).toMatchObject({ version: 2, changed: ['text', 'tier'] });
-    // going back to v1 brings back its text and tier, never wider tools than today's (ADR 0186)
+    expect(catalog.history('scout')[0]).toMatchObject({ version: 2, changed: ['text'] });
+    // a model or tier alone changes the version in use
+    const tier = catalog.save(edit(text, { tier: 'mid', model: 'm-mid' }), 'scout');
+    expect(tier).toMatchObject({ version: 2, activeVersion: 2, tier: 'mid', model: 'm-mid' });
+    // going back to v1 brings back its text, never wider tools than today's, and keeps today's model and tier
     const narrowed = catalog.save(edit(catalog.list().profiles.find(p => p.id === 'scout')!, { tools: { allow: [] } as never, permissionCeiling: 'plan' }), 'scout');
     expect(narrowed).toMatchObject({ version: 2, tools: { allow: [] }, permissionCeiling: 'plan' });
     const back = catalog.restoreVersion('scout', 1);
-    expect(back).toMatchObject({ activeVersion: 1, instructions: scout.instructions, tier: scout.tier, tools: { allow: [] }, permissionCeiling: 'plan' });
+    expect(back).toMatchObject({ activeVersion: 1, instructions: scout.instructions, tier: 'mid', model: 'm-mid', tools: { allow: [] }, permissionCeiling: 'plan' });
+    // the restored version's own record says what it runs with now: a trial's rollback goes back to it as a whole
+    expect(catalog.history('scout').find(v => v.version === 1)!.behaviour).toMatchObject({ instructions: scout.instructions, tier: 'mid', model: 'm-mid', permissionCeiling: 'plan' });
     // a trial always makes a version, even for tools only
     const trial = catalog.approveTrial('scout', { ...edit(back, { tools: { allow: ['read'] } as never }) }, 'prova');
     expect(trial.trial).toMatchObject({ version: 3, baseline: 1 });
+    // a trial of a tier alone is a version too, and says what it tries (ADR 0284)
+    const sentinel = catalog.list().profiles.find(p => p.id === 'sentinel')!;
+    const tried = catalog.approveTrial('sentinel', edit(sentinel, { tier: sentinel.tier === 'top' ? 'mid' : 'top', tierMax: 'top' }), 'prova di livello');
+    expect(catalog.history('sentinel').find(v => v.version === tried.trial!.version)).toMatchObject({ state: 'trial', changed: ['tier'] });
   });
   it('ignores a chosen engine that is not usable', () => {
     const w = world({ preferred: 'cursor', models: [choice('claude', { installed: true, authenticated: true }), choice('cursor', { authenticated: false })] });

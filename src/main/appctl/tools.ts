@@ -53,6 +53,7 @@ import type { ResolvedRole } from '../agents/catalog';
 import { BALANCED_ASK_SCHEMA, balancedAskOf, balancedStatusRun, balancedStatusTool, type BalancedMode } from '../agents/balanced-mode';
 import { metricsTool, type RunFeedback } from '../agents/run-feedback';
 import { estimateTool, estimateTask, SimilarIndex } from '../agents/task-estimate';
+import type { PriceOf } from '../agents/standing';
 import { agentLearnTool, lessonReviewTool, type AgentPackLearning } from '../agents/pack/learning';
 import type { McpTool } from '../mcp/server';
 import { ToolRefusal } from '../mcp/refusal';
@@ -95,6 +96,8 @@ export interface AppCtlDeps {
   resolveRole?: (req: NewChat) => ResolvedRole;
   /** agent_metrics for the Orchestrator's own endpoint */
   runFeedback?: RunFeedback;
+  /** list prices for the estimates' runs whose engine reported no cost (agents/list-price.ts, ADR 0284) */
+  priceOf?: PriceOf;
   /** when a chat's context last began again (a new session or a compaction): app_digest since "last" answers in full
    *  after it, because the summary may have dropped what the earlier digests said */
   contextSince?: (chatId: string) => number | undefined;
@@ -280,7 +283,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     ...(d.skillLibrary && authed() ? skillTools(d.skillLibrary, () => caller()?.title || 'Orchestrator') : []),
     ...(authed() ? [childOutputTool({ chats: () => d.chats.list().filter(mine), runs: () => d.runFeedback?.runList() ?? [] }), agentsRecapTool({ chats: () => d.chats.list().filter(mine), items: id => d.chats.items(id), pending: () => [...d.chats.pending(), ...(d.commandAsks?.() ?? [])], runs: () => d.runFeedback?.runList() ?? [] })] : []),
     ...(d.runFeedback && authed() ? [metricsTool(d.runFeedback)] : []),
-    ...(d.runFeedback && authed() ? [estimateTool(() => d.runFeedback!.runList())] : []),
+    ...(d.runFeedback && authed() ? [estimateTool(() => d.runFeedback!.runList(), d.priceOf ?? null)] : []),
     {
       name: 'app_set_chat_effort',
       description: 'Select the reasoning effort for one running app chat, for this conversation only (a role\'s lasting effort is the user\'s, in Brain → Agenti). Changes the next turn, never approvals, sandbox, model or a running turn. Returns requested, submitted, provider-reported effective and pending separately; null is unknown/default, never medium.',
@@ -613,7 +616,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (warnings.length) log.info('appctl', 'chat started with a skill its role lacks tools for', { chat: chat.id, data: { role: roleId, warnings: warnings.length } });
         // the machine is busy: the chat exists, its first turn waits in the cold-start queue (ADR 0222)
         // the estimate from similar past tasks (ADR 0087): the same figure the strip shows, so the plan is checked with data
-        const estimate = d.runFeedback ? estimateTask(new SimilarIndex(d.runFeedback.runList()), { text: task.estimate, agentId: roleId }) : null;
+        const estimate = d.runFeedback ? estimateTask(new SimilarIndex(d.runFeedback.runList(), d.priceOf ?? null), { text: task.estimate, agentId: roleId, model: model || resolved.request.model || null }) : null;
         return { chatId: chat.id, title: chat.title, harness, cwd, model: model || null, effort, ...(warnings.length ? { warnings } : {}), ...(chat.queued ? { status: queuedLine(chat.queued) } : {}),
           ...(estimate ? { estimate: { timeMs: estimate.timeMs, costUsd: estimate.costUsd, n: estimate.n, confidence: estimate.confidence, parts: estimate.parts, path: estimate.path } } : {}), route: { source: route.source, kind: route.kind, area: route.area, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}), ...(route.balanced ? { balanced: route.balanced } : {}) },
           ...(choice?.suggestedRole ? { suggestedRole: choice.suggestedRole } : {}) };

@@ -7,6 +7,7 @@ import type { AgentRun } from '../../shared/agents';
 import type { RunEstimates } from '../../shared/task-estimate';
 import { RUN_ID } from './runs';
 import { runEstimates, SimilarIndex } from './task-estimate';
+import type { TokenPrice } from './standing';
 import { estimateAccuracy } from './estimate-accuracy';
 
 export const RUN_IDS_MAX = 200;
@@ -25,8 +26,9 @@ export function mergeRuns(stored: readonly AgentRun[], mirrors: readonly (AgentR
   return [...byId.values()];
 }
 
-export function estimatesState(runs: readonly AgentRun[], runIds: readonly string[], now: number): RunEstimates {
-  const index = new SimilarIndex(runs);
+/** `prices` = the list price of each model whose runs report no cost (a plain table: the read worker takes no function). */
+export function estimatesState(runs: readonly AgentRun[], runIds: readonly string[], now: number, prices: Record<string, TokenPrice> = {}): RunEstimates {
+  const index = new SimilarIndex(runs, model => prices[model] ?? null);
   return { runs: runEstimates(runs, runIds, index), accuracy: estimateAccuracy(runs, now, undefined, index) };
 }
 
@@ -62,7 +64,7 @@ export function demoEstimateRuns(now: number): AgentRun[] {
       const startedAt = endedAt - exec - Math.round(rand() * 6 * MIN);
       out.push({
         runId: `r_${(0xd00000000000 + i++).toString(16)}`, chatId: `demo-past-${i}`, agentId: tpl.agentId, version: 1, goal: tpl.goal,
-        startedBy: 'orchestrator', startedAt, endedAt, endReason: 'completed', executionMs: exec,
+        startedBy: 'orchestrator', startedAt, endedAt, endReason: 'completed', executionMs: exec, model: 'claude-opus-5-5',
         costUsd: Math.round(tpl.usd * Math.pow(f, 0.8) * 1000) / 1000, tokens: null,
         counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null },
       });
