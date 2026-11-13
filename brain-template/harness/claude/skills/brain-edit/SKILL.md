@@ -11,8 +11,8 @@ words, no bare ids.
 
 Read first: `brain-rules.md` (the rules: follow them exactly), `map.md` (where things live), `me.md` (already in
 context in Claude). A brain without them at the root keeps them in its skill `brain-rules`: `SKILL.md` = the rules,
-`references/memory-map.md` = the map, `references/behavior-tests.md` = `tests/behavior.md`. Work in the folder you were started in (the
-main checkout; in a worktree, write there and say so).
+`references/memory-map.md` = the map, `references/behavior-tests.md` = `tests/behavior.md`. Work in the folder you
+were started in (the main checkout; in a worktree, write there and say so).
 
 Input: {{OWNER}}'s exact words and, if given, the case that triggered them. Missing words → ask back, change nothing.
 
