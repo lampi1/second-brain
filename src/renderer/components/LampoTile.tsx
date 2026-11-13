@@ -13,7 +13,6 @@ import { createChat, send, stop, useApp } from '../store/store';
 import { t } from '../i18n';
 import { brainBridge, clearFlash } from '../actions';
 import { ItemList, turnActivity, Typing } from './ChatItems';
-import { SpriteCtx } from './AgentSprite';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { IconButton, StatePill } from './ui';
 import { AgentAvatar } from './AgentAvatar';
@@ -75,7 +74,7 @@ export function LampoTile({ onWork }: { onWork: () => void }) {
       </div>
       <div className="chat-topic-row"><ModelChip chat={lampo} profileId={FLASH_ID} testid="lampo-model" /><span className="chat-topic">{t('lampo.hint')}</span></div>
     </header>
-    <ItemList chatId={lampo.id} items={items ?? []} empty={t('lampo.empty')} footer={busy ? <SpriteCtx.Provider value="flash"><Typing what={turnActivity(items)} testid="typing-lampo" items={items} /></SpriteCtx.Provider> : null} />
+    <ItemList chatId={lampo.id} items={items ?? []} empty={t('lampo.empty')} footer={busy ? <Typing what={turnActivity(items)} testid="typing-lampo" items={items} /> : null} />
     <ChatInput ref={input} chat={lampo} testid="lampo-input" voice="flash" />
   </section>;
 }

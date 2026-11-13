@@ -74,11 +74,6 @@ export function keyframesCss(nodes: readonly Node[]): string {
 
 /** There and back for ever: `t` seconds one way. */
 export const sway = (a: number, t: number, d = 0, e: Ease = 'io'): Track => ({ t: t * 2, d, keys: [{ at: 0, e }, { at: 50, a, e }] });
-/** Up and down (or aside) for ever. */
-export const bob = (dy: number, t: number, d = 0, dx = 0): Track => ({ t: t * 2, d, keys: [{ at: 0 }, { at: 50, dy, dx }] });
-/** Appears, drifts away and fades, for ever. */
-export const drift = (dx: number, dy: number, t: number, d = 0, s = 1, a?: number): Track =>
-  ({ t, d, keys: [{ at: 0, o: 0, e: 'out' }, { at: 14, o: 1, e: 'lin' }, { at: 100, o: 0, dx, dy, sx: s, sy: s, ...(a === undefined ? {} : { a }) }] });
 
 export type Eyes = 'open' | 'closed' | 'happy' | 'sad' | 'up' | 'none';
 export type Mouth = 'smile' | 'grin' | 'flat' | 'frown' | 'o';

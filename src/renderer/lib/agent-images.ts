@@ -1,10 +1,12 @@
 // The user's own pictures for the roles, renderer half (shared/agent-images.ts): one shared copy of main's map for
 // every AgentAvatar on screen (loaded on the first badge, kept fresh by 'avatars:changed'), and the step that turns
 // a chosen file into the square PNG main accepts: format and header size checked before any decoding (avatar-raster.ts),
-// then the centre square drawn at AGENT_IMAGE_SIDE. Main checks and re-encodes it again. Used by AgentAvatar.tsx and
-// AgentImagePicker.tsx; unit tests in test/unit/agent-images.test.ts.
+// then the centre square drawn at AGENT_IMAGE_SIDE. Main checks and re-encodes it again. Used by AgentAvatar.tsx,
+// AgentImagePicker.tsx, StripFace.tsx and AgentCatalogCard.tsx (useOwnPicture); unit tests in test/unit/agent-images.test.ts.
 import { useSyncExternalStore } from 'react';
 import { AGENT_IMAGE_SIDE, type AgentImages } from '@shared/agent-images';
+import type { AgentAvatar } from '@shared/agents';
+import { isRoleId } from '@shared/roles';
 import { avatarRasterSize } from './avatar-raster';
 
 let images: AgentImages = {};
@@ -25,6 +27,11 @@ function subscribe(fn: () => void): () => void {
 
 /** role id → its picture, for every badge (a role without one draws its character) */
 export const useAgentImages = (): AgentImages => useSyncExternalStore(subscribe, () => images, () => images);
+/** True when the user gave this role a picture of their own: it is shown as it is, never as the little person (ADR 0294). */
+export const useOwnPicture = (avatar: AgentAvatar | undefined): boolean => {
+  const all = useAgentImages();
+  return avatar?.kind === 'character' && isRoleId(avatar.value) && !!all[avatar.value];
+};
 
 /** a phone photo is a few MB; larger is not a picture anyone picks for a badge */
 export const PICK_BYTES = 15 * 1024 * 1024;

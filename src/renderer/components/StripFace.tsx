@@ -4,9 +4,8 @@
 // chat's state to the animation (spriteStateOf).
 import type { AgentAvatar as Avatar } from '@shared/agents';
 import type { ChatItem } from '@shared/contract';
-import { isRoleId } from '@shared/roles';
 import type { SpriteState } from '../lib/agent-sprites';
-import { useAgentImages } from '../lib/agent-images';
+import { useOwnPicture } from '../lib/agent-images';
 import { useApp } from '../store/store';
 import { t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
@@ -29,9 +28,8 @@ export function isThinking(items: readonly ChatItem[] | undefined): boolean {
 }
 
 export function StripFace({ chatId, avatar, name, tone, size, height = 32, ...o }: { chatId: string; avatar: Avatar | undefined; name: string; tone: string; size: number; height?: number; waitsUser: boolean; error: boolean; busy: boolean; done: boolean; pending?: boolean }) {
-  const images = useAgentImages();
   const thinking = useApp(s => o.busy && isThinking(s.items[chatId]));
-  const own = avatar?.kind === 'character' && isRoleId(avatar.value) && !!images[avatar.value];
+  const own = useOwnPicture(avatar);
   if (own) return <span className="strip-face"><AgentAvatar avatar={avatar} name={name} size={size} /><span className={`strip-dot lead tone-${tone}`} aria-hidden="true" /></span>;
   return <span className="strip-face"><AgentSprite id={spriteIdOf(avatar)} state={spriteStateOf({ ...o, thinking })} height={height} label={t('product.avatar', { name })} /></span>;
 }

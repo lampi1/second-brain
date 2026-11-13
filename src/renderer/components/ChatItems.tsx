@@ -150,7 +150,7 @@ const Message = memo(function Message({ id, text, streaming }: { id: string; tex
   );
 });
 
-/** The running turn's line: a turning spark (the Orchestrator's and Flash's little person instead: WorkingMark) and what the chat does now (lib/typing-line.ts: the tool or command running,
+/** The running turn's line: a turning spark (the Orchestrator's little person instead: WorkingMark) and what the chat does now (lib/typing-line.ts: the tool or command running,
  *  the plan item in progress, else "sta pensando…"), "sta scrivendo…" while it writes. `children` replaces the words with
  *  a collapsed strip's step and silence (StripActivity.tsx); the data-what hook stays. */
 export function Typing({ what, testid, items, children }: { what: 'scrive' | 'pensa' | 'lavora'; testid?: string; items?: readonly ChatItem[]; children?: ReactNode }) {

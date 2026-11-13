@@ -2,16 +2,17 @@
 // on a small body in the role's clothes, free on the strip (no tile), and does its own job while its chat
 // works: the Orchestrator conducts, the Strategist lifts a chess knight at its table, the Scout walks with a magnifying
 // glass, the Artisan hammers on an anvil, the Sentinel scans with binoculars beside its shield, the Herald blows its
-// horn, Flash runs; a chat without a role types on a laptop. The other states are shared: thinking (a hand at the chin,
+// horn; a chat without a role types on a laptop. The other states are shared: thinking (a hand at the chin,
 // a thought), waiting for the user (a wave, a hop, an amber «!»), done (two jumps with the arms up, then still under a
 // green tick), error (the head down, a sigh, a drop of sweat, a red «!»), idle (asleep, nodding off). Every scene is a
 // small piece of acting written as tracks of keys (lib/sprite-rig.ts): a move loads, strikes, overshoots and settles,
 // the body squashes when it lands, the head follows a moment late. Drawn by components/AgentSprite.tsx.
-import { CHARACTER_IDS, type CharacterId } from '../../shared/characters';
+import type { CharacterId } from '../../shared/characters';
 import { CHARACTERS, type Shape } from './character-art';
-import { AMBER, GOLD, GREEN, INK, J, RED, SKY, WHITE, bubble, drift, ink, person, quaver, sh, sway, type Ease, type Key, type Look, type Node, type Pose, type Track } from './sprite-rig';
+import { AMBER, GOLD, GREEN, INK, J, RED, SKY, WHITE, bubble, ink, person, quaver, sh, sway, type Ease, type Key, type Look, type Node, type Pose, type Track } from './sprite-rig';
 
-export type SpriteId = CharacterId | 'plain';
+/** The roles with a little person (the keys of WORK below); any other chat is the plain one. */
+export type SpriteId = keyof typeof WORK;
 export type SpriteState = 'work' | 'think' | 'wait' | 'done' | 'err' | 'idle';
 /** One scene: the tree to draw. */
 export interface SpriteScene { nodes: Node[] }
@@ -35,8 +36,6 @@ const CLOTHES: Record<SpriteId, Pick<Look, 'top' | 'sleeve' | 'pants' | 'shoes' 
     wear: [S('M25.4 46.4C28 44.6 36 44.6 38.6 46.4', '#d9a72c', 1.5), S('M32 47V54', '#8a96a8', 1)] },
   herald: { top: '#2d4fa1', pants: '#26224a', shoes: '#16142c',
     wear: [C(28.4, 43.8, 1.9, WHITE), C(32, 44.4, 1.9, WHITE), C(35.6, 43.8, 1.9, WHITE), C(32, 49, 1, GOLD), C(32, 52.4, 1, GOLD)] },
-  flash: { top: '#d93b30', pants: '#b02a22', shoes: '#ffd23f',
-    wear: [P('M33.4 45.4L30 50.4H32.4L31 54.4L35 49H32.8L34.2 45.4Z', '#ffd23f')] },
   plain: { top: '#93a7cc', pants: '#2f3445', shoes: '#eceef4',
     wear: [S('M30.6 43V46.4M33.4 43V46.4', '#eceef4', 0.9), rr(28.4, 50.6, 7.2, 3.6, 1.2, '#7f93ba')] },
 };
@@ -63,7 +62,7 @@ const notes = (x: number, y: number, t: number, at: [number, number]): Node[] =>
 const Z = 'M-2.6 -2.6H2.6L-2.6 2.6H2.6';
 
 // ── what each role does while its chat works ─────────────────────────────────────────────────────────────────────────
-const WORK: Record<SpriteId, () => Pose> = {
+const WORK = {
   // four beats: down, in, out, up; the left hand follows a moment late, the baton trails the hand
   orchestrator: () => ({
     eyes: 'happy', mouth: 'smile',
@@ -144,17 +143,6 @@ const WORK: Record<SpriteId, () => Pose> = {
     armL: { a: 38, b: -72 },
     front: notes(66, 29, 2.8, [24, 44]),
   }),
-  // a run: the body lands and pushes off, the arms pump, the head rides it, lines and dust behind
-  flash: () => ({
-    mouth: 'grin', lean: 10,
-    go: loop(0.32, [k(0, { sy: 0.96, sx: 1.02, e: 'out' }), k(25, { dy: -1.9, sy: 1.03, e: 'in' }), k(50, { sy: 0.96, sx: 1.02, e: 'out' }), k(75, { dy: -1.9, sy: 1.03, e: 'in' })]),
-    head: { go: loop(0.32, [k(0, { a: 2 }), k(25, { a: -2 }), k(50, { a: 2 }), k(75, { a: -2 })], 0.04) },
-    legL: { a: 44, go: sway(-44, 0.16) }, legR: { a: -44, go: sway(44, 0.16) },
-    armL: { a: -48, b: -82, go: sway(48, 0.16) }, armR: { a: 48, b: -82, go: sway(-48, 0.16) },
-    front: [J(15, 40, 0, [ink([S('M0 0H8', WHITE, 1.7)])], drift(-13, 0, 0.5)), J(12, 50, 0, [ink([S('M0 0H6', WHITE, 1.7)])], drift(-11, 0, 0.5, -0.2)),
-      J(16, 58, 0, [ink([S('M0 0H7', WHITE, 1.7)])], drift(-13, 0, 0.5, -0.36)),
-      J(21, 63, 0, [ink([C(0, 0, 1.5, WHITE)])], drift(-8, -3, 0.48, 0, 2)), J(21, 63, 0, [ink([C(0, 0, 1.2, WHITE)])], drift(-10, -1, 0.48, -0.24, 2))],
-  }),
   // types with both hands while the lines of code write themselves on the screen, then a nod
   plain: () => {
     const line = (y: number, w: number, c: string, from: number, to: number): Node =>
@@ -168,7 +156,7 @@ const WORK: Record<SpriteId, () => Pose> = {
         line(45.4, 8, SKY, 2, 26), line(48.4, 11.6, WHITE, 28, 58), line(51.4, 5.6, '#7ee0a8', 60, 78)],
     };
   },
-};
+} satisfies Partial<Record<CharacterId | 'plain', () => Pose>>;
 
 // ── the states every role shares ─────────────────────────────────────────────────────────────────────────────────────
 const SHARED: Record<Exclude<SpriteState, 'work'>, () => Pose> = {
@@ -235,5 +223,6 @@ export function spriteScene(id: SpriteId, state: SpriteState): SpriteScene {
   if (!s) cache.set(key, s = { nodes: person(lookOf(id), (state === 'work' ? WORK[id] : SHARED[state])()) });
   return s;
 }
-export const SPRITE_IDS: readonly SpriteId[] = [...CHARACTER_IDS, 'plain'];
+export const SPRITE_IDS = Object.keys(WORK) as readonly SpriteId[];
+export const isSpriteId = (id: string): id is SpriteId => Object.hasOwn(WORK, id);
 export const SPRITE_STATES: readonly SpriteState[] = ['work', 'think', 'wait', 'done', 'err', 'idle'];

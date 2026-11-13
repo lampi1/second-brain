@@ -2,20 +2,20 @@
 // its joints, its tool) drawn as one inline SVG, free on the strip. Each joint carries its rest pose and its
 // animation inline; the @keyframes of a scene are written once into one <style> of the page the first time the scene
 // is drawn (styles/agent-sprite.css has the rest: the rim, the ink, the blink; no image, no timer, no script per
-// frame). Used by StripFace.tsx (the Grindhouse strips and the delegated rows) and by the working line of the
-// Orchestrator's and Flash's transcript (ChatItems.tsx Typing, in place of the spark). Without motion
+// frame). Used by StripFace.tsx (the Grindhouse strips and the delegated rows), by the front of the role cards
+// (AgentCatalogCard.tsx) and by the working line of the Orchestrator's transcript (ChatItems.tsx Typing, in place of
+// the spark). Without motion
 // (prefers-reduced-motion, a hidden window) it is the rest pose, which every state draws complete.
 import { createContext, useInsertionEffect, useMemo, type CSSProperties, type ReactElement } from 'react';
 import type { AgentAvatar as Avatar } from '@shared/agents';
-import { isCharacterId } from '@shared/characters';
-import { spriteScene, type SpriteId, type SpriteState } from '../lib/agent-sprites';
+import { isSpriteId, spriteScene, type SpriteId, type SpriteState } from '../lib/agent-sprites';
 import { VIEW, jointStyle, keyframesCss, type Node } from '../lib/sprite-rig';
 import '../styles/agent-sprite.css';
 
 /** The little person a transcript's working line shows instead of the spark (ChatItems.tsx Typing); null = the spark. */
 export const SpriteCtx = createContext<SpriteId | null>(null);
 /** The little person of a chat's role; a chat without a role is the plain one at a laptop. */
-export const spriteIdOf = (avatar: Avatar | undefined): SpriteId => (avatar?.kind === 'character' && isCharacterId(avatar.value) ? avatar.value : 'plain');
+export const spriteIdOf = (avatar: Avatar | undefined): SpriteId => (avatar?.kind === 'character' && isSpriteId(avatar.value) ? avatar.value : 'plain');
 
 const written = new Set<string>();
 /** The scene's @keyframes, added once to the page's one <style> for the sprites. */

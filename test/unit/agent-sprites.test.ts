@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(), on: vi.fn() } }));
 import { CHARACTER_IDS } from '../../src/shared/characters';
+import { WORK_ROLE_IDS } from '../../src/shared/roles';
 import type { ChatItem } from '../../src/shared/contract';
 import { SPRITE_IDS, SPRITE_STATES, spriteScene } from '../../src/renderer/lib/agent-sprites';
 import { J, VIEW, jointStyle, keyframesCss, nodeSvg, trackName, walk, type Group } from '../../src/renderer/lib/sprite-rig';
@@ -16,8 +17,9 @@ import { isThinking, spriteStateOf } from '../../src/renderer/components/StripFa
 const groups = (id: (typeof SPRITE_IDS)[number], state: (typeof SPRITE_STATES)[number]) => walk(spriteScene(id, state).nodes).filter((n): n is Group => 'g' in n);
 
 describe('the little people', () => {
-  it('has one for every character, and a plain one', () => {
-    expect([...SPRITE_IDS].sort()).toEqual([...CHARACTER_IDS, 'plain'].sort());
+  it('has one for the Orchestrator, every work role, and a plain one', () => {
+    expect(SPRITE_IDS).toEqual(expect.arrayContaining(['orchestrator', ...WORK_ROLE_IDS, 'plain']));
+    expect(SPRITE_IDS.every(id => id === 'plain' || (CHARACTER_IDS as readonly string[]).includes(id))).toBe(true);
   });
   it('gives every role every state: a whole person, with joints that move', () => {
     for (const id of SPRITE_IDS) for (const state of SPRITE_STATES) {

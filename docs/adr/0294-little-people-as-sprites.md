@@ -22,7 +22,7 @@ owner wants whole little people who do things, readable when small, one per role
 2. While its chat works each role plays its own small scene: the Orchestrator conducts in four beats, the
    Strategist thinks, lifts a chess knight and puts it down, the Scout walks, stops and brings a magnifying glass
    to its eye, the Artisan gives three hammer blows on an anvil and looks at the piece, the Sentinel scans left
-   and right with binoculars beside its shield, the Herald breathes in and blows its horn, Flash runs; a chat
+   and right with binoculars beside its shield, the Herald breathes in and blows its horn; a chat
    without a role types on a laptop while the lines write themselves on its screen.
 3. The other states are the same for everyone: thinking (a hand at the chin, a thought growing), waiting for the
    user (three waves, a hop, an amber «!»), done (two jumps with the arms up, confetti, then still under a green
@@ -37,9 +37,13 @@ owner wants whole little people who do things, readable when small, one per role
    keeps its white and black parts readable on a light and on a dark strip; notes, «z», speed lines and thoughts
    are drawn in the theme's text colour. It thinks on a thought or before the first step and keeps at its work
    between two steps. A role the user gave a picture of their own keeps that picture with the dot.
-6. The Orchestrator and Flash have no strip: their person replaces the spark on their chat's working line. Every
-   other working line keeps the spark (in a strip it is hidden: the person already moves).
-7. A hidden window pauses every movement; reduced motion shows the rest pose, which is always a whole picture.
+6. The Orchestrator has no strip: its person replaces the spark on its chat's working line. Every other working
+   line keeps the spark (in a strip it is hidden: the person already moves). Flash gets no person: the owner
+   removes that agent (2026-11-13).
+7. The front of a role card (Agenti) shows the same person, large and free, in place of the portrait in its
+   circle: always at its work, the role's own scene, because the card presents the role (the «Al lavoro» badge
+   still says when a chat of that role really runs). The back and the profile page keep the portrait.
+8. A hidden window pauses every movement; reduced motion shows the rest pose, which is always a whole picture.
 
 ## Consequences
 

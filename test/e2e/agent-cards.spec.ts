@@ -45,7 +45,7 @@ test('agent cards: big centred character, level and performance with their "?" f
     expect(Number(await overview.getByTestId('catalog-level-orchestrator').getAttribute('data-level'))).toBeGreaterThan(1);
     expect(Number(await overview.getByTestId('catalog-level-flash').getAttribute('data-level'))).toBeGreaterThan(1);
     await expect(artisan.locator('.catalog-chip[data-kind="model"]')).toHaveText(/\S/); // the model it last ran on, else its tier
-    const big = await artisan.locator('.catalog-hero .agent-avatar').boundingBox();
+    const big = await artisan.locator('.catalog-hero .agent-sprite').boundingBox(); // the role's little person (ADR 0294)
     expect(big!.width).toBeGreaterThanOrEqual(96);
     // a new role: still warming up; the Battito's card is gone (ADR 0201)
     await expect(overview.getByTestId('catalog-perf-herald')).toContainText('In rodaggio');
