@@ -18,6 +18,7 @@ import { initialEffort } from './effort';
 import { pausedState } from './remote-control';
 import type { Rec } from './manager-types';
 import { clearTimeout, workBehind, storedResult, coldDivider, LAMPO_TITLE, MAX_ARCHIVED, RUN_SAVE_MS, restoredOwner } from './manager-helpers';
+import { receiptsReading } from './receipt-reads';
 import { ManagerCore } from './manager-core';
 
 /** chats.json and agent-runs.json: restore, save (deferred or strict), the agent runs' start and end, archived chats. */
@@ -81,7 +82,7 @@ export abstract class ManagerPersistence extends ManagerCore {
     if (mine) this.ranUntil(r!, at);
     endRun(run, reason, at);
     // the receipts' verdict now, unless a turn's files are still coming (receiptTurn settles it then)
-    if (mine && !r!.receiptsBusy && r!.turnAt === undefined) this.settleReceipts(run);
+    if (mine && !receiptsReading(run) && r!.turnAt === undefined) this.settleReceipts(run);
     this.hook('agent lifecycle', () => this.opts.onRunEnded?.(structuredClone(run)));
     log.info('chats', 'agent run ended', { chat: run.chatId, data: { runId: run.runId, reason } });
     for (const child of this.runs.children(run.runId)) this.finishRun(child, 'closed', at);

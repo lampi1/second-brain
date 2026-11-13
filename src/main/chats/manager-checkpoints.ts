@@ -9,6 +9,7 @@ import type { AgentRun } from '../../shared/agents';
 import { afterTree, KEEP as CHECKPOINTS_KEPT, prune as pruneCheckpoints, restore as restoreCheckpoint, snapshot as takeCheckpoint, treeFiles, turnFiles } from './checkpoints';
 import { emptyReceipts, noteTool, noteTurnFiles, receiptVerdict, rowChanges, turnFilesWithoutGit } from '../agents/receipts';
 import type { Checkpoint } from './checkpoints';
+import { receiptReadEnded, receiptReadStarted, receiptsReading } from './receipt-reads';
 import type { Rec } from './manager-types';
 import { sysItem } from './manager-helpers';
 import { ManagerSessions } from './manager-sessions';
@@ -20,8 +21,6 @@ export const CHECKPOINT_DEADLINE_MS = 45_000;
 
 /** the turn (Rec.checkpointSeq) each checkpoint belongs to: a turn's end and receipts read only their own */
 const turnOf = new WeakMap<Checkpoint, number>();
-/** per run, the reads of its turns' files still under way: its verdict waits for them (receiptsIn) */
-const receiptReads = new WeakMap<AgentRun, number>();
 /** End reads still pending when a later turn's deadline opens its write barrier can contain that later turn's files. */
 const uncertainEndsThrough = new WeakMap<Rec, number>();
 
@@ -155,8 +154,8 @@ export abstract class ManagerCheckpoints extends ManagerSessions {
     // the difference would also hold what the user or another chat changed meanwhile) (ADR 0279)
     const followUp = own && !!cp && r.receiptCp === cp && !cp.afterUncertain && chained;
     if (!own || !cp || (r.receiptCp === cp && !followUp)) { noteTurnFiles(rc, turnFilesWithoutGit(turn), turnAt ?? end, end); this.receiptsIn(run); return; }
-    r.receiptCp = cp; r.receiptsBusy = true;
-    receiptReads.set(run, (receiptReads.get(run) ?? 0) + 1);
+    r.receiptCp = cp;
+    receiptReadStarted(run);
     // a follow-up turn's end is read now, in line with the other end records: the next turn's snapshot waits for it
     let endTree: Promise<string | null> | undefined;
     if (followUp) {
@@ -178,8 +177,8 @@ export abstract class ManagerCheckpoints extends ManagerSessions {
     };
     // one read after the other: a follow-up turn's files start from the tree the read before it ended on
     const chain: Promise<void> = (r.receiptChain ?? Promise.resolve()).then(read).catch(() => {}).finally(() => {
-      if (r.receiptChain === chain) { r.receiptChain = undefined; r.receiptsBusy = false; }
-      receiptReads.set(run, (receiptReads.get(run) ?? 1) - 1);
+      if (r.receiptChain === chain) r.receiptChain = undefined;
+      receiptReadEnded(run);
       this.receiptsIn(run);
     });
     r.receiptChain = chain;
@@ -187,7 +186,7 @@ export abstract class ManagerCheckpoints extends ManagerSessions {
   /** an ended run gets its verdict once none of its own turns' files are still being read (the chat may already be
    *  reading a newer run's) */
   private receiptsIn(run: AgentRun): void {
-    if (run.endedAt !== undefined && !receiptReads.get(run)) this.settleReceipts(run); else this.runs.touch();
+    if (run.endedAt !== undefined && !receiptsReading(run)) this.settleReceipts(run); else this.runs.touch();
   }
   /** The run's deterministic verdict at its end (receipts.ts receiptVerdict), once. */
   protected override settleReceipts(run: AgentRun): void {

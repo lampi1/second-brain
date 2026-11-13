@@ -128,7 +128,7 @@ export class RunFeedback {
   private setOutcome(run: AgentRun, outcome: AgentRunOutcome): void {
     const previous = run.outcome;
     run.outcome = outcome;
-    try { this.d.runs.save(); } catch (error) { run.outcome = previous; throw error; }
+    try { this.d.runs.save(run); } catch (error) { run.outcome = previous; throw error; }
     try { this.d.onOutcome?.(structuredClone(run)); } catch (error) { log.warn('agents', 'run verdict not passed to the loop', { cause: errText(error), hint: 'the verdict is saved; the next run end evaluates the role again' }); }
   }
   /** The receipts decided a run with no review (judge-sample.ts, ADR 0130): its outcome, basis 'receipts', unless

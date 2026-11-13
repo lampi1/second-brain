@@ -275,7 +275,6 @@ export interface Rec {
   receiptChain?: Promise<void>;
   /** the engine session the last message went to: a booting engine that got none has no turn in flight */
   sentTo?: unknown;
-  receiptsBusy?: boolean;
   undoNote?: string;
   /** the roles this chat's role may launch (resolved at creation; absent = unknown, e.g. a chat saved before) */
   launches?: string[];

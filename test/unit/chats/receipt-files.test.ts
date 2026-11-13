@@ -43,7 +43,7 @@ function fixture() {
   let n = 0;
   const command = (cmd: string) => sink.item({ kind: 'tool', id: `t${++n}`, at: Date.now(), name: 'Bash', input: { command: cmd }, status: 'ok', exitCode: 0 } as never, false);
   const result = () => sink.item({ kind: 'result', id: `r${++n}`, at: Date.now(), costUsd: 0, durationMs: 1, turns: 1, isError: false } as never, false);
-  const create = () => m.create({ harness: 'claude', cwd: dir, prompt: 'Sistema lo sconto' }, 'user',
+  const create = (worktree = false) => m.create({ harness: 'claude', cwd: dir, prompt: 'Sistema lo sconto', ...(worktree ? { worktree: true } : {}) }, 'user',
     { owner: { ...plainOwner('claude', null), source: 'catalog', id: 'artisan', version: 1 }, instructions: 'Sei un artigiano.', policy: null });
   const receipts = (id: string) => m.list().find(c => c.id === id)?.run?.receipts;
   // the reads are promises only (git is mocked): waited for by what the receipts must show, never by a sleep
@@ -100,6 +100,17 @@ describe('receipts: the files of a run\'s turns', () => {
     await f.shows(c.id, { filesGap: true });       // a command that may write, files not read from git: a gap, as before
     expect(f.receipts(c.id)!.files).toEqual(['src/first.ts']);
     expect(git.trees).toBe(1);                     // only the first turn's end was read from git
+  });
+
+  it('a chat in a worktree the CLI made never takes the snapshot of its folder as its files', async () => {
+    const f = fixture();
+    const c = await f.create(true);
+    f.set('running');
+    f.command('npm install');
+    f.result();
+    f.set('idle');
+    await f.shows(c.id, { filesGap: true });       // its work is elsewhere: what the folder's snapshot says is not it
+    expect(f.receipts(c.id)!.files).toEqual([]);
   });
 
   it('a follow-up turn whose files git cannot read is a gap when a command may have written, as before', async () => {
