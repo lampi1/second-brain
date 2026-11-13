@@ -391,3 +391,12 @@ docs/screenshots/settings.webp binary-media sha256:f109673d75eb26c9c50f20b8817fc
 docs/screenshots/worktrees.webp binary-media sha256:41383bbe08b56cb7231d3823e9bc2eb67a2a13b7009c2802d2ba3b7dbc3f51f6
 # ADR 0292: «In attività» on the strips and the delegated rows (2026-11-13)
 docs/screenshots/grindhouse.webp binary-media sha256:5b72a80df3d5712d491ee76bff10b1b8695f66deda1fba29db547df11f84b2e6
+# ADR 0292/0303 after the merge of ADR 0301: model and effort, «In attività», the maps button (2026-11-13)
+docs/screenshots/agents.webp binary-media sha256:8f761d14012da49fbae970e59829180a08fd9e62494564763d711bbac015399c
+docs/screenshots/connectors.webp binary-media sha256:0c680cf6278ee113f9bd07c96e65cef866565b07e5cababe29af1b56d5d7e2d3
+docs/screenshots/grindhouse.webp binary-media sha256:7156098d2bc40678ef958c0b76a8713860cc4506c7b0b77c47629fbe2158e553
+docs/screenshots/news.webp binary-media sha256:cb183768818021025cbd2f78f577def895f874c52a12b2d1376dd349ab1c5581
+docs/screenshots/orchestrator-column.webp binary-media sha256:fd9be1cc48fb71b7293c2707bb43a561f31aa5ddc2c5da4f30d2533d759edd60
+docs/screenshots/orchestrator.webp binary-media sha256:63d41d66f08b6e3234d2e12feb9ccb59aadd5eebea718cc320f0474bee24b261
+docs/screenshots/settings.webp binary-media sha256:6f619afafa2c30ea74e09522aa684d69b9e4c344f069258661e1498d1a689d38
+docs/screenshots/worktrees.webp binary-media sha256:5e6f3ea5e8b417f194d5b034c08e6ef940233d59f5c4d7d22fba5b221c53e54d
