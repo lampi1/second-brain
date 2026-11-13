@@ -53,11 +53,19 @@ export function StagePreview({ name }: { name: string }) {
   </section>;
 }
 
+/** whether a chat was delegated, directly or through other chats, by `rootId` (a parent chain is short; 8 bounds a loop) */
+function descendsFrom(chats: Readonly<Record<string, ChatSummary | undefined>>, chat: ChatSummary, rootId: string): boolean {
+  let at = chat.parentId;
+  for (let i = 0; at && i < 8; i++) { if (at === rootId) return true; at = chats[at]?.parentId; }
+  return false;
+}
+
 /** the real Orchestrator chat, inside the setup */
 export function StageLive({ chatId, text, onText: setText, input, onAnswer }: { chatId: string; text: string; onText: (text: string) => void; input: Ref<HTMLTextAreaElement>; onAnswer: () => void }) {
   const chat = useApp(s => s.chats[chatId]);
   const items = useApp(s => s.items[chatId]);
-  const all = useApp(s => Object.values(s.chats).filter((c): c is ChatSummary => !!c && !c.isOrchestrator && !c.quick), sameList);
+  // the open chats this Orchestrator delegated (a setup repeated later shows no role «done» from old, closed work)
+  const all = useApp(s => Object.values(s.chats).filter((c): c is ChatSummary => !!c && !c.closedAt && descendsFrom(s.chats, c, chatId)), sameList);
   const asks = useApp(s => s.pending.filter(p => !s.chats[p.chatId]?.quick).length);
   const box = useRef<HTMLTextAreaElement | null>(null);
   const states = useMemo(() => teamStates(all), [all]);

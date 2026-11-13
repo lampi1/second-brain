@@ -21,7 +21,7 @@ const port: EngineLinkPort = {
 };
 const PENDING: readonly EngineLink['phase'][] = ['checking', 'opening', 'verifying'];
 
-export function SetupEngines({ engines, onChange }: { engines: string[]; onChange: (next: string[]) => void }) {
+export function SetupEngines({ engines, onChange, onSettled }: { engines: string[]; onChange: (next: string[]) => void; onSettled?: (settled: boolean) => void }) {
   const defined = useApp(s => s.info?.engines);
   const [links, setLinks] = useState<Partial<Record<SetupEngineId, EngineLink>>>({});
   const live = useRef(true);
@@ -75,12 +75,16 @@ export function SetupEngines({ engines, onChange }: { engines: string[]; onChang
   // once every engine has been checked: the ones already signed in are put in use by themselves, and a choice this
   // computer no longer backs (uninstalled, signed out) leaves, so «Continua con …» never names an engine that cannot start
   const settled = SETUP_ENGINES.every(e => links[e] && links[e]!.phase !== 'checking');
+  // «out» = a phase no first request can start on and no sign-in is running for: a choice in it leaves at once (a
+  // failed «Accedi» on the chosen engine included)
+  const out = SETUP_ENGINES.filter(e => ['missing', 'signedOut', 'error'].includes(links[e]?.phase ?? '')).join();
   useEffect(() => {
+    onSettled?.(settled);
     if (!settled) return;
-    const kept = chosen.current.filter(e => !(SETUP_ENGINES as readonly string[]).includes(e) || usable(links[e as SetupEngineId]));
+    const kept = chosen.current.filter(e => !(SETUP_ENGINES as readonly string[]).includes(e) || !out.split(',').includes(e));
     const next = autoEngines(links, kept) ?? kept;
     if (next.join() !== chosen.current.join()) onChange(next);
-  }, [settled]);
+  }, [settled, out]);
   const found = SETUP_ENGINES.filter(e => (links[e]?.phase ?? 'checking') !== 'missing'), absent = SETUP_ENGINES.filter(e => links[e]?.phase === 'missing');
   const primary = engines[0];
   const row = (engine: SetupEngineId) => {

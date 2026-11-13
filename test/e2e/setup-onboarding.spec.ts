@@ -62,6 +62,13 @@ test('setup: three moments in one modal, the first request answered inside it', 
     await setup.getByTestId('setup-lang-it').click();
     await expect(title).toHaveText('Piacere, Giulia');
     await both(page, 'setup-onboarding-1-welcome-named');
+    // the app's smallest window: both halves and the actions still fit
+    await setSize(app, 1000, 640);
+    await expect(setup.getByTestId('setup-preview-reply')).toBeInViewport({ ratio: 1 });
+    await expect(setup.getByTestId('setup-name')).toBeInViewport({ ratio: 1 });
+    await expect(next).toBeInViewport({ ratio: 1 });
+    await shot(page, 'setup-onboarding-1-welcome-small');
+    await setSize(app, 1600, 1000);
 
     // 2 your AI: found by itself; «Accedi» waits in place and turns connected without a click
     await next.click();
@@ -117,6 +124,11 @@ test('setup: three moments in one modal, the first request answered inside it', 
     await expect(live).toContainText('Presentami la squadra: chi fa cosa?');
     await expect(live).toContainText('Ciao dal motore', { timeout: 20_000 });
     await both(page, 'setup-onboarding-3-first-answer');
+    await setSize(app, 1000, 640);
+    await expect(setup.getByTestId('setup-first-input')).toBeInViewport({ ratio: 1 });
+    await expect(setup.getByTestId('setup-enter')).toBeInViewport({ ratio: 1 });
+    await shot(page, 'setup-onboarding-3-first-small');
+    await setSize(app, 1600, 1000);
 
     // what was prepared, with no questions
     const settings = await page.evaluate(() => window.sb.invoke('settings:get', undefined));

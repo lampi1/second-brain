@@ -37,7 +37,9 @@ first: an agentic orchestration over the person's own AI tools, with a brain tha
 ## Consequences
 - A draft saved by the six-step wizard resumes on «your AI» at the latest (`LAST_RESUMABLE`), never inside the first
   request: the workspace is always prepared by an explicit click.
-- OpenCode joins the setup's engines. Its sign-in check may answer «cannot tell»: the row then says so and can still
+- A setup repeated from Settings never turns an engine off and never changes the engine of an Orchestrator that
+  already runs; only a first run states every engine.
+- OpenCode joins the setup's engines (`setup:save` accepts it; a brain created with it gets no harness notes). Its sign-in check may answer «cannot tell»: the row then says so and can still
   be chosen.
 - e2e `setup-onboarding.spec.ts` covers the three moments on a fresh profile with the fake Claude CLI; the specs
   `setup-simple`, `setup-modal` and `setup-wizard` (six steps) are removed, and the connectors spec no longer opens

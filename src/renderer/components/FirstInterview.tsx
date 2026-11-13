@@ -70,16 +70,23 @@ async function saveProfile(draft: SetupDraft): Promise<boolean> {
 /** The workspace, with no questions: the projects folder the app found by itself, a new empty brain in the default
  *  place when none is connected, the chosen engines (the first one is the roles' and the Orchestrator's), the answers
  *  in me.md. Throws when the brain cannot be created or the answers cannot be written into the new brain. */
-async function prepareWorkspace(draft: SetupDraft): Promise<void> {
+async function prepareWorkspace(draft: SetupDraft, firstRun: boolean, keepOrchestrator: boolean): Promise<void> {
   const latest = await sb.invoke('app:info', undefined), primary = draft.engines?.[0] as Harness | undefined;
   const projects = await sb.invoke('app:projectsFolder', undefined).catch(() => null);
   if (projects && !projects.saved && projects.detected) await sb.invoke('settings:set', { projectsRoot: projects.detected.path });
   if (!latest.brainRoot) {
-    const created = await sb.invoke('app:createBrain', { language: lang(), harness: (primary ?? 'none') as CreateBrainRequest['harness'] });
+    // the brain template has harness notes for these three only; any other engine (OpenCode) gets a brain with none
+    const harness: CreateBrainRequest['harness'] = primary === 'claude' || primary === 'codex' || primary === 'cursor' ? primary : 'none';
+    const created = await sb.invoke('app:createBrain', { language: lang(), harness });
     if (!created?.connected) throw new Error('brain not connected');
     await refreshInfo();
   }
-  if (draft.engines) dispatch({ type: 'settings', settings: await sb.invoke('settings:set', { engineOn: Object.fromEntries(SETUP_ENGINES.map(e => [e, draft.engines!.includes(e)])), ...(primary ? { orchestratorChats: { harness: primary } } : {}) }) });
+  // a first run states every engine (the ones not found go off, so no list offers them); a run repeated from Settings
+  // only turns on what was chosen: it never turns off an engine the owner uses, even one signed out today
+  const on = SETUP_ENGINES.filter(e => draft.engines?.includes(e) || firstRun).map(e => [e, !!draft.engines?.includes(e)] as const);
+  // an Orchestrator that already runs keeps its engine («Cambia motore» in its menu changes it, with its confirm)
+  const lead = primary && !keepOrchestrator ? { orchestratorChats: { harness: primary } } : {};
+  if (on.length || 'orchestratorChats' in lead) dispatch({ type: 'settings', settings: await sb.invoke('settings:set', { engineOn: Object.fromEntries(on), ...lead }) });
   if (await saveProfile(draft)) {
     if (!latest.brainRoot) throw new Error('profile not saved');
     toast(t('cmp.interview.profileNotWritable'), 'info');
@@ -91,6 +98,8 @@ function SetupWizard({ initial }: { initial: SetupState }) {
   const [draft, setDraft] = useState<SetupDraft>(() => openingDraft(initial, enabledEngines));
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null), [saved, setSaved] = useState(false);
   const [ask, setAsk] = useState('');
+  // every engine has been checked: until then «Continua con …» could name one this computer no longer backs
+  const [scanned, setScanned] = useState(false);
   const saving = useRef(false), terminal = useRef(false);
   const info = useApp(s => s.info), uiLang = lang();
   const orchestrator = useApp(orchestratorIdOf);
@@ -148,7 +157,7 @@ function SetupWizard({ initial }: { initial: SetupState }) {
     saving.current = true; terminal.current = true; setBusy(true); setError(null);
     try {
       const mine: SetupDraft = withAi ? draft : { ...draft, engines: [] };
-      await prepareWorkspace(mine);
+      await prepareWorkspace(mine, initial.status === 'new' || initial.status === 'draft', !!orchestrator);
       if (withAi && primary) {
         await sb.invoke('engines:trust', { engine: primary }).catch(() => {});
         if (!await ensureOrchestrator(primary)) throw new Error('orchestrator not started');
@@ -169,7 +178,7 @@ function SetupWizard({ initial }: { initial: SetupState }) {
   const next = () => {
     if (busy || blocked) return;
     if (id === 'welcome') void pickLanguage(uiLang, step + 1);
-    else if (id === 'ai' && primary) void finish(true);
+    else if (id === 'ai' && primary && scanned) void finish(true);
   };
   const submit = (e: FormEvent) => { e.preventDefault(); next(); };
   const idea = (text: string) => { setAsk(text); askBox.current?.focus(); };
@@ -200,7 +209,7 @@ function SetupWizard({ initial }: { initial: SetupState }) {
                   {problems.name && <small role="alert" className="sw-field-error">{problems.name}</small>}
                 </label>}
             </>}
-            {id === 'ai' && <SetupEngines engines={draft.engines ?? []} onChange={engines => { setDraft(d => ({ ...d, engines })); setSaved(false); }}/>}
+            {id === 'ai' && <SetupEngines engines={draft.engines ?? []} onChange={engines => { setDraft(d => ({ ...d, engines })); setSaved(false); }} onSettled={setScanned}/>}
             {id === 'first' && <div className="sw-ideas" data-testid="setup-ideas">
               <span className="sw-kicker">{t('setup.first.ideas')}</span>
               {IDEAS.map(k => <button key={k} type="button" className="sw-idea" onClick={() => idea(t(`setup.first.idea.${k}`))} data-testid={`setup-idea-${k}`}><span>{t(`setup.first.idea.${k}`)}</span><IconArrowRight size={14}/></button>)}
@@ -221,9 +230,9 @@ function SetupWizard({ initial }: { initial: SetupState }) {
               <button type="button" className="btn btn-m btn-subtle" disabled={busy} onClick={() => void leave('skip')}>{t('audit.FirstInterview.skipForNow')}</button>
               <small className="sw-saved" role="status">{busy ? '' : saved ? t('auditExpression.FirstInterview.text52') : ''}</small>
               <span className="sp"/>
-              {id === 'ai' && !primary && <button type="button" className="btn btn-m btn-ghost" disabled={busy} onClick={() => void finish(false)} data-testid="setup-no-ai">{t('setup.ai.without')}</button>}
-              <button type="button" className="btn btn-m btn-primary" disabled={busy || blocked || (id === 'ai' && !primary)} onClick={next} data-testid="setup-next">
-                {busy && id === 'ai' ? <><IconSpinner size={14}/>{t('setup.first.preparing')}</> : <>{id === 'ai' && primary ? t('setup.ai.continueWith', { name: engineLabel(primary) }) : t('audit.FirstInterview.continue')}<IconArrowRight size={14}/></>}
+              {id === 'ai' && (!primary || !!error) && <button type="button" className="btn btn-m btn-ghost" disabled={busy} onClick={() => void finish(false)} data-testid="setup-no-ai">{t('setup.ai.without')}</button>}
+              <button type="button" className="btn btn-m btn-primary" disabled={busy || blocked || (id === 'ai' && (!primary || !scanned))} onClick={next} data-testid="setup-next">
+                {busy && id === 'ai' ? <><IconSpinner size={14}/>{t('setup.first.preparing')}</> : <>{id === 'ai' && primary && !orchestrator ? t('setup.ai.continueWith', { name: engineLabel(primary) }) : t('audit.FirstInterview.continue')}<IconArrowRight size={14}/></>}
               </button>
             </>}
         </footer>

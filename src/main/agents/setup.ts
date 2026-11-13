@@ -7,7 +7,7 @@ const blank = (): SetupDraft => ({ step: 0, work: '', goals: '', tools: '', styl
 export function checkSetup(value: unknown): SetupDraft {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Preferenze non valide.');
   const v = value as Record<string, unknown>;
-  if (v.engines !== undefined && (!Array.isArray(v.engines) || v.engines.length > 3 || !v.engines.every(id => typeof id === 'string' && ['claude', 'codex', 'cursor'].includes(id)))) throw new Error('Motori non validi.');
+  if (v.engines !== undefined && (!Array.isArray(v.engines) || v.engines.length > 4 || !v.engines.every(id => typeof id === 'string' && ['claude', 'codex', 'cursor', 'opencode'].includes(id)))) throw new Error('Motori non validi.');
   let guide: SetupGuide | undefined;
   if (v.guide !== undefined) {
     if (!v.guide || typeof v.guide !== 'object' || Array.isArray(v.guide)) throw new Error('Guida non valida.');

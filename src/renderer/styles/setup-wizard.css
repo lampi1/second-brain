@@ -2,7 +2,7 @@
    one fixed-size modal in two halves. Left: the current moment (a thin three-dot progress, a display title, a few
    controls, the footer's actions). Right: the stage, in the Orchestrator's violet: a fixed preview of the team at work
    that becomes the real Orchestrator chat in the third moment. The modal keeps its size between moments so moving on
-   never feels like a new window. Shared tokens only, light and dark; motion is off for reduced-motion users. Scoped
+   never feels like a new window, and its two halves fit the app's smallest window (1000 × 640). Shared tokens only, light and dark; motion is off for reduced-motion users. Scoped
    under .sw / .modal-setup. */
 .modal.modal-setup { width: min(1080px, calc(100vw - 32px)); height: min(700px, calc(100vh - 48px)); max-height: none; }
 .modal.modal-setup-wait { height: auto; width: min(460px, calc(100vw - 32px)); }
@@ -25,8 +25,9 @@
 .sw-dots li.is-done { background: color-mix(in srgb, var(--accent) 50%, var(--surface-4)); }
 .sw-dots li.is-current { width: 38px; background: var(--accent); }
 .sw-count { font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--text-3); }
-.sw-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; justify-content: center; gap: 26px; padding: 24px 36px; }
-.sw[data-step="first"] .sw-body { justify-content: flex-start; padding-top: 30px; padding-bottom: 0; }
+/* the title keeps its place while the controls under it grow (a sign-in note, more engines): top-anchored, never centred */
+.sw-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 26px; padding: min(92px, 11vh) 36px 24px; }
+.sw[data-step="first"] .sw-body { padding-top: 30px; padding-bottom: 0; }
 .sw[data-step="first"] .sw-fields { flex: 1; }
 .sw[data-step="first"] .sw-ideas { flex: 1; }
 .sw-intro { animation: sw-in 260ms var(--ease) both; }
@@ -35,13 +36,14 @@
 .sw-intro p { margin: 0; max-width: 46ch; font-size: 14px; line-height: 1.6; color: var(--text-2); }
 .sw[data-step="first"] .sw-intro h2 { font-size: 26px; letter-spacing: -.7px; }
 .sw-fields { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 18px; animation: sw-in 260ms 60ms var(--ease) both; }
-.sw-foot { display: flex; align-items: center; gap: 4px; min-height: 68px; padding: 14px 36px 18px; }
+.sw-foot { display: flex; align-items: center; gap: 8px; min-height: 68px; padding: 14px 36px 18px; }
 .sw-foot .btn-subtle { margin-left: -10px; }
 .sw-foot .btn-subtle + .btn-subtle { margin-left: 0; }
 .sw-foot .btn-primary { height: 38px; padding: 0 16px; font-size: 13.5px; }
 .sw[data-step="first"] :is(.sw-top, .sw-body, .sw-foot) { padding-left: 28px; padding-right: 24px; }
 .sw-foot .sp { flex: 1; }
-.sw-saved { font-size: 11px; color: var(--text-3); }
+/* «Bozza salvata»: said to screen readers only, the footer keeps room for the actions */
+.sw-saved { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .sw-hint { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-3); }
 .sw-kicker { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; font-weight: 650; color: var(--text-3); }
 .sw-error { margin: 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--red) 45%, transparent); border-radius: var(--r-m); background: var(--red-bg); color: var(--red); font-size: 12.5px; }
@@ -135,17 +137,3 @@
 @keyframes sw-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes sw-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.8); } }
 @media (prefers-reduced-motion: reduce) { .sw-intro, .sw-fields, .sw-demo-user, .sw-demo-orch, .sw-demo-work, .sw-demo-work i { animation: none; } .sw-dots li, .sw-back, .sw-lang, .sw-ai, .sw-idea, .sw-role, .sw-send { transition: none; } }
-
-/* ---- narrow windows: the preview leaves, the real chat goes under the moment */
-@media (max-width: 860px) {
-  .modal.modal-setup { height: calc(100vh - 24px); width: calc(100vw - 16px); }
-  .sw, .sw[data-step="first"] { grid-template-columns: 1fr; }
-  .sw-stage.is-preview { display: none; }
-  .sw[data-step="first"] { grid-template-rows: auto minmax(0, 1fr); }
-  .sw[data-step="first"] .sw-ideas { display: none; }
-  .sw[data-step="first"] .sw-body { flex: none; padding-top: 16px; padding-bottom: 8px; }
-  .sw-stage { border-left: 0; border-top: 1px solid var(--orchestrator-line); }
-  .sw-top, .sw-body, .sw-foot, .sw[data-step="first"] :is(.sw-top, .sw-body, .sw-foot) { padding-left: 18px; padding-right: 18px; }
-  .sw-langs { grid-template-columns: 1fr; }
-  .sw-foot { flex-wrap: wrap; }
-}
