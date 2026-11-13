@@ -75,13 +75,17 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     expect(back).toContain('[risultato · Sentinel «Controllo test»] La suite passa: 42 su 42');
     await expect.poll(async () => (await childrenOf(page, parent.id)).map(c => c.delegation?.result?.outcome).sort()).toEqual(['done', 'done']);
 
-    // the Grindhouse: the children right under the parent, on thread lines, as thread cards with their result
+    // the Grindhouse: the children right under the parent, on thread lines, one row each with the result's first words
     await page.getByTestId('nav-home').click();
     const card = page.getByTestId(`delegation-card-${scout.id}`);
     await expect(card).toBeVisible();
     await expect(page.getByTestId(`delegation-state-${scout.id}`)).toHaveText('finito');
+    // closed, the row carries the result's first words (ADR 0293); open, the whole result and who received it
+    await expect(page.getByTestId(`delegation-now-${scout.id}`)).toContainText('Trovati 3 errori nel servizio ordini');
+    await card.locator('.dc-title').click();
     await expect(page.getByTestId(`delegation-res-${scout.id}`)).toContainText('Trovati 3 errori nel servizio ordini');
     await expect(card).toContainText('esito inviato a Strategist');
+    await card.locator('.dc-title').click();
     await expect(card).toContainText('Scout');
     await expect(page.getByTestId(`delegation-card-${sentinelChat.id}`)).toContainText('La suite passa');
     const pBox = (await page.getByTestId(`tile-chat-${parent.id}`).boundingBox())!, cBox = (await card.boundingBox())!;

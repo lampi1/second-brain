@@ -195,7 +195,10 @@
 .agent-pane.strip-pane { border-bottom:1px solid var(--border); }
 .chat-tile.is-strip { border:0; border-radius:0; }
 .chat-tile.is-strip .tile-head { padding:7px 4px 7px 10px; }
-.strip-dot.lead { flex:none; width:8px; height:8px; margin-right:2px; }
+/* the role's face is back on the row (the owner, 2026-11-13: «voglio l'iconcina … bella visibile»): the state dot sits on its corner (ADR 0293) */
+.strip-face { position:relative; flex:none; display:inline-flex; }
+.strip-dot.lead { position:absolute; right:-2px; bottom:-2px; width:9px; height:9px; box-shadow:0 0 0 2px var(--bg); }
+.chat-tile.is-expanded .strip-dot.lead, .delegation-card.is-open .strip-dot.lead { box-shadow:0 0 0 2px var(--surface); }
 .strip-dot.tone-run { background:var(--accent); }
 .strip-dot.tone-done { background:var(--green); }
 .strip-dot.tone-err { background:var(--red); }

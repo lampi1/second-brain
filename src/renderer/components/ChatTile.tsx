@@ -1,5 +1,5 @@
 // One agent's window (ADR 0287): a chat as a one-line strip in the Grindhouse (AgentStrips.tsx), open in the column, or in
-// full screen (FullScreen.tsx). The strip is one row (ADR 0292, the look the owner chose): a dot for its state, who it
+// full screen (FullScreen.tsx). The strip is one row (ADR 0292, 0293): the role's face with a dot for its state, who it
 // is, the title · current step, then on the right its work time and cost so far, each next to its estimate («22 min /
 // ~19 min · 1,84 $ / ~0,60 $», amber once past it), and a pill only when words are needed («Ti aspetta» opens its
 // question, an error, a queue); a long context shows its meter; three controls appear on hover (stop, full screen, the
@@ -29,7 +29,7 @@ import {schedule,suspendViews}from'../lib/viewports';
 import { openQueue, requestPostponed } from '../lib/later';
 import { admitNow, reqKey, toggleMaximize } from '../actions';
 import { useHandoffTabs } from '../store/handoffs';
-import { estimateText, useRunEstimates } from '../lib/run-estimates';
+import { StripMeta } from './StripMeta';
 import { BrowserTile } from './BrowserTile';
 import { FullTools } from './FullTools';
 import { selectedHere } from '../lib/strip-click';
@@ -141,7 +141,6 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
   const lqCpu = useApp(s => s.settings?.loadQueueCpu ?? 95);
   const lqRam = useApp(s => s.settings?.loadQueueRam ?? 10);
   const size = useSize(ref);
-  const estimates = useRunEstimates();
   const now = useNow(15_000); // the running work span grows on screen
   useEffect(() => {
     if (!focusReq) return;
@@ -172,20 +171,12 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
   // a Strategist's open question: the strip points to the window, set aside too («Basta domande» stays reachable)
   const planAsk = planQuestion(chat, reqs, false);
   const ownReqs = activeOwn;
-  // past its estimate a figure of the strip turns amber (ADR 0292); a long context shows its meter on the head
-  const estimate = chat.run ? estimates?.runs[chat.run.runId]?.estimate ?? null : null;
-  // the cost as chatCost reads it: the ledger's for an engine that reports none, nothing when it is unknown or zero
-  const costNow = chat.costLedgerUsd ?? (chat.costKnown === false ? null : chat.costUsd || null);
-  const overTime = !!estimate && estimate.timeMs !== null && work !== null && work > estimate.timeMs;
-  const overCost = !!estimate && estimate.costUsd !== null && costNow !== null && costNow > estimate.costUsd * 1.5;
   const longContext = isLong(chat, warn);
   const name = chat.agent?.name || chat.title, topic = chat.agent?.name && chat.title && chat.title !== chat.agent.name ? chat.title : '';
   // one state: «Ti aspetta» (opens the question), else the dot in front and, when words are needed, a pill
   const stateText = waitText && st.tone !== 'err' && st.label !== t('ui.state.queued') ? waitText : st.label;
   // the plain states are the leading dot alone (its word stays for screen readers); anything else is said in words
   const plainState = !focus && stateText === st.label && (st.tone === 'run' || st.tone === 'done');
-  const est = estimate ? estimateText(estimate) : null;
-  const cost = chatCost(chat);
   const drag = (e: React.PointerEvent<HTMLDivElement>) => {
     const el = e.currentTarget, box = body.current?.getBoundingClientRect();
     if (!box || e.button !== 0) return;
@@ -209,7 +200,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
       {!embedded && <header className="tile-head">
         <div className="th-row">
           {focus && <button type="button" className="btn btn-ghost btn-s aw-back" onClick={() => toggleMaximize(key)} data-testid="focus-exit" aria-label={t('aw.fullExit')}><IconArrowLeft size={13} /><Kbd>Esc</Kbd></button>}
-          {focus ? <AgentAvatar avatar={chat.agent?.avatar} name={name} size={24}/> : <span className={`strip-dot lead tone-${first ? 'wait' : st.tone}`} aria-hidden="true" />}
+          <span className="strip-face"><AgentAvatar avatar={chat.agent?.avatar} name={name} size={focus ? 24 : 26}/>{!focus && <span className={`strip-dot lead tone-${first ? 'wait' : st.tone}`} aria-hidden="true" />}</span>
           {/* the name is the strip's own button (keyboard, screen readers); a click anywhere on the strip does the same */}
           <h3 className="th-title" title={(chat.agent?.purpose&&rolePurpose(chat.agent.id,chat.agent.purpose))||chat.title}>
             {strip ? <button ref={expansionButton} type="button" className="strip-name" aria-expanded={expanded} aria-controls={`chat-work-${chatId}`} data-tip={t(expanded?'product.collapse':'product.expand')} onClick={()=>setChatExpanded(chatId,!expanded)} data-testid={`chat-expand-${chatId}`}>{name}</button> : name}
@@ -224,11 +215,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
               data-testid={`chat-resumed-${chatId}`}>{auditText('audit.ChatTile.resumedAfterRestart')}</span>
           )}
           {/* time and cost so far, each against its estimate: always on the strip (the owner, 2026-11-13) */}
-          {(work !== null || costNow !== null) && <span className="strip-meta" data-testid={`chat-meta-${chatId}`} data-tip={t((work !== null && est?.time) || (costNow !== null && est?.cost) ? 'aw.metaTipEst' : 'aw.metaTip')}>
-            {work !== null && <span className={overTime ? 'over' : undefined}>{minutes(work)}{est?.time && <i> / {est.time}</i>}</span>}
-            {costNow !== null && <span className={overCost ? 'over' : undefined}>{cost}{est?.cost && <i> / {est.cost}</i>}</span>}
-            {(overTime || overCost) && <span className="sr-only" data-testid={`chat-over-${chatId}`}>{t('aw.overTip')}</span>}
-          </span>}
+          <StripMeta chat={chat} workMs={work} />
           {(!expanded || !facts) && longContext && <ContextMeter chat={chat} warn={warn} />}
           {viewSwitch}
           {/* the state stays in the DOM as the strip's data-state hook; one thing is shown: the wait or the state */}

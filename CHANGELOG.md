@@ -23,6 +23,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   OpenCode, OpenRouter included; the chat's model and plan mode go through OpenCode's session options (ADR 0216).
 
 ### Changed
+- Grindhouse: a delegated chat is one row like its parent (its steps and result open with a click); the role's
+  character is back on every strip, with the state dot on its corner (ADR 0293).
 - Grindhouse strips: a state dot in front, time and cost so far next to the estimate always on the row, rows edge
   to edge with a hairline; the open window's details (model, full estimate, links) open from the ⓘ (ADR 0292).
 - A Claude chat with no mode of its own starts in «default», so the app answers its permission requests (they pass

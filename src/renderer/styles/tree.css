@@ -1,6 +1,6 @@
-/* The delegation tree (ADR 0083; the owner's chosen design, variant A "thread cards", 2026-10-19): the curved thread
-   lines from a parent to its children, the children's thread cards (DelegationCard.tsx: task, character, steps, state,
-   what it needs, its result; expanded in place into its chat), the parent's KidsBar, the "Orchestrator ha avviato"
+/* The delegation tree (ADR 0083, made quiet by ADR 0293): the thread lines from a parent to its children, the
+   children's rows (DelegationCard.tsx: one line like the parent's strip; what it needs under it; opened in place
+   into its steps, its result and its chat), the parent's KidsBar, the "Orchestrator ha avviato"
    origin line, a child's pause panel in its parent's chat (ChatTile.tsx), and the two-line tree under the Grindhouse
    entry of the sidebar (SidebarTree.tsx). Colours only from tokens.css, so dark and light both follow. */
 :root { --thread: var(--border-3); --tree-step: 36px; --tree-in: 16px; }
@@ -9,10 +9,10 @@
 /* One geometry for every depth (owner, 2026-10-22: a grandchild's card sat off its parent's line): a card at depth d
    starts d × --tree-step from the root's left edge; its elbow drops from --tree-in inside its parent's left edge, where
    the parent's KidsBar line runs too. The rails of the ancestors use the same step, so every line meets its elbow. */
-.agent-pane-wrap.tree-child { position: relative; margin: -8px 0 0 calc((var(--depth, 1) - 1) * var(--tree-step) + var(--tree-in)); padding: 8px 0 0 calc(var(--tree-step) - var(--tree-in)); }
+.agent-pane-wrap.tree-child { position: relative; margin: 0 0 0 calc((var(--depth, 1) - 1) * var(--tree-step) + var(--tree-in)); padding: 0 0 0 calc(var(--tree-step) - var(--tree-in)); }
 .tree-rails { position: absolute; inset: 0 auto 0 0; width: 0; pointer-events: none; }
-.tree-rail { position: absolute; top: 0; bottom: 0; left: calc((var(--level) - var(--depth) + 1) * var(--tree-step)); width: 2px; border-radius: 1px; background: var(--thread); }
-.tree-elbow { position: absolute; left: 0; top: 0; width: calc(var(--tree-step) - var(--tree-in) - 4px); height: 27px; border-left: 2px solid var(--thread); border-bottom: 2px solid var(--thread); border-bottom-left-radius: 10px; }
+.tree-rail { position: absolute; top: 0; bottom: 0; left: calc((var(--level) - var(--depth) + 1) * var(--tree-step)); width: 1px; border-radius: 1px; background: var(--thread); }
+.tree-elbow { position: absolute; left: 0; top: 0; width: calc(var(--tree-step) - var(--tree-in) - 4px); height: 18px; border-left: 1px solid var(--thread); border-bottom: 1px solid var(--thread); border-bottom-left-radius: 8px; }
 .tree-elbow.line-run { border-color: color-mix(in srgb, var(--accent) 55%, var(--thread)); }
 .tree-elbow.line-wait { border-color: color-mix(in srgb, var(--amber) 60%, var(--thread)); }
 .tree-elbow.line-done { border-color: color-mix(in srgb, var(--green) 45%, var(--thread)); }
@@ -22,39 +22,35 @@
 .tree-origin b { color: var(--violet); font-weight: 600; }
 
 /* ---------------------------------------------------------------- thread card */
-/* Compact (owner, 2026-10-22): one head row (face, task, role, skills, model, time, state, ↗), a quiet line with the
-   parent and the cost, then every step on a dense line; the boxes (ask, error, note, result) sit under the steps. */
-.delegation-card { --dc-pad: 12px; --dc-text: 28px; position: relative; isolation: isolate; overflow: hidden; min-width: 0; padding: 8px var(--dc-pad) 9px; border: 1px solid var(--border); border-radius: var(--r-l, 12px);
-  background: linear-gradient(160deg, var(--surface-2), var(--surface) 62%); cursor: pointer; --dc-tone: var(--text-4);
-  transition: border-color var(--dur-fast), box-shadow var(--dur-fast); }
-.delegation-card::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: radial-gradient(90% 70% at 0% 0%, color-mix(in srgb, var(--dc-tone) 10%, transparent), transparent 60%); }
-.delegation-card:hover { border-color: var(--border-3); }
-.delegation-card.is-open { cursor: default; }
+/* One row like the parent's strip (ADR 0293): no card, a hairline under it; the state is the dot on the face and, when
+   words are needed, a pill; open, it is a quiet panel with its steps, its result and its chat. */
+.delegation-card { --dc-pad: 10px; --dc-text: 30px; position: relative; min-width: 0; padding: 5px 4px 5px var(--dc-pad); border-bottom: 1px solid var(--border); cursor: pointer; --dc-tone: var(--text-4); }
+.delegation-card:hover { background: var(--surface-2); }
+.delegation-card.is-open { cursor: default; background: var(--surface); padding-bottom: 9px; }
 .delegation-card.is-open .dc-summary { cursor: pointer; }
-.delegation-card.flash { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent); }
-.delegation-card.s-run, .delegation-card.s-start { --dc-tone: var(--accent); border-color: color-mix(in srgb, var(--accent) 26%, var(--border)); }
-.delegation-card.s-start { border-color: var(--border); }
-.delegation-card.s-wait { --dc-tone: var(--amber); border-color: var(--amber-line); box-shadow: 0 0 0 3px var(--amber-bg); }
+.delegation-card.flash { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent); }
+.delegation-card.s-run, .delegation-card.s-start { --dc-tone: var(--accent); }
+.delegation-card.s-wait, .delegation-card.s-stall { --dc-tone: var(--amber); }
 .delegation-card.s-done, .delegation-card.s-partial { --dc-tone: var(--green); }
-.delegation-card.s-err, .delegation-card.s-refused, .delegation-card.s-blocked { --dc-tone: var(--red); border-color: color-mix(in srgb, var(--red) 40%, var(--border)); }
-.delegation-card.s-stall { --dc-tone: var(--amber); }
-.delegation-card.s-queued { --dc-tone: var(--text-4); border-style: dashed; border-color: var(--border-3); background: transparent; }
-/* a finished child folded by itself: quieter, its result in view */
-.delegation-card.is-folded { background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.delegation-card.s-err, .delegation-card.s-refused, .delegation-card.s-blocked { --dc-tone: var(--red); }
+.delegation-card.s-queued .dc-head { opacity: .7; }
 .delegation-card.is-folded .dc-title { font-weight: 500; color: var(--text-2); }
-.dc-head { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 22px; }
+.dc-head { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 24px; }
 .dc-head > :first-child { flex: none; }
-.dc-title { flex: 0 1 auto; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 13.5px/1.3 var(--font-display); letter-spacing: -.15px; color: var(--text); }
+.dc-title { flex: 0 1 auto; min-width: 0; max-width: 46%; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 13px/1.25 var(--font-display); color: var(--text); }
+.dc-now { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-3); }
+.dc-now::before { content: "· "; color: var(--text-4); }
+.dc-now .typing { padding: 0; vertical-align: bottom; max-width: 100%; min-width: 0; }
+.dc-open { opacity: 0; }
+.delegation-card:hover .dc-open, .delegation-card:focus-within .dc-open { opacity: 1; }
 .dc-who { flex: 1 1 0; display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; font-size: 12px; color: var(--text-3); white-space: nowrap; }
 .dc-who::before { content: "·"; color: var(--text-4); }
-.dc-role { color: var(--text-2); font-weight: 600; }
+.dc-role { flex: none; color: var(--text-2); font-weight: 500; }
 .dc-model { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .dc-model::before { content: "· "; color: var(--text-4); }
 .dc-time { flex: none; color: var(--text-4); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .dc-head .pill { flex: none; }
 .dc-chip { display: inline-flex; align-items: center; height: 17px; padding: 0 5px; border-radius: 5px; background: var(--surface-3); color: var(--text-2); font: 500 10.5px var(--mono); white-space: nowrap; }
-.dc-sub { display: flex; align-items: center; gap: 10px; min-width: 0; margin: 1px 0 0 var(--dc-text); font-size: 11px; color: var(--text-4); }
-.dc-sub .dc-cost { margin-left: auto; flex: none; font-variant-numeric: tabular-nums; }
 .dc-steps { list-style: none; margin: 5px 0 0 var(--dc-text); padding: 0; display: flex; flex-direction: column; gap: 0; }
 .dc-step { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: baseline; gap: 4px; font-size: 12px; line-height: 1.55; color: var(--text-2); }
 .dc-step .mk { font-weight: 700; text-align: center; font-size: 11px; }
@@ -70,7 +66,6 @@
 .dc-step .at { color: var(--text-4); font-size: 10.5px; font-weight: 400; font-variant-numeric: tabular-nums; }
 .dc-more { display: block; margin: 1px 0 0 calc(var(--dc-text) + 18px); padding: 0; border: 0; background: none; font: 500 11px var(--font); color: var(--text-3); cursor: pointer; }
 .dc-more:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
-.dc-fold-steps { margin-top: 4px; margin-left: var(--dc-text); }
 .dc-k { display: block; font: 700 9.5px var(--font); letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); margin-bottom: 1px; }
 .dc-k-sub { font: 400 11px var(--font); letter-spacing: 0; text-transform: none; color: var(--text-4); }
 .dc-ask, .dc-res, .dc-err, .dc-note { margin: 7px 0 0 var(--dc-text); padding: 6px 10px; border-radius: var(--r-m); }
@@ -102,7 +97,7 @@
 .dc-open:hover { background: var(--accent-bg); }
 .dc-open:focus-visible, .delegation-card button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* expanded in place: the whole chat under the card's summary */
-.dc-chat { margin: 9px calc(-1 * var(--dc-pad)) -9px; border-top: 1px solid var(--border); cursor: auto; }
+.dc-chat { margin: 9px -4px -9px calc(-1 * var(--dc-pad)); border-top: 1px solid var(--border); cursor: auto; }
 .dc-chat .chat-tile.is-embedded { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 .dc-chat .chat-tile.is-embedded .chat-work-inner { max-height: min(60vh, 560px); }
 /* a narrow column: the role, skills and model go on their own line under the task */
@@ -182,7 +177,7 @@
 
 /* Name the parent even when it has scrolled away; preserve the visible thread. */
 
-.tree-parent > .kids-bar { margin-top: 0; padding: 4px 0 4px calc(var(--tree-step) - var(--tree-in)); border-left: 2px solid var(--thread); margin-left: var(--tree-in); }
+.tree-parent > .kids-bar { margin-top: 0; padding: 4px 0 4px calc(var(--tree-step) - var(--tree-in)); border-left: 1px solid var(--thread); margin-left: var(--tree-in); }
 .tree-parent > .kids-bar .kids-toggle { border-top-left-radius: 0; }
 /* folded: no children under it, so no thread stub on its left (owner, 2026-11-12: «sta lineetta … fa schifo») */
 .tree-parent > .kids-bar[data-folded] { border-left-color: transparent; }
