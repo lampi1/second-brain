@@ -9,7 +9,7 @@ export const chessLinesDe: ChessLines = {
   piece: { p: 'Bauer', n: 'Springer', b: 'Läufer', r: 'Turm', q: 'Dame' },
   says: {
     orchestrator: {
-      start: ['Ruhe im Saal. Ich eröffne die Sinfonie, du spielst Triangel.', 'Erster Zug, erste Geige. Du bist das zahlende Publikum.'],
+      start: ['Ruhe im Saal. Ich dirigiere die Sinfonie, du spielst Triangel.', 'Erster Zug, erste Geige. Du bist das zahlende Publikum.'],
       take: ['Ich habe {yours} aus dem Orchester entfernt. Er war verstimmt.', 'Ich entlasse {yours}. Fristlos.'],
       takeQueen: ['Deine Dame verlässt die Bühne. Applaus, bitte.', 'Ich habe deine Dame. Der Rest ist mein Solo.'],
       lost: ['Du nimmst {mine}? Ein Statist. Sein Tod war delegiert.', 'Ich hatte {mine} nur auf Probe. Nicht bestanden.'],
@@ -72,7 +72,7 @@ export const chessLinesDe: ChessLines = {
       undo: ['Du gehst zurück? Ich auch, immer. Den Pfad nie gefunden.', 'Kehrtwende! Mein Lieblingsmanöver.'],
     },
     artisan: {
-      start: ['Zieh. Ich habe zu tun.', 'Brett ist im Wasser. Es geht los.'],
+      start: ['Machen wir schnell. Ich habe zu tun.', 'Brett ist im Wasser. Es geht los.'],
       take: ['Ich zerlege {yours}.', 'Ich behalte {yours}. Ersatzteil.'],
       takeQueen: ['Deine Dame. Verschrottet.', 'Dame geschlagen. Ein Schlag, sauber.'],
       lost: ['Du hast {mine}. Hatte eh schon einen Sprung.', 'Behalt {mine}. Keine Garantie mehr.'],

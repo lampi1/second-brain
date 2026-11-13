@@ -8,7 +8,7 @@ export const chessLinesEn: ChessLines = {
   piece: { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen' },
   says: {
     orchestrator: {
-      start: ['Silence in the hall. I open the symphony, you play the triangle.', 'First move, first violin. You are the paying audience.'],
+      start: ['Silence in the hall. I conduct the symphony, you play the triangle.', 'First move, first violin. You are the paying audience.'],
       take: ['I removed {yours} from the orchestra. It was out of tune.', 'Out goes {yours}. No notice period.'],
       takeQueen: ['Your queen leaves the stage. Applause, please.', 'I took your queen. The rest is my solo.'],
       lost: ['You took {mine}? An extra. I had delegated its death.', '{mine} was on probation. It did not pass.'],
@@ -71,7 +71,7 @@ export const chessLinesEn: ChessLines = {
       undo: ['Going back? Me too, always. Never found the trail.', 'About turn! My favourite manoeuvre.'],
     },
     artisan: {
-      start: ['Move. I have work to do.', 'Board is level. We start.'],
+      start: ['Let’s be quick. I have work to do.', 'Board is level. We start.'],
       take: ['Taking {yours} apart.', 'I keep {yours}. Spare part.'],
       takeQueen: ['Your queen. Scrapped.', 'Queen taken. One blow, clean.'],
       lost: ['{mine}. It had a crack anyway.', 'Keep {mine}. Out of warranty.'],

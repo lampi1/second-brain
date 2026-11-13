@@ -2,7 +2,8 @@
 // demo's history (fastest wins, last games). A written game against the Artigiano (SB_CHESS_SCRIPT: the bot answers
 // from a list instead of asking Stockfish) plays an en passant, a promotion from the picker and a castling by clicks,
 // takes a move back, and a resignation is stored. A fool's mate with black against the scripted white ends with the
-// end card and «nuovo record»; the card closes to look at the board and «Rivincita» starts again; a second win in a row is a streak, shown on the card and in the lobby. One game asks the real engine (the process in out/chess-engine) for its first move.
+// end card and «nuovo record»; the card closes to look at the board and «Rivincita» starts again; a second win in a row is a streak, shown on the card and in the lobby.
+// The real engine is not asked here (rule 7: no test waits on a real process); it was tried by hand in the built app.
 // Screenshots dark.
 import { expect, test, type Page } from '@playwright/test';
 import { goPage, launchDemo, shot } from './helpers';
@@ -110,20 +111,5 @@ test('a mate with black ends the game with the end card and a new record', async
     await shot(page, 'chess-streak-dark');
     await page.getByTestId('chess-change').click();
     await expect(page.getByTestId('chess-streak-orchestrator')).toContainText('2');
-  } finally { await app.close(); }
-});
-
-test('the real engine answers the first move', async () => {
-  test.setTimeout(120_000);
-  const { app, page } = await launchDemo();
-  try {
-    await goPage(page, 'scacchi');
-    await page.getByTestId('chess-bot-sentinel').click();
-    await page.getByTestId('chess-play').click();
-    await move(page, 'e2', 'e4');
-    // Stockfish's own process starts at this first request and answers: black has moved, it is the user's turn again
-    await expect(page.getByTestId('chess-board')).toHaveAttribute('data-turn', 'w', { timeout: 60_000 });
-    await expect(page.getByTestId('chess-moves').locator('li').first().locator('span').nth(2)).not.toBeEmpty();
-    await expect(page.getByTestId('chess-problem')).toHaveCount(0);
   } finally { await app.close(); }
 });

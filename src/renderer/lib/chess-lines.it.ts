@@ -11,7 +11,7 @@ export const chessLinesIt: ChessLines = {
   piece: { p: 'pedone', n: 'cavallo', b: 'alfiere', r: 'torre', q: 'donna' },
   says: {
     orchestrator: {
-      start: ['Silenzio in sala. Apro io la sinfonia, tu suoni il triangolo.', 'Prima mossa, primo violino. Tu sei il pubblico pagante.'],
+      start: ['Silenzio in sala. La sinfonia la dirigo io, tu suoni il triangolo.', 'Prima mossa, primo violino. Tu sei il pubblico pagante.'],
       take: ['Ho tolto {yours} dall’orchestra. Stonava.', 'Via {yours}. Senza preavviso.'],
       takeQueen: ['La tua donna esce di scena. Applausi, prego.', 'Ho preso la tua donna. Il resto è un assolo mio.'],
       lost: ['Hai preso {mine}? Era una comparsa, l’avevo delegata a morire.', '{mine} era in prova. Non ha superato il periodo.'],
@@ -49,7 +49,7 @@ export const chessLinesIt: ChessLines = {
       lose: ['Matto?! Zugzwang esistenziale.', 'Hai vinto. Avevo calcolato tutto tranne te.'],
       draw: ['Patta. Era il risultato più probabile. L’ho deciso adesso.', 'Pari: nessuno dei due ha rispettato il piano.'],
       resign: ['Abbandoni alla mossa giusta. Era prevista anche questa.', 'Resa accettata. Aggiorno le statistiche.'],
-      slow: ['Io questa mossa l’ho calcolata ieri.', 'Tranquillo: ho pianificato anche la tua indecisione.'],
+      slow: ['Io questa mossa l’ho calcolata ieri.', 'Niente fretta: ho pianificato anche la tua indecisione.'],
       undo: ['Ritiri la mossa? Il piano prevedeva che ti pentissi.', 'Rollback approvato. A malincuore.'],
     },
     scout: {
@@ -74,7 +74,7 @@ export const chessLinesIt: ChessLines = {
       undo: ['Torni indietro? Anch’io, sempre. Mai trovato il sentiero.', 'Dietrofront! La mia manovra preferita.'],
     },
     artisan: {
-      start: ['Muovi. Ho da fare.', 'Scacchiera in bolla. Si comincia.'],
+      start: ['Sbrighiamoci. Ho da fare.', 'Scacchiera in bolla. Si comincia.'],
       take: ['Smonto {yours}.', 'Mi tengo {yours}. Pezzo di ricambio.'],
       takeQueen: ['La tua donna. Rottamata.', 'Donna presa. Un colpo solo, pulito.'],
       lost: ['{mine}. Aveva già una crepa.', 'Tieniti {mine}. Fuori garanzia.'],
@@ -111,7 +111,7 @@ export const chessLinesIt: ChessLines = {
       win: ['Scacco matto. Il re è caduto. Spengo le luci.', 'Matto. Un altro nome sul registro.'],
       lose: ['Matto… Seppellitemi nel log.', 'Sono caduto. Chiudete /tmp dietro di me.'],
       draw: ['Patta. Nessun morto ufficiale. Sospetto.', 'Pari. Vi tengo d’occhio tutti e due. Anche me.'],
-      resign: ['Ti arrendi. Saggio. Consegna i pezzi.', 'Resa accettata. Resti schedato.'],
+      resign: ['Ti arrendi. Saggio. Consegna i pezzi.', 'Resa accettata. Finisci in archivio.'],
       slow: ['Fai con calma. Io non dormo mai.', 'Stai tramando qualcosa. Lo sento.'],
       undo: ['Ritiri la mossa? Sospetto. Molto sospetto.', 'Annullato. Ma il log ricorda.'],
     },
@@ -132,7 +132,7 @@ export const chessLinesIt: ChessLines = {
       win: ['SCACCO MATTO! Titoloni a nove colonne!', 'Udite udite! Ho vinto! Festa nazionale!'],
       lose: ['Udite… ho perso. Edizione listata a lutto.', 'MATTO?! Chiudo il giornale. Addio.'],
       draw: ['PATTA! Notizia clamorosa: non è successo niente!', 'Pareggio storico! Come tutti gli altri!'],
-      resign: ['ULTIM’ORA: l’avversario fugge!', 'Udite! Si è arreso! Stampate subito!'],
+      resign: ['ULTIM’ORA: l’avversario fugge!', 'Udite! La resa! Stampate subito!'],
       slow: ['Ultim’ora: ancora nessuna mossa.', 'Aggiornamento: sta ancora pensando. Vi terremo informati.'],
       undo: ['Smentita ufficiale: quella mossa non è mai esistita!', 'Rettifica! Errata corrige!'],
     },

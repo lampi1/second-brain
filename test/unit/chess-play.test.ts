@@ -3,9 +3,10 @@
 // move comes after its pause, a mate is stored and may be a record, a move is taken back in pairs and makes the win
 // no record, a resignation is a loss (or just the lobby before the first move), an engine that fails shows «Riprova»,
 // leaving the page stops the engine and coming back asks again, an answer for an older game is dropped, a premove is
-// played the moment the bot has moved (or dropped when it is not legal then).
+// played the moment the bot has moved (or dropped when it is not legal then), a line about the move is never
+// muttered over, an answer to a dropped request is ignored, a game days long is stored with the cap.
 import { describe, expect, it } from 'vitest';
-import { chessHistory, type ChessGame, type ChessGameInput, type ChessMoveReply } from '../../src/shared/chess';
+import { MAX_GAME_MS, chessHistory, type ChessGame, type ChessGameInput, type ChessMoveReply } from '../../src/shared/chess';
 import { MIN_THINK_MS, createChessPlay, type ChessDeps } from '../../src/renderer/lib/chess-play';
 
 interface Ask { bot: string; moves: string[]; answer: (r: ChessMoveReply) => void }
@@ -155,6 +156,71 @@ describe('a game against a bot', () => {
     await g.tick();
     expect(g.get().ucis).toEqual(['e2e4']);
     expect(g.waits).toHaveLength(0);
+  });
+  it('with black, leaving after only the bot\'s opening move is no loss; nor is leaving a game the engine cannot go on with', async () => {
+    const g = setup();
+    g.play.setSide('b');
+    g.play.start();
+    await g.bot('e2e4');
+    expect(g.get()).toMatchObject({ ucis: ['e2e4'], startedAt: 1000 });
+    g.play.resign();
+    await g.tick();
+    expect(g.get().view).toBe('lobby');
+    expect(g.saved).toHaveLength(0);
+    // the engine is missing after the user's move: the way out stores nothing
+    g.play.setSide('w');
+    g.play.start();
+    g.play.play('e2e4');
+    g.asks.at(-1)!.answer({ move: null, error: 'missing' });
+    await g.tick();
+    expect(g.get().problem).toBe('missing');
+    g.play.resign();
+    await g.tick();
+    expect(g.get().view).toBe('lobby');
+    expect(g.saved).toHaveLength(0);
+  });
+  it('never mutters over what it just said about the user\'s move', async () => {
+    // rnd 0: it would mutter at every request
+    const g = setup({ rnd: () => 0 });
+    g.play.pick('artisan'); // it never slips into a random move
+    g.play.start();
+    g.play.play('e2e4');
+    await g.bot('d7d5');
+    const before = g.get().line?.n ?? 0;
+    g.play.play('e4d5'); // takes the bot's pawn: one line, about the pawn
+    expect(g.get().line?.n).toBe(before + 1);
+    await g.bot('g8f6');
+    const quietBefore = g.get().line?.n ?? 0;
+    g.play.play('b1c3'); // nothing happened on the board: now it may mutter while it thinks
+    expect(g.get().line?.n).toBe(quietBefore + 1);
+  });
+  it('an answer to a request the page dropped (closed and opened again at once) never touches the newer one', async () => {
+    const g = setup();
+    g.play.start();
+    g.play.play('e2e4');
+    g.play.close();
+    g.play.open();
+    expect(g.asks).toHaveLength(2);
+    g.asks[0]!.answer({ move: null, error: 'superseded' });
+    await g.tick();
+    expect(g.get()).toMatchObject({ thinking: true, problem: null });
+    await g.bot('e7e5');
+    expect(g.get()).toMatchObject({ ucis: ['e2e4', 'e7e5'], thinking: false });
+    // a request the engine refuses is a failure the user can retry
+    g.play.play('g1f3');
+    g.asks.at(-1)!.answer({ move: null, error: 'bad-request' });
+    await g.tick();
+    expect(g.get().problem).toBe('failed');
+  });
+  it('stores a game left open for days with the longest time a game may have', async () => {
+    const g = setup();
+    g.play.start();
+    g.play.play('e2e4');
+    g.at(1000 + 3 * MAX_GAME_MS);
+    g.play.resign();
+    await g.tick();
+    expect(g.saved).toEqual([expect.objectContaining({ result: 'loss', ms: MAX_GAME_MS })]);
+    expect(g.games).toHaveLength(1);
   });
   it('an engine that fails shows the problem and «Riprova» asks again', async () => {
     const g = setup();

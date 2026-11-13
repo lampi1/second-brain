@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CHESS_BOTS, STREAK_MIN, clock, eloLabel, type ChessColor } from '@shared/chess';
 import { roleName } from '@shared/roles';
-import { VALUE, material, position, type PieceSymbol } from '../../lib/chess-game';
+import { VALUE, material, position, userMoves, type PieceSymbol } from '../../lib/chess-game';
 import { useNow, now } from '../../lib/clock';
 import type { SpriteState } from '../../lib/agent-sprites';
 import { chess } from '../../store/chess';
@@ -20,13 +20,18 @@ import { pieceArt } from './pieces';
 
 /** The user has been on the same move this long: the opponent says so and dozes off. */
 const SLOW_MS = 45_000;
+// the board's handlers never change, so the board is drawn again only when the position or the turn does (not at
+// every second of the clock)
+const onMove = (uci: string) => { chess.play(uci); };
+const onPremove = (from: string, to: string) => { chess.premove(from, to); };
+const onCancelPremove = () => chess.cancelPremove();
 /** A line stays this long, then its bubble fades (the last line of a finished game stays). */
 const BUBBLE_MS = 5200;
 
 function Taken({ pieces, color, lead }: { pieces: readonly PieceSymbol[]; color: ChessColor; lead: number }) {
   const sorted = [...pieces].sort((a, b) => VALUE[b] - VALUE[a]);
   return (
-    <span className="chess-taken" aria-label={t('chess.taken')}>
+    <span className="chess-taken" role="group" aria-label={t('chess.taken')}>
       {sorted.length > 0 && <span className="chess-taken-set">{sorted.map((p, i) => <img key={i} src={pieceArt(color, p)} alt={t(`chess.piece.${p}`)} width={20} height={20} draggable={false} />)}</span>}
       {lead > 0 && <span className="chess-plus">+{lead}</span>}
     </span>
@@ -74,12 +79,16 @@ export function ChessGame() {
   for (let i = 0; i < pos.sans.length; i += 2) rows.push([pos.sans[i]!, pos.sans[i + 1]]);
   const canUndo = usersTurn && s.ucis.length >= (s.color === 'w' ? 2 : 3);
   const name = roleName(s.bot);
+  // a game with nothing to lose yet (the user has not moved) or that cannot go on (the engine does not answer) is
+  // left without a result; from the user's first move on, leaving is a resignation
+  const leave = userMoves(s.ucis.length, s.color) === 0 || !!s.problem;
+  const botSan = pos.last && pos.last.color === botColor ? pos.last.san : null;
 
   return (
     <div className="chess-game" data-testid="chess-game" data-bot={s.bot} data-color={s.color} data-thinking={s.thinking || undefined} data-over={s.outcome?.result} data-premove={s.premove ? `${s.premove.from}${s.premove.to}` : undefined}>
       <div className="chess-stage">
-        <ChessBoard pos={pos} side={s.color} canMove={usersTurn} onMove={uci => { chess.play(uci); }}
-          canPremove={!s.outcome && pos.turn !== s.color} premove={s.premove} onPremove={(from, to) => { chess.premove(from, to); }} onCancelPremove={() => chess.cancelPremove()} />
+        <ChessBoard pos={pos} side={s.color} canMove={usersTurn} onMove={onMove}
+          canPremove={!s.outcome && pos.turn !== s.color} premove={s.premove} onPremove={onPremove} onCancelPremove={onCancelPremove} />
         {s.outcome && card && (
           <div className={`chess-over is-${s.outcome.result}`} role="status" data-testid="chess-over">
             <button type="button" className="chess-over-close" onClick={() => setCard(false)} aria-label={t('chess.seeBoard')} data-tip={t('chess.seeBoard')} data-testid="chess-over-close"><IconX size={13} /></button>
@@ -105,6 +114,7 @@ export function ChessGame() {
             <strong>{name}</strong>
             <span className="chess-elo" data-tip={t('chess.eloTip')}>{t('chess.elo', { elo: eloLabel(bot) })}</span>
             <span className={`chess-status${s.thinking ? ' thinking' : ''}`} data-testid="chess-status">{status}</span>
+            <span className="sr-only" aria-live="polite">{botSan ? t('chess.botPlayed', { name, san: botSan }) : ''}</span>
           </div>
           <Taken pieces={pos.taken[botColor]} color={s.color} lead={-lead} />
         </section>
@@ -130,7 +140,7 @@ export function ChessGame() {
         <div className="chess-actions">
           {s.outcome
             ? <><Button variant="primary" onClick={() => chess.start()} testid="chess-again">{t('chess.rematch')}</Button><Button onClick={() => chess.lobby()} testid="chess-back"><IconArrowLeft size={13} />{t('chess.back')}</Button></>
-            : <><Button onClick={() => chess.undo()} disabled={!canUndo} tip={t('chess.undoTip')} testid="chess-undo">{t('chess.undo')}</Button><Button variant={s.startedAt ? 'danger' : undefined} onClick={() => chess.resign()} testid="chess-resign">{s.startedAt ? t('chess.resign') : t('chess.back')}</Button></>}
+            : <><Button onClick={() => chess.undo()} disabled={!canUndo} tip={t('chess.undoTip')} testid="chess-undo">{t('chess.undo')}</Button><Button variant={leave ? undefined : 'danger'} onClick={() => chess.resign()} testid="chess-resign">{leave ? t('chess.back') : t('chess.resign')}</Button></>}
         </div>
       </aside>
     </div>

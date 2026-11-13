@@ -5,7 +5,7 @@
 // legal squares and reports a move as UCI. While the bot thinks the user may already make their move (a premove:
 // a piece and any square, by click or drag; shown on the two squares, dropped by Esc, a right click or a click
 // elsewhere), which the game plays the moment the bot has moved if it is legal then. Always seen from the user's side. Used by ChessGame.tsx.
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { PROMOTIONS, needsPromotion, targets, uciOf, type Color, type PieceSymbol, type Placed, type Position, type Square } from '../../lib/chess-game';
 import { t } from '../../i18n';
 import { pieceArt } from './pieces';
@@ -32,7 +32,7 @@ export interface ChessBoardProps {
   onCancelPremove?: () => void;
 }
 
-export function ChessBoard({ pos, side, canMove, onMove, canPremove = false, premove = null, onPremove, onCancelPremove }: ChessBoardProps) {
+export const ChessBoard = memo(function ChessBoard({ pos, side, canMove, onMove, canPremove = false, premove = null, onPremove, onCancelPremove }: ChessBoardProps) {
   const board = useRef<HTMLDivElement>(null);
   const [sel, setSel] = useState<Square | null>(null);
   const [promo, setPromo] = useState<{ from: Square; to: Square } | null>(null);
@@ -47,7 +47,7 @@ export function ChessBoard({ pos, side, canMove, onMove, canPremove = false, pre
   useEffect(() => {
     const prev = before.current;
     before.current = pos;
-    if (pos.ucis.length !== prev.ucis.length + 1 || !pos.last?.captured) { setGhosts([]); return; }
+    if (pos.ucis.length !== prev.ucis.length + 1 || !pos.last?.captured) { setGhosts(g => (g.length ? [] : g)); return; }
     const here = new Set(pos.pieces.map(p => p.id));
     setGhosts(prev.pieces.filter(p => !here.has(p.id)));
     const id = setTimeout(() => setGhosts([]), GHOST_MS);
@@ -61,8 +61,12 @@ export function ChessBoard({ pos, side, canMove, onMove, canPremove = false, pre
     if (held && at.get(held)?.color !== side) { setSel(null); setDrag(null); down.current = null; }
   }, [pos]);
   // nothing to move and nothing to premove (the game ended, the lobby): nothing stays picked
-  useEffect(() => { if (!canMove && !canPremove) { setSel(null); setDrag(null); down.current = null; } }, [canMove, canPremove]);
+  useEffect(() => { if (!canMove && !canPremove) { setSel(null); setDrag(null); setPromo(null); down.current = null; } }, [canMove, canPremove]);
   const from = drag?.from ?? sel;
+  /** Nothing in hand: the pick, a drag going on, the kept premove. */
+  const drop = () => { down.current = null; setDrag(null); setSel(null); onCancelPremove?.(); };
+  /** The promotion picker closes and the keyboard is back on the board (the picker had the focus). */
+  const closePromo = (sq: Square) => { setPromo(null); setFocus(sq); board.current?.querySelector<HTMLElement>(`[data-square="${sq}"]`)?.focus(); };
   const to = useMemo(() => new Set(from && canMove ? targets(pos, from) : []), [pos, from, canMove]);
 
   const tryMove = (a: Square, b: Square) => {
@@ -125,7 +129,7 @@ export function ChessBoard({ pos, side, canMove, onMove, canPremove = false, pre
     } else if (d.wasSel) setSel(null); // a second click on the picked piece puts it down
   };
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (promo) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setPromo(null); } return; }
+    if (promo) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closePromo(promo.from); } return; }
     const [x, y] = cell(focus, side);
     const step: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
     const s = step[e.key];
@@ -135,7 +139,7 @@ export function ChessBoard({ pos, side, canMove, onMove, canPremove = false, pre
       setFocus(next);
       board.current?.querySelector<HTMLElement>(`[data-square="${next}"]`)?.focus();
     } else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(focus); }
-    else if (e.key === 'Escape' && (sel || premove)) { e.preventDefault(); e.stopPropagation(); setSel(null); onCancelPremove?.(); }
+    else if (e.key === 'Escape' && (sel || premove || down.current)) { e.preventDefault(); e.stopPropagation(); drop(); }
   };
   const name = (sq: Square): string => {
     const p = at.get(sq);
@@ -144,20 +148,20 @@ export function ChessBoard({ pos, side, canMove, onMove, canPremove = false, pre
   const choose = (type: PieceSymbol) => {
     if (!promo) return;
     const uci = uciOf(pos, promo.from, promo.to, type);
-    setPromo(null);
+    closePromo(promo.to);
     if (uci) onMove(uci);
   };
 
   return (
-    <div className={`chess-board${canMove || canPremove ? ' can-move' : ''}${drag ? ' is-dragging' : ''}`} ref={board} role="grid" aria-label={t('chess.board')} data-testid="chess-board" data-side={side} data-turn={pos.turn}
+    <div className={`chess-board${canMove || canPremove ? ' can-move' : ''}${drag ? ' is-dragging' : ''}`} ref={board} role="group" aria-label={t('chess.board')} data-testid="chess-board" data-side={side} data-turn={pos.turn}
       onPointerDown={onDown} onPointerMove={onPointerMove} onPointerUp={onUp} onPointerCancel={() => { down.current = null; setDrag(null); }} onKeyDown={onKey}
-      onContextMenu={e => { if (premove || sel) { e.preventDefault(); setSel(null); onCancelPremove?.(); } }}>
+      onContextMenu={e => { if (premove || sel || down.current) { e.preventDefault(); drop(); } }}>
       {SQUARES.map(([x, y]) => {
         const sq = squareAt(x, y, side);
         const cls = ['chess-sq', (x + y) % 2 ? 'dark' : 'light', pos.last && (pos.last.from === sq || pos.last.to === sq) ? 'last' : '', from === sq ? 'picked' : '',
           pos.check === sq ? 'check' : '', premove && (premove.from === sq || premove.to === sq) ? 'premove' : '', to.has(sq) ? (at.has(sq) ? 'target capture' : 'target') : ''].filter(Boolean).join(' ');
         return (
-          <button key={sq} type="button" role="gridcell" className={cls} data-square={sq} data-testid={`chess-sq-${sq}`} tabIndex={focus === sq ? 0 : -1} aria-label={name(sq)} aria-selected={from === sq}
+          <button key={sq} type="button" className={cls} data-square={sq} data-testid={`chess-sq-${sq}`} tabIndex={focus === sq ? 0 : -1} aria-label={name(sq)} aria-pressed={from === sq}
             onFocus={() => setFocus(sq)}>
             {x === 0 && <span className="chess-rank" aria-hidden="true">{sq[1]}</span>}
             {y === 7 && <span className="chess-file" aria-hidden="true">{sq[0]}</span>}
@@ -175,7 +179,7 @@ export function ChessBoard({ pos, side, canMove, onMove, canPremove = false, pre
         return <span key={`gone-${p.id}`} className="chess-piece gone" style={{ transform: `translate(${x * 100}%, ${y * 100}%)`, backgroundImage: `url("${pieceArt(p.color, p.type)}")` }} aria-hidden="true" />;
       })}
       {promo && (
-        <div className="chess-promo-veil" onPointerDown={e => { e.stopPropagation(); setPromo(null); }} data-testid="chess-promo">
+        <div className="chess-promo-veil" onPointerDown={e => { e.stopPropagation(); closePromo(promo.from); }} data-testid="chess-promo">
           <div className="chess-promo" role="dialog" aria-label={t('chess.promote')} style={{ left: `${cell(promo.to, side)[0] * 12.5}%` }} onPointerDown={e => e.stopPropagation()}>
             {PROMOTIONS.map((type, i) => (
               <button key={type} type="button" className="chess-promo-opt" autoFocus={i === 0} onClick={() => choose(type)} aria-label={`${t('chess.promote')} ${t(`chess.piece.${type}`)}`} data-tip={t(`chess.piece.${type}`)}
@@ -186,4 +190,4 @@ export function ChessBoard({ pos, side, canMove, onMove, canPremove = false, pre
       )}
     </div>
   );
-}
+});

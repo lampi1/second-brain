@@ -6,7 +6,7 @@
 // Everything it needs from outside comes as `deps`, so the tests play whole games in Node.
 // Used by store/chess.ts (the app's one instance). Tests: test/unit/chess-play.test.ts.
 import { pickQuip } from '@shared/agent-quips';
-import { CHESS_BOTS, isRecord, isStreakRecord, type ChessBotId, type ChessColor, type ChessEnding, type ChessGame, type ChessGameInput, type ChessHistory, type ChessMoveReply, type ChessResult } from '@shared/chess';
+import { CHESS_BOTS, MAX_GAME_MS, isRecord, isStreakRecord, type ChessBotId, type ChessColor, type ChessEnding, type ChessGame, type ChessGameInput, type ChessHistory, type ChessMoveReply, type ChessResult } from '@shared/chess';
 import type { Lang } from '@shared/contract';
 import { createStore, type Store } from '../store/createStore';
 import { botMove, eventOf, isLegal, position, resultFor, userMoves, type ChessEvent } from './chess-game';
@@ -103,11 +103,12 @@ export function createChessPlay(d: ChessDeps): ChessPlay {
   const botColor = (): ChessColor => (get().color === 'w' ? 'b' : 'w');
   const speak = (text: string) => { if (text) set({ line: { text, n: (get().line?.n ?? 0) + 1 } }); };
   const say = (e: ChessEvent | null) => { if (e) speak(chessLine(get().bot, e, d.lang(), d.rnd, get().line?.text)); };
+  let asked = 0;
   const usersTurn = (): boolean => { const s = get(); return s.view === 'game' && !s.outcome && !s.thinking && position(s.ucis).turn === s.color; };
 
   function finish(result: ChessResult, ending: ChessEnding): void {
     const s = get();
-    const input: ChessGameInput = { bot: s.bot, color: s.color, result, ending, moves: userMoves(s.ucis.length, s.color), ms: Math.max(0, d.now() - (s.startedAt ?? d.now())), undos: s.undos };
+    const input: ChessGameInput = { bot: s.bot, color: s.color, result, ending, moves: userMoves(s.ucis.length, s.color), ms: Math.min(MAX_GAME_MS, Math.max(0, d.now() - (s.startedAt ?? d.now()))), undos: s.undos };
     set({ thinking: false, problem: null, premove: null, outcome: { result, ending, moves: input.moves, ms: input.ms, record: false, streak: 0, streakRecord: false } });
     const game = s.game;
     void d.stop().catch(() => undefined);
@@ -128,20 +129,23 @@ export function createChessPlay(d: ChessDeps): ChessPlay {
     return true;
   }
 
-  async function askBot(): Promise<void> {
+  /** `quiet`: the bot has just said something about the move: no muttering over it. */
+  async function askBot(quiet = false): Promise<void> {
     const s = get();
     if (s.view !== 'game' || s.outcome || s.thinking) return;
     const { game, ucis, bot } = s;
-    const mine = () => { const n = get(); return n.game === game && n.ucis === ucis && n.thinking; };
+    // each request has its number: an answer to an older one (the page closed and opened again) is dropped
+    const id = ++asked;
+    const mine = () => { const n = get(); return asked === id && n.game === game && n.ucis === ucis && n.thinking; };
     set({ thinking: true, problem: null });
     const t0 = d.now();
-    if (ucis.length > 1 && d.rnd() < MUTTER) speak(pickQuip(bot, 'work', d.lang(), d.rnd, get().line?.text));
+    if (!quiet && ucis.length > 1 && d.rnd() < MUTTER) speak(pickQuip(bot, 'work', d.lang(), d.rnd, get().line?.text));
     let reply: ChessMoveReply;
     try { reply = await d.move({ bot, moves: [...ucis] }); } catch { reply = { move: null, error: 'failed' }; }
     if (!mine()) return;
     if (reply.move === null) {
       // superseded = the page closed or another request took its place: open() asks again
-      set({ thinking: false, problem: reply.error === 'superseded' || reply.error === 'bad-request' ? null : reply.error });
+      set({ thinking: false, problem: reply.error === 'superseded' ? null : reply.error === 'bad-request' ? 'failed' : reply.error });
       return;
     }
     const move = botMove(CHESS_BOTS[bot], reply.move, position(ucis), d.rnd);
@@ -163,7 +167,8 @@ export function createChessPlay(d: ChessDeps): ChessPlay {
     const s = get();
     if (!usersTurn() || !isLegal(position(s.ucis), uci)) return false;
     set({ ucis: [...s.ucis, uci], startedAt: s.startedAt ?? d.now(), problem: null, premove: null });
-    if (!after()) void askBot();
+    const said = get().line?.n;
+    if (!after()) void askBot(get().line?.n !== said);
     return true;
   }
 
@@ -210,8 +215,8 @@ export function createChessPlay(d: ChessDeps): ChessPlay {
     resign() {
       const s = get();
       if (s.view !== 'game' || s.outcome) return;
-      // nothing played yet: there is no game to lose
-      if (!s.startedAt) { lobby(); return; }
+      // the user has not moved yet (the bot may have opened), or the engine cannot answer: there is no game to lose
+      if (userMoves(s.ucis.length, s.color) === 0 || s.problem) { lobby(); return; }
       say({ moment: 'resign' });
       finish('loss', 'resign');
     },

@@ -1776,11 +1776,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Sei avversari, dal più debole al più forte: Scout ~600, Herald ~900, Artisan 1400, Sentinel 1700, Strategist 2000 e l’Orchestrator, che gioca senza limiti (2200+). I due più deboli ogni tanto giocano una mossa a caso.',
         'Six opponents, weakest first: Scout ~600, Herald ~900, Artisan 1400, Sentinel 1700, Strategist 2000 and the Orchestrator, which plays without a limit (2200+). The two weakest play a random move now and then.'),
       // src/renderer/components/chess/ChessLobby.tsx
-      b('Scegli l’avversario e il colore (bianco, nero o a caso), poi «Gioca». Su ogni agente vedi vittorie, sconfitte, patte e la tua vittoria più veloce contro di lui.',
-        'Pick the opponent and the colour (white, black or random), then "Play". Each agent shows your wins, losses, draws and your fastest win against it.'),
+      b('Scegli l’avversario e il colore (bianco, nero o a caso), poi «Gioca contro …». Su ogni agente vedi vittorie, sconfitte, patte e la tua vittoria più veloce contro di lui.',
+        'Pick the opponent and the colour (white, black or random), then "Play against …". Each agent shows your wins, losses, draws and your fastest win against it.'),
       // src/renderer/components/chess/ChessBoard.tsx
-      b('Muovi con un clic sul pezzo e uno sulla casa, trascinando, o con frecce e Invio. La scacchiera segna le case possibili, l’ultima mossa e lo scacco; quando un pedone arriva in fondo scegli tu il pezzo. Mentre l’avversario pensa puoi già fare la tua mossa (premove): parte appena lui ha mosso, se è ancora legale; Esc o un clic destro la toglie.',
-        'Move with a click on the piece and one on the square, by dragging, or with the arrows and Enter. The board marks the possible squares, the last move and a check; when a pawn reaches the last rank you pick the piece. While the opponent thinks you can already make your move (a premove): it is played as soon as it has moved, if it is still legal; Esc or a right click drops it.'),
+      b('Muovi con un clic sul pezzo e uno sulla casa, trascinando, o con frecce e Invio. La scacchiera segna le case possibili, l’ultima mossa e lo scacco; quando un pedone arriva in fondo scegli tu il pezzo. Mentre l’avversario pensa puoi già fare la tua mossa (premove): parte appena lui ha mosso, se è ancora legale (un pedone che arriva in fondo così diventa donna); Esc o un clic destro la toglie.',
+        'Move with a click on the piece and one on the square, by dragging, or with the arrows and Enter. The board marks the possible squares, the last move and a check; when a pawn reaches the last rank you pick the piece. While the opponent thinks you can already make your move (a premove): it is played as soon as it has moved, if it is still legal (a pawn that reaches the last rank this way becomes a queen); Esc or a right click drops it.'),
       // src/renderer/lib/chess-game.ts
       b('Le regole ci sono tutte: arrocco, en passant, promozione, scacco matto, stallo, patta per ripetizione, per le cinquanta mosse e per materiale insufficiente.',
         'All the rules are there: castling, en passant, promotion, checkmate, stalemate, draws by repetition, by the fifty-move rule and by insufficient material.'),
@@ -1806,7 +1806,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(FILES, 'Storico: tabella chess_games di userData/app.db (al massimo 5000 partite). Motore: out/chess-engine (da vendor/stockfish, Stockfish 19 lite, GPLv3, non modificato). Pezzi: Chessnut di Alexis Luengas (Apache 2.0).',
         'History: table chess_games of userData/app.db (at most 5000 games). Engine: out/chess-engine (from vendor/stockfish, Stockfish 19 lite, GPLv3, unmodified). Pieces: Chessnut by Alexis Luengas (Apache 2.0).'),
       tech(LIMITS, 'Tempo per mossa del motore: da 0,2 s (Scout) a 1,2 s (Orchestrator). Da 1400 a 2000 la forza è l’UCI_Elo di Stockfish; sotto 1320 è una nostra stima. Una mossa senza risposta 15 s oltre il suo tempo ferma il motore e la pagina offre «Riprova».',
-        'Engine time per move: from 0.2 s (Scout) to 1.2 s (Orchestrator). From 1400 to 2000 the strength is Stockfish’s UCI_Elo; under 1320 it is our estimate. A move not answered 15 s past its time stops the engine and the page offers "Retry".'),
+        'Engine time per move: from 0.2 s (Scout) to 1.2 s (Orchestrator). From 1400 to 2000 the strength is Stockfish’s UCI_Elo; under 1320 it is our estimate. A move not answered 15 s past its time stops the engine and the page offers "Try again".'),
       tech(WHERE, 'Pagina Scacchi (barra a sinistra, o G K); IPC chess:move, chess:stop, chess:save, chess:history.',
         'Chess page (left rail, or G K); IPC chess:move, chess:stop, chess:save, chess:history.'),
     ],

@@ -40,9 +40,10 @@ strength on a known scale, but it is GPLv3 and this app is MIT.
    promotion (the user picks the piece), stalemate, insufficient material, threefold repetition, fifty moves. A game
    is its list of UCI moves; every piece keeps one id from the first move, so a move slides and a capture leaves.
    Moves by click, drag or keyboard. **Premove** (owner, 2026-11-13: «mi piace bullet, amo il premove e gioco veloce»):
-   while the bot thinks the user may already make a move (a piece and any square, their own included: a recapture made
-   in advance); `lib/chess-play.ts` plays it the moment the bot has moved if it is legal there (a pawn reaching the
-   last rank becomes a queen), else drops it. Esc, a right click or a click elsewhere cancels it. A piece held in a
+   while the bot thinks the user may already make a move (a piece and any square; by drag also onto a piece of their own, a
+   recapture made in advance); `lib/chess-play.ts` plays it the moment the bot has moved if it is legal there (a pawn reaching the
+   last rank becomes a queen), else drops it. Esc, a right click or a click elsewhere cancels it. The game's time keeps running while the page is closed, and
+   is stored up to 24 hours. A piece held in a
    drag stays in hand when the bot moves.
    **Quick and smooth** (owner: «le animazioni fluide e veloci»): a move slides in 0.15 s, a taken piece fades in
    0.18 s, and the bot's move comes as soon as its engine answers (never sooner than 0.15 s, `MIN_THINK_MS`): the

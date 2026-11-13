@@ -38,6 +38,7 @@ export const chessEn: typeof chessIt = {
   'chess.board': 'Chessboard',
   'chess.you': 'You',
   'chess.thinking': 'Thinking…',
+  'chess.botPlayed': ({ name, san }) => `${name} played ${san}`,
   'chess.yourTurn': 'Your move',
   'chess.check': 'Check!',
   'chess.time': 'Time',
