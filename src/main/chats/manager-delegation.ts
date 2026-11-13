@@ -665,6 +665,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
       const cut = item.isError || !!item.interrupted;
       if (cut) { r.handoffStopped = true; r.session?.noRetry?.(); }
       handoffTurn.done(cut ? null : [...handoffTurn.texts.values()].join('\n\n'));
+      r.turnChained = false;
       return; // not a turn of the job: no ledger entry
     }
     r.turnSinceDone = true; r.lastTurnAt = item.at;
@@ -681,6 +682,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     this.receiptTurn(r, turnAt, item.at);
     // still running after the result: a queued turn follows at once (no state change starts it), and it starts now
     if (r.s.state === 'running') r.turnAt = item.at; else delete r.turnAt;
+    r.turnChained = r.s.state === 'running';
     const reply = turnReply(r.items), runReport = reportOf(reply, item.at);
     if (run && (run.endedAt === undefined || (turnAt !== undefined && run.endedAt >= turnAt))) {
       if (runReport && run.report?.via !== 'agent_report') { run.report = runReport; this.runSave(); }

@@ -117,6 +117,7 @@ export abstract class ManagerSink extends ManagerWork {
         // gone mid-turn (crash, close, kill): no result will settle the estimate, which stays as spent (no "≈")
         delete r.s.costLiveUsd;
         delete r.turnAt; // its turn is over, result or not
+        r.turnChained = false;
         r.handoffTurn?.done(null);
         delete r.s.background; // its background tasks died with it
         // its Remote Control bridge went with it: on, it comes back with the next engine (manager-remote.ts)
@@ -244,7 +245,7 @@ export abstract class ManagerSink extends ManagerWork {
     if ('effortSubmitted' in p && !r.handoffTurn) r.turnAt = Date.now();
     if (p.state === 'running' && !r.handoffTurn) r.turnAt ??= Date.now();
     // out of the turn with no result (a crash, a clean exit mid-turn): the next turn starts its own clock
-    else if (p.state === 'idle' || p.state === 'error' || p.state === 'closed') delete r.turnAt;
+    else if (p.state === 'idle' || p.state === 'error' || p.state === 'closed') { delete r.turnAt; r.turnChained = false; }
     // execution time: only while running (waiting on Brother, a permission or the queue is not), never a hand-off note
     if (p.state && run && run.endedAt === undefined) {
       if (p.state === 'running' && !r.handoffTurn) r.runningSince ??= Date.now();

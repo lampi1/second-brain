@@ -645,11 +645,12 @@ export class ChatManager extends ManagerRemote implements ChatService {
     const phoneHint = fromPhone ? PHONE_REPLY_HINT : '';
     if (spoken) { r.voiceText = undefined; r.voiceTold = r.s.sessionId ?? ''; }
     // the files as they are before this turn (ADR 0103): what the user can put back with «Annulla l'ultimo turno»
-    if (!this.midTurn(r)) r.turnCheckpoint = false;
+    const inFlight = this.turnInFlight(r);
+    if (!inFlight) r.turnCheckpoint = false;
     lapT = Date.now();
     // ADR 0228: an engine that can hold its writing tools gets the message now and the snapshot runs alongside it; any
     // other engine waits for the snapshot first, as before
-    if (this.opts.checkpoints?.() && !r.s.isOrchestrator && !r.s.quick && !this.midTurn(r)) {
+    if (this.opts.checkpoints?.() && !r.s.isOrchestrator && !r.s.quick && !inFlight) {
       const taking = this.checkpoint(r);
       if (r.session?.holdWrites?.(taking)) lap.checkpointParallel = 1; else await taking;
     }
@@ -661,6 +662,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
       // (AI-DLC's human-turn record) never take it for the user's turn; the user's own text goes as it is
       const composed = `${role}${warning}${body}${hint}${langHint}${voiceHint}${phoneHint}${awayHint}`;
       r.session.send(forEngine(composed, { claude: engineOf(r.s.harness)?.kind === 'claude', relayed }), imgs);
+      r.sentTo = r.session;
       if (awayHint) { if (awayOn) r.awayTold = session; else delete r.awayTold; }
       receipt?.submitted();
       if (r.continuationPending) { r.continuationPending = undefined; this.persist(true); }

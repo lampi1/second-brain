@@ -6,7 +6,7 @@ import path from 'node:path';
 import type { ChatItem } from '../../shared/contract';
 import { errText, log } from '../log';
 import type { AgentRun } from '../../shared/agents';
-import { afterTree, KEEP as CHECKPOINTS_KEPT, prune as pruneCheckpoints, restore as restoreCheckpoint, snapshot as takeCheckpoint, turnFiles } from './checkpoints';
+import { afterTree, KEEP as CHECKPOINTS_KEPT, prune as pruneCheckpoints, restore as restoreCheckpoint, snapshot as takeCheckpoint, treeFiles, turnFiles } from './checkpoints';
 import { emptyReceipts, noteTool, noteTurnFiles, receiptVerdict, rowChanges, turnFilesWithoutGit } from '../agents/receipts';
 import type { Checkpoint } from './checkpoints';
 import type { Rec } from './manager-types';
@@ -20,6 +20,8 @@ export const CHECKPOINT_DEADLINE_MS = 45_000;
 
 /** the turn (Rec.checkpointSeq) each checkpoint belongs to: a turn's end and receipts read only their own */
 const turnOf = new WeakMap<Checkpoint, number>();
+/** per run, the reads of its turns' files still under way: its verdict waits for them (receiptsIn) */
+const receiptReads = new WeakMap<AgentRun, number>();
 /** End reads still pending when a later turn's deadline opens its write barrier can contain that later turn's files. */
 const uncertainEndsThrough = new WeakMap<Rec, number>();
 
@@ -133,32 +135,59 @@ export abstract class ManagerCheckpoints extends ManagerSessions {
   }
   /** A turn of the run ended: the files it changed go into the receipts once git recorded its end (recordTurnEnd); a
    *  turn without its own checkpoint is a gap (files unknown). An ended run gets its verdict once they are in. */
-  protected receiptTurn(r: Rec, turnAt: number | undefined, end: number, seq?: number, rows?: Rec['receiptTurn']): void {
+  protected receiptTurn(r: Rec, turnAt: number | undefined, end: number, seq?: number, rows?: Rec['receiptTurn'], chained = !!r.turnChained): void {
     // its snapshot still running (ADR 0228): read once it settled, with this turn's own rows (a newer turn fills its own)
     const pending = r.checkpointPending;
     if (seq === undefined && pending) {
       const at = r.checkpointSeq ?? 0, mine = r.receiptTurn ?? { files: [], mayWrite: false };
       r.receiptTurn = undefined;
-      void pending.then(() => this.receiptTurn(r, turnAt, end, at, mine));
+      void pending.then(() => this.receiptTurn(r, turnAt, end, at, mine, chained));
       return;
     }
     const run = r.s.run;
     if (!run || run.source === 'oneshot' || (run.endedAt !== undefined && (turnAt === undefined || run.endedAt < turnAt))) return;
     const rc = run.receipts ??= emptyReceipts(), cp = r.checkpoints?.at(-1), turn = rows ?? r.receiptTurn ?? { files: [], mayWrite: false };
     if (!rows) r.receiptTurn = undefined;
-    const own = seq === undefined ? !!r.turnCheckpoint : !!cp && turnOf.get(cp) === seq;
-    if (!own || !cp || r.receiptCp === cp) { noteTurnFiles(rc, turnFilesWithoutGit(turn), turnAt ?? end, end); this.receiptsIn(r, run); return; }
+    // a chat in a worktree the CLI made works outside cwd: the snapshot of cwd says nothing of its files
+    const own = !r.inWorktree && (seq === undefined ? !!r.turnCheckpoint : !!cp && turnOf.get(cp) === seq);
+    // a follow-up turn under the checkpoint already read (a message queued mid-turn takes none): what changed since the
+    // previous turn's end is its own, but only when it began the moment that one ended (`chained`: after an idle gap
+    // the difference would also hold what the user or another chat changed meanwhile) (ADR 0279)
+    const followUp = own && !!cp && r.receiptCp === cp && !cp.afterUncertain && chained;
+    if (!own || !cp || (r.receiptCp === cp && !followUp)) { noteTurnFiles(rc, turnFilesWithoutGit(turn), turnAt ?? end, end); this.receiptsIn(run); return; }
     r.receiptCp = cp; r.receiptsBusy = true;
-    void (async () => {
+    receiptReads.set(run, (receiptReads.get(run) ?? 0) + 1);
+    // a follow-up turn's end is read now, in line with the other end records: the next turn's snapshot waits for it
+    let endTree: Promise<string | null> | undefined;
+    if (followUp) {
+      const before = r.afterPending;
+      endTree = (async () => { await before; return afterTree(cp.root); })();
+      this.trackAfter(r, endTree.then(() => {}));
+    }
+    const read = async (): Promise<void> => {
       let files: string[] | null = null;
-      try { await r.afterPending; if (cp.after) files = await turnFiles(cp); } catch (e) { log.debug('chats', 'turn files not read for the receipts', { chat: r.s.id, data: errText(e) }); }
-      noteTurnFiles(rc, files, cp.at, end);
-      r.receiptsBusy = false;
-      this.receiptsIn(r, run);
-    })();
+      try {
+        if (!endTree) { await r.afterPending; if (cp.after) { files = await turnFiles(cp); r.receiptTree = cp.after; } }
+        else {
+          const from = r.receiptTree, now = await endTree;
+          if (from && now) { files = await treeFiles(cp.root, from, now); r.receiptTree = now; }
+        }
+      } catch (e) { log.warn('chats', 'turn files not read for the receipts', { chat: r.s.id, cause: errText(e), hint: 'this turn counts as files unknown for the run verdict' }); }
+      if (files === null) { r.receiptTree = undefined; files = turnFilesWithoutGit(turn); }
+      noteTurnFiles(rc, files, followUp ? turnAt ?? end : cp.at, end);
+    };
+    // one read after the other: a follow-up turn's files start from the tree the read before it ended on
+    const chain: Promise<void> = (r.receiptChain ?? Promise.resolve()).then(read).catch(() => {}).finally(() => {
+      if (r.receiptChain === chain) { r.receiptChain = undefined; r.receiptsBusy = false; }
+      receiptReads.set(run, (receiptReads.get(run) ?? 1) - 1);
+      this.receiptsIn(run);
+    });
+    r.receiptChain = chain;
   }
-  private receiptsIn(r: Rec, run: AgentRun): void {
-    if (run.endedAt !== undefined && !r.receiptsBusy) this.settleReceipts(run); else this.runs.touch();
+  /** an ended run gets its verdict once none of its own turns' files are still being read (the chat may already be
+   *  reading a newer run's) */
+  private receiptsIn(run: AgentRun): void {
+    if (run.endedAt !== undefined && !receiptReads.get(run)) this.settleReceipts(run); else this.runs.touch();
   }
   /** The run's deterministic verdict at its end (receipts.ts receiptVerdict), once. */
   protected override settleReceipts(run: AgentRun): void {

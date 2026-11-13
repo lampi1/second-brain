@@ -107,6 +107,12 @@ export async function turnFiles(cp: Checkpoint): Promise<string[]> {
   return (await changes(cp.root, `${cp.commit}^{tree}`, cp.after)).map(c => c.file);
 }
 
+/** The repo-relative paths that differ between two recorded trees of the repository at root (a follow-up turn's files:
+ *  the previous turn's end against its own end, ADR 0279). */
+export async function treeFiles(root: string, from: string, to: string): Promise<string[]> {
+  return from === to ? [] : (await changes(root, from, to)).map(c => c.file);
+}
+
 /** Puts back what the checkpoint's turn changed (see the header): a file the turn created is removed, one it changed or
  *  deleted comes back; a path changed again since the turn ended is skipped. Without cp.after (the turn's end was not
  *  recorded) every change since the checkpoint counts. backupRef records the files as they are first. */
