@@ -29,7 +29,9 @@ import type { InputRevision } from './input-revision';
 // endpoints would need the user's session token and fall under the ToS ban on extracting data. So: said, never guessed.
 export const CURSOR_PLAN_NOTE = "Cursor non offre un'API d'uso per gli account personali (solo agli amministratori del team): la quota del piano non si vede. Il costo è stimato dai token di ogni turno (hook stop di Cursor) e diventa esatto quando un export CSV è in Download (dashboard Cursor → Usage → Export CSV).";
 
-export interface Limits { fiveHourPct: number | null; fiveHourResetsAt: number | null; weekPct: number | null; weekResetsAt: number | null; source: 'stream' | 'get_usage' | 'claude-cache'; at: number }
+export interface Limits { fiveHourPct: number | null; fiveHourResetsAt: number | null; weekPct: number | null; weekResetsAt: number | null; source: 'stream' | 'get_usage' | 'claude-cache'; at: number;
+  /** the week came from weekFallback (one model's window): it never replaces an all-models week (ADR 0298) */
+  weekScoped?: boolean }
 /** at = when cost.mjs started reading (set by UsageMonitor.refresh): what the app's chats spend after it is not in todayUsd */
 export interface CostSnapshot { todayUsd: number; chats: ChatSpend[]; cursorTodayUsd: number | null; cursorNote: string; costKnown: boolean; costNote: string; at?: number }
 
@@ -90,27 +92,30 @@ export function parseRateLimits(msg: unknown, now = Date.now()): Limits | null {
     const one = readWindow({ utilization: i.utilization, resetsAt: i.resetsAt }, 100, 'resetsAt', 'unix');
     if (f.pct === null && i.rateLimitType === 'five_hour') f = one;
     if (w.pct === null && i.rateLimitType === 'seven_day') w = one;
+    const scoped = w.pct === null;
     if (w.pct === null) w = weekFallback(uw, 100, 'resetsAt', 'unix');
     if (w.pct === null && typeof i.rateLimitType === 'string' && i.rateLimitType.startsWith('seven_day_')) w = one;
     if (f.pct === null && w.pct === null) return null;
-    return { fiveHourPct: f.pct, fiveHourResetsAt: f.resets, weekPct: w.pct, weekResetsAt: w.resets, source: 'stream', at: now };
+    return { fiveHourPct: f.pct, fiveHourResetsAt: f.resets, weekPct: w.pct, weekResetsAt: w.resets, source: 'stream', at: now, ...(scoped && w.pct !== null ? { weekScoped: true } : {}) };
   }
   // (2) get_usage control response (maybe wrapped: {response:{...}}): rate_limits.{five_hour,seven_day}.{utilization 0-100, resets_at ISO}
   const body = isObj(msg.response) ? msg.response : msg;
   if (isObj(body.rate_limits)) {
     const rl = body.rate_limits, f = readWindow(rl.five_hour, 1, 'resets_at', 'iso');
     let w = readWindow(rl.seven_day, 1, 'resets_at', 'iso');
+    const scoped = w.pct === null;
     if (w.pct === null) w = weekFallback(rl, 1, 'resets_at', 'iso');
     if (f.pct === null && w.pct === null) return null;
-    return { fiveHourPct: f.pct, fiveHourResetsAt: f.resets, weekPct: w.pct, weekResetsAt: w.resets, source: 'get_usage', at: now };
+    return { fiveHourPct: f.pct, fiveHourResetsAt: f.resets, weekPct: w.pct, weekResetsAt: w.resets, source: 'get_usage', at: now, ...(scoped && w.pct !== null ? { weekScoped: true } : {}) };
   }
   // (3) Claude Code's cache: {fetchedAtMs, utilization:{five_hour:{utilization 0-100, resets_at}, seven_day:{...}}}
   if (num(msg.fetchedAtMs) !== null && isObj(msg.utilization)) {
     const ut = msg.utilization, f = readWindow(ut.five_hour, 1, 'resets_at', 'iso');
     let w = readWindow(ut.seven_day, 1, 'resets_at', 'iso');
+    const scoped = w.pct === null;
     if (w.pct === null) w = weekFallback(ut, 1, 'resets_at', 'iso');
     if (f.pct === null && w.pct === null) return null;
-    return { fiveHourPct: f.pct, fiveHourResetsAt: f.resets, weekPct: w.pct, weekResetsAt: w.resets, source: 'claude-cache', at: num(msg.fetchedAtMs)! };
+    return { fiveHourPct: f.pct, fiveHourResetsAt: f.resets, weekPct: w.pct, weekResetsAt: w.resets, source: 'claude-cache', at: num(msg.fetchedAtMs)!, ...(scoped && w.pct !== null ? { weekScoped: true } : {}) };
   }
   return null;
 }
@@ -119,7 +124,9 @@ export function parseRateLimits(msg: unknown, now = Date.now()): Limits | null {
 export function mergeLimits(newer: Limits, older: Limits | null): Limits {
   if (!older) return newer;
   const five = newer.fiveHourPct !== null ? { fiveHourPct: newer.fiveHourPct, fiveHourResetsAt: newer.fiveHourResetsAt } : { fiveHourPct: older.fiveHourPct, fiveHourResetsAt: older.fiveHourResetsAt };
-  const week = newer.weekPct !== null ? { weekPct: newer.weekPct, weekResetsAt: newer.weekResetsAt } : { weekPct: older.weekPct, weekResetsAt: older.weekResetsAt };
+  // a one-model week (weekScoped) never replaces an all-models one still in its window
+  const keepOlder = newer.weekPct === null || (newer.weekScoped && !older.weekScoped && older.weekPct !== null && (older.weekResetsAt === null || older.weekResetsAt > newer.at));
+  const week = keepOlder ? { weekPct: older.weekPct, weekResetsAt: older.weekResetsAt, weekScoped: older.weekScoped } : { weekPct: newer.weekPct, weekResetsAt: newer.weekResetsAt, weekScoped: newer.weekScoped };
   return { ...newer, ...five, ...week };
 }
 
