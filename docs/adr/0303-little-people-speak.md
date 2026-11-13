@@ -29,8 +29,10 @@ the same time (its own ADR) is to use the same characters and lines for the oppo
    `work` (14 per role) for anything else; `pat` and `whack` (3 each) at the click of ADR 0297. Each moment has two
    lines per role; one may carry `{x}`, replaced by the real name: the file read or edited, the program of a
    command, the words of a search, the host of a page (cut to 12 characters). Only a plain program name is said:
-   a variable's value, a quoted path or any other piece of a command is not, and a command is a `test` only when it
-   runs tests. `pickQuip` does not repeat the line said last when it has another, and gives a `{x}` line only when
+   what stands in quotes or is computed in place is taken out of the command first, so a variable's value or a
+   quoted path is not; a command is a `test` when one of its steps is a test runner or a tool asked to test (`npm
+   test`, `dotnet test`, `python -m pytest`), not when the word is in a message or a file name. The list of runners
+   and tools is short and fixed: an unknown one is a plain `run`. `pickQuip` does not repeat the line said last when it has another, and gives a `{x}` line only when
    there is a name. A new moment is a new kind in the same file.
 3. The bubble is part of the person (`AgentSprite.tsx`, `lib/quips.ts`): a small inverted pill at the head that pops
    in, stays 2.6 s and fades. Every person says a line when clicked (strips, role cards, the Orchestrator's line).

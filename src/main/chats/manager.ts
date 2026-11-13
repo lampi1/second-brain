@@ -351,7 +351,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
   }
 
   /** A message, optionally with images (pasted screenshots; checked here: images.ts). Text may be empty with images.
-   *  resumed = the app's own "riprendi" after a restart (keeps the tile's mark; any other message clears it);
+   *  resumed = the app's own "riprendi" after a restart (keeps the chat's resumedAt, the line above a strip; any other message clears it);
    *  from = not the user's: the sender shown above the bubble (another chat's title, the Orchestrator);
    *  liveOnly = mail (chats/mail.ts): never into a chat that has no engine or is closing, never reopens one;
    *  appText = the app wrote the text for the user (a «Continua» note): the user's turn, the app's words (ADR 0261) */

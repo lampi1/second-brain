@@ -585,7 +585,6 @@ export class DemoChats implements ChatService {
     const c = this.chats.get(chatId);
     if (!c) throw new Error(`demo: no chat ${chatId}`);
     if (c.closedAt) await this.reopen(chatId);
-    if (c.resumedAt) this.patch(chatId, { resumedAt: undefined }); // the user's message clears "ripresa dopo il riavvio"
     if (this.runs.has(chatId)) { this.sends.set(chatId, [...(this.sends.get(chatId) ?? []), text]); return; }
     const thumbs = (images ?? []).flatMap(im => (im.thumb ? [im.thumb] : []));
     this.startRun(chatId, async run => { run.user(text, thumbs); await (c.isOrchestrator ? orchestratorReply(run, text, this) : genericReply(run, text)); });

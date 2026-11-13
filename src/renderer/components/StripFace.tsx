@@ -36,7 +36,7 @@ export function isThinking(items: readonly ChatItem[] | undefined): boolean {
  *  page does not celebrate again, a new end after more work does. */
 const celebrated = new Map<string, string>();
 /** The end of each chat its person has already spoken about: it says so once, then keeps quiet until more work. */
-const boasted = new Set<string>();
+const boasted = new Map<string, string>();
 
 export function StripFace({ chatId, avatar, name, tone, size, height = 40, ...o }: { chatId: string; avatar: Avatar | undefined; name: string; tone: string; size: number; height?: number; waitsUser: boolean; error: boolean; busy: boolean; done: boolean; pending?: boolean }) {
   const thinking = useApp(s => o.busy && isThinking(s.items[chatId]));
@@ -57,7 +57,12 @@ export function StripFace({ chatId, avatar, name, tone, size, height = 40, ...o 
   };
   // what it speaks about when its turn comes: read then, from the transcript the app already has
   const mood = (): QuipMoment | null => {
-    if (state === 'done') { if (boasted.has(chatId)) return null; boasted.add(chatId); }
+    if (state === 'done') {
+      // which end: its run and turn, not its cost (the real cost replaces the estimate after the end)
+      const run = app.get().chats[chatId]?.run, end = `${run?.runId ?? ''}:${run?.turns ?? ''}`;
+      if (boasted.get(chatId) === end) return null;
+      boasted.set(chatId, end);
+    }
     return quipMoment(state, app.get().items[chatId]);
   };
   // a picture of the user's own, or a character without a person, stays a portrait with its state dot

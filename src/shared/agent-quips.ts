@@ -444,15 +444,44 @@ export function pickQuip(role: QuipRole, kind: QuipKind, lang: Lang, rnd: () => 
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {});
 const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 const base = (p: string): string => p.replace(/\\/g, '/').replace(/\/+$/, '').split('/').pop() ?? '';
-/** A command that runs tests: a test runner, or a tool asked to test (`npm test`, `dotnet test`, `npm run check:quick`);
- *  the word alone in a message or a file name is not one. */
-const TESTS = /(^|[\s/\\])(vitest|jest|pytest|playwright|mocha|rspec|phpunit)\b|\b(npm|pnpm|yarn|bun|npx|dotnet|cargo|go|mvn|gradle|gradlew|make|deno|python\d?|node)(\s+(run|-m|--))?\s+(test|tests|check:quick|check)\b/i;
 /** A step that only moves or prepares: the program is the one after it. */
-const SETUP = /^(cd|pushd|Set-Location|export|set)\b/i;
-/** A variable set in front of the program (`FOO=1`, `FOO="a b"`), dropped with its value. */
-const ASSIGN = /^\s*\w+=("[^"]*"|'[^']*'|\S*)\s+/;
-/** A program's name as it can be said: letters first, no quotes, signs or values (a piece of anything else is not shown). */
+const SETUP = /^(cd|pushd|Set-Location|export|set)\s/i;
+/** A variable set in front of the program (`FOO=1`), dropped with its value. */
+const ASSIGN = /^\s*\w+=(\\.|\S)*\s+/;
+/** A program's path as typed, before its folders are cut away: no quotes, signs or values. */
+const PLAIN_PATH = /^[\w.\/\\:+-]+$/;
+/** A program's name as it can be said: letters first (a piece of anything else is not shown). */
 const PROGRAM = /^[A-Za-z][\w.+-]*$/;
+/** Programs that are test runners by themselves, and tools that test when asked to with a word. */
+const RUNNER = /^(vitest|jest|pytest|mocha|rspec|phpunit|ctest)$/i;
+const TOOL = /^(npm|pnpm|yarn|bun|npx|pnpx|bunx|dotnet|cargo|go|mvn|mvnw|gradle|gradlew|make|deno|python\d?|py|php|rake|node)$/i;
+const ASKED = /^(test|tests|t|unittest|nextest|check:quick|--test)$|^test:|(^|[\/\\])e2e\b/i;
+
+/** The steps of a command, each as its words: what stands in quotes or is computed in place is taken out first (a
+ *  value never becomes a word), the variables set in front are dropped, a step that only prepares is skipped. */
+function steps(cmd: string): string[][] {
+  const bare = cmd.replace(/"[^"]*"|'[^']*'|`[^`]*`|\$\([^)]*\)/g, '""');
+  return bare.split(/&&|\|\||;|\||\n/).map(p => { let s = p.trim(); while (ASSIGN.test(s)) s = s.replace(ASSIGN, ''); return s; })
+    .filter(s => s && !SETUP.test(`${s} `)).map(s => s.split(/\s+/));
+}
+/** The program of a step, without its folders and `.exe`; '' when it is not a plain name (a quoted path, a sign). */
+const program = (step: readonly string[]): string => {
+  const raw = step[0] ?? '', word = PLAIN_PATH.test(raw) ? base(raw).replace(/\.(exe|cmd|bat)$/i, '') : '';
+  return PROGRAM.test(word) ? word : '';
+};
+/** A step that runs tests: a test runner (`vitest`, `npx playwright test`), or a tool asked to test (`npm test`,
+ *  `dotnet test`, `python -m pytest`, `npm run check:quick`). The word in a message or a file name is not one. */
+function testing(step: readonly string[]): boolean {
+  const p = program(step), args = step.slice(1), words = args.filter(a => !a.startsWith('-') || a === '--test');
+  if (RUNNER.test(p)) return true;
+  if (/^playwright$/i.test(p)) return words[0] === 'test';
+  if (!TOOL.test(p)) return false;
+  // `npx vitest`, `yarn jest`, `python -m pytest`: the runner is the first word; `npx playwright test`
+  const first = base(words[0] ?? '');
+  if (RUNNER.test(first)) return true;
+  if (/^playwright$/i.test(first)) return words[1] === 'test';
+  return words.some(w => ASKED.test(w));
+}
 
 /** The moment of a tool call, and the real thing it works on (zero tokens: the tool's name and input, as every engine
  *  the app runs names them). A file's name for a read or an edit, the program for a command, the words for a search,
@@ -462,11 +491,9 @@ export function quipOfTool(name: string, input: unknown): { kind: QuipKind; x?: 
   const withX = (kind: QuipKind, x: string): { kind: QuipKind; x?: string } => (x ? { kind, x } : { kind });
   if (/^(Bash|PowerShell|Shell|shell|exec_command|command)$/.test(name)) {
     const cmd = str(i.command) || (Array.isArray(i.command) ? i.command.map(str).join(' ') : '') || str(i.cmd);
-    // the program that runs: past `cd x &&` and the variables set in front; anything that is not a plain name stays unsaid
-    let step = cmd.split(/&&|;|\|/).map(p => p.trim()).find(p => p && !SETUP.test(p)) ?? '';
-    while (ASSIGN.test(step)) step = step.replace(ASSIGN, '');
-    const word = base(step.split(/\s+/)[0] ?? '');
-    return withX(TESTS.test(cmd) ? 'test' : 'run', PROGRAM.test(word) ? word : '');
+    // the program that runs first, past `cd x &&` and the variables set in front; a test when any step runs tests
+    const all = steps(cmd);
+    return withX(all.some(testing) ? 'test' : 'run', program(all[0] ?? []));
   }
   if (/^(Read|LS|List|NotebookRead)$/.test(name)) return withX('read', file);
   if (/^(Edit|MultiEdit|Write|NotebookEdit|Delete|Move|apply_patch)$/.test(name)) return withX('edit', file);

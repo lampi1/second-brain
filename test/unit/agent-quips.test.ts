@@ -126,15 +126,22 @@ describe('agent quips', () => {
   it('says only a plain program name, and a test only for a command that runs tests', () => {
     // a `$` in the name is text, not a pattern of the replacement
     expect(pickQuip('artisan', 'edit', 'it', () => 0, undefined, 'a$&b')).toBe('a$&b: a mazzate');
-    // variables in front are dropped with their values; a piece of a value or a quoted path is never the program
-    expect(quipOfTool('Bash', { command: 'AUTH="Bearer abc123xyz" curl https://example.org' })).toEqual({ kind: 'run', x: 'curl' });
-    expect(quipOfTool('PowerShell', { command: '$t="abc def"; curl https://example.org' })).toEqual({ kind: 'run' });
-    expect(quipOfTool('PowerShell', { command: '& "C:\\Program Files\\Git\\bin\\git.exe" status' })).toEqual({ kind: 'run' });
-    expect(quipOfTool('PowerShell', { command: 'Set-Location app; npm run build' })).toEqual({ kind: 'run', x: 'npm' });
-    expect(quipOfTool('Bash', { command: 'git commit -m "add tests"' })).toEqual({ kind: 'run', x: 'git' });
-    expect(quipOfTool('Bash', { command: 'cat test.txt' })).toEqual({ kind: 'run', x: 'cat' });
-    expect(quipOfTool('Bash', { command: 'npm run check:quick' })).toEqual({ kind: 'test', x: 'npm' });
-    expect(quipOfTool('Bash', { command: 'node_modules/.bin/vitest run' })).toEqual({ kind: 'test', x: 'vitest' });
+    // the program is said only as a plain name: a value, a quoted path, a sign or something computed never is
+    const said: [string, string | undefined][] = [
+      ['AUTH="Bearer abc123xyz" curl https://example.org', 'curl'], ['GREETING=my\\ words cmd', 'cmd'], ['TOKEN=$(pass show github) gh api', 'gh'],
+      ['export API_KEY="sk;abcdef123 zz"; curl x', 'curl'], ['export MSG="a | hunter2 b"', undefined], ['$t="abc def"; curl https://example.org', undefined],
+      ['& "C:\\Program Files\\Git\\bin\\git.exe" status', undefined], ['"C:\\Program Files\\Git\\bin\\git.exe" status', undefined],
+      ["'/home/me/my secret dir/tool' run", undefined], ['Set-Location app; npm run build', 'npm'], ['C:\\tools\\dotnet.exe build', 'dotnet'], ['', undefined],
+    ];
+    for (const [command, x] of said) expect(quipOfTool('Bash', { command }).x, command).toBe(x);
+    // a test is a step that runs tests: a runner, or a tool asked to test; the word in a message or a file name is not
+    const tests = ['npm test', 'npm t', 'npm run test:unit', 'npm run -s test', 'npm --prefix app test', 'pnpm -r test', 'yarn jest', 'yarn workspace web test',
+      'npx vitest run', 'node_modules/.bin/vitest run', 'npx playwright test', 'dotnet test', 'dotnet.exe test', 'pytest -k x', 'python -m pytest', 'python manage.py test',
+      'cargo test', 'cargo nextest run', 'go test ./...', 'mvn clean test', 'node --test', 'node scripts/e2e.mjs ui', 'npm run check:quick', 'npm run build && npm test'];
+    const others = ['npm install -D vitest', 'pip install pytest', 'npx playwright install', 'cat playwright.config.ts', 'git commit -m "bump jest"', 'git commit -m "npm test is red"',
+      'git commit -m "add tests"', 'grep -rn mocha src', 'cargo check', 'node test.js', 'cat test.txt', 'ls tests', 'npm run build', 'echo test', 'curl https://x/test'];
+    for (const command of tests) expect(quipOfTool('Bash', { command }).kind, command).toBe('test');
+    for (const command of others) expect(quipOfTool('Bash', { command }).kind, command).toBe('run');
     // a cut never splits a character
     expect(quipX('📦📦📦📦📦📦📦📦📦📦📦📦📦')).toBe(`${'📦'.repeat(QUIP_X_MAX - 1)}…`);
   });
