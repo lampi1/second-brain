@@ -280,3 +280,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0273](0273-mcp-oauth-login.md) Remote MCP connectors log in with the MCP OAuth flow — accepted
 - [0274](0274-answers-in-the-users-words.md) The user answers in his own words; the Orchestrator's column has no answer box — accepted
 - [0275](0275-orchestrator-counts-as-the-user.md) What the Orchestrator says counts as the user's own, always; the project maps take «Stato»'s place — accepted
+- [0276](0276-planning-on-the-project-maps.md) Planning on the project maps: the Strategist proposes a map, the app keeps it live, only the Orchestrator edits it — accepted

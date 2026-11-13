@@ -98,7 +98,7 @@ row and its line here in the same change.
 | `app_recordings` | Orchestrator only | The call recordings and their local transcripts, or the audio files found on the PC. |
 | `app_recording_import` | Orchestrator only | Import an audio or video file from the PC to be transcribed locally. |
 | `app_learn` | Orchestrator only | Start an Impara lesson the user asked for (an explanation or a quiz), or list the lessons. |
-| `app_project_map` | Orchestrator only | The user's project maps: list, read as text, open in the maps window (ADR 0275), the brief for a Scout that draws one, the user's corrections. |
+| `app_project_map` | Orchestrator only | The user's project maps: list, read as text, open in the maps window (ADR 0275), the brief for a Scout that draws one, the user's corrections, piece-by-piece edits from the talk with the user and undo (ADR 0276). |
 | `app_agents_recap` | Orchestrator only | The recap: one short line per agent that works, waits or finished; with detail, one block per agent with its last steps. |
 | `app_child_output` | Orchestrator only | The latest report of a chat in its tree, delegates included: summary and criteria; full: the output, max 4,000 chars. |
 | `agent_metrics` | Orchestrator only | Success rate, cost, time and corrections per role and version (numbers only). |
@@ -118,8 +118,8 @@ row and its line here in the same change.
 | `agent_child_feedback` | work chats | Your verdict on a delegated child's run, with evidence. |
 | `agent_work_decisions` | work chats | The user's recorded decisions for your latest assignment, readable after reporting without reopening it. Historical decisions remain context, not new grants. |
 | `ask_user` | work chats | Ask the user one Sì/No question as a panel (engines whose question tool may not reach the model: OpenCode, Cursor). |
-| `plan_propose` | work chats | Show the user your short plan for approval (Strategist). |
-| `plan_update` | work chats | Move a step of your approved plan: now, done, blocked or todo. |
+| `plan_propose` | work chats | Show the user your short plan for approval (Strategist); on a project it is drawn on the project's map (`map`, each step's `on`: ADR 0276). |
+| `plan_update` | work chats | Move a step of your approved plan (now, done, blocked or todo), or add one found on the way (ADR 0276). |
 | `list_chats` | work chats | The user's chats you can write to with send_to_chat. |
 | `send_to_chat` | work chats | Send a message to another chat of the user, never as his approval. |
 | `show_ui` | work chats | Show the user a visual from the app's component catalog instead of a wall of text. |
