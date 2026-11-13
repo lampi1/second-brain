@@ -1,4 +1,4 @@
-// Role card of the Agenti catalogue (AgentCatalogPage): on the front the role's little person at its work, large and free (ADR 0294; a picture the user gave the role stays a portrait in its circle), its name and what
+// Role card of the Agenti catalogue (AgentCatalogPage): on the front the role's little person at its work, large and free (ADR 0295; a picture the user gave the role stays a portrait in its circle), its name and what
 // it is for, engine and model tier («Modello: alto»), a live status, its level (from the XP of its verified successful runs, ADR 0131,
 // shown beside it: «Lv 7 Praticante · 124 XP», ADR 0100; for a work role, when the nightly review last updated it, ADR 0203) and performance % (a Bayesian estimate of the verdicts weighted by trust and
 // recency, with its ±, the agent's own word excluded, with the verdicts it rests on; main/agents/standing.ts), each with a "?" giving the formula, and four compact run metrics (the success rate among them: verified verdicts only, shared/success.ts, ADR 0186); a click anywhere on the card flips it in 3D (#81)
@@ -165,7 +165,7 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
   const trial = !!profile.trial;
   const busy = useWorkingChats(profile.id);
   const working = !trial && busy > 0;
-  // the role's little person (ADR 0294), unless the user gave the role a picture of their own or it has none
+  // the role's little person (ADR 0295), unless the user gave the role a picture of their own or it has none
   const ownPicture = useOwnPicture(profile.avatar);
   const person = !ownPicture && profile.avatar.kind === 'character' && isSpriteId(profile.avatar.value) ? profile.avatar.value : null;
   const state = trial ? 'trial' : working ? 'working' : 'active';

@@ -1,6 +1,6 @@
 // The delegation tree in the Grindhouse (ADR 0083; made quiet by ADR 0293, the owner 2026-11-13: «le striscioline dei
 // figli le voglio più discrete come quelle del padre»): every delegated chat is ONE row under its parent, on a thread
-// line tinted by its state (TreeRails), drawn like its parent's strip: the role's little person doing what it does (StripFace.tsx, ADR 0294), the
+// line tinted by its state (TreeRails), drawn like its parent's strip: the role's little person doing what it does (StripFace.tsx, ADR 0295), the
 // task, who runs it and what it does now (its result once ended), its time and cost against the estimate
 // (StripMeta.tsx), a pill only when words are needed, ↗ for full screen. What needs the user stays in sight under the
 // row (a permission to answer here, its error, the limit it hit, a nudge when it stalled). A click on the row opens

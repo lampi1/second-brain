@@ -1,4 +1,4 @@
-/* The little people of the roles (AgentSprite.tsx, ADR 0294): free on the strip, no tile. Their colours are fixed, like
+/* The little people of the roles (AgentSprite.tsx, ADR 0295): free on the strip, no tile. Their colours are fixed, like
    the portraits'; a thin rim in the theme's text colour keeps the white and the black parts readable on a light and on
    a dark strip, and what is drawn «in ink» (notes, a «z», speed lines, a thought) takes the theme's text colour. Every
    joint turns around its own origin; its rest pose and its animation are inline (lib/sprite-rig.ts jointStyle), the

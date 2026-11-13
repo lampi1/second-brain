@@ -159,7 +159,7 @@ export function Typing({ what, testid, items, children }: { what: 'scrive' | 'pe
 }
 
 /** The mark of a working line: the chat's little person at work or thinking where the transcript names one (SpriteCtx,
- *  ADR 0294), the spark elsewhere. */
+ *  ADR 0295), the spark elsewhere. */
 function WorkingMark({ what }: { what: 'scrive' | 'pensa' | 'lavora' }) {
   const id = useContext(SpriteCtx);
   return id ? <AgentSprite id={id} state={what === 'pensa' ? 'think' : 'work'} height={48} /> : <TypingSpark />;

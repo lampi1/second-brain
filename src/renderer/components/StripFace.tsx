@@ -1,4 +1,4 @@
-// The face of a strip (ADR 0294): the role's little person doing what the chat does (AgentSprite.tsx), in place of the
+// The face of a strip (ADR 0295): the role's little person doing what the chat does (AgentSprite.tsx), in place of the
 // portrait and its state dot. A role the user gave a picture of their own keeps that picture with the dot (the sprite
 // could not look like it). Used by ChatTile.tsx (a root strip) and DelegationCard.tsx (a delegated row); also maps a
 // chat's state to the animation (spriteStateOf).

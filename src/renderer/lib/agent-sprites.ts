@@ -1,4 +1,4 @@
-// The little people of the roles, scene by scene (ADR 0294): each role is its portrait's head (lib/character-art.ts)
+// The little people of the roles, scene by scene (ADR 0295): each role is its portrait's head (lib/character-art.ts)
 // on a small body in the role's clothes, free on the strip (no tile), and does its own job while its chat
 // works: the Orchestrator conducts, the Strategist lifts a chess knight at its table, the Scout walks with a magnifying
 // glass, the Artisan hammers on an anvil, the Sentinel scans with binoculars beside its shield, the Herald blows its

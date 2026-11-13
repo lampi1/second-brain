@@ -345,8 +345,8 @@ docs/screenshots/orchestrator-flash.webp binary-media sha256:5c6c19684184ad2644b
 # README screenshots retaken 2026-11-13 for ADR 0293 (children as rows, the face back on the strip)
 docs/screenshots/grindhouse.webp binary-media sha256:ffd8346ceb012ebb97c818de44295f384ea4b49c20414439df440480d4242f85
 docs/screenshots/browser.webp binary-media sha256:0a1b4e387bbe312b238f75b4133129fdc1eda65b4982ac8e1f8ce177cfaff785
-# README screenshot retaken 2026-11-13 for ADR 0294 (the roles as little people on the strips)
+# README screenshot retaken 2026-11-13 for ADR 0295 (the roles as little people on the strips)
 docs/screenshots/grindhouse.webp binary-media sha256:ab3fc971131aa44a2161967f8c1e38ea6410edba5c9754ea87ddfcc2c70d401a
-# README screenshots retaken 2026-11-13 for ADR 0294 (the little person on the front of the role cards)
+# README screenshots retaken 2026-11-13 for ADR 0295 (the little person on the front of the role cards)
 docs/screenshots/agents.webp binary-media sha256:8627192c0b8deeed198a832f8da0b4afb8515008ac71adb3fa5c8277020e7c2c
 docs/screenshots/agent-levels.webp binary-media sha256:0b70e7770a9ce7df06ce30fc2105b9751e81869eaec072e2f2857de02186e049

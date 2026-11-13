@@ -1,4 +1,4 @@
-// The roles' little people (lib/agent-sprites.ts on lib/sprite-rig.ts, ADR 0294): every role has every state, each
+// The roles' little people (lib/agent-sprites.ts on lib/sprite-rig.ts, ADR 0295): every role has every state, each
 // scene is a whole person with something that moves, a track compiles to one @keyframes rule that starts and ends on
 // the rest pose, the same movement is written once, the «done» scene stops by itself; and what a strip's person does
 // follows the chat (components/StripFace.tsx).

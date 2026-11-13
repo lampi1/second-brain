@@ -1,4 +1,4 @@
-# ADR 0294 · The roles are little people at work on the strips
+# ADR 0295 · The roles are little people at work on the strips
 
 Date: 2026-11-13 · Status: accepted (owner, thread «Rifare la UI della Grindhouse», after the three animated badges
 proposed with ADR 0293: «voglio dei veri e propri omini che fanno cose … molto carini anche nel piccolo; al posto

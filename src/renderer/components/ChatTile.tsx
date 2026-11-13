@@ -1,5 +1,5 @@
 // One agent's window (ADR 0287): a chat as a one-line strip in the Grindhouse (AgentStrips.tsx), open in the column, or in
-// full screen (FullScreen.tsx). The strip is one row (ADR 0292-0294): the role's little person doing what the chat does
+// full screen (FullScreen.tsx). The strip is one row (ADR 0292, 0293, 0295): the role's little person doing what the chat does
 // (StripFace.tsx), who it is, the title · current step, then on the right its work time and cost so far, each next to its estimate («22 min /
 // ~19 min · 1,84 $ / ~0,60 $», amber once past it), and a pill only when words are needed («Ti aspetta» opens its
 // question, an error, a queue); a long context shows its meter; three controls appear on hover (stop, full screen, the

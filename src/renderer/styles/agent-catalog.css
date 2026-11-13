@@ -80,7 +80,7 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .catalog-hero-avatar::before{content:"";position:absolute;inset:8px;border-radius:50%;border:1px dashed color-mix(in srgb,var(--tone) 38%,transparent);pointer-events:none}
 .catalog-hero-avatar>.agent-avatar{filter:drop-shadow(0 10px 18px color-mix(in srgb,var(--tone) 35%,transparent));transition:transform var(--dur-slow) var(--ease)}
 .bm-face-front:hover .catalog-hero-avatar>.agent-avatar{transform:translateY(-2px) scale(1.03)}
-/* the role's little person, free: no disc, no ring; the level medal sits under its feet (ADR 0294) */
+/* the role's little person, free: no disc, no ring; the level medal sits under its feet (ADR 0295) */
 .catalog-hero-avatar[data-person]{width:auto;height:auto;padding-bottom:30px;border-radius:0;background:none}
 .catalog-hero-avatar[data-person]>.catalog-level-medal{left:40%}
 .catalog-hero-avatar[data-person]::before{content:none}

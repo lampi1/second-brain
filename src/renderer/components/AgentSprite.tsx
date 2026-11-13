@@ -1,4 +1,4 @@
-// A role's little person, animated (ADR 0294): the scene of lib/agent-sprites.ts (the portrait's head on a small body,
+// A role's little person, animated (ADR 0295): the scene of lib/agent-sprites.ts (the portrait's head on a small body,
 // its joints, its tool) drawn as one inline SVG, free on the strip. Each joint carries its rest pose and its
 // animation inline; the @keyframes of a scene are written once into one <style> of the page the first time the scene
 // is drawn (styles/agent-sprite.css has the rest: the rim, the ink, the blink; no image, no timer, no script per

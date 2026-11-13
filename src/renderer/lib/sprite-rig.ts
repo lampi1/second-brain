@@ -1,4 +1,4 @@
-// The rig of the little people the roles are animated as (ADR 0294; the owner, 2026-11-13: «veri e propri omini che
+// The rig of the little people the roles are animated as (ADR 0295; the owner, 2026-11-13: «veri e propri omini che
 // fanno cose», «non li voglio pixelosi, li voglio normali, smooth», «animazioni veramente fighe … non dentro un
 // quadrato colorato ma liberi»): smooth vector people, the head of the role's portrait (lib/character-art.ts) on a
 // small body with two legs and two arms that bend at the elbow. A person is a tree of shapes and joints; a joint has a

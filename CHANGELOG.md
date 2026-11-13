@@ -23,22 +23,27 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   OpenCode, OpenRouter included; the chat's model and plan mode go through OpenCode's session options (ADR 0216).
 
 ### Changed
+- No permission question outside your brain's rules, on every engine: the app's own guard on settings and hooks is
+  gone (it asked for ordinary commands such as `mkdir "$(pwd)/out"`, `gh pr create --body "$(cat …)"`, and for any
+  file under `.claude`, `.cursor`, `.vscode` or `.git`). What still reaches you: what a rule of your
+  `permissions.json` holds, what a role you limited asks, a plan to approve, and a change of `permissions.json`
+  itself. Codex, Cursor and OpenCode now send the app the whole request too, so a long one is no longer yours to
+  answer only because it was shortened for the screen (ADR 0294).
 - Grindhouse: each role is a little animated person, free on the strip, who plays its own scene while the chat
   works (the Artisan gives three hammer blows, the Scout walks and brings its lens to the eye) and changes with the
   state; it replaces the portrait and the state dot, and the spark on the Orchestrator's «thinking» line;
-  root strips are a little taller; the front of a role card shows it at work too (ADR 0294).
+  root strips are a little taller; the front of a role card shows it at work too (ADR 0295).
 - Grindhouse: a delegated chat is one row like its parent (its steps and result open with a click); the role's
   character is back on every strip, with the state dot on its corner (ADR 0293).
 - Grindhouse strips: a state dot in front, time and cost so far next to the estimate always on the row, rows edge
   to edge with a hairline; the open window's details (model, full estimate, links) open from the ⓘ (ADR 0292).
 - A Claude chat with no mode of its own starts in «default», so the app answers its permission requests (they pass
-  unless a rule of your brain, a role's limit or the settings-and-hooks guard holds them) instead of Claude Code's
+  unless a rule of your brain or a role's limit holds them) instead of Claude Code's
   own default mode: with «auto» as that default, its classifier refused the agents before the app was asked. A mode
   you pick on the chat still wins, and «Solo piano» as your Claude Code default stays. For Claude the app decides on
   the whole request, not on the copy shortened for the screen, and your rules read up to 100,000 characters of it
   (20,000 before: under a rule on all tools a 10 KB file asked for your yes); a request your rules would take too
-  long to read asks you within about half a second instead of holding the app, and the settings-and-hooks guard
-  reads a place however long it is written (ADR 0290).
+  long to read asks you within about half a second instead of holding the app (ADR 0290).
 - Maintenance: app-bug cards follow your own answers (turn down the last five issue cards, or approve only one, and
   the maintenance makes none for three months); an agent's report notes one lesson, not three, and a lesson tied to
   one case is left out instead of refusing the report (ADR 0288).

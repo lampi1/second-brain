@@ -27,7 +27,7 @@ function subscribe(fn: () => void): () => void {
 
 /** role id → its picture, for every badge (a role without one draws its character) */
 export const useAgentImages = (): AgentImages => useSyncExternalStore(subscribe, () => images, () => images);
-/** True when the user gave this role a picture of their own: it is shown as it is, never as the little person (ADR 0294). */
+/** True when the user gave this role a picture of their own: it is shown as it is, never as the little person (ADR 0295). */
 export const useOwnPicture = (avatar: AgentAvatar | undefined): boolean => {
   const all = useAgentImages();
   return avatar?.kind === 'character' && isRoleId(avatar.value) && !!all[avatar.value];
