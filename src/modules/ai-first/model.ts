@@ -15,8 +15,9 @@ export function replyProof(items: ChatItem[]): 'pending' | 'verified' | 'failed'
   return items.slice(start + 1, end).some(item => item.kind === 'assistant' && !!item.text.trim() && !item.streaming) ? 'verified' : 'failed';
 }
 export function installation(status: CliStatus | undefined): 'found' | 'missing' | 'unknown' { return !status ? 'unknown' : status.found ? 'found' : 'missing'; }
-/** The first guide chat's brief (started by the setup wizard on confirm, ADR 0119): the wizard asked only language, AI,
- *  tools, name and role, so the guide asks the rest here, one question at a time: goals, work areas and the team. */
+/** The first guide chat's brief of the six-step setup (ADR 0119). The setup no longer starts a guide chat (ADR 0279:
+ *  the first request goes to the Orchestrator inside the setup); the text stays so the brief of a guide chat that
+ *  already exists keeps being hidden (presentation.ts visibleGuideItems). */
 export function guidePrompt(language: Lang): string {
   if (language === 'de') return guidePrompt('en').replace('Reply warmly in simple English.', 'Reply warmly in simple German, as written in Austria, using "du".');
   return language === 'it'

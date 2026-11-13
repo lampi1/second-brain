@@ -1,30 +1,32 @@
-// The "La tua IA" step of the first-run setup wizard (FirstInterview.tsx): ONE recommended engine on top (issue #165,
-// ADR 0119: lib/setup-wizard.ts recommendedEngine, the first signed in, else installed, else Claude Code) and the others
-// under «Altre IA»; one card per built-in engine (Claude Code, Codex, Cursor) with what this computer says about it, a "Collega" that opens the engine's official sign-in in its own
-// window (typed IPC engines:trust + cli:login) and then WAITS on this same step, checking by itself every few seconds
-// and on coming back to the window (cli:status, no tokens), with a "Verifica" and a reopen; a connected card says when
-// and how it was checked. Why: the owner clicked the old "Collega la tua
-// IA" and the setup closed (2026-10-18); here nothing navigates away or closes the modal. Credentials never pass here.
+// The second moment of the first-run setup (FirstInterview.tsx, ADR 0279): «Collega la tua AI». The app looks by itself
+// for the engines installed on this computer (Claude Code, Codex, Cursor, OpenCode: cli:status, no tokens) and lists
+// them as one row each: what this computer says («installato · già connesso»), and one action. An engine already
+// signed in is put in use with no click, the proposed one first (lib/setup-wizard.ts autoEngines); a row's radio makes
+// it the one the Orchestrator starts on. «Accedi» opens the engine's official sign-in in its own window (typed IPC
+// engines:trust + cli:login) and the row WAITS in place, checking by itself every few seconds and on coming back to
+// the window, with a «Verifica». Engines not found share one quiet line. Why: the owner clicked the old "Collega la
+// tua IA" and the setup closed (2026-10-18); here nothing navigates away or closes the modal. Credentials never pass here.
 import { useEffect, useRef, useState } from 'react';
 import { sb } from '../sb';
-import { locale, t } from '../i18n';
+import { t } from '../i18n';
 import { useApp } from '../store/store';
-import { HarnessMark, IconAlert, IconCheck, IconRefresh, IconShield, IconSpinner } from './Icons';
-import { ENGINE_POLL_MS, ENGINE_POLL_TRIES, SETUP_ENGINES, canSignIn, linkFromStatus, openSignIn, recommendedEngine, verifySignIn } from '../lib/setup-wizard';
+import { HarnessMark, IconAlert, IconCheck, IconRefresh, IconSpinner } from './Icons';
+import { ENGINE_NAMES, ENGINE_POLL_MS, ENGINE_POLL_TRIES, SETUP_ENGINES, autoEngines, canSignIn, linkFromStatus, openSignIn, usable, verifySignIn, withEngine, withPrimary } from '../lib/setup-wizard';
 import type { EngineLink, EngineLinkPort, SetupEngineId } from '../lib/setup-wizard';
 
-const NAMES: Record<SetupEngineId, string> = { claude: 'Claude Code', codex: 'Codex', cursor: 'Cursor' };
 const port: EngineLinkPort = {
   status: engine => sb.invoke('cli:status', { harness: engine, checkLogin: true }),
   trust: engine => sb.invoke('engines:trust', { engine }),
   login: engine => sb.invoke('cli:login', { harness: engine }),
 };
-const TONE: Record<EngineLink['phase'], 'ok' | 'wait' | 'off' | 'warn'> = { checking: 'wait', missing: 'off', signedOut: 'warn', unknown: 'warn', opening: 'wait', waiting: 'wait', verifying: 'wait', connected: 'ok', error: 'warn' };
+const PENDING: readonly EngineLink['phase'][] = ['checking', 'opening', 'verifying'];
 
-export function SetupEngines({ engines, onUse }: { engines: string[]; onUse: (engine: SetupEngineId, on: boolean) => void }) {
+export function SetupEngines({ engines, onChange }: { engines: string[]; onChange: (next: string[]) => void }) {
   const defined = useApp(s => s.info?.engines);
   const [links, setLinks] = useState<Partial<Record<SetupEngineId, EngineLink>>>({});
   const live = useRef(true);
+  // the latest choice, read where a check lands later than the render that started it
+  const chosen = useRef(engines); chosen.current = engines;
   const set = (engine: SetupEngineId, link: EngineLink) => { if (live.current) setLinks(l => ({ ...l, [engine]: link })); };
   const available = (engine: SetupEngineId) => !!defined?.some(e => e.id === engine && e.source === 'app');
   const scan = () => {
@@ -36,7 +38,7 @@ export function SetupEngines({ engines, onUse }: { engines: string[]; onUse: (en
   };
   useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
   useEffect(() => { if (defined) scan(); }, [!!defined]);
-  const connected = (engine: SetupEngineId, link: EngineLink) => { set(engine, link); if (link.phase === 'connected' && !engines.includes(engine)) onUse(engine, true); };
+  const use = (engine: SetupEngineId) => { if (!chosen.current.includes(engine)) onChange(withEngine(chosen.current, engine, true)); };
   const connect = async (engine: SetupEngineId) => {
     tries.current[engine] = 0;
     set(engine, { phase: 'opening' });
@@ -44,10 +46,12 @@ export function SetupEngines({ engines, onUse }: { engines: string[]; onUse: (en
   };
   const verify = async (engine: SetupEngineId) => {
     set(engine, { ...links[engine], phase: 'verifying' });
-    connected(engine, await verifySignIn(port, engine));
+    const link = await verifySignIn(port, engine);
+    set(engine, link);
+    if (link.phase === 'connected') use(engine);
   };
   // while a sign-in window is open: checked by itself every few seconds and when the owner comes back to this window,
-  // so "Collegata" appears without a click (Verifica stays for an explicit check); applied only while it still waits
+  // so «già connesso» appears without a click (Verifica stays for an explicit check); applied only while it still waits
   const waiting = SETUP_ENGINES.filter(e => links[e]?.phase === 'waiting');
   const tries = useRef<Partial<Record<SetupEngineId, number>>>({});
   const poll = useRef((_e: SetupEngineId) => {});
@@ -57,7 +61,7 @@ export function SetupEngines({ engines, onUse }: { engines: string[]; onUse: (en
     void verifySignIn(port, engine).then(link => {
       if (!live.current) return;
       setLinks(l => l[engine]?.phase === 'waiting' ? { ...l, [engine]: link } : l);
-      if (link.phase === 'connected' && !engines.includes(engine)) onUse(engine, true);
+      if (link.phase === 'connected') use(engine);
     });
   };
   useEffect(() => {
@@ -67,55 +71,49 @@ export function SetupEngines({ engines, onUse }: { engines: string[]; onUse: (en
     window.addEventListener('focus', tick);
     return () => { clearInterval(timer); window.removeEventListener('focus', tick); };
   }, [waiting.join(',')]);
-  const busy = SETUP_ENGINES.some(e => ['checking', 'opening', 'verifying'].includes(links[e]?.phase ?? 'checking'));
-  // the recommendation is chosen once every engine has been checked, so the cards do not jump while they load
+  const busy = SETUP_ENGINES.some(e => PENDING.includes(links[e]?.phase ?? 'checking'));
+  // once every engine has been checked: the ones already signed in are put in use by themselves, and a choice this
+  // computer no longer backs (uninstalled, signed out) leaves, so «Continua con …» never names an engine that cannot start
   const settled = SETUP_ENGINES.every(e => links[e] && links[e]!.phase !== 'checking');
-  const picked = useRef<SetupEngineId | null>(null);
-  if (settled && !picked.current) picked.current = recommendedEngine(links);
-  const rec = picked.current ?? 'claude', others = SETUP_ENGINES.filter(e => e !== rec);
-  const card = (engine: SetupEngineId, recommended: boolean) => {
-    const link = links[engine] ?? { phase: 'checking' as const }, name = NAMES[engine], on = engines.includes(engine);
-    const pending = link.phase === 'opening' || link.phase === 'verifying' || link.phase === 'checking';
-    return <article key={engine} className={`sw-engine ${recommended ? 'is-rec' : ''} ${link.phase === 'connected' ? 'is-ok' : ''} ${link.phase === 'waiting' ? 'is-waiting' : ''}`} aria-label={name} data-testid={`setup-engine-${engine}`} data-phase={link.phase} data-recommended={recommended || undefined}>
-      <header className="sw-engine-head">
-        <HarnessMark harness={engine} size={recommended ? 40 : 30}/>
-        <div className="sw-engine-name"><span className="sw-engine-title"><b>{name}</b>{recommended && <span className="sw-rec-badge">{t('setup.ai.recommended')}</span>}</span><span className={`sw-pill sw-pill-${TONE[link.phase]}`} role="status">{pending ? <IconSpinner size={12}/> : link.phase === 'connected' ? <IconCheck size={12}/> : <i aria-hidden="true"/>}{t(`setup.ai.status.${link.phase}`)}</span></div>
-      </header>
-      {recommended && <p className="sw-engine-why">{t(`setup.ai.why.${engine}`)}</p>}
-      {link.account && <p className="sw-engine-account">{t('setup.ai.account', { account: link.account })}</p>}
-      {link.phase === 'connected' && link.checkedAt && <p className="sw-engine-account" data-testid={`setup-engine-${engine}-checked`}>{t('setup.ai.checked', { at: new Date(link.checkedAt).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }), name })}</p>}
-      {link.phase === 'missing' && <p className="sw-engine-note">{t('setup.ai.missingHint')}</p>}
-      {(link.phase === 'waiting' || link.phase === 'verifying') && <div className="sw-callout" data-testid={`setup-engine-${engine}-waiting`}>
-        <p>{t('setup.ai.waiting', { name })}</p>
-        {link.note === 'notYet' && <p className="sw-callout-warn"><IconAlert size={14}/>{t('setup.ai.notYet')}</p>}
-        {link.error && <p className="sw-callout-warn" role="alert"><IconAlert size={14}/>{link.error}</p>}
-      </div>}
-      {link.phase === 'unknown' && link.note === 'unverifiable' && <p className="sw-engine-note">{t('setup.ai.unverifiable')}</p>}
-      {link.phase === 'error' && link.error && <p className="sw-engine-note sw-callout-warn" role="alert"><IconAlert size={14}/>{link.error}</p>}
-      <div className="sw-engine-actions">
-        {canSignIn(link) && <button type="button" className="btn btn-m btn-primary" aria-label={t('setup.ai.connectAria', { name })} data-testid={`setup-connect-${engine}`} onClick={() => void connect(engine)}>{t('setup.ai.connect')}</button>}
-        {(link.phase === 'waiting' || link.phase === 'verifying') && <>
-          <button type="button" className="btn btn-m btn-primary" aria-label={t('setup.ai.verifyAria', { name })} data-testid={`setup-verify-${engine}`} disabled={link.phase === 'verifying'} onClick={() => void verify(engine)}>{t('setup.ai.verify')}</button>
+  useEffect(() => {
+    if (!settled) return;
+    const kept = chosen.current.filter(e => !(SETUP_ENGINES as readonly string[]).includes(e) || usable(links[e as SetupEngineId]));
+    const next = autoEngines(links, kept) ?? kept;
+    if (next.join() !== chosen.current.join()) onChange(next);
+  }, [settled]);
+  const found = SETUP_ENGINES.filter(e => (links[e]?.phase ?? 'checking') !== 'missing'), absent = SETUP_ENGINES.filter(e => links[e]?.phase === 'missing');
+  const primary = engines[0];
+  const row = (engine: SetupEngineId) => {
+    const link = links[engine] ?? { phase: 'checking' as const }, name = ENGINE_NAMES[engine], first = primary === engine;
+    const pending = PENDING.includes(link.phase), wait = link.phase === 'waiting' || link.phase === 'verifying';
+    return <li key={engine} className={`sw-ai${first ? ' is-primary' : ''}${wait ? ' is-waiting' : ''}`} data-testid={`setup-engine-${engine}`} data-phase={link.phase} data-primary={first || undefined}>
+      <label className="sw-ai-pick">
+        <input type="radio" name="sw-ai" checked={first} disabled={!usable(link)} onChange={() => onChange(withPrimary(engines, engine))} aria-label={t('setup.ai.pickAria', { name })} data-testid={`setup-use-${engine}`}/>
+        <HarnessMark harness={engine} size={34}/>
+        <span className="sw-ai-text">
+          <b>{name}</b>
+          <small role="status">{pending && <IconSpinner size={11}/>}{t(`setup.ai.status.${link.phase}`)}{link.phase === 'connected' && link.account ? ` · ${link.account}` : ''}</small>
+        </span>
+      </label>
+      <span className="sw-ai-actions">
+        {link.phase === 'connected' && <span className="sw-ready" data-testid={`setup-engine-${engine}-ready`}><IconCheck size={12}/>{t('setup.ai.ready')}</span>}
+        {canSignIn(link) && <button type="button" className={`btn btn-m ${primary ? 'btn-ghost' : 'btn-primary'}`} aria-label={t('setup.ai.connectAria', { name })} data-testid={`setup-connect-${engine}`} onClick={() => void connect(engine)}>{t('setup.ai.connect')}</button>}
+        {wait && <>
           <button type="button" className="btn btn-m btn-ghost" disabled={link.phase === 'verifying'} onClick={() => void connect(engine)}>{t('setup.ai.reopen')}</button>
+          <button type="button" className="btn btn-m btn-primary" aria-label={t('setup.ai.verifyAria', { name })} data-testid={`setup-verify-${engine}`} disabled={link.phase === 'verifying'} onClick={() => void verify(engine)}>{t('setup.ai.verify')}</button>
         </>}
-        {link.phase !== 'missing' && link.phase !== 'checking' && <label className="sw-check"><input type="checkbox" checked={on} onChange={e => onUse(engine, e.target.checked)} data-testid={`setup-use-${engine}`}/>{t('setup.ai.use')}</label>}
-      </div>
-    </article>;
+      </span>
+      {wait && <p className="sw-ai-note" data-testid={`setup-engine-${engine}-waiting`}>{t('setup.ai.waiting', { name })}{link.note === 'notYet' && <span className="sw-warn"><IconAlert size={13}/>{t('setup.ai.notYet')}</span>}{link.error && <span className="sw-warn" role="alert"><IconAlert size={13}/>{link.error}</span>}</p>}
+      {link.phase === 'unknown' && <p className="sw-ai-note">{t('setup.ai.unverifiable')}</p>}
+      {link.phase === 'error' && link.error && <p className="sw-ai-note"><span className="sw-warn" role="alert"><IconAlert size={13}/>{link.error}</span></p>}
+    </li>;
   };
-  // «Altre IA» opens by itself when one of them is in use or signing in; the owner opens and closes it at will
-  const moreNeeded = others.some(e => engines.includes(e) || ['waiting', 'verifying', 'opening'].includes(links[e]?.phase ?? ''));
-  const [more, setMore] = useState(false);
-  useEffect(() => { if (moreNeeded) setMore(true); }, [moreNeeded]);
-  return <div className="sw-engines" data-testid="setup-engines">
-    {card(rec, true)}
-    <section className={`sw-more${more ? ' is-open' : ''}`} data-testid="setup-engines-more">
-      <button type="button" className="sw-more-toggle" aria-expanded={more} aria-controls="sw-more-list" onClick={() => setMore(v => !v)} data-testid="setup-engines-more-toggle"><span>{t('setup.ai.more')}</span><small>{t('setup.ai.moreHint')}</small></button>
-      {more && <div className="sw-engine-list" id="sw-more-list">{others.map(e => card(e, false))}</div>}
-    </section>
-    <div className="sw-engines-foot">
-      <p className="sw-note"><IconShield size={15}/>{t('setup.ai.trust')}</p>
-      <button type="button" className="btn btn-m btn-subtle" disabled={busy} onClick={scan}><IconRefresh size={14}/>{t('setup.ai.rescan')}</button>
+  return <div className="sw-ais" data-testid="setup-engines" data-settled={settled || undefined}>
+    {found.length > 0 && <ul className="sw-ai-list" role="radiogroup" aria-label={t('setup.ai.group')}>{found.map(row)}</ul>}
+    {settled && !found.length && <div className="sw-ai-none" data-testid="setup-engines-none"><b>{t('setup.ai.noneTitle')}</b><p>{t('setup.ai.noneHint')}</p></div>}
+    <div className="sw-ai-foot">
+      <p data-testid="setup-engines-absent">{absent.length > 0 && found.length > 0 ? t('setup.ai.absent', { names: absent.map(e => ENGINE_NAMES[e]).join(', ') }) : ''}</p>
+      <button type="button" className="btn btn-m btn-subtle" disabled={busy} onClick={scan} data-testid="setup-rescan"><IconRefresh size={14}/>{t('setup.ai.rescan')}</button>
     </div>
-    <p className="sw-hint">{t('setup.ai.optional')}</p>
   </div>;
 }

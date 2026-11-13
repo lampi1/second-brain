@@ -1,4 +1,4 @@
-// The tool catalog of the setup wizard and of Settings → Connettori (issue #165, ADR 0119), kept pure so it is
+// The tool catalog of Settings → Connettori (issue #165, ADR 0119; out of the setup since ADR 0279), kept pure so it is
 // unit-tested without a DOM (test/unit/tool-presets.test.ts). Each tile is a preset that creates the app's account
 // connector and its MCP server together (the app-managed servers of ADR 0086): it asks only human data (organization,
 // site, email), then a browser sign-in or a token with a direct link to the page where it is made, and tests the

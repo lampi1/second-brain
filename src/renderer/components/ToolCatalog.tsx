@@ -3,8 +3,8 @@
 // variable or a header. "Collega" opens the tile in place: only human data (organization, site, email), then a token
 // field with a direct link to the page where the token is made and one line on how, or the tool's official sign-in in
 // its own window (checked by itself every few seconds). On connect the app tests at once: "Funziona: vedo N progetti"
-// or what failed and what to do. Shown in the setup wizard's tools step (FirstInterview.tsx, `onConnected` reports the
-// tools that work) and in Settings → Connettori (ConnectorsHub.tsx). Flow: lib/tool-presets.ts; one call at a time
+// or what failed and what to do. Shown in Settings → Connettori (ConnectorsHub.tsx); the first-run setup no longer
+// shows it (ADR 0279: the Orchestrator proposes a tool when one is needed). Flow: lib/tool-presets.ts; one call at a time
 // (main refuses two connector actions at once); a typed token lives only in this component's state until it is sent.
 import { useEffect, useId, useRef, useState } from 'react';
 import { t } from '../i18n';

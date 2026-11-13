@@ -1,5 +1,5 @@
-/* The tool catalog (components/ToolCatalog.tsx, ADR 0119): a grid of tiles on the shared tokens, light and dark, in the
-   setup wizard and in Settings → Connettori. A tile opened to connect spans the whole row; its state is always the
+/* The tool catalog (components/ToolCatalog.tsx, ADR 0119): a grid of tiles on the shared tokens, light and dark, in
+   Settings → Connettori (the first-run setup no longer shows it, ADR 0279). A tile opened to connect spans the whole row; its state is always the
    outcome of a real check (green works, blue waiting, red with what to do). Motion off for reduced-motion users. */
 .tc { display: flex; flex-direction: column; gap: 14px; }
 .tc-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
@@ -44,4 +44,15 @@
 .tc :is(button, input, a):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .tc-trust { margin: 0; }
 @media (prefers-reduced-motion: reduce) { .tc-tile { transition: none; } }
+/* the state pill, the waiting callout and the trust note: the catalog's own since the setup no longer shows it (ADR 0279) */
+.sw-pill { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 20px; border: 1px solid var(--border-2); font-size: 11px; font-weight: 500; white-space: nowrap; }
+.sw-pill i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.sw-pill-ok { color: var(--green); background: var(--green-bg); border-color: transparent; }
+.sw-pill-wait { color: var(--accent); background: var(--accent-bg); border-color: transparent; }
+.sw-pill-warn { color: var(--amber); background: var(--amber-bg); border-color: transparent; }
+.sw-pill-off { color: var(--text-3); }
+.sw-callout { padding: 10px 12px; border: 1px solid var(--accent-line); border-radius: var(--r-m); background: var(--accent-bg); font-size: 12.5px; line-height: 1.5; color: var(--text-2); }
+.sw-callout p { margin: 0; }
+.sw-note { margin: 0; display: flex; align-items: flex-start; gap: 8px; font-size: 12px; line-height: 1.5; color: var(--text-3); }
+.sw-note svg { flex: none; margin-top: 1px; }
 .sw-pill-bad { color: var(--red); background: var(--red-bg); border-color: transparent; }

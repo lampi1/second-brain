@@ -1,7 +1,8 @@
 # ADR 0119 · Simple onboarding: the language first, six steps, tool tiles
 
-Date: 2026-10-22 · Status: accepted (owner, issues #164 and #165) · Builds on: ADR 0086 (MCP servers managed by the
-app), issue #96 (the roles start on the engine chosen in setup)
+Date: 2026-10-22 · Status: partly superseded by ADR 0279 (the six steps and the guide chat); accepted (owner, issues
+#164 and #165) · Builds on: ADR 0086 (MCP servers managed by the app), issue #96 (the roles start on the engine chosen
+in setup)
 
 ## Context
 The first-run interview asked too much and in the wrong order. The language was a free-text field on the fourth step,
