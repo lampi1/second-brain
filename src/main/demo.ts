@@ -694,6 +694,9 @@ export class DemoChats implements ChatService {
     if (patch.effort !== undefined) clean.effort = patch.effort;
     if (patch.permissionMode !== undefined) clean.permissionMode = patch.permissionMode;
     if (patch.title !== undefined && patch.title.trim()) clean.title = patch.title.trim();
+    // the effort it now runs with is reported as an engine would (the strip and the chip say the one picked)
+    const cur = this.chats.get(chatId);
+    if (cur && patch.effort !== undefined) { const { effortStatus: _old, ...rest } = cur; const st = ran({ ...rest, ...clean }).effortStatus; if (st) clean.effortStatus = st; }
     const c = this.patch(chatId, clean);
     if (!c) throw new Error(`demo: no chat ${chatId}`);
     return c;

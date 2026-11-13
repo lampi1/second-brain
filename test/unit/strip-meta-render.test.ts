@@ -46,7 +46,7 @@ describe('strip figures', () => {
   it('says the model and the effort the chat runs with, before the figures and without them', () => {
     estimates.value = null;
     const running = chat({ model: 'claude-opus-5-5', effortStatus: { effective: 'high' } } as Partial<ChatSummary>);
-    expect(render(running, 8 * MIN)).toMatch(/data-testid="chat-model-c"[^>]*>Opus 5\.5 · high<\/span><span class="strip-meta"/);
+    expect(render(running, 8 * MIN)).toMatch(/data-testid="strip-model-c"[^>]*>Opus 5\.5 · high<\/span><span class="strip-meta"/);
     // no figures yet: the model alone; an effort only asked for is not shown as if it ran
     expect(render(chat({ model: 'claude-sonnet-5-5', effort: 'low', costUsd: 0 } as Partial<ChatSummary>), null)).toMatch(/^<span class="strip-model"[^>]*>Sonnet 5\.5<\/span>$/);
   });

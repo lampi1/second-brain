@@ -296,7 +296,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0298](0298-weekly-limit-on-the-top-bar.md) The weekly limit on the top bar, the 5-hour window from 70% — accepted
 - [0299](0299-one-command-one-panel.md) One command, one panel: an identical command never runs twice by accident — accepted
 - [0300](0300-quote-what-is-on-screen.md) Quote what is on screen: select a text, right click, it is in the prompt field — accepted
-- [0302](0302-little-people-speak.md) The little people speak: two words of nonsense, a character per role — accepted
+- [0303](0303-little-people-speak.md) The little people speak: two words of nonsense, a character per role — accepted
 
 ## Replaced
 

@@ -1,4 +1,4 @@
-// What the agents' little people say (ADR 0302): two or three words of nonsense in a small bubble, each role in its
+// What the agents' little people say (ADR 0303): two or three words of nonsense in a small bubble, each role in its
 // own character. The owner asked for it (2026-11-13: «frasi divertenti e stupide esilaranti quasi nosense, ogni agente
 // un carattere … umorismo informatico, macabro, nosense, esilarante, cringe»). One set for the whole app: the
 // Grindhouse bubbles (renderer AgentSprite.tsx) and the chess section read it from here. The lines follow what the
@@ -427,8 +427,8 @@ export const quips = (role: QuipRole, kind: QuipKind, lang: Lang): readonly stri
 
 /** The name that goes in a line: one word or file name, cut short. '' when there is nothing sayable. */
 export function quipX(v: string): string {
-  const x = v.trim().replace(/\s+/g, ' ');
-  return x.length > QUIP_X_MAX ? `${x.slice(0, QUIP_X_MAX - 1)}…` : x;
+  const x = [...v.trim().replace(/\s+/g, ' ')]; // by character: a cut never splits one
+  return x.length > QUIP_X_MAX ? `${x.slice(0, QUIP_X_MAX - 1).join('')}…` : x.join('');
 }
 
 /** One line, picked by `rnd` (0 ≤ rnd() < 1); never `avoid` (the one it said last) when there is another. With `x`
@@ -436,7 +436,7 @@ export function quipX(v: string): string {
  *  others: every moment has at least one. */
 export function pickQuip(role: QuipRole, kind: QuipKind, lang: Lang, rnd: () => number = Math.random, avoid?: string, x?: string): string {
   const name = x ? quipX(x) : '';
-  const all = quips(role, kind, lang).flatMap(q => (q.includes('{x}') ? (name ? [q.replace('{x}', name)] : []) : [q]));
+  const all = quips(role, kind, lang).flatMap(q => (q.includes('{x}') ? (name ? [q.replace('{x}', () => name)] : []) : [q]));
   const pool = all.length > 1 ? all.filter(q => q !== avoid) : all;
   return pool[Math.min(pool.length - 1, Math.floor(rnd() * pool.length))]!;
 }
@@ -444,7 +444,15 @@ export function pickQuip(role: QuipRole, kind: QuipKind, lang: Lang, rnd: () => 
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {});
 const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 const base = (p: string): string => p.replace(/\\/g, '/').replace(/\/+$/, '').split('/').pop() ?? '';
-const TESTS = /\b(test|tests|vitest|jest|pytest|playwright|mocha|rspec|phpunit|xunit|nunit|check:quick)\b/i;
+/** A command that runs tests: a test runner, or a tool asked to test (`npm test`, `dotnet test`, `npm run check:quick`);
+ *  the word alone in a message or a file name is not one. */
+const TESTS = /(^|[\s/\\])(vitest|jest|pytest|playwright|mocha|rspec|phpunit)\b|\b(npm|pnpm|yarn|bun|npx|dotnet|cargo|go|mvn|gradle|gradlew|make|deno|python\d?|node)(\s+(run|-m|--))?\s+(test|tests|check:quick|check)\b/i;
+/** A step that only moves or prepares: the program is the one after it. */
+const SETUP = /^(cd|pushd|Set-Location|export|set)\b/i;
+/** A variable set in front of the program (`FOO=1`, `FOO="a b"`), dropped with its value. */
+const ASSIGN = /^\s*\w+=("[^"]*"|'[^']*'|\S*)\s+/;
+/** A program's name as it can be said: letters first, no quotes, signs or values (a piece of anything else is not shown). */
+const PROGRAM = /^[A-Za-z][\w.+-]*$/;
 
 /** The moment of a tool call, and the real thing it works on (zero tokens: the tool's name and input, as every engine
  *  the app runs names them). A file's name for a read or an edit, the program for a command, the words for a search,
@@ -454,9 +462,11 @@ export function quipOfTool(name: string, input: unknown): { kind: QuipKind; x?: 
   const withX = (kind: QuipKind, x: string): { kind: QuipKind; x?: string } => (x ? { kind, x } : { kind });
   if (/^(Bash|PowerShell|Shell|shell|exec_command|command)$/.test(name)) {
     const cmd = str(i.command) || (Array.isArray(i.command) ? i.command.map(str).join(' ') : '') || str(i.cmd);
-    // the program that runs: past `cd x &&` and variables set in front
-    const word = base((cmd.split(/&&|;|\|/).map(p => p.trim()).find(p => p && !/^cd\b/.test(p)) ?? '').split(/\s+/).find(w => w && !/^\w+=/.test(w)) ?? '');
-    return withX(TESTS.test(cmd) ? 'test' : 'run', word);
+    // the program that runs: past `cd x &&` and the variables set in front; anything that is not a plain name stays unsaid
+    let step = cmd.split(/&&|;|\|/).map(p => p.trim()).find(p => p && !SETUP.test(p)) ?? '';
+    while (ASSIGN.test(step)) step = step.replace(ASSIGN, '');
+    const word = base(step.split(/\s+/)[0] ?? '');
+    return withX(TESTS.test(cmd) ? 'test' : 'run', PROGRAM.test(word) ? word : '');
   }
   if (/^(Read|LS|List|NotebookRead)$/.test(name)) return withX('read', file);
   if (/^(Edit|MultiEdit|Write|NotebookEdit|Delete|Move|apply_patch)$/.test(name)) return withX('edit', file);

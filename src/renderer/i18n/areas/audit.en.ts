@@ -11,8 +11,6 @@ export const auditEn: Record<keyof typeof auditIt, string> = {
   "audit.ChatInput.enter": "Enter",
   "audit.ChatItems.messages": "Messages",
   "audit.ChatLinkChips.chatDevopsLinks": "Chat DevOps links",
-  "audit.ChatTile.itsTurnWasInterruptedByThe": "Its turn was interrupted by the app restarting: the app resumed it automatically. This disappears when you send your next message.",
-  "audit.ChatTile.resumedAfterRestart": "resumed after restart",
   "audit.ChatTile.actualWorkTimeExcludingWaitsFor": "Actual work time, excluding waits for your answers",
   "audit.ChatTile.work": "work",
   "audit.ChatTile.queued": "Queued ·",

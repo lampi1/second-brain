@@ -1,4 +1,4 @@
-// When a little person speaks (ADR 0302): the timing of its small bubble of nonsense, and which moment the line is
+// When a little person speaks (ADR 0303): the timing of its small bubble of nonsense, and which moment the line is
 // for. The lines are in shared/agent-quips.ts; this file decides when one is said and about what. A person on a
 // Grindhouse strip speaks now and then by itself about what its chat is really doing (quipMoment: its state, or the
 // tool it is using with the real file, command or site; zero tokens, read from the transcript the app already has),
@@ -34,6 +34,19 @@ export const QUIP_MS = 2600;
 /** The wait before a person speaks by itself: 15-60 s the first time, then 60-150 s (`rnd` in 0..1). */
 export const quipDelay = (rnd: number, first: boolean): number => Math.round(first ? 15_000 + rnd * 45_000 : 60_000 + rnd * 90_000);
 
+/** The air after a line before another person may speak, in ms. */
+export const QUIP_AIR = 1500;
+/** A person's turn to speak by itself: silent (null: it tries again soon) when it must be quiet or somebody else is
+ *  speaking; else its line and until when the voice is taken. The moment is asked only when it is really about to
+ *  speak (asking uses up the one line about an end). One line in three (`rnd` under PLAIN_SHARE) is plain nonsense;
+ *  an end is always said as an end. Pure. */
+export function quipTurn(o: { quiet: boolean; at: number; busyUntil: number; moment: () => QuipMoment | null | undefined; rnd: number }): { say: QuipMoment; busyUntil: number } | null {
+  if (o.quiet || o.at < o.busyUntil) return null;
+  const m = o.moment();
+  if (!m) return null;
+  return { say: m.kind !== 'done' && o.rnd < PLAIN_SHARE ? { kind: 'work' } : m, busyUntil: o.at + QUIP_MS + QUIP_AIR };
+}
+
 // one voice at a time: until when somebody is speaking by itself, and a little air after
 let busyUntil = 0;
 const quiet = (): boolean => document.hidden || isFrozen() || !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -60,14 +73,11 @@ export function useQuip(role: QuipRole, mood?: () => QuipMoment | null): { text:
     let next: ReturnType<typeof setTimeout>;
     const wait = (first: boolean) => {
       next = setTimeout(() => {
-        const at = Date.now();
-        // not now (hidden, frozen, somebody else is speaking): it tries again soon, without a line
-        if (quiet() || at < busyUntil) return wait(true);
-        const m = moodRef.current?.();
-        if (!m) return wait(true);
-        busyUntil = at + QUIP_MS + 1500;
-        // an end is always said as an end
-        if (m.kind !== 'done' && Math.random() < PLAIN_SHARE) say('work'); else say(m.kind, m.x);
+        // not now (hidden, frozen, somebody else is speaking, nothing to say): it tries again soon, without a line
+        const turn = quipTurn({ quiet: quiet(), at: Date.now(), busyUntil, moment: () => moodRef.current?.(), rnd: Math.random() });
+        if (!turn) return wait(true);
+        busyUntil = turn.busyUntil;
+        say(turn.say.kind, turn.say.x);
         wait(false);
       }, quipDelay(Math.random(), first));
     };

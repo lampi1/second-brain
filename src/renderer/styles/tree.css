@@ -99,7 +99,7 @@
 .dc-chat { margin: 9px -4px -9px calc(-1 * var(--dc-pad)); border-top: 1px solid var(--border); cursor: auto; }
 .dc-chat .chat-tile.is-embedded { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 .dc-chat .chat-tile.is-embedded .chat-work-inner { max-height: min(60vh, 560px); }
-/* a narrow column: the role, skills and model go on their own line under the task */
+/* a narrow column: the role and skills go on their own line under the task */
 .delegation-card { container-type: inline-size; }
 @container (max-width: 440px) {
   .dc-head { flex-wrap: wrap; row-gap: 0; }

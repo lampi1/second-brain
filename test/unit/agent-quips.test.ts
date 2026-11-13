@@ -1,14 +1,15 @@
-// The agents' nonsense lines (src/shared/agent-quips.ts, ADR 0302): every role speaks in every language at every
+// The agents' nonsense lines (src/shared/agent-quips.ts, ADR 0303): every role speaks in every language at every
 // moment, each line fits a small bubble, and a pick never repeats the line said last; the lines follow what the agent
 // is really doing (the moment of a tool, the real file or command in the line). Also when a person speaks by itself
-// (renderer lib/quips.ts): the waits, the moment of a chat, and no bubble in a person nobody clicked.
+// (renderer lib/quips.ts): the waits, the moment of a chat, its turn to speak (one voice at a time, silence when it
+// must be quiet, an end said once as an end) and no bubble in a person nobody clicked.
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ChatItem } from '../../src/shared/contract';
 import { QUIP_CHARACTER, QUIP_KINDS, QUIP_MAX, QUIP_ROLES, QUIP_X_MAX, isQuipRole, pickQuip, quipOfTool, quipX, quips } from '../../src/shared/agent-quips';
 
-import { QUIP_MS, quipDelay, quipMoment } from '../../src/renderer/lib/quips';
+import { PLAIN_SHARE, QUIP_AIR, QUIP_MS, quipDelay, quipMoment, quipTurn } from '../../src/renderer/lib/quips';
 import { AgentSprite } from '../../src/renderer/components/AgentSprite';
 import { SPRITE_IDS } from '../../src/renderer/lib/agent-sprites';
 
@@ -98,5 +99,43 @@ describe('agent quips', () => {
     expect(quipMoment('work', [text])).toEqual({ kind: 'work' });
     // a tool many steps ago is no longer what it is doing
     expect(quipMoment('work', [tool('Read', { file_path: 'a.ts' }), ...Array.from({ length: 6 }, () => text)])).toEqual({ kind: 'work' });
+  });
+
+  it('speaks at its turn only: one voice at a time, quiet when asked, an end always as an end', () => {
+    const edit = { kind: 'edit' as const, x: 'cart.ts' };
+    const turn = (o: Partial<Parameters<typeof quipTurn>[0]>) => quipTurn({ quiet: false, at: 10_000, busyUntil: 0, moment: () => edit, rnd: 0.9, ...o });
+    // its own moment, and the voice is taken for the bubble and a little air
+    expect(turn({})).toEqual({ say: edit, busyUntil: 10_000 + QUIP_MS + QUIP_AIR });
+    // one line in three is plain nonsense, but never in place of an end
+    expect(turn({ rnd: PLAIN_SHARE - 0.01 })?.say).toEqual({ kind: 'work' });
+    expect(turn({ rnd: PLAIN_SHARE })?.say).toEqual(edit);
+    expect(turn({ rnd: 0, moment: () => ({ kind: 'done' }) })?.say).toEqual({ kind: 'done' });
+    // nothing to say
+    expect(turn({ moment: () => null })).toBeNull();
+    // quiet (hidden window, frozen clock, reduced motion) or somebody else speaking: silent, and the moment is not
+    // even asked (asking uses up the one line about an end)
+    let asked = 0;
+    const moment = () => { asked++; return edit; };
+    expect(turn({ quiet: true, moment })).toBeNull();
+    expect(turn({ busyUntil: 10_001, moment })).toBeNull();
+    expect(asked).toBe(0);
+    expect(turn({ busyUntil: 10_000, moment })?.say).toEqual(edit);
+    expect(asked).toBe(1);
+  });
+
+  it('says only a plain program name, and a test only for a command that runs tests', () => {
+    // a `$` in the name is text, not a pattern of the replacement
+    expect(pickQuip('artisan', 'edit', 'it', () => 0, undefined, 'a$&b')).toBe('a$&b: a mazzate');
+    // variables in front are dropped with their values; a piece of a value or a quoted path is never the program
+    expect(quipOfTool('Bash', { command: 'AUTH="Bearer abc123xyz" curl https://example.org' })).toEqual({ kind: 'run', x: 'curl' });
+    expect(quipOfTool('PowerShell', { command: '$t="abc def"; curl https://example.org' })).toEqual({ kind: 'run' });
+    expect(quipOfTool('PowerShell', { command: '& "C:\\Program Files\\Git\\bin\\git.exe" status' })).toEqual({ kind: 'run' });
+    expect(quipOfTool('PowerShell', { command: 'Set-Location app; npm run build' })).toEqual({ kind: 'run', x: 'npm' });
+    expect(quipOfTool('Bash', { command: 'git commit -m "add tests"' })).toEqual({ kind: 'run', x: 'git' });
+    expect(quipOfTool('Bash', { command: 'cat test.txt' })).toEqual({ kind: 'run', x: 'cat' });
+    expect(quipOfTool('Bash', { command: 'npm run check:quick' })).toEqual({ kind: 'test', x: 'npm' });
+    expect(quipOfTool('Bash', { command: 'node_modules/.bin/vitest run' })).toEqual({ kind: 'test', x: 'vitest' });
+    // a cut never splits a character
+    expect(quipX('📦📦📦📦📦📦📦📦📦📦📦📦📦')).toBe(`${'📦'.repeat(QUIP_X_MAX - 1)}…`);
   });
 });

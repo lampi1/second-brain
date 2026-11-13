@@ -271,8 +271,6 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
       chats.push(chatId, { kind: 'result', id: chats.nextId(), at: now() - agoMs, costUsd: 0.1, durationMs: 1000, turns: 1, isError });
       chats.patch(chatId, { state: 'idle', pending: 0 });
     },
-    /** a chat the app resumed by itself after a restart (e2e: the "ripresa dopo il riavvio" mark) */
-    resumed: (chatId: string) => chats.patch(chatId, { resumedAt: now() }),
     clearThumbs: () => browser.clearThumbs(),
     /** a delegation tree under a Strategist (README shots: the Grindhouse's thread cards) */
     tree: () => {

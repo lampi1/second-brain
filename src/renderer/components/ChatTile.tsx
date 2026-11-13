@@ -1,8 +1,8 @@
 // One agent's window (ADR 0287): a chat as a one-line strip in the Grindhouse (AgentStrips.tsx), open in the column, or in
 // full screen (FullScreen.tsx). The strip is one row (ADR 0292, 0293, 0295): the role's little person doing what the chat does
 // (StripFace.tsx), who it is, the title · current step, then on the right its work time and cost so far, each next to its estimate («22 min /
-// ~19 min · 1,84 $ / ~0,60 $», amber once past it), and a pill only when words are needed («Ti aspetta» opens its
-// question, an error, a queue); a long context shows its meter; three controls appear on hover (stop, full screen, the
+// ~19 min · 1,84 $ / ~0,60 $», amber once past it), «In attività» in plain words while it works, and a pill only when
+// words are needed («Ti aspetta» opens its question, an error, a queue); a long context shows its meter; three controls appear on hover (stop, full screen, the
 // ⋯ menu with rename / model / permissions / hand-off / close; Ctrl+W closes too). A click anywhere on the strip opens
 // it; open, a click on the head closes it. Open, the ⓘ shows one details row (version, model, cost, work time, folder,
 // the estimate: RunEstimate.tsx, ADR 0087; context size) and the DevOps links (ChatLinkChips.tsx), then the body. A chat that
@@ -172,8 +172,10 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
   const name = chat.agent?.name || chat.title, topic = chat.agent?.name && chat.title && chat.title !== chat.agent.name ? chat.title : '';
   // one state: «Ti aspetta» (opens the question), else the little person in front and, when words are needed, a pill
   const stateText = waitText && st.tone !== 'err' && st.label !== t('ui.state.queued') ? waitText : st.label;
-  // the plain states are the little person alone (its word stays for screen readers); anything else is said in words
-  const plainState = !focus && stateText === st.label && (st.tone === 'run' || st.tone === 'done');
+  // an end is the little person alone (its word stays for screen readers); work is said in plain coloured words, the
+  // same as on the rows of what it started («In attività», the owner, 2026-11-13); anything else is a pill
+  const plainState = !focus && stateText === st.label && st.tone === 'done';
+  const working = stateText === st.label && st.tone === 'run';
   const drag = (e: React.PointerEvent<HTMLDivElement>) => {
     const el = e.currentTarget, box = body.current?.getBoundingClientRect();
     if (!box || e.button !== 0) return;
@@ -208,10 +210,6 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
             {topic && <span className={expanded ? 'chat-topic' : 'th-topic'} title={chat.title} onDoubleClick={expanded ? () => setRenaming(true) : undefined} data-testid={`chat-topic-${chatId}`}>{topic}</span>}
             {!expanded && <span className="chat-strip-line">{busy?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.plan?.phase==='proposed'?t('tree.plan.ready'):chat.lastText.slice(0,140)}</span>}
           </span>}
-          {chat.resumedAt && (
-            <span className="th-resumed" data-tip={auditText('audit.ChatTile.itsTurnWasInterruptedByThe')}
-              data-testid={`chat-resumed-${chatId}`}>{auditText('audit.ChatTile.resumedAfterRestart')}</span>
-          )}
           {/* time and cost so far, each against its estimate: always on the strip (the owner, 2026-11-13) */}
           <StripMeta chat={chat} workMs={work} />
           {(!expanded || !facts) && longContext && <ContextMeter chat={chat} warn={warn} />}
@@ -220,7 +218,8 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
           <span hidden><StatePill chat={chat} testid={`chat-state-${chatId}`} /></span>
           {first ? <button type="button" className="strip-wait" onClick={() => openQueue(first)} aria-label={t('product.waitsYouOpen', { title: name })} data-testid={`chat-wait-${chatId}`} data-state={chat.state} {...(expanded ? {} : { 'data-waits-keys': reqs.map(reqKey).join(' ') })}>
             <span className="strip-wait-dot" aria-hidden="true" />{waitText && userWait ? waitText : t('product.waitsYou')}{reqs.length > 1 && <b>{reqs.length}</b>}
-          </button> : <span className={`strip-state tone-${st.tone}${plainState ? ' sr-only' : ''}`} data-testid={`chat-status-${chatId}`} title={st.label}>{stateText}</span>}
+          </button> : working ? <span className="pill pill-run strip-working" data-testid={`chat-status-${chatId}`}><span className="pill-dot" aria-hidden="true" />{chat.state === 'running' ? t('product.running') : stateText}</span>
+            : <span className={`strip-state tone-${st.tone}${plainState ? ' sr-only' : ''}`} data-testid={`chat-status-${chatId}`} title={st.label}>{stateText}</span>}
           {focus && <FullTools chatId={chatId} />}
           <div className="chat-header-actions">
           {(busy || chat.state === 'waiting') && (

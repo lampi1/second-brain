@@ -208,7 +208,7 @@
 .strip-state.tone-err { border-color:var(--red); }
 .strip-state.tone-wait { border-color:var(--amber-line); }
 /* the model and the effort the chat runs with, in plain words before its figures (the owner, 2026-11-13) */
-.strip-model { flex:none; font-size:11px; color:var(--text-3); white-space:nowrap; font-variant-numeric:tabular-nums; }
+.strip-model { flex:0 .2 auto; min-width:0; max-width:200px; overflow:hidden; text-overflow:ellipsis; font-size:11px; color:var(--text-3); white-space:nowrap; font-variant-numeric:tabular-nums; }
 .strip-meta { flex:none; display:inline-flex; align-items:center; gap:6px; height:20px; padding:0 8px; border:1px solid var(--border-2); border-radius:99px; font-size:11px; color:var(--text-2); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .strip-meta > span + span:not(.sr-only)::before { content:"· "; color:var(--text-3); }
 .strip-meta i { font-style:normal; color:var(--text-3); }
@@ -220,6 +220,8 @@
 .agent-strips .chat-tile.is-expanded > .tile-head { padding:7px 4px 7px 10px; border-bottom:1px solid var(--border); }
 .strip-facts { padding-left:34px; margin-top:4px; }
 .workspace-area { margin:16px 10px 6px; font:600 10.5px var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--text-3); }
+/* a working chat says so in plain coloured words on its strip and on a delegated row, as the rows under it do */
+.strip-working { flex:none; height:auto; padding:0; border:0; background:none; font-weight:500; }
 /* a sub-agent's state is plain words here: the pill belongs to the strip above it */
 .child-strip .child-strip-state { height:auto; padding:0; border:0; background:none; font-weight:500; }
 /* The little person is the strip's face (StripFace.tsx, ADR 0295): the row grows a little for it, and the spark of the

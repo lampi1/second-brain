@@ -3,7 +3,7 @@
 // could not look like it). Used by ChatTile.tsx (a root strip) and DelegationCard.tsx (a delegated row); also maps a
 // chat's state to the animation (spriteStateOf), and sends the user's pat or whack on the person to the chat's run
 // (run:touch, ADR 0297). The person also speaks by itself now and then about what the chat is really doing: its state,
-// or the tool it is using with the real file or command (ADR 0302, lib/quips.ts quipMoment); once about an end.
+// or the tool it is using with the real file or command (ADR 0303, lib/quips.ts quipMoment); once about an end.
 import type { AgentAvatar as Avatar } from '@shared/agents';
 import type { ChatItem } from '@shared/contract';
 import { useEffect, useState } from 'react';
@@ -36,7 +36,7 @@ export function isThinking(items: readonly ChatItem[] | undefined): boolean {
  *  page does not celebrate again, a new end after more work does. */
 const celebrated = new Map<string, string>();
 /** The end of each chat its person has already spoken about: it says so once, then keeps quiet until more work. */
-const boasted = new Map<string, string>();
+const boasted = new Set<string>();
 
 export function StripFace({ chatId, avatar, name, tone, size, height = 40, ...o }: { chatId: string; avatar: Avatar | undefined; name: string; tone: string; size: number; height?: number; waitsUser: boolean; error: boolean; busy: boolean; done: boolean; pending?: boolean }) {
   const thinking = useApp(s => o.busy && isThinking(s.items[chatId]));
@@ -47,7 +47,7 @@ export function StripFace({ chatId, avatar, name, tone, size, height = 40, ...o 
   const [seen, setSeen] = useState(() => celebrated.get(chatId) === mark);
   useEffect(() => {
     if (state === 'done') { celebrated.set(chatId, mark); return; }
-    celebrated.delete(chatId); setSeen(false);
+    celebrated.delete(chatId); boasted.delete(chatId); setSeen(false);
   }, [chatId, state, mark]);
   // the user's pat or whack is a nudge on this chat's run (ADR 0297): sent when it changes, never at every click
   const hasRun = useApp(s => !!s.chats[chatId]?.run), touched = useApp(s => s.chats[chatId]?.run?.touch?.sign);
@@ -57,7 +57,7 @@ export function StripFace({ chatId, avatar, name, tone, size, height = 40, ...o 
   };
   // what it speaks about when its turn comes: read then, from the transcript the app already has
   const mood = (): QuipMoment | null => {
-    if (state === 'done') { if (boasted.get(chatId) === mark) return null; boasted.set(chatId, mark); }
+    if (state === 'done') { if (boasted.has(chatId)) return null; boasted.add(chatId); }
     return quipMoment(state, app.get().items[chatId]);
   };
   // a picture of the user's own, or a character without a person, stays a portrait with its state dot

@@ -73,14 +73,13 @@ export function TreeRails({ node, state }: { node: TreeNode; state: ChildState }
 }
 
 /** The row (ADR 0293): the role's little person in its state (StripFace.tsx), the task, who runs it and what it does now (closed: the
- *  live step, or the result's first words once ended; open: its skills), the model and effort, time and cost, the state in words
- *  only when the dot is not enough, "Vai alla chat". */
+ *  live step, or the result's first words once ended; open: its skills), the model and effort, time and cost, «In attività» in
+ *  plain words while it works and a pill for any other state but a plain end, "Vai alla chat". */
 function Head({ chat, state, open }: { chat: ChatSummary; state: ChildState; open: boolean }) {
   const now = useNow(15_000);
   const role = chat.agent?.name ?? chat.delegation?.role ?? '';
   const skills = chat.run?.tags?.skills ?? [];
   const live = state === 'run' || state === 'start';
-  const plain = live || state === 'done';
   const said = chat.delegation?.result?.summary || chat.lastText;
   return <div className="dc-head">
     <StripFace chatId={chat.id} avatar={chat.agent?.avatar} name={role} size={22} tone={LINE[state]} waitsUser={state === 'wait'} error={LINE[state] === 'err'}
@@ -94,7 +93,8 @@ function Head({ chat, state, open }: { chat: ChatSummary; state: ChildState; ope
       </> : <span className="dc-now" data-testid={`delegation-now-${chat.id}`}>{isBusy(chat) ? <StripActivity chatId={chat.id} /> : said.split('\n')[0]!.slice(0, 140)}</span>}
     </span>
     <StripMeta chat={chat} workMs={chat.queued ? null : workTime(chat, now) ?? chat.run?.executionMs ?? null} />
-    <ChildPill state={state} testid={`delegation-state-${chat.id}`} quiet={plain} />
+    {live ? <span className="pill pill-run strip-working" data-testid={`delegation-state-${chat.id}`} data-child-state={state}><span className="pill-dot" aria-hidden="true" />{t('product.running')}</span>
+      : <ChildPill state={state} testid={`delegation-state-${chat.id}`} quiet={state === 'done'} />}
     <button type="button" className="dc-open" data-testid={`delegation-open-${chat.id}`} onClick={() => setFocusMode(chat.id)} aria-label={t('tree.focus', { title: chat.title })} title={t('tree.goTo')}>
       <span aria-hidden="true">↗</span>
     </button>

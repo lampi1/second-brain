@@ -11,8 +11,6 @@ export const auditDe: Record<keyof typeof auditIt, string> = {
   "audit.ChatInput.enter": "Eingabe",
   "audit.ChatItems.messages": "Nachrichten",
   "audit.ChatLinkChips.chatDevopsLinks": "DevOps-Links des Chats",
-  "audit.ChatTile.itsTurnWasInterruptedByThe": "Sein Turn wurde durch den Neustart der App unterbrochen: Die App hat ihn automatisch fortgesetzt. Das verschwindet, wenn du deine nächste Nachricht sendest.",
-  "audit.ChatTile.resumedAfterRestart": "nach Neustart fortgesetzt",
   "audit.ChatTile.actualWorkTimeExcludingWaitsFor": "Tatsächliche Arbeitszeit, ohne Wartezeit auf deine Antworten",
   "audit.ChatTile.work": "Arbeit",
   "audit.ChatTile.queued": "In Warteschlange ·",

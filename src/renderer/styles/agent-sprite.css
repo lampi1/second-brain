@@ -16,9 +16,9 @@
 @keyframes sp-blink { 0%, 93%, 100% { transform:scaleY(1); } 96% { transform:scaleY(.1); } }
 html[data-hidden] .agent-sprite * { animation-play-state:paused !important; }
 /* still: the rest pose, which is every scene's last picture too */
-.agent-sprite.is-still * { animation:none !important; }
+.agent-sprite.is-still svg, .agent-sprite.is-still svg * { animation:none !important; }
 @media (prefers-reduced-motion: reduce) { .agent-sprite * { animation:none !important; } }
-/* What it says (ADR 0302): a small bubble at the head, its corner pointing at the mouth, that pops in and fades by
+/* What it says (ADR 0303): a small bubble at the head, its corner pointing at the mouth, that pops in and fades by
    itself (lib/quips.ts QUIP_MS sets how long). Over the row's text for that moment; it takes no click. */
 .agent-sprite > .quip { position:absolute; left:76%; top:-5px; z-index:3; padding:3px 8px 4px; border-radius:10px 10px 10px 2px; background:var(--text); color:var(--bg);
   font:600 11px/1.25 var(--font); letter-spacing:0; white-space:nowrap; pointer-events:none; box-shadow:0 2px 8px rgb(0 0 0 / .28); transform-origin:0 100%; animation:quip-pop 2600ms both; }

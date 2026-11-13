@@ -16,11 +16,15 @@ test('strips: collapsed with their facts, click to expand and collapse, "Ti aspe
     await expect(page.locator('[data-testid^="home-request-"]')).toHaveCount(0);
     for (const id of ['qa', 'fix', 'sms', 'feedback']) {
       await expect(page.getByTestId(`chat-expand-${id}`)).toHaveAttribute('aria-expanded', 'false');
-      await expect(page.getByTestId(`chat-sub-${id}`)).toHaveCount(0); // one line (ADR 0287): model and context are in the open window's details
+      await expect(page.getByTestId(`chat-sub-${id}`)).toHaveCount(0); // one line (ADR 0287): the details row is in the open window
     }
     // time and cost so far, against the estimate, always on the strip (ADR 0292)
     await expect(page.getByTestId('chat-meta-qa')).toContainText(/\d+ min \/ ~\d+ min/);
     await expect(page.getByTestId('chat-meta-fix')).toContainText('$');
+    // the model and the effort it runs with before the figures, and a working chat says so in words (the owner, 2026-11-13)
+    await expect(page.getByTestId('strip-model-fix')).toHaveText('Opus 5.5 · medium');
+    await expect(page.getByTestId('chat-status-fix')).toHaveText('In attività');
+    await expect(page.getByTestId('chat-status-fix')).toBeVisible();
     await expect(page.getByTestId('chat-input-fix')).toBeHidden();
     // a strip's browser is folded: a globe among the strip's controls opens it beside the chat
     await expect(page.getByTestId('tile-browser-tab-sms')).toHaveCount(0);

@@ -7,7 +7,7 @@
 // the spark). Without motion
 // (prefers-reduced-motion, a hidden window) it is the rest pose, which every state draws complete. A click on it plays
 // a reaction (ADR 0297: a pat, a whack of the stick) and tells its owner, which may record it as a nudge on the run.
-// It also speaks (ADR 0302): two words of nonsense in a small bubble that goes away by itself, at a click and, with a
+// It also speaks (ADR 0303): two words of nonsense in a small bubble that goes away by itself, at a click and, with a
 // `mood` (the strips), now and then by itself about what its chat is doing (lib/quips.ts; the lines are in
 // shared/agent-quips.ts).
 import { createContext, useEffect, useInsertionEffect, useMemo, useState, type CSSProperties, type MouseEvent, type ReactElement } from 'react';
@@ -50,7 +50,7 @@ function draw(n: Node, key: number): ReactElement {
  *  A click on the person plays a reaction once over its state (ADR 0297): the left one a pat on the head, the right
  *  one a whack of the stick; `onTouch` hears which (+1 the pat, -1 the whack), `tip` is its tooltip. The click stays on
  *  the person: it never opens the strip or the card under it. It says a line at the click and, with a `mood` (what
- *  its chat is doing now, or null to stay silent), now and then by itself (ADR 0302). */
+ *  its chat is doing now, or null to stay silent), now and then by itself (ADR 0303). */
 export function AgentSprite({ id, state, height = 32, label, still, onTouch, tip, mood }: { id: SpriteId; state: SpriteState; height?: number; label?: string; still?: boolean; onTouch?: (sign: 1 | -1) => void; tip?: string; mood?: () => QuipMoment | null }) {
   // `n` counts the clicks: each one starts its reaction from the top
   const [react, setReact] = useState<{ kind: SpriteReaction; n: number } | null>(null);

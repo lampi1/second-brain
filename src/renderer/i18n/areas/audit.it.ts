@@ -10,8 +10,6 @@ export const auditIt = {
   "audit.ChatInput.enter": "Invio",
   "audit.ChatItems.messages": "Messaggi",
   "audit.ChatLinkChips.chatDevopsLinks": "Link DevOps della chat",
-  "audit.ChatTile.itsTurnWasInterruptedByThe": "Il suo turno si era interrotto con il riavvio dell'app: l'app l'ha fatta ripartire da sola. Sparisce al tuo prossimo messaggio.",
-  "audit.ChatTile.resumedAfterRestart": "ripresa dopo il riavvio",
   "audit.ChatTile.actualWorkTimeExcludingWaitsFor": "Tempo di lavoro effettivo: senza le attese delle tue risposte",
   "audit.ChatTile.work": "lavoro",
   "audit.ChatTile.queued": "In coda ·",

@@ -310,7 +310,6 @@ button.lc-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 1
 .th-sub-text { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .th-badge { flex: none; border: 1px solid var(--border-2); border-radius: 99px; padding: 0 6px; font-size: 10.5px; color: var(--text-2); line-height: 16px; }
 .th-engine { flex: none; display: inline-flex; }
-.th-resumed { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 99px; padding: 0 7px; font-size: 10.5px; line-height: 18px; color: var(--violet); background: var(--violet-bg); }
 .th-row > .icon-btn { margin-left: -2px; }
 .th-work { color: var(--text-2); font-variant-numeric: tabular-nums; }
 /* context meter (ContextBar.tsx): "182k" + a thin bar of the window; amber above the threshold */

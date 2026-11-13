@@ -24,8 +24,12 @@ ADR 0287 showed a strip's numbers only out of the norm. The owner wants them alw
    modello e effort nelle striscioline degli agenti») the model and the effort the chat runs with stand before the
    figures in plain words, on a root strip and on a delegated row: «Opus 5.5 · high» (`StripMeta.tsx`; the effort
    as the engine reports it or as the last turn sent it, never the one only asked for).
-3. The state is a pill only when words are needed (waiting, error, queued). «Al lavoro» and «finito» are the dot; the
-   word stays for screen readers.
+3. The state is a pill only when words are needed (waiting, error, queued). «Finito» is the little person alone; the
+   word stays for screen readers. Since 2026-11-13 (the owner, on a screenshot of his app: «non so perché vedo "in
+   attività" nel comando e non nella strisciolina degli agenti») a working chat says «In attività» on its strip and
+   on a delegated row, in the same plain coloured words as the rows of what it started (point 6), not a pill. The
+   violet «ripresa dopo il riavvio» chip is gone from the strip (the owner, the same message: «non serve … è
+   inutile»); the line above a chat the user started («Ripresa dall'app dopo il riavvio · 09:12», ADR 0102) stays.
 4. Rows run edge to edge of the page with a hairline between them; the area heading is a small label. The open window
    is a panel between two hairlines, no card and no focus border.
 5. The open window's details row (version, model, the full estimate chip, context, links) opens from the ⓘ, in the

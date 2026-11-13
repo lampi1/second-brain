@@ -1,4 +1,4 @@
-# ADR 0302 · The little people speak: two words of nonsense, a character per role
+# ADR 0303 · The little people speak: two words of nonsense, a character per role
 
 Date: 2026-11-13 · Status: accepted (owner, 2026-11-13: «vorrei che mentre gioco gli agenti avessero animazione tipo
 sto pensando e mi dicessero frasi divertenti e stupide esilaranti quasi nosense, ogni agente un carattere diversi
@@ -12,7 +12,7 @@ little people), ADR 0297 (their reactions to a click)
 
 The roles are little people on the Grindhouse strips. The owner wants them to say short, silly, almost senseless
 lines, each role with a character of its own, in a small bubble that goes away quickly; the chess section built at
-the same time wants the same characters and lines for the opponent.
+the same time (its own ADR) is to use the same characters and lines for the opponent.
 
 ## Decision
 
@@ -21,20 +21,23 @@ the same time wants the same characters and lines for the opponent.
    in one line (`QUIP_CHARACTER`): the Orchestrator a pompous conductor, the Strategist an over-planning chess nerd,
    the Scout an over-keen explorer who is always lost, the Artisan a gruff craftsman with a hammer, the Sentinel a
    paranoid guard with a macabre streak, the Herald a melodramatic town crier, the plain one a burned-out office
-   worker. Lines are two to four words and at most 24 characters, in Italian, English and German.
+   worker. Lines are one to five words and at most 24 characters as written (a few more once a name is in), in
+   Italian, English and German.
 2. Lines are grouped by moment (`QuipKind`), so a line is about what the agent is really doing, with no model call:
    the states `think`, `wait` (for the user), `err`, `done`, `idle`; what its tool does, `read`, `edit`, `run`,
    `test`, `search`, `web`, `delegate` (`quipOfTool` reads the tool's name and input as every engine names them);
    `work` (14 per role) for anything else; `pat` and `whack` (3 each) at the click of ADR 0297. Each moment has two
    lines per role; one may carry `{x}`, replaced by the real name: the file read or edited, the program of a
-   command, the words of a search, the host of a page (cut to 12 characters). `pickQuip` never gives the line said
-   last, and gives a `{x}` line only when there is a name. A new moment is a new kind in the same file.
+   command, the words of a search, the host of a page (cut to 12 characters). Only a plain program name is said:
+   a variable's value, a quoted path or any other piece of a command is not, and a command is a `test` only when it
+   runs tests. `pickQuip` does not repeat the line said last when it has another, and gives a `{x}` line only when
+   there is a name. A new moment is a new kind in the same file.
 3. The bubble is part of the person (`AgentSprite.tsx`, `lib/quips.ts`): a small inverted pill at the head that pops
    in, stays 2.6 s and fades. Every person says a line when clicked (strips, role cards, the Orchestrator's line).
    On a Grindhouse strip the person also speaks by itself: the first time after 15 to 60 s, then every 60 to 150 s,
    one voice at a time on the page. What it says is read at that moment from the chat's state and the last tool of
    its transcript (`lib/quips.ts` quipMoment); one line in three is the role's plain `work` nonsense, for
-   variety. About an end it speaks once, and always as an end.
+   variety. About an end it speaks once, until the chat works again, and always as an end.
 4. It never speaks by itself while the window is hidden, on the frozen demo clock (the screenshots stay equal) or
    under prefers-reduced-motion. The bubble is decoration: hidden from screen readers, it takes no click.
 5. No setting to turn it off for now.

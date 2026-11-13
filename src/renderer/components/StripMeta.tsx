@@ -14,7 +14,7 @@ export function StripMeta({ chat, workMs }: { chat: ChatSummary; workMs: number 
   const estimates = useRunEstimates();
   const estimate = chat.run ? estimates?.runs[chat.run.runId]?.estimate ?? null : null;
   const costNow = chat.costLedgerUsd ?? (chat.costKnown === false ? null : chat.costUsd || null);
-  const model = <span className="strip-model" data-testid={`chat-model-${chat.id}`} data-tip={t('aw.modelTip')}>{modelWithEffort(chat)}</span>;
+  const model = <span className="strip-model" data-testid={`strip-model-${chat.id}`} data-tip={t('aw.modelTip')}>{modelWithEffort(chat)}</span>;
   if (workMs === null && costNow === null) return model;
   const est = estimate ? estimateText(estimate) : null;
   const overTime = !!estimate && estimate.timeMs !== null && workMs !== null && workMs > estimate.timeMs;
