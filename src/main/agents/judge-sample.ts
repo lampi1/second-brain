@@ -184,14 +184,17 @@ export function coreVersions(history: readonly AgentVersion[], active: number): 
 export const roleShare = (spread: number | null, steadyVerdicts: number): number =>
   spread !== null && spread < STEADY_SPREAD && steadyVerdicts >= STEADY_MIN ? SHARE_STEADY : SHARE_DEFAULT;
 /** Every work role's share now: its standing's spread and the verdicts (the user's, a review's, the receipts') on runs of
- *  the versions that share its active model, skills and rules. */
+ *  the versions that share its active model, skills and rules, on the model its latest run used: a model change no
+ *  longer makes a version (ADR 0284), so the runs say which model each verdict is about. */
 export function roleShares(runs: readonly AgentRun[], standing: ReadonlyMap<string, Pick<AgentStanding, 'spread'>>, roles: readonly { id: string; activeVersion: number }[],
   history: (id: string) => readonly AgentVersion[]): Map<string, number> {
   const out = new Map<string, number>();
   for (const role of roles) {
     if (!isWorkRole(role.id)) continue;
     const core = coreVersions(history(role.id), role.activeVersion);
-    const verdicts = runs.filter(r => r.agentId === role.id && core.has(r.version) && r.outcome && r.outcome.verdict !== 'unknown'
+    const own = runs.filter(r => r.agentId === role.id && core.has(r.version));
+    const model = own.reduce<AgentRun | null>((last, r) => !last || r.startedAt > last.startedAt ? r : last, null)?.model;
+    const verdicts = own.filter(r => r.model === model && r.outcome && r.outcome.verdict !== 'unknown'
       && ['human', 'reviewed-evidence', 'receipts'].includes(r.outcome.basis)).length;
     out.set(role.id, roleShare(standing.get(role.id)?.spread ?? null, verdicts));
   }

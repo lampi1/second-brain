@@ -2,7 +2,7 @@
 // 96 px, English name, what it is for, engine, model tier, trial and customized chips, Avvia), its run numbers, the
 // permissions card (RolePermissions: tool classes and ceiling, each with its "?", ADR 0085), the instructions it runs
 // with, its configuration (tools, permission ceiling, the roles it may launch), the skills it loads at every launch, its
-// versions (a new one only for text, skills, model or tier; each with its runs, verified outcomes and success ±, ADR
+// versions (a new one only for text or skills, ADR 0284; each with its runs, verified outcomes and success ±, ADR
 // 0186). "Modifica" opens the editor in place: only the
 // behaviour is editable (instructions, engine, model, tier, launches, skills, context; the permissions on their own
 // card); name and summary belong to the role; the character can be swapped for the user's own picture

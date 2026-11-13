@@ -246,17 +246,20 @@ export function estimate(num: number, den: number, prior: { mean: number; weight
 
 const noSources = (): AgentStanding['sources'] => ({ human: 0, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 0, decision: 0, chain: 0, quick: 0, self: 0 });
 interface Acc { runs: number; wins: number; xp: number; num: number; den: number; evaluated: number; sources: AgentStanding['sources']; models: Map<string, ModelAcc> }
-interface ModelAcc { runs: number; wins: number; num: number; den: number; evaluated: number; cost: number; costRuns: number; estimated: number; ms: number[]; lastAt: number }
+interface ModelAcc { runs: number; wins: number; num: number; den: number; evaluated: number; cost: number; costRuns: number; estimated: number; unpriced: number; ms: number[]; lastAt: number }
 const median = (v: number[]): number | null => { if (!v.length) return null; const s = [...v].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2; };
-/** One model's row: its estimate starts from the role's (roleMean), its cost per success counts every run's cost. */
-function modelRow(model: string, m: ModelAcc, roleMean: number): ModelStanding {
-  const est = m.evaluated > 0 ? estimate(m.num, m.den, { mean: roleMean, weight: MODEL_PRIOR_WEIGHT }) : null;
-  const shown = !!est && m.evaluated >= MODEL_MIN_EVALUATED && est.spread <= MAX_SPREAD;
+/** One model's row. Its estimate starts from the role's performance on its OTHER verdicts (`others`: the role's
+ *  weighted score and weights without this model's, so no verdict counts twice; none = 50%), and shows only when the
+ *  card's does (`roleShown`): a row never says more than its card. Its cost per success counts every run's cost. */
+function modelRow(model: string, m: ModelAcc, others: { num: number; den: number }, roleShown: boolean): ModelStanding {
+  const prior = others.den > 1e-9 ? estimate(others.num, others.den).mean : PRIOR.mean;
+  const est = m.evaluated > 0 ? estimate(m.num, m.den, { mean: prior, weight: MODEL_PRIOR_WEIGHT }) : null;
+  const shown = roleShown && !!est && m.evaluated >= MODEL_MIN_EVALUATED && est.spread <= MAX_SPREAD;
   // a run without a cost counts as the average of those with one: the figure is then an estimate
   const total = m.costRuns ? m.cost / m.costRuns * m.runs : null;
   return { model, runs: m.runs, wins: m.wins, performance: shown ? est.mean : null, spread: est ? est.spread : null, evaluated: m.evaluated, minRuns: MODEL_MIN_EVALUATED,
-    costPerWin: total !== null && m.wins ? Math.round(total / m.wins * 100) / 100 : null, costEstimated: m.estimated > 0 || (m.costRuns > 0 && m.costRuns < m.runs),
-    unpriced: m.runs - m.costRuns, medianMs: median(m.ms), lastAt: m.lastAt };
+    costPerWin: total !== null && m.wins ? Math.round(total / m.wins * 10_000) / 10_000 : null, costEstimated: m.estimated > 0 || (m.costRuns > 0 && m.costRuns < m.runs),
+    unpriced: m.unpriced, medianMs: median(m.ms), lastAt: m.lastAt };
 }
 function add(a: Acc, source: Source, verdict: Verdict, age: number): void {
   a.sources[source]++;
@@ -267,6 +270,9 @@ function add(a: Acc, source: Source, verdict: Verdict, age: number): void {
 
 /** Level and performance of each agent with at least one run (ended or rolled up) or Flash answer, by agent id. */
 export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[], now: number, flash: FlashLog | null = null, priceOf: PriceOf | null = null): Map<string, AgentStanding> {
+  // one price lookup per model, not per run (the lookup reads the brain's price table)
+  const prices = new Map<string, TokenPrice | null>();
+  const price = (model: string): TokenPrice | null => { if (!prices.has(model)) prices.set(model, priceOf ? priceOf(model) : null); return prices.get(model)!; };
   const ix = earnIndex(runs), { reviews, starts } = ix;
   const acc = new Map<string, Acc>();
   const of = (id: string) => {
@@ -296,13 +302,15 @@ export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[
     if (v) add(own, v.source, v.verdict, age);
     if (r.model) {
       let m = own.models.get(r.model);
-      if (!m) own.models.set(r.model, m = { runs: 0, wins: 0, num: 0, den: 0, evaluated: 0, cost: 0, costRuns: 0, estimated: 0, ms: [], lastAt: 0 });
+      if (!m) own.models.set(r.model, m = { runs: 0, wins: 0, num: 0, den: 0, evaluated: 0, cost: 0, costRuns: 0, estimated: 0, unpriced: 0, ms: [], lastAt: 0 });
       m.runs++; m.lastAt = Math.max(m.lastAt, r.endedAt!);
       if (e?.verdict === 'success') m.wins++;
       if (v && TRUST[v.source] > 0) { const w = TRUST[v.source] * 0.5 ** (Math.max(0, age) / HALF_LIFE_MS); m.evaluated++; m.num += w * SCORE[v.verdict]; m.den += w; }
       // the engine's own figure, else list price × tokens (Codex, OpenCode and Cursor report tokens only)
-      const listed = r.costUsd === null && priceOf ? listCost(r.tokens, priceOf(r.model)) : null;
+      const listed = r.costUsd === null ? listCost(r.tokens, price(r.model)) : null;
       if (r.costUsd !== null) { m.cost += r.costUsd; m.costRuns++; } else if (listed !== null) { m.cost += listed; m.costRuns++; m.estimated++; }
+      // tokens used and no price for them: «prezzo sconosciuto» (a run that used no tokens has simply no cost)
+      else if (r.tokens && r.tokens.input + r.tokens.output + r.tokens.cacheRead + r.tokens.cacheWrite > 0) m.unpriced++;
       const ms = r.executionMs ?? r.endedAt! - r.startedAt;
       if (ms > 0) m.ms.push(ms);
     }
@@ -332,7 +340,7 @@ export function standings(runs: readonly AgentRun[], rollups: readonly RunTally[
     const est = a.evaluated > 0 ? estimate(a.num, a.den) : null;
     const shown = !!est && a.evaluated >= MIN_EVALUATED && est.spread <= MAX_SPREAD;
     const xp = Math.round(a.xp * 100) / 100;
-    const models = [...a.models].map(([model, m]) => modelRow(model, m, est?.mean ?? PRIOR.mean)).sort((x, y) => y.runs - x.runs || y.lastAt - x.lastAt || x.model.localeCompare(y.model, 'en'));
+    const models = [...a.models].map(([model, m]) => modelRow(model, m, { num: a.num - m.num, den: a.den - m.den }, shown)).sort((x, y) => y.runs - x.runs || y.lastAt - x.lastAt || x.model.localeCompare(y.model, 'en'));
     out.set(id, { runs: a.runs, wins: a.wins, xp, ...levelOf(xp), performance: shown ? est.mean : null, spread: est ? est.spread : null,
       evaluated: a.evaluated, minRuns: MIN_EVALUATED, sources: a.sources, ...(models.length ? { models } : {}) });
   }

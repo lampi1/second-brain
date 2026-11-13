@@ -31,6 +31,9 @@ const TABLE: [string, Price][] = [
   ['gemini-3.1-pro', { input: 2, cacheWrite: 2, cacheRead: 0.2, output: 12 }],
 ];
 
+/** The table's rows by name, for a caller with its own, stricter matching (agents/list-price.ts). */
+export const priceRows = (): readonly (readonly [string, Price])[] => TABLE;
+
 const tokens = (s: string): string[] => s.toLowerCase().replace(/\[.*\]$/, '').split(/[^a-z0-9.]+/).filter(Boolean);
 
 /** The list price of a Cursor model id ("claude-sonnet-5.5", "sonnet-5.5-thinking", "gpt-5.6-sol[effort=high]"):

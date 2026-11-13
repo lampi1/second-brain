@@ -232,6 +232,8 @@ describe('default engine (issue #96)', () => {
     expect(narrowed).toMatchObject({ version: 2, tools: { allow: [] }, permissionCeiling: 'plan' });
     const back = catalog.restoreVersion('scout', 1);
     expect(back).toMatchObject({ activeVersion: 1, instructions: scout.instructions, tier: 'mid', model: 'm-mid', tools: { allow: [] }, permissionCeiling: 'plan' });
+    // the restored version's own record says what it runs with now: a trial's rollback goes back to it as a whole
+    expect(catalog.history('scout').find(v => v.version === 1)!.behaviour).toMatchObject({ instructions: scout.instructions, tier: 'mid', model: 'm-mid', permissionCeiling: 'plan' });
     // a trial always makes a version, even for tools only
     const trial = catalog.approveTrial('scout', { ...edit(back, { tools: { allow: ['read'] } as never }) }, 'prova');
     expect(trial.trial).toMatchObject({ version: 3, baseline: 1 });

@@ -105,6 +105,11 @@ describe('free signals first, then the sample (L1, L3)', () => {
     const runs = [...judged(1, 3), ...judged(2, 2), ...judged(3, 1)];
     const roles = [{ id: 'scout', activeVersion: 2 }, { id: 'orchestrator', activeVersion: 1 }];
     expect(roleShares(runs, new Map([['scout', { spread: 0.05 }]]), roles, () => history)).toEqual(new Map([['scout', SHARE_STEADY]]));
+    // a model change no longer makes a version (ADR 0284): the verdicts count on the model of the role's latest run
+    const on = (model: string, n: number, at: number) => Array.from({ length: n }, (_, i) => run(`${model}${i}`, { version: 2, model, startedAt: at + i, outcome: { verdict: 'success', basis: 'human', by: 'user', at: 1 } }));
+    const scout = [{ id: 'scout', activeVersion: 2 }];
+    expect(roleShares(on('opus', 6, 100), new Map([['scout', { spread: 0.05 }]]), scout, () => history).get('scout')).toBe(SHARE_STEADY);
+    expect(roleShares([...on('opus', 6, 100), ...on('sonnet', 1, 200)], new Map([['scout', { spread: 0.05 }]]), scout, () => history).get('scout')).toBe(SHARE_DEFAULT);
     // the user switches Scout to another model: back to 25% until 5 verdicts on it
     expect(roleShares(runs, new Map([['scout', { spread: 0.05 }]]), [{ id: 'scout', activeVersion: 3 }], () => history).get('scout')).toBe(SHARE_DEFAULT);
   });

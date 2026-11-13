@@ -185,7 +185,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0183](0183-one-read-only-file-viewer.md) One read-only in-app viewer for every file link — accepted
 - [0184](0184-user-pictures-for-roles.md) The user's own picture for a role — accepted
 - [0185](0185-impara-lessons.md) Impara: lessons on a blackboard — accepted
-- [0186](0186-honest-classifiers-and-statistics.md) Honest classifiers and statistics: one taxonomy, one success, fewer numbers — accepted
+- [0186](0186-honest-classifiers-and-statistics.md) Honest classifiers and statistics: one taxonomy, one success, fewer numbers — accepted, partly superseded by 0284, 0285
 - [0187](0187-end-of-day-smoothness.md) Closing chats frees what they started; repeated work stops growing with the day — accepted
 - [0188](0188-impara-research-and-animated-board.md) Impara: research and verification before teaching, the animated board, the user's teacher — accepted
 - [0189](0189-impara-subjects-and-spaced-review.md) Impara: subjects, verified review cards, spaced review — accepted

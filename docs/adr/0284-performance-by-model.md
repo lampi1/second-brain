@@ -20,14 +20,19 @@ run» could not be compared between models.
 1. Only the role's text and its skills (and know-how) make a new version (`versions.ts versionedChanges`). Model,
    effort and tier change the active version in place, like tools and permissions: every run already names the model
    and the tier it ran on. Going back to an older version keeps today's engine, model, effort and tier
-   (`catalog.ts restoreVersion`). 'model' and 'tier' stay as names for the versions older releases made.
+   (`catalog.ts restoreVersion`), and the version's record takes them. 'model' and 'tier' stay as names for the
+   versions older releases made and for a trial of a model or a tier, which is still compared as a version. The
+   nightly review's share (ADR 0203) counts a role's verdicts on the model of its latest run, so a model change
+   still takes the role back to the wider sample.
 2. `AgentStanding.models` (`standing.ts`): one row per model among the role's kept runs, with the runs, the verified
    successes, the performance and its spread, the cost of one verified success and the median working time.
-3. A model's performance is the same weighted estimate as the role's, started from the role's own performance instead
-   of 50%: a prior worth `MODEL_PRIOR_WEIGHT` = 4 verdicts, shown from `MODEL_MIN_EVALUATED` = 3 verdicts with a
-   spread no wider than the card's. The two numbers are a first choice, not a measured one.
+3. A model's performance is the same weighted estimate as the role's, started from the role's performance on its
+   other models instead of 50% (no verdict counts twice; a role with one model starts at 50%): a prior worth
+   `MODEL_PRIOR_WEIGHT` = 4 verdicts, shown from `MODEL_MIN_EVALUATED` = 3 verdicts with a spread no wider than the
+   card's, and only when the card shows its own. The two numbers are a first choice, not a measured one.
 4. A run with tokens and no cost is priced at list price (`list-price.ts`): the brain's `harness/models.json` first,
-   any engine's row, then the list prices kept for Cursor's models. The row is then marked as an estimate («stima»).
+   any engine's row, then the list prices kept for Cursor's models, by the exact name only (a near name would take
+   another model's price). The row is then marked as an estimate («stima»).
    A model in neither table has no cost («prezzo sconosciuto»), never 0. Nothing is written on the run: the estimate
    is computed when the metrics are read, so a corrected price corrects the past too.
 5. The cost of a success is every run's cost over the verified successes, failed runs included. Runs without a cost
@@ -44,4 +49,4 @@ run» could not be compared between models.
 - The version list no longer says when a model changed; the runs do.
 - A list price is not a bill: a subscription plan, a cached price or a provider discount make the real cost lower.
 - Tests: `test/unit/agents/model-standing.test.ts`, `test/unit/agents/versions.test.ts`,
-  `test/unit/agents/catalog.test.ts`.
+  `test/unit/agents/catalog.test.ts`, `test/unit/agents/judge-sample.test.ts`.

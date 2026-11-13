@@ -241,13 +241,14 @@ export interface ModelStanding {
   model: string;
   /** ended runs on this model, and the verified successful ones */
   runs: number; wins: number;
-  /** as AgentStanding: the estimate starts from the role's own performance instead of 50% (null = «in rodaggio») */
+  /** as AgentStanding: the estimate starts from the role's performance on its other models instead of 50%, and
+   *  shows only when the card's does (null = «in rodaggio») */
   performance: number | null; spread: number | null; evaluated: number; minRuns: number;
   /** what one verified success cost: every run's cost over the successes; null without a success or a cost */
   costPerWin: number | null;
   /** part of the cost is list price × tokens (the engine reported none) or an average over the runs with a cost: «stima» */
   costEstimated: boolean;
-  /** runs with no cost at all: no engine figure, and no list price for the model («prezzo sconosciuto») */
+  /** runs that used tokens and have no cost: no engine figure, and no list price for the model («prezzo sconosciuto») */
   unpriced: number;
   /** median working time of a run, ms; null = none measured */
   medianMs: number | null;
