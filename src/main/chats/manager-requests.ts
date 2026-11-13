@@ -15,7 +15,7 @@ import { allowsClass, COMMAND_TOOLS, commandsReadOnly, readOnlyCommand, toolClas
 import { readOnlyTools } from '../agents/read-tools';
 import { gateRequest, runtimePluginName } from '../agents/role-gate';
 import { autoPermit } from './auto-permit';
-import { loadPolicy, policyCovers, policyRead } from './permit-policy';
+import { loadPolicy, policyCovers, policyRead, POLICY_FILE } from './permit-policy';
 import { AWAY_PARKED, AWAY_PLAN_NOTE, recommendedAnswers } from '../../shared/away';
 import { askingPlan, PLAN_APPROVED, type IntakeSource, type PlanIntake } from '../../shared/strategy';
 import type { SubmissionReceipt, Rec } from './manager-types';
@@ -473,10 +473,12 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     const command = (req.input as { command?: unknown } | null)?.command;
     if (r.policy?.tools && c && !allowsClass(r.policy, c)) return toUser();
     if (COMMAND_TOOLS.includes(req.tool) && commandsReadOnly(r.policy) && !readOnlyCommand(command, this.readScripts(r))) return toUser();
-    const v = autoPermit(whole ? { ...req, whole } : req, { cwd: r.s.cwd, ceiling: r.policy?.ceiling ?? null, readScripts: this.readScripts(r), policy });
+    const brainRoot = this.opts.brainRoot?.() ?? null;
+    const v = autoPermit(whole ? { ...req, whole } : req, { cwd: r.s.cwd, ceiling: r.policy?.ceiling ?? null, readScripts: this.readScripts(r), policy, ...(brainRoot ? { rulesFile: path.join(brainRoot, POLICY_FILE) } : {}) });
     if (v.kind === 'ask') {
       // held by the user's rule: no «always» (a saved rule would let the next ones through unasked); the phone may answer
       if (v.rule) { req.noAlways = true; delete req.alwaysRules; req.heldBy = { rule: v.rule.id, why: v.rule.why }; log.info('chats', 'brain rule asks the user', { chat: r.s.id, data: { tool: req.tool, rule: v.rule.id } }); }
+      if (v.rulesFile) { req.noAlways = true; delete req.alwaysRules; log.info('chats', 'a change of the brain rules file asks the user', { chat: r.s.id, data: { tool: req.tool } }); }
       return toUser();
     }
     if (v.kind === 'allow') {

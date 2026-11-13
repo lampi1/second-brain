@@ -318,6 +318,13 @@ interface Ask {
 /** the yes/no labels of an app question (askUser), the recommended one marked as QUESTION_RULE asks */
 const ASK_YES = 'Sì', ASK_NO = 'No', ASK_MARK = ' (consigliato)';
 
+/** The whole input of a permission request: its own rawInput, or the earlier tool call's (kept whole) when the
+ *  request brings none, with the request's locations. undefined = no whole input is known. */
+export function acpWhole(tc: Record<string, unknown>, earlier: unknown): Record<string, unknown> | undefined {
+  const own = tc.rawInput && typeof tc.rawInput === 'object' && !Array.isArray(tc.rawInput) && Object.keys(tc.rawInput).length ? tc.rawInput as Record<string, unknown> : undefined;
+  const raw = own ?? (earlier && typeof earlier === 'object' && !Array.isArray(earlier) && Object.keys(earlier).length ? earlier as Record<string, unknown> : undefined);
+  return raw ? { ...raw, ...(tc.locations !== undefined ? { locations: tc.locations } : {}) } : undefined;
+}
 /** ACP tool kinds → the tool name a row and a permission panel show (PendingRequest.tool). */
 export const KIND_NAME: Record<string, string> = {
   execute: 'Shell', read: 'Read', edit: 'Edit', delete: 'Delete', move: 'Move', search: 'Search', fetch: 'Fetch', think: 'Think', switch_mode: 'Mode', other: 'Tool',
@@ -499,6 +506,9 @@ export class AcpSession implements HarnessSession {
   private thought: Stream | null = null;
   private flushTimer: NodeJS.Timeout | null = null;
   private tools = new Map<string, ToolItem>();
+  /** the input of each running tool as the engine sent it, by tool call id (`tools` keeps the copy shortened for the
+   *  screen): the app's own answer to a permission request reads what will run (ADR 0292) */
+  private wholeInputs = new Map<string, unknown>();
   /** running subagents (Task tool calls) by toolCallId, for the subagent hooks */
   private subagents = new Map<string, { at: number; type: string; task: string; description: string; model: string | null }>();
   private readonly childTelemetry: AgentChildrenReporter;
@@ -691,7 +701,7 @@ export class AcpSession implements HarnessSession {
           this.flushAll(true);
           this.sink.changed({ replaying: false });
           this.replayUser = null;
-          this.tools.clear(); // replayed tool rows keep the status they were replayed with
+          this.tools.clear(); this.wholeInputs.clear(); // replayed tool rows keep the status they were replayed with
         }
       } else this.sysCode('noResume', { label: this.label }, 'warn');
     }
@@ -948,7 +958,7 @@ export class AcpSession implements HarnessSession {
     this.flushAll(true);
     for (const t of this.tools.values()) if (t.status === 'running') this.sink.item({ ...t, status: 'error', output: t.output ?? 'interrotto' }, true);
     for (const id of [...this.subagents.keys()]) this.subagentHooks(id, {}, 'error'); // interrupted: its stop hook too
-    this.tools.clear();
+    this.tools.clear(); this.wholeInputs.clear();
     const stop = s(r.stopReason);
     if (!err && !STOP_REASONS.has(stop)) this.drift('stop reason', stop, r);
     const net = (!err && stop === 'end_turn' && isNetError(this.lastAnswer)) || (!!err && isNetError(errText(err)));
@@ -1377,7 +1387,9 @@ export class AcpSession implements HarnessSession {
         // the permission's locations from the path/role gates. Keep all locations even with raw input.
         // an empty rawInput (OpenCode's shape) falls back to the earlier tool call's input: the rules must read the arguments
         input: trimInput({ ...o(tc.rawInput && Object.keys(o(tc.rawInput)).length ? tc.rawInput : known?.input ?? tc.rawInput ?? tc), ...(tc.locations !== undefined ? { locations: tc.locations } : {}) }), at, noAlways: true,
-      });
+        // the whole input beside the copy shortened for the screen: the request's own, or the earlier tool call's kept
+        // whole (OpenCode's request comes with an empty rawInput). The app's own answer reads what will run (ADR 0292)
+      }, acpWhole(tc, this.wholeInputs.get(s(tc.toolCallId))));
       return;
     }
     if (method === 'cursor/ask_question') {
@@ -1482,10 +1494,10 @@ export class AcpSession implements HarnessSession {
     }
   }
 
-  private pending(req: Omit<PendingRequest, 'chatId'>): void {
+  private pending(req: Omit<PendingRequest, 'chatId'>, whole?: unknown): void {
     log.info('chats', 'acp asks', { chat: this.opts.chatId, op: 'execute_tool', data: { engine: this.engine, requestId: req.id, type: req.type, tool: req.tool } });
     this.setState('waiting');
-    this.sink.pending(req);
+    this.sink.pending(req, whole);
   }
 
   private onNotification(method: string, p: Obj): void {
@@ -1643,6 +1655,8 @@ export class AcpSession implements HarnessSession {
       ...(name === 'Shell' ? acpExitCode(u.rawOutput) : {}),
     };
     this.tools.set(id, item);
+    if (u.rawInput !== undefined && Object.keys(o(u.rawInput)).length) this.wholeInputs.set(id, u.rawInput);
+    if (item.status !== 'running') this.wholeInputs.delete(id);
     this.sink.item(item, !isNew || !!prev);
     this.subagentHooks(id, u, item.status);
   }
@@ -1729,7 +1743,7 @@ export class AcpSession implements HarnessSession {
     for (const id of [...this.asks.keys()]) { this.asks.delete(id); this.sink.resolved(id); }
     for (const t of this.tools.values()) if (t.status === 'running') this.sink.item({ ...t, status: 'error', output: t.output ?? 'interrotto' }, true);
     for (const id of [...this.subagents.keys()]) this.subagentHooks(id, {}, 'error'); // interrupted: its stop hook too
-    this.tools.clear();
+    this.tools.clear(); this.wholeInputs.clear();
     this.queue = [];
     this.prompting = false;
     this.setState(state);

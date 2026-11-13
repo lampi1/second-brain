@@ -18,6 +18,22 @@ export function cursorLog(file: string): CursorLog[] {
   return fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l) as CursorLog) : [];
 }
 
+/** A brain with a rules file that holds nothing: the one permission the app still leaves to the user with no rule and
+ *  no role limit is a change of that file (ADR 0292). Tests that need a permission to reach the user use it. */
+let rules: { root: string; file: string } | undefined;
+export function rulesBrain(): { root: string; file: string } {
+  if (!rules) {
+    const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-rules-brain-')));
+    fs.writeFileSync(path.join(root, 'permissions.json'), JSON.stringify({ version: 1, rules: [] }));
+    rules = { root, file: path.join(root, 'permissions.json') };
+    process.once('exit', () => { try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* best effort */ } });
+  }
+  return rules;
+}
+/** A permission request that reaches the user: an edit of the brain's rules file (the manager's brainRoot must be rulesBrain().root). */
+export const rulesChange = (id: string, title = 'Write · regole'): Omit<PendingRequest, 'chatId'> =>
+  ({ id, type: 'permission', tool: 'Write', title, detail: 'permissions.json', input: { file_path: rulesBrain().file }, at: Date.now() });
+
 export function tmp(prefix: string): string {
   return fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), `sb-${prefix}-`)));
 }

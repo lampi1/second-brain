@@ -1,6 +1,6 @@
 # ADR 0290 · A Claude chat starts in «default»: the app answers its requests, not the engine's own default mode
 
-Date: 2026-11-13 · Status: accepted (owner, thread «Preparare la 1.0 con analisi profonda», card «Scegli chi decide
+Date: 2026-11-13 · Status: partly superseded by ADR 0292 (the settings-and-hooks guard is removed, every engine sends the whole input); accepted (owner, thread «Preparare la 1.0 con analisi profonda», card «Scegli chi decide
 i permessi nelle chat dei ruoli»: «Decidono le regole dell'app», then «meno blocchi ho meglio è… tutti devono poter
 fare tutto se non ci sono regole nel brain tipo le mie di prod») · Amends: ADR 0002 (the mode a Claude chat is
 launched with), ADR 0254 (allow by default; how much of a request the rules read), ADR 0085 (a role's ceiling)

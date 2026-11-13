@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { rulesBrain, rulesChange } from './helpers';
 import type { Answer, PendingRequest } from '../../../src/shared/contract';
 import { ChatManager } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
@@ -21,7 +22,7 @@ afterEach(async () => {
 const tmp = (): string => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-away-')); roots.push(d); return d; };
 
 interface World { sent: string[]; answers: { id: string; answer: Answer }[]; away: { on: boolean }; log: Omit<AwayEntry, 'at'>[]; sink?: SessionSink }
-function manager(w: World, brainRoot?: string): ChatManager {
+function manager(w: World, brainRoot: string = rulesBrain().root): ChatManager {
   const m = new ChatManager({ userData: tmp(), emitter: { emit() {} }, coldEveryMs: 0, away: () => w.away.on, onAway: e => w.log.push(e), ...(brainRoot ? { brainRoot: () => brainRoot } : {}),
     sessionFactory: (_h, o: { sessionId?: string | null }, s: SessionSink) => {
       w.sink = s;
@@ -40,8 +41,8 @@ function manager(w: World, brainRoot?: string): ChatManager {
 const world = (on: boolean): World => ({ sent: [], answers: [], away: { on }, log: [] });
 const question = (id: string): Omit<PendingRequest, 'chatId'> => ({ id, type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at: Date.now(),
   questions: [{ question: 'Apro la PR?', multiSelect: false, options: [{ label: 'No' }, { label: 'Sì (consigliato)' }] }] });
-// a permission that still reaches the user (an edit of the agents' settings, AGENTS.md rule 6: ADR 0254)
-const permission = (id: string): Omit<PendingRequest, 'chatId'> => ({ id, type: 'permission', tool: 'Write', title: 'Write · settings', detail: '.claude/settings.json', input: { file_path: '.claude/settings.json' }, at: Date.now() });
+// a permission that still reaches the user (an edit of the brain's rules file, ADR 0292)
+const permission = (id: string): Omit<PendingRequest, 'chatId'> => rulesChange(id);
 
 describe('Modalità notte in the chats', () => {
   it('tells every new context once, then once that the user is back', async () => {

@@ -6,12 +6,13 @@
 // - the policy file is there but cannot be read: the app cannot know the user's rules, so all but reads reach the user;
 // - the user narrowed the role on its card: «Chiede conferma» or «Solo piano» ask everything but reads, «Accetta
 //   modifiche» lets reads and edits through and asks the rest;
-// - it would change the agents' own settings or hooks (Claude, Cursor, Codex, the editor's, git's hooks): AGENTS.md
-//   rule 6, «never change Claude desktop / Cursor config, hooks or settings», not an opinion of the app;
+// - it would change the brain's rules file itself (permissions.json): an agent that may rewrite the rules has none;
 // - it is a plan to approve (ExitPlanMode): the user's call by its nature.
+// The app keeps no guard of its own on settings or hooks (ADR 0292; a user who wants one writes it as a rule).
 // Pure (the file system only to resolve links); used by ChatManager's sink.pending after the role gate; pinned by
 // test/unit/chats/auto-permit.test.ts and permit-policy.test.ts.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { PermissionCeiling } from '../../shared/agents';
 import { COMMAND_TOOLS, readOnlyCommand, type ReadScripts } from '../agents/tool-policy';
@@ -30,13 +31,15 @@ export interface PermitContext {
   readScripts?: ReadScripts;
   /** the user's rules from the brain (permit-policy.ts loadPolicy); missing = none */
   policy?: BrainPolicy;
+  /** the brain's rules file (absolute path), when the brain has one: a change of it is the user's call */
+  rulesFile?: string;
   /** the clock of the rules' time budget (permit-policy.ts policyRead); the tests' own, else the real one */
   now?: () => number;
 }
 export type PermitVerdict =
   | { kind: 'allow' }
   /** rule: the user's policy rule that sent it to the user (no «always» then: a rule would free later ones) */
-  | { kind: 'ask'; rule?: PolicyRule }
+  | { kind: 'ask'; rule?: PolicyRule; rulesFile?: true }
   /** a rule of the user's policy refused it. message: English, what the model reads */
   | { kind: 'deny'; shown: string; rule: PolicyRule; message: string };
 
@@ -45,14 +48,9 @@ const ALLOW: PermitVerdict = { kind: 'allow' };
 
 const READ_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'NotebookRead', 'Search', 'TodoWrite', 'Think', 'WebSearch']);
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Delete', 'Move']);
-/** the agents' own settings and hooks (AGENTS.md rule 6) and the repository's internals, where hooks live */
-const SETTINGS_DIRS = new Set(['.git', '.claude', '.cursor', '.codex', '.opencode', '.githooks', '.husky', '.vscode', '.idea']);
-const SETTINGS_FILE = /^(\.mcp\.json|\.claude\.json|\.guardallow|\.gitconfig|claude_desktop_config\.json|opencode\.jsonc?)$/i;
-/** commands that change the agents' or git's settings without naming the file */
-const SETTINGS_COMMAND = /\bgit\b[^;&|\n]*\bconfig\b[^;&|\n]*--(global|system)\b|\b(claude|codex|cursor-agent|agent|opencode)(\.exe)?\s+(mcp|config|plugins?|hooks?)\b|core\.hookspath/i;
 /** an engine's cut (session.ts trimInput): a string ends with «… (+N)», a list stops at 200 entries */
 const CUT = /… \(\+\d+\)$/;
-/** what a tool writes or says, never where: its text may name a settings file without touching it */
+/** what a tool writes or says, never where */
 const CONTENT_KEYS = new Set(['content', 'old_string', 'new_string', 'old_str', 'new_str', 'oldText', 'newText', 'text', 'description', 'title', 'explanation', 'instructions', 'code_edit', 'prompt', 'body', 'message', 'query', 'command']);
 
 const obj = (v: unknown): Record<string, unknown> => v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
@@ -69,19 +67,6 @@ function realish(p: string): string {
     cur = up;
   }
   return p;
-}
-
-const settingsSegments = (p: string): boolean => {
-  // Windows reads `.git.`, `.git ` and `.git::$INDEX_ALLOCATION` as `.git`
-  const parts = p.toLowerCase().split(/[\\/]+/).filter(Boolean).map(seg => seg.replace(/(?<=.):.*$/, '').replace(/[. ]+$/, '') || seg);
-  return parts.some(seg => SETTINGS_DIRS.has(seg)) || SETTINGS_FILE.test(parts[parts.length - 1] ?? '');
-};
-/** p names a settings or hooks place, as written or once links are resolved (a link in the folder to ~/.claude). */
-function settingsPath(p: string, cwd: string): boolean {
-  if (!p || p.includes('\0')) return true;
-  if (settingsSegments(p) || settingsSegments(p.replace(/\\/g, ''))) return true;
-  if (!path.isAbsolute(cwd) || p.startsWith('~')) return false;
-  try { return settingsSegments(realish(path.resolve(cwd, p))); } catch { return false; }
 }
 
 /** The places a tool may name: every string value that is not its content (any engine's shape: file_path, filePath,
@@ -107,51 +92,80 @@ function placesOf(input: unknown, whole = false): string[] | null {
     : depth > 20 ? false : Array.isArray(v) ? (whole || v.length < 200) && v.every(x => cutFree(x, depth + 1)) : v && typeof v === 'object' ? Object.values(v).every(x => cutFree(x, depth + 1)) : true;
   return walk(input, 0) ? out : null;
 }
-const pathLike = (p: string): boolean => /[\\/]/.test(p) || p.startsWith('.') || p.startsWith('~');
-
-/** A change that would touch the agents' settings or hooks (rule 6): a tool naming such a place, or a command naming
- *  one or changing them by itself. A command or tool that only reads may look. Null input shapes ask. */
-function touchesSettings(req: PermitRequest, command: boolean, cwd: string): boolean {
-  const o = obj(req.input);
-  if (command) {
-    // `.g''it` and `.g'i't` are `.git` to a shell; a glob can name a settings place by pattern (.gi?/hooks); `$'\x2e'`,
-    // an escape that printf or echo (zsh and dash need no -e) turns into a name, and a `$(…)` or a `…` pair glued to a
-    // path build a name the app cannot read. `X=$(…) cmd`, `echo $(date)`, `-v $(pwd):/app`, `grep '^$'`, a Windows
-    // `C:\work\2026` path and PowerShell's single `t escape stay free.
-    const line = typeof o.command === 'string' ? o.command : '';
-    // `$'.git'` and `$".git"` are `.git`; PowerShell drops a backtick before a letter that is no escape (.g`it is .git)
-    const raw = line.replace(/\$(?=['"])/g, '').replace(/['"]/g, '');
-    const plain = raw.replace(/`(?![0abefnrtuv])/g, '');
-    if (/\$'[^']*\\/.test(line)) return true;
-    // printf or echo with an escape anywhere in the line (the app does not parse where an echo's arguments end:
-    // redirects, substitutions and escaped quotes all move it). Only a quoted or doubled backslash reaches the program:
-    // the shell drops an unquoted one, so an unquoted Windows path (> C:\work\2026\out.txt) is no escape. A line with
-    // an escaped quote ('\'' or \"), a heredoc or several lines is read whole, since the app does not parse it.
-    const esc = /\\(x[0-9a-f]{2}|0?[0-7]{1,3}|u[0-9a-f]{4})/i;
-    // printf: any escape (Git for Windows' printf.exe gets an unquoted backslash as typed from PowerShell or cmd)
-    if (/\bprintf\b/i.test(line) && esc.test(line)) return true;
-    if (/\becho\b/i.test(line)) {
-      const quoted = /\\['"]|<<|\n/.test(line) ? line : (line.match(/'[^']*'|"(?:[^"\\]|\\.)*"/g) ?? []).join(' ');
-      if (esc.test(quoted) || /\\\\(x[0-9a-f]{2}|0?[0-7]{1,3}|u[0-9a-f]{4})/i.test(line)) return true;
-    }
-    if (/[^\s=;&|(<>]\$\(|[^\s=;&|(<>]`[^`]*`|\$\([^)]*\)[^\s;&|)<>:]|`[^`]*`[^\s;&|)<>:]/.test(raw)) return true;
-    if (SETTINGS_COMMAND.test(raw)) return true;
-    const base = typeof o.cwd === 'string' && o.cwd ? path.resolve(cwd, o.cwd) : cwd;
-    const words = [...raw.split(/[\s'"`;&|<>(){}=,]+/), ...plain.split(/[\s'"`;&|<>(){}=,]+/)].filter(w => /[\\/]/.test(w) || w.startsWith('.') || w.startsWith('~'));
-    if (words.some(w => /[*?[]/.test(w) && /(^|[\\/])\.[^\\/]*[*?[]|[*?[][^\\/]*[\\/]/.test(w))) return true;
-    // each word once: a long script repeats its paths, and each check resolves links on disk
-    return [...new Set(words)].some(w => settingsPath(w, base)) || (typeof o.cwd === 'string' && settingsPath(o.cwd, cwd));
+/** A shell line as words: quoted stretches stay inside their word, separators and redirections end one. */
+const WORDS = /(?:"[^"]*"|'[^']*'|[^\s;&|<>"'])+/g;
+const MOVES = /^(cd|pushd|chdir|set-location|sl)$/i;
+/** The request names the brain's rules file: a tool with it among its places (or a session-wide grant of a folder that
+ *  holds it), or a command with it among its words. The words are read from the chat's folder and from every folder
+ *  the line itself moves to (`cd x`, `git -C x`); home is read in its usual spellings (`~`, `$HOME`, `%USERPROFILE%`,
+ *  Git Bash `/c/…` on Windows). A word that ends in the file's name through a variable the app cannot read, or after
+ *  a move it cannot follow, counts too: the app does not know where it lands. What only reads has passed already.
+ *  A net by name, not a wall: a command that reaches the file without naming it is not seen (ADR 0292). */
+function namesRules(req: PermitRequest, command: boolean, cwd: string, file: string): boolean {
+  if (!path.isAbsolute(cwd)) return false;
+  const win = process.platform === 'win32';
+  const fold = (p: string): string => win ? p.toLowerCase() : p;
+  let target: string;
+  try { target = fold(realish(path.resolve(file))); } catch { return false; }
+  const home = os.homedir();
+  const plain = (p: string): string => {
+    let out = p.replace(/^file:\/\//i, '').replace(/^(~|\$HOME|\$\{HOME\}|\$env:USERPROFILE|\$env:HOME|%USERPROFILE%|%HOME%)(?=$|[\\/])/i, () => home);
+    if (win) out = out.replace(/^\/(?:mnt\/)?([a-z])\/(?!\/)/i, (_m, d: string) => `${d}:/`);
+    return out;
+  };
+  const open = (p: string): boolean => /[$`%]|^~/.test(p);
+  // each look reads the disk: a line that names the file more times than any real one asks instead of stalling the app
+  let looks = 0;
+  const same = (base: string, p: string): boolean => {
+    if (++looks > 400) return true;
+    try { return fold(realish(path.resolve(base, p))) === target; } catch { return true; }
+  };
+  const input = obj(req.input);
+  if (!command) {
+    if ((placesOf(req.input, true) ?? []).some(p => /permissions\.json/i.test(p) && same(cwd, plain(p)))) return true;
+    // a grant of a whole folder for the session (Codex) frees every later edit under it, the rules file among them
+    const root = typeof input.grantRoot === 'string' && input.grantRoot ? input.grantRoot : null;
+    if (!root) return false;
+    try { const r = fold(realish(path.resolve(cwd, plain(root)))); return target === r || target.startsWith(r.endsWith(path.sep) ? r : r + path.sep); } catch { return true; }
   }
-  const places = placesOf(o, req.whole);
-  if (!places) return true;
-  return places.filter(pathLike).some(p => settingsPath(p, cwd));
+  const line = typeof input.command === 'string' ? input.command : '';
+  const start = typeof input.cwd === 'string' && input.cwd ? path.resolve(cwd, input.cwd) : cwd;
+  const scan = (whole: string, from: string[], depth: number): boolean => {
+    if (!/permissions\.json/i.test(whole)) return false;
+    const bases = [...from];
+    let lost = false;   // the line moved somewhere the app cannot follow
+    // a substitution ($(…), `…`) stands in its word as a variable the app cannot read; what it runs is read on its own
+    const inner: string[] = [];
+    const text = whole.replace(/\$\(([^()]*)\)|`([^`]*)`/g, (_m, a?: string, b?: string) => { inner.push(a ?? b ?? ''); return '$_'; });
+    if (depth < 3 && inner.some(x => scan(x, bases, depth + 1))) return true;
+    const words = (text.match(WORDS) ?? []).map(w => w.replace(/["'`]/g, m => m === '`' ? m : ''));
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i]!;
+      if (MOVES.test(w) || w === '-C') {
+        let j = i + 1;
+        while (MOVES.test(w) && j < words.length && /^-\w/.test(words[j]!)) j++;   // Set-Location -Path x
+        const to = j < words.length ? plain(words[j]!) : '';
+        if (!to || open(to) || to === '-' || bases.length > 32) lost = true;
+        else bases.push(...bases.map(b => path.resolve(b, to)));
+        continue;
+      }
+      if (!/permissions\.json/i.test(w)) continue;
+      // a quoted stretch with its own words (bash -c "…", a commit message): read as a line of its own
+      if (/\s/.test(w)) { if (depth < 3 && scan(w, bases, depth + 1)) return true; continue; }
+      for (const piece of new Set([w, ...w.split(/[(){}=,]+/)])) {
+        if (!/permissions\.json/i.test(piece)) continue;
+        const p = plain(piece);
+        if (/permissions\.json$/i.test(p) && (open(p) || (lost && !path.isAbsolute(p)))) return true;
+        if (bases.some(b => same(b, p))) return true;
+      }
+    }
+    return false;
+  };
+  return scan(line, [start], 0);
 }
 
 /** An engine cut the request (session.ts trimInput): what runs is not what the rules would read. */
 const cut = (input: unknown): boolean => placesOf(input) === null || Object.values(obj(input)).some(v => typeof v === 'string' && CUT.test(v));
-/** The places of a request's input (null: not read whole, see placesOf). */
-const placesIn = (req: PermitRequest): string[] | null => placesOf(req.input, req.whole);
-
 function refusal(rule: PolicyRule, shown: string, command: boolean): PermitVerdict {
   const message = rule.action === 'esegui' && !command
     ? `Held by the user's rule "${rule.id}": ${rule.why}. Only the user does this: do not retry it or a variant of it. Tell the user exactly what is needed (the tool and its input) in your reply (a delegated chat reports it as userAction), then go on with the rest of the work.`
@@ -166,10 +180,11 @@ export function autoPermit(req: PermitRequest, ctx: PermitContext): PermitVerdic
   const policy = ctx.policy ?? { state: 'none' };
   const command = COMMAND_TOOLS.includes(req.tool);
   const raw = obj(req.input).command;
-  // the rules and rule 6 must read what will run: a command with no line, or one an engine cut, is the user's call
-  if (command && (typeof raw !== 'string' || !raw.trim())) return ASK;
-  if (!req.whole && cut(req.input)) return ASK;
-  if (req.whole && placesIn(req) === null) return ASK;   // deeper than any engine's shape
+  // some rule could hold this tool (or the rules cannot be read): then they must read what will run, so a command
+  // with no line, or a request an engine cut, is the user's call. With no rule on the tool, nothing needs reading
+  const covered = policyCovers(policy, req.tool, COMMAND_TOOLS, req.title);
+  if (covered && command && (typeof raw !== 'string' || !raw.trim())) return ASK;
+  if (covered && !req.whole && cut(req.input)) return ASK;
   const { rule, unread } = policyRead(policy, req.tool, req.input, COMMAND_TOOLS, req.title, ctx.now);
   if (rule) {
     if (rule.action === 'ask-user') return { kind: 'ask', rule };
@@ -177,7 +192,7 @@ export function autoPermit(req: PermitRequest, ctx: PermitContext): PermitVerdic
   }
   // no rule in what they read, but they did not read it all (longer than their limit, or too slow to read): what they
   // did not see may be what they hold. Only for a tool some rule could hold
-  if (unread && policyCovers(policy, req.tool, COMMAND_TOOLS, req.title)) return ASK;
+  if (unread && covered) return ASK;
   // looking never asks, whatever the role's limit (ADR 0278: the quick-answer role, limited to «Solo piano», asked the
   // user for Read, Glob and Grep)
   const reads = command ? readOnlyCommand(raw, ctx.readScripts) : READ_TOOLS.has(req.tool);
@@ -185,11 +200,10 @@ export function autoPermit(req: PermitRequest, ctx: PermitContext): PermitVerdic
   if (ctx.ceiling === 'plan' || ctx.ceiling === 'default') return ASK;
   if (ctx.ceiling === 'acceptEdits' && !EDIT_TOOLS.has(req.tool)) return ASK;
   if (policy.state === 'broken') return ASK;
-  // Codex's grantRoot is write access under a folder for the rest of the session: later writes never come back here
-  if (obj(req.input).grantRoot !== undefined) return ASK;
-  // an edit that names no file: a short one-line value that reads as a path or a file name
-  const files = (placesIn(req) ?? []).filter(p => p.length <= 1000 && !/[\r\n]/.test(p));
-  if (EDIT_TOOLS.has(req.tool) && !files.some(pathLike) && !files.some(p => /^[\w.-]+\.\w+$/.test(p))) return ASK;
-  if (touchesSettings(req, command, ctx.cwd)) return ASK;
+  // Codex's grantRoot is write access under a folder for the rest of the session: later writes never come back here,
+  // so where a rule could hold an edit the grant is the user's call
+  if (obj(req.input).grantRoot !== undefined && covered) return ASK;
+  // the rules file is the user's to change: no «always» on it either
+  if (ctx.rulesFile && policy.state !== 'none' && namesRules(req, command, ctx.cwd, ctx.rulesFile)) return { kind: 'ask', rulesFile: true };
   return ALLOW;
 }

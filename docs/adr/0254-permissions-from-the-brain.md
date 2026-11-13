@@ -1,6 +1,6 @@
 # ADR 0254 · Permissions v3: everything is allowed, the only blocks are the user's brain rules
 
-Date: 2026-11-09 · Status: accepted (owner, issue #352, approved scope; «risolvi tutte le issue aperte») · Supersedes:
+Date: 2026-11-09 · Status: partly superseded by ADR 0292 (the settings-and-hooks guard, «rule 6», is removed); accepted (owner, issue #352, approved scope; «risolvi tutte le issue aperte») · Supersedes:
 the refusal and ask lists of ADR 0103 (its checkpoint and undo stay) and of ADR 0232 (`ASK_COMMANDS`) · Builds on:
 ADR 0085 (every permission by default), ADR 0238 (plain push free), ADR 0253 (userAction) · Amended by: ADR 0290
 (the rules read up to 100 000 characters of each part of a request, within a time budget; Claude's requests are judged on their whole input)

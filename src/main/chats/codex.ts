@@ -87,6 +87,9 @@ export interface CodexOptions extends SessionOptions {
 type Obj = Record<string, unknown>;
 const o = (v: unknown): Obj => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Obj) : {});
 const s = (v: unknown): string => (typeof v === 'string' ? v : '');
+/** The whole command of an approval request: the request's own, else the running item's as the engine sent it
+ *  (never the shortened copy the screen keeps). '' = no whole command is known. */
+export const codexWholeCommand = (p: Obj, running: unknown): string => s(p.command) || s(o(running).command);
 const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 
@@ -172,6 +175,9 @@ export class CodexSession implements HarnessSession {
   private streams = new Map<string, Stream>();  // agentMessage / reasoning items by Codex item id
   private flushTimer: NodeJS.Timeout | null = null;
   private tools = new Map<string, ToolItem>();
+  /** the input of each running tool as the engine sent it, by item id (`tools` keeps the copy shortened for the
+   *  screen): the app's own answer to a permission request reads what will run (ADR 0292) */
+  private wholeInputs = new Map<string, unknown>();
   private planItemId: string | null = null;
   private context: ContextUsage | null = null;
   private totals: TokenUsage | null = null;        // the thread's running token totals (tokenUsage.total)
@@ -480,6 +486,7 @@ export class CodexSession implements HarnessSession {
     }
     for (const t of this.tools.values()) if (t.status === 'running') this.sink.item({ ...t, status: 'error', output: t.output ?? 'interrotto' }, true);
     this.tools.clear();
+    this.wholeInputs.clear();
     const stopped = this.stopping;
     this.stopping = null;
     const interrupted = status === 'interrupted' && !!stopped;
@@ -730,14 +737,17 @@ export class CodexSession implements HarnessSession {
     if (method === 'mcpServer/elicitation/request') return this.elicitation(id, rid, p, at);
     if (method === 'item/commandExecution/requestApproval') {
       const known = this.tools.get(s(p.itemId));
-      const command = s(p.command) || s(o(known?.input).command);
+      // the whole line: the request's own, else the running item's as the engine sent it; the shortened copy only shows
+      const wholeCommand = codexWholeCommand(p, this.wholeInputs.get(s(p.itemId)));
+      const command = wholeCommand || s(o(known?.input).command);
       const detail = [command, s(p.cwd) ? `in ${s(p.cwd)}` : '', s(p.reason)].filter(Boolean).join('\n');
       this.asks.set(rid, { rpcId: id, method });
       this.flushAll(true);
       this.pending({
         id: rid, type: 'permission', tool: 'Shell', title: cut(command ? `Shell: ${stripAnsi(command)}` : 'Shell: permesso', 140), detail: cut(detail, 8000),
         input: trimInput({ command, cwd: s(p.cwd) || undefined, reason: s(p.reason) || undefined }), at, alwaysRules: ['questo tipo di comando, per questa sessione'],
-      });
+        // the whole command beside the copy shortened for the screen: the app's own answer reads what will run (ADR 0292)
+      }, wholeCommand ? { command: wholeCommand, cwd: s(p.cwd) || undefined, reason: s(p.reason) || undefined } : undefined);
       return;
     }
     if (method === 'item/fileChange/requestApproval') {
@@ -752,7 +762,7 @@ export class CodexSession implements HarnessSession {
       this.pending({
         id: rid, type: 'permission', tool: 'Edit', title: cut(grantRoot ? `Scrivere in ${grantRoot} per tutta la sessione` : files.length ? `Modifica: ${files.join(', ')}` : 'Modifica di file', 140), detail: cut(detail, 8000),
         input: trimInput({ files, reason: s(p.reason) || undefined, grantRoot: grantRoot || undefined }), at, ...(grantRoot ? {} : { alwaysRules: ['modifiche ai file, per questa sessione'] }),
-      });
+      }, { files, reason: s(p.reason) || undefined, grantRoot: grantRoot || undefined });
       return;
     }
     if (method === 'item/tool/requestUserInput') {
@@ -817,19 +827,22 @@ export class CodexSession implements HarnessSession {
     const server = s(p.serverName);
     const candidates = [...this.tools.values()].filter(t => t.status === 'running' && t.name.startsWith(`mcp__${server}__`));
     const tool = candidates.length === 1 ? candidates[0] : undefined;
-    const args = meta.tool_params ?? tool?.input ?? {};
+    const wholeArgs = meta.tool_params ?? (tool ? this.wholeInputs.get(tool.id.replace(/^t-/, '')) : undefined);
+    const args = wholeArgs ?? tool?.input ?? {};
     const display = arr(meta.tool_params_display).map(o).map(v => `${s(v.display_name) || s(v.name)}: ${s(v.value)}`);
     const detail = [s(p.message), `Server: ${server}`, tool ? `Tool: ${tool.name}` : '', s(meta.tool_description), ...display, `Parametri:\n${JSON.stringify(args, null, 2)}`].filter(Boolean).join('\n');
     this.asks.set(rid, { rpcId: id, method: 'mcpServer/elicitation/request', ...(s(p.turnId) ? { turnId: s(p.turnId) } : {}) });
     this.flushAll(true);
     this.pending({ id: rid, type: 'permission', tool: tool?.name ?? `mcp__${server}`, title: cut(stripAnsi(s(p.message)), 140),
-      detail: cut(stripAnsi(detail), 8000), input: trimInput({ server, ...(tool ? { tool: tool.name } : {}), arguments: args }), noAlways: true, at });
+      detail: cut(stripAnsi(detail), 8000), input: trimInput({ server, ...(tool ? { tool: tool.name } : {}), arguments: args }), noAlways: true, at },
+      // whole when the arguments came with the request or with the running item (its stored input is shortened)
+      wholeArgs !== undefined ? { server, ...(tool ? { tool: tool.name } : {}), arguments: wholeArgs } : undefined);
   }
 
-  private pending(req: Omit<PendingRequest, 'chatId'>): void {
+  private pending(req: Omit<PendingRequest, 'chatId'>, whole?: unknown): void {
     log.info('chats', 'codex asks', { chat: this.opts.chatId, op: 'execute_tool', data: { engine: this.engine, requestId: req.id, type: req.type, tool: req.tool } });
     this.setState('waiting');
-    this.sink.pending(req);
+    this.sink.pending(req, whole);
   }
 
   private onNotification(method: string, p: Obj): void {
@@ -957,7 +970,7 @@ export class CodexSession implements HarnessSession {
       ...(t.exitCode !== undefined ? { exitCode: t.exitCode } : {}),
     } as ToolItem;
     this.chars += (output?.length ?? 0) + JSON.stringify(t.input ?? {}).length;
-    if (done) this.tools.delete(id); else this.tools.set(id, item);
+    if (done) { this.tools.delete(id); this.wholeInputs.delete(id); } else { this.tools.set(id, item); this.wholeInputs.set(id, t.input); }
     this.sink.item(item, !!prev);
   }
 
@@ -1046,6 +1059,7 @@ export class CodexSession implements HarnessSession {
     for (const id of [...this.asks.keys()]) { this.asks.delete(id); this.sink.resolved(id); }
     for (const t of this.tools.values()) if (t.status === 'running') this.sink.item({ ...t, status: 'error', output: t.output ?? 'interrotto' }, true);
     this.tools.clear();
+    this.wholeInputs.clear();
     for (const f of this.turnFiles.splice(0)) fs.rm(f, { force: true }, () => {});
     this.queue = [];
     this.prompting = false;
