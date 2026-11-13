@@ -135,12 +135,18 @@ describe('agent runs on chats', () => {
     const f = fixture();
     const a = await f.create(), b = await f.create();
     await f.m.archive(a.id);
-    expect(f.run(a.id)).toMatchObject({ endReason: 'closed' });
+    expect(f.run(a.id)).toMatchObject({ endReason: 'closed', endCause: 'user' }); // why it was closed (ADR 0286)
     await f.m.set(a.id, { workStatus: 'completed' });
     expect(f.run(a.id)?.endReason).toBe('closed');
     const id = f.run(b.id)!.runId;
     await f.m.close(b.id);
-    expect(f.m.runs.get(id)).toMatchObject({ endReason: 'closed' });
+    expect(f.m.runs.get(id)).toMatchObject({ endReason: 'closed', endCause: 'user' });
+    // a new task in the same chat takes the place of a run that never reported
+    const c = await f.create('agent');
+    const first = f.run(c.id)!.runId;
+    await f.m.assignTask(c.id, 'Un altro lavoro', { mode: 'new-task' });
+    expect(f.m.runs.get(first)).toMatchObject({ endReason: 'closed', endCause: 'replaced' });
+    expect(f.run(c.id)!.runId).not.toBe(first);
   });
 
   it('the user’s verdict ends an open run as completed with a human basis', async () => {
@@ -206,7 +212,8 @@ describe('agent runs on chats', () => {
     expect(f.run(p.id)?.endedAt).toBeUndefined();
     await f.m.set(p.id, { workStatus: 'completed' });
     expect(f.run(p.id)?.endReason).toBe('completed');
-    expect(f.run(k2.id)?.endReason).toBe('closed');
+    expect(f.run(k2.id)).toMatchObject({ endReason: 'closed', endCause: 'parent' });
+    expect(f.run(p.id)).not.toHaveProperty('endCause');
   });
 
   it('refuses links to an unknown run before the chat starts', async () => {

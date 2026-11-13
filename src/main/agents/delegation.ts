@@ -610,7 +610,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: async (a, ctx) => JSON.stringify(await closeChild(a, callerOf(ctx.params))),
   }, {
     name: 'agent_children',
-    description: 'The chats you delegated (agent_delegate): role, title, state, goal, their result once reported, open requests and cost; runId is what agent_child_feedback takes. stalled: true (with quietMin) = a working child silent for longer than the user\'s "Ferma dopo" limit: nudge it with a message or close it.',
+    description: 'The chats you delegated (agent_delegate): role, title, state, goal, their result once reported, open requests and cost. stalled: true (with quietMin) = a working child silent for longer than the user\'s "Ferma dopo" limit: nudge it with a message or close it.',
     inputSchema: { type: 'object', additionalProperties: false, properties: {} },
     annotations: { readOnlyHint: true, openWorldHint: false },
     run: (_a, ctx) => JSON.stringify(children(callerOf(ctx.params))),

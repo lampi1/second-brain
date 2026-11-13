@@ -241,7 +241,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     this.deliveryPolicy(options.deliveryPolicy, !!r.s.parentId);
     if (options.doneWhen && (options.doneWhen.length > 12 || options.doneWhen.some(x => typeof x !== 'string' || !x.trim() || x.length > 300))) throw new Error('Invalid task criteria.');
     const newPlan = mode === 'new-task' && r.s.plan ? askingPlan(at, options.intake && this.planIntake(options.intake)) : undefined;
-    this.finishRun(previous, previous.report ? 'completed' : 'closed', at);
+    this.finishRun(previous, previous.report ? 'completed' : 'closed', at, 'replaced');
     const next = this.runs.start({ chatId: r.s.id, agentId: previous.agentId, version: previous.version,
       goal: prompt, startedBy: previous.startedBy, startedAt: at, costKnown: previous.costUsd !== null,
       requestOrigin: mode === 'new-task' ? (options.source?.kind === 'chat' ? 'agent' : options.source?.kind === 'app' ? 'app' : 'user') : previous.requestOrigin ?? 'app',
@@ -261,7 +261,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
       if (options.intake) delete this.need(options.intake.chatId).intakeKey;
     }
     r.s.work = { status: 'assigned', updatedAt: at };
-    if (r.s.delegation) r.s.delegation = { ...r.s.delegation, goal: prompt, doneWhen: next.taskContract.doneWhen, at, result: undefined };
+    if (r.s.delegation) r.s.delegation = { ...r.s.delegation, goal: next.goal, doneWhen: next.taskContract.doneWhen, at, result: undefined };
     delete r.rootReportAt; delete r.report; delete r.autoCompleted; delete r.runSeen;
     r.idleSince = at;
     if (r.s.state === 'running' && !r.handoffTurn) r.runningSince = at;

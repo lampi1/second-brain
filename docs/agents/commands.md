@@ -120,7 +120,6 @@ row and its line here in the same change.
 | `agent_task_events` | work chats | The ordered user instructions for your direct child (optional before reassigning it). |
 | `agent_integrate_child` | work chats | Stage one finished child's commits in a fresh detached worktree. |
 | `agent_integrate_children` | work chats | Combine several finished children's commits in one staging worktree. |
-| `agent_child_feedback` | work chats | Your verdict on a delegated child's run, with evidence. |
 | `agent_work_decisions` | work chats | The user's recorded decisions for your latest assignment, readable after reporting without reopening it. Historical decisions remain context, not new grants. |
 | `ask_user` | work chats | Ask the user one Sì/No question as a panel (engines whose question tool may not reach the model: OpenCode, Cursor). |
 | `plan_propose` | work chats | Show the user your short plan for approval (Strategist); on a project it is drawn on the project's map (`map`, each step's `on`: ADR 0276). |

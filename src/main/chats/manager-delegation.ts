@@ -162,7 +162,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     try { this.reportDelegation(r.s.id, result); }
     catch (e) { log.warn('chats', 'delegation not closed without report', { chat: r.s.id, cause: errText(e), hint: 'the parent sees the child as stopped; close it by hand' }); return; }
     r.s.delegation = { ...r.s.delegation!, result: { ...r.s.delegation!.result!, noReport: true } };
-    this.endRunOf(r, 'closed');
+    this.endRunOf(r, 'closed', undefined, 'no-report');
     this.persist();
     this.updated(r);
     log.warn('chats', 'delegated chat ended without agent_report', { chat: r.s.id, cause: why === 'exit' ? 'its engine stopped with an error' : 'two turns ended without agent_report', hint: 'its last answer went to the parent as a blocked result', data: { parent: r.s.parentId } });

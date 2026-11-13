@@ -91,7 +91,6 @@ export const TOOL_CATALOG: Readonly<Record<string, ToolInfo>> = {
   agent_task_events: t('chat', 'The ordered user instructions for your direct child (optional before reassigning it).'),
   agent_integrate_child: t('chat', 'Stage one finished child\'s commits in a fresh detached worktree.'),
   agent_integrate_children: t('chat', 'Combine several finished children\'s commits in one staging worktree.'),
-  agent_child_feedback: t('chat', 'Your verdict on a delegated child\'s run, with evidence.'),
   agent_work_decisions: t('chat', 'The user\'s recorded decisions for your current assignment.'),
   ask_user: t('chat', 'Ask the user one Sì/No question as a panel (engines whose question tool may not reach the model: OpenCode, Cursor).'),
   plan_propose: t('chat', 'Show the plan for approval after three answers or the user’s early stop (Strategist).'),

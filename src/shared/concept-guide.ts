@@ -361,8 +361,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
     diagram: { kind: 'flow', steps: [b('Avvio', 'Start'), b('Turni e richieste', 'Turns and requests'), b('Rapporto', 'Report'), b('Esito', 'Outcome')] },
     tech: [
       // src/shared/agents.ts AgentRun
-      tech(DATA, 'AgentRun { runId, chatId, agentId, version, goal, startedBy, startedAt, endedAt?, endReason?, outcome?, counters, costUsd | null, tokens | null, report?, tier?, parentRunId?, reviewOf?, reworkOf?, continuedFrom?, tags? }.',
-        'AgentRun { runId, chatId, agentId, version, goal, startedBy, startedAt, endedAt?, endReason?, outcome?, counters, costUsd | null, tokens | null, report?, tier?, parentRunId?, reviewOf?, reworkOf?, continuedFrom?, tags? }.'),
+      tech(DATA, 'AgentRun { runId, chatId, agentId, version, goal, startedBy, startedAt, endedAt?, endReason?, endCause?, outcome?, counters, costUsd | null, tokens | null, report?, tier?, parentRunId?, reviewOf?, reworkOf?, continuedFrom?, tags? }.',
+        'AgentRun { runId, chatId, agentId, version, goal, startedBy, startedAt, endedAt?, endReason?, endCause?, outcome?, counters, costUsd | null, tokens | null, report?, tier?, parentRunId?, reviewOf?, reworkOf?, continuedFrom?, tags? }.'),
       tech(FILES, 'userData/app.db (SQLite, una riga per run; prima dell’ADR 0199 agent-runs.json, conservato come agent-runs.json.migrated-<data>) è la fonte; ChatSummary.run ne è una copia; i giudizi in run-feedback.json.', 'userData/app.db (SQLite, one row per run; agent-runs.json before ADR 0199, kept as agent-runs.json.migrated-<date>) is the source; ChatSummary.run mirrors it; verdicts in run-feedback.json.'),
       // src/main/agents/runs.ts RUNS_MAX, RUNS_DB_BYTES, RUNS_BYTES, STALE_MS
       tech(LIMITS, 'RUNS_MAX = 5000, RUNS_DB_BYTES = 16 000 000 (app.db; 7 000 000 nel file JSON di riserva), STALE_MS = 72 h.', 'RUNS_MAX = 5000, RUNS_DB_BYTES = 16,000,000 (app.db; 7,000,000 in the fallback JSON file), STALE_MS = 72 h.'),

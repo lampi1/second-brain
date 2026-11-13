@@ -10,7 +10,7 @@ import type { StoredChat } from './store';
 import { updateActivity } from '../update/activity';
 import { engineOf } from '../engines/registry';
 import { findTranscript, readHistory } from './transcript';
-import type { AgentRun, AgentRunEnd } from '../../shared/agents';
+import type { AgentRun, AgentRunEnd, AgentRunEndCause } from '../../shared/agents';
 import type { AgentRunStore} from '../agents/runs';
 import { endRun } from '../agents/runs';
 import { AgentChildrenReducer } from './agent-children';
@@ -74,18 +74,19 @@ export abstract class ManagerPersistence extends ManagerCore {
     } catch (e) { log.warn('chats', 'agent run not recorded', { chat: r.s.id, cause: errText(e), hint: 'the chat works; this run is missing from the agent metrics' }); }
   }
 
-  /** Ends a run and, below it, every open run it spawned (a child never ends its parent). */
-  protected finishRun(run: AgentRun | undefined, reason: AgentRunEnd, at = Date.now()): void {
+  /** Ends a run and, below it, every open run it spawned (a child never ends its parent). `cause` = why, for a run
+   *  closed before its work was completed (ADR 0286); its children are closed because their parent ended. */
+  protected finishRun(run: AgentRun | undefined, reason: AgentRunEnd, at = Date.now(), cause?: AgentRunEndCause): void {
     if (!run || run.endedAt !== undefined) return;
     const r = this.chats.get(run.chatId), mine = !!r && r.s.run === run;
     if (r?.s.routineArchived) return;
     if (mine) this.ranUntil(r!, at);
-    endRun(run, reason, at);
+    endRun(run, reason, at, cause);
     // the receipts' verdict now, unless a turn's files are still coming (receiptTurn settles it then)
     if (mine && !receiptsReading(run) && r!.turnAt === undefined) this.settleReceipts(run);
     this.hook('agent lifecycle', () => this.opts.onRunEnded?.(structuredClone(run)));
-    log.info('chats', 'agent run ended', { chat: run.chatId, data: { runId: run.runId, reason } });
-    for (const child of this.runs.children(run.runId)) this.finishRun(child, 'closed', at);
+    log.info('chats', 'agent run ended', { chat: run.chatId, data: { runId: run.runId, reason, ...(run.endCause ? { cause: run.endCause } : {}) } });
+    for (const child of this.runs.children(run.runId)) this.finishRun(child, 'closed', at, 'parent');
     if (!mine) return;
     // its cost, tokens and time now live in the run: the analytics row may be pruned when the archive is full
     this.hook('analytics', () => this.analytics.rolledUp(r!.s));
@@ -99,9 +100,9 @@ export abstract class ManagerPersistence extends ManagerCore {
     run.executionMs += Math.max(0, at - since);
     this.runs.touch();
   }
-  protected endRunOf(r: Rec, reason: AgentRunEnd, at = Date.now()): void {
+  protected endRunOf(r: Rec, reason: AgentRunEnd, at = Date.now(), cause?: AgentRunEndCause): void {
     if (!r.s.run || r.s.run.endedAt !== undefined) return;
-    this.finishRun(r.s.run, reason, at);
+    this.finishRun(r.s.run, reason, at, cause);
     this.runSave();
   }
   /** Nothing waits on the user any more: an open run's stale clock starts again from now (kept in chats.json). */

@@ -167,7 +167,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
       if (!authorized || !valid()) return false;
       this.flushItems(chatId);
       r.s.closedAt = Date.now(); r.s.closedBy = 'auto'; r.s.state = 'closed';
-      this.endRunOf(r, 'closed', r.s.closedAt);
+      this.endRunOf(r, 'closed', r.s.closedAt, 'auto');
       this.pruneArchived(); this.persist(); this.updated(r);
       return true;
     } finally { r.archiving = undefined; r.autoClosing = false; r.autoEnding = false; }
@@ -207,7 +207,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     delete r.twins;
     this.dropUserAsks((q, worker) => q.chatId === chatId || worker === chatId);
     this.flushItems(chatId);
-    this.endRunOf(r, 'closed');
+    this.endRunOf(r, 'closed', undefined, r.s.closedBy === 'auto' ? 'auto' : 'user');
     this.chats.delete(chatId);
     this.persist();
     await tree;
@@ -345,9 +345,9 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     r.s.closedBy = opts.auto ? 'auto' : 'user';
     if (opts.undoable && !opts.auto) {
       const at = r.s.closedAt;
-      const t = setTimeout(() => { if (this.chats.get(chatId) === r && r.s.closedAt === at) this.endRunOf(r, 'closed', at); }, 15_000);
+      const t = setTimeout(() => { if (this.chats.get(chatId) === r && r.s.closedAt === at) this.endRunOf(r, 'closed', at, 'user'); }, 15_000);
       t.unref?.();
-    } else this.endRunOf(r, 'closed', r.s.closedAt);
+    } else this.endRunOf(r, 'closed', r.s.closedAt, opts.auto ? 'auto' : 'user');
     r.working = false;
     if (keep) r.closeAfterCold = true;
     if (r.s.state !== 'error') r.s.state = 'closed';

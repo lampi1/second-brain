@@ -1,5 +1,5 @@
-// The verdicts on role runs that are not the user's own: a parent's opinion of its child's run (agent_child_feedback,
-// agents/child-feedback.ts) and an independent review (the judge-sample job: a Sentinel since ADR 0100, a Judge before).
+// The verdicts on role runs that are not the user's own: a parent's opinion of its child's run (the removed
+// agent_child_feedback, ADR 0286: old records still count) and an independent review (the judge-sample job: a Sentinel since ADR 0100, a Judge before).
 // One store, <userData>/run-feedback.json; the run's outcome takes the verdict unless the user already gave one, and an
 // opinion never overwrites a reviewed verdict. It counts as reviewed evidence only when it cites an ended review run of
 // that run (Sentinel, or a Judge before ADR 0100) whose own report says verified, in its own session (ADR 0083; on any

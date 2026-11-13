@@ -9,7 +9,8 @@ import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunPlan, AgentRunReport, AgentRunTags, AgentRunTokens, ReviewBatchEntry } from '../../shared/agents';
-import { ONE_SHOT_PURPOSES } from '../../shared/agents';
+import { ONE_SHOT_PURPOSES, RUN_END_CAUSES, type AgentRunEndCause } from '../../shared/agents';
+import { goalText } from '../../shared/agent-label';
 import { errText, log } from '../log';
 import { emptyFlashLog, flashAnswered, flashAsked, flashBriefed, flashHanded, readFlashLog, type FlashLog } from './flash-outcomes';
 import { MAX_CORRECTIONS, checkResult } from '../../shared/delegation';
@@ -201,6 +202,7 @@ export function readRun(v: unknown): AgentRun | null {
     ...(r.continuedFrom ? { continuedFrom: r.continuedFrom as string } : {}),
     ...(batch ? { reviewBatch: batch } : {}),
     ...(r.endedAt !== undefined ? { endedAt: r.endedAt, endReason: r.endReason as AgentRunEnd } : {}),
+    ...(r.endReason === 'closed' && RUN_END_CAUSES.includes(r.endCause as AgentRunEndCause) ? { endCause: r.endCause as AgentRunEndCause } : {}),
     ...(outcome ? { outcome } : {}),
     ...(r.source ? { source: r.source as AgentRun['source'] } : {}),
     ...(r.requestOrigin ? { requestOrigin: r.requestOrigin as AgentRun['requestOrigin'] } : {}),
@@ -223,15 +225,16 @@ function readPlan(v: unknown): AgentRunPlan | null {
 }
 
 /** Ends an open run; false when it had already ended (the first end wins). */
-export function endRun(run: AgentRun, reason: AgentRunEnd, at: number): boolean {
+export function endRun(run: AgentRun, reason: AgentRunEnd, at: number, cause?: AgentRunEndCause): boolean {
   if (run.endedAt !== undefined) return false;
   run.endedAt = at; run.endReason = reason;
+  if (reason === 'closed' && cause) run.endCause = cause;
   return true;
 }
 /** Brother goes on with an ended run: it is open again, its old verdict no longer holds, and it counts as reworked. */
 export function reopenRun(run: AgentRun): boolean {
   if (run.endedAt === undefined) return false;
-  delete run.endedAt; delete run.endReason; delete run.outcome;
+  delete run.endedAt; delete run.endReason; delete run.endCause; delete run.outcome;
   if (run.receipts) delete run.receipts.verdict; // decided again at its next end
   run.counters.reopened++;
   return true;
@@ -592,7 +595,7 @@ export class AgentRunStore {
     if (!AGENT_ID.test(s.agentId) || !str(s.chatId, 80) || !count(s.version) || (s.tags !== undefined && !readTags(s.tags))) throw new Error('Esecuzione non valida.');
     this.checkLinks(s);
     const run: AgentRun = {
-      runId: newRunId(), chatId: s.chatId, agentId: s.agentId, version: s.version, goal: s.goal.trim().slice(0, GOAL_MAX), startedBy: s.startedBy, startedAt: s.startedAt,
+      runId: newRunId(), chatId: s.chatId, agentId: s.agentId, version: s.version, goal: goalText(s.goal).slice(0, GOAL_MAX), startedBy: s.startedBy, startedAt: s.startedAt,
       requestOrigin: s.requestOrigin ?? (s.startedBy === 'user' ? 'user' : s.startedBy === 'app' ? 'app' : 'agent'),
       ...(s.parentRunId ? { parentRunId: s.parentRunId } : {}),
       ...(s.tier ? { tier: s.tier } : {}), ...(s.model !== undefined ? { model: s.model } : {}),

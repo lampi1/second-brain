@@ -11,7 +11,7 @@
 //   used to block the receipts, so neither the role nor the Orchestrator got the XP);
 // - chain: it is a delegated child whose agent_report met every criterion, with no correction, reopen or rework, that
 //   reached its parent before the parent ended, and the parent run is itself verified (the user or a review accepted
-//   the result built on it) and did not judge it badly (agent_child_feedback partial or fail);
+//   the result built on it) and did not judge it badly (an opinion partial or fail: the removed agent_child_feedback, old records);
 // - graded: it is a Sentinel's verified review, and what happened later grades it: the user's verdict on the reviewed
 //   run, else a later independent second review of it (the app no longer opens one by itself, ADR 0203), else its
 //   parent's feedback on its findings, else a rework of the reviewed run (against a pass, for a fail; ADR 0186: verified
@@ -121,7 +121,7 @@ export const gradableReview = (r: AgentRun): boolean => !!r.reviewOf && REVIEWER
 const gap = (a: Verdict, b: Verdict): number => Math.abs(SCORE[a] - SCORE[b]);
 const agreement = (a: Verdict, b: Verdict): Verdict => gap(a, b) === 0 ? 'success' : gap(a, b) === 0.5 ? 'partial' : 'fail';
 /** grading a review (ADR 0125, 0186): the user's verdict on the reviewed run, else a later independent review, else
- *  what its parent did with its findings (agent_child_feedback on the review run: accepted or rejected), else a fact
+ *  what its parent did with its findings (an opinion on the review run, old records: accepted or rejected), else a fact
  *  (the run it passed was then reopened or reworked; the run it failed was reworked, as it said) */
 function graded(review: AgentRun, ix: EarnIndex): EarnedVerdict | null {
   const target = ix.byId.get(review.reviewOf!), said = review.report!.verdict!;
