@@ -29,6 +29,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - README rewritten around the two things the app is (multi-harness orchestration, a brain of skills and memory), with
   a plain quick start; `SECURITY.md` added; the ADR index lists the decisions in force first and every replaced or
   amended record names the record that changed it.
+- A fresh brain's safety text names the same three things the app holds for your yes (database writes, production
+  releases, cloud writes; a message to a person waits too). It no longer forbids reading production or using a
+  credential, which contradicted a brain's own rules (ADR 0275).
 - The agent runs kept whole more than double (16 MB in app.db): about two weeks at a hundred runs a day, a month at
   fifty. Saving them while agents work takes a tenth of the time: only the runs at work are looked at, the others
   every 15 s (ADR 0280).
