@@ -71,6 +71,14 @@ const readWindow = (w: unknown, scale: number, resetsKey: string, resetsScale: '
   return { pct: u === null ? null : Math.round(u * scale * 10) / 10, resets: resets !== null && Number.isFinite(resets) ? resets : null };
 };
 
+/** The weekly figure when the plan sends no all-models `seven_day` (ADR 0298): the highest of the other weekly windows
+ *  (seven_day_opus, seven_day_sonnet, seven_day_overage_included and get_usage's per-model `model_scoped` list). */
+const weekFallback = (o: Record<string, unknown>, scale: number, resetsKey: string, resetsScale: 'iso' | 'unix'): { pct: number | null; resets: number | null } => {
+  const all = [o.seven_day_opus, o.seven_day_sonnet, o.seven_day_overage_included, ...(Array.isArray(o.model_scoped) ? o.model_scoped : [])]
+    .map(w => readWindow(w, scale, resetsKey, resetsScale)).filter(w => w.pct !== null);
+  return all.reduce((a, b) => (b.pct! > (a.pct ?? -1) ? b : a), { pct: null, resets: null } as { pct: number | null; resets: number | null });
+};
+
 /** A rate-limit message from Claude (stream event, get_usage answer, or Claude Code's cache) → plan windows, or null. */
 export function parseRateLimits(msg: unknown, now = Date.now()): Limits | null {
   if (!isObj(msg)) return null;
@@ -82,19 +90,25 @@ export function parseRateLimits(msg: unknown, now = Date.now()): Limits | null {
     const one = readWindow({ utilization: i.utilization, resetsAt: i.resetsAt }, 100, 'resetsAt', 'unix');
     if (f.pct === null && i.rateLimitType === 'five_hour') f = one;
     if (w.pct === null && i.rateLimitType === 'seven_day') w = one;
+    if (w.pct === null) w = weekFallback(uw, 100, 'resetsAt', 'unix');
+    if (w.pct === null && typeof i.rateLimitType === 'string' && i.rateLimitType.startsWith('seven_day_')) w = one;
     if (f.pct === null && w.pct === null) return null;
     return { fiveHourPct: f.pct, fiveHourResetsAt: f.resets, weekPct: w.pct, weekResetsAt: w.resets, source: 'stream', at: now };
   }
   // (2) get_usage control response (maybe wrapped: {response:{...}}): rate_limits.{five_hour,seven_day}.{utilization 0-100, resets_at ISO}
   const body = isObj(msg.response) ? msg.response : msg;
   if (isObj(body.rate_limits)) {
-    const f = readWindow(body.rate_limits.five_hour, 1, 'resets_at', 'iso'), w = readWindow(body.rate_limits.seven_day, 1, 'resets_at', 'iso');
+    const rl = body.rate_limits, f = readWindow(rl.five_hour, 1, 'resets_at', 'iso');
+    let w = readWindow(rl.seven_day, 1, 'resets_at', 'iso');
+    if (w.pct === null) w = weekFallback(rl, 1, 'resets_at', 'iso');
     if (f.pct === null && w.pct === null) return null;
     return { fiveHourPct: f.pct, fiveHourResetsAt: f.resets, weekPct: w.pct, weekResetsAt: w.resets, source: 'get_usage', at: now };
   }
   // (3) Claude Code's cache: {fetchedAtMs, utilization:{five_hour:{utilization 0-100, resets_at}, seven_day:{...}}}
   if (num(msg.fetchedAtMs) !== null && isObj(msg.utilization)) {
-    const f = readWindow(msg.utilization.five_hour, 1, 'resets_at', 'iso'), w = readWindow(msg.utilization.seven_day, 1, 'resets_at', 'iso');
+    const ut = msg.utilization, f = readWindow(ut.five_hour, 1, 'resets_at', 'iso');
+    let w = readWindow(ut.seven_day, 1, 'resets_at', 'iso');
+    if (w.pct === null) w = weekFallback(ut, 1, 'resets_at', 'iso');
     if (f.pct === null && w.pct === null) return null;
     return { fiveHourPct: f.pct, fiveHourResetsAt: f.resets, weekPct: w.pct, weekResetsAt: w.resets, source: 'claude-cache', at: num(msg.fetchedAtMs)! };
   }

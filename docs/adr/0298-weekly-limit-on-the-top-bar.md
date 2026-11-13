@@ -13,7 +13,11 @@ the app then had a week below 70% (hidden) and no 5-hour figure: nothing to show
 ## Decision
 
 The bar shows «7g» (the weekly limit) always; «5h» appears beside it only from 70%, as the week did before. The tooltip
-and the popup list the week first. Data and sources are unchanged (`brain/usage.ts`).
+and the popup list the week first; below 1640 px the 5-hour meter, not the week's, is the one dropped.
+
+When the plan sends no all-models `seven_day`, the week is the highest of the other weekly windows the CLI sends
+(`seven_day_opus`, `seven_day_sonnet`, `seven_day_overage_included`, get_usage's per-model `model_scoped`), in the
+stream event, the get_usage answer and Claude Code's cache alike (`brain/usage.ts weekFallback`).
 
 ## Consequences
 

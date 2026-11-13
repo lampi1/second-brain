@@ -1,5 +1,5 @@
-// E2E of the usage strip in the top bar (UsageBar.tsx) on the frozen demo: today's spend, the Claude 5-hour and week
-// windows with their reset times, Cursor's estimate (≈ with its margin), and the detail panel with
+// E2E of the usage strip in the top bar (UsageBar.tsx) on the frozen demo: today's spend, the Claude week (the 5-hour
+// window from 70%, ADR 0298), the reset times in the panel, Cursor's estimate (≈ with its margin), and the detail panel with
 // the reason Cursor's plan usage is missing; screenshots in dark and light theme and at 1280 px
 // (test-results/shots/usage-*.png). Then the real app on a Cursor ledger and a usage CSV in test folders
 // (SB_CURSOR_LEDGER, SB_DOWNLOADS): "≈ $" while estimated, exact once the CSV covers the day, and the Costi page says
