@@ -64,7 +64,7 @@ export function demoEstimateRuns(now: number): AgentRun[] {
       const startedAt = endedAt - exec - Math.round(rand() * 6 * MIN);
       out.push({
         runId: `r_${(0xd00000000000 + i++).toString(16)}`, chatId: `demo-past-${i}`, agentId: tpl.agentId, version: 1, goal: tpl.goal,
-        startedBy: 'orchestrator', startedAt, endedAt, endReason: 'completed', executionMs: exec,
+        startedBy: 'orchestrator', startedAt, endedAt, endReason: 'completed', executionMs: exec, model: 'claude-opus-5-5',
         costUsd: Math.round(tpl.usd * Math.pow(f, 0.8) * 1000) / 1000, tokens: null,
         counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null },
       });

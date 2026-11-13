@@ -103,6 +103,15 @@ describe('estimate from similar tasks', () => {
     expect(treeCosts([r, free]).get(r.runId)).toBeCloseTo(0.12);
     expect(treeCosts([r, free], m => m === 'gpt-x' ? price : null).get(r.runId)).toBeCloseTo(0.12 + 3);
     expect(new SimilarIndex([free], m => m === 'gpt-x' ? price : null).actual(free.runId)).toMatchObject({ costUsd: 3 });
+    // one lookup per model, however many runs (the lookup reads the brain's price table)
+    let asked = 0;
+    treeCosts(Array.from({ length: 5 }, () => ({ ...free, runId: run({ agentId: 'scout', goal: 'w' }).runId })), m => { asked++; return m === 'gpt-x' ? price : null; });
+    expect(asked).toBe(1);
+    // the read worker gets the prices as a table (run-estimates.ts estimatesState)
+    const five = Array.from({ length: 5 }, (_, i) => ({ ...run({ agentId: 'scout', goal: `Cerca ${i}`, at: 1_500 * DAY + i * MIN * 10 }), costUsd: null, tokens, model: 'gpt-x' }));
+    const view = estimatesState(five, [five[4]!.runId], 1_600 * DAY, { 'gpt-x': price }).runs[five[4]!.runId]!;
+    expect(view).toMatchObject({ estimate: { basis: 'agent-model', costUsd: 3 }, actual: { costUsd: 3 } });
+    expect(estimatesState(five, [five[4]!.runId], 1_600 * DAY).runs[five[4]!.runId]!.estimate).toMatchObject({ costUsd: null });
     expect(actualOf({ ...r, endedAt: undefined })).toBeNull();
     expect(actualOf({ ...r, source: 'oneshot' })).toBeNull();
     expect(actualOf({ ...r, executionMs: undefined, endReason: 'stale', costUsd: null })).toBeNull();

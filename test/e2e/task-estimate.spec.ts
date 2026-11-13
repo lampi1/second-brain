@@ -15,7 +15,7 @@ async function theme(page: Page, scheme: 'dark' | 'light') {
 test('strips show readable estimates from similar tasks, with their accuracy', async () => {
   const { app, page } = await launchDemo({ width: 1600, height: 1000, orchestrator: true });
   try {
-    // the QA run: same agent and same kind; the SMS run: no Sentinel fix yet, so fixes on any agent
+    // the QA run: the same agent on the same model; the SMS run (another model): the same agent on any model (ADR 0285)
     const qa = page.getByTestId('chat-estimate-qa');
     await expect(qa).toBeVisible();
     await expect(qa).toContainText(/~\d+ min · ~\d+,\d\d\s\$ · su \d+ lavori simili/);

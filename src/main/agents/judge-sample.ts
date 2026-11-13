@@ -192,9 +192,10 @@ export function roleShares(runs: readonly AgentRun[], standing: ReadonlyMap<stri
   for (const role of roles) {
     if (!isWorkRole(role.id)) continue;
     const core = coreVersions(history(role.id), role.activeVersion);
-    const own = runs.filter(r => r.agentId === role.id && core.has(r.version));
-    const model = own.reduce<AgentRun | null>((last, r) => !last || r.startedAt > last.startedAt ? r : last, null)?.model;
-    const verdicts = own.filter(r => r.model === model && r.outcome && r.outcome.verdict !== 'unknown'
+    // the app's own one-shot jobs (the nightly batch, an upgrade ask) are not the role's work: they name no model of its
+    const own = runs.filter(r => r.agentId === role.id && core.has(r.version) && r.source !== 'oneshot');
+    const model = own.reduce<AgentRun | null>((last, r) => !last || r.startedAt > last.startedAt ? r : last, null)?.model ?? null;
+    const verdicts = own.filter(r => (r.model ?? null) === model && r.outcome && r.outcome.verdict !== 'unknown'
       && ['human', 'reviewed-evidence', 'receipts'].includes(r.outcome.basis)).length;
     out.set(role.id, roleShare(standing.get(role.id)?.spread ?? null, verdicts));
   }

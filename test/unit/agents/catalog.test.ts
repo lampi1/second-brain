@@ -237,6 +237,10 @@ describe('default engine (issue #96)', () => {
     // a trial always makes a version, even for tools only
     const trial = catalog.approveTrial('scout', { ...edit(back, { tools: { allow: ['read'] } as never }) }, 'prova');
     expect(trial.trial).toMatchObject({ version: 3, baseline: 1 });
+    // a trial of a tier alone is a version too, and says what it tries (ADR 0284)
+    const sentinel = catalog.list().profiles.find(p => p.id === 'sentinel')!;
+    const tried = catalog.approveTrial('sentinel', edit(sentinel, { tier: sentinel.tier === 'top' ? 'mid' : 'top', tierMax: 'top' }), 'prova di livello');
+    expect(catalog.history('sentinel').find(v => v.version === tried.trial!.version)).toMatchObject({ state: 'trial', changed: ['tier'] });
   });
   it('ignores a chosen engine that is not usable', () => {
     const w = world({ preferred: 'cursor', models: [choice('claude', { installed: true, authenticated: true }), choice('cursor', { authenticated: false })] });

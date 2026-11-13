@@ -75,11 +75,14 @@ export const modelKey = (model: string | null | undefined): string => String(mod
  *  its delegated children's, down the parentRunId links. */
 export function treeCosts(runs: readonly AgentRun[], priceOf: PriceOf | null = null): Map<string, number> {
   const kids = new Map<string, AgentRun[]>(), out = new Map<string, number>();
+  // one price lookup per model, not per run (the lookup reads the brain's price table)
+  const prices = new Map<string, ReturnType<PriceOf>>();
+  const price = (model: string): ReturnType<PriceOf> => { if (!prices.has(model)) prices.set(model, priceOf!(model)); return prices.get(model)!; };
   for (const r of runs) if (r.parentRunId) kids.set(r.parentRunId, [...(kids.get(r.parentRunId) ?? []), r]);
   const sum = (r: AgentRun, depth: number): number => {
     const hit = out.get(r.runId);
     if (hit !== undefined) return hit;
-    const own = typeof r.costUsd === 'number' && r.costUsd > 0 ? r.costUsd : (priceOf && r.model ? listCost(r.tokens, priceOf(r.model)) : null) ?? 0;
+    const own = typeof r.costUsd === 'number' && r.costUsd > 0 ? r.costUsd : (priceOf && r.model ? listCost(r.tokens, price(r.model)) : null) ?? 0;
     const total = own + (depth > 16 ? 0 : (kids.get(r.runId) ?? []).reduce((n, k) => n + sum(k, depth + 1), 0));
     out.set(r.runId, total);
     return total;

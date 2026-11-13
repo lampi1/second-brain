@@ -55,7 +55,7 @@ export function agentsHandlers({ s, demo, agentImages, workflows, orchestrator, 
       // the chats' runs are the store's own records (adopted ones too): its revision plus the count covers both
       const key = !demo && s.agentRuns ? `store:${s.agentRuns.revision}/${runs.length}` : undefined;
       // a run with tokens and no cost counts at list price (ADR 0284): the table of those runs' models goes with the request
-      const prices = s.chats.listPrices?.(runs.flatMap(r => r.costUsd === null && r.model ? [r.model] : [])) ?? {};
+      const prices = s.chats.listPrices?.(runs.flatMap(r => !(typeof r.costUsd === 'number' && r.costUsd > 0) && r.model ? [r.model] : [])) ?? {};
       return readWorker.call({ op: 'estimates', runs, runIds: checkRunIds(a?.runIds), now, prices }, key);
     },
     'agents:judgingEstimate': () => {

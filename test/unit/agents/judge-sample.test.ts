@@ -110,6 +110,9 @@ describe('free signals first, then the sample (L1, L3)', () => {
     const scout = [{ id: 'scout', activeVersion: 2 }];
     expect(roleShares(on('opus', 6, 100), new Map([['scout', { spread: 0.05 }]]), scout, () => history).get('scout')).toBe(SHARE_STEADY);
     expect(roleShares([...on('opus', 6, 100), ...on('sonnet', 1, 200)], new Map([['scout', { spread: 0.05 }]]), scout, () => history).get('scout')).toBe(SHARE_DEFAULT);
+    // the app's own one-shot job on the role (the nightly batch, an upgrade ask) is not its work: it names no model of its
+    const oneshot = run('batch', { version: 2, startedAt: 300, source: 'oneshot' });
+    expect(roleShares([...on('opus', 6, 100), oneshot], new Map([['scout', { spread: 0.05 }]]), scout, () => history).get('scout')).toBe(SHARE_STEADY);
     // the user switches Scout to another model: back to 25% until 5 verdicts on it
     expect(roleShares(runs, new Map([['scout', { spread: 0.05 }]]), [{ id: 'scout', activeVersion: 3 }], () => history).get('scout')).toBe(SHARE_DEFAULT);
   });
