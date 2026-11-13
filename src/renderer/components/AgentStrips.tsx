@@ -3,7 +3,7 @@
 // a group). There is no drag and no saved order (SPEC 10-11): the user opens a strip in place or in full screen (F11,
 // FullScreen.tsx), the Orchestrator decides where it goes. A chat's browser tabs are inside its own window
 // (ChatTile.tsx, ADR 0287), never rows of their own; a browser without a strip is. Delegated chats (ADR 0083) sit under
-// the chat that delegated them (lib/chat-tree.ts), each a thread card on a curved thread line that opens in place into
+// the chat that delegated them (lib/chat-tree.ts), each one row on a thread line that opens in place into
 // its chat (DelegationCard.tsx); a parent's KidsBar folds and unfolds its children (the fold is kept across restarts);
 // a root chat the app started or resumed by itself says so above it (Origin, ADR 0102).
 import { useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react';
@@ -75,7 +75,7 @@ export function AgentStrips() {
         const node = lead.kind === 'chat' ? nodes.get(lead.id) : undefined, depth = node?.depth ?? 0;
         const firstOfArea = lead.kind === 'chat' && depth === 0 && area !== lastArea;
         if (lead.kind === 'chat' && depth === 0) lastArea = area;
-        // a delegated chat is its thread card (opened in place into its chat)
+        // a delegated chat is its row (opened in place into its chat)
         const card = lead.kind === 'chat' && depth > 0;
         const owned = lead.kind === 'browser' && !!owners[lead.id];
         // the strips enter in turn (agent-strips.css, off under reduced motion)

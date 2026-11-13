@@ -105,7 +105,7 @@ export function demoTree(E: number): { chats: ChatSummary[]; items: Record<strin
   const role = (id: WorkRoleId, name: string): ChatSummary['agent'] => ({ id, name, purpose: ROLE_DEFAULTS[id].summary, avatar: { kind: 'character', value: id }, engine: 'claude', model: 'claude-opus-5-5', revision: 1, version: 1, source: 'catalog' });
   const node = (id: string, r: WorkRoleId, name: string, title: string, goal: string, ago: number, extra: Partial<ChatSummary>, parentId?: string, doneWhen: string[] = []): ChatSummary => ({
     id, title, harness: 'claude', origin: 'app', cwd, sessionId: `demo-${id}`, model: 'claude-opus-5-5', effort: 'high', permissionMode: 'default', state: 'running',
-    costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: E - 30_000, browserTabIds: [], agent: role(r, name),
+    costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: E - 30_000, browserTabIds: [], agent: role(r, name), workMs: ago * MIN,
     run: { runId: `r_tree_${id}`, chatId: id, agentId: r, version: 1, goal, startedBy: parentId ? 'parent' : 'orchestrator', startedAt: E - ago * MIN, costUsd: extra.costUsd ?? null, tokens: null,
       counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null } },
     ...(parentId ? { parentId, delegation: { role: r, goal, doneWhen, at: E - ago * MIN } } : {}),

@@ -21,7 +21,7 @@
 .tree-origin { display: flex; align-items: center; gap: 8px; height: 22px; margin: 0 0 4px 4px; font-size: 12px; color: var(--text-3); }
 .tree-origin b { color: var(--violet); font-weight: 600; }
 
-/* ---------------------------------------------------------------- thread card */
+/* ---------------------------------------------------------------- a delegated chat's row */
 /* One row like the parent's strip (ADR 0293): no card, a hairline under it; the state is the dot on the face and, when
    words are needed, a pill; open, it is a quiet panel with its steps, its result and its chat. */
 .delegation-card { --dc-pad: 10px; --dc-text: 30px; position: relative; min-width: 0; padding: 5px 4px 5px var(--dc-pad); border-bottom: 1px solid var(--border); cursor: pointer; --dc-tone: var(--text-4); }
@@ -39,7 +39,7 @@
 .dc-head > :first-child { flex: none; }
 .dc-title { flex: 0 1 auto; min-width: 0; max-width: 46%; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 13px/1.25 var(--font-display); color: var(--text); }
 .dc-now { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-3); }
-.dc-now::before { content: "· "; color: var(--text-4); }
+.dc-now:not(:empty)::before { content: "· "; color: var(--text-4); }
 .dc-now .typing { padding: 0; vertical-align: bottom; max-width: 100%; min-width: 0; }
 .dc-open { opacity: 0; }
 .delegation-card:hover .dc-open, .delegation-card:focus-within .dc-open { opacity: 1; }
@@ -48,7 +48,6 @@
 .dc-role { flex: none; color: var(--text-2); font-weight: 500; }
 .dc-model { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .dc-model::before { content: "· "; color: var(--text-4); }
-.dc-time { flex: none; color: var(--text-4); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .dc-head .pill { flex: none; }
 .dc-chip { display: inline-flex; align-items: center; height: 17px; padding: 0 5px; border-radius: 5px; background: var(--surface-3); color: var(--text-2); font: 500 10.5px var(--mono); white-space: nowrap; }
 .dc-steps { list-style: none; margin: 5px 0 0 var(--dc-text); padding: 0; display: flex; flex-direction: column; gap: 0; }

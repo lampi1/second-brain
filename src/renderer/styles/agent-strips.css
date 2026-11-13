@@ -199,6 +199,7 @@
 .strip-face { position:relative; flex:none; display:inline-flex; }
 .strip-dot.lead { position:absolute; right:-2px; bottom:-2px; width:9px; height:9px; box-shadow:0 0 0 2px var(--bg); }
 .chat-tile.is-expanded .strip-dot.lead, .delegation-card.is-open .strip-dot.lead { box-shadow:0 0 0 2px var(--surface); }
+.chat-tile.is-strip:hover .strip-dot.lead, .chat-tile.is-strip:focus-within .strip-dot.lead, .chat-tile.is-strip.focused .strip-dot.lead, .delegation-card:not(.is-open):hover .strip-dot.lead { box-shadow:0 0 0 2px var(--surface-2); }
 .strip-dot.tone-run { background:var(--accent); }
 .strip-dot.tone-done { background:var(--green); }
 .strip-dot.tone-err { background:var(--red); }
@@ -215,7 +216,7 @@
 .agent-strips .chat-tile.is-expanded:not(.is-embedded) { border:0; border-radius:0; background:var(--surface); }
 .agent-strips .chat-tile.is-expanded:not(.is-embedded).focused { border:0; }
 .agent-strips .chat-tile.is-expanded > .tile-head { padding:7px 4px 7px 10px; border-bottom:1px solid var(--border); }
-.strip-facts { padding-left:20px; margin-top:4px; }
+.strip-facts { padding-left:34px; margin-top:4px; }
 .workspace-area { margin:16px 10px 6px; font:600 10.5px var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--text-3); }
 /* a sub-agent's state is plain words here: the pill belongs to the strip above it */
 .child-strip .child-strip-state { height:auto; padding:0; border:0; background:none; font-weight:500; }

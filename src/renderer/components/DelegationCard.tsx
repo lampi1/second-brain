@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEve
 import type { ChatItem, ChatSummary, PendingRequest } from '@shared/contract';
 import { useApp, loadItems, answer, send, stop } from '../store/store';
 import { setChatExpanded, setFocusMode, setTreeCollapsed, ui } from '../store/ui';
-import { sameList } from '../store/state';
+import { isBusy, sameList } from '../store/state';
 import { activeState, childState, kidCounts, type ChildState, type TreeNode } from '../lib/chat-tree';
 import { runSteps, type RunStep, type StepMark } from '../lib/run-steps';
 import { requestHost } from '../lib/child-requests';
@@ -38,13 +38,6 @@ const lastRefusal = (items: readonly ChatItem[] | undefined): string => {
   return r && r.kind === 'system' ? r.text : '';
 };
 const hhmm = (at: number) => new Date(at).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
-/** "8 s", "4 min", "2 h": how long the delegated work has run (until its result) */
-export function span(ms: number): string {
-  const s = Math.max(0, Math.round(ms / 1000));
-  if (s < 60) return `${s} s`;
-  const m = Math.round(s / 60);
-  return m < 60 ? `${m} min` : `${Math.round(m / 60)} h`;
-}
 /** the pill tone of a child's state (app.css pills) */
 const TONE: Record<ChildState, string> = { start: 'run', run: 'run', wait: 'wait', queued: 'off', err: 'err', stall: 'wait', refused: 'err', done: 'done', partial: 'wait', blocked: 'err', noreport: 'err', closed: 'off' };
 /** the thread line's and the bar segment's tint */
@@ -86,22 +79,22 @@ function Head({ chat, state, open }: { chat: ChatSummary; state: ChildState; ope
   const now = useNow(15_000);
   const role = chat.agent?.name ?? chat.delegation?.role ?? '';
   const skills = chat.run?.tags?.skills ?? [];
-  const from = chat.delegation?.at ?? chat.run?.startedAt ?? now, until = chat.delegation?.result?.at ?? chat.closedAt ?? now;
   const model = modelWithEffort(chat);
   const live = state === 'run' || state === 'start';
   const plain = live || state === 'done';
-  const said = chat.delegation?.result?.summary ?? chat.lastText;
+  const said = chat.delegation?.result?.summary || chat.lastText;
   return <div className="dc-head">
     <span className="strip-face"><AgentAvatar avatar={chat.agent?.avatar} name={role} size={22} /><span className={`strip-dot lead tone-${LINE[state]}`} aria-hidden="true" /></span>
-    <h4 className="dc-title" title={chat.delegation?.goal ?? chat.title}>{chat.title}</h4>
+    {/* the task is the row's own button (keyboard, screen readers), as on the root strip; a click anywhere on the row does the same */}
+    <h4 className="dc-title" title={chat.delegation?.goal ?? chat.title}><button type="button" className="strip-name" aria-expanded={open} data-testid={`delegation-expand-${chat.id}`} onClick={() => setChatExpanded(chat.id, !open)}>{chat.title}</button></h4>
     <span className="dc-who">
       <span className="dc-role">{role}</span>
       {open ? <>
         {skills.slice(0, 2).map(s => <span key={s} className="dc-chip">{s}</span>)}
         {model && <span className="dc-model">{model}</span>}
-      </> : <span className="dc-now" data-testid={`delegation-now-${chat.id}`}>{live ? <StripActivity chatId={chat.id} /> : said.split('\n')[0]!.slice(0, 140)}</span>}
+      </> : <span className="dc-now" data-testid={`delegation-now-${chat.id}`}>{isBusy(chat) ? <StripActivity chatId={chat.id} /> : said.split('\n')[0]!.slice(0, 140)}</span>}
     </span>
-    <StripMeta chat={chat} workMs={chat.queued ? null : workTime(chat, now) ?? Math.max(0, until - from)} />
+    <StripMeta chat={chat} workMs={chat.queued ? null : workTime(chat, now) ?? chat.run?.executionMs ?? null} />
     <ChildPill state={state} testid={`delegation-state-${chat.id}`} quiet={plain} />
     <button type="button" className="dc-open" data-testid={`delegation-open-${chat.id}`} onClick={() => setFocusMode(chat.id)} aria-label={t('tree.focus', { title: chat.title })} title={t('tree.goTo')}>
       <span aria-hidden="true">↗</span>
@@ -166,7 +159,7 @@ function Result({ chat, parent }: { chat: ChatSummary; parent: string }) {
   </div>;
 }
 
-/** A delegated chat's thread card; expanded, its whole chat under the card's summary. */
+/** A delegated chat's row; opened, its steps, its result and its whole chat under it. */
 export function DelegationCard({ chatId }: { chatId: string }) {
   const chat = useApp(s => s.chats[chatId]);
   const open = ui.use(s => s.prefs.chatExpanded[chatId] === true);
