@@ -128,7 +128,7 @@ export function drawBrief(title: string, root: string, prev: ProjectMap | null):
 export function appProjectMapTool(maps: ProjectMaps, emitUi: (cmd: EventMap['ui:command']) => void): Tool {
   return {
     name: 'app_project_map',
-    description: 'The user\'s project maps (Mappa page → Progetti, ADR 0271): each project drawn as people, systems, parts, environments and links, with their status, who must act, the agents at work on each part and the history from the first drawing. Use it when the user asks how a project is built, where it stands, or to see its map. action: list | read (the map as text, to answer) | open (show it on screen; element = a system to zoom into) | brief (the task for a Scout chat that draws or redraws it: pass title and root for a new one, then start the Scout with app_create_chat, cwd = root) | correct (text = the user\'s correction, kept for every later drawing; then brief a redraw if the drawing must change).',
+    description: 'The user\'s project maps (Mappa page → Progetti, ADR 0271): each project drawn as people, systems, parts, environments and links, with their status, who must act, the agents at work on each part and the history from the first drawing. Use it when the user asks how a project is built, where it stands, or for its map, diagram, schema, lines («fili»): open shows the real map in a window (never draw your own diagram of a project with app_show_ui); none drawn yet → brief a Scout. action: list | read (the map as text, to answer) | open (the maps window on screen, at project, element = a system to step into; no project = the maps window as it is) | brief (the task for a Scout chat that draws or redraws it: pass title and root for a new one, then start the Scout with app_create_chat, cwd = root) | correct (text = the user\'s correction, kept for every later drawing; then brief a redraw if the drawing must change).',
     inputSchema: { type: 'object', properties: {
       action: { type: 'string', enum: ['list', 'read', 'open', 'brief', 'correct'] },
       project: { type: 'string', description: 'the map\'s name or id' },
@@ -148,12 +148,14 @@ export function appProjectMapTool(maps: ProjectMaps, emitUi: (cmd: EventMap['ui:
         if (!root || !title) throw new Error('brief: title and root for a new map (or project for a redraw)');
         return { roleId: 'scout', cwd: root, title: `Mappa · ${title}`.slice(0, 80), prompt: drawBrief(title, root, prev) };
       }
+      // open with no project: the maps window as the user left it (or «nessun progetto disegnato» with what to ask)
+      if (action === 'open' && !(typeof a.project === 'string' && a.project)) { emitUi({ action: 'maps', value: '' }); return maps.list().length ? 'ok' : 'ok: nessuna mappa ancora, la finestra dice come chiederla'; }
       const project = projectOf(maps, a.project);
       if (action === 'read') return mapText(maps.view(project)!, Date.now());
       if (action === 'open') {
         const el = typeof a.element === 'string' && a.element ? a.element : '';
         if (el && !maps.view(project)!.map.elements.some(e => e.id === el)) throw new Error(`element: no «${el}» in this map`);
-        emitUi({ action: 'page', value: `collegamenti/progetti/${project}${el ? `/${el}` : ''}` });
+        emitUi({ action: 'maps', value: `${project}${el ? `/${el}` : ''}` }); // ADR 0275: the maps window, in «Stato»'s place
         return 'ok';
       }
       if (action === 'correct') { const m = maps.correct(project, typeof a.text === 'string' ? a.text : ''); return { ok: true, version: m.version, corrections: m.corrections.length }; }

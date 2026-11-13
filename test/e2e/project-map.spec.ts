@@ -39,3 +39,35 @@ test('the project map draws the project, zooms into a system and plays its histo
     await expect(view.getByTestId('pm-node-carrello')).toHaveCount(0);
   } finally { await app.close(); }
 });
+
+// ADR 0275: the maps in a window, in «Stato»'s place (top bar, the Orchestrator's head, Ctrl+Shift+S, app_project_map open)
+test('the project maps open in a window from the Orchestrator and step into a system', async () => {
+  const { app, page } = await launchDemo();
+  try {
+    await page.getByTestId('maps-btn').click();
+    const win = page.getByTestId('maps');
+    await expect(win).toBeVisible();
+    const view = win.getByTestId('pm-view');
+    await expect(view.getByTestId('pm-node-negozio')).toBeVisible();
+    await page.waitForTimeout(300);
+    await shot(page, 'project-maps-window');
+    await view.getByTestId('pm-node-negozio').click();
+    await expect(view.getByTestId('pm-node-rimborsi')).toBeVisible();
+    await page.waitForTimeout(300);
+    await shot(page, 'project-maps-window-zoom');
+    await page.keyboard.press('Escape');
+    await expect(win).toBeHidden();
+    // it reopens where the user left it (Ctrl+Shift+S), and the breadcrumbs go back up
+    await page.keyboard.press('Control+Shift+KeyS');
+    await expect(view.getByTestId('pm-node-rimborsi')).toBeVisible();
+    await view.getByRole('button', { name: 'Tutto il progetto' }).click();
+    await expect(view.getByTestId('pm-node-carrello')).toHaveCount(0);
+    // the Orchestrator opens it at a system (app_project_map open → ui:command 'maps')
+    await page.keyboard.press('Escape');
+    await app.evaluate(({ BrowserWindow }) => { for (const w of BrowserWindow.getAllWindows()) if (w.webContents.getURL().startsWith('file:')) w.webContents.send('ui:command', { action: 'maps', value: 'alfa-shop/negozio' }); });
+    await expect(view.getByTestId('pm-node-rimborsi')).toBeVisible();
+    await win.getByTestId('maps-full').click();
+    await expect(win).toBeHidden();
+    await expect(page.getByTestId('pm-view').getByTestId('pm-node-rimborsi')).toBeVisible();
+  } finally { await app.close(); }
+});

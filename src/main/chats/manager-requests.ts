@@ -2,13 +2,13 @@
 // it reaches the user (role gate, read-only commands, auto-permit, «Modalità notte» ADR 0191), the away recap and
 // the count of a run's requests and «Comando da eseguire» asks.
 import { phoneQuestionReserved } from './phone-port';
+import { touchesProdDbAzure } from './ask-text';
 import { withClarified } from './plan-interview';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { Answer, PendingRequest } from '../../shared/contract';
 import { backedAnswer } from './ran-check';
 
-const RESERVED_FOR_USER = 'bloccato: questa decisione è solo dell’utente (produzione, database, Azure/cloud, segreti, permessi o impostazioni, pubblicazione, messaggi a persone): resta nella sua riga nell’Orchestrator';
 import { errText, log } from '../log';
 import { engineOf } from '../engines/registry';
 import { allowsClass, COMMAND_TOOLS, commandsReadOnly, readOnlyCommand, toolClassOf, type ReadScripts } from '../agents/tool-policy';
@@ -16,10 +16,10 @@ import { readOnlyTools } from '../agents/read-tools';
 import { gateRequest, runtimePluginName } from '../agents/role-gate';
 import { autoPermit } from './auto-permit';
 import { loadPolicy, policyCovers } from './permit-policy';
-import { AWAY_PARKED, AWAY_PLAN_NOTE, recommendedAnswers, userOnlyText } from '../../shared/away';
+import { AWAY_PARKED, AWAY_PLAN_NOTE, recommendedAnswers } from '../../shared/away';
 import { askingPlan, PLAN_APPROVED, type IntakeSource, type PlanIntake } from '../../shared/strategy';
 import type { SubmissionReceipt, Rec } from './manager-types';
-import { isNativeQuestion, isYesNo } from '../../shared/yes-no';
+import { isNativeQuestion, yesNoOf } from '../../shared/yes-no';
 import { answerableInWords, sameWords, wordsAnswer } from '../../shared/answer-in-words';
 import { sysItem } from './manager-helpers';
 import { phoneTime } from './phone-reply';
@@ -28,6 +28,10 @@ import { requestKey, registerRequest } from '../coordination/requests';
 import type { DecisionActor } from '../coordination/model';
 import type { AnswerPatch } from './session';
 import { CoordinationStore } from '../coordination/store';
+
+/** his whole message is a go: «sì», «ok», «vai», «confermo», «procedi», «lancialo», «eseguilo», «sì vai» (ADR 0275) */
+const saysGo = (text: string): boolean => yesNoOf(text) === 'yes' || /^(?:s[iì][, ]*)?(?:ok|okay|vai|confermo|procedi|lancia(?:lo)?|esegui(?:lo)?|fallo)[.! ]*$/i.test(text.trim());
+const PROD_FOR_USER = 'bloccato: questo permesso tocca produzione, un database o Azure: mostra all’utente cosa lancia e, dopo il suo sì (il suo ultimo messaggio), rispondi con confirmed true';
 
 /** A question request's identity for #379: its questions and their options, in order. */
 const questionSig = (req: Pick<PendingRequest, 'questions'>): string =>
@@ -159,56 +163,78 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     return true;
   }
 
-  /** The Orchestrator answers a work chat's question for the user (ADR 0269, the owner 2026-11-12: «l'orchestrator deve
-   *  poter fare il ruolo dell'utente»): only an engine's own yes/no question in a work chat (never the Orchestrator's,
-   *  a Strategist's interview, an MCP form, a permission or a command), with one of its options, and never on what stays
-   *  the user's alone (shared/away.ts userOnlyText: production, secrets, permissions, settings, databases, Azure/cloud, publishing, messages to people; the whole request with its brief).
-   *  Recorded as policy «orchestrator-for-user», never as the user's click; the chat's transcript says who answered. */
-  answerForUser(chatId: string, requestId: string, answers: Record<string, string>): void {
+  /** The Orchestrator answers for the user (ADR 0269, 0275; the owner 2026-11-13: «ciò che dice l'orchestrator deve
+   *  valere come se l'avessi detto io SEMPRE»): any open question of a chat (an option or free words, an MCP form, a
+   *  Strategist's interview, a delegated chat's), and any permission, except one that runs a command on production, a
+   *  database or Azure (that one waits for his own click, as Esegui does). Never the Orchestrator's own question: that is
+   *  the user's. Recorded as policy «orchestrator-for-user» with a line in the chat that says who answered. */
+  answerForUser(chatId: string, requestId: string, answer: Answer, confirmed = false): void {
     const r = this.need(chatId);
     const req = r.pending.get(requestId);
     if (!req) throw new Error('Questa richiesta non è più aperta.');
-    if (r.s.isOrchestrator || r.s.plan || req.type !== 'question' || !isNativeQuestion(req) || !req.questions?.length) throw new Error('bloccato: l’Orchestrator risponde solo alle domande Sì/No di una chat di lavoro');
+    if (r.s.isOrchestrator) throw new Error('bloccato: è una tua domanda, la risposta è dell’utente');
+    if (req.type === 'command') throw new Error('bloccato: un comando si mostra intero all’utente con relay_question e parte al suo sì');
     if (!r.session) { this.dropPending(r, requestId); throw new Error('La chat non è più attiva: la richiesta è scaduta.'); }
-    // the whole request is read (title, detail, the brief's why / ifYes / steps), as the phone bridge reads it: a short
-    // «Procedo?» whose brief says «deploy in produzione» stays the user's
-    if (phoneQuestionReserved(req, () => { this.ensureHistory(r); return r.items; }, userOnlyText)) throw new Error(RESERVED_FOR_USER);
-    const picks: string[] = [];
-    for (const q of req.questions) {
-      const pick = answers[q.question];
-      if (!isYesNo(q) || q.multiSelect) throw new Error('bloccato: solo una domanda Sì/No');
-      const opt = q.options.find(o => o.label === pick);
-      if (!opt) throw new Error(`Rispondi con una delle opzioni: ${q.options.map(o => o.label).join(' / ')}`);
-      if (userOnlyText(`${q.question} ${q.header ?? ''} ${opt.label} ${opt.description ?? ''}`)) throw new Error(RESERVED_FOR_USER);
-      picks.push(opt.label);
+    let choice: string;
+    let given: Answer = answer;
+    if (req.type === 'permission') {
+      if (answer.kind !== 'permission') throw new Error('È un permesso: rispondi con allow true o false.');
+      // production, a database or Azure: only after his own yes to it, in his last message to the Orchestrator (PC,
+      // Telegram or Remote Control), written after the request (the owner 2026-11-13: «mostrami i comandi e rispondi per
+      // me dopo la conferma»)
+      if (answer.allow && touchesProdDbAzure([req.title, req.detail, JSON.stringify(req.input ?? {})].join('\n'))) {
+        const o = this.openOrchestrator(), said = o?.userSaid;
+        if (!confirmed || !said || said.at < req.at || !saysGo(said.text)) throw new Error(PROD_FOR_USER);
+        // one yes, one production step: used up here, a second one needs his next yes
+        o!.userSaid = undefined;
+      }
+      given = { kind: 'permission', allow: answer.allow, ...(answer.message ? { message: answer.message } : {}) };
+      choice = answer.allow ? 'Consenti' : `Nega${answer.message ? `: ${answer.message}` : ''}`;
+    } else {
+      if (answer.kind !== 'question' || !req.questions?.length) throw new Error('È una domanda: rispondi con answers.');
+      if (Object.keys(answer.answers).some(k => !req.questions!.some(q => q.question === k))) throw new Error('Rispondi alle domande della richiesta originale.');
+      if (req.questions.some(q => answer.answers[q.question] === undefined || answer.answers[q.question] === '')) throw new Error('Rispondi a ogni domanda della richiesta.');
+      choice = req.questions.map(q => { const v = answer.answers[q.question]!; return Array.isArray(v) ? v.join(', ') : v; }).join(' · ');
+      // a Sì to «did you run it?» with no run since the question carries the NOT_RAN note, as the user's own does (#372)
+      given = this.opts.runs ? backedAnswer(req, answer, this.opts.runs(chatId)) : answer;
     }
-    if (Object.keys(answers).some(k => !req.questions!.some(q => q.question === k))) throw new Error('Rispondi alle domande della richiesta originale.');
-    const choice = picks.join(', ');
-    const given: Answer = { kind: 'question', answers };
-    // a Sì to «did you run it?» with no run since the question carries the NOT_RAN note, as the user's own does (#372)
-    const told = this.opts.runs ? backedAnswer(req, given, this.opts.runs(chatId)) : given;
-    this.policyAnswer(r, req, told, 'orchestrator-for-user', undefined, () => {
-      this.addItem(r, sysItem('orchestratorAnswered', { choice }, 'info'), false);
+    const said = () => {
+      this.addItem(r, sysItem('orchestratorAnswered', { choice: choice.length > 200 ? `${choice.slice(0, 199)}…` : choice }, 'info'), false);
       this.updated(r);
-      log.info('chats', 'the Orchestrator answered for the user', { chat: r.s.id, data: { requestId, questions: picks.length } });
-    });
+      log.info('chats', 'the Orchestrator answered for the user', { chat: r.s.id, data: { requestId, type: req.type } });
+    };
+    // a Strategist's interview: his answer, recorded as the plan's clarified answer as the user's own would be
+    if (r.s.plan && req.type === 'question' && isNativeQuestion(req)) {
+      void this.answer(chatId, requestId, given, 'pc').then(said, e => log.warn('chats', 'the Orchestrator\'s answer to an interview was not delivered', { chat: r.s.id, cause: errText(e), hint: 'the question stays in the user\'s row' }));
+      return;
+    }
+    if (this.answering.get(r)?.has(requestId)) throw new Error('Request already answered; delivery is still pending.');
+    if (!this.policyAnswer(r, req, given, 'orchestrator-for-user', undefined, said)) throw new Error('La risposta non è arrivata alla chat: la richiesta resta nella riga dell’utente.');
   }
 
-  /** The user's own message to the Orchestrator answers a work chat's question (ADR 0274): the Orchestrator names the
-   *  question and quotes his words (`words`, checked against his last PC message, written after the question); his whole
+  /** The user's own message to the Orchestrator answers a chat's question (ADR 0274, 0275): the Orchestrator names the
+   *  question and quotes his words (`words`, checked against his last message, written after the question); his whole
    *  message is what the chat gets, so an excerpt never turns his «non …» into a yes. Never the Orchestrator's own
-   *  question, a Strategist's interview, an MCP form, a permission or a command; never what stays his alone (that one
-   *  keeps its click). Recorded as policy «orchestrator-user-words», with a line in the chat. */
+   *  question, an MCP form, a permission or a command. Recorded as policy «orchestrator-user-words» (an interview: as
+   *  his own answer, so the plan keeps it), with a line in the chat. */
   answerWithUserWords(chatId: string, requestId: string, words: string): void {
     const r = this.need(chatId);
     const req = r.pending.get(requestId);
     if (!req) throw new Error('Questa richiesta non è più aperta.');
-    if (r.s.isOrchestrator || r.s.plan || !answerableInWords(req)) throw new Error('bloccato: le sue parole rispondono solo alla domanda di una chat di lavoro (non a un permesso, un comando, un modulo, un’intervista o una tua domanda)');
+    if (r.s.isOrchestrator || !answerableInWords(req)) throw new Error('bloccato: le sue parole rispondono solo alla domanda di una chat di lavoro (non a un permesso, un comando, un modulo o una tua domanda)');
     const said = this.openOrchestrator()?.userSaid;
     if (!said || said.at < req.at || !sameWords(said.text, words)) throw new Error('bloccato: words deve essere copiato dal suo ultimo messaggio, scritto dopo la domanda; se non risponde a questa domanda lasciala aperta');
     if (!r.session) { this.dropPending(r, requestId); throw new Error('La chat non è più attiva: la richiesta è scaduta.'); }
-    if (phoneQuestionReserved(req, () => { this.ensureHistory(r); return r.items; }, userOnlyText) || userOnlyText(said.text)) throw new Error(RESERVED_FOR_USER);
     if (this.answering.get(r)?.has(requestId)) throw new Error('Request already answered; delivery is still pending.');
+    // a Strategist's interview: his answer, recorded as the plan's clarified answer (the user's own path)
+    if (r.s.plan) {
+      const words = said.text.trim();
+      void this.answer(chatId, requestId, wordsAnswer(req, words), 'pc').then(() => {
+        this.addItem(r, sysItem('orchestratorPassedWords', { words: words.length > 200 ? `${words.slice(0, 199)}…` : words }, 'info'), false);
+        this.updated(r);
+      }, e => log.warn('chats', 'the user\'s words did not reach the interview', { chat: r.s.id, cause: errText(e), hint: 'the question stays in the user\'s row' }));
+      return;
+    }
     const text = said.text.trim();
     const sent = this.policyAnswer(r, req, wordsAnswer(req, text), 'orchestrator-user-words', undefined, () => {
       this.addItem(r, sysItem('orchestratorPassedWords', { words: text.length > 200 ? `${text.slice(0, 199)}…` : text }, 'info'), false);

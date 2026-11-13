@@ -1,6 +1,6 @@
-// The Orchestrator answering a work chat's Sì/No question for the user (ADR 0269, ChatManager.answerForUser): only an
-// engine's own yes/no question in a work chat, one of its options, never what stays the user's alone; recorded with a
-// line in the chat that says who answered.
+// The Orchestrator answering for the user (ADR 0269, 0275, ChatManager.answerForUser): any question or permission of a
+// work chat, a permission on production, a database or Azure only after his own yes; never its own question; recorded
+// with a line in the chat that says who answered. And his own words passed on (ADR 0274, answerWithUserWords).
 import { afterEach, describe, expect, it } from 'vitest';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -41,36 +41,47 @@ const world = (on: boolean): World => ({ sent: [], answers: [], away: { on }, lo
 const ask = (id: string, question: string, options = ['Sì (consigliato)', 'No']): Omit<PendingRequest, 'chatId'> => ({ id, type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at: Date.now(),
   questions: [{ question, multiSelect: false, options: options.map(label => ({ label })) }] });
 
-describe('the Orchestrator answers for the user', () => {
-  it('answers a work chat\'s yes/no question with one of its options and says so in the chat', async () => {
-    const w = world(false), m = manager(w);
-    const chat = await m.create({ harness: 'anthropic', cwd: tmp(), title: 'Lavoro' });
-    w.sink!.pending(ask('q1', 'Tolgo il vecchio login?'));
-    m.answerForUser(chat.id, 'q1', { 'Tolgo il vecchio login?': 'Sì (consigliato)' });
-    expect(w.answers).toEqual([{ id: 'q1', answer: { kind: 'question', answers: { 'Tolgo il vecchio login?': 'Sì (consigliato)' } } }]);
-    expect(m.pending().filter(p => p.chatId === chat.id)).toEqual([]);
-    expect(m.items(chat.id).some(i => i.kind === 'system' && i.code === 'orchestratorAnswered')).toBe(true);
-  });
-
-  it('never on what is the user\'s alone, an option the question does not have, or the Orchestrator\'s own question', async () => {
+describe('the Orchestrator answers for the user (ADR 0275: what it says counts as his, always)', () => {
+  const yes = (q: string, a: string): Answer => ({ kind: 'question', answers: { [q]: a } });
+  it('answers any question of a work chat, an option or free words, and says so in the chat', async () => {
     const w = world(false), m = manager(w);
     const chat = await m.create({ harness: 'anthropic', cwd: tmp(), title: 'Lavoro' });
     w.sink!.pending(ask('q1', 'Faccio il deploy in produzione?'));
-    expect(() => m.answerForUser(chat.id, 'q1', { 'Faccio il deploy in produzione?': 'Sì (consigliato)' })).toThrow(/solo dell’utente/);
-    w.sink!.pending(ask('q2', 'Tolgo il vecchio login?'));
-    expect(() => m.answerForUser(chat.id, 'q2', { 'Tolgo il vecchio login?': 'Forse' })).toThrow(/opzioni/);
-    w.sink!.pending(ask('q3', 'Quale colore?', ['Rosso', 'Blu']));
-    expect(() => m.answerForUser(chat.id, 'q3', { 'Quale colore?': 'Rosso' })).toThrow(/Sì\/No/);
-    expect(w.answers).toEqual([]);
-    w.sink!.pending(ask('q5', 'Applico la migrazione al database?'));
-    expect(() => m.answerForUser(chat.id, 'q5', { 'Applico la migrazione al database?': 'Sì (consigliato)' })).toThrow(/solo dell’utente/);
-    // a short question whose request says what it does: read whole, as the phone bridge reads it
-    w.sink!.pending({ ...ask('q6', 'Procedo con il passo successivo?'), detail: 'push su main e deploy' });
-    expect(() => m.answerForUser(chat.id, 'q6', { 'Procedo con il passo successivo?': 'Sì (consigliato)' })).toThrow(/solo dell’utente/);
-    expect(w.answers).toEqual([]);
+    m.answerForUser(chat.id, 'q1', yes('Faccio il deploy in produzione?', 'Sì (consigliato)'));
+    w.sink!.pending(ask('q2', 'Quale colore?', ['Rosso', 'Blu']));
+    m.answerForUser(chat.id, 'q2', yes('Quale colore?', 'Verde scuro'));
+    expect(w.answers.map(a => a.id)).toEqual(['q1', 'q2']);
+    expect(m.pending().filter(p => p.chatId === chat.id)).toEqual([]);
+    expect(m.items(chat.id).filter(i => i.kind === 'system' && i.code === 'orchestratorAnswered')).toHaveLength(2);
+  });
+
+  it('a permission: allowed or refused for him; on production, a database or Azure only after his own yes', async () => {
+    const w = world(false), m = manager(w);
+    const chat = await m.create({ harness: 'anthropic', cwd: tmp(), title: 'Lavoro' });
+    const work = w.sink!;
+    const o = await m.create({ harness: 'anthropic', cwd: tmp(), orchestrator: true });
+    // put straight in its list: the default rules would allow both by themselves (auto-permit)
+    const perm = (id: string, title: string) => { void work; (m as unknown as { chats: Map<string, { pending: Map<string, PendingRequest> }> }).chats.get(chat.id)!.pending.set(id, { id, chatId: chat.id, type: 'permission', tool: 'Bash', title, detail: '', input: { command: title }, at: Date.now() }); };
+    perm('p1', 'git push origin feature');
+    m.answerForUser(chat.id, 'p1', { kind: 'permission', allow: true });
+    perm('p2', 'az webapp deploy --name shop');
+    expect(() => m.answerForUser(chat.id, 'p2', { kind: 'permission', allow: true }, true)).toThrow(/dopo il suo sì/);
+    await m.send(o.id, 'parliamo d’altro');
+    expect(() => m.answerForUser(chat.id, 'p2', { kind: 'permission', allow: true }, true)).toThrow(/dopo il suo sì/);
+    await m.send(o.id, 'sì vai');
+    expect(() => m.answerForUser(chat.id, 'p2', { kind: 'permission', allow: true })).toThrow(/dopo il suo sì/);
+    m.answerForUser(chat.id, 'p2', { kind: 'permission', allow: true }, true);
+    expect(w.answers.map(a => [a.id, a.answer])).toEqual([['p1', { kind: 'permission', allow: true }], ['p2', { kind: 'permission', allow: true }]]);
+    // one yes, one production step: the next one waits for his next yes
+    perm('p3', 'dotnet ef database update');
+    expect(() => m.answerForUser(chat.id, 'p3', { kind: 'permission', allow: true }, true)).toThrow(/dopo il suo sì/);
+  });
+
+  it('never the Orchestrator\'s own question: that answer is the user\'s', async () => {
+    const w = world(false), m = manager(w);
     const o = await m.create({ harness: 'anthropic', cwd: tmp(), orchestrator: true });
     w.sink!.pending(ask('q4', 'Tolgo il vecchio login?'));
-    expect(() => m.answerForUser(o.id, 'q4', { 'Tolgo il vecchio login?': 'Sì (consigliato)' })).toThrow(/chat di lavoro/);
+    expect(() => m.answerForUser(o.id, 'q4', yes('Tolgo il vecchio login?', 'Sì (consigliato)'))).toThrow(/tua domanda/);
   });
 });
 
@@ -95,7 +106,7 @@ describe('the Orchestrator passes the user\'s own message to a work chat\'s ques
     expect(m.items(chat.id).some(i => i.kind === 'system' && i.code === 'orchestratorPassedWords')).toBe(true);
   });
 
-  it('never words he did not write, a message older than the question, what is his alone, or the Orchestrator\'s own question', async () => {
+  it('never words he did not write, a message older than the question, or the Orchestrator\'s own question', async () => {
     const { w, m, chat, work, o } = await setup();
     await m.send(o.id, 'Blu');
     await new Promise(r => setTimeout(r, 2));
@@ -103,9 +114,6 @@ describe('the Orchestrator passes the user\'s own message to a work chat\'s ques
     expect(() => m.answerWithUserWords(chat.id, 'q1', 'Blu')).toThrow(/ultimo messaggio/);
     await m.send(o.id, 'parliamo d’altro');
     expect(() => m.answerWithUserWords(chat.id, 'q1', 'Blu')).toThrow(/ultimo messaggio/);
-    work.pending(ask('q2', 'Faccio il deploy in produzione?'));
-    await m.send(o.id, 'non farlo adesso');
-    expect(() => m.answerWithUserWords(chat.id, 'q2', 'non farlo adesso')).toThrow(/solo dell’utente/);
     expect(() => m.answerWithUserWords(o.id, 'q2', 'non farlo')).toThrow(/Questa richiesta non è più aperta|bloccato/);
     expect(w.answers).toEqual([]);
   });

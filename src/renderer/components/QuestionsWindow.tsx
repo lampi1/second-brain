@@ -9,7 +9,6 @@
 // (InWindowLine). A command the chat left before its question comes first (ADR 0259). Mounted by OrchestratorTile.tsx.
 import { WriteViaOrchestrator } from '../lib/write-via-orchestrator';
 import { answerableInWords } from '@shared/answer-in-words';
-import { userOnlyText } from '@shared/away';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Harness, PendingRequest } from '@shared/contract';
 import { isYesNo, yesNoOf } from '@shared/yes-no';
@@ -159,12 +158,9 @@ function AskRow({ ask, open, later, onToggle, onClose }: { ask: Ask; open: boole
 function AskCard({ ask, name, harness, onLater }: { ask: Ask; name: string; harness: Harness; onLater: () => void }) {
   const [keysEl, setKeysEl] = useState<HTMLSpanElement | null>(null);
   const k = reqKey(ask);
-  // what the Orchestrator can pass on in the user's words (ADR 0274): a plan, an engine question (not a Strategist's
-  // interview); the rest (work proposals, commands, forms, the app's own steps) keeps its own box
-  const interview = useApp(s => !isHost(ask) && !s.chats[ask.chatId]?.isOrchestrator && !!s.chats[ask.chatId]?.plan);
-  // what is his alone keeps its own box: the Orchestrator never passes it on (shared/away.ts userOnlyText)
-  const viaOrchestrator = !isDurable(ask) && (ask.type === 'plan' || (answerableInWords(ask) && !interview
-    && !userOnlyText([ask.title, ask.detail, ...(ask.questions ?? []).flatMap(q => [q.question, q.header ?? '', ...q.options.map(o => `${o.label} ${o.description ?? ''}`)])].join(' '))));
+  // what the Orchestrator passes on in the user's words (ADR 0274, 0275): a plan, an engine question (a Strategist's
+  // interview too); the rest (work proposals, commands, forms, the app's own steps) keeps its own box
+  const viaOrchestrator = !isDurable(ask) && (ask.type === 'plan' || answerableInWords(ask));
   // the card reads the chat as it was when it opened (lib/askItems.tsx)
   const frozen = useFrozenItems(ask.chatId, k);
   const items = ask.type === 'question' ? frozen.items : undefined;

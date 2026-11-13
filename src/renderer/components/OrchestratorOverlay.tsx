@@ -1,22 +1,22 @@
 // Persistent coordinator column, with the Orchestrator or «Flash», the quick lane (ADR 0105, 0107), in two tabs. The shell and native overlays share its exact width;
 // pointer and keyboard resizing preserve a usable workspace without covering inputs.
 import { ErrorBoundary } from './ErrorBoundary';
-import { t as auditText } from '../i18n';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useApp } from '../store/store';
-import { openModal, setPrefs, ui } from '../store/ui';
+import { openMaps, setPrefs, ui } from '../store/ui';
 import { registerOverlay, schedule } from '../lib/viewports';
 import { scheduleLayer } from '../lib/layer';
 import { columnSize, viewport, type Reserve } from '../lib/orchestrator-dock';
 import { OrchestratorTile } from './OrchestratorTile';
 import { LampoTile } from './LampoTile';
-import { IconList } from './Icons';
+import { IconMap } from './Icons';
 import { IconButton } from './ui';
 import { t } from '../i18n';
 import { orchestratorIdOf } from '../lib/orchestrator-route';
 
-export function StatoButton() {
-  return <IconButton label={auditText('audit.OrchestratorOverlay.statusChatsAndPrs')} shortcut="Ctrl+Shift+S" onClick={() => openModal('stato')} testid="stato-btn"><IconList size={16} /></IconButton>;
+/** The project maps (ADR 0275: in «Stato»'s place, which stays in the palette). */
+export function MapsButton() {
+  return <IconButton label={t('pm.mapsButton')} shortcut="Ctrl+Shift+S" onClick={() => openMaps()} testid="maps-btn"><IconMap size={16} /></IconButton>;
 }
 
 function useColumnSize() {

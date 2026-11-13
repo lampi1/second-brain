@@ -1,21 +1,18 @@
 // The chats side of the phone bridge (shared/contract/phone.ts PhonePort): what the Telegram bridge (src/main/phone)
 // may see and decide. Why: the phone is the owner away from the PC, but a weaker channel (design §5.5): its free text
-// only informs the Orchestrator (source {kind:'phone'}, never an ok), and its buttons decide only a simple Sì/No question
-// or a proposed Strategist plan that touches nothing reserved (shared/away.ts reservedText), and a permission one of the
-// user's own brain rules sent to them (ADR 0254: Sì allows it once), and a command left by a chat (ADR 0259 §4: Sì runs
-// it on the PC, No lets it go) unless it touches production, a database, Azure or anything reserved (ask-text.ts
-// commandReserved). Other permissions and anything else stay for the PC («Serve il PC»). A question shows the same
+// informs the Orchestrator (source {kind:'phone'}), which answers for him (ADR 0275), and its buttons decide a simple
+// Sì/No question or a proposed Strategist plan, a permission one of the user's own brain rules sent to them (ADR 0254:
+// Sì allows it once), and a command left by a chat that the phone shows whole (ADR 0259 §4, 0275: Sì runs it on the PC,
+// production included, since he saw it; No lets it go). Anything else the Orchestrator answers when he tells it. A question shows the same
 // parts as the PC's card (ask-text.ts questionLines). Every decision is checked again against the live chat when it arrives.
 // Built by the integrator in main's wiring with the ChatManager and the main Emitter; tests: test/unit/chats/phone.test.ts.
 import { SYS_IT } from '../../shared/sys';
 import type { Answer, ChatItem, ChatSummary, EventChannel, EventMap, PendingRequest } from '../../shared/contract';
 import type { PhoneDecidable, PhoneDecideResult, PhonePort, PhoneOutcome } from '../../shared/contract/phone';
 import { reservedText } from '../../shared/away';
-import { interviewNeedsPC } from '../../shared/strategy';
-import type { WorkRoleId } from '../../shared/roles';
 import { isYesNo, yesNoOf } from '../../shared/yes-no';
 import { errText, log } from '../log';
-import { briefFor, commandLines, commandReserved, commandShownWhole, questionLines } from './ask-text';
+import { briefFor, commandLines, commandShownWhole, questionLines } from './ask-text';
 import type { TurnEndInfo } from './manager-types';
 
 /** What the port needs from the ChatManager (structural, so tests pass a fake). */
@@ -33,7 +30,8 @@ export interface PhoneChats {
 /** the commands the chats left (run/asks.ts): Sì runs one on the PC, No puts it aside; absent = commands stay on the PC */
 export interface PhoneCommands {
   pending(): PendingRequest[];
-  run(chatId: string, requestId: string): void;
+  /** confirmProd: the user saw the whole command and said yes to it (ADR 0275), the second click production needs */
+  run(chatId: string, requestId: string, confirmProd?: boolean): void;
   dismiss(chatId: string, requestId: string): void;
 }
 /** The main Emitter's tap (main/ipc.ts Emitter.tap). */
@@ -43,8 +41,6 @@ export interface PhoneEvents { tap(fn: <K extends EventChannel>(channel: K, payl
  *  anything an agent built) is never decided from the phone. */
 const NATIVE_QUESTIONS = new Set(['AskUserQuestion', 'AskQuestion', 'AskUser']);
 const MARK = /\((consigliat[oa]|recommended|empfohlen)\)/i;
-/** the roles whose work leaves the PC (sends or publishes to people): a plan with one of their steps is reserved */
-const PUBLISHING_ROLES: ReadonlySet<WorkRoleId> = new Set<WorkRoleId>(['herald']);
 /** what the Strategist gets when the phone says No to its plan: nothing to change yet, the user looks at it on the PC */
 export const PHONE_PLAN_NO = 'Non approvato dal telefono: l\'utente rivede il piano al PC. Non partire e non riproporlo finché non ti scrive.';
 /** answers remembered so a late button says «già risposto» ('already') instead of «non c'è più» */
@@ -100,10 +96,11 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents, commands
       const text = commandLines(p, role(c)).join('\n');
       return { chatId: c.id, ref: { kind: 'question', requestId: p.id }, role: role(c), neutralLabel: neutral(c), text,
         // the short form only when it holds the whole command: a decision is never taken on a cut text
-        ...(p.command.code.includes('\n') ? {} : { short: `Eseguo sul PC? ${p.command.code}` }), recommended: 'yes', simple: !!commands && commandShownWhole(p), reserved: commandReserved(p), orchestrator: true };
+        ...(p.command.code.includes('\n') ? {} : { short: `Eseguo sul PC? ${p.command.code}` }), recommended: 'yes', simple: !!commands && commandShownWhole(p), reserved: false, orchestrator: true };
     }
     const simple = p.type === 'question' && NATIVE_QUESTIONS.has(p.tool) && qs.length === 1 && !!q && isYesNo(q);
-    const reserved = phoneQuestionReserved(p, () => chats.items(p.chatId));
+    // nothing is reserved any more (ADR 0275): the owner decides from the phone what he decides on the PC
+    const reserved = false;
     const pick = simple ? q!.options.find(o => MARK.test(o.label)) : undefined;
     const recommended = pick ? yesNoOf(pick.label) ?? undefined : undefined;
     // a question with its brief: the same parts as the PC's card (ADR 0259 §4)
@@ -121,11 +118,9 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents, commands
     const plan = c.plan;
     if (!plan || plan.phase !== 'proposed') return null;
     const text = [...plan.steps.map((s, i) => `${i + 1}. ${s.title}${s.detail ? ` · ${s.detail}` : ''}`), ...(plan.doneWhen ? [`Fatto quando: ${plan.doneWhen}`] : [])].join('\n');
-    // a step given to a role that sends or publishes outside (Herald: mail, Teams, comments) needs the PC, whatever it says
-    // Classify the local interview as well; only the step summary is sent to the phone.
-    const publishes = plan.steps.some(s => s.role !== undefined && PUBLISHING_ROLES.has(s.role));
+    // ADR 0275: a plan is answered from the phone like on the PC, whatever its steps do (only prod/DB/Azure commands wait for his whole-command yes)
     return { chatId: c.id, ref: { kind: 'plan', at: String(plan.at) }, role: role(c), neutralLabel: neutral(c), text,
-      simple: true, reserved: publishes || interviewNeedsPC(plan) || reservedText(text), orchestrator: true };
+      simple: true, reserved: false, orchestrator: true };
   }
 
   const keyOf = (d: PhoneDecidable) => d.ref.kind === 'question' ? qKey(d.chatId, d.ref.requestId) : pKey(d.chatId, d.ref.at);
@@ -215,9 +210,10 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents, commands
     const c = chatOf(chatId), p = cmds?.pending().find(x => x.chatId === chatId && x.id === requestId);
     if (!cmds || !p) return resolved.has(k) ? 'already' : 'gone';
     if (!c || closed(c)) return 'gone';
-    if (commandReserved(p) || !commandShownWhole(p)) return 'gone';
+    // he sees the whole command before his Sì: production included, that Sì is his second click (ADR 0275)
+    if (!commandShownWhole(p)) return 'gone';
     try {
-      if (yes) cmds.run(chatId, requestId); else cmds.dismiss(chatId, requestId);
+      if (yes) cmds.run(chatId, requestId, true); else cmds.dismiss(chatId, requestId);
       log.info('phone', yes ? 'command run from the phone' : 'command put aside from the phone', { chat: chatId, data: { request: requestId } });
       return 'ok';
     } catch (e) {

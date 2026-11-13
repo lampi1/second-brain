@@ -5,18 +5,17 @@
 // when it is just «sì» or «no» (any channel: the PC, the paired phone, Remote Control), from the user's words and by
 // the app, never from the Orchestrator's: an agent's mail or the app's news never count. Any other message ends the
 // relay (a later bare «no» may answer something else). Only simple yes/no questions of the engines' own question
-// tools, never one touching production, deploys, pushes, secrets or messages to people (phone-port.ts
-// phoneQuestionReserved, checked again when the answer comes: those stay for the PC), never a permission. A command a
-// chat left is relayed as «Eseguo sul PC?» (ADR 0259 §4): «sì» runs it on the PC, «no» puts it aside; production,
-// databases, Azure and reserved words stay for the PC (ask-text.ts commandReserved). The text carries the same parts
+// tools (any other the Orchestrator answers itself with app_resolve_question, ADR 0275), never a permission. A command
+// a chat left is relayed as «Eseguo sul PC?» (ADR 0259 §4) with its whole text: «sì» runs it on the PC, production,
+// databases and Azure included (his «sì» to what he read is the second click, ADR 0275), «no» puts it aside. The text carries the same parts
 // as the PC's card (ask-text.ts questionLines). One relay per Orchestrator at a time, for RELAY_MS; a question answered elsewhere first drops
 // it. A «sì»/«no» that cannot be delivered (the relay expired, the question changed, the delivery failed) is told to
 // the Orchestrator, never lost in silence. Used by wiring.ts (the tool and the emitter tap); pinned by
 // test/unit/chats/relay.test.ts.
 import type { Answer, ChatItem, ChatSummary, PendingRequest } from '../../shared/contract';
-import { isYesNo, yesNoOf } from '../../shared/yes-no';
-import { phoneQuestionReserved, type PhoneCommands } from './phone-port';
-import { briefFor, commandLines, commandReserved, commandShownWhole, questionLines } from './ask-text';
+import { isNativeQuestion, isYesNo, yesNoOf } from '../../shared/yes-no';
+import type { PhoneCommands } from './phone-port';
+import { briefFor, commandLines, commandShownWhole, questionLines } from './ask-text';
 import { errText, log } from '../log';
 import { callerOf } from '../mcp/caller';
 import type { McpTool } from '../mcp/server';
@@ -58,20 +57,19 @@ export class QuestionRelay {
     const asks = [...cmds, ...this.d.pending().filter(p => p.chatId === chatId)].sort((a, b) => a.at - b.at);
     if (!asks.length) throw new Error('That chat waits for no answer now (app_pending).');
     // its command first: the PC's window shows it before the chat's question too (ADR 0259)
-    // a reserved one stays on the PC and does not block the rest
-    const cmd = cmds.find(x => !commandReserved(x));
+    // production, databases and Azure too (ADR 0275): he reads the whole command and his «sì» runs it
+    const cmd = cmds[0];
     if (cmd) return this.relayCommand(orchestratorId, c.title, cmd);
-    if (cmds.length && !asks.some(x => x.type === 'question')) this.relayCommand(orchestratorId, c.title, cmds[0]!); // throws: reserved
     const p = asks.find(x => x.type === 'question');
-    if (!p) throw new Error('Only a question or a command is relayed: a permission is the user\'s click on the PC. Tell the user it waits there.');
+    if (!p) throw new Error('Only a question or a command is relayed. A permission you answer yourself with app_resolve_question (allow); one that runs on production, a database or Azure: show the user what it runs, and after his yes answer it with confirmed true.');
     const q = p.questions?.[0];
-    if (p.questions?.length !== 1 || !q || !isYesNo(q)) throw new Error('Only a single Sì/No question is relayed; this one stays in its panel on the PC.');
+    if (p.questions?.length !== 1 || !q || !isYesNo(q)) throw new Error('Only a single Sì/No question is relayed. Write this one to the user yourself, then answer it for him with app_resolve_question with what he says.');
     const armed = this.relays.get(orchestratorId);
     if (armed && armed.requestId !== p.id && this.now() - armed.at <= RELAY_MS && this.d.pending().some(x => x.chatId === armed.chatId && x.id === armed.requestId)) {
       const other = chats.find(x => x.id === armed.chatId)?.title ?? armed.chatId;
       throw new Error(`The user has not answered the question of «${other}» yet: one relayed question at a time. Relay this one after that answer.`);
     }
-    if (phoneQuestionReserved(p, () => this.d.items(chatId))) throw new Error('This question touches something reserved to the user (production, a deploy, a push, a secret, a message to people) or is not the engine\'s own question: it stays in its panel on the PC. Tell the user it waits there.');
+    if (!isNativeQuestion(p)) throw new Error('This is not the engine\'s own question: write it to the user yourself, then answer it for him with app_resolve_question with what he says.');
     this.armed(orchestratorId);
     this.relays.set(orchestratorId, { orchestratorId, chatId, requestId: p.id, question: q.question, at: this.now() });
     this.ended.delete(orchestratorId);
@@ -90,7 +88,6 @@ export class QuestionRelay {
   }
 
   private relayCommand(orchestratorId: string, title: string, p: PendingRequest): { question: string; chat: string; write: string } {
-    if (commandReserved(p)) throw new Error('This command touches production, a database, Azure or something reserved to the user: it stays on the PC with its Esegui. Tell the user it waits there.');
     const armed = this.relays.get(orchestratorId);
     if (armed && armed.requestId !== p.id && this.now() - armed.at <= RELAY_MS
       && [...this.d.pending(), ...(this.d.commands?.pending() ?? [])].some(x => x.chatId === armed.chatId && x.id === armed.requestId)) {
@@ -104,17 +101,27 @@ export class QuestionRelay {
     return { question, chat: title, write: writeText(title, commandLines(p, title)) };
   }
 
+  /** the Orchestrator wrote the whole command to the user after relaying it (spaces folded: Markdown may rewrap it) */
+  private shownWhole(orchestratorId: string, r: Relay, code: string): boolean {
+    const fold = (t: string) => t.replace(/\s+/g, ' ').trim(), want = fold(code);
+    if (!want) return false;
+    try { return this.d.items(orchestratorId).some(i => i.kind === 'assistant' && i.at >= r.at && fold(i.text).includes(want)); } catch { return false; }
+  }
+
   /** «sì» / «no» on a relayed command: run it on the PC or put it aside (checked again on the command as it is now) */
   private commandSaid(r: Relay, said: 'yes' | 'no' | null, orchestratorId: string, via?: 'phone'): boolean {
     const cmds = this.d.commands, p = cmds?.pending().find(x => x.chatId === r.chatId && x.id === r.requestId);
     if (!cmds || !p) return false;                       // run or put aside elsewhere first
     if (!said) { this.ended.set(orchestratorId, r); return false; }
-    const why = this.now() - r.at > RELAY_MS ? 'l\'inoltro era scaduto (30 min)' : commandReserved(p) ? 'il comando ora tocca qualcosa riservato all\'utente'
+    const why = this.now() - r.at > RELAY_MS ? 'l\'inoltro era scaduto (30 min)'
       // the phone's chat shows a command as «[comando: eseguilo dal PC]» (phone/filter.ts): a «sì» from there never runs what it did not show
-      : via === 'phone' && said === 'yes' && !commandShownWhole(p) ? 'dal telefono il comando non si vede intero: si lancia dal PC o da Controllo remoto' : '';
+      : via === 'phone' && said === 'yes' && !commandShownWhole(p) ? 'dal telefono il comando non si vede intero: si lancia dal PC o da Controllo remoto'
+      // his «sì» runs only what he read: the Orchestrator's reply since the relay must hold the whole command (ADR 0275)
+      : said === 'yes' && !this.shownWhole(orchestratorId, r, p.command?.code ?? '') ? 'non gli hai mostrato il comando intero: riscrivigli il testo di relay_question parola per parola' : '';
     if (why) { this.lost(r, said, why); return false; }
     try {
-      if (said === 'yes') cmds.run(r.chatId, r.requestId); else cmds.dismiss(r.chatId, r.requestId);
+      // he read the whole command in the relayed text: his «sì» is the second click production needs (ADR 0275)
+      if (said === 'yes') cmds.run(r.chatId, r.requestId, true); else cmds.dismiss(r.chatId, r.requestId);
       log.info('chats', 'relayed command decided by the user', { chat: r.chatId, data: { request: r.requestId, answer: said } });
       return true;
     } catch (e) {
@@ -144,8 +151,7 @@ export class QuestionRelay {
     if (!said) { this.ended.set(orchestratorId, r); return false; }   // something else: the Orchestrator reads it
     const option = p.questions?.[0]?.options.find(o => yesNoOf(o.label) === said);
     const why = this.now() - r.at > RELAY_MS ? 'l\'inoltro era scaduto (30 min)'
-      : !option || p.questions?.[0]?.question !== r.question ? 'la domanda è cambiata'
-      : phoneQuestionReserved(p, () => this.d.items(r.chatId)) ? 'la domanda ora tocca qualcosa riservato all\'utente' : '';
+      : !option || p.questions?.[0]?.question !== r.question ? 'la domanda è cambiata' : '';
     if (!why) {
       try {
         await this.d.answer(r.chatId, r.requestId, { kind: 'question', answers: { [r.question]: option!.label } }, via === 'phone' ? 'phone' : 'pc');

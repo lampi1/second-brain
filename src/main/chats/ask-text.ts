@@ -1,11 +1,11 @@
 // The text of a question or a command card away from the PC (ADR 0259 §4): Telegram (phone-port.ts) and Remote Control
 // (relay.ts, through the Orchestrator) show the same parts as the PC's «Bivio» card: the question, its context
 // sentence, what the user must do («Tocca a te»), what was done, and what happens on each road. A command is the
-// question «Eseguo sul PC?» with the command whole; one touching production, a deploy, a push, a secret or people
-// (shared/away.ts reservedText, or the runner's prodRisk) is reserved and stays for the PC.
+// question «Eseguo sul PC?» with the command whole; since ADR 0275 nothing stays for the PC: a production, database or
+// Azure one (touchesProdDbAzure) runs only after the user's yes to that whole command.
 // Pure; used by phone-port.ts and relay.ts, pinned by test/unit/chats/ask-text.test.ts.
 import type { ChatItem, PendingRequest, UiBrief } from '../../shared/contract';
-import { reservedText } from '../../shared/away';
+import { prodRisk } from '../../shared/runnable';
 import { filterOutgoing } from '../phone/filter';
 
 /** the brief an agent attached to this request (show_ui next-ask), if any */
@@ -45,16 +45,15 @@ export function commandLines(p: PendingRequest, who: string): string[] {
  *  migrations, Azure and other cloud or cluster tools (with a path before them too), recursive or bulk deletes */
 const RESERVED_TOOL = /(?:^|[\s;|&('"`\\/])(?:az|azd|azcopy|aws|gcloud|gsutil|terraform|pulumi|kubectl|helm|sqlcmd|psql|mysql|mysqladmin|mongo|mongosh|mongos|sqlite3|redis-cli|invoke-sqlcmd|bcp|dotnet-ef|prisma|sequelize|knex|flyway|liquibase)(?:\.(?:cmd|exe|ps1|bat))?(?=$|[\s;|&)'"`])/i;
 const RESERVED_WORDS = /\b(?:ef\s+database|migrat\w*|db:\w+|database|drop\s+(?:table|database|collection|schema)|truncate|delete\s+from|insert\s+into|update\s+\w+\s+set|\w+-az\w*|[a-z]+-azure\w*)\b/i;
-/** rm / Remove-Item / rd / del with a recursive or force flag, anywhere in the command (backtick continuations too) */
-const BULK_DELETE = /\b(?:rm|rmdir|rd|del|erase|remove-item|ri)\b[^\n]*(?:\s-(?:[a-z]*r[a-z]*|recurse|force)\b|\s\/[sq]\b)|-recurse\b|\brm\s+-[a-z]*[rf]/i;
+/** an MCP tool of a cloud or database server (mcp__azure__…, azmcp_…, mcp__postgres__…, mcp__supabase__…) */
+const RESERVED_MCP = /\b(?:mcp__[\w-]*(?:azure|az|sql|postgres|pg|mysql|maria|mongo|redis|supabase|neon|planetscale|cosmos|dynamo|db|database|prisma|drizzle)[\w-]*__|azmcp_)/i;
+/** database and migration CLIs the tool list misses (supabase db, drizzle-kit, pg_dump, dropdb, mongorestore…) */
+const RESERVED_CLI = /\b(?:supabase\s+db|drizzle-kit|pg_dump|pg_restore|pg_dumpall|createdb|dropdb|mongorestore|mongodump|mongoimport|mysqldump)\b|_?migrat\w*|database_url/i;
 
-/** A command that never runs from away: production (the runner wants a second click on the PC), reserved words, a
- *  database, cloud or bulk-delete command. A denylist: anything it misses still needs the user's own «sì». */
-export const commandReserved = (p: PendingRequest): boolean => {
-  if (!p.command) return true;
-  const code = p.command.code;
-  return !!p.command.prod || reservedText([code, p.command.lead ?? ''].join('\n')) || RESERVED_TOOL.test(code) || RESERVED_WORDS.test(code) || BULK_DELETE.test(code);
-};
+/** Text that runs something on production, a database or Azure (ADR 0275): the one thing the Orchestrator never grants
+ *  for the user without his yes. A denylist, plus the runner's own production check (shared/runnable.ts prodRisk). */
+export const touchesProdDbAzure = (text: string): boolean => RESERVED_TOOL.test(text) || RESERVED_WORDS.test(text) || RESERVED_MCP.test(text) || RESERVED_CLI.test(text)
+  || /\b(deploy\w*|produzion\w*|production|prod)\b/i.test(text) || prodRisk(text) !== null;
 
 /** Telegram's filter (phone/filter.ts) hides command lines and paths: a command the phone would show as
  *  «[comando: eseguilo dal PC]» is never decided there, the user must see what runs. */

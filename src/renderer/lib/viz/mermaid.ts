@@ -6,8 +6,10 @@
 // as well-formed XML and shown as an <img src="data:image/svg+xml,…"> (an image cannot run script, read the page or
 // load anything; img-src already allows data:). No eval: mermaid's parsers are precompiled (CSP script-src 'self').
 // The theme is mermaid's 'base' fed with the app's tokens read at draw time; VisualBlock redraws when the theme changes.
+// A box the model coloured itself gets a text colour that reads on it (mermaid-contrast.ts, ADR 0275).
 import mermaid from 'mermaid';
 import { parseFlowLayout, type FlowLayout } from './flow-layout';
+import { readableMermaid } from './mermaid-contrast';
 
 let seq = 0;
 let queue: Promise<unknown> = Promise.resolve();
@@ -95,7 +97,7 @@ export function drawMermaid(code: string, opts?: DrawOptions): Promise<{ src: st
     configure(opts);
     const id = `${opts?.idPrefix ?? 'sb-mermaid'}-${++seq}`;
     try {
-      const { svg } = await mermaid.render(id, code);
+      const { svg } = await mermaid.render(id, readableMermaid(code));
       return toImage(svg);
     } finally {
       // mermaid's scratch nodes, if a failure left them behind
@@ -113,7 +115,7 @@ export function layoutMermaid(code: string, opts?: DrawOptions): Promise<FlowLay
     configure(opts);
     const id = `${opts?.idPrefix ?? 'sb-mermaid'}-${++seq}`;
     try {
-      const { svg } = await mermaid.render(id, code);
+      const { svg } = await mermaid.render(id, readableMermaid(code));
       return parseFlowLayout(svg, id);
     } finally {
       document.getElementById(id)?.remove(); document.getElementById(`d${id}`)?.remove();

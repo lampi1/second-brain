@@ -1,0 +1,7 @@
+/* The project maps window (ProjectMapsDialog.tsx, ADR 0275): as wide as «Stato» was and nearly as tall as the screen, so
+   the drawing gets the room and the agents column scrolls on its own. Tokens only (tokens.css). */
+.modal.modal-maps { width: min(1440px, calc(100vw - 48px)); height: min(900px, calc(100vh - 48px)); display: flex; flex-direction: column; }
+.modal-maps .modal-body.maps-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 12px; overflow: hidden; }
+.modal-maps .pm-body { min-height: 0; }
+.modal-maps .pm-canvas, .modal-maps .pm-side { min-height: 0; overflow: auto; }
+.modal-maps .pm-empty { margin: auto; max-width: 560px; }

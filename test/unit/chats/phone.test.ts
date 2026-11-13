@@ -255,7 +255,7 @@ describe('the phone port', () => {
     expect(await f.port.answerFromPhone(c.id, 'central', true)).toBe('already');
     expect(f.answers).toHaveLength(1);
   });
-  it('lists only simple Sì/No questions and plans as decidable; the rest needs the PC', async () => {
+  it('lists simple Sì/No questions and plans as decidable, production ones too (ADR 0275); the rest goes through the Orchestrator', async () => {
     const f = fixture();
     const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'artisan', title: 'Titolo segreto' });
     const sink = f.sinks.get(c.id)!;
@@ -272,9 +272,9 @@ describe('the phone port', () => {
     expect(by('simple')).toMatchObject({ simple: true, reserved: false, recommended: 'yes', role: 'Artisan', neutralLabel: 'lavoro 1', orchestrator: true, text: 'Apro la PR?\nSì (consigliato)\nNo', short: 'Apro la PR?' });
     expect(JSON.stringify(list)).not.toContain('Titolo segreto');
     for (const id of ['multi', 'two', 'notyn']) expect(by(id).simple).toBe(false);
-    expect(by('reserved')).toMatchObject({ simple: true, reserved: true });
-    expect(by('mcp')).toMatchObject({ simple: false, reserved: true });
-    expect(by('perm')).toMatchObject({ simple: false, reserved: true });
+    expect(by('reserved')).toMatchObject({ simple: true, reserved: false });
+    expect(by('mcp')).toMatchObject({ simple: false, reserved: false });
+    expect(by('perm')).toMatchObject({ simple: false, reserved: false });
     const plan = list.find(d => d.ref.kind === 'plan')!;
     expect(plan).toMatchObject({ chatId: s.id, simple: true, reserved: false, role: 'Strategist', ref: { kind: 'plan', at: String(f.chat(s.id).plan!.at) } });
     expect(plan.text).toContain('Trovo dove si calcola lo sconto');
@@ -294,16 +294,17 @@ describe('the phone port', () => {
     expect(f.decided.at(-1)).toMatchObject({ type: 'resolved', by: 'phone' });
     expect(await f.port.answerFromPhone(c.id, 'nope', true)).toBe('gone');
     expect(await f.port.answerFromPhone('no-chat', 'q1', true)).toBe('gone');
-    // a permission, a reserved question, a multi-option one: never answered from the phone
+    // a question about a mail to a client: his Sì from the phone (ADR 0275); a permission, a multi-option one: no buttons
     sink.pending(permission('p1'));
     sink.pending(yesNo('r1', 'Mando la mail al cliente?'));
     sink.pending(yesNo('m1', 'Quale?', { questions: [{ question: 'Quale?', multiSelect: false, options: [{ label: 'A' }, { label: 'B' }, { label: 'C' }] }] }));
-    for (const id of ['p1', 'r1', 'm1']) expect(await f.port.answerFromPhone(c.id, id, true)).toBe('gone');
-    expect(f.answers).toHaveLength(1);
-    expect(f.m.pending().map(p => p.id).sort()).toEqual(['m1', 'p1', 'r1']);
+    for (const id of ['p1', 'm1']) expect(await f.port.answerFromPhone(c.id, id, true)).toBe('gone');
+    expect(await f.port.answerFromPhone(c.id, 'r1', true)).toBe('ok');
+    expect(f.answers).toHaveLength(2);
+    expect(f.m.pending().map(p => p.id).sort()).toEqual(['m1', 'p1']);
   });
 
-  it('a reserved action named only in the question\'s brief still needs the PC', async () => {
+  it('an action on production named in the question\'s brief is decided from the phone too (ADR 0275)', async () => {
     const f = fixture();
     const c = await f.m.create({ harness: 'claude', cwd: f.dir, title: 'Lavoro' });
     const sink = f.sinks.get(c.id)!;
@@ -311,9 +312,9 @@ describe('the phone port', () => {
     expect(f.port.listDecidable()[0]).toMatchObject({ simple: true, reserved: false });
     sink.item({ kind: 'artifact', id: 'art-b', at: Date.now(), key: 'b', title: 'Brief', summary: '', target: 'next-ask', askId: 'q1',
       ui: { component: 'brief', props: { done: ['Pronto il rilascio'], ifYes: 'Faccio il deploy in produzione', ifNo: 'Mi fermo' } } }, false);
-    expect(f.port.listDecidable()[0]).toMatchObject({ simple: true, reserved: true });
-    expect(await f.port.answerFromPhone(c.id, 'q1', true)).toBe('gone');
-    expect(f.answers).toEqual([]);
+    expect(f.port.listDecidable()[0]).toMatchObject({ simple: true, reserved: false });
+    expect(await f.port.answerFromPhone(c.id, 'q1', true)).toBe('ok');
+    expect(f.answers).toHaveLength(1);
   });
 
   it('a question answered on the PC first: the phone gets already, the event says by pc', async () => {
@@ -344,16 +345,16 @@ describe('the phone port', () => {
     expect(f.sent.get(t.id)!.at(-1)).toContain(PHONE_PLAN_NO);
   });
 
-  it('a plan that touches something reserved has no buttons', async () => {
+  it('a plan that touches production has its buttons too (ADR 0275)', async () => {
     const f = fixture();
     const s = await f.strategist([{ title: 'Faccio il deploy in produzione' }]);
     const d = f.port.listDecidable().find(x => x.chatId === s.id)!;
-    expect(d).toMatchObject({ simple: true, reserved: true });
-    expect(await f.port.decidePlanFromPhone(s.id, (d.ref as { at: string }).at, true)).toBe('gone');
-    expect(f.chat(s.id).plan!.phase).toBe('proposed');
+    expect(d).toMatchObject({ simple: true, reserved: false });
+    expect(await f.port.decidePlanFromPhone(s.id, (d.ref as { at: string }).at, true)).toBe('ok');
+    expect(f.chat(s.id).plan!.phase).toBe('running');
   });
 
-  it('reserves a plan when only its local intake mentions production', async () => {
+  it('a plan whose local intake mentions production: decided from the phone too, the intake text never sent (ADR 0275)', async () => {
     const f = fixture();
     const q = 'Confermi il dettaglio discusso per questo progetto? '.repeat(3) + 'La modifica va applicata in produzione?';
     const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true, prompt: 'Pianifica' });
@@ -373,13 +374,12 @@ describe('the phone port', () => {
     await f.m.send(plan.id, 'Basta domande');
     await strategyTools(f.m).find(t => t.name === 'plan_propose')!.run(PLAN, { mount: 'chat', params: { chatId: plan.id }, sessionId: '', signal: new AbortController().signal } as never);
     const item = f.port.listDecidable().find(x => x.chatId === plan.id)!;
-    expect(item.reserved).toBe(true);
+    expect(item.reserved).toBe(false);
     expect(item.text).not.toContain(q);
-    expect(await f.port.decidePlanFromPhone(plan.id, (item.ref as { at: string }).at, true)).toBe('gone');
-    expect(f.chat(plan.id).plan!.phase).toBe('proposed');
+    expect(await f.port.decidePlanFromPhone(plan.id, (item.ref as { at: string }).at, true)).toBe('ok');
   });
 
-  it.each(['Sì', 'Basta domande'])('preserves a PC-only option through an intake response of %s', async reply => {
+  it.each(['Sì', 'Basta domande'])('keeps the PC-only mark through an intake response of %s; the phone decides it (ADR 0275)', async reply => {
     const f = fixture(), q = 'Procedo?';
     const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true, prompt: 'Pianifica' });
     const req = yesNo('scope', q);
@@ -392,18 +392,17 @@ describe('the phone port', () => {
     if (reply === 'Sì') await f.m.send(plan.id, 'Basta domande');
     await strategyTools(f.m).find(t => t.name === 'plan_propose')!.run(PLAN, { mount: 'chat', params: { chatId: plan.id }, sessionId: '', signal: new AbortController().signal } as never);
     const item = f.port.listDecidable().find(x => x.chatId === plan.id)!;
-    expect(item.reserved).toBe(true);
+    expect(item.reserved).toBe(false);
     expect(item.text).not.toContain('produzione');
-    expect(await f.port.decidePlanFromPhone(plan.id, (item.ref as { at: string }).at, true)).toBe('gone');
+    expect(await f.port.decidePlanFromPhone(plan.id, (item.ref as { at: string }).at, true)).toBe('ok');
   });
 
-  it('a plan with a Herald step (it sends or publishes) is reserved, whatever its words (review S5)', async () => {
+  it('a plan with a Herald step (it sends or publishes) is decided from the phone too (ADR 0275)', async () => {
     const f = fixture();
     const s = await f.strategist([{ title: 'Scrivo il riassunto' }, { title: 'Lo giro al team', role: 'herald' }]);
     const d = f.port.listDecidable().find(x => x.chatId === s.id)!;
-    expect(d).toMatchObject({ simple: true, reserved: true });
-    expect(await f.port.decidePlanFromPhone(s.id, (d.ref as { at: string }).at, true)).toBe('gone');
-    expect(f.chat(s.id).plan!.phase).toBe('proposed');
+    expect(d).toMatchObject({ simple: true, reserved: false });
+    expect(await f.port.decidePlanFromPhone(s.id, (d.ref as { at: string }).at, true)).toBe('ok');
   });
 
   it('sends to the Orchestrator; says queued while it works; counts who waits with neutral labels', async () => {

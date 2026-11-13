@@ -45,7 +45,9 @@ describe('app_project_map', () => {
     expect(tool.run({ action: 'list' })).toMatchObject({ projects: [{ project: 'negozio' }] });
     expect(tool.run({ action: 'read', project: 'negozio' })).toContain('Mappa «Negozio»');
     expect(tool.run({ action: 'open', project: 'negozio', element: 'web' })).toBe('ok');
-    expect(ui).toEqual([{ action: 'page', value: 'collegamenti/progetti/negozio/web' }]);
+    expect(ui).toEqual([{ action: 'maps', value: 'negozio/web' }]);
+    expect(tool.run({ action: 'open' })).toBe('ok');
+    expect(ui[1]).toEqual({ action: 'maps', value: '' });
     expect(() => tool.run({ action: 'open', project: 'negozio', element: 'nope' })).toThrow('no «nope»');
     expect(tool.run({ action: 'brief', title: 'Gestionale', root: 'C:\\repo\\erp' })).toMatchObject({ roleId: 'scout', cwd: 'C:\\repo\\erp', title: 'Mappa · Gestionale' });
     expect((tool.run({ action: 'brief', project: 'negozio' }) as { prompt: string }).prompt).toContain('Ridisegna la mappa del progetto «Negozio»');

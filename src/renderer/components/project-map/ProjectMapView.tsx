@@ -9,7 +9,8 @@
 // - The agents column: the chats bound to the map (projectmap/service.ts), who waits for the user first, with their
 //   steps; a card lights its boxes on the map and opens its chat.
 // - The history slider plays every version from the first drawing to now. Live: 'projectmap:changed' reloads it.
-// Rendered by brain-model/MapPage.tsx (view «Progetti», pageArg progetti/<project>/<system>).
+// Rendered by brain-model/MapPage.tsx (view «Progetti», pageArg progetti/<project>/<system>) and by ProjectMapsDialog.tsx
+// (the window that took «Stato»'s place, ADR 0275): a chat opened from a card closes that window first.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { BOX, levelOf, pathTo, shownStatus, type Level, type LevelEdge, type LevelNode, type MapAgent, type MapElement, type MapState, type ProjectMapInfo, type ProjectMapView as View } from '@shared/project-map';
 import { openChatRef } from '../../actions';
@@ -17,6 +18,7 @@ import { t } from '../../i18n';
 import { useNow } from '../../lib/clock';
 import { ago } from '../../lib/format';
 import { useApp } from '../../store/store';
+import { closeModal } from '../../store/ui';
 import { AgentAvatar } from '../AgentAvatar';
 import './project-map.css';
 
@@ -65,7 +67,7 @@ function AgentCard({ a, names, on, onPick }: { a: MapAgent; names: string; on: b
     {a.total > 0 && <div className="pm-steps" aria-hidden>{Array.from({ length: a.total }, (_, i) => <i key={i} data-s={i < a.done ? 'done' : i === a.done && !DONE_MARKS.has(a.mark) ? 'now' : 'todo'} />)}</div>}
     {a.ask && <p className="pm-agent-ask"><b>{t('pm.asks')}</b> {a.ask}</p>}
     {!a.ask && a.now && <p><b>{t('pm.now')}</b> {a.now}</p>}
-    <button type="button" className="btn btn-ghost btn-s" onClick={e => { e.stopPropagation(); openChatRef(a.chatId); }}>{t('pm.openChat')}</button>
+    <button type="button" className="btn btn-ghost btn-s" onClick={e => { e.stopPropagation(); closeModal(); openChatRef(a.chatId); }}>{t('pm.openChat')}</button>
   </div>;
 }
 
@@ -91,7 +93,8 @@ function placeLabels(lv: Level): { e: LevelEdge; left: number; top: number; flat
   });
 }
 
-export function ProjectMapView({ arg, onArg }: { arg: string | null; onArg: (arg: string | null) => void }) {
+/** fitAll: the whole level fits the canvas, height too (the maps window, ADR 0275); otherwise the width alone (the page scrolls). */
+export function ProjectMapView({ arg, onArg, fitAll = false }: { arg: string | null; onArg: (arg: string | null) => void; fitAll?: boolean }) {
   const now = useNow(30_000);
   const [maps, setMaps] = useState<ProjectMapInfo[] | null>(null);
   const [view, setView] = useState<View | null>(null);
@@ -102,7 +105,8 @@ export function ProjectMapView({ arg, onArg }: { arg: string | null; onArg: (arg
   const [fit, setFit] = useState(1);
   const box = useRef<HTMLDivElement>(null);
   const [argProject, argLevel] = (arg ?? '').split('/');
-  const project = argProject || maps?.[0]?.project || null;
+  // a project no longer drawn (or a stale place) falls back to the first one instead of «loading» for ever
+  const project = (argProject && (!maps || maps.some(m => m.project === argProject)) ? argProject : maps?.[0]?.project) || null;
   const level = argLevel || null;
 
   const loadList = useCallback(() => { void window.sb.invoke('projectmap:list', undefined).then(setMaps, () => setMaps([])); }, []);
@@ -137,12 +141,13 @@ export function ProjectMapView({ arg, onArg }: { arg: string | null; onArg: (arg
   useEffect(() => {
     const el = box.current;
     if (!el || !lv) return;
-    const measure = () => setFit(Math.min(1, Math.max(0.35, (el.clientWidth - 24) / lv.width)));
+    // the legend and the zoom buttons take ≈68 px at the bottom of the canvas
+    const measure = () => setFit(Math.min(1, Math.max(0.35, Math.min((el.clientWidth - 24) / lv.width, fitAll ? (el.clientHeight - 68) / lv.height : Infinity))));
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [lv]);
+  }, [lv, fitAll]);
 
   if (maps === null) return <div className="dash-empty">{t('bm.loading')}</div>;
   if (!maps.length || !project) return <section className="dash-panel pm-empty" data-testid="pm-empty"><h3>{t('pm.emptyTitle')}</h3><p>{t('pm.emptyLead')}</p><p className="pm-example">{t('pm.emptyExample')}</p></section>;

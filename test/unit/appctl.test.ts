@@ -101,42 +101,55 @@ describe('app control tools', () => {
     expect(set).toHaveBeenCalledTimes(3);
     expect(rows[0]).toMatchObject({ model: 'chosen-model', effort: 'xhigh', effortStatus: current });
   });
-  it('can never answer permissions; questions only through app_resolve_question', () => {
+  it('answers for the user only through app_resolve_question', () => {
     const { tools } = deps();
-    expect(tools.map(t => t.name).some(n => /answer|approve|allow|permission/i.test(n))).toBe(false);
     expect(tools.filter(t => /resolve/.test(t.name)).map(t => t.name)).toEqual(['app_resolve_question']);
   });
 
-  describe('app_resolve_question: the Orchestrator answers a work chat\'s Sì/No question for the user (ADR 0269)', () => {
+  describe('app_resolve_question: the Orchestrator answers for the user, as the user (ADR 0269, 0275)', () => {
     const q = { id: 'q1', chatId: 'w', type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at: 100,
       questions: [{ question: 'Apro il bug?', options: [{ label: 'Sì' }, { label: 'No' }], multiSelect: false }] };
     const perm = { id: 'p1', chatId: 'w', type: 'permission', tool: 'Bash', title: 'git push', detail: '', input: {}, at: 100 };
     function setup(caller?: string) {
-      const answered: unknown[] = [];
+      const answered: unknown[] = [], decided: unknown[] = [];
       const chats = {
-        list: () => [{ id: 'orchestrator', isOrchestrator: true, harness: 'claude' }, { id: 'w', isOrchestrator: false, harness: 'claude' }],
+        list: () => [{ id: 'orchestrator', isOrchestrator: true, harness: 'claude' }, { id: 'w', isOrchestrator: false, harness: 'claude' },
+          { id: 's', isOrchestrator: false, harness: 'claude', plan: { phase: 'proposed', at: 150, steps: [], clarified: [] } }],
         pending: () => [q, perm, { ...q, id: 'form', tool: 'mcp__fixture' }],
         items: () => [],
         answer: async () => { throw new Error('never the user\'s own path'); },
-        answerForUser: (chatId: string, requestId: string, answers: unknown) => { answered.push({ chatId, requestId, answers }); },
+        answerForUser: (chatId: string, requestId: string, answer: unknown, confirmed?: boolean) => { answered.push({ chatId, requestId, answer, ...(confirmed ? { confirmed } : {}) }); },
+        planDecide: async (chatId: string, decision: string, at: number, text?: string) => { decided.push({ chatId, decision, at, text }); },
       } as unknown as ChatService;
       const t = appControlTools({ chats, browser: {} as BrowserService, brain: {} as BrainService, window: () => null, emitUi: () => {}, version: '0' }, caller).find(x => x.name === 'app_resolve_question')!;
-      return { answered, run: (a: Record<string, unknown>) => Promise.resolve().then(() => t.run(a)) };
+      return { answered, decided, run: (a: Record<string, unknown>) => Promise.resolve().then(() => t.run(a)) };
     }
 
-    it('the authenticated Orchestrator answers for the user through the chats\' own check', async () => {
-      const { answered, run } = setup('orchestrator');
+    it('a question (an option or free words, an MCP form too), a permission, a plan', async () => {
+      const { answered, decided, run } = setup('orchestrator');
       await expect(run({ chatId: 'w', requestId: 'q1', answers: { 'Apro il bug?': 'Sì' } })).resolves.toMatch(/per l’utente/);
-      expect(answered).toEqual([{ chatId: 'w', requestId: 'q1', answers: { 'Apro il bug?': 'Sì' } }]);
+      await run({ chatId: 'w', requestId: 'form', answers: { 'Apro il bug?': 'solo quello grave' } });
+      await run({ chatId: 'w', requestId: 'p1', allow: true });
+      await run({ chatId: 'w', requestId: 'p1', allow: true, confirmed: true });
+      expect(answered).toEqual([
+        { chatId: 'w', requestId: 'q1', answer: { kind: 'question', answers: { 'Apro il bug?': 'Sì' } } },
+        { chatId: 'w', requestId: 'form', answer: { kind: 'question', answers: { 'Apro il bug?': 'solo quello grave' } } },
+        { chatId: 'w', requestId: 'p1', answer: { kind: 'permission', allow: true } },
+        { chatId: 'w', requestId: 'p1', answer: { kind: 'permission', allow: true }, confirmed: true },
+      ]);
+      await run({ chatId: 's', requestId: 'plan', decision: 'approve' });
+      await run({ chatId: 's', requestId: 'plan', decision: 'change', text: 'prima i test' });
+      expect(decided).toEqual([{ chatId: 's', decision: 'approve', at: 150, text: undefined }, { chatId: 's', decision: 'change', at: 150, text: 'prima i test' }]);
     });
 
-    it('refused on the plain mount, for a permission, an MCP form or a closed request', async () => {
+    it('refused on the plain mount, without an answer, or for a closed request', async () => {
       const plain = setup();
       await expect(plain.run({ chatId: 'w', requestId: 'q1', answers: { 'Apro il bug?': 'Sì' } })).rejects.toThrow(/solo l’Orchestrator/);
       const { answered, run } = setup('orchestrator');
-      await expect(run({ chatId: 'w', requestId: 'p1', answers: {} })).rejects.toThrow(/solo le domande/);
-      await expect(run({ chatId: 'w', requestId: 'form', answers: { 'Apro il bug?': 'Sì' } })).rejects.toThrow(/modulo MCP/);
+      await expect(run({ chatId: 'w', requestId: 'p1' })).rejects.toThrow(/allow true o false/);
+      await expect(run({ chatId: 'w', requestId: 'q1' })).rejects.toThrow(/answers/);
       await expect(run({ chatId: 'w', requestId: 'nope', answers: {} })).rejects.toThrow(/non è più aperta/);
+      await expect(run({ chatId: 's', requestId: 'plan', decision: 'forse' })).rejects.toThrow(/approve o change/);
       expect(plain.answered).toEqual([]);
       expect(answered).toEqual([]);
     });
@@ -165,7 +178,6 @@ describe('app control tools', () => {
       const { passed, run } = setup({ text: 'Fallo blu scuro', at: 200 });
       await expect(run({ chatId: 'w', requestId: 'q1', words: 'blu scuro' })).resolves.toMatch(/suo messaggio/);
       expect(passed).toEqual([{ chatId: 'w', requestId: 'q1', words: 'blu scuro' }]);
-      await expect(setup({ text: 'sì', at: 200 }).run({ chatId: 'w', requestId: 'p1', words: 'sì' })).rejects.toThrow(/solo le domande/);
       await expect(setup({ text: 'Blu', at: 200 }, true).run({ chatId: 'w', requestId: 'q1', words: 'Blu' })).rejects.toThrow(/solo l’Orchestrator/);
     });
 

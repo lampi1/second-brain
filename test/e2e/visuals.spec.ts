@@ -81,3 +81,39 @@ for (const scheme of ['dark', 'light'] as const) {
     await app.close();
   });
 }
+
+// ADR 0275: the boxes a model colours itself (pastel classDef fills) keep a readable label on the dark theme
+const COLOURED = [
+  'Lo stato dei lavori:',
+  '```mermaid',
+  'flowchart TD',
+  '  subgraph Lavori',
+  '    A[Server in test, 12 tool] --> B[Fetta A: correzioni]',
+  '    B --> C[Chiamata nella fetta A] & D[Fetta B: scritture]',
+  '    D --> E[Collaudo] --> F[Rilascio]',
+  '  end',
+  '  classDef done fill:#c8e6c9,stroke:#2e7d32',
+  '  classDef next fill:#fff9c4,stroke:#f9a825',
+  '  classDef todo fill:#eeeeee,stroke:#9e9e9e',
+  '  class A,B done',
+  '  class C,D next',
+  '  class E,F todo',
+  '```',
+].join('\n');
+
+test('a diagram whose boxes the model coloured keeps its labels readable', async () => {
+  const { app, page } = await launchDemo({ scheme: 'dark' });
+  try {
+    await say(app, 'fix', COLOURED);
+    for (let i = 0; i < 10 && await page.getByTestId('qwin-backdrop').isVisible(); i++) await page.getByTestId('qwin-later').click();
+    await page.getByTestId('chat-max-fix').click();
+    const diagram = page.getByTestId('maximized').getByTestId('viz-diagram').locator('img');
+    await expect(diagram).toBeVisible({ timeout: 30_000 });
+    const svg = decodeURIComponent((await diagram.getAttribute('src'))!.replace(/^data:image\/svg\+xml;charset=utf-8,/, ''));
+    expect(svg).toContain('color:#16181d');
+    await diagram.click();
+    await expect(page.locator('[data-testid^="viz-zoom"]').first()).toBeVisible();
+    await page.waitForTimeout(300);
+    await shot(page, 'visuals-diagram-coloured');
+  } finally { await app.close(); }
+});

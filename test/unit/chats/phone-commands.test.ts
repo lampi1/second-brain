@@ -4,7 +4,7 @@
 import { expect, it } from 'vitest';
 import type { ChatItem, ChatSummary, EventChannel, EventMap, PendingRequest } from '../../../src/shared/contract';
 import { createPhonePort, type PhoneChats } from '../../../src/main/chats/phone-port';
-import { commandReserved, questionLines } from '../../../src/main/chats/ask-text';
+import { questionLines, touchesProdDbAzure } from '../../../src/main/chats/ask-text';
 
 type Tap = <K extends EventChannel>(channel: K, payload: EventMap[K]) => void;
 const chat = { id: 'dev', title: 'Fix totale', state: 'waiting', pending: 1, isOrchestrator: false, agent: { name: 'Artisan' } } as unknown as ChatSummary;
@@ -55,22 +55,22 @@ it('a command Telegram\'s filter would hide («[comando: eseguilo dal PC]») get
   expect(w.ran).toEqual([]);
 });
 
-it('production, database, Azure and reserved commands stay for the PC', async () => {
-  const reserved = [cmd('p', 'npm run build', 'prod'), cmd('a', 'az webapp restart -n shop'), cmd('d', 'dotnet ef database update'), cmd('m', 'npm run db:migrate'),
-    cmd('g', 'git push origin main'), cmd('s', 'sqlcmd -S . -Q "select 1"')];
-  for (const c of reserved) expect(commandReserved(c)).toBe(true);
-  expect(commandReserved(cmd('ok', 'npm test -- --grep ordini'))).toBe(false);
-  // a path before the tool, other databases and clouds, recursive deletes in any spelling (review of ADR 0259 §4)
-  const bad = ["& 'C:\\Program Files\\x\\az.cmd' group delete -n rg --yes", '/usr/bin/az group delete', 'sqlite3 app.db "UPDATE users SET admin=1"', 'mongo shop --eval "db.orders.drop()"',
-    'rm -fr build', 'rm -r -Force x', 'Remove-Item x -R -Force', 'rd /s /q x', 'Remove-Item x `\n -Recurse', 'aws s3 rm s3://b --recursive', 'gcloud sql instances delete x',
-    'New-AzResourceGroup -Name x', 'Invoke-Sqlcmd -Query "x"', 'npx prisma migrate deploy', 'AZ login'];
-  expect(bad.filter(b => !commandReserved(cmd('x', b)))).toEqual([]);
-  const fine = ['npm test', 'npm run lint', 'git status', 'dotnet test test/Shop.Tests', "echo 'test verdi'", 'node scripts/check.js'];
-  expect(fine.filter(b => commandReserved(cmd('x', b)))).toEqual([]);
-  const w = world([cmd('a', 'az webapp restart -n shop')]);
-  expect(w.port.listDecidable()[0]!.reserved).toBe(true);
-  expect(await w.port.answerFromPhone('dev', 'a', true)).toBe('gone');
-  expect(w.ran).toEqual([]);
+it('production, database and Azure commands are recognised, and run from the phone on his yes (ADR 0275)', async () => {
+  const reserved = ['az webapp restart -n shop', 'dotnet ef database update', 'npm run db:migrate', 'sqlcmd -S . -Q "select 1"',
+    "& 'C:\\Program Files\\x\\az.cmd' group delete -n rg --yes", '/usr/bin/az group delete', 'sqlite3 app.db "UPDATE users SET admin=1"', 'mongo shop --eval "db.orders.drop()"',
+    'aws s3 rm s3://b --recursive', 'gcloud sql instances delete x', 'New-AzResourceGroup -Name x', 'Invoke-Sqlcmd -Query "x"', 'npx prisma migrate deploy', 'AZ login',
+    // the review's gaps: the runner's own production check, MCP servers of clouds and databases, more database CLIs
+    'bash ops.sh restart api', 'ro-query "select * from users"', './ops/runner/run.sh', 'mcp__azure__storage_account_delete', 'mcp__azure-mcp__keyvault_secret_get',
+    'azmcp_sql_db_delete', 'mcp__supabase__apply_migration', 'mcp__postgres__query', 'mcp__mssql__execute', 'npx supabase db push',
+    'DATABASE_URL=$PROD_DATABASE_URL npx drizzle-kit push', 'pg_dump shop > x.sql', 'dropdb shop', 'mongorestore dump/'];
+  expect(reserved.filter(b => !touchesProdDbAzure(b))).toEqual([]);
+  const fine = ['npm test', 'npm run lint', 'git status', 'dotnet test test/Shop.Tests', "echo 'test verdi'", 'node scripts/check.js', 'mcp__playwright__browser_click', 'Bash'];
+  expect(fine.filter(b => touchesProdDbAzure(b))).toEqual([]);
+  // shown whole: nothing stays for the PC, his Yes runs it
+  const w = world([cmd('a', 'pytest -q', 'prod')]);
+  expect(w.port.listDecidable()[0]!.reserved).toBe(false);
+  expect(await w.port.answerFromPhone('dev', 'a', true)).toBe('ok');
+  expect(w.ran).toEqual(['a']);
 });
 
 it('without the commands hook a command stays on the PC (not simple)', () => {

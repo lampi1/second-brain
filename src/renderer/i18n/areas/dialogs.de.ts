@@ -119,7 +119,6 @@ export const dialogsDe: typeof dialogsIt = {
   'dialogs.orchestrator.name': 'Orchestrator',
   'dialogs.orchestrator.empty': 'Noch kein Orchestrator',
   'dialogs.orchestrator.createButton': 'Orchestrator erstellen',
-  'dialogs.orchestrator.statusLabel': 'Status: Chats und PRs auf einen Blick',
   'dialogs.orchestrator.statusShortcut': 'Strg+Umschalt+S',
   'dialogs.orchestrator.stopLabel': 'Stoppen',
   'dialogs.orchestrator.stopShortcut': 'Strg+.',

@@ -62,11 +62,11 @@ it('«no» picks the No option, from the PC', async () => {
   expect(w.answered[0]).toMatchObject({ answer: { answers: { 'Applico la migrazione al DB locale?': 'No' } }, by: 'pc' });
 });
 
-it('refuses what stays for the user\'s click: permissions, commands, reserved or non-native questions, not Sì/No', () => {
+it('relays a Sì/No question, production ones too (ADR 0275); the rest the Orchestrator answers itself', () => {
   const perm = { ...yesNo('p1', 'dev'), type: 'permission', tool: 'Bash', questions: undefined } as PendingRequest;
-  expect(() => world([perm]).r.relay('orch', 'dev')).toThrow(/click/);
-  expect(() => world([yesNo('q1', 'dev', 'Faccio il deploy in produzione?')]).r.relay('orch', 'dev')).toThrow(/reserved/);
-  expect(() => world([yesNo('q1', 'dev', 'Procedo?', 'mcp__x__form')]).r.relay('orch', 'dev')).toThrow(/reserved/);
+  expect(() => world([perm]).r.relay('orch', 'dev')).toThrow(/app_resolve_question/);
+  expect(world([yesNo('q1', 'dev', 'Faccio il deploy in produzione?')]).r.relay('orch', 'dev').question).toBe('Faccio il deploy in produzione?');
+  expect(() => world([yesNo('q1', 'dev', 'Procedo?', 'mcp__x__form')]).r.relay('orch', 'dev')).toThrow(/app_resolve_question/);
   const three = yesNo('q1', 'dev');
   three.questions![0]!.options.push({ label: 'Forse', description: '' });
   expect(() => world([three]).r.relay('orch', 'dev')).toThrow(/Sì\/No/);
@@ -74,7 +74,7 @@ it('refuses what stays for the user\'s click: permissions, commands, reserved or
   expect(() => world([]).r.relay('orch', 'dev')).toThrow(/waits for no answer/);
 });
 
-it('a «sì» that cannot land is told to the Orchestrator: expired, failed delivery, or the brief turned reserved', async () => {
+it('a «sì» that cannot land is told to the Orchestrator: expired or failed delivery; a brief naming production still lands', async () => {
   const e = world([yesNo('q1', 'dev')]);
   e.r.relay('orch', 'dev');
   e.at(1000 + RELAY_MS + 1);
@@ -89,9 +89,8 @@ it('a «sì» that cannot land is told to the Orchestrator: expired, failed deli
   const b = world([yesNo('q1', 'dev')]);
   b.r.relay('orch', 'dev');
   b.items.push({ kind: 'artifact', id: 'x', at: 2, askId: 'q1', title: 'Brief', summary: '', ui: { component: 'brief', props: { done: ['fatto'], ifYes: 'faccio il push in produzione', ifNo: 'mi fermo' } } } as unknown as ChatItem);
-  expect(await b.r.userSaid('orch', 'sì')).toBe(false);
-  expect(b.answered).toEqual([]);
-  expect(b.told).toEqual([expect.stringContaining('riservato')]);
+  expect(await b.r.userSaid('orch', 'sì')).toBe(true);
+  expect(b.told).toEqual([]);
 });
 
 it('a question answered elsewhere first, or an old relay, takes no later «sì»', async () => {
@@ -118,9 +117,14 @@ const cmd = (id: string, chatId: string, code: string, prod?: string): PendingRe
 function withCommands(cmds: PendingRequest[], pending: PendingRequest[] = []) {
   const ran: string[] = [], dismissed: string[] = [];
   const chats = [chat({ id: 'orch', isOrchestrator: true, title: 'Orchestrator' }), chat({ id: 'dev', title: 'Dev' })];
-  const r = new QuestionRelay({ chats: () => chats, pending: () => pending, items: () => [], answer: async () => {},
-    commands: { pending: () => cmds, run: (_c, id) => { ran.push(id); cmds.splice(cmds.findIndex(x => x.id === id), 1); }, dismiss: (_c, id) => { dismissed.push(id); cmds.splice(cmds.findIndex(x => x.id === id), 1); } } });
-  return { r, ran, dismissed };
+  const said: ChatItem[] = [];
+  const r = new QuestionRelay({ chats: () => chats, pending: () => pending, items: id => (id === 'orch' ? said : []), answer: async () => {},
+    commands: { pending: () => cmds, run: (_c, id, confirmed) => { ran.push(confirmed ? `${id}:confirmed` : id); cmds.splice(cmds.findIndex(x => x.id === id), 1); }, dismiss: (_c, id) => { dismissed.push(id); cmds.splice(cmds.findIndex(x => x.id === id), 1); } } });
+  /** the Orchestrator writes the relayed text to the user */
+  const wrote = (text: string) => { said.push({ kind: 'assistant', id: `a${said.length}`, at: Date.now(), text } as ChatItem); };
+  /** relay, then write it word for word */
+  const show = (chatId = 'dev') => { const out = r.relay('orch', chatId); wrote(out.write); return out; };
+  return { r, ran, dismissed, wrote, show };
 }
 
 it('relays the brief\'s parts with the question', () => {
@@ -131,26 +135,35 @@ it('relays the brief\'s parts with the question', () => {
 
 it('a command is relayed first; «sì» runs it on the PC, «no» puts it aside', async () => {
   const w = withCommands([cmd('c1', 'dev', 'npm test')], [yesNo('q1', 'dev')]);
-  const out = w.r.relay('orch', 'dev');
+  const out = w.show();
   expect(out.question).toBe('Eseguo questo comando sul tuo PC?');
   expect(out.write).toContain('npm test');
   expect(await w.r.userSaid('orch', 'sì')).toBe(true);
-  expect(w.ran).toEqual(['c1']);
+  expect(w.ran).toEqual(['c1:confirmed']);
   const n = withCommands([cmd('c2', 'dev', 'npm run lint')]);
-  n.r.relay('orch', 'dev');
+  n.show();
   expect(await n.r.userSaid('orch', 'no')).toBe(true);
   expect(n.dismissed).toEqual(['c2']);
 });
 
-it('production, database and Azure commands are never relayed', () => {
+it('production, database and Azure commands are relayed whole; his «sì» runs them, confirmed (ADR 0275)', async () => {
   for (const c of [cmd('c1', 'dev', 'npm run build', 'prod'), cmd('c2', 'dev', 'az webapp restart -n shop'), cmd('c3', 'dev', 'dotnet ef database update'), cmd('c4', 'dev', 'git push origin main')]) {
-    expect(() => withCommands([c]).r.relay('orch', 'dev')).toThrow(/stays on the PC/);
+    const w = withCommands([c]);
+    expect(w.show().write).toContain(c.command!.code);
+    expect(await w.r.userSaid('orch', 'sì')).toBe(true);
+    expect(w.ran).toEqual([`${c.id}:confirmed`]);
   }
 });
 
-it('a reserved command does not block the chat\'s question; a «sì» from the phone never runs a command it could not show', async () => {
-  const w = withCommands([cmd('c1', 'dev', 'az group delete -n rg')], [yesNo('q1', 'dev')]);
-  expect(w.r.relay('orch', 'dev').question).toBe('Applico la migrazione al DB locale?');
+it('a «sì» never runs a relayed command the Orchestrator did not write whole to the user (ADR 0275)', async () => {
+  const w = withCommands([cmd('c1', 'dev', 'az webapp restart -n shop')]);
+  w.r.relay('orch', 'dev');
+  w.wrote('Riavvio il sito, va bene?');
+  expect(await w.r.userSaid('orch', 'sì')).toBe(false);
+  expect(w.ran).toEqual([]);
+});
+
+it('a «sì» from the phone never runs a command it could not show', async () => {
   const p = withCommands([cmd('c2', 'dev', 'npm test')]);
   p.r.relay('orch', 'dev');
   expect(await p.r.userSaid('orch', 'sì', 'phone')).toBe(false);

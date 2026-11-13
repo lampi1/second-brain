@@ -18,7 +18,7 @@ import { emptyViewer, type ViewerState } from '../lib/viewer-stack';
 
 export type Density = 'comfortable' | 'compact';
 export type Theme = 'system' | 'light' | 'dark';
-export type Modal = 'palette' | 'shortcuts' | 'confirm' | 'settings' | 'orchestratorRenew' | 'handoff' | 'credentials' | 'stato' | 'visual' | 'setup';
+export type Modal = 'palette' | 'shortcuts' | 'confirm' | 'settings' | 'orchestratorRenew' | 'handoff' | 'credentials' | 'stato' | 'maps' | 'visual' | 'setup';
 export { BRAIN_PAGES, type BrainPageId };
 export const isBrainPage = (id: string): id is BrainPageId => id==='file'||BRAIN_PAGES.some(p => p.id === id);
 export const pageLabel = (id: string): string => (id==='file'?t('viewer.title'): id === 'mappa' ? t('appText.ui.map3d') : BRAIN_PAGES.find(p => p.id === id)?.label ?? id);
@@ -68,6 +68,7 @@ export interface UiState {
   confirm: ConfirmSpec | null;
   orchestratorRenew: { chatId: string; to: Harness } | null; // the new-Orchestrator dialog: which Orchestrator, which engine preselected
   handoffChat: string | null;    // the chat whose hand-off the 'handoff' dialog shows
+  mapsArg: string | null;        // the 'maps' dialog's place: <project>/<system> (ADR 0275), null = the first project
   handoffSession: string | null; // set: the note one cold continuation started from (read only, ADR 0031)
   ctxHidden: Record<string, number>; // long-chat notice hidden by the user, per chat: the context size when hidden
   page: BrainPageId;             // the page on screen; 'home' (the Grindhouse) holds the agents' strips and focus mode
@@ -159,7 +160,7 @@ function readPrefs(): Prefs {
 }
 
 export const ui = createStore<UiState>({
-  prefs: readPrefs(), maximized: null, focusMode: null, focused: null, modal: null, confirm: null, orchestratorRenew: null, handoffChat: null, handoffSession: null, ctxHidden: {}, page: 'home',
+  prefs: readPrefs(), maximized: null, focusMode: null, focused: null, modal: null, confirm: null, orchestratorRenew: null, handoffChat: null, mapsArg: null, handoffSession: null, ctxHidden: {}, page: 'home',
   lanePeek: false, toasts: [], flash: null, focusReq: null, hidden: [], hiddenTabs: [], closing: [], later: false, announce: '', qwin: { open: false, first: null, call: 0, shown: false }, viewer: emptyViewer,
   map: false, pageArg: null, mapArg: null, history: [{ page: 'home' }], hist: 0, center: false, read: readRead(), highlight: null, toastDismissed: [],
 });
@@ -211,6 +212,9 @@ export const openModal = (modal: Modal) => ui.set(s => ({ ...s, modal }));
 export const closeModal = () => ui.set(s => ({ ...s, modal: null, confirm: null, orchestratorRenew: null }));
 export const openOrchestratorRenew = (orchestratorRenew: { chatId: string; to: Harness }) => ui.set(s => ({ ...s, modal: 'orchestratorRenew', orchestratorRenew }));
 export const askConfirm = (confirm: ConfirmSpec) => ui.set(s => ({ ...s, modal: 'confirm', confirm }));
+/** The project maps in a window (ADR 0275: in place of «Stato»), at a project or a system inside it. */
+export const openMaps = (arg?: string | null) => ui.set(s => ({ ...s, modal: 'maps', mapsArg: arg ?? s.mapsArg }));
+export const setMapsArg = (arg: string | null) => ui.set(s => ({ ...s, mapsArg: arg }));
 export const openHandoff = (chatId: string, session?: string) => ui.set(s => ({ ...s, modal: 'handoff', handoffChat: chatId, handoffSession: session ?? null }));
 export const setMaximized = (key: string | null) => ui.set(s => ({ ...s, maximized: key }));
 export const setFocused = (key: string | null) => { if (ui.get().focused !== key) ui.set(s => ({ ...s, focused: key })); };

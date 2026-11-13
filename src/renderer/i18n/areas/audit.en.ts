@@ -63,7 +63,6 @@ export const auditEn: Record<keyof typeof auditIt, string> = {
   "audit.OverlayApp.close": "Close",
   "audit.OverlayApp.noticesForYou": "Notices for you",
   "audit.PreparedUpdateCard.applyUpdate": "Apply update",
-  "audit.OrchestratorOverlay.statusChatsAndPrs": "Status: chats and PRs",
   "audit.StatoDialog.goToChat": "Go to chat",
   "audit.StatoDialog.appCode": "App code",
   "audit.StatoDialog.openThePrInDevops": "Open the PR in DevOps",

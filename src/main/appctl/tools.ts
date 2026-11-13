@@ -391,47 +391,58 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         .map(r => ({ id: r.id, chatId: r.chatId, state: r.state, exitCode: r.exitCode, code: redact(r.code.slice(0, 1500)), cwd: r.cwd, output: redact(r.output.slice(-4000)), startedAt: new Date(r.startedAt).toISOString(), endedAt: r.endedAt ? new Date(r.endedAt).toISOString() : null, ...(r.prod ? { prod: r.prod } : {}) })),
     },
     {
-      name: 'app_pending', description: 'Open questions, permission requests and commands left for the user to run (type "command": a shell block waiting for his Esegui) waiting for the user (read-only; the one exception: app_resolve_question, for a question the user answered in the Orchestrator).',
+      name: 'app_pending', description: 'Open questions, permission requests and commands left for the user to run (type "command": a shell block waiting for his Esegui) waiting for the user. Answer them for him with app_resolve_question; a command goes to him with relay_question.',
       inputSchema: obj(), run: () => [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].filter(r => !other(r.chatId)).map(r => mutedRequest(r, delegated(r.chatId))),
     },
     {
       name: 'app_resolve_question',
-      description: 'Answer a work chat\'s Sì/No question for the user (ADR 0269): you speak for him, so pick the option his goal, the brain or the plan already settle, then tell him in one line what you answered. Refused (it stays in his row in the Orchestrator) for what is his alone: production, secrets, permissions, publishing, messages to people; also refused for permissions, commands, MCP forms, a Strategist\'s interview and the Orchestrator\'s own questions. When his own last message to you answers an open question or a proposed plan (ADR 0274), pass words (his exact words, quoted from it) instead of answers: his whole message reaches the chat; what is his alone keeps its click.',
+      description: 'Answer for the user (ADR 0269, 0275): what you answer counts as his own, always. Any chat\'s open question (an option label or free words, every question of the request), any permission (allow true/false, message), a Strategist\'s proposed plan (requestId "plan", decision approve/change, text). Pick what his goal, the brain or the plan settle, then tell him in one line what you answered. The one exception: a permission that runs on production, a database or Azure — show him what it runs, and only after his yes pass confirmed true. A command waiting for Esegui: relay_question shows it to him and his «sì» runs it. When his last message to you answers a request, pass words (quoted from it) instead: his whole message reaches the chat.',
       inputSchema: obj({
-        chatId: str('the work chat, from app_pending'), requestId: str('the question\'s id, from app_pending; "plan" for a Strategist\'s proposed plan (words only)'),
-        answers: { type: 'object', description: '{ "<question text>": "<one of its option labels>" } for every question', additionalProperties: { type: 'string' } },
-        words: str('his exact words from his last message to you, when they answer this question (instead of answers)'),
+        chatId: str('the chat, from app_pending'), requestId: str('the request\'s id, from app_pending; "plan" for a Strategist\'s proposed plan'),
+        answers: { type: 'object', description: '{ "<question text>": "<an option label, or free words>" } for every question', additionalProperties: { type: 'string' } },
+        allow: { type: 'boolean', description: 'a permission: true allows it once, false refuses it' },
+        message: str('a refused permission: what the chat should do instead'),
+        confirmed: { type: 'boolean', description: 'a permission on production, a database or Azure: true only after the user said yes to it in his last message' },
+        decision: str('a plan: approve or change'), text: str('a plan change: what to change'),
+        words: str('his exact words from his last message to you, when they answer this request (instead of answers)'),
       }, ['chatId', 'requestId']),
       run: async a => {
         const chatId = String(a.chatId ?? ''), requestId = String(a.requestId ?? '');
         need(chatId);
-        // a Strategist's proposed plan (requestId "plan"): his whole message is the change, or the ok when all of it is
-        // one and this is the only plan waiting (ADR 0274)
+        if (!authed()) throw new Error('bloccato: solo l’Orchestrator risponde per l’utente');
+        // a delegated chat: you see its state only (ADR 0083); its parent answers it, or the user in his row
+        if (delegated(chatId)) throw new Error('bloccato: è una chat delegata (ne vedi solo lo stato): la risponde la chat che l’ha delegata, o l’utente nella sua riga');
+        // a Strategist's proposed plan: his own words, or the Orchestrator's decision for him (ADR 0274, 0275)
         if (requestId === 'plan') {
-          if (!authed()) throw new Error('bloccato: solo l’Orchestrator risponde per l’utente');
           const chats = d.chats.list(), plan = chats.find(c => c.id === chatId)?.plan;
           if (!plan || plan.phase !== 'proposed') throw new Error('questo piano non aspetta più una risposta');
-          const said = d.chats.userSaid?.();
-          if (!said || said.at < plan.at || !sameWords(said.text, String(a.words ?? ''))) throw new Error('bloccato: words deve essere copiato dal suo ultimo messaggio, scritto dopo il piano; se non parla di questo piano lascialo aperto');
-          const only = chats.filter(c => c.plan?.phase === 'proposed').length === 1;
-          await d.chats.planDecide(chatId, only && isPlanApproval(said.text) ? 'approve' : 'change', plan.at, said.text.trim());
-          return 'consegnato al piano con il suo messaggio: la sua riga è chiusa';
+          if (a.words !== undefined) {
+            const said = d.chats.userSaid?.();
+            if (!said || said.at < plan.at || !sameWords(said.text, String(a.words))) throw new Error('bloccato: words deve essere copiato dal suo ultimo messaggio, scritto dopo il piano; se non parla di questo piano lascialo aperto');
+            const only = chats.filter(c => c.plan?.phase === 'proposed').length === 1;
+            await d.chats.planDecide(chatId, only && isPlanApproval(said.text) ? 'approve' : 'change', plan.at, said.text.trim());
+            return 'consegnato al piano con il suo messaggio: la sua riga è chiusa';
+          }
+          const decision = a.decision === 'approve' ? 'approve' : a.decision === 'change' ? 'change' : null;
+          if (!decision) throw new Error('decision: approve o change');
+          await d.chats.planDecide(chatId, decision, plan.at, decision === 'change' ? String(a.text ?? '') : undefined);
+          return decision === 'approve' ? 'piano approvato per l’utente' : 'modifica mandata allo Strategist';
         }
         const req = d.chats.pending().find(p => p.chatId === chatId && p.id === requestId);
-        if (!req) throw new Error('questa domanda non è più aperta (quelle aperte: app_pending)');
-        if (req.type !== 'question' || !req.questions?.length) throw new Error('bloccato: solo le domande; permessi e comandi li risponde solo l\'utente con un clic');
-        if (req.tool.startsWith('mcp__')) throw new Error('bloccato: compila il modulo MCP nel pannello delle domande; le risposte non possono essere riscritte dall’Orchestrator');
-        // only the authenticated Orchestrator speaks for the user; a delegated chat's question stays his (ADR 0083)
-        if (!authed()) throw new Error('bloccato: solo l’Orchestrator risponde per l’utente');
-        // his own message (ADR 0274): the chats check it is his, after the question, and not his alone
+        if (!req) throw new Error('questa richiesta non è più aperta (quelle aperte: app_pending; un comando si mostra all’utente con relay_question e parte al suo sì)');
+        // his own message (ADR 0274): the chats check it is his and after the request
         if (a.words !== undefined) {
           if (!d.chats.answerWithUserWords) throw new Error('non disponibile');
           d.chats.answerWithUserWords(chatId, requestId, String(a.words));
           return 'consegnata con il suo messaggio: la sua riga è chiusa';
         }
-        if (!a.answers || typeof a.answers !== 'object') throw new Error('answers (le opzioni) o words (le sue parole) servono');
-        if (delegated(chatId)) throw new Error('bloccato: è una chat delegata (ne vedi solo lo stato): la sua domanda resta all’utente nella sua riga');
-        d.chats.answerForUser(chatId, requestId, Object.fromEntries(Object.entries((a.answers ?? {}) as Record<string, unknown>).map(([k, v]) => [k, String(v)])));
+        if (req.type === 'permission') {
+          if (typeof a.allow !== 'boolean') throw new Error('è un permesso: allow true o false');
+          d.chats.answerForUser(chatId, requestId, { kind: 'permission', allow: a.allow, ...(a.message ? { message: String(a.message) } : {}) }, a.confirmed === true);
+          return a.allow ? 'consentito per l’utente' : 'negato per l’utente';
+        }
+        if (!a.answers || typeof a.answers !== 'object') throw new Error('answers (un’opzione o parole per ogni domanda) o words (le sue parole) servono');
+        d.chats.answerForUser(chatId, requestId, { kind: 'question', answers: Object.fromEntries(Object.entries(a.answers as Record<string, unknown>).map(([k, v]) => [k, String(v)])) });
         return 'risposto per l’utente';
       },
     },

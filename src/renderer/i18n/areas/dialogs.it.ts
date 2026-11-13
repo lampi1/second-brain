@@ -117,7 +117,6 @@ export const dialogsIt = {
   'dialogs.orchestrator.name': 'Orchestrator',
   'dialogs.orchestrator.empty': 'Nessun Orchestrator ancora',
   'dialogs.orchestrator.createButton': 'Crea l’Orchestrator',
-  'dialogs.orchestrator.statusLabel': 'Stato: chat e PR in un colpo d’occhio',
   'dialogs.orchestrator.statusShortcut': 'Ctrl+Shift+S',
   'dialogs.orchestrator.stopLabel': 'Ferma',
   'dialogs.orchestrator.stopShortcut': 'Ctrl+.',

@@ -16,7 +16,7 @@ import { sameTally, tallyOf } from '../lib/chat-derived';
 import { engineName } from '../lib/engines';
 import { isBusy, sameList } from '../store/state';
 import { ensureOrchestrator, stop, useApp } from '../store/store';
-import { openModal, setFocused, ui } from '../store/ui';
+import { openMaps, setFocused, ui } from '../store/ui';
 import { t } from '../i18n';
 import { pairHover, usePair } from '../lib/pairs';
 import { awaitingCard, clearOrchestratorNow, go } from '../actions';
@@ -35,7 +35,7 @@ import { useFlash } from './ChatTile';
 import { StrategyPanel } from './StrategyPanel';
 import { planCards } from '../lib/plan-ask';
 import { OrchestratorAsks } from './QuestionsWindow';
-import { HarnessMark, IconEraser, IconList, IconMore, IconStop } from './Icons';
+import { HarnessMark, IconEraser, IconMap, IconMore, IconStop } from './Icons';
 import { IconButton, StatePill } from './ui';
 import { Select } from './Select';
 import { requestFocus } from '../store/ui';
@@ -134,7 +134,7 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
           <MaintenanceButton compact testId="orchestrator-maint" />
           <AwayButton />
           <RemoteButton chat={chat} reveal={() => setRemoteHidden(false)} />
-          <IconButton label={t('dialogs.orchestrator.statusLabel')} shortcut={t('dialogs.orchestrator.statusShortcut')} onClick={() => openModal('stato')} testid="orchestrator-stato"><IconList size={14} /></IconButton>
+          <IconButton label={t('pm.mapsButton')} shortcut={t('dialogs.orchestrator.statusShortcut')} onClick={() => openMaps()} testid="orchestrator-maps"><IconMap size={14} /></IconButton>
           {busy && <IconButton label={t('dialogs.orchestrator.stopLabel')} shortcut={t('dialogs.orchestrator.stopShortcut')} tone="danger" onClick={() => void stop(chat.id)} testid="orchestrator-stop"><IconStop size={14} /></IconButton>}
           <IconButton label={t('lampo.clear')} disabled={busy} onClick={() => void clearOrchestratorNow(chat.id)} testid="orchestrator-clear"><IconEraser size={14} /></IconButton>
           <IconButton ref={menuBtn} label={t('dialogs.orchestrator.menuLabel')} onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid="orchestrator-menu"><IconMore /></IconButton>

@@ -235,6 +235,6 @@
 .oasks:has(.oask.open) { max-height: none; flex: 0 1 auto; }
 .orchestrator-tile:has(.oask.open) > .items { min-height: 48px; }
 /* the answers stay in sight at the bottom of the scrolling rows while a long card is read */
-.oask-card .dc-actions { position: sticky; bottom: -8px; z-index: 2; margin: 0 -12px; padding: 10px 12px; background: var(--surface); border-top: 1px solid var(--border); }
+.oask-card .dc-actions { position: sticky; bottom: 0; z-index: 2; margin: 0 -12px; padding: 10px 12px; background: var(--surface); border-top: 1px solid var(--border); }
 .oask-foot { display: flex; align-items: center; gap: 8px; padding-top: 8px; margin-top: 8px; border-top: 1px solid var(--border); }
 .dc-via-input { font-size: 12px; color: var(--text-3); }

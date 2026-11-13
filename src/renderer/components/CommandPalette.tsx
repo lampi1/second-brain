@@ -18,7 +18,7 @@ import { fuzzyScore } from '../lib/fuzzy';
 import { closedTime, folderName, sameDay, stateInfo } from '../lib/format';
 import { engineName, otherEngine } from '../lib/engines';
 import { app } from '../store/store';
-import { BRAIN_PAGES, closeModal, openModal, pageLabel, placeLabel, setMaximized, setPrefs, setOrchestratorOpen, ui, type BrainPageId } from '../store/ui';
+import { BRAIN_PAGES, closeModal, openMaps, openModal, pageLabel, placeLabel, setMaximized, setPrefs, setOrchestratorOpen, ui, type BrainPageId } from '../store/ui';
 import { linkOfEvent, parseLink } from '../lib/notify';
 import { settingsSections } from '../lib/settings-sections';
 import { closedChats } from '../lib/autoclose';
@@ -85,7 +85,8 @@ function buildCommands(): Cmd[] {
   const orchestrator = rid ? s.chats[rid] : undefined;
   const to = orchestrator && otherEngine(orchestrator.harness);
   const actions: Omit<Cmd, 'group'>[] = [
-    { id: 'stato', title: auditText('cmp.palette.status'), sub: auditText('cmp.palette.statusSub'), shortcut: 'Ctrl+Shift+S', icon: <IconList />, run: () => openModal('stato'), text: 'stato come siamo messi a che punto siamo pr' },
+    { id: 'maps', title: auditText('pm.mapsTitle'), sub: auditText('pm.mapsSub'), shortcut: 'Ctrl+Shift+S', icon: <IconMap />, run: () => openMaps(), text: 'mappe mappa progetti fili linee sistemi project maps' },
+    { id: 'stato', title: auditText('cmp.palette.status'), sub: auditText('cmp.palette.statusSub'), icon: <IconList />, run: () => openModal('stato'), text: 'stato come siamo messi a che punto siamo pr' },
     { id: 'next', title: auditText('cmp.palette.next'), shortcut: 'Ctrl+J', icon: <IconBolt />, run: () => nextThing() },
     { id: 'new', title: auditText('cmp.palette.newChat'), shortcut: 'Ctrl+N', icon: <IconPlus />, run: () => newRequest() },
     { id: 'new-browser', title: t('ui.newBrowser'), sub: t('ui.browserMine'), icon: <IconGlobe />, run: () => { void newBrowser(); }, text: 'browser tab scheda web' },

@@ -30,9 +30,9 @@ describe('Orchestrator context ownership', () => {
       'execution permission checks still apply',
       'free text is a clarification, never implicit approval',
       'exactly two options "Sì" and "No"',
-      'A question that needs the owner is presented by the host in the Orchestrator',
-      'You write to work chats as the user',
-      'never for production, DB writes, cloud, permissions or messages to people',
+      'What you say counts as the user\'s own, always',
+      'Never send him to a chat or the PC',
+      'Only prod, DB, Azure wait: show the whole command',
       'The role grants no permission and approves no action',
       'Updater apply is disabled',
     ]) expect(frame).toContain(rule);

@@ -34,7 +34,7 @@ import { durableAsks, withDurableAsks } from './lib/work-ask';
 import { workflowState } from './store/workflows';
 import { engineLabel } from './lib/engines';
 import {
-  askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
+  askConfirm, closeModal, flashTile, highlight, isBrainPage, openMaps, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
   openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, callQuestions, setQuestionsAside, setChatExpanded, setTreeCollapsed, setBrowserOpen, setViewer, type Place,type BrainPageId,
 } from './store/ui';
 import { currentEntry, pushEntry, stepEntry, type Shot, type ViewerEntry } from './lib/viewer-stack';
@@ -645,6 +645,7 @@ export function uiCommand(cmd: EventMap['ui:command']): void {
     case 'back': back(); break;
     case 'forward': forward(); break;
     case 'palette': openModal('palette'); break;
+    case 'maps': openMaps(v || null); break; // app_project_map open (ADR 0275): the maps window at <project>/<system>
     case 'next': nextThing(); break;
     case 'clock': freezeClock(Number(v)); break;
     case 'layout': setReporting(v !== 'off'); break;

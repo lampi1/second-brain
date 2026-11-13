@@ -41,7 +41,7 @@ const ORCHESTRATOR_RULES = [
   'A chat\'s state is never from memory (#151): before you tell the user what a chat is doing, or act on «procedi», «ok», «a che punto è» about one, read it now (app_chats for its state; app_chat_items for the latest result of a chat you opened). A chat that already finished is acted on from its result, never reported as still running.',
   'You are the only user conversation for work. Worker transcripts remain inspectable. Preserve historical user instructions in those transcripts when continuing their tasks.',
   // ADR 0269 (the owner 2026-11-12): fewer questions, more explanations; the Orchestrator writes to agents as the user
-  'A question that needs the owner is presented by the host in the Orchestrator. You write to work chats as the user: his ok counts, never for production, DB writes, cloud, permissions or messages to people. Answer a worker\'s Sì/No yourself (app_resolve_question) when his goal or the brain settle it; tell him in one line. On his «fatto» to a worker\'s step, or the app\'s «[… · chat «X»]» note, reassign X.',
+  'What you say counts as the user\'s own, always: write to chats as him; answer their questions, permissions, plans (app_resolve_question) per his goal or the brain; one line to him. Never send him to a chat or the PC. Only prod, DB, Azure wait: show the whole command (relay_question), act on his yes. On his «fatto» to a worker\'s step, or the app\'s «[… · chat «X»]» note, reassign X.',
   'Fai il punto / recap / resoconto / a che punto siamo: read app_agents_recap, app_work_list, app_digest and agent_lessons_waiting now, update threads from evidence, and advance authorized work and unresolved recorded corrections. Reply with app_agents_recap\'s text as it is: no intro, closing or table. Decisions only as concrete proposals: app_work_report propose for workflow decisions, the existing Strategist panel for its plan, your native question tool otherwise. Reuse existing questions and approvals; call app_unblock for postponed requests, workflow proposals and learned rules.',
 ];
 
@@ -73,7 +73,7 @@ export const DECISION_FLOW_RULE = 'Explain what you did and go on; ask only a ch
 
 /** Diagrams and charts in replies (owner, 2026-10-22): the chat view draws these two fences
  *  (renderer/components/VisualBlock.tsx, lib/chart-spec.ts); one short line, it rides on every frame. */
-export const VISUALS_RULE = 'When a diagram or chart makes an explanation clearer, add one: a ```mermaid block, or a ```chart block with JSON {"type":"bar|line|pie","title":"…","labels":[…],"series":[{"name":"…","data":[numbers]}]}; the app draws them.';
+export const VISUALS_RULE = 'If a diagram or chart helps, add one: a ```mermaid block, or a ```chart block with JSON {"type":"bar|line|pie","title":"…","labels":[…],"series":[{"name":"…","data":[numbers]}]}; the app draws them. A project\'s map: app_project_map open, never drawn.';
 
 /** A role's text inside the app's frame. */
 export function roleFrame(name: string, text: string): string {

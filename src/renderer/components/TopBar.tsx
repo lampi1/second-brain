@@ -23,7 +23,7 @@ import { openQueue } from '../lib/later';
 import { HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconGlobe, IconHistory, IconLogin, IconMore, IconRefresh, IconSearch, IconSettings, IconStop } from './Icons';
 import { UsageBar } from './UsageBar';
 import { SyncStatus } from './SyncStatus';
-import { StatoButton } from './OrchestratorOverlay';
+import { MapsButton } from './OrchestratorOverlay';
 import { LangSwitch } from './LangSwitch';
 import { MaintenanceButton } from './brain-model/MaintenanceButton';
 import { IconButton, Keys, MenuItem, MenuLabel, Popover } from './ui';
@@ -203,7 +203,7 @@ export function TopBar() {
       {/* the mark only: the name and the version sit in its tooltip, the room went to the bar's actions (the user, 2026-10-12) */}
       <div className="brand" aria-label={version ? `second-brain v${version}` : 'second-brain'} data-tip={version ? `second-brain · v${version}` : 'second-brain'} data-testid="app-version"><span className="brand-mark" aria-hidden="true" /></div>
       <HistoryNav />
-      <StatoButton />
+      <MapsButton />
       <button type="button" className="search" onClick={() => openModal('palette')} data-testid="topbar-search" aria-label={auditText('audit.TopBar.searchChatsPagesAndCommandsCtrl')}>
         <IconSearch size={14} /><span className="search-text">{auditText('audit.TopBar.searchChatsIdeasOrACommand')}</span><Keys combo="Ctrl+K" />
       </button>

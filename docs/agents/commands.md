@@ -56,7 +56,7 @@ row and its line here in the same change.
 | `app_agent_context` | Orchestrator, /mcp/app | The frozen launch context of one work chat: memories chosen, omissions, skill hashes. |
 | `app_command_runs` | Orchestrator, /mcp/app | The commands the user ran from a chat code block with «Esegui», read only. |
 | `app_pending` | Orchestrator, /mcp/app | Open questions, permissions and commands waiting for the user, read only. |
-| `app_resolve_question` | Orchestrator, /mcp/app | Close a work chat's open question with the answer the user gave the Orchestrator. |
+| `app_resolve_question` | Orchestrator, /mcp/app | Answer a work chat's question, permission or plan as the user (ADR 0275: it counts as his own); a production/DB/Azure permission needs `confirmed` after his yes. |
 | `app_feed` | Orchestrator, /mcp/app | Recent live feed events (ideas, errors, chats done or waiting). |
 | `app_logs` | Orchestrator, /mcp/app | Recent structured log entries (redacted), filtered by level, scope, chat or text. |
 | `app_screenshot` | Orchestrator, /mcp/app | A screenshot of the app window and of each browser tab on screen. |
@@ -98,7 +98,7 @@ row and its line here in the same change.
 | `app_recordings` | Orchestrator only | The call recordings and their local transcripts, or the audio files found on the PC. |
 | `app_recording_import` | Orchestrator only | Import an audio or video file from the PC to be transcribed locally. |
 | `app_learn` | Orchestrator only | Start an Impara lesson the user asked for (an explanation or a quiz), or list the lessons. |
-| `app_project_map` | Orchestrator only | The user's project maps: list, read as text, open on screen, the brief for a Scout that draws one, the user's corrections. |
+| `app_project_map` | Orchestrator only | The user's project maps: list, read as text, open in the maps window (ADR 0275), the brief for a Scout that draws one, the user's corrections. |
 | `app_agents_recap` | Orchestrator only | The recap: one short line per agent that works, waits or finished; with detail, one block per agent with its last steps. |
 | `app_child_output` | Orchestrator only | The latest report of a chat in its tree, delegates included: summary and criteria; full: the output, max 4,000 chars. |
 | `agent_metrics` | Orchestrator only | Success rate, cost, time and corrections per role and version (numbers only). |

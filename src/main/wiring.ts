@@ -716,13 +716,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // single entry (ADR 0239): a work chat's Sì/No question goes to the user through the Orchestrator's conversation, and
   // the user's own «sì» / «no» there (PC, phone, Remote Control) answers it
   // a command a chat left, decided away from the PC (ADR 0259 §4: Telegram's Sì, a relayed «sì»): the same run as Esegui
-  // (runner checks: a block of that message, never production without the PC's second click)
+  // (runner checks: a block of that message; production only after the user saw it whole and said yes, ADR 0275)
   const awayCommands: PhoneCommands = {
     pending: () => asks.pending(),
-    run: (chatId, requestId) => {
+    run: (chatId, requestId, confirmProd) => {
       const c = asks.pending().find(p => p.chatId === chatId && p.id === requestId)?.command;
       if (!c) throw new Error('Questa richiesta non è più aperta.');
-      const run = runner.start({ chatId, itemId: c.itemId, code: c.code, ...(c.lang ? { lang: c.lang } : {}) });
+      const run = runner.start({ chatId, itemId: c.itemId, code: c.code, ...(c.lang ? { lang: c.lang } : {}), ...(confirmProd ? { confirmProd: true } : {}) });
       asks.ran(run.chatId, run.itemId, run.code, run.state !== 'running');
     },
     dismiss: (chatId, requestId) => asks.dismiss(chatId, requestId),
@@ -736,6 +736,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     if (channel !== 'chat:item') return;
     const { chatId, item, replace } = payload as EventMap['chat:item'];
     if (replace || item.kind !== 'user' || item.from || !manager.list().find(c => c.id === chatId)?.isOrchestrator) return;
+    // Remote Control's echo of what he typed on the phone (Telegram's went through send): his last message too (ADR 0275)
+    if (item.via === 'phone') manager.noteUserSaid(chatId, item.text);
     void relay.userSaid(chatId, item.text, item.via === 'phone' ? 'phone' : undefined);
   });
   const workDriverTimer = prodPollers ? setInterval(() => {

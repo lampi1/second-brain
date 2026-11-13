@@ -62,7 +62,6 @@ export const auditIt = {
   "audit.OverlayApp.close": "Chiudi",
   "audit.OverlayApp.noticesForYou": "Avvisi per te",
   "audit.PreparedUpdateCard.applyUpdate": "Applica aggiornamento",
-  "audit.OrchestratorOverlay.statusChatsAndPrs": "Stato: chat e PR",
   "audit.StatoDialog.goToChat": "Vai alla chat",
   "audit.StatoDialog.appCode": "Codice dell’app",
   "audit.StatoDialog.openThePrInDevops": "Apri la PR in DevOps",
