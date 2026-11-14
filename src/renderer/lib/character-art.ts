@@ -67,7 +67,7 @@ export const jawPath = (jaw = 9.6, chin = 4.6, y = 44.8): string =>
   `M20.7 30C20.7 22.3 25.5 18.6 32 18.6C38.5 18.6 43.3 22.3 43.3 30V34.4C43.3 37.4 ${32 + jaw + 0.9} 39.6 ${32 + jaw} 41.4C${32 + jaw - 1.6} 43.4 ${32 + chin + 0.4} ${y} 32 ${y}C${32 - chin - 0.4} ${y} ${32 - jaw + 1.6} 43.4 ${32 - jaw} 41.4C${32 - jaw - 0.9} 39.6 20.7 37.4 20.7 34.4Z`;
 export const JAW = jawPath();
 
-const DARK = '#191a22', ROBE = '#2a2456', STEEL = '#3b4252', STEEL_HI = '#5d6780', BLOOD = '#b3261e', LEATHER = '#5a3a22';
+const ROBE = '#2a2456', STEEL = '#3b4252', STEEL_HI = '#5d6780', BLOOD = '#b3261e', LEATHER = '#5a3a22';
 export const CHARACTERS: Record<CharacterId, Character> = {
   // the old wizard: long white hair parted in the middle, a white beard down to the chest, half-moon glasses low on
   // the nose, a midnight robe with a gold hem and a wand
