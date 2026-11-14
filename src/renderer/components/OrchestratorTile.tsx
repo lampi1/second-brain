@@ -85,7 +85,7 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
   const reqs = useApp(s => (id ? s.pending : []), sameList);
   const plans = useApp(s => Object.values(s.chats).filter(c => c && !c.closedAt && c.plan && ['asking', 'revising', 'proposed'].includes(c.plan.phase)), sameList);
   const ready = useApp(s => s.ready);
-  // the conductor on the working line, unless the user gave the Orchestrator a picture of their own (then the spark)
+  // the wizard on the working line, unless the user gave the Orchestrator a picture of their own (then the spark)
   const ownPicture = useOwnPicture(chat?.agent?.avatar);
   const isFocused = ui.use(s => s.focused === 'orchestrator');
   const focusReq = ui.use(s => (id && s.focusReq?.chatId === id ? s.focusReq.n : 0));

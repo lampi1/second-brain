@@ -48,6 +48,10 @@ Amended by ADR 0305 (2026-11-14): while its chat works a person speaks nearly al
 up to three people speak at once (point 3); a click's line starts once the hand or the stick has left; the fixed
 lines are joined by lines of the day written by the lightest model (point 1), with a setting to turn those off.
 
+Amended by ADR 0306 (2026-11-14): the characters are adults (an old wizard, a cold strategist, a weathered tracker,
+a gruff blacksmith, a merciless guard, a pompous town crier, a burned-out senior developer) and every fixed line is
+rewritten in them, in the three languages.
+
 ## Consequences
 
 - One pending timeout per strip with a person, nothing per frame, no token: the transcript is already in the app.

@@ -6,7 +6,7 @@ export const chessDe: typeof chessIt = {
   'chess.pick': 'Gegner wählen',
   'chess.elo': ({ elo }) => `Elo ${elo}`,
   'chess.eloTip': 'Ungefähre Stärke: ab 1400 ist es die Elo-Stufe von Stockfish, darunter eine Schätzung. Der Orchestrator spielt ohne Limit.',
-  'chess.tag.scout': 'Verirrt sich auch am Brett.',
+  'chess.tag.scout': 'Liest Spuren, auch am Brett.',
   'chess.tag.herald': 'Meldet jeden Bauern als Eilmeldung.',
   'chess.tag.artisan': 'Spielt mit dem Hammer.',
   'chess.tag.sentinel': 'Traut keiner Figur.',

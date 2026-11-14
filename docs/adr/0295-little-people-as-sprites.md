@@ -47,6 +47,9 @@ owner wants whole little people who do things, readable when small, one per role
    still says when a chat of that role really runs). The back and the profile page keep the portrait.
 8. A hidden window pauses every movement; reduced motion shows the rest pose, which is always a whole picture.
 
+Amended by ADR 0306 (2026-11-14): the people are adults (a little over three heads tall, a build per role, knees,
+real faces) and the cast is new; the states, the timing and the rules of this record stay.
+
 ## Consequences
 
 - The state is read from the person, without a legend; the words stay beside it (pill, tooltip, screen reader label).

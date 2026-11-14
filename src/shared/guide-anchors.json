@@ -267,7 +267,7 @@
     "src/renderer/lib/andamento.ts": "af1d6c87fdf79c73",
     "src/renderer/lib/askContext.ts#lastThoughtOf": "7eccedda54165c7a",
     "src/renderer/lib/brain-model-view.ts#linkGraph": "151735466bff5bfe",
-    "src/renderer/lib/character-art.ts": "216f1e78d6259b30",
+    "src/renderer/lib/character-art.ts": "abeecfee2c8c3922",
     "src/renderer/lib/chess-game.ts": "5302a3b93532cf9b",
     "src/renderer/lib/chess-lines.ts": "1047129e4f8be706",
     "src/renderer/lib/chess-play.ts": "4157cffe27608d9c",

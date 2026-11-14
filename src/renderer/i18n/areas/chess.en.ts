@@ -5,7 +5,7 @@ export const chessEn: typeof chessIt = {
   'chess.pick': 'Choose your opponent',
   'chess.elo': ({ elo }) => `Elo ${elo}`,
   'chess.eloTip': 'Indicative strength: from 1400 up it is Stockfish’s own Elo level, below that an estimate. The Orchestrator plays without a limit.',
-  'chess.tag.scout': 'Gets lost on the board too.',
+  'chess.tag.scout': 'Follows the tracks, on the board too.',
   'chess.tag.herald': 'Announces every pawn as breaking news.',
   'chess.tag.artisan': 'Plays with a hammer.',
   'chess.tag.sentinel': 'Trusts no piece.',

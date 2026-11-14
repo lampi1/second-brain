@@ -36,6 +36,12 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   OpenCode, OpenRouter included; the chat's model and plan mode go through OpenCode's session options (ADR 0216).
 
 ### Changed
+- The people of the roles are adults: taller bodies with a build of their own, real faces (a jaw, brows, a nose,
+  beards) and adult characters. The Orchestrator is an old wizard with a long white beard and a wand, the Strategist
+  a cold chess master, the Scout a weathered tracker, the Artisan a bare-chested blacksmith with a cigar, the
+  Sentinel a guard in dark plate and a closed helm with red eyes, the Herald a stout town crier; a chat without a role
+  is a tired senior developer. The role icons change with them, and every line they say (Grindhouse and chess) is
+  rewritten in these characters in Italian, English and German (ADR 0306).
 - No permission question outside your brain's rules, on every engine: the app's own guard on settings and hooks is
   gone (it asked for ordinary commands such as `mkdir "$(pwd)/out"`, `gh pr create --body "$(cat …)"`, and for any
   file under `.claude`, `.cursor`, `.vscode` or `.git`). What still reaches you: what a rule of your
