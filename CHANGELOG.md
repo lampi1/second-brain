@@ -6,6 +6,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- The Grindhouse is a workshop: one square bench per chat with its person at work, stop and ✕ always in sight; the
+  chats a chat delegated stand at its bench as helpers with one row each, and an open chat shows its team as tabs.
+  The scenes have no computers (an hourglass, a carrier pigeon, a brass balance; the Artisan hammers), and at rest
+  each role now and then has its vice, also on the front of its card. Three radii (4/6/8 px) across the app, the
+  plan's progress as dots, a plain permission answered on its row (ADR 0311).
 - Sign-in by name in the app's browser: an agent names a test account of the brain's credentials file
   (`fill_credential`) and the app types user name and password into the sign-in form itself; the agent never reads
   the password. Only on the entry's own site (`url`, or `loginUrl` for a sign-in page on another host), only into a
