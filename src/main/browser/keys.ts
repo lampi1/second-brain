@@ -105,7 +105,8 @@ export function isPasteKey(key:string,modifiers:number):boolean {
 /** Copy or cut to the clipboard (Ctrl/Cmd+C, Ctrl/Cmd+X, Ctrl+Insert): refused in a tab where the app typed a
  *  password from the credentials file (fill_credential, ADR 0310), or a revealed field could be copied and read back. */
 export function isCopyKey(key:string,modifiers:number):boolean {
-  return /^[cx]$/i.test(key) && (modifiers & (MOD.ctrl | MOD.meta)) !== 0 || key === 'Insert' && (modifiers & MOD.ctrl) !== 0;
+  return /^[cx]$/i.test(key) && (modifiers & (MOD.ctrl | MOD.meta)) !== 0 || key === 'Insert' && (modifiers & MOD.ctrl) !== 0
+    || key === 'Delete' && (modifiers & MOD.shift) !== 0;   // Shift+Delete = cut on Windows and Linux
 }
 /** A key spec as it may be shown (feed, results, the tab's last action, recordings; ADR 0237): each run of strokes
  *  that could write text is replaced by "•••" (a character with shift at most, or any word that is not a known key

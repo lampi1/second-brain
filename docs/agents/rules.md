@@ -17,7 +17,7 @@ app (each CLI logs in itself) with these exceptions:
 - a login hand-off's password, read from the user's brain file only when they click Copia, never stored or logged
   (ADR 0012);
 - a test account's password of the same file, read when an agent calls `fill_credential` and typed by the app into the
-  password field of a page on the entry's own site (its `url` or `loginUrl` host), never for an entry that looks like
+  `type=password` field of a page on the entry's own site (its `url` or `loginUrl` host), never for an entry that looks like
   production; it is never given to the agent, a tool result, the feed or a log, and never stored (ADR 0310);
 - the API keys the user types in Settings → Motori, encrypted with safeStorage, write-only from the UI, given only to
   their own engine's process env or HTTP header (ADR 0046);

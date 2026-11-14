@@ -29,15 +29,19 @@ account, the banner shows it, and the password is read only at the user's click.
    `<brain>/brain-settings.json`, a path inside the brain, else `ops/credentials.md`). No other file or store is read,
    and nothing is copied or cached.
 3. **A password is typed only where it belongs** (`logins.ts siteCredential`), else the call is refused with the fix:
-   - only into a field that is a password field (its value reads back masked in `read_page`, results and screenshots,
-     ADR 0237), never into a text field;
+   - only into a `type=password` field (its value reads back masked in `read_page`, results and screenshots, ADR
+     0237), never into a text field, not even one whose label says «password» or one a «show password» toggle
+     revealed; the field and the frame's site are checked again right before each field is typed;
    - only on the entry's own site: the host (with port) of the frame that holds the field must be the host of the
      entry's `url`, or of a new optional `loginUrl` for a sign-in page that lives on another host (single sign-on). An
      entry without a url is refused: the user adds it once;
    - never an entry that looks like production: «prod», «production» or «produzione» as a word of the keys that lead
      to it or of its host. Those go through the hand-off, as before. The tool is for test accounts.
-4. **After it, the tab does not give the value back.** Until the page is left or reloaded the tab takes no caller
-   JavaScript (`javascript`, local stacks) and no copy or cut keys; the password is registered for redaction in logs,
+4. **After it, the page does not give the value back.** Until the page is left or reloaded, no tab of that environment
+   (popups share its session and pages) takes caller JavaScript (`javascript`, local stacks), a drag, a middle click or
+   a `wait_for` selector on the `value` attribute (some form libraries mirror a field's value there), and the tab takes
+   no copy or cut keys (Shift+Delete included). A page where caller JavaScript already ran is refused
+   (`tab.scriptRan`): a script could be waiting for the value. The password is registered for redaction in logs,
    console lines and network bodies (values of 8 characters or more, `addRedaction`).
 5. **Agents are told to use it**: the tool descriptions, the browser's MCP instructions, the sign-in notice after a
    navigation (it names the site's accounts), the reply rule and the refusal of a login hand-off on a local stack all
@@ -48,8 +52,12 @@ account, the banner shows it, and the password is read only at the user's click.
 
 - The agent's context, the tool call, the feed, the transcript and the logs carry the account's name only.
 - The owner's entries need a `url` to be usable this way; the «Credenziali» panel says so.
+- The guarantee is against an agent that follows the tools, not against one set on getting the value: an agent that
+  reads the credentials file with its own file tools, or controls the local server that receives the form (its logs,
+  its code), still can. What the app adds is that it never has to.
 - Limits, by design or outside the app's control: a page that itself shows the password as plain text outside a field
-  is not masked; a password shorter than 8 characters is not added to the log redaction (it would blank ordinary
+  is not masked, and `read_page` / `get_page_text` text is not passed through the log redaction; a «back» navigation
+  clears the tab's blocks while the browser may restore the form; a password shorter than 8 characters is not added to the log redaction (it would blank ordinary
   words), the field masking and the tab's blocks still hold; the production check reads names, so an entry that does
   not say «prod» is typed.
 - Untried on the owner's PC with a real test account and with Claude Code's classifier: whether the classifier lets

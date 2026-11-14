@@ -88,17 +88,19 @@ function page(url = 'https://test-3.example.com/Account/Login', c: Credentials =
   const actions = new BrowserActions(tabs);
   const typed: Record<string, string> = {};
   let focus = '';
+  /** the type the page gives a field now (default: e12 password, others text); a test may change it mid-call */
+  const types: Record<string, string> = {};
   vi.spyOn(actions, 'evalIn').mockImplementation(async (_tab, _frame, script: string) => {
     const ref = /\("((?:f\d+)?e\d+)"/.exec(script.slice(script.lastIndexOf('(')))?.[1] ?? '';
     if (script.includes('focusSelect')) { focus = ref; typed[ref] = ''; return true as never; }
     const secret = ref.endsWith('e12');
-    return { kind: 'text', password: secret, tag: 'input', type: secret ? 'password' : 'text', checked: false, disabled: false, readonly: false, multiple: false,
+    return { kind: 'text', password: secret, tag: 'input', type: types[ref] ?? (secret ? 'password' : 'text'), checked: false, disabled: false, readonly: false, multiple: false,
       value: secret && typed[ref] ? '•••' : typed[ref] ?? '', desc: secret ? 'input "Password"' : 'input "E-mail"' } as never;
   });
   const sent: unknown[] = [];
   const cdp = { send: async (method: string, params: Record<string, unknown>) => { sent.push([method, params]); if (method === 'Input.insertText') typed[focus] += String(params.text); } };
   const tab = { id: 't1', env: 'example-test-3', agentInput: 0, dialog: null, cdp, wc: { isDestroyed: () => false, getURL: () => url, mainFrame: frame } } as unknown as Tab;
-  return { actions, tab, typed, sent };
+  return { actions, tab, typed, sent, types };
 }
 
 describe('fill_credential', () => {
@@ -119,6 +121,33 @@ describe('fill_credential', () => {
     await expect(actions.fillCredential(tab, { account: 'luigi', user_ref: 'f1e1', password_ref: 'e12' })).rejects.toThrow(/same frame/);
     expect(typed).toEqual({});
     expect(tab.secretTyped).toBeUndefined();
+  });
+
+  it('types nothing into a text field that only looks like a password field (its label), or one a toggle revealed', async () => {
+    const { actions, tab, typed, types } = page();
+    types.e12 = 'text';
+    await expect(actions.fillCredential(tab, { account: 'luigi', password_ref: 'e12' })).rejects.toThrow(/not a password field \(type=password\)/);
+    expect(typed).toEqual({});
+  });
+
+  it('checks the field again right before typing: a field turned into text after the check gets nothing', async () => {
+    const { actions, tab, typed, types } = page();
+    const real = vi.mocked(actions.evalIn).getMockImplementation()!;
+    let reads = 0;
+    vi.mocked(actions.evalIn).mockImplementation(async (t, f, script: string) => {
+      if (script.includes('inputInfo') && script.includes('"e12"') && ++reads === 2) types.e12 = 'text';   // the page swaps it
+      return real(t, f, script);
+    });
+    const r = await actions.fillCredential(tab, { account: 'luigi', user_ref: 'e1', password_ref: 'e12' }).catch((e: Error) => e.message);
+    expect(r).toMatch(/no longer a password field/);
+    expect(typed.e12).toBeUndefined();
+  });
+
+  it('is refused in a page where caller JavaScript already ran', async () => {
+    const { actions, tab, typed } = page('http://localhost:4200/login');
+    tab.scriptRan = true;
+    await expect(actions.fillCredential(tab, { password_ref: 'e12' })).rejects.toThrow(/caller JavaScript ran in this page/);
+    expect(typed).toEqual({});
   });
 
   it('types nothing on a site the entry is not for', async () => {
@@ -142,13 +171,21 @@ describe('fill_credential', () => {
     const before = sent.length;
     await expect(actions.key(tab, 'ctrl+a ctrl+c')).rejects.toThrow(/copy and cut are blocked/);
     expect(sent.slice(before).some(s => { const p = (s as [string, { key?: string; type?: string }])[1]; return p.key === 'c' && p.type !== 'keyUp'; })).toBe(false);   // only its release
+    await expect(actions.key(tab, 'shift+Delete')).rejects.toThrow(/copy and cut are blocked/);
+    await expect(actions.drag(tab, { from: [1, 1], to: [5, 5] })).rejects.toThrow(/drag is blocked/);
+    await expect(actions.click(tab, { coordinate: [1, 1], button: 'middle' })).rejects.toThrow(/middle click/);
+    await expect(actions.waitFor(tab, { selector: 'input[value^="a"]' })).rejects.toThrow(/value attribute/);
+    // another tab of the same environment (a popup shares the page's session) takes no caller JavaScript either
+    const other = { ...tab, id: 't2', secretTyped: false } as Tab;
+    Object.assign((actions as unknown as { tabs: object }).tabs, { tabs: new Map([['t1', tab], ['t2', other]]) });
+    await expect(actions.evaluate(other, 'opaque caller source')).rejects.toThrow(/holds a password the app typed/);
     tab.secretTyped = false;                               // the page was left (tabs.ts did-navigate)
     await expect(actions.key(tab, 'ctrl+c')).resolves.toBe('Pressed ctrl+c');
   });
 
   it('knows copy and cut keys', () => {
-    for (const [k, m] of [['c', MOD.ctrl], ['C', MOD.meta], ['x', MOD.ctrl | MOD.shift], ['Insert', MOD.ctrl]] as const) expect(isCopyKey(k, m), k).toBe(true);
-    for (const [k, m] of [['c', 0], ['v', MOD.ctrl], ['Insert', MOD.shift], ['a', MOD.ctrl]] as const) expect(isCopyKey(k, m), k).toBe(false);
+    for (const [k, m] of [['c', MOD.ctrl], ['C', MOD.meta], ['x', MOD.ctrl | MOD.shift], ['Insert', MOD.ctrl], ['Delete', MOD.shift]] as const) expect(isCopyKey(k, m), k).toBe(true);
+    for (const [k, m] of [['c', 0], ['v', MOD.ctrl], ['Insert', MOD.shift], ['a', MOD.ctrl], ['Delete', 0]] as const) expect(isCopyKey(k, m), k).toBe(false);
   });
 
   it('is a browser tool that needs only the password field, and the login rules point to it', () => {
