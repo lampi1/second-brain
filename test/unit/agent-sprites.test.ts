@@ -108,8 +108,22 @@ describe('the little people', () => {
         drawn.add(scene.nodes.map(nodeSvg).join(''));
         expect(spriteScene(id, 'work', act), `${id} ${act} built once`).toBe(scene);
       }
-      // the role's own way of working and the six kinds: seven different drawings
-      expect(drawn.size, id).toBe(SPRITE_ACTIVITIES.length + 1);
+      // the role's own way of working and the six kinds: seven different drawings; the smith hammers for a command
+      // and the tests too (his own work), so he has five
+      expect(drawn.size, id).toBe(id === 'artisan' ? SPRITE_ACTIVITIES.length - 1 : SPRITE_ACTIVITIES.length + 1);
+    }
+  });
+  it('lets the smith hammer for a command and the tests, and plays the shared scenes for the rest', () => {
+    expect(spriteScene('artisan', 'work', 'run')).toBe(spriteScene('artisan', 'work'));
+    expect(spriteScene('artisan', 'work', 'test')).toBe(spriteScene('artisan', 'work'));
+    expect(spriteScene('artisan', 'work', 'read')).not.toBe(spriteScene('artisan', 'work'));
+  });
+  it('shows no screen, key or pointer in the shared scenes of a command, a page and the tests', () => {
+    // the old props were drawn in these colours: the terminal's steel, its dark glass, the pointer's ink
+    for (const act of ['run', 'web', 'test'] as const) {
+      const svg = spriteScene('scout', 'work', act).nodes.map(nodeSvg).join('');
+      expect(svg, act).not.toContain('#59627a');
+      expect(svg, act).not.toContain('#1f2430');
     }
   });
   it('draws a kind of work only while the person works', () => {
