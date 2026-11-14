@@ -445,3 +445,5 @@ docs/screenshots/voice-talk.webp binary-media sha256:5e92c6e71787d9331e59fde537c
 docs/screenshots/worktrees.webp binary-media sha256:9eff87e2271a1c6e1c195eb2f5c7e8f70ea22d3d2824504001c76c5929153cbc
 docs/screenshots/agent-avatars/dark.png binary-media sha256:1b0e10f4748a80653cccb42934c20fe28004fc5fe7037894190fe0a66dad28c6
 docs/screenshots/agent-avatars/light.png binary-media sha256:42bbcd951965d793ab243a809e519ee6e24b9f7d6dd2acb8f8c5219724dca33e
+# The README's crew picture redrawn from the new badges (ADR 0306)
+docs/screenshots/crew.webp binary-media sha256:c7c037abfa98b873c01a90a80cc8f76877192b26519f477554b88ed3c53b22b0
