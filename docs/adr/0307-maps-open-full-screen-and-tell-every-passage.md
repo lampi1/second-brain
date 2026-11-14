@@ -20,26 +20,31 @@ where a drawing of ten boxes is small.
    Ctrl+Shift+S and the palette call `openMaps()`, which raises `ui.mapsFull`; the view reads it once, goes full screen
    and clears it. Esc leaves the map where it was before: a page beside the Orchestrator. When the Orchestrator opens
    the map (`app_project_map` open → `ui:command maps`) it stays beside its column, because the user is talking to it.
+   The flag is taken only with a map on screen: an empty page never goes full screen.
 2. **Every piece has a longer text.** `details` on an element (1500 characters) and on a link (800): how it works in
    plain words, paragraphs kept. The box on the drawing stays short. A redraw that leaves `details` out keeps the old
    text, an empty string removes it; the Orchestrator's edit ops (`app_project_map` edit) take it too. The brief for the agent that draws the map asks
    for it on every element and link it understood, and tells it not to invent.
 3. **A click tells the piece in full, at the side.** «Come funziona» (the details, or how to get them when nobody wrote
-   them), its parts, «Cosa entra e cosa esce» (each link in and out, with its own text), the plan's steps on it. With
+   them), its parts, «Cosa entra e cosa esce» (each link in and out, with its own text; for a system, its parts' links
+   with the outside too), the plan's steps on it. With
    nothing picked inside a system, the side tells that system. A link's label is a button: it tells what passes on the
    arrow; an arrow that stands for several links (`LevelEdge.ids`) tells each one.
 4. **A plan's step is told in words.** Under the strip of ADR 0302, the step under way in full: when it starts («Parte
    quando è finito il passo 1», «Va insieme al passo 4»), how far it is («in corso da 10 min», «fatto in 5 min»), who
-   does it, on which box, its chat. A click on any step tells that one; «Tutti i passi» tells them all; a plan that
+   does it, on which box, its chat. The card follows the plan as it moves on, until the user clicks a step: a click on
+   any step tells that one; «Tutti i passi» tells them all; a plan that
    waits for the user's ok shows them all from the start. The view carries what the plan already knows
    (`MapFlowStep.detail`, `chatIds`, `startedAt`, `endedAt`, `added`): no new tool, no token.
 5. **«Aggiorna» asks for a redraw.** The button sends the Orchestrator a message, as the user's own (ADR 0275), that
    asks to have the project read again and the map redrawn with the details, keeping ids and corrections. The button
-   waits until a new version of that map is saved. It costs tokens, and the tip says so; nothing is redrawn by itself.
+   waits until a new version of that map is saved, ten minutes at most, and says so in the view's bar (a toast would
+   sit under the full screen). It costs tokens, and the tip says so; nothing is redrawn by itself. Any new version
+   frees the button, a status update too: the app cannot tell a redraw from another save.
 6. **Agents read one piece without the whole map.** `project_map_read` and `app_project_map` read take `element`:
    that piece in full (`elementText`). The map's text stays short.
 7. **The drawing is never fitted too small to read.** By itself the view does not go under 62 %: a tall level starts
-   from its top and the wheel moves down it. ⤢ still shows the whole level.
+   from its top and the wheel moves down it. ⤢ shows the whole level, until the level changes.
 
 ## Consequences
 

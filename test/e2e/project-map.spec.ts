@@ -111,12 +111,11 @@ test('the maps go real full screen, Esc leaves it, and a box is discussed with t
     const vp = page.viewportSize() ?? await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
     const b = (await view.boundingBox())!;
     expect([b.x, b.y, Math.round(b.width), Math.round(b.height)]).toEqual([0, 0, vp.width, vp.height]);
-    await page.waitForTimeout(500);
     await shot(page, 'project-maps-fullscreen');
     await page.keyboard.press('Escape');
     await expect(view.getByTestId('pm-fullscreen')).toHaveAttribute('aria-pressed', 'false');
     await expect(view).toBeVisible(); // Esc left the full screen, not the page
-    await page.waitForTimeout(450);
+    await expect.poll(async () => (await view.boundingBox())!.x).toBeGreaterThan(100);
 
     // one click on a box's corner: the Orchestrator, beside the map, has a draft that quotes the box
     await view.getByTestId('pm-talk-rimborsi').click();
@@ -281,6 +280,7 @@ test('the map tells every step, every box and every arrow in full, and «Aggiorn
     await view.getByTestId('pm-refresh').click();
     await expect(view.getByTestId('pm-refresh')).toBeDisabled();
     await expect(view.getByTestId('pm-refresh')).toContainText('Aggiornamento chiesto');
+    await expect(view.getByTestId('pm-refresh-note')).toContainText('Chiesto all’Orchestrator'); // said inside the full screen
     await page.keyboard.press('Escape');
     await expect(page.getByText(/Aggiorna la mappa del progetto «Alfa · negozio online» \(alfa-shop\)/).first()).toBeVisible();
   } finally { await app.close(); }

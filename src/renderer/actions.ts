@@ -171,7 +171,8 @@ export function placeOf(target: string): Place | null {
 }
 
 /** The project maps (ADR 0276; the owner: «mi piace che rimanga la chat dell'orchestrator a destra»): the Mappa → Progetti
- *  page, beside the Orchestrator's column and never over it; at a project or a system inside it, else where the user left it. */
+ *  page, beside the Orchestrator's column; opened by the user it starts full screen (ADR 0307) and Esc leaves it beside
+ *  the column; at a project or a system inside it, else where the user left it. */
 export function openMaps(arg?: string | null, opts: { full?: boolean } = {}): void {
   const at = arg ?? ui.get().mapsArg;
   if (ui.get().modal) closeModal();

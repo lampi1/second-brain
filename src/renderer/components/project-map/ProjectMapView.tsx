@@ -65,6 +65,8 @@ const clock = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: '2-dig
 const WORK_MARK = { todo: '○', now: '●', done: '✓', blocked: '✕' } as const;
 
 const reduced = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** how long «Aggiorna» waits for the redraw before it can be pressed again */
+const REFRESH_WAIT_MS = 10 * 60_000;
 /** the smallest scale the view picks by itself: under it a box's text cannot be read */
 const READABLE = 0.62;
 /** how long the view zooms into a box before the level inside it is drawn (project-map.css .pm-plane.zooming) */
@@ -145,7 +147,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   // a picked arrow: the links it stands for (ADR 0307), told beside the drawing
   const [pickedLinks, setPickedLinks] = useState<string[] | null>(null);
   // «Aggiorna» was pressed at this version: the button waits until the map changes
-  const [asked, setAsked] = useState<{ project: string; version: number } | null>(null);
+  const [asked, setAsked] = useState<{ project: string; version: number; at: number } | null>(null);
   const [agentOn, setAgentOn] = useState<string | null>(null);
   // the view on the drawing, like a design canvas (the owner 2026-11-13: «control + rotella zummasse e il drag … per
   // spostare la view, non spostare i riquadri ma spostarsi sul workspace tipo figma»): scale and offset of the plane;
@@ -173,8 +175,12 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   // the maps the user opens start full screen (ADR 0307: «quando le apro le voglio di default full screen»): «Mappe»,
   // Ctrl+Shift+S and the palette ask for it (actions.ts openMaps); the Orchestrator's own opening stays beside it
   const wantFull = ui.use(s => s.mapsFull);
-  useEffect(() => { if (wantFull) { setMapsFull(false); setFull(true); } }, [wantFull, setFull]);
   const [drawn, setDrawn] = useState(false); // the view's root is on screen (not «loading»): the screen can be asked
+  // only with a map on screen: over an empty page the full screen would wait, and jump over the Orchestrator when the
+  // first map is saved while the user talks to it
+  const none = maps !== null && maps.length === 0;
+  useEffect(() => { if (!wantFull) return; if (none) setMapsFull(false); else if (drawn) { setMapsFull(false); setFull(true); } }, [wantFull, drawn, none, setFull]);
+  useEffect(() => { if (none && full) setFull(false); }, [none, full, setFull]);
   useEffect(() => {
     const el = root.current;
     if (full && el && document.fullscreenElement !== el) void el.requestFullscreen().catch(() => {});
@@ -215,7 +221,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   // the Orchestrator is told the map, the level and the box on screen (lib/where.ts, ADR 0276); «Mappe» comes back here
   useEffect(() => { setMapPicked(picked); return () => setMapPicked(null); }, [picked]);
   useEffect(() => { if (project) setMapsArg(`${project}${level ? `/${level}` : ''}`); }, [project, level]);
-  useEffect(() => { setPicked(null); setPickedLinks(null); moved.current = false; }, [level]);
+  useEffect(() => { setPicked(null); setPickedLinks(null); moved.current = false; whole.current = false; }, [level, project]);
   useEffect(() => { if (picked) setPickedLinks(null); }, [picked]);
 
   const map = view?.map ?? null;
@@ -264,10 +270,9 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
       if (moved.current) return;
       const w = el.clientWidth, h = el.clientHeight;
       const sc = Math.min(1, Math.max(whole.current ? 0.2 : READABLE, Math.min((w - 48) / lv.width, (h - 88) / lv.height)));
-      setCam({ s: sc, x: (w - lv.width * sc) / 2, y: Math.max(16, (h - 56 - lv.height * sc) / 2) });
+      setCam({ s: sc, x: Math.max(16, (w - lv.width * sc) / 2), y: Math.max(16, (h - 56 - lv.height * sc) / 2) });
     };
     fitNow.current = () => { moved.current = false; whole.current = true; measure(); };
-    whole.current = false;
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -387,18 +392,19 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   const show = (id: string) => { if (level === id && !kids(id)) setPicked(id); else go(id); };
   const sel = picked ? byId.get(picked) : undefined;
   // nothing picked inside a system: the system itself is told
-  const here = !sel && !pickedLinks && shownLevel ? byId.get(shownLevel) : undefined;
-  const stLink = (l: MapLink) => shown(shownStatus(l, now));
   const selLinks = pickedLinks ? map.links.filter(l => pickedLinks.includes(l.id)) : [];
+  const here = !sel && !selLinks.length && shownLevel ? byId.get(shownLevel) : undefined;
+  const stLink = (l: MapLink) => shown(shownStatus(l, now));
   // «Aggiorna» (ADR 0307: «vorrei anche poterle aggiornare da un tasto»): the Orchestrator has the project read again
   // and the map redrawn, details included; the drawing changes by itself when the new version is saved
-  const waitingRefresh = !!asked && asked.project === map.project && asked.version === map.version;
+  // The button waits for a new version of this map, ten minutes at most (the Orchestrator may ask something first).
+  const waitingRefresh = !!asked && asked.project === map.project && asked.version === map.version && now - asked.at < REFRESH_WAIT_MS;
   const refresh = () => {
     const r = orchestratorId();
-    if (!r) { toast(t('pm.noOrchestrator'), 'warn'); return; }
-    send(r, t('pm.refreshAsk', { title: map.title, project: map.project }));
-    setAsked({ project: map.project, version: map.version });
-    toast(t('pm.refreshAsked'), 'ok');
+    // a toast sits under the full screen: without an Orchestrator, or with nothing sent, the full screen steps aside
+    if (!r) { setFull(false); toast(t('pm.noOrchestrator'), 'warn'); return; }
+    if (send(r, t('pm.refreshAsk', { title: map.title, project: map.project })) === 'empty') { setFull(false); toast(t('pm.refreshFailed'), 'warn'); return; }
+    setAsked({ project: map.project, version: map.version, at: now });
   };
   // «Discuti» on a box (the owner 2026-11-13: «ogni riquadro devo poterlo discutere con l'orchestrator in un click»):
   // the full screen and the maps window step aside, the Orchestrator gets a ready draft that quotes the box, not sent
@@ -422,8 +428,10 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
       </nav>}
       <span className="sp" />
       {live && waiting > 0 && <span className="pm-waiting" data-testid="pm-waiting">{t('pm.waiting', { n: waiting })}</span>}
-      <span className="pm-updated">{t('pm.updated', { at: since(map.updatedAt, now) })}</span>
-      {live && <button type="button" className="btn btn-s pm-refresh" onClick={refresh} disabled={waitingRefresh} data-tip={t('pm.refreshTip')} data-testid="pm-refresh"><IconRefresh size={14} />{t(waitingRefresh ? 'pm.refreshing' : 'pm.refresh')}</button>}
+      {/* said inside the view: a toast and a tip sit under the full screen */}
+      {live && waitingRefresh ? <span className="pm-updated pm-asked" role="status" data-testid="pm-refresh-note">{t('pm.refreshAsked')}</span>
+        : <span className="pm-updated">{t('pm.updated', { at: since(map.updatedAt, now) })}</span>}
+      {live && <button type="button" className="btn btn-s pm-refresh" onClick={refresh} disabled={waitingRefresh} title={t('pm.refreshTip')} data-testid="pm-refresh"><IconRefresh size={14} />{t(waitingRefresh ? 'pm.refreshing' : 'pm.refresh')}</button>}
       <button type="button" className="btn btn-s pm-fullbtn" onClick={toggleFull} aria-pressed={full} data-testid="pm-fullscreen">{full ? <IconMinimize size={14} /> : <IconMaximize size={14} />}{t('pm.fullscreen')}</button>
     </header>
     {!live && <div className="pm-past" data-testid="pm-past">{t('pm.past', { v: map.version, at: since(map.updatedAt, now), by: map.by })} · {map.summary}<button type="button" className="btn btn-s" onClick={() => setVersion(null)}>{t('pm.backNow')}</button></div>}
@@ -496,7 +504,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
               onClick={() => talk(byId.get(n.id)!)} aria-label={t('pm.talkOn', { name: byId.get(n.id)!.name })} data-tip={t('pm.talk')} data-testid={`pm-talk-${n.id}`}><IconChat size={13} /></button>)}
             {/* the labels above the boxes: a label in a narrow gap is never hidden under one */}
             {labels.map(({ e, left, top }) => <button type="button" key={`l${e.from}>${e.to}`} className={`pm-label s-${shown(e)}${pickedLinks?.includes(e.id) ? ' picked' : ''}`} style={{ left, top }} title={e.note}
-              onClick={() => { setPicked(null); setPickedLinks(p => (p?.includes(e.id) ? null : e.ids)); }} data-testid={`pm-label-${e.id}`}>
+              aria-pressed={!!pickedLinks?.includes(e.id)} onClick={() => { setPicked(null); setPickedLinks(p => (p?.includes(e.id) ? null : e.ids)); }} data-testid={`pm-label-${e.id}`}>
               {e.label}{e.count > 1 ? ` +${e.count - 1}` : ''}{e.status === 'blocked' && e.actor === 'user' && live && <em>{t('pm.you')}</em>}
             </button>)}
             </div>

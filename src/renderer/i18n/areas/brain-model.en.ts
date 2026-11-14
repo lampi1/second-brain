@@ -74,6 +74,7 @@ export const brainModelEn: typeof brainModelIt = {
   'pm.turn': (p: N) => `Turn ${p.n}: it starts when the turn before is finished`, 'pm.turnPar': (p: N) => `Turn ${p.n}: it goes together with other steps, in parallel`,
   'pm.how': 'How it works', 'pm.noDetails': 'No details written for this piece: press «Update» and the agent that reads the project again writes them.', 'pm.noLinkDetails': 'No details written for this passage: «Update» has them written.',
   'pm.partsOf': 'Its parts', 'pm.passages': 'What goes in and out', 'pm.passage': 'Passage', 'pm.worksOn': 'Plan steps here', 'pm.youAreIn': 'YOU ARE IN',
+  'pm.goesTo': 'Goes to', 'pm.comesFrom': 'Comes from', 'pm.refreshFailed': 'Nothing could be sent now: try again shortly.',
   'pm.refresh': 'Update', 'pm.refreshing': 'Update asked…', 'pm.refreshTip': 'The Orchestrator has the project read again and the map redrawn, with the details of every piece. It uses tokens; the map changes by itself when it is done.',
   'pm.refreshAsk': (p: { title: string; project: string }) => `Update the map of the project «${p.title}» (${p.project}): have the project read again and the map redrawn, with the details of every piece and every link. Keep the ids and my corrections.`,
   'pm.refreshAsked': 'Asked the Orchestrator: the map updates by itself when it is done.',

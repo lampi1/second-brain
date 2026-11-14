@@ -4,7 +4,7 @@
 // every passage in and out with what goes along it, and the plan steps on it. A picked arrow tells its passages the
 // same way. A piece drawn before the details existed says so and points to «Aggiorna». Used by ProjectMapView.tsx.
 import type { ReactNode } from 'react';
-import type { MapElement, MapLink, MapState, MapWork, ProjectMap } from '@shared/project-map';
+import { passagesOf, type MapElement, type MapLink, type MapState, type MapWork, type ProjectMap } from '@shared/project-map';
 import { t } from '../../i18n';
 import { IconChat } from '../Icons';
 import { Turn } from './PlanFlow';
@@ -16,7 +16,7 @@ const Paras = ({ text }: { text: string }) => <>{text.split('\n').map((p, i) => 
 function Passage({ l, other, dir, state, onShow }: { l: MapLink; other: MapElement | undefined; dir: 'out' | 'in'; state: Shown; onShow: (id: string) => void }) {
   return <li className="pm-pass" data-dir={dir} data-testid={`pm-pass-${l.id}`}>
     <div className="pm-pass-head">
-      <span aria-hidden>{dir === 'out' ? '→' : '←'}</span>
+      <span aria-label={t(dir === 'out' ? 'pm.goesTo' : 'pm.comesFrom')} role="img">{dir === 'out' ? '→' : '←'}</span>
       <button type="button" onClick={() => onShow(dir === 'out' ? l.to : l.from)}>{other?.name ?? (dir === 'out' ? l.to : l.from)}</button>
       <b>{l.label}</b>
       {state !== 'ok' && <span className="pm-pass-st"><i className={`pm-dot s-${state}`} />{t(`pm.state.${state}`)}</span>}
@@ -31,8 +31,9 @@ export function ElementDetail({ map, el, state, stateOfLink, confirmed, works, o
   onTalk: () => void; onShow: (id: string) => void; testid?: string; lead?: ReactNode;
 }) {
   const byId = new Map(map.elements.map(e => [e.id, e]));
-  const out = map.links.filter(l => l.from === el.id), into = map.links.filter(l => l.to === el.id);
   const parts = map.elements.filter(e => e.parent === el.id);
+  // a system's passages are its parts' too, as the drawing lifts them onto its box: what leaves it and what enters it
+  const { out, into } = passagesOf(map, el.id);
   return <section className="pm-detail" data-testid={testid}>
     <span className="dash-eyebrow">{lead ?? t(`pm.kind.${el.kind}`).toUpperCase()}</span>
     <h3>{el.name}</h3>

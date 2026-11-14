@@ -74,6 +74,7 @@ export const brainModelDe: typeof brainModelIt = {
   'pm.turn': (p: N) => `Runde ${p.n}: beginnt, wenn die Runde davor fertig ist`, 'pm.turnPar': (p: N) => `Runde ${p.n}: läuft zusammen mit anderen Schritten, parallel`,
   'pm.how': 'So funktioniert es', 'pm.noDetails': 'Für dieses Teil sind keine Details geschrieben: Drück „Aktualisieren“, und der Agent, der das Projekt neu liest, schreibt sie.', 'pm.noLinkDetails': 'Für diesen Übergang sind keine Details geschrieben: „Aktualisieren“ lässt sie schreiben.',
   'pm.partsOf': 'Seine Teile', 'pm.passages': 'Was hinein- und hinausgeht', 'pm.passage': 'Übergang', 'pm.worksOn': 'Planschritte hier', 'pm.youAreIn': 'DU BIST IN',
+  'pm.goesTo': 'Geht zu', 'pm.comesFrom': 'Kommt von', 'pm.refreshFailed': 'Jetzt konnte nichts gesendet werden: Versuch es gleich noch einmal.',
   'pm.refresh': 'Aktualisieren', 'pm.refreshing': 'Aktualisierung angefragt…', 'pm.refreshTip': 'Der Orchestrator lässt das Projekt neu lesen und die Karte neu zeichnen, mit den Details zu jedem Teil. Das verbraucht Tokens; die Karte ändert sich von selbst, wenn er fertig ist.',
   'pm.refreshAsk': (p: { title: string; project: string }) => `Aktualisiere die Karte des Projekts „${p.title}“ (${p.project}): Lass das Projekt neu lesen und die Karte neu zeichnen, mit den Details zu jedem Teil und jeder Verbindung. Behalte die IDs und meine Korrekturen.`,
   'pm.refreshAsked': 'Beim Orchestrator angefragt: Die Karte aktualisiert sich von selbst, wenn er fertig ist.',

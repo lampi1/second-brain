@@ -466,15 +466,21 @@ export function mapText(v: Pick<ProjectMapView, 'map' | 'agents' | 'changed'> & 
 }
 /** One element in full, for the Orchestrator and the agents (read with `element`, ADR 0307): what the map's text leaves
  *  out to stay short. Its description and details, its files, and every link in and out with what goes along it. */
-export function elementText(map: Pick<ProjectMap, 'elements' | 'links' | 'title'>, id: string, now: number): string {
+/** The links that leave a piece and the ones that enter it. For a system: its parts' links with the outside too (the
+ *  drawing lifts them onto its box), never the ones between its own parts. */
+export function passagesOf(map: Pick<ProjectMap, 'elements' | 'links'>, id: string): { out: MapLink[]; into: MapLink[] } {
+  const mine = new Set([id, ...map.elements.filter(e => e.parent === id).map(e => e.id)]);
+  return { out: map.links.filter(l => mine.has(l.from) && !mine.has(l.to)), into: map.links.filter(l => mine.has(l.to) && !mine.has(l.from)) };
+}
+export function elementText(map: Pick<ProjectMap, 'elements' | 'links' | 'title'>, id: string, now: number, changed: Record<string, number> = {}): string {
   const e = map.elements.find(x => x.id === id);
   if (!e) throw new Error(`element: no «${id.slice(0, 48)}» in this map`);
   const name = (x: string) => map.elements.find(y => y.id === x)?.name ?? x;
-  const st = (x: { status: MapState; confirmedAt: number }) => { const s = shownStatus(x, now); return s.stale ? 'da verificare' : LABEL_IT[s.status]; };
+  const st = (x: { status: MapState; confirmedAt: number }, key?: string) => { const s = shownStatus(x, now, key ? changed[key] : undefined); return s.stale ? 'da verificare' : LABEL_IT[s.status]; };
   const link = (l: MapLink, other: string, arrow: string) => `- ${arrow} ${name(other)} (${other}) «${l.label}» — ${st(l)}${l.note ? `: ${l.note}` : ''}${l.details ? `\n  ${l.details.replace(/\n/g, '\n  ')}` : ''}`;
-  const out = map.links.filter(l => l.from === id).map(l => link(l, l.to, '→')), into = map.links.filter(l => l.to === id).map(l => link(l, l.from, '←'));
+  const p = passagesOf(map, id), out = p.out.map(l => link(l, l.to, '→')), into = p.into.map(l => link(l, l.from, '←'));
   const parts = map.elements.filter(x => x.parent === id).map(x => `- ${x.id} · ${x.name}${x.description ? `: ${x.description}` : ''}`);
-  return [`«${e.name}» (${e.id}, ${e.kind}${e.parent ? `, in ${name(e.parent)}` : ''}) — ${st(e)}${e.note ? `: ${e.note}` : ''}`,
+  return [`«${e.name}» (${e.id}, ${e.kind}${e.parent ? `, in ${name(e.parent)}` : ''}) — ${st(e, e.id)}${e.note ? `: ${e.note}` : ''}`,
     ...(e.description ? [e.description] : []), ...(e.details ? ['Come funziona:', e.details] : ['Nessun dettaglio scritto: un ridisegno lo aggiunge.']),
     ...(e.evidence.length ? [`Letto da: ${e.evidence.join(', ')}`] : []), ...(parts.length ? ['Parti:', ...parts] : []),
     ...(out.length || into.length ? ['Collegamenti:', ...out, ...into] : [])].join('\n');

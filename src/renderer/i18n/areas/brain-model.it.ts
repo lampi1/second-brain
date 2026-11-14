@@ -81,6 +81,7 @@ export const brainModelIt = {
   'pm.turn': (p: N) => `Turno ${p.n}: parte quando il turno prima è finito`, 'pm.turnPar': (p: N) => `Turno ${p.n}: va insieme ad altri passi, in parallelo`,
   'pm.how': 'Come funziona', 'pm.noDetails': 'Nessun dettaglio scritto per questo pezzo: premi «Aggiorna» e l’agente che rilegge il progetto li scrive.', 'pm.noLinkDetails': 'Nessun dettaglio scritto per questo passaggio: «Aggiorna» li fa scrivere.',
   'pm.partsOf': 'Le sue parti', 'pm.passages': 'Cosa entra e cosa esce', 'pm.passage': 'Passaggio', 'pm.worksOn': 'Passi del piano qui', 'pm.youAreIn': 'SEI DENTRO',
+  'pm.goesTo': 'Va verso', 'pm.comesFrom': 'Arriva da', 'pm.refreshFailed': 'Non sono riuscito a mandare la richiesta: riprova tra poco.',
   'pm.refresh': 'Aggiorna', 'pm.refreshing': 'Aggiornamento chiesto…', 'pm.refreshTip': 'L’Orchestrator fa rileggere il progetto e ridisegnare la mappa, con i dettagli di ogni pezzo. Usa token; la mappa cambia da sola quando ha finito.',
   'pm.refreshAsk': (p: { title: string; project: string }) => `Aggiorna la mappa del progetto «${p.title}» (${p.project}): fai rileggere il progetto e ridisegnarla, con i dettagli di ogni pezzo e di ogni collegamento. Tieni gli id e le mie correzioni.`,
   'pm.refreshAsked': 'Chiesto all’Orchestrator: la mappa si aggiorna da sola quando ha finito.',

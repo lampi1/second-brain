@@ -29,6 +29,11 @@ export function stateOf(f: MapFlowStep, now: number): string {
   return t(f.state === 'blocked' ? 'pm.step.blocked' : 'pm.step.todo');
 }
 
+/** The steps told in full when the user picked none: all of them while the plan waits for the ok, else the one under way. */
+export function followOf(plan: MapPlan): number | 'all' | null {
+  return plan.phase === 'proposed' || plan.phase === 'revising' ? 'all' : plan.flow.find(f => f.state === 'now')?.step ?? null;
+}
+
 function StepCard({ f, flow, now, nameOf, onShow, onChat }: { f: MapFlowStep; flow: MapFlowStep[]; now: number; nameOf: (id: string) => string | undefined; onShow: (on: string) => void; onChat: (chatId: string) => void }) {
   const titles = useApp(s => (f.chatIds ?? []).map(id => s.chats[id]?.title ?? '').join('\n')).split('\n');
   const box = f.on ? nameOf(f.on) : undefined;
@@ -47,11 +52,13 @@ function StepCard({ f, flow, now, nameOf, onShow, onChat }: { f: MapFlowStep; fl
 
 export function PlanFlow({ plan, now, nameOf, onShow, onChat }: { plan: MapPlan; now: number; nameOf: (id: string) => string | undefined; onShow: (on: string) => void; onChat: (chatId: string) => void }) {
   const { flow } = plan;
-  const waiting = plan.phase === 'proposed' || plan.phase === 'revising';
   // which steps are told in full: all of them while the plan waits for the ok, the one under way after
-  const first = (): number | 'all' | null => (waiting ? 'all' : flow.find(f => f.state === 'now')?.step ?? null);
-  const [open, setOpen] = useState<number | 'all' | null>(first);
-  useEffect(() => { setOpen(first()); }, [plan.chatId, plan.phase]);
+  // it follows the plan (the step under way changes by itself) until the user picks one; a new phase follows again
+  const follow = followOf(plan);
+  const [mine, setMine] = useState<{ open: number | 'all' | null } | null>(null);
+  useEffect(() => { setMine(null); }, [plan.chatId, plan.phase]);
+  const open = mine ? mine.open : follow;
+  const setOpen = (next: (o: number | 'all' | null) => number | 'all' | null) => setMine({ open: next(open) });
   const turns = [...new Set(flow.map(f => f.wave))].map(w => flow.filter(f => f.wave === w));
   const told = open === 'all' ? flow : flow.filter(f => f.step === open);
   return <div className="pm-flowbox">

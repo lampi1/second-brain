@@ -66,7 +66,11 @@ describe('details on the map', () => {
   it('tells one piece in full: how it works, its files, its parts, every link in and out with what passes', () => {
     const m = base();
     expect(elementText(m, 'web', T)).toBe(['«Web» (web, system) — funziona', 'Il sito', 'Come funziona:', 'Riceve gli ordini.\nLi salva e avvisa il cliente.', 'Letto da: src/',
-      'Parti:', '- cart · Carrello', '- orders · Ordini'].join('\n'));
+      'Parti:', '- cart · Carrello', '- orders · Ordini',
+      // a system's links are its parts' links with the outside, never the ones between its own parts
+      'Collegamenti:', '- → Pagamenti (pay) «addebita» — da capire\n  Manda il totale e aspetta «pagato».', '- → Pagamenti (pay) «storna» — da capire'].join('\n'));
+    // files changed after the status was confirmed: «da verificare», as the whole map's text says
+    expect(elementText(m, 'web', T, { web: T + 1 })).toContain('«Web» (web, system) — da verificare');
     const cart = elementText(m, 'cart', T);
     expect(cart).toContain('«Carrello» (cart, part, in Web) — in lavorazione: sconti');
     expect(cart).toContain('Nessun dettaglio scritto');

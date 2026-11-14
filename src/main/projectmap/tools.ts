@@ -63,7 +63,7 @@ export function chatMapTools(d: ChatMapDeps): McpTool[] {
       run: a => {
         if (typeof a.project !== 'string' || !a.project.trim()) return json({ projects: d.maps.list() });
         const v = d.maps.view(projectOf(d.maps, a.project))!;
-        if (typeof a.element === 'string' && a.element) return elementText(v.map, a.element, Date.now());
+        if (typeof a.element === 'string' && a.element) return elementText(v.map, a.element, Date.now(), v.changed);
         return mapText(v, Date.now());
       },
     },
@@ -160,7 +160,7 @@ export function appProjectMapTool(maps: ProjectMaps, emitUi: (cmd: EventMap['ui:
       // open with no project: the maps window as the user left it (or «nessun progetto disegnato» with what to ask)
       if (action === 'open' && !(typeof a.project === 'string' && a.project)) { emitUi({ action: 'maps', value: '' }); return maps.list().length ? 'ok' : 'ok: nessuna mappa ancora, la finestra dice come chiederla'; }
       const project = projectOf(maps, a.project);
-      if (action === 'read') return typeof a.element === 'string' && a.element ? elementText(maps.view(project)!.map, a.element, Date.now()) : mapText(maps.view(project)!, Date.now());
+      if (action === 'read') return typeof a.element === 'string' && a.element ? elementText(maps.view(project)!.map, a.element, Date.now(), maps.view(project)!.changed) : mapText(maps.view(project)!, Date.now());
       if (action === 'open') {
         const el = typeof a.element === 'string' && a.element ? a.element : '';
         if (el && !maps.view(project)!.map.elements.some(e => e.id === el)) throw new Error(`element: no «${el}» in this map`);

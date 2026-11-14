@@ -126,7 +126,7 @@ function onKey(e: KeyboardEvent): void {
     case 'settings': go({ page: 'impostazioni' }); break;
     case 'voice': if (!e.repeat) shortcutVoice(); break;
     case 'talk': if (!e.repeat) shortcutTalk(); break;
-    case 'stato': openMaps(); break; // Ctrl+Shift+S: the project maps took «Stato»'s place (ADR 0275), beside the Orchestrator (ADR 0276)
+    case 'stato': openMaps(); break; // Ctrl+Shift+S: the project maps took «Stato»'s place (ADR 0275), full screen first (ADR 0307), then beside the Orchestrator (ADR 0276)
     case 'escape': if (!escapeOne()) return; break;
   }
   e.preventDefault();

@@ -3,8 +3,8 @@
 // full screen the maps take when the user opens them, not when the Orchestrator does (actions.ts openMaps).
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(), on: () => () => {} } }));
-import type { MapFlowStep } from '../../src/shared/project-map';
-import { stateOf, whenOf } from '../../src/renderer/components/project-map/PlanFlow';
+import type { MapFlowStep, MapPlan } from '../../src/shared/project-map';
+import { followOf, stateOf, whenOf } from '../../src/renderer/components/project-map/PlanFlow';
 import { openMaps, uiCommand } from '../../src/renderer/actions';
 import { setMapsFull, ui } from '../../src/renderer/store/ui';
 
@@ -41,5 +41,17 @@ describe('the maps open full screen for the user', () => {
     expect(ui.get().page).toBe('collegamenti');
     uiCommand({ action: 'maps', value: 'shop/web' });
     expect(ui.get().mapsFull).toBe(false);
+  });
+});
+
+describe('the step told in full', () => {
+  it('is the one under way, every one while the plan waits for the ok, none when nothing runs', () => {
+    const plan = (phase: MapPlan['phase'], now: number): MapPlan => ({ chatId: 's1', title: 'P', phase, at: 1, steps: 3, done: 0,
+      flow: [1, 2, 3].map(n => ({ step: n, title: `passo ${n}`, state: n < now ? 'done' : n === now ? 'now' : 'todo', wave: n })) });
+    expect(followOf(plan('running', 1))).toBe(1);
+    expect(followOf(plan('running', 2))).toBe(2); // the plan moved on: the card moves with it
+    expect(followOf(plan('running', 4))).toBeNull();
+    expect(followOf(plan('proposed', 0))).toBe('all');
+    expect(followOf(plan('revising', 0))).toBe('all');
   });
 });

@@ -9,6 +9,7 @@
 .pm-trail button[aria-current] { color: var(--text); font-weight: 600; }
 .pm-waiting { background: var(--amber); color: #1a1405; font-weight: 700; font-size: 12.5px; padding: 4px 12px; border-radius: 999px; }
 .pm-updated { color: var(--text-3); font-size: 12.5px; border: 1px solid var(--border-2); padding: 4px 10px; border-radius: 999px; }
+.pm-updated.pm-asked { color: var(--text); border-color: var(--accent); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pm-past { display: flex; align-items: center; gap: 10px; background: var(--accent-bg); border: 1px solid var(--accent-line); color: var(--text); padding: 7px 12px; border-radius: var(--r-m); font-size: 13px; }
 .pm-past .btn { margin-left: auto; }
 
