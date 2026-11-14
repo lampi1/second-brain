@@ -108,8 +108,8 @@ describe('agent_delegate', () => {
     expect(f.m.pending().filter(r => r.chatId === o.id)).toHaveLength(0);
     const note = f.m.items(o.id).find(i => i.kind === 'system' && i.code === 'userStep');
     expect(note).toMatchObject({ params: { title: 'Caso supporto', text: 'Accendi la VPN', command: 'vpn up' } });
-    // the reporting chat is held and tagged by it, never closed meanwhile
-    expect(f.m.autoCloseCandidates(() => false).find(c => c.id === child.id)).toMatchObject({ eligible: false, waitingFor: 'answer' });
+    // the reporting chat is held and tagged by it, never closed meanwhile; a command to run, never a question (#411)
+    expect(f.m.autoCloseCandidates(() => false).find(c => c.id === child.id)).toMatchObject({ eligible: false, waitingFor: 'command' });
     const before = f.sent.get(parent.id)?.length ?? 0;
     f.m.runEnded({ id: 'x', chatId: o.id, itemId: 'i', code: 'other', cwd: f.dir, state: 'ok', exitCode: 0, output: '', startedAt: Date.now() + 1, endedAt: Date.now() + 2 });
     await Promise.resolve();
@@ -141,12 +141,14 @@ describe('agent_delegate', () => {
     expect(f.m.items(o.id).some(i => i.kind === 'system' && i.code === 'userStep' && !i.params?.command)).toBe(true);
     expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).not.toContain('chat «Login»]');
     expect(f.m.list().find(c => c.id === child.id)!.delegation!.result!.outcome).toBe('blocked');
+    // held as a step of the user's, never as a question: the chat has none open (#411)
+    expect(f.m.autoCloseCandidates(() => false).find(c => c.id === child.id)).toMatchObject({ eligible: false, waitingFor: 'step' });
     // the user's «fatto», passed on by the Orchestrator, reaches the parent that owns the work, once
     expect(f.m.userStepDone(child.id, 'fatto')).toBe(true);
     await vi.waitFor(() => expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).toContain('[risposta dell’utente · chat «Login»]'));
     expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).toContain('«fatto»');
     expect(f.m.userStepDone(child.id, 'fatto')).toBe(false);
-    expect(f.m.autoCloseCandidates(() => false).find(c => c.id === child.id)?.waitingFor).not.toBe('answer');
+    expect(['answer', 'step', 'command']).not.toContain(f.m.autoCloseCandidates(() => false).find(c => c.id === child.id)?.waitingFor);
   });
 
   it('a decision is never asked: the owner of the work decides it as the user would (ADR 0269)', async () => {
@@ -254,6 +256,36 @@ describe('agent_delegate', () => {
     expect(r).toMatchObject({ reported: true, remembered: 1 });
     expect(r.warnings.join(' ')).toContain('only the first line was noted (one line per report); 2 left out');
     expect(remembered).toEqual([['scout', 'Logs are in D:/logs']]);
+  });
+
+  it('one review chat per piece of work: a Sentinel that reported re-reviews the fix delta, a second one is refused (#387)', async () => {
+    const f = fixture(), parent = await f.root('artisan');
+    // two Sentinels started side by side for two parts are fine: neither has reported yet
+    const first = (await f.call('agent_delegate', parent.id, { tasks: [f.task('sentinel', 'Review · sconto')] })).children[0].chatId as string;
+    const second = (await f.call('agent_delegate', parent.id, { tasks: [f.task('sentinel', 'Review · sicurezza')] })).children[0].chatId as string;
+    await f.call('agent_report', first, { outcome: 'done', summary: 'Un difetto nel totale', output: 'Trovato: lo sconto si applica due volte.', doneWhen: [{ criterion: 'criterion A', met: true }] });
+    // after the fix: a fresh Sentinel is refused, the refusal names the chat that reviewed the work
+    const refused = await f.call('agent_delegate', parent.id, { tasks: [f.task('sentinel', 'Review · sconto dopo il fix')] }).catch((e: Error) => e.message);
+    expect(refused).toMatch(/one review chat per piece of work/);
+    expect(refused).toContain(first);
+    expect(refused).not.toContain(second);                   // still at work: not a review to continue
+    expect(refused).toMatch(/agent_assign_task.*only the fix delta.*freshReview true/s);
+    expect(f.m.list().filter(c => c.parentId === parent.id)).toHaveLength(2);
+    // the same Sentinel takes the next round, told to review only the delta
+    const before = f.sent.get(first)?.length ?? 0;
+    const again = await f.call('agent_assign_task', parent.id, { chatId: first, roleId: 'sentinel', cwd: f.m.list().find(c => c.id === first)!.cwd, mode: 'continue', contract: { goal: 'Check the fix of the double discount', doneWhen: ['the total is right'] } });
+    expect(again.chatId).toBe(first);
+    const prompt = (f.sent.get(first) ?? []).slice(before).join('\n');
+    expect(prompt).toContain('Review only what changed since your last review (the fix delta)');
+    expect(prompt).toContain('Check the fix of the double discount');
+    // while it re-reviews, the work still has its review chat
+    await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('sentinel', 'Review · terzo giro')] })).rejects.toThrow(/one review chat per piece of work/);
+    // the user asked for a fresh reviewer, or a part none covers: freshReview opens it
+    const fresh = await f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('sentinel', 'Review · occhi nuovi'), freshReview: true }] });
+    expect(fresh.children[0].chatId).toBeTruthy();
+    await expect(f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Fonte'), freshReview: 'yes' }] })).rejects.toThrow(/freshReview/);
+    // another role is never held back
+    expect((await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Fonte')] })).children).toHaveLength(1);
   });
 
   it('three Scouts run in parallel, each a writable chat of its own', async () => {

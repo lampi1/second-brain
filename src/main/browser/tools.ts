@@ -1,4 +1,4 @@
-// MCP tools of the internal browser (24, under Cursor's 40-tool budget). Names and arguments follow the Claude desktop
+// MCP tools of the internal browser (25, under Cursor's 40-tool budget). Names and arguments follow the Claude desktop
 // browser pane where it has an equivalent (tabs_*, navigate, read_page, find, get_page_text, console/network,
 // javascript), Playwright MCP elsewhere (fill_form, select_option, wait_for, handle_dialog), so agents and skills
 // (QA skills) transfer. Every call is scoped: an app chat sees only its own tab group, an external client only the group of
@@ -221,7 +221,7 @@ PNG ${shot.width}x${shot.height}` : ''}${dialog}`, images: [{ data: img.data, mi
     },
     {
       name: 'type', annotations: WRITE,
-      description: 'Type text as real key presses into the focused element, or click ref first. "\\n" presses Enter. For several fields at once use fill_form. Passwords are fine on any host: read_page and the result show their values masked ("•••"); never repeat a password in chat.',
+      description: 'Type text as real key presses into the focused element, or click ref first. "\\n" presses Enter. For several fields at once use fill_form. To sign in with an account of the user\'s credentials file use fill_credential (the app types the password, you never read it). A password you were given in the task is fine on any host: read_page and the result show its value masked ("•••"); never repeat a password in chat.',
       inputSchema: schema({ text: { type: 'string' }, ref: target.ref }, ['text']),
       run: write(a => `type ${[...String(a.text ?? '')].length} chars${a.ref ? ` in ${String(a.ref)}` : ''}`, (tab, a) => actions.type(tab, typeof a.text === 'string' ? a.text : str(a.text, 'text'), a.ref)),
     },
@@ -258,6 +258,16 @@ PNG ${shot.width}x${shot.height}` : ''}${dialog}`, images: [{ data: img.data, mi
       run: write(a => `fill_form ${Array.isArray(a.fields) ? a.fields.length : 0} fields`, (tab, a) => actions.fill(tab, a.fields as Array<{ ref?: unknown; value?: unknown }>)),
     },
     {
+      name: 'fill_credential', annotations: WRITE,
+      description: 'Sign in with a test account of the user\'s credentials file without ever reading the password: the app reads the entry and types it into the sign-in form itself; you only get the account name and a masked value ("•••"). Never open or read the credentials file, never ask the user for a password. password_ref = the form\'s password field (find "password"); user_ref = its user name / e-mail field (optional: leave it out when it is already filled or on an earlier step); account = the entry\'s user name or e-mail (optional when the file has one entry for this site; a refusal lists the names). The entry must be for this site (its "url", or "loginUrl" for a sign-in page on another host) and not a production account, else the call is refused with the fix. Then submit the form yourself (click its button). Afterwards this tab takes no javascript and no copy keys until the page is left or reloaded. For MFA, a CAPTCHA or an account without an entry use handoff_to_user kind "login".',
+      inputSchema: schema({
+        account: { type: 'string', description: 'User name or e-mail of the entry (never a password). Optional when the file has one entry for this site.' },
+        password_ref: { type: 'string', description: 'Ref of the password field (from read_page/find).' },
+        user_ref: { type: 'string', description: 'Ref of the user name / e-mail field, in the same frame (optional).' },
+      }, ['password_ref']),
+      run: write(a => `fill_credential ${typeof a.account === 'string' ? a.account.slice(0, 80) : ''}`.trim(), (tab, a) => { str(a.password_ref, 'password_ref'); return actions.fillCredential(tab, a); }),
+    },
+    {
       name: 'wait_for', annotations: RO,
       description: 'Wait until all given conditions hold (default timeout 10 s, max 120 s): text visible, text_gone, a CSS selector visible, url contains (or * glob), network_idle (no request for 500 ms). Searches iframes too.',
       inputSchema: schema({ text: { type: 'string' }, text_gone: { type: 'string' }, selector: { type: 'string' }, url: { type: 'string' }, network_idle: { type: 'boolean' }, timeout_ms: { type: 'number' } }),
@@ -289,7 +299,7 @@ PNG ${shot.width}x${shot.height}` : ''}${dialog}`, images: [{ data: img.data, mi
     },
     {
       name: 'handoff_to_user', annotations: WRITE,
-      description: 'Ask the user to act in your tab themselves (a login you cannot do yourself: MFA, CAPTCHA, no password for the account; or a choice only they can make): the app shows them a banner on your tab with your reason and instructions until they click Fatto (done) or Non riesco (failed). kind "login" = sign in to this environment (also announced in their feed as "Rifai l\'accesso a <env>"); the environment keeps the session for later runs. Open the sign-in page in your tab first. On a local stack whose test accounts are in the user\'s credentials file a login hand-off is refused: sign in yourself. For a login pass account = the user name or e-mail of the entry in the user\'s credentials file (required, refused otherwise, when the file has entries for the page\'s host): the banner shows that account and its sign-in URL with Copia buttons, and the app copies the password from the file only when the user clicks (never put a password in any argument, never read it out, never write it in chat). The call keeps waiting (progress notifications; default 600 s, max 1800) and returns as soon as they answer; if it returns "still waiting", call it again with the same handoff_id. If you end your turn instead, the app messages you when they answer.',
+      description: 'Ask the user to act in your tab themselves (a login you cannot do yourself: MFA, CAPTCHA, no entry for the account in the credentials file, so fill_credential was refused; or a choice only they can make): the app shows them a banner on your tab with your reason and instructions until they click Fatto (done) or Non riesco (failed). kind "login" = sign in to this environment (also announced in their feed as "Rifai l\'accesso a <env>"); the environment keeps the session for later runs. Open the sign-in page in your tab first. On a local stack whose test accounts are in the user\'s credentials file a login hand-off is refused: sign in yourself. For a login pass account = the user name or e-mail of the entry in the user\'s credentials file (required, refused otherwise, when the file has entries for the page\'s host): the banner shows that account and its sign-in URL with Copia buttons, and the app copies the password from the file only when the user clicks (never put a password in any argument, never read it out, never write it in chat). The call keeps waiting (progress notifications; default 600 s, max 1800) and returns as soon as they answer; if it returns "still waiting", call it again with the same handoff_id. If you end your turn instead, the app messages you when they answer.',
       inputSchema: schema({
         reason: { type: 'string', description: 'One short line, e.g. "Login richiesto su example-test-3"' }, instructions: { type: 'string' },
         kind: { type: 'string', enum: ['login', 'other'] },

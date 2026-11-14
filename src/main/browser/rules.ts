@@ -50,7 +50,7 @@ export function loginRefusal(c: LoginCheck): string | null {
   const list = c.accounts.map(a => `"${a}"`).join(', ');
   if (isLocalHost(c.url) && c.accounts.length) {
     return `Refused: ${host} is a local stack with test accounts in the user's credentials file (${c.file}): ${list}. ` +
-      'On a local stack you sign in yourself with type / fill_form: do not ask the user.';
+      'On a local stack you sign in yourself with fill_credential (account = one of them; the app types the password, never read the file): do not ask the user.';
   }
   if (!c.accounts.length) return null;
   const want = c.account.trim().toLowerCase();

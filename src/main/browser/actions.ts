@@ -6,17 +6,19 @@
 // returns a short result (what changed: URL, dialog, console errors, failed requests, new tabs, downloads) so the agent
 // rarely needs an extra read. Nothing here waits forever: page scripts and input race a timeout and dialog opening.
 // Agents may type passwords on every host (ADR 0237): a password field's value comes back only masked ("•••").
+// fillCredential (#386, ADR 0310): the app types an account of the user's credentials file itself, so the agent signs
+// in without holding the password; that tab then takes no caller JavaScript and no copy keys until the page is left.
 // Used by browser/tools.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { NativeImage, WebFrameMain } from 'electron';
-import { log, errText, redact } from '../log';
+import { log, errText, redact, addRedaction } from '../log';
 import { ToolRefusal } from '../mcp/refusal';
 import type { BrowserTabs, Tab } from './tabs';
 import { pageCall, walkPage, locateRef, frameBox, inputInfo, focusSelect, selectOptions, pageText, probe, angularStable, hasPasswordField,
   type WalkMode, type WalkResult, type PointResult, type InputInfo, type FrameMarker } from './page';
 import { parseRef, parseFrame, refPrefix } from './refs';
-import { charKey, isPasteKey, isPasteStroke, maskKeys, parseKeys, parseModifiers, strokeEvents } from './keys';
+import { charKey, isCopyKey, isPasteKey, isPasteStroke, maskKeys, parseKeys, parseModifiers, strokeEvents } from './keys';
 import { evidencePath, stampName } from './evidence';
 import { previewOf, type Preview } from './preview';
 import { formatDetail, formatEntry, redactBody } from './netlog';
@@ -31,6 +33,10 @@ const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 /** A call whose tab went away while it ran: who closed it, so the agent knows not to reopen it blindly. */
 const goneText = (tab: Tab) => (tab.closedByUser ? `The user closed tab ${tab.id} in the app while this call ran: call tabs_list.` : 'The tab was closed: call tabs_list.');
 type Step = [string, Record<string, unknown>];
+/** Refusal of an action that could read back a password the app typed (fill_credential, ADR 0310). */
+const SECRET_HELD = (what: string) => `Refused: ${what} is blocked while a tab of this environment holds a password the app typed (fill_credential). It works again once that page is left or reloaded.`;
+/** The site of a URL: scheme-less host with port ('' when none). */
+const siteOf = (url: string): string => { try { return new URL(url).host.toLowerCase(); } catch { return ''; } };
 
 export interface Before { url: string; console: number; t0: number; tabs: Set<string>; downloads: number; dialogs: number }
 /** A capture: png = full size (evidence), width/height its pixels; scale = image px per CSS px and origin = the CSS
@@ -110,6 +116,8 @@ export class BrowserActions {
           if (method === 'Input.dispatchKeyEvent' && (raw.type === 'keyDown' || raw.type === 'rawKeyDown')
             && isPasteKey(String(raw.key),Number(raw.modifiers))
             && this.tabs.credentials.pasteBlocked()) throw new Error('Refused: pasting is blocked while a login password is on the clipboard.');
+          if (tab.secretTyped && method === 'Input.dispatchKeyEvent' && (raw.type === 'keyDown' || raw.type === 'rawKeyDown') && isCopyKey(String(raw.key),Number(raw.modifiers)))
+            throw new Error('Refused: copy and cut are blocked in this tab while it holds a password the app typed (fill_credential). They work again after the page is left or reloaded.');
         const r = await Promise.race([
           cdp.send(method, params).then(() => 'ok' as const),
           d.promise.then(() => 'dialog' as const),
@@ -187,8 +195,8 @@ export class BrowserActions {
     return lines.join('\n');
   }
 
-  /** When the tab shows a sign-in page: the agent signs in itself with type / fill_form (any host, ADR 0237); the
-   *  hand-off stays for MFA, CAPTCHA or an account it has no password for. */
+  /** When the tab shows a sign-in page: the agent signs in itself (any host, ADR 0237), with fill_credential when the
+   *  user's credentials file has an entry for the site (ADR 0310); the hand-off stays for MFA, CAPTCHA or no entry. */
   async loginNotice(tab: Tab): Promise<string> {
     if (tab.wc.isDestroyed()) return '';
     const url = tab.wc.getURL();
@@ -196,7 +204,8 @@ export class BrowserActions {
     const form = await this.evalIn<boolean>(tab, tab.wc.mainFrame, pageCall(hasPasswordField, true), 1500).catch(() => false);
     if (!form && !isLoginUrl(url)) return '';
     const host = hostOf(url);
-    return `Sign-in page in environment ${tab.env} (${host}): sign in yourself with type / fill_form and the account you were given ` +
+    const mine = this.tabs.credentials.accountsFor(url).map(u => `"${u}"`).join(', ');
+    return `Sign-in page in environment ${tab.env} (${host}): sign in yourself with ${mine ? `fill_credential (test account${mine.includes(',') ? 's' : ''} ${mine} in the user's credentials file: the app types the password, never read the file)` : 'fill_credential when the user\'s credentials file has an entry for this site, or type / fill_form and the account you were given'} ` +
       `(password values come back masked). For MFA, CAPTCHA or an account without a password, call handoff_to_user with kind "login"; ` +
       `environment ${tab.env} keeps the session.`;
   }
@@ -336,6 +345,7 @@ export class BrowserActions {
   async click(tab: Tab, a: { ref?: unknown; coordinate?: unknown; button?: unknown; clickCount?: unknown; modifiers?: unknown }): Promise<string> {
     const button = String(a.button ?? 'left');
     if (!['left', 'right', 'middle'].includes(button)) throw new Error('button must be left, right or middle');
+    if (button === 'middle' && this.secretHeld(tab)) throw new Error(SECRET_HELD('middle click (it pastes the selection on Linux)'));
     const count = Math.max(1, Math.min(3, Math.floor(Number(a.clickCount ?? 1)) || 1));
     const modifiers = parseModifiers(a.modifiers);
     const t = await this.target(tab, a.ref, a.coordinate);
@@ -356,6 +366,7 @@ export class BrowserActions {
   }
 
   async drag(tab: Tab, a: { from_ref?: unknown; from?: unknown; to_ref?: unknown; to?: unknown }): Promise<string> {
+    if (this.secretHeld(tab)) throw new Error(SECRET_HELD('drag'));
     const s = await this.target(tab, a.from_ref, a.from);
     const e = await this.target(tab, a.to_ref, a.to);
     const steps: Step[] = [
@@ -402,6 +413,49 @@ export class BrowserActions {
     return `Typed ${[...text].length} characters ${where}${r === 'dialog' ? ' (a dialog opened: typing stopped)' : ''}`;
   }
 
+  /** A tab of this environment (popups and other tabs share its session and pages) holds a password the app typed. */
+  private secretHeld(tab: Tab): boolean {
+    if (tab.secretTyped) return true;
+    for (const t of this.tabs.tabs?.values() ?? []) if (t.env === tab.env && t.secretTyped) return true;
+    return false;
+  }
+
+  /** Signs in by name (#386, ADR 0310): types the user name (user_ref, optional) and the password of an account of the
+   *  user's credentials file into the form, read from the file now. The password goes only into a password field (its
+   *  value reads back masked) of a page on the entry's own site; the agent gets the account name and "•••". */
+  async fillCredential(tab: Tab, a: { account?: unknown; password_ref?: unknown; user_ref?: unknown }): Promise<string> {
+    if (tab.scriptRan) throw new ToolRefusal('Refused: caller JavaScript ran in this page, and a script could read what the app types. Reload the page (navigate "reload") or open the sign-in page again, then call fill_credential before any javascript.');
+    const { frame: no, ref } = parseRef(a.password_ref);
+    const frame = this.tabs.frameByNo(tab, no);
+    const info = await this.evalIn<InputInfo | { error: string }>(tab, frame, pageCall(inputInfo, ref));
+    if ('error' in info) throw new Error(info.error === 'stale' ? `${ref} is no longer on the page: call read_page or find for fresh refs.` : `${ref}: ${info.error}`);
+    const notPassword = (i: InputInfo) => !i.password || i.kind !== 'text' || i.type !== 'password';
+    if (notPassword(info)) throw new ToolRefusal(`Refused: ${ref} (${info.desc}) is not a password field (type=password). password_ref must be the form's password field (find "password"); the user name goes in user_ref. A "show password" toggle turned it into text: toggle it back first.`);
+    const hasUser = a.user_ref !== undefined && a.user_ref !== null && a.user_ref !== '';
+    let userRef = '';
+    if (hasUser) {
+      const u = parseRef(a.user_ref);
+      if (u.frame !== no) throw new ToolRefusal('Refused: user_ref and password_ref must be in the same frame (the same sign-in form).');
+      userRef = u.ref;
+      const ui = await this.evalIn<InputInfo | { error: string }>(tab, frame, pageCall(inputInfo, u.ref));
+      if ('error' in ui) throw new Error(ui.error === 'stale' ? `${u.ref} is no longer on the page: call read_page or find for fresh refs.` : `${u.ref}: ${ui.error}`);
+      if (ui.password) throw new ToolRefusal(`Refused: ${u.ref} is a password field. user_ref is the user name or e-mail field.`);
+    }
+    const site = siteOf(frameUrl(frame));
+    const c = this.tabs.credentials.siteCredential(typeof a.account === 'string' ? a.account : '', frameUrl(frame));
+    if ('refusal' in c) throw new ToolRefusal(c.refusal);
+    addRedaction(c.password);                             // logs, console and network output never show it either
+    tab.secretTyped = true;
+    // checked again right before each field is typed: the page may have changed the field or the frame meanwhile
+    const lines = await this.fill(tab, [...(hasUser ? [{ ref: a.user_ref, value: c.user }] : []), { ref: a.password_ref, value: c.password }], (r, i, f) => {
+      if (siteOf(frameUrl(f)) !== site) throw new ToolRefusal('Refused: the sign-in form moved to another site while the app typed: nothing more was typed.');
+      if (r === ref && notPassword(i)) throw new ToolRefusal(`Refused: ${ref} is no longer a password field: the password was not typed.`);
+      if (r === userRef && i.password) throw new ToolRefusal(`Refused: ${userRef} became a password field: nothing was typed there.`);
+    });
+    const typed = lines.split('\n').some(l => l.startsWith(`${ref} `));
+    return `Account ${c.user}, typed by the app from the user's credentials file (you never see the password):\n${lines}\n${typed ? 'Submit the form now (click its button, or key Enter).' : 'The password was not typed: read the form again and call fill_credential once more.'}`;
+  }
+
   async key(tab: Tab, keys: string, repeat = 1): Promise<string> {
     const strokes = parseKeys(keys);
     const n = Math.max(1, Math.min(100, Math.floor(repeat) || 1));
@@ -446,7 +500,7 @@ export class BrowserActions {
 
   /** Fills several fields in one call: text-like fields are focused, selected and replaced; checkboxes/radios clicked
    *  only when their state differs; selects set by value or label. One result line per field. */
-  async fill(tab: Tab, fields: Array<{ ref?: unknown; value?: unknown }>): Promise<string> {
+  async fill(tab: Tab, fields: Array<{ ref?: unknown; value?: unknown }>, check?: (ref: string, info: InputInfo, frame: WebFrameMain) => void): Promise<string> {
     if (!Array.isArray(fields) || !fields.length) throw new Error('fields must be a non-empty array of { ref, value }');
     const lines: string[] = [];
     for (const f of fields.slice(0, 50)) {
@@ -458,6 +512,7 @@ export class BrowserActions {
         const info = await this.evalIn<InputInfo | { error: string }>(tab, frame, pageCall(inputInfo, ref));
         if ('error' in info) throw new Error(info.error === 'stale' ? 'no longer on the page: call read_page again' : info.error);
         if (info.disabled) throw new Error(`${info.desc} is disabled`);
+        check?.(ref, info, frame);
         const v = f.value;
         if (info.kind === 'text' || info.kind === 'editable') {
           if (info.readonly) throw new Error(`${info.desc} is read-only`);
@@ -623,6 +678,8 @@ export class BrowserActions {
     const selector = o.selector ? String(o.selector) : undefined, url = o.url ? String(o.url) : undefined;
     const idle = o.network_idle === true;
     if (!text && !gone && !selector && !url && !idle) throw new Error('Pass at least one of text, text_gone, selector, url, network_idle.');
+    // a form library may mirror a field's value in its value attribute: a selector on it would test the password
+    if (selector && /\[\s*value/i.test(selector) && this.secretHeld(tab)) throw new Error(SECRET_HELD('a selector on the value attribute'));
     const timeout = Math.max(100, Math.min(120_000, Number(o.timeout_ms ?? 10_000) || 10_000));
     const t0 = Date.now();
     let quietSince = 0;
@@ -753,6 +810,7 @@ export class BrowserActions {
     // the user is working in this tab (a hand-off, a login above all): no caller script runs there meanwhile, as in act()
     const h = this.tabs.handoffs.openFor(tab.id);
     if (h) throw new Error(`The user is working in this tab (hand-off ${h.id}: ${h.reason}). Wait with handoff_to_user handoff_id "${h.id}".`);
+    if (this.secretHeld(tab)) throw new Error('Refused: a tab of this environment holds a password the app typed from the credentials file (fill_credential), and caller JavaScript could read it. It works again once that page is left or reloaded (navigate "reload"): the environment keeps the session.');
     if(parseFrame(frameArg)!==0)throw new Error('Caller JavaScript supports only the verified local top page. Use frame-aware read_page / get_page_text / screenshot for iframe inspection.');
     const cdp=this.cdp(tab),frame=tab.wc.mainFrame;
     const before={url:tab.wc.getURL(),frameUrl:frame.url,origin:frame.origin,process:frame.processId,routing:frame.routingId,tree:frame.frameTreeNodeId};
@@ -776,6 +834,7 @@ export class BrowserActions {
     try{
       this.guard(tab);
       if(this.tabs.handoffs.openFor(tab.id)||!current())throw new Error('The page changed or the user is working in it. Read the page again before running local JavaScript.');
+      tab.scriptRan = true;                               // fill_credential is refused in this document from now on
       // No await between the last guard and send. A subsequent navigation destroys this system-unique context;
       // CDP cannot redirect the expression into a different process/document or an omitted default context.
       const r=await withTimeout(Promise.race([
@@ -798,6 +857,12 @@ function originOf(f: WebFrameMain): string {
 /** wait_for url: a substring, or a glob ("*" = anything) matched against the whole URL, without regex (no ReDoS). */
 function urlMatches(url: string, want: string): boolean {
   return want.includes('*') ? globMatch(url.slice(0, 8192), want, true) : url.includes(want);
+}
+
+/** The web page a frame belongs to: its own http(s) URL, else the nearest parent's (about:blank / srcdoc frames). */
+function frameUrl(f: WebFrameMain): string {
+  for (let cur: WebFrameMain | null = f; cur; cur = cur.parent) if (/^https?:\/\//i.test(cur.url)) return cur.url;
+  return '';
 }
 
 /** The host a frame's content belongs to: about:blank / srcdoc / data frames take their parent's. */

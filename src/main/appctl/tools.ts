@@ -58,6 +58,7 @@ import type { PriceOf } from '../agents/standing';
 import { agentLearnTool, lessonReviewTool, type AgentPackLearning } from '../agents/pack/learning';
 import type { McpTool } from '../mcp/server';
 import { ToolRefusal } from '../mcp/refusal';
+import { DELTA_REVIEW, hasReported, nextReviewOf, REVIEW_ROLES, reviewsSameWork, rootReviewer, type ReviewWorld } from '../agents/one-review';
 import type { BrainScripts } from '../brain/scripts';
 import type { BrainChangelog } from '../brain/changelog';
 import { scriptWriteTools } from '../brain/scripts-tools';
@@ -232,6 +233,12 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const authed = () => !!callerId && d.chats.list().some(c => c.id === callerId && c.isOrchestrator && !c.closedAt);
   /** the Orchestrator this endpoint acts for */
   const caller = (): ChatSummary | undefined => d.chats.list().find(c => c.isOrchestrator && !c.closedAt && (!callerId || c.id === callerId));
+  /** what the one-review rule reads (#387, agents/one-review.ts): chats, runs, the roles' cards and the open work threads */
+  const reviewWorld = (): ReviewWorld => {
+    const threads = d.workflows?.list().filter(r => r.status !== 'done') ?? [];
+    return { chats: d.chats.list(), runs: d.runFeedback?.runList() ?? [], profile: id => d.agents?.().profiles.find(p => p.id === id),
+      threadOf: id => threads.find(r => r.chatIds.includes(id))?.id ?? null };
+  };
   /** the authenticated Orchestrator writes to a work chat as the user (ADR 0269); the plain mount as an agent */
   const voice = (): string => (authed() ? ORCHESTRATOR_USER_LABEL : AGENT_LABEL);
   const intakeField = str('For a new Strategist plan only: the exact question from your latest answered intake panel for this task. The host supplies the answer.');
@@ -520,7 +527,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     },
     {
       name: 'app_create_chat',
-      description: 'Delegate: create a work chat that runs one role (roleId, from agent_catalog) and start it with a self-contained prompt. Fast path first (task_estimate): a short question needs no chat; a quick one-part job is ONE chat that works alone; only several independent parts get a plan. The answer carries the estimate from similar past tasks; it shows under you in the sidebar tree and reports back to you. Never an Orchestrator: only the user picks it. Title "Area · cosa". The role decides engine, model and effort (its tier; `tier` asks a higher one up to the role\'s tierMax); only the user overrides it: `userModel` {engine?, model, effort?} when he named the model for THIS task (that chat only, the role\'s card stays as it is; never your own pick), or his «Balanced mode» setting: then read balanced_status and pass `balanced` {engine, model, effort?, why} (prefer its proposal unless its data say otherwise), or omit it and the formula follows the credits left on each provider (route.reason says who chose and why; suggestedRole = the role the work fits, a hint). `skills` = the brain skills the chat may use (their SKILL.md names; without a skill the role cannot use it; `warnings` in the answer names a skill that needs tools the role lacks). Its permissions are its role\'s (tools, ceiling) within the user\'s defaults, not yours: you plan, the chat does the work. reviewOf / reworkOf = the run it reviews or redoes; goal = the run\'s goal. The chat starts in the brain folder unless cwd is given (pick the repo or worktree from the task). The prompt is labelled as written by an agent.',
+      description: 'Delegate: create a work chat that runs one role (roleId, from agent_catalog) and start it with a self-contained prompt. Fast path first (task_estimate): a short question needs no chat; a quick one-part job is ONE chat that works alone; only several independent parts get a plan. The answer carries the estimate from similar past tasks; it shows under you in the sidebar tree and reports back to you. Never an Orchestrator: only the user picks it. Title "Area · cosa". The role decides engine, model and effort (its tier; `tier` asks a higher one up to the role\'s tierMax); only the user overrides it: `userModel` {engine?, model, effort?} when he named the model for THIS task (that chat only, the role\'s card stays as it is; never your own pick), or his «Balanced mode» setting: then read balanced_status and pass `balanced` {engine, model, effort?, why} (prefer its proposal unless its data say otherwise), or omit it and the formula follows the credits left on each provider (route.reason says who chose and why; suggestedRole = the role the work fits, a hint). `skills` = the brain skills the chat may use (their SKILL.md names; without a skill the role cannot use it; `warnings` in the answer names a skill that needs tools the role lacks). Its permissions are its role\'s (tools, ceiling) within the user\'s defaults, not yours: you plan, the chat does the work. reviewOf / reworkOf = the run it reviews or redoes; goal = the run\'s goal. One review chat per piece of work (#387): when a review chat already reported on that work the call is refused and names it; re-review the fix there with app_assign_task (only the fix delta). freshReview true only when the user asked for a fresh reviewer or the review covers a part no review chat covers. The chat starts in the brain folder unless cwd is given (pick the repo or worktree from the task). The prompt is labelled as written by an agent.',
       inputSchema: obj({
         title: { ...str('"Area · cosa", e.g. "Ordini · Fix totale"'), maxLength: CHAT_TITLE_MAX }, contract: contractField, prompt: { ...str(`fallback when there is no contract: what the chat must do, self-contained; at most ${CHAT_PROMPT_MAX} characters`), maxLength: CHAT_PROMPT_MAX },
         roleId: { type: 'string', enum: ROLE_IDS.filter(r => r !== 'orchestrator'), description: 'the role the chat runs (agent_catalog)' },
@@ -530,6 +537,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         tier: { type: 'string', enum: [...MODEL_TIERS], description: 'optional model tier, at most the role\'s tierMax; omitted = the role\'s own' },
         skills: { type: 'array', items: { type: 'string' }, maxItems: 16, description: 'the brain skills this chat may use (their SKILL.md names)' },
         intakeQuestion: intakeField, reviewOf: str('Run being reviewed'), reworkOf: str('Run being reworked'), goal: str('Run goal, up to 2000 characters'),
+        freshReview: { type: 'boolean', description: 'with reviewOf: open a fresh review chat although one already reported on this work; only when the user asked for it or it reviews a part no review chat covers' },
         kind: str(`optional kind of task: ${TASK_KINDS.join(' | ')}; omitted: read from title and prompt`),
         cwd: str('optional absolute folder (repo or worktree); default: the brain folder'),
         balanced: BALANCED_ASK_SCHEMA,
@@ -559,6 +567,13 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         }
         const cwd = typeof a.cwd === 'string' && a.cwd.trim() ? a.cwd.trim() : d.brain.info().brainRoot;
         if (!cwd) throw new Error('nessuna cartella: il brain non è collegato');
+        if (a.freshReview !== undefined && typeof a.freshReview !== 'boolean') throw new Error('freshReview: true or false.');
+        // one review chat per piece of work (#387, ADR 0309): a second one for work a review chat already reported on is
+        // refused, naming the chat that re-reviews the fix delta
+        if (links.reviewOf && a.freshReview !== true && typeof a.roleId === 'string') {
+          const has = rootReviewer(reviewWorld(), { role: a.roleId, reviewOf: links.reviewOf, cwd, from: caller()?.harness ?? 'claude' });
+          if (has) throw new ToolRefusal(`One review chat per piece of work: «${has.title}» (chatId ${has.id}) already reviewed this work. Re-review the fix there: app_assign_task { chatId: "${has.id}", roleId: "${a.roleId}", cwd: "${has.cwd}", mode: "continue", reviewOf: "${links.reviewOf}" } with a contract that names only the fix delta (what changed since its review). If it is still busy, wait for its report. A fresh review chat only when the user asked for one, this reviews a part no review chat covers, or app_assign_task refuses that chat: then pass freshReview true.`);
+        }
         // a chat in the app's code folder or one of its worktrees works on the app (routing area App)
         const app = await d.code?.inRepo?.(cwd) ?? false;
         if (fastTurn(caller()?.id)) throw new ToolRefusal(FAST_REFUSAL);
@@ -634,13 +649,14 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       run: (a: Record<string, unknown>) => balancedStatusRun(balanced, a, h => !openRefusal(d.brain.settings(), caller()?.harness ?? 'claude', h)) }] : []),
     {
       name: 'app_assign_task',
-      description: 'Continue a compatible work conversation with a distinct measured run. Use continue for related follow-ups, new-task for a distinct assignment in the same scope, rework only for an explicit correction. Requires the same role and project folder; the current task version (app_chats) is used when expectedVersion is omitted. The user\'s messages and answers in that chat you have not seen come back readable (userInstructions): the chat already has them, so they are not repeated in its prompt; account for them, and correct it or ask the user where your prompt disagrees. expectedEventSeq is optional. Refused only while the chat works or has queued work. Independent Sentinel reviews always need a fresh chat. Does not change tools or permissions.',
+      description: 'Continue a compatible work conversation with a distinct measured run. Use continue for related follow-ups, new-task for a distinct assignment in the same scope, rework only for an explicit correction. Requires the same role and project folder; the current task version (app_chats) is used when expectedVersion is omitted. The user\'s messages and answers in that chat you have not seen come back readable (userInstructions): the chat already has them, so they are not repeated in its prompt; account for them, and correct it or ask the user where your prompt disagrees. expectedEventSeq is optional. Refused only while the chat works or has queued work. A review chat (a Sentinel or Judge opened with reviewOf) is continued the same way for a fix of the work it reviewed (#387): it reviews only the fix delta; reviewOf = the run to review now (default: the current run of the chat it reviews); other work needs its own review chat. Does not change tools or permissions.',
       inputSchema: obj({ intakeQuestion: intakeField, chatId: str('Existing conversation ID'), contract: contractField, prompt: { ...str(`Fallback when there is no contract: self-contained assignment, up to ${CHAT_PROMPT_MAX} characters`), maxLength: CHAT_PROMPT_MAX },
         doneWhen: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 300 }, description: 'Checkable criteria for this assignment' },
         mode: { type: 'string', enum: ['continue', 'new-task', 'rework'] }, roleId: str('Existing work role'), cwd: str('Same absolute project folder'),
         expectedVersion: { type: 'integer', minimum: 1, description: 'Current taskVersion from app_chats' },
         expectedEventSeq: { type: 'integer', minimum: 0, description: 'optional: latestSeq from app_task_events you have read' },
         deliveryPolicy: { type: 'string', enum: ['display', 'notify', 'synthesize'] },
+        reviewOf: str('Only for a review chat: the run it reviews now (the implementation chat\'s current run); default: that chat\'s current run'),
       }, ['chatId', 'mode', 'roleId', 'cwd']),
       run: async a => {
         const orchestrator = caller();
@@ -648,8 +664,6 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (!authed() || !orchestrator || !d.chats.assignTask) throw new Error('app_assign_task requires an authenticated Orchestrator.');
         const target = d.chats.list().find(c => c.id === a.chatId);
         if (!target || target.parentId || target.isOrchestrator) throw new ToolRefusal('Work conversation not found; use app_chats.');
-        // said with the chat's own role, so the next call is right (issue #274): a fresh chat, or this chat's role
-        if (a.roleId === 'sentinel' || target.agent?.id === 'sentinel') throw new ToolRefusal('An independent Sentinel review always needs a fresh chat: use app_create_chat.');
         if (!isWorkRole(a.roleId) || target.agent?.id !== a.roleId) {
           const asked = String(a.roleId).slice(0, 40), runs = target.agent?.id ?? 'no role';
           throw new ToolRefusal(`Role mismatch: this chat runs ${runs}, not ${asked}. Assign ${target.agent?.id ?? 'its role'} work here, or use app_create_chat for ${asked}.`);
@@ -663,6 +677,13 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const task = taskPrompt(a, String(a.roleId ?? '')), prompt = task.prompt;
         if (!prompt) throw new Error('contract (or prompt): required');
         if (prompt.length > CHAT_PROMPT_MAX) throw new Error(`${task.what}: at most ${CHAT_PROMPT_MAX} characters (this one has ${prompt.length})`);
+        // a review chat goes on only with the work it reviewed, and reviews only the fix delta (#387, ADR 0309)
+        const reviewing = !!target.run?.reviewOf && REVIEW_ROLES.includes(String(a.roleId));
+        if (a.reviewOf !== undefined && (!reviewing || typeof a.reviewOf !== 'string' || !a.reviewOf.trim() || a.reviewOf.length > 80)) throw new ToolRefusal(reviewing ? 'Invalid reviewOf.' : 'reviewOf: only for a review chat (one opened with reviewOf); open the review with app_create_chat.');
+        const world = reviewing ? reviewWorld() : null;
+        const reviewOf = world ? (a.reviewOf as string | undefined)?.trim() ?? nextReviewOf(world, target) : null;
+        if (world && (!reviewOf || !reviewsSameWork(world, target, reviewOf))) throw new ToolRefusal('This review chat reviews other work: a review chat stays with the work it reviewed, and reviewOf names a run of that work (never of a review chat). Open the review of this work with app_create_chat (reviewOf; freshReview true if a review chat of it was named but cannot take it).');
+        const delta = !!world && a.mode !== 'new-task' && hasReported(world, target);   // a first round, unfinished, reviews it all
         const doneWhen = task.doneWhen ?? (a.doneWhen === undefined ? undefined : Array.isArray(a.doneWhen) && a.doneWhen.length <= 12 && a.doneWhen.every(c => typeof c === 'string' && c.trim() && c.length <= 300) ? a.doneWhen as string[] : null);
         if (doneWhen === null) throw new Error('Invalid doneWhen criteria.');
         const refused = crossRefusal(d.brain.settings(), orchestrator.harness, target.harness);
@@ -671,7 +692,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (a.expectedEventSeq !== undefined && (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0)) throw new Error('Invalid user event cursor.');
         if (a.deliveryPolicy !== undefined && !['display', 'notify', 'synthesize'].includes(String(a.deliveryPolicy))) throw new Error('Invalid delivery policy.');
         const userInstructions = d.chats.userEvents ? unreadInstructions(d.chats.userEvents(target.id)) : [];
-        await d.chats.assignTask(target.id, `${voice()}\n\n${prompt}`, { ...intakeOf(a, a.roleId === 'strategist' && a.mode === 'new-task' && !!target.plan), mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: a.expectedVersion === undefined ? target.run?.taskVersion ?? 1 : Number(a.expectedVersion), ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), ...(a.deliveryPolicy ? { deliveryPolicy: a.deliveryPolicy as 'display' | 'notify' | 'synthesize' } : {}), ...(doneWhen ? { doneWhen } : {}), ...(task.contractFields ? { contractFields: task.contractFields } : {}), source: { kind: 'chat', chatId: orchestrator.id } });
+        await d.chats.assignTask(target.id, `${voice()}\n\n${delta ? `${DELTA_REVIEW}\n\n` : ''}${prompt}`, { ...(reviewOf ? { reviewOf } : {}), ...intakeOf(a, a.roleId === 'strategist' && a.mode === 'new-task' && !!target.plan), mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: a.expectedVersion === undefined ? target.run?.taskVersion ?? 1 : Number(a.expectedVersion), ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), ...(a.deliveryPolicy ? { deliveryPolicy: a.deliveryPolicy as 'display' | 'notify' | 'synthesize' } : {}), ...(doneWhen ? { doneWhen } : {}), ...(task.contractFields ? { contractFields: task.contractFields } : {}), source: { kind: 'chat', chatId: orchestrator.id } });
         const assigned = d.chats.list().find(c => c.id === target.id);
         return { chatId: target.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions } : {}), ...(task.warnings.length ? { warnings: task.warnings } : {}) };
       },

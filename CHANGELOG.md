@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- Sign-in by name in the app's browser: an agent names a test account of the brain's credentials file
+  (`fill_credential`) and the app types user name and password into the sign-in form itself; the agent never reads
+  the password. Only on the entry's own site (`url`, or `loginUrl` for a sign-in page on another host), only into a
+  password field, never an entry that looks like production (#386, ADR 0310).
 - Project maps: they open full screen when the user opens them; a click on a box or on an arrow's label tells it in
   full at the side («Come funziona», what goes in and out); the step of a plan under way says when it starts, who does
   it and how far it is; «Aggiorna» asks the Orchestrator for a redraw with the details (`details` on elements and
@@ -40,6 +44,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   OpenCode, OpenRouter included; the chat's model and plan mode go through OpenCode's session options (ADR 0216).
 
 ### Changed
+- One review chat per piece of work: once a Sentinel or a Judge reported on a work, a second review chat for it is
+  refused and names the first; after a fix that same chat reviews only what changed (`app_assign_task`,
+  `agent_assign_task`). `freshReview` opens a fresh one when the user asks or a part is not covered (#387, ADR 0309).
 - The people of the roles are adults: taller bodies with a build of their own, real faces (a jaw, brows, a nose,
   beards) and adult characters. The Orchestrator is an old wizard with a long white beard and a wand, the Strategist
   a cold chess master, the Scout a weathered tracker, the Artisan a bare-chested blacksmith with a cigar, the
@@ -184,6 +191,12 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   key is gone (ADR 0291).
 
 ### Fixed
+- A chat held by a step of the user's (a report's `userAction`: the VPN, a login, a try) no longer shows «Aspetta te:
+  domanda» without any question: it shows «Aspetta te: passo», or «Aspetta Esegui» when the step is a command, and the
+  wait is written once per row (#411).
+- `relay_question` no longer asks from Telegram a command whose «sì» it would then drop: Telegram hides commands, so
+  the relay is refused up front and the Orchestrator says where to approve it; a «sì» typed in Remote Control, where
+  the command is read whole, runs it (#390).
 - «Scacchi»: the piece in hand no longer has a dark line above it (a style of the Orchestrator's held questions
   reached it by its class name), and the board is lighter: a dragged piece moves without the board being drawn again,
   a long game no longer replays itself at every move, the marks of the squares appear at once (ADR 0304).

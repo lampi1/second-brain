@@ -130,6 +130,7 @@ export const TOOL_CATALOG: Readonly<Record<string, ToolInfo>> = {
   key: t('browser', 'Press keys or key combinations.'),
   scroll: t('browser', 'Mouse-wheel scroll at a ref, coordinate or the page center.'),
   fill_form: t('browser', 'Fill several fields in one call.'),
+  fill_credential: t('browser', 'Sign in with a test account of the credentials file: the app types the password, the agent never reads it.'),
   select_option: t('browser', 'Choose options of a native select.'),
   wait_for: t('browser', 'Wait for text, a selector, a url or the network to settle.'),
   handle_dialog: t('browser', 'Answer a JavaScript dialog that blocks the page.'),

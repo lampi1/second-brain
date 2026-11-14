@@ -97,6 +97,7 @@ export const componentsIt = {
   "cmp.autoClose.waiting.permission": 'Aspetta te: permesso',
   "cmp.autoClose.waiting.plan": 'Aspetta te: piano',
   "cmp.autoClose.waiting.command": 'Aspetta Esegui',
+  "cmp.autoClose.waiting.step": 'Aspetta te: passo',
   "cmp.autoClose.waiting.browser": 'Aspetta te: browser',
   "cmp.autoClose.waiting.children": (p: { n: number }) => `Aspetta ${p.n} sotto-chat`,
   "cmp.autoClose.waiting.background": (p: { n: number }) => `In background: ${p.n}`,

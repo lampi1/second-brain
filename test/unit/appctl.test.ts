@@ -72,7 +72,7 @@ describe('app control tools', () => {
     await tool.run(args);
     expect(assignTask).toHaveBeenCalledWith('w', `${ORCHESTRATOR_USER_LABEL}\n\nExpand the second point`, { mode: 'continue', expectedVersion: 2, source: { kind: 'chat', chatId: 'o' } });
     await expect(Promise.resolve().then(() => tool.run({ ...args, cwd: '/different' }))).rejects.toThrow(/Project changed/);
-    await expect(Promise.resolve().then(() => tool.run({ ...args, roleId: 'sentinel' }))).rejects.toThrow(/independent Sentinel review/);
+    await expect(Promise.resolve().then(() => tool.run({ ...args, roleId: 'sentinel' }))).rejects.toThrow(/this chat runs scout, not sentinel/);
     // the refusal names the chat's own role (issue #274) and is an expected refusal, not an app failure
     const wrong = await Promise.resolve().then(() => tool.run({ ...args, roleId: 'artisan' })).catch((e: unknown) => e);
     expect(wrong).toBeInstanceOf(ToolRefusal);
@@ -317,6 +317,42 @@ describe('app control tools', () => {
     expect(made[0]).toMatchObject({ doneWhen: ['a test passes'], contractFields: ['goal', 'doneWhen'] });
     expect(out.warnings?.some(w => /why is missing/.test(w))).toBe(true);
     await expect(Promise.resolve(t.run({ title: 'X', roleId: 'artisan', contract: { goal: 'G', doneWhen: ['d'] }, prompt: 'p' }))).rejects.toThrow(/not both/);
+  });
+
+  it('one review chat per piece of work (#387): a second review is refused and names the chat, which re-reviews only the fix delta', async () => {
+    const catalog = roleCatalog(), sentinel = catalog.list().profiles.find(p => p.id === 'sentinel')!;
+    const made: Record<string, unknown>[] = [];
+    const runs = [{ runId: 'i1', chatId: 'impl' }, { runId: 'i2', chatId: 'impl' }, { runId: 'o1', chatId: 'other' }, { runId: 'r1', chatId: 'rev', reviewOf: 'i1', report: { summary: 'un difetto' } }];
+    const reviewer = { id: 'rev', title: 'Revisione · Ordini', harness: 'claude', cwd: '/repo', state: 'idle', agent: { id: 'sentinel', source: 'catalog', version: sentinel.activeVersion, revision: sentinel.updatedAt },
+      run: { runId: 'r1', chatId: 'rev', reviewOf: 'i1', taskVersion: 1, report: { summary: 'un difetto' } } };
+    const assignTask = vi.fn(async () => {});
+    const chats = { list: () => [{ id: 'r', harness: 'claude', isOrchestrator: true, title: 'Orchestrator' }, { id: 'impl', harness: 'claude', cwd: '/repo', run: { runId: 'i2', chatId: 'impl' } }, reviewer],
+      create: async (req: Record<string, unknown>) => { made.push(req); return { id: 'n1', title: req.title }; }, assignTask } as unknown as ChatService;
+    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true }, engines: { claude: true }, orchestratorChats: { harness: 'claude' } }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
+    const all = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: req => catalog.resolve(req),
+      runFeedback: { runList: () => runs } as never }, 'r');
+    const create = all.find(x => x.name === 'app_create_chat')!, assign = all.find(x => x.name === 'app_assign_task')!;
+    const review = { title: 'Revisione · Ordini dopo il fix', roleId: 'sentinel', prompt: 'Review the fix', reviewOf: 'i2', cwd: '/repo' };
+    const refused = await Promise.resolve().then(() => create.run(review)).catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(ToolRefusal);
+    expect((refused as Error).message).toMatch(/One review chat per piece of work: «Revisione · Ordini» \(chatId rev\).*app_assign_task.*only the fix delta.*freshReview true/s);
+    expect(made).toHaveLength(0);
+    // other work, another folder: its own review chat, no refusal from this rule
+    await create.run({ ...review, reviewOf: 'o1' });
+    await create.run({ ...review, cwd: '/other' });
+    // the user asked for a fresh reviewer
+    await create.run({ ...review, freshReview: true });
+    expect(made).toHaveLength(3);
+    await expect(Promise.resolve().then(() => create.run({ ...review, freshReview: 'yes' }))).rejects.toThrow(/freshReview/);
+    // the same chat takes the fix: the run it reviews now is the implementation chat's current one, the prompt asks only the delta
+    await assign.run({ chatId: 'rev', roleId: 'sentinel', cwd: '/repo', mode: 'continue', prompt: 'The discount fix' });
+    expect(assignTask).toHaveBeenCalledWith('rev', expect.stringMatching(/Review only what changed since your last review \(the fix delta\)[\s\S]*The discount fix/), expect.objectContaining({ reviewOf: 'i2', mode: 'continue' }));
+    // never for other work, and reviewOf only on a review chat
+    await expect(Promise.resolve().then(() => assign.run({ chatId: 'rev', roleId: 'sentinel', cwd: '/repo', mode: 'continue', prompt: 'p', reviewOf: 'o1' }))).rejects.toThrow(/reviews other work/);
+    expect(assignTask).toHaveBeenCalledTimes(1);
+    // a new task for the same review chat reviews it all: no delta paragraph
+    await assign.run({ chatId: 'rev', roleId: 'sentinel', cwd: '/repo', mode: 'new-task', prompt: 'Review the whole order flow', reviewOf: 'i2' });
+    expect(String((assignTask.mock.calls as unknown[][])[1]![1])).not.toMatch(/fix delta/);
   });
 
   it('app_create_chat keeps the explicit kind on the route; the role resolution never sees it (ADR 0210: no table row to meet)', async () => {

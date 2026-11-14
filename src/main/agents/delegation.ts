@@ -23,6 +23,7 @@ import type { McpTool } from '../mcp/server';
 import { callerOf } from '../mcp/caller';
 import { allowsClass, belowParent, type AgentPolicy } from './tool-policy';
 import { withinParent } from './worktrees';
+import { childReviewers, DELTA_REVIEW, type ReviewWorld } from './one-review';
 import { gapLines, skillGaps } from './skill-needs';
 import { BALANCED_ASK_SCHEMA, balancedAskOf, balancedDecision, balancedStatusTool, type BalancedChoice, type BalancedMode } from './balanced-mode';
 import type { SkillToolsSource } from './discovery';
@@ -121,6 +122,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
   // slots taken by agent_delegate calls still creating their chats, per parent (checked and taken synchronously)
   const reserved = new Map<string, number>();
   const chat = (id: string) => d.chats.list().find(c => c.id === id);
+  /** what the one-review rule reads (#387, one-review.ts) */
+  const reviewWorld = (): ReviewWorld => ({ chats: d.chats.list(), runs: d.runs(), profile: id => d.roles().profiles.find(p => p.id === id) });
 
   const assigning = new Set<string>();
   function activeParent(callerId: string, tool: string): ChatSummary {
@@ -170,7 +173,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     const plans = raw.map((value, i) => {
       const t = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
       if (!t) throw new Error(`tasks[${i}]: object required.`);
-      const extra = Object.keys(t).find(k => !['role', 'title', 'contract', 'cwd', 'step', 'balanced'].includes(k));
+      const extra = Object.keys(t).find(k => !['role', 'title', 'contract', 'cwd', 'step', 'balanced', 'freshReview'].includes(k));
       if (extra) throw new Error(`tasks[${i}]: unknown field ${extra}.`);
       const role = t.role;
       if (!isWorkRole(role)) throw new Error(`tasks[${i}].role: one of ${WORK_ROLE_IDS.join(', ')}.`);
@@ -190,6 +193,11 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       const outside = (contract.tools ?? []).filter(c => !(profile.tools?.allow ?? []).includes(c));
       if (outside.length) throw new Error(`tasks[${i}].contract.tools: ${outside.join(', ')} is not among ${profile.name}'s tools; contract.tools only narrows them.`);
       const cwd = typeof t.cwd === 'string' && t.cwd.trim() ? t.cwd.trim() : parent.cwd;
+      if (t.freshReview !== undefined && typeof t.freshReview !== 'boolean') throw new Error(`tasks[${i}].freshReview: true or false.`);
+      // one review chat per piece of work (#387, ADR 0309): a Sentinel of yours that already reported on this task
+      // re-reviews its fix; a new one would review everything again
+      const reviewed = role === 'sentinel' && t.freshReview !== true ? childReviewers(reviewWorld(), parent, cwd) : [];
+      if (reviewed.length) throw new Error(`tasks[${i}]: one review chat per piece of work. Your Sentinel ${reviewed.slice(0, 3).map(c => `«${c.title}» (chatId ${c.id})`).join(', ')} already reviewed this task: re-review the fix there with agent_assign_task { chatId, roleId: "sentinel", cwd: "${reviewed[0]!.cwd}", mode: "continue", contract } naming only the fix delta (what changed since its review). A fresh Sentinel only when the user asked for one, it checks a part none of them covers, or agent_assign_task refuses that chat (engine, settings, permissions): then add freshReview true to this part.`);
       if (!withinParent(parent.cwd, cwd, trees)) throw new Error(`tasks[${i}].cwd: ${cwd} is outside your folder (${parent.cwd}) and its repository's worktrees; a child never leaves its parent's repository. For work in another repository: leave this part out and report it with agent_report (outcome blocked or partial) as a ready contract (role, goal, done-criteria, the folder): the Orchestrator opens that chat there (app_create_chat with cwd).`);
       // with «Balanced mode» on the engine is picked below, among the ones this parent may open
       const refused = d.balancedMode?.enabled ? null : d.engineRefusal(parent.harness, profile.engine);
@@ -271,7 +279,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (!child || child.parentId !== callerId || !child.delegation || !child.run || child.isOrchestrator) throw new Error('agent_assign_task: chatId must be one of YOUR direct children (agent_children).');
     if (child.cwd !== childCwd) throw new Error('Child project changed; discard this stale assignment request.');
     if (assigning.has(child.id)) throw new Error('agent_assign_task: this child already has an assignment in progress.');
-    if (!isWorkRole(a.roleId) || a.roleId === 'sentinel' || child.agent?.source !== 'catalog' || child.agent.id !== a.roleId || child.delegation.role !== a.roleId) throw new Error('Role mismatch or independent Sentinel review: delegate a fresh chat.');
+    // a Sentinel child is continued as any other (#387, ADR 0309): after a fix it reviews only the delta
+    if (!isWorkRole(a.roleId) || child.agent?.source !== 'catalog' || child.agent.id !== a.roleId || child.delegation.role !== a.roleId) throw new Error('Role mismatch: delegate a fresh chat.');
     const catalog = d.roles(), own = catalog.profiles.find(p => p.id === parent.agent!.id), profile = catalog.profiles.find(p => p.id === a.roleId);
     if (!own || !canLaunch(own.launches, a.roleId)) throw new Error('Your current role may not launch this child role.');
     // the revision too: tools, permissions and limits change the version in use in place (ADR 0186)
@@ -314,7 +323,9 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (version !== (child.run.taskVersion ?? 1)) throw new Error('Task version changed; refresh agent_children.');
     reserved.set(parent.id, (reserved.get(parent.id) ?? 0) + 1); assigning.add(child.id);
     try {
-      const prompt = `${d.label}\n\n${delegationPrompt(contract, { role: a.roleId, parentTitle: parent.title, title: child.title, skills: [] })}`;
+      // its next round on the work it already reviewed: only the delta (a new task is reviewed whole)
+      const delta = a.roleId === 'sentinel' && a.mode !== 'new-task' && !!child.delegation.result ? `${DELTA_REVIEW}\n\n` : '';
+      const prompt = `${d.label}\n\n${delta}${delegationPrompt(contract, { role: a.roleId, parentTitle: parent.title, title: child.title, skills: [] })}`;
       await d.chats.assignTask(child.id, prompt, { mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: version, ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), doneWhen: contract.doneWhen, contractFields: contractFields(contract), ...(step !== null ? { planStep: step } : {}), source: { kind: 'chat', chatId: parent.id } });
       const assigned = chat(child.id);
       const warned = contractWarnings(contract);
@@ -532,7 +543,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       taskVersion: { type: 'integer', minimum: 1, description: 'Current task version supplied with the assignment; required after a follow-up. Stale reports are refused.' },
       doneWhen: { type: 'array', description: 'one entry per criterion of your contract, written exactly as in the contract (the field is doneWhen, never criteria)', items: { type: 'object', required: ['criterion', 'met'], additionalProperties: false, properties: { criterion: { ...str, maxLength: CRITERION_MAX }, met: { type: 'boolean' }, evidence: { ...str, maxLength: EVIDENCE_MAX } } } },
       questions: { type: 'array', items: { ...str, maxLength: 500 }, maxItems: 8 },
-      userAction: { type: 'object', required: ['kind', 'text'], additionalProperties: false, description: 'only with outcome partial or blocked, when the next step is one only the user can do (turn on the VPN, a login with MFA, an Esegui command, a permission, a decision): the app asks the user at once in the Orchestrator and, on Sì, tells your parent to resume. Never leave such a block only in the report text.',
+      userAction: { type: 'object', required: ['kind', 'text'], additionalProperties: false, description: 'only with outcome partial or blocked, when the next step is one only the user can do (turn on the VPN, a login with MFA, an Esegui command, a permission, a decision): the app asks the user at once in the Orchestrator and, on Sì, tells your parent to resume. Never leave such a block only in the report text. Never for what the Orchestrator, your parent or another chat must do (that goes in summary and questions): a userAction shows your chat as waiting for the user until he acts.',
         properties: { kind: { type: 'string', enum: [...USER_ACTION_KINDS] }, text: { ...str, maxLength: USER_ACTION_TEXT_MAX, description: 'what the user must do, in the user\'s language' }, command: { ...str, maxLength: USER_ACTION_COMMAND_MAX, description: 'the exact command to run, if any' } } },
       goalChangedByUser: { type: 'boolean', description: 'true when the user wrote to you directly and changed your goal (you followed the user)' },
       newGoal: { ...str, description: 'with goalChangedByUser: the goal the user gave you' },
@@ -540,13 +551,14 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     } };
   return [{
     name: 'agent_delegate',
-    description: 'Delegate parts of your task to other roles, only when it has several independent parts: a quick single-part task you do yourself (a child costs more tokens and time than it saves; task_estimate on the Orchestrator says which). each part starts a visible chat under yours, running the role you name (only roles your role may launch: agent_catalog). The child sees only its contract, never this conversation: write it self-contained. Several parts start at once (parallel). It never gets more permissions than you, uses an isolated Git worktree when it can write (a clean committed baseline is required), and returns one result with agent_report that reaches you as a message. Limits (depth, children running at once) are the user\'s. With the user\'s «Balanced mode» on: read balanced_status, then pass each part\'s `balanced` {engine, model, effort?, why} (prefer the proposal unless its data say otherwise) or omit it and the formula picks.',
+    description: 'Delegate parts of your task to other roles, only when it has several independent parts: a quick single-part task you do yourself (a child costs more tokens and time than it saves; task_estimate on the Orchestrator says which). each part starts a visible chat under yours, running the role you name (only roles your role may launch: agent_catalog). The child sees only its contract, never this conversation: write it self-contained. Several parts start at once (parallel). It never gets more permissions than you, uses an isolated Git worktree when it can write (a clean committed baseline is required), and returns one result with agent_report that reaches you as a message. Limits (depth, children running at once) are the user\'s. One review chat per piece of work: once a Sentinel of yours reported on this task, a new Sentinel is refused; re-review the fix in that chat with agent_assign_task (only the fix delta). With the user\'s «Balanced mode» on: read balanced_status, then pass each part\'s `balanced` {engine, model, effort?, why} (prefer the proposal unless its data say otherwise) or omit it and the formula picks.',
     inputSchema: { type: 'object', required: ['tasks'], additionalProperties: false, properties: {
       tasks: { type: 'array', minItems: 1, maxItems: TASKS_MAX, items: { type: 'object', required: ['role', 'title', 'contract'], additionalProperties: false, properties: {
         role: { type: 'string', enum: [...WORK_ROLE_IDS] }, title: { ...str, description: '"Area · what", e.g. "Ordini · Log degli errori"' },
         cwd: { ...str, description: 'optional absolute folder inside yours or one of your repository\'s worktrees; default: your folder; writing children receive a new isolated worktree from that committed baseline. Never another repository: for that, report the part with agent_report as a ready contract (outcome blocked, with the folder) so the Orchestrator opens the chat there (app_create_chat with cwd)' },
         step: { type: 'integer', minimum: 1, description: 'with a plan approved by the user (plan_propose): the step number this part does' },
         balanced: BALANCED_ASK_SCHEMA,
+        freshReview: { type: 'boolean', description: 'only for role sentinel: open a fresh one although a Sentinel of yours already reviewed this task; only when the user asked for it or it checks a part none of them covers' },
         contract: { type: 'object', required: ['goal', 'doneWhen'], additionalProperties: false, properties: {
           goal: { ...str, description: 'the wanted outcome, one checkable sentence' }, output: { ...str, description: 'what to give back; default: the role\'s output' },
           doneWhen: { type: 'array', items: str, minItems: 1, maxItems: 12, description: 'checkable criteria, each with the expected evidence' },
@@ -567,7 +579,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: async (a, ctx) => JSON.stringify(await delegate(a, callerOf(ctx.params))),
   }, {
     name: 'agent_assign_task',
-    description: 'Continue YOUR direct child in the same role and project with a separate task run. The user\'s messages and answers in that chat you have not seen come back to you readable (userInstructions): the child already has them, so they are not repeated in its prompt; account for them, and correct the child or ask the user where your contract disagrees. expectedVersion (taskVersion from agent_children) and expectedEventSeq are optional and honoured when given. Refused only while the child works or has queued work. Keeps the session, tools and skills; changed role settings or Sentinel reviews require a fresh child. Use rework only for explicit corrections. With an approved plan, step is required. Closed parents must first receive a new assignment from their own parent or Orchestrator.',
+    description: 'Continue YOUR direct child in the same role and project with a separate task run. The user\'s messages and answers in that chat you have not seen come back to you readable (userInstructions): the child already has them, so they are not repeated in its prompt; account for them, and correct the child or ask the user where your contract disagrees. expectedVersion (taskVersion from agent_children) and expectedEventSeq are optional and honoured when given. Refused only while the child works or has queued work. Keeps the session, tools and skills; changed role settings require a fresh child. A Sentinel that reviewed this task is continued here after a fix (mode continue): it reviews only the fix delta. Use rework only for explicit corrections. With an approved plan, step is required. Closed parents must first receive a new assignment from their own parent or Orchestrator.',
     inputSchema: { type: 'object', required: ['chatId', 'roleId', 'cwd', 'mode', 'contract'],additionalProperties: false, properties: {
       chatId: str, roleId: { type: 'string', enum: [...WORK_ROLE_IDS] }, cwd: str,
       mode: { type: 'string', enum: ['continue', 'new-task', 'rework'] },

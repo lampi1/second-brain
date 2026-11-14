@@ -4,5 +4,5 @@
 /* never wider than the tile: a long label is cut, it never widens the column and shifts the chat (#157) */
 .agent-waiting-text { min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .agent-waiting-dot { width:6px; height:6px; border-radius:50%; background:var(--accent); flex:none; }
-.agent-waiting:is([data-waiting="answer"],[data-waiting="permission"],[data-waiting="command"],[data-waiting="user"],[data-waiting="browser"]) { border-color:var(--amber-line,var(--border-2)); background:var(--amber-bg,transparent); }
-.agent-waiting:is([data-waiting="answer"],[data-waiting="permission"],[data-waiting="command"],[data-waiting="user"],[data-waiting="browser"]) .agent-waiting-dot { background:var(--amber); }
+.agent-waiting:is([data-waiting="answer"],[data-waiting="permission"],[data-waiting="command"],[data-waiting="step"],[data-waiting="user"],[data-waiting="browser"]) { border-color:var(--amber-line,var(--border-2)); background:var(--amber-bg,transparent); }
+.agent-waiting:is([data-waiting="answer"],[data-waiting="permission"],[data-waiting="command"],[data-waiting="step"],[data-waiting="user"],[data-waiting="browser"]) .agent-waiting-dot { background:var(--amber); }

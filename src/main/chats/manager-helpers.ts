@@ -75,7 +75,7 @@ export const storedResult = (x: { at: number; isError: boolean; interrupted?: bo
 
 export const WAITING_REASON: Record<AutoCloseWaiting, string> = {
   answer: 'Aspetta una tua risposta', permission: 'Aspetta un tuo permesso', plan: 'Aspetta che approvi il piano',
-  command: 'Aspetta che premi Esegui', browser: 'Aspetta te nel browser', children: 'Aspetta le sue sotto-chat',
+  command: 'Aspetta che premi Esegui', step: 'Aspetta un tuo passo, scritto nell’Orchestrator: riparte al tuo «fatto»', browser: 'Aspetta te nel browser', children: 'Aspetta le sue sotto-chat',
   background: 'Attività in background', work: 'Un suo comando o una pagina è ancora in corso',
   report: 'Non ha ancora mandato il report finale', mail: 'Aspetta posta',
   unsaved: 'Lavoro non salvato nel repository (modifiche non committate o commit non pushati)',

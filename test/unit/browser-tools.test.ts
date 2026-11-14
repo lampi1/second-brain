@@ -28,7 +28,7 @@ describe('browser MCP tools', () => {
     expect(names).toEqual(expect.arrayContaining([
       'tabs_list', 'tabs_create', 'tabs_select', 'tabs_close', 'navigate', 'screenshot', 'read_page', 'find', 'get_page_text', 'click',
       'hover', 'type', 'key', 'scroll', 'select_option', 'fill_form', 'wait_for', 'handle_dialog', 'network_requests', 'console_messages',
-      'javascript', 'handoff_to_user',
+      'javascript', 'handoff_to_user', 'fill_credential',
     ]));
   });
 

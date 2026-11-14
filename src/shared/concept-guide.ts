@@ -129,9 +129,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/delegation.ts allowsClass, launchGap; src/main/agents/worktrees.ts; src/main/agents/role-gate.ts aboveParent
       b('I permessi scendono soltanto: un figlio non ha mai più strumenti o permessi del genitore e lavora nella sua cartella (o in un worktree dello stesso repository); una richiesta oltre i permessi del genitore è rifiutata e lo dice nella chat. Di base ogni ruolo può tutto, quindi chi pianifica (Strategist) avvia anche chi cambia qualcosa (Artisan, Sentinel, Herald); se hai ristretto il genitore, un figlio che ha bisogno di più non parte: il genitore lo scrive nel suo risultato e lo avvia l’Orchestrator.',
         'Permissions only go down: a child never gets more tools or permissions than its parent and works in its folder (or a worktree of the same repository); a request beyond the parent’s permissions is refused and says so in the chat. By default every role may do everything, so a planner (Strategist) also launches the roles that change something (Artisan, Sentinel, Herald); if you narrowed the parent, a child that needs more does not start: the parent writes it in its result and the Orchestrator starts it.'),
-      // src/shared/roles.ts DELEGATION_DEFAULTS; src/main/chats/manager-delegation.ts limitNotice
-      b('Profondità e figli in corso sono limiti tuoi (Impostazioni → Ruoli e deleghe); una delega oltre il limite è rifiutata e il genitore mostra «Limite».',
-        'Depth and running children are your limits (Settings → Roles and delegation); a delegation over the limit is refused and the parent shows "Limit".'),
+      // src/shared/roles.ts DELEGATION_DEFAULTS; src/main/chats/manager-delegation.ts limitNotice; src/main/agents/one-review.ts (#387)
+      b('Profondità e figli in corso sono limiti tuoi (Impostazioni → Ruoli e deleghe); una delega oltre il limite è rifiutata e il genitore mostra «Limite». Una sola chat di review per lavoro: dopo un fix la stessa chat rivede solo quello che è cambiato; una nuova si apre per un altro lavoro, per una parte che nessuna copre o se la chiedi tu.',
+        'Depth and running children are your limits (Settings → Roles and delegation); a delegation over the limit is refused and the parent shows "Limit". One review chat per piece of work: after a fix the same chat reviews only what changed; a new one is opened for other work, for a part none covers or when you ask for it.'),
       // src/main/agents/worktree-pool.ts WorktreePool; src/renderer/components/WorktreeSettings.tsx (ADR 0227)
       b('Un figlio che scrive lavora in una copia del repository (worktree) su un branch suo. L’app riusa le copie libere e pulite, con i file di build già fatti, e cancella quelle oltre i limiti di Impostazioni → Avanzate (copie per repository, in tutto, spazio massimo): la prima volta con il tuo «Pulisci ora», poi da sola ogni 6 ore. Una copia con modifiche o commit non pubblicati non si cancella mai: la vedi elencata lì.',
         'A child that writes works in a copy of the repository (worktree) on its own branch. The app reuses free, clean copies, their build outputs already there, and deletes the ones over the limits in Settings → Advanced (copies per repository, in total, disk cap): the first time with your "Clean up now", then by itself every 6 hours. A copy with changes or unpushed commits is never deleted: you see it listed there.'),
@@ -160,7 +160,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       [-1]: ['src/shared/delegation.ts'],
       0: ['src/shared/delegation.ts#delegationPrompt'],
       1: ['src/main/agents/worktrees.ts', 'src/main/agents/role-gate.ts#aboveParent'],
-      2: ['src/shared/roles.ts#DELEGATION_DEFAULTS', 'src/main/chats/manager-delegation.ts#limitNotice'],
+      2: ['src/shared/roles.ts#DELEGATION_DEFAULTS', 'src/main/chats/manager-delegation.ts#limitNotice', 'src/main/agents/one-review.ts'],
       3: ['src/main/agents/worktree-pool.ts', 'src/renderer/components/WorktreeSettings.tsx'],
       4: ['src/main/agents/delegation.ts#agent_ask_parent', 'src/main/agents/delegation.ts#agent_answer_child', 'src/renderer/lib/child-requests.ts#requestHost'],
       5: ['src/renderer/components/DelegationCard.tsx', 'src/renderer/lib/run-steps.ts'],
@@ -1237,8 +1237,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Prima di chiudere mostra un avviso di 2 minuti sulla striscia: «Resta aperto» la ferma.',
         'Before closing it shows a 2-minute notice on the strip: "Keep open" (Resta aperto) stops it.'),
       // src/shared/auto-close.ts AutoCloseWaiting; src/renderer/lib/waiting-label.ts (#359)
-      b('Resta aperta una chat che aspetta qualcosa di vero, scritto in breve sulla striscia al posto dello stato: «Aspetta te: domanda», «Aspetta te: permesso», «Aspetta te: piano», «Aspetta Esegui», «Aspetta 2 sotto-chat», «In background: 1», «Aspetta posta», «Senza report» o «Non salvato» (modifiche non committate o commit non pushati). Non lo indovina mai dalle parole della risposta, e l’etichetta cambia appena cambia lo stato.',
-        'A chat that waits for something real stays open, said briefly on its strip in place of the state: «Needs you: question», «Needs you: permission», «Needs you: plan», «Awaits Run», «Awaits 2 sub-chats», «In background: 1», «Awaits mail», «No report» or «Not saved» (uncommitted changes or unpushed commits). It never guesses it from the words of the answer, and the label changes as soon as the state does.'),
+      b('Resta aperta una chat che aspetta qualcosa di vero, scritto in breve sulla striscia al posto dello stato: «Aspetta te: domanda», «Aspetta te: permesso», «Aspetta te: piano», «Aspetta te: passo» (un passo tuo fuori dalla chat, scritto nell’Orchestrator: mai «domanda» senza una domanda aperta), «Aspetta Esegui», «Aspetta 2 sotto-chat», «In background: 1», «Aspetta posta», «Senza report» o «Non salvato» (modifiche non committate o commit non pushati). Non lo indovina mai dalle parole della risposta, e l’etichetta cambia appena cambia lo stato.',
+        'A chat that waits for something real stays open, said briefly on its strip in place of the state: «Needs you: question», «Needs you: permission», «Needs you: plan», «Needs you: step» (a step of yours outside the chat, written in the Orchestrator: never «question» without an open question), «Awaits Run», «Awaits 2 sub-chats», «In background: 1», «Awaits mail», «No report» or «Not saved» (uncommitted changes or unpushed commits). It never guesses it from the words of the answer, and the label changes as soon as the state does.'),
       // src/main/chats/auto-close.ts: presence lease
       b('Chiude anche se non guardi l’avviso o la finestra è ridotta a icona, e dopo un riavvio dell’app; una bozza, una chat in primo piano o messaggi in coda la tengono aperta.',
         'It closes even if you do not look at the notice or the window is minimized, and after the app restarts; a draft, a chat in focus or queued messages keep it open.'),
@@ -1257,8 +1257,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
     tech: [
       tech(LIMITS, 'Avviso AUTO_CLOSE_WARNING_MS = 120 s; presenza della finestra rinnovata ogni 15 s; tempo in Impostazioni (autoCloseMin, 0 = mai).',
         'Notice AUTO_CLOSE_WARNING_MS = 120 s; window presence renewed every 15 s; time in Settings (autoCloseMin, 0 = never).'),
-      tech(DATA, 'AutoCloseStatus { chatId, deadline, warningStartedAt, keptOpen, reason, waitingFor?, waitingN? }; waitingFor: answer | permission | plan | command | browser | children | background | work | mail | report | unsaved | gitcheck.',
-        'AutoCloseStatus { chatId, deadline, warningStartedAt, keptOpen, reason, waitingFor?, waitingN? }; waitingFor: answer | permission | plan | command | browser | children | background | work | mail | report | unsaved | gitcheck.'),
+      tech(DATA, 'AutoCloseStatus { chatId, deadline, warningStartedAt, keptOpen, reason, waitingFor?, waitingN? }; waitingFor: answer | permission | plan | command | step | browser | children | background | work | mail | report | unsaved | gitcheck.',
+        'AutoCloseStatus { chatId, deadline, warningStartedAt, keptOpen, reason, waitingFor?, waitingN? }; waitingFor: answer | permission | plan | command | step | browser | children | background | work | mail | report | unsaved | gitcheck.'),
     ],
     anchors: {
       0: ['src/main/chats/auto-close.ts'],

@@ -8,6 +8,10 @@
 // used by browser/tabs.ts (owner), browser/tools.ts (lookup) and browser/service.ts (copy).
 // The "Credenziali" panel (the user asked "dammi url e credenziali di test X" ~12 times in 6 days) lists every entry the
 // same way: list() gives group, user, URL and note with an id, byId(id) reads the file again at the Copia click.
+// Sign-in by name (#386, ADR 0310): siteCredential() gives the browser's fill_credential tool the user name and the
+// password of an entry, only for the site the entry is for (the host of its url, or of an optional loginUrl when the
+// sign-in page lives on another host) and never for an entry that looks like production. The agent names the account;
+// the value goes from the file to the page's password field, never to the agent.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -17,7 +21,10 @@ export const DEFAULT_CREDENTIALS_FILE = 'ops/credentials.md';
 const USER_KEYS = ['email', 'username', 'user', 'login'] as const;
 
 /** group: the keys that lead to the entry ("ExampleApp · test"), array indexes left out. */
-interface Entry { user: string; password: string; url?: string; note?: string; group: string }
+interface Entry { user: string; password: string; url?: string; loginUrl?: string; note?: string; group: string }
+
+/** What fill_credential may type, or why not (a text for the agent, with the fix; never a password). */
+export type SiteCredential = { user: string; password: string } | { refusal: string };
 
 const oneLine = (s: string, max: number) => s.replace(/\s+/g, ' ').trim().slice(0, max);
 const hostOf = (u: string | undefined): string => { try { return u ? new URL(u).host.toLowerCase() : ''; } catch { return ''; } };
@@ -39,6 +46,7 @@ export function parseEntries(text: string): Entry[] {
       out.push({
         user: (o[key] as string).trim(), password: o.password, group: oneLine(keys.join(' · '), 120),
         ...(typeof o.url === 'string' && /^https?:\/\//i.test(o.url) ? { url: o.url } : {}),
+        ...(typeof o.loginUrl === 'string' && /^https?:\/\//i.test(o.loginUrl) ? { loginUrl: o.loginUrl } : {}),
         ...(typeof o.note === 'string' && o.note.trim() ? { note: oneLine(o.note, 200) } : {}),
       });
     }
@@ -59,12 +67,22 @@ export function publicEntries(entries: Entry[]): CredentialEntry[] {
   return entries.map((e, i) => ({ id: entryId(e, i), group: e.group, user: e.user, ...(e.url ? { url: e.url } : {}), ...(e.note ? { note: e.note } : {}) }));
 }
 
+/** The hosts (with port) an entry signs in on: its url and its loginUrl. */
+const hostsOf = (e: Entry): string[] => [hostOf(e.url), hostOf(e.loginUrl)].filter(Boolean);
+
 /** The entry for an account: same user name (case-insensitive); with several, the one whose URL host is the page's. */
 export function pick(entries: Entry[], account: string, pageUrl: string): Entry | undefined {
   const want = account.trim().toLowerCase();
   const same = entries.filter(e => e.user.toLowerCase() === want);
   const host = hostOf(pageUrl);
-  return same.find(e => host && hostOf(e.url) === host) ?? same[0];
+  return same.find(e => host && hostsOf(e).includes(host)) ?? same[0];
+}
+
+/** An entry that looks like a production account: "prod", "production" or "produzione" as a word of its group (the
+ *  keys that lead to it) or a label of its hosts. The app types only test accounts (#386). */
+export function looksProduction(e: Pick<Entry, 'group' | 'url' | 'loginUrl'>): boolean {
+  const word = /(?:^|[^a-z0-9])(?:prod|production|produzione)(?:[^a-z0-9]|$)/i;
+  return word.test(e.group) || [hostOf(e.url), hostOf(e.loginUrl)].some(h => word.test(h));
 }
 
 export class Credentials {
@@ -113,10 +131,39 @@ export class Credentials {
     return { user: e.user, found: true, ...(e.url ? { url: e.url } : {}), ...(e.note ? { note: e.note } : {}) };
   }
 
-  /** User names of the entries whose URL host (with port) is the page's: the accounts meant for this site (rules.ts). */
+  /** User names of the entries whose host (url or loginUrl, with port) is the page's: the accounts meant for this site (rules.ts). */
   accountsFor(pageUrl: string): string[] {
     const host = hostOf(pageUrl);
-    return host ? [...new Set(this.entries().filter(e => hostOf(e.url) === host).map(e => e.user))] : [];
+    return host ? [...new Set(this.entries().filter(e => hostsOf(e).includes(host)).map(e => e.user))] : [];
+  }
+
+  /** The account fill_credential types into a sign-in form of the page at pageUrl (the frame that holds the password
+   *  field), read from the file now. account '' = the only entry for that host. Refused, with the fix, when the entry
+   *  is for another site, has no url, looks like production, or cannot be told apart. */
+  siteCredential(account: string, pageUrl: string): SiteCredential {
+    const host = hostOf(pageUrl), file = this.describe(), all = this.entries();
+    if (!host) return { refusal: 'Refused: the password field is not in a web page (http or https). Open the sign-in page first.' };
+    if (!this.file()) return { refusal: 'Refused: there is no credentials file (no brain folder, or credentialsFile points outside it). Use handoff_to_user kind "login".' };
+    const here = all.filter(e => hostsOf(e).includes(host));
+    const names = [...new Set(here.map(e => e.user))].map(u => `"${u}"`).join(', ');
+    const want = account.trim().toLowerCase();
+    let e: Entry | undefined;
+    if (want) {
+      const same = all.filter(x => x.user.toLowerCase() === want);
+      e = same.find(x => hostsOf(x).includes(host));
+      if (!e && same.length) {
+        const sites = [...new Set(same.flatMap(hostsOf))];
+        return { refusal: `Refused: account "${account.trim()}" in the user's credentials file (${file}) is ${sites.length ? `for ${sites.join(', ')}` : 'without a url'}, and this sign-in form is on ${host}. ` +
+          `The app types a password only on the site of its entry${sites.length ? ': open that site' : ''}; if ${host} is its sign-in page, the user adds "${sites.length ? 'loginUrl' : 'url'}": "https://${host}/…" to the entry (ask them in one line, never for the password).` };
+      }
+      if (!e) return { refusal: `Refused: no account "${account.trim()}" in the user's credentials file (${file}). ${names ? `Entries for ${host}: ${names}.` : `It has no entry for ${host}: the user adds one ({ "user", "password", "url" }), or use handoff_to_user kind "login".`}` };
+    } else {
+      if (!here.length) return { refusal: `Refused: the user's credentials file (${file}) has no entry for ${host}. The user adds one ({ "user", "password", "url": "https://${host}/…" }), or use handoff_to_user kind "login". Never ask for a password in chat.` };
+      if (new Set(here.map(x => x.user.toLowerCase())).size > 1) return { refusal: `Refused: several accounts for ${host} in the user's credentials file (${file}): ${names}. Call fill_credential again with account = one of them.` };
+      e = here[0]!;
+    }
+    if (looksProduction(e)) return { refusal: `Refused: account "${e.user}"${e.group ? ` (${e.group})` : ''} looks like a production account. The app types test accounts only: use handoff_to_user kind "login" with this account.` };
+    return { user: e.user, password: e.password };
   }
 
   /** Every entry for the "Credenziali" panel: group, user, URL, note and an id (never the password). */

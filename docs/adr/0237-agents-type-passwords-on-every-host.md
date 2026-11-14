@@ -3,6 +3,8 @@
 
 Date: 2026-11-09. Status: accepted (the owner, yes in a decision panel, 2026-11-09: «voglio togliere quel controllo
 del browser dell'app», every host, production included). Partly supersedes ADR 0003 (its password limit).
+Amended by ADR 0310 (to sign in an agent names an account of the credentials file and the app types it: it no longer
+reads the password).
 
 ## Context
 

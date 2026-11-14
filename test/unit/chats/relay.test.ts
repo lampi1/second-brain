@@ -115,16 +115,18 @@ const cmd = (id: string, chatId: string, code: string, prod?: string): PendingRe
   command: { itemId: 'a1', code, lang: 'powershell', lead: 'Lancia i test:', ...(prod ? { prod } : {}) } } as PendingRequest);
 
 function withCommands(cmds: PendingRequest[], pending: PendingRequest[] = []) {
-  const ran: string[] = [], dismissed: string[] = [];
+  const ran: string[] = [], dismissed: string[] = [], told: string[] = [];
   const chats = [chat({ id: 'orch', isOrchestrator: true, title: 'Orchestrator' }), chat({ id: 'dev', title: 'Dev' })];
   const said: ChatItem[] = [];
-  const r = new QuestionRelay({ chats: () => chats, pending: () => pending, items: id => (id === 'orch' ? said : []), answer: async () => {},
+  const r = new QuestionRelay({ chats: () => chats, pending: () => pending, items: id => (id === 'orch' ? said : []), answer: async () => {}, notify: (_o, text) => { told.push(text); },
     commands: { pending: () => cmds, run: (_c, id, confirmed) => { ran.push(confirmed ? `${id}:confirmed` : id); cmds.splice(cmds.findIndex(x => x.id === id), 1); }, dismiss: (_c, id) => { dismissed.push(id); cmds.splice(cmds.findIndex(x => x.id === id), 1); } } });
   /** the Orchestrator writes the relayed text to the user */
   const wrote = (text: string) => { said.push({ kind: 'assistant', id: `a${said.length}`, at: Date.now(), text } as ChatItem); };
   /** relay, then write it word for word */
   const show = (chatId = 'dev') => { const out = r.relay('orch', chatId); wrote(out.write); return out; };
-  return { r, ran, dismissed, wrote, show };
+  /** the user's own message in the Orchestrator's chat: from the PC, Telegram ('phone') or Remote Control ('remote') */
+  const userWrote = (text: string, via?: 'phone' | 'remote') => { said.push({ kind: 'user', id: `u${said.length}`, at: Date.now(), text, ...(via ? { via: 'phone' as const, ...(via === 'remote' ? { remote: true as const } : {}) } : {}) } as ChatItem); };
+  return { r, ran, dismissed, told, wrote, show, userWrote };
 }
 
 it('relays the brief\'s parts with the question', () => {
@@ -163,9 +165,47 @@ it('a «sì» never runs a relayed command the Orchestrator did not write whole 
   expect(w.ran).toEqual([]);
 });
 
-it('a «sì» from the phone never runs a command it could not show', async () => {
+it('a «sì» from Telegram never runs a command it could not show, and the Orchestrator is told what to say (#390)', async () => {
   const p = withCommands([cmd('c2', 'dev', 'npm test')]);
-  p.r.relay('orch', 'dev');
+  p.show();                                                  // relayed while he wrote from the PC
   expect(await p.r.userSaid('orch', 'sì', 'phone')).toBe(false);
   expect(p.ran).toEqual([]);
+  expect(p.told.join('\n')).toMatch(/Telegram.*Esegui.*Controllo remoto/);
+});
+
+it('while he writes from Telegram a command it cannot show is refused up front, never asked and then dropped (#390)', async () => {
+  const p = withCommands([cmd('c2', 'dev', 'npm test')]);
+  p.userWrote('come va?', 'phone');
+  expect(() => p.r.relay('orch', 'dev')).toThrow(/Telegram.*Do not ask him yes or no.*Esegui on the PC.*Remote Control/s);
+  expect(p.r.current('orch')).toBeUndefined();               // nothing armed: a later «sì» answers nothing
+  expect(await p.r.userSaid('orch', 'sì', 'phone')).toBe(false);
+  expect(p.ran).toEqual([]);
+  expect(p.told).toEqual([]);
+  // a command Telegram shows whole is still relayed there, and his «sì» runs it
+  const q = withCommands([cmd('c3', 'dev', 'riavvia il servizio')]);
+  q.userWrote('come va?', 'phone');
+  q.show();
+  expect(await q.r.userSaid('orch', 'sì', 'phone')).toBe(true);
+  expect(q.ran).toEqual(['c3:confirmed']);
+});
+
+it('on Telegram a command it cannot show waits for the PC, and the chat\'s own Sì/No question is relayed instead (#390)', async () => {
+  const p = withCommands([cmd('c2', 'dev', 'npm test')], [yesNo('q1', 'dev', 'Faccio il commit del fix?')]);
+  p.userWrote('come va?', 'phone');
+  expect(p.r.relay('orch', 'dev').question).toBe('Faccio il commit del fix?');
+  expect(p.ran).toEqual([]);
+});
+
+it('Remote Control shows the reply whole: his «sì» there runs the relayed command, as on the PC (#390)', async () => {
+  const p = withCommands([cmd('c2', 'dev', 'npm test')]);
+  p.userWrote('come va?', 'remote');
+  p.show();
+  expect(await p.r.userSaid('orch', 'sì', 'remote')).toBe(true);
+  expect(p.ran).toEqual(['c2:confirmed']);
+  // still only what he read: a reply without the whole command runs nothing
+  const q = withCommands([cmd('c4', 'dev', 'npm test')]);
+  q.r.relay('orch', 'dev');
+  q.wrote('Lancio i test, va bene?');
+  expect(await q.r.userSaid('orch', 'sì', 'remote')).toBe(false);
+  expect(q.ran).toEqual([]);
 });

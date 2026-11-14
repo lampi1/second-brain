@@ -35,7 +35,7 @@ const INSTRUCTIONS = [
   'A JavaScript alert/confirm blocks the page until you call handle_dialog. Popups and target=_blank links open as new tabs of yours.',
   'You open and drive the pages yourself (tabs_create, navigate): never ask the user to open a browser, a URL or a page, and never give them sign-in steps.',
   'Each tab lives in an environment (its own cookies and storage; default from the host, e.g. example-test-3, local); environments shows them with their sign-in status. Local stacks (localhost, 127.0.0.1, *.localhost) always load in environment "local" (the tools refuse another).',
-  'Sign-in pages, on any host: sign in yourself with type / fill_form and the account you were given (password values come back masked as "•••"; never repeat a password in chat). If you have no password for it, or the page asks for MFA or a CAPTCHA, call handoff_to_user with kind "login": the user signs in once and the environment keeps the session.',
+  'Sign-in pages, on any host: sign in yourself with fill_credential (the app types a test account of the user\'s credentials file into the form; you never read the file or the password), or with type / fill_form for an account given to you in the task (password values come back masked as "•••"; never repeat a password in chat). If there is no entry for the site, or the page asks for MFA or a CAPTCHA, call handoff_to_user with kind "login": the user signs in once and the environment keeps the session.',
   'For MFA, CAPTCHA or anything only the user can do, call handoff_to_user and wait: never ask them for passwords.',
 ].join('\n');
 

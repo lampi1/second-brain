@@ -39,7 +39,7 @@ export function serverName(server: string): string {
 const BROWSER: Record<string, (i: Obj) => string> = {
   navigate: i => (str(i.url) ? `apre ${host(str(i.url))}` : 'apre una pagina'),
   click: () => 'clicca nella pagina', type: () => 'scrive nella pagina', key: () => 'preme un tasto nella pagina',
-  fill_form: () => 'compila un modulo', select_option: () => 'sceglie un’opzione', scroll: () => 'scorre la pagina', hover: () => 'passa sopra un elemento',
+  fill_form: () => 'compila un modulo', fill_credential: () => 'fa l’accesso con un account di test', select_option: () => 'sceglie un’opzione', scroll: () => 'scorre la pagina', hover: () => 'passa sopra un elemento',
   drag: () => 'trascina un elemento', screenshot: () => 'fa uno screenshot', read_page: () => 'legge la pagina', get_page_text: () => 'legge il testo della pagina',
   find: i => (str(i.query) ? `cerca «${cut(str(i.query), 40)}» nella pagina` : 'cerca nella pagina'), wait_for: () => 'aspetta la pagina',
   javascript: () => 'esegue codice nella pagina', javascript_tool: () => 'esegue codice nella pagina', console_messages: () => 'legge la console', network_requests: () => 'legge le richieste di rete',

@@ -12,7 +12,7 @@ const SECRET = ['Segreto', 'Synthetic', String(1)].join('-');   // built at run 
 function remotePage(url = 'https://app.example.com/login') {
   const frame = { url, origin: new URL(url).origin, parent: null };
   const tabs = {
-    credentials: { pasteBlocked: () => false },
+    credentials: { pasteBlocked: () => false, accountsFor: () => [] },
     cssScale: () => 1,
     dialogOpened: () => ({ promise: new Promise(() => {}), cancel: () => {} }),
     frames: () => [frame],

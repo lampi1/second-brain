@@ -87,6 +87,8 @@ export interface Tab {
   createdAt: number;
   closedByUser?: { url: string };             // the user closed it in the app (✕ / Ctrl+W on its tile): its agent is told so
   agentInput?: number;                        // CDP input of an agent running on it (actions.ts): its keys are not the user's
+  secretTyped?: boolean;                      // the app typed a password of the credentials file here (fill_credential): no caller JavaScript, no copy keys until the page is left
+  scriptRan?: boolean;                        // caller JavaScript ran in this document: fill_credential is refused until the page is left (a script could be waiting for the value)
 }
 
 interface Group { key: string; owner: string | null; active: string | null }
@@ -436,7 +438,7 @@ export class BrowserTabs {
     const live = () => this.tabs.get(tab.id) === tab;
     const changed = () => { if (live()) this.emitTabs(); };
     for (const ev of ['did-start-loading', 'did-stop-loading', 'did-navigate-in-page', 'page-title-updated'] as const) wc.on(ev as 'did-stop-loading', changed);
-    wc.on('did-navigate', (_e, url) => { if (!live()) return; this.dropDialog(tab, 'dismissed (page navigated)'); if (url && url !== 'about:blank') tab.fresh = false; tab.committed = true; tab.emu = null; this.emulate(tab); this.emitTabs(); });
+    wc.on('did-navigate', (_e, url) => { if (!live()) return; this.dropDialog(tab, 'dismissed (page navigated)'); tab.secretTyped = false; tab.scriptRan = false; if (url && url !== 'about:blank') tab.fresh = false; tab.committed = true; tab.emu = null; this.emulate(tab); this.emitTabs(); });
     wc.on('did-stop-loading', () => { if (live()) void this.onPageLoaded(tab); });
     wc.on('did-navigate-in-page', (_e, _url, isMain) => { if (isMain && live()) void this.onPageLoaded(tab); });
     wc.on('destroyed', () => this.remove(tab));
