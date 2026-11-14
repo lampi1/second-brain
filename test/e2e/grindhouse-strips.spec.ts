@@ -16,7 +16,7 @@ test('strips: collapsed with their facts, click to expand and collapse, "Ti aspe
     await expect(page.locator('[data-testid^="home-request-"]')).toHaveCount(0);
     for (const id of ['qa', 'fix', 'sms', 'feedback']) {
       await expect(page.getByTestId(`chat-expand-${id}`)).toHaveAttribute('aria-expanded', 'false');
-      await expect(page.getByTestId(`chat-sub-${id}`)).toHaveCount(0); // one line (ADR 0287): the details row is in the open window
+      await expect(page.getByTestId(`chat-sub-${id}`)).toHaveCount(0); // no details row on a closed strip (ADR 0287): it is in the open window
     }
     // at a glance a strip says the task and the state; time and cost against the estimate, the model and the effort
     // it runs with are the tip of its ⓘ mark (ADR 0307), not figures on the row

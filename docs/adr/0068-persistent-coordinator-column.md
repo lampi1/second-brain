@@ -1,6 +1,7 @@
 # 0068 — The Grindhouse beside one persistent Orchestrator column
 
-Date: 2026-10-17. Status: accepted for the UI redesign. Supersedes the two workspace views of ADR 0005 (Mosaico,
+Date: 2026-10-17. Status: accepted for the UI redesign; amended by ADR 0307 (the column is about half the window on
+every page, no longer wider on the Grindhouse and narrower elsewhere). Supersedes the two workspace views of ADR 0005 (Mosaico,
 Corsie) and their toggle, and ADR 0021's floating Regia as the default place of the coordinator.
 
 The home view duplicated a coordinator composer beneath a large graph, the coordinator panel could occupy the top of

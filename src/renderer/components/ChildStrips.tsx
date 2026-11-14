@@ -2,7 +2,8 @@
 // visibile»): one short row per child the engine reported (Claude's Agent/Task tools and background tasks, Codex's
 // sub-agents, Cursor's task tool: main/chats/agent-children.ts collects them, the chat's agentChildren carries them),
 // with the app agent it runs as (the catalog profile its engine agent type names, else "nessun agente"; owner, #69),
-// what it does, its state and when it started (on a narrow column the time is in the row's tip only, ADR 0307). A child at work always shows; an ended one leaves at once
+// what it does, its state and when it started (on a narrow column the kind and the time are in the row's tip and
+// for screen readers only, ADR 0307). A child at work always shows; an ended one leaves at once
 // (lib/agent-children.ts), so the strips stay short. Mounted under each strip of the
 // Grindhouse (AgentStrips.tsx) and under the Orchestrator's head (OrchestratorTile.tsx). The "Dettagli" popover
 // (AgentIdentity.tsx) keeps the full census with the parent links.
@@ -31,7 +32,7 @@ export function ChildStrips({ chatId }: { chatId: string }) {
       const tone = childTone(r.state);
       const since = r.active ? t('product.childFor', { d: minutes(Math.max(0, now - r.startedAt)) }) : null;
       return <div role="listitem" className={`child-strip${r.active ? ' is-active' : ' is-ended'}`} key={r.key} data-testid="child-strip" data-child-key={r.key} data-child-state={r.state} data-child-kind={r.kind}
-        data-tip={tipOf(r.task || t('product.noTask'), [[t('product.childStarted', { time: timeOf(r.startedAt) }), since].filter(Boolean).join(' · '), ...(r.source === 'replay' ? [t('product.replayed')] : [])])}>
+        data-tip={tipOf(r.task || t('product.noTask'), [[t(`product.child.${r.kind}`), t('product.childStarted', { time: timeOf(r.startedAt) }), since].filter(Boolean).join(' · '), ...(r.source === 'replay' ? [t('product.replayed')] : [])])}>
         <span className="child-strip-mark" aria-hidden="true">↳</span>
         <span className="child-strip-kind">{t(`product.child.${r.kind}`)}</span>
         {r.kind !== 'shell' && <ChildAgent agentType={r.agentType} profiles={profiles} />}

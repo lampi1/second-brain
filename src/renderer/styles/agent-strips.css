@@ -76,7 +76,6 @@
 .strip-dot { width:7px; height:7px; border-radius:50%; background:var(--text-4); }
 .strip-state.tone-err { color:var(--red); }
 .strip-state.tone-wait { color:var(--amber); }
-.chat-tile.is-strip .th-ctx { margin-left:0; }
 .chat-tile.is-strip .chat-header-actions { min-width:86px; flex-wrap:nowrap; margin-left:0; }
 .chat-tile.is-strip .chat-header-actions > .icon-btn { opacity:0; transition:opacity var(--dur-fast) var(--ease); }
 .chat-tile.is-strip .chat-header-actions > .icon-btn:last-child { opacity:.45; }
@@ -189,8 +188,9 @@
 .agent-pane-wrap.leave-ghost { animation:none; box-sizing:border-box; overflow:hidden; pointer-events:none; transition:height 320ms var(--ease), opacity 220ms ease, padding 320ms var(--ease), margin 320ms var(--ease), transform 320ms var(--ease); }
 .agent-pane-wrap.leave-ghost.is-leaving { height:0 !important; opacity:0; padding-top:0; padding-bottom:0; margin-top:0; margin-bottom:-8px; transform:scale(.98); }
 /* The strip as the owner chose it (2026-11-13, ADR 0292): the state as a dot in front, the name, what it does now, and
-   on the right its time and cost so far against the estimate, always; a hairline between the rows, no cards; the open
-   window is a quiet panel between two hairlines, its details behind the ⓘ. */
+   on the right the state (its time and cost against the estimate are the tip of its ⓘ mark since ADR 0307; on the row
+   only on the full screen's bar); a hairline between the rows, no cards; the open window is a quiet panel between two
+   hairlines, its details behind the ⓘ. */
 .workspace-column { gap:0; }
 .agent-pane.strip-pane { border-bottom:1px solid var(--border); }
 .chat-tile.is-strip { border:0; border-radius:0; }
@@ -246,7 +246,7 @@
 @container (max-width: 640px) {
   .chat-tile.is-strip .th-row { display:grid; grid-template-columns:auto minmax(0,1fr) auto auto auto; grid-template-areas:"face name state info acts" "face now now now now"; column-gap:8px; row-gap:1px; align-items:center; }
   .chat-tile.is-strip .th-row > .strip-face { grid-area:face; }
-  .chat-tile.is-strip .th-row > .th-title { grid-area:name; max-width:none; justify-self:start; }
+  .chat-tile.is-strip .th-row > .th-title { grid-area:name; max-width:100%; justify-self:start; } /* a long name keeps its ellipsis inside its track */
   .chat-tile.is-strip .th-row > .strip-now, .chat-tile.is-strip .th-row > .th-title-input { grid-area:now; }
   .chat-tile.is-strip .th-row > .strip-wait, .chat-tile.is-strip .th-row > .strip-working, .chat-tile.is-strip .th-row > .strip-state:not(.sr-only) { grid-area:state; }
   .chat-tile.is-strip .th-row > .strip-info { grid-area:info; }
@@ -257,7 +257,7 @@
 @container (max-width: 640px) {
   .chat-tile.is-expanded:not(.is-full) .th-row { display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; grid-template-areas:"face name state acts" "face now ctx views"; column-gap:8px; row-gap:2px; align-items:center; }
   .chat-tile.is-expanded:not(.is-full) .th-row > .strip-face { grid-area:face; }
-  .chat-tile.is-expanded:not(.is-full) .th-row > .th-title { grid-area:name; max-width:none; min-width:0; justify-self:start; }
+  .chat-tile.is-expanded:not(.is-full) .th-row > .th-title { grid-area:name; max-width:100%; min-width:0; justify-self:start; }
   .chat-tile.is-expanded:not(.is-full) .th-row > .strip-now, .chat-tile.is-expanded:not(.is-full) .th-row > .th-title-input { grid-area:now; }
   .chat-tile.is-expanded:not(.is-full) .th-row > .th-ctx { grid-area:ctx; justify-self:end; }
   .chat-tile.is-expanded:not(.is-full) .th-row > .aw-views { grid-area:views; justify-self:end; }
@@ -266,6 +266,7 @@
   .strip-facts { flex-wrap:wrap; row-gap:4px; }
   .strip-facts > .agent-identity { margin-left:0; }
 }
-/* a sub-agent's row on a short column: the kind and the start time leave the row (the time is in its tip) */
+/* a sub-agent's row on a short column: the kind and the start time leave the row for its tip; they stay in the page
+   for screen readers (clipped, not removed) */
 .child-strips { container-type:inline-size; }
-@container (max-width: 520px) { .child-strip-time, .child-strip-kind { display:none; } }
+@container (max-width: 520px) { .child-strip-time, .child-strip-kind { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; } }

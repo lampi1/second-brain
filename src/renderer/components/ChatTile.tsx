@@ -1,5 +1,5 @@
-// One agent's window (ADR 0287): a chat as a one-line strip in the Grindhouse (AgentStrips.tsx), open in the column, or in
-// full screen (FullScreen.tsx). The strip is one row (ADR 0292, 0293, 0295): the role's little person doing what the chat does
+// One agent's window (ADR 0287): a chat as a strip in the Grindhouse (AgentStrips.tsx), open in the column, or in
+// full screen (FullScreen.tsx). The strip is one row, two on a short column (ADR 0292, 0293, 0295, 0307): the role's little person doing what the chat does
 // (StripFace.tsx), who it is, the title · current step, then on the right «In attività» in plain words while it works, or a pill when
 // words are needed («Ti aspetta» opens its question, an error, a queue), and one ⓘ mark whose tip says the rest (StripInfo.tsx, ADR 0307:
 // model and effort, work time and cost against the estimate, the context; amber past the estimate or with a long context; the full
@@ -31,7 +31,8 @@ import { openQueue, requestPostponed } from '../lib/later';
 import { admitNow, reqKey, toggleMaximize } from '../actions';
 import { useHandoffTabs } from '../store/handoffs';
 import { StripMeta } from './StripMeta';
-import { StripInfo, useStripInfo } from './StripInfo';
+import { StripInfo, stripFacts } from './StripInfo';
+import { useRunEstimates } from '../lib/run-estimates';
 import { StripFace } from './StripFace';
 import { BrowserTile } from './BrowserTile';
 import { FullTools } from './FullTools';
@@ -147,6 +148,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
     reveal(true);
     ref.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [focusReq]);
+  const estimates = useRunEstimates(); // a hook: before the early return (a chat removed while in full screen renders once more)
   if (!chat) return null;
   const compact = !expanded || !focus && !embedded && size.height > 0 && size.height < COMPACT_TILE_H;
   const busy = isBusy(chat);
@@ -171,7 +173,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
   // a Strategist's open question: the strip points to the window, set aside too («Basta domande» stays reachable)
   const planAsk = planQuestion(chat, reqs, false);
   const longContext = isLong(chat, warn);
-  const info = useStripInfo(chat, work, longContext);
+  const info = stripFacts(chat, work, estimates, longContext);
   const name = chat.agent?.name || chat.title, topic = chat.agent?.name && chat.title && chat.title !== chat.agent.name ? chat.title : '';
   // one state: «Ti aspetta» (opens the question), else the little person in front and, when words are needed, a pill
   const stateText = waitText && st.tone !== 'err' && st.label !== t('ui.state.queued') ? waitText : st.label;
@@ -217,7 +219,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
               (ADR 0307; the owner, 2026-11-14). Open, the same mark is the «Dettagli» button among the actions; the
               full window has the room and keeps the figures in sight */}
           {focus && <StripMeta chat={chat} workMs={work} />}
-          {(focus || (expanded && !facts)) && longContext && <ContextMeter chat={chat} warn={warn} />}
+          {(focus || expanded) && !facts && longContext && <ContextMeter chat={chat} warn={warn} />}
           {viewSwitch}
           {/* the state stays in the DOM as the strip's data-state hook; one thing is shown: the wait or the state */}
           <span hidden><StatePill chat={chat} testid={`chat-state-${chatId}`} /></span>

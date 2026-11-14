@@ -6,7 +6,7 @@ import { useApp } from '../store/store';
 import { setPrefs, ui } from '../store/ui';
 import { registerOverlay, schedule } from '../lib/viewports';
 import { scheduleLayer } from '../lib/layer';
-import { columnSize, viewport, type Reserve } from '../lib/orchestrator-dock';
+import { columnSize, PAGE_MIN, viewport, type Reserve } from '../lib/orchestrator-dock';
 import { OrchestratorTile } from './OrchestratorTile';
 import { t } from '../i18n';
 import { orchestratorIdOf } from '../lib/orchestrator-route';
@@ -51,7 +51,7 @@ export function OrchestratorOverlay() {
     </div>
     <div className="orchestrator-body" id="orchestrator-panel"><ErrorBoundary where="orchestrator" compact key={active ?? 'none'}><OrchestratorTile key={active ?? 'none'} chatId={active} /></ErrorBoundary></div>
     <div className="orchestrator-column-resize" role="separator" tabIndex={0} aria-label={t('home.orchestratorWidth')} aria-orientation="vertical"
-      aria-valuemin={280} aria-valuemax={Math.max(280, viewport().W - viewport().left - 360)} aria-valuenow={size.w} data-testid="orchestrator-resize"
+      aria-valuemin={280} aria-valuemax={Math.max(280, viewport().W - viewport().left - PAGE_MIN)} aria-valuenow={size.w} data-testid="orchestrator-resize"
       onPointerDown={event => { if (event.button !== 0) return; drag.current = { x: event.clientX, w: size.w }; event.currentTarget.setPointerCapture(event.pointerId); event.preventDefault(); }}
       onPointerMove={event => { if (drag.current) resize(drag.current.w + drag.current.x - event.clientX); }}
       onPointerUp={event => { drag.current = null; event.currentTarget.releasePointerCapture(event.pointerId); }}

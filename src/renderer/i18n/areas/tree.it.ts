@@ -7,8 +7,6 @@ export const treeIt = {
   'tree.focus': (p: { title: string }) => `Porta in vista la chat ${p.title}`,
   'tree.goTo': 'Vai alla chat',
   'tree.answerHere': 'Rispondi qui',
-  'tree.openCard': 'Apri la conversazione qui',
-  'tree.foldCard': 'Chiudi la conversazione',
   'tree.retry': 'Riprova',
   'tree.retryText': 'Riprova il compito della delega da dove ti sei fermato.',
   'tree.stop': 'Ferma',

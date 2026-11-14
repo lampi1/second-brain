@@ -3,9 +3,10 @@
 Date: 2026-11-14 · Status: accepted (owner, 2026-11-14: «le striscioline devono essere belle anche meno lunghe, di
 default voglio che l'orchestrator occupi sempre metà schermata circa, quindi le striscioline e anche tutte le altre
 parti dell'app si devono adattare bene»; and four minutes later: «mi interessa vedere a colpo d'occhio cosa fanno a
-livello di task e se sono in attività, il resto posso guardarlo da un tooltip informativo») · Builds on: ADR 0068
-(the strips, the Orchestrator's column), ADR 0295 (the little people) · Amends: ADR 0292 (time, cost, model and
-effort always on the strip), ADR 0293 (the delegated chat's row), ADR 0207 (Settings on a narrow page)
+livello di task e se sono in attività, il resto posso guardarlo da un tooltip informativo») · Builds on: ADR 0295
+(the little people) · Amends: ADR 0068 (the column's width: wider on the Grindhouse, narrower elsewhere), ADR 0292
+(time, cost, model and effort always on the strip), ADR 0293 (the delegated chat's row), ADR 0207 (Settings on a
+narrow page)
 
 ## Context
 
@@ -33,8 +34,10 @@ chose again: at a glance the task and whether the chat is at work, everything el
    whole text as its label. The global tooltip shows a tip's lines one under the other (`components/ui.tsx`).
 4. Open, the window's head has no mark: the ⓘ among its controls opens the details row, as before (ADR 0292). The
    full screen has the room and keeps the figures on its bar (`StripMeta.tsx`).
-5. A delegated chat's row has the same mark in place of its figures. A sub-agent's or a command's row keeps kind,
-   agent, task and state; when it started and for how long is in its tip, and on the row only when there is room.
+5. A delegated chat's row has the same mark in place of its figures. A sub-agent's or a command's row keeps agent,
+   task and state; its kind, when it started and for how long are in its tip, and on the row only when there is
+   room (under 520 px they are clipped, not removed, so a screen reader still reads them). A command's «|» stays
+   readable in a tip (`lib/tips.ts` tipOf, splitTip).
 6. Under 640 px a strip takes two lines, inside the height the person already gives it: name, state, mark and
    controls on the first; the task and what it does now on the whole second. The open window's head folds the same
    way and its details row wraps.

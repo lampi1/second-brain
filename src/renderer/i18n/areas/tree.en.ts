@@ -7,8 +7,6 @@ export const treeEn: typeof treeIt = {
   'tree.focus': (p: { title: string }) => `Bring the chat ${p.title} into view`,
   'tree.goTo': 'Go to chat',
   'tree.answerHere': 'Answer here',
-  'tree.openCard': 'Open the conversation here',
-  'tree.foldCard': 'Close the conversation',
   'tree.retry': 'Retry',
   'tree.retryText': 'Retry the delegated task from where you stopped.',
   'tree.stop': 'Stop',

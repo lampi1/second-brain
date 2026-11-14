@@ -38,7 +38,7 @@ describe('what a strip keeps behind its mark', () => {
     expect(over.over).toBe(true);
     expect(over.lines[1]!.length).toBeGreaterThan(under.lines[1]!.length); // «oltre la stima» is added to the line
     expect(over.lines[2]!.split(' · ')).toHaveLength(3);
-    // the cost is past its estimate only beyond 1.5 times, as on the open window's figures (StripMeta.tsx)
+    // the cost is past its estimate only beyond 1.5 times, as on the full screen's figures (StripMeta.tsx)
     expect(stripInfo(chat({ costUsd: 0.8 }), 8 * MIN, { timeMs: 19 * MIN, costUsd: 0.6 }).over).toBe(false);
   });
   it('reads the cost as the strip does: the ledger for an engine that reports none, no line when unknown or zero', () => {
@@ -62,13 +62,16 @@ describe('the tip of several lines', () => {
     const tip = tipOf('Fix totale ordine', ['Modello: Opus 5.5 · high', 'Costo: 0,50 $']);
     expect(splitTip(tip)).toEqual({ text: 'Fix totale ordine', more: 'Modello: Opus 5.5 · high\nCosto: 0,50 $' });
   });
-  it('never lets a title or a line break the tip apart', () => {
-    const tip = tipOf('a | b\nc', ['x | y', 'z\nw']);
-    expect(tip.split('|')).toHaveLength(2);
-    expect(splitTip(tip).more!.split('\n')).toEqual(['x y', 'z w']);
-    expect(splitTip(tip).text).toBe('a b c');
+  it('never lets a title or a line break the tip apart, and keeps a command readable', () => {
+    const tip = tipOf('rg -n foo src | head -5\nc', ['x | y', 'z\nw']);
+    expect(splitTip(tip).text).toBe('rg -n foo src │ head -5 c'); // the title's pipe is written with a look-alike
+    expect(splitTip(tip).more!.split('\n')).toEqual(['x | y', 'z w']); // the lines under it keep theirs
   });
-  it('is the title alone when there is nothing under it', () => expect(tipOf('Solo', [])).toBe('Solo'));
+  it('is the title alone when there is nothing under it, and the first line when there is no title', () => {
+    expect(tipOf('Solo', [])).toBe('Solo');
+    expect(splitTip(tipOf('', ['uno', 'due']))).toEqual({ text: 'uno', more: 'due' });
+    expect(tipOf('', [])).toBe('');
+  });
 });
 
 describe('the mark on a strip', () => {

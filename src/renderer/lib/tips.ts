@@ -24,12 +24,20 @@ export function placeBubble(a: { left: number; top: number; width: number; heigh
 /** A tip's part after "|": a shortcut ("Ctrl+K", "Esc") becomes keys, anything else more text under the first line
  *  (each line of it a line of the tip: components/StripInfo.tsx). */
 export function splitTip(raw: string): { text: string; keys?: string; more?: string } {
-  const [text = '', rest] = raw.split('|');
-  if (rest === undefined) return { text };
+  const at = raw.indexOf('|');
+  if (at < 0) return { text: raw };
+  const text = raw.slice(0, at), rest = raw.slice(at + 1); // only the first «|» splits: a line under it may hold one (a command)
   return rest.length <= 24 && /^[A-Z][\w.]*(?:\+\S+)*(?: [A-Z][\w.]*(?:\+\S+)*)*$/.test(rest) ? { text, keys: rest } : { text, more: rest };
 }
 
-const oneLine = (s: string): string => s.replace(/\s*[|\n]+\s*/g, ' ').trim();
-/** A tip of several lines for the TooltipLayer: the first before «|», the others after it, one per line; a «|» or a
- *  line break inside a part becomes a space, so a title never breaks the tip apart (ADR 0307). */
-export const tipOf = (title: string, lines: readonly string[]): string => [oneLine(title), lines.map(oneLine).filter(Boolean).join('\n')].filter(Boolean).join('|');
+const oneLine = (s: string): string => s.replace(/\s*\n+\s*/g, ' ').trim();
+/** A tip of several lines for the TooltipLayer: the first before «|», the others after it, one per line. A line break
+ *  inside a part becomes a space; a «|» in the first part is written «│» (it would end the first line: a command such
+ *  as `rg foo | head` stays readable), the parts under it keep theirs. With no title the first line takes its place
+ *  (ADR 0307). */
+export function tipOf(title: string, lines: readonly string[]): string {
+  const [first, ...rest] = [oneLine(title), ...lines.map(oneLine)].filter(Boolean);
+  if (first === undefined) return '';
+  const head = first.replace(/\|/g, '│');
+  return rest.length ? `${head}|${rest.join('\n')}` : head;
+}

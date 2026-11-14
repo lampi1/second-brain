@@ -66,4 +66,29 @@ describe('chat strip head', () => {
     // the noise is gone (ADR 0287): no close cross, no help mark on a strip
     expect(html).not.toContain('chat-x-w'); expect(html).not.toContain('chat-help-w');
   });
+  it('a closed strip says the task and the state; the rest is the tip of its mark and of the task (ADR 0307)', () => {
+    const chat = { id: 'w', title: 'AI-DLC · U5 verifica', cwd: '', state: 'idle', harness: 'claude', model: 'claude-opus-5-5', costUsd: 0.5, lastText: '',
+      agent: { id: 'artisan', name: 'Artisan' } } as unknown as ChatSummary;
+    vi.mocked(useApp).mockImplementation(selector => selector({ chats: { w: chat }, pending: [], tabs: [] } as unknown as Parameters<typeof selector>[0]));
+    const html = renderToStaticMarkup(createElement(ChatTile, { chatId: 'w' }));
+    const tip = /data-tip="(AI-DLC · U5 verifica\|[^"]*Opus 5\.5[^"]*)"/.exec(html)?.[1];
+    expect(tip).toBeDefined();
+    expect(html).toContain(`data-tip="${tip}" data-testid="chat-info-w"`);            // on the mark
+    expect(html).toContain(`<span class="strip-now" data-tip="${tip}">`);              // and on the task's text
+    expect(html).not.toMatch(/class="th-topic" title=/);                               // no native tooltip beside it
+    expect(html).not.toContain('chat-meta-w'); expect(html).not.toContain('strip-model-w'); // no figures on the row
+  });
+  it('the full screen keeps the figures on its bar, with no mark', () => {
+    const chat = { id: 'w', title: 'AI-DLC · U5 verifica', cwd: '', state: 'idle', harness: 'claude', model: 'claude-opus-5-5', costUsd: 0.5, lastText: '',
+      agent: { id: 'artisan', name: 'Artisan' } } as unknown as ChatSummary;
+    vi.mocked(useApp).mockImplementation(selector => selector({ chats: { w: chat }, pending: [], tabs: [] } as unknown as Parameters<typeof selector>[0]));
+    const html = renderToStaticMarkup(createElement(ChatTile, { chatId: 'w', focus: true }));
+    expect(html).toContain('strip-model-w');
+    expect(html).not.toContain('chat-info-w');
+    expect(html).not.toMatch(/class="strip-now" data-tip=/);
+  });
+  it('a chat that is gone renders nothing (every hook runs before that return)', () => {
+    vi.mocked(useApp).mockImplementation(selector => selector({ chats: {}, pending: [], tabs: [] } as unknown as Parameters<typeof selector>[0]));
+    expect(renderToStaticMarkup(createElement(ChatTile, { chatId: 'w' }))).toBe('');
+  });
 });

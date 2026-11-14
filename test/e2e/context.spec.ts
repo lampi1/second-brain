@@ -25,18 +25,20 @@ for (const engine of ['claude', 'cursor'] as const) {
     const tile = page.getByTestId(`tile-chat-${chat.id}`);
     await expect(tile).toBeVisible();
 
-    const meter = page.getByTestId(`chat-ctx-${chat.id}`);
-    await expect(meter).toHaveClass(/long/, { timeout: 20_000 });
+    // closed, the strip's ⓘ mark turns amber and its tip says the context is long (ADR 0307); the meter is in the open window
+    const mark = page.getByTestId(`chat-info-${chat.id}`);
+    await expect(mark).toHaveClass(/over/, { timeout: 20_000 });
+    await expect(mark).toHaveAttribute('data-tip', /Contesto: [^\n]*lungo/);
     const list = () => page.evaluate(() => window.sb.invoke('chat:list', undefined));
     if (engine === 'claude') {
       // 250k on the 200k window the app passed (the fake never compacts by itself): amber, compaction near, no notice (it compacts by itself)
       await expect.poll(async () => (await list()).find(c => c.id === chat.id)?.contextMaxTokens).toBe(200_000);
-      await expect(meter).toHaveAttribute('data-tip', /Compatta da sola vicino a 200k/);
+      await expect(mark).toHaveAttribute('data-tip', /Contesto: [^\n]*200k/);
       await expect(page.getByTestId(`ctx-bar-${chat.id}`)).toHaveCount(0);
       await page.getByTestId(`chat-menu-${chat.id}`).click();
       await page.getByTestId(`chat-handoff-${chat.id}`).click();
     } else {
-      await expect(meter).toContainText('~');
+      await expect(mark).toHaveAttribute('data-tip', /Contesto: ~/);
       await expect(page.getByTestId(`ctx-bar-${chat.id}`)).toHaveCount(0);
       await page.getByTestId(`chat-menu-${chat.id}`).click();
       await page.getByTestId(`chat-handoff-${chat.id}`).click();

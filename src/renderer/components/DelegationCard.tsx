@@ -27,6 +27,7 @@ import { openQueue } from '../lib/later';
 import { ChatTile, useFlash } from './ChatTile';
 import { StripActivity } from './StripActivity';
 import { StripInfo, useStripInfo } from './StripInfo';
+import { isLong, useWarnTokens } from './ContextBar';
 import { StripFace } from './StripFace';
 import { IconChevronDown, IconChevronRight } from './Icons';
 import '../styles/tree.css';
@@ -81,7 +82,7 @@ function Head({ chat, state, open }: { chat: ChatSummary; state: ChildState; ope
   const skills = chat.run?.tags?.skills ?? [];
   const live = state === 'run' || state === 'start';
   const said = chat.delegation?.result?.summary || chat.lastText;
-  const info = useStripInfo(chat, chat.queued ? null : workTime(chat, now) ?? chat.run?.executionMs ?? null);
+  const info = useStripInfo(chat, chat.queued ? null : workTime(chat, now) ?? chat.run?.executionMs ?? null, isLong(chat, useWarnTokens()));
   return <div className="dc-head">
     <StripFace chatId={chat.id} avatar={chat.agent?.avatar} name={role} size={22} tone={LINE[state]} waitsUser={state === 'wait'} error={LINE[state] === 'err'}
       busy={isBusy(chat)} done={state === 'done' || state === 'partial'} pending={live} />
@@ -195,7 +196,8 @@ export function DelegationCard({ chatId }: { chatId: string }) {
   return <article ref={ref} className={`delegation-card s-${state}${open ? ' is-open' : ''}${ended && !open ? ' is-folded' : ''}${flash ? ' flash' : ''}${chat.closedAt ? ' is-ended' : ''}`} data-testid={`delegation-card-${chatId}`}
     data-state={chat.state} data-child-state={state} data-open={open || undefined}
     onClick={onClick} onPointerDown={() => { down.current = window.getSelection()?.toString() ?? ''; }}>
-    <div className="dc-summary" title={t(open ? 'tree.foldCard' : 'tree.openCard')}>
+    {/* no native title here: it would show together with the tips of the row's text and of its ⓘ mark (ADR 0307); the task's button says open or closed */}
+    <div className="dc-summary">
       <Head chat={chat} state={state} open={open} />
       {open && state !== 'queued' && <Steps chat={chat} items={c.items} state={state} />}
     </div>

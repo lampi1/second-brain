@@ -13,10 +13,10 @@ import { tipOf } from '../lib/tips';
 import { IconInfo } from './Icons';
 import { t } from '../i18n';
 
-export interface StripFacts { title: string; lines: string[]; over: boolean; tip: string }
+interface StripFacts { title: string; lines: string[]; over: boolean; tip: string }
 
 /** What the tip says: the task whole on the first line, then one fact per line; `over` when something asks for a look. */
-export function stripInfo(chat: ChatSummary, workMs: number | null, estimate: Pick<TaskEstimate, 'timeMs' | 'costUsd'> | null, longContext = false): { title: string; lines: string[]; over: boolean } {
+export function stripInfo(chat: ChatSummary, workMs: number | null, estimate: Pick<TaskEstimate, 'timeMs' | 'costUsd'> | null, longContext = false): Omit<StripFacts, 'tip'> {
   const costNow = chat.costLedgerUsd ?? (chat.costKnown === false ? null : chat.costUsd || null);
   const est = estimate ? estimateText(estimate) : null;
   const overTime = !!estimate && estimate.timeMs !== null && workMs !== null && workMs > estimate.timeMs;
@@ -32,13 +32,14 @@ export function stripInfo(chat: ChatSummary, workMs: number | null, estimate: Pi
   return { title: chat.title, lines, over: overTime || overCost || longContext };
 }
 
-/** The strip's facts and their tip, read once for the mark and for the task's own text (the same tip on both). */
-export function useStripInfo(chat: ChatSummary, workMs: number | null, longContext = false): StripFacts {
-  const estimates = useRunEstimates();
-  const estimate = chat.run ? estimates?.runs[chat.run.runId]?.estimate ?? null : null;
-  const info = stripInfo(chat, workMs, estimate, longContext);
+/** The strip's facts with their tip, from the estimates the caller read with useRunEstimates (a hook: a component
+ *  that can return early calls it first and this after, ChatTile.tsx). */
+export function stripFacts(chat: ChatSummary, workMs: number | null, estimates: ReturnType<typeof useRunEstimates>, longContext = false): StripFacts {
+  const info = stripInfo(chat, workMs, chat.run ? estimates?.runs[chat.run.runId]?.estimate ?? null : null, longContext);
   return { ...info, tip: tipOf(info.title, info.lines) };
 }
+/** The same for a component with no early return: the mark and the task's own text carry the one tip. */
+export const useStripInfo = (chat: ChatSummary, workMs: number | null, longContext = false): StripFacts => stripFacts(chat, workMs, useRunEstimates(), longContext);
 
 export function StripInfo({ chatId, info }: { chatId: string; info: StripFacts }) {
   if (!info.lines.length) return null;

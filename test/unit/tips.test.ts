@@ -40,6 +40,9 @@ describe('splitTip', () => {
   it('shortcuts become keys', () => {
     for (const k of ['Ctrl+K', 'Esc', 'F11', 'Ctrl+Shift+.', 'G U', 'Ctrl+1']) expect(splitTip(`Fai|${k}`)).toEqual({ text: 'Fai', keys: k });
   });
+  it('only the first «|» splits: what follows may hold one', () => {
+    expect(splitTip('Titolo|a | b\nc')).toEqual({ text: 'Titolo', more: 'a | b\nc' });
+  });
   it('words become a second line, never keys', () => {
     for (const m of ['clic per copiare', 'URL, utente e Copia password degli ambienti', 'Soglia del contesto lungo: 200k']) expect(splitTip(`Testo|${m}`)).toEqual({ text: 'Testo', more: m });
   });
