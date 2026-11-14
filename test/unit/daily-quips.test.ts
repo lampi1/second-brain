@@ -254,6 +254,19 @@ describe('the service that has the lines of the day written', () => {
     expect(Object.keys(stored().days['2026-11-14']!)).toEqual(['it']);
   });
 
+  it('asks nothing while its file is there but cannot be read, and does not write over it', async () => {
+    const { svc, file, calls } = make(req => ok(rowsFor(asked(req), 'oggi')));
+    fs.mkdirSync(file, { recursive: true }); // a folder where the file should be: reading it fails, and not as «no file»
+    expect(() => svc.get('it')).toThrow();
+    await expect(svc.ensure('it')).rejects.toThrow();
+    expect(calls).toHaveLength(0);
+    expect(fs.statSync(file).isDirectory()).toBe(true);
+    // readable again: it works as on a first day
+    fs.rmSync(file, { recursive: true });
+    expect((await svc.ensure('it')).lines.scout?.work).toHaveLength(dailyCount('work'));
+    expect(calls).toHaveLength(DAILY_BATCHES.length);
+  });
+
   it('asks every role for every moment, in the words of its character', () => {
     const p = dailyPrompt(DAILY_BATCHES[1]!, 'de', NOON, ['Schon gesagt']);
     expect(DAILY_SYSTEM('de')).toContain('German');

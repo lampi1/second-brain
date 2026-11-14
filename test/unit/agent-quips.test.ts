@@ -120,6 +120,8 @@ describe('agent quips', () => {
     const moment = () => { asked++; return edit; };
     expect(turn({ quiet: true, moment })).toBeNull();
     expect(turn({ speaking: QUIP_VOICES, moment })).toBeNull();
+    // nor over a line of its own: the one on the page, or a click's line that waits for the stick to leave
+    expect(turn({ busy: true, moment })).toBeNull();
     expect(asked).toBe(0);
     expect(turn({ speaking: QUIP_VOICES - 1, moment })?.say).toEqual(edit);
     expect(asked).toBe(1);

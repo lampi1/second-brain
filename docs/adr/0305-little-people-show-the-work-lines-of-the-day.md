@@ -17,7 +17,8 @@ more and show what the agent is doing; and the lines should change every day, wr
 
 1. The bubble and the stick. A click's line starts when the hand or the stick has left the head (`lib/quips.ts`
    QUIP_REACTION_AT: 250 ms after a pat, 1000 ms after a whack; the bubble is put on the page only then, so also
-   with no animation) and for its whole life it stands further right (`agent-sprite.css` `.quip.is-aside`).
+   with no animation) and for its whole life it stands further right (`agent-sprite.css` `.quip.is-aside`). The line
+   it was saying leaves at the click, and it does not speak by itself until the click's line is over.
 2. Six scenes of work for every role (`lib/agent-sprites.ts` ACT, `SpriteActivity`), beside the role's own trade:
    `read` (an open book, a page turning), `run` (a finger slams the enter key, a terminal prints lines), `test` (a
    test tube and a checklist that gets its ticks), `search` (a lens over the pages), `web` (the world on a fingertip,
@@ -46,7 +47,7 @@ more and show what the agent is doing; and the lines should change every day, wr
    them too through `pickQuip`), at most 40 for one role and moment (DAILY_MAX: of a week of `work` lines the oldest
    give way): the choice grows for a week and then turns over. The fixed lines are
    always there: no engine, no network, a day the model wrote nothing usable.
-8. Limits: at most two tries a day per language (so at most six small calls), 30 minutes apart, the try counted
+8. Limits: at most two tries a day per language (so at most six small calls), 30 minutes apart within one run of the app, the try counted
    before the model is asked; a part that came whole (every role with `work` lines and at least 12 of its 15
    moments) is not asked again. Today's count is always kept, also when the clock is set back past the kept week;
    days after today leave. Never in a test run (SB_TEST). The renderer asks 20 s after the app's start and then every hour

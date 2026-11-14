@@ -54,8 +54,9 @@ export const QUIP_REACTION_AT = { pat: 250, whack: 1000 } as const;
  *  speaking; else its line and for how long. The moment is asked only when it is really about to speak (asking uses
  *  up the one line about an end). One line in three (`rnd` under PLAIN_SHARE) is plain nonsense; an end is always
  *  said as an end. At work the line stays longer. Pure. */
-export function quipTurn(o: { quiet: boolean; speaking: number; lively?: boolean; moment: () => QuipMoment | null | undefined; rnd: number }): { say: QuipMoment; ms: number } | null {
-  if (o.quiet || o.speaking >= QUIP_VOICES) return null;
+export function quipTurn(o: { quiet: boolean; speaking: number; busy?: boolean; lively?: boolean; moment: () => QuipMoment | null | undefined; rnd: number }): { say: QuipMoment; ms: number } | null {
+  // `busy`: a line of its own is on the page or about to be (a click's line waits for the stick to leave): not over it
+  if (o.quiet || o.busy || o.speaking >= QUIP_VOICES) return null;
   const m = o.moment();
   if (!m) return null;
   return { say: m.kind !== 'done' && o.rnd < PLAIN_SHARE ? { kind: 'work' } : m, ms: o.lively ? QUIP_WORK_MS : QUIP_MS };
@@ -107,7 +108,7 @@ export function useQuip(role: QuipRole, mood?: () => QuipMoment | null, lively =
         // not now (hidden, frozen, enough others are speaking, nothing to say): it tries again soon, without a line
         const at = Date.now();
         voices = voices.filter(end => end > at);
-        const turn = quipTurn({ quiet: quiet(), speaking: voices.length, lively, moment: () => moodRef.current?.(), rnd: Math.random() });
+        const turn = quipTurn({ quiet: quiet(), speaking: voices.length, busy: until.current > at, lively, moment: () => moodRef.current?.(), rnd: Math.random() });
         if (!turn) return wait(true);
         voices.push(at + turn.ms);
         say(turn.say.kind, turn.say.x, { ms: turn.ms });
