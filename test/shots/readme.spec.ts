@@ -101,16 +101,17 @@ const tool = (chatId: string, t: { id: string; name: string; input: unknown; sum
 test('README screenshots', async () => {
   test.setTimeout(180_000);
 
-  // 1. The Grindhouse: the work chats as strips, a Strategist's delegation tree as thread cards under it
+  // 1. The Grindhouse: the work chats as benches, a Strategist's helpers at its bench
   await app.evaluate(() => (globalThis as unknown as { __sbDemo: { tree(): void } }).__sbDemo.tree());
   await expect(page.getByTestId('view-agents')).toBeVisible();
   const lead = page.getByTestId('tile-chat-tree-plan');
   await expect(lead).toBeVisible({ timeout: 15_000 });
+  // the Strategist's bench with its helpers at the bottom, the benches above it whole (ADR 0311)
   await lead.evaluate(el => {
-    el.scrollIntoView({ block: 'start' });
-    let box = el.parentElement; // its scrolling column: a little room above the Strategist's strip
+    el.scrollIntoView({ block: 'end' });
+    let box = el.parentElement;
     while (box && box.scrollHeight <= box.clientHeight) box = box.parentElement;
-    box?.scrollBy(0, -44);
+    box?.scrollBy(0, 12);
   });
   await waitThumbs(page);
   await save('grindhouse');
@@ -273,6 +274,7 @@ test('README showcase: the Strategist\'s plan to approve in the Orchestrator', a
   // Popup on: the plan to approve is one more card of the questions window, its steps numbered with their role
   await page.keyboard.press('Escape');
   await goPage(page, 'home');
+  if (await page.getByTestId('bench-back').count()) await page.getByTestId('bench-back').click(); // the benches, not an open chat (ADR 0311)
   if (!(await page.getByTestId('tile-chat-tree-plan').count())) await demo('tree');
   await expect(page.getByTestId('tile-chat-tree-plan')).toBeVisible({ timeout: 15_000 });
   const at = Date.now();
