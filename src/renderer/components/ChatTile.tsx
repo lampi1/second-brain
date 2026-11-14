@@ -31,6 +31,9 @@ import { admitNow, reqKey, toggleMaximize } from '../actions';
 import { useHandoffTabs } from '../store/handoffs';
 import { StripMeta } from './StripMeta';
 import { StripFace } from './StripFace';
+import { BenchHelpers, BenchKidRows } from './BenchKids';
+import { spriteIdOf } from './AgentSprite';
+import { areaOf } from '../lib/agent-order';
 import { BrowserTile } from './BrowserTile';
 import { FullTools } from './FullTools';
 import { selectedHere } from '../lib/strip-click';
@@ -192,11 +195,45 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
       {v === 'chat' ? <IconChat size={13} /> : v === 'split' ? <IconColumns size={13} /> : <IconGlobe size={13} />}<span>{t(`aw.view.${v}`)}</span>
     </button>)}
   </div>;
+  const stateEl = <>
+    {/* the state stays in the DOM as the strip's data-state hook; one thing is shown: the wait or the state */}
+    <span hidden><StatePill chat={chat} testid={`chat-state-${chatId}`} /></span>
+    {first ? <button type="button" className="strip-wait" onClick={() => openQueue(first)} aria-label={t('product.waitsYouOpen', { title: name })} data-testid={`chat-wait-${chatId}`} data-state={chat.state} {...(expanded ? {} : { 'data-waits-keys': reqs.map(reqKey).join(' ') })}>
+      <span className="strip-wait-dot" aria-hidden="true" />{waitText && userWait ? waitText : t('product.waitsYou')}{reqs.length > 1 && <b>{reqs.length}</b>}
+    </button> : working ? <span className="pill pill-run strip-working" data-testid={`chat-status-${chatId}`}><span className="pill-dot" aria-hidden="true" />{chat.state === 'running' ? t('product.running') : stateText}</span>
+      : <span className={`strip-state tone-${st.tone}${plainState ? ' sr-only' : ''}`} data-testid={`chat-status-${chatId}`} title={st.label}>{stateText}</span>}
+  </>;
+  const actions = <div className="chat-header-actions">
+    {(busy || chat.state === 'waiting') && (
+      <IconButton label={t('chat.tile.stop')} shortcut="Ctrl+." tone="danger" onClick={() => void stop(chatId)} testid={`chat-stop-${chatId}`}><IconStop size={14} /></IconButton>
+    )}
+    {/* a closed strip that drives a browser: one click opens it with the page beside the chat */}
+    {tabs.length > 0 && !expanded && <IconButton label={t('aw.view.split')} aria-pressed={false} onClick={() => { setAgentView(chatId, 'split'); setChatExpanded(chatId, true); }} testid={`chat-browser-${chatId}`}><IconGlobe size={14} /></IconButton>}
+    {(strip || focus) && <IconButton label={focus ? t('aw.fullExit') : t('aw.full')} shortcut="F11" onClick={() => toggleMaximize(key)} testid={`chat-max-${chatId}`}><IconMaximize size={14} /></IconButton>}
+    {expanded && <IconButton label={t('aw.facts')} onClick={() => setFacts(v => !v)} aria-expanded={facts} testid={`chat-facts-${chatId}`}><IconInfo size={14} /></IconButton>}
+    <IconButton ref={menuBtn} label={t('chat.tile.menu')} onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid={`chat-menu-${chatId}`}><IconMore /></IconButton>
+    </div>;
   return (
     <section ref={ref} className={`tile chat-tile ${expanded?'is-expanded':'is-strip'} tone-${st.tone} ${isFocused ? 'focused' : ''} ${flash ? 'flash' : ''} ${compact ? 'compact' : ''} ${closing ? 'closing' : ''}${embedded ? ' is-embedded' : ''}${focus ? ' is-full' : ''}`} role="region"
       aria-label={auditText('auditExpression.ChatTile.text20', { v0: chat.title, v1: st.label })} data-testid={`tile-chat-${chatId}`} data-chat-id={chatId} data-sb-id={`chat-${chatId}`} data-chat-index={index} data-state={chat.state}
       onClick={onStripClick} onFocus={() => setFocused(key)} onPointerDown={() => { downSelection.current = window.getSelection()?.toString() ?? ''; setFocused(key); }}>
-      {!embedded && <header className="tile-head">
+      {strip && !expanded ? <header className="tile-head bench-head">
+        <div className={`bench-stage t-${spriteIdOf(chat.agent?.avatar)}`}>
+          <span className="bench-state">{stateEl}</span>
+          <StripFace chatId={chatId} avatar={chat.agent?.avatar} name={name} size={64} height={134} tone={first ? 'wait' : st.tone}
+            waitsUser={!!first || userWait || st.tone === 'wait'} error={st.tone === 'err'} busy={busy} done={st.tone === 'done'} pending={st.tone === 'run'} />
+          <BenchHelpers chatId={chatId} />
+          {actions}
+        </div>
+        <div className="bench-plate">
+          <div className="bench-prow"><span className="bench-area">{areaOf(chat) || t('product.noArea')}</span>{longContext && <ContextMeter chat={chat} warn={warn} />}</div>
+          <h3 className="th-title" title={(chat.agent?.purpose&&rolePurpose(chat.agent.id,chat.agent.purpose))||chat.title}>
+            {renaming ? <TitleInput chat={chat} onDone={()=>setRenaming(false)}/> : <button ref={expansionButton} type="button" className="strip-name" aria-expanded={false} aria-controls={`chat-work-${chatId}`} data-tip={t('product.expand')} onClick={()=>setChatExpanded(chatId,true)} data-testid={`chat-expand-${chatId}`}>{topic || name}</button>}
+          </h3>
+          <span className="bench-now">{topic && <span className="bench-role" data-testid={`chat-topic-${chatId}`}>{name}</span>}<span className="chat-strip-line">{busy?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.plan?.phase==='proposed'?t('tree.plan.ready'):chat.lastText.slice(0,140)}</span></span>
+          <div className="bench-meta"><StripMeta chat={chat} workMs={work} /></div>
+        </div>
+      </header> : !embedded && <header className="tile-head">
         <div className="th-row">
           {focus && <button type="button" className="btn btn-ghost btn-s aw-back" onClick={() => toggleMaximize(key)} data-testid="focus-exit" aria-label={t('aw.fullExit')}><IconArrowLeft size={13} /><Kbd>Esc</Kbd></button>}
           {focus ? <AgentAvatar avatar={chat.agent?.avatar} name={name} size={24}/> : <StripFace chatId={chatId} avatar={chat.agent?.avatar} name={name} size={26} height={60} tone={first ? 'wait' : st.tone}
@@ -214,23 +251,9 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
           <StripMeta chat={chat} workMs={work} />
           {(!expanded || !facts) && longContext && <ContextMeter chat={chat} warn={warn} />}
           {viewSwitch}
-          {/* the state stays in the DOM as the strip's data-state hook; one thing is shown: the wait or the state */}
-          <span hidden><StatePill chat={chat} testid={`chat-state-${chatId}`} /></span>
-          {first ? <button type="button" className="strip-wait" onClick={() => openQueue(first)} aria-label={t('product.waitsYouOpen', { title: name })} data-testid={`chat-wait-${chatId}`} data-state={chat.state} {...(expanded ? {} : { 'data-waits-keys': reqs.map(reqKey).join(' ') })}>
-            <span className="strip-wait-dot" aria-hidden="true" />{waitText && userWait ? waitText : t('product.waitsYou')}{reqs.length > 1 && <b>{reqs.length}</b>}
-          </button> : working ? <span className="pill pill-run strip-working" data-testid={`chat-status-${chatId}`}><span className="pill-dot" aria-hidden="true" />{chat.state === 'running' ? t('product.running') : stateText}</span>
-            : <span className={`strip-state tone-${st.tone}${plainState ? ' sr-only' : ''}`} data-testid={`chat-status-${chatId}`} title={st.label}>{stateText}</span>}
+          {stateEl}
           {focus && <FullTools chatId={chatId} />}
-          <div className="chat-header-actions">
-          {(busy || chat.state === 'waiting') && (
-            <IconButton label={t('chat.tile.stop')} shortcut="Ctrl+." tone="danger" onClick={() => void stop(chatId)} testid={`chat-stop-${chatId}`}><IconStop size={14} /></IconButton>
-          )}
-          {/* a closed strip that drives a browser: one click opens it with the page beside the chat */}
-          {tabs.length > 0 && !expanded && <IconButton label={t('aw.view.split')} aria-pressed={false} onClick={() => { setAgentView(chatId, 'split'); setChatExpanded(chatId, true); }} testid={`chat-browser-${chatId}`}><IconGlobe size={14} /></IconButton>}
-          {(strip || focus) && <IconButton label={focus ? t('aw.fullExit') : t('aw.full')} shortcut="F11" onClick={() => toggleMaximize(key)} testid={`chat-max-${chatId}`}><IconMaximize size={14} /></IconButton>}
-          {expanded && <IconButton label={t('aw.facts')} onClick={() => setFacts(v => !v)} aria-expanded={facts} testid={`chat-facts-${chatId}`}><IconInfo size={14} /></IconButton>}
-          <IconButton ref={menuBtn} label={t('chat.tile.menu')} onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid={`chat-menu-${chatId}`}><IconMore /></IconButton>
-          </div>
+          {actions}
         </div>
         {expanded && facts && <div className="th-sub strip-facts" data-testid={`chat-sub-${chatId}`}>
           {chat.run && <RunChips run={chat.run} />}
@@ -247,6 +270,9 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
       {/* in full screen the subagents at work stay in sight, as under the strip in the Grindhouse */}
       {focus && <ChildStrips chatId={chatId} />}
       {chat.plan && !['asking', 'revising', 'proposed'].includes(chat.plan.phase) && <StrategyPanel chat={chat} question={planAsk} />}
+      {/* a closed bench: its sub-agents, one row each, and the engine's own sub-agents at work (ADR 0311) */}
+      {strip && !expanded && <BenchKidRows chatId={chatId} />}
+      {strip && !expanded && <ChildStrips chatId={chatId} />}
       {embedded && viewSwitch}
       <div ref={body} className={`aw-body view-${shownView}`} data-view={shownView} {...(expanded && shownView !== 'chat' ? { 'data-testid': `strip-pair-${chatId}` } : {})}>
       <div className={`chat-work${expanded?' expanded':''}`} id={`chat-work-${chatId}`} inert={!expanded} aria-hidden={!expanded} style={expanded && shownView === 'split' ? { flexGrow: share } : undefined}><div className="chat-work-inner">

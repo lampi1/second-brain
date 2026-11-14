@@ -1,15 +1,15 @@
-// The agents' strips in the Grindhouse (brain/pages/Home.tsx; SPEC 19: the one place for agents): one column, one
-// one-line strip under the other, in the Orchestrator's order (lib/agent-order.ts: grouped by area, start order inside
-// a group). There is no drag and no saved order (SPEC 10-11): the user opens a strip in place or in full screen (F11,
-// FullScreen.tsx), the Orchestrator decides where it goes. A chat's browser tabs are inside its own window
-// (ChatTile.tsx, ADR 0287), never rows of their own; a browser without a strip is. Delegated chats (ADR 0083) sit under
-// the chat that delegated them (lib/chat-tree.ts), each one row on a thread line that opens in place into
-// its chat (DelegationCard.tsx); a parent's KidsBar folds and unfolds its children (the fold is kept across restarts);
-// a root chat the app started or resumed by itself says so above it (Origin, ADR 0102).
+// The Grindhouse as a workshop (ADR 0311; it replaces the one column of strips of ADR 0287 and 0292): every root chat is
+// a square bench in a grid, in the Orchestrator's order (lib/agent-order.ts: grouped by area, start order inside a group),
+// its role's person big on a stage and a plate under it (ChatTile.tsx closed); the chats it delegated stand at its
+// bench as helpers, one row each on the plate (BenchKids.tsx), and the bench takes two columns. A click on a bench opens
+// its chat in place of the workshop: only that chat, its views (Chat · Affiancati · Browser, ADR 0287) in its head,
+// and above it the team as tabs (the chat that delegated and every chat under it) with «← Grindhouse» to go back; a
+// delegated chat opens as its card (DelegationCard.tsx). The Orchestrator stays beside it. There is no drag and no saved
+// order (SPEC 10-11); F11 still takes a chat to full screen (FullScreen.tsx). A browser without a strip is a row of its
+// own across the grid; a root chat the app started or resumed by itself says so above its bench (Origin, ADR 0102).
 import { useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react';
 import { tileKey, type TileRef } from '../lib/grid';
-import { areaOf } from '../lib/agent-order';
-import { childState, visibleTree, type TreeNode } from '../lib/chat-tree';
+import { type TreeNode } from '../lib/chat-tree';
 import { originFor, sameOrigin, sameTree, stripTiles, stripTree, tabOwners } from '../lib/chat-derived';
 import { sameRecord } from '../lib/memo';
 import { schedule } from '../lib/viewports';
@@ -22,7 +22,12 @@ import { t as tr, locale } from '../i18n';
 import { ChatTile } from './ChatTile';
 import { BrowserTile } from './BrowserTile';
 import { ChildStrips } from './ChildStrips';
-import { DelegationCard, KidsBar, TreeRails } from './DelegationCard';
+import { DelegationCard } from './DelegationCard';
+import { AgentAvatar } from './AgentAvatar';
+import { IconArrowLeft } from './Icons';
+import { childState } from '../lib/chat-tree';
+import { kidTone } from './BenchKids';
+import { setChatExpanded } from '../store/ui';
 import { go } from '../actions';
 import { GrindhouseEmpty } from './MorningBlock';
 import '../styles/alive.css';
@@ -37,12 +42,11 @@ export function AgentStrips() {
   const hidden = ui.use(s => s.hidden, sameList), hiddenTabs = ui.use(s => s.hiddenTabs, sameList);
   // derived once per chats object for every subscriber (lib/chat-derived.ts), compared without JSON.stringify
   const tree = useApp(s => stripTree(s.order, s.chats), sameTree);
-  const collapsed = ui.use(s => s.prefs.treeCollapsed);
   const tiles = useApp(s => stripTiles(s.order, s.chats, s.tabs), equalTiles);
   const nodes = new Map<string, TreeNode>(tree.map(n => [n.id, n]));
-  const inTree = new Set(visibleTree(tree, collapsed).map(n => n.id));
+  const inTree = new Set(tree.map(n => n.id));
+  const opened = ui.use(s => s.opened);
   const owners = useApp(s => tabOwners(s.tabs), sameRecord);
-  const areas = useApp(s => tiles.map(t => t.kind === 'chat' ? areaOf(s.chats[t.id] ?? { cwd: '' }) : ''), sameList);
   const keep = useHandoffTabs();
   const leaveRef = useLeaveRef();
   // every strip starts closed (Brother, 18/10: the strips are the Grindhouse); prefs with another chatPanelsV start closed too
@@ -55,7 +59,6 @@ export function AgentStrips() {
   const isVisible = (t: TileRef) => t.kind === 'chat' ? !hidden.includes(t.id) && inTree.has(t.id) : !hiddenTabs.includes(t.id) && !hidden.includes(owners[t.id] ?? '') && (!owners[t.id] || !nodes.has(owners[t.id]!) || inTree.has(owners[t.id]!)) && !folded(t);
   const shown = tiles.filter(isVisible);
   const chatIndices = new Map(shown.filter(t => t.kind === 'chat').map((t, index) => [tileKey(t), index + 1]));
-  let lastArea: string | null = null;
   // native browser views follow their strip when strips open, close or change
   useLayoutEffect(() => { schedule(); }, [shown.map(tileKey).join('|'), expansion]);
 
@@ -66,31 +69,70 @@ export function AgentStrips() {
       <div className="agent-pane-content">{tile.kind === 'chat' ? <ChatTile chatId={tile.id} index={chatIndices.get(key)} /> : <BrowserTile tabId={tile.id} />}</div>
     </div>;
   };
+  const openRef = useRef<HTMLDivElement>(null);
+  const shownOpen = shown.some(t => t.kind === 'chat' && expansion[t.id] === true);
+  useLayoutEffect(() => { if (shownOpen) openRef.current?.scrollIntoView({ block: 'start' }); }, [shownOpen, opened]);
   // no strip: the morning block for a user with history, the first-run text otherwise (ADR 0102)
   if (!shown.length) return <GrindhouseEmpty />;
+  // the chat on screen: the one opened last, else any open one (one at a time; the others stay as they were)
+  const open = shown.filter(t => t.kind === 'chat' && expansion[t.id] === true).map(t => t.id);
+  const openId = opened && open.includes(opened) ? opened : open[0];
+  if (openId) {
+    // the open chat starts at the top of the page, its head and its team in sight
+    let root = openId;
+    while (nodes.get(root)?.parentId && nodes.has(nodes.get(root)!.parentId!)) root = nodes.get(root)!.parentId!;
+    const team = tree.filter(n => n.id === root || isUnder(n, root, nodes)).map(n => n.id);
+    const lead = shown.find(t => t.kind === 'chat' && t.id === openId)!;
+    const depth = nodes.get(openId)?.depth ?? 0;
+    // back to the workshop: every open chat of the team folds (their drafts and transcripts stay mounted elsewhere)
+    const back = () => { for (const id of new Set([...team, ...open])) if (expansion[id] === true) setChatExpanded(id, false); };
+    return <div ref={openRef} className="agent-strips bench-open" data-testid="view-agents" data-open={openId}>
+      <TeamTabs team={team} openId={openId} onBack={back} />
+      <ChildStrips chatId={openId} />
+      <div className="bench-open-chat">{depth > 0 ? <DelegationCard chatId={openId} /> : pane(lead)}</div>
+    </div>;
+  }
   return <div className="agent-strips" data-testid="view-agents">
-    <div className="workspace-column">
+    <div className="workspace-column bench-grid">
       {shown.map((lead, i) => {
-        const key = tileKey(lead), area = areas[tiles.indexOf(lead)] ?? '';
+        const key = tileKey(lead);
         const node = lead.kind === 'chat' ? nodes.get(lead.id) : undefined, depth = node?.depth ?? 0;
-        const firstOfArea = lead.kind === 'chat' && depth === 0 && area !== lastArea;
-        if (lead.kind === 'chat' && depth === 0) lastArea = area;
-        // a delegated chat is its row (opened in place into its chat)
-        const card = lead.kind === 'chat' && depth > 0;
+        // a delegated chat stands at its parent's bench (BenchKids.tsx), never a bench of its own
+        if (depth > 0) return null;
         const owned = lead.kind === 'browser' && !!owners[lead.id];
-        // the strips enter in turn (agent-strips.css, off under reduced motion)
-        return <div className={`agent-pane-wrap${owned ? ' owned-pane' : ''}${depth ? ' tree-child' : ''}${node?.children.length ? ' tree-parent' : ''}`} key={key} data-depth={depth || undefined} style={{ '--row-index': Math.min(i, 8), '--depth': depth } as CSSProperties}
+        const kids = node?.children.length ?? 0;
+        // the benches enter in turn (agent-strips.css, off under reduced motion)
+        return <div className={`agent-pane-wrap${owned ? ' owned-pane' : ''}${lead.kind === 'browser' ? ' bench-row' : ''}${kids ? ' bench-wide tree-parent' : ''}`} key={key} style={{ '--row-index': Math.min(i, 8) } as CSSProperties}
           ref={lead.kind === 'chat' ? leaveRef(lead.id) : undefined}>
-          {firstOfArea && <h3 className="workspace-area">{area || tr('product.noArea')}</h3>}
-          {card && node && <ChildRails node={node} />}
-          {lead.kind === 'chat' && depth === 0 && <Origin chatId={lead.id} />}
-          {card ? <DelegationCard chatId={lead.id} /> : pane(lead)}
-          {/* Child activity remains visible when its parent is closed or open. */}
-          {lead.kind === 'chat' && <ChildStrips chatId={lead.id} />}
-          {node && node.children.length > 0 && <KidsBar chatId={lead.id} />}
+          {lead.kind === 'chat' && <Origin chatId={lead.id} />}
+          {pane(lead)}
         </div>;
       })}
     </div>
+  </div>;
+}
+
+/** Whether a node sits anywhere under `root`. */
+function isUnder(n: TreeNode, root: string, nodes: ReadonlyMap<string, TreeNode>): boolean {
+  for (let p = n.parentId; p; p = nodes.get(p)?.parentId ?? null) if (p === root) return true;
+  return false;
+}
+
+/** The open chat's bar: back to the workshop, then the team as tabs (only when there is a team): the chat that delegated
+ *  and every chat under it, each with its state dot, its face, its name and what it does now. */
+function TeamTabs({ team, openId, onBack }: { team: readonly string[]; openId: string; onBack: () => void }) {
+  const chats = useApp(s => team.map(id => s.chats[id]), sameList);
+  return <div className="bench-bar">
+    <button type="button" className="bench-back" onClick={onBack} data-testid="bench-back"><IconArrowLeft size={13} />{tr('product.benchBack')}</button>
+    {team.length > 1 && <div className="bench-tabs" role="tablist" aria-label={tr('product.benchTeam')}>
+      {chats.map((c, i) => {
+        if (!c) return null;
+        const name = c.agent?.name || c.title, tone = i === 0 ? (c.state === 'waiting' ? 'wait' : c.state === 'error' ? 'err' : c.state === 'running' ? 'run' : 'off') : kidTone(childState(c));
+        return <button key={c.id} type="button" role="tab" aria-selected={c.id === openId} className={`bench-tab${c.id === openId ? ' on' : ''}`} data-testid={`bench-tab-${c.id}`} onClick={() => setChatExpanded(c.id, true)}>
+          <span className={`bench-dot tone-${tone}`} aria-hidden="true" /><AgentAvatar avatar={c.agent?.avatar} name={name} size={16} /><b>{name}</b>{c.id === openId && <span>{i === 0 ? c.title : c.delegation?.goal || c.title}</span>}
+        </button>;
+      })}
+    </div>}
   </div>;
 }
 
@@ -112,12 +154,6 @@ function useLeaveRef(): (chatId: string) => (el: HTMLDivElement | null) => () =>
     }
     return ref;
   };
-}
-
-/** A delegated card's thread lines, tinted by its state. */
-function ChildRails({ node }: { node: TreeNode }) {
-  const state = useApp(s => { const c = s.chats[node.id]; return c ? childState(c) : 'closed'; });
-  return <TreeRails node={node} state={state} />;
 }
 
 /** Who started a root chat, above it, only when it was not the Orchestrator (every chat is, so that line said nothing; the

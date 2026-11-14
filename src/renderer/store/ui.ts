@@ -101,6 +101,7 @@ export interface UiState {
   announce: string;              // screen-reader live region
   qwin: QWin;                    // the questions window (QuestionsWindow.tsx, always on)
   viewer: ViewerState;           // the file viewer overlay over the page (components/viewer/ViewerOverlay.tsx, lib/viewer-stack.ts)
+  opened: string | null;         // the chat opened last (the Grindhouse shows that one when several are open: AgentStrips.tsx, ADR 0311)
 }
 
 /** The questions window: open = called as the "Da rispondere" queue (Ctrl+J, the counter, "Rispondi" on a tile): it
@@ -178,7 +179,7 @@ function readPrefs(): Prefs {
 
 export const ui = createStore<UiState>({
   prefs: readPrefs(), maximized: null, focusMode: null, fullOrch: false, focused: null, modal: null, confirm: null, orchestratorRenew: null, handoffChat: null, mapsArg: null, mapsFull: false, mapPicked: null, handoffSession: null, ctxHidden: {}, page: 'home',
-  lanePeek: false, toasts: [], flash: null, focusReq: null, hidden: [], hiddenTabs: [], closing: [], later: false, announce: '', qwin: { open: false, first: null, call: 0, shown: false }, viewer: emptyViewer,
+  lanePeek: false, toasts: [], flash: null, focusReq: null, hidden: [], hiddenTabs: [], closing: [], later: false, announce: '', qwin: { open: false, first: null, call: 0, shown: false }, viewer: emptyViewer, opened: null,
   map: false, pageArg: null, mapArg: null, history: [{ page: 'home' }], hist: 0, center: false, read: readRead(), highlight: null, toastDismissed: [],
 });
 
@@ -209,6 +210,7 @@ export function saveWorkProfile(id: string | undefined, expected: string | undef
 }
 /** Expansion is independent of transcript/draft state. Collapsing never unmounts the input or item list. */
 export function setChatExpanded(id:string,expanded:boolean):void{
+  if(expanded)ui.set(s=>s.opened===id?s:{...s,opened:id});
   setPrefs({chatExpanded:{...ui.get().prefs.chatExpanded,[id]:expanded}});
 }
 /** What a chat's agent window shows (ADR 0287); a view with the browser opens the strip too. */

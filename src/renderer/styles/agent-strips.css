@@ -230,3 +230,78 @@
 /* only beside a person: a portrait (the user's own picture) keeps the spark and the old indent */
 .strip-face[data-person] ~ * .typing-spark { display:none; }
 .th-row:has(> .strip-face[data-person]) ~ .strip-facts { padding-left:83px; }
+/* ── The workshop (ADR 0311): a grid of square benches. A bench is the strip, closed: the role's person big on a stage
+   tinted by its role (a floor line under it), a plate with the project and the time and cost, the title, the role and
+   what it does now; a plan as a row of dots (strategy.css); the sub-agents as helpers at the bench and one row each.
+   A bench with helpers takes two columns. The controls show on hover in the stage's corner. Radii from the scale
+   (tokens.css: 4 / 6 / 8); round only for dots, counters and faces. ── */
+.bench-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 280px), 1fr)); grid-auto-flow:dense; align-items:start; gap:8px; padding:8px 0 12px; }
+.bench-grid > .agent-pane-wrap { min-width:0; }
+.bench-grid > .bench-wide { grid-column:span 2; }
+.bench-grid > .bench-row { grid-column:1 / -1; }
+@container (max-width: 620px) { .bench-grid > .bench-wide { grid-column:auto; } }
+.bench-grid .tree-origin { margin:0 0 4px; }
+.bench-grid .chat-tile.is-strip { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-s); overflow:hidden; transition:border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease); }
+.bench-grid .chat-tile.is-strip:hover, .bench-grid .chat-tile.is-strip.focused, .bench-grid .chat-tile.is-strip:focus-within { background:var(--surface-2); border-color:var(--border-3); }
+.bench-grid .chat-tile.is-strip.tone-wait { border-color:var(--amber-line); }
+.bench-grid .chat-tile.is-strip .tile-head.bench-head { padding:0; display:flex; flex-direction:column; }
+.bench-stage { --tint:var(--text-3); position:relative; height:150px; display:flex; align-items:flex-end; justify-content:center; gap:6px; padding:0 10px; overflow:hidden; border-bottom:1px solid var(--border);
+  background:radial-gradient(60% 34% at 50% 100%, color-mix(in srgb, var(--tint) 16%, transparent), transparent 70%), linear-gradient(180deg, color-mix(in srgb, var(--tint) 7%, var(--bg-2)), var(--bg-2) 70%); }
+.bench-stage::after { content:""; position:absolute; left:0; right:0; bottom:12px; height:1px; background:var(--border-2); }
+.bench-stage > .strip-face { position:relative; z-index:1; margin-bottom:2px; }
+.bench-stage:has(.bench-helpers) { justify-content:flex-start; padding-left:18px; }
+.bench-state { position:absolute; left:8px; top:8px; z-index:2; display:inline-flex; }
+.bench-state .strip-state { display:inline-flex; align-items:center; gap:6px; padding:3px 8px 3px 6px; border-radius:var(--r-s); background:var(--surface-3); font-size:11px; font-weight:600; }
+.bench-state .strip-state::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; }
+.bench-stage > .chat-header-actions { position:absolute; right:6px; top:6px; z-index:2; min-width:0; flex-wrap:nowrap; margin:0; }
+.bench-helpers { position:relative; z-index:1; display:flex; align-items:flex-end; gap:2px; margin-left:auto; }
+.bench-helper { position:relative; display:inline-flex; border-radius:var(--r-s); cursor:pointer; }
+.bench-helper:hover { background:color-mix(in srgb, var(--text) 5%, transparent); }
+.bench-helper > .bench-dot { position:absolute; left:50%; top:2px; transform:translateX(-50%); z-index:2; }
+.bench-more { align-self:center; font:600 12px var(--font); color:var(--text-3); padding:0 6px; }
+.bench-dot { flex:none; width:7px; height:7px; border-radius:50%; background:var(--text-4); }
+.bench-dot.tone-run { background:var(--accent); box-shadow:0 0 0 3px var(--accent-bg); }
+.bench-dot.tone-wait { background:var(--amber); }
+.bench-dot.tone-done { background:var(--green); }
+.bench-dot.tone-err { background:var(--red); }
+.bench-plate { display:flex; flex-direction:column; gap:2px; padding:8px 10px 10px; min-width:0; }
+.bench-prow { display:flex; align-items:center; gap:8px; min-width:0; margin-bottom:2px; }
+.bench-area { flex:1; min-width:0; font:600 10.5px var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--text-3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bench-plate .th-title { flex:none; max-width:100%; font-size:13.5px; font-weight:600; margin:0; }
+.bench-now { display:flex; min-width:0; gap:0; font-size:12px; color:var(--text-3); white-space:nowrap; overflow:hidden; }
+.bench-now > .bench-role { flex:none; color:var(--text-2); }
+.bench-now > .bench-role + .chat-strip-line:not(:empty)::before { content:" · "; color:var(--text-4); white-space:pre; }
+.bench-now > .chat-strip-line { flex:1 1 0; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.bench-grid .chat-tile.is-strip > .sp-card { margin:0 10px 8px; }
+.bench-kids { display:flex; flex-direction:column; margin:0 10px 8px; border-top:1px solid var(--border); }
+.bench-kid { all:unset; box-sizing:border-box; display:grid; grid-template-columns:auto auto auto minmax(0, 1fr) auto; align-items:center; gap:7px; padding:5px 2px; border-bottom:1px solid var(--border); font-size:12px; color:var(--text-3); cursor:pointer; border-radius:0; }
+.bench-kid:hover { color:var(--text-2); background:color-mix(in srgb, var(--text) 3%, transparent); }
+.bench-kid:focus-visible { outline:2px solid var(--focus); outline-offset:-2px; }
+.bench-kid > b { color:var(--text); font-weight:600; }
+.bench-kid-now { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bench-kid-now .typing { padding:0; }
+.bench-kid-time { font:500 11px var(--mono); color:var(--text-3); font-variant-numeric:tabular-nums; }
+.bench-grid .chat-tile.is-strip .child-strips { margin:0 10px 8px; }
+.t-orchestrator { --tint:#b892ff; } .t-strategist { --tint:#6f8cff; } .t-scout { --tint:#7fb069; } .t-artisan { --tint:#ff8a3d; } .t-sentinel { --tint:#ff5d5d; } .t-herald { --tint:#e0b84a; } .t-plain { --tint:#9aa3b5; }
+/* the open chat in place of the workshop: the bar (back, the team as tabs), then the chat filling the page */
+.agent-strips.bench-open { display:flex; flex-direction:column; min-height:360px; height:calc(100vh - var(--topbar-h, 52px) - 112px); padding-bottom:0; }
+.bench-bar { flex:none; display:flex; align-items:stretch; gap:8px; min-width:0; border-bottom:1px solid var(--border); margin-bottom:6px; }
+.bench-back { all:unset; flex:none; display:inline-flex; align-items:center; gap:6px; padding:8px 10px; color:var(--accent); font:600 12.5px var(--font); cursor:pointer; border-radius:var(--r-s); }
+.bench-back:hover { background:var(--surface-2); }
+.bench-back:focus-visible { outline:2px solid var(--focus); }
+.bench-tabs { display:flex; min-width:0; overflow-x:auto; }
+.bench-tab { all:unset; display:flex; align-items:center; gap:7px; min-width:0; max-width:260px; padding:8px 12px; font-size:12px; color:var(--text-3); border-bottom:2px solid transparent; cursor:pointer; }
+.bench-tab > span:last-child { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bench-tab > b { color:var(--text); font-weight:600; flex:none; white-space:nowrap; }
+.bench-tab { flex:none; }
+.bench-tab:hover { background:var(--surface-2); }
+.bench-tab.on { border-bottom-color:var(--accent); background:var(--surface); }
+.bench-tab:focus-visible { outline:2px solid var(--focus); outline-offset:-2px; }
+.bench-open-chat { flex:1; min-height:0; display:flex; flex-direction:column; }
+.bench-open-chat > .agent-pane { flex:1; height:auto; margin:0; }
+.bench-open-chat > .delegation-card { flex:1; min-height:0; overflow:auto; }
+.agent-strips.bench-open .child-strips { flex:none; }
+.agent-strips { container-type:inline-size; }
+.bench-meta { display:flex; min-width:0; margin-top:4px; overflow:hidden; }
+/* the engine's own sub-agents on a bench: who and what, without the kind and the clock */
+.bench-grid .chat-tile.is-strip .child-strip-kind, .bench-grid .chat-tile.is-strip .child-strip-time { display:none; }
