@@ -23,7 +23,7 @@
 .nav-item.on::before { content: ""; position: absolute; left: -6px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
 .nav-icon { width: 18px; flex: none; display: grid; place-items: center; color: inherit; }
 .nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.nav-badge { flex: none; display: inline-grid; place-items: center; min-width: 18px; height: 17px; padding: 0 5px; border-radius: var(--r-m); background: var(--accent-bg); color: var(--accent); font-size: 10.5px; font-weight: 700; }
+.nav-badge { flex: none; display: inline-grid; place-items: center; min-width: 18px; height: 17px; padding: 0 5px; border-radius: 999px; background: var(--accent-bg); color: var(--accent); font-size: 10.5px; font-weight: 700; }
 .nav-badge.amber { background: var(--amber); color: var(--on-amber); }
 .nav-badge.warn { background: var(--amber-bg); color: var(--amber); box-shadow: inset 0 0 0 1px var(--amber-line); }
 .hist-nav { display: inline-flex; gap: 0; flex: none; }
@@ -59,7 +59,7 @@
 .orchestrator-ov.moving { user-select: none; transition: none; }
 .orchestrator-bar { flex: none; display: flex; align-items: center; gap: 4px; padding: 4px 6px 0 18px; }
 .orchestrator-grip { min-width: 28px; align-self: stretch; } /* always room to double-click */
-.orchestrator-badge { min-width: 17px; height: 16px; padding: 0 5px; border-radius: var(--r-m); background: var(--amber); color: var(--bg); font-size: 10.5px; font-weight: 700; display: inline-grid; place-items: center; }
+.orchestrator-badge { min-width: 17px; height: 16px; padding: 0 5px; border-radius: 999px; background: var(--amber); color: var(--bg); font-size: 10.5px; font-weight: 700; display: inline-grid; place-items: center; }
 .orchestrator-body { flex: 1; min-height: 0; display: flex; }
 .orchestrator-body > .tile { flex: 1; border-radius: 0 0 var(--r-l) var(--r-l); border-left: 0; border-right: 0; border-bottom: 0; }
 .orchestrator-resize { position: absolute; left: 0; top: 0; width: 16px; height: 16px; cursor: nwse-resize; touch-action: none;

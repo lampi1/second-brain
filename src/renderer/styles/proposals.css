@@ -25,7 +25,7 @@
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease); }
 .pd-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--pd-c); margin-right: -1px; }
 .pd-chip[data-testid="pd-chip-all"]::before { display: none; }
-.pd-chip span { min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--r-m); display: inline-grid; place-items: center; background: var(--surface-3); color: var(--text-2); font: 600 var(--fs-xs) var(--font-small); font-variant-numeric: tabular-nums; }
+.pd-chip span { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; display: inline-grid; place-items: center; background: var(--surface-3); color: var(--text-2); font: 600 var(--fs-xs) var(--font-small); font-variant-numeric: tabular-nums; }
 .pd-chip:hover { border-color: var(--border-3); color: var(--text); }
 .pd-chip[aria-pressed="true"] { background: var(--surface-3); border-color: color-mix(in srgb, var(--pd-c) 55%, var(--border-2)); color: var(--text); }
 .pd-chip[aria-pressed="true"] span { background: color-mix(in srgb, var(--pd-c) 22%, var(--surface-3)); color: var(--text); }

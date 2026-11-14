@@ -504,7 +504,7 @@ button.lc-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 1
 /* two round icons on the row (owner, 2026-10-31: icons, not words): ✦ the Orchestrator summarizes it, → its agent's chat */
 .result-ready-actions { display: inline-flex; align-items: center; gap: 6px; }
 .result-ready-actions .result-synth-btn { width: 28px; height: 28px; padding: 0; justify-content: center; }
-.result-ready-go { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border-radius: var(--r-m); border: 1px solid color-mix(in srgb, var(--violet) 45%, transparent);
+.result-ready-go { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--violet) 45%, transparent);
   background: var(--violet-bg); color: var(--violet); font: 600 12px var(--font); cursor: pointer; transition: background .12s, transform .12s; }
 .result-ready-go:hover { background: color-mix(in srgb, var(--violet) 22%, transparent); }
 .result-ready-go:hover svg { transform: translateX(2px); }
@@ -1086,7 +1086,7 @@ html.overlay, html.overlay body, html.overlay #root { background: transparent; h
 .layer-who { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
 .layer-who b { font: 600 13px var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .layer-who span { font-size: 11.5px; color: var(--text-3); }
-.layer-badge { flex: none; display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 7px; border-radius: var(--r-m); background: var(--amber); color: var(--on-amber); font-size: 11.5px; font-weight: 700; }
+.layer-badge { flex: none; display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 7px; border-radius: 999px; background: var(--amber); color: var(--on-amber); font-size: 11.5px; font-weight: 700; }
 .layer-card .ask { animation: none; }
 .layer-card .ask-q { font-size: var(--fs-m); }
 .layer-foot { display: flex; align-items: center; gap: 8px; padding: 0 2px; font-size: 11.5px; color: var(--text-3); min-width: 0; }

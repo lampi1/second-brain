@@ -34,7 +34,7 @@
 .nw-eds button:hover{color:var(--text)}
 .nw-eds button.on{color:var(--text);border-bottom-color:var(--accent)}
 .nw-eds button:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:var(--r-s)}
-.nw-eds .n{font-family:var(--font);font-size:11px;font-weight:600;min-width:18px;padding:1px 6px;border-radius:var(--r-m);background:var(--accent-bg);color:var(--accent);font-variant-numeric:tabular-nums;text-align:center}
+.nw-eds .n{font-family:var(--font);font-size:11px;font-weight:600;min-width:18px;padding:1px 6px;border-radius:999px;background:var(--accent-bg);color:var(--accent);font-variant-numeric:tabular-nums;text-align:center}
 .nw-eds button.add{margin-left:auto;font-family:var(--font);font-size:12.5px;font-weight:500;color:var(--text-3);gap:6px;padding-bottom:12px}
 .nw-eds button.add:hover{color:var(--accent)}
 

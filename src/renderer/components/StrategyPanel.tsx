@@ -90,13 +90,15 @@ export function StrategyPanel({ chat, question }: { chat: ChatSummary; question?
     <button type="button" className="sp-summary" aria-expanded={details} aria-controls={`plan-details-${id}`} onClick={() => setDetails(!details)} data-testid={`plan-toggle-${id}`}>
       <span className="sp-kicker">{t('tree.plan.title')}</span>
       {/* one round dot per step: done filled, the one under way half, a blocked one amber, the next ones empty (ADR 0311) */}
-      <span className="sp-dots" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done} aria-label={t('tree.plan.progress', { done, total })}>
+      <span className="sp-dots" aria-hidden="true">
         {plan.steps.map((s, i) => <i key={i} className={`is-${s.state}`} />)}
       </span>
       <span className="sp-count">{done}/{total}</span>
       {qualityLabel && <span className="sp-blocked">{t(qualityLabel)}</span>}
       <span className="sp-right" aria-hidden="true">{details ? '▴' : '▾'}</span>
     </button>
+    {/* the progress for screen readers, outside the button (a button's children are presentational) */}
+    <span className="sr-only" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done} aria-label={t('tree.plan.progress', { done, total })} />
     <div id={`plan-details-${id}`} hidden={!details}><Steps plan={plan} timed testid={`plan-steps-${id}`} /></div>
   </div>;
 }

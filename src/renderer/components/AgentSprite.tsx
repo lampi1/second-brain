@@ -74,7 +74,7 @@ export function AgentSprite({ id, state, activity, height = 32, label, still, on
   useEffect(() => {
     const el = box.current;
     if (!el || typeof IntersectionObserver === 'undefined') return;
-    const io = new IntersectionObserver(([e]) => setAway(!e!.isIntersecting));
+    const io = new IntersectionObserver(es => setAway(!es[es.length - 1]!.isIntersecting)); // the latest entry counts
     io.observe(el);
     return () => io.disconnect();
   }, []);
@@ -82,7 +82,7 @@ export function AgentSprite({ id, state, activity, height = 32, label, still, on
     const svg = box.current?.querySelector('svg');
     if (react || !svg?.getAnimations) return;
     const at = Math.random() * 4000;
-    for (const a of svg.getAnimations({ subtree: true })) a.currentTime = ((a.currentTime as number | null) ?? 0) + at;
+    for (const a of svg.getAnimations({ subtree: true })) if (a.effect?.getTiming().iterations === Infinity) a.currentTime = ((a.currentTime as number | null) ?? 0) + at; // loops only: a one-off (the finish) plays whole
   }, [key, react]);
   const touch = (sign: 1 | -1) => (e: MouseEvent) => {
     e.preventDefault(); e.stopPropagation();

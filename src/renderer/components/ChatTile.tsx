@@ -90,6 +90,8 @@ export function useFlash(key: string): boolean {
 
 const VIEWS: readonly AgentView[] = ['chat', 'split', 'browser'];
 
+/** The focus request each chat already handled (ChatTile's focus effect). */
+const handledFocus = new Map<string, number>();
 export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded }: { chatId: string; index?: number; focus?: boolean; embedded?: boolean }) {
   const chat = useApp(s => s.chats[chatId]);
   const reqs = useApp(s => pendingOf(s.pending, chatId), sameList);
@@ -144,7 +146,9 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
   const size = useSize(ref);
   const now = useNow(15_000); // the running work span grows on screen
   useEffect(() => {
-    if (!focusReq) return;
+    // a bench and its open chat are two mounts of this tile: a request is handled once, not again at each remount
+    if (!focusReq || handledFocus.get(chatId) === focusReq) return;
+    handledFocus.set(chatId, focusReq);
     reveal(true);
     ref.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [focusReq]);
@@ -313,7 +317,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
           <button type="button" className="btn btn-ghost btn-s" onClick={() => send(chatId, auditText('cmp.chatTile.retryMessage'))} data-testid={`chat-retry-${chatId}`}>{auditText('audit.ChatTile.retry')}</button>
         </div>
       )}
-      <ChatMenu chat={chat} anchor={menuBtn} open={menu} onClose={() => setMenu(false)} onRename={() => { if (strip) setChatExpanded(chatId, true); setRenaming(true); }} />
+      <ChatMenu chat={chat} anchor={menuBtn} open={menu} onClose={() => setMenu(false)} onRename={() => setRenaming(true)} />
     </section>
   );
 });
