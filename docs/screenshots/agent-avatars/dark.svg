@@ -10,7 +10,7 @@
 <rect x="16" y="64" width="1008" height="104" rx="12" fill="#22242b"/>
 <text x="32" y="110" font-size="17" font-weight="600" fill="#eceef3">Orchestrator</text>
 <foreignObject x="32" y="120" width="250" height="50">
-<div xmlns="http://www.w3.org/1999/xhtml" style="font:12px/1.35 Segoe UI,sans-serif;color:#9aa0ad">old wizard with long white hair and beard, half-moon glasses and a midnight robe, raising a wand</div>
+<div xmlns="http://www.w3.org/1999/xhtml" style="font:12px/1.35 Segoe UI,sans-serif;color:#9aa0ad">old wizard with long white hair and beard, small round glasses and a midnight robe, raising a wand</div>
 </foreignObject>
 <g transform="translate(300 110)">
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="10 8 44 44" width="16" height="16">
@@ -44,8 +44,11 @@
 <path d="M20.3 31C19.2 21.6 24.6 16 32 16C39.4 16 44.8 21.6 43.7 31C42.9 26.6 40.9 23.6 37.8 22.4C35.4 21.6 33.4 22.4 32 24.2C30.6 22.4 28.6 21.6 26.2 22.4C23.1 23.6 21.1 26.6 20.3 31Z" fill="#f1f3f8"/>
 <path d="M32 24V17.4" fill="none" stroke="#c3c9d6" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M23 24.6C24.4 21.4 27 19.4 30 18.8M41 24.6C39.6 21.4 37 19.4 34 18.8" fill="none" stroke="#c3c9d6" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M24.3 33.3H30.3C30.3 35.6 29.1 36.7 27.3 36.7C25.5 36.7 24.3 35.6 24.3 33.3ZM33.7 33.3H39.7C39.7 35.6 38.5 36.7 36.7 36.7C34.9 36.7 33.7 35.6 33.7 33.3Z" fill="#cfe6ff" opacity="0.22"/>
-<path d="M24.3 33.3H30.3C30.3 35.6 29.1 36.7 27.3 36.7C25.5 36.7 24.3 35.6 24.3 33.3ZM33.7 33.3H39.7C39.7 35.6 38.5 36.7 36.7 36.7C34.9 36.7 33.7 35.6 33.7 33.3ZM30.3 33.6H33.7" fill="none" stroke="#c9982e" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="27.3" cy="34.3" r="2.7" fill="#cfe6ff" opacity="0.22"/>
+<circle cx="36.7" cy="34.3" r="2.7" fill="#cfe6ff" opacity="0.22"/>
+<circle cx="27.3" cy="34.3" r="2.7" fill="none" stroke="#c9982e" stroke-width="1.54" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="36.7" cy="34.3" r="2.7" fill="none" stroke="#c9982e" stroke-width="1.54" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M30 34H34" fill="none" stroke="#c9982e" stroke-width="1.54" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 <circle class="ring" cx="32" cy="30" r="21.472" fill="none" stroke-width="1.034"/>
 </svg>
@@ -82,8 +85,11 @@
 <path d="M20.3 31C19.2 21.6 24.6 16 32 16C39.4 16 44.8 21.6 43.7 31C42.9 26.6 40.9 23.6 37.8 22.4C35.4 21.6 33.4 22.4 32 24.2C30.6 22.4 28.6 21.6 26.2 22.4C23.1 23.6 21.1 26.6 20.3 31Z" fill="#f1f3f8"/>
 <path d="M32 24V17.4" fill="none" stroke="#c3c9d6" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M23 24.6C24.4 21.4 27 19.4 30 18.8M41 24.6C39.6 21.4 37 19.4 34 18.8" fill="none" stroke="#c3c9d6" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M24.3 33.3H30.3C30.3 35.6 29.1 36.7 27.3 36.7C25.5 36.7 24.3 35.6 24.3 33.3ZM33.7 33.3H39.7C39.7 35.6 38.5 36.7 36.7 36.7C34.9 36.7 33.7 35.6 33.7 33.3Z" fill="#cfe6ff" opacity="0.22"/>
-<path d="M24.3 33.3H30.3C30.3 35.6 29.1 36.7 27.3 36.7C25.5 36.7 24.3 35.6 24.3 33.3ZM33.7 33.3H39.7C39.7 35.6 38.5 36.7 36.7 36.7C34.9 36.7 33.7 35.6 33.7 33.3ZM30.3 33.6H33.7" fill="none" stroke="#c9982e" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="27.3" cy="34.3" r="2.7" fill="#cfe6ff" opacity="0.22"/>
+<circle cx="36.7" cy="34.3" r="2.7" fill="#cfe6ff" opacity="0.22"/>
+<circle cx="27.3" cy="34.3" r="2.7" fill="none" stroke="#c9982e" stroke-width="1.54" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="36.7" cy="34.3" r="2.7" fill="none" stroke="#c9982e" stroke-width="1.54" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M30 34H34" fill="none" stroke="#c9982e" stroke-width="1.54" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 <circle class="ring" cx="32" cy="30" r="21.472" fill="none" stroke-width="1.034"/>
 </svg>
@@ -124,14 +130,17 @@
 <path d="M20.3 31C19.2 21.6 24.6 16 32 16C39.4 16 44.8 21.6 43.7 31C42.9 26.6 40.9 23.6 37.8 22.4C35.4 21.6 33.4 22.4 32 24.2C30.6 22.4 28.6 21.6 26.2 22.4C23.1 23.6 21.1 26.6 20.3 31Z" fill="#f1f3f8"/>
 <path d="M32 24V17.4" fill="none" stroke="#c3c9d6" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M23 24.6C24.4 21.4 27 19.4 30 18.8M41 24.6C39.6 21.4 37 19.4 34 18.8" fill="none" stroke="#c3c9d6" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M24.3 33.3H30.3C30.3 35.6 29.1 36.7 27.3 36.7C25.5 36.7 24.3 35.6 24.3 33.3ZM33.7 33.3H39.7C39.7 35.6 38.5 36.7 36.7 36.7C34.9 36.7 33.7 35.6 33.7 33.3Z" fill="#cfe6ff" opacity="0.22"/>
-<path d="M24.3 33.3H30.3C30.3 35.6 29.1 36.7 27.3 36.7C25.5 36.7 24.3 35.6 24.3 33.3ZM33.7 33.3H39.7C39.7 35.6 38.5 36.7 36.7 36.7C34.9 36.7 33.7 35.6 33.7 33.3ZM30.3 33.6H33.7" fill="none" stroke="#c9982e" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="27.3" cy="34.3" r="2.7" fill="#cfe6ff" opacity="0.22"/>
+<circle cx="36.7" cy="34.3" r="2.7" fill="#cfe6ff" opacity="0.22"/>
+<circle cx="27.3" cy="34.3" r="2.7" fill="none" stroke="#c9982e" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="36.7" cy="34.3" r="2.7" fill="none" stroke="#c9982e" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M30 34H34" fill="none" stroke="#c9982e" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M44 51C45.8 47 47.2 44 48.4 41.8L52 43.4C51 46.6 49.8 50.4 48.2 53.4Z" fill="#2a2456"/>
 <path d="M47.6 42.6L51.4 44.2" fill="none" stroke="#e3c067" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M50 40.6L57.6 23.2" fill="none" stroke="#f4e9d2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M50 40.6L56 23.6" fill="none" stroke="#f4e9d2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
 <circle cx="50.2" cy="41.2" r="2.7" fill="#ecc4a4"/>
-<path d="M58.2 15.8L59.5 20.3L64 21.6L59.5 22.9L58.2 27.4L56.9 22.9L52.4 21.6L56.9 20.3Z" fill="#ffd166"/>
-<circle cx="58.2" cy="21.6" r="1.2" fill="#ffffff"/>
+<path d="M56.4 16.6L57.6 20.6L61.6 21.8L57.6 23L56.4 27L55.2 23L51.2 21.8L55.2 20.6Z" fill="#ffd166"/>
+<circle cx="56.4" cy="21.8" r="1.1" fill="#ffffff"/>
 <path d="M13.4 21.4L14.2 23.8L16.6 24.6L14.2 25.4L13.4 27.8L12.6 25.4L10.2 24.6L12.6 23.8Z" fill="#ffffff" opacity="0.9"/>
 <path d="M19.2 14.4L19.7 15.9L21.2 16.4L19.7 16.9L19.2 18.4L18.7 16.9L17.2 16.4L18.7 15.9Z" fill="#ffffff" opacity="0.7"/>
 </g>
@@ -174,14 +183,17 @@
 <path d="M20.3 31C19.2 21.6 24.6 16 32 16C39.4 16 44.8 21.6 43.7 31C42.9 26.6 40.9 23.6 37.8 22.4C35.4 21.6 33.4 22.4 32 24.2C30.6 22.4 28.6 21.6 26.2 22.4C23.1 23.6 21.1 26.6 20.3 31Z" fill="#f1f3f8"/>
 <path d="M32 24V17.4" fill="none" stroke="#c3c9d6" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M23 24.6C24.4 21.4 27 19.4 30 18.8M41 24.6C39.6 21.4 37 19.4 34 18.8" fill="none" stroke="#c3c9d6" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M24.3 33.3H30.3C30.3 35.6 29.1 36.7 27.3 36.7C25.5 36.7 24.3 35.6 24.3 33.3ZM33.7 33.3H39.7C39.7 35.6 38.5 36.7 36.7 36.7C34.9 36.7 33.7 35.6 33.7 33.3Z" fill="#cfe6ff" opacity="0.22"/>
-<path d="M24.3 33.3H30.3C30.3 35.6 29.1 36.7 27.3 36.7C25.5 36.7 24.3 35.6 24.3 33.3ZM33.7 33.3H39.7C39.7 35.6 38.5 36.7 36.7 36.7C34.9 36.7 33.7 35.6 33.7 33.3ZM30.3 33.6H33.7" fill="none" stroke="#c9982e" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="27.3" cy="34.3" r="2.7" fill="#cfe6ff" opacity="0.22"/>
+<circle cx="36.7" cy="34.3" r="2.7" fill="#cfe6ff" opacity="0.22"/>
+<circle cx="27.3" cy="34.3" r="2.7" fill="none" stroke="#c9982e" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="36.7" cy="34.3" r="2.7" fill="none" stroke="#c9982e" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M30 34H34" fill="none" stroke="#c9982e" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M44 51C45.8 47 47.2 44 48.4 41.8L52 43.4C51 46.6 49.8 50.4 48.2 53.4Z" fill="#2a2456"/>
 <path d="M47.6 42.6L51.4 44.2" fill="none" stroke="#e3c067" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M50 40.6L57.6 23.2" fill="none" stroke="#f4e9d2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M50 40.6L56 23.6" fill="none" stroke="#f4e9d2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
 <circle cx="50.2" cy="41.2" r="2.7" fill="#ecc4a4"/>
-<path d="M58.2 15.8L59.5 20.3L64 21.6L59.5 22.9L58.2 27.4L56.9 22.9L52.4 21.6L56.9 20.3Z" fill="#ffd166"/>
-<circle cx="58.2" cy="21.6" r="1.2" fill="#ffffff"/>
+<path d="M56.4 16.6L57.6 20.6L61.6 21.8L57.6 23L56.4 27L55.2 23L51.2 21.8L55.2 20.6Z" fill="#ffd166"/>
+<circle cx="56.4" cy="21.8" r="1.1" fill="#ffffff"/>
 <path d="M13.4 21.4L14.2 23.8L16.6 24.6L14.2 25.4L13.4 27.8L12.6 25.4L10.2 24.6L12.6 23.8Z" fill="#ffffff" opacity="0.9"/>
 <path d="M19.2 14.4L19.7 15.9L21.2 16.4L19.7 16.9L19.2 18.4L18.7 16.9L17.2 16.4L18.7 15.9Z" fill="#ffffff" opacity="0.7"/>
 </g>
@@ -224,14 +236,17 @@
 <path d="M20.3 31C19.2 21.6 24.6 16 32 16C39.4 16 44.8 21.6 43.7 31C42.9 26.6 40.9 23.6 37.8 22.4C35.4 21.6 33.4 22.4 32 24.2C30.6 22.4 28.6 21.6 26.2 22.4C23.1 23.6 21.1 26.6 20.3 31Z" fill="#f1f3f8"/>
 <path d="M32 24V17.4" fill="none" stroke="#c3c9d6" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M23 24.6C24.4 21.4 27 19.4 30 18.8M41 24.6C39.6 21.4 37 19.4 34 18.8" fill="none" stroke="#c3c9d6" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M24.3 33.3H30.3C30.3 35.6 29.1 36.7 27.3 36.7C25.5 36.7 24.3 35.6 24.3 33.3ZM33.7 33.3H39.7C39.7 35.6 38.5 36.7 36.7 36.7C34.9 36.7 33.7 35.6 33.7 33.3Z" fill="#cfe6ff" opacity="0.22"/>
-<path d="M24.3 33.3H30.3C30.3 35.6 29.1 36.7 27.3 36.7C25.5 36.7 24.3 35.6 24.3 33.3ZM33.7 33.3H39.7C39.7 35.6 38.5 36.7 36.7 36.7C34.9 36.7 33.7 35.6 33.7 33.3ZM30.3 33.6H33.7" fill="none" stroke="#c9982e" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="27.3" cy="34.3" r="2.7" fill="#cfe6ff" opacity="0.22"/>
+<circle cx="36.7" cy="34.3" r="2.7" fill="#cfe6ff" opacity="0.22"/>
+<circle cx="27.3" cy="34.3" r="2.7" fill="none" stroke="#c9982e" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="36.7" cy="34.3" r="2.7" fill="none" stroke="#c9982e" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M30 34H34" fill="none" stroke="#c9982e" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M44 51C45.8 47 47.2 44 48.4 41.8L52 43.4C51 46.6 49.8 50.4 48.2 53.4Z" fill="#2a2456"/>
 <path d="M47.6 42.6L51.4 44.2" fill="none" stroke="#e3c067" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M50 40.6L57.6 23.2" fill="none" stroke="#f4e9d2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M50 40.6L56 23.6" fill="none" stroke="#f4e9d2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
 <circle cx="50.2" cy="41.2" r="2.7" fill="#ecc4a4"/>
-<path d="M58.2 15.8L59.5 20.3L64 21.6L59.5 22.9L58.2 27.4L56.9 22.9L52.4 21.6L56.9 20.3Z" fill="#ffd166"/>
-<circle cx="58.2" cy="21.6" r="1.2" fill="#ffffff"/>
+<path d="M56.4 16.6L57.6 20.6L61.6 21.8L57.6 23L56.4 27L55.2 23L51.2 21.8L55.2 20.6Z" fill="#ffd166"/>
+<circle cx="56.4" cy="21.8" r="1.1" fill="#ffffff"/>
 <path d="M13.4 21.4L14.2 23.8L16.6 24.6L14.2 25.4L13.4 27.8L12.6 25.4L10.2 24.6L12.6 23.8Z" fill="#ffffff" opacity="0.9"/>
 <path d="M19.2 14.4L19.7 15.9L21.2 16.4L19.7 16.9L19.2 18.4L18.7 16.9L17.2 16.4L18.7 15.9Z" fill="#ffffff" opacity="0.7"/>
 </g>
@@ -1393,8 +1408,11 @@
 <path d="M20.3 31C19.2 21.6 24.6 16 32 16C39.4 16 44.8 21.6 43.7 31C42.9 26.6 40.9 23.6 37.8 22.4C35.4 21.6 33.4 22.4 32 24.2C30.6 22.4 28.6 21.6 26.2 22.4C23.1 23.6 21.1 26.6 20.3 31Z" fill="#f1f3f8"/>
 <path d="M32 24V17.4" fill="none" stroke="#c3c9d6" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M23 24.6C24.4 21.4 27 19.4 30 18.8M41 24.6C39.6 21.4 37 19.4 34 18.8" fill="none" stroke="#c3c9d6" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M24.3 33.3H30.3C30.3 35.6 29.1 36.7 27.3 36.7C25.5 36.7 24.3 35.6 24.3 33.3ZM33.7 33.3H39.7C39.7 35.6 38.5 36.7 36.7 36.7C34.9 36.7 33.7 35.6 33.7 33.3Z" fill="#cfe6ff" opacity="0.22"/>
-<path d="M24.3 33.3H30.3C30.3 35.6 29.1 36.7 27.3 36.7C25.5 36.7 24.3 35.6 24.3 33.3ZM33.7 33.3H39.7C39.7 35.6 38.5 36.7 36.7 36.7C34.9 36.7 33.7 35.6 33.7 33.3ZM30.3 33.6H33.7" fill="none" stroke="#c9982e" stroke-width="1.68" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="27.3" cy="34.3" r="2.7" fill="#cfe6ff" opacity="0.22"/>
+<circle cx="36.7" cy="34.3" r="2.7" fill="#cfe6ff" opacity="0.22"/>
+<circle cx="27.3" cy="34.3" r="2.7" fill="none" stroke="#c9982e" stroke-width="1.54" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="36.7" cy="34.3" r="2.7" fill="none" stroke="#c9982e" stroke-width="1.54" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M30 34H34" fill="none" stroke="#c9982e" stroke-width="1.54" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 <circle class="ring" cx="32" cy="30" r="21.472" fill="none" stroke-width="1.034"/>
 </svg>
