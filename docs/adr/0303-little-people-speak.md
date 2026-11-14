@@ -44,6 +44,10 @@ the same time (its own ADR) is to use the same characters and lines for the oppo
    under prefers-reduced-motion. The bubble is decoration: hidden from screen readers, it takes no click.
 5. No setting to turn it off for now.
 
+Amended by ADR 0305 (2026-11-14): while its chat works a person speaks nearly all the time and each line stays 6 s,
+up to three people speak at once (point 3); a click's line starts once the hand or the stick has left; the fixed
+lines are joined by lines of the day written by the lightest model (point 1), with a setting to turn those off.
+
 ## Consequences
 
 - One pending timeout per strip with a person, nothing per frame, no token: the transcript is already in the app.

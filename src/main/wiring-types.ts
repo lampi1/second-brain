@@ -43,6 +43,7 @@ import type { UserCorrectionStore } from './brain/user-corrections';
 import type { BrainQueries } from './brain/queries';
 import type { LegacyArchive } from './routines/legacy';
 import type { GuideService } from './guide/service';
+import type { DailyQuipsService } from './quips/daily';
 import type { PhonePort } from '../shared/contract/phone';
 
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
@@ -117,6 +118,8 @@ export interface Wired {
   heldNews?: HeldNewsHub;
   /** the Guida's «Chiedi alla Guida» and its cards «da verificare» (main/guide/service.ts, ADR 0196) */
   guide?: GuideService;
+  /** the little people's lines of the day (main/quips/daily.ts, ADR 0305) */
+  quips?: DailyQuipsService;
   /** "Aggiorna" from GitHub (Settings → Aggiornamenti), app_update_code, the restart notice (ADR 0074, 0075) */
   source: AppSourceService;
   /** "Rispondi dopo" (main/later.ts, ADR 0035) */

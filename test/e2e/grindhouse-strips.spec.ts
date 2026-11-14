@@ -26,6 +26,10 @@ test('strips: collapsed with their facts, click to expand and collapse, "Ti aspe
     await expect(page.getByTestId('chat-status-fix')).toHaveText('In attività');
     await expect(page.getByTestId('chat-status-fix')).toBeVisible();
     await expect(page.getByTestId('chat-input-fix')).toBeHidden();
+    // its person is drawn doing the kind of work at hand (ADR 0305): this chat runs the tests, the SMS one reads the web
+    await expect(page.getByTestId('tile-chat-fix').locator('.strip-face .agent-sprite')).toHaveAttribute('data-sprite-activity', 'test');
+    await expect(page.getByTestId('tile-chat-sms').locator('.strip-face .agent-sprite')).toHaveAttribute('data-sprite-activity', 'web');
+    await expect(page.getByTestId('tile-chat-qa').locator('.strip-face .agent-sprite')).not.toHaveAttribute('data-sprite-activity');
     // a strip's browser is folded: a globe among the strip's controls opens it beside the chat
     await expect(page.getByTestId('tile-browser-tab-sms')).toHaveCount(0);
     await expect(page.getByTestId('chat-browser-sms')).toHaveAttribute('aria-pressed', 'false');

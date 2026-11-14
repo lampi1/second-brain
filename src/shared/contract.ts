@@ -178,7 +178,7 @@ export const INVOKE_CHANNELS = [
   'orchestrator:held', 'orchestrator:heldSeen',
   'log:renderer',
   'proposals:shown', 'proposals:undoAuto',
-  'guide:ask', 'guide:stale',
+  'guide:ask', 'guide:stale', 'agents:quips',
   'usecount:add', 'usecount:report',
   'projectmap:list', 'projectmap:view',
   'chess:move', 'chess:stop', 'chess:save', 'chess:history',

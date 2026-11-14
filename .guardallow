@@ -417,3 +417,9 @@ docs/screenshots/chess.webp binary-media sha256:0ff4106fe22b3d3656726d76e5f1868d
 # «Chess» (ADR 0304); inspected 2026-11-13.
 docs/screenshots/grindhouse.webp binary-media sha256:ca4dfb482c11c8f2a475e128aa401bd9aed3303fdbff370371e22ef6f0e3948c
 docs/screenshots/agents.webp binary-media sha256:2d8fa5f1fee71eb19cc39300f1aa725916842c5d603921d9498dfe51f431062c
+# README screenshots retaken (ADR 0305): the Grindhouse people show the work at hand; four pages get the «Chess» row of the side list (ADR 0304)
+docs/screenshots/grindhouse.webp binary-media sha256:35f75aa5ebb4763f6ddf04e6371220974bf15f74b2fae2ce5cd9a7b80ebcc92a
+docs/screenshots/connectors.webp binary-media sha256:3e5539289d9f14d400fa2b496b2e22b4b65c698423295cac89246b222d39485c
+docs/screenshots/news.webp binary-media sha256:8f641ac64ff9bea1bc9a85ff600752ae2896eccd749effeae504acc84906f399
+docs/screenshots/settings.webp binary-media sha256:6b3f19fdd993a61a61dc170a7af040f80d35665f74e85d7c5842f14e3d6eb067
+docs/screenshots/worktrees.webp binary-media sha256:50cf262bd1b23c82eb496bf280b6280e4a74fa0380101dc1182a90cd71b1531f

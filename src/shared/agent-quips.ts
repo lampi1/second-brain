@@ -422,8 +422,89 @@ const QUIPS: Record<Lang, Record<QuipRole, Lines>> = {
 
 export const isQuipRole = (v: unknown): v is QuipRole => typeof v === 'string' && (QUIP_ROLES as readonly string[]).includes(v);
 
-/** Every line a role can say at a moment, in a language, as written (a `{x}` stands for the real thing's name). */
-export const quips = (role: QuipRole, kind: QuipKind, lang: Lang): readonly string[] => QUIPS[lang][role][kind];
+/** The lines of the day (ADR 0305; the owner, 2026-11-14: «ogni giorno dovrebbero cambiare … un modello minuscolo per
+ *  farlo, tipo la frase del giorno»): written once a day by the lightest model (main/quips/daily.ts), checked by
+ *  cleanDailyQuips, kept a few days. They join the fixed lines, which are always there (no engine, no network, a day
+ *  the model wrote nothing usable). */
+export type DailyQuips = Partial<Record<QuipRole, Partial<Record<QuipKind, string[]>>>>;
+const daily: Partial<Record<Lang, DailyQuips>> = {};
+/** The lines of the day of a language, for every person in this process (null: none). */
+export function setDailyQuips(lang: Lang, lines: DailyQuips | null): void {
+  if (lines) daily[lang] = lines; else delete daily[lang];
+}
+
+/** Every line a role can say at a moment, in a language, as written (a `{x}` stands for the real thing's name): the
+ *  lines of the day first, then the fixed ones. */
+export const quips = (role: QuipRole, kind: QuipKind, lang: Lang): readonly string[] => {
+  const today = daily[lang]?.[role]?.[kind];
+  return today?.length ? [...today, ...QUIPS[lang][role][kind]] : QUIPS[lang][role][kind];
+};
+/** The fixed lines alone: what the app says with no line of the day. */
+export const fixedQuips = (role: QuipRole, kind: QuipKind, lang: Lang): readonly string[] => QUIPS[lang][role][kind];
+
+/** The moments whose line may name the real thing with `{x}`. */
+export const QUIP_X_KINDS: readonly QuipKind[] = ['read', 'edit', 'run', 'test', 'search', 'web'];
+/** How long a line of the day that names the real thing may be besides the name (the name takes up to QUIP_X_MAX). */
+export const QUIP_X_REST = 18;
+/** How many lines of the day a role keeps for one moment. */
+export const DAILY_MAX = 40;
+/** One line a model wrote, as it may be said: a few plain words that fit the bubble, at most one `{x}` and only where
+ *  a thing can be named; null when it is not. Letters, digits and plain punctuation only: no markup, link or code. */
+export function cleanQuip(v: unknown, kind: QuipKind): string | null {
+  if (typeof v !== 'string') return null;
+  const q = v.normalize('NFC').replace(/\s+/g, ' ').replace(/^[\s"'«»“”„]+|[\s"'«»“”„]+$/g, '');
+  if (!q || [...q].length > QUIP_MAX || q.split(' ').length > 5) return null;
+  const x = q.split('{x}').length - 1;
+  if (x > (QUIP_X_KINDS.includes(kind) ? 1 : 0)) return null;
+  if (x && [...q.replace('{x}', '')].length > QUIP_X_REST) return null;
+  if (!/^[\p{L}\p{N} .,:;!?'’…()%+\-]+$/u.test(q.replace('{x}', 'x')) || !/\p{L}/u.test(q.replace('{x}', ''))) return null;
+  if (/https?:|www\.|\/\//i.test(q)) return null;
+  return q;
+}
+/** What a model wrote for the day, checked line by line: only known roles and moments, only lines cleanQuip accepts,
+ *  none twice, none that is a fixed line already, at most DAILY_MAX each. Anything else is dropped. */
+export function cleanDailyQuips(raw: unknown, lang: Lang): DailyQuips {
+  const out: DailyQuips = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const role of QUIP_ROLES) {
+    const of = (raw as Record<string, unknown>)[role];
+    if (!of || typeof of !== 'object' || Array.isArray(of)) continue;
+    for (const kind of QUIP_KINDS) {
+      const list = (of as Record<string, unknown>)[kind];
+      if (!Array.isArray(list)) continue;
+      const fixed = new Set(QUIPS[lang][role][kind].map(q => q.toLowerCase())), seen = new Set<string>(), kept: string[] = [];
+      for (const v of list) {
+        const q = cleanQuip(v, kind);
+        if (!q || fixed.has(q.toLowerCase()) || seen.has(q.toLowerCase())) continue;
+        seen.add(q.toLowerCase()); kept.push(q);
+        if (kept.length >= DAILY_MAX) break;
+      }
+      if (kept.length) (out[role] ??= {})[kind] = kept;
+    }
+  }
+  return out;
+}
+/** A model's answer as lines of the day: one `role.moment: line | line | line` per row; a row it cannot read is skipped. */
+export function parseDailyQuips(text: string, lang: Lang): DailyQuips {
+  const raw: Record<string, Record<string, string[]>> = {};
+  for (const row of text.split(/\r?\n/)) {
+    const m = /^\s*[-*]?\s*([a-z]+)\.([a-z]+)\s*:\s*(.+)$/i.exec(row);
+    if (!m) continue;
+    const role = m[1]!.toLowerCase(), kind = m[2]!.toLowerCase();
+    ((raw[role] ??= {})[kind] ??= []).push(...m[3]!.split('|'));
+  }
+  return cleanDailyQuips(raw, lang);
+}
+/** Two sets of lines as one: the first one's lines first, none twice, at most DAILY_MAX each. */
+export function mergeDailyQuips(a: DailyQuips, b: DailyQuips): DailyQuips {
+  const out: DailyQuips = {};
+  for (const role of QUIP_ROLES) for (const kind of QUIP_KINDS) {
+    const all = [...(a[role]?.[kind] ?? []), ...(b[role]?.[kind] ?? [])];
+    const kept = all.filter((q, i) => all.findIndex(o => o.toLowerCase() === q.toLowerCase()) === i).slice(0, DAILY_MAX);
+    if (kept.length) (out[role] ??= {})[kind] = kept;
+  }
+  return out;
+}
 
 /** The name that goes in a line: one word or file name, cut short. '' when there is nothing sayable. */
 export function quipX(v: string): string {

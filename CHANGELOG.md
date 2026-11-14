@@ -46,6 +46,16 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   and cost («Opus 5.5 · high»).
 - Grindhouse: a working chat says «In attività» on its strip and on a delegated row, as the rows of its commands and
   sub-agents already did. The «ripresa dopo il riavvio» chip is gone from the strips.
+- The little people show the work at hand: besides the role's own trade, six new scenes for every role, picked by
+  the tool the chat is really using: it reads a book, slams the enter key of a terminal, tries the tests with a test
+  tube and a checklist, searches the pages with a lens, spins the world on a finger for the web, throws a paper plane
+  when it hands the work to another agent. While its chat works a person now speaks nearly all the time, each line
+  staying six seconds, about that same kind of work; up to three people speak at once, never the same line. After a
+  whack the bubble comes once the stick is gone, and stands further right (ADR 0305).
+- New lines every day: once a day the lightest model of an engine you turned on writes new lines for every role and
+  moment, with a theme of the day of its own (three small calls, no tools). Each one is checked before it is said
+  (a few plain words, no markup or link), they stay a week beside the fixed ones, and the setting `quipsDaily` turns
+  them off (ADR 0305).
 - The little people speak: two words of nonsense in a small bubble that goes away by itself, each role in its own
   character (a pompous conductor, a paranoid guard, a gruff craftsman…), at every click and now and then by
   themselves on the Grindhouse strips, where the line is about what the chat is really doing: the file it reads or

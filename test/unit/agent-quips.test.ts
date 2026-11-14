@@ -9,9 +9,9 @@ import { describe, expect, it } from 'vitest';
 import type { ChatItem } from '../../src/shared/contract';
 import { QUIP_CHARACTER, QUIP_KINDS, QUIP_MAX, QUIP_ROLES, QUIP_X_MAX, isQuipRole, pickQuip, quipOfTool, quipX, quips } from '../../src/shared/agent-quips';
 
-import { PLAIN_SHARE, QUIP_AIR, QUIP_MS, quipDelay, quipMoment, quipTurn } from '../../src/renderer/lib/quips';
+import { PLAIN_SHARE, QUIP_MS, QUIP_REACTION_AT, QUIP_VOICES, QUIP_WORK_MS, quipDelay, quipMoment, quipTurn } from '../../src/renderer/lib/quips';
 import { AgentSprite } from '../../src/renderer/components/AgentSprite';
-import { SPRITE_IDS } from '../../src/renderer/lib/agent-sprites';
+import { REACTION_S, SPRITE_IDS } from '../../src/renderer/lib/agent-sprites';
 
 const LANGS = ['it', 'en', 'de'] as const;
 
@@ -101,26 +101,54 @@ describe('agent quips', () => {
     expect(quipMoment('work', [tool('Read', { file_path: 'a.ts' }), ...Array.from({ length: 6 }, () => text)])).toEqual({ kind: 'work' });
   });
 
-  it('speaks at its turn only: one voice at a time, quiet when asked, an end always as an end', () => {
+  it('speaks at its turn only: a few voices at a time, quiet when asked, an end always as an end', () => {
     const edit = { kind: 'edit' as const, x: 'cart.ts' };
-    const turn = (o: Partial<Parameters<typeof quipTurn>[0]>) => quipTurn({ quiet: false, at: 10_000, busyUntil: 0, moment: () => edit, rnd: 0.9, ...o });
-    // its own moment, and the voice is taken for the bubble and a little air
-    expect(turn({})).toEqual({ say: edit, busyUntil: 10_000 + QUIP_MS + QUIP_AIR });
+    const turn = (o: Partial<Parameters<typeof quipTurn>[0]>) => quipTurn({ quiet: false, speaking: 0, moment: () => edit, rnd: 0.9, ...o });
+    // its own moment; a short bubble at rest, one that stays while its chat works
+    expect(turn({})).toEqual({ say: edit, ms: QUIP_MS });
+    expect(turn({ lively: true })).toEqual({ say: edit, ms: QUIP_WORK_MS });
+    expect(QUIP_WORK_MS).toBeGreaterThan(QUIP_MS);
     // one line in three is plain nonsense, but never in place of an end
     expect(turn({ rnd: PLAIN_SHARE - 0.01 })?.say).toEqual({ kind: 'work' });
     expect(turn({ rnd: PLAIN_SHARE })?.say).toEqual(edit);
     expect(turn({ rnd: 0, moment: () => ({ kind: 'done' }) })?.say).toEqual({ kind: 'done' });
     // nothing to say
     expect(turn({ moment: () => null })).toBeNull();
-    // quiet (hidden window, frozen clock, reduced motion) or somebody else speaking: silent, and the moment is not
+    // quiet (hidden window, frozen clock, reduced motion) or enough others speaking: silent, and the moment is not
     // even asked (asking uses up the one line about an end)
     let asked = 0;
     const moment = () => { asked++; return edit; };
     expect(turn({ quiet: true, moment })).toBeNull();
-    expect(turn({ busyUntil: 10_001, moment })).toBeNull();
+    expect(turn({ speaking: QUIP_VOICES, moment })).toBeNull();
     expect(asked).toBe(0);
-    expect(turn({ busyUntil: 10_000, moment })?.say).toEqual(edit);
+    expect(turn({ speaking: QUIP_VOICES - 1, moment })?.say).toEqual(edit);
     expect(asked).toBe(1);
+  });
+
+  it('while its chat works the pause between two lines is shorter than a line: it is seen speaking most of the time', () => {
+    for (const rnd of [0, 0.5, 0.999]) {
+      expect(quipDelay(rnd, true, true)).toBeLessThanOrEqual(QUIP_WORK_MS);
+      expect(quipDelay(rnd, false, true)).toBeLessThanOrEqual(QUIP_WORK_MS);
+      expect(quipDelay(rnd, false, true)).toBeGreaterThan(0);
+      // at rest: now and then, as before
+      expect(quipDelay(rnd, true)).toBeGreaterThanOrEqual(15_000);
+      expect(quipDelay(rnd, false)).toBeGreaterThanOrEqual(60_000);
+    }
+    // the line about a click starts after the hand or the stick has left the head
+    expect(QUIP_REACTION_AT.whack).toBeGreaterThan(QUIP_REACTION_AT.pat);
+    expect(QUIP_REACTION_AT.whack).toBeLessThan(REACTION_S.whack * 1000);
+  });
+
+  it('the line is about the kind of work its person is drawn doing, with the last thing of that kind', () => {
+    const tool = (name: string, input: unknown): ChatItem => ({ kind: 'tool', id: name, at: 0, name, summary: '', input, status: 'ok' });
+    const items = [tool('Read', { file_path: 'src/a.ts' }), tool('Edit', { file_path: 'src/b.ts' })];
+    // the drawing changes a little later than the tools: it still reads, so it speaks of the file it read
+    expect(quipMoment('work', items, 'read')).toEqual({ kind: 'read', x: 'a.ts' });
+    // no tool of that kind in sight: the kind alone
+    expect(quipMoment('work', items, 'web')).toEqual({ kind: 'web' });
+    // nothing shown: the last tool, as before; and a state that is not work is that state
+    expect(quipMoment('work', items, null)).toEqual({ kind: 'edit', x: 'b.ts' });
+    expect(quipMoment('done', items, 'read')).toEqual({ kind: 'done' });
   });
 
   it('says only a plain program name, and a test only for a command that runs tests', () => {

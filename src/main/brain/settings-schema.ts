@@ -58,6 +58,8 @@ const BASE: readonly SettingDef[] = [
     description: 'Ogni chat Claude dell’app, Orchestrator compreso, compatta da sola il suo contesto in un riassunto poco prima di questa finestra, anche con i modelli da 1M e nelle cartelle che ne chiedono un’altra. Da 100000 a 1000000; 0 = come dicono le impostazioni di Claude.' },
   { key: 'orchestratorDayCompact', type: 'boolean', default: true, protected: false, label: 'Orchestrator corti: compatta a inizio giornata',
     description: 'Un Orchestrator con un contesto di ieri (50k o più) lo compatta in un riassunto la prima volta che è fermo da 3 minuti in un giorno nuovo. Resta la stessa chat: la coda e le chat che segue non cambiano.' },
+  { key: 'quipsDaily', type: 'boolean', default: true, protected: false, label: 'Omini: frasi nuove ogni giorno',
+    description: 'Una volta al giorno il modello più leggero di un motore acceso scrive frasi nuove per gli omini degli agenti (tre chiamate piccole, senza strumenti). Restano una settimana accanto a quelle fisse. Spento: solo le frasi fisse, nessuna chiamata.' },
   { key: 'launchRulesClaude', type: 'boolean', default: false, protected: true, label: 'Regole del brain alle chat Claude',
     description: 'A ogni avvio di una chat Claude l’app le passa le regole del brain (AGENTS.md, skill, agenti, stili e hook) come plugin. Spento: Claude legge solo le sue impostazioni.' },
   { key: 'launchRulesCodex', type: 'boolean', default: true, protected: true, label: 'Regole del brain alle chat Codex',
@@ -262,7 +264,7 @@ export function defaults(): Settings {
   return {
     jobs: { fallback: 'auto' },
     brainRoot: null, mcpPort: 4319, autoCloseMin: 2, engineIdleMin: 30, mute: {}, osToasts: 'urgent', theme: 'dark', language: 'system', dnd: false, dndUntil: null,
-    contextWarnTokens: 200_000, contextHandoff: false, compactWindowTokens: COMPACT_WINDOW, orchestratorDayCompact: true, launchRulesClaude: false, launchRulesCodex: true, codexAutonomyRoots: [], coldHandoffMin: 50,
+    contextWarnTokens: 200_000, contextHandoff: false, compactWindowTokens: COMPACT_WINDOW, orchestratorDayCompact: true, quipsDaily: true, launchRulesClaude: false, launchRulesCodex: true, codexAutonomyRoots: [], coldHandoffMin: 50,
     engineOn: Object.fromEntries(engines().map(e => [e.id, e.defaultOn])),
     engines: Object.fromEntries(engines().map(e => [e.id, e.defaultOn])),
     messaging: { crossHarness: true },

@@ -1,7 +1,7 @@
 // The roles' little people (lib/agent-sprites.ts on lib/sprite-rig.ts, ADR 0295): every role has every state, each
 // scene is a whole person with something that moves, a track compiles to one @keyframes rule that starts and ends on
 // the rest pose, the same movement is written once, the «done» scene stops by itself; and what a strip's person does
-// follows the chat (components/StripFace.tsx).
+// follows the chat (components/StripFace.tsx), down to the kind of work at hand (ADR 0305).
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -9,7 +9,7 @@ vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(), on: vi.fn() } }
 import { CHARACTER_IDS } from '../../src/shared/characters';
 import { WORK_ROLE_IDS } from '../../src/shared/roles';
 import type { ChatItem } from '../../src/shared/contract';
-import { REACTION_S, SPRITE_IDS, SPRITE_REACTIONS, SPRITE_STATES, reactionScene, spriteScene } from '../../src/renderer/lib/agent-sprites';
+import { REACTION_S, SPRITE_ACTIVITIES, SPRITE_IDS, SPRITE_REACTIONS, SPRITE_STATES, isSpriteActivity, reactionScene, spriteScene } from '../../src/renderer/lib/agent-sprites';
 import { J, VIEW, jointStyle, keyframeRules, keyframesCss, nodeSvg, trackName, walk, type Group } from '../../src/renderer/lib/sprite-rig';
 import { AgentSprite, spriteIdOf } from '../../src/renderer/components/AgentSprite';
 import { isThinking, spriteStateOf } from '../../src/renderer/components/StripFace';
@@ -82,6 +82,39 @@ describe('the little people', () => {
   it('builds a scene once', () => {
     expect(spriteScene('artisan', 'work')).toBe(spriteScene('artisan', 'work'));
   });
+  it('draws the kind of work at hand for every role (ADR 0305): a whole person that moves, each kind its own scene', () => {
+    expect([...SPRITE_ACTIVITIES].sort()).toEqual(['delegate', 'read', 'run', 'search', 'test', 'web']);
+    for (const id of SPRITE_IDS) {
+      const drawn = new Set([spriteScene(id, 'work').nodes.map(nodeSvg).join('')]);
+      for (const act of SPRITE_ACTIVITIES) {
+        const scene = spriteScene(id, 'work', act), all = walk(scene.nodes), moving = all.filter((n): n is Group => 'g' in n && !!n.track);
+        expect(all.filter(n => !('g' in n)).length, `${id} ${act}`).toBeGreaterThan(24);
+        expect(moving.length, `${id} ${act} moves`).toBeGreaterThanOrEqual(3);
+        for (const g of moving) {
+          // a loop a person can watch, never a counted one: it goes on as long as the work does
+          expect(g.track!.n, `${id} ${act}`).toBeUndefined();
+          expect(g.track!.t, `${id} ${act}`).toBeGreaterThan(0.1);
+          expect(g.track!.t, `${id} ${act}`).toBeLessThanOrEqual(6);
+          for (const key of g.track!.keys) { expect(key.at, `${id} ${act}`).toBeGreaterThanOrEqual(0); expect(key.at, `${id} ${act}`).toBeLessThanOrEqual(100); }
+        }
+        for (const rule of keyframeRules(scene.nodes).values()) {
+          const at = [...rule.matchAll(/([\d.]+)%\{/g)].map(m => m[1]);
+          expect(new Set(at).size, `${id} ${act} ${at.join(' ')}`).toBe(at.length);
+        }
+        drawn.add(scene.nodes.map(nodeSvg).join(''));
+        expect(spriteScene(id, 'work', act), `${id} ${act} built once`).toBe(scene);
+      }
+      // the role's own way of working and the six kinds: seven different drawings
+      expect(drawn.size, id).toBe(SPRITE_ACTIVITIES.length + 1);
+    }
+  });
+  it('draws a kind of work only while the person works', () => {
+    for (const state of SPRITE_STATES) if (state !== 'work') expect(spriteScene('scout', state, 'read'), state).toBe(spriteScene('scout', state));
+    expect(spriteScene('scout', 'work', null)).toBe(spriteScene('scout', 'work'));
+    expect(isSpriteActivity('read')).toBe(true);
+    // an edit and work the app cannot name stay the role's own scene
+    for (const v of ['edit', 'work', 'pat', '', null, undefined, 'toString']) expect(isSpriteActivity(v), String(v)).toBe(false);
+  });
 });
 
 describe('a joint', () => {
@@ -125,6 +158,12 @@ describe('the sprite on the page', () => {
     expect(html).toContain('width="60" height="48"');
     expect(html).not.toContain('background');
     expect(html).toMatch(/class="sp-j" style="transform:[^"]*;animation:spk-/);
+  });
+  it('says on the page which kind of work it draws, and only at work', () => {
+    const at = (state: 'work' | 'idle') => renderToStaticMarkup(createElement(AgentSprite, { id: 'scout', state, activity: 'search', height: 48 }));
+    expect(at('work')).toContain('data-sprite-activity="search"');
+    expect(at('idle')).not.toContain('data-sprite-activity');
+    expect(at('work')).not.toBe(renderToStaticMarkup(createElement(AgentSprite, { id: 'scout', state: 'work', height: 48 })));
   });
   it('picks the person of the role, the plain one without a role', () => {
     expect(spriteIdOf({ kind: 'character', value: 'herald' })).toBe('herald');

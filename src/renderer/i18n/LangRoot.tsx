@@ -1,9 +1,10 @@
 // Keeps the UI in the chosen language (ADR 0057): reads the setting `language` and Windows' language (app:info) from
 // the store, sets the current one for t() and re-mounts its children when it changes, so every text is drawn again.
 // startLang() picks it, and loads its dictionary, before the first render (no Italian flash on an English system).
-// Used by main.tsx.
+// It also keeps the little people's lines of the day in that language (lib/daily-quips.ts). Used by main.tsx.
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { sb } from '../sb';
+import { useDailyQuips } from '../lib/daily-quips';
 import { useApp } from '../store/store';
 import { lang, langLoaded, loadLang, resolveLang, setLang } from './index';
 
@@ -13,6 +14,8 @@ export function LangRoot({ children }: { children: ReactNode }) {
   const [, loaded] = useState(0);
   useEffect(() => { if (!langLoaded(want)) void loadLang(want).then(() => loaded(n => n + 1), () => {}); }, [want]);
   if (want !== lang() && langLoaded(want)) setLang(want);
+  // the little people's lines of the day follow the language on screen (lib/daily-quips.ts, ADR 0305)
+  useDailyQuips(lang(), useApp(st => st.settings?.quipsDaily !== false));
   return <Fragment key={lang()}>{children}</Fragment>;
 }
 

@@ -12,9 +12,9 @@
 // shared/agent-quips.ts).
 import { createContext, useEffect, useInsertionEffect, useMemo, useState, type CSSProperties, type MouseEvent, type ReactElement } from 'react';
 import type { AgentAvatar as Avatar } from '@shared/agents';
-import { REACTION_S, isSpriteId, reactionScene, spriteScene, type SpriteId, type SpriteReaction, type SpriteState } from '../lib/agent-sprites';
+import { REACTION_S, isSpriteId, reactionScene, spriteScene, type SpriteActivity, type SpriteId, type SpriteReaction, type SpriteState } from '../lib/agent-sprites';
 import { VIEW, jointStyle, keyframeRules, type Node } from '../lib/sprite-rig';
-import { QUIP_MS, useQuip, type QuipMoment } from '../lib/quips';
+import { QUIP_REACTION_AT, useQuip, type QuipMoment } from '../lib/quips';
 import '../styles/agent-sprite.css';
 
 /** The little person a transcript's working line shows instead of the spark (ChatItems.tsx Typing); null = the spark. */
@@ -50,8 +50,10 @@ function draw(n: Node, key: number): ReactElement {
  *  A click on the person plays a reaction once over its state (ADR 0297): the left one a pat on the head, the right
  *  one a whack of the stick; `onTouch` hears which (+1 the pat, -1 the whack), `tip` is its tooltip. The click stays on
  *  the person: it never opens the strip or the card under it. It says a line at the click and, with a `mood` (what
- *  its chat is doing now, or null to stay silent), now and then by itself (ADR 0303). */
-export function AgentSprite({ id, state, height = 32, label, still, onTouch, tip, mood }: { id: SpriteId; state: SpriteState; height?: number; label?: string; still?: boolean; onTouch?: (sign: 1 | -1) => void; tip?: string; mood?: () => QuipMoment | null }) {
+ *  its chat is doing now, or null to stay silent), by itself too (ADR 0303): nearly all the time while it works, now
+ *  and then otherwise. `activity`: the kind of work the chat is doing, when the app can name it (reading, a command,
+ *  tests, a search, a page, a hand-off): at work the person plays that scene instead of its role's own (ADR 0305). */
+export function AgentSprite({ id, state, activity, height = 32, label, still, onTouch, tip, mood }: { id: SpriteId; state: SpriteState; activity?: SpriteActivity | null; height?: number; label?: string; still?: boolean; onTouch?: (sign: 1 | -1) => void; tip?: string; mood?: () => QuipMoment | null }) {
   // `n` counts the clicks: each one starts its reaction from the top
   const [react, setReact] = useState<{ kind: SpriteReaction; n: number } | null>(null);
   useEffect(() => {
@@ -59,22 +61,25 @@ export function AgentSprite({ id, state, height = 32, label, still, onTouch, tip
     const back = setTimeout(() => setReact(null), REACTION_S[react.kind] * 1000);
     return () => clearTimeout(back);
   }, [react]);
-  const scene = react ? reactionScene(id, react.kind) : spriteScene(id, state);
-  const key = react ? `${id}:${react.kind}` : `${id}:${state}`;
+  const act = state === 'work' && activity ? activity : null;
+  const scene = react ? reactionScene(id, react.kind) : spriteScene(id, state, act);
+  const key = react ? `${id}:${react.kind}` : `${id}:${state}${act ? `:${act}` : ''}`;
   useInsertionEffect(() => writeKeyframes(key, scene.nodes), [key, scene]);
   const body = useMemo(() => scene.nodes.map(draw), [scene]);
-  const quip = useQuip(id, mood);
+  const quip = useQuip(id, mood, state === 'work' || state === 'think');
   const touch = (sign: 1 | -1) => (e: MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
     setReact(r => ({ kind: sign > 0 ? 'pat' : 'whack', n: (r?.n ?? 0) + 1 }));
-    quip.say(sign > 0 ? 'pat' : 'whack');
+    // the line starts when the hand or the stick is no longer where the bubble is
+    const kind = sign > 0 ? 'pat' : 'whack';
+    quip.say(kind, undefined, { delay: QUIP_REACTION_AT[kind] });
     onTouch?.(sign);
   };
-  return <span className={`agent-sprite${still && !react ? ' is-still' : ''}`} data-sprite={id} data-sprite-state={state} data-react={react?.kind} title={tip}
+  return <span className={`agent-sprite${still && !react ? ' is-still' : ''}`} data-sprite={id} data-sprite-state={state} data-sprite-activity={act ?? undefined} data-react={react?.kind} title={tip}
     onClick={touch(1)} onContextMenu={touch(-1)} {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })}>
     {/* the key restarts the movements when the state changes, and at every click */}
     <svg key={react ? `${key}:${react.n}` : key} viewBox={`${VIEW.x} ${VIEW.y} ${VIEW.w} ${VIEW.h}`} width={height * VIEW.w / VIEW.h} height={height} aria-hidden="true">{body}</svg>
     {/* what it says: decoration, never read aloud */}
-    {quip.text && <span key={quip.n} className="quip" style={{ animationDuration: `${QUIP_MS}ms` }} aria-hidden="true">{quip.text}</span>}
+    {quip.text && <span key={quip.n} className="quip" style={{ animationDuration: `${quip.ms}ms`, animationDelay: `${quip.delay}ms` }} aria-hidden="true">{quip.text}</span>}
   </span>;
 }

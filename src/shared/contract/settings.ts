@@ -50,6 +50,8 @@ export interface Settings {
   /** «Orchestrators corte» (ADR 0051): an Orchestrator whose context began on an earlier day compacts it once, the first time it is idle
    *  on a new day (same chat: its queue and the chats it follows stay); its window is compactWindowTokens as for every chat */
   orchestratorDayCompact?: boolean;
+  /** the little people's lines of the day, written once a day by the lightest model (main/quips/daily.ts, ADR 0305); default on */
+  quipsDaily?: boolean;
   /** ADR 0060: the brain's rules given to each Claude chat at launch (a plugin folder: skills, agents, output styles,
    *  hooks, plus the rules file); off by default */
   launchRulesClaude?: boolean;
@@ -149,7 +151,7 @@ export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engine
 /** Every setting is one dot key ("theme", "budget.claude.dailyUsd", "mute.idea"): the unit of validation, history,
  *  undo and agent permissions. The schema (settings:schema) gives type, default, Italian label and description. */
 export type SettingKey =
-  | 'jobs.fallback' | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
+  | 'jobs.fallback' | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'quipsDaily' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
   | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'judging' | 'judgingSince' | 'judgingCapUsd' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'coldStartSlots' | 'worktreePoolPerRepo' | 'worktreePoolTotal' | 'worktreeDiskCapGb' | 'codexAutonomyRoots'
   | 'suggestOn' | 'voiceAsr' | 'voiceName' | 'voicePtt' | 'voiceSpeed' | 'awayMode' | 'balancedMode'

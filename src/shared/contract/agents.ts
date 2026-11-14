@@ -2,6 +2,7 @@
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
 import type { AgentImages } from '../agent-images';
+import type { DailyQuips } from '../agent-quips';
 import type { AgentLifecycleDecide, AgentLifecycleSnapshot } from '../agent-lifecycle';
 import type { LearnedRuleProposal } from '../agent-pack';
 import type { AgentCatalog, AgentDraft, AgentMetrics, AgentMetricsFilter, AgentProfile, AgentUndo, AgentVersion, JudgingEstimate } from '../agents';
@@ -15,6 +16,7 @@ import type { RoutineRunDetail, RoutineRunRef, RoutineTerminalExport, RoutinesSn
 import type { ScheduleEdit, SchedulesState } from '../schedules';
 import type { RunEstimates } from '../task-estimate';
 import type { WorkDecision, WorkThread } from '../workflows';
+import type { Lang } from './settings';
 
 /** renderer → main, agents: each entry [argument, result]. Part of InvokeMap (src/shared/contract.ts). */
 export interface AgentsInvokeMap {
@@ -98,4 +100,7 @@ export interface AgentsInvokeMap {
   'guide:ask': [GuideAskRequest, GuideAnswer];
   /** the Guida cards whose anchored code changed (a run from the repo; checked: false in a packaged build) */
   'guide:stale': [void, GuideStaleState];
+  /** the little people's lines of the day (main/quips/daily.ts, ADR 0305): the lines to say now; `wait` writes
+   *  today's first when they are due (one light model call, at most twice a day) */
+  'agents:quips': [{ lang: Lang; wait?: boolean }, { lines: DailyQuips; pending: boolean }];
 }

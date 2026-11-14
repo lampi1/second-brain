@@ -2,12 +2,13 @@
 // portrait and its state dot. A role the user gave a picture of their own keeps that picture with the dot (the sprite
 // could not look like it). Used by ChatTile.tsx (a root strip) and DelegationCard.tsx (a delegated row); also maps a
 // chat's state to the animation (spriteStateOf), and sends the user's pat or whack on the person to the chat's run
-// (run:touch, ADR 0297). The person also speaks by itself now and then about what the chat is really doing: its state,
-// or the tool it is using with the real file or command (ADR 0303, lib/quips.ts quipMoment); once about an end.
+// (run:touch, ADR 0297). At work the person plays what the chat is really doing when its tool says so (reading, a
+// command, tests, a search, a page, a hand-off: ADR 0305), its role's own work otherwise, and speaks about it: its
+// state, or the tool it is using with the real file or command (ADR 0303, lib/quips.ts quipMoment); once about an end.
 import type { AgentAvatar as Avatar } from '@shared/agents';
 import type { ChatItem } from '@shared/contract';
-import { useEffect, useState } from 'react';
-import { isSpriteId, type SpriteState } from '../lib/agent-sprites';
+import { useEffect, useRef, useState } from 'react';
+import { isSpriteActivity, isSpriteId, type SpriteState } from '../lib/agent-sprites';
 import { quipMoment, type QuipMoment } from '../lib/quips';
 import { useOwnPicture } from '../lib/agent-images';
 import { app, useApp } from '../store/store';
@@ -32,6 +33,23 @@ export function isThinking(items: readonly ChatItem[] | undefined): boolean {
   return !last || last.kind === 'thinking' || last.kind === 'user';
 }
 
+/** How long a kind of work is played before the person may change to another, in ms: tools follow each other faster
+ *  than a scene can be watched. */
+export const ACTIVITY_MS = 4000;
+/** A value that changes no more often than every `ms`: the latest one is taken when the time is up. */
+function useSettled<T>(value: T, ms: number): T {
+  const [shown, setShown] = useState(value), since = useRef(0);
+  useEffect(() => {
+    if (Object.is(value, shown)) return;
+    const take = () => { since.current = Date.now(); setShown(value); };
+    const left = since.current + ms - Date.now();
+    if (left <= 0) { take(); return; }
+    const later = setTimeout(take, left);
+    return () => clearTimeout(later);
+  }, [value, shown, ms]);
+  return shown;
+}
+
 /** The end of each chat the user has already seen play (its run, turns and cost when it ended): coming back to the
  *  page does not celebrate again, a new end after more work does. */
 const celebrated = new Map<string, string>();
@@ -42,6 +60,9 @@ export function StripFace({ chatId, avatar, name, tone, size, height = 40, ...o 
   const thinking = useApp(s => o.busy && isThinking(s.items[chatId]));
   const own = useOwnPicture(avatar);
   const state = spriteStateOf({ ...o, thinking });
+  // what kind of work it is doing (its last tool), held a few seconds: the person plays that, and speaks about it
+  const kind = useApp(s => (state === 'work' ? quipMoment('work', s.items[chatId]).kind : null));
+  const activity = useSettled(isSpriteActivity(kind) ? kind : null, ACTIVITY_MS);
   const mark = useApp(s => { const c = s.chats[chatId]; return `${c?.run?.runId ?? ''}:${c?.run?.turns ?? ''}:${c?.costUsd ?? ''}`; });
   // seen before this row was drawn: it stands still
   const [seen, setSeen] = useState(() => celebrated.get(chatId) === mark);
@@ -63,11 +84,11 @@ export function StripFace({ chatId, avatar, name, tone, size, height = 40, ...o 
       if (boasted.get(chatId) === end) return null;
       boasted.set(chatId, end);
     }
-    return quipMoment(state, app.get().items[chatId]);
+    return quipMoment(state, app.get().items[chatId], activity);
   };
   // a picture of the user's own, or a character without a person, stays a portrait with its state dot
   if (own || (avatar?.kind === 'character' && !isSpriteId(avatar.value)))
     return <span className="strip-face"><AgentAvatar avatar={avatar} name={name} size={size} /><span className={`strip-dot lead tone-${tone}`} aria-hidden="true" /></span>;
-  return <span className="strip-face" data-person><AgentSprite id={spriteIdOf(avatar)} state={state} still={state === 'done' && seen} height={height} label={t('product.avatar', { name })}
+  return <span className="strip-face" data-person><AgentSprite id={spriteIdOf(avatar)} state={state} activity={activity} still={state === 'done' && seen} height={height} label={t('product.avatar', { name })}
     mood={mood} onTouch={onTouch} tip={t(!hasRun ? 'sprite.tip' : touched === 1 ? 'sprite.tipPat' : touched === -1 ? 'sprite.tipWhack' : 'sprite.tipRun')} /></span>;
 }

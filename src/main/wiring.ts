@@ -140,6 +140,7 @@ import { timersFor } from './timers';
 import { createLegacyArchive } from './routines/legacy';
 import { createFolderPackageStore } from './flows/package-authoring';
 import { GuideService } from './guide/service';
+import { DailyQuipsService } from './quips/daily';
 import { repoRootOf } from './guide/anchors';
 import { guideIndex } from './appctl/guide';
 const { setInterval, clearInterval } = timersFor('wiring/auto-close');
@@ -832,6 +833,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // «Chiedi alla Guida» (ADR 0196): one light one-shot on the Scout's engine; the anchors are checked only in a run from the repo
   const guide = new GuideService({ runOnce: r => oneShot.runOnce(r), repoRoot: repoRootOf(path.dirname(fileURLToPath(import.meta.url))),
     index: lang => guideIndex({ window: ctx.window, settings: { schema: () => brain.settingsSchema(), get: () => brain.settings() }, tools: () => [], showValues: () => false }, lang) });
+  // the little people's lines of the day (ADR 0305): two light one-shots a day on the Herald's engine, when the setting is on
+  const quips = new DailyQuipsService({ file: path.join(ctx.userData, 'quips-daily.json'), runOnce: r => oneShot.runOnce(r), on: () => brain.settings().quipsDaily !== false });
 
   // GitHub sync outcomes + product changes in the brain (stable instance only, never in tests): src/main/sync.ts
   let sync: ProductSync | null = null;
@@ -929,7 +932,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     judging: { estimate: now => judgingEstimate(manager.runs.list(), now, { shares: judgeShares(), capUsd: Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD, lastBatch: judgeSampler.lastBatch() }) },
     phonePort: createPhonePort(manager, ctx.emitter, awayCommands),
     worktreePool,
-    chats, browser, recordings, learn, news, schedules, projectMaps, brain, mcp, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, modelLists, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, userCorrections,
+    chats, browser, recordings, learn, news, schedules, projectMaps, brain, mcp, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, modelLists, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, quips, userCorrections,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : null),
       checkpoint: () => manager.checkpointForUpdate(),

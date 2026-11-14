@@ -65,6 +65,7 @@ const notes = (x: number, y: number, t: number, at: [number, number]): Node[] =>
   J(x + 3, y + 9, 6, [ink(quaver(WHITE))], puff(t, [at[1]], 46, 12, -9, 1.15, -10)),
 ];
 const Z = 'M-2.6 -2.6H2.6L-2.6 2.6H2.6';
+const STAR = 'M0 -5L1.2 -1.2L5 0L1.2 1.2L0 5L-1.2 1.2L-5 0L-1.2 -1.2Z';
 
 // ── what each role does while its chat works ─────────────────────────────────────────────────────────────────────────
 const WORK = {
@@ -220,13 +221,148 @@ const SHARED: Record<Exclude<SpriteState, 'work'>, () => Pose> = {
   }),
 };
 
+// ── what a working chat is doing, when its tool says so (ADR 0305) ────────────────────────────────────────────────────
+/** The kinds of work with a scene of their own (the same moments as the lines, shared/agent-quips.ts): reading a file,
+ *  running a command, running tests, searching, a web page, handing work to another agent. An edit, and anything the
+ *  app cannot name, is the role's own work. The same acting for every role, in its own looks. */
+export type SpriteActivity = 'read' | 'run' | 'test' | 'search' | 'web' | 'delegate';
+const PAPER = '#eceef4', LINE = '#b4bacb', STEEL = '#59627a', DARK = '#1f2430';
+/** A sheet with two lines of text, its top left corner at 0 0. */
+const sheet = (w: number, h: number): Shape[] => [rr(0, 0, w, h, 1.2, PAPER), S(`M2 ${h * 0.36}H${w - 2}M2 ${h * 0.68}H${w - 4.4}`, LINE, 0.9)];
+const ACT: Record<SpriteActivity, (look: Look) => Pose> = {
+  // an open book in both hands: the head follows the lines, left to right, three times, then a page turns
+  read: look => {
+    const page = 'M0 -3.4C2.4 -4.6 5 -4.6 7.6 -3.6V3C5 2 2.4 2 0 3.2Z';
+    return {
+      blink: true, mouth: 'smile', lean: 1,
+      go: loop(4.4, [k(0), k(50, { sy: 1.012 })]),
+      head: { a: 5, go: loop(4.4, [k(0), k(16, { a: 10 }), k(20, { a: 5, e: 'out' }), k(36, { a: 10 }), k(40, { a: 5, e: 'out' }), k(56, { a: 10 }), k(66, { a: 4 }), k(74, { a: 8, e: 'out' }), k(84, { a: 5 })]) },
+      armR: { a: -40, b: -60, goB: loop(4.4, [k(0), k(60, { e: 'in' }), k(68, { a: -72, e: 'out' }), k(78, {})]) }, armL: { a: -30, b: -80 },
+      front: [J(40.2, 47.4, -4, [
+        rr(-8.2, -3, 16.4, 6.8, 1, '#b5483a'),
+        P('M0 -3.4C-2.4 -4.6 -5 -4.6 -7.6 -3.6V3C-5 2 -2.4 2 0 3.2Z', '#fdfaf0'), P(page, '#f4eedc'),
+        S('M-6.2 -1.9H-1.6M-6.2 -0.5H-1.6M-6.2 0.9H-2.8', '#b9b2a0', 0.7), S('M1.6 -1.9H6.2M1.6 -0.5H6.2M1.6 0.9H5', '#b9b2a0', 0.7),
+        // the page that turns: it folds onto the spine and opens on the other side
+        J(0, 0, 0, [P(page, '#fdfaf0'), S('M1.6 -1.9H6.2M1.6 -0.5H6.2', '#cfc8b4', 0.7)], loop(4.4, [k(0), k(60, { e: 'in' }), k(67, { sx: 0.04, e: 'out' }), k(75, { sx: -1 }), k(76, { sx: -1, o: 0, e: 'hold' }), k(100, { o: 0 })])),
+        S('M0 -3.4V3.2', '#d9d2bd', 0.7),
+        C(-7.2, 2.4, 1.6, look.skin), C(7.2, 2.4, 1.6, look.skin),
+      ])],
+    };
+  },
+  // a finger up, then down on a big «enter» key, twice: the key sinks, the terminal on its pole prints a line each
+  // time while its gear turns
+  run: () => {
+    const hits = [16, 52], T = 3.4;
+    const line = (y: number, w: number, c: string, from: number, to: number): Node =>
+      J(59.4, y, 0, [S(`M0 0H${w}`, c, 1.4)], loop(T, [k(0, { sx: 0, e: 'hold' }), k(from, { sx: 0, e: 'lin' }), k(to, { sx: 1 }), k(92, { sx: 1 }), k(96, { sx: 1, o: 0, e: 'hold' }), k(100, { sx: 0, o: 0 })]));
+    return {
+      blink: true, mouth: 'grin',
+      head: { a: 3, go: loop(T, [...hits.flatMap(h => [k(h, { e: 'out' }), k(h + 3, { a: 7 }), k(h + 14, { a: 2 })]), k(84, { a: 6 }), k(94, {})]) },
+      go: loop(T, hits.flatMap(h => [k(h - 14, { e: 'out' }), k(h - 5, { dy: -1.1, sy: 1.025, e: 'in' }), k(h, { sy: 0.96, sx: 1.03, e: 'out' }), k(h + 5, {})])),
+      armR: { a: -70, b: -30, go: loop(T, hits.flatMap(h => [k(h - 14, { e: 'out' }), k(h - 5, { a: -138, e: 'in' }), k(h, { a: -68, e: 'out' }), k(h + 3, { a: -76 }), k(h + 7, {})])),
+        goB: loop(T, hits.flatMap(h => [k(h - 14, { e: 'out' }), k(h - 5, { a: -18, e: 'in' }), k(h, { a: -32, e: 'out' }), k(h + 7, {})])) },
+      armL: { a: 24, b: -40 },
+      back: [
+        rr(42.6, 53.6, 9.6, 10.8, 1.4, '#3a4152'), S('M44.6 57.4L47.4 54.8M47.6 57.4L50.4 54.8', AMBER, 1.1, 0.8),
+        J(47.4, 53.6, 0, [rr(-5.4, -4.4, 10.8, 4.4, 1.4, PAPER), rr(-5.4, -1.5, 10.8, 1.5, 0.7, '#aab2bf'), S('M2 -3.6V-2.5H-2M-0.9 -3.5L-2 -2.5L-0.9 -1.6', INK, 0.9)],
+          loop(T, hits.flatMap(h => [k(h - 1, { e: 'out' }), k(h, { dy: 1.5, sy: 0.66, e: 'out' }), k(h + 6, {})]))),
+        S('M66 47.4V63.6', STEEL, 1.8), S('M60.6 64.4H71.4', STEEL, 2),
+        rr(55.4, 28.4, 21.6, 19.4, 2.4, STEEL), rr(56.8, 29.8, 18.8, 16.6, 1.5, DARK),
+        S('M59.4 33L61.4 34.6L59.4 36.2', GREEN, 1.2), J(63.4, 34.6, 0, [rr(0, -1.7, 2.4, 3.4, 0.4, GREEN)], loop(0.9, [k(0, { e: 'hold' }), k(50, { o: 0, e: 'hold' })])),
+        line(39.4, 9, WHITE, hits[0]! + 2, hits[0]! + 16), line(42, 12.4, SKY, hits[1]! + 2, hits[1]! + 14), line(44.6, 6.4, '#7ee0a8', hits[1]! + 16, hits[1]! + 26),
+        J(71.4, 33.6, 0, [ring(0, 0, 1.9, '#aab2bf', 1.2), S('M0 -2.3V-3.3M0 2.3V3.3M-2.3 0H-3.3M2.3 0H3.3M-1.6 -1.6L-2.4 -2.4M1.6 1.6L2.4 2.4M-1.6 1.6L-2.4 2.4M1.6 -1.6L2.4 -2.4', '#aab2bf', 1.1)],
+          loop(2.6, [k(0, { e: 'lin' }), k(100, { a: 360 })])),
+      ],
+    };
+  },
+  // a test tube held up and swirled, bubbles rising from it; on the board beside it the checks tick one after the other
+  test: () => {
+    const T = 4.4;
+    const row = (y: number, at: number): Node[] => [
+      S(`M59.6 ${y}h3v3h-3Z`, STEEL, 0.9), S(`M64.6 ${y + 1.5}H72.6`, LINE, 1),
+      J(61.1, y + 1.5, 0, [S('M-1.7 -0.2L-0.4 1.2L2.2 -1.9', GREEN, 1.5)], loop(T, [k(0, { o: 0, sx: 0.2, sy: 0.2, e: 'hold' }), k(at, { o: 0, sx: 0.2, sy: 0.2, e: 'back' }), k(at + 7, { o: 1 }), k(92, { o: 1 }), k(97, { o: 0 }), k(100, { o: 0, sx: 0.2, sy: 0.2 })])),
+    ];
+    const bubbleUp = (x: number, r: number, at: number[]): Node => J(x, 31.4, 0, [C(0, 0, r, '#bff3d6')], puff(T, at, 16, x > 48.4 ? 2 : -2, -8, 1.3), 1, 0);
+    return {
+      blink: true, mouth: 'smile', lean: 1,
+      head: { a: 4, go: loop(T, [k(0), k(24, { a: 8 }), k(40, { a: 3 }), k(62, { a: 8 }), k(80, { a: 3, e: 'out' }), k(88, { a: 9 }), k(96, {})]) },
+      go: loop(T, [k(0), k(50, { sy: 1.014 })]),
+      // the tube stays upright: its own angle undoes the arm's (-95 at the shoulder, -25 at the elbow)
+      armR: { a: -95, b: -25, go: sway(-100, 0.55), ha: 120, goH: loop(1.1, [k(0, { a: 108 }), k(50, { a: 132 })]),
+        held: [rr(-2.5, -12, 5, 14.6, 2.5, '#e9f6ff', 0.62), P('M-2.5 -5.4H2.5V0.1A2.5 2.5 0 0 1 -2.5 0.1Z', GREEN, 0.92), S('M-3.2 -12H3.2', WHITE, 1.2), S('M-1.2 -10.2V-7', WHITE, 0.8, 0.8)] },
+      armL: { a: 26, b: -52 },
+      back: [S('M66.4 50.4V63.6', STEEL, 1.8), S('M61.4 64.4H71.4', STEEL, 2), rr(56.4, 29.6, 20, 21.4, 1.8, '#f1e6cb'), rr(63, 28, 6.8, 3, 1.1, '#8a96a8'),
+        ...row(34.6, 20), ...row(39.8, 44), ...row(45, 68)],
+      front: [bubbleUp(47.8, 0.9, [8, 52]), bubbleUp(49, 1.2, [26, 70]), bubbleUp(48.2, 0.7, [40, 84])],
+    };
+  },
+  // a lens passed down and up over a pile of sheets, leaning in: the one it was looking for lights up
+  search: () => {
+    const T = 4.2;
+    const arm: [number, number, Ease?][] = [[0, -112], [30, -62], [36, -66, 'out'], [62, -96, 'back'], [86, -96], [100, -112]];
+    return {
+      blink: true, mouth: 'o', lean: 3,
+      head: { a: 4, go: loop(T, [k(0), k(30, { a: 10 }), k(62, { a: 5, e: 'back' }), k(70, { a: 9 }), k(86, { a: 7 }), k(96, {})]) },
+      go: loop(T, [k(0), k(30, { a: 6, sy: 0.985 }), k(62, { a: 4 }), k(86, { a: 4 }), k(96, {})]),
+      armR: { a: -112, b: -10, go: loop(T, arm.map(([at, a, e]) => k(at, { a, ...(e ? { e } : {}) }))),
+        held: [S('M0 0V4.4', '#6b4423', 2.2), C(0, 9.4, 4.5, SKY, 0.55), ring(0, 9.4, 4.9, '#f4f6fa', 1.9), S('M-2.4 7.4C-1.6 6.6 -0.8 6.2 0.2 6.2', WHITE, 1)] },
+      armL: { a: 20, b: -30 },
+      back: [J(50.6, 31, -3, sheet(13, 7.4)), J(51.6, 40.8, 2, sheet(13, 7.4)), J(50.2, 50.6, -2, sheet(13, 7.4)),
+        J(58, 44.5, 2, [S('M-7.4 -4.6H7.4V4.6H-7.4Z', GOLD, 1.5)], loop(T, [k(0, { o: 0, e: 'hold' }), k(60, { o: 0, e: 'out' }), k(66, { o: 1 }), k(88, { o: 1 }), k(96, { o: 0 }), k(100, { o: 0 })]), 1, 0)],
+      front: [J(67.6, 38.6, 0, [ink([P(STAR, WHITE)])], pop(T, 64, 86))],
+    };
+  },
+  // the world spinning on a fingertip, a pointer clicking beside it: the head looks up at it
+  web: look => {
+    const T = 3.6;
+    const click = (x: number, y: number, d: string, at: number[]): Node => J(x, y, 0, [ink([S(d, WHITE, 1.2)])], puff(T, at, 9, 0, 0, 1.5), 1, 0);
+    return {
+      eyes: 'up', mouth: 'smile',
+      head: { a: 2, go: loop(T, [k(0), k(40, { a: 6 }), k(70, { a: 1 })]) },
+      go: loop(T, [k(0), k(50, { dy: -0.5, sy: 1.012 })]),
+      // the globe stays upright over the hand (-95 at the shoulder, -5 at the elbow)
+      armR: { a: -95, b: -5, go: sway(-91, 0.9), ha: 100, goH: sway(96, 0.9),
+        held: [S('M0.8 -1.8L3.4 -4.2', look.skin, 1.7),
+          J(4.6, -9.6, 0, [C(0, 0, 6.4, '#3b82d9'), P('M-5 -2.8C-3.2 -4.8 -0.6 -4.4 0 -2.7C0.6 -1 -1.4 -0.2 -2.7 0.7C-4.1 1.6 -5.7 0.9 -5.9 -0.9Z', '#58c98a'), P('M1.4 1.8C3 1.1 5 1.8 4.8 3.4C4.6 4.8 2.7 5.5 1.6 4.4C0.7 3.5 0.5 2.3 1.4 1.8Z', '#58c98a'),
+            J(0, 0, 0, [S('M0 -6.4C3.9 -3.6 3.9 3.6 0 6.4C-3.9 3.6 -3.9 -3.6 0 -6.4', '#d6ebff', 0.8, 0.85)], loop(1.8, [k(0, { e: 'lin' }), k(50, { sx: 0.06, e: 'lin' })])),
+            S('M-6.4 0H6.4', '#d6ebff', 0.8, 0.85), S('M-3.7 -3.8C-2.3 -5 -0.5 -5.4 0.9 -5', WHITE, 1, 0.8)])] },
+      armL: { a: 30, b: -60 },
+      front: [
+        J(63.6, 38.4, 0, [P('M0 0V7L1.9 5.3L3.2 8.2L4.6 7.6L3.3 4.8H5.8Z', WHITE), S('M0 0V7L1.9 5.3L3.2 8.2L4.6 7.6L3.3 4.8H5.8Z', INK, 0.8)],
+          loop(T, [k(0, { dx: 7, dy: 7 }), k(22, { dx: 0, dy: 0, e: 'out' }), k(26, { sx: 0.84, sy: 0.84 }), k(30, {}), k(56, { dx: 5, dy: -6 }), k(72, { dx: -1, dy: 2, e: 'out' }), k(76, { dx: -1, dy: 2, sx: 0.84, sy: 0.84 }), k(80, { dx: -1, dy: 2 }), k(100, { dx: 7, dy: 7 })])),
+        click(62.4, 36.4, 'M0 0L-2 -2', [26]), click(64, 35.6, 'M0 0V-2.8', [26]), click(61.4, 38.4, 'M0 0L-2 -2', [76]), click(63, 37.6, 'M0 0V-2.8', [76]),
+      ],
+    };
+  },
+  // a paper plane: the arm goes back, throws it, and it flies off to whoever gets the work; a look after it
+  delegate: () => {
+    const T = 3.2, GO = 30;
+    return {
+      eyes: 'happy', mouth: 'grin',
+      head: { go: loop(T, [k(0), k(18, { a: -5 }), k(GO, { a: 5, e: 'out' }), k(56, { a: -3 }), k(80, { a: -3 }), k(94, {})]) },
+      go: loop(T, [k(0), k(18, { a: -5, sy: 0.98, e: 'in' }), k(GO, { a: 5, sy: 1.02, e: 'out' }), k(44, { a: 2 }), k(86, {})]),
+      armR: { a: -60, b: -70, go: loop(T, [k(0), k(18, { a: -24, e: 'in' }), k(GO, { a: -112, e: 'out' }), k(40, { a: -104 }), k(70, { a: -104 }), k(88, {})]),
+        goB: loop(T, [k(0), k(18, { a: -134, e: 'in' }), k(GO, { a: -6, e: 'out' }), k(70, { a: -6 }), k(88, {})]),
+        // the plane in the hand until it leaves, and a new one when the arm comes back
+        held: [P('M0 8L-4.2 -3.2L0 -0.6L4.2 -3.2Z', PAPER), S('M0 8V-0.6', LINE, 0.7)], goH: loop(T, [k(0, { e: 'hold' }), k(GO, { o: 0, e: 'hold' }), k(84, { o: 0, e: 'out' }), k(92, {})]) },
+      armL: { a: 22, b: -50 },
+      front: [
+        J(50, 41.4, -24, [P('M0 0L-11.6 -4.4L-8.4 0L-11.6 4.4Z', PAPER), P('M0 0L-8.4 0L-11.6 4.4Z', '#cfd4df'), S('M0 0H-8.4', LINE, 0.7)],
+          loop(T, [k(0, { o: 0, e: 'hold' }), k(GO - 0.2, { o: 0, e: 'hold' }), k(GO, { o: 1, e: 'out' }), k(54, { o: 1, dx: 17, dy: -8, a: -30 }), k(66, { o: 1, dx: 24, dy: -9, a: -8, e: 'in' }), k(76, { o: 0, dx: 29, dy: -7, a: 2 }), k(100, { o: 0 })]), 1, 0),
+        J(52, 40.4, -24, [ink([S('M0 0H-3.4M-6 0H-8.4', WHITE, 0.9)])], puff(T, [GO + 6], 14, 6, -3), 1, 0),
+      ],
+    };
+  },
+};
+export const SPRITE_ACTIVITIES = Object.keys(ACT) as readonly SpriteActivity[];
+export const isSpriteActivity = (v: string | null | undefined): v is SpriteActivity => !!v && Object.hasOwn(ACT, v);
+
 // ── what the user's click does to it (ADR 0297) ─────────────────────────────────────────────────────────────────────
 /** A pat (the left click) or a whack of the stick (the right one): played once over whatever it was doing. */
 export type SpriteReaction = 'pat' | 'whack';
 /** How long each lasts, in seconds: then the person goes back to its state. */
 export const REACTION_S: Record<SpriteReaction, number> = { pat: 1.3, whack: 1.6 };
 const HEART = 'M0 3.6C-4.6 0.4 -4 -3.4 -1.6 -3.4C-0.6 -3.4 0 -2.6 0 -2C0 -2.6 0.6 -3.4 1.6 -3.4C4 -3.4 4.6 0.4 0 3.6Z';
-const STAR = 'M0 -5L1.2 -1.2L5 0L1.2 1.2L0 5L-1.2 1.2L-5 0L-1.2 -1.2Z';
 /** the patting hand's glove: a warm yellow that reads on a light and on a dark strip */
 const GLOVE = '#ffd98a';
 const REACT: Record<SpriteReaction, () => Pose> = {
@@ -290,11 +426,12 @@ const REACT: Record<SpriteReaction, () => Pose> = {
 export const SPRITE_REACTIONS: readonly SpriteReaction[] = ['pat', 'whack'];
 
 const cache = new Map<string, SpriteScene>();
-/** The scene of a role in a state (built once). */
-export function spriteScene(id: SpriteId, state: SpriteState): SpriteScene {
-  const key = `${id}:${state}`;
+/** The scene of a role in a state (built once). At work, with an `activity` the app can name, the scene of that
+ *  activity; without, the role's own work. */
+export function spriteScene(id: SpriteId, state: SpriteState, activity?: SpriteActivity | null): SpriteScene {
+  const act = state === 'work' && activity ? activity : null, key = act ? `${id}:work:${act}` : `${id}:${state}`;
   let s = cache.get(key);
-  if (!s) cache.set(key, s = { nodes: person(lookOf(id), (state === 'work' ? WORK[id] : SHARED[state])()) });
+  if (!s) { const look = lookOf(id); cache.set(key, s = { nodes: person(look, act ? ACT[act](look) : (state === 'work' ? WORK[id] : SHARED[state])()) }); }
   return s;
 }
 /** A role's reaction to a click (built once): the same acting for everyone, in the role's own looks. */

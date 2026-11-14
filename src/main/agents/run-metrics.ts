@@ -99,7 +99,7 @@ export function indexRuns(all: readonly AgentRun[], now = Date.now()): RunIndex 
 export function foldRun(t: RunTally, run: AgentRun, index: RunIndex): void {
   if (run.endedAt === undefined) return;
   // Headline and fallback runs are not comparable with the agent version's card/task baseline.
-  if (run.oneshot?.fallback || run.oneshot?.job === 'headline' || run.oneshot?.job === 'guide') return;
+  if (run.oneshot?.fallback || run.oneshot?.job === 'headline' || run.oneshot?.job === 'guide' || run.oneshot?.job === 'phrases') return;
   t.ended++;
   const o = run.outcome, starts = index.reworkStarts.get(run.runId);
   const verified = verifiedVerdict(run, starts, index.now);

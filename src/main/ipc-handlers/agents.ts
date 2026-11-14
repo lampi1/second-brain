@@ -99,5 +99,7 @@ export function agentsHandlers({ s, demo, agentImages, workflows, orchestrator, 
     // «Chiedi alla Guida» and the cards «da verificare» (main/guide/service.ts, ADR 0196); none in the demo
     'guide:ask': async a => s.guide ? s.guide.ask(a) : { ok: false, text: '', cards: [], files: [], costUsd: null, costBasis: 'unknown', model: null, reason: 'unavailable', noEngine: true },
     'guide:stale': () => s.guide?.stale() ?? { checked: false, cards: [] },
+    // the little people's lines of the day (main/quips/daily.ts, ADR 0305); none in the demo: the fixed lines are said
+    'agents:quips': async a => !s.quips ? { lines: {}, pending: false } : a?.wait === true ? s.quips.ensure(a?.lang) : s.quips.get(a?.lang),
   };
 }
