@@ -90,6 +90,11 @@ describe('position', () => {
     expect(() => position([...all.slice(0, 4), 'g1f3', 'a1a5'])).toThrow();
     expect(position([...all.slice(0, 4), 'g1f3', 'h7h6']).sans).toEqual(['e4', 'a6', 'e5', 'd5', 'Nf3', 'h6']);
     expect(position([...all.slice(0, 4), 'g1f3', 'h7h6']).pieces).toHaveLength(32);
+    // a repetition is counted on the game walked move by move as on one read at once
+    const back = 'g1f3 g8f6 f3g1 f6g8 g1f3 g8f6 f3g1 f6g8'.split(' ');
+    position([]);
+    const steps = back.map((_, i) => position(back.slice(0, i + 1)));
+    expect(steps.map(p => p.over?.ending ?? null)).toEqual([null, null, null, null, null, null, null, 'repetition']);
   });
 });
 

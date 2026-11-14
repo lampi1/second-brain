@@ -110,7 +110,7 @@
 .chess-rival-face { display: flex; align-items: flex-end; gap: 6px; height: 128px; }
 .chess-bubble { position: relative; margin: 0 0 34px; padding: 8px 11px; max-width: 196px; border-radius: 13px 13px 13px 3px; background: var(--surface-3); border: 1px solid var(--border-3); color: var(--text); font-size: var(--fs-m); line-height: 1.35;
   transform-origin: 0 100%; animation: chess-pop .16s cubic-bezier(.2, .9, .3, 1.25) both; transition: opacity .25s, transform .25s; }
-.chess-bubble.gone { opacity: 0; transform: translateY(5px) scale(.96); }
+.chess-bubble.is-gone { opacity: 0; transform: translateY(5px) scale(.96); }
 .chess-rival-id { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .chess-rival-id strong { font-family: var(--font-display); font-size: var(--fs-xl); font-weight: 650; }
 .chess-status { margin-left: auto; color: var(--text-2); font-size: var(--fs-s); }

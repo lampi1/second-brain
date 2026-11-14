@@ -112,7 +112,7 @@ export function ChessGame() {
         <section className={`chess-rival is-${sprite}`} data-testid="chess-rival">
           <div className="chess-rival-face">
             <AgentSprite id={s.bot} state={sprite} height={104} label={name} onTouch={sign => chess.touch(sign)} />
-            {s.line && <p key={s.line.n} className={`chess-bubble${bubble ? '' : ' gone'}`} role="status" data-testid="chess-bubble">{s.line.text}</p>}
+            {s.line && <p key={s.line.n} className={`chess-bubble${bubble ? '' : ' is-gone'}`} role="status" data-testid="chess-bubble">{s.line.text}</p>}
           </div>
           <div className="chess-rival-id">
             <strong>{name}</strong>

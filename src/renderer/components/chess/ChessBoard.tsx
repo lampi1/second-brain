@@ -40,12 +40,11 @@ export const ChessBoard = memo(function ChessBoard({ pos, side, canMove, onMove,
   const board = useRef<HTMLDivElement>(null);
   const [sel, setSel] = useState<Square | null>(null);
   const [promo, setPromo] = useState<{ from: Square; to: Square } | null>(null);
-  /** the square of the piece being dragged (where it is under the pointer is not state: see `follow`) */
+  /** the square of the piece being dragged (where it is under the pointer is not state: see `onPointerMove`) */
   const [held, setHeld] = useState<Square | null>(null);
   const [focus, setFocus] = useState<Square>(side === 'w' ? 'e2' : 'e7');
-  /** the pointer went down on a piece of the user's: where, the board's box then (read once, not at every movement)
-   *  and, once it is a drag, the piece's element */
-  const down = useRef<{ sq: Square; x: number; y: number; wasSel: boolean; moved: boolean; box: DOMRect; el: HTMLElement | null } | null>(null);
+  /** the pointer went down on a piece of the user's: where and, once it is a drag, the piece's element */
+  const down = useRef<{ sq: Square; x: number; y: number; wasSel: boolean; moved: boolean; el: HTMLElement | null } | null>(null);
   /** The pointer is let go of (or the drag is dropped): the piece's element is React's again. It goes to the square
    *  React has for it by then: the new one after a move, its own after anything else. */
   const release = () => {
@@ -54,7 +53,12 @@ export const ChessBoard = memo(function ChessBoard({ pos, side, canMove, onMove,
     setHeld(null);
     if (!el) return;
     el.style.transition = '';
-    requestAnimationFrame(() => { const sq = el.dataset.at as Square | undefined; if (el.isConnected && sq) el.style.transform = place(sq, side); });
+    requestAnimationFrame(() => {
+      // taken in hand again meanwhile: it is the new drag's
+      if (down.current?.el === el || !el.isConnected) return;
+      const sq = el.dataset.at as Square | undefined, seen = el.parentElement?.dataset.side as Color | undefined;
+      if (sq) el.style.transform = place(sq, seen ?? side);
+    });
   };
   const at = useMemo(() => new Map(pos.pieces.map(p => [p.square, p])), [pos]);
   // a piece just taken stays for a moment and fades where it stood (only on a move forward: not on a move taken back
@@ -113,14 +117,16 @@ export const ChessBoard = memo(function ChessBoard({ pos, side, canMove, onMove,
     return x < 0 || x > 7 || y < 0 || y > 7 ? null : squareAt(x, y, side);
   };
   const onDown = (e: PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0 || promo) return;
+    if (e.button !== 0 || promo || !e.isPrimary) return;
+    // a drag that never saw its pointer go up (a second finger, the window losing the pointer) ends here
+    if (down.current) release();
     const sq = under(e);
     if (!sq) return;
     setFocus(sq);
     // the user's own piece is picked at once and may be dragged; any other square is a plain click
     if ((canMove || canPremove) && at.get(sq)?.color === side && !(sel && sel !== sq && to.has(sq))) {
       if (!canMove) onCancelPremove?.();
-      down.current = { sq, x: e.clientX, y: e.clientY, wasSel: sel === sq, moved: false, box: e.currentTarget.getBoundingClientRect(), el: null };
+      down.current = { sq, x: e.clientX, y: e.clientY, wasSel: sel === sq, moved: false, el: null };
       setSel(sq);
       e.currentTarget.setPointerCapture(e.pointerId);
     } else act(sq);
@@ -136,7 +142,13 @@ export const ChessBoard = memo(function ChessBoard({ pos, side, canMove, onMove,
       if (d.el) d.el.style.transition = 'none';
       setHeld(d.sq);
     }
-    if (d.el) d.el.style.transform = `translate(calc(${e.clientX - d.box.left}px - 50%), calc(${e.clientY - d.box.top}px - 50%))`;
+    // the button is up and nobody said so (it went up outside the window): the piece is let go of
+    if (e.buttons === 0) { release(); return; }
+    if (!d.el) return;
+    // the board's box as it is now (the page may have scrolled under the drag); the transform written here never
+    // makes the page lay itself out again
+    const box = e.currentTarget.getBoundingClientRect();
+    d.el.style.transform = `translate(calc(${e.clientX - box.left}px - 50%), calc(${e.clientY - box.top}px - 50%))`;
   };
   const onUp = (e: PointerEvent<HTMLDivElement>) => {
     const d = down.current;
@@ -176,7 +188,7 @@ export const ChessBoard = memo(function ChessBoard({ pos, side, canMove, onMove,
 
   return (
     <div className={`chess-board${canMove || canPremove ? ' can-move' : ''}${held ? ' is-dragging' : ''}`} ref={board} role="group" aria-label={t('chess.board')} data-testid="chess-board" data-side={side} data-turn={pos.turn}
-      onPointerDown={onDown} onPointerMove={onPointerMove} onPointerUp={onUp} onPointerCancel={release} onKeyDown={onKey}
+      onPointerDown={onDown} onPointerMove={onPointerMove} onPointerUp={onUp} onPointerCancel={release} onLostPointerCapture={release} onKeyDown={onKey}
       onContextMenu={e => { if (premove || sel || down.current) { e.preventDefault(); drop(); } }}>
       {SQUARES.map(([x, y]) => {
         const sq = squareAt(x, y, side);
