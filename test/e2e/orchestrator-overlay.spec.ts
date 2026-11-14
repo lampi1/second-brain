@@ -49,8 +49,7 @@ test('resized from its left edge; the width survives a restart; double-click res
   let page = first.page;
   const start = await box(page);
   const initialWidth = Math.round(start.width), viewportWidth = await page.evaluate(() => innerWidth);
-  expect(initialWidth).toBeGreaterThanOrEqual(440);
-  expect(initialWidth).toBeLessThanOrEqual(680);
+  expect(initialWidth).toBe(Math.round(viewportWidth / 2)); // about half the window by default (ADR 0307)
   const edge = (await page.getByTestId('orchestrator-resize').boundingBox())!;
   await page.mouse.move(edge.x + edge.width / 2, edge.y + edge.height / 2);
   await page.mouse.down();
