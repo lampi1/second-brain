@@ -96,7 +96,7 @@ describe('parent child task continuity',()=>{
     await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/agent_assign_task/);
     expect(f.assign).not.toHaveBeenCalled();
   });
-  it('refuses stale role configuration, Sentinel reuse, scope changes and current permission narrowing',async()=>{
+  it('refuses stale role configuration, another role, scope changes and current permission narrowing',async()=>{
     const f=fixture();
     f.catalog.profiles[1]!.activeVersion=2;
     await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/configuration changed/);
@@ -105,7 +105,7 @@ describe('parent child task continuity',()=>{
     (f.catalog.profiles[1] as {updatedAt?:number}).updatedAt=5;
     await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/configuration changed/);
     delete (f.catalog.profiles[1] as {updatedAt?:number}).updatedAt;
-    await expect(f.call('agent_assign_task',{...f.args(),roleId:'sentinel'})).rejects.toThrow(/Sentinel/);
+    await expect(f.call('agent_assign_task',{...f.args(),roleId:'sentinel'})).rejects.toThrow(/Role mismatch/);
     await expect(f.call('agent_assign_task',{...f.args(),cwd:path.resolve('/elsewhere')})).rejects.toThrow(/Project mismatch/);
     f.parent.permissionMode='plan';
     await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/permissions exceed/);

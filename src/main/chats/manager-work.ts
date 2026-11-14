@@ -222,6 +222,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
       if (source.kind !== 'chat' || source.chatId !== r.s.parentId || !plan || !['running', 'done'].includes(plan.phase) || !Number.isSafeInteger(options.planStep) || !plan.steps[options.planStep]) throw new Error('Invalid or unapproved parent plan step.');
     }
     if (this.midTurn(r) || r.pending.size || r.s.queued || r.opening || r.releasing || r.switching || r.archiving || this.deliveries.has(chatId)) throw new Error('The chat is busy or has queued work; wait before assigning another task.');
+    if (options.reviewOf !== undefined) this.runs.checkLinks({ reviewOf: options.reviewOf }); // before the previous run ends
     const freshBoundary = this.freshReady(r, Date.now());
     this.beginAssignment(r, prompt, options);
     if (freshBoundary) r.freshAssignmentRun = r.s.run?.runId;
@@ -248,7 +249,9 @@ export abstract class ManagerWork extends ManagerLifecycle {
       requestOrigin: mode === 'new-task' ? (options.source?.kind === 'chat' ? 'agent' : options.source?.kind === 'app' ? 'app' : 'user') : previous.requestOrigin ?? 'app',
       tags: previous.tags ? { ...previous.tags, skills: [] } : undefined, tier: previous.tier, model: previous.model,
       ...(r.s.parentId && this.chats.get(r.s.parentId)?.s.run ? { parentRunId: this.chats.get(r.s.parentId)!.s.run!.runId } : {}),
-      ...(mode === 'rework' ? { reworkOf: previous.runId } : {}) }, !this.deferWrites());
+      ...(mode === 'rework' ? { reworkOf: previous.runId } : {}),
+      // a review chat's next round stays a review (#387): its run names the run it reviews now
+      ...(options.reviewOf ? { reviewOf: options.reviewOf } : {}) }, !this.deferWrites());
     const brainRoot = this.opts.brainRoot?.();
     if (brainRoot) next.scope = { brainRoot: path.resolve(brainRoot), projectRoot: path.resolve(r.s.cwd) };
     next.taskId = mode === 'new-task' ? next.runId : previous.taskId ?? previous.runId;

@@ -28,6 +28,8 @@ export interface TaskAssignmentOptions {
   planStep?: number;
   /** the fields the assignment's contract carried (#355), stored on the run */
   contractFields?: string[];
+  /** a review chat's next round (#387): the run it reviews now; the new run keeps the review's link and verdict fields */
+  reviewOf?: string;
 }
 
 export interface DelegationContract {

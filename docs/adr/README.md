@@ -84,7 +84,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0079](0079-remove-improve-section-and-rename-devops-to-task.md) "Migliora l'app" removed; DevOps renamed Task; Fatto becomes a log — accepted, partly superseded by 0181
 - [0081](0081-agent-screenshots-everywhere.md) Agent screenshots everywhere: a path is enough, nothing remote ever loads — accepted
 - [0082](0082-orchestrator-agent-changes-apply-and-learned-rules-in-regole.md) The Orchestrator changes agents by itself; learned rules live on the Regole page — accepted, partly superseded by 0243
-- [0083](0083-generic-roles-and-direct-delegation.md) Nine fixed roles, direct parent-to-child delegation in visible chats — accepted, partly superseded by 0125, 0186, 0100
+- [0083](0083-generic-roles-and-direct-delegation.md) Nine fixed roles, direct parent-to-child delegation in visible chats — accepted, partly superseded by 0125, 0186, 0100; amended by 0309
 - [0084](0084-finished-workers-close-by-themselves.md) Finished workers close by themselves; held ones say what they wait for — accepted
 - [0085](0085-full-default-permissions-narrowed-from-the-card.md) Every role may do everything by default; the user narrows it from its card — accepted, partly superseded by 0186
 - [0086](0086-app-managed-mcp-servers.md) MCP servers managed by the app, given to every engine through a local gateway — accepted
@@ -303,6 +303,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0305](0305-little-people-show-the-work-lines-of-the-day.md) The little people show the work at hand, speak while they work, and get new lines every day — accepted
 - [0306](0306-the-people-of-the-roles-grow-up.md) The people of the roles grow up: adult bodies, faces and characters — accepted
 - [0307](0307-maps-open-full-screen-and-tell-every-passage.md) The maps open full screen, tell every step and every passage, and are redrawn from a button — accepted
+- [0309](0309-one-review-chat-per-piece-of-work.md) One review chat per piece of work: after a fix it reviews only the delta — accepted
 
 ## Replaced
 

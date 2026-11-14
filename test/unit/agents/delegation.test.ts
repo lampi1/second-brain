@@ -258,6 +258,36 @@ describe('agent_delegate', () => {
     expect(remembered).toEqual([['scout', 'Logs are in D:/logs']]);
   });
 
+  it('one review chat per piece of work: a Sentinel that reported re-reviews the fix delta, a second one is refused (#387)', async () => {
+    const f = fixture(), parent = await f.root('artisan');
+    // two Sentinels started side by side for two parts are fine: neither has reported yet
+    const first = (await f.call('agent_delegate', parent.id, { tasks: [f.task('sentinel', 'Review · sconto')] })).children[0].chatId as string;
+    const second = (await f.call('agent_delegate', parent.id, { tasks: [f.task('sentinel', 'Review · sicurezza')] })).children[0].chatId as string;
+    await f.call('agent_report', first, { outcome: 'done', summary: 'Un difetto nel totale', output: 'Trovato: lo sconto si applica due volte.', doneWhen: [{ criterion: 'criterion A', met: true }] });
+    // after the fix: a fresh Sentinel is refused, the refusal names the chat that reviewed the work
+    const refused = await f.call('agent_delegate', parent.id, { tasks: [f.task('sentinel', 'Review · sconto dopo il fix')] }).catch((e: Error) => e.message);
+    expect(refused).toMatch(/one review chat per piece of work/);
+    expect(refused).toContain(first);
+    expect(refused).not.toContain(second);                   // still at work: not a review to continue
+    expect(refused).toMatch(/agent_assign_task.*only the fix delta.*freshReview true/s);
+    expect(f.m.list().filter(c => c.parentId === parent.id)).toHaveLength(2);
+    // the same Sentinel takes the next round, told to review only the delta
+    const before = f.sent.get(first)?.length ?? 0;
+    const again = await f.call('agent_assign_task', parent.id, { chatId: first, roleId: 'sentinel', cwd: f.m.list().find(c => c.id === first)!.cwd, mode: 'continue', contract: { goal: 'Check the fix of the double discount', doneWhen: ['the total is right'] } });
+    expect(again.chatId).toBe(first);
+    const prompt = (f.sent.get(first) ?? []).slice(before).join('\n');
+    expect(prompt).toContain('Review only what changed since your last review (the fix delta)');
+    expect(prompt).toContain('Check the fix of the double discount');
+    // while it re-reviews, the work still has its review chat
+    await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('sentinel', 'Review · terzo giro')] })).rejects.toThrow(/one review chat per piece of work/);
+    // the user asked for a fresh reviewer, or a part none covers: freshReview opens it
+    const fresh = await f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('sentinel', 'Review · occhi nuovi'), freshReview: true }] });
+    expect(fresh.children[0].chatId).toBeTruthy();
+    await expect(f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Fonte'), freshReview: 'yes' }] })).rejects.toThrow(/freshReview/);
+    // another role is never held back
+    expect((await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Fonte')] })).children).toHaveLength(1);
+  });
+
   it('three Scouts run in parallel, each a writable chat of its own', async () => {
     const f = fixture();
     const parent = await f.root('strategist');

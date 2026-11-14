@@ -129,9 +129,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/delegation.ts allowsClass, launchGap; src/main/agents/worktrees.ts; src/main/agents/role-gate.ts aboveParent
       b('I permessi scendono soltanto: un figlio non ha mai più strumenti o permessi del genitore e lavora nella sua cartella (o in un worktree dello stesso repository); una richiesta oltre i permessi del genitore è rifiutata e lo dice nella chat. Di base ogni ruolo può tutto, quindi chi pianifica (Strategist) avvia anche chi cambia qualcosa (Artisan, Sentinel, Herald); se hai ristretto il genitore, un figlio che ha bisogno di più non parte: il genitore lo scrive nel suo risultato e lo avvia l’Orchestrator.',
         'Permissions only go down: a child never gets more tools or permissions than its parent and works in its folder (or a worktree of the same repository); a request beyond the parent’s permissions is refused and says so in the chat. By default every role may do everything, so a planner (Strategist) also launches the roles that change something (Artisan, Sentinel, Herald); if you narrowed the parent, a child that needs more does not start: the parent writes it in its result and the Orchestrator starts it.'),
-      // src/shared/roles.ts DELEGATION_DEFAULTS; src/main/chats/manager-delegation.ts limitNotice
-      b('Profondità e figli in corso sono limiti tuoi (Impostazioni → Ruoli e deleghe); una delega oltre il limite è rifiutata e il genitore mostra «Limite».',
-        'Depth and running children are your limits (Settings → Roles and delegation); a delegation over the limit is refused and the parent shows "Limit".'),
+      // src/shared/roles.ts DELEGATION_DEFAULTS; src/main/chats/manager-delegation.ts limitNotice; src/main/agents/one-review.ts (#387)
+      b('Profondità e figli in corso sono limiti tuoi (Impostazioni → Ruoli e deleghe); una delega oltre il limite è rifiutata e il genitore mostra «Limite». Una sola chat di review per lavoro: dopo un fix la stessa chat rivede solo quello che è cambiato; una nuova si apre per un altro lavoro, per una parte che nessuna copre o se la chiedi tu.',
+        'Depth and running children are your limits (Settings → Roles and delegation); a delegation over the limit is refused and the parent shows "Limit". One review chat per piece of work: after a fix the same chat reviews only what changed; a new one is opened for other work, for a part none covers or when you ask for it.'),
       // src/main/agents/worktree-pool.ts WorktreePool; src/renderer/components/WorktreeSettings.tsx (ADR 0227)
       b('Un figlio che scrive lavora in una copia del repository (worktree) su un branch suo. L’app riusa le copie libere e pulite, con i file di build già fatti, e cancella quelle oltre i limiti di Impostazioni → Avanzate (copie per repository, in tutto, spazio massimo): la prima volta con il tuo «Pulisci ora», poi da sola ogni 6 ore. Una copia con modifiche o commit non pubblicati non si cancella mai: la vedi elencata lì.',
         'A child that writes works in a copy of the repository (worktree) on its own branch. The app reuses free, clean copies, their build outputs already there, and deletes the ones over the limits in Settings → Advanced (copies per repository, in total, disk cap): the first time with your "Clean up now", then by itself every 6 hours. A copy with changes or unpushed commits is never deleted: you see it listed there.'),
@@ -160,7 +160,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       [-1]: ['src/shared/delegation.ts'],
       0: ['src/shared/delegation.ts#delegationPrompt'],
       1: ['src/main/agents/worktrees.ts', 'src/main/agents/role-gate.ts#aboveParent'],
-      2: ['src/shared/roles.ts#DELEGATION_DEFAULTS', 'src/main/chats/manager-delegation.ts#limitNotice'],
+      2: ['src/shared/roles.ts#DELEGATION_DEFAULTS', 'src/main/chats/manager-delegation.ts#limitNotice', 'src/main/agents/one-review.ts'],
       3: ['src/main/agents/worktree-pool.ts', 'src/renderer/components/WorktreeSettings.tsx'],
       4: ['src/main/agents/delegation.ts#agent_ask_parent', 'src/main/agents/delegation.ts#agent_answer_child', 'src/renderer/lib/child-requests.ts#requestHost'],
       5: ['src/renderer/components/DelegationCard.tsx', 'src/renderer/lib/run-steps.ts'],
