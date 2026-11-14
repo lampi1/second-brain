@@ -3,7 +3,7 @@
 // loop for the state `idle`, which the agent cards show on their front. Drawn with lib/sprite-kit.ts on lib/sprite-rig.ts.
 import { shade, type Shape } from './character-art';
 import { GOLD, INK, J, WHITE, ink, sh, type Ease, type Look, type Node, type Pose, type Track } from './sprite-rig';
-import { COAL, D2R, HIP_L, HIP_R, KNIGHT, STAR, k, loop, notes, pop, puff, reach, rr, shOf } from './sprite-kit';
+import { COAL, D2R, HIP_L, HIP_R, KNIGHT, L1, L2, SHY, STAR, handOf, k, loop, notes, pop, puff, reach, rr, shOf } from './sprite-kit';
 import type { SpriteId } from './agent-sprites';
 
 const { P, S, C, E } = sh;
@@ -27,6 +27,54 @@ const armPath = (T: number, keys: [number, AB, number, Ease?][], lean = 0) => ({
   goB: loop(T, keys.map(([at, o, , e]) => k(at, { a: o.b, ...(e ? { e } : {}) }))),
   goH: loop(T, keys.map(([at, o, tilt, e]) => k(at, { a: Math.round(tilt - lean - o.a - o.b), ...(e ? { e } : {}) }))),
 });
+/** Both elbows of a right hand on (x, y) (the figure's own frame), as [a, b] pairs. */
+const elbows = (sx: number, x: number, y: number): AB[] => {
+  const dx = x - (32 + sx), dy = y - SHY, D = Math.max(0.3, Math.min(Math.hypot(dx, dy), L1 + L2 - 0.05)), phi = Math.atan2(-dx, dy);
+  const al = Math.acos(Math.max(-1, Math.min(1, (L1 * L1 + D * D - L2 * L2) / (2 * L1 * D))));
+  const be = Math.acos(Math.max(-1, Math.min(1, (L1 * L1 + L2 * L2 - D * D) / (2 * L1 * L2))));
+  return [{ a: (phi + al) / D2R, b: -(Math.PI - be) / D2R }, { a: (phi - al) / D2R, b: (Math.PI - be) / D2R }];
+};
+const near = (v: number, ref: number) => v + 360 * Math.round((ref - v) / 360);
+const EASED: Record<Ease, (t: number) => number> = {
+  io: t => t * t * (3 - 2 * t), in: t => t * t, out: t => 1 - (1 - t) * (1 - t), lin: t => t, hold: () => 0,
+  back: t => 1 + 2.7 * (t - 1) ** 3 + 1.7 * (t - 1) ** 2,
+};
+/** An arm's tracks through poses like armPath, but the hand glides between them in a straight line with the eased
+ *  timing, every step solved again and the elbow kept where it was, out to the side (with arms this short a hand
+ *  reaches the mouth only with the elbow raised, as one drinks): no arm swinging round a joint, no held thing spinning. `left`: the
+ *  poses are the left arm's. */
+const armGlide = (T: number, sx: number, keys: [number, AB, number, Ease?][], lean = 0, left = false) => {
+  const m = left ? -1 : 1, handAt = (o: AB): [number, number] => { const [x, y] = handOf(sx, m * o.a, m * o.b); return [left ? 64 - x : x, y]; };
+  // the first pose puts the elbow out; from there each step keeps the elbow nearest to where it was
+  const solve = (x: number, y: number, ref: AB | null): AB => {
+    const all = elbows(sx, left ? 64 - x : x, y).map(r => ({ a: m * r.a, b: m * r.b }));
+    if (!ref) return all.sort((p, q) => (-m * Math.sin(q.a * D2R) + 0.35 * Math.cos(q.a * D2R)) - (-m * Math.sin(p.a * D2R) + 0.35 * Math.cos(p.a * D2R)))[0]!;
+    const cand = all.map(r => ({ a: near(r.a, ref.a), b: near(r.b, ref.b) }));
+    return cand.sort((p, q) => Math.abs(p.a - ref.a) + Math.abs(p.b - ref.b) - Math.abs(q.a - ref.a) - Math.abs(q.b - ref.b))[0]!;
+  };
+  const out: [number, AB, number, Ease?][] = [];
+  let prev: AB | null = null;
+  keys.forEach(([at, o, tilt, e], i) => {
+    const h0 = handAt(o), here = solve(h0[0], h0[1], prev), next = keys[i + 1];
+    prev = here;
+    if (!next || e === 'hold') { out.push([at, here, tilt, e]); return; }
+    const h1 = handAt(next[1]), n = Math.min(6, Math.floor(Math.hypot(h1[0] - h0[0], h1[1] - h0[1]) / 1.4));
+    out.push([at, here, tilt, n > 1 ? 'lin' : e]);
+    for (let j = 1; j < n; j++) {
+      const u = EASED[e ?? 'io'](j / n);
+      prev = solve(h0[0] + (h1[0] - h0[0]) * u, h0[1] + (h1[1] - h0[1]) * u, prev);
+      out.push([at + ((next[0] - at) * j) / n, prev, tilt + (next[2] - tilt) * u, 'lin']);
+    }
+  });
+  let h = 0;
+  const held = out.map(([, o, tilt], i) => (h = i ? near(tilt - lean - o.a - o.b, h) : tilt - lean - o.a - o.b));
+  const r1 = (v: number) => Math.round(v * 10) / 10, r2 = (v: number) => Math.round(v * 100) / 100;
+  return {
+    go: loop(T, out.map(([at, o, , e]) => k(r2(at), { a: r1(o.a), ...(e ? { e } : {}) }))),
+    goB: loop(T, out.map(([at, o, , e]) => k(r2(at), { a: r1(o.b), ...(e ? { e } : {}) }))),
+    goH: loop(T, out.map(([at, , , e], i) => k(r2(at), { a: Math.round(held[i]!), ...(e ? { e } : {}) }))),
+  };
+};
 /** Shown from `on` to `off` (% of the loop), hidden otherwise (or the other way round). */
 const shown = (T: number, ranges: [number, number][], invert = false): Track => {
   const v = (x: boolean) => ((x !== invert) ? 1 : 0);
@@ -144,17 +192,18 @@ export const VICE: Record<Exclude<SpriteId, 'plain'>, (look: Look) => Pose> = {
     };
   },
   // a look left, a look right, the metal flask out of the coat, a long swig with the eyes shut, the moustache wiped
-  // with the back of the other hand; then the hiccups, a hop each
+  // with a happy sigh; then the hiccups, a hop each
   scout: look => {
     const T = 6.2, sx = shOf(look), skin = look.skin;
-    // the flask in the held frame: the fist low on it at 0 0, the cap's top at CAP
-    const CAP: [number, number] = [0, -6.6];
-    const pocket = hold(sx, [0, 0], 0, 34.8, 44.2), show = hold(sx, [0, 0], -8, 40.8, 41.8), up = hold(sx, CAP, -118, MOUTH[0] + 0.3, MOUTH[1] + 0.5), deep = hold(sx, CAP, -134, MOUTH[0] + 0.2, MOUTH[1] + 0.3);
+    // the flask in the held frame: the fist round its bottom at 0 0 (so the hand stays out by the cheek while the
+    // flask reaches the mouth), the cap's top at CAP
+    const CAP: [number, number] = [0, -8.2];
+    const pocket = hold(sx, [0, 0], 0, 34.8, 44.2), show = hold(sx, [0, 0], -8, 40.8, 41.8), up = hold(sx, CAP, -118, MOUTH[0] + 0.3, MOUTH[1] + 0.5), chin = hold(sx, CAP, -50, MOUTH[0] + 1.4, MOUTH[1] + 1.6), deep = hold(sx, CAP, -134, MOUTH[0] + 0.2, MOUTH[1] + 0.3);
     const BODY = 'M-2.6 -3.6Q-2.6 -4.6 -1.2 -4.8H1.2Q2.6 -4.6 2.6 -3.6V1.6Q2.6 3 1.2 3H-1.2Q-2.6 3 -2.6 1.6Z';
     const flask: Node[] = [P(BODY, '#b8c0cc'), P('M1 -4.8Q2.6 -4.6 2.6 -3.6V1.6Q2.6 3 1 3Z', '#7d8696', 0.6),
       rr(-0.9, -5.8, 1.8, 1.2, 0.3, '#8d96a6'), rr(-1.25, -6.6, 2.5, 1, 0.4, '#5d6573'), S('M-0.9 -6.1H0.9', '#9aa3b2', 0.3),
       S('M-1.7 -3.8V1.9', '#f2f5fa', 0.6, 0.9), S('M-1.1 -4.2H1.1', '#f2f5fa', 0.35, 0.6), rr(-2.6, -1.6, 5.2, 1.7, 0.2, '#6b4a22'), S('M-2.4 -0.75H2.4', '#8a6232', 0.3),
-      S(BODY, '#5d6573', 0.35)];
+      S(BODY, '#5d6573', 0.35)].map(n => J(0, -1.6, 0, [n]));
     const swigs = [70, 82];
     return {
       blink: true, mouth: 'smile',
@@ -163,8 +212,8 @@ export const VICE: Record<Exclude<SpriteId, 'plain'>, (look: Look) => Pose> = {
       lean: -1,
       go: loop(T, [k(0), k(33, { a: -1.5 }), k(50, { a: -1.5 }), k(54), ...swigs.flatMap(h => [k(h, { e: 'out' }), k(h + 2, { dy: -1.8, sy: 1.04, e: 'in' }), k(h + 5, { sy: 0.97 }), k(h + 8)])]),
       armR: { ...HIP_R, held: [J(0, 0, 0, flask, shown(T, [[19, 61]]))], grip: [J(0, 0, 0, fingers(skin, -1.9, -1.5, 3.4, 1.15, [2.7, -1.8]), shown(T, [[19, 61]]))],
-        ...armPath(T, [[0, HIP_R, 0], [14, HIP_R, 0, 'io'], [19, pocket, 0, 'io'], [24, show, -8, 'out'], [30, show, -8, 'io'], [35, up, -118, 'out'], [44, deep, -134, 'io'], [50, up, -118, 'io'], [55, show, -8, 'io'], [61, pocket, 0, 'io'], [65, HIP_R, 0], [100, HIP_R, 0]]) },
-      armL: { ...HIP_L, ...armPath(T, [[0, HIP_L, 0], [52, HIP_L, 0, 'io'], [56, reachL(sx, 29.6, 31.8), 0, 'io'], [59, reachL(sx, 36, 31.2), 0, 'io'], [63, HIP_L, 0, 'io'], [100, HIP_L, 0]]) },
+        ...armGlide(T, sx, [[0, HIP_R, 0], [14, HIP_R, 0, 'io'], [19, pocket, 0, 'io'], [24, show, -8, 'out'], [29, show, -8, 'io'], [33, chin, -50, 'io'], [37, up, -118, 'out'], [45, deep, -132, 'io'], [49, up, -118, 'io'], [52, chin, -50, 'io'], [56, show, -8, 'io'], [61, pocket, 0, 'io'], [65, HIP_R, 0], [100, HIP_R, 0]]) },
+      armL: HIP_L,
       front: [...swigs.map(h => J(MOUTH[0] + 3.4, MOUTH[1] - 2, 0, [ink([C(0, 0, 1, WHITE), C(1.8, -1.6, 0.7, WHITE)])], puff(T, [h + 1], 11, 4, -6, 1.7), 1, 0))],
     };
   },
@@ -200,15 +249,15 @@ export const VICE: Record<Exclude<SpriteId, 'plain'>, (look: Look) => Pose> = {
   // up; the can crushed in the fist and flicked over the shoulder; then a double biceps, eyes blazing
   sentinel: look => {
     const T = 7, sx = shOf(look);
-    // the can in the held frame: the gauntlet low on it at 0 0, the near edge of its top at LIP
-    const LIP: [number, number] = [-1.3, -5.7];
-    const rest = hold(sx, [0, 0], 0, 41.6, 45.2), lift = hold(sx, [0, 0], -30, 43.4, 38.4), drink = hold(sx, LIP, -108, MOUTH[0] + 0.3, MOUTH[1] + 1.4), deep = hold(sx, LIP, -122, MOUTH[0] + 0.2, MOUTH[1] + 1.2);
+    // the tall can in the held frame: the gauntlet round its bottom at 0 0, the near edge of its top at LIP
+    const LIP: [number, number] = [-1.2, -8.8];
+    const rest = hold(sx, [0, 0], 0, 41.6, 45.2), lift = hold(sx, [0, 0], -30, 43.4, 38.4), drink = hold(sx, LIP, -108, MOUTH[0] + 0.3, MOUTH[1] + 1.4), chinS = hold(sx, LIP, -64, MOUTH[0] + 2, MOUTH[1] + 2.6), deep = hold(sx, LIP, -122, MOUTH[0] + 0.2, MOUTH[1] + 1.2);
     const crush = hold(sx, [0, 0], 0, 43, 41.2), flick = hold(sx, [0, 0], -40, 44.8, 30.4);
     const flexR: AB = { a: -120, b: -88 }, flexL: AB = { a: 120, b: 88 }, tightR: AB = { a: -124, b: -106 }, tightL: AB = { a: 124, b: 106 };
     const CAN = '#3ccf5a', RIM = '#c3cad6';
-    const can: Node[] = [J(0, -2.1, 0, [J(0, 2.1, 0, [rr(-1.9, -5.4, 3.8, 6.8, 0.7, CAN), P('M0.9 -5.4H1.2Q1.9 -5.4 1.9 -4.7V0.7Q1.9 1.4 1.2 1.4H0.9Z', '#22963b'),
-      rr(-1.9, -5.9, 3.8, 1, 0.4, RIM), rr(-1.9, 1, 3.8, 0.8, 0.35, RIM), S('M-0.4 -5.6L0.8 -5.9', '#8d96a6', 0.4),
-      P('M0.4 -4.6L-1 -2.2H0.2L-0.5 -0.2L1.2 -2.8H0Z', '#12301b'), S('M-1.3 -4.6V0.8', WHITE, 0.5, 0.45)])],
+    const can: Node[] = [J(0, -3.6, 0, [J(0, 3.6, 0, [rr(-1.8, -8.2, 3.6, 9.4, 0.7, CAN), P('M0.8 -8.2H1.1Q1.8 -8.2 1.8 -7.5V0.5Q1.8 1.2 1.1 1.2H0.8Z', '#22963b'),
+      rr(-1.8, -8.8, 3.6, 1, 0.4, RIM), rr(-1.8, 0.8, 3.6, 0.8, 0.35, RIM), S('M-0.4 -8.5L0.8 -8.8', '#8d96a6', 0.4),
+      P('M0.5 -6.6L-1 -3.6H0.2L-0.5 -1.2L1.3 -4.3H0Z', '#12301b'), S('M-1.2 -7.4V0.4', WHITE, 0.5, 0.45)])],
       loop(T, [k(0), k(45.5, { e: 'back' }), k(48, { sy: 0.4, sx: 1.25, a: 8 }), k(96, { sy: 0.4, sx: 1.25, a: 8, e: 'hold' }), k(97)]))];
     const pulses = [63, 69, 75];
     return {
@@ -219,11 +268,11 @@ export const VICE: Record<Exclude<SpriteId, 'plain'>, (look: Look) => Pose> = {
           loop(T, [k(0), k(15, { e: 'io' }), k(19, { dy: 3.6, sy: 0.7 }), k(38, { dy: 3.6, sy: 0.7, e: 'io' }), k(42)])),
           J(32, 32, 0, [E(-4.6, 0, 3.2, 1.2, '#ff3b30', 0.35), E(4.6, 0, 3.2, 1.2, '#ff3b30', 0.35)], loop(T, [k(0, { o: 0, e: 'hold' }), k(58, { o: 0 }), k(61, { o: 1, sx: 1.4, sy: 1.4 }), k(84, { o: 1, sx: 1.2, sy: 1.2 }), k(90, { o: 0 }), k(100, { o: 0 })]), 1, 0)] },
       go: loop(T, [k(0), k(19, { a: -2 }), k(36, { a: -2 }), k(42), k(57, { e: 'out' }), ...pulses.flatMap(p => [k(p, { sx: 1.04, sy: 0.99, e: 'out' }), k(p + 3.4, { sx: 1.01 })]), k(84), k(92)]),
-      armR: { ...rest, held: [J(0, 0, 0, can, shown(T, [[52.6, 96]], true))], grip: [J(0, 0, 0, fingers(COAL, -2.2, -2, 3.6, 1.2, [2.3, -2.4]), shown(T, [[52.6, 96]], true))], ha: -(rest.a + rest.b),
-        ...armPath(T, [[0, rest, 0], [6, rest, 0, 'io'], [8, hold(sx, [0, 0], 0, 41.4, 44.4), 0, 'io'], [10, rest, 0, 'io'], [14, lift, -30, 'io'], [19, drink, -108, 'out'], [36, deep, -122, 'io'],
-          [41, lift, -20, 'io'], [45, crush, 0, 'io'], [49, crush, 0, 'io'], [51.5, hold(sx, [0, 0], -10, 45.6, 41), -10, 'in'], [53, flick, -40, 'out'], [57, flexR, 0, 'io'],
+      armR: { ...rest, held: [J(0, 0, 0, can, shown(T, [[52.6, 96]], true))], grip: [J(0, 0, 0, fingers(COAL, -2.1, -1.6, 3.4, 1.15, [2.2, -2.2]), shown(T, [[52.6, 96]], true))], ha: -(rest.a + rest.b),
+        ...armGlide(T, sx, [[0, rest, 0], [6, rest, 0, 'io'], [8, hold(sx, [0, 0], 0, 41.4, 44.4), 0, 'io'], [10, rest, 0, 'io'], [13.5, lift, -30, 'io'], [16.5, chinS, -64, 'io'], [20, drink, -108, 'out'], [35, deep, -122, 'io'],
+          [38, chinS, -64, 'io'], [41, lift, -20, 'io'], [45, crush, 0, 'io'], [49, crush, 0, 'io'], [51.5, hold(sx, [0, 0], -10, 45.6, 41), -10, 'in'], [53, flick, -40, 'out'], [57, flexR, 0, 'io'],
           ...pulses.flatMap((p): [number, AB, number, Ease?][] => [[p, tightR, 0, 'io'], [p + 3.4, flexR, 0, 'io']]), [84, flexR, 0, 'io'], [92, rest, 0, 'io'], [100, rest, 0]]) },
-      armL: { ...HIP_L, ...armPath(T, [[0, HIP_L, 0], [52, HIP_L, 0, 'io'], [57, flexL, 0, 'io'], ...pulses.flatMap((p): [number, AB, number, Ease?][] => [[p, tightL, 0, 'io'], [p + 3.4, flexL, 0, 'io']]), [84, flexL, 0, 'io'], [92, HIP_L, 0, 'io'], [100, HIP_L, 0]]) },
+      armL: { ...HIP_L, ...armGlide(T, sx, [[0, HIP_L, 0], [52, HIP_L, 0, 'io'], [57, flexL, 0, 'io'], ...pulses.flatMap((p): [number, AB, number, Ease?][] => [[p, tightL, 0, 'io'], [p + 3.4, flexL, 0, 'io']]), [84, flexL, 0, 'io'], [92, HIP_L, 0, 'io'], [100, HIP_L, 0]], 0, true) },
       front: [
         // the hiss of the opening
         J(40.8, 37.6, 0, [ink([S('M0 0L-1 -2.4M1.2 0.2L1.6 -2.2M2.2 0.8L3.6 -0.8', WHITE, 0.7)])], puff(T, [8.4], 9, 0, -2, 1.3), 1, 0),
@@ -239,12 +288,12 @@ export const VICE: Record<Exclude<SpriteId, 'plain'>, (look: Look) => Pose> = {
   // then a pat on the belly, rosy and a little tipsy, humming
   herald: look => {
     const T = 6.8, sx = shOf(look), skin = look.skin, G = 0.85;
-    // the glass in the held frame: the fingers on the stem at 0 0, the near edge of the rim at RIMG
-    const RIMG: [number, number] = [-2.9 * G, -8.4 * G];
+    // the glass in the held frame: the fingers pinch the bottom of the stem at 0 0, the near edge of the rim at RIMG
+    const RIMG: [number, number] = [-2.9 * G, -10 * G];
     const c: [number, number] = [43.4, 42.4];
     const swirl = [0, 1, 2, 3].map(i => hold(sx, [0, 0], 0, c[0] + Math.sin(i * Math.PI / 2) * 1.1, c[1] - Math.cos(i * Math.PI / 2) * 0.7));
-    const nose = hold(sx, [0, -5.4 * G], -16, MOUTH[0] + 2.4, MOUTH[1] - 0.4), sip = hold(sx, RIMG, -76, MOUTH[0] + 0.2, MOUTH[1] + 0.5), sip2 = hold(sx, RIMG, -86, MOUTH[0] + 0.1, MOUTH[1] + 0.4);
-    const glass: Node[] = [J(0, 0, 0, [S('M0 -2.4V1.6', '#dcecf8', 0.7), E(0, 1.9, 2, 0.5, '#dcecf8'),
+    const nose = hold(sx, [-1.6 * G, -9 * G], -40, MOUTH[0] + 2.4, MOUTH[1] - 1.6), sip = hold(sx, RIMG, -76, MOUTH[0] + 0.2, MOUTH[1] + 0.5), sip2 = hold(sx, RIMG, -86, MOUTH[0] + 0.1, MOUTH[1] + 0.4);
+    const glass: Node[] = [J(0, -1.4, 0, [S('M0 -2.4V1.6', '#dcecf8', 0.7), E(0, 1.9, 2, 0.5, '#dcecf8'),
       J(0, -2.6, 0, [liquid(T, 0, 0, 4.4, 2.6, '#7a1426', [[50, 0.45]], 1.4)], loop(T, [k(0, { a: -14 }), k(5, { a: 12 }), k(10, { a: -12 }), k(15, { a: 12 }), k(20, { a: -8 }), k(26, { a: 0, e: 'out' })])),
       P('M-2.9 -8.4H2.9C2.9 -4.4 1.7 -2.4 0 -2.4C-1.7 -2.4 -2.9 -4.4 -2.9 -8.4Z', '#e4f1fa', 0.32), S('M-2.9 -8.4C-2.9 -4.4 -1.7 -2.4 0 -2.4C1.7 -2.4 2.9 -4.4 2.9 -8.4', '#d2e5f1', 0.5, 0.9),
       S('M-2.9 -8.4H2.9', '#d2e5f1', 0.35, 0.7), S('M-2 -7.4Q-2.1 -5 -1 -3.6', WHITE, 0.5, 0.75)], undefined, G)];
@@ -254,9 +303,9 @@ export const VICE: Record<Exclude<SpriteId, 'plain'>, (look: Look) => Pose> = {
       head: { go: loop(T, [k(0), k(20, { a: 3 }), k(26, { a: 6, e: 'io' }), k(34, { a: 6 }), k(40, { a: -10, e: 'io' }), k(54, { a: -12 }), k(60, { a: 4, e: 'out' }), k(70, { a: -3 }), k(78, { a: 4 }), k(86, { a: -3 }), k(96)]),
         over: [savour(T, skin, 26, 56), cheeks(T, 54, 96)] },
       go: loop(T, [k(0), k(26, { a: 1 }), k(40, { a: -1.5 }), k(56), k(64, { a: 2.2, e: 'io' }), k(74, { a: -2.2, e: 'io' }), k(84, { a: 1.6, e: 'io' }), k(96)]),
-      armR: { ...swirl[0]!, held: glass, grip: [S('M-1.2 -0.9V1.1', skin, 1.15), S('M1.2 -0.9V1.1', skin, 1.15)], ha: -(swirl[0]!.a + swirl[0]!.b),
-        ...armPath(T, [[0, swirl[0]!, 0], [5, swirl[1]!, 0], [10, swirl[2]!, 0], [15, swirl[3]!, 0], [20, swirl[0]!, 0], [26, nose, -16, 'io'], [34, nose, -16, 'io'], [42, sip, -76, 'io'], [54, sip2, -86, 'io'], [62, swirl[0]!, 0, 'io'], [100, swirl[0]!, 0]]) },
-      armL: { ...HIP_L, ...armPath(T, [[0, HIP_L, 0], [60, HIP_L, 0, 'io'], [64, belly, 0, 'io'], [66.5, pat, 0, 'out'], [69, belly, 0, 'in'], [71.5, pat, 0, 'out'], [74, belly, 0, 'in'], [80, HIP_L, 0, 'io'], [100, HIP_L, 0]]) },
+      armR: { ...swirl[0]!, held: glass, grip: [S('M-1.15 -2V-0.2', skin, 1.1), S('M1.15 -2V-0.2', skin, 1.1)], ha: -(swirl[0]!.a + swirl[0]!.b),
+        ...armGlide(T, sx, [[0, swirl[0]!, 0], [5, swirl[1]!, 0], [10, swirl[2]!, 0], [15, swirl[3]!, 0], [20, swirl[0]!, 0], [26, nose, -40, 'io'], [34, nose, -40, 'io'], [42, sip, -76, 'io'], [54, sip2, -86, 'io'], [62, swirl[0]!, 0, 'io'], [100, swirl[0]!, 0]]) },
+      armL: { ...HIP_L, ...armGlide(T, sx, [[0, HIP_L, 0], [60, HIP_L, 0, 'io'], [64, belly, 0, 'io'], [66.5, pat, 0, 'out'], [69, belly, 0, 'in'], [71.5, pat, 0, 'out'], [74, belly, 0, 'in'], [80, HIP_L, 0, 'io'], [100, HIP_L, 0]], 0, true) },
       front: notes(52, 20, T, [68, 80]),
     };
   },

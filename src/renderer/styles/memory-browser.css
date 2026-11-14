@@ -4,7 +4,7 @@
    Custom Highlight API. Theme tokens only; no motion of its own (the detail's rise is the library's). */
 .mb-shelves{grid-template-columns:repeat(5,minmax(0,1fr))}
 .mb-shelves button{padding:0 4px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mb-kind{flex:none;display:inline-flex;align-items:center;gap:5px;height:18px;max-width:14ch;padding:0 7px;border-radius:99px;font-size:10.5px;font-weight:600;
+.mb-kind{flex:none;display:inline-flex;align-items:center;gap:5px;height:18px;max-width:14ch;padding:0 7px;border-radius:var(--r-m);font-size:10.5px;font-weight:600;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--k,var(--text-2));background:color-mix(in srgb,var(--k,var(--text-3)) 13%,transparent)}
 .mb-kind::before{content:"";flex:none;width:5px;height:5px;border-radius:50%;background:currentColor}
 .mb-kind[data-kind=now],.mb-kind[data-kind=journal]{--k:var(--green)}

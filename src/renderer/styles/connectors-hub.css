@@ -42,12 +42,12 @@
 .hub-card h3, .hub-card p { margin: 0; }
 
 .hub-card-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; min-width: 0; }
-.hub-mark { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 11px; font: 700 13px/1 var(--font-display); letter-spacing: .3px; color: var(--tone);
+.hub-mark { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: var(--r-l); font: 700 13px/1 var(--font-display); letter-spacing: .3px; color: var(--tone);
   background: color-mix(in srgb, var(--tone) 14%, var(--surface-3)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 32%, transparent), 0 0 22px -12px var(--tone); }
 .hub-card-id { flex: 1 1 150px; min-width: 0; }
 .hub-card-id h3 { font-size: var(--fs-l); font-weight: 600; letter-spacing: -.2px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hub-kind { margin-top: 2px !important; font-size: var(--fs-xs); color: var(--text-3); line-height: 1.4; }
-.hub-pill { display: inline-flex; align-items: center; gap: 6px; flex: none; align-self: flex-start; font-size: var(--fs-xs); font-weight: 550; color: var(--text-2); border: 1px solid var(--border-2); background: var(--surface-2); border-radius: 20px; padding: 3px 9px 3px 8px; white-space: nowrap; margin-left: auto; }
+.hub-pill { display: inline-flex; align-items: center; gap: 6px; flex: none; align-self: flex-start; font-size: var(--fs-xs); font-weight: 550; color: var(--text-2); border: 1px solid var(--border-2); background: var(--surface-2); border-radius: var(--r-l); padding: 3px 9px 3px 8px; white-space: nowrap; margin-left: auto; }
 .hub-pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-4); }
 .hub-pill[data-status=ok] { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, transparent); background: var(--green-bg); } .hub-pill[data-status=ok] i { background: var(--green); box-shadow: 0 0 0 3px var(--green-bg); }
 .hub-pill[data-status=failed], .hub-pill[data-status=missing] { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, transparent); background: var(--red-bg); } .hub-pill[data-status=failed] i, .hub-pill[data-status=missing] i { background: var(--red); }
@@ -147,7 +147,7 @@
 /* Settings → Avanzate (McpAdvanced, ADR 0119): one row per server, its editor in place */
 .hub-adv-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .hub-adv-list > li { --tone: var(--accent); display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border-2); border-radius: var(--r-m); background: var(--surface-2); min-width: 0; }
-.hub-adv-list > li .hub-mark { width: 30px; height: 30px; border-radius: 8px; font-size: 11px; }
+.hub-adv-list > li .hub-mark { width: 30px; height: 30px; border-radius: var(--r-l); font-size: 11px; }
 .hub-adv-list > li code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 12px; color: var(--text-3); }
 .hub-adv-list > li.hub-adv-edit { display: block; padding: 0; border: 0; background: none; }
 
@@ -159,7 +159,7 @@
 .mcp-add-head > div { flex: 1; min-width: 0; }
 .mcp-add-head h4 { margin: 0 0 3px; font: 600 var(--fs-l)/1.3 var(--font-display); color: var(--text); }
 .mcp-add-head p { margin: 0; color: var(--text-3); font-size: var(--fs-s); line-height: 1.5; }
-.mcp-x { display: grid; place-items: center; width: 26px; height: 26px; flex: none; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--text-3); cursor: pointer; }
+.mcp-x { display: grid; place-items: center; width: 26px; height: 26px; flex: none; padding: 0; border: 0; border-radius: var(--r-m); background: transparent; color: var(--text-3); cursor: pointer; }
 .mcp-x:hover { background: var(--surface-3); color: var(--text); }
 .mcp-x:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .mcp-paste { display: grid; gap: 6px; }
@@ -173,13 +173,13 @@
 .mcp-paste-status.ok { color: var(--green); }
 .mcp-paste-status.bad { color: var(--red); }
 .mcp-picks { display: flex; flex-wrap: wrap; gap: 6px; }
-.mcp-pick, .mcp-role { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--border-2); background: var(--surface);
+.mcp-pick, .mcp-role { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: var(--r-m); border: 1px solid var(--border-2); background: var(--surface);
   color: var(--text-2); font: 550 var(--fs-s) var(--font); cursor: pointer; transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
 .mcp-pick:hover, .mcp-role:hover:not(:disabled) { border-color: var(--border-3); color: var(--text); }
 .mcp-pick[aria-pressed="true"] { border-color: var(--accent); color: var(--text); background: var(--accent-bg); }
 .mcp-catalog { display: grid; gap: 8px; }
 .mcp-catalog-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
-.mcp-cat { display: grid; align-content: start; gap: 2px; padding: 9px 11px; text-align: left; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); cursor: pointer;
+.mcp-cat { display: grid; align-content: start; gap: 2px; padding: 9px 11px; text-align: left; border: 1px solid var(--border); border-radius: var(--r-l); background: var(--surface); color: var(--text); cursor: pointer;
   font: inherit; transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease); }
 .mcp-cat b { font-size: var(--fs-s); font-weight: 600; }
 .mcp-cat small { font-size: var(--fs-xs); color: var(--text-3); line-height: 1.35; }
@@ -195,7 +195,7 @@
 .mcp-tokens { display: grid; gap: 6px; justify-items: start; }
 .mcp-token { display: grid; grid-template-columns: minmax(140px, 1.2fr) minmax(0, 1fr) auto; gap: 6px; width: 100%; align-items: center; }
 .mcp-roles { display: flex; flex-wrap: wrap; gap: 6px; }
-.mcp-role i { display: grid; place-items: center; width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--border-3); background: var(--surface-2); color: var(--on-accent); font-style: normal; }
+.mcp-role i { display: grid; place-items: center; width: 14px; height: 14px; border-radius: var(--r-s); border: 1px solid var(--border-3); background: var(--surface-2); color: var(--on-accent); font-style: normal; }
 .mcp-role[aria-pressed="true"] { border-color: var(--accent-line); background: var(--accent-bg); color: var(--text); }
 .mcp-role[aria-pressed="true"] i { background: var(--accent); border-color: var(--accent); }
 .mcp-role[data-partial] i { background: var(--amber); border-color: var(--amber); }

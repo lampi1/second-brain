@@ -1,4 +1,4 @@
-// E2E of the quick close (demo): «Chiudi chat» in a strip's menu (no ✕ on a strip, ADR 0287) and Ctrl+W on the selected chat close it at once (main
+// E2E of the quick close (demo): «Chiudi chat» in a bench's menu or its ✕ (always in sight, ADR 0311) and Ctrl+W on the selected chat close it at once (main
 // archives it at once, #168) with the usual "Chiusa «…» · Annulla" (6 s); Annulla reopens it. The Orchestrator has no ✕ and Ctrl+W never closes it;
 // a held Ctrl+W closes one chat; a chat in full screen leaves that view and comes back in full screen with Annulla; Ctrl+W under a dialog or in the requests
 // layer never closes the app window (Electron's default menu would).
@@ -11,7 +11,7 @@ const closeByMenu = async (page: Page) => { await page.getByTestId('chat-menu-fi
 test('the menu and Ctrl+W close a chat with Annulla; never the Orchestrator, never the window', async () => {
   const { app, page } = await launchDemo({ orchestrator: true });
   await expect(page.getByTestId('tile-chat-fix')).toBeVisible();
-  await expect(page.locator('[data-testid^="chat-x-"]')).toHaveCount(0); // no ✕ on a strip
+  await expect(page.getByTestId('chat-x-fix')).toBeVisible(); // a bench keeps its ✕ in sight (ADR 0311)
   await shot(page, 'close-fast-1-x');
 
   // «Chiudi chat»: gone at once, Annulla brings it back

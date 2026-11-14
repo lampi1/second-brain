@@ -1,6 +1,6 @@
 /* The strip of the commands just run from a question card (RunWatch.tsx, ADR 0259): bottom center, above the window. */
 .run-watch { position: fixed; left: 50%; bottom: 18px; translate: -50% 0; z-index: 1300; display: flex; flex-direction: column; gap: 6px; width: min(560px, calc(100vw - 32px)); pointer-events: none; }
-.rw-strip { pointer-events: auto; display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-2); box-shadow: var(--shadow-pop); }
+.rw-strip { pointer-events: auto; display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: var(--r-l); background: var(--surface); border: 1px solid var(--border-2); box-shadow: var(--shadow-pop); }
 .rw-strip.running { border-color: color-mix(in srgb, var(--accent) 50%, var(--border-2)); }
 .rw-strip.ok { border-color: color-mix(in srgb, var(--green) 55%, var(--border-2)); }
 .rw-strip.error { border-color: color-mix(in srgb, var(--red) 55%, var(--border-2)); }

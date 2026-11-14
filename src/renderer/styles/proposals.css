@@ -20,12 +20,12 @@
 /* ── head: chips and progress ─────────────────────────────────────────────────────────────────────────────── */
 .pd-head { width: min(780px, 100%); display: flex; flex-direction: column; gap: 12px; }
 .pd-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
-.pd-chip { --pd-c: var(--text-2); display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 6px 0 12px; border-radius: 999px;
+.pd-chip { --pd-c: var(--text-2); display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 6px 0 12px; border-radius: var(--r-m);
   border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2); font: 500 var(--fs-s) var(--font); cursor: pointer;
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease); }
 .pd-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--pd-c); margin-right: -1px; }
 .pd-chip[data-testid="pd-chip-all"]::before { display: none; }
-.pd-chip span { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; display: inline-grid; place-items: center; background: var(--surface-3); color: var(--text-2); font: 600 var(--fs-xs) var(--font-small); font-variant-numeric: tabular-nums; }
+.pd-chip span { min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--r-m); display: inline-grid; place-items: center; background: var(--surface-3); color: var(--text-2); font: 600 var(--fs-xs) var(--font-small); font-variant-numeric: tabular-nums; }
 .pd-chip:hover { border-color: var(--border-3); color: var(--text); }
 .pd-chip[aria-pressed="true"] { background: var(--surface-3); border-color: color-mix(in srgb, var(--pd-c) 55%, var(--border-2)); color: var(--text); }
 .pd-chip[aria-pressed="true"] span { background: color-mix(in srgb, var(--pd-c) 22%, var(--surface-3)); color: var(--text); }
@@ -42,7 +42,7 @@
 .pd-stage { width: var(--pd-w); display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .pd-stack { position: relative; width: 100%; height: 580px; margin-bottom: 26px; perspective: 1200px; }
 .pd-card { --pd-c: var(--accent); --k: 0; position: absolute; inset: 0; display: flex; flex-direction: column; gap: 10px; padding: 18px 20px 16px; overflow: hidden;
-  border-radius: 18px; border: 1px solid var(--border-2); background:
+  border-radius: var(--r-l); border: 1px solid var(--border-2); background:
     radial-gradient(120% 60% at 0% 0%, color-mix(in srgb, var(--pd-c) 10%, transparent), transparent 60%), var(--surface);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 22px 50px -24px rgba(0, 0, 0, 0.6), 0 2px 10px rgba(0, 0, 0, 0.18);
   transform-origin: 50% 110%; transition: transform 380ms cubic-bezier(0.2, 1.35, 0.35, 1), opacity 240ms var(--ease), box-shadow var(--dur) var(--ease);
@@ -59,14 +59,14 @@
 .pd-tint { position: absolute; inset: 0; pointer-events: none; opacity: 0; border-radius: inherit; }
 .pd-tint-yes { background: linear-gradient(115deg, transparent 30%, color-mix(in srgb, var(--green) 26%, transparent)); box-shadow: inset 0 0 0 2px var(--green); }
 .pd-tint-no { background: linear-gradient(245deg, transparent 30%, color-mix(in srgb, var(--red) 26%, transparent)); box-shadow: inset 0 0 0 2px var(--red); }
-.pd-stamp { position: absolute; top: 44%; z-index: 2; padding: 4px 12px; border: 3px solid currentColor; border-radius: 10px; font: 800 34px/1.1 var(--font-display);
+.pd-stamp { position: absolute; top: 44%; z-index: 2; padding: 4px 12px; border: 3px solid currentColor; border-radius: var(--r-l); font: 800 34px/1.1 var(--font-display);
   letter-spacing: 0.08em; pointer-events: none; opacity: 0; background: color-mix(in srgb, var(--surface) 70%, transparent); backdrop-filter: blur(2px); }
 .pd-stamp-yes { left: 28px; color: var(--green); transform: translateY(-50%) rotate(-13deg); }
 .pd-stamp-no { right: 28px; color: var(--red); transform: translateY(-50%) rotate(13deg); }
 .pd-card-head { display: flex; align-items: center; gap: 8px; min-height: 22px; }
-.pd-kind { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; font: 600 var(--fs-xs) var(--font-small); letter-spacing: 0.02em;
+.pd-kind { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: var(--r-m); font: 600 var(--fs-xs) var(--font-small); letter-spacing: 0.02em;
   color: var(--pd-c); background: color-mix(in srgb, var(--pd-c) 14%, transparent); border: 1px solid color-mix(in srgb, var(--pd-c) 35%, transparent); }
-.pd-applied { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: 999px; font: 500 var(--fs-xs) var(--font-small); color: var(--text-2); background: var(--surface-3); }
+.pd-applied { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: var(--r-m); font: 500 var(--fs-xs) var(--font-small); color: var(--text-2); background: var(--surface-3); }
 .pd-applied::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px var(--green-bg); }
 .pd-when { margin-left: auto; color: var(--text-4); font: 500 var(--fs-xs) var(--font-small); font-variant-numeric: tabular-nums; }
 .pd-title { margin: 2px 0 0; font: 600 21px/1.25 var(--font-display); color: var(--text); letter-spacing: -0.01em; overflow-wrap: anywhere;
@@ -129,7 +129,7 @@
 
 /* ── done and empty ─────────────────────────────────────────────────────────────────────────────────────── */
 .pd-done, .pd-empty { position: relative; width: var(--pd-w); display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px;
-  padding: 40px 28px 30px; border-radius: 20px; border: 1px solid var(--border-2); overflow: hidden;
+  padding: 40px 28px 30px; border-radius: var(--r-l); border: 1px solid var(--border-2); overflow: hidden;
   background: radial-gradient(90% 70% at 50% 0%, color-mix(in srgb, var(--green) 12%, transparent), transparent 70%), var(--surface); }
 .pd-empty { background: radial-gradient(90% 70% at 50% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 70%), var(--surface); }
 .pd-done h3, .pd-empty h3 { margin: 6px 0 0; font: 600 26px/1.2 var(--font-display); color: var(--text); letter-spacing: -0.01em; }
@@ -157,7 +157,7 @@
 .pd-confetti i:nth-child(5n+3) { background: var(--amber); }
 .pd-confetti i:nth-child(5n+4) { background: var(--pair-1); border-radius: 50%; width: 6px; height: 6px; }
 .pd-empty-art { position: relative; width: 92px; height: 78px; margin-bottom: 6px; }
-.pd-empty-art i { position: absolute; left: 14px; top: 10px; width: 64px; height: 56px; border-radius: 12px; border: 1.5px solid var(--border-3); background: var(--surface-2); }
+.pd-empty-art i { position: absolute; left: 14px; top: 10px; width: 64px; height: 56px; border-radius: var(--r-l); border: 1.5px solid var(--border-3); background: var(--surface-2); }
 .pd-empty-art i:nth-child(1) { transform: rotate(-12deg) translate(-10px, 4px); opacity: 0.55; }
 .pd-empty-art i:nth-child(2) { transform: rotate(9deg) translate(10px, 2px); opacity: 0.75; }
 .pd-empty-art i:nth-child(3) { background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 18%, var(--surface-2)), var(--surface-2)); border-color: color-mix(in srgb, var(--accent) 45%, var(--border-3)); }
@@ -207,7 +207,7 @@
 .pd-conflict legend { padding: 0 4px; color: var(--text); font-size: var(--fs-s); font-weight: 600; }
 .pd-conflict ul { margin: 2px 0 8px; padding-left: 18px; color: var(--text-2); font-size: var(--fs-s); line-height: 1.45; max-height: 64px; overflow: auto; }
 .pd-conflict-choices { display: flex; flex-wrap: wrap; gap: 6px; }
-.pd-conflict-choices label { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px 5px 8px; border-radius: 999px; border: 1px solid var(--border-2); background: var(--surface);
+.pd-conflict-choices label { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px 5px 8px; border-radius: var(--r-m); border: 1px solid var(--border-2); background: var(--surface);
   font-size: var(--fs-s); color: var(--text-2); cursor: pointer; }
 .pd-conflict-choices label.on { border-color: var(--amber); color: var(--text); background: color-mix(in srgb, var(--amber) 16%, var(--surface)); }
 .pd-conflict-choices input { accent-color: var(--amber); margin: 0; }
@@ -234,7 +234,7 @@
 .pd-auto { width: var(--pd-w); margin-top: 18px; padding: 14px 16px; border-radius: var(--r-m); background: var(--surface-2); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
 .pd-auto-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
 .pd-auto-head h3 { margin: 0; font: 600 var(--fs-m) var(--font); color: var(--text); }
-.pd-auto-saved { margin-left: auto; display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; font: 600 var(--fs-xs) var(--font-small);
+.pd-auto-saved { margin-left: auto; display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: var(--r-m); font: 600 var(--fs-xs) var(--font-small);
   color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); border: 1px solid color-mix(in srgb, var(--green) 30%, transparent); font-variant-numeric: tabular-nums; }
 .pd-auto-lead { margin: 0; color: var(--text-3); font-size: var(--fs-s); line-height: 1.45; }
 .pd-auto-list { margin: 2px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
@@ -254,7 +254,7 @@
 .pd-cand-kind { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--pd-c); transform: translateY(-1px); }
 .pd-cand-checks li { color: var(--text-2); padding-left: 14px; position: relative; }
 .pd-cand-checks li::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-size: var(--fs-xs); }
-.pd-cand-status { margin-left: 8px; padding: 1px 8px; border-radius: 999px; font: 500 var(--fs-xs) var(--font-small); background: var(--surface-3); color: var(--text-2); text-transform: none; letter-spacing: 0; }
+.pd-cand-status { margin-left: 8px; padding: 1px 8px; border-radius: var(--r-m); font: 500 var(--fs-xs) var(--font-small); background: var(--surface-3); color: var(--text-2); text-transform: none; letter-spacing: 0; }
 .pd-cand-passed { background: color-mix(in srgb, var(--green) 18%, var(--surface-3)); color: var(--text); }
 .pd-cand-failed { background: color-mix(in srgb, var(--red) 18%, var(--surface-3)); color: var(--text); }
 .pd-diffs { display: flex; flex-direction: column; gap: 6px; }
@@ -262,7 +262,7 @@
 .pd-diff-file summary { display: flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; font-size: var(--fs-s); color: var(--text-2); }
 .pd-diff-file summary code { color: var(--text); font-size: var(--fs-xs); overflow-wrap: anywhere; }
 .pd-diff-file summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-.pd-diff-tag { padding: 0 7px; border-radius: 999px; font: 500 var(--fs-xs) var(--font-small); }
+.pd-diff-tag { padding: 0 7px; border-radius: var(--r-m); font: 500 var(--fs-xs) var(--font-small); }
 .pd-diff-new { background: color-mix(in srgb, var(--green) 18%, var(--surface-3)); color: var(--text); }
 .pd-diff-gone { background: color-mix(in srgb, var(--red) 18%, var(--surface-3)); color: var(--text); }
 .pd-diff-body { max-height: 320px; overflow: auto; border-top: 1px solid var(--border); padding: 6px; cursor: text; user-select: text; }

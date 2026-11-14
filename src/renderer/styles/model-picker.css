@@ -2,12 +2,12 @@
    their facts, the effort chips and the scope's actions at the bottom. */
 .mp { display: flex; flex-direction: column; gap: 8px; padding: 8px; max-height: min(560px, calc(100vh - 32px)); min-height: 0; }
 .mp-scope { margin: 0; font-size: 12px; color: var(--text-2); line-height: 1.35; }
-.mp-search { width: 100%; height: 28px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-control); background: var(--surface);
+.mp-search { width: 100%; height: 28px; padding: 0 8px; border-radius: var(--r-m); border: 1px solid var(--border-control); background: var(--surface);
   color: var(--text); font: inherit; font-size: 12.5px; }
 .mp-search:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
-.mp-state { margin: 0; padding: 8px; border-radius: 6px; background: var(--surface-2); color: var(--text-2); font-size: 12px; line-height: 1.4; }
+.mp-state { margin: 0; padding: 8px; border-radius: var(--r-m); background: var(--surface-2); color: var(--text-2); font-size: 12px; line-height: 1.4; }
 .mp-error { display: flex; align-items: center; gap: 8px; justify-content: space-between; color: var(--red); }
-.mp-retry, .mp-btn, .mp-chip { font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text); }
+.mp-retry, .mp-btn, .mp-chip { font: inherit; cursor: pointer; border-radius: var(--r-m); border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text); }
 .mp-retry { padding: 3px 10px; font-size: 12px; flex: none; }
 .mp-searchbar { display: flex; gap: 6px; align-items: stretch; }
 .mp-searchbar .mp-search { flex: 1 1 auto; min-width: 0; }
@@ -16,11 +16,11 @@
 .mp-group { display: flex; flex-direction: column; gap: 1px; }
 .mp-group-head { display: flex; align-items: center; gap: 6px; padding: 4px 4px 2px; font-size: 12px; color: var(--text); position: sticky; top: 0;
   background: var(--surface-2); z-index: 1; }
-.mp-tag { font-size: 10.5px; color: var(--text-3); border: 1px solid var(--border-2); border-radius: 99px; padding: 0 6px; white-space: nowrap; }
+.mp-tag { font-size: 10.5px; color: var(--text-3); border: 1px solid var(--border-2); border-radius: var(--r-m); padding: 0 6px; white-space: nowrap; }
 .mp-warn { color: var(--amber); }
 .mp-note { margin: 0 4px 2px 22px; font-size: 11px; color: var(--text-3); line-height: 1.35; }
 .mp-row { display: grid; grid-template-columns: 14px 1fr; column-gap: 8px; align-items: center; text-align: left; width: 100%; padding: 5px 6px;
-  border: 0; border-radius: 6px; background: none; color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer; }
+  border: 0; border-radius: var(--r-m); background: none; color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer; }
 .mp-row:hover:not(:disabled), .mp-row:focus-visible { background: var(--surface-3); outline: none; }
 .mp-row:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
 .mp-row:disabled { cursor: default; color: var(--text-3); }
@@ -41,10 +41,10 @@
 .mp-btn:disabled, .mp-chip:disabled, .mp-retry:disabled { opacity: .5; cursor: default; }
 .mp-btn:focus-visible, .mp-chip:focus-visible, .mp-retry:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 /* «Balanced mode» switch on the Orchestrator's picker (ADR 0218) */
-.mp-balanced { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border-2); }
+.mp-balanced { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: var(--r-m); background: var(--surface-2); border: 1px solid var(--border-2); }
 .mp-balanced-text { display: flex; flex-direction: column; gap: 2px; flex: 1; font-size: 12.5px; }
 .mp-balanced-text small { color: var(--text-2); font-size: 11.5px; line-height: 1.35; }
-.mp-switch { position: relative; flex: none; width: 34px; height: 20px; border-radius: 10px; border: 1px solid var(--border-control); background: var(--surface-4); cursor: pointer; padding: 0; }
+.mp-switch { position: relative; flex: none; width: 34px; height: 20px; border-radius: var(--r-l); border: 1px solid var(--border-control); background: var(--surface-4); cursor: pointer; padding: 0; }
 .mp-switch span { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--text-2); transition: transform 0.12s; }
 .mp-switch.on { background: var(--accent); border-color: var(--accent); }
 .mp-switch.on span { transform: translateX(14px); background: var(--on-accent); }

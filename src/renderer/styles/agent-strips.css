@@ -64,7 +64,7 @@
 .chat-tile.is-strip .tile-head { padding:5px 4px 5px 8px; border-bottom:0; }
 .chat-tile.is-strip .th-row { flex-wrap:nowrap; gap:8px; min-height:26px; }
 .chat-tile .th-title { flex:none; max-width:42%; }
-.strip-name { all:unset; cursor:pointer; font:inherit; color:inherit; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; border-radius:4px; }
+.strip-name { all:unset; cursor:pointer; font:inherit; color:inherit; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; border-radius:var(--r-s); }
 .strip-name:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
 .strip-now { flex:1 1 0; min-width:0; display:flex; align-items:baseline; gap:8px; overflow:hidden; white-space:nowrap; font-size:var(--fs-s); }
 .chat-tile .th-topic { flex:0 1 auto; min-width:0; margin:0; overflow:hidden; text-overflow:ellipsis; font-size:13px; font-weight:400; color:var(--text-2); }
@@ -92,8 +92,8 @@
 .strip-facts > .agent-identity > button { white-space:nowrap; }
 .strip-facts > .th-ctx { margin-left:0; }
 /* Three views of one agent window (ChatTile.tsx): a quiet segmented switch in the head. */
-.aw-views { flex:none; display:inline-flex; padding:2px; gap:1px; border-radius:8px; background:var(--surface-2); border:1px solid var(--border); }
-.aw-view { display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 8px; border:0; border-radius:6px; background:none; color:var(--text-3); font:500 12px var(--font); cursor:pointer; white-space:nowrap; }
+.aw-views { flex:none; display:inline-flex; padding:2px; gap:1px; border-radius:var(--r-l); background:var(--surface-2); border:1px solid var(--border); }
+.aw-view { display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 8px; border:0; border-radius:var(--r-m); background:none; color:var(--text-3); font:500 12px var(--font); cursor:pointer; white-space:nowrap; }
 .aw-view:hover { color:var(--text); }
 .aw-view.on { background:var(--surface-4); color:var(--text); }
 .chat-tile.is-embedded > .aw-views { align-self:flex-start; margin:6px 10px 0; }
@@ -151,7 +151,7 @@
 .full-orch-btn .orchestrator-column-mark { color:var(--violet); }
 .full-orch-btn.on { background:var(--surface-3); color:var(--text); }
 @media (prefers-reduced-motion: reduce) { .full-layer { animation:none; } }
-.strip-wait { display:inline-flex; align-items:center; gap:6px; height:20px; padding:0 8px; border-radius:99px; border:1px solid var(--amber-line); background:var(--amber-bg); color:var(--amber); font:inherit; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap; flex:none; }
+.strip-wait { display:inline-flex; align-items:center; gap:6px; height:20px; padding:0 8px; border-radius:var(--r-m); border:1px solid var(--amber-line); background:var(--amber-bg); color:var(--amber); font:inherit; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap; flex:none; }
 .strip-wait:hover { background:color-mix(in srgb, var(--amber) 18%, transparent); }
 .strip-wait:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
 .strip-wait b { font-weight:700; }
@@ -160,7 +160,7 @@
    as an owned browser (.owned-pane below); a running one carries the pulsing dot of a running chat. */
 .child-strips { position:relative; display:flex; flex-direction:column; gap:0; margin:0 0 2px 19px; padding-left:12px; min-width:0; }
 .child-strips::before { content:''; position:absolute; left:0; top:-2px; bottom:13px; width:1px; background:var(--border-2); }
-.child-strip { position:relative; display:flex; align-items:center; gap:8px; min-width:0; min-height:26px; padding:2px 8px; border-radius:8px; font-size:var(--fs-s); color:var(--text-2); }
+.child-strip { position:relative; display:flex; align-items:center; gap:8px; min-width:0; min-height:26px; padding:2px 8px; border-radius:var(--r-l); font-size:var(--fs-s); color:var(--text-2); }
 .child-strip::before { content:''; position:absolute; left:-12px; top:50%; width:10px; height:1px; background:var(--border-2); }
 .child-strip.is-ended { color:var(--text-3); }
 .child-strip-mark { flex:none; color:var(--text-4); }
@@ -176,7 +176,7 @@
 .agent-pane-wrap.owned-pane::after { content:''; position:absolute; left:0; top:22px; width:10px; height:2px; background:var(--pair, var(--border-2)); }
 /* A run's live estimate (ChatTile.tsx RunEstimateChip): dashed and labelled "stima", never mistaken for the run's own
    time and cost beside it; amber once the run is past it. */
-.th-estimate { display:inline-flex; align-items:center; gap:6px; flex:0 3 auto; min-width:0; overflow:hidden; height:18px; padding:0 7px; border:1px dashed var(--border-3); border-radius:99px; color:var(--text-3); font-size:11px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.th-estimate { display:inline-flex; align-items:center; gap:6px; flex:0 3 auto; min-width:0; overflow:hidden; height:18px; padding:0 7px; border:1px dashed var(--border-3); border-radius:var(--r-m); color:var(--text-3); font-size:11px; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .th-estimate-label { font-size:9.5px; font-weight:650; letter-spacing:.06em; text-transform:uppercase; color:var(--text-4); }
 .th-estimate-left { color:var(--text-2); }
 .th-estimate.over { border-color:var(--amber-line); color:var(--amber); }
@@ -204,12 +204,12 @@
 .strip-dot.tone-done { background:var(--green); }
 .strip-dot.tone-err { background:var(--red); }
 .strip-dot.tone-wait { background:var(--amber); }
-.strip-state:not(.sr-only) { height:20px; padding:0 8px; border:1px solid var(--border-2); border-radius:99px; font-size:11px; }
+.strip-state:not(.sr-only) { height:20px; padding:0 8px; border:1px solid var(--border-2); border-radius:var(--r-m); font-size:11px; }
 .strip-state.tone-err { border-color:var(--red); }
 .strip-state.tone-wait { border-color:var(--amber-line); }
 /* the model and the effort the chat runs with, in plain words before its figures (the owner, 2026-11-13) */
 .strip-model { flex:0 .2 auto; min-width:0; max-width:200px; overflow:hidden; text-overflow:ellipsis; font-size:11px; color:var(--text-3); white-space:nowrap; font-variant-numeric:tabular-nums; }
-.strip-meta { flex:none; display:inline-flex; align-items:center; gap:6px; height:20px; padding:0 8px; border:1px solid var(--border-2); border-radius:99px; font-size:11px; color:var(--text-2); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.strip-meta { flex:none; display:inline-flex; align-items:center; gap:6px; height:20px; padding:0 8px; border:1px solid var(--border-2); border-radius:var(--r-m); font-size:11px; color:var(--text-2); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .strip-meta > span + span:not(.sr-only)::before { content:"· "; color:var(--text-3); }
 .strip-meta i { font-style:normal; color:var(--text-3); }
 .strip-meta .over, .strip-meta .over i { color:var(--amber); }

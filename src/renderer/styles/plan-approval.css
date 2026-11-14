@@ -20,7 +20,7 @@
 .pa-title { font-size: var(--fs-l); font-weight: 600; line-height: 1.4; color: var(--text); overflow-wrap: anywhere; }
 .pa-detail { max-width: 64ch; font-size: var(--fs-m); line-height: 1.5; color: var(--text-3); overflow-wrap: anywhere; }
 .pa-who {
-  flex: none; align-self: center; display: inline-flex; align-items: center; gap: 7px; padding: 3px 10px 3px 4px; border-radius: 99px;
+  flex: none; align-self: center; display: inline-flex; align-items: center; gap: 7px; padding: 3px 10px 3px 4px; border-radius: var(--r-m);
   font-size: 12.5px; font-weight: 500; color: var(--text-2); background: var(--surface); border: 1px solid var(--border-2); white-space: nowrap;
 }
 
@@ -29,7 +29,7 @@
 .pa-fact-k { flex: none; display: inline-flex; align-items: center; gap: 5px; min-width: 104px; font-size: 12px; font-weight: 600; color: var(--text-3); }
 .pa-fact-k svg { color: var(--green); }
 .pa-known { display: flex; flex-wrap: wrap; gap: 6px; }
-.pa-chip { padding: 2px 9px; border-radius: 99px; background: var(--surface-3); color: var(--text-2); font-size: 12.5px; overflow-wrap: anywhere; }
+.pa-chip { padding: 2px 9px; border-radius: var(--r-m); background: var(--surface-3); color: var(--text-2); font-size: 12.5px; overflow-wrap: anywhere; }
 .pa-chip b { font-weight: 600; color: var(--text); margin-right: 3px; }
 
 .pa-actions { margin-top: 2px; }

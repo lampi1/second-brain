@@ -34,7 +34,7 @@
 .guide-card h3{font-size:14.5px;font-weight:600;margin:0;letter-spacing:-.2px;line-height:1.35}
 .guide-summary{margin:0;font-size:12.5px;line-height:1.6;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .guide-badges{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px}
-.guide-badge{font-size:10px;color:var(--amber);background:var(--amber-bg);border:1px solid var(--amber-line);border-radius:20px;padding:2px 8px;white-space:nowrap}
+.guide-badge{font-size:10px;color:var(--amber);background:var(--amber-bg);border:1px solid var(--amber-line);border-radius:var(--r-l);padding:2px 8px;white-space:nowrap}
 .guide-badge-coming{color:var(--accent);background:var(--accent-bg);border-color:var(--accent-line)}
 .guide-card-foot{display:flex;align-items:center;gap:10px;padding-top:10px;border-top:1px solid var(--border)}
 .guide-meta{margin-top:auto;font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
@@ -124,10 +124,10 @@
 .guide-ask-text p{margin:0}
 .guide-ask-text ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
 .guide-ask-text code{font-family:var(--mono);font-size:11px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-s);padding:1px 5px}
-.guide-ask-cite{appearance:none;font:inherit;font-size:11px;font-weight:550;color:var(--accent);background:var(--accent-bg);border:1px solid var(--accent-line);border-radius:20px;padding:0 8px;margin:0 2px;cursor:pointer;vertical-align:1px;transition:background 150ms}
+.guide-ask-cite{appearance:none;font:inherit;font-size:11px;font-weight:550;color:var(--accent);background:var(--accent-bg);border:1px solid var(--accent-line);border-radius:var(--r-l);padding:0 8px;margin:0 2px;cursor:pointer;vertical-align:1px;transition:background 150ms}
 .guide-ask-cite:hover{background:color-mix(in srgb,var(--accent) 18%,transparent)}
 .guide-ask-foot{display:flex;flex-wrap:wrap;gap:6px 14px;padding-top:8px;border-top:1px solid var(--border);font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
-.guide-ask-skel{display:block;height:10px;width:92%;border-radius:6px;background:linear-gradient(90deg,var(--surface-2),var(--surface-3),var(--surface-2));background-size:200% 100%;animation:guide-shimmer 1.2s linear infinite}
+.guide-ask-skel{display:block;height:10px;width:92%;border-radius:var(--r-m);background:linear-gradient(90deg,var(--surface-2),var(--surface-3),var(--surface-2));background-size:200% 100%;animation:guide-shimmer 1.2s linear infinite}
 .guide-ask-skel.short{width:60%}
 @keyframes guide-shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
 

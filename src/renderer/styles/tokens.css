@@ -81,11 +81,12 @@
   --fs-xl: 16px;
   --fs-2xl: 22px;
 
-  --r-xs: 6px;
-  --r-s: 8px;
-  --r-m: 10px;
-  --r-l: 12px;
-  --r-xl: 14px;
+  /* three radii for the whole app (ADR 0311): small 4, medium 6, large 8; round only for dots, counters, avatars */
+  --r-xs: 4px;
+  --r-s: 4px;
+  --r-m: 6px;
+  --r-l: 8px;
+  --r-xl: 8px;
 
   /* density-dependent spacing */
   --topbar-h: 52px;

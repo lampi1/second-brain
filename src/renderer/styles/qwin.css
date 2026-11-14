@@ -76,7 +76,7 @@
 .wq-kind > svg { color: var(--amber); }
 .wq.perm .wq-kind > svg, .wq.cmd-ask .wq-kind > svg { color: var(--accent); }
 .wq-gist {
-  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px 0 9px; border-radius: 99px;
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px 0 9px; border-radius: var(--r-m);
   font: 600 var(--fs-m)/1 var(--font); color: var(--text); background: var(--accent-bg); border: 1px solid var(--accent-line); white-space: nowrap;
 }
 .wq-gist > svg { color: var(--accent); }
@@ -118,7 +118,7 @@
 .wq-opts { display: flex; flex-direction: column; gap: 8px; }
 /* a yes/no question (ADR 0135): Sì and No side by side, «Altro…» under them */
 .wq-opts.yesno { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.wq-opts.yesno > .wq-other { justify-content: center; border-radius: 999px; }
+.wq-opts.yesno > .wq-other { justify-content: center; border-radius: var(--r-m); }
 .wq-opts.yesno > :not(.gu-choice) { grid-column: 1 / -1; }
 .wq-opt {
   position: relative; display: flex; align-items: flex-start; gap: 14px; width: 100%; padding: 13px 16px; border-radius: var(--r-m);
@@ -130,14 +130,14 @@
 .wq-opt:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus-ring); }
 .wq:focus .wq-opt.cur, .wq:focus-visible .wq-opt.cur { box-shadow: 0 0 0 2px var(--focus-ring); }
 .wq-key {
-  flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; margin-top: -2px;
+  flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: var(--r-m); margin-top: -2px;
   font: 600 13px/1 var(--mono); color: var(--text-2); background: var(--surface-3); border: 1px solid var(--border-3); border-bottom-width: 2px;
 }
 .wq-opt-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .wq-opt-label { font-size: var(--fs-l); font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
 .wq-opt-desc { max-width: 68ch; font-size: var(--fs-m); line-height: 1.5; color: var(--text-2); overflow-wrap: anywhere; }
 .wq-opt.rec .wq-opt-desc, .wq-opt.cur .wq-opt-desc { color: var(--text-2); }
-.wq-rec { flex: none; align-self: center; padding: 2px 9px; border-radius: 99px; font-size: var(--fs-s); font-weight: 600; color: var(--on-accent); background: var(--accent); }
+.wq-rec { flex: none; align-self: center; padding: 2px 9px; border-radius: var(--r-m); font-size: var(--fs-s); font-weight: 600; color: var(--on-accent); background: var(--accent); }
 .wq-opt.rec { border-color: var(--accent-line); background: color-mix(in srgb, var(--accent) 9%, var(--surface-2)); }
 .wq-opt.rec .wq-key { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
 .wq-opt.picked { border-color: var(--accent); background: var(--accent-bg); }
