@@ -1,6 +1,7 @@
 // The figures of a strip (ADR 0292): the work time and the cost so far, each next to its estimate from similar jobs
 // when there is one («22 min / ~19 min · 1,84 $ / ~0,60 $»), amber once past it (time: past it; cost: past 1.5 times).
-// Always on a root strip (ChatTile.tsx) and on a delegated chat's row (DelegationCard.tsx). The cost is read as
+// On the bar of a chat in full screen (ChatTile.tsx); a closed strip and a delegated chat's row say the same in the
+// tip of their ⓘ mark (StripInfo.tsx, ADR 0307). The cost is read as
 // lib/format.ts chatCost reads it: the ledger's for an engine that reports none, nothing when unknown or zero.
 // Before the figures, in plain words, the model the chat runs on and the effort it runs with («Opus 5.5 · high», the
 // owner, 2026-11-13: «voglio vedere il modello e effort nelle striscioline degli agenti»): the effort as the engine

@@ -1,6 +1,6 @@
 # 0207 — Settings redesign, MCP servers in one paste, the Orchestrator configures everything
 
-Status: partly superseded by ADR 0296 (Flash's MCP role removed: six roles, every tool by default); accepted. Builds on ADR 0086 (app-managed MCP servers), ADR 0149 (app_config), ADR 0200 (contract split).
+Status: partly superseded by ADR 0296 (Flash's MCP role removed: six roles, every tool by default); amended by ADR 0307 (on a narrow page the sections wrap on top, they no longer scroll sideways); accepted. Builds on ADR 0086 (app-managed MCP servers), ADR 0149 (app_config), ADR 0200 (contract split).
 
 2026-10-30.
 

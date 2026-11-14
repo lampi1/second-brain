@@ -36,6 +36,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   OpenCode, OpenRouter included; the chat's model and plan mode go through OpenCode's session options (ADR 0216).
 
 ### Changed
+- The Orchestrator takes about half the window by default, on every page (drag its edge to change it; a width saved
+  before is reset once). A strip of the Grindhouse says at a glance the task and whether the agent is at work; the
+  model and effort, time and cost against the estimate and the context are in the tooltip of the ⓘ beside the state,
+  amber when the work is past its estimate. On a narrow column a strip takes two lines, and every page adapts to its
+  own width: Settings, Memoria, the skills, Andamento and Registrazioni no longer run out of the page (ADR 0307).
 - The people of the roles are adults: taller bodies with a build of their own, real faces (a jaw, brows, a nose,
   beards) and adult characters. The Orchestrator is an old wizard with a long white beard and a wand, the Strategist
   a cold chess master, the Scout a weathered tracker, the Artisan a bare-chested blacksmith with a cigar, the

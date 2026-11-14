@@ -8,7 +8,7 @@ import { columnSize } from '../../src/renderer/lib/orchestrator-dock';
 it.each([900, 1280, 1920])('reserves a visible coordinator and usable Dashboard at %i pixels', W => {
   const viewport = { W, H: 900, top: 52, left: 196 };
   for (const saved of [null, { w: 900, h: 848 }]) {
-    const column = columnSize(saved, viewport, false);
+    const column = columnSize(saved, viewport);
     expect(column.w).toBeGreaterThanOrEqual(280);
     expect(W - viewport.left - column.w).toBeGreaterThanOrEqual(360);
     expect(column.h).toBe(848);

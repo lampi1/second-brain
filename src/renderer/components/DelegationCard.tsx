@@ -1,8 +1,8 @@
 // The delegation tree in the Grindhouse (ADR 0083; made quiet by ADR 0293, the owner 2026-11-13: «le striscioline dei
 // figli le voglio più discrete come quelle del padre»): every delegated chat is ONE row under its parent, on a thread
 // line tinted by its state (TreeRails), drawn like its parent's strip: the role's little person doing what it does (StripFace.tsx, ADR 0295), the
-// task, who runs it and what it does now (its result once ended), its time and cost against the estimate
-// (StripMeta.tsx), a pill only when words are needed, ↗ for full screen. What needs the user stays in sight under the
+// task, who runs it and what it does now (its result once ended), a pill only when words are needed, the ⓘ mark whose
+// tip says model, effort, time and cost against the estimate (StripInfo.tsx, ADR 0307), ↗ for full screen. What needs the user stays in sight under the
 // row (a permission to answer here, its error, the limit it hit, a nudge when it stalled). A click on the row opens
 // it in place: its steps ✓ ✱ ✗, its result with the criteria met or not, then the whole chat (conversation and input,
 // writable like any strip); a click on the row folds it again; the state is prefs.chatExpanded, kept across restarts
@@ -26,7 +26,7 @@ import { t, locale } from '../i18n';
 import { openQueue } from '../lib/later';
 import { ChatTile, useFlash } from './ChatTile';
 import { StripActivity } from './StripActivity';
-import { StripMeta } from './StripMeta';
+import { StripInfo, useStripInfo } from './StripInfo';
 import { StripFace } from './StripFace';
 import { IconChevronDown, IconChevronRight } from './Icons';
 import '../styles/tree.css';
@@ -73,28 +73,29 @@ export function TreeRails({ node, state }: { node: TreeNode; state: ChildState }
 }
 
 /** The row (ADR 0293): the role's little person in its state (StripFace.tsx), the task, who runs it and what it does now (closed: the
- *  live step, or the result's first words once ended; open: its skills), the model and effort, time and cost, «In attività» in
- *  plain words while it works and a pill for any other state but a plain end, "Vai alla chat". */
+ *  live step, or the result's first words once ended; open: its skills), «In attività» in plain words while it works and a
+ *  pill for any other state but a plain end, the ⓘ mark with the rest in its tip (ADR 0307), "Vai alla chat". */
 function Head({ chat, state, open }: { chat: ChatSummary; state: ChildState; open: boolean }) {
   const now = useNow(15_000);
   const role = chat.agent?.name ?? chat.delegation?.role ?? '';
   const skills = chat.run?.tags?.skills ?? [];
   const live = state === 'run' || state === 'start';
   const said = chat.delegation?.result?.summary || chat.lastText;
+  const info = useStripInfo(chat, chat.queued ? null : workTime(chat, now) ?? chat.run?.executionMs ?? null);
   return <div className="dc-head">
     <StripFace chatId={chat.id} avatar={chat.agent?.avatar} name={role} size={22} tone={LINE[state]} waitsUser={state === 'wait'} error={LINE[state] === 'err'}
       busy={isBusy(chat)} done={state === 'done' || state === 'partial'} pending={live} />
     {/* the task is the row's own button (keyboard, screen readers), as on the root strip; a click anywhere on the row does the same */}
     <h4 className="dc-title" title={chat.delegation?.goal ?? chat.title}><button type="button" className="strip-name" aria-expanded={open} data-testid={`delegation-expand-${chat.id}`} onClick={() => setChatExpanded(chat.id, !open)}>{chat.title}</button></h4>
-    <span className="dc-who">
+    <span className="dc-who" data-tip={!open && info.tip ? info.tip : undefined}>
       <span className="dc-role">{role}</span>
       {open ? <>
         {skills.slice(0, 2).map(s => <span key={s} className="dc-chip">{s}</span>)}
       </> : <span className="dc-now" data-testid={`delegation-now-${chat.id}`}>{isBusy(chat) ? <StripActivity chatId={chat.id} /> : said.split('\n')[0]!.slice(0, 140)}</span>}
     </span>
-    <StripMeta chat={chat} workMs={chat.queued ? null : workTime(chat, now) ?? chat.run?.executionMs ?? null} />
     {live ? <span className="pill pill-run strip-working" data-testid={`delegation-state-${chat.id}`} data-child-state={state}><span className="pill-dot" aria-hidden="true" />{t('product.running')}</span>
       : <ChildPill state={state} testid={`delegation-state-${chat.id}`} quiet={state === 'done'} />}
+    <StripInfo chatId={chat.id} info={info} />
     <button type="button" className="dc-open" data-testid={`delegation-open-${chat.id}`} onClick={() => setFocusMode(chat.id)} aria-label={t('tree.focus', { title: chat.title })} title={t('tree.goTo')}>
       <span aria-hidden="true">↗</span>
     </button>

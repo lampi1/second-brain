@@ -230,3 +230,43 @@
 /* only beside a person: a portrait (the user's own picture) keeps the spark and the old indent */
 .strip-face[data-person] ~ * .typing-spark { display:none; }
 .th-row:has(> .strip-face[data-person]) ~ .strip-facts { padding-left:83px; }
+/* The rest of a strip behind one mark (StripInfo.tsx, ADR 0307; the owner, 2026-11-14: at a glance the task and whether
+   it is at work, «il resto posso guardarlo da un tooltip informativo»): model and effort, time and cost against the
+   estimate and the context are the mark's tip; amber when the work is past its estimate or the context is long. */
+.strip-info { flex:none; display:inline-grid; place-items:center; width:20px; height:20px; border-radius:50%; color:var(--text-4); cursor:help; transition:color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease); }
+.chat-tile.is-strip:hover .strip-info, .delegation-card:hover .strip-info { color:var(--text-3); }
+.strip-info:hover, .strip-info:focus-visible { color:var(--text); background:var(--surface-3); }
+.strip-info:focus-visible { outline:2px solid var(--focus-ring); outline-offset:1px; }
+.strip-info.over, .chat-tile.is-strip:hover .strip-info.over, .delegation-card:hover .strip-info.over { color:var(--amber); }
+@media (prefers-reduced-motion: reduce) { .strip-info { transition:none; } }
+/* With the Orchestrator on half the window (ADR 0307) a strip is often short: under 640 px it takes the two lines the
+   little person's height already gives it, who it is with the state on the first, the task and what it does now on
+   the whole second, so the task is never squeezed between the name and the state. */
+@container (max-width: 640px) {
+  .chat-tile.is-strip .th-row { display:grid; grid-template-columns:auto minmax(0,1fr) auto auto auto; grid-template-areas:"face name state info acts" "face now now now now"; column-gap:8px; row-gap:1px; align-items:center; }
+  .chat-tile.is-strip .th-row > .strip-face { grid-area:face; }
+  .chat-tile.is-strip .th-row > .th-title { grid-area:name; max-width:none; justify-self:start; }
+  .chat-tile.is-strip .th-row > .strip-now, .chat-tile.is-strip .th-row > .th-title-input { grid-area:now; }
+  .chat-tile.is-strip .th-row > .strip-wait, .chat-tile.is-strip .th-row > .strip-working, .chat-tile.is-strip .th-row > .strip-state:not(.sr-only) { grid-area:state; }
+  .chat-tile.is-strip .th-row > .strip-info { grid-area:info; }
+  .chat-tile.is-strip .th-row > .chat-header-actions { grid-area:acts; min-width:0; }
+  .chat-tile.is-strip .chat-header-actions > .icon-btn:not(:last-child) { display:none; }
+  .chat-tile.is-strip:hover .chat-header-actions > .icon-btn, .chat-tile.is-strip:focus-within .chat-header-actions > .icon-btn { display:inline-grid; }
+}
+/* the open window's head on a short column: the same two lines (who it is, the state and the controls; under them the
+   title, a long context and the view switch), and its details wrap instead of running out of the window */
+@container (max-width: 640px) {
+  .chat-tile.is-expanded:not(.is-full) .th-row { display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; grid-template-areas:"face name state acts" "face now ctx views"; column-gap:8px; row-gap:2px; align-items:center; }
+  .chat-tile.is-expanded:not(.is-full) .th-row > .strip-face { grid-area:face; }
+  .chat-tile.is-expanded:not(.is-full) .th-row > .th-title { grid-area:name; max-width:none; min-width:0; justify-self:start; }
+  .chat-tile.is-expanded:not(.is-full) .th-row > .strip-now, .chat-tile.is-expanded:not(.is-full) .th-row > .th-title-input { grid-area:now; }
+  .chat-tile.is-expanded:not(.is-full) .th-row > .th-ctx { grid-area:ctx; justify-self:end; }
+  .chat-tile.is-expanded:not(.is-full) .th-row > .aw-views { grid-area:views; justify-self:end; }
+  .chat-tile.is-expanded:not(.is-full) .th-row > .strip-wait, .chat-tile.is-expanded:not(.is-full) .th-row > .strip-working, .chat-tile.is-expanded:not(.is-full) .th-row > .strip-state:not(.sr-only) { grid-area:state; }
+  .chat-tile.is-expanded:not(.is-full) .th-row > .chat-header-actions { grid-area:acts; flex-wrap:nowrap; }
+  .strip-facts { flex-wrap:wrap; row-gap:4px; }
+  .strip-facts > .agent-identity { margin-left:0; }
+}
+/* a sub-agent's row on a short column: the kind and the start time leave the row (the time is in its tip) */
+.child-strips { container-type:inline-size; }
+@container (max-width: 520px) { .child-strip-time, .child-strip-kind { display:none; } }

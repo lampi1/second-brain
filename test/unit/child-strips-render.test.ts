@@ -29,6 +29,8 @@ describe('child strips', () => {
     expect(html).toContain('1970-01-01T00:00:01.000Z');
     expect(html).toContain('&lt;script&gt;Review&lt;/script&gt;');
     expect(html.match(/role="listitem"/g)).toHaveLength(2);
+    // the row's tip says the task whole, then when it started and for how long: on a short column the time is there only (ADR 0307)
+    expect(html).toMatch(/data-tip="&lt;script&gt;Review&lt;\/script&gt;\|[^"|]*\d\d:\d\d[^"|]*min"/);
     setLang('en');
     expect(render([row('running')])).toContain('Subagents of Parent');
   });

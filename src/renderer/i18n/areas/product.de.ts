@@ -58,6 +58,7 @@ export const productDe:typeof productIt={
  'aw.views':'Was das Fenster zeigt','aw.view.chat':'Chat','aw.view.split':'Nebeneinander','aw.view.browser':'Browser',
  'aw.resizer':'Trenner zwischen Chat und Browser verschieben','aw.tabs':'Browser-Tabs','aw.tab':p=>`Tab ${p.n}`,
  'aw.full':'Vollbild','aw.fullExit':'Vollbild verlassen',
+ 'aw.info.model':(p:{v:string})=>`Modell: ${p.v}`,'aw.info.time':(p:{v:string})=>`Arbeitszeit: ${p.v}`,'aw.info.cost':(p:{v:string})=>`Kosten: ${p.v}`,'aw.info.context':(p:{v:string})=>`Kontext: ${p.v}`,'aw.info.estimate':(p:{v:string})=>`Schätzung ${p.v}`,'aw.info.over':'über der Schätzung','aw.info.long':'lang',
  'aw.overTip':'Die Arbeit liegt über der Schätzung aus ähnlichen Aufgaben.','aw.modelTip':'Modell und Aufwand, mit denen dieser Chat arbeitet.','aw.metaTip':'Arbeitszeit und Kosten bisher.','aw.metaTipEst':'Arbeitszeit und Kosten bisher, jeweils neben der Schätzung (~).',
  'aw.orchestratorShow':'Orchestrator daneben zeigen','aw.orchestratorHide':'Orchestrator ausblenden',
  'aw.facts':'Details: Modell, Kosten, Schätzung, Links',

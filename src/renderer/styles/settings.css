@@ -3,9 +3,12 @@
    VS Code): a sticky left column (search, then the sections in labelled groups with a coloured icon tile each, the one
    in view marked) and on the right every section as a header and a card of rows, the text left and the control right.
    Buttons keep one hierarchy: primary (the action), ghost (secondary), subtle (dismiss), danger. Only the app's tokens
-   (tokens.css): light and dark follow the theme by themselves; a narrow window puts the navigation on top as one
-   scrolling line and stacks each row (container queries on the page). */
-.st-page { display: grid; gap: 20px; max-width: 1120px; width: 100%; margin: 0 auto; container-type: inline-size; container-name: st; min-width: 0; }
+   (tokens.css): light and dark follow the theme by themselves; a narrow page puts the navigation on top, wrapped on
+   as many lines as it needs, and stacks each row (container queries on the page). */
+/* the page's host is the query container (App.tsx): a container cannot answer its own query, and the page is the grid
+   that goes from two columns to one (ADR 0307: with the Orchestrator on half the window a page is often narrow) */
+.st-host { container: st / inline-size; }
+.st-page { display: grid; gap: 20px; max-width: 1120px; width: 100%; margin: 0 auto; min-width: 0; }
 .st-shell { grid-template-columns: 212px minmax(0, 1fr); gap: 32px; align-items: start; }
 .st-main { display: grid; gap: 18px; min-width: 0; }
 
@@ -207,11 +210,11 @@
 .st-card .appearance-picker > summary:hover { color: var(--text); }
 .st-card .appearance-controls { background: var(--surface-2); border-color: var(--border); }
 
-/* narrow: the navigation goes on top as one scrolling line, rows stack, the controls go under their text */
+/* narrow: the navigation goes on top, wrapped (every section in sight, no sideways scroll), rows stack, the controls go under their text */
 @container st (max-width: 720px) {
   .st-shell { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .st-side { position: static; max-height: none; overflow: visible; padding: 0; }
-  .st-nav { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
+  .st-nav { display: flex; flex-wrap: wrap; gap: 4px; }
   .st-nav-group { display: contents; }
   .st-nav-label { display: none; }
   .st-nav-item { flex: none; width: auto; padding: 0 10px 0 6px; }

@@ -187,10 +187,12 @@ button.mh-row-name:hover{color:var(--accent);text-decoration:underline;text-unde
 @container mh (max-width:1020px){.mh-hero-bottom{grid-template-columns:1fr}}
 /* Wrap every tab into view beside the Orchestrator; never hide destinations behind a fade. */
 @container mh (max-width:1060px){.mh-tab-icon{display:none}.mh-tabs>button{padding:8px 9px;gap:5px}}
-@container mh (max-width:600px){.mh-groups{grid-template-columns:1fr}}
+@container mh (max-width:600px){.mh-groups{grid-template-columns:1fr}.mh-pulses{grid-template-columns:repeat(2,minmax(0,1fr))}.mh-hero{padding:18px 16px 14px}}
 @container mh (max-width:760px){.mh-split{grid-template-columns:1fr 1fr}.mh-split-side{grid-column:1/-1;flex-direction:row;flex-wrap:wrap}}
 @container mh (max-width:560px){.mh-split{grid-template-columns:1fr}}
 @media (max-width:560px){.mh-ctx-row{grid-template-columns:1fr auto}.mh-ctx-track{grid-column:1/-1;grid-row:2}}
+/* the same on a narrow page in a wide window (ADR 0307) */
+@container (max-width:560px){.mh-ctx-row{grid-template-columns:minmax(0,1fr) auto}.mh-ctx-track{grid-column:1/-1;grid-row:2}}
 
 @media (prefers-reduced-motion:reduce){
   .mh-hero-glow,.mh-live,.mh-count[data-hot=true],.nav-badge-pulse,.mh-activity li,.mh-panel,.mh-row,.mh-dusted,.mh-dust:not(:disabled):hover svg{animation:none}

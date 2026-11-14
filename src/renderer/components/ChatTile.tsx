@@ -1,8 +1,9 @@
 // One agent's window (ADR 0287): a chat as a one-line strip in the Grindhouse (AgentStrips.tsx), open in the column, or in
 // full screen (FullScreen.tsx). The strip is one row (ADR 0292, 0293, 0295): the role's little person doing what the chat does
-// (StripFace.tsx), who it is, the title · current step, then on the right its work time and cost so far, each next to its estimate («22 min /
-// ~19 min · 1,84 $ / ~0,60 $», amber once past it), «In attività» in plain words while it works, and a pill only when
-// words are needed («Ti aspetta» opens its question, an error, a queue); a long context shows its meter; three controls appear on hover (stop, full screen, the
+// (StripFace.tsx), who it is, the title · current step, then on the right «In attività» in plain words while it works, or a pill when
+// words are needed («Ti aspetta» opens its question, an error, a queue), and one ⓘ mark whose tip says the rest (StripInfo.tsx, ADR 0307:
+// model and effort, work time and cost against the estimate, the context; amber past the estimate or with a long context; the full
+// screen keeps the figures on its bar, StripMeta.tsx); on a column under 640 px the strip takes two lines, the task under the name; three controls appear on hover (stop, full screen, the
 // ⋯ menu with rename / model / permissions / hand-off / close; Ctrl+W closes too). A click anywhere on the strip opens
 // it; open, a click on the head closes it. Open, the ⓘ shows one details row (version, model, cost, work time, folder,
 // the estimate: RunEstimate.tsx, ADR 0087; context size) and the DevOps links (ChatLinkChips.tsx), then the body. A chat that
@@ -30,6 +31,7 @@ import { openQueue, requestPostponed } from '../lib/later';
 import { admitNow, reqKey, toggleMaximize } from '../actions';
 import { useHandoffTabs } from '../store/handoffs';
 import { StripMeta } from './StripMeta';
+import { StripInfo, useStripInfo } from './StripInfo';
 import { StripFace } from './StripFace';
 import { BrowserTile } from './BrowserTile';
 import { FullTools } from './FullTools';
@@ -169,6 +171,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
   // a Strategist's open question: the strip points to the window, set aside too («Basta domande» stays reachable)
   const planAsk = planQuestion(chat, reqs, false);
   const longContext = isLong(chat, warn);
+  const info = useStripInfo(chat, work, longContext);
   const name = chat.agent?.name || chat.title, topic = chat.agent?.name && chat.title && chat.title !== chat.agent.name ? chat.title : '';
   // one state: «Ti aspetta» (opens the question), else the little person in front and, when words are needed, a pill
   const stateText = waitText && st.tone !== 'err' && st.label !== t('ui.state.queued') ? waitText : st.label;
@@ -206,13 +209,15 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
             {strip ? <button ref={expansionButton} type="button" className="strip-name" aria-expanded={expanded} aria-controls={`chat-work-${chatId}`} data-tip={t(expanded?'product.collapse':'product.expand')} onClick={()=>setChatExpanded(chatId,!expanded)} data-testid={`chat-expand-${chatId}`}>{name}</button> : name}
           </h3>
           {/* the title and, closed, what it is doing now (the owner, 2026-11-12: the title next to the agent, as the sidebar) */}
-          {renaming ? <TitleInput chat={chat} onDone={()=>setRenaming(false)}/> : <span className="strip-now">
-            {topic && <span className={expanded ? 'chat-topic' : 'th-topic'} title={chat.title} onDoubleClick={expanded ? () => setRenaming(true) : undefined} data-testid={`chat-topic-${chatId}`}>{topic}</span>}
+          {renaming ? <TitleInput chat={chat} onDone={()=>setRenaming(false)}/> : <span className="strip-now" data-tip={!expanded && info.tip ? info.tip : undefined}>
+            {topic && <span className={expanded ? 'chat-topic' : 'th-topic'} title={expanded ? chat.title : undefined} onDoubleClick={expanded ? () => setRenaming(true) : undefined} data-testid={`chat-topic-${chatId}`}>{topic}</span>}
             {!expanded && <span className="chat-strip-line">{busy?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.plan?.phase==='proposed'?t('tree.plan.ready'):chat.lastText.slice(0,140)}</span>}
           </span>}
-          {/* time and cost so far, each against its estimate: always on the strip (the owner, 2026-11-13) */}
-          <StripMeta chat={chat} workMs={work} />
-          {(!expanded || !facts) && longContext && <ContextMeter chat={chat} warn={warn} />}
+          {/* at a glance a strip says the task and the state; model, effort, time, cost and context are the mark's tip
+              (ADR 0307; the owner, 2026-11-14). Open, the same mark is the «Dettagli» button among the actions; the
+              full window has the room and keeps the figures in sight */}
+          {focus && <StripMeta chat={chat} workMs={work} />}
+          {(focus || (expanded && !facts)) && longContext && <ContextMeter chat={chat} warn={warn} />}
           {viewSwitch}
           {/* the state stays in the DOM as the strip's data-state hook; one thing is shown: the wait or the state */}
           <span hidden><StatePill chat={chat} testid={`chat-state-${chatId}`} /></span>
@@ -220,6 +225,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
             <span className="strip-wait-dot" aria-hidden="true" />{waitText && userWait ? waitText : t('product.waitsYou')}{reqs.length > 1 && <b>{reqs.length}</b>}
           </button> : working ? <span className="pill pill-run strip-working" data-testid={`chat-status-${chatId}`}><span className="pill-dot" aria-hidden="true" />{chat.state === 'running' ? t('product.running') : stateText}</span>
             : <span className={`strip-state tone-${st.tone}${plainState ? ' sr-only' : ''}`} data-testid={`chat-status-${chatId}`} title={st.label}>{stateText}</span>}
+          {!focus && !expanded && <StripInfo chatId={chatId} info={info} />}
           {focus && <FullTools chatId={chatId} />}
           <div className="chat-header-actions">
           {(busy || chat.state === 'waiting') && (

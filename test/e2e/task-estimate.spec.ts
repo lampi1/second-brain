@@ -16,8 +16,8 @@ test('strips show readable estimates from similar tasks, with their accuracy', a
   const { app, page } = await launchDemo({ width: 1600, height: 1000, orchestrator: true });
   try {
     // the QA run: the same agent on the same model; the SMS run (another model): the same agent on any model (ADR 0285)
-    // closed, the strip itself carries time and cost against the estimate (ADR 0292); the chip is in the details (ⓘ)
-    await expect(page.getByTestId('chat-meta-qa')).toContainText(/\d+ min \/ ~\d+ min/);
+    // closed, the strip's ⓘ mark says time and cost against the estimate in its tip (ADR 0307); the chip is in the details
+    await expect(page.getByTestId('chat-info-qa')).toHaveAttribute('data-tip', /\d+ min · stima ~\d+ min/);
     for (const id of ['qa', 'sms']) { await page.getByTestId(`chat-expand-${id}`).click(); await page.getByTestId(`chat-facts-${id}`).click(); }
     const qa = page.getByTestId('chat-estimate-qa');
     await expect(qa).toBeVisible();

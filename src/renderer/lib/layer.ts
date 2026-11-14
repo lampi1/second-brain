@@ -46,7 +46,7 @@ export function computeModel(): OverlayModel {
     action: g.kind === 'chat-waiting' ? t('appText.layer.answer') : t('appText.layer.open'),
   }));
   const v = viewport();
-  const size = columnSize(u.prefs.orchestratorSize, v, u.page === 'home' && !u.map);
+  const size = columnSize(u.prefs.orchestratorSize, v);
   const reserve = { right: size.w, bottom: 0, top: 0 };
   // Workspace padding is relative to the shell. Native bounds need the absolute occupied bottom, including banners.
   const avoid = {...reserve,...(reserve.top?{top:v.top+reserve.top}:{})};

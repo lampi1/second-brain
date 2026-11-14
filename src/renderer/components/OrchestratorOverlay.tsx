@@ -13,7 +13,6 @@ import { orchestratorIdOf } from '../lib/orchestrator-route';
 
 function useColumnSize() {
   const saved = ui.use(s => s.prefs.orchestratorSize);
-  const home = ui.use(s => s.page === 'home' && !s.map);
   const [v, setV] = useState(viewport);
   useEffect(() => {
     const measure = () => setV(viewport());
@@ -25,7 +24,7 @@ function useColumnSize() {
     window.addEventListener('resize', measure);
     return () => { observer.disconnect(); window.removeEventListener('resize', measure); };
   }, []);
-  return { ...columnSize(saved, v, home), top: v.top, home };
+  return { ...columnSize(saved, v), top: v.top };
 }
 
 export function useDockReserve(): Reserve {
@@ -42,8 +41,7 @@ export function OrchestratorOverlay() {
   useLayoutEffect(() => ref.current ? registerOverlay(ref.current) : undefined, []);
   const resize = (width: number) => {
     const v = viewport();
-    const next = columnSize({ w: width / (size.home ? 1 : .78), h: size.h }, v, size.home);
-    setPrefs({ orchestratorSize: { w: next.w / (size.home ? 1 : .78), h: size.h } });
+    setPrefs({ orchestratorSize: columnSize({ w: width, h: size.h }, v) });
     schedule();
   };
   return <aside ref={ref} className="orchestrator-dock orchestrator-ov orchestrator-column" data-placement="right" data-orchestrator-overlay data-testid="orchestrator-overlay"

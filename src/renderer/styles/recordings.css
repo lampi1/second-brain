@@ -28,6 +28,8 @@
 
 /* body */
 .rec-body{display:grid;grid-template-columns:minmax(260px,340px) 1fr;gap:16px;align-items:start}
+/* a narrow page: the list over the transcript (ADR 0307) */
+@container (max-width:640px){.rec-body{grid-template-columns:minmax(0,1fr)}}
 .rec-side{display:flex;flex-direction:column;gap:14px;min-width:0}
 .rec-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .rec-card{display:flex;flex-direction:column;gap:6px;width:100%;padding:11px 13px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--text);font:inherit;text-align:left;cursor:pointer;transition:border-color var(--dur-fast),background var(--dur-fast)}

@@ -216,6 +216,8 @@ textarea.sl-input{height:auto;padding:8px 10px;resize:vertical;line-height:1.5}
 .sl-un-icon{color:var(--text-3);display:inline-flex}
 .sl-un-main{display:flex;flex-direction:column;gap:2px;min-width:0}
 .sl-un-line .st-select{height:28px;font-size:var(--fs-s);min-width:0}
+/* a narrow page (ADR 0307): a skill's actions go on their own line under its tabs, never out of sight */
+@container sl (max-width:620px){.sl-head-title{flex-wrap:wrap}.sl-head-title h2{max-width:100%}.sl-head-title>.sp{display:none}.sl-head-title>.sl-head-actions{margin-inline-start:auto;padding-inline-start:0}.sl-tabs{flex-wrap:wrap;overflow:visible;row-gap:0}.sl-tabs>.sp{display:none}.sl-head-actions{flex:1 0 100%;justify-content:flex-end;padding:0 0 8px}.sl-un-line{grid-template-columns:auto minmax(0,1fr)}.sl-un-line .st-select,.sl-un-line .btn{grid-column:2}}
 @media (max-width:720px){.sl-un-line{grid-template-columns:auto minmax(0,1fr)}.sl-un-line .st-select,.sl-un-line .btn{grid-column:2}}
 
 @media (prefers-reduced-motion:reduce){.sl-detail,.sl-create{animation:none}.sl-tabs [role=tab]::after,.sl-bar span,.sl-role input::after,.sl-part{transition:none}}

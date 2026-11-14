@@ -260,7 +260,7 @@ export function TooltipLayer() {
   if (!tip) return null;
   return createPortal(
     <div ref={ref} className={`tooltip ${tip.below ? 'below' : 'above'} ${tip.more || tip.text.length > 48 ? 'wrap' : ''}`} role="tooltip" style={{ left: tip.x, top: tip.y }}>
-      {tip.more ? <span className="tooltip-lines"><span>{tip.text}</span><span className="tooltip-more">{tip.more}</span></span> : <span>{tip.text}</span>}
+      {tip.more ? <span className="tooltip-lines"><span>{tip.text}</span>{tip.more.split('\n').map((line, i) => <span key={i} className="tooltip-more">{line}</span>)}</span> : <span>{tip.text}</span>}
       {tip.keys && <Keys combo={tip.keys} />}
     </div>,
     document.body,

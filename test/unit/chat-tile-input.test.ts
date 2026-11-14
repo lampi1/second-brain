@@ -62,7 +62,7 @@ describe('chat strip head', () => {
       agent: { id: 'artisan', name: 'Artisan' } } as unknown as ChatSummary;
     vi.mocked(useApp).mockImplementation(selector => selector({ chats: { w: chat }, pending: [], tabs: [] } as unknown as Parameters<typeof selector>[0]));
     const html = renderToStaticMarkup(createElement(ChatTile, { chatId: 'w' }));
-    expect(html).toMatch(/Artisan<\/button>.*<span class="strip-now"><span class="th-topic"[^>]*>AI-DLC · U5 verifica<\/span>/);
+    expect(html).toMatch(/Artisan<\/button>.*<span class="strip-now"[^>]*><span class="th-topic"[^>]*>AI-DLC · U5 verifica<\/span>/);
     // the noise is gone (ADR 0287): no close cross, no help mark on a strip
     expect(html).not.toContain('chat-x-w'); expect(html).not.toContain('chat-help-w');
   });

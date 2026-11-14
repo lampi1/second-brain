@@ -12,7 +12,7 @@ test('child activity at work stays visible beneath each parent strip and the Orc
     await expect(work.getByTestId('child-strip')).toHaveCount(2);
     await expect(work.locator('[data-child-kind="shell"]')).toContainText('dotnet test');
     await expect(work.locator('[data-child-state="completed"]')).toHaveCount(0);
-    await expect(work.getByTestId('child-time').first()).toBeVisible();
+    await expect(work.getByTestId('child-strip').first()).toHaveAttribute('data-tip', /\d\d:\d\d/); // when it started: on the row when there is room, always in its tip (ADR 0307)
     // the role each sub-agent runs as; a command names none
     await expect(work.locator('[data-child-kind="agent"]').getByTestId('child-agent')).toHaveText('Scout');
     await expect(work.locator('[data-child-kind="shell"]').getByTestId('child-agent')).toHaveCount(0);

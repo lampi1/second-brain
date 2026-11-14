@@ -58,6 +58,7 @@ export const productEn:typeof productIt={
  'aw.views':'What the window shows','aw.view.chat':'Chat','aw.view.split':'Side by side','aw.view.browser':'Browser',
  'aw.resizer':'Move the divider between chat and browser','aw.tabs':'Browser tabs','aw.tab':p=>`Tab ${p.n}`,
  'aw.full':'Full screen','aw.fullExit':'Leave full screen',
+ 'aw.info.model':(p:{v:string})=>`Model: ${p.v}`,'aw.info.time':(p:{v:string})=>`Work time: ${p.v}`,'aw.info.cost':(p:{v:string})=>`Cost: ${p.v}`,'aw.info.context':(p:{v:string})=>`Context: ${p.v}`,'aw.info.estimate':(p:{v:string})=>`estimate ${p.v}`,'aw.info.over':'past the estimate','aw.info.long':'long',
  'aw.overTip':'The work is past the estimate made from similar jobs.','aw.modelTip':'The model and the effort this chat runs with.','aw.metaTip':'Work time and cost so far.','aw.metaTipEst':'Work time and cost so far, each next to its estimate (~).',
  'aw.orchestratorShow':'Show the Orchestrator beside it','aw.orchestratorHide':'Hide the Orchestrator',
  'aw.facts':'Details: model, cost, estimate, links',

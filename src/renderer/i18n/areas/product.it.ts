@@ -57,6 +57,7 @@ export const productIt={
  'aw.views':'Cosa mostra la finestra','aw.view.chat':'Chat','aw.view.split':'Affiancati','aw.view.browser':'Browser',
  'aw.resizer':'Sposta il divisore tra chat e browser','aw.tabs':'Schede del browser','aw.tab':(p:{n:number})=>`Scheda ${p.n}`,
  'aw.full':'Schermo intero','aw.fullExit':'Esci dallo schermo intero',
+ 'aw.info.model':(p:{v:string})=>`Modello: ${p.v}`,'aw.info.time':(p:{v:string})=>`Tempo di lavoro: ${p.v}`,'aw.info.cost':(p:{v:string})=>`Costo: ${p.v}`,'aw.info.context':(p:{v:string})=>`Contesto: ${p.v}`,'aw.info.estimate':(p:{v:string})=>`stima ${p.v}`,'aw.info.over':'oltre la stima','aw.info.long':'lungo',
  'aw.overTip':'Il lavoro ha superato la stima fatta dai lavori simili.','aw.modelTip':'Modello ed effort con cui lavora questa chat.','aw.metaTip':'Tempo di lavoro e costo finora.','aw.metaTipEst':'Tempo di lavoro e costo finora, ciascuno accanto alla sua stima (~).',
  'aw.orchestratorShow':'Mostra l’Orchestrator accanto','aw.orchestratorHide':'Nascondi l’Orchestrator',
  'aw.facts':'Dettagli: modello, costo, stima, link',

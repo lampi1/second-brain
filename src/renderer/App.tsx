@@ -204,7 +204,7 @@ function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
       <div className="page-body" key={id} ref={bodyRef}>
         <ErrorBoundary where={id}>
         {hub ? null : id === 'log' ? <LogPage /> : id === 'guida' ? <Suspense fallback={null}><GuidePage arg={arg ?? undefined} /></Suspense> : id === 'registrazioni' ? <RecordingsPage /> : id === 'impara' ? <ImparaPage /> : id === 'scacchi' ? <Suspense fallback={null}><ChessPage /></Suspense> : id === 'agenti' ? <AgentCatalogPage /> : id === 'impostazioni'
-          ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.settings')}><div className="bx-inner"><SettingsPage /></div></div>
+          ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.settings')}><div className="bx-inner st-host"><SettingsPage /></div></div>
           : id === 'memoria'
             ? <div className="bx bx-page bx-scroll" role="region" aria-label={pageLabel(id)}><div className="bx-inner mh-inner"><MemoryPage /></div></div>
             : id === 'andamento' ? <AndamentoPage /> : id === 'collegamenti' ? <MapPage />
