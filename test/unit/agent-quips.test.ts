@@ -82,8 +82,8 @@ describe('agent quips', () => {
     // the name goes in the line, cut short; without a name only the lines that need none are said
     expect(quipX('  OrderTotalsTests.cs ')).toBe('OrderTotals…');
     expect(quipX('OrderTotalsTests.cs').length).toBe(QUIP_X_MAX);
-    expect(pickQuip('artisan', 'edit', 'it', () => 0, undefined, 'Refund.cs')).toBe('Refund.cs: a mazzate');
-    for (const r of [0, 0.5, 0.999]) expect(pickQuip('artisan', 'edit', 'it', () => r)).toBe('Limo e incollo');
+    expect(pickQuip('artisan', 'edit', 'it', () => 0, undefined, 'Refund.cs')).toBe('Raddrizzo Refund.cs');
+    for (const r of [0, 0.5, 0.999]) expect(pickQuip('artisan', 'edit', 'it', () => r)).toBe('Lima e martello');
     for (const lang of LANGS) for (const role of QUIP_ROLES) for (const kind of QUIP_KINDS) for (const r of [0, 0.5, 0.999]) {
       expect(pickQuip(role, kind, lang, () => r)).not.toContain('{x}');
       expect(pickQuip(role, kind, lang, () => r, undefined, 'OrderTotalsTests.cs')).not.toContain('{x}');
@@ -155,7 +155,7 @@ describe('agent quips', () => {
 
   it('says only a plain program name, and a test only for a command that runs tests', () => {
     // a `$` in the name is text, not a pattern of the replacement
-    expect(pickQuip('artisan', 'edit', 'it', () => 0, undefined, 'a$&b')).toBe('a$&b: a mazzate');
+    expect(pickQuip('artisan', 'edit', 'it', () => 0, undefined, 'a$&b')).toBe('Raddrizzo a$&b');
     // the program is said only as a plain name: a value, a quoted path, a sign or something computed never is
     const said: [string, string | undefined][] = [
       ['AUTH="Bearer abc123xyz" curl https://example.org', 'curl'], ['GREETING=my\\ words cmd', 'cmd'], ['TOKEN=$(pass show github) gh api', 'gh'],

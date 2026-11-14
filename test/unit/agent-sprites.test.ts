@@ -66,9 +66,13 @@ describe('the little people', () => {
       expect(new Set(at).size, `${id} ${state} ${at.join(" ")}`).toBe(at.length);
     }
   });
-  it('writes the shared states once for all the roles', () => {
-    const css = SPRITE_IDS.map(id => keyframesCss(spriteScene(id, 'idle').nodes));
-    expect(new Set(css).size).toBe(1);
+  it('writes the shared states once for all the roles: a role adds only what is its own (the cigar smoke, the cape)', () => {
+    const shared = [...keyframeRules(spriteScene('scout', 'idle').nodes).values()];
+    for (const id of SPRITE_IDS) {
+      const own = [...keyframeRules(spriteScene(id, 'idle').nodes).values()].filter(r => !shared.includes(r));
+      if (id === 'artisan' || id === 'sentinel') expect(own.length, id).toBeLessThan(6);
+      else expect(own, id).toEqual([]);
+    }
   });
   it('reacts to a click the same way in every role: a pat and a whack, each played once and as long as it says', () => {
     for (const id of SPRITE_IDS) for (const kind of SPRITE_REACTIONS) {

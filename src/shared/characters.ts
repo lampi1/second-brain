@@ -10,12 +10,12 @@ export const isCharacterId = (v: unknown): v is CharacterId => typeof v === 'str
 
 /** What each character is, for alt text and the approval sheet (scripts/agent-avatar-sheets.mjs). */
 export const CHARACTER_LOOKS: Record<CharacterId, string> = {
-  orchestrator: 'conductor with swept silver hair, tailcoat and bow tie, raising a baton',
-  strategist: 'planner with short neat hair and glasses, holding a chess knight',
-  scout: 'explorer in a wide-brim hat with a magnifying glass',
-  artisan: 'maker in a bandana and apron with a wrench',
-  sentinel: 'guard in a visored helmet with a shield',
-  herald: 'town crier in a feathered tricorn with a horn',
+  orchestrator: 'gaunt maestro with a silver mane, tailcoat and bow tie, raising a baton',
+  strategist: 'cold planner with cropped greying hair, glasses and a trimmed beard, holding a chess knight',
+  scout: 'weathered tracker in a worn hat with a ginger beard and a spyglass',
+  artisan: 'muscular blacksmith with a black beard, a red rag on the head and a cigar, holding a sledge',
+  sentinel: 'merciless guard in a dark closed helm with red eye slits and a halberd',
+  herald: 'stout town crier in a feathered tricorn with a waxed moustache and a trumpet',
 };
 /** The character of a catalog entry: its own id when it has one (a retired role: its successor's), else the Scout's
  *  (never empty). */
