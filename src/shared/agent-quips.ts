@@ -486,12 +486,13 @@ export function cleanDailyQuips(raw: unknown, lang: Lang): DailyQuips {
 }
 /** A model's answer as lines of the day: one `role.moment: line | line | line` per row; a row it cannot read is skipped. */
 export function parseDailyQuips(text: string, lang: Lang): DailyQuips {
-  const raw: Record<string, Record<string, string[]>> = {};
+  const raw: DailyQuips = {};
   for (const row of text.split(/\r?\n/)) {
     const m = /^\s*[-*]?\s*([a-z]+)\.([a-z]+)\s*:\s*(.+)$/i.exec(row);
     if (!m) continue;
-    const role = m[1]!.toLowerCase(), kind = m[2]!.toLowerCase();
-    ((raw[role] ??= {})[kind] ??= []).push(...m[3]!.split('|'));
+    // only a known role and moment is a key: a word like `constructor` in their place is not looked up anywhere
+    const role = QUIP_ROLES.find(r => r === m[1]!.toLowerCase()), kind = QUIP_KINDS.find(k => k === m[2]!.toLowerCase());
+    if (role && kind) ((raw[role] ??= {})[kind] ??= []).push(...m[3]!.split('|'));
   }
   return cleanDailyQuips(raw, lang);
 }

@@ -4,14 +4,14 @@
 // (agents/oneshot.ts, light: no role text, no tools, no file; three small calls, the roles in three parts), with a theme
 // of the day and the lines of the last days to stay away from. What it writes is text for a bubble and nothing else:
 // shared/agent-quips.ts parseDailyQuips keeps only plain short lines for known roles and moments. The lines are kept
-// in userData/quips-daily.json for DAILY_KEEP_DAYS days and all of them are said, so the choice grows for a week and
-// then turns over; the fixed lines in code are always there (no engine, no network, a day nothing usable came back).
+// in userData/quips-daily.json for DAILY_KEEP_DAYS days and said newest first (at most DAILY_MAX for a moment), so the
+// choice grows for a week and then turns over; the fixed lines in code are always there (no engine, no network, a day nothing usable came back).
 // Never more than DAILY_TRIES tries a day per language, none while the setting quipsDaily is off. The renderer asks
 // through IPC agents:quips (lib/daily-quips.ts). Built by wiring.ts; none in the demo.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Lang } from '../../shared/contract';
-import { QUIP_CHARACTER, QUIP_KINDS, QUIP_ROLES, QUIP_X_KINDS, QUIP_X_REST, fixedQuips, mergeDailyQuips, parseDailyQuips, type DailyQuips, type QuipKind, type QuipRole } from '../../shared/agent-quips';
+import { QUIP_CHARACTER, QUIP_KINDS, QUIP_ROLES, QUIP_X_KINDS, QUIP_X_REST, cleanDailyQuips, fixedQuips, mergeDailyQuips, parseDailyQuips, type DailyQuips, type QuipKind, type QuipRole } from '../../shared/agent-quips';
 import type { OneShotRequest, OneShotResult } from '../agents/oneshot';
 import { localDay } from '../jobs/scheduler';
 import { errText, log } from '../log';
@@ -66,7 +66,11 @@ export interface DailyQuipsDeps {
   now?: () => number;
 }
 const isLang = (v: unknown): v is Lang => v === 'it' || v === 'en' || v === 'de';
-const whole = (lines: DailyQuips | undefined, roles: readonly QuipRole[]): boolean => roles.every(r => !!lines?.[r]?.work?.length);
+/** How many of a role's moments must have lines for its day to be whole: an answer cut short is asked again. */
+export const DAILY_WHOLE_KINDS = 12;
+const whole = (lines: DailyQuips | undefined, roles: readonly QuipRole[]): boolean =>
+  roles.every(r => !!lines?.[r]?.work?.length && QUIP_KINDS.filter(k => lines[r]?.[k]?.length).length >= DAILY_WHOLE_KINDS);
+const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
 export class DailyQuipsService {
   private readonly busy = new Map<Lang, Promise<void>>();
@@ -74,28 +78,43 @@ export class DailyQuipsService {
   constructor(private readonly d: DailyQuipsDeps) {}
   private now(): number { return (this.d.now ?? Date.now)(); }
 
+  /** The file as it may be used: every line checked like a model's answer (the file is not trusted), only days and
+   *  counters that are what they should be. No file, or one that is not ours: an empty store. A file that is there
+   *  but cannot be read now throws: nothing is asked and nothing is written over it. */
   private read(): Stored {
-    try {
-      const v = JSON.parse(fs.readFileSync(this.d.file, 'utf8')) as Partial<Stored>;
-      if (v?.v === 1 && v.days && typeof v.days === 'object') return { v: 1, days: v.days, tries: v.tries && typeof v.tries === 'object' ? v.tries : {} };
-    } catch { /* no file yet, or one that cannot be read: start again */ }
-    return { v: 1, days: {}, tries: {} };
+    const out: Stored = { v: 1, days: {}, tries: {} };
+    let text: string;
+    try { text = fs.readFileSync(this.d.file, 'utf8'); } catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') return out; throw e; }
+    let v: unknown;
+    try { v = JSON.parse(text); } catch { return out; }
+    const obj = (x: unknown): Record<string, unknown> | null => (x && typeof x === 'object' && !Array.isArray(x) ? x as Record<string, unknown> : null);
+    const o = obj(v), days = obj(o?.days), tries = obj(o?.tries);
+    if (o?.v !== 1 || !days) return out;
+    for (const [day, of] of Object.entries(days)) {
+      const langs = obj(of);
+      if (!DAY_KEY.test(day) || !langs) continue;
+      for (const [lang, lines] of Object.entries(langs)) if (isLang(lang)) (out.days[day] ??= {})[lang] = cleanDailyQuips(lines, lang);
+    }
+    for (const [k, n] of Object.entries(tries ?? {})) if (DAY_KEY.test(k.slice(0, 10)) && typeof n === 'number' && Number.isFinite(n) && n >= 0) out.tries[k] = n;
+    return out;
   }
   private write(s: Stored): void {
-    // only the last days stay: older lines and their counters leave with them
-    const keep = Object.keys(s.days).sort().slice(-DAILY_KEEP_DAYS), first = keep[0] ?? '';
-    const out: Stored = { v: 1, days: Object.fromEntries(keep.map(k => [k, s.days[k]!])), tries: Object.fromEntries(Object.entries(s.tries).filter(([k]) => k.slice(0, 10) >= first)) };
+    // only the last days up to today stay: older lines and their counters leave with them, and so does a day after
+    // today (a clock that ran ahead). Today's counter always stays: a clock set back does not ask again for ever.
+    const today = localDay(this.now());
+    const keep = Object.keys(s.days).filter(k => k <= today).sort().slice(-DAILY_KEEP_DAYS), first = keep[0] ?? today;
+    const out: Stored = { v: 1, days: Object.fromEntries(keep.map(k => [k, s.days[k]!])), tries: Object.fromEntries(Object.entries(s.tries).filter(([k]) => k.slice(0, 10) >= first && k.slice(0, 10) <= today)) };
     fs.mkdirSync(path.dirname(this.d.file), { recursive: true });
     const tmp = `${this.d.file}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(out));
     fs.renameSync(tmp, this.d.file);
   }
-  /** Every kept line of a language, today's first; each one checked again as it is read (the file is not trusted). */
+  /** The kept lines of a language, the newest day first (at most DAILY_MAX for a moment: the oldest give way). */
   private pool(s: Stored, lang: Lang): DailyQuips {
     let out: DailyQuips = {};
     for (const day of Object.keys(s.days).sort().reverse()) {
       const lines = s.days[day]?.[lang];
-      if (lines) out = mergeDailyQuips(out, parseDailyQuips(rows(lines), lang));
+      if (lines) out = mergeDailyQuips(out, lines);
     }
     return out;
   }
@@ -148,11 +167,6 @@ export class DailyQuipsService {
   }
 }
 
-/** Lines as the rows a model writes: what is stored goes through the same reader as what a model answers. */
-const rows = (lines: DailyQuips): string => QUIP_ROLES.flatMap(role => QUIP_KINDS.flatMap(kind => {
-  const list = lines[role]?.[kind];
-  return Array.isArray(list) && list.length ? [`${role}.${kind}: ${list.filter(q => typeof q === 'string').join(' | ')}`] : [];
-})).join('\n');
 const count = (lines: DailyQuips): number => QUIP_ROLES.reduce((n, role) => n + QUIP_KINDS.reduce((m, kind) => m + (lines[role]?.[kind]?.length ?? 0), 0), 0);
 /** A sample of what the asked roles say already, for the model to stay away from: each one's last `work` lines of
  *  the day and a few of its fixed ones (they show the tone too). */

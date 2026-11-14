@@ -833,8 +833,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // «Chiedi alla Guida» (ADR 0196): one light one-shot on the Scout's engine; the anchors are checked only in a run from the repo
   const guide = new GuideService({ runOnce: r => oneShot.runOnce(r), repoRoot: repoRootOf(path.dirname(fileURLToPath(import.meta.url))),
     index: lang => guideIndex({ window: ctx.window, settings: { schema: () => brain.settingsSchema(), get: () => brain.settings() }, tools: () => [], showValues: () => false }, lang) });
-  // the little people's lines of the day (ADR 0305): two light one-shots a day on the Herald's engine, when the setting is on
-  const quips = new DailyQuipsService({ file: path.join(ctx.userData, 'quips-daily.json'), runOnce: r => oneShot.runOnce(r), on: () => brain.settings().quipsDaily !== false });
+  // the little people's lines of the day (ADR 0305): three light one-shots a day per language on the Herald's engine
+  // (twice when the first try was not whole), when the setting is on; never in a test run
+  const quips = new DailyQuipsService({ file: path.join(ctx.userData, 'quips-daily.json'), runOnce: r => oneShot.runOnce(r), on: () => !process.env.SB_TEST && brain.settings().quipsDaily !== false });
 
   // GitHub sync outcomes + product changes in the brain (stable instance only, never in tests): src/main/sync.ts
   let sync: ProductSync | null = null;

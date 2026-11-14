@@ -1,15 +1,18 @@
 // The little people's lines of the day (ADR 0305): what a model wrote is said only as a few plain words for a known
 // role and moment (shared/agent-quips.ts cleanQuip, parseDailyQuips, mergeDailyQuips), the lines of the day are said
 // beside the fixed ones (setDailyQuips, pickQuip), and the service asks the lightest model at most twice a day per
-// language, in a few small calls, keeps a week of lines and never trusts its own file (main/quips/daily.ts). The engine
-// is a fake and the clock is given: nothing here waits or measures time.
+// language, in a few small calls, keeps a week of lines and never trusts its own file (main/quips/daily.ts); the
+// renderer reads them at once and waits for the model once (renderer/lib/daily-quips.ts watchDailyQuips). The engine
+// is a fake, the clock and the timers are given: nothing here waits or measures time.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(), on: vi.fn() } }));
 import { DAILY_MAX, QUIP_KINDS, QUIP_MAX, QUIP_ROLES, QUIP_X_KINDS, QUIP_X_REST, cleanQuip, fixedQuips, mergeDailyQuips, parseDailyQuips, pickQuip, quips, setDailyQuips, type QuipRole } from '../../src/shared/agent-quips';
 import type { OneShotRequest, OneShotResult } from '../../src/main/agents/oneshot';
-import { DAILY_BATCHES, DAILY_KEEP_DAYS, DAILY_RETRY_MS, DAILY_SYSTEM, DAILY_TRIES, DailyQuipsService, dailyCount, dailyPrompt } from '../../src/main/quips/daily';
+import { DAILY_BATCHES, DAILY_KEEP_DAYS, DAILY_RETRY_MS, DAILY_SYSTEM, DAILY_TRIES, DAILY_WHOLE_KINDS, DailyQuipsService, dailyCount, dailyPrompt } from '../../src/main/quips/daily';
+import { DAILY_EVERY_MS, DAILY_START_MS, watchDailyQuips, type DailyWatchDeps } from '../../src/renderer/lib/daily-quips';
 
 describe('a line a model wrote', () => {
   it('is said only as a few plain words that fit the bubble', () => {
@@ -34,6 +37,9 @@ describe('a line a model wrote', () => {
     ].join('\r\n'), 'it');
     expect(got).toEqual({ scout: { work: ['Fiuto la rotta', 'Mappa bagnata'], read: ['{x} sa di sale', 'Leggo il vento'] }, herald: { done: ['Annuncio fatto'] } });
     expect(parseDailyQuips('', 'it')).toEqual({});
+    // a word every object knows in place of a role or a moment is a row like any other unknown one
+    expect(parseDailyQuips('scout.constructor: Ciao mondo\nconstructor.work: Ciao mondo\ntoString.valueOf: Ciao\nscout.work: Ancora viva', 'it')).toEqual({ scout: { work: ['Ancora viva'] } });
+    expect(Object.hasOwn(Object, 'work')).toBe(false);
     // never more than DAILY_MAX for one moment
     const many = Array.from({ length: DAILY_MAX + 10 }, (_, i) => `Riga numero ${i}`).join(' | ');
     expect(parseDailyQuips(`scout.work: ${many}`, 'it').scout?.work).toHaveLength(DAILY_MAX);
@@ -203,6 +209,51 @@ describe('the service that has the lines of the day written', () => {
     }
   });
 
+  it('keeps the count of the day when the clock goes back past the kept week: it does not ask for ever', async () => {
+    let calls = 0;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'quips-')); dirs.push(dir);
+    const file = path.join(dir, 'quips-daily.json'), clock = { at: NOON };
+    const fresh = () => new DailyQuipsService({ file, runOnce: async req => { calls++; return clock.at >= NOON ? ok(rowsFor(asked(req), 'poi')) : ko('timeout'); }, on: () => true, now: () => clock.at });
+    // a week written with the clock ahead
+    for (let day = 0; day < DAILY_KEEP_DAYS; day++) { clock.at = NOON + day * DAY; await fresh().ensure('it'); }
+    // the clock is set right, ten days back, and the app starts again and again (each start a new service)
+    clock.at = NOON - 10 * DAY; calls = 0;
+    for (let i = 0; i < 6; i++) { await fresh().ensure('it'); clock.at += DAILY_RETRY_MS; }
+    expect(calls).toBe(DAILY_TRIES * DAILY_BATCHES.length);
+    const s = JSON.parse(fs.readFileSync(file, 'utf8')) as { days: Record<string, unknown>; tries: Record<string, number> };
+    expect(s.tries['2026-11-04:it']).toBe(DAILY_TRIES);
+    // the days after today left with the wrong clock; nothing of them is said
+    expect(Object.keys(s.days)).toEqual([]);
+    expect(fresh().get('it')).toEqual({ lines: {}, pending: false });
+  });
+
+  it('asks again a role whose answer was cut short, and keeps what came', async () => {
+    const cut = (req: OneShotRequest) => rowsFor(asked(req), 'oggi').split('\n').filter(row => !row.startsWith('scout.') || QUIP_KINDS.indexOf(row.slice(6, row.indexOf(':')) as never) < DAILY_WHOLE_KINDS - 1).join('\n');
+    const { svc, calls, clock } = make((req, n) => ok(n <= DAILY_BATCHES.length ? cut(req) : rowsFor(asked(req), 'dopo')));
+    const first = await svc.ensure('it');
+    expect(Object.keys(first.lines.scout!)).toHaveLength(DAILY_WHOLE_KINDS - 1);
+    clock.at += DAILY_RETRY_MS;
+    expect(svc.get('it').pending).toBe(true);
+    const second = await svc.ensure('it');
+    expect(calls.slice(DAILY_BATCHES.length).map(asked)).toEqual([DAILY_BATCHES.find(b => b.includes('scout'))]);
+    expect(Object.keys(second.lines.scout!)).toHaveLength(QUIP_KINDS.length);
+    expect(second.lines.scout!.work![0]).toBe('sco work oggi 0');
+    expect(second.pending).toBe(false);
+  });
+
+  it('writes over a file that is not what it should be without asking twice or throwing', async () => {
+    const { svc, file, calls, stored } = make(req => ok(rowsFor(asked(req), 'oggi')));
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ v: 1, tries: { '2026-11-14:it': 'molte', '2026-11-14:en': -3, 'boh': 1, '2026-11-13:it': 1 }, days: { '2026-11-14': { it: { scout: { work: 7 }, constructor: { work: ['Ciao mondo'] } }, fr: { scout: { work: ['Bonjour'] } } }, ieri: { it: { scout: { work: ['Riga di ieri'] } } }, '2026-11-13': 'niente' } }));
+    const got = await svc.ensure('it');
+    expect(calls).toHaveLength(DAILY_BATCHES.length);
+    expect(got.lines.scout?.work).toHaveLength(dailyCount('work'));
+    expect(got.pending).toBe(false);
+    expect(stored().tries).toEqual({ '2026-11-14:it': 1 });
+    expect(Object.keys(stored().days)).toEqual(['2026-11-14']);
+    expect(Object.keys(stored().days['2026-11-14']!)).toEqual(['it']);
+  });
+
   it('asks every role for every moment, in the words of its character', () => {
     const p = dailyPrompt(DAILY_BATCHES[1]!, 'de', NOON, ['Schon gesagt']);
     expect(DAILY_SYSTEM('de')).toContain('German');
@@ -213,5 +264,58 @@ describe('the service that has the lines of the day written', () => {
     expect(p).toContain('Schon gesagt');
     expect(dailyPrompt(DAILY_BATCHES[0]!, 'it', NOON, [])).not.toContain('Said in the last days');
     expect(DAILY_BATCHES.flat().sort()).toEqual([...QUIP_ROLES].sort());
+  });
+});
+
+describe('the renderer that keeps the lines of the day', () => {
+  /** A watch on fake surroundings: the answers are given, the timers are fired by hand. */
+  const watch = (answers: { lines: object; pending: boolean }[]) => {
+    const asks: boolean[] = [], set: unknown[] = [], later: { fn: () => void; ms: number; off: boolean }[] = [], every: { fn: () => void; ms: number; off: boolean }[] = [];
+    const d: DailyWatchDeps = {
+      ask: async (_l, wait) => { asks.push(wait); const a = answers.shift(); if (!a) throw new Error('no main'); return a as never; },
+      set: (_l, lines) => { set.push(lines); },
+      later: (fn, ms) => { const t = { fn, ms, off: false }; later.push(t); return () => { t.off = true; }; },
+      every: (fn, ms) => { const t = { fn, ms, off: false }; every.push(t); return () => { t.off = true; }; },
+    };
+    const stop = watchDailyQuips('it', d), settle = async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); };
+    return { asks, set, later, every, stop, settle };
+  };
+  const A = { scout: { work: ['Riga uno'] } }, B = { scout: { work: ['Riga due', 'Riga uno'] } };
+
+  it('reads the lines at once, and waits for the model once, a little later, only when today’s are due', async () => {
+    const w = watch([{ lines: A, pending: true }, { lines: A, pending: true }, { lines: B, pending: false }, { lines: B, pending: false }]);
+    await w.settle();
+    expect(w.asks).toEqual([false]);
+    expect(w.set).toEqual([A]);
+    expect(w.later.map(t => t.ms)).toEqual([DAILY_START_MS]);
+    expect(w.every.map(t => t.ms)).toEqual([DAILY_EVERY_MS]);
+    // the hour comes before the wait is over: still one waiting ask
+    w.every[0]!.fn(); await w.settle();
+    expect(w.asks).toEqual([false, false]);
+    expect(w.later).toHaveLength(1);
+    w.later[0]!.fn(); await w.settle();
+    expect(w.asks).toEqual([false, false, true]);
+    expect(w.set.at(-1)).toEqual(B);
+    // nothing due any more: the next hour only reads
+    w.every[0]!.fn(); await w.settle();
+    expect(w.asks).toEqual([false, false, true, false]);
+    expect(w.later).toHaveLength(1);
+  });
+  it('never waits for the model when nothing is due, and a failure leaves the lines there are', async () => {
+    const w = watch([{ lines: A, pending: false }]);
+    await w.settle();
+    expect(w.later).toHaveLength(0);
+    w.every[0]!.fn(); await w.settle(); // main does not answer
+    expect(w.set).toEqual([A]);
+    expect(w.asks).toEqual([false, false]);
+  });
+  it('stops: no timer left, and an answer that comes late is not used', async () => {
+    const w = watch([{ lines: A, pending: true }]);
+    w.stop(); await w.settle();
+    expect(w.set).toEqual([]);
+    expect(w.every[0]!.off).toBe(true);
+    const v = watch([{ lines: A, pending: true }]);
+    await v.settle(); v.stop();
+    expect(v.later[0]!.off).toBe(true);
   });
 });

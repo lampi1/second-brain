@@ -124,6 +124,16 @@ describe('standings', () => {
     expect(s).toMatchObject({ runs: 13, wins: 7, xp: 7, level: 2 }); // a rollup without XP: its 6 successes at 1 each
     expect(standings([run({ endedAt: undefined })], [], NOW).has('scout')).toBe(false);
   });
+  it('counts a small job that is no role’s work for nothing: the Guida’s answer, the little people’s lines of the day (ADR 0305)', () => {
+    const job = (j: 'guide' | 'phrases') => run({ agentId: 'herald', source: 'oneshot', outcome: human('fail'), oneshot: { engine: 'claude', job: j, fallback: false, costBasis: 'reported' } });
+    const real = run({ agentId: 'herald', outcome: human('success') });
+    const with_ = standings([job('guide'), job('phrases'), real], [], NOW).get('herald')!, alone = standings([real], [], NOW).get('herald')!;
+    expect(with_).toEqual(alone);
+    expect(standings([job('phrases')], [], NOW).has('herald')).toBe(false);
+    const ended = (runs: AgentRun[]) => runMetrics(runs).find(m => m.agentId === 'herald')?.all?.ended ?? 0;
+    expect(ended([job('guide'), job('phrases'), real])).toBe(ended([real]));
+    expect(ended([real])).toBe(1);
+  });
 });
 
 describe('the Orchestrator\'s standing (issue #112, ADR 0097)', () => {

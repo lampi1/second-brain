@@ -50,7 +50,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   the tool the chat is really using: it reads a book, slams the enter key of a terminal, tries the tests with a test
   tube and a checklist, searches the pages with a lens, spins the world on a finger for the web, throws a paper plane
   when it hands the work to another agent. While its chat works a person now speaks nearly all the time, each line
-  staying six seconds, about that same kind of work; up to three people speak at once, never the same line. After a
+  staying six seconds, about that same kind of work; up to three people speak at once, and not the line another one is saying when there
+  is another. After a
   whack the bubble comes once the stick is gone, and stands further right (ADR 0305).
 - New lines every day: once a day the lightest model of an engine you turned on writes new lines for every role and
   moment, with a theme of the day of its own (three small calls, no tools). Each one is checked before it is said

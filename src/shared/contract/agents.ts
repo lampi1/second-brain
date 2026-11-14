@@ -101,6 +101,6 @@ export interface AgentsInvokeMap {
   /** the Guida cards whose anchored code changed (a run from the repo; checked: false in a packaged build) */
   'guide:stale': [void, GuideStaleState];
   /** the little people's lines of the day (main/quips/daily.ts, ADR 0305): the lines to say now; `wait` writes
-   *  today's first when they are due (one light model call, at most twice a day) */
+   *  today's first when they are due (three light model calls, at most twice a day per language) */
   'agents:quips': [{ lang: Lang; wait?: boolean }, { lines: DailyQuips; pending: boolean }];
 }

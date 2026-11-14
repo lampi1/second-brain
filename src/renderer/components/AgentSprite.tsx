@@ -80,6 +80,6 @@ export function AgentSprite({ id, state, activity, height = 32, label, still, on
     {/* the key restarts the movements when the state changes, and at every click */}
     <svg key={react ? `${key}:${react.n}` : key} viewBox={`${VIEW.x} ${VIEW.y} ${VIEW.w} ${VIEW.h}`} width={height * VIEW.w / VIEW.h} height={height} aria-hidden="true">{body}</svg>
     {/* what it says: decoration, never read aloud */}
-    {quip.text && <span key={quip.n} className="quip" style={{ animationDuration: `${quip.ms}ms`, animationDelay: `${quip.delay}ms` }} aria-hidden="true">{quip.text}</span>}
+    {quip.text && <span key={quip.n} className={quip.aside ? 'quip is-aside' : 'quip'} style={{ animationDuration: `${quip.ms}ms` }} aria-hidden="true">{quip.text}</span>}
   </span>;
 }

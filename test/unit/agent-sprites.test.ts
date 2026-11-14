@@ -12,7 +12,7 @@ import type { ChatItem } from '../../src/shared/contract';
 import { REACTION_S, SPRITE_ACTIVITIES, SPRITE_IDS, SPRITE_REACTIONS, SPRITE_STATES, isSpriteActivity, reactionScene, spriteScene } from '../../src/renderer/lib/agent-sprites';
 import { J, VIEW, jointStyle, keyframeRules, keyframesCss, nodeSvg, trackName, walk, type Group } from '../../src/renderer/lib/sprite-rig';
 import { AgentSprite, spriteIdOf } from '../../src/renderer/components/AgentSprite';
-import { isThinking, spriteStateOf } from '../../src/renderer/components/StripFace';
+import { ACTIVITY_MS, isThinking, settleLeft, spriteStateOf } from '../../src/renderer/components/StripFace';
 
 const groups = (id: (typeof SPRITE_IDS)[number], state: (typeof SPRITE_STATES)[number]) => walk(spriteScene(id, state).nodes).filter((n): n is Group => 'g' in n);
 
@@ -182,6 +182,14 @@ describe('what the person of a strip does', () => {
     expect(spriteStateOf({ ...o, done: true })).toBe('done');
     expect(spriteStateOf({ ...o, pending: true })).toBe('think');
     expect(spriteStateOf(o)).toBe('idle');
+  });
+  it('changes the scene of work no more often than a scene can be watched: the first change at once, the next when its time is up', () => {
+    expect(settleLeft(0, ACTIVITY_MS, 1_000_000)).toBe(0);
+    expect(settleLeft(1_000_000, ACTIVITY_MS, 1_000_000)).toBe(ACTIVITY_MS);
+    expect(settleLeft(1_000_000, ACTIVITY_MS, 1_000_000 + ACTIVITY_MS - 1)).toBe(1);
+    expect(settleLeft(1_000_000, ACTIVITY_MS, 1_000_000 + ACTIVITY_MS)).toBe(0);
+    expect(settleLeft(1_000_000, ACTIVITY_MS, 9_000_000)).toBe(0);
+    expect(ACTIVITY_MS).toBeGreaterThanOrEqual(2000);
   });
   it('thinks on a thought or before the first step, keeps working between two steps', () => {
     const item = (p: Record<string, unknown>) => ({ id: 'i', at: 0, ...p }) as unknown as ChatItem;

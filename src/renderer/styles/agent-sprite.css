@@ -22,7 +22,8 @@ html[data-hidden] .agent-sprite * { animation-play-state:paused !important; }
    itself (lib/quips.ts QUIP_MS sets how long). Over the row's text for that moment; it takes no click. */
 .agent-sprite > .quip { position:absolute; left:76%; top:-5px; z-index:3; padding:3px 8px 4px; border-radius:10px 10px 10px 2px; background:var(--text); color:var(--bg);
   font:600 11px/1.25 var(--font); letter-spacing:0; white-space:nowrap; pointer-events:none; box-shadow:0 2px 8px rgb(0 0 0 / .28); transform-origin:0 100%; animation:quip-pop 2600ms both; }
-/* during a reaction the bubble stands clear of the hand and the stick, which come in over the head from the right */
-.agent-sprite[data-react] > .quip { left:86%; }
+/* a click's line stands clear of the hand and the stick, which come in over the head from the right, for as long as
+   it is there (it comes once they have left: lib/quips.ts) */
+.agent-sprite > .quip.is-aside { left:86%; }
 @keyframes quip-pop { 0% { opacity:0; transform:scale(.5) translateY(4px); } 6% { opacity:1; transform:scale(1.07); } 11%, 86% { opacity:1; transform:none; } 100% { opacity:0; transform:translateY(-3px) scale(.94); } }
 @media (prefers-reduced-motion: reduce) { .agent-sprite > .quip { animation:none; } }

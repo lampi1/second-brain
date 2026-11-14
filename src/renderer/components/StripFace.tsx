@@ -36,13 +36,16 @@ export function isThinking(items: readonly ChatItem[] | undefined): boolean {
 /** How long a kind of work is played before the person may change to another, in ms: tools follow each other faster
  *  than a scene can be watched. */
 export const ACTIVITY_MS = 4000;
-/** A value that changes no more often than every `ms`: the latest one is taken when the time is up. */
+/** How long a new value still waits, in ms, when the shown one was taken at `since`: 0 = it is taken now. */
+export const settleLeft = (since: number, ms: number, now: number): number => Math.max(0, since + ms - now);
+/** A value that changes no more often than every `ms`: the latest one is taken when the time is up (the first
+ *  change at once). */
 function useSettled<T>(value: T, ms: number): T {
   const [shown, setShown] = useState(value), since = useRef(0);
   useEffect(() => {
     if (Object.is(value, shown)) return;
     const take = () => { since.current = Date.now(); setShown(value); };
-    const left = since.current + ms - Date.now();
+    const left = settleLeft(since.current, ms, Date.now());
     if (left <= 0) { take(); return; }
     const later = setTimeout(take, left);
     return () => clearTimeout(later);

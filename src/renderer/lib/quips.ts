@@ -67,27 +67,34 @@ let voices: number[] = [];
 const onAir = new Map<string, number>();
 const quiet = (): boolean => document.hidden || isFrozen() || !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-/** One line on screen: its text, how long it stays and after what delay it starts (`n` counts the lines, to restart the bubble). */
-export interface Quip { text: string | null; n: number; ms: number; delay: number }
-/** The bubble of one person: `text` while it speaks, `say` for a click. `mood` makes it speak by itself: asked each
- *  time it is about to, it gives the moment, or null to stay silent. `lively` (its chat works): it speaks nearly all
- *  the time, each line staying longer. */
+/** One line on screen: its text and how long it stays (`n` counts the lines, to restart the bubble); `aside`: it is a
+ *  click's line and stands clear of the hand and the stick. */
+export interface Quip { text: string | null; n: number; ms: number; aside: boolean }
+/** The bubble of one person: `text` while it speaks, `say` for a click (`delay`: the line comes that much later, once
+ *  the hand or the stick has left the head). `mood` makes it speak by itself: asked each time it is about to, it gives
+ *  the moment, or null to stay silent. `lively` (its chat works): it speaks nearly all the time, each line staying
+ *  longer. */
 export function useQuip(role: QuipRole, mood?: () => QuipMoment | null, lively = false): Quip & { say: (kind: QuipKind, x?: string, o?: { ms?: number; delay?: number }) => void } {
-  const [quip, setQuip] = useState<Quip>({ text: null, n: 0, ms: QUIP_MS, delay: 0 });
-  const last = useRef<string | undefined>(undefined), hide = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [quip, setQuip] = useState<Quip>({ text: null, n: 0, ms: QUIP_MS, aside: false });
+  const last = useRef<string | undefined>(undefined), hide = useRef<ReturnType<typeof setTimeout> | undefined>(undefined), show = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // until when this person's own line is on the page
+  const until = useRef(0);
   const say = useCallback((kind: QuipKind, x?: string, o?: { ms?: number; delay?: number }) => {
     const ms = o?.ms ?? QUIP_MS, delay = o?.delay ?? 0, at = Date.now();
-    // not the line another person is saying right now, when there is another one to say (a few tries, then any)
+    // not the line another person is saying right now, when a few tries find another one
     let text = pickQuip(role, kind, lang(), Math.random, last.current, x);
     for (let i = 0; i < 3 && (onAir.get(text) ?? 0) > at; i++) text = pickQuip(role, kind, lang(), Math.random, text, x);
-    if (onAir.size > 24) for (const [q, until] of onAir) if (until <= at) onAir.delete(q);
+    if (onAir.size > 24) for (const [q, end] of onAir) if (end <= at) onAir.delete(q);
     onAir.set(text, at + delay + ms);
     last.current = text;
-    setQuip(q => ({ text, n: q.n + 1, ms, delay }));
-    clearTimeout(hide.current);
+    until.current = at + delay + ms;
+    clearTimeout(show.current); clearTimeout(hide.current);
+    const put = () => setQuip(q => ({ text, n: q.n + 1, ms, aside: delay > 0 }));
+    // a line that waits is not on the page before its time (so also with no animation: reduced motion)
+    if (delay > 0) { setQuip(q => (q.text === null ? q : { ...q, text: null })); show.current = setTimeout(put, delay); } else put();
     hide.current = setTimeout(() => setQuip(q => ({ ...q, text: null })), delay + ms);
   }, [role]);
-  useEffect(() => () => clearTimeout(hide.current), []);
+  useEffect(() => () => { clearTimeout(hide.current); clearTimeout(show.current); }, []);
   // the latest `mood` without restarting the wait at every render
   const moodRef = useRef(mood);
   useEffect(() => { moodRef.current = mood; });
@@ -99,7 +106,7 @@ export function useQuip(role: QuipRole, mood?: () => QuipMoment | null, lively =
       next = setTimeout(() => {
         // not now (hidden, frozen, enough others are speaking, nothing to say): it tries again soon, without a line
         const at = Date.now();
-        voices = voices.filter(until => until > at);
+        voices = voices.filter(end => end > at);
         const turn = quipTurn({ quiet: quiet(), speaking: voices.length, lively, moment: () => moodRef.current?.(), rnd: Math.random() });
         if (!turn) return wait(true);
         voices.push(at + turn.ms);
@@ -107,7 +114,8 @@ export function useQuip(role: QuipRole, mood?: () => QuipMoment | null, lively =
         wait(false, turn.ms);
       }, after + quipDelay(Math.random(), first, lively));
     };
-    wait(true);
+    // its chat started or stopped working while a line is on the page: that line is let finish first
+    wait(true, Math.max(0, until.current - Date.now()));
     return () => clearTimeout(next);
   }, [chatty, lively, say]);
   return { ...quip, say };
