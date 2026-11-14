@@ -219,7 +219,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
               (ADR 0307; the owner, 2026-11-14). Open, the same mark is the «Dettagli» button among the actions; the
               full window has the room and keeps the figures in sight */}
           {focus && <StripMeta chat={chat} workMs={work} />}
-          {(focus || expanded) && !facts && longContext && <ContextMeter chat={chat} warn={warn} />}
+          {expanded && !facts && longContext && <ContextMeter chat={chat} warn={warn} />}
           {viewSwitch}
           {/* the state stays in the DOM as the strip's data-state hook; one thing is shown: the wait or the state */}
           <span hidden><StatePill chat={chat} testid={`chat-state-${chatId}`} /></span>

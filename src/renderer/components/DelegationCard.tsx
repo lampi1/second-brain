@@ -76,7 +76,7 @@ export function TreeRails({ node, state }: { node: TreeNode; state: ChildState }
 /** The row (ADR 0293): the role's little person in its state (StripFace.tsx), the task, who runs it and what it does now (closed: the
  *  live step, or the result's first words once ended; open: its skills), «In attività» in plain words while it works and a
  *  pill for any other state but a plain end, the ⓘ mark with the rest in its tip (ADR 0307), "Vai alla chat". */
-function Head({ chat, state, open }: { chat: ChatSummary; state: ChildState; open: boolean }) {
+export function DelegationHead({ chat, state, open }: { chat: ChatSummary; state: ChildState; open: boolean }) {
   const now = useNow(15_000);
   const role = chat.agent?.name ?? chat.delegation?.role ?? '';
   const skills = chat.run?.tags?.skills ?? [];
@@ -198,7 +198,7 @@ export function DelegationCard({ chatId }: { chatId: string }) {
     onClick={onClick} onPointerDown={() => { down.current = window.getSelection()?.toString() ?? ''; }}>
     {/* no native title here: it would show together with the tips of the row's text and of its ⓘ mark (ADR 0307); the task's button says open or closed */}
     <div className="dc-summary">
-      <Head chat={chat} state={state} open={open} />
+      <DelegationHead chat={chat} state={state} open={open} />
       {open && state !== 'queued' && <Steps chat={chat} items={c.items} state={state} />}
     </div>
     {!open && hostsAsk && c.reqs[0] && <Ask req={c.reqs[0]} chatId={chatId} />}

@@ -1,5 +1,5 @@
 // The agents' strips in the Grindhouse (brain/pages/Home.tsx; SPEC 19: the one place for agents): one column, one
-// one-line strip under the other, in the Orchestrator's order (lib/agent-order.ts: grouped by area, start order inside
+// strip under the other (one line, two on a short column: ADR 0307), in the Orchestrator's order (lib/agent-order.ts: grouped by area, start order inside
 // a group). There is no drag and no saved order (SPEC 10-11): the user opens a strip in place or in full screen (F11,
 // FullScreen.tsx), the Orchestrator decides where it goes. A chat's browser tabs are inside its own window
 // (ChatTile.tsx, ADR 0287), never rows of their own; a browser without a strip is. Delegated chats (ADR 0083) sit under

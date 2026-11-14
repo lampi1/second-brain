@@ -811,13 +811,8 @@ button.lc-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 1
   .bt-nav { display: none; }
   .last-action { display: none; }
 }
-.pill-sub { display: none; }
 @container (max-width: 400px) {
   .composer-hint { display: none; }
-}
-@container (max-width: 360px) {
-  .chat-tile .th-row > .pill { display: none; }
-  .chat-tile .th-sub > .pill-sub { display: inline-flex; height: 17px; padding: 0 6px; font-size: 10.5px; }
 }
 
 /* ---------------------------------------------------------------- Workspace and full screen */

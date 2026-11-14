@@ -1,6 +1,6 @@
 /* The agents' strips in the Grindhouse and the agent window (ADR 0287; AgentStrips.tsx, ChatTile.tsx, FullScreen.tsx):
-   one column in the Orchestrator's order, an area heading before each group. A closed chat is ONE borderless row (the role's little person: ADR 0295 at the end; who,
-   what it does now, its time and cost against the estimate, one state: ADR 0292 at the end; three controls on hover); an open chat is a
+   one column in the Orchestrator's order, an area heading before each group. A closed chat is ONE borderless row, two lines on a short column (the role's little person: ADR 0295 at the end; who,
+   what it does now, one state and the ⓘ mark with the rest in its tip: ADR 0292 and 0307 at the end; three controls on hover); an open chat is a
    window with a fixed share of the page, so the transcript scrolls inside and a native page view has a stable rect.
    A chat that drives browsers is one window with three views (chat, side by side behind a divider, browser with the
    input); full screen covers the whole app window (.full-layer), the Orchestrator one key away beside it. */
@@ -235,7 +235,7 @@
    estimate and the context are the mark's tip; amber when the work is past its estimate or the context is long. */
 .strip-info { flex:none; display:inline-grid; place-items:center; width:20px; height:20px; border-radius:50%; color:var(--text-4); cursor:help; transition:color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease); }
 .chat-tile.is-strip:hover .strip-info, .delegation-card:hover .strip-info { color:var(--text-3); }
-.strip-info:hover, .strip-info:focus-visible { color:var(--text); background:var(--surface-3); }
+.chat-tile.is-strip .strip-info:hover, .delegation-card .strip-info:hover, .strip-info:focus-visible { color:var(--text); background:var(--surface-3); }
 .strip-info:focus-visible { outline:2px solid var(--focus-ring); outline-offset:1px; }
 .strip-info.over, .chat-tile.is-strip:hover .strip-info.over, .delegation-card:hover .strip-info.over { color:var(--amber); }
 @media (prefers-reduced-motion: reduce) { .strip-info { transition:none; } }

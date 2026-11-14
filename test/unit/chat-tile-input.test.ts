@@ -87,7 +87,7 @@ describe('chat strip head', () => {
     expect(html).not.toContain('chat-info-w');
     expect(html).not.toMatch(/class="strip-now" data-tip=/);
   });
-  it('a chat that is gone renders nothing (every hook runs before that return)', () => {
+  it('a chat that is gone renders nothing', () => {
     vi.mocked(useApp).mockImplementation(selector => selector({ chats: {}, pending: [], tabs: [] } as unknown as Parameters<typeof selector>[0]));
     expect(renderToStaticMarkup(createElement(ChatTile, { chatId: 'w' }))).toBe('');
   });

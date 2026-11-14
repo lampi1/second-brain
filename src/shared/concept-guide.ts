@@ -695,13 +695,14 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'Una striscia è aperta se prefs.chatExpanded[id]; la vista è prefs.agentView[id] (chat, split, browser) e la proporzione prefs.agentSplit[id]; nessun ordine salvato, nessun trascinamento. ADR 0287.', 'A strip is expanded if prefs.chatExpanded[id]; its view is prefs.agentView[id] (chat, split, browser) and the ratio prefs.agentSplit[id]; no saved order, no dragging. ADR 0287.'),
     ],
     anchors: {
-      0: ['src/renderer/brain/pages/Home.tsx'],
-      1: ['src/renderer/lib/agent-order.ts'],
-      2: ['src/renderer/components/ChatTile.tsx', 'src/renderer/components/FullScreen.tsx'],
-      3: ['src/renderer/components/ChildStrips.tsx'],
-      4: ['src/renderer/components/RunEstimate.tsx', 'src/main/agents/task-estimate.ts'],
-      5: ['src/main/chats/manager-delegation.ts#settleReport', 'src/main/chats/auto-close.ts', 'src/renderer/components/AutoCloseNotice.tsx'],
-      6: ['src/renderer/components/ChatTile.tsx'],
+      0: ['src/renderer/brain/pages/Home.tsx', 'src/renderer/components/StripInfo.tsx', 'src/renderer/lib/orchestrator-dock.ts'],
+      1: ['src/renderer/components/StripFace.tsx'],
+      2: ['src/renderer/lib/agent-order.ts'],
+      3: ['src/renderer/components/ChatTile.tsx', 'src/renderer/components/FullScreen.tsx'],
+      4: ['src/renderer/components/ChildStrips.tsx'],
+      5: ['src/renderer/components/RunEstimate.tsx', 'src/main/agents/task-estimate.ts'],
+      6: ['src/main/chats/manager-delegation.ts#settleReport', 'src/main/chats/auto-close.ts', 'src/renderer/components/AutoCloseNotice.tsx'],
+      7: ['src/renderer/components/ChatTile.tsx'],
     },
     sources: ['src/renderer/brain/pages/Home.tsx', 'src/renderer/components/AgentStrips.tsx', 'src/renderer/lib/agent-order.ts', 'src/renderer/lib/grid.ts', 'src/renderer/components/ChatTile.tsx', 'src/renderer/components/RunEstimate.tsx', 'src/renderer/components/BrowserTile.tsx', 'src/main/chats/manager-delegation.ts'],
   },
@@ -1451,8 +1452,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'A chat re-reads its whole history at every step: the longer, the costlier. The app summarises it or restarts it from a hand-off note.'),
     points: [
       // src/shared/context.ts NEAR_COMPACTION; src/renderer/components/ContextBar.tsx
-      b('La barra del contesto sulla striscia diventa ambra quando la chat è vicina al suo limite (l’80% della finestra; per Cursor la soglia in Impostazioni, di serie 200k token).',
-        'The context bar on the strip turns amber when the chat is near its limit (80% of the window; for Cursor the threshold in Settings, 200k tokens by default).'),
+      b('Quando la chat è vicina al suo limite (l’80% della finestra; per Cursor la soglia in Impostazioni, di serie 200k token) la ⓘ della sua striscia diventa ambra e il tooltip dice che il contesto è lungo; nella finestra aperta diventa ambra la barra del contesto.',
+        'When the chat is near its limit (80% of the window; for Cursor the threshold in Settings, 200k tokens by default) the ⓘ on its strip turns amber and its tip says the context is long; in the open window the context bar turns amber.'),
       // src/main/chats/continuity.ts compact
       b('Una chat Claude al limite si riassume da sola nella stessa sessione; l’Orchestrator anche una volta al giorno nuovo.',
         'A Claude chat at its limit summarises itself in the same session; the Orchestrator also once on each new day.'),
