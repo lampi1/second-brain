@@ -1,6 +1,7 @@
 // E2E of the Scacchi page (ADR 0304) on the frozen demo. The lobby lists the six agents with their strength and the
 // demo's history (fastest wins, last games). A written game against the Artigiano (SB_CHESS_SCRIPT: the bot answers
 // from a list instead of asking Stockfish) plays an en passant, a promotion from the picker and a castling by clicks,
+// one move by drag (the piece in hand, a drop on a square it cannot reach, a drop on one it can),
 // takes a move back, and a resignation is stored. A fool's mate with black against the scripted white ends with the
 // end card and «nuovo record»; the card closes to look at the board and «Rivincita» starts again; a second win in a row is a streak, shown on the card and in the lobby.
 // The real engine is not asked here (rule 7: no test waits on a real process); it was tried by hand in the built app.
@@ -16,6 +17,14 @@ async function move(page: Page, from: string, to: string, answer?: string): Prom
   await expect(sq(page, to)).toHaveClass(/target/);
   await sq(page, to).click();
   if (answer) await expect(piece(page, answer)).toHaveCount(1);
+}
+
+/** A drag from the middle of `from` to the middle of `to`, the button still down (the caller lets go). */
+async function dragTo(page: Page, from: string, to: string): Promise<void> {
+  const a = (await sq(page, from).boundingBox())!, b = (await sq(page, to).boundingBox())!;
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 6 });
 }
 
 test('the lobby shows the six agents and the history; a written game: en passant, promotion, castling, undo, resign', async () => {
@@ -56,7 +65,21 @@ test('the lobby shows the six agents and the history; a written game: en passant
     await page.getByTestId('chess-promo-q').click();
     await expect(page.getByTestId('chess-moves')).toContainText('cxb8=Q');
     await expect(page.locator('.chess-piece[data-piece="br"][data-at="b8"]')).toHaveCount(1); // the bot took it back
-    await move(page, 'g1', 'f3', 'h4');
+    // by drag: the knight in hand follows the pointer (bigger, nothing drawn around it), goes back from a square
+    // it cannot reach, lands on one it can
+    await dragTo(page, 'g1', 'g5');
+    const inHand = page.locator('.chess-piece.is-held');
+    await expect(inHand).toHaveAttribute('data-at', 'g1');
+    expect(await inHand.evaluate(e => { const c = getComputedStyle(e); return [c.borderTopWidth, c.boxShadow, c.outlineStyle, /px/.test(e.style.transform)].join(' '); })).toBe('0px none none true');
+    await shot(page, 'chess-drag-dark');
+    await page.mouse.up();
+    await expect(inHand).toHaveCount(0);
+    await expect.poll(() => piece(page, 'g1').evaluate(e => (e as HTMLElement).style.transform)).not.toMatch(/px/);
+    await dragTo(page, 'g1', 'f3');
+    await page.mouse.up();
+    await expect(piece(page, 'h4')).toHaveCount(1);
+    await expect(page.locator('.chess-piece[data-piece="wn"][data-at="f3"]')).toHaveCount(1);
+    await expect.poll(() => piece(page, 'f3').evaluate(e => (e as HTMLElement).style.transform)).not.toMatch(/px/);
     await move(page, 'f1', 'c4', 'h3');
     // castling: the king to g1 brings the rook to f1
     await move(page, 'e1', 'g1', 'b6');
@@ -93,7 +116,7 @@ test('a mate with black ends the game with the end card and a new record', async
     await expect(page.getByTestId('chess-over')).toBeVisible();
     await expect(page.getByTestId('chess-game')).toHaveAttribute('data-over', 'win');
     await expect(page.getByTestId('chess-new-record')).toBeVisible(); // the first win against the Orchestrator
-    await expect(page.locator('.chess-sq.check')).toHaveAttribute('data-square', 'e1');
+    await expect(page.locator('.chess-sq.in-check')).toHaveAttribute('data-square', 'e1');
     await shot(page, 'chess-over-dark');
     // the card closes to look at the final position; «Rivincita» stays in the panel
     await page.getByTestId('chess-over-close').click();

@@ -1,7 +1,8 @@
 // The rules side of the Scacchi page (ADR 0304, src/renderer/lib/chess-game.ts): a game replayed from its UCI moves
 // keeps one id per piece through a capture, an en passant, a castling and a promotion; the legal targets, the
 // promotion check, the endings (mate, stalemate, material, repetition), the material, the user's move count, the
-// bot's move (the engine's, or a random legal one when it slips) and what the bot may comment.
+// bot's move (the engine's, or a random legal one when it slips) and what the bot may comment. A game that grows
+// move by move is walked on, not replayed: its positions are the same as read at once.
 import { describe, expect, it } from 'vitest';
 import { CHESS_BOTS } from '../../src/shared/chess';
 import { SWING, botMove, eventOf, isLegal, material, needsPromotion, position, resultFor, targets, uciOf, userMoves } from '../../src/renderer/lib/chess-game';
@@ -70,6 +71,25 @@ describe('position', () => {
   });
   it('throws on a move that is not legal where it is played', () => {
     expect(() => position(['e2e5'])).toThrow();
+  });
+  it('a game that grows move by move gives the same positions as one read at once, and an earlier position stays as it was', () => {
+    // a capture, an en passant, a promotion with a capture, a castling: everything the walk keeps track of
+    const all = `${TO_C7} c7b8q a8b8 g1f3 h5h4 f1c4 h4h3 e1g1 b7b6`.split(' ');
+    const grown = all.map((_, i) => position(all.slice(0, i + 1)));
+    const before = JSON.stringify(grown[3]);
+    for (let i = 0; i < all.length; i++) {
+      position([]); // forget the walk: this one is read from the start
+      const once = position(all.slice(0, i + 1));
+      expect({ ...grown[i], legal: grown[i]!.legal.map(m => m.san), last: grown[i]!.last?.san }).toEqual({ ...once, legal: once.legal.map(m => m.san), last: once.last?.san });
+    }
+    expect(JSON.stringify(grown[3])).toBe(before);
+    // a move taken back, then another line: the walk starts again and is right
+    expect(position(all.slice(0, 4)).sans).toEqual(['e4', 'a6', 'e5', 'd5']);
+    expect(position([...all.slice(0, 4), 'g1f3']).sans.at(-1)).toBe('Nf3');
+    // a move that is not legal leaves nothing half done behind
+    expect(() => position([...all.slice(0, 4), 'g1f3', 'a1a5'])).toThrow();
+    expect(position([...all.slice(0, 4), 'g1f3', 'h7h6']).sans).toEqual(['e4', 'a6', 'e5', 'd5', 'Nf3', 'h6']);
+    expect(position([...all.slice(0, 4), 'g1f3', 'h7h6']).pieces).toHaveLength(32);
   });
 });
 

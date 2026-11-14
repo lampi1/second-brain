@@ -48,6 +48,11 @@ strength on a known scale, but it is GPLv3 and this app is MIT.
    **Quick and smooth** (owner: «le animazioni fluide e veloci»): a move slides in 0.15 s, a taken piece fades in
    0.18 s, and the bot's move comes as soon as its engine answers (never sooner than 0.15 s, `MIN_THINK_MS`): the
    Scout answers in about 0.2 s, the Strategist in 0.9 s.
+   **Light** (owner, 2026-11-14: «va un po' a scatti … rendi più fluida e leggera»): the piece in hand follows the
+   pointer by its element's transform alone (`ChessBoard.tsx` does not draw the board again at every movement of the
+   mouse) and has no shadow; the marks of a square appear at once; a game that grows by a move is walked on, not
+   replayed (`position` in `lib/chess-game.ts`); the clock draws only itself. The board's state classes are named
+   `is-…` / `in-…`: a plain `held` is another thing in `app.css` and drew a line over the piece in hand.
 6. **The history** (`main/chess/store.ts`, table `chess_games` of `userData/app.db`, ADR 0199): one row per finished
    game (bot, colour, result, how it ended, the user's moves, the time, moves taken back), at most 5000. The page shows
    wins, losses and draws per bot, the fastest win against each, the eight fastest wins and the last twelve games. A
