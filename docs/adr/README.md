@@ -301,6 +301,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0303](0303-little-people-speak.md) The little people speak: two words of nonsense, a character per role — accepted
 - [0304](0304-chess-against-the-agents.md) Scacchi: chess against the agents, Stockfish as a separate program — accepted
 - [0305](0305-little-people-show-the-work-lines-of-the-day.md) The little people show the work at hand, speak while they work, and get new lines every day — accepted
+- [0306](0306-the-people-of-the-roles-grow-up.md) The people of the roles grow up: adult bodies, faces and characters — accepted
 
 ## Replaced
 

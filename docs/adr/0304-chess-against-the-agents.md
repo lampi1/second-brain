@@ -84,6 +84,9 @@ the app starts it and exchanges UCI text with it, as any chess interface does wi
 the GPL's «aggregate», not legal advice; if it is ever questioned, the engine can be replaced or made a download
 without touching the page.
 
+Amended by ADR 0306 (2026-11-14): the bots speak in the adult characters; the Orchestrator's and the Scout's lines
+are new, the Artisan's are a blacksmith's.
+
 ## Consequences
 
 - The repository and every release grow by 1.9 MB (engine) and about 60 KB (pieces); the renderer's first screen does
