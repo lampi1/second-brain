@@ -38,14 +38,18 @@ function Taken({ pieces, color, lead }: { pieces: readonly PieceSymbol[]; color:
   );
 }
 
+/** The game's time. Its own component: the second that passes draws these few characters again, not the panel. */
+function GameTime({ startedAt, over }: { startedAt: number | null; over: number | null }) {
+  const tick = useNow(1000);
+  const elapsed = over ?? (startedAt ? Math.max(0, Math.max(tick, now()) - startedAt) : 0);
+  return <span className="chess-time" data-testid="chess-time">{t('chess.time')} {clock(elapsed)}</span>;
+}
+
 export function ChessGame() {
   const s = chess.store.use(x => x);
   const pos = useMemo(() => position(s.ucis), [s.ucis]);
   const bot = CHESS_BOTS[s.bot], botColor: ChessColor = s.color === 'w' ? 'b' : 'w';
   const usersTurn = !s.outcome && !s.thinking && pos.turn === s.color;
-  const running = !!s.startedAt && !s.outcome;
-  const tick = useNow(1000);
-  const elapsed = s.outcome ? s.outcome.ms : s.startedAt ? Math.max(0, (running ? Math.max(tick, now()) : now()) - s.startedAt) : 0;
 
   // the user takes long on a move: one line, and the opponent falls asleep until they play
   const [asleep, setAsleep] = useState(false);
@@ -108,12 +112,12 @@ export function ChessGame() {
         <section className={`chess-rival is-${sprite}`} data-testid="chess-rival">
           <div className="chess-rival-face">
             <AgentSprite id={s.bot} state={sprite} height={104} label={name} onTouch={sign => chess.touch(sign)} />
-            {s.line && <p key={s.line.n} className={`chess-bubble${bubble ? '' : ' gone'}`} role="status" data-testid="chess-bubble">{s.line.text}</p>}
+            {s.line && <p key={s.line.n} className={`chess-bubble${bubble ? '' : ' is-gone'}`} role="status" data-testid="chess-bubble">{s.line.text}</p>}
           </div>
           <div className="chess-rival-id">
             <strong>{name}</strong>
             <span className="chess-elo" data-tip={t('chess.eloTip')}>{t('chess.elo', { elo: eloLabel(bot) })}</span>
-            <span className={`chess-status${s.thinking ? ' thinking' : ''}`} data-testid="chess-status">{status}</span>
+            <span className={`chess-status${s.thinking ? ' is-thinking' : ''}`} data-testid="chess-status">{status}</span>
             <span className="sr-only" aria-live="polite">{botSan ? t('chess.botPlayed', { name, san: botSan }) : ''}</span>
           </div>
           <Taken pieces={pos.taken[botColor]} color={s.color} lead={-lead} />
@@ -125,7 +129,7 @@ export function ChessGame() {
           </div>
         )}
         <section className="chess-moves-box">
-          <header><span>{t('chess.moves')}</span><span className="chess-time" data-testid="chess-time">{t('chess.time')} {clock(elapsed)}</span></header>
+          <header><span>{t('chess.moves')}</span><GameTime startedAt={s.startedAt} over={s.outcome ? s.outcome.ms : null} /></header>
           {rows.length ? (
             <ol className="chess-moves" ref={moves} data-testid="chess-moves">
               {rows.map(([w, b], i) => <li key={i}><span className="n">{i + 1}.</span><span className={i * 2 === pos.sans.length - 1 ? 'on' : ''}>{w}</span><span className={b && i * 2 + 1 === pos.sans.length - 1 ? 'on' : ''}>{b ?? ''}</span></li>)}

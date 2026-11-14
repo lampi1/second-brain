@@ -4,7 +4,9 @@
 // the last rank opens the promotion picker on its file. Legality comes from lib/chess-game.ts: the board offers only
 // legal squares and reports a move as UCI. While the bot thinks the user may already make their move (a premove:
 // a piece and any square, by click or drag; shown on the two squares, dropped by Esc, a right click or a click
-// elsewhere), which the game plays the moment the bot has moved if it is legal then. Always seen from the user's side. Used by ChessGame.tsx.
+// elsewhere), which the game plays the moment the bot has moved if it is legal then. Always seen from the user's side.
+// A dragged piece follows the pointer without React: its element is moved directly, so the board is not drawn again
+// at every movement of the mouse (owner, 2026-11-14: «va un po' a scatti»). Used by ChessGame.tsx.
 import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { PROMOTIONS, needsPromotion, targets, uciOf, type Color, type PieceSymbol, type Placed, type Position, type Square } from '../../lib/chess-game';
 import { t } from '../../i18n';
@@ -14,6 +16,8 @@ const FILES = 'abcdefgh';
 /** Where a square is drawn (column, row from the top) seen from `side`, and back. */
 const cell = (sq: Square, side: Color): [number, number] => { const f = FILES.indexOf(sq[0]!), r = Number(sq[1]); return side === 'w' ? [f, 8 - r] : [7 - f, r - 1]; };
 const squareAt = (x: number, y: number, side: Color): Square => (side === 'w' ? `${FILES[x]}${8 - y}` : `${FILES[7 - x]}${y + 1}`) as Square;
+/** Where the piece on `sq` is drawn: its element's transform (styles/chess.css .chess-piece). */
+const place = (sq: Square, side: Color): string => { const [x, y] = cell(sq, side); return `translate(${x * 100}%, ${y * 100}%)`; };
 const SQUARES: readonly [number, number][] = Array.from({ length: 64 }, (_, i) => [i % 8, Math.floor(i / 8)]);
 /** How long a taken piece stays to fade (styles/chess.css chess-taken-out). */
 const GHOST_MS = 180;
@@ -36,9 +40,26 @@ export const ChessBoard = memo(function ChessBoard({ pos, side, canMove, onMove,
   const board = useRef<HTMLDivElement>(null);
   const [sel, setSel] = useState<Square | null>(null);
   const [promo, setPromo] = useState<{ from: Square; to: Square } | null>(null);
-  const [drag, setDrag] = useState<{ from: Square; x: number; y: number } | null>(null);
+  /** the square of the piece being dragged (where it is under the pointer is not state: see `onPointerMove`) */
+  const [held, setHeld] = useState<Square | null>(null);
   const [focus, setFocus] = useState<Square>(side === 'w' ? 'e2' : 'e7');
-  const down = useRef<{ sq: Square; x: number; y: number; wasSel: boolean; moved: boolean } | null>(null);
+  /** the pointer went down on a piece of the user's: where and, once it is a drag, the piece's element */
+  const down = useRef<{ sq: Square; x: number; y: number; wasSel: boolean; moved: boolean; el: HTMLElement | null } | null>(null);
+  /** The pointer is let go of (or the drag is dropped): the piece's element is React's again. It goes to the square
+   *  React has for it by then: the new one after a move, its own after anything else. */
+  const release = () => {
+    const el = down.current?.el;
+    down.current = null;
+    setHeld(null);
+    if (!el) return;
+    el.style.transition = '';
+    requestAnimationFrame(() => {
+      // taken in hand again meanwhile: it is the new drag's
+      if (down.current?.el === el || !el.isConnected) return;
+      const sq = el.dataset.at as Square | undefined, seen = el.parentElement?.dataset.side as Color | undefined;
+      if (sq) el.style.transform = place(sq, seen ?? side);
+    });
+  };
   const at = useMemo(() => new Map(pos.pieces.map(p => [p.square, p])), [pos]);
   // a piece just taken stays for a moment and fades where it stood (only on a move forward: not on a move taken back
   // or a new game)
@@ -57,14 +78,14 @@ export const ChessBoard = memo(function ChessBoard({ pos, side, canMove, onMove,
   // in hand while it is still theirs on that square (the bot moved while they were dragging a premove)
   useEffect(() => {
     setPromo(null);
-    const held = down.current?.sq ?? sel;
-    if (held && at.get(held)?.color !== side) { setSel(null); setDrag(null); down.current = null; }
+    const inHand = down.current?.sq ?? sel;
+    if (inHand && at.get(inHand)?.color !== side) { setSel(null); release(); }
   }, [pos]);
   // nothing to move and nothing to premove (the game ended, the lobby): nothing stays picked
-  useEffect(() => { if (!canMove && !canPremove) { setSel(null); setDrag(null); setPromo(null); down.current = null; } }, [canMove, canPremove]);
-  const from = drag?.from ?? sel;
+  useEffect(() => { if (!canMove && !canPremove) { setSel(null); setPromo(null); release(); } }, [canMove, canPremove]);
+  const from = held ?? sel;
   /** Nothing in hand: the pick, a drag going on, the kept premove. */
-  const drop = () => { down.current = null; setDrag(null); setSel(null); onCancelPremove?.(); };
+  const drop = () => { release(); setSel(null); onCancelPremove?.(); };
   /** The promotion picker closes and the keyboard is back on the board (the picker had the focus). */
   const closePromo = (sq: Square) => { setPromo(null); setFocus(sq); board.current?.querySelector<HTMLElement>(`[data-square="${sq}"]`)?.focus(); };
   const to = useMemo(() => new Set(from && canMove ? targets(pos, from) : []), [pos, from, canMove]);
@@ -96,32 +117,45 @@ export const ChessBoard = memo(function ChessBoard({ pos, side, canMove, onMove,
     return x < 0 || x > 7 || y < 0 || y > 7 ? null : squareAt(x, y, side);
   };
   const onDown = (e: PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0 || promo) return;
+    if (e.button !== 0 || promo || !e.isPrimary) return;
+    // a drag that never saw its pointer go up (a second finger, the window losing the pointer) ends here
+    if (down.current) release();
     const sq = under(e);
     if (!sq) return;
     setFocus(sq);
     // the user's own piece is picked at once and may be dragged; any other square is a plain click
     if ((canMove || canPremove) && at.get(sq)?.color === side && !(sel && sel !== sq && to.has(sq))) {
       if (!canMove) onCancelPremove?.();
-      down.current = { sq, x: e.clientX, y: e.clientY, wasSel: sel === sq, moved: false };
+      down.current = { sq, x: e.clientX, y: e.clientY, wasSel: sel === sq, moved: false, el: null };
       setSel(sq);
       e.currentTarget.setPointerCapture(e.pointerId);
     } else act(sq);
   };
+  /** The held piece follows the pointer: only its element's transform changes, nothing is drawn again. */
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
-    const d = down.current, r = board.current?.getBoundingClientRect();
-    if (!d || !r) return;
-    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < DRAG_PX) return;
-    d.moved = true;
-    setDrag({ from: d.sq, x: e.clientX - r.left, y: e.clientY - r.top });
+    const d = down.current;
+    if (!d) return;
+    if (!d.moved) {
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < DRAG_PX) return;
+      d.moved = true;
+      d.el = e.currentTarget.querySelector<HTMLElement>(`.chess-piece[data-at="${d.sq}"]`);
+      if (d.el) d.el.style.transition = 'none';
+      setHeld(d.sq);
+    }
+    // the button is up and nobody said so (it went up outside the window): the piece is let go of
+    if (e.buttons === 0) { release(); return; }
+    if (!d.el) return;
+    // the board's box as it is now (the page may have scrolled under the drag); the transform written here never
+    // makes the page lay itself out again
+    const box = e.currentTarget.getBoundingClientRect();
+    d.el.style.transform = `translate(calc(${e.clientX - box.left}px - 50%), calc(${e.clientY - box.top}px - 50%))`;
   };
   const onUp = (e: PointerEvent<HTMLDivElement>) => {
     const d = down.current;
-    down.current = null;
     if (!d) return;
+    release();
     if (d.moved) {
       const sq = under(e);
-      setDrag(null);
       if (!sq || sq === d.sq) return;
       if (canMove) { if (targets(pos, d.sq).includes(sq)) tryMove(d.sq, sq); }
       // a premove may land on the user's own piece: the bot may take it first (a recapture made in advance)
@@ -153,13 +187,13 @@ export const ChessBoard = memo(function ChessBoard({ pos, side, canMove, onMove,
   };
 
   return (
-    <div className={`chess-board${canMove || canPremove ? ' can-move' : ''}${drag ? ' is-dragging' : ''}`} ref={board} role="group" aria-label={t('chess.board')} data-testid="chess-board" data-side={side} data-turn={pos.turn}
-      onPointerDown={onDown} onPointerMove={onPointerMove} onPointerUp={onUp} onPointerCancel={() => { down.current = null; setDrag(null); }} onKeyDown={onKey}
+    <div className={`chess-board${canMove || canPremove ? ' can-move' : ''}${held ? ' is-dragging' : ''}`} ref={board} role="group" aria-label={t('chess.board')} data-testid="chess-board" data-side={side} data-turn={pos.turn}
+      onPointerDown={onDown} onPointerMove={onPointerMove} onPointerUp={onUp} onPointerCancel={release} onLostPointerCapture={release} onKeyDown={onKey}
       onContextMenu={e => { if (premove || sel || down.current) { e.preventDefault(); drop(); } }}>
       {SQUARES.map(([x, y]) => {
         const sq = squareAt(x, y, side);
         const cls = ['chess-sq', (x + y) % 2 ? 'dark' : 'light', pos.last && (pos.last.from === sq || pos.last.to === sq) ? 'last' : '', from === sq ? 'picked' : '',
-          pos.check === sq ? 'check' : '', premove && (premove.from === sq || premove.to === sq) ? 'premove' : '', to.has(sq) ? (at.has(sq) ? 'target capture' : 'target') : ''].filter(Boolean).join(' ');
+          pos.check === sq ? 'in-check' : '', premove && (premove.from === sq || premove.to === sq) ? 'premove' : '', to.has(sq) ? (at.has(sq) ? 'target capture' : 'target') : ''].filter(Boolean).join(' ');
         return (
           <button key={sq} type="button" className={cls} data-square={sq} data-testid={`chess-sq-${sq}`} tabIndex={focus === sq ? 0 : -1} aria-label={name(sq)} aria-pressed={from === sq}
             onFocus={() => setFocus(sq)}>
@@ -169,14 +203,12 @@ export const ChessBoard = memo(function ChessBoard({ pos, side, canMove, onMove,
         );
       })}
       {pos.pieces.map(p => {
-        const [x, y] = cell(p.square, side);
-        const held = drag?.from === p.square;
-        const style: CSSProperties = held ? { transform: `translate(calc(${drag.x}px - 50%), calc(${drag.y}px - 50%))` } : { transform: `translate(${x * 100}%, ${y * 100}%)` };
-        return <span key={p.id} className={`chess-piece${held ? ' held' : ''}`} style={{ ...style, backgroundImage: `url("${pieceArt(p.color, p.type)}")` }} data-piece={`${p.color}${p.type}`} data-at={p.square} aria-hidden="true" />;
+        // the held piece keeps its square's transform here: while it is dragged `onPointerMove` moves the element itself
+        const style: CSSProperties = { transform: place(p.square, side), backgroundImage: `url("${pieceArt(p.color, p.type)}")` };
+        return <span key={p.id} className={`chess-piece${held === p.square ? ' is-held' : ''}`} style={style} data-piece={`${p.color}${p.type}`} data-at={p.square} aria-hidden="true" />;
       })}
       {ghosts.map(p => {
-        const [x, y] = cell(p.square, side);
-        return <span key={`gone-${p.id}`} className="chess-piece gone" style={{ transform: `translate(${x * 100}%, ${y * 100}%)`, backgroundImage: `url("${pieceArt(p.color, p.type)}")` }} aria-hidden="true" />;
+        return <span key={`gone-${p.id}`} className="chess-piece is-gone" style={{ transform: place(p.square, side), backgroundImage: `url("${pieceArt(p.color, p.type)}")` }} aria-hidden="true" />;
       })}
       {promo && (
         <div className="chess-promo-veil" onPointerDown={e => { e.stopPropagation(); closePromo(promo.from); }} data-testid="chess-promo">

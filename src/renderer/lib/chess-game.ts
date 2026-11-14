@@ -72,25 +72,33 @@ function ending(chess: Chess): Position['over'] {
 }
 
 let memo: { key: string; pos: Position } | null = null;
+/** The game as it was last walked: a game grows by one move at a time, so the next position plays only the new
+ *  moves on it and never the whole game again (a long game cost a frame per move). */
+interface Walk { ucis: string[]; chess: Chess; at: Map<Square, Placed>; taken: Record<Color, PieceSymbol[]>; sans: string[]; last: Move | null }
+let walk: Walk | null = null;
+const newWalk = (): Walk => ({ ucis: [], chess: new Chess(), at: startPieces(), taken: { w: [], b: [] }, sans: [], last: null });
 
 /** The position after `ucis`. Throws on a move that is not legal where it is played (the callers check first). */
 export function position(ucis: readonly string[]): Position {
   const key = ucis.join(' ');
   if (memo?.key === key) return memo.pos;
-  const chess = new Chess();
-  const at = startPieces();
-  const taken: Record<Color, PieceSymbol[]> = { w: [], b: [] };
-  const sans: string[] = [];
-  let last: Move | null = null;
-  for (const uci of ucis) {
-    last = chess.move(split(uci));
-    if (last.captured) taken[last.color].push(last.captured);
-    track(at, last);
-    sans.push(last.san);
+  // the walked game goes on when `ucis` starts with it; a move taken back or another game starts a new walk
+  let w = walk;
+  if (!w || w.ucis.length > ucis.length || w.ucis.some((u, i) => u !== ucis[i])) w = newWalk();
+  walk = null; // a move that throws leaves no half-walked game behind
+  for (let i = w.ucis.length; i < ucis.length; i++) {
+    const m = w.chess.move(split(ucis[i]!));
+    if (m.captured) w.taken[m.color].push(m.captured);
+    track(w.at, m);
+    w.sans.push(m.san);
+    w.ucis.push(ucis[i]!);
+    w.last = m;
   }
-  const turn = chess.turn();
-  const check = chess.inCheck() ? [...at.values()].find(p => p.type === 'k' && p.color === turn)?.square ?? null : null;
-  const pos: Position = { ucis: [...ucis], sans, pieces: [...at.values()], turn, last, check, taken, over: ending(chess), legal: chess.moves({ verbose: true }) };
+  walk = w;
+  const turn = w.chess.turn(), pieces = [...w.at.values()];
+  const check = w.chess.inCheck() ? pieces.find(p => p.type === 'k' && p.color === turn)?.square ?? null : null;
+  // a position is a picture: its lists are its own, the walk goes on without changing them
+  const pos: Position = { ucis: [...ucis], sans: [...w.sans], pieces, turn, last: w.last, check, taken: { w: [...w.taken.w], b: [...w.taken.b] }, over: ending(w.chess), legal: w.chess.moves({ verbose: true }) };
   memo = { key, pos };
   return pos;
 }
