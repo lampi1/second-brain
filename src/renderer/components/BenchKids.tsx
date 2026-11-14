@@ -1,7 +1,7 @@
 // The sub-agents of a bench in the Grindhouse workshop (ADR 0311; the owner picked «aiutanti allo stesso banco»,
 // 2026-11-14): the chats a chat delegated stand at its bench, smaller, each doing what it does (StripFace.tsx) with its
 // state dot (BenchHelpers, up to three and «+N»), and the bench's plate has one row for each: who, what it does now,
-// for how long, or its state when it needs someone (BenchKidRows; a grandchild has its row too, indented), under a line that counts them and shows the limit
+// for how long, or its state when it needs someone; an ended one shows its result's first words (BenchKidRows; a grandchild has its row too, indented), under a line that counts them and shows the limit
 // the bench hit, when it did. A click on a helper or on its row opens that sub-agent's chat (the Grindhouse shows the
 // whole team as tabs then: AgentStrips.tsx TeamTabs); a click on the little person itself stays a pat. Used by
 // ChatTile.tsx on a closed bench.
@@ -72,7 +72,7 @@ export function BenchKidRows({ chatId }: { chatId: string }) {
         <span className={`bench-dot tone-${kidTone(state)}`} aria-hidden="true" />
         <AgentAvatar avatar={k.agent?.avatar} name={name} size={16} />
         <b>{name}</b>
-        <span className="bench-kid-now">{isBusy(k) ? <StripActivity chatId={k.id} /> : k.delegation?.goal || k.title}</span>
+        <span className="bench-kid-now">{isBusy(k) ? <StripActivity chatId={k.id} /> : (k.delegation?.result?.summary?.split('\n')[0] || k.delegation?.goal || k.title).slice(0, 140)}</span>
         <span className="bench-kid-time">{work !== null && !needs ? minutes(work) : t(`tree.state.${state}`)}</span>
       </button></div>;
     })}

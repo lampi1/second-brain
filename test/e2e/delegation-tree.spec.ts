@@ -75,24 +75,19 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     expect(back).toContain('[risultato · Sentinel «Controllo test»] La suite passa: 42 su 42');
     await expect.poll(async () => (await childrenOf(page, parent.id)).map(c => c.delegation?.result?.outcome).sort()).toEqual(['done', 'done']);
 
-    // the Grindhouse: the children right under the parent, on thread lines, one row each with the result's first words
+    // the Grindhouse: the children at the parent's bench, one row each with the result's first words (ADR 0311)
     await page.getByTestId('nav-home').click();
-    const card = page.getByTestId(`delegation-card-${scout.id}`);
-    await expect(card).toBeVisible();
-    await expect(page.getByTestId(`delegation-state-${scout.id}`)).toHaveText('finito');
-    // closed, the row carries the result's first words (ADR 0293); open, the whole result and who received it
-    await expect(page.getByTestId(`delegation-now-${scout.id}`)).toContainText('Trovati 3 errori nel servizio ordini');
-    await card.locator('.dc-title').click();
-    await expect(page.getByTestId(`delegation-res-${scout.id}`)).toContainText('Trovati 3 errori nel servizio ordini');
-    await expect(card).toContainText('esito inviato a Strategist');
-    await card.locator('.dc-title').click();
-    await expect(card).toContainText('Scout');
-    await expect(page.getByTestId(`delegation-card-${sentinelChat.id}`)).toContainText('La suite passa');
-    const pBox = (await page.getByTestId(`tile-chat-${parent.id}`).boundingBox())!, cBox = (await card.boundingBox())!;
-    expect(cBox.x).toBeGreaterThan(pBox.x + 8);
-    expect(cBox.y).toBeGreaterThan(pBox.y);
-    await expect(page.getByTestId(`tree-toggle-${parent.id}`)).toContainText('2 figli');
-    await expect(page.getByTestId(`tree-toggle-${parent.id}`)).toContainText('2 finiti');
+    const row = page.getByTestId(`bench-kid-${scout.id}`);
+    await expect(row).toBeVisible();
+    await expect(row).toHaveAttribute('data-child-state', 'done');
+    await expect(row).toContainText('Trovati 3 errori nel servizio ordini');
+    await expect(page.getByTestId(`bench-kid-${sentinelChat.id}`)).toContainText('La suite passa');
+    await expect(page.getByTestId(`bench-kids-sum-${parent.id}`)).toContainText('2 figli');
+    await expect(page.getByTestId(`bench-kids-sum-${parent.id}`)).toContainText('2 finiti');
+    await expect(page.getByTestId(`bench-helper-${scout.id}`)).toBeVisible();
+    const pBox = (await page.getByTestId(`tile-chat-${parent.id}`).boundingBox())!, rBox = (await row.boundingBox())!;
+    expect(rBox.y).toBeGreaterThan(pBox.y);
+    expect(rBox.y + rBox.height).toBeLessThanOrEqual(pBox.y + pBox.height + 1);
     // the sidebar tree: the same shape, the children one level in
     await expect(page.getByTestId(`nav-tree-${parent.id}`)).toHaveAttribute('data-depth', '0');
     await expect(page.getByTestId(`nav-tree-${scout.id}`)).toHaveAttribute('data-depth', '1');
@@ -103,28 +98,30 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     await shot(page, 'delegation-tree-light');
     await theme(page, 'dark');
 
-    // a click on a card expands it in place into the whole child chat, writable like any strip; on its head, folds it
-    await card.locator('.dc-title').click();
-    await expect(page.getByTestId(`delegation-chat-${scout.id}`)).toBeVisible();
+    // a click on a row opens the child's chat, writable, with the whole result and the team as tabs
+    await row.click();
     await expect(page.getByTestId(`chat-input-${scout.id}`)).toBeVisible();
-    await card.locator('.dc-title').click();
-    await expect(page.getByTestId(`delegation-chat-${scout.id}`)).toHaveCount(0);
-    // a row of the sidebar tree brings its card on screen, expanded
+    await expect(page.getByTestId(`delegation-res-${scout.id}`)).toContainText('Trovati 3 errori nel servizio ordini');
+    await expect(page.getByTestId(`delegation-card-${scout.id}`)).toContainText('esito inviato a Strategist');
+    await expect(page.getByTestId(`bench-tab-${parent.id}`)).toBeVisible();
+    await page.getByTestId(`bench-tab-${sentinelChat.id}`).click();
+    await expect(page.getByTestId(`chat-input-${sentinelChat.id}`)).toBeVisible();
+    await page.getByTestId('bench-back').click();
+    await expect(row).toBeVisible();
+    // a row of the sidebar tree opens that chat too
     await page.getByTestId(`nav-tree-${sentinelChat.id}`).locator('.tn-main').click();
-    await expect(page.getByTestId(`delegation-card-${sentinelChat.id}`)).toHaveAttribute('data-open', 'true');
     await expect(page.getByTestId(`chat-input-${sentinelChat.id}`)).toBeVisible();
     // "Vai alla chat" opens it in focus mode
-    await page.getByTestId(`delegation-open-${scout.id}`).click();
+    await page.getByTestId(`delegation-open-${sentinelChat.id}`).click();
     await expect(page.getByTestId('maximized')).toBeVisible();
-    await expect(page.getByTestId('maximized').getByTestId(`chat-input-${scout.id}`)).toBeVisible();
+    await expect(page.getByTestId('maximized').getByTestId(`chat-input-${sentinelChat.id}`)).toBeVisible();
     await page.getByTestId('focus-exit').click();
+    await page.getByTestId('bench-back').click(); // back to the benches
 
-    // folding the parent hides its children in both views
-    await page.getByTestId(`tree-toggle-${parent.id}`).click();
-    await expect(page.getByTestId(`tile-chat-${scout.id}`)).toHaveCount(0);
-    await expect(page.getByTestId(`delegation-card-${sentinelChat.id}`)).toHaveCount(0);
+    // folding the parent in the sidebar hides its children there; the bench keeps its helpers
+    await page.getByTestId(`nav-tree-fold-${parent.id}`).click();
     await expect(page.getByTestId(`nav-tree-${scout.id}`)).toHaveCount(0);
-    await shot(page, 'delegation-tree-folded');
+    await page.waitForTimeout(600); // the fold is saved a moment later
 
     // after a restart the fold is still there, and the tree is rebuilt from the saved chats
     await app.close();
@@ -132,12 +129,11 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     homes.push(home);
     await skipSetup(page);
     await page.getByTestId('nav-home').click();
-    await expect(page.getByTestId(`tree-toggle-${parent.id}`)).toHaveAttribute('aria-expanded', 'false');
     await expect(page.getByTestId(`nav-tree-fold-${parent.id}`)).toHaveAttribute('aria-expanded', 'false');
     await expect(page.getByTestId(`nav-tree-${scout.id}`)).toHaveCount(0);
     await page.getByTestId(`nav-tree-fold-${parent.id}`).click();
     await expect(page.getByTestId(`nav-tree-${scout.id}`)).toHaveAttribute('data-depth', '1');
-    await expect(page.getByTestId(`delegation-card-${sentinelChat.id}`)).toBeVisible();
+    await expect(page.getByTestId(`bench-kid-${sentinelChat.id}`)).toBeVisible();
   } finally {
     await app.close();
     for (const h of homes) fs.rmSync(h, { recursive: true, force: true });
