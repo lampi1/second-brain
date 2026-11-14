@@ -1,7 +1,7 @@
 /* «Controllo remoto» (ADR 0222): the lit phone on the Orchestrator's head and the line under it with the claude.ai link
    (components/RemoteControl.tsx, which imports this file). */
 .icon-btn.remote-on { color: var(--green); background: var(--green-bg); }
-.remote-line { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0 2px; padding: 6px 10px; border-radius: 10px;
+.remote-line { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0 2px; padding: 6px 10px; border-radius: var(--r-l);
   font-size: 12px; color: var(--green); background: var(--green-bg); }
 .remote-line > svg { flex: 0 0 auto; margin-top: 2px; }
 .remote-line.remote-failed { color: var(--red); background: var(--red-bg); align-items: center; }

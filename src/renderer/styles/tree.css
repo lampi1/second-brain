@@ -49,12 +49,12 @@
 .dc-who::before { content: "·"; color: var(--text-4); }
 .dc-role { flex: none; color: var(--text-2); font-weight: 500; }
 .dc-head .pill { flex: none; }
-.dc-chip { display: inline-flex; align-items: center; height: 17px; padding: 0 5px; border-radius: 5px; background: var(--surface-3); color: var(--text-2); font: 500 10.5px var(--mono); white-space: nowrap; }
+.dc-chip { display: inline-flex; align-items: center; height: 17px; padding: 0 5px; border-radius: var(--r-s); background: var(--surface-3); color: var(--text-2); font: 500 10.5px var(--mono); white-space: nowrap; }
 .dc-steps { list-style: none; margin: 5px 0 0 var(--dc-text); padding: 0; display: flex; flex-direction: column; gap: 0; }
 .dc-step { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: baseline; gap: 4px; font-size: 12px; line-height: 1.55; color: var(--text-2); }
 .dc-step .mk { font-weight: 700; text-align: center; font-size: 11px; }
 .dc-step-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dc-step code { font: 11px var(--mono); color: var(--md-text, var(--text)); background: var(--surface-3); padding: 0 4px; border-radius: 4px; }
+.dc-step code { font: 11px var(--mono); color: var(--md-text, var(--text)); background: var(--surface-3); padding: 0 4px; border-radius: var(--r-s); }
 .dc-step.is-done { color: var(--text-3); }
 .dc-step.is-done .mk { color: var(--green); }
 .dc-step.is-cur { color: var(--text); font-weight: 500; }
@@ -145,7 +145,7 @@
 .tn.on::before { content: ""; position: absolute; left: -6px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
 :root[data-theme="light"] .tn.on { background: var(--surface); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgba(20, 24, 33, .05); }
 .tn-guide { position: absolute; top: -1px; bottom: -1px; left: calc(13px + var(--g) * 16px); width: 1px; background: var(--border-3); }
-.tn-chev { grid-column: 1; align-self: start; display: grid; place-items: center; width: 14px; height: 18px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--text-4); cursor: pointer; }
+.tn-chev { grid-column: 1; align-self: start; display: grid; place-items: center; width: 14px; height: 18px; padding: 0; border: 0; border-radius: var(--r-s); background: none; color: var(--text-4); cursor: pointer; }
 .tn-chev:hover { color: var(--text); background: var(--surface-2); }
 .tn-chev.is-leaf { cursor: default; }
 .tn-chev.is-leaf:hover { background: none; }
@@ -165,7 +165,7 @@
 .tn-x { margin-left: auto; color: var(--text-4); font-variant-numeric: tabular-nums; }
 .tn-w { margin-left: auto; color: var(--amber); font-weight: 600; }
 /* close from the sidebar (owner, 2026-10-21): the ✕ takes the dot's place on hover or keyboard focus */
-.tn-close { position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 5px; background: var(--surface-2); color: var(--text-3); cursor: pointer; opacity: 0; transition: opacity .12s, background .12s, color .12s; }
+.tn-close { position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: var(--r-s); background: var(--surface-2); color: var(--text-3); cursor: pointer; opacity: 0; transition: opacity .12s, background .12s, color .12s; }
 .tn:hover .tn-close, .tn:focus-within .tn-close { opacity: 1; }
 .tn:hover .tn-dot, .tn:focus-within .tn-dot { opacity: 0; }
 .tn-close:hover { background: color-mix(in srgb, var(--red) 18%, var(--surface-2)); color: var(--red); }

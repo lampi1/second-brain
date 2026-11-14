@@ -3,9 +3,12 @@
    a dark strip, and what is drawn «in ink» (notes, a «z», a thought) takes the theme's text colour. Every
    joint turns around its own origin; its rest pose and its animation are inline (lib/sprite-rig.ts jointStyle), the
    @keyframes come from the scene (keyframesCss). Transforms and opacity only. Still (the rest pose, a whole picture)
-   without motion; paused while the window is hidden. */
+   without motion; paused while the window is hidden or the person is out of sight. */
 .agent-sprite { position:relative; flex:none; display:inline-flex; line-height:0; color:var(--text-2); cursor:pointer; -webkit-user-select:none; user-select:none; }
-.agent-sprite > svg { display:block; overflow:visible; filter:drop-shadow(0 0 .55px color-mix(in srgb, var(--text) 62%, transparent)); }
+.agent-sprite > svg { display:block; overflow:visible; }
+/* the rim only on a small person: on a big one (a bench of the Grindhouse) it is the dearest thing to draw, and the
+   stage behind it already sets it apart (ADR 0311) */
+.agent-sprite:not(.is-big) > svg { filter:drop-shadow(0 0 .55px color-mix(in srgb, var(--text) 62%, transparent)); }
 .agent-sprite .sp-j { transform-origin:0 0; }
 .agent-sprite .sp-ink > :is(path, ellipse, circle):not([fill="none"]) { fill:currentColor; }
 .agent-sprite .sp-ink > [stroke] { stroke:currentColor; }
@@ -14,7 +17,7 @@
 .agent-sprite .sp-shadow > * { fill:inherit; }
 .agent-sprite .sp-blink { transform-box:fill-box; transform-origin:50% 50%; animation:sp-blink 3.8s infinite; }
 @keyframes sp-blink { 0%, 93%, 100% { transform:scaleY(1); } 96% { transform:scaleY(.1); } }
-html[data-hidden] .agent-sprite * { animation-play-state:paused !important; }
+html[data-hidden] .agent-sprite *, .agent-sprite[data-away] * { animation-play-state:paused !important; }
 /* still: the rest pose, which is every scene's last picture too */
 .agent-sprite.is-still svg, .agent-sprite.is-still svg * { animation:none !important; }
 @media (prefers-reduced-motion: reduce) { .agent-sprite * { animation:none !important; } }

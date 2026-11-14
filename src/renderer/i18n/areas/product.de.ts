@@ -52,7 +52,7 @@ export const productDe:typeof productIt={
  'product.running':'Arbeitet','product.waiting':'Wartet','product.completed':'Erledigt','product.failed':'Fehler','product.stopped':'Gestoppt','product.unknown':'Status nicht gemeldet',
  'product.teamExplain':'Von der Engine beobachtete interne Mitwirkende. Fehlende Daten bedeuten nicht null Aktivität.','product.teamEmpty':'Keine interne Aktivität beobachtet.','product.teamIncomplete':'Die Engine liefert keine vollständige Liste.',
  'product.child.agent':'Subagent','product.childNoAgent':'kein Agent','product.childExplore':'Explore · nur lesen','product.child.shell':'Befehl','product.child.unknown':'Aktivität','product.childrenOf':p=>`Subagenten von ${p.title}`,'product.childStarted':p=>`gestartet um ${p.time}`,'product.childFor':p=>`seit ${p.d}`,
- 'product.restoreLayout':'Zurück zur Spalte','product.noArea':'Kein Projekt',
+ 'product.restoreLayout':'Zurück zur Spalte','product.noArea':'Kein Projekt','product.benchBack':'Grindhouse','product.benchTeam':'Das Team',
  'product.advanced':'Erweiterte Details',
  'product.agents':'Deine Agenten','product.agentsPurpose':'Eine klare Rolle für jede Aufgabe.','product.setup':'Richte deine Arbeit ein',
  'aw.views':'Was das Fenster zeigt','aw.view.chat':'Chat','aw.view.split':'Nebeneinander','aw.view.browser':'Browser',

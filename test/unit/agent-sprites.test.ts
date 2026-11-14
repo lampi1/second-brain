@@ -33,7 +33,8 @@ describe('the little people', () => {
     for (const id of SPRITE_IDS) for (const state of SPRITE_STATES) for (const g of groups(id, state)) {
       if (!g.track) continue;
       expect(g.track.t, `${id} ${state}`).toBeGreaterThan(0.1);
-      expect(g.track.t).toBeLessThanOrEqual(6);
+      // a vice at rest plays once in a longer still loop (ADR 0311)
+      expect(g.track.t, `${id} ${state}`).toBeLessThanOrEqual(state === 'idle' && id !== 'plain' ? 18 : 7);
       for (const key of g.track.keys) { expect(key.at, `${id} ${state}`).toBeGreaterThanOrEqual(0); expect(key.at, `${id} ${state}`).toBeLessThanOrEqual(100); }
     }
   });
@@ -66,12 +67,12 @@ describe('the little people', () => {
       expect(new Set(at).size, `${id} ${state} ${at.join(" ")}`).toBe(at.length);
     }
   });
-  it('writes the idle state once for all the roles: a role adds only what is its own (the cigar and its smoke, the cape)', () => {
-    const shared = [...keyframeRules(spriteScene('scout', 'idle').nodes).values()];
+  it('at rest lets each role indulge its own vice, then hold still for most of the loop; the plain chat dozes', () => {
+    const idle = SPRITE_IDS.map(id => spriteScene(id, 'idle').nodes.map(nodeSvg).join(''));
+    expect(new Set(idle).size).toBe(SPRITE_IDS.length);
     for (const id of SPRITE_IDS) {
-      const mine = [...keyframeRules(spriteScene(id, 'idle').nodes).values()];
-      expect(mine, id).toEqual(expect.arrayContaining(shared));
-      expect(mine.filter(r => !shared.includes(r)).length, id).toBe(id === 'artisan' ? 4 : id === 'sentinel' ? 1 : 0);
+      if (id === 'plain') continue;
+      for (const g of groups(id, 'idle')) if (g.track) expect(Math.max(...g.track.keys.filter(k => k.at < 100).map(k => k.at)), id).toBeLessThanOrEqual(40.01);
     }
   });
   it('reacts to a click the same way in every role: a pat and a whack, each played once and as long as it says', () => {
@@ -108,8 +109,22 @@ describe('the little people', () => {
         drawn.add(scene.nodes.map(nodeSvg).join(''));
         expect(spriteScene(id, 'work', act), `${id} ${act} built once`).toBe(scene);
       }
-      // the role's own way of working and the six kinds: seven different drawings
-      expect(drawn.size, id).toBe(SPRITE_ACTIVITIES.length + 1);
+      // the role's own way of working and the six kinds: seven different drawings; the smith hammers for a command
+      // and the tests too (his own work), so he has five
+      expect(drawn.size, id).toBe(id === 'artisan' ? SPRITE_ACTIVITIES.length - 1 : SPRITE_ACTIVITIES.length + 1);
+    }
+  });
+  it('lets the smith hammer for a command and the tests, and plays the shared scenes for the rest', () => {
+    expect(spriteScene('artisan', 'work', 'run')).toBe(spriteScene('artisan', 'work'));
+    expect(spriteScene('artisan', 'work', 'test')).toBe(spriteScene('artisan', 'work'));
+    expect(spriteScene('artisan', 'work', 'read')).not.toBe(spriteScene('artisan', 'work'));
+  });
+  it('shows no screen, key or pointer in the shared scenes of a command, a page and the tests', () => {
+    // the old props were drawn in these colours: the terminal's steel, its dark glass, the pointer's ink
+    for (const act of ['run', 'web', 'test'] as const) {
+      const svg = spriteScene('scout', 'work', act).nodes.map(nodeSvg).join('');
+      expect(svg, act).not.toContain('#59627a');
+      expect(svg, act).not.toContain('#1f2430');
     }
   });
   it('draws a kind of work only while the person works', () => {

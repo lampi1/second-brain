@@ -27,12 +27,12 @@
 .lg-col-head { display: flex; align-items: baseline; gap: 10px; padding: 0 2px; }
 .lg-col-head h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
 .lg-col-head small { color: var(--text-3); font-size: 12px; }
-.lg-empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 40px 24px; border: 1px dashed var(--border-2); border-radius: 14px; background: var(--surface); }
+.lg-empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 40px 24px; border: 1px dashed var(--border-2); border-radius: var(--r-l); background: var(--surface); }
 .lg-empty p { margin: 0; max-width: 46ch; color: var(--text-3); font-size: 13px; line-height: 1.65; }
 .lg-more { align-self: center; }
 
 /* a task: its chain of steps */
-.lg-task { position: relative; background: linear-gradient(150deg, var(--surface-2), var(--surface)); border: 1px solid var(--border); border-radius: 14px; padding: 14px 14px 10px;
+.lg-task { position: relative; background: linear-gradient(150deg, var(--surface-2), var(--surface)); border: 1px solid var(--border); border-radius: var(--r-l); padding: 14px 14px 10px;
   animation: dash-enter 360ms cubic-bezier(.2, .8, .2, 1) both; transition: border-color 180ms, box-shadow 180ms; }
 .lg-task:hover { border-color: var(--border-3); box-shadow: 0 14px 34px -26px var(--accent); }
 .lg-task.tone-run { border-color: var(--accent-line); }
@@ -41,7 +41,7 @@
 .lg-task-title { min-width: 0; }
 .lg-task-title h3 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -.15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lg-task-title small { color: var(--text-3); font-size: 11.5px; font-variant-numeric: tabular-nums; }
-.lg-state { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
+.lg-state { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--r-m); font-size: 11px; font-weight: 600; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
 .lg-state > i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .lg-state-run { background: var(--accent-bg); color: var(--accent); }
 .lg-state-run > i { animation: dash-beat 1.6s ease-in-out infinite; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
@@ -49,13 +49,13 @@
 .lg-state-err { background: var(--red-bg); color: var(--red); }
 .lg-state-done { background: var(--green-bg); color: var(--green); }
 .lg-flags { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0 36px; }
-.lg-flag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 99px; font-size: 11px; font-weight: 600; background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-line); }
+.lg-flag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: var(--r-m); font-size: 11px; font-weight: 600; background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-line); }
 
 .lg-chain { list-style: none; margin: 10px 0 0; padding: 0 0 0 12px; position: relative; }
 .lg-chain::before { content: ""; position: absolute; left: 24px; top: 14px; bottom: 14px; width: 2px; border-radius: 2px; background: linear-gradient(var(--border-3), var(--border)); }
 .lg-step { position: relative; padding-left: calc(var(--depth, 0) * 20px); }
 .lg-step > button { appearance: none; position: relative; width: 100%; display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 6px 8px 6px 0;
-  background: none; border: 0; border-radius: 9px; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: background 140ms; }
+  background: none; border: 0; border-radius: var(--r-l); color: inherit; font: inherit; text-align: left; cursor: pointer; transition: background 140ms; }
 .lg-step > button:hover:not(:disabled) { background: var(--surface-3); }
 .lg-step > button:disabled { cursor: default; }
 .lg-step-ico { position: relative; z-index: 1; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; font-size: 12px; font-weight: 700;
@@ -79,24 +79,24 @@
 .lg-step-text { font-size: 12px; color: var(--text-3); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .lg-step-meta { display: flex; flex-wrap: wrap; gap: 5px; }
 .lg-step > button > time, .lg-row time { font-size: 11px; color: var(--text-4); font-variant-numeric: tabular-nums; padding-top: 5px; white-space: nowrap; }
-.lg-pill { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 6px; background: var(--surface-3); color: var(--text-2); font-size: 10.5px; font-weight: 550; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lg-pill { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: var(--r-m); background: var(--surface-3); color: var(--text-2); font-size: 10.5px; font-weight: 550; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .lg-pill-err { background: var(--red-bg); color: var(--red); }
 .lg-task > footer { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
 .lg-task > footer .sp { flex: 1; }
-.lg-ai { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 11px; border-radius: 99px; border: 1px solid color-mix(in srgb, var(--violet) 40%, transparent);
+.lg-ai { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 11px; border-radius: var(--r-m); border: 1px solid color-mix(in srgb, var(--violet) 40%, transparent);
   background: var(--violet-bg); color: var(--violet); font: 600 11.5px var(--font); cursor: pointer; transition: background 140ms; }
 .lg-ai:hover { background: color-mix(in srgb, var(--violet) 22%, transparent); }
 
 /* the live stream */
-.lg-days { display: flex; flex-direction: column; gap: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 6px 6px 10px; }
+.lg-days { display: flex; flex-direction: column; gap: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-l); padding: 6px 6px 10px; }
 .lg-day h3 { position: sticky; top: 0; z-index: 1; margin: 0; padding: 8px 10px 6px; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); background: var(--surface); }
 .lg-day ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.lg-row > button { appearance: none; width: 100%; display: grid; grid-template-columns: 58px auto minmax(0, 1fr) auto; gap: 9px; align-items: start; padding: 6px 8px; border: 0; border-radius: 8px;
+.lg-row > button { appearance: none; width: 100%; display: grid; grid-template-columns: 58px auto minmax(0, 1fr) auto; gap: 9px; align-items: start; padding: 6px 8px; border: 0; border-radius: var(--r-l);
   background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: background 140ms; }
 .lg-row > button:hover { background: var(--surface-2); }
 .lg-row { animation: lg-in 320ms cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes lg-in { from { opacity: 0; transform: translateY(-4px); } }
-.lg-kind { display: inline-flex; align-items: center; gap: 5px; height: 19px; margin-top: 1px; padding: 0 8px; border-radius: 6px; font-size: 10.5px; font-weight: 650; white-space: nowrap;
+.lg-kind { display: inline-flex; align-items: center; gap: 5px; height: 19px; margin-top: 1px; padding: 0 8px; border-radius: var(--r-m); font-size: 10.5px; font-weight: 650; white-space: nowrap;
   color: var(--k); background: color-mix(in srgb, var(--k) 13%, transparent); }
 .lg-row-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding-top: 1px; }
 .lg-row-title { font-size: 12.5px; color: var(--text); line-height: 1.45; overflow-wrap: anywhere; }
@@ -106,21 +106,21 @@
 
 /* the details: a side panel on the shared dialog (ui.tsx Modal size side; head, body and footer from app.css «Dialogs») */
 .modal-std .modal-body.lg-detail-main { padding: 0 0 4px; gap: 0; }
-.lg-detail-flag { margin: 12px 20px 0; padding: 9px 12px; border-radius: 9px; background: var(--amber-bg); color: var(--amber); font-size: 12.5px; line-height: 1.5; }
+.lg-detail-flag { margin: 12px 20px 0; padding: 9px 12px; border-radius: var(--r-l); background: var(--amber-bg); color: var(--amber); font-size: 12.5px; line-height: 1.5; }
 .lg-detail-flag svg { vertical-align: -1px; margin-right: 4px; }
 .lg-detail-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 14px 20px 0; }
-.lg-detail-facts > div { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); }
+.lg-detail-facts > div { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: var(--r-l); background: var(--surface-2); border: 1px solid var(--border); }
 .lg-detail-facts span { font-size: 12px; color: var(--text-2); }
 .lg-detail-facts b { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .lg-tools { display: flex; flex-wrap: wrap; gap: 5px; padding: 10px 20px 0; }
-.lg-tools code { font-family: var(--mono); font-size: 11px; padding: 2px 7px; border-radius: 6px; background: var(--surface-3); color: var(--text-2); }
+.lg-tools code { font-family: var(--mono); font-size: 11px; padding: 2px 7px; border-radius: var(--r-m); background: var(--surface-3); color: var(--text-2); }
 .lg-detail-body { padding: 14px 20px; display: flex; flex-direction: column; gap: 12px; }
 .lg-block h4 { margin: 0 0 6px; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
-.lg-block pre { margin: 0; padding: 10px 12px; max-height: 280px; overflow: auto; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--text);
+.lg-block pre { margin: 0; padding: 10px 12px; max-height: 280px; overflow: auto; border-radius: var(--r-l); background: var(--surface); border: 1px solid var(--border); color: var(--text);
   font-family: var(--font); font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
 .lg-block-err pre { border-color: color-mix(in srgb, var(--red) 40%, transparent); background: var(--red-bg); color: var(--text); }
 .lg-block-err h4 { color: var(--red); }
-.lg-turn { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.lg-turn { border: 1px solid var(--border); border-radius: var(--r-l); background: var(--surface); }
 .lg-turn > summary { display: flex; justify-content: space-between; gap: 10px; padding: 9px 12px; cursor: pointer; font-size: 12.5px; }
 .lg-turn > summary span { color: var(--text-3); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .lg-turn[open] > summary { border-bottom: 1px solid var(--border); }

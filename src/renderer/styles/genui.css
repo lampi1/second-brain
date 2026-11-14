@@ -5,7 +5,7 @@
 .gu-art.attached { margin: 0 0 6px; border-color: var(--accent-line); }
 .gu-head { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 7px 8px 0 10px; color: var(--text-3); }
 .gu-title { font: 600 13px var(--font-display); color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gu-kind, .gu-from { flex: none; font-size: 11px; color: var(--text-3); padding: 0 6px; border-radius: 99px; background: var(--surface-3); }
+.gu-kind, .gu-from { flex: none; font-size: 11px; color: var(--text-3); padding: 0 6px; border-radius: var(--r-m); background: var(--surface-3); }
 .gu-from { color: var(--violet); background: var(--violet-bg); }
 .gu-btn { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: var(--r-xs); background: none; color: var(--text-3); cursor: pointer; }
 .gu-btn:hover { background: var(--surface-3); color: var(--text); }
@@ -30,7 +30,7 @@
 .gu-status i, .gu-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
 .gu-ok { color: var(--green); } .gu-fail { color: var(--red); } .gu-blocked { color: var(--amber); } .gu-warn { color: var(--amber); }
 .gu-running { color: var(--accent-strong); } .gu-todo { color: var(--text-3); } .gu-info { color: var(--text-2); }
-.gu-link { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 1px 7px; border-radius: 99px; border: 1px solid var(--accent-line); background: var(--accent-bg); color: var(--accent-strong); font: inherit; font-size: 11.5px; text-decoration: none; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gu-link { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 1px 7px; border-radius: var(--r-m); border: 1px solid var(--accent-line); background: var(--accent-bg); color: var(--accent-strong); font: inherit; font-size: 11.5px; text-decoration: none; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gu-link:hover { text-decoration: underline; }
 .gu-link.off { border-color: var(--border-2); background: none; color: var(--text-3); cursor: default; }
 .gu-count { flex: none; font-size: 11px; color: var(--text-3); padding: 0 6px; border-radius: 99px; background: var(--surface-3); }
@@ -49,7 +49,7 @@
 .gu-card.rec { border-color: var(--green); box-shadow: inset 0 0 0 1px var(--green-bg); }
 .gu-card-head { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; color: var(--text); }
 .gu-card-head b { flex: 1; min-width: 0; }
-.gu-rec { flex: none; font-size: 11px; font-weight: 600; color: var(--green); padding: 0 6px; border-radius: 99px; background: var(--green-bg); }
+.gu-rec { flex: none; font-size: 11px; font-weight: 600; color: var(--green); padding: 0 6px; border-radius: var(--r-m); background: var(--green-bg); }
 .gu-card-sum { margin: 0; font-size: 12.5px; color: var(--text-2); line-height: 1.4; }
 .gu-pros, .gu-cons { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--text-2); }
 .gu-pros li, .gu-cons li { display: flex; gap: 5px; align-items: baseline; }
@@ -115,13 +115,13 @@
 .peek-act:hover, .peek-act:focus-visible { background: var(--surface-3); outline: none; box-shadow: 0 0 0 2px var(--focus-ring); }
 
 /* Product hierarchy shared by light/dark themes. Keep all meaning in words as well as colour. */
-.gu-art { border-radius: 12px; }
+.gu-art { border-radius: var(--r-l); }
 .gu-head { padding: 12px 12px 4px; gap: 8px; }
 .gu-title { font-size: 14px; }
 .gu-sum { margin: 2px 12px 12px; line-height: 1.55; }
 .gu-body { padding: 0 12px 12px; }
 .gu-btn { width: 32px; height: 32px; }
-.gu-status { padding: 3px 7px; border-radius: 6px; background: var(--surface-3); }
+.gu-status { padding: 3px 7px; border-radius: var(--r-m); background: var(--surface-3); }
 .gu-status-icon { display: inline-grid; place-items: center; width: 12px; font-weight: 700; }
 .gu-table-wrap:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .gu-table th { padding: 10px 12px; background: var(--surface-3); color: var(--text-2); }
@@ -129,20 +129,20 @@
 .gu-table tbody tr:hover td { background: var(--surface-3); }
 .gu-link { min-height: 28px; white-space: normal; overflow-wrap: anywhere; }
 .gu-cards { grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px; }
-.gu-card { padding: 16px; gap: 12px; border-radius: 10px; }
+.gu-card { padding: 16px; gap: 12px; border-radius: var(--r-l); }
 .gu-card.rec { border-color: var(--accent-line); box-shadow: inset 3px 0 var(--accent); }
 .gu-card-head { flex-wrap: wrap; font-size: 14px; line-height: 1.4; }
 .gu-rec { color: var(--accent-strong); background: var(--accent-bg); padding: 3px 8px; white-space: normal; }
 .gu-card-sum, .gu-pros, .gu-cons { line-height: 1.55; overflow-wrap: anywhere; }
 .gu-tradeoffs > b { display: block; margin-bottom: 5px; font-size: 11px; color: var(--text-3); }
 .gu-card-foot { padding-top: 10px; }
-.gu-lane { padding: 12px; gap: 10px; flex-basis: 240px; border-radius: 10px; }
+.gu-lane { padding: 12px; gap: 10px; flex-basis: 240px; border-radius: var(--r-l); }
 .gu-lane-head { flex-wrap: wrap; }
 .gu-lane-head b { white-space: normal; overflow-wrap: anywhere; flex-basis: 100%; order: -1; }
 .gu-item { padding: 10px; gap: 7px; line-height: 1.5; }
 .gu-item-detail, .gu-why { color: var(--text-2); line-height: 1.5; }
 .gu-empty { padding: 12px; color: var(--text-3); }
-.gu-diff-group { border: 1px solid var(--border-2); border-radius: 10px; overflow: hidden; }
+.gu-diff-group { border: 1px solid var(--border-2); border-radius: var(--r-l); overflow: hidden; }
 .gu-diff-area { padding: 10px 12px; background: var(--surface-3); }
 .gu-diff-file { padding: 10px 12px; border-left: 0; border-bottom: 1px solid var(--border); align-items: center; }
 .gu-diff-file:last-child { border-bottom: 0; }
@@ -152,7 +152,7 @@
 .gu-why { padding-left: 23px; }
 
 /* Choice body submits; its sibling disclosure only inspects. Every RequestPanel host uses this module. */
-.gu-choice { container-type: inline-size; min-width: 0; width: 100%; border: 1px solid var(--border-2); border-radius: 10px; background: var(--surface); overflow: hidden; }
+.gu-choice { container-type: inline-size; min-width: 0; width: 100%; border: 1px solid var(--border-2); border-radius: var(--r-l); background: var(--surface); overflow: hidden; }
 .gu-choice.rec { border-color: var(--accent-line); box-shadow: inset 3px 0 var(--accent); }
 .gu-choice.picked { background: var(--accent-bg); border-color: var(--accent); }
 .gu-choice.cur { border-color: var(--accent-line); }
@@ -160,7 +160,7 @@
 .gu-choice-answer:hover:not(:disabled) { background: var(--surface-3); }
 .gu-choice-answer:disabled { opacity: .55; cursor: default; }
 .gu-choice-answer:focus-visible, .gu-choice-preview summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -3px; }
-.gu-choice-key { display: grid; place-items: center; flex: none; min-width: 26px; height: 26px; border: 1px solid var(--border-3); border-radius: 7px; color: var(--text-2); font-size: 12px; }
+.gu-choice-key { display: grid; place-items: center; flex: none; min-width: 26px; height: 26px; border: 1px solid var(--border-3); border-radius: var(--r-m); color: var(--text-2); font-size: 12px; }
 .gu-choice-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; overflow-wrap: anywhere; }
 .gu-choice-copy strong { font-size: 14px; line-height: 1.45; }
 .gu-choice-description { font-size: 12.5px; color: var(--text-2); line-height: 1.55; }
@@ -196,7 +196,7 @@
    the word, the key a hint in the corner; neutral surface, each hue only on its icon, the recommended one with a thin
    colored border and a filled icon (owner, 2026-10-23: «più sobri e un po' più piccoli»). Smaller in the lane, the
    Orchestrator and the chat tiles; a narrow tile puts its pill under the word. */
-.gu-yn { --yn: var(--green); --yn-bg: var(--green-bg); position: relative; border-radius: 12px; background: var(--surface);
+.gu-yn { --yn: var(--green); --yn-bg: var(--green-bg); position: relative; border-radius: var(--r-l); background: var(--surface);
   transition: border-color 140ms ease, background-color 140ms ease; }
 .gu-yn.no { --yn: var(--red); --yn-bg: var(--red-bg); }
 .gu-yn.rec { border-color: color-mix(in srgb, var(--yn) 55%, var(--border-2)); box-shadow: none; }
@@ -204,15 +204,15 @@
 /* the keyboard's place: a focus ring, also on the recommended tile it starts on */
 .gu-yn.cur { border-color: color-mix(in srgb, var(--yn) 70%, var(--border-2)); }
 :focus-visible > .gu-yn.cur, .wq:focus .gu-yn.cur, .need-card:focus .gu-yn.cur, .decision:focus .gu-yn.cur, .ask:focus .gu-yn.cur { box-shadow: 0 0 0 2px var(--focus-ring); }
-.gu-yn-answer { position: relative; min-height: 84px; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 12px 10px 10px; text-align: center; border-radius: 12px; }
+.gu-yn-answer { position: relative; min-height: 84px; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 12px 10px 10px; text-align: center; border-radius: var(--r-l); }
 .gu-yn-answer:hover:not(:disabled) { background: transparent; }
-.gu-yn-answer:focus-visible { outline-offset: 2px; border-radius: 12px; }
+.gu-yn-answer:focus-visible { outline-offset: 2px; border-radius: var(--r-l); }
 .gu-yn-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; color: var(--yn); background: var(--yn-bg); transition: background-color 140ms ease, color 140ms ease; }
 .gu-yn-icon svg { width: 18px; height: 18px; stroke-width: 2.4; }
 .gu-yn.rec .gu-yn-icon { color: var(--surface); background: var(--yn); }
 .gu-yn-label { font-size: 16px; font-weight: 600; line-height: 1.2; color: var(--text); }
 .gu-yn-desc { max-width: 34ch; }
-.gu-yn-key { position: absolute; left: 10px; top: 10px; display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 4px; border-radius: 5px;
+.gu-yn-key { position: absolute; left: 10px; top: 10px; display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 4px; border-radius: var(--r-s);
   font: 600 10.5px/1 var(--mono); color: var(--text-3); border: 1px solid var(--border-3); border-bottom-width: 2px; background: var(--surface-2); }
 .gu-yn-rec { position: absolute; right: 8px; top: 8px; white-space: nowrap; font-size: 11px; color: var(--text-2); background: var(--surface-3); }
 .gu-yn > .gu-choice-preview { border-top-color: var(--border); }

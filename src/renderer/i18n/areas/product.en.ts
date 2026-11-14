@@ -52,7 +52,7 @@ export const productEn:typeof productIt={
  'product.running':'Working','product.waiting':'Waiting','product.completed':'Completed','product.failed':'Error','product.stopped':'Stopped','product.unknown':'Status not reported',
  'product.teamExplain':'Internal collaborators observed by the engine. Missing data does not mean zero activity.','product.teamEmpty':'No internal activity observed.','product.teamIncomplete':'The engine does not provide a complete list.',
  'product.child.agent':'subagent','product.childNoAgent':'no agent','product.childExplore':'Explore · read-only','product.child.shell':'command','product.child.unknown':'activity','product.childrenOf':p=>`Subagents of ${p.title}`,'product.childStarted':p=>`started at ${p.time}`,'product.childFor':p=>`for ${p.d}`,
- 'product.restoreLayout':'Back to the column','product.noArea':'No project',
+ 'product.restoreLayout':'Back to the column','product.noArea':'No project','product.benchBack':'Grindhouse','product.benchTeam':'The team',
  'product.advanced':'Advanced details',
  'product.agents':'Your agents','product.agentsPurpose':'A clear role for each job.','product.setup':'Set up your work',
  'aw.views':'What the window shows','aw.view.chat':'Chat','aw.view.split':'Side by side','aw.view.browser':'Browser',

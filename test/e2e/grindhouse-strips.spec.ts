@@ -77,8 +77,8 @@ test('a click expands a strip every time: repeated, on any part of it, with text
   try {
     const expand = page.getByTestId('chat-expand-fix');
     await expect(expand).toHaveAttribute('aria-expanded', 'false');
-    // the strip's title, what it is doing, its last-activity line: each click on a collapsed strip expands it
-    for (const part of ['.th-title', '.strip-now', '.chat-strip-line']) {
+    // the bench's title, its area, its last-activity line: each click on a collapsed bench expands it
+    for (const part of ['.th-title', '.bench-area', '.chat-strip-line']) {
       await page.getByTestId('tile-chat-fix').locator(part).first().click();
       await expect(expand, part).toHaveAttribute('aria-expanded', 'true');
       await expect(page.getByTestId('chat-input-fix')).toBeVisible();

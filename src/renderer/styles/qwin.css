@@ -76,7 +76,7 @@
 .wq-kind > svg { color: var(--amber); }
 .wq.perm .wq-kind > svg, .wq.cmd-ask .wq-kind > svg { color: var(--accent); }
 .wq-gist {
-  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px 0 9px; border-radius: 99px;
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px 0 9px; border-radius: var(--r-m);
   font: 600 var(--fs-m)/1 var(--font); color: var(--text); background: var(--accent-bg); border: 1px solid var(--accent-line); white-space: nowrap;
 }
 .wq-gist > svg { color: var(--accent); }
@@ -118,7 +118,7 @@
 .wq-opts { display: flex; flex-direction: column; gap: 8px; }
 /* a yes/no question (ADR 0135): Sì and No side by side, «Altro…» under them */
 .wq-opts.yesno { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.wq-opts.yesno > .wq-other { justify-content: center; border-radius: 999px; }
+.wq-opts.yesno > .wq-other { justify-content: center; border-radius: var(--r-m); }
 .wq-opts.yesno > :not(.gu-choice) { grid-column: 1 / -1; }
 .wq-opt {
   position: relative; display: flex; align-items: flex-start; gap: 14px; width: 100%; padding: 13px 16px; border-radius: var(--r-m);
@@ -130,14 +130,14 @@
 .wq-opt:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus-ring); }
 .wq:focus .wq-opt.cur, .wq:focus-visible .wq-opt.cur { box-shadow: 0 0 0 2px var(--focus-ring); }
 .wq-key {
-  flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; margin-top: -2px;
+  flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: var(--r-m); margin-top: -2px;
   font: 600 13px/1 var(--mono); color: var(--text-2); background: var(--surface-3); border: 1px solid var(--border-3); border-bottom-width: 2px;
 }
 .wq-opt-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .wq-opt-label { font-size: var(--fs-l); font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
 .wq-opt-desc { max-width: 68ch; font-size: var(--fs-m); line-height: 1.5; color: var(--text-2); overflow-wrap: anywhere; }
 .wq-opt.rec .wq-opt-desc, .wq-opt.cur .wq-opt-desc { color: var(--text-2); }
-.wq-rec { flex: none; align-self: center; padding: 2px 9px; border-radius: 99px; font-size: var(--fs-s); font-weight: 600; color: var(--on-accent); background: var(--accent); }
+.wq-rec { flex: none; align-self: center; padding: 2px 9px; border-radius: var(--r-m); font-size: var(--fs-s); font-weight: 600; color: var(--on-accent); background: var(--accent); }
 .wq-opt.rec { border-color: var(--accent-line); background: color-mix(in srgb, var(--accent) 9%, var(--surface-2)); }
 .wq-opt.rec .wq-key { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
 .wq-opt.picked { border-color: var(--accent); background: var(--accent-bg); }
@@ -207,33 +207,38 @@
 
 /* The questions inside the Orchestrator (QuestionsWindow.tsx OrchestratorAsks, ADR 0269): one quiet row each at the
    bottom of its column, Sì / No on the row for a yes/no question, a click opens the full card in place. */
-.oasks { flex: 0 0 auto; min-height: 0; display: flex; flex-direction: column; gap: 6px; margin: 0 10px 8px; padding-top: 8px; border-top: 1px solid var(--border); max-height: 45%; overflow-y: auto; scrollbar-width: thin; }
-/* the rows never shrink under a long chat: the messages take what is left (the owner 2026-11-13: «tagliatissime
-   illeggibili»; a long chat's whole height used to squeeze the rows to a strip, flex shrinks by size) */
-.orchestrator-tile > .items-wrap { flex: 1 1 0; min-height: 56px; }
-.oasks-later { display: flex; align-items: center; gap: 5px; padding: 3px 4px; border: 0; background: none; color: var(--text-2); font: 12px var(--font); cursor: pointer; text-align: left; }
+.oasks { flex: 0 0 auto; min-height: 0; display: flex; flex-direction: column; gap: 0; margin: 0 10px 8px; border: 1px solid var(--border); border-radius: var(--r-l); background: var(--surface); max-height: 45%; overflow-y: auto; scrollbar-width: thin; }
+.oasks-k { font-size: 12px; font-weight: 600; color: var(--text-2); padding: 8px 12px 6px; }
+.oasks-later { display: flex; align-items: center; gap: 5px; padding: 7px 12px; border: 0; border-top: 1px solid var(--border); background: none; color: var(--text-2); font: 12px var(--font); cursor: pointer; text-align: left; }
 .oasks-later:hover { color: var(--text); }
-.oasks-k { font-size: 12px; font-weight: 600; color: var(--text-2); padding: 2px 2px 0; }
-/* no coloured side stripe (ADR 0287): a row is a quiet card; the open one is the panel, on a stronger border */
-.oask { border: 1px solid var(--border); border-radius: var(--r-m); background: var(--surface-2); transition: border-color var(--dur-fast) var(--ease); }
-.oask:not(.open):hover { border-color: var(--border-3); }
+/* one flat row per question (ADR 0311): a thin colour rule on its left says what it is (violet the Orchestrator's or a
+   plan, amber a decision, red a permission or a command), who asks and since when, the question; Sì/No or
+   Consenti/Nega on the row when one click answers it; ✕ = later */
+.oask { --kc: var(--amber); position: relative; border-top: 1px solid var(--border); transition: background-color var(--dur-fast) var(--ease); }
+.oasks > .oask:first-child { border-top: 0; }
+.oask::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 2px; background: var(--kc); }
+.oask.k-orch { --kc: var(--violet); }
+.oask.k-perm { --kc: var(--red); }
+.oask:not(.open):hover { background: var(--surface-2); }
 .oask.later { opacity: .8; }
-.oask.open { background: var(--surface); border-color: var(--border-3); }
+.oask.open { background: var(--surface-2); }
 .oask.open .oask-q { display: none; } /* the card under it says the question */
-.oask-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; }
+.oask-row { display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 14px; }
 .oask-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .oask-main:focus-visible, .oask-chev:focus-visible, .oask-yn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus-ring); border-radius: var(--r-s); }
-.oask-who { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text-2); min-width: 0; }
-.oask-who > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oask-who { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text-3); min-width: 0; }
+.oask-who > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); font-weight: 600; }
 .oask-age::before { content: "·"; margin-right: 5px; }
-.oask-later { margin-left: 4px; padding: 0 6px; border-radius: 99px; background: var(--surface-3); }
+.oask-later { margin-left: 4px; padding: 0 6px; border-radius: var(--r-s); background: var(--surface-3); }
 .oask-q { font-size: 13.5px; font-weight: 600; color: var(--text); line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
-.oask-yn { flex: none; padding: 2px 10px; border-radius: var(--r-s); border: 1.5px solid var(--border-2); background: var(--surface); font: 600 12.5px var(--font); cursor: pointer; white-space: nowrap; }
-.oask-yn.y { border-color: var(--green, #1e8a4c); color: var(--green, #1e8a4c); }
-.oask-yn.n { color: var(--red, #b3392f); }
+.oask-yn { flex: none; height: 26px; padding: 0 10px; border-radius: var(--r-s); border: 1px solid var(--border-2); background: var(--surface); color: var(--text); font: 600 12.5px var(--font); cursor: pointer; white-space: nowrap; }
+.oask-yn.y { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.oask.k-perm .oask-yn.y { background: var(--surface); border-color: var(--border-3); color: var(--text); }
+.oask-yn.n { color: var(--text-2); }
+.oask-yn:hover:not(:disabled) { border-color: var(--border-3); }
 .oask-yn:disabled { opacity: .5; cursor: default; }
-.oask-chev { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: var(--r-s); background: none; color: var(--text-2); cursor: pointer; }
-.oask-chev:hover { background: var(--surface-3); }
+.oask-chev { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: var(--r-s); background: none; color: var(--text-3); cursor: pointer; }
+.oask-chev:hover { background: var(--surface-3); color: var(--text); }
 .oask-card { border-top: 1px solid var(--border); padding: 10px 12px 8px; font-size: var(--fs-l); line-height: 1.5; }
 /* an open card is the column's panel: it takes everything but a 72 px strip of the last messages, never the input's: the Orchestrator's input
    stays in sight and writable under it (the owner 2026-11-12), and the card scrolls inside to its last line */

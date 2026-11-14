@@ -51,7 +51,7 @@ export const productIt={
  'product.running':'In attività','product.waiting':'In attesa','product.completed':'Concluso','product.failed':'Errore','product.stopped':'Fermato','product.unknown':'Stato non riportato',
  'product.teamExplain':'Collaboratori interni osservati dal motore. I dati mancanti non indicano zero attività.','product.teamEmpty':'Nessuna attività interna osservata.','product.teamIncomplete':'Il motore non fornisce un elenco completo.',
  'product.child.agent':'sottoagente','product.childNoAgent':'nessun agente','product.childExplore':'Explore · sola lettura','product.child.shell':'comando','product.child.unknown':'attività','product.childrenOf':(p:{title:string})=>`Sottoagenti di ${p.title}`,'product.childStarted':(p:{time:string})=>`avviato alle ${p.time}`,'product.childFor':(p:{d:string})=>`da ${p.d}`,
- 'product.restoreLayout':'Torna alla colonna','product.noArea':'Senza progetto',
+ 'product.restoreLayout':'Torna alla colonna','product.noArea':'Senza progetto','product.benchBack':'Grindhouse','product.benchTeam':'La squadra',
  'product.advanced':'Dettagli avanzati',
  'product.agents':'I tuoi agenti','product.agentsPurpose':'Un ruolo chiaro per ogni lavoro.','product.setup':'Configura il tuo lavoro',
  'aw.views':'Cosa mostra la finestra','aw.view.chat':'Chat','aw.view.split':'Affiancati','aw.view.browser':'Browser',

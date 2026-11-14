@@ -10,10 +10,10 @@ test('one window per agent: three views, a line to drag, one full screen over th
   const W = 1600, H = 900;
   const { app, page } = await launchDemo({ width: W, height: H });
   try {
-    // a strip is one line: no ✕, no "?", the views only once it has a browser to show
+    // a closed chat is a bench: its ✕ in sight, no "?", the views only once it has a browser to show (ADR 0311)
     await expect(page.getByTestId('chat-expand-sms')).toHaveAttribute('aria-expanded', 'false');
-    await expect(page.locator('[data-testid^="chat-x-"], [data-testid^="chat-help-"]')).toHaveCount(0);
-    expect((await page.getByTestId('tile-chat-sms').boundingBox())!.height).toBeLessThan(76); // one row, as tall as the role's little person (ADR 0295, 60 px since ADR 0297)
+    await expect(page.getByTestId('chat-x-sms')).toBeVisible();
+    await expect(page.locator('[data-testid^="chat-help-"]')).toHaveCount(0);
     await expect(page.getByTestId('tile-browser-tab-sms')).toHaveCount(0); // an owned browser is never a row of its own
     await page.mouse.move(2, 2);
     await shot(page, 'agent-window-strips');
@@ -83,8 +83,10 @@ test('one window per agent: three views, a line to drag, one full screen over th
     await expect(full).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(full).toHaveCount(0);
+    // back from the full screen the chat stays open in the workshop; «Grindhouse» brings the benches back (ADR 0311)
+    await page.getByTestId('bench-back').click();
     await expect(page.getByTestId('tile-chat-qa')).toBeVisible();
-    await page.getByTestId('tile-chat-fix').locator('.th-title').click();
+    await page.getByTestId('chat-expand-fix').click();
     await page.keyboard.press('F11');
     await expect(full).toHaveAttribute('data-key', 'chat:fix');
     await page.getByTestId('focus-exit').click();

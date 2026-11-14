@@ -23,7 +23,7 @@
 .nav-item.on::before { content: ""; position: absolute; left: -6px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
 .nav-icon { width: 18px; flex: none; display: grid; place-items: center; color: inherit; }
 .nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.nav-badge { flex: none; display: inline-grid; place-items: center; min-width: 18px; height: 17px; padding: 0 5px; border-radius: 99px; background: var(--accent-bg); color: var(--accent); font-size: 10.5px; font-weight: 700; }
+.nav-badge { flex: none; display: inline-grid; place-items: center; min-width: 18px; height: 17px; padding: 0 5px; border-radius: 999px; background: var(--accent-bg); color: var(--accent); font-size: 10.5px; font-weight: 700; }
 .nav-badge.amber { background: var(--amber); color: var(--on-amber); }
 .nav-badge.warn { background: var(--amber-bg); color: var(--amber); box-shadow: inset 0 0 0 1px var(--amber-line); }
 .hist-nav { display: inline-flex; gap: 0; flex: none; }
@@ -49,7 +49,7 @@
 .orchestrator-dock-bar:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus-ring); }
 .orchestrator-dock-bar.waits { border-color: var(--amber-line); }
 .orchestrator-dock-bar > svg:last-child { color: var(--text-3); }
-.orchestrator-unread { height: 18px; padding: 0 7px; border-radius: 99px; background: var(--violet-bg); color: var(--violet); font-size: 11px; font-weight: 600; display: inline-grid; place-items: center; white-space: nowrap; }
+.orchestrator-unread { height: 18px; padding: 0 7px; border-radius: var(--r-m); background: var(--violet-bg); color: var(--violet); font-size: 11px; font-weight: 600; display: inline-grid; place-items: center; white-space: nowrap; }
 .orchestrator-ov {
   display: flex; flex-direction: column; min-width: 0; border-radius: var(--r-l);
   background: var(--orchestrator-bg); border: 1px solid var(--orchestrator-line-2); box-shadow: var(--shadow-pop);
@@ -59,7 +59,7 @@
 .orchestrator-ov.moving { user-select: none; transition: none; }
 .orchestrator-bar { flex: none; display: flex; align-items: center; gap: 4px; padding: 4px 6px 0 18px; }
 .orchestrator-grip { min-width: 28px; align-self: stretch; } /* always room to double-click */
-.orchestrator-badge { min-width: 17px; height: 16px; padding: 0 5px; border-radius: 99px; background: var(--amber); color: var(--bg); font-size: 10.5px; font-weight: 700; display: inline-grid; place-items: center; }
+.orchestrator-badge { min-width: 17px; height: 16px; padding: 0 5px; border-radius: 999px; background: var(--amber); color: var(--bg); font-size: 10.5px; font-weight: 700; display: inline-grid; place-items: center; }
 .orchestrator-body { flex: 1; min-height: 0; display: flex; }
 .orchestrator-body > .tile { flex: 1; border-radius: 0 0 var(--r-l) var(--r-l); border-left: 0; border-right: 0; border-bottom: 0; }
 .orchestrator-resize { position: absolute; left: 0; top: 0; width: 16px; height: 16px; cursor: nwse-resize; touch-action: none;
@@ -93,10 +93,10 @@
 .nc-head h2 { margin: 0; font: 600 15px var(--font-display); }
 .nc-dnd { position: relative; }
 .nc-dnd-menu { position: absolute; right: 0; top: 30px; z-index: 2; display: flex; flex-direction: column; min-width: 160px; padding: 4px; border-radius: var(--r-m); background: var(--surface-2); border: 1px solid var(--border-2); box-shadow: var(--shadow-pop); }
-.nc-dnd-menu button { height: 30px; text-align: left; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--text); cursor: pointer; }
+.nc-dnd-menu button { height: 30px; text-align: left; padding: 0 10px; border: 0; border-radius: var(--r-m); background: none; color: var(--text); cursor: pointer; }
 .nc-dnd-menu button:hover { background: var(--surface-4); }
 .nc-filters { flex: none; display: flex; gap: 4px; flex-wrap: wrap; padding: 0 14px 10px; border-bottom: 1px solid var(--border); }
-.nc-filters button { height: 24px; padding: 0 9px; border-radius: 99px; border: 1px solid var(--border-2); background: none; color: var(--text-2); font-size: 12px; cursor: pointer; display: inline-flex; gap: 5px; align-items: center; }
+.nc-filters button { height: 24px; padding: 0 9px; border-radius: var(--r-m); border: 1px solid var(--border-2); background: none; color: var(--text-2); font-size: 12px; cursor: pointer; display: inline-flex; gap: 5px; align-items: center; }
 .nc-filters button.on { background: var(--accent-bg); border-color: var(--accent-line); color: var(--text); }
 .nc-n { color: var(--text-4); font-size: 11px; }
 .nc-list { flex: 1; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 6px; }
@@ -104,7 +104,7 @@
 .nc-item:hover { background: var(--surface-2); }
 .nc-item.unread::before { content: ""; position: absolute; left: 4px; top: 16px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 .nc-main { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 10px; padding: 9px 6px 9px 16px; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; border-radius: var(--r-s); }
-.nc-kind { flex: none; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 99px; background: var(--surface-3); margin-top: 1px; color: var(--text-2); }
+.nc-kind { flex: none; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: var(--r-m); background: var(--surface-3); margin-top: 1px; color: var(--text-2); }
 .nc-kind.tone-blue { color: var(--blue); }
 .nc-kind.tone-red { color: var(--red); }
 .nc-kind.tone-green { color: var(--green); }

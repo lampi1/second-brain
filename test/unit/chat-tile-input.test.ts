@@ -56,14 +56,14 @@ describe('chat tile input', () => {
   });
 });
 
-describe('chat strip head', () => {
-  it('a collapsed strip is one line: the agent name, then what the chat is about', () => {
+describe('chat bench head', () => {
+  it('a closed chat is a bench: what it is about as its title, the role under it, and its ✕ in sight (ADR 0311)', () => {
     const chat = { id: 'w', title: 'AI-DLC · U5 verifica', cwd: '', state: 'idle', harness: 'claude', lastText: '',
       agent: { id: 'artisan', name: 'Artisan' } } as unknown as ChatSummary;
     vi.mocked(useApp).mockImplementation(selector => selector({ chats: { w: chat }, pending: [], tabs: [] } as unknown as Parameters<typeof selector>[0]));
     const html = renderToStaticMarkup(createElement(ChatTile, { chatId: 'w' }));
-    expect(html).toMatch(/Artisan<\/button>.*<span class="strip-now"><span class="th-topic"[^>]*>AI-DLC · U5 verifica<\/span>/);
-    // the noise is gone (ADR 0287): no close cross, no help mark on a strip
-    expect(html).not.toContain('chat-x-w'); expect(html).not.toContain('chat-help-w');
+    expect(html).toMatch(/data-testid="chat-expand-w">AI-DLC · U5 verifica<\/button><\/h3><span class="bench-now"><span class="bench-role"[^>]*>Artisan<\/span>/);
+    // stop and close stay in sight on every bench (the owner, 2026-11-14); no help mark
+    expect(html).toContain('chat-x-w'); expect(html).not.toContain('chat-help-w');
   });
 });

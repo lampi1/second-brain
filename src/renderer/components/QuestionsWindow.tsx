@@ -135,13 +135,27 @@ function AskRow({ ask, open, later, onToggle, onClose }: { ask: Ask; open: boole
     setSent(true);
     void answer(ask, { kind: 'question', answers: { [yn.question]: label } }).then(ok => { if (!ok) setSent(false); });
   };
+  // the row's colour rule says what it is (ADR 0311): violet a question of the Orchestrator or a plan, red a
+  // permission or a command to run, amber anything else that waits for a decision
+  const kind = !isDurable(ask) && (ask.type === 'permission' || ask.type === 'command') ? 'perm' : isOrchestrator || (!isDurable(ask) && ask.type === 'plan') ? 'orch' : 'decide';
+  // a plain permission is answered on its row: «Consenti» once, «Nega»
+  const perm = !isDurable(ask) && ask.type === 'permission' && !open;
+  const allow = (yes: boolean) => {
+    if (sent || isDurable(ask) || ask.type !== 'permission') return;
+    setSent(true);
+    void answer(ask, yes ? { kind: 'permission', allow: true } : { kind: 'permission', allow: false }).then(ok => { if (!ok) setSent(false); });
+  };
   return (
-    <div className={`oask ${open ? 'open' : ''} ${later ? 'later' : ''}`} data-ask-row={k} data-testid="orchestrator-ask">
+    <div className={`oask k-${kind} ${open ? 'open' : ''} ${later ? 'later' : ''}`} data-ask-row={k} data-ask-kind={kind} data-testid="orchestrator-ask">
       <div className="oask-row">
         <button type="button" className="oask-main" onClick={onToggle} aria-expanded={open} data-testid="orchestrator-ask-toggle">
           <span className="oask-who"><HarnessMark harness={harness} orchestrator={isOrchestrator} size={13} /><span>{name}</span><span className="oask-age">{ago(ask.at, now)}</span>{later && <span className="oask-later">{t('chat.questions.later')}</span>}</span>
           <span className="oask-q">{title}</span>
         </button>
+        {perm && <>
+          <button type="button" className="oask-yn y" disabled={sent} onClick={() => allow(true)} data-testid="orchestrator-ask-allow">{t('tree.allowOnce')}</button>
+          <button type="button" className="oask-yn n" disabled={sent} onClick={() => allow(false)} data-testid="orchestrator-ask-deny">{t('tree.deny')}</button>
+        </>}
         {yn && !open && <>
           <button type="button" className="oask-yn y" disabled={sent} onClick={() => quick(yn.yes)} data-testid="orchestrator-ask-yes">{t('chat.questions.yes')}</button>
           <button type="button" className="oask-yn n" disabled={sent} onClick={() => quick(yn.no)} data-testid="orchestrator-ask-no">{t('chat.questions.no')}</button>

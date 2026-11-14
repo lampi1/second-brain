@@ -5,7 +5,7 @@
 .lr-kpis{margin:18px 0 0}
 .lr-kpi{position:relative;background:linear-gradient(160deg,var(--surface-2),var(--surface) 70%)}
 .lr-kpi .k{display:flex;align-items:center;gap:6px}
-.lr-kpi button.v{all:unset;cursor:pointer;font:650 24px/1.2 var(--font-display);font-variant-numeric:tabular-nums;border-radius:4px}
+.lr-kpi button.v{all:unset;cursor:pointer;font:650 24px/1.2 var(--font-display);font-variant-numeric:tabular-nums;border-radius:var(--r-s)}
 .lr-kpi button.v:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .lr-kpi[data-tone=green] .v{color:var(--green)}
 .lr-kpi[data-tone=amber] .v{color:var(--amber)}
@@ -31,7 +31,7 @@
 .lr-mark[data-verdict=aiuta] line,.lr-mark[data-verdict=peggiora] line{stroke-dasharray:none}
 
 .lr-chips{display:flex;gap:6px;flex-wrap:wrap}
-.lr-chip{font:inherit;font-size:var(--fs-xs);color:var(--text-2);border:1px solid var(--border-2);background:var(--surface-2);border-radius:20px;padding:3px 10px;cursor:pointer;font-variant-numeric:tabular-nums}
+.lr-chip{font:inherit;font-size:var(--fs-xs);color:var(--text-2);border:1px solid var(--border-2);background:var(--surface-2);border-radius:var(--r-l);padding:3px 10px;cursor:pointer;font-variant-numeric:tabular-nums}
 .lr-chip[aria-pressed=true]{color:var(--text);border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--surface-2))}
 .lr-chip:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .lr-note{max-width:90ch;margin-top:22px}

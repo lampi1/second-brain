@@ -75,24 +75,19 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     expect(back).toContain('[risultato · Sentinel «Controllo test»] La suite passa: 42 su 42');
     await expect.poll(async () => (await childrenOf(page, parent.id)).map(c => c.delegation?.result?.outcome).sort()).toEqual(['done', 'done']);
 
-    // the Grindhouse: the children right under the parent, on thread lines, one row each with the result's first words
+    // the Grindhouse: the children at the parent's bench, one row each with the result's first words (ADR 0311)
     await page.getByTestId('nav-home').click();
-    const card = page.getByTestId(`delegation-card-${scout.id}`);
-    await expect(card).toBeVisible();
-    await expect(page.getByTestId(`delegation-state-${scout.id}`)).toHaveText('finito');
-    // closed, the row carries the result's first words (ADR 0293); open, the whole result and who received it
-    await expect(page.getByTestId(`delegation-now-${scout.id}`)).toContainText('Trovati 3 errori nel servizio ordini');
-    await card.locator('.dc-title').click();
-    await expect(page.getByTestId(`delegation-res-${scout.id}`)).toContainText('Trovati 3 errori nel servizio ordini');
-    await expect(card).toContainText('esito inviato a Strategist');
-    await card.locator('.dc-title').click();
-    await expect(card).toContainText('Scout');
-    await expect(page.getByTestId(`delegation-card-${sentinelChat.id}`)).toContainText('La suite passa');
-    const pBox = (await page.getByTestId(`tile-chat-${parent.id}`).boundingBox())!, cBox = (await card.boundingBox())!;
-    expect(cBox.x).toBeGreaterThan(pBox.x + 8);
-    expect(cBox.y).toBeGreaterThan(pBox.y);
-    await expect(page.getByTestId(`tree-toggle-${parent.id}`)).toContainText('2 figli');
-    await expect(page.getByTestId(`tree-toggle-${parent.id}`)).toContainText('2 finiti');
+    const row = page.getByTestId(`bench-kid-${scout.id}`);
+    await expect(row).toBeVisible();
+    await expect(row).toHaveAttribute('data-child-state', 'done');
+    await expect(row).toContainText('Trovati 3 errori nel servizio ordini');
+    await expect(page.getByTestId(`bench-kid-${sentinelChat.id}`)).toContainText('La suite passa');
+    await expect(page.getByTestId(`bench-kids-sum-${parent.id}`)).toContainText('2 figli');
+    await expect(page.getByTestId(`bench-kids-sum-${parent.id}`)).toContainText('2 finiti');
+    await expect(page.getByTestId(`bench-helper-${scout.id}`)).toBeVisible();
+    const pBox = (await page.getByTestId(`tile-chat-${parent.id}`).boundingBox())!, rBox = (await row.boundingBox())!;
+    expect(rBox.y).toBeGreaterThan(pBox.y);
+    expect(rBox.y + rBox.height).toBeLessThanOrEqual(pBox.y + pBox.height + 1);
     // the sidebar tree: the same shape, the children one level in
     await expect(page.getByTestId(`nav-tree-${parent.id}`)).toHaveAttribute('data-depth', '0');
     await expect(page.getByTestId(`nav-tree-${scout.id}`)).toHaveAttribute('data-depth', '1');
@@ -103,28 +98,30 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     await shot(page, 'delegation-tree-light');
     await theme(page, 'dark');
 
-    // a click on a card expands it in place into the whole child chat, writable like any strip; on its head, folds it
-    await card.locator('.dc-title').click();
-    await expect(page.getByTestId(`delegation-chat-${scout.id}`)).toBeVisible();
+    // a click on a row opens the child's chat, writable, with the whole result and the team as tabs
+    await row.click();
     await expect(page.getByTestId(`chat-input-${scout.id}`)).toBeVisible();
-    await card.locator('.dc-title').click();
-    await expect(page.getByTestId(`delegation-chat-${scout.id}`)).toHaveCount(0);
-    // a row of the sidebar tree brings its card on screen, expanded
+    await expect(page.getByTestId(`delegation-res-${scout.id}`)).toContainText('Trovati 3 errori nel servizio ordini');
+    await expect(page.getByTestId(`delegation-card-${scout.id}`)).toContainText('esito inviato a Strategist');
+    await expect(page.getByTestId(`bench-tab-${parent.id}`)).toBeVisible();
+    await page.getByTestId(`bench-tab-${sentinelChat.id}`).click();
+    await expect(page.getByTestId(`chat-input-${sentinelChat.id}`)).toBeVisible();
+    await page.getByTestId('bench-back').click();
+    await expect(row).toBeVisible();
+    // a row of the sidebar tree opens that chat too
     await page.getByTestId(`nav-tree-${sentinelChat.id}`).locator('.tn-main').click();
-    await expect(page.getByTestId(`delegation-card-${sentinelChat.id}`)).toHaveAttribute('data-open', 'true');
     await expect(page.getByTestId(`chat-input-${sentinelChat.id}`)).toBeVisible();
     // "Vai alla chat" opens it in focus mode
-    await page.getByTestId(`delegation-open-${scout.id}`).click();
+    await page.getByTestId(`delegation-open-${sentinelChat.id}`).click();
     await expect(page.getByTestId('maximized')).toBeVisible();
-    await expect(page.getByTestId('maximized').getByTestId(`chat-input-${scout.id}`)).toBeVisible();
+    await expect(page.getByTestId('maximized').getByTestId(`chat-input-${sentinelChat.id}`)).toBeVisible();
     await page.getByTestId('focus-exit').click();
+    await page.getByTestId('bench-back').click(); // back to the benches
 
-    // folding the parent hides its children in both views
-    await page.getByTestId(`tree-toggle-${parent.id}`).click();
-    await expect(page.getByTestId(`tile-chat-${scout.id}`)).toHaveCount(0);
-    await expect(page.getByTestId(`delegation-card-${sentinelChat.id}`)).toHaveCount(0);
+    // folding the parent in the sidebar hides its children there; the bench keeps its helpers
+    await page.getByTestId(`nav-tree-fold-${parent.id}`).click();
     await expect(page.getByTestId(`nav-tree-${scout.id}`)).toHaveCount(0);
-    await shot(page, 'delegation-tree-folded');
+    await page.waitForTimeout(600); // the fold is saved a moment later
 
     // after a restart the fold is still there, and the tree is rebuilt from the saved chats
     await app.close();
@@ -132,12 +129,11 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     homes.push(home);
     await skipSetup(page);
     await page.getByTestId('nav-home').click();
-    await expect(page.getByTestId(`tree-toggle-${parent.id}`)).toHaveAttribute('aria-expanded', 'false');
     await expect(page.getByTestId(`nav-tree-fold-${parent.id}`)).toHaveAttribute('aria-expanded', 'false');
     await expect(page.getByTestId(`nav-tree-${scout.id}`)).toHaveCount(0);
     await page.getByTestId(`nav-tree-fold-${parent.id}`).click();
     await expect(page.getByTestId(`nav-tree-${scout.id}`)).toHaveAttribute('data-depth', '1');
-    await expect(page.getByTestId(`delegation-card-${sentinelChat.id}`)).toBeVisible();
+    await expect(page.getByTestId(`bench-kid-${sentinelChat.id}`)).toBeVisible();
   } finally {
     await app.close();
     for (const h of homes) fs.rmSync(h, { recursive: true, force: true });
@@ -183,7 +179,7 @@ test('a child\'s question waits as a row in the Orchestrator; a permission above
     await page.getByTestId('qwin-later').click(); // set aside: one folded line in the Orchestrator's column
     await page.getByTestId('nav-home').click();
     // the child's card says it waits for the user and hosts no second answer surface (lib/child-requests.ts requestHost)
-    const kid = page.getByTestId(`delegation-card-${asker.id}`);
+    const kid = page.getByTestId(`bench-kid-${asker.id}`); // its row at the parent's bench (ADR 0311)
     await expect(kid).toContainText('Ti aspetta', { timeout: 20000 });
     await expect(page.getByTestId(`delegation-ask-${asker.id}`)).toHaveCount(0);
     await expect(page.locator(`[data-request-key="${key}"]`)).toHaveCount(0);
@@ -198,7 +194,7 @@ test('a child\'s question waits as a row in the Orchestrator; a permission above
     await expect.poll(async () => (await items(page, parent.id)).some(i => i.kind === 'user' && textOf(i).includes('[risultato · Sentinel «Scelta ambiente»] Ambiente scelto e verificato')), { timeout: 20000 }).toBe(true);
     expect(JSON.stringify((await items(page, asker.id)).filter(i => i.kind === 'tool'))).toContain('Blu');
     // the refusal is in the Scout's own chat, in words
-    await page.getByTestId(`delegation-card-${shell.id}`).locator('.dc-title').click();
+    await page.getByTestId(`bench-kid-${shell.id}`).click();
     await expect(page.getByTestId(`tile-chat-${shell.id}`)).toContainText('va oltre i permessi di «Piano rilascio»');
     await page.getByTestId(`tile-chat-${shell.id}`).getByText('va oltre i permessi', { exact: false }).scrollIntoViewIfNeeded();
     await page.mouse.move(2, 2);
@@ -225,12 +221,13 @@ test('three Scouts run at once, each one writable; a call over the parallel limi
     const kids = await childrenOf(page, parent.id);
     await expect.poll(async () => (await childrenOf(page, parent.id)).map(c => c.background), { timeout: 20000 }).toEqual([1, 1, 1]);
     await page.getByTestId('nav-home').click();
-    for (const k of kids) await expect(page.getByTestId(`delegation-card-${k.id}`)).toBeVisible();
-    await expect(page.getByTestId(`tree-toggle-${parent.id}`)).toContainText('3 figli');
-    await expect(page.getByTestId(`tree-toggle-${parent.id}`)).toContainText('3 in corso');
+    // one row each at the parent's bench, under a line that counts them (ADR 0311)
+    for (const k of kids) await expect(page.getByTestId(`bench-kid-${k.id}`)).toBeVisible();
+    await expect(page.getByTestId(`bench-kids-sum-${parent.id}`)).toContainText('3 figli');
+    await expect(page.getByTestId(`bench-kids-sum-${parent.id}`)).toContainText('3 in corso');
     // each one is a chat of its own: open it and write to it
     const first = kids[0]!;
-    await page.getByTestId(`delegation-card-${first.id}`).locator('.dc-title').click();
+    await page.getByTestId(`bench-kid-${first.id}`).click();
     const input = page.getByTestId(`chat-input-${first.id}`);
     await input.fill('Aggiungi anche gli ordini di marzo');
     await input.press('Enter');
@@ -239,6 +236,7 @@ test('three Scouts run at once, each one writable; a call over the parallel limi
     await expect.poll(async () => (await items(page, parent.id)).some(i => i.kind === 'system' && i.code === 'userWroteChild'), { timeout: 15000 }).toBe(true);
 
     // two more would make five, over the limit of four: refused, and the parent shows the limit it hit
+    await page.getByTestId('bench-back').click(); // back to the workshop: the limit shows on the parent's bench
     await page.evaluate(([id, text]) => window.sb.invoke('chat:send', { chatId: id, text }), [parent.id, delegate([task('scout', 'Resi', 'Cerca nei resi.', 'Elenco'), task('scout', 'Spedizioni', 'Cerca nelle spedizioni.', 'Elenco')])] as const);
     await expect(page.getByTestId(`tree-limit-${parent.id}`)).toContainText('4', { timeout: 20000 });
     expect((await childrenOf(page, parent.id)).length).toBe(3);

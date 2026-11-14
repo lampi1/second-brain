@@ -24,8 +24,8 @@
 │ window.sb = { invoke, on }                                                    │
 └───────────────▲───────────────────────────────────────────────────────────────┘
 ┌───────────────┴──────────────── renderer (React) ─────────────────────────────┐
-│ store (one external store, events → state) · Grindhouse (strips) · Brain      │
-│ strips: agent · browser zone (reports its rect → main places the view)        │
+│ store (one external store, events → state) · Grindhouse (benches) · Brain     │
+│ open chat: agent · browser zone (reports its rect → main places the view)     │
 │ Orchestrator column: full height beside every page (ADR 0068)                 │
 └────────────────────────────────────────────────────────────────────────────────┘
         child processes: claude.exe (per Claude chat) · agent (per Cursor chat)
