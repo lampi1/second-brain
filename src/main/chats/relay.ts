@@ -65,7 +65,9 @@ export class QuestionRelay {
     // its command first: the PC's window shows it before the chat's question too (ADR 0259)
     // production, databases and Azure too (ADR 0275): he reads the whole command and his «sì» runs it
     const cmd = cmds[0];
-    if (cmd) return this.relayCommand(orchestratorId, c.title, cmd);
+    // on Telegram a command it cannot show whole waits for the PC, and the chat's own Sì/No question goes first (#390)
+    const hidden = !!cmd && this.lastChannel(orchestratorId) === 'phone' && !commandShownWhole(cmd);
+    if (cmd && !(hidden && asks.some(x => x.type === 'question'))) return this.relayCommand(orchestratorId, c.title, cmd);
     const p = asks.find(x => x.type === 'question');
     if (!p) throw new Error('Only a question or a command is relayed. A permission you answer yourself with app_resolve_question (allow); one that runs on production, a database or Azure: show the user what it runs, and after his yes answer it with confirmed true.');
     const q = p.questions?.[0];

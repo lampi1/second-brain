@@ -58,7 +58,7 @@ import type { PriceOf } from '../agents/standing';
 import { agentLearnTool, lessonReviewTool, type AgentPackLearning } from '../agents/pack/learning';
 import type { McpTool } from '../mcp/server';
 import { ToolRefusal } from '../mcp/refusal';
-import { DELTA_REVIEW, nextReviewOf, REVIEW_ROLES, reviewsSameWork, rootReviewer, type ReviewWorld } from '../agents/one-review';
+import { DELTA_REVIEW, hasReported, nextReviewOf, REVIEW_ROLES, reviewsSameWork, rootReviewer, type ReviewWorld } from '../agents/one-review';
 import type { BrainScripts } from '../brain/scripts';
 import type { BrainChangelog } from '../brain/changelog';
 import { scriptWriteTools } from '../brain/scripts-tools';
@@ -572,7 +572,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         // refused, naming the chat that re-reviews the fix delta
         if (links.reviewOf && a.freshReview !== true && typeof a.roleId === 'string') {
           const has = rootReviewer(reviewWorld(), { role: a.roleId, reviewOf: links.reviewOf, cwd, from: caller()?.harness ?? 'claude' });
-          if (has) throw new ToolRefusal(`One review chat per piece of work: «${has.title}» (chatId ${has.id}) already reviewed this work. Re-review the fix there: app_assign_task { chatId: "${has.id}", roleId: "${a.roleId}", cwd: "${has.cwd}", mode: "continue", reviewOf: "${links.reviewOf}" } with a contract that names only the fix delta (what changed since its review). If it is still busy, wait for its report. A fresh review chat only when the user asked for one or this reviews a part no review chat covers: then pass freshReview true.`);
+          if (has) throw new ToolRefusal(`One review chat per piece of work: «${has.title}» (chatId ${has.id}) already reviewed this work. Re-review the fix there: app_assign_task { chatId: "${has.id}", roleId: "${a.roleId}", cwd: "${has.cwd}", mode: "continue", reviewOf: "${links.reviewOf}" } with a contract that names only the fix delta (what changed since its review). If it is still busy, wait for its report. A fresh review chat only when the user asked for one, this reviews a part no review chat covers, or app_assign_task refuses that chat: then pass freshReview true.`);
         }
         // a chat in the app's code folder or one of its worktrees works on the app (routing area App)
         const app = await d.code?.inRepo?.(cwd) ?? false;
@@ -682,7 +682,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (a.reviewOf !== undefined && (!reviewing || typeof a.reviewOf !== 'string' || !a.reviewOf.trim() || a.reviewOf.length > 80)) throw new ToolRefusal(reviewing ? 'Invalid reviewOf.' : 'reviewOf: only for a review chat (one opened with reviewOf); open the review with app_create_chat.');
         const world = reviewing ? reviewWorld() : null;
         const reviewOf = world ? (a.reviewOf as string | undefined)?.trim() ?? nextReviewOf(world, target) : null;
-        if (world && (!reviewOf || !reviewsSameWork(world, target, reviewOf))) throw new ToolRefusal('This review chat reviews other work: a review chat stays with the work it reviewed. Open the review of this work with app_create_chat (reviewOf).');
+        if (world && (!reviewOf || !reviewsSameWork(world, target, reviewOf))) throw new ToolRefusal('This review chat reviews other work: a review chat stays with the work it reviewed, and reviewOf names a run of that work (never of a review chat). Open the review of this work with app_create_chat (reviewOf; freshReview true if a review chat of it was named but cannot take it).');
+        const delta = !!world && a.mode !== 'new-task' && hasReported(world, target);   // a first round, unfinished, reviews it all
         const doneWhen = task.doneWhen ?? (a.doneWhen === undefined ? undefined : Array.isArray(a.doneWhen) && a.doneWhen.length <= 12 && a.doneWhen.every(c => typeof c === 'string' && c.trim() && c.length <= 300) ? a.doneWhen as string[] : null);
         if (doneWhen === null) throw new Error('Invalid doneWhen criteria.');
         const refused = crossRefusal(d.brain.settings(), orchestrator.harness, target.harness);
@@ -691,7 +692,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (a.expectedEventSeq !== undefined && (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0)) throw new Error('Invalid user event cursor.');
         if (a.deliveryPolicy !== undefined && !['display', 'notify', 'synthesize'].includes(String(a.deliveryPolicy))) throw new Error('Invalid delivery policy.');
         const userInstructions = d.chats.userEvents ? unreadInstructions(d.chats.userEvents(target.id)) : [];
-        await d.chats.assignTask(target.id, `${voice()}\n\n${reviewOf ? `${DELTA_REVIEW}\n\n` : ''}${prompt}`, { ...(reviewOf ? { reviewOf } : {}), ...intakeOf(a, a.roleId === 'strategist' && a.mode === 'new-task' && !!target.plan), mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: a.expectedVersion === undefined ? target.run?.taskVersion ?? 1 : Number(a.expectedVersion), ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), ...(a.deliveryPolicy ? { deliveryPolicy: a.deliveryPolicy as 'display' | 'notify' | 'synthesize' } : {}), ...(doneWhen ? { doneWhen } : {}), ...(task.contractFields ? { contractFields: task.contractFields } : {}), source: { kind: 'chat', chatId: orchestrator.id } });
+        await d.chats.assignTask(target.id, `${voice()}\n\n${delta ? `${DELTA_REVIEW}\n\n` : ''}${prompt}`, { ...(reviewOf ? { reviewOf } : {}), ...intakeOf(a, a.roleId === 'strategist' && a.mode === 'new-task' && !!target.plan), mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: a.expectedVersion === undefined ? target.run?.taskVersion ?? 1 : Number(a.expectedVersion), ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), ...(a.deliveryPolicy ? { deliveryPolicy: a.deliveryPolicy as 'display' | 'notify' | 'synthesize' } : {}), ...(doneWhen ? { doneWhen } : {}), ...(task.contractFields ? { contractFields: task.contractFields } : {}), source: { kind: 'chat', chatId: orchestrator.id } });
         const assigned = d.chats.list().find(c => c.id === target.id);
         return { chatId: target.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions } : {}), ...(task.warnings.length ? { warnings: task.warnings } : {}) };
       },

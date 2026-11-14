@@ -350,6 +350,9 @@ describe('app control tools', () => {
     // never for other work, and reviewOf only on a review chat
     await expect(Promise.resolve().then(() => assign.run({ chatId: 'rev', roleId: 'sentinel', cwd: '/repo', mode: 'continue', prompt: 'p', reviewOf: 'o1' }))).rejects.toThrow(/reviews other work/);
     expect(assignTask).toHaveBeenCalledTimes(1);
+    // a new task for the same review chat reviews it all: no delta paragraph
+    await assign.run({ chatId: 'rev', roleId: 'sentinel', cwd: '/repo', mode: 'new-task', prompt: 'Review the whole order flow', reviewOf: 'i2' });
+    expect(String((assignTask.mock.calls as unknown[][])[1]![1])).not.toMatch(/fix delta/);
   });
 
   it('app_create_chat keeps the explicit kind on the route; the role resolution never sees it (ADR 0210: no table row to meet)', async () => {

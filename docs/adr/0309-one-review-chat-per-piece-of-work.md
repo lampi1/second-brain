@@ -28,11 +28,14 @@ looks at the fix of what it found: it is the chat that knows best what to check.
    The refusal gives the call to make instead and how to open a fresh one.
 3. **The same chat takes the next round.** `app_assign_task` and `agent_assign_task` accept a review chat. The app puts
    one fixed paragraph before the contract (`DELTA_REVIEW`): review only what changed since your last review and say
-   which earlier findings are fixed. For a root review the new run keeps `reviewOf` (the run named, else the current
+   which earlier findings are fixed; only once it has reported, and never for `mode: "new-task"` (a first round that
+   stopped early, or a new task, reviews it all). For a root review the new run keeps `reviewOf` (the run named, else the current
    run of the chat it reviews), so its report still carries the verdict fields and `app_work_report` still accepts it.
-   A review chat is never given other work: `reviewOf` must belong to the work it already reviews.
-4. **A fresh one stays possible**, with `freshReview: true`: when the user asks for a fresh reviewer, or the review
-   covers a part no review chat covers.
+   A review chat is never given other work: `reviewOf` must belong to work it reviewed in any of its rounds (so a chat
+   the refusal names is always one the assign tool accepts), and never to a review chat, itself included.
+4. **A fresh one stays possible**, with `freshReview: true`: when the user asks for a fresh reviewer, the review
+   covers a part no review chat covers, or the assign tool refuses the chat named (another engine turned off, changed
+   settings or permissions).
 5. **What never counts as a duplicate**: reviewers started side by side that have not reported yet (several parts of
    one change reviewed at once); a review chat that could not take the assignment anyway (another folder, a role card
    changed since, closed by the user, a stopped engine of another kind); other work; another task of the same parent.

@@ -189,6 +189,13 @@ it('while he writes from Telegram a command it cannot show is refused up front, 
   expect(q.ran).toEqual(['c3:confirmed']);
 });
 
+it('on Telegram a command it cannot show waits for the PC, and the chat\'s own Sì/No question is relayed instead (#390)', async () => {
+  const p = withCommands([cmd('c2', 'dev', 'npm test')], [yesNo('q1', 'dev', 'Faccio il commit del fix?')]);
+  p.userWrote('come va?', 'phone');
+  expect(p.r.relay('orch', 'dev').question).toBe('Faccio il commit del fix?');
+  expect(p.ran).toEqual([]);
+});
+
 it('Remote Control shows the reply whole: his «sì» there runs the relayed command, as on the PC (#390)', async () => {
   const p = withCommands([cmd('c2', 'dev', 'npm test')]);
   p.userWrote('come va?', 'remote');

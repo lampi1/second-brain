@@ -51,7 +51,7 @@ function reusable(w: ReviewWorld, c: ChatSummary, role: string, cwd: string, fro
 const newestFirst = (a: ChatSummary, b: ChatSummary): number => (b.run?.startedAt ?? 0) - (a.run?.startedAt ?? 0);
 
 /** every run of a chat the world knows: the stored ones and the one on its summary (a run may have been pruned) */
-function runsOf(w: ReviewWorld, c: ChatSummary): AgentRun[] {
+export function runsOf(w: ReviewWorld, c: ChatSummary): AgentRun[] {
   const own = w.runs.filter(r => r.chatId === c.id);
   return c.run && !own.some(r => r.runId === c.run!.runId) ? [...own, c.run] : own;
 }
@@ -81,10 +81,17 @@ export function childReviewers(w: ReviewWorld, parent: ChatSummary, cwd: string)
   return w.chats.filter(c => c.parentId === parent.id && c.delegation?.role === 'sentinel' && reusable(w, c, 'sentinel', cwd, parent.harness) && reported(c)).sort(newestFirst);
 }
 
-/** Whether a review chat may be given this run to review: only the work it already reviews (the same chat or thread). */
+/** Whether a review chat may be given this run to review: only work it reviews or reviewed in any of its rounds (the
+ *  same chat or thread), so every chat rootReviewer names is one this accepts. Never a review chat, itself included. */
 export function reviewsSameWork(w: ReviewWorld, reviewer: ChatSummary, reviewOf: string): boolean {
-  const now = reviewedChat(w.runs, reviewer.run?.reviewOf), next = reviewedChat(w.runs, reviewOf);
-  return !!now && !!next && sameWork(w, now, next);
+  const next = reviewedChat(w.runs, reviewOf);
+  if (!next || next === reviewer.id || w.chats.find(c => c.id === next)?.run?.reviewOf) return false;
+  return runsOf(w, reviewer).some(r => { const about = reviewedChat(w.runs, r.reviewOf); return !!about && sameWork(w, about, next); });
+}
+
+/** Whether a review chat already reported in one of its rounds: only then is its next round a delta review. */
+export function hasReported(w: ReviewWorld, reviewer: ChatSummary): boolean {
+  return runsOf(w, reviewer).some(r => !!r.report);
 }
 
 /** The run a review chat reviews next when none is named: the current run of the chat it reviews. */

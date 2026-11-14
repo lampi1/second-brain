@@ -242,8 +242,8 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
         </div>}
         {!compact && facts && <ChatLinkChips chatId={chatId} />}
       </header>}
-      {/* the wait is said once (#411): by the head (its button for a wait of the user's, else its state words) or here */}
-      <AutoCloseNotice chatId={chatId} said={first ? userWait : !embedded && stateText === waitText} />
+      {/* the wait is said once (#411): by the head (its button for a wait of the user's, else its state words) or here; an embedded tile has no head */}
+      <AutoCloseNotice chatId={chatId} said={!embedded && (first ? userWait : stateText === waitText)} />
       {/* in full screen the subagents at work stay in sight, as under the strip in the Grindhouse */}
       {focus && <ChildStrips chatId={chatId} />}
       {chat.plan && !['asking', 'revising', 'proposed'].includes(chat.plan.phase) && <StrategyPanel chat={chat} question={planAsk} />}

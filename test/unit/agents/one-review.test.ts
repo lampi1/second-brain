@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentRun } from '../../../src/shared/agents';
 import type { ChatSummary } from '../../../src/shared/contract';
-import { childReviewers, nextReviewOf, reviewedChat, reviewsSameWork, rootReviewer, sameWork, type ReviewWorld } from '../../../src/main/agents/one-review';
+import { childReviewers, hasReported, nextReviewOf, reviewedChat, reviewsSameWork, rootReviewer, sameWork, type ReviewWorld } from '../../../src/main/agents/one-review';
 
 const run = (runId: string, chatId: string, p: Partial<AgentRun> = {}): AgentRun => ({ runId, chatId, agentId: 'artisan', version: 1, goal: '', startedBy: 'orchestrator', startedAt: 1, ...p }) as AgentRun;
 const chat = (id: string, role: string, p: Partial<ChatSummary> = {}): ChatSummary => ({ id, title: id, harness: 'claude', cwd: '/repo', state: 'idle', isOrchestrator: false,
@@ -40,6 +40,19 @@ describe('one review chat per piece of work', () => {
     expect(reviewsSameWork(world([implChat, reviewer], [impl1, impl2, rev, other]), reviewer, 'o1')).toBe(false);
     expect(rootReviewer(world([implChat, reviewer], [impl1, impl2, rev]), { ...ask, role: 'judge' })).toBeNull();
     expect(rootReviewer(world([implChat, reviewer], [impl1, impl2, rev]), { ...ask, reviewOf: 'unknown' })).toBeNull();
+  });
+
+  it('a chat it names is one the assign tool accepts: work it reviewed in an earlier round counts, never a review chat', () => {
+    // r1 reviewed A, then r2 reviewed B of the same thread; the thread is now done, so A and B are apart again
+    const a1 = run('a1', 'A'), a2 = run('a2', 'A', { startedAt: 9 }), b1 = run('b1', 'B');
+    const r1 = run('r1', 'rev', { agentId: 'sentinel', reviewOf: 'a1', ...reported }), r2 = run('r2', 'rev', { agentId: 'sentinel', reviewOf: 'b1', startedAt: 3, ...reported });
+    const rv = chat('rev', 'sentinel', { run: r2 });
+    const w = world([chat('A', 'artisan', { run: a2 }), chat('B', 'artisan', { run: b1 }), rv], [a1, a2, b1, r1, r2]);
+    expect(rootReviewer(w, { ...ask, reviewOf: 'a2' })?.id).toBe('rev');
+    expect(reviewsSameWork(w, rv, 'a2')).toBe(true);
+    expect(reviewsSameWork(w, rv, 'r1')).toBe(false);         // its own run: never a review of itself
+    expect(hasReported(w, rv)).toBe(true);
+    expect(hasReported(world([chat('rev', 'sentinel', { run: run('r9', 'rev', { reviewOf: 'a1' }) })], [a1]), chat('rev', 'sentinel', { run: run('r9', 'rev', { reviewOf: 'a1' }) }))).toBe(false);
   });
 
   it('two chats linked to the same open work thread are one piece of work', () => {
