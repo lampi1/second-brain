@@ -183,7 +183,7 @@ test('a child\'s question waits as a row in the Orchestrator; a permission above
     await page.getByTestId('qwin-later').click(); // set aside: one folded line in the Orchestrator's column
     await page.getByTestId('nav-home').click();
     // the child's card says it waits for the user and hosts no second answer surface (lib/child-requests.ts requestHost)
-    const kid = page.getByTestId(`delegation-card-${asker.id}`);
+    const kid = page.getByTestId(`bench-kid-${asker.id}`); // its row at the parent's bench (ADR 0311)
     await expect(kid).toContainText('Ti aspetta', { timeout: 20000 });
     await expect(page.getByTestId(`delegation-ask-${asker.id}`)).toHaveCount(0);
     await expect(page.locator(`[data-request-key="${key}"]`)).toHaveCount(0);
@@ -198,7 +198,7 @@ test('a child\'s question waits as a row in the Orchestrator; a permission above
     await expect.poll(async () => (await items(page, parent.id)).some(i => i.kind === 'user' && textOf(i).includes('[risultato · Sentinel «Scelta ambiente»] Ambiente scelto e verificato')), { timeout: 20000 }).toBe(true);
     expect(JSON.stringify((await items(page, asker.id)).filter(i => i.kind === 'tool'))).toContain('Blu');
     // the refusal is in the Scout's own chat, in words
-    await page.getByTestId(`delegation-card-${shell.id}`).locator('.dc-title').click();
+    await page.getByTestId(`bench-kid-${shell.id}`).click();
     await expect(page.getByTestId(`tile-chat-${shell.id}`)).toContainText('va oltre i permessi di «Piano rilascio»');
     await page.getByTestId(`tile-chat-${shell.id}`).getByText('va oltre i permessi', { exact: false }).scrollIntoViewIfNeeded();
     await page.mouse.move(2, 2);
@@ -225,12 +225,13 @@ test('three Scouts run at once, each one writable; a call over the parallel limi
     const kids = await childrenOf(page, parent.id);
     await expect.poll(async () => (await childrenOf(page, parent.id)).map(c => c.background), { timeout: 20000 }).toEqual([1, 1, 1]);
     await page.getByTestId('nav-home').click();
-    for (const k of kids) await expect(page.getByTestId(`delegation-card-${k.id}`)).toBeVisible();
-    await expect(page.getByTestId(`tree-toggle-${parent.id}`)).toContainText('3 figli');
-    await expect(page.getByTestId(`tree-toggle-${parent.id}`)).toContainText('3 in corso');
+    // one row each at the parent's bench, under a line that counts them (ADR 0311)
+    for (const k of kids) await expect(page.getByTestId(`bench-kid-${k.id}`)).toBeVisible();
+    await expect(page.getByTestId(`bench-kids-sum-${parent.id}`)).toContainText('3 figli');
+    await expect(page.getByTestId(`bench-kids-sum-${parent.id}`)).toContainText('3 in corso');
     // each one is a chat of its own: open it and write to it
     const first = kids[0]!;
-    await page.getByTestId(`delegation-card-${first.id}`).locator('.dc-title').click();
+    await page.getByTestId(`bench-kid-${first.id}`).click();
     const input = page.getByTestId(`chat-input-${first.id}`);
     await input.fill('Aggiungi anche gli ordini di marzo');
     await input.press('Enter');
@@ -239,6 +240,7 @@ test('three Scouts run at once, each one writable; a call over the parallel limi
     await expect.poll(async () => (await items(page, parent.id)).some(i => i.kind === 'system' && i.code === 'userWroteChild'), { timeout: 15000 }).toBe(true);
 
     // two more would make five, over the limit of four: refused, and the parent shows the limit it hit
+    await page.getByTestId('bench-back').click(); // back to the workshop: the limit shows on the parent's bench
     await page.evaluate(([id, text]) => window.sb.invoke('chat:send', { chatId: id, text }), [parent.id, delegate([task('scout', 'Resi', 'Cerca nei resi.', 'Elenco'), task('scout', 'Spedizioni', 'Cerca nelle spedizioni.', 'Elenco')])] as const);
     await expect(page.getByTestId(`tree-limit-${parent.id}`)).toContainText('4', { timeout: 20000 });
     expect((await childrenOf(page, parent.id)).length).toBe(3);

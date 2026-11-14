@@ -1,11 +1,12 @@
 // The sub-agents of a bench in the Grindhouse workshop (ADR 0311; the owner picked «aiutanti allo stesso banco»,
 // 2026-11-14): the chats a chat delegated stand at its bench, smaller, each doing what it does (StripFace.tsx) with its
 // state dot (BenchHelpers, up to three and «+N»), and the bench's plate has one row for each: who, what it does now,
-// for how long (BenchKidRows). A click on a helper or on its row opens that sub-agent's chat (the Grindhouse shows the
+// for how long, or its state when it needs someone (BenchKidRows), under a line that counts them and shows the limit
+// the bench hit, when it did. A click on a helper or on its row opens that sub-agent's chat (the Grindhouse shows the
 // whole team as tabs then: AgentStrips.tsx TeamTabs); a click on the little person itself stays a pat. Used by
 // ChatTile.tsx on a closed bench.
 import type { ChatSummary } from '@shared/contract';
-import { childState, type ChildState } from '../lib/chat-tree';
+import { childState, kidCounts, type ChildState } from '../lib/chat-tree';
 import { openKidsOf } from '../lib/chat-derived';
 import { useApp } from '../store/store';
 import { isBusy } from '../store/state';
@@ -45,16 +46,26 @@ export function BenchHelpers({ chatId }: { chatId: string }) {
 export function BenchKidRows({ chatId }: { chatId: string }) {
   const kids = useKids(chatId);
   const now = useNow(15_000);
+  const limit = useApp(s => s.chats[chatId]?.limitHit);
   if (!kids.length) return null;
+  const { run, wait, stuck, done } = kidCounts(kids.map(k => childState(k)));
   return <div className="bench-kids" role="list" aria-label={t('tree.kids', { n: kids.length })}>
+    <div className="bench-kids-sum" data-testid={`bench-kids-sum-${chatId}`}>
+      <b>{t('tree.kids', { n: kids.length })}</b>
+      {run > 0 && <span>{t('tree.kidsRun', { n: run })}</span>}
+      {wait > 0 && <span>{t('tree.kidsWait', { n: wait })}</span>}
+      {stuck > 0 && <span>{t('tree.kidsStuck', { n: stuck })}</span>}
+      {done > 0 && <span>{t('tree.kidsDone', { n: done })}</span>}
+      {limit && <span className="pill pill-wait tree-limit" data-testid={`tree-limit-${chatId}`}>{t(`tree.limit.${limit.kind}`, { limit: limit.limit })}</span>}
+    </div>
     {kids.map(k => {
-      const state = childState(k), name = k.agent?.name || k.title, work = workTime(k, now);
+      const state = childState(k), name = k.agent?.name || k.title, work = workTime(k, now), needs = state === 'wait' || state === 'err' || state === 'blocked';
       return <button key={k.id} type="button" role="listitem" className="bench-kid" data-testid={`bench-kid-${k.id}`} data-child-state={state} onClick={() => setChatExpanded(k.id, true)}>
         <span className={`bench-dot tone-${kidTone(state)}`} aria-hidden="true" />
         <AgentAvatar avatar={k.agent?.avatar} name={name} size={16} />
         <b>{name}</b>
         <span className="bench-kid-now">{isBusy(k) ? <StripActivity chatId={k.id} /> : k.delegation?.goal || k.title}</span>
-        <span className="bench-kid-time">{work !== null ? minutes(work) : t(`tree.state.${state}`)}</span>
+        <span className="bench-kid-time">{work !== null && !needs ? minutes(work) : t(`tree.state.${state}`)}</span>
       </button>;
     })}
   </div>;

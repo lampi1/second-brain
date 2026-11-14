@@ -276,6 +276,8 @@
 .bench-now > .chat-strip-line { flex:1 1 0; min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .bench-grid .chat-tile.is-strip > .sp-card { margin:0 10px 8px; }
 .bench-kids { display:flex; flex-direction:column; margin:0 10px 8px; border-top:1px solid var(--border); }
+.bench-kids-sum { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; padding:6px 2px 2px; font-size:11.5px; color:var(--text-muted); }
+.bench-kids-sum b { color:var(--text); font-weight:600; }
 .bench-kid { all:unset; box-sizing:border-box; display:grid; grid-template-columns:auto auto auto minmax(0, 1fr) auto; align-items:center; gap:7px; padding:5px 2px; border-bottom:1px solid var(--border); font-size:12px; color:var(--text-3); cursor:pointer; border-radius:0; }
 .bench-kid:hover { color:var(--text-2); background:color-mix(in srgb, var(--text) 3%, transparent); }
 .bench-kid:focus-visible { outline:2px solid var(--focus); outline-offset:-2px; }

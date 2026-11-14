@@ -12,15 +12,17 @@ test('child activity at work stays visible beneath each parent strip and the Orc
     await expect(work.getByTestId('child-strip')).toHaveCount(2);
     await expect(work.locator('[data-child-kind="shell"]')).toContainText('dotnet test');
     await expect(work.locator('[data-child-state="completed"]')).toHaveCount(0);
-    await expect(work.getByTestId('child-time').first()).toBeVisible();
+    // on a bench the plate is narrow: the time stays on the Orchestrator's rows (ADR 0311)
+    await expect(page.getByTestId('child-strips-orchestrator').getByTestId('child-time').first()).toBeVisible();
     // the role each sub-agent runs as; a command names none
     await expect(work.locator('[data-child-kind="agent"]').getByTestId('child-agent')).toHaveText('Scout');
     await expect(work.locator('[data-child-kind="shell"]').getByTestId('child-agent')).toHaveCount(0);
     await expect(page.getByTestId('child-strips-orchestrator').locator('[data-child-key="claude:task:a1"]').getByTestId('child-agent')).toHaveText('Explore · sola lettura'); // the engine type (#356)
     const parentBox = (await page.getByTestId('tile-chat-fix').boundingBox())!;
     const childBox = (await work.boundingBox())!;
-    expect(childBox.x).toBeGreaterThan(parentBox.x);
-    expect(childBox.y).toBeGreaterThanOrEqual(parentBox.y + parentBox.height - 1);
+    // inside the bench, under its plate (ADR 0311)
+    expect(childBox.x).toBeGreaterThanOrEqual(parentBox.x);
+    expect(childBox.y + childBox.height).toBeLessThanOrEqual(parentBox.y + parentBox.height + 1);
     await expect(page.getByTestId('child-strips-orchestrator').getByTestId('child-strip')).toHaveCount(2);
     await expect(page.getByTestId('child-strips-sms')).toContainText('Riproduci il bug');
     await shot(page, 'child-strips-collapsed');
