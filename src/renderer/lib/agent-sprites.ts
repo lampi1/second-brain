@@ -1,14 +1,15 @@
-// The people of the roles, scene by scene (ADR 0295; grown up since): each role is its portrait's head
+// The people of the roles, scene by scene (ADR 0295; grown up with ADR 0306): each role is its portrait's head
 // (lib/character-art.ts) on an adult body of its own build and clothes, free on the strip (no tile), and does its own
-// job while its chat works: the Orchestrator conducts with its eyes shut, the Strategist slams a chess knight on its
-// table, the Scout strides and raises a spyglass, the Artisan (a bare-chested smith with a cigar) hammers hot iron on
-// an anvil, the Sentinel (dark plate, closed helm) watches and slams its halberd, the Herald blows a long trumpet; a
-// chat without a role is a tired developer at a standing desk. The other states are shared: thinking (a hand at the
-// chin, a thought), waiting for the user (arms folded, a foot tapping, an amber «!»), done (a fist pump, then fists
-// on the hips under a green tick), error (a facepalm, a red «!»), idle (asleep on its feet, arms folded). The kind of
-// work at hand has its own scene for every role (ADR 0305). A click plays a reaction once over any of them
-// (ADR 0297): a pat on the head, a whack of the stick. Every scene is a small piece of acting written as tracks of
-// keys (lib/sprite-rig.ts): a move loads, strikes, overshoots and settles. Drawn by components/AgentSprite.tsx.
+// job while its chat works: the Orchestrator (an old wizard in a midnight robe) leads the work with its wand, the
+// Strategist slams a chess knight on its table, the Scout strides and raises a spyglass, the Artisan (a bare-chested
+// smith with a cigar) hammers hot iron on an anvil, the Sentinel (dark plate, closed helm) watches and slams its
+// halberd, the Herald blows a long trumpet; a chat without a role is a tired developer at a standing desk. The other
+// states are shared: thinking (a hand at the chin, a thought), waiting for the user (arms folded, a foot tapping, an
+// amber «!»), done (a fist pump, then fists on the hips under a green tick), error (a facepalm, a red «!»), idle
+// (asleep on its feet, arms folded). The kind of work at hand has its own scene for every role (ADR 0305). A click
+// plays a reaction once over any of them (ADR 0297): a pat on the head, a whack of the stick. Every scene is a small
+// piece of acting written as tracks of keys (lib/sprite-rig.ts): a move loads, strikes, overshoots and settles.
+// Drawn by components/AgentSprite.tsx.
 import type { CharacterId } from '../../shared/characters';
 import { CHARACTERS, shade, type Features, type Shape } from './character-art';
 import { AMBER, GOLD, GREEN, INK, J, RED, SKY, WHITE, bubble, ink, person, quaver, sh, sway, type Ease, type Key, type Look, type Node, type Pose, type Track } from './sprite-rig';
@@ -46,7 +47,7 @@ const Z = 'M-2.6 -2.6H2.6L-2.6 2.6H2.6';
 const STAR = 'M0 -5L1.2 -1.2L5 0L1.2 1.2L0 5L-1.2 1.2L-5 0L-1.2 -1.2Z';
 
 // ── who they are: the body and the clothes under each role's head ───────────────────────────────────────────────────
-const COAL = '#191a22', IRON = '#3b4252', IRON_HI = '#5d6780', BLOOD = '#b3261e', LEATHER = '#5a3a22', SMITH = CHARACTERS.artisan.skin;
+const COAL = '#191a22', ROBE = '#2a2456', IRON = '#3b4252', IRON_HI = '#5d6780', BLOOD = '#b3261e', LEATHER = '#5a3a22', SMITH = CHARACTERS.artisan.skin;
 /** A shape of one shoulder mirrored for the other: `x` turns a distance from the arm's line to that side. */
 const sided = (m: 1 | -1, d: (x: (v: number) => number) => string): string => d(v => Math.round(v * m * 100) / 100);
 /** The cigar's ember and its smoke, in the head's box (the cigar itself is in the character's `over`). */
@@ -59,12 +60,12 @@ const smoke = (): Node[] => [
 type Body = Omit<Look, keyof Features | 'jaw' | 'hairBack' | 'under' | 'hair' | 'over'>;
 /** `live`: with what moves by itself all the time (smoke, a cape in the wind); a scene that ends stands still. */
 const BODY: Record<Exclude<SpriteId, 'plain'>, (live: boolean) => Body> = {
-  // a black tailcoat cut away over a white waistcoat, its tails behind the knees, a wine-red bow tie
+  // a midnight robe down to the ankles with a gold hem and a few stars, wide sleeves, soft shoes under it
   orchestrator: () => ({
-    build: { sh: 6.9, waist: 4.6, hip: 5, arm: 3.4, leg: 4, neck: 2 }, top: COAL, cuff: '#f4f4f8', pants: '#14141b', shoes: '#0c0c10',
-    behind: [P('M27.6 46.4L24.8 60L29.2 58.6L31.2 49ZM36.4 46.4L39.2 60L34.8 58.6L32.8 49Z', COAL)],
-    wear: [P('M29.7 33.9H34.3L32 42.6Z', '#f4f4f8'), P('M28.8 43.2L32 40.6L35.2 43.2L35.8 47.3H28.2Z', '#f4f4f8'), S('M29.7 34.2L32 42.2L34.3 34.2', '#2c2b3a', 0.8),
-      P('M29.8 34.2L32 35.4L29.8 36.6Z', '#a3212b'), P('M34.2 34.2L32 35.4L34.2 36.6Z', '#a3212b'), C(32, 44, 0.45, '#b9bfce'), C(32, 45.6, 0.45, '#b9bfce')],
+    build: { sh: 6.9, waist: 5, hip: 5.4, arm: 3.9, leg: 3.8, neck: 2 }, top: ROBE, cuff: '#e3c067', pants: ROBE, shoes: '#4a3a78',
+    wear: [P('M26.6 46.6H37.4C38.6 51.4 39.8 56.4 41 61.6C38 62.7 35 63.1 32 63.1C29 63.1 26 62.7 23 61.6C24.2 56.4 25.4 51.4 26.6 46.6Z', ROBE),
+      P('M30.4 36.4H33.6L34.8 62.9C33 63.1 31 63.1 29.2 62.9Z', '#3a2f6e'), S('M23.2 61.5C29 63.3 35 63.3 40.8 61.5', '#e3c067', 1.1), S('M26.8 47.4H37.2', '#e3c067', 1),
+      J(27.4, 55, 0, [P(STAR, '#e3c067')], undefined, 0.22), J(37, 52.4, 0, [P(STAR, '#e3c067')], undefined, 0.18), J(36.4, 58.6, 0, [P(STAR, '#e3c067')], undefined, 0.16)],
   }),
   // shirt sleeves rolled to the elbow, a charcoal waistcoat, an ochre tie
   strategist: () => ({
@@ -125,16 +126,21 @@ const lookOf = (id: SpriteId, live = true): Look => {
 
 // ── what each role does while its chat works ─────────────────────────────────────────────────────────────────────────
 const WORK = {
-  // eyes shut, chin up, four beats: down, in, out, up; the left hand shapes the sound a moment late, the baton trails
-  orchestrator: () => ({
-    eyes: 'closed', mouth: 'flat',
-    head: { a: -5, go: loop(2.4, [k(0), k(25, { a: -9 }), k(50, { a: 2 }), k(75, { a: -3 })], 0.12) },
-    go: loop(2.4, [0, 25, 50, 75].flatMap(b => [k(b, { dy: 0.6, sy: 0.985, e: 'out' }), k(b + 12.5, { dy: -0.5, sy: 1.008, e: 'in' })])),
-    armR: { a: -70, b: -22, go: loop(2.4, [k(0), k(25, { a: -104 }), k(50, { a: -92 }), k(75, { a: -128 })]), goB: loop(2.4, [k(0), k(25, { a: -64 }), k(50, { a: -4 }), k(75, { a: -26 })]),
-      goH: loop(2.4, [k(0), k(12, { a: 16 }), k(37, { a: -14 }), k(62, { a: 12 }), k(87, { a: -16 })]), held: [S('M0 0V10.8', WHITE, 1.2), C(0, 10.8, 1.1, '#ffd166')] },
-    armL: { a: 80, b: 24, go: loop(2.4, [k(0), k(25, { a: 100 }), k(50, { a: 84 }), k(75, { a: 122 })], 0.14), goB: loop(2.4, [k(0), k(25, { a: 50 }), k(50, { a: 14 }), k(75, { a: 32 })], 0.14) },
-    front: notes(59, 20, 2.4, [4, 54]),
-  }),
+  // the wand leads four slow beats: down, in, out, up; the left hand shapes the spell a moment late, the wand trails
+  // and its tip glows; stars of light leave it and drift up
+  orchestrator: () => {
+    const T = 3.2, spark = (x: number, y: number, at: number[], dx: number, dy: number, s: number): Node => J(x, y, 0, [P(STAR, GOLD), C(0, 0, 1, WHITE)], puff(T, at, 30, dx, dy, s, 50), 0.5, 0);
+    return {
+      blink: true, mouth: 'smile',
+      head: { a: -3, go: loop(T, [k(0), k(25, { a: -6 }), k(50, { a: 2 }), k(75, { a: -2 })], 0.12) },
+      go: loop(T, [0, 25, 50, 75].flatMap(b => [k(b, { dy: 0.5, sy: 0.988, e: 'out' }), k(b + 12.5, { dy: -0.4, sy: 1.006, e: 'in' })])),
+      armR: { a: -70, b: -22, go: loop(T, [k(0), k(25, { a: -104 }), k(50, { a: -92 }), k(75, { a: -128 })]), goB: loop(T, [k(0), k(25, { a: -64 }), k(50, { a: -4 }), k(75, { a: -26 })]),
+        goH: loop(T, [k(0), k(12, { a: 16 }), k(37, { a: -14 }), k(62, { a: 12 }), k(87, { a: -16 })]),
+        held: [S('M0 0V10.4', '#f4e9d2', 1.2), J(0, 10.8, 0, [C(0, 0, 2.6, GOLD, 0.35), C(0, 0, 1.2, '#fff3c4')], loop(T / 4, [k(0), k(50, { sx: 1.5, sy: 1.5, o: 0.6 })]))] },
+      armL: { a: 80, b: 24, go: loop(T, [k(0), k(25, { a: 100 }), k(50, { a: 84 }), k(75, { a: 122 })], 0.14), goB: loop(T, [k(0), k(25, { a: 50 }), k(50, { a: 14 }), k(75, { a: 32 })], 0.14) },
+      front: [spark(57, 22, [4, 54], 8, -13, 1.5), spark(61, 30, [28, 78], 10, -8, 1.2), spark(53, 17, [40, 90], -4, -11, 1)],
+    };
+  },
   // a hand at the beard, a long look at the board; the knight goes up (a small dip first), hangs, comes down hard:
   // the pawns jump, the coffee shivers, a nod
   strategist: () => {
