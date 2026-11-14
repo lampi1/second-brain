@@ -8,7 +8,9 @@
 // tools (any other the Orchestrator answers itself with app_resolve_question, ADR 0275), never a permission. A command
 // a chat left is relayed as «Eseguo sul PC?» (ADR 0259 §4) with its whole text: «sì» runs it on the PC, production,
 // databases and Azure included (his «sì» to what he read is the second click, ADR 0275), «no» puts it aside. The text carries the same parts
-// as the PC's card (ask-text.ts questionLines). One relay per Orchestrator at a time, for RELAY_MS; a question answered elsewhere first drops
+// as the PC's card (ask-text.ts questionLines). Telegram's filter hides commands, paths and addresses, so a command it
+// cannot show whole is refused up front while he writes from Telegram (#390: never a question whose «sì» is then thrown
+// away); Remote Control shows the Orchestrator's reply whole, so his «sì» there runs it as on the PC. One relay per Orchestrator at a time, for RELAY_MS; a question answered elsewhere first drops
 // it. A «sì»/«no» that cannot be delivered (the relay expired, the question changed, the delivery failed) is told to
 // the Orchestrator, never lost in silence. Used by wiring.ts (the tool and the emitter tap); pinned by
 // test/unit/chats/relay.test.ts.
@@ -21,6 +23,10 @@ import { callerOf } from '../mcp/caller';
 import type { McpTool } from '../mcp/server';
 
 export const RELAY_MS = 30 * 60_000;
+/** where a user's message was typed away from the PC: Telegram ('phone') or Remote Control ('remote') */
+type Channel = 'phone' | 'remote';
+/** relay_question's refusal of a command Telegram cannot show (#390): what the Orchestrator tells him instead */
+const TELEGRAM_HIDES = (title: string): string => `Not relayed: the user is writing from Telegram, which hides commands, paths and addresses, and his «sì» never runs a command he did not read whole. Do not ask him yes or no. Tell him in one line that a command of «${title}» waits for him: he approves it with Esegui on the PC, or from Remote Control, where he reads it whole.`;
 
 /** what the Orchestrator writes to the user, word for word: the card's parts, one per line, then «Rispondi sì o no» */
 const writeText = (title: string, lines: readonly string[]): string =>
@@ -87,7 +93,21 @@ export class QuestionRelay {
     }
   }
 
+  /** where the user's last own message in the Orchestrator's chat came from: his next one most likely comes from there too */
+  private lastChannel(orchestratorId: string): Channel | 'pc' | null {
+    let items: ChatItem[];
+    try { items = this.d.items(orchestratorId); } catch { return null; }
+    for (let i = items.length - 1; i >= 0; i--) {
+      const it = items[i]!;
+      if (it.kind === 'user' && !it.from) return it.via === 'phone' ? it.remote ? 'remote' : 'phone' : 'pc';
+    }
+    return null;
+  }
+
   private relayCommand(orchestratorId: string, title: string, p: PendingRequest): { question: string; chat: string; write: string } {
+    // he is on Telegram, which would show «[comando: eseguilo dal PC]» in place of this command: no question is asked
+    // whose «sì» could not run it (#390)
+    if (this.lastChannel(orchestratorId) === 'phone' && !commandShownWhole(p)) throw new Error(TELEGRAM_HIDES(title));
     const armed = this.relays.get(orchestratorId);
     if (armed && armed.requestId !== p.id && this.now() - armed.at <= RELAY_MS
       && [...this.d.pending(), ...(this.d.commands?.pending() ?? [])].some(x => x.chatId === armed.chatId && x.id === armed.requestId)) {
@@ -109,13 +129,15 @@ export class QuestionRelay {
   }
 
   /** «sì» / «no» on a relayed command: run it on the PC or put it aside (checked again on the command as it is now) */
-  private commandSaid(r: Relay, said: 'yes' | 'no' | null, orchestratorId: string, via?: 'phone'): boolean {
+  private commandSaid(r: Relay, said: 'yes' | 'no' | null, orchestratorId: string, via?: Channel): boolean {
     const cmds = this.d.commands, p = cmds?.pending().find(x => x.chatId === r.chatId && x.id === r.requestId);
     if (!cmds || !p) return false;                       // run or put aside elsewhere first
     if (!said) { this.ended.set(orchestratorId, r); return false; }
     const why = this.now() - r.at > RELAY_MS ? 'l\'inoltro era scaduto (30 min)'
-      // the phone's chat shows a command as «[comando: eseguilo dal PC]» (phone/filter.ts): a «sì» from there never runs what it did not show
-      : via === 'phone' && said === 'yes' && !commandShownWhole(p) ? 'dal telefono il comando non si vede intero: si lancia dal PC o da Controllo remoto'
+      // Telegram shows a command as «[comando: eseguilo dal PC]» (phone/filter.ts): a «sì» from there never runs what it
+      // did not show. Reached only when the relay started while he wrote from the PC or Remote Control (relayCommand
+      // refuses it up front on Telegram); Remote Control shows the reply whole and falls to the check below, as the PC
+      : via === 'phone' && said === 'yes' && !commandShownWhole(p) ? 'su Telegram il comando non si vede intero, quindi il suo «sì» da lì non lo lancia: digli in una riga che lo approva dal PC (Esegui) o da Controllo remoto, senza richiedergli sì o no'
       // his «sì» runs only what he read: the Orchestrator's reply since the relay must hold the whole command (ADR 0275)
       : said === 'yes' && !this.shownWhole(orchestratorId, r, p.command?.code ?? '') ? 'non gli hai mostrato il comando intero: riscrivigli il testo di relay_question parola per parola' : '';
     if (why) { this.lost(r, said, why); return false; }
@@ -132,7 +154,7 @@ export class QuestionRelay {
   }
 
   /** A user's own message in the Orchestrator chat (wiring.ts taps chat:item). True = it answered a relayed question. */
-  async userSaid(orchestratorId: string, text: string, via?: 'phone'): Promise<boolean> {
+  async userSaid(orchestratorId: string, text: string, via?: Channel): Promise<boolean> {
     const said = yesNoOf(text);
     const r = this.relays.get(orchestratorId);
     if (!r) {
@@ -154,7 +176,7 @@ export class QuestionRelay {
       : !option || p.questions?.[0]?.question !== r.question ? 'la domanda è cambiata' : '';
     if (!why) {
       try {
-        await this.d.answer(r.chatId, r.requestId, { kind: 'question', answers: { [r.question]: option!.label } }, via === 'phone' ? 'phone' : 'pc');
+        await this.d.answer(r.chatId, r.requestId, { kind: 'question', answers: { [r.question]: option!.label } }, via ? 'phone' : 'pc');
         log.info('chats', 'relayed question answered by the user', { chat: r.chatId, data: { request: r.requestId, answer: said } });
         return true;
       } catch (e) {
@@ -177,7 +199,7 @@ export class QuestionRelay {
   tool(): McpTool {
     return {
       name: 'relay_question',
-      description: 'Bring a work chat\'s open Sì/No question to the user through THIS conversation (Remote Control, phone, PC): the app returns its exact text; write it to the user as told. Their next message that is only «sì» or «no» answers it (the app delivers it). A command the chat left is relayed first, as «Eseguo sul PC?»: «sì» runs it on the PC. Permissions, and questions or commands about production, databases, Azure, deploys, pushes, secrets or messages to people are refused: they stay for the user\'s click on the PC.',
+      description: 'Bring a work chat\'s open Sì/No question to the user through THIS conversation (Remote Control, phone, PC): the app returns its exact text; write it to the user as told. Their next message that is only «sì» or «no» answers it (the app delivers it). A command the chat left is relayed first, as «Eseguo sul PC?», whole: his «sì» runs it on the PC (production, databases and Azure too: he read it). While he writes from Telegram a command it cannot show whole is refused: say what the refusal tells you. A permission is never relayed: answer it with app_resolve_question.',
       inputSchema: { type: 'object', required: ['chatId'], additionalProperties: false, properties: { chatId: { type: 'string', description: 'the work chat that waits (app_pending)' } } },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
       run: (a, ctx) => JSON.stringify(this.relay(callerOf(ctx.params), String(a.chatId ?? ''))),

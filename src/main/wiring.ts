@@ -760,7 +760,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     if (replace || item.kind !== 'user' || item.from || !manager.list().find(c => c.id === chatId)?.isOrchestrator) return;
     // Remote Control's echo of what he typed on the phone (Telegram's went through send): his last message too (ADR 0275)
     if (item.via === 'phone') manager.noteUserSaid(chatId, item.text);
-    void relay.userSaid(chatId, item.text, item.via === 'phone' ? 'phone' : undefined);
+    // Telegram ('phone') hides commands; Remote Control ('remote') shows the Orchestrator's reply whole, as the PC (#390)
+    void relay.userSaid(chatId, item.text, item.via === 'phone' ? item.remote ? 'remote' : 'phone' : undefined);
   });
   const workDriverTimer = prodPollers ? setInterval(() => {
     try { wakeLater.tick(); schedules.tick(); workDriver.tick(); } catch (e) { log.warn('workflows', 'approved-work check failed', { cause: errText(e), hint: 'the next minute retries' }); }

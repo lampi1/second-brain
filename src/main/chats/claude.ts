@@ -1186,7 +1186,7 @@ export class ClaudeSession implements HarnessSession {
     if (uuid && this.sentUuids.delete(uuid)) return;
     if (!this.remoteOn) return;
     const text = phoneText(m, this.sentUuids);
-    if (text) this.sink.item({ kind: 'user', id: nextId('u'), at: Date.now(), text, via: 'phone' }, false);
+    if (text) this.sink.item({ kind: 'user', id: nextId('u'), at: Date.now(), text, via: 'phone', remote: true }, false);
   }
 
   private onResult(m: Obj): void {
