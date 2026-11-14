@@ -55,7 +55,8 @@ export function dailyPrompt(roles: readonly QuipRole[], lang: Lang, at: number, 
   ].join('\n');
 }
 
-interface Stored { v: 1; days: Record<string, Partial<Record<Lang, DailyQuips>>>; tries: Record<string, number> }
+/** `v` 2: the lines kept under 1 were written for the characters before ADR 0306, so that file is not read. */
+interface Stored { v: 2; days: Record<string, Partial<Record<Lang, DailyQuips>>>; tries: Record<string, number> }
 export interface DailyQuipsDeps {
   /** userData/quips-daily.json */
   file: string;
@@ -82,14 +83,14 @@ export class DailyQuipsService {
    *  counters that are what they should be. No file, or one that is not ours: an empty store. A file that is there
    *  but cannot be read now throws: nothing is asked and nothing is written over it. */
   private read(): Stored {
-    const out: Stored = { v: 1, days: {}, tries: {} };
+    const out: Stored = { v: 2, days: {}, tries: {} };
     let text: string;
     try { text = fs.readFileSync(this.d.file, 'utf8'); } catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') return out; throw e; }
     let v: unknown;
     try { v = JSON.parse(text); } catch { return out; }
     const obj = (x: unknown): Record<string, unknown> | null => (x && typeof x === 'object' && !Array.isArray(x) ? x as Record<string, unknown> : null);
     const o = obj(v), days = obj(o?.days), tries = obj(o?.tries);
-    if (o?.v !== 1 || !days) return out;
+    if (o?.v !== 2 || !days) return out;
     for (const [day, of] of Object.entries(days)) {
       const langs = obj(of);
       if (!DAY_KEY.test(day) || !langs) continue;
@@ -103,7 +104,7 @@ export class DailyQuipsService {
     // today (a clock that ran ahead). Today's counter always stays: a clock set back does not ask again for ever.
     const today = localDay(this.now());
     const keep = Object.keys(s.days).filter(k => k <= today).sort().slice(-DAILY_KEEP_DAYS), first = keep[0] ?? today;
-    const out: Stored = { v: 1, days: Object.fromEntries(keep.map(k => [k, s.days[k]!])), tries: Object.fromEntries(Object.entries(s.tries).filter(([k]) => k.slice(0, 10) >= first && k.slice(0, 10) <= today)) };
+    const out: Stored = { v: 2, days: Object.fromEntries(keep.map(k => [k, s.days[k]!])), tries: Object.fromEntries(Object.entries(s.tries).filter(([k]) => k.slice(0, 10) >= first && k.slice(0, 10) <= today)) };
     fs.mkdirSync(path.dirname(this.d.file), { recursive: true });
     const tmp = `${this.d.file}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(out));

@@ -9,7 +9,7 @@ export const chessLinesEn: ChessLines = {
   says: {
     orchestrator: {
       start: ['Sit down, apprentice. The board teaches more than I do.', 'Ah, a game. The stars say it will be instructive. For you.'],
-      take: ['{yours} vanishes. A simple spell, first-year stuff.', 'I made {yours} disappear. Do not look up my sleeve.'],
+      take: ['{yours} vanishes. A simple spell, apprentice work.', 'I made {yours} disappear. Do not look up my sleeve.'],
       takeQueen: ['Your queen is gone in a puff of smoke. Elegant, no?', 'I took your queen. Even queens meet their fate.'],
       lost: ['You took {mine}. Every loss is a lesson. This one is mine.', '{mine} has met its destiny. More or less.'],
       lostQueen: ['My queen… Curious. The stars never mentioned it.', 'No queen, only wisdom left. Let us hope it is enough.'],
@@ -26,7 +26,7 @@ export const chessLinesEn: ChessLines = {
       draw: ['A draw. Perfect balance: the hardest magic.', 'Even. Nobody wins, both wiser.'],
       resign: ['You resign? Knowing when to stop is wisdom.', 'You leave. The door stays open, apprentice.'],
       slow: ['Take the time you need. I have a few centuries.', 'Think it over. I will stroke my beard meanwhile.'],
-      undo: ['Going back? Turning time is dangerous magic.', 'Move withdrawn. I will look the other way, this once.'],
+      undo: ['Going back? Not even magic erases the past.', 'Move withdrawn. I will look the other way, this once.'],
     },
     strategist: {
       start: ['I already won on move 34. We only have to get there.', 'I have a Gantt chart for this game. You are late.'],

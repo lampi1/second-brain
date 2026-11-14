@@ -6,7 +6,7 @@ export const chessIt = {
   'chess.pick': 'Scegli l’avversario',
   'chess.elo': ({ elo }: { elo: string }) => `Elo ${elo}`,
   'chess.eloTip': 'Forza indicativa: da 1400 in su è il livello Elo di Stockfish, sotto è una stima. L’Orchestrator gioca senza limite.',
-  'chess.tag.scout': 'Si perde anche sulla scacchiera.',
+  'chess.tag.scout': 'Segue le tracce, anche sulla scacchiera.',
   'chess.tag.herald': 'Annuncia ogni pedone come una notizia.',
   'chess.tag.artisan': 'Gioca a colpi di martello.',
   'chess.tag.sentinel': 'Non si fida di nessun pezzo.',

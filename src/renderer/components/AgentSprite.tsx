@@ -1,4 +1,4 @@
-// A role's little person, animated (ADR 0295): the scene of lib/agent-sprites.ts (the portrait's head on a small body,
+// A role's little person, animated (ADR 0295): the scene of lib/agent-sprites.ts (the portrait's head on an adult body,
 // its joints, its tool) drawn as one inline SVG, free on the strip. Each joint carries its rest pose and its
 // animation inline; the @keyframes of a scene are written once into one <style> of the page the first time the scene
 // is drawn (styles/agent-sprite.css has the rest: the rim, the ink, the blink; no image, no timer, no script per
@@ -19,7 +19,7 @@ import '../styles/agent-sprite.css';
 
 /** The little person a transcript's working line shows instead of the spark (ChatItems.tsx Typing); null = the spark. */
 export const SpriteCtx = createContext<SpriteId | null>(null);
-/** The little person of a chat's role; a chat without a role is the plain one at a laptop. */
+/** The little person of a chat's role; a chat without a role is the plain one at a standing desk. */
 export const spriteIdOf = (avatar: Avatar | undefined): SpriteId => (avatar?.kind === 'character' && isSpriteId(avatar.value) ? avatar.value : 'plain');
 
 const scenes = new Set<string>(), rules = new Set<string>();

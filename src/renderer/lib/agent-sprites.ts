@@ -93,7 +93,7 @@ const BODY: Record<Exclude<SpriteId, 'plain'>, (live: boolean) => Body> = {
   sentinel: live => ({
     build: { sh: 8.7, waist: 5.9, hip: 6, arm: 4.5, leg: 4.8, neck: 2.8 }, top: IRON, sleeve: '#262b37', fore: IRON, hand: COAL, pants: '#262b37', shin: IRON, shoes: COAL,
     behind: [J(32, 35, 0, [P('M-8.4 1L-11.4 24C-7.4 26 7.4 26 11.4 24L8.4 1Z', '#6e1a16'), S('M-4 6L-5.4 23.6M3.6 6L4.6 24', '#571310', 0.9)], live ? sway(1.6, 2.6) : undefined)],
-    pad: m => [P(sided(m, x => `M${x(-4.6)} 2.4C${x(-5)} -2.2 ${x(-2.2)} -4.2 ${x(1)} -4C${x(3.2)} -3.8 ${x(3.8)} -1.8 ${x(3.6)} 2.4Z`), IRON_HI),
+    cap: m => [P(sided(m, x => `M${x(-4.6)} 2.4C${x(-5)} -2.2 ${x(-2.2)} -4.2 ${x(1)} -4C${x(3.2)} -3.8 ${x(3.8)} -1.8 ${x(3.6)} 2.4Z`), IRON_HI),
       P(sided(m, x => `M${x(-4)} -1.6L${x(-7.4)} -6L${x(-1.4)} -3.9Z`), '#8d96a8'), S(sided(m, x => `M${x(-4.2)} 1.6H${x(3.4)}`), '#262b37', 0.8)],
     wear: [P('M26.4 36.4C29 35.2 35 35.2 37.6 36.4L37 43.4C34 45 30 45 27 43.4Z', '#4a5263'), S('M29.6 38.4L32 41.6L34.4 38.4', BLOOD, 1.5),
       S('M26.2 47.3H37.8', COAL, 1.7), C(32, 47.3, 1, '#8d96a8'), P('M26 48H31.5L31 54H25.4ZM32.5 48H38L38.6 54H33Z', IRON_HI), S('M32 31.6V34.4', '#262b37', 5.6)],
@@ -341,7 +341,7 @@ const ACT: Record<SpriteActivity, (look: Look) => Pose> = {
         // the page that turns: it folds onto the spine and opens on the other side
         J(0, 0, 0, [P(page, '#fdfaf0'), S('M1.6 -1.9H6.2M1.6 -0.5H6.2', '#cfc8b4', 0.7)], loop(4.4, [k(0), k(60, { e: 'in' }), k(67, { sx: 0.04, e: 'out' }), k(75, { sx: -1 }), k(76, { sx: -1, o: 0, e: 'hold' }), k(100, { o: 0 })])),
         S('M0 -3.4V3.2', '#d9d2bd', 0.7),
-        C(-7.2, 2.4, 1.6, look.skin), C(7.2, 2.4, 1.6, look.skin),
+        C(-7.2, 2.4, 1.6, look.hand ?? look.skin), C(7.2, 2.4, 1.6, look.hand ?? look.skin),
       ])],
     };
   },
@@ -418,7 +418,7 @@ const ACT: Record<SpriteActivity, (look: Look) => Pose> = {
       go: loop(T, [k(0), k(50, { dy: -0.5, sy: 1.012 })]),
       // the globe stays upright over the hand (-95 at the shoulder, -5 at the elbow)
       armR: { a: -95, b: -5, go: sway(-91, 0.9), ha: 100, goH: sway(96, 0.9),
-        held: [S('M0.8 -1.8L3.4 -4.2', look.skin, 1.7),
+        held: [S('M0.8 -1.8L3.4 -4.2', look.hand ?? look.skin, 1.7),
           J(4.6, -9.6, 0, [C(0, 0, 6.4, '#3b82d9'), P('M-5 -2.8C-3.2 -4.8 -0.6 -4.4 0 -2.7C0.6 -1 -1.4 -0.2 -2.7 0.7C-4.1 1.6 -5.7 0.9 -5.9 -0.9Z', '#58c98a'), P('M1.4 1.8C3 1.1 5 1.8 4.8 3.4C4.6 4.8 2.7 5.5 1.6 4.4C0.7 3.5 0.5 2.3 1.4 1.8Z', '#58c98a'),
             J(0, 0, 0, [S('M0 -6.4C3.9 -3.6 3.9 3.6 0 6.4C-3.9 3.6 -3.9 -3.6 0 -6.4', '#d6ebff', 0.8, 0.85)], loop(1.8, [k(0, { e: 'lin' }), k(50, { sx: 0.06, e: 'lin' })])),
             S('M-6.4 0H6.4', '#d6ebff', 0.8, 0.85), S('M-3.7 -3.8C-2.3 -5 -0.5 -5.4 0.9 -5', WHITE, 1, 0.8)])] },

@@ -27,7 +27,7 @@ export const chessLinesDe: ChessLines = {
       draw: ['Remis. Vollkommenes Gleichgewicht: die schwerste Magie.', 'Unentschieden. Keiner gewinnt, beide sind weiser.'],
       resign: ['Du gibst auf? Zu wissen, wann Schluss ist, ist Weisheit.', 'Du gehst. Die Tür bleibt offen, Lehrling.'],
       slow: ['Nimm dir die Zeit. Ich habe ein paar Jahrhunderte.', 'Denk ruhig nach. Ich streiche inzwischen meinen Bart.'],
-      undo: ['Zurück? Die Zeit zu drehen ist gefährliche Magie.', 'Zug zurückgenommen. Diesmal drücke ich ein Auge zu.'],
+      undo: ['Zurück? Nicht einmal Magie löscht die Vergangenheit.', 'Zug zurückgenommen. Diesmal drücke ich ein Auge zu.'],
     },
     strategist: {
       start: ['Ich habe schon im 34. Zug gewonnen. Wir müssen nur noch hinkommen.', 'Für diese Partie gibt es ein Gantt-Diagramm. Du bist im Verzug.'],

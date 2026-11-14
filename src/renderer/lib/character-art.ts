@@ -1,6 +1,6 @@
 // The characters the roles are drawn as (shared/characters.ts): a round badge in the role's own colour with an adult
 // face (a jaw, small eyes under brows, a nose, a beard or a moustache where it fits), the hair or headwear that makes
-// the silhouette (the maestro's silver mane, the scout's worn hat, the smith's rag and cigar, the sentinel's closed
+// the silhouette (the wizard's white hair and beard, the scout's worn hat, the smith's rag and cigar, the sentinel's closed
 // helm…) and one prop. Trusted code, never user or model content: AgentAvatar renders these shapes, and
 // scripts/agent-avatar-sheets.mjs draws the approval sheets and checks the colours from the same data. Two variants:
 // the full one (24 px and up: face details and the prop) and a small one (16–20 px) that frames the head closer and
@@ -69,7 +69,7 @@ export const JAW = jawPath();
 
 const ROBE = '#2a2456', STEEL = '#3b4252', STEEL_HI = '#5d6780', BLOOD = '#b3261e', LEATHER = '#5a3a22';
 export const CHARACTERS: Record<CharacterId, Character> = {
-  // the old wizard: long white hair parted in the middle, a white beard down to the chest, half-moon glasses low on
+  // the old wizard: long white hair parted in the middle, a white beard down to the chest, small round glasses low on
   // the nose, a midnight robe with a gold hem and a wand
   orchestrator: {
     bg: ['#8f6dff', '#5333d1'], skin: '#ecc4a4', jaw: jawPath(8.6, 3.6, 45.2),
@@ -80,12 +80,12 @@ export const CHARACTERS: Record<CharacterId, Character> = {
       S('M26.4 44.6C27.4 49.6 29.6 54 32 57.4M37.6 44.6C36.6 49.6 34.4 54 32 57.4M32 45V53', '#c3c9d6', 0.9)],
     head: [P('M20.3 31C19.2 21.6 24.6 16 32 16C39.4 16 44.8 21.6 43.7 31C42.9 26.6 40.9 23.6 37.8 22.4C35.4 21.6 33.4 22.4 32 24.2C30.6 22.4 28.6 21.6 26.2 22.4C23.1 23.6 21.1 26.6 20.3 31Z', '#f1f3f8'),
       S('M32 24V17.4', '#c3c9d6', 0.9), S('M23 24.6C24.4 21.4 27 19.4 30 18.8M41 24.6C39.6 21.4 37 19.4 34 18.8', '#c3c9d6', 0.9)],
-    wear: [P('M24.3 33.3H30.3C30.3 35.6 29.1 36.7 27.3 36.7C25.5 36.7 24.3 35.6 24.3 33.3ZM33.7 33.3H39.7C39.7 35.6 38.5 36.7 36.7 36.7C34.9 36.7 33.7 35.6 33.7 33.3Z', '#cfe6ff', 0.22),
-      S('M24.3 33.3H30.3C30.3 35.6 29.1 36.7 27.3 36.7C25.5 36.7 24.3 35.6 24.3 33.3ZM33.7 33.3H39.7C39.7 35.6 38.5 36.7 36.7 36.7C34.9 36.7 33.7 35.6 33.7 33.3ZM30.3 33.6H33.7', '#c9982e', 1.2)],
+    wear: [C(27.3, 34.3, 2.7, '#cfe6ff', 0.22), C(36.7, 34.3, 2.7, '#cfe6ff', 0.22), { r: [27.3, 34.3, 2.7], c: '#c9982e', w: 1.1 }, { r: [36.7, 34.3, 2.7], c: '#c9982e', w: 1.1 },
+      S('M30 34H34', '#c9982e', 1.1)],
     over: [S('M32 38.4C30.2 37.6 27.8 38 26.2 40C25.2 41.4 24.6 43.4 24.4 45.4M32 38.4C33.8 37.6 36.2 38 37.8 40C38.8 41.4 39.4 43.4 39.6 45.4', '#f1f3f8', 2.2)],
     prop: [P('M44 51C45.8 47 47.2 44 48.4 41.8L52 43.4C51 46.6 49.8 50.4 48.2 53.4Z', ROBE), S('M47.6 42.6L51.4 44.2', '#e3c067', 1.2),
-      S('M50 40.6L57.6 23.2', '#f4e9d2', 1.8), C(50.2, 41.2, 2.7, '#ecc4a4'),
-      P('M58.2 15.8L59.5 20.3L64 21.6L59.5 22.9L58.2 27.4L56.9 22.9L52.4 21.6L56.9 20.3Z', '#ffd166'), C(58.2, 21.6, 1.2, WHITE),
+      S('M50 40.6L56 23.6', '#f4e9d2', 1.8), C(50.2, 41.2, 2.7, '#ecc4a4'),
+      P('M56.4 16.6L57.6 20.6L61.6 21.8L57.6 23L56.4 27L55.2 23L51.2 21.8L55.2 20.6Z', '#ffd166'), C(56.4, 21.8, 1.1, WHITE),
       P('M13.4 21.4L14.2 23.8L16.6 24.6L14.2 25.4L13.4 27.8L12.6 25.4L10.2 24.6L12.6 23.8Z', WHITE, 0.9), P('M19.2 14.4L19.7 15.9L21.2 16.4L19.7 16.9L19.2 18.4L18.7 16.9L17.2 16.4L18.7 15.9Z', WHITE, 0.7)],
     face: { eyes: 'open', mouth: 'smirk', brows: 'arched', brow: '#b4bac8', nose: 'sharp', lip: '#b98a72' },
   },
@@ -132,7 +132,7 @@ export const CHARACTERS: Record<CharacterId, Character> = {
     over: [S('M34.2 40.6L42.4 42.6', '#6b4226', 2.5), S('M41.6 42.4L43.2 42.8', '#d9d4cc', 2.5), C(43.9, 42.95, 1.1, '#ff7a1a'), S('M25 26.6L26.6 30.4', '#6e4126', 0.9)],
     prop: [S('M50.6 58.6L52.4 40.4', '#7b5230', 3), P('M45 32.6H59.8C60.9 32.6 61.6 33.3 61.6 34.4V40C61.6 41.1 60.9 41.8 59.8 41.8H45C43.9 41.8 43.2 41.1 43.2 40V34.4C43.2 33.3 43.9 32.6 45 32.6Z', '#8d96a8'),
       P('M43.2 38.6H61.6V40C61.6 41.1 60.9 41.8 59.8 41.8H45C43.9 41.8 43.2 41.1 43.2 40Z', '#5d6577'), S('M46 34.8H58.6', '#c3cad8', 1.1)],
-    face: { eyes: 'open', mouth: 'none', brows: 'heavy', brow: '#17120f', nose: 'broad' },
+    face: { eyes: 'open', mouth: 'none', brows: 'heavy', brow: '#17120f', nose: 'broad', lip: '#c08566' },
   },
   // the sentinel: no face, a dark helm with a blood-red crest and two slits of light where the eyes should be
   sentinel: {

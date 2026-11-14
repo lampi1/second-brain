@@ -12,7 +12,7 @@ export const chessLinesIt: ChessLines = {
   says: {
     orchestrator: {
       start: ['Siediti, apprendista. La scacchiera insegna più di me.', 'Ah, una partita. Le stelle dicono che sarà istruttiva. Per te.'],
-      take: ['{yours} svanisce. Un incantesimo semplice, da primo anno.', 'Ho fatto sparire {yours}. Non cercare nella manica.'],
+      take: ['{yours} svanisce. Un incantesimo semplice, da apprendista.', 'Ho fatto sparire {yours}. Non cercare nella manica.'],
       takeQueen: ['La tua donna è svanita in una nuvola di fumo. Elegante, no?', 'Ho preso la tua donna. Anche le regine incontrano il loro destino.'],
       lost: ['Hai preso {mine}. Ogni perdita è una lezione. Questa è mia.', '{mine} ha compiuto il suo destino. Più o meno.'],
       lostQueen: ['La mia donna… Curioso. Le stelle non ne avevano parlato.', 'Senza donna resta la saggezza. Speriamo basti.'],
@@ -29,7 +29,7 @@ export const chessLinesIt: ChessLines = {
       draw: ['Patta. Equilibrio perfetto: la magia più difficile.', 'Pari. Nessuno vince, entrambi più saggi.'],
       resign: ['Abbandoni? Sapere quando fermarsi è saggezza.', 'Te ne vai. La porta resta aperta, apprendista.'],
       slow: ['Prenditi il tempo che serve. Io ho qualche secolo.', 'Rifletti pure. Intanto mi liscio la barba.'],
-      undo: ['Torni indietro? Girare il tempo è magia pericolosa.', 'Mossa ritirata. Per questa volta chiudo un occhio.'],
+      undo: ['Torni indietro? Nemmeno la magia cancella il passato.', 'Mossa ritirata. Per questa volta chiudo un occhio.'],
     },
     strategist: {
       start: ['Ho già vinto alla mossa 34. Dobbiamo solo arrivarci.', 'Ho un Gantt per questa partita. Sei in ritardo.'],
@@ -56,7 +56,7 @@ export const chessLinesIt: ChessLines = {
       start: ['Terreno nuovo. Vado avanti io.', 'Sessantaquattro caselle. Ho attraversato di peggio.'],
       take: ['{yours}. Seguivo le tracce da tre mosse.', 'Preso: {yours}. Lasciava impronte ovunque.'],
       takeQueen: ['La tua donna. Preda grossa.', 'Ho stanato la tua donna. Si muoveva troppo.'],
-      lost: ['Hai preso {mine}. Imboscata. Capita.', 'Addio a {mine}. Ne ho sepolti di migliori.'],
+      lost: ['Hai preso {mine}. Imboscata. Capita.', 'Ho perso {mine}. Ne ho sepolti di migliori.'],
       lostQueen: ['La mia donna. Brutta ferita. Si va avanti.', 'Persa la donna. Ho camminato con meno.'],
       check: ['Scacco. Il tuo re lascia tracce.', 'Scacco. Ti ho trovato.'],
       checked: ['Scacco a me. Sentivo l’odore.', 'Mi hai stanato. Cambio sentiero.'],

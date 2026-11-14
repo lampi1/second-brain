@@ -10,7 +10,7 @@ export const isCharacterId = (v: unknown): v is CharacterId => typeof v === 'str
 
 /** What each character is, for alt text and the approval sheet (scripts/agent-avatar-sheets.mjs). */
 export const CHARACTER_LOOKS: Record<CharacterId, string> = {
-  orchestrator: 'old wizard with long white hair and beard, half-moon glasses and a midnight robe, raising a wand',
+  orchestrator: 'old wizard with long white hair and beard, small round glasses and a midnight robe, raising a wand',
   strategist: 'cold planner with cropped greying hair, glasses and a trimmed beard, holding a chess knight',
   scout: 'weathered tracker in a worn hat with a ginger beard and a spyglass',
   artisan: 'muscular blacksmith with a black beard, a red rag on the head and a cigar, holding a sledge',

@@ -199,7 +199,7 @@ describe('the service that has the lines of the day written', () => {
   it('does not trust its own file: what is read from it is checked like a model’s answer', async () => {
     const { svc, file } = make(() => ko('unused'));
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify({ v: 1, tries: { '2026-11-14:it': DAILY_TRIES }, days: { '2026-11-14': { it: {
+    fs.writeFileSync(file, JSON.stringify({ v: 2, tries: { '2026-11-14:it': DAILY_TRIES }, days: { '2026-11-14': { it: {
       scout: { work: ['Riga buona', '<img src=x onerror=alert(1)>', 7, 'x'.repeat(80)], sail: ['Vele su'] }, pirate: { work: ['Arrr'] }, herald: 'tutto', sentinel: { done: 'una stringa' },
     } } } }));
     expect(svc.get('it')).toEqual({ lines: { scout: { work: ['Riga buona'] } }, pending: false });
@@ -244,7 +244,7 @@ describe('the service that has the lines of the day written', () => {
   it('writes over a file that is not what it should be without asking twice or throwing', async () => {
     const { svc, file, calls, stored } = make(req => ok(rowsFor(asked(req), 'oggi')));
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify({ v: 1, tries: { '2026-11-14:it': 'molte', '2026-11-14:en': -3, 'boh': 1, '2026-11-13:it': 1 }, days: { '2026-11-14': { it: { scout: { work: 7 }, constructor: { work: ['Ciao mondo'] } }, fr: { scout: { work: ['Bonjour'] } } }, ieri: { it: { scout: { work: ['Riga di ieri'] } } }, '2026-11-13': 'niente' } }));
+    fs.writeFileSync(file, JSON.stringify({ v: 2, tries: { '2026-11-14:it': 'molte', '2026-11-14:en': -3, 'boh': 1, '2026-11-13:it': 1 }, days: { '2026-11-14': { it: { scout: { work: 7 }, constructor: { work: ['Ciao mondo'] } }, fr: { scout: { work: ['Bonjour'] } } }, ieri: { it: { scout: { work: ['Riga di ieri'] } } }, '2026-11-13': 'niente' } }));
     const got = await svc.ensure('it');
     expect(calls).toHaveLength(DAILY_BATCHES.length);
     expect(got.lines.scout?.work).toHaveLength(dailyCount('work'));

@@ -103,7 +103,7 @@ export interface Pose {
 /** A body's measures: half the width between the shoulders, at the waist and at the hips, the thickness of an arm and
  *  of a leg, half the neck; `belly`: how far a paunch comes out past the waist. */
 export interface Build { sh: number; waist: number; hip: number; arm: number; leg: number; neck: number; belly?: number }
-export const BUILD: Build = { sh: 7.2, waist: 5, hip: 5.4, arm: 3.7, leg: 4.3, neck: 2.2 };
+const BUILD: Build = { sh: 7.2, waist: 5, hip: 5.4, arm: 3.7, leg: 4.3, neck: 2.2 };
 export interface Look extends Features {
   /** the head, in the badge's box: its outline, the hair behind it, what is under the face (a beard, the dark of a
    *  helm), the hair or headwear and glasses over it, and what is over the face (a moustache, a cigar that smokes) */
@@ -113,8 +113,9 @@ export interface Look extends Features {
   /** the legs: the thigh and the hips, the shin (a boot, a stocking), the shoe */
   pants: string; shin?: string; shoes: string;
   /** details over the torso and the hips (a tie, an apron); behind the whole body (a coat's tails, a cape); on each
-   *  shoulder, turning with the arm (`m`: 1 the left of the picture, -1 the right) */
-  wear?: Node[]; behind?: Node[]; pad?: (m: 1 | -1) => Node[];
+   *  shoulder, turning with the arm (`pad`: a muscle) or staying on the shoulder over it (`cap`: a pauldron; `m`: 1 the
+   *  left of the picture, -1 the right) */
+  wear?: Node[]; behind?: Node[]; pad?: (m: 1 | -1) => Node[]; cap?: (m: 1 | -1) => Node[];
   build?: Build;
 }
 
@@ -122,10 +123,7 @@ export interface Look extends Features {
 const HEAD = { s: 0.56, x: 32, y: 32.9, chin: 44.5 };
 const SH_Y = 36.3, HIP_Y = 49.4, UPPER = 6.6, FORE = 5.9, THIGH = 7.2, SHIN = 6.6;
 /** The hand of an arm seen from its elbow: where a held thing starts. */
-export const HAND = FORE;
-/** How far a hand reaches from its shoulder, and where the shoulders are for a build. */
-export const REACH = UPPER + FORE;
-export const shoulders = (b: Build = BUILD) => ({ l: 32 - b.sh, r: 32 + b.sh, y: SH_Y });
+const HAND = FORE;
 
 function face(look: Look, eyes: Eyes, mouth: Mouth, blink: boolean): Node[] {
   const f = features(look, eyes, mouth === 'smile' ? 'smirk' : mouth);
@@ -134,12 +132,13 @@ function face(look: Look, eyes: Eyes, mouth: Mouth, blink: boolean): Node[] {
 
 function arm(side: 'l' | 'r', p: ArmPose, look: Look, b: Build): Group {
   const sleeve = look.sleeve ?? look.top, fore = look.fore ?? sleeve, m = side === 'l' ? 1 : -1;
-  return J(side === 'l' ? 32 - b.sh : 32 + b.sh, SH_Y, p.a, [
+  const x = side === 'l' ? 32 - b.sh : 32 + b.sh, whole = J(x, SH_Y, p.a, [
     S(`M0 0V${UPPER}`, sleeve, b.arm),
     ...(look.pad?.(m) ?? []),
     J(0, UPPER, p.b ?? 0, [S(`M0 0V${n2(FORE - b.arm * 0.4)}`, fore, b.arm * 0.9), ...(look.cuff ? [S(`M0 ${n2(FORE - b.arm * 0.62)}V${n2(FORE - b.arm * 0.4)}`, look.cuff, b.arm * 0.94)] : []),
       ...(p.held ? [J(0, HAND, p.ha ?? 0, p.held, p.goH)] : []), C(0, HAND, b.arm * 0.56, look.hand ?? look.skin)], p.goB),
   ], p.go);
+  return look.cap ? { g: [whole, J(x, SH_Y, 0, look.cap(m))] } : whole;
 }
 function leg(side: 'l' | 'r', p: LegPose | undefined, look: Look, b: Build, toe: number): Group {
   const x = (b.hip - b.leg / 2 + 0.3) * (side === 'l' ? -1 : 1);
