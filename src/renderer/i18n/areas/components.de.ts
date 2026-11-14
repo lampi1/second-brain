@@ -99,6 +99,7 @@ export const componentsDe: typeof componentsIt = {
   "cmp.autoClose.waiting.permission": 'Braucht dich: Erlaubnis',
   "cmp.autoClose.waiting.plan": 'Braucht dich: Plan',
   "cmp.autoClose.waiting.command": 'Wartet: Ausführen',
+  "cmp.autoClose.waiting.step": 'Braucht dich: Schritt',
   "cmp.autoClose.waiting.browser": 'Braucht dich: Browser',
   "cmp.autoClose.waiting.children": (p: { n: number }) => `Wartet: ${p.n} ${p.n === 1 ? 'Unterchat' : 'Unterchats'}`,
   "cmp.autoClose.waiting.background": (p: { n: number }) => `Im Hintergrund: ${p.n}`,

@@ -36,20 +36,25 @@ it('shows one short status from what main says it waits for (#359)', () => {
   expect(html()).toContain('Aspetta 1 sotto-chat');
   autoCloseState.set([row({ waitingFor: 'command' })]);
   expect(html()).toContain('Aspetta Esegui');
+  // a step of the user's (a report's userAction) has its own words, never «domanda» (#411)
+  autoCloseState.set([row({ waitingFor: 'step' })]);
+  expect(html()).toContain('Aspetta te: passo');
+  expect(html()).toContain('data-waiting="step"');
   autoCloseState.set([row({ waitingFor: 'report' })]);
   expect(html()).toContain('Senza report');
   setLang('en'); expect(html()).toContain('No report');
 });
 
-it('shows nothing for a chat that waits for nothing, once kept open, or for a wait the tile\'s button already says', () => {
+it('shows nothing for a chat that waits for nothing, once kept open, or for a wait the strip\'s head already says (#411)', () => {
   autoCloseState.set([row({})]);
   expect(html()).toBe('');
   autoCloseState.set([row({ waitingFor: 'answer', keptOpen: true })]);
   expect(html()).not.toContain('autoclose-waiting');
   autoCloseState.set([row({ waitingFor: 'permission' })]);
-  expect(renderToStaticMarkup(createElement(AutoCloseNotice, { chatId: 'w', hideUser: true }))).toBe('');
+  expect(renderToStaticMarkup(createElement(AutoCloseNotice, { chatId: 'w', said: true }))).toBe('');
   autoCloseState.set([row({ waitingFor: 'background', waitingN: 1 })]);
-  expect(renderToStaticMarkup(createElement(AutoCloseNotice, { chatId: 'w', hideUser: true }))).toContain('In background: 1');
+  expect(renderToStaticMarkup(createElement(AutoCloseNotice, { chatId: 'w', said: true }))).toBe('');
+  expect(html()).toContain('In background: 1');
 });
 
 it('every status is at most three words, in it, en and de (#359), and none speaks of «the user» in third person', () => {

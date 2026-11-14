@@ -108,8 +108,8 @@ describe('agent_delegate', () => {
     expect(f.m.pending().filter(r => r.chatId === o.id)).toHaveLength(0);
     const note = f.m.items(o.id).find(i => i.kind === 'system' && i.code === 'userStep');
     expect(note).toMatchObject({ params: { title: 'Caso supporto', text: 'Accendi la VPN', command: 'vpn up' } });
-    // the reporting chat is held and tagged by it, never closed meanwhile
-    expect(f.m.autoCloseCandidates(() => false).find(c => c.id === child.id)).toMatchObject({ eligible: false, waitingFor: 'answer' });
+    // the reporting chat is held and tagged by it, never closed meanwhile; a command to run, never a question (#411)
+    expect(f.m.autoCloseCandidates(() => false).find(c => c.id === child.id)).toMatchObject({ eligible: false, waitingFor: 'command' });
     const before = f.sent.get(parent.id)?.length ?? 0;
     f.m.runEnded({ id: 'x', chatId: o.id, itemId: 'i', code: 'other', cwd: f.dir, state: 'ok', exitCode: 0, output: '', startedAt: Date.now() + 1, endedAt: Date.now() + 2 });
     await Promise.resolve();
@@ -141,12 +141,14 @@ describe('agent_delegate', () => {
     expect(f.m.items(o.id).some(i => i.kind === 'system' && i.code === 'userStep' && !i.params?.command)).toBe(true);
     expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).not.toContain('chat «Login»]');
     expect(f.m.list().find(c => c.id === child.id)!.delegation!.result!.outcome).toBe('blocked');
+    // held as a step of the user's, never as a question: the chat has none open (#411)
+    expect(f.m.autoCloseCandidates(() => false).find(c => c.id === child.id)).toMatchObject({ eligible: false, waitingFor: 'step' });
     // the user's «fatto», passed on by the Orchestrator, reaches the parent that owns the work, once
     expect(f.m.userStepDone(child.id, 'fatto')).toBe(true);
     await vi.waitFor(() => expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).toContain('[risposta dell’utente · chat «Login»]'));
     expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).toContain('«fatto»');
     expect(f.m.userStepDone(child.id, 'fatto')).toBe(false);
-    expect(f.m.autoCloseCandidates(() => false).find(c => c.id === child.id)?.waitingFor).not.toBe('answer');
+    expect(['answer', 'step', 'command']).not.toContain(f.m.autoCloseCandidates(() => false).find(c => c.id === child.id)?.waitingFor);
   });
 
   it('a decision is never asked: the owner of the work decides it as the user would (ADR 0269)', async () => {

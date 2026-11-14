@@ -99,6 +99,7 @@ export const componentsEn: typeof componentsIt = {
   "cmp.autoClose.waiting.permission": 'Needs you: permission',
   "cmp.autoClose.waiting.plan": 'Needs you: plan',
   "cmp.autoClose.waiting.command": 'Awaits Run',
+  "cmp.autoClose.waiting.step": 'Needs you: step',
   "cmp.autoClose.waiting.browser": 'Needs you: browser',
   "cmp.autoClose.waiting.children": (p: { n: number }) => `Awaits ${p.n} ${p.n === 1 ? 'sub-chat' : 'sub-chats'}`,
   "cmp.autoClose.waiting.background": (p: { n: number }) => `In background: ${p.n}`,

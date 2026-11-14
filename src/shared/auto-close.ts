@@ -18,9 +18,11 @@ export interface AutoCloseStatus {
  *  answer, permission or plan approval, a command left to Esegui, a browser hand-off or dialog, its running sub-chats or
  *  sub-agents (waitingN = how many), its background tasks (waitingN), a command or page of its own still running, mail
  *  it waits for, its final report not sent yet, work it left unsaved in its repository (uncommitted changes or commits
- *  on no remote, #357), or the check of that repository still running or failed (gitcheck: never closed on a guess). */
-export type AutoCloseWaiting = 'answer' | 'permission' | 'plan' | 'command' | 'browser' | 'children' | 'background' | 'work' | 'mail' | 'report' | 'unsaved' | 'gitcheck';
-export const AUTO_CLOSE_WAITING: readonly AutoCloseWaiting[] = ['answer', 'permission', 'plan', 'command', 'browser', 'children', 'background', 'work', 'mail', 'report', 'unsaved', 'gitcheck'];
+ *  on no remote, #357), or the check of that repository still running or failed (gitcheck: never closed on a guess).
+ *  'answer' is only a question open in that chat; a step the user does outside it (its report's userAction, written
+ *  as a note in the Orchestrator: turn on the VPN, a login, a try) is 'step', never a question (#411). */
+export type AutoCloseWaiting = 'answer' | 'permission' | 'plan' | 'command' | 'step' | 'browser' | 'children' | 'background' | 'work' | 'mail' | 'report' | 'unsaved' | 'gitcheck';
+export const AUTO_CLOSE_WAITING: readonly AutoCloseWaiting[] = ['answer', 'permission', 'plan', 'command', 'step', 'browser', 'children', 'background', 'work', 'mail', 'report', 'unsaved', 'gitcheck'];
 export interface AutoClosePresence {
   chatId: string;
   draft: boolean;
