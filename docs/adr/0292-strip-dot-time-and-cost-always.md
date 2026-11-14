@@ -1,6 +1,6 @@
 # ADR 0292 · The strip: a state dot in front, time and cost against the estimate always in sight
 
-Date: 2026-11-13 · Status: accepted, partly amended by ADR 0293 (the character is back, the dot on its corner) (owner, thread «Rifare la UI della Grindhouse»: shown three other layouts and a
+Date: 2026-11-13 · Status: accepted, partly amended by ADR 0293 (the character is back, the dot on its corner) and ADR 0311 (the strip became a square bench) (owner, thread «Rifare la UI della Grindhouse»: shown three other layouts and a
 drawing of the current one, he picked the drawing: «mi piace proprio questa … con questo identico stile e pulizia …
 tieni le stime di tempo e costi come info sempre visibile nella strisciolina») · Amends: ADR 0287 (the strip's row and
 the open window's details row)

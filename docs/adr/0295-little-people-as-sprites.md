@@ -1,6 +1,6 @@
 # ADR 0295 · The roles are little people at work on the strips
 
-Date: 2026-11-13 · Status: accepted (owner, thread «Rifare la UI della Grindhouse», after the three animated badges
+Date: 2026-11-13 · Status: accepted, partly amended by ADR 0311 (scenes without screens, a vice at rest) (owner, thread «Rifare la UI della Grindhouse», after the three animated badges
 proposed with ADR 0293: «voglio dei veri e propri omini che fanno cose … molto carini anche nel piccolo; al posto
 della stellina di "sto pensando" nel caso dell'Orchestrator e al posto del pallino dello stato nel caso delle
 striscioline degli agenti; sentiti libero di farle un pelo più grandi le striscioline»; shown a pixel-art version:

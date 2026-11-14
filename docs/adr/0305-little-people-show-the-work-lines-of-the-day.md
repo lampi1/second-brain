@@ -1,6 +1,6 @@
 # ADR 0305 · The little people show the work at hand, speak while they work, and get new lines every day
 
-Date: 2026-11-14 · Status: accepted (owner, 2026-11-14: «il testo a volte nasconde il bastone della bastonata quindi
+Date: 2026-11-14 · Status: accepted, partly amended by ADR 0311 (no computers in the scenes) (owner, 2026-11-14: «il testo a volte nasconde il bastone della bastonata quindi
 vorrei che si risolvesse questa cosa, e che ci fossero più frasi che compaiono con più varietà secondo me ogni giorno
 dovrebbero cambiare, un modello minuscolo per farlo, tipo la frase del giorno ma deve essere tutto molto vario»; and a
 minute later: «che le frasi si vedano finché lavorano, frasi e animazioni molto più varie che rispecchino un po'
