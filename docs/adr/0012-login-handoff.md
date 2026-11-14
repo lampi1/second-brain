@@ -1,6 +1,6 @@
 # ADR 0012 · Login hand-off: progress while waiting, the account from the credentials file, the password only on a click
 
-Date: 2026-10-11 · Status: accepted
+Date: 2026-10-11 · Status: accepted · Amended by: ADR 0310 (an agent signs in by naming an account: the app types it)
 
 ## Context
 In the chat "Prova · Browser su test 3" an agent called `handoff_to_user` (kind login, wait_seconds 600). Two failures:

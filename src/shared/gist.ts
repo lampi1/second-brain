@@ -158,7 +158,7 @@ export function describedGist(description: string): Gist | null {
 }
 
 const BROWSER: Record<string, Gist> = {
-  navigate: 'openPage', tabs_create: 'openPage', click: 'click', type: 'typeText', fill_form: 'typeText', key: 'typeText',
+  navigate: 'openPage', tabs_create: 'openPage', click: 'click', type: 'typeText', fill_form: 'typeText', fill_credential: 'typeText', key: 'typeText',
   screenshot: 'screenshot', read_page: 'read', get_page_text: 'read', find: 'search',
 };
 const DELEGATION: Record<string, Gist> = { agent_delegate: 'delegate', agent_report: 'report', agent_ask_parent: 'askParent', agent_answer_child: 'answerChild', agent_children: 'delegate' };

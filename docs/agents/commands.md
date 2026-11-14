@@ -157,6 +157,7 @@ row and its line here in the same change.
 | `key` | browser | Press keys or key combinations. |
 | `scroll` | browser | Mouse-wheel scroll at a ref, coordinate or the page center. |
 | `fill_form` | browser | Fill several fields in one call. |
+| `fill_credential` | browser | Sign in with a test account of the credentials file: the app types the password, the agent never reads it. |
 | `select_option` | browser | Choose options of a native select. |
 | `wait_for` | browser | Wait for text, a selector, a url or the network to settle. |
 | `handle_dialog` | browser | Answer a JavaScript dialog that blocks the page. |

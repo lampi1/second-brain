@@ -6,17 +6,19 @@
 // returns a short result (what changed: URL, dialog, console errors, failed requests, new tabs, downloads) so the agent
 // rarely needs an extra read. Nothing here waits forever: page scripts and input race a timeout and dialog opening.
 // Agents may type passwords on every host (ADR 0237): a password field's value comes back only masked ("•••").
+// fillCredential (#386, ADR 0310): the app types an account of the user's credentials file itself, so the agent signs
+// in without holding the password; that tab then takes no caller JavaScript and no copy keys until the page is left.
 // Used by browser/tools.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { NativeImage, WebFrameMain } from 'electron';
-import { log, errText, redact } from '../log';
+import { log, errText, redact, addRedaction } from '../log';
 import { ToolRefusal } from '../mcp/refusal';
 import type { BrowserTabs, Tab } from './tabs';
 import { pageCall, walkPage, locateRef, frameBox, inputInfo, focusSelect, selectOptions, pageText, probe, angularStable, hasPasswordField,
   type WalkMode, type WalkResult, type PointResult, type InputInfo, type FrameMarker } from './page';
 import { parseRef, parseFrame, refPrefix } from './refs';
-import { charKey, isPasteKey, isPasteStroke, maskKeys, parseKeys, parseModifiers, strokeEvents } from './keys';
+import { charKey, isCopyKey, isPasteKey, isPasteStroke, maskKeys, parseKeys, parseModifiers, strokeEvents } from './keys';
 import { evidencePath, stampName } from './evidence';
 import { previewOf, type Preview } from './preview';
 import { formatDetail, formatEntry, redactBody } from './netlog';
@@ -110,6 +112,8 @@ export class BrowserActions {
           if (method === 'Input.dispatchKeyEvent' && (raw.type === 'keyDown' || raw.type === 'rawKeyDown')
             && isPasteKey(String(raw.key),Number(raw.modifiers))
             && this.tabs.credentials.pasteBlocked()) throw new Error('Refused: pasting is blocked while a login password is on the clipboard.');
+          if (tab.secretTyped && method === 'Input.dispatchKeyEvent' && (raw.type === 'keyDown' || raw.type === 'rawKeyDown') && isCopyKey(String(raw.key),Number(raw.modifiers)))
+            throw new Error('Refused: copy and cut are blocked in this tab while it holds a password the app typed (fill_credential). They work again after the page is left or reloaded.');
         const r = await Promise.race([
           cdp.send(method, params).then(() => 'ok' as const),
           d.promise.then(() => 'dialog' as const),
@@ -187,8 +191,8 @@ export class BrowserActions {
     return lines.join('\n');
   }
 
-  /** When the tab shows a sign-in page: the agent signs in itself with type / fill_form (any host, ADR 0237); the
-   *  hand-off stays for MFA, CAPTCHA or an account it has no password for. */
+  /** When the tab shows a sign-in page: the agent signs in itself (any host, ADR 0237), with fill_credential when the
+   *  user's credentials file has an entry for the site (ADR 0310); the hand-off stays for MFA, CAPTCHA or no entry. */
   async loginNotice(tab: Tab): Promise<string> {
     if (tab.wc.isDestroyed()) return '';
     const url = tab.wc.getURL();
@@ -196,7 +200,8 @@ export class BrowserActions {
     const form = await this.evalIn<boolean>(tab, tab.wc.mainFrame, pageCall(hasPasswordField, true), 1500).catch(() => false);
     if (!form && !isLoginUrl(url)) return '';
     const host = hostOf(url);
-    return `Sign-in page in environment ${tab.env} (${host}): sign in yourself with type / fill_form and the account you were given ` +
+    const mine = this.tabs.credentials.accountsFor(url).map(u => `"${u}"`).join(', ');
+    return `Sign-in page in environment ${tab.env} (${host}): sign in yourself with ${mine ? `fill_credential (test account${mine.includes(',') ? 's' : ''} ${mine} in the user's credentials file: the app types the password, never read the file)` : 'fill_credential when the user\'s credentials file has an entry for this site, or type / fill_form and the account you were given'} ` +
       `(password values come back masked). For MFA, CAPTCHA or an account without a password, call handoff_to_user with kind "login"; ` +
       `environment ${tab.env} keeps the session.`;
   }
@@ -400,6 +405,30 @@ export class BrowserActions {
     }
     const r = await this.typeText(tab, text);
     return `Typed ${[...text].length} characters ${where}${r === 'dialog' ? ' (a dialog opened: typing stopped)' : ''}`;
+  }
+
+  /** Signs in by name (#386, ADR 0310): types the user name (user_ref, optional) and the password of an account of the
+   *  user's credentials file into the form, read from the file now. The password goes only into a password field (its
+   *  value reads back masked) of a page on the entry's own site; the agent gets the account name and "•••". */
+  async fillCredential(tab: Tab, a: { account?: unknown; password_ref?: unknown; user_ref?: unknown }): Promise<string> {
+    const { frame: no, ref } = parseRef(a.password_ref);
+    const frame = this.tabs.frameByNo(tab, no);
+    const info = await this.evalIn<InputInfo | { error: string }>(tab, frame, pageCall(inputInfo, ref));
+    if ('error' in info) throw new Error(info.error === 'stale' ? `${ref} is no longer on the page: call read_page or find for fresh refs.` : `${ref}: ${info.error}`);
+    if (!info.password || info.kind !== 'text') throw new ToolRefusal(`Refused: ${ref} (${info.desc}) is not a password field. password_ref must be the form's password field (find "password"); the user name goes in user_ref.`);
+    const hasUser = a.user_ref !== undefined && a.user_ref !== null && a.user_ref !== '';
+    if (hasUser) {
+      const u = parseRef(a.user_ref);
+      if (u.frame !== no) throw new ToolRefusal('Refused: user_ref and password_ref must be in the same frame (the same sign-in form).');
+      const ui = await this.evalIn<InputInfo | { error: string }>(tab, frame, pageCall(inputInfo, u.ref));
+      if (!('error' in ui) && ui.password) throw new ToolRefusal(`Refused: ${u.ref} is a password field. user_ref is the user name or e-mail field.`);
+    }
+    const c = this.tabs.credentials.siteCredential(typeof a.account === 'string' ? a.account : '', frameUrl(frame));
+    if ('refusal' in c) throw new ToolRefusal(c.refusal);
+    addRedaction(c.password);                             // logs, console and network output never show it either
+    tab.secretTyped = true;
+    const lines = await this.fill(tab, [...(hasUser ? [{ ref: a.user_ref, value: c.user }] : []), { ref: a.password_ref, value: c.password }]);
+    return `Account ${c.user}, typed by the app from the user's credentials file (you never see the password):\n${lines}\nSubmit the form now (click its button, or key Enter).`;
   }
 
   async key(tab: Tab, keys: string, repeat = 1): Promise<string> {
@@ -753,6 +782,7 @@ export class BrowserActions {
     // the user is working in this tab (a hand-off, a login above all): no caller script runs there meanwhile, as in act()
     const h = this.tabs.handoffs.openFor(tab.id);
     if (h) throw new Error(`The user is working in this tab (hand-off ${h.id}: ${h.reason}). Wait with handoff_to_user handoff_id "${h.id}".`);
+    if (tab.secretTyped) throw new Error('Refused: this tab holds a password the app typed from the credentials file (fill_credential), and caller JavaScript could read it. It works again after the page is left or reloaded (navigate "reload"); another tab of the same environment keeps the session.');
     if(parseFrame(frameArg)!==0)throw new Error('Caller JavaScript supports only the verified local top page. Use frame-aware read_page / get_page_text / screenshot for iframe inspection.');
     const cdp=this.cdp(tab),frame=tab.wc.mainFrame;
     const before={url:tab.wc.getURL(),frameUrl:frame.url,origin:frame.origin,process:frame.processId,routing:frame.routingId,tree:frame.frameTreeNodeId};
@@ -798,6 +828,12 @@ function originOf(f: WebFrameMain): string {
 /** wait_for url: a substring, or a glob ("*" = anything) matched against the whole URL, without regex (no ReDoS). */
 function urlMatches(url: string, want: string): boolean {
   return want.includes('*') ? globMatch(url.slice(0, 8192), want, true) : url.includes(want);
+}
+
+/** The web page a frame belongs to: its own http(s) URL, else the nearest parent's (about:blank / srcdoc frames). */
+function frameUrl(f: WebFrameMain): string {
+  for (let cur: WebFrameMain | null = f; cur; cur = cur.parent) if (/^https?:\/\//i.test(cur.url)) return cur.url;
+  return '';
 }
 
 /** The host a frame's content belongs to: about:blank / srcdoc / data frames take their parent's. */

@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- Sign-in by name in the app's browser: an agent names a test account of the brain's credentials file
+  (`fill_credential`) and the app types user name and password into the sign-in form itself; the agent never reads
+  the password. Only on the entry's own site (`url`, or `loginUrl` for a sign-in page on another host), only into a
+  password field, never an entry that looks like production (#386, ADR 0310).
 - Project maps: they open full screen when the user opens them; a click on a box or on an arrow's label tells it in
   full at the side («Come funziona», what goes in and out); the step of a plan under way says when it starts, who does
   it and how far it is; «Aggiorna» asks the Orchestrator for a redraw with the details (`details` on elements and
