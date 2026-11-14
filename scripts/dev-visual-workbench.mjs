@@ -19,18 +19,18 @@ export async function captureRoutineWorkbench(app, page, capture) {
   const idle = { ...child, state: 'idle', pending: 0, queued: undefined, background: 0, agentChildren: undefined, delegation: { ...child.delegation, result: undefined } };
   const publish = chat => app.evaluate(({ BrowserWindow }, chat) => { const w = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:') && !w.webContents.getURL().includes('#overlay')); w.webContents.send('chat:updated', chat); }, chat);
   await publish(idle);
-  await page.waitForFunction(id => document.querySelector(`[data-testid="delegation-card-${id}"]`)?.getAttribute('data-child-state') === 'stall', child.id);
-  // the parent's bar counts its children at work (data-run): a child with background work is one more, then one less
-  const runs = () => page.getByTestId(`tree-kids-${child.parentId}`).getAttribute('data-run').then(Number);
+  await page.waitForFunction(id => document.querySelector(`[data-testid="bench-kid-${id}"]`)?.getAttribute('data-child-state') === 'stall', child.id);
+  // the parent's bench counts its children at work (data-run, BenchKids.tsx): a child with background work is one more, then one less
+  const runs = () => page.getByTestId(`bench-kids-sum-${child.parentId}`).getAttribute('data-run').then(Number);
   const before = await runs();
   await publish({ ...idle, background: 1 });
-  await page.waitForFunction(({ id, parent, count }) => document.querySelector(`[data-testid="delegation-card-${id}"]`)?.getAttribute('data-child-state') === 'run'
-    && Number(document.querySelector(`[data-testid="tree-kids-${parent}"]`)?.getAttribute('data-run')) === count, { id: child.id, parent: child.parentId, count: before + 1 });
-  await page.getByTestId(`delegation-card-${child.id}`).scrollIntoViewIfNeeded();
+  await page.waitForFunction(({ id, parent, count }) => document.querySelector(`[data-testid="bench-kid-${id}"]`)?.getAttribute('data-child-state') === 'run'
+    && Number(document.querySelector(`[data-testid="bench-kids-sum-${parent}"]`)?.getAttribute('data-run')) === count, { id: child.id, parent: child.parentId, count: before + 1 });
+  await page.getByTestId(`bench-kid-${child.id}`).scrollIntoViewIfNeeded();
   await capture('delegation-background-work');
   await publish(idle);
-  await page.waitForFunction(({ id, parent, count }) => document.querySelector(`[data-testid="delegation-card-${id}"]`)?.getAttribute('data-child-state') === 'stall'
-    && Number(document.querySelector(`[data-testid="tree-kids-${parent}"]`)?.getAttribute('data-run')) === count, { id: child.id, parent: child.parentId, count: before });
+  await page.waitForFunction(({ id, parent, count }) => document.querySelector(`[data-testid="bench-kid-${id}"]`)?.getAttribute('data-child-state') === 'stall'
+    && Number(document.querySelector(`[data-testid="bench-kids-sum-${parent}"]`)?.getAttribute('data-run')) === count, { id: child.id, parent: child.parentId, count: before });
   await publish(child);
   const chat = await page.evaluate(async () => (await window.sb.invoke('chat:list', undefined)).find(c => !c.isOrchestrator && !c.closedAt && !c.parentId));
   if (!chat) throw new Error('Synthetic work chat missing for context capture');

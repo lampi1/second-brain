@@ -57,7 +57,7 @@ export function BenchKidRows({ chatId }: { chatId: string }) {
   if (!kids.length) return null;
   const { run, wait, stuck, done } = kidCounts(kids.map(k => childState(k)));
   return <div className="bench-kids" role="list" aria-label={t('tree.kids', { n: kids.length })}>
-    <div className="bench-kids-sum" data-testid={`bench-kids-sum-${chatId}`}>
+    <div className="bench-kids-sum" data-testid={`bench-kids-sum-${chatId}`} data-run={run}>
       <b>{t('tree.kids', { n: kids.length })}</b>
       {run > 0 && <span>{t('tree.kidsRun', { n: run })}</span>}
       {wait > 0 && <span>{t('tree.kidsWait', { n: wait })}</span>}
