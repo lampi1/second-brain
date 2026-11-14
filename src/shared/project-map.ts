@@ -26,6 +26,9 @@ export type MapActor = (typeof MAP_ACTORS)[number];
 
 export interface MapElement {
   id: string; kind: MapKind; name: string; description?: string;
+  /** how it works, in a few plain sentences (ADR 0307): what it does step by step, what it reads and writes, the rules
+   *  it applies, where it breaks. Shown beside the drawing when the box is picked; paragraphs are kept. */
+  details?: string;
   /** the system this part sits in (zoom); absent = the project's top level */
   parent?: string;
   status: MapState;
@@ -42,7 +45,9 @@ export interface MapElement {
   /** when the Orchestrator or a plan added it to an existing drawing (ms): the drawing marks it «nuovo» for a while */
   addedAt?: number;
 }
-export interface MapLink { id: string; from: string; to: string; label: string; status: MapState; note?: string; actor?: MapActor; confirmedAt: number }
+export interface MapLink { id: string; from: string; to: string; label: string; status: MapState; note?: string; actor?: MapActor; confirmedAt: number;
+  /** what goes along it, in full (ADR 0307): when, which data, how (call, file, queue), what comes back */
+  details?: string }
 
 export interface ProjectMap {
   /** the folder name under the brain's projects/ (lowercase, digits, dashes) */
@@ -89,7 +94,9 @@ export interface MapWork {
   par?: boolean;
 }
 /** A plan's step in the order of the plan (ADR 0302): the map shows which come one after the other and which together. */
-export interface MapFlowStep { step: number; title: string; state: MapWork['state']; wave: number; par?: boolean; on?: string; role?: string }
+export interface MapFlowStep { step: number; title: string; state: MapWork['state']; wave: number; par?: boolean; on?: string; role?: string;
+  /** what tells the step in full (ADR 0307): its detail line, the chats working on it, when it started and ended, added on the way */
+  detail?: string; chatIds?: string[]; startedAt?: number; endedAt?: number; added?: boolean }
 /** A Strategist's plan drawn on this map: `proposed` waits for the user's «Approva e parti». */
 export interface MapPlan { chatId: string; title: string; phase: 'proposed' | 'revising' | 'running' | 'done'; at: number; steps: number; done: number; doneWhen?: string;
   /** every step in order, with its turn (ADR 0302) */
@@ -110,7 +117,7 @@ export const NEW_MS = 3600_000;
 /** A status nobody confirmed for this long reads «da verificare» (work and blocked only: a done part stays done
  *  unless its files change). */
 export const STALE_MS = 2 * 3600_000;
-export const MAP_LIMITS = { elements: 200, links: 400, name: 80, description: 300, note: 200, label: 80, evidence: 20, path: 300, corrections: 30, correction: 300, summary: 300, title: 80 } as const;
+export const MAP_LIMITS = { elements: 200, links: 400, name: 80, description: 300, details: 1500, linkDetails: 800, note: 200, label: 80, evidence: 20, path: 300, corrections: 30, correction: 300, summary: 300, title: 80 } as const;
 
 const ID = /^[a-z0-9][a-z0-9-]{0,47}$/;
 export const isMapId = (v: unknown): v is string => typeof v === 'string' && ID.test(v);
@@ -129,6 +136,14 @@ const text = (v: unknown, key: string, max: number, required = true): string | u
   if (typeof v !== 'string') throw new Error(`${key}: text`);
   const t = v.replace(/\s+/g, ' ').trim();
   if (!t && required) throw new Error(`${key}: required`);
+  if (t.length > max) throw new Error(`${key}: at most ${max} characters`);
+  return t || undefined;
+};
+/** A longer text (details): paragraphs kept (blank lines and line breaks become one break), spaces folded. */
+const longText = (v: unknown, key: string, max: number): string | undefined => {
+  if (v === undefined || v === null || v === '') return undefined;
+  if (typeof v !== 'string') throw new Error(`${key}: text`);
+  const t = v.split(/\r?\n+/).map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n');
   if (t.length > max) throw new Error(`${key}: at most ${max} characters`);
   return t || undefined;
 };
@@ -162,9 +177,11 @@ export function checkMap(input: unknown, now: number, prev?: ProjectMap | null):
     const old = before.get(e.id);
     const status = (e.status as MapState | undefined) ?? old?.status ?? 'unknown';
     const note = text(e.note, `${key}.note`, MAP_LIMITS.note, false), description = text(e.description, `${key}.description`, MAP_LIMITS.description, false);
+    // left out: the previous drawing's stay (a redraw need not send them again); '' removes them
+    const details = e.details === undefined ? old?.details : longText(e.details, `${key}.details`, MAP_LIMITS.details);
     return {
       id: e.id, kind: e.kind, name: text(e.name, `${key}.name`, MAP_LIMITS.name)!,
-      ...(description ? { description } : {}), ...(e.parent ? { parent: e.parent as string } : {}),
+      ...(description ? { description } : {}), ...(details ? { details } : {}), ...(e.parent ? { parent: e.parent as string } : {}),
       status, ...(note ? { note } : {}), ...(e.actor ? { actor: e.actor as MapActor } : {}),
       evidence: evidenceOf(e.evidence, `${key}.evidence`),
       confirmedAt: e.status !== undefined ? now : old?.confirmedAt ?? now,
@@ -201,8 +218,9 @@ export function checkMap(input: unknown, now: number, prev?: ProjectMap | null):
     if (l.actor !== undefined && !isActor(l.actor)) throw new Error(`${key}.actor: ${MAP_ACTORS.join(' | ')}`);
     const old = oldLinks.get(id);
     const note = text(l.note, `${key}.note`, MAP_LIMITS.note, false);
+    const details = l.details === undefined ? old?.details : longText(l.details, `${key}.details`, MAP_LIMITS.linkDetails);
     return { id, from: l.from, to: l.to, label: text(l.label, `${key}.label`, MAP_LIMITS.label)!, status: (l.status as MapState | undefined) ?? old?.status ?? 'unknown',
-      ...(note ? { note } : {}), ...(l.actor ? { actor: l.actor as MapActor } : {}), confirmedAt: l.status !== undefined ? now : old?.confirmedAt ?? now };
+      ...(note ? { note } : {}), ...(l.actor ? { actor: l.actor as MapActor } : {}), confirmedAt: l.status !== undefined ? now : old?.confirmedAt ?? now, ...(details ? { details } : {}) };
   });
   return { elements, links: out };
 }
@@ -234,7 +252,7 @@ export const EDIT_OPS = ['add', 'set', 'remove', 'link', 'unlink'] as const;
 /** One change to a drawing without a redraw (ADR 0276): add = a new piece (planned unless a status is given) · set =
  *  rename, describe, move under a system, change status or note · remove = the piece, its parts and their links ·
  *  link / unlink = an arrow. */
-export interface MapEditOp { op: (typeof EDIT_OPS)[number]; id?: string; kind?: MapKind; name?: string; description?: string; parent?: string | null; status?: MapState; note?: string; actor?: MapActor; from?: string; to?: string; label?: string }
+export interface MapEditOp { op: (typeof EDIT_OPS)[number]; id?: string; kind?: MapKind; name?: string; description?: string; details?: string; parent?: string | null; status?: MapState; note?: string; actor?: MapActor; from?: string; to?: string; label?: string }
 
 /** The drawing after the ops, checked as a whole drawing is (checkMap); what it did, one line each, for the history.
  *  `plan` = the Strategist chat a new piece belongs to. Untouched elements keep their status and when it was confirmed. */
@@ -256,7 +274,7 @@ export function applyEdit(map: ProjectMap, ops: unknown, now: number, plan?: str
       if (o.id !== undefined && !isMapId(o.id)) throw new Error(`${key}.id: lowercase letters, digits and dashes`);
       if (o.id !== undefined && els.some(e => e.id === id)) throw new Error(`${key}.id: "${id}" is already on the map (op "set" changes it)`);
       for (let n = 2; els.some(e => e.id === id) || links.some(l => l.id === id); n++) id = `${projectSlug(name).slice(0, 44)}-${n}`;
-      els.push({ id, kind: o.kind ?? (o.parent ? 'part' : 'system'), name, ...(o.description ? { description: o.description } : {}), ...(o.parent ? { parent: o.parent } : {}),
+      els.push({ id, kind: o.kind ?? (o.parent ? 'part' : 'system'), name, ...(o.description ? { description: o.description } : {}), ...(o.details ? { details: o.details } : {}), ...(o.parent ? { parent: o.parent } : {}),
         status: o.status ?? 'planned', ...(o.note ? { note: o.note } : {}), ...(o.actor ? { actor: o.actor } : {}), evidence: [] });
       added.push(id);
       did.push(`+ ${name}`);
@@ -267,7 +285,7 @@ export function applyEdit(map: ProjectMap, ops: unknown, now: number, plan?: str
       if (links.some(l => l.id === id)) throw new Error(`${key}: the link "${String(id)}" is already on the map`);
       // an arrow to a piece that is not there yet is not there either
       const dashed = [o.from, o.to].some(x => els.find(e => e.id === x)?.status === 'planned' || added.includes(x as string));
-      links.push({ id, from: o.from, to: o.to, label: o.label, ...(o.status ? { status: o.status } : dashed ? { status: 'planned' } : {}) });
+      links.push({ id, from: o.from, to: o.to, label: o.label, ...(o.details ? { details: o.details } : {}), ...(o.status ? { status: o.status } : dashed ? { status: 'planned' } : {}) });
       did.push(`+ ${nameOf(o.from)} → ${nameOf(o.to)}`);
       return;
     }
@@ -288,7 +306,8 @@ export function applyEdit(map: ProjectMap, ops: unknown, now: number, plan?: str
       return;
     }
     // set
-    for (const k of ['name', 'description', 'kind', 'status', 'note', 'actor'] as const) if (o[k] !== undefined) { if (o[k] === '' || o[k] === null) delete el[k]; else el[k] = o[k]; }
+    for (const k of ['name', 'description', 'details', 'kind', 'status', 'note', 'actor'] as const) if (o[k] !== undefined) { if (o[k] === '' || o[k] === null) el[k] = k === 'details' ? '' : undefined; else el[k] = o[k]; }
+    for (const k of Object.keys(el)) if (el[k] === undefined) delete el[k];
     if (o.parent !== undefined) { if (o.parent === null || o.parent === '') delete el.parent; else el.parent = o.parent; }
     did.push(`~ ${String(el.name)}${isMapState(o.status) ? `: ${LABEL_IT[o.status]}` : ''}`);
   });
@@ -322,7 +341,9 @@ export function elementOfFile(elements: readonly MapElement[], file: string): st
 // ---------------------------------------------------------------- one level of the drawing
 
 export interface LevelNode { id: string; x: number; y: number; w: number; h: number; ctx: boolean }
-export interface LevelEdge { id: string; from: string; to: string; label: string; status: MapState; stale: boolean; note?: string; actor?: MapActor; count: number }
+export interface LevelEdge { id: string; from: string; to: string; label: string; status: MapState; stale: boolean; note?: string; actor?: MapActor; count: number;
+  /** every link the arrow stands for (ADR 0307: a click on it tells each one in full) */
+  ids: string[] }
 export interface Level { nodes: LevelNode[]; edges: LevelEdge[]; width: number; height: number }
 
 export const BOX = { w: 210, h: 128, gx: 60, gy: 84, ctxW: 160, ctxH: 70, pad: 32 } as const;
@@ -359,8 +380,8 @@ export function levelOf(map: Pick<ProjectMap, 'elements' | 'links'>, parent: str
     const key = `${a}>${b}`;
     const st = shownStatus(l, now);
     const old = edges.get(key);
-    if (old) { old.count++; if (rank(st.status) > rank(old.status)) { old.status = st.status; old.stale = st.stale; } continue; }
-    edges.set(key, { id: l.id, from: a, to: b, label: l.label, status: st.status, stale: st.stale, ...(l.note ? { note: l.note } : {}), ...(l.actor ? { actor: l.actor } : {}), count: 1 });
+    if (old) { old.count++; old.ids.push(l.id); if (rank(st.status) > rank(old.status)) { old.status = st.status; old.stale = st.stale; } continue; }
+    edges.set(key, { id: l.id, from: a, to: b, label: l.label, status: st.status, stale: st.stale, ...(l.note ? { note: l.note } : {}), ...(l.actor ? { actor: l.actor } : {}), count: 1, ids: [l.id] });
   }
   const ids = [...own, ...[...ctx].filter(id => !own.includes(id))];
   // layers: people first; then longest path along the links (a cycle is cut where it closes). Environments and documents
@@ -442,5 +463,20 @@ export function mapText(v: Pick<ProjectMapView, 'map' | 'agents' | 'changed'> & 
   const links = map.links.map(l => `- ${l.id}: ${l.from} → ${l.to} «${l.label}» — ${st(l, l.id)}${l.note ? `: ${l.note}` : ''}`);
   return [`Mappa «${map.title}» (${map.project}, versione ${map.version}, ${map.root ?? 'senza cartella'})`, 'Elementi:', ...tree(undefined, 0),
     ...(links.length ? ['Collegamenti:', ...links] : []), ...(plans.length ? ['Piani sulla mappa:', ...plans] : []), ...(map.corrections.length ? ['Correzioni dell\'utente (da rispettare):', ...map.corrections.map(c => `- ${c}`)] : [])].join('\n');
+}
+/** One element in full, for the Orchestrator and the agents (read with `element`, ADR 0307): what the map's text leaves
+ *  out to stay short. Its description and details, its files, and every link in and out with what goes along it. */
+export function elementText(map: Pick<ProjectMap, 'elements' | 'links' | 'title'>, id: string, now: number): string {
+  const e = map.elements.find(x => x.id === id);
+  if (!e) throw new Error(`element: no «${id.slice(0, 48)}» in this map`);
+  const name = (x: string) => map.elements.find(y => y.id === x)?.name ?? x;
+  const st = (x: { status: MapState; confirmedAt: number }) => { const s = shownStatus(x, now); return s.stale ? 'da verificare' : LABEL_IT[s.status]; };
+  const link = (l: MapLink, other: string, arrow: string) => `- ${arrow} ${name(other)} (${other}) «${l.label}» — ${st(l)}${l.note ? `: ${l.note}` : ''}${l.details ? `\n  ${l.details.replace(/\n/g, '\n  ')}` : ''}`;
+  const out = map.links.filter(l => l.from === id).map(l => link(l, l.to, '→')), into = map.links.filter(l => l.to === id).map(l => link(l, l.from, '←'));
+  const parts = map.elements.filter(x => x.parent === id).map(x => `- ${x.id} · ${x.name}${x.description ? `: ${x.description}` : ''}`);
+  return [`«${e.name}» (${e.id}, ${e.kind}${e.parent ? `, in ${name(e.parent)}` : ''}) — ${st(e)}${e.note ? `: ${e.note}` : ''}`,
+    ...(e.description ? [e.description] : []), ...(e.details ? ['Come funziona:', e.details] : ['Nessun dettaglio scritto: un ridisegno lo aggiunge.']),
+    ...(e.evidence.length ? [`Letto da: ${e.evidence.join(', ')}`] : []), ...(parts.length ? ['Parti:', ...parts] : []),
+    ...(out.length || into.length ? ['Collegamenti:', ...out, ...into] : [])].join('\n');
 }
 export const LABEL_IT: Record<MapState, string> = { ok: 'funziona', work: 'in lavorazione', blocked: 'bloccato', unknown: 'da capire', planned: 'previsto' };

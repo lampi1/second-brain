@@ -17,10 +17,13 @@ export function seedDemoMap(brainRoot: string, maps: ProjectMaps, now: number): 
   const base: MapElement[] = [
     el('cliente', 'person', 'Cliente', { description: 'Compra sul sito e chiede i rimborsi' }),
     el('operatore', 'person', 'Operatore del negozio', { description: 'Gestisce ordini, resi e rimborsi' }),
-    el('negozio', 'system', 'Negozio web', { description: 'Il sito e le API degli ordini', evidence: ['src/'] }),
+    el('negozio', 'system', 'Negozio web', { description: 'Il sito e le API degli ordini', evidence: ['src/'],
+      details: 'Il cliente riempie il carrello, paga e riceve la conferma; l\'operatore segue ordini, resi e rimborsi dallo stesso sito.\nDentro ci sono cinque parti: il carrello, gli ordini con gli sconti, i rimborsi, le notifiche SMS e il database. Ogni ordine passa dal carrello agli ordini, che calcolano il totale, lo addebitano sul gateway e scaricano il magazzino del fornitore.' }),
     el('carrello', 'part', 'Carrello', { parent: 'negozio', description: 'Prodotti, quantità, codici sconto', evidence: ['src/Cart/'] }),
-    el('ordini', 'part', 'Ordini e sconti', { parent: 'negozio', description: 'Calcola il totale e crea l\'ordine', evidence: ['src/Orders/'] }),
-    el('rimborsi', 'part', 'Rimborsi', { parent: 'negozio', description: 'Resi e rimborsi sul metodo di pagamento', evidence: ['src/Refunds/'] }),
+    el('ordini', 'part', 'Ordini e sconti', { parent: 'negozio', description: 'Calcola il totale e crea l\'ordine', evidence: ['src/Orders/'],
+      details: 'Riceve il carrello confermato e ne fa un ordine: somma le righe, applica il codice sconto, aggiunge l\'IVA e arrotonda una volta sola alla fine.\nSalva l\'ordine nel database, chiede l\'addebito al gateway e, se va a buon fine, scarica le quantità dal gestionale del fornitore e fa partire l\'SMS.\nSe l\'addebito fallisce l\'ordine resta «in attesa di pagamento» e niente viene scaricato dal magazzino. Oggi lo sconto è applicato dopo l\'IVA: è l\'errore che il piano corregge.' }),
+    el('rimborsi', 'part', 'Rimborsi', { parent: 'negozio', description: 'Resi e rimborsi sul metodo di pagamento', evidence: ['src/Refunds/'],
+      details: 'L\'operatore apre un reso su un ordine pagato e sceglie le righe da rimborsare. Il rimborso è calcolato sul prezzo pagato, sconto compreso, e torna sullo stesso metodo di pagamento con uno storno sul gateway.\nUn rimborso sopra i 200 € chiede una seconda approvazione. Il reso parziale non è ancora gestito: si rimborsa l\'ordine intero.' }),
     el('db', 'part', 'Database ordini', { parent: 'negozio', description: 'SQL Server: ordini, righe, rimborsi', evidence: ['db/migrations/'] }),
     el('pagamenti', 'external', 'Gateway pagamenti', { description: 'Addebiti e storni con carta' }),
     el('gestionale', 'external', 'Gestionale magazzino', { description: 'Il fornitore: giacenze e spedizioni' }),
@@ -30,8 +33,8 @@ export function seedDemoMap(brainRoot: string, maps: ProjectMaps, now: number): 
   ];
   const links: MapLink[] = [
     ln('cliente', 'carrello', 'compra e paga'), ln('operatore', 'rimborsi', 'approva i rimborsi'), ln('operatore', 'manuale', 'consulta'),
-    ln('carrello', 'ordini', 'crea l\'ordine'), ln('ordini', 'db', 'salva'), ln('rimborsi', 'db', 'legge e scrive'),
-    ln('ordini', 'pagamenti', 'addebita il totale'), ln('rimborsi', 'pagamenti', 'storna'), ln('ordini', 'gestionale', 'scarica il magazzino'),
+    ln('carrello', 'ordini', 'crea l\'ordine', { details: 'Quando il cliente preme «Paga» il carrello passa le righe, le quantità e il codice sconto. Da qui il carrello è bloccato: una modifica crea un ordine nuovo.' }), ln('ordini', 'db', 'salva'), ln('rimborsi', 'db', 'legge e scrive'),
+    ln('ordini', 'pagamenti', 'addebita il totale', { details: 'Alla conferma dell\'ordine parte una chiamata al gateway con il totale e il riferimento dell\'ordine. Torna «pagato» o il motivo del rifiuto; senza risposta entro 30 secondi l\'ordine resta in attesa e si riprova una volta.' }), ln('rimborsi', 'pagamenti', 'storna'), ln('ordini', 'gestionale', 'scarica il magazzino'),
     ln('pipeline', 'test', 'pubblica'), ln('test', 'negozio', 'ospita la prova'),
   ];
   const head = { project: 'alfa-shop', title: 'Alfa · negozio online', root: 'C:\\progetti\\alfa-shop', corrections: [] as string[] };

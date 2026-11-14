@@ -40,16 +40,20 @@ test('the project map draws the project, zooms into a system and plays its histo
   } finally { await app.close(); }
 });
 
-// ADR 0276: «Mappe» (top bar, the Orchestrator's head (ADR 0301), Ctrl+Shift+S, app_project_map open) opens the map as a page beside
-// the Orchestrator's column, never over it: the user talks to the Orchestrator while he looks at the map
-test('the project maps open beside the Orchestrator and step into a system', async () => {
+// ADR 0276 + ADR 0307: «Mappe» opened by the user (top bar, the Orchestrator's head (ADR 0301), Ctrl+Shift+S) takes the
+// whole screen at once; Esc leaves the map as a page beside the Orchestrator's column, where the user talks to the
+// Orchestrator while he looks at it. Opened by the Orchestrator (app_project_map open) it stays beside the column.
+test('the project maps open full screen, Esc puts them beside the Orchestrator, and they step into a system', async () => {
   const { app, page } = await launchDemo();
   try {
     await page.getByTestId('maps-btn').click();
     const view = page.getByTestId('pm-view');
     await expect(view.getByTestId('pm-node-negozio')).toBeVisible();
+    await expect(view.getByTestId('pm-fullscreen')).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('Escape');
+    await expect(view.getByTestId('pm-fullscreen')).toHaveAttribute('aria-pressed', 'false');
     await expect(page.getByTestId('orchestrator-input')).toBeVisible();
-    await page.waitForTimeout(300);
+    await expect.poll(async () => (await view.boundingBox())!.x).toBeGreaterThan(100); // beside the column, not over it
     await shot(page, 'project-maps-page');
     await view.getByTestId('pm-node-negozio').click();
     await expect(view.getByTestId('pm-node-rimborsi')).toBeVisible();
@@ -58,11 +62,14 @@ test('the project maps open beside the Orchestrator and step into a system', asy
     await expect(view).toHaveCount(0);
     await page.keyboard.press('Control+Shift+KeyS');
     await expect(view.getByTestId('pm-node-rimborsi')).toBeVisible();
+    await expect(view.getByTestId('pm-fullscreen')).toHaveAttribute('aria-pressed', 'true'); // the user opened it: full screen
+    await page.keyboard.press('Escape');
     await view.locator('.pm-trail').getByRole('button', { name: 'Tutto il progetto' }).click();
     await expect(view.getByTestId('pm-node-carrello')).toHaveCount(0);
     // the Orchestrator opens it at a system (app_project_map open → ui:command 'maps')
     await app.evaluate(({ BrowserWindow }) => { for (const w of BrowserWindow.getAllWindows()) if (w.webContents.getURL().startsWith('file:')) w.webContents.send('ui:command', { action: 'maps', value: 'alfa-shop/negozio' }); });
     await expect(view.getByTestId('pm-node-rimborsi')).toBeVisible();
+    await expect(view.getByTestId('pm-fullscreen')).toHaveAttribute('aria-pressed', 'false'); // the Orchestrator opened it: beside him
   } finally { await app.close(); }
 });
 
@@ -99,8 +106,7 @@ test('the maps go real full screen, Esc leaves it, and a box is discussed with t
     const view = page.getByTestId('pm-view');
     await view.getByTestId('pm-node-negozio').click();
     await expect(view.getByTestId('pm-node-rimborsi')).toBeVisible();
-    await view.getByTestId('pm-fullscreen').click();
-    await expect(view.getByTestId('pm-fullscreen')).toHaveAttribute('aria-pressed', 'true');
+    await expect(view.getByTestId('pm-fullscreen')).toHaveAttribute('aria-pressed', 'true'); // full screen from the first moment (ADR 0307)
     // the whole window (the OS full screen is asked too; a headless window may not get it)
     const vp = page.viewportSize() ?? await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
     const b = (await view.boundingBox())!;
@@ -220,9 +226,62 @@ test('the map shows what moves, the order of the steps, the passage into a syste
     await shot(page, 'project-map-projects');
     // full screen: the list at the side, the drawing, the agents
     await nav.getByTestId('pm-nav-alfa-shop').click();
-    await view.getByTestId('pm-fullscreen').click();
     await expect(view).toHaveClass(/pm-full/);
     await expect(view.getByTestId('pm-node-negozio')).toBeInViewport();
     await shot(page, 'project-map-moving-full');
+  } finally { await app.close(); }
+});
+
+// ADR 0307 (the owner 2026-11-14): «voglio che si capisca bene ogni passaggio e vorrei anche poterle aggiornare da un
+// tasto… il contenuto testuale non è molto dettagliato». Every step of a plan told in full, every box with how it works
+// and what goes in and out, every arrow with what passes on it, and «Aggiorna» that asks the Orchestrator for a redraw.
+test('the map tells every step, every box and every arrow in full, and «Aggiorna» asks the Orchestrator to redraw it', async () => {
+  const { app, page } = await launchDemo();
+  try {
+    await app.evaluate(() => (globalThis as unknown as { __sbDemo: { tree(): void } }).__sbDemo.tree());
+    await page.getByTestId('maps-btn').click();
+    const view = page.getByTestId('pm-view');
+    // a plan under way: the step being done, told in full (when it starts, how far it is, who does it, on which box)
+    const now = view.getByTestId('pm-stepcard-2');
+    await expect(now).toContainText('Parte quando è finito il passo 1.');
+    await expect(now).toContainText('in corso');
+    await expect(now).toContainText('lo fa Artisan');
+    await expect(now).toContainText('su Ordini e sconti');
+    await expect(view.getByTestId('pm-stepcard-1')).toHaveCount(0);
+    // all of them on a click: the two that go together say so
+    await view.getByTestId('pm-flow-all').click();
+    for (const n of [1, 2, 3, 4]) await expect(view.getByTestId(`pm-stepcard-${n}`)).toBeVisible();
+    await expect(view.getByTestId('pm-stepcard-1')).toContainText('Parte per primo.');
+    await expect(view.getByTestId('pm-stepcard-3')).toContainText('Va insieme al passo 4.');
+    await shot(page, 'project-map-steps');
+    await view.getByTestId('pm-flow-all').click();
+    await expect(view.getByTestId('pm-stepcard-1')).toHaveCount(0);
+
+    // into the shop: with nothing picked, the side tells the system on screen
+    await view.getByTestId('pm-node-negozio').click();
+    await expect(view.getByTestId('pm-here')).toContainText('Come funziona');
+    await expect(view.getByTestId('pm-here')).toContainText('Dentro ci sono cinque parti');
+    // a part: how it works, what goes in and out (each passage with what it carries), the plan's steps on it
+    await view.getByTestId('pm-node-ordini').click();
+    const detail = view.getByTestId('pm-detail');
+    await expect(detail).toContainText('arrotonda una volta sola alla fine');
+    await expect(detail.getByTestId('pm-pass-carrello--ordini')).toContainText('Quando il cliente preme «Paga»');
+    await expect(detail.getByTestId('pm-pass-ordini--pagamenti')).toContainText('addebita il totale');
+    await expect(detail.getByTestId('pm-worklist')).toContainText('Applico lo sconto %');
+    await shot(page, 'project-map-details');
+    // a piece nobody described yet says how to get its text
+    await view.getByTestId('pm-node-db').click();
+    await expect(view.getByTestId('pm-no-details')).toBeVisible();
+    // an arrow: what passes on it
+    await view.getByTestId('pm-label-ordini--pagamenti').click();
+    await expect(view.getByTestId('pm-link-detail')).toContainText('senza risposta entro 30 secondi');
+    await shot(page, 'project-map-arrow');
+
+    // «Aggiorna»: the request goes to the Orchestrator as the user's message; the button waits for the new version
+    await view.getByTestId('pm-refresh').click();
+    await expect(view.getByTestId('pm-refresh')).toBeDisabled();
+    await expect(view.getByTestId('pm-refresh')).toContainText('Aggiornamento chiesto');
+    await page.keyboard.press('Escape');
+    await expect(page.getByText(/Aggiorna la mappa del progetto «Alfa · negozio online» \(alfa-shop\)/).first()).toBeVisible();
   } finally { await app.close(); }
 });

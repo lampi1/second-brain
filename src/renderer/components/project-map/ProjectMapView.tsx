@@ -17,18 +17,23 @@
 //   work carries a moving mark; a plan shows its steps in order, one turn after the other, the steps of one turn stacked
 //   («insieme»), and each step on a box wears its turn; entering a system zooms into its box and coming back shows the
 //   box left; with more than one project they are a list on the left (a row of pills on a narrow page), not a menu.
+// - Told in full (ADR 0307, the owner 2026-11-14): the maps the user opens start full screen; a picked box, the system
+//   on screen or a picked arrow tells how it works beside the drawing (MapDetail.tsx); a plan tells each step
+//   (PlanFlow.tsx); «Aggiorna» asks the Orchestrator to have the project read again and the map redrawn.
 // Rendered by brain-model/MapPage.tsx (view «Progetti», pageArg progetti/<project>/<system>), beside the Orchestrator's
 // column: «Mappe», Ctrl+Shift+S and app_project_map open land there (actions.ts openMaps).
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { NEW_MS, levelOf, pathTo, shownStatus, type MapFlowStep, type MapPlan, type MapWork, type Level, type LevelEdge, type LevelNode, type MapAgent, type MapElement, type MapState, type ProjectMapInfo, type ProjectMapView as View } from '@shared/project-map';
-import { brainBridge, openChatRef } from '../../actions';
+import { NEW_MS, levelOf, pathTo, shownStatus, type MapLink, type MapPlan, type MapWork, type Level, type LevelEdge, type LevelNode, type MapAgent, type MapElement, type MapState, type ProjectMapInfo, type ProjectMapView as View } from '@shared/project-map';
+import { brainBridge, openChatRef, orchestratorId } from '../../actions';
 import { t } from '../../i18n';
 import { useNow } from '../../lib/clock';
 import { ago } from '../../lib/format';
-import { useApp } from '../../store/store';
-import { closeModal, setMapPicked, setMapsArg, toast, ui } from '../../store/ui';
-import { IconArrowLeft, IconChat, IconMaximize, IconMinimize } from '../Icons';
+import { send, useApp } from '../../store/store';
+import { closeModal, setMapPicked, setMapsArg, setMapsFull, toast, ui } from '../../store/ui';
+import { IconArrowLeft, IconChat, IconMaximize, IconMinimize, IconRefresh } from '../Icons';
 import { AgentAvatar } from '../AgentAvatar';
+import { ElementDetail, LinkDetail } from './MapDetail';
+import { PlanFlow, Turn } from './PlanFlow';
 import './project-map.css';
 
 type Shown = MapState | 'stale';
@@ -60,26 +65,10 @@ const clock = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: '2-dig
 const WORK_MARK = { todo: '○', now: '●', done: '✓', blocked: '✕' } as const;
 
 const reduced = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** the smallest scale the view picks by itself: under it a box's text cannot be read */
+const READABLE = 0.62;
 /** how long the view zooms into a box before the level inside it is drawn (project-map.css .pm-plane.zooming) */
 const ZOOM_MS = 200;
-
-/** A step's turn in its plan: «2», or «2∥» when it goes together with another step. */
-function Turn({ wave, par }: { wave: number; par?: boolean | undefined }) {
-  return <small className="pm-turn-n" data-par={par ? '' : undefined} title={par ? t('pm.turnPar', { n: wave }) : t('pm.turn', { n: wave })}>{wave}{par ? '∥' : ''}</small>;
-}
-
-/** The plan's steps in order (ADR 0302): the turns left to right with an arrow between them, the steps of one turn
- *  stacked under «insieme». A step under way moves; a click shows the box it works on. */
-function PlanFlow({ flow, onShow }: { flow: MapFlowStep[]; onShow: (on: string) => void }) {
-  const turns = [...new Set(flow.map(f => f.wave))].map(w => flow.filter(f => f.wave === w));
-  return <ol className="pm-flow" aria-label={t('pm.flow')} data-testid="pm-flow">
-    {turns.map(group => <li key={group[0]!.wave} className="pm-turn" data-par={group.length > 1 ? '' : undefined} data-testid={`pm-turn-${group[0]!.wave}`}>
-      {group.length > 1 && <em className="pm-together">{t('pm.together')}</em>}
-      {group.map(f => <button type="button" key={f.step} className="pm-step" data-s={f.state} data-par={f.par ? '' : undefined} disabled={!f.on} onClick={() => { if (f.on) onShow(f.on); }}
-        title={f.title} data-testid={`pm-step-${f.step}`}><i>{f.state === 'done' ? '✓' : f.state === 'blocked' ? '✕' : f.step}</i><span>{f.title}</span></button>)}
-    </li>)}
-  </ol>;
-}
 
 function Ring({ done, total }: { done: number; total: number }) {
   const r = 15, c = 2 * Math.PI * r, f = total ? done / total : 0;
@@ -153,6 +142,10 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   const [view, setView] = useState<View | null>(null);
   const [version, setVersion] = useState<number | null>(null); // null = now
   const [picked, setPicked] = useState<string | null>(null);
+  // a picked arrow: the links it stands for (ADR 0307), told beside the drawing
+  const [pickedLinks, setPickedLinks] = useState<string[] | null>(null);
+  // «Aggiorna» was pressed at this version: the button waits until the map changes
+  const [asked, setAsked] = useState<{ project: string; version: number } | null>(null);
   const [agentOn, setAgentOn] = useState<string | null>(null);
   // the view on the drawing, like a design canvas (the owner 2026-11-13: «control + rotella zummasse e il drag … per
   // spostare la view, non spostare i riquadri ma spostarsi sul workspace tipo figma»): scale and offset of the plane;
@@ -162,6 +155,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   const drag = useRef<{ x: number; y: number; cx: number; cy: number; far: boolean } | null>(null);
   const dragged = useRef(false);
   const fitNow = useRef<() => void>(() => {});
+  const whole = useRef(false); // ⤢ was pressed on this level: the whole of it, however small
   const box = useRef<HTMLDivElement>(null);
   // the passage between a level and the one inside it (ADR 0302): the view zooms into the box, then the level inside
   // grows from it; coming back, the level shrinks into place and the box left is marked for a moment
@@ -176,11 +170,16 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   const full = fullProp ?? fullOwn;
   const setFull = useCallback((on: boolean) => { if (onFull) onFull(on); else setFullOwn(on); }, [onFull]);
   const toggleFull = () => setFull(!full);
+  // the maps the user opens start full screen (ADR 0307: «quando le apro le voglio di default full screen»): «Mappe»,
+  // Ctrl+Shift+S and the palette ask for it (actions.ts openMaps); the Orchestrator's own opening stays beside it
+  const wantFull = ui.use(s => s.mapsFull);
+  useEffect(() => { if (wantFull) { setMapsFull(false); setFull(true); } }, [wantFull, setFull]);
+  const [drawn, setDrawn] = useState(false); // the view's root is on screen (not «loading»): the screen can be asked
   useEffect(() => {
     const el = root.current;
     if (full && el && document.fullscreenElement !== el) void el.requestFullscreen().catch(() => {});
     if (!full && el && document.fullscreenElement === el) void document.exitFullscreen().catch(() => {});
-  }, [full]);
+  }, [full, drawn]);
   // the OS full screen left by itself (Esc, F11): the view leaves it too
   const wasScreen = useRef(false);
   useEffect(() => {
@@ -212,13 +211,15 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   useEffect(loadList, [loadList]);
   useEffect(load, [load]);
   useEffect(() => window.sb.on('projectmap:changed', p => { loadList(); if (p.project === project && version === null) load(); }), [project, version, load, loadList]);
-  useEffect(() => { setVersion(null); setPicked(null); setAgentOn(null); }, [project]);
+  useEffect(() => { setVersion(null); setPicked(null); setPickedLinks(null); setAgentOn(null); }, [project]);
   // the Orchestrator is told the map, the level and the box on screen (lib/where.ts, ADR 0276); «Mappe» comes back here
   useEffect(() => { setMapPicked(picked); return () => setMapPicked(null); }, [picked]);
   useEffect(() => { if (project) setMapsArg(`${project}${level ? `/${level}` : ''}`); }, [project, level]);
-  useEffect(() => { setPicked(null); moved.current = false; }, [level]);
+  useEffect(() => { setPicked(null); setPickedLinks(null); moved.current = false; }, [level]);
+  useEffect(() => { if (picked) setPickedLinks(null); }, [picked]);
 
   const map = view?.map ?? null;
+  useEffect(() => { setDrawn(!!map); }, [map]);
   const live = version === null;
   // the level drawn: the system named in the place, or, for an element with nothing inside, the level that holds it
   // (app_project_map open can name any element: it is then picked)
@@ -256,14 +257,17 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   useEffect(() => {
     const el = box.current;
     if (!el || !lv) return;
-    // fitted: the whole level in sight, centred (the legend takes ≈56 px at the bottom); never above 100 %
+    // fitted: the level in sight, centred (the legend takes ≈56 px at the bottom); never above 100 %, and by itself
+    // never so small that the boxes cannot be read (ADR 0307): a tall level starts from its top and the wheel moves
+    // down it. ⤢ shows the whole level whatever its size.
     const measure = () => {
       if (moved.current) return;
       const w = el.clientWidth, h = el.clientHeight;
-      const sc = Math.min(1, Math.max(0.2, Math.min((w - 48) / lv.width, (h - 88) / lv.height)));
+      const sc = Math.min(1, Math.max(whole.current ? 0.2 : READABLE, Math.min((w - 48) / lv.width, (h - 88) / lv.height)));
       setCam({ s: sc, x: (w - lv.width * sc) / 2, y: Math.max(16, (h - 56 - lv.height * sc) / 2) });
     };
-    fitNow.current = () => { moved.current = false; measure(); };
+    fitNow.current = () => { moved.current = false; whole.current = true; measure(); };
+    whole.current = false;
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -382,6 +386,20 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   /** a plan's step shows the box it works on: its place (go picks it there), or picked again when already there */
   const show = (id: string) => { if (level === id && !kids(id)) setPicked(id); else go(id); };
   const sel = picked ? byId.get(picked) : undefined;
+  // nothing picked inside a system: the system itself is told
+  const here = !sel && !pickedLinks && shownLevel ? byId.get(shownLevel) : undefined;
+  const stLink = (l: MapLink) => shown(shownStatus(l, now));
+  const selLinks = pickedLinks ? map.links.filter(l => pickedLinks.includes(l.id)) : [];
+  // «Aggiorna» (ADR 0307: «vorrei anche poterle aggiornare da un tasto»): the Orchestrator has the project read again
+  // and the map redrawn, details included; the drawing changes by itself when the new version is saved
+  const waitingRefresh = !!asked && asked.project === map.project && asked.version === map.version;
+  const refresh = () => {
+    const r = orchestratorId();
+    if (!r) { toast(t('pm.noOrchestrator'), 'warn'); return; }
+    send(r, t('pm.refreshAsk', { title: map.title, project: map.project }));
+    setAsked({ project: map.project, version: map.version });
+    toast(t('pm.refreshAsked'), 'ok');
+  };
   // «Discuti» on a box (the owner 2026-11-13: «ogni riquadro devo poterlo discutere con l'orchestrator in un click»):
   // the full screen and the maps window step aside, the Orchestrator gets a ready draft that quotes the box, not sent
   const talk = (e: MapElement) => {
@@ -405,6 +423,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
       <span className="sp" />
       {live && waiting > 0 && <span className="pm-waiting" data-testid="pm-waiting">{t('pm.waiting', { n: waiting })}</span>}
       <span className="pm-updated">{t('pm.updated', { at: since(map.updatedAt, now) })}</span>
+      {live && <button type="button" className="btn btn-s pm-refresh" onClick={refresh} disabled={waitingRefresh} data-tip={t('pm.refreshTip')} data-testid="pm-refresh"><IconRefresh size={14} />{t(waitingRefresh ? 'pm.refreshing' : 'pm.refresh')}</button>}
       <button type="button" className="btn btn-s pm-fullbtn" onClick={toggleFull} aria-pressed={full} data-testid="pm-fullscreen">{full ? <IconMinimize size={14} /> : <IconMaximize size={14} />}{t('pm.fullscreen')}</button>
     </header>
     {!live && <div className="pm-past" data-testid="pm-past">{t('pm.past', { v: map.version, at: since(map.updatedAt, now), by: map.by })} · {map.summary}<button type="button" className="btn btn-s" onClick={() => setVersion(null)}>{t('pm.backNow')}</button></div>}
@@ -417,7 +436,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
         <button type="button" className="btn btn-ghost btn-s" onClick={() => change(p)} data-testid="pm-plan-change">{t('pm.planChange')}</button>
       </div>}
       <button type="button" className="btn btn-ghost btn-s" onClick={() => { closeModal(); openChatRef(p.chatId); }}>{t('pm.openChat')}</button>
-      {p.flow.length > 1 && <PlanFlow flow={p.flow} onShow={show} />}
+      <PlanFlow plan={p} now={now} nameOf={id => byId.get(id)?.name} onShow={show} onChat={id => { setFull(false); closeModal(); openChatRef(id); }} />
     </section>)}
     <div className={`pm-body${maps.length > 1 ? ' with-nav' : ''}`}>
       {/* the projects, a list beside the drawing like the newspaper's sections (ADR 0302: no menu to open) */}
@@ -476,9 +495,10 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
             {lv.nodes.map(n => <button type="button" key={`talk-${n.id}`} className="pm-talk" style={{ left: n.x + n.w - 30, top: n.y + 6, transform: `scale(${1 / scale})` }}
               onClick={() => talk(byId.get(n.id)!)} aria-label={t('pm.talkOn', { name: byId.get(n.id)!.name })} data-tip={t('pm.talk')} data-testid={`pm-talk-${n.id}`}><IconChat size={13} /></button>)}
             {/* the labels above the boxes: a label in a narrow gap is never hidden under one */}
-            {labels.map(({ e, left, top }) => <div key={`l${e.from}>${e.to}`} className={`pm-label s-${shown(e)}`} style={{ left, top }} title={e.note}>
+            {labels.map(({ e, left, top }) => <button type="button" key={`l${e.from}>${e.to}`} className={`pm-label s-${shown(e)}${pickedLinks?.includes(e.id) ? ' picked' : ''}`} style={{ left, top }} title={e.note}
+              onClick={() => { setPicked(null); setPickedLinks(p => (p?.includes(e.id) ? null : e.ids)); }} data-testid={`pm-label-${e.id}`}>
               {e.label}{e.count > 1 ? ` +${e.count - 1}` : ''}{e.status === 'blocked' && e.actor === 'user' && live && <em>{t('pm.you')}</em>}
-            </div>)}
+            </button>)}
             </div>
           </div>
         </div>
@@ -495,16 +515,9 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
         </div>
       </div>
       <aside className="pm-side" data-testid="pm-side">
-        {sel && <section className="pm-detail" data-testid="pm-detail">
-          <span className="dash-eyebrow">{t(`pm.kind.${sel.kind}`).toUpperCase()}</span>
-          <h3>{sel.name}</h3>
-          {sel.description && <p>{sel.description}</p>}
-          <p><i className={`pm-dot s-${st(sel)}`} />{t(`pm.state.${st(sel)}`)}{sel.note ? `: ${sel.note}` : ''}</p>
-          <p className="pm-muted">{t('pm.confirmed', { at: since(sel.confirmedAt, now) })}</p>
-          {sel.evidence.length > 0 && <p className="pm-muted">{t('pm.files')} {sel.evidence.join(', ')}</p>}
-          {worksOf(sel.id).length > 0 && <ul className="pm-worklist" data-testid="pm-worklist">{worksOf(sel.id).map(w => <li key={`${w.chatId}-${w.step}`} data-s={w.state}><i>{WORK_MARK[w.state]}</i><Turn wave={w.wave} par={w.par} /><span>{w.title}{w.added && <em className="pm-new">{t('pm.new')}</em>}</span>{w.role && <small>{w.role}</small>}</li>)}</ul>}
-          <button type="button" className="btn btn-s" onClick={() => talk(sel)} data-testid="pm-detail-talk"><IconChat size={13} />{t('pm.talk')}</button>
-        </section>}
+        {sel && <ElementDetail map={map} el={sel} state={st(sel)} stateOfLink={stLink} confirmed={t('pm.confirmed', { at: since(sel.confirmedAt, now) })} works={worksOf(sel.id)} onTalk={() => talk(sel)} onShow={show} />}
+        {here && <ElementDetail map={map} el={here} state={st(here)} stateOfLink={stLink} confirmed={t('pm.confirmed', { at: since(here.confirmedAt, now) })} works={[]} onTalk={() => talk(here)} onShow={show} testid="pm-here" lead={t('pm.youAreIn')} />}
+        {selLinks.length > 0 && <LinkDetail map={map} links={selLinks} stateOfLink={stLink} onShow={show} />}
         <div className="pm-side-head"><h3>{t('pm.agents')}</h3><span>{live ? t('pm.agentsCount', { n: agents.length, run: agents.filter(a => a.mark === 'run').length }) : t('pm.agentsPast')}</span></div>
         {live && !agents.length && <p className="pm-muted">{t('pm.noAgents')}</p>}
         {groups.map(([g, list]) => (list.length ? <section key={g} className="pm-group" data-g={g}>

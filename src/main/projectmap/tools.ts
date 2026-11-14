@@ -10,7 +10,7 @@
 //   user said, no redraw; a new piece is «previsto») and undo (the version before comes back).
 // Used by wiring-shared.ts (chat tools) and appctl/tools.ts (the Orchestrator's); pinned by test/unit/projectmap-tools.test.ts.
 import type { EventMap } from '@shared/contract';
-import { EDIT_OPS, MAP_ACTORS, MAP_KINDS, MAP_STATES, mapText, type ProjectMap } from '@shared/project-map';
+import { EDIT_OPS, MAP_ACTORS, MAP_KINDS, MAP_STATES, elementText, mapText, type ProjectMap } from '@shared/project-map';
 import type { McpTool } from '../mcp/server';
 import type { ProjectMaps } from './service';
 
@@ -23,7 +23,8 @@ const ELEMENT = {
     id: { type: 'string', description: 'stable id: lowercase letters, digits, dashes (keep it across redraws)' },
     kind: { type: 'string', enum: [...MAP_KINDS], description: `person = who uses it; system = the user's own system; external = a system of others it talks to; env = an environment (test host, pipeline); doc = a document; part = a piece inside a system (needs parent)` },
     name: { type: 'string', description: 'short name, in the user\'s language' },
-    description: { type: 'string', description: 'what it is or does, one line' },
+    description: { type: 'string', description: 'what it is or does, one line (shown in the box)' },
+    details: { type: 'string', description: 'how it works, 3 to 8 plain sentences in the user\'s language, no code: what it does step by step, what it reads and writes, the rules it applies, what happens when it fails, what is unusual in it. The user reads this in place of the code when the box is picked. Up to 1500 characters; a line break starts a paragraph. Omit on a redraw to keep the previous text.' },
     parent: { type: 'string', description: 'for a part: the id of the system it sits in (zoom)' },
     status: { type: 'string', enum: [...MAP_STATES], description: 'ok = works or done; work = being built; blocked = stuck; unknown = not known. Omit to keep the previous one.' },
     note: { type: 'string', description: 'one short line: what is missing, what the user must do' },
@@ -37,6 +38,7 @@ const LINK = {
   properties: {
     id: { type: 'string', description: 'stable id (default from--to)' }, from: { type: 'string' }, to: { type: 'string' },
     label: { type: 'string', description: 'what goes along it, a few words («chiama gli strumenti», «legge gli ordini»)' },
+    details: { type: 'string', description: 'the passage in full, 1 to 4 plain sentences: when it happens, which data goes, how (a call, a file, a queue, by hand), what comes back, what happens if it fails. Up to 800 characters. Omit on a redraw to keep the previous text.' },
     status: { type: 'string', enum: [...MAP_STATES] }, note: { type: 'string' }, actor: { type: 'string', enum: [...MAP_ACTORS] },
   },
   required: ['from', 'to', 'label'],
@@ -56,17 +58,18 @@ export function chatMapTools(d: ChatMapDeps): McpTool[] {
     {
       name: 'project_map_read',
       description: 'The user\'s project maps (Mappa page → Progetti): each project drawn as people, systems, environments and the parts inside each system, with the links between them, their status and who must act. Without project: the list. With project: that map as text (ids, statuses, «da verificare» when nobody confirmed it lately or its files changed, the agents bound, the user\'s corrections). Read it before working on a mapped project: then say what you work on and update the status of what you finish with project_map_update.',
-      inputSchema: { type: 'object', properties: { project: { type: 'string', description: 'project name or id' } }, additionalProperties: false },
+      inputSchema: { type: 'object', properties: { project: { type: 'string', description: 'project name or id' }, element: { type: 'string', description: 'with project: one element in full (its details, its files, every link in and out with what goes along it)' } }, additionalProperties: false },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
       run: a => {
         if (typeof a.project !== 'string' || !a.project.trim()) return json({ projects: d.maps.list() });
         const v = d.maps.view(projectOf(d.maps, a.project))!;
+        if (typeof a.element === 'string' && a.element) return elementText(v.map, a.element, Date.now());
         return mapText(v, Date.now());
       },
     },
     {
       name: 'project_map_save',
-      description: `Draw (or redraw) a project's map for the user: what they look at instead of the code. Read the project first (code, configuration, pipelines, README, the brain's notes) and draw what it IS: who uses it (person), the user's system(s) (system) and their main parts (part, parent = the system), the external systems it talks to (external), the environments (env: test host, pipeline) and key documents (doc); the links with what goes along them. Keep it small enough to read (about 5-15 elements per level). Give each element its status as far as you know it and the files you read it from (evidence, relative to the root: the app watches them). Never invent what the project does not show: mark it unknown with a note, and ask. The user reads this map in place of the code, to see how the system works and to spot what is wrong in its structure himself: draw what is there plainly, each link with what really goes along it. A redraw: read the map first (project_map_read), keep the ids, respect the user's corrections. Every save is a version in the map's history. kinds: ${KINDS}; statuses: ${STATES}; actors: ${ACTORS}.`,
+      description: `Draw (or redraw) a project's map for the user: what they look at instead of the code. Read the project first (code, configuration, pipelines, README, the brain's notes) and draw what it IS: who uses it (person), the user's system(s) (system) and their main parts (part, parent = the system), the external systems it talks to (external), the environments (env: test host, pipeline) and key documents (doc); the links with what goes along them. Keep it small enough to read (about 5-15 elements per level). Give each element its status as far as you know it and the files you read it from (evidence, relative to the root: the app watches them). Never invent what the project does not show: mark it unknown with a note, and ask. The user reads this map in place of the code, to see how the system works and to spot what is wrong in its structure himself: draw what is there plainly, each link with what really goes along it. The boxes stay short; the substance goes in details, on every element and every link you understood: a map with one-line boxes and nothing behind them tells the user too little. A redraw: read the map first (project_map_read), keep the ids, respect the user's corrections. Every save is a version in the map's history. kinds: ${KINDS}; statuses: ${STATES}; actors: ${ACTORS}.`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -121,6 +124,7 @@ export function drawBrief(title: string, root: string, prev: ProjectMap | null):
       : `Disegna la mappa del progetto «${title}» per l'utente: è quello che guarda al posto del codice.`,
     `Cartella del progetto: ${root}.`,
     'Leggi il progetto (codice, configurazioni, pipeline, README, note del brain su di lui) e chiamati project_map_save con: chi lo usa, i suoi sistemi e le loro parti principali, i sistemi esterni con cui parla, gli ambienti, i collegamenti con cosa passa. 5-15 elementi per livello, nomi brevi in italiano.',
+    'I riquadri restano brevi; la sostanza va in `details`, su ogni elemento e su ogni collegamento che hai capito: come funziona in 3-8 frasi semplici (cosa fa passo per passo, cosa legge e scrive, le regole che applica, cosa succede se fallisce), e per un collegamento quando avviene, quali dati passano, come, cosa torna indietro. L\'utente legge questo al posto del codice: niente codice, niente gergo.',
     'Per ogni elemento: lo stato per quanto lo sai (ok, work, blocked, unknown), chi deve agire se è bloccato, e i file da cui l\'hai capito (evidence). Quello che il progetto non mostra non inventarlo: unknown con una nota.',
     'Sola lettura: non cambiare file del progetto. Alla fine riporta in 3 righe cosa hai disegnato e cosa resta da capire.',
   ].join('\n');
@@ -129,17 +133,17 @@ export function drawBrief(title: string, root: string, prev: ProjectMap | null):
 export function appProjectMapTool(maps: ProjectMaps, emitUi: (cmd: EventMap['ui:command']) => void): Tool {
   return {
     name: 'app_project_map',
-    description: 'The user\'s project maps (Mappa page → Progetti, ADR 0271): each project drawn as people, systems, parts, environments and links, with their status, who must act, the agents at work on each part and the history from the first drawing. Use it when the user asks how a project is built, where it stands, or for its map, diagram, schema, lines («fili»): open shows the real map in a window (never draw your own diagram of a project with app_show_ui); none drawn yet → brief a Scout. action: list | read (the map as text, to answer) | open (the maps window on screen, at project, element = a system to step into; no project = the maps window as it is) | brief (the task for a Scout chat that draws or redraws it: pass title and root for a new one, then start the Scout with app_create_chat, cwd = root) | correct (text = the user\'s correction, kept for every later drawing; then brief a redraw if the drawing must change) | edit (ops = the pieces the talk with the user adds, changes or removes, at once and without a redraw: only you change a map, the user never does by hand; a new piece is «previsto», dashed, until work starts on it; read first for the ids; say what changed in one line) | undo (the last change comes back). The user\'s message says which map and box he looks at ([app · the user looks at …]): «qui», «questo» mean that one. Work planned in Plan mode is drawn by its Strategist; to change a plan under way, write to that Strategist (app_send_to_chat).',
+    description: 'The user\'s project maps (Mappa page → Progetti, ADR 0271): each project drawn as people, systems, parts, environments and links, with their status, who must act, the agents at work on each part and the history from the first drawing. Use it when the user asks how a project is built, where it stands, or for its map, diagram, schema, lines («fili»): open shows the real map in a window (never draw your own diagram of a project with app_show_ui); none drawn yet → brief a Scout. action: list | read (the map as text, to answer; with element = that piece in full: how it works, its files, every link with what goes along it) | open (the maps window on screen, at project, element = a system to step into; no project = the maps window as it is) | brief (the task for a Scout chat that draws or redraws it: pass title and root for a new one, then start the Scout with app_create_chat, cwd = root) | correct (text = the user\'s correction, kept for every later drawing; then brief a redraw if the drawing must change) | edit (ops = the pieces the talk with the user adds, changes or removes, at once and without a redraw: only you change a map, the user never does by hand; a new piece is «previsto», dashed, until work starts on it; read first for the ids; say what changed in one line) | undo (the last change comes back). The user\'s message says which map and box he looks at ([app · the user looks at …]): «qui», «questo» mean that one. Work planned in Plan mode is drawn by its Strategist; to change a plan under way, write to that Strategist (app_send_to_chat).',
     inputSchema: { type: 'object', properties: {
       action: { type: 'string', enum: ['list', 'read', 'open', 'brief', 'correct', 'edit', 'undo'] },
       project: { type: 'string', description: 'the map\'s name or id' },
-      element: { type: 'string', description: 'open: a system to zoom into' },
+      element: { type: 'string', description: 'open: a system to zoom into; read: the piece to tell in full' },
       title: { type: 'string', description: 'brief: the new project\'s name' },
       root: { type: 'string', description: 'brief: the project\'s folder on this PC' },
       text: { type: 'string', description: 'correct: the user\'s correction, in their words' },
       ops: { type: 'array', maxItems: 40, description: 'edit: the changes, in order', items: { type: 'object', required: ['op'], properties: {
         op: { type: 'string', enum: [...EDIT_OPS], description: 'add (name, kind, parent for a part) | set (id + what changes) | remove (id; its parts and links go too) | link (from, to, label) | unlink (id)' },
-        id: { type: 'string' }, name: { type: 'string' }, kind: { type: 'string', enum: [...MAP_KINDS] }, description: { type: 'string' }, parent: { type: 'string' },
+        id: { type: 'string' }, name: { type: 'string' }, kind: { type: 'string', enum: [...MAP_KINDS] }, description: { type: 'string' }, details: { type: 'string', description: 'how it works (an element) or what goes along it in full (a link)' }, parent: { type: 'string' },
         status: { type: 'string', enum: [...MAP_STATES] }, note: { type: 'string' }, actor: { type: 'string', enum: [...MAP_ACTORS] }, from: { type: 'string' }, to: { type: 'string' }, label: { type: 'string' } } } },
     }, required: ['action'] },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
@@ -156,7 +160,7 @@ export function appProjectMapTool(maps: ProjectMaps, emitUi: (cmd: EventMap['ui:
       // open with no project: the maps window as the user left it (or «nessun progetto disegnato» with what to ask)
       if (action === 'open' && !(typeof a.project === 'string' && a.project)) { emitUi({ action: 'maps', value: '' }); return maps.list().length ? 'ok' : 'ok: nessuna mappa ancora, la finestra dice come chiederla'; }
       const project = projectOf(maps, a.project);
-      if (action === 'read') return mapText(maps.view(project)!, Date.now());
+      if (action === 'read') return typeof a.element === 'string' && a.element ? elementText(maps.view(project)!.map, a.element, Date.now()) : mapText(maps.view(project)!, Date.now());
       if (action === 'open') {
         const el = typeof a.element === 'string' && a.element ? a.element : '';
         if (el && !maps.view(project)!.map.elements.some(e => e.id === el)) throw new Error(`element: no «${el}» in this map`);
