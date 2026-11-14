@@ -36,8 +36,8 @@ chose again: at a glance the task and whether the chat is at work, everything el
 5. A delegated chat's row has the same mark in place of its figures. A sub-agent's or a command's row keeps kind,
    agent, task and state; when it started and for how long is in its tip, and on the row only when there is room.
 6. Under 640 px a strip takes two lines, inside the height the person already gives it: name, state, mark and
-   controls on the first; the task and what it does now on the whole second. Only the ⋯ control keeps its place, the
-   others come on hover or focus. The open window's head folds the same way and its details row wraps.
+   controls on the first; the task and what it does now on the whole second. The open window's head folds the same
+   way and its details row wraps.
 7. A page answers to its own width. Every page host (`.bx-page`) is a query container; a narrow page keeps a 16 px
    gutter and its grids fold by the page's width. Fixed where it showed: Settings (its two columns never became one,
    because the page was its own query container: the host is now; the sections wrap on top instead of scrolling

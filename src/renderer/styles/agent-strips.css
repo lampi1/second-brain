@@ -241,7 +241,8 @@
 @media (prefers-reduced-motion: reduce) { .strip-info { transition:none; } }
 /* With the Orchestrator on half the window (ADR 0307) a strip is often short: under 640 px it takes the two lines the
    little person's height already gives it, who it is with the state on the first, the task and what it does now on
-   the whole second, so the task is never squeezed between the name and the state. */
+   the whole second, so the task is never squeezed between the name and the state. The controls keep their room on
+   the first line, as on a long strip (they are there to click before the pointer shows them). */
 @container (max-width: 640px) {
   .chat-tile.is-strip .th-row { display:grid; grid-template-columns:auto minmax(0,1fr) auto auto auto; grid-template-areas:"face name state info acts" "face now now now now"; column-gap:8px; row-gap:1px; align-items:center; }
   .chat-tile.is-strip .th-row > .strip-face { grid-area:face; }
@@ -249,9 +250,7 @@
   .chat-tile.is-strip .th-row > .strip-now, .chat-tile.is-strip .th-row > .th-title-input { grid-area:now; }
   .chat-tile.is-strip .th-row > .strip-wait, .chat-tile.is-strip .th-row > .strip-working, .chat-tile.is-strip .th-row > .strip-state:not(.sr-only) { grid-area:state; }
   .chat-tile.is-strip .th-row > .strip-info { grid-area:info; }
-  .chat-tile.is-strip .th-row > .chat-header-actions { grid-area:acts; min-width:0; }
-  .chat-tile.is-strip .chat-header-actions > .icon-btn:not(:last-child) { display:none; }
-  .chat-tile.is-strip:hover .chat-header-actions > .icon-btn, .chat-tile.is-strip:focus-within .chat-header-actions > .icon-btn { display:inline-grid; }
+  .chat-tile.is-strip .th-row > .chat-header-actions { grid-area:acts; }
 }
 /* the open window's head on a short column: the same two lines (who it is, the state and the controls; under them the
    title, a long context and the view switch), and its details wrap instead of running out of the window */
