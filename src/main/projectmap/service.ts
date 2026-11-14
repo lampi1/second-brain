@@ -119,7 +119,8 @@ export class ProjectMaps {
       const waves = planWaves(p.steps), running = p.steps.filter(x => x.state === 'now').length;
       const par = (x: PlanStep, i: number) => waves.filter(w => w === waves[i]).length > 1 || (x.state === 'now' && running > 1);
       plans.push({ chatId: c.id, title: c.title, phase: p.phase, at: p.at, steps: p.steps.length, done: p.steps.filter(x => x.state === 'done').length, ...(p.doneWhen ? { doneWhen: p.doneWhen } : {}),
-        flow: p.steps.map((x, i) => ({ step: i + 1, title: x.title, state: x.state, wave: waves[i]!, ...(par(x, i) ? { par: true } : {}), ...(x.on ? { on: x.on } : {}), ...(x.role ? { role: x.role } : {}) })) });
+        flow: p.steps.map((x, i) => ({ step: i + 1, title: x.title, state: x.state, wave: waves[i]!, ...(par(x, i) ? { par: true } : {}), ...(x.on ? { on: x.on } : {}), ...(x.role ? { role: x.role } : {}),
+          ...(x.detail ? { detail: x.detail } : {}), ...(x.chatIds?.length ? { chatIds: [...x.chatIds] } : {}), ...(x.startedAt ? { startedAt: x.startedAt } : {}), ...(x.endedAt ? { endedAt: x.endedAt } : {}), ...(x.added ? { added: true } : {}) })) });
       p.steps.forEach((x, i) => { if (x.on) (works[x.on] ??= []).push({ title: x.title, state: x.state, ...(x.role ? { role: x.role } : {}), chatId: c.id, step: i + 1, chatIds: x.chatIds ?? [], ...(x.added ? { added: true } : {}), wave: waves[i]!, ...(par(x, i) ? { par: true } : {}) }); });
     }
     return { works, plans: plans.sort((a, b) => b.at - a.at) };

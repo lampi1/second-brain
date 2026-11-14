@@ -76,6 +76,7 @@ export interface UiState {
   orchestratorRenew: { chatId: string; to: Harness } | null; // the new-Orchestrator dialog: which Orchestrator, which engine preselected
   handoffChat: string | null;    // the chat whose hand-off the 'handoff' dialog shows
   mapsArg: string | null;        // the project map last on screen: <project>/<system> (ADR 0276: «Mappe» goes back there), null = the first project
+  mapsFull: boolean;             // the user opened the maps («Mappe», Ctrl+Shift+S): the view starts full screen and clears it (ADR 0307)
   mapPicked: string | null;      // the box selected on the project map on screen (ADR 0276: the Orchestrator is told)
   handoffSession: string | null; // set: the note one cold continuation started from (read only, ADR 0031)
   ctxHidden: Record<string, number>; // long-chat notice hidden by the user, per chat: the context size when hidden
@@ -176,7 +177,7 @@ function readPrefs(): Prefs {
 }
 
 export const ui = createStore<UiState>({
-  prefs: readPrefs(), maximized: null, focusMode: null, fullOrch: false, focused: null, modal: null, confirm: null, orchestratorRenew: null, handoffChat: null, mapsArg: null, mapPicked: null, handoffSession: null, ctxHidden: {}, page: 'home',
+  prefs: readPrefs(), maximized: null, focusMode: null, fullOrch: false, focused: null, modal: null, confirm: null, orchestratorRenew: null, handoffChat: null, mapsArg: null, mapsFull: false, mapPicked: null, handoffSession: null, ctxHidden: {}, page: 'home',
   lanePeek: false, toasts: [], flash: null, focusReq: null, hidden: [], hiddenTabs: [], closing: [], later: false, announce: '', qwin: { open: false, first: null, call: 0, shown: false }, viewer: emptyViewer,
   map: false, pageArg: null, mapArg: null, history: [{ page: 'home' }], hist: 0, center: false, read: readRead(), highlight: null, toastDismissed: [],
 });
@@ -239,6 +240,7 @@ export const openModal = (modal: Modal) => ui.set(s => ({ ...s, modal }));
 export const closeModal = () => ui.set(s => ({ ...s, modal: null, confirm: null, orchestratorRenew: null }));
 export const openOrchestratorRenew = (orchestratorRenew: { chatId: string; to: Harness }) => ui.set(s => ({ ...s, modal: 'orchestratorRenew', orchestratorRenew }));
 export const askConfirm = (confirm: ConfirmSpec) => ui.set(s => ({ ...s, modal: 'confirm', confirm }));
+export const setMapsFull = (on: boolean) => ui.set(s => (s.mapsFull === on ? s : { ...s, mapsFull: on }));
 export const setMapsArg = (arg: string | null) => ui.set(s => ({ ...s, mapsArg: arg }));
 export const setMapPicked = (id: string | null) => ui.set(s => (s.mapPicked === id ? s : { ...s, mapPicked: id }));
 export const openHandoff = (chatId: string, session?: string) => ui.set(s => ({ ...s, modal: 'handoff', handoffChat: chatId, handoffSession: session ?? null }));

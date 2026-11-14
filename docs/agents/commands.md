@@ -132,7 +132,7 @@ row and its line here in the same change.
 | `brain_search` | work chats | Search the user's brain by meaning and words. |
 | `brain_scripts` | work chats | The brain's tested reusable scripts with usage. |
 | `brain_script_add` | work chats | Save a new script in the brain right after it ran and worked. |
-| `project_map_read` | work chats | The user's project maps: the list, or one map as text with statuses and agents. |
+| `project_map_read` | work chats | The user's project maps: the list, one map as text with statuses and agents, or one `element` in full (details, files, links). |
 | `project_map_save` | work chats | Draw or redraw a project's map (people, systems, parts, links, statuses, evidence files). |
 | `project_map_update` | work chats | Say which elements of a map you work on and update the status of what you finished. |
 | `brain_queries` | work chats | The brain's saved queries (SQL, KQL, GraphQL…). |

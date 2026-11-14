@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- Project maps: they open full screen when the user opens them; a click on a box or on an arrow's label tells it in
+  full at the side («Come funziona», what goes in and out); the step of a plan under way says when it starts, who does
+  it and how far it is; «Aggiorna» asks the Orchestrator for a redraw with the details (`details` on elements and
+  links, `element` on `project_map_read`) (ADR 0307).
 - Project maps: the box somebody works on right now pulses quietly, a plan shows its steps in order with the
   parallel ones together (`par` on a step of `plan_propose`), entering a system zooms into it, and the projects are a
   list at the side in place of the menu (ADR 0302).

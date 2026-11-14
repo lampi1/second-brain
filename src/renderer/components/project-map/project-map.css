@@ -9,6 +9,7 @@
 .pm-trail button[aria-current] { color: var(--text); font-weight: 600; }
 .pm-waiting { background: var(--amber); color: #1a1405; font-weight: 700; font-size: 12.5px; padding: 4px 12px; border-radius: 999px; }
 .pm-updated { color: var(--text-3); font-size: 12.5px; border: 1px solid var(--border-2); padding: 4px 10px; border-radius: 999px; }
+.pm-updated.pm-asked { color: var(--text); border-color: var(--accent); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pm-past { display: flex; align-items: center; gap: 10px; background: var(--accent-bg); border: 1px solid var(--accent-line); color: var(--text); padding: 7px 12px; border-radius: var(--r-m); font-size: 13px; }
 .pm-past .btn { margin-left: auto; }
 
@@ -184,7 +185,7 @@
 }
 
 /* ADR 0302 · the plan's steps in order: the turns left to right, an arrow between them, the steps of one turn stacked */
-.pm-flow { list-style: none; margin: 4px 0 2px; padding: 0; flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 0; min-width: 0; }
+.pm-flow { list-style: none; margin: 4px 0 2px; padding: 0; flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 0; min-width: 0; }
 .pm-turn { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; max-width: 100%; }
 .pm-turn + .pm-turn { margin-left: 30px; }
 .pm-turn + .pm-turn::before { content: '→'; position: absolute; left: -22px; top: 50%; transform: translateY(-50%); color: var(--text-3); font-size: 14px; }
@@ -238,3 +239,55 @@
 }
 /* the legend never runs under the zoom buttons in a narrow drawing */
 .pm-legend { max-width: calc(100% - 72px); gap: 4px 14px; }
+
+/* ADR 0307 · told in full: a plan's steps as cards, how a piece works beside the drawing, a picked arrow, «Aggiorna» */
+.pm-refresh { gap: 6px; }
+button.pm-label { font: inherit; font-size: 12px; cursor: pointer; }
+button.pm-label:hover { color: var(--text); border-color: var(--text-3); }
+button.pm-label:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.pm-label.picked { border-color: var(--accent); color: var(--text); box-shadow: 0 0 0 3px var(--accent-bg); }
+.pm-flowbox { flex: 1 0 100%; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.pm-flowrow { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.pm-flow-all { flex: none; margin-top: 4px; }
+.pm-step[aria-pressed='true'] { background: var(--surface-3); color: var(--text); }
+.pm-stepcards { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); max-height: 34vh; overflow: auto; }
+.pm-stepcards[data-all] { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.pm-stepcard { display: flex; flex-direction: column; gap: 5px; padding: 10px 12px; border: 1px solid var(--border-2); border-radius: var(--r-m); background: var(--surface-2); min-width: 0; }
+/* one step told alone: a single line, so the drawing keeps its height */
+.pm-stepcards:not([data-all]) .pm-stepcard { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding: 7px 12px; }
+.pm-stepcards:not([data-all]) .pm-stepcard > p:not(.pm-muted) { flex: 1 0 100%; order: 3; }
+.pm-stepcard[data-s='now'] { border-color: var(--accent); }
+.pm-stepcard[data-s='blocked'] { border-color: var(--red); }
+.pm-stepcard-head { display: flex; align-items: flex-start; gap: 8px; font-size: 13.5px; line-height: 1.3; }
+.pm-stepcard-head > i { font-style: normal; flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--surface-4); color: var(--text-2); font-size: 11px; font-weight: 700; }
+.pm-stepcard[data-s='now'] .pm-stepcard-head > i { background: var(--accent); color: var(--bg); }
+.pm-stepcard[data-s='done'] .pm-stepcard-head > i { background: color-mix(in srgb, var(--green) 22%, transparent); color: var(--green); }
+.pm-stepcard[data-s='blocked'] .pm-stepcard-head > i { background: var(--red); color: var(--bg); }
+.pm-stepcard p { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--text-2); }
+.pm-stepcard p.pm-muted { color: var(--text-3); }
+.pm-stepcard-meta { display: flex; flex-wrap: wrap; gap: 4px 6px; font-size: 12px; color: var(--text-2); }
+.pm-stepcard-meta > * { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border-2); background: var(--surface); color: inherit; font: inherit; font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-stepcard-meta > button { cursor: pointer; }
+.pm-stepcard-meta > button:hover { color: var(--text); border-color: var(--text-3); }
+.pm-stepcard-meta > [data-k='state'] { font-weight: 600; color: var(--text); }
+/* the detail of a piece: headings, the long text, the passages in and out */
+.pm-detail h4 { margin: 12px 0 4px; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); font-weight: 600; }
+.pm-detail p.pm-long { font-size: 13px; line-height: 1.5; color: var(--text); margin: 0 0 6px; }
+.pm-detail button:not(.btn) { appearance: none; background: none; border: 0; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-align: left; }
+.pm-detail button:not(.btn):hover { text-decoration: underline; }
+.pm-detail button:not(.btn):focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: 3px; }
+.pm-passes, .pm-partlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pm-pass { padding: 7px 9px; border-radius: var(--r-s); background: var(--surface); border: 1px solid var(--border); }
+.pm-pass-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; font-size: 12.5px; color: var(--text-2); }
+.pm-pass-head b { color: var(--text); font-weight: 600; }
+.pm-pass-st { margin-left: auto; font-size: 11.5px; white-space: nowrap; }
+.pm-pass p { margin: 4px 0 0; }
+.pm-pass p.pm-long { font-size: 12.5px; color: var(--text-2); }
+.pm-partlist li { display: flex; flex-direction: column; gap: 1px; font-size: 12.5px; }
+.pm-partlist li span { color: var(--text-2); }
+.pm-linkcard + .pm-linkcard { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.pm-linkends { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+/* full screen has the room: a wider column to read in */
+.pm.pm-full .pm-body { grid-template-columns: minmax(0, 1fr) 400px; }
+.pm.pm-full .pm-body.with-nav { grid-template-columns: 190px minmax(0, 1fr) 400px; }
+.pm.pm-full .pm-step { max-width: 320px; }
