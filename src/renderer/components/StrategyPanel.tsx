@@ -1,7 +1,7 @@
 // A Strategist's plan with the user on its strip (ADR 0108), collapsed or expanded: while it asks, the answers already
 // clear, «Basta domande» and a pointer to its open question in the questions window (QuestionsWindow.tsx, always on
 // since 2026-10-22); then its short plan, approved or changed in that window too (PlanApproval.tsx, ADR 0121); once
-// approved, the steps as a checklist, Claude Code style (✓ done, a turning ring for the step under way, a dashed ring
+// approved, a flat row with one round dot per step (ADR 0311) that opens the steps as a checklist, Claude Code style (✓ done, a turning ring for the step under way, a dashed ring
 // for the next ones), each with the role that does it. Used by ChatTile.tsx; the plan itself is ChatSummary.plan
 // (shared/strategy.ts).
 import { useState } from 'react';
@@ -88,13 +88,15 @@ export function StrategyPanel({ chat, question }: { chat: ChatSummary; question?
       : plan.steps.some(s => s.outcome === 'partial') ? 'tree.plan.partial' : null;
   return <div tabIndex={-1} className="sp-card sp-progress" data-testid={`plan-${id}`} data-phase={plan.phase}>
     <button type="button" className="sp-summary" aria-expanded={details} aria-controls={`plan-details-${id}`} onClick={() => setDetails(!details)} data-testid={`plan-toggle-${id}`}>
-      <span className="sp-kicker">{t('tree.plan.title')}</span><span>{t('tree.plan.progress', { done, total })}</span>
+      <span className="sp-kicker">{t('tree.plan.title')}</span>
+      {/* one round dot per step: done filled, the one under way half, a blocked one amber, the next ones empty (ADR 0311) */}
+      <span className="sp-dots" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done} aria-label={t('tree.plan.progress', { done, total })}>
+        {plan.steps.map((s, i) => <i key={i} className={`is-${s.state}`} />)}
+      </span>
+      <span className="sp-count">{done}/{total}</span>
       {qualityLabel && <span className="sp-blocked">{t(qualityLabel)}</span>}
       <span className="sp-right" aria-hidden="true">{details ? '▴' : '▾'}</span>
     </button>
-    <div className="sp-bar" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done} aria-label={t('tree.plan.progress', { done, total })} data-tip={t('tree.plan.progress', { done, total })}>
-      <b style={{ width: `${total ? Math.round(done / total * 100) : 0}%` }} />
-    </div>
     <div id={`plan-details-${id}`} hidden={!details}><Steps plan={plan} timed testid={`plan-steps-${id}`} /></div>
   </div>;
 }

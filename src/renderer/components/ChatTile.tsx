@@ -22,7 +22,7 @@ import { chatCost, queueReason, folderName, minutes, permissionBadge, modelWithE
 import { useNow } from '../lib/clock';
 import { COMPACT_TILE_H } from '../lib/grid';
 import { isBusy, sameList } from '../store/state';
-import { send, stop, useApp } from '../store/store';
+import { closeChat, send, stop, useApp } from '../store/store';
 import { DEFAULT_SPLIT, setAgentSplit, setAgentView, setFocused, setChatExpanded, ui, type AgentView } from '../store/ui';
 import {t}from'../i18n';
 import {schedule,suspendViews}from'../lib/viewports';
@@ -57,7 +57,7 @@ import { TaskContext } from './TaskContext';
 import { InWindowLine } from './QuestionsWindow';
 import { RunHereCtx } from './CodeBlock';
 import { childRequestsFor, requestHost, type ChildRequest } from '../lib/child-requests';
-import { IconAlert, IconArrowLeft, IconChat, IconColumns, IconGlobe, IconInfo, IconMaximize, IconMore, IconStop } from './Icons';
+import { IconAlert, IconArrowLeft, IconChat, IconColumns, IconGlobe, IconInfo, IconMaximize, IconMore, IconStop, IconX } from './Icons';
 import { IconButton, Kbd, StatePill, useSize } from './ui';
 import { rolePurpose } from '../lib/role-text';
 
@@ -212,6 +212,8 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
     {(strip || focus) && <IconButton label={focus ? t('aw.fullExit') : t('aw.full')} shortcut="F11" onClick={() => toggleMaximize(key)} testid={`chat-max-${chatId}`}><IconMaximize size={14} /></IconButton>}
     {expanded && <IconButton label={t('aw.facts')} onClick={() => setFacts(v => !v)} aria-expanded={facts} testid={`chat-facts-${chatId}`}><IconInfo size={14} /></IconButton>}
     <IconButton ref={menuBtn} label={t('chat.tile.menu')} onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid={`chat-menu-${chatId}`}><IconMore /></IconButton>
+    {/* a bench keeps its ✕ in sight, as its stop (the owner, 2026-11-14) */}
+    {strip && !expanded && <IconButton label={t('chat.menu.closeChat')} shortcut="Ctrl+W" onClick={e => closeFromX(e, () => void closeChat(chatId))} testid={`chat-x-${chatId}`}><IconX size={14} /></IconButton>}
     </div>;
   return (
     <section ref={ref} className={`tile chat-tile ${expanded?'is-expanded':'is-strip'} tone-${st.tone} ${isFocused ? 'focused' : ''} ${flash ? 'flash' : ''} ${compact ? 'compact' : ''} ${closing ? 'closing' : ''}${embedded ? ' is-embedded' : ''}${focus ? ' is-full' : ''}`} role="region"

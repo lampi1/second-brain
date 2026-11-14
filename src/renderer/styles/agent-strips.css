@@ -254,6 +254,8 @@
 .bench-state .strip-state { display:inline-flex; align-items:center; gap:6px; padding:3px 8px 3px 6px; border-radius:var(--r-s); background:var(--surface-3); font-size:11px; font-weight:600; }
 .bench-state .strip-state::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; }
 .bench-stage > .chat-header-actions { position:absolute; right:6px; top:6px; z-index:2; min-width:0; flex-wrap:nowrap; margin:0; }
+/* on a bench every control stays in sight: stop, ✕ and the rest (the owner, 2026-11-14) */
+.chat-tile.is-strip .bench-stage > .chat-header-actions > .icon-btn { opacity:1; }
 .bench-helpers { position:relative; z-index:1; display:flex; align-items:flex-end; gap:2px; margin-left:auto; }
 .bench-helper { position:relative; display:inline-flex; border-radius:var(--r-s); cursor:pointer; }
 .bench-helper:hover { background:color-mix(in srgb, var(--text) 5%, transparent); }

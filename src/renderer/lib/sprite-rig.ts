@@ -86,6 +86,9 @@ export interface ArmPose {
   go?: Track; goB?: Track;
   /** what the hand holds, drawn from the hand, along the forearm; its own angle and movement */
   held?: Node[]; ha?: number; goH?: Track;
+  /** the fingers over what the hand holds (drawn after the hand, in the held thing's frame): the hand round a mug, a
+   *  can, a stem; the palm stays behind it (a two-layer hand, as cut-out animation does it) */
+  grip?: Node[];
 }
 /** A leg: the hip's angle and the knee's, and their movements. */
 export interface LegPose { a?: number; go?: Track; b?: number; goB?: Track }
@@ -99,6 +102,8 @@ export interface Pose {
   lean?: number; go?: Track;
   /** behind the figure (a table, an anvil) and in front of everything (a bubble, notes) */
   back?: Node[]; front?: Node[];
+  /** in front of the body but under the head and the arms (a table he stands behind: the hands reach over it) */
+  mid?: Node[];
 }
 /** A body's measures: half the width between the shoulders, at the waist and at the hips, the thickness of an arm and
  *  of a leg, half the neck; `belly`: how far a paunch comes out past the waist. */
@@ -132,13 +137,11 @@ function face(look: Look, eyes: Eyes, mouth: Mouth, blink: boolean): Node[] {
 
 function arm(side: 'l' | 'r', p: ArmPose, look: Look, b: Build): Group {
   const sleeve = look.sleeve ?? look.top, fore = look.fore ?? sleeve, m = side === 'l' ? 1 : -1;
-  const x = side === 'l' ? 32 - b.sh : 32 + b.sh, whole = J(x, SH_Y, p.a, [
-    S(`M0 0V${UPPER}`, sleeve, b.arm),
-    ...(look.pad?.(m) ?? []),
-    J(0, UPPER, p.b ?? 0, [S(`M0 0V${n2(FORE - b.arm * 0.4)}`, fore, b.arm * 0.9), ...(look.cuff ? [S(`M0 ${n2(FORE - b.arm * 0.62)}V${n2(FORE - b.arm * 0.4)}`, look.cuff, b.arm * 0.94)] : []),
-      ...(p.held ? [J(0, HAND, p.ha ?? 0, p.held, p.goH)] : []), C(0, HAND, b.arm * 0.56, look.hand ?? look.skin)], p.goB),
-  ], p.go);
-  return look.cap ? { g: [whole, J(x, SH_Y, 0, look.cap(m))] } : whole;
+  const x = side === 'l' ? 32 - b.sh : 32 + b.sh, upper = [S(`M0 0V${UPPER}`, sleeve, b.arm), ...(look.pad?.(m) ?? [])];
+  const forearm = J(0, UPPER, p.b ?? 0, [S(`M0 0V${n2(FORE - b.arm * 0.4)}`, fore, b.arm * 0.9), ...(look.cuff ? [S(`M0 ${n2(FORE - b.arm * 0.62)}V${n2(FORE - b.arm * 0.4)}`, look.cuff, b.arm * 0.94)] : []),
+    ...(p.held ? [J(0, HAND, p.ha ?? 0, p.held, p.goH)] : []), C(0, HAND, b.arm * 0.56, look.hand ?? look.skin), ...(p.grip ? [J(0, HAND, p.ha ?? 0, p.grip, p.goH)] : [])], p.goB);
+  // a pauldron covers the upper arm only: the forearm, the hand and what it holds pass over it (the same turn twice)
+  return look.cap ? { g: [J(x, SH_Y, p.a, upper, p.go), J(x, SH_Y, 0, look.cap(m)), J(x, SH_Y, p.a, [forearm], p.go)] } : J(x, SH_Y, p.a, [...upper, forearm], p.go);
 }
 function leg(side: 'l' | 'r', p: LegPose | undefined, look: Look, b: Build, toe: number): Group {
   const x = (b.hip - b.leg / 2 + 0.3) * (side === 'l' ? -1 : 1);
@@ -176,6 +179,7 @@ export function person(look: Look, pose: Pose = {}): Node[] {
     P(torso(b), look.top),
     P(`M${n2(32 - hips)} 46.9H${n2(32 + hips)}L${n2(32 + b.hip)} 50.6Q32 52.6 ${n2(32 - b.hip)} 50.6Z`, look.pants),
     ...(look.wear ?? []),
+    ...(pose.mid ?? []),
     head,
     arm('l', pose.armL ?? { a: 5 }, look, b), arm('r', pose.armR ?? { a: -5 }, look, b),
   ];

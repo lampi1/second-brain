@@ -5,16 +5,19 @@
 // smith with a cigar) hammers hot iron on an anvil, the Sentinel (dark plate, closed helm) watches and slams its
 // halberd, the Herald blows a long trumpet; a chat without a role is a tired developer at a standing desk. The other
 // states are shared: thinking (a hand at the chin, a thought), waiting for the user (arms folded, a foot tapping, an
-// amber «!»), done (a fist pump, then fists on the hips under a green tick), error (a facepalm, a red «!»), idle
-// (asleep on its feet, arms folded). The kind of work at hand has its own scene for every role (ADR 0305), with props
+// amber «!»), done (a fist pump, then fists on the hips under a green tick), error (a facepalm, a red «!»); at rest
+// each role plays its vice once in a long still loop (lib/agent-vices.ts, ADR 0311), the plain chat dozes on its feet. The kind of work at hand has its own scene for every role (ADR 0305), with props
 // of a workshop and never a screen (ADR 0311): a command turns an hourglass over, a page comes by carrier pigeon, the
 // tests weigh on a brass balance; the smith hammers for an edit, a command and the tests alike. A click
 // plays a reaction once over any of them (ADR 0297): a pat on the head, a whack of the stick. Every scene is a small
-// piece of acting written as tracks of keys (lib/sprite-rig.ts): a move loads, strikes, overshoots and settles.
+// piece of acting written as tracks of keys (lib/sprite-rig.ts, shorthands in lib/sprite-kit.ts): a move loads,
+// strikes, overshoots and settles.
 // Drawn by components/AgentSprite.tsx.
 import type { CharacterId } from '../../shared/characters';
 import { CHARACTERS, shade, type Features, type Shape } from './character-art';
-import { AMBER, GOLD, GREEN, INK, J, RED, SKY, WHITE, bubble, ink, person, quaver, sh, sway, type Ease, type Key, type Look, type Node, type Pose, type Track } from './sprite-rig';
+import { AMBER, GOLD, GREEN, INK, J, RED, SKY, WHITE, bubble, ink, person, sway, type Ease, type Key, type Look, type Node, type Pose, type Track } from './sprite-rig';
+import { BRASS, BRASS_D, C, COAL, E, GLASS, HIP_L, HIP_R, KNIGHT, P, PARCH, S, SAND, STAR, WOOD, WOOD_D, Z, handOf, k, loop, notes, once, pop, puff, reach, ring, rr, shOf } from './sprite-kit';
+import { VICE } from './agent-vices';
 
 /** The roles with a little person (the keys of WORK below); any other chat is the plain one. */
 export type SpriteId = keyof typeof WORK;
@@ -22,34 +25,8 @@ export type SpriteState = 'work' | 'think' | 'wait' | 'done' | 'err' | 'idle';
 /** One scene: the tree to draw. */
 export interface SpriteScene { nodes: Node[] }
 
-const { P, S, C, E } = sh;
-const ring = (x: number, y: number, r: number, c: string, w: number): Shape => ({ r: [x, y, r], c, w });
-/** A rounded rectangle as a path. */
-const rr = (x: number, y: number, w: number, h: number, r: number, f: string, o?: number): Shape =>
-  P(`M${x + r} ${y}H${x + w - r}Q${x + w} ${y} ${x + w} ${y + r}V${y + h - r}Q${x + w} ${y + h} ${x + w - r} ${y + h}H${x + r}Q${x} ${y + h} ${x} ${y + h - r}V${y + r}Q${x} ${y} ${x + r} ${y}Z`, f, o);
-
-const k = (at: number, p: Omit<Key, 'at'> = {}): Key => ({ at, ...p });
-const loop = (t: number, keys: Key[], d = 0): Track => ({ t, keys, d });
-const once = (t: number, keys: Key[]): Track => ({ t, keys, n: 1 });
-/** Hidden, then there at `at` (% of the loop) and away while it fades over `len` %: a spark, a note, a puff. Hidden
- *  from the loop's start to its first moment and after its last one too (at rest, without motion, it is in sight). */
-const puff = (t: number, at: number[], len: number, dx: number, dy: number, s = 1, a?: number): Track => {
-  const keys = at.flatMap(h => [k(Math.max(0, h - 0.2), { o: 0, e: 'hold' }), k(h, { o: 1, e: 'out' }), k(Math.min(100, h + len), { o: 0, dx, dy, sx: s, sy: s, ...(a === undefined ? {} : { a }) }),
-    ...(h + len + 0.2 < 100 ? [k(h + len + 0.2, { o: 0, e: 'hold' as Ease })] : [])]);
-  return loop(t, [...(keys[0]!.at > 0 ? [k(0, { o: 0, e: 'hold' as Ease })] : []), ...keys, ...(keys[keys.length - 1]!.at < 100 ? [k(100, { o: 0 })] : [])]);
-};
-/** Grows from nothing past its size and settles, stays, fades: a thought, a sparkle. */
-const pop = (t: number, at: number, until: number): Track =>
-  loop(t, [k(0, { sx: 0, sy: 0, o: 0, e: 'hold' }), k(at, { sx: 0.2, sy: 0.2, o: 0, e: 'back' }), k(at + 9, { o: 1 }), k(until, { o: 1 }), k(until + 6, { o: 0 }), k(100, { o: 0, sx: 0, sy: 0 })]);
-const notes = (x: number, y: number, t: number, at: [number, number]): Node[] => [
-  J(x, y, -8, [ink(quaver(WHITE))], puff(t, [at[0]], 46, 10, -14, 1.15, 12)),
-  J(x + 3, y + 9, 6, [ink(quaver(WHITE))], puff(t, [at[1]], 46, 12, -9, 1.15, -10)),
-];
-const Z = 'M-2.6 -2.6H2.6L-2.6 2.6H2.6';
-const STAR = 'M0 -5L1.2 -1.2L5 0L1.2 1.2L0 5L-1.2 1.2L-5 0L-1.2 -1.2Z';
-
 // ── who they are: the body and the clothes under each role's head ───────────────────────────────────────────────────
-const COAL = '#191a22', ROBE = '#2a2456', IRON = '#3b4252', IRON_HI = '#5d6780', BLOOD = '#b3261e', LEATHER = '#5a3a22', SMITH = CHARACTERS.artisan.skin;
+const ROBE = '#2a2456', IRON = '#3b4252', IRON_HI = '#5d6780', BLOOD = '#b3261e', LEATHER = '#5a3a22', SMITH = CHARACTERS.artisan.skin;
 /** A shape of one shoulder mirrored for the other: `x` turns a distance from the arm's line to that side. */
 const sided = (m: 1 | -1, d: (x: (v: number) => number) => string): string => d(v => Math.round(v * m * 100) / 100);
 /** The cigar's ember and its smoke, in the head's box (the cigar itself is in the character's `over`). */
@@ -102,10 +79,12 @@ const BODY: Record<Exclude<SpriteId, 'plain'>, (live: boolean) => Body> = {
   }),
   // a stout man in a long blue coat with gold edges over a red waistcoat, lace at the throat, breeches and stockings
   herald: () => ({
-    build: { sh: 7.9, waist: 6.1, hip: 6.5, arm: 4, leg: 4.5, neck: 2.6, belly: 2.2 }, top: '#27407f', cuff: '#f4efe2', pants: '#e3d6b8', shin: '#f4f1ea', shoes: '#1d1a22',
-    behind: [P('M23.4 42L21.4 58.4H42.6L40.6 42Z', '#1f3468')],
-    wear: [P('M28.8 37.6H35.2L37.6 47.4H26.4Z', '#b8312a'), C(32, 40.4, 0.6, GOLD), C(32, 42.8, 0.6, GOLD), C(32, 45.2, 0.6, GOLD),
-      S('M28.6 34.6L26 47.6M35.4 34.6L38 47.6', GOLD, 0.9), P('M29.6 33.8H34.4L35.4 37.2Q33.6 39 32 37.6Q30.4 39 28.6 37.2Z', WHITE), S('M30.2 36.2Q32 37.4 33.8 36.2', '#d6d0c0', 0.7)],
+    build: { sh: 9.2, waist: 7.4, hip: 8, arm: 4.8, leg: 5.4, neck: 3.2, belly: 4.8 }, top: '#27407f', cuff: '#f4efe2', pants: '#e3d6b8', shin: '#f4f1ea', shoes: '#1d1a22',
+    behind: [P('M20.2 42L18.2 58.4H45.8L43.8 42Z', '#1f3468')],
+    wear: [P('M28 37.4H36Q44.2 41.6 41.8 47.4H22.2Q19.8 41.6 28 37.4Z', '#b8312a'), C(32, 40.2, 0.65, GOLD), C(32.3, 42.8, 0.65, GOLD), C(32.2, 45.4, 0.65, GOLD),
+      S('M37.4 40.8Q40.4 43.4 39.2 46.4', '#d24a3f', 0.9), S('M28.6 34.6Q20.4 40.8 22.2 47.6M35.4 34.6Q43.6 40.8 41.8 47.6', GOLD, 0.9), // a double chin over the lace
+      E(32, 33.9, 4.6, 1.6, CHARACTERS.herald.skin), S('M28.6 34.6Q32 36 35.4 34.6', shade(CHARACTERS.herald.skin, 0.2), 0.5),
+      J(0, 1, 0, [P('M29.6 33.8H34.4L35.4 37.2Q33.6 39 32 37.6Q30.4 39 28.6 37.2Z', WHITE), S('M30.2 36.2Q32 37.4 33.8 36.2', '#d6d0c0', 0.7)])],
   }),
 };
 /** A chat without a role: someone who has seen too many sprints, in a hoodie with headphones round the neck. */
@@ -125,27 +104,6 @@ const lookOf = (id: SpriteId, live = true): Look => {
   return { skin: ch.skin, ...f, ...(ch.jaw ? { jaw: ch.jaw } : {}), ...(ch.back ? { hairBack: ch.back } : {}), ...(ch.under ? { under: ch.under } : {}),
     over: [...(ch.over ?? []), ...(id === 'artisan' && live ? smoke() : [])], hair: [...ch.head, ...(ch.wear ?? [])], ...BODY[id](live) };
 };
-
-// ── reaching: where a hand goes, and the arm that takes it there ──────────────────────────────────────────────────
-const D2R = Math.PI / 180, L1 = 6.6, L2 = 5.9, SHY = 36.3;
-/** The right hand's place for a shoulder and elbow angle (the rig's convention: 0 = hanging, clockwise positive). */
-const handOf = (sx: number, a: number, b: number): [number, number] =>
-  [32 + sx - L1 * Math.sin(a * D2R) - L2 * Math.sin((a + b) * D2R), SHY + L1 * Math.cos(a * D2R) + L2 * Math.cos((a + b) * D2R)];
-/** Two-bone IK for the right arm: the shoulder and elbow angles that put the hand on (x, y), elbow down. */
-function reach(sx: number, x: number, y: number): { a: number; b: number } {
-  const dx = x - (32 + sx), dy = y - SHY, D = Math.min(Math.hypot(dx, dy), L1 + L2 - 0.05), phi = Math.atan2(-dx, dy);
-  const al = Math.acos(Math.max(-1, Math.min(1, (L1 * L1 + D * D - L2 * L2) / (2 * L1 * D))));
-  const be = Math.acos(Math.max(-1, Math.min(1, (L1 * L1 + L2 * L2 - D * D) / (2 * L1 * L2))));
-  const opts = [{ a: phi + al, b: -(Math.PI - be) }, { a: phi - al, b: Math.PI - be }].map(o => ({ a: o.a / D2R, b: o.b / D2R }));
-  const elbowY = (o: { a: number }) => SHY + L1 * Math.cos(o.a * D2R);
-  const best = elbowY(opts[0]!) >= elbowY(opts[1]!) ? opts[0]! : opts[1]!;
-  return { a: Math.round(best.a * 10) / 10, b: Math.round(best.b * 10) / 10 };
-}
-const shOf = (look: Look) => look.build?.sh ?? 7.2;
-const SAND = '#e3b35c', WOOD = '#8a5d38', WOOD_D = '#5e3d22', GLASS = '#dcecf8', BRASS = '#d4a843', BRASS_D = '#9c7a2c', PARCH = '#f1e7cf';
-const HIP_R = { a: -30, b: 62 }, HIP_L = { a: 30, b: -62 };
-/** A chess knight 6.8 tall, its ear at 0 0 and its base on y 6.8, the muzzle to the left. */
-const KNIGHT = 'M-2.3 6.8H2.3V6L1.6 5.4C1.8 3.8 2.3 2.6 2.1 1.4C1.9 0.4 1 -0.1 0 0L-0.4 -0.6L-0.8 0.2C-1.6 0.6 -2.3 1.4 -2.5 2.2C-2.6 2.8 -2.2 3.1 -1.7 2.9L-0.7 2.6C-0.6 3.6 -1.2 4.4 -1.5 5.2L-1.6 5.4L-2.3 6Z';
 
 // ── scenes with a prop of their own, shared by the roles (no screens, no keys, no pointers) ──────────────────────────
 /** An hourglass, its centre at 0 0: the sand above and below as given. */
@@ -435,146 +393,6 @@ const SHARED: Record<Exclude<SpriteState, 'work'>, () => Pose> = {
   }),
 };
 
-// ── each role's vice, while it rests (ADR 0311; the owner, 2026-11-14: «ognuno avesse un vizio»): a short gag with a
-// prop, never a screen: the wizard's pipe, the Strategist's bullet chess against himself, the Scout's flask, the
-// smith's beer, the Sentinel's energy drink (no brand), the Herald's red wine ──────────────────────────────────────────
-type AB = { a: number; b: number };
-/** The left arm's angles for a hand at (x, y): the right arm's, mirrored. */
-const reachL = (sx: number, x: number, y: number): AB => { const r = reach(sx, 64 - x, y); return { a: -r.a, b: -r.b }; };
-/** An arm's three tracks through hand places: the shoulder, the elbow, and the held thing kept upright plus its tilt. */
-const armPath = (T: number, keys: [number, AB, Ease?, number?][]) => ({
-  go: loop(T, keys.map(([at, o, e]) => k(at, { a: o.a, ...(e ? { e } : {}) }))),
-  goB: loop(T, keys.map(([at, o, e]) => k(at, { a: o.b, ...(e ? { e } : {}) }))),
-  goH: loop(T, keys.map(([at, o, e, tilt]) => k(at, { a: Math.round(-(o.a + o.b) + (tilt ?? 0)), ...(e ? { e } : {}) }))),
-});
-/** Where the mouth is, in the picture (the head's box is drawn at 0.56 around its chin). */
-const MOUTH: [number, number] = [33.4, 30.6];
-/** Rosy cheeks that come in at `from` and go at `to` (in the head's box). */
-const cheeks = (T: number, from: number, to: number): Node => J(0, 0, 0, [E(25.6, 37.6, 2.6, 1.6, '#e8606a'), E(38.4, 37.6, 2.6, 1.6, '#e8606a')],
-  loop(T, [k(0, { o: 0, e: 'hold' }), k(from, { o: 0 }), k(from + 6, { o: 0.55 }), k(to, { o: 0.55 }), k(Math.min(100, to + 4), { o: 0 }), k(100, { o: 0 })]), 1, 0);
-const hop1 = (T: number, at: number, dy: number): Key[] => [k(at, { e: 'out' }), k(at + 2, { dy, sy: 1.03, e: 'in' }), k(at + 5, { sy: 0.97 }), k(at + 8, {})];
-
-const VICE: Record<Exclude<SpriteId, 'plain'>, (look: Look) => Pose> = {
-  // a long pipe: a slow pull (the bowl glows), a fat smoke ring, then a small quick one that flies right through it
-  orchestrator: look => {
-    const T = 6.4, sx = shOf(look), hold = reach(sx, 39.8, 34.4);
-    const ringAt = (start: number, end: number, dx: number, dy: number, s: number, w: number): Node => J(MOUTH[0] + 1.6, MOUTH[1], 0, [ink([ring(0, 0, 2, WHITE, w)])],
-      loop(T, [k(0, { o: 0, sx: 0.3, sy: 0.3, e: 'hold' }), k(start, { o: 0, sx: 0.3, sy: 0.3, e: 'out' }), k(start + 4, { o: 0.9, sx: 0.8, sy: 0.8 }), k(end, { o: 0, dx, dy, sx: s, sy: s }), k(100, { o: 0, dx, dy })]), 1, 0);
-    return {
-      blink: true, mouth: 'flat',
-      head: { a: -2, go: loop(T, [k(0), k(18, { a: -6, e: 'io' }), k(28, { a: -6 }), k(34, { a: 2, e: 'out' }), k(48, {}), k(60, { a: 4 }), k(72, { a: -3, e: 'back' }), k(90, {})]),
-        over: [S('M35 41.4Q40 44.2 43.6 43.2', '#4a2e18', 1.5), rr(42.2, 38.6, 4.8, 5.8, 1.6, '#6b4423'), S('M42.4 39H47', '#2a1a0e', 1),
-          J(44.6, 39.4, 0, [C(0, 0, 1.3, '#ffb347')], loop(T, [k(0, { o: 0.25 }), k(16, { o: 0.25 }), k(24, { o: 1, sx: 1.3, sy: 1.3 }), k(32, { o: 0.35 }), k(100, { o: 0.25 })]), 1, 0.25),
-          J(44.6, 37, 0, [ink([C(0, 0, 1, WHITE, 0.5)])], puff(T, [6, 46, 80], 22, 3, -9, 2.2), 1, 0)] },
-      go: loop(T, [k(0), k(18, { sy: 1.02, e: 'io' }), k(30, { sy: 1.02 }), k(36, { sy: 0.99, e: 'out' }), k(46, {})]),
-      armR: hold, armL: { a: 22, b: -46 },
-      front: [ringAt(34, 78, 13, -14, 3, 1.5), ringAt(52, 70, 22, -22, 1.1, 1.3),
-        J(MOUTH[0] + 12.4, MOUTH[1] - 11.6, 0, [P(STAR, GOLD)], pop(T, 60, 70))],
-    };
-  },
-  // bullet against himself: a move and a slap on the clock, faster and faster, then one slap too hard: the clock jumps,
-  // the flag falls, a hand over the eyes
-  strategist: look => {
-    const T = 5.8, sx = shOf(look), R = (x: number, y: number) => reach(sx, x, y);
-    const hover = R(40, 42.6), b1 = R(36.8, 45.4), b2 = R(40.6, 45.4), clock = R(47.2, 41.8), high = R(46.4, 37.4);
-    const beats: [number, number][] = [[10, 18], [25, 31], [36, 40.5], [44, 47.5], [50.5, 53]];
-    const path: [number, AB, Ease?][] = [[0, hover], ...beats.flatMap(([m, c], i): [number, AB, Ease?][] => [[m, i % 2 ? b2 : b1, 'in'], [c, clock, 'in']]), [57, high, 'out'], [60, clock, 'in'],
-      [66, clock], [74, hover, 'io'], [100, hover]];
-    const slap = beats.map(([, c]) => c).concat(60);
-    const button = (x: number, odd: boolean): Node => J(x, 42.6, 0, [rr(-1, -0.6, 2, 1, 0.3, '#c9ccd6')],
-      loop(T, [k(0), ...slap.flatMap((c, i) => ((i % 2 === 1) === odd ? [k(c - 1), k(c, { dy: 0.6, e: 'out' }), k(c + 2)] : []))]));
-    const piece = (x: number, at: number[]): Node => J(0, 0, 0, [C(x, 44.2, 0.85, '#f7f3e6'), P(`M${x - 1.2} 46.2H${x + 1.2}L${x + 0.6} 44.8H${x - 0.6}Z`, '#f7f3e6')],
-      loop(T, [k(0), ...at.flatMap(a => [k(a), k(a + 1.5, { dy: -0.8, dx: 0.6, e: 'out' }), k(a + 3)])]));
-    const jump: Track = loop(T, [k(0), k(60), k(62, { dy: -2.4, a: -12, e: 'out' }), k(66, { dy: 0, a: 4, e: 'in' }), k(68, { a: -2 }), k(70)]);
-    return {
-      blink: true, mouth: 'flat',
-      head: { a: 6, go: loop(T, [k(0), k(54, { a: 9 }), k(62, { a: -4, e: 'back' }), k(68, { a: 10 }), k(74, { a: 4 }), k(80, { a: 10 }), k(90, { a: 6 })]) },
-      go: loop(T, [k(0), ...slap.flatMap(c => [k(c - 2), k(c, { sy: 0.985, e: 'out' }), k(c + 2)]), k(100)]),
-      armR: { ...hover, ...armPath(T, path) },
-      armL: { ...reachL(sx, 24, 46), go: loop(T, [k(0), k(64), k(70, { a: -150, e: 'out' }), k(88, { a: -150 }), k(96)]), goB: loop(T, [k(0), k(64), k(70, { a: -6, e: 'out' }), k(88, { a: -6 }), k(96)]) },
-      front: [
-        rr(30, 47.6, 24, 1.8, 0.6, '#e9dcc0'), S('M33 49.4V63.6M51 49.4V63.6', '#b9a987', 1.8),
-        rr(34, 46.3, 9, 1.3, 0.3, '#5e3d22'), S('M34.3 46.75H36.4M38.5 46.75H40.6', '#e9dcc0', 0.7),
-        piece(36.8, [10, 36, 50.5]), piece(40.6, [25, 44]),
-        J(0, 0, 0, [rr(44.2, 43.2, 7, 4.4, 0.9, '#3a3542'), C(46, 45.4, 1.2, WHITE), C(49.4, 45.4, 1.2, WHITE), S('M46 45.4V44.6M49.4 45.4L50 45', INK, 0.4),
-          button(46.2, false), button(49.4, true),
-          J(46, 44.2, 0, [P('M0 0L1.6 0.6L0 1.2Z', RED)], loop(T, [k(0, { o: 0, e: 'hold' }), k(66, { o: 0, e: 'hold' }), k(67, { o: 1, a: -60, e: 'out' }), k(72, { o: 1, a: 30 }), k(96, { o: 1, a: 30 }), k(100, { o: 0 })]))], jump),
-      ],
-    };
-  },
-  // a look left, a look right, the flask out of the coat, a long pull, a wipe of the moustache; then the hiccups
-  scout: look => {
-    const T = 6, sx = shOf(look), R = (x: number, y: number) => reach(sx, x, y);
-    const pocket = R(35.2, 42.4), mouth = R(34.4, 31.4), low = R(37.6, 41);
-    const flask = [rr(-1.7, -2.8, 3.4, 4.8, 0.9, '#b8bcc6'), rr(-0.7, -3.9, 1.4, 1.2, 0.3, '#7d828f'), S('M-1 -2V1', WHITE, 0.5, 0.6)];
-    return {
-      blink: true, mouth: 'smile',
-      head: { go: loop(T, [k(0), k(5, { a: -8, e: 'io' }), k(10, { a: -8 }), k(14, { a: 8, e: 'io' }), k(19, { a: 8 }), k(23), k(32, { a: -9, e: 'out' }), k(46, { a: -9 }), k(52), k(64, { a: 3 }), k(76, { a: -3 }), k(88)]),
-        over: [cheeks(T, 46, 92)] },
-      go: loop(T, [k(0), k(34), k(36, { sy: 0.99 }), k(38), k(40, { sy: 0.99 }), k(42), ...hop1(T, 64, -1.6), ...hop1(T, 78, -1.3), k(100)]),
-      armR: { ...HIP_R, held: [J(0, 0, 0, [J(0, 0, 0, flask, undefined, 1.45)], loop(T, [k(0, { o: 0, e: 'hold' }), k(22, { o: 1, e: 'hold' }), k(56, { o: 0, e: 'hold' }), k(100, { o: 0 })]))],
-        ...armPath(T, [[0, HIP_R], [16, HIP_R, 'io'], [22, pocket, 'io'], [30, mouth, 'out', -70], [46, mouth, 'io', -80], [52, low, 'io'], [56, pocket, 'io'], [62, HIP_R], [100, HIP_R]]) },
-      armL: { ...HIP_L, ...armPath(T, [[0, HIP_L], [50, HIP_L, 'io'], [54, reachL(sx, 31, 31.6), 'io'], [56, reachL(sx, 35, 31.4)], [60, HIP_L], [100, HIP_L]]) },
-      front: [J(MOUTH[0] + 3, MOUTH[1] - 2, 0, [ink([C(0, 0, 1.2, WHITE)])], puff(T, [65, 79], 12, 4, -6, 1.6), 1, 0)],
-    };
-  },
-  // a big mug of beer: up, a long gulp, down; a foam moustache, and a burp that shakes him
-  artisan: look => {
-    const T = 6.2, sx = shOf(look), R = (x: number, y: number) => reach(sx, x, y);
-    const rest = R(42.2, 42.4), mouth = R(35.6, 31.8);
-    const mug = [rr(-3.2, -6.4, 6.4, 7.6, 1.2, '#e3a83a'), rr(-3.2, -6.4, 6.4, 1.8, 0.9, '#fff3d6'), C(-1.8, -6.6, 1.2, '#fff3d6'), C(0.6, -6.9, 1.4, '#fff3d6'), C(2.4, -6.5, 1.1, '#fff3d6'),
-      S('M3.2 -4.6Q5.8 -4 5.4 -1.6Q5 0.2 3.2 0', '#d9dde4', 1.1), S('M-1.8 -3.6V-0.6M0.4 -3.6V-0.6', '#f4c766', 0.6)];
-    return {
-      blink: true, mouth: 'grin',
-      head: { go: loop(T, [k(0), k(16, { a: -4 }), k(24, { a: -12, e: 'out' }), k(46, { a: -12 }), k(54), k(60, { a: 6, e: 'out' }), k(64, { a: -6 }), k(70, { a: 3 }), k(80)]),
-        over: [J(0, 0, 0, [P('M27.4 38.6Q29.6 37 32 38.2Q34.4 37 36.6 38.6Q34.4 39.6 32 39Q29.6 39.6 27.4 38.6Z', '#fff3d6')],
-          loop(T, [k(0, { o: 0, e: 'hold' }), k(50, { o: 0, e: 'hold' }), k(51, { o: 1 }), k(92, { o: 1 }), k(98, { o: 0 }), k(100, { o: 0 })]), 1, 0)] },
-      go: loop(T, [k(0), k(28), k(31, { sy: 0.985 }), k(34), k(37, { sy: 0.985 }), k(40), k(43, { sy: 0.985 }), k(46), k(58, { e: 'out' }), k(61, { sy: 1.05, sx: 0.97, e: 'back' }), k(66, { sy: 0.97, sx: 1.02 }), k(72)]),
-      armR: { ...rest, held: mug, ha: -(rest.a + rest.b), ...armPath(T, [[0, rest], [12, rest, 'io'], [22, mouth, 'out', -64], [46, mouth, 'io', -78], [54, rest, 'out'], [100, rest]]) },
-      armL: HIP_L,
-      front: [J(MOUTH[0] + 3, MOUTH[1], 0, [ink([C(0, 0, 2, WHITE, 0.8), C(2.4, -1.4, 1.4, WHITE, 0.8)])], puff(T, [61], 18, 9, -5, 2.4), 1, 0)],
-    };
-  },
-  // an energy drink with a straw through the slit of the helm, a long slurp; the can crushed in the fist and thrown
-  // away; then the jitters
-  sentinel: look => {
-    const T = 6.2, sx = shOf(look), R = (x: number, y: number) => reach(sx, x, y);
-    const rest = R(40.6, 43), up = R(37.2, 36.4);
-    const can: Node[] = [J(0, 0, 0, [rr(-1.8, -3, 3.6, 6, 0.7, '#1d2b22'), rr(-1.8, -3.4, 3.6, 0.9, 0.3, '#b9c0cc'), P('M0.4 -2.2L-0.9 0.2H0.2L-0.4 2.2L1.1 -0.4H0Z', '#7cf06a')],
-      loop(T, [k(0), k(50), k(53, { sy: 0.4, sx: 1.25, dy: 1.4, e: 'back' }), k(58, { sy: 0.4, sx: 1.25, dy: 1.4 }), k(59, { sy: 0.4, sx: 1.25, dy: 1.4, o: 0, e: 'hold' }), k(96, { o: 0, e: 'hold' }), k(100)])),
-      J(0, -3, 0, [S('M0 0L-2.2 -8.6', '#e04a3a', 0.7)], loop(T, [k(0, { o: 0, sx: 0.1, sy: 0.1, e: 'hold' }), k(12, { o: 0, sx: 0.1, sy: 0.1, e: 'back' }), k(16, { o: 1 }), k(46, { o: 1 }), k(48, { o: 0, e: 'hold' }), k(100, { o: 0 })]))];
-    const jitter = Array.from({ length: 14 }, (_, i) => k(64 + i * 2, { dx: i % 2 ? -0.4 : 0.4 }));
-    return {
-      blink: true, mouth: 'flat',
-      head: { go: loop(T, [k(0), k(18, { a: -3 }), k(24, { a: -1 }), k(30, { a: -3 }), k(36, { a: -1 }), k(42, { a: -3 }), k(50)]) },
-      go: loop(T, [k(0), k(62), ...jitter, k(92), k(100)]),
-      armR: { ...rest, held: [J(0, 0, 0, can, undefined, 1.35)], ha: -(rest.a + rest.b), ...armPath(T, [[0, rest], [10, rest, 'io'], [18, up, 'out', -8], [46, up, 'io', -8], [50, rest, 'io'], [100, rest]]) },
-      armL: HIP_L,
-      front: [J(44, 41, 0, [J(0, 0, 0, [rr(-1.6, -1.1, 3.2, 2.2, 0.6, '#1d2b22'), S('M-0.4 -0.6L0.6 0.6', '#7cf06a', 0.5)], undefined, 1.6)],
-        loop(T, [k(0, { o: 0, e: 'hold' }), k(58, { o: 0, e: 'hold' }), k(59, { o: 1, e: 'out' }), k(68, { o: 1, dx: 14, dy: -14, a: 260 }), k(76, { o: 0, dx: 22, dy: 4, a: 420 }), k(100, { o: 0, dx: 22, dy: 4 })]), 1, 0),
-        J(52, 18, 0, [P('M1.4 -6L-3.4 1H0L-1.4 6L3.4 -1H0Z', '#7cf06a')], pop(T, 64, 86))],
-    };
-  },
-  // a glass of red: swirled, sniffed with the eyes half shut, a slow sip; then he hums, a little tipsy
-  herald: look => {
-    const T = 6.4, sx = shOf(look), R = (x: number, y: number) => reach(sx, x, y);
-    const c = [41, 40.6], swirl = [R(c[0]!, c[1]!), R(c[0]! + 0.8, c[1]! - 0.6), R(c[0]! + 1.4, c[1]!), R(c[0]! + 0.6, c[1]! + 0.6)];
-    const nose = R(35.6, 31.6), lips = R(34.6, 32.2);
-    const glass: Node[] = [S('M0 -1.6V1.6M-1.5 1.8H1.5', '#dcecf8', 0.6),
-      J(0, -1.8, 0, [P('M-2 -1.6H2C1.9 -0.4 1.1 0.4 0 0.4C-1.1 0.4 -1.9 -0.4 -2 -1.6Z', '#7a1426')], loop(T, [k(0, { a: -10 }), k(6, { a: 10 }), k(12, { a: -10 }), k(18, { a: 10 }), k(24, { a: -6 }), k(30)])),
-      P('M-2.4 -6.6H2.4C2.4 -3.2 1.4 -1.6 0 -1.6C-1.4 -1.6 -2.4 -3.2 -2.4 -6.6Z', '#dcecf8', 0.45), S('M-1.6 -5.6Q-1.6 -3.4 -0.6 -2.6', WHITE, 0.45, 0.7)];
-    return {
-      blink: true, mouth: 'smile',
-      head: { go: loop(T, [k(0), k(30, { a: 4 }), k(36, { a: 6 }), k(44, { a: -6 }), k(56, { a: -6 }), k(62), k(72, { a: 5 }), k(84, { a: -4 }), k(96)]), over: [cheeks(T, 56, 94)] },
-      go: loop(T, [k(0), k(60), k(70, { a: 2 }), k(80, { a: -2 }), k(90, { a: 1.5 }), k(100)]),
-      armR: { ...swirl[0]!, held: [J(0, 0, 0, glass, undefined, 1.3)], ha: -(swirl[0]!.a + swirl[0]!.b),
-        ...armPath(T, [[0, swirl[0]!], [6, swirl[1]!], [12, swirl[2]!], [18, swirl[3]!], [24, swirl[0]!], [32, nose, 'io'], [40, nose], [46, lips, 'io', -40], [56, lips, 'io', -46], [62, swirl[0]!, 'io'], [100, swirl[0]!]]) },
-      armL: HIP_L,
-      front: notes(52, 20, T, [66, 78]),
-    };
-  },
-};
-
 // ── what a working chat is doing, when its tool says so (ADR 0305) ────────────────────────────────────────────────────
 /** The kinds of work with a scene of their own (the same moments as the lines, shared/agent-quips.ts): reading a file,
  *  running a command, running tests, searching, a web page, handing work to another agent. An edit, and anything the
@@ -723,8 +541,24 @@ export function spriteScene(id: SpriteId, state: SpriteState, activity?: SpriteA
   const own = id === 'artisan' && (activity === 'run' || activity === 'test');
   const act = state === 'work' && activity && !own ? activity : null, key = act ? `${id}:work:${act}` : `${id}:${state}`;
   let s = cache.get(key);
+  if (!s && state === 'idle' && id !== 'plain') {
+    // at rest a role indulges its vice (ADR 0311): once, then a long still pause, so it is not seen more than the rest
+    const look = lookOf(id, false);
+    cache.set(key, s = { nodes: unhurried(person(look, VICE[id](look)), VICE_SHARE) });
+  }
   if (!s) { const look = lookOf(id, state !== 'done'); cache.set(key, s = { nodes: person(look, act ? ACT[act](look) : (state === 'work' ? WORK[id] : SHARED[state])()) }); }
   return s;
+}
+/** The share of a resting loop a vice plays for; still for the rest of it. */
+const VICE_SHARE = 0.4;
+/** A looping picture played in the first `share` of a longer loop, then held where it ended (its start pose). */
+function unhurried(nodes: Node[], share: number): Node[] {
+  const stretch = (t: Track): Track => {
+    const keys = [...t.keys].sort((a, b) => a.at - b.at).map(x => ({ ...x, at: x.at * share }));
+    if (keys[keys.length - 1]!.at !== 100 * share) keys.push({ at: 100 * share });
+    return { ...t, t: t.t / share, keys: [...keys, { ...keys[keys.length - 1]!, at: 100, e: 'hold' }] };
+  };
+  return nodes.map(n => ('g' in n ? { ...n, g: unhurried(n.g, share), ...(n.track && !n.track.n ? { track: stretch(n.track) } : {}) } : n));
 }
 /** A role's reaction to a click (built once): the same acting for everyone, in the role's own looks. */
 export function reactionScene(id: SpriteId, kind: SpriteReaction): SpriteScene {
@@ -736,5 +570,5 @@ export function reactionScene(id: SpriteId, kind: SpriteReaction): SpriteScene {
 export const SPRITE_IDS = Object.keys(WORK) as readonly SpriteId[];
 export const isSpriteId = (id: string): id is SpriteId => Object.hasOwn(WORK, id);
 export const SPRITE_STATES: readonly SpriteState[] = ['work', 'think', 'wait', 'done', 'err', 'idle'];
-/** Preview only (not wired yet): a role's vice. */
+/** A role's vice playing without a pause (previews). */
 export const viceScene = (id: Exclude<SpriteId, 'plain'>): SpriteScene => ({ nodes: person(lookOf(id), VICE[id](lookOf(id))) });
