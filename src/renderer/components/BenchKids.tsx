@@ -35,8 +35,8 @@ export function useTeam(chatId: string): readonly ChatSummary[] {
 /** The dot's tone of a sub-agent's state (the same tints as its thread line). */
 export const kidTone = (state: ChildState): string => LINE[state];
 const working = (s: ChildState) => s === 'run' || s === 'start';
-/** Who stands first at the bench (the owner, 2026-11-15: «vorrei vedere quelli in attività per primi»): at work or
- *  waiting for someone, then stuck, then the rest. A short stop keeps its place (run, wait and stall are one group). */
+/** Who stands first at the bench (the owner, 2026-11-15: «vorrei vedere quelli in attività per primi»): at work,
+ *  waiting for someone or between two turns, then failed or refused, then the rest. A short stop keeps its place (run, wait and stall are one group). */
 const rank = (s: ChildState) => s === 'run' || s === 'start' || s === 'queued' || s === 'wait' || s === 'stall' ? 0
   : s === 'err' || s === 'refused' || s === 'noreport' || s === 'blocked' ? 1 : 2;
 const open = (id: string) => setChatExpanded(id, true);
@@ -57,7 +57,7 @@ export function BenchHelpers({ chatId }: { chatId: string }) {
     setEdge(e => e.left === left && e.right === right ? e : { left, right });
     setTick(n => n + 1);
   }, [row]);
-  useLayoutEffect(measure, [measure, order.length]);
+  useLayoutEffect(measure, [measure, order]); // a new order moves the helpers: the tag follows
   // a resize of the bench moves the helpers and the edges: measured again
   useEffect(() => {
     if (!row || typeof ResizeObserver === 'undefined') return;
@@ -83,7 +83,7 @@ export function BenchHelpers({ chatId }: { chatId: string }) {
   if (!order.length) return null;
   return <span ref={setWrap} className={`bench-helpers-wrap${edge.left ? ' more-left' : ''}${edge.right ? ' more-right' : ''}`} data-testid={`bench-helpers-${chatId}`}>
     <span ref={setRow} className="bench-helpers" onScroll={measure}>
-      {order.map(k => <Helper key={k.id} kid={k} depth={depthOf(k, chatId, team)} frame={tip === k.id ? wrap : null} tick={tick} onShow={show} onHide={hide} onKeep={keep} />)}
+      {order.map(k => <Helper key={k.id} kid={k} depth={depthOf(k, chatId, team)} frame={tip === k.id ? wrap : null} tick={tip === k.id ? tick : 0} onShow={show} onHide={hide} onKeep={keep} />)}
     </span>
   </span>;
 }
@@ -120,10 +120,11 @@ function Helper({ kid, depth, frame, tick, onShow, onHide, onKeep }: { kid: Chat
 function HelperTag({ id, name, state, tone, label, anchor, frame, tick, onEnter, onLeave }: { id: string; name: string; state: ChildState; tone: string; label: string;
   anchor: React.RefObject<HTMLSpanElement | null>; frame: HTMLElement; tick: number; onEnter: () => void; onLeave: () => void }) {
   const el = useRef<HTMLButtonElement>(null);
-  const [at, setAt] = useState<{ left: number; top: number } | null>(null);
+  const [at, setAt] = useState<{ left: number; top: number } | null>(null); // null: not placed, or its helper scrolled out of the row
   useLayoutEffect(() => {
     const a = anchor.current, me = el.current; if (!a || !me) return;
-    const w = frame.getBoundingClientRect(), b = a.getBoundingClientRect(), tw = me.offsetWidth;
+    const w = frame.getBoundingClientRect(), b = a.getBoundingClientRect(), tw = me.offsetWidth, mid = b.left + b.width / 2;
+    if (mid < w.left || mid > w.right) { setAt(null); return; }
     const left = Math.max(0, Math.min(Math.max(0, w.width - tw), b.left + b.width / 2 - w.left - tw / 2)), top = Math.max(38, b.top - w.top - 28);
     setAt(p => p && p.left === left && p.top === top ? p : { left, top });
   }, [tick, name, state, anchor, frame]);

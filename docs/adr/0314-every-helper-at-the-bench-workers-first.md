@@ -16,7 +16,8 @@ what had happened.
 1. **All of them** (`BenchKids.tsx`, cap 40): every open chat under the bench stands at it, in one row that scrolls
    sideways when it does not fit (the wheel, the trackpad, or a thin bar shown under the pointer); a side with more to
    see fades out. «+N» is gone.
-2. **At work first**: at work, starting, queued or waiting for someone, then stuck, then the rest; the tree's order
+2. **At work first**: at work, starting, queued, waiting for someone or between two turns, then failed or refused,
+   then the rest; the tree's order
    inside each group. A short stop (run → wait or stall → run) keeps its place.
 3. **One name tag for the row**: the tag of the helper under the pointer or the keyboard is drawn in the row's frame (a
    portal, with the helper's own held state), placed again when the row scrolls or resizes, and kept inside it, so it is never cut at an edge. A helper takes the focus and opens its chat with Enter; a click on the
