@@ -74,12 +74,11 @@ jobs:
       - name: Stable copy
         if: runner.os != 'Linux'
         run: npm run test:stable
-      # TEMP-PR: the two installer steps run on this pull request once, to read them; main only before the merge
       - name: Build offline Windows installer
-        if: runner.os == 'Windows'
+        if: github.event_name != 'pull_request' && runner.os == 'Windows'
         run: npm run package:windows
       - name: Install and launch without system Node
-        if: runner.os == 'Windows'
+        if: github.event_name != 'pull_request' && runner.os == 'Windows'
         run: npm run test:installer
       - name: Verified Windows installer
         if: github.event_name != 'pull_request' && runner.os == 'Windows'
