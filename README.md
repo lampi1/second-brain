@@ -232,8 +232,10 @@ build or QA, bugs that came back. Every number says where it comes from and how 
 ### Your projects, drawn
 
 **Map → Projects** shows a project instead of its code: who uses it, your systems and the external ones they talk to,
-environments and documents, with the links and a status on each. Click a system to step inside it; the agents at work
-sit beside the boxes they work on. With Plan mode the Strategist proposes the plan on the map itself: the pieces to
+environments and documents, with the links and a status on each. Click a system to step inside it, and a part with
+pieces of its own to step further; each box tells its rules, what it keeps, how big it is, why it is made so and its
+key files, which open in the viewer. Paths tell a question («What happens when a customer pays?») stop by stop on the
+boxes. The agents at work sit beside the boxes they work on. With Plan mode the Strategist proposes the plan on the map itself: the pieces to
 build show as planned, you approve from the map and the boxes turn green as the agents finish.
 
 <p align="center"><img src="docs/screenshots/project-map.webp" alt="A project map: people, the shop system, external systems and environments linked, with statuses, what waits for you and the agents at work" width="640"></p>

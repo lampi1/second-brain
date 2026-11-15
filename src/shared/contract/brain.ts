@@ -107,6 +107,9 @@ export interface BrainInvokeMap {
    *  (version = one of the history's, the slider) */
   'projectmap:list': [void, ProjectMapInfo[]];
   'projectmap:view': [{ project: string; version?: number }, ProjectMapView | null];
+  /** «Quanto è grande» beside a picked box (ADR 0316): the files and lines under its evidence, counted by main without
+   *  tokens (bounded; capped = it stopped counting); null = no folder on this PC or nothing to count */
+  'projectmap:size': [{ project: string; element: string }, { files: number; lines: number; capped: boolean } | null];
   /** the shareable brain zip for colleagues (ADR 0088): rules, skills, roles, scripts, never memory; null = save dialog cancelled */
   'brain:share': [void, BrainShareResult | null];
   /** the Brain pages (ADR 0077, src/main/brainmodel): agents, skills and their links, rules, memory, the change log */

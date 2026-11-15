@@ -6,6 +6,14 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- The project maps go deeper: a part can hold parts of its own, down to four levels, entered like a system. A box's
+  panel tells the rules it applies, what it keeps and where, how big it is (files and lines, counted without tokens),
+  why it is made this way and its key files, each opening in the viewer. «Percorsi» tell a question about the project
+  stop by stop on the boxes; «Chiedi un percorso» has a Scout answer a new one (ADR 0316).
+- The file viewer finds a relative path from a chat in the other folders the app knows (the chats it started, the
+  projects, the other chats), so a file of an agent's project opens from the Orchestrator's message. Code reads as in
+  an editor: a coding font, its own colours for functions, types, parameters and properties, and indent guides
+  (ADR 0316).
 - A bench shows every helper, the ones at work first, in a row that scrolls sideways; the name tag never gets cut
   at an edge. The limit on the foot reads «Max 5 insieme» while it matters and says under the pointer what it means
   (ADR 0314).
