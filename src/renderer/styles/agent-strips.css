@@ -278,27 +278,36 @@ html[data-hidden] .bench-stage::after { animation-play-state:paused; }
 /* on a bench every control stays in sight: stop, ✕ and the rest (the owner, 2026-11-14), each a comfortable target */
 .chat-tile.is-strip .bench-stage > .chat-header-actions > .icon-btn { opacity:1; width:28px; height:28px; }
 /* ── the helpers: smaller people at the bench, a grandchild smaller still; a name tag over the head under the pointer ── */
-.bench-helpers { position:relative; z-index:2; display:flex; align-items:flex-end; margin-left:auto; padding-right:4px; }
-.bench-helper { position:relative; display:inline-flex; flex-direction:column; align-items:center; margin-bottom:5px; cursor:pointer; }
+.bench-helpers-wrap { position:relative; z-index:2; flex:1 1 0; min-width:0; align-self:stretch; display:flex; margin-left:10px; }
+/* the row scrolls sideways when the team does not fit; the first helper is pushed right while there is room (an auto
+   margin, never justify-content: the start stays reachable); a thin bar only under the pointer (the WebKit
+   bar: scrollbar-width would bring the platform's arrows back) */
+.bench-helpers { flex:1 1 0; min-width:0; display:flex; align-items:flex-end; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; padding:0 4px 0 2px; scroll-behavior:smooth; }
+.bench-helpers::-webkit-scrollbar { height:0; background:transparent; }
+.bench-helpers::-webkit-scrollbar-button { display:none; }
+.bench-helpers-wrap:hover > .bench-helpers::-webkit-scrollbar { height:5px; }
+.bench-helpers::-webkit-scrollbar-thumb { border-radius:3px; background:color-mix(in srgb, var(--text-3) 55%, transparent); }
+.bench-helpers > :first-child { margin-left:auto; }
+/* more to see on a side: the row fades there */
+.bench-helpers-wrap.more-right > .bench-helpers { -webkit-mask-image:linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image:linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
+.bench-helpers-wrap.more-left > .bench-helpers { -webkit-mask-image:linear-gradient(90deg, transparent, #000 36px); mask-image:linear-gradient(90deg, transparent, #000 36px); }
+.bench-helpers-wrap.more-left.more-right > .bench-helpers { -webkit-mask-image:linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image:linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
+.bench-helper { position:relative; flex:none; display:inline-flex; flex-direction:column; align-items:center; margin-bottom:5px; cursor:pointer; outline:none; border-radius:var(--r-m); }
+.bench-helper:focus-visible { box-shadow:0 0 0 2px var(--focus); }
 .bench-helper + .bench-helper { margin-left:-14px; }
 .bench-helper:hover, .bench-helper:focus-within { z-index:4; }
 .bench-head-dot { position:absolute; pointer-events:none; left:50%; top:-6px; transform:translateX(-50%); z-index:2; transition:opacity var(--dur-fast) var(--ease); }
-.bench-tag { all:unset; box-sizing:border-box; position:absolute; left:50%; bottom:calc(100% - 6px); z-index:5; display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 9px 0 8px; border-radius:var(--r-m);
+.bench-tag { all:unset; box-sizing:border-box; position:absolute; z-index:5; display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 9px 0 8px; border-radius:var(--r-m);
   background:var(--surface); border:1px solid var(--border-3); box-shadow:0 6px 16px rgb(0 0 0 / .28); font:600 11.5px var(--font); color:var(--text); white-space:nowrap; cursor:pointer;
-  opacity:0; pointer-events:none; transform:translate(-50%, 4px); transition:opacity 110ms var(--ease), transform 110ms var(--ease); }
+  animation:bench-tag-in 110ms var(--ease); }
+@keyframes bench-tag-in { from { opacity:0; transform:translateY(4px); } }
 .bench-tag > b { min-width:0; max-width:150px; overflow:hidden; text-overflow:ellipsis; }
 .bench-tag > span { flex:none; color:var(--text-3); font-weight:500; }
 .bench-tag > i { font-style:normal; color:var(--accent); font-size:13px; margin-left:1px; }
 .bench-tag:hover { border-color:var(--accent); }
 .bench-tag:focus-visible { outline:2px solid var(--focus); outline-offset:1px; }
-.bench-helper:last-of-type > .bench-tag { left:auto; right:0; transform:translateY(4px); }
-.bench-helper:hover > .bench-tag, .bench-helper:focus-within > .bench-tag { opacity:1; pointer-events:auto; transform:translate(-50%, 0); }
-.bench-helper:last-of-type:is(:hover, :focus-within) > .bench-tag { transform:none; }
 .bench-helper:is(:hover, :focus-within) > .bench-head-dot { opacity:0; }
-@media (prefers-reduced-motion: reduce) { .bench-tag { transition:none; } }
-.bench-more { all:unset; align-self:center; z-index:2; min-width:30px; height:26px; padding:0 8px; box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center; border-radius:var(--r-m); background:color-mix(in srgb, var(--surface) 80%, transparent); border:1px solid var(--border-2); font:600 12px var(--font); color:var(--text-2); cursor:pointer; }
-.bench-more:hover { border-color:var(--accent); color:var(--text); }
-.bench-more:focus-visible { outline:2px solid var(--focus); }
+@media (prefers-reduced-motion: reduce) { .bench-tag { animation:none; } }
 .bench-dot { flex:none; width:7px; height:7px; border-radius:50%; background:var(--text-4); }
 .bench-dot.tone-run { background:var(--accent); box-shadow:0 0 0 3px var(--accent-bg); }
 .bench-dot.tone-wait { background:var(--amber); }

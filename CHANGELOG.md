@@ -6,6 +6,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- A bench shows every helper, the ones at work first, in a row that scrolls sideways; the name tag never gets cut
+  at an edge. The limit on the foot reads «Max 5 insieme» while it matters and says under the pointer what it means
+  (ADR 0314).
 - Every pull request and every push to `main` is checked on Windows, Linux and macOS: typecheck, lint, every unit
   test, the publish guard, the built app started once in its frozen demo (`scripts/boot-smoke.mjs`) and the stable
   copy started with a new profile (`npm run test:stable`). The e2e suite is started by hand. `npm run check --
