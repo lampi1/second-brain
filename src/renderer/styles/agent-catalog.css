@@ -70,24 +70,17 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .catalog-front-top>.catalog-badge{margin-left:auto}
 .agent-overview .catalog-origin{font-size:var(--fs-xs);color:var(--text-3);letter-spacing:.06em;text-transform:uppercase;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .catalog-hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:6px;min-width:0}
+.catalog-hero:has(>.catalog-hero-avatar[data-person]){justify-content:flex-start}
 .catalog-hero-avatar{position:relative;display:grid;place-items:center;width:132px;height:132px;margin-bottom:4px;border-radius:50%;
   background:radial-gradient(circle at 50% 45%,color-mix(in srgb,var(--tone) 26%,transparent),color-mix(in srgb,var(--tone) 7%,transparent) 62%,transparent 71%)}
 .catalog-hero-avatar::before{content:"";position:absolute;inset:8px;border-radius:50%;border:1px dashed color-mix(in srgb,var(--tone) 38%,transparent);pointer-events:none}
 .catalog-hero-avatar>.agent-avatar{filter:drop-shadow(0 10px 18px color-mix(in srgb,var(--tone) 35%,transparent));transition:transform var(--dur-slow) var(--ease)}
 .bm-face-front:hover .catalog-hero-avatar>.agent-avatar{transform:translateY(-2px) scale(1.03)}
-/* the role's little person on the workshop's stone wall and planks (ADR 0312, agent-strips.css :root --wall, --torch-*):
+/* the role's little person in the workshop (assets/stage/bottega.svg; ADR 0312, agent-strips.css :root --torch-*):
    two torches, lit while the role works */
 .catalog-hero-avatar[data-person]{align-self:stretch;width:auto;height:168px;margin:0 0 6px;padding:0 0 12px;box-sizing:border-box;display:flex;align-items:flex-end;justify-content:center;border-radius:var(--r-m);overflow:hidden;
-  --stone:color-mix(in srgb,#9a8466 14%,var(--bg-2));
-  background:
-    linear-gradient(180deg,color-mix(in srgb,#4a3424 70%,var(--bg-2)) 0 9px,color-mix(in srgb,#000 22%,transparent) 9px 11px,transparent 11px),
-    linear-gradient(0deg,color-mix(in srgb,#5b4130 55%,var(--bg-2)) 0 16px,color-mix(in srgb,#000 25%,transparent) 16px 17px,transparent 17px),
-    repeating-linear-gradient(90deg,transparent 0 62px,color-mix(in srgb,#000 30%,transparent) 62px 63px),
-    radial-gradient(60% 45% at 50% 100%,color-mix(in srgb,var(--tone) 16%,transparent),transparent 70%),
-    var(--wall),
-    linear-gradient(180deg,color-mix(in srgb,var(--tone) 5%,var(--stone)),var(--stone));
-  background-size:auto,auto,100% 16px,auto,120px 60px,auto;background-position:0 0,0 0,0 100%,0 0,0 11px,0 0;background-repeat:no-repeat,no-repeat,no-repeat,no-repeat,repeat,no-repeat}
-.catalog-hero-avatar[data-person]::before,.catalog-hero-avatar[data-person]::after{content:"";position:absolute;top:46px;width:24px;height:54px;z-index:0;background:var(--torch-out) no-repeat;opacity:.8;pointer-events:none}
+  background:url("../assets/stage/bottega.svg") center bottom / cover no-repeat,#2a1d15}
+.catalog-hero-avatar[data-person]::before,.catalog-hero-avatar[data-person]::after{content:"";position:absolute;inset:auto;top:46px;width:24px;height:54px;border:0;border-radius:0;z-index:0;background:var(--torch-out) no-repeat;opacity:.8;pointer-events:none}
 .catalog-hero-avatar[data-person]::before{left:12px}
 .catalog-hero-avatar[data-person]::after{right:12px}
 .catalog-card[data-state=working] .catalog-hero-avatar[data-person]::before,.catalog-card[data-state=working] .catalog-hero-avatar[data-person]::after{background-image:var(--torch-lit);opacity:1;filter:drop-shadow(0 0 10px rgb(255 170 70 / .55))}

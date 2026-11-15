@@ -130,9 +130,9 @@
       ]
     },
     "plan": {
-      "test": "README showcase: the Strategist's plan to approve in the Orchestrator",
+      "test": "README showcase: the Strategist's plan to approve on the project map",
       "sources": [
-        "src/renderer/components/QuestionsWindow.tsx",
+        "src/renderer/components/project-map/",
         "src/renderer/components/PlanApproval.tsx",
         "src/renderer/styles/qwin.css",
         "src/renderer/styles/plan-approval.css"

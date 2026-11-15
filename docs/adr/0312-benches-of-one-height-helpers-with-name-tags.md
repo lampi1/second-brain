@@ -7,7 +7,8 @@ possibilità di cliccare un agente e andare direttamente nella sua tab, però no
 «rimuovi completamente i fumetti … tienili solo quando giochiamo a scacchi e nelle card agenti»; «lo sfondo degli
 agenti fallo più carino … poco medievale»; «nelle card agenti si ripetono troppe info … le animazioni ci mettono troppo
 a ripartire»; «anche la navigazione tra le sezioni dell'app deve essere veramente super fluida») · Amends: ADR 0311
-(benches, helpers), ADR 0303 and 0305 (where the people speak), ADR 0295 (the spark of the working line)
+(benches, helpers), ADR 0303 and 0305 (where the people speak), ADR 0295 (the spark of the working line) · Amended
+by: ADR 0313 (the workshop picture, no fading)
 
 ## Context
 

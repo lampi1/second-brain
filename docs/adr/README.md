@@ -306,7 +306,8 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0309](0309-one-review-chat-per-piece-of-work.md) One review chat per piece of work: after a fix it reviews only the delta — accepted
 - [0310](0310-sign-in-by-credential-name.md) Sign-in by credential name: the app types the password, the agent never holds it — accepted
 - [0311](0311-the-grindhouse-becomes-a-workshop.md) The Grindhouse becomes a workshop: square benches, scenes without screens, a vice at rest — accepted; amended by 0312
-- [0312](0312-benches-of-one-height-helpers-with-name-tags.md) Benches of one height, helpers with name tags, a torch for who works, people who speak only where asked — accepted
+- [0312](0312-benches-of-one-height-helpers-with-name-tags.md) Benches of one height, helpers with name tags, a torch for who works, people who speak only where asked — accepted; amended by 0313
+- [0313](0313-the-workshop-picture-and-people-in-full.md) The workshop picture behind the people, and every person in full — accepted
 
 ## Replaced
 
