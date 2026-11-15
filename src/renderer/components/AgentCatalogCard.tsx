@@ -1,5 +1,5 @@
-// Role card of the Agenti catalogue (AgentCatalogPage): on the front the role's little person at its vice, large, on a
-// stone wall, playing it again and again and speaking at a click (ADR 0295, the vice ADR 0311, ADR 0312; a picture the
+// Role card of the Agenti catalogue (AgentCatalogPage): on the front the role's little person at its vice, large, in the
+// workshop (ADR 0313), playing it again and again and speaking at a click (ADR 0295, the vice ADR 0311, ADR 0312; a picture the
 // user gave the role stays a portrait in its circle), its name only (what it is for, the engine and the model are on
 // the back: the owner, 2026-11-15, «si ripetono troppe info»), a live status, its level (from the XP of its verified successful runs, ADR 0131,
 // shown beside it: «Lv 7 Praticante · 124 XP», ADR 0100; for a work role, when the nightly review last updated it, ADR 0203) and performance % (a Bayesian estimate of the verdicts weighted by trust and

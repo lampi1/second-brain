@@ -17,6 +17,7 @@
         "src/renderer/components/TopBar.tsx",
         "src/renderer/components/OrchestratorOverlay.tsx",
         "src/renderer/styles/agent-strips.css",
+        "src/renderer/assets/stage/bottega.svg",
         "src/renderer/styles/tree.css",
         "src/renderer/styles/shell.css"
       ]
@@ -28,6 +29,7 @@
         "src/renderer/components/AgentCatalogCard.tsx",
         "src/renderer/components/AgentAvatar.tsx",
         "src/renderer/styles/agent-catalog.css",
+        "src/renderer/assets/stage/bottega.svg",
         "src/renderer/components/Sidebar.tsx",
         "src/renderer/components/TopBar.tsx",
         "src/renderer/styles/shell.css"
