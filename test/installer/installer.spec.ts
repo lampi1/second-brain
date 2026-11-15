@@ -20,8 +20,15 @@ test.afterEach(async ({ browserName: _browserName }, info) => {
   else await info.attach('retained-isolated-installation', { body: testRoot, contentType: 'text/plain' });
   testRoot = null;
 });
-/** The last lines of an Inno Setup log, for a failed expectation's message. */
-const setupLogTail = (file: string): string => { try { return fs.readFileSync(file, 'utf8').split(/\r?\n/).slice(-45).join('\n'); } catch { return '(no Setup log written)'; } };
+/** The last lines of an Inno Setup log that say what happened (not the per-file copy and rollback lines), for a failed
+ *  expectation's message. */
+const setupLogTail = (file: string): string => {
+  try {
+    return fs.readFileSync(file, 'utf8').split(/\r?\n/)
+      .filter(line => !/ {3}(Deleting (file|directory):|-- File entry --|Dest filename:|Time stamp of our file:|Installing the file\.|Successfully installed the file\.|Creating directory:|Directory for uninstall files:|Dest file (exists|is protected))/.test(line))
+      .slice(-60).join('\n');
+  } catch { return '(no Setup log written)'; }
+};
 
 test('offline per-user installer starts and reopens its stable copy without system Node', async () => {
   const latest = JSON.parse(fs.readFileSync(path.join(repo, 'test-results/installer/latest.json'), 'utf8')) as { installer: string; payload: string; manifest: { id: string; version: string; sha256: string } };
