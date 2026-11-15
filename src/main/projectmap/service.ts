@@ -16,11 +16,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ChatItem, ChatSummary, PendingRequest } from '@shared/contract';
-import { applyChanges, applyEdit, checkMap, elementOfFile, isMapId, MAP_LIMITS, projectSlug, type MapAgent, type MapElement, type MapPlan, type MapState, type MapWork, type ProjectMap, type ProjectMapInfo, type ProjectMapView } from '@shared/project-map';
+import { applyChanges, applyEdit, checkMap, checkPaths, elementOfFile, isMapId, MAP_LIMITS, mergePaths, projectSlug, prunePaths, type MapAgent, type MapElement, type MapPlan, type MapState, type MapWork, type ProjectMap, type ProjectMapInfo, type ProjectMapView } from '@shared/project-map';
 import { planWaves, type PlanStep } from '@shared/strategy';
 import { askLine } from '../appctl/digest';
 import { markOf, progressOf } from '../appctl/agents-recap';
 import { errText, log } from '../log';
+import { sizeOf, type PieceSize } from './size';
 import type { ProjectMapStore } from './store';
 
 export interface ProjectMapsDeps {
@@ -78,6 +79,8 @@ export class ProjectMaps {
   /** chat → the proposal (its plan's `at`) already put on screen */
   private shown = new Map<string, number>();
   private saveTimer: NodeJS.Timeout | null = null;
+  /** «Quanto è grande» per piece, counted a minute ago at most (ADR 0316) */
+  private sizes = new Map<string, { at: number; size: Promise<PieceSize> }>();
 
   constructor(private readonly d: ProjectMapsDeps) {
     try {
@@ -89,6 +92,8 @@ export class ProjectMaps {
   private now(): number { return this.d.now?.() ?? Date.now(); }
 
   list(): ProjectMapInfo[] { return this.d.store.list(); }
+  /** the maps' project folders (where a file named in a message may be, file-roots.ts) */
+  roots(): string[] { return this.list().flatMap(m => this.d.store.get(m.project)?.root ?? []); }
 
   /** The project a name means: its folder name, its title, or a slug of it. */
   resolve(name: string): string | null {
@@ -134,7 +139,8 @@ export class ProjectMaps {
     if (!prev) throw new Error(`nessuna mappa «${project}»`);
     const now = this.now();
     const { elements, links, did, added } = applyEdit(prev, ops, now, plan);
-    const map: ProjectMap = { ...prev, elements, links, version: prev.version + 1, updatedAt: now, by, summary: did.join(' · ').slice(0, MAP_LIMITS.summary) };
+    const paths = prunePaths(prev.paths, new Set(elements.map(e => e.id)));
+    const map: ProjectMap = { ...prev, elements, links, paths: paths.length ? paths : undefined, version: prev.version + 1, updatedAt: now, by, summary: did.join(' · ').slice(0, MAP_LIMITS.summary) };
     this.d.store.save(map);
     const ids = new Set(elements.map(e => e.id));
     for (const f of Object.values(this.state.focus)) if (f.project === project) f.elements = f.elements.filter(id => ids.has(id));
@@ -155,7 +161,7 @@ export class ProjectMaps {
     // the pieces come back as they were drawn; the ones still there keep the status they have now
     const live = new Map(cur.elements.map(e => [e.id, e]));
     const elements = v === cur.version ? before.elements : before.elements.map(e => { const n = live.get(e.id); return n ? { ...e, status: n.status, confirmedAt: n.confirmedAt, ...(n.note ? { note: n.note } : {}) } : e; });
-    const map: ProjectMap = { ...cur, elements, links: before.links, corrections: before.corrections, version: cur.version + 1, updatedAt: this.now(), by, summary: `annullato: ${last!.summary}`.slice(0, MAP_LIMITS.summary) };
+    const map: ProjectMap = { ...cur, elements, links: before.links, corrections: before.corrections, paths: before.paths, version: cur.version + 1, updatedAt: this.now(), by, summary: `annullato: ${last!.summary}`.slice(0, MAP_LIMITS.summary) };
     this.d.store.save(map);
     const ids = new Set(elements.map(e => e.id));
     for (const f of Object.values(this.state.focus)) if (f.project === project) f.elements = f.elements.filter(id => ids.has(id));
@@ -271,15 +277,18 @@ export class ProjectMaps {
     if (root && !isAbs(norm(root))) throw new Error(`root: the project's folder as an absolute path, not «${root.slice(0, 80)}»`);
     const now = this.now();
     const { elements, links } = checkMap(a.map, now, prev);
+    // the walks (ADR 0316): the ones sent, or the previous ones still on the drawing
+    const ids = new Set(elements.map(e => e.id));
+    const sent = a.map && typeof a.map === 'object' ? (a.map as { paths?: unknown }).paths : undefined;
+    const paths = sent === undefined ? prunePaths(prev?.paths, ids) : checkPaths(sent, ids);
     const summary = a.summary.trim().slice(0, MAP_LIMITS.summary) || (prev ? 'mappa ridisegnata' : 'prima mappa');
     const map: ProjectMap = {
       project, title: title || prev?.title || project, ...(root ? { root } : {}),
       version: (prev?.version ?? 0) + 1, updatedAt: now, by: a.by, summary, elements, links,
-      corrections: a.corrections ?? prev?.corrections ?? [],
+      corrections: a.corrections ?? prev?.corrections ?? [], ...(paths.length ? { paths } : {}),
     };
     this.d.store.save(map);
     // an element that left the drawing leaves the bindings and the edit times too
-    const ids = new Set(elements.map(e => e.id));
     const changed = this.state.changed[project];
     if (changed) for (const id of Object.keys(changed)) if (!ids.has(id) || (elements.find(e => e.id === id)!.confirmedAt >= changed[id]!)) delete changed[id];
     for (const f of Object.values(this.state.focus)) if (f.project === project) f.elements = f.elements.filter(id => ids.has(id));
@@ -290,12 +299,14 @@ export class ProjectMaps {
   }
 
   /** A status update (project_map_update): each change is confirmed now; `working_on` binds the calling chat. */
-  update(project: string, a: { changes?: unknown; workingOn?: unknown; chatId?: string; by: string; summary?: string }): { map: ProjectMap | null; touched: string[] } {
+  update(project: string, a: { changes?: unknown; workingOn?: unknown; paths?: unknown; dropPaths?: unknown; chatId?: string; by: string; summary?: string }): { map: ProjectMap | null; touched: string[] } {
     const prev = this.d.store.get(project);
     if (!prev) throw new Error(`nessuna mappa «${project}»: disegnala prima con project_map_save`);
     const now = this.now();
     // the changes first: a wrong one refuses the whole call, binding included
     const next = a.changes === undefined ? null : applyChanges(prev, a.changes, now);
+    // walks told or taken away (ADR 0316): no redraw, a version of their own
+    const walks = a.paths === undefined && a.dropPaths === undefined ? null : mergePaths(prev.paths, a.paths, a.dropPaths, new Set(prev.elements.map(e => e.id)));
     if (a.workingOn !== undefined) {
       if (!a.chatId) throw new Error('working_on: only a chat can say what it works on');
       if (!Array.isArray(a.workingOn) || a.workingOn.length > 20 || !a.workingOn.every(isMapId)) throw new Error('working_on: up to 20 element ids');
@@ -304,16 +315,30 @@ export class ProjectMaps {
       this.state.focus[a.chatId] = { project, elements: [...new Set(a.workingOn as string[])], at: now };
       this.persist();
     }
-    if (!next) { this.changed(project); return { map: null, touched: [] }; }
-    const { elements, links, touched } = next;
-    const map: ProjectMap = { ...prev, elements, links, version: prev.version + 1, updatedAt: now, by: a.by,
-      summary: (a.summary ?? '').trim().slice(0, MAP_LIMITS.summary) || `stato di ${touched.join(', ')}` };
+    if (!next && !walks) { this.changed(project); return { map: null, touched: [] }; }
+    const { elements, links, touched } = next ?? { elements: prev.elements, links: prev.links, touched: [] as string[] };
+    const map: ProjectMap = { ...prev, elements, links, ...(walks ? { paths: walks.paths.length ? walks.paths : undefined } : {}), version: prev.version + 1, updatedAt: now, by: a.by,
+      summary: (a.summary ?? '').trim().slice(0, MAP_LIMITS.summary) || [...(touched.length ? [`stato di ${touched.join(', ')}`] : []), ...(walks?.did ?? [])].join(' · ').slice(0, MAP_LIMITS.summary) };
     this.d.store.save(map);
     const changed = this.state.changed[project];
     if (changed) for (const id of touched) delete changed[id];
     this.persist();
     this.changed(project);
     return { map, touched };
+  }
+
+  /** «Quanto è grande» (ADR 0316): the files and lines under a piece's evidence, inside the map's root; null without
+   *  a root on this PC or files to count. Counted again a minute later at most. */
+  async size(project: string, element: string): Promise<PieceSize | null> {
+    const map = this.d.store.get(project), e = map?.elements.find(x => x.id === element);
+    if (!map?.root || !e?.evidence.length || !isAbs(norm(map.root))) return null;
+    const key = `${project}\n${map.root}\n${e.evidence.join('\n')}`, now = this.now(), hit = this.sizes.get(key);
+    if (hit && now - hit.at < 60_000) return hit.size;
+    const size = sizeOf(map.root, e.evidence);
+    this.sizes.set(key, { at: now, size });
+    if (this.sizes.size > 200) this.sizes.delete(this.sizes.keys().next().value!);
+    const got = await size;
+    return got.files ? got : null;
   }
 
   /** A correction of the user's (the Orchestrator writes it): kept for every later drawing. */

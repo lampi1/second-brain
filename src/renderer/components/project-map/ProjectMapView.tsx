@@ -20,11 +20,15 @@
 // - Told in full (ADR 0307, the owner 2026-11-14): the maps the user opens start full screen; a picked box, the system
 //   on screen or a picked arrow tells how it works beside the drawing (MapDetail.tsx); a plan tells each step
 //   (PlanFlow.tsx); «Aggiorna» asks the Orchestrator to have the project read again and the map redrawn.
+// - More detail (ADR 0316, the owner 2026-11-15: «vorrei capire bene come è strutturato senza vederlo»): a part holds
+//   parts of its own, entered the same way, up to four levels; a box's panel tells its rules, what it keeps, how big it
+//   is, why it is made so and its key files, each opened in the viewer; the paths (MapPaths.tsx) light the boxes of a
+//   question one stop at a time, the view following each stop to its level.
 // Rendered by brain-model/MapPage.tsx (view «Progetti», pageArg progetti/<project>/<system>), beside the Orchestrator's
 // column: «Mappe», Ctrl+Shift+S and app_project_map open land there (actions.ts openMaps).
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { NEW_MS, levelOf, pathTo, shownStatus, type MapLink, type MapPlan, type MapWork, type Level, type LevelEdge, type LevelNode, type MapAgent, type MapElement, type MapState, type ProjectMapInfo, type ProjectMapView as View } from '@shared/project-map';
-import { brainBridge, openChatRef, orchestratorId } from '../../actions';
+import { NEW_MS, descendantsOf, levelOf, pathTo, shownStatus, type MapLink, type MapPlan, type MapWork, type Level, type LevelEdge, type LevelNode, type MapAgent, type MapElement, type MapState, type ProjectMapInfo, type ProjectMapView as View, type MapPath } from '@shared/project-map';
+import { brainBridge, openChatRef, openFileViewer, orchestratorId } from '../../actions';
 import { t } from '../../i18n';
 import { useNow } from '../../lib/clock';
 import { ago } from '../../lib/format';
@@ -33,6 +37,7 @@ import { closeModal, setMapPicked, setMapsArg, setMapsFull, toast, ui } from '..
 import { IconArrowLeft, IconChat, IconMaximize, IconMinimize, IconRefresh } from '../Icons';
 import { AgentAvatar } from '../AgentAvatar';
 import { ElementDetail, LinkDetail } from './MapDetail';
+import { PathList, PathPanel, type Walk } from './MapPaths';
 import { PlanFlow, Turn } from './PlanFlow';
 import './project-map.css';
 
@@ -59,6 +64,13 @@ const curve = (p: Ends) => `M${p.x1},${p.y1} C${p.c1[0]},${p.c1[1]} ${p.c2[0]},$
 function along(p: Ends, f: number): { left: number; top: number } {
   const g = 1 - f, k = [g * g * g, 3 * g * g * f, 3 * g * f * f, f * f * f] as const;
   return { left: k[0] * p.x1 + k[1] * p.c1[0] + k[2] * p.c2[0] + k[3] * p.x2, top: k[0] * p.y1 + k[1] * p.c1[1] + k[2] * p.c2[1] + k[3] * p.y2 };
+}
+
+/** a file of the project as the viewer opens it: the map's folder joined to the path, with the folder's own separator */
+export function inRoot(root: string | undefined, rel: string): string {
+  if (!root) return rel;
+  const sep = root.includes('\\') && !root.includes('/') ? '\\' : '/';
+  return `${root.replace(/[\\/]+$/, '')}${sep}${rel.split('/').join(sep)}`;
 }
 
 const clock = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -149,6 +161,11 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   // «Aggiorna» was pressed at this version: the button waits until the map changes
   const [asked, setAsked] = useState<{ project: string; version: number; at: number } | null>(null);
   const [agentOn, setAgentOn] = useState<string | null>(null);
+  // a path walked on the map (ADR 0316): which one and the stop on screen
+  const [walk, setWalk] = useState<Walk | null>(null);
+  const side = useRef<HTMLElement>(null);
+  // a path opened from deep in the side (a box's «Percorsi che passano di qui»): its stops show from the top
+  useEffect(() => { if (walk && side.current) side.current.scrollTop = 0; }, [walk]);
   // the view on the drawing, like a design canvas (the owner 2026-11-13: «control + rotella zummasse e il drag … per
   // spostare la view, non spostare i riquadri ma spostarsi sul workspace tipo figma»): scale and offset of the plane;
   // fitted (centred, whole level in sight) until the user zooms or drags, then his own until the level changes
@@ -217,7 +234,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   useEffect(loadList, [loadList]);
   useEffect(load, [load]);
   useEffect(() => window.sb.on('projectmap:changed', p => { loadList(); if (p.project === project && version === null) load(); }), [project, version, load, loadList]);
-  useEffect(() => { setVersion(null); setPicked(null); setPickedLinks(null); setAgentOn(null); }, [project]);
+  useEffect(() => { setVersion(null); setPicked(null); setPickedLinks(null); setAgentOn(null); setWalk(null); }, [project]);
   // the Orchestrator is told the map, the level and the box on screen (lib/where.ts, ADR 0276); «Mappe» comes back here
   useEffect(() => { setMapPicked(picked); return () => setMapPicked(null); }, [picked]);
   useEffect(() => { if (project) setMapsArg(`${project}${level ? `/${level}` : ''}`); }, [project, level]);
@@ -250,6 +267,36 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   }, [map, project, shownLevel]);
   // the place changed while the view was zooming into a box (Backspace, another project): that zoom is dropped
   useEffect(() => { if (zoomTimer.current) { clearTimeout(zoomTimer.current); zoomTimer.current = null; } setZooming(false); }, [project, level]);
+  // the path walked: its stop on screen, and the view follows each new stop to the level that shows its box
+  const walkPath = walk && map ? map.paths?.find(p => p.id === walk.path) : undefined;
+  const walkStop = walk && walkPath ? walkPath.stops[walk.i] : undefined;
+  const walkedTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (!walk || !walkStop || !map) { walkedTo.current = null; return; }
+    const key = `${walk.path}/${walk.i}`;
+    if (walkedTo.current === key) return;
+    walkedTo.current = key;
+    const want = map.elements.find(e => e.id === walkStop.on)?.parent ?? null;
+    if (want !== shownLevel) onArg(`${project}${want ? `/${want}` : ''}`);
+  }, [walk, walkStop, map, shownLevel, project, onArg]);
+  // ← → move along the path while the map has the keyboard (not in a field)
+  useEffect(() => {
+    if (!walk || !walkPath) return;
+    const key = (e: KeyboardEvent) => {
+      if ((e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || e.ctrlKey || e.altKey || e.metaKey || e.defaultPrevented) return;
+      if (ui.get().modal && !root.current?.closest('.modal-body')) return;
+      const a = document.activeElement as HTMLElement | null;
+      if (a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return;
+      const i = walk.i + (e.key === 'ArrowRight' ? 1 : -1);
+      if (i < 0 || i >= walkPath.stops.length) return;
+      e.preventDefault();
+      setWalk({ path: walk.path, i });
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [walk, walkPath]);
+  // a path gone from the map (a redraw, the history): the walk ends
+  useEffect(() => { if (walk && map && !walkStop) setWalk(null); }, [walk, map, walkStop]);
   // placed once per level, not on every pan or zoom tick
   const labels = useMemo(() => (lv ? placeLabels(lv) : []), [lv]);
   // once per place (not on every live reload, which would undo what the user picked since)
@@ -326,8 +373,17 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   const of = (id: string) => agents.filter(a => a.elements.some(x => x === id || pathTo(map, x).some(p => p.id === id)));
   const lit = new Set(agentOn ? agents.find(a => a.chatId === agentOn)?.elements.flatMap(x => pathTo(map, x).map(p => p.id)) ?? [] : []);
   const st = (e: MapElement) => shown(shownStatus(e, now, view!.changed[e.id]));
-  // the plan steps on a box: its own, and for a system those of its parts
-  const worksOf = (id: string): MapWork[] => (live ? [...(view!.works[id] ?? []), ...map.elements.filter(x => x.parent === id).flatMap(x => view!.works[x.id] ?? [])] : []);
+  // the plan steps on a box: its own, and for a system those of its parts (and theirs, at every depth)
+  const worksOf = (id: string): MapWork[] => (live ? [...(view!.works[id] ?? []), ...[...descendantsOf(map, id)].flatMap(x => view!.works[x] ?? [])] : []);
+  // the path walked on the drawing: each box shows the stops on it or inside it, the stop on screen stands out
+  const stopsOn = new Map<string, number[]>();
+  for (const [k, s] of (walkPath?.stops ?? []).entries()) for (const e of pathTo(map, s.on)) stopsOn.set(e.id, [...(stopsOn.get(e.id) ?? []), k + 1]);
+  const nowOn = new Set(walkStop ? pathTo(map, walkStop.on).map(e => e.id) : []);
+  const startWalk = (p: MapPath, i: number) => { setPicked(null); setPickedLinks(null); setWalk({ path: p.id, i }); };
+  // a key file, a stop's file or a file a piece was read from: the viewer shows it (the full screen steps aside, the
+  // viewer opens over the page)
+  const openFile = (rel: string) => { setFull(false); openFileViewer(inRoot(map.root, rel)); };
+  const askPath = () => { setFull(false); if (!brainBridge.draftToOrchestrator(t('pm.pathAskDraft', { title: map.title }), () => {})) toast(t('pm.noOrchestrator'), 'warn'); };
   const plans: MapPlan[] = live ? view!.plans : [];
   const decide = (p: MapPlan) => { void window.sb.invoke('chat:plan', { chatId: p.chatId, decision: 'approve', at: p.at }).catch(() => toast(t('pm.planGone'), 'warn')); };
   const change = (p: MapPlan) => { setFull(false); if (!brainBridge.draftToOrchestrator(t('pm.planChangeDraft', { title: p.title }), () => {})) toast(t('pm.noOrchestrator'), 'warn'); };
@@ -462,7 +518,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
         {shownLevel && <button type="button" className="btn btn-s pm-up" onClick={up} data-testid="pm-up" data-tip={t('pm.upTip')}>
           <IconArrowLeft size={13} />{parentOf ? byId.get(parentOf)?.name : t('pm.top')}</button>}
         <div className="pm-stage">
-          <div className={`pm-plane${zooming ? ' zooming' : ''}`} style={{ width: lv.width, height: lv.height, transform: `translate(${cam.x}px, ${cam.y}px) scale(${scale})` }}>
+          <div className={`pm-plane${zooming ? ' zooming' : ''}${walkPath ? ' walking' : ''}`} style={{ width: lv.width, height: lv.height, transform: `translate(${cam.x}px, ${cam.y}px) scale(${scale})` }}>
             <div className="pm-level" key={`${project}/${shownLevel ?? ''}`} data-enter={enter?.dir} data-testid="pm-level">
             <svg className="pm-edges" width={lv.width} height={lv.height} aria-hidden>
               <defs>{(['ok', 'work', 'blocked', 'unknown', 'stale', 'planned'] as const).map(s => <marker key={s} id={`pm-arrow-${s}`} viewBox="0 0 10 10" refX={9} refY={5} markerWidth={7} markerHeight={7} orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" className={`pm-arrow s-${s}`} /></marker>)}</defs>
@@ -482,10 +538,11 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
               // somebody works on it right now: a step of a plan under way, or an agent at work on it
               const running = live && (worksOf(e.id).some(w => w.state === 'now') || who.some(a => a.mark === 'run'));
               const style: CSSProperties = { left: n.x, top: n.y, width: n.w, height: n.h };
-              return <button type="button" key={n.id} className={`pm-node k-${e.kind} s-${s}${n.ctx ? ' ctx' : ''}${picked === e.id ? ' picked' : ''}${lit.has(e.id) ? ' lit' : ''}${running ? ' running' : ''}${enter?.from === e.id ? ' came' : ''}`}
+              return <button type="button" key={n.id} className={`pm-node k-${e.kind} s-${s}${n.ctx ? ' ctx' : ''}${picked === e.id ? ' picked' : ''}${lit.has(e.id) ? ' lit' : ''}${stopsOn.has(e.id) ? ' on-path' : ''}${nowOn.has(e.id) ? ' stop-now' : ''}${running ? ' running' : ''}${enter?.from === e.id ? ' came' : ''}`}
                 style={style} onClick={() => click(n)} data-testid={`pm-node-${e.id}`} data-running={running ? '' : undefined} title={e.description}
                 onAnimationEnd={ev => { if (ev.animationName === 'pm-came') setEnter(x => (x ? { ...x, from: null } : x)); }}>
                 <span className="pm-kind">{t(`pm.kind.${e.kind}`)}{k && !n.ctx ? ` · ${t('pm.parts', { n: k })}` : ''}</span>
+                {stopsOn.has(e.id) && <span className="pm-stopnum" data-testid={`pm-stopnum-${e.id}`}>{stopsOn.get(e.id)!.slice(0, 4).join(' · ')}{stopsOn.get(e.id)!.length > 4 ? ' …' : ''}</span>}
                 <b className="pm-name">{e.name}</b>
                 {!n.ctx && (ws.length && !(e.status === 'blocked' && e.note)
                   ? <span className="pm-works" data-testid={`pm-works-${e.id}`}>{(ws.length > 2 ? [ws.find(w => w.state === 'now') ?? ws.find(w => w.state !== 'done') ?? ws[0]!] : ws).map(w => <span key={`${w.chatId}-${w.step}`} data-s={w.state}><i>{WORK_MARK[w.state]}</i><Turn wave={w.wave} par={w.par} />{w.title}</span>)}{ws.length > 2 && <span className="pm-works-more">{t('pm.worksMore', { n: ws.length - 1, done: ws.filter(w => w.state === 'done').length, total: ws.length })}</span>}</span>
@@ -522,10 +579,12 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
           <span><em className="pm-you">{t('pm.you')}</em>{t('pm.youMeans')}</span>
         </div>
       </div>
-      <aside className="pm-side" data-testid="pm-side">
-        {sel && <ElementDetail map={map} el={sel} state={st(sel)} stateOfLink={stLink} confirmed={t('pm.confirmed', { at: since(sel.confirmedAt, now) })} works={worksOf(sel.id)} onTalk={() => talk(sel)} onShow={show} />}
-        {here && <ElementDetail map={map} el={here} state={st(here)} stateOfLink={stLink} confirmed={t('pm.confirmed', { at: since(here.confirmedAt, now) })} works={[]} onTalk={() => talk(here)} onShow={show} testid="pm-here" lead={t('pm.youAreIn')} />}
+      <aside className="pm-side" ref={side} data-testid="pm-side">
+        {walkPath && walk && <PathPanel map={map} path={walkPath} i={walk.i} onStep={i => setWalk({ path: walkPath.id, i })} onClose={() => setWalk(null)} onShow={show} onFile={openFile} />}
+        {sel && <ElementDetail map={map} el={sel} state={st(sel)} stateOfLink={stLink} confirmed={t('pm.confirmed', { at: since(sel.confirmedAt, now) })} works={worksOf(sel.id)} onTalk={() => talk(sel)} onShow={show} onFile={openFile} onWalk={startWalk} />}
+        {here && !walkPath && <ElementDetail map={map} el={here} state={st(here)} stateOfLink={stLink} confirmed={t('pm.confirmed', { at: since(here.confirmedAt, now) })} works={here.kind === 'part' ? worksOf(here.id) : []} onTalk={() => talk(here)} onShow={show} onFile={openFile} onWalk={startWalk} testid="pm-here" lead={t('pm.youAreIn')} />}
         {selLinks.length > 0 && <LinkDetail map={map} links={selLinks} stateOfLink={stLink} onShow={show} />}
+        {!walkPath && <PathList map={map} onWalk={startWalk} onAsk={askPath} />}
         <div className="pm-side-head"><h3>{t('pm.agents')}</h3><span>{live ? t('pm.agentsCount', { n: agents.length, run: agents.filter(a => a.mark === 'run').length }) : t('pm.agentsPast')}</span></div>
         {live && !agents.length && <p className="pm-muted">{t('pm.noAgents')}</p>}
         {groups.map(([g, list]) => (list.length ? <section key={g} className="pm-group" data-g={g}>

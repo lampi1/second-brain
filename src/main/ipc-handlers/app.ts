@@ -16,7 +16,8 @@ import { hiddenRun } from '../window';
 import { logInputLag } from '../perf';
 import path from 'node:path';
 import { readFileDiff } from '../file-diff';
-import { readFileView } from '../file-view';
+import { readFileView, rootFor } from '../file-view';
+import { fileRoots } from '../file-roots';
 import { copyFile, type ClipboardLike } from '../file-copy';
 import { showLocal } from '../open-path';
 import { systemLang } from '../lang';
@@ -36,6 +37,9 @@ const CLIPBOARD: ClipboardLike = {
 const HIDDEN_CLIPBOARD: ClipboardLike = { writeText: async () => {}, writeRaw: async () => {}, writeImageFromPath: async () => true };
 
 export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, defaultBrain, updates, search, hiddenShell, bumpBrainChoice, rendererErrors }: HandlerContext): HandlersOf<'app' | 'cli' | 'source' | 'update' | 'setup' | 'profile' | 'overlay' | 'log' | 'search' | 'tasks' | 'feed' | 'usecount' | 'worktrees'> {
+  /** where a file named in a chat's message may be: its folder first, then the others the app knows (file-roots.ts) */
+  const rootsFor = (chatId: unknown) => fileRoots({ chatId: typeof chatId === 'string' ? chatId : undefined, chats: s.chats.list(),
+    mapRoots: s.projectMaps?.roots() ?? [], brainRoot: demo ? process.env.SB_BRAIN : s.brain.info().brainRoot });
   return {
     'update:get': () => updates.state(),
     'update:apply': a => updates.apply(a?.id),
@@ -77,19 +81,18 @@ export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, 
     'app:showInFolder': a => showLocal(String(a?.path ?? '').slice(0, 4096), hiddenRun() ? hiddenShell : shell),
     // an agent's hidden run never overwrites the user's clipboard: the copy is checked and dropped
     'app:copyFile': a => copyFile(String(a?.path ?? '').slice(0, 4096), hiddenRun() ? HIDDEN_CLIPBOARD : CLIPBOARD),
+    // a relative path is looked for in the chat's folder first, then in the other folders the app knows (file-roots.ts)
     'app:readFile': a => {
-      const chat=typeof a?.chatId==='string'?s.chats.list().find(chat=>chat.id===a.chatId):undefined;
-      const brainRoot=demo?process.env.SB_BRAIN:s.brain.info().brainRoot;
+      const raw=typeof a?.path==='string'?a.path:'';
       const count=(n:unknown)=>typeof n==='number'&&Number.isSafeInteger(n)&&n>0?n:undefined;
-      return readFileView(typeof a?.path==='string'?a.path:'',{cwd:chat?.cwd??brainRoot??undefined,offset:count(a?.offset),align:a?.align===true,before:count(a?.before),line:count(a?.line)});
+      return readFileView(raw,{cwd:rootFor(raw,rootsFor(a?.chatId)),offset:count(a?.offset),align:a?.align===true,before:count(a?.before),line:count(a?.line)});
     },
     'app:readFileDiff': a => {
-      const chat=typeof a?.chatId==='string'?s.chats.list().find(chat=>chat.id===a.chatId):undefined;
-      const brainRoot=demo?process.env.SB_BRAIN:s.brain.info().brainRoot;
+      const raw=typeof a?.path==='string'?a.path:'';
       const w=a?.against;
       const against:DiffAgainst|null=w?.kind==='head'?{kind:'head'}:w?.kind==='ref'&&typeof w.ref==='string'?{kind:'ref',ref:w.ref}:w?.kind==='file'&&typeof w.path==='string'?{kind:'file',path:w.path}:null;
       if(!against)return {kind:'refused',reason:'ref'};
-      return readFileDiff(typeof a?.path==='string'?a.path:'',against,chat?.cwd??brainRoot??undefined);
+      return readFileDiff(raw,against,rootFor(raw,rootsFor(a?.chatId)));
     },
     'app:askImage': a => readAskImage(String(a?.path ?? '').slice(0, 1000), askImageRoots({
       userData: app.getPath('userData'), appData: app.getPath('appData'), brainRoot: demo ? process.env.SB_BRAIN ?? null : s.brain.info().brainRoot,

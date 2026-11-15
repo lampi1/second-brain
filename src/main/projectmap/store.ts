@@ -7,7 +7,7 @@
 // test/unit/projectmap-store.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
-import type { MapVersionInfo, ProjectMap, ProjectMapInfo } from '@shared/project-map';
+import { MAP_LIMITS, prunePaths, type MapPath, type MapVersionInfo, type ProjectMap, type ProjectMapInfo } from '@shared/project-map';
 
 export const HISTORY_MAX = 400;
 const SLUG = /^[a-z0-9][a-z0-9-]{0,47}$/;
@@ -18,17 +18,29 @@ const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinit
 /** A parsed file as a map of `project` (its folder), or null when it is not one: the shape every reader relies on. */
 export function asMap(v: unknown, project: string): ProjectMap | null {
   if (!obj(v) || !num(v.version) || !Array.isArray(v.elements)) return null;
+  // the short lists of what tells a piece (ADR 0316): strings only; a key file needs its path and its line
+  const strs = (x: unknown) => (Array.isArray(x) ? x.filter(str) : undefined);
+  const files = (x: unknown) => (Array.isArray(x) ? x.filter(f => obj(f) && str(f.path) && str(f.what)).map(f => ({ path: f.path as string, what: f.what as string })) : undefined);
   const elements = v.elements.filter(e => obj(e) && str(e.id) && str(e.kind) && str(e.name) && str(e.status)).map(e => {
-    const x = e as Record<string, unknown>;
+    const x = { ...(e as Record<string, unknown>) };
+    for (const k of ['rules', 'keeps', 'why'] as const) { const l = strs(x[k]); if (l?.length) x[k] = l; else delete x[k]; }
+    const kf = files(x.keyFiles); if (kf?.length) x.keyFiles = kf; else delete x.keyFiles;
     return { ...x, evidence: Array.isArray(x.evidence) ? x.evidence.filter(str) : [], confirmedAt: num(x.confirmedAt) ? x.confirmedAt : 0 };
   }) as unknown as ProjectMap['elements'];
   if (!elements.length) return null;
-  // a parent that is not a system on the top level (missing, a part, a loop: a hand-edited file) is dropped
-  const top = new Map(elements.map(e => [e.id, e]));
-  for (const e of elements) {
-    const p = e.parent === undefined ? undefined : top.get(e.parent);
-    if (e.parent !== undefined && (!p || (p.kind !== 'system' && p.kind !== 'external') || p.parent !== undefined)) delete (e as { parent?: string }).parent;
-  }
+  // a parent that cannot hold a piece (missing, a person, a loop, too deep: a hand-edited file) is dropped; a part sits in
+  // a system or in another part (ADR 0316)
+  const byId = new Map(elements.map(e => [e.id, e]));
+  const holds = (k: string) => k === 'system' || k === 'external' || k === 'part';
+  const drop = elements.filter(e => {
+    if (e.parent === undefined) return false;
+    const p = byId.get(e.parent);
+    const seen = new Set<string>([e.id]);
+    let ok = !!p && holds(p.kind) && e.kind === 'part';
+    for (let q: string | undefined = e.parent; ok && q; q = byId.get(q)?.parent) { if (seen.has(q)) ok = false; seen.add(q); }
+    return !ok || seen.size - 1 > MAP_LIMITS.depth;
+  });
+  for (const e of drop) delete (e as { parent?: string }).parent; // judged on the file as read, so a loop drops every parent in it
   const ids = new Set(elements.map(e => e.id));
   const links = (Array.isArray(v.links) ? v.links : []).filter(l => obj(l) && str(l.id) && str(l.from) && str(l.to) && ids.has(l.from) && ids.has(l.to) && str(l.status))
     .map(l => ({ ...(l as Record<string, unknown>), label: str((l as Record<string, unknown>).label) ? (l as Record<string, unknown>).label : '', confirmedAt: num((l as Record<string, unknown>).confirmedAt) ? (l as Record<string, unknown>).confirmedAt : 0 })) as unknown as ProjectMap['links'];
@@ -37,7 +49,19 @@ export function asMap(v: unknown, project: string): ProjectMap | null {
     updatedAt: num(v.updatedAt) ? v.updatedAt : 0, by: str(v.by) ? v.by : '', summary: str(v.summary) ? v.summary : '',
     ...(str(v.root) && v.root ? { root: v.root } : { root: undefined }), elements, links,
     corrections: Array.isArray(v.corrections) ? v.corrections.filter(str) : [],
+    ...pathsOf(v.paths, ids),
   };
+}
+
+/** The walks of a file (ADR 0316): only well formed ones, each stop on an element still drawn. */
+function pathsOf(v: unknown, ids: ReadonlySet<string>): { paths: MapPath[] | undefined } {
+  if (!Array.isArray(v)) return { paths: undefined };
+  const ok = v.filter(x => obj(x) && str(x.id) && str(x.question) && Array.isArray(x.stops)).map(x => ({
+    id: x.id as string, question: x.question as string,
+    stops: (x.stops as unknown[]).filter((s): s is Record<string, unknown> => obj(s) && str(s.on) && str(s.text)).map(s => ({ on: s.on as string, text: s.text as string, ...(str(s.file) && s.file ? { file: s.file } : {}) })),
+  }));
+  const paths = prunePaths(ok, ids);
+  return { paths: paths.length ? paths : undefined };
 }
 
 export class ProjectMapStore {

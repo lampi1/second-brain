@@ -8,6 +8,7 @@ export function brainHandlers({ s, emitter, research, requireReviewRoot, search,
     // the project maps (ADR 0271): read only from the page; agents draw and update them through their MCP tools
     'projectmap:list': () => s.projectMaps?.list() ?? [],
     'projectmap:view': a => s.projectMaps?.view(String(a?.project ?? ''), typeof a?.version === 'number' ? a.version : undefined) ?? null,
+    'projectmap:size': async a => (s.projectMaps ? s.projectMaps.size(String(a?.project ?? '').slice(0, 64), String(a?.element ?? '').slice(0, 64)) : null),
     'brain:share': () => s.agentPacks.share(),
     // the Brain pages (ADR 0077): read, the maintenance button, an undo, a skill toggle; Classificatori read-only
     'brainmodel:state': () => s.brainModel.stateAsync(),

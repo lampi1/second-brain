@@ -23,6 +23,7 @@ import {Toc} from '../components/Toc';
 import {baseName} from '../lib/text';
 import {extOf,fmtBytes,highlightLines,parseCsv,prettyJson,viewOf,type FileView} from '../lib/file-format';
 import {fileLink} from '../lib/viewer-tools';
+import {indentGuides} from '../lib/indent-guides';
 import {Compare} from './FileDiff';
 import type {PDFDocumentProxy,PDFPageProxy} from '../lib/pdf';
 import {pdfPagesToDraw,samePages} from '../lib/pdf-window';
@@ -57,6 +58,7 @@ function Code({ text, path, line, base=1, wrap=false, picked, onPick }: { text: 
   // a very long text without a cited line is one plain block, so it is not highlighted either
   const html = useHighlight(flat,path,lines.length<=WINDOW||!!at);
   const w = String(lines.length+(base??1)).length;
+  const guides = useMemo(()=>indentGuides(lines),[lines]);
   useEffect(() => {const target=line?ref.current?.querySelector<HTMLElement>(`[data-l="${line}"]`):null;target?.scrollIntoView({block:'center',inline:'nearest'});}, [line, text, html]);
   const cls=`bx-code bx-scroll${wrap?' is-wrap':''}`;
   // a very long text stays one text block (one element per line would slow the page down)
@@ -64,12 +66,12 @@ function Code({ text, path, line, base=1, wrap=false, picked, onPick }: { text: 
   const first=lines.length>WINDOW?Math.max(0,Math.min(lines.length-WINDOW,(at??1)-WINDOW/2)):0,number=(i:number)=>base?i+base:null;
   const pick=(e:ReactMouseEvent<HTMLPreElement>)=>{const n=Number((e.target as HTMLElement).closest('.bx-ln')?.parentElement?.dataset.l);if(onPick&&n>0)onPick(n);};
   return (
-    <pre ref={ref} className={`${cls} hljs`} style={{['--ln-w' as string]:`${w+2}ch`}} data-testid="bx-code" data-highlighted={html?'true':undefined} data-wrap={wrap?'true':undefined} onClick={pick}>
+    <pre ref={ref} className={`${cls} hljs`} style={{['--ln-w' as string]:`${w+2}ch`,['--ig' as string]:`${guides.unit}ch`}} data-testid="bx-code" data-highlighted={html?'true':undefined} data-wrap={wrap?'true':undefined} onClick={pick}>
       {first>0&&<div className="bx-code-window" data-find-skip>{t('viewer.window',{first:first+(base??1),last:Math.min(lines.length,first+WINDOW)+(base??1)-1,total:lines.length+(base??1)-1})}</div>}
       {lines.slice(first,first+WINDOW).map((l, offset) => {const i=first+offset,h=html?.[i],n=number(i);
         return <div key={i} className={`bx-cl${n!==null&&n===line?' is-cited':''}${n!==null&&n===picked?' is-picked':''}`} data-l={n??undefined} style={n!==null&&n === line ? { background: 'var(--bx-amber-bg)' } : undefined}>
           {n!==null&&<span className={`bx-ln${onPick?' is-link':''}`} data-find-skip title={onPick?t('vw.lineLink',{n}):undefined}>{n}</span>}
-          <span className="bx-lc">{h?<span dangerouslySetInnerHTML={{__html:h||' '}}/>:l || ' '}</span></div>;})}
+          <span className="bx-lc">{guides.cols[i]?<span className="bx-ig" aria-hidden data-find-skip style={{width:`${guides.cols[i]}ch`}}/>:null}{h?<span dangerouslySetInnerHTML={{__html:h||' '}}/>:l || ' '}</span></div>;})}
     </pre>
   );
 }

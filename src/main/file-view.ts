@@ -70,6 +70,12 @@ export function localFile(raw:string,cwd?:string):{requested:string;real:string;
  if(!stats.isFile())return{kind:'unsupported',reason:'unsupported'};
  return{requested,real,stats};
 }
+/** The first of `roots` where a relative `raw` names a file (a path in a message may live in another chat's folder,
+ *  file-roots.ts); an absolute path, or one found nowhere, keeps the first root. */
+export function rootFor(raw:string,roots:readonly string[]):string|undefined{
+ if(roots.length>1&&typeof raw==='string'&&raw.length<=4096&&!resolvePeek(fileReference(raw).path))for(const r of roots){const l=localFile(raw,r);if(!('kind'in l))return r;}
+ return roots[0];
+}
 /**
  * One page of text, from (the first that applies):
  * - `line`: the page around that cited line (up to LINE_CONTEXT lines above it, from the top in the first half page);

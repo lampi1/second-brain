@@ -1,6 +1,7 @@
 // The demo's project maps (ADR 0271): a small second project nobody works on (ADR 0302) and the made-up shop the demo chats work on, drawn in four versions (so the history
 // slider plays it from the first drawing to now), with the demo's chats bound to the parts they work on. Written into the
-// demo brain once (a map already there is left alone). Used by demo-wiring.ts.
+// demo brain once (a map already there is left alone). The orders part holds pieces of its own, tells its rules, what
+// it keeps, why and its key files, and the last version has two paths told stop by stop (ADR 0316). Used by demo-wiring.ts.
 import type { MapElement, MapLink, ProjectMap } from '@shared/project-map';
 import type { ProjectMaps } from './service';
 import { ProjectMapStore } from './store';
@@ -21,7 +22,14 @@ export function seedDemoMap(brainRoot: string, maps: ProjectMaps, now: number): 
       details: 'Il cliente riempie il carrello, paga e riceve la conferma; l\'operatore segue ordini, resi e rimborsi dallo stesso sito.\nDentro ci sono cinque parti: il carrello, gli ordini con gli sconti, i rimborsi, le notifiche SMS e il database. Ogni ordine passa dal carrello agli ordini, che calcolano il totale, lo addebitano sul gateway e scaricano il magazzino del fornitore.' }),
     el('carrello', 'part', 'Carrello', { parent: 'negozio', description: 'Prodotti, quantità, codici sconto', evidence: ['src/Cart/'] }),
     el('ordini', 'part', 'Ordini e sconti', { parent: 'negozio', description: 'Calcola il totale e crea l\'ordine', evidence: ['src/Orders/'],
+      rules: ['Lo sconto va sul prezzo pieno, prima dell\'IVA (oggi è dopo: il piano lo corregge)', 'Si arrotonda una volta sola, sul totale', 'Senza addebito riuscito niente esce dal magazzino'],
+      keeps: ['Ordini e righe nel Database ordini (tabelle Orders e OrderLines)', 'Lo stato del pagamento sull\'ordine: in attesa, pagato o rifiutato'],
+      why: ['Dopo «Paga» un ordine non cambia più: una modifica ne crea uno nuovo, così il totale addebitato resta quello salvato (docs/ordini.md)'],
+      keyFiles: [{ path: 'src/Orders/Checkout.cs', what: 'Dove nasce l\'ordine e parte l\'addebito' }, { path: 'src/Orders/Totals.cs', what: 'Somma delle righe, IVA e arrotondamento' }, { path: 'src/Orders/Discounts.cs', what: 'I codici sconto' }],
       details: 'Riceve il carrello confermato e ne fa un ordine: somma le righe, applica il codice sconto, aggiunge l\'IVA e arrotonda una volta sola alla fine.\nSalva l\'ordine nel database, chiede l\'addebito al gateway e, se va a buon fine, scarica le quantità dal gestionale del fornitore e fa partire l\'SMS.\nSe l\'addebito fallisce l\'ordine resta «in attesa di pagamento» e niente viene scaricato dal magazzino. Oggi lo sconto è applicato dopo l\'IVA: è l\'errore che il piano corregge.' }),
+    el('totale', 'part', 'Calcolo del totale', { parent: 'ordini', description: 'Righe, IVA, arrotondamento', evidence: ['src/Orders/Totals.cs'] }),
+    el('sconti', 'part', 'Codici sconto', { parent: 'ordini', description: 'Valida il codice e ne calcola lo sconto', evidence: ['src/Orders/Discounts.cs'] }),
+    el('conferma', 'part', 'Conferma e addebito', { parent: 'ordini', description: 'Salva l\'ordine e chiede il pagamento', evidence: ['src/Orders/Checkout.cs'] }),
     el('rimborsi', 'part', 'Rimborsi', { parent: 'negozio', description: 'Resi e rimborsi sul metodo di pagamento', evidence: ['src/Refunds/'],
       details: 'L\'operatore apre un reso su un ordine pagato e sceglie le righe da rimborsare. Il rimborso è calcolato sul prezzo pagato, sconto compreso, e torna sullo stesso metodo di pagamento con uno storno sul gateway.\nUn rimborso sopra i 200 € chiede una seconda approvazione. Il reso parziale non è ancora gestito: si rimborsa l\'ordine intero.' }),
     el('db', 'part', 'Database ordini', { parent: 'negozio', description: 'SQL Server: ordini, righe, rimborsi', evidence: ['db/migrations/'] }),
@@ -36,6 +44,7 @@ export function seedDemoMap(brainRoot: string, maps: ProjectMaps, now: number): 
     ln('carrello', 'ordini', 'crea l\'ordine', { details: 'Quando il cliente preme «Paga» il carrello passa le righe, le quantità e il codice sconto. Da qui il carrello è bloccato: una modifica crea un ordine nuovo.' }), ln('ordini', 'db', 'salva'), ln('rimborsi', 'db', 'legge e scrive'),
     ln('ordini', 'pagamenti', 'addebita il totale', { details: 'Alla conferma dell\'ordine parte una chiamata al gateway con il totale e il riferimento dell\'ordine. Torna «pagato» o il motivo del rifiuto; senza risposta entro 30 secondi l\'ordine resta in attesa e si riprova una volta.' }), ln('rimborsi', 'pagamenti', 'storna'), ln('ordini', 'gestionale', 'scarica il magazzino'),
     ln('pipeline', 'test', 'pubblica'), ln('test', 'negozio', 'ospita la prova'),
+    ln('totale', 'sconti', 'chiede lo sconto'), ln('totale', 'conferma', 'passa il totale'),
   ];
   const head = { project: 'alfa-shop', title: 'Alfa · negozio online', root: 'C:\\progetti\\alfa-shop', corrections: [] as string[] };
   const v1: ProjectMap = { ...head, version: 1, updatedAt: now - 3 * 24 * H, by: 'Scout · Mappa Alfa', summary: 'prima mappa: sito, ordini, rimborsi, pagamenti',
@@ -59,6 +68,24 @@ export function seedDemoMap(brainRoot: string, maps: ProjectMaps, now: number): 
   let v5: ProjectMap = { ...v4, version: 5, updatedAt: now - 4 * MIN, by: 'QA · Rimborsi', summary: 'rimborsi bloccati: il test case 7 aspetta la tua decisione' };
   v5 = set(v5, 'rimborsi', { status: 'blocked', actor: 'user', note: 'Il test case 7 fallisce anche su master: decidi tu', confirmedAt: now - 4 * MIN });
   v5 = set(v5, 'operatore--rimborsi', { status: 'blocked', actor: 'user', note: 'Rimborso senza sconto', confirmedAt: now - 4 * MIN });
+  v5 = { ...v5, paths: [
+    { id: 'paga', question: 'Cosa succede quando un cliente paga?', stops: [
+      { on: 'cliente', text: 'Il cliente ha riempito il carrello e preme «Paga».' },
+      { on: 'carrello', text: 'Il carrello si blocca e passa righe, quantità e codice sconto agli ordini. Da qui una modifica crea un ordine nuovo.', file: 'src/Cart/CartController.cs' },
+      { on: 'totale', text: 'Somma le righe, aggiunge l\'IVA e arrotonda una volta sola alla fine.', file: 'src/Orders/Totals.cs' },
+      { on: 'sconti', text: 'Controlla il codice e toglie lo sconto. Oggi lo toglie dopo l\'IVA: è l\'errore che il piano corregge.', file: 'src/Orders/Discounts.cs' },
+      { on: 'conferma', text: 'Salva l\'ordine «in attesa di pagamento» e chiede l\'addebito del totale.', file: 'src/Orders/Checkout.cs' },
+      { on: 'pagamenti', text: 'Il gateway risponde «pagato» o il motivo del rifiuto. Senza risposta in 30 secondi si riprova una volta.' },
+      { on: 'gestionale', text: 'Solo se è pagato: le quantità escono dal magazzino del fornitore.' },
+      { on: 'notifiche', text: 'Parte l\'SMS di conferma al cliente.', file: 'src/Notifications/SmsSender.cs' },
+    ] },
+    { id: 'rimborso', question: 'Come si rimborsa un ordine?', stops: [
+      { on: 'operatore', text: 'L\'operatore apre un reso su un ordine pagato.' },
+      { on: 'rimborsi', text: 'Calcola il rimborso sul prezzo pagato, sconto compreso. Sopra i 200 € serve una seconda approvazione.', file: 'src/Refunds/RefundService.cs' },
+      { on: 'db', text: 'Il reso e il rimborso sono scritti accanto all\'ordine.' },
+      { on: 'pagamenti', text: 'Lo storno torna sullo stesso metodo di pagamento.' },
+    ] },
+  ] };
   for (const m of [v1, v2, v3, v4, v5]) store.save(m);
   // a second, quiet project: with more than one the view lists them beside the drawing (ADR 0302)
   const old = now - 5 * 24 * H, at = <T extends { confirmedAt: number }>(x: T): T => ({ ...x, confirmedAt: old });
