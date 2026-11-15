@@ -125,6 +125,7 @@ async function promote(staging = false, quick = false) {
   if (shaNow !== sha || (!staging && dirtyNow)) throw new Error(`the repo changed during the check (${sha} -> ${shaNow}${dirtyNow ? ', uncommitted changes' : ''}): nothing promoted, run it again`);
   execFileSync(process.execPath, [path.join(repo, 'scripts', 'build.mjs')], { cwd: repo, stdio: 'inherit', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } });
   const lease = acquireReleaseLock(base, staging ? 'stage-test' : 'promote');
+  let failed = null;
   try {
   const draft = dirty ? `-draft-${createHash('sha256').update(fs.readFileSync(path.join(repo, 'out', 'main', 'index.js'))).update(fs.readFileSync(fileURLToPath(import.meta.url))).digest('hex').slice(0, 10)}` : '';
   const id = assertReleaseId(`${pkg.version}-${sha}${draft}`);
@@ -178,7 +179,9 @@ async function promote(staging = false, quick = false) {
   lease.commit();
   say(`promoted ${id} (previous: ${s.previous ?? 'none'}) · start it with ${path.join(base, launcherFile)}`);
   startSync(id);
-  } finally { lease.release(); }
+  } catch (error) { failed = error; throw error; }
+  // a lease with an open mutation refuses to go: keep the reason the mutation stopped in the message, not only that it did
+  finally { try { lease.release(); } catch (locked) { throw failed ? new Error(`${failed.message}; ${locked.message}`, { cause: failed }) : locked; } }
 }
 
 /** An installer activates only the frozen payload already copied by Setup; it never builds, syncs or runs npm. */
