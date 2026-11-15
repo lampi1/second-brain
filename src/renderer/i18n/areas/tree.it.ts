@@ -54,7 +54,7 @@ export const treeIt = {
   'tree.sentTo': (p: { parent: string }) => `esito inviato a ${p.parent}`,
   'tree.limit.depth': (p: { limit: number }) => `Profondità massima ${p.limit}`,
   'tree.limit.parallel': (p: { limit: number }) => `Max ${p.limit} insieme`,
-  'tree.limit.parallelTip': (p: { limit: number }) => `Ha chiesto più sotto-agenti insieme di quanti ne permetti (${p.limit}): l'app ha rifiutato quelli in più e gli ha detto di aspettare un risultato. Ripartono appena uno finisce. Il numero si cambia in Impostazioni → Ruoli e deleghe.`,
+  'tree.limit.parallelTip': (p: { limit: number }) => `Ha chiesto più sotto-agenti insieme di quanti ne permetti (${p.limit}): l'app ha rifiutato quella richiesta e gli ha detto di aspettare il risultato di uno di quelli al lavoro. Poi li rilancia lui. Il numero si cambia in Impostazioni → Ruoli e deleghe.`,
   'tree.limit.depthTip': (p: { limit: number }) => `Un sotto-agente ha provato a delegare oltre ${p.limit} livelli: l'app l'ha rifiutato e quella parte la fa lui. Il numero si cambia in Impostazioni → Ruoli e deleghe.`,
   'tree.sidebar': 'Agenti al lavoro',
   'delegation.group': 'Ruoli e deleghe',

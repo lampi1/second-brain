@@ -17,13 +17,14 @@ what had happened.
    sideways when it does not fit (the wheel, the trackpad, or a thin bar shown under the pointer); a side with more to
    see fades out. «+N» is gone.
 2. **At work first**: at work, starting, queued or waiting for someone, then stuck, then the rest; the tree's order
-   inside each group. A short stop (run → wait → run) keeps its place.
-3. **One name tag for the row**: the tag of the helper under the pointer or the keyboard floats over the row and is kept
-   inside it, so it is never cut at an edge. A helper takes the focus and opens its chat with Enter; a click on the
+   inside each group. A short stop (run → wait or stall → run) keeps its place.
+3. **One name tag for the row**: the tag of the helper under the pointer or the keyboard is drawn in the row's frame (a
+   portal, with the helper's own held state), placed again when the row scrolls or resizes, and kept inside it, so it is never cut at an edge. A helper takes the focus and opens its chat with Enter; a click on the
    person stays a pat or a whack (ADR 0297).
 4. **The limit says what it means**: «Max 5 insieme» (it asked for more sub-agents at once than allowed), shown only
-   while something under the bench is at work; under the pointer: the app refused the extra ones and told it to wait
-   for a result, they start again when one finishes, and the number is in Settings → Roles and delegation.
+   while something under the bench is at work; under the pointer: the app refused that delegation (the whole call) and told it to wait
+   for a result of one at work, then it delegates again itself; the number is in Settings → Roles and delegation.
+   The open chat's team line (`DelegationCard.tsx`) carries the same explanation.
 
 ## Consequences
 

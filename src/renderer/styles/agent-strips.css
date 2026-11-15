@@ -280,13 +280,13 @@ html[data-hidden] .bench-stage::after { animation-play-state:paused; }
 /* ── the helpers: smaller people at the bench, a grandchild smaller still; a name tag over the head under the pointer ── */
 .bench-helpers-wrap { position:relative; z-index:2; flex:1 1 0; min-width:0; align-self:stretch; display:flex; margin-left:10px; }
 /* the row scrolls sideways when the team does not fit; the first helper is pushed right while there is room (an auto
-   margin, never justify-content: the start stays reachable); a thin bar only under the pointer (the WebKit
+   margin, never justify-content: the start stays reachable); a thin bar seen only under the pointer, its room always kept (the WebKit
    bar: scrollbar-width would bring the platform's arrows back) */
-.bench-helpers { flex:1 1 0; min-width:0; display:flex; align-items:flex-end; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; padding:0 4px 0 2px; scroll-behavior:smooth; }
-.bench-helpers::-webkit-scrollbar { height:0; background:transparent; }
+.bench-helpers { flex:1 1 0; min-width:0; display:flex; align-items:flex-end; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; padding:0 4px 0 2px; }
+.bench-helpers::-webkit-scrollbar { height:5px; background:transparent; }
 .bench-helpers::-webkit-scrollbar-button { display:none; }
-.bench-helpers-wrap:hover > .bench-helpers::-webkit-scrollbar { height:5px; }
-.bench-helpers::-webkit-scrollbar-thumb { border-radius:3px; background:color-mix(in srgb, var(--text-3) 55%, transparent); }
+.bench-helpers::-webkit-scrollbar-thumb { border-radius:3px; background:transparent; }
+.bench-helpers-wrap:hover > .bench-helpers::-webkit-scrollbar-thumb { background:color-mix(in srgb, var(--text-3) 55%, transparent); }
 .bench-helpers > :first-child { margin-left:auto; }
 /* more to see on a side: the row fades there */
 .bench-helpers-wrap.more-right > .bench-helpers { -webkit-mask-image:linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image:linear-gradient(90deg, #000 calc(100% - 36px), transparent); }

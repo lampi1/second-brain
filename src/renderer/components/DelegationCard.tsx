@@ -237,6 +237,6 @@ export function KidsBar({ chatId }: { chatId: string }) {
       {stuck > 0 && <span className="kid-sum" data-testid={`tree-kids-stuck-${chatId}`}><span className="kid-dot err" />{t('tree.kidsStuck', { n: stuck })}</span>}
       {done > 0 && <span className="kid-sum"><span className="kid-dot done" />{t('tree.kidsDone', { n: done })}</span>}
     </button>
-    {limit && <span className="pill pill-wait tree-limit" data-testid={`tree-limit-${chatId}`}>{t(`tree.limit.${limit.kind}`, { limit: limit.limit })}</span>}
+    {limit && <span className="pill pill-wait tree-limit" data-testid={`tree-limit-${chatId}`} tabIndex={0} data-tip={t(`tree.limit.${limit.kind}Tip`, { limit: limit.limit })}>{t(`tree.limit.${limit.kind}`, { limit: limit.limit })}</span>}
   </div>;
 }

@@ -54,7 +54,7 @@ export const treeDe: typeof treeIt = {
   'tree.sentTo': (p: { parent: string }) => `Ergebnis an ${p.parent} gesendet`,
   'tree.limit.depth': (p: { limit: number }) => `Maximale Tiefe ${p.limit}`,
   'tree.limit.parallel': (p: { limit: number }) => `Höchstens ${p.limit} zugleich`,
-  'tree.limit.parallelTip': (p: { limit: number }) => `Er wollte mehr Sub-Agenten zugleich, als du erlaubst (${p.limit}): die App hat die übrigen abgelehnt und ihn auf ein Ergebnis warten lassen. Sie starten, sobald einer fertig ist. Die Zahl änderst du unter Einstellungen → Rollen und Delegation.`,
+  'tree.limit.parallelTip': (p: { limit: number }) => `Er wollte mehr Sub-Agenten zugleich, als du erlaubst (${p.limit}): die App hat diese Anfrage abgelehnt und ihn auf das Ergebnis eines arbeitenden warten lassen. Dann startet er sie selbst erneut. Die Zahl änderst du unter Einstellungen → Rollen und Delegation.`,
   'tree.limit.depthTip': (p: { limit: number }) => `Ein Sub-Agent wollte tiefer als ${p.limit} Ebenen delegieren: die App hat abgelehnt, und er macht diesen Teil selbst. Die Zahl änderst du unter Einstellungen → Rollen und Delegation.`,
   'tree.sidebar': 'Agenten bei der Arbeit',
   'delegation.group': 'Rollen und Delegation',

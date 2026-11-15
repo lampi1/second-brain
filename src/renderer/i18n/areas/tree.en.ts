@@ -54,7 +54,7 @@ export const treeEn: typeof treeIt = {
   'tree.sentTo': (p: { parent: string }) => `result sent to ${p.parent}`,
   'tree.limit.depth': (p: { limit: number }) => `Max depth ${p.limit}`,
   'tree.limit.parallel': (p: { limit: number }) => `At most ${p.limit} at once`,
-  'tree.limit.parallelTip': (p: { limit: number }) => `It asked for more sub-agents at once than you allow (${p.limit}): the app refused the extra ones and told it to wait for a result. They start again as soon as one finishes. Change the number in Settings → Roles and delegation.`,
+  'tree.limit.parallelTip': (p: { limit: number }) => `It asked for more sub-agents at once than you allow (${p.limit}): the app refused that request and told it to wait for the result of one at work. Then it launches them again itself. Change the number in Settings → Roles and delegation.`,
   'tree.limit.depthTip': (p: { limit: number }) => `A sub-agent tried to delegate deeper than ${p.limit} levels: the app refused and it does that part itself. Change the number in Settings → Roles and delegation.`,
   'tree.sidebar': 'Agents at work',
   'delegation.group': 'Roles and delegation',
