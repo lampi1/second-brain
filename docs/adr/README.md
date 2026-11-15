@@ -21,7 +21,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0009](0009-brain-settings-budget-estimates.md) Settings as data with agent proposals; calm toasts; spending limits that never stop; honest estimates — accepted
 - [0010](0010-monolith-engines.md) A monolith with two engines: Claude embedded, Cursor CLI the only external piece — accepted
 - [0011](0011-engines-generic.md) Any engine: one adapter interface, Claude and Cursor are only the first two — accepted
-- [0012](0012-login-handoff.md) Login hand-off: progress while waiting, the account from the credentials file, the password only on a click — accepted; amended by 0310
+- [0012](0012-login-handoff.md) Login hand-off: progress while waiting, the account from the credentials file, the password only on a click — accepted
 - [0013](0013-run-code-blocks.md) "Esegui" on a chat's shell blocks: the user's click, PowerShell 5.1 in the app, the outcome back to the chat — accepted
 - [0014](0014-long-chats-handoff.md) Long chats: context size, hand-off note and "Riprendi" in a new chat — accepted, partly superseded by 0031
 - [0015](0015-chat-mail-real-time.md) Mail between chats delivered by the app in real time; the user's interrupt is not an error — accepted
@@ -84,7 +84,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0079](0079-remove-improve-section-and-rename-devops-to-task.md) "Migliora l'app" removed; DevOps renamed Task; Fatto becomes a log — accepted, partly superseded by 0181
 - [0081](0081-agent-screenshots-everywhere.md) Agent screenshots everywhere: a path is enough, nothing remote ever loads — accepted
 - [0082](0082-orchestrator-agent-changes-apply-and-learned-rules-in-regole.md) The Orchestrator changes agents by itself; learned rules live on the Regole page — accepted, partly superseded by 0243
-- [0083](0083-generic-roles-and-direct-delegation.md) Nine fixed roles, direct parent-to-child delegation in visible chats — accepted, partly superseded by 0125, 0186, 0100; amended by 0309
+- [0083](0083-generic-roles-and-direct-delegation.md) Nine fixed roles, direct parent-to-child delegation in visible chats — accepted, partly superseded by 0125, 0186, 0100
 - [0084](0084-finished-workers-close-by-themselves.md) Finished workers close by themselves; held ones say what they wait for — accepted
 - [0085](0085-full-default-permissions-narrowed-from-the-card.md) Every role may do everything by default; the user narrows it from its card — accepted, partly superseded by 0186
 - [0086](0086-app-managed-mcp-servers.md) MCP servers managed by the app, given to every engine through a local gateway — accepted
@@ -232,7 +232,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0234](0234-authoritative-jobs-and-request-receipts.md) One job projection and exact request receipts — accepted
 - [0235](0235-measure-launch-memory-recall.md) Measure how well the launch memory finds the right fact — accepted
 - [0236](0236-episodic-memory-past-run-examples.md) Episodic memory: a role starts with examples of its own verified past successes — accepted
-- [0237](0237-agents-type-passwords-on-every-host.md) Agents type passwords on every host — accepted; amended by 0310
+- [0237](0237-agents-type-passwords-on-every-host.md) Agents type passwords on every host — accepted
 - [0238](0238-approved-work-continues-by-itself.md) Approved work goes on by itself: stalls, crashes, waits and pushes need no human nudge — accepted
 - [0239](0239-single-entry-through-the-orchestrator.md) Single entry: the user talks only with the Orchestrator, and a command is asked once — accepted, partly superseded by 0275, 0299
 - [0240](0240-idle-engines-end-and-unsaved-work-holds.md) Idle engines end with their tools; a chat with unsaved git work does not close by itself — accepted
@@ -282,15 +282,15 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0284](0284-performance-by-model.md) The level is the role's, the performance is the model's — accepted
 - [0285](0285-estimates-by-role-and-model.md) An estimate rests on the role and its model before the kind of work — accepted, partly superseded by 0291
 - [0286](0286-run-goal-close-cause-no-child-feedback.md) A run keeps its goal without the app's label and says why it was closed; `agent_child_feedback` is gone — accepted
-- [0287](0287-one-agent-window-one-full-screen.md) One agent window, one full screen, a quiet top bar — accepted; amended by 0311
+- [0287](0287-one-agent-window-one-full-screen.md) One agent window, one full screen, a quiet top bar — accepted
 - [0288](0288-maintenance-bug-cards-by-answers-one-lesson.md) The maintenance stays on the click: app-bug cards follow the user's answers, a report notes one lesson — accepted
 - [0289](0289-fewer-refusals-agents-learn-by-failing.md) Fewer refusals an agent learns only by failing: long outputs are cut, the tools' commands name the copy, a question has a place without an Orchestrator — accepted
 - [0290](0290-claude-chats-start-in-default-the-app-answers.md) A Claude chat starts in «default»: the app answers its requests, not the engine's own default mode — accepted, partly superseded by 0294
 - [0291](0291-remove-kind-by-examples-and-classificatori.md) The kind of work by examples and the Classificatori section are removed — accepted
-- [0292](0292-strip-dot-time-and-cost-always.md) The strip: a state dot in front, time and cost against the estimate always in sight — accepted; amended by 0311
-- [0293](0293-children-are-rows-face-back-on-the-strip.md) A delegated chat is one row like its parent; the role's face is back on the strip — accepted; amended by 0311
+- [0292](0292-strip-dot-time-and-cost-always.md) The strip: a state dot in front, time and cost against the estimate always in sight — accepted
+- [0293](0293-children-are-rows-face-back-on-the-strip.md) A delegated chat is one row like its parent; the role's face is back on the strip — accepted
 - [0294](0294-no-app-guard-on-settings-and-hooks.md) No permission question outside the brain's rules: the app's guard on settings and hooks is removed — accepted
-- [0295](0295-little-people-as-sprites.md) The roles are little people at work on the strips — accepted; amended by 0311 and 0312
+- [0295](0295-little-people-as-sprites.md) The roles are little people at work on the strips — accepted
 - [0296](0296-fast-mode-user-model-per-task-flash-removed.md) «Fast» beside «Plan», one task on the model the user names, Flash removed — accepted
 - [0297](0297-click-reactions-and-touch-nudge.md) A click on a little person: a pat or a whack of the stick, and a nudge on the run — accepted
 - [0298](0298-weekly-limit-on-the-top-bar.md) The weekly limit on the top bar, the 5-hour window from 70% — accepted
@@ -298,16 +298,17 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0300](0300-quote-what-is-on-screen.md) Quote what is on screen: select a text, right click, it is in the prompt field — accepted
 - [0301](0301-maps-button-on-the-orchestrator-head.md) The project maps button is back on the Orchestrator's head — accepted
 - [0302](0302-maps-show-what-moves-and-the-order.md) The maps show what moves, the order of the steps, and the passage between levels — accepted
-- [0303](0303-little-people-speak.md) The little people speak: two words of nonsense, a character per role — accepted; amended by 0312
+- [0303](0303-little-people-speak.md) The little people speak: two words of nonsense, a character per role — accepted
 - [0304](0304-chess-against-the-agents.md) Scacchi: chess against the agents, Stockfish as a separate program — accepted
-- [0305](0305-little-people-show-the-work-lines-of-the-day.md) The little people show the work at hand, speak while they work, and get new lines every day — accepted; amended by 0311 and 0312
+- [0305](0305-little-people-show-the-work-lines-of-the-day.md) The little people show the work at hand, speak while they work, and get new lines every day — accepted
 - [0306](0306-the-people-of-the-roles-grow-up.md) The people of the roles grow up: adult bodies, faces and characters — accepted
 - [0307](0307-maps-open-full-screen-and-tell-every-passage.md) The maps open full screen, tell every step and every passage, and are redrawn from a button — accepted
 - [0309](0309-one-review-chat-per-piece-of-work.md) One review chat per piece of work: after a fix it reviews only the delta — accepted
 - [0310](0310-sign-in-by-credential-name.md) Sign-in by credential name: the app types the password, the agent never holds it — accepted
-- [0311](0311-the-grindhouse-becomes-a-workshop.md) The Grindhouse becomes a workshop: square benches, scenes without screens, a vice at rest — accepted; amended by 0312
-- [0312](0312-benches-of-one-height-helpers-with-name-tags.md) Benches of one height, helpers with name tags, a torch for who works, people who speak only where asked — accepted; amended by 0313
+- [0311](0311-the-grindhouse-becomes-a-workshop.md) The Grindhouse becomes a workshop: square benches, scenes without screens, a vice at rest — accepted
+- [0312](0312-benches-of-one-height-helpers-with-name-tags.md) Benches of one height, helpers with name tags, a torch for who works, people who speak only where asked — accepted
 - [0313](0313-the-workshop-picture-and-people-in-full.md) The workshop picture behind the people, and every person in full — accepted
+- [0314](0314-ci-green-on-three-systems.md) CI that tells the truth on Windows, Linux and macOS — accepted
 
 ## Replaced
 

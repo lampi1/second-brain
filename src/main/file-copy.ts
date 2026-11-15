@@ -34,7 +34,8 @@ export function looksText(buf: Buffer): boolean {
 /** The clipboard format and bytes that make a file paste as a file on this OS. */
 export function fileFormat(real: string, platform: NodeJS.Platform = process.platform): { format: string; buffer: Buffer } {
   if (platform === 'win32') return { format: 'FileNameW', buffer: Buffer.from(`${real}\0`, 'utf16le') };
-  const url = pathToFileURL(real).href;
+  // the path read by the target OS's rules, not the host's: on a Windows host a POSIX path would get a drive letter
+  const url = pathToFileURL(real, { windows: false }).href;
   return platform === 'darwin' ? { format: 'public.file-url', buffer: Buffer.from(url, 'utf8') } : { format: 'text/uri-list', buffer: Buffer.from(`${url}\r\n`, 'utf8') };
 }
 

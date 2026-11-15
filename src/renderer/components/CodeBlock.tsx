@@ -1,7 +1,8 @@
 // A code block of a chat message with its toolbar: "Copia" on every block, "Esegui" on shell blocks (bash, powershell…)
 // of an app chat, "Mandato" on a text for the user to send (a mail, Teams or PR comment: lib/sendable.ts; ADR 0038).
-// Esegui runs the block in Windows PowerShell 5.1 inside the app (main/run/runner.ts) only when the user clicks; the
-// live output shows right under the block like a small terminal (Ferma stops it), and when it ends main sends the
+// Esegui runs the block in Windows PowerShell 5.1 (macOS/Linux: the user's login shell) inside the app
+// (main/run/runner.ts) only when the user clicks; the live output shows right under the block like a small terminal
+// (Ferma stops it), and when it ends main sends the
 // outcome to the chat by itself (main/run/results.ts, setting runResults): the panel says when it got there, "Rimanda"
 // sends it again (with the setting off it is the only way, "Manda l'esito alla chat"). A block that looks like
 // production asks a second click that says why (me.md "Safety": production commands are the user's alone). On a text
@@ -33,6 +34,7 @@ import { IconAlert, IconArrowRight, IconCheck, IconCopy, IconPlay, IconSend, Ico
 import { t } from '../i18n';
 import { openQueue } from '../lib/later';
 import { openChatRef } from '../actions';
+import { hostIsWindows } from '../lib/host-os';
 
 /** a chat as the user reads it in one line */
 const chatTitle = (chatId: string): string => { const c = app.get().chats[chatId]; return c?.isOrchestrator ? 'Orchestrator' : c?.title ?? chatId; };
@@ -105,7 +107,7 @@ function RunPanel({ run, chatId }: { run: RunInfo; chatId: string }) {
   return (
     <div className={`cb-run cb-run-${run.state}`} data-testid="cb-run" data-state={run.state} data-exit={run.exitCode ?? ''}>
       <div className="cb-run-head">
-        <IconTerminal size={13} /><span className="cb-run-name">{t('chat.codeblock.powerShell')}</span>
+        <IconTerminal size={13} /><span className="cb-run-name">{t(hostIsWindows() ? 'chat.codeblock.powerShell' : 'chat.codeblock.userShell')}</span>
         <span className="cb-run-cwd" title={run.cwd}>{folderName(run.cwd)}</span>
         <span className="sp" />
         <span className="cb-run-status" data-testid="cb-run-status">{status}</span>
@@ -121,7 +123,7 @@ function RunPanel({ run, chatId }: { run: RunInfo; chatId: string }) {
           )}
           {/* with the automatic outcome still on its way, a manual one would reach the chat twice: resend only after */}
           {(!auto || told || reported?.id === run.id) && <button type="button" className="cb-btn" disabled={reported?.id === run.id} data-testid="cb-report"
-            onClick={() => { const how = send(chatId, runReport(run)); if (how !== 'empty') setReported({ id: run.id, how }); }}>
+            onClick={() => { const how = send(chatId, runReport(run, undefined, hostIsWindows() ? 'powershell' : 'bash')); if (how !== 'empty') setReported({ id: run.id, how }); }}>
             {reported?.id !== run.id ? (auto ? t('chat.codeblock.runResend') : t('chat.codeblock.runSendFull'))
               : reported.how === 'sent' ? <><IconCheck size={12} /> {t('chat.codeblock.runSent')}</> : <><IconCheck size={12} /> {t('chat.codeblock.runQueued')}</>}
           </button>}
@@ -223,7 +225,7 @@ export function CodeBlock({ chatId, itemId, lang, code, streaming, label }: { ch
         )}
         {runnable && !cref && runHere && (running ? null : (
           <button type="button" className={`cb-btn cb-run-btn ${armed ? 'armed' : ''}`} onClick={() => { void doRun(); }} disabled={busy || tooLong} data-testid="cb-exec"
-            data-tip={tooLong ? t('chat.codeblock.execTipLong', { max: MAX_RUN_CODE }) : armed ? undefined : t('chat.codeblock.execTip')}>
+            data-tip={tooLong ? t('chat.codeblock.execTipLong', { max: MAX_RUN_CODE }) : armed ? undefined : t(hostIsWindows() ? 'chat.codeblock.execTip' : 'chat.codeblock.execTipPosix')}>
             {armed ? <><IconAlert size={12} /> {t('chat.codeblock.execConfirm', { warning: risk ?? '' })}</> : <><IconPlay size={11} /> {run ? t('chat.codeblock.execAgain') : t('chat.codeblock.execLabel')}</>}
           </button>
         ))}

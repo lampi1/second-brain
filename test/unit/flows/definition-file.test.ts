@@ -106,7 +106,9 @@ it('rejects a parent swapped to an outside junction after realpath even when res
     return lstat(file, options);
   });
   const read = vi.spyOn(fs, 'readSync');
-  expect(() => readDefinitionFile(f.root, f.file, f.args.contextKey)).toThrow(/directory changed|links/); expect(read).not.toHaveBeenCalled();
+  // Which guard refuses depends on the filesystem: where a directory's new timestamps show at once it is the directory
+  // check; on Windows they may show later, and then the file's own identity refuses. Either way nothing is read.
+  expect(() => readDefinitionFile(f.root, f.file, f.args.contextKey)).toThrow(/directory changed|links|changed while opening/); expect(read).not.toHaveBeenCalled();
 });
 it('rejects a swapped ancestor above the selected brain instead of snapshotting the outside directories', () => {
   const f = setup(), held = f.dir + '-held', outside = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'flow-file-outside-')));
@@ -127,14 +129,21 @@ it('rejects a swapped ancestor above the selected brain instead of snapshotting 
   finally { restore(); }
 });
 it.each([false, true])('retries incidental ancestor metadata only, with a fixed attempt bound (continuous=%s)', continuous => {
-  const f = setup(), realpath = fs.realpathSync; let changes = 0, attempts = 0;
+  const f = setup(), realpath = fs.realpathSync, lstat = fs.lstatSync; let changes = 0, attempts = 0;
   vi.spyOn(fs, 'realpathSync').mockImplementation((file, options) => {
     if (file === f.root) attempts++;
     const result = realpath(file, options);
     if (file === f.file && (continuous || changes === 0)) fs.writeFileSync(path.join(f.dir, `unrelated-${++changes}.txt`), 'unrelated file');
     return result;
   });
-  // Windows may expose directory timestamps at a later checkpoint; count complete attempts, not per-path checks.
+  // The filesystem stamps a directory with its own clock, and on Windows that clock moves in steps: a file made in the
+  // same step as the snapshot leaves the directory's times as they were. The test is about the retry bound, so every
+  // new file also shows in the directory's time here, whatever the clock did.
+  vi.spyOn(fs, 'lstatSync').mockImplementation((file, options) => {
+    const stat = lstat(file, options);
+    return file === f.dir && options?.bigint ? Object.assign(stat!, { mtimeNs: (stat as fs.BigIntStats).mtimeNs + BigInt(changes) }) : stat;
+  });
+  // Count complete attempts, not per-path checks.
   if (continuous) { expect(() => readDefinitionFile(f.root, f.file, f.args.contextKey)).toThrow('directory changed'); expect(attempts).toBe(FLOW_DEFINITION_READ_ATTEMPTS); expect(changes).toBeGreaterThanOrEqual(attempts); }
   else { expect(readDefinitionFile(f.root, f.file, f.args.contextKey)).toEqual(definition()); expect(changes).toBe(1); }
 });

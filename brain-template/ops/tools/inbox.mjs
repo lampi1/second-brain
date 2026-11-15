@@ -29,6 +29,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { cursorDb } from './cursor-db.mjs';
 
 const MAX_HOPS = 6; // a thread of replies longer than this is refused: two chats can't loop forever (OpenClaw: 5 turns)
 const DEFAULT_ROOT = '{{BRAIN}}';
@@ -236,7 +237,7 @@ export async function cursorTitle(id) {
   if (!id) return '';
   try {
     const { DatabaseSync } = await import('node:sqlite');
-    const db = new DatabaseSync(process.env.BRAIN_CURSOR_DB || path.join(process.env.APPDATA || '', 'Cursor', 'User', 'globalStorage', 'state.vscdb'), { readOnly: true });
+    const db = new DatabaseSync(cursorDb(), { readOnly: true });
     const v = db.prepare('SELECT value FROM composerHeaders WHERE composerId = ?').get(String(id))?.value;
     db.close();
     return JSON.parse(v || '{}').name || '';

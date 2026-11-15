@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseHookJson } from './hook-input.mjs';
+import { cursorDb } from '../../ops/tools/cursor-db.mjs';
 
 process.removeAllListeners('warning'); // node:sqlite "experimental" warning: hooks print only their JSON
 const HOME = os.homedir();
@@ -52,7 +53,7 @@ async function isOrchestrator(input) {
   if (!id) return false;
   try {
     const { DatabaseSync } = await import('node:sqlite');
-    const db = new DatabaseSync(process.env.BRAIN_CURSOR_DB || path.join(process.env.APPDATA || '', 'Cursor', 'User', 'globalStorage', 'state.vscdb'), { readOnly: true });
+    const db = new DatabaseSync(cursorDb(), { readOnly: true });
     const v = db.prepare('SELECT value FROM composerHeaders WHERE composerId = ?').get(String(id))?.value;
     db.close();
     return /^\s*(orchestrator|orchestrator)\b/i.test(JSON.parse(v || '{}').name || '');

@@ -6,6 +6,9 @@
 // the others: one run shows every failure, the summary lists them. The e2e steps fail only on «nuovi rossi» (failed and
 // not in test/e2e/known-red.json, ADR 0198); the summary repeats the verdict of both projects (rossi noti, nuovi verdi).
 // Green, it records the commit through scripts/check-pass.mjs. Used by package.json "check" (and so by `npm run promote`).
+// `--no-e2e` runs only the other parts (typecheck, lint, every unit test, the publish guard), in a row: what main gets
+// after a batch of merges and on every push in CI (docs/agents/rules.md §7: the e2e suite runs only when the owner
+// asks). It needs no display and no build, and records nothing: only the full check marks a commit as tested.
 import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -38,8 +41,32 @@ function held(label, args) {
   });
 }
 
+/** typecheck, lint, the unit tests and the publish guard: [label, node arguments]; `skip` = unit files left for later. */
+function plainSteps(skip = []) {
+  return [
+    // the native TypeScript 7 compiler (ADR 0198, ~9x faster); eslint keeps TypeScript 6's API (`typescript`)
+    ['typecheck', [bin('typescript7', 'bin/tsc'), '-p', 'tsconfig.json', '--noEmit']],
+    ['lint', [bin('eslint', 'bin/eslint.js'), '.']],
+    ['unit', [bin('vitest', 'vitest.mjs'), 'run', ...skip.flatMap(f => ['--exclude', f])]],
+    // the repo is public product (ADR 0061): every tracked file through the guard (a script: unit tests start no git)
+    ['publish guard', ['scripts/publish-guard.mjs']],
+  ];
+}
+
+/** `--no-e2e`: the same steps one after the other, each shown as it runs; a red step never stops the others. */
+function withoutE2e() {
+  const failed = [];
+  for (const [label, args] of plainSteps()) {
+    console.log(`\n> ${label}`);
+    if (spawnSync(process.execPath, args, { stdio: 'inherit' }).status !== 0) failed.push(label);
+  }
+  if (failed.length) fail(failed.join(', '), 1);
+  console.log('\ncheck (no e2e): typecheck, lint, unit and publish guard green');
+}
+
 async function main() {
   process.chdir(repo);
+  if (process.argv.includes('--no-e2e')) return withoutE2e();
   const failed = [];
   const note = (label, code) => { if (code !== 0) failed.push(label); };
 
@@ -53,14 +80,7 @@ async function main() {
 
   const vitest = bin('vitest', 'vitest.mjs');
   const units = processUnits();
-  for (const [label, args] of [
-    // the native TypeScript 7 compiler (ADR 0198, ~9x faster); eslint keeps TypeScript 6's API (`typescript`)
-    ['typecheck', [bin('typescript7', 'bin/tsc'), '-p', 'tsconfig.json', '--noEmit']],
-    ['lint', [bin('eslint', 'bin/eslint.js'), '.']],
-    ['unit', [vitest, 'run', ...units.flatMap(f => ['--exclude', f])]],
-    // the repo is public product (ADR 0061): every tracked file through the guard (a script: unit tests start no git)
-    ['publish guard', ['scripts/publish-guard.mjs']],
-  ]) note(label, await held(label, args));
+  for (const [label, args] of plainSteps(units)) note(label, await held(label, args));
   note('e2e (parallel)', await e2eDone);
 
   console.log(`\n> unit with real processes (alone, ${units.length} files)`);

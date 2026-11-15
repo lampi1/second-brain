@@ -30,7 +30,7 @@ import { Credentials } from './logins';
 import { groupFolder } from './evidence';
 import { UserClosed } from './closed';
 import { EnvStore, computeSession, envColor, envForUrl, envPartition, envSlug, isAuthCookie, isLoginUrl } from './envs';
-import { cookieEncryptionEnabled } from './fuses';
+import { cookieEncryptionEnabled, fuseFile } from './fuses';
 import { hasPasswordField, pageCall } from './page';
 import { isCloseKey, swallowCloseKey } from '../keyguard';
 import { DESKTOP, fitDesktop } from './desktop';
@@ -123,7 +123,7 @@ export class BrowserTabs {
   constructor(private readonly opts: TabsOptions) {
     this.envStore = new EnvStore(path.join(opts.userData, 'browser-envs.json'));
     this.handoffs = new Handoffs(h => this.onHandoff(h));
-    void cookieEncryptionEnabled(process.execPath).then(on => {
+    void cookieEncryptionEnabled(fuseFile(process.execPath)).then(on => {
       this.encryptedAtRest = on;
       if (on === false) log.warn('browser', 'cookies are not encrypted at rest', { cause: 'the Electron binary has its EnableCookieEncryption fuse off (the default)', hint: 'node scripts/fuses.mjs --enable-cookie-encryption <electron.exe> with the app closed (release.mjs does it for the stable copy); ADR 0003' });
       this.emitEnvs();

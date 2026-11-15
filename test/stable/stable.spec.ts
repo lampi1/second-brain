@@ -1,8 +1,9 @@
 // The STABLE copy as the user gets it (live check 2026-10-11: the 0.1.0 stable started without its brain and every
 // section showed an error, while the dev e2e were green). Promotes the current commit into a temp releases folder,
 // starts that release the way the launcher does (shared Electron runtime + SB_RELEASE, a fresh userData, NO SB_TEST,
-// NO SB_BRAIN: the app must find the brain by itself), opens its data sections and fails on errors or missing content.
-// Reads the local brain read-only outside CI; CI uses a synthetic home. Run: npm run test:stable
+// NO SB_BRAIN), links a brain the way the user does (the saved setting: the app never searches for one, ADR 0072),
+// opens its data sections and fails on errors or missing content. The brain is a synthetic one in a synthetic home;
+// SB_STABLE_BRAIN=<folder> reads a real one instead, read-only. Run: npm run test:stable
 import { test, expect, _electron as electron } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -16,7 +17,7 @@ const repo = path.resolve(import.meta.dirname, '..', '..');
 const SECTIONS = ['idee', 'costi', 'qualita'] as const;
 const temp = (prefix: string) => fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
 
-test('the packaged stable copy finds the brain by itself and every section shows data', async () => {
+test('the packaged stable copy starts, takes the chosen brain and every section shows data', async () => {
   test.setTimeout(600000);
   const releases = temp('sb-stable-');
   execFileSync(process.execPath, [path.join(repo, 'scripts', 'release.mjs'), 'stage-test'], { cwd: repo, env: { ...process.env, SB_RELEASES_ROOT: releases, SB_NO_SYNC: '1' }, stdio: 'pipe' });
@@ -25,11 +26,11 @@ test('the packaged stable copy finds the brain by itself and every section shows
   const userData = temp('sb-stable-ud-');
   const env: Record<string, string> = { ...(process.env as Record<string, string>), SB_RELEASE: state.current, SB_RELEASES_ROOT: releases, SB_USER_DATA: userData, SB_MCP_PORT: '0', SB_NO_SYNC: '1', SB_HIDDEN: '1' };
   delete env.SB_TEST; delete env.SB_BRAIN; delete env.ELECTRON_RUN_AS_NODE;
-  // CI has no personal brain. Keep the same real auto-discovery path with a synthetic home, without SB_BRAIN/SB_TEST.
-  let fixtureHome: string | null = null;
-  if (process.env.CI) {
+  // No personal brain is needed: a synthetic one in a synthetic home, without SB_BRAIN/SB_TEST.
+  let fixtureHome: string | null = null, brain = process.env.SB_STABLE_BRAIN ?? '';
+  if (!brain) {
     fixtureHome = temp('sb-stable-home-');
-    const brain = path.join(fixtureHome, 'brain');
+    brain = path.join(fixtureHome, 'brain');
     const fixture = demoBrain();
     fs.renameSync(fixture, brain);
     fs.writeFileSync(path.join(brain, 'AGENTS.md'), '# Synthetic CI brain\n');
@@ -48,11 +49,17 @@ test('the packaged stable copy finds the brain by itself and every section shows
   try {
     await expect(page.getByTestId('app')).toBeVisible({ timeout: 30000 });
     await closeSetup(page);
+    // a new profile has no brain (the first setup never searches for one): choose it with the banner's own button,
+    // the native folder chooser answered here
+    expect((await page.evaluate(() => window.sb.invoke('app:info', undefined))).brainRoot).toBeNull();
+    await app.evaluate(({ dialog }, dir) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [dir] }); }, brain);
+    await page.getByTestId('brain-setup-pick').click();
+    await expect.poll(async () => (await page.evaluate(() => window.sb.invoke('app:info', undefined))).brainRoot, { timeout: 30000 }).toBeTruthy();
     const info = await page.evaluate(() => window.sb.invoke('app:info', undefined));
     expect(info.brainRoot).toBeTruthy();
     expect(info.brainProblem).toBeFalsy();
     if (fixtureHome) expect(fs.realpathSync.native(info.brainRoot!)).toBe(path.join(fixtureHome, 'brain'));
-    await expect(page.getByTestId('brain-setup')).toHaveCount(0, { timeout: 30000 }); // the brain was found by itself
+    await expect(page.getByTestId('brain-setup')).toHaveCount(0, { timeout: 30000 }); // the chosen brain was taken
     for (const id of SECTIONS) {
       await goPage(page, id);
       const sec = page.getByTestId(id === 'idee' ? 'mh-panel-idee' : id === 'costi' || id === 'qualita' ? `an-panel-${id}` : `brain-page-${id}`); // Costi, Qualità: Andamento tabs (ADR 0202)

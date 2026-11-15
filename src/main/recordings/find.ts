@@ -1,6 +1,6 @@
 // «Trovate sul PC» (ADR 0154; owner 2026-10-24: «due giorni fa avevo anche fatto una call e avevo la registrazione … l'app
 // sa che deve andare a vedersi la registrazione»): the audio and video files of the last weeks in the usual places a
-// recording lands (Downloads, Documents, Videos, Music, Desktop, Windows' Sound Recorder folder, OneDrive's
+// recording lands (Downloads, Documents, Videos or macOS's Movies, Music, Desktop, Windows' Sound Recorder folder, OneDrive's
 // «Recordings»/«Registrazioni» where Teams saves meetings), newest first. Names, sizes and dates only: nothing is read or
 // imported until the user (or the Orchestrator, for the user) asks.
 import fs from 'node:fs/promises';
@@ -14,7 +14,8 @@ const MAX = 40;
 
 /** The folders to look in under the user's home (absent ones are skipped). */
 export async function recordingFolders(home: string): Promise<string[]> {
-  const base = ['Downloads', 'Documents', 'Documenti', 'Videos', 'Video', 'Music', 'Musica', 'Desktop',
+  // Windows and Linux names (English and Italian), and macOS's Movies (its Videos folder)
+  const base = ['Downloads', 'Scaricati', 'Documents', 'Documenti', 'Videos', 'Video', 'Movies', 'Music', 'Musica', 'Desktop', 'Scrivania',
     path.join('Documents', 'Sound Recordings'), path.join('Documents', 'Registrazioni di suoni'), path.join('Videos', 'Captures')];
   const out = base.map(b => path.join(home, b));
   try {

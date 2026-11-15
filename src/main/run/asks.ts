@@ -38,6 +38,7 @@ import { log } from '../log';
 import { APP_EVENT_LABEL } from '../chats/orchestrator-wake';
 import { RUN_RESULT_LABEL } from './results';
 import { isNotesOnly } from '../../shared/notes';
+import { userShellName } from '../platform';
 
 export interface CommandAsksDeps {
   emit<K extends 'pending:added' | 'pending:resolved'>(channel: K, payload: EventMap[K]): void;
@@ -70,7 +71,8 @@ export const MAX_BOUNCES = 3;
 
 /** The message that sends a broken block back to its chat (Italian: the chats speak Italian with the user). */
 export function checkMessage(blocks: readonly { code: string; problems: readonly string[] }[], cwd: string): string {
-  return [CHECK_LABEL, ...blocks.flatMap(b => [`Comando (PowerShell 5.1, cartella ${cwd}):`, '```powershell', b.code, '```',
+  const sh = userShellName();
+  return [CHECK_LABEL, ...blocks.flatMap(b => [`Comando (${sh.name}, cartella ${cwd}):`, '```' + sh.fence, b.code, '```',
     `Esito: non mostrato all'utente: ${b.problems[0] ?? ''}`, ...b.problems.map(p => `- ${p}`), '']),
     'Correggilo e riproponilo come ultimo blocco della risposta; se non puoi correggerlo, spiega all\'utente cosa manca.'].join('\n');
 }

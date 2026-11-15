@@ -71,14 +71,15 @@ if (existsSync(dir) && (output !== dir || readdirSync(dir).length)) { console.er
 if (existsSync(output) && readdirSync(output).length) { console.error('install: staging non vuoto'); process.exit(1); }
 
 const B = fwd(dir), R = fwd(repos), H = fwd(HOME);
-const toWin = p => p.replace(/\//g, '\\');
+// the *_WIN values are the path as this OS writes it: backslashes on Windows only (a POSIX path keeps its slashes)
+const toWin = p => (win ? p.replace(/\//g, '\\') : p);
 const V = {
   OWNER: name.trim(), BRAIN_NAME: basename(dir), TODAY: new Date().toISOString().slice(0, 10),
   BRAIN: B, BRAIN_WIN: toWin(B), BRAIN_JS: B, BRAIN_RE: B.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&'),
   REPOS: R, REPOS_WIN: toWin(R), REPOS_JS: R,
   HOME: H, HOME_WIN: toWin(H), HOME_JS: H,
   DEVOPS_ORG: org?.trim() || 'your-org', DEVOPS_PROJECT: project?.trim() || 'your-project', ROLE: role?.trim() || 'developer', LANG: lang,
-  OS: win ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux', SHELL: win ? 'PowerShell' : 'bash',
+  OS: win ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux', SHELL: win ? 'PowerShell' : process.env.SHELL?.startsWith('/') ? basename(process.env.SHELL) : 'sh',
   HARNESSES: harness.filter(h => ['claude', 'cursor', 'codex'].includes(h)).map(h => ({ claude: 'Claude Code', cursor: 'Cursor', codex: 'Codex' })[h]).join(' + '),
 };
 // In JavaScript the values land inside '...', "..." and `...` strings and regex literals: quotes, backticks and $ are

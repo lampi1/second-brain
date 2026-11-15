@@ -78,6 +78,7 @@ import { imparaTools, type ImparaControl } from './impara';
 import { childOutputTool } from './child-output';
 import { agentsRecapTool } from './agents-recap';
 import { appProjectMapTool } from '../projectmap/tools';
+import { userShellName } from '../platform';
 import type { ProjectMaps } from '../projectmap/service';
 import { skillTools } from './skills';
 import type { SkillLibrary } from '../skills/library';
@@ -402,7 +403,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     },
     {
       name: 'app_command_runs',
-      description: 'Commands the user ran from a chat code block with "Esegui" (PowerShell 5.1 in the app): state, exit code, output tail. Read-only: only the user starts a run, by his click. Pass chatId to see the runs of one chat (yours: read the outcome of the command you proposed). duplicateOf = the id of the first run of the identical command (one command, one run: an identical running command never starts twice, ADR 0299).',
+      description: `Commands the user ran from a chat code block with "Esegui" (${userShellName().name} in the app): state, exit code, output tail. Read-only: only the user starts a run, by his click. Pass chatId to see the runs of one chat (yours: read the outcome of the command you proposed). duplicateOf = the id of the first run of the identical command (one command, one run: an identical running command never starts twice, ADR 0299).`,
       inputSchema: obj({ chatId: str('chat id from app_chats (optional)'), last: num('how many, newest last, default 5') }),
       run: a => (d.runs?.(a.chatId ? contentOf(String(a.chatId)) : undefined) ?? []).filter(r => !delegated(r.chatId)).slice(-(Number(a.last) || 5))
         .map(r => ({ id: r.id, chatId: r.chatId, state: r.state, exitCode: r.exitCode, code: redact(r.code.slice(0, 1500)), cwd: r.cwd, output: redact(r.output.slice(-4000)), startedAt: new Date(r.startedAt).toISOString(), endedAt: r.endedAt ? new Date(r.endedAt).toISOString() : null, ...(r.prod ? { prod: r.prod } : {}), ...(r.duplicateOf ? { duplicateOf: r.duplicateOf } : {}) })),

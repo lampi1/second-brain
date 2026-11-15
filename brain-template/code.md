@@ -10,7 +10,7 @@ rule or a repo fact changes.
 
 | Repo | Path | Main branch | Notes |
 |------|------|-------------|-------|
-| (add one row per repo you work on) | `{{REPOS_WIN}}\<name>` | `main` | |
+| (add one row per repo you work on) | `{{REPOS}}/<name>` | `main` | |
 
 ## Rules
 

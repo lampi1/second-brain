@@ -20,10 +20,22 @@ test.afterEach(async ({ browserName: _browserName }, info) => {
   else await info.attach('retained-isolated-installation', { body: testRoot, contentType: 'text/plain' });
   testRoot = null;
 });
+/** The last lines of an Inno Setup log that say what happened (not the per-file copy and rollback lines), for a failed
+ *  expectation's message. */
+const setupLogTail = (file: string): string => {
+  try {
+    return fs.readFileSync(file, 'utf8').split(/\r?\n/)
+      .filter(line => !/ {3}(Deleting (file|directory):|-- File entry --|Dest filename:|Time stamp of our file:|Installing the file\.|Successfully installed the file\.|Creating directory:|Directory for uninstall files:|Dest file (exists|is protected))/.test(line))
+      .slice(-60).join('\n');
+  } catch { return '(no Setup log written)'; }
+};
+
 test('offline per-user installer starts and reopens its stable copy without system Node', async () => {
   const latest = JSON.parse(fs.readFileSync(path.join(repo, 'test-results/installer/latest.json'), 'utf8')) as { installer: string; payload: string; manifest: { id: string; version: string; sha256: string } };
   expect(createHash('sha256').update(fs.readFileSync(latest.installer)).digest('hex')).toBe(latest.manifest.sha256);
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-installer space & percent%-'));
+  // a space, an ampersand and a percent sign in the path, in a short name: Inno Setup 6 stops at 259 characters, and
+  // with a longer name the payload's deepest file passed or failed with the length of the Windows user name
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb setup &%-'));
   testRoot = root;
   const install = path.join(root, 'installed');
   const userData = path.join(install, 'test-user-data');
@@ -49,7 +61,8 @@ test('offline per-user installer starts and reopens its stable copy without syst
   fs.writeFileSync(path.join(lock, 'owner.json'), owner);
   const blocked = spawnSync(latest.installer, ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/SBTEST=1', `/DIR=${install}`, `/LOG=${path.join(diagnostics, 'setup-blocked.log')}`], { env, windowsHide: true, encoding: 'utf8', timeout: 120000 });
   expect(blocked.error).toBeUndefined();
-  expect(blocked.status).toBe(1);
+  // a wrong exit code says nothing by itself: the end of Setup's own log says where it stopped
+  expect(blocked.status, setupLogTail(path.join(diagnostics, 'setup-blocked.log'))).toBe(1);
   expect(fs.existsSync(path.join(userData, 'ready.json'))).toBe(false);
   expect(fs.existsSync(path.join(install, 'current.json'))).toBe(false);
   expect(fs.readFileSync(path.join(lock, 'owner.json'), 'utf8')).toBe(owner);

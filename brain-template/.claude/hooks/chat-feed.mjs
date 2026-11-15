@@ -21,6 +21,8 @@ const CURSOR = path.join(DIR, 'feed-cursor.json');
 const FOCUS = path.join(DIR, 'focus.json');
 const MAIN = path.resolve(ROOT).toLowerCase();
 const MAX_INJECT = 1800;
+// the block a command for the user comes in: `powershell` on Windows, the shell's own name elsewhere
+const COMMAND_BLOCK = process.platform === 'win32' ? /```powershell/i : /```(?:powershell|bash|zsh|sh)\b/i;
 
 // Conservatively omit everything after a credential label before persistence or cross-chat forwarding. This catches
 // prose and Markdown labels as well as assignments; arbitrary unlabeled secrets still must never be pasted in chats.
@@ -147,7 +149,7 @@ process.stdin.on('data', d => (raw += d)).on('end', () => {
   if (event === 'Stop' && !isOrchestrator && !input.stop_hook_active) {
     const msg = lastAssistant(input);
     if (!msg.trim()) return;
-    const tag = /```powershell/i.test(msg) ? 'comando' : (/\?\s*$/.test(msg.trim()) ? 'domanda' : '');
+    const tag = COMMAND_BLOCK.test(msg) ? 'comando' : (/\?\s*$/.test(msg.trim()) ? 'domanda' : '');
     const lines = msg.split('\n').filter(l => l.trim());
     const text = tag === 'domanda' && lines.length > 1 ? `${oneLine(lines[0], 120)} … ${oneLine(lines.at(-1), 160)}` : oneLine(lines[0], 200);
     const turn = origins[input.session_id] ?? {};

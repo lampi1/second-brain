@@ -10,7 +10,10 @@
 //   node scan.mjs <dir> --history               also every blob, commit message and author of every commit
 //   options: --deny <file>    words/regexes that must never appear (one per line, `#` comment, `re:` prefix = regex)
 //            --allow <file>   default <dir>/.guardallow: lines `<path glob> <rule> [sha256:<hex>]` that silence a known false
-//                             positive (with a hash: only that exact file content)
+//                             positive (with a hash: only that exact file content); `commit:<full sha> email`
+//                             accepts the e-mail rule in that one commit's message and identities, only with --published
+//            --published      the commits scanned are already public (CI on the checkout's history): read the
+//                             `commit:` lines. Never passed by the hooks: a commit being pushed is never silenced
 //            --json           machine output
 // Exit: 0 clean · 2 findings (publish must stop) · 1 error. The matched value is never printed, only file:line + rule.
 
@@ -23,7 +26,7 @@ const argv = process.argv.slice(2);
 const flag = n => argv.includes(n);
 const opt = n => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
 const values = new Set(['--deny', '--allow', '--commits', '--meta']);
-const switches = new Set(['--history', '--json', '--no-skip']);
+const switches = new Set(['--history', '--json', '--no-skip', '--published']);
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
   if (values.has(argv[i])) { if (!argv[++i] || argv[i].startsWith('--')) { console.error('guard: missing option argument'); process.exit(1); } }
@@ -107,12 +110,22 @@ const allows = existsSync(allowFile) ? decodeText(readFileSync(allowFile)).split
   .map(l => { const [glob, rule, pin, extra] = l.split(/\s+/);
     // a malformed pin must never fall back to "any content": refuse the whole allow file
     if (!rule || extra || (pin !== undefined && !/^sha256:[0-9a-fA-F]{64}$/.test(pin))) { console.error('guard: bad allow line'); process.exit(1); }
+    // a published commit's identities: one whole commit id (the id is the pin) and the e-mail rule only, never a
+    // pattern, another rule or a secret; read only with --published (see scanHistory)
+    if (glob.startsWith('commit:')) {
+      if (!/^commit:[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(glob) || rule !== 'email' || pin !== undefined) { console.error('guard: bad allow line'); process.exit(1); }
+      return { commit: glob.slice(7) };
+    }
     return { re: new RegExp('^' + glob.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '\u0000').replace(/\*/g, '[^/]*').replace(/\u0000/g, '.*') + '$'), rule, sha: pin?.startsWith('sha256:') ? pin.slice(7).toLowerCase() : null }; }) : [];
 // An entry with `sha256:<hex>` (e.g. a binary icon a human looked at) holds only for that exact content: a changed
 // file blocks again until someone checks it and ADDS a line with the new hash (old lines stay: the public history
 // keeps the old blobs, and --history checks them).
 const sha256 = buf => createHash('sha256').update(buf).digest('hex');
-const allowed = (path, rule, buf) => allows.some(a => a.re.test(path) && (a.rule === '*' || a.rule === rule) && (!a.sha || (buf && sha256(buf) === a.sha)));
+// A path line never reaches a commit's text, and a `commit:<sha>` line never reaches a file (it has no path pattern).
+const allowed = (path, rule, buf) => allows.some(a => a.re?.test(path) && (a.rule === '*' || a.rule === rule) && (!a.sha || (buf && sha256(buf) === a.sha)));
+// Commits whose e-mail finding is accepted: only with --published, which says the listed commits are already public
+// (CI on the checkout's own history). The hooks never pass it: a commit being pushed is never silenced.
+const pinnedCommits = new Set(flag('--published') ? allows.filter(a => a.commit).map(a => a.commit) : []);
 
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'out', 'dist', 'test-results']);
 const TEXT_MAX = 2_000_000;
@@ -129,12 +142,13 @@ function scanName(path, label) {
 }
 
 // buf: the file's bytes, so a hash-pinned allow line can hold for a line finding too (only for that exact content);
-// commit messages pass none, so no pinned line ever silences them
-function scanText(path, text, label = path, buf, canAllow = true) {
+// a commit's message and identities pass none and canAllow false: no allow line silences them; skip = the one rule a
+// pinned published commit is excused from
+function scanText(path, text, label = path, buf, canAllow = true, skip) {
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i]; if (l.length > 5000) { add(path, label, i + 1, 'long-line-unscanned', buf, canAllow); continue; }
-    for (const [name, re] of allRules) if (re.test(l) && (name !== 'guid' || realGuid(l))) add(path, label, i + 1, name, buf, canAllow);
+    for (const [name, re] of allRules) if (name !== skip && re.test(l) && (name !== 'guid' || realGuid(l))) add(path, label, i + 1, name, buf, canAllow);
   }
 }
 
@@ -179,7 +193,7 @@ function scanHistory(selected) {
   const seen = new Map(); // one blob read, every distinct path scanned (path rules apply to every alias)
   for (const c of commits) {
     const meta = git(['show', '-s', '--format=%an%x00%ae%x00%cn%x00%ce%x00%B', c]).toString();
-    scanText(`commit:${c.slice(0, 8)}`, meta.replace(/\x00/g, '\n'), `commit ${c.slice(0, 8)} (message/author)`, undefined, false);
+    scanText('', meta.replace(/\x00/g, '\n'), `commit ${c.slice(0, 8)} (message/author)`, undefined, false, pinnedCommits.has(c.toLowerCase()) ? 'email' : undefined);
     for (const row of git(['ls-tree', '-r', '-z', c]).toString('utf8').split('\0').filter(Boolean)) {
       const tab = row.indexOf('\t');
       const [, type, sha] = row.slice(0, tab).split(' '); const path = row.slice(tab + 1);

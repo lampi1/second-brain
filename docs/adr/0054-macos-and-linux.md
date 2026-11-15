@@ -1,6 +1,6 @@
 # ADR 0054 · macOS and Linux beside Windows, in stages
 
-Date: 2026-10-15 · Status: accepted (stages 1-4 done; stage 5: CI workflow written, no run yet) · Builds on: ADR 0007 (stable vs dev), ADR 0010
+Date: 2026-10-15 · Status: accepted (stages 1-4 done; stage 5 done by ADR 0314: the unit suite and a start of the app run on the three systems in CI) · Builds on: ADR 0007 (stable vs dev), ADR 0010
 (embedded Claude engine), ADR 0026 (engine processes)
 
 ## Context

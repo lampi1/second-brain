@@ -6,8 +6,8 @@
 // last `custom-title`, folder = `cwd`, a turn ends with a `system` `stop_hook_summary` record.
 // Cursor sources (verified 09/10 on {{OWNER}}'s PC, Cursor 3.23):
 // - titles and state: table composerHeaders (+ the `status` field of cursorDiskKV composerData:<id>) in
-//   %APPDATA%/Cursor/User/globalStorage/state.vscdb, opened READ-ONLY in place (13+ GB, too big to copy; read-only
-//   opens never write it). Only named fields leave the DB: it also holds encryption keys, never printed.
+//   Cursor's state.vscdb (its place per OS: ops/tools/cursor-db.mjs), opened READ-ONLY in place (13+ GB, too big to
+//   copy; read-only opens never write it). Only named fields leave the DB: it also holds encryption keys, never printed.
 // - messages: ~/.cursor/projects/<folder>/agent-transcripts/<id>/<id>.jsonl (the hooks' transcript_path).
 // DB unreadable → titles from the first message of each transcript. Secrets-looking text is masked in the output.
 import fs from 'node:fs';
@@ -15,11 +15,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { mask } from '../../ops/tools/mask.mjs';
 import { brainRoot } from '../../ops/tools/brain-root.mjs';
+import { cursorDb } from '../../ops/tools/cursor-db.mjs';
 
 process.removeAllListeners('warning'); // node:sqlite is "experimental" in Node 22: keep its warning out of the output
 const argv = process.argv.slice(2);
 const opt = (f, d) => (argv.includes(f) ? argv[argv.indexOf(f) + 1] : d);
-const DB = process.env.BRAIN_CURSOR_DB || path.join(process.env.APPDATA || '', 'Cursor', 'User', 'globalStorage', 'state.vscdb');
+const DB = cursorDb();
+// the block a command for the user comes in: `powershell` on Windows, the shell's own name elsewhere
+const COMMAND_BLOCK = new RegExp('```' + (process.platform === 'win32' ? 'powershell' : '(?:powershell|bash|zsh|sh)') + '[\\s\\S]*```\\s*$');
 const PROJECTS = process.env.BRAIN_CURSOR_PROJECTS || path.join(os.homedir(), '.cursor', 'projects');
 const CLAUDE = process.env.BRAIN_CLAUDE_PROJECTS || path.join(os.homedir(), '.claude', 'projects');
 let complete = true;
@@ -83,7 +86,7 @@ function state(h, rows) {
   const ended = rows.at(-1)?.type === 'turn_ended';
   if (!ended && !s) return 'in corso (?)';
   if (lastTool === 'AskQuestion') return 'aspetta te (domanda)';
-  if (/```powershell[\s\S]*```\s*$/.test(lastRaw.trim())) return 'aspetta te (comando da lanciare)';
+  if (COMMAND_BLOCK.test(lastRaw.trim())) return 'aspetta te (comando da lanciare)';
   if (/\?\s*(\*\*)?$/.test(lastText)) return 'aspetta te (domanda)';
   return h?.unread ? 'finito, da leggere' : 'finito';
 }
@@ -179,7 +182,7 @@ function claudeState(rows) {
   if (lastStop < lastMsgAt) return Date.now() - Date.parse(last?.timestamp || 0) < 10 * 60e3 ? 'in corso' : 'in corso (?)';
   const lastText = [...msgs].reverse().find(r => r.type === 'assistant' && textOf(r.message?.content).trim());
   const raw = textOf(lastText?.message?.content).trim();
-  if (/```powershell[\s\S]*```\s*$/.test(raw)) return 'aspetta te (comando da lanciare)';
+  if (COMMAND_BLOCK.test(raw)) return 'aspetta te (comando da lanciare)';
   if (/\?\s*(\*\*)?$/.test(one(raw))) return 'aspetta te (domanda)';
   return 'finito';
 }
