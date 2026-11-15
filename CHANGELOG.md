@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- The benches and the role cards stand in a workshop: one picture of planks, barrels, crates and a window on the
+  sunset, never tiled, so no brick is cut at the edges. Every person stays fully visible, at rest too; the role cards'
+  stages line up. The README shows plan approval on the project map and a chess game with the opponent talking
+  (ADR 0313).
 - The Grindhouse benches are all one height: what grew a bench (a plan, its children's rows, a queue, an error, the
   engine's sub-agents) is one line at its foot. Every chat under a bench stands at it, grandchildren too, and under the
   pointer a helper shows a name tag that opens its chat (a click on the person stays a pat). A torch on the bench's

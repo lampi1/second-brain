@@ -17,6 +17,7 @@
         "src/renderer/components/TopBar.tsx",
         "src/renderer/components/OrchestratorOverlay.tsx",
         "src/renderer/styles/agent-strips.css",
+        "src/renderer/assets/stage/bottega.svg",
         "src/renderer/styles/tree.css",
         "src/renderer/styles/shell.css"
       ]
@@ -28,6 +29,7 @@
         "src/renderer/components/AgentCatalogCard.tsx",
         "src/renderer/components/AgentAvatar.tsx",
         "src/renderer/styles/agent-catalog.css",
+        "src/renderer/assets/stage/bottega.svg",
         "src/renderer/components/Sidebar.tsx",
         "src/renderer/components/TopBar.tsx",
         "src/renderer/styles/shell.css"
@@ -130,9 +132,9 @@
       ]
     },
     "plan": {
-      "test": "README showcase: the Strategist's plan to approve in the Orchestrator",
+      "test": "README showcase: the Strategist's plan to approve on the project map",
       "sources": [
-        "src/renderer/components/QuestionsWindow.tsx",
+        "src/renderer/components/project-map/",
         "src/renderer/components/PlanApproval.tsx",
         "src/renderer/styles/qwin.css",
         "src/renderer/styles/plan-approval.css"

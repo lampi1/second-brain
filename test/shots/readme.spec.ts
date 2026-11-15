@@ -270,29 +270,32 @@ test('README screenshot: worktree pool', async () => {
   await save('worktrees');
 });
 
-test('README showcase: the Strategist\'s plan to approve in the Orchestrator', async () => {
-  // Popup on: the plan to approve is one more card of the questions window, its steps numbered with their role
+test('README showcase: the Strategist\'s plan to approve on the project map', async () => {
+  // ADR 0276: in Plan mode the Strategist proposes the plan on the project map: its steps on the boxes they work on,
+  // the piece that does not exist yet dashed, «Approve and start» in the map's side column
   await page.keyboard.press('Escape');
   await goPage(page, 'home');
   if (await page.getByTestId('bench-back').count()) await page.getByTestId('bench-back').click(); // the benches, not an open chat (ADR 0311)
   if (!(await page.getByTestId('tile-chat-tree-plan').count())) await demo('tree');
   await expect(page.getByTestId('tile-chat-tree-plan')).toBeVisible({ timeout: 15_000 });
   const at = Date.now();
-  const plan = { phase: 'proposed', at, asked: 2, doneWhen: 'Order tests pass and the release notes are ready.',
+  const plan = { phase: 'proposed', at, asked: 2, map: 'alfa-shop', doneWhen: 'Order tests pass and the release notes are ready.',
     steps: [
-      { title: 'Find where the discount is computed today', detail: 'cart, order and refund', role: 'scout', state: 'todo' },
-      { title: 'Apply the % discount to the full price', detail: 'no double discount on offers', role: 'artisan', state: 'todo' },
-      { title: 'Check that the order tests pass', role: 'sentinel', state: 'todo' },
-      { title: 'Write the release notes', role: 'herald', state: 'todo' },
+      { title: 'Find where the discount is computed today', detail: 'cart, order and refund', role: 'scout', state: 'todo', on: 'ordini' },
+      { title: 'Apply the % discount to the full price', detail: 'no double discount on offers', role: 'artisan', state: 'todo', on: 'ordini' },
+      { title: 'Check that the order tests pass', role: 'sentinel', state: 'todo', on: 'ordini' },
+      { title: 'Write the release notes', role: 'herald', state: 'todo', on: 'note-di-rilascio', par: true },
     ],
     clarified: [{ q: 'Where', a: 'Cart, order and refund' }, { q: 'Offers', a: 'No, full price only' }] } as StrategyPlan;
   await demo('plan', 'tree-plan', plan);
-  // ADR 0269: the plan is one more row at the bottom of the Orchestrator, opened in place
-  const row = page.locator(`[data-ask-row="tree-plan/plan@${at}"]`);
-  await expect(row).toBeVisible({ timeout: 15_000 });
-  await row.getByTestId('orchestrator-ask-toggle').click();
-  await expect(page.getByTestId('qwin-plan')).toBeVisible();
-  await save('plan', row);
+  await goPage(page, 'collegamenti');
+  await page.getByTestId('bm-map-page').getByRole('button', { name: 'Projects', exact: true }).click();
+  const view = page.getByTestId('pm-view');
+  await expect(view.getByTestId('pm-plan-approve')).toBeVisible({ timeout: 15_000 });
+  await setSize(app, 2000, 1250); // room for the plan column beside the map
+  await expect(view.getByTestId('pm-plan-approve')).toBeVisible();
+  await save('plan', view);
+  await setSize(app, W, H);
 });
 
 test('README showcase: voice, Log, recordings, quality, learn, news, costs, trends, the maintenance notice', async () => {
@@ -394,7 +397,13 @@ test('README screenshot: Chess', async () => {
   await goPage(page, 'scacchi');
   await expect(page.getByTestId('chess-lobby')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('chess-recent').getByTestId('chess-history-row')).toHaveCount(9);
-  await page.getByTestId('chess-bot-orchestrator').click();
-  const bots = (await page.locator('.chess-lobby > section').first().boundingBox())!;
-  await save('chess', { x: Math.round(bots.x - 12), y: Math.round(bots.y - 12), width: Math.round(bots.width + 24), height: Math.round(bots.height + 24) });
+  // the owner (2026-11-15): the board, with the opponent saying something about the game
+  await page.getByTestId('chess-bot-strategist').click();
+  await page.getByTestId('chess-play').click();
+  await expect(page.locator('.chess-piece')).toHaveCount(32);
+  await expect(page.getByTestId('chess-bubble')).toBeVisible({ timeout: 15_000 }); // the opening line
+  const game = (await page.getByTestId('chess-game').boundingBox())!, board = (await page.getByTestId('chess-board').boundingBox())!;
+  await save('chess', { x: Math.round(game.x), y: Math.round(game.y), width: Math.round(game.width), height: Math.round(board.y + board.height - game.y + 16) });
+  await page.getByTestId('chess-resign').click(); // no move yet: it goes back to the lobby
+  await expect(page.getByTestId('chess-lobby')).toBeVisible();
 });
