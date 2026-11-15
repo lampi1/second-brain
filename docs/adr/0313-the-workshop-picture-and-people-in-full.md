@@ -4,7 +4,7 @@ Date: 2026-11-15 · Status: accepted (owner, thread «Proporre nuova Grindhouse 
 voglio in trasparenza li voglio visibili bene tutti, lo sfondo mi fa un po' cagare mi sembra cheap e poi a volte mi
 sembra allineato male. Fammi proposte di sfondo fighe»; of four proposals drawn in the app he picked «la bottega ma
 mettici un barile e qualche elemento in più tienilo bello e funzionale occhio agli z index») · Amends: ADR 0312 (points
-3 and 6)
+3 and 6) · Amended by: ADR 0315 (no dot over the helpers)
 
 ## Context
 
@@ -23,7 +23,7 @@ on the role cards the stage starting at a different height on each card, with a 
    people's heads hold nothing busy; the people, the helpers' tags and the buttons stay above the picture and the
    torch.
 3. **Every person in full**: no fading at rest, on the bench or for a helper. Who works is said by the lit torch, the
-   filled chip with the accent border and the helper's dot.
+   filled chip with the accent border (the helper's dot went with ADR 0315).
 4. **Role cards line up**: the stage starts at the top of every card's front; the torches lost the dashed ring of the
    old round avatar.
 

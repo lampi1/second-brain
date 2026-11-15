@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- The helpers at a bench no longer carry a coloured dot over their heads: their scene says what they do, the name
+  tag says it in words (ADR 0315).
 - A bench shows every helper, the ones at work first, in a row that scrolls sideways; the name tag never gets cut
   at an edge. The limit on the foot reads «Max 5 insieme» while it matters and says under the pointer what it means
   (ADR 0314).
