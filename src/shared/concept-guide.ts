@@ -1002,8 +1002,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('«Aggiungi server MCP»: incolli il JSON del README (mcpServers), una riga di comando o un indirizzo e il modulo si compila da solo, oppure scegli un server tra i più usati. «Salva e prova» (e «Prova» su ogni scheda) apre il server come farebbe una chat, elenca i suoi strumenti e, se non va, dice l’errore e come sistemarlo.',
         '"Aggiungi server MCP": paste the README’s JSON (mcpServers), a command line or an address and the form fills itself, or pick a popular server. "Salva e prova" (and "Prova" on each card) opens the server as a chat would, lists its tools and, when it fails, says the error and how to fix it.'),
       // src/main/mcp-servers/gateway.ts
-      b('Le chat raggiungono i server solo attraverso l’app (127.0.0.1): il token resta nell’app, mai nei file di configurazione dei motori.',
-        'Chats reach the servers only through the app (127.0.0.1): the token stays in the app, never in the engines’ config files.'),
+      b('Le chat raggiungono i server solo attraverso l’app (127.0.0.1): il token resta nell’app, mai nei file di configurazione dei motori. Un server il cui programma non parte non viene riavviato per ogni chat: la sua scheda mostra l’errore e l’app lo riprova dopo 10 minuti, o subito con «Prova».',
+        'Chats reach the servers only through the app (127.0.0.1): the token stays in the app, never in the engines’ config files. A server whose program does not start is not started again for every chat: its card shows the error and the app tries it again after 10 minutes, or at once with "Prova".'),
       // src/shared/mcp-servers.ts chainAllows, effectiveAccess; src/renderer/components/McpAddPanel.tsx ServerRoles
       b('Ogni scheda server ha i ruoli da accendere con un clic, Orchestrator compreso; dal retro della scheda di un agente lo restringi per server: tutto, solo lettura, strumenti scelti o niente.',
         'Each server card has role chips to turn on with one click, the Orchestrator included; from the back of an agent’s card you narrow it per server: everything, read only, chosen tools or nothing.'),

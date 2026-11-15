@@ -207,6 +207,14 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   key is gone (ADR 0291).
 
 ### Fixed
+- A user's MCP server whose program does not start is no longer started again for every chat: each chat gets the
+  error at once for 10 minutes, its card in Connettori shows it, «Prova» tries it again at once, and the log warns
+  once until it works again (#417).
+- «ResizeObserver loop completed with undelivered notifications» is no longer logged as an interface error: the
+  browser raises it with no exception behind it, nothing breaks (#418).
+- `project_map_save` and `project_map_update` say their limits in their descriptions (evidence only inside the root,
+  note at most 200 characters, `planned` for work not started, update changes only status, note and actor), so no
+  agent learns them from a refusal (#420).
 - A chat held by a step of the user's (a report's `userAction`: the VPN, a login, a try) no longer shows «Aspetta te:
   domanda» without any question: it shows «Aspetta te: passo», or «Aspetta Esegui» when the step is a command, and the
   wait is written once per row (#411).

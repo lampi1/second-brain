@@ -10,7 +10,7 @@
 //   user said, no redraw; a new piece is «previsto») and undo (the version before comes back).
 // Used by wiring-shared.ts (chat tools) and appctl/tools.ts (the Orchestrator's); pinned by test/unit/projectmap-tools.test.ts.
 import type { EventMap } from '@shared/contract';
-import { EDIT_OPS, MAP_ACTORS, MAP_KINDS, MAP_STATES, elementText, mapText, type ProjectMap } from '@shared/project-map';
+import { EDIT_OPS, MAP_ACTORS, MAP_KINDS, MAP_LIMITS, MAP_STATES, elementText, mapText, type ProjectMap } from '@shared/project-map';
 import type { McpTool } from '../mcp/server';
 import type { ProjectMaps } from './service';
 
@@ -26,10 +26,10 @@ const ELEMENT = {
     description: { type: 'string', description: 'what it is or does, one line (shown in the box)' },
     details: { type: 'string', description: 'how it works, 3 to 8 plain sentences in the user\'s language, no code: what it does step by step, what it reads and writes, the rules it applies, what happens when it fails, what is unusual in it. The user reads this in place of the code when the box is picked. Up to 1500 characters; a line break starts a paragraph. Omit on a redraw to keep the previous text.' },
     parent: { type: 'string', description: 'for a part: the id of the system it sits in (zoom)' },
-    status: { type: 'string', enum: [...MAP_STATES], description: 'ok = works or done; work = being built; blocked = stuck; unknown = not known. Omit to keep the previous one.' },
-    note: { type: 'string', description: 'one short line: what is missing, what the user must do' },
+    status: { type: 'string', enum: [...MAP_STATES], description: 'ok = works or done; work = being built; blocked = stuck; planned = not started yet (planned, not there); unknown = not known. Omit to keep the previous one.' },
+    note: { type: 'string', description: `one short line, at most ${MAP_LIMITS.note} characters: what is missing, what the user must do` },
     actor: { type: 'string', enum: [...MAP_ACTORS], description: 'who must act when it is blocked: user, agent, other (a colleague, a team)' },
-    evidence: { type: 'array', items: { type: 'string' }, description: 'the project files or folders (ending in /) it was read from, relative to the root: the app watches them' },
+    evidence: { type: 'array', items: { type: 'string' }, description: `the project files or folders (ending in /) it was read from, relative to the root (up to ${MAP_LIMITS.evidence}): the app watches them. Only paths inside the root: an absolute path or one with ../ is refused; name a source outside it (another repo, a wiki, the brain) in the note or details text instead.` },
   },
   required: ['id', 'kind', 'name'],
 };
@@ -39,7 +39,7 @@ const LINK = {
     id: { type: 'string', description: 'stable id (default from--to)' }, from: { type: 'string' }, to: { type: 'string' },
     label: { type: 'string', description: 'what goes along it, a few words («chiama gli strumenti», «legge gli ordini»)' },
     details: { type: 'string', description: 'the passage in full, 1 to 4 plain sentences: when it happens, which data goes, how (a call, a file, a queue, by hand), what comes back, what happens if it fails. Up to 800 characters. Omit on a redraw to keep the previous text.' },
-    status: { type: 'string', enum: [...MAP_STATES] }, note: { type: 'string' }, actor: { type: 'string', enum: [...MAP_ACTORS] },
+    status: { type: 'string', enum: [...MAP_STATES] }, note: { type: 'string', description: `at most ${MAP_LIMITS.note} characters` }, actor: { type: 'string', enum: [...MAP_ACTORS] },
   },
   required: ['from', 'to', 'label'],
 };
@@ -69,7 +69,7 @@ export function chatMapTools(d: ChatMapDeps): McpTool[] {
     },
     {
       name: 'project_map_save',
-      description: `Draw (or redraw) a project's map for the user: what they look at instead of the code. Read the project first (code, configuration, pipelines, README, the brain's notes) and draw what it IS: who uses it (person), the user's system(s) (system) and their main parts (part, parent = the system), the external systems it talks to (external), the environments (env: test host, pipeline) and key documents (doc); the links with what goes along them. Keep it small enough to read (about 5-15 elements per level). Give each element its status as far as you know it and the files you read it from (evidence, relative to the root: the app watches them). Never invent what the project does not show: mark it unknown with a note, and ask. The user reads this map in place of the code, to see how the system works and to spot what is wrong in its structure himself: draw what is there plainly, each link with what really goes along it. The boxes stay short; the substance goes in details, on every element and every link you understood: a map with one-line boxes and nothing behind them tells the user too little. A redraw: read the map first (project_map_read), keep the ids, respect the user's corrections. Every save is a version in the map's history. kinds: ${KINDS}; statuses: ${STATES}; actors: ${ACTORS}.`,
+      description: `Draw (or redraw) a project's map for the user: what they look at instead of the code. Read the project first (code, configuration, pipelines, README, the brain's notes) and draw what it IS: who uses it (person), the user's system(s) (system) and their main parts (part, parent = the system), the external systems it talks to (external), the environments (env: test host, pipeline) and key documents (doc); the links with what goes along them. Keep it small enough to read (about 5-15 elements per level). Give each element its status as far as you know it and the files you read it from (evidence, relative to the root: the app watches them). Never invent what the project does not show: mark it unknown with a note, and ask. The user reads this map in place of the code, to see how the system works and to spot what is wrong in its structure himself: draw what is there plainly, each link with what really goes along it. The boxes stay short; the substance goes in details, on every element and every link you understood: a map with one-line boxes and nothing behind them tells the user too little. A redraw: read the map first (project_map_read), keep the ids, respect the user's corrections. Every save is a version in the map's history. kinds: ${KINDS}; statuses: ${STATES} (planned = not started yet); actors: ${ACTORS}. Limits, refused otherwise: evidence only inside the root (no absolute path, no ../), note at most ${MAP_LIMITS.note} characters, name ${MAP_LIMITS.name}, description ${MAP_LIMITS.description}, details ${MAP_LIMITS.details} (links ${MAP_LIMITS.linkDetails}). Renaming or moving a box, or adding one, is a save (or app_project_map edit for the Orchestrator): project_map_update changes only status, note and actor.`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -93,13 +93,13 @@ export function chatMapTools(d: ChatMapDeps): McpTool[] {
     },
     {
       name: 'project_map_update',
-      description: `Keep a project's map current while you work: working_on = the element ids you work on now (you show on the map beside them, with your progress); changes = the new status of what you finished, broke or found blocked (each confirmed now; a status nobody confirms for 2 hours, or whose files changed after it, reads «da verificare»). Call it when you start on a mapped project and before your report. statuses: ${STATES} (planned = a piece of a plan, not there yet); actor (who must act when blocked): ${ACTORS}. A step of a plan drawn on the map moves its element by itself: no call needed for it. A structural change (a new system, part or link) is a redraw: project_map_save.`,
+      description: `Keep a project's map current while you work: working_on = the element ids you work on now (you show on the map beside them, with your progress); changes = the new status of what you finished, broke or found blocked (each confirmed now; a status nobody confirms for 2 hours, or whose files changed after it, reads «da verificare»). Call it when you start on a mapped project and before your report. statuses: ${STATES} (planned = not started yet: a piece of a plan, not there); actor (who must act when blocked): ${ACTORS}. It changes only status, note (at most ${MAP_LIMITS.note} characters) and actor of existing ids: a name, a description, a new box or link need project_map_save. A step of a plan drawn on the map moves its element by itself: no call needed for it. A structural change (a new system, part or link) is a redraw: project_map_save.`,
       inputSchema: {
         type: 'object',
         properties: {
           project: { type: 'string', description: 'the map\'s name or id' },
           working_on: { type: 'array', items: { type: 'string' }, description: 'element ids you work on now' },
-          changes: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', description: 'element or link id' }, status: { type: 'string', enum: [...MAP_STATES] }, note: { type: 'string' }, actor: { type: 'string', enum: [...MAP_ACTORS] } }, required: ['id'] } },
+          changes: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', description: 'element or link id' }, status: { type: 'string', enum: [...MAP_STATES] }, note: { type: 'string', description: `at most ${MAP_LIMITS.note} characters` }, actor: { type: 'string', enum: [...MAP_ACTORS] } }, required: ['id'] } },
           summary: { type: 'string', description: 'one line for the history (default: which ids changed)' },
         },
         required: ['project'], additionalProperties: false,

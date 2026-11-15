@@ -8,9 +8,14 @@
 // Access is checked at every request with the chat's live context (access.ts): a server the chat may not use answers
 // 404, a tool it may not use is neither listed nor callable. One upstream connection per chat and server, opened on
 // the first request, closed after 10 idle minutes, on a definition change and at shutdown. Used by service.ts.
+// A server whose process does not start or dies at once (#417: 59 warnings in 3 days for one user server that could not
+// start its program) is not started again for every chat: for BROKEN_MS each chat gets the same error at once, the
+// failure goes on its Connettori card (onBroken) and is warned once until it works again or the user changes or tries it
+// («Prova» resets it).
 import type { McpServer, McpTool } from '../mcp/server';
 import { EndpointTokens } from '../mcp/tokens';
 import { UpstreamError } from '../mcp/refusal';
+import { McpClientError } from './client';
 import { log, errText } from '../log';
 import type { McpServerDef, RoleMcpAccess } from '../../shared/mcp-servers';
 import { serversFor, toolFor, type ChatMcpContext } from './access';
@@ -26,18 +31,25 @@ export interface GatewayDeps {
   context: (chatId: string) => ChatMcpContext | null;
   /** tests and the demo: a fake upstream */
   connect?: (ep: Endpoint, def: McpServerDef) => Upstream;
+  /** a server whose process did not start: its card shows the failure (service.ts records it as its last test) */
+  onBroken?: (server: string, error: unknown) => void;
+  now?: () => number;
   idleMs?: number;
 }
 
 interface Conn { up: Upstream; tools: Promise<UpstreamTool[]> | null; toolsAt: number; used: number; def: string }
 const TOOLS_TTL = 5 * 60_000;
-/** one warning per server this often when it does not list its tools */
+/** one warning per server this often when it does not list its tools (a slow or unreachable one) */
 const WARN_EVERY_MS = 3600_000;
+/** a server whose process did not start is not started again for this long (each chat gets the error at once) */
+export const BROKEN_MS = 10 * 60_000;
 
 export class McpGateway {
   private readonly tokens = new EndpointTokens();
   private readonly conns = new Map<string, Conn>();
   private readonly warned = new Map<string, number>();
+  /** server → until when it is not started again, and why (its process did not start) */
+  private readonly broken = new Map<string, { until: number; cause: string }>();
   private readonly timer: NodeJS.Timeout;
 
   constructor(private readonly deps: GatewayDeps) {
@@ -99,19 +111,33 @@ export class McpGateway {
   private async toolsFor(chatId: string, server: string): Promise<McpTool[]> {
     const ctx = this.deps.context(chatId);
     if (!ctx) return [];
+    const clock = this.deps.now ?? Date.now, b = this.broken.get(server);
+    if (b && clock() < b.until) throw new UpstreamError(`MCP server ${server} did not start (${b.cause}); the app tries it again in ${Math.ceil((b.until - clock()) / 60_000)} min, or when the user presses «Prova» on its card (Impostazioni → Connettori).`);
     const c = this.conn(chatId, server);
     if (!c.tools || Date.now() - c.toolsAt > TOOLS_TTL) { c.tools = c.up.tools(); c.toolsAt = Date.now(); }
     let list: UpstreamTool[];
     try { list = await c.tools; }
     catch (e) {
+      // a connection the app itself closed meanwhile (the chat closed, a definition change) is not a server that died
+      const ours = this.conns.get(`${chatId}|${server}`) === c;
       this.drop(chatId, server, c);
-      // the user's server is slow or down: once an hour per server a warning, the rest at info (#347: 42 warnings, one
-      // per chat that started, for one server that did not answer); the chat gets an upstream error, never «crashed» (#329)
-      const now = Date.now(), last = this.warned.get(server) ?? -Infinity;
-      if (now - last >= WARN_EVERY_MS) this.warned.set(server, now);
-      log[now - last >= WARN_EVERY_MS ? 'warn' : 'info']('mcp-servers', 'MCP server tools not listed', { chat: chatId, cause: errText(e), data: { server }, hint: 'test the server in Impostazioni → Connettori' });
+      const now = clock(), dead = ours && e instanceof McpClientError && e.code === 'spawn';
+      if (dead) {
+        // its program does not start: warned once until it works again or the user changes or tries it (#417)
+        const first = !this.broken.has(server);
+        this.broken.set(server, { until: now + BROKEN_MS, cause: errText(e).slice(0, 300) });
+        log[first ? 'warn' : 'info']('mcp-servers', first ? 'MCP server did not start' : 'MCP server still does not start', { chat: chatId, cause: errText(e), data: { server }, hint: 'its card in Impostazioni → Connettori shows the error; «Prova» there tries it again' });
+        if (first) try { this.deps.onBroken?.(server, e); } catch { /* the card is a convenience */ }
+      } else {
+        // the user's server is slow or down: once an hour per server a warning, the rest at info (#347: 42 warnings, one
+        // per chat that started, for one server that did not answer); the chat gets an upstream error, never «crashed» (#329)
+        const last = this.warned.get(server) ?? -Infinity;
+        if (now - last >= WARN_EVERY_MS) this.warned.set(server, now);
+        log[now - last >= WARN_EVERY_MS ? 'warn' : 'info']('mcp-servers', 'MCP server tools not listed', { chat: chatId, cause: errText(e), data: { server }, hint: 'test the server in Impostazioni → Connettori' });
+      }
       throw new UpstreamError(`MCP server ${server} did not list its tools: ${errText(e)}`);
     }
+    this.broken.delete(server);                           // it works again: a later failure is warned again
     return list.filter(t => toolFor(ctx, this.deps.roleAccess, server, t)).map(t => ({
       name: t.name, description: t.description, inputSchema: t.inputSchema,
       ...(t.annotations ? { annotations: t.annotations as McpTool['annotations'] } : {}),
@@ -128,7 +154,7 @@ export class McpGateway {
   /** A server's definition or token changed, or it was removed: its open connections close (the next call reopens). */
   reset(server?: string): void {
     // a changed definition gets its own first warning again
-    if (server) this.warned.delete(server); else this.warned.clear();
+    if (server) { this.warned.delete(server); this.broken.delete(server); } else { this.warned.clear(); this.broken.clear(); }
     for (const [key, c] of this.conns) if (!server || key.endsWith(`|${server}`)) { c.up.close(); this.conns.delete(key); }
   }
 
