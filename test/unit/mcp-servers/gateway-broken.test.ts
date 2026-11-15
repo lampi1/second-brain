@@ -17,15 +17,15 @@ function setup(fail: () => Error | null) {
   const mcp = { mount: (_p: string, o: { tools: typeof tools }) => { tools = o.tools; } } as unknown as McpServer;
   const def = { id: 'kb', label: 'KB', transport: 'stdio', command: 'kb', args: [], secrets: [], enabled: true } as unknown as McpServerDef;
   let t = 1000, started = 0;
-  const broken: string[] = [];
+  const broken: string[] = [], works: string[] = [];
   const g = new McpGateway({
     mcp, servers: () => [def], roleAccess: () => undefined, endpoint: () => ({ transport: 'stdio', command: 'kb', args: [], env: {} }),
-    context: () => ({ roles: [null], policy: null }), now: () => t, onBroken: s => broken.push(s),
+    context: () => ({ roles: [null], policy: null }), now: () => t, onBroken: s => broken.push(s), onWorks: s => works.push(s),
     connect: () => { started++; const e = fail(); return { serverInfo: undefined, tools: async () => { if (e) throw e; return [{ name: 'find', description: 'd', inputSchema: {} }]; }, call: async () => ({}), close() {} } as unknown as Upstream; },
   });
   gateways.push(g);
   const list = (chatId: string) => tools!({ params: { chatId, server: 'kb' } });
-  return { g, list, started: () => started, broken, at: (ms: number) => { t = ms; } };
+  return { g, list, started: () => started, broken, works, at: (ms: number) => { t = ms; } };
 }
 
 describe('a user MCP server whose program does not start (#417)', () => {
@@ -56,10 +56,35 @@ describe('a user MCP server whose program does not start (#417)', () => {
     err = null;
     s.at(1000 + BROKEN_MS);
     await expect(s.list('c2')).resolves.toHaveLength(1);
+    expect(s.works).toEqual(['kb']);                          // its card shows it working again
     const slow = setup(() => new McpClientError('timeout', 'Il server non ha risposto', 'x'));
     await expect(slow.list('c1')).rejects.toThrow(/did not list/);
     await expect(slow.list('c2')).rejects.toThrow(/did not list/);
     expect(slow.started()).toBe(2);
     expect(slow.broken).toEqual([]);
+  });
+
+  it('a chat whose connection is up keeps it; a server that listed and then exits is not one that does not start', async () => {
+    vi.spyOn(log, 'warn').mockImplementation(() => {}); vi.spyOn(log, 'info').mockImplementation(() => {});
+    let err: Error | null = null;
+    const s = setup(() => err);
+    await expect(s.list('c1')).resolves.toHaveLength(1);      // c1's program started
+    err = new McpClientError('spawn', 'non è partito', 'x');
+    await expect(s.list('c2')).rejects.toThrow(/did not list/);
+    expect(s.broken).toEqual(['kb']);
+    await expect(s.list('c1')).resolves.toHaveLength(1);      // not held back: its connection is up
+    expect(s.works).toEqual([]);                              // a cached list says nothing about a new process
+    await expect(s.list('c3')).rejects.toThrow(/did not start/);
+
+    const up = setup(() => null);
+    const conn = vi.fn();
+    await expect(up.list('c1')).resolves.toHaveLength(1);
+    // the same connection fails later with «spawn» (its program exited): the usual warning, no cool-down
+    const later = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 10 * 3_600_000);
+    (up.g as unknown as { conns: Map<string, { up: { tools: () => Promise<unknown> } }> }).conns.get('c1|kb')!.up.tools = async () => { conn(); throw new McpClientError('spawn', 'Il server si è chiuso', 'x'); };
+    await expect(up.list('c1')).rejects.toThrow(/did not list/);
+    later.mockRestore();
+    expect(conn).toHaveBeenCalled();
+    expect(up.broken).toEqual([]);
   });
 });

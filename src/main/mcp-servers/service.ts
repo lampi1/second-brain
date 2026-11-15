@@ -81,6 +81,11 @@ export class McpServersService {
         this.store.recordTest(id, { ok: false, at: (this.opts.now ?? Date.now)(), ms: 0, tools: this.store.test(id)?.tools ?? [], error: describeError(e) });
         this.opts.emit?.(this.state());
       },
+      onWorks: (id, tools) => {
+        if (!this.store.def(id)) return;
+        this.store.recordTest(id, { ok: true, at: (this.opts.now ?? Date.now)(), ms: 0, tools: tools.map(t => ({ name: t.name, description: t.description.slice(0, 400), readOnly: t.readOnly })) });
+        this.opts.emit?.(this.state());
+      },
     });
     this.undoFile = path.join(opts.userData, 'mcp-undo.json');
     this.loadUndos();

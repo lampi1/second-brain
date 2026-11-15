@@ -27,8 +27,10 @@ export function cleanRendererError(a: unknown): RendererErrorReport | null {
   const r = (a && typeof a === 'object' ? a : {}) as Record<string, unknown>;
   // scrubbed again here (shared/error-scrub.ts): what a page sends is never trusted to be clean
   const raw = str(r.message, 4000), message = raw ? scrubMessage(raw, 500) : undefined;
-  if (!message || isBrowserNotice(message)) return null;     // a browser notice, not an error (#418), from any page
+  if (!message) return null;
   const kind = KINDS.find(k => k === r.kind) ?? 'error';
+  // a browser notice, not an error (#418), from any page: a window error without a stack (a thrown one has frames)
+  if (kind === 'error' && !r.stack && isBrowserNotice(message)) return null;
   const rawStack = str(r.stack, 4 * MAX_STACK), rawComp = str(r.componentStack, 4 * MAX_STACK), rawSource = str(r.source, 1000);
   const stack = rawStack ? scrubStack(rawStack, MAX_STACK) : undefined, componentStack = rawComp ? scrubComponentStack(rawComp, MAX_STACK) : undefined;
   const source = rawSource ? scrubSource(rawSource) : undefined, where = str(r.where, 60);

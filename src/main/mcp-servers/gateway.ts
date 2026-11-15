@@ -33,11 +33,14 @@ export interface GatewayDeps {
   connect?: (ep: Endpoint, def: McpServerDef) => Upstream;
   /** a server whose process did not start: its card shows the failure (service.ts records it as its last test) */
   onBroken?: (server: string, error: unknown) => void;
+  /** it started again after that: its card shows its tools again */
+  onWorks?: (server: string, tools: UpstreamTool[]) => void;
   now?: () => number;
   idleMs?: number;
 }
 
-interface Conn { up: Upstream; tools: Promise<UpstreamTool[]> | null; toolsAt: number; used: number; def: string }
+/** listed: it gave its tools once (its program started: a later failure of it is not one that does not start) */
+interface Conn { up: Upstream; tools: Promise<UpstreamTool[]> | null; toolsAt: number; used: number; def: string; listed?: boolean }
 const TOOLS_TTL = 5 * 60_000;
 /** one warning per server this often when it does not list its tools (a slow or unreachable one) */
 const WARN_EVERY_MS = 3600_000;
@@ -112,7 +115,8 @@ export class McpGateway {
     const ctx = this.deps.context(chatId);
     if (!ctx) return [];
     const clock = this.deps.now ?? Date.now, b = this.broken.get(server);
-    if (b && clock() < b.until) throw new UpstreamError(`MCP server ${server} did not start (${b.cause}); the app tries it again in ${Math.ceil((b.until - clock()) / 60_000)} min, or when the user presses «Prova» on its card (Impostazioni → Connettori).`);
+    // held back only where a new process would start: a chat whose connection is up keeps using it
+    if (b && clock() < b.until && !this.conns.has(`${chatId}|${server}`)) throw new UpstreamError(`MCP server ${server} did not start (${b.cause}); the app tries it again in ${Math.ceil((b.until - clock()) / 60_000)} min, or when the user presses «Prova» on its card (Impostazioni → Connettori).`);
     const c = this.conn(chatId, server);
     if (!c.tools || Date.now() - c.toolsAt > TOOLS_TTL) { c.tools = c.up.tools(); c.toolsAt = Date.now(); }
     let list: UpstreamTool[];
@@ -121,14 +125,15 @@ export class McpGateway {
       // a connection the app itself closed meanwhile (the chat closed, a definition change) is not a server that died
       const ours = this.conns.get(`${chatId}|${server}`) === c;
       this.drop(chatId, server, c);
-      const now = clock(), dead = ours && e instanceof McpClientError && e.code === 'spawn';
+      // its program did not start: a fresh connection that never listed (one that worked and then exited reconnects)
+      const now = clock(), dead = ours && !c.listed && e instanceof McpClientError && e.code === 'spawn';
       if (dead) {
         // its program does not start: warned once until it works again or the user changes or tries it (#417)
         const first = !this.broken.has(server);
         this.broken.set(server, { until: now + BROKEN_MS, cause: errText(e).slice(0, 300) });
         log[first ? 'warn' : 'info']('mcp-servers', first ? 'MCP server did not start' : 'MCP server still does not start', { chat: chatId, cause: errText(e), data: { server }, hint: 'its card in Impostazioni → Connettori shows the error; «Prova» there tries it again' });
         if (first) try { this.deps.onBroken?.(server, e); } catch { /* the card is a convenience */ }
-      } else {
+      } else if (ours) {
         // the user's server is slow or down: once an hour per server a warning, the rest at info (#347: 42 warnings, one
         // per chat that started, for one server that did not answer); the chat gets an upstream error, never «crashed» (#329)
         const last = this.warned.get(server) ?? -Infinity;
@@ -137,7 +142,10 @@ export class McpGateway {
       }
       throw new UpstreamError(`MCP server ${server} did not list its tools: ${errText(e)}`);
     }
-    this.broken.delete(server);                           // it works again: a later failure is warned again
+    // a new connection that listed: its program starts again (a chat's cached list says nothing about a new process)
+    const fresh = !c.listed;
+    c.listed = true;
+    if (fresh && this.broken.delete(server)) try { this.deps.onWorks?.(server, list); } catch { /* the card is a convenience */ }   // it works again: a later failure is warned again
     return list.filter(t => toolFor(ctx, this.deps.roleAccess, server, t)).map(t => ({
       name: t.name, description: t.description, inputSchema: t.inputSchema,
       ...(t.annotations ? { annotations: t.annotations as McpTool['annotations'] } : {}),
