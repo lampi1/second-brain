@@ -526,3 +526,12 @@ docs/vices/orchestrator.webp binary-media sha256:df64910fe12abcbe79bf0df6ab58792
 docs/vices/scout.webp binary-media sha256:b02c0983afae44f86112f0686bc59891606261cec2a2d8477f8924913cd67f86
 docs/vices/sentinel.webp binary-media sha256:5adebb9a9c78289a2cd64d777eefda94d515355d693f1c6d61fd142332f1ce07
 docs/vices/strategist.webp binary-media sha256:29532d96fd1475bd1df8f23ffd778f69f2a099eb4060b380fb57fa13696d0867
+# Three commits of 2026-11-13 already on main, made in a cloud session whose committer was the coding tool's own
+# no-reply identity instead of the owner's; the author is the owner (checked 2026-11-15). The
+# public history is never rewritten, so each is pinned by its whole id: any other commit with that identity blocks.
+commit:984dfb750effca9a137ce6028cf400422df9b65d email
+commit:e1880e82450235702aab620b36e90f23a06741b6 email
+commit:5b2fc17548145673dea819d3ed51aafca5a8066b email
+# The Grindhouse screenshot of ba6d4a3d (2026-11-13, frozen demo, fictional data; looked at 2026-11-15): published
+# without its line, so the history scan stopped on it.
+docs/screenshots/grindhouse.webp binary-media sha256:74b277eaf8b9d8804f2f0f8ebdd40071659fe97319da958c622054f378f26807

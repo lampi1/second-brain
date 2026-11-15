@@ -8,7 +8,8 @@
 // optional guard config commands. Used by the user by hand on a new PC; the pure parts are unit-tested (test/unit/setup-pc.test.ts).
 //   node scripts/setup-pc.mjs --app <url> --app-dir <dir> --domain <url>=<dir> [--domain ...] [--brain <dir>]
 //                             [--user-data <dir>] [--dry-run] [--no-setup]
-//   --user-data defaults to %APPDATA%/second-brain (the stable instance's userData); --dry-run prints the plan only.
+//   --user-data defaults to the stable instance's userData (%APPDATA%/second-brain on Windows, ~/Library/Application
+//   Support/second-brain on macOS, $XDG_CONFIG_HOME/second-brain on Linux); --dry-run prints the plan only.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -22,7 +23,7 @@ export function urlOk(u) {
 }
 
 /** argv → plan; throws an Error with an Italian message on bad input. */
-export function parseArgs(argv, env = process.env) {
+export function parseArgs(argv, env = process.env, platform = process.platform, home = os.homedir()) {
   const out = { app: null, appDir: null, domains: [], brain: null, userData: null, dryRun: false, setup: true };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -43,7 +44,9 @@ export function parseArgs(argv, env = process.env) {
   if (out.app && !urlOk(out.app)) throw new Error('URL dell\'app non valido');
   if (out.app && !out.appDir) throw new Error('--app vuole anche --app-dir');
   for (const d of out.domains) if (!urlOk(d.url)) throw new Error(`URL del dominio non valido per ${d.dir}`);
-  out.userData ??= path.join(env.APPDATA ?? path.join(os.homedir(), '.config'), 'second-brain');
+  // Electron's appData per OS, as in scripts/doctor-lib.mjs (the stable instance's userData lives there)
+  out.userData ??= path.join(platform === 'win32' ? env.APPDATA || path.join(home, 'AppData', 'Roaming')
+    : platform === 'darwin' ? path.join(home, 'Library', 'Application Support') : env.XDG_CONFIG_HOME || path.join(home, '.config'), 'second-brain');
   return out;
 }
 

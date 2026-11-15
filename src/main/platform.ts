@@ -52,6 +52,14 @@ export function userShell(code: string, env: NodeJS.ProcessEnv = process.env, pl
   return { command: sh, args: ['-l', '-c', code], stdin: false };
 }
 
+/** How the app names that shell to an agent or in a rule, and the fence of a block it ran: «PowerShell 5.1» and
+ *  `powershell` on Windows; elsewhere the login shell's own name (zsh, bash; sh when unset) in a `bash` fence, so an
+ *  agent on macOS or Linux is never told its command ran in PowerShell. */
+export function userShellName(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): { name: string; fence: string } {
+  if (platform === 'win32') return { name: 'PowerShell 5.1', fence: 'powershell' };
+  return { name: env.SHELL && path.posix.isAbsolute(env.SHELL) ? path.posix.basename(env.SHELL) : 'sh', fence: 'bash' };
+}
+
 /** Seconds from ps's etime ([[dd-]hh:]mm:ss): the one elapsed-time column that both Linux procps and macOS BSD ps
  *  print (etimes is Linux only). NaN for anything else. */
 export function etimeSeconds(s: string): number {

@@ -10,7 +10,8 @@
 //   node scan.mjs <dir> --history               also every blob, commit message and author of every commit
 //   options: --deny <file>    words/regexes that must never appear (one per line, `#` comment, `re:` prefix = regex)
 //            --allow <file>   default <dir>/.guardallow: lines `<path glob> <rule> [sha256:<hex>]` that silence a known false
-//                             positive (with a hash: only that exact file content)
+//                             positive (with a hash: only that exact file content); `commit:<full sha> <rule>`
+//                             silences that rule in the message and identities of that one commit, already published
 //            --json           machine output
 // Exit: 0 clean · 2 findings (publish must stop) · 1 error. The matched value is never printed, only file:line + rule.
 
@@ -107,12 +108,20 @@ const allows = existsSync(allowFile) ? decodeText(readFileSync(allowFile)).split
   .map(l => { const [glob, rule, pin, extra] = l.split(/\s+/);
     // a malformed pin must never fall back to "any content": refuse the whole allow file
     if (!rule || extra || (pin !== undefined && !/^sha256:[0-9a-fA-F]{64}$/.test(pin))) { console.error('guard: bad allow line'); process.exit(1); }
+    // a commit's message and identities: one whole commit id and one named rule, never a pattern (the id is the pin)
+    if (glob.startsWith('commit:')) {
+      if (!/^commit:[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(glob) || rule === '*' || pin !== undefined) { console.error('guard: bad allow line'); process.exit(1); }
+      return { commit: glob, rule };
+    }
     return { re: new RegExp('^' + glob.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '\u0000').replace(/\*/g, '[^/]*').replace(/\u0000/g, '.*') + '$'), rule, sha: pin?.startsWith('sha256:') ? pin.slice(7).toLowerCase() : null }; }) : [];
 // An entry with `sha256:<hex>` (e.g. a binary icon a human looked at) holds only for that exact content: a changed
 // file blocks again until someone checks it and ADDS a line with the new hash (old lines stay: the public history
 // keeps the old blobs, and --history checks them).
 const sha256 = buf => createHash('sha256').update(buf).digest('hex');
-const allowed = (path, rule, buf) => allows.some(a => a.re.test(path) && (a.rule === '*' || a.rule === rule) && (!a.sha || (buf && sha256(buf) === a.sha)));
+// A `commit:<sha>` line holds only for that commit's message and identities; a path line never reaches a commit.
+const allowed = (path, rule, buf) => path.startsWith('commit:')
+  ? allows.some(a => a.commit === path && a.rule === rule)
+  : allows.some(a => a.re?.test(path) && (a.rule === '*' || a.rule === rule) && (!a.sha || (buf && sha256(buf) === a.sha)));
 
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'out', 'dist', 'test-results']);
 const TEXT_MAX = 2_000_000;
@@ -129,7 +138,7 @@ function scanName(path, label) {
 }
 
 // buf: the file's bytes, so a hash-pinned allow line can hold for a line finding too (only for that exact content);
-// commit messages pass none, so no pinned line ever silences them
+// a commit's message and identities pass none: only a `commit:<full sha>` line silences them, never a path line
 function scanText(path, text, label = path, buf, canAllow = true) {
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
@@ -179,7 +188,7 @@ function scanHistory(selected) {
   const seen = new Map(); // one blob read, every distinct path scanned (path rules apply to every alias)
   for (const c of commits) {
     const meta = git(['show', '-s', '--format=%an%x00%ae%x00%cn%x00%ce%x00%B', c]).toString();
-    scanText(`commit:${c.slice(0, 8)}`, meta.replace(/\x00/g, '\n'), `commit ${c.slice(0, 8)} (message/author)`, undefined, false);
+    scanText(`commit:${c.toLowerCase()}`, meta.replace(/\x00/g, '\n'), `commit ${c.slice(0, 8)} (message/author)`);
     for (const row of git(['ls-tree', '-r', '-z', c]).toString('utf8').split('\0').filter(Boolean)) {
       const tab = row.indexOf('\t');
       const [, type, sha] = row.slice(0, tab).split(' '); const path = row.slice(tab + 1);

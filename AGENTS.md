@@ -36,7 +36,7 @@ release vs. anything run from this repo. The rest: `docs/agents/glossary.md`.
 | Lint | `npm run lint` |
 | Quick check (a branch's gate) | `npm run check:quick`: typecheck, lint of changed files, only the tests reaching them directly, doc tests if needed |
 | Light check (optional) | `npm run check:branch`: typecheck, lint + related unit tests + guard on changed files + doc freshness; no e2e |
-| All checks (main only) | `npm run check`: + full unit + e2e; after a batch of merges only its non-e2e parts run on main; e2e read against `test/e2e/known-red.json` |
+| All checks (main only) | `npm run check`: + full unit + e2e; after a batch of merges only its non-e2e parts run on main (`npm run check -- --no-e2e`, what CI runs on the three systems); e2e read against `test/e2e/known-red.json` |
 | Unit · e2e | `npm test` · `npm run test:e2e` · `node scripts/e2e.mjs <specs>` (only when the owner asks; never a merge gate) |
 | e2e baseline | `node scripts/e2e-baseline.mjs [--update]` (main, after a full run) |
 | Live tests (real tokens) | `SB_LIVE=1 npx vitest run test/live` (Claude only) |

@@ -9,9 +9,18 @@ export interface InputSource { directory: string; recursive?: boolean; accepts?:
 export interface InputRevision { revision(): Promise<string | null>; stop(): void }
 interface Watched { source: InputSource; key?: string; watcher?: fs.FSWatcher }
 
+/** Cursor's chat database, where the editor keeps it on each OS: the rule of the shipped tools
+ *  (brain-template/ops/tools/cursor-db.mjs), so the app watches the same file they read. */
+export function cursorDatabase(env: NodeJS.ProcessEnv, home = os.homedir(), platform: NodeJS.Platform = process.platform): string {
+  if (env.BRAIN_CURSOR_DB) return env.BRAIN_CURSOR_DB;
+  const data = platform === 'win32' ? env.APPDATA || path.join(home, 'AppData', 'Roaming')
+    : platform === 'darwin' ? path.join(home, 'Library', 'Application Support') : env.XDG_CONFIG_HOME || path.join(home, '.config');
+  return path.join(data, 'Cursor', 'User', 'globalStorage', 'state.vscdb');
+}
+
 /** Only for app-owned product tools; custom legacy scripts may read arbitrary inputs and keep polling. */
-export function chatInputs(root: string, env: NodeJS.ProcessEnv, home = os.homedir()): InputSource[] {
-  const database = path.resolve(root, env.BRAIN_CURSOR_DB || path.join(env.APPDATA || '', 'Cursor', 'User', 'globalStorage', 'state.vscdb'));
+export function chatInputs(root: string, env: NodeJS.ProcessEnv, home = os.homedir(), platform: NodeJS.Platform = process.platform): InputSource[] {
+  const database = path.resolve(root, cursorDatabase(env, home, platform));
   const name = path.basename(database);
   return [
     { directory: path.resolve(root, env.BRAIN_CLAUDE_PROJECTS || path.join(home, '.claude', 'projects')), recursive: true },

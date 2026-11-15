@@ -21,7 +21,7 @@ Durable knowledge lives in this folder, **not** in agent-private memory, so ever
 
 ## Read on demand
 
-| When | Read (absolute: `{{BRAIN_WIN}}\...`) |
+| When | Read (absolute: `{{BRAIN}}/...`) |
 |------|------|
 | Before reading or writing any memory file; unsure where something lives | `map.md` |
 | You are the Orchestrator, or you coordinate other chats/agents | `hub.md` |

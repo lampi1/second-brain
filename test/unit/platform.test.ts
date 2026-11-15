@@ -1,7 +1,7 @@
 // Per-OS folders and engine package (src/main/platform.ts, ADR 0054): the shared folder never lands inside the stable
 // userData, the XDG variables are honoured on Linux, and the engine package matches the npm names Anthropic ships.
 import { describe, expect, it } from 'vitest';
-import { claudeEnginePackage, etimeSeconds, launcherName, linuxDesktopEntry, macCommandFile, ownProcessGroup, restartWaiter, sharedDir, userShell } from '../../src/main/platform';
+import { claudeEnginePackage, etimeSeconds, launcherName, linuxDesktopEntry, macCommandFile, ownProcessGroup, restartWaiter, sharedDir, userShell, userShellName } from '../../src/main/platform';
 
 describe('sharedDir', () => {
   it('Windows: %LOCALAPPDATA%/second-brain, with the profile fallback when the variable is missing', () => {
@@ -61,6 +61,13 @@ describe('process helpers (ADR 0054 stage 3)', () => {
     expect(userShell('ls -la', { SHELL: '/bin/zsh' }, 'darwin')).toEqual({ command: '/bin/zsh', args: ['-l', '-c', 'ls -la'], stdin: false });
     expect(userShell('ls', {}, 'linux').command).toBe('/bin/sh');
     expect(userShell('ls', { SHELL: 'zsh' }, 'linux').command).toBe('/bin/sh');
+  });
+  it('names that shell to an agent: PowerShell 5.1 on Windows, the login shell elsewhere, never PowerShell off Windows', () => {
+    expect(userShellName({ SHELL: '/bin/zsh' }, 'win32')).toEqual({ name: 'PowerShell 5.1', fence: 'powershell' });
+    expect(userShellName({ SHELL: '/bin/zsh' }, 'darwin')).toEqual({ name: 'zsh', fence: 'bash' });
+    expect(userShellName({ SHELL: '/usr/bin/fish' }, 'linux')).toEqual({ name: 'fish', fence: 'bash' });
+    expect(userShellName({}, 'linux')).toEqual({ name: 'sh', fence: 'bash' });
+    expect(userShellName({ SHELL: 'zsh' }, 'linux').name).toBe('sh'); // as userShell: a relative SHELL is not trusted
   });
   it('ps etime in every form both Linux and macOS print', () => {
     expect(etimeSeconds('00:07')).toBe(7);

@@ -173,7 +173,10 @@ const nowCmd = (sub, text) => {
 
 export const WORK_KEY = /^(wi:\d{4,7}|branch:[\w.-]+\/[\w./-]+|chat:[\w:.-]+)$/;
 export const RUN_ID = /^r_[a-f0-9]{12}$/;
-const APP_DIR = path.join(process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming'), 'second-brain');
+// the stable app's userData: Windows %APPDATA%, macOS ~/Library/Application Support, Linux $XDG_CONFIG_HOME (~/.config)
+const APP_DIR = path.join(process.platform === 'win32' ? process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming')
+  : process.platform === 'darwin' ? path.join(os.homedir(), 'Library', 'Application Support')
+    : process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'second-brain');
 /** The app chats (the stable app's chats.json, or `appDir`) and the one a line names, or null. `rest` = the line after
  *  its time: titles contain " · " themselves, so the chat is the longest title the line starts with. */
 function chatOfLine(rest, appDir) {
