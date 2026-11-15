@@ -1,5 +1,7 @@
-// Role card of the Agenti catalogue (AgentCatalogPage): on the front the role's little person at its vice, large and free (ADR 0295, the vice ADR 0311; a picture the user gave the role stays a portrait in its circle), its name and what
-// it is for, engine and model tier («Modello: alto»), a live status, its level (from the XP of its verified successful runs, ADR 0131,
+// Role card of the Agenti catalogue (AgentCatalogPage): on the front the role's little person at its vice, large, on a
+// stone wall, playing it again and again and speaking at a click (ADR 0295, the vice ADR 0311, ADR 0312; a picture the
+// user gave the role stays a portrait in its circle), its name only (what it is for, the engine and the model are on
+// the back: the owner, 2026-11-15, «si ripetono troppe info»), a live status, its level (from the XP of its verified successful runs, ADR 0131,
 // shown beside it: «Lv 7 Praticante · 124 XP», ADR 0100; for a work role, when the nightly review last updated it, ADR 0203) and performance % (a Bayesian estimate of the verdicts weighted by trust and
 // recency, with its ±, the agent's own word excluded, with the verdicts it rests on; main/agents/standing.ts), each with a "?" giving the formula, and four compact run metrics (the success rate among them: verified verdicts only, shared/success.ts, ADR 0186); a click anywhere on the card flips it in 3D (#81)
 // to the back: the model, effort and context window pickers (AgentCardModel.tsx, ADR 0211), the role's instructions, the skills it loads at every launch, its permissions («Tutto consentito» or how
@@ -30,7 +32,6 @@ import { HelpTip } from './HelpTip';
 import { formatCost } from '../lib/format';
 import { useApp } from '../store/store';
 import { isBusy } from '../store/state';
-import { rolePurpose } from '../lib/role-text';
 import { isWorkRole } from '@shared/roles';
 
 /** How many open chats of this role are working right now (a turn running or starting), from the live chat list: «Al
@@ -177,7 +178,7 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
   // the model the role really ran on last (its newest «Per modello» row, ADR 0284): the tier's name may not match it
   const lastModel = standing?.models?.reduce<{ model: string; lastAt: number } | null>((best, m) => (!best || m.lastAt > best.lastAt ? m : best), null)?.model;
   const shownModel = profile.model ?? lastModel ?? tier;
-  const engineModel = balanced ? t('mp.balanced.card') : `${engine} · ${profile.model ?? tier}`;
+  const engineModel = balanced ? t('mp.balanced.card') : `${engine} · ${shownModel}`;
   const skills = profile.skills;
   const last = lastStart === null ? unknown : new Date(lastStart).toLocaleString(locale());
   const prompt = profile.instructions.trim();
@@ -193,19 +194,11 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
         </div>}
         <header className="catalog-hero">
           <span className="catalog-hero-avatar" data-person={person ? true : undefined}>
-            {person ? <AgentSprite id={person} state="idle" height={128} label={t('product.avatar', { name: profile.name })} tip={t('sprite.tip')} />
-              : <AgentAvatar avatar={profile.avatar} name={profile.name} size={104} />}
-            {standing && <span className="catalog-level-medal" aria-hidden="true">{t('agentsGrid.levelShort', { n: standing.level })}</span>}</span>
+            {person ? <AgentSprite id={person} state="idle" restless talk height={128} label={t('product.avatar', { name: profile.name })} tip={t('sprite.tip')} />
+              : <AgentAvatar avatar={profile.avatar} name={profile.name} size={104} />}</span>
           <h3><button ref={front} type="button" onClick={() => flip(true)} aria-expanded={flipped} aria-controls={backId} aria-describedby={`${backId}-f`} data-testid={`catalog-flip-${profile.id}`}>{profile.name}</button></h3>
           <span id={`${backId}-f`} className="sr-only">{t('bm.card.flip', { name: profile.name })}</span>
-          <p className="catalog-purpose" title={rolePurpose(profile.id, profile.purpose) || undefined}>{rolePurpose(profile.id, profile.purpose)}</p>
         </header>
-        <p className="catalog-chips">
-          {balanced ? <span className="catalog-chip" data-kind="engine" data-balanced="true">{t('mp.balanced.card')}</span> : <>
-            <span className="catalog-chip" data-kind="engine">{engine}</span>
-            <span className="catalog-chip" data-kind="model" title={shownModel}>{shownModel}</span></>}
-          <span className="catalog-chip" data-kind="skills">{t('bm.map.agentSkills', { n: skills.length })}</span>
-        </p>
         <Standing id={profile.id} standing={standing} reviewedAt={reviewedAt} />
         <dl className="catalog-stats">
           <Metric label={t('agentsGrid.runs')} full={t('catalog.runs')} value={values.runs} unknown={unknown} />

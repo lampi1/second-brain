@@ -3,15 +3,15 @@
 // could not look like it). Used by ChatTile.tsx (a root strip) and DelegationCard.tsx (a delegated row); also maps a
 // chat's state to the animation (spriteStateOf), and sends the user's pat or whack on the person to the chat's run
 // (run:touch, ADR 0297). At work the person plays what the chat is really doing when its tool says so (reading, a
-// command, tests, a search, a page, a hand-off: ADR 0305), its role's own work otherwise, and speaks about it: its
-// state, or the tool it is using with the real file or command (ADR 0303, lib/quips.ts quipMoment); once about an end.
+// command, tests, a search, a page, a hand-off: ADR 0305), its role's own work otherwise. It never speaks here
+// (ADR 0312: the bubbles stay in chess and on the role cards).
 import type { AgentAvatar as Avatar } from '@shared/agents';
 import type { ChatItem } from '@shared/contract';
 import { useEffect, useRef, useState } from 'react';
 import { isSpriteActivity, isSpriteId, type SpriteState } from '../lib/agent-sprites';
-import { quipMoment, type QuipMoment } from '../lib/quips';
+import { quipMoment } from '../lib/quips';
 import { useOwnPicture } from '../lib/agent-images';
-import { app, useApp } from '../store/store';
+import { useApp } from '../store/store';
 import { sb } from '../sb';
 import { t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
@@ -56,8 +56,6 @@ function useSettled<T>(value: T, ms: number): T {
 /** The end of each chat the user has already seen play (its run, turns and cost when it ended): coming back to the
  *  page does not celebrate again, a new end after more work does. */
 const celebrated = new Map<string, string>();
-/** The end of each chat its person has already spoken about: it says so once, then keeps quiet until more work. */
-const boasted = new Map<string, string>();
 
 export function StripFace({ chatId, avatar, name, tone, size, height = 40, ...o }: { chatId: string; avatar: Avatar | undefined; name: string; tone: string; size: number; height?: number; waitsUser: boolean; error: boolean; busy: boolean; done: boolean; pending?: boolean }) {
   const thinking = useApp(s => o.busy && isThinking(s.items[chatId]));
@@ -71,7 +69,7 @@ export function StripFace({ chatId, avatar, name, tone, size, height = 40, ...o 
   const [seen, setSeen] = useState(() => celebrated.get(chatId) === mark);
   useEffect(() => {
     if (state === 'done') { celebrated.set(chatId, mark); return; }
-    celebrated.delete(chatId); boasted.delete(chatId); setSeen(false);
+    celebrated.delete(chatId); setSeen(false);
   }, [chatId, state, mark]);
   // the user's pat or whack is a nudge on this chat's run (ADR 0297): sent when it changes, never at every click
   const hasRun = useApp(s => !!s.chats[chatId]?.run), touched = useApp(s => s.chats[chatId]?.run?.touch?.sign);
@@ -79,19 +77,9 @@ export function StripFace({ chatId, avatar, name, tone, size, height = 40, ...o 
     if (state === 'done') setSeen(true); // after its reaction a finished person stands still: no second celebration
     if (hasRun && sign !== touched) void sb.invoke('run:touch', { chatId, sign }).catch(() => undefined);
   };
-  // what it speaks about when its turn comes: read then, from the transcript the app already has
-  const mood = (): QuipMoment | null => {
-    if (state === 'done') {
-      // which end: its run and turn, not its cost (the real cost replaces the estimate after the end)
-      const run = app.get().chats[chatId]?.run, end = `${run?.runId ?? ''}:${run?.turns ?? ''}`;
-      if (boasted.get(chatId) === end) return null;
-      boasted.set(chatId, end);
-    }
-    return quipMoment(state, app.get().items[chatId], activity);
-  };
   // a picture of the user's own, or a character without a person, stays a portrait with its state dot
   if (own || (avatar?.kind === 'character' && !isSpriteId(avatar.value)))
     return <span className="strip-face"><AgentAvatar avatar={avatar} name={name} size={size} /><span className={`strip-dot lead tone-${tone}`} aria-hidden="true" /></span>;
   return <span className="strip-face" data-person><AgentSprite id={spriteIdOf(avatar)} state={state} activity={activity} still={state === 'done' && seen} height={height} label={t('product.avatar', { name })}
-    mood={mood} onTouch={onTouch} tip={t(!hasRun ? 'sprite.tip' : touched === 1 ? 'sprite.tipPat' : touched === -1 ? 'sprite.tipWhack' : 'sprite.tipRun')} /></span>;
+    onTouch={onTouch} tip={t(!hasRun ? 'sprite.tip' : touched === 1 ? 'sprite.tipPat' : touched === -1 ? 'sprite.tipWhack' : 'sprite.tipRun')} /></span>;
 }

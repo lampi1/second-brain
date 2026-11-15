@@ -17,7 +17,8 @@ import { locale, t } from '../i18n';
 
 const timeOf = (at: number) => new Intl.DateTimeFormat(locale(), { timeStyle: 'short' }).format(at);
 
-export function ChildStrips({ chatId }: { chatId: string }) {
+/** `compact`: one row on a closed bench's foot (ADR 0312), the first child and «+N». */
+export function ChildStrips({ chatId, compact }: { chatId: string; compact?: boolean }) {
   const children = useApp(s => s.chats[chatId]?.agentChildren);
   const title = useApp(s => s.chats[chatId]?.agent?.name || s.chats[chatId]?.title || '');
   const now = useNow(15_000); // a running child's duration grows on screen
@@ -25,8 +26,9 @@ export function ChildStrips({ chatId }: { chatId: string }) {
   if (!children?.children.length) return null;
   const { rows } = childRows(children);
   if (!rows.length) return null;
-  return <div className="child-strips" role="list" aria-label={t('product.childrenOf', { title })} data-testid={`child-strips-${chatId}`} data-active={rows.filter(r => r.active).length}>
-    {rows.map(r => {
+  const shown = compact ? rows.slice(0, 1) : rows;
+  return <div className={`child-strips${compact ? ' is-compact' : ''}`} role="list" aria-label={t('product.childrenOf', { title })} data-testid={`child-strips-${chatId}`} data-active={rows.filter(r => r.active).length}>
+    {shown.map(r => {
       const tone = childTone(r.state);
       const since = r.active ? t('product.childFor', { d: minutes(Math.max(0, now - r.startedAt)) }) : null;
       return <div role="listitem" className={`child-strip${r.active ? ' is-active' : ' is-ended'}`} key={r.key} data-testid="child-strip" data-child-key={r.key} data-child-state={r.state} data-child-kind={r.kind}
@@ -39,6 +41,7 @@ export function ChildStrips({ chatId }: { chatId: string }) {
         <span className="child-strip-time" data-testid="child-time"><time dateTime={new Date(r.startedAt).toISOString()}>{timeOf(r.startedAt)}</time>{since ? ` · ${since}` : ''}</span>
       </div>;
     })}
+    {rows.length > shown.length && <span className="child-strips-more" data-testid={`child-strips-more-${chatId}`}>+{rows.length - shown.length}</span>}
   </div>;
 }
 

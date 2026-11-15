@@ -23,6 +23,12 @@ const ask = (app: ElectronApplication) => demo(app, 'ask', LEAD, { type: 'questi
   questions: [{ header: 'Offerte', question: QUESTION, multiSelect: false, options: [{ label: 'No, solo a prezzo pieno (consigliato)', description: 'niente doppio sconto' }, { label: 'Sì, si sommano' }] }] } satisfies Omit<PendingRequest, 'id' | 'chatId' | 'at'>);
 const items = (page: Page): Promise<ChatItem[]> => page.evaluate(id => window.sb.invoke('chat:items', { chatId: id }), LEAD);
 const userTexts = async (page: Page) => (await items(page)).flatMap(i => (i.kind === 'user' && 'text' in i ? [i.text as string] : []));
+/** The plan from a closed bench: its line opens the chat (ADR 0312), where a click unfolds the steps. */
+async function openPlan(page: Page) {
+  await page.getByTestId(`plan-toggle-${LEAD}`).click();
+  await expect(page.getByTestId('bench-back')).toBeVisible();
+  await page.getByTestId(`plan-toggle-${LEAD}`).click();
+}
 const top = (page: Page) => page.getByTestId(`tile-chat-${LEAD}`).evaluate(el => { el.scrollIntoView({ block: 'start' }); });
 
 test('a Strategist asks, proposes a short plan to approve in the Orchestrator and shows its steps on its strip', async () => {
@@ -35,7 +41,9 @@ test('a Strategist asks, proposes a short plan to approve in the Orchestrator an
     // under way: the checklist, each step with its role and state, on the collapsed strip
     const card = page.getByTestId(`plan-${LEAD}`);
     await expect(card).toHaveAttribute('data-phase', 'running');
-    await page.getByTestId(`plan-toggle-${LEAD}`).click();
+    // on the closed bench the plan is one line (ADR 0312): a click opens the chat, where it unfolds
+    await expect(page.getByTestId(`plan-steps-${LEAD}`)).toHaveCount(0);
+    await openPlan(page);
     await expect(page.getByTestId(`plan-steps-${LEAD}-1`)).toHaveAttribute('data-state', 'done');
     await expect(page.getByTestId(`plan-steps-${LEAD}-2`)).toHaveAttribute('data-state', 'now');
     await expect(page.getByTestId(`plan-steps-${LEAD}-3`)).toHaveAttribute('data-state', 'todo');
@@ -44,6 +52,7 @@ test('a Strategist asks, proposes a short plan to approve in the Orchestrator an
     await expect(card.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '1');
     await top(page);
     await shot(page, 'strategist-plan-progress-dark');
+    await page.getByTestId('bench-back').click(); // back to the benches
 
     // asking: the question is a row in the Orchestrator, the strip says where it is and what is already clear
     await demo(app, 'plan', LEAD, plan({ clarified: [{ q: 'Dove', a: 'Carrello, ordine e reso' }] }));
@@ -100,7 +109,7 @@ test('a Strategist asks, proposes a short plan to approve in the Orchestrator an
     await page.getByTestId('qwin-plan-approve').click();
     await expect(card).toHaveAttribute('data-phase', 'running');
     await expect.poll(() => userTexts(page).then(t => t.at(-1))).toBe('Piano approvato: parti.');
-    await expect(page.getByTestId(`plan-steps-${LEAD}-1`)).toHaveAttribute('data-state', 'todo');
+    await expect(card.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0'); // its line on the bench: none done yet
 
     // light theme
     await demo(app, 'plan', LEAD, plan({ phase: 'proposed', steps: [...STEPS] }));
@@ -144,7 +153,7 @@ test('a finished partial plan is complete, compact and expandable, with named pa
     await expect(card.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '3');
     await expect(card).toContainText('risultato parziale');
     await expect(page.getByTestId(`plan-steps-${LEAD}`)).toBeHidden();
-    await page.getByTestId(`plan-toggle-${LEAD}`).click();
+    await openPlan(page);
     await expect(page.getByTestId(`plan-steps-${LEAD}`)).toBeVisible();
     await top(page);
     await shot(page, 'strategist-plan-partial-complete');

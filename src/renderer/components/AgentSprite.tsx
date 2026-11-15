@@ -2,18 +2,17 @@
 // its joints, its tool) drawn as one inline SVG, free on the strip. Each joint carries its rest pose and its
 // animation inline; the @keyframes of a scene are written once into one <style> of the page the first time the scene
 // is drawn (styles/agent-sprite.css has the rest: the rim, the ink, the blink; no image, no timer, no script per
-// frame). Used by StripFace.tsx (the Grindhouse strips and the delegated rows), by the front of the role cards
-// (AgentCatalogCard.tsx) and by the working line of the Orchestrator's transcript (ChatItems.tsx Typing, in place of
-// the spark). Without motion
-// (prefers-reduced-motion, a hidden window, out of sight) it is the rest pose, which every state draws complete; two
-// people never move in step (each starts its loops at a moment of its own, ADR 0311). A click on it plays
-// a reaction (ADR 0297: a pat, a whack of the stick) and tells its owner, which may record it as a nudge on the run.
-// It also speaks (ADR 0303): two words of nonsense in a small bubble that goes away by itself, at a click and, with a
-// `mood` (the strips), now and then by itself about what its chat is doing (lib/quips.ts; the lines are in
-// shared/agent-quips.ts).
+// frame). Used by StripFace.tsx (the Grindhouse benches and the delegated rows), by the front of the role cards
+// (AgentCatalogCard.tsx), by the chess bots (ChessGame.tsx) and by the working line of the Orchestrator's transcript
+// (ChatItems.tsx Typing). Without motion (prefers-reduced-motion, a hidden window, out of sight) it is the rest pose,
+// which every state draws complete; two people never move in step (each starts its loops at a moment of its own,
+// ADR 0311). A click on it plays a reaction (ADR 0297: a pat, a whack of the stick) and tells its owner, which may
+// record it as a nudge on the run. Only where it is asked to `talk` (chess and the role cards, ADR 0312) it also
+// speaks (ADR 0303): two words in a small bubble that goes away by itself, at a click and, with a `mood`, now and then
+// by itself (lib/quips.ts; the lines are in shared/agent-quips.ts). In the Grindhouse it never speaks.
 import { createContext, useEffect, useInsertionEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactElement } from 'react';
 import type { AgentAvatar as Avatar } from '@shared/agents';
-import { REACTION_S, isSpriteId, reactionScene, spriteScene, type SpriteActivity, type SpriteId, type SpriteReaction, type SpriteState } from '../lib/agent-sprites';
+import { REACTION_S, isSpriteId, reactionScene, restlessScene, spriteScene, type SpriteActivity, type SpriteId, type SpriteReaction, type SpriteState } from '../lib/agent-sprites';
 import { VIEW, jointStyle, keyframeRules, type Node } from '../lib/sprite-rig';
 import { QUIP_REACTION_AT, useQuip, type QuipMoment } from '../lib/quips';
 import '../styles/agent-sprite.css';
@@ -53,8 +52,10 @@ function draw(n: Node, key: number): ReactElement {
  *  the person: it never opens the strip or the card under it. It says a line at the click and, with a `mood` (what
  *  its chat is doing now, or null to stay silent), by itself too (ADR 0303): nearly all the time while it works, now
  *  and then otherwise. `activity`: the kind of work the chat is doing, when the app can name it (reading, a command,
- *  tests, a search, a page, a hand-off): at work the person plays that scene instead of its role's own (ADR 0305). */
-export function AgentSprite({ id, state, activity, height = 32, label, still, onTouch, tip, mood }: { id: SpriteId; state: SpriteState; activity?: SpriteActivity | null; height?: number; label?: string; still?: boolean; onTouch?: (sign: 1 | -1) => void; tip?: string; mood?: () => QuipMoment | null }) {
+ *  tests, a search, a page, a hand-off): at work the person plays that scene instead of its role's own (ADR 0305).
+ *  `talk`: it speaks (chess, the role cards); elsewhere it is silent (ADR 0312). `restless`: at rest it plays its vice
+ *  again and again, without the long pause of the workshop (the role cards, ADR 0312). */
+export function AgentSprite({ id, state, activity, height = 32, label, still, onTouch, tip, mood, talk = false, restless = false }: { id: SpriteId; state: SpriteState; activity?: SpriteActivity | null; height?: number; label?: string; still?: boolean; onTouch?: (sign: 1 | -1) => void; tip?: string; mood?: () => QuipMoment | null; talk?: boolean; restless?: boolean }) {
   // `n` counts the clicks: each one starts its reaction from the top
   const [react, setReact] = useState<{ kind: SpriteReaction; n: number } | null>(null);
   useEffect(() => {
@@ -63,11 +64,12 @@ export function AgentSprite({ id, state, activity, height = 32, label, still, on
     return () => clearTimeout(back);
   }, [react]);
   const act = state === 'work' && activity ? activity : null;
-  const scene = react ? reactionScene(id, react.kind) : spriteScene(id, state, act);
-  const key = react ? `${id}:${react.kind}` : `${id}:${state}${act ? `:${act}` : ''}`;
+  const rest = restless && state === 'idle' && id !== 'plain';
+  const scene = react ? reactionScene(id, react.kind) : rest ? restlessScene(id) : spriteScene(id, state, act);
+  const key = react ? `${id}:${react.kind}` : rest ? `${id}:restless` : `${id}:${state}${act ? `:${act}` : ''}`;
   useInsertionEffect(() => writeKeyframes(key, scene.nodes), [key, scene]);
   const body = useMemo(() => scene.nodes.map(draw), [scene]);
-  const quip = useQuip(id, mood, state === 'work' || state === 'think');
+  const quip = useQuip(id, talk ? mood : undefined, state === 'work' || state === 'think');
   // out of sight it stands still (a long Grindhouse scrolled away costs nothing), and two people of the same scene never
   // move in step: each starts its loops at its own moment (one offset for the whole picture keeps its parts together)
   const box = useRef<HTMLSpanElement>(null), [away, setAway] = useState(false);
@@ -89,7 +91,7 @@ export function AgentSprite({ id, state, activity, height = 32, label, still, on
     setReact(r => ({ kind: sign > 0 ? 'pat' : 'whack', n: (r?.n ?? 0) + 1 }));
     // the line starts when the hand or the stick is no longer where the bubble is
     const kind = sign > 0 ? 'pat' : 'whack';
-    quip.say(kind, undefined, { delay: QUIP_REACTION_AT[kind] });
+    if (talk) quip.say(kind, undefined, { delay: QUIP_REACTION_AT[kind] });
     onTouch?.(sign);
   };
   return <span ref={box} className={`agent-sprite${still && !react ? ' is-still' : ''}${height > 64 ? ' is-big' : ''}`} data-away={away || undefined} data-sprite={id} data-sprite-state={state} data-sprite-activity={act ?? undefined} data-react={react?.kind} title={tip}
@@ -97,6 +99,6 @@ export function AgentSprite({ id, state, activity, height = 32, label, still, on
     {/* the key restarts the movements when the state changes, and at every click */}
     <svg key={react ? `${key}:${react.n}` : key} viewBox={`${VIEW.x} ${VIEW.y} ${VIEW.w} ${VIEW.h}`} width={height * VIEW.w / VIEW.h} height={height} aria-hidden="true">{body}</svg>
     {/* what it says: decoration, never read aloud */}
-    {quip.text && <span key={quip.n} className={quip.aside ? 'quip is-aside' : 'quip'} style={{ animationDuration: `${quip.ms}ms` }} aria-hidden="true">{quip.text}</span>}
+    {talk && quip.text && <span key={quip.n} className={quip.aside ? 'quip is-aside' : 'quip'} style={{ animationDuration: `${quip.ms}ms` }} aria-hidden="true">{quip.text}</span>}
   </span>;
 }

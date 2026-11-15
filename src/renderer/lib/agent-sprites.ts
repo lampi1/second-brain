@@ -570,5 +570,16 @@ export function reactionScene(id: SpriteId, kind: SpriteReaction): SpriteScene {
 export const SPRITE_IDS = Object.keys(WORK) as readonly SpriteId[];
 export const isSpriteId = (id: string): id is SpriteId => Object.hasOwn(WORK, id);
 export const SPRITE_STATES: readonly SpriteState[] = ['work', 'think', 'wait', 'done', 'err', 'idle'];
+/** A role's vice at rest, again and again: its own loop with a short breath after it, not the workshop's long still
+ *  pause (the role cards, ADR 0312: «le animazioni ci mettono troppo a ripartire»). Built once per role. */
+export function restlessScene(id: SpriteId): SpriteScene {
+  if (id === 'plain') return spriteScene(id, 'idle');
+  const key = `${id}:restless`;
+  let s = cache.get(key);
+  if (!s) { const look = lookOf(id, false); cache.set(key, s = { nodes: unhurried(person(look, VICE[id](look)), RESTLESS_SHARE) }); }
+  return s;
+}
+/** The share of a card's resting loop the vice plays for. */
+const RESTLESS_SHARE = 0.85;
 /** A role's vice playing without a pause (previews). */
 export const viceScene = (id: Exclude<SpriteId, 'plain'>): SpriteScene => ({ nodes: person(lookOf(id), VICE[id](lookOf(id))) });

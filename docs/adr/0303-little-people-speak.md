@@ -1,6 +1,6 @@
 # ADR 0303 · The little people speak: two words of nonsense, a character per role
 
-Date: 2026-11-13 · Status: accepted (owner, 2026-11-13: «vorrei che mentre gioco gli agenti avessero animazione tipo
+Date: 2026-11-13 · Status: accepted, amended by ADR 0312 (they speak only in chess and on the role cards) (owner, 2026-11-13: «vorrei che mentre gioco gli agenti avessero animazione tipo
 sto pensando e mi dicessero frasi divertenti e stupide esilaranti quasi nosense, ogni agente un carattere diversi
 queste frasi mi piacerebbe vederle anche nella grindhouse un fumettino a scomparsa che duri poco, 2 parole nosense
 umorismo informatico, macabro, nosense, esilarante, cringe ogni agente un carattere»; and a few minutes later: «i

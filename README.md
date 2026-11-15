@@ -117,6 +117,17 @@ Finish with a three-line summary: where the code lives, how I start the app, and
 
 <p align="center"><img src="docs/screenshots/crew.webp" alt="The six roles: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald" width="544"></p>
 
+Each role has a little person of its own in the Grindhouse, and at rest it indulges a vice:
+
+<p align="center">
+  <img src="docs/vices/orchestrator.webp" alt="The Orchestrator at rest: a long pipe and smoke rings" width="160">
+  <img src="docs/vices/strategist.webp" alt="The Strategist at rest: two moves on a chess board, then fists on the table" width="160">
+  <img src="docs/vices/scout.webp" alt="The Scout at rest: a sip from a metal hip flask" width="160">
+  <img src="docs/vices/artisan.webp" alt="The Artisan at rest: a stein of beer" width="160">
+  <img src="docs/vices/sentinel.webp" alt="The Sentinel at rest: an energy drink, then a flex" width="160">
+  <img src="docs/vices/herald.webp" alt="The Herald at rest: a glass of red wine" width="160">
+</p>
+
 ### The Orchestrator
 
 The **Orchestrator** is where work starts: it plans, hands each job to the right role, answers their mail and tells you
