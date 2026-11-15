@@ -165,7 +165,8 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   const [walk, setWalk] = useState<Walk | null>(null);
   const side = useRef<HTMLElement>(null);
   // a path opened from deep in the side (a box's «Percorsi che passano di qui»): its stops show from the top
-  useEffect(() => { if (walk && side.current) side.current.scrollTop = 0; }, [walk]);
+  const walking = walk?.path ?? null;
+  useEffect(() => { if (walking && side.current) side.current.scrollTop = 0; }, [walking]);
   // the view on the drawing, like a design canvas (the owner 2026-11-13: «control + rotella zummasse e il drag … per
   // spostare la view, non spostare i riquadri ma spostarsi sul workspace tipo figma»): scale and offset of the plane;
   // fitted (centred, whole level in sight) until the user zooms or drags, then his own until the level changes
@@ -284,9 +285,11 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
     if (!walk || !walkPath) return;
     const key = (e: KeyboardEvent) => {
       if ((e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || e.ctrlKey || e.altKey || e.metaKey || e.defaultPrevented) return;
-      if (ui.get().modal && !root.current?.closest('.modal-body')) return;
+      // the viewer over the page (a stop's file), a window over the map or another column has the keyboard
+      if (ui.get().viewer.open || (ui.get().modal && !root.current?.closest('.modal-body'))) return;
       const a = document.activeElement as HTMLElement | null;
       if (a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return;
+      if (a && a !== document.body && !root.current?.contains(a)) return;
       const i = walk.i + (e.key === 'ArrowRight' ? 1 : -1);
       if (i < 0 || i >= walkPath.stops.length) return;
       e.preventDefault();

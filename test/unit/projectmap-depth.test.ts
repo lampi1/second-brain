@@ -107,6 +107,9 @@ describe('tools', () => {
     expect(b.prompt).toContain('«Cosa succede quando un cliente paga?»');
     expect(b.prompt).toContain('project_map_update');
     expect(() => tool.run({ action: 'brief', question: 'x?' })).toThrow('existing map');
+    maps.save({ title: 'Senza', map: drawing, by: 'Scout', summary: '' });
+    expect(() => tool.run({ action: 'brief', project: 'senza', question: 'x?' })).toThrow('no folder');
+    expect(() => maps.save({ title: 'Rete', root: '\\\\host\\share', map: drawing, by: 'Scout', summary: '' })).toThrow('local folder');
   });
 });
 
@@ -115,12 +118,13 @@ describe('store', () => {
     const s = new ProjectMapStore(() => dir);
     fs.mkdirSync(path.join(dir, 'projects', 'n'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'projects', 'n', 'map.json'), JSON.stringify({ version: 1, elements: [
-      { id: 's', kind: 'system', name: 'S', status: 'ok' }, { id: 'p', kind: 'part', name: 'P', status: 'ok', parent: 's', rules: ['ok', 3], keyFiles: [{ path: 'a.ts', what: 'x' }, 'bad'] },
+      { id: 's', kind: 'system', name: 'S', status: 'ok' }, { id: 'p', kind: 'part', name: 'P', status: 'ok', parent: 's', rules: ['ok', 3, ...Array.from({ length: 12 }, (_, i) => `r${i}`)], keyFiles: [{ path: 'a.ts', what: 'x' }, 'bad', { path: '../out.ts', what: 'y' }] },
       { id: 'q', kind: 'part', name: 'Q', status: 'ok', parent: 'p' }],
     paths: [{ id: 'a', question: 'Q?', stops: [{ on: 's', text: 'a' }, { on: 'gone', text: 'b' }, { on: 'q', text: 'c' }] }, { id: 'b', question: 'R?', stops: [{ on: 'gone', text: 'x' }] }] }));
     const m = s.get('n')!;
     expect(m.elements.find(e => e.id === 'q')!.parent).toBe('p');
-    expect(m.elements.find(e => e.id === 'p')).toMatchObject({ rules: ['ok'], keyFiles: [{ path: 'a.ts', what: 'x' }] });
+    expect(m.elements.find(e => e.id === 'p')).toMatchObject({ keyFiles: [{ path: 'a.ts', what: 'x' }] });
+    expect(m.elements.find(e => e.id === 'p')!.rules).toHaveLength(8); // held to the drawing's limit, so an edit still works
     expect(m.paths!.map(p => [p.id, p.stops.map(x => x.on)])).toEqual([['a', ['s', 'q']]]);
   });
 });

@@ -19,11 +19,15 @@ const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinit
 export function asMap(v: unknown, project: string): ProjectMap | null {
   if (!obj(v) || !num(v.version) || !Array.isArray(v.elements)) return null;
   // the short lists of what tells a piece (ADR 0316): strings only; a key file needs its path and its line
-  const strs = (x: unknown) => (Array.isArray(x) ? x.filter(str) : undefined);
-  const files = (x: unknown) => (Array.isArray(x) ? x.filter(f => obj(f) && str(f.path) && str(f.what)).map(f => ({ path: f.path as string, what: f.what as string })) : undefined);
+  // held to the drawing's limits, so a later edit (checkMap) does not refuse what was read; a key file stays inside the root
+  const LIM = { rules: [MAP_LIMITS.rules, MAP_LIMITS.rule], keeps: [MAP_LIMITS.keeps, MAP_LIMITS.rule], why: [MAP_LIMITS.why, MAP_LIMITS.rule] } as const;
+  const strs = (x: unknown, k: keyof typeof LIM) => (Array.isArray(x) ? x.filter(str).map(s => s.slice(0, LIM[k][1])).filter(Boolean).slice(0, LIM[k][0]) : undefined);
+  const inside = (p: string) => !!p && !p.startsWith('/') && !p.startsWith('\\') && !/^[a-z]:/i.test(p) && !p.split(/[\\/]/).includes('..');
+  const files = (x: unknown) => (Array.isArray(x) ? x.filter(f => obj(f) && str(f.path) && str(f.what) && inside(f.path))
+    .map(f => ({ path: (f.path as string).slice(0, MAP_LIMITS.path), what: (f.what as string).slice(0, MAP_LIMITS.keyWhat) })).slice(0, MAP_LIMITS.keyFiles) : undefined);
   const elements = v.elements.filter(e => obj(e) && str(e.id) && str(e.kind) && str(e.name) && str(e.status)).map(e => {
     const x = { ...(e as Record<string, unknown>) };
-    for (const k of ['rules', 'keeps', 'why'] as const) { const l = strs(x[k]); if (l?.length) x[k] = l; else delete x[k]; }
+    for (const k of ['rules', 'keeps', 'why'] as const) { const l = strs(x[k], k); if (l?.length) x[k] = l; else delete x[k]; }
     const kf = files(x.keyFiles); if (kf?.length) x.keyFiles = kf; else delete x.keyFiles;
     return { ...x, evidence: Array.isArray(x.evidence) ? x.evidence.filter(str) : [], confirmedAt: num(x.confirmedAt) ? x.confirmedAt : 0 };
   }) as unknown as ProjectMap['elements'];

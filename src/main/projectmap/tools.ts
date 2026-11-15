@@ -189,6 +189,7 @@ export function appProjectMapTool(maps: ProjectMaps, emitUi: (cmd: EventMap['ui:
         const question = typeof a.question === 'string' ? a.question.replace(/\s+/g, ' ').trim().slice(0, 300) : '';
         if (question) {
           if (!prev) throw new Error('brief with question: the project of an existing map');
+          if (!prev.root) throw new Error('brief with question: this map has no folder; brief a redraw with root first');
           return { roleId: 'scout', cwd: prev.root ?? '', title: `Percorso · ${question}`.slice(0, 80), prompt: pathBrief(prev, question) };
         }
         const root = typeof a.root === 'string' && a.root.trim() ? a.root.trim() : prev?.root;

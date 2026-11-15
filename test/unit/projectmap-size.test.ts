@@ -21,3 +21,10 @@ it('counts files and lines under the evidence, once each', async () => {
   expect(await sizeOf(root, ['docs/d.md', '../outside', 'missing/'])).toEqual({ files: 1, lines: 1, capped: false });
   expect(await sizeOf(root, [])).toEqual({ files: 0, lines: 0, capped: false });
 });
+
+it('never reaches a network share, and counts from a root that ends in a separator', async () => {
+  expect(await sizeOf('//host/share/proj', ['src/'])).toEqual({ files: 0, lines: 0, capped: false });
+  expect(await sizeOf('\\\\host\\share\\proj', ['src/'])).toEqual({ files: 0, lines: 0, capped: false });
+  const root = tree({ 'a.ts': 'x\n' });
+  expect(await sizeOf(root + '/', ['a.ts'])).toMatchObject({ files: 1, lines: 1 });
+});

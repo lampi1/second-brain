@@ -93,7 +93,12 @@ export class ProjectMaps {
 
   list(): ProjectMapInfo[] { return this.d.store.list(); }
   /** the maps' project folders (where a file named in a message may be, file-roots.ts) */
-  roots(): string[] { return this.list().flatMap(m => this.d.store.get(m.project)?.root ?? []); }
+  roots(): string[] {
+    const now = this.now();
+    if (!this.rootsAt || now - this.rootsAt.at > 30_000) this.rootsAt = { at: now, roots: this.list().flatMap(m => this.d.store.get(m.project)?.root ?? []) };
+    return this.rootsAt.roots;
+  }
+  private rootsAt: { at: number; roots: string[] } | null = null;
 
   /** The project a name means: its folder name, its title, or a slug of it. */
   resolve(name: string): string | null {
@@ -274,7 +279,7 @@ export class ProjectMaps {
     if (!project) throw new Error('project or title: required');
     const prev = this.d.store.get(project);
     const root = a.root?.trim() || prev?.root || a.defaultRoot?.trim() || undefined;
-    if (root && !isAbs(norm(root))) throw new Error(`root: the project's folder as an absolute path, not «${root.slice(0, 80)}»`);
+    if (root && (!isAbs(norm(root)) || norm(root).startsWith('//'))) throw new Error(`root: the project's folder as an absolute path, a local folder, not «${root.slice(0, 80)}»`);
     const now = this.now();
     const { elements, links } = checkMap(a.map, now, prev);
     // the walks (ADR 0316): the ones sent, or the previous ones still on the drawing
@@ -333,10 +338,8 @@ export class ProjectMaps {
     const map = this.d.store.get(project), e = map?.elements.find(x => x.id === element);
     if (!map?.root || !e?.evidence.length || !isAbs(norm(map.root))) return null;
     const key = `${project}\n${map.root}\n${e.evidence.join('\n')}`, now = this.now(), hit = this.sizes.get(key);
-    if (hit && now - hit.at < 60_000) return hit.size;
-    const size = sizeOf(map.root, e.evidence);
-    this.sizes.set(key, { at: now, size });
-    if (this.sizes.size > 200) this.sizes.delete(this.sizes.keys().next().value!);
+    const size = hit && now - hit.at < 60_000 ? hit.size : sizeOf(map.root, e.evidence);
+    if (size !== hit?.size) { this.sizes.set(key, { at: now, size }); if (this.sizes.size > 200) this.sizes.delete(this.sizes.keys().next().value!); }
     const got = await size;
     return got.files ? got : null;
   }
@@ -433,6 +436,7 @@ export class ProjectMaps {
   }
 
   private changed(project: string): void {
+    this.rootsAt = null;
     if (this.timers.has(project)) return;
     const t = setTimeout(() => { this.timers.delete(project); this.d.emit(project); }, this.d.debounceMs ?? 400);
     t.unref?.();
