@@ -300,7 +300,8 @@ html[data-hidden] .bench-stage::after { animation-play-state:paused; }
 .bench-tag { all:unset; box-sizing:border-box; position:absolute; left:50%; bottom:calc(100% - 6px); z-index:5; display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 9px 0 8px; border-radius:var(--r-m);
   background:var(--surface); border:1px solid var(--border-3); box-shadow:0 6px 16px rgb(0 0 0 / .28); font:600 11.5px var(--font); color:var(--text); white-space:nowrap; cursor:pointer;
   opacity:0; pointer-events:none; transform:translate(-50%, 4px); transition:opacity 110ms var(--ease), transform 110ms var(--ease); }
-.bench-tag > span { color:var(--text-3); font-weight:500; }
+.bench-tag > b { min-width:0; max-width:150px; overflow:hidden; text-overflow:ellipsis; }
+.bench-tag > span { flex:none; color:var(--text-3); font-weight:500; }
 .bench-tag > i { font-style:normal; color:var(--accent); font-size:13px; margin-left:1px; }
 .bench-tag:hover { border-color:var(--accent); }
 .bench-tag:focus-visible { outline:2px solid var(--focus); outline-offset:1px; }
@@ -321,7 +322,7 @@ html[data-hidden] .bench-stage::after { animation-play-state:paused; }
 .bench-plate { flex:none; height:104px; box-sizing:border-box; display:flex; flex-direction:column; gap:2px; padding:10px 12px 8px; min-width:0; overflow:hidden; }
 .bench-prow { display:flex; align-items:center; gap:8px; min-width:0; height:16px; margin-bottom:2px; }
 .bench-area { flex:1; min-width:0; font:600 10.5px var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--text-3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.bench-plate .th-title { flex:none; min-width:0; max-width:100%; height:20px; font-size:13.5px; font-weight:600; margin:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.bench-plate .th-title { flex:none; min-width:0; max-width:100%; height:24px; line-height:24px; font-size:13.5px; font-weight:600; margin:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .bench-plate .th-title > .strip-name { display:block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .bench-now { display:flex; min-width:0; height:18px; align-items:center; font-size:12px; color:var(--text-3); white-space:nowrap; overflow:hidden; }
 .bench-now > .bench-role { flex:none; color:var(--text-2); }
@@ -334,8 +335,8 @@ html[data-hidden] .bench-stage::after { animation-play-state:paused; }
 /* ── the foot: one line, the same height on every bench ── */
 .bench-foot { flex:none; height:34px; box-sizing:border-box; display:flex; align-items:center; gap:12px; padding:0 12px; min-width:0; overflow:hidden; white-space:nowrap; border-top:1px solid var(--border); font-size:12px; color:var(--text-3); }
 .bench-foot:empty { border-top-color:transparent; }
-.bench-foot > * { flex:none; min-width:0; }
-.bench-foot > :is(.queued-bar, .error-bar) { flex:1 1 auto; margin:0; padding:0 0 0 2px; height:26px; background:none; gap:8px; font-size:12px; }
+.bench-foot > * { flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.bench-foot > :is(.queued-bar, .error-bar) { flex:none; max-width:100%; overflow:visible; margin:0; padding:0 0 0 2px; height:26px; background:none; gap:8px; font-size:12px; }
 .bench-foot > .error-bar > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .bench-foot > :is(.agent-waiting, .agent-autoclose) { margin:0; padding:0; border:0; background:none; flex-wrap:nowrap; font-size:12px; }
 .bench-foot > .sp-card.is-compact { margin:0; padding:0; border:0; background:none; }

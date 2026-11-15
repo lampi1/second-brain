@@ -36,7 +36,6 @@ test('the little person reacts to a click: a pat, a whack, and the run keeps the
     await person.click({ button: 'right' });
     await expect.poll(seen).toEqual(['pat', 'whack']);
     // no bubble in the Grindhouse (ADR 0312)
-    await page.waitForTimeout(1500);
     expect(await said()).toEqual([]);
     await expect(person).toHaveAttribute('title', /Bastonata data/);
     // the clicks stayed on the person: the strip is still closed, no menu opened

@@ -55,6 +55,7 @@ function depthOf(k: ChatSummary, root: string, team: readonly ChatSummary[]): nu
 /** One helper: its person (a pat at a click), its dot, and its name tag that opens its chat. */
 function Helper({ kid, depth }: { kid: ChatSummary; depth: number }) {
   const state = useSteady(childState(kid), working, s => s === 'err' || s === 'blocked');
+  const busy = useSteady(isBusy(kid), b => b); // held like the state, or a short stop would remount the person
   const name = kid.agent?.name || kid.title, tone = kidTone(state), live = working(state) || state === 'wait';
   return <span className={`bench-helper${depth > 1 ? ' is-grand' : ''}${live ? ' is-live' : ''}`} data-testid={`bench-helper-${kid.id}`} data-child-state={state} data-depth={depth}
     onClick={e => { e.stopPropagation(); open(kid.id); }}>
@@ -64,7 +65,7 @@ function Helper({ kid, depth }: { kid: ChatSummary; depth: number }) {
     </button>
     <span className={`bench-dot bench-head-dot tone-${tone}`} aria-hidden="true" />
     <StripFace chatId={kid.id} avatar={kid.agent?.avatar} name={name} tone={tone} size={36} height={depth > 1 ? 62 : 82}
-      waitsUser={state === 'wait'} error={state === 'err' || state === 'blocked'} busy={isBusy(kid) && working(state)} done={state === 'done' || state === 'partial'} pending={working(state)} />
+      waitsUser={state === 'wait'} error={state === 'err' || state === 'blocked'} busy={busy && working(state)} done={state === 'done' || state === 'partial'} pending={working(state)} />
   </span>;
 }
 
@@ -72,8 +73,9 @@ function Helper({ kid, depth }: { kid: ChatSummary; depth: number }) {
 export function BenchKidsSum({ chatId }: { chatId: string }) {
   const team = useTeam(chatId);
   const limit = useApp(s => s.chats[chatId]?.limitHit);
+  // held like each helper's state: a helper's short stop does not move the counts
+  const { run, wait, stuck, done } = useSteady(kidCounts(team.map(k => childState(k))), c => c.run > 0, c => c.stuck > 0);
   if (!team.length) return null;
-  const { run, wait, stuck, done } = kidCounts(team.map(k => childState(k)));
   return <span className="bench-kids-sum" data-testid={`bench-kids-sum-${chatId}`} data-run={run}>
     <b>{t('tree.kids', { n: team.length })}</b>
     {run > 0 && <span className="is-run">{t('tree.kidsRun', { n: run })}</span>}

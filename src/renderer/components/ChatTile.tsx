@@ -159,7 +159,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
     v => !!v.chat && isBusy(v.chat) && v.chat.state !== 'waiting' && !v.reqs.length, v => v.chat?.state === 'error');
   if (!chat) return null;
   const sc = shown.chat ?? chat, shownReqs = shown.reqs, waitRow = shown.waitRow;
-  const busyShown = isBusy(sc);
+  const busyShown = isBusy(sc), holding = sc !== chat;
   const compact = !expanded || !focus && !embedded && size.height > 0 && size.height < COMPACT_TILE_H;
   const busy = isBusy(chat);
   const st = stateInfo(sc);
@@ -295,13 +295,13 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
       {bench ? <div className="bench-foot" data-testid={`bench-foot-${chatId}`}>
         {/* a closed bench is always as tall as the others (ADR 0312): what would grow it is one line here, by importance */}
         {queuedBar}{errorBar}
-        <AutoCloseNotice chatId={chatId} said={first ? userWait : stateText === waitText} />
+        {!holding && <AutoCloseNotice chatId={chatId} said={first ? userWait : stateText === waitText} />}
         {chat.plan && !['asking', 'revising', 'proposed'].includes(chat.plan.phase) && <StrategyPanel chat={chat} question={planAsk} compact />}
         <BenchKidsSum chatId={chatId} />
         <ChildStrips chatId={chatId} compact />
       </div> : <>
       {/* the wait is said once (#411): by the head (its button for a wait of the user's, else its state words) or here; an embedded tile has no head */}
-      <AutoCloseNotice chatId={chatId} said={!embedded && (first ? userWait : stateText === waitText)} />
+      {!holding && <AutoCloseNotice chatId={chatId} said={!embedded && (first ? userWait : stateText === waitText)} />}
       {/* in full screen the subagents at work stay in sight, as under the strip in the Grindhouse */}
       {focus && <ChildStrips chatId={chatId} />}
       {chat.plan && !['asking', 'revising', 'proposed'].includes(chat.plan.phase) && <StrategyPanel chat={chat} question={planAsk} />}
