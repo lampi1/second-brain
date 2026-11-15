@@ -207,6 +207,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   terminal routines.
 
 ### Removed
+- The helpers at a bench no longer carry a coloured dot over their heads: their scene says what they do, the name
+  tag says it in words (ADR 0315).
 - «Flash», the read-only tab beside the Orchestrator, with its card, level, MCP role and brief: the Orchestrator's «Fast»
   mode does its job. Old Flash chats, its card, its MCP access and its log are dropped from the saved files (ADR 0296).
 - The Classificatori section of Andamento → Qualità and the kind of work by examples: they decided nothing and, on

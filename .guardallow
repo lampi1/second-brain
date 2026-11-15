@@ -539,3 +539,4 @@ commit:5b2fc17548145673dea819d3ed51aafca5a8066b email
 # without its line, so the history scan stopped on it.
 docs/screenshots/grindhouse.webp binary-media sha256:74b277eaf8b9d8804f2f0f8ebdd40071659fe97319da958c622054f378f26807
 docs/screenshots/grindhouse.webp binary-media sha256:76937185774beb75a44e08dd6950cdc67245bde2b8d3bad3ee6abc126e7b132a
+docs/screenshots/grindhouse.webp binary-media sha256:a8bfbabe814fc044a43f7baa8cafa370867feb3a0fee54a888b242fe9d5a7ebb

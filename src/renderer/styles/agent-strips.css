@@ -296,7 +296,6 @@ html[data-hidden] .bench-stage::after { animation-play-state:paused; }
 .bench-helper:focus-visible { box-shadow:0 0 0 2px var(--focus); }
 .bench-helper + .bench-helper { margin-left:-14px; }
 .bench-helper:hover, .bench-helper:focus-within { z-index:4; }
-.bench-head-dot { position:absolute; pointer-events:none; left:50%; top:-6px; transform:translateX(-50%); z-index:2; transition:opacity var(--dur-fast) var(--ease); }
 .bench-tag { all:unset; box-sizing:border-box; position:absolute; z-index:5; display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 9px 0 8px; border-radius:var(--r-m);
   background:var(--surface); border:1px solid var(--border-3); box-shadow:0 6px 16px rgb(0 0 0 / .28); font:600 11.5px var(--font); color:var(--text); white-space:nowrap; cursor:pointer;
   animation:bench-tag-in 110ms var(--ease); }
@@ -306,7 +305,6 @@ html[data-hidden] .bench-stage::after { animation-play-state:paused; }
 .bench-tag > i { font-style:normal; color:var(--accent); font-size:13px; margin-left:1px; }
 .bench-tag:hover { border-color:var(--accent); }
 .bench-tag:focus-visible { outline:2px solid var(--focus); outline-offset:1px; }
-.bench-helper:is(:hover, :focus-within) > .bench-head-dot { opacity:0; }
 @media (prefers-reduced-motion: reduce) { .bench-tag { animation:none; } }
 .bench-dot { flex:none; width:7px; height:7px; border-radius:50%; background:var(--text-4); }
 .bench-dot.tone-run { background:var(--accent); box-shadow:0 0 0 3px var(--accent-bg); }

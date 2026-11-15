@@ -94,7 +94,7 @@ function depthOf(k: ChatSummary, root: string, team: readonly ChatSummary[]): nu
   return depth;
 }
 
-/** One helper: its person (a pat or a whack at a click, ADR 0297) and its dot; Enter opens its chat; under the pointer
+/** One helper: its person (a pat or a whack at a click, ADR 0297) (no dot over its head: the scene says what it does, ADR 0315); Enter opens its chat; under the pointer
  *  or the keyboard its tag, drawn in the row's frame (`frame`) with the same held state as the person. */
 function Helper({ kid, depth, frame, tick, onShow, onHide, onKeep }: { kid: ChatSummary; depth: number; frame: HTMLElement | null; tick: number;
   onShow: (id: string) => void; onHide: () => void; onKeep: () => void }) {
@@ -108,7 +108,6 @@ function Helper({ kid, depth, frame, tick, onShow, onHide, onKeep }: { kid: Chat
     onMouseEnter={() => onShow(kid.id)} onMouseLeave={onHide} onFocus={() => onShow(kid.id)} onBlur={onHide}
     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); open(kid.id); } }}
     onClick={e => { e.stopPropagation(); open(kid.id); }}>
-    <span className={`bench-dot bench-head-dot tone-${tone}`} aria-hidden="true" />
     <StripFace chatId={kid.id} avatar={kid.agent?.avatar} name={name} tone={tone} size={36} height={depth > 1 ? 62 : 82}
       waitsUser={state === 'wait'} error={state === 'err' || state === 'blocked'} busy={busy && working(state)} done={state === 'done' || state === 'partial'} pending={working(state)} />
     {frame && createPortal(<HelperTag id={kid.id} name={name} state={state} tone={tone} label={label} anchor={self} frame={frame} tick={tick} onEnter={onKeep} onLeave={onHide} />, frame)}
