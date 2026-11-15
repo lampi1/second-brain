@@ -30,6 +30,8 @@ test/unit/runner.test.ts internal-host sha256:ce2a98829d67f4655b51dde1c9c6847a5d
 test/unit/runner.test.ts internal-host sha256:9b7a97db1e8bc04e3910dfd3363f2cca94d8434584e0937de42b9d71dc5b85c3
 # Same made-up Azure-host fixtures, unchanged; three Windows PowerShell tests with a 30 s deadline removed (2026-11-09).
 test/unit/runner.test.ts internal-host sha256:3973fe13228fc962d820a9417bd029458a8398daae5c90ae3c4aeeea42bef424
+# Same made-up Azure-host fixtures, unchanged; the refusal test now runs on every OS, not on Windows only (2026-11-15).
+test/unit/runner.test.ts internal-host sha256:4d6873029bc1b39cd0af1e013493db3c477f18a996061a87fa710069b7b69554
 # devlinks tests: the legacy DevOps host shape on a made-up org ("acme", "o") and the new host with org "o"; no real
 # org (checked 2026-10-13; second hash 2026-10-14, the linkKey test added, same made-up orgs, owner ok). A changed
 # file blocks again.

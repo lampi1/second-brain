@@ -14,7 +14,8 @@ import { recEmitter, tmp, waitFor } from './helpers';
 const managers: ChatManager[] = [];
 afterEach(async () => { await Promise.all(managers.splice(0).map(m => m.shutdown())); });
 
-const ON: AdmissionLimits = { enabled: true, cpu: 75, ram: 15 };
+// slots fixed: the default follows the machine's cores (one slot on 2-3 cores), and a busy first turn holds its slot
+const ON: AdmissionLimits = { enabled: true, cpu: 75, ram: 15, slots: 8 };
 
 /** What the fake engine of each chat was asked to do. */
 interface Calls { interrupts: number; closes: { keepChildren: boolean }[]; sent: string[]; answered: number }

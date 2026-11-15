@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { askImageRoots, isInside, magicMatches, MAX_ASK_IMAGE, readAskImage } from '../../src/main/ask-image';
+import { pathToFileURL } from 'node:url';
 
 const r = String.raw;
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-askimg-'));
@@ -44,7 +45,7 @@ describe('magic bytes and folders', () => {
   });
 });
 
-describe.runIf(process.platform === 'win32')('readAskImage', () => {
+describe('readAskImage', () => {
   it('a PNG, JPG or WebP in an allowed folder comes back as a data: URL', () => {
     for (const [n, b, m] of [['a.png', PNG, 'image/png'], ['b.jpg', JPG, 'image/jpeg'], ['c.webp', WEBP, 'image/webp']] as const) {
       const res = readAskImage(put(path.join(allowed, n), b), [allowed]);
@@ -52,7 +53,7 @@ describe.runIf(process.platform === 'win32')('readAskImage', () => {
       if (res.kind === 'image') expect(res.dataUrl.startsWith(`data:${m};base64,`)).toBe(true);
     }
     // a file:/// URL of the same file
-    expect(readAskImage(`file:///${path.join(allowed, 'a.png').replace(/\\/g, '/')}`, [allowed]).kind).toBe('image');
+    expect(readAskImage(pathToFileURL(path.join(allowed, 'a.png')).href, [allowed]).kind).toBe('image');
   });
   it('refused: outside the folders, another type, a fake image, too big, a share; missing says so', () => {
     expect(readAskImage(put(path.join(other, 'x.png'), PNG), [allowed])).toMatchObject({ kind: 'refused', reason: /Fuori dalle cartelle/ });
