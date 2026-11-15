@@ -309,8 +309,8 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0312](0312-benches-of-one-height-helpers-with-name-tags.md) Benches of one height, helpers with name tags, a torch for who works, people who speak only where asked — accepted
 - [0313](0313-the-workshop-picture-and-people-in-full.md) The workshop picture behind the people, and every person in full — accepted; amended by 0315
 - [0314](0314-every-helper-at-the-bench-workers-first.md) Every helper at the bench, the ones at work first, and a limit that says what it means — accepted
-- [0315](0315-no-dot-over-the-helpers.md) No dot over the helpers' heads — accepted
 - [0314](0314-ci-green-on-three-systems.md) CI that tells the truth on Windows, Linux and macOS — accepted
+- [0315](0315-no-dot-over-the-helpers.md) No dot over the helpers' heads — accepted
 
 ## Replaced
 
