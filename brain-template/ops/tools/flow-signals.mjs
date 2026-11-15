@@ -20,6 +20,8 @@ import { fileURLToPath } from 'node:url';
 import { CORRECTION, CONFUSION } from './signals-regex.mjs';
 import { brainRoot } from './brain-root.mjs';
 
+// the block a command for the user comes in: `powershell` on Windows, the shell's own name elsewhere
+const COMMAND_BLOCK = process.platform === 'win32' ? /```powershell/i : /```(?:powershell|bash|zsh|sh)\b/i;
 const arg = n => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : undefined; };
 const romeMidnight = d => { // 'YYYY-MM-DD' → epoch ms of 00:00 in Europe/Rome
   const utc = Date.parse(`${d}T00:00:00Z`);
@@ -92,7 +94,7 @@ for (const { p, dir, sub } of files) {
       if (txt) lastAssistant = { t, text: txt };
       const mid = o.message?.id ?? `${p}:${t}`, model = o.message?.model;
       if (!sub && model && model !== '<synthetic>' && !modelIds.has(mid)) { modelIds.add(mid); const m = (models[day(t)] ??= {}); m[model] = (m[model] ?? 0) + 1; }
-      if (txt && !sub) { lastLen = txt.length; if (/```powershell/i.test(txt) && !cmdIds.has(o.message?.id ?? t)) { cmdIds.add(o.message?.id ?? t); bump(t, 'comando', `· ${s.title || dir}`); } }
+      if (txt && !sub) { lastLen = txt.length; if (COMMAND_BLOCK.test(txt) && !cmdIds.has(o.message?.id ?? t)) { cmdIds.add(o.message?.id ?? t); bump(t, 'comando', `· ${s.title || dir}`); } }
       continue;
     }
     // A message reaches the session either as a user line or, if typed while the agent works, as a queued_command attachment.

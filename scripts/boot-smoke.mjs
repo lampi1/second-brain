@@ -1,7 +1,7 @@
 // Starts the built app once on this machine and proves it comes up: the frozen demo (no providers, no tokens) in an
 // isolated profile, the Orchestrator on screen, every sidebar page opened with no renderer error, one picture taken,
 // and a clean quit. Why: the app is written on Windows; this is the proof that it also starts on macOS and Linux
-// (ADR 0054 stage 5), run by CI on the three systems (job `boot` in .github/workflows/ci.yml) and by hand:
+// (ADR 0054 stage 5), run by CI on the three systems (a step of job `check` in .github/workflows/ci.yml) and by hand:
 // `node scripts/build.mjs --dev && node scripts/boot-smoke.mjs` (Linux without a display: under `xvfb-run`).
 // Not a test of features: the e2e suite does that. Exit 0 = started, rendered and quit; 1 = the reason in the output.
 import { _electron as electron } from 'playwright';
@@ -28,9 +28,13 @@ try {
   app = await electron.launch({ cwd: root, args: ['.', ...extra], env, timeout: 60_000 });
   app.process().stderr?.on('data', d => { const t = String(d); if (/Uncaught|UnhandledPromiseRejection|Error: /.test(t)) report.mainErrors.push(t.trim().slice(0, 500)); });
 
-  // Electron may open its overlay window first: wait for the app's own renderer
-  let page = app.windows().find(w => isMain(w.url()));
-  while (!page) { const w = await app.waitForEvent('window', { timeout: 60_000 }); if (isMain(w.url())) page = w; else page = app.windows().find(x => isMain(x.url())); }
+  // Electron may open its overlay window first, and a window can show before it has its URL: look again until the
+  // app's own renderer is there (as test/e2e/helpers.ts does), never wait for one more window event
+  let page;
+  for (const until = Date.now() + 60_000; !(page = app.windows().find(w => isMain(w.url()))); ) {
+    if (Date.now() > until) throw new Error('the main window did not open in 60 s');
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
   page.setDefaultTimeout(30_000);
   page.on('pageerror', error => report.rendererErrors.push(error.message));
   await page.waitForLoadState('domcontentloaded');

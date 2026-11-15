@@ -21,6 +21,8 @@ process.removeAllListeners('warning'); // node:sqlite is "experimental" in Node 
 const argv = process.argv.slice(2);
 const opt = (f, d) => (argv.includes(f) ? argv[argv.indexOf(f) + 1] : d);
 const DB = cursorDb();
+// the block a command for the user comes in: `powershell` on Windows, the shell's own name elsewhere
+const COMMAND_BLOCK = new RegExp('```' + (process.platform === 'win32' ? 'powershell' : '(?:powershell|bash|zsh|sh)') + '[\\s\\S]*```\\s*$');
 const PROJECTS = process.env.BRAIN_CURSOR_PROJECTS || path.join(os.homedir(), '.cursor', 'projects');
 const CLAUDE = process.env.BRAIN_CLAUDE_PROJECTS || path.join(os.homedir(), '.claude', 'projects');
 let complete = true;
@@ -84,7 +86,7 @@ function state(h, rows) {
   const ended = rows.at(-1)?.type === 'turn_ended';
   if (!ended && !s) return 'in corso (?)';
   if (lastTool === 'AskQuestion') return 'aspetta te (domanda)';
-  if (/```powershell[\s\S]*```\s*$/.test(lastRaw.trim())) return 'aspetta te (comando da lanciare)';
+  if (COMMAND_BLOCK.test(lastRaw.trim())) return 'aspetta te (comando da lanciare)';
   if (/\?\s*(\*\*)?$/.test(lastText)) return 'aspetta te (domanda)';
   return h?.unread ? 'finito, da leggere' : 'finito';
 }
@@ -180,7 +182,7 @@ function claudeState(rows) {
   if (lastStop < lastMsgAt) return Date.now() - Date.parse(last?.timestamp || 0) < 10 * 60e3 ? 'in corso' : 'in corso (?)';
   const lastText = [...msgs].reverse().find(r => r.type === 'assistant' && textOf(r.message?.content).trim());
   const raw = textOf(lastText?.message?.content).trim();
-  if (/```powershell[\s\S]*```\s*$/.test(raw)) return 'aspetta te (comando da lanciare)';
+  if (COMMAND_BLOCK.test(raw)) return 'aspetta te (comando da lanciare)';
   if (/\?\s*(\*\*)?$/.test(one(raw))) return 'aspetta te (domanda)';
   return 'finito';
 }

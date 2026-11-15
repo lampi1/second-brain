@@ -172,8 +172,11 @@ describe('Electron fuses', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-fuse-'));
     const exe = path.join(dir, 'electron.exe');
     fs.writeFileSync(exe, fake('101100011'));
+    fs.chmodSync(exe, 0o755);
     expect(readFuses(exe)).toMatchObject({ RunAsNode: '1', EnableCookieEncryption: '0' });
     expect(ensureCookieEncryption(exe)).toBe('enabled');
+    // the rewritten binary must still start on macOS and Linux (Windows has no such bit)
+    if (process.platform !== 'win32') expect(fs.statSync(exe).mode & 0o777).toBe(0o755);
     expect(ensureCookieEncryption(exe)).toBe('already');
     expect(readFuses(exe)).toMatchObject({ RunAsNode: '1', EnableCookieEncryption: '1', GrantFileProtocolExtraPrivileges: '1' });
     fs.writeFileSync(exe, Buffer.alloc(100));

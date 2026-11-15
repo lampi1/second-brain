@@ -531,6 +531,7 @@ docs/vices/strategist.webp binary-media sha256:29532d96fd1475bd1df8f23ffd778f69f
 # Three commits of 2026-11-13 already on main, made in a cloud session whose committer was the coding tool's own
 # no-reply identity instead of the owner's; the author is the owner (checked 2026-11-15). The
 # public history is never rewritten, so each is pinned by its whole id: any other commit with that identity blocks.
+# Read only by CI (scan.mjs --published), for the e-mail rule only; the hooks never read these lines.
 commit:984dfb750effca9a137ce6028cf400422df9b65d email
 commit:e1880e82450235702aab620b36e90f23a06741b6 email
 commit:5b2fc17548145673dea819d3ed51aafca5a8066b email

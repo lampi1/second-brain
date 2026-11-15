@@ -1,9 +1,9 @@
 # Every pull request and every push to main, on Windows, Linux and macOS: typecheck, lint, every unit test and the
-# publish guard (`check`), and the built app started once in its frozen demo (`boot`). A pull request also runs the
-# branch gate (README and doc freshness) and captures the hidden dev demo for visual review. Windows main then proves
-# stable and the exact offline installer before upload. The e2e suite is never a gate (docs/agents/rules.md §7): it
-# runs only when the owner starts this workflow by hand with `e2e` ticked. No live/token-spending tests; publishing
-# remains a manual workflow and a draft review.
+# publish guard, then the built app started once in its frozen demo and the stable copy (the staged release) started
+# with a new profile (all steps of `check`). A pull request also runs the branch gate (README and doc freshness) and
+# captures the hidden dev demo for visual review. Windows main then proves the exact offline installer before upload.
+# The e2e suite is never a gate (docs/agents/rules.md §7): it runs only when the owner starts this workflow by hand
+# with `e2e` ticked. No live/token-spending tests; publishing remains a manual workflow and a draft review.
 name: ci
 
 on:
@@ -66,10 +66,15 @@ jobs:
       - name: Start the app once
         if: runner.os != 'Linux' && !cancelled()
         run: node scripts/boot-smoke.mjs
-      # TEMP-PR: the three installer steps run on this pull request once, to read them; main only before the merge
-      - name: Stable copy (synthetic home, real auto-discovery)
-        if: runner.os == 'Windows'
+      # the release as the user gets it: staged in a temp folder with its own Electron copy, a new profile, a brain
+      # chosen with the app's own button. The proof that the stable copy starts on this OS too
+      - name: Stable copy (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum -s "-screen 0 1920x1080x24" npm run test:stable
+      - name: Stable copy
+        if: runner.os != 'Linux'
         run: npm run test:stable
+      # TEMP-PR: the two installer steps run on this pull request once, to read them; main only before the merge
       - name: Build offline Windows installer
         if: runner.os == 'Windows'
         run: npm run package:windows
@@ -125,7 +130,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # A dev-app visual inspection artifact, independent of the main-only E2E suite.
+  # A dev-app visual inspection artifact, independent of the by-hand E2E suite.
   dev-visual:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -213,4 +218,4 @@ jobs:
       - name: Every commit that leads to it
         run: |
           git rev-list HEAD > "$RUNNER_TEMP/commits.txt"
-          node tools/guard/scan.mjs . --commits "$RUNNER_TEMP/commits.txt"
+          node tools/guard/scan.mjs . --commits "$RUNNER_TEMP/commits.txt" --published

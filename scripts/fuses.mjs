@@ -5,7 +5,9 @@
 // encrypted cookies back (they are dropped, the user signs in again).
 // Usage: node scripts/fuses.mjs [--enable-cookie-encryption] [path/to/electron.exe]   (default: node_modules electron)
 // Used by scripts/release.mjs on the stable runtime copy. Close every app running from that binary first (Windows
-// locks a running .exe).
+// locks a running .exe). The rewritten binary keeps its permissions (it must stay executable on macOS and Linux) and,
+// on macOS, gets a new ad-hoc signature: a changed binary no longer matches its old one, which macOS checks at start.
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,13 +39,24 @@ export function ensureCookieEncryption(exe) {
   if (buf[at] === 0x31) return 'already';
   if (buf[at] !== 0x30) throw new Error(`EnableCookieEncryption is "${String.fromCharCode(buf[at])}" (removed?): not changed`);
   buf[at] = 0x31;
-  const tmp = `${exe}.fuses-tmp`;
-  fs.writeFileSync(tmp, buf);
-  try { fs.renameSync(tmp, exe); } catch (e) {
+  const tmp = `${exe}.fuses-tmp`, mode = fs.statSync(exe).mode & 0o777;
+  fs.writeFileSync(tmp, buf, { mode });
+  try { fs.chmodSync(tmp, mode); fs.renameSync(tmp, exe); } catch (e) {
     fs.rmSync(tmp, { force: true });
     throw new Error(`cannot replace ${exe} (${e.code ?? e.message}): close every app running from it and try again`);
   }
+  if (process.platform === 'darwin' && isMachO(buf)) signAdHoc(exe);
   return 'enabled';
+}
+
+/** A macOS executable (one architecture or universal), by its first four bytes. */
+const isMachO = buf => [0xcffaedfe, 0xcefaedfe, 0xcafebabe].includes(buf.readUInt32BE(0));
+
+/** macOS: signs the changed binary again, ad hoc (no identity), as its app bundle when it is inside one. */
+function signAdHoc(exe) {
+  const bundle = /^(.*\.app)\/Contents\/MacOS\/[^/]+$/.exec(exe)?.[1];
+  try { execFileSync('/usr/bin/codesign', ['--force', '--sign', '-', '--preserve-metadata=entitlements,requirements,flags,runtime', bundle ?? exe], { stdio: 'pipe' }); }
+  catch (e) { throw new Error(`cannot sign ${bundle ?? exe} again after the change (${String(e.stderr ?? e.message).trim().slice(0, 300)})`); }
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);

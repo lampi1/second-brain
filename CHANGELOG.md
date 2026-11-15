@@ -7,8 +7,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ### Added
 - Every pull request and every push to `main` is checked on Windows, Linux and macOS: typecheck, lint, every unit
-  test, the publish guard, and the built app started once in its frozen demo (`scripts/boot-smoke.mjs`). The e2e suite
-  is started by hand. `npm run check -- --no-e2e` runs the same steps locally (ADR 0314).
+  test, the publish guard, the built app started once in its frozen demo (`scripts/boot-smoke.mjs`) and the stable
+  copy started with a new profile (`npm run test:stable`). The e2e suite is started by hand. `npm run check --
+  --no-e2e` runs the checks without a display locally (ADR 0314).
 - The benches and the role cards stand in a workshop: one picture of planks, barrels, crates and a window on the
   sunset, never tiled, so no brick is cut at the edges. Every person stays fully visible, at rest too; the role cards'
   stages line up. The README shows plan approval on the project map and a chess game with the opponent talking
@@ -214,9 +215,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   and `setup-pc.mjs` find the app's data folder; the brain's path values keep a POSIX path as it is; agents are told
   the real login shell (zsh, bash) instead of PowerShell, in the rules and in the outcome of Esegui; «Trovate sul PC»
   also looks in `Movies` (ADR 0314).
+- Linux: the stable copy starts (its Electron binary lost the permission to run when the release was staged); macOS:
+  the same binary is signed again after that change (ADR 0314).
 - The checks on GitHub were red on every push to `main` for reasons unrelated to the code (an e2e run cancelled after
-  an hour, a guard that read every branch of the repository, one unit test red on Windows only): each is fixed at its
-  cause (ADR 0314).
+  an hour, a guard that read every branch of the repository, one unit test red on Windows only, one on macOS only,
+  a stable-copy test that still expected the app to find a brain by itself): each is fixed at its cause (ADR 0314).
 - A chat held by a step of the user's (a report's `userAction`: the VPN, a login, a try) no longer shows «Aspetta te:
   domanda» without any question: it shows «Aspetta te: passo», or «Aspetta Esegui» when the step is a command, and the
   wait is written once per row (#411).

@@ -123,7 +123,7 @@ function RunPanel({ run, chatId }: { run: RunInfo; chatId: string }) {
           )}
           {/* with the automatic outcome still on its way, a manual one would reach the chat twice: resend only after */}
           {(!auto || told || reported?.id === run.id) && <button type="button" className="cb-btn" disabled={reported?.id === run.id} data-testid="cb-report"
-            onClick={() => { const how = send(chatId, runReport(run)); if (how !== 'empty') setReported({ id: run.id, how }); }}>
+            onClick={() => { const how = send(chatId, runReport(run, undefined, hostIsWindows() ? 'powershell' : 'bash')); if (how !== 'empty') setReported({ id: run.id, how }); }}>
             {reported?.id !== run.id ? (auto ? t('chat.codeblock.runResend') : t('chat.codeblock.runSendFull'))
               : reported.how === 'sent' ? <><IconCheck size={12} /> {t('chat.codeblock.runSent')}</> : <><IconCheck size={12} /> {t('chat.codeblock.runQueued')}</>}
           </button>}

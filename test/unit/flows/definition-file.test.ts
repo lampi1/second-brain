@@ -106,7 +106,9 @@ it('rejects a parent swapped to an outside junction after realpath even when res
     return lstat(file, options);
   });
   const read = vi.spyOn(fs, 'readSync');
-  expect(() => readDefinitionFile(f.root, f.file, f.args.contextKey)).toThrow(/directory changed|links/); expect(read).not.toHaveBeenCalled();
+  // Which guard refuses depends on the filesystem: where a directory's new timestamps show at once it is the directory
+  // check; on Windows they may show later, and then the file's own identity refuses. Either way nothing is read.
+  expect(() => readDefinitionFile(f.root, f.file, f.args.contextKey)).toThrow(/directory changed|links|changed while opening/); expect(read).not.toHaveBeenCalled();
 });
 it('rejects a swapped ancestor above the selected brain instead of snapshotting the outside directories', () => {
   const f = setup(), held = f.dir + '-held', outside = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'flow-file-outside-')));
