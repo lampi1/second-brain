@@ -6,6 +6,13 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- The Grindhouse benches are all one height: what grew a bench (a plan, its children's rows, a queue, an error, the
+  engine's sub-agents) is one line at its foot. Every chat under a bench stands at it, grandchildren too, and under the
+  pointer a helper shows a name tag that opens its chat (a click on the person stays a pat). A torch on the bench's
+  stone wall burns while the chat works; a resting person is fainter; a stop shorter than 0.7 s no longer flashes
+  «Ti aspetta». The people speak only in chess and on the role cards; the blinking spark is gone. The role cards show
+  the person and the name, and the vice comes back at once. The Agents page no longer re-measures the whole page at
+  every frame of the people. The README shows the six vices (ADR 0312).
 - The Grindhouse is a workshop: one square bench per chat with its person at work, stop and ✕ always in sight; the
   chats a chat delegated stand at its bench as helpers with one row each, and an open chat shows its team as tabs.
   The scenes have no computers (an hourglass, a carrier pigeon, a brass balance; the Artisan hammers), and at rest

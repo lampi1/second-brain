@@ -1,7 +1,8 @@
 // E2E of the clicks on a role's little person (ADR 0297), on the frozen demo: a left click on the person of a strip
 // plays the pat, a right click the whack of the stick, and neither opens the strip; the chat's run keeps the last one
 // (its tooltip says so, the second same click writes nothing new); the person on the front of a role card reacts too
-// and the card does not turn. At each click the person says a line of its own in a small bubble (ADR 0303).
+// and the card does not turn. On the card the person says a line of its own in a small bubble at each click (ADR 0303);
+// in the Grindhouse it never speaks (ADR 0312).
 // Screenshot in test-results/shots/sprite-touch-*.png.
 import { expect, test, type Locator } from '@playwright/test';
 import { quips } from '../../src/shared/agent-quips';
@@ -30,15 +31,12 @@ test('the little person reacts to a click: a pat, a whack, and the run keeps the
     const { seen, said } = await watch(person);
     await person.click();
     await expect.poll(seen).toEqual(['pat']);
-    // it says one of its own lines for a pat, in a bubble (the demo's «mappa» chat is the Artisan's)
-    await expect.poll(async () => (await said()).length).toBe(1);
-    expect(quips('artisan', 'pat', 'it')).toContain((await said())[0]);
     await shot(page, 'sprite-touch-pat');
     await expect(person).toHaveAttribute('title', /Buffetto dato/);
     await person.click({ button: 'right' });
     await expect.poll(seen).toEqual(['pat', 'whack']);
-    await expect.poll(async () => (await said()).length).toBe(2);
-    expect(quips('artisan', 'whack', 'it')).toContain((await said())[1]);
+    // no bubble in the Grindhouse (ADR 0312)
+    expect(await said()).toEqual([]);
     await expect(person).toHaveAttribute('title', /Bastonata data/);
     // the clicks stayed on the person: the strip is still closed, no menu opened
     await expect(page.getByTestId('chat-expand-mappa')).toHaveAttribute('aria-expanded', 'false');
@@ -46,9 +44,12 @@ test('the little person reacts to a click: a pat, a whack, and the run keeps the
     await goPage(page, 'agenti');
     const card = page.getByTestId('catalog-card-artisan'), hero = card.locator('.catalog-hero .agent-sprite');
     await expect(hero).toBeVisible();
-    const { seen: heroSeen } = await watch(hero);
+    const { seen: heroSeen, said: heroSaid } = await watch(hero);
     await hero.click({ button: 'right' });
     await expect.poll(heroSeen).toEqual(['whack']);
+    // on the card it says one of its own lines for the whack, in a bubble (ADR 0303)
+    await expect.poll(async () => (await heroSaid()).length).toBe(1);
+    expect(quips('artisan', 'whack', 'it')).toContain((await heroSaid())[0]);
     await expect(card).toHaveAttribute('data-flipped', 'false');
   } finally { await app.close(); }
 });

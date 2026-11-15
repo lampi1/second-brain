@@ -160,16 +160,11 @@ export function Typing({ what, testid, items, children }: { what: 'scrive' | 'pe
 }
 
 /** The mark of a working line: the chat's little person at work or thinking where the transcript names one (SpriteCtx,
- *  ADR 0295), the spark elsewhere. */
+ *  ADR 0295), nothing elsewhere (the blinking spark is gone: the owner, 2026-11-15, ADR 0312). */
 function WorkingMark({ what, items }: { what: 'scrive' | 'pensa' | 'lavora'; items?: readonly ChatItem[] }) {
   const id = useContext(SpriteCtx);
   // as on a strip: it thinks on a thought or before the first step, and keeps at its work between two tools
-  return id ? <AgentSprite id={id} state={(items ? isThinking(items) : what === 'pensa') ? 'think' : 'work'} height={48} tip={t('sprite.tip')} /> : <TypingSpark />;
-}
-
-/** The working mark: a four-point spark that turns and breathes (transform and opacity only: the compositor draws it). */
-export function TypingSpark() {
-  return <span className="typing-spark" aria-hidden="true"><svg viewBox="0 0 16 16" width="12" height="12"><path d="M8 0.8 9.6 6.4 15.2 8 9.6 9.6 8 15.2 6.4 9.6 0.8 8 6.4 6.4Z" fill="currentColor" /></svg></span>;
+  return id ? <AgentSprite id={id} state={(items ? isThinking(items) : what === 'pensa') ? 'think' : 'work'} height={48} tip={t('sprite.tip')} /> : null;
 }
 
 function DiffView({ diff }: { diff: FileDiff[] }) {

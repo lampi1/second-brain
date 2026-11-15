@@ -31,7 +31,7 @@ import { admitNow, reqKey, toggleMaximize } from '../actions';
 import { useHandoffTabs } from '../store/handoffs';
 import { StripMeta } from './StripMeta';
 import { StripFace } from './StripFace';
-import { BenchHelpers, BenchKidRows } from './BenchKids';
+import { BenchHelpers, BenchKidsSum } from './BenchKids';
 import { spriteIdOf } from './AgentSprite';
 import { areaOf } from '../lib/agent-order';
 import { BrowserTile } from './BrowserTile';
@@ -60,6 +60,8 @@ import { childRequestsFor, requestHost, type ChildRequest } from '../lib/child-r
 import { IconAlert, IconArrowLeft, IconChat, IconColumns, IconGlobe, IconInfo, IconMaximize, IconMore, IconStop, IconX } from './Icons';
 import { IconButton, Kbd, StatePill, useSize } from './ui';
 import { rolePurpose } from '../lib/role-text';
+import { useSteady } from '../lib/steady';
+import type { AutoCloseStatus } from '@shared/auto-close';
 
 // the ✕ (of a chat or a browser tile) ignores the later clicks of a double click (detail > 1): the grid reflows and the
 // next tile's ✕ lands under the pointer, so a double click would close two tiles. Not a time window: one swallowed a
@@ -96,7 +98,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
   const chat = useApp(s => s.chats[chatId]);
   const reqs = useApp(s => pendingOf(s.pending, chatId), sameList);
   // its one status (#359): what main says it waits for, from real state, in place of the state
-  const waitRow = autoCloseState.use(rows => rows.find(r => r.chatId === chatId));
+  const liveWaitRow = autoCloseState.use(rows => rows.find(r => r.chatId === chatId));
   // each request shows once (lib/child-requests.ts requestHost): here only when this view is the one that holds it
   const expandedAll = ui.use(s => s.prefs.chatExpanded), focusModeId = ui.use(s => s.focusMode), maxKey = ui.use(s => s.maximized);
   const treeCollapsed = ui.use(s => s.prefs.treeCollapsed);
@@ -152,10 +154,15 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
     reveal(true);
     ref.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [focusReq]);
+  // what the state words, the dot and the person say: a stop shorter than HOLD_MS while it works is not shown (ADR 0312)
+  const shown = useSteady<{ chat: typeof chat; reqs: readonly PendingRequest[]; waitRow: AutoCloseStatus | undefined }>({ chat, reqs, waitRow: liveWaitRow },
+    v => !!v.chat && isBusy(v.chat) && v.chat.state !== 'waiting' && !v.reqs.length, v => v.chat?.state === 'error');
   if (!chat) return null;
+  const sc = shown.chat ?? chat, shownReqs = shown.reqs, waitRow = shown.waitRow;
+  const busyShown = isBusy(sc), holding = sc !== chat;
   const compact = !expanded || !focus && !embedded && size.height > 0 && size.height < COMPACT_TILE_H;
   const busy = isBusy(chat);
-  const st = stateInfo(chat);
+  const st = stateInfo(sc);
   const queueLimits = { cpu: lqCpu, ram: lqRam };
   // no per-chat effort control here (#75): the agent's profile decides it; the effort in use is shown read only (#100)
   const sub = [modelWithEffort(chat), chatCost(chat)].filter(Boolean).join(' · ');
@@ -163,6 +170,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
   const perm = permissionBadge(chat.permissionMode);
   const work = workTime(chat, now);
   const strip = !focus && !embedded;
+  const bench = strip && !expanded;
   // a click on the strip itself (not on one of its controls, nor inside a portalled menu) opens or closes it
   const onStripClick = (e: React.MouseEvent<HTMLElement>) => {
     const el = e.target as Element;
@@ -171,7 +179,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
     if (!expanded) setChatExpanded(chatId, true);
     else if (el.closest('.tile-head')) setChatExpanded(chatId, false);
   };
-  const first = reqs[0] ? reqKey(reqs[0]) : null;
+  const first = shownReqs[0] ? reqKey(shownReqs[0]) : null;
   const waitText = waitingLabel(waitRow), userWait = !!waitRow?.waitingFor && USER_WAITS.has(waitRow.waitingFor);
   // a Strategist's open question: the strip points to the window, set aside too («Basta domande» stays reachable)
   const planAsk = planQuestion(chat, reqs, false);
@@ -202,8 +210,8 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
   const stateEl = <>
     {/* the state stays in the DOM as the strip's data-state hook; one thing is shown: the wait or the state */}
     <span hidden><StatePill chat={chat} testid={`chat-state-${chatId}`} /></span>
-    {first ? <button type="button" className="strip-wait" onClick={() => openQueue(first)} aria-label={t('product.waitsYouOpen', { title: name })} data-testid={`chat-wait-${chatId}`} data-state={chat.state} {...(expanded ? {} : { 'data-waits-keys': reqs.map(reqKey).join(' ') })}>
-      <span className="strip-wait-dot" aria-hidden="true" />{waitText && userWait ? waitText : t('product.waitsYou')}{reqs.length > 1 && <b>{reqs.length}</b>}
+    {first ? <button type="button" className="strip-wait" onClick={() => openQueue(first)} aria-label={t('product.waitsYouOpen', { title: name })} data-testid={`chat-wait-${chatId}`} data-state={chat.state} {...(expanded ? {} : { 'data-waits-keys': shownReqs.map(reqKey).join(' ') })}>
+      <span className="strip-wait-dot" aria-hidden="true" />{waitText && userWait ? waitText : t('product.waitsYou')}{shownReqs.length > 1 && <b>{shownReqs.length}</b>}
     </button> : working ? <span className="pill pill-run strip-working" data-testid={`chat-status-${chatId}`}><span className="pill-dot" aria-hidden="true" />{chat.state === 'running' ? t('product.running') : stateText}</span>
       : <span className={`strip-state tone-${st.tone}${plainState ? ' sr-only' : ''}`} data-testid={`chat-status-${chatId}`} title={st.label}>{stateText}</span>}
   </>;
@@ -219,6 +227,19 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
     {/* a bench keeps its ✕ in sight, as its stop (the owner, 2026-11-14) */}
     {strip && !expanded && <IconButton label={t('chat.menu.closeChat')} shortcut="Ctrl+W" onClick={e => closeFromX(e, () => void closeChat(chatId))} testid={`chat-x-${chatId}`}><IconX size={14} /></IconButton>}
     </div>;
+  const queuedBar = chat.queued && !chat.closedAt ? (
+        <div className="queued-bar" data-testid={`chat-queued-${chatId}`}>
+          <span className="queued-text" data-tip={auditText('auditExpression.ChatTile.text23', { v0: chat.queued.cpu, v1: chat.queued.freeRam, v3: chat.queued.starting ?? 0, v4: chat.queued.slots ?? '?', v2: chat.queued.kind === 'start' ? auditText('auditExpression.ChatTile.text24') : auditText('auditExpression.ChatTile.text25') })}>{auditText('audit.ChatTile.queued')}{' '}{queueReason(chat.queued, queueLimits)} · {chat.queued.position === 1 ? auditText('auditExpression.ChatTile.text26') : auditText('auditExpression.ChatTile.text27', { v0: chat.queued.position })}
+          </span>
+          <button type="button" className="btn btn-ghost btn-s" onClick={() => void admitNow(chatId)} data-testid={`chat-admit-${chatId}`}>{auditText('audit.ChatTile.startNow')}</button>
+        </div>
+  ) : null;
+  const errorBar = chat.state === 'error' ? (
+        <div className="error-bar" role="alert">
+          <IconAlert size={14} /><span>{chat.lastError || auditText('cmp.chatTile.stoppedWithError')}</span>
+          <button type="button" className="btn btn-ghost btn-s" onClick={() => send(chatId, auditText('cmp.chatTile.retryMessage'))} data-testid={`chat-retry-${chatId}`}>{auditText('audit.ChatTile.retry')}</button>
+        </div>
+  ) : null;
   return (
     <section ref={ref} className={`tile chat-tile ${expanded?'is-expanded':'is-strip'} tone-${st.tone} ${isFocused ? 'focused' : ''} ${flash ? 'flash' : ''} ${compact ? 'compact' : ''} ${closing ? 'closing' : ''}${embedded ? ' is-embedded' : ''}${focus ? ' is-full' : ''}`} role="region"
       aria-label={auditText('auditExpression.ChatTile.text20', { v0: chat.title, v1: st.label })} data-testid={`tile-chat-${chatId}`} data-chat-id={chatId} data-sb-id={`chat-${chatId}`} data-chat-index={index} data-state={chat.state}
@@ -227,7 +248,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
         <div className={`bench-stage t-${spriteIdOf(chat.agent?.avatar)}`}>
           <span className="bench-state">{stateEl}</span>
           <StripFace chatId={chatId} avatar={chat.agent?.avatar} name={name} size={64} height={134} tone={first ? 'wait' : st.tone}
-            waitsUser={!!first || userWait || st.tone === 'wait'} error={st.tone === 'err'} busy={busy} done={st.tone === 'done'} pending={st.tone === 'run'} />
+            waitsUser={!!first || userWait || st.tone === 'wait'} error={st.tone === 'err'} busy={busyShown} done={st.tone === 'done'} pending={st.tone === 'run'} />
           <BenchHelpers chatId={chatId} />
           {actions}
         </div>
@@ -236,14 +257,14 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
           <h3 className="th-title" title={(chat.agent?.purpose&&rolePurpose(chat.agent.id,chat.agent.purpose))||chat.title}>
             {renaming ? <TitleInput chat={chat} onDone={()=>setRenaming(false)}/> : <button ref={expansionButton} type="button" className="strip-name" aria-expanded={false} aria-controls={`chat-work-${chatId}`} data-tip={t('product.expand')} onClick={()=>setChatExpanded(chatId,true)} data-testid={`chat-expand-${chatId}`}>{topic || name}</button>}
           </h3>
-          <span className="bench-now">{topic && <span className="bench-role" data-testid={`chat-topic-${chatId}`}>{name}</span>}<span className="chat-strip-line">{busy?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.plan?.phase==='proposed'?t('tree.plan.ready'):chat.lastText.slice(0,140)}</span></span>
+          <span className="bench-now">{topic && <span className="bench-role" data-testid={`chat-topic-${chatId}`}>{name}</span>}<span className="chat-strip-line">{busyShown?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.plan?.phase==='proposed'?t('tree.plan.ready'):chat.lastText.slice(0,140)}</span></span>
           <div className="bench-meta"><StripMeta chat={chat} workMs={work} /></div>
         </div>
       </header> : !embedded && <header className="tile-head">
         <div className="th-row">
           {focus && <button type="button" className="btn btn-ghost btn-s aw-back" onClick={() => toggleMaximize(key)} data-testid="focus-exit" aria-label={t('aw.fullExit')}><IconArrowLeft size={13} /><Kbd>Esc</Kbd></button>}
           {focus ? <AgentAvatar avatar={chat.agent?.avatar} name={name} size={24}/> : <StripFace chatId={chatId} avatar={chat.agent?.avatar} name={name} size={26} height={60} tone={first ? 'wait' : st.tone}
-            waitsUser={!!first || userWait || st.tone === 'wait'} error={st.tone === 'err'} busy={busy} done={st.tone === 'done'} pending={st.tone === 'run'} />}
+            waitsUser={!!first || userWait || st.tone === 'wait'} error={st.tone === 'err'} busy={busyShown} done={st.tone === 'done'} pending={st.tone === 'run'} />}
           {/* the name is the strip's own button (keyboard, screen readers); a click anywhere on the strip does the same */}
           <h3 className="th-title" title={(chat.agent?.purpose&&rolePurpose(chat.agent.id,chat.agent.purpose))||chat.title}>
             {strip ? <button ref={expansionButton} type="button" className="strip-name" aria-expanded={expanded} aria-controls={`chat-work-${chatId}`} data-tip={t(expanded?'product.collapse':'product.expand')} onClick={()=>setChatExpanded(chatId,!expanded)} data-testid={`chat-expand-${chatId}`}>{name}</button> : name}
@@ -251,7 +272,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
           {/* the title and, closed, what it is doing now (the owner, 2026-11-12: the title next to the agent, as the sidebar) */}
           {renaming ? <TitleInput chat={chat} onDone={()=>setRenaming(false)}/> : <span className="strip-now">
             {topic && <span className={expanded ? 'chat-topic' : 'th-topic'} title={chat.title} onDoubleClick={expanded ? () => setRenaming(true) : undefined} data-testid={`chat-topic-${chatId}`}>{topic}</span>}
-            {!expanded && <span className="chat-strip-line">{busy?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.plan?.phase==='proposed'?t('tree.plan.ready'):chat.lastText.slice(0,140)}</span>}
+            {!expanded && <span className="chat-strip-line">{busyShown?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.plan?.phase==='proposed'?t('tree.plan.ready'):chat.lastText.slice(0,140)}</span>}
           </span>}
           {/* time and cost so far, each against its estimate: always on the strip (the owner, 2026-11-13) */}
           <StripMeta chat={chat} workMs={work} />
@@ -271,14 +292,20 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
         </div>}
         {!compact && facts && <ChatLinkChips chatId={chatId} />}
       </header>}
+      {bench ? <div className="bench-foot" data-testid={`bench-foot-${chatId}`}>
+        {/* a closed bench is always as tall as the others (ADR 0312): what would grow it is one line here, by importance */}
+        {queuedBar}{errorBar}
+        {!holding && <AutoCloseNotice chatId={chatId} said={first ? userWait : stateText === waitText} />}
+        {chat.plan && !['asking', 'revising', 'proposed'].includes(chat.plan.phase) && <StrategyPanel chat={chat} question={planAsk} compact />}
+        <BenchKidsSum chatId={chatId} />
+        <ChildStrips chatId={chatId} compact />
+      </div> : <>
       {/* the wait is said once (#411): by the head (its button for a wait of the user's, else its state words) or here; an embedded tile has no head */}
-      <AutoCloseNotice chatId={chatId} said={!embedded && (first ? userWait : stateText === waitText)} />
+      {!holding && <AutoCloseNotice chatId={chatId} said={!embedded && (first ? userWait : stateText === waitText)} />}
       {/* in full screen the subagents at work stay in sight, as under the strip in the Grindhouse */}
       {focus && <ChildStrips chatId={chatId} />}
       {chat.plan && !['asking', 'revising', 'proposed'].includes(chat.plan.phase) && <StrategyPanel chat={chat} question={planAsk} />}
-      {/* a closed bench: its sub-agents, one row each, and the engine's own sub-agents at work (ADR 0311) */}
-      {strip && !expanded && <BenchKidRows chatId={chatId} />}
-      {strip && !expanded && <ChildStrips chatId={chatId} />}
+      </>}
       {embedded && viewSwitch}
       <div ref={body} className={`aw-body view-${shownView}`} data-view={shownView} {...(expanded && shownView !== 'chat' ? { 'data-testid': `strip-pair-${chatId}` } : {})}>
       <div className={`chat-work${expanded?' expanded':''}`} id={`chat-work-${chatId}`} inert={!expanded} aria-hidden={!expanded} style={expanded && shownView === 'split' ? { flexGrow: share } : undefined}><div className="chat-work-inner">
@@ -304,19 +331,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
       </div>
       {expanded && postponedChildren.length > 0 && <InWindowLine reqs={postponedChildren.map(c => c.req)} queued testid={`chat-child-queued-${chatId}`} />}
       {expanded && activeChildren.length > 0 && <InWindowLine reqs={activeChildren.map(c => c.req)} testid={`chat-child-in-window-${chatId}`} />}
-      {chat.queued && !chat.closedAt && (
-        <div className="queued-bar" data-testid={`chat-queued-${chatId}`}>
-          <span className="queued-text" data-tip={auditText('auditExpression.ChatTile.text23', { v0: chat.queued.cpu, v1: chat.queued.freeRam, v3: chat.queued.starting ?? 0, v4: chat.queued.slots ?? '?', v2: chat.queued.kind === 'start' ? auditText('auditExpression.ChatTile.text24') : auditText('auditExpression.ChatTile.text25') })}>{auditText('audit.ChatTile.queued')}{' '}{queueReason(chat.queued, queueLimits)} · {chat.queued.position === 1 ? auditText('auditExpression.ChatTile.text26') : auditText('auditExpression.ChatTile.text27', { v0: chat.queued.position })}
-          </span>
-          <button type="button" className="btn btn-ghost btn-s" onClick={() => void admitNow(chatId)} data-testid={`chat-admit-${chatId}`}>{auditText('audit.ChatTile.startNow')}</button>
-        </div>
-      )}
-      {chat.state === 'error' && (
-        <div className="error-bar" role="alert">
-          <IconAlert size={14} /><span>{chat.lastError || auditText('cmp.chatTile.stoppedWithError')}</span>
-          <button type="button" className="btn btn-ghost btn-s" onClick={() => send(chatId, auditText('cmp.chatTile.retryMessage'))} data-testid={`chat-retry-${chatId}`}>{auditText('audit.ChatTile.retry')}</button>
-        </div>
-      )}
+      {!bench && <>{queuedBar}{errorBar}</>}
       <ChatMenu chat={chat} anchor={menuBtn} open={menu} onClose={() => setMenu(false)} onRename={() => setRenaming(true)} />
     </section>
   );

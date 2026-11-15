@@ -75,19 +75,27 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     expect(back).toContain('[risultato · Sentinel «Controllo test»] La suite passa: 42 su 42');
     await expect.poll(async () => (await childrenOf(page, parent.id)).map(c => c.delegation?.result?.outcome).sort()).toEqual(['done', 'done']);
 
-    // the Grindhouse: the children at the parent's bench, one row each with the result's first words (ADR 0311)
+    // the Grindhouse: the children stand at the parent's bench, its foot counts them (ADR 0311, 0312)
     await page.getByTestId('nav-home').click();
-    const row = page.getByTestId(`bench-kid-${scout.id}`);
-    await expect(row).toBeVisible();
-    await expect(row).toHaveAttribute('data-child-state', 'done');
-    await expect(row).toContainText('Trovati 3 errori nel servizio ordini');
-    await expect(page.getByTestId(`bench-kid-${sentinelChat.id}`)).toContainText('La suite passa');
+    const helper = page.getByTestId(`bench-helper-${scout.id}`);
+    await expect(helper).toBeVisible();
+    await expect(helper).toHaveAttribute('data-child-state', 'done');
+    await expect(page.getByTestId(`bench-helper-${sentinelChat.id}`)).toHaveAttribute('data-child-state', 'done');
     await expect(page.getByTestId(`bench-kids-sum-${parent.id}`)).toContainText('2 figli');
     await expect(page.getByTestId(`bench-kids-sum-${parent.id}`)).toContainText('2 finiti');
-    await expect(page.getByTestId(`bench-helper-${scout.id}`)).toBeVisible();
-    const pBox = (await page.getByTestId(`tile-chat-${parent.id}`).boundingBox())!, rBox = (await row.boundingBox())!;
-    expect(rBox.y).toBeGreaterThan(pBox.y);
-    expect(rBox.y + rBox.height).toBeLessThanOrEqual(pBox.y + pBox.height + 1);
+    const pBox = (await page.getByTestId(`tile-chat-${parent.id}`).boundingBox())!, hBox = (await helper.boundingBox())!;
+    expect(hBox.y).toBeGreaterThan(pBox.y);
+    expect(hBox.y + hBox.height).toBeLessThanOrEqual(pBox.y + pBox.height + 1);
+    // every bench is as tall as the others, the one with helpers too (ADR 0312)
+    const heights = await page.locator('.bench-grid .chat-tile.is-strip').evaluateAll(els => els.map(e => Math.round(e.getBoundingClientRect().height)));
+    expect(new Set(heights).size).toBe(1);
+    // its name tag shows under the pointer, and opens it
+    const tag = page.getByTestId(`bench-helper-open-${scout.id}`);
+    await expect(tag).toHaveCSS('opacity', '0');
+    await helper.hover();
+    await expect(tag).toHaveCSS('opacity', '1');
+    await expect(tag).toContainText('Scout');
+    const row = tag;
     // the sidebar tree: the same shape, the children one level in
     await expect(page.getByTestId(`nav-tree-${parent.id}`)).toHaveAttribute('data-depth', '0');
     await expect(page.getByTestId(`nav-tree-${scout.id}`)).toHaveAttribute('data-depth', '1');
@@ -98,7 +106,8 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     await shot(page, 'delegation-tree-light');
     await theme(page, 'dark');
 
-    // a click on a row opens the child's chat, writable, with the whole result and the team as tabs
+    // a click on the tag opens the child's chat, writable, with the whole result and the team as tabs
+    await helper.hover();
     await row.click();
     await expect(page.getByTestId(`chat-input-${scout.id}`)).toBeVisible();
     await expect(page.getByTestId(`delegation-res-${scout.id}`)).toContainText('Trovati 3 errori nel servizio ordini');
@@ -107,7 +116,7 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     await page.getByTestId(`bench-tab-${sentinelChat.id}`).click();
     await expect(page.getByTestId(`chat-input-${sentinelChat.id}`)).toBeVisible();
     await page.getByTestId('bench-back').click();
-    await expect(row).toBeVisible();
+    await expect(helper).toBeVisible();
     // a row of the sidebar tree opens that chat too
     await page.getByTestId(`nav-tree-${sentinelChat.id}`).locator('.tn-main').click();
     await expect(page.getByTestId(`chat-input-${sentinelChat.id}`)).toBeVisible();
@@ -133,7 +142,7 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     await expect(page.getByTestId(`nav-tree-${scout.id}`)).toHaveCount(0);
     await page.getByTestId(`nav-tree-fold-${parent.id}`).click();
     await expect(page.getByTestId(`nav-tree-${scout.id}`)).toHaveAttribute('data-depth', '1');
-    await expect(page.getByTestId(`bench-kid-${sentinelChat.id}`)).toBeVisible();
+    await expect(page.getByTestId(`bench-helper-${sentinelChat.id}`)).toBeVisible();
   } finally {
     await app.close();
     for (const h of homes) fs.rmSync(h, { recursive: true, force: true });
@@ -179,8 +188,9 @@ test('a child\'s question waits as a row in the Orchestrator; a permission above
     await page.getByTestId('qwin-later').click(); // set aside: one folded line in the Orchestrator's column
     await page.getByTestId('nav-home').click();
     // the child's card says it waits for the user and hosts no second answer surface (lib/child-requests.ts requestHost)
-    const kid = page.getByTestId(`bench-kid-${asker.id}`); // its row at the parent's bench (ADR 0311)
-    await expect(kid).toContainText('Ti aspetta', { timeout: 20000 });
+    const kid = page.getByTestId(`bench-helper-${asker.id}`); // it stands at the parent's bench (ADR 0311, 0312)
+    await expect(kid).toHaveAttribute('data-child-state', 'wait', { timeout: 20000 });
+    await expect(page.getByTestId(`bench-helper-open-${asker.id}`)).toContainText('Ti aspetta');
     await expect(page.getByTestId(`delegation-ask-${asker.id}`)).toHaveCount(0);
     await expect(page.locator(`[data-request-key="${key}"]`)).toHaveCount(0);
     await page.mouse.move(2, 2);
@@ -194,7 +204,8 @@ test('a child\'s question waits as a row in the Orchestrator; a permission above
     await expect.poll(async () => (await items(page, parent.id)).some(i => i.kind === 'user' && textOf(i).includes('[risultato · Sentinel «Scelta ambiente»] Ambiente scelto e verificato')), { timeout: 20000 }).toBe(true);
     expect(JSON.stringify((await items(page, asker.id)).filter(i => i.kind === 'tool'))).toContain('Blu');
     // the refusal is in the Scout's own chat, in words
-    await page.getByTestId(`bench-kid-${shell.id}`).click();
+    await page.getByTestId(`bench-helper-${shell.id}`).hover(); // its name tag shows under the pointer
+    await page.getByTestId(`bench-helper-open-${shell.id}`).click();
     await expect(page.getByTestId(`tile-chat-${shell.id}`)).toContainText('va oltre i permessi di «Piano rilascio»');
     await page.getByTestId(`tile-chat-${shell.id}`).getByText('va oltre i permessi', { exact: false }).scrollIntoViewIfNeeded();
     await page.mouse.move(2, 2);
@@ -221,13 +232,14 @@ test('three Scouts run at once, each one writable; a call over the parallel limi
     const kids = await childrenOf(page, parent.id);
     await expect.poll(async () => (await childrenOf(page, parent.id)).map(c => c.background), { timeout: 20000 }).toEqual([1, 1, 1]);
     await page.getByTestId('nav-home').click();
-    // one row each at the parent's bench, under a line that counts them (ADR 0311)
-    for (const k of kids) await expect(page.getByTestId(`bench-kid-${k.id}`)).toBeVisible();
+    // each one at the parent's bench, its foot counts them (ADR 0311, 0312)
+    for (const k of kids) await expect(page.getByTestId(`bench-helper-${k.id}`)).toBeVisible();
     await expect(page.getByTestId(`bench-kids-sum-${parent.id}`)).toContainText('3 figli');
     await expect(page.getByTestId(`bench-kids-sum-${parent.id}`)).toContainText('3 in corso');
     // each one is a chat of its own: open it and write to it
     const first = kids[0]!;
-    await page.getByTestId(`bench-kid-${first.id}`).click();
+    await page.getByTestId(`bench-helper-${first.id}`).hover();
+    await page.getByTestId(`bench-helper-open-${first.id}`).click();
     const input = page.getByTestId(`chat-input-${first.id}`);
     await input.fill('Aggiungi anche gli ordini di marzo');
     await input.press('Enter');

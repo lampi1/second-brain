@@ -114,9 +114,13 @@ try {
   await page.getByTestId('plan-toggle-tree-plan').waitFor();
   await page.getByTestId('tile-chat-tree-plan').scrollIntoViewIfNeeded();
   await capture('plan-compact');
+  // on a closed bench the plan is one line that opens the chat (ADR 0312); there the whole plan unfolds
+  await page.getByTestId('plan-toggle-tree-plan').click();
+  await page.getByTestId('bench-back').waitFor();
   await page.getByTestId('plan-toggle-tree-plan').click();
   await page.getByTestId('plan-steps-tree-plan').waitFor();
   await capture('plan-expanded');
+  await page.getByTestId('bench-back').click();
   const ready = page.getByTestId('tile-orchestrator').getByTestId('result-ready').filter({
     has: page.locator('[data-testid="chatref-open"][data-chat-id="tree-plan"]'),
   });

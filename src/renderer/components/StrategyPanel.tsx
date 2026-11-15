@@ -14,6 +14,7 @@ import { useNow } from '../lib/clock';
 import { reqKey } from '../actions';
 import { planAskKey } from '../lib/plan-ask';
 import { openQueue } from '../lib/later';
+import { setChatExpanded } from '../store/ui';
 import { AgentAvatar } from './AgentAvatar';
 import '../styles/strategy.css';
 
@@ -52,8 +53,9 @@ function Known({ plan }: { plan: StrategyPlan }) {
   </div>;
 }
 
-/** question = the Strategist's open question: it opens in the questions window, the card points to it. */
-export function StrategyPanel({ chat, question }: { chat: ChatSummary; question?: PendingRequest }) {
+/** question = the Strategist's open question: it opens in the questions window, the card points to it. `compact`: one
+ *  line on a closed bench (ADR 0312): its dots and count; a click opens the chat, where the whole plan is. */
+export function StrategyPanel({ chat, question, compact }: { chat: ChatSummary; question?: PendingRequest; compact?: boolean }) {
   const plan = chat.plan;
   const [details, setDetails] = useState(false);
   if (!plan) return null;
@@ -86,8 +88,9 @@ export function StrategyPanel({ chat, question }: { chat: ChatSummary; question?
   const qualityLabel = plan.steps.some(s => s.state === 'blocked') ? 'tree.plan.blocked'
     : plan.steps.some(s => s.outcome === 'blocked') ? 'tree.plan.resultBlocked'
       : plan.steps.some(s => s.outcome === 'partial') ? 'tree.plan.partial' : null;
-  return <div tabIndex={-1} className="sp-card sp-progress" data-testid={`plan-${id}`} data-phase={plan.phase}>
-    <button type="button" className="sp-summary" aria-expanded={details} aria-controls={`plan-details-${id}`} onClick={() => setDetails(!details)} data-testid={`plan-toggle-${id}`}>
+  return <div tabIndex={-1} className={`sp-card sp-progress${compact ? ' is-compact' : ''}`} data-testid={`plan-${id}`} data-phase={plan.phase}>
+    <button type="button" className="sp-summary" {...(compact ? { 'aria-label': t('tree.plan.openChat', { done, total }) } : { 'aria-expanded': details, 'aria-controls': `plan-details-${id}` })}
+      onClick={() => (compact ? setChatExpanded(id, true) : setDetails(!details))} data-testid={`plan-toggle-${id}`}>
       <span className="sp-kicker">{t('tree.plan.title')}</span>
       {/* one round dot per step: done filled, the one under way half, a blocked one amber, the next ones empty (ADR 0311) */}
       <span className="sp-dots" aria-hidden="true">
@@ -95,10 +98,10 @@ export function StrategyPanel({ chat, question }: { chat: ChatSummary; question?
       </span>
       <span className="sp-count">{done}/{total}</span>
       {qualityLabel && <span className="sp-blocked">{t(qualityLabel)}</span>}
-      <span className="sp-right" aria-hidden="true">{details ? '▴' : '▾'}</span>
+      {!compact && <span className="sp-right" aria-hidden="true">{details ? '▴' : '▾'}</span>}
     </button>
     {/* the progress for screen readers, outside the button (a button's children are presentational) */}
     <span className="sr-only" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done} aria-label={t('tree.plan.progress', { done, total })} />
-    <div id={`plan-details-${id}`} hidden={!details}><Steps plan={plan} timed testid={`plan-steps-${id}`} /></div>
+    {!compact && <div id={`plan-details-${id}`} hidden={!details}><Steps plan={plan} timed testid={`plan-steps-${id}`} /></div>}
   </div>;
 }

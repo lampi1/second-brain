@@ -12,6 +12,7 @@ import type { ChatSummary } from '@shared/contract';
 import { busyState, childState, kidCounts, visibleTree, type ChildState, type TreeNode } from '../lib/chat-tree';
 import { sameTree, sidebarTree } from '../lib/chat-derived';
 import { sameList } from '../store/state';
+import { useSteady } from '../lib/steady';
 import { useApp } from '../store/store';
 import { setTreeCollapsed, ui } from '../store/ui';
 import { focusChat } from '../actions';
@@ -23,6 +24,7 @@ import { IconChevronDown, IconChevronRight, IconX } from './Icons';
 import '../styles/tree.css';
 
 const MAX_ROWS = 40;
+const isWorking = (s: ChildState | null) => s === 'run' || s === 'start';
 /** the dot's tint by state */
 const DOT: Record<ChildState, string> = { start: 'run', run: 'run', wait: 'wait', queued: 'off', err: 'err', stall: 'stall', refused: 'err', done: 'done', partial: 'done', blocked: 'err', noreport: 'err', closed: 'off' };
 const ENDED = new Set<ChildState>(['done', 'partial', 'blocked', 'noreport', 'closed']);
@@ -60,9 +62,10 @@ const Row = memo(function Row({ node, folded, on }: { node: TreeNode; folded: bo
   const chat = useApp(s => s.chats[node.id]);
   const kids = useApp(s => node.children.map(id => s.chats[id]).filter((c): c is ChatSummary => !!c), sameList);
   const runningRun = useRunningRun(node.id);
-  if (!chat) return null;
   const running = kidCounts(kids.map(k => childState(k))).run;
-  const state = busyState(rowState(chat), chat, runningRun, Math.max(running, node.working));
+  // a stop shorter than HOLD_MS while it works is not shown (ADR 0312: no blink of «Ti aspetta»)
+  const state = useSteady(chat ? busyState(rowState(chat), chat, runningRun, Math.max(running, node.working)) : null, isWorking, s => s === 'err');
+  if (!chat || !state) return null;
   const right = state === 'wait' ? <span className="tn-w">{t('tree.state.wait')}</span>
     : kids.length ? <span className="tn-x">{t('tree.kids', { n: kids.length })}</span>
     : node.depth > 0 || state !== 'done' ? <span className="tn-x">{t(`tree.state.${state}`)}</span> : null;
