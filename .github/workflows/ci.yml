@@ -39,6 +39,10 @@ jobs:
       - name: Branch gate (no e2e)
         if: github.ref != 'refs/heads/main' || github.event_name == 'pull_request'
         run: npm run check:branch
+      # TEMP (this PR only): every unit test on the three systems, to read what is red where
+      - name: All unit tests
+        if: (github.ref != 'refs/heads/main' || github.event_name == 'pull_request') && !cancelled()
+        run: npx vitest run
       - name: Main gate (Linux)
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && runner.os == 'Linux'
         env:
