@@ -5,8 +5,10 @@
 // encrypted cookies back (they are dropped, the user signs in again).
 // Usage: node scripts/fuses.mjs [--enable-cookie-encryption] [path/to/electron.exe]   (default: node_modules electron)
 // Used by scripts/release.mjs on the stable runtime copy. Close every app running from that binary first (Windows
-// locks a running .exe). The rewritten binary keeps its permissions (it must stay executable on macOS and Linux) and,
-// on macOS, gets a new ad-hoc signature: a changed binary no longer matches its old one, which macOS checks at start.
+// locks a running .exe). On macOS the fuses are not in the app's executable but in its Electron Framework: fuseFile
+// names the file for a given executable. The rewritten file keeps its permissions (it must stay executable on macOS
+// and Linux) and, on macOS, the app gets a new ad-hoc signature: a changed binary no longer matches its old one,
+// which macOS checks at start.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,14 +26,23 @@ function wireAt(buf) {
   return { start: p + 2, length: buf[p + 1] };
 }
 
+/** The file that holds an Electron executable's fuses: the executable itself, or on macOS (an executable inside an app
+ *  bundle) the bundle's Electron Framework. */
+export function fuseFile(exe, platform = process.platform) {
+  const bundle = platform === 'darwin' ? /^(.*\.app)\/Contents\/MacOS\/[^/]+$/.exec(exe)?.[1] : null;
+  return bundle ? `${bundle}/Contents/Frameworks/Electron Framework.framework/Electron Framework` : exe;
+}
+
 export function readFuses(exe) {
-  const buf = fs.readFileSync(exe);
+  const buf = fs.readFileSync(fuseFile(exe));
   const { start, length } = wireAt(buf);
   return Object.fromEntries([...buf.subarray(start, start + length)].map((c, i) => [NAMES[i] ?? `fuse${i}`, String.fromCharCode(c)]));
 }
 
 /** Turns EnableCookieEncryption on (idempotent). Returns 'already' | 'enabled'. */
-export function ensureCookieEncryption(exe) {
+export function ensureCookieEncryption(app) {
+  // the real file: in a macOS framework the name is a link, and a rename over it would replace the link
+  const exe = fs.realpathSync(fuseFile(app));
   const buf = fs.readFileSync(exe);
   const { start, length } = wireAt(buf);
   if (length < 2) throw new Error('fuse wire too short');
@@ -45,17 +56,18 @@ export function ensureCookieEncryption(exe) {
     fs.rmSync(tmp, { force: true });
     throw new Error(`cannot replace ${exe} (${e.code ?? e.message}): close every app running from it and try again`);
   }
-  if (process.platform === 'darwin' && isMachO(buf)) signAdHoc(exe);
+  if (process.platform === 'darwin' && isMachO(buf)) signAdHoc(app);
   return 'enabled';
 }
 
 /** A macOS executable (one architecture or universal), by its first four bytes. */
 const isMachO = buf => [0xcffaedfe, 0xcefaedfe, 0xcafebabe].includes(buf.readUInt32BE(0));
 
-/** macOS: signs the changed binary again, ad hoc (no identity), as its app bundle when it is inside one. */
+/** macOS: signs the changed code again, ad hoc (no identity): the whole app bundle with what it nests (the changed
+ *  framework is inside it) when the executable is in one, else the file itself. */
 function signAdHoc(exe) {
   const bundle = /^(.*\.app)\/Contents\/MacOS\/[^/]+$/.exec(exe)?.[1];
-  try { execFileSync('/usr/bin/codesign', ['--force', '--sign', '-', '--preserve-metadata=entitlements,requirements,flags,runtime', bundle ?? exe], { stdio: 'pipe' }); }
+  try { execFileSync('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', '--preserve-metadata=entitlements,requirements,flags,runtime', bundle ?? exe], { stdio: 'pipe' }); }
   catch (e) { throw new Error(`cannot sign ${bundle ?? exe} again after the change (${String(e.stderr ?? e.message).trim().slice(0, 300)})`); }
 }
 
@@ -63,7 +75,7 @@ const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPat
 if (isMain) {
   const args = process.argv.slice(2);
   const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-  const exe = args.find(a => !a.startsWith('--')) ?? path.join(repo, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
+  const exe = args.find(a => !a.startsWith('--')) ?? path.join(repo, 'node_modules', 'electron', 'dist', ...(process.platform === 'win32' ? ['electron.exe'] : process.platform === 'darwin' ? ['Electron.app', 'Contents', 'MacOS', 'Electron'] : ['electron']));
   try {
     if (args.includes('--enable-cookie-encryption')) console.log(`EnableCookieEncryption: ${ensureCookieEncryption(exe)} (${exe})`);
     console.log(JSON.stringify(readFuses(exe), null, 1));

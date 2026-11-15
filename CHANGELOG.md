@@ -215,8 +215,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   and `setup-pc.mjs` find the app's data folder; the brain's path values keep a POSIX path as it is; agents are told
   the real login shell (zsh, bash) instead of PowerShell, in the rules and in the outcome of Esegui; «Trovate sul PC»
   also looks in `Movies` (ADR 0314).
-- Linux: the stable copy starts (its Electron binary lost the permission to run when the release was staged); macOS:
-  the same binary is signed again after that change (ADR 0314).
+- Linux: the stable copy starts (its Electron binary lost the permission to run when the release was staged). macOS:
+  a release can be staged (cookie encryption is switched on in the app's Electron Framework, where macOS keeps that
+  switch, and the app is signed again); a staging that fails says why (ADR 0314).
 - The checks on GitHub were red on every push to `main` for reasons unrelated to the code (an e2e run cancelled after
   an hour, a guard that read every branch of the repository, one unit test red on Windows only, one on macOS only,
   a stable-copy test that still expected the app to find a brain by itself): each is fixed at its cause (ADR 0314).

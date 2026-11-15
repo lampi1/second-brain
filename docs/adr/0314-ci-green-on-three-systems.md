@@ -28,8 +28,9 @@ Every push to `main` was red on GitHub, for reasons that said nothing about the 
 - **The stable copy never ran in CI** (`npm run test:stable` came after the red e2e, on Windows main only), and two
   defects sat behind it. Its test still waited for the app to find a brain by itself, which the app stopped doing with
   the clean install (ADR 0072). And `scripts/fuses.mjs` rewrote the copied Electron binary through a new file with
-  default permissions: on Linux the stable copy did not start (`EACCES`, reproduced here); on macOS the same rewrite
-  also leaves a changed binary with its old signature.
+  default permissions: on Linux the stable copy did not start (`EACCES`, reproduced here). On macOS the release could
+  not even be staged: the fuses are in the app's Electron Framework, not in its executable («fuse sentinel not found»
+  in CI), and a failed staging said only «release mutation interrupted», not why.
 - One more unit test was red now and then on Windows (`flows/definition-file.test.ts`, seen once in two runs): it
   asked which of two guards refuses a swapped folder, and on Windows a directory's new timestamps may show later, so
   the file's own identity check refuses first. The read is refused either way.
@@ -48,9 +49,10 @@ The same review read the code for places that still assumed Windows.
    quit. This is the proof ADR 0054 stage 5 asked for, on GitHub's Windows, Linux and macOS machines. It is not a test
    of features and replaces no e2e. **The stable copy is started too** (`npm run test:stable`, on the three systems,
    pull requests included): the release staged in a temp folder with its own Electron copy, a new profile, a synthetic
-   brain chosen with the banner's own button, three data sections opened. `fuses.mjs` keeps the binary's permissions
-   and, on macOS, signs the changed binary again ad hoc (`codesign --force --sign -`). The Windows installer steps
-   stay on Windows main.
+   brain chosen with the banner's own button, three data sections opened. `fuses.mjs` keeps the binary's permissions;
+   on macOS it changes the Electron Framework (`fuseFile`, the same rule in `src/main/browser/fuses.ts` for the app's
+   own check) and signs the app again ad hoc (`codesign --force --deep --sign -`). A failed staging names its cause.
+   The Windows installer steps stay on Windows main.
 3. **The CI guard scans the checkout and the commits that lead to it** (`git rev-list HEAD` → `scan.mjs --commits`),
    not every ref of the repository. The archived history stays where it is and is never rewritten.
 4. **A published commit's identity can be pinned, one commit at a time, in CI only.** `.guardallow` takes
