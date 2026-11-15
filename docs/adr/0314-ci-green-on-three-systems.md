@@ -31,6 +31,10 @@ Every push to `main` was red on GitHub, for reasons that said nothing about the 
   default permissions: on Linux the stable copy did not start (`EACCES`, reproduced here). On macOS the release could
   not even be staged: the fuses are in the app's Electron Framework, not in its executable («fuse sentinel not found»
   in CI), and a failed staging said only «release mutation interrupted», not why.
+- **The Windows installer test never ran in CI either**, and failed at its first run: Setup stopped and rolled back
+  («MoveFile failed; code 3») on a file whose whole path was 261 characters, two over what Inno Setup 6 accepts. The
+  path was the test's long temp folder plus the deepest file of the payload, a TypeScript declaration of a runtime
+  package; whether it fitted depended on the length of the Windows user name.
 - One more unit test was red now and then on Windows (`flows/definition-file.test.ts`, seen once in two runs): it
   asked which of two guards refuses a swapped folder, and on Windows a directory's new timestamps may show later, so
   the file's own identity check refuses first. The read is refused either way.
@@ -52,7 +56,9 @@ The same review read the code for places that still assumed Windows.
    brain chosen with the banner's own button, three data sections opened. `fuses.mjs` keeps the binary's permissions;
    on macOS it changes the Electron Framework (`fuseFile`, the same rule in `src/main/browser/fuses.ts` for the app's
    own check) and signs the app again ad hoc (`codesign --force --deep --sign -`). A failed staging names its cause.
-   The Windows installer steps stay on Windows main.
+   The Windows installer steps stay on Windows main. The build leaves TypeScript declarations out of
+   `out/node_modules` (nothing loads them at run time), the installer test uses a short folder name, and a wrong
+   Setup exit code shows the end of Setup's own log.
 3. **The CI guard scans the checkout and the commits that lead to it** (`git rev-list HEAD` → `scan.mjs --commits`),
    not every ref of the repository. The archived history stays where it is and is never rewritten.
 4. **A published commit's identity can be pinned, one commit at a time, in CI only.** `.guardallow` takes
@@ -96,6 +102,9 @@ Rejected:
   were removed as load-sensitive (2026-11-09); it was tried by hand in a scratch repository.
 - On Windows the brain template's three path references now read `C:/…/` (forward slashes), which every tool there
   accepts.
+- The Windows installer still has Inno Setup 6's limit of 259 characters for a whole path. With the default folder
+  (`%LOCALAPPDATA%\second-brain`) the payload's deepest file fits up to a Windows user name of about 49 characters;
+  a longer one stops Setup, which rolls back. Not handled with a message of its own.
 - Known and left as it is: shortcut hints on screen say «Ctrl» on macOS too (Ctrl and ⌘ both work); the brain's
   `chat-prompt.mjs` opens Cursor by itself only on Windows (elsewhere it prints the block to copy); the in-app update
   is Windows only (ADR 0074), switched off everywhere.

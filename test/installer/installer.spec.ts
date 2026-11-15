@@ -33,7 +33,9 @@ const setupLogTail = (file: string): string => {
 test('offline per-user installer starts and reopens its stable copy without system Node', async () => {
   const latest = JSON.parse(fs.readFileSync(path.join(repo, 'test-results/installer/latest.json'), 'utf8')) as { installer: string; payload: string; manifest: { id: string; version: string; sha256: string } };
   expect(createHash('sha256').update(fs.readFileSync(latest.installer)).digest('hex')).toBe(latest.manifest.sha256);
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-installer space & percent%-'));
+  // a space, an ampersand and a percent sign in the path, in a short name: Inno Setup 6 stops at 259 characters, and
+  // with a longer name the payload's deepest file passed or failed with the length of the Windows user name
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb setup &%-'));
   testRoot = root;
   const install = path.join(root, 'installed');
   const userData = path.join(install, 'test-user-data');

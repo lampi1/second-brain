@@ -220,7 +220,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   switch, and the app is signed again); a staging that fails says why (ADR 0314).
 - The checks on GitHub were red on every push to `main` for reasons unrelated to the code (an e2e run cancelled after
   an hour, a guard that read every branch of the repository, one unit test red on Windows only, one on macOS only,
-  a stable-copy test that still expected the app to find a brain by itself): each is fixed at its cause (ADR 0314).
+  a stable-copy test that still expected the app to find a brain by itself, a Windows installer test whose longest
+  path fitted or not with the length of the user name): each is fixed at its cause (ADR 0314).
 - A chat held by a step of the user's (a report's `userAction`: the VPN, a login, a try) no longer shows «Aspetta te:
   domanda» without any question: it shows «Aspetta te: passo», or «Aspetta Esegui» when the step is a command, and the
   wait is written once per row (#411).
