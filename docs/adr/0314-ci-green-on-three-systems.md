@@ -35,9 +35,12 @@ Every push to `main` was red on GitHub, for reasons that said nothing about the 
   («MoveFile failed; code 3») on a file whose whole path was 261 characters, two over what Inno Setup 6 accepts. The
   path was the test's long temp folder plus the deepest file of the payload, a TypeScript declaration of a runtime
   package; whether it fitted depended on the length of the Windows user name.
-- One more unit test was red now and then on Windows (`flows/definition-file.test.ts`, seen once in two runs): it
-  asked which of two guards refuses a swapped folder, and on Windows a directory's new timestamps may show later, so
-  the file's own identity check refuses first. The read is refused either way.
+- Two unit tests of `flows/definition-file.test.ts` were red now and then on Windows (each seen once in this pull
+  request's runs). Both waited for a directory's times to change right after a file was made in it. The likely cause
+  (not proven on a Windows PC): the filesystem stamps with a clock that moves in steps, so a change in the same step
+  as the snapshot leaves the times as they were. With the directory's times held still on Linux the second test fails
+  with the same message. In the first the file's own identity check then refuses the swapped folder; the read is
+  refused either way. In the second the reader simply reads the file, which is correct: only the test expected a retry.
 
 The same review read the code for places that still assumed Windows.
 
@@ -84,7 +87,8 @@ The same review read the code for places that still assumed Windows.
    - «Trovate sul PC» also looks in macOS's `Movies` and in the Italian Linux folder names.
 6. **Tests say the same on every machine.** `close-tree.test.ts` fixes its start slots; the `readAskImage` and the
    Esegui refusal tests, which ran on Windows only, run on the three systems; the swapped-folder test of
-   `definition-file` accepts either refusal and still asserts that nothing is read.
+   `definition-file` accepts either refusal and still asserts that nothing is read, and its retry-bound test shows
+   every new file in the directory's time itself instead of waiting for the filesystem's clock.
 
 Rejected:
 - Rewriting `main` to fix the three committer identities: the owner's rule is never to rewrite public history.
