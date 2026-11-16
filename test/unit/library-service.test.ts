@@ -218,7 +218,7 @@ describe('every kind of file', () => {
     const copy = lib.list().artifacts.find(a => a.kind === 'markdown')!.versions[0]!.copy!;
     expect(await lib.open(md)).toEqual({ ok: true });
     expect(await lib.open(copy)).toEqual({ ok: true });
-    expect(opened).toEqual([doc, copy, copy]);
+    expect(opened).toEqual([fs.realpathSync.native(doc), copy, copy]); // the file as the disk names it (macOS: /private/var)
     expect(await t.make().open(doc)).toMatchObject({ ok: false });
   });
 });
