@@ -12,7 +12,12 @@
 // cannot show whole is refused up front while he writes from Telegram (#390: never a question whose «sì» is then thrown
 // away); Remote Control shows the Orchestrator's reply whole, so his «sì» there runs it as on the PC. One relay per Orchestrator at a time, for RELAY_MS; a question answered elsewhere first drops
 // it. A «sì»/«no» that cannot be delivered (the relay expired, the question changed, the delivery failed) is told to
-// the Orchestrator, never lost in silence. Used by wiring.ts (the tool and the emitter tap); pinned by
+// the Orchestrator, never lost in silence. Remote Control (#425): claude.ai shows a plain message as text only, but the
+// Orchestrator's own AskUserQuestion as a panel with buttons; so while he writes from there the relay asks the
+// Orchestrator to put the question (a command: written whole first, then «Eseguo questo comando sul tuo PC?») in its
+// AskUserQuestion with the options Sì and No, and his pick there (toolAnswered: the tool's result in the Orchestrator's
+// chat, the PC's panel or the phone's) is delivered by the app as his «sì» / «no». The Orchestrator's own command blocks
+// are relayed the same way (Esegui is a PC button). Used by wiring.ts (the tool and the emitter tap); pinned by
 // test/unit/chats/relay.test.ts.
 import type { Answer, ChatItem, ChatSummary, PendingRequest } from '../../shared/contract';
 import { isNativeQuestion, isYesNo, yesNoOf } from '../../shared/yes-no';
@@ -23,10 +28,16 @@ import { callerOf } from '../mcp/caller';
 import type { McpTool } from '../mcp/server';
 
 export const RELAY_MS = 30 * 60_000;
+/** the Orchestrator's own question tool (it runs on Claude): its panel shows on Remote Control */
+const ASK_TOOL = /(?:^|__)AskUserQuestion$/;
 /** where a user's message was typed away from the PC: Telegram ('phone') or Remote Control ('remote') */
 type Channel = 'phone' | 'remote';
 /** relay_question's refusal of a command Telegram cannot show (#390): what the Orchestrator tells him instead */
 const TELEGRAM_HIDES = (title: string): string => `Not relayed: the user is writing from Telegram, which hides commands, paths and addresses, and his «sì» never runs a command he did not read whole. Do not ask him yes or no. Tell him in one line that a command of «${title}» waits for him: he approves it with Esegui on the PC, or from Remote Control, where he reads it whole.`;
+
+/** Remote Control (#425): the question goes into the Orchestrator's own AskUserQuestion, whose pick the app delivers */
+const askText = (ask: string, before?: string): string =>
+  `${before ? `First write to the user, exactly, keeping the line breaks: «${before}». Then a` : 'A'}sk the user with your own AskUserQuestion tool: one question, exactly «${ask}», header «Sì o no», two options «Sì» and «No» (nothing else). Remote Control shows it as a panel with buttons. His pick there is delivered by the app: you do nothing more, never answer it yourself, never call app_resolve_question for it. If it cannot be delivered the app tells you.`;
 
 /** what the Orchestrator writes to the user, word for word: the card's parts, one per line, then «Rispondi sì o no» */
 const writeText = (title: string, lines: readonly string[]): string =>
@@ -45,7 +56,19 @@ export interface RelayDeps {
   now?(): number;
 }
 
-interface Relay { orchestratorId: string; chatId: string; requestId: string; question: string; at: number; command?: boolean }
+/** ask = the exact question of the Orchestrator's AskUserQuestion that answers it (Remote Control, #425) */
+interface Relay { orchestratorId: string; chatId: string; requestId: string; question: string; at: number; command?: boolean; ask?: string }
+
+/** The pick of an AskUserQuestion result for one question: Claude Code answers «"<question>"="<label>"». */
+export function pickOf(output: string, question: string): 'yes' | 'no' | null {
+  const fold = (t: string) => t.replace(/\s+/g, ' ').trim();
+  const out = fold(output), q = fold(question);
+  const at = out.indexOf(`"${q}"=`);
+  if (at >= 0) { const m = /^"([^"]*)"/.exec(out.slice(at + q.length + 3)); if (m) return yesNoOf(m[1]!); }
+  // one question asked: the only quoted Sì or No in the result
+  const found = [...out.matchAll(/"([^"]{1,30})"/g)].map(m => yesNoOf(m[1]!)).filter((x): x is 'yes' | 'no' => !!x);
+  return new Set(found).size === 1 ? found[0]! : null;
+}
 
 export class QuestionRelay {
   private relays = new Map<string, Relay>();
@@ -58,8 +81,13 @@ export class QuestionRelay {
   relay(orchestratorId: string, chatId: string): { question: string; chat: string; write: string } {
     const chats = this.d.chats(), o = chats.find(c => c.id === orchestratorId), c = chats.find(x => x.id === chatId);
     if (!o?.isOrchestrator) throw new Error('Only the Orchestrator relays questions.');
-    if (!c || c.isOrchestrator || c.closedAt) throw new Error('chatId: an open work chat (app_pending).');
     const cmds = (this.d.commands?.pending() ?? []).filter(p => p.chatId === chatId);
+    // its own command block waits for Esegui, a PC button: relayed too (#425); its own questions are its AskUserQuestion
+    if (chatId === orchestratorId && c && !c.closedAt) {
+      if (!cmds[0]) throw new Error('Your own questions are already the user\'s: only a command block of yours that waits for Esegui is relayed.');
+      return this.relayCommand(orchestratorId, c.title, cmds[0]);
+    }
+    if (!c || c.isOrchestrator || c.closedAt) throw new Error('chatId: an open work chat (app_pending).');
     const asks = [...cmds, ...this.d.pending().filter(p => p.chatId === chatId)].sort((a, b) => a.at - b.at);
     if (!asks.length) throw new Error('That chat waits for no answer now (app_pending).');
     // its command first: the PC's window shows it before the chat's question too (ADR 0259)
@@ -79,12 +107,14 @@ export class QuestionRelay {
     }
     if (!isNativeQuestion(p)) throw new Error('This is not the engine\'s own question: write it to the user yourself, then answer it for him with app_resolve_question with what he says.');
     this.armed(orchestratorId);
-    this.relays.set(orchestratorId, { orchestratorId, chatId, requestId: p.id, question: q.question, at: this.now() });
-    this.ended.delete(orchestratorId);
-    log.info('chats', 'question relayed through the Orchestrator', { chat: chatId, data: { request: p.id } });
     let brief;
     try { brief = briefFor(p, this.d.items(chatId)); } catch { brief = undefined; }
-    return { question: q.question, chat: c.title, write: writeText(c.title, questionLines(q.question, brief)) };
+    const lines = questionLines(q.question, brief), remote = this.lastChannel(orchestratorId) === 'remote';
+    const ask = remote ? `${c.title} chiede: ${lines.join('\n')}` : undefined;
+    this.relays.set(orchestratorId, { orchestratorId, chatId, requestId: p.id, question: q.question, at: this.now(), ...(ask ? { ask } : {}) });
+    this.ended.delete(orchestratorId);
+    log.info('chats', 'question relayed through the Orchestrator', { chat: chatId, data: { request: p.id, panel: remote } });
+    return { question: q.question, chat: c.title, write: ask ? askText(ask) : writeText(c.title, lines) };
   }
 
   private armed(orchestratorId: string): void {
@@ -116,11 +146,13 @@ export class QuestionRelay {
       const other = this.d.chats().find(x => x.id === armed.chatId)?.title ?? armed.chatId;
       throw new Error(`The user has not answered the question of «${other}» yet: one relayed question at a time. Relay this one after that answer.`);
     }
-    const question = 'Eseguo questo comando sul tuo PC?';
-    this.relays.set(orchestratorId, { orchestratorId, chatId: p.chatId, requestId: p.id, question, at: this.now(), command: true });
+    const question = 'Eseguo questo comando sul tuo PC?', remote = this.lastChannel(orchestratorId) === 'remote';
+    this.relays.set(orchestratorId, { orchestratorId, chatId: p.chatId, requestId: p.id, question, at: this.now(), command: true, ...(remote ? { ask: question } : {}) });
     this.ended.delete(orchestratorId);
-    log.info('chats', 'command relayed through the Orchestrator', { chat: p.chatId, data: { request: p.id } });
-    return { question, chat: title, write: writeText(title, commandLines(p, title)) };
+    log.info('chats', 'command relayed through the Orchestrator', { chat: p.chatId, data: { request: p.id, panel: remote } });
+    // Remote Control: the whole command written first (his «sì» runs only what he read), the question in the panel
+    const lines = commandLines(p, title);
+    return { question, chat: title, write: remote ? askText(question, `${title} chiede: ${lines.slice(1).join('\n')}`) : writeText(title, lines) };
   }
 
   /** the Orchestrator wrote the whole command to the user after relaying it (spaces folded: Markdown may rewrap it) */
@@ -168,7 +200,32 @@ export class QuestionRelay {
       }
       return false;
     }
+    // a relay asked in the Orchestrator's panel (Remote Control) is answered there; a message typed meanwhile still is
     this.relays.delete(orchestratorId);                  // the next own message: an answer or the end of the relay
+    return this.decide(orchestratorId, r, said, via);
+  }
+
+  /** An item of the Orchestrator's chat (wiring.ts taps chat:item): the result of its AskUserQuestion that carries a
+   *  relayed question (Remote Control, #425) answers it with the user's pick, made in that panel on the phone or the PC.
+   *  True = it answered a relayed question. */
+  async toolAnswered(orchestratorId: string, item: ChatItem): Promise<boolean> {
+    const r = this.relays.get(orchestratorId);
+    if (!r?.ask || item.kind !== 'tool' || item.status === 'running' || !ASK_TOOL.test(item.name)) return false;
+    const fold = (t: string) => t.replace(/\s+/g, ' ').trim();
+    const qs = (item.input as { questions?: { question?: unknown }[] } | null)?.questions;
+    if (!Array.isArray(qs) || qs.length !== 1 || fold(String(qs[0]?.question ?? '')) !== fold(r.ask)) return false;
+    this.relays.delete(orchestratorId);
+    const said = item.status === 'ok' ? pickOf(item.output ?? '', String(qs[0]!.question)) : null;
+    if (!said) {
+      log.warn('chats', 'relayed panel answer not read', { chat: r.chatId, data: { status: item.status }, hint: 'the Orchestrator is told to relay it again' });
+      this.d.notify?.(orchestratorId, `[evento app] La risposta dell'utente nel pannello non è stata letta (${item.status === 'ok' ? 'né Sì né No' : 'pannello chiuso senza risposta'}): la domanda di «${this.d.chats().find(c => c.id === r.chatId)?.title ?? r.chatId}» è ancora aperta. Inoltrala di nuovo con relay_question.`);
+      return false;
+    }
+    return this.decide(orchestratorId, r, said, 'remote');
+  }
+
+  /** his «sì», «no» or other words (null) for a relay taken off the list: delivered, put aside or told */
+  private async decide(orchestratorId: string, r: Relay, said: 'yes' | 'no' | null, via?: Channel): Promise<boolean> {
     if (r.command) return this.commandSaid(r, said, orchestratorId, via);
     const p = this.d.pending().find(x => x.chatId === r.chatId && x.id === r.requestId);
     if (!p) return false;                                // answered elsewhere first: nothing waits for this word
@@ -201,7 +258,7 @@ export class QuestionRelay {
   tool(): McpTool {
     return {
       name: 'relay_question',
-      description: 'Bring a work chat\'s open Sì/No question to the user through THIS conversation (Remote Control, phone, PC): the app returns its exact text; write it to the user as told. Their next message that is only «sì» or «no» answers it (the app delivers it). A command the chat left is relayed first, as «Eseguo sul PC?», whole: his «sì» runs it on the PC (production, databases and Azure too: he read it). While he writes from Telegram a command it cannot show whole is refused: say what the refusal tells you. A permission is never relayed: answer it with app_resolve_question.',
+      description: 'Bring a work chat\'s open Sì/No question to the user through THIS conversation (Remote Control, phone, PC): the app returns its exact text; write it to the user as told (from Remote Control: in your own AskUserQuestion with Sì and No, which shows him buttons; the app delivers his pick). Their next message that is only «sì» or «no» answers it (the app delivers it). A command the chat left is relayed first, as «Eseguo sul PC?», whole: his «sì» runs it on the PC (production, databases and Azure too: he read it). Your own command block waiting for Esegui (a PC button) is relayed the same way: pass your own chatId. While he writes from Telegram a command it cannot show whole is refused: say what the refusal tells you. A permission is never relayed: answer it with app_resolve_question.',
       inputSchema: { type: 'object', required: ['chatId'], additionalProperties: false, properties: { chatId: { type: 'string', description: 'the work chat that waits (app_pending)' } } },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
       run: (a, ctx) => JSON.stringify(this.relay(callerOf(ctx.params), String(a.chatId ?? ''))),

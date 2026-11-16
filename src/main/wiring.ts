@@ -757,6 +757,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   ctx.emitter.tap((channel, payload) => {
     if (channel !== 'chat:item') return;
     const { chatId, item, replace } = payload as EventMap['chat:item'];
+    // his pick in the Orchestrator's own question panel, for a question relayed while he writes from Remote Control (#425)
+    if (item.kind === 'tool') { if (item.status !== 'running' && manager.list().find(c => c.id === chatId)?.isOrchestrator) void relay.toolAnswered(chatId, item); return; }
     if (replace || item.kind !== 'user' || item.from || !manager.list().find(c => c.id === chatId)?.isOrchestrator) return;
     // Remote Control's echo of what he typed on the phone (Telegram's went through send): his last message too (ADR 0275)
     if (item.via === 'phone') manager.noteUserSaid(chatId, item.text);

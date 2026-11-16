@@ -115,7 +115,7 @@ describe('app control tools', () => {
       const chats = {
         list: () => [{ id: 'orchestrator', isOrchestrator: true, harness: 'claude' }, { id: 'w', isOrchestrator: false, harness: 'claude' },
           { id: 's', isOrchestrator: false, harness: 'claude', plan: { phase: 'proposed', at: 150, steps: [], clarified: [] } }],
-        pending: () => [q, perm, { ...q, id: 'form', tool: 'mcp__fixture' }],
+        pending: () => [q, perm, { ...q, id: 'form', tool: 'mcp__fixture' }, { ...q, id: 'own', chatId: 'orchestrator' }],
         items: () => [],
         answer: async () => { throw new Error('never the user\'s own path'); },
         answerForUser: (chatId: string, requestId: string, answer: unknown, confirmed?: boolean) => { answered.push({ chatId, requestId, answer, ...(confirmed ? { confirmed } : {}) }); },
@@ -150,6 +150,8 @@ describe('app control tools', () => {
       await expect(run({ chatId: 'w', requestId: 'q1' })).rejects.toThrow(/answers/);
       await expect(run({ chatId: 'w', requestId: 'nope', answers: {} })).rejects.toThrow(/non è più aperta/);
       await expect(run({ chatId: 's', requestId: 'plan', decision: 'forse' })).rejects.toThrow(/approve o change/);
+      // its own panel is the user's (#425: a relayed question or command there runs on his pick)
+      await expect(run({ chatId: 'orchestrator', requestId: 'own', answers: { 'Apro il bug?': 'Sì' } })).rejects.toThrow(/è una tua domanda/);
       expect(plain.answered).toEqual([]);
       expect(answered).toEqual([]);
     });
