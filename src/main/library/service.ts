@@ -107,6 +107,11 @@ export class LibraryService {
   }
 
   private now(): number { return this.p.now?.() ?? Date.now(); }
+
+  /** A folder as the disk names it (a brain behind a junction or a link, macOS /var → /private/var): the walk and a
+   *  chat's links (localFile) give real paths, so every folder they are compared with is real too. */
+  private real(dir: string): string { try { return fs.realpathSync.native(dir); } catch { return dir; } }
+  private brain(): string | null { const b = this.p.brainRoot(); return b ? this.real(b) : null; }
   private keyOf(p: string, kind: ArtifactKind): string { return versionKey(p, kind, this.platform); }
   private same(a: string, b: string): boolean { return pathKey(a, this.platform) === pathKey(b, this.platform); }
 
@@ -164,19 +169,17 @@ export class LibraryService {
 
   // ── where artifacts are looked for ──
   private roots(): WalkRoot[] {
-    const raw = this.p.brainRoot();
     // the real folders: a brain behind a junction or a link is walked by the same paths a chat's link resolves to
-    const real = (d: string) => { try { return fs.realpathSync.native(d); } catch { return d; } };
-    const brain = raw ? real(raw) : null;
+    const brain = this.brain();
     const out: WalkRoot[] = [];
     if (brain) out.push({ dir: path.join(brain, 'reviews'), depth: 5 }, { dir: path.join(brain, 'tmp'), depth: 3 }, { dir: path.join(brain, 'evidence'), depth: 5 });
-    out.push({ dir: real(path.join(this.p.userData, 'evidence')), depth: 6 });
+    out.push({ dir: this.real(path.join(this.p.userData, 'evidence')), depth: 6 });
     return out;
   }
 
   /** The chat whose evidence folder holds `file` (<userData>/evidence/chat-<id>/…). */
   private evidenceChat(file: string): string | undefined {
-    const ev = path.join(this.p.userData, 'evidence');
+    const ev = this.real(path.join(this.p.userData, 'evidence'));
     if (!isInside(file, ev, this.platform)) return undefined;
     const first = path.relative(ev, file).split(/[\\/]/)[0] ?? '';
     return first.match(/^chat-(.+)$/)?.[1] || undefined;
@@ -184,7 +187,7 @@ export class LibraryService {
 
   /** Inside the brain, only its work folders hold artifacts (journal, memory, skills… are shown in their own tabs). */
   private allowed(file: string): boolean {
-    const brain = this.p.brainRoot();
+    const brain = this.brain();
     if (!brain || !isInside(file, brain, this.platform)) return true;
     const segs = path.relative(brain, file).split(/[\\/]/);
     return segs.length > 1 && !BRAIN_OWN.test(segs[0] ?? '');
@@ -198,14 +201,15 @@ export class LibraryService {
     const tags = chat?.run?.tags;
     if (tags?.app) return tags.app;
     if (tags?.repo) return tags.repo;
-    const brain = this.p.brainRoot();
+    const brain = this.brain();
     const inBrain = (p: string) => !!brain && isInside(p, brain, this.platform);
     if (inBrain(file)) {
       const segs = path.relative(brain!, file).split(/[\\/]/);
       if (segs[0]?.toLowerCase() === 'projects' && segs.length > 2) return segs[1]!;
     }
     const projects = [...(this.p.projectRoots?.() ?? []), ...chats.filter(c => !c.isOrchestrator).map(c => c.cwd)]
-      .filter(r => r && path.isAbsolute(r) && !inBrain(r) && isInside(file, r, this.platform))
+      .filter(r => r && path.isAbsolute(r)).map(r => this.real(r))
+      .filter(r => !inBrain(r) && isInside(file, r, this.platform))
       .sort((a, b) => b.length - a.length);
     if (projects[0]) return baseNameOf(projects[0]);
     // a report a chat wrote in the brain (reviews/, tmp/) is about that chat's project
@@ -364,7 +368,7 @@ export class LibraryService {
    *  (the backfill, the demo) only relative links into the brain count. */
   private async linked(chatId: string, texts: readonly string[], since?: number): Promise<boolean> {
     const chat = this.p.chats().find(c => c.id === chatId);
-    const brain = this.p.brainRoot();
+    const brain = this.brain();
     const bases = [chat?.cwd, brain].filter((d): d is string => !!d && path.isAbsolute(d));
     let changed = false;
     const done = new Set<string>();
@@ -476,7 +480,13 @@ export class LibraryService {
   /** Opens an artifact's file (or, when it went, the copy kept of that version) with the system's app. Only a file the
    *  index holds: the viewer's bar asks with the path it shows. */
   async open(file: string): Promise<{ ok: boolean; error?: string }> {
-    const hit = artifactOfPath(this.data.artifacts as Artifact[], file, this.platform);
+    let hit = artifactOfPath(this.data.artifacts as Artifact[], file, this.platform);
+    if (!hit) {
+      // the path as the disk names it; a gone file by its real folder
+      let real = this.real(file);
+      if (real === file) real = path.join(this.real(path.dirname(file)), path.basename(file));
+      if (real !== file) { hit = artifactOfPath(this.data.artifacts as Artifact[], real, this.platform); file = real; }
+    }
     if (!hit || !this.p.openPath) return { ok: false, error: 'not an artifact' };
     const v = hit.artifact.versions[hit.version]!;
     const target = pathKey(file, this.platform) === pathKey(v.path, this.platform) && !v.missing ? v.path : v.copy;

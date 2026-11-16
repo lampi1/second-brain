@@ -285,3 +285,25 @@ describe('what is kept', () => {
     expect(lib.list().artifacts.map(a => a.title)).toEqual(['A']);
   });
 });
+
+describe('a brain reached through a link', () => {
+  it('compares real paths (a junction on Windows, /var → /private/var on macOS)', async () => {
+    const t = setup([chat('c_7', '/nowhere', 'Fix totale')]);
+    const linkBrain = path.join(t.base, 'brain-link'), linkUser = path.join(t.base, 'user-link');
+    try { fs.symlinkSync(t.brain, linkBrain, 'junction'); fs.symlinkSync(t.userData, linkUser, 'junction'); } catch { return; /* no links on this machine */ }
+    const md = t.write('reviews/nota.md', '# Nota\n\nUna nota che poi viene cancellata dal disco.\n');
+    t.write('chat-c_7/shot.png', Buffer.from('x'), undefined, path.join(t.userData, 'evidence'));
+    const opened: string[] = [];
+    const lib = t.make({ brainRoot: () => linkBrain, userData: linkUser, openPath: async f => { opened.push(f); return ''; } });
+    await lib.scan();
+    const list = lib.list().artifacts;
+    expect(list.find(a => a.title === 'Nota')).toMatchObject({ area: 'Brain' });
+    expect(list.find(a => a.kind === 'image')).toMatchObject({ chatId: 'c_7', origin: 'chat' });
+    // the viewer's path through the link, then the same file gone
+    expect(await lib.open(path.join(linkBrain, 'reviews', 'nota.md'))).toEqual({ ok: true });
+    fs.rmSync(md);
+    await lib.refresh();
+    expect(await lib.open(path.join(linkBrain, 'reviews', 'nota.md'))).toEqual({ ok: true });
+    expect(opened).toHaveLength(2);
+  });
+});
