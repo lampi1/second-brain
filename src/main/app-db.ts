@@ -1,14 +1,18 @@
 // The app's own SQLite database, userData/app.db (ADR 0199), on node:sqlite (DatabaseSync, the Node that Electron bundles;
 // the hybrid search index uses it too, search/hybrid/store.ts). Opened with WAL, synchronous=normal and a busy timeout, its
-// pages checked (quick_check) at its first open in this process. A file SQLite reports as corrupt is renamed aside (never deleted) with its
-// -wal/-shm and a new one is created; any other failure (a lock, a runtime without node:sqlite) throws, so the caller keeps
+// pages checked (quick_check) once per process. A file SQLite reports as corrupt is renamed aside (never deleted) with its
+// -wal/-shm and a new one is created. The check runs in a worker thread, never on the main thread: on a big app.db it
+// held the window 7 s at every start (#426); pages it finds damaged leave a `<file>.damaged` mark, and the next open moves
+// that file aside. Any other failure (a lock, a runtime without node:sqlite) throws, so the caller keeps
 // its JSON file instead. Each area (first: the agent runs, agents/runs-db.ts) has its own schema version in
 // `schema_version` and forward migrations, each in one transaction. Used by agents/runs-db.ts and the levels CLI.
 import fs from 'node:fs';
 import path from 'node:path';
 import type * as NodeSqlite from 'node:sqlite';
 import type { DatabaseSync } from 'node:sqlite';
+import { Worker } from 'node:worker_threads';
 import { renameWithRetry } from './agents/local-store';
+import { log } from './log';
 
 export const APP_DB = 'app.db';
 /** How long a statement waits for another connection's write lock (the levels CLI reading, a second store) before failing. */
@@ -61,28 +65,83 @@ export function reopenAppDb(file: string): DatabaseSync {
   return track(db);
 }
 
-/** The files whose pages this process already checked: quick_check reads the whole file, and a second owner opening the
- *  same app.db later (the use counter after the agent runs) froze the window for 5.3 s on a big one (#336). */
+/** The files whose pages this process already checked (or is checking): quick_check reads the whole file, once per
+ *  process (#336). */
 const checked = new Set<string>();
+
+/** As at a new start: no file counts as checked (tests). */
+export function forgetChecks(): void { checked.clear(); }
+
+/** The mark a background check leaves beside a file whose pages are damaged: the next open moves the file aside. */
+export const damagedMark = (file: string): string => `${file}.damaged`;
+
+const CHECK_WORKER = `
+const { workerData, parentPort } = require('node:worker_threads');
+let out;
+try {
+  const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
+  const db = new DatabaseSync(workerData.file, { readOnly: true });
+  try {
+    db.exec('pragma busy_timeout = ' + workerData.busy);
+    out = { rows: db.prepare('pragma quick_check').all().map(r => String(r.quick_check)) };
+  } finally { db.close(); }
+} catch (e) { out = { error: String(e && e.message || e), corrupt: typeof (e && e.errcode) === 'number' && [11, 26].includes(e.errcode & 0xff) }; }
+parentPort.postMessage(out);
+`;
+
+/** What a check found: ok, damaged (with the first lines SQLite gave), or not run (a lock, a missing runtime). */
+export type CheckResult = { ok: true } | { ok: false; damaged: boolean; cause: string };
+
+/** Reads a quick_check result into a verdict. Exported for the tests. */
+export function readCheck(out: { rows?: string[]; error?: string; corrupt?: boolean }): CheckResult {
+  if (out.rows) return out.rows.join() === 'ok' ? { ok: true } : { ok: false, damaged: true, cause: `quick_check: ${out.rows.slice(0, 3).join('; ')}` };
+  return { ok: false, damaged: out.corrupt === true, cause: out.error ?? 'no answer' };
+}
+
+/** Runs quick_check on a read-only connection in a worker thread (WAL lets it read while the app writes). Damaged
+ *  pages: the mark is written and a warning logged; the next open moves the file aside. Never throws. */
+export function checkInBackground(file: string, done?: (r: CheckResult) => void): void {
+  let worker: Worker;
+  try { worker = new Worker(CHECK_WORKER, { eval: true, workerData: { file, busy: BUSY_MS } }); } catch (e) {
+    done?.({ ok: false, damaged: false, cause: String(e) }); return;
+  }
+  worker.unref();
+  let told = false;
+  const tell = (r: CheckResult): void => {
+    if (told) return;
+    told = true;
+    if (!r.ok && r.damaged) {
+      try { fs.writeFileSync(damagedMark(file), `${new Date().toISOString()} ${r.cause}\n`); } catch { /* the next check finds it again */ }
+      log.warn('app-db', 'app database pages damaged', { cause: r.cause, hint: `${path.basename(file)} is moved aside and created again at the next start` });
+    }
+    done?.(r);
+  };
+  worker.once('message', (m: { rows?: string[]; error?: string; corrupt?: boolean }) => tell(readCheck(m)));
+  worker.once('error', e => tell({ ok: false, damaged: false, cause: String(e) }));
+  worker.once('exit', () => tell({ ok: false, damaged: false, cause: 'the check stopped' }));
+}
 
 function openChecked(file: string): DatabaseSync {
   fs.mkdirSync(path.dirname(file), { recursive: true });
+  // the mark counts only at the process's first open of the file: another owner opening it later must not move it
+  // aside under the connections already open on it (the next start does)
+  const key = path.resolve(file), first = !checked.has(key);
+  if (first && fs.existsSync(damagedMark(file)) && !fs.existsSync(file)) { try { fs.rmSync(damagedMark(file), { force: true }); } catch { /* left */ } }
+  if (first && fs.existsSync(damagedMark(file))) {
+    const cause = (() => { try { return fs.readFileSync(damagedMark(file), 'utf8').trim(); } catch { return 'quick_check'; } })();
+    throw Object.assign(new Error(`marked damaged by the last check: ${cause}`), { corrupt: true });
+  }
   const db = new (sqlite().DatabaseSync)(file);
   try {
     db.exec(`pragma busy_timeout = ${BUSY_MS}`); // first: a writer elsewhere is waited for, not taken for damage
     db.exec('pragma journal_mode = wal; pragma synchronous = normal;');
-    const key = path.resolve(file);
-    if (!checked.has(key)) {
-      const check = (db.prepare('pragma quick_check').all() as { quick_check?: unknown }[]).map(r => String(r.quick_check));
-      if (check.join() !== 'ok') throw Object.assign(new Error(`quick_check: ${check.slice(0, 3).join('; ')}`), { corrupt: true });
-      checked.add(key);
-    }
     db.exec('create table if not exists schema_version(area text primary key, version integer not null, at integer not null)');
   } catch (e) {
     // closed, or Windows keeps the file locked and it cannot be moved aside
     try { db.close(); } catch { /* already closed */ }
     throw e;
   }
+  if (first) { checked.add(key); if (process.env.SB_DB_CHECK !== '0') checkInBackground(file); }
   return track(db);
 }
 
@@ -94,6 +153,7 @@ function moveAside(file: string): string {
   for (let i = 2; fs.existsSync(aside); i++) aside = `${file}.corrupt-${stamp}-${i}`;
   renameWithRetry(file, aside);
   for (const ext of ['-wal', '-shm']) if (fs.existsSync(file + ext)) renameWithRetry(file + ext, aside + ext);
+  try { fs.rmSync(damagedMark(file), { force: true }); } catch { /* a new file is not checked against an old mark */ }
   return aside;
 }
 

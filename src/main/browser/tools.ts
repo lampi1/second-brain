@@ -13,6 +13,7 @@ import { containsPaste, maskKeys } from './keys';
 import { fmtFactor } from './preview';
 import { snapshotDelta } from './delta';
 import { ToolRefusal } from '../mcp/refusal';
+import { LinkRefusal } from './logins';
 
 export interface Scope { group: string; owner: string | null; chatId: string | null }
 
@@ -259,13 +260,29 @@ PNG ${shot.width}x${shot.height}` : ''}${dialog}`, images: [{ data: img.data, mi
     },
     {
       name: 'fill_credential', annotations: WRITE,
-      description: 'Sign in with a test account of the user\'s credentials file without ever reading the password: the app reads the entry and types it into the sign-in form itself; you only get the account name and a masked value ("•••"). Never open or read the credentials file, never ask the user for a password. password_ref = the form\'s password field (find "password"); user_ref = its user name / e-mail field (optional: leave it out when it is already filled or on an earlier step); account = the entry\'s user name or e-mail (optional when the file has one entry for this site; a refusal lists the names). The entry must be for this site (its "url", or "loginUrl" for a sign-in page on another host) and not a production account, else the call is refused with the fix. Then submit the form yourself (click its button). Afterwards this tab takes no javascript and no copy keys until the page is left or reloaded. For MFA, a CAPTCHA or an account without an entry use handoff_to_user kind "login".',
+      description: 'Sign in with a test account of the user\'s credentials file without ever reading the password: the app reads the entry and types it into the sign-in form itself; you only get the account name and a masked value ("•••"). Never open or read the credentials file, never ask the user for a password. password_ref = the form\'s password field (find "password"); user_ref = its user name / e-mail field (optional: leave it out when it is already filled or on an earlier step); account = the entry\'s user name or e-mail (optional when the file has one entry for this site; a refusal lists the names). The entry must be for this site (its "url", or "loginUrl" for a sign-in page on another host) and not a production account, else the call is refused with the fix; when the entry of the named account is for another host (an environment that moved), the app asks the user on your tab whether to link this site to it, and the refusal gives the handoff_id to wait on (handoff_to_user): on Sì call fill_credential again. Then submit the form yourself (click its button). Afterwards this tab takes no javascript and no copy keys until the page is left or reloaded. For MFA, a CAPTCHA or an account without an entry use handoff_to_user kind "login".',
       inputSchema: schema({
         account: { type: 'string', description: 'User name or e-mail of the entry (never a password). Optional when the file has one entry for this site.' },
         password_ref: { type: 'string', description: 'Ref of the password field (from read_page/find).' },
         user_ref: { type: 'string', description: 'Ref of the user name / e-mail field, in the same frame (optional).' },
       }, ['password_ref']),
-      run: write(a => `fill_credential ${typeof a.account === 'string' ? a.account.slice(0, 80) : ''}`.trim(), (tab, a) => { str(a.password_ref, 'password_ref'); return actions.fillCredential(tab, a); }),
+      run: async (a, ctx) => {
+        try {
+          return await write(x => `fill_credential ${typeof x.account === 'string' ? x.account.slice(0, 80) : ''}`.trim(), (tab, x) => { str(x.password_ref, 'password_ref'); return actions.fillCredential(tab, x); })(a, ctx);
+        } catch (e) {
+          if (!(e instanceof LinkRefusal)) throw e;
+          // #429: the user links the page's site to the entry with one click (Sì/No on the tab); never an agent
+          const s = scopeOf(ctx), tab = tabOf(ctx, a), l = e.link;
+          const h = tabs.handoffs.open({ tabId: tab.id, chatId: s.chatId, reason: `Collegare ${l.host} all'account ${l.user}?`,
+            instructions: `La pagina di accesso è su ${l.host}, ma nel tuo file delle credenziali l'account ${l.user}${l.group ? ` (${l.group})` : ''} è per ${l.sites.join(', ') || 'nessun sito'}. Sì: l'app aggiunge ${l.origin} all'account (loginUrl) e l'agente entra da solo, ora e le prossime volte. La password resta nel file.`,
+            url: redact(tab.wc.getURL()), env: tab.env, kind: 'link', account: { user: l.user, found: true },
+            link: { host: l.host, origin: l.origin, sites: l.sites, entryId: l.entryId } });
+          handoffGroup.set(h.id, s.group);
+          tabs.setLastAction(tab, `waiting for the user: ${h.reason}`);
+          log.info('browser', 'credential site link asked', { chat: s.chatId ?? undefined, data: { id: h.id, tab: tab.id, host: l.host } });
+          throw new ToolRefusal(`${e.message}\nhandoff_id "${h.id}"`);
+        }
+      },
     },
     {
       name: 'wait_for', annotations: RO,
@@ -345,7 +362,9 @@ PNG ${shot.width}x${shot.height}` : ''}${dialog}`, images: [{ data: img.data, mi
         if (r.state === 'open') return `${opened}Still waiting for the user (hand-off ${r.id}, open for ${Math.round((Date.now() - r.at) / 1000)}s). Call handoff_to_user with handoff_id "${r.id}" to keep waiting; if you end your turn instead, the app messages you when they answer.`;
         tabs.handoffs.delivered(r.id);
         const tab = tabs.tabs.get(r.tabId);
-        const outcome = r.state === 'done' ? 'clicked Fatto (done)' : r.state === 'failed' ? 'answered Non riesco (failed)' : 'cancelled the hand-off (the tab was closed)';
+        const outcome = r.kind === 'link'
+          ? (r.state === 'done' ? `said Sì: ${r.link?.host ?? 'this site'} is now linked to account ${r.account?.user ?? ''}; call fill_credential again` : r.state === 'failed' ? 'said No (or the file could not take the link): sign in another way (handoff_to_user kind "login")' : 'cancelled the hand-off (the tab was closed)')
+          : r.state === 'done' ? 'clicked Fatto (done)' : r.state === 'failed' ? 'answered Non riesco (failed)' : 'cancelled the hand-off (the tab was closed)';
         log.info('browser', 'hand-off resolved', { chat: s.chatId ?? undefined, data: { id: r.id, state: r.state, waitedMs: Date.now() - t0 } });
         return `${opened}The user ${outcome}${r.note ? `: "${r.note}"` : ''}.${tab && !tab.wc.isDestroyed() ? `\nTab ${tab.id}: "${tab.wc.getTitle()}" ${redact(tab.wc.getURL())}` : ''}`;
       },

@@ -1,4 +1,4 @@
-/* Memoria → Artifact (ADR 0317; components/library/ArtifactsTab.tsx, ArtifactThumb.tsx, ArtifactBar.tsx). A browse
+/* Memoria → Artifact (ADR 0318; components/library/ArtifactsTab.tsx, ArtifactThumb.tsx, ArtifactBar.tsx). A browse
    surface like Claude's artifacts: a calm toolbar, day headings, cards whose picture is the document itself (a report
    drawn small, an image, a paper for Markdown and PDF), the text under it in the hub's type. One hue per kind from the
    app's palette (HTML accent, Markdown green, PDF red, images violet). Theme tokens only (tokens.css): dark and light

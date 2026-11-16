@@ -1,4 +1,4 @@
-// English texts of Memoria → Artifact (ADR 0317): the gallery, the viewer's artifact bar, the empty and missing states.
+// English texts of Memoria → Artifact (ADR 0318): the gallery, the viewer's artifact bar, the empty and missing states.
 import type { libraryIt } from './library.it';
 export const libraryEn: typeof libraryIt = {
   'mh.tab.artifact': 'Artifacts',

@@ -137,7 +137,7 @@ export interface EventMap {
   'news:changed': NewsState;
   /** scheduled routines (ADR 0281): the list changed (an edit, a run, a next time) */
   'schedules:changed': SchedulesState;
-  /** Memoria → Artifact (ADR 0317): the index changed (a scan, a chat's turn, the past chats looked through) */
+  /** Memoria → Artifact (ADR 0318): the index changed (a scan, a chat's turn, the past chats looked through) */
   'library:changed': void;
 }
 

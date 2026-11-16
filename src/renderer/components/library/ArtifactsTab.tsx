@@ -1,4 +1,4 @@
-// Memoria → Artifact (ADR 0317, the owner 2026-11-16: «one place to browse every report, analysis and document that my
+// Memoria → Artifact (ADR 0318, the owner 2026-11-16: «one place to browse every report, analysis and document that my
 // chats produce over time, similar to Claude's artifacts»): a gallery of what the chats produced, newest first and
 // grouped by day, with a search, filters (type, area, period, chat), a sort and a grid or list view. Each card shows its
 // picture (ArtifactThumb.tsx), title, date, area, a short summary, its versions and the chat it came from; a click opens

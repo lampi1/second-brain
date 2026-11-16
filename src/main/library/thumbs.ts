@@ -1,4 +1,4 @@
-// Memoria → Artifact (ADR 0317): an image artifact's card picture, scaled down in main with Electron's nativeImage (the
+// Memoria → Artifact (ADR 0318): an image artifact's card picture, scaled down in main with Electron's nativeImage (the
 // page never decodes the full file). Its size is read from the header first (agents/raster.ts) and a picture over the
 // limits is never decoded, like the viewer's own rule (file-view.ts). Used by index.ts as LibraryPorts.thumbnail.
 import fs from 'node:fs';

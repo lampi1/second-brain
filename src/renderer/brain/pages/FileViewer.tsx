@@ -10,7 +10,7 @@
 // as `chrome`): a header with the file's name, folder, size and kind and its actions, Ctrl+F search in the text on
 // screen (FindBar.tsx), a table of contents beside a Markdown document with three or more headings (Toc.tsx), wrapped or
 // unwrapped code, and a click on a line number copies the internal link to that line (sb://file/…). A file that is one of
-// Memoria's artifacts gets the artifact bar on top (components/library/ArtifactBar.tsx, ADR 0317).
+// Memoria's artifacts gets the artifact bar on top (components/library/ArtifactBar.tsx, ADR 0318).
 import {lazy,Suspense,useCallback,useEffect,useMemo,useRef,useState,type MouseEvent as ReactMouseEvent,type ReactNode} from 'react';
 import DOMPurify from 'dompurify';
 import {DataTable,type Col} from '../components/DataTable';

@@ -1,4 +1,4 @@
-// IPC handlers, Memoria → Artifact (ADR 0317): the index, «Aggiorna», a card's picture, a file opened with the system's app. Registered by src/main/index.ts
+// IPC handlers, Memoria → Artifact (ADR 0318): the index, «Aggiorna», a card's picture, a file opened with the system's app. Registered by src/main/index.ts
 // with every other group (Handlers in ipc.ts keeps the set complete); each channel's shape is in
 // src/shared/contract/library.ts. The service (library/service.ts) reads only what it indexed itself.
 import type { LibraryService } from '../library/service';

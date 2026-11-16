@@ -1,4 +1,4 @@
-// The viewer's artifact bar (ADR 0317): above a file that is one of Memoria's artifacts, the chat that produced it (a
+// The viewer's artifact bar (ADR 0318): above a file that is one of Memoria's artifacts, the chat that produced it (a
 // click opens it, a closed one comes back on the grid), its versions (another version opens in the viewer: the file, or
 // the copy the app kept when it changed or went), the related artifacts (same chat, same folder, same area those days:
 // shared/library.ts relatedArtifacts), «Apri con l'app» (the system's program: the first button for a file the viewer

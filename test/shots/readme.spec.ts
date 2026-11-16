@@ -409,7 +409,7 @@ test('README screenshot: Chess', async () => {
 });
 
 test('README screenshot: Artifacts', async () => {
-  // Memoria › Artifacts (ADR 0317): what the chats produced, indexed where it is, with its picture, chat and versions
+  // Memoria › Artifacts (ADR 0318): what the chats produced, indexed where it is, with its picture, chat and versions
   await keepQuestionsAside(page);
   await page.keyboard.press('Control+K');
   await page.getByTestId('palette-input').fill('sb://memoria/artifact');

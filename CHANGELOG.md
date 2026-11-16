@@ -9,7 +9,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - Memoria › Artifact: every report, analysis, document, picture, table, recording or other file the chats produce,
   indexed where it is (a chat's link, the brain's reviews/tmp/evidence, a chat's evidence folder, once the past chats).
   Search, filters, cards with a picture, versions of the same report as one artifact, a gone file kept as missing; a
-  click opens it in the viewer with its source chat, versions and related ones, or with the system's app (ADR 0317).
+  click opens it in the viewer with its source chat, versions and related ones, or with the system's app (ADR 0318).
+- A sign-in page on a new host of a test environment: `fill_credential` asks the user on the tab «Collegare <host>
+  all'account <user>?» (account and hosts, never the password); his Sì adds the site to the entry's `loginUrl` and the
+  agent signs in by itself, his No is the old refusal. Only his click on the tab answers it (ADR 0317, #429).
 - The project maps go deeper: a part can hold parts of its own, down to four levels, entered like a system. A box's
   panel tells the rules it applies, what it keeps and where, how big it is (files and lines, counted without tokens),
   why it is made this way and its key files, each opening in the viewer. «Percorsi» tell a question about the project
@@ -228,6 +231,16 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   key is gone (ADR 0291).
 
 ### Fixed
+- The phone (Remote Control): a work chat's Sì/No question and a command waiting for Esegui, the Orchestrator's own
+  ones too, reach the user in the Orchestrator's own question panel with Sì and No buttons (a command written whole
+  first); his tap there answers the chat or runs the command, as his «sì» typed did (#425).
+- Esegui: «Non serve» on a card whose identical command runs, or ran within the hour, tells the chat it was a duplicate,
+  not a refusal (the chat that dismissed it while it runs gets that run's result); a message the user writes to a chat
+  while one of its commands still runs carries «[In corso] …» (#428).
+- `agent_assign_task` takes `cwd` as optional (the child's folder, its worktree or the parent's), and a mismatch names
+  the child's folder instead of a bare «Project mismatch» (#427).
+- The app no longer stops for seconds at start on a big `app.db`: its page check runs in a worker thread, and pages it
+  finds damaged move the file aside at the next start (#426).
 - macOS and Linux: Cursor's chats are found (its database was looked for under `%APPDATA%` only); the brain's tools
   and `setup-pc.mjs` find the app's data folder; the brain's path values keep a POSIX path as it is; agents are told
   the real login shell (zsh, bash) instead of PowerShell, in the rules and in the outcome of Esegui; «Trovate sul PC»

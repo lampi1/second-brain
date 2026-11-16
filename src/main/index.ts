@@ -218,7 +218,7 @@ app.whenReady().then(async () => {
   const chessEngine = new ChessEngine({ start: () => (chessScript?.length ? scriptedProc(chessScript) : spawnStockfish(path.join(outDir, 'chess-engine', ENGINE_JS))) });
   chessGames.init(demo ? { userData: null, seed: DEMO_CHESS_GAMES, ...(process.env.SB_DEMO_FREEZE === '1' ? { now: () => FROZEN_EPOCH } : {}) } : { userData: app.getPath('userData') });
   app.on('will-quit', () => { recordings.dispose(); voice.dispose(); useCounts.close(); chessEngine.stop(); chessGames.close(); });
-  // Memoria → Artifact (ADR 0317): the chats' reports indexed where they are; a turn's links at its end, the folders at
+  // Memoria → Artifact (ADR 0318): the chats' reports indexed where they are; a turn's links at its end, the folders at
   // start and when the tab asks, the past chats once
   // the demo's artifacts live in its throwaway brain (or a folder of its own profile when it runs without one)
   const demoLibraryBrain = demo ? process.env.SB_BRAIN ?? path.join(app.getPath('userData'), 'demo-brain') : null;

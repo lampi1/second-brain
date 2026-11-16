@@ -14,6 +14,7 @@ import path from 'node:path';
 import type { NativeImage, WebFrameMain } from 'electron';
 import { log, errText, redact, addRedaction } from '../log';
 import { ToolRefusal } from '../mcp/refusal';
+import { LinkRefusal } from './logins';
 import type { BrowserTabs, Tab } from './tabs';
 import { pageCall, walkPage, locateRef, frameBox, inputInfo, focusSelect, selectOptions, pageText, probe, angularStable, hasPasswordField,
   type WalkMode, type WalkResult, type PointResult, type InputInfo, type FrameMarker } from './page';
@@ -443,7 +444,7 @@ export class BrowserActions {
     }
     const site = siteOf(frameUrl(frame));
     const c = this.tabs.credentials.siteCredential(typeof a.account === 'string' ? a.account : '', frameUrl(frame));
-    if ('refusal' in c) throw new ToolRefusal(c.refusal);
+    if ('refusal' in c) throw c.link ? new LinkRefusal(c.refusal, c.link) : new ToolRefusal(c.refusal);
     addRedaction(c.password);                             // logs, console and network output never show it either
     tab.secretTyped = true;
     // checked again right before each field is typed: the page may have changed the field or the frame meanwhile

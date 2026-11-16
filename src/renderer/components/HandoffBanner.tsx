@@ -3,6 +3,8 @@
 // file (sign-in URL, user name, a masked password) with Copia buttons; the password is copied by main and never
 // reaches this page. Fatto / Non riesco answer the waiting agent (or wake its chat: browser/service.ts).
 // Why: the user missed a login request whose credentials the chat had written only in its reasoning (2026-10-11).
+// A «link» banner (#429) asks Sì/No to link the page's site to an account of the credentials file (fill_credential on a
+// test environment that moved host): it names the site, the account and where it is for today, never a password.
 // Used by BrowserTile.tsx.
 import { useEffect, useRef, useState } from 'react';
 import type { BrowserHandoff } from '@shared/contract';
@@ -11,7 +13,7 @@ import { useNow } from '../lib/clock';
 import { copyFromHandoff, resolveHandoff } from '../store/handoffs';
 import { navigateTab } from '../store/store';
 import { t } from '../i18n';
-import { IconAlert, IconCheck, IconLogin, IconShield } from './Icons';
+import { IconAlert, IconCheck, IconLink, IconLogin, IconShield } from './Icons';
 import { Button } from './ui';
 
 function CopyButton({ id, field, label, testid }: { id: string; field: 'user' | 'password'; label: string; testid: string }) {
@@ -35,8 +37,35 @@ function CopyButton({ id, field, label, testid }: { id: string; field: 'user' | 
 export function HandoffBanner({ h, chatTitle }: { h: BrowserHandoff; chatTitle: string | null }) {
   const now = useNow(15_000);
   const a = h.account;
-  const login = h.kind === 'login';
+  const login = h.kind === 'login', link = h.kind === 'link' ? h.link : undefined;
   const signIn = a?.url && a.url !== h.url ? a.url : null;
+  if (link) return (
+    <div className="handoff is-login is-link" role="alert" aria-label={t('dialogs.handoffBanner.askAria', { who: chatTitle ?? t('dialogs.handoffBanner.anAgent'), reason: h.reason })} data-testid={`handoff-${h.tabId}`}>
+      <div className="ho-head">
+        <span className="ho-icon" aria-hidden="true"><IconLink size={16} /></span>
+        <div className="ho-titles">
+          <b className="ho-title">{h.reason}</b>
+          <span className="ho-sub">{chatTitle ? <><span className="ho-who">{chatTitle}</span>{t('dialogs.handoffBanner.waitingSuffix')}</> : `${t('dialogs.handoffBanner.anAgent')}${t('dialogs.handoffBanner.waitingSuffix')}`}{h.env ? <> · {t('dialogs.handoffBanner.envLabel')} <span className="ho-env">{h.env}</span></> : null}</span>
+        </div>
+      </div>
+      {h.instructions && <p className="ho-text" data-testid={`handoff-text-${h.tabId}`}>{h.instructions}</p>}
+      <dl className="ho-cred" data-testid={`handoff-link-${h.tabId}`}>
+        <dt>{t('dialogs.handoffBanner.linkSite')}</dt>
+        <dd><span className="ho-val" data-testid={`handoff-link-host-${h.tabId}`}>{link.host}</span></dd>
+        <dt>{t('dialogs.handoffBanner.user')}</dt>
+        <dd><span className="ho-val" data-testid={`handoff-user-${h.tabId}`}>{a?.user ?? ''}</span></dd>
+        <dt>{t('dialogs.handoffBanner.linkNowFor')}</dt>
+        <dd><span className="ho-val">{link.sites.join(', ') || '—'}</span></dd>
+      </dl>
+      <div className="ho-actions">
+        <Button size="s" variant="primary" testid={`handoff-done-${h.tabId}`} onClick={() => void resolveHandoff(h, 'done')}>
+          <IconCheck size={14} /> {t('dialogs.handoffBanner.linkYes')}
+        </Button>
+        <Button size="s" variant="subtle" testid={`handoff-failed-${h.tabId}`} onClick={() => void resolveHandoff(h, 'failed')}>{t('dialogs.handoffBanner.linkNo')}</Button>
+        <span className="ho-safe"><IconShield size={13} /> {t('dialogs.handoffBanner.linkSafe')}</span>
+      </div>
+    </div>
+  );
   return (
     <div className={`handoff ${login ? 'is-login' : ''}`} role="alert" aria-label={t('dialogs.handoffBanner.askAria', { who: chatTitle ?? t('dialogs.handoffBanner.anAgent'), reason: h.reason })} data-testid={`handoff-${h.tabId}`}>
       <div className="ho-head">

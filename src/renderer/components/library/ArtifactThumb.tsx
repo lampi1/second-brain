@@ -1,4 +1,4 @@
-// A card's picture in Memoria → Artifact (ADR 0317), asked only once the card is near the screen: an image scaled down
+// A card's picture in Memoria → Artifact (ADR 0318), asked only once the card is near the screen: an image scaled down
 // by main; an HTML report drawn small from its head, cleaned exactly like the viewer cleans it (ReportHtml.tsx
 // cleanReport: no script, no remote load, a shadow root of its own) and never interactive; a Markdown document as a
 // small page of its title and first lines; a csv, json or txt as its first lines; a PDF as a paper with its badge; any

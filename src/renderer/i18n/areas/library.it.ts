@@ -1,4 +1,4 @@
-// Italian UI texts of Memoria → Artifact (ADR 0317): the gallery (search, filters, cards, days), the viewer's artifact
+// Italian UI texts of Memoria → Artifact (ADR 0318): the gallery (search, filters, cards, days), the viewer's artifact
 // bar (source chat, versions, related) and the empty and missing states. Spread into it.ts; library.en.ts and
 // library.de.ts have the same keys (typed by this object).
 type N = { n: number };

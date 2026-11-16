@@ -4,7 +4,7 @@
 // so a link opens a tab: lib/memory-hub.ts): Proposte (ProposalsDeck.tsx), Approvate (ApprovedTab.tsx: everything in
 // the brain now, deleted in one click with Annulla), Skill (SkillsPage.tsx), Regole (RulesPage.tsx), Idee (brain/pages/Idee.tsx: yours and the AI's, «Rispolvera»), File (the
 // «Diario e note»: MemoryBrowser.tsx, ADR 0245), Artifact (the chats' reports, documents and images:
-// library/ArtifactsTab.tsx, ADR 0317); Apprendimento moved to Andamento (ADR 0202); Statistiche is gone (ADR
+// library/ArtifactsTab.tsx, ADR 0318); Apprendimento moved to Andamento (ADR 0202); Statistiche is gone (ADR
 // 0248: it counted rules and notes; skill use is in the Skill tab); Script & Query is gone (ADR 0263: scripts and queries
 // are files of their skill, shown in its «Leggi»). The old Skill, Regole, Script, Idee and Dashboard
 // pages land here (actions.ts go()). Memory never travels with an exported agent. Rendered by App.tsx

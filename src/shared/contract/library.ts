@@ -1,4 +1,4 @@
-// Memoria → Artifact (ADR 0317): the index of the reports, analyses, documents and images the chats produce. One area of
+// Memoria → Artifact (ADR 0318): the index of the reports, analyses, documents and images the chats produce. One area of
 // the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape here first, then
 // both sides). Handlers: src/main/ipc-handlers/library.ts.
 import type { ArtifactList, ArtifactThumb } from '../library';
