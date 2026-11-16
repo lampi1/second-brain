@@ -10,6 +10,8 @@ export interface WalkRoot { dir: string; depth: number }
 export interface Found { path: string; kind: ArtifactKind; mtimeMs: number; size: number }
 
 const PER_DIR = 3000;
+/** Entries looked at in all (files and folders): past it the walk stops, whatever it found so far is kept. */
+const ENTRIES_MAX = 200_000;
 const SKIP_DIR = /^(node_modules|\.git|\.claude|\.cursor|\.agents|\.codex|\.vscode|\.idea|\.next|\.cache|__pycache__|bin|obj|dist|coverage|site-packages|vendor|voice-samples)$/i;
 const yieldNow = () => new Promise<void>(r => setImmediate(r));
 
@@ -23,7 +25,8 @@ export async function walk(roots: readonly WalkRoot[], max = 20_000): Promise<Fo
     // a folder this full is a build's or a cache's output, not where reports are kept
     if (entries.length > PER_DIR) return;
     for (const e of entries) {
-      if (++seen % 400 === 0) await yieldNow();
+      if (++seen > ENTRIES_MAX) return;
+      if (seen % 400 === 0) await yieldNow();
       if (e.isSymbolicLink()) continue;
       const full = path.join(dir, e.name);
       if (e.isDirectory()) { if (depth > 0 && !SKIP_DIR.test(e.name)) await visit(full, depth - 1); continue; }

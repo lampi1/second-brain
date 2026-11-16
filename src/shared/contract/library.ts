@@ -5,8 +5,9 @@ import type { ArtifactList, ArtifactThumb } from '../library';
 
 /** renderer → main, library: each entry [argument, result]. Part of InvokeMap (src/shared/contract.ts). */
 export interface LibraryInvokeMap {
-  /** the index as it is (a light look through the folders starts when the last one is older than a minute) */
-  'library:list': [void, ArtifactList];
+  /** the index as it is; `scan` (the tab opening) also starts a look through the folders when the last one is older
+   *  than a minute */
+  'library:list': [{ scan?: boolean } | void, ArtifactList];
   /** «Aggiorna»: look through the folders now; the index after it */
   'library:refresh': [void, ArtifactList];
   /** a card's picture: an image scaled down by main, or an HTML page's head for the renderer to draw; null = none */

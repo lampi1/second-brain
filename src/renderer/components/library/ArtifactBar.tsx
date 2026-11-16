@@ -20,10 +20,11 @@ export function ArtifactBar({ path }: { path: string }) {
   const hit = useMemo(() => artifactOfPath(list.artifacts, path, pagePlatform()), [list.artifacts, path]);
   const related = useMemo(() => (hit ? relatedArtifacts(hit.artifact, list.artifacts) : []), [hit, list.artifacts]);
   const [failed, setFailed] = useState<{ path: string; error: string } | null>(null);
+  const [opened, setOpened] = useState<string | null>(null);
   if (!hit) return null;
   const outside = !opensInViewer(path);
-  const openApp = <button type="button" className={outside ? 'lib-vbar-app primary' : 'lib-vbar-app'} title={t('lib.bar.openAppTip')} data-testid="lib-vbar-app"
-    onClick={() => { setFailed(null); void openWithApp(path).then(error => { if (error) setFailed({ path, error }); }); }}><IconExternal size={13} /><span>{t('lib.bar.openApp')}</span></button>;
+  const openApp = <button type="button" className={outside ? 'lib-vbar-app primary' : 'lib-vbar-app'} title={t('lib.bar.openAppTip')} data-testid="lib-vbar-app" data-opened={opened === path || undefined}
+    onClick={() => { setFailed(null); setOpened(null); void openWithApp(path).then(error => { if (error) setFailed({ path, error }); else setOpened(path); }); }}><IconExternal size={13} /><span>{t('lib.bar.openApp')}</span></button>;
   const { artifact: a, version } = hit;
   const n = a.versions.length;
   return <nav className="lib-vbar" aria-label={t('lib.bar.label')} data-testid="lib-vbar">

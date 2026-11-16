@@ -100,6 +100,7 @@ test('Memoria → Artifact: gallery by day, filters, versions, missing file, vie
     const app2 = page.getByTestId('lib-vbar-app');
     await expect(app2).toHaveClass(/primary/);
     await app2.click();
+    await expect(app2).toHaveAttribute('data-opened', 'true');
     await expect(page.locator('.lib-vbar-err')).toHaveCount(0);
     await shot(page, 'library-viewer-docx-dark');
   } finally { await app.close(); }

@@ -12,9 +12,9 @@ let rev = 0, started = false;
 const set = (next: typeof state) => { state = next; for (const fn of subs) fn(); };
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
 
-async function load(channel: 'library:list' | 'library:refresh' = 'library:list'): Promise<void> {
+async function load(channel: 'library:list' | 'library:refresh' = 'library:list', scan = false): Promise<void> {
   const mine = ++rev;
-  try { const list = await window.sb.invoke(channel, undefined); if (mine === rev) set({ list, loaded: true, error: null }); }
+  try { const list = await (channel === 'library:list' ? window.sb.invoke(channel, { scan }) : window.sb.invoke(channel, undefined)); if (mine === rev) set({ list, loaded: true, error: null }); }
   catch (e) { if (mine === rev) set({ ...state, loaded: true, error: errText(e) }); }
 }
 
@@ -31,6 +31,9 @@ const snapshot = () => state;
 export function useLibrary(): typeof state {
   return useSyncExternalStore(subscribe, snapshot, snapshot);
 }
+
+/** The tab opened: the index, and a look through the folders when the last one is older than a minute. */
+export const openedLibrary = (): Promise<void> => (typeof window === 'undefined' || !window.sb ? Promise.resolve() : load('library:list', true));
 
 /** «Aggiorna»: the folders looked through now. */
 export const refreshLibrary = (): Promise<void> => load('library:refresh');

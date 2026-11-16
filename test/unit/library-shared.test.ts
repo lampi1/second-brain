@@ -1,7 +1,7 @@
 // Memoria → Artifact (ADR 0317), the shared rules: which files are artifacts, how a chat's text links them, which files
 // are versions of one report, title and summary from a head, the gallery's filters, related artifacts, a path's artifact.
 import { describe, expect, it } from 'vitest';
-import { NO_FILTER, artifactKind, opensInViewer, readsText, artifactOfPath, filterArtifacts, linkedPaths, nameTitle, relatedArtifacts, stemOf, summaryOf, titleOf, versionKey, type Artifact } from '../../src/shared/library';
+import { NO_FILTER, artifactKind, opensInViewer, readsText, secretHead, artifactOfPath, filterArtifacts, linkedPaths, nameTitle, relatedArtifacts, stemOf, summaryOf, titleOf, versionKey, type Artifact } from '../../src/shared/library';
 
 const art = (o: Partial<Artifact> & { id: string; path: string }): Artifact => ({
   title: o.id, kind: 'markdown', area: 'Brain', summary: '', origin: 'scan', at: 0, size: 1, missing: false,
@@ -24,6 +24,14 @@ describe('which files are artifacts', () => {
     expect(artifactKind('/r/schema.drawio')).toBe('file');
     // never code, programs, a project's config or a hidden file
     for (const p of ['/r/main.ts', '/r/setup.exe', '/r/run.ps1', '/r/package.json', '/r/tsconfig.app.json', '/r/requirements.txt', '/r/LICENSE.txt', '/r/.env.json', '/r/app.config.json', '/r/x.log']) expect(artifactKind(p)).toBeNull();
+    // nor a login's state or a secret named as such
+    for (const p of ['/r/storage-state.json', '/r/auth.json', '/r/cookies.json', '/r/token.txt', '/r/client_secret_1.json', '/r/credentials.csv']) expect(artifactKind(p)).toBeNull();
+  });
+  it('tells a head that holds a credential', () => {
+    expect(secretHead('{"refresh_token": "x"}')).toBe(true);
+    expect(secretHead(['-----BEGIN RSA', 'PRIVATE KEY-----'].join(' '))).toBe(true);
+    expect(secretHead(`${'pass'}word = ${'y'.repeat(12)}`)).toBe(true);
+    expect(secretHead('# Analisi\n\nIl token di accesso scade dopo un\'ora.')).toBe(false);
     expect(artifactKind('/home/u/r/README.md')).toBeNull();
     expect(artifactKind('/home/u/r/SKILL.md')).toBeNull();
     expect(artifactKind('/home/u/r/node_modules/pkg/doc.md')).toBeNull();
@@ -46,6 +54,8 @@ describe('versions of one report', () => {
     expect(stemOf('2026-10-23-app-devops-adapter-review-2')).toBe('app-devops-adapter-review');
     expect(stemOf('report (1)')).toBe('report');
     expect(stemOf('analisi-final')).toBe('analisi');
+    // parts are not copies
+    expect(stemOf('piano-part-1')).not.toBe(stemOf('piano-part-2'));
     expect(stemOf('research-2-testplans')).toBe('research-2-testplans');
     expect(stemOf('fix-126308')).toBe('fix-126308');
     expect(stemOf('2026-10-12')).toBe('2026-10-12');

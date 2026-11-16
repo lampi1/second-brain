@@ -79,7 +79,14 @@ const IN_VIEWER = new Set(['html', 'htm', 'md', 'markdown', 'pdf', 'png', 'jpg',
 const TEXT = new Set(['html', 'htm', 'md', 'markdown', 'csv', 'tsv', 'json', 'jsonl', 'txt']);
 /** Names that are a project's own files, never a chat's output (a README a chat edited is not a report, a package.json
  *  is not data), and hidden files. */
-const NOT_ARTIFACT = /^(?:(?:readme|agents|claude|changelog|skill|license|licence|contributing|security|memory|notice|code_of_conduct)\.(?:md|markdown|txt)|requirements[\w.-]*\.txt|robots\.txt|cmakelists\.txt|package(?:-lock)?\.json|[jt]sconfig[\w.-]*\.json|composer\.json|settings(?:\.local)?\.json|launch\.json|tasks\.json|extensions\.json|manifest\.json|permissions\.json|appsettings[\w.-]*\.json|global\.json|index\.json|models\.json|[\w.-]+\.(?:config|schema)\.json|\..*)$/i;/** Folders whose files are tooling, packages or caches. */
+const NOT_ARTIFACT = /^(?:(?:readme|agents|claude|changelog|skill|license|licence|contributing|security|memory|notice|code_of_conduct)\.(?:md|markdown|txt)|requirements[\w.-]*\.txt|robots\.txt|cmakelists\.txt|package(?:-lock)?\.json|[jt]sconfig[\w.-]*\.json|composer\.json|settings(?:\.local)?\.json|launch\.json|tasks\.json|extensions\.json|manifest\.json|permissions\.json|appsettings[\w.-]*\.json|global\.json|index\.json|models\.json|[\w.-]+\.(?:config|schema)\.json|\..*)$/i;/** A table or text file named like a login's state or a secret (a browser's storage state, a token, cookies): never
+ *  indexed, copied or previewed. */
+const SECRET_NAME = /(cookie|token|secret|credential|passw|auth|storage[-_.]?state|session|private[-_.]?key|api[-_.]?key|\.env\b)/i;
+const SECRET_EXT = new Set(['json', 'jsonl', 'txt', 'csv', 'tsv']);
+/** A text head that holds a credential (a token, a password, a private key): no copy, no card text, no summary. */
+export const secretHead = (text: string): boolean =>
+  /"(?:cookies|token|access_?token|refresh_?token|id_?token|password|passwd|private_?key|client_?secret|api_?key|secret|authorization)"\s*:|-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:password|passwd|api[_-]?key|secret|token)\s*[=:]\s*["']?[^\s"']{8,}/i.test(text);
+/** Folders whose files are tooling, packages or caches. */
 const SKIP_SEGMENT = /^(node_modules|\.git|\.claude|\.cursor|\.agents|\.codex|\.vscode|\.idea|\.next|\.cache|__pycache__|bin|obj|dist|coverage|site-packages|vendor)$/i;
 
 const sepSplit = (p: string): string[] => p.split(/[\\/]+/).filter(Boolean);
@@ -91,6 +98,7 @@ export function artifactKind(p: string): ArtifactKind | null {
   const kind = EXT[extOf(p)];
   if (!kind) return null;
   if (NOT_ARTIFACT.test(baseNameOf(p))) return null;
+  if (SECRET_EXT.has(extOf(p)) && SECRET_NAME.test(baseNameOf(p))) return null;
   if (sepSplit(p).slice(0, -1).some(s => SKIP_SEGMENT.test(s))) return null;
   return kind;
 }
@@ -108,7 +116,8 @@ export function pathKey(p: string, platform: string): string {
 const DATE_HEAD = /^\d{4}-\d{2}-\d{2}(?:[t_ -]\d{2}[-:.]?\d{2}(?:[-:.]?\d{2})?)?[-_ .]*/i;
 const DATE_TAIL = /[-_ .]+(?:\d{4}-\d{2}-\d{2}(?:[t_ -]\d{2}[-:.]?\d{2}(?:[-:.]?\d{2}(?:[-.]\d{1,3})?)?z?)?|\d{8}(?:[-_]\d{4,6})?)$/i;
 const VERSION_TOKEN = /(^|[-_ .])(?:v|ver|rev)\d{1,3}(?=$|[-_ .])/gi;
-const COPY_TAIL = /(?:[-_ ](?:\d{1,2}|final|finale|draft|bozza|new|nuovo|nuova|latest|updated|aggiornat[oa])|\s*\(\d{1,2}\))$/i;
+// «-2» is a copy mark, except after a word that numbers parts (part-1 and part-2 are two documents)
+const COPY_TAIL = /(?:(?<!(?:part|parte|step|fase|phase|chapter|capitolo|section|sezione|day|giorno|week|settimana|sprint|lesson|lezione|round|run|test|case|caso))[-_ ](?:\d{1,2}|final|finale|draft|bozza|new|nuovo|nuova|latest|updated|aggiornat[oa])|\s*\(\d{1,2}\))$/i;
 
 /** A file or folder name without its dates, version tokens (v3, rev2) and copy marks (-2, (1), -final): the same report
  *  regenerated later gets the same stem. Empty → the name as it is. */
@@ -145,9 +154,9 @@ export function versionKey(p: string, kind: ArtifactKind, platform: string): str
 // every artifact extension, longest first (jsonl before json, markdown before md)
 const EXT_ALT = Object.keys(EXT).sort((a, b) => b.length - a.length).join('|');
 const END = `(?=$|[\\s"'\`<>|*)\\],;!?]|[.:](?:\\s|$|\\d))`;
-const ABS = new RegExp(String.raw`(?:file:\/\/\/?)?(?:[a-zA-Z]:[\\/]|\/(?:Users|home|tmp|private|var\/folders|Volumes|opt|mnt|media|srv|root)\/)[^\s"'\`<>|*?]*?\.(?:${EXT_ALT})${END}`, 'gi');
-const MD_LINK = new RegExp(String.raw`\]\(\s*<?([^)<>\n]+?\.(?:${EXT_ALT}))>?(?::\d+)?\s*\)`, 'gi');
-const REL = new RegExp(String.raw`(?:^|[\s(\["'\`])((?:\.{1,2}[\\/])?[\w@\-.]+(?:[\\/][\w@\-. ]*?[\w@\-.])*\.(?:${EXT_ALT}))${END}`, 'gi');
+const ABS = new RegExp(String.raw`(?:file:\/\/\/?)?(?:[a-zA-Z]:[\\/]|\/(?:Users|home|tmp|private|var\/folders|Volumes|opt|mnt|media|srv|root)\/)[^\s"'\`<>|*?]{0,400}?\.(?:${EXT_ALT})${END}`, 'gi');
+const MD_LINK = new RegExp(String.raw`\]\(\s*<?([^)<>\n]{1,600}?\.(?:${EXT_ALT}))>?(?::\d+)?\s*\)`, 'gi');
+const REL = new RegExp(String.raw`(?:^|[\s(\["'\`])((?:\.{1,2}[\\/])?[\w@\-.]{1,120}(?:[\\/][\w@\-.]{1,120}){0,12}\.(?:${EXT_ALT}))${END}`, 'gi');
 
 /** A link as written → the plain path: file: URLs decoded, a trailing ":line" dropped. */
 function plain(raw: string): string {

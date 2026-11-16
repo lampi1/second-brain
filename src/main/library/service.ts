@@ -14,8 +14,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ChatItem, ChatSummary } from '../../shared/contract';
-import { LIBRARY_MAX, artifactKind, artifactOfPath, baseNameOf, extOf, linkedPaths, pathKey, readsText, summaryOf, titleOf, versionKey, type Artifact, type ArtifactKind, type ArtifactList, type ArtifactThumb, type ArtifactVersion } from '../../shared/library';
-import { readLocal, writeLocal } from '../agents/local-store';
+import { LIBRARY_MAX, artifactKind, artifactOfPath, baseNameOf, extOf, linkedPaths, pathKey, readsText, secretHead, summaryOf, titleOf, versionKey, type Artifact, type ArtifactKind, type ArtifactList, type ArtifactThumb, type ArtifactVersion } from '../../shared/library';
+import { readLocal, writeLocalText } from '../agents/local-store';
 import { isInside } from '../ask-image';
 import { localFile } from '../file-view';
 import { log } from '../log';
@@ -60,8 +60,18 @@ export function answerTexts(items: readonly ChatItem[]): string[] {
   const out: string[] = [];
   for (const it of items) {
     if (it.kind === 'assistant' && it.text) out.push(it.text);
-    else if (it.kind === 'tool' && /report|show_ui|present|deliver/i.test(it.name)) { try { out.push(JSON.stringify(it.input ?? '')); } catch { /* not serializable */ } }
+    else if (it.kind === 'tool' && /report|show_ui|present|deliver/i.test(it.name)) out.push(...stringsOf(it.input));
   }
+  return out;
+}
+
+/** The text values inside a tool's input (its report, its links), as written: a JSON dump would escape every newline
+ *  and backslash. At most 200, nested at most 6 deep. */
+function stringsOf(value: unknown, out: string[] = [], depth = 0): string[] {
+  if (out.length >= 200 || depth > 6) return out;
+  if (typeof value === 'string') { if (value) out.push(value); }
+  else if (Array.isArray(value)) for (const v of value) stringsOf(v, out, depth + 1);
+  else if (value && typeof value === 'object') for (const v of Object.values(value)) stringsOf(v, out, depth + 1);
   return out;
 }
 
@@ -76,6 +86,10 @@ export class LibraryService {
   private backfilling: Promise<void> | null = null;
   private thumbCache = new Map<string, string>();
   private queue: Promise<unknown> = Promise.resolve();
+  /** One picture decoded at a time (a gallery scrolled fast asks for many). */
+  private pictures: Promise<unknown> = Promise.resolve();
+  /** With a full index, the mtime of the oldest kept: an older file is not added (it would go again at once). */
+  private floor = -Infinity;
 
   constructor(private readonly p: LibraryPorts) {
     const dir = path.join(p.userData, 'library');
@@ -85,6 +99,11 @@ export class LibraryService {
     this.platform = p.platform ?? process.platform;
     this.data = this.load();
     for (const a of this.data.artifacts) this.byKey.set(this.keyOf(a.path, a.kind), a);
+    this.setFloor();
+  }
+
+  private setFloor(): void {
+    this.floor = this.data.artifacts.length >= LIBRARY_MAX ? Math.min(...this.data.artifacts.map(a => a.at)) : -Infinity;
   }
 
   private now(): number { return this.p.now?.() ?? Date.now(); }
@@ -96,8 +115,15 @@ export class LibraryService {
     try {
       const raw = readLocal(this.file) as Partial<Stored> | undefined;
       if (!raw || raw.v !== 1 || !Array.isArray(raw.artifacts)) return empty;
-      const artifacts = raw.artifacts.filter(a => a && typeof a.id === 'string' && typeof a.path === 'string' && Array.isArray(a.versions) && a.versions.length > 0 && artifactKind(a.path) === a.kind);
-      return { ...empty, ...raw, artifacts };
+      const version = (v: unknown): v is ArtifactVersion => !!v && typeof (v as ArtifactVersion).path === 'string' && typeof (v as ArtifactVersion).at === 'number' && typeof (v as ArtifactVersion).size === 'number'
+        && ((v as ArtifactVersion).copy === undefined || typeof (v as ArtifactVersion).copy === 'string');
+      const artifacts = raw.artifacts.filter(a => a && typeof a.id === 'string' && typeof a.path === 'string' && typeof a.at === 'number' && Array.isArray(a.versions) && a.versions.length > 0 && a.versions.every(version) && artifactKind(a.path) === a.kind)
+        .slice(0, LIBRARY_MAX);
+      // the copies' budget is what the kept copies weigh now (one file per text, shared by equal versions)
+      const copies = new Map<string, number>();
+      for (const a of artifacts) for (const v of a.versions) if (v.copy) copies.set(v.copy, v.size);
+      const copyBytes = [...copies.values()].reduce((n, x) => n + x, 0);
+      return { ...empty, ...raw, artifacts, copyBytes, dropped: typeof raw.dropped === 'number' ? raw.dropped : 0, backfilled: raw.backfilled === true, scannedAt: typeof raw.scannedAt === 'number' ? raw.scannedAt : null };
     } catch (e) {
       log.warn('library', 'artifact index unreadable: starting a new one', { cause: String(e), hint: 'the old file is kept as it is; a scan rebuilds the index' });
       try { fs.renameSync(this.file, `${this.file}.bad-${Date.now()}`); } catch { /* nothing to keep */ }
@@ -106,7 +132,8 @@ export class LibraryService {
   }
 
   private save(): void {
-    try { writeLocal(this.file, this.data); } catch (e) { log.warn('library', 'artifact index not saved', { cause: String(e), hint: 'the next change saves it again' }); }
+    // compact: 4000 artifacts with their versions stay well under the local store's size cap
+    try { writeLocalText(this.file, JSON.stringify(this.data)); } catch (e) { log.warn('library', 'artifact index not saved', { cause: String(e), hint: 'the next change saves it again' }); }
   }
 
   /** Runs `fn` after every earlier change (a turn's links while a scan is going): one writer at a time. */
@@ -116,9 +143,11 @@ export class LibraryService {
     return next;
   }
 
-  list(): ArtifactList {
+  /** The index as it is; `scan` (the tab opening) also starts a look through the folders when the last one is older
+   *  than a minute. Without it nothing starts: the viewer's bar and every reload after a change only read. */
+  list(o: { scan?: boolean } = {}): ArtifactList {
     const fresh = this.data.scannedAt !== null && this.now() - this.data.scannedAt < STALE_MS;
-    if (!fresh && !this.scanning) void this.scan();
+    if (o.scan && !fresh && !this.scanning) void this.scan();
     return this.view();
   }
 
@@ -135,10 +164,13 @@ export class LibraryService {
 
   // ── where artifacts are looked for ──
   private roots(): WalkRoot[] {
-    const brain = this.p.brainRoot();
+    const raw = this.p.brainRoot();
+    // the real folders: a brain behind a junction or a link is walked by the same paths a chat's link resolves to
+    const real = (d: string) => { try { return fs.realpathSync.native(d); } catch { return d; } };
+    const brain = raw ? real(raw) : null;
     const out: WalkRoot[] = [];
     if (brain) out.push({ dir: path.join(brain, 'reviews'), depth: 5 }, { dir: path.join(brain, 'tmp'), depth: 3 }, { dir: path.join(brain, 'evidence'), depth: 5 });
-    out.push({ dir: path.join(this.p.userData, 'evidence'), depth: 6 });
+    out.push({ dir: real(path.join(this.p.userData, 'evidence')), depth: 6 });
     return out;
   }
 
@@ -182,11 +214,14 @@ export class LibraryService {
   }
 
   // ── adding and updating ──
-  private async copyOf(file: string, size: number): Promise<string | undefined> {
+  /** A copy of a text version: always for a report (HTML, Markdown), for a table or a text file only when a chat linked
+   *  it (a scratch file in tmp/ would spend the budget); never for a text that holds a credential. */
+  private async copyOf(file: string, size: number, kind: ArtifactKind, chat: string | undefined): Promise<string | undefined> {
+    if (kind !== 'html' && kind !== 'markdown' && !chat) return undefined;
     if (!readsText(file) || size > COPY_BYTES || this.data.copyBytes + size > COPY_TOTAL) return undefined;
     try {
       const body = await fs.promises.readFile(file);
-      if (body.length > COPY_BYTES) return undefined;
+      if (body.length > COPY_BYTES || secretHead(body.toString('utf8', 0, 64 * 1024))) return undefined;
       const sha = crypto.createHash('sha256').update(body).digest('hex').slice(0, 32);
       // the copy keeps the original's extension so the viewer renders it the same way
       const named = path.join(this.copies, `${sha}.${extOf(file)}`);
@@ -208,21 +243,27 @@ export class LibraryService {
       if (same && same.at === at && same.size === f.size) {
         // seen again: a chat that links it now becomes its producer when none was known
         let changed = false;
-        if (chat && !same.chatId) { same.chatId = chat; changed = true; }
+        if (chat && !same.chatId) {
+          same.chatId = chat; changed = true;
+          // a chat's output now: its text is worth a copy even when the scan found it first
+          if (!same.copy) { const copy = await this.copyOf(f.path, f.size, f.kind, chat); if (copy) same.copy = copy; }
+        }
         if (chat && !known.chatId) { known.chatId = chat; known.origin = 'chat'; changed = true; }
         if (changed) known.area = this.areaOf(known.path, known.chatId);
         return changed;
       }
       // the same file rewritten: its older text stays as a past version when a copy of it was kept
       if (same) { if (same.copy) same.missing = true; else known.versions.splice(known.versions.indexOf(same), 1); }
-      const copy = await this.copyOf(f.path, f.size);
+      const copy = await this.copyOf(f.path, f.size, f.kind, chat);
       known.versions.push({ path: f.path, at, size: f.size, ...(chat ? { chatId: chat } : {}), ...(copy ? { copy } : {}) });
       known.versions.sort((a, b) => b.at - a.at);
-      known.versions.splice(VERSIONS_MAX);
+      await this.release(known.versions.splice(VERSIONS_MAX));
       await this.describe(known, chat);
       return true;
     }
-    const copy = await this.copyOf(f.path, f.size);
+    // a full index takes no file older than the oldest it keeps (it would be dropped again at every scan)
+    if (this.data.artifacts.length >= LIBRARY_MAX && at <= this.floor) return false;
+    const copy = await this.copyOf(f.path, f.size, f.kind, chat);
     const a: Omit<Artifact, 'chatTitle'> = {
       id: crypto.createHash('sha1').update(key).digest('hex').slice(0, 16), title: '', kind: f.kind, area: '', summary: '',
       origin: chat ? 'chat' : origin, path: f.path, at, size: f.size, missing: false,
@@ -232,7 +273,7 @@ export class LibraryService {
     this.byKey.set(key, a);
     this.data.artifacts.push(a);
     await this.describe(a, chat);
-    this.trim();
+    await this.trim();
     return true;
   }
 
@@ -243,17 +284,32 @@ export class LibraryService {
     if (newest.chatId ?? chat) a.chatId = newest.chatId ?? chat;
     const text = readsText(newest.path) ? await head(newest.path) : '';
     a.title = titleOf(a.kind, text, newest.path);
-    a.summary = summaryOf(a.kind, text, newest.path);
+    a.summary = secretHead(text) ? '' : summaryOf(a.kind, text, newest.path);
     a.area = this.areaOf(newest.path, a.chatId);
   }
 
-  /** Over LIBRARY_MAX: the oldest go (counted as dropped). */
-  private trim(): void {
-    if (this.data.artifacts.length <= LIBRARY_MAX) return;
+  /** Over LIBRARY_MAX: the oldest go (counted as dropped), with their kept copies. */
+  private async trim(): Promise<void> {
+    if (this.data.artifacts.length <= LIBRARY_MAX) { this.setFloor(); return; }
     this.data.artifacts.sort((x, y) => y.at - x.at);
     const gone = this.data.artifacts.splice(LIBRARY_MAX);
     for (const a of gone) this.byKey.delete(this.keyOf(a.path, a.kind));
     this.data.dropped += gone.length;
+    this.setFloor();
+    await this.release(gone.flatMap(a => a.versions));
+  }
+
+  /** Deletes the kept copies of versions no longer in the index (unless another version shares the same text). */
+  private async release(versions: readonly ArtifactVersion[]): Promise<void> {
+    const copies = versions.filter(v => v.copy);
+    if (!copies.length) return;
+    const used = new Set<string>();
+    for (const a of this.data.artifacts) for (const v of a.versions) if (v.copy) used.add(v.copy);
+    for (const v of copies) {
+      if (used.has(v.copy!) || !isInside(v.copy!, this.copies, this.platform)) continue;
+      used.add(v.copy!);
+      try { await fs.promises.unlink(v.copy!); this.data.copyBytes = Math.max(0, this.data.copyBytes - v.size); } catch { /* already gone */ }
+    }
   }
 
   /** Every known version checked again: a file that went is marked missing (never removed), one back is unmarked, one
@@ -292,19 +348,24 @@ export class LibraryService {
         if (await this.upsert(found[i]!, undefined, 'scan')) changed = true;
       }
       if (await this.check()) changed = true;
-      this.data.scannedAt = this.now();
       this.save();
       if (changed) this.p.changed();
     });
-    this.scanning = run.catch(e => log.warn('library', 'artifact scan failed', { cause: String(e), hint: 'the index stays as it was; «Aggiorna» tries again' })).finally(() => { this.scanning = null; this.p.changed(); });
+    // a failed scan counts as done too: the next one waits a minute like after a good one
+    this.scanning = run.catch(e => log.warn('library', 'artifact scan failed', { cause: String(e), hint: 'the index stays as it was; «Aggiorna» tries again' }))
+      .finally(() => { this.data.scannedAt = this.now(); this.scanning = null; this.p.changed(); });
     void this.scanning.then(() => { if (!this.data.backfilled) void this.backfill(); });
     return this.scanning;
   }
 
   /** The artifact files `texts` link, resolved against the chat's folder and the brain; each one indexed for the chat. */
-  private async linked(chatId: string, texts: readonly string[]): Promise<boolean> {
+  /** `since`: a relative link outside the brain counts only for a file written from then on (a coding chat names
+   *  index.html, docs/*.md and fixtures all the time: those are the project's files, not its outputs); without it
+   *  (the backfill, the demo) only relative links into the brain count. */
+  private async linked(chatId: string, texts: readonly string[], since?: number): Promise<boolean> {
     const chat = this.p.chats().find(c => c.id === chatId);
-    const bases = [chat?.cwd, this.p.brainRoot()].filter((d): d is string => !!d && path.isAbsolute(d));
+    const brain = this.p.brainRoot();
+    const bases = [chat?.cwd, brain].filter((d): d is string => !!d && path.isAbsolute(d));
     let changed = false;
     const done = new Set<string>();
     for (const text of texts) {
@@ -316,6 +377,7 @@ export class LibraryService {
         if ('kind' in local) continue;
         const kind = artifactKind(local.real);
         if (!kind || local.stats.size === 0) continue;
+        if (base && !(brain && isInside(local.real, brain, this.platform)) && (since === undefined || local.stats.mtimeMs < since)) continue;
         done.add(raw);
         if (await this.upsert({ path: local.real, kind, mtimeMs: local.stats.mtimeMs, size: local.stats.size }, chatId, 'chat')) changed = true;
       }
@@ -335,8 +397,11 @@ export class LibraryService {
     while (from > 0 && items[from - 1]!.kind !== 'user') from--;
     const texts = answerTexts(items.slice(from));
     if (!texts.length) return Promise.resolve();
+    // files this turn wrote: from a minute before the user's message on (a clock a little off still counts)
+    const asked = items[from - 1]?.at;
+    const since = typeof asked === 'number' && asked > 0 ? asked - 60_000 : undefined;
     return this.serial(async () => {
-      if (await this.linked(chatId, texts)) { this.save(); this.p.changed(); }
+      if (await this.linked(chatId, texts, since)) { this.save(); this.p.changed(); }
     }).catch(e => log.warn('library', 'turn links not indexed', { cause: String(e), hint: 'the next scan or turn tries again' }));
   }
 
@@ -369,9 +434,9 @@ export class LibraryService {
     // a gone file: its kept copy (text kinds only), never the gone path
     const file = a.missing ? a.versions.find(v => v.copy)?.copy : a.path;
     if (!file) return null;
-    if (a.kind === 'html') return { kind: 'html', text: await head(file, 160 * 1024), path: file };
-    // a Markdown card is drawn from its title and summary
-    if (a.kind !== 'markdown' && readsText(a.path)) { const text = await head(file, 6 * 1024); return text.trim() ? { kind: 'text', text } : null; }
+    if (a.kind === 'html') { const text = await head(file, 160 * 1024); return secretHead(text) ? null : { kind: 'html', text, path: file }; }
+    // a Markdown card is drawn from its title and summary; a text holding a credential shows none of it
+    if (a.kind !== 'markdown' && readsText(a.path)) { const text = await head(file, 6 * 1024); return text.trim() && !secretHead(text) ? { kind: 'text', text } : null; }
     if (a.kind !== 'image' || a.missing) return null;
     const ext = extOf(a.path);
     if (ext === 'gif' || ext === 'svg') return this.rawPicture(a.path, ext);
@@ -382,7 +447,10 @@ export class LibraryService {
     const cached = path.join(this.thumbs, `${name}.jpg`);
     let dataUrl: string | null = null;
     try { dataUrl = `data:image/jpeg;base64,${(await fs.promises.readFile(cached)).toString('base64')}`; } catch {
-      dataUrl = await this.p.thumbnail(a.path).catch(() => null);
+      const make = this.p.thumbnail;
+      const next = this.pictures.then(() => make(a.path)).catch(() => null);
+      this.pictures = next;
+      dataUrl = await next;
       if (dataUrl?.startsWith('data:image/jpeg;base64,')) {
         try { await fs.promises.mkdir(this.thumbs, { recursive: true }); await fs.promises.writeFile(cached, Buffer.from(dataUrl.slice(23), 'base64')); } catch { /* shown, not kept */ }
       }

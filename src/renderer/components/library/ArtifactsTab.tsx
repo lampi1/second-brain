@@ -12,7 +12,7 @@ import { useDeferredValue, useEffect, useMemo, useState, type CSSProperties } fr
 import { ARTIFACT_KINDS, NO_FILTER, filterArtifacts, type Artifact, type ArtifactFilter, type ArtifactKind, type ArtifactRange, type ArtifactSort } from '@shared/library';
 import { openChatRef } from '../../actions';
 import { locale, t } from '../../i18n';
-import { badgeOf, refreshLibrary, useLibrary } from '../../lib/library';
+import { badgeOf, openedLibrary, refreshLibrary, useLibrary } from '../../lib/library';
 import { now as clockNow } from '../../lib/clock';
 import { IconChat, IconGrid, IconList, IconRefresh, IconSearch, IconX } from '../Icons';
 import { HubIntro } from '../brain-model/HubIntro';
@@ -87,6 +87,8 @@ export function ArtifactsTab() {
   const { list, loaded, error } = useLibrary();
   const [f, setF] = useState<ArtifactFilter>(kept);
   useEffect(() => { kept = f; }, [f]);
+  // the tab opened: a look through the folders when the last one is older than a minute
+  useEffect(() => { void openedLibrary(); }, []);
   const [view, setViewState] = useState<View>(readView);
   const setView = (v: View) => { setViewState(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* this session only */ } };
   const [nowMs, setNow] = useState(() => clockNow());

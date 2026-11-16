@@ -156,7 +156,7 @@ describe('a chat’s links', () => {
   });
 
   it('reads answer texts and report tools only', () => {
-    expect(answerTexts([said('a'), { kind: 'tool', id: 't', at: 1, name: 'Read', summary: '', input: { file_path: '/x.md' }, status: 'ok' }, { kind: 'tool', id: 'r', at: 1, name: 'agent_report', summary: '', input: { output: 'y' }, status: 'ok' }])).toEqual(['a', '{"output":"y"}']);
+    expect(answerTexts([said('a'), { kind: 'tool', id: 't', at: 1, name: 'Read', summary: '', input: { file_path: '/x.md' }, status: 'ok' }, { kind: 'tool', id: 'r', at: 1, name: 'agent_report', summary: '', input: { output: 'y' }, status: 'ok' }])).toEqual(['a', 'y']);
   });
 });
 
@@ -168,9 +168,16 @@ describe('every kind of file', () => {
     t.write('evidence/fix-1/demo.mp4', Buffer.from('mp4'));
     t.write('tmp/run.ps1', 'Write-Host x');
     t.write('tmp/package.json', '{}');
+    t.write('tmp/storage-state.json', '{"cookies":[]}');
+    t.write('tmp/esportazione.json', `{"access_${'token'}": "${'x'.repeat(16)}"}`);
     const lib = t.make();
     await lib.scan();
-    const all = lib.list().artifacts;
+    // a login's state is never indexed; a json holding a token is, without its text on the card
+    const secret = lib.list().artifacts.find(a => a.title === 'Esportazione')!;
+    expect(secret.summary).toBe('');
+    expect(await lib.thumb(secret.id)).toBeNull();
+    await lib.linkFromChat('c9', [`export: ${csv}`]);
+    const all = lib.list().artifacts.filter(a => a !== secret && a.id !== secret.id);
     expect(all.map(a => a.kind).sort()).toEqual(['data', 'document', 'media']);
     const table = all.find(a => a.kind === 'data')!;
     expect(table).toMatchObject({ title: 'Ordini', summary: 'ordine · cliente · totale' });
@@ -178,7 +185,7 @@ describe('every kind of file', () => {
     expect(await lib.thumb(all.find(a => a.kind === 'document')!.id)).toBeNull();
     fs.rmSync(csv);
     await lib.refresh();
-    const gone = lib.list().artifacts.find(a => a.kind === 'data')!;
+    const gone = lib.list().artifacts.find(a => a.title === 'Ordini')!;
     expect(gone.missing).toBe(true);
     expect(gone.versions[0]!.copy).toMatch(/\.csv$/);
     expect(await lib.thumb(gone.id)).toEqual({ kind: 'text', text: expect.stringContaining('Rossi') });
@@ -240,5 +247,41 @@ describe('card pictures and the walk', () => {
     try { fs.symlinkSync(path.join(t.brain, 'reviews'), path.join(t.brain, 'reviews', 'loop')); } catch { /* no symlinks here */ }
     const found = await walk([{ dir: path.join(t.brain, 'reviews'), depth: 5 }]);
     expect(found.map(f => path.basename(f.path))).toEqual(['ok.md']);
+  });
+});
+
+describe('what is kept', () => {
+  it('copies a report always, a scratch table only when a chat linked it', async () => {
+    const t = setup([chat('c1', '/nowhere')]);
+    t.write('tmp/a.csv', 'x;y\n1;2\n');
+    const linked = t.write('tmp/b.csv', 'x;y\n3;4\n');
+    t.write('reviews/r.md', '# R\n');
+    const lib = t.make();
+    await lib.scan();
+    await lib.linkFromChat('c1', [`vedi ${linked}`]);
+    const copy = (name: string) => lib.list().artifacts.find(a => path.basename(a.path) === name)!.versions[0]!.copy;
+    expect([!!copy('a.csv'), !!copy('b.csv'), !!copy('r.md')]).toEqual([false, true, true]);
+  });
+
+  it('takes a relative link outside the brain only for a file written during the turn', async () => {
+    const t = setup();
+    const proj = path.join(t.base, 'proj');
+    t.write('docs/guida.md', '# Guida del progetto\n', Date.UTC(2020, 0, 1), proj);
+    t.write('out/esito.md', '# Esito\n', Date.UTC(2026, 10, 16, 10), proj);
+    const lib = new LibraryService({ ...t.ports, chats: () => [chat('c1', proj)] });
+    await lib.noteTurn('c1', [{ kind: 'user', id: 'u', at: Date.UTC(2026, 10, 16, 9), text: 'fai' }, said('Scritto out/esito.md seguendo docs/guida.md', Date.UTC(2026, 10, 16, 10))]);
+    expect(lib.list().artifacts.map(a => a.title)).toEqual(['Esito']);
+  });
+
+  it('starts a look through the folders only when the tab asks', async () => {
+    const t = setup();
+    t.write('reviews/a.md', '# A\n');
+    const lib = t.make();
+    expect(lib.list().artifacts).toEqual([]);
+    expect(lib.list().scanning).toBe(false);
+    lib.list({ scan: true });
+    expect(lib.list().scanning).toBe(true);
+    await lib.refresh();
+    expect(lib.list().artifacts.map(a => a.title)).toEqual(['A']);
   });
 });
