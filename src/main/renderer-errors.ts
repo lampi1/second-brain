@@ -8,7 +8,7 @@
 // broken page must not flood the log: the same error at most once per REPEAT_MS (the repeats counted on its next line),
 // at most PER_MINUTE lines a minute in all. Used by index.ts; tests: test/unit/renderer-errors.test.ts.
 import type { RendererErrorReport } from '../shared/contract';
-import { scrubComponentStack, scrubMessage, scrubSource, scrubStack } from '../shared/error-scrub';
+import { isBrowserNotice, scrubComponentStack, scrubMessage, scrubSource, scrubStack } from '../shared/error-scrub';
 import { log } from './log';
 
 export const REPEAT_MS = 60_000;
@@ -29,6 +29,8 @@ export function cleanRendererError(a: unknown): RendererErrorReport | null {
   const raw = str(r.message, 4000), message = raw ? scrubMessage(raw, 500) : undefined;
   if (!message) return null;
   const kind = KINDS.find(k => k === r.kind) ?? 'error';
+  // a browser notice, not an error (#418), from any page: a window error without a stack (a thrown one has frames)
+  if (kind === 'error' && !r.stack && isBrowserNotice(message)) return null;
   const rawStack = str(r.stack, 4 * MAX_STACK), rawComp = str(r.componentStack, 4 * MAX_STACK), rawSource = str(r.source, 1000);
   const stack = rawStack ? scrubStack(rawStack, MAX_STACK) : undefined, componentStack = rawComp ? scrubComponentStack(rawComp, MAX_STACK) : undefined;
   const source = rawSource ? scrubSource(rawSource) : undefined, where = str(r.where, 60);
