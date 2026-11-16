@@ -61,6 +61,22 @@ describe('the end of a turn starts no process of the app (ADR 0317)', () => {
     expect(stop.filter(c => c.includes('inbox.mjs'))).toEqual([]);
     expect(stop.filter(c => c.includes('runbook-reminder.mjs'))).toHaveLength(1);
   });
+  it('a chat in a brain folder that wires its own copy of the reminder gets no second one from the plugin; a chat elsewhere keeps the plugin\'s', () => {
+    const root = brain();
+    fs.mkdirSync(path.join(root, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.claude/settings.json'), JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/runbook-reminder.mjs"', timeout: 15 }] }] } }));
+    const domains = [{ name: 'personal', root }];
+    // wired but not there: the brain's own copy would not run, the plugin's stays
+    expect(stopCommands(claudeLaunch(path.join(base, 'userData'), { domains }, { cwd: root }).pluginDir!)).toHaveLength(1);
+    fs.mkdirSync(path.join(root, '.claude/hooks'));
+    fs.writeFileSync(path.join(root, '.claude/hooks/runbook-reminder.mjs'), '// the brain\'s own copy\n');
+    const inBrain = claudeLaunch(path.join(base, 'userData'), { domains }, { cwd: root });
+    expect(stopCommands(inBrain.pluginDir!)).toEqual([]);
+    const project = path.join(base, 'project'); fs.mkdirSync(project);
+    const elsewhere = claudeLaunch(path.join(base, 'userData'), { domains }, { cwd: project });
+    expect(stopCommands(elsewhere.pluginDir!).filter(c => c.includes('runbook-reminder.mjs'))).toHaveLength(1);
+    expect(elsewhere.pluginDir).not.toBe(inBrain.pluginDir); // each chat keeps the plugin its folder needs
+  });
   it('a brain that commits its memory at the stop keeps the runner: its synchronous git never runs inside the app', () => {
     const root = brain();
     fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', rules: { topicFiles: [], autoCommit: true } }));

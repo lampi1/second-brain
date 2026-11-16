@@ -46,7 +46,8 @@ export interface ProductHooks { root: string; state: string; launch: LaunchFacts
 
 /** Legacy brains fail open with a warning. Migrated brains fail closed if product hooks cannot be delivered. */
 /** `skills: false` = a role chat: the brain's skills stay out (its launch's own plugin carries the ones it was given). */
-export function claudeLaunch(userData: string, input?: { domains: BrainDomain[]; on?: boolean }, opts: { skills?: boolean } = {}): ClaudeLaunch {
+/** `cwd` = the chat's folder: the template's Stop hooks it runs by itself are left out of the plugin (ownStopHooks). */
+export function claudeLaunch(userData: string, input?: { domains: BrainDomain[]; on?: boolean }, opts: { skills?: boolean; cwd?: string } = {}): ClaudeLaunch {
   const none: ClaudeLaunch = { args: [], pluginDir: null, rulesFile: null };
   const rules = input ? null : launchRules();
   const domains = input?.domains ?? rules?.domains ?? [];
@@ -64,12 +65,13 @@ export function claudeLaunch(userData: string, input?: { domains: BrainDomain[];
     const productText = productInstructions(root, false, tools ? tools.replace(/\\/g, '/') : undefined);
     let instructions = productText === null ? instructionsOf(domains) : [productText, instructionsOf(domains.slice(1))].filter(Boolean).join('\n\n');
     // HOOKS_LAYOUT: a plugin built before the in-process hooks still runs every event as a process: rebuilt once
-    const sig = signature(files, (instructions ?? '') + productSignature(root) + HOOKS_LAYOUT);
+    const ownStop = product ? ownStopHooks(opts.cwd, root) : [];
+    const sig = signature(files, (instructions ?? '') + productSignature(root) + HOOKS_LAYOUT + ownStop.join('|'));
     // A running chat keeps its exact product/root binding when another brain is selected or a release changes.
     const dir = path.join(base, product ? `${PLUGIN_NAME}-${sig}` : `${PLUGIN_NAME}${noSkills ? '-roles' : ''}`);
     const rulesFile = product ? path.join(dir, 'rules.md') : path.join(base, 'rules.md');
     if (product) instructions += '\n\n' + memoryInstructions(path.join(dir, 'product-rules'), root, tools ?? undefined);
-    if (readText(path.join(dir, '.signature')) !== sig) build(base, dir, files, domains, sig, tools);
+    if (readText(path.join(dir, '.signature')) !== sig) build(base, dir, files, domains, sig, tools, ownStop);
     if (instructions) { if (readText(rulesFile) !== instructions) fs.writeFileSync(rulesFile, instructions); }
     else fs.rmSync(rulesFile, { force: true });
     const hasParts = files.length > 0 || product;
@@ -85,6 +87,27 @@ export function claudeLaunch(userData: string, input?: { domains: BrainDomain[];
     return none;
   }
 }
+
+/** The hook files a chat in the brain's own folder runs at the stop by itself: Claude Code reads that folder's
+ * .claude/settings.json and settings.local.json (read here, never written), and an older brain wires its own copy of a
+ * template hook there. The plugin's copy would do the same work a second time at every turn's end (measured on the
+ * owner's brain: `runbook-reminder.mjs` twice, ~2 s each, ADR 0317). A chat in any other folder has only the plugin's. */
+function ownStopHooks(cwd: string | undefined, root: string): string[] {
+  if (!cwd || !samePath(cwd, root)) return [];
+  const names = new Set<string>();
+  for (const file of ['settings.json', 'settings.local.json']) {
+    try {
+      const own = JSON.parse(fs.readFileSync(path.join(root, '.claude', file), 'utf8').replace(/^\uFEFF/, '')) as { hooks?: { Stop?: { hooks?: { command?: unknown }[] }[] } };
+      for (const g of own.hooks?.Stop ?? []) for (const h of g.hooks ?? []) {
+        const name = typeof h.command === 'string' ? /[\\/]\.claude[\\/]hooks[\\/]([\w.-]+\.mjs)/.exec(h.command)?.[1] : undefined;
+        if (name && fs.existsSync(path.join(root, '.claude', 'hooks', name))) names.add(name);
+      }
+    } catch { /* no such file, or not JSON: the folder runs nothing of its own */ }
+  }
+  return [...names].sort();
+}
+const real = (p: string): string => { try { return fs.realpathSync.native(p); } catch { return path.resolve(p); } };
+const samePath = (a: string, b: string): boolean => process.platform === 'win32' ? real(a).toLowerCase() === real(b).toLowerCase() : real(a) === real(b);
 
 interface Src { abs: string; rel: string; size: number; mtime: number; domain: string }
 
@@ -136,7 +159,7 @@ function signature(files: readonly Src[], instructions: string | null): string {
 }
 
 /** Writes the plugin into a fresh folder, then swaps it in (rename), so a chat starting meanwhile sees the old or the new. */
-function build(base: string, dir: string, files: readonly Src[], domains: readonly BrainDomain[], sig: string, tools: string | null): void {
+function build(base: string, dir: string, files: readonly Src[], domains: readonly BrainDomain[], sig: string, tools: string | null, ownStop: readonly string[] = []): void {
   fs.mkdirSync(base, { recursive: true });
   const tmp = path.join(base, `.${PLUGIN_NAME}-${process.pid}-${Date.now()}`);
   fs.mkdirSync(path.join(tmp, '.claude-plugin'), { recursive: true });
@@ -152,7 +175,7 @@ function build(base: string, dir: string, files: readonly Src[], domains: readon
   // the session answers the product hooks in process (claudeLaunch productHooks); the runner in hooks.json serves only
   // the Stop of a brain that commits its memory there (stopInProcess)
   installHooks(tmp, root, path.join(base, 'rule-state'), undefined, fwdTools ? { tools: fwdTools, correctionHook: true } : {}, stopInProcess(root) ? [] : ['Stop']);
-  if (fwdTools && enabled(root)) addHooks(tmp, templateHooks(root, fwdTools));
+  if (fwdTools && enabled(root)) addHooks(tmp, templateHooks(root, fwdTools, ownStop));
   fs.writeFileSync(path.join(tmp, '.signature'), sig);
   const old = `${dir}.old-${Date.now()}`;
   if (fs.existsSync(dir)) fs.renameSync(dir, old);

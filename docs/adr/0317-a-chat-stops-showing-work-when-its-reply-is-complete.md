@@ -67,16 +67,22 @@ turn's result waits for those processes, and the indicator with it. No test tied
    work. The template's inbox hook is no longer added to the plugin (`rules/tools.ts REPLACED_HOOKS`): the plugin
    reaches only the app's own chats, and the app delivers their mail itself within 2 s, mid-turn too
    (`chats/mail.ts`, ADR 0015).
-6. **The end of the turn is timed in the log.** `timing: turn` gains `closeMs` (reply complete → result),
+6. **A template hook the chat's own folder runs is not run twice.** A chat in the brain's folder whose
+   `.claude/settings.json` (or `settings.local.json`) wires its own copy of a template Stop hook, with the file there,
+   gets a plugin without that hook (`claude-plugin.ts` `ownStopHooks`; the owner, 2026-11-16: «se non serve togli»).
+   A chat in any other folder keeps the plugin's copy, the only one it has. The brain's files are read, never written.
+7. **The end of the turn is timed in the log.** `timing: turn` gains `closeMs` (reply complete → result),
    `stopHooks` and `stopHooksMs`: `npm run logs -- --scope chats --grep "timing: turn"` tells how long a brain's
    hooks hold each turn.
 
 ## Consequences
 
 - Nothing moves between the last text and the «Turno finito» line. The line still comes when the hooks end, and
-  `closeMs` says how long that took. Of the owner's four hooks two are gone (the slowest, and the runner); what is left
-  is `runbook-reminder.mjs`, once from the plugin and, for a chat in a brain whose own `.claude/settings.json` wires
-  it too, once more from there. That file is the brain's: the app does not edit it.
+  `closeMs` says how long that took. Of the owner's four hooks three are gone (the slowest, the runner and the
+  plugin's copy of `runbook-reminder.mjs`); what is left for a chat in his brain's folder is that brain's own
+  `runbook-reminder.mjs`, wired in its `.claude/settings.json`. That file is the brain's: the app does not edit it.
+- A brain has up to two plugin folders, one for chats in its own folder and one for chats elsewhere, when its own
+  settings wire a template Stop hook.
 - The plugin's folder name changes once (its signature carries the hooks' layout): the first turn of each chat after
   the update reads its prompt uncached.
 - A message typed in that gap waits in the queue and leaves at the idle, as before.
