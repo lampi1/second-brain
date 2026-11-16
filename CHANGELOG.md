@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- Memoria › Artifact: every report, analysis, document, picture, table, recording or other file the chats produce,
+  indexed where it is (a chat's link, the brain's reviews/tmp/evidence, a chat's evidence folder, once the past chats).
+  Search, filters, cards with a picture, versions of the same report as one artifact, a gone file kept as missing; a
+  click opens it in the viewer with its source chat, versions and related ones, or with the system's app (ADR 0317).
 - The project maps go deeper: a part can hold parts of its own, down to four levels, entered like a system. A box's
   panel tells the rules it applies, what it keeps and where, how big it is (files and lines, counted without tokens),
   why it is made this way and its key files, each opening in the viewer. «Percorsi» tell a question about the project
