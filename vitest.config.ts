@@ -14,5 +14,8 @@ export default defineConfig({
     // the fake CLIs' children left suspended by this run are ended at its end
     globalSetup: ['test/fixtures/sweep-suspended.mjs'],
     // both lazy dictionaries, for tests that switch the language synchronously
-    setupFiles: ['test/fixtures/i18n-all.ts'] },
+    setupFiles: ['test/fixtures/i18n-all.ts'],
+    // app.db's page check runs in a worker thread at a file's first open (#426): off in tests, whose temp folders are
+    // removed while it could still hold the file (Windows refuses); test/unit/app-db-check.test.ts runs it by hand
+    env: { SB_DB_CHECK: '0' } },
 });
