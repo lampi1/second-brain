@@ -226,6 +226,14 @@
         "src/renderer/styles/chess.css",
         "src/shared/chess.ts"
       ]
+    },
+    "artifacts": {
+      "test": "README screenshot: Artifacts",
+      "sources": [
+        "src/renderer/components/library/",
+        "src/renderer/styles/library.css",
+        "src/main/library/demo.ts"
+      ]
     }
   },
   "pages": {
