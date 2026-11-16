@@ -3,7 +3,7 @@
 // One command, one panel (ADR 0299): a block whose command another block already left waiting for Esegui, or runs now,
 // is a reference to that one (originalOf); the reference is remembered for the window's life, so it keeps showing the
 // original's state («in attesa», «in corso», «finito, exit N») after the request left or the run ended.
-// Used by components/CodeBlock.tsx, components/AutoCloser.tsx and components/SidebarTree.tsx.
+// Used by components/CodeBlock.tsx, components/AutoCloser.tsx, components/SidebarTree.tsx and store/store.ts.
 import { useSyncExternalStore } from 'react';
 import type { PendingRequest, RunInfo } from '@shared/contract';
 import { commandRefOf, type CommandOriginal, type CommandRef } from '@shared/command-dupes';
@@ -21,6 +21,11 @@ export function putRun(r: RunInfo): void {
 }
 
 if (typeof window !== 'undefined' && window.sb && location.hash !== '#overlay') sb.on('run:updated', putRun);
+
+/** The chat's runs still going, oldest first (their note rides on the user's next message: store.ts, #428). */
+export function runningRuns(chatId: string): RunInfo[] {
+  return [...runs.values()].filter(r => r.chatId === chatId && r.state === 'running').sort((a, b) => a.startedAt - b.startedAt);
+}
 
 /** Whether one of the chat's runs is still going (the auto-close waits for it: components/AutoCloser.tsx). */
 export function hasRunningRun(chatId: string): boolean {

@@ -448,6 +448,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         }
         const req = d.chats.pending().find(p => p.chatId === chatId && p.id === requestId);
         if (!req) throw new Error('questa richiesta non è più aperta (quelle aperte: app_pending; un comando si mostra all’utente con relay_question e parte al suo sì)');
+        // your own question panel is his to answer: a relayed question or command there runs on his pick (#425)
+        if (chatId === callerId && req.type === 'question') throw new Error('bloccato: è una tua domanda: la risponde l’utente nel pannello');
         // his own message (ADR 0274): the chats check it is his and after the request
         if (a.words !== undefined) {
           if (!d.chats.answerWithUserWords) throw new Error('non disponibile');

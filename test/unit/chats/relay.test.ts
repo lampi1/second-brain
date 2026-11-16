@@ -2,7 +2,7 @@
 // user's own «sì» / «no» there answers it, never anything else. Fake deps, fake clock.
 import { expect, it } from 'vitest';
 import type { Answer, ChatItem, ChatSummary, PendingRequest } from '../../../src/shared/contract';
-import { QuestionRelay, RELAY_MS } from '../../../src/main/chats/relay';
+import { pickOf, QuestionRelay, RELAY_MS } from '../../../src/main/chats/relay';
 
 const chat = (p: Partial<ChatSummary> & { id: string }): ChatSummary => ({ title: p.id, state: 'waiting', pending: 1, isOrchestrator: false, ...p }) as ChatSummary;
 const yesNo = (id: string, chatId: string, question = 'Applico la migrazione al DB locale?', tool = 'AskUserQuestion'): PendingRequest => ({
@@ -208,4 +208,73 @@ it('Remote Control shows the reply whole: his «sì» there runs the relayed com
   q.wrote('Lancio i test, va bene?');
   expect(await q.r.userSaid('orch', 'sì', 'remote')).toBe(false);
   expect(q.ran).toEqual([]);
+});
+
+// #425: on Remote Control a plain message is only text; the Orchestrator's own AskUserQuestion shows buttons, and his
+// pick there is delivered by the app
+const remoteUser = (text = 'come va?'): ChatItem => ({ kind: 'user', id: 'ur', at: 1, text, via: 'phone', remote: true } as ChatItem);
+let panelN = 0;
+const panel = (question: string, output: string, status: 'ok' | 'error' = 'ok'): ChatItem => ({ kind: 'tool', id: `t${++panelN}`, at: Date.now() + 1000, name: 'AskUserQuestion', summary: '', status, output,
+  input: { questions: [{ question, header: 'Sì o no', multiSelect: false, options: [{ label: 'Sì' }, { label: 'No' }] }] } } as ChatItem);
+const answeredWith = (q: string, label: string) => `User has answered your questions: "${q}"="${label}". You can now continue with the user's answers in mind.`;
+
+it('pickOf reads the label of the asked question, else the only quoted Sì or No', () => {
+  expect(pickOf(answeredWith('Va bene?', 'Sì'), 'Va bene?')).toBe('yes');
+  expect(pickOf(answeredWith('Riga uno\nriga due', 'No'), 'Riga uno riga due')).toBe('no');
+  expect(pickOf('answered: "Sì (consigliato)"', 'altro')).toBe('yes');
+  expect(pickOf('"Sì" or "No"', 'altro')).toBeNull();
+  expect(pickOf('the user closed it', 'Va bene?')).toBeNull();
+  // quotes inside the question never count as his pick
+  expect(pickOf('answered "Va bene il "sì" di Dev?" with other text', 'Va bene il "sì" di Dev?')).toBeNull();
+});
+
+it('from Remote Control a relayed question goes into the Orchestrator\'s panel, and his pick there answers the chat (#425)', async () => {
+  const w = world([yesNo('q1', 'dev')], [remoteUser()]);
+  const out = w.r.relay('orch', 'dev');
+  expect(out.write).toMatch(/AskUserQuestion.*exactly «Dev · migrazione chiede: Applico la migrazione al DB locale\?».*«Sì» and «No».*never answer it yourself/s);
+  // another tool of the Orchestrator, or a panel with another question, answers nothing
+  expect(await w.r.toolAnswered('orch', panel('Altra domanda?', answeredWith('Altra domanda?', 'Sì')))).toBe(false);
+  expect(await w.r.toolAnswered('orch', { ...panel('x', 'y'), name: 'Bash' } as ChatItem)).toBe(false);
+  const ask = 'Dev · migrazione chiede: Applico la migrazione al DB locale?';
+  // a connector's tool of the same name, or a panel older than the relay, answers nothing
+  expect(await w.r.toolAnswered('orch', { ...panel(ask, answeredWith(ask, 'Sì')), name: 'mcp__srv__AskUserQuestion' } as ChatItem)).toBe(false);
+  expect(await w.r.toolAnswered('orch', { ...panel(ask, answeredWith(ask, 'Sì')), at: 500 } as ChatItem)).toBe(false);
+  expect(w.r.panelArmed('orch')).toBe(true);
+  expect(await w.r.toolAnswered('orch', { ...panel(ask, answeredWith(ask, 'Sì')), at: 2000 } as ChatItem)).toBe(true);
+  expect(w.r.panelArmed('orch')).toBe(false);
+  expect(w.answered).toEqual([{ chatId: 'dev', requestId: 'q1', answer: { kind: 'question', answers: { 'Applico la migrazione al DB locale?': 'Sì (consigliato)' } }, by: 'phone' }]);
+  expect(await w.r.toolAnswered('orch', panel(ask, answeredWith(ask, 'No')))).toBe(false);   // used once
+});
+
+it('a panel closed without a Sì or No leaves the question open and tells the Orchestrator to relay it again (#425)', async () => {
+  const w = world([yesNo('q1', 'dev')], [remoteUser()]);
+  w.r.relay('orch', 'dev');
+  const ask = 'Dev · migrazione chiede: Applico la migrazione al DB locale?';
+  expect(await w.r.toolAnswered('orch', panel(ask, 'interrupted', 'error'))).toBe(false);
+  expect(w.answered).toEqual([]);
+  expect(w.told).toEqual([expect.stringMatching(/non è stata letta.*relay_question/)]);
+});
+
+it('from Remote Control a command is written whole first, then asked in the panel; his Sì there runs it (#425)', async () => {
+  const p = withCommands([cmd('c2', 'dev', 'Get-Date')]);
+  p.userWrote('come va?', 'remote');
+  const out = p.r.relay('orch', 'dev');
+  expect(out.write).toMatch(/First write to the user, exactly.*Get-Date.*AskUserQuestion.*exactly «Eseguo questo comando sul tuo PC\?»/s);
+  // the panel answered before the whole command was written: nothing runs
+  expect(await p.r.toolAnswered('orch', panel(out.question, answeredWith(out.question, 'Sì')))).toBe(false);
+  expect(p.ran).toEqual([]);
+  const q = withCommands([cmd('c3', 'dev', 'Get-Date')]);
+  q.userWrote('come va?', 'remote');
+  const o2 = q.r.relay('orch', 'dev');
+  q.wrote('Dev chiede: Lancia i test:\nGet-Date');
+  expect(await q.r.toolAnswered('orch', panel(o2.question, answeredWith(o2.question, 'Sì')))).toBe(true);
+  expect(q.ran).toEqual(['c3:confirmed']);
+});
+
+it('the Orchestrator\'s own command block is relayed too (Esegui is a PC button), never its own questions (#425)', async () => {
+  const p = withCommands([cmd('c9', 'orch', 'Get-Date')]);
+  expect(p.show('orch').question).toBe('Eseguo questo comando sul tuo PC?');
+  expect(await p.r.userSaid('orch', 'sì', 'remote')).toBe(true);
+  expect(p.ran).toEqual(['c9:confirmed']);
+  expect(() => withCommands([]).r.relay('orch', 'orch')).toThrow(/only a command block of yours/);
 });

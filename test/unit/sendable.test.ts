@@ -4,7 +4,7 @@
 // turn when it works; Copiato only with the user's next message; Annulla tells nothing; Non serve tells the chat.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatItem, ChatSummary, PendingRequest } from '@shared/contract';
-import { blockKey, firstWords, isSendable, noteLine, splitNotes, UNDO_MS } from '../../src/renderer/lib/sendable';
+import { blockKey, dismissedLine, firstWords, isSendable, noteLine, splitNotes, UNDO_MS } from '../../src/renderer/lib/sendable';
 import { foreignOf } from '../../src/renderer/lib/foreign';
 
 const invoke = vi.fn();
@@ -27,6 +27,14 @@ describe('sendable', () => {
     expect(firstWords('PR https://git.example.com/org/p/_git/r/pull/4242?_a=files&x=y')).toBe('PR https://git.example.com/org/p/_git/r/pull/4242');
     expect(noteLine('sent', 'Ciao Marco,\nresto')).toBe('[Mandato] Ciao Marco,');
     expect(noteLine('dismissed', 'npm test')).toBe('[Non serve] npm test');
+    // #428: a duplicate of a command that runs or ran is told as a duplicate, never as a refusal; still a note line
+    const at = new Date(2026, 10, 16, 10, 42).getTime();
+    expect(dismissedLine('npm test')).toBe('[Non serve] npm test');
+    expect(dismissedLine('npm test', { runId: 'r', state: 'running', startedAt: at, ownChat: false, resultComes: true })).toBe("[Non serve] npm test · doppione, non un rifiuto: lo stesso comando è in esecuzione dalle 10:42 (da un'altra chat); l'esito ti arriva quando finisce, non riproporlo");
+    // run results off: the chat is not promised a result that never comes
+    expect(dismissedLine('npm test', { runId: 'r', state: 'running', startedAt: at, ownChat: true })).toMatch(/l'esito non ti arriva da solo/);
+    expect(dismissedLine('npm test', { runId: 'r', state: 'error', startedAt: at, endedAt: at, ownChat: true })).toBe("[Non serve] npm test · doppione, non un rifiuto: lo stesso comando è già stato eseguito alle 10:42 (con errore); leggi quell'esito, non riproporlo");
+    expect(splitNotes(dismissedLine('npm test', { runId: 'r', state: 'ok', startedAt: at, ownChat: true })).notes).toHaveLength(1);
   });
 
   it('notes at the end of a message come apart; a message of notes only folds as "Fatto da te"', () => {
@@ -115,6 +123,20 @@ describe('notes to the chat', () => {
     expect(sent()).toEqual([]);
     dispatch({ type: 'chat:updated', chat: chat('a') });
     expect(sent()).toEqual(['[Mandato] Ciao Marco,']);
+  });
+
+  it('a message written while a command of the chat still runs carries an «In corso» line; an ended run none (#428)', async () => {
+    const { putRun } = await import('../../src/renderer/lib/runs');
+    const run = { id: 'r-428', chatId: 'a', itemId: 'm', code: 'az deployment group create -g rg-demo', cwd: 'C:/x', state: 'running' as const, exitCode: null, output: '', startedAt: new Date(2026, 10, 16, 9, 5).getTime() };
+    putRun(run);
+    expect(send('a', 'come va?')).toBe('sent');
+    expect(sent().at(-1)).toBe("come va?\n\n[In corso] az deployment group create -g rg-demo · avviato con Esegui alle 09:05, ancora in esecuzione: l'esito ti arriva quando finisce, non riproporlo");
+    expect(splitNotes(sent().at(-1)!)).toMatchObject({ text: 'come va?', notes: [expect.stringMatching(/^\[In corso\] /)] });
+    putRun({ ...run, state: 'ok', exitCode: 0, endedAt: run.startedAt + 1 });
+    await vi.runAllTimersAsync();
+    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle' }) });
+    expect(send('a', 'e ora?')).toBe('sent');
+    expect(sent().at(-1)).toBe('e ora?');
   });
 
   it('Non serve on a command card tells the chat', async () => {

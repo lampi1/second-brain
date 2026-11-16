@@ -296,6 +296,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const delegateWorktrees = new DelegateWorktrees(path.join(ctx.userData, 'delegation-worktrees.json'), () => brain.info().brainRoot, worktreePool);
   // the question gates ask for a brief before a yes/no question (ADR 0150): the visuals' store exists further down
   const briefRef: { current?: Artifacts } = {};
+  const relayRef: { current?: QuestionRelay } = {};
   // «Modalità notte» (ADR 0191): the user is away; what the app chooses or parks for them waits for the recap
   const awayLog = new AwayLog(path.join(ctx.userData, 'away-log.json'));
   const awayOn = () => brain.settings().awayMode === true;
@@ -316,7 +317,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     runs: chatId => runsRef.current?.list(chatId) ?? [],
     writeDelayMs: 250, // chats.json and agent-runs.json: one asynchronous write per burst (the main-process freezes, 2026-10-27)
     priceOf,
-    briefReady: chatId => briefRef.current?.hasBrief(chatId) ?? true,
+    // the Orchestrator's own Sì/No panel for a relayed question carries its brief in the text (#425)
+    briefReady: chatId => relayRef.current?.panelArmed(chatId) || (briefRef.current?.hasBrief(chatId) ?? true),
     briefOptions: chatId => briefRef.current?.briefOptions(chatId) ?? null,
     prepareDelegation: delegateWorktrees.prepare,
     reopenBlocked: delegateWorktrees.reopenBlocked,
@@ -753,10 +755,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     answer: (chatId, requestId, a, by) => manager.answer(chatId, requestId, a, by),
     notify: (orchestratorId, text) => { void manager.send(orchestratorId, text, undefined, false, 'App', false, { kind: 'app' }).catch(() => {}); },
     commands: awayCommands });
+  relayRef.current = relay;
   addChatTools([relay.tool()]);
   ctx.emitter.tap((channel, payload) => {
     if (channel !== 'chat:item') return;
     const { chatId, item, replace } = payload as EventMap['chat:item'];
+    // his pick in the Orchestrator's own question panel, for a question relayed while he writes from Remote Control (#425)
+    if (item.kind === 'tool') { if (item.status !== 'running' && manager.list().find(c => c.id === chatId)?.isOrchestrator) void relay.toolAnswered(chatId, item); return; }
     if (replace || item.kind !== 'user' || item.from || !manager.list().find(c => c.id === chatId)?.isOrchestrator) return;
     // Remote Control's echo of what he typed on the phone (Telegram's went through send): his last message too (ADR 0275)
     if (item.via === 'phone') manager.noteUserSaid(chatId, item.text);
