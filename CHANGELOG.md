@@ -229,7 +229,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   before Claude Code writes the result). The «Turno finito» line still comes with the real cost, and sooner: at a
   turn's end the app no longer starts a process for its rules hook, nor the inbox hook (the app delivers the chats'
   mail itself), nor a second copy of a template hook the chat's own brain folder already runs. The log's
-  `timing: turn` line now says how long each turn's end and its Stop hooks took (ADR 0317).
+  `timing: turn` line now says how long each turn's end and its Stop hooks took (ADR 0318).
 - macOS and Linux: Cursor's chats are found (its database was looked for under `%APPDATA%` only); the brain's tools
   and `setup-pc.mjs` find the app's data folder; the brain's path values keep a POSIX path as it is; agents are told
   the real login shell (zsh, bash) instead of PowerShell, in the rules and in the outcome of Esegui; «Trovate sul PC»

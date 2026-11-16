@@ -48,7 +48,7 @@ describe('product brain activation for Claude', () => {
   });
 });
 
-describe('the end of a turn starts no process of the app (ADR 0317)', () => {
+describe('the end of a turn starts no process of the app (ADR 0318)', () => {
   // Claude Code writes a turn's result only after every Stop hook: each one the app adds is a wait before «Turno finito»
   const stopCommands = (pluginDir: string): string[] =>
     ((JSON.parse(fs.readFileSync(path.join(pluginDir, 'hooks/hooks.json'), 'utf8')) as { hooks: Record<string, { hooks: { command: string }[] }[]> }).hooks.Stop ?? []).flatMap(g => g.hooks.map(h => h.command));

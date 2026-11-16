@@ -312,7 +312,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0314](0314-ci-green-on-three-systems.md) CI that tells the truth on Windows, Linux and macOS — accepted
 - [0315](0315-no-dot-over-the-helpers.md) No dot over the helpers' heads — accepted
 - [0316](0316-maps-in-depth-and-a-readable-viewer.md) Maps in depth, key files in the viewer, and code read as in an editor — accepted
-- [0317](0317-a-chat-stops-showing-work-when-its-reply-is-complete.md) A chat stops showing work when its reply is complete — accepted
+- [0318](0318-a-chat-stops-showing-work-when-its-reply-is-complete.md) A chat stops showing work when its reply is complete — accepted
 
 ## Replaced
 

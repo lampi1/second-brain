@@ -37,7 +37,7 @@ export function runHook(root: string, state: string, input: HookInput, launch: L
       // Feed contains metadata only. Prompts/tool input and credentials never enter this file.
       atomicWrite(state, `${id}.feed.json`, JSON.stringify({ session: input.session_id, event: input.hook_event_name, at: Date.now() }));
       // the commit is synchronous git: only in the runner's own process, never inside the app (a brain that turns
-      // autoCommit on while a chat lives would otherwise commit in the app's main process, ADR 0317)
+      // autoCommit on while a chat lives would otherwise commit in the app's main process, ADR 0318)
       if (input.hook_event_name === 'Stop' && launch.inProcess !== true) autoCommit(ctx);
       return context ? { context } : {};
     });

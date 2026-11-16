@@ -1,4 +1,4 @@
-// The end of a turn as the user sees it (ADR 0317): what shows a chat as working stops with the reply's last text, not
+// The end of a turn as the user sees it (ADR 0318): what shows a chat as working stops with the reply's last text, not
 // with the CLI's result, which waits for the Stop hooks (seconds on a brain with several) and for an idle that may come
 // late. Three steps, none with a clock or a process: the Claude engine fed the lines a real CLI wrote (2.1.325,
 // recorded 2026-11-16: assistant, message_delta end_turn, hook_started Stop … hook_response, result, idle), the
@@ -110,7 +110,7 @@ describe('the Claude engine says when the reply is complete', () => {
   });
 });
 
-describe('a product brain\'s Stop hook costs no process (ADR 0317)', () => {
+describe('a product brain\'s Stop hook costs no process (ADR 0318)', () => {
   type Raw = { write(obj: unknown): void; initHooks(): Record<string, { hookCallbackIds: string[] }[]> | null; onControlRequest(m: Line): Promise<void> };
   const product = (stop: boolean) => new ClaudeSession({ chatId: 'c_stop', cwd: '.', sessionId: 'abc12345', readOnly: true,
     productHooks: { root: path.join(os.tmpdir(), 'sb-no-such-brain'), state: path.join(os.tmpdir(), 'sb-no-such-state'), launch: {}, ...(stop ? { stop: true as const } : {}) } }, recSink()) as unknown as Raw;

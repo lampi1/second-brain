@@ -1,4 +1,4 @@
-// Live check of the end of a turn (ADR 0317) against the real Claude CLI (spends real tokens, 1 tiny haiku turn,
+// Live check of the end of a turn (ADR 0318) against the real Claude CLI (spends real tokens, 1 tiny haiku turn,
 // ~0.01 $): runs only with SB_LIVE=1.   SB_LIVE=1 npx vitest run test/live/turn-closing.live.test.ts
 // A Stop hook that sleeps 3 s holds the CLI's result back, as a brain's own hooks do. Measured from the reply's last
 // text, into test-results/live-turn-closing.json: when the chat stops showing work (turnClosing), when the result with

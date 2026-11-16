@@ -1,4 +1,4 @@
-# ADR 0317 · A chat stops showing work when its reply is complete
+# ADR 0318 · A chat stops showing work when its reply is complete
 
 Date: 2026-11-16 · Status: accepted (owner, thread «Fermare subito l'indicatore a fine turno», 2026-11-16: «as soon as
 the last assistant text is shown and no tool call follows, the indicator stops at once»)

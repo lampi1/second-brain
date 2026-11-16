@@ -312,7 +312,7 @@ type HookGroup = { matcher?: string; hooks: { type: string; command: string; tim
 /** Template hooks the product runtime replaces: limits and vendor checks (guards.ts), the feed (runtime metadata feed,
  * the app's own Live feed), auto-commit (maintenance.ts) and the inbox's Stop hook: the plugin reaches only the app's
  * own chats, whose mail the app delivers itself within 2 s, mid-turn too (chats/mail.ts), so that hook only made every
- * turn's result wait for one more process, the slowest of the stop (ADR 0317). */
+ * turn's result wait for one more process, the slowest of the stop (ADR 0318). */
 export const REPLACED_HOOKS = ['vendor-guard.mjs', 'brain-limits.mjs', 'chat-feed.mjs', 'auto-commit.mjs', 'inbox.mjs'];
 /** The template's Claude hooks a product brain keeps (panel dismissed, compact, correction/praise/recall, runbook
  * reminder), pointed at the app-owned copy. Read from the release template; the brain's own settings are never used.

@@ -227,7 +227,7 @@ export abstract class ManagerSink extends ManagerWork {
         void this.closeKeeping(r, r.session);
       }
     }
-    // the reply is complete, the engine only closes the turn (ADR 0317): what shows work stops, the state stays
+    // the reply is complete, the engine only closes the turn (ADR 0318): what shows work stops, the state stays
     if (p.closing === true && r.s.state === 'running' && !r.handoffTurn?.quiet) r.s.turnClosing = true;
     else if (p.closing === false) delete r.s.turnClosing;
     if (p.sessionId && p.sessionId !== r.s.sessionId) {

@@ -58,7 +58,7 @@ type StateRow = Pick<ChatSummary, 'state' | 'pending' | 'queued' | 'closedAt' | 
 /** Where a delegated chat stands, for its card (DelegationCard.tsx, the states of the tree design): its result once it
  *  reported; otherwise asking the user, queued, failed, starting, working; a turn that ended without agent_report is
  *  "fermo" (it owes its result), or "permesso negato" when the app refused it a permission above its parent's. A
- *  turn that closes with no report yet (turnClosing, ADR 0317) stays "working": at the idle the app asks it for its
+ *  turn that closes with no report yet (turnClosing, ADR 0318) stays "working": at the idle the app asks it for its
  *  report, and «fermo» with its buttons for the seconds of the Stop hooks would read as an alarm. */
 export function childState(c: StateRow, refused = false): ChildState {
   const r = c.delegation?.result;

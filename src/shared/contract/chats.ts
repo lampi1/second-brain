@@ -57,7 +57,7 @@ export interface ChatSummary {
   permissionMode: PermissionMode | null;
   state: ChatState;
   /** the reply is complete (the model stopped and asks for no tool, or the result came) and the engine only closes the
-   *  turn: its Stop hooks, its own bookkeeping (ADR 0317). state stays 'running' for every rule (queue, Stop,
+   *  turn: its Stop hooks, its own bookkeeping (ADR 0318). state stays 'running' for every rule (queue, Stop,
    *  auto-close); only what shows the chat as working goes. Set by main with state 'running' only, never persisted */
   turnClosing?: true;
   costUsd: number;            // cumulative for this app run (API-equivalent on a subscription), live estimate included

@@ -23,7 +23,7 @@ import { memoryInstructions } from '../../rules/new-brain';
 import { isDir, launchRules, readText, resolvePlaceholders, instructionsOf, type BrainDomain } from './domains';
 
 export const PLUGIN_NAME = 'second-brain';
-/** how the product hooks are delivered (in process, Stop too unless the brain commits at the stop: ADR 0099, 0317),
+/** how the product hooks are delivered (in process, Stop too unless the brain commits at the stop: ADR 0099, 0318),
  *  and which template hooks the plugin keeps (rules/tools.ts REPLACED_HOOKS): part of the plugin's signature */
 const HOOKS_LAYOUT = 'hooks:in-process-v2';
 /** what is copied from each domain's .claude folder into the plugin, and as which plugin folder */
@@ -91,7 +91,7 @@ export function claudeLaunch(userData: string, input?: { domains: BrainDomain[];
 /** The hook files a chat in the brain's own folder runs at the stop by itself: Claude Code reads that folder's
  * .claude/settings.json and settings.local.json (read here, never written), and an older brain wires its own copy of a
  * template hook there. The plugin's copy would do the same work a second time at every turn's end (measured on the
- * owner's brain: `runbook-reminder.mjs` twice, ~2 s each, ADR 0317). A chat in any other folder has only the plugin's.
+ * owner's brain: `runbook-reminder.mjs` twice, ~2 s each, ADR 0318). A chat in any other folder has only the plugin's.
  * Only a copy that can run counts: wired to this folder's own file (`$CLAUDE_PROJECT_DIR`, a relative path or the
  * folder itself), the file there, and every file it imports there too (a migrated brain keeps its hooks and loses
  * the ops/tools they import: its copy fails at load, and the plugin's is the one that works). */

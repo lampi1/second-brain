@@ -73,7 +73,7 @@ export interface SessionPatch {
   state?: ChatState;
   /** true: the reply is complete and the engine only closes the turn (Claude: the model stopped with no tool call, or
    *  the result came, while Stop hooks run or the CLI's idle is late); false: it works again. The state does not change:
-   *  the manager shows it as ChatSummary.turnClosing (ADR 0317) */
+   *  the manager shows it as ChatSummary.turnClosing (ADR 0318) */
   closing?: boolean;
   sessionId?: string;          // the CLI's own session id (learned at init, or new after a fork)
   model?: string;              // the model actually in use (from init)
@@ -171,7 +171,7 @@ export interface SessionOptions {
   preToolUse?: PreToolHook | null;
   /** Claude only: a product brain's hooks the session answers in process (rules/runtime.ts runHook) instead of a node
    *  process per call: UserPromptSubmit, PreToolUse, PostToolUse (ADR 0099), and Stop when `stop` says so */
-  productHooks?: { root: string; state: string; launch: { tools?: string; correctionHook?: boolean }; /** Stop too (no runner process at the turn's end, ADR 0317) */ stop?: true } | null;
+  productHooks?: { root: string; state: string; launch: { tools?: string; correctionHook?: boolean }; /** Stop too (no runner process at the turn's end, ADR 0318) */ stop?: true } | null;
   /** Claude only: the chat may turn on Remote Control (the Orchestrator, ADR 0229): the engine echoes every user message
    *  it queues (--replay-user-messages), so the ones typed on the phone show in the chat */
   remoteControl?: boolean;

@@ -30,7 +30,7 @@ export function productSignature(root: string): string {
 /** The events the runner serves from hooks.json. The app's own Claude chats answer them in process (ClaudeSession
  *  productHooks, hook_callback): two node processes per tool call were 0.2-2 s each on Windows (ADR 0099). */
 export const ALL_EVENTS = ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'] as const;
-/** Stop too is answered in process (ADR 0317: Claude Code writes a turn's result only after its Stop hooks, and a
+/** Stop too is answered in process (ADR 0318: Claude Code writes a turn's result only after its Stop hooks, and a
  *  process start is 0.4 s or more on a busy Windows PC), unless the brain commits its memory at every stop
  *  (rules.autoCommit): that commit runs synchronous git, which must never block the app's main process, so the runner
  *  keeps it. */

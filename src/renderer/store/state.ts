@@ -219,7 +219,7 @@ export function sameList<T>(a: readonly T[], b: readonly T[]): boolean {
 
 export const isBusy = (c: ChatSummary) => c.state === 'running' || c.state === 'starting';
 /** Whether the chat is shown as working (the working line, the person at work, «al lavoro»): busy, and not only
- *  closing a turn whose reply is already complete (ChatSummary.turnClosing, ADR 0317). The rules (queue, Stop, menus)
+ *  closing a turn whose reply is already complete (ChatSummary.turnClosing, ADR 0318). The rules (queue, Stop, menus)
  *  keep isBusy: the turn is not over for them until its result and the engine's idle. */
 export const showsWork = (c: ChatSummary) => isBusy(c) && !c.turnClosing;
 
