@@ -100,7 +100,7 @@ function ownStopHooks(cwd: string | undefined, root: string): string[] {
   const names = new Set<string>();
   for (const file of ['settings.json', 'settings.local.json']) {
     try {
-      const own = JSON.parse(fs.readFileSync(path.join(root, '.claude', file), 'utf8').replace(/^﻿/, '')) as { hooks?: { Stop?: { hooks?: { command?: unknown }[] }[] } };
+      const own = JSON.parse(fs.readFileSync(path.join(root, '.claude', file), 'utf8').replace(/^\uFEFF/, '')) as { hooks?: { Stop?: { hooks?: { command?: unknown }[] }[] } };
       for (const g of own.hooks?.Stop ?? []) for (const h of g.hooks ?? []) {
         if (typeof h.command !== 'string') continue;
         for (const word of h.command.matchAll(/"([^"]+)"|'([^']+)'|(\S+)/g)) {

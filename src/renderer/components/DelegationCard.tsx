@@ -214,7 +214,7 @@ export function DelegationCard({ chatId }: { chatId: string }) {
 const sameAvatar = (a: ChatSummary['agent'], b: ChatSummary['agent']) => a?.avatar === b?.avatar || (!!a?.avatar && !!b?.avatar && a.avatar.kind === b.avatar.kind && a.avatar.value === b.avatar.value);
 const sameKids = (a: readonly ChatSummary[], b: readonly ChatSummary[]) => a === b || (a.length === b.length && a.every((k, i) => {
   const o = b[i]!;
-  return k === o || (k.id === o.id && childState(k) === childState(o) && k.agent?.name === o.agent?.name && sameAvatar(k.agent, o.agent));
+  return k === o || (k.id === o.id && childState(k) === childState(o) && k.turnClosing === o.turnClosing && k.agent?.name === o.agent?.name && sameAvatar(k.agent, o.agent));
 }));
 
 /** The parent's summary of its children, at the foot of its strip: counts by state, their characters, one segment each,

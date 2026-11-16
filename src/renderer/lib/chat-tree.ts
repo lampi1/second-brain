@@ -54,11 +54,12 @@ export function visibleTree(nodes: readonly TreeNode[], collapsed: Readonly<Reco
 }
 
 export type ChildState = 'start' | 'run' | 'wait' | 'queued' | 'err' | 'stall' | 'refused' | 'done' | 'partial' | 'blocked' | 'noreport' | 'closed';
-type StateRow = Pick<ChatSummary, 'state' | 'pending' | 'queued' | 'closedAt' | 'delegation' | 'background' | 'agentChildren' | 'turnClosing'>;
+type StateRow = Pick<ChatSummary, 'state' | 'pending' | 'queued' | 'closedAt' | 'delegation' | 'background' | 'agentChildren'>;
 /** Where a delegated chat stands, for its card (DelegationCard.tsx, the states of the tree design): its result once it
  *  reported; otherwise asking the user, queued, failed, starting, working; a turn that ended without agent_report is
- *  "fermo" (it owes its result), or "permesso negato" when the app refused it a permission above its parent's. A turn
- *  whose reply is complete is no longer at work (turnClosing, ADR 0317): it reads as it will at the engine's idle. */
+ *  "fermo" (it owes its result), or "permesso negato" when the app refused it a permission above its parent's. A
+ *  turn that closes with no report yet (turnClosing, ADR 0317) stays "working": at the idle the app asks it for its
+ *  report, and «fermo» with its buttons for the seconds of the Stop hooks would read as an alarm. */
 export function childState(c: StateRow, refused = false): ChildState {
   const r = c.delegation?.result;
   // the app closed it: it ended without agent_report (#152)
@@ -70,7 +71,7 @@ export function childState(c: StateRow, refused = false): ChildState {
   if (c.queued && c.state !== 'running' && c.state !== 'error') return 'queued';
   if (c.state === 'error') return 'err';
   if (c.state === 'starting') return 'start';
-  if ((c.state === 'running' && !c.turnClosing) || (c.background ?? 0) > 0 || (c.agentChildren?.active ?? c.agentChildren?.observedActive ?? 0) > 0) return 'run';
+  if (c.state === 'running' || (c.background ?? 0) > 0 || (c.agentChildren?.active ?? c.agentChildren?.observedActive ?? 0) > 0) return 'run';
   return refused ? 'refused' : 'stall';
 }
 const BUSY_CAN_SHOW = new Set<ChildState>(['done', 'partial', 'stall', 'queued']);

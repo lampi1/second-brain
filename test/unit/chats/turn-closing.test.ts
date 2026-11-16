@@ -13,7 +13,6 @@ import { ChatManager } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import { showsWork, isBusy } from '../../../src/renderer/store/state';
 import { stateInfo } from '../../../src/renderer/lib/format';
-import { childState } from '../../../src/renderer/lib/chat-tree';
 import { runHook } from '../../../src/main/rules/runtime';
 import { autoCommit } from '../../../src/main/rules/maintenance';
 import { recSink, type RecSink } from './helpers';
@@ -172,11 +171,9 @@ describe('the chat stops showing work while its turn closes', () => {
     expect(showsWork(chat())).toBe(false);          // no working line, no person at work
     expect(isBusy(chat())).toBe(true);              // the rules still wait for the real end
     expect(stateInfo(chat()).tone).not.toBe('run'); // nor «al lavoro»
-    expect(childState(chat())).not.toBe('run');     // nor a helper at work, a pulsing pill, a running row in the tree
 
     sink.changed({ closing: false }); // a Stop hook sent it back to work
     expect(showsWork(chat())).toBe(true);
-    expect(childState(chat())).toBe('run');
 
     sink.changed({ closing: true });
     sink.changed({ state: 'idle' });

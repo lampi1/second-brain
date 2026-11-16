@@ -216,7 +216,7 @@
     "src/renderer/components/ConnectorsHub.tsx": "0c7627a87a26b11d",
     "src/renderer/components/ContextBar.tsx": "29e55a926c219803",
     "src/renderer/components/CorrectThought.tsx": "3806dfb86d1c8a15",
-    "src/renderer/components/DelegationCard.tsx": "ff7ab7beb4f0d454",
+    "src/renderer/components/DelegationCard.tsx": "b78cea49138a35ea",
     "src/renderer/components/FirstInterview.tsx": "89591db9ba961609",
     "src/renderer/components/FullScreen.tsx": "6932b99745c8e053",
     "src/renderer/components/GuideAsk.tsx": "74917107bdfae08c",

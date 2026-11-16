@@ -136,6 +136,9 @@ export interface SessionOptions {
   resume?: boolean;
   fork?: boolean;
   worktree?: boolean;
+  /** the chat works in a worktree the CLI made, on this launch or an earlier one (a resume re-enters it): its folder's
+   *  own settings and hooks are not sure to be there */
+  inWorktree?: boolean;
   /** --mcp-config value: a file path or an inline JSON string */
   mcpConfig?: string | null;
   /** running total cost already restored for this session (for per-turn deltas after a resume) */

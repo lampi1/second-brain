@@ -58,8 +58,10 @@ turn's result waits for those processes, and the indicator with it. No test tied
    `ChatSummary.turnClosing`, only with state `running`, never persisted.
 3. **What shows work follows it.** `showsWork(chat)` = busy and not `turnClosing` (`renderer/store/state.ts`): the
    working line of the Orchestrator, of an open chat, of a strip and of a delegated card, the person at work at a
-   bench, and the state words («al lavoro»). A delegated chat's state (`childState`), a root chat's row in the
-   sidebar and the team's dots read a closing turn as ended too. Strips keep their 0.7 s hold (ADR 0312). Counts of
+   bench, and the state words («al lavoro»). A root chat's row in the sidebar and its dot among the
+   team read a closing turn as ended too. A delegated chat that has not reported keeps its state («in attività»)
+   until the idle, when the app asks it for its report: its person stops working, but «fermo» with its buttons for
+   the seconds of the Stop hooks would read as an alarm. Strips keep their 0.7 s hold (ADR 0312). Counts of
    running chats (top bar, taskbar, tallies) still follow the state.
 4. **The «Turno finito» line is the CLI's result, as before**: its cost is the real one, never an estimate shown
    early.
