@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- Memoria › Artifact: every report, analysis, document, picture, table, recording or other file the chats produce,
+  indexed where it is (a chat's link, the brain's reviews/tmp/evidence, a chat's evidence folder, once the past chats).
+  Search, filters, cards with a picture, versions of the same report as one artifact, a gone file kept as missing; a
+  click opens it in the viewer with its source chat, versions and related ones, or with the system's app (ADR 0319).
 - A sign-in page on a new host of a test environment: `fill_credential` asks the user on the tab «Collegare <host>
   all'account <user>?» (account and hosts, never the password); his Sì adds the site to the entry's `loginUrl` and the
   agent signs in by itself, his No is the old refusal. Only his click on the tab answers it (ADR 0317, #429).

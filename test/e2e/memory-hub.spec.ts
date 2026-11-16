@@ -18,7 +18,7 @@ function fixtureBrain(): string {
   return d;
 }
 
-const TABS = ['proposte', 'approvate', 'skill', 'regole', 'idee', 'file'] as const;
+const TABS = ['proposte', 'approvate', 'skill', 'regole', 'idee', 'file', 'artifact'] as const;
 
 async function theme(page: Page, scheme: 'dark' | 'light') {
   await page.evaluate(t => window.sb.invoke('settings:set', { theme: t }), scheme);
@@ -70,13 +70,13 @@ test('Memoria hub: live top, tabs with keys and deep links, old G-keys, trash wi
     await expect(mem).toHaveAttribute('data-tab', 'approvate');
     await expect(page.getByTestId('mh-tab-approvate')).toBeFocused();
     await page.keyboard.press('End');
-    await expect(mem).toHaveAttribute('data-tab', 'file');
-    await expect(page.getByTestId('mh-tab-file')).toBeFocused();
+    await expect(mem).toHaveAttribute('data-tab', 'artifact');
+    await expect(page.getByTestId('mh-tab-artifact')).toBeFocused();
     await page.keyboard.press('Home');
     await expect(mem).toHaveAttribute('data-tab', 'proposte');
     await expect(page.getByTestId('mh-tab-proposte')).toBeFocused();
     await page.keyboard.press('ArrowLeft');
-    await expect(mem).toHaveAttribute('data-tab', 'file');
+    await expect(mem).toHaveAttribute('data-tab', 'artifact');
 
     // the old G-keys land on their tab
     const keys: [Parameters<typeof goPage>[1], string][] = [['skill', 'skill'], ['regole', 'regole'], ['script', 'skill'], ['idee', 'idee'], ['dashboard', 'proposte']];

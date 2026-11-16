@@ -17,6 +17,7 @@ import type { EngineInfo, Harness, EnginesInvokeMap } from './contract/engines';
 import type { FeedEvent, TasksState, FeedInvokeMap } from './contract/feed';
 import type { MediaInvokeMap } from './contract/media';
 import type { ChessInvokeMap } from './contract/chess';
+import type { LibraryInvokeMap } from './contract/library';
 import type { BudgetAlert, SettingChange, SettingProposal, Settings, SettingsInvokeMap } from './contract/settings';
 import type { AnswerLater, HeldNewsState, OverlayAction, OverlayModel, SearchIndexStatus, SyncState, UiInvokeMap } from './contract/ui';
 import type { ImparaState, Lesson } from './lesson';
@@ -40,6 +41,7 @@ export * from './contract/ui';
 export * from './contract/agents';
 export * from './contract/media';
 export * from './contract/chess';
+export * from './contract/library';
 export * from './contract/phone';
 export * from './contract/phone-ipc';
 // Internal identity only: exporting its data type adds no renderer channel or authority.
@@ -48,7 +50,7 @@ export type { RuntimeIdentity, RuntimeOutcome } from './agent-runtime';
 /** renderer → main. Each entry: [argument, result]. One interface per area (src/shared/contract/*.ts). */
 export interface InvokeMap extends
   EnginesInvokeMap, ChatsInvokeMap, BrowserInvokeMap, FeedInvokeMap, AppInvokeMap,
-  SettingsInvokeMap, BrainInvokeMap, UiInvokeMap, AgentsInvokeMap, MediaInvokeMap, ChessInvokeMap {}
+  SettingsInvokeMap, BrainInvokeMap, UiInvokeMap, AgentsInvokeMap, MediaInvokeMap, ChessInvokeMap, LibraryInvokeMap {}
 
 /** main → renderer. */
 export interface EventMap {
@@ -135,6 +137,8 @@ export interface EventMap {
   'news:changed': NewsState;
   /** scheduled routines (ADR 0281): the list changed (an edit, a run, a next time) */
   'schedules:changed': SchedulesState;
+  /** Memoria → Artifact (ADR 0319): the index changed (a scan, a chat's turn, the past chats looked through) */
+  'library:changed': void;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -182,6 +186,7 @@ export const INVOKE_CHANNELS = [
   'usecount:add', 'usecount:report',
   'projectmap:list', 'projectmap:view', 'projectmap:size',
   'chess:move', 'chess:stop', 'chess:save', 'chess:history',
+  'library:list', 'library:refresh', 'library:thumb', 'library:open',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'routines:progress', 'work:changed',
@@ -200,6 +205,7 @@ export const EVENT_CHANNELS = [
   'impara:changed', 'impara:tutor',
   'news:changed', 'schedules:changed',
   'projectmap:changed',
+  'library:changed',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;

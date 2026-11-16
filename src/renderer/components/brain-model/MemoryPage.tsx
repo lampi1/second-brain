@@ -3,7 +3,8 @@
 // «Manutenzione» button. Below, a tab bar (pills with a count each, arrows / Home / End, the page arg "memoria/<tab>"
 // so a link opens a tab: lib/memory-hub.ts): Proposte (ProposalsDeck.tsx), Approvate (ApprovedTab.tsx: everything in
 // the brain now, deleted in one click with Annulla), Skill (SkillsPage.tsx), Regole (RulesPage.tsx), Idee (brain/pages/Idee.tsx: yours and the AI's, «Rispolvera»), File (the
-// «Diario e note»: MemoryBrowser.tsx, ADR 0245); Apprendimento moved to Andamento (ADR 0202); Statistiche is gone (ADR
+// «Diario e note»: MemoryBrowser.tsx, ADR 0245), Artifact (the chats' reports, documents and images:
+// library/ArtifactsTab.tsx, ADR 0319); Apprendimento moved to Andamento (ADR 0202); Statistiche is gone (ADR
 // 0248: it counted rules and notes; skill use is in the Skill tab); Script & Query is gone (ADR 0263: scripts and queries
 // are files of their skill, shown in its «Leggi»). The old Skill, Regole, Script, Idee and Dashboard
 // pages land here (actions.ts go()). Memory never travels with an exported agent. Rendered by App.tsx
@@ -25,7 +26,7 @@ import { DiscussContext } from '../../brain/components/Discuss';
 import { Idee } from '../../brain/pages/Idee';
 import { ThemesPanel } from '../../dashboard/Themes';
 import { useCountUp } from '../../dashboard/parts';
-import { IconBolt, IconCheck, IconFile, IconLightbulb, IconShield, IconSparkle } from '../Icons';
+import { IconBolt, IconCheck, IconFile, IconLayers, IconLightbulb, IconShield, IconSparkle } from '../Icons';
 import { SkillsPage } from '../SkillsPage';
 import { MaintenancePanel } from './MaintenancePanel';
 import { MaintenanceButton } from './MaintenanceButton';
@@ -33,6 +34,8 @@ import { RulesPage } from './RulesPage';
 import { ApprovedTab, useApprovedCount } from './ApprovedTab';
 import { ProposalsDeck } from './ProposalsDeck';
 import { MemoryBrowser } from './MemoryBrowser';
+import { ArtifactsTab } from '../library/ArtifactsTab';
+import { useLibrary } from '../../lib/library';
 import '../../styles/agent-catalog.css';
 import '../../styles/brain-model.css';
 import '../../styles/memory.css';
@@ -114,7 +117,7 @@ function Hero({ onTab }: { onTab: (tab: HubTab) => void }) {
 // ── the tab bar ─────────────────────────────────────────────────────────────────────────────────────────────────────
 const ICON: Record<HubTab, ReactNode> = {
   proposte: <IconBolt />, approvate: <IconCheck />, skill: <IconSparkle />, regole: <IconShield />,
-  idee: <IconLightbulb />, file: <IconFile />,
+  idee: <IconLightbulb />, file: <IconFile />, artifact: <IconLayers />,
 };
 
 function useCounts(): Partial<Record<HubTab, number>> {
@@ -122,10 +125,12 @@ function useCounts(): Partial<Record<HubTab, number>> {
   const proposals = useProposalCount();
   const approved = useApprovedCount();
   const tables = useBrain('/api/tables', normTables);
+  const library = useLibrary();
   return {
     proposte: proposals, approvate: approved,
     skill: state?.skills.length, regole: state?.rules.length,
     idee: tables.data?.ideas.length,
+    artifact: library.loaded ? library.list.artifacts.length : undefined,
   };
 }
 
@@ -147,7 +152,7 @@ function TabBar({ tab, onTab }: { tab: HubTab; onTab: (tab: HubTab) => void }) {
       bar.current.querySelectorAll('button').forEach(button => ro?.observe(button));
     }
     return () => ro?.disconnect();
-  }, [tab, counts.skill, counts.idee, counts.approvate]);
+  }, [tab, counts.skill, counts.idee, counts.approvate, counts.artifact]);
   const key = (e: KeyboardEvent, i: number) => {
     const n = HUB_TABS.length;
     const next = e.key === 'ArrowRight' ? (i + 1) % n : e.key === 'ArrowLeft' ? (i + n - 1) % n : e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : null;
@@ -188,11 +193,13 @@ function TabContent({ tab, rest }: { tab: HubTab; rest: string | null }) {
     case 'regole': return <RulesPage />;
     case 'idee': return <IdeasTab rest={rest} />;
     case 'file': return <><MemoryBrowser /><MaintenancePanel kinds={['memory']} testId="bm-maint-memory" /></>;
+    case 'artifact': return <ArtifactsTab />;
   }
 }
 
-/** Tabs that work with no brain folder chosen: the deck, the brain's server pages and the skills in ~/.claude/skills. */
-const NO_BRAIN_OK: ReadonlySet<HubTab> = new Set(['proposte', 'skill', 'idee']);
+/** Tabs that work with no brain folder chosen: the deck, the brain's server pages, the skills in ~/.claude/skills and
+ *  the artifacts (the chats' evidence folders are the app's own). */
+const NO_BRAIN_OK: ReadonlySet<HubTab> = new Set(['proposte', 'skill', 'idee', 'artifact']);
 
 export function MemoryPage() {
   const { state, error } = useBrainModel();
