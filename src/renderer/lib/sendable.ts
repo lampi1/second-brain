@@ -17,6 +17,7 @@ export function isSendable(lang: string | null | undefined): boolean {
 export type NoteKind = 'sent' | 'copied' | 'dismissed';
 export const NOTE_TAG: Record<NoteKind, string> = { sent: 'Mandato', copied: 'Copiato', dismissed: 'Non serve' };
 import { NOTE_LINE } from '@shared/notes';
+import type { RunDismissed, RunInfo } from '@shared/contract';
 export { NOTE_LINE };
 
 /** How long a click on Mandato can be undone before the chat is told. */
@@ -31,6 +32,21 @@ export function firstWords(code: string, max = MAX): string {
 }
 
 export const noteLine = (kind: NoteKind, code: string): string => `[${NOTE_TAG[kind]}] ${firstWords(code) || '(blocco vuoto)'}`;
+
+/** A command of this chat still running with Esegui when the user writes to it (#428): the agent knows it runs, so it
+ *  neither proposes it again nor takes the silence for a refusal. */
+export const runningLine = (run: Pick<RunInfo, 'code' | 'startedAt'>): string =>
+  `[In corso] ${firstWords(run.code) || '(blocco vuoto)'} · avviato con Esegui alle ${hhmm(run.startedAt)}, ancora in esecuzione: l'esito ti arriva quando finisce, non riproporlo`;
+
+/** «Non serve» on a card whose identical command runs, or ran recently (#428): the note says it was put aside as a
+ *  duplicate, never as a refusal, so the agent neither proposes it again nor undoes what it waits on. */
+export function dismissedLine(code: string, same?: RunDismissed['same']): string {
+  const line = noteLine('dismissed', code);
+  if (!same) return line;
+  if (same.state === 'running') return `${line} · doppione, non un rifiuto: lo stesso comando è in esecuzione dalle ${hhmm(same.startedAt)}${same.ownChat ? '' : ' (da un\'altra chat)'}; ${same.resultComes ? 'l\'esito ti arriva quando finisce' : 'l\'esito non ti arriva da solo: aspetta che l\'utente ti dica come è finito'}, non riproporlo`;
+  const how = same.state === 'ok' ? 'riuscito' : same.state === 'stopped' ? 'fermato' : 'con errore';
+  return `${line} · doppione, non un rifiuto: lo stesso comando è già stato eseguito${same.endedAt ? ` alle ${hhmm(same.endedAt)}` : ''} (${how}); leggi quell'esito, non riproporlo`;
+}
 
 /** A user message whose last lines are notes: the user's own text and the notes, apart (the bubble shows the notes as
  *  one muted line). A message made only of notes gives text ''. */

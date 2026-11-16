@@ -30,7 +30,7 @@
 // with the reasons (CHECK_LABEL), so the user only sees commands that can start. After MAX_BOUNCES such returns in a row
 // the chat's next broken block is shown anyway, its problems written on the card (no endless loop of tokens).
 // Used by wiring.ts (attachCommandAsks, for the real app and the demo) and index.ts (chat:pending, run:*).
-import type { ChatItem, ChatState, ChatSummary, EventMap, PendingRequest, RunInfo } from '../../shared/contract';
+import type { ChatItem, ChatState, ChatSummary, EventMap, PendingRequest, RunDismissed, RunInfo } from '../../shared/contract';
 import { askedBlocks, type AskedBlock } from '../../shared/command-ask';
 import { prodRisk } from '../../shared/runnable';
 import { normCommand } from '../../shared/command-dupes';
@@ -148,12 +148,32 @@ export class CommandAsks {
    *  of one of them may answer that question; a block from earlier in the turn, or a later question, never. */
   askedAtQuestion(chatId: string, itemId: string): boolean { return this.atQuestion.get(chatId) === itemId; }
 
-  /** "Non serve": off the list, the block stays in the chat with its Esegui. */
-  dismiss(chatId: string, requestId: string): void {
-    if (!this.has(chatId, requestId)) throw new Error('Questa richiesta non è più aperta.');
-    log.info('run', 'command request dismissed', { chat: chatId, data: { id: requestId } });
+  /** "Non serve": off the list, the block stays in the chat with its Esegui. When the identical command runs now, or ran
+   *  within RECENT_OK_MS (#428: a duplicate card put aside while a deploy ran was read by its agent as a refusal), the
+   *  answer names that run so the chat's note says so, and a chat dismissing it while it runs follows that run (its
+   *  result comes when it ends). */
+  dismiss(chatId: string, requestId: string): RunDismissed {
+    const req = this.asks.get(chatId)?.get(requestId);
+    if (!req) throw new Error('Questa richiesta non è più aperta.');
     this.dismissed.add(`${chatId}#${requestId}`);
+    const same = req.command ? this.sameRun(req.command.code) : undefined;
+    log.info('run', 'command request dismissed', { chat: chatId, data: { id: requestId, ...(same ? { same: same.id, state: same.state } : {}) } });
+    const resultComes = same?.state === 'running' && !!this.teller;
+    if (resultComes && same!.chatId !== chatId) {
+      const key = runKey(same!.chatId, same!.itemId, same!.code);
+      this.runFollowers.set(key, (this.runFollowers.get(key) ?? new Set<string>()).add(chatId));
+      this.toldRunning.add(`${chatId}|${same!.id}`);
+    }
     this.drop(chatId, requestId);
+    return same ? { same: { runId: same.id, state: same.state, startedAt: same.startedAt, ...(same.endedAt ? { endedAt: same.endedAt } : {}), ownChat: same.chatId === chatId, ...(resultComes ? { resultComes } : {}) } } : {};
+  }
+
+  /** The identical command (normCommand, any folder: ADR 0299) running now, else the last one that ended within
+   *  RECENT_OK_MS. */
+  private sameRun(code: string): RunInfo | undefined {
+    const norm = normCommand(code), runs = (this.d.runs?.() ?? []).filter(r => normCommand(r.code) === norm);
+    const now = this.d.now?.() ?? Date.now();
+    return runs.filter(r => r.state === 'running').at(-1) ?? runs.filter(r => r.state !== 'running' && (r.endedAt ?? 0) >= now - RECENT_OK_MS).at(-1);
   }
 
   /** A run started (Esegui on the card or under the block): its request is answered, and so is every open ask of the

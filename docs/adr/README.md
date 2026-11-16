@@ -304,7 +304,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0306](0306-the-people-of-the-roles-grow-up.md) The people of the roles grow up: adult bodies, faces and characters — accepted
 - [0307](0307-maps-open-full-screen-and-tell-every-passage.md) The maps open full screen, tell every step and every passage, and are redrawn from a button — accepted; amended by 0316
 - [0309](0309-one-review-chat-per-piece-of-work.md) One review chat per piece of work: after a fix it reviews only the delta — accepted
-- [0310](0310-sign-in-by-credential-name.md) Sign-in by credential name: the app types the password, the agent never holds it — accepted
+- [0310](0310-sign-in-by-credential-name.md) Sign-in by credential name: the app types the password, the agent never holds it — accepted; amended by 0317
 - [0311](0311-the-grindhouse-becomes-a-workshop.md) The Grindhouse becomes a workshop: square benches, scenes without screens, a vice at rest — accepted
 - [0312](0312-benches-of-one-height-helpers-with-name-tags.md) Benches of one height, helpers with name tags, a torch for who works, people who speak only where asked — accepted
 - [0313](0313-the-workshop-picture-and-people-in-full.md) The workshop picture behind the people, and every person in full — accepted; amended by 0315
@@ -312,6 +312,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0314](0314-ci-green-on-three-systems.md) CI that tells the truth on Windows, Linux and macOS — accepted
 - [0315](0315-no-dot-over-the-helpers.md) No dot over the helpers' heads — accepted
 - [0316](0316-maps-in-depth-and-a-readable-viewer.md) Maps in depth, key files in the viewer, and code read as in an editor — accepted
+- [0317](0317-link-a-site-to-a-credential-with-one-click.md) Link a sign-in page's site to a test account with one click — accepted
 
 ## Replaced
 
