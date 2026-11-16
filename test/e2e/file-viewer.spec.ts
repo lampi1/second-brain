@@ -30,6 +30,11 @@ test('file viewer: any local file, highlighted code, CSV table, pretty JSON, pag
   fs.writeFileSync(path.join(brain, 'AGENTS.md'), '# Brain\n');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-viewer-files-'));
   fs.writeFileSync(path.join(dir, 'app.ts'), 'export const answer = 42;\n// the end\n');
+  // code as an editor shows it (ADR 0316): its own palette, indent guides
+  fs.writeFileSync(path.join(dir, 'tools.py'), [
+    'from dataclasses import dataclass', '', '', '@dataclass', 'class Tool:', '    """One tool the server offers."""', '    name: str', '    limit: int = 20', '',
+    '    def run(self, items: list[str]) -> dict:', '        found = []', '        for item in items:', '            if item.startswith("#"):', '                continue  # a comment line',
+    '            found.append(item.strip())', '        return {"name": self.name, "found": found[: self.limit]}', ''].join('\n'));
   fs.writeFileSync(path.join(dir, 'people.csv'), 'name;city\nAda;"London, UK"\n');
   fs.writeFileSync(path.join(dir, 'conf.json'), '{"a":{"b":[1,2]}}');
   fs.writeFileSync(path.join(dir, '.env'), 'TOKEN=shown-on-purpose\n');
@@ -46,6 +51,11 @@ test('file viewer: any local file, highlighted code, CSV table, pretty JSON, pag
     await expect(viewer.getByTestId('bx-code')).toHaveAttribute('data-highlighted', 'true');
     await expect(viewer.locator('[data-l="1"] .hljs-keyword').first()).toHaveText('export');
     await shot(page, 'file-viewer-code');
+    await open(page, path.join(dir, 'tools.py'));
+    await expect(viewer.getByTestId('bx-code')).toHaveAttribute('data-highlighted', 'true');
+    await expect(viewer.locator('[data-l="13"] .bx-ig')).toBeAttached(); // a guide under each indent level
+    await expect(viewer.locator('.hljs-title.function_').first()).toHaveText('run');
+    await shot(page, 'file-viewer-code-ide');
 
     await open(page, path.join(dir, 'people.csv'));
     await expect(viewer.getByTestId('viewer-csv')).toContainText('London, UK');

@@ -3,11 +3,19 @@
 // 44.4.5). With the fuse on, Chromium encrypts cookie values (AES-GCM, "v10") with a key that Windows DPAPI protects
 // for the user (Local State os_crypt.encrypted_key). scripts/fuses.mjs flips it (release.mjs does it for the stable
 // copy). This module only reads the fuse wire, streaming the binary, so the app can warn and show it per environment.
+// On macOS the wire is in the app bundle's Electron Framework, not in the executable: fuseFile names the file.
 // Pure apart from file reading; unit-tested; used by browser/tabs.ts.
 import fs from 'node:fs';
 
 export const FUSE_SENTINEL = 'dL7pKGdnNz796PbbjQWNKmHXBZaB9tsX';
 export const FUSE_COOKIE_ENCRYPTION = 1;            // index in the v1 wire (0 = RunAsNode)
+
+/** The file that holds an Electron executable's fuses: the executable itself, or on macOS (an executable inside an app
+ *  bundle) the bundle's Electron Framework. The same rule as scripts/fuses.mjs. */
+export function fuseFile(exe: string, platform: NodeJS.Platform = process.platform): string {
+  const bundle = platform === 'darwin' ? /^(.*\.app)\/Contents\/MacOS\/[^/]+$/.exec(exe)?.[1] : null;
+  return bundle ? `${bundle}/Contents/Frameworks/Electron Framework.framework/Electron Framework` : exe;
+}
 
 /** The fuse wire ("101100011") right after the sentinel in a buffer, or null. */
 export function readFuseWire(buf: Buffer): string | null {

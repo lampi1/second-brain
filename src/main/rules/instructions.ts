@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { APP_PLUGIN_PARTS } from './tools';
 import { parseMd, field } from '../../shared/skillmd';
+import { userShellName } from '../platform';
 
 /** The app's topic-rule skills (regole-*) in the tools copy, as lines naming each SKILL.md: an adapter without the app's
  *  skills (ACP) reads them from there (#366). Bounded; [] without a copy. */
@@ -31,7 +32,7 @@ export function topicSkillIndex(tools: string, root?: string): string[] {
 /** The product's always-loaded rules for a fresh brain (what the template's AGENTS.md and me.md "Safety" said). */
 export function appBoot(root: string, tools?: string): string {
   const brain = root.replace(/\\/g, '/');
-  const os = process.platform === 'win32' ? 'Windows; shell for the owner\'s commands: PowerShell' : process.platform === 'darwin' ? 'macOS; shell: bash' : 'Linux; shell: bash';
+  const os = process.platform === 'win32' ? 'Windows; shell for the owner\'s commands: PowerShell' : `${process.platform === 'darwin' ? 'macOS' : 'Linux'}; shell for the owner's commands: ${userShellName().name}`;
   return expandTools([
     `# Personal brain: ${brain}`, '',
     'This folder holds only the owner\'s own content. Product rules, tools, agents and skills come from the app at each',

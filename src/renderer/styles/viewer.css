@@ -288,3 +288,53 @@ mark.bx-word { color: inherit; border-radius: 3px; padding: 0 1px; background: c
 @media (prefers-reduced-motion: reduce) {
   .vw-layer, .vw-panel, .vw-find { animation: none; }
 }
+
+/* Code read as in a good editor (ADR 0316, the owner 2026-11-15: «leggibilissimo come dal miglior ide»): a coding font
+   at a readable size, tabs of 4, a thin guide at every indent level (lib/indent-guides.ts), and a token palette of its
+   own with more kinds told apart (functions, types, parameters, properties, decorators, punctuation), tuned for the
+   dark and the light theme. Only in the viewer: the brain's small code blocks keep theirs. */
+.vw-main .bx-code {
+  --code-fg: #d4d8e3; --code-dim: #8a93a8; --code-comment: #7d879c; --code-keyword: #c792ea; --code-control: #f07fb5;
+  --code-fn: #82aaff; --code-type: #5fd4c8; --code-string: #a8d982; --code-number: #f2a766; --code-prop: #9cdcfe;
+  --code-param: #f5c27a; --code-meta: #e8cf6a; --code-tag: #f07178; --code-escape: #89ddff; --code-guide: rgba(255, 255, 255, 0.07);
+  font-family: "Cascadia Code", "JetBrains Mono", "Cascadia Mono", "Fira Code", Consolas, "SF Mono", Menlo, monospace;
+  font-size: 13px; line-height: 1.62; tab-size: 4; font-variant-ligatures: none; color: var(--code-fg);
+  -webkit-font-smoothing: antialiased;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .vw-main .bx-code {
+    --code-fg: #24292f; --code-dim: #6e7781; --code-comment: #6a737d; --code-keyword: #8250df; --code-control: #c2185b;
+    --code-fn: #0550ae; --code-type: #0a7f78; --code-string: #116329; --code-number: #b35900; --code-prop: #0b5c8f;
+    --code-param: #8a4b00; --code-meta: #7d5d00; --code-tag: #b42318; --code-escape: #0b6fa4; --code-guide: rgba(0, 0, 0, 0.08);
+  }
+}
+:root[data-theme="light"] .vw-main .bx-code {
+  --code-fg: #24292f; --code-dim: #6e7781; --code-comment: #6a737d; --code-keyword: #8250df; --code-control: #c2185b;
+  --code-fn: #0550ae; --code-type: #0a7f78; --code-string: #116329; --code-number: #b35900; --code-prop: #0b5c8f;
+  --code-param: #8a4b00; --code-meta: #7d5d00; --code-tag: #b42318; --code-escape: #0b6fa4; --code-guide: rgba(0, 0, 0, 0.08);
+}
+.vw-main .bx-code .bx-lc { position: relative; }
+.vw-main .bx-code .bx-ig { position: absolute; left: 0; top: 0; bottom: 0; pointer-events: none;
+  background-image: repeating-linear-gradient(to right, var(--code-guide) 0 1px, transparent 1px var(--ig, 4ch)); }
+.vw-main .bx-code .bx-cl:hover .bx-ig { --code-guide: color-mix(in srgb, var(--code-dim) 30%, transparent); }
+.vw-main .bx-code .bx-ln { font-size: 12px; color: color-mix(in srgb, var(--code-dim) 70%, transparent); }
+.vw-main .bx-code .bx-cl:hover .bx-ln { color: var(--code-dim); }
+.vw-main .bx-code.hljs .hljs-comment, .vw-main .bx-code.hljs .hljs-quote { color: var(--code-comment); font-style: italic; }
+.vw-main .bx-code.hljs .hljs-doctag { color: var(--code-keyword); font-style: italic; }
+.vw-main .bx-code.hljs .hljs-keyword, .vw-main .bx-code.hljs .hljs-selector-tag { color: var(--code-keyword); }
+.vw-main .bx-code.hljs .hljs-built_in, .vw-main .bx-code.hljs .hljs-variable.language_ { color: var(--code-control); }
+.vw-main .bx-code.hljs .hljs-literal { color: var(--code-number); }
+.vw-main .bx-code.hljs .hljs-string, .vw-main .bx-code.hljs .hljs-regexp, .vw-main .bx-code.hljs .hljs-template-tag { color: var(--code-string); }
+.vw-main .bx-code.hljs .hljs-char.escape_, .vw-main .bx-code.hljs .hljs-subst { color: var(--code-escape); }
+.vw-main .bx-code.hljs .hljs-number, .vw-main .bx-code.hljs .hljs-symbol, .vw-main .bx-code.hljs .hljs-bullet { color: var(--code-number); }
+.vw-main .bx-code.hljs .hljs-title, .vw-main .bx-code.hljs .hljs-title.function_, .vw-main .bx-code.hljs .hljs-section { color: var(--code-fn); opacity: 1; }
+.vw-main .bx-code.hljs .hljs-title.class_, .vw-main .bx-code.hljs .hljs-title.class_.inherited__, .vw-main .bx-code.hljs .hljs-type { color: var(--code-type); opacity: 1; }
+.vw-main .bx-code.hljs .hljs-params { color: var(--code-param); }
+.vw-main .bx-code.hljs .hljs-property, .vw-main .bx-code.hljs .hljs-attr, .vw-main .bx-code.hljs .hljs-attribute, .vw-main .bx-code.hljs .hljs-variable, .vw-main .bx-code.hljs .hljs-template-variable { color: var(--code-prop); opacity: 1; }
+.vw-main .bx-code.hljs .hljs-meta, .vw-main .bx-code.hljs .hljs-meta .hljs-keyword { color: var(--code-meta); font-style: normal; }
+.vw-main .bx-code.hljs .hljs-meta .hljs-string { color: var(--code-string); }
+.vw-main .bx-code.hljs .hljs-tag, .vw-main .bx-code.hljs .hljs-name, .vw-main .bx-code.hljs .hljs-selector-id, .vw-main .bx-code.hljs .hljs-selector-class { color: var(--code-tag); opacity: 1; }
+.vw-main .bx-code.hljs .hljs-tag .hljs-attr { color: var(--code-prop); }
+.vw-main .bx-code.hljs .hljs-operator, .vw-main .bx-code.hljs .hljs-punctuation { color: var(--code-dim); }
+.vw-main .bx-code.hljs .hljs-addition { color: var(--code-string); background: color-mix(in srgb, var(--code-string) 10%, transparent); }
+.vw-main .bx-code.hljs .hljs-deletion { color: var(--code-tag); background: color-mix(in srgb, var(--code-tag) 10%, transparent); }

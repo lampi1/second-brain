@@ -75,7 +75,7 @@ export function foreignOf(item: UserItem): Foreign | null {
   }
   if (RUN.test(text)) {
     const body = after(text, RUN);
-    const code = body.match(/```powershell\n([^\n]*)/)?.[1] ?? '';
+    const code = body.match(/```(?:powershell|bash)\n([^\n]*)/)?.[1] ?? ''; // the fence of main/platform.ts userShellName
     const how = runOutcome(body.match(/^Esito: ([^\n]*)/m)?.[1] ?? '');
     return { kind: 'run', sender: t('chat.command.exec'), summary: oneLine([code, how].filter(Boolean).join(' · ')), body };
   }

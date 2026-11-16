@@ -30,6 +30,8 @@ test/unit/runner.test.ts internal-host sha256:ce2a98829d67f4655b51dde1c9c6847a5d
 test/unit/runner.test.ts internal-host sha256:9b7a97db1e8bc04e3910dfd3363f2cca94d8434584e0937de42b9d71dc5b85c3
 # Same made-up Azure-host fixtures, unchanged; three Windows PowerShell tests with a 30 s deadline removed (2026-11-09).
 test/unit/runner.test.ts internal-host sha256:3973fe13228fc962d820a9417bd029458a8398daae5c90ae3c4aeeea42bef424
+# Same made-up Azure-host fixtures, unchanged; the refusal test now runs on every OS, not on Windows only (2026-11-15).
+test/unit/runner.test.ts internal-host sha256:4d6873029bc1b39cd0af1e013493db3c477f18a996061a87fa710069b7b69554
 # devlinks tests: the legacy DevOps host shape on a made-up org ("acme", "o") and the new host with org "o"; no real
 # org (checked 2026-10-13; second hash 2026-10-14, the linkKey test added, same made-up orgs, owner ok). A changed
 # file blocks again.
@@ -526,3 +528,17 @@ docs/vices/orchestrator.webp binary-media sha256:df64910fe12abcbe79bf0df6ab58792
 docs/vices/scout.webp binary-media sha256:b02c0983afae44f86112f0686bc59891606261cec2a2d8477f8924913cd67f86
 docs/vices/sentinel.webp binary-media sha256:5adebb9a9c78289a2cd64d777eefda94d515355d693f1c6d61fd142332f1ce07
 docs/vices/strategist.webp binary-media sha256:29532d96fd1475bd1df8f23ffd778f69f2a099eb4060b380fb57fa13696d0867
+# Three commits of 2026-11-13 already on main, made in a cloud session whose committer was the coding tool's own
+# no-reply identity instead of the owner's; the author is the owner (checked 2026-11-15). The
+# public history is never rewritten, so each is pinned by its whole id: any other commit with that identity blocks.
+# Read only by CI (scan.mjs --published), for the e-mail rule only; the hooks never read these lines.
+commit:984dfb750effca9a137ce6028cf400422df9b65d email
+commit:e1880e82450235702aab620b36e90f23a06741b6 email
+commit:5b2fc17548145673dea819d3ed51aafca5a8066b email
+# The Grindhouse screenshot of ba6d4a3d (2026-11-13, frozen demo, fictional data; looked at 2026-11-15): published
+# without its line, so the history scan stopped on it.
+docs/screenshots/grindhouse.webp binary-media sha256:74b277eaf8b9d8804f2f0f8ebdd40071659fe97319da958c622054f378f26807
+docs/screenshots/grindhouse.webp binary-media sha256:76937185774beb75a44e08dd6950cdc67245bde2b8d3bad3ee6abc126e7b132a
+docs/screenshots/grindhouse.webp binary-media sha256:a8bfbabe814fc044a43f7baa8cafa370867feb3a0fee54a888b242fe9d5a7ebb
+docs/screenshots/project-map.webp binary-media sha256:d2c838a481970427c7c0fac74eeda0a6f7d5ade65891bee706894dc39def6029
+docs/screenshots/plan.webp binary-media sha256:63207074a8cef2204738f26d625b7b77c988d34b81495bf59a44b77609893fb4

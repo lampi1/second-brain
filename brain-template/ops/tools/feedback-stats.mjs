@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { CORRECTION, CONFUSION, positiveKind } from './signals-regex.mjs';
 import { areaOf } from './feedback-log.mjs';
 import { brainRoot } from './brain-root.mjs';
+import { cursorDb } from './cursor-db.mjs';
 
 const argv = process.argv.slice(2);
 const arg = n => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : undefined);
@@ -78,7 +79,7 @@ const cursorTitles = (() => {
   try {
     process.removeAllListeners('warning');
     const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
-    const db = new DatabaseSync(process.env.BRAIN_CURSOR_DB || path.join(process.env.APPDATA || '', 'Cursor', 'User', 'globalStorage', 'state.vscdb'), { readOnly: true });
+    const db = new DatabaseSync(cursorDb(), { readOnly: true });
     const m = new Map(db.prepare('SELECT composerId, value FROM composerHeaders').all().map(r => { try { return [r.composerId, JSON.parse(r.value).name || '']; } catch { return [r.composerId, '']; } }));
     db.close();
     return m;

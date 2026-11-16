@@ -91,9 +91,13 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     expect(new Set(heights).size).toBe(1);
     // its name tag shows under the pointer, and opens it
     const tag = page.getByTestId(`bench-helper-open-${scout.id}`);
-    await expect(tag).toHaveCSS('opacity', '0');
+    await expect(tag).toHaveCount(0);
     await helper.hover();
-    await expect(tag).toHaveCSS('opacity', '1');
+    await expect(tag).toBeVisible();
+    // the tag stays inside the bench, never cut at an edge (ADR 0314)
+    const tBox = (await tag.boundingBox())!;
+    expect(tBox.x).toBeGreaterThanOrEqual(pBox.x);
+    expect(tBox.x + tBox.width).toBeLessThanOrEqual(pBox.x + pBox.width + 1);
     await expect(tag).toContainText('Scout');
     const row = tag;
     // the sidebar tree: the same shape, the children one level in
@@ -107,6 +111,7 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     await theme(page, 'dark');
 
     // a click on the tag opens the child's chat, writable, with the whole result and the team as tabs
+    await helper.hover();
     await helper.hover();
     await row.click();
     await expect(page.getByTestId(`chat-input-${scout.id}`)).toBeVisible();
@@ -190,7 +195,9 @@ test('a child\'s question waits as a row in the Orchestrator; a permission above
     // the child's card says it waits for the user and hosts no second answer surface (lib/child-requests.ts requestHost)
     const kid = page.getByTestId(`bench-helper-${asker.id}`); // it stands at the parent's bench (ADR 0311, 0312)
     await expect(kid).toHaveAttribute('data-child-state', 'wait', { timeout: 20000 });
+    await kid.hover(); // its name tag shows under the pointer, kept inside the row (ADR 0314)
     await expect(page.getByTestId(`bench-helper-open-${asker.id}`)).toContainText('Ti aspetta');
+    await page.mouse.move(2, 2);
     await expect(page.getByTestId(`delegation-ask-${asker.id}`)).toHaveCount(0);
     await expect(page.locator(`[data-request-key="${key}"]`)).toHaveCount(0);
     await page.mouse.move(2, 2);

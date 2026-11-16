@@ -29,6 +29,7 @@ import { Gist } from './Gist';
 import { DecisionCard } from './DecisionCard';
 import { watchRun } from '../lib/run-watch';
 import { t } from '../i18n';
+import { hostIsWindows } from '../lib/host-os';
 
 export type CommandVariant = 'lane' | 'tile' | 'orchestrator' | 'compact' | 'window';
 
@@ -146,7 +147,7 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
       {!small && replyField(false)}
       <div className="cmd-actions">
         <button type="button" className={`btn btn-primary ${small ? 'btn-s' : 'btn-m'} ${armed ? 'armed' : ''}`} onClick={() => { void run(); }} disabled={busy} data-testid={`${testBase}-run`}
-          data-tip={armed ? undefined : t('chat.command.help')}>
+          data-tip={armed ? undefined : t(hostIsWindows() ? 'chat.command.help' : 'chat.command.helpPosix')}>
           {armed ? <><IconAlert size={12} /> {t('chat.command.execConfirm', { warning: prod ?? '' })}</> : <><IconPlay size={11} /> {t('chat.command.exec')}</>}{!small && !armed && <Kbd>{auditText('audit.CommandRequest.enter')}</Kbd>}
         </button>
         <button type="button" className={`btn btn-ghost ${small ? 'btn-s' : 'btn-m'}`} onClick={copy} data-testid={`${testBase}-copy`}>

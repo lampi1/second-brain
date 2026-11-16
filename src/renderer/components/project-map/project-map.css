@@ -291,3 +291,41 @@ button.pm-label:focus-visible { outline: 2px solid var(--focus); outline-offset:
 .pm.pm-full .pm-body { grid-template-columns: minmax(0, 1fr) 400px; }
 .pm.pm-full .pm-body.with-nav { grid-template-columns: 190px minmax(0, 1fr) 400px; }
 .pm.pm-full .pm-step { max-width: 320px; }
+/* more substance on a piece (ADR 0316): short lists of facts, the files as code-type links, the paths through it */
+.pm-facts { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.45; color: var(--text); }
+.pm-facts li::marker { color: var(--text-3); }
+.pm-detail button.pm-file { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 2px 7px; border-radius: var(--r-s); background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+.pm-detail button.pm-file:hover { text-decoration: none; border-color: var(--accent); color: var(--accent); }
+.pm-file code, .pm-folder { font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-folder { padding: 2px 4px; color: var(--text-2); }
+.pm-evidence { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.pm-keyfiles, .pm-pathlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.pm-keyfiles li { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: 12.5px; }
+.pm-keyfiles li > span { color: var(--text-2); padding-left: 2px; }
+.pm-pathlist li { display: flex; flex-direction: column; gap: 1px; font-size: 13px; }
+.pm-pathlist small { color: var(--text-3); font-size: 11.5px; }
+.pm-paths .pm-pathlist button { appearance: none; background: none; border: 0; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-align: left; }
+.pm-paths .pm-pathlist button:hover { text-decoration: underline; }
+.pm-paths > .btn { align-self: flex-start; margin-top: 2px; }
+.pm-partlist small { color: var(--text-3); font-weight: 400; }
+/* a path walked: its stops in order, the one on screen open */
+.pm-walk { border-color: var(--accent-line); }
+.pm-walk-head { display: flex; align-items: center; justify-content: space-between; }
+.pm-walk h3 { margin: 2px 0 8px; font-size: 15px; line-height: 1.3; }
+.pm-stops { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pm-detail button.pm-stop { display: flex; align-items: center; gap: 8px; width: 100%; color: var(--text-2); font-size: 13px; }
+.pm-stop > i { flex: none; width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; font-style: normal; font-size: 11px; font-weight: 700; background: var(--surface-3); color: var(--text-2); }
+.pm-stops [data-s='done'] .pm-stop > i { background: var(--accent-bg); color: var(--accent); }
+.pm-stops [data-s='now'] .pm-stop { color: var(--text); font-weight: 600; }
+.pm-stops [data-s='now'] .pm-stop > i { background: var(--accent); color: var(--bg); }
+.pm-stop-now { margin: 4px 0 6px 28px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.pm-stop-now p.pm-long { margin: 0; }
+.pm-stop-file { margin: 0; }
+.pm-walk-act { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+.pm-walk-act .btn { gap: 4px; }
+/* on the drawing: the boxes off the path step back, the path's boxes wear their stop numbers, the stop on screen stands out */
+.pm-plane.walking .pm-node:not(.on-path) { opacity: .38; }
+.pm-node.on-path { border-color: var(--accent-line); }
+.pm-node.stop-now { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-bg), 0 0 0 1.5px var(--accent); }
+.pm-stopnum { position: absolute; top: 9px; right: 40px; padding: 1px 6px; border-radius: 9px; font-size: 10.5px; font-weight: 700; background: var(--accent-bg); color: var(--accent); }
+.pm-node.stop-now .pm-stopnum { background: var(--accent); color: var(--bg); }

@@ -10,9 +10,14 @@ import { mergeConfig, parseArgs, remoteCommands, urlOk } from '../../scripts/set
 
 describe('setup-pc', () => {
   it('parses the plan; refuses option-like or ext:: URLs', () => {
-    const p = parseArgs(['--app', 'https://github.com/me/app.git', '--app-dir', 'C:/x/app', '--domain', 'ssh://example.com/me/brain.git=C:/x/personale', '--dry-run'], { APPDATA: 'C:/AD' });
+    const p = parseArgs(['--app', 'https://github.com/me/app.git', '--app-dir', 'C:/x/app', '--domain', 'ssh://example.com/me/brain.git=C:/x/personale', '--dry-run'], { APPDATA: 'C:/AD' }, 'win32');
     expect(p).toMatchObject({ app: 'https://github.com/me/app.git', dryRun: true, setup: true, domains: [{ url: 'ssh://example.com/me/brain.git', dir: path.resolve('C:/x/personale') }] });
     expect(p.userData).toBe(path.join('C:/AD', 'second-brain'));
+    // the stable instance's userData on the other systems (Electron's appData), never %APPDATA%
+    const minimal = ['--app', 'https://github.com/me/app.git', '--app-dir', '/x/app'];
+    expect(parseArgs(minimal, { APPDATA: 'C:/AD' }, 'darwin', '/Users/me').userData).toBe(path.join('/Users/me', 'Library', 'Application Support', 'second-brain'));
+    expect(parseArgs(minimal, {}, 'linux', '/home/me').userData).toBe(path.join('/home/me', '.config', 'second-brain'));
+    expect(parseArgs(minimal, { XDG_CONFIG_HOME: '/cfg' }, 'linux', '/home/me').userData).toBe(path.join('/cfg', 'second-brain'));
     expect(() => parseArgs(['--domain', '-uevil=C:/x'])).toThrow(/non valido/);
     expect(() => parseArgs(['--domain', 'ext::sh=C:/x'])).toThrow(/non valido/);
     expect(() => parseArgs(['--domain', 'nodir'])).toThrow(/<url>=<cartella>/);

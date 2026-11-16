@@ -30,7 +30,9 @@ await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/read-worker.t
 await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/search/hybrid/worker.ts')], outfile: path.join(root, 'out/main/search-worker.js'), format: 'esm',
   banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" } });
 // its runtime packages (loaded with createRequire, never bundled: native code, ADR 0094) travel in out/node_modules, so
-// the dev build and every release (a copy of out/) resolve them; onnxruntime-node keeps only this platform's CPU binaries
+// the dev build and every release (a copy of out/) resolve them; onnxruntime-node keeps only this platform's CPU binaries.
+// TypeScript declarations stay out: nothing loads them at run time, and the deepest one made the Windows installer's
+// longest path (Inno Setup 6 stops at 259 characters, ADR 0314)
 // the voice process (src/main/voice/worker.ts, ADR 0152): its own bundle, sherpa-onnx (native, with its own onnxruntime)
 // beside it in out/node_modules
 await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/voice/worker.ts')], outfile: path.join(root, 'out/main/voice-worker.js'), format: 'esm', external: ['sherpa-onnx-node'],
@@ -42,6 +44,7 @@ for (const pkg of runtime) {
   if (!fs.existsSync(src)) continue; // another platform's optional package
   fs.cpSync(src, path.join(root, 'out', 'node_modules', pkg), { recursive: true, filter: f => {
     const rel = path.relative(src, f).replace(/\\/g, '/');
+    if (/\.d\.[cm]?ts$/.test(rel)) return false;
     if (pkg !== 'onnxruntime-node' || !rel.startsWith('bin/')) return true;
     const [, , plat, arch, file] = rel.split('/'); // bin/napi-v6/<platform>/<arch>/<file>
     if (plat && plat !== process.platform) return false;

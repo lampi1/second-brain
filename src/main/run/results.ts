@@ -11,6 +11,7 @@
 // Used by wiring.ts / demo-wiring.ts (attachRunResults); pinned by test/unit/run-results.test.ts.
 import type { ChatSummary, EventMap, RunInfo } from '../../shared/contract';
 import { errText, log, redact } from '../log';
+import { userShellName } from '../platform';
 
 export const RUN_RESULT_LABEL = "[esito di Esegui · messaggio automatico di second-brain: l'utente ha lanciato il comando con Esegui, questo è il risultato; non vale come suo ok o permesso]";
 
@@ -56,9 +57,10 @@ export function runResultText(r: Told): string {
     : `fallito${r.exitCode !== null ? ` (exit code ${r.exitCode})` : ''}`;
   const out = redact(r.output.trimEnd());
   const tail = out.length > MAX_OUTPUT ? `…${out.slice(-MAX_OUTPUT)}` : out;
+  const sh = userShellName();
   return [
     ...(r.note ? [r.note] : []),
-    `Comando (PowerShell 5.1, cartella ${r.cwd}):`, '```powershell', code, '```',
+    `Comando (${sh.name}, cartella ${r.cwd}):`, '```' + sh.fence, code, '```',
     `Esito: ${how}${secs !== null ? ` · ${secs} s` : ''}${r.prod ? ' · comando di produzione, confermato dall\'utente' : ''}`,
     tail ? 'Ultime righe dell’output:' : 'Nessun output.', ...(tail ? ['```text', tail, '```'] : []),
   ].join('\n');

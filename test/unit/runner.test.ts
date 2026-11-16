@@ -1,6 +1,6 @@
 // Unit tests of main/run/runner.ts and shared/runnable.ts: "Esegui" runs only a block of that chat's own message, asks
 // a second click for production, runs in PowerShell 5.1 with the real exit code, streams output, stops, and the
-// outcome message for the chat. Real powershell.exe (Windows only), harmless commands.
+// outcome message for the chat.
 // Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
 // removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 import os from 'node:os';
@@ -8,8 +8,6 @@ import { describe, expect, it } from 'vitest';
 import type { RunInfo } from '../../src/shared/contract';
 import { CommandRunner, wrapScript } from '../../src/main/run/runner';
 import { isRunnable, prodRisk, runReport } from '../../src/shared/runnable';
-
-const win = process.platform === 'win32';
 
 function make(text: string) {
   const events: RunInfo[] = [];
@@ -49,7 +47,7 @@ describe('runnable', () => {
   });
 });
 
-describe.skipIf(!win)('CommandRunner', () => {
+describe('CommandRunner', () => {
   it('refuses code that is not in that chat message, and production without the second click', () => {
     const { r } = make('Prova:\n```powershell\nWrite-Output ciao\n```');
     expect(() => r.start({ chatId: 'c1', itemId: 'a1', code: 'Remove-Item C:/x' })).toThrow(/non è nel messaggio/);

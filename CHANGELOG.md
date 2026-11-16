@@ -6,6 +6,21 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- The project maps go deeper: a part can hold parts of its own, down to four levels, entered like a system. A box's
+  panel tells the rules it applies, what it keeps and where, how big it is (files and lines, counted without tokens),
+  why it is made this way and its key files, each opening in the viewer. «Percorsi» tell a question about the project
+  stop by stop on the boxes; «Chiedi un percorso» has a Scout answer a new one (ADR 0316).
+- The file viewer finds a relative path from a chat in the other folders the app knows (the chats it started, the
+  projects, the other chats), so a file of an agent's project opens from the Orchestrator's message. Code reads as in
+  an editor: a coding font, its own colours for functions, types, parameters and properties, and indent guides
+  (ADR 0316).
+- A bench shows every helper, the ones at work first, in a row that scrolls sideways; the name tag never gets cut
+  at an edge. The limit on the foot reads «Max 5 insieme» while it matters and says under the pointer what it means
+  (ADR 0314).
+- Every pull request and every push to `main` is checked on Windows, Linux and macOS: typecheck, lint, every unit
+  test, the publish guard, the built app started once in its frozen demo (`scripts/boot-smoke.mjs`) and the stable
+  copy started with a new profile (`npm run test:stable`). The e2e suite is started by hand. `npm run check --
+  --no-e2e` runs the checks without a display locally (ADR 0314).
 - The benches and the role cards stand in a workshop: one picture of planks, barrels, crates and a window on the
   sunset, never tiled, so no brick is cut at the edges. Every person stays fully visible, at rest too; the role cards'
   stages line up. The README shows plan approval on the project map and a chess game with the opponent talking
@@ -200,6 +215,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   terminal routines.
 
 ### Removed
+- The helpers at a bench no longer carry a coloured dot over their heads: their scene says what they do, the name
+  tag says it in words (ADR 0315).
 - «Flash», the read-only tab beside the Orchestrator, with its card, level, MCP role and brief: the Orchestrator's «Fast»
   mode does its job. Old Flash chats, its card, its MCP access and its log are dropped from the saved files (ADR 0296).
 - The Classificatori section of Andamento → Qualità and the kind of work by examples: they decided nothing and, on
@@ -207,6 +224,17 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   key is gone (ADR 0291).
 
 ### Fixed
+- macOS and Linux: Cursor's chats are found (its database was looked for under `%APPDATA%` only); the brain's tools
+  and `setup-pc.mjs` find the app's data folder; the brain's path values keep a POSIX path as it is; agents are told
+  the real login shell (zsh, bash) instead of PowerShell, in the rules and in the outcome of Esegui; «Trovate sul PC»
+  also looks in `Movies` (ADR 0314).
+- Linux: the stable copy starts (its Electron binary lost the permission to run when the release was staged). macOS:
+  a release can be staged (cookie encryption is switched on in the app's Electron Framework, where macOS keeps that
+  switch, and the app is signed again); a staging that fails says why (ADR 0314).
+- The checks on GitHub were red on every push to `main` for reasons unrelated to the code (an e2e run cancelled after
+  an hour, a guard that read every branch of the repository, one unit test red on Windows only, one on macOS only,
+  a stable-copy test that still expected the app to find a brain by itself, a Windows installer test whose longest
+  path fitted or not with the length of the user name): each is fixed at its cause (ADR 0314).
 - A user's MCP server whose program does not start is no longer started again for every chat: each chat gets the
   error at once for 10 minutes, its card in Connettori shows it, «Prova» tries it again at once, and the log warns
   once until it works again (#417).

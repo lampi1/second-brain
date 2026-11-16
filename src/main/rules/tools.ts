@@ -11,6 +11,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { enabled } from './delivery';
 import { read } from './storage';
+import { userShellName } from '../platform';
 
 /** Template code the app owns for a product brain; everything else in the template is personal content. */
 export const isTemplateCode = (rel: string): boolean =>
@@ -53,7 +54,8 @@ export function templateRoot(): string {
 }
 
 const fwd = (p: string) => p.replace(/\\/g, '/');
-const win = (p: string) => p.replace(/\//g, '\\');
+/** The path as this OS writes it (the template's *_WIN values): backslashes on Windows only, as install.mjs. */
+const win = (p: string) => (process.platform === 'win32' ? p.replace(/\//g, '\\') : p);
 function values(root: string): Record<string, string> {
   const raw = read(root, 'brain.json');
   const stored = (raw ? (JSON.parse(raw) as { template?: TemplateValues }).template : undefined) ?? {};
@@ -64,7 +66,7 @@ function values(root: string): Record<string, string> {
     REPOS: R, REPOS_WIN: win(R), REPOS_JS: R, HOME: H, HOME_WIN: win(H), HOME_JS: H,
     DEVOPS_ORG: stored.DEVOPS_ORG ?? 'your-org', DEVOPS_PROJECT: stored.DEVOPS_PROJECT ?? 'your-project',
     ROLE: stored.ROLE ?? 'developer', LANG: stored.LANG ?? 'italiano', HARNESSES: stored.HARNESSES ?? 'Claude Code',
-    OS: process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux', SHELL: process.platform === 'win32' ? 'PowerShell' : 'bash',
+    OS: process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux', SHELL: process.platform === 'win32' ? 'PowerShell' : userShellName().name,
   };
   for (const [k, v] of Object.entries(out)) if (/[\x00-\x1f]/.test(v)) throw new Error(`Invalid template value ${k}.`);
   return out;

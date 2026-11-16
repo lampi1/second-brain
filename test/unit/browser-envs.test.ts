@@ -8,9 +8,9 @@ import { isLocalHost, hostOf, changesInputType, urlCredentials } from '../../src
 import { redact } from '../../src/main/log';
 import { EnvStore, computeSession, envColor, envForUrl, envSlug, envPartition, isAuthCookie, isLoginUrl } from '../../src/main/browser/envs';
 import { redactBody } from '../../src/main/browser/netlog';
-import { FUSE_SENTINEL, cookieEncryptionEnabled, readFuseWire } from '../../src/main/browser/fuses';
+import { FUSE_SENTINEL, cookieEncryptionEnabled, fuseFile, readFuseWire } from '../../src/main/browser/fuses';
 // @ts-expect-error plain .mjs script without types
-import { ensureCookieEncryption, readFuses } from '../../scripts/fuses.mjs';
+import { ensureCookieEncryption, fuseFile as scriptFuseFile, readFuses } from '../../scripts/fuses.mjs';
 
 describe('globMatch (no regex: no ReDoS on page-controlled URLs)', () => {
   it('matches substrings and anchored globs', () => {
@@ -168,12 +168,26 @@ describe('Electron fuses', () => {
     expect(await cookieEncryptionEnabled(path.join(dir, 'missing.exe'))).toBeNull();
   });
 
+  it('the fuses of a macOS app are in its Electron Framework; elsewhere in the executable', () => {
+    const mac = '/Users/x/second-brain-shared/electron/44.4.5/Electron.app/Contents/MacOS/Electron';
+    const framework = '/Users/x/second-brain-shared/electron/44.4.5/Electron.app/Contents/Frameworks/Electron Framework.framework/Electron Framework';
+    for (const f of [fuseFile, scriptFuseFile]) {
+      expect(f(mac, 'darwin')).toBe(framework);
+      expect(f('/opt/sb/electron/44.4.5/electron', 'linux')).toBe('/opt/sb/electron/44.4.5/electron');
+      expect(f('C:\\sb\\electron\\44.4.5\\electron.exe', 'win32')).toBe('C:\\sb\\electron\\44.4.5\\electron.exe');
+      expect(f('/tmp/electron', 'darwin')).toBe('/tmp/electron'); // not in a bundle: the file itself
+    }
+  });
+
   it('scripts/fuses.mjs turns cookie encryption on, idempotently, without touching RunAsNode', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-fuse-'));
     const exe = path.join(dir, 'electron.exe');
     fs.writeFileSync(exe, fake('101100011'));
+    fs.chmodSync(exe, 0o755);
     expect(readFuses(exe)).toMatchObject({ RunAsNode: '1', EnableCookieEncryption: '0' });
     expect(ensureCookieEncryption(exe)).toBe('enabled');
+    // the rewritten binary must still start on macOS and Linux (Windows has no such bit)
+    if (process.platform !== 'win32') expect(fs.statSync(exe).mode & 0o777).toBe(0o755);
     expect(ensureCookieEncryption(exe)).toBe('already');
     expect(readFuses(exe)).toMatchObject({ RunAsNode: '1', EnableCookieEncryption: '1', GrantFileProtocolExtraPrivileges: '1' });
     fs.writeFileSync(exe, Buffer.alloc(100));

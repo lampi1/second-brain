@@ -32,9 +32,9 @@ export function prodRisk(code: string): string | null {
 }
 
 /** One message for the chat with the outcome of a run (the "Manda l'esito alla chat" button, and app_command_runs). */
-export function runReport(run: RunInfo, maxOutput = 3000): string {
+export function runReport(run: RunInfo, maxOutput = 3000, fence: 'powershell' | 'bash' = 'powershell'): string {
   const out = run.output.trim();
   const shown = out.length > maxOutput ? `…${out.slice(-maxOutput)}` : out;
   const how = run.state === 'running' ? 'ancora in corso' : run.state === 'stopped' ? 'fermato da me' : `exit code ${run.exitCode ?? '?'}`;
-  return `Ho eseguito il comando (${how}):\n\`\`\`powershell\n${run.code}\n\`\`\`\nOutput:\n\`\`\`\n${shown || '(nessun output)'}\n\`\`\``;
+  return `Ho eseguito il comando (${how}):\n\`\`\`${fence}\n${run.code}\n\`\`\`\nOutput:\n\`\`\`\n${shown || '(nessun output)'}\n\`\`\``;
 }

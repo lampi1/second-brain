@@ -260,14 +260,36 @@ test('the map tells every step, every box and every arrow in full, and «Aggiorn
     await view.getByTestId('pm-node-negozio').click();
     await expect(view.getByTestId('pm-here')).toContainText('Come funziona');
     await expect(view.getByTestId('pm-here')).toContainText('Dentro ci sono cinque parti');
-    // a part: how it works, what goes in and out (each passage with what it carries), the plan's steps on it
+    // a part with pieces of its own (ADR 0316): entered like a system; the side tells how it works, its rules, what it
+    // keeps, why, its key files, what goes in and out (each passage with what it carries), the plan's steps on it
     await view.getByTestId('pm-node-ordini').click();
-    const detail = view.getByTestId('pm-detail');
+    for (const id of ['totale', 'sconti', 'conferma']) await expect(view.getByTestId(`pm-node-${id}`)).toBeVisible();
+    const detail = view.getByTestId('pm-here');
     await expect(detail).toContainText('arrotonda una volta sola alla fine');
+    await expect(detail.getByTestId('pm-rules')).toContainText('Si arrotonda una volta sola');
+    await expect(detail.getByTestId('pm-keeps')).toContainText('OrderLines');
+    await expect(detail.getByTestId('pm-why')).toContainText('una modifica ne crea uno nuovo');
+    await expect(detail.getByTestId('pm-keyfile-src/Orders/Checkout.cs')).toBeVisible();
     await expect(detail.getByTestId('pm-pass-carrello--ordini')).toContainText('Quando il cliente preme «Paga»');
     await expect(detail.getByTestId('pm-pass-ordini--pagamenti')).toContainText('addebita il totale');
     await expect(detail.getByTestId('pm-worklist')).toContainText('Applico lo sconto %');
+    await expect(detail.getByTestId('pm-paths-here')).toContainText('Cosa succede quando un cliente paga?');
     await shot(page, 'project-map-details');
+    // a path: its stops one by one, the view follows each to its level, the boxes of the path lit
+    await detail.getByTestId('pm-paths-here').getByRole('button', { name: 'Cosa succede quando un cliente paga?' }).click();
+    await expect(view.getByTestId('pm-stop-now')).toContainText('Somma le righe');
+    await expect(view.getByTestId('pm-node-totale')).toHaveClass(/stop-now/);
+    await expect(view.getByTestId('pm-node-sconti')).toHaveClass(/on-path/);
+    await shot(page, 'project-map-path');
+    await view.getByTestId('pm-walk-next').click();
+    await view.getByTestId('pm-walk-next').click();
+    await view.getByTestId('pm-walk-next').click();
+    await expect(view.getByTestId('pm-stop-now')).toContainText('Il gateway risponde');
+    await expect(view.getByTestId('pm-node-pagamenti')).toHaveClass(/stop-now/);
+    await expect(view.getByTestId('pm-node-carrello')).toHaveCount(0); // back at the top
+    await view.getByTestId('pm-walk-close').click();
+    await expect(view.getByTestId('pm-walk')).toHaveCount(0);
+    await view.getByTestId('pm-node-negozio').click();
     // a piece nobody described yet says how to get its text
     await view.getByTestId('pm-node-db').click();
     await expect(view.getByTestId('pm-no-details')).toBeVisible();

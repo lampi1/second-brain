@@ -16,6 +16,7 @@ import { parseHookJson } from './hook-input.mjs';
 import { CORRECTION, CONFUSION, isPositive } from '../../ops/tools/signals-regex.mjs';
 import { logPositive } from '../../ops/tools/feedback-log.mjs';
 import { brainRoot } from '../../ops/tools/brain-root.mjs';
+import { cursorDb } from '../../ops/tools/cursor-db.mjs';
 
 const OPS = brainRoot(import.meta.url);
 const STATE = process.env.BRAIN_CORRECTIONS_FILE || path.join(OPS, 'ops', 'state', 'cursor-corrections.json');
@@ -45,7 +46,7 @@ const titleOf = (id, rows) => {
   try {
     process.removeAllListeners('warning'); // node:sqlite is "experimental" in Node 22
     const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
-    const db = new DatabaseSync(process.env.BRAIN_CURSOR_DB || path.join(process.env.APPDATA || '', 'Cursor', 'User', 'globalStorage', 'state.vscdb'), { readOnly: true });
+    const db = new DatabaseSync(cursorDb(), { readOnly: true });
     const v = db.prepare('SELECT value FROM composerHeaders WHERE composerId = ?').get(id)?.value;
     db.close();
     const name = v && JSON.parse(v).name;

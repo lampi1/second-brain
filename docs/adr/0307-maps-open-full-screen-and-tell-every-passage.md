@@ -3,7 +3,8 @@
 Date: 2026-11-14 · Status: accepted (owner, 2026-11-14: «le mappe quando le apro le voglio di default full screen, e
 voglio che si capisca bene ogni passaggio e vorrei anche poterle aggiornare da un tasto volendo, secondo me hanno un
 gran potenziale ma il contenuto testuale non è molto dettagliato») · Builds on: ADR 0271, ADR 0275, ADR 0276, ADR 0302 ·
-Amends: ADR 0276 (where the map opens when the user opens it)
+Amends: ADR 0276 (where the map opens when the user opens it) · Amended by: ADR 0316 (the side tells rules, keeps, size,
+why, key files and paths)
 
 ## Context
 

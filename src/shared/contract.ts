@@ -180,7 +180,7 @@ export const INVOKE_CHANNELS = [
   'proposals:shown', 'proposals:undoAuto',
   'guide:ask', 'guide:stale', 'agents:quips',
   'usecount:add', 'usecount:report',
-  'projectmap:list', 'projectmap:view',
+  'projectmap:list', 'projectmap:view', 'projectmap:size',
   'chess:move', 'chess:stop', 'chess:save', 'chess:history',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
