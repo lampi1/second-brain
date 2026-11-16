@@ -14,7 +14,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { errText, log } from '../../log';
-import { enabled, installHooks, productSignature } from '../../rules/delivery';
+import { enabled, installHooks, productSignature, stopInProcess } from '../../rules/delivery';
 import type { LaunchFacts } from '../../rules/types';
 import { productInstructions } from '../../rules/instructions';
 import { configOf } from '../../rules/storage';
@@ -23,8 +23,9 @@ import { memoryInstructions } from '../../rules/new-brain';
 import { isDir, launchRules, readText, resolvePlaceholders, instructionsOf, type BrainDomain } from './domains';
 
 export const PLUGIN_NAME = 'second-brain';
-/** how the product hooks are delivered (in process but Stop, ADR 0103): part of the plugin's signature */
-const HOOKS_LAYOUT = 'hooks:in-process-v1';
+/** how the product hooks are delivered (in process, Stop too unless the brain commits at the stop: ADR 0099, 0317),
+ *  and which template hooks the plugin keeps (rules/tools.ts REPLACED_HOOKS): part of the plugin's signature */
+const HOOKS_LAYOUT = 'hooks:in-process-v2';
 /** what is copied from each domain's .claude folder into the plugin, and as which plugin folder */
 const PARTS: readonly { from: string; to: string }[] = [
   // the brain's one copy of its skills (#361, skills/layout.ts); .claude/skills links to it, or is an older brain's
@@ -38,9 +39,10 @@ const TEXT = /\.(md|json|txt|ya?ml|toml)$/i;
 const MAX_FILE = 2_000_000;
 
 export interface ClaudeLaunch { args: string[]; pluginDir: string | null; rulesFile: string | null;
-  /** a product brain: the session answers the product hooks but Stop in process (rules/delivery.ts IN_PROCESS_EVENTS) */
+  /** a product brain: the session answers the product hooks in process (rules/delivery.ts IN_PROCESS_EVENTS) */
   productHooks?: ProductHooks }
-export interface ProductHooks { root: string; state: string; launch: LaunchFacts }
+/** stop = Stop is answered in process too (rules/delivery.ts stopInProcess): the plugin's hooks.json has no runner then */
+export interface ProductHooks { root: string; state: string; launch: LaunchFacts; stop?: true }
 
 /** Legacy brains fail open with a warning. Migrated brains fail closed if product hooks cannot be delivered. */
 /** `skills: false` = a role chat: the brain's skills stay out (its launch's own plugin carries the ones it was given). */
@@ -75,7 +77,7 @@ export function claudeLaunch(userData: string, input?: { domains: BrainDomain[];
     return {
       args: [...(hasParts ? ['--plugin-dir', dir] : []), ...(instructions ? ['--append-system-prompt-file', rulesFile] : [])],
       pluginDir: hasParts ? dir : null, rulesFile: instructions ? rulesFile : null,
-      ...(product && enabled(root) ? { productHooks: { root, state: path.join(base, 'rule-state'), launch: fwd ? { tools: fwd, correctionHook: true } : {} } } : {}),
+      ...(product && enabled(root) ? { productHooks: { root, state: path.join(base, 'rule-state'), launch: fwd ? { tools: fwd, correctionHook: true } : {}, ...(stopInProcess(root) ? { stop: true as const } : {}) } } : {}),
     };
   } catch (e) {
     if (product) throw e; // a migrated brain must never silently lose its safety hooks
@@ -147,8 +149,9 @@ function build(base: string, dir: string, files: readonly Src[], domains: readon
   }
   const root = domains[0]!.root;
   const fwdTools = tools?.replace(/\\/g, '/');
-  // the runner in hooks.json serves only Stop: the session answers the others in process (claudeLaunch productHooks)
-  installHooks(tmp, root, path.join(base, 'rule-state'), undefined, fwdTools ? { tools: fwdTools, correctionHook: true } : {}, ['Stop']);
+  // the session answers the product hooks in process (claudeLaunch productHooks); the runner in hooks.json serves only
+  // the Stop of a brain that commits its memory there (stopInProcess)
+  installHooks(tmp, root, path.join(base, 'rule-state'), undefined, fwdTools ? { tools: fwdTools, correctionHook: true } : {}, stopInProcess(root) ? [] : ['Stop']);
   if (fwdTools && enabled(root)) addHooks(tmp, templateHooks(root, fwdTools));
   fs.writeFileSync(path.join(tmp, '.signature'), sig);
   const old = `${dir}.old-${Date.now()}`;

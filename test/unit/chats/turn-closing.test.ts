@@ -98,6 +98,25 @@ describe('the Claude engine says when the reply is complete', () => {
   });
 });
 
+describe('a product brain\'s Stop hook costs no process (ADR 0317)', () => {
+  type Raw = { write(obj: unknown): void; initHooks(): Record<string, { hookCallbackIds: string[] }[]> | null; onControlRequest(m: Line): Promise<void> };
+  const product = (stop: boolean) => new ClaudeSession({ chatId: 'c_stop', cwd: '.', sessionId: 'abc12345', readOnly: true,
+    productHooks: { root: path.join(os.tmpdir(), 'sb-no-such-brain'), state: path.join(os.tmpdir(), 'sb-no-such-state'), launch: {}, ...(stop ? { stop: true as const } : {}) } }, recSink()) as unknown as Raw;
+
+  it('is registered at initialize only when the launch says so (the runner keeps it for a brain that commits at the stop)', () => {
+    expect(product(true).initHooks()?.Stop).toEqual([{ hookCallbackIds: ['sb_product_stop'] }]);
+    expect(product(false).initHooks()?.Stop).toBeUndefined();
+  });
+
+  it('is answered at once and never sends the model back to work, even for a brain it cannot read', async () => {
+    const s = product(true);
+    const answers: unknown[] = [];
+    s.write = obj => { answers.push(obj); };
+    await s.onControlRequest({ type: 'control_request', request_id: 'req-stop', request: { subtype: 'hook_callback', callback_id: 'sb_product_stop', input: { hook_event_name: 'Stop', session_id: 's1' } } });
+    expect(answers).toEqual([{ type: 'control_response', response: { subtype: 'success', request_id: 'req-stop', response: {} } }]);
+  });
+});
+
 describe('the chat stops showing work while its turn closes', () => {
   const roots: string[] = [], managers: ChatManager[] = [];
   afterEach(async () => {

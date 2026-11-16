@@ -168,7 +168,7 @@ export interface SessionOptions {
   preToolUse?: PreToolHook | null;
   /** Claude only: a product brain's hooks the session answers in process (rules/runtime.ts runHook) instead of a node
    *  process per call: UserPromptSubmit, PreToolUse, PostToolUse (Stop stays in the plugin's hooks.json, ADR 0103) */
-  productHooks?: { root: string; state: string; launch: { tools?: string; correctionHook?: boolean } } | null;
+  productHooks?: { root: string; state: string; launch: { tools?: string; correctionHook?: boolean }; /** Stop too (no runner process at the turn's end, ADR 0317) */ stop?: true } | null;
   /** Claude only: the chat may turn on Remote Control (the Orchestrator, ADR 0229): the engine echoes every user message
    *  it queues (--replay-user-messages), so the ones typed on the phone show in the chat */
   remoteControl?: boolean;

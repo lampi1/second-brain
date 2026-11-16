@@ -16,7 +16,8 @@
 //            With opts.preToolUse, initialize registers one PreToolUse hook callback and the CLI asks it with
 //            hook_callback before each tool call (answered with the hook's JSON output: {} or a deny with its reason).
 //            With opts.productHooks (a product brain), the brain's rules hooks for UserPromptSubmit, PreToolUse and
-//            PostToolUse are answered the same way, in process (rules/runtime.ts runHook), not by a node process each.
+//            PostToolUse are answered the same way, in process (rules/runtime.ts runHook), not by a node process each;
+//            Stop too (productHooks.stop), since the CLI writes a turn's result only after its Stop hooks (ADR 0317).
 //            A writing session also registers the write barrier's PreToolUse hook (write-barrier.ts, ADR 0228): a call
 //            that may write is answered only once the turn's checkpoint settled (holdWrites).
 // Messages become contract ChatItems (streamed text as replace events, tool rows with a one-line summary, diff counts,
@@ -166,7 +167,7 @@ const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 /** The callback id of the app's in-process PreToolUse hook (opts.preToolUse), registered at initialize. */
 const PRE_TOOL_HOOK = 'sb_pre_tool_use';
 /** The callback ids of a product brain's hooks answered in process (opts.productHooks), per event. */
-const PRODUCT_HOOKS: Readonly<Record<string, string>> = { UserPromptSubmit: 'sb_product_prompt', PreToolUse: 'sb_product_pre', PostToolUse: 'sb_product_post' };
+const PRODUCT_HOOKS: Readonly<Record<string, string>> = { UserPromptSubmit: 'sb_product_prompt', PreToolUse: 'sb_product_pre', PostToolUse: 'sb_product_post', Stop: 'sb_product_stop' };
 const PRODUCT_IDS: ReadonlySet<string> = new Set(Object.values(PRODUCT_HOOKS));
 /** The write barrier's PreToolUse hook (ADR 0228) and its CLI timeout in seconds: above the manager's snapshot deadline
  *  (manager-checkpoints.ts), so the CLI never gives up on the hook and runs a write before the snapshot settled. */
@@ -976,6 +977,8 @@ export class ClaudeSession implements HarnessSession {
     if (this.opts.productHooks) {
       hooks.UserPromptSubmit = [{ hookCallbackIds: [PRODUCT_HOOKS.UserPromptSubmit!] }];
       hooks.PostToolUse = [{ matcher: '*', hookCallbackIds: [PRODUCT_HOOKS.PostToolUse!] }];
+      // the turn's result waits for every Stop hook: answered here it costs no process start (ADR 0317)
+      if (this.opts.productHooks.stop) hooks.Stop = [{ hookCallbackIds: [PRODUCT_HOOKS.Stop!] }];
     }
     return Object.keys(hooks).length ? hooks : null;
   }
@@ -989,7 +992,9 @@ export class ClaudeSession implements HarnessSession {
     try {
       const p = this.opts.productHooks!;
       const result = runHook(p.root, p.state, input as unknown as HookInput, p.launch);
-      if (result.deny) response = event === 'PreToolUse'
+      // a stop is no operation to refuse: a brain the hook cannot read must not send the model back to work for ever
+      if (event === 'Stop') response = {};
+      else if (result.deny) response = event === 'PreToolUse'
         ? { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: result.deny } }
         : { decision: 'block', reason: result.deny };
       else if (result.context && (event === 'UserPromptSubmit' || event === 'PreToolUse' || event === 'PostToolUse')) response = { hookSpecificOutput: { hookEventName: event, additionalContext: result.context } };
