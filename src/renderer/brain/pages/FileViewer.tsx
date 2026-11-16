@@ -9,7 +9,8 @@
 // It is shown in the viewer overlay above the page (components/viewer/ViewerOverlay.tsx, which passes its own controls
 // as `chrome`): a header with the file's name, folder, size and kind and its actions, Ctrl+F search in the text on
 // screen (FindBar.tsx), a table of contents beside a Markdown document with three or more headings (Toc.tsx), wrapped or
-// unwrapped code, and a click on a line number copies the internal link to that line (sb://file/…).
+// unwrapped code, and a click on a line number copies the internal link to that line (sb://file/…). A file that is one of
+// Memoria's artifacts gets the artifact bar on top (components/library/ArtifactBar.tsx, ADR 0317).
 import {lazy,Suspense,useCallback,useEffect,useMemo,useRef,useState,type MouseEvent as ReactMouseEvent,type ReactNode} from 'react';
 import DOMPurify from 'dompurify';
 import {DataTable,type Col} from '../components/DataTable';
@@ -25,6 +26,7 @@ import {extOf,fmtBytes,highlightLines,parseCsv,prettyJson,viewOf,type FileView} 
 import {fileLink} from '../lib/viewer-tools';
 import {indentGuides} from '../lib/indent-guides';
 import {Compare} from './FileDiff';
+import {ArtifactBar} from '../../components/library/ArtifactBar';
 import type {PDFDocumentProxy,PDFPageProxy} from '../lib/pdf';
 import {pdfPagesToDraw,samePages} from '../lib/pdf-window';
 import {t} from '../../i18n';
@@ -310,6 +312,7 @@ export function CitedFile({reference,chrome}:{reference:FileReference;chrome?:Vi
         <div className="vw-grid">
           <Toc root={main}/>
           <div ref={setMain} className="vw-main file-context-main">
+            {!reference.routine&&<ArtifactBar path={real??reference.path}/>}
             {compare&&<Compare key={ref} path={reference.path} chatId={reference.chatId}/>}
             {pageError&&<p role="alert" data-testid="viewer-page-error">{t(`viewer.${pageError}`)}</p>}
             <ReportReview key={real??ref} file={real??reference.path} snapshot={result&&'size'in result?{size:result.size,...('mtimeMs'in result&&typeof result.mtimeMs==='number'?{mtimeMs:result.mtimeMs}:{}),...(result.kind==='text'?{offset:result.offset,shown:result.shown}:{})}:undefined}>{!result?<p role="status" className="vw-loading">{t('viewer.loading')}</p>:reason?<Empty title={t(`viewer.${reason}`)}/>

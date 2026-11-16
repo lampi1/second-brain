@@ -407,3 +407,19 @@ test('README screenshot: Chess', async () => {
   await page.getByTestId('chess-resign').click(); // no move yet: it goes back to the lobby
   await expect(page.getByTestId('chess-lobby')).toBeVisible();
 });
+
+test('README screenshot: Artifacts', async () => {
+  // Memoria › Artifacts (ADR 0317): what the chats produced, indexed where it is, with its picture, chat and versions
+  await keepQuestionsAside(page);
+  await page.keyboard.press('Control+K');
+  await page.getByTestId('palette-input').fill('sb://memoria/artifact');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('mh-panel-artifact')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('lib-count')).toHaveText(/^\d+ artifacts$/, { timeout: 30_000 });
+  await expect(page.locator('[data-testid="lib-card"]', { hasText: 'QA rimborsi' }).locator('.lib-mini')).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('.lib-lines').first()).toBeVisible({ timeout: 20_000 });
+  // the tab bar on top, the gallery under it
+  await page.getByTestId('mh-panel-artifact').evaluate(el => { const f = el.closest('.bx-scroll'); const bar = el.previousElementSibling; if (f && bar) f.scrollTop += el.getBoundingClientRect().top - f.getBoundingClientRect().top - bar.getBoundingClientRect().height; });
+  await page.waitForTimeout(500);
+  await save('artifacts', await frameOf(page.getByTestId('mh-panel-artifact')));
+});

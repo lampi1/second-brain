@@ -195,10 +195,22 @@ navigates, clicks, fills forms and takes screenshots on its own, and every step 
 
 Everything the agents learn lands as a card: a fact, a skill, a rule, a setting. Swipe right to keep it, left to drop
 it (or the arrow keys, with Z to undo), and every card says who proposed it, in which chat and when. Behind the deck,
-**Memory** is one hub with tabs (Proposals, Approved, Skills, the Rules always loaded, Ideas, Files). **Skills** follow the Agent Skills
+**Memory** is one hub with tabs (Proposals, Approved, Skills, the Rules always loaded, Ideas, Files, Artifacts). **Skills** follow the Agent Skills
 format: each one is a package with its own Scripts, saved queries, references and assets.
 
 <p align="center"><img src="docs/screenshots/memory.webp" alt="Memory: the live header with its counters, the tabs, and a proposal card swiped toward APPROVE" width="560"></p>
+
+### Artifacts
+
+Every report, analysis, document and image your chats produce shows up in **Memory › Artifacts** by itself, left
+where it is on disk: HTML, Markdown, PDF, pictures, tables (csv, Excel), documents (Word, PowerPoint, text), video and
+audio. It comes in when a chat links it, when it sits in the brain's `reviews`, `tmp` or `evidence` folders, and once
+from your past chats. Search it, filter by type, area, period or chat, and open one in the viewer, formatted, with a
+bar that leads back to the chat that made it, to its earlier versions (a report regenerated later is one artifact with
+its history) and to related ones; what the viewer does not render opens with your system's app. A file that went is
+kept, marked missing.
+
+<p align="center"><img src="docs/screenshots/artifacts.webp" alt="Memory › Artifacts: cards grouped by day with their pictures, an HTML report drawn small, a csv's first lines, a diagram, screenshots and a Markdown report with two versions" width="760"></p>
 
 ### Maintenance
 

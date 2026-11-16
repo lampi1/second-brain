@@ -18,7 +18,7 @@ function fixtureBrain(): string {
   return d;
 }
 
-const TABS = ['proposte', 'approvate', 'skill', 'regole', 'idee', 'file'] as const;
+const TABS = ['proposte', 'approvate', 'skill', 'regole', 'idee', 'file', 'artifact'] as const;
 
 async function theme(page: Page, scheme: 'dark' | 'light') {
   await page.evaluate(t => window.sb.invoke('settings:set', { theme: t }), scheme);
