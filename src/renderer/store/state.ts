@@ -218,6 +218,10 @@ export function sameList<T>(a: readonly T[], b: readonly T[]): boolean {
 // ---------- selectors (pure) ----------
 
 export const isBusy = (c: ChatSummary) => c.state === 'running' || c.state === 'starting';
+/** Whether the chat is shown as working (the working line, the person at work, «al lavoro»): busy, and not only
+ *  closing a turn whose reply is already complete (ChatSummary.turnClosing, ADR 0318). The rules (queue, Stop, menus)
+ *  keep isBusy: the turn is not over for them until its result and the engine's idle. */
+export const showsWork = (c: ChatSummary) => isBusy(c) && !c.turnClosing;
 
 /** The queued message to send now: a chat that just went from busy/waiting to idle with something in its queue. */
 export function toFlush(prev: ChatSummary | undefined, next: ChatSummary, queue: readonly QueuedMsg[] | undefined): QueuedMsg | null {

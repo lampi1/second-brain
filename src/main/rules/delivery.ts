@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { read } from './storage';
+import { configOf, read } from './storage';
 import type { LaunchFacts } from './types';
 
 export function enabled(root: string): boolean {
@@ -27,11 +27,14 @@ export function productSignature(root: string): string {
     .update(fs.readFileSync(path.join(source, 'runtime.mjs'))).update(fs.readFileSync(path.join(source, 'cli.mjs')))
     .update(fs.readFileSync(path.join(source, 'hooks/runner.mjs'))).update(fs.readFileSync(path.join(source, 'hooks/cli.mjs'))).digest('hex');
 }
-/** The events the runner serves from hooks.json. The app's own Claude chats answer the others in process (ClaudeSession
- *  productHooks, hook_callback): two node processes per tool call were 0.2-2 s each on Windows (ADR 0103). Stop stays a
- *  process: its local brain commit runs synchronous git, which must never block the app's main process. */
+/** The events the runner serves from hooks.json. The app's own Claude chats answer them in process (ClaudeSession
+ *  productHooks, hook_callback): two node processes per tool call were 0.2-2 s each on Windows (ADR 0099). */
 export const ALL_EVENTS = ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'] as const;
-export const IN_PROCESS_EVENTS = ['UserPromptSubmit', 'PreToolUse', 'PostToolUse'] as const;
+/** Stop too is answered in process (ADR 0318: Claude Code writes a turn's result only after its Stop hooks, and a
+ *  process start is 0.4 s or more on a busy Windows PC), unless the brain commits its memory at every stop
+ *  (rules.autoCommit): that commit runs synchronous git, which must never block the app's main process, so the runner
+ *  keeps it. */
+export function stopInProcess(root: string): boolean { return enabled(root) && !configOf(root).autoCommit; }
 export function installHooks(plugin: string, root: string, state: string, source?: string, launch: LaunchFacts = {}, events: readonly string[] = ALL_EVENTS): void {
   if (!enabled(root)) return;
   const target = path.join(plugin, 'product-rules');

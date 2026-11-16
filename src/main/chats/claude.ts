@@ -16,7 +16,8 @@
 //            With opts.preToolUse, initialize registers one PreToolUse hook callback and the CLI asks it with
 //            hook_callback before each tool call (answered with the hook's JSON output: {} or a deny with its reason).
 //            With opts.productHooks (a product brain), the brain's rules hooks for UserPromptSubmit, PreToolUse and
-//            PostToolUse are answered the same way, in process (rules/runtime.ts runHook), not by a node process each.
+//            PostToolUse are answered the same way, in process (rules/runtime.ts runHook), not by a node process each;
+//            Stop too (productHooks.stop), since the CLI writes a turn's result only after its Stop hooks (ADR 0318).
 //            A writing session also registers the write barrier's PreToolUse hook (write-barrier.ts, ADR 0228): a call
 //            that may write is answered only once the turn's checkpoint settled (holdWrites).
 // Messages become contract ChatItems (streamed text as replace events, tool rows with a one-line summary, diff counts,
@@ -166,7 +167,7 @@ const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 /** The callback id of the app's in-process PreToolUse hook (opts.preToolUse), registered at initialize. */
 const PRE_TOOL_HOOK = 'sb_pre_tool_use';
 /** The callback ids of a product brain's hooks answered in process (opts.productHooks), per event. */
-const PRODUCT_HOOKS: Readonly<Record<string, string>> = { UserPromptSubmit: 'sb_product_prompt', PreToolUse: 'sb_product_pre', PostToolUse: 'sb_product_post' };
+const PRODUCT_HOOKS: Readonly<Record<string, string>> = { UserPromptSubmit: 'sb_product_prompt', PreToolUse: 'sb_product_pre', PostToolUse: 'sb_product_post', Stop: 'sb_product_stop' };
 const PRODUCT_IDS: ReadonlySet<string> = new Set(Object.values(PRODUCT_HOOKS));
 /** The write barrier's PreToolUse hook (ADR 0228) and its CLI timeout in seconds: above the manager's snapshot deadline
  *  (manager-checkpoints.ts), so the CLI never gives up on the hook and runs a write before the snapshot settled. */
@@ -194,7 +195,11 @@ const LIVE_TASK = new Set(['pending', 'running', 'in_progress']);
 // Checked against CLI 2.1.283 (thinking_tokens, background_tasks_changed, vcs_state_changed are new there and carry
 // nothing the app shows, #155); a new CLI's first run warns once for each new name (`npm run logs -- --scope drift`).
 const QUIET_TYPES = new Set(['keep_alive', 'auth_status', 'tool_progress', 'tool_use_summary', 'prompt_suggestion']);
-const QUIET_STREAM = new Set(['message_delta', 'message_stop', 'ping']);
+const QUIET_STREAM = new Set(['message_stop', 'ping']);
+/** stop reasons that end the model's reply. After any other the CLI goes on by itself (a tool's result, a paused server
+ *  tool, a reply cut at its token limit that it continues) or may: a reason this list does not know keeps the chat at
+ *  work until the result, as before ADR 0318 */
+const REPLY_ENDS = new Set(['end_turn', 'stop_sequence', 'refusal']);
 const QUIET_DELTAS = new Set(['input_json_delta', 'signature_delta', 'citations_delta']);
 const QUIET_BLOCKS = new Set(['tool_use', 'server_tool_use', 'redacted_thinking', 'mcp_tool_use', 'mcp_tool_result', 'web_search_tool_result', 'web_fetch_tool_result', 'code_execution_tool_result']);
 const QUIET_SYSTEM = new Set(['hook_started', 'hook_progress', 'hook_response', 'files_persisted', 'elicitation_complete', 'task_progress', 'thinking_tokens', 'background_tasks_changed', 'vcs_state_changed']);
@@ -248,6 +253,9 @@ export class ClaudeSession implements HarnessSession {
   /** the user stopped the running turn (Stop, or "Invia subito" = sendNow): its result is an interruption, not an error */
   private stopping: { sendNow: boolean } | null = null;
   private stateEvents = false;        // the CLI sends session_state_changed (authoritative running/idle)
+  /** the reply is complete and the CLI only closes the turn (Stop hooks, its own bookkeeping, a late idle): told as
+   *  SessionPatch.closing, so what shows the chat as working stops with the last text, not with the result (ADR 0318) */
+  private turnClosing = false;
   private closing = false;
   private keepChildren = false;
   private exitedRoot: Root | null = null;
@@ -284,7 +292,8 @@ export class ClaudeSession implements HarnessSession {
   private initAt = 0;                 // system/init: MCP servers, plugins and hooks loaded
   private initMcp: Record<string, unknown> = {};
   private readonly writeBarrier = new WriteBarrier(); // ADR 0228: writing calls wait for the turn's checkpoint
-  private turnT: { sent: number; first?: number; text?: number; warm: boolean; n: number } | null = null;
+  /** replied = the model's last stop with no tool call; hooks* = the turn's Stop hooks (how many, first start, last end) */
+  private turnT: { sent: number; first?: number; text?: number; replied?: number; hooks?: number; hooksFrom?: number; hooksTo?: number; warm: boolean; n: number } | null = null;
   private turnsSent = 0;
   private readyDone!: () => void;
   /** settles when the engine answered initialize, failed it, or exited: control requests sent after it are not
@@ -453,6 +462,7 @@ export class ClaudeSession implements HarnessSession {
     if (!this.turnOpen) this.turnT = { sent: Date.now(), warm: !!this.readyAt, n: ++this.turnsSent };
     if (!this.turnOpen) this.sink.changed({ effortSubmitted: this.selectedEffort });
     this.turnOpen = true;
+    this.setClosing(false); // a message sent while the last turn closes: its answer is awaited from now
     if (this.state !== 'waiting') this.setState('running');
   }
 
@@ -717,7 +727,16 @@ export class ClaudeSession implements HarnessSession {
   private setState(st: ChatState): void {
     if (this.state === st) return;
     this.state = st;
+    if (st !== 'running') this.turnClosing = false; // the manager drops its own with the state (ChatSummary.turnClosing)
     this.sink.changed({ state: st });
+  }
+
+  /** The reply is complete and only the turn's end is left (on), or the model works again (off). The state stays
+   *  'running' either way: every rule keyed on it (queue, Stop, auto-close) waits for the real end (ADR 0318). */
+  private setClosing(on: boolean): void {
+    if (this.turnClosing === on || (on && this.state !== 'running')) return;
+    this.turnClosing = on;
+    this.sink.changed({ closing: on });
   }
 
   /** The model is producing output: a turn is in flight even if we did not start it (a queued message, a task
@@ -727,6 +746,7 @@ export class ClaudeSession implements HarnessSession {
     // The CLI can start its own turn. No per-turn effort parameter was submitted by the app.
     this.sink.changed({ effortSubmitted: null });
     this.turnOpen = true;
+    this.setClosing(false); // a turn of its own after a result whose idle never came
     this.setState(this.calls.size ? 'waiting' : 'running');
   }
 
@@ -959,6 +979,8 @@ export class ClaudeSession implements HarnessSession {
     if (this.opts.productHooks) {
       hooks.UserPromptSubmit = [{ hookCallbackIds: [PRODUCT_HOOKS.UserPromptSubmit!] }];
       hooks.PostToolUse = [{ matcher: '*', hookCallbackIds: [PRODUCT_HOOKS.PostToolUse!] }];
+      // the turn's result waits for every Stop hook: answered here it costs no process start (ADR 0318)
+      if (this.opts.productHooks.stop) hooks.Stop = [{ hookCallbackIds: [PRODUCT_HOOKS.Stop!] }];
     }
     return Object.keys(hooks).length ? hooks : null;
   }
@@ -971,8 +993,10 @@ export class ClaudeSession implements HarnessSession {
     const event = s(input.hook_event_name);
     try {
       const p = this.opts.productHooks!;
-      const result = runHook(p.root, p.state, input as unknown as HookInput, p.launch);
-      if (result.deny) response = event === 'PreToolUse'
+      const result = runHook(p.root, p.state, input as unknown as HookInput, { ...p.launch, inProcess: true });
+      // a stop is no operation to refuse: a brain the hook cannot read must not send the model back to work for ever
+      if (event === 'Stop') response = {};
+      else if (result.deny) response = event === 'PreToolUse'
         ? { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: result.deny } }
         : { decision: 'block', reason: result.deny };
       else if (result.context && (event === 'UserPromptSubmit' || event === 'PreToolUse' || event === 'PostToolUse')) response = { hookSpecificOutput: { hookEventName: event, additionalContext: result.context } };
@@ -1043,6 +1067,7 @@ export class ClaudeSession implements HarnessSession {
       case 'message_start':
         this.curMessage = s(o(e.message).id) || nextId('m');
         if (this.turnT && this.turnT.first === undefined) this.turnT.first = Date.now();
+        this.setClosing(false); // it speaks again (a Stop hook sent it back to work, a queued turn began)
         return;
       case 'content_block_start': {
         const b = o(e.content_block);
@@ -1074,6 +1099,16 @@ export class ClaudeSession implements HarnessSession {
         return;
       }
       case 'content_block_stop': this.flushStreams(false); return;
+      // the model stopped and asks for no tool: its reply is complete, whatever the CLI still runs before the result
+      // (Stop hooks: seconds on a brain with several). Live check 2026-11-16, CLI 2.1.325: assistant, then this event
+      case 'message_delta': {
+        const stop = s(o(e.delta).stop_reason);
+        if (!stop || !REPLY_ENDS.has(stop)) return;
+        // the last stop of the turn is the one timed: hooks of an earlier stop (one sent it back to work) do not count
+        if (this.turnT) Object.assign(this.turnT, { replied: Date.now(), hooks: 0, hooksFrom: undefined, hooksTo: undefined });
+        this.setClosing(true);
+        return;
+      }
       default: if (!QUIET_STREAM.has(s(e.type))) this.drift('stream event', s(e.type), e); return;
     }
   }
@@ -1231,14 +1266,18 @@ export class ClaudeSession implements HarnessSession {
     this.sink.changed({ turnCostUsd: turn, totalCostUsd: total, liveCostUsd: 0, ...(turnTokens ? { turnTokens } : {}) });
     // more sends wait in the CLI's queue: another turn follows on its own, the chat stays running
     const queued = num(m.queued_turn_count) ?? 0;
-    if (queued > 0) { this.sink.changed({ effortSubmitted: null }); this.turnOpen = true; }
+    if (queued > 0) { this.sink.changed({ effortSubmitted: null }); this.turnOpen = true; this.setClosing(false); }
     else {
       this.turnOpen = false;
       // with session state events the CLI says itself when it is idle (after held-back results and background agents)
       if (!this.stateEvents) this.setState(this.calls.size ? 'waiting' : 'idle');
-      // live check 2026-10-11 (CLI 2.1.283): the closing session_state_changed 'idle' may come late or not at all after
-      // the last result; if nothing reopened the turn within 3 s, the chat is idle (else the tile stays "al lavoro")
-      else setTimeout(() => { if (!this.turnOpen && this.state === 'running') this.setState(this.calls.size ? 'waiting' : 'idle'); }, 3000).unref?.();
+      else {
+        // live check 2026-10-11 (CLI 2.1.283): the closing session_state_changed 'idle' may come late or not at all
+        // after the last result; if nothing reopened the turn within 3 s, the chat is idle (else the tile stays "al
+        // lavoro"). Until then nothing shows it as working: for the user the turn ended with its result (ADR 0318)
+        this.setClosing(true);
+        setTimeout(() => { if (!this.turnOpen && this.state === 'running') this.setState(this.calls.size ? 'waiting' : 'idle'); }, 3000).unref?.();
+      }
     }
     log.info('chats', 'turn done', { chat: this.opts.chatId, op: 'invoke_agent', data: { costUsd: turn, durationMs: m.duration_ms, turns: m.num_turns, isError, interrupted, queued } });
     this.logTiming(m);
@@ -1255,6 +1294,8 @@ export class ClaudeSession implements HarnessSession {
     const rel = (x: number | undefined): number | null => (x === undefined ? null : x - t.sent);
     log.info('chats', 'timing: turn', { chat: this.opts.chatId, data: {
       turn: t.n, firstEventMs: rel(t.first), firstTextMs: rel(t.text), resultMs: now - t.sent, apiMs: num(m.duration_api_ms) ?? null,
+      // the end of the turn (ADR 0318): complete reply → result, and the Stop hooks that ran in between
+      closeMs: t.replied === undefined ? null : now - t.replied, stopHooks: t.hooks ?? 0, stopHooksMs: t.hooksFrom !== undefined && t.hooksTo !== undefined ? t.hooksTo - t.hooksFrom : null,
       // the first turn of a process: was the engine already up when it was sent (warm), and how long since the spawn
       ...(t.n === 1 ? { warm: t.warm, sentAfterSpawnMs: t.sent - this.spawnedAt, readyMs: this.readyAt ? this.readyAt - this.spawnedAt : null, ...this.initTiming(t.first) } : {}),
     } });
@@ -1316,6 +1357,9 @@ export class ClaudeSession implements HarnessSession {
         if (m.status === 'compacting') this.sysCode('compacting', undefined, 'info');
         return;
       }
+      // a Stop hook holds the result back while it runs (they run together): timed for the log, never shown
+      case 'hook_started': if (s(m.hook_event) === 'Stop' && this.turnT) { this.turnT.hooksFrom ??= Date.now(); this.turnT.hooks = (this.turnT.hooks ?? 0) + 1; } return;
+      case 'hook_response': if (s(m.hook_event) === 'Stop' && this.turnT) this.turnT.hooksTo = Date.now(); return;
       case 'commands_changed': if (Array.isArray(m.commands)) { this.cmdList = m.commands; this.reportCommands(); } return;
       case 'session_state_changed': {
         this.stateEvents = true;

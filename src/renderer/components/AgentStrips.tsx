@@ -15,7 +15,7 @@ import { sameRecord } from '../lib/memo';
 import { schedule } from '../lib/viewports';
 import { app, useApp } from '../store/store';
 import { leaveGhost } from '../lib/leave-ghost';
-import { sameList } from '../store/state';
+import { sameList, showsWork } from '../store/state';
 import { useHandoffTabs } from '../store/handoffs';
 import { setPrefs, ui } from '../store/ui';
 import { t as tr, locale } from '../i18n';
@@ -127,7 +127,7 @@ function TeamTabs({ team, openId, onBack }: { team: readonly string[]; openId: s
     {team.length > 1 && <div className="bench-tabs" role="tablist" aria-label={tr('product.benchTeam')}>
       {chats.map((c, i) => {
         if (!c) return null;
-        const name = c.agent?.name || c.title, tone = i === 0 ? (c.state === 'waiting' ? 'wait' : c.state === 'error' ? 'err' : c.state === 'running' ? 'run' : 'off') : kidTone(childState(c));
+        const name = c.agent?.name || c.title, tone = i === 0 ? (c.state === 'waiting' ? 'wait' : c.state === 'error' ? 'err' : showsWork(c) ? 'run' : 'off') : kidTone(childState(c));
         return <button key={c.id} type="button" role="tab" aria-selected={c.id === openId} className={`bench-tab${c.id === openId ? ' on' : ''}`} data-testid={`bench-tab-${c.id}`} onClick={() => setChatExpanded(c.id, true)}>
           <span className={`bench-dot tone-${tone}`} aria-hidden="true" /><AgentAvatar avatar={c.agent?.avatar} name={name} size={16} /><b>{name}</b>{c.id === openId && <span>{i === 0 ? c.title : c.delegation?.goal || c.title}</span>}
         </button>;

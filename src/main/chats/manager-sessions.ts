@@ -333,7 +333,7 @@ export abstract class ManagerSessions extends ManagerPersistence {
       // Claude asks no permission to start one
       ...(engine.kind !== 'claude' ? {} : r.s.isOrchestrator ? { preToolUse: new TurnToolBudget() }
         : subagentGateFor(r.policy?.tools, r.s.cwd)),
-      sessionId, resume, fork, worktree: r.worktree && !resume, mcpConfig: this.mcpConfig(chatId), costBaseUsd: r.costTotalUsd,
+      sessionId, resume, fork, worktree: r.worktree && !resume, ...(r.worktree || r.inWorktree ? { inWorktree: true } : {}), mcpConfig: this.mcpConfig(chatId), costBaseUsd: r.costTotalUsd,
       compactWindowTokens: r.maxContext ?? this.compactWindow(),
       // Native subagents inherit this environment: a per-chat model cannot prove a memory event's producer.
       env: { ...this.opts.env, SB_EVENT_CONTEXT: '' }, ...(extraArgs ? { extraArgs } : {}),

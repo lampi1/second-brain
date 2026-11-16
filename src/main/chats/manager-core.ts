@@ -207,6 +207,7 @@ export abstract class ManagerCore {
     this.refreshTaskSummary(r);
     const now = Date.now();
     r.s.updatedAt = now;
+    if (r.s.state !== 'running') delete r.s.turnClosing; // only a running chat closes a turn (ADR 0318)
     // work time: starting or running counts; waiting for the user, idle, closed do not
     const working = (r.s.state === 'starting' || r.s.state === 'running') && !r.handoffTurn; // a hand-off turn is no work of the job
     if (working && r.s.workSince === undefined) r.s.workSince = now;

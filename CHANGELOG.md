@@ -227,6 +227,12 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   key is gone (ADR 0291).
 
 ### Fixed
+- A chat stops showing work as soon as its reply is complete: the working line («sta pensando…»), the person at
+  work and «al lavoro» no longer stay for the seconds the engine takes to close the turn (the brain's Stop hooks run
+  before Claude Code writes the result). The «Turno finito» line still comes with the real cost, and sooner: at a
+  turn's end the app no longer starts a process for its rules hook, nor the inbox hook (the app delivers the chats'
+  mail itself), nor a second copy of a template hook the chat's own brain folder already runs. The log's
+  `timing: turn` line now says how long each turn's end and its Stop hooks took (ADR 0318).
 - The phone (Remote Control): a work chat's Sì/No question and a command waiting for Esegui, the Orchestrator's own
   ones too, reach the user in the Orchestrator's own question panel with Sì and No buttons (a command written whole
   first); his tap there answers the chat or runs the command, as his «sì» typed did (#425).
