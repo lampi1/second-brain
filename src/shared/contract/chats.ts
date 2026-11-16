@@ -331,6 +331,11 @@ export interface RunInfo {
  *  'running' = still going (nothing started, never overridden), 'done' = ended recently, start again with confirmRerun. */
 export type RunStart = RunInfo & { already?: 'running' | 'done' };
 
+/** What «Non serve» answers (#428): `same` = the identical command already runs, or ran recently, so the user put the
+ *  card aside as a duplicate, not as a refusal; the chat's note says so, and a chat dismissing it while it runs gets that
+ *  run's result when it ends. */
+export interface RunDismissed { same?: { runId: string; state: RunInfo['state']; startedAt: number; endedAt?: number; ownChat: boolean } }
+
 /** The engine, model and effort «Balanced mode» picked for one role chat, and the credit pool it spends (ADR 0218). */
 export interface BalancedRoute { engine: Harness; model: string; effort?: Effort; pool: string }
 /** What a delegating agent passes in «Balanced mode» (app_create_chat, agent_delegate): its own pick after reading
@@ -467,7 +472,7 @@ export interface ChatsInvokeMap {
   'run:stop': [{ runId: string }, void];
   'run:list': [{ chatId?: string }, RunInfo[]];
   /** "Non serve" on a command request: it leaves "Ti aspettano" without running (the block stays in the chat) */
-  'run:dismiss': [{ chatId: string; requestId: string }, void];
+  'run:dismiss': [{ chatId: string; requestId: string }, RunDismissed];
   /** what "/" offers in a chat's input: the commands its engine reported, or its engine's skills on disk */
   'chat:commands': [{ chatId: string }, ChatCommand[]];
   /** Read without starting an engine; ensure creates only when no coordinator exists. */

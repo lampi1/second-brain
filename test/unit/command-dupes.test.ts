@@ -194,4 +194,29 @@ describe('the incident: a worker queues X, the Orchestrator repeats X in a code 
     expect(originalOf('echo demo', { chatId: 'a', itemId: 'a1' }, [ask('a', 'a1', 1)], [])).toBeNull();
     expect(originalOf('echo demo ', { chatId: 'c', itemId: 'c1' }, [ask('b', 'b1', 5), ask('a', 'a1', 2)], [])?.chatId).toBe('a');
   });
+
+  // #428: «Non serve» on a duplicate card while the first run went on was read by its agent as a refusal
+  it('«Non serve» on a card whose identical command runs names that run, and the chat follows its result', () => {
+    const live: RunInfo = { id: 'run-3', chatId: 'worker', itemId: 'w1', code: DEPLOY, cwd: 'C:/repo/demo-app', state: 'running', exitCode: null, output: '', startedAt: 1_990_000 };
+    const w = world([live]);
+    // results that could not tell the chat (false): the block is asked as usual, so a duplicate card stands
+    w.s.useResults(() => false);
+    w.turn('orch', [asst('o1', `Lancia:\n${fence('powershell', DEPLOY)}`)], { isOrchestrator: true });
+    const [card] = w.s.pending();
+    expect(card?.chatId).toBe('orch');
+    expect(w.s.dismiss('orch', card!.id)).toEqual({ same: { runId: 'run-3', state: 'running', startedAt: 1_990_000, ownChat: false } });
+    expect(w.s.followersOf(live)).toEqual(['orch']);
+    expect(w.s.pending()).toEqual([]);
+  });
+
+  it('«Non serve» after the identical command ended within the hour names that run; otherwise nothing', () => {
+    const done: RunInfo = { id: 'run-4', chatId: 'old', itemId: 'z', code: 'npm run seed:demo', cwd: 'C:/elsewhere', state: 'ok', exitCode: 0, output: '', startedAt: 1_900_000, endedAt: 1_950_000 };
+    const w = world([done]);
+    w.turn('worker', [asst('w1', `Lancia:\n${fence('powershell', 'npm run seed:demo')}`), ]);
+    w.turn('orch', [asst('o1', `Lancia:\n${fence('powershell', 'npm run build')}`)], { isOrchestrator: true });
+    const [a, b] = w.s.pending();
+    expect(w.s.dismiss('worker', a!.id)).toEqual({ same: { runId: 'run-4', state: 'ok', startedAt: 1_900_000, endedAt: 1_950_000, ownChat: false } });
+    expect(w.s.dismiss('orch', b!.id)).toEqual({});
+    expect(w.s.followersOf(done)).toEqual([]);
+  });
 });

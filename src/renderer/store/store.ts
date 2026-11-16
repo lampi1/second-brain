@@ -16,7 +16,8 @@ import { t, locale } from '../i18n';
 import { connectAutoClose } from './auto-close';
 import { initialState, isBusy, reduce, toFlush, type Action, type AppState, type QueuedMsg } from './state';
 import { announce, hideChat, hideTab, setPrefs, toast,toastKey, ui } from './ui';
-import { noteLine, UNDO_MS, type NoteKind } from '../lib/sendable';
+import { dismissedLine, noteLine, runningLine, UNDO_MS, type NoteKind } from '../lib/sendable';
+import { runningRuns } from '../lib/runs';
 import { setMark, type Mark } from '../lib/marks';
 import { canCorrectAtNextStep, cleanQuote, correctionBlocked, correctionText } from '../lib/correction';
 import { now as clockNow } from '../lib/clock';
@@ -253,7 +254,7 @@ export function send(chatId: string, text: string, images: readonly ImageAttachm
   const voice = opts.voice ? { voice: true as const } : {};
   if (busyNow(chatId, c)) { dispatch({ type: 'queue', chatId, msg: { id: `q:${++localN}`, text: own, ...(images.length ? { images } : {}), ...voice } }); return 'queued'; }
   // the notes waiting for this chat ride on the user's message
-  return sendOut(chatId, [own, takeNotes(chatId).join('\n')].filter(Boolean).join('\n\n'), images, c, !!opts.voice);
+  return sendOut(chatId, [own, userNotes(chatId).join('\n')].filter(Boolean).join('\n\n'), images, c, !!opts.voice);
 }
 
 /** Send now (the chat is free): the optimistic copy, then main. */
@@ -283,8 +284,10 @@ function takeNotes(chatId: string): string[] {
   notes.delete(chatId);
   return list.map(n => n.line);
 }
+/** What rides on a message the user writes: the waiting notes, and a line per command of the chat still running (#428). */
+const userNotes = (chatId: string): string[] => [...takeNotes(chatId), ...runningRuns(chatId).map(runningLine)];
 function withNotes(chatId: string, msg: QueuedMsg): QueuedMsg {
-  const extra = takeNotes(chatId);
+  const extra = userNotes(chatId);
   return extra.length ? { ...msg, text: [msg.text, extra.join('\n')].filter(Boolean).join('\n\n') } : msg;
 }
 function addNote(chatId: string, n: Note): void {
@@ -448,9 +451,10 @@ export async function runCommand(req: PendingRequest, confirmProd = false, resto
 export async function dismissCommand(req: PendingRequest, reply?: string): Promise<void> {
   dispatch({ type: 'pending:resolved', chatId: req.chatId, requestId: req.id });
   try {
-    await sb.invoke('run:dismiss', { chatId: req.chatId, requestId: req.id });
-    // the chat learns the user will not run it (the user, 2026-10-13: "devi capire meglio da sola quando finisco")
-    if (req.command) addNote(req.chatId, { key: `cmd:${req.chatId}/${req.id}`, kind: 'dismissed', line: noteLine('dismissed', req.command.code) });
+    const out = await sb.invoke('run:dismiss', { chatId: req.chatId, requestId: req.id });
+    // the chat learns the user will not run it (the user, 2026-10-13: "devi capire meglio da sola quando finisco"), or,
+    // when the same command runs or ran, that this card was only a duplicate (#428)
+    if (req.command) addNote(req.chatId, { key: `cmd:${req.chatId}/${req.id}`, kind: 'dismissed', line: dismissedLine(req.command.code, out?.same) });
     if (reply?.trim()) send(req.chatId, reply.trim());
   } catch (e) {
     if (/non è più aperta/i.test(errText(e))) return;
