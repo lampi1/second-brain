@@ -102,4 +102,16 @@ describe('page: ui-errors', () => {
     handlers.unhandledrejection!({ reason: new Error('lost promise') });
     expect(invoke.mock.calls.map(c => (c as unknown[])[1])).toMatchObject([{ kind: 'error', message: 'boom', source: 'app.js:3' }, { kind: 'rejection', message: 'lost promise' }]);
   });
+
+  it('a browser notice with no exception behind it is never an interface error (#418)', () => {
+    const handlers: Record<string, (e: unknown) => void> = {};
+    startUiErrors({ addEventListener: ((type: string, fn: (e: unknown) => void) => { handlers[type] = fn; }) as Window['addEventListener'] });
+    invoke.mockClear();
+    handlers.error!({ message: 'ResizeObserver loop completed with undelivered notifications.', error: null, filename: 'index.html' });
+    handlers.error!({ message: 'ResizeObserver loop limit exceeded', error: null });
+    expect(invoke).not.toHaveBeenCalled();
+    expect(cleanRendererError({ kind: 'error', message: 'ResizeObserver loop completed with undelivered notifications.' })).toBeNull();
+    // a real exception that only mentions it still counts
+    expect(cleanRendererError({ kind: 'error', message: 'TypeError: ResizeObserver loop completed with undelivered notifications. in Chart' })).not.toBeNull();
+  });
 });

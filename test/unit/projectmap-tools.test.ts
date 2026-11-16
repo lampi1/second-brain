@@ -35,6 +35,16 @@ describe('chat tools', () => {
     await expect(async () => t.project_map_update!.run({ project: 'negozio' }, ctx('s1'))).rejects.toThrow('at least one');
     await expect(async () => t.project_map_read!.run({ project: 'altro' }, ctx('s1'))).rejects.toThrow('nessuna mappa «altro»');
   });
+
+  it('the tool descriptions say the limits a save or an update refuses (#420), so no agent learns them by a refusal', () => {
+    const t = Object.fromEntries(chatMapTools({ maps, titleOf: () => null, cwdOf: () => null }).map(x => [x.name, x]));
+    const save = JSON.stringify(t.project_map_save), update = t.project_map_update!.description;
+    expect(save).toMatch(/Only paths inside the root: an absolute path or one with \.\.\/ is refused/);
+    expect(save).toMatch(/note at most 200 characters/);
+    expect(save).toMatch(/planned = not started yet/);
+    expect(update).toMatch(/changes only status, note \(at most 200 characters\) and actor/);
+    expect(update).toMatch(/need project_map_save/);
+  });
 });
 
 describe('app_project_map', () => {
