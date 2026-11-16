@@ -224,6 +224,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   key is gone (ADR 0291).
 
 ### Fixed
+- A chat stops showing work as soon as its reply is complete: the working line («sta pensando…»), the person at
+  work and «al lavoro» no longer stay for the seconds the engine takes to close the turn (the brain's Stop hooks run
+  before Claude Code writes the result). The «Turno finito» line still comes with the real cost. The log's `timing:
+  turn` line now says how long each turn's end and its Stop hooks took (ADR 0317).
 - macOS and Linux: Cursor's chats are found (its database was looked for under `%APPDATA%` only); the brain's tools
   and `setup-pc.mjs` find the app's data folder; the brain's path values keep a POSIX path as it is; agents are told
   the real login shell (zsh, bash) instead of PowerShell, in the rules and in the outcome of Esegui; «Trovate sul PC»

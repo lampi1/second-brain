@@ -21,7 +21,7 @@ import type { PendingRequest } from '@shared/contract';
 import { chatCost, queueReason, folderName, minutes, permissionBadge, modelWithEffort, stateInfo, workTime } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { COMPACT_TILE_H } from '../lib/grid';
-import { isBusy, sameList } from '../store/state';
+import { isBusy, sameList, showsWork } from '../store/state';
 import { closeChat, send, stop, useApp } from '../store/store';
 import { DEFAULT_SPLIT, setAgentSplit, setAgentView, setFocused, setChatExpanded, ui, type AgentView } from '../store/ui';
 import {t}from'../i18n';
@@ -156,10 +156,10 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
   }, [focusReq]);
   // what the state words, the dot and the person say: a stop shorter than HOLD_MS while it works is not shown (ADR 0312)
   const shown = useSteady<{ chat: typeof chat; reqs: readonly PendingRequest[]; waitRow: AutoCloseStatus | undefined }>({ chat, reqs, waitRow: liveWaitRow },
-    v => !!v.chat && isBusy(v.chat) && v.chat.state !== 'waiting' && !v.reqs.length, v => v.chat?.state === 'error');
+    v => !!v.chat && showsWork(v.chat) && v.chat.state !== 'waiting' && !v.reqs.length, v => v.chat?.state === 'error');
   if (!chat) return null;
   const sc = shown.chat ?? chat, shownReqs = shown.reqs, waitRow = shown.waitRow;
-  const busyShown = isBusy(sc), holding = sc !== chat;
+  const busyShown = showsWork(sc), holding = sc !== chat;
   const compact = !expanded || !focus && !embedded && size.height > 0 && size.height < COMPACT_TILE_H;
   const busy = isBusy(chat);
   const st = stateInfo(sc);
@@ -313,7 +313,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
       {expanded && <TaskContext chat={chat} onContinue={() => reveal(true)} />}
       {!compact && chat.handoffBusy && <ContextNotice chat={chat} />}
       {/* no Esegui in a work chat: its commands wait in the Orchestrator (ADR 0269) */}
-      <RunHereCtx.Provider value={false}><ChatTranscript key={chatId} chatId={chatId} busy={busy} expanded={expanded} /></RunHereCtx.Provider>
+      <RunHereCtx.Provider value={false}><ChatTranscript key={chatId} chatId={chatId} busy={showsWork(chat)} expanded={expanded} /></RunHereCtx.Provider>
       {/* every chat keeps its input (the owner, 2026-11-10: «permettimi anche di scrivere ad ogni agente … voglio
           comunque avere la possibilità»); the Orchestrator stays the usual way to talk to delegated work */}
       <ChatInput ref={input} chat={chat} testid={`chat-input-${chatId}`} />

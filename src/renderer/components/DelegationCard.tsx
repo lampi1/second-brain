@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEve
 import type { ChatItem, ChatSummary, PendingRequest } from '@shared/contract';
 import { useApp, loadItems, answer, send, stop } from '../store/store';
 import { setChatExpanded, setFocusMode, setTreeCollapsed, ui } from '../store/ui';
-import { isBusy, sameList } from '../store/state';
+import { sameList, showsWork } from '../store/state';
 import { activeState, childState, kidCounts, type ChildState, type TreeNode } from '../lib/chat-tree';
 import { runSteps, type RunStep, type StepMark } from '../lib/run-steps';
 import { requestHost } from '../lib/child-requests';
@@ -83,14 +83,14 @@ function Head({ chat, state, open }: { chat: ChatSummary; state: ChildState; ope
   const said = chat.delegation?.result?.summary || chat.lastText;
   return <div className="dc-head">
     <StripFace chatId={chat.id} avatar={chat.agent?.avatar} name={role} size={22} tone={LINE[state]} waitsUser={state === 'wait'} error={LINE[state] === 'err'}
-      busy={isBusy(chat)} done={state === 'done' || state === 'partial'} pending={live} />
+      busy={showsWork(chat)} done={state === 'done' || state === 'partial'} pending={live} />
     {/* the task is the row's own button (keyboard, screen readers), as on the root strip; a click anywhere on the row does the same */}
     <h4 className="dc-title" title={chat.delegation?.goal ?? chat.title}><button type="button" className="strip-name" aria-expanded={open} data-testid={`delegation-expand-${chat.id}`} onClick={() => setChatExpanded(chat.id, !open)}>{chat.title}</button></h4>
     <span className="dc-who">
       <span className="dc-role">{role}</span>
       {open ? <>
         {skills.slice(0, 2).map(s => <span key={s} className="dc-chip">{s}</span>)}
-      </> : <span className="dc-now" data-testid={`delegation-now-${chat.id}`}>{isBusy(chat) ? <StripActivity chatId={chat.id} /> : said.split('\n')[0]!.slice(0, 140)}</span>}
+      </> : <span className="dc-now" data-testid={`delegation-now-${chat.id}`}>{showsWork(chat) ? <StripActivity chatId={chat.id} /> : said.split('\n')[0]!.slice(0, 140)}</span>}
     </span>
     <StripMeta chat={chat} workMs={chat.queued ? null : workTime(chat, now) ?? chat.run?.executionMs ?? null} />
     {live ? <span className="pill pill-run strip-working" data-testid={`delegation-state-${chat.id}`} data-child-state={state}><span className="pill-dot" aria-hidden="true" />{t('product.running')}</span>

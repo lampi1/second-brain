@@ -71,6 +71,10 @@ export interface SessionPatch {
    *  history), false after: those items are no answer of the engine, so they never end its cold start. Sent alone. */
   replaying?: boolean;
   state?: ChatState;
+  /** true: the reply is complete and the engine only closes the turn (Claude: the model stopped with no tool call, or
+   *  the result came, while Stop hooks run or the CLI's idle is late); false: it works again. The state does not change:
+   *  the manager shows it as ChatSummary.turnClosing (ADR 0317) */
+  closing?: boolean;
   sessionId?: string;          // the CLI's own session id (learned at init, or new after a fork)
   model?: string;              // the model actually in use (from init)
   permissionMode?: PermissionMode;
