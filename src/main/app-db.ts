@@ -69,6 +69,9 @@ export function reopenAppDb(file: string): DatabaseSync {
  *  process (#336). */
 const checked = new Set<string>();
 
+/** As at a new start: no file counts as checked (tests). */
+export function forgetChecks(): void { checked.clear(); }
+
 /** The mark a background check leaves beside a file whose pages are damaged: the next open moves the file aside. */
 export const damagedMark = (file: string): string => `${file}.damaged`;
 
@@ -120,8 +123,11 @@ export function checkInBackground(file: string, done?: (r: CheckResult) => void)
 
 function openChecked(file: string): DatabaseSync {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  if (fs.existsSync(damagedMark(file)) && !fs.existsSync(file)) { try { fs.rmSync(damagedMark(file), { force: true }); } catch { /* left */ } }
-  if (fs.existsSync(damagedMark(file))) {
+  // the mark counts only at the process's first open of the file: another owner opening it later must not move it
+  // aside under the connections already open on it (the next start does)
+  const key = path.resolve(file), first = !checked.has(key);
+  if (first && fs.existsSync(damagedMark(file)) && !fs.existsSync(file)) { try { fs.rmSync(damagedMark(file), { force: true }); } catch { /* left */ } }
+  if (first && fs.existsSync(damagedMark(file))) {
     const cause = (() => { try { return fs.readFileSync(damagedMark(file), 'utf8').trim(); } catch { return 'quick_check'; } })();
     throw Object.assign(new Error(`marked damaged by the last check: ${cause}`), { corrupt: true });
   }
@@ -135,8 +141,7 @@ function openChecked(file: string): DatabaseSync {
     try { db.close(); } catch { /* already closed */ }
     throw e;
   }
-  const key = path.resolve(file);
-  if (!checked.has(key)) { checked.add(key); if (process.env.SB_DB_CHECK !== '0') checkInBackground(file); }
+  if (first) { checked.add(key); if (process.env.SB_DB_CHECK !== '0') checkInBackground(file); }
   return track(db);
 }
 

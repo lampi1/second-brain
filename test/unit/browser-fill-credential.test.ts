@@ -5,6 +5,8 @@
 // masked result), and what the tab refuses afterwards (caller JavaScript, copy keys). Fakes stand in for the tab, its
 // frames and the page scripts; no Electron, no page.
 import { describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { BrowserActions } from '../../src/main/browser/actions';
 import { addLoginUrl, Credentials, LinkRefusal, looksProduction } from '../../src/main/browser/logins';
@@ -216,6 +218,8 @@ describe('linking a sign-in page\'s site to an account', () => {
     const twins = JSON.stringify([{ url: 'https://a.example.com/', username: 'same', password: PW('a') }, { url: 'https://b.example.com/', username: 'same', password: PW('b') }]);
     expect(creds(twins).siteCredential('same', 'https://c.example.com/')).not.toHaveProperty('link');
     expect(refusal(creds(), '', 'https://test-4.example.com/')).toMatch(/call fill_credential with account = its user name: the app asks the user to link/);
+    // a production-looking host is never offered: linking it would make the whole entry refused
+    expect(creds().siteCredential('luigi', 'https://app.prod.example.com/login')).not.toHaveProperty('link');
   });
 
   it('Sì writes the origin into that entry\'s loginUrl only; a second site makes it a list; both hosts then sign in', () => {
@@ -267,5 +271,23 @@ describe('linking a sign-in page\'s site to an account', () => {
     const [h] = handoffs.list();
     expect(h).toMatchObject({ kind: 'link', chatId: 'c1', tabId: 't1', account: { user: 'luigi' }, link: { host: 'test-4.example.com', origin: 'https://test-4.example.com/', sites: ['test-3.example.com'] } });
     expect(JSON.stringify(h)).not.toContain('Synthetic-');
+  });
+
+  it('the real write keeps a linked file a link (secrets outside the brain) and its mode', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-link-'));
+    try {
+      const outside = path.join(dir, 'secret.json'), brain = path.join(dir, 'brain');
+      fs.mkdirSync(path.join(brain, 'ops'), { recursive: true });
+      fs.writeFileSync(outside, FILE, { mode: 0o600 });
+      fs.chmodSync(outside, 0o600);
+      const link = path.join(brain, 'ops', 'credentials.md');
+      try { fs.symlinkSync(outside, link); } catch { return; }    // no symlinks here (Windows without the right): nothing to check
+      const c = new Credentials(() => brain);
+      const offer = (c.siteCredential('luigi', 'https://test-4.example.com/') as { link: { entryId: string; origin: string } }).link;
+      expect(c.linkSite(offer.entryId, offer.origin)).toEqual({ ok: true });
+      expect(fs.lstatSync(link).isSymbolicLink()).toBe(true);
+      expect(fs.readFileSync(outside, 'utf8')).toContain('https://test-4.example.com/');
+      if (process.platform !== 'win32') expect(fs.statSync(outside).mode & 0o777).toBe(0o600);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });

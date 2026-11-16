@@ -43,7 +43,7 @@ export const runningLine = (run: Pick<RunInfo, 'code' | 'startedAt'>): string =>
 export function dismissedLine(code: string, same?: RunDismissed['same']): string {
   const line = noteLine('dismissed', code);
   if (!same) return line;
-  if (same.state === 'running') return `${line} · doppione, non un rifiuto: lo stesso comando è in esecuzione dalle ${hhmm(same.startedAt)}${same.ownChat ? '' : ' (da un\'altra chat)'}; l'esito ti arriva quando finisce, non riproporlo`;
+  if (same.state === 'running') return `${line} · doppione, non un rifiuto: lo stesso comando è in esecuzione dalle ${hhmm(same.startedAt)}${same.ownChat ? '' : ' (da un\'altra chat)'}; ${same.resultComes ? 'l\'esito ti arriva quando finisce' : 'l\'esito non ti arriva da solo: aspetta che l\'utente ti dica come è finito'}, non riproporlo`;
   const how = same.state === 'ok' ? 'riuscito' : same.state === 'stopped' ? 'fermato' : 'con errore';
   return `${line} · doppione, non un rifiuto: lo stesso comando è già stato eseguito${same.endedAt ? ` alle ${hhmm(same.endedAt)}` : ''} (${how}); leggi quell'esito, non riproporlo`;
 }

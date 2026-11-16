@@ -254,7 +254,7 @@ export function send(chatId: string, text: string, images: readonly ImageAttachm
   const voice = opts.voice ? { voice: true as const } : {};
   if (busyNow(chatId, c)) { dispatch({ type: 'queue', chatId, msg: { id: `q:${++localN}`, text: own, ...(images.length ? { images } : {}), ...voice } }); return 'queued'; }
   // the notes waiting for this chat ride on the user's message
-  return sendOut(chatId, [own, userNotes(chatId).join('\n')].filter(Boolean).join('\n\n'), images, c, !!opts.voice);
+  return sendOut(chatId, [own, userNotes(chatId, own).join('\n')].filter(Boolean).join('\n\n'), images, c, !!opts.voice);
 }
 
 /** Send now (the chat is free): the optimistic copy, then main. */
@@ -284,10 +284,11 @@ function takeNotes(chatId: string): string[] {
   notes.delete(chatId);
   return list.map(n => n.line);
 }
-/** What rides on a message the user writes: the waiting notes, and a line per command of the chat still running (#428). */
-const userNotes = (chatId: string): string[] => [...takeNotes(chatId), ...runningRuns(chatId).map(runningLine)];
+/** What rides on a message the user writes: the waiting notes, and, with words of his, a line per command of the chat
+ *  still running (#428; never on images alone: a message of notes only is the app's own, main/run/asks.ts). */
+const userNotes = (chatId: string, words: string): string[] => [...takeNotes(chatId), ...(words.trim() ? runningRuns(chatId).map(runningLine) : [])];
 function withNotes(chatId: string, msg: QueuedMsg): QueuedMsg {
-  const extra = userNotes(chatId);
+  const extra = userNotes(chatId, msg.text);
   return extra.length ? { ...msg, text: [msg.text, extra.join('\n')].filter(Boolean).join('\n\n') } : msg;
 }
 function addNote(chatId: string, n: Note): void {

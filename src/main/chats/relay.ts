@@ -29,7 +29,7 @@ import type { McpTool } from '../mcp/server';
 
 export const RELAY_MS = 30 * 60_000;
 /** the Orchestrator's own question tool (it runs on Claude): its panel shows on Remote Control */
-const ASK_TOOL = /(?:^|__)AskUserQuestion$/;
+const ASK_TOOL = 'AskUserQuestion';   // exactly: a connector tool named …__AskUserQuestion writes its own result
 /** where a user's message was typed away from the PC: Telegram ('phone') or Remote Control ('remote') */
 type Channel = 'phone' | 'remote';
 /** relay_question's refusal of a command Telegram cannot show (#390): what the Orchestrator tells him instead */
@@ -65,8 +65,9 @@ export function pickOf(output: string, question: string): 'yes' | 'no' | null {
   const out = fold(output), q = fold(question);
   const at = out.indexOf(`"${q}"=`);
   if (at >= 0) { const m = /^"([^"]*)"/.exec(out.slice(at + q.length + 3)); if (m) return yesNoOf(m[1]!); }
-  // one question asked: the only quoted Sì or No in the result
-  const found = [...out.matchAll(/"([^"]{1,30})"/g)].map(m => yesNoOf(m[1]!)).filter((x): x is 'yes' | 'no' => !!x);
+  // one question asked: the only quoted Sì or No in the result, the question's own text left out
+  const rest = q ? out.split(q).join(' ') : out;
+  const found = [...rest.matchAll(/"([^"]{1,30})"/g)].map(m => yesNoOf(m[1]!)).filter((x): x is 'yes' | 'no' => !!x);
   return new Set(found).size === 1 ? found[0]! : null;
 }
 
@@ -74,7 +75,16 @@ export class QuestionRelay {
   private relays = new Map<string, Relay>();
   /** a relay another message ended (the user may not have seen the question yet): a bare «sì»/«no» after it is told */
   private ended = new Map<string, Relay>();
+  /** the Orchestrator's panels (tool item ids) whose pick already answered a relay */
+  private usedPanels = new Set<string>();
   constructor(private readonly d: RelayDeps) {}
+
+  /** A relay waits for the Orchestrator's own Sì/No panel (#425): that question carries its brief in its text, so the
+   *  brief gate (ADR 0150) lets it through without a show_ui. */
+  panelArmed(orchestratorId: string): boolean {
+    const r = this.relays.get(orchestratorId);
+    return !!r?.ask && this.now() - r.at <= RELAY_MS;
+  }
   private now(): number { return this.d.now?.() ?? Date.now(); }
 
   /** The Orchestrator relays a work chat's open Sì/No question: what it must write to the user, word for word. */
@@ -210,11 +220,13 @@ export class QuestionRelay {
    *  True = it answered a relayed question. */
   async toolAnswered(orchestratorId: string, item: ChatItem): Promise<boolean> {
     const r = this.relays.get(orchestratorId);
-    if (!r?.ask || item.kind !== 'tool' || item.status === 'running' || !ASK_TOOL.test(item.name)) return false;
+    // a panel asked after this relay, each one used once: an older answer shown again never answers a newer relay
+    if (!r?.ask || item.kind !== 'tool' || item.status === 'running' || item.name !== ASK_TOOL || item.at < r.at || this.usedPanels.has(item.id)) return false;
     const fold = (t: string) => t.replace(/\s+/g, ' ').trim();
     const qs = (item.input as { questions?: { question?: unknown }[] } | null)?.questions;
     if (!Array.isArray(qs) || qs.length !== 1 || fold(String(qs[0]?.question ?? '')) !== fold(r.ask)) return false;
     this.relays.delete(orchestratorId);
+    this.usedPanels.add(item.id);
     const said = item.status === 'ok' ? pickOf(item.output ?? '', String(qs[0]!.question)) : null;
     if (!said) {
       log.warn('chats', 'relayed panel answer not read', { chat: r.chatId, data: { status: item.status }, hint: 'the Orchestrator is told to relay it again' });

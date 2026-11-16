@@ -213,7 +213,8 @@ it('Remote Control shows the reply whole: his «sì» there runs the relayed com
 // #425: on Remote Control a plain message is only text; the Orchestrator's own AskUserQuestion shows buttons, and his
 // pick there is delivered by the app
 const remoteUser = (text = 'come va?'): ChatItem => ({ kind: 'user', id: 'ur', at: 1, text, via: 'phone', remote: true } as ChatItem);
-const panel = (question: string, output: string, status: 'ok' | 'error' = 'ok'): ChatItem => ({ kind: 'tool', id: 't1', at: 2, name: 'AskUserQuestion', summary: '', status, output,
+let panelN = 0;
+const panel = (question: string, output: string, status: 'ok' | 'error' = 'ok'): ChatItem => ({ kind: 'tool', id: `t${++panelN}`, at: Date.now() + 1000, name: 'AskUserQuestion', summary: '', status, output,
   input: { questions: [{ question, header: 'Sì o no', multiSelect: false, options: [{ label: 'Sì' }, { label: 'No' }] }] } } as ChatItem);
 const answeredWith = (q: string, label: string) => `User has answered your questions: "${q}"="${label}". You can now continue with the user's answers in mind.`;
 
@@ -223,6 +224,8 @@ it('pickOf reads the label of the asked question, else the only quoted Sì or No
   expect(pickOf('answered: "Sì (consigliato)"', 'altro')).toBe('yes');
   expect(pickOf('"Sì" or "No"', 'altro')).toBeNull();
   expect(pickOf('the user closed it', 'Va bene?')).toBeNull();
+  // quotes inside the question never count as his pick
+  expect(pickOf('answered "Va bene il "sì" di Dev?" with other text', 'Va bene il "sì" di Dev?')).toBeNull();
 });
 
 it('from Remote Control a relayed question goes into the Orchestrator\'s panel, and his pick there answers the chat (#425)', async () => {
@@ -233,7 +236,12 @@ it('from Remote Control a relayed question goes into the Orchestrator\'s panel, 
   expect(await w.r.toolAnswered('orch', panel('Altra domanda?', answeredWith('Altra domanda?', 'Sì')))).toBe(false);
   expect(await w.r.toolAnswered('orch', { ...panel('x', 'y'), name: 'Bash' } as ChatItem)).toBe(false);
   const ask = 'Dev · migrazione chiede: Applico la migrazione al DB locale?';
-  expect(await w.r.toolAnswered('orch', panel(ask, answeredWith(ask, 'Sì')))).toBe(true);
+  // a connector's tool of the same name, or a panel older than the relay, answers nothing
+  expect(await w.r.toolAnswered('orch', { ...panel(ask, answeredWith(ask, 'Sì')), name: 'mcp__srv__AskUserQuestion' } as ChatItem)).toBe(false);
+  expect(await w.r.toolAnswered('orch', { ...panel(ask, answeredWith(ask, 'Sì')), at: 500 } as ChatItem)).toBe(false);
+  expect(w.r.panelArmed('orch')).toBe(true);
+  expect(await w.r.toolAnswered('orch', { ...panel(ask, answeredWith(ask, 'Sì')), at: 2000 } as ChatItem)).toBe(true);
+  expect(w.r.panelArmed('orch')).toBe(false);
   expect(w.answered).toEqual([{ chatId: 'dev', requestId: 'q1', answer: { kind: 'question', answers: { 'Applico la migrazione al DB locale?': 'Sì (consigliato)' } }, by: 'phone' }]);
   expect(await w.r.toolAnswered('orch', panel(ask, answeredWith(ask, 'No')))).toBe(false);   // used once
 });

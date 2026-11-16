@@ -137,11 +137,18 @@ export function looksProduction(e: Pick<Entry, 'group' | 'url' | 'loginUrls'>): 
   return word.test(e.group) || [hostOf(e.url), ...(e.loginUrls ?? []).map(hostOf)].some(h => word.test(h));
 }
 
+/** Writes the file where it really is (a link to a file outside the brain stays a link, the secrets stay out of the
+ *  brain) with its own mode, through a temporary file beside it and a rename. */
+function writeKeeping(f: string, text: string): void {
+  const real = fs.realpathSync(f), mode = fs.statSync(real).mode & 0o777, tmp = `${real}.${process.pid}.tmp`;
+  try { fs.writeFileSync(tmp, text, { mode }); fs.chmodSync(tmp, mode); fs.renameSync(tmp, real); } catch (e) { try { fs.rmSync(tmp, { force: true }); } catch { /* none */ } throw e; }
+}
+
 export class Credentials {
   private copiedUntil = 0;
 
   constructor(private root: () => string | null = () => null, private readonly read: (f: string) => string = f => fs.readFileSync(f, 'utf8'),
-    private readonly write: (f: string, text: string) => void = (f, text) => { const tmp = `${f}.${process.pid}.tmp`; fs.writeFileSync(tmp, text); fs.renameSync(tmp, f); }) {}
+    private readonly write: (f: string, text: string) => void = writeKeeping) {}
 
   setRoot(fn: () => string | null): void { this.root = fn; }
 
@@ -210,7 +217,8 @@ export class Credentials {
         // one test entry with that name: the user can link this site to it with one click (#429)
         const linkable = same.map(x => ({ x, i: all.indexOf(x) })).filter(({ x }) => !looksProduction(x));
         const origin = originOf(pageUrl);
-        if (linkable.length === 1 && origin) {
+        // a production-looking host is never linked: it would turn the whole entry into one the app refuses
+        if (linkable.length === 1 && origin && !looksProduction({ group: '', loginUrls: [origin] })) {
           const { x, i } = linkable[0]!;
           return { refusal: `${head} The app asked the user, with a banner on your tab, whether to link ${host} to this account: wait for the answer (handoff_to_user with the handoff_id below). On Sì call fill_credential again; on No sign in another way (handoff_to_user kind "login"). Do not navigate to the entry's old host meanwhile.`,
             link: { entryId: entryId(x, i), user: x.user, group: x.group, sites: hostsOf(x), host, origin } };

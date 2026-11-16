@@ -204,7 +204,7 @@ describe('the incident: a worker queues X, the Orchestrator repeats X in a code 
     w.turn('orch', [asst('o1', `Lancia:\n${fence('powershell', DEPLOY)}`)], { isOrchestrator: true });
     const [card] = w.s.pending();
     expect(card?.chatId).toBe('orch');
-    expect(w.s.dismiss('orch', card!.id)).toEqual({ same: { runId: 'run-3', state: 'running', startedAt: 1_990_000, ownChat: false } });
+    expect(w.s.dismiss('orch', card!.id)).toEqual({ same: { runId: 'run-3', state: 'running', startedAt: 1_990_000, ownChat: false, resultComes: true } });
     expect(w.s.followersOf(live)).toEqual(['orch']);
     expect(w.s.pending()).toEqual([]);
   });

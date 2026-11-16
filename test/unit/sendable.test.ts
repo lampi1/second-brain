@@ -30,7 +30,9 @@ describe('sendable', () => {
     // #428: a duplicate of a command that runs or ran is told as a duplicate, never as a refusal; still a note line
     const at = new Date(2026, 10, 16, 10, 42).getTime();
     expect(dismissedLine('npm test')).toBe('[Non serve] npm test');
-    expect(dismissedLine('npm test', { runId: 'r', state: 'running', startedAt: at, ownChat: false })).toBe("[Non serve] npm test · doppione, non un rifiuto: lo stesso comando è in esecuzione dalle 10:42 (da un'altra chat); l'esito ti arriva quando finisce, non riproporlo");
+    expect(dismissedLine('npm test', { runId: 'r', state: 'running', startedAt: at, ownChat: false, resultComes: true })).toBe("[Non serve] npm test · doppione, non un rifiuto: lo stesso comando è in esecuzione dalle 10:42 (da un'altra chat); l'esito ti arriva quando finisce, non riproporlo");
+    // run results off: the chat is not promised a result that never comes
+    expect(dismissedLine('npm test', { runId: 'r', state: 'running', startedAt: at, ownChat: true })).toMatch(/l'esito non ti arriva da solo/);
     expect(dismissedLine('npm test', { runId: 'r', state: 'error', startedAt: at, endedAt: at, ownChat: true })).toBe("[Non serve] npm test · doppione, non un rifiuto: lo stesso comando è già stato eseguito alle 10:42 (con errore); leggi quell'esito, non riproporlo");
     expect(splitNotes(dismissedLine('npm test', { runId: 'r', state: 'ok', startedAt: at, ownChat: true })).notes).toHaveLength(1);
   });

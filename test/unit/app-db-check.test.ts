@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { checkInBackground, closeAppDbs, damagedMark, openAppDb, readCheck, type CheckResult } from '../../src/main/app-db';
+import { checkInBackground, closeAppDbs, damagedMark, forgetChecks, openAppDb, readCheck, type CheckResult } from '../../src/main/app-db';
 import { log } from '../../src/main/log';
 
 const roots: string[] = [];
@@ -50,6 +50,7 @@ describe('the background check', () => {
     const dir = tmp(), file = path.join(dir, 'app.db');
     openAppDb(file).db.close();
     fs.writeFileSync(damagedMark(file), 'quick_check: page 9 bad');
+    forgetChecks();                                          // the next start
     const opened = openAppDb(file);
     expect(opened.aside).not.toBeNull();
     expect(opened.cause).toContain('page 9 bad');
@@ -61,5 +62,14 @@ describe('the background check', () => {
     const opened = openAppDb(file);
     expect(opened.aside).toBeNull();
     expect(fs.existsSync(damagedMark(file))).toBe(false);
+  });
+
+  it('a mark written while the file is open is honoured only at the next start, never by a later owner\'s open', () => {
+    const dir = tmp(), file = path.join(dir, 'app.db');
+    const first = openAppDb(file);
+    fs.writeFileSync(damagedMark(file), 'quick_check: page 2 bad');
+    expect(openAppDb(file).aside).toBeNull();          // a second owner in the same process
+    first.db.close();
+    expect(fs.existsSync(file)).toBe(true);
   });
 });

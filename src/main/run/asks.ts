@@ -158,13 +158,14 @@ export class CommandAsks {
     this.dismissed.add(`${chatId}#${requestId}`);
     const same = req.command ? this.sameRun(req.command.code) : undefined;
     log.info('run', 'command request dismissed', { chat: chatId, data: { id: requestId, ...(same ? { same: same.id, state: same.state } : {}) } });
-    if (same?.state === 'running' && same.chatId !== chatId && this.teller) {
-      const key = runKey(same.chatId, same.itemId, same.code);
+    const resultComes = same?.state === 'running' && !!this.teller;
+    if (resultComes && same!.chatId !== chatId) {
+      const key = runKey(same!.chatId, same!.itemId, same!.code);
       this.runFollowers.set(key, (this.runFollowers.get(key) ?? new Set<string>()).add(chatId));
-      this.toldRunning.add(`${chatId}|${same.id}`);
+      this.toldRunning.add(`${chatId}|${same!.id}`);
     }
     this.drop(chatId, requestId);
-    return same ? { same: { runId: same.id, state: same.state, startedAt: same.startedAt, ...(same.endedAt ? { endedAt: same.endedAt } : {}), ownChat: same.chatId === chatId } } : {};
+    return same ? { same: { runId: same.id, state: same.state, startedAt: same.startedAt, ...(same.endedAt ? { endedAt: same.endedAt } : {}), ownChat: same.chatId === chatId, ...(resultComes ? { resultComes } : {}) } } : {};
   }
 
   /** The identical command (normCommand, any folder: ADR 0299) running now, else the last one that ended within
