@@ -48,7 +48,8 @@ turn's result waits for those processes, and the indicator with it. No test tied
 ## Decision
 
 1. **The engine says when the reply is complete.** The Claude session reads the top-level `message_delta`: a
-   `stop_reason` other than `tool_use` or `pause_turn` means the model stopped and asks for nothing more. It reports
+   `stop_reason` of `end_turn`, `stop_sequence` or `refusal` means the model stopped and asks for nothing more (any
+   other, known or new, keeps the chat at work until the result, as before). It reports
    `SessionPatch.closing: true`; also at a `result` with no queued turn, until the idle comes (the 3 s fallback
    stays). `closing: false` when it works again: a new `message_start` (a Stop hook sent it back to work), a message
    sent meanwhile, a queued turn, a turn the CLI starts by itself.
@@ -57,20 +58,24 @@ turn's result waits for those processes, and the indicator with it. No test tied
    `ChatSummary.turnClosing`, only with state `running`, never persisted.
 3. **What shows work follows it.** `showsWork(chat)` = busy and not `turnClosing` (`renderer/store/state.ts`): the
    working line of the Orchestrator, of an open chat, of a strip and of a delegated card, the person at work at a
-   bench, and the state words («al lavoro»). Strips keep their 0.7 s hold (ADR 0312).
+   bench, and the state words («al lavoro»). A delegated chat's state (`childState`), a root chat's row in the
+   sidebar and the team's dots read a closing turn as ended too. Strips keep their 0.7 s hold (ADR 0312). Counts of
+   running chats (top bar, taskbar, tallies) still follow the state.
 4. **The «Turno finito» line is the CLI's result, as before**: its cost is the real one, never an estimate shown
    early.
 5. **The app's own Stop hooks no longer start a process.** The rules runner's Stop is answered in process like its
    other events (`hook_callback`, `ProductHooks.stop`), unless the brain commits its memory at every stop
    (`rules.autoCommit`): that synchronous git stays in the runner, outside the app (`rules/delivery.ts
-   stopInProcess`). In process a Stop never refuses: a brain the hook cannot read must not send the model back to
+   stopInProcess`), and a Stop answered in process never commits, even when the brain turns `autoCommit` on while the
+   chat lives (`LaunchFacts.inProcess`). In process a Stop never refuses: a brain the hook cannot read must not send the model back to
    work. The template's inbox hook is no longer added to the plugin (`rules/tools.ts REPLACED_HOOKS`): the plugin
    reaches only the app's own chats, and the app delivers their mail itself within 2 s, mid-turn too
    (`chats/mail.ts`, ADR 0015).
 6. **A template hook the chat's own folder runs is not run twice.** A chat in the brain's folder whose
-   `.claude/settings.json` (or `settings.local.json`) wires its own copy of a template Stop hook, with the file there,
-   gets a plugin without that hook (`claude-plugin.ts` `ownStopHooks`; the owner, 2026-11-16: «se non serve togli»).
-   A chat in any other folder keeps the plugin's copy, the only one it has. The brain's files are read, never written.
+   `.claude/settings.json` (or `settings.local.json`) wires its own copy of a template Stop hook that can run (wired to
+   that folder's own file, the file there with every file it imports: a migrated brain keeps its hooks and loses the
+   tools they import) gets a plugin without that hook (`claude-plugin.ts` `ownStopHooks`; the owner, 2026-11-16: «se non serve togli»).
+   A chat in any other folder, or in a worktree, keeps the plugin's copy, the only one sure to be there. The brain's files are read, never written.
 7. **The end of the turn is timed in the log.** `timing: turn` gains `closeMs` (reply complete → result),
    `stopHooks` and `stopHooksMs`: `npm run logs -- --scope chats --grep "timing: turn"` tells how long a brain's
    hooks hold each turn.
@@ -85,7 +90,12 @@ turn's result waits for those processes, and the indicator with it. No test tied
   settings wire a template Stop hook.
 - The plugin's folder name changes once (its signature carries the hooks' layout): the first turn of each chat after
   the update reads its prompt uncached.
-- A message typed in that gap waits in the queue and leaves at the idle, as before.
+- A message typed in that gap waits in the queue and leaves at the idle, as before; the Stop button stays. Nothing
+  says «closing the turn»: with hooks that take long the chat reads as ended while its queue waits for them.
+- A message the app injected mid-turn that the CLI turns into a queued turn shows the chat as ended for the length of
+  the Stop hooks, then at work again.
+- Mail of two live chats with the same title waits (the app delivers to neither); the inbox hook gave it to the first
+  that stopped.
 - When a Stop hook sends the model back to work the indicator returns with the model's next message, not before.
 - Codex and the ACP engines report no `closing`: their turn ends with their last message.
 - `test/unit/chats/turn-closing.test.ts` feeds the engine the lines the real CLI wrote, with Stop hooks that do not

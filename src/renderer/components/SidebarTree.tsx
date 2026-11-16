@@ -38,7 +38,7 @@ function rowState(c: ChatSummary): ChildState {
   if (c.state === 'waiting' || c.pending > 0) return 'wait';
   if (c.state === 'error') return 'err';
   if (c.state === 'starting') return 'start';
-  if (c.state === 'running') return 'run';
+  if (c.state === 'running' && !c.turnClosing) return 'run'; // its reply complete, it reads as done (ADR 0317)
   return c.queued ? 'queued' : 'done';
 }
 

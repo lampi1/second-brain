@@ -13,7 +13,13 @@ import { ChatManager } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import { showsWork, isBusy } from '../../../src/renderer/store/state';
 import { stateInfo } from '../../../src/renderer/lib/format';
+import { childState } from '../../../src/renderer/lib/chat-tree';
+import { runHook } from '../../../src/main/rules/runtime';
+import { autoCommit } from '../../../src/main/rules/maintenance';
 import { recSink, type RecSink } from './helpers';
+
+// the stop's commit is synchronous git: here only whether it is called matters, never git itself
+vi.mock('../../../src/main/rules/maintenance', async actual => ({ ...(await actual<Record<string, unknown>>()), autoCommit: vi.fn() }));
 
 type Line = Record<string, unknown>;
 const stream = (event: Line): Line => ({ type: 'stream_event', parent_tool_use_id: null, event });
@@ -73,10 +79,17 @@ describe('the Claude engine says when the reply is complete', () => {
     expect(s.state).toBe('idle');
   });
 
-  it('a reply that asks for a tool is not the end', () => {
-    const { sink, say } = engine();
-    say(...reply('m1', 'Guardo il file.', 'tool_use'));
-    expect(sink.patch.closing).toBeUndefined();
+  it('a reply that asks for a tool, or stops for a reason the CLI goes on from, is not the end', () => {
+    for (const stop of ['tool_use', 'pause_turn', 'max_tokens', 'model_context_window_exceeded', 'a_reason_of_tomorrow']) {
+      const { sink, say } = engine();
+      say(...reply('m1', 'Guardo il file.', stop));
+      expect(sink.patch.closing, stop).toBeUndefined();
+    }
+    for (const stop of ['end_turn', 'stop_sequence', 'refusal']) {
+      const { sink, say } = engine();
+      say(...reply('m1', 'Fatto.', stop));
+      expect(sink.patch.closing, stop).toBe(true);
+    }
   });
 
   it('it works again: a Stop hook sent it back, a queued turn follows, the CLI starts a turn of its own', () => {
@@ -115,6 +128,19 @@ describe('a product brain\'s Stop hook costs no process (ADR 0317)', () => {
     await s.onControlRequest({ type: 'control_request', request_id: 'req-stop', request: { subtype: 'hook_callback', callback_id: 'sb_product_stop', input: { hook_event_name: 'Stop', session_id: 's1' } } });
     expect(answers).toEqual([{ type: 'control_response', response: { subtype: 'success', request_id: 'req-stop', response: {} } }]);
   });
+
+  it('never commits inside the app, even when the brain turns autoCommit on while the chat lives; the runner still does', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-stop-brain-')), state = path.join(root, 'state');
+    try {
+      fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', rules: { topicFiles: [], autoCommit: true } }));
+      const s = new ClaudeSession({ chatId: 'c_stop', cwd: '.', sessionId: 'abc12345', readOnly: true, productHooks: { root, state, launch: {}, stop: true } }, recSink()) as unknown as Raw;
+      s.write = () => {};
+      await s.onControlRequest({ type: 'control_request', request_id: 'req-stop', request: { subtype: 'hook_callback', callback_id: 'sb_product_stop', input: { hook_event_name: 'Stop', session_id: 's1' } } });
+      expect(autoCommit).not.toHaveBeenCalled();
+      runHook(root, state, { hook_event_name: 'Stop', session_id: 's1' }); // as the node runner calls it
+      expect(autoCommit).toHaveBeenCalledTimes(1);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  });
 });
 
 describe('the chat stops showing work while its turn closes', () => {
@@ -146,9 +172,11 @@ describe('the chat stops showing work while its turn closes', () => {
     expect(showsWork(chat())).toBe(false);          // no working line, no person at work
     expect(isBusy(chat())).toBe(true);              // the rules still wait for the real end
     expect(stateInfo(chat()).tone).not.toBe('run'); // nor «al lavoro»
+    expect(childState(chat())).not.toBe('run');     // nor a helper at work, a pulsing pill, a running row in the tree
 
     sink.changed({ closing: false }); // a Stop hook sent it back to work
     expect(showsWork(chat())).toBe(true);
+    expect(childState(chat())).toBe('run');
 
     sink.changed({ closing: true });
     sink.changed({ state: 'idle' });

@@ -28,5 +28,7 @@ export interface HookInput {
 export interface RuleContext { root: string; state: string; config: BrainRulesConfig; tools?: string }
 /** Per-launch facts written by the app into the plugin's launch.json. correctionHook = the template's correction-catch
  * hook runs too (praise log, recall), so the runtime's own correction reminder is not repeated. */
-export interface LaunchFacts { tools?: string; correctionHook?: boolean }
+/** inProcess = the hook is answered inside the app (a chat's ClaudeSession), not by the node runner: nothing that
+ *  blocks (the stop's git commit) may run there */
+export interface LaunchFacts { tools?: string; correctionHook?: boolean; inProcess?: boolean }
 export interface HookResult { deny?: string; context?: string }

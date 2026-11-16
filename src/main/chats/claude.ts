@@ -196,8 +196,10 @@ const LIVE_TASK = new Set(['pending', 'running', 'in_progress']);
 // nothing the app shows, #155); a new CLI's first run warns once for each new name (`npm run logs -- --scope drift`).
 const QUIET_TYPES = new Set(['keep_alive', 'auth_status', 'tool_progress', 'tool_use_summary', 'prompt_suggestion']);
 const QUIET_STREAM = new Set(['message_stop', 'ping']);
-/** stop reasons after which the model goes on by itself (a tool's result, a paused server tool): any other ends its reply */
-const REPLY_GOES_ON = new Set(['tool_use', 'pause_turn']);
+/** stop reasons that end the model's reply. After any other the CLI goes on by itself (a tool's result, a paused server
+ *  tool, a reply cut at its token limit that it continues) or may: a reason this list does not know keeps the chat at
+ *  work until the result, as before ADR 0317 */
+const REPLY_ENDS = new Set(['end_turn', 'stop_sequence', 'refusal']);
 const QUIET_DELTAS = new Set(['input_json_delta', 'signature_delta', 'citations_delta']);
 const QUIET_BLOCKS = new Set(['tool_use', 'server_tool_use', 'redacted_thinking', 'mcp_tool_use', 'mcp_tool_result', 'web_search_tool_result', 'web_fetch_tool_result', 'code_execution_tool_result']);
 const QUIET_SYSTEM = new Set(['hook_started', 'hook_progress', 'hook_response', 'files_persisted', 'elicitation_complete', 'task_progress', 'thinking_tokens', 'background_tasks_changed', 'vcs_state_changed']);
@@ -991,7 +993,7 @@ export class ClaudeSession implements HarnessSession {
     const event = s(input.hook_event_name);
     try {
       const p = this.opts.productHooks!;
-      const result = runHook(p.root, p.state, input as unknown as HookInput, p.launch);
+      const result = runHook(p.root, p.state, input as unknown as HookInput, { ...p.launch, inProcess: true });
       // a stop is no operation to refuse: a brain the hook cannot read must not send the model back to work for ever
       if (event === 'Stop') response = {};
       else if (result.deny) response = event === 'PreToolUse'
@@ -1101,7 +1103,7 @@ export class ClaudeSession implements HarnessSession {
       // (Stop hooks: seconds on a brain with several). Live check 2026-11-16, CLI 2.1.325: assistant, then this event
       case 'message_delta': {
         const stop = s(o(e.delta).stop_reason);
-        if (!stop || REPLY_GOES_ON.has(stop)) return;
+        if (!stop || !REPLY_ENDS.has(stop)) return;
         // the last stop of the turn is the one timed: hooks of an earlier stop (one sent it back to work) do not count
         if (this.turnT) Object.assign(this.turnT, { replied: Date.now(), hooks: 0, hooksFrom: undefined, hooksTo: undefined });
         this.setClosing(true);

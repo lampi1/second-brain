@@ -39,7 +39,7 @@ const TEXT = /\.(md|json|txt|ya?ml|toml)$/i;
 const MAX_FILE = 2_000_000;
 
 export interface ClaudeLaunch { args: string[]; pluginDir: string | null; rulesFile: string | null;
-  /** a product brain: the session answers the product hooks in process (rules/delivery.ts IN_PROCESS_EVENTS) */
+  /** a product brain: the session answers the product hooks in process (ClaudeSession initHooks) */
   productHooks?: ProductHooks }
 /** stop = Stop is answered in process too (rules/delivery.ts stopInProcess): the plugin's hooks.json has no runner then */
 export interface ProductHooks { root: string; state: string; launch: LaunchFacts; stop?: true }
@@ -91,20 +91,36 @@ export function claudeLaunch(userData: string, input?: { domains: BrainDomain[];
 /** The hook files a chat in the brain's own folder runs at the stop by itself: Claude Code reads that folder's
  * .claude/settings.json and settings.local.json (read here, never written), and an older brain wires its own copy of a
  * template hook there. The plugin's copy would do the same work a second time at every turn's end (measured on the
- * owner's brain: `runbook-reminder.mjs` twice, ~2 s each, ADR 0317). A chat in any other folder has only the plugin's. */
+ * owner's brain: `runbook-reminder.mjs` twice, ~2 s each, ADR 0317). A chat in any other folder has only the plugin's.
+ * Only a copy that can run counts: wired to this folder's own file (`$CLAUDE_PROJECT_DIR`, a relative path or the
+ * folder itself), the file there, and every file it imports there too (a migrated brain keeps its hooks and loses
+ * the ops/tools they import: its copy fails at load, and the plugin's is the one that works). */
 function ownStopHooks(cwd: string | undefined, root: string): string[] {
   if (!cwd || !samePath(cwd, root)) return [];
   const names = new Set<string>();
   for (const file of ['settings.json', 'settings.local.json']) {
     try {
-      const own = JSON.parse(fs.readFileSync(path.join(root, '.claude', file), 'utf8').replace(/^\uFEFF/, '')) as { hooks?: { Stop?: { hooks?: { command?: unknown }[] }[] } };
+      const own = JSON.parse(fs.readFileSync(path.join(root, '.claude', file), 'utf8').replace(/^﻿/, '')) as { hooks?: { Stop?: { hooks?: { command?: unknown }[] }[] } };
       for (const g of own.hooks?.Stop ?? []) for (const h of g.hooks ?? []) {
-        const name = typeof h.command === 'string' ? /[\\/]\.claude[\\/]hooks[\\/]([\w.-]+\.mjs)/.exec(h.command)?.[1] : undefined;
-        if (name && fs.existsSync(path.join(root, '.claude', 'hooks', name))) names.add(name);
+        if (typeof h.command !== 'string') continue;
+        for (const word of h.command.matchAll(/"([^"]+)"|'([^']+)'|(\S+)/g)) {
+          const at = /^(.*?)[\\/]?\.claude[\\/]hooks[\\/]([\w.-]+\.mjs)$/.exec(word[1] ?? word[2] ?? word[3] ?? '');
+          if (!at) continue;
+          const from = at[1]!, name = at[2]!;
+          const here = from === '' || from === '.' || /^(\$\{?CLAUDE_PROJECT_DIR\}?|%CLAUDE_PROJECT_DIR%)$/.test(from) || (path.isAbsolute(from) && samePath(from, root));
+          if (here && runs(path.join(root, '.claude', 'hooks', name))) names.add(name);
+        }
       }
     } catch { /* no such file, or not JSON: the folder runs nothing of its own */ }
   }
   return [...names].sort();
+}
+/** A hook file that is there with every file it imports by a relative path (one level: what fails at its load). */
+function runs(file: string): boolean {
+  try {
+    const text = fs.readFileSync(file, 'utf8');
+    return [...text.matchAll(/^\s*import\s[^'"]*['"](\.{1,2}\/[^'"]+)['"]/gm)].every(m => fs.existsSync(path.resolve(path.dirname(file), m[1]!)));
+  } catch { return false; }
 }
 const real = (p: string): string => { try { return fs.realpathSync.native(p); } catch { return path.resolve(p); } };
 const samePath = (a: string, b: string): boolean => process.platform === 'win32' ? real(a).toLowerCase() === real(b).toLowerCase() : real(a) === real(b);

@@ -68,7 +68,7 @@ function startSession(engine: EngineDef, opts: SessionOptions, sink: SessionSink
     case 'claude': {
       // the brain as a plugin (off by default); a read-only run (comparison side b) takes nothing that could act; a role
       // chat takes the brain without its skills and its launch's own plugin (only the skills it was given)
-      const launch = opts.readOnly ? null : claudeLaunch(ctx.userData, opts.env?.SB_ROUTINE_PACKAGE || opts.env?.SB_ROUTINE_BROWSER ? { domains: [], on: false } : undefined, { skills: !opts.agentAssets, cwd: opts.cwd });
+      const launch = opts.readOnly ? null : claudeLaunch(ctx.userData, opts.env?.SB_ROUTINE_PACKAGE || opts.env?.SB_ROUTINE_BROWSER ? { domains: [], on: false } : undefined, { skills: !opts.agentAssets, ...(opts.worktree ? {} : { cwd: opts.cwd }) }); // a worktree chat runs in a copy: only the plugin's hooks are sure to be there
       const brain = launch ? [...launch.args, ...(opts.agentAssets ? ['--plugin-dir', opts.agentAssets.pluginDir] : [])] : [];
       return prepared({ kind: 'claude', options: { ...opts, ...(brain.length ? { extraArgs: [...brain, ...(opts.extraArgs ?? [])] } : {}), ...(launch?.productHooks ? { productHooks: launch.productHooks } : {}), ...(ctx.path ? { claudePath: ctx.path } : {}) } }, sink);
     }
