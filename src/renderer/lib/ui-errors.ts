@@ -5,7 +5,7 @@
 // and its stack frames as file:line (shared/error-scrub.ts) leave the page, never what the user typed or sees. The same message is sent at most once every LOCAL_REPEAT_MS from here too (a render loop must not flood IPC).
 // startUiErrors is called by main.tsx; reportUiError by ErrorBoundary.tsx. Tests: test/unit/ui-errors.test.ts.
 import type { RendererErrorReport } from '@shared/contract';
-import { scrubComponentStack, scrubMessage, scrubSource, scrubStack } from '@shared/error-scrub';
+import { isBrowserNotice, scrubComponentStack, scrubMessage, scrubSource, scrubStack } from '@shared/error-scrub';
 import { sb } from '../sb';
 
 export const LOCAL_REPEAT_MS = 5_000;
@@ -45,6 +45,8 @@ export function startUiErrors(win: Pick<Window, 'addEventListener'> = window): v
     const e = ev as ErrorEvent;
     // a resource that failed to load (img, script) is a plain Event without message or error: not an exception
     if (!e.message && !e.error) return;
+    // a browser notice with no exception behind it (ResizeObserver's loop limit, #418): nothing broke
+    if (!e.error && isBrowserNotice(e.message)) return;
     reportUiError('error', e.error ?? e.message, { ...(e.filename ? { source: `${e.filename}:${e.lineno}:${e.colno}` } : {}) });
   });
   win.addEventListener('unhandledrejection', (ev: Event) => {

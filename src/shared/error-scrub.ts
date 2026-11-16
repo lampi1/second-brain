@@ -5,9 +5,17 @@
 // never the message lines it repeats; a React component stack keeps the component and its file:line. Pure, used on both
 // sides: renderer/lib/ui-errors.ts (before sending) and main/renderer-errors.ts (again, as the page is not trusted).
 // Tests: test/unit/renderer-errors.test.ts.
+// isBrowserNotice (#418): a window 'error' Chromium raises with no exception behind it is not logged. «ResizeObserver
+// loop completed with undelivered notifications» means an observer callback changed a size again in the same frame, so
+// the rest of its notifications move to the next frame (the ResizeObserver spec's loop limit): nothing is lost or thrown.
 
 const QUOTED = /'[^'\n]*'|"[^"\n]*"|«[^»\n]*»|`[^`\n]*`|“[^”\n]*”|‘[^’\n]*’/g;
 const PATHLIKE = /(?:[a-z][\w+.-]*:\/\/[^\s)]+|[A-Za-z]:[\\/][^\s)]*|\\\\[^\s)]+|(?:~|\.{1,2})?\/[^\s/\\)]+(?:\/[^\s/\\)]+)+|[^\s/\\()]+(?:[\\/][^\s/\\()]+){2,})/g;
+
+/** A window 'error' the browser raises without an exception, nothing broken: never an interface error (#418). */
+export function isBrowserNotice(message: string): boolean {
+  return /^ResizeObserver loop (?:completed with undelivered notifications|limit exceeded)\.?$/.test(message.trim());
+}
 
 /** The message as kept: first line, quotes, paths, long numbers and ids folded, cut to `max`. */
 export function scrubMessage(raw: string, max = 500): string {

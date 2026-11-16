@@ -13,7 +13,7 @@
 //   them all, update adds or drops some; brief with a question starts the Scout that answers one).
 // Used by wiring-shared.ts (chat tools) and appctl/tools.ts (the Orchestrator's); pinned by test/unit/projectmap-tools.test.ts.
 import type { EventMap } from '@shared/contract';
-import { EDIT_OPS, MAP_ACTORS, MAP_KINDS, MAP_STATES, elementText, mapText, type ProjectMap } from '@shared/project-map';
+import { EDIT_OPS, MAP_ACTORS, MAP_KINDS, MAP_LIMITS, MAP_STATES, elementText, mapText, type ProjectMap } from '@shared/project-map';
 import type { McpTool } from '../mcp/server';
 import type { ProjectMaps } from './service';
 
@@ -33,10 +33,10 @@ const ELEMENT = {
     keeps: { type: 'array', items: { type: 'string' }, description: 'what it keeps and where (a table, a file, a cache), one line each, up to 6' },
     why: { type: 'array', items: { type: 'string' }, description: 'why it is built this way: the decisions behind it (an ADR, a constraint), one line each, up to 6' },
     keyFiles: { type: 'array', items: { type: 'object', properties: { path: { type: 'string', description: 'relative to the root' }, what: { type: 'string', description: 'what it holds, one line' } }, required: ['path', 'what'] }, description: 'the 1-4 files worth opening first to see it at work (the user opens them in the app\'s viewer), up to 8' },
-    status: { type: 'string', enum: [...MAP_STATES], description: 'ok = works or done; work = being built; blocked = stuck; unknown = not known. Omit to keep the previous one.' },
-    note: { type: 'string', description: 'one short line: what is missing, what the user must do' },
+    status: { type: 'string', enum: [...MAP_STATES], description: 'ok = works or done; work = being built; blocked = stuck; planned = not started yet (planned, not there); unknown = not known. Omit to keep the previous one.' },
+    note: { type: 'string', description: `one short line, at most ${MAP_LIMITS.note} characters: what is missing, what the user must do` },
     actor: { type: 'string', enum: [...MAP_ACTORS], description: 'who must act when it is blocked: user, agent, other (a colleague, a team)' },
-    evidence: { type: 'array', items: { type: 'string' }, description: 'the project files or folders (ending in /) it was read from, relative to the root: the app watches them' },
+    evidence: { type: 'array', items: { type: 'string' }, description: `the project files or folders (ending in /) it was read from, relative to the root (up to ${MAP_LIMITS.evidence}): the app watches them. Only paths inside the root: an absolute path or one with ../ is refused; name a source outside it (another repo, a wiki, the brain) in the note or details text instead.` },
   },
   required: ['id', 'kind', 'name'],
 };
@@ -46,7 +46,7 @@ const LINK = {
     id: { type: 'string', description: 'stable id (default from--to)' }, from: { type: 'string' }, to: { type: 'string' },
     label: { type: 'string', description: 'what goes along it, a few words («chiama gli strumenti», «legge gli ordini»)' },
     details: { type: 'string', description: 'the passage in full, 1 to 4 plain sentences: when it happens, which data goes, how (a call, a file, a queue, by hand), what comes back, what happens if it fails. Up to 800 characters. Omit on a redraw to keep the previous text.' },
-    status: { type: 'string', enum: [...MAP_STATES] }, note: { type: 'string' }, actor: { type: 'string', enum: [...MAP_ACTORS] },
+    status: { type: 'string', enum: [...MAP_STATES] }, note: { type: 'string', description: `at most ${MAP_LIMITS.note} characters` }, actor: { type: 'string', enum: [...MAP_ACTORS] },
   },
   required: ['from', 'to', 'label'],
 };
@@ -88,7 +88,7 @@ export function chatMapTools(d: ChatMapDeps): McpTool[] {
     },
     {
       name: 'project_map_save',
-      description: `Draw (or redraw) a project's map for the user: what they look at instead of the code. Read the project first (code, configuration, pipelines, README, the brain's notes) and draw what it IS: who uses it (person), the user's system(s) (system) and their main parts (part, parent = the system), the external systems it talks to (external), the environments (env: test host, pipeline) and key documents (doc); the links with what goes along them. Keep it small enough to read (about 5-15 elements per level); a part with several pieces of its own holds them (parent = the part), so the user enters it and sees them. Give each element its status as far as you know it and the files you read it from (evidence, relative to the root: the app watches them). Never invent what the project does not show: mark it unknown with a note, and ask. The user reads this map in place of the code, to see how the system works and to spot what is wrong in its structure himself: draw what is there plainly, each link with what really goes along it. The boxes stay short; the substance goes in details, on every element and every link you understood, and in rules, keeps, why and keyFiles: a map with one-line boxes and nothing behind them tells the user too little. Add paths: the project's key questions told stop by stop. A redraw: read the map first (project_map_read), keep the ids, respect the user's corrections. Every save is a version in the map's history. kinds: ${KINDS}; statuses: ${STATES}; actors: ${ACTORS}.`,
+      description: `Draw (or redraw) a project's map for the user: what they look at instead of the code. Read the project first (code, configuration, pipelines, README, the brain's notes) and draw what it IS: who uses it (person), the user's system(s) (system) and their main parts (part, parent = the system), the external systems it talks to (external), the environments (env: test host, pipeline) and key documents (doc); the links with what goes along them. Keep it small enough to read (about 5-15 elements per level); a part with several pieces of its own holds them (parent = the part), so the user enters it and sees them. Give each element its status as far as you know it and the files you read it from (evidence, relative to the root: the app watches them). Never invent what the project does not show: mark it unknown with a note, and ask. The user reads this map in place of the code, to see how the system works and to spot what is wrong in its structure himself: draw what is there plainly, each link with what really goes along it. The boxes stay short; the substance goes in details, on every element and every link you understood, and in rules, keeps, why and keyFiles: a map with one-line boxes and nothing behind them tells the user too little. Add paths: the project's key questions told stop by stop. A redraw: read the map first (project_map_read), keep the ids, respect the user's corrections. Every save is a version in the map's history. kinds: ${KINDS}; statuses: ${STATES} (planned = not started yet); actors: ${ACTORS}. Limits, refused otherwise: evidence only inside the root (no absolute path, no ../), note at most ${MAP_LIMITS.note} characters, name ${MAP_LIMITS.name}, description ${MAP_LIMITS.description}, details ${MAP_LIMITS.details} (links ${MAP_LIMITS.linkDetails}). Renaming or moving a box, or adding one, is a save (or app_project_map edit for the Orchestrator): project_map_update changes only status, note, actor and paths.`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -113,13 +113,13 @@ export function chatMapTools(d: ChatMapDeps): McpTool[] {
     },
     {
       name: 'project_map_update',
-      description: `Keep a project's map current while you work: working_on = the element ids you work on now (you show on the map beside them, with your progress); changes = the new status of what you finished, broke or found blocked (each confirmed now; a status nobody confirms for 2 hours, or whose files changed after it, reads «da verificare»). Call it when you start on a mapped project and before your report. statuses: ${STATES} (planned = a piece of a plan, not there yet); actor (who must act when blocked): ${ACTORS}. A step of a plan drawn on the map moves its element by itself: no call needed for it. paths = add or tell again (same id) the project's questions as walks on the map; drop_paths = path ids to take away. A structural change (a new system, part or link) is a redraw: project_map_save.`,
+      description: `Keep a project's map current while you work: working_on = the element ids you work on now (you show on the map beside them, with your progress); changes = the new status of what you finished, broke or found blocked (each confirmed now; a status nobody confirms for 2 hours, or whose files changed after it, reads «da verificare»). Call it when you start on a mapped project and before your report. statuses: ${STATES} (planned = a piece of a plan, not there yet); actor (who must act when blocked): ${ACTORS}. It changes only status, note (at most ${MAP_LIMITS.note} characters) and actor of existing ids, and the paths: a name, a description, a new box or link need project_map_save. A step of a plan drawn on the map moves its element by itself: no call needed for it. paths = add or tell again (same id) the project's questions as walks on the map; drop_paths = path ids to take away. A structural change (a new system, part or link) is a redraw: project_map_save.`,
       inputSchema: {
         type: 'object',
         properties: {
           project: { type: 'string', description: 'the map\'s name or id' },
           working_on: { type: 'array', items: { type: 'string' }, description: 'element ids you work on now' },
-          changes: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', description: 'element or link id' }, status: { type: 'string', enum: [...MAP_STATES] }, note: { type: 'string' }, actor: { type: 'string', enum: [...MAP_ACTORS] } }, required: ['id'] } },
+          changes: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', description: 'element or link id' }, status: { type: 'string', enum: [...MAP_STATES] }, note: { type: 'string', description: `at most ${MAP_LIMITS.note} characters` }, actor: { type: 'string', enum: [...MAP_ACTORS] } }, required: ['id'] } },
           paths: { type: 'array', items: PATH, description: 'walks to add, or to replace by id' },
           drop_paths: { type: 'array', items: { type: 'string' }, description: 'path ids to take away' },
           summary: { type: 'string', description: 'one line for the history (default: which ids changed)' },
