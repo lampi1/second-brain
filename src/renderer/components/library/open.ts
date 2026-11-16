@@ -1,4 +1,4 @@
-// Opening an artifact (ADR 0318) in the app's viewer: the version asked for (the newest by default), as its file, or as
+// Opening an artifact (ADR 0319) in the app's viewer: the version asked for (the newest by default), as its file, or as
 // the copy the app kept when that file changed or went (main/library/service.ts), with its chat as the viewer's context
 // (relative links in it resolve in that chat's folder). Used by ArtifactsTab.tsx and ArtifactBar.tsx. The actions are
 // loaded on the click: the viewer (FileViewer.tsx → ArtifactBar.tsx) stays free of the app's store at import, like its

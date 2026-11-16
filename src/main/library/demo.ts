@@ -1,4 +1,4 @@
-// The demo's artifacts (ADR 0318): a few fictional reports, documents, screenshots and a PDF written into the demo brain's
+// The demo's artifacts (ADR 0319): a few fictional reports, documents, screenshots and a PDF written into the demo brain's
 // reviews/, tmp/ and evidence/ and into two demo chats' evidence folders, dated around the demo's clock, so Memoria →
 // Artifact has content with no real brain: a report with two versions (one file regenerated, one copied with -v2), an
 // HTML report, a PDF, screenshots, and one file that went (shown as missing). Fictional data only. Used by index.ts in

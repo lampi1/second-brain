@@ -1,4 +1,4 @@
-// Memoria → Artifact (ADR 0318), the index in main: a scan of the brain's reviews/tmp/evidence and the chats' evidence
+// Memoria → Artifact (ADR 0319), the index in main: a scan of the brain's reviews/tmp/evidence and the chats' evidence
 // folders, a chat's turn links, the one-time backfill, versions (a rewritten file keeps its old text as a copy, a -v2
 // joins its report), a file that went shown as missing (never dropped), the brain's own folders left out, areas, the
 // index kept across a restart, a card's picture. Temp folders only; no timers.

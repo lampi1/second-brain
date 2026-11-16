@@ -12,7 +12,7 @@ const { ideaTool } = await import('../../../src/main/brain/save-idea');
 const { appSkillsIn } = await import('../../../src/main/agents/pack/shared-skills');
 const { toolReferences } = await import('../../../src/main/rules/new-brain');
 const { journalOf, migrate, recoverMigration } = await import('../../../src/main/rules/migration');
-const {  } = await import('../../../src/main/brain/adapters/claude-plugin');
+const { claudeLaunch } = await import('../../../src/main/brain/adapters/claude-plugin');
 const { runHook } = await import('../../../src/main/rules/runtime');
 const {  } = await import('../../../src/main/brain/detect');
 
@@ -45,6 +45,50 @@ describe('product brain activation for Claude', () => {
     const withHook = runHook(root, state, input, { tools: 'C:/app/tools', correctionHook: true });
     expect(withHook.context).toBeUndefined();
     expect(runHook(root, state, { ...input, session_id: 's2' }).context).toContain('correction');
+  });
+});
+
+describe('the end of a turn starts no process of the app (ADR 0318)', () => {
+  // Claude Code writes a turn's result only after every Stop hook: each one the app adds is a wait before «Turno finito»
+  const stopCommands = (pluginDir: string): string[] =>
+    ((JSON.parse(fs.readFileSync(path.join(pluginDir, 'hooks/hooks.json'), 'utf8')) as { hooks: Record<string, { hooks: { command: string }[] }[]> }).hooks.Stop ?? []).flatMap(g => g.hooks.map(h => h.command));
+  it('Stop is answered in process and the inbox hook is left to the app\'s own mail delivery; the template\'s reminder stays', () => {
+    const root = brain();
+    const launch = claudeLaunch(path.join(base, 'userData'), { domains: [{ name: 'personal', root }] });
+    expect(launch.productHooks).toMatchObject({ root, stop: true });
+    const stop = stopCommands(launch.pluginDir!);
+    expect(stop.filter(c => c.includes('product-rules/hooks/runner.mjs'))).toEqual([]);
+    expect(stop.filter(c => c.includes('inbox.mjs'))).toEqual([]);
+    expect(stop.filter(c => c.includes('runbook-reminder.mjs'))).toHaveLength(1);
+  });
+  it('a chat in a brain folder that runs its own copy of the reminder gets no second one from the plugin; a chat elsewhere keeps the plugin\'s', () => {
+    const root = brain(), userData = path.join(base, 'userData'), domains = [{ name: 'personal', root }];
+    const reminders = (cwd: string) => stopCommands(claudeLaunch(userData, { domains }, { cwd }).pluginDir!).filter(c => c.includes('runbook-reminder.mjs')).length;
+    const wire = (command: string) => fs.writeFileSync(path.join(root, '.claude/settings.json'), JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command, timeout: 15 }] }] } }));
+    fs.mkdirSync(path.join(root, '.claude/hooks'), { recursive: true });
+    const own = 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/runbook-reminder.mjs"';
+    wire(own);
+    expect(reminders(root)).toBe(1); // wired but not there: the brain's own copy would not run, the plugin's stays
+    fs.writeFileSync(path.join(root, '.claude/hooks/runbook-reminder.mjs'), "import { brainRoot } from '../../ops/tools/brain-root.mjs';\n");
+    expect(reminders(root)).toBe(1); // there, but what it imports is not (a migrated brain): it fails at load
+    fs.mkdirSync(path.join(root, 'ops/tools'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'ops/tools/brain-root.mjs'), 'export const brainRoot = () => "";\n');
+    wire('node "/some/other/brain/.claude/hooks/runbook-reminder.mjs"');
+    expect(reminders(root)).toBe(1); // wired to another folder's file: not this brain's copy
+    wire(own);
+    const inBrain = claudeLaunch(userData, { domains }, { cwd: root });
+    expect(stopCommands(inBrain.pluginDir!)).toEqual([]);
+    const project = path.join(base, 'project'); fs.mkdirSync(project);
+    const elsewhere = claudeLaunch(userData, { domains }, { cwd: project });
+    expect(stopCommands(elsewhere.pluginDir!).filter(c => c.includes('runbook-reminder.mjs'))).toHaveLength(1);
+    expect(elsewhere.pluginDir).not.toBe(inBrain.pluginDir); // each chat keeps the plugin its folder needs
+  });
+  it('a brain that commits its memory at the stop keeps the runner: its synchronous git never runs inside the app', () => {
+    const root = brain();
+    fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', rules: { topicFiles: [], autoCommit: true } }));
+    const launch = claudeLaunch(path.join(base, 'userData'), { domains: [{ name: 'personal', root }] });
+    expect(launch.productHooks?.stop).toBeUndefined();
+    expect(stopCommands(launch.pluginDir!).filter(c => c.includes('product-rules/hooks/runner.mjs'))).toHaveLength(1);
   });
 });
 

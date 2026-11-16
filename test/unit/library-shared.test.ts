@@ -1,4 +1,4 @@
-// Memoria → Artifact (ADR 0318), the shared rules: which files are artifacts, how a chat's text links them, which files
+// Memoria → Artifact (ADR 0319), the shared rules: which files are artifacts, how a chat's text links them, which files
 // are versions of one report, title and summary from a head, the gallery's filters, related artifacts, a path's artifact.
 import { describe, expect, it } from 'vitest';
 import { NO_FILTER, artifactKind, opensInViewer, readsText, secretHead, artifactOfPath, filterArtifacts, linkedPaths, nameTitle, relatedArtifacts, stemOf, summaryOf, titleOf, versionKey, type Artifact } from '../../src/shared/library';

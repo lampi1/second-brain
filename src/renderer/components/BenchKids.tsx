@@ -14,7 +14,7 @@ import { childState, kidCounts, type ChildState } from '../lib/chat-tree';
 import { openKidsOf } from '../lib/chat-derived';
 import { useSteady } from '../lib/steady';
 import { useApp } from '../store/store';
-import { isBusy } from '../store/state';
+import { showsWork } from '../store/state';
 import { setChatExpanded } from '../store/ui';
 import { t } from '../i18n';
 import { StripFace } from './StripFace';
@@ -99,7 +99,7 @@ function depthOf(k: ChatSummary, root: string, team: readonly ChatSummary[]): nu
 function Helper({ kid, depth, frame, tick, onShow, onHide, onKeep }: { kid: ChatSummary; depth: number; frame: HTMLElement | null; tick: number;
   onShow: (id: string) => void; onHide: () => void; onKeep: () => void }) {
   const state = useSteady(childState(kid), working, s => s === 'err' || s === 'blocked');
-  const busy = useSteady(isBusy(kid), b => b); // held like the state, or a short stop would remount the person
+  const busy = useSteady(showsWork(kid), b => b); // held like the state, or a short stop would remount the person
   const self = useRef<HTMLSpanElement>(null);
   const name = kid.agent?.name || kid.title, tone = kidTone(state), live = working(state) || state === 'wait';
   const label = t('tree.openHelper', { name, state: t(`tree.state.${state}`) });

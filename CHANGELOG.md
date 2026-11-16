@@ -9,7 +9,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - Memoria › Artifact: every report, analysis, document, picture, table, recording or other file the chats produce,
   indexed where it is (a chat's link, the brain's reviews/tmp/evidence, a chat's evidence folder, once the past chats).
   Search, filters, cards with a picture, versions of the same report as one artifact, a gone file kept as missing; a
-  click opens it in the viewer with its source chat, versions and related ones, or with the system's app (ADR 0318).
+  click opens it in the viewer with its source chat, versions and related ones, or with the system's app (ADR 0319).
 - A sign-in page on a new host of a test environment: `fill_credential` asks the user on the tab «Collegare <host>
   all'account <user>?» (account and hosts, never the password); his Sì adds the site to the entry's `loginUrl` and the
   agent signs in by itself, his No is the old refusal. Only his click on the tab answers it (ADR 0317, #429).
@@ -231,6 +231,12 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   key is gone (ADR 0291).
 
 ### Fixed
+- A chat stops showing work as soon as its reply is complete: the working line («sta pensando…»), the person at
+  work and «al lavoro» no longer stay for the seconds the engine takes to close the turn (the brain's Stop hooks run
+  before Claude Code writes the result). The «Turno finito» line still comes with the real cost, and sooner: at a
+  turn's end the app no longer starts a process for its rules hook, nor the inbox hook (the app delivers the chats'
+  mail itself), nor a second copy of a template hook the chat's own brain folder already runs. The log's
+  `timing: turn` line now says how long each turn's end and its Stop hooks took (ADR 0318).
 - The phone (Remote Control): a work chat's Sì/No question and a command waiting for Esegui, the Orchestrator's own
   ones too, reach the user in the Orchestrator's own question panel with Sì and No buttons (a command written whole
   first); his tap there answers the chat or runs the command, as his «sì» typed did (#425).

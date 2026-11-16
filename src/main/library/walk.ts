@@ -1,4 +1,4 @@
-// Memoria → Artifact (ADR 0318): the files under a folder that may be artifacts, found without reading them: a bounded
+// Memoria → Artifact (ADR 0319): the files under a folder that may be artifacts, found without reading them: a bounded
 // walk (depth, entries per folder, files in all) that never follows a link and skips tool folders (node_modules, .git,
 // bin, obj, …: shared/library.ts artifactKind). Async, so a big brain/tmp never holds the main process up; it yields to
 // the event loop every few hundred entries. Used by library/service.ts; pinned by test/unit/library-service.test.ts.

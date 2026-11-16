@@ -1,4 +1,4 @@
-// German texts of Memoria → Artifact (ADR 0318): the gallery, the viewer's artifact bar, the empty and missing states.
+// German texts of Memoria → Artifact (ADR 0319): the gallery, the viewer's artifact bar, the empty and missing states.
 import type { libraryIt } from './library.it';
 export const libraryDe: typeof libraryIt = {
   'mh.tab.artifact': 'Artefakte',

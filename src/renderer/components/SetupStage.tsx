@@ -13,7 +13,7 @@ import { ORCHESTRATOR_ROLE_ID, WORK_ROLE_IDS, roleName } from '@shared/roles';
 import type { WorkRoleId } from '@shared/roles';
 import { t } from '../i18n';
 import { teamStates, type RoleState } from '../lib/setup-wizard';
-import { isBusy, sameList } from '../store/state';
+import { isBusy, sameList, showsWork } from '../store/state';
 import { send, stop, useApp } from '../store/store';
 import { AgentAvatar } from './AgentAvatar';
 import { ItemList, Typing, turnActivity } from './ChatItems';
@@ -82,7 +82,7 @@ export function StageLive({ chatId, text, onText: setText, input, onAnswer }: { 
       <StatePill chat={chat} testid="setup-live-state"/>
     </header>
     <Team states={states}/>
-    <ItemList chatId={chat.id} items={items ?? []} empty={t('setup.first.empty')} footer={busy ? <Typing what={turnActivity(items)} testid="setup-live-typing" items={items}/> : null}/>
+    <ItemList chatId={chat.id} items={items ?? []} empty={t('setup.first.empty')} footer={showsWork(chat) ? <Typing what={turnActivity(items)} testid="setup-live-typing" items={items}/> : null}/>
     {asks > 0 && <p className="sw-stage-ask" role="status" data-testid="setup-live-ask"><span>{t('setup.first.ask', { n: asks })}</span><button type="button" className="btn btn-m btn-primary" onClick={onAnswer}>{t('setup.first.answer')}</button></p>}
     <div className="sw-stage-input">
       <textarea ref={bind} rows={2} value={text} onChange={e => setText(e.target.value)} onKeyDown={key} placeholder={t('setup.first.placeholder')} aria-label={t('setup.first.inputAria')} data-testid="setup-first-input"/>

@@ -2,7 +2,7 @@
 // and its issues are cards in Proposte, so 'app' opens Proposte): its tabs in order, the page arg that opens one ("memoria/<tab>[/<more>]"), and
 // the old pages that became tabs (Skill, Regole, Script, Idee: their ids, links and G-keys still exist and land on the
 // matching tab; Script lands on Skill since ADR 0263). Apprendimento left for Andamento (ADR 0202, lib/andamento.ts redirects "memoria/apprendimento"); Statistiche is gone (ADR 0248): "memoria/statistiche" opens Skill, where skill use lives. Pure: used by actions.ts go() (the redirect), components/brain-model/MemoryPage.tsx (the
-// tab bar; «Artifact» after «Diario e note», ADR 0318) and Sidebar.tsx (which entries leave the rail). Tests: test/unit/memory-hub.test.ts.
+// tab bar; «Artifact» after «Diario e note», ADR 0319) and Sidebar.tsx (which entries leave the rail). Tests: test/unit/memory-hub.test.ts.
 
 export const HUB_TABS = ['proposte', 'approvate', 'skill', 'regole', 'idee', 'file', 'artifact'] as const;
 export type HubTab = (typeof HUB_TABS)[number];

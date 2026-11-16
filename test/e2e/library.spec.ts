@@ -1,4 +1,4 @@
-// E2E of Memoria → Artifact (ADR 0318) on the frozen demo: the tab right after «Diario e note» with its count, the demo's
+// E2E of Memoria → Artifact (ADR 0319) on the frozen demo: the tab right after «Diario e note» with its count, the demo's
 // artifacts grouped by day (a report with two versions, an HTML report with its picture, a PDF, screenshots from two
 // chats, one file gone and shown as missing, a csv, an SVG and a Word file), the search and the type filter, the list view, a card opening the viewer
 // with the artifact bar (source chat, versions, related), and a missing file still listed. Screenshots dark and light:

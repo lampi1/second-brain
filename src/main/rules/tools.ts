@@ -310,11 +310,14 @@ export const toolsRef = (root: string): string => fwd(ensureTools(root));
 
 type HookGroup = { matcher?: string; hooks: { type: string; command: string; timeout?: number }[] };
 /** Template hooks the product runtime replaces: limits and vendor checks (guards.ts), the feed (runtime metadata feed,
- * the app's own Live feed) and auto-commit (maintenance.ts). */
-export const REPLACED_HOOKS = ['vendor-guard.mjs', 'brain-limits.mjs', 'chat-feed.mjs', 'auto-commit.mjs'];
-/** The template's Claude hooks a product brain keeps (panel dismissed, compact, correction/praise/recall, inbox, runbook
- * reminder), pointed at the app-owned copy. Read from the release template; the brain's own settings are never used. */
-export function templateHooks(root: string, tools: string): Record<string, HookGroup[]> {
+ * the app's own Live feed), auto-commit (maintenance.ts) and the inbox's Stop hook: the plugin reaches only the app's
+ * own chats, whose mail the app delivers itself within 2 s, mid-turn too (chats/mail.ts), so that hook only made every
+ * turn's result wait for one more process, the slowest of the stop (ADR 0318). */
+export const REPLACED_HOOKS = ['vendor-guard.mjs', 'brain-limits.mjs', 'chat-feed.mjs', 'auto-commit.mjs', 'inbox.mjs'];
+/** The template's Claude hooks a product brain keeps (panel dismissed, compact, correction/praise/recall, runbook
+ * reminder), pointed at the app-owned copy. Read from the release template; the brain's own settings are never used.
+ * `ownStop` = hook files the chat's folder runs at the stop by itself (claude-plugin.ts ownStopHooks): not added twice. */
+export function templateHooks(root: string, tools: string, ownStop: readonly string[] = []): Record<string, HookGroup[]> {
   const source = templateRoot();
   const V = { ...values(fs.realpathSync(root)), BRAIN: fwd(tools) };
   const wiring = JSON.parse(render(fs.readFileSync(path.join(source, 'harness/claude/settings.hooks.json'), 'utf8'), V, false)) as { hooks: Record<string, HookGroup[]> };
@@ -325,7 +328,8 @@ export function templateHooks(root: string, tools: string): Record<string, HookG
       for (const g of groups) {
         const hooks = g.hooks
           .map(h => ({ ...h, command: h.command.replace('$CLAUDE_PROJECT_DIR', fwd(tools)) }))
-          .filter(h => !REPLACED_HOOKS.some(n => h.command.includes(`/${n}`)) && h.command.includes(fwd(tools)));
+          .filter(h => !REPLACED_HOOKS.some(n => h.command.includes(`/${n}`)) && h.command.includes(fwd(tools)))
+          .filter(h => event !== 'Stop' || !ownStop.some(n => h.command.includes(`/${n}`)));
         if (hooks.length) (out[event] ??= []).push({ ...(g.matcher ? { matcher: g.matcher } : {}), hooks });
       }
     }

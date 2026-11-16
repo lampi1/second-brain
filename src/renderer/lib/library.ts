@@ -1,4 +1,4 @@
-// Memoria → Artifact (ADR 0318): the artifact index as the page sees it, shared by the tab (components/library/*) and
+// Memoria → Artifact (ADR 0319): the artifact index as the page sees it, shared by the tab (components/library/*) and
 // the viewer's artifact bar: loaded once on first use, reloaded on 'library:changed' (only the newest answer lands),
 // with the OS the page runs on for comparing paths. A card's picture is asked once per artifact and version and kept.
 import { useSyncExternalStore } from 'react';

@@ -1,4 +1,4 @@
-// Memoria → Artifact (ADR 0318): one place for every report, analysis, document and image the chats produce, indexed
+// Memoria → Artifact (ADR 0319): one place for every report, analysis, document and image the chats produce, indexed
 // where it is (nothing moved, renamed or deleted). Sources:
 // - a chat's turn: the artifact files its answer or report links (absolute paths, file: URLs, Markdown links, relative
 //   paths in its folder or the brain) — noteTurn, called at every turn's end by index.ts;

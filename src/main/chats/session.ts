@@ -71,6 +71,10 @@ export interface SessionPatch {
    *  history), false after: those items are no answer of the engine, so they never end its cold start. Sent alone. */
   replaying?: boolean;
   state?: ChatState;
+  /** true: the reply is complete and the engine only closes the turn (Claude: the model stopped with no tool call, or
+   *  the result came, while Stop hooks run or the CLI's idle is late); false: it works again. The state does not change:
+   *  the manager shows it as ChatSummary.turnClosing (ADR 0318) */
+  closing?: boolean;
   sessionId?: string;          // the CLI's own session id (learned at init, or new after a fork)
   model?: string;              // the model actually in use (from init)
   permissionMode?: PermissionMode;
@@ -132,6 +136,9 @@ export interface SessionOptions {
   resume?: boolean;
   fork?: boolean;
   worktree?: boolean;
+  /** the chat works in a worktree the CLI made, on this launch or an earlier one (a resume re-enters it): its folder's
+   *  own settings and hooks are not sure to be there */
+  inWorktree?: boolean;
   /** --mcp-config value: a file path or an inline JSON string */
   mcpConfig?: string | null;
   /** running total cost already restored for this session (for per-turn deltas after a resume) */
@@ -163,8 +170,8 @@ export interface SessionOptions {
    *  session-only, no settings file). The Orchestrator's turn budget (agents/orchestrator-budget.ts, ADR 0090). */
   preToolUse?: PreToolHook | null;
   /** Claude only: a product brain's hooks the session answers in process (rules/runtime.ts runHook) instead of a node
-   *  process per call: UserPromptSubmit, PreToolUse, PostToolUse (Stop stays in the plugin's hooks.json, ADR 0103) */
-  productHooks?: { root: string; state: string; launch: { tools?: string; correctionHook?: boolean } } | null;
+   *  process per call: UserPromptSubmit, PreToolUse, PostToolUse (ADR 0099), and Stop when `stop` says so */
+  productHooks?: { root: string; state: string; launch: { tools?: string; correctionHook?: boolean }; /** Stop too (no runner process at the turn's end, ADR 0318) */ stop?: true } | null;
   /** Claude only: the chat may turn on Remote Control (the Orchestrator, ADR 0229): the engine echoes every user message
    *  it queues (--replay-user-messages), so the ones typed on the phone show in the chat */
   remoteControl?: boolean;

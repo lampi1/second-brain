@@ -1,4 +1,4 @@
-// Memoria → Artifact (ADR 0318): the reports, analyses, documents and images the user's chats produce, indexed where
+// Memoria → Artifact (ADR 0319): the reports, analyses, documents and images the user's chats produce, indexed where
 // they are (never moved). Shapes of the index main keeps (main/library/*) and the pure rules both sides share: which
 // files are artifacts (`artifactKind`), how a text links one (`linkedPaths`), which files are versions of one report
 // (`versionKey`), its title and summary from its head (`titleOf`, `summaryOf`). Used by main/library/service.ts, the
