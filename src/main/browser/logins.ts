@@ -12,48 +12,100 @@
 // password of an entry, only for the site the entry is for (the host of its url, or of an optional loginUrl when the
 // sign-in page lives on another host) and never for an entry that looks like production. The agent names the account;
 // the value goes from the file to the page's password field, never to the agent.
+// Linking a site (#429): when the named account's entry is for another host (a test environment that moved), the
+// refusal carries a link offer; the browser shows the user a Sì/No banner on the tab (hand-off kind "link": the user's
+// click only, never an agent or the Orchestrator), and Sì makes linkSite() add the page's origin to the entry's loginUrl
+// (a string, or a list once it has several). Only that key of that entry changes; the password is never read for it.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { CredentialEntry, HandoffAccount } from '../../shared/contract';
+import { ToolRefusal } from '../mcp/refusal';
 
 export const DEFAULT_CREDENTIALS_FILE = 'ops/credentials.md';
 const USER_KEYS = ['email', 'username', 'user', 'login'] as const;
 
 /** group: the keys that lead to the entry ("ExampleApp · test"), array indexes left out. */
-interface Entry { user: string; password: string; url?: string; loginUrl?: string; note?: string; group: string }
+interface Entry { user: string; password: string; url?: string; loginUrls?: string[]; note?: string; group: string }
 
-/** What fill_credential may type, or why not (a text for the agent, with the fix; never a password). */
-export type SiteCredential = { user: string; password: string } | { refusal: string };
+/** An entry fill_credential could use on this page once the user links the page's site to it (#429). */
+export interface LinkOffer { entryId: string; user: string; group: string; sites: string[]; host: string; origin: string }
+
+/** fill_credential's refusal that comes with a link the user can allow (tools.ts opens the banner). */
+export class LinkRefusal extends ToolRefusal {
+  constructor(message: string, readonly link: LinkOffer) { super(message); }
+}
+
+/** What fill_credential may type, or why not (a text for the agent, with the fix; never a password), and maybe the link
+ *  the user can allow with one click. */
+export type SiteCredential = { user: string; password: string } | { refusal: string; link?: LinkOffer };
 
 const oneLine = (s: string, max: number) => s.replace(/\s+/g, ' ').trim().slice(0, max);
 const hostOf = (u: string | undefined): string => { try { return u ? new URL(u).host.toLowerCase() : ''; } catch { return ''; } };
+/** "https://test-4.example.com/" of a page URL ('' for a page that is not http or https). */
+const originOf = (u: string): string => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? `${x.origin}/` : ''; } catch { return ''; } };
 
-/** Every entry of the file's text (a JSON document, or the JSON code blocks of a Markdown file). */
-export function parseEntries(text: string): Entry[] {
-  const docs: unknown[] = [];
-  const t = text.replace(/^﻿/, '');
-  try { docs.push(JSON.parse(t)); } catch {
-    for (const m of t.matchAll(/```[a-z]*\r?\n([\s\S]*?)```/gi)) { try { docs.push(JSON.parse(m[1]!)); } catch { /* not JSON */ } }
+/** The JSON documents of a file's text: the whole text, else each JSON code block of a Markdown file, with where the
+ *  block's body sits (start, end) so linkSite can write it back in place. */
+function documents(text: string): { doc: unknown; start: number; end: number }[] {
+  const t = text.replace(/^\uFEFF/, ''), bom = text.length - t.length;
+  try { return [{ doc: JSON.parse(t), start: bom, end: text.length }]; } catch { /* Markdown */ }
+  const out: { doc: unknown; start: number; end: number }[] = [];
+  for (const m of t.matchAll(/```[a-z]*\r?\n([\s\S]*?)```/gi)) {
+    try { const start = bom + m.index! + m[0].length - 3 - m[1]!.length; out.push({ doc: JSON.parse(m[1]!), start, end: start + m[1]!.length }); } catch { /* not JSON */ }
   }
-  const out: Entry[] = [];
+  return out;
+}
+
+const httpList = (v: unknown): string[] => (Array.isArray(v) ? v : [v]).filter((x): x is string => typeof x === 'string' && /^https?:\/\//i.test(x));
+
+/** Every entry object of a document, in order (pre-order, as parseEntries reads them), with the keys that lead to it. */
+function walkEntries(doc: unknown, visit: (o: Record<string, unknown>, keys: string[]) => void): void {
   const walk = (v: unknown, depth: number, keys: string[]): void => {
     if (depth > 12 || !v || typeof v !== 'object') return;
     if (Array.isArray(v)) { for (const x of v) walk(x, depth + 1, keys); return; }
     const o = v as Record<string, unknown>;
     const key = USER_KEYS.find(k => typeof o[k] === 'string' && (o[k] as string).trim());
-    if (key && typeof o.password === 'string' && o.password) {
-      out.push({
-        user: (o[key] as string).trim(), password: o.password, group: oneLine(keys.join(' · '), 120),
-        ...(typeof o.url === 'string' && /^https?:\/\//i.test(o.url) ? { url: o.url } : {}),
-        ...(typeof o.loginUrl === 'string' && /^https?:\/\//i.test(o.loginUrl) ? { loginUrl: o.loginUrl } : {}),
-        ...(typeof o.note === 'string' && o.note.trim() ? { note: oneLine(o.note, 200) } : {}),
-      });
-    }
+    if (key && typeof o.password === 'string' && o.password) visit(o, keys);
     for (const [k, x] of Object.entries(o)) walk(x, depth + 1, [...keys, k]);
   };
-  for (const d of docs) walk(d, 0, []);
+  walk(doc, 0, []);
+}
+
+/** Every entry of the file's text (a JSON document, or the JSON code blocks of a Markdown file). */
+export function parseEntries(text: string): Entry[] {
+  const out: Entry[] = [];
+  for (const { doc } of documents(text)) walkEntries(doc, (o, keys) => {
+    const key = USER_KEYS.find(k => typeof o[k] === 'string' && (o[k] as string).trim())!;
+    const logins = httpList(o.loginUrl);
+    out.push({
+      user: (o[key] as string).trim(), password: o.password as string, group: oneLine(keys.join(' · '), 120),
+      ...(typeof o.url === 'string' && /^https?:\/\//i.test(o.url) ? { url: o.url } : {}),
+      ...(logins.length ? { loginUrls: logins } : {}),
+      ...(typeof o.note === 'string' && o.note.trim() ? { note: oneLine(o.note, 200) } : {}),
+    });
+  });
   return out;
+}
+
+/** The file's text with `origin` added to the loginUrl of its index-th entry (a string, then a list), or null when that
+ *  entry is not there. Only that key changes; the document (or its Markdown block) is written back as 2-space JSON with
+ *  the file's own line ends. Pure. */
+export function addLoginUrl(text: string, index: number, origin: string): string | null {
+  let n = 0;
+  for (const d of documents(text)) {
+    let hit: Record<string, unknown> | null = null;
+    walkEntries(d.doc, o => { if (n++ === index) hit = o; });
+    if (!hit) continue;
+    const o = hit as Record<string, unknown>, have = httpList(o.loginUrl);
+    if (!have.some(u => hostOf(u) === hostOf(origin))) o.loginUrl = have.length ? [...have, origin] : origin;
+    const eol = text.includes('\r\n') ? '\r\n' : '\n';
+    let body = JSON.stringify(d.doc, null, 2).replace(/\n/g, eol);
+    const old = text.slice(d.start, d.end);
+    if (/\r?\n$/.test(old)) body += eol;
+    return text.slice(0, d.start) + body + text.slice(d.end);
+  }
+  return null;
 }
 
 /** A stable id for the panel: position, group, user, URL and note (never the password), so a Copia after the file
@@ -68,7 +120,7 @@ export function publicEntries(entries: Entry[]): CredentialEntry[] {
 }
 
 /** The hosts (with port) an entry signs in on: its url and its loginUrl. */
-const hostsOf = (e: Entry): string[] => [hostOf(e.url), hostOf(e.loginUrl)].filter(Boolean);
+const hostsOf = (e: Entry): string[] => [hostOf(e.url), ...(e.loginUrls ?? []).map(hostOf)].filter(Boolean);
 
 /** The entry for an account: same user name (case-insensitive); with several, the one whose URL host is the page's. */
 export function pick(entries: Entry[], account: string, pageUrl: string): Entry | undefined {
@@ -80,15 +132,16 @@ export function pick(entries: Entry[], account: string, pageUrl: string): Entry 
 
 /** An entry that looks like a production account: "prod", "production" or "produzione" as a word of its group (the
  *  keys that lead to it) or a label of its hosts. The app types only test accounts (#386). */
-export function looksProduction(e: Pick<Entry, 'group' | 'url' | 'loginUrl'>): boolean {
+export function looksProduction(e: Pick<Entry, 'group' | 'url' | 'loginUrls'>): boolean {
   const word = /(?:^|[^a-z0-9])(?:prod|production|produzione)(?:[^a-z0-9]|$)/i;
-  return word.test(e.group) || [hostOf(e.url), hostOf(e.loginUrl)].some(h => word.test(h));
+  return word.test(e.group) || [hostOf(e.url), ...(e.loginUrls ?? []).map(hostOf)].some(h => word.test(h));
 }
 
 export class Credentials {
   private copiedUntil = 0;
 
-  constructor(private root: () => string | null = () => null, private readonly read: (f: string) => string = f => fs.readFileSync(f, 'utf8')) {}
+  constructor(private root: () => string | null = () => null, private readonly read: (f: string) => string = f => fs.readFileSync(f, 'utf8'),
+    private readonly write: (f: string, text: string) => void = (f, text) => { const tmp = `${f}.${process.pid}.tmp`; fs.writeFileSync(tmp, text); fs.renameSync(tmp, f); }) {}
 
   setRoot(fn: () => string | null): void { this.root = fn; }
 
@@ -153,17 +206,42 @@ export class Credentials {
       e = same.find(x => hostsOf(x).includes(host));
       if (!e && same.length) {
         const sites = [...new Set(same.flatMap(hostsOf))];
-        return { refusal: `Refused: account "${account.trim()}" in the user's credentials file (${file}) is ${sites.length ? `for ${sites.join(', ')}` : 'without a url'}, and this sign-in form is on ${host}. ` +
-          `The app types a password only on the site of its entry${sites.length ? ': open that site' : ''}; if ${host} is its sign-in page, the user adds "${sites.length ? 'loginUrl' : 'url'}": "https://${host}/…" to the entry (ask them in one line, never for the password).` };
+        const head = `Refused: account "${account.trim()}" in the user's credentials file (${file}) is ${sites.length ? `for ${sites.join(', ')}` : 'without a url'}, and this sign-in form is on ${host}.`;
+        // one test entry with that name: the user can link this site to it with one click (#429)
+        const linkable = same.map(x => ({ x, i: all.indexOf(x) })).filter(({ x }) => !looksProduction(x));
+        const origin = originOf(pageUrl);
+        if (linkable.length === 1 && origin) {
+          const { x, i } = linkable[0]!;
+          return { refusal: `${head} The app asked the user, with a banner on your tab, whether to link ${host} to this account: wait for the answer (handoff_to_user with the handoff_id below). On Sì call fill_credential again; on No sign in another way (handoff_to_user kind "login"). Do not navigate to the entry's old host meanwhile.`,
+            link: { entryId: entryId(x, i), user: x.user, group: x.group, sites: hostsOf(x), host, origin } };
+        }
+        return { refusal: `${head} The app types a password only on the site of its entry${sites.length ? ': open that site' : ''}; if ${host} is its sign-in page, the user adds "${sites.length ? 'loginUrl' : 'url'}": "https://${host}/…" to the entry (ask them in one line, never for the password).` };
       }
       if (!e) return { refusal: `Refused: no account "${account.trim()}" in the user's credentials file (${file}). ${names ? `Entries for ${host}: ${names}.` : `It has no entry for ${host}: the user adds one ({ "user", "password", "url" }), or use handoff_to_user kind "login".`}` };
     } else {
-      if (!here.length) return { refusal: `Refused: the user's credentials file (${file}) has no entry for ${host}. The user adds one ({ "user", "password", "url": "https://${host}/…" }), or use handoff_to_user kind "login". Never ask for a password in chat.` };
+      if (!here.length) return { refusal: `Refused: the user's credentials file (${file}) has no entry for ${host}. If one of its accounts is meant for this site, call fill_credential with account = its user name: the app asks the user to link the site to it. Otherwise the user adds one ({ "user", "password", "url": "https://${host}/…" }), or use handoff_to_user kind "login". Never ask for a password in chat.` };
       if (new Set(here.map(x => x.user.toLowerCase())).size > 1) return { refusal: `Refused: several accounts for ${host} in the user's credentials file (${file}): ${names}. Call fill_credential again with account = one of them.` };
       e = here[0]!;
     }
     if (looksProduction(e)) return { refusal: `Refused: account "${e.user}"${e.group ? ` (${e.group})` : ''} looks like a production account. The app types test accounts only: use handoff_to_user kind "login" with this account.` };
     return { user: e.user, password: e.password };
+  }
+
+  /** The user said Sì to linking a site (#429): the origin goes into the loginUrl of the entry with that id, read from
+   *  the file now. Refused when the file changed so that the id names no entry (or two), or the entry looks like
+   *  production. Never reads or writes the password. */
+  linkSite(id: string, origin: string): { ok: true } | { error: string } {
+    const f = this.file();
+    if (!f) return { error: 'there is no credentials file' };
+    let text: string;
+    try { text = this.read(f); } catch (e) { return { error: `the credentials file cannot be read: ${e instanceof Error ? e.message : String(e)}` }; }
+    const all = parseEntries(text), idx = all.map((e, n) => (entryId(e, n) === id ? n : -1)).filter(n => n >= 0);
+    if (idx.length !== 1) return { error: 'the credentials file changed meanwhile: the entry is no longer there' };
+    if (looksProduction(all[idx[0]!]!)) return { error: 'the entry looks like a production account' };
+    const next = addLoginUrl(text, idx[0]!, origin);
+    if (next === null) return { error: 'the entry could not be found in the file' };
+    try { this.write(f, next); } catch (e) { return { error: `the credentials file cannot be written: ${e instanceof Error ? e.message : String(e)}` }; }
+    return { ok: true };
   }
 
   /** Every entry for the "Credenziali" panel: group, user, URL, note and an id (never the password). */

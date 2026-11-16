@@ -18,7 +18,10 @@ app (each CLI logs in itself) with these exceptions:
   (ADR 0012);
 - a test account's password of the same file, read when an agent calls `fill_credential` and typed by the app into the
   `type=password` field of a page on the entry's own site (its `url` or `loginUrl` host), never for an entry that looks like
-  production; it is never given to the agent, a tool result, the feed or a log, and never stored (ADR 0310);
+  production; it is never given to the agent, a tool result, the feed or a log, and never stored (ADR 0310). When the
+  named entry is for another host, the user's own Sì on a banner of the tab (never an agent's or the Orchestrator's
+  answer) adds the page's origin to that entry's `loginUrl`: the only write the app makes to the file, the password
+  untouched (ADR 0317, #429);
 - the API keys the user types in Settings → Motori, encrypted with safeStorage, write-only from the UI, given only to
   their own engine's process env or HTTP header (ADR 0046);
 - the tokens of the MCP servers added in Settings → Connettori, the same way, given only by the app's MCP gateway to
