@@ -1,7 +1,9 @@
 // Parent-owned child reuse: guards are checked before mutation; assignment and creation share reserved slots.
 import {describe,expect,it,vi} from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import {delegationTools, type DelegationChats, type DelegationDeps} from '../../../src/main/agents/delegation';
+import {delegationTools, samePath, type DelegationChats, type DelegationDeps} from '../../../src/main/agents/delegation';
 import type {ChatSummary} from '../../../src/shared/contract';
 import type {AgentCatalog, UserTaskEvents} from '../../../src/shared/agents';
 import type {TaskAssignmentOptions} from '../../../src/shared/delegation';
@@ -106,10 +108,26 @@ describe('parent child task continuity',()=>{
     await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/configuration changed/);
     delete (f.catalog.profiles[1] as {updatedAt?:number}).updatedAt;
     await expect(f.call('agent_assign_task',{...f.args(),roleId:'sentinel'})).rejects.toThrow(/Role mismatch/);
-    await expect(f.call('agent_assign_task',{...f.args(),cwd:path.resolve('/elsewhere')})).rejects.toThrow(/Project mismatch/);
+    await expect(f.call('agent_assign_task',{...f.args(),cwd:path.resolve('/elsewhere')})).rejects.toThrow(/Project mismatch: this child works in/);
     f.parent.permissionMode='plan';
     await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/permissions exceed/);
     expect(f.assign).not.toHaveBeenCalled();
+  });
+  it('takes cwd as optional: omitted, the child\'s worktree or the parent\'s folder all reuse the child in its own folder (#427)',async()=>{
+    const wt=fs.mkdtempSync(path.join(os.tmpdir(),'sb-reuse-wt-'));
+    for(const cwd of [undefined,wt+path.sep,'parent']){
+      const f=fixture(async()=>[wt]);f.child.cwd=wt;
+      const {cwd:_cwd,...rest}=f.args();
+      const args=cwd===undefined?rest:{...rest,cwd:cwd==='parent'?f.parent.cwd:cwd};
+      await expect(f.call('agent_assign_task',args)).resolves.toMatchObject({chatId:'child'});
+      expect(f.assign).toHaveBeenCalledOnce();
+    }
+    fs.rmSync(wt,{recursive:true,force:true});
+  });
+  it('samePath ignores a trailing separator, and letter case only on Windows',()=>{
+    expect(samePath(path.resolve('/a/b'),path.resolve('/a/b')+path.sep)).toBe(true);
+    expect(samePath('/A/b','/a/b','linux')).toBe(false);
+    expect(samePath('/A/b','/a/b','win32')).toBe(true);
   });
   it('reserves the last slot across reuse and creation, releases it after failure',async()=>{
     const f=fixture();let reject!:(e:Error)=>void;

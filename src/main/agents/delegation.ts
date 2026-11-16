@@ -32,6 +32,12 @@ import { checkMemoryWorth } from '../rules/memory-worth';
 import { closeRefusal, descendantIds } from '../chats/close-rules';
 import { unreadInstructions } from '../../shared/user-events';
 
+/** Two absolute folders are the same one: separators and a trailing slash aside, and letter case on Windows. */
+export function samePath(a: string, b: string, platform: NodeJS.Platform = process.platform): boolean {
+  const x = path.resolve(a), y = path.resolve(b);
+  return platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y;
+}
+
 /** With agent_assign_task's userInstructions: what the parent does with the user's entries it had not seen. */
 const USER_INSTRUCTIONS_NOTE = 'The user wrote or answered these in the child since your last assignment; the child already has them and they are not repeated in its prompt. Check your new contract agrees with them; where it does not, correct the child with a new assignment or ask the user.';
 
@@ -285,7 +291,10 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (!own || !canLaunch(own.launches, a.roleId)) throw new Error('Your current role may not launch this child role.');
     // the revision too: tools, permissions and limits change the version in use in place (ADR 0186)
     if (!profile || profile.activeVersion !== child.agent.version || profile.updatedAt !== child.agent.revision || (profile.engine !== child.harness && !child.route?.balanced)) throw new Error('Role configuration changed: delegate a fresh chat.');
-    if (typeof a.cwd !== 'string' || !path.isAbsolute(a.cwd) || path.resolve(a.cwd) !== path.resolve(child.cwd) || !withinParent(parent.cwd, child.cwd, trees)) throw new Error('Project mismatch: reuse only the same folder inside your scope or repository worktree.');
+    // cwd only confirms the project (#427): the child's own folder (its worktree) or yours; omitted = the child's. The
+    // folder never changes on a reuse, so a cwd naming another one is refused with the child's folder in the message
+    if (a.cwd !== undefined && (typeof a.cwd !== 'string' || !path.isAbsolute(a.cwd) || !(samePath(a.cwd, child.cwd) || samePath(a.cwd, parent.cwd)))) throw new Error(`Project mismatch: this child works in ${child.cwd}; a reuse keeps its folder, so pass that folder (or yours, ${parent.cwd}) as cwd or omit cwd. For another folder delegate a fresh chat.`);
+    if (!withinParent(parent.cwd, child.cwd, trees)) throw new Error(`Project mismatch: this child's folder ${child.cwd} is no longer inside your folder or one of your repository's worktrees; delegate a fresh chat.`);
     // expectedVersion and expectedEventSeq are optional (cloudroom P6): honoured when given, else the current version
     if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || (a.expectedVersion !== undefined && (!Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1))) throw new Error('Invalid assignment mode/version.');
     if (a.expectedEventSeq !== undefined && (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0)) throw new Error('Invalid user event cursor.');
@@ -580,8 +589,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
   }, {
     name: 'agent_assign_task',
     description: 'Continue YOUR direct child in the same role and project with a separate task run. The user\'s messages and answers in that chat you have not seen come back to you readable (userInstructions): the child already has them, so they are not repeated in its prompt; account for them, and correct the child or ask the user where your contract disagrees. expectedVersion (taskVersion from agent_children) and expectedEventSeq are optional and honoured when given. Refused only while the child works or has queued work. Keeps the session, tools and skills; changed role settings require a fresh child. A Sentinel that reviewed this task is continued here after a fix (mode continue): it reviews only the fix delta. Use rework only for explicit corrections. With an approved plan, step is required. Closed parents must first receive a new assignment from their own parent or Orchestrator.',
-    inputSchema: { type: 'object', required: ['chatId', 'roleId', 'cwd', 'mode', 'contract'],additionalProperties: false, properties: {
-      chatId: str, roleId: { type: 'string', enum: [...WORK_ROLE_IDS] }, cwd: str,
+    inputSchema: { type: 'object', required: ['chatId', 'roleId', 'mode', 'contract'],additionalProperties: false, properties: {
+      chatId: str, roleId: { type: 'string', enum: [...WORK_ROLE_IDS] }, cwd: { ...str, description: 'optional: the child\'s folder (agent_children cwd, its worktree) or yours; omitted = the child\'s. A reuse never moves the child to another folder' },
       mode: { type: 'string', enum: ['continue', 'new-task', 'rework'] },
       expectedVersion: { type: 'integer', minimum: 1 }, expectedEventSeq: { type: 'integer', minimum: 0 },
       step: { type: 'integer', minimum: 1 },
