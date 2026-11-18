@@ -23,11 +23,14 @@ every chat's folder through a fresh `realpath` each time, on main's thread.
    report's first 64 KB (was 160 KB); a GIF or SVG is shown as it is only up to 300 KB (was 1.5 MB), a bigger one gets
    its tile.
 3. **Keep (star).** Every card has a star: `library:pin` sets `pinned` on the artifact; a kept artifact is never
-   cleaned. A second click lets it go again.
+   cleaned, nor dropped when the index is full (4000). A second click lets it go again.
 4. **Daily cleanup.** With a scan (20 s after start, on «Aggiorna», when the tab opens with an index older than a
    minute), at most once a day, every picture (kind `image`) not kept and older than `CLEANUP_DAYS` (30) by its file's
-   time leaves the index. Its file is **deleted only in the app's own screenshot folder** (`<userData>/evidence`, the
-   agents' browser evidence); a picture in the brain or in a project stays where it is and is only no longer shown.
+   time leaves the index. It runs after the scan's walk and check, so a file written again under an old name is a new
+   version, not an old picture. Its file is **deleted only in the app's own screenshot folder** (`<userData>/evidence`,
+   the agents' browser evidence), only when it is still the very file indexed (same time and size, a plain file whose
+   real path is inside that folder), and never in a `downloads` folder; a picture in the brain or in a project stays
+   where it is and is only no longer shown.
    A scan never takes an old picture back in. The count of cleaned pictures is kept in the index and shown beside the
    gallery's count, with a tip that says which files are deleted and which are only hidden. Reports, documents, data
    and every other kind are never cleaned.

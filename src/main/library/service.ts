@@ -110,7 +110,9 @@ export class LibraryService {
   }
 
   private setFloor(): void {
-    this.floor = this.data.artifacts.length >= LIBRARY_MAX ? Math.min(...this.data.artifacts.map(a => a.at)) : -Infinity;
+    // a kept (starred) artifact never goes, so the floor is the oldest of the others
+    const free = this.data.artifacts.filter(a => !a.pinned);
+    this.floor = this.data.artifacts.length >= LIBRARY_MAX && free.length ? Math.min(...free.map(a => a.at)) : -Infinity;
   }
 
   private now(): number { return this.p.now?.() ?? Date.now(); }
@@ -309,10 +311,10 @@ export class LibraryService {
     a.area = this.areaOf(newest.path, a.chatId);
   }
 
-  /** Over LIBRARY_MAX: the oldest go (counted as dropped), with their kept copies. */
+  /** Over LIBRARY_MAX: the oldest go (counted as dropped), with their kept copies; a starred one never goes. */
   private async trim(): Promise<void> {
     if (this.data.artifacts.length <= LIBRARY_MAX) { this.setFloor(); return; }
-    this.data.artifacts.sort((x, y) => y.at - x.at);
+    this.data.artifacts.sort((x, y) => Number(!!y.pinned) - Number(!!x.pinned) || y.at - x.at);
     const gone = this.data.artifacts.splice(LIBRARY_MAX);
     for (const a of gone) this.byKey.delete(this.keyOf(a.path, a.kind));
     this.data.dropped += gone.length;
@@ -380,8 +382,14 @@ export class LibraryService {
     const own = this.real(path.join(this.p.userData, 'evidence'));
     let deleted = 0;
     for (const v of old.flatMap(a => a.versions)) {
-      if (v.missing || !isInside(v.path, own, this.platform)) continue;
-      try { await fs.promises.unlink(v.path); deleted++; } catch { /* already gone */ }
+      // only a screenshot of the app's own folder (an agent's download stays), and only the very file indexed: one
+      // written again under the same name since is a new picture, and a link never leads the delete elsewhere
+      if (v.missing || !isInside(v.path, own, this.platform) || path.relative(own, v.path).split(/[\\/]/).includes('downloads')) continue;
+      try {
+        const st = await fs.promises.lstat(v.path);
+        if (!st.isFile() || Math.round(st.mtimeMs) !== v.at || st.size !== v.size || !isInside(realNow(v.path), own, this.platform)) continue;
+        await fs.promises.unlink(v.path); deleted++;
+      } catch { /* already gone */ }
     }
     try { await fs.promises.rm(this.thumbs, { recursive: true, force: true }); this.thumbCache.clear(); } catch { /* made again when asked */ }
     log.info('library', 'old pictures cleaned', { data: { hidden: old.length - deleted, deleted, days: CLEANUP_DAYS } });
@@ -406,13 +414,15 @@ export class LibraryService {
     if (this.scanning) return this.scanning;
     this.reals.clear();
     const run = this.serial(async () => {
-      let changed = await this.cleanup();
+      let changed = false;
       const found = await walk(this.roots());
       for (let i = 0; i < found.length; i++) {
         if (i % 100 === 99) await yieldNow();
         if (await this.upsert(found[i]!, undefined, 'scan')) changed = true;
       }
       if (await this.check()) changed = true;
+      // after the check: a file rewritten under an old name is a new version by now, not an old picture
+      if (await this.cleanup()) changed = true;
       this.save();
       if (changed) this.p.changed();
     });

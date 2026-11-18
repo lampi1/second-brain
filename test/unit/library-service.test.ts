@@ -371,3 +371,24 @@ describe('the cleanup of old pictures (ADR 0323)', () => {
     expect(again.list().artifacts[0]!.pinned).toBeUndefined();
   });
 });
+
+describe('the cleanup never deletes a new picture (ADR 0323)', () => {
+  const NOW = Date.UTC(2026, 10, 18), DAY = 864e5;
+  it('keeps a screenshot written again under an old name, and an agent’s download', async () => {
+    const t = setup();
+    let now = NOW;
+    const shot = t.write('evidence/g1/step-3-login.png', Buffer.from('png'), NOW - DAY, t.userData);
+    const download = t.write('evidence/g1/downloads/fattura.png', Buffer.from('png'), NOW - DAY, t.userData);
+    const lib = t.make({ now: () => now });
+    await lib.scan();
+    expect(lib.list().artifacts).toHaveLength(2);
+    // 40 days on an agent writes the same name again; the first scan of the day sees the new file, not an old one
+    now = NOW + 40 * DAY;
+    t.write('evidence/g1/step-3-login.png', Buffer.from('png, new'), now - 60_000, t.userData);
+    await lib.refresh();
+    expect(fs.existsSync(shot)).toBe(true);
+    expect(lib.list().artifacts.map(a => path.basename(a.path))).toEqual(['step-3-login.png']);
+    // the download is only hidden
+    expect(fs.existsSync(download)).toBe(true);
+  });
+});
