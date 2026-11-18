@@ -11,9 +11,12 @@
 // - Deeper, without code (ADR 0316): a part can hold its own pieces; each element can carry its rules, what it keeps,
 //   why it is built so and its key files; a map carries paths, the project's questions told stop by stop (save sends
 //   them all, update adds or drops some; brief with a question starts the Scout that answers one).
+// - A project told as a sequence (#443, ADR 0322): kinds phase and step, drawn in a line in the saved order; par on a
+//   step that goes together with the one before; layout on the map and on a piece (linear | auto); a link of kind
+//   next = the arrow to the following step; proofs and refs on a piece. edit: par, layout, before (its place), next.
 // Used by wiring-shared.ts (chat tools) and appctl/tools.ts (the Orchestrator's); pinned by test/unit/projectmap-tools.test.ts.
 import type { EventMap } from '@shared/contract';
-import { EDIT_OPS, MAP_ACTORS, MAP_KINDS, MAP_LIMITS, MAP_STATES, elementText, mapText, type ProjectMap } from '@shared/project-map';
+import { EDIT_OPS, MAP_ACTORS, MAP_KINDS, MAP_LAYOUTS, MAP_LIMITS, MAP_STATES, elementText, mapText, type ProjectMap } from '@shared/project-map';
 import type { McpTool } from '../mcp/server';
 import type { ProjectMaps } from './service';
 
@@ -24,11 +27,15 @@ const ELEMENT = {
   type: 'object',
   properties: {
     id: { type: 'string', description: 'stable id: lowercase letters, digits, dashes (keep it across redraws)' },
-    kind: { type: 'string', enum: [...MAP_KINDS], description: `person = who uses it; system = the user's own system; external = a system of others it talks to; env = an environment (test host, pipeline); doc = a document; part = a piece inside a system (needs parent)` },
+    kind: { type: 'string', enum: [...MAP_KINDS], description: `person = who uses it; system = the user's own system; external = a system of others it talks to; env = an environment (test host, pipeline); doc = a document; part = a piece inside a system (needs parent); phase = a stage of a project told as a sequence; step = one thing done inside a phase (parent = the phase, or a step for its sub-steps)` },
     name: { type: 'string', description: 'short name, in the user\'s language' },
     description: { type: 'string', description: 'what it is or does, one line (shown in the box)' },
     details: { type: 'string', description: 'how it works, 3 to 8 plain sentences in the user\'s language, no code: what it does step by step, what it reads and writes, the rules it applies, what happens when it fails, what is unusual in it. The user reads this in place of the code when the box is picked. Up to 1500 characters; a line break starts a paragraph. Omit on a redraw to keep the previous text.' },
-    parent: { type: 'string', description: 'for a part: the id of the system, or of the part, it sits in (the user clicks a box to enter it)' },
+    parent: { type: 'string', description: 'for a part: the id of the system, or of the part, it sits in (the user clicks a box to enter it); for a step: its phase (or the step it is a sub-step of)' },
+    par: { type: 'boolean', description: 'in a line of phases or steps: true = it goes together with the one before it (drawn side by side). Only when they really run in parallel: without it the steps are one after the other, in the order you send them' },
+    layout: { type: 'string', enum: [...MAP_LAYOUTS], description: 'how the level INSIDE this piece is drawn: linear = its pieces in a line, in the order sent; auto = layered by the links. Omit: a line when the pieces are all phases or steps, else layered' },
+    proofs: { type: 'array', items: { type: 'object', properties: { text: { type: 'string', description: 'what it shows, one line' }, file: { type: 'string', description: 'optional: the project file that holds it, relative to the root' }, href: { type: 'string', description: 'optional: an http(s) address (a run, a pull request)' } }, required: ['text'] }, description: `what shows the piece is done or how it stands: a test run, a screenshot, a merged change, up to ${MAP_LIMITS.proofs}. Only real ones. Omit on a redraw to keep the previous` },
+    refs: { type: 'array', items: { type: 'object', properties: { label: { type: 'string' }, href: { type: 'string', description: 'an http(s) address' } }, required: ['label', 'href'] }, description: `addresses worth opening about it (an issue, a pull request, a document), up to ${MAP_LIMITS.refs}` },
     rules: { type: 'array', items: { type: 'string' }, description: 'the rules it applies, one short plain line each (limits, checks, when it refuses), up to 8' },
     keeps: { type: 'array', items: { type: 'string' }, description: 'what it keeps and where (a table, a file, a cache), one line each, up to 6' },
     why: { type: 'array', items: { type: 'string' }, description: 'why it is built this way: the decisions behind it (an ADR, a constraint), one line each, up to 6' },
@@ -44,11 +51,12 @@ const LINK = {
   type: 'object',
   properties: {
     id: { type: 'string', description: 'stable id (default from--to)' }, from: { type: 'string' }, to: { type: 'string' },
-    label: { type: 'string', description: 'what goes along it, a few words («chiama gli strumenti», «legge gli ordini»)' },
+    label: { type: 'string', description: 'what goes along it, a few words («chiama gli strumenti», «legge gli ordini»); may be left out on a next link' },
+    kind: { type: 'string', enum: ['next'], description: 'next = the arrow from a step to the one after it: plain, no status. A line of phases or steps draws these arrows by itself, in the order sent: add one only to say something on it (label) or to jump' },
     details: { type: 'string', description: 'the passage in full, 1 to 4 plain sentences: when it happens, which data goes, how (a call, a file, a queue, by hand), what comes back, what happens if it fails. Up to 800 characters. Omit on a redraw to keep the previous text.' },
     status: { type: 'string', enum: [...MAP_STATES] }, note: { type: 'string', description: `at most ${MAP_LIMITS.note} characters` }, actor: { type: 'string', enum: [...MAP_ACTORS] },
   },
-  required: ['from', 'to', 'label'],
+  required: ['from', 'to'],
 };
 
 const PATH = {
@@ -88,7 +96,7 @@ export function chatMapTools(d: ChatMapDeps): McpTool[] {
     },
     {
       name: 'project_map_save',
-      description: `Draw (or redraw) a project's map for the user: what they look at instead of the code. Read the project first (code, configuration, pipelines, README, the brain's notes) and draw what it IS: who uses it (person), the user's system(s) (system) and their main parts (part, parent = the system), the external systems it talks to (external), the environments (env: test host, pipeline) and key documents (doc); the links with what goes along them. Keep it small enough to read (about 5-15 elements per level); a part with several pieces of its own holds them (parent = the part), so the user enters it and sees them. Give each element its status as far as you know it and the files you read it from (evidence, relative to the root: the app watches them). Never invent what the project does not show: mark it unknown with a note, and ask. The user reads this map in place of the code, to see how the system works and to spot what is wrong in its structure himself: draw what is there plainly, each link with what really goes along it. The boxes stay short; the substance goes in details, on every element and every link you understood, and in rules, keeps, why and keyFiles: a map with one-line boxes and nothing behind them tells the user too little. Add paths: the project's key questions told stop by stop. A redraw: read the map first (project_map_read), keep the ids, respect the user's corrections. Every save is a version in the map's history. kinds: ${KINDS}; statuses: ${STATES} (planned = not started yet); actors: ${ACTORS}. Limits, refused otherwise: evidence only inside the root (no absolute path, no ../), note at most ${MAP_LIMITS.note} characters, name ${MAP_LIMITS.name}, description ${MAP_LIMITS.description}, details ${MAP_LIMITS.details} (links ${MAP_LIMITS.linkDetails}). Renaming or moving a box, or adding one, is a save (or app_project_map edit for the Orchestrator): project_map_update changes only status, note, actor and paths.`,
+      description: `Draw (or redraw) a project's map for the user: what they look at instead of the code. Read the project first (code, configuration, pipelines, README, the brain's notes) and draw what it IS: who uses it (person), the user's system(s) (system) and their main parts (part, parent = the system), the external systems it talks to (external), the environments (env: test host, pipeline) and key documents (doc); the links with what goes along them. Keep it small enough to read (about 5-15 elements per level); a part with several pieces of its own holds them (parent = the part), so the user enters it and sees them. A project that is a path of work (a migration, a rollout, a delivery in stages) is drawn as a sequence instead: its phases at the top (kind phase), in the order they happen, and inside each its steps (kind step, parent = the phase), in order too; they are drawn in a line, one after the other, numbered, with the arrows; par: true only on a step that really runs together with the one before. Give each element its status as far as you know it and the files you read it from (evidence, relative to the root: the app watches them). Never invent what the project does not show: mark it unknown with a note, and ask. The user reads this map in place of the code, to see how the system works and to spot what is wrong in its structure himself: draw what is there plainly, each link with what really goes along it. The boxes stay short; the substance goes in details, on every element and every link you understood, and in rules, keeps, why and keyFiles: a map with one-line boxes and nothing behind them tells the user too little. Add paths: the project's key questions told stop by stop. A redraw: read the map first (project_map_read), keep the ids, respect the user's corrections. Every save is a version in the map's history. kinds: ${KINDS}; statuses: ${STATES} (planned = not started yet); actors: ${ACTORS}. Limits, refused otherwise: evidence only inside the root (no absolute path, no ../), note at most ${MAP_LIMITS.note} characters, name ${MAP_LIMITS.name}, description ${MAP_LIMITS.description}, details ${MAP_LIMITS.details} (links ${MAP_LIMITS.linkDetails}). Renaming or moving a box, or adding one, is a save (or app_project_map edit for the Orchestrator): project_map_update changes only status, note, actor and paths.`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -98,6 +106,7 @@ export function chatMapTools(d: ChatMapDeps): McpTool[] {
           summary: { type: 'string', description: 'what this version changes, one line in the user\'s language' },
           elements: { type: 'array', items: ELEMENT },
           links: { type: 'array', items: LINK },
+          layout: { type: 'string', enum: [...MAP_LAYOUTS], description: 'how the top level is drawn: linear = in a line, in the order sent; auto = layered by the links. Omit: the previous one, else a line when the top is all phases or steps' },
           paths: { type: 'array', items: PATH, description: 'every path of the map (omit to keep the previous ones): 3-6 key questions about the project («Cosa succede quando…», «Come fa…»), each told stop by stop on the elements' },
         },
         required: ['elements', 'summary'], additionalProperties: false,
@@ -107,7 +116,7 @@ export function chatMapTools(d: ChatMapDeps): McpTool[] {
         const chatId = ctx.params.chatId;
         const root = typeof a.root === 'string' && a.root.trim() ? a.root.trim() : undefined, cwd = chatId ? d.cwdOf(chatId) ?? undefined : undefined;
         const m = d.maps.save({ ...(typeof a.project === 'string' ? { project: a.project } : {}), ...(typeof a.title === 'string' ? { title: a.title } : {}), ...(root ? { root } : {}), ...(cwd ? { defaultRoot: cwd } : {}),
-          map: { elements: a.elements, links: a.links, ...(a.paths !== undefined ? { paths: a.paths } : {}) }, by: (chatId ? d.titleOf(chatId) : null) || 'agente', summary: typeof a.summary === 'string' ? a.summary : '' });
+          map: { elements: a.elements, links: a.links, ...(a.paths !== undefined ? { paths: a.paths } : {}), ...(a.layout !== undefined ? { layout: a.layout } : {}) }, by: (chatId ? d.titleOf(chatId) : null) || 'agente', summary: typeof a.summary === 'string' ? a.summary : '' });
         return json({ ok: true, project: m.project, version: m.version, elements: m.elements.length, links: m.links.length, paths: m.paths?.length ?? 0, root: m.root ?? null });
       },
     },
@@ -148,6 +157,7 @@ export function drawBrief(title: string, root: string, prev: ProjectMap | null):
     'Leggi il progetto (codice, configurazioni, pipeline, README, note del brain su di lui) e chiamati project_map_save con: chi lo usa, i suoi sistemi e le loro parti principali, i sistemi esterni con cui parla, gli ambienti, i collegamenti con cosa passa. 5-15 elementi per livello, nomi brevi in italiano.',
     'I riquadri restano brevi; la sostanza va in `details`, su ogni elemento e su ogni collegamento che hai capito: come funziona in 3-8 frasi semplici (cosa fa passo per passo, cosa legge e scrive, le regole che applica, cosa succede se fallisce), e per un collegamento quando avviene, quali dati passano, come, cosa torna indietro. L\'utente legge questo al posto del codice: niente codice, niente gergo.',
     'Più a fondo: una parte con più pezzi suoi li contiene (parent = la parte), fino a 4 livelli, così l\'utente ci entra. Su ogni elemento che hai capito: `rules` (le regole che applica), `keeps` (cosa tiene e dove), `why` (perché è fatto così: le decisioni, un ADR) e `keyFiles` (1-4 file da aprire per vederlo, con cosa contengono). Poi `paths`: 3-6 domande chiave sul progetto («Cosa succede quando…», «Come fa…») raccontate tappa per tappa sui riquadri, nell\'ordine in cui le cose succedono.',
+    'Se il progetto è un percorso di lavoro (una migrazione, un rilascio a tappe) disegnalo come sequenza: in alto le fasi (kind phase) nell\'ordine in cui avvengono, dentro ognuna i suoi passi (kind step, parent = la fase), in ordine; `par: true` solo su un passo che va davvero insieme al precedente. Su un passo fatto metti le prove (`proofs`) e i link utili (`refs`).',
     'Per ogni elemento: lo stato per quanto lo sai (ok, work, blocked, unknown), chi deve agire se è bloccato, e i file da cui l\'hai capito (evidence). Quello che il progetto non mostra non inventarlo: unknown con una nota.',
     'Sola lettura: non cambiare file del progetto. Alla fine riporta in 3 righe cosa hai disegnato e cosa resta da capire.',
   ].join('\n');
@@ -176,9 +186,10 @@ export function appProjectMapTool(maps: ProjectMaps, emitUi: (cmd: EventMap['ui:
       question: { type: 'string', description: 'brief: a question about the project to answer as a path on the map' },
       text: { type: 'string', description: 'correct: the user\'s correction, in their words' },
       ops: { type: 'array', maxItems: 40, description: 'edit: the changes, in order', items: { type: 'object', required: ['op'], properties: {
-        op: { type: 'string', enum: [...EDIT_OPS], description: 'add (name, kind, parent for a part) | set (id + what changes) | remove (id; its parts and links go too) | link (from, to, label) | unlink (id)' },
+        op: { type: 'string', enum: [...EDIT_OPS], description: 'add (name, kind, parent for a part or a step; before = the id it comes before, else last) | set (id + what changes; before moves it in the order) | remove (id; its parts and links go too) | link (from, to, label; next: true = the arrow to the following step) | unlink (id)' },
         id: { type: 'string' }, name: { type: 'string' }, kind: { type: 'string', enum: [...MAP_KINDS] }, description: { type: 'string' }, details: { type: 'string', description: 'how it works (an element) or what goes along it in full (a link)' }, parent: { type: 'string' },
-        status: { type: 'string', enum: [...MAP_STATES] }, note: { type: 'string' }, actor: { type: 'string', enum: [...MAP_ACTORS] }, from: { type: 'string' }, to: { type: 'string' }, label: { type: 'string' } } } },
+        status: { type: 'string', enum: [...MAP_STATES] }, note: { type: 'string' }, actor: { type: 'string', enum: [...MAP_ACTORS] }, from: { type: 'string' }, to: { type: 'string' }, label: { type: 'string' },
+        par: { type: 'boolean', description: 'a phase or step that goes together with the one before it' }, layout: { type: 'string', enum: [...MAP_LAYOUTS], description: 'how the level inside it is drawn' }, before: { type: 'string', description: 'add / set: the element id it comes before (a line is drawn in this order)' }, next: { type: 'boolean', description: 'link: the arrow to the following step' } } } },
     }, required: ['action'] },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: a => {

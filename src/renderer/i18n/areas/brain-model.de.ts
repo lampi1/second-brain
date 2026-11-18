@@ -100,6 +100,11 @@ export const brainModelDe: typeof brainModelIt = {
   'pm.planSteps': (p: { done: number; total: number }) => `${p.done} von ${p.total} Schritten erledigt`, 'pm.planApprove': 'Genehmigen und starten', 'pm.planChange': 'Etwas ändern', 'pm.planChangeDraft': (p: { title: string }) => `Ändere den Plan «${p.title}»: `, 'pm.planGone': 'Der Plan hat sich geändert: sieh dir die neue Version an.',
   'pm.changeSent': (p: { at: string }) => `Änderung gesendet ${p.at}:`, 'pm.changeSeen': (p: { at: string }) => `Änderung erhalten ${p.at}:`, 'pm.worksMore': (p: { n: number; done: number; total: number }) => `+${p.n} weitere · ${p.done}/${p.total} erledigt`,
   'pm.parts': (p: N) => (p.n === 1 ? '1 Teil' : `${p.n} Teile`),
+  // #443 · phases and steps in a line, the arrow to the following step, proofs and links, the panel's width
+  'pm.kind.phase': 'Phase', 'pm.kind.step': 'Schritt', 'pm.next': 'Nächster Schritt', 'pm.nextShort': 'dann', 'pm.withPrev': 'Zusammen mit dem vorigen',
+  'pm.stepsOf': 'Ihre Schritte', 'pm.proofs': 'Belege', 'pm.refs': 'Links', 'pm.openLink': 'Im Browser der App öffnen',
+  'pm.resize': 'Breite des Bereichs: ziehen, oder Pfeil links und rechts; Doppelklick für die Anfangsbreite',
+  'pm.stepsCount': (p: N) => (p.n === 1 ? '1 Schritt' : `${p.n} Schritte`),
   'pm.zoomIn': 'Vergrößern', 'pm.zoomOut': 'Verkleinern', 'pm.fit': 'An Fenster anpassen',
   'pm.confirmed': (p: { at: string }) => `Status bestätigt ${p.at}`, 'pm.files': 'Gelesen aus:',
   'pm.agents': 'Agenten', 'pm.agentsCount': (p: { n: number; run: number }) => `${p.n} · ${p.run} bei der Arbeit`, 'pm.agentsPast': 'nur in der aktuellen Version',

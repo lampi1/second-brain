@@ -104,7 +104,7 @@ export const TOOL_CATALOG: Readonly<Record<string, ToolInfo>> = {
   brain_scripts: t('chat', 'The brain\'s tested reusable scripts with usage.'),
   brain_script_add: t('chat', 'Save a new script in the brain right after it ran and worked.'),
   project_map_read: t('chat', 'The user\'s project maps: the list, or one map as text with statuses and agents.'),
-  project_map_save: t('chat', 'Draw or redraw a project\'s map (people, systems, parts inside parts, links, statuses, evidence files, rules, what each piece keeps, why, key files, paths).'),
+  project_map_save: t('chat', 'Draw or redraw a project\'s map (people, systems, parts inside parts, or phases and their steps in a line, links, statuses, evidence files, rules, what each piece keeps, why, key files, proofs, paths).'),
   project_map_update: t('chat', 'Say which elements of a map you work on, update the status of what you finished, add or drop paths.'),
   brain_queries: t('chat', 'The brain\'s saved queries (SQL, KQL, GraphQL…).'),
   brain_query_add: t('chat', 'Save a new query in the brain right after it gave the right answer.'),

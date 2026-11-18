@@ -4,7 +4,8 @@ Date: 2026-11-15 · Status: accepted (owner, thread «Capire come esplorare il c
 vorrei vedere codice, vorrei capire bene come è strutturato senza vederlo e la mappa al momento non è perfetta in
 questo, troppi pochi dettagli», «vorrei un link al file chiave … che lo apre nel viewer»; he picked «Tutti e tre» on the
 three kinds of detail shown in a draft; then «al momento non posso vedere i file esterni all'app e il codice vorrei
-fosse formattato bene leggibilissimo come dal miglior ide») · Amends: ADR 0271 (one level of parts), ADR 0307
+fosse formattato bene leggibilissimo come dal miglior ide») · Amends: ADR 0271 (one level of parts), ADR 0307 ·
+Amended by: ADR 0322 (proofs, links and the steps in the panel; its width)
 
 ## Decision
 

@@ -7,10 +7,14 @@
 // dettagli», «un link al file chiave … che lo apre nel viewer»): the rules it applies, what it keeps and where, how it is
 // built inside, how big it is (counted by the app from its files, no token), why it is made so, its key files (each opens
 // in the viewer) and the paths that go through it.
+// Richer still (issue #443, ADR 0322): the proofs of a piece (what shows it is done: a text, a project file, an
+// address), its links, and the steps inside it in order, each with its status and opened by a click; a section with
+// nothing to say is not drawn (a phase or a step without written details has no «Come funziona»); the arrow to the
+// following step is told without a status.
 import { useEffect, useState, type ReactNode } from 'react';
-import { descendantsOf, passagesOf, type MapElement, type MapLink, type MapPath, type MapState, type MapWork, type ProjectMap } from '@shared/project-map';
+import { descendantsOf, layoutOf, passagesOf, type MapElement, type MapLink, type MapPath, type MapState, type MapWork, type ProjectMap } from '@shared/project-map';
 import { t } from '../../i18n';
-import { IconChat, IconFile } from '../Icons';
+import { IconChat, IconFile, IconGlobe } from '../Icons';
 import { Turn } from './PlanFlow';
 
 type Shown = MapState | 'stale';
@@ -37,27 +41,37 @@ function Size({ project, id }: { project: string; id: string }) {
   return <><h4>{t('pm.size')}</h4><p data-testid="pm-size">{t(size.capped ? 'pm.sizeAtLeast' : 'pm.sizeIs', p)}</p></>;
 }
 
+/** An address a piece points to (a proof's, a link): opened in a tab of the app's browser. */
+function WebLink({ href, label, onLink, testid }: { href: string; label?: string; onLink: (href: string) => void; testid?: string }) {
+  return <button type="button" className="pm-file pm-web" onClick={() => onLink(href)} title={`${t('pm.openLink')}: ${href}`} data-testid={testid}><IconGlobe size={12} /><span>{label ?? href.replace(/^https?:\/\//i, '')}</span></button>;
+}
+
 function Passage({ l, other, dir, state, onShow }: { l: MapLink; other: MapElement | undefined; dir: 'out' | 'in'; state: Shown; onShow: (id: string) => void }) {
   return <li className="pm-pass" data-dir={dir} data-testid={`pm-pass-${l.id}`}>
     <div className="pm-pass-head">
       <span aria-label={t(dir === 'out' ? 'pm.goesTo' : 'pm.comesFrom')} role="img">{dir === 'out' ? '→' : '←'}</span>
       <button type="button" onClick={() => onShow(dir === 'out' ? l.to : l.from)}>{other?.name ?? (dir === 'out' ? l.to : l.from)}</button>
-      <b>{l.label}</b>
-      {state !== 'ok' && <span className="pm-pass-st"><i className={`pm-dot s-${state}`} />{t(`pm.state.${state}`)}</span>}
+      <b>{l.label || t('pm.nextShort')}</b>
+      {state !== 'ok' && l.kind !== 'next' && <span className="pm-pass-st"><i className={`pm-dot s-${state}`} />{t(`pm.state.${state}`)}</span>}
     </div>
     {l.note && <p className="pm-muted">{l.note}</p>}
     {l.details && <Paras text={l.details} />}
   </li>;
 }
 
-export function ElementDetail({ map, el, state, stateOfLink, confirmed, works, onTalk, onShow, onFile, onWalk, testid = 'pm-detail', lead }: {
-  map: ProjectMap; el: MapElement; state: Shown; stateOfLink: (l: MapLink) => Shown; confirmed: string; works: MapWork[];
-  onTalk: () => void; onShow: (id: string) => void; onFile: (path: string) => void; onWalk: (path: MapPath, stop: number) => void; testid?: string; lead?: ReactNode;
+export function ElementDetail({ map, el, state, stateOfLink, stateOfEl, confirmed, works, onTalk, onShow, onFile, onLink, onWalk, testid = 'pm-detail', lead }: {
+  map: ProjectMap; el: MapElement; state: Shown; stateOfLink: (l: MapLink) => Shown; stateOfEl: (e: MapElement) => Shown; confirmed: string; works: MapWork[];
+  onTalk: () => void; onShow: (id: string) => void; onFile: (path: string) => void; onLink: (href: string) => void; onWalk: (path: MapPath, stop: number) => void; testid?: string; lead?: ReactNode;
 }) {
+  // a phase or a step tells a sequence: its pieces are its steps, numbered in the order of the line
+  const seq = el.kind === 'phase' || el.kind === 'step';
+  const line = layoutOf(map, el.id) === 'linear';
   const byId = new Map(map.elements.map(e => [e.id, e]));
   const parts = map.elements.filter(e => e.parent === el.id);
   const inner = descendantsOf(map, el.id);
   const kidsOf = (id: string) => map.elements.filter(e => e.parent === id).length;
+  // each step's place in the line: the ones that go together share it (as the drawing numbers them)
+  const ord = parts.reduce<number[]>((out, p, i) => [...out, i > 0 && p.par ? out[i - 1]! : (out[i - 1] ?? 0) + 1], []);
   // the paths with a stop here (or on a piece inside), each opened at its first stop here
   const through = (map.paths ?? []).flatMap(p => { const i = p.stops.findIndex(s => s.on === el.id || inner.has(s.on)); return i < 0 ? [] : [{ p, i }]; });
   // a system's passages are its parts' too, as the drawing lifts them onto its box: what leaves it and what enters it
@@ -67,11 +81,15 @@ export function ElementDetail({ map, el, state, stateOfLink, confirmed, works, o
     <h3>{el.name}</h3>
     {el.description && <p>{el.description}</p>}
     <p><i className={`pm-dot s-${state}`} />{t(`pm.state.${state}`)}{el.note ? `: ${el.note}` : ''}</p>
-    <h4>{t('pm.how')}</h4>
-    {el.details ? <Paras text={el.details} /> : <p className="pm-muted" data-testid="pm-no-details">{t('pm.noDetails')}</p>}
+    {(el.details || !seq) && <h4>{t('pm.how')}</h4>}
+    {el.details ? <Paras text={el.details} /> : !seq ? <p className="pm-muted" data-testid="pm-no-details">{t('pm.noDetails')}</p> : null}
+    {el.proofs?.length ? <><h4>{t('pm.proofs')}</h4><ul className="pm-proofs" data-testid="pm-proofs">{el.proofs.map((x, i) => <li key={i}><span>{x.text}</span>{x.file ? <FileLink path={x.file} onFile={onFile} testid={`pm-proof-file-${i}`} /> : null}{x.href ? <WebLink href={x.href} onLink={onLink} testid={`pm-proof-link-${i}`} /> : null}</li>)}</ul></> : null}
+    {el.refs?.length ? <><h4>{t('pm.refs')}</h4><ul className="pm-refs" data-testid="pm-refs">{el.refs.map((x, i) => <li key={i}><WebLink href={x.href} label={x.label} onLink={onLink} testid={`pm-ref-${i}`} /></li>)}</ul></> : null}
     {el.rules?.length ? <><h4>{t('pm.rules')}</h4><List items={el.rules} id="pm-rules" /></> : null}
     {el.keeps?.length ? <><h4>{t('pm.keeps')}</h4><List items={el.keeps} id="pm-keeps" /></> : null}
-    {parts.length > 0 && <><h4>{t('pm.partsOf')}</h4><ul className="pm-partlist">{parts.map(p => <li key={p.id}><button type="button" onClick={() => onShow(p.id)}>{p.name}{kidsOf(p.id) ? <small> · {t('pm.parts', { n: kidsOf(p.id) })}</small> : null}</button>{p.description ? <span>{p.description}</span> : null}</li>)}</ul></>}
+    {parts.length > 0 && <><h4>{t(line ? 'pm.stepsOf' : 'pm.partsOf')}</h4><ul className={`pm-partlist${line ? ' pm-steplist' : ''}`} data-testid="pm-partlist">{parts.map((p, i) => <li key={p.id} data-testid={`pm-part-${p.id}`}>
+      <button type="button" onClick={() => onShow(p.id)}>{line && <i className="pm-ord">{ord[i]}</i>}<i className={`pm-dot s-${stateOfEl(p)}`} title={t(`pm.state.${stateOfEl(p)}`)} />{p.name}{line && p.par && i > 0 ? <em className="pm-par" title={t('pm.withPrev')}>∥</em> : null}{kidsOf(p.id) ? <small> · {t(line ? 'pm.stepsCount' : 'pm.parts', { n: kidsOf(p.id) })}</small> : null}</button>
+      {p.description ? <span>{p.description}</span> : null}</li>)}</ul></>}
     {(out.length > 0 || into.length > 0) && <><h4>{t('pm.passages')}</h4><ul className="pm-passes" data-testid="pm-passes">
       {out.map(l => <Passage key={l.id} l={l} other={byId.get(l.to)} dir="out" state={stateOfLink(l)} onShow={onShow} />)}
       {into.map(l => <Passage key={l.id} l={l} other={byId.get(l.from)} dir="in" state={stateOfLink(l)} onShow={onShow} />)}
@@ -91,12 +109,13 @@ export function ElementDetail({ map, el, state, stateOfLink, confirmed, works, o
 export function LinkDetail({ map, links, stateOfLink, onShow }: { map: ProjectMap; links: MapLink[]; stateOfLink: (l: MapLink) => Shown; onShow: (id: string) => void }) {
   const name = (id: string) => map.elements.find(e => e.id === id)?.name ?? id;
   return <section className="pm-detail" data-testid="pm-link-detail">
-    <span className="dash-eyebrow">{t('pm.passage').toUpperCase()}</span>
+    <span className="dash-eyebrow">{t(links.every(l => l.kind === 'next') ? 'pm.next' : 'pm.passage').toUpperCase()}</span>
     {links.map(l => <div key={l.id} className="pm-linkcard">
-      <h3>{l.label}</h3>
+      <h3>{l.label || t('pm.next')}</h3>
       <p className="pm-linkends"><button type="button" onClick={() => onShow(l.from)}>{name(l.from)}</button><span aria-hidden>→</span><button type="button" onClick={() => onShow(l.to)}>{name(l.to)}</button></p>
-      <p><i className={`pm-dot s-${stateOfLink(l)}`} />{t(`pm.state.${stateOfLink(l)}`)}{l.note ? `: ${l.note}` : ''}</p>
-      {l.details ? <Paras text={l.details} /> : <p className="pm-muted">{t('pm.noLinkDetails')}</p>}
+      {/* the arrow to the following step has no status of its own (#443), and no «details missing» line */}
+      {l.kind === 'next' ? (l.note ? <p>{l.note}</p> : null) : <p><i className={`pm-dot s-${stateOfLink(l)}`} />{t(`pm.state.${stateOfLink(l)}`)}{l.note ? `: ${l.note}` : ''}</p>}
+      {l.details ? <Paras text={l.details} /> : l.kind === 'next' ? null : <p className="pm-muted">{t('pm.noLinkDetails')}</p>}
     </div>)}
   </section>;
 }

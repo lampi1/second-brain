@@ -107,6 +107,11 @@ export const brainModelIt = {
   'pm.planSteps': (p: { done: number; total: number }) => `${p.done} di ${p.total} passi fatti`, 'pm.planApprove': 'Approva e parti', 'pm.planChange': 'Cambia qualcosa', 'pm.planChangeDraft': (p: { title: string }) => `Cambia il piano «${p.title}»: `, 'pm.planGone': 'Il piano è cambiato: guarda la versione nuova.',
   'pm.changeSent': (p: { at: string }) => `Modifica inviata ${p.at}:`, 'pm.changeSeen': (p: { at: string }) => `Modifica ricevuta ${p.at}:`, 'pm.worksMore': (p: { n: number; done: number; total: number }) => `+${p.n} altri · ${p.done}/${p.total} fatti`,
   'pm.parts': (p: N) => (p.n === 1 ? '1 parte' : `${p.n} parti`),
+  // #443 · phases and steps in a line, the arrow to the following step, proofs and links, the panel's width
+  'pm.kind.phase': 'Fase', 'pm.kind.step': 'Passo', 'pm.next': 'Passo successivo', 'pm.nextShort': 'poi', 'pm.withPrev': 'Insieme al precedente',
+  'pm.stepsOf': 'I suoi passi', 'pm.proofs': 'Prove', 'pm.refs': 'Link', 'pm.openLink': 'Apri nel browser dell’app',
+  'pm.resize': 'Larghezza del pannello: trascina, o frecce sinistra e destra; doppio clic per quella iniziale',
+  'pm.stepsCount': (p: N) => (p.n === 1 ? '1 passo' : `${p.n} passi`),
   'pm.zoomIn': 'Ingrandisci', 'pm.zoomOut': 'Rimpicciolisci', 'pm.fit': 'Adatta alla finestra',
   'pm.confirmed': (p: { at: string }) => `Stato confermato ${p.at}`, 'pm.files': 'Letto da:',
   'pm.agents': 'Agenti', 'pm.agentsCount': (p: { n: number; run: number }) => `${p.n} · ${p.run} al lavoro`, 'pm.agentsPast': 'solo nella versione di ora',

@@ -266,7 +266,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0268](0268-brief-maps-engine-labels-to-yes-no.md) A brief maps an engine's own option labels to Sì / No — accepted
 - [0269](0269-questions-live-in-the-orchestrator.md) Questions live in the Orchestrator; it speaks for the user — accepted
 - [0270](0270-short-recap-by-default.md) The recap is short by default; the detail on request — accepted
-- [0271](0271-project-maps.md) Project maps: a project drawn in place of its code, kept current by its agents — accepted; amended by 0316
+- [0271](0271-project-maps.md) Project maps: a project drawn in place of its code, kept current by its agents — accepted; amended by 0316, 0322
 - [0272](0272-esegui-precheck.md) Esegui commands are checked before the user sees them — accepted
 - [0273](0273-mcp-oauth-login.md) Remote MCP connectors log in with the MCP OAuth flow — accepted
 - [0274](0274-answers-in-the-users-words.md) The user answers in his own words; the Orchestrator's column has no answer box — accepted
@@ -302,7 +302,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0304](0304-chess-against-the-agents.md) Scacchi: chess against the agents, Stockfish as a separate program — accepted
 - [0305](0305-little-people-show-the-work-lines-of-the-day.md) The little people show the work at hand, speak while they work, and get new lines every day — accepted
 - [0306](0306-the-people-of-the-roles-grow-up.md) The people of the roles grow up: adult bodies, faces and characters — accepted
-- [0307](0307-maps-open-full-screen-and-tell-every-passage.md) The maps open full screen, tell every step and every passage, and are redrawn from a button — accepted; amended by 0316
+- [0307](0307-maps-open-full-screen-and-tell-every-passage.md) The maps open full screen, tell every step and every passage, and are redrawn from a button — accepted; amended by 0316, 0322
 - [0309](0309-one-review-chat-per-piece-of-work.md) One review chat per piece of work: after a fix it reviews only the delta — accepted
 - [0310](0310-sign-in-by-credential-name.md) Sign-in by credential name: the app types the password, the agent never holds it — accepted; amended by 0317
 - [0311](0311-the-grindhouse-becomes-a-workshop.md) The Grindhouse becomes a workshop: square benches, scenes without screens, a vice at rest — accepted
@@ -311,12 +311,13 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0314](0314-every-helper-at-the-bench-workers-first.md) Every helper at the bench, the ones at work first, and a limit that says what it means — accepted
 - [0314](0314-ci-green-on-three-systems.md) CI that tells the truth on Windows, Linux and macOS — accepted
 - [0315](0315-no-dot-over-the-helpers.md) No dot over the helpers' heads — accepted
-- [0316](0316-maps-in-depth-and-a-readable-viewer.md) Maps in depth, key files in the viewer, and code read as in an editor — accepted
+- [0316](0316-maps-in-depth-and-a-readable-viewer.md) Maps in depth, key files in the viewer, and code read as in an editor — accepted; amended by 0322
 - [0317](0317-link-a-site-to-a-credential-with-one-click.md) Link a sign-in page's site to a test account with one click — accepted
 - [0318](0318-a-chat-stops-showing-work-when-its-reply-is-complete.md) A chat stops showing work when its reply is complete — accepted
 - [0319](0319-artifacts-in-memoria.md) Artifacts in Memoria: every file the chats produce, indexed where it is — accepted
 - [0320](0320-maintenance-fixes-one-line-of-an-always-loaded-file.md) The maintenance fixes one line of an always-loaded file — accepted
 - [0321](0321-a-routine-step-can-leave-the-login-page-unsigned.md) A routine step can leave the login page as it is (`relogin: false`); the routine runtime of feat/routine-park is on main — accepted
+- [0322](0322-project-maps-told-as-a-line-of-phases.md) Project maps told as a line of phases and steps, with a richer and wider panel — accepted
 
 ## Replaced
 

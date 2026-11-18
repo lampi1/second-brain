@@ -217,7 +217,7 @@ test('the map shows what moves, the order of the steps, the passage into a syste
     await expect(view.getByTestId('pm-detail')).toContainText('Note di rilascio');
     // the projects are a list beside the drawing, not a menu
     const nav = view.getByTestId('pm-nav');
-    await expect(nav.getByRole('button')).toHaveCount(2);
+    await expect(nav.getByRole('button')).toHaveCount(3);
     await expect(nav.getByTestId('pm-nav-alfa-shop')).toHaveAttribute('aria-pressed', 'true');
     await nav.getByTestId('pm-nav-beta-crm').click();
     await expect(view.getByTestId('pm-node-crm')).toBeVisible();
@@ -305,5 +305,67 @@ test('the map tells every step, every box and every arrow in full, and «Aggiorn
     await expect(view.getByTestId('pm-refresh-note')).toContainText('Chiesto all’Orchestrator'); // said inside the full screen
     await page.keyboard.press('Escape');
     await expect(page.getByText(/Aggiorna la mappa del progetto «Alfa · negozio online» \(alfa-shop\)/).first()).toBeVisible();
+  } finally { await app.close(); }
+});
+
+// Issue #443, ADR 0322: a project told as a sequence. The phases are a line in the saved order, numbered, with the
+// plain arrow to the next; inside a phase the steps are a line too, two of them together; a step's panel tells its
+// status, proofs and links, a phase's lists its steps, each opened by a click; the panel is dragged wider by its left
+// edge and the width is remembered, the drawing keeping its room.
+test('a map of phases is a line, the steps inside too; the panel tells proofs and steps and is resized', async () => {
+  const { app, page } = await launchDemo();
+  try {
+    await goPage(page, 'collegamenti');
+    await page.getByTestId('bm-map-page').getByRole('button', { name: 'Progetti', exact: true }).click();
+    const view = page.getByTestId('pm-view');
+    await view.getByTestId('pm-nav-gamma-migrazione').click();
+    await expect(view.getByTestId('pm-level')).toHaveAttribute('data-layout', 'linear');
+    const ids = ['analisi', 'preparazione', 'migrazione', 'verifica'];
+    const boxes = await Promise.all(ids.map(async id => (await view.getByTestId(`pm-node-${id}`).boundingBox())!));
+    for (let i = 1; i < boxes.length; i++) { expect(boxes[i]!.x).toBeGreaterThan(boxes[i - 1]!.x + boxes[i - 1]!.width - 1); expect(Math.abs(boxes[i]!.y - boxes[0]!.y)).toBeLessThan(2); }
+    for (const [i, id] of ids.entries()) await expect(view.getByTestId(`pm-ord-${id}`)).toHaveText(String(i + 1));
+    await expect(view.getByTestId('pm-next-analisi-preparazione')).toHaveCount(1);
+    await expect(view.locator('.pm-label')).toHaveCount(0); // the arrows to the next phase say nothing, least of all «da capire»
+    await shot(page, 'project-map-phases');
+
+    // into a phase: its steps in a line, two together; the panel lists them, each with its status
+    await view.getByTestId('pm-node-preparazione').click();
+    await expect(view.getByTestId('pm-level')).toHaveAttribute('data-layout', 'linear');
+    for (const [id, n] of [['script', '1'], ['ripristino', '2'], ['avviso', '2'], ['via-libera', '3']] as const) await expect(view.getByTestId(`pm-ord-${id}`)).toHaveText(n);
+    await expect(view.getByTestId('pm-par-avviso')).toBeVisible();
+    await expect(view.getByTestId('pm-par-script')).toHaveCount(0);
+    const [a, b] = [(await view.getByTestId('pm-node-ripristino').boundingBox())!, (await view.getByTestId('pm-node-avviso').boundingBox())!];
+    expect(Math.abs(a.x - b.x)).toBeLessThan(2); expect(b.y).toBeGreaterThan(a.y + a.height - 1);
+    await expect(view.getByTestId('pm-label-ripristino--via-libera')).toHaveText('solo se riesce');
+    await expect(view.getByTestId('pm-here')).toContainText('I suoi passi');
+    await expect(view.getByTestId('pm-here').getByTestId('pm-no-details')).toHaveCount(0);
+    // a sub-step opens its own detail: status, proofs, the address of a proof; no empty section
+    await view.getByTestId('pm-here').getByTestId('pm-part-script').getByRole('button').click();
+    const detail = view.getByTestId('pm-detail');
+    await expect(detail).toContainText('Script di copia');
+    await expect(detail.getByTestId('pm-proofs')).toContainText('36 script, tutti passati');
+    await expect(detail.getByTestId('pm-proof-link-0')).toBeVisible();
+    await expect(detail.getByText('Come funziona')).toHaveCount(0);
+    await expect(detail.getByTestId('pm-refs')).toHaveCount(0);
+    await shot(page, 'project-map-step-detail');
+
+    // the panel (full screen: beside the drawing): wider from its left edge, remembered, and the drawing keeps its room
+    await view.getByTestId('pm-fullscreen').click();
+    await expect(view).toHaveClass(/pm-full/);
+    await shot(page, 'project-map-steps-full');
+    const wrap = view.getByTestId('pm-sidewrap'), handle = view.getByTestId('pm-resize');
+    const w0 = (await wrap.boundingBox())!.width;
+    await handle.focus();
+    await page.keyboard.press('ArrowLeft'); await page.keyboard.press('ArrowLeft');
+    await expect.poll(async () => (await wrap.boundingBox())!.width).toBeGreaterThan(w0 + 20);
+    const w1 = (await wrap.boundingBox())!.width;
+    expect(await page.evaluate(() => Number(localStorage.getItem('sb.projectMap.sideWidth')))).toBeGreaterThan(w0);
+    for (let i = 0; i < 40; i++) await page.keyboard.press('ArrowLeft');
+    expect((await view.getByTestId('pm-canvas').boundingBox())!.width).toBeGreaterThanOrEqual(319);
+    for (let i = 0; i < 60; i++) await page.keyboard.press('ArrowRight');
+    await expect.poll(async () => (await wrap.boundingBox())!.width).toBeLessThan(w1);
+    expect((await wrap.boundingBox())!.width).toBeGreaterThanOrEqual(279);
+    await handle.dblclick();
+    await expect.poll(async () => Math.round((await wrap.boundingBox())!.width)).toBe(Math.round(w0));
   } finally { await app.close(); }
 });

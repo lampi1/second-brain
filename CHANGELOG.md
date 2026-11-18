@@ -13,6 +13,12 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - The routine runtime of the branch `feat/routine-park` is on main: parked runs that resume on an @AI answer, test
   deployment leases, DevOps field, state and tag writes, the browser's 23 tools (history, tabs, eval, console,
   network…).
+- Project maps told as a sequence: a project can be drawn as phases, one after the other, with the steps inside each
+  phase one after the other, in the order they were saved; every box wears its number, a plain arrow leads to the next
+  (never «da capire»), and two steps sit side by side only when the map says they go together. A box's panel also
+  tells its proofs and links and lists its steps, each opened by a click; sections with nothing to say are gone. The
+  panel is wider, is dragged by its left edge and remembers its width. Maps drawn before look as before (ADR 0322,
+  #443).
 - The maintenance can fix one line of a file every job loads (AGENTS.md, me.md…): the card shows the exact line before
   and after, it goes into the candidate brain with the other brain changes and one «Annulla» puts the old line back.
   Never a line about safety, permissions, settings, hooks, production or secrets, and never past the budget of the

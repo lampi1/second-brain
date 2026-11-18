@@ -134,7 +134,7 @@ row and its line here in the same change.
 | `brain_scripts` | work chats | The brain's tested reusable scripts with usage. |
 | `brain_script_add` | work chats | Save a new script in the brain right after it ran and worked. |
 | `project_map_read` | work chats | The user's project maps: the list, one map as text with statuses and agents, or one `element` in full (details, files, links). |
-| `project_map_save` | work chats | Draw or redraw a project's map (people, systems, parts inside parts up to four levels, links, statuses, evidence files, `rules`, `keeps`, `why`, `keyFiles`, `paths`; ADR 0316). |
+| `project_map_save` | work chats | Draw or redraw a project's map (people, systems, parts inside parts up to four levels, links, statuses, evidence files, `rules`, `keeps`, `why`, `keyFiles`, `paths`; ADR 0316), or as a sequence: kinds `phase` and `step` drawn in a line in the saved order, `par`, `layout`, links of kind `next`, `proofs`, `refs` (ADR 0322). |
 | `project_map_update` | work chats | Say which elements of a map you work on, update the status of what you finished, add `paths` or `drop_paths` by id (ADR 0316). |
 | `brain_queries` | work chats | The brain's saved queries (SQL, KQL, GraphQL…). |
 | `brain_query_add` | work chats | Save a new query in the brain right after it gave the right answer. |
