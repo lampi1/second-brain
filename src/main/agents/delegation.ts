@@ -413,7 +413,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
    *  not met, a wrong field) is the agent's own mistake: it reads the reason and reports again. A ToolRefusal, so the
    *  app's log keeps it at info and Manutenzione does not file it as an app bug (#439). */
   const checked = (a: Record<string, unknown>, doneWhen: readonly string[]) => {
-    try { return checkResult(a, doneWhen); } catch (e) { throw new ToolRefusal(e instanceof Error ? e.message : String(e)); }
+    // only what the check itself says (plain Errors): a TypeError is a bug of the app and stays a failed tool
+    try { return checkResult(a, doneWhen); } catch (e) { throw e instanceof Error && e.constructor === Error ? new ToolRefusal(e.message) : e; }
   };
 
   function report(all: Record<string, unknown>, callerId: string): unknown {

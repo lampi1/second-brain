@@ -104,7 +104,9 @@ describe('agent_delegate', () => {
     const child = f.m.list().find(c => c.parentId === parent.id)!;
     const base = { outcome: 'partial', summary: 'VPN off, queries ready', output: 'Le query sono pronte in docs/q.sql.', doneWhen: [{ criterion: 'criterion A', met: false }] };
     // named only in the text: sent back once, naming userAction; the same report goes through the second time
-    await expect(f.call('agent_report', child.id, base)).rejects.toThrow(/userAction/);
+    const sentBack: unknown = await f.call('agent_report', child.id, base).catch((e: unknown) => e);
+    expect(sentBack).toBeInstanceOf(ToolRefusal);              // the agent's to fix: info in the log, not a failed tool
+    expect(String(sentBack)).toMatch(/userAction/);
     await expect(f.call('agent_report', child.id, { ...base, outcome: 'done', doneWhen: [{ criterion: 'criterion A', met: true }], userAction: { kind: 'vpn', text: 'Accendi la VPN' } })).rejects.toThrow(/partial.*blocked/);
     await f.call('agent_report', child.id, { ...base, userAction: { kind: 'vpn', text: 'Accendi la VPN', command: 'vpn up' } });
     // no question anywhere: the user reads a plain note with the command

@@ -16,7 +16,7 @@
 // the chat's error says what the user must do, and the log keeps it at info until it works again.
 import type { McpServer, McpTool } from '../mcp/server';
 import { EndpointTokens } from '../mcp/tokens';
-import { UpstreamError } from '../mcp/refusal';
+import { ToolRefusal, UpstreamError } from '../mcp/refusal';
 import { McpClientError } from './client';
 import { log, errText } from '../log';
 import type { McpServerDef, RoleMcpAccess } from '../../shared/mcp-servers';
@@ -123,7 +123,8 @@ export class McpGateway {
     // held back only where a new process would start: a chat whose connection is up keeps using it
     if (b && clock() < b.until && !this.conns.has(`${chatId}|${server}`)) throw new UpstreamError(`MCP server ${server} did not start (${b.cause}); the app tries it again in ${Math.ceil((b.until - clock()) / 60_000)} min, or when the user presses «Prova» on its card (Impostazioni → Connettori).`);
     const c = this.conn(chatId, server);
-    if (!c.tools || Date.now() - c.toolsAt > TOOLS_TTL) { c.tools = c.up.tools(); c.toolsAt = Date.now(); }
+    const asked = !c.tools || Date.now() - c.toolsAt > TOOLS_TTL;   // the server is asked now (else the chat's cached list)
+    if (asked) { c.tools = c.up.tools(); c.toolsAt = Date.now(); }
     let list: UpstreamTool[];
     try { list = await c.tools; }
     catch (e) {
@@ -141,11 +142,7 @@ export class McpGateway {
       } else if (ours && e instanceof McpClientError && e.code === 'auth') {
         // the server refuses the access (a login that ended, a wrong or missing token): the user's to fix on its card,
         // never an app warning; the card is told once, the chat gets what the user must do (#437)
-        const first = !this.denied.has(server);
-        this.denied.add(server);
-        log.info('mcp-servers', 'MCP server refuses the access', { chat: chatId, cause: errText(e), data: { server }, hint: 'its card in Impostazioni → Connettori shows it: «Accedi» there, or a valid token' });
-        if (first) try { this.deps.onBroken?.(server, e); } catch { /* the card is a convenience */ }
-        throw new UpstreamError(`MCP server ${server} refused the access: ${errText(e)} Only the user can fix it, on the server's card in Impostazioni → Connettori: ${e.fix} Tell the user; do not retry before.`);
+        throw new UpstreamError(this.refused(chatId, server, e));
       } else if (ours) {
         // the user's server is slow or down: once an hour per server a warning, the rest at info (#347: 42 warnings, one
         // per chat that started, for one server that did not answer); the chat gets an upstream error, never «crashed» (#329)
@@ -158,7 +155,8 @@ export class McpGateway {
     // a new connection that listed: its program starts again (a chat's cached list says nothing about a new process)
     const fresh = !c.listed;
     c.listed = true;
-    const wasDown = fresh && [this.broken.delete(server), this.denied.delete(server)].some(Boolean);
+    // a program that starts is known from a new connection, an access granted again from any list the server just gave
+    const wasDown = [fresh && this.broken.delete(server), asked && this.denied.delete(server)].some(Boolean);
     if (wasDown) try { this.deps.onWorks?.(server, list); } catch { /* the card is a convenience */ }   // it works again: a later failure is warned again
     return list.filter(t => toolFor(ctx, this.deps.roleAccess, server, t)).map(t => ({
       name: t.name, description: t.description, inputSchema: t.inputSchema,
@@ -168,9 +166,23 @@ export class McpGateway {
         const now = this.deps.context(chatId);
         if (!now || !toolFor(now, this.deps.roleAccess, server, t) || !this.offered(chatId, server)) throw new Error(`${t.name}: not allowed for this chat’s role (Brain → Agenti → its card → MCP)`);
         try { return { raw: await this.conn(chatId, server).up.call(t.name, args, call.signal) }; }
-        catch (e) { this.drop(chatId, server, c); throw e; }
+        catch (e) {
+          this.drop(chatId, server, c);
+          // the access ended after the list (a token that expired mid-chat): the same answer as at the list (#437)
+          if (e instanceof McpClientError && e.code === 'auth') throw new ToolRefusal(this.refused(chatId, server, e));
+          throw e;
+        }
       },
     }));
+  }
+
+  /** The server refused the access: its card is told once, the log keeps it at info; returns what the chat reads. */
+  private refused(chatId: string, server: string, e: McpClientError): string {
+    const first = !this.denied.has(server);
+    this.denied.add(server);
+    log.info('mcp-servers', 'MCP server refuses the access', { chat: chatId, cause: errText(e), data: { server }, hint: 'its card in Impostazioni → Connettori shows it: «Accedi» there, or a valid token' });
+    if (first) try { this.deps.onBroken?.(server, e); } catch { /* the card is a convenience */ }
+    return `MCP server ${server} refused the access: ${errText(e)} Only the user can fix it, on the server's card in Impostazioni → Connettori: ${e.fix} Tell the user; do not retry before.`;
   }
 
   /** A server's definition or token changed, or it was removed: its open connections close (the next call reopens). */
