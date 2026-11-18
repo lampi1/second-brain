@@ -208,7 +208,8 @@ audio. It comes in when a chat links it, when it sits in the brain's `reviews`, 
 from your past chats. Search it, filter by type, area, period or chat, and open one in the viewer, formatted, with a
 bar that leads back to the chat that made it, to its earlier versions (a report regenerated later is one artifact with
 its history) and to related ones; what the viewer does not render opens with your system's app. A file that went is
-kept, marked missing.
+kept, marked missing. The gallery shows twenty at a time, and a daily cleanup takes out pictures older than 30 days
+unless you kept them with the star (the app's own screenshots are deleted; files elsewhere stay on disk).
 
 <p align="center"><img src="docs/screenshots/artifacts.webp" alt="Memory › Artifacts: cards grouped by day with their pictures, an HTML report drawn small, a csv's first lines, a diagram, screenshots and a Markdown report with two versions" width="760"></p>
 

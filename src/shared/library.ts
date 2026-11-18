@@ -48,6 +48,8 @@ export interface Artifact {
   missing: boolean;
   /** newest first; one entry = no history */
   versions: ArtifactVersion[];
+  /** kept by the user: the cleanup never takes it (ADR 0323) */
+  pinned?: boolean;
 }
 
 export interface ArtifactList {
@@ -59,12 +61,18 @@ export interface ArtifactList {
   backfilled: boolean;
   /** artifacts left out because the index is full (oldest first) */
   dropped: number;
+  /** screenshots and pictures older than CLEANUP_DAYS the cleanup took out of the index so far (ADR 0323) */
+  cleaned: number;
 }
 
 /** A card's picture: an image scaled down, an HTML head to draw small, or the first lines of a text file (csv, txt, json). */
 export type ArtifactThumb = { kind: 'image'; dataUrl: string } | { kind: 'html'; text: string; path: string } | { kind: 'text'; text: string };
 
 export const LIBRARY_MAX = 4000;
+/** The cleanup (ADR 0323): a picture not pinned and older than this many days leaves the gallery. */
+export const CLEANUP_DAYS = 30;
+/** The gallery shows this many at first and this many more at each «Mostra altri» (ADR 0323). */
+export const LIBRARY_PAGE = 20;
 const EXT: Readonly<Record<string, ArtifactKind>> = {
   html: 'html', htm: 'html', md: 'markdown', markdown: 'markdown', pdf: 'pdf',
   png: 'image', jpg: 'image', jpeg: 'image', webp: 'image', gif: 'image', svg: 'image', bmp: 'image', avif: 'image', heic: 'image', tif: 'image', tiff: 'image',

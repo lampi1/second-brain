@@ -307,3 +307,67 @@ describe('a brain reached through a link', () => {
     expect(opened).toHaveLength(2);
   });
 });
+
+describe('the cleanup of old pictures (ADR 0323)', () => {
+  const NOW = Date.UTC(2026, 10, 18), DAY = 864e5;
+  it('takes out pictures older than 30 days not kept; deletes only the app’s own screenshots; a scan does not take them back', async () => {
+    const t = setup();
+    let now = NOW;
+    const appShot = t.write('evidence/chat-c1/old.png', Buffer.from('png'), NOW - 40 * DAY, t.userData);
+    const brainShot = t.write('evidence/fix/old-brain.png', Buffer.from('png'), NOW - 40 * DAY);
+    t.write('evidence/fix/kept.png', Buffer.from('png'), NOW - 20 * DAY);
+    t.write('reviews/old-report.md', '# Vecchio report\n\nUn report di due mesi fa resta.\n', NOW - 60 * DAY);
+    t.write('evidence/fix/fresh.png', Buffer.from('png'), NOW - DAY);
+    const lib = t.make({ now: () => now });
+    await lib.scan();
+    // the first scan already cleans: old pictures are not even taken in
+    expect(lib.list().artifacts.map(a => path.basename(a.path)).sort()).toEqual(['fresh.png', 'kept.png', 'old-report.md']);
+    expect(fs.existsSync(appShot)).toBe(true);
+    // one kept with the star; ten days later the other one is 30 days old too
+    const keptId = lib.list().artifacts.find(a => a.path.endsWith('kept.png'))!.id;
+    expect((await lib.pin(keptId, true)).artifacts.find(a => a.id === keptId)!.pinned).toBe(true);
+    now = NOW + 15 * DAY;
+    await lib.refresh();
+    const names = lib.list().artifacts.map(a => path.basename(a.path)).sort();
+    expect(names).toEqual(['fresh.png', 'kept.png', 'old-report.md']);
+    expect(fs.existsSync(brainShot)).toBe(true);
+  });
+
+  it('deletes an indexed old screenshot in the app’s evidence folder, only de-indexes one in the brain, once a day', async () => {
+    const t = setup();
+    let now = NOW;
+    const appShot = t.write('evidence/chat-c1/shot.png', Buffer.from('png'), NOW - DAY, t.userData);
+    const brainShot = t.write('evidence/fix/shot-brain.png', Buffer.from('png'), NOW - DAY);
+    const lib = t.make({ now: () => now });
+    await lib.scan();
+    expect(lib.list().artifacts).toHaveLength(2);
+    // 31 days on: both are old; the cleanup ran today already only if less than a day passed
+    now = NOW + 31 * DAY;
+    await lib.refresh();
+    expect(lib.list().artifacts).toHaveLength(0);
+    expect(lib.list().cleaned).toBe(2);
+    expect(fs.existsSync(appShot)).toBe(false);
+    expect(fs.existsSync(brainShot)).toBe(true);
+    // a picture 29.5 days old: half a day later it is past 30, but the cleanup waits for its next day
+    t.write('evidence/fix/almost.png', Buffer.from('png'), now - 29.5 * DAY);
+    await lib.refresh();
+    now += DAY / 2;
+    await lib.refresh();
+    expect(lib.list().artifacts).toHaveLength(1);
+    now += DAY;
+    await lib.refresh();
+    expect(lib.list().artifacts).toHaveLength(0);
+    expect(lib.list().cleaned).toBe(3);
+    t.write('evidence/fix/fresh.png', Buffer.from('png'), now - DAY);
+    await lib.refresh();
+    // a restart keeps the count and the pin
+    const id = lib.list().artifacts[0]!.id;
+    await lib.pin(id, true);
+    const again = t.make({ now: () => now + 40 * DAY });
+    await again.refresh();
+    expect(again.list().artifacts.map(a => a.pinned)).toEqual([true]);
+    expect(again.list().cleaned).toBe(3);
+    await again.pin(id, false);
+    expect(again.list().artifacts[0]!.pinned).toBeUndefined();
+  });
+});
