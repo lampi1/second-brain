@@ -6,6 +6,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- Routines: a package can run a work item again. `trigger.retriggerTags` lists tags a person adds: `routine watch`
+  starts an item it already handled again, once per tag, when its last run is over; the new run takes the tag off the
+  work item and logs it. `routine.entries` name where a run starts by the work item's tags (`startStep`), for `watch`
+  and `run` (`--entry`); the steps get the entry's name and the folder of the previous run. Packages without the two
+  options run as before (ADR 0323).
 - Routines: a browser step can see the login page. `relogin: false` on `navigate`, `history`, `click`, `press` or
   `click_at` makes that call never sign in: a page that lands on a login page is left there and the reply says so
   (a sign-out in one tab, a reload in another). The next navigation or action without it signs in again (ADR 0321,

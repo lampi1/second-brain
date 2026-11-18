@@ -51,11 +51,17 @@ Check: `routine --help`.
 
 | Command | What it does |
 |---------|--------------|
-| `routine run <package> [--input name=value]... [--from-step <id>]` | One run. Ctrl+C stops it; the run can be resumed later. |
+| `routine run <package> [--input name=value]... [--from-step <id>] [--entry <name>]` | One run. Ctrl+C stops it; the run can be resumed later. |
 | `routine resume <run folder>` | Continues a run from the step that did not finish. |
-| `routine watch <package>` | Polls the package's DevOps trigger and starts one run per new work item. Ctrl+C stops cleanly. A restart never runs an item twice. |
+| `routine watch <package>` | Polls the package's DevOps trigger and starts one run per new work item. Ctrl+C stops cleanly. A restart never runs an item twice; an item whose run ended starts again only on one of the package's `trigger.retriggerTags`. |
 
 `<package>` is a folder, its `routine.json`, or the `.zip`.
+
+A package may name **entries** (`routine.entries`: a tag on the work item chooses the step a run starts from) and
+**retrigger tags** (`trigger.retriggerTags`: a tag a person adds starts an ended item again, once; the new run takes
+the tag off the item). `run` and `watch` read the work item's tags when a run starts; `--entry <name>` names the entry
+yourself (`default` = the first step). The steps get the entry's name (`ROUTINE_ENTRY`) and the folder of the item's
+previous run (`ROUTINE_PREVIOUS_RUN`, read only). Details: `docs/routines/authoring.md`, "Entries and retrigger tags".
 
 Options for every command:
 
@@ -116,4 +122,4 @@ The screenshot is at `steps/01-air-login/evidence/air-home.png`. The work item i
 
 - Build: `npm run build` creates `dist/routine.mjs` (the command) and `dist/routine-mcp.mjs` (the runtime's MCP
   servers: `routine-browser`, `routine-devops`, `routine-testdb`).
-- Tests are in the app repo's `test/unit/routine-runtime/`. Decisions are in ADR 0175 and 0176.
+- Tests are in the app repo's `test/unit/routine-runtime/`. Decisions are in ADR 0175, 0176 and 0323.

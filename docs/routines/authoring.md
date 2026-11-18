@@ -30,7 +30,8 @@ Orchestrator reads the same rules live (`app_routine_capabilities`, `app_routine
     inputs: [{ name, label?, required?, default? }],          // a step reads {{name}}; workItem = the run's work item
     steps: [{ id, title, prompt, model?, effort?, allowedTools?, mcpServers?, testDbs?, browser?: true,
               timeoutMs?, maxAttempts? }],
-    trigger?,      // DevOps: one run per matching work item
+    entries?: [{ name, when: { tag }, startStep }],            // where a run starts, by the work item's tags
+    trigger?,      // DevOps: one run per matching work item; retriggerTags?: tags that start an ended item again
     devops?,       // what the runtime may write on that item
     escalation?,   // who is asked on DevOps when a step needs a person
     mcpServers?,   // stdio MCP servers of the package (never the app)
@@ -43,7 +44,7 @@ Orchestrator reads the same rules live (`app_routine_capabilities`, `app_routine
 ```
 
 Placeholders: `{{<input>}}` for each declared input; `{{workItem}}`, `{{work-item-id}}`, `{{work-item-url}}` need a
-trigger or a `workItem` input.
+trigger or a `workItem` input; `{{entry}}` and `{{previousRun}}` in a package with entries or retrigger tags (below).
 
 The runtime adds to each prompt: the inputs, the work item (title, description, repro steps, acceptance criteria), the
 earlier steps' summaries, the test DB and browser notes, a person's answer, the previous failure on a retry, and the
@@ -101,6 +102,44 @@ allow it (`mcp__routine-browser__eval`) only where a prompt needs it, and say in
 `eval` the runtime writes no password beside what it may have left: `fill_secret` asks first for the other tabs closed
 and the page reloaded (`history` reload, then a new `snapshot`), and a login (a session that ended, the `login` tool)
 closes the other tabs by itself. A step that sets a password and uses `eval` does the `fill_secret` part first.
+
+## Entries and retrigger tags
+
+Two options for a routine that must run **again** on a work item it already handled, e.g. a retest after a tester
+found the fix incomplete (ADR 0323). A package that uses neither runs exactly as before.
+
+```json
+"trigger": { "kind": "devops", "...": "...", "includeTags": ["ai-fixable"], "retriggerTags": ["ai-retest"] },
+"entries": [{ "name": "retest", "when": { "tag": "ai-retest" }, "startStep": "verify" }],
+"devops": { "organization": "...", "projects": ["..."], "ops": ["comment", "tags"], "fields": [] }
+```
+
+- **`trigger.retriggerTags`**: tags a person adds to ask for another run. `routine watch` starts an item it already
+  started again when one of them is on the item, the item's last run is over (`done`, `needs-human` or `failed`) and
+  no run of it is going on. The item's state and its other tags no longer matter: it only has to be an item this
+  package started once. Without the tag nothing changes: an item is started once, as always. The caps of a new item
+  hold (`maxPerHour`, `maxActive`, the locks).
+- **One tag, one run.** The new run takes the tag off the work item before its first step, through the runtime's own
+  tags write (so `devops.ops` must include `tags`), and the removal is in the run's `events.jsonl`, ledger and
+  `report.md`. If DevOps refuses it, the run goes on, the watch tries again at each poll (five tries in all) and the
+  item does not start again until the tag is off; a person can take it off by hand.
+- **`routine.entries`**: named ways into the routine. The first entry whose `when.tag` is on the work item decides the
+  step the run starts from (`startStep`); the steps before it are recorded as skipped. No match, or no entries, is the
+  entry `default`: the first step. `routine watch` and `routine run` both choose from the work item's tags, read when
+  the run starts; `routine run … --entry <name>` names one (or `default`), and `--from-step` still wins for the first
+  step. A work item that cannot be read starts nothing.
+- **What the steps get.** The input `entry` (the entry's name, `default` otherwise; also `{{entry}}` and the
+  environment variable `ROUTINE_ENTRY`), so one prompt can say "if the entry is retest, only verify". And, when the
+  work item has an earlier run, the input `previousRun` (`{{previousRun}}`, `ROUTINE_PREVIOUS_RUN`): the folder of that
+  run, with its `report.md` and each step's `evidence/` and `screenshots/`, plus a "Previous run" section in the
+  prompt that lists its steps and their summaries. It is given as read only: the prompt says so, the runtime does not
+  lock the folder (a session runs as the same OS user).
+- **Rules the preflight checks**: `startStep` is a step id; entry names are unique and never `default`; one tag chooses
+  one entry; a retrigger tag is not one of `includeTags` nor `devops.downgrade.addTag` (the item would start again at
+  once); the inputs `entry` and `previousRun` are the runtime's, not the package's. A retrigger tag with no entry is a
+  warning: the whole routine runs again.
+- A retrigger replaces a parked run: the new run becomes the item's run, and a later `@AI` comment no longer resumes
+  the parked one.
 
 ## Workflow (the Orchestrator)
 

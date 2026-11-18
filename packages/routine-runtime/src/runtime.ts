@@ -8,10 +8,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { Clock, CredentialStore, EngineRunner, Paths, RuntimeLog, TokenProvider } from './ports';
-import type { RoutinePackage, RoutineStep } from './format';
-import { packageSecrets } from './format';
+import type { RoutineEntry, RoutinePackage, RoutineStep } from './format';
+import { DEFAULT_ENTRY, entryForTags, packageSecrets, retriggerTagsOn, usesEntries } from './format';
 import { createMasker, type Masker } from './mask';
-import { createRunStore, StaleAttempt, stepFolderName, type AiAnswer, type RunRecord, type RunStepRecord, type RunStore, type RunEscalation, type RunPark } from './run-store';
+import { createRunStore, listRuns, StaleAttempt, stepFolderName, type AiAnswer, type RunRecord, type RunStepRecord, type RunStore, type RunEscalation, type RunPark } from './run-store';
 import { STEP_RESULT_FILE, StepResultError, grantedWriteOps, stepResultInstructions, validateStepResult, type StepResult, type StepWrite } from './step-result';
 import { aiInstruction, commentSignature, createDevOpsClient, executeWrites, html, isRoutineComment, mentionHtml, signedHtml, type DevOpsClient, type WriteContext, type WritesOutcome } from './devops';
 import { lostDeployment, runResources, type Deployments, type ParkStop } from './devops-ops';
@@ -36,6 +36,8 @@ export const DEFAULT_LOOP_MAX = 2;
 export const PARK_RETRIES = 2;
 /** tries of the reply to an @AI comment ("Presa in carico") before the run goes on without it */
 export const ACK_TRIES = 3;
+/** tries of a retrigger tag's removal (the run's start, then the watch); past them the tag is only looked for on DevOps */
+export const RETRIGGER_UNTAG_TRIES = 5;
 
 type Request = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -84,8 +86,15 @@ export interface StartRequest {
   workItem?: number;
   /** the trigger's dedup key */
   subjectKey?: string;
-  /** start at this step: the earlier ones are recorded as skipped (done, no session) */
+  /** start at this step: the earlier ones are recorded as skipped (done, no session); wins over the entry's startStep */
   fromStep?: string;
+  /** the package entry to take (routine.entries by name, or "default"); absent = the one `tags` choose */
+  entry?: string;
+  /** the work item's tags now (`startFor` reads them): they choose the entry, and the package's retrigger tags among
+   *  them are taken off the item by this run (ADR 0323) */
+  tags?: string[];
+  /** the run of the same work item this one follows (the trigger's restart); absent = its newest run in this runs root */
+  previousRunId?: string;
 }
 
 export interface RunHandle { runId: string; finished: Promise<RunRecord> }
@@ -118,7 +127,8 @@ const newRunId = (now: number): string => {
   return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}-${randomBytes(3).toString('hex')}`;
 };
 
-/** Fills {{workItem}}, {{work-item-id}}, {{work-item-url}}, {{input.<name>}} and {{<name>}} for the run's inputs. */
+/** Fills {{workItem}}, {{work-item-id}}, {{work-item-url}}, {{input.<name>}} and {{<name>}} for the run's inputs.
+ *  {{entry}} and {{previousRun}} (ADR 0323) are "default" and empty when the run has none. */
 export function fillPlaceholders(text: string, run: Pick<RunRecord, 'inputs' | 'workItem'>, organization?: string): string {
   const id = run.workItem !== undefined ? String(run.workItem) : '';
   const url = id && organization ? `https://dev.azure.com/${encodeURIComponent(organization)}/_workitems/edit/${id}` : '';
@@ -126,7 +136,8 @@ export function fillPlaceholders(text: string, run: Pick<RunRecord, 'inputs' | '
     if (name === 'workItem' || name === 'work-item-id') return id || whole;
     if (name === 'work-item-url') return url || whole;
     const key = name.startsWith('input.') ? name.slice(6) : name;
-    return Object.prototype.hasOwnProperty.call(run.inputs, key) ? run.inputs[key]! : whole;
+    if (Object.prototype.hasOwnProperty.call(run.inputs, key)) return run.inputs[key]!;
+    return key === 'entry' ? DEFAULT_ENTRY : key === 'previousRun' ? '' : whole;
   });
 }
 
@@ -246,12 +257,31 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
   }
   const unlockRun = (runId: string, run: Pick<RunRecord, 'workItem' | 'inputs'>) => { try { options.locks?.release(lockNames(run), runId); } catch { /* best effort: the lock expires */ } };
 
+  /** The run a new run of a work item follows: the named one, else the newest run of that item in this runs root. */
+  function previousRunOf(workItem: number, named?: string): string | undefined {
+    if (named) { try { if (store.read(named).workItem === workItem) return named; } catch { /* gone: the newest one */ } }
+    return listRuns(paths.runsRoot).find(r => r.workItem === workItem)?.runId;
+  }
+
   /** Starts a new run. */
   function start(request: StartRequest = {}): RunHandle {
     const inputs = inputsFor(request), now = clock.now(), runId = newRunId(now);
     const workItem = workItemOf(inputs, request.workItem);
-    const from = request.fromStep === undefined ? 0 : routine.steps.findIndex(s => s.id === request.fromStep);
-    if (from < 0) throw new Error(`No step "${request.fromStep}" in this routine (steps: ${routine.steps.map(s => s.id).join(', ')})`);
+    // the entry (ADR 0323): the one asked by name, else the one the work item's tags choose; none = the first step
+    const tagged = usesEntries(routine);
+    let entry: RoutineEntry | undefined;
+    if (request.entry !== undefined && request.entry !== DEFAULT_ENTRY) {
+      entry = routine.entries?.find(e => e.name === request.entry);
+      if (!entry) throw new Error(`No entry "${request.entry}" in this routine (entries: ${[DEFAULT_ENTRY, ...(routine.entries ?? []).map(e => e.name)].join(', ')})`);
+    } else if (request.entry === undefined && request.tags) entry = entryForTags(routine, request.tags);
+    const fromStep = request.fromStep ?? entry?.startStep;
+    const from = fromStep === undefined ? 0 : routine.steps.findIndex(s => s.id === fromStep);
+    if (from < 0) throw new Error(`No step "${fromStep}" in this routine (steps: ${routine.steps.map(s => s.id).join(', ')})`);
+    const skipped = request.fromStep !== undefined || !entry ? `skipped (started from step ${fromStep})` : `skipped (entry "${entry.name}" starts from step ${fromStep})`;
+    // the retrigger tags on the item are this run's: taken off before its first step, so one tag starts one run
+    const taken = workItem !== undefined && request.tags ? retriggerTagsOn(routine, request.tags) : [];
+    const previous = tagged && workItem !== undefined ? previousRunOf(workItem, request.previousRunId) : undefined;
+    if (tagged) { inputs.entry = entry?.name ?? DEFAULT_ENTRY; if (previous) inputs.previousRun = store.runDir(previous); }
     lockRun(runId, { inputs, ...(workItem !== undefined ? { workItem } : {}) });
     const admitted = workItem !== undefined ? admissions.get(workItem) : undefined;
     if (workItem !== undefined) admissions.delete(workItem);
@@ -259,22 +289,95 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
       schema: 1, runId, routineId: routine.id, routineTitle: routine.title, status: 'running', attempt: 0,
       inputs, ...(workItem !== undefined ? { workItem } : {}), ...(request.subjectKey ? { subjectKey: request.subjectKey } : {}),
       ...(admitted ? { admitted } : {}),
+      ...(tagged ? { entry: inputs.entry! } : {}), ...(previous ? { previousRunId: previous } : {}),
+      ...(taken.length ? { retrigger: { tags: taken, removed: false } } : {}),
       createdAt: now, updatedAt: now,
       steps: routine.steps.map((s, i) => i < from
-        ? { n: i + 1, id: s.id, title: s.title, status: 'done', attempts: 0, summary: `skipped (started from step ${request.fromStep})` }
+        ? { n: i + 1, id: s.id, title: s.title, status: 'done', attempts: 0, summary: skipped }
         : { n: i + 1, id: s.id, title: s.title, status: 'pending', attempts: 0 }),
     };
     let claimed: RunRecord;
     try { fs.mkdirSync(paths.runsRoot, { recursive: true }); store.create(run); claimed = store.claim(runId); }
     catch (e) { unlockRun(runId, run); throw e; }
-    emit(runId, { type: 'run-start', at: now, runId, routine: routine.id, total: routine.steps.length, ...(workItem !== undefined ? { workItem } : {}) });
-    info('run started', { runId, routine: routine.id, workItem });
+    emit(runId, { type: 'run-start', at: now, runId, routine: routine.id, total: routine.steps.length, ...(workItem !== undefined ? { workItem } : {}),
+      ...(tagged ? { entry: inputs.entry!, ...(fromStep !== undefined ? { startStep: fromStep } : {}) } : {}),
+      ...(taken.length ? { retriggerTags: taken } : {}), ...(previous ? { previousRunId: previous } : {}) });
+    info('run started', { runId, routine: routine.id, workItem, ...(tagged ? { entry: inputs.entry } : {}) });
     return { runId, finished: execute(runId, claimed.attempt) };
   }
 
   /** Starts a run for one work item: the same path the DevOps trigger uses. */
   const startItem = (workItem: number, inputs?: Record<string, string>, subjectKey = `item:${workItem}`): RunHandle =>
     start({ workItem, subjectKey, ...(inputs ? { inputs } : {}) });
+
+  /** The tags of work items now (one read per 200 ids); an item DevOps does not return is absent. */
+  const itemTags = (ids: number[]): Promise<Map<number, string[]>> => organization && ids.length ? devops().tags(organization, ids) : Promise.resolve(new Map<number, string[]>());
+
+  /** Starts a run the way its work item asks (ADR 0323). A package with entries or retrigger tags reads the item's
+   *  tags first (unless the request carries them): they choose the entry, and a retrigger tag on the item is taken by
+   *  this run. A work item that cannot be read starts nothing. Any other package: exactly `start`. */
+  async function startFor(request: StartRequest = {}): Promise<RunHandle> {
+    if (!usesEntries(routine) || request.tags) return start(request);
+    const workItem = workItemOf(inputsFor(request), request.workItem);
+    if (workItem === undefined) return start(request);
+    let tags: string[] | undefined;
+    try { tags = (await itemTags([workItem])).get(workItem); }
+    catch (e) { throw new Error(`Work item ${workItem} could not be read to choose the entry: ${masker.mask(e instanceof Error ? e.message : String(e))}`); }
+    if (!tags) throw new Error(`Work item ${workItem} was not found on DevOps (its tags choose the entry): the run was not started`);
+    return start({ ...request, tags });
+  }
+
+  /** `startFor` for one work item: the path `routine watch` takes (a new item, or one a retrigger tag starts again). */
+  const startItemFor = (workItem: number, how: Pick<StartRequest, 'inputs' | 'tags' | 'previousRunId'> = {}, subjectKey = `item:${workItem}`): Promise<RunHandle> =>
+    startFor({ workItem, subjectKey, ...how });
+
+  /** Takes the run's retrigger tags off its work item (trigger.retriggerTags), so one tag starts one run: a tags write
+   *  through the write adapter (the run's ledger, verified on DevOps), logged in the run's events and report. It never
+   *  blocks the run. A removal that is not confirmed is tried again by the watch (settleRetrigger), at most
+   *  RETRIGGER_UNTAG_TRIES times in all, then only looked for on DevOps (a person took the tag off); meanwhile the
+   *  item does not start again. true = the tags are off. StaleAttempt propagates. */
+  async function consumeRetrigger(runId: string, attempt: number, signal: AbortSignal): Promise<boolean> {
+    const run = store.read(runId), r = run.retrigger;
+    if (!r || r.removed) return true;
+    if (run.workItem === undefined || !routine.devops) return false;
+    const tries = (r.tries ?? 0) + 1, fold = (t: string) => t.trim().toLowerCase();
+    let status: 'done' | 'not-verified' | 'failed' = 'not-verified', note = '';
+    try {
+      if (tries > RETRIGGER_UNTAG_TRIES) {
+        const on = (await devops().tags(routine.devops.organization, [run.workItem])).get(run.workItem);
+        if (!on || r.tags.some(t => on.some(x => fold(x) === fold(t)))) return false;
+        status = 'done';
+      } else {
+        const writes = await executeWrites(writeContext(runId, attempt, routine.steps[0]!, run, tries, signal, undefined, 'retrigger'), [{ op: 'tags', remove: r.tags }]);
+        status = writes.done.length ? 'done' : writes.failed.length ? 'failed' : 'not-verified';
+        note = writes.failed[0] ?? writes.notVerified[0] ?? '';
+      }
+    } catch (e) {
+      if (e instanceof StaleAttempt) throw e;
+      status = 'failed'; note = masker.mask(e instanceof Error ? e.message : String(e)).slice(0, 300);
+    }
+    const at = clock.now(), removed = status === 'done';
+    store.update(runId, attempt, x => { x.retrigger = { tags: r.tags, removed, tries, at, ...(!removed && note ? { note } : {}) }; });
+    emit(runId, { type: 'write', at, n: 0, what: `retrigger tag ${r.tags.join(', ')} ${removed ? 'removed from' : 'not removed from'} work item ${run.workItem}${!removed && note ? ` (${note})` : ''}`, status });
+    if (removed) info('retrigger tag removed', { runId, workItem: run.workItem, tags: r.tags });
+    else warn('retrigger tag not removed: the item does not start again until it is', { runId, workItem: run.workItem, tags: r.tags, tries }, note);
+    return removed;
+  }
+
+  /** The watch's retry of a retrigger tag removal that was not confirmed when its run started (the run may be over);
+   *  true once the tags are off the work item. */
+  async function settleRetrigger(runId: string): Promise<boolean> {
+    try {
+      const run = store.read(runId);
+      if (!run.retrigger || run.retrigger.removed) return true;
+      const removed = await consumeRetrigger(runId, run.attempt, new AbortController().signal);
+      if (!running.has(runId)) writeReport(store, store.read(runId));
+      return removed;
+    } catch (e) {
+      warn('retrigger tag removal not retried', { runId }, e instanceof Error ? e.message : String(e));
+      return false;
+    }
+  }
 
   /** Continues the same run from the step that did not finish; any older runtime of this run stops at its next write. */
   function resume(runId: string, mutate?: (run: RunRecord) => void): RunHandle {
@@ -330,6 +433,8 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     const update = (mutate: (run: RunRecord) => void) => store.update(runId, attempt, mutate);
     const step = (run: RunRecord, id: string) => run.steps.find(s => s.id === id)!;
     try {
+      // a run a retrigger tag started takes the tag off its work item before any step (a no-op once done)
+      await consumeRetrigger(runId, attempt, controller.signal);
       for (let i = 0; i < routine.steps.length; i++) {
         const def = routine.steps[i]!;
         let run = store.read(runId);
@@ -587,7 +692,8 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
         ...(def.model ? { model: def.model } : {}), ...(def.effort ? { effort: def.effort } : {}),
         ...(def.allowedTools?.length ? { allowedTools: browserNote && !def.allowedTools.includes(`mcp__${BROWSER_SERVER_NAME}__*`) ? [...def.allowedTools, `mcp__${BROWSER_SERVER_NAME}__*`] : def.allowedTools } : {}),
         ...(mcpConfig ? { mcpConfig } : {}),
-        env: { ROUTINE_RUN_ID: runId, ROUTINE_STEP_DIR: dir, ...(run.workItem !== undefined ? { ROUTINE_WORK_ITEM: String(run.workItem) } : {}) },
+        env: { ROUTINE_RUN_ID: runId, ROUTINE_STEP_DIR: dir, ...(run.workItem !== undefined ? { ROUTINE_WORK_ITEM: String(run.workItem) } : {}),
+          ...(run.entry ? { ROUTINE_ENTRY: run.entry } : {}), ...(run.previousRunId ? { ROUTINE_PREVIOUS_RUN: store.runDir(run.previousRunId) } : {}) },
         timeoutMs: def.timeoutMs ?? DEFAULT_STEP_TIMEOUT_MS, signal,
         onLine: line => {
           store.appendText(transcript, `${line}\n`);
@@ -677,6 +783,12 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     if (inputs.length) parts.push('', '## Inputs', ...inputs.map(([k, v]) => `- ${k}: ${v}`));
     if (run.workItem !== undefined) parts.push('', '## Work item', `This run is about work item ${run.workItem}${organization ? ` (${itemUrl(undefined, run.workItem)})` : ''}. DevOps writes target only this item and go in ${STEP_RESULT_FILE}, never through a tool.`);
     if (itemText) parts.push('', itemText);
+    const entry = routine.entries?.find(e => e.name === run.entry);
+    if (entry || run.retrigger) parts.push('', '## Entry', [
+      entry ? `This run entered the routine as "${entry.name}" (tag ${entry.when.tag} on the work item): it starts from step ${routine.steps.find(s => s.id === entry.startStep)?.title ?? entry.startStep}; the steps before it were not run again.` : 'This run takes the default entry: it starts from the first step.',
+      ...(run.retrigger ? [`The tag ${run.retrigger.tags.join(', ')} started this work item again after its previous run; the runtime takes the tag off the item, never add it back.`] : []),
+    ].join(' '));
+    if (run.previousRunId) parts.push('', '## Previous run', previousRunNote(run.previousRunId));
     if (devopsMcp) parts.push('', `More reads (comments, attachments): the ${DEVOPS_SERVER_NAME} MCP tools get_work_item, get_work_item_comments, get_attachment, current_iteration (read only).${routine.devops?.deployTargets?.length ? ' Build and test environment status: pr_build_status, test_environment_status, test_deploy_status (read only).' : ''}`);
     const done = run.steps.filter(s => s.status === 'done' && s.summary);
     if (done.length) parts.push('', '## Earlier steps', ...done.map(s => `- ${s.title}: ${s.summary}`));
@@ -699,6 +811,17 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     parts.push('', stepResultInstructions(dir, writable ? grantedWriteOps(writable.ops) : false, def.loop ? { to: def.loop.to, max: def.loop.max ?? DEFAULT_LOOP_MAX } : undefined,
       parking(run) ? { steps: routine.steps.slice(0, routine.steps.findIndex(s => s.id === def.id) + 1).map(s => s.id) } : undefined));
     return `${parts.join('\n')}\n`;
+  }
+
+  /** The previous run of the same work item as prompt text: where it is (read only), how it ended, what its steps said. */
+  function previousRunNote(runId: string): string {
+    let previous: RunRecord | undefined;
+    try { previous = store.read(runId); } catch { /* removed since: the path alone */ }
+    const clip = (t: string) => t.length > 300 ? `${t.slice(0, 300)}…` : t;
+    return [
+      `The previous run of this work item${previous ? ` (${previous.status})` : ''} is in ${store.runDir(runId)} (also the input previousRun). Read only: read its report.md and each step's evidence/ and screenshots/, never write, move or delete anything there.`,
+      ...(previous?.steps ?? []).filter(s => s.attempts > 0).map(s => `- steps/${stepFolderName(s.n, s.id, s.round)} · ${s.title} (${s.status})${s.summary ? `: ${clip(s.summary)}` : ''}`),
+    ].join('\n');
   }
 
   async function escalationIo(runId: string, attempt: number, run: RunRecord): Promise<EscalationIo | null> {
@@ -865,6 +988,6 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     return driveLogin(page, target.origin, { user: credential.user, password: credential.password }, rule);
   }
 
-  return { pkg, store, masker, start, startItem, resume, resumeParked, recover, admitItem, cancel, login, isRunning: (runId: string) => running.has(runId), leaseSettled: runSettled };
+  return { pkg, store, masker, start, startItem, startFor, startItemFor, itemTags, settleRetrigger, resume, resumeParked, recover, admitItem, cancel, login, isRunning: (runId: string) => running.has(runId), leaseSettled: runSettled };
 }
 export type RoutineRuntime = ReturnType<typeof createRoutineRuntime>;
