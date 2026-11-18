@@ -75,7 +75,8 @@ export class McpServersService {
     this.gateway = new McpGateway({
       mcp: opts.mcp, servers: () => this.store.servers(), roleAccess: r => this.store.roleAccess(r),
       endpoint: id => this.endpoint(id), context: opts.context, ...(opts.connect ? { connect: opts.connect } : {}),
-      // a server whose program did not start for a chat: its card says so, as after a failed «Prova» (#417)
+      // a server whose program did not start for a chat, or that refused the access (its error asks for the login,
+      // so the card offers «Accedi»): its card says so, as after a failed «Prova» (#417, #437)
       onBroken: (id, e) => {
         if (!this.store.def(id)) return;
         this.store.recordTest(id, { ok: false, at: (this.opts.now ?? Date.now)(), ms: 0, tools: this.store.test(id)?.tools ?? [], error: describeError(e) });
