@@ -248,6 +248,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   key is gone (ADR 0291).
 
 ### Fixed
+- Memoria no longer hangs on a note with a very long line: the check that hides a web address with a user and a
+  password in it read a 200 KB line of letters again from every letter (tens of seconds); it now reads it once and
+  hides the same lines as before.
 - Routines: a password written by `fill_secret` can no longer be read back (a Backspace in the field and the
   accessibility snapshot, or a "show password" toggle and a screenshot): the field stays a password field for every
   browser tool. And none is written beside code an `eval` may have left: after an `eval`, `fill_secret` asks for a
