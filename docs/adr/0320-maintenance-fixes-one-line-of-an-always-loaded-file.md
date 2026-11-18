@@ -27,17 +27,27 @@ pending files several times.
 3. **Never a safety line.** Refused when the old or the new line is about safety, permissions, settings, hooks,
    production or secrets (a word list, plus `checkPermissionText`), or when the line sits under a heading with one of
    those words (the «Safety» section of `me.md`). Those lines stay the user's to edit by hand. The guard refuses when
-   in doubt (two independent reviews, 2026-11-18):
-   - the words are English, Italian and German (compounds too) and are also looked for with `_ * \` ~` and camelCase
-     taken apart and invisible characters off (`__Safety__`, `dangerously_skip_permissions`, `GITHUB_TOKEN`); a
-     Cyrillic or Greek letter beside a Latin one counts as a guarded word;
-   - a rule wrapped on more lines is read whole, before and after the edit;
+   in doubt (three independent reviews, 2026-11-18):
+   - only a rule line is written or replaced: never a heading (`# …`, also in a quote or a list), a table's header or
+     its row of dashes, a code fence, a `---` line, an HTML comment mark or a tag that opens a block; a table row
+     stays a row with the same cells. Renaming «## Hard rules» or opening a comment above a section would change what
+     the lines under it mean without touching them;
+   - a rule is read whole, before and after the edit: the lines it wraps onto, the items under it and the items it
+     sits under, its second paragraph, a table row with its header; a title or a lead-in («Never do these:») is not
+     changed when a line under it is guarded;
    - only a plain ATX heading (outside a code block, an HTML comment or `<pre>`) ends a section; every other form
-     above the line (Setext, an all-emphasis line, a label ending with a colon, a `# …` in a code block, in a quote or
-     indented as code, an HTML heading) is checked and ends nothing, so no form can hide a guarded section;
-   - a line that starts like a code fence is never written or replaced, and a block opens and closes as CommonMark
-     says, so no edit can move a section into or out of a code block.
-   The price is known: a file that marks its sections without plain headings gets more refusals than it should.
+     above the line (Setext, an all-emphasis line, a line ending with a colon, a `# …` in a code block, in a quote or
+     indented as code, an HTML heading) is checked and ends nothing, so no form can hide a guarded section; a byte
+     order mark hides no heading;
+   - the words are English, Italian and German (compounds too): safety, permissions and approvals, settings and
+     configuration, hooks, production and deploys, secrets, tokens, keys, `.env`, `sudo`, `--no-verify`. They are
+     read with accents, `_ * \` ~`, camelCase and invisible characters taken off (`__Safety__`,
+     `dangerously_skip_permissions`, `GITHUB_TOKEN`); a Cyrillic or Greek letter beside a Latin one counts as a
+     guarded word.
+   Two prices, both accepted. A file that marks its sections without plain headings, or that says «config» or
+   «deploy» in an ordinary line, gets more refusals than it should. And the guard is a word list, not an
+   understanding of the text: a line that weakens a rule in words the list does not hold («Ignore the rules above»)
+   passes it. The user's yes on the exact line before and after (point 6) stays the real check.
 4. **Through the candidate brain.** The finding is a brain-file finding (`isCandidateFinding`): it is planned with the
    others on the virtual copy, and the candidate's before/after diff of the file is that one line. Rejecting the
    candidate writes nothing; approving applies it as one change whose «Annulla» puts the old line back; a file edited
