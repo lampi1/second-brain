@@ -316,6 +316,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0318](0318-a-chat-stops-showing-work-when-its-reply-is-complete.md) A chat stops showing work when its reply is complete — accepted
 - [0319](0319-artifacts-in-memoria.md) Artifacts in Memoria: every file the chats produce, indexed where it is — accepted
 - [0320](0320-maintenance-fixes-one-line-of-an-always-loaded-file.md) The maintenance fixes one line of an always-loaded file — accepted
+- [0321](0321-a-routine-step-can-leave-the-login-page-unsigned.md) A routine step can leave the login page as it is (`relogin: false`); the routine runtime of feat/routine-park is on main — accepted
 
 ## Replaced
 

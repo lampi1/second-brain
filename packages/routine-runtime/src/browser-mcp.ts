@@ -19,7 +19,10 @@
 // Every widget of a real app is reachable (owner, 2026-10-28): the snapshot names pointer-cursor divs, toggles, datepicker
 // days and SVG groups too, `type` presses real keys, `press`/`hover`/`click_at`/`scroll`/`wait` cover the rest and `eval`
 // runs JavaScript on the declared origins only, refused while a password field holds a value; errors carry Playwright's
-// call log, masked like every reply.
+// call log, masked like every reply. A test that must SEE the login page (a sign-out in one tab, a reload in another:
+// issue #434, ADR 0321) passes `relogin: false` to the call: that call never signs in, a page that lands on a login
+// page is left there and the reply says so; snapshot and screenshot read it (password fields emptied before the PNG),
+// `eval` and `type` keep refusing it, and the next call without the flag signs in again as always.
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -55,12 +58,15 @@ type Json = Record<string, unknown>;
 const REF = { type: 'string', description: 'an element ref from the last snapshot, e.g. e12 (f1e3: inside frame f1)' };
 const PX = { type: 'number', minimum: 0, description: 'page pixels, as in the full-page screenshot and the snapshot\'s @x,y' };
 const KEY = { type: 'string', description: 'a key or chord: Enter, Tab, Escape, ArrowDown, PageDown, Control+a…' };
+const RELOGIN = { type: 'boolean', description: 'false = this call never signs in: a page that lands on a login page is left there to be read with snapshot or screenshot (a sign-out or expired-session test). Default: logins are done for you.' };
+/** What a `relogin: false` call's reply ends with when the page it leaves is a login page. */
+export const LEFT_ON_LOGIN = 'This is a login page, left as it is (relogin: false): read it with snapshot or screenshot. The next call without relogin: false signs in again.';
 const TOOLS = [
-  { name: 'navigate', description: 'Open a URL (only the routine\'s declared origins). Logins are done for you.', inputSchema: { type: 'object', additionalProperties: false, required: ['url'], properties: { url: { type: 'string' } } } },
-  { name: 'history', description: 'Go back, forward or reload the page (logins are redone for you).', inputSchema: { type: 'object', additionalProperties: false, required: ['action'], properties: { action: { type: 'string', enum: ['back', 'forward', 'reload'] } } } },
+  { name: 'navigate', description: 'Open a URL (only the routine\'s declared origins). Logins are done for you (relogin: false = not in this call).', inputSchema: { type: 'object', additionalProperties: false, required: ['url'], properties: { url: { type: 'string' }, relogin: RELOGIN } } },
+  { name: 'history', description: 'Go back, forward or reload the page (logins are redone for you; relogin: false = not in this call).', inputSchema: { type: 'object', additionalProperties: false, required: ['action'], properties: { action: { type: 'string', enum: ['back', 'forward', 'reload'] }, relogin: RELOGIN } } },
   { name: 'tabs', description: 'The open tabs (popups and target=_blank links open new ones): list them, select one to act on, or close one.', inputSchema: { type: 'object', additionalProperties: false, properties: { action: { type: 'string', enum: ['list', 'select', 'close'] }, index: { type: 'number', minimum: 0 } } } },
   { name: 'snapshot', description: 'The current page as text plus its interactive elements with refs (e1, e2…; f1e1… inside an iframe) and their centre @x,y, for the element tools. Take a new one after the page changes. aria: true = the full accessibility tree instead (roles, names, states; no refs).', inputSchema: { type: 'object', additionalProperties: false, properties: { aria: { type: 'boolean' } } } },
-  { name: 'click', description: 'Click an element by ref; button right = context menu, double = double click. force: skip the checks when another element covers it (the error says "intercepts pointer events").', inputSchema: { type: 'object', additionalProperties: false, required: ['ref'], properties: { ref: REF, button: { type: 'string', enum: ['left', 'right', 'middle'] }, double: { type: 'boolean' }, force: { type: 'boolean' } } } },
+  { name: 'click', description: 'Click an element by ref; button right = context menu, double = double click. force: skip the checks when another element covers it (the error says "intercepts pointer events").', inputSchema: { type: 'object', additionalProperties: false, required: ['ref'], properties: { ref: REF, button: { type: 'string', enum: ['left', 'right', 'middle'] }, double: { type: 'boolean' }, force: { type: 'boolean' }, relogin: RELOGIN } } },
   { name: 'check', description: 'Check (or with checked: false uncheck) a checkbox, radio or switch by ref; its label works too.', inputSchema: { type: 'object', additionalProperties: false, required: ['ref'], properties: { ref: REF, checked: { type: 'boolean' }, force: { type: 'boolean' } } } },
   { name: 'drag', description: 'Drag an element by ref and drop it onto another (an appointment onto a time slot).', inputSchema: { type: 'object', additionalProperties: false, required: ['from', 'to'], properties: { from: REF, to: REF } } },
   { name: 'upload', description: 'Set the files of a file input by ref: paths of files inside your working folder, your evidence folder or the temp folder (never a secret).', inputSchema: { type: 'object', additionalProperties: false, required: ['ref', 'files'], properties: { ref: REF, files: { type: 'array', maxItems: 10, items: { type: 'string' } } } } },
@@ -70,9 +76,9 @@ const TOOLS = [
   { name: 'resize', description: 'Set the viewport size in pixels (default 1366x900): a small screen, a tablet.', inputSchema: { type: 'object', additionalProperties: false, required: ['width', 'height'], properties: { width: { type: 'number', minimum: 320, maximum: 3840 }, height: { type: 'number', minimum: 240, maximum: 2160 } } } },
   { name: 'type', description: 'Replace the text of an input, textarea or editable element by ref with real key presses (a datepicker sees them; never a password field). then: a key pressed after it (Tab or Escape closes a picker, Enter submits).', inputSchema: { type: 'object', additionalProperties: false, required: ['ref', 'text'], properties: { ref: REF, text: { type: 'string' }, then: { type: 'string', enum: ['Tab', 'Enter', 'Escape'] } } } },
   { name: 'select_option', description: 'Choose an option of a select by ref, by its value or label.', inputSchema: { type: 'object', additionalProperties: false, required: ['ref', 'value'], properties: { ref: REF, value: { type: 'string' } } } },
-  { name: 'press', description: 'Press a key, on an element by ref or on whatever has the focus.', inputSchema: { type: 'object', additionalProperties: false, required: ['key'], properties: { key: KEY, ref: REF } } },
+  { name: 'press', description: 'Press a key, on an element by ref or on whatever has the focus.', inputSchema: { type: 'object', additionalProperties: false, required: ['key'], properties: { key: KEY, ref: REF, relogin: RELOGIN } } },
   { name: 'hover', description: 'Move the mouse over an element by ref (menus and tooltips that open on hover).', inputSchema: { type: 'object', additionalProperties: false, required: ['ref'], properties: { ref: REF } } },
-  { name: 'click_at', description: 'Click a point of the page, for what has no ref (a canvas, a cross-origin frame): x,y in the full-page screenshot\'s pixels. Returns what was there.', inputSchema: { type: 'object', additionalProperties: false, required: ['x', 'y'], properties: { x: PX, y: PX, button: { type: 'string', enum: ['left', 'right', 'middle'] }, double: { type: 'boolean' } } } },
+  { name: 'click_at', description: 'Click a point of the page, for what has no ref (a canvas, a cross-origin frame): x,y in the full-page screenshot\'s pixels. Returns what was there.', inputSchema: { type: 'object', additionalProperties: false, required: ['x', 'y'], properties: { x: PX, y: PX, button: { type: 'string', enum: ['left', 'right', 'middle'] }, double: { type: 'boolean' }, relogin: RELOGIN } } },
   { name: 'scroll', description: 'Scroll an element by ref into view, or scroll the wheel by dx,dy pixels (default 600 down) over the point x,y (a scrolling panel) or the page.', inputSchema: { type: 'object', additionalProperties: false, properties: { ref: REF, dx: { type: 'number' }, dy: { type: 'number' }, x: PX, y: PX } } },
   { name: 'wait', description: 'Wait ms milliseconds, until the network is idle (idle: true), or until a text shows on the page or a CSS selector is visible (gone: true = until it disappears, a spinner), at most timeout ms (default 10000, max 30000).', inputSchema: { type: 'object', additionalProperties: false, properties: { ms: { type: 'number', minimum: 0, maximum: 30000 }, idle: { type: 'boolean' }, text: { type: 'string' }, selector: { type: 'string' }, gone: { type: 'boolean' }, timeout: { type: 'number', minimum: 0, maximum: 30000 } } } },
   { name: 'eval', description: 'Run a JavaScript expression in the page (only on the routine\'s origins) and return its value as JSON (a promise is awaited; statements: wrap them in (() => { …; return x; })()). Powerful: use it when no other tool can, e.g. to read a widget\'s state or call the page\'s own functions. Refused while a password field holds a value.', inputSchema: { type: 'object', additionalProperties: false, required: ['expression'], properties: { expression: { type: 'string' } } } },
@@ -161,6 +167,8 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
   const masker = createMasker(config.logins.map(l => l.password));
   const watcher = createWatcher(config.evidence, io.now);
   let current: BrowserPage | null = null;
+  /** false while a call that passed `relogin: false` runs: nothing signs in, a login page is left as it is (#434) */
+  let relogin = true;
   /** the logins in lookup order: the one switched to with `login` comes first, so every lookup picks it */
   const state = { logins: [...config.logins] };
   let shots = 0;
@@ -238,6 +246,8 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
   /** Opens a URL: the step's first visit to a credential's site signs in from its loginUrl first; its bare origin with
    *  no session is that login; a landing on any login page signs in again and returns to the URL. */
   async function goto(page: BrowserPage, url: string): Promise<string | null> {
+    // relogin: false = the URL as the site serves it now, the login page itself included: nothing is filled
+    if (!relogin) { await page.goto(url, { waitUntil: 'load', timeout: 30_000 }); return null; }
     const own = loginFor(state, url);
     if (own) return logIn(page, own); // the agent asked for the login page itself: the runtime does it
     const cred = credentialFor(state, url);
@@ -279,7 +289,7 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
     return e.tagName.toLowerCase() + (c ? '.' + c : '') + (e.tagName === 'IFRAME' ? ' (a frame: the click went inside it)' : '') + (t ? ' "' + t + '"' : ''); })()`);
   async function settle(page: BrowserPage): Promise<string | null> {
     await page.waitForLoadState('load', { timeout: ACTION_TIMEOUT }).catch(() => undefined);
-    return ensureLoggedIn(page);
+    return relogin ? ensureLoggedIn(page) : null;
   }
 
   /** The named credential with its stored values, or the error text. */
@@ -321,7 +331,18 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
     return real;
   }
 
+  /** One tool call. `relogin: false` holds for this call only: the page it leaves on a login page is named in the reply. */
   async function call(name: string, args: Json): Promise<{ text: string; isError?: boolean; image?: Buffer }> {
+    relogin = args.relogin !== false;
+    try {
+      const r = await run(name, args);
+      if (relogin || r.isError) return r;
+      const page = await activePage();
+      return loginPageFor(state, page.url(), lastLogin) ? { ...r, text: `${r.text} ${LEFT_ON_LOGIN}` } : r;
+    } finally { relogin = true; }
+  }
+
+  async function run(name: string, args: Json): Promise<{ text: string; isError?: boolean; image?: Buffer }> {
     const page = await activePage();
     switch (name) {
       case 'tabs': {
@@ -506,6 +527,8 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
         const refs = [...new Set(args.highlight === undefined ? [] : Array.isArray(args.highlight) ? args.highlight : [args.highlight])];
         if (refs.length > 5) return { text: 'highlight: at most 5 element refs.', isError: true };
         for (const ref of refs) locate(page, ref); // validates each ref before the page is touched
+        // a login page (one left there by relogin: false): no PNG of it ever holds a typed password
+        if (loginPageFor(state, page.url(), lastLogin) && !await page.evaluate<boolean>(CLEAR_PASSWORDS_SCRIPT)) return { text: 'Refused: a password field of this login page could not be emptied before the screenshot.', isError: true };
         // the originals live here, not on the page: only the elements really marked get their own style back
         let marked: Array<[ref: string, style: string]> = [];
         const view = args.view === true;

@@ -68,6 +68,13 @@ login pages, uses `loginSuccess` (Air: success = the URL leaves `/Account/Login`
 and `type` refuses password fields. A prompt says "the browser is already logged into <site>"; never login steps,
 credentials or selectors.
 
+**A step that must see the login page** (a sign-out in one tab and a reload in another, an expired session) passes
+`relogin: false` to the call that leads there: `navigate`, `history`, `click`, `press` or `click_at`. That call never
+signs in: a page that lands on a login page is left as it is and the reply says so. `snapshot` and `screenshot` read
+it (the password fields are emptied before the PNG); `eval` and `type` keep refusing it. The flag holds for that call
+only: the next call without it signs in again, as always. Say it in the prompt, e.g. "sign out in tab 0, then in tab 1
+reload with `relogin: false` and check that the login page shows".
+
 `browser.hide` (optional): CSS selectors of overlays the runtime hides on every page, so they never cover what a step
 clicks (Air: `["#draggable", "ai-chat"]`, the Maia chat). Plain selectors only (no braces).
 
