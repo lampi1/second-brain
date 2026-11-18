@@ -24,8 +24,11 @@
 // page is left there and the reply says so; snapshot and screenshot read it (password fields emptied before the PNG),
 // `eval` keeps refusing it and `type` its password field, and the next navigation or action without the flag signs in
 // again as always. A password `fill_secret` wrote stays unreadable (independent review, 2026-11-18): the field is
-// marked, so it counts as a password field even after a "show password" toggle; there only Tab, Enter and Escape are
-// pressed, the accessibility tree and eval are refused while it holds a value, and no screenshot shows it in clear.
+// marked, so it counts as a password field even after a "show password" toggle; there only Tab, Shift+Tab, Enter and Escape are
+// pressed, the accessibility tree and eval are refused while it holds a value (eval: in any open tab), no screenshot
+// shows it in clear and it is never dragged. And no password is written beside code an eval may have left (a timer, a
+// handle to another tab): after an eval `fill_secret` refuses until the only open tab is reloaded, and a login first
+// closes the other tabs and loads its page anew.
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -68,7 +71,7 @@ export const LEFT_ON_LOGIN = 'This is a login page, left as it is (relogin: fals
 /** The tools that take `relogin: false` (the ones a sign-out test acts with); every other tool signs in as always. */
 const RELOGIN_TOOLS = new Set(['navigate', 'history', 'click', 'press', 'click_at']);
 /** The keys pressed in a password field: the ones that leave it or submit it, never one that edits its value. */
-const SECRET_KEYS = new Set(['Tab', 'Enter', 'Escape']);
+const SECRET_KEYS = new Set(['Tab', 'Shift+Tab', 'Enter', 'Escape']);
 const TOOLS = [
   { name: 'navigate', description: 'Open a URL (only the routine\'s declared origins). Logins are done for you (relogin: false = not in this call).', inputSchema: { type: 'object', additionalProperties: false, required: ['url'], properties: { url: { type: 'string' }, relogin: RELOGIN } } },
   { name: 'history', description: 'Go back, forward or reload the page (logins are redone for you; relogin: false = not in this call).', inputSchema: { type: 'object', additionalProperties: false, required: ['action'], properties: { action: { type: 'string', enum: ['back', 'forward', 'reload'] }, relogin: RELOGIN } } },
@@ -89,7 +92,7 @@ const TOOLS = [
   { name: 'click_at', description: 'Click a point of the page, for what has no ref (a canvas, a cross-origin frame): x,y in the full-page screenshot\'s pixels. Returns what was there.', inputSchema: { type: 'object', additionalProperties: false, required: ['x', 'y'], properties: { x: PX, y: PX, button: { type: 'string', enum: ['left', 'right', 'middle'] }, double: { type: 'boolean' }, relogin: RELOGIN } } },
   { name: 'scroll', description: 'Scroll an element by ref into view, or scroll the wheel by dx,dy pixels (default 600 down) over the point x,y (a scrolling panel) or the page.', inputSchema: { type: 'object', additionalProperties: false, properties: { ref: REF, dx: { type: 'number' }, dy: { type: 'number' }, x: PX, y: PX } } },
   { name: 'wait', description: 'Wait ms milliseconds, until the network is idle (idle: true), or until a text shows on the page or a CSS selector is visible (gone: true = until it disappears, a spinner), at most timeout ms (default 10000, max 30000).', inputSchema: { type: 'object', additionalProperties: false, properties: { ms: { type: 'number', minimum: 0, maximum: 30000 }, idle: { type: 'boolean' }, text: { type: 'string' }, selector: { type: 'string' }, gone: { type: 'boolean' }, timeout: { type: 'number', minimum: 0, maximum: 30000 } } } },
-  { name: 'eval', description: 'Run a JavaScript expression in the page (only on the routine\'s origins) and return its value as JSON (a promise is awaited; statements: wrap them in (() => { …; return x; })()). Powerful: use it when no other tool can, e.g. to read a widget\'s state or call the page\'s own functions. Refused while a password field holds a value.', inputSchema: { type: 'object', additionalProperties: false, required: ['expression'], properties: { expression: { type: 'string' } } } },
+  { name: 'eval', description: 'Run a JavaScript expression in the page (only on the routine\'s origins) and return its value as JSON (a promise is awaited; statements: wrap them in (() => { …; return x; })()). Powerful: use it when no other tool can, e.g. to read a widget\'s state or call the page\'s own functions. Refused while a password field holds a value. After it, fill_secret needs the other tabs closed and this page reloaded first, and a login closes the other tabs.', inputSchema: { type: 'object', additionalProperties: false, required: ['expression'], properties: { expression: { type: 'string' } } } },
   { name: 'screenshot', description: 'Save a PNG of the page (full page; fullPage: false = the viewport) or of one element (ref) into this step\'s evidence folder; returns its path, and the image itself with view: true. highlight: refs of the proving elements, drawn with a red box in this PNG.', inputSchema: { type: 'object', additionalProperties: false, properties: { name: { type: 'string', description: 'file name without extension' }, ref: REF, fullPage: { type: 'boolean' }, view: { type: 'boolean' }, highlight: { type: 'array', maxItems: 5, items: REF, description: 'element refs from snapshot to mark with a red box' } } } },
   { name: 'login', description: 'Sign out and in again as a named credential of the routine (the runtime fills the password). user: another login name for that credential\'s stored password. No credential: back to the default login.', inputSchema: { type: 'object', additionalProperties: false, properties: { credential: { type: 'string', description: 'a credential id' }, user: { type: 'string', description: 'the login name to use instead of the stored one' } } } },
   { name: 'fill_secret', description: 'Fill a password field by ref with the password of a named credential (e.g. to set a user\'s password in an admin page). The value is never shown.', inputSchema: { type: 'object', additionalProperties: false, required: ['ref', 'credential'], properties: { ref: REF, credential: { type: 'string', description: 'a credential id' } } } },
@@ -181,6 +184,25 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
   /** logins done (or found still valid) by this server; one server per step, so each step starts from its loginUrl */
   const signedIn = new Set<BrowserLogin>();
   let lastLogin: BrowserLogin | null = null;
+  /** eval ran since this browser's last clean load (independent review, 2026-11-18): code the session left may still
+   *  live in a tab (a timer, a handle to another tab that survives that tab's reload) and would read a password
+   *  written beside it. No password is written while it is set: `fill_secret` refuses, a login first makes the tab
+   *  `alone`. */
+  let evalLeft = false;
+  const others = (page: BrowserPage) => page.context().pages().filter(p => p !== page && !p.isClosed());
+  /** Leaves no code an eval planted: every other tab closed (a closed tab is the only one nothing can be planted in
+   *  again), this one loaded anew, and still the only one after it (a popup the old document opened on its way out is
+   *  closed and the page loaded again). False = not sure after three tries. */
+  async function alone(page: BrowserPage): Promise<boolean> {
+    for (let i = 0; i < 3; i++) {
+      const closed = others(page);
+      for (const p of closed) await p.close().catch(() => undefined);
+      if (closed.length) watcher.note(`Closed ${closed.length} other tab${closed.length === 1 ? '' : 's'}: eval had run in this browser, and a password is never written beside code it may have left.`);
+      await page.reload({ timeout: 30_000 });
+      if (!others(page).length) { evalLeft = false; return true; }
+    }
+    return false;
+  }
 
   const activeFile = path.join(config.profileDir, ACTIVE_LOGIN_FILE);
   const whoKey = (l: BrowserLogin) => `${l.id ?? ''}|${l.user}`;
@@ -204,6 +226,8 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
     if (held !== undefined && held !== whoKey(login)) await signOut(page); // the cookies hold another user's session
     lastLogin = login;
     await page.goto(login.loginUrl, { waitUntil: 'load', timeout: 30_000 });
+    // after an eval the other tabs go and this page is a new document (a hash-routed login is not one after goto)
+    if (evalLeft && !await alone(page)) { signedIn.delete(login); return 'Login not done: tabs kept opening beside the login page after an eval. Close the other tabs (tabs) and try again.'; }
     if (loginPageFor(state, page.url(), login)) {
       const result = await driveLoginResult(playwrightLoginDriver(page), originOf(login.loginUrl), login, login.success ?? { urlNotContaining: new URL(login.loginUrl).pathname }, { timeoutMs: 20_000 })
         .catch((): LoginResult => ({ ok: false, reason: 'driver-error' }));
@@ -371,7 +395,11 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
         const action = String(args.action ?? '');
         if (action === 'back') await page.goBack({ timeout: 30_000 });
         else if (action === 'forward') await page.goForward({ timeout: 30_000 });
-        else if (action === 'reload') await page.reload({ timeout: 30_000 });
+        else if (action === 'reload') {
+          const single = !others(page).length;
+          await page.reload({ timeout: 30_000 });
+          if (single && !others(page).length) evalLeft = false; // the only tab, anew, still alone: nothing an eval left lives
+        }
         else return { text: 'action: back, forward or reload.', isError: true };
         const failed = await settle(page);
         return failed ? { text: failed, isError: true } : { text: await where(page) };
@@ -390,6 +418,8 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
         return failed ? { text: failed, isError: true } : { text: `${checked ? 'Checked' : 'Unchecked'} ${String(args.ref)}.` };
       }
       case 'drag': {
+        // a password field's text (selected, shown by a toggle) would be dropped where the page can be read
+        if (await locate(page, args.from).evaluate(IS_SECRET_FIELD)) return { text: 'Refused: a password field is never dragged.', isError: true };
         await locate(page, args.from).dragTo(locate(page, args.to), { timeout: ACTION_TIMEOUT });
         const failed = await settle(page);
         return failed ? { text: failed, isError: true } : { text: `Dragged ${String(args.from)} onto ${String(args.to)}.` };
@@ -456,7 +486,7 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
         const key = String(args.key ?? '');
         if (!/^[^\s]{1,40}$/.test(key)) return { text: 'key: a key name such as Enter, Tab, Escape, ArrowDown or Control+a.', isError: true };
         // in a password field (or one fill_secret filled) only the keys that leave or submit it: an edited value is one the masking no longer knows
-        if (!SECRET_KEYS.has(key) && (args.ref === undefined ? await page.evaluate<boolean>(SECRET_FOCUS_SCRIPT) : await locate(page, args.ref).evaluate(IS_SECRET_FIELD))) return { text: 'Refused: in a password field only Tab, Enter or Escape are pressed.', isError: true };
+        if (!SECRET_KEYS.has(key) && (args.ref === undefined ? await page.evaluate<boolean>(SECRET_FOCUS_SCRIPT) : await locate(page, args.ref).evaluate(IS_SECRET_FIELD))) return { text: 'Refused: in a password field only Tab, Shift+Tab, Enter or Escape are pressed.', isError: true };
         if (args.ref === undefined) await page.keyboard.press(key);
         else await locate(page, args.ref).press(key, { timeout: ACTION_TIMEOUT });
         const failed = await settle(page);
@@ -526,6 +556,8 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
         if (!allowedOrigin(config, page.url())) return { text: `Refused: eval runs only on ${config.origins.join(', ')}; this page is ${originOf(page.url()) || page.url()}.`, isError: true };
         if (loginPageFor(state, page.url())) return { text: 'Refused: eval never runs on a login page.', isError: true };
         if (await page.evaluate<boolean>(PASSWORD_HELD_SCRIPT)) return { text: 'Refused: a password field of this page holds a value (eval could read it). Run it before fill_secret or after the form is saved.', isError: true };
+        for (const p of others(page)) if (await p.evaluate<boolean>(PASSWORD_HELD_SCRIPT).catch(() => false)) return { text: 'Refused: a password field of another open tab holds a value (eval could reach it). Save that form or close that tab first.', isError: true };
+        evalLeft = true;
         const value = await page.evaluate<string>(evalScript(expression));
         const failed = await settle(page);
         return failed ? { text: failed, isError: true } : { text: `Result: ${value}` };
@@ -586,6 +618,7 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
         const el = locate(page, args.ref);
         const kind = await el.evaluate(e => `${e.tagName.toLowerCase()}:${(e.getAttribute('type') ?? '').toLowerCase()}`);
         if (kind !== 'input:password') return { text: 'Refused: fill_secret fills only password fields (a text field would show the value).', isError: true };
+        if (evalLeft) return { text: 'Refused: eval ran in this browser, and code it left (a timer, another tab) could read the field. Close the other tabs (tabs close), reload this page (history reload), take a new snapshot, then fill_secret.', isError: true };
         // marked first: the field stays a password field for type, press, eval, the snapshots and the screenshot even
         // when the page turns it into a text field (a "show password" toggle)
         await el.evaluate(MARK_SECRET_FIELD);

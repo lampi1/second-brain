@@ -97,7 +97,10 @@ hidden). A failed action returns Playwright's call log (e.g. "… intercepts poi
 **`eval` is a powerful tool**: it runs any JavaScript expression in the page and returns its value as JSON (at most
 4000 characters). It runs only on `browser.origins`, never on a login page, and is refused while a password field
 holds a value; every reply is masked against the package's passwords. It can still change data the page can change:
-allow it (`mcp__routine-browser__eval`) only where a prompt needs it, and say in the prompt what it may do.
+allow it (`mcp__routine-browser__eval`) only where a prompt needs it, and say in the prompt what it may do. After an
+`eval` the runtime writes no password beside what it may have left: `fill_secret` asks first for the other tabs closed
+and the page reloaded (`history` reload, then a new `snapshot`), and a login (a session that ended, the `login` tool)
+closes the other tabs by itself. A step that sets a password and uses `eval` does the `fill_secret` part first.
 
 ## Workflow (the Orchestrator)
 

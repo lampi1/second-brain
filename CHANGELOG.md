@@ -244,7 +244,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ### Fixed
 - Routines: a password written by `fill_secret` can no longer be read back (a Backspace in the field and the
   accessibility snapshot, or a "show password" toggle and a screenshot): the field stays a password field for every
-  browser tool.
+  browser tool. And none is written beside code an `eval` may have left: after an `eval`, `fill_secret` asks for a
+  reload of the only open tab first, and a login closes the other tabs and loads its page anew.
 - Expected answers of a tool to an agent no longer show up as app warnings in Manutenzione: a chat that is busy
   (`app_assign_task`), a card without title or summary (`show_ui`), a report «done» with a criterion not met
   (`agent_report`) are refusals the agent corrects by itself (#436, #438, #439).

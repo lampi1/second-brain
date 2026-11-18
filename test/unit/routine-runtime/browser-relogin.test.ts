@@ -3,7 +3,7 @@
 // read (screenshot with its password fields emptied first) but never scripted; the next call without the flag signs in
 // again as always, and the declared origins still hold. And the host side of the guards on a password `fill_secret`
 // wrote: the field is marked before it is filled, and a marked field is a password field for type, press, the
-// accessibility snapshot and the screenshot. The session runs on a fake page (no browser, no port, no timer): a site
+// accessibility snapshot and the screenshot; and after an eval no password is written until the only tab is loaded anew. The session runs on a fake page (no browser, no port, no timer): a site
 // with one login page whose session the test ends as a sign-out in another tab would; the in-page scripts are answered
 // by the fake.
 import fs from 'node:fs';
@@ -20,7 +20,9 @@ const FAKE = ['fake', 'value', String(process.pid)].join('-');
 /** The fake site and the session on it. `sso`: the login page signs in by itself and leaves (so no form is driven). */
 function open() {
   const s = { session: false, sso: true, url: 'about:blank', gotos: [] as string[], cleared: 0, clearOk: true, onClick: () => {},
-    keys: [] as string[], onKey: () => {}, held: false, shown: false, focusSecret: false,
+    keys: [] as string[], onKey: () => {}, held: false, shown: false, focusSecret: false, reloads: 0, onReload: () => {},
+    /** the other open tabs: whether each holds a password, and whether it was closed */
+    tabs: [] as { held: boolean; closed: boolean }[],
     /** the one field the fake locator finds: its attributes, its value, and what was done to it in order */
     field: { attrs: { type: 'text' } as Record<string, string>, value: '', did: [] as string[] } };
   const land = (url: string) => {
@@ -33,7 +35,7 @@ function open() {
   const page = {
     url: () => s.url, title: async () => 'App',
     goto: async (url: string) => { s.gotos.push(url); land(url); },
-    reload: async () => { land(s.url); }, goBack: async () => { land(s.url); }, goForward: async () => { land(s.url); },
+    reload: async () => { s.reloads += 1; land(s.url); s.onReload(); }, goBack: async () => { land(s.url); }, goForward: async () => { land(s.url); },
     waitForLoadState: async () => {}, waitForTimeout: async () => {},
     evaluate: async (script: string) => (scripts.get(script) ?? (() => ({ marked: [] })))(),
     ariaSnapshot: async () => '- textbox',
@@ -44,9 +46,11 @@ function open() {
       evaluate: async (fn: (e: unknown) => unknown) => fn(element),
       press: async (key: string) => { s.keys.push(`field:${key}`); },
       fill: async (value: string) => { s.field.value = value; s.field.did.push('fill'); },
+      dragTo: async () => { s.field.did.push('drag'); },
       pressSequentially: async (text: string) => { s.field.value += text; },
     }),
-    context: () => ({ clearCookies: async () => { s.session = false; }, pages: () => [page], on: () => undefined }),
+    context: () => ({ clearCookies: async () => { s.session = false; }, on: () => undefined,
+      pages: () => [page, ...s.tabs.map(tab => ({ isClosed: () => tab.closed, close: async () => { tab.closed = true; }, evaluate: async () => tab.held }))] }),
     on: () => undefined, isClosed: () => false,
   };
   const dir = tempDir('routine-relogin-');
@@ -182,11 +186,11 @@ describe('routine browser: a password fill_secret wrote stays unreadable', () =>
     // the page's "show password" toggle made it a text field; the mark stays
     s.field.attrs = { type: 'text', [SECRET_MARK]: '' };
     expect(await call('type', { ref: 'e1', text: 'x' })).toMatchObject({ isError: true, text: expect.stringMatching(/password fields are filled only/) });
-    expect(await call('press', { ref: 'e1', key: 'Backspace' })).toMatchObject({ isError: true, text: expect.stringMatching(/only Tab, Enter or Escape/) });
+    expect(await call('press', { ref: 'e1', key: 'Backspace' })).toMatchObject({ isError: true, text: expect.stringMatching(/only Tab, Shift\+Tab, Enter or Escape/) });
     expect((await call('press', { ref: 'e1', key: 'Enter' })).isError).toBe(false);
     // by focus too: fill leaves the focus in the field
     s.focusSecret = true;
-    expect(await call('press', { key: 'Backspace' })).toMatchObject({ isError: true, text: expect.stringMatching(/only Tab, Enter or Escape/) });
+    expect(await call('press', { key: 'Backspace' })).toMatchObject({ isError: true, text: expect.stringMatching(/only Tab, Shift\+Tab, Enter or Escape/) });
     expect(await call('press', { key: 'Control+c' })).toMatchObject({ isError: true });
     expect((await call('press', { key: 'Tab' })).isError).toBe(false);
     expect(s.keys).toEqual(['field:Enter', 'Tab']);
@@ -209,6 +213,79 @@ describe('routine browser: a password fill_secret wrote stays unreadable', () =>
     expect(fs.existsSync(path.join(dir, 'evidence', 'shown.png'))).toBe(false);
     s.shown = false;
     expect((await call('screenshot', { name: 'hidden' })).isError).toBe(false);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('routine browser: no password is written beside code an eval may have left', () => {
+  it('after an eval fill_secret is refused until the only tab is reloaded', async () => {
+    const { s, call, dir } = open();
+    await call('navigate', { url: HOME });
+    s.field.attrs = { type: 'password' };
+    expect(await call('eval', { expression: '1' })).toMatchObject({ isError: false });
+    expect(await call('fill_secret', { ref: 'e1', credential: 'admin' })).toMatchObject({ isError: true, text: expect.stringMatching(/eval ran in this browser/) });
+    expect(s.field.did).toEqual([]);
+    // a second tab is open: the reload of this one is not enough (that tab may hold a handle to it)
+    s.tabs.push({ held: false, closed: false });
+    await call('history', { action: 'reload' });
+    expect((await call('fill_secret', { ref: 'e1', credential: 'admin' })).isError).toBe(true);
+    s.tabs[0]!.closed = true;
+    await call('history', { action: 'reload' });
+    expect(await call('fill_secret', { ref: 'e1', credential: 'admin' })).toMatchObject({ isError: false });
+    expect(s.field.value).toBe(FAKE);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('a reload during which a tab opens does not count', async () => {
+    const { s, call, dir } = open();
+    await call('navigate', { url: HOME });
+    s.field.attrs = { type: 'password' };
+    await call('eval', { expression: '1' });
+    s.onReload = () => { s.tabs.push({ held: false, closed: false }); s.onReload = () => {}; };
+    await call('history', { action: 'reload' });
+    expect((await call('fill_secret', { ref: 'e1', credential: 'admin' })).isError).toBe(true);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('a login after an eval closes the other tabs and loads its page anew before it signs in', async () => {
+    const { s, call, dir } = open();
+    await call('navigate', { url: HOME });
+    s.tabs.push({ held: false, closed: false }, { held: false, closed: false });
+    await call('eval', { expression: '1' });
+    const before = s.reloads;
+    expect(await call('login', { credential: 'admin' })).toMatchObject({ isError: false });
+    expect(s.tabs.map(tab => tab.closed)).toEqual([true, true]);
+    expect(s.reloads).toBe(before + 1);
+    // clean again: fill_secret works
+    s.field.attrs = { type: 'password' };
+    expect((await call('fill_secret', { ref: 'e1', credential: 'admin' })).isError).toBe(false);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('a login is not done while tabs keep opening beside it; without an eval the other tabs stay', async () => {
+    const { s, call, dir } = open();
+    await call('navigate', { url: HOME });
+    s.tabs.push({ held: false, closed: false });
+    expect((await call('login', { credential: 'admin' })).isError).toBe(false);
+    expect(s.tabs[0]!.closed).toBe(false);
+    await call('eval', { expression: '1' });
+    s.onReload = () => { s.tabs.push({ held: false, closed: false }); };
+    expect(await call('login', { credential: 'admin' })).toMatchObject({ isError: true, text: expect.stringMatching(/Login not done/) });
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('eval is refused while another open tab holds a password; a password field is never dragged; Shift+Tab leaves it', async () => {
+    const { s, call, dir } = open();
+    await call('navigate', { url: HOME });
+    s.tabs.push({ held: true, closed: false });
+    expect(await call('eval', { expression: '1' })).toMatchObject({ isError: true, text: expect.stringMatching(/another open tab holds a value/) });
+    s.field.attrs = { type: 'text', [SECRET_MARK]: '' };
+    expect(await call('drag', { from: 'e1', to: 'e2' })).toMatchObject({ isError: true, text: expect.stringMatching(/never dragged/) });
+    expect(s.field.did).toEqual([]);
+    expect((await call('press', { ref: 'e1', key: 'Shift+Tab' })).isError).toBe(false);
+    s.field.attrs = { type: 'text' };
+    expect((await call('drag', { from: 'e1', to: 'e2' })).isError).toBe(false);
+    expect(s.field.did).toEqual(['drag']);
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });

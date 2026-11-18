@@ -39,9 +39,15 @@ change is made on that runtime, so this ADR also brings it to `main`.
    field (`data-routine-secret`), and a marked field is a password field for every tool whatever its type: `type`
    refuses it, only Tab, Enter and Escape are pressed in it (by ref or by focus), its snapshot value is `***`, the
    accessibility snapshot and `eval` are refused while it holds a value, and no screenshot is taken while it shows
-   the value in clear. Known limits: a page that replaces the field with a new element on the toggle loses the mark,
-   and `eval` stays a tool that can do what the page can (a script it leaves in one tab can watch another tab of the
-   same site), which is why a package allows it only for the steps whose prompt needs it.
+   the value in clear, and it is never dragged. A second pass of the review read a password through what an `eval`
+   leaves behind: a timer on the page, or a handle to another tab, which survives that tab's reload. So after an
+   `eval` no password is written until nothing it left can be alive: `fill_secret` refuses until the only open tab is
+   reloaded (`history` reload, with no tab opened meanwhile), and a login closes the other tabs and loads its page
+   anew before it types (three tries, then the login is not done); `eval` is also refused while any open tab holds
+   a password. Closing is the point: a reloaded tab can be written into again by a tab still alive, a closed one
+   cannot. Known limits: a page that replaces the field with a new element on the toggle loses the mark; a tab that
+   opens in the instant between the reload and the check is not seen; and `eval` stays a tool that can do what the
+   page can, which is why a package allows it only for the steps whose prompt needs it.
 
 ## Consequences
 
