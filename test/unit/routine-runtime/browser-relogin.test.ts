@@ -244,6 +244,11 @@ describe('routine browser: no password is written beside code an eval may have l
     s.onReload = () => { s.tabs.push({ held: false, closed: false }); s.onReload = () => {}; };
     await call('history', { action: 'reload' });
     expect((await call('fill_secret', { ref: 'e1', credential: 'admin' })).isError).toBe(true);
+    // a tab that shows up only after the reload was judged clean: still refused, and that reload no longer counts
+    s.tabs[0]!.closed = true;
+    await call('history', { action: 'reload' });
+    s.tabs.push({ held: false, closed: false });
+    expect((await call('fill_secret', { ref: 'e1', credential: 'admin' })).isError).toBe(true);
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
@@ -279,6 +284,7 @@ describe('routine browser: no password is written beside code an eval may have l
     await call('navigate', { url: HOME });
     s.tabs.push({ held: true, closed: false });
     expect(await call('eval', { expression: '1' })).toMatchObject({ isError: true, text: expect.stringMatching(/another open tab holds a value/) });
+    s.tabs[0]!.closed = true;
     s.field.attrs = { type: 'text', [SECRET_MARK]: '' };
     expect(await call('drag', { from: 'e1', to: 'e2' })).toMatchObject({ isError: true, text: expect.stringMatching(/never dragged/) });
     expect(s.field.did).toEqual([]);

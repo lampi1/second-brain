@@ -188,7 +188,7 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
    *  live in a tab (a timer, a handle to another tab that survives that tab's reload) and would read a password
    *  written beside it. No password is written while it is set: `fill_secret` refuses, a login first makes the tab
    *  `alone`. */
-  let evalLeft = false;
+  let evalLeft = false, reloadedAlone = false; // reloadedAlone: the only tab was reloaded since; the flag falls at the next fill_secret that still finds it alone
   const others = (page: BrowserPage) => page.context().pages().filter(p => p !== page && !p.isClosed());
   /** Leaves no code an eval planted: every other tab closed (a closed tab is the only one nothing can be planted in
    *  again), this one loaded anew, and still the only one after it (a popup the old document opened on its way out is
@@ -398,7 +398,7 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
         else if (action === 'reload') {
           const single = !others(page).length;
           await page.reload({ timeout: 30_000 });
-          if (single && !others(page).length) evalLeft = false; // the only tab, anew, still alone: nothing an eval left lives
+          reloadedAlone = single && !others(page).length; // the only tab, anew, still alone: nothing an eval left lives
         }
         else return { text: 'action: back, forward or reload.', isError: true };
         const failed = await settle(page);
@@ -556,8 +556,8 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
         if (!allowedOrigin(config, page.url())) return { text: `Refused: eval runs only on ${config.origins.join(', ')}; this page is ${originOf(page.url()) || page.url()}.`, isError: true };
         if (loginPageFor(state, page.url())) return { text: 'Refused: eval never runs on a login page.', isError: true };
         if (await page.evaluate<boolean>(PASSWORD_HELD_SCRIPT)) return { text: 'Refused: a password field of this page holds a value (eval could read it). Run it before fill_secret or after the form is saved.', isError: true };
-        for (const p of others(page)) if (await p.evaluate<boolean>(PASSWORD_HELD_SCRIPT).catch(() => false)) return { text: 'Refused: a password field of another open tab holds a value (eval could reach it). Save that form or close that tab first.', isError: true };
-        evalLeft = true;
+        for (const p of others(page)) if (await p.evaluate<boolean>(PASSWORD_HELD_SCRIPT).catch(() => true)) return { text: 'Refused: a password field of another open tab holds a value (or the tab cannot be read) (eval could reach it). Save that form or close that tab first.', isError: true };
+        evalLeft = true; reloadedAlone = false;
         const value = await page.evaluate<string>(evalScript(expression));
         const failed = await settle(page);
         return failed ? { text: failed, isError: true } : { text: `Result: ${value}` };
@@ -618,6 +618,7 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
         const el = locate(page, args.ref);
         const kind = await el.evaluate(e => `${e.tagName.toLowerCase()}:${(e.getAttribute('type') ?? '').toLowerCase()}`);
         if (kind !== 'input:password') return { text: 'Refused: fill_secret fills only password fields (a text field would show the value).', isError: true };
+        if (evalLeft && reloadedAlone && !others(page).length) evalLeft = false;
         if (evalLeft) return { text: 'Refused: eval ran in this browser, and code it left (a timer, another tab) could read the field. Close the other tabs (tabs close), reload this page (history reload), take a new snapshot, then fill_secret.', isError: true };
         // marked first: the field stays a password field for type, press, eval, the snapshots and the screenshot even
         // when the page turns it into a text field (a "show password" toggle)

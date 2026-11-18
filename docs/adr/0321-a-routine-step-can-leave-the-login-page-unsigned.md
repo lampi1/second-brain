@@ -42,7 +42,7 @@ change is made on that runtime, so this ADR also brings it to `main`.
    the value in clear, and it is never dragged. A second pass of the review read a password through what an `eval`
    leaves behind: a timer on the page, or a handle to another tab, which survives that tab's reload. So after an
    `eval` no password is written until nothing it left can be alive: `fill_secret` refuses until the only open tab is
-   reloaded (`history` reload, with no tab opened meanwhile), and a login closes the other tabs and loads its page
+   reloaded (`history` reload, with no tab opened meanwhile nor found at the `fill_secret` itself), and a login closes the other tabs and loads its page
    anew before it types (three tries, then the login is not done); `eval` is also refused while any open tab holds
    a password. Closing is the point: a reloaded tab can be written into again by a tab still alive, a closed one
    cannot. Known limits: a page that replaces the field with a new element on the toggle loses the mark; a tab that
