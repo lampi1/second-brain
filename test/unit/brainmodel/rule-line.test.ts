@@ -202,8 +202,13 @@ describe('editRuleLine: what the last verification got through (2026-11-18)', ()
     expect(why('# Rules\n\n- Ask the owner before any change to the\n  production database.\n  - Read-only queries are fine.\n', '- Read-only queries are fine.', '- Every query is fine.')).toBe('guarded');
     expect(why('# Rules\n\n- Never touch the\n  production database.\n\n  Exception: read-only queries.\n', 'Exception: read-only queries.', 'Exception: every query.')).toBe('guarded');
     expect(why('# Rules\n\n- On the production database run only\n  ```sql\n  SELECT 1;\n  ```\n', 'SELECT 1;', 'DROP TABLE users;')).toBe('guarded');
-    // siblings are not each other's rule
-    expect(why('# Rules\n\n- Git\n  - Never push to production.\n  - Be concise.\n', '- Be concise.', '- Be brief.')).toBe('ok');
+    // the sub-items of one item stand or fall together (the price of reading the whole item); the next item does not
+    expect(why('# Rules\n\n- Git\n  - Never push to production.\n  - Be concise.\n- Tests\n  - Run them.\n', '- Be concise.', '- Be brief.')).toBe('guarded');
+    expect(why('# Rules\n\n- Git\n  - Never push to production.\n  - Be concise.\n- Tests\n  - Run them.\n', '- Run them.', '- Run them all.')).toBe('ok');
+    // a bar in a line makes no table of it; a new line may not lean on the item above; a # in a code block is no heading
+    expect(why('# Rules\n\n- Production databases\n  - run `a | b` first\n', '- run `a | b` first', '- skip `a | b`')).toBe('guarded');
+    expect(why('# Rules\n\n- Never push to production\n  without asking.\n- Be concise.\n', '- Be concise.', 'unless you are in a hurry.')).toBe('guarded');
+    expect(why('# Rules\n\n- On the production database run only\n  ```sh\n  # read-only check\n  psql -c "SELECT 1"\n  ```\n', 'psql -c "SELECT 1"', 'psql -c "DROP TABLE users"')).toBe('guarded');
   });
 
   it('a title speaks for every line down to the next plain heading; a Setext title holds its level', () => {
@@ -218,6 +223,7 @@ describe('editRuleLine: what the last verification got through (2026-11-18)', ()
     expect(why(t, '--- | ---', 'plain text')).toBe('structure');
     expect(why(t, 'a | b', 'a | b | extra')).toBe('structure');
     expect(why(t, 'c | d', 'c | e')).toBe('ok');
+    expect(why('# Rules\n\n| When | Read |\n|---|---|\n| code | file |\n', '| code | file |', 'code | file | more |')).toBe('structure');
     const f = '# Rules\n\n- Be concise.\n';
     for (const text of ['--', '-', '- - # Old', '- > # Old', '- ```', '> ```', '> ---', '<?php', '\u200b## Obsolete rules'])
       expect(why(f, '- Be concise.', text), JSON.stringify(text)).toBe('structure');

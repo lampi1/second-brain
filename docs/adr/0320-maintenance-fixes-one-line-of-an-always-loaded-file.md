@@ -27,14 +27,15 @@ pending files several times.
 3. **Never a safety line.** Refused when the old or the new line is about safety, permissions, settings, hooks,
    production or secrets (a word list, plus `checkPermissionText`), or when the line sits under a heading with one of
    those words (the «Safety» section of `me.md`). Those lines stay the user's to edit by hand. The guard refuses when
-   in doubt (three independent reviews, 2026-11-18):
+   in doubt (five independent review passes, 2026-11-18, each of which got through the one before):
    - only a rule line is written or replaced: never a heading (`# …`, also in a quote or a list), a table's header or
      its row of dashes, a code fence, a `---` line, an HTML comment mark or a tag that opens a block; a table row
      stays a row with the same cells. Renaming «## Hard rules» or opening a comment above a section would change what
      the lines under it mean without touching them;
-   - a rule is read whole, before and after the edit: the lines it wraps onto, the items under it and the items it
-     sits under, its second paragraph, a table row with its header; a title or a lead-in («Never do these:») is not
-     changed when a line under it is guarded;
+   - a rule is read whole, before and after the edit and where the new line will stand: the whole top-level item
+     or paragraph the line is in (its wrapped lines, every item under it, its second paragraph, its code block), a
+     table row with its header; so the sub-items of one item stand or fall together. A title or a lead-in («Never do
+     these:») is not changed when a line under it, down to the next plain heading, is guarded;
    - only a plain ATX heading (outside a code block, an HTML comment or `<pre>`) ends a section; every other form
      above the line (Setext, an all-emphasis line, a line ending with a colon, a `# …` in a code block, in a quote or
      indented as code, an HTML heading) is checked and ends nothing, so no form can hide a guarded section; a byte

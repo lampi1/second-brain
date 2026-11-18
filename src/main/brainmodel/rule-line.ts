@@ -4,10 +4,10 @@
 // finding of kind rule with `file` and `before` now replaces exactly that line with `text`: the file must be one of the
 // always-loaded ones, `before` must be one whole line of it, found once, and neither the old nor the new line may be
 // about safety, permissions, settings, hooks, production or secrets (those stay the user's to edit by hand). The guard
-// refuses when in doubt (three independent reviews, 2026-11-18): only a rule line is written or replaced, never a
+// refuses when in doubt (five independent review passes, 2026-11-18): only a rule line is written or replaced, never a
 // heading, a table's header, a code fence, a --- line or an HTML tag; only a plain ATX heading ends a section, every other
-// heading form above the line is checked and ends nothing; a rule is read whole (the lines it wraps onto, the items
-// under it and over it), and a title or lead-in is not changed when a line under it is guarded; the words are read
+// heading form above the line is checked and ends nothing; a rule is read whole (the top-level item or paragraph the
+// line is in), and a title or lead-in is not changed when a line under it is guarded; the words are read
 // with accents, _ * ` ~, camelCase and invisible characters taken off; and the fixed core never grows past its budget
 // (the launch would stop: rules/instructions.ts). It is a word list, not an understanding of the text: the user's yes
 // on the exact line before and after stays the real check.
@@ -94,71 +94,74 @@ function looseTitle(lines: readonly string[], i: number): string | null {
   return null;
 }
 
-/** The sections line `at` sits in, as the texts to check. Only a plain ATX heading (at most 3 spaces in, outside a code
- *  block and an HTML comment or <pre>) ends the sections of its level and below; every other heading form above the
- *  line and after the last plain heading is checked too and ends nothing, so no form hides a guarded section. A code
- *  block opens and closes as CommonMark says (its own marker, at least as long, nothing after it). */
-function sectionsOf(lines: readonly string[], at: number): string[] {
-  let plain: { level: number; title: string }[] = [], loose: string[] = [];
+type Kind = 'fence' | 'code' | 'html' | 'head' | 'text';
+/** What each line is for the document's shape: a code block's own marks, a line inside one, a line inside an HTML
+ *  comment or raw block, a plain ATX heading (at most 3 spaces in, outside those), or text. A code block opens and
+ *  closes as CommonMark says (its own marker, at least as long, nothing after it). */
+function kindsOf(lines: readonly string[]): Kind[] {
   let fence = '', html = '';
-  const note = (i: number) => { const t = looseTitle(lines, i); if (t) loose.push(t); };
-  for (let i = 0; i < at; i++) {
-    const l = lines[i]!;
+  return lines.map((l): Kind => {
     if (fence) {
       const close = /^ {0,3}(`{3,}|~{3,})\s*$/.exec(l);
-      if (close && close[1]![0] === fence[0] && close[1]!.length >= fence.length) fence = ''; else note(i);
-      continue;
+      if (!close || close[1]![0] !== fence[0] || close[1]!.length < fence.length) return 'code';
+      fence = '';
+      return 'fence';
     }
-    if (html) { if (l.toLowerCase().includes(html)) html = ''; note(i); continue; }
+    if (html) { if (l.toLowerCase().includes(html)) html = ''; return 'html'; }
     const open = /^ {0,3}(`{3,})[^`]*$/.exec(l) ?? /^ {0,3}(~{3,})/.exec(l);
-    if (open) { fence = open[1]!; continue; }
+    if (open) { fence = open[1]!; return 'fence'; }
     const tag = /<!--(?!.*-->)/.test(l) ? '-->' : /<(pre|script|style|textarea)\b(?!.*<\/\1>)/i.exec(l)?.[1];
-    if (tag) { html = tag === '-->' ? tag : `</${tag.toLowerCase()}>`; note(i); continue; }
-    const atx = /^ {0,3}(#{1,6})[ \t]+(.+)$/.exec(l);
-    if (atx) { plain = [...plain.filter(h => h.level < atx[1]!.length), { level: atx[1]!.length, title: atx[2]! }]; loose = []; continue; }
-    // a Setext title holds its level (=== 1, --- 2) against the plain headings after it, and ends nothing itself
-    if (l.trim() && !UNDERLINE.test(l) && UNDERLINE.test(lines[i + 1] ?? '')) plain.push({ level: lines[i + 1]!.trim().startsWith('=') ? 1 : 2, title: looseTitle(lines, i) ?? l });
-    else note(i);
+    if (tag) { html = tag === '-->' ? tag : `</${tag.toLowerCase()}>`; return 'html'; }
+    return /^ {0,3}#{1,6}[ \t]/.test(l) ? 'head' : 'text';
+  });
+}
+
+/** The sections line `at` sits in, as the texts to check. Only a plain heading ends the sections of its level and
+ *  below; every other heading form above the line and after the last plain heading is checked too and ends nothing,
+ *  so no form hides a guarded section. A Setext title holds its level (=== 1, --- 2) against the plain headings after
+ *  it. */
+function sectionsOf(lines: readonly string[], kinds: readonly Kind[], at: number): string[] {
+  let plain: { level: number; title: string }[] = [], loose: string[] = [];
+  for (let i = 0; i < at; i++) {
+    const l = lines[i]!, kind = kinds[i]!;
+    if (kind === 'fence') continue;
+    if (kind === 'head') {
+      const level = /#+/.exec(l)![0].length;
+      plain = [...plain.filter(h => h.level < level), { level, title: l }];
+      loose = [];
+    } else if (kind === 'text' && l.trim() && !UNDERLINE.test(l) && UNDERLINE.test(lines[i + 1] ?? '')) {
+      plain.push({ level: lines[i + 1]!.trim().startsWith('=') ? 1 : 2, title: looseTitle(lines, i) ?? l });
+    } else { const t = looseTitle(lines, i); if (t) loose.push(t); }
   }
   return [...plain.map(h => h.title), ...loose];
 }
 
 const indentOf = (l: string): number => /^[ \t]*/.exec(l)![0].replace(/\t/g, '    ').length;
-const plainHeading = (l: string): boolean => /^ {0,3}#{1,6}[ \t]/.test(l);
 
-/** The lines that make one rule with line `at`: the lines it wraps onto and everything deeper in under it (its second
- *  paragraph, its sub-items), the lines it continues, and the items it sits under (less deep, above). A guarded word
- *  on any of them guards the line. */
-function ruleOf(lines: readonly string[], at: number): number[] {
-  const out = [at], own = indentOf(lines[at]!);
-  // a table row is read with its header row (the first row of the table)
-  if (isRow(lines[at]!)) { let top = at; while (top > 0 && isRow(lines[top - 1]!)) top--; return top === at ? out : [top, at]; }
-  let joined = true; // no blank line since the line: a line not deeper in can still be its continuation
-  for (let i = at + 1; i < lines.length; i++) {
-    const l = lines[i]!;
-    if (!l.trim()) { joined = false; continue; }
-    if (plainHeading(l)) break;
-    if (indentOf(l) <= own && !(joined && !ITEM.test(l) && !isRow(l))) break;
-    out.push(i);
+/** The lines that make one rule with line `at`, first and last. In a table (rows with a row of dashes): the row, read
+ *  with the table's header. Else the whole top-level item or paragraph the line is in, from its first line (an item
+ *  at the margin, or a line at the margin after a blank line or a heading) to the line before the next one: its
+ *  wrapped lines, every item under it, its second paragraph, its code block. A guarded word anywhere in it guards the
+ *  line; the price is that the sub-items of one item stand or fall together. */
+function ruleOf(lines: readonly string[], kinds: readonly Kind[], at: number): string {
+  if (isRow(lines[at]!)) {
+    let top = at, end = at;
+    while (top > 0 && isRow(lines[top - 1]!)) top--;
+    while (end + 1 < lines.length && isRow(lines[end + 1]!)) end++;
+    if (lines.slice(top, end + 1).some(l => DASHES.test(l))) return top === at ? lines[at]! : `${lines[top]!} ${lines[at]!}`;
   }
-  // up: the lines it continues, then each item it sits under with the lines that item wraps onto
-  let level = own, wrapped = !ITEM.test(lines[at]!);
-  for (let i = at - 1; i >= 0 && (level > 0 || wrapped); i--) {
-    const l = lines[i]!;
-    if (!l.trim()) { wrapped = false; continue; }
-    if (plainHeading(l)) break;
-    const deep = indentOf(l), item = ITEM.test(l);
-    if (deep < level) { out.push(i); level = deep; wrapped = !item; }
-    else if (deep === level && !isRow(l) && (wrapped || (level > 0 && !item))) { out.push(i); if (item) wrapped = false; }
-    else wrapped = false;
-  }
-  return out.sort((x, y) => x - y);
+  const starts = (i: number): boolean => kinds[i] === 'head' || (kinds[i] === 'text' && !!lines[i]!.trim() && indentOf(lines[i]!) === 0
+    && (ITEM.test(lines[i]!) || i === 0 || !lines[i - 1]!.trim() || kinds[i - 1] === 'head'));
+  let a = at, b = at;
+  while (a > 0 && !starts(a)) a--;
+  while (b + 1 < lines.length && !starts(b + 1)) b++;
+  return lines.slice(a, b + 1).join(' ');
 }
 
 /** The lines a title or a lead-in at `at` speaks for: down to the next plain heading. */
-function governed(lines: readonly string[], at: number): string {
+function governed(lines: readonly string[], kinds: readonly Kind[], at: number): string {
   let end = at + 1;
-  while (end < lines.length && !plainHeading(lines[end]!)) end++;
+  while (end < lines.length && kinds[end] !== 'head') end++;
   return lines.slice(at + 1, end).join(' ');
 }
 
@@ -180,13 +183,16 @@ export function editRuleLine(fileText: string, before: string, after: string): R
   const at = hits[0]!, old = lines[at]!;
   // a line that shapes the document, the line over a row of dashes (a table's header, a Setext title), and a table
   // row that would gain or lose cells: never written, never replaced
-  if (shapes(old) || shapes(next) || DASHES.test(lines[at + 1] ?? '') || cellsOf(old) !== cellsOf(next)) return { ok: false, why: 'structure' };
+  const outer = (l: string) => `${/^\s*\|/.test(l)}${/\|\s*$/.test(l)}`;
+  if (shapes(old) || shapes(next) || DASHES.test(lines[at + 1] ?? '') || cellsOf(old) !== cellsOf(next) || outer(old) !== outer(next)) return { ok: false, why: 'structure' };
   const written = `${/^\s*/.exec(old)![0]}${next}${/\s*$/.exec(old)![0]}`, after1 = lines.map((l, i) => (i === at ? written : l));
-  // the whole rule is read, before and after: a guarded word on a line it wraps onto, under it or over it guards it
-  const rule = (all: readonly string[]) => ruleOf(all, at).map(i => all[i]!).join(' ');
+  // the document's shape before and after (the same, since no shaping line is written: computed twice to be sure)
+  const kinds = kindsOf(lines), kinds1 = kindsOf(after1);
+  // the whole rule is read, before and after, where the new line will stand
   // a title or a lead-in («Never do these:») speaks for the lines under it: not changed when one of them is guarded
-  const leads = (all: readonly string[]) => looseTitle(all, at) !== null && guardedText(governed(all, at));
-  if (guardedText(old) || guardedText(next) || guardedText(rule(lines)) || guardedText(rule(after1)) || leads(lines) || leads(after1) || sectionsOf(lines, at).some(guardedText)) return { ok: false, why: 'guarded' };
+  const leads = (all: readonly string[], k: readonly Kind[]) => looseTitle(all, at) !== null && guardedText(governed(all, k, at));
+  if (guardedText(old) || guardedText(next) || guardedText(ruleOf(lines, kinds, at)) || guardedText(ruleOf(after1, kinds1, at)) || leads(lines, kinds) || leads(after1, kinds1)
+    || sectionsOf(lines, kinds, at).some(guardedText)) return { ok: false, why: 'guarded' };
   // the line keeps its place in a list or a quote: its indentation stays, the new text brings its own marker
   parts[at * 2] = written;
   return { ok: true, text: bom + parts.join('') };
