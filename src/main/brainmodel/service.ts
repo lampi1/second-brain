@@ -35,7 +35,7 @@ import { lintPlan } from './lint-cards';
 import { checkChange } from './success-check';
 import { countLogGroup } from './log-scan';
 import { randomBytes } from 'node:crypto';
-import { alwaysLoadedText, editRuleLine, RULE_LINE_WHY } from './rule-line';
+import { alwaysLoadedText, editAlwaysLoaded, RULE_LINE_WHY } from './rule-line';
 
 /** How long an unchanged state is reused (the day's figures still move with the clock). */
 export const CACHE_MS = 5 * 60_000;
@@ -422,7 +422,7 @@ export class BrainModelService {
     if (ch.target === 'rule' && !role && ch.file && ch.before) {
       const before = alwaysLoadedText(root, readRules(root), ch.file);
       if (before === null) throw new Error('Il file non è più tra quelli sempre caricati, o non si legge.');
-      const edit = editRuleLine(before, ch.before, text);
+      const edit = editAlwaysLoaded(root, ch.file, before, ch.before, text);
       if (!edit.ok) throw new Error(`Riga non cambiata: ${RULE_LINE_WHY[edit.why].it}.`);
       const c = this.log.apply({ job: 'research', kind: 'rule', action: 'update', target: ch.file, summary: `${ch.file}: ${oneLine(text, 140)}`, reason: why, evidence, ...success },
         [{ file: path.join(root, ...ch.file.split('/')), text: edit.text, removed: [{ item: ch.before, reason: why }] }]);

@@ -119,7 +119,7 @@ describe('one line of an always-loaded file (#435, ADR 0320)', () => {
   function fixed(): string {
     const root = brain();
     fs.writeFileSync(path.join(root, 'AGENTS.md'), AGENTS);
-    fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', fixedFiles: ['AGENTS.md'], rules: { topicFiles: [], appRules: true } }));
+    fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', rules: { fixedFiles: ['AGENTS.md'], fixedBudget: 300, topicFiles: [], appRules: true } }));
     return root;
   }
   const edit = { target: 'rule' as const, file: 'AGENTS.md', before: '- Stage everything, then commit.', text: '- Stage only the files you changed, then commit.' };
@@ -143,6 +143,20 @@ describe('one line of an always-loaded file (#435, ADR 0320)', () => {
     expect(snapshot(root)).toEqual(before);
     // the checks say the always-loaded lines did not grow
     expect(candidateChecks(plan.files, input.rules, 'en').some(l => /\+0 lines in rules loaded in every job/.test(l))).toBe(true);
+  });
+
+  it('two findings on one file both land, the second on the first; one that would pass the fixed budget is left out', () => {
+    const root = fixed(), input = { root, skills: [], rules: readRules(root), now: NOW };
+    const second = { ...edit, before: '- Message in English.', text: '- Message in English, conventional style.' };
+    const plan = planCandidate(input, [
+      p('l1', { change: edit }),
+      p('l2', { change: second }),
+      p('l3', { change: { ...edit, before: second.text, text: `- Message in English, ${'conventional '.repeat(20)}style.` } }),
+    ]);
+    expect(plan.used).toEqual(['l1', 'l2']);
+    expect(plan.skipped).toEqual([{ id: 'l3', why: expect.stringMatching(/limite/) }]);
+    expect(plan.files).toHaveLength(1);
+    expect(plan.files[0]!.after).toBe(AGENTS.replace(edit.before, edit.text).replace(second.before, second.text));
   });
 
   it('the research proposes it, the candidate shows the line, rejecting keeps the old line, approving changes it and one undo puts it back', async () => {

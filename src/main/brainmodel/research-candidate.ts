@@ -26,7 +26,7 @@ import { appendUnder, skillText } from './jobs';
 import { ignoreWrite, sourceOfSkill } from './migration-ignore';
 import { landsInsideBrain, readSmall } from './model';
 import type { ProcedureSection } from './procedure-sources';
-import { editRuleLine, RULE_LINE_WHY } from './rule-line';
+import { editAlwaysLoaded, RULE_LINE_WHY } from './rule-line';
 
 const DAY = 86_400_000;
 /** A file the change log can keep a copy of (changes.ts SNAP): a bigger one leaves the finding out of the candidate. */
@@ -146,7 +146,7 @@ export function planCandidate(input: PlanInput, proposals: readonly ResearchProp
           const file = path.join(root, ...ch.file.split('/'));
           const before = input.rules.some(r => r.file === ch.file && r.loaded === 'always') && relOf(root, file) === ch.file ? read(file) : null;
           if (before === null) throw new Error('file non tra quelli sempre caricati, o non leggibile');
-          const edit = editRuleLine(before, ch.before, text);
+          const edit = editAlwaysLoaded(root, ch.file, before, ch.before, text, rel => read(path.join(root, ...rel.split('/'))));
           if (!edit.ok) throw new Error(RULE_LINE_WHY[edit.why].it);
           put(file, edit.text);
         } else throw new Error('regole per tutti i ruoli: non ci sono più (#366), va proposta una skill');

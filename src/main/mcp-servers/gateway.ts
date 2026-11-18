@@ -126,7 +126,7 @@ export class McpGateway {
     const asked = !c.tools || Date.now() - c.toolsAt > TOOLS_TTL;   // the server is asked now (else the chat's cached list)
     if (asked) { c.tools = c.up.tools(); c.toolsAt = Date.now(); }
     let list: UpstreamTool[];
-    try { list = await c.tools; }
+    try { list = await c.tools!; }
     catch (e) {
       // a connection the app itself closed meanwhile (the chat closed, a definition change) is not a server that died
       const ours = this.conns.get(`${chatId}|${server}`) === c;

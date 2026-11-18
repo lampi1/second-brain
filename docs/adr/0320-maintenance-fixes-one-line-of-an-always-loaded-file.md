@@ -21,12 +21,17 @@ pending files several times.
    the «riuscito se…» check stay the ones of a brain change. A rule for every role without `file` is still refused
    (ADR 0243): new knowledge for everyone remains a skill.
 2. **Exactly that line.** The line is found by its whole text (trimmed, inner spaces folded, as the item delta of ADR
-   0194 compares lines) and must be in the file exactly once; its indentation and the file's line ends stay. One line
-   per finding; a line break, an empty line or more than 800 characters is refused.
+   0194 compares lines) and must be in the file exactly once; its indentation and every line end stay (a file with
+   mixed line ends keeps each). One line per finding; a line break, a control character, an empty line or more than
+   800 characters is refused.
 3. **Never a safety line.** Refused when the old or the new line is about safety, permissions, settings, hooks,
    production or secrets (a word list, plus `checkPermissionText`), or when the line sits under a heading with one of
-   those words (the «Safety» section of `me.md`). Those lines stay the user's to edit by hand. The guard errs on the
-   side of refusing.
+   those words (the «Safety» section of `me.md`). Those lines stay the user's to edit by hand. The guard refuses when
+   in doubt (independent review, 2026-11-18): the words are English, Italian and German and are also looked for with
+   `_ * \` ~` and camelCase taken apart (`__Safety__`, `dangerously_skip_permissions`, `GITHUB_TOKEN`); a heading
+   counts in every form (ATX at any indentation, Setext, a bold-only line, a `# …` inside a code block until the next
+   heading); a line that opens or closes a code block is never written or replaced, and a block closes only with its
+   own marker, so no edit can hide a section inside a code block.
 4. **Through the candidate brain.** The finding is a brain-file finding (`isCandidateFinding`): it is planned with the
    others on the virtual copy, and the candidate's before/after diff of the file is that one line. Rejecting the
    candidate writes nothing; approving applies it as one change whose «Annulla» puts the old line back; a file edited
@@ -37,6 +42,10 @@ pending files several times.
    as it is then.
 6. **The exact text on the card.** The finding's «removes» and «adds» are written by the app from the two lines, never
    the research's own words.
+7. **Never past the fixed budget.** A line that would make the always-loaded files grow past `rules.fixedBudget` is
+   refused at the three checks (`editAlwaysLoaded`): over it every launch stops (`rules/instructions.ts`), which the
+   agents' write guard already prevents (`rules/guards.ts`). A line that shortens the core passes even when the user
+   left it over the budget.
 
 ## Consequences
 
