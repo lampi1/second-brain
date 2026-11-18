@@ -12,6 +12,7 @@ import { ARTIFACT_MAX_BYTES, ARTIFACT_MAX_PER_CHAT, checkUi, describeUi, hasUiFe
 import { Artifacts, showUiTool, type Artifact } from '../../src/main/genui/artifacts';
 import { SCREENSHOT_HINT } from '../../src/main/ask-image';
 import type { CallCtx } from '../../src/main/mcp/server';
+import { ToolRefusal } from '../../src/main/mcp/refusal';
 
 const table = { columns: ['Test', 'Esito'], rows: [{ cells: ['TC 1', 'ok'], status: 'ok', link: { label: 'evidenza', href: 'C:\\qa\\tc1.png' } }, { cells: ['TC 2'] }] };
 
@@ -170,6 +171,8 @@ describe('Artifacts: the store behind show_ui', () => {
     expect(sent[0]).toMatchObject({ chatId: 'w', item: { kind: 'artifact', id: 'art-qa', key: 'qa', target: 'chat', ui: { component: 'table' } } });
     expect(JSON.parse(fs.readFileSync(path.join(dir, 'w.json'), 'utf8'))).toHaveLength(1);
     expect(() => store.show('w', args({ summary: '' }))).toThrow('summary: required');
+    // the chat's own mistake: a refusal (info in the log), never a failed tool Manutenzione files as an app bug (#438)
+    expect(() => store.show('w', args({ title: undefined, summary: undefined }))).toThrow(ToolRefusal);
     expect(() => store.show('w', args({ props: { columns: [] } }))).toThrow(/table props.columns: needs at least 1 item; props.rows: missing\. Fix all fields/);
     expect(() => store.show('w', args({ target: 'popup' }))).toThrow('target: expected one of chat, orchestrator, next-ask');
     expect(() => store.show('w', args({ id: 'a b' }))).toThrow('id: 1-40');

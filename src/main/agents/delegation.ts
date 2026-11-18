@@ -21,6 +21,7 @@ import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import { delegationGate, stepIndex, type StrategyPlan } from '../../shared/strategy';
 import type { McpTool } from '../mcp/server';
 import { callerOf } from '../mcp/caller';
+import { ToolRefusal } from '../mcp/refusal';
 import { allowsClass, belowParent, type AgentPolicy } from './tool-policy';
 import { withinParent } from './worktrees';
 import { childReviewers, DELTA_REVIEW, type ReviewWorld } from './one-review';
@@ -408,6 +409,13 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     };
   }
 
+  /** The report's shape against the contract. A report the check sends back (a criterion not answered, «done» with one
+   *  not met, a wrong field) is the agent's own mistake: it reads the reason and reports again. A ToolRefusal, so the
+   *  app's log keeps it at info and Manutenzione does not file it as an app bug (#439). */
+  const checked = (a: Record<string, unknown>, doneWhen: readonly string[]) => {
+    try { return checkResult(a, doneWhen); } catch (e) { throw new ToolRefusal(e instanceof Error ? e.message : String(e)); }
+  };
+
   function report(all: Record<string, unknown>, callerId: string): unknown {
     const self = chat(callerId);
     // `remember` is the role memory's, not the result's: the result keeps its exact shape (shared/delegation.ts checkResult)
@@ -444,7 +452,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if ((a.outcome === 'partial' || a.outcome === 'blocked') && a.userAction === undefined && !askedUserAction.has(runKey)
       && typeof a.summary === 'string' && USER_ONLY_BLOCKER.test(a.summary)) { // the summary's words, never code or logs in output
       askedUserAction.add(runKey);
-      throw new Error(USER_ACTION_REFUSAL);
+      throw new ToolRefusal(USER_ACTION_REFUSAL);
     }
     const review = independentReview(self);
     if ((a.verdict !== undefined || a.verified !== undefined) && review && (self?.closedAt || self?.run?.endedAt !== undefined)) throw new Error('Review fields require an active app-owned independent reviewer run.');
@@ -457,11 +465,11 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (review && (a.verdict === undefined || a.verified === undefined)) throw new Error('Independent reviews require explicit verdict and verified fields.');
     // Root contracts are host-owned. Direct-user and explicit app replay roots retain their results locally.
     if (self && !self.delegation && !self.parentId && !self.isOrchestrator && self.run && (self.run.startedBy === 'orchestrator' || self.run.startedBy === 'user' || self.run.taskContract?.reportExpected) && d.chats.reportRoot) {
-      const done = d.chats.reportRoot(callerId, checkResult(a, self.run.taskContract?.doneWhen ?? [])), remembered = write();
+      const done = d.chats.reportRoot(callerId, checked(a, self.run.taskContract?.doneWhen ?? [])), remembered = write();
       return { reported: true, to: self.run.startedBy === 'app' ? 'this-chat' : 'orchestrator', delivered: done.delivered, ...(warnings.length ? { warnings } : {}), ...(remembered ? { remembered } : {}), ...(done.delivered ? {} : { note: 'The canonical result is retained on its run; pending delivery retries.' }) };
     }
     if (!self?.delegation || !self.parentId) throw new Error('agent_report: only a chat the Orchestrator or a parent started reports with it (agent_delegate or app_create_chat). Answer in this chat instead.');
-    const result = checkResult(a, self.delegation.doneWhen);
+    const result = checked(a, self.delegation.doneWhen);
     const done = d.chats.reportDelegation(callerId, result), remembered = write();
     return { reported: true, parentId: done.parentId, delivered: done.delivered, ...(warnings.length ? { warnings } : {}), ...(remembered ? { remembered } : {}) };
   }
@@ -545,7 +553,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
 
   const str = { type: 'string' };
   const reportSchema: Record<string, unknown> = { type: 'object', required: ['outcome', 'summary', 'output', 'doneWhen'], additionalProperties: false, properties: {
-      outcome: { type: 'string', enum: ['done', 'partial', 'blocked'] }, summary: { ...str, description: `one or two sentences, up to ${SUMMARY_MAX} characters (a longer one is cut with …)` }, output: { ...str, description: `the result, up to ${RESULT_OUTPUT_MAX} characters (a longer one is cut with …): long material goes in a file, its path here` },
+      outcome: { type: 'string', enum: ['done', 'partial', 'blocked'], description: 'done only when every doneWhen entry has met: true; else partial or blocked' }, summary: { ...str, description: `one or two sentences, up to ${SUMMARY_MAX} characters (a longer one is cut with …)` }, output: { ...str, description: `the result, up to ${RESULT_OUTPUT_MAX} characters (a longer one is cut with …): long material goes in a file, its path here` },
       amends: { type: 'boolean', description: `true only to correct the result you already reported for this assignment: the new version replaces it and reaches the same reader, marked as a correction; at most ${MAX_CORRECTIONS} corrections` },
       verdict: { type: 'string', enum: ['success', 'partial', 'fail'], description: 'Only app-owned independent reviews: assessment of the reviewed work, separate from completion of your review.' },
       verified: { type: 'string', enum: ['yes', 'partial', 'no'], description: 'Only with verdict: yes only when you independently checked the evidence; never inferred from completing the review.' },
