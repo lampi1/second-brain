@@ -53,18 +53,21 @@ const GUARDED = new RegExp(`\\b(?:${[
 const ENV_SECRET = /(?:\b|_)(?:TOKEN|SECRET|PASSWORD|PASSWD|PWD)\b|[A-Z0-9]_(?:KEY|PAT)\b/;
 /** A letter of another script beside a Latin one (a Cyrillic e inside «permissions»): read as a guarded word. */
 const MIXED = /[A-Za-z][\p{Script=Cyrillic}\p{Script=Greek}]|[\p{Script=Cyrillic}\p{Script=Greek}][A-Za-z]/u;
-/** A line that starts like a code fence, whatever follows. */
-const FENCE = /^\s*(`{3,}|~{3,})/;
 const UNDERLINE = /^\s*(?:=+|-+)\s*$/;
 const ITEM = /^\s*(?:[-*+]|\d+[.)])\s/;
 /** A line that shapes the document instead of stating a rule, never written and never replaced: a code fence, a
  *  heading («# …», also in a quote or a list), a rule line (---, ===, ***), an HTML comment mark, a line that starts
  *  with a tag, a tag that opens a raw block. Renaming «## Hard rules» or opening a comment above a section would
  *  change what the lines under it mean. */
-const STRUCTURE = /^\s*(?:`{3,}|~{3,})|^[\s>]*(?:(?:[-*+]|\d+[.)])\s+)?#{1,6}(?:\s|$)|^\s*(?:[-=*_]\s*){3,}$|^\s*=+\s*$|<!--|-->|^\s*<\/?[a-z]|<\/?(?:pre|script|style|textarea|details|div|table|h[1-6]|iframe|template|noscript|plaintext|xmp)\b/i;
-/** A table row, and the row of dashes under a table's header. */
-const ROW = /^\s*\|/, DASHES = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/;
+const STRUCTURE = /^\s*(?:`{3,}|~{3,})|^[\s>]*(?:(?:[-*+]|\d+[.)])\s+)?#{1,6}(?:\s|$)|^\s*(?:[-=*_]\s*){3,}$|^\s*=+\s*$|<!--|-->|^\s*<[\/?!a-z]|<\/?(?:pre|script|style|textarea|details|div|table|h[1-6]|iframe|template|noscript|plaintext|xmp)\b/i;
+/** The row of dashes under a table's header (with or without its outer pipes), which is also a Setext underline. */
+const DASHES = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/;
+/** The cell bars of a line: a table row has some, with or without the outer ones. */
 const cellsOf = (l: string): number => (l.replace(/\\\|/g, '').match(/\|/g) ?? []).length;
+const isRow = (l: string): boolean => cellsOf(l) > 0;
+/** A line without its invisible characters and without the quote and list marks it sits in («- > # Old» is a heading). */
+const bare = (l: string): string => l.replace(/\p{Cf}/gu, '').replace(/^(?:\s*(?:>|[-*+]|\d+[.)])(?:\s+|$))+/, '');
+const shapes = (l: string): boolean => STRUCTURE.test(l.replace(/\p{Cf}/gu, '')) || STRUCTURE.test(bare(l)) || DASHES.test(l) || DASHES.test(bare(l)) || !bare(l).trim();
 
 function guardedText(line: string): boolean {
   // accents and invisible characters off (a zero-width space inside a word), then the words also with their marks
@@ -112,7 +115,10 @@ function sectionsOf(lines: readonly string[], at: number): string[] {
     const tag = /<!--(?!.*-->)/.test(l) ? '-->' : /<(pre|script|style|textarea)\b(?!.*<\/\1>)/i.exec(l)?.[1];
     if (tag) { html = tag === '-->' ? tag : `</${tag.toLowerCase()}>`; note(i); continue; }
     const atx = /^ {0,3}(#{1,6})[ \t]+(.+)$/.exec(l);
-    if (atx) { plain = [...plain.filter(h => h.level < atx[1]!.length), { level: atx[1]!.length, title: atx[2]! }]; loose = []; } else note(i);
+    if (atx) { plain = [...plain.filter(h => h.level < atx[1]!.length), { level: atx[1]!.length, title: atx[2]! }]; loose = []; continue; }
+    // a Setext title holds its level (=== 1, --- 2) against the plain headings after it, and ends nothing itself
+    if (l.trim() && !UNDERLINE.test(l) && UNDERLINE.test(lines[i + 1] ?? '')) plain.push({ level: lines[i + 1]!.trim().startsWith('=') ? 1 : 2, title: looseTitle(lines, i) ?? l });
+    else note(i);
   }
   return [...plain.map(h => h.title), ...loose];
 }
@@ -126,32 +132,33 @@ const plainHeading = (l: string): boolean => /^ {0,3}#{1,6}[ \t]/.test(l);
 function ruleOf(lines: readonly string[], at: number): number[] {
   const out = [at], own = indentOf(lines[at]!);
   // a table row is read with its header row (the first row of the table)
-  if (ROW.test(lines[at]!)) { let top = at; while (top > 0 && ROW.test(lines[top - 1]!)) top--; return top === at ? out : [top, at]; }
+  if (isRow(lines[at]!)) { let top = at; while (top > 0 && isRow(lines[top - 1]!)) top--; return top === at ? out : [top, at]; }
   let joined = true; // no blank line since the line: a line not deeper in can still be its continuation
   for (let i = at + 1; i < lines.length; i++) {
     const l = lines[i]!;
     if (!l.trim()) { joined = false; continue; }
-    if (plainHeading(l) || FENCE.test(l)) break;
-    if (indentOf(l) <= own && !(joined && !ITEM.test(l) && !ROW.test(l))) break;
+    if (plainHeading(l)) break;
+    if (indentOf(l) <= own && !(joined && !ITEM.test(l) && !isRow(l))) break;
     out.push(i);
   }
+  // up: the lines it continues, then each item it sits under with the lines that item wraps onto
   let level = own, wrapped = !ITEM.test(lines[at]!);
   for (let i = at - 1; i >= 0 && (level > 0 || wrapped); i--) {
     const l = lines[i]!;
     if (!l.trim()) { wrapped = false; continue; }
-    if (plainHeading(l) || FENCE.test(l)) break;
-    const deep = indentOf(l);
-    if (deep < level) { out.push(i); level = deep; wrapped = !ITEM.test(l); }
-    else if (wrapped && deep === level && !ROW.test(l)) { out.push(i); wrapped = !ITEM.test(l); }
+    if (plainHeading(l)) break;
+    const deep = indentOf(l), item = ITEM.test(l);
+    if (deep < level) { out.push(i); level = deep; wrapped = !item; }
+    else if (deep === level && !isRow(l) && (wrapped || (level > 0 && !item))) { out.push(i); if (item) wrapped = false; }
     else wrapped = false;
   }
   return out.sort((x, y) => x - y);
 }
 
-/** The lines a title or a lead-in at `at` speaks for: down to the next plain heading or the next title. */
+/** The lines a title or a lead-in at `at` speaks for: down to the next plain heading. */
 function governed(lines: readonly string[], at: number): string {
   let end = at + 1;
-  while (end < lines.length && !plainHeading(lines[end]!) && !(lines[end]!.trim() && looseTitle(lines, end))) end++;
+  while (end < lines.length && !plainHeading(lines[end]!)) end++;
   return lines.slice(at + 1, end).join(' ');
 }
 
@@ -171,18 +178,17 @@ export function editRuleLine(fileText: string, before: string, after: string): R
   if (!hits.length) return { ok: false, why: 'missing' };
   if (hits.length > 1) return { ok: false, why: 'twice' };
   const at = hits[0]!, old = lines[at]!;
-  if (STRUCTURE.test(old) || STRUCTURE.test(next)) return { ok: false, why: 'structure' };
-  // a table row stays a row with the same cells; the header row and the dashes under it are the table's shape
-  const row = ROW.test(old);
-  if (row !== ROW.test(next) || (row && (cellsOf(old) !== cellsOf(next) || DASHES.test(old) || DASHES.test(next) || DASHES.test(lines[at + 1] ?? '')))) return { ok: false, why: 'structure' };
-  const after1 = lines.map((l, i) => (i === at ? next : l));
+  // a line that shapes the document, the line over a row of dashes (a table's header, a Setext title), and a table
+  // row that would gain or lose cells: never written, never replaced
+  if (shapes(old) || shapes(next) || DASHES.test(lines[at + 1] ?? '') || cellsOf(old) !== cellsOf(next)) return { ok: false, why: 'structure' };
+  const written = `${/^\s*/.exec(old)![0]}${next}${/\s*$/.exec(old)![0]}`, after1 = lines.map((l, i) => (i === at ? written : l));
   // the whole rule is read, before and after: a guarded word on a line it wraps onto, under it or over it guards it
   const rule = (all: readonly string[]) => ruleOf(all, at).map(i => all[i]!).join(' ');
   // a title or a lead-in («Never do these:») speaks for the lines under it: not changed when one of them is guarded
   const leads = (all: readonly string[]) => looseTitle(all, at) !== null && guardedText(governed(all, at));
   if (guardedText(old) || guardedText(next) || guardedText(rule(lines)) || guardedText(rule(after1)) || leads(lines) || leads(after1) || sectionsOf(lines, at).some(guardedText)) return { ok: false, why: 'guarded' };
   // the line keeps its place in a list or a quote: its indentation stays, the new text brings its own marker
-  parts[at * 2] = `${/^\s*/.exec(old)![0]}${next}${/\s*$/.exec(old)![0]}`;
+  parts[at * 2] = written;
   return { ok: true, text: bom + parts.join('') };
 }
 

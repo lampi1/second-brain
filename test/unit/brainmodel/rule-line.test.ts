@@ -191,6 +191,39 @@ describe('editRuleLine: what the third independent review got through (2026-11-1
   });
 });
 
+describe('editRuleLine: what the last verification got through (2026-11-18)', () => {
+  const why = (file: string, before: string, after: string) => { const r = editRuleLine(file, before, after); return r.ok ? 'ok' : r.why; };
+
+  it('the new line is read where it will stand: it may not become the continuation of a guarded item', () => {
+    expect(why('# Rules\n\n- Git\n  - Never push to production.\n  - Be concise.\n', '- Be concise.', 'unless you are in a hurry.')).toBe('guarded');
+  });
+
+  it('a parent item is read with the lines it wraps onto, and a code block with the item it stands in', () => {
+    expect(why('# Rules\n\n- Ask the owner before any change to the\n  production database.\n  - Read-only queries are fine.\n', '- Read-only queries are fine.', '- Every query is fine.')).toBe('guarded');
+    expect(why('# Rules\n\n- Never touch the\n  production database.\n\n  Exception: read-only queries.\n', 'Exception: read-only queries.', 'Exception: every query.')).toBe('guarded');
+    expect(why('# Rules\n\n- On the production database run only\n  ```sql\n  SELECT 1;\n  ```\n', 'SELECT 1;', 'DROP TABLE users;')).toBe('guarded');
+    // siblings are not each other's rule
+    expect(why('# Rules\n\n- Git\n  - Never push to production.\n  - Be concise.\n', '- Be concise.', '- Be brief.')).toBe('ok');
+  });
+
+  it('a title speaks for every line down to the next plain heading; a Setext title holds its level', () => {
+    expect(why('# Rules\n\n**Hard rules**\n\nBefore a commit:\n- run the tests\n\n- Never push to production.\n', '**Hard rules**', '**Optional hints**')).toBe('guarded');
+    expect(why('Safety\n===\n\n## Merges\n\n- Ask before any merge.\n', '- Ask before any merge.', '- Merge freely.')).toBe('guarded');
+    expect(why('Safety\n---\n\n## Merges\n\n- Ask before any merge.\n', '- Ask before any merge.', '- Ask before a merge.')).toBe('ok');
+  });
+
+  it('a table without outer pipes is a table; marks inside a quote or a list are marks', () => {
+    const t = '# Rules\n\nName | Value\n--- | ---\na | b\nc | d\n';
+    expect(why(t, 'Name | Value', 'Never | Value')).toBe('structure');
+    expect(why(t, '--- | ---', 'plain text')).toBe('structure');
+    expect(why(t, 'a | b', 'a | b | extra')).toBe('structure');
+    expect(why(t, 'c | d', 'c | e')).toBe('ok');
+    const f = '# Rules\n\n- Be concise.\n';
+    for (const text of ['--', '-', '- - # Old', '- > # Old', '- ```', '> ```', '> ---', '<?php', '\u200b## Obsolete rules'])
+      expect(why(f, '- Be concise.', text), JSON.stringify(text)).toBe('structure');
+  });
+});
+
 describe('ruleLineChange (the tool\'s early check)', () => {
   const dirs: string[] = [];
   afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
