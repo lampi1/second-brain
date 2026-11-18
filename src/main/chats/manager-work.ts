@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import type { ChatSummary } from '../../shared/contract';
 import { errText, log } from '../log';
+import { ToolRefusal } from '../mcp/refusal';
 import type { UserTaskEvents, AgentRun, AgentRunOutcome } from '../../shared/agents';
 import { goalText } from '../../shared/agent-label';
 import { ownerSource, type TaskAssignmentOptions } from '../../shared/delegation';
@@ -221,7 +222,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
       const plan = r.s.parentId ? this.chats.get(r.s.parentId)?.s.plan : undefined;
       if (source.kind !== 'chat' || source.chatId !== r.s.parentId || !plan || !['running', 'done'].includes(plan.phase) || !Number.isSafeInteger(options.planStep) || !plan.steps[options.planStep]) throw new Error('Invalid or unapproved parent plan step.');
     }
-    if (this.midTurn(r) || r.pending.size || r.s.queued || r.opening || r.releasing || r.switching || r.archiving || this.deliveries.has(chatId)) throw new Error('The chat is busy or has queued work; wait before assigning another task.');
+    if (this.midTurn(r) || r.pending.size || r.s.queued || r.opening || r.releasing || r.switching || r.archiving || this.deliveries.has(chatId)) throw new ToolRefusal('The chat is busy or has queued work: nothing was assigned. Assign again once its current work has ended; a retry now gets the same answer.');
     if (options.reviewOf !== undefined) this.runs.checkLinks({ reviewOf: options.reviewOf }); // before the previous run ends
     const freshBoundary = this.freshReady(r, Date.now());
     this.beginAssignment(r, prompt, options);

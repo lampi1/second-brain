@@ -22,6 +22,7 @@ import { AGENT_LABEL, oneLine } from '../../../src/shared/agent-label';
 import type { AgentCatalog } from '../../../src/shared/agents';
 import type { NewChat } from '../../../src/shared/contract';
 import type { McpTool } from '../../../src/main/mcp/server';
+import { ToolRefusal } from '../../../src/main/mcp/refusal';
 import { ChatMail } from '../../../src/main/chats/mail';
 import { supersededResult } from '../../../src/main/chats/manager-helpers';
 // the text inside the app's envelope (ADR 0261, pinned by chats/agent-message.test.ts)
@@ -86,6 +87,8 @@ describe('agent_delegate', () => {
     const report = { outcome: 'done', summary: 'word '.repeat(60) + 'done', output: 'Complete evidence', evidence: ['fixture.txt'], doneWhen: [{ criterion: 'criterion A', met: false }] };
     expect(report.summary).toHaveLength(304);
     await expect(f.call('agent_report', child.id, report)).rejects.toThrow('every criterion');
+    // a report sent back by the check is the agent's own mistake: a refusal, not a failed tool (#439)
+    await expect(f.call('agent_report', child.id, report)).rejects.toBeInstanceOf(ToolRefusal);
     const result = await f.call('agent_report', child.id, { ...report, doneWhen: [{ criterion: 'criterion A', met: true, evidence: 'verified result' }] });
     expect(result).toMatchObject({ reported: true, warnings: [expect.stringContaining('summary'), expect.stringContaining('evidence')] });
     const stored = f.m.list().find(c => c.id === child.id)!.run!.report!.canonical!;
@@ -101,7 +104,9 @@ describe('agent_delegate', () => {
     const child = f.m.list().find(c => c.parentId === parent.id)!;
     const base = { outcome: 'partial', summary: 'VPN off, queries ready', output: 'Le query sono pronte in docs/q.sql.', doneWhen: [{ criterion: 'criterion A', met: false }] };
     // named only in the text: sent back once, naming userAction; the same report goes through the second time
-    await expect(f.call('agent_report', child.id, base)).rejects.toThrow(/userAction/);
+    const sentBack: unknown = await f.call('agent_report', child.id, base).catch((e: unknown) => e);
+    expect(sentBack).toBeInstanceOf(ToolRefusal);              // the agent's to fix: info in the log, not a failed tool
+    expect(String(sentBack)).toMatch(/userAction/);
     await expect(f.call('agent_report', child.id, { ...base, outcome: 'done', doneWhen: [{ criterion: 'criterion A', met: true }], userAction: { kind: 'vpn', text: 'Accendi la VPN' } })).rejects.toThrow(/partial.*blocked/);
     await f.call('agent_report', child.id, { ...base, userAction: { kind: 'vpn', text: 'Accendi la VPN', command: 'vpn up' } });
     // no question anywhere: the user reads a plain note with the command
@@ -955,6 +960,8 @@ describe('versioned task continuity and canonical results', () => {
     // the one refusal left: the child is working
     f.sinks.get(c.id)!.changed({ state: 'running' });
     await expect(f.m.assignTask(c.id, 'follow up', { source: { kind: 'chat', chatId: o.id } })).rejects.toThrow(/busy/);
+    // an expected answer to the assigner, logged at info: not an app warning (#436)
+    await expect(f.m.assignTask(c.id, 'follow up', { source: { kind: 'chat', chatId: o.id } })).rejects.toBeInstanceOf(ToolRefusal);
     f.sinks.get(c.id)!.changed({ state: 'idle' });
     const sent = vi.spyOn(f.m, 'send');
     // a stale cursor is no longer a refusal; the child already has the user's entries: its prompt is the assignment only

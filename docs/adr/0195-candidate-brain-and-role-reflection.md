@@ -1,6 +1,7 @@
 # 0195 — The maintenance writes a candidate brain, and reflects on one role's text as a trial
 
-Status: accepted. Builds on ADR 0077, ADR 0083, ADR 0123, ADR 0132, ADR 0153 and ADR 0186.
+Status: accepted. Builds on ADR 0077, ADR 0083, ADR 0123, ADR 0132, ADR 0153 and ADR 0186. Amended by ADR 0320 (one line of an
+always-loaded file is a candidate finding too).
 
 2026-10-29.
 

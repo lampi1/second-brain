@@ -13,6 +13,7 @@ import path from 'node:path';
 import type { ArtifactTarget, ChatItem, ChatSummary, EventMap } from '../../shared/contract';
 import { ARTIFACT_MAX_PER_CHAT, ARTIFACT_TARGETS, SUMMARY_MAX, TITLE_MAX, UI_COMPONENTS, checkUi } from '../../shared/genui';
 import type { McpTool } from '../mcp/server';
+import { ToolRefusal } from '../mcp/refusal';
 import { log, errText } from '../log';
 
 export type Artifact = Extract<ChatItem, { kind: 'artifact' }>;
@@ -47,7 +48,8 @@ export class Artifacts {
     this.waitMs = d.askWaitMs ?? ASK_WAIT_MS;
   }
 
-  /** show_ui from chat callerId. Returns the tool's answer; throws an Error with a clear message on a wrong call. */
+  /** show_ui from chat callerId. Returns the tool's answer; a wrong call (its shape, a screenshot the card cannot show)
+   *  is a ToolRefusal with a clear message: the chat's own mistake, answered to it, never an app warning (#438). */
   show(callerId: string, a: Record<string, unknown>): string {
     const all = this.d.chats();
     const caller = all.find(c => c.id === callerId);
@@ -62,12 +64,12 @@ export class Artifacts {
     if (a.component === 'brief' && target !== 'next-ask') problems.push('brief: only with target "next-ask" (it is the context of your next question)');
     if (!ui.ok) problems.push(ui.error);
     if (a.id !== undefined && a.id !== null && (typeof a.id !== 'string' || !KEY.test(a.id))) problems.push('id: 1-40 letters, digits, ".", "_" or "-"');
-    if (problems.length || !ui.ok) throw new Error(`${problems.join('; ')}. Fix all fields and call show_ui again.${a.component === 'brief' ? ` Minimal brief example: ${BRIEF_EXAMPLE}` : ''}`);
+    if (problems.length || !ui.ok) throw new ToolRefusal(`${problems.join('; ')}. Fix all fields and call show_ui again.${a.component === 'brief' ? ` Minimal brief example: ${BRIEF_EXAMPLE}` : ''}`);
     // a brief's screenshot the card cannot show is sent back now, while the chat can still move it (ADR 0150)
     if (ui.spec.component === 'brief' && this.d.imageProblem) {
       for (const [i, im] of (ui.spec.props.images ?? []).entries()) {
         const why = this.d.imageProblem(im.path);
-        if (why) throw new Error(`images[${i}] (${im.path}): ${why} The question card cannot show it. Save the screenshot as PNG, JPG or WebP${this.d.evidenceDir ? ` under ${this.d.evidenceDir}` : ' under your evidence folder'} (or the brain, the app's repo), then call show_ui again with that absolute path.`);
+        if (why) throw new ToolRefusal(`images[${i}] (${im.path}): ${why} The question card cannot show it. Save the screenshot as PNG, JPG or WebP${this.d.evidenceDir ? ` under ${this.d.evidenceDir}` : ' under your evidence folder'} (or the brain, the app's repo), then call show_ui again with that absolute path.`);
       }
     }
     const key = typeof a.id === 'string' ? a.id : `${this.now().toString(36)}${++this.n}`;

@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- The maintenance can fix one line of a file every job loads (AGENTS.md, me.md…): the card shows the exact line before
+  and after, it goes into the candidate brain with the other brain changes and one «Annulla» puts the old line back.
+  Never a line about safety, permissions, settings, hooks, production or secrets, and never past the budget of the
+  always-loaded files (ADR 0320, #435).
 - Memoria › Artifact: every report, analysis, document, picture, table, recording or other file the chats produce,
   indexed where it is (a chat's link, the brain's reviews/tmp/evidence, a chat's evidence folder, once the past chats).
   Search, filters, cards with a picture, versions of the same report as one artifact, a gone file kept as missing; a
@@ -231,6 +235,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   key is gone (ADR 0291).
 
 ### Fixed
+- Expected answers of a tool to an agent no longer show up as app warnings in Manutenzione: a chat that is busy
+  (`app_assign_task`), a card without title or summary (`show_ui`), a report «done» with a criterion not met
+  (`agent_report`) are refusals the agent corrects by itself (#436, #438, #439).
+- A connector's server that refuses the access (a login that ended, a wrong token) is told on its card in
+  Impostazioni → Connettori, once, and the agent is told only the user can fix it: no more one warning per chat (#437).
 - A chat stops showing work as soon as its reply is complete: the working line («sta pensando…»), the person at
   work and «al lavoro» no longer stay for the seconds the engine takes to close the turn (the brain's Stop hooks run
   before Claude Code writes the result). The «Turno finito» line still comes with the real cost, and sooner: at a

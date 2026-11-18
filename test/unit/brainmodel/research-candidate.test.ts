@@ -114,6 +114,83 @@ const end = async (t: ReturnType<typeof research>, cost = 1) => {
   await waitFor(() => t.ended() === 1, 'the run to end');
 };
 
+describe('one line of an always-loaded file (#435, ADR 0320)', () => {
+  const AGENTS = '# Agents\n\n## Commits\n\n- Stage everything, then commit.\n- Message in English.\n\n## Safety\n\n- Ask before any deploy.\n';
+  function fixed(): string {
+    const root = brain();
+    fs.writeFileSync(path.join(root, 'AGENTS.md'), AGENTS);
+    fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', rules: { fixedFiles: ['AGENTS.md'], fixedBudget: 300, topicFiles: [], appRules: true } }));
+    return root;
+  }
+  const edit = { target: 'rule' as const, file: 'AGENTS.md', before: '- Stage everything, then commit.', text: '- Stage only the files you changed, then commit.' };
+
+  it('the plan changes that line and nothing else; a safety line, another file or a line that is gone is left out', () => {
+    const root = fixed(), before = snapshot(root);
+    const input = { root, skills: [], rules: readRules(root), now: NOW };
+    expect(input.rules.find(r => r.file === 'AGENTS.md')?.loaded).toBe('always');
+    expect(isCandidateFinding(p('l1', { change: edit }))).toBe(true);
+    const plan = planCandidate(input, [
+      p('l1', { change: edit }),
+      p('l2', { change: { ...edit, before: '- Ask before any deploy.', text: '- Deploy when the tests pass.' } }),
+      p('l3', { change: { ...edit, file: 'rules/old-proxy.md', before: 'Use proxy-1.', text: 'Use proxy-2.' } }),
+      p('l4', { change: { ...edit, before: '- A line nobody wrote.' } }),
+    ]);
+    expect(plan.used).toEqual(['l1']);
+    expect(plan.skipped.map(x => x.id)).toEqual(['l2', 'l3', 'l4']);
+    expect(plan.skipped[0]!.why).toMatch(/solo l'utente/);
+    expect(plan.files).toHaveLength(1);
+    expect(plan.files[0]).toMatchObject({ rel: 'AGENTS.md', before: AGENTS, after: AGENTS.replace(edit.before, edit.text) });
+    expect(snapshot(root)).toEqual(before);
+    // the checks say the always-loaded lines did not grow
+    expect(candidateChecks(plan.files, input.rules, 'en').some(l => /\+0 lines in rules loaded in every job/.test(l))).toBe(true);
+  });
+
+  it('two findings on one file both land, the second on the first; one that would pass the fixed budget is left out', () => {
+    const root = fixed(), input = { root, skills: [], rules: readRules(root), now: NOW };
+    const second = { ...edit, before: '- Message in English.', text: '- Message in English, conventional style.' };
+    const plan = planCandidate(input, [
+      p('l1', { change: edit }),
+      p('l2', { change: second }),
+      p('l3', { change: { ...edit, before: second.text, text: `- Message in English, ${'conventional '.repeat(20)}style.` } }),
+    ]);
+    expect(plan.used).toEqual(['l1', 'l2']);
+    expect(plan.skipped).toEqual([{ id: 'l3', why: expect.stringMatching(/limite/) }]);
+    expect(plan.files).toHaveLength(1);
+    expect(plan.files[0]!.after).toBe(AGENTS.replace(edit.before, edit.text).replace(second.before, second.text));
+  });
+
+  it('the research proposes it, the candidate shows the line, rejecting keeps the old line, approving changes it and one undo puts it back', async () => {
+    const root = fixed(), before = snapshot(root);
+    const withRules = (): BrainModelState => ({ ...state(), root, rules: readRules(root) });
+    const make = () => { const t = research(root); (t.svc as unknown as { d: ResearchDeps }).d.brain.state = withRules; return t; };
+    const finding = { kind: 'rule', title: 'Commit only your own files', adds: 'x', why: '3 runs committed other chats\' files.', evidence: ['run r1, r2, r3'], change: { file: edit.file, before: edit.before, text: edit.text } };
+    const t = make();
+    await t.svc.start(opts);
+    // refused at once, in the tool's words: a safety line, a file that is not always loaded, a role with a file
+    expect(() => t.svc.propose('c1', { ...finding, title: 'Deploy freely', change: { file: 'AGENTS.md', before: '- Ask before any deploy.', text: '- Deploy when ready.' } })).toThrow(/changed only by the user/);
+    expect(() => t.svc.propose('c1', { ...finding, title: 'Other file', change: { file: 'rules/old-proxy.md', before: 'Use proxy-1.', text: 'Use proxy-2.' } })).toThrow(/loaded in every job \(AGENTS\.md\)/);
+    expect(() => t.svc.propose('c1', { ...finding, title: 'With a role', change: { role: 'artisan', file: 'AGENTS.md', before: edit.before, text: edit.text } })).toThrow(/no role/);
+    t.svc.propose('c1', finding);
+    await end(t);
+    const [c] = t.svc.candidateCards();
+    expect(c!.files).toEqual([{ rel: 'AGENTS.md', before: AGENTS, after: AGENTS.replace(edit.before, edit.text) }]);
+    // the finding's card text is the exact line before and after, written by the app
+    expect(t.svc.store.all().find(x => x.title === finding.title)).toMatchObject({ removes: `AGENTS.md: ${edit.before}`, adds: edit.text });
+    await t.svc.reject(c!.id);
+    expect(snapshot(root)).toEqual(before);
+
+    const t2 = make();
+    await t2.svc.start(opts);
+    t2.svc.propose('c1', { ...finding, title: 'Commit only the files you changed' });
+    await end(t2);
+    const [c2] = t2.svc.candidateCards();
+    const changeId = await t2.svc.approve(c2!.id);
+    expect(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')).toBe(AGENTS.replace(edit.before, edit.text));
+    t2.cp.log.rollback(changeId, { activeVersion: () => null, restore: () => {} });
+    expect(snapshot(root)).toEqual(before);
+  });
+});
+
 describe('ResearchService with the candidate brain', () => {
   it('holds brain-file findings, builds ONE candidate card at the end, applies it as one change and one undo restores every file', async () => {
     const root = brain(), before = snapshot(root);

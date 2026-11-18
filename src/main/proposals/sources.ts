@@ -332,6 +332,8 @@ const research: Source = {
         ask: { kind: 'research', finding: x.kind, adds: x.adds, removes: x.removes, why: x.why, expected: [x.expected, x.success?.text ?? ''].filter(Boolean).join(' '), risk: x.risk, evidence: x.evidence, sources: x.sources, ...(x.roleTrial ? { trial: true } : {}) },
         // a revised role text (ADR 0195): its before and after
         ...(x.roleTrial ? { diffs: [{ file: x.roleTrial.role, before: x.roleTrial.before, after: x.roleTrial.text }] } : {}),
+        // one line of an always-loaded file (#435): the line as it is and as it would be
+        ...(x.change?.file && x.change.before ? { diffs: [{ file: x.change.file, before: x.change.before, after: x.change.text }] } : {}),
         facts: [...(role ?? x.roleTrial?.role ? [{ key: 'target' as const, value: (role ?? x.roleTrial?.role)! }] : []), ...(x.change?.name ? [{ key: 'target' as const, value: x.change.name }] : []),
           ...(issue && repo ? [{ key: 'target' as const, value: repo }] : []), ...(issue && x.issue!.labels?.length ? [{ key: 'scope' as const, value: x.issue!.labels.join(', ') }] : []),
           ...(issue && x.issue!.duplicateOf ? [{ key: 'before' as const, value: x.issue!.duplicateOf.url }] : [])],

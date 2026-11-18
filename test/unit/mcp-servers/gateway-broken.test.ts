@@ -1,10 +1,13 @@
 // A user's MCP server whose program does not start (#417: 59 «MCP server tools not listed» warnings in 3 days for one
 // server whose program could not start): the gateway does not start it again for every chat for BROKEN_MS, warns once
 // until it works again, and puts the failure on its card (onBroken); «Prova» or a definition change (reset) tries it
-// again at once. A slow or unreachable server keeps the hourly warning of #347. Fakes for the upstream and the clock.
+// again at once. A slow or unreachable server keeps the hourly warning of #347. A server that refuses the access (#437:
+// a login that ended) is never a warning: its card is told once, the chat reads what the user must do. Fakes for the
+// upstream and the clock.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BROKEN_MS, McpGateway } from '../../../src/main/mcp-servers/gateway';
 import { McpClientError, type Upstream } from '../../../src/main/mcp-servers/client';
+import { ToolRefusal } from '../../../src/main/mcp/refusal';
 import type { McpServer } from '../../../src/main/mcp/server';
 import type { McpServerDef } from '../../../src/shared/mcp-servers';
 import { log } from '../../../src/main/log';
@@ -86,5 +89,51 @@ describe('a user MCP server whose program does not start (#417)', () => {
     later.mockRestore();
     expect(conn).toHaveBeenCalled();
     expect(up.broken).toEqual([]);
+  });
+});
+
+describe('a user MCP server that refuses the access (#437)', () => {
+  it('is never an app warning: its card is told once and the chat reads what the user must do', async () => {
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {}), info = vi.spyOn(log, 'info').mockImplementation(() => {});
+    let err: Error | null = new McpClientError('auth', 'Accesso rifiutato (HTTP 401).', 'premi «Accedi» sulla scheda del connettore.', true);
+    const s = setup(() => err);
+    await expect(s.list('c1')).rejects.toThrow(/refused the access.*Only the user can fix it.*«Accedi»/);
+    await expect(s.list('c2')).rejects.toThrow(/refused the access/);
+    s.at(1000 + 2 * 3_600_000);                               // hours later: still no warning
+    await expect(s.list('c3')).rejects.toThrow(/refused the access/);
+    expect(s.started()).toBe(3);                              // never held back: it works as soon as the user signs in
+    expect(warn.mock.calls.filter(c => c[0] === 'mcp-servers')).toHaveLength(0);
+    expect(info.mock.calls.filter(c => c[1] === 'MCP server refuses the access')).toHaveLength(3);
+    expect(s.broken).toEqual(['kb']);                         // the card once
+    err = null;                                               // the user signed in
+    await expect(s.list('c4')).resolves.toHaveLength(1);
+    expect(s.works).toEqual(['kb']);
+    err = new McpClientError('auth', 'Accesso rifiutato (HTTP 401).', 'x', true);
+    await expect(s.list('c5')).rejects.toThrow(/refused the access/);
+    expect(s.broken).toEqual(['kb', 'kb']);                   // refused again later: the card is told again
+    await expect(s.list('c6')).rejects.toThrow(/refused the access/);
+    s.g.reset('kb');                                          // «Accedi», «Prova» or a changed definition: told anew
+    await expect(s.list('c7')).rejects.toThrow(/refused the access/);
+    expect(s.broken).toEqual(['kb', 'kb', 'kb']);
+  });
+
+  it('an access that ends after the list: the call is a refusal with the same words, the card is told, no warning', async () => {
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {}); vi.spyOn(log, 'info').mockImplementation(() => {});
+    const s = setup(() => null);
+    const tools = await s.list('c1') as { name: string; run: (a: object, c: object) => Promise<unknown> }[];
+    (s.g as unknown as { conns: Map<string, { up: { call: () => Promise<unknown> } }> }).conns.get('c1|kb')!.up.call = async () => { throw new McpClientError('auth', 'Accesso rifiutato (HTTP 401).', 'premi «Accedi».', true); };
+    const call = tools[0]!.run({}, { signal: new AbortController().signal });
+    await expect(call).rejects.toBeInstanceOf(ToolRefusal);
+    await expect(call).rejects.toThrow(/refused the access.*Only the user can fix it/);
+    expect(s.broken).toEqual(['kb']);
+    expect(warn.mock.calls.filter(c => c[0] === 'mcp-servers')).toHaveLength(0);
+    await expect(s.list('c1')).resolves.toHaveLength(1);       // it lists again (a new connection): the card shows it working
+    expect(s.works).toEqual(['kb']);
+    // a chat's cached list says nothing about the access: the card is not told it works
+    const cached = setup(() => null);
+    await cached.list('c1');
+    (cached.g as unknown as { denied: Set<string> }).denied.add('kb');
+    await cached.list('c1');
+    expect(cached.works).toEqual([]);
   });
 });

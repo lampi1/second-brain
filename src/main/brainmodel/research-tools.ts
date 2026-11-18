@@ -41,9 +41,11 @@ export function researchTools(research: Pick<ResearchService, 'pack' | 'propose'
       expected: s('what should change afterwards and how it is measured'), risk: s('what could go wrong and how to go back'),
       change: { type: 'object', additionalProperties: false, required: ['text'], properties: {
         target: { type: 'string', enum: ['skill', 'rule', 'role'], description: 'only for bold: what it changes' },
-        role: s('the role id it is for (needed for role and rule: rules for every role are gone, propose a skill instead)'),
+        role: s('the role id it is for (needed for role and rule: rules for every role are gone, propose a skill instead; not with file)'),
+        file: s('kind rule, to fix ONE line of a file loaded in every job (rules section: loaded always): its brain-relative path, with before; no role'),
+        before: s('with file: the whole line as it is now, copied exactly; text replaces it (one line). Safety, permission, settings and hook lines are refused'),
         name: s('a skill\'s kebab-case name (new or existing in the brain)'),
-        text: s('the text to add: a skill\'s body in Markdown, a rule line, a line for the role\'s text'),
+        text: s('the text to add: a skill\'s body in Markdown, a rule line, a line for the role\'s text; with file and before, the new line'),
       } },
       forget: { type: 'object', additionalProperties: false, required: ['what', 'name'], properties: {
         what: { type: 'string', enum: ['skill', 'rule'] },
