@@ -70,7 +70,15 @@ export function safeHref(h: string): 'web' | 'file' | null {
 }
 const href: V<string> = (v, at) => { const s = str(1000)(v, at); return safeHref(s) ? s : fail(at, 'expected an http(s) URL or an absolute local path'); };
 const link: V<UiLink> = obj({ label: str(80), href }, {});
-const status = oneOf(UI_STATUSES);
+/** What models write for a status by habit (#440: a brief with "pass" was sent back): read as the status it means. */
+const STATUS_ALIASES: Readonly<Record<string, UiStatus>> = {
+  pass: 'ok', passed: 'ok', passing: 'ok', success: 'ok', successful: 'ok', done: 'ok', completed: 'ok',
+  failed: 'fail', failing: 'fail', failure: 'fail', error: 'fail', warning: 'warn', pending: 'todo', 'in progress': 'running',
+};
+const status: V<UiStatus> = (v, at) => {
+  const s = typeof v === 'string' ? v.trim().toLowerCase().replace(/[-_\s]+/g, ' ') : '';
+  return oneOf(UI_STATUSES)(s && Object.hasOwn(STATUS_ALIASES, s) ? STATUS_ALIASES[s] : (UI_STATUSES as readonly string[]).includes(s) ? s : v, at);
+};
 /** a table cell may be empty (nothing to say in that column) */
 const cell: V<string> = (v, at) => (v === '' ? '' : str(300)(v, at));
 
@@ -96,6 +104,11 @@ const SCHEMAS: { [K in UiComponent]: V<Extract<UiSpec, { component: K }>['props'
     files: arr(obj({ path: str(300) }, { why: str(200), added: count, removed: count, href }), 10),
   }),
 };
+
+/** One complete show_ui call for a brief, valid as it is (#440): in show_ui's description, in its shape refusal and in
+ *  the refusal of a question without a brief (shared/yes-no.ts BRIEF_REFUSAL), so the first brief passes. Its texts say
+ *  what goes there, never a made-up result: a call copied as it is shows no fake green check. */
+export const BRIEF_EXAMPLE = '{"title":"What the question is about","summary":"What you did and what the user decides, in one or two plain sentences.","component":"brief","target":"next-ask","props":{"done":["What you did, one short line"],"ifYes":"What happens if the user says yes","ifNo":"What happens if the user says no","checks":[{"label":"A test or command you ran","status":"ok"}]}}';
 
 export type UiCheck = { ok: true; spec: UiSpec } | { ok: false; error: string };
 

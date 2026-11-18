@@ -8,10 +8,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ChatItem, ChatSummary, PendingRequest } from '../../src/shared/contract';
-import { ARTIFACT_MAX_BYTES, ARTIFACT_MAX_PER_CHAT, checkUi, describeUi, hasUiFence, safeHref, splitUiFences, textOfUi } from '../../src/shared/genui';
+import { ARTIFACT_MAX_BYTES, ARTIFACT_MAX_PER_CHAT, BRIEF_EXAMPLE, UI_STATUSES, checkUi, describeUi, hasUiFence, safeHref, splitUiFences, textOfUi } from '../../src/shared/genui';
 import { Artifacts, showUiTool, type Artifact } from '../../src/main/genui/artifacts';
 import { SCREENSHOT_HINT } from '../../src/main/ask-image';
 import type { CallCtx } from '../../src/main/mcp/server';
+import { BRIEF_REFUSAL } from '../../src/shared/yes-no';
 import { ToolRefusal } from '../../src/main/mcp/refusal';
 
 const table = { columns: ['Test', 'Esito'], rows: [{ cells: ['TC 1', 'ok'], status: 'ok', link: { label: 'evidenza', href: 'C:\\qa\\tc1.png' } }, { cells: ['TC 2'] }] };
@@ -308,4 +309,27 @@ it('documents a complete brief example that show_ui accepts', () => {
   expect(showUiTool(store).inputSchema).toMatchObject({ properties: { props: { properties: {
     done: { type: 'array', minItems: 1, maxItems: 5, items: { maxLength: 200 } }, ifYes: { maxLength: 200 }, ifNo: { maxLength: 200 },
   } } } });
+});
+
+describe('the first brief after a refused question passes (#440)', () => {
+  it('the refusal of a question without a brief names title, summary and the statuses, and carries a call show_ui accepts as it is', () => {
+    for (const word of ['title and summary are required', ...UI_STATUSES]) expect(BRIEF_REFUSAL).toContain(word);
+    const call = BRIEF_REFUSAL.slice(BRIEF_REFUSAL.indexOf('{"title"'));
+    expect(call).toBe(BRIEF_EXAMPLE);
+    const { store } = setup([chat('w')]);
+    expect(() => store.show('w', JSON.parse(call))).not.toThrow();
+    expect(JSON.parse(call).props.checks).toMatchObject([{ status: 'ok' }]);
+    // the ask_user gate's wording of it (chats/acp.ts) keeps the example
+    expect(BRIEF_REFUSAL.replace('ask the same yes/no question again', 'call ask_user again')).toContain(BRIEF_EXAMPLE);
+    // the ask_user gate swaps these words (chats/acp.ts): they must stay in the text
+    expect(BRIEF_REFUSAL).toContain('ask the same yes/no question again');
+  });
+  it('a status written by habit is read as the status it means; an unknown one is still sent back with the list', () => {
+    const b = (status: unknown) => checkUi('brief', { done: ['x'], ifYes: 'y', ifNo: 'n', checks: [{ label: 'Tests', status }] });
+    for (const [said, means] of [['pass', 'ok'], ['Passed', 'ok'], [' SUCCESS ', 'ok'], ['done', 'ok'], ['completed', 'ok'], ['failed', 'fail'], ['failure', 'fail'], ['error', 'fail'], ['warning', 'warn'], ['pending', 'todo'], ['in_progress', 'running'], ['in progress', 'running'], ['In-Progress', 'running'], ['ok', 'ok'], [' OK ', 'ok']]) {
+      expect(b(said)).toMatchObject({ ok: true, spec: { props: { checks: [{ status: means }] } } });
+    }
+    expect(checkUi('table', { columns: ['a'], rows: [{ cells: ['x'], status: 'pass' }] })).toMatchObject({ ok: true, spec: { props: { rows: [{ status: 'ok' }] } } });
+    for (const bad of ['green', 'constructor', 'toString', 7, {}]) expect(b(bad)).toMatchObject({ ok: false, error: expect.stringContaining('props.checks[0].status: expected one of ok, fail, blocked, running, todo, info, warn') });
+  });
 });
