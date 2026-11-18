@@ -14,7 +14,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ChatItem, ChatSummary } from '../../shared/contract';
-import { LIBRARY_MAX, artifactKind, artifactOfPath, baseNameOf, extOf, linkedPaths, pathKey, readsText, secretHead, summaryOf, titleOf, versionKey, type Artifact, type ArtifactKind, type ArtifactList, type ArtifactThumb, type ArtifactVersion } from '../../shared/library';
+import { CLEANUP_DAYS, LIBRARY_MAX, artifactKind, artifactOfPath, baseNameOf, extOf, linkedPaths, pathKey, readsText, secretHead, summaryOf, titleOf, versionKey, type Artifact, type ArtifactKind, type ArtifactList, type ArtifactThumb, type ArtifactVersion } from '../../shared/library';
 import { readLocal, writeLocalText } from '../agents/local-store';
 import { isInside } from '../ask-image';
 import { localFile } from '../file-view';
@@ -27,6 +27,7 @@ export const COPY_BYTES = 8_000_000;
 export const COPY_TOTAL = 400_000_000;
 const VERSIONS_MAX = 30;
 const STALE_MS = 60_000;
+const DAY_MS = 864e5;
 /** Folders of the brain that are its own memory and machinery (shown elsewhere in Memoria), never artifacts. */
 const BRAIN_OWN = /^(journal|memory|ops|harness|playbooks|skills|agents|routines|rules|knowledge|\.[^\\/]+)$/i;
 
@@ -49,11 +50,15 @@ export interface LibraryPorts {
   now?(): number;
 }
 
-interface Stored { v: 1; backfilled: boolean; scannedAt: number | null; dropped: number; copyBytes: number; artifacts: Omit<Artifact, 'chatTitle'>[] }
+interface Stored { v: 1; backfilled: boolean; scannedAt: number | null; dropped: number; copyBytes: number; cleaned: number; cleanedAt: number | null; artifacts: Omit<Artifact, 'chatTitle'>[] }
 
-/** GIF and SVG pictures a card shows as they are (in an <img>, where an SVG runs no script), up to this size. */
-const RAW_PICTURE_BYTES = 1_500_000;
+/** GIF and SVG pictures a card shows as they are (in an <img>, where an SVG runs no script), up to this size (a card
+ *  is small: a bigger one shows its tile, ADR 0323). */
+const RAW_PICTURE_BYTES = 300_000;
+/** An HTML card is drawn from this much of the report's head (enough for its title and first lines). */
+const HTML_THUMB_BYTES = 64 * 1024;
 const yieldNow = () => new Promise<void>(r => setImmediate(r));
+const realNow = (p: string): string => { try { return fs.realpathSync.native(p); } catch { return p; } };
 
 /** The texts of a turn's (or a past chat's) answers that may link artifacts: assistant text and report tools' input. */
 export function answerTexts(items: readonly ChatItem[]): string[] {
@@ -90,6 +95,8 @@ export class LibraryService {
   private pictures: Promise<unknown> = Promise.resolve();
   /** With a full index, the mtime of the oldest kept: an older file is not added (it would go again at once). */
   private floor = -Infinity;
+  /** Folders' real paths, asked again at each scan (a file's area compares it with every chat's folder). */
+  private reals = new Map<string, string>();
 
   constructor(private readonly p: LibraryPorts) {
     const dir = path.join(p.userData, 'library');
@@ -103,20 +110,29 @@ export class LibraryService {
   }
 
   private setFloor(): void {
-    this.floor = this.data.artifacts.length >= LIBRARY_MAX ? Math.min(...this.data.artifacts.map(a => a.at)) : -Infinity;
+    // a kept (starred) artifact never goes, so the floor is the oldest of the others
+    const free = this.data.artifacts.filter(a => !a.pinned);
+    this.floor = this.data.artifacts.length >= LIBRARY_MAX && free.length ? Math.min(...free.map(a => a.at)) : -Infinity;
   }
 
   private now(): number { return this.p.now?.() ?? Date.now(); }
 
   /** A folder as the disk names it (a brain behind a junction or a link, macOS /var → /private/var): the walk and a
    *  chat's links (localFile) give real paths, so every folder they are compared with is real too. */
-  private real(dir: string): string { try { return fs.realpathSync.native(dir); } catch { return dir; } }
+  private real(dir: string): string {
+    const hit = this.reals.get(dir);
+    if (hit !== undefined) return hit;
+    const out = realNow(dir);
+    if (this.reals.size > 2000) this.reals.clear();
+    this.reals.set(dir, out);
+    return out;
+  }
   private brain(): string | null { const b = this.p.brainRoot(); return b ? this.real(b) : null; }
   private keyOf(p: string, kind: ArtifactKind): string { return versionKey(p, kind, this.platform); }
   private same(a: string, b: string): boolean { return pathKey(a, this.platform) === pathKey(b, this.platform); }
 
   private load(): Stored {
-    const empty: Stored = { v: 1, backfilled: false, scannedAt: null, dropped: 0, copyBytes: 0, artifacts: [] };
+    const empty: Stored = { v: 1, backfilled: false, scannedAt: null, dropped: 0, copyBytes: 0, cleaned: 0, cleanedAt: null, artifacts: [] };
     try {
       const raw = readLocal(this.file) as Partial<Stored> | undefined;
       if (!raw || raw.v !== 1 || !Array.isArray(raw.artifacts)) return empty;
@@ -128,7 +144,8 @@ export class LibraryService {
       const copies = new Map<string, number>();
       for (const a of artifacts) for (const v of a.versions) if (v.copy) copies.set(v.copy, v.size);
       const copyBytes = [...copies.values()].reduce((n, x) => n + x, 0);
-      return { ...empty, ...raw, artifacts, copyBytes, dropped: typeof raw.dropped === 'number' ? raw.dropped : 0, backfilled: raw.backfilled === true, scannedAt: typeof raw.scannedAt === 'number' ? raw.scannedAt : null };
+      return { ...empty, ...raw, artifacts, copyBytes, dropped: typeof raw.dropped === 'number' ? raw.dropped : 0,
+        cleaned: typeof raw.cleaned === 'number' ? raw.cleaned : 0, cleanedAt: typeof raw.cleanedAt === 'number' ? raw.cleanedAt : null, backfilled: raw.backfilled === true, scannedAt: typeof raw.scannedAt === 'number' ? raw.scannedAt : null };
     } catch (e) {
       log.warn('library', 'artifact index unreadable: starting a new one', { cause: String(e), hint: 'the old file is kept as it is; a scan rebuilds the index' });
       try { fs.renameSync(this.file, `${this.file}.bad-${Date.now()}`); } catch { /* nothing to keep */ }
@@ -164,7 +181,7 @@ export class LibraryService {
       const chatTitle = a.chatId ? titles.get(a.chatId) : undefined;
       return chatTitle ? { ...a, chatTitle } : { ...a };
     });
-    return { artifacts, scanning: !!this.scanning || !!this.backfilling, scannedAt: this.data.scannedAt, backfilled: this.data.backfilled, dropped: this.data.dropped };
+    return { artifacts, scanning: !!this.scanning || !!this.backfilling, scannedAt: this.data.scannedAt, backfilled: this.data.backfilled, dropped: this.data.dropped, cleaned: this.data.cleaned };
   }
 
   // ── where artifacts are looked for ──
@@ -267,6 +284,8 @@ export class LibraryService {
     }
     // a full index takes no file older than the oldest it keeps (it would be dropped again at every scan)
     if (this.data.artifacts.length >= LIBRARY_MAX && at <= this.floor) return false;
+    // an old screenshot is not taken back in after the cleanup took it out (ADR 0323)
+    if (this.oldPicture(f.kind, at)) return false;
     const copy = await this.copyOf(f.path, f.size, f.kind, chat);
     const a: Omit<Artifact, 'chatTitle'> = {
       id: crypto.createHash('sha1').update(key).digest('hex').slice(0, 16), title: '', kind: f.kind, area: '', summary: '',
@@ -292,10 +311,10 @@ export class LibraryService {
     a.area = this.areaOf(newest.path, a.chatId);
   }
 
-  /** Over LIBRARY_MAX: the oldest go (counted as dropped), with their kept copies. */
+  /** Over LIBRARY_MAX: the oldest go (counted as dropped), with their kept copies; a starred one never goes. */
   private async trim(): Promise<void> {
     if (this.data.artifacts.length <= LIBRARY_MAX) { this.setFloor(); return; }
-    this.data.artifacts.sort((x, y) => y.at - x.at);
+    this.data.artifacts.sort((x, y) => Number(!!y.pinned) - Number(!!x.pinned) || y.at - x.at);
     const gone = this.data.artifacts.splice(LIBRARY_MAX);
     for (const a of gone) this.byKey.delete(this.keyOf(a.path, a.kind));
     this.data.dropped += gone.length;
@@ -341,9 +360,59 @@ export class LibraryService {
     return changed;
   }
 
+  // ── the cleanup (ADR 0323, the owner 2026-11-18: «chi se ne fotte di tutti gli screen di sempre … una pulizia
+  //    periodica») ──
+  private oldPicture(kind: ArtifactKind, at: number): boolean { return kind === 'image' && at < this.now() - CLEANUP_DAYS * DAY_MS; }
+
+  /** Pictures (screenshots above all) not pinned and older than CLEANUP_DAYS leave the index. Their files are deleted
+   *  only in the app's own screenshot folder (<userData>/evidence); anywhere else (the brain, a project) a file stays
+   *  where it is and is only no longer shown. Runs with a scan, at most once a day. */
+  private async cleanup(): Promise<boolean> {
+    const at = this.now();
+    if (this.data.cleanedAt !== null && at - this.data.cleanedAt < DAY_MS && at >= this.data.cleanedAt) return false;
+    this.data.cleanedAt = at;
+    const old = this.data.artifacts.filter(a => !a.pinned && this.oldPicture(a.kind, a.at));
+    if (!old.length) return false;
+    const gone = new Set(old);
+    this.data.artifacts = this.data.artifacts.filter(a => !gone.has(a));
+    for (const a of old) this.byKey.delete(this.keyOf(a.path, a.kind));
+    this.data.cleaned += old.length;
+    this.setFloor();
+    await this.release(old.flatMap(a => a.versions));
+    const own = this.real(path.join(this.p.userData, 'evidence'));
+    let deleted = 0;
+    for (const v of old.flatMap(a => a.versions)) {
+      // only a screenshot of the app's own folder (an agent's download stays), and only the very file indexed: one
+      // written again under the same name since is a new picture, and a link never leads the delete elsewhere
+      if (v.missing || !isInside(v.path, own, this.platform) || path.relative(own, v.path).split(/[\\/]/).includes('downloads')) continue;
+      try {
+        const st = await fs.promises.lstat(v.path);
+        if (!st.isFile() || Math.round(st.mtimeMs) !== v.at || st.size !== v.size || !isInside(realNow(v.path), own, this.platform)) continue;
+        await fs.promises.unlink(v.path); deleted++;
+      } catch { /* already gone */ }
+    }
+    try { await fs.promises.rm(this.thumbs, { recursive: true, force: true }); this.thumbCache.clear(); } catch { /* made again when asked */ }
+    log.info('library', 'old pictures cleaned', { data: { hidden: old.length - deleted, deleted, days: CLEANUP_DAYS } });
+    return true;
+  }
+
+  /** The user keeps an artifact (the cleanup never takes it) or lets it go again. */
+  pin(id: string, pinned: boolean): Promise<ArtifactList> {
+    return this.serial(async () => {
+      const a = this.data.artifacts.find(x => x.id === id);
+      if (a && !!a.pinned !== pinned) {
+        if (pinned) a.pinned = true; else delete a.pinned;
+        this.save();
+        this.p.changed();
+      }
+      return this.view();
+    });
+  }
+
   /** Looks through the folders (and checks every known file); the one-time backfill follows the first scan. */
   scan(): Promise<void> {
     if (this.scanning) return this.scanning;
+    this.reals.clear();
     const run = this.serial(async () => {
       let changed = false;
       const found = await walk(this.roots());
@@ -352,6 +421,8 @@ export class LibraryService {
         if (await this.upsert(found[i]!, undefined, 'scan')) changed = true;
       }
       if (await this.check()) changed = true;
+      // after the check: a file rewritten under an old name is a new version by now, not an old picture
+      if (await this.cleanup()) changed = true;
       this.save();
       if (changed) this.p.changed();
     });
@@ -438,7 +509,7 @@ export class LibraryService {
     // a gone file: its kept copy (text kinds only), never the gone path
     const file = a.missing ? a.versions.find(v => v.copy)?.copy : a.path;
     if (!file) return null;
-    if (a.kind === 'html') { const text = await head(file, 160 * 1024); return secretHead(text) ? null : { kind: 'html', text, path: file }; }
+    if (a.kind === 'html') { const text = await head(file, HTML_THUMB_BYTES); return secretHead(text) ? null : { kind: 'html', text, path: file }; }
     // a Markdown card is drawn from its title and summary; a text holding a credential shows none of it
     if (a.kind !== 'markdown' && readsText(a.path)) { const text = await head(file, 6 * 1024); return text.trim() && !secretHead(text) ? { kind: 'text', text } : null; }
     if (a.kind !== 'image' || a.missing) return null;
@@ -483,8 +554,8 @@ export class LibraryService {
     let hit = artifactOfPath(this.data.artifacts as Artifact[], file, this.platform);
     if (!hit) {
       // the path as the disk names it; a gone file by its real folder
-      let real = this.real(file);
-      if (real === file) real = path.join(this.real(path.dirname(file)), path.basename(file));
+      let real = realNow(file);
+      if (real === file) real = path.join(realNow(path.dirname(file)), path.basename(file));
       if (real !== file) { hit = artifactOfPath(this.data.artifacts as Artifact[], real, this.platform); file = real; }
     }
     if (!hit || !this.p.openPath) return { ok: false, error: 'not an artifact' };

@@ -15,4 +15,6 @@ export interface LibraryInvokeMap {
   /** opens an artifact's file (the path the viewer shows: one of the index's versions or kept copies) with the system's
    *  app, for what the viewer does not render (Word, Excel, video…); any other path is refused */
   'library:open': [{ path: string }, { ok: boolean; error?: string }];
+  /** keeps an artifact (the cleanup never takes it) or lets it go again (ADR 0323); the index after it */
+  'library:pin': [{ id: string; pinned: boolean }, ArtifactList];
 }
