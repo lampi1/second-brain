@@ -599,6 +599,22 @@ describe('applyResearch (ADR 0132)', () => {
     expect(() => w.service.applyResearch(card({ kind: 'rule', change: { target: 'rule', text: 'Lancia i test prima di dire fatto.' } }))).toThrow(/non ci sono più/);
     expect(fs.existsSync(path.join(w.brain, 'rules/lessons.md'))).toBe(false);
   });
+  it('one line of an always-loaded file is replaced as one change with its Annulla; safety lines and other files are refused (#435)', () => {
+    const w = world();
+    const text = '# Agents\n\n- Stage everything, then commit.\n\n## Safety\n\n- Ask before any deploy.\n';
+    put(w.brain, 'AGENTS.md', text);
+    put(w.brain, 'rules/vecchia.md', '- Riga vecchia.\n');
+    put(w.brain, 'brain.json', JSON.stringify({ machinery: 'product-v1', fixedFiles: ['AGENTS.md'], rules: { topicFiles: [], appRules: true } }));
+    const line = (before: string, after: string, file = 'AGENTS.md') => card({ kind: 'rule', change: { target: 'rule', file, before, text: after } });
+    expect(() => w.service.applyResearch(line('- Ask before any deploy.', '- Deploy when ready.'))).toThrow(/solo l'utente/);
+    expect(() => w.service.applyResearch(line('- Riga vecchia.', '- Riga nuova.', 'rules/vecchia.md'))).toThrow(/sempre caricati/);
+    expect(() => w.service.applyResearch(line('- A line nobody wrote.', '- x'))).toThrow(/non c'è più/);
+    expect(fs.readFileSync(path.join(w.brain, 'AGENTS.md'), 'utf8')).toBe(text);
+    const id = w.service.applyResearch(line('- Stage everything, then commit.', '- Stage only the files you changed, then commit.'));
+    expect(fs.readFileSync(path.join(w.brain, 'AGENTS.md'), 'utf8')).toBe(text.replace('- Stage everything, then commit.', '- Stage only the files you changed, then commit.'));
+    w.service.rollback(id);
+    expect(fs.readFileSync(path.join(w.brain, 'AGENTS.md'), 'utf8')).toBe(text);
+  });
   it('a new skill is never written through a .agents/skills linked outside the brain', () => {
     const w = world();
     const outside = path.join(w.base, 'other-skills'); fs.mkdirSync(outside, { recursive: true });

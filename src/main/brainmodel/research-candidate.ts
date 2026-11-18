@@ -1,7 +1,7 @@
 // The candidate brain (ADR 0195), after Anthropic's «dreaming» for managed agents: a job reads the sessions and a memory
 // store and writes a NEW store (duplicates merged, superseded values replaced, new insights), never touching its input;
 // the user compares and keeps it or throws it away. Here: the brain-file findings one maintenance research proposes (a
-// skill written or extended, a skill or a rules/ file to forget) are not
+// skill written or extended, one line of an always-loaded file fixed, a skill or a rules/ file to forget) are not
 // separate cards any more; when the research ends they are planned together on a virtual copy of the brain, the
 // affected files are copied under userData/brain-candidates/<id>/files (the brain is never written), zero-token checks
 // run, the recorded-task replay (evaluation.ts) is started only when an anonymized holdout set exists and the research's
@@ -26,6 +26,7 @@ import { appendUnder, skillText } from './jobs';
 import { ignoreWrite, sourceOfSkill } from './migration-ignore';
 import { landsInsideBrain, readSmall } from './model';
 import type { ProcedureSection } from './procedure-sources';
+import { editRuleLine, RULE_LINE_WHY } from './rule-line';
 
 const DAY = 86_400_000;
 /** A file the change log can keep a copy of (changes.ts SNAP): a bigger one leaves the finding out of the candidate. */
@@ -140,6 +141,14 @@ export function planCandidate(input: PlanInput, proposals: readonly ResearchProp
           const before = read(file);
           if (have && before === null) throw new Error(writes.has(file) || files.has(file) ? 'la skill è tolta da un\'altra proposta' : 'skill non leggibile');
           put(file, before !== null ? setBody(before, appendUnder(parseMd(before).body, 'Dalla manutenzione', text)) : skillText(name, oneLine(p.title, 300), text));
+        } else if (ch.target === 'rule' && ch.file && ch.before) {
+          // one line of an always-loaded file, replaced (#435, ADR 0320): the diff is that line and nothing else
+          const file = path.join(root, ...ch.file.split('/'));
+          const before = input.rules.some(r => r.file === ch.file && r.loaded === 'always') && relOf(root, file) === ch.file ? read(file) : null;
+          if (before === null) throw new Error('file non tra quelli sempre caricati, o non leggibile');
+          const edit = editRuleLine(before, ch.before, text);
+          if (!edit.ok) throw new Error(RULE_LINE_WHY[edit.why].it);
+          put(file, edit.text);
         } else throw new Error('regole per tutti i ruoli: non ci sono più (#366), va proposta una skill');
       }
     } catch (e) { skipped.push({ id: p.id, why: errText(e).slice(0, 200) }); continue; }

@@ -30,8 +30,13 @@ export interface ResearchChange {
   role?: string;
   /** the skill's name (kebab-case) */
   name?: string;
-  /** the text to add: a rule line, a skill's SKILL.md body, a line for the role's text */
+  /** the text to add: a rule line, a skill's SKILL.md body, a line for the role's text; with `file` and `before`, the
+   *  line that replaces `before` */
   text: string;
+  /** target rule, one line of an always-loaded file fixed (issue #435, ADR 0320): the brain-relative file… */
+  file?: string;
+  /** …and the whole line as it is now; `text` takes its place. Never a safety, permission, settings or hook line. */
+  before?: string;
 }
 
 /** What a forget card would archive (kind forget). */

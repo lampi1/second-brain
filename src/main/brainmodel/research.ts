@@ -52,6 +52,7 @@ import { defaultSuccess, parseSuccess, successText } from './success-check';
 import { RESEARCH_TOTAL_CAP } from '../../shared/maintenance-research';
 import { brainEvidence, conversationEvidence, issueSnapshot, threadPage, matchingIssue, sameFinding, type Conversation, type IssueSnapshot } from './research-deep';
 import { scrub } from './research-scrub';
+import { ruleLineChange } from './rule-line';
 export { scrub };
 
 /** At most this many lint cards of each check per pass (the worst first), so a messy brain is not one wall of cards. */
@@ -525,6 +526,7 @@ export class ResearchService {
       else if (a.issue !== undefined) out.issue = this.issue(a.issue);
       else throw new Error('bold: give a change (for the brain) or an issue (for the app).');
     } else out.change = this.change(a.change, kind);
+    if (out.change?.file && out.change.before) { out.removes = `${out.change.file}: ${out.change.before}`; out.adds = out.change.text; } // a line edit shows its exact before and after, written by the app (#435)
     // Brain drafts have no guessed public destination and never publish when the brain change is approved.
     if (!out.issue) out.issue = this.issue(a.issue ?? { title: base.title, body: `## Context\n\n${base.why}\n\n## Proposal\n\n${base.adds}\n${base.removes}\n\n## Evidence\n\n${base.evidence.map(e => `- ${e}`).join('\n')}\n\n## Verification\n\n${base.expected || 'Verify the cited cases before accepting the change.'}` });
     const inventory = isAppCard(out) ? this.inventory : { repo: null, status: 'unverified' as const, at: this.now(), note: 'dedup da verificare: repository del brain non verificato', issues: [] };
@@ -544,8 +546,9 @@ export class ResearchService {
     const role = typeof o.role === 'string' && o.role ? o.role : undefined;
     if (role !== undefined && !isRoleId(role)) throw new Error('change.role: a role id.');
     if (target === 'role' && !role) throw new Error('change.role: required for a change to a role.');
+    if (o.file !== undefined || o.before !== undefined) return ruleLineChange(this.d.root(), this.d.brain.state().rules, { ...o, target, role }); // one line of an always-loaded file fixed (#435, ADR 0320)
     // rules for every role are gone (#366, ADR 0243): what all roles should know is a skill
-    if (target === 'rule' && !role) throw new Error('change.role: a rule is for one role now (rules for every role are gone): for everyone, propose a skill.');
+    if (target === 'rule' && !role) throw new Error('change.role: a rule is for one role now (rules for every role are gone): for everyone, propose a skill; to fix one line of a file loaded in every job, pass change.file and change.before.');
     const name = typeof o.name === 'string' && o.name.trim() ? str(o.name, 64, 'change.name') : undefined;
     if (target === 'skill' && (!name || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name))) throw new Error('change.name: the skill\'s kebab-case name.');
     const text = str(o.text, target === 'skill' ? 8000 : 800, 'change.text');

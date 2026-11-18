@@ -35,6 +35,7 @@ import { lintPlan } from './lint-cards';
 import { checkChange } from './success-check';
 import { countLogGroup } from './log-scan';
 import { randomBytes } from 'node:crypto';
+import { alwaysLoadedText, editRuleLine, RULE_LINE_WHY } from './rule-line';
 
 /** How long an unchanged state is reused (the day's figures still move with the clock). */
 export const CACHE_MS = 5 * 60_000;
@@ -366,7 +367,7 @@ export class BrainModelService {
   }
   /** A maintenance finding the user approved in Proposte (ADR 0132), through the change log (its «Annulla» puts the brain
    *  back): a skill (new, or a section added to one of the brain's), a rule for one role (its text; rules for every
-   *  role are gone since #366), a memory line (a role's memory or the shared one), a line in a role's text, or what to forget (a brain
+   *  role are gone since #366), one line of an always-loaded file replaced (#435), a memory line (a role's memory or the shared one), a line in a role's text, or what to forget (a brain
    *  skill, a rules/ file, one memory line). Returns the change's id. Never grants permissions (checkPermissionText). */
   applyResearch(p: ResearchProposal): string {
     const root = this.root();
@@ -414,6 +415,17 @@ export class BrainModelService {
       const linked = role ? this.d.packs.profile(role.id).knowhow?.linked ?? [] : null;
       const snap = role && linked && !linked.includes(name) ? this.writer().update(role.id, { linked: [...linked, name] }, `Manutenzione: skill ${name}`) : null;
       const c = this.log.apply({ job: 'research', kind: 'skill', action: have ? 'update' : 'create', target: name, summary: `${have ? 'Skill aggiornata' : 'Nuova skill'} «${name}»${role && snap ? ` per ${role.name}` : ''}: ${oneLine(p.title, 100)}`, reason: why, evidence, ...success }, [{ file, text: next }], snap ?? undefined);
+      if (!c) throw new Error('Niente da cambiare.');
+      return this.done(c.id);
+    }
+    // one line of an always-loaded file, replaced (#435, ADR 0320): checked again on the file as it is now
+    if (ch.target === 'rule' && !role && ch.file && ch.before) {
+      const before = alwaysLoadedText(root, readRules(root), ch.file);
+      if (before === null) throw new Error('Il file non è più tra quelli sempre caricati, o non si legge.');
+      const edit = editRuleLine(before, ch.before, text);
+      if (!edit.ok) throw new Error(`Riga non cambiata: ${RULE_LINE_WHY[edit.why].it}.`);
+      const c = this.log.apply({ job: 'research', kind: 'rule', action: 'update', target: ch.file, summary: `${ch.file}: ${oneLine(text, 140)}`, reason: why, evidence, ...success },
+        [{ file: path.join(root, ...ch.file.split('/')), text: edit.text, removed: [{ item: ch.before, reason: why }] }]);
       if (!c) throw new Error('Niente da cambiare.');
       return this.done(c.id);
     }
