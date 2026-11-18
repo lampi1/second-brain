@@ -7,7 +7,7 @@
 // test/unit/projectmap-store.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
-import { MAP_LIMITS, prunePaths, type MapPath, type MapVersionInfo, type ProjectMap, type ProjectMapInfo } from '@shared/project-map';
+import { MAP_LIMITS, canHold, canSitInside, isMapHref, isMapLayout, prunePaths, type MapPath, type MapVersionInfo, type ProjectMap, type ProjectMapInfo } from '@shared/project-map';
 
 export const HISTORY_MAX = 400;
 const SLUG = /^[a-z0-9][a-z0-9-]{0,47}$/;
@@ -29,31 +29,39 @@ export function asMap(v: unknown, project: string): ProjectMap | null {
     const x = { ...(e as Record<string, unknown>) };
     for (const k of ['rules', 'keeps', 'why'] as const) { const l = strs(x[k], k); if (l?.length) x[k] = l; else delete x[k]; }
     const kf = files(x.keyFiles); if (kf?.length) x.keyFiles = kf; else delete x.keyFiles;
+    // #443: a layout the drawing knows, a real «together», proofs and links held to their shape and limits
+    if (!isMapLayout(x.layout)) delete x.layout;
+    if (x.par !== true) delete x.par;
+    const proofs = Array.isArray(x.proofs) ? x.proofs.filter(f => obj(f) && str(f.text) && f.text).map(f => ({ text: (f.text as string).slice(0, MAP_LIMITS.proof), ...(str(f.file) && inside(f.file) ? { file: f.file.slice(0, MAP_LIMITS.path) } : {}), ...(isMapHref(f.href) ? { href: f.href } : {}) })).slice(0, MAP_LIMITS.proofs) : [];
+    if (proofs.length) x.proofs = proofs; else delete x.proofs;
+    const refs = Array.isArray(x.refs) ? x.refs.filter(f => obj(f) && str(f.label) && f.label && isMapHref(f.href)).map(f => ({ label: (f.label as string).slice(0, MAP_LIMITS.label), href: f.href as string })).slice(0, MAP_LIMITS.refs) : [];
+    if (refs.length) x.refs = refs; else delete x.refs;
     return { ...x, evidence: Array.isArray(x.evidence) ? x.evidence.filter(str) : [], confirmedAt: num(x.confirmedAt) ? x.confirmedAt : 0 };
   }) as unknown as ProjectMap['elements'];
   if (!elements.length) return null;
   // a parent that cannot hold a piece (missing, a person, a loop, too deep: a hand-edited file) is dropped; a part sits in
-  // a system or in another part (ADR 0316)
+  // a system or in another part (ADR 0316), a step in its phase (#443)
   const byId = new Map(elements.map(e => [e.id, e]));
-  const holds = (k: string) => k === 'system' || k === 'external' || k === 'part';
   const drop = elements.filter(e => {
     if (e.parent === undefined) return false;
     const p = byId.get(e.parent);
     const seen = new Set<string>([e.id]);
-    let ok = !!p && holds(p.kind) && e.kind === 'part';
+    let ok = !!p && canHold(p.kind) && canSitInside(e.kind);
     for (let q: string | undefined = e.parent; ok && q; q = byId.get(q)?.parent) { if (seen.has(q)) ok = false; seen.add(q); }
     return !ok || seen.size - 1 > MAP_LIMITS.depth;
   });
   for (const e of drop) delete (e as { parent?: string }).parent; // judged on the file as read, so a loop drops every parent in it
   const ids = new Set(elements.map(e => e.id));
   const links = (Array.isArray(v.links) ? v.links : []).filter(l => obj(l) && str(l.id) && str(l.from) && str(l.to) && ids.has(l.from) && ids.has(l.to) && str(l.status))
-    .map(l => ({ ...(l as Record<string, unknown>), label: str((l as Record<string, unknown>).label) ? (l as Record<string, unknown>).label : '', confirmedAt: num((l as Record<string, unknown>).confirmedAt) ? (l as Record<string, unknown>).confirmedAt : 0 })) as unknown as ProjectMap['links'];
+    .map(l => l as Record<string, unknown>)
+    // an arrow to the next step has no status of its own (#443): a file written by hand cannot make it wait for anyone
+    .map(l => ({ ...l, label: str(l.label) ? l.label : '', confirmedAt: num(l.confirmedAt) ? l.confirmedAt : 0, ...(l.kind === 'next' ? { kind: 'next', status: 'ok', actor: undefined } : { kind: undefined }) })) as unknown as ProjectMap['links'];
   return {
     ...(v as unknown as ProjectMap), project, title: str(v.title) && v.title ? v.title : project,
     updatedAt: num(v.updatedAt) ? v.updatedAt : 0, by: str(v.by) ? v.by : '', summary: str(v.summary) ? v.summary : '',
     ...(str(v.root) && v.root ? { root: v.root } : { root: undefined }), elements, links,
     corrections: Array.isArray(v.corrections) ? v.corrections.filter(str) : [],
-    ...pathsOf(v.paths, ids),
+    ...pathsOf(v.paths, ids), layout: isMapLayout(v.layout) ? v.layout : undefined,
   };
 }
 

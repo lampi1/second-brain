@@ -16,7 +16,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ChatItem, ChatSummary, PendingRequest } from '@shared/contract';
-import { applyChanges, applyEdit, checkMap, checkPaths, elementOfFile, isMapId, MAP_LIMITS, mergePaths, projectSlug, prunePaths, type MapAgent, type MapElement, type MapPlan, type MapState, type MapWork, type ProjectMap, type ProjectMapInfo, type ProjectMapView } from '@shared/project-map';
+import { applyChanges, applyEdit, checkMap, checkPaths, elementOfFile, isMapId, isMapLayout, MAP_LAYOUTS, MAP_LIMITS, mergePaths, projectSlug, prunePaths, type MapAgent, type MapElement, type MapPlan, type MapState, type MapWork, type ProjectMap, type ProjectMapInfo, type ProjectMapView } from '@shared/project-map';
 import { planWaves, type PlanStep } from '@shared/strategy';
 import { askLine } from '../appctl/digest';
 import { markOf, progressOf } from '../appctl/agents-recap';
@@ -166,7 +166,8 @@ export class ProjectMaps {
     // the pieces come back as they were drawn; the ones still there keep the status they have now
     const live = new Map(cur.elements.map(e => [e.id, e]));
     const elements = v === cur.version ? before.elements : before.elements.map(e => { const n = live.get(e.id); return n ? { ...e, status: n.status, confirmedAt: n.confirmedAt, ...(n.note ? { note: n.note } : {}) } : e; });
-    const map: ProjectMap = { ...cur, elements, links: before.links, corrections: before.corrections, paths: before.paths, version: cur.version + 1, updatedAt: this.now(), by, summary: `annullato: ${last!.summary}`.slice(0, MAP_LIMITS.summary) };
+    const { layout: _now, ...rest } = cur;
+    const map: ProjectMap = { ...rest, ...(before.layout ? { layout: before.layout } : {}), elements, links: before.links, corrections: before.corrections, paths: before.paths, version: cur.version + 1, updatedAt: this.now(), by, summary: `annullato: ${last!.summary}`.slice(0, MAP_LIMITS.summary) };
     this.d.store.save(map);
     const ids = new Set(elements.map(e => e.id));
     for (const f of Object.values(this.state.focus)) if (f.project === project) f.elements = f.elements.filter(id => ids.has(id));
@@ -286,11 +287,15 @@ export class ProjectMaps {
     const ids = new Set(elements.map(e => e.id));
     const sent = a.map && typeof a.map === 'object' ? (a.map as { paths?: unknown }).paths : undefined;
     const paths = sent === undefined ? prunePaths(prev?.paths, ids) : checkPaths(sent, ids);
+    // how the top level is drawn (#443): the one sent, else the previous one
+    const asked = a.map && typeof a.map === 'object' ? (a.map as { layout?: unknown }).layout : undefined;
+    if (asked !== undefined && asked !== null && !isMapLayout(asked)) throw new Error(`layout: ${MAP_LAYOUTS.join(' | ')}`);
+    const layout = asked === undefined ? prev?.layout : asked ?? undefined;
     const summary = a.summary.trim().slice(0, MAP_LIMITS.summary) || (prev ? 'mappa ridisegnata' : 'prima mappa');
     const map: ProjectMap = {
       project, title: title || prev?.title || project, ...(root ? { root } : {}),
       version: (prev?.version ?? 0) + 1, updatedAt: now, by: a.by, summary, elements, links,
-      corrections: a.corrections ?? prev?.corrections ?? [], ...(paths.length ? { paths } : {}),
+      corrections: a.corrections ?? prev?.corrections ?? [], ...(paths.length ? { paths } : {}), ...(layout ? { layout } : {}),
     };
     this.d.store.save(map);
     // an element that left the drawing leaves the bindings and the edit times too

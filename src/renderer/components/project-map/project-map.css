@@ -13,7 +13,7 @@
 .pm-past { display: flex; align-items: center; gap: 10px; background: var(--accent-bg); border: 1px solid var(--accent-line); color: var(--text); padding: 7px 12px; border-radius: var(--r-m); font-size: 13px; }
 .pm-past .btn { margin-left: auto; }
 
-.pm-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; min-height: 420px; flex: 1; }
+.pm-body { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(280px, var(--pm-side, 400px)); gap: 12px; min-height: 420px; flex: 1; }
 .pm-canvas { position: relative; overflow: hidden; border: 1px solid var(--border); border-radius: var(--r-l); background-color: var(--bg-2);
   background-image: radial-gradient(var(--surface-4) 1px, transparent 1px); background-size: 22px 22px; min-height: 520px;
   cursor: grab; touch-action: none; user-select: none; }
@@ -112,6 +112,7 @@
   .pm-body { flex: none; }
   .pm-canvas { height: max(520px, calc(100vh - 360px)); }
   .pm-side { overflow: visible; }
+  .pm-resize { display: none; }
   .pm-group { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
   .pm-group h4 { grid-column: 1 / -1; }
 }
@@ -160,7 +161,7 @@
 .pm-agent-change[data-seen] b { color: var(--green); }
 
 /* ADR 0302 · the projects as a list beside the drawing (the newspaper's sections, news.css .nw-nav), never a menu */
-.pm-body.with-nav { grid-template-columns: 190px minmax(0, 1fr) 320px; }
+.pm-body.with-nav { grid-template-columns: 190px minmax(320px, 1fr) minmax(280px, var(--pm-side, 400px)); }
 .pm-nav { display: flex; flex-direction: column; gap: 3px; align-self: start; padding: 12px 8px; border: 1px solid var(--border); border-radius: var(--r-l); background: var(--surface); min-width: 0; }
 .pm-nav-lbl { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); font-weight: 600; padding: 0 10px 6px; }
 .pm-nav button { appearance: none; display: flex; align-items: center; gap: 4px; width: 100%; min-width: 0; text-align: left; background: none; border: 0; border-radius: var(--r-m); padding: 8px 10px; font: inherit; font-size: 13px; color: var(--text-2); cursor: pointer; }
@@ -173,7 +174,8 @@
 /* beside the Orchestrator's column the list stays at the side and the agents go under the drawing */
 @container (max-width: 980px) {
   .pm-body.with-nav { grid-template-columns: 172px minmax(0, 1fr); }
-  .pm-body.with-nav .pm-side { grid-column: 1 / -1; }
+  .pm-body.with-nav .pm-sidewrap { grid-column: 1 / -1; }
+  .pm-body.with-nav .pm-resize { display: none; }
   .pm-step { max-width: 190px; }
 }
 /* a really narrow page: the projects are a row of pills over the drawing */
@@ -288,8 +290,6 @@ button.pm-label:focus-visible { outline: 2px solid var(--focus); outline-offset:
 .pm-linkcard + .pm-linkcard { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .pm-linkends { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
 /* full screen has the room: a wider column to read in */
-.pm.pm-full .pm-body { grid-template-columns: minmax(0, 1fr) 400px; }
-.pm.pm-full .pm-body.with-nav { grid-template-columns: 190px minmax(0, 1fr) 400px; }
 .pm.pm-full .pm-step { max-width: 320px; }
 /* more substance on a piece (ADR 0316): short lists of facts, the files as code-type links, the paths through it */
 .pm-facts { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.45; color: var(--text); }
@@ -329,3 +329,36 @@ button.pm-label:focus-visible { outline: 2px solid var(--focus); outline-offset:
 .pm-node.stop-now { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-bg), 0 0 0 1.5px var(--accent); }
 .pm-stopnum { position: absolute; top: 9px; right: 40px; padding: 1px 6px; border-radius: 9px; font-size: 10.5px; font-weight: 700; background: var(--accent-bg); color: var(--accent); }
 .pm-node.stop-now .pm-stopnum { background: var(--accent); color: var(--bg); }
+
+/* #443 (ADR 0322) · the side panel: wider, and dragged by its left edge. The grid holds the drawing at 320 px at
+   least and the panel between 280 px and the width the user chose (--pm-side, set by ProjectMapView.tsx) */
+.pm-sidewrap { position: relative; display: flex; min-width: 0; min-height: 0; }
+.pm-sidewrap > .pm-side { flex: 1; min-width: 0; }
+.pm-resize { position: absolute; z-index: 3; left: -10px; top: 0; bottom: 0; width: 8px; border-radius: 4px; cursor: col-resize; touch-action: none; }
+.pm-resize::after { content: ''; position: absolute; left: 3px; top: calc(50% - 22px); width: 2px; height: 44px; border-radius: 2px; background: var(--border-2); transition: background .12s, height .12s, top .12s; }
+.pm-resize:hover::after, .pm-resize:focus-visible::after, .pm-body.resizing .pm-resize::after { background: var(--accent); top: 8px; height: calc(100% - 16px); }
+.pm-resize:focus-visible { outline: none; }
+.pm-body.resizing { cursor: col-resize; user-select: none; }
+.pm-body.resizing .pm-canvas { pointer-events: none; }
+
+/* #443 · a project told as a sequence: a phase is a headed box, a step a plain one; in a line each wears its number */
+.pm-node.k-phase { background: var(--surface-2); border-width: 1.5px; border-top-width: 5px; border-radius: var(--r-m) var(--r-m) var(--r-l) var(--r-l); }
+.pm-node.k-phase .pm-name { font-size: 15px; }
+.pm-node.k-step { border-radius: var(--r-m); }
+.pm-node.k-phase.s-planned, .pm-node.k-step.s-planned { border-style: dashed; }
+.pm-kind { display: flex; align-items: center; gap: 6px; }
+.pm-ord { font-style: normal; display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--surface-4); color: var(--text); font-size: 11px; font-weight: 700; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.pm-node.k-phase .pm-ord { background: var(--text); color: var(--bg); }
+.pm-par { font-style: normal; font-weight: 700; color: var(--accent); letter-spacing: 0; text-transform: none; }
+/* the arrow to the following step: plain, with no status colour, whatever is around it */
+.pm-edge.s-next { stroke: var(--text-2); stroke-width: 2; } .pm-arrow.s-next { fill: var(--text-2); }
+.pm-label.s-next { border-color: var(--border-2); color: var(--text); }
+/* the richer panel: proofs, links, the steps in order */
+.pm-proofs, .pm-refs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.pm-proofs li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13px; line-height: 1.45; color: var(--text); padding-left: 16px; position: relative; }
+.pm-proofs li::before { content: '✓'; position: absolute; left: 0; top: 0; color: var(--green); font-weight: 700; }
+.pm-proofs li > span { flex: 1 1 100%; }
+.pm-detail button.pm-web > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-steplist li > button { display: flex; align-items: center; gap: 6px; text-align: left; }
+.pm-steplist .pm-ord { flex: none; }
+.pm-steplist li > span { padding-left: 24px; }

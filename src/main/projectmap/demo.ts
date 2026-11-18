@@ -1,4 +1,4 @@
-// The demo's project maps (ADR 0271): a small second project nobody works on (ADR 0302) and the made-up shop the demo chats work on, drawn in four versions (so the history
+// The demo's project maps (ADR 0271): a small second project nobody works on (ADR 0302), a third told as phases and steps in a line (#443, ADR 0322) and the made-up shop the demo chats work on, drawn in four versions (so the history
 // slider plays it from the first drawing to now), with the demo's chats bound to the parts they work on. Written into the
 // demo brain once (a map already there is left alone). The orders part holds pieces of its own, tells its rules, what
 // it keeps, why and its key files, and the last version has two paths told stop by stop (ADR 0316). Used by demo-wiring.ts.
@@ -56,7 +56,7 @@ export function seedDemoMap(brainRoot: string, maps: ProjectMaps, now: number): 
   const smsLinks = [ln('ordini', 'notifiche', 'avvisa il cliente'), ln('notifiche', 'provider-sms', 'invia l\'SMS')];
   const v2: ProjectMap = { ...head, version: 2, updatedAt: now - 2 * 24 * H, by: 'Scout · Mappa Alfa', summary: 'aggiunte le notifiche SMS e il provider',
     elements: [...base, ...sms], links: [...links, ...smsLinks], corrections: ['Il gestionale non è nostro: è del fornitore, non va modificato'] };
-  const set = (m: ProjectMap, id: string, patch: Partial<MapElement & MapLink>) => ({
+  const set = (m: ProjectMap, id: string, patch: Partial<Pick<MapElement, 'status' | 'note' | 'actor' | 'confirmedAt'>>) => ({
     ...m, elements: m.elements.map(e => (e.id === id ? { ...e, ...patch } as MapElement : e)), links: m.links.map(l => (l.id === id ? { ...l, ...patch } as MapLink : l)),
   });
   let v3: ProjectMap = { ...v2, version: 3, updatedAt: now - 3 * H, by: 'Bug notifiche SMS', summary: 'notifiche SMS in lavorazione' };
@@ -98,6 +98,30 @@ export function seedDemoMap(brainRoot: string, maps: ProjectMaps, now: number): 
       el('posta', 'external', 'Posta', { description: 'Invia i promemoria di scadenza' }),
     ].map(at),
     links: [ln('commerciale', 'anagrafica', 'cerca e aggiorna'), ln('anagrafica', 'contratti', 'intesta'), ln('contratti', 'posta', 'manda i promemoria')].map(at) });
+  // a third one told as a sequence (#443, ADR 0322): phases in a line, the steps inside each in a line too, two of
+  // them together, proofs and links on what is done
+  const done = now - 26 * H, ph = (id: string, name: string, extra: Partial<MapElement>) => el(id, 'phase', name, { confirmedAt: done, ...extra });
+  const stp = (id: string, parent: string, name: string, extra: Partial<MapElement> = {}) => el(id, 'step', name, { parent, confirmedAt: done, ...extra });
+  store.save({ project: 'gamma-migrazione', title: 'Gamma · migrazione del gestionale', root: 'C:\\progetti\\gamma', corrections: [], version: 1, updatedAt: done, by: 'Scout · Mappa Gamma', summary: 'prima mappa: le fasi della migrazione',
+    elements: [
+      ph('analisi', 'Analisi', { description: 'Cosa c\'è oggi e cosa deve passare', details: 'Si contano i dati del vecchio gestionale e si decide cosa migra, cosa si archivia e cosa si butta.\nNe esce l\'elenco delle tabelle con il loro destino, firmato dal responsabile.' }),
+      stp('inventario', 'analisi', 'Inventario dei dati', { description: 'Tabelle, righe e chi le usa', proofs: [{ text: '48 tabelle censite, 12 da archiviare', file: 'docs/inventario.md' }], refs: [{ label: 'Verbale della riunione', href: 'https://docs.example.com/gamma/verbale-1' }] }),
+      stp('destino', 'analisi', 'Destino di ogni tabella', { description: 'Migra, archivia o elimina', proofs: [{ text: 'Elenco approvato dal responsabile' }] }),
+      ph('preparazione', 'Preparazione', { status: 'work', confirmedAt: now - 20 * MIN, description: 'Script, prove e via libera', note: 'La prova di ripristino è in corso',
+        details: 'Si scrivono gli script di copia e li si prova su una copia dei dati. La fase finisce con il via libera: senza una prova di ripristino riuscita non si parte.' }),
+      stp('script', 'preparazione', 'Script di copia', { description: 'Uno per tabella, rilanciabili', evidence: ['scripts/copy/'], proofs: [{ text: '36 script, tutti passati sulla copia di prova', href: 'https://ci.example.com/gamma/run/212' }] }),
+      stp('ripristino', 'preparazione', 'Prova di ripristino', { status: 'work', confirmedAt: now - 20 * MIN, description: 'Dal backup al sistema acceso', note: 'Ripristino a metà: mancano gli allegati' }),
+      stp('avviso', 'preparazione', 'Avviso ai clienti', { par: true, status: 'ok', description: 'Data e ore di fermo', proofs: [{ text: 'Mail inviata a 214 clienti' }] }),
+      stp('via-libera', 'preparazione', 'Via libera', { status: 'planned', description: 'Si parte solo con il ripristino provato' }),
+      ph('migrazione', 'Migrazione', { status: 'planned', description: 'Il fine settimana del passaggio' }),
+      stp('fermo', 'migrazione', 'Fermo del vecchio sistema', { status: 'planned', description: 'Sola lettura dalle 20 di venerdì' }),
+      stp('copia', 'migrazione', 'Copia dei dati', { status: 'planned', description: 'Gli script, nell\'ordine delle dipendenze' }),
+      stp('controlli', 'migrazione', 'Controlli', { status: 'planned', description: 'Conteggi e campioni, tabella per tabella' }),
+      ph('verifica', 'Verifica', { status: 'planned', description: 'Una settimana con i due sistemi affiancati' }),
+    ],
+    // one arrow to the next step with a condition, and one way back that goes under the line
+    links: [{ id: 'ripristino--via-libera', from: 'ripristino', to: 'via-libera', label: 'solo se riesce', kind: 'next', status: 'ok', confirmedAt: done },
+      { id: 'verifica--preparazione', from: 'verifica', to: 'preparazione', label: 'se un controllo fallisce', status: 'planned', confirmedAt: done }] });
   bind(maps);
 }
 

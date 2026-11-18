@@ -16,10 +16,19 @@
 // - Planning (ADR 0276): a piece that does not exist yet is `planned` (drawn dashed). The Orchestrator adds, changes and
 //   removes pieces without a redraw (applyEdit); a Strategist's plan names the element each step works on, and the view
 //   carries those steps as the element's works, read live from the plan (never copied into the map file).
+// - A project told as a sequence (issue #443, ADR 0322; the owner 2026-11-18: «fasi una dopo l'altra, e i passi dentro
+//   ogni fase uno dopo l'altro»): a `phase` holds its `step`s (parent), and a level made of phases or steps is drawn
+//   in a line, in the saved order (layoutOf, lineOf), each box numbered; two boxes sit side by side only when the
+//   second says `par`. A level can ask for the line or for the layered drawing itself (`layout`). A link of kind
+//   `next` is the arrow to the following step: plain, with no status of its own (never «da capire»). A piece also
+//   carries its proofs (what shows it is done: a text, a file, an address) and its refs (addresses worth opening).
 // Shared by main (projectmap/: store, service, tools) and the renderer (components/project-map/); pure, no I/O.
 // Pinned by test/unit/project-map.test.ts.
+// The boxes and arrows of a level, their sizes and the line of phases and steps live in project-map-line.ts.
+import { BOX, ROW_MAX, lineOf, type Level, type LevelEdge, type LevelNode } from './project-map-line';
+export { BOX, LINE_MAX, ROW_MAX, type Level, type LevelEdge, type LevelNode } from './project-map-line';
 
-export const MAP_KINDS = ['person', 'system', 'external', 'env', 'doc', 'part'] as const;
+export const MAP_KINDS = ['person', 'system', 'external', 'env', 'doc', 'part', 'phase', 'step'] as const;
 export type MapKind = (typeof MAP_KINDS)[number];
 /** ok = works / done · work = being built · blocked = stuck (someone must act) · unknown = nobody knows ·
  *  planned = not there yet, a piece of the plan (ADR 0276) */
@@ -28,6 +37,16 @@ export type MapState = (typeof MAP_STATES)[number];
 /** who must act on a blocked element: the user, an agent, someone else (a colleague, a team) */
 export const MAP_ACTORS = ['user', 'agent', 'other'] as const;
 export type MapActor = (typeof MAP_ACTORS)[number];
+/** How one level is drawn (#443): linear = its boxes in a line, in the saved order · auto = layered by the links */
+export const MAP_LAYOUTS = ['linear', 'auto'] as const;
+export type MapLayout = (typeof MAP_LAYOUTS)[number];
+/** The kinds that tell a sequence: a level made only of these is drawn in a line unless it asks otherwise. */
+const SEQUENCE_KINDS: ReadonlySet<string> = new Set(['phase', 'step']);
+/** The kinds that sit inside another piece, and the kinds that hold pieces. */
+const INNER_KINDS: ReadonlySet<string> = new Set(['part', 'phase', 'step']);
+const HOLDER_KINDS: ReadonlySet<string> = new Set(['system', 'external', 'part', 'phase', 'step']);
+export const canHold = (kind: string): boolean => HOLDER_KINDS.has(kind);
+export const canSitInside = (kind: string): boolean => INNER_KINDS.has(kind);
 
 export interface MapElement {
   id: string; kind: MapKind; name: string; description?: string;
@@ -52,14 +71,29 @@ export interface MapElement {
   /** what else tells the piece without code (ADR 0316), each a short line: the rules it applies, what it keeps and
    *  where, why it is built this way (the decisions behind it), and the files worth opening */
   rules?: string[]; keeps?: string[]; why?: string[]; keyFiles?: MapKeyFile[];
+  /** how the level inside it is drawn (#443); absent = a line when its pieces are all phases or steps, else layered */
+  layout?: MapLayout;
+  /** in a line: it goes together with the box before it (side by side, the only split a line has) */
+  par?: boolean;
+  /** what shows it is done or how it stands (#443): a test run, a screenshot, a merged change */
+  proofs?: MapProof[];
+  /** addresses worth opening about it: an issue, a pull request, a document */
+  refs?: MapRef[];
 }
+/** A proof of a piece (#443): what it shows in a line, and maybe the project file or the address that holds it. */
+export interface MapProof { text: string; file?: string; href?: string }
+export interface MapRef { label: string; href: string }
 /** A file worth opening to see a piece (ADR 0316): relative to the map's root, with what it holds in one line. */
 export interface MapKeyFile { path: string; what: string }
 /** A question about the project told as a walk on the map (ADR 0316): «cosa succede quando…», one stop per piece, in
  *  order; a stop says what happens there and may name the file where it happens. */
 export interface MapStop { on: string; text: string; file?: string }
 export interface MapPath { id: string; question: string; stops: MapStop[] }
-export interface MapLink { id: string; from: string; to: string; label: string; status: MapState; note?: string; actor?: MapActor; confirmedAt: number;
+export interface MapLink { id: string; from: string; to: string;
+  /** what goes along it; may be empty on a `next` link (the arrow alone says «then») */
+  label: string; status: MapState; note?: string; actor?: MapActor; confirmedAt: number;
+  /** next = the arrow from a step to the one after it (#443): plain, with no status of its own (saved as ok) */
+  kind?: 'next';
   /** what goes along it, in full (ADR 0307): when, which data, how (call, file, queue), what comes back */
   details?: string }
 
@@ -77,6 +111,8 @@ export interface ProjectMap {
   corrections: string[];
   /** the project's questions told as walks on the map (ADR 0316) */
   paths?: MapPath[];
+  /** how the top level is drawn (#443); absent = a line when it is all phases or steps, else layered */
+  layout?: MapLayout;
 }
 export interface MapVersionInfo { version: number; at: number; by: string; summary: string }
 export interface ProjectMapInfo { project: string; title: string; version: number; updatedAt: number; elements: number; waiting: number }
@@ -136,13 +172,17 @@ export const STALE_MS = 2 * 3600_000;
 export const MAP_LIMITS = { elements: 200, links: 400, name: 80, description: 300, details: 1500, linkDetails: 800, note: 200, label: 80, evidence: 20, path: 300, corrections: 30, correction: 300, summary: 300, title: 80,
   /** levels of pieces under a top-level system (ADR 0316): system › part › piece › … */
   depth: 4,
-  rules: 8, rule: 200, keeps: 6, why: 6, keyFiles: 8, keyWhat: 120, paths: 12, stops: 12, question: 160, stop: 400 } as const;
+  rules: 8, rule: 200, keeps: 6, why: 6, keyFiles: 8, keyWhat: 120, paths: 12, stops: 12, question: 160, stop: 400,
+  proofs: 8, proof: 200, refs: 8, href: 500 } as const;
 
 const ID = /^[a-z0-9][a-z0-9-]{0,47}$/;
 export const isMapId = (v: unknown): v is string => typeof v === 'string' && ID.test(v);
 export const isMapState = (v: unknown): v is MapState => typeof v === 'string' && (MAP_STATES as readonly string[]).includes(v);
 const isKind = (v: unknown): v is MapKind => typeof v === 'string' && (MAP_KINDS as readonly string[]).includes(v);
 const isActor = (v: unknown): v is MapActor => typeof v === 'string' && (MAP_ACTORS as readonly string[]).includes(v);
+export const isMapLayout = (v: unknown): v is MapLayout => typeof v === 'string' && (MAP_LAYOUTS as readonly string[]).includes(v);
+/** An address a piece points to: http(s) only, no spaces (the app opens it in the user's browser tab). */
+export const isMapHref = (v: unknown): v is string => typeof v === 'string' && v.length <= MAP_LIMITS.href && /^https?:\/\/[^\s<>"']+$/i.test(v);
 
 /** A project name → its folder name: «Server MCP per il gestionale» → server-mcp-per-il-gestionale. */
 export function projectSlug(title: string): string {
@@ -191,13 +231,36 @@ const keyFilesOf = (v: unknown, key: string): MapKeyFile[] | undefined => {
     return { path: relPath(f.path, `${key}[${i}].path`), what: text(f.what, `${key}[${i}].what`, MAP_LIMITS.keyWhat)! };
   });
 };
-/** The substance fields of an element (ADR 0316): a redraw that leaves one out keeps the previous; an empty list removes it. */
-function substanceOf(e: Record<string, unknown>, key: string, old: MapElement | undefined): Pick<MapElement, 'rules' | 'keeps' | 'why' | 'keyFiles'> {
+const proofsOf = (v: unknown, key: string): MapProof[] | undefined => {
+  if (v === undefined || v === null) return undefined;
+  if (!Array.isArray(v) || v.length > MAP_LIMITS.proofs) throw new Error(`${key}: up to ${MAP_LIMITS.proofs} proofs`);
+  return v.map((raw, i) => {
+    const x = typeof raw === 'string' ? { text: raw } : raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    const k = `${key}[${i}]`;
+    const file = x.file === undefined || x.file === null || x.file === '' ? undefined : relPath(x.file, `${k}.file`);
+    if (x.href !== undefined && x.href !== null && x.href !== '' && !isMapHref(x.href)) throw new Error(`${k}.href: an http(s) address`);
+    return { text: text(x.text, `${k}.text`, MAP_LIMITS.proof)!, ...(file ? { file } : {}), ...(x.href ? { href: x.href as string } : {}) };
+  });
+};
+const refsOf = (v: unknown, key: string): MapRef[] | undefined => {
+  if (v === undefined || v === null) return undefined;
+  if (!Array.isArray(v) || v.length > MAP_LIMITS.refs) throw new Error(`${key}: up to ${MAP_LIMITS.refs} links`);
+  return v.map((raw, i) => {
+    const x = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    if (!isMapHref(x.href)) throw new Error(`${key}[${i}].href: an http(s) address`);
+    return { label: text(x.label, `${key}[${i}].label`, MAP_LIMITS.label)!, href: x.href };
+  });
+};
+/** The substance fields of an element (ADR 0316, #443): a redraw that leaves one out keeps the previous; an empty list removes it. */
+function substanceOf(e: Record<string, unknown>, key: string, old: MapElement | undefined): Pick<MapElement, 'rules' | 'keeps' | 'why' | 'keyFiles' | 'proofs' | 'refs'> {
+  const proofs = e.proofs === undefined ? old?.proofs : proofsOf(e.proofs, `${key}.proofs`);
+  const refs = e.refs === undefined ? old?.refs : refsOf(e.refs, `${key}.refs`);
   const rules = e.rules === undefined ? old?.rules : linesOf(e.rules, `${key}.rules`, MAP_LIMITS.rules, MAP_LIMITS.rule);
   const keeps = e.keeps === undefined ? old?.keeps : linesOf(e.keeps, `${key}.keeps`, MAP_LIMITS.keeps, MAP_LIMITS.rule);
   const why = e.why === undefined ? old?.why : linesOf(e.why, `${key}.why`, MAP_LIMITS.why, MAP_LIMITS.rule);
   const keyFiles = e.keyFiles === undefined ? old?.keyFiles : keyFilesOf(e.keyFiles, `${key}.keyFiles`);
-  return { ...(rules?.length ? { rules } : {}), ...(keeps?.length ? { keeps } : {}), ...(why?.length ? { why } : {}), ...(keyFiles?.length ? { keyFiles } : {}) };
+  return { ...(rules?.length ? { rules } : {}), ...(keeps?.length ? { keeps } : {}), ...(why?.length ? { why } : {}), ...(keyFiles?.length ? { keyFiles } : {}),
+    ...(proofs?.length ? { proofs } : {}), ...(refs?.length ? { refs } : {}) };
 }
 
 /** The drawing an agent sends (project_map_save), checked field by field; a status it gives is confirmed now, one it
@@ -217,6 +280,8 @@ export function checkMap(input: unknown, now: number, prev?: ProjectMap | null):
     if (e.status !== undefined && !isMapState(e.status)) throw new Error(`${key}.status: ${MAP_STATES.join(' | ')}`);
     if (e.actor !== undefined && !isActor(e.actor)) throw new Error(`${key}.actor: ${MAP_ACTORS.join(' | ')}`);
     if (e.parent !== undefined && !isMapId(e.parent)) throw new Error(`${key}.parent: an element id`);
+    if (e.layout !== undefined && e.layout !== null && e.layout !== '' && !isMapLayout(e.layout)) throw new Error(`${key}.layout: ${MAP_LAYOUTS.join(' | ')}`);
+    if (e.par !== undefined && e.par !== null && typeof e.par !== 'boolean') throw new Error(`${key}.par: true or false`);
     const old = before.get(e.id);
     const status = (e.status as MapState | undefined) ?? old?.status ?? 'unknown';
     const note = text(e.note, `${key}.note`, MAP_LIMITS.note, false), description = text(e.description, `${key}.description`, MAP_LIMITS.description, false);
@@ -227,6 +292,8 @@ export function checkMap(input: unknown, now: number, prev?: ProjectMap | null):
       ...(description ? { description } : {}), ...(details ? { details } : {}), ...(e.parent ? { parent: e.parent as string } : {}),
       status, ...(note ? { note } : {}), ...(e.actor ? { actor: e.actor as MapActor } : {}),
       evidence: evidenceOf(e.evidence, `${key}.evidence`), ...substanceOf(e, key, old),
+      // a layout left out is the one it had; null or '' takes it away (the level is drawn by its kinds again)
+      ...((e.layout === undefined ? old?.layout : e.layout) ? { layout: (e.layout === undefined ? old?.layout : e.layout) as MapLayout } : {}), ...(e.par === true ? { par: true } : {}),
       confirmedAt: e.status !== undefined ? now : old?.confirmedAt ?? now,
       ...(old?.plan ? { plan: old.plan } : {}), ...(old?.addedAt ? { addedAt: old.addedAt } : {}),
     };
@@ -236,10 +303,10 @@ export function checkMap(input: unknown, now: number, prev?: ProjectMap | null):
   for (const e of elements) {
     if (!e.parent) continue;
     if (!ids.has(e.parent)) throw new Error(`element "${e.id}": parent "${e.parent}" is not an element`);
-    if (e.kind !== 'part') throw new Error(`element "${e.id}": only a part has a parent (kind "part")`);
-    // a part sits in a system, or in another part when it is one of its pieces (ADR 0316)
+    if (!canSitInside(e.kind)) throw new Error(`element "${e.id}": only a part, a phase or a step has a parent`);
+    // a part sits in a system, or in another part when it is one of its pieces (ADR 0316); a step in its phase (#443)
     const holder = elements.find(x => x.id === e.parent)!;
-    if (holder.kind !== 'system' && holder.kind !== 'external' && holder.kind !== 'part') throw new Error(`element "${e.id}": a part's parent is a system, an external system or another part, not a ${holder.kind}`);
+    if (!canHold(holder.kind)) throw new Error(`element "${e.id}": a parent is a system, an external system, a part, a phase or a step, not a ${holder.kind}`);
     // no cycles: a part's chain of parents ends at the top, and not too deep to be read
     const seen = new Set<string>([e.id]);
     for (let p: string | undefined = e.parent; p; p = elements.find(x => x.id === p)?.parent) { if (seen.has(p)) throw new Error(`element "${e.id}": its parents loop`); seen.add(p); }
@@ -260,9 +327,13 @@ export function checkMap(input: unknown, now: number, prev?: ProjectMap | null):
     if (l.from === l.to) throw new Error(`${key}: from and to are the same element`);
     if (l.status !== undefined && !isMapState(l.status)) throw new Error(`${key}.status: ${MAP_STATES.join(' | ')}`);
     if (l.actor !== undefined && !isActor(l.actor)) throw new Error(`${key}.actor: ${MAP_ACTORS.join(' | ')}`);
+    if (l.kind !== undefined && l.kind !== null && l.kind !== 'next') throw new Error(`${key}.kind: "next" (the arrow to the following step), or leave it out`);
     const old = oldLinks.get(id);
     const note = text(l.note, `${key}.note`, MAP_LIMITS.note, false);
     const details = l.details === undefined ? old?.details : longText(l.details, `${key}.details`, MAP_LIMITS.linkDetails);
+    // the arrow to the following step: its label may be left out, and it has no status of its own (never «da capire»)
+    if (l.kind === 'next') return { id, from: l.from, to: l.to, label: text(l.label, `${key}.label`, MAP_LIMITS.label, false) ?? '', status: 'ok', kind: 'next',
+      ...(note ? { note } : {}), confirmedAt: old?.confirmedAt ?? now, ...(details ? { details } : {}) };
     return { id, from: l.from, to: l.to, label: text(l.label, `${key}.label`, MAP_LIMITS.label)!, status: (l.status as MapState | undefined) ?? old?.status ?? 'unknown',
       ...(note ? { note } : {}), ...(l.actor ? { actor: l.actor as MapActor } : {}), confirmedAt: l.status !== undefined ? now : old?.confirmedAt ?? now, ...(details ? { details } : {}) };
   });
@@ -341,7 +412,8 @@ export function applyChanges(map: Pick<ProjectMap, 'elements' | 'links'>, change
     if (!target) throw new Error(`${key}.id: no element or link "${String(c.id).slice(0, 48)}" (project_map_read lists them)`);
     if (c.status !== undefined && !isMapState(c.status)) throw new Error(`${key}.status: ${MAP_STATES.join(' | ')}`);
     if (c.actor !== undefined && c.actor !== null && !isActor(c.actor)) throw new Error(`${key}.actor: ${MAP_ACTORS.join(' | ')} or null`);
-    if (c.status !== undefined) target.status = c.status as MapState;
+    // the arrow to the following step has no status of its own
+    if (c.status !== undefined && (target as MapLink).kind !== 'next') target.status = c.status as MapState;
     if (c.note !== undefined) { const n = text(c.note, `${key}.note`, MAP_LIMITS.note, false); if (n) target.note = n; else delete target.note; }
     if (c.actor === null) delete target.actor; else if (c.actor !== undefined) target.actor = c.actor as MapActor;
     target.confirmedAt = now;
@@ -354,7 +426,9 @@ export const EDIT_OPS = ['add', 'set', 'remove', 'link', 'unlink'] as const;
 /** One change to a drawing without a redraw (ADR 0276): add = a new piece (planned unless a status is given) · set =
  *  rename, describe, move under a system, change status or note · remove = the piece, its parts (all the way down) and their links ·
  *  link / unlink = an arrow. */
-export interface MapEditOp { op: (typeof EDIT_OPS)[number]; id?: string; kind?: MapKind; name?: string; description?: string; details?: string; parent?: string | null; status?: MapState; note?: string; actor?: MapActor; from?: string; to?: string; label?: string }
+export interface MapEditOp { op: (typeof EDIT_OPS)[number]; id?: string; kind?: MapKind; name?: string; description?: string; details?: string; parent?: string | null; status?: MapState; note?: string; actor?: MapActor; from?: string; to?: string; label?: string;
+  /** #443 · add / set: together with the box before it; how the level inside is drawn; the piece it comes before (its place in the order) · link: the arrow to the following step */
+  par?: boolean; layout?: MapLayout | null; before?: string; next?: boolean }
 
 /** The drawing after the ops, checked as a whole drawing is (checkMap); what it did, one line each, for the history.
  *  `plan` = the Strategist chat a new piece belongs to. Untouched elements keep their status and when it was confirmed. */
@@ -366,18 +440,31 @@ export function applyEdit(map: ProjectMap, ops: unknown, now: number, plan?: str
   let links: Raw[] = map.links.map(({ status: _s, confirmedAt: _c, ...l }) => ({ ...l }));
   const did: string[] = [], added: string[] = [];
   const nameOf = (id: unknown) => String(els.find(e => e.id === id)?.name ?? id);
+  /** a piece's place in the order (#443: a line is drawn in the saved order): right before another piece */
+  const place = (id: unknown, before: unknown, key: string) => {
+    if (before === undefined || before === null || before === '') return;
+    const at = els.findIndex(e => e.id === before);
+    const from = els.findIndex(e => e.id === id);
+    if (at < 0 || before === id || (els[at]!.parent ?? null) !== (els[from]!.parent ?? null)) throw new Error(`${key}.before: the id of another piece on the same level`);
+    const [el] = els.splice(from, 1);
+    els.splice(els.findIndex(e => e.id === before), 0, el!);
+  };
   ops.forEach((raw, i) => {
     const o = raw && typeof raw === 'object' ? raw as Raw : {};
     const key = `ops[${i}]`;
     if (!(EDIT_OPS as readonly string[]).includes(o.op as string)) throw new Error(`${key}.op: ${EDIT_OPS.join(' | ')}`);
+    if (o.par !== undefined && typeof o.par !== 'boolean') throw new Error(`${key}.par: true or false`);
     if (o.op === 'add') {
       const name = text(o.name, `${key}.name`, MAP_LIMITS.name)!;
       let id = isMapId(o.id) ? o.id : projectSlug(name);
       if (o.id !== undefined && !isMapId(o.id)) throw new Error(`${key}.id: lowercase letters, digits and dashes`);
       if (o.id !== undefined && els.some(e => e.id === id)) throw new Error(`${key}.id: "${id}" is already on the map (op "set" changes it)`);
       for (let n = 2; els.some(e => e.id === id) || links.some(l => l.id === id); n++) id = `${projectSlug(name).slice(0, 44)}-${n}`;
-      els.push({ id, kind: o.kind ?? (o.parent ? 'part' : 'system'), name, ...(o.description ? { description: o.description } : {}), ...(o.details ? { details: o.details } : {}), ...(o.parent ? { parent: o.parent } : {}),
-        status: o.status ?? 'planned', ...(o.note ? { note: o.note } : {}), ...(o.actor ? { actor: o.actor } : {}), evidence: [] });
+      // inside a phase or a step a new piece is a step (#443)
+      const holder = o.parent ? els.find(e => e.id === o.parent)?.kind : undefined;
+      els.push({ id, kind: o.kind ?? (o.parent ? (holder === 'phase' || holder === 'step' ? 'step' : 'part') : 'system'), name, ...(o.description ? { description: o.description } : {}), ...(o.details ? { details: o.details } : {}), ...(o.parent ? { parent: o.parent } : {}),
+        status: o.status ?? 'planned', ...(o.note ? { note: o.note } : {}), ...(o.actor ? { actor: o.actor } : {}), evidence: [], ...(o.par === true ? { par: true } : {}), ...(o.layout ? { layout: o.layout } : {}) });
+      place(id, o.before, key);
       added.push(id);
       did.push(`+ ${name}`);
       return;
@@ -387,7 +474,7 @@ export function applyEdit(map: ProjectMap, ops: unknown, now: number, plan?: str
       if (links.some(l => l.id === id)) throw new Error(`${key}: the link "${String(id)}" is already on the map`);
       // an arrow to a piece that is not there yet is not there either
       const dashed = [o.from, o.to].some(x => els.find(e => e.id === x)?.status === 'planned' || added.includes(x as string));
-      links.push({ id, from: o.from, to: o.to, label: o.label, ...(o.details ? { details: o.details } : {}), ...(o.status ? { status: o.status } : dashed ? { status: 'planned' } : {}) });
+      links.push({ id, from: o.from, to: o.to, label: o.label, ...(o.details ? { details: o.details } : {}), ...(o.next === true ? { kind: 'next' } : o.status ? { status: o.status } : dashed ? { status: 'planned' } : {}) });
       did.push(`+ ${nameOf(o.from)} → ${nameOf(o.to)}`);
       return;
     }
@@ -412,6 +499,9 @@ export function applyEdit(map: ProjectMap, ops: unknown, now: number, plan?: str
     for (const k of ['name', 'description', 'details', 'kind', 'status', 'note', 'actor'] as const) if (o[k] !== undefined) { if (o[k] === '' || o[k] === null) el[k] = k === 'details' ? '' : undefined; else el[k] = o[k]; }
     for (const k of Object.keys(el)) if (el[k] === undefined) delete el[k];
     if (o.parent !== undefined) { if (o.parent === null || o.parent === '') delete el.parent; else el.parent = o.parent; }
+    if (o.par !== undefined) { if (o.par === true) el.par = true; else delete el.par; }
+    if (o.layout !== undefined) el.layout = o.layout === '' ? null : o.layout;
+    place(el.id, o.before, key);
     did.push(`~ ${String(el.name)}${isMapState(o.status) ? `: ${LABEL_IT[o.status]}` : ''}`);
   });
   const out = checkMap({ elements: els, links }, now, map);
@@ -443,20 +533,19 @@ export function elementOfFile(elements: readonly MapElement[], file: string): st
 
 // ---------------------------------------------------------------- one level of the drawing
 
-export interface LevelNode { id: string; x: number; y: number; w: number; h: number; ctx: boolean }
-export interface LevelEdge { id: string; from: string; to: string; label: string; status: MapState; stale: boolean; note?: string; actor?: MapActor; count: number;
-  /** every link the arrow stands for (ADR 0307: a click on it tells each one in full) */
-  ids: string[] }
-export interface Level { nodes: LevelNode[]; edges: LevelEdge[]; width: number; height: number }
-
-export const BOX = { w: 210, h: 128, gx: 60, gy: 84, ctxW: 160, ctxH: 70, pad: 32 } as const;
-/** at most this many boxes side by side: a wider row wraps onto the next line */
-export const ROW_MAX = 4;
+/** How a level is drawn (#443): what the map (top) or the piece that holds it asks for; else a line when every piece
+ *  on it is a phase or a step, the layered drawing otherwise (every map drawn before phases existed). */
+export function layoutOf(map: Pick<ProjectMap, 'elements' | 'layout'>, parent: string | null): MapLayout {
+  const asked = parent === null ? map.layout : map.elements.find(e => e.id === parent)?.layout;
+  if (asked) return asked;
+  const own = map.elements.filter(e => (e.parent ?? null) === parent);
+  return own.length > 0 && own.every(e => SEQUENCE_KINDS.has(e.kind)) ? 'linear' : 'auto';
+}
 
 /** The elements shown at one level: the top (parent null) or inside a system; around a system, the outside elements
  *  linked to its parts (ctx) so the drawing still shows where it connects. Links between deeper parts are drawn between
  *  the shown elements that hold them. Layered: people on top, then each element under what calls it. */
-export function levelOf(map: Pick<ProjectMap, 'elements' | 'links'>, parent: string | null, now: number): Level {
+export function levelOf(map: Pick<ProjectMap, 'elements' | 'links' | 'layout'>, parent: string | null, now: number): Level {
   const byId = new Map(map.elements.map(e => [e.id, e]));
   const inside = (id: string): string | null => {
     // the shown element holding `id` at this level: itself or an ancestor whose parent is `parent`
@@ -491,10 +580,17 @@ export function levelOf(map: Pick<ProjectMap, 'elements' | 'links'>, parent: str
     const key = `${a}>${b}`;
     const st = shownStatus(l, now);
     const old = edges.get(key);
-    if (old) { old.count++; old.ids.push(l.id); if (rank(st.status) > rank(old.status)) { old.status = st.status; old.stale = st.stale; } continue; }
-    edges.set(key, { id: l.id, from: a, to: b, label: l.label, status: st.status, stale: st.stale, ...(l.note ? { note: l.note } : {}), ...(l.actor ? { actor: l.actor } : {}), count: 1, ids: [l.id] });
+    if (old) {
+      old.count++; old.ids.push(l.id);
+      // an arrow that also stands for a passage with a status is told as that passage
+      if (old.kind === 'next' && l.kind !== 'next') { delete old.kind; Object.assign(old, { label: l.label, status: st.status, stale: st.stale }, l.note ? { note: l.note } : {}, l.actor ? { actor: l.actor } : {}); }
+      else if (l.kind !== 'next' && rank(st.status) > rank(old.status)) { old.status = st.status; old.stale = st.stale; }
+      continue;
+    }
+    edges.set(key, { id: l.id, from: a, to: b, label: l.label, status: st.status, stale: st.stale, ...(l.note ? { note: l.note } : {}), ...(l.actor ? { actor: l.actor } : {}), count: 1, ids: [l.id], ...(l.kind === 'next' ? { kind: 'next' as const } : {}) });
   }
   const ids = [...own, ...[...ctx].filter(id => !own.includes(id))];
+  if (layoutOf(map, parent) === 'linear') return lineOf(own.map(id => byId.get(id)!), ids.filter(id => !own.includes(id)), edges);
   // layers: people first; then longest path along the links (a cycle is cut where it closes). Environments and documents
   // serve the rest: they sit on a row of their own at the bottom, and their links do not push anything down.
   const base = (id: string) => { const k = byId.get(id)?.kind; return k === 'env' || k === 'doc'; };
@@ -560,6 +656,9 @@ export function pathTo(map: Pick<ProjectMap, 'elements'>, id: string | null): Ma
   return out;
 }
 
+/** whether a piece is drawn together with the one before it: `par` on a line, never on the line's first piece */
+const goesWith = (map: Pick<ProjectMap, 'elements' | 'layout'>, e: MapElement): boolean => !!e.par && layoutOf(map, e.parent ?? null) === 'linear' && map.elements.find(x => (x.parent ?? null) === (e.parent ?? null)) !== e;
+
 /** The map as text, for the Orchestrator (app_project_map read) and the agents (project_map_read): one line per element
  *  with its status, then the links, then what waits for the user. */
 export function mapText(v: Pick<ProjectMapView, 'map' | 'agents' | 'changed'> & Partial<Pick<ProjectMapView, 'works' | 'plans'>>, now: number): string {
@@ -569,11 +668,14 @@ export function mapText(v: Pick<ProjectMapView, 'map' | 'agents' | 'changed'> & 
   const works = (id: string) => { const w = v.works?.[id]; return w?.length ? ` · lavori: ${w.map(x => `${MARK[x.state]} ${x.title}`).join('; ')}` : ''; };
   const plans = (v.plans ?? []).map(p => `- «${p.title}» (chatId ${p.chatId}): ${p.phase === 'proposed' ? 'aspetta «Approva e parti»' : p.phase === 'revising' ? 'in revisione' : p.phase === 'done' ? 'finito' : 'in corso'}, ${p.done}/${p.steps} passi`);
   const who = (id: string) => v.agents.filter(a => a.elements.includes(id)).map(a => `${a.title} (${a.mark})`).join(', ');
-  const line = (e: MapElement, depth: number) => `${'  '.repeat(depth)}- ${e.id} · ${e.kind} · ${e.name} — ${st(e, e.id)}${e.note ? `: ${e.note}` : ''}${e.actor === 'user' && e.status === 'blocked' ? ' [tocca all\'utente]' : ''}${who(e.id) ? ` · agenti: ${who(e.id)}` : ''}${works(e.id)}`;
-  const tree = (parent: string | undefined, depth: number): string[] => map.elements.filter(e => e.parent === parent).flatMap(e => [line(e, depth), ...tree(e.id, depth + 1)]);
-  const links = map.links.map(l => `- ${l.id}: ${l.from} → ${l.to} «${l.label}» — ${st(l, l.id)}${l.note ? `: ${l.note}` : ''}`);
+  const row = (e: MapElement, depth: number) => `${'  '.repeat(depth)}- ${e.id} · ${e.kind} · ${e.name}${goesWith(map, e) ? ' (insieme al precedente)' : ''} — ${st(e, e.id)}${e.note ? `: ${e.note}` : ''}${e.actor === 'user' && e.status === 'blocked' ? ' [tocca all\'utente]' : ''}${who(e.id) ? ` · agenti: ${who(e.id)}` : ''}${works(e.id)}${map.elements.some(x => x.parent === e.id) ? line(e.id) : ''}`;
+  const tree = (parent: string | undefined, depth: number): string[] => map.elements.filter(e => e.parent === parent).flatMap(e => [row(e, depth), ...tree(e.id, depth + 1)]);
+  const links = map.links.map(l => (l.kind === 'next' ? `- ${l.id}: ${l.from} → ${l.to} (passo successivo${l.label ? `: «${l.label}»` : ''})${l.note ? `: ${l.note}` : ''}`
+    : `- ${l.id}: ${l.from} → ${l.to} «${l.label}» — ${st(l, l.id)}${l.note ? `: ${l.note}` : ''}`));
+  // a level drawn as a line says so: its pieces are listed in the order they happen
+  const line = (parent: string | null) => (layoutOf(map, parent) === 'linear' ? ' [in fila, in quest\'ordine]' : '');
   const walks = (map.paths ?? []).map(x => `- ${x.id}: «${x.question}» (${x.stops.map(s => s.on).join(' → ')})`);
-  return [`Mappa «${map.title}» (${map.project}, versione ${map.version}, ${map.root ?? 'senza cartella'})`, 'Elementi:', ...tree(undefined, 0),
+  return [`Mappa «${map.title}» (${map.project}, versione ${map.version}, ${map.root ?? 'senza cartella'})`, `Elementi:${line(null)}`, ...tree(undefined, 0),
     ...(links.length ? ['Collegamenti:', ...links] : []), ...(walks.length ? ['Percorsi (domande raccontate sulla mappa):', ...walks] : []), ...(plans.length ? ['Piani sulla mappa:', ...plans] : []), ...(map.corrections.length ? ['Correzioni dell\'utente (da rispettare):', ...map.corrections.map(c => `- ${c}`)] : [])].join('\n');
 }
 /** One element in full, for the Orchestrator and the agents (read with `element`, ADR 0307): what the map's text leaves
@@ -584,21 +686,24 @@ export function passagesOf(map: Pick<ProjectMap, 'elements' | 'links'>, id: stri
   const mine = new Set([id, ...descendantsOf(map, id)]);
   return { out: map.links.filter(l => mine.has(l.from) && !mine.has(l.to)), into: map.links.filter(l => mine.has(l.to) && !mine.has(l.from)) };
 }
-export function elementText(map: Pick<ProjectMap, 'elements' | 'links' | 'title' | 'paths'>, id: string, now: number, changed: Record<string, number> = {}): string {
+export function elementText(map: Pick<ProjectMap, 'elements' | 'links' | 'title' | 'paths' | 'layout'>, id: string, now: number, changed: Record<string, number> = {}): string {
   const e = map.elements.find(x => x.id === id);
   if (!e) throw new Error(`element: no «${id.slice(0, 48)}» in this map`);
   const name = (x: string) => map.elements.find(y => y.id === x)?.name ?? x;
   const st = (x: { status: MapState; confirmedAt: number }, key?: string) => { const s = shownStatus(x, now, key ? changed[key] : undefined); return s.stale ? 'da verificare' : LABEL_IT[s.status]; };
-  const link = (l: MapLink, other: string, arrow: string) => `- ${arrow} ${name(other)} (${other}) «${l.label}» — ${st(l)}${l.note ? `: ${l.note}` : ''}${l.details ? `\n  ${l.details.replace(/\n/g, '\n  ')}` : ''}`;
+  const link = (l: MapLink, other: string, arrow: string) => `- ${arrow} ${name(other)} (${other}) ${l.kind === 'next' ? `(passo successivo${l.label ? `: «${l.label}»` : ''})` : `«${l.label}» — ${st(l)}`}${l.note ? `: ${l.note}` : ''}${l.details ? `\n  ${l.details.replace(/\n/g, '\n  ')}` : ''}`;
   const p = passagesOf(map, id), out = p.out.map(l => link(l, l.to, '→')), into = p.into.map(l => link(l, l.from, '←'));
-  const parts = map.elements.filter(x => x.parent === id).map(x => `- ${x.id} · ${x.name}${x.description ? `: ${x.description}` : ''}`);
+  // the steps of a line are told in order, each with its status; the parts of a system as before
+  const inLine = layoutOf(map, id) === 'linear';
+  const parts = map.elements.filter(x => x.parent === id).map(x => `- ${x.id} · ${x.name}${inLine ? `${goesWith(map, x) ? ' (insieme al precedente)' : ''} — ${st(x, x.id)}` : ''}${x.description ? `: ${x.description}` : ''}`);
   const list = (head: string, xs: readonly string[] | undefined) => (xs?.length ? [head, ...xs.map(x => `- ${x}`)] : []);
   const inner = descendantsOf(map, id);
   return [`«${e.name}» (${e.id}, ${e.kind}${e.parent ? `, in ${name(e.parent)}` : ''}) — ${st(e, e.id)}${e.note ? `: ${e.note}` : ''}`,
     ...(e.description ? [e.description] : []), ...(e.details ? ['Come funziona:', e.details] : ['Nessun dettaglio scritto: un ridisegno lo aggiunge.']),
     ...list('Regole:', e.rules), ...list('Cosa tiene e dove:', e.keeps), ...list('Perché è fatto così:', e.why),
     ...list('File chiave:', e.keyFiles?.map(f => `${f.path}: ${f.what}`)),
-    ...(e.evidence.length ? [`Letto da: ${e.evidence.join(', ')}`] : []), ...(parts.length ? ['Parti:', ...parts] : []),
+    ...list('Prove:', e.proofs?.map(x => `${x.text}${x.file ? ` (${x.file})` : ''}${x.href ? ` ${x.href}` : ''}`)), ...list('Link:', e.refs?.map(x => `${x.label}: ${x.href}`)),
+    ...(e.evidence.length ? [`Letto da: ${e.evidence.join(', ')}`] : []), ...(parts.length ? [inLine ? 'Passi, in ordine:' : 'Parti:', ...parts] : []),
     ...(out.length || into.length ? ['Collegamenti:', ...out, ...into] : []),
     ...list('Percorsi che passano di qui:', (map.paths ?? []).filter(x => x.stops.some(s => s.on === id || inner.has(s.on))).map(x => `${x.id}: «${x.question}»`))].join('\n');
 }

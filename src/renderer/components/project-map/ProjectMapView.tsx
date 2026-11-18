@@ -24,11 +24,14 @@
 //   parts of its own, entered the same way, up to four levels; a box's panel tells its rules, what it keeps, how big it
 //   is, why it is made so and its key files, each opened in the viewer; the paths (MapPaths.tsx) light the boxes of a
 //   question one stop at a time, the view following each stop to its level.
+// - A project told as a sequence (issue #443, ADR 0322; the owner 2026-11-18): a level of phases or steps is a line,
+//   each box numbered in its order, «∥» on the ones that go together; the arrow to the following step is plain and
+//   never wears a status; the side panel is wider, dragged by its left edge and remembered (side-width.ts).
 // Rendered by brain-model/MapPage.tsx (view «Progetti», pageArg progetti/<project>/<system>), beside the Orchestrator's
 // column: «Mappe», Ctrl+Shift+S and app_project_map open land there (actions.ts openMaps).
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { NEW_MS, descendantsOf, levelOf, pathTo, shownStatus, type MapLink, type MapPlan, type MapWork, type Level, type LevelEdge, type LevelNode, type MapAgent, type MapElement, type MapState, type ProjectMapInfo, type ProjectMapView as View, type MapPath } from '@shared/project-map';
-import { brainBridge, openChatRef, openFileViewer, orchestratorId } from '../../actions';
+import { brainBridge, openChatRef, openFileViewer, openInAppBrowser, orchestratorId } from '../../actions';
 import { t } from '../../i18n';
 import { useNow } from '../../lib/clock';
 import { ago } from '../../lib/format';
@@ -39,6 +42,7 @@ import { AgentAvatar } from '../AgentAvatar';
 import { ElementDetail, LinkDetail } from './MapDetail';
 import { PathList, PathPanel, type Walk } from './MapPaths';
 import { PlanFlow, Turn } from './PlanFlow';
+import { SIDE, clampSide, readSide, writeSide } from './side-width';
 import './project-map.css';
 
 type Shown = MapState | 'stale';
@@ -48,20 +52,36 @@ const DONE_MARKS = new Set(['done', 'idle']);
 const since = (ts: number, now: number) => { const a = ago(ts, now); return a === t('appText.format.now') ? a : t('pm.ago', { at: a }); };
 
 /** Where an arrow leaves a box and where it enters the next: bottom → top between rows, side → side on one row; drawn
- *  as a curve that leaves and enters straight (c1, c2 its control points). */
-interface Ends { x1: number; y1: number; x2: number; y2: number; c1: [number, number]; c2: [number, number] }
-function ends(a: LevelNode, b: LevelNode): Ends {
+ *  as a curve that leaves and enters straight (c1, c2 its control points). In a line (#443) the arrow to the place
+ *  beside always runs side to side (`side`), and one that goes further follows the corners the layout gives (`route`),
+ *  along the lanes between the boxes: it never runs behind a box. */
+interface Ends { x1: number; y1: number; x2: number; y2: number; c1: [number, number]; c2: [number, number]; route?: [number, number][] }
+function ends(a: LevelNode, b: LevelNode, e?: Pick<LevelEdge, 'side' | 'route'>): Ends {
   const ax = a.x + a.w / 2, ay = a.y + a.h / 2, bx = b.x + b.w / 2, by = b.y + b.h / 2;
-  if (Math.abs(ay - by) < 20) {
+  if (e?.route && e.route.length > 1) { const [x1, y1] = e.route[0]!, [x2, y2] = e.route[e.route.length - 1]!; return { x1, y1, x2, y2, c1: [x1, y1], c2: [x2, y2], route: e.route }; }
+  if (e?.side || Math.abs(ay - by) < 20) {
     const [x1, x2] = ax < bx ? [a.x + a.w, b.x] : [a.x, b.x + b.w], mx = (x1 + x2) / 2;
     return { x1, y1: ay, x2, y2: by, c1: [mx, ay], c2: [mx, by] };
   }
   const [y1, y2] = ay < by ? [a.y + a.h, b.y] : [a.y, b.y + b.h], my = (y1 + y2) / 2;
   return { x1: ax, y1, x2: bx, y2, c1: [ax, my], c2: [bx, my] };
 }
-const curve = (p: Ends) => `M${p.x1},${p.y1} C${p.c1[0]},${p.c1[1]} ${p.c2[0]},${p.c2[1]} ${p.x2},${p.y2}`;
+/** the corner of a route, rounded: how far from it the straight part stops */
+const BEND = 10;
+function curve(p: Ends): string {
+  if (!p.route) return `M${p.x1},${p.y1} C${p.c1[0]},${p.c1[1]} ${p.c2[0]},${p.c2[1]} ${p.x2},${p.y2}`;
+  const r = p.route, toward = (from: [number, number], to: [number, number]) => { const len = Math.hypot(to[0] - from[0], to[1] - from[1]), k = len ? Math.min(BEND, len / 2) / len : 0; return `${from[0] + (to[0] - from[0]) * k},${from[1] + (to[1] - from[1]) * k}`; };
+  return `M${r[0]![0]},${r[0]![1]}${r.slice(1, -1).map((c, i) => ` L${toward(c, r[i]!)} Q${c[0]},${c[1]} ${toward(c, r[i + 2]!)}`).join('')} L${p.x2},${p.y2}`;
+}
 /** the point at f (0..1) along the curve */
 function along(p: Ends, f: number): { left: number; top: number } {
+  if (p.route) {
+    const legs = p.route.slice(1).map((c, i) => Math.hypot(c[0] - p.route![i]![0], c[1] - p.route![i]![1]));
+    let d = f * legs.reduce((s, l) => s + l, 0), i = 0;
+    while (i < legs.length - 1 && d > legs[i]!) d -= legs[i++]!;
+    const from = p.route[i]!, to = p.route[i + 1]!, k = legs[i] ? d / legs[i]! : 0;
+    return { left: from[0] + (to[0] - from[0]) * k, top: from[1] + (to[1] - from[1]) * k };
+  }
   const g = 1 - f, k = [g * g * g, 3 * g * g * f, 3 * g * f * f, f * f * f] as const;
   return { left: k[0] * p.x1 + k[1] * p.c1[0] + k[2] * p.c2[0] + k[3] * p.x2, top: k[0] * p.y1 + k[1] * p.c1[1] + k[2] * p.c2[1] + k[3] * p.y2 };
 }
@@ -131,8 +151,9 @@ function placeLabels(lv: Level): { e: LevelEdge; left: number; top: number }[] {
   const DX = [0, -40, 40, -80, 80], DY = [0, -18, 18, -36, 36, -60, 60, -90, 90];
   return lv.edges.flatMap(e => {
     const a = lv.nodes.find(n => n.id === e.from), b = lv.nodes.find(n => n.id === e.to);
-    if (!a || !b) return [];
-    const p = ends(a, b);
+    // the arrow to the following step with nothing written on it says «then» by itself (#443)
+    if (!a || !b || !e.label) return [];
+    const p = ends(a, b, e);
     const da = deg.get(e.from) ?? 1, db = deg.get(e.to) ?? 1, want = Math.min(0.7, Math.max(0.3, da / (da + db)));
     const w = Math.min(220, e.label.length * 6.6 + 30);
     let best = { left: 0, top: 0, cost: Infinity };
@@ -164,6 +185,29 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   // a path walked on the map (ADR 0316): which one and the stop on screen
   const [walk, setWalk] = useState<Walk | null>(null);
   const side = useRef<HTMLElement>(null);
+  // the side panel's width (#443): dragged by its left edge, remembered; the grid keeps the drawing its floor
+  const body = useRef<HTMLDivElement>(null);
+  const [sideW, setSideW] = useState(() => readSide(typeof localStorage === 'undefined' ? undefined : localStorage));
+  const storeSide = (w: number) => writeSide(typeof localStorage === 'undefined' ? undefined : localStorage, w);
+  /** the width the panel and the drawing share: the body less the projects list and the gaps */
+  const sideRoom = () => { const b = body.current; if (!b) return undefined; const nav = b.querySelector<HTMLElement>('.pm-nav'); return b.clientWidth - (nav ? nav.offsetWidth + 12 : 0) - 12; };
+  const resizeDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const x0 = e.clientX, w0 = side.current?.parentElement?.getBoundingClientRect().width ?? sideW, room = sideRoom();
+    // the width is kept only once the edge has moved: a click on it changes nothing
+    let last: number | null = null;
+    const move = (m: PointerEvent) => { last = clampSide(w0 + x0 - m.clientX, room); setSideW(last); };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up); body.current?.classList.remove('resizing'); if (last !== null) storeSide(last); };
+    body.current?.classList.add('resizing');
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+  };
+  const resizeKey = (e: React.KeyboardEvent) => {
+    const d = e.key === 'ArrowLeft' ? SIDE.step : e.key === 'ArrowRight' ? -SIDE.step : e.key === 'Home' ? SIDE.max : e.key === 'End' ? -SIDE.max : 0;
+    if (!d) return;
+    e.preventDefault();
+    const w = clampSide(sideW + d, sideRoom()); setSideW(w); storeSide(w);
+  };
   // a path opened from deep in the side (a box's «Percorsi che passano di qui»): its stops show from the top
   const walking = walk?.path ?? null;
   useEffect(() => { if (walking && side.current) side.current.scrollTop = 0; }, [walking]);
@@ -372,6 +416,8 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
 
   const byId = new Map(map.elements.map(e => [e.id, e]));
   const kids = (id: string) => map.elements.filter(e => e.parent === id).length;
+  /** its pieces are steps (or phases): counted as «passi» */
+  const stepsIn = (id: string) => map.elements.some(e => e.parent === id && (e.kind === 'step' || e.kind === 'phase'));
   const agents = live ? view!.agents : [];
   const of = (id: string) => agents.filter(a => a.elements.some(x => x === id || pathTo(map, x).some(p => p.id === id)));
   const lit = new Set(agentOn ? agents.find(a => a.chatId === agentOn)?.elements.flatMap(x => pathTo(map, x).map(p => p.id)) ?? [] : []);
@@ -386,6 +432,8 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   // a key file, a stop's file or a file a piece was read from: the viewer shows it (the full screen steps aside, the
   // viewer opens over the page)
   const openFile = (rel: string) => { setFull(false); openFileViewer(inRoot(map.root, rel)); };
+  // a proof's or a link's address: a tab of the app's browser (the full screen steps aside)
+  const openLink = (href: string) => { setFull(false); void openInAppBrowser(href); };
   const askPath = () => { setFull(false); if (!brainBridge.draftToOrchestrator(t('pm.pathAskDraft', { title: map.title }), () => {})) toast(t('pm.noOrchestrator'), 'warn'); };
   const plans: MapPlan[] = live ? view!.plans : [];
   const decide = (p: MapPlan) => { void window.sb.invoke('chat:plan', { chatId: p.chatId, decision: 'approve', at: p.at }).catch(() => toast(t('pm.planGone'), 'warn')); };
@@ -505,7 +553,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
       <button type="button" className="btn btn-ghost btn-s" onClick={() => { closeModal(); openChatRef(p.chatId); }}>{t('pm.openChat')}</button>
       <PlanFlow plan={p} now={now} nameOf={id => byId.get(id)?.name} onShow={show} onChat={id => { setFull(false); closeModal(); openChatRef(id); }} />
     </section>)}
-    <div className={`pm-body${maps.length > 1 ? ' with-nav' : ''}`}>
+    <div className={`pm-body${maps.length > 1 ? ' with-nav' : ''}`} ref={body} style={{ '--pm-side': `${sideW}px` } as CSSProperties}>
       {/* the projects, a list beside the drawing like the newspaper's sections (ADR 0302: no menu to open) */}
       {maps.length > 1 && <nav className="pm-nav" aria-label={t('pm.projects')} data-testid="pm-nav">
         <div className="pm-nav-lbl">{t('pm.projects')}</div>
@@ -522,14 +570,15 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
           <IconArrowLeft size={13} />{parentOf ? byId.get(parentOf)?.name : t('pm.top')}</button>}
         <div className="pm-stage">
           <div className={`pm-plane${zooming ? ' zooming' : ''}${walkPath ? ' walking' : ''}`} style={{ width: lv.width, height: lv.height, transform: `translate(${cam.x}px, ${cam.y}px) scale(${scale})` }}>
-            <div className="pm-level" key={`${project}/${shownLevel ?? ''}`} data-enter={enter?.dir} data-testid="pm-level">
+            <div className="pm-level" key={`${project}/${shownLevel ?? ''}`} data-enter={enter?.dir} data-layout={lv.linear ? 'linear' : 'auto'} data-testid="pm-level">
             <svg className="pm-edges" width={lv.width} height={lv.height} aria-hidden>
-              <defs>{(['ok', 'work', 'blocked', 'unknown', 'stale', 'planned'] as const).map(s => <marker key={s} id={`pm-arrow-${s}`} viewBox="0 0 10 10" refX={9} refY={5} markerWidth={7} markerHeight={7} orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" className={`pm-arrow s-${s}`} /></marker>)}</defs>
+              <defs>{(['ok', 'work', 'blocked', 'unknown', 'stale', 'planned', 'next'] as const).map(s => <marker key={s} id={`pm-arrow-${s}`} viewBox="0 0 10 10" refX={9} refY={5} markerWidth={7} markerHeight={7} orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" className={`pm-arrow s-${s}`} /></marker>)}</defs>
               {lv.edges.map(e => {
                 const a = lv.nodes.find(n => n.id === e.from), b = lv.nodes.find(n => n.id === e.to);
                 if (!a || !b) return null;
-                const p = ends(a, b), s = shown(e);
-                return <g key={`${e.from}>${e.to}`}>
+                // the arrow to the following step: plain, whatever the statuses around it (#443)
+                const p = ends(a, b, e), s = e.kind === 'next' ? 'next' : shown(e);
+                return <g key={`${e.from}>${e.to}`} data-testid={e.kind === 'next' ? `pm-next-${e.from}-${e.to}` : undefined}>
                   <path d={curve(p)} className={`pm-edge s-${s}`} markerEnd={`url(#pm-arrow-${s})`} />
                   {/* a line under work carries a mark that travels along it */}
                   {live && s === 'work' && <path d={curve(p)} className="pm-edge-run" pathLength={100} />}
@@ -541,10 +590,10 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
               // somebody works on it right now: a step of a plan under way, or an agent at work on it
               const running = live && (worksOf(e.id).some(w => w.state === 'now') || who.some(a => a.mark === 'run'));
               const style: CSSProperties = { left: n.x, top: n.y, width: n.w, height: n.h };
-              return <button type="button" key={n.id} className={`pm-node k-${e.kind} s-${s}${n.ctx ? ' ctx' : ''}${picked === e.id ? ' picked' : ''}${lit.has(e.id) ? ' lit' : ''}${stopsOn.has(e.id) ? ' on-path' : ''}${nowOn.has(e.id) ? ' stop-now' : ''}${running ? ' running' : ''}${enter?.from === e.id ? ' came' : ''}`}
+              return <button type="button" key={n.id} className={`pm-node k-${e.kind} s-${s}${n.n !== undefined ? ' in-line' : ''}${n.ctx ? ' ctx' : ''}${picked === e.id ? ' picked' : ''}${lit.has(e.id) ? ' lit' : ''}${stopsOn.has(e.id) ? ' on-path' : ''}${nowOn.has(e.id) ? ' stop-now' : ''}${running ? ' running' : ''}${enter?.from === e.id ? ' came' : ''}`}
                 style={style} onClick={() => click(n)} data-testid={`pm-node-${e.id}`} data-running={running ? '' : undefined} title={e.description}
                 onAnimationEnd={ev => { if (ev.animationName === 'pm-came') setEnter(x => (x ? { ...x, from: null } : x)); }}>
-                <span className="pm-kind">{t(`pm.kind.${e.kind}`)}{k && !n.ctx ? ` · ${t('pm.parts', { n: k })}` : ''}</span>
+                <span className="pm-kind">{n.n !== undefined && <i className="pm-ord" data-testid={`pm-ord-${e.id}`}>{n.n}</i>}{t(`pm.kind.${e.kind}`)}{k && !n.ctx ? ` · ${t(stepsIn(e.id) ? 'pm.stepsCount' : 'pm.parts', { n: k })}` : ''}{n.par && <em className="pm-par" title={t('pm.withPrev')} data-testid={`pm-par-${e.id}`}>∥</em>}</span>
                 {stopsOn.has(e.id) && <span className="pm-stopnum" data-testid={`pm-stopnum-${e.id}`}>{stopsOn.get(e.id)!.slice(0, 4).join(' · ')}{stopsOn.get(e.id)!.length > 4 ? ' …' : ''}</span>}
                 <b className="pm-name">{e.name}</b>
                 {!n.ctx && (ws.length && !(e.status === 'blocked' && e.note)
@@ -563,7 +612,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
             {lv.nodes.map(n => <button type="button" key={`talk-${n.id}`} className="pm-talk" style={{ left: n.x + n.w - 30, top: n.y + 6, transform: `scale(${1 / scale})` }}
               onClick={() => talk(byId.get(n.id)!)} aria-label={t('pm.talkOn', { name: byId.get(n.id)!.name })} data-tip={t('pm.talk')} data-testid={`pm-talk-${n.id}`}><IconChat size={13} /></button>)}
             {/* the labels above the boxes: a label in a narrow gap is never hidden under one */}
-            {labels.map(({ e, left, top }) => <button type="button" key={`l${e.from}>${e.to}`} className={`pm-label s-${shown(e)}${pickedLinks?.includes(e.id) ? ' picked' : ''}`} style={{ left, top }} title={e.note}
+            {labels.map(({ e, left, top }) => <button type="button" key={`l${e.from}>${e.to}`} className={`pm-label s-${e.kind === 'next' ? 'next' : shown(e)}${pickedLinks?.includes(e.id) ? ' picked' : ''}`} style={{ left, top }} title={e.note}
               aria-pressed={!!pickedLinks?.includes(e.id)} onClick={() => { setPicked(null); setPickedLinks(p => (p?.includes(e.id) ? null : e.ids)); }} data-testid={`pm-label-${e.id}`}>
               {e.label}{e.count > 1 ? ` +${e.count - 1}` : ''}{e.status === 'blocked' && e.actor === 'user' && live && <em>{t('pm.you')}</em>}
             </button>)}
@@ -582,10 +631,14 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
           <span><em className="pm-you">{t('pm.you')}</em>{t('pm.youMeans')}</span>
         </div>
       </div>
+      <div className="pm-sidewrap" data-testid="pm-sidewrap">
+      {/* the panel's left edge: dragged to make it wider or narrower (#443); a double click puts the starting width back */}
+      <div className="pm-resize" role="separator" aria-orientation="vertical" tabIndex={0} aria-label={t('pm.resize')} title={t('pm.resize')} aria-valuemin={SIDE.min} aria-valuemax={SIDE.max} aria-valuenow={sideW}
+        onPointerDown={resizeDown} onKeyDown={resizeKey} onDoubleClick={() => { setSideW(SIDE.def); storeSide(SIDE.def); }} data-testid="pm-resize" />
       <aside className="pm-side" ref={side} data-testid="pm-side">
         {walkPath && walk && <PathPanel map={map} path={walkPath} i={walk.i} onStep={i => setWalk({ path: walkPath.id, i })} onClose={() => setWalk(null)} onShow={show} onFile={openFile} />}
-        {sel && <ElementDetail map={map} el={sel} state={st(sel)} stateOfLink={stLink} confirmed={t('pm.confirmed', { at: since(sel.confirmedAt, now) })} works={worksOf(sel.id)} onTalk={() => talk(sel)} onShow={show} onFile={openFile} onWalk={startWalk} />}
-        {here && !walkPath && <ElementDetail map={map} el={here} state={st(here)} stateOfLink={stLink} confirmed={t('pm.confirmed', { at: since(here.confirmedAt, now) })} works={here.kind === 'part' ? worksOf(here.id) : []} onTalk={() => talk(here)} onShow={show} onFile={openFile} onWalk={startWalk} testid="pm-here" lead={t('pm.youAreIn')} />}
+        {sel && <ElementDetail map={map} el={sel} state={st(sel)} stateOfLink={stLink} confirmed={t('pm.confirmed', { at: since(sel.confirmedAt, now) })} works={worksOf(sel.id)} onTalk={() => talk(sel)} onShow={show} onFile={openFile} onWalk={startWalk} stateOfEl={st} onLink={openLink} />}
+        {here && !walkPath && <ElementDetail map={map} el={here} state={st(here)} stateOfLink={stLink} confirmed={t('pm.confirmed', { at: since(here.confirmedAt, now) })} works={here.kind === 'part' || here.kind === 'phase' || here.kind === 'step' ? worksOf(here.id) : []} onTalk={() => talk(here)} onShow={show} onFile={openFile} onWalk={startWalk} stateOfEl={st} onLink={openLink} testid="pm-here" lead={t('pm.youAreIn')} />}
         {selLinks.length > 0 && <LinkDetail map={map} links={selLinks} stateOfLink={stLink} onShow={show} />}
         {!walkPath && <PathList map={map} onWalk={startWalk} onAsk={askPath} />}
         <div className="pm-side-head"><h3>{t('pm.agents')}</h3><span>{live ? t('pm.agentsCount', { n: agents.length, run: agents.filter(a => a.mark === 'run').length }) : t('pm.agentsPast')}</span></div>
@@ -596,6 +649,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
         </section> : null))}
         {map.corrections.length > 0 && <section className="pm-group"><h4>{t('pm.corrections')}</h4>{map.corrections.map((c, i) => <p key={i} className="pm-muted">{c}</p>)}</section>}
       </aside>
+      </div>
     </div>
     {hist.length > 1 && <footer className="pm-history" data-testid="pm-history">
       <span>{t('pm.history')}</span>

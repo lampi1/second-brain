@@ -25,7 +25,9 @@ const SECRET_LINE: RegExp[] = [
   /\bxox[abprs]-[A-Za-z0-9-]{10,}/,                                   // chat bot tokens
   /\bAKIA[0-9A-Z]{16}\b/,                                             // cloud access key ids
   /[?&]sig=[A-Za-z0-9%+/=]{16,}/,                                     // a signed URL
-  /[a-z][a-z0-9+.-]*:\/\/[^\s/:@]+:[^\s/@<$%{]+@/i,                   // a URL with user:password@
+  // a URL with user:password@. The «://» is looked for first and its scheme checked behind it: written scheme
+  // first, a long line without a URL (200 KB of letters) was read again from every letter and took tens of seconds
+  /:\/\/(?<=[a-z][a-z0-9+.-]*:\/\/)[^\s/:@]+:[^\s/@<$%{]+@/i,
   // password flags: sqlcmd -P …, --password …, --client-secret=…, --token …, --api-key …
   new RegExp(String.raw`(?:^|\s)(?:-P|--password|--client-secret|--secret|--account-key|--sas-token|--connection-string|--token|--access-token|--auth-token|--api-key|--apikey|--pat|--personal-access-token)(?:\s+|=)${VALUE}`),
   // PowerShell parameters (any case): Invoke-Sqlcmd -Password …, -Token …, -ApiKey …
