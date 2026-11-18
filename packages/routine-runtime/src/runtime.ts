@@ -563,7 +563,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
       fs.writeFileSync(file, JSON.stringify(config), { mode: 0o600 });
       mcpServers[BROWSER_SERVER_NAME] = { command: options.browser.server.command, args: options.browser.server.args, env: { ...(options.browser.server.env ?? {}), SB_ROUTINE_BROWSER_CONFIG: file } };
       browserNote = `A browser for ${origins.join(', ')}: the ${BROWSER_SERVER_NAME} MCP tools ${BROWSER_TOOLS.join(', ')}. `
-        + 'Site logins are done for you by the runtime when a page asks for one: never type a password, never ask for one. '
+        + 'Site logins are done for you by the runtime when a page asks for one: never type a password, never ask for one. To see the login page itself (a sign-out or expired-session check) pass relogin: false to each navigate, history, click, press or click_at that leads there. '
         + (logins.some(l => l.id) ? `Named credentials: ${logins.filter(l => l.id).map(l => `"${l.id}"`).join(', ')}: \`login\` {credential, user?} signs out and in again as one of them (user = another login name, the password stays the stored one; no credential = back to the default login); \`fill_secret\` {ref, credential} fills a password field with that credential's password (e.g. setting a user's password in an admin page). `
           : '')
         + 'Use snapshot to see the page and its element refs; save evidence with screenshot (it lands in the evidence folder of this step).';

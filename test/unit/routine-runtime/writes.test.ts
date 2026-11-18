@@ -89,7 +89,7 @@ describe('executeWrites: verify then decide', () => {
 
   it('moves the item to another project of the package with area and iteration in ONE patch', async () => {
     const { devops, context } = setup();
-    const move = { 'System.TeamProject': 'Planning', 'System.AreaPath': 'Planning\\OrisDent Air', 'System.IterationPath': 'Planning\\2026\\Sprint 20' };
+    const move = { 'System.TeamProject': 'Planning', 'System.AreaPath': 'Planning\\Product', 'System.IterationPath': 'Planning\\2026\\Sprint 20' };
     const moving = { ...context, grant: { ...context.grant, projects: ['Proj', 'Planning'], fields: ['System.TeamProject', 'System.AreaPath', 'System.IterationPath'] } };
     const out = await executeWrites(moving, [{ op: 'fields', fields: move }]);
     expect(out).toEqual({ done: ['fields System.TeamProject, System.AreaPath, System.IterationPath'], notVerified: [], failed: [] });
@@ -100,7 +100,7 @@ describe('executeWrites: verify then decide', () => {
   it('after a project move, a later comment of the same step goes to the new project', async () => {
     const { devops, context } = setup();
     const moving = { ...context, grant: { ...context.grant, projects: ['Proj', 'Planning'], fields: ['System.TeamProject', 'System.AreaPath'] } };
-    const out = await executeWrites(moving, [{ op: 'fields', fields: { 'System.TeamProject': 'Planning', 'System.AreaPath': 'Planning\\OrisDent Air' } }, { op: 'comment', text: 'x' }]);
+    const out = await executeWrites(moving, [{ op: 'fields', fields: { 'System.TeamProject': 'Planning', 'System.AreaPath': 'Planning\\Product' } }, { op: 'comment', text: 'x' }]);
     expect(out.done).toEqual(['fields System.TeamProject, System.AreaPath', 'comment']);
     expect(devops.calls.filter(c => c.method === 'POST').map(c => new URL(c.url).pathname)).toEqual(['/contoso/Planning/_apis/wit/workItems/9/comments']);
   });

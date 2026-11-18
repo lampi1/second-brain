@@ -69,11 +69,13 @@ and `type` refuses password fields. A prompt says "the browser is already logged
 credentials or selectors.
 
 **A step that must see the login page** (a sign-out in one tab and a reload in another, an expired session) passes
-`relogin: false` to the call that leads there: `navigate`, `history`, `click`, `press` or `click_at`. That call never
-signs in: a page that lands on a login page is left as it is and the reply says so. `snapshot` and `screenshot` read
-it (the password fields are emptied before the PNG); `eval` and `type` keep refusing it. The flag holds for that call
-only: the next call without it signs in again, as always. Say it in the prompt, e.g. "sign out in tab 0, then in tab 1
-reload with `relogin: false` and check that the login page shows".
+`relogin: false` to every call that leads there: `navigate`, `history`, `click`, `press` or `click_at` (the other
+tools sign in as always). That call never signs in: a page that lands on a login page is left as it is and the reply
+says so. `snapshot` and `screenshot` read it (the password fields are emptied before the PNG); `eval` keeps refusing a
+login page and `type` its password field. The flag holds for that call only: the next navigation or action without it
+signs in again. The sign-out click needs it too, or the runtime signs straight back in. Say it in the prompt, e.g.
+"click Sign out in tab 0 with `relogin: false`, select tab 1, reload it with `relogin: false` and check that the
+login page shows".
 
 `browser.hide` (optional): CSS selectors of overlays the runtime hides on every page, so they never cover what a step
 clicks (Air: `["#draggable", "ai-chat"]`, the Maia chat). Plain selectors only (no braces).

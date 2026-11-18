@@ -1,37 +1,57 @@
 // `relogin: false` on a routine browser call (issue #434, ADR 0321; packages/routine-runtime/src/browser-mcp.ts): the
 // call never signs in, a page that lands on a login page is left there and the reply says so; the login page can be
 // read (screenshot with its password fields emptied first) but never scripted; the next call without the flag signs in
-// again as always, and the declared origins still hold. The session runs on a fake page (no browser, no port, no
-// timer): a site with one login page whose session the test ends as a sign-out in another tab would.
+// again as always, and the declared origins still hold. And the host side of the guards on a password `fill_secret`
+// wrote: the field is marked before it is filled, and a marked field is a password field for type, press, the
+// accessibility snapshot and the screenshot. The session runs on a fake page (no browser, no port, no timer): a site
+// with one login page whose session the test ends as a sign-out in another tab would; the in-page scripts are answered
+// by the fake.
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CLEAR_PASSWORDS_SCRIPT, createBrowserSession, LEFT_ON_LOGIN, type BrowserServerConfig } from '../../../packages/routine-runtime/src/browser-mcp';
-import type { BrowserPage } from '../../../packages/routine-runtime/src/browser-page';
+import { createBrowserSession, LEFT_ON_LOGIN, type BrowserServerConfig } from '../../../packages/routine-runtime/src/browser-mcp';
+import { CLEAR_PASSWORDS_SCRIPT, PASSWORD_HELD_SCRIPT, SECRET_FOCUS_SCRIPT, SECRET_MARK, SECRET_SHOWN_SCRIPT, type BrowserPage } from '../../../packages/routine-runtime/src/browser-page';
 import { tempDir } from './fakes';
 
 const LOGIN = 'https://app.test/Account/Login', HOME = 'https://app.test/home';
+// a made-up value of the named credential, built at run time (the repo guard refuses secret-shaped literals)
+const FAKE = ['fake', 'value', String(process.pid)].join('-');
 
 /** The fake site and the session on it. `sso`: the login page signs in by itself and leaves (so no form is driven). */
 function open() {
-  const s = { session: false, sso: true, url: 'about:blank', gotos: [] as string[], cleared: 0, clearOk: true, onClick: () => {} };
+  const s = { session: false, sso: true, url: 'about:blank', gotos: [] as string[], cleared: 0, clearOk: true, onClick: () => {},
+    keys: [] as string[], onKey: () => {}, held: false, shown: false, focusSecret: false,
+    /** the one field the fake locator finds: its attributes, its value, and what was done to it in order */
+    field: { attrs: { type: 'text' } as Record<string, string>, value: '', did: [] as string[] } };
   const land = (url: string) => {
     if (url.split('?')[0] === LOGIN) { if (s.sso) s.session = true; s.url = s.session ? HOME : url; }
     else s.url = s.session ? url : `${LOGIN}?ReturnUrl=%2Fhome`;
   };
+  const element = { tagName: 'INPUT', getAttribute: (k: string) => s.field.attrs[k] ?? null, hasAttribute: (k: string) => k in s.field.attrs,
+    setAttribute: (k: string, v: string) => { s.field.attrs[k] = v; s.field.did.push(`mark ${k}`); } };
+  const scripts = new Map<string, () => unknown>([[CLEAR_PASSWORDS_SCRIPT, () => (s.cleared += 1, s.clearOk)], [PASSWORD_HELD_SCRIPT, () => s.held], [SECRET_SHOWN_SCRIPT, () => s.shown], [SECRET_FOCUS_SCRIPT, () => s.focusSecret]]);
   const page = {
     url: () => s.url, title: async () => 'App',
     goto: async (url: string) => { s.gotos.push(url); land(url); },
     reload: async () => { land(s.url); }, goBack: async () => { land(s.url); }, goForward: async () => { land(s.url); },
     waitForLoadState: async () => {}, waitForTimeout: async () => {},
-    evaluate: async (script: string) => (script === CLEAR_PASSWORDS_SCRIPT ? (s.cleared += 1, s.clearOk) : { marked: [] }),
+    evaluate: async (script: string) => (scripts.get(script) ?? (() => ({ marked: [] })))(),
+    ariaSnapshot: async () => '- textbox',
     screenshot: async (o: { path?: string }) => { if (o.path) fs.writeFileSync(o.path, 'png'); return Buffer.from('png'); },
-    locator: () => ({ click: async () => { s.onClick(); } }),
+    keyboard: { press: async (key: string) => { s.keys.push(key); s.onKey(); } },
+    locator: () => ({
+      click: async () => { s.onClick(); }, setChecked: async () => { s.onClick(); },
+      evaluate: async (fn: (e: unknown) => unknown) => fn(element),
+      press: async (key: string) => { s.keys.push(`field:${key}`); },
+      fill: async (value: string) => { s.field.value = value; s.field.did.push('fill'); },
+      pressSequentially: async (text: string) => { s.field.value += text; },
+    }),
     context: () => ({ clearCookies: async () => { s.session = false; }, pages: () => [page], on: () => undefined }),
     on: () => undefined, isClosed: () => false,
   };
   const dir = tempDir('routine-relogin-');
-  const config: BrowserServerConfig = { origins: ['https://app.test'], profileDir: path.join(dir, 'profile'), evidence: path.join(dir, 'evidence'), headless: true, logins: [{ loginUrl: LOGIN, user: 'u', password: 'p-secret' }] };
+  const config: BrowserServerConfig = { origins: ['https://app.test'], profileDir: path.join(dir, 'profile'), evidence: path.join(dir, 'evidence'), headless: true,
+    logins: [{ loginUrl: LOGIN, user: 'u', password: 'p-secret' }, { id: 'admin', loginUrl: LOGIN, user: 'a', password: FAKE }] };
   const session = createBrowserSession(config, { page: async () => page as unknown as BrowserPage });
   let id = 0;
   const call = async (name: string, args: Record<string, unknown> = {}): Promise<{ text: string; isError: boolean }> => {
@@ -96,7 +116,8 @@ describe('routine browser: relogin false leaves the login page to be read', () =
     const back = await call('navigate', { url: HOME });
     expect(back).toMatchObject({ isError: false, text: expect.stringContaining(`Now at ${HOME}`) });
     expect(back.text).not.toContain('login page');
-    expect(s.gotos).toEqual([LOGIN, HOME, HOME, LOGIN]);
+    // that login counts as signed out: the navigation starts from its login page, as a step's first visit does
+    expect(s.gotos).toEqual([LOGIN, HOME, LOGIN, HOME]);
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
@@ -114,6 +135,80 @@ describe('routine browser: relogin false leaves the login page to be read', () =
     expect(again.text).not.toContain('login page');
     expect(s.gotos).toEqual([LOGIN, HOME, LOGIN]);
     expect(s.session).toBe(true);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('press takes the flag too; a tool that does not take it signs in as always; a failed call drops the flag', async () => {
+    const { s, call, dir } = open();
+    await call('navigate', { url: HOME });
+    const end = () => { s.session = false; s.url = `${LOGIN}?ReturnUrl=%2Fhome`; };
+    s.onKey = end;
+    const pressed = await call('press', { key: 'Enter', relogin: false });
+    expect(pressed.text.endsWith(LEFT_ON_LOGIN)).toBe(true);
+    expect(s.gotos).toEqual([LOGIN, HOME]);
+    // check is not one of the five: the flag is ignored and the runtime signs in again
+    s.session = true; s.url = HOME; s.onClick = end;
+    const checked = await call('check', { ref: 'e1', relogin: false });
+    expect(checked).toMatchObject({ isError: false, text: expect.stringContaining('Checked') });
+    expect(checked.text).not.toContain('login page');
+    expect(s.gotos).toEqual([LOGIN, HOME, LOGIN]);
+    // a call that fails with the flag leaves no flag behind: the next reload signs in again
+    s.onClick = () => { throw new Error('element is not visible'); };
+    expect(await call('click', { ref: 'e1', relogin: false })).toMatchObject({ isError: true, text: expect.stringContaining('element is not visible') });
+    s.session = false;
+    const reloaded = await call('history', { action: 'reload' });
+    expect(reloaded).toMatchObject({ isError: false, text: expect.stringContaining(`Now at ${HOME}`) });
+    expect(s.gotos).toEqual([LOGIN, HOME, LOGIN, LOGIN]);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('routine browser: a password fill_secret wrote stays unreadable', () => {
+  it('fill_secret marks the field before it fills it, and never fills a text field', async () => {
+    const { s, call, dir } = open();
+    expect(await call('fill_secret', { ref: 'e1', credential: 'admin' })).toMatchObject({ isError: true, text: expect.stringMatching(/only password fields/) });
+    expect(s.field.did).toEqual([]);
+    s.field.attrs.type = 'password';
+    const filled = await call('fill_secret', { ref: 'e1', credential: 'admin' });
+    expect(filled.isError).toBe(false);
+    expect(filled.text).not.toContain(FAKE);
+    expect(s.field.did).toEqual([`mark ${SECRET_MARK}`, 'fill']);
+    expect(s.field.value).toBe(FAKE);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('a marked field is a password field even as a text field: no typing, only Tab, Enter and Escape', async () => {
+    const { s, call, dir } = open();
+    // the page's "show password" toggle made it a text field; the mark stays
+    s.field.attrs = { type: 'text', [SECRET_MARK]: '' };
+    expect(await call('type', { ref: 'e1', text: 'x' })).toMatchObject({ isError: true, text: expect.stringMatching(/password fields are filled only/) });
+    expect(await call('press', { ref: 'e1', key: 'Backspace' })).toMatchObject({ isError: true, text: expect.stringMatching(/only Tab, Enter or Escape/) });
+    expect((await call('press', { ref: 'e1', key: 'Enter' })).isError).toBe(false);
+    // by focus too: fill leaves the focus in the field
+    s.focusSecret = true;
+    expect(await call('press', { key: 'Backspace' })).toMatchObject({ isError: true, text: expect.stringMatching(/only Tab, Enter or Escape/) });
+    expect(await call('press', { key: 'Control+c' })).toMatchObject({ isError: true });
+    expect((await call('press', { key: 'Tab' })).isError).toBe(false);
+    expect(s.keys).toEqual(['field:Enter', 'Tab']);
+    expect(s.field.value).toBe('');
+    // an ordinary field takes both
+    s.focusSecret = false; s.field.attrs = { type: 'text' };
+    expect((await call('press', { ref: 'e1', key: 'Backspace' })).isError).toBe(false);
+    expect((await call('type', { ref: 'e1', text: 'hello' })).isError).toBe(false);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('no accessibility tree while a password is held, no screenshot while one shows in clear', async () => {
+    const { s, call, dir } = open();
+    expect((await call('snapshot', { aria: true })).isError).toBe(false);
+    s.held = true;
+    expect(await call('snapshot', { aria: true })).toMatchObject({ isError: true, text: expect.stringMatching(/accessibility tree would show it/) });
+    expect(await call('eval', { expression: '1' })).toMatchObject({ isError: true });
+    s.shown = true;
+    expect(await call('screenshot', { name: 'shown' })).toMatchObject({ isError: true, text: expect.stringMatching(/shown in clear/) });
+    expect(fs.existsSync(path.join(dir, 'evidence', 'shown.png'))).toBe(false);
+    s.shown = false;
+    expect((await call('screenshot', { name: 'hidden' })).isError).toBe(false);
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });

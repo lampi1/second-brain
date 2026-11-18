@@ -17,8 +17,8 @@ type Saved = { deployments: { runId: string; state: string; released?: boolean }
 const saved = (root: string) => JSON.parse(fs.readFileSync(stateFile(root), 'utf8')) as Saved;
 /** the ledger as an older runtime left it: deployments of this run and of another one, none released */
 const seed = (root: string, runId: string, own: string) => fs.writeFileSync(stateFile(root), JSON.stringify({ schema: 1, deployments: [
-  { runId, target: { id: 'air-test-1' }, buildId: 1, commit: 'c', state: own, releaseId: 7, token: 't' },
-  { runId: 'other-run', target: { id: 'air-test-1' }, buildId: 2, commit: 'c', state: 'queued', releaseId: 8, token: 't' },
+  { runId, target: { id: 'test-node-1' }, buildId: 1, commit: 'c', state: own, releaseId: 7, token: 't' },
+  { runId: 'other-run', target: { id: 'test-node-1' }, buildId: 2, commit: 'c', state: 'queued', releaseId: 8, token: 't' },
 ] }));
 
 function setup(script: Script, locks?: ReturnType<typeof createLocks>) {
@@ -36,7 +36,7 @@ function parking(script: Script, deployments?: Deployments) {
   fs.mkdirSync(path.join(root, 'runs'), { recursive: true });
   const pkg = routinePackage({
     escalation: { contact: g('d'), contactName: 'Davide', park: true },
-    devops: { organization: 'contoso', projects: ['Proj'], ops: ['comment', 'state', 'fields', 'tags', 'downgrade'], fields: [], deployTargets: [{ id: 'air-test-1' } as never],
+    devops: { organization: 'contoso', projects: ['Proj'], ops: ['comment', 'state', 'fields', 'tags', 'downgrade'], fields: [], deployTargets: [{ id: 'test-node-1' } as never],
       downgrade: { removeTag: 'ai-fixable', addTag: 'ai-needs-human', state: 'New' } },
   });
   const runtime = createRoutineRuntime({ pkg, paths: paths(root), engine, devops: { authorization: devops.authorization, request: devops.request, ...(deployments ? { deployments } : {}) } });
@@ -81,12 +81,14 @@ describe('test deployment leases', () => {
   });
 
   it('a cancel while a parked run ends (its lease being released) never turns it into a cancelled run', async () => {
+    // a turn of the event loop, no clock: what the cancel started gets to run before the release answers
+    const turn = () => new Promise<void>(r => setImmediate(r));
     let cancels = 0;
     const box: { runtime?: ReturnType<typeof parking>['runtime'] } = {};
     const deployments: Deployments = {
       execute: async () => ({}), ownedTargets: () => [], reclaim: async () => [],
       // the release at the run's end: a Ctrl+C lands right then
-      settle: async runId => { await new Promise(r => setTimeout(r, 5)); if (box.runtime!.store.read(runId).status === 'needs-human') { cancels++; box.runtime!.cancel(runId); await new Promise(r => setTimeout(r, 20)); } return true; },
+      settle: async runId => { await turn(); if (box.runtime!.store.read(runId).status === 'needs-human') { cancels++; box.runtime!.cancel(runId); await turn(); await turn(); } return true; },
     };
     const s = parking(r => r.stepId === 'fix' ? needsHuman : done('ok'), deployments);
     box.runtime = s.runtime;
@@ -105,22 +107,22 @@ describe('test deployment leases', () => {
     const s = parking(r => r.stepId === 'fix' && fixCalls++ === 0 ? needsHuman : done('ok'), deployments);
     const { runId } = await s.runtime.startItem(5).finished;
     // while parked another run deploys its release on the node; the contact answers
-    lost = [{ targetId: 'air-test-1', releaseId: 7, replaced: true, reason: 'replaced' }];
+    lost = [{ targetId: 'test-node-1', releaseId: 7, replaced: true, reason: 'replaced' }];
     s.devops.reply(5, g('9'), '@AI riprendi');
     const again = await (await s.runtime.resumeParked(runId))!.finished;
     expect(again.status).toBe('needs-human');
     expect(again.parked).toMatchObject({ n: 2, stepId: 'fix' });
-    expect(again.lostNodes).toEqual(['air-test-1:7']);
+    expect(again.lostNodes).toEqual(['test-node-1:7']);
     // no session ran on the redeployed node
     expect(s.engine.requests.map(r => r.stepId)).toEqual(['analyse', 'fix']);
     const parks = s.devops.comments.get(5)!.filter(c => c.text.includes('Serve un umano'));
-    expect(parks.at(-1)!.text).toContain("air-test-1 è stato ridistribuito da un'altra run: serve un nuovo deploy");
+    expect(parks.at(-1)!.text).toContain("test-node-1 è stato ridistribuito da un'altra run: serve un nuovo deploy");
     // the person answered knowing it: the steps run, each told its tests on that node do not prove this run's change
     s.devops.reply(5, g('9'), '@AI rideploya e riprendi');
     const end = await (await s.runtime.resumeParked(runId))!.finished;
     expect(end.status).toBe('done');
     expect(s.engine.requests.map(r => r.stepId)).toEqual(['analyse', 'fix', 'fix', 'report']);
-    for (const r of s.engine.requests.slice(2)) expect(r.prompt).toContain('## Test node\nair-test-1 è stato ridistribuito da un\'altra run: serve un nuovo deploy. Tests on that node do not prove this run\'s change');
+    for (const r of s.engine.requests.slice(2)) expect(r.prompt).toContain('## Test node\ntest-node-1 è stato ridistribuito da un\'altra run: serve un nuovo deploy. Tests on that node do not prove this run\'s change');
   });
 
   it('leaseSettled: done yes; parked no; running only when no live process holds its locks', async () => {

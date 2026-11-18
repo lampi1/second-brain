@@ -145,7 +145,7 @@ export const SNAPSHOT_SCRIPT = `(() => {
       const first = (e.getAttribute('class') || '').trim().split(/\\s+/)[0];
       let value = '';
       if (tag === 'input' && (type === 'checkbox' || type === 'radio')) value = e.checked ? 'on' : 'off';
-      else if (tag === 'input' || tag === 'textarea') value = type === 'password' ? (e.value ? '***' : '') : clip(e.value, 60);
+      else if (tag === 'input' || tag === 'textarea') value = type === 'password' || e.hasAttribute('data-routine-secret') ? (e.value ? '***' : '') : clip(e.value, 60);
       if (tag === 'select') value = clip(e.selectedOptions[0] ? e.selectedOptions[0].textContent : '', 60) + ' | options: ' + clip([...e.options].map(o => o.value + '=' + o.textContent).join('; '), 200);
       const r = target.getBoundingClientRect(), x = Math.round(ox + r.left + r.width / 2), y = Math.round(oy + r.top + r.height / 2);
       const label = nameOf(e);
@@ -174,11 +174,31 @@ export const SNAPSHOT_SCRIPT = `(() => {
   return { url: location.href, title: document.title, text: [body, ...frames].filter(Boolean).join('\\n\\n'), elements };
 })()`;
 
-/** True when a password field of the page (or of a same-origin frame) holds a value: eval is refused then, since a
- *  script could return the password reshaped past the masking. */
-export const PASSWORD_HELD_SCRIPT = `(() => { const docs = [document];
+/** The mark `fill_secret` leaves on the field it fills: the field stays a password field for every tool even when a
+ *  "show password" toggle turns it into a text field. */
+export const SECRET_MARK = 'data-routine-secret';
+const SECRET_DOCS = `const docs = [document];
   for (const f of document.querySelectorAll('iframe,frame')) { try { if (f.contentDocument) docs.push(f.contentDocument); } catch (e) { /* cross-origin */ } }
-  return docs.some(d => [...d.querySelectorAll('input[type="password"]')].some(i => i.value !== '')); })()`;
+  const secret = e => !!e && e.tagName === 'INPUT' && ((e.getAttribute('type') || '').toLowerCase() === 'password' || e.hasAttribute('${SECRET_MARK}'));`;
+/** True when a password field of the page (or of a same-origin frame), or a field `fill_secret` filled, holds a value:
+ *  eval and the accessibility tree are refused then, since they could return the password past the masking. */
+export const PASSWORD_HELD_SCRIPT = `(() => { ${SECRET_DOCS}
+  return docs.some(d => [...d.querySelectorAll('input')].some(i => secret(i) && i.value !== '')); })()`;
+/** True when a field `fill_secret` filled shows its value in clear (a "show password" toggle made it a text field):
+ *  no screenshot is taken then. */
+export const SECRET_SHOWN_SCRIPT = `(() => { ${SECRET_DOCS}
+  return docs.some(d => [...d.querySelectorAll('input[${SECRET_MARK}]')].some(i => i.value !== '' && (i.getAttribute('type') || '').toLowerCase() !== 'password')); })()`;
+/** True when the keyboard focus is in a password field or one `fill_secret` filled: only Tab, Enter and Escape are
+ *  pressed there (a Backspace would leave a value the masking no longer knows). */
+export const SECRET_FOCUS_SCRIPT = `(() => { ${SECRET_DOCS}
+  return docs.some(d => secret(d.activeElement)); })()`;
+/** Empties every password field of the page and of its same-origin frames, the ones `fill_secret` filled included
+ *  (native setter + input event); true when they are all empty now. */
+export const CLEAR_PASSWORDS_SCRIPT = `(() => { ${SECRET_DOCS}
+  const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+  const all = docs.flatMap(d => [...d.querySelectorAll('input')].filter(secret));
+  for (const el of all) { set.call(el, ''); el.dispatchEvent(new Event('input', { bubbles: true })); }
+  return all.every(el => el.value === ''); })()`;
 
 /** Wraps an agent's expression: awaited, serialised to JSON (DOM nodes as a short tag + text, cycles and functions
  *  named), capped at `max` characters. */

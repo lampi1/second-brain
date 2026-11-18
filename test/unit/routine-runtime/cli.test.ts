@@ -134,7 +134,7 @@ describe('routine CLI', () => {
   });
 
   describe('test databases file', () => {
-    const DB = { server: 'sql-air-01', port: 1433, database: 'AirBugs' };
+    const DB = { server: 'sql-app-01', port: 1433, database: 'AppBugs' };
     // a made-up login value, built at run time (the repo guard refuses secret-shaped literals)
     const FAKE = ['fake', 'login', String(process.pid)].join('-');
     // the runtime's own packages folder of these tests (the CLI's default is %LOCALAPPDATA%\routine-runtime\packages)
@@ -219,7 +219,7 @@ describe('routine CLI', () => {
       expect(h.stderr.text).not.toContain('cannot run yet');
       expect(h.stdout.text).toMatch(/Folder: /);
 
-      fs.writeFileSync(path.join(dir, 'test-dbs.json'), `[{"server":"sql-air-01","${'pass'}word":"${FAKE}" oops}]`);
+      fs.writeFileSync(path.join(dir, 'test-dbs.json'), `[{"server":"sql-app-01","${'pass'}word":"${FAKE}" oops}]`);
       h = harness(() => done('x'));
       expect(await main(['run', dir, '--runs-dir', tempDir()], h.deps)).toBe(2);
       expect(h.stderr.text).toContain(`the package's test-dbs.json: cannot read ${real(path.join(dir, 'test-dbs.json'))}`);

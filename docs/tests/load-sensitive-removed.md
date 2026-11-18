@@ -1221,3 +1221,10 @@ Files left without tests and deleted: `test/unit/chats/orchestrator-cursor.test.
 ### `test/unit/voice-download.test.ts` (1)
 
 - a .tar.bz2 voice is unpacked without its top folder, the archive removed
+
+### `test/unit/routine-runtime/browser-widgets.test.ts` (whole file, 2026-11-18)
+
+Came with the port of the routine runtime (ADR 0321) and left with it: a real headless Chromium and a local port.
+
+- the snapshot gives refs to a toolbar div.btn, a data-toggle span, a datepicker day and an SVG group
+- type fires keyup as a datepicker needs; eval runs only on the declared origins and its result is masked

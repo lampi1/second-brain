@@ -22,7 +22,10 @@
 // call log, masked like every reply. A test that must SEE the login page (a sign-out in one tab, a reload in another:
 // issue #434, ADR 0321) passes `relogin: false` to the call: that call never signs in, a page that lands on a login
 // page is left there and the reply says so; snapshot and screenshot read it (password fields emptied before the PNG),
-// `eval` and `type` keep refusing it, and the next call without the flag signs in again as always.
+// `eval` keeps refusing it and `type` its password field, and the next navigation or action without the flag signs in
+// again as always. A password `fill_secret` wrote stays unreadable (independent review, 2026-11-18): the field is
+// marked, so it counts as a password field even after a "show password" toggle; there only Tab, Enter and Escape are
+// pressed, the accessibility tree and eval are refused while it holds a value, and no screenshot shows it in clear.
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -32,7 +35,8 @@ import { createMasker } from './mask';
 import { createWatcher, safeUrl } from './browser-watch';
 import { readConfigOnce } from './fs-util';
 import { driveLoginResult, LOGIN_FAIL_REASONS, type LoginResult, type LoginSuccessRule } from './login-form';
-import { evalScript, PASSWORD_HELD_SCRIPT, playwrightLoginDriver, SNAPSHOT_SCRIPT, type BrowserPage } from './browser-page';
+import { CLEAR_PASSWORDS_SCRIPT, evalScript, PASSWORD_HELD_SCRIPT, playwrightLoginDriver, SECRET_FOCUS_SCRIPT, SECRET_SHOWN_SCRIPT, SNAPSHOT_SCRIPT, type BrowserPage } from './browser-page';
+export { CLEAR_PASSWORDS_SCRIPT };
 
 export const BROWSER_SERVER_NAME = 'routine-browser';
 export const BROWSER_TOOLS = ['navigate', 'history', 'tabs', 'snapshot', 'click', 'type', 'select_option', 'check', 'press', 'hover', 'drag', 'click_at', 'scroll', 'upload', 'dialog', 'wait', 'eval', 'console', 'network', 'resize', 'screenshot', 'login', 'fill_secret'] as const;
@@ -60,7 +64,11 @@ const PX = { type: 'number', minimum: 0, description: 'page pixels, as in the fu
 const KEY = { type: 'string', description: 'a key or chord: Enter, Tab, Escape, ArrowDown, PageDown, Control+a…' };
 const RELOGIN = { type: 'boolean', description: 'false = this call never signs in: a page that lands on a login page is left there to be read with snapshot or screenshot (a sign-out or expired-session test). Default: logins are done for you.' };
 /** What a `relogin: false` call's reply ends with when the page it leaves is a login page. */
-export const LEFT_ON_LOGIN = 'This is a login page, left as it is (relogin: false): read it with snapshot or screenshot. The next call without relogin: false signs in again.';
+export const LEFT_ON_LOGIN = 'This is a login page, left as it is (relogin: false): read it with snapshot or screenshot. The next navigation or action on the page without relogin: false signs in again.';
+/** The tools that take `relogin: false` (the ones a sign-out test acts with); every other tool signs in as always. */
+const RELOGIN_TOOLS = new Set(['navigate', 'history', 'click', 'press', 'click_at']);
+/** The keys pressed in a password field: the ones that leave it or submit it, never one that edits its value. */
+const SECRET_KEYS = new Set(['Tab', 'Enter', 'Escape']);
 const TOOLS = [
   { name: 'navigate', description: 'Open a URL (only the routine\'s declared origins). Logins are done for you (relogin: false = not in this call).', inputSchema: { type: 'object', additionalProperties: false, required: ['url'], properties: { url: { type: 'string' }, relogin: RELOGIN } } },
   { name: 'history', description: 'Go back, forward or reload the page (logins are redone for you; relogin: false = not in this call).', inputSchema: { type: 'object', additionalProperties: false, required: ['action'], properties: { action: { type: 'string', enum: ['back', 'forward', 'reload'] }, relogin: RELOGIN } } },
@@ -156,11 +164,9 @@ export function errorText(e: unknown): string {
   return text.length > 2000 ? `${text.slice(0, 1999)}…` : text;
 }
 
-/** Empties every password field of the page (native setter + input event); true when they are all empty now. */
-export const CLEAR_PASSWORDS_SCRIPT = `(() => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-  const all = [...document.querySelectorAll('input[type="password"]')];
-  for (const el of all) { set.call(el, ''); el.dispatchEvent(new Event('input', { bubbles: true })); }
-  return all.every(el => el.value === ''); })()`;
+/** In the page: is this element a password field, or one `fill_secret` filled? */
+const IS_SECRET_FIELD = (e: Element): boolean => e.tagName === 'INPUT' && ((e.getAttribute('type') ?? '').toLowerCase() === 'password' || e.hasAttribute('data-routine-secret'));
+const MARK_SECRET_FIELD = (e: Element): void => { e.setAttribute('data-routine-secret', ''); };
 
 /** One server's session: the page, its login state, the JSON-RPC handler. */
 export function createBrowserSession(config: BrowserServerConfig, io: BrowserServerIo) {
@@ -333,12 +339,14 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
 
   /** One tool call. `relogin: false` holds for this call only: the page it leaves on a login page is named in the reply. */
   async function call(name: string, args: Json): Promise<{ text: string; isError?: boolean; image?: Buffer }> {
-    relogin = args.relogin !== false;
+    relogin = args.relogin !== false || !RELOGIN_TOOLS.has(name);
     try {
       const r = await run(name, args);
       if (relogin || r.isError) return r;
-      const page = await activePage();
-      return loginPageFor(state, page.url(), lastLogin) ? { ...r, text: `${r.text} ${LEFT_ON_LOGIN}` } : r;
+      const page = await activePage(), login = loginPageFor(state, page.url(), lastLogin);
+      if (!login) return r;
+      signedIn.delete(login); // its session is over: the next navigate starts from the login page, as a step's first visit
+      return { ...r, text: `${r.text} ${LEFT_ON_LOGIN}` };
     } finally { relogin = true; }
   }
 
@@ -405,7 +413,11 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
       case 'snapshot': {
         await page.waitForLoadState('load', { timeout: ACTION_TIMEOUT }).catch(() => undefined);
         // the accessibility tree (roles, names, states) as Playwright's aria snapshot: no refs, for reading structure
-        if (args.aria === true) return { text: `URL: ${page.url()}\n\n${await page.ariaSnapshot({ timeout: ACTION_TIMEOUT })}` };
+        if (args.aria === true) {
+          // the accessibility tree prints a password field's value as it is
+          if (await page.evaluate<boolean>(PASSWORD_HELD_SCRIPT)) return { text: 'Refused: a password field of this page holds a value (the accessibility tree would show it). Use snapshot without aria.', isError: true };
+          return { text: `URL: ${page.url()}\n\n${await page.ariaSnapshot({ timeout: ACTION_TIMEOUT })}` };
+        }
         let s = await page.evaluate<{ url: string; title: string; text: string; elements: string[] }>(SNAPSHOT_SCRIPT);
         // a SPA (Air's agenda) paints after 'load': wait a little for something to read
         for (let i = 0; i < 10 && !s.text.trim() && !s.elements.length; i++) { await page.waitForTimeout(500); s = await page.evaluate(SNAPSHOT_SCRIPT); }
@@ -424,8 +436,7 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
         const el = locate(page, args.ref);
         const then = args.then === undefined ? undefined : String(args.then);
         if (then !== undefined && !['Tab', 'Enter', 'Escape'].includes(then)) return { text: 'then: Tab, Enter or Escape.', isError: true };
-        const kind = await el.evaluate(e => `${e.tagName.toLowerCase()}:${(e.getAttribute('type') ?? '').toLowerCase()}`);
-        if (kind.endsWith(':password')) return { text: 'Refused: password fields are filled only by the runtime\'s own login.', isError: true };
+        if (await el.evaluate(IS_SECRET_FIELD)) return { text: 'Refused: password fields are filled only by the runtime\'s own login.', isError: true };
         const text = String(args.text ?? '');
         // real keys (keydown/keypress/input/keyup per character): bootstrap-datepicker reads the date only on keyup, and
         // its forceParse would put the old date back on blur after a bare fill; a long text is filled, then one End key
@@ -444,6 +455,8 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
       case 'press': {
         const key = String(args.key ?? '');
         if (!/^[^\s]{1,40}$/.test(key)) return { text: 'key: a key name such as Enter, Tab, Escape, ArrowDown or Control+a.', isError: true };
+        // in a password field (or one fill_secret filled) only the keys that leave or submit it: an edited value is one the masking no longer knows
+        if (!SECRET_KEYS.has(key) && (args.ref === undefined ? await page.evaluate<boolean>(SECRET_FOCUS_SCRIPT) : await locate(page, args.ref).evaluate(IS_SECRET_FIELD))) return { text: 'Refused: in a password field only Tab, Enter or Escape are pressed.', isError: true };
         if (args.ref === undefined) await page.keyboard.press(key);
         else await locate(page, args.ref).press(key, { timeout: ACTION_TIMEOUT });
         const failed = await settle(page);
@@ -527,6 +540,8 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
         const refs = [...new Set(args.highlight === undefined ? [] : Array.isArray(args.highlight) ? args.highlight : [args.highlight])];
         if (refs.length > 5) return { text: 'highlight: at most 5 element refs.', isError: true };
         for (const ref of refs) locate(page, ref); // validates each ref before the page is touched
+        // a secret fill_secret wrote, shown in clear by a "show password" toggle: no PNG of it
+        if (await page.evaluate<boolean>(SECRET_SHOWN_SCRIPT)) return { text: 'Refused: a password filled by fill_secret is shown in clear on this page (a "show password" toggle): hide it again first.', isError: true };
         // a login page (one left there by relogin: false): no PNG of it ever holds a typed password
         if (loginPageFor(state, page.url(), lastLogin) && !await page.evaluate<boolean>(CLEAR_PASSWORDS_SCRIPT)) return { text: 'Refused: a password field of this login page could not be emptied before the screenshot.', isError: true };
         // the originals live here, not on the page: only the elements really marked get their own style back
@@ -571,6 +586,9 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
         const el = locate(page, args.ref);
         const kind = await el.evaluate(e => `${e.tagName.toLowerCase()}:${(e.getAttribute('type') ?? '').toLowerCase()}`);
         if (kind !== 'input:password') return { text: 'Refused: fill_secret fills only password fields (a text field would show the value).', isError: true };
+        // marked first: the field stays a password field for type, press, eval, the snapshots and the screenshot even
+        // when the page turns it into a text field (a "show password" toggle)
+        await el.evaluate(MARK_SECRET_FIELD);
         await el.fill(named.password, { timeout: ACTION_TIMEOUT });
         return { text: `Filled ${String(args.ref)} with the password of credential ${named.id}.` };
       }
