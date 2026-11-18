@@ -248,6 +248,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   key is gone (ADR 0291).
 
 ### Fixed
+- An open question in the Orchestrator's column is as tall as what it says: a short one no longer takes the whole
+  column with an empty panel under «Ci penso dopo» while the chat above is squeezed to a strip with its last card cut.
+  A long one still takes everything but that strip, with the input in sight. The colour rule on the question's left
+  runs whole down the open card (the answers' bar used to cover it).
 - Memoria no longer hangs on a note with a very long line: the check that hides a web address with a user and a
   password in it read a 200 KB line of letters again from every letter (tens of seconds); it now reads it once and
   hides the same lines as before.

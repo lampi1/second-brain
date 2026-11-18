@@ -50,7 +50,8 @@ ADR 0269, 0274; supersedes the «reserved» parts of ADR 0239/0255/0259 §4
   detail) leaves the full screen and the maps window and puts a draft in the Orchestrator's input that quotes the
   project, the box's path, kind, status, note and description; not sent, the user adds his words.
 - **Question rows** (`qwin.css`): under a long Orchestrator chat the rows keep their height (up to 45%) and the
-  messages take what is left; an open card is the column's panel above a 72 px strip of messages.
+  messages take what is left; an open card is the column's panel above a 72 px strip of messages (since 2026-11-18
+  only as tall as what it says: a short card leaves the rest of the column to the messages).
 
 ## Addendum (2026-11-13, owner: «control + rotella zummasse e il drag … per spostare la view … tipo figma» · «le chip … alcune sono in sovrapposizione»)
 - **A design canvas** (`ProjectMapView` `cam`): Ctrl/⌘+wheel zooms toward the pointer (15–300 %), a plain wheel pans
