@@ -88,7 +88,7 @@ export function ElementDetail({ map, el, state, stateOfLink, stateOfEl, confirme
     {el.rules?.length ? <><h4>{t('pm.rules')}</h4><List items={el.rules} id="pm-rules" /></> : null}
     {el.keeps?.length ? <><h4>{t('pm.keeps')}</h4><List items={el.keeps} id="pm-keeps" /></> : null}
     {parts.length > 0 && <><h4>{t(line ? 'pm.stepsOf' : 'pm.partsOf')}</h4><ul className={`pm-partlist${line ? ' pm-steplist' : ''}`} data-testid="pm-partlist">{parts.map((p, i) => <li key={p.id} data-testid={`pm-part-${p.id}`}>
-      <button type="button" onClick={() => onShow(p.id)}>{line && <i className="pm-ord">{ord[i]}</i>}<i className={`pm-dot s-${stateOfEl(p)}`} title={t(`pm.state.${stateOfEl(p)}`)} />{p.name}{line && p.par && i > 0 ? <em className="pm-par" title={t('pm.withPrev')}>∥</em> : null}{kidsOf(p.id) ? <small> · {t(line ? 'pm.stepsCount' : 'pm.parts', { n: kidsOf(p.id) })}</small> : null}</button>
+      <button type="button" onClick={() => onShow(p.id)}>{line && <><i className="pm-ord">{ord[i]}</i><i className={`pm-dot s-${stateOfEl(p)}`} title={t(`pm.state.${stateOfEl(p)}`)} /></>}{p.name}{line && p.par && i > 0 ? <em className="pm-par" title={t('pm.withPrev')}>∥</em> : null}{kidsOf(p.id) ? <small> · {t(line ? 'pm.stepsCount' : 'pm.parts', { n: kidsOf(p.id) })}</small> : null}</button>
       {p.description ? <span>{p.description}</span> : null}</li>)}</ul></>}
     {(out.length > 0 || into.length > 0) && <><h4>{t('pm.passages')}</h4><ul className="pm-passes" data-testid="pm-passes">
       {out.map(l => <Passage key={l.id} l={l} other={byId.get(l.to)} dir="out" state={stateOfLink(l)} onShow={onShow} />)}

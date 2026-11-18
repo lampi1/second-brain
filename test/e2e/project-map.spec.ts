@@ -325,7 +325,9 @@ test('a map of phases is a line, the steps inside too; the panel tells proofs an
     for (let i = 1; i < boxes.length; i++) { expect(boxes[i]!.x).toBeGreaterThan(boxes[i - 1]!.x + boxes[i - 1]!.width - 1); expect(Math.abs(boxes[i]!.y - boxes[0]!.y)).toBeLessThan(2); }
     for (const [i, id] of ids.entries()) await expect(view.getByTestId(`pm-ord-${id}`)).toHaveText(String(i + 1));
     await expect(view.getByTestId('pm-next-analisi-preparazione')).toHaveCount(1);
-    await expect(view.locator('.pm-label')).toHaveCount(0); // the arrows to the next phase say nothing, least of all «da capire»
+    // the arrows to the next phase say nothing, least of all «da capire»; the only label is on the way back
+    await expect(view.locator('.pm-label')).toHaveCount(1);
+    await expect(view.getByTestId('pm-label-verifica--preparazione')).toHaveText('se un controllo fallisce');
     await shot(page, 'project-map-phases');
 
     // into a phase: its steps in a line, two together; the panel lists them, each with its status
@@ -367,5 +369,18 @@ test('a map of phases is a line, the steps inside too; the panel tells proofs an
     expect((await wrap.boundingBox())!.width).toBeGreaterThanOrEqual(279);
     await handle.dblclick();
     await expect.poll(async () => Math.round((await wrap.boundingBox())!.width)).toBe(Math.round(w0));
+    // dragged by its left edge: 120 px to the left make it 120 px wider, and that width is kept; a click alone keeps it
+    const edge = (await handle.boundingBox())!;
+    await page.mouse.move(edge.x + edge.width / 2, edge.y + 200);
+    await page.mouse.down(); await page.mouse.move(edge.x + edge.width / 2 - 120, edge.y + 200, { steps: 4 }); await page.mouse.up();
+    await expect.poll(async () => Math.round((await wrap.boundingBox())!.width)).toBe(Math.round(w0) + 120);
+    expect(await page.evaluate(() => Number(localStorage.getItem('sb.projectMap.sideWidth')))).toBe(Math.round(w0) + 120);
+    await handle.click();
+    expect(await page.evaluate(() => Number(localStorage.getItem('sb.projectMap.sideWidth')))).toBe(Math.round(w0) + 120);
+    // back to the phases, the whole line on screen: the way back from «Verifica» runs under the boxes, behind none
+    await view.getByTestId('pm-up').click();
+    await expect(view.getByTestId('pm-node-verifica')).toBeVisible();
+    await expect(view.getByTestId('pm-label-verifica--preparazione')).toBeVisible();
+    await shot(page, 'project-map-phases-full');
   } finally { await app.close(); }
 });

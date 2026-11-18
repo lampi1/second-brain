@@ -157,7 +157,71 @@ describe('phases, steps, the next arrow, proofs and links are checked', () => {
     expect(moved.elements.filter(e => e.parent === 'prep').map(e => e.id)[0]).toBe('p4');
     expect(moved.elements.find(e => e.id === 'p4')!.par).toBeUndefined();
     expect(moved.elements.find(e => e.id === 'prep')!.layout).toBe('auto');
-    expect(() => applyEdit(m, [{ op: 'set', id: 'p4', before: 'nope' }], T)).toThrow(/before: an element id/);
+    expect(() => applyEdit(m, [{ op: 'set', id: 'p4', before: 'nope' }], T)).toThrow(/before: the id of another piece on the same level/);
+    // a piece of another phase is not a place in this one; «together» is true or false, never a word
+    expect(() => applyEdit(m, [{ op: 'set', id: 'p4', before: 'migra' }], T)).toThrow(/before: the id of another piece on the same level/);
+    expect(() => applyEdit(m, [{ op: 'set', id: 'p3', par: 'true' }], T)).toThrow(/par: true or false/);
+  });
+
+  it('a redraw that leaves a piece\'s layout out keeps it; «together» is told only where it is drawn', () => {
+    const first = mapOf({ elements: phased.elements.map(e => (e.id === 'prep' ? { ...e, layout: 'auto' } : e.id === 'analisi' ? { ...e, par: true } : e)) });
+    expect(checkMap(phased, T + 1, first).elements.find(e => e.id === 'prep')!.layout).toBe('auto');
+    const text = mapText({ map: first, agents: [], changed: {} }, T);
+    // the first piece of a line has none before it, and the steps of «prep» are drawn in layers here
+    expect(text).not.toContain('(insieme al precedente)');
+    expect(elementText(first, 'prep', T, {})).not.toContain('(insieme al precedente)');
+  });
+});
+
+describe('an arrow of a line never runs behind a box', () => {
+  type Pt = [number, number];
+  /** the boxes a straight stretch a→b goes through (touching a side does not count) */
+  const through = (lv: ReturnType<typeof levelOf>, a: Pt, b: Pt) => lv.nodes.filter(n =>
+    Math.max(a[0], b[0]) > n.x && Math.min(a[0], b[0]) < n.x + n.w && Math.max(a[1], b[1]) > n.y && Math.min(a[1], b[1]) < n.y + n.h).map(n => n.id);
+  const crossed = (lv: ReturnType<typeof levelOf>) => lv.edges.flatMap(e => (e.route ?? []).slice(1).flatMap((c, i) => through(lv, e.route![i]!, c).map(id => `${e.from}>${e.to} behind ${id}`)));
+  const steps = (n: number, more: Record<string, object> = {}) => Array.from({ length: n }, (_, i) => ({ id: `s${i + 1}`, kind: 'step', name: `S${i + 1}`, ...more[`s${i + 1}`] }));
+  const edge = (lv: ReturnType<typeof levelOf>, from: string, to: string) => lv.edges.find(e => e.from === from && e.to === to)!;
+
+  it('the arrow to the place beside runs side to side; a jump goes over the row, a way back under it', () => {
+    const lv = levelOf(mapOf({ elements: steps(4), links: [{ from: 's1', to: 's3', kind: 'next', label: 'se è piccolo' }, { from: 's4', to: 's1', label: 'da rifare' }, { from: 's3', to: 's2', label: 'corregge' }] }), null, T);
+    expect([edge(lv, 's1', 's2').side, edge(lv, 's3', 's2').side, edge(lv, 's1', 's2').route]).toEqual([true, true, undefined]);
+    const [s1, s3] = xs(lv, ['s1', 's3']);
+    const jump = edge(lv, 's1', 's3').route!, back = edge(lv, 's4', 's1').route!;
+    expect(jump[0]).toEqual([s1!.x + s1!.w, s1!.y + s1!.h / 2 - 28]); expect(jump.at(-1)).toEqual([s3!.x, s3!.y + s3!.h / 2 - 28]);
+    expect(Math.min(...jump.map(c => c[1]))).toBeLessThan(s1!.y); expect(Math.min(...jump.map(c => c[1]))).toBeGreaterThan(0);
+    expect(Math.max(...back.map(c => c[1]))).toBeGreaterThan(s1!.y + s1!.h); expect(Math.max(...back.map(c => c[1]))).toBeLessThan(lv.height);
+    expect(crossed(lv)).toEqual([]);
+  });
+
+  it('the arrow to the next row goes round the row, also from and to steps that go together', () => {
+    const lv = levelOf(mapOf({ elements: steps(LINE_MAX + 5, { s2: { par: true }, s8: { par: true }, s10: { par: true } }) }), null, T);
+    // s7 and s8 share the last place of the first row, s9 and s10 the first of the second: four arrows go round
+    expect(xs(lv, ['s8', 's9']).map(n => n!.n)).toEqual([LINE_MAX, LINE_MAX + 1]);
+    const round = lv.edges.filter(e => ['s7', 's8'].includes(e.from) && ['s9', 's10'].includes(e.to));
+    expect(round).toHaveLength(4); expect(round.every(e => e.route && e.route.every(c => c[0] >= 0 && c[0] <= lv.width))).toBe(true);
+    expect(crossed(lv)).toEqual([]);
+    for (const e of lv.edges) expect(!!e.side || !!e.route).toBe(true);
+  });
+
+  it('an arrow to or from an outside box runs along the lanes, whatever column and row it starts from', () => {
+    const els = [{ id: 'sys', kind: 'system', name: 'Sys' }, ...steps(LINE_MAX + 2, { s2: { par: true } }).map(e => ({ ...e, parent: 'sys' })), { id: 'ext', kind: 'external', name: 'Ext' }, { id: 'doc', kind: 'doc', name: 'Doc' }];
+    const lv = levelOf(mapOf({ elements: els, links: [{ from: 's1', to: 'ext', label: 'chiede' }, { from: 'doc', to: 's3', label: 'spiega' }, { from: 's8', to: 'doc', label: 'aggiorna' }] }), 'sys', T);
+    expect(lv.linear).toBe(true);
+    expect(lv.nodes.filter(n => n.ctx).map(n => n.id).sort()).toEqual(['doc', 'ext']);
+    for (const [a, b] of [['s1', 'ext'], ['doc', 's3'], ['s8', 'doc']]) expect(edge(lv, a!, b!).route!.length).toBeGreaterThan(3);
+    expect(crossed(lv)).toEqual([]);
+  });
+
+  it('a level in layers has no routes: its arrows are drawn as before', () => {
+    const lv = levelOf(mapOf({ elements: [{ id: 'a', kind: 'system', name: 'A' }, { id: 'b', kind: 'system', name: 'B' }, { id: 'c', kind: 'system', name: 'C' }], links: [{ from: 'a', to: 'c', label: 'x' }, { from: 'a', to: 'b', label: 'y' }] }), null, T);
+    expect(lv.edges.some(e => e.side || e.route)).toBe(false);
+  });
+
+  it('an arrow that stands for a next link and a passage tells the passage, with its note and whose turn it is', () => {
+    const m = mapOf({ elements: [{ id: 'f', kind: 'phase', name: 'F' }, { id: 'g', kind: 'phase', name: 'G' }, { id: 'f1', kind: 'step', name: 'F1', parent: 'f' }, { id: 'g1', kind: 'step', name: 'G1', parent: 'g' }],
+      links: [{ from: 'f', to: 'g', kind: 'next' }, { from: 'f1', to: 'g1', label: 'consegna', status: 'blocked', note: 'manca la firma', actor: 'user' }] });
+    expect(levelOf(m, null, T).edges).toEqual([expect.objectContaining({ from: 'f', to: 'g', label: 'consegna', status: 'blocked', note: 'manca la firma', actor: 'user', count: 2 })]);
+    expect(levelOf(m, null, T).edges[0]!.kind).toBeUndefined();
   });
 });
 
@@ -185,5 +249,21 @@ describe('saved and read back', () => {
     expect(m.layout).toBeUndefined(); expect(p1.layout).toBeUndefined(); expect(p1.par).toBeUndefined();
     expect(p1.proofs).toEqual([{ text: 'ok' }]); expect(p1.refs).toBeUndefined(); expect(m.links[0]!.kind).toBeUndefined();
     expect(p1.parent).toBe('prep');
+    // an arrow to the next step written by hand with a status: it waits for nobody and is never «da capire»
+    const hand = asMap(JSON.parse(JSON.stringify({ ...read, links: [{ id: 'n', from: 'p1', to: 'p2', kind: 'next', status: 'blocked', actor: 'user' }, { id: 'w', from: 'p2', to: 'p4', kind: 'next', status: 'work' }] })), 'x')!;
+    expect(hand.links.map(l => [l.id, l.kind, l.status, l.actor])).toEqual([['n', 'next', 'ok', undefined], ['w', 'next', 'ok', undefined]]);
+    expect(levelOf(hand, 'prep', T + 100 * 3600_000).edges.filter(e => e.ids.length).map(e => [e.status, e.stale])).toEqual([['ok', false], ['ok', false]]);
+  });
+
+  it('undo brings back the layout the map had', () => {
+    const maps = new ProjectMaps({ store: new ProjectMapStore(() => dir), chats: () => [], items: () => [], pending: () => [], emit: () => {}, stateFile: path.join(dir, 'state.json'), now: () => T, debounceMs: 10 });
+    const first = maps.save({ title: 'Migrazione', map: phased, by: 't', summary: 'in fila' });
+    expect(first.layout).toBeUndefined();
+    expect(maps.save({ project: first.project, map: { ...phased, layout: 'auto' }, by: 't', summary: 'a livelli' }).layout).toBe('auto');
+    expect(maps.undo(first.project, 't').layout).toBeUndefined();
+    // and the other way: the undo of «back to a line» is «in layers» again
+    maps.save({ project: first.project, map: { ...phased, layout: 'auto' }, by: 't', summary: 'a livelli' });
+    maps.save({ project: first.project, map: { ...phased, layout: 'linear' }, by: 't', summary: 'in fila' });
+    expect(maps.undo(first.project, 't').layout).toBe('auto');
   });
 });

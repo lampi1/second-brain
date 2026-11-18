@@ -18,7 +18,7 @@
 //   carries those steps as the element's works, read live from the plan (never copied into the map file).
 // - A project told as a sequence (issue #443, ADR 0322; the owner 2026-11-18: «fasi una dopo l'altra, e i passi dentro
 //   ogni fase uno dopo l'altro»): a `phase` holds its `step`s (parent), and a level made of phases or steps is drawn
-//   in a line, in the saved order (layoutOf, linearLevel), each box numbered; two boxes sit side by side only when the
+//   in a line, in the saved order (layoutOf, lineOf), each box numbered; two boxes sit side by side only when the
 //   second says `par`. A level can ask for the line or for the layered drawing itself (`layout`). A link of kind
 //   `next` is the arrow to the following step: plain, with no status of its own (never «da capire»). A piece also
 //   carries its proofs (what shows it is done: a text, a file, an address) and its refs (addresses worth opening).
@@ -289,7 +289,7 @@ export function checkMap(input: unknown, now: number, prev?: ProjectMap | null):
       ...(description ? { description } : {}), ...(details ? { details } : {}), ...(e.parent ? { parent: e.parent as string } : {}),
       status, ...(note ? { note } : {}), ...(e.actor ? { actor: e.actor as MapActor } : {}),
       evidence: evidenceOf(e.evidence, `${key}.evidence`), ...substanceOf(e, key, old),
-      ...(e.layout ? { layout: e.layout as MapLayout } : {}), ...(e.par === true ? { par: true } : {}),
+      ...(e.layout ?? old?.layout ? { layout: (e.layout ?? old?.layout) as MapLayout } : {}), ...(e.par === true ? { par: true } : {}),
       confirmedAt: e.status !== undefined ? now : old?.confirmedAt ?? now,
       ...(old?.plan ? { plan: old.plan } : {}), ...(old?.addedAt ? { addedAt: old.addedAt } : {}),
     };
@@ -440,14 +440,16 @@ export function applyEdit(map: ProjectMap, ops: unknown, now: number, plan?: str
   const place = (id: unknown, before: unknown, key: string) => {
     if (before === undefined || before === null || before === '') return;
     const at = els.findIndex(e => e.id === before);
-    if (at < 0 || before === id) throw new Error(`${key}.before: an element id of this map, not the piece itself`);
-    const from = els.findIndex(e => e.id === id), [el] = els.splice(from, 1);
+    const from = els.findIndex(e => e.id === id);
+    if (at < 0 || before === id || (els[at]!.parent ?? null) !== (els[from]!.parent ?? null)) throw new Error(`${key}.before: the id of another piece on the same level`);
+    const [el] = els.splice(from, 1);
     els.splice(els.findIndex(e => e.id === before), 0, el!);
   };
   ops.forEach((raw, i) => {
     const o = raw && typeof raw === 'object' ? raw as Raw : {};
     const key = `ops[${i}]`;
     if (!(EDIT_OPS as readonly string[]).includes(o.op as string)) throw new Error(`${key}.op: ${EDIT_OPS.join(' | ')}`);
+    if (o.par !== undefined && typeof o.par !== 'boolean') throw new Error(`${key}.par: true or false`);
     if (o.op === 'add') {
       const name = text(o.name, `${key}.name`, MAP_LIMITS.name)!;
       let id = isMapId(o.id) ? o.id : projectSlug(name);
@@ -534,7 +536,10 @@ export interface LevelEdge { id: string; from: string; to: string; label: string
   /** every link the arrow stands for (ADR 0307: a click on it tells each one in full) */
   ids: string[];
   /** next = an arrow to the following step (#443): every link behind it is one, or the line drew it itself (ids empty) */
-  kind?: 'next' }
+  kind?: 'next';
+  /** in a line: side = between two places next to each other, drawn side to side; route = the corners of an arrow
+   *  that goes further (a jump, a way back, the next row, an outside box), along the free lanes between the boxes */
+  side?: true; route?: [number, number][] }
 export interface Level { nodes: LevelNode[]; edges: LevelEdge[]; width: number; height: number;
   /** drawn as a line, in the saved order (#443) */
   linear?: boolean }
@@ -548,6 +553,9 @@ export const LINE_MAX = 6;
 const PAR_GAP = 18;
 /** the gap between two places of a line: room for the arrow to the next, wider than between two layered boxes */
 const LINE_GAP = 92;
+/** an arrow that goes further than the next place runs in the free lanes: this far from a box's side (LANE), leaving
+ *  and entering a box this far above or below its middle (TAP), where the arrow to the next place is not */
+const LANE = 20, TAP = 28;
 
 /** How a level is drawn (#443): what the map (top) or the piece that holds it asks for; else a line when every piece
  *  on it is a phase or a step, the layered drawing otherwise (every map drawn before phases existed). */
@@ -599,7 +607,7 @@ export function levelOf(map: Pick<ProjectMap, 'elements' | 'links' | 'layout'>, 
     if (old) {
       old.count++; old.ids.push(l.id);
       // an arrow that also stands for a passage with a status is told as that passage
-      if (old.kind === 'next' && l.kind !== 'next') { delete old.kind; old.label = l.label; old.status = st.status; old.stale = st.stale; }
+      if (old.kind === 'next' && l.kind !== 'next') { delete old.kind; Object.assign(old, { label: l.label, status: st.status, stale: st.stale }, l.note ? { note: l.note } : {}, l.actor ? { actor: l.actor } : {}); }
       else if (l.kind !== 'next' && rank(st.status) > rank(old.status)) { old.status = st.status; old.stale = st.stale; }
       continue;
     }
@@ -676,24 +684,55 @@ function lineOf(own: readonly MapElement[], ctx: readonly string[], edges: Map<s
     if (edges.has(`${a.id}>${b.id}`) || edges.has(`${b.id}>${a.id}`)) continue;
     edges.set(`${a.id}>${b.id}`, { id: `seq:${a.id}>${b.id}`, from: a.id, to: b.id, label: '', status: 'ok', stale: false, count: 1, ids: [], kind: 'next' });
   }
+  // where each piece sits: its place in the line (i) and its row (r)
+  const at = new Map<string, { i: number; r: number }>();
+  places.forEach((p, i) => p.forEach(e => at.set(e.id, { i, r: Math.floor(i / LINE_MAX) })));
   const rows = Array.from({ length: Math.ceil(places.length / LINE_MAX) }, (_, r) => places.slice(r * LINE_MAX, (r + 1) * LINE_MAX));
+  // an arrow over the first row or under the last one needs its lane inside the drawing
+  const far = [...edges.values()].flatMap(e => { const a = at.get(e.from), b = at.get(e.to); return a && b && a.r === b.r && Math.abs(a.i - b.i) > 1 ? [{ r: a.r, over: b.i > a.i }] : []; });
   const widest = Math.max(1, ...rows.map(r => r.length), Math.min(ctx.length, ROW_MAX));
   const width = BOX.pad * 2 + widest * BOX.w + (widest - 1) * LINE_GAP;
   const nodes: LevelNode[] = [];
-  let y = BOX.pad, n = 0;
+  const tops: number[] = [], bottoms: number[] = [];
+  let y = BOX.pad + (far.some(f => f.over && f.r === 0) ? LANE + TAP : 0), n = 0;
   rows.forEach((row, r) => {
     const tall = Math.max(...row.map(p => p.length));
     row.forEach((p, c) => {
       n++;
       p.forEach((e, k) => nodes.push({ id: e.id, x: BOX.pad + c * (BOX.w + LINE_GAP), y: y + k * (BOX.h + PAR_GAP), w: BOX.w, h: BOX.h, ctx: false, n, ...(p.length > 1 ? { par: true } : {}) }));
     });
-    y += tall * BOX.h + (tall - 1) * PAR_GAP + (r < rows.length - 1 ? BOX.gy : 0);
+    tops[r] = y;
+    bottoms[r] = y += tall * BOX.h + (tall - 1) * PAR_GAP;
+    if (r < rows.length - 1) y += BOX.gy;
   });
+  if (!ctx.length && far.some(f => !f.over && f.r === rows.length - 1)) y += LANE + TAP;
   for (let i = 0; i < ctx.length; i += ROW_MAX) {
     const row = ctx.slice(i, i + ROW_MAX);
     y += BOX.gy;
     row.forEach((id, c) => nodes.push({ id, x: BOX.pad + c * (BOX.w + BOX.gx) + Math.round((BOX.w - BOX.ctxW) / 2), y: y + Math.round((BOX.h - BOX.ctxH) / 2), w: BOX.ctxW, h: BOX.ctxH, ctx: true }));
     y += BOX.h;
+  }
+  // every arrow that is not to the place beside: out of a box by its right side, along the lanes, into the other by
+  // its left side (an outside box by its top), so it never runs behind a box
+  const box = new Map(nodes.map(b => [b.id, b]));
+  const lanes = new Map<string, number>();
+  const stagger = (key: string) => { const k = lanes.get(key) ?? 0; lanes.set(key, k + 1); return (k % 3) * 9; };
+  for (const e of edges.values()) {
+    const a = box.get(e.from), b = box.get(e.to), pa = at.get(e.from), pb = at.get(e.to);
+    if (!a || !b || (!pa && !pb) || (pa && pb && pa.i === pb.i)) continue;
+    if (pa && pb && pa.r === pb.r && Math.abs(pa.i - pb.i) === 1) { e.side = true; continue; }
+    // the lane it runs along (its height), and whether it leaves a and enters b above (-1) or below (+1) the middle
+    let lane: number, ua: number, ub: number;
+    if (pa && pb && pa.r === pb.r) { const over = pb.i > pa.i; ua = ub = over ? -1 : 1; lane = over ? tops[pa.r]! - LANE - stagger(`o${pa.r}`) : bottoms[pa.r]! + LANE + stagger(`u${pa.r}`); }
+    else if (pa && pb) { const down = pb.r > pa.r; ua = down ? 1 : -1; ub = -ua; lane = down ? bottoms[pa.r]! + BOX.gy / 2 : tops[pa.r]! - BOX.gy / 2; }
+    else { ua = ub = 1; lane = (pa ? b : a).y - LANE - 4; }
+    const out: [number, number][] = pa
+      ? [[a.x + a.w, a.y + a.h / 2 + ua * TAP], [a.x + a.w + LANE, a.y + a.h / 2 + ua * TAP], [a.x + a.w + LANE, lane]]
+      : [[a.x + a.w / 2, a.y], [a.x + a.w / 2, lane]];
+    const into: [number, number][] = pb
+      ? [[b.x - LANE, lane], [b.x - LANE, b.y + b.h / 2 + ub * TAP], [b.x, b.y + b.h / 2 + ub * TAP]]
+      : [[b.x + b.w / 2, lane], [b.x + b.w / 2, b.y]];
+    e.route = [...out, ...into];
   }
   return { nodes, edges: [...edges.values()], width, height: y + BOX.pad, linear: true };
 }
@@ -705,6 +744,9 @@ export function pathTo(map: Pick<ProjectMap, 'elements'>, id: string | null): Ma
   return out;
 }
 
+/** whether a piece is drawn together with the one before it: `par` on a line, never on the line's first piece */
+const goesWith = (map: Pick<ProjectMap, 'elements' | 'layout'>, e: MapElement): boolean => !!e.par && layoutOf(map, e.parent ?? null) === 'linear' && map.elements.find(x => (x.parent ?? null) === (e.parent ?? null)) !== e;
+
 /** The map as text, for the Orchestrator (app_project_map read) and the agents (project_map_read): one line per element
  *  with its status, then the links, then what waits for the user. */
 export function mapText(v: Pick<ProjectMapView, 'map' | 'agents' | 'changed'> & Partial<Pick<ProjectMapView, 'works' | 'plans'>>, now: number): string {
@@ -714,7 +756,7 @@ export function mapText(v: Pick<ProjectMapView, 'map' | 'agents' | 'changed'> & 
   const works = (id: string) => { const w = v.works?.[id]; return w?.length ? ` · lavori: ${w.map(x => `${MARK[x.state]} ${x.title}`).join('; ')}` : ''; };
   const plans = (v.plans ?? []).map(p => `- «${p.title}» (chatId ${p.chatId}): ${p.phase === 'proposed' ? 'aspetta «Approva e parti»' : p.phase === 'revising' ? 'in revisione' : p.phase === 'done' ? 'finito' : 'in corso'}, ${p.done}/${p.steps} passi`);
   const who = (id: string) => v.agents.filter(a => a.elements.includes(id)).map(a => `${a.title} (${a.mark})`).join(', ');
-  const row = (e: MapElement, depth: number) => `${'  '.repeat(depth)}- ${e.id} · ${e.kind} · ${e.name}${e.par ? ' (insieme al precedente)' : ''} — ${st(e, e.id)}${e.note ? `: ${e.note}` : ''}${e.actor === 'user' && e.status === 'blocked' ? ' [tocca all\'utente]' : ''}${who(e.id) ? ` · agenti: ${who(e.id)}` : ''}${works(e.id)}${map.elements.some(x => x.parent === e.id) ? line(e.id) : ''}`;
+  const row = (e: MapElement, depth: number) => `${'  '.repeat(depth)}- ${e.id} · ${e.kind} · ${e.name}${goesWith(map, e) ? ' (insieme al precedente)' : ''} — ${st(e, e.id)}${e.note ? `: ${e.note}` : ''}${e.actor === 'user' && e.status === 'blocked' ? ' [tocca all\'utente]' : ''}${who(e.id) ? ` · agenti: ${who(e.id)}` : ''}${works(e.id)}${map.elements.some(x => x.parent === e.id) ? line(e.id) : ''}`;
   const tree = (parent: string | undefined, depth: number): string[] => map.elements.filter(e => e.parent === parent).flatMap(e => [row(e, depth), ...tree(e.id, depth + 1)]);
   const links = map.links.map(l => (l.kind === 'next' ? `- ${l.id}: ${l.from} → ${l.to} (passo successivo${l.label ? `: «${l.label}»` : ''})${l.note ? `: ${l.note}` : ''}`
     : `- ${l.id}: ${l.from} → ${l.to} «${l.label}» — ${st(l, l.id)}${l.note ? `: ${l.note}` : ''}`));
@@ -741,7 +783,7 @@ export function elementText(map: Pick<ProjectMap, 'elements' | 'links' | 'title'
   const p = passagesOf(map, id), out = p.out.map(l => link(l, l.to, '→')), into = p.into.map(l => link(l, l.from, '←'));
   // the steps of a line are told in order, each with its status; the parts of a system as before
   const inLine = layoutOf(map, id) === 'linear';
-  const parts = map.elements.filter(x => x.parent === id).map(x => `- ${x.id} · ${x.name}${inLine ? `${x.par ? ' (insieme al precedente)' : ''} — ${st(x, x.id)}` : ''}${x.description ? `: ${x.description}` : ''}`);
+  const parts = map.elements.filter(x => x.parent === id).map(x => `- ${x.id} · ${x.name}${inLine ? `${goesWith(map, x) ? ' (insieme al precedente)' : ''} — ${st(x, x.id)}` : ''}${x.description ? `: ${x.description}` : ''}`);
   const list = (head: string, xs: readonly string[] | undefined) => (xs?.length ? [head, ...xs.map(x => `- ${x}`)] : []);
   const inner = descendantsOf(map, id);
   return [`«${e.name}» (${e.id}, ${e.kind}${e.parent ? `, in ${name(e.parent)}` : ''}) — ${st(e, e.id)}${e.note ? `: ${e.note}` : ''}`,

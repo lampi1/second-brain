@@ -119,7 +119,9 @@ export function seedDemoMap(brainRoot: string, maps: ProjectMaps, now: number): 
       stp('controlli', 'migrazione', 'Controlli', { status: 'planned', description: 'Conteggi e campioni, tabella per tabella' }),
       ph('verifica', 'Verifica', { status: 'planned', description: 'Una settimana con i due sistemi affiancati' }),
     ],
-    links: [{ id: 'ripristino--via-libera', from: 'ripristino', to: 'via-libera', label: 'solo se riesce', kind: 'next', status: 'ok', confirmedAt: done }] });
+    // one arrow to the next step with a condition, and one way back that goes under the line
+    links: [{ id: 'ripristino--via-libera', from: 'ripristino', to: 'via-libera', label: 'solo se riesce', kind: 'next', status: 'ok', confirmedAt: done },
+      { id: 'verifica--preparazione', from: 'verifica', to: 'preparazione', label: 'se un controllo fallisce', status: 'planned', confirmedAt: done }] });
   bind(maps);
 }
 

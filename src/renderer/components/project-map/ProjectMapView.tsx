@@ -52,23 +52,36 @@ const DONE_MARKS = new Set(['done', 'idle']);
 const since = (ts: number, now: number) => { const a = ago(ts, now); return a === t('appText.format.now') ? a : t('pm.ago', { at: a }); };
 
 /** Where an arrow leaves a box and where it enters the next: bottom → top between rows, side → side on one row; drawn
- *  as a curve that leaves and enters straight (c1, c2 its control points). */
-interface Ends { x1: number; y1: number; x2: number; y2: number; c1: [number, number]; c2: [number, number] }
-function ends(a: LevelNode, b: LevelNode, line = false): Ends {
+ *  as a curve that leaves and enters straight (c1, c2 its control points). In a line (#443) the arrow to the place
+ *  beside always runs side to side (`side`), and one that goes further follows the corners the layout gives (`route`),
+ *  along the lanes between the boxes: it never runs behind a box. */
+interface Ends { x1: number; y1: number; x2: number; y2: number; c1: [number, number]; c2: [number, number]; route?: [number, number][] }
+function ends(a: LevelNode, b: LevelNode, e?: Pick<LevelEdge, 'side' | 'route'>): Ends {
   const ax = a.x + a.w / 2, ay = a.y + a.h / 2, bx = b.x + b.w / 2, by = b.y + b.h / 2;
-  // in a line (#443) an arrow to a box further right always runs side to side, also to one that sits lower or higher
-  // (two steps together): it never skims under a box to reach the next
-  if (line && b.x >= a.x + a.w) { const mx = (a.x + a.w + b.x) / 2; return { x1: a.x + a.w, y1: ay, x2: b.x, y2: by, c1: [mx, ay], c2: [mx, by] }; }
-  if (Math.abs(ay - by) < 20) {
+  if (e?.route && e.route.length > 1) { const [x1, y1] = e.route[0]!, [x2, y2] = e.route[e.route.length - 1]!; return { x1, y1, x2, y2, c1: [x1, y1], c2: [x2, y2], route: e.route }; }
+  if (e?.side || Math.abs(ay - by) < 20) {
     const [x1, x2] = ax < bx ? [a.x + a.w, b.x] : [a.x, b.x + b.w], mx = (x1 + x2) / 2;
     return { x1, y1: ay, x2, y2: by, c1: [mx, ay], c2: [mx, by] };
   }
   const [y1, y2] = ay < by ? [a.y + a.h, b.y] : [a.y, b.y + b.h], my = (y1 + y2) / 2;
   return { x1: ax, y1, x2: bx, y2, c1: [ax, my], c2: [bx, my] };
 }
-const curve = (p: Ends) => `M${p.x1},${p.y1} C${p.c1[0]},${p.c1[1]} ${p.c2[0]},${p.c2[1]} ${p.x2},${p.y2}`;
+/** the corner of a route, rounded: how far from it the straight part stops */
+const BEND = 10;
+function curve(p: Ends): string {
+  if (!p.route) return `M${p.x1},${p.y1} C${p.c1[0]},${p.c1[1]} ${p.c2[0]},${p.c2[1]} ${p.x2},${p.y2}`;
+  const r = p.route, toward = (from: [number, number], to: [number, number]) => { const len = Math.hypot(to[0] - from[0], to[1] - from[1]), k = len ? Math.min(BEND, len / 2) / len : 0; return `${from[0] + (to[0] - from[0]) * k},${from[1] + (to[1] - from[1]) * k}`; };
+  return `M${r[0]![0]},${r[0]![1]}${r.slice(1, -1).map((c, i) => ` L${toward(c, r[i]!)} Q${c[0]},${c[1]} ${toward(c, r[i + 2]!)}`).join('')} L${p.x2},${p.y2}`;
+}
 /** the point at f (0..1) along the curve */
 function along(p: Ends, f: number): { left: number; top: number } {
+  if (p.route) {
+    const legs = p.route.slice(1).map((c, i) => Math.hypot(c[0] - p.route![i]![0], c[1] - p.route![i]![1]));
+    let d = f * legs.reduce((s, l) => s + l, 0), i = 0;
+    while (i < legs.length - 1 && d > legs[i]!) d -= legs[i++]!;
+    const from = p.route[i]!, to = p.route[i + 1]!, k = legs[i] ? d / legs[i]! : 0;
+    return { left: from[0] + (to[0] - from[0]) * k, top: from[1] + (to[1] - from[1]) * k };
+  }
   const g = 1 - f, k = [g * g * g, 3 * g * g * f, 3 * g * f * f, f * f * f] as const;
   return { left: k[0] * p.x1 + k[1] * p.c1[0] + k[2] * p.c2[0] + k[3] * p.x2, top: k[0] * p.y1 + k[1] * p.c1[1] + k[2] * p.c2[1] + k[3] * p.y2 };
 }
@@ -140,7 +153,7 @@ function placeLabels(lv: Level): { e: LevelEdge; left: number; top: number }[] {
     const a = lv.nodes.find(n => n.id === e.from), b = lv.nodes.find(n => n.id === e.to);
     // the arrow to the following step with nothing written on it says «then» by itself (#443)
     if (!a || !b || !e.label) return [];
-    const p = ends(a, b, lv.linear);
+    const p = ends(a, b, e);
     const da = deg.get(e.from) ?? 1, db = deg.get(e.to) ?? 1, want = Math.min(0.7, Math.max(0.3, da / (da + db)));
     const w = Math.min(220, e.label.length * 6.6 + 30);
     let best = { left: 0, top: 0, cost: Infinity };
@@ -182,9 +195,10 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
     if (e.button !== 0) return;
     e.preventDefault();
     const x0 = e.clientX, w0 = side.current?.parentElement?.getBoundingClientRect().width ?? sideW, room = sideRoom();
-    let last = w0;
+    // the width is kept only once the edge has moved: a click on it changes nothing
+    let last: number | null = null;
     const move = (m: PointerEvent) => { last = clampSide(w0 + x0 - m.clientX, room); setSideW(last); };
-    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up); body.current?.classList.remove('resizing'); storeSide(last); };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up); body.current?.classList.remove('resizing'); if (last !== null) storeSide(last); };
     body.current?.classList.add('resizing');
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
   };
@@ -563,7 +577,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
                 const a = lv.nodes.find(n => n.id === e.from), b = lv.nodes.find(n => n.id === e.to);
                 if (!a || !b) return null;
                 // the arrow to the following step: plain, whatever the statuses around it (#443)
-                const p = ends(a, b, lv.linear), s = e.kind === 'next' ? 'next' : shown(e);
+                const p = ends(a, b, e), s = e.kind === 'next' ? 'next' : shown(e);
                 return <g key={`${e.from}>${e.to}`} data-testid={e.kind === 'next' ? `pm-next-${e.from}-${e.to}` : undefined}>
                   <path d={curve(p)} className={`pm-edge s-${s}`} markerEnd={`url(#pm-arrow-${s})`} />
                   {/* a line under work carries a mark that travels along it */}

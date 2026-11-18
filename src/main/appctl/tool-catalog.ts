@@ -72,7 +72,7 @@ export const TOOL_CATALOG: Readonly<Record<string, ToolInfo>> = {
   app_news_source: t('orchestrator', 'Try a link at zero tokens, then add, remove, pause or resume a source of an edition.'),
   app_news_refresh: t('orchestrator', 'Refresh one edition or all now: reads the sources, one AI pass per edition, returns what it brought and its cost.'),
   app_schedule: t('orchestrator', 'The user\'s scheduled routines: list, create (daily at a time, every N minutes, once), change, pause, resume, delete or run one now.'),
-  app_project_map: t('orchestrator', 'The user\'s project maps: list, read as text, open on screen, the brief for a Scout that draws one, the user\'s corrections, piece-by-piece edits from the talk with the user and undo (ADR 0276); a brief with a question has a Scout answer it as a path on the map (ADR 0316).'),
+  app_project_map: t('orchestrator', 'The user\'s project maps: list, read as text, open on screen, the brief for a Scout that draws one, the user\'s corrections, piece-by-piece edits from the talk with the user (also a piece\'s place in the order, «together with the one before», a level as a line or in layers, an arrow to the next step: ADR 0322) and undo (ADR 0276); a brief with a question has a Scout answer it as a path on the map (ADR 0316).'),
   app_agents_recap: t('orchestrator', 'The recap: one short line per agent that works, waits or finished; with detail, one block per agent with its last steps.'),
   app_child_output: t('orchestrator', 'The latest report of a chat in its tree, delegates included: summary and criteria; full: the output, max 4,000 chars.'),
   agent_metrics: t('orchestrator', 'Success rate, cost, time and corrections per role and version (numbers only).'),

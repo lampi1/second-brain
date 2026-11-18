@@ -166,7 +166,8 @@ export class ProjectMaps {
     // the pieces come back as they were drawn; the ones still there keep the status they have now
     const live = new Map(cur.elements.map(e => [e.id, e]));
     const elements = v === cur.version ? before.elements : before.elements.map(e => { const n = live.get(e.id); return n ? { ...e, status: n.status, confirmedAt: n.confirmedAt, ...(n.note ? { note: n.note } : {}) } : e; });
-    const map: ProjectMap = { ...cur, elements, links: before.links, corrections: before.corrections, paths: before.paths, version: cur.version + 1, updatedAt: this.now(), by, summary: `annullato: ${last!.summary}`.slice(0, MAP_LIMITS.summary) };
+    const { layout: _now, ...rest } = cur;
+    const map: ProjectMap = { ...rest, ...(before.layout ? { layout: before.layout } : {}), elements, links: before.links, corrections: before.corrections, paths: before.paths, version: cur.version + 1, updatedAt: this.now(), by, summary: `annullato: ${last!.summary}`.slice(0, MAP_LIMITS.summary) };
     this.d.store.save(map);
     const ids = new Set(elements.map(e => e.id));
     for (const f of Object.values(this.state.focus)) if (f.project === project) f.elements = f.elements.filter(id => ids.has(id));

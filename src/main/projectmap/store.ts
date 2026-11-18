@@ -53,7 +53,9 @@ export function asMap(v: unknown, project: string): ProjectMap | null {
   for (const e of drop) delete (e as { parent?: string }).parent; // judged on the file as read, so a loop drops every parent in it
   const ids = new Set(elements.map(e => e.id));
   const links = (Array.isArray(v.links) ? v.links : []).filter(l => obj(l) && str(l.id) && str(l.from) && str(l.to) && ids.has(l.from) && ids.has(l.to) && str(l.status))
-    .map(l => ({ ...(l as Record<string, unknown>), kind: (l as Record<string, unknown>).kind === 'next' ? 'next' : undefined, label: str((l as Record<string, unknown>).label) ? (l as Record<string, unknown>).label : '', confirmedAt: num((l as Record<string, unknown>).confirmedAt) ? (l as Record<string, unknown>).confirmedAt : 0 })) as unknown as ProjectMap['links'];
+    .map(l => l as Record<string, unknown>)
+    // an arrow to the next step has no status of its own (#443): a file written by hand cannot make it wait for anyone
+    .map(l => ({ ...l, label: str(l.label) ? l.label : '', confirmedAt: num(l.confirmedAt) ? l.confirmedAt : 0, ...(l.kind === 'next' ? { kind: 'next', status: 'ok', actor: undefined } : { kind: undefined }) })) as unknown as ProjectMap['links'];
   return {
     ...(v as unknown as ProjectMap), project, title: str(v.title) && v.title ? v.title : project,
     updatedAt: num(v.updatedAt) ? v.updatedAt : 0, by: str(v.by) ? v.by : '', summary: str(v.summary) ? v.summary : '',
