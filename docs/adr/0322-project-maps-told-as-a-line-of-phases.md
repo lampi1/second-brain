@@ -32,7 +32,9 @@ status, so an arrow nobody confirmed reads «da capire», and nothing says «thi
    back, the passage to the next row, an arrow to or from an outside box) follows corners the layout computes
    (`LevelEdge.route`): out of a box by its right side, along the free lanes between the columns and between the
    rows, into the other box by its left side (an outside box by its top). A jump ahead runs over its row, a way back
-   under it; the drawing grows by the lane when the first row or the last one needs it.
+   under it; the drawing grows by the lane when the first row or the last one needs it. The outside boxes sit on the
+   line's own columns, so the lanes stay free down through their rows; of three pieces together, an arrow from the
+   first to the third goes round the second. The layout lives in `src/shared/project-map-line.ts` (`lineOf`).
 4. **The arrow to the following step.** A link of kind `next`: its label may be left out, it has no status of its own
    (saved as `ok`, never stale, a status update leaves it alone, and a map file written by hand with another status
    or a «waits for the user» mark on it is read as `ok`) and it is drawn plain, in no status colour. With a
@@ -53,7 +55,7 @@ status, so an arrow nobody confirmed reads «da capire», and nothing says «thi
    `app_project_map edit` takes `par`, `layout`, `before` (the piece it comes before: its place in the order) and
    `next` on a link, and a piece added inside a phase is a step; `before` names a piece of the same level. The map's
    text says which levels are a line and lists their pieces in order. A redraw that leaves an element's `layout` out
-   keeps it, as it keeps the map's; `par` is sent again with the order. «Annulla» brings back the map's layout too.
+   keeps it, as it keeps the map's (the edit op with `layout: ""` takes it away); `par` is sent again with the order. «Annulla» brings back the map's layout too.
 
 ## Consequences
 
