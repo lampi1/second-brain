@@ -171,7 +171,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0172](0172-engines-below-normal-priority.md) Engines run below normal CPU priority; stalls say whether the app was working or waiting — accepted
 - [0173](0173-working-line-shows-real-activity.md) The working line shows what the chat really does — accepted
 - [0174](0174-classifiers-calibrated-under-approval.md) Classifiers learn from confirmed outcomes, under the user's approval — accepted
-- [0175](0175-shared-routine-runtime-package.md) One routine runtime for the app and the terminal: `packages/routine-runtime` — accepted, partly superseded by 0179; amended by 0323
+- [0175](0175-shared-routine-runtime-package.md) One routine runtime for the app and the terminal: `packages/routine-runtime` — accepted, partly superseded by 0179; amended by 0324
 - [0176](0176-routine-package-embedded-secrets.md) Routine packages carry their secrets in clear text (exception to AGENTS.md rule 2) — accepted, partly superseded by 0179
 - [0177](0177-bounded-routine-polling.md) Bound routine polling to the records it needs — accepted, partly superseded by 0179
 - [0178](0178-mcp-form-and-report-compatibility.md) Accept supported MCP forms and recover harmless report shape errors — accepted
@@ -314,11 +314,12 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0316](0316-maps-in-depth-and-a-readable-viewer.md) Maps in depth, key files in the viewer, and code read as in an editor — accepted; amended by 0322
 - [0317](0317-link-a-site-to-a-credential-with-one-click.md) Link a sign-in page's site to a test account with one click — accepted
 - [0318](0318-a-chat-stops-showing-work-when-its-reply-is-complete.md) A chat stops showing work when its reply is complete — accepted
-- [0319](0319-artifacts-in-memoria.md) Artifacts in Memoria: every file the chats produce, indexed where it is — accepted
+- [0319](0319-artifacts-in-memoria.md) Artifacts in Memoria: every file the chats produce, indexed where it is — accepted; amended by 0323
 - [0320](0320-maintenance-fixes-one-line-of-an-always-loaded-file.md) The maintenance fixes one line of an always-loaded file — accepted
 - [0321](0321-a-routine-step-can-leave-the-login-page-unsigned.md) A routine step can leave the login page as it is (`relogin: false`); the routine runtime of feat/routine-park is on main — accepted
 - [0322](0322-project-maps-told-as-a-line-of-phases.md) Project maps told as a line of phases and steps, with a richer and wider panel — accepted
-- [0323](0323-retrigger-tags-and-entries-for-routine-packages.md) A routine package can run a work item again: retrigger tags and entries — accepted
+- [0323](0323-artifacts-light-paged-and-cleaned.md) Artifacts: twenty at a time, light pictures, and a daily cleanup of old screenshots — accepted
+- [0324](0324-retrigger-tags-and-entries-for-routine-packages.md) A routine package can run a work item again: retrigger tags and entries — accepted
 
 ## Replaced
 

@@ -4,7 +4,7 @@
 
 export type RunEvent =
   | { type: 'run-start'; at: number; runId: string; routine: string; total: number; workItem?: number;
-      /** a package with entries or retrigger tags (ADR 0323): the entry taken, its first step, the tags that started
+      /** a package with entries or retrigger tags (ADR 0324): the entry taken, its first step, the tags that started
        *  the item again and the run it follows */
       entry?: string; startStep?: string; retriggerTags?: string[]; previousRunId?: string }
   | { type: 'run-resume'; at: number; attempt: number }

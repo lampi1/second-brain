@@ -91,7 +91,7 @@ export interface StartRequest {
   /** the package entry to take (routine.entries by name, or "default"); absent = the one `tags` choose */
   entry?: string;
   /** the work item's tags now (`startFor` reads them): they choose the entry, and the package's retrigger tags among
-   *  them are taken off the item by this run (ADR 0323) */
+   *  them are taken off the item by this run (ADR 0324) */
   tags?: string[];
   /** the run of the same work item this one follows (the trigger's restart); absent = its newest run in this runs root */
   previousRunId?: string;
@@ -128,7 +128,7 @@ const newRunId = (now: number): string => {
 };
 
 /** Fills {{workItem}}, {{work-item-id}}, {{work-item-url}}, {{input.<name>}} and {{<name>}} for the run's inputs.
- *  `tagged` (a package with entries or retrigger tags, ADR 0323): {{entry}} and {{previousRun}} are "default" and empty
+ *  `tagged` (a package with entries or retrigger tags, ADR 0324): {{entry}} and {{previousRun}} are "default" and empty
  *  when the run has none; any other package keeps them as written, as before. */
 export function fillPlaceholders(text: string, run: Pick<RunRecord, 'inputs' | 'workItem'>, organization?: string, tagged = false): string {
   const id = run.workItem !== undefined ? String(run.workItem) : '';
@@ -268,7 +268,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
   function start(request: StartRequest = {}): RunHandle {
     const inputs = inputsFor(request), now = clock.now(), runId = newRunId(now);
     const workItem = workItemOf(inputs, request.workItem);
-    // the entry (ADR 0323): the one asked by name, else the one the work item's tags choose; none = the first step
+    // the entry (ADR 0324): the one asked by name, else the one the work item's tags choose; none = the first step
     const tagged = usesEntries(routine);
     let entry: RoutineEntry | undefined;
     if (request.entry !== undefined && request.entry !== DEFAULT_ENTRY) {
@@ -314,7 +314,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
   /** The tags of work items now (one read per 200 ids); an item DevOps does not return is absent. */
   const itemTags = (ids: number[]): Promise<Map<number, string[]>> => organization && ids.length ? devops().tags(organization, ids) : Promise.resolve(new Map<number, string[]>());
 
-  /** Starts a run the way its work item asks (ADR 0323). A package with entries or retrigger tags reads the item's
+  /** Starts a run the way its work item asks (ADR 0324). A package with entries or retrigger tags reads the item's
    *  tags first (unless the request carries them): they choose the entry, and a retrigger tag on the item is taken by
    *  this run. A work item that cannot be read starts nothing. Any other package: exactly `start`. */
   async function startFor(request: StartRequest = {}): Promise<RunHandle> {

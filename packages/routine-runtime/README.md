@@ -122,4 +122,4 @@ The screenshot is at `steps/01-air-login/evidence/air-home.png`. The work item i
 
 - Build: `npm run build` creates `dist/routine.mjs` (the command) and `dist/routine-mcp.mjs` (the runtime's MCP
   servers: `routine-browser`, `routine-devops`, `routine-testdb`).
-- Tests are in the app repo's `test/unit/routine-runtime/`. Decisions are in ADR 0175, 0176 and 0323.
+- Tests are in the app repo's `test/unit/routine-runtime/`. Decisions are in ADR 0175, 0176 and 0324.

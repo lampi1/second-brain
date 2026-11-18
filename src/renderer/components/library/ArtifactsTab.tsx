@@ -8,13 +8,15 @@
 // (ArtifactBar.tsx) links the source chat, the versions and related artifacts. A missing file stays, marked. Data:
 // lib/library.ts ('library:list', reloaded on 'library:changed'); the filters: shared/library.ts filterArtifacts.
 // Rendered by brain-model/MemoryPage.tsx for the 'artifact' tab. Styles: styles/library.css (lib-*).
+// ADR 0323 (the owner 2026-11-18: «deve essere più essenziale … se la apro mi impalla l'app»): the gallery draws the
+// newest LIBRARY_PAGE and «Mostra altri» adds as many again; a card's star keeps it from the cleanup of old pictures.
 import { useDeferredValue, useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { ARTIFACT_KINDS, NO_FILTER, filterArtifacts, type Artifact, type ArtifactFilter, type ArtifactKind, type ArtifactRange, type ArtifactSort } from '@shared/library';
+import { ARTIFACT_KINDS, CLEANUP_DAYS, LIBRARY_PAGE, NO_FILTER, filterArtifacts, type Artifact, type ArtifactFilter, type ArtifactKind, type ArtifactRange, type ArtifactSort } from '@shared/library';
 import { openChatRef } from '../../actions';
 import { locale, t } from '../../i18n';
-import { badgeOf, openedLibrary, refreshLibrary, useLibrary } from '../../lib/library';
+import { badgeOf, openedLibrary, pinArtifact, refreshLibrary, useLibrary } from '../../lib/library';
 import { now as clockNow } from '../../lib/clock';
-import { IconChat, IconGrid, IconList, IconRefresh, IconSearch, IconX } from '../Icons';
+import { IconChat, IconGrid, IconList, IconRefresh, IconSearch, IconStar, IconX } from '../Icons';
 import { HubIntro } from '../brain-model/HubIntro';
 import { ArtifactThumb } from './ArtifactThumb';
 import { openArtifact } from './open';
@@ -67,6 +69,9 @@ function Card({ a, nowMs, i, list }: { a: Artifact; nowMs: number; i: number; li
       </span>
     </button>
     <footer className="lib-card-foot">
+      <button type="button" className="lib-pin" aria-pressed={!!a.pinned} onClick={() => void pinArtifact(a.id, !a.pinned)}
+        title={a.pinned ? t('lib.unpinTip') : t('lib.pinTip', { days: CLEANUP_DAYS })} aria-label={a.pinned ? t('lib.unpin') : t('lib.pin')} data-testid="lib-card-pin">
+        <IconStar size={12} filled={!!a.pinned} /></button>
       <span className="lib-area" title={t('lib.area')}>{a.area}</span>
       {a.chatId ? <button type="button" className="lib-chat" onClick={() => openChatRef(a.chatId!)} title={t('lib.openChat')} data-testid="lib-card-chat"><IconChat size={12} /><span>{chat}</span></button>
         : <span className="lib-chat lib-chat-none">{chat}</span>}
@@ -102,13 +107,23 @@ export function ArtifactsTab() {
     for (const a of all) if (a.chatId && a.chatTitle && !m.has(a.chatId)) m.set(a.chatId, a.chatTitle);
     return [...m].sort((x, y) => x[1].localeCompare(y[1]));
   }, [all]);
-  const kindCount = (k: ArtifactKind | 'all') => (k === 'all' ? all.length : all.filter(a => a.kind === k).length);
+  const kindCounts = useMemo(() => {
+    const m = new Map<ArtifactKind | 'all', number>([['all', all.length]]);
+    for (const a of all) m.set(a.kind, (m.get(a.kind) ?? 0) + 1);
+    return m;
+  }, [all]);
+  const kindCount = (k: ArtifactKind | 'all') => kindCounts.get(k) ?? 0;
+  // a page at a time: other filters start again from the first page
+  const [limit, setLimit] = useState(LIBRARY_PAGE);
+  useEffect(() => { setLimit(LIBRARY_PAGE); }, [f.kind, f.area, f.chat, f.range, f.sort, q]);
+  const page = useMemo(() => shown.slice(0, limit), [shown, limit]);
+  const left = shown.length - page.length;
   const groups = useMemo(() => {
-    if (f.sort !== 'newest' && f.sort !== 'oldest') return [{ key: 'all', label: '', items: shown }];
+    if (f.sort !== 'newest' && f.sort !== 'oldest') return [{ key: 'all', label: '', items: page }];
     const out: { key: string; label: string; items: Artifact[] }[] = [];
-    for (const a of shown) { const g = dayGroup(a.at, nowMs); const last = out[out.length - 1]; if (last?.key === g.key) last.items.push(a); else out.push({ ...g, items: [a] }); }
+    for (const a of page) { const g = dayGroup(a.at, nowMs); const last = out[out.length - 1]; if (last?.key === g.key) last.items.push(a); else out.push({ ...g, items: [a] }); }
     return out;
-  }, [shown, f.sort, nowMs]);
+  }, [page, f.sort, nowMs]);
   const filtered = f.q || f.kind !== 'all' || f.area !== 'all' || f.chat !== 'all' || f.range !== 'all';
   const set = <K extends keyof ArtifactFilter>(k: K, v: ArtifactFilter[K]) => setF(x => ({ ...x, [k]: v }));
   const [busy, setBusy] = useState(false);
@@ -151,16 +166,19 @@ export function ArtifactsTab() {
       <span data-testid="lib-count">{t('lib.count', { shown: shown.length, n: all.length })}</span>
       {filtered && <button type="button" className="sl-link" onClick={() => setF({ ...NO_FILTER, sort: f.sort })} data-testid="lib-reset">{t('lib.reset')}</button>}
       {list.dropped > 0 && <span>· {t('lib.dropped', { n: list.dropped })}</span>}
+      {list.cleaned > 0 && <span title={t('lib.cleanedTip', { days: CLEANUP_DAYS })} data-testid="lib-cleaned">· {t('lib.cleaned', { n: list.cleaned, days: CLEANUP_DAYS })}</span>}
       {!list.backfilled && loaded && <span className="lib-note">· {t('lib.backfilling')}</span>}
     </div>
     {!loaded ? <div className="lib-grid" aria-busy="true">{Array.from({ length: 6 }, (_, k) => <div key={k} className="lib-card lib-skel" />)}</div>
       : !all.length ? <p className="lib-empty" data-testid="lib-empty">{t('lib.empty')}</p>
         : !shown.length ? <p className="lib-empty" data-testid="lib-empty">{t('lib.emptyFilter')}</p>
           : groups.map(g => <section key={g.key} className="lib-group" aria-label={g.label || undefined}>
-            {g.label && <h3 className="lib-day"><span>{g.label}</span><span className="sl-n">{g.items.length}</span></h3>}
+            {g.label && <h3 className="lib-day"><span>{g.label}</span></h3>}
             <div className={view === 'list' ? 'lib-rows' : 'lib-grid'} data-testid="lib-grid">
               {g.items.map(a => <Card key={a.id} a={a} nowMs={nowMs} i={i++} list={view === 'list'} />)}
             </div>
           </section>)}
+    {loaded && left > 0 && <button type="button" className="btn btn-ghost lib-more" onClick={() => setLimit(n => n + LIBRARY_PAGE)} data-testid="lib-more">
+      {t('lib.more', { n: Math.min(LIBRARY_PAGE, left), left })}</button>}
   </div>;
 }

@@ -10,7 +10,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   starts an item it already handled again, once per tag, when its last run is over; the new run takes the tag off the
   work item and logs it. `routine.entries` name where a run starts by the work item's tags (`startStep`), for `watch`
   and `run` (`--entry`); the steps get the entry's name and the folder of the previous run. Packages without the two
-  options run as before (ADR 0323).
+  options run as before (ADR 0324).
 - Routines: a browser step can see the login page. `relogin: false` on `navigate`, `history`, `click`, `press` or
   `click_at` makes that call never sign in: a page that lands on a login page is left there and the reply says so
   (a sign-out in one tab, a reload in another). The next navigation or action without it signs in again (ADR 0321,
@@ -104,6 +104,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   OpenCode, OpenRouter included; the chat's model and plan mode go through OpenCode's session options (ADR 0216).
 
 ### Changed
+- Memory › Artifacts is lighter: it shows the newest twenty and «Mostra altri» loads twenty more, the card pictures
+  are smaller, and a daily cleanup takes out pictures older than 30 days that were not kept with the card's star (the
+  app's own screenshots in `<userData>/evidence` are deleted; pictures in the brain or a project stay on disk and are
+  only no longer shown). Opening the tab no longer freezes the app with months of screenshots (ADR 0323).
 - One review chat per piece of work: once a Sentinel or a Judge reported on a work, a second review chat for it is
   refused and names the first; after a fix that same chat reviews only what changed (`app_assign_task`,
   `agent_assign_task`). `freshReview` opens a fresh one when the user asks or a part is not covered (#387, ADR 0309).

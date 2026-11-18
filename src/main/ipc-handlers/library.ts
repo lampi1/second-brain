@@ -10,5 +10,6 @@ export function libraryHandlers(library: LibraryService): HandlersOf<'library'> 
     'library:refresh': () => library.refresh(),
     'library:thumb': a => library.thumb(String(a?.id ?? '').slice(0, 64)),
     'library:open': a => (typeof a?.path === 'string' && a.path.length <= 4096 ? library.open(a.path) : { ok: false, error: 'not an artifact' }),
+    'library:pin': a => library.pin(String(a?.id ?? '').slice(0, 64), a?.pinned === true),
   };
 }

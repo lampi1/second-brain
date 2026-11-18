@@ -1,4 +1,4 @@
-// Retrigger tags and entries (ADR 0323): `trigger.retriggerTags` starts an item again after its run ended, once per
+// Retrigger tags and entries (ADR 0324): `trigger.retriggerTags` starts an item again after its run ended, once per
 // tag (the new run takes the tag off the work item through the write adapter, logged in its events and report), and
 // `routine.entries` choose the step a run starts from by the work item's tags. The dedup still holds without the tag,
 // an active run blocks a restart, a tag whose removal failed never starts a second run, and a package without the two

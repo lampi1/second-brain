@@ -64,6 +64,14 @@ test('Memoria → Artifact: gallery by day, filters, versions, missing file, vie
     await page.getByTestId('lib-kind-pdf').click();
     await expect(page.locator('[data-testid="lib-card"]')).toHaveCount(1);
     await expect(page.locator('[data-testid="lib-card"]')).toContainText('Audit sicurezza');
+    // the star keeps it from the cleanup (ADR 0323); a second click lets it go again
+    const pin = page.locator('[data-testid="lib-card"]').getByTestId('lib-card-pin');
+    await pin.click();
+    await expect(pin).toHaveAttribute('aria-pressed', 'true');
+    await pin.click();
+    await expect(pin).toHaveAttribute('aria-pressed', 'false');
+    // under twenty artifacts there is no next page
+    await expect(page.getByTestId('lib-more')).toHaveCount(0);
     await page.getByTestId('lib-reset').click();
     // the list view
     await page.getByTestId('lib-view-list').click();

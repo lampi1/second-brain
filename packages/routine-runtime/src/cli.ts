@@ -2,7 +2,7 @@
 // package (folder, routine.json or the app's .zip export), `resume` continues a run folder from the step that did not
 // finish, `watch` polls the package's DevOps trigger and starts one run per new work item (a restart never starts an
 // item twice: the dedup lives in the runs root's trigger.json; an ended item starts again only on a retrigger tag, ADR
-// 0323). `run` and `watch` take the package entry the work item's tags choose. Every start goes through preflight first. Progress is
+// 0324). `run` and `watch` take the package entry the work item's tags choose. Every start goes through preflight first. Progress is
 // rendered from events.jsonl by terminal.ts. No app, no brain, no roles: `claude` on PATH, the package's own secrets.
 // `main(argv, deps)` is the whole program; deps are injectable for the unit tests (engine, DevOps, signals, output).
 import fs from 'node:fs';
@@ -290,7 +290,7 @@ async function run(args: Parsed, runsDir: string, packagesDir: string, runtimeFo
   if (!loaded) return 1;
   try {
     const runtime = runtimeFor(loaded.pkg, routinePaths(runsDir, loaded.pkg.routine.id), recognised);
-    // a package with entries or retrigger tags reads the work item's tags first: they choose the entry (ADR 0323)
+    // a package with entries or retrigger tags reads the work item's tags first: they choose the entry (ADR 0324)
     const handle = await runtime.startFor({ inputs: args.inputs, ...(args.fromStep ? { fromStep: args.fromStep } : {}), ...(args.entry ? { entry: args.entry } : {}) });
     const runDir = path.join(runsDir, loaded.pkg.routine.id, handle.runId);
     writeSource(runDir, args.target!);

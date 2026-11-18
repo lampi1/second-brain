@@ -1,4 +1,4 @@
-# ADR 0323 · A routine package can run a work item again: retrigger tags and entries
+# ADR 0324 · A routine package can run a work item again: retrigger tags and entries
 
 Date: 2026-11-18 · Status: accepted (owner, thread «Riavviare routine con tag retrigger»: «let a routine package
 re-run a work item it already handled, when a "retrigger tag" is set on it, starting from a chosen step») · Amends:

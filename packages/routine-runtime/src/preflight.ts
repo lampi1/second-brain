@@ -1,7 +1,7 @@
 // Routine package preflight (ADR 0175, 0176): the one check that says whether a routine.json can run, used before a
 // run starts (terminal CLI run/watch, the app host) and by the app's routine authoring tool. It
 // runs the format validator (parseRoutinePackage), then the cross-field checks the format cannot express: undeclared
-// {{placeholders}}, DevOps trigger/grant/escalation coherence, entries and retrigger tags (ADR 0323), login rules without a login, test DB logins, MCP tools
+// {{placeholders}}, DevOps trigger/grant/escalation coherence, entries and retrigger tags (ADR 0324), login rules without a login, test DB logins, MCP tools
 // a step cannot reach, and anything left from the old role-based routines (roles, app MCP tools). Every problem comes
 // with the field path and the fix in plain words. Pure: no network, no file system, no secrets in the messages.
 import { foldTag, parseRoutinePackage, RoutineFormatError, SECRET_PLACEHOLDER, usesEntries, type RoutinePackage } from './format';
@@ -24,7 +24,7 @@ export interface PreflightOptions {
 
 /** Placeholders the runtime fills by itself (runtime.ts fillPlaceholders). */
 const BUILTIN = new Set(['workItem', 'work-item-id', 'work-item-url']);
-/** Inputs the runtime fills for a package with entries or retrigger tags (ADR 0323): the entry's name and the folder
+/** Inputs the runtime fills for a package with entries or retrigger tags (ADR 0324): the entry's name and the folder
  *  of the previous run of the same work item. */
 const TAGGED = new Set(['entry', 'previousRun']);
 /** The app's role names: a package step is a plain Claude Code session, never a role (ADR 0175 item 2). */
@@ -36,7 +36,7 @@ const RUNTIME_SERVERS = new Set(['routine-devops', 'routine-testdb', 'routine-br
 
 /** Hints for the format errors authors hit most, by the field name in the validator's message. */
 function formatFix(message: string): string {
-  // entries and retrigger tags (ADR 0323): the fix shows the whole shape, whatever part of it is wrong
+  // entries and retrigger tags (ADR 0324): the fix shows the whole shape, whatever part of it is wrong
   if (/^entries\[\d+\]\.startStep/.test(message)) return 'Use the id of one of routine.steps: the step a run of this entry starts from.';
   if (/^entries\[\d+\]\.when/.test(message)) return 'Write when as { "tag": "<one DevOps tag>" }, e.g. { "tag": "ai-retest" }.';
   if (/^entries/.test(message)) return 'Write entries as [{ "name": "retest", "when": { "tag": "ai-retest" }, "startStep": "<step id>" }]: a name of its own each ("default" is the first step).';
@@ -110,7 +110,7 @@ export function preflightRoutinePackage(value: unknown, options: PreflightOption
     if (!r.trigger.states.length) err('trigger.states', 'no state to watch', 'List the states that start a run, e.g. ["New"].');
     if (!r.trigger.includeTags?.length && !r.trigger.workItemIds?.length) warn('trigger', 'every work item of that type and state starts a run', 'Narrow it with includeTags (e.g. ["ai-fixable"]) or workItemIds.');
   }
-  // entries and retrigger tags (ADR 0323)
+  // entries and retrigger tags (ADR 0324)
   if (tagged) r.inputs.forEach((input, i) => {
     if (TAGGED.has(input.name)) err(`inputs[${i}].name`, `"${input.name}" is filled by the runtime in a package with entries or retrigger tags`, 'Rename the input: steps read {{entry}} (the entry\'s name) and {{previousRun}} (the folder of the previous run of the work item) as they are.');
   });

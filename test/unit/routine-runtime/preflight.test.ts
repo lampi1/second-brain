@@ -114,7 +114,7 @@ describe('routine package preflight', () => {
     expect(preflightRoutinePackage(p).warnings.map(w => w.path)).toEqual(['browser']);
   });
 
-  it('entries and retrigger tags: each mistake names its field and gives a fix (ADR 0323)', () => {
+  it('entries and retrigger tags: each mistake names its field and gives a fix (ADR 0324)', () => {
     const tagged = () => {
       const p = base();
       p.routine.steps = [{ id: 'fix', title: 'Fix', prompt: 'Fix {{workItem}} as {{entry}}; before: {{previousRun}}.' }, { id: 'verify', title: 'Verify', prompt: 'Verify.' }];

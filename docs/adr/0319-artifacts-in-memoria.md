@@ -6,6 +6,8 @@ document that my chats produce over time, similar to Claude's artifacts … do n
 where they are … A missing file is shown as missing, never silently dropped … versions: the same report regenerated
 later shows as one artifact with its history»; then «considera che gli artifact potranno essere sia html che png che
 pdf insomma un po' tutto», «che md ovviamente»)
+· Amended by: ADR 0323 (twenty cards at a time, lighter pictures, a star to keep one, a daily cleanup of pictures
+older than 30 days)
 
 ## Decision
 

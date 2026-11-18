@@ -9,7 +9,8 @@ import { rasterSize } from '../agents/raster';
 
 const MIME: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 const MAX_BYTES = 16_000_000;
-const WIDTH = 480;
+/** A card's picture is at most this wide (a small JPEG: twenty cards stay light, ADR 0323). */
+const WIDTH = 360;
 
 export function nativeThumb(native: { createFromBuffer(b: Buffer): NativeImage }): (file: string) => Promise<string | null> {
   return async file => {
@@ -23,6 +24,6 @@ export function nativeThumb(native: { createFromBuffer(b: Buffer): NativeImage }
     const img = native.createFromBuffer(buf);
     if (img.isEmpty()) return null;
     const small = size.width > WIDTH ? img.resize({ width: WIDTH, quality: 'good' }) : img;
-    return `data:image/jpeg;base64,${small.toJPEG(80).toString('base64')}`;
+    return `data:image/jpeg;base64,${small.toJPEG(72).toString('base64')}`;
   };
 }

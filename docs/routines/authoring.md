@@ -106,7 +106,7 @@ closes the other tabs by itself. A step that sets a password and uses `eval` doe
 ## Entries and retrigger tags
 
 Two options for a routine that must run **again** on a work item it already handled, e.g. a retest after a tester
-found the fix incomplete (ADR 0323). A package that uses neither runs exactly as before.
+found the fix incomplete (ADR 0324). A package that uses neither runs exactly as before.
 
 ```json
 "trigger": { "kind": "devops", "...": "...", "includeTags": ["ai-fixable"], "retriggerTags": ["ai-retest"] },

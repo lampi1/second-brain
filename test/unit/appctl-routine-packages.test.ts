@@ -65,7 +65,7 @@ it('returns each preflight problem with its field and fix and saves nothing when
   expect(fs.existsSync(f.storeRoot)).toBe(false);
 });
 
-it('entries and retrigger tags come back with their field and fix too (ADR 0323)', async () => {
+it('entries and retrigger tags come back with their field and fix too (ADR 0324)', async () => {
   const f = fixture(), p = pkg() as ReturnType<typeof pkg> & { routine: Record<string, unknown> };
   p.routine.inputs = [{ name: 'page', default: '/Agenda' }, { name: 'workItem' } as { name: string; default: string }];
   p.routine.trigger = { kind: 'devops', everyMinutes: 5, organization: 'contoso', project: 'Air', areaPath: 'Air', workItemType: 'Bug', states: ['New'], includeExisting: false, includeTags: ['ai-fixable'], retriggerTags: ['ai-retest'] };

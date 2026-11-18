@@ -139,3 +139,10 @@ button.lib-chat:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
   .lib-card,.lib-thumb img,.lib-mini,.lib-thumb-wait,.lib-skel,.lib-refresh[data-busy] svg{animation:none}
   .lib-card:hover{transform:none}
 }
+/* ADR 0323: the star that keeps an artifact from the cleanup, and the next page */
+.lib-pin{flex:none;display:grid;place-items:center;width:22px;height:20px;padding:0;border:0;border-radius:var(--r-s);background:none;color:var(--text-3);cursor:pointer;opacity:.55;transition:opacity var(--dur-fast) var(--ease),color var(--dur-fast) var(--ease)}
+.lib-card:hover .lib-pin,.lib-pin:focus-visible{opacity:1}
+.lib-pin:hover{color:var(--text)}
+.lib-pin[aria-pressed="true"]{opacity:1;color:var(--accent)}
+.lib-pin:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+.lib-more{display:block;margin:14px auto 4px}

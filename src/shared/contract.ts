@@ -186,7 +186,7 @@ export const INVOKE_CHANNELS = [
   'usecount:add', 'usecount:report',
   'projectmap:list', 'projectmap:view', 'projectmap:size',
   'chess:move', 'chess:stop', 'chess:save', 'chess:history',
-  'library:list', 'library:refresh', 'library:thumb', 'library:open',
+  'library:list', 'library:refresh', 'library:thumb', 'library:open', 'library:pin',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'routines:progress', 'work:changed',

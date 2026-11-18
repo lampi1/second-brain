@@ -4,7 +4,7 @@
 // the runs root's trigger.json, so a restarted loop (app or `routine watch`) never starts an item twice. A parking
 // package (escalation.park) is driven by comments: each pass first offers every started item to `resume` (a parked
 // run goes on when its contact answered), then starts new items that `admit` accepts, at most `maxActive` at once.
-// trigger.retriggerTags (ADR 0323): a started item whose run ended (done, needs-human, failed) starts again, once, while
+// trigger.retriggerTags (ADR 0324): a started item whose run ended (done, needs-human, failed) starts again, once, while
 // one of those tags is on it; the new run takes the tag off the item, and until that is confirmed the item waits
 // (whoever started the run that took it: this loop or a `routine run` by hand).
 import type { FlowAutomationConfig, FlowDetectionResult } from '../../../src/shared/flow-automation';

@@ -56,14 +56,14 @@ export interface RoutineTrigger {
   /** at most this many runs at once (a shared test environment or checkout); more items wait for the next poll */
   maxActive?: number;
   /** tags that start an item again after its run ended (done, needs-human or failed), whatever its state now: the
-   *  runtime removes the tag when the new run starts, so one tag starts one run (ADR 0323) */
+   *  runtime removes the tag when the new run starts, so one tag starts one run (ADR 0324) */
   retriggerTags?: string[];
 }
 export interface RoutineTriggerArea {
   project: string; areaPath: string;
   states?: string[]; includeExisting?: boolean; includeTags?: string[]; excludeTags?: string[];
 }
-/** A named way into the routine (ADR 0323): the first entry whose `when.tag` is on the run's work item decides the
+/** A named way into the routine (ADR 0324): the first entry whose `when.tag` is on the run's work item decides the
  *  step the run starts from; no match, or no entries, = the default entry (the first step). */
 export interface RoutineEntry { name: string; when: { tag: string }; startStep: string }
 /** The name of the entry every routine has: the first step. */
@@ -352,7 +352,7 @@ export function parseRoutinePackage(value: unknown): RoutinePackage {
 }
 
 /** Whether a package uses the tag-driven options (routine.entries, trigger.retriggerTags): only then a run reads its
- *  work item's tags at its start, gets the `entry` input and the previous run's folder (ADR 0323). */
+ *  work item's tags at its start, gets the `entry` input and the previous run's folder (ADR 0324). */
 export const usesEntries = (routine: RoutineDefinition): boolean => Boolean(routine.entries?.length || routine.trigger?.retriggerTags?.length);
 /** The entry a work item's tags choose: the first whose `when.tag` is on it; undefined = the default entry. */
 export function entryForTags(routine: RoutineDefinition, tags: readonly string[]): RoutineEntry | undefined {
