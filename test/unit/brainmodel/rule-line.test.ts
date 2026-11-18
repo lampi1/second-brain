@@ -224,6 +224,8 @@ describe('editRuleLine: what the last verification got through (2026-11-18)', ()
     expect(why(t, 'a | b', 'a | b | extra')).toBe('structure');
     expect(why(t, 'c | d', 'c | e')).toBe('ok');
     expect(why('# Rules\n\n| When | Read |\n|---|---|\n| code | file |\n', '| code | file |', 'code | file | more |')).toBe('structure');
+    // a table inside an item is read with the item
+    expect(why('# Rules\n\n- Production access\n\n  | Who | What |\n  |---|---|\n  | agent | read |\n', '| agent | read |', '| agent | write |')).toBe('guarded');
     const f = '# Rules\n\n- Be concise.\n';
     for (const text of ['--', '-', '- - # Old', '- > # Old', '- ```', '> ```', '> ---', '<?php', '\u200b## Obsolete rules'])
       expect(why(f, '- Be concise.', text), JSON.stringify(text)).toBe('structure');

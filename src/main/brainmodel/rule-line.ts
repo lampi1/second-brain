@@ -148,7 +148,8 @@ function ruleOf(lines: readonly string[], kinds: readonly Kind[], at: number): s
     let top = at, end = at;
     while (top > 0 && isRow(lines[top - 1]!)) top--;
     while (end + 1 < lines.length && isRow(lines[end + 1]!)) end++;
-    if (lines.slice(top, end + 1).some(l => DASHES.test(l))) return top === at ? lines[at]! : `${lines[top]!} ${lines[at]!}`;
+    // a table at the margin: the row and its header; one inside an item is read with the whole item, below
+    if (indentOf(lines[top]!) === 0 && lines.slice(top, end + 1).some(l => DASHES.test(l))) return top === at ? lines[at]! : `${lines[top]!} ${lines[at]!}`;
   }
   const starts = (i: number): boolean => kinds[i] === 'head' || (kinds[i] === 'text' && !!lines[i]!.trim() && indentOf(lines[i]!) === 0
     && (ITEM.test(lines[i]!) || i === 0 || !lines[i - 1]!.trim() || kinds[i - 1] === 'head'));
