@@ -22,6 +22,7 @@ export type StepWrite =
   | { op: 'create-test-suite'; ref: string; plan: string; parent?: string; name: string }
   | { op: 'create-test-case'; ref: string; suite: string; title: string; steps: { action: string; expected?: string }[]; description?: string; priority?: number; tags?: string[] }
   | { op: 'set-test-outcome'; testCase: string; outcome: TestOutcome }
+  | { op: 'tag-test-case'; testCase: string; add: string[] }
   // the run's PR and links
   | { op: 'create-pr'; project: string; repositoryId: string; sourceRef: string; targetRef: string; title: string; text: string }
   | { op: 'link-pr'; projectId: string; repositoryId: string; pullRequestId: number }
@@ -36,13 +37,14 @@ export type StepWrite =
   | { op: 'deploy-test'; targetId: string; waitMinutes?: number }
   | { op: 'cancel-test-deploy'; targetId: string }
   // stops the run: cleanup, tags and state from the package's devops.downgrade, a comment for a person
-  | { op: 'downgrade'; reason: string };
+  // resumeFrom (a parking package, escalation.park): the step an answered run restarts from (default: this step)
+  | { op: 'downgrade'; reason: string; resumeFrom?: string };
 export type StepWriteOp = StepWrite['op'];
 
 /** The package grant category each write needs (format.ts DEVOPS_OPS). */
 export const WRITE_CATEGORY: Record<StepWriteOp, RoutineDevOpsOp> = {
   comment: 'comment', state: 'state', fields: 'fields', tags: 'tags',
-  'create-test-plan': 'test-plans', 'rename-test-plan': 'test-plans', 'create-test-suite': 'test-plans', 'create-test-case': 'test-plans', 'set-test-outcome': 'test-results',
+  'create-test-plan': 'test-plans', 'rename-test-plan': 'test-plans', 'create-test-suite': 'test-plans', 'create-test-case': 'test-plans', 'set-test-outcome': 'test-results', 'tag-test-case': 'test-plans',
   'create-pr': 'pr-create', 'link-pr': 'pr-links', 'relate-pr': 'related-links', 'relate-work-item': 'related-links', 'pr-comment': 'pr-comment', 'publish-pr': 'pr-publish', 'abandon-pr': 'pr-abandon',
   'push-branch': 'git-push', 'queue-pr-validation': 'pr-validation', 'deploy-test': 'test-deploy', 'cancel-test-deploy': 'test-deploy',
   downgrade: 'downgrade',
@@ -129,6 +131,12 @@ function write(v: unknown, i: number): StepWrite {
       keysOnly(w, ['op', 'testCase', 'outcome'], what);
       if (!(TEST_OUTCOMES as readonly string[]).includes(w.outcome as string)) bad(`${what}.outcome: one of ${TEST_OUTCOMES.join(', ')}`);
       return { op: 'set-test-outcome', testCase: ref(w.testCase, `${what}.testCase`), outcome: w.outcome as TestOutcome };
+    case 'tag-test-case': {
+      keysOnly(w, ['op', 'testCase', 'add'], what);
+      const add = tagList(w.add, `${what}.add`);
+      if (!add?.length) bad(`${what}.add: at least one tag`);
+      return { op: 'tag-test-case', testCase: ref(w.testCase, `${what}.testCase`), add: add! };
+    }
     case 'create-pr':
       keysOnly(w, ['op', 'project', 'repositoryId', 'sourceRef', 'targetRef', 'title', 'text'], what);
       return { op: 'create-pr', project: text(w.project, `${what}.project`, 128), repositoryId: guid(w.repositoryId, `${what}.repositoryId`), sourceRef: branchRef(w.sourceRef, `${what}.sourceRef`), targetRef: branchRef(w.targetRef, `${what}.targetRef`), title: text(w.title, `${what}.title`, 300), text: text(w.text, `${what}.text`, 10_000) };
@@ -157,8 +165,8 @@ function write(v: unknown, i: number): StepWrite {
       if (w.waitMinutes !== undefined && !(Number.isInteger(w.waitMinutes) && (w.waitMinutes as number) >= 1 && (w.waitMinutes as number) <= 240)) bad(`${what}.waitMinutes: 1-240`);
       return { op: 'deploy-test', targetId: text(w.targetId, `${what}.targetId`, 80), ...(w.waitMinutes !== undefined ? { waitMinutes: w.waitMinutes as number } : {}) };
     case 'downgrade':
-      keysOnly(w, ['op', 'reason'], what);
-      return { op: 'downgrade', reason: text(w.reason, `${what}.reason`, 2000) };
+      keysOnly(w, ['op', 'reason', 'resumeFrom'], what);
+      return { op: 'downgrade', reason: text(w.reason, `${what}.reason`, 2000), ...(w.resumeFrom !== undefined ? { resumeFrom: ref(w.resumeFrom, `${what}.resumeFrom`) } : {}) };
     default: return bad(`${what}.op: one of ${Object.keys(WRITE_CATEGORY).join(', ')}`);
   }
 }
@@ -195,6 +203,7 @@ const SHAPES: Record<StepWriteOp, string> = {
   'create-test-suite': '{"op":"create-test-suite","ref":"suite","plan":"<plan ref>","parent?":"<suite ref>","name":"..."} (the runtime links the suite Related to this run\'s work item)',
   'create-test-case': '{"op":"create-test-case","ref":"tc01","suite":"<suite ref>","title":"...","steps":[{"action":"...","expected":"..."}],"description?":"...","priority?":1-4,"tags?":["..."]}',
   'set-test-outcome': '{"op":"set-test-outcome","testCase":"<test case ref>","outcome":"passed|failed|blocked|notApplicable"}',
+  'tag-test-case': '{"op":"tag-test-case","testCase":"<test case ref>","add":["#pr123"]} (adds tags to a test case of this run)',
   'create-pr': '{"op":"create-pr","project":"...","repositoryId":"<GUID>","sourceRef":"refs/heads/...","targetRef":"refs/heads/...","title":"...","text":"..."} (a draft PR, linked to the work item; one per run)',
   'link-pr': '{"op":"link-pr","projectId":"<GUID>","repositoryId":"<GUID>","pullRequestId":123}',
   'relate-pr': '{"op":"relate-pr","projectId":"<GUID>","repositoryId":"<GUID>","pullRequestId":123} (the PR that introduced the bug)',
@@ -211,7 +220,7 @@ const SHAPES: Record<StepWriteOp, string> = {
 
 /** The protocol paragraph appended to every step prompt: where and what to write. `ops`: the write ops the package
  *  grants (none = no devopsWrites). */
-export function stepResultInstructions(stepDir: string, ops: readonly StepWriteOp[] | boolean, loop?: { to: string; max: number }): string {
+export function stepResultInstructions(stepDir: string, ops: readonly StepWriteOp[] | boolean, loop?: { to: string; max: number }, park?: { steps: readonly string[] }): string {
   const allowed = ops === true ? (['comment', 'state', 'fields', 'tags'] as StepWriteOp[]) : ops === false ? [] : [...ops];
   const file = `${stepDir.replace(/\\/g, '/')}/${STEP_RESULT_FILE}`;
   return [
@@ -222,12 +231,16 @@ export function stepResultInstructions(stepDir: string, ops: readonly StepWriteO
     `Save evidence files under ${stepDir.replace(/\\/g, '/')}/evidence/ and screenshots under ${stepDir.replace(/\\/g, '/')}/screenshots/.`,
     ...(allowed.length ? [
       'devopsWrites are done by the runtime after you stop, in order, only with outcome "done", on this run\'s work item and its own resources; never do them yourself. Allowed:',
-      ...allowed.map(op => `- ${SHAPES[op]}`),
+      ...allowed.map(op => op === 'downgrade' && park
+        ? `- {"op":"downgrade","reason":"...","resumeFrom?":"<step id>"} (last write; the run parks: one comment for the contact with the reason and the step number, the run branch pushed when it is checked out, the package's tag; when somebody answers with a comment starting with @AI, the same run restarts from resumeFrom, one of ${park.steps.join(', ')}, default this step)`
+        : `- ${SHAPES[op]}`),
       'A write never blocks the run: what was done, not verified or refused is listed for the next steps.',
       'Images in a comment are files of this step folder only ("evidence/<file>" or "screenshots/<file>", PNG or JPEG).',
     ] : []),
     ...(loop ? [`To send the run back to step ${loop.to} (for example findings it must fix), use outcome "done" with "sendBack": {"reason": "what must be fixed"}; at most ${loop.max} times per run, then a person decides.`] : []),
-    'Use needs-human only when a person must decide or provide something; the runtime asks them on DevOps and runs this step again with the answer.',
+    park
+      ? 'Use needs-human only when a person must decide or provide something: the runtime parks the run (as a downgrade from this step) and runs this step again with the answer.'
+      : 'Use needs-human only when a person must decide or provide something; the runtime asks them on DevOps and runs this step again with the answer.',
   ].join('\n');
 }
 

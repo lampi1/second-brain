@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createDevOpsClient, createMasker, createRoutineRuntime, createRunStore, executeWrites, readConfigOnce, runResources, validateStepResult, type RunRecord, type StepWrite, type WriteContext } from '../../../packages/routine-runtime/src/index';
+import { aiInstruction, commentSignature, isRoutineComment, modelDisplayName } from '../../../packages/routine-runtime/src/devops';
 import { done, fakeDevOps, routinePackage, scriptedEngine, tempDir } from './fakes';
 
 // GUIDs built at run time (the repo guard refuses GUID literals)
@@ -217,6 +218,19 @@ describe('test plan writes', () => {
     expect(lines).toContain(`test case "tc01": id ${tc.id} in suite ${suite.id}, outcome passed`);
   });
 
+  it('tag-test-case adds a tag to a test case of this run once the PR exists, keeping its tags', async () => {
+    const { ado, exec } = setup();
+    await exec(testPlanWrites.slice(0, 3).map(w => w.op === 'create-test-case' ? { ...w, tags: ['#127906', '#orisdentair'] } : w));
+    const out = await exec([{ op: 'tag-test-case', testCase: 'tc01', add: ['#pr5', '#orisdentair'] }]);
+    expect(out.failed).toEqual([]); expect(out.notVerified).toEqual([]);
+    const tc = [...ado.items.values()].find(i => i.type === 'Test Case')!;
+    expect(tc.fields['System.Tags']).toBe('#127906; #orisdentair; #pr5');
+    expect((await exec([{ op: 'tag-test-case', testCase: 'tc01', add: ['#PR5'] }])).failed).toEqual([]);
+    expect(tc.fields['System.Tags']).toBe('#127906; #orisdentair; #pr5'); // a tag it already has is not added twice
+    expect((await exec([{ op: 'tag-test-case', testCase: 'tc09', add: ['#pr5'] }])).failed[0]).toMatch(/no test case with that ref/);
+    expect(() => validateStepResult({ outcome: 'done', summary: 's', devopsWrites: [{ op: 'tag-test-case', testCase: 'tc01', add: [] }] })).toThrow(/at least one tag/);
+  });
+
   it('the same writes again are already done: nothing is created twice', async () => {
     const { ado, exec } = setup();
     await exec(testPlanWrites);
@@ -253,7 +267,7 @@ describe('PR, push and deploy writes', () => {
   });
 
   it('push → draft PR linked to the work item → the second create is a no-op → comment → publish', async () => {
-    const { ado, store, exec, pushed } = setup();
+    const { ado, store, exec, pushed, context } = setup();
     const out = await exec(prWrites);
     expect(out.failed).toEqual([]);
     expect(pushed).toEqual([{ workspace: expect.stringMatching(/checkout$/), authorization: 'Bearer fake-token' }]);
@@ -261,13 +275,15 @@ describe('PR, push and deploy writes', () => {
     const pr = ado.prs[0]!;
     expect(pr).toMatchObject({ isDraft: true, sourceRefName: BRANCH });
     expect(ado.items.get(9)!.relations).toEqual([expect.objectContaining({ rel: 'ArtifactLink', url: expect.stringContaining(`%2F${pr.pullRequestId}`) })]);
-    const again = await exec([prWrites[1]!, { op: 'pr-comment', text: 'Ready for review.', mentions: [MENTION] }, { op: 'publish-pr' }], 'review');
+    const again = await executeWrites({ ...context, stepId: 'review', signature: commentSignature('claude-opus-5-5', 'high') }, [prWrites[1]!, { op: 'pr-comment', text: 'Ready for review.', mentions: [MENTION] }, { op: 'publish-pr' }]);
     expect(again.done[0]).toBe(`PR ${pr.pullRequestId} (already created by this run)`);
     expect(again.failed).toEqual([]);
     expect(ado.prs).toHaveLength(1);
     expect(pr.threads).toHaveLength(1);
     expect(pr.threads[0]!.comments[0]!.content).toContain(`@<${MENTION.toUpperCase()}>`);
     expect(pr.threads[0]!.comments[0]!.content).toContain(`routine run ${RUN}`);
+    expect(pr.threads[0]!.comments[0]!.content).toMatch(new RegExp(`^AI · Opus 5\\.5 · high\\n\\n@<${MENTION.toUpperCase()}>\\n\\nReady for review\\.`));
+    expect(pr.threads[0]!.comments[0]!.content).not.toMatch(/claude/i);
     expect(pr.isDraft).toBe(false);
     expect(runResources(store.ledger(RUN), 'contoso').join('\n')).toContain(`pushed ${BRANCH} at ${PUSHED}`);
   });
@@ -309,11 +325,45 @@ describe('downgrade', () => {
     expect(item.fields['System.Tags']).toBe('needs-human');
     expect(item.fields['System.State']).toBe('Active');
     const comment = ado.comments.get(9)!.join('\n');
-    expect(comment).toContain('Serve un intervento umano: serve una decisione di prodotto.');
+    expect(comment).toContain('Serve un umano: serve una decisione di prodotto.');
     expect(comment).toContain(`version:2.0,${MENTION}`);
     expect(comment).toContain(`version:2.0,${CONTACT}`);
     expect(comment).toContain('@Mario Rossi');
     expect(fs.readFileSync(path.join(root, RUN, 'downgrade.md'), 'utf8')).toContain('Classification correction: serve una decisione di prodotto');
+  });
+
+  it('a park keeps the draft PR, pushes the run branch, mentions only the contact, gives only the reason and the step number', async () => {
+    const { ado, exec, pushed, context } = setup();
+    await exec(prWrites);
+    const park = { n: 1, position: 'Passo 3 di 5' };
+    const out = await executeWrites({ ...context, stepId: 'review', park, headOf: async () => BRANCH, signature: commentSignature('claude-opus-5-5', 'medium') }, [{ op: 'downgrade', reason: 'manca un dato', resumeFrom: 'fix' }]);
+    expect(out.failed).toEqual([]);
+    expect(out.resumeFrom).toBe('fix');
+    expect(out.parked).toMatchObject({ branch: `fix/routine-${RUN}`, pushed: true, commentId: expect.any(Number) });
+    expect(pushed).toHaveLength(2);
+    expect(ado.prs[0]).toMatchObject({ isDraft: true, status: 'active' });
+    expect(ado.items.get(9)!.fields['System.Tags']).toBe('needs-human');
+    const comment = ado.comments.get(9)!.join('\n');
+    expect(comment).toContain('Serve un umano: manca un dato.<br/>Passo 3 di 5.<br/>Per riprendere rispondi con un commento che inizia con @AI.<br/><small>');
+    expect(comment).toMatch(/^AI · Opus 5\.5 · medium<br\/>/);
+    expect(comment).toMatch(/<\/small>$/);
+    expect(comment).not.toMatch(/claude/i);
+    expect(comment).not.toContain('Branch:');
+    expect(comment).not.toContain('Rispondi');
+    expect(comment).toContain(`version:2.0,${CONTACT}`);
+    expect(comment).not.toContain(MENTION);
+  });
+
+  it('each park of a run writes again (its own keys); a detached checkout publishes nothing', async () => {
+    const { ado, store, pushed, context } = setup();
+    const park = (n: number) => ({ n, position: 'Passo 1 di 5' });
+    await executeWrites({ ...context, stepId: 'analyse', park: park(1), headOf: async () => undefined }, [{ op: 'downgrade', reason: 'primo dubbio' }]);
+    const out = await executeWrites({ ...context, stepId: 'analyse', park: park(2), headOf: async () => undefined }, [{ op: 'downgrade', reason: 'secondo dubbio' }]);
+    expect(out.parked).toMatchObject({ pushed: false });
+    expect(pushed).toEqual([]);
+    expect(ado.comments.get(9)!).toHaveLength(2);
+    expect(ado.comments.get(9)![1]).toContain('secondo dubbio.<br/>Passo 1 di 5.');
+    expect(Object.keys(store.ledger(RUN))).toEqual(expect.arrayContaining(['downgrade:p1:comment', 'downgrade:p2:comment']));
   });
 
   it('a step that downgrades stops the run in needs-human, with no later step', async () => {
@@ -328,7 +378,7 @@ describe('downgrade', () => {
     expect(run.error).toBe('step analyse downgraded the work item: not a bug');
     expect(engine.requests.map(r => r.stepId)).toEqual(['analyse']);
     expect(devops.items.get(5)!.fields['System.Tags']).toBe('needs-human');
-    expect(devops.comments.get(5)!.some(c => c.text.includes('Serve un intervento umano: not a bug'))).toBe(true);
+    expect(devops.comments.get(5)!.some(c => c.text.includes('Serve un umano: not a bug'))).toBe(true);
   });
 });
 
@@ -373,6 +423,21 @@ describe('comment images (upload-image)', () => {
     expect(thread).toContain(`![after.png](${afterUrl})`);
   });
 
+  it('a PR comment places each image at its {{image:<name>}} line, right under its caption', async () => {
+    const { ado, exec, context } = setup();
+    fs.writeFileSync(path.join(context.stepDir!, 'evidence', 'before.png'), png(1));
+    fs.writeFileSync(path.join(context.stepDir!, 'evidence', 'after.png'), png(2));
+    fs.writeFileSync(path.join(context.stepDir!, 'evidence', 'extra.png'), png(3));
+    await exec(prWrites);
+    const out = await exec([{ op: 'pr-comment', images: ['evidence/before.png', 'evidence/after.png', 'evidence/extra.png'],
+      text: 'TC01 prima: il saldo resta 94\n{{image:before.png}}\n\nTC01 dopo: il saldo è 244\n{{image:after.png}}\n{{image:missing.png}}' }]);
+    expect(out.failed).toEqual([]);
+    const [beforeUrl, afterUrl, extraUrl] = [g('1'), g('2'), g('3')].map(id => `${ATTACHMENTS}/${id}`);
+    const thread = ado.prs[0]!.threads.at(-1)!.comments[0]!.content;
+    expect(thread).toContain(`TC01 prima: il saldo resta 94\n![before.png](${beforeUrl})\n\nTC01 dopo: il saldo è 244\n![after.png](${afterUrl})\nimmagine missing.png non caricata\n\n![extra.png](${extraUrl})`);
+    expect(thread).not.toContain('{{image:');
+  });
+
   it('only files of the step\'s own evidence/ or screenshots/ folder: any other path is refused', () => {
     const result = (images: string[]) => () => validateStepResult({ outcome: 'done', summary: 's', devopsWrites: [{ op: 'comment', text: 't', images }] });
     expect(result(['screenshots/a.png'])).not.toThrow();
@@ -401,12 +466,49 @@ describe('comment images (upload-image)', () => {
   });
 });
 
+describe('comment signature and @AI', () => {
+  it('names the model without the word claude, effort optional', () => {
+    expect(modelDisplayName('claude-opus-5-5')).toBe('Opus 5.5');
+    expect(modelDisplayName('claude-sonnet-5')).toBe('Sonnet 5');
+    expect(modelDisplayName('claude-fable-5-1')).toBe('Fable 5.1');
+    expect(modelDisplayName('claude-haiku-4-5-20251001')).toBe('Haiku 4.5');
+    expect(modelDisplayName('claude-nova-7')).toBe('nova-7');
+    expect(commentSignature('claude-opus-5-5', 'medium')).toBe('AI · Opus 5.5 · medium');
+    expect(commentSignature('claude-opus-5-5')).toBe('AI · Opus 5.5');
+    expect(commentSignature()).toBe('AI');
+  });
+
+  it('an instruction only from a comment starting with @AI; the runtime\'s own comments are recognized', () => {
+    expect(aiInstruction('<div>  @ai, usa il campo Note</div>')).toBe('usa il campo Note');
+    expect(aiInstruction('@AI')).toBe('');
+    expect(aiInstruction('ciao @AI usa il campo Note')).toBeUndefined();
+    expect(aiInstruction('@AIUTO')).toBeUndefined();
+    expect(isRoutineComment('AI · Opus 5.5 · medium<br/>Serve un umano')).toBe(true);
+    expect(isRoutineComment('x <small>routine run r1 · park 1</small>')).toBe(true);
+    expect(isRoutineComment('@AI riprendi')).toBe(false);
+    expect(isRoutineComment('@AI la routine run di ieri ha sbagliato')).toBe(false);
+    expect(isRoutineComment('AI<br/>Serve un umano')).toBe(true);
+  });
+
+  it('@AI parsing: numeric entities decoded, @AI-bot and mention anchors of an identity named AI never count', () => {
+    expect(aiInstruction('&#160;@AI&#160;riprendi')).toBe('riprendi');
+    expect(aiInstruction('&#xA0;@ai: riprendi')).toBe('riprendi');
+    expect(aiInstruction('@AI-bot riprendi')).toBeUndefined();
+    expect(aiInstruction('@AI.riprendi')).toBeUndefined();
+    expect(aiInstruction('@AI')).toBe('');
+    expect(aiInstruction(`<a href="#" data-vss-mention="version:2.0,${g('9')}">@AI Bot</a> riprendi`)).toBeUndefined();
+    expect(aiInstruction(`<a href="#" data-vss-mention="version:2.0,${g('9')}">@Mario</a> @AI riprendi`)).toBeUndefined();
+    expect(aiInstruction(`@AI riprendi, chiedi a <a href="#" data-vss-mention="version:2.0,${g('9')}">@Mario</a>`)).toBe('riprendi, chiedi a [mention]');
+  });
+});
+
 describe('work item comment mentions', () => {
   it('an identity of devops.mentions becomes a DevOps mention; one outside it is refused before anything is sent', async () => {
-    const { ado, exec } = setup();
-    const out = await exec([{ op: 'comment', text: 'Serve una verifica', mentions: [MENTION] }]);
+    const { ado, exec, context } = setup();
+    const out = await executeWrites({ ...context, stepId: 'fix', signature: commentSignature('claude-opus-5-5', 'medium') }, [{ op: 'comment', text: 'Serve una verifica', mentions: [MENTION] }]);
     expect(out.done).toEqual(['comment']);
-    expect(ado.comments.get(9)!.at(-1)).toMatch(new RegExp(`^<a href="#" data-vss-mention="version:2\\.0,${MENTION}">@Anna Bianchi</a><br/>Serve una verifica`));
+    expect(ado.comments.get(9)!.at(-1)).toMatch(/<\/small>$/);
+    expect(ado.comments.get(9)!.at(-1)).toMatch(new RegExp(`^AI · Opus 5\\.5 · medium<br/><a href="#" data-vss-mention="version:2\\.0,${MENTION}">@Anna Bianchi</a><br/>Serve una verifica`));
     const sent = ado.calls.length;
     await expect(exec([{ op: 'comment', text: 'x', mentions: [g('9')] }])).rejects.toThrow(/mentions/);
     expect(ado.calls.length).toBe(sent);

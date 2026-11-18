@@ -9,8 +9,9 @@
 // writes point at them by the session's ref, and the next prompts list them (`runResources`).
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
 import type { TestDeployTarget } from '../../../src/shared/flow-automation';
-import { DevOpsCallError, commentHtml, html, mentionHtml, type DevOpsClient } from './devops';
+import { DevOpsCallError, commentHtml, html, mentionHtml, signedHtml, type DevOpsClient } from './devops';
 import type { RoutineDevOps } from './format';
 import type { Masker } from './mask';
 import type { LedgerEntry, RunStore } from './run-store';
@@ -20,13 +21,13 @@ import { organizationUrl, readEvidenceImage, type UploadedImage } from './devops
 import { HostPushPreconditionError, pushRunBranch, runBranch, type HostPush } from './devops-host/git-push';
 import { prBuildStatus } from './devops-host/pr-build-status';
 import { queuePrValidation, sameArtifact } from './devops-host/pr-validation';
-import type { TestDeploymentCoordinator } from './devops-host/test-deployment';
+import type { LostDeployment, TestDeploymentCoordinator } from './devops-host/test-deployment';
 import { NoRemoteEffect } from './devops-host/write-refusal';
 import { object } from './devops-host/schema';
 
 const API = 'api-version=7.1';
 type Call = DevOpsClient['call'];
-export type Deployments = Pick<TestDeploymentCoordinator, 'execute' | 'settle' | 'ownedTargets'>;
+export type Deployments = Pick<TestDeploymentCoordinator, 'execute' | 'settle' | 'ownedTargets'> & Partial<Pick<TestDeploymentCoordinator, 'reclaim'>>;
 
 export interface ExtendedContext {
   runId: string; attempt: number; stepId: string; workItem: number; project: string;
@@ -44,11 +45,21 @@ export interface ExtendedContext {
   /** the person a downgrade comment mentions (the escalation contact) */
   contact?: { id: string; name?: string };
   push?: (p: HostPush) => Promise<{ branch: string; commit: string }>;
+  /** a parking package (escalation.park): the downgrade parks the run instead of handing it over (see downgrade) */
+  park?: ParkStop;
+  /** the branch a checkout is on (`refs/heads/...`), undefined when detached or unreadable (tests replace it) */
+  headOf?: (workspace: string) => Promise<string | undefined>;
+  /** the step's commentSignature: the first line of its PR and park comments */
+  signature?: string;
   sleep(ms: number): Promise<void>;
   now(): number;
 }
 
-export interface ExtendedOutcome { done: string[]; notVerified: string[]; failed: string[]; downgraded?: string }
+/** Where a parked run stopped: `n` = the run's park count (its own ledger keys); `position` = "Passo i di n" for the comment. */
+export interface ParkStop { n: number; position: string }
+export interface ExtendedOutcome { done: string[]; notVerified: string[]; failed: string[]; downgraded?: string; resumeFrom?: string;
+  /** a parked downgrade: its comment and whether the run branch was published */
+  parked?: { commentId?: number; branch: string; pushed: boolean } }
 
 /** One write as the settle loop sees it: a ledger key, a label, the attempt and the read-back. */
 interface Plan {
@@ -210,7 +221,7 @@ export async function executeExtended(ctx: ExtendedContext, write: Exclude<StepW
             const created = await t.call('POST', `${org}/${encodeURIComponent(project)}/_apis/wit/workitems/$Test%20Case?${API}`, [
               { op: 'add', path: '/fields/System.Title', value: title },
               ...(steps.length ? [{ op: 'add', path: '/fields/Microsoft.VSTS.TCM.Steps', value: xml }] : []),
-              ...(write.description ? [{ op: 'add', path: '/fields/System.Description', value: commentHtml(masker.mask(write.description)) }] : []),
+              ...(write.description ? [{ op: 'add', path: '/fields/System.Description', value: commentHtml(masker.mask(write.description), grant.organization) }] : []),
               ...(write.priority !== undefined ? [{ op: 'add', path: '/fields/Microsoft.VSTS.Common.Priority', value: write.priority }] : []),
               ...(write.tags?.length ? [{ op: 'add', path: '/fields/System.Tags', value: write.tags.join('; ') }] : []),
             ], 'application/json-patch+json');
@@ -249,6 +260,21 @@ export async function executeExtended(ctx: ExtendedContext, write: Exclude<StepW
           const list = await read();
           return list.length && list.every(p => lower(String(object(p.results ?? {}, 'point results').outcome ?? '')) === lower(write.outcome)) ? { seen: 'present' } : { seen: 'absent' };
         } });
+      return;
+    }
+    case 'tag-test-case': {
+      // tags a test case of this run after its creation (e.g. #pr<n> once the PR exists); existing tags are kept
+      const tc = resources().cases.find(c => c.ref === write.testCase);
+      if (!tc) { out.failed.push(`test case tags "${write.testCase}": no test case with that ref in this run`); return; }
+      const url = `${org}/_apis/wit/workitems/${tc.id}?${API}`;
+      const read = async () => { const item = await client.call('GET', `${org}/_apis/wit/workitems/${tc.id}?fields=System.Tags&${API}`); return { rev: item.rev as number, tags: String(object(item.fields ?? {}, 'test case fields')['System.Tags'] ?? '').split(';').map(s => s.trim()).filter(Boolean) }; };
+      const missing = (tags: string[]) => write.add.filter(a => !tags.some(t => lower(t) === lower(a)));
+      await settle({ key, what: `test case "${write.testCase}" tags +${write.add.join(',')}`,
+        async once(t) {
+          const now = await read(), add = missing(now.tags);
+          if (add.length) await t.call('PATCH', url, [{ op: 'test', path: '/rev', value: now.rev }, { op: 'add', path: '/fields/System.Tags', value: [...now.tags, ...add].join('; ') }], 'application/json-patch+json');
+        },
+        async verify() { return missing((await read()).tags).length ? { seen: 'absent' } : { seen: 'present' }; } });
       return;
     }
     case 'link-pr': case 'relate-pr': {
@@ -314,9 +340,9 @@ export async function executeExtended(ctx: ExtendedContext, write: Exclude<StepW
       const marker = `routine run ${ctx.runId} · ${key.slice(0, 12)}`;
       const threads = `${org}/${encodeURIComponent(pr.project)}/_apis/git/repositories/${pr.repositoryId}/pullrequests/${pr.id}/threads?${API}`;
       if (write.images?.length && ledger()[key]?.state !== 'done') images = await uploadImages(ctx, write.images, settle, out);
-      const shown = images.map(i => `\n\n![${i.name.replace(/[[\]]/g, '')}](attachment:${i.id})`).join('');
+      const body = prCommentBody(masker.mask(write.text), images);
       await settle({ key, what: `PR ${pr.id} comment`,
-        async once(t) { await devopsResource({ op: 'pr-comment', pullRequestId: pr.id, text: `${masker.mask(write.text)}${shown}\n\n${marker}`, ...(write.mentions ? { mentions: write.mentions } : {}) }, resourcePorts(t)); },
+        async once(t) { await devopsResource({ op: 'pr-comment', pullRequestId: pr.id, text: `${body}\n\n${marker}`, ...(ctx.signature ? { signature: ctx.signature } : {}), ...(write.mentions ? { mentions: write.mentions } : {}) }, resourcePorts(t)); },
         async verify() {
           const r = await client.call('GET', threads);
           return (Array.isArray(r.value) ? r.value : []).some(th => (Array.isArray(object(th, 'thread').comments) ? (object(th, 'thread').comments as unknown[]) : []).some(c => String(object(c, 'comment').content ?? '').includes(marker))) ? { seen: 'present' } : { seen: 'absent' };
@@ -376,6 +402,7 @@ export async function executeExtended(ctx: ExtendedContext, write: Exclude<StepW
     }
     case 'downgrade': {
       out.downgraded = masker.mask(write.reason);
+      if (write.resumeFrom) out.resumeFrom = write.resumeFrom;
       await downgrade(ctx, write.reason, settle, out, classic);
       return;
     }
@@ -405,11 +432,21 @@ async function prSource(ctx: ExtendedContext, target: TestDeployTarget, call: Ca
 
 const deployPorts = (ctx: ExtendedContext, call: Call, extra: Partial<Parameters<Deployments['execute']>[3]> = {}) => ({ runId: ctx.runId, authorize: () => {}, call: (m: string, u: string, b?: unknown) => call(m, u, b), ...(ctx.arm ? { arm: ctx.arm } : {}), ...extra });
 
+/** Why a run's earlier test deployment no longer counts (Italian, for the person a park or a report reaches). */
+export const lostDeployment = (l: LostDeployment): string => l.replaced
+  ? `${l.targetId} è stato ridistribuito da un'altra run: serve un nuovo deploy`
+  : `${l.targetId}: non si può verificare che esegua ancora il deploy di questa run (${l.reason}): serve un nuovo deploy`;
+
 /** deploy-test: waits for the PR's merge build, deploys it through the coordinator, waits for the deployment. */
 async function deploy(ctx: ExtendedContext, target: TestDeployTarget, src: Awaited<ReturnType<typeof prSource>>, waitMinutes: number, key: string, out: ExtendedOutcome): Promise<void> {
   const deployKey = `deploy:${target.id}:${key}`, what = `deploy PR ${src.pr.id} to ${target.id}`;
   const prior = ctx.store.ledger(ctx.runId)[deployKey];
-  if (prior?.state === 'done') { out.done.push(`${what} (already done)`); return; }
+  if (prior?.state === 'done') {
+    // done earlier (a resumed run): still this run's release on the node, never another run's deployment taken as ours
+    const lost = (await ctx.deployments?.reclaim?.(ctx.runId, deployPorts(ctx, ctx.client.call)).catch((e: unknown) => [{ targetId: target.id, replaced: false, reason: e instanceof Error ? e.message : String(e) }]))?.find(l => l.targetId === target.id);
+    if (lost) { out.failed.push(`${what}: ${ctx.masker.mask(lostDeployment(lost))}`); return; }
+    out.done.push(`${what} (already done)`); return;
+  }
   if (prior?.state === 'failed') { out.failed.push(what); return; }
   if (!ctx.deployments) { out.failed.push(`${what}: this host has no test deployment coordinator`); return; }
   const save = (state: LedgerEntry['state'], resource: LedgerEntry['resource']) => ctx.store.setLedger(ctx.runId, ctx.attempt, deployKey, { state, what, at: ctx.now(), tries: 1, resource: { targetId: target.id, ...resource } });
@@ -465,38 +502,79 @@ async function cancelDeploy(ctx: ExtendedContext, target: TestDeployTarget, key:
 }
 
 /** The comment a downgrade leaves (the app's text, Italian like its other routine comments). */
-export const needsHumanComment = (reason: string): string => `Serve un intervento umano: ${reason}. La routine si è fermata; segue la pulizia automatica.`;
+export const needsHumanComment = (reason: string): string => `Serve un umano: ${reason}. La routine si è fermata; segue la pulizia automatica.`;
+
+/** The one comment of a parked run (Italian, for its contact): why, the step number, how to resume (owner, 2026-10-28). */
+export const parkComment = (reason: string, park: ParkStop): string => [
+  `Serve un umano: ${reason.trim().replace(/[.\s]+$/, '')}.`,
+  `${park.position}.`,
+  'Per riprendere rispondi con un commento che inizia con @AI.',
+].join('\n');
+
+/** Publishes the run branch before a park when a push target's checkout is on it (fast-forward, like push-branch).
+ *  Detached or another branch: nothing to publish yet (an analysis lives in the run folder, kept for the resume). */
+async function pushParked(ctx: ExtendedContext, scope: string, settle: (plan: Plan) => Promise<'done' | 'not-verified' | 'failed'>, out: ExtendedOutcome, classic: (write: StepWrite, key: string) => Promise<void>): Promise<{ branch: string; pushed: boolean }> {
+  const branch = runBranch(ctx.runId), name = branch.slice('refs/heads/'.length);
+  if (!ctx.grant.ops.includes('git-push')) return { branch: name, pushed: false };
+  const headOf = ctx.headOf ?? gitHead;
+  for (const target of ctx.grant.pushTargets ?? []) {
+    const workspace = ctx.inputs[target.workspaceInput];
+    if (!workspace || await headOf(workspace) !== branch) continue;
+    const key = `${scope}:push`;
+    await executeExtended(ctx, { op: 'push-branch', project: target.project, repositoryId: target.repositoryId }, key, settle, out, classic);
+    const state = ctx.store.ledger(ctx.runId)[`push:${key}`]?.state;
+    return { branch: name, pushed: state === 'done' };
+  }
+  return { branch: name, pushed: false };
+}
+
+/** `refs/heads/...` of a checkout's HEAD; undefined when detached or unreadable (read only, no credentials). */
+const gitHead = (workspace: string): Promise<string | undefined> => new Promise(resolve => execFile('git', ['-C', workspace, 'symbolic-ref', '--quiet', 'HEAD'],
+  { timeout: 30_000, windowsHide: true, encoding: 'utf8' }, (error, stdout) => resolve(error ? undefined : stdout.trim() || undefined)));
 
 /** The downgrade, as the app's cleanup did it: the run's draft PR abandoned and its test deployment ended, the reason
  *  kept in downgrade.md, then the package's tag removed, its tag added, its state set, a comment for a person; each
  *  phase one ledger entry, so a resumed run continues where it stopped. */
 async function downgrade(ctx: ExtendedContext, reason: string, settle: (plan: Plan) => Promise<'done' | 'not-verified' | 'failed'>, out: ExtendedOutcome, classic: (write: StepWrite, key: string) => Promise<void>): Promise<void> {
-  const policy = ctx.grant.downgrade!;
+  const policy = ctx.grant.downgrade!, park = ctx.park;
+  // each park of a run has its own ledger keys: a run parked, answered and parked again writes again
+  const scope = park ? `downgrade:p${park.n}` : 'downgrade';
   const cleanup = async (phase: string) => {
-    const pr = ledgerResources(ctx.store.ledger(ctx.runId)).pr;
-    if (pr) await executeExtended(ctx, { op: 'abandon-pr' }, `downgrade:${phase}:abandon-pr`, settle, out, classic);
+    // a parked run keeps its draft PR: the answered run goes on with it; its test deployment ends (others need it)
+    const pr = park ? undefined : ledgerResources(ctx.store.ledger(ctx.runId)).pr;
+    if (pr) await executeExtended(ctx, { op: 'abandon-pr' }, `${scope}:${phase}:abandon-pr`, settle, out, classic);
     for (const targetId of ctx.deployments?.ownedTargets(ctx.runId) ?? []) {
       const target = ctx.grant.deployTargets?.find(t => t.id === targetId);
-      if (target) await cancelDeploy(ctx, target, `downgrade:${phase}:cancel:${targetId}`, settle, out);
+      if (target) await cancelDeploy(ctx, target, `${scope}:${phase}:cancel:${targetId}`, settle, out);
     }
     if (ctx.deployments && !await ctx.deployments.settle(ctx.runId, () => {}).catch(() => false)) out.notVerified.push('test deployment still active or uncertain: its lease is kept');
   };
   await cleanup('before');
   fs.mkdirSync(ctx.runDir, { recursive: true });
   fs.writeFileSync(path.join(ctx.runDir, 'downgrade.md'), ctx.masker.mask(`# Downgrade\n\nClassification correction: ${reason}\nRun: ${ctx.runId}; step: ${ctx.stepId}. Evidence for a future reviewed routine update, not an automatic rule.\n`));
-  await classic({ op: 'tags', remove: [policy.removeTag] }, 'downgrade:remove-tag');
-  await classic({ op: 'tags', add: [policy.addTag] }, 'downgrade:add-tag');
-  await classic({ op: 'state', state: policy.state }, 'downgrade:state');
-  const marker = `routine run ${ctx.runId} · downgrade`;
-  const mentions = [...new Set([...(ctx.grant.mentions ?? []), ...(ctx.contact ? [ctx.contact.id] : [])])];
-  await settle({ key: 'downgrade:comment', what: 'downgrade comment',
+  const pushed = park ? await pushParked(ctx, scope, settle, out, classic) : undefined;
+  await classic({ op: 'tags', remove: [policy.removeTag] }, `${scope}:remove-tag`);
+  await classic({ op: 'tags', add: [policy.addTag] }, `${scope}:add-tag`);
+  await classic({ op: 'state', state: policy.state }, `${scope}:state`);
+  const marker = park ? `routine run ${ctx.runId} · park ${park.n} ·` : `routine run ${ctx.runId} · downgrade`;
+  // a parked run talks only to its contact (owner, 2026-10-28: the bug comment mentions only the contact)
+  const mentions = park && ctx.contact ? [ctx.contact.id] : [...new Set([...(ctx.grant.mentions ?? []), ...(ctx.contact ? [ctx.contact.id] : [])])];
+  const text = park ? parkComment(reason, park) : needsHumanComment(reason);
+  await settle({ key: `${scope}:comment`, what: 'downgrade comment',
     async once(t) {
       const tags = mentions.map(id => mentionHtml(id, id === ctx.contact?.id ? ctx.contact.name : undefined)).join(' ');
       const r = await t.call('POST', `https://dev.azure.com/${encodeURIComponent(ctx.grant.organization)}/${encodeURIComponent(ctx.project)}/_apis/wit/workItems/${ctx.workItem}/comments?api-version=7.1-preview.4`,
-        { text: `${tags ? `${tags}<br/>` : ''}${commentHtml(ctx.masker.mask(needsHumanComment(reason)))}<br/><small>${html(marker)}</small>` });
+        { text: signedHtml(`${tags ? `${tags}<br/>` : ''}${commentHtml(ctx.masker.mask(text), ctx.grant.organization)}<br/><small>${html(marker)}</small>`, ctx.signature) });
       return typeof r.id === 'number' ? { commentId: r.id } : undefined;
     },
-    async verify() { return (await ctx.client.comments(ctx.grant.organization, ctx.project, ctx.workItem)).some(c => c.text.includes(marker)) ? { seen: 'present' } : { seen: 'absent' }; } });
+    async verify() {
+      const found = (await ctx.client.comments(ctx.grant.organization, ctx.project, ctx.workItem)).find(c => c.text.includes(marker));
+      return found ? { seen: 'present', extra: { commentId: found.id } } : { seen: 'absent' };
+    } });
+  if (park && pushed) {
+    const commentId = ctx.store.ledger(ctx.runId)[`${scope}:comment`]?.commentId;
+    out.parked = { branch: pushed.branch, pushed: pushed.pushed, ...(typeof commentId === 'number' ? { commentId } : {}) };
+  }
   await cleanup('after');
 }
 
@@ -561,6 +639,21 @@ export async function mentionTags(ctx: Pick<ExtendedContext, 'grant' | 'client' 
     tags.push(mentionHtml(id, name));
   }
   return tags.join(' ');
+}
+
+/** A PR comment's text with its images: `{{image:<file name>}}` in the text puts that image there (so a caption line
+ *  can sit right above it); the images it does not place follow the text; a placeholder whose image did not upload
+ *  says so instead of showing the raw token. */
+export function prCommentBody(text: string, images: readonly UploadedImage[]): string {
+  const md = (i: UploadedImage) => `![${i.name.replace(/[[\]]/g, '')}](attachment:${i.id})`;
+  const placed = new Set<UploadedImage>();
+  const body = text.replace(/\{\{image:([^{}\r\n]{1,200})\}\}/g, (_, name: string) => {
+    const image = images.find(i => i.name === name.trim());
+    if (!image) return `immagine ${name.trim()} non caricata`;
+    placed.add(image);
+    return md(image);
+  });
+  return `${body}${images.filter(i => !placed.has(i)).map(i => `\n\n${md(i)}`).join('')}`;
 }
 
 /** The images of a work item comment, as HTML after its text. */

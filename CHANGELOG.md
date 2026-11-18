@@ -6,6 +6,13 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- Routines: a browser step can see the login page. `relogin: false` on `navigate`, `history`, `click`, `press` or
+  `click_at` makes that call never sign in: a page that lands on a login page is left there and the reply says so
+  (a sign-out in one tab, a reload in another). The next navigation or action without it signs in again (ADR 0321,
+  #434).
+- The routine runtime of the branch `feat/routine-park` is on main: parked runs that resume on an @AI answer, test
+  deployment leases, DevOps field, state and tag writes, the browser's 23 tools (history, tabs, eval, console,
+  network…).
 - The maintenance can fix one line of a file every job loads (AGENTS.md, me.md…): the card shows the exact line before
   and after, it goes into the candidate brain with the other brain changes and one «Annulla» puts the old line back.
   Never a line about safety, permissions, settings, hooks, production or secrets, and never past the budget of the
@@ -235,6 +242,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   key is gone (ADR 0291).
 
 ### Fixed
+- Routines: a password written by `fill_secret` can no longer be read back (a Backspace in the field and the
+  accessibility snapshot, or a "show password" toggle and a screenshot): the field stays a password field for every
+  browser tool. And none is written beside code an `eval` may have left: after an `eval`, `fill_secret` asks for a
+  reload of the only open tab first, and a login closes the other tabs and loads its page anew.
 - Expected answers of a tool to an agent no longer show up as app warnings in Manutenzione: a chat that is busy
   (`app_assign_task`), a card without title or summary (`show_ui`), a report «done» with a criterion not met
   (`agent_report`) are refusals the agent corrects by itself (#436, #438, #439).

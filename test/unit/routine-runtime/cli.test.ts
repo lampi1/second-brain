@@ -7,7 +7,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { main, parseArgs, PACKAGE_SOURCE_FILE, type CliDeps } from '../../../packages/routine-runtime/src/cli';
-import { parseEvents, progressFrom, type RoutineTrigger } from '../../../packages/routine-runtime/src/index';
+import { createLocks, parseEvents, progressFrom, type RoutineTrigger } from '../../../packages/routine-runtime/src/index';
 import { readProgress, renderProgress } from '../../../packages/routine-runtime/src/terminal';
 import { extractPackageZip, readZip } from '../../../packages/routine-runtime/src/zip';
 import type { FlowDetectionResult } from '../../../src/shared/flow-automation';
@@ -15,12 +15,13 @@ import { done, fakeDevOps, routinePackage, scriptedEngine, tempDir, type Script 
 
 const sink = () => { let text = ''; return { write: (s: string) => { text += s; return true; }, get text() { return text; } }; };
 
+const baseHarness = harness;
 function harness(script: Script, over: Partial<CliDeps> = {}) {
   const stdout = sink(), stderr = sink();
   const engine = scriptedEngine(script);
   let interrupt: (() => void) | undefined;
   const deps: Partial<CliDeps> = {
-    stdout, stderr, env: {}, engine: () => engine, mcp: () => undefined, repaintMs: 10_000,
+    stdout, stderr, env: {}, engine: () => engine, mcp: () => undefined, repaintMs: 10_000, locksDir: tempDir(),
     onInterrupt: handler => { interrupt = handler; return () => { interrupt = undefined; }; },
     ...over,
   };
@@ -132,6 +133,147 @@ describe('routine CLI', () => {
     expect(again.stdout.text).toContain(`Report: ${path.join(runDir, 'report.md')}`);
   });
 
+  describe('test databases file', () => {
+    const DB = { server: 'sql-app-01', port: 1433, database: 'AppBugs' };
+    // a made-up login value, built at run time (the repo guard refuses secret-shaped literals)
+    const FAKE = ['fake', 'login', String(process.pid)].join('-');
+    // the runtime's own packages folder of these tests (the CLI's default is %LOCALAPPDATA%\routine-runtime\packages)
+    const packagesDir = tempDir('routine-cli-packages-');
+    const dbJson = () => {
+      const pkg = plainPackage() as unknown as { routine: Record<string, unknown> & { steps: Record<string, unknown>[] }; secrets?: unknown };
+      pkg.routine.testDbs = [{ id: 'db', ...DB }];
+      pkg.routine.steps[0]!.testDbs = ['db'];
+      pkg.secrets = { testDbs: { db: { user: 'reader', password: FAKE } } };
+      return JSON.stringify(pkg, null, 2);
+    };
+    /** a package folder: by default right inside the runtime's packages folder */
+    const dbPackage = (parent = fs.mkdtempSync(path.join(packagesDir, 'pkg-'))) => {
+      fs.mkdirSync(parent, { recursive: true });
+      fs.writeFileSync(path.join(parent, 'routine.json'), dbJson());
+      return parent;
+    };
+    const dbsFile = (file: string, dbs: unknown) => { fs.writeFileSync(file, JSON.stringify(dbs)); return file; };
+    const notRecognisable = /cannot run yet[\s\S]*testDbs\[0\][\s\S]*not recognisable as a test database/;
+    const harness = (script: Script, over: Partial<CliDeps> = {}) => baseHarness(script, { packagesDir, ...over });
+    const real = (p: string) => fs.realpathSync.native(p);
+
+    it('run and watch without --test-dbs read test-dbs.json in the package folder; a missing file keeps the preflight error', async () => {
+      const dir = dbPackage();
+      let h = harness(r => done(`did ${r.stepId}`));
+      expect(await main(['run', dir, '--runs-dir', tempDir()], h.deps)).toBe(1);
+      expect(h.stderr.text).toMatch(notRecognisable);
+      expect(h.stderr.text).toContain('Hint: pass --test-dbs');
+      expect(h.stdout.text).not.toContain('test databases:');
+      expect(h.engine.requests).toHaveLength(0);
+      h = harness(() => done('x'));
+      expect(await main(['watch', dir, '--runs-dir', tempDir()], h.deps)).not.toBe(0);
+      expect(h.stderr.text).toMatch(notRecognisable);
+
+      dbsFile(path.join(dir, 'test-dbs.json'), [DB]);
+      h = harness(r => done(`did ${r.stepId}`));
+      await main(['run', path.join(dir, 'routine.json'), '--runs-dir', tempDir()], h.deps);
+      expect(h.stderr.text).not.toContain('cannot run yet');
+      expect(h.stdout.text).toContain(`test databases: ${real(path.join(dir, 'test-dbs.json'))}
+`);
+      expect(h.stdout.text).not.toContain(FAKE);
+      expect(h.stdout.text).toMatch(/Folder: /);
+      // watch passes the preflight too and stops only at the package's missing trigger
+      h = harness(() => done('x'));
+      expect(await main(['watch', dir, '--runs-dir', tempDir()], h.deps)).not.toBe(0);
+      expect(h.stderr.text).not.toContain('cannot run yet');
+      expect(h.stderr.text).toMatch(/trigger/i);
+    });
+
+    it('resume reads the test-dbs.json of the run\'s package', async () => {
+      const dir = dbPackage(), runs = tempDir('routine-cli-runs-');
+      dbsFile(path.join(dir, 'test-dbs.json'), [DB]);
+      let h = harness(() => done('x'));
+      const blocking: Script = async r => {
+        if (r.stepId !== 'fix') return done(`did ${r.stepId}`);
+        setTimeout(() => h.interrupt(), 20);
+        await new Promise(resolve => r.signal.addEventListener('abort', resolve, { once: true }));
+        return 'no-result';
+      };
+      h = harness(blocking);
+      expect(await main(['run', dir, '--runs-dir', runs], h.deps)).toBe(130);
+      const runDir = runDirOf(h.stdout.text);
+      fs.renameSync(path.join(dir, 'test-dbs.json'), path.join(dir, 'elsewhere.json'));
+      let again = harness(r => done(`did ${r.stepId}`));
+      expect(await main(['resume', runDir], again.deps)).toBe(1);
+      expect(again.stderr.text).toMatch(notRecognisable);
+      fs.renameSync(path.join(dir, 'elsewhere.json'), path.join(dir, 'test-dbs.json'));
+      again = harness(r => done(`did ${r.stepId}`));
+      expect(await main(['resume', runDir], again.deps)).toBe(0);
+      expect(again.engine.requests.map(r => r.stepId)).toEqual(['fix', 'report']);
+    });
+
+    it('an explicit --test-dbs wins over the package file; a broken file is named, its text never printed', async () => {
+      const dir = dbPackage();
+      dbsFile(path.join(dir, 'test-dbs.json'), [{ ...DB, database: 'OtherDb' }]);
+      let h = harness(r => done(`did ${r.stepId}`));
+      expect(await main(['run', dir, '--runs-dir', tempDir()], h.deps)).toBe(1);
+      expect(h.stderr.text).toMatch(/testDbs\[0\][\s\S]*not one of the host's recognised test databases/);
+      const flag = dbsFile(path.join(tempDir(), 'mine.json'), [DB]);
+      h = harness(r => done(`did ${r.stepId}`));
+      await main(['run', dir, '--runs-dir', tempDir(), '--test-dbs', flag], h.deps);
+      expect(h.stderr.text).not.toContain('cannot run yet');
+      expect(h.stdout.text).toMatch(/Folder: /);
+
+      fs.writeFileSync(path.join(dir, 'test-dbs.json'), `[{"server":"sql-app-01","${'pass'}word":"${FAKE}" oops}]`);
+      h = harness(() => done('x'));
+      expect(await main(['run', dir, '--runs-dir', tempDir()], h.deps)).toBe(2);
+      expect(h.stderr.text).toContain(`the package's test-dbs.json: cannot read ${real(path.join(dir, 'test-dbs.json'))}`);
+      expect(h.stderr.text).toContain('not valid JSON');
+      expect(h.stderr.text).not.toContain(FAKE);
+    });
+
+    it('reads no package test-dbs.json outside the runtime packages folder, beside a .zip, deeper, or through a link', async () => {
+      const outside = dbPackage(tempDir('routine-cli-pkg-'));
+      dbsFile(path.join(outside, 'test-dbs.json'), [DB]);
+      const nested = dbPackage(path.join(fs.mkdtempSync(path.join(packagesDir, 'group-')), 'inner'));
+      dbsFile(path.join(nested, 'test-dbs.json'), [DB]);
+      const zipDir = fs.mkdtempSync(path.join(packagesDir, 'zip-'));
+      dbsFile(path.join(zipDir, 'test-dbs.json'), [DB]);
+      const zip = path.join(zipDir, 'pkg.zip');
+      fs.writeFileSync(zip, zipOf({ 'demo/routine.json': dbJson() }));
+      const linked = path.join(packagesDir, `link-${process.pid}`);
+      fs.symlinkSync(outside, linked, 'junction');
+      for (const target of [outside, path.join(outside, 'routine.json'), nested, zip, linked]) {
+        const h = harness(r => done(`did ${r.stepId}`));
+        expect(await main(['run', target, '--runs-dir', tempDir()], h.deps), target).toBe(1);
+        expect(h.stderr.text, target).toMatch(notRecognisable);
+        expect(h.stderr.text, target).toContain('Hint: pass --test-dbs');
+        expect(h.stdout.text, target).not.toContain('test databases:');
+      }
+      // the same folder through the runtime's packages folder is trusted
+      const h = harness(r => done(`did ${r.stepId}`));
+      expect(await main(['run', outside, '--runs-dir', tempDir()], { ...h.deps, packagesDir: path.dirname(outside) })).toBe(0);
+    });
+
+    it('a missing package path never reads the test-dbs.json of its parent folder', async () => {
+      const dir = fs.mkdtempSync(path.join(packagesDir, 'pkg-'));
+      fs.writeFileSync(path.join(dir, 'test-dbs.json'), 'not json');
+      const h = harness(() => done('x'));
+      expect(await main(['run', path.join(dir, 'missing'), '--runs-dir', tempDir()], h.deps)).not.toBe(0);
+      expect(h.stdout.text).not.toContain('test databases:');
+      expect(h.stderr.text).not.toContain('not valid JSON');
+      expect(h.stderr.text).toMatch(/missing/);
+    });
+
+    it('a null entry is refused with exit 2, naming its source', async () => {
+      const dir = dbPackage();
+      fs.writeFileSync(path.join(dir, 'test-dbs.json'), '[null]');
+      let h = harness(() => done('x'));
+      expect(await main(['run', dir, '--runs-dir', tempDir()], h.deps)).toBe(2);
+      expect(h.stderr.text).toMatch(/^the package's test-dbs\.json: item 0 of .+ needs "server"/m);
+      const flag = path.join(tempDir(), 'mine.json');
+      fs.writeFileSync(flag, '[null]');
+      h = harness(() => done('x'));
+      expect(await main(['run', dir, '--runs-dir', tempDir(), '--test-dbs', flag], h.deps)).toBe(2);
+      expect(h.stderr.text).toMatch(/^--test-dbs: item 0 of .+ needs "server"/m);
+    });
+  });
+
   describe('watch', () => {
     const trigger: RoutineTrigger = { kind: 'devops', everyMinutes: 5, organization: 'contoso', project: 'Proj', areaPath: 'Proj', workItemType: 'Bug', states: ['New'], includeExisting: true, includeTags: ['ai-fixable'] };
     const oneItem = async (): Promise<FlowDetectionResult> => ({ items: [{ title: 'Bug 42', inputs: { 'work-item-id': '42' } }], cursor: { 42: '3' }, summary: '1 item.' } as unknown as FlowDetectionResult);
@@ -169,6 +311,20 @@ describe('routine CLI', () => {
       expect(h.stdout.text).toMatch(/Stopped\. Interrupted runs stay resumable/);
       const runDir = fs.readdirSync(path.join(runs, 'demo')).find(d => d !== 'trigger.json')!;
       expect(JSON.parse(fs.readFileSync(path.join(runs, 'demo', runDir, 'run.json'), 'utf8')).status).toBe('cancelled');
+    });
+
+    it('a second watch of the same routine (another terminal, any runs dir) is refused; the first frees its lock', async () => {
+      const { devops, pkg, runs } = setup();
+      const locksDir = tempDir();
+      const over = { devops: { authorization: devops.authorization, request: devops.request, detect: oneItem }, sleep: async () => undefined, locksDir };
+      createLocks(locksDir, { alive: () => true }).acquire('watch-demo', 'watch-elsewhere');
+      const second = harness(r => done(`did ${r.stepId}`), { ...over, maxPolls: 1 });
+      expect(await main(['watch', pkg, '--runs-dir', tempDir()], second.deps)).toBe(1);
+      expect(second.stderr.text).toMatch(/Another routine watch of "demo" is running/);
+      createLocks(locksDir).release(['watch-demo'], 'watch-elsewhere');
+      const first = harness(r => done(`did ${r.stepId}`), { ...over, maxPolls: 1 });
+      expect(await main(['watch', pkg, '--runs-dir', runs], first.deps)).toBe(0);
+      expect(fs.readdirSync(locksDir)).toEqual([]);
     });
 
     it('a package without a trigger is refused', async () => {

@@ -9,6 +9,7 @@ import { checkedAuthorization } from './token';
 import type { RoutineDevOps } from './format';
 import { WRITE_CATEGORY, type StepWrite } from './step-result';
 import type { Masker } from './mask';
+import { markdownHtml } from './devops-host/devops-content';
 import { StaleAttempt, type LedgerEntry, type RunStore } from './run-store';
 import { executeExtended, imagesHtml, mentionTags, refusal, tracker, uploadImages, type Deployments, type ExtendedContext, type ExtendedOutcome, type Plan } from './devops-ops';
 
@@ -24,6 +25,14 @@ export class DevOpsCallError extends Error {
 const ORG = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,49}$/;
 const base = (org: string) => { if (!ORG.test(org)) throw new DevOpsCallError('DevOps: invalid organization'); return `https://dev.azure.com/${encodeURIComponent(org)}`; };
 
+/** DevOps's own words for a refused call (the "message" of its JSON error body), as ": <message>"; "" when there is none. */
+async function errorReason(response: Response): Promise<string> {
+  try {
+    const message = (JSON.parse(await response.text()) as Record<string, unknown>).message;
+    return typeof message === 'string' && message.trim() ? `: ${message.replace(/\s+/g, ' ').trim().slice(0, 300)}` : '';
+  } catch { return ''; }
+}
+
 export function createDevOpsClient(options: { authorization: TokenProvider; request?: Request; timeoutMs?: number }) {
   const call = async (method: string, url: string, body?: unknown, contentType = 'application/json'): Promise<Record<string, unknown>> => {
     const signal = AbortSignal.timeout(options.timeoutMs ?? 60_000);
@@ -33,7 +42,7 @@ export function createDevOpsClient(options: { authorization: TokenProvider; requ
       // an image upload sends its bytes as they are; everything else is JSON
       ...(body !== undefined ? { body: Buffer.isBuffer(body) ? new Uint8Array(body) : JSON.stringify(body) } : {}) });
     if (response.status === 401 || response.status === 403 || response.status === 203) throw new DevOpsCallError('DevOps: not authorised (check the PAT or az login)', true);
-    if (!response.ok) throw new DevOpsCallError(`DevOps: ${method} failed (HTTP ${response.status})`, response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429);
+    if (!response.ok) throw new DevOpsCallError(`DevOps: ${method} failed (HTTP ${response.status})${await errorReason(response)}`, response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429);
     const text = await response.text();
     try { return text ? JSON.parse(text) as Record<string, unknown> : {}; } catch { throw new DevOpsCallError('DevOps: invalid response'); }
   };
@@ -108,11 +117,36 @@ export function createDevOpsClient(options: { authorization: TokenProvider; requ
 export type DevOpsClient = ReturnType<typeof createDevOpsClient>;
 
 export const html = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-/** Plain text → comment HTML (paragraphs and line breaks only). */
-export const commentHtml = (text: string): string => html(text).replace(/\r?\n/g, '<br/>');
+/** Agent or host text → work item HTML (DevOps stores those comments as HTML: raw Markdown would show its ** and [](…)):
+ *  escaped, with **bold**, `- ` lists, `#` headings and links to the organization rendered. Never throws. */
+export const commentHtml = (text: string, organization: string): string => markdownHtml(text, organization);
 export const mentionHtml = (identity: string, name?: string): string => `<a href="#" data-vss-mention="version:2.0,${identity}">@${html(name ?? identity)}</a>`;
 /** The visible marker that makes a comment findable after a crash (no secret, no prompt text). */
 export const runMarker = (runId: string, key: string): string => `routine run ${runId} · ${key.slice(0, 12)}`;
+/** Comment HTML → plain text for the next prompt (DevOps returns HTML). */
+export const replyText = (htmlText: string): string =>
+  htmlText.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li)>/gi, '\n').replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&#(?:x([0-9a-f]{1,6})|(\d{1,7}));/gi, (raw, hex: string | undefined, dec: string | undefined) => {
+      const code = hex ? parseInt(hex, 16) : Number(dec);
+      return code === 0 || code === 38 || code > 0x10ffff ? raw : String.fromCodePoint(code);
+    }).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, '\'').replace(/&amp;/g, '&')
+    .replace(/\n{3,}/g, '\n\n').trim().slice(0, 4000);
+const MODEL_NAMES: [RegExp, string][] = [[/^claude-opus-5-5/i, 'Opus 5.5'], [/^claude-sonnet-5(?![-.\d])/i, 'Sonnet 5'], [/^claude-fable-5-1/i, 'Fable 5.1'], [/^claude-haiku-4-5/i, 'Haiku 4.5']];
+/** A model id as people read it (claude-opus-5-5 → Opus 5.5); an unknown id loses the vendor word. */
+export const modelDisplayName = (id: string): string => MODEL_NAMES.find(([re]) => re.test(id))?.[1] ?? id.replace(/claude-?/gi, '').trim();
+/** The first line of every comment the runtime writes: AI, the model and effort of the step behind it (owner, 2026-10-28). */
+export const commentSignature = (model?: string, effort?: string): string => ['AI', ...(model && modelDisplayName(model) ? [modelDisplayName(model)] : []), ...(effort ? [effort] : [])].join(' · ');
+/** Comment HTML with the signature as its first line. */
+export const signedHtml = (body: string, signature?: string): string => signature ? `${html(signature)}<br/>${body}` : body;
+/** Whether a comment is the runtime's own: it starts with the signature (AI · …, or a bare AI line) or carries the
+ *  small run marker every marked runtime comment ends with; a person's text that merely says "routine run" is not. */
+export const isRoutineComment = (htmlText: string): boolean => /^AI(?: · |\n|$)/.test(replyText(htmlText).trimStart()) || /<small>\s*routine run /i.test(htmlText);
+/** The instruction of a comment whose literal text starts with @AI (any case) followed by a space, ":", "," or the end;
+ *  the prefix removed. undefined for any other comment: @AI-bot, @AIUTO, or a DevOps mention of an identity named AI. */
+export const aiInstruction = (htmlText: string): string | undefined => {
+  const text = replyText(htmlText.replace(/<a\b[^>]*data-vss-mention[^>]*>[\s\S]*?<\/a>/gi, '[mention]')).trimStart();
+  return /^@AI(?=[\s:,]|$)/i.test(text) ? text.replace(/^@AI[\s:,]*/i, '').trim() : undefined;
+};
 
 export interface WriteContext {
   runId: string; attempt: number; stepId: string; workItem: number;
@@ -125,10 +159,15 @@ export interface WriteContext {
   /** who a downgrade comment mentions besides devops.mentions */
   contact?: ExtendedContext['contact'];
   push?: ExtendedContext['push'];
+  /** set when the package parks runs: a downgrade becomes a park of this step (scoped keys, run branch pushed) */
+  park?: ExtendedContext['park'];
+  headOf?: ExtendedContext['headOf'];
   /** the step's own folder: comment images are read only from its evidence/ and screenshots/ */
   stepDir?: string;
   /** the review→fix round of the step (1 = first pass): a later round's writes are new writes, not duplicates */
   round?: number;
+  /** the commentSignature of the step: the first line of its comments (bug, PR, park) */
+  signature?: string;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
 }
@@ -157,6 +196,8 @@ export function refusedWrite(grant: RoutineDevOps, write: StepWrite): string | n
     case 'fields':
       for (const f of Object.keys(write.fields)) if (!grant.fields.includes(f)) return `field ${f} is not in the package's devops.fields`;
       if (Object.keys(write.fields).some(f => f === 'System.State' || f === 'System.Tags')) return 'use the state or tags write for System.State / System.Tags';
+      // a move to another project (with its area and iteration in the same write) stays inside the package's projects
+      if ('System.TeamProject' in write.fields && !(typeof write.fields['System.TeamProject'] === 'string' && inProjects(write.fields['System.TeamProject']))) return `project ${String(write.fields['System.TeamProject'])} is not in the package's devops.projects`;
       return null;
     case 'create-test-plan': return write.project && !inProjects(write.project) ? `project ${write.project} is not in the package's devops.projects` : null;
     case 'create-pr': return inProjects(write.project) ? null : `project ${write.project} is not in the package's devops.projects`;
@@ -194,6 +235,10 @@ export interface WritesOutcome {
   failed: string[];
   /** a downgrade ran (its reason): the run stops and waits for a person */
   downgraded?: string;
+  /** the step the parked run resumes from (a step id the model named) */
+  resumeFrom?: string;
+  /** a parked downgrade: the comment the answer must follow and the run branch */
+  parked?: { commentId?: number; branch: string; pushed: boolean };
 }
 
 /**
@@ -214,7 +259,7 @@ export async function executeWrites(context: WriteContext, writes: StepWrite[]):
     const entry = current();
     if (entry?.state === 'done') { out.done.push(`${plan.what} (already done)`); return 'done'; }
     if (entry?.state === 'not-verified') { out.notVerified.push(plan.what); return 'not-verified'; }
-    if (entry?.state === 'failed') { out.failed.push(plan.what); return 'failed'; }
+    if (entry?.state === 'failed') { out.failed.push(entry.error ? `${plan.what}: ${entry.error}` : plan.what); return 'failed'; }
     const save = (state: LedgerEntry['state'], extra: Partial<LedgerEntry> = {}) => {
       const prior = current();
       const resource = { ...prior?.resource, ...extra.resource };
@@ -241,7 +286,7 @@ export async function executeWrites(context: WriteContext, writes: StepWrite[]):
       result = await once();
     }
     if (result === 'ok') { out.done.push(label); return 'done'; }
-    if (result === 'definite') { save('failed'); out.failed.push(reason ? `${plan.what}: ${reason}` : plan.what); return 'failed'; }
+    if (result === 'definite') { save('failed', reason ? { error: reason } : {}); out.failed.push(reason ? `${plan.what}: ${reason}` : plan.what); return 'failed'; }
     save('not-verified'); out.notVerified.push(plan.what); return 'not-verified';
   };
   const classic = async (write: ClassicWrite, key: string): Promise<void> => {
@@ -249,7 +294,7 @@ export async function executeWrites(context: WriteContext, writes: StepWrite[]):
     const entry = store.ledger(context.runId)[key];
     if (entry?.state === 'done') { out.done.push(`${what} (already done)`); return; }
     if (entry?.state === 'not-verified') { out.notVerified.push(what); return; }
-    if (entry?.state === 'failed') { out.failed.push(what); return; }
+    if (entry?.state === 'failed') { out.failed.push(entry.error ? `${what}: ${entry.error}` : what); return; }
     const save = (state: LedgerEntry['state'], extra: Partial<LedgerEntry> = {}) => store.setLedger(context.runId, context.attempt, key, { state, what, at: Date.now(), tries: extra.tries ?? store.ledger(context.runId)[key]?.tries ?? 0, ...extra });
     if (!project) {
       try { project = (await client.item(grant.organization, workItem)).project; }
@@ -264,10 +309,12 @@ export async function executeWrites(context: WriteContext, writes: StepWrite[]):
       if (write.mentions?.length) before = `${await mentionTags(ectx, write.mentions)}<br/>`;
       if (write.images?.length) after = imagesHtml(await uploadImages(ectx, write.images, settle, out));
     }
+    // DevOps's reason for the last definite refusal: kept in the ledger and reported with the failure
+    let reason = '';
     const once = async (): Promise<'ok' | 'definite' | 'unknown'> => {
       try {
         if (write.op === 'comment') {
-          const commentId = await client.comment(grant.organization, project!, workItem, `${before}${commentHtml(masker.mask(write.text))}${after}<br/><small>${html(marker)}</small>`);
+          const commentId = await client.comment(grant.organization, project!, workItem, signedHtml(`${before}${commentHtml(masker.mask(write.text), grant.organization)}${after}<br/><small>${html(marker)}</small>`, context.signature));
           save('done', { commentId }); return 'ok';
         }
         let ops: { op: 'add' | 'replace' | 'remove'; path: string; value?: unknown }[];
@@ -286,7 +333,10 @@ export async function executeWrites(context: WriteContext, writes: StepWrite[]):
         // a tags write is done only when the item really shows it (DevOps answers a no-op patch with the same rev)
         if (write.op === 'tags' && await verifyWrite(context, write, marker, project!) !== 'present') return 'unknown';
         save('done', { rev }); return 'ok';
-      } catch (e) { return e instanceof DevOpsCallError && e.definite ? 'definite' : 'unknown'; }
+      } catch (e) {
+        if (!(e instanceof DevOpsCallError && e.definite)) return 'unknown';
+        reason = masker.mask(e.message).slice(0, 300); return 'definite';
+      }
     };
     // a "writing" entry is a write whose outcome was lost (crash): verify before anything else
     let tries = entry?.tries ?? 0, label = what;
@@ -299,8 +349,10 @@ export async function executeWrites(context: WriteContext, writes: StepWrite[]):
       result = await once();
     }
     if (result === 'ok') out.done.push(label);
-    else if (result === 'definite') { save('failed'); out.failed.push(what); }
+    else if (result === 'definite') { save('failed', reason ? { error: reason } : {}); out.failed.push(reason ? `${what}: ${reason}` : what); }
     else { save('not-verified'); out.notVerified.push(what); }
+    // a project move: the later comments go to the new project; an unverified move is re-read before the next write
+    if (write.op === 'fields' && 'System.TeamProject' in write.fields && result !== 'definite') project = result === 'ok' ? String(write.fields['System.TeamProject']) : undefined;
   };
   for (const [index, write] of writes.entries()) {
     const key = writeKey(context.runId, context.stepId, index, write, context.round);
@@ -318,6 +370,8 @@ export async function executeWrites(context: WriteContext, writes: StepWrite[]):
       inputs: context.inputs ?? {}, runDir: store.runDir(context.runId), ...(context.stepDir ? { stepDir: context.stepDir } : {}),
       ...(context.deployments ? { deployments: context.deployments } : {}), ...(context.arm ? { arm: context.arm } : {}),
       ...(context.contact ? { contact: context.contact } : {}), ...(context.push ? { push: context.push } : {}),
+      ...(context.park ? { park: context.park } : {}), ...(context.headOf ? { headOf: context.headOf } : {}),
+      ...(context.signature ? { signature: context.signature } : {}),
       sleep: context.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms))), now,
     }, write, resourceKey, settle, ext, (w, k) => isClassic(w) ? classic(w, k) : Promise.resolve());
     if (out.downgraded) break;

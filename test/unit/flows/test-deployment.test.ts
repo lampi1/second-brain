@@ -142,3 +142,51 @@ it('clears creation intent when authority is withdrawn after intent persistence 
   expect(s.call.mock.calls.some(c => c[0] === 'POST')).toBe(false);
   expect(s.coordinator.ownedTargets('run-a')).toEqual([]);
 });
+it('heals a finished lease left by a settled run (a done run never released its succeeded release), never an active one or a live run', async () => {
+  const s = setup(), state = path.join(path.dirname(s.config), 'state.json'), settled = new Set<string>();
+  const healing = new TestDeploymentCoordinator(s.config, state, id => settled.has(id));
+  s.set({ status: 'succeeded' });
+  await s.coordinator.execute('deploy-test', s.target, 40, s.ports);
+  await s.coordinator.execute('test-deploy-status', s.target, undefined, s.ports);
+  // run-a still running or parked: its node stays leased
+  await expect(healing.execute('deploy-test', s.target, 40, { ...s.ports, runId: 'run-b' })).rejects.toThrow('leased');
+  await expect(healing.acquireStep('run-b', 'after', s.target, () => {})).rejects.toThrow('already leased');
+  // run-a ended (done) without releasing: the next deploy heals it and goes on
+  settled.add('run-a');
+  await expect(healing.execute('deploy-test', s.target, 40, { ...s.ports, runId: 'run-b' })).resolves.toMatchObject({ releaseId: 20 });
+  const saved = JSON.parse(fs.readFileSync(state, 'utf8')) as { deployments: { runId: string; released?: boolean }[] };
+  expect(saved.deployments.find(d => d.runId === 'run-a')?.released).toBe(true);
+  expect(saved.deployments.find(d => d.runId === 'run-b')?.released).toBeFalsy();
+});
+it('keeps an active or uncertain deployment of a settled run leased, and heals the step leases a settled run left', async () => {
+  const s = setup(), state = path.join(path.dirname(s.config), 'state.json'), settled = new Set<string>(['run-a']);
+  const healing = new TestDeploymentCoordinator(s.config, state, id => settled.has(id));
+  await s.coordinator.execute('deploy-test', s.target, 40, s.ports); // still inProgress
+  await expect(healing.execute('deploy-test', s.target, 40, { ...s.ports, runId: 'run-b' })).rejects.toThrow('leased');
+  expect(await healing.settle('run-a', () => {})).toBe(false);
+  const steps = setup(), stepState = path.join(path.dirname(steps.config), 'state.json');
+  await steps.coordinator.acquireStep('run-a', 'before', steps.target, () => {});
+  const stepHealing = new TestDeploymentCoordinator(steps.config, stepState, id => id === 'run-a');
+  await expect(stepHealing.acquireStep('run-b', 'before', steps.target, () => {})).resolves.toBeUndefined();
+  const live = new TestDeploymentCoordinator(steps.config, stepState, () => false);
+  await expect(live.acquireStep('run-c', 'before', steps.target, () => {})).rejects.toThrow('already leased');
+});
+it('a run that let its node go (park) takes it back only while the node still runs its release; another run\'s redeploy is a lasting conflict, never success', async () => {
+  const s = setup(); let latest = { release: 20, attempt: 1 };
+  // the environment's deployments: nothing active, the latest one is `latest`
+  const call = async (method: string, url: string, body?: unknown): Promise<Record<string, unknown>> => url.includes('/release/deployments?')
+    ? url.includes('queryOrder=descending') ? { value: [{ id: 300 + latest.release, releaseDefinition: { id: 4 }, definitionEnvironmentId: 9, release: { id: latest.release }, deploymentStatus: 'succeeded', operationStatus: 'Approved', lastModifiedOn: 't', attempt: latest.attempt }] } : { value: [] }
+    : s.call(method, url, body);
+  const ports = { ...s.ports, call };
+  await s.coordinator.execute('deploy-test', s.target, 40, ports); s.set({ status: 'succeeded' });
+  expect(await s.coordinator.execute('test-deploy-status', s.target, undefined, ports)).toMatchObject({ success: true });
+  // parked: the node is free; nobody touched it, so the resumed run takes it back and another run is refused again
+  expect(await s.coordinator.settle('run-a', ports.authorize)).toBe(true);
+  expect(await s.coordinator.reclaim('run-a', ports)).toEqual([]);
+  await expect(s.coordinator.execute('deploy-test', s.target, 40, { ...ports, runId: 'run-b' })).rejects.toThrow('leased');
+  // parked again; meanwhile run B deploys its own release on the node; run A resumes
+  expect(await s.coordinator.settle('run-a', ports.authorize)).toBe(true);
+  latest = { release: 21, attempt: 1 };
+  expect(await s.coordinator.reclaim('run-a', ports)).toEqual([expect.objectContaining({ targetId: 'test-a', releaseId: 20, replaced: true })]);
+  expect(await s.coordinator.execute('test-deploy-status', s.target, undefined, ports)).toMatchObject({ success: false, evidenceConflict: expect.stringContaining('replaced') });
+});

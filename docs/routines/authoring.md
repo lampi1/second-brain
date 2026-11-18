@@ -56,9 +56,9 @@ A step gets these by declaring them, never by adding them to `routine.mcpServers
 
 | Server | How a step gets it | Tools |
 |--------|--------------------|-------|
-| `routine-devops` | the run has a work item | `get_work_item`, `get_work_item_comments`, `get_attachment` (read only) |
+| `routine-devops` | the run has a work item | `get_work_item`, `get_work_item_comments`, `get_attachment`, `current_iteration` (read only) |
 | `routine-testdb` | the step lists ids in `testDbs` | `test_db_query` (read only, TEST databases only) |
-| `routine-browser` | the step has `browser: true` and the routine `browser.origins` | `navigate`, `snapshot`, `click`, `type`, `select_option`, `screenshot`, `login`, `fill_secret` |
+| `routine-browser` | the step has `browser: true` and the routine `browser.origins` | `navigate`, `history`, `tabs`, `snapshot`, `click`, `type`, `select_option`, `check`, `press`, `hover`, `drag`, `click_at`, `scroll`, `upload`, `dialog`, `wait`, `eval`, `console`, `network`, `resize`, `screenshot`, `login`, `fill_secret` |
 
 Allow their tools with `mcp__<server>__*` in `allowedTools`.
 
@@ -68,8 +68,39 @@ login pages, uses `loginSuccess` (Air: success = the URL leaves `/Account/Login`
 and `type` refuses password fields. A prompt says "the browser is already logged into <site>"; never login steps,
 credentials or selectors.
 
+**A step that must see the login page** (a sign-out in one tab and a reload in another, an expired session) passes
+`relogin: false` to every call that leads there: `navigate`, `history`, `click`, `press` or `click_at` (the other
+tools sign in as always). That call never signs in: a page that lands on a login page is left as it is and the reply
+says so. `snapshot` and `screenshot` read it (the password fields are emptied before the PNG); `eval` keeps refusing a
+login page and `type` its password field. The flag holds for that call only: the next navigation or action without it
+signs in again. The sign-out click needs it too, or the runtime signs straight back in. Say it in the prompt, e.g.
+"click Sign out in tab 0 with `relogin: false`, select tab 1, reload it with `relogin: false` and check that the
+login page shows".
+
 `browser.hide` (optional): CSS selectors of overlays the runtime hides on every page, so they never cover what a step
 clicks (Air: `["#draggable", "ai-chat"]`, the Maia chat). Plain selectors only (no braces).
+
+**Every widget is reachable.** `snapshot` gives a ref to links, buttons, fields, ARIA roles, Bootstrap toggles
+(`data-toggle`), `.btn` divs, datepicker days, any element with a pointer cursor its parent lacks, SVG groups that draw
+shapes (Air's odontogram) and the elements of same-origin iframes (`f1e3`); each line ends with `@x,y`, the element's
+centre in the full-page screenshot. `type` presses real keys (a datepicker sees them; `then: "Tab"` closes it).
+`press`, `hover`, `scroll`, `wait` (ms, network `idle`, a text, a selector, or `gone`) and `click_at` (screenshot
+pixels: a canvas, a cross-origin frame) cover the rest; `click` does right and double clicks, `check`, `drag`,
+`upload` (files of the step's folder, its evidence or the temp folder, never one named like a secret), `history`
+(back, forward, reload), `tabs` (popups open new ones), `resize`. Dialogs: alerts are accepted, confirms and prompts
+dismissed unless `dialog {accept: true}` comes first. Downloads land in the evidence folder. `screenshot` takes one
+element (`ref`) or the viewport too and returns the image with `view: true`; `snapshot {aria: true}` is the full
+accessibility tree. Every action ends with a line on what went wrong meanwhile (console errors, failed requests,
+dialogs, new tabs); `console` and `network` give the details (stacks, status, a short body; token-like query values
+hidden). A failed action returns Playwright's call log (e.g. "… intercepts pointer events": `click` with `force: true`).
+
+**`eval` is a powerful tool**: it runs any JavaScript expression in the page and returns its value as JSON (at most
+4000 characters). It runs only on `browser.origins`, never on a login page, and is refused while a password field
+holds a value; every reply is masked against the package's passwords. It can still change data the page can change:
+allow it (`mcp__routine-browser__eval`) only where a prompt needs it, and say in the prompt what it may do. After an
+`eval` the runtime writes no password beside what it may have left: `fill_secret` asks first for the other tabs closed
+and the page reloaded (`history` reload, then a new `snapshot`), and a login (a session that ended, the `login` tool)
+closes the other tabs by itself. A step that sets a password and uses `eval` does the `fill_secret` part first.
 
 ## Workflow (the Orchestrator)
 
