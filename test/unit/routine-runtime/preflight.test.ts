@@ -114,6 +114,69 @@ describe('routine package preflight', () => {
     expect(preflightRoutinePackage(p).warnings.map(w => w.path)).toEqual(['browser']);
   });
 
+  it('entries and retrigger tags: each mistake names its field and gives a fix (ADR 0324)', () => {
+    const tagged = () => {
+      const p = base();
+      p.routine.steps = [{ id: 'fix', title: 'Fix', prompt: 'Fix {{workItem}} as {{entry}}; before: {{previousRun}}.' }, { id: 'verify', title: 'Verify', prompt: 'Verify.' }];
+      p.routine.inputs = [];
+      p.routine.trigger = { kind: 'devops', everyMinutes: 5, organization: 'contoso', project: 'Air', areaPath: 'Air', workItemType: 'Bug', states: ['New'], includeExisting: false, includeTags: ['ai-fixable'], retriggerTags: ['ai-retest'] };
+      p.routine.devops = { organization: 'contoso', projects: ['Air'], ops: ['comment', 'tags'], fields: [] };
+      p.routine.entries = [{ name: 'retest', when: { tag: 'ai-retest' }, startStep: 'verify' }];
+      p.routine.escalation = { contact: [8, 4, 4, 4, 12].map(n => 'a'.repeat(n)).join('-') };
+      p.secrets = { devopsPat: 'pat-value-123' };
+      return p;
+    };
+    const issue = (p: unknown, kind: 'errors' | 'warnings' = 'errors') => preflightRoutinePackage(p)[kind].map(e => [e.path, e.fix]);
+    // the whole thing right: runs, nothing to say; {{entry}} and {{previousRun}} are the runtime's
+    expect(preflightRoutinePackage(tagged())).toMatchObject({ ok: true, errors: [], warnings: [] });
+    expect(preflightRoutinePackage(tagged()).pkg!.routine).toMatchObject({ entries: [{ name: 'retest', when: { tag: 'ai-retest' }, startStep: 'verify' }], trigger: { retriggerTags: ['ai-retest'] } });
+    // without the two options {{entry}} is an undeclared input, as before
+    let p = tagged(); delete p.routine.entries; delete p.routine.trigger.retriggerTags;
+    expect(preflightRoutinePackage(p).errors.map(e => e.message)).toEqual(['{{entry}} is not an input', '{{previousRun}} is not an input']);
+
+    // format: the validator's message, with a fix that says what to write
+    p = tagged(); p.routine.entries[0].startStep = 'nope';
+    expect(issue(p)).toEqual([['entries[0].startStep', 'Use the id of one of routine.steps: the step a run of this entry starts from.']]);
+    p = tagged(); p.routine.entries[0].when = { tags: ['ai-retest'] };
+    expect(issue(p)).toEqual([['entries[0].when', expect.stringContaining('{ "tag": "ai-retest" }')]]);
+    p = tagged(); p.routine.entries[0].name = 'default';
+    expect(issue(p)).toEqual([['entries[0].name', expect.stringContaining('"default" is the first step')]]);
+    p = tagged(); p.routine.entries.push({ ...p.routine.entries[0], startStep: 'fix' });
+    expect(issue(p)[0]![0]).toBe('entries');
+    p = tagged(); p.routine.trigger.retriggerTags = ['a;b'];
+    expect(issue(p)).toEqual([['trigger.retriggerTags[0]', expect.stringContaining('without ";"')]]);
+    p = tagged(); p.routine.trigger.retriggerTags = [];
+    expect(issue(p)[0]![0]).toBe('trigger.retriggerTags');
+
+    // the runtime must be able to take the tag off
+    p = tagged(); p.routine.devops.ops = ['comment'];
+    expect(issue(p)).toEqual([['trigger.retriggerTags', 'Add "tags" to devops.ops.']]);
+    p = tagged(); delete p.routine.devops; delete p.secrets;
+    expect(issue(p)).toEqual([['trigger.retriggerTags', expect.stringContaining('Add routine.devops')]]);
+    // a retrigger tag every item already has, or the one a parked item gets, would start it again at once
+    p = tagged(); p.routine.trigger.retriggerTags = ['AI-Fixable'];
+    expect(issue(p)).toEqual([['trigger.retriggerTags[0]', expect.stringContaining('a tag of its own')]]);
+    p = tagged(); p.routine.devops.ops.push('downgrade'); p.routine.devops.downgrade = { removeTag: 'ai-fixable', addTag: 'ai-retest', state: 'New' };
+    expect(issue(p)).toEqual([['trigger.retriggerTags[0]', expect.stringContaining('a tag of its own')]]);
+    // two entries on one tag: the second is never chosen
+    p = tagged(); p.routine.entries.push({ name: 'again', when: { tag: 'AI-RETEST' }, startStep: 'fix' });
+    expect(issue(p)).toEqual([['entries[1].when.tag', 'Give each entry its own tag, or remove this entry.']]);
+    // the runtime's inputs cannot be declared
+    p = tagged(); p.routine.inputs = [{ name: 'entry' }, { name: 'previousRun' }];
+    expect(preflightRoutinePackage(p).errors.map(e => e.path)).toEqual(['inputs[0].name', 'inputs[1].name']);
+    // entries need a work item, and an organization to read its tags from
+    p = base(); p.routine.entries = [{ name: 'again', when: { tag: 'x' }, startStep: 'a' }];
+    expect(issue(p)).toEqual([['entries', expect.stringContaining('workItem')]]);
+    p.routine.inputs.push({ name: 'workItem' });
+    expect(issue(p)).toEqual([['entries', expect.stringContaining('routine.devops')]]);
+
+    // warnings: a retrigger with no entry reruns everything; an entry at the first step is the default one
+    p = tagged(); delete p.routine.entries; p.routine.steps[0].prompt = 'Fix {{workItem}}.';
+    expect(issue(p, 'warnings')).toEqual([['trigger.retriggerTags', expect.stringContaining('routine.entries')]]);
+    p = tagged(); p.routine.entries[0].startStep = 'fix';
+    expect(issue(p, 'warnings')).toEqual([['entries[0].startStep', expect.stringContaining('Name a later step')]]);
+  });
+
   it('a secret placeholder is a missing-secret error, marked for the user', () => {
     const p = base();
     p.credentials = [{ loginUrl: 'https://air.example.test/Account/Login?mode=local', user: 'u', password: SECRET_PLACEHOLDER }];

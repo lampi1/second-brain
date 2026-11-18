@@ -65,7 +65,19 @@ export interface RunRecord {
   lostNodes?: string[];
   /** the @AI comment that admitted an item already carrying the park tag: guidance for every step */
   admitted?: AiAnswer;
+  /** the package entry this run took (routine.entries; "default" = the first step): only for a package that uses
+   *  entries or retrigger tags (ADR 0324) */
+  entry?: string;
+  /** the step that run started from, when it is not the first (its entry's startStep, or --from-step); same packages only */
+  startStep?: string;
+  /** the previous run of the same work item in this runs root: its folder is the run's read-only `previousRun` input */
+  previousRunId?: string;
+  /** the retrigger tags this run's start took from its work item (trigger.retriggerTags) */
+  retrigger?: RunRetrigger;
 }
+/** A run's retrigger tags: removed from the work item before its first step, so one tag starts one run. `removed` false
+ *  = not confirmed yet: the watch tries again and the item does not start again meanwhile. */
+export interface RunRetrigger { tags: string[]; removed: boolean; tries?: number; at?: number; note?: string }
 /** A comment starting with @AI: its instruction (prefix removed, masked) and its author. `authorId` is set from the
  *  version that acknowledges it ("Presa in carico"); an answer recorded without it gets no late reply. */
 export interface AiAnswer { commentId: number; at: number; text: string; author: string; authorId?: string }
@@ -85,7 +97,11 @@ export interface RunPark {
 export interface LedgerEntry { state: 'writing' | 'done' | 'not-verified' | 'failed'; what: string; at: number; tries: number; commentId?: number; rev?: number;
   /** DevOps's reason for a refused (failed) write */
   error?: string; resource?: Record<string, string | number | boolean> }
-export interface TriggerSubject { runId: string; at: number; title?: string }
+export interface TriggerSubject { runId: string; at: number; title?: string;
+  /** the item's earlier runs, oldest first (a retrigger tag started it again) */
+  previous?: string[];
+  /** a restart being made (saved before its run starts): the run it follows, so a crash in between starts nothing twice */
+  restart?: { from: string } }
 export interface TriggerState { schema: 1; cursor: Record<string, string>;
   /** cursors of the trigger's further areas (key project|areaPath) */
   cursors?: Record<string, Record<string, string>>; subjects: Record<string, TriggerSubject>; starts: number[]; lastCheckAt?: number; lastResult?: string }

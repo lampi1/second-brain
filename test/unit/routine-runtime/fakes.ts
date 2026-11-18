@@ -43,6 +43,11 @@ export function fakeDevOps(options: { me?: string; now?: () => number } = {}) {
     m = /\/_apis\/wit\/workItems\/(\d+)\/updates$/i.exec(p);
     if (m) return json({ value: (updates.get(Number(m[1])) ?? []).map(u => ({ rev: u.rev, revisedBy: { id: u.by }, revisedDate: new Date(u.at).toISOString(), fields: Object.fromEntries(u.fields.map(f => [f, {}])) })) });
     if (/\/_apis\/connectionData$/i.test(p)) return json({ authenticatedUser: { id: me } });
+    // several items' fields in one read (the retrigger tags of started items): a missing item is null (errorPolicy Omit)
+    if (/\/_apis\/wit\/workitemsbatch$/i.test(p) && method === 'POST') {
+      const asked = body as { ids: number[]; fields: string[] };
+      return json({ value: asked.ids.map(id => { const item = items.get(id); return item ? { id, rev: item.rev, fields: Object.fromEntries(asked.fields.filter(f => f in item.fields).map(f => [f, item.fields[f]])) } : null; }) });
+    }
     m = /\/_apis\/wit\/workitems\/(\d+)$/i.exec(p);
     if (m) {
       const item = items.get(Number(m[1]));

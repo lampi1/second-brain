@@ -3,7 +3,10 @@
 // terminal line of `routine` and the app's Routine section. Pure: no I/O in the reducer.
 
 export type RunEvent =
-  | { type: 'run-start'; at: number; runId: string; routine: string; total: number; workItem?: number }
+  | { type: 'run-start'; at: number; runId: string; routine: string; total: number; workItem?: number;
+      /** a package with entries or retrigger tags (ADR 0324): the entry taken, its first step, the tags that started
+       *  the item again and the run it follows */
+      entry?: string; startStep?: string; retriggerTags?: string[]; previousRunId?: string }
   | { type: 'run-resume'; at: number; attempt: number }
   | { type: 'run-end'; at: number; status: string; error?: string }
   | { type: 'step-start'; at: number; n: number; total: number; id: string; title: string; attempt: number }
@@ -13,7 +16,8 @@ export type RunEvent =
   | { type: 'waiting-human'; at: number; n: number; url?: string; question: string }
   | { type: 'human-answer'; at: number; n: number; author: string }
   | { type: 'db-unavailable'; at: number; n: number; note: string }
-  /** a DevOps write of a step: "not-verified" = its effect could not be confirmed, the run went on */
+  /** a DevOps write of a step (n 0 = the runtime's own, before the first step: the retrigger tag removed):
+   *  "not-verified" = its effect could not be confirmed, the run went on */
   | { type: 'write'; at: number; n: number; what: string; status: 'done' | 'not-verified' | 'failed' }
   /** review→fix: step `from` (number n) sent the run back to step `to`, which starts its round `round` */
   | { type: 'loop'; at: number; n: number; from: string; to: string; round: number; reason: string };

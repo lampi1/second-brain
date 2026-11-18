@@ -1,10 +1,10 @@
 // Routine package preflight (ADR 0175, 0176): the one check that says whether a routine.json can run, used before a
 // run starts (terminal CLI run/watch, the app host) and by the app's routine authoring tool. It
 // runs the format validator (parseRoutinePackage), then the cross-field checks the format cannot express: undeclared
-// {{placeholders}}, DevOps trigger/grant/escalation coherence, login rules without a login, test DB logins, MCP tools
+// {{placeholders}}, DevOps trigger/grant/escalation coherence, entries and retrigger tags (ADR 0324), login rules without a login, test DB logins, MCP tools
 // a step cannot reach, and anything left from the old role-based routines (roles, app MCP tools). Every problem comes
 // with the field path and the fix in plain words. Pure: no network, no file system, no secrets in the messages.
-import { parseRoutinePackage, RoutineFormatError, SECRET_PLACEHOLDER, type RoutinePackage } from './format';
+import { foldTag, parseRoutinePackage, RoutineFormatError, SECRET_PLACEHOLDER, usesEntries, type RoutinePackage } from './format';
 import { checkTestDbTarget, type RecognisedTestDb } from './testdb-guard';
 
 export interface PreflightIssue { path: string; message: string; fix: string; /** a secret only the user can type */ secret?: true }
@@ -24,6 +24,9 @@ export interface PreflightOptions {
 
 /** Placeholders the runtime fills by itself (runtime.ts fillPlaceholders). */
 const BUILTIN = new Set(['workItem', 'work-item-id', 'work-item-url']);
+/** Inputs the runtime fills for a package with entries or retrigger tags (ADR 0324): the entry's name and the folder
+ *  of the previous run of the same work item. */
+const TAGGED = new Set(['entry', 'previousRun']);
 /** The app's role names: a package step is a plain Claude Code session, never a role (ADR 0175 item 2). */
 const ROLE = /\b(Orchestrator|Strategist|Scout|Artisan|Sentinel|Herald)\b/;
 /** App-only MCP tools and servers a plain session does not have. */
@@ -33,6 +36,11 @@ const RUNTIME_SERVERS = new Set(['routine-devops', 'routine-testdb', 'routine-br
 
 /** Hints for the format errors authors hit most, by the field name in the validator's message. */
 function formatFix(message: string): string {
+  // entries and retrigger tags (ADR 0324): the fix shows the whole shape, whatever part of it is wrong
+  if (/^entries\[\d+\]\.startStep/.test(message)) return 'Use the id of one of routine.steps: the step a run of this entry starts from.';
+  if (/^entries\[\d+\]\.when/.test(message)) return 'Write when as { "tag": "<one DevOps tag>" }, e.g. { "tag": "ai-retest" }.';
+  if (/^entries/.test(message)) return 'Write entries as [{ "name": "retest", "when": { "tag": "ai-retest" }, "startStep": "<step id>" }]: a name of its own each ("default" is the first step).';
+  if (/^trigger\.retriggerTags/.test(message)) return 'List one or more DevOps tags, each once and without ";", e.g. ["ai-retest"]; or leave retriggerTags out.';
   const unknown = /unknown field "([^"]+)"/.exec(message)?.[1];
   if (unknown && ['role', 'roleId', 'tier', 'engine', 'agentPrompt', 'kind'].includes(unknown))
     return `Remove "${unknown}": a step is a plain Claude Code session (prompt, optional model, effort, allowedTools, mcpServers, testDbs, timeoutMs, maxAttempts).`;
@@ -63,11 +71,13 @@ export function preflightRoutinePackage(value: unknown, options: PreflightOption
   const warn = (path: string, message: string, fix: string) => warnings.push({ path, message, fix });
   const inputs = new Set(r.inputs.map(i => i.name));
   const hasWorkItem = Boolean(r.trigger) || inputs.has('workItem');
+  const tagged = usesEntries(r);
 
   r.steps.forEach((s, i) => {
     const at = `steps[${i}]`;
     for (const m of s.prompt.matchAll(/\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}/g)) {
       const name = m[1]!.startsWith('input.') ? m[1]!.slice(6) : m[1]!;
+      if (tagged && TAGGED.has(name)) continue;
       if (!BUILTIN.has(name) && !inputs.has(name)) err(`${at}.prompt`, `{{${m[1]}}} is not an input`, `Add { "name": "${name}" } to routine.inputs, or remove the placeholder.`);
       if (BUILTIN.has(name) && !hasWorkItem) err(`${at}.prompt`, `{{${m[1]}}} needs a work item, but the routine has no trigger and no workItem input`, 'Add { "name": "workItem", "label": "DevOps work item id" } to routine.inputs.');
     }
@@ -99,6 +109,29 @@ export function preflightRoutinePackage(value: unknown, options: PreflightOption
     }
     if (!r.trigger.states.length) err('trigger.states', 'no state to watch', 'List the states that start a run, e.g. ["New"].');
     if (!r.trigger.includeTags?.length && !r.trigger.workItemIds?.length) warn('trigger', 'every work item of that type and state starts a run', 'Narrow it with includeTags (e.g. ["ai-fixable"]) or workItemIds.');
+  }
+  // entries and retrigger tags (ADR 0324)
+  if (tagged) r.inputs.forEach((input, i) => {
+    if (TAGGED.has(input.name)) err(`inputs[${i}].name`, `"${input.name}" is filled by the runtime in a package with entries or retrigger tags`, 'Rename the input: steps read {{entry}} (the entry\'s name) and {{previousRun}} (the folder of the previous run of the work item) as they are.');
+  });
+  (r.entries ?? []).forEach((e, i) => {
+    const same = r.entries!.findIndex(x => foldTag(x.when.tag) === foldTag(e.when.tag));
+    if (same < i) err(`entries[${i}].when.tag`, `the same tag as entries[${same}], which is always chosen first`, 'Give each entry its own tag, or remove this entry.');
+    if (e.startStep === r.steps[0]!.id) warn(`entries[${i}].startStep`, 'is the first step: the same start as the default entry', 'Name a later step, or remove the entry if only its name is not needed by the steps.');
+  });
+  if (r.entries?.length) {
+    if (!hasWorkItem) err('entries', 'an entry is chosen from the work item\'s tags, but the routine has no trigger and no workItem input', 'Add { "name": "workItem", "label": "DevOps work item id" } to routine.inputs (or a trigger), or remove entries.');
+    else if (!r.trigger && !r.devops) err('entries', 'an entry is chosen from the work item\'s tags, but the package names no DevOps organization to read them from', 'Add routine.devops { organization, projects, ops } or a trigger.');
+  }
+  const retags = r.trigger?.retriggerTags ?? [];
+  if (r.trigger && retags.length) {
+    if (!r.devops?.ops.includes('tags')) err('trigger.retriggerTags', 'the runtime takes the retrigger tag off the work item when the run starts, but the package may not write tags', r.devops ? 'Add "tags" to devops.ops.' : 'Add routine.devops { organization, projects, ops: ["tags"], fields: [] }.');
+    const include = new Set([...(r.trigger.includeTags ?? []), ...(r.trigger.areas ?? []).flatMap(a => a.includeTags ?? [])].map(foldTag));
+    retags.forEach((t, i) => {
+      if (include.has(foldTag(t))) err(`trigger.retriggerTags[${i}]`, `"${t}" is also in includeTags: every item would run a second time as soon as its first run ends`, 'Use a tag of its own that a person adds to ask for another run, e.g. "ai-retest".');
+      if (r.devops?.downgrade && foldTag(r.devops.downgrade.addTag) === foldTag(t)) err(`trigger.retriggerTags[${i}]`, `"${t}" is the tag a downgraded or parked item gets (devops.downgrade.addTag): it would start again at once`, 'Use a tag of its own that a person adds to ask for another run, e.g. "ai-retest".');
+    });
+    if (!(r.entries ?? []).some(e => retags.some(t => foldTag(t) === foldTag(e.when.tag)))) warn('trigger.retriggerTags', 'no entry is chosen by a retrigger tag: an item started again runs every step from the first', 'Add routine.entries [{ "name": "retest", "when": { "tag": "<the retrigger tag>" }, "startStep": "<step id>" }], or leave it so if the whole routine must run again.');
   }
   if (r.devops) {
     if (r.devops.ops.includes('fields') && !r.devops.fields.length) err('devops.fields', 'the "fields" op is granted but no field is listed', 'List the field reference names steps may set (e.g. "Microsoft.VSTS.Common.Priority"), or drop "fields" from devops.ops.');

@@ -75,6 +75,19 @@ export function createDevOpsClient(options: { authorization: TokenProvider; requ
       if (r.id !== id || typeof r.rev !== 'number' || typeof fields['System.TeamProject'] !== 'string') throw new DevOpsCallError('DevOps: invalid work item');
       return { id, rev: r.rev, project: fields['System.TeamProject'], fields };
     },
+    /** The tags of several work items in one read per 200 ids (any project of the organization); an item DevOps does
+     *  not return (deleted, not visible) is absent from the map. */
+    async tags(org: string, ids: number[]): Promise<Map<number, string[]>> {
+      const out = new Map<number, string[]>(), unique = [...new Set(ids)];
+      for (let i = 0; i < unique.length; i += 200) {
+        const r = await call('POST', `${base(org)}/_apis/wit/workitemsbatch?api-version=7.1`, { ids: unique.slice(i, i + 200), fields: ['System.Id', 'System.Tags'], errorPolicy: 'Omit' });
+        for (const x of Array.isArray(r.value) ? r.value as (Record<string, unknown> | null)[] : []) {
+          if (!x || typeof x.id !== 'number') continue;
+          out.set(x.id, String((x.fields as Record<string, unknown> | undefined)?.['System.Tags'] ?? '').split(';').map(t => t.trim()).filter(Boolean));
+        }
+      }
+      return out;
+    },
     async patch(org: string, id: number, ops: { op: 'add' | 'replace' | 'remove' | 'test'; path: string; value?: unknown }[]): Promise<number> {
       const r = await call('PATCH', `${base(org)}/_apis/wit/workitems/${id}?api-version=7.1`, ops, 'application/json-patch+json');
       if (typeof r.rev !== 'number') throw new DevOpsCallError('DevOps: invalid patch response');

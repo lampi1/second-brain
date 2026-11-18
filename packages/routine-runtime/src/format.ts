@@ -55,11 +55,19 @@ export interface RoutineTrigger {
   areas?: RoutineTriggerArea[];
   /** at most this many runs at once (a shared test environment or checkout); more items wait for the next poll */
   maxActive?: number;
+  /** tags that start an item again after its run ended (done, needs-human or failed), whatever its state now: the
+   *  runtime removes the tag when the new run starts, so one tag starts one run (ADR 0324) */
+  retriggerTags?: string[];
 }
 export interface RoutineTriggerArea {
   project: string; areaPath: string;
   states?: string[]; includeExisting?: boolean; includeTags?: string[]; excludeTags?: string[];
 }
+/** A named way into the routine (ADR 0324): the first entry whose `when.tag` is on the run's work item decides the
+ *  step the run starts from; no match, or no entries, = the default entry (the first step). */
+export interface RoutineEntry { name: string; when: { tag: string }; startStep: string }
+/** The name of the entry every routine has: the first step. */
+export const DEFAULT_ENTRY = 'default';
 /** What step results may write on the run's work item; anything else is refused by the runtime. */
 export interface RoutineDevOps {
   organization: string; projects: string[]; ops: RoutineDevOpsOp[]; fields: string[];
@@ -87,6 +95,8 @@ export interface RoutineTestDb { id: string; server: string; port?: number; data
 export interface RoutineDefinition {
   id: string; title: string; description: string;
   inputs: RoutineInput[]; steps: RoutineStep[];
+  /** named entries: where a run starts, chosen from its work item's tags (absent = always the first step) */
+  entries?: RoutineEntry[];
   trigger?: RoutineTrigger; devops?: RoutineDevOps; escalation?: RoutineEscalation;
   mcpServers?: Record<string, RoutineMcpServer>;
   testDbs?: RoutineTestDb[];
@@ -118,6 +128,11 @@ const int = (v: unknown, what: string, min: number, max: number): number => Numb
 const list = (v: unknown, what: string, max = 64): unknown[] => Array.isArray(v) && v.length <= max ? v : fail(`${what}: expected a list of at most ${max}`);
 const strs = (v: unknown, what: string, max = 64): string[] => list(v, what, max).map((s, i) => str(s, `${what}[${i}]`));
 const opt = <T>(v: Obj, key: string, read: (value: unknown) => T): Partial<Record<string, T>> => v[key] === undefined ? {} : { [key]: read(v[key]) };
+/** A DevOps tag: one tag, so no ";" (the separator of System.Tags). */
+const tag = (v: unknown, what: string): string => { const t = str(v, what, 100).trim(); return t.includes(';') ? fail(`${what}: one tag, without ";"`) : t; };
+/** How two DevOps tags are the same one for entries and retrigger tags: trimmed and without case, exactly as the tags
+ *  write compares them (devops.ts), so a tag that starts a run is always the tag that run takes off. */
+export const foldTag = (t: string): string => t.trim().toLowerCase();
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const ORG = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,49}$/;
 
@@ -140,7 +155,7 @@ function step(v: unknown, i: number): RoutineStep {
 
 export function parseTrigger(v: unknown): RoutineTrigger {
   const t = obj(v, 'trigger');
-  only(t, ['kind', 'everyMinutes', 'organization', 'project', 'areaPath', 'workItemType', 'states', 'includeExisting', 'includeTags', 'excludeTags', 'workItemIds', 'iterationPath', 'maxPerHour', 'areas', 'maxActive'], 'trigger');
+  only(t, ['kind', 'everyMinutes', 'organization', 'project', 'areaPath', 'workItemType', 'states', 'includeExisting', 'includeTags', 'excludeTags', 'workItemIds', 'iterationPath', 'maxPerHour', 'areas', 'maxActive', 'retriggerTags'], 'trigger');
   if (t.kind !== 'devops') fail('trigger.kind: only "devops"');
   const organization = str(t.organization, 'trigger.organization', 50);
   if (!ORG.test(organization)) fail('trigger.organization: invalid');
@@ -155,6 +170,12 @@ export function parseTrigger(v: unknown): RoutineTrigger {
     ...opt(t, 'iterationPath', x => str(x, 'trigger.iterationPath', 512)), ...opt(t, 'maxPerHour', x => int(x, 'trigger.maxPerHour', 1, 1000)),
     ...opt(t, 'areas', x => list(x, 'trigger.areas', 8).map((a, i) => parseArea(a, `trigger.areas[${i}]`))),
     ...opt(t, 'maxActive', x => int(x, 'trigger.maxActive', 1, 20)),
+    ...opt(t, 'retriggerTags', x => {
+      const tags = list(x, 'trigger.retriggerTags', 16).map((r, i) => tag(r, `trigger.retriggerTags[${i}]`));
+      if (!tags.length) fail('trigger.retriggerTags: at least one tag, or leave it out');
+      if (new Set(tags.map(foldTag)).size !== tags.length) fail('trigger.retriggerTags: duplicate tag');
+      return tags;
+    }),
   } as RoutineTrigger;
 }
 
@@ -245,7 +266,7 @@ function browserRule(v: unknown): RoutineBrowser {
 
 export function parseRoutineDefinition(v: unknown): RoutineDefinition {
   const r = obj(v, 'routine');
-  only(r, ['id', 'title', 'description', 'inputs', 'steps', 'trigger', 'devops', 'escalation', 'mcpServers', 'testDbs', 'browser', 'loginSuccess'], 'routine');
+  only(r, ['id', 'title', 'description', 'inputs', 'steps', 'entries', 'trigger', 'devops', 'escalation', 'mcpServers', 'testDbs', 'browser', 'loginSuccess'], 'routine');
   const steps = list(r.steps, 'steps', 50).map(step);
   if (!steps.length) fail('steps: at least one step');
   if (new Set(steps.map(s => s.id)).size !== steps.length) fail('steps: duplicate step id');
@@ -255,6 +276,16 @@ export function parseRoutineDefinition(v: unknown): RoutineDefinition {
     return { name: id(p.name, `inputs[${i}].name`), ...opt(p, 'label', l => str(l, `inputs[${i}].label`, 120)),
       ...opt(p, 'required', b => typeof b === 'boolean' ? b : fail(`inputs[${i}].required: true or false`)), ...opt(p, 'default', d => str(d, `inputs[${i}].default`, 2000, true)) } as RoutineInput;
   });
+  const entries = r.entries === undefined ? undefined : list(r.entries, 'entries', 16).map((x, i) => {
+    const what = `entries[${i}]`, e = obj(x, what); only(e, ['name', 'when', 'startStep'], what);
+    const when = obj(e.when, `${what}.when`); only(when, ['tag'], `${what}.when`);
+    const entry: RoutineEntry = { name: id(e.name, `${what}.name`), when: { tag: tag(when.tag, `${what}.when.tag`) }, startStep: id(e.startStep, `${what}.startStep`) };
+    if (entry.name === DEFAULT_ENTRY) fail(`${what}.name: "${DEFAULT_ENTRY}" is the entry every routine has (the first step)`);
+    if (!steps.some(s => s.id === entry.startStep)) fail(`${what}.startStep: not a step id (steps: ${steps.map(s => s.id).join(', ')})`);
+    return entry;
+  });
+  if (entries && !entries.length) fail('entries: at least one entry, or leave it out');
+  if (entries && new Set(entries.map(e => e.name)).size !== entries.length) fail('entries: duplicate entry name');
   const mcpServers = r.mcpServers === undefined ? undefined : Object.fromEntries(Object.entries(obj(r.mcpServers, 'mcpServers')).map(([name, server]) => {
     const s = obj(server, `mcpServers.${name}`); only(s, ['command', 'args', 'env'], `mcpServers.${name}`);
     id(name, 'mcpServers name');
@@ -271,7 +302,7 @@ export function parseRoutineDefinition(v: unknown): RoutineDefinition {
   });
   const definition: RoutineDefinition = {
     id: id(r.id, 'routine.id'), title: str(r.title, 'routine.title', 200), description: str(r.description ?? '', 'routine.description', 4000, true),
-    inputs, steps,
+    inputs, steps, ...(entries ? { entries } : {}),
     ...(r.trigger === undefined ? {} : { trigger: parseTrigger(r.trigger) }),
     ...(r.devops === undefined ? {} : { devops: devops(r.devops) }),
     ...(r.escalation === undefined ? {} : { escalation: escalation(r.escalation) }),
@@ -318,6 +349,20 @@ export function parseRoutinePackage(value: unknown): RoutinePackage {
     };
   }
   return { format: ROUTINE_FORMAT, schemaVersion: 1, routine, ...(files ? { files } : {}), ...(credentials ? { credentials } : {}), ...(secrets ? { secrets } : {}) };
+}
+
+/** Whether a package uses the tag-driven options (routine.entries, trigger.retriggerTags): only then a run reads its
+ *  work item's tags at its start, gets the `entry` input and the previous run's folder (ADR 0324). */
+export const usesEntries = (routine: RoutineDefinition): boolean => Boolean(routine.entries?.length || routine.trigger?.retriggerTags?.length);
+/** The entry a work item's tags choose: the first whose `when.tag` is on it; undefined = the default entry. */
+export function entryForTags(routine: RoutineDefinition, tags: readonly string[]): RoutineEntry | undefined {
+  const on = new Set(tags.map(foldTag));
+  return routine.entries?.find(e => on.has(foldTag(e.when.tag)));
+}
+/** The package's retrigger tags a work item carries now (as the package spells them). */
+export function retriggerTagsOn(routine: RoutineDefinition, tags: readonly string[]): string[] {
+  const on = new Set(tags.map(foldTag));
+  return (routine.trigger?.retriggerTags ?? []).filter(t => on.has(foldTag(t)));
 }
 
 /** Reads `<dir>/routine.json` (or the file itself). */

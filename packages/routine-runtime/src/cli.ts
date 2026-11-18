@@ -1,7 +1,8 @@
 // The `routine` command (ADR 0175): the thin terminal host of the shared routine runtime. `run` starts one run of a
 // package (folder, routine.json or the app's .zip export), `resume` continues a run folder from the step that did not
 // finish, `watch` polls the package's DevOps trigger and starts one run per new work item (a restart never starts an
-// item twice: the dedup lives in the runs root's trigger.json). Every start goes through preflight first. Progress is
+// item twice: the dedup lives in the runs root's trigger.json; an ended item starts again only on a retrigger tag, ADR
+// 0324). `run` and `watch` take the package entry the work item's tags choose. Every start goes through preflight first. Progress is
 // rendered from events.jsonl by terminal.ts. No app, no brain, no roles: `claude` on PATH, the package's own secrets.
 // `main(argv, deps)` is the whole program; deps are injectable for the unit tests (engine, DevOps, signals, output).
 import fs from 'node:fs';
@@ -56,9 +57,11 @@ export interface CliDeps {
 }
 
 const USAGE = `Usage:
-  routine run <package-folder|routine.json|package.zip> [--input name=value]... [--from-step <step id>]
+  routine run <package-folder|routine.json|package.zip> [--input name=value]... [--from-step <step id>] [--entry <name>]
   routine resume <run-folder> [--package <package-folder|routine.json|package.zip>]
   routine watch <package-folder|routine.json|package.zip>
+  --entry <name>         run: take this package entry (routine.entries, or "default") instead of the one the work
+                         item's tags choose; --from-step still wins for the first step
 Options (all commands):
   --engine claude        the agent engine (only claude today)
   --runs-dir <folder>    where runs are kept (default: ${'$'}ROUTINE_RUNS_DIR or the per-user default)
@@ -72,7 +75,7 @@ class UsageError extends Error {}
 type RuntimeFor = (pkg: RoutinePackage, paths: Paths, recognised: RecognisedTestDb[] | undefined) => RoutineRuntime;
 
 interface Parsed {
-  command: string; target?: string; inputs: Record<string, string>; fromStep?: string; engine: string;
+  command: string; target?: string; inputs: Record<string, string>; fromStep?: string; entry?: string; engine: string;
   runsDir?: string; headed: boolean; testDbs?: string; pkg?: string; help: boolean;
 }
 
@@ -93,6 +96,7 @@ export function parseArgs(argv: readonly string[]): Parsed {
       out.inputs[v.slice(0, eq)] = v.slice(eq + 1);
     }
     else if (a === '--from-step') out.fromStep = value(++i, a);
+    else if (a === '--entry') out.entry = value(++i, a);
     else if (a === '--engine') out.engine = value(++i, a);
     else if (a === '--runs-dir') out.runsDir = value(++i, a);
     else if (a === '--test-dbs') out.testDbs = value(++i, a);
@@ -286,10 +290,12 @@ async function run(args: Parsed, runsDir: string, packagesDir: string, runtimeFo
   if (!loaded) return 1;
   try {
     const runtime = runtimeFor(loaded.pkg, routinePaths(runsDir, loaded.pkg.routine.id), recognised);
-    const handle = runtime.start({ inputs: args.inputs, ...(args.fromStep ? { fromStep: args.fromStep } : {}) });
+    // a package with entries or retrigger tags reads the work item's tags first: they choose the entry (ADR 0324)
+    const handle = await runtime.startFor({ inputs: args.inputs, ...(args.fromStep ? { fromStep: args.fromStep } : {}), ...(args.entry ? { entry: args.entry } : {}) });
     const runDir = path.join(runsDir, loaded.pkg.routine.id, handle.runId);
     writeSource(runDir, args.target!);
-    deps.stdout.write(`${loaded.pkg.routine.title}: run ${handle.runId}\nFolder: ${runDir}\n`);
+    const started = runtime.store.read(handle.runId);
+    deps.stdout.write(`${loaded.pkg.routine.title}: run ${handle.runId}\nFolder: ${runDir}\n${started.entry ? `Entry: ${started.entry}${started.previousRunId ? ` (previous run ${started.previousRunId})` : ''}\n` : ''}`);
     const { record } = await follow(runtime, runDir, handle, deps);
     return ending(record, runDir, deps);
   } finally { loaded.dispose(); }
@@ -343,14 +349,18 @@ async function watch(args: Parsed, runsDir: string, packagesDir: string, runtime
     const loop = createTriggerLoop({
       routineId: pkg.routine.id, trigger, store: runtime.store, authorization, log: { info: () => undefined, warn: (_s, msg, extra) => { deps.stderr.write(`warning: ${msg}${extra?.cause ? ` (${extra.cause})` : ''}\n`); } },
       ...(deps.devops?.detect ? { detect: deps.devops.detect } : {}),
-      start: (workItem, inputs) => {
-        const handle = runtime.startItem(workItem, inputs);
+      // a package with entries or retrigger tags starts the item the way its tags ask; any other, as always
+      start: async (workItem, inputs, how) => {
+        const handle = await runtime.startItemFor(workItem, { inputs, ...how });
         const runDir = path.join(runsDir, pkg.routine.id, handle.runId);
         writeSource(runDir, args.target!);
-        stdout.write(`Work item ${workItem}: run ${handle.runId} started (${runDir})\n`);
+        const entry = runtime.store.read(handle.runId).entry;
+        stdout.write(`Work item ${workItem}: run ${handle.runId} started${how ? ` again after run ${how.previousRunId} (retrigger tag)` : ''}${entry ? `, entry ${entry}` : ''} (${runDir})\n`);
         follow(handle);
         return handle;
       },
+      // trigger.retriggerTags: the started items' tags now, and the retry of a tag removal that was not confirmed
+      ...(trigger.retriggerTags?.length ? { tags: (ids: number[]) => runtime.itemTags(ids), settle: (runId: string) => runtime.settleRetrigger(runId) } : {}),
       // a parked run whose contact answered on the work item goes on (escalation.park); a run stopped by Ctrl+C, a crash
       // or a park that could not be written goes on from its step (runtime.recover); done and failed runs stay
       resume: async runId => {

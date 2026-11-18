@@ -8,7 +8,7 @@ export const ROUTINE_CAPABILITY_SECTIONS = ['overview', 'steps', 'devops', 'brow
 
 /** The authoring recipe in one paragraph: the guide topic and the role text point here. */
 export const ROUTINE_AUTHORING_SUMMARY = 'Routine packages (ADR 0175): from the user\'s need write ONE routine.json object ' +
-  '{format:"second-brain-routine",schemaVersion:1,routine:{id,title,description,inputs,steps,trigger?,devops?,escalation?,mcpServers?,testDbs?,browser?,loginSuccess?},credentials?,secrets?,files?} ' +
+  '{format:"second-brain-routine",schemaVersion:1,routine:{id,title,description,inputs,steps,entries?,trigger?,devops?,escalation?,mcpServers?,testDbs?,browser?,loginSuccess?},credentials?,secrets?,files?} ' +
   'and save it with app_routine_save: it runs the package preflight and returns each problem with its field and fix. Each step is a plain Claude Code session ' +
   '(prompt, optional model/effort/allowedTools/mcpServers/testDbs/browser): never an app role, chat, agent_* or app_* tool. The runtime appends the step-result.json ' +
   'contract to every prompt and does the DevOps writes a step lists there. Never write a password or PAT: leave it out, the user types it on the Routine page. ' +
@@ -20,6 +20,7 @@ const ROUTINE_SHAPE = {
     id: 'letters, digits, - and _ (the folder name)', title: 'short, Italian for the user', description: 'what it does and when',
     inputs: '[{name, label?, required?, default?}]: a step reads {{name}}; name workItem = the DevOps work item a run is about',
     steps: '[{id, title, prompt, model?, effort?: low|medium|high|xhigh|max, allowedTools?, mcpServers?, testDbs?, browser?: true, timeoutMs? (default 30 min), maxAttempts? (default 2)}]',
+    entries: 'optional [{name, when: {tag}, startStep}]: where a run starts, chosen by the work item\'s tags (section devops)',
     trigger: 'optional DevOps trigger (section devops)', devops: 'optional DevOps write grant (section devops)', escalation: 'optional: who is asked on DevOps when a step needs a person (section devops)',
     mcpServers: '{name: {command, args?, env?}}: stdio MCP servers a step lists in its mcpServers (never the app)',
     testDbs: 'optional read-only SQL Server TEST databases (section test-db)', browser: 'optional {origins} for the runtime browser (section browser)', loginSuccess: 'optional per-site login success rule (section browser)',
@@ -41,7 +42,7 @@ export function flowCapabilities(section: unknown = 'overview'): object {
         'app_routine_save {package} (or packagePath: a JSON file in the brain). invalid = fix each error (field + fix) and propose again; needs-human secrets = saved, tell the user which secrets to type on the Routine page; ready = saved.',
         'Saving never runs anything and never switches a trigger on: the user runs routine run, watch or resume in a terminal. The app only reads runs on explicit request or in an open run view.',
       ],
-      placeholders: '{{input}} for each declared input; {{workItem}}, {{work-item-id}}, {{work-item-url}} need a trigger or a workItem input.',
+      placeholders: '{{input}} for each declared input; {{workItem}}, {{work-item-id}}, {{work-item-url}} need a trigger or a workItem input; {{entry}} and {{previousRun}} only with entries or retriggerTags (section devops).',
       never: ['app roles (Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald) or role/roleId/tier/engine fields', 'app tools (agent_*, app_*, flow_*, browser_login, handoff_to_user, mcp__second-brain__*)', 'approval or manual steps (a person is asked through outcome needs-human)', 'passwords, PATs, production databases or production commands'],
     };
     case 'steps': return {
@@ -54,6 +55,8 @@ export function flowCapabilities(section: unknown = 'overview'): object {
     };
     case 'devops': return {
       trigger: '{kind:"devops", everyMinutes, organization, project, areaPath, workItemType, states:["New"], includeExisting:false, includeTags?:["ai-fixable"], excludeTags?, workItemIds?, iterationPath?, maxPerHour?}: one run per matching work item; the item is {{workItem}}. Always narrow with includeTags or workItemIds.',
+      retrigger: 'trigger.retriggerTags: ["ai-retest"]: tags a person adds to run an item again. routine watch starts an already started item again when one is on it, its last run is over (done, needs-human, failed) and none is going on, whatever its state now; the new run takes the tag off the item by itself (devops.ops must include "tags"), so one tag starts one run. Never a tag of includeTags or devops.downgrade.addTag. Without retriggerTags an item runs once, as always.',
+      entries: 'routine.entries [{name, when: {tag: "ai-retest"}, startStep: "<step id>"}]: the first entry whose tag is on the work item decides the first step of the run (earlier steps are skipped); no match = the entry "default" (the first step). Steps get the input entry ({{entry}}: the name, or "default") and, when the item has an earlier run, previousRun ({{previousRun}}: that run\'s folder with report.md and each step\'s evidence, read only): write the prompts so they say what to do per entry. Use both together for a retest: retriggerTags ["ai-retest"] + an entry on the same tag.',
       grant: `devops {organization, projects, ops: subset of ${DEVOPS_OPS.join('|')}, fields: [reference names, needed with op fields]}: the ONLY writes a run may do, on its own work item, made by the runtime from devopsWrites in step-result.json. A step never calls DevOps itself.`,
       reading: 'The runtime puts the work item (title, description, repro steps) in every prompt; for comments and attachments a step uses the runtime server routine-devops (allowedTools mcp__routine-devops__*), see app_routine_connectors.',
       escalation: '{contact: DevOps identity GUID (lowercase), contactName?, pollMinutes?, reminderMinutes?}: on needs-human the runtime comments on the work item mentioning the contact, then polls for their reply and resumes. Ask the user whose identity; never guess a GUID.',

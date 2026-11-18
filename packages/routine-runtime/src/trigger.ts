@@ -4,9 +4,12 @@
 // the runs root's trigger.json, so a restarted loop (app or `routine watch`) never starts an item twice. A parking
 // package (escalation.park) is driven by comments: each pass first offers every started item to `resume` (a parked
 // run goes on when its contact answered), then starts new items that `admit` accepts, at most `maxActive` at once.
+// trigger.retriggerTags (ADR 0324): a started item whose run ended (done, needs-human, failed) starts again, once, while
+// one of those tags is on it; the new run takes the tag off the item, and until that is confirmed the item waits
+// (whoever started the run that took it: this loop or a `routine run` by hand).
 import type { FlowAutomationConfig, FlowDetectionResult } from '../../../src/shared/flow-automation';
-import type { RoutineTrigger } from './format';
-import type { RunStore, TriggerState } from './run-store';
+import { foldTag as fold, type RoutineTrigger } from './format';
+import type { RunRecord, RunStore, TriggerState } from './run-store';
 import type { Clock, RuntimeLog, TokenProvider } from './ports';
 import { createDevOpsDetector } from './devops-detector';
 
@@ -16,8 +19,14 @@ export interface TriggerLoopOptions {
   routineId: string;
   trigger: RoutineTrigger;
   store: RunStore;
-  /** starts one run for a work item (runtime.startItem) */
-  start(workItem: number, inputs: Record<string, string>): { runId: string } | Promise<{ runId: string }>;
+  /** starts one run for a work item (runtime.startItem; runtime.startItemFor when the package has entries or retrigger
+   *  tags). `how` is set for an item a retrigger tag starts again: its tags now and the run it follows */
+  start(workItem: number, inputs: Record<string, string>, how?: TriggerRestart): { runId: string } | Promise<{ runId: string }>;
+  /** the tags of started items now (runtime.itemTags), for trigger.retriggerTags; an item that is not returned waits */
+  tags?(workItems: number[]): Promise<Map<number, string[]>>;
+  /** tries again to take a run's retrigger tags off its item (runtime.settleRetrigger); true = they are off. Asked for
+   *  every run of a started item whose removal is not confirmed, also one this loop did not start */
+  settle?(runId: string): Promise<boolean>;
   /** resumes a started item's run when it is parked and answered (runtime.resumeParked); null = nothing to do */
   resume?(runId: string): Promise<{ runId: string } | null>;
   /** whether a new item may start (runtime.admitItem): false keeps it seen until its next change */
@@ -31,10 +40,16 @@ export interface TriggerLoopOptions {
   log?: RuntimeLog;
 }
 
-export interface TickResult { started: { workItem: number; runId: string }[]; resumed: { workItem: number; runId: string }[]; skipped: number; summary: string }
+/** How an item a retrigger tag starts again is started: its tags now (they choose the entry) and the run it follows. */
+export interface TriggerRestart { tags: string[]; previousRunId: string }
+export interface TickResult { started: { workItem: number; runId: string }[]; resumed: { workItem: number; runId: string }[]; skipped: number; summary: string;
+  /** the items of `started` a retrigger tag started again */
+  retriggered?: { workItem: number; runId: string; tags: string[]; previousRunId: string }[] }
 
 export const subjectKeyOf = (workItem: number): string => `item:${workItem}`;
 const HOUR = 3_600_000;
+/** the run statuses after which a retrigger tag may start the item again; a cancelled run is recovered, never replaced */
+const ENDED: ReadonlySet<RunRecord['status']> = new Set<RunRecord['status']>(['done', 'needs-human', 'failed']);
 
 export function createTriggerLoop(options: TriggerLoopOptions) {
   const clock = options.clock ?? { now: () => Date.now() };
@@ -43,12 +58,27 @@ export function createTriggerLoop(options: TriggerLoopOptions) {
   // the detector sees one area per call: the trigger's own, then each further one with its own cursor and its overrides
   // (an override replaces the rule's value: an area's includeTags narrows only that area)
   const scopes = (): { key: string; trigger: FlowAutomationConfig['trigger'] }[] => {
-    const { areas, maxActive: _maxActive, ...base } = options.trigger;
+    const { areas, maxActive: _maxActive, retriggerTags: _retriggerTags, ...base } = options.trigger;
     return [{ key: '', trigger: { ...base } }, ...(areas ?? []).map(a => ({ key: `${a.project}|${a.areaPath}`, trigger: { ...base, ...a } }))];
   };
   const config = (trigger: FlowAutomationConfig['trigger']): FlowAutomationConfig => ({ flowId: options.routineId, flowVersion: 1, trigger, scope: {}, inputs: {}, priority: 'normal' });
   const busyNow = () => options.trigger.maxActive !== undefined && (options.active?.() ?? 0) >= options.trigger.maxActive;
   const message = (error: unknown) => error instanceof Error ? error.message : String(error);
+  // runs with no retrigger tag left to take off: a run gets its tags at its start and a removal is final, so they are
+  // never read again; the others (few) are read at each pass
+  const settledRuns = new Set<string>();
+  /** The runs of this runs root whose retrigger tag is not confirmed off their work item, whoever started them. */
+  function pendingRemovals(): RunRecord[] {
+    const pending: RunRecord[] = [];
+    for (const runId of options.store.runIds()) {
+      if (settledRuns.has(runId)) continue;
+      try {
+        const run = options.store.read(runId);
+        if (run.retrigger && !run.retrigger.removed) pending.push(run); else settledRuns.add(runId);
+      } catch { /* not readable now: looked at again at the next pass */ }
+    }
+    return pending;
+  }
 
   async function pass(signal: AbortSignal): Promise<TickResult> {
     const state: TriggerState = options.store.trigger();
@@ -65,6 +95,9 @@ export function createTriggerLoop(options: TriggerLoopOptions) {
     }
     const starts = state.starts.filter(t => t > at - HOUR);
     const max = options.trigger.maxPerHour;
+    const { again: retriggered, waiting } = await restarts(state, starts, at, signal);
+    for (const r of retriggered) started.push({ workItem: r.workItem, runId: r.runId });
+    skipped += waiting;
     for (const scope of scopes()) {
       const before = scope.key ? state.cursors?.[scope.key] ?? {} : state.cursor;
       let result: FlowDetectionResult;
@@ -116,8 +149,83 @@ export function createTriggerLoop(options: TriggerLoopOptions) {
     const summary = !checked && !resumed.length ? summaries.join(' ')
       : `${summaries.join(' ')}${resumed.length ? ` Riprese ${resumed.length} run.` : ''} Avviate ${started.length} run.`;
     options.store.setTrigger({ ...state, starts, lastCheckAt: at, lastResult: summary });
-    if (started.length || resumed.length) options.log?.info('routine', 'trigger started runs', { data: { started, resumed } });
-    return { started, resumed, skipped, summary };
+    if (started.length || resumed.length) options.log?.info('routine', 'trigger started runs', { data: { started, resumed, ...(retriggered.length ? { retriggered } : {}) } });
+    return { started, resumed, skipped, summary, ...(retriggered.length ? { retriggered } : {}) };
+  }
+
+  /** trigger.retriggerTags: started items carrying one of the tags start again, each once per tag. An item waits while
+   *  its run is not over (done, needs-human, failed), while that run's own retrigger tag is not confirmed off the item
+   *  (tried again here), and under the same caps as a new item (maxPerHour, maxActive). `waiting` counts those. */
+  async function restarts(state: TriggerState, starts: number[], at: number, signal: AbortSignal): Promise<{ again: NonNullable<TickResult['retriggered']>; waiting: number }> {
+    const out = { again: [] as NonNullable<TickResult['retriggered']>, waiting: 0 };
+    const wanted = (options.trigger.retriggerTags ?? []).map(fold), max = options.trigger.maxPerHour;
+    // a restart cut by a crash between its save and its start: the run it made is taken, else the item is as before
+    for (const [key, subject] of Object.entries(state.subjects)) {
+      if (subject.runId || !subject.restart) continue;
+      const from = subject.restart.from, made = options.store.runIds().find(id => { try { const r = options.store.read(id); return r.subjectKey === key && r.previousRunId === from; } catch { return false; } });
+      const { restart: _restart, ...rest } = subject;
+      state.subjects[key] = made ? { ...rest, runId: made, previous: [...(subject.previous ?? []), from].slice(-20) } : { ...rest, runId: from };
+      options.store.setTrigger({ ...state, starts });
+    }
+    if (!wanted.length || !options.tags) return out;
+    const known = Object.entries(state.subjects).filter(([, s]) => s.runId).map(([key, subject]) => ({ key, id: Number(key.slice('item:'.length)), subject }))
+      .filter(k => Number.isSafeInteger(k.id) && k.id > 0);
+    if (!known.length) return out;
+    let tagsNow: Map<number, string[]>;
+    try { tagsNow = await options.tags(known.map(k => k.id)); }
+    catch (error) { options.log?.warn('routine', 'retrigger tags not read', { cause: message(error) }); return out; }
+    const pending = pendingRemovals();
+    for (const { key, id, subject } of known) {
+      if (signal.aborted) break;
+      const seen = tagsNow.get(id);
+      if (!seen) continue;
+      let run: RunRecord;
+      try { run = options.store.read(subject.runId); } catch { continue; }
+      // a run of this item took the tag and it is still to be taken off (this loop's run, or a `routine run` by hand):
+      // never a second start on it
+      const taking = pending.filter(r => r.workItem === id);
+      if (taking.length) {
+        let off = true;
+        for (const r of taking) {
+          try { if (!options.settle || !await options.settle(r.runId)) off = false; }
+          catch (error) { off = false; options.log?.warn('routine', 'retrigger tag not removed', { data: { workItem: id, runId: r.runId }, cause: message(error) }); }
+        }
+        if (!off) out.waiting++;
+        continue; // off only now: the tags read above are older, the next pass sees the item as it is
+      }
+      if (!seen.some(t => wanted.includes(fold(t)))) continue;
+      if (!ENDED.has(run.status) || (max && starts.length >= max) || busyNow()) { out.waiting++; continue; }
+      // read again just before the start: a run by hand may have taken the tag since the read of all the items above
+      let tags: string[] | undefined;
+      try { tags = (await options.tags([id])).get(id); }
+      catch (error) { options.log?.warn('routine', 'retrigger tags not read', { data: { workItem: id }, cause: message(error) }); out.waiting++; continue; }
+      if (!tags?.some(t => wanted.includes(fold(t)))) continue;
+      if (pendingRemovals().some(r => r.workItem === id)) { out.waiting++; continue; }
+      // saved before the start, with the run it follows: a crash in between never starts the item twice
+      const previousRunId = subject.runId;
+      state.subjects[key] = { ...subject, runId: '', restart: { from: previousRunId } };
+      options.store.setTrigger({ ...state, starts });
+      let handle: { runId: string };
+      try { handle = await options.start(id, {}, { tags, previousRunId }); }
+      catch (error) {
+        state.subjects[key] = subject;
+        options.store.setTrigger({ ...state, starts });
+        options.log?.warn('routine', 'run not started again', { data: { workItem: id }, cause: message(error) });
+        out.waiting++; continue;
+      }
+      state.subjects[key] = { runId: handle.runId, at, ...(subject.title ? { title: subject.title } : {}), previous: [...(subject.previous ?? []), previousRunId].slice(-20) };
+      options.store.setTrigger({ ...state, starts });
+      starts.push(at);
+      const on = tags;
+      out.again.push({ workItem: id, runId: handle.runId, tags: (options.trigger.retriggerTags ?? []).filter(t => on.some(x => fold(x) === fold(t))), previousRunId });
+    }
+    // a run by hand on an item this loop never started: its removal is tried again too, so its report tells the truth
+    const mine = new Set(known.map(k => k.id));
+    if (options.settle) for (const r of pending) {
+      if (signal.aborted) break;
+      if (r.workItem !== undefined && !mine.has(r.workItem)) try { await options.settle(r.runId); } catch { /* tried again at the next pass */ }
+    }
+    return out;
   }
 
   const loop = {

@@ -13,6 +13,9 @@ export function reportText(run: RunRecord): string {
     `- Started: ${time(run.createdAt)} · ended: ${time(run.endedAt)} · attempt ${run.attempt}`,
     ...(run.workItem !== undefined ? [`- Work item: ${run.workItem}`] : []),
     ...(Object.keys(run.inputs).length ? [`- Inputs: ${Object.entries(run.inputs).map(([k, v]) => `${k}=${v}`).join(', ')}`] : []),
+    ...(run.entry ? [`- Entry: ${run.entry}`] : []),
+    ...(run.previousRunId ? [`- Previous run of this work item: ${run.previousRunId}`] : []),
+    ...(run.retrigger ? [`- Retrigger tag ${run.retrigger.tags.join(', ')}: ${run.retrigger.removed ? `removed from the work item (${time(run.retrigger.at)})` : `not removed yet${run.retrigger.note ? ` (${run.retrigger.note})` : ''}; the item does not start again until it is`}`] : []),
     ...(run.error ? [`- Error: ${run.error}`] : []),
     '', '## Steps', '',
   ];

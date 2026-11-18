@@ -65,6 +65,27 @@ it('returns each preflight problem with its field and fix and saves nothing when
   expect(fs.existsSync(f.storeRoot)).toBe(false);
 });
 
+it('entries and retrigger tags come back with their field and fix too (ADR 0324)', async () => {
+  const f = fixture(), p = pkg() as ReturnType<typeof pkg> & { routine: Record<string, unknown> };
+  p.routine.inputs = [{ name: 'page', default: '/Agenda' }, { name: 'workItem' } as { name: string; default: string }];
+  p.routine.trigger = { kind: 'devops', everyMinutes: 5, organization: 'contoso', project: 'Air', areaPath: 'Air', workItemType: 'Bug', states: ['New'], includeExisting: false, includeTags: ['ai-fixable'], retriggerTags: ['ai-retest'] };
+  p.routine.devops = { organization: 'contoso', projects: ['Air'], ops: ['comment'], fields: [] };
+  p.routine.entries = [{ name: 'retest', when: { tag: 'ai-retest' }, startStep: 'missing' }];
+  const bad = await f.run('app_routine_save', { package: p });
+  expect(bad).toMatchObject({ status: 'invalid', errors: [{ path: 'entries[0].startStep', fix: expect.stringContaining('routine.steps') as string }] });
+  (p.routine.entries as { startStep: string }[])[0]!.startStep = 'check';
+  const noTags = await f.run('app_routine_save', { package: p });
+  expect(noTags.status).toBe('invalid');
+  expect(noTags.errors).toContainEqual(expect.objectContaining({ path: 'trigger.retriggerTags', fix: 'Add "tags" to devops.ops.' }));
+  expect(fs.existsSync(f.storeRoot)).toBe(false);
+  (p.routine.devops as { ops: string[] }).ops.push('tags');
+  // only the secret the user types is left: saved
+  const saved = await f.run('app_routine_save', { package: p });
+  expect(saved.status).toBe('needs-secrets');
+  expect((saved.errors as { path: string }[]).map(e => e.path)).toEqual(['credentials[0].password']);
+  expect(f.store.get('air-login-check')!.routine).toMatchObject({ entries: [{ name: 'retest', startStep: 'check' }], trigger: { retriggerTags: ['ai-retest'] } });
+});
+
 it('saves with needs-secrets, refuses a secret from the agent and keeps the user\'s stored one on revision', async () => {
   const f = fixture();
   const r = await f.run('app_routine_save', { package: pkg() });
