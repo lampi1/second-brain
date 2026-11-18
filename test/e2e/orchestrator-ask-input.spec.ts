@@ -57,8 +57,8 @@ test('an open question keeps the Orchestrator input in sight; its ✕ answers la
 
 // The owner 2026-11-13: «le domande dall'orchestratore sono tagliatissime illeggibili»: under a LONG Orchestrator chat
 // the rows kept a strip of 90 px (flex shrinks by content size). Closed: every row whole, its Sì / No in sight; open:
-// the card is the column's panel, the last messages a strip above it, the answers and the input in sight.
-test('under a long Orchestrator chat the question rows stay whole and an open one is the column\'s panel', async () => {
+// the chat gives way to the card (down to a strip of the last messages), the answers and the input in sight.
+test('under a long Orchestrator chat the question rows stay whole and an open one is never the one cut', async () => {
   const { app, page } = await launchDemo({ width: 1600, height: 830 });
   const say = (text: string) => app.evaluate((_e, t) => { (globalThis as unknown as { __sbDemo: { say(c: string, t: string): void } }).__sbDemo.say('orchestrator', t); }, text);
   try {
@@ -105,7 +105,6 @@ test('a short open question is as tall as what it says: no empty panel under it,
     await expect(row).toBeVisible({ timeout: 15_000 });
     if (!(await page.getByTestId('qwin').count())) await row.getByTestId('orchestrator-ask-toggle').click();
     await expect(page.getByTestId('qwin-card-opt-1')).toBeInViewport({ ratio: 1 });
-    await page.waitForTimeout(400);
     await shot(page, 'orchestrator-asks-short-open');
     const fit = await page.evaluate(() => {
       const o = document.querySelector('.oasks')!, w = document.querySelector('.orchestrator-tile > .items-wrap')!, last = o.lastElementChild!;

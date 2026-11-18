@@ -241,13 +241,14 @@
 .oask-chev { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: var(--r-s); background: none; color: var(--text-3); cursor: pointer; }
 .oask-chev:hover { background: var(--surface-3); color: var(--text); }
 .oask-card { border-top: 1px solid var(--border); padding: 10px 12px 8px; font-size: var(--fs-l); line-height: 1.5; }
-/* an open card is as tall as what it says, and the messages keep the rest of the column (the owner 2026-11-18, a
-   short question: half the column was an empty panel and the chat a strip). A long card takes everything but a 72 px
+/* an open card is as tall as what it says, and the messages keep their place above it (the owner 2026-11-18, a
+   short question: half the column was an empty panel and the chat a strip; under a short chat the card opens where
+   its row was, it does not jump down to the input). A long card takes everything but a 72 px
    strip of the last messages, never the input's: the Orchestrator's input stays in sight and writable under it (the
    owner 2026-11-12), and the card scrolls inside to its last line. The strip is the messages' floor, so under a
    long chat the card is never the one that gives way (the owner 2026-11-13: «tagliatissime illeggibili»). */
 .oasks:has(.oask.open) { max-height: none; flex: 0 1 auto; min-height: 160px; }
-.orchestrator-tile:has(.oask.open) > .items-wrap { flex: 1 1 72px; min-height: 72px; }
+.orchestrator-tile:has(.oask.open) > .items-wrap { flex: 0 9999 auto; min-height: 72px; }
 /* the answers stay in sight at the bottom of the scrolling rows while a long card is read */
 .oask-card .dc-actions { position: sticky; bottom: 0; z-index: 2; margin: 0 -12px; padding: 10px 12px; background: var(--surface); border-top: 1px solid var(--border); }
 /* the chat's long message above a question scrolls in its own box: the question's answers come right after it */
