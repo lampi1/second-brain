@@ -9,7 +9,7 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { Clock, CredentialStore, EngineRunner, Paths, RuntimeLog, TokenProvider } from './ports';
 import type { RoutineEntry, RoutinePackage, RoutineStep } from './format';
-import { DEFAULT_ENTRY, entryForTags, packageSecrets, retriggerTagsOn, usesEntries } from './format';
+import { DEFAULT_ENTRY, entryForTags, foldTag, packageSecrets, retriggerTagsOn, usesEntries } from './format';
 import { createMasker, type Masker } from './mask';
 import { createRunStore, listRuns, StaleAttempt, stepFolderName, type AiAnswer, type RunRecord, type RunStepRecord, type RunStore, type RunEscalation, type RunPark } from './run-store';
 import { STEP_RESULT_FILE, StepResultError, grantedWriteOps, stepResultInstructions, validateStepResult, type StepResult, type StepWrite } from './step-result';
@@ -128,8 +128,9 @@ const newRunId = (now: number): string => {
 };
 
 /** Fills {{workItem}}, {{work-item-id}}, {{work-item-url}}, {{input.<name>}} and {{<name>}} for the run's inputs.
- *  {{entry}} and {{previousRun}} (ADR 0323) are "default" and empty when the run has none. */
-export function fillPlaceholders(text: string, run: Pick<RunRecord, 'inputs' | 'workItem'>, organization?: string): string {
+ *  `tagged` (a package with entries or retrigger tags, ADR 0323): {{entry}} and {{previousRun}} are "default" and empty
+ *  when the run has none; any other package keeps them as written, as before. */
+export function fillPlaceholders(text: string, run: Pick<RunRecord, 'inputs' | 'workItem'>, organization?: string, tagged = false): string {
   const id = run.workItem !== undefined ? String(run.workItem) : '';
   const url = id && organization ? `https://dev.azure.com/${encodeURIComponent(organization)}/_workitems/edit/${id}` : '';
   return text.replace(/\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}/g, (whole, name: string) => {
@@ -137,7 +138,7 @@ export function fillPlaceholders(text: string, run: Pick<RunRecord, 'inputs' | '
     if (name === 'work-item-url') return url || whole;
     const key = name.startsWith('input.') ? name.slice(6) : name;
     if (Object.prototype.hasOwnProperty.call(run.inputs, key)) return run.inputs[key]!;
-    return key === 'entry' ? DEFAULT_ENTRY : key === 'previousRun' ? '' : whole;
+    return tagged && key === 'entry' ? DEFAULT_ENTRY : tagged && key === 'previousRun' ? '' : whole;
   });
 }
 
@@ -289,7 +290,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
       schema: 1, runId, routineId: routine.id, routineTitle: routine.title, status: 'running', attempt: 0,
       inputs, ...(workItem !== undefined ? { workItem } : {}), ...(request.subjectKey ? { subjectKey: request.subjectKey } : {}),
       ...(admitted ? { admitted } : {}),
-      ...(tagged ? { entry: inputs.entry! } : {}), ...(previous ? { previousRunId: previous } : {}),
+      ...(tagged ? { entry: inputs.entry! } : {}), ...(tagged && from > 0 ? { startStep: routine.steps[from]!.id } : {}), ...(previous ? { previousRunId: previous } : {}),
       ...(taken.length ? { retrigger: { tags: taken, removed: false } } : {}),
       createdAt: now, updatedAt: now,
       steps: routine.steps.map((s, i) => i < from
@@ -336,16 +337,21 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
    *  blocks the run. A removal that is not confirmed is tried again by the watch (settleRetrigger), at most
    *  RETRIGGER_UNTAG_TRIES times in all, then only looked for on DevOps (a person took the tag off); meanwhile the
    *  item does not start again. true = the tags are off. StaleAttempt propagates. */
+  const gaveUp = new Set<string>();
   async function consumeRetrigger(runId: string, attempt: number, signal: AbortSignal): Promise<boolean> {
     const run = store.read(runId), r = run.retrigger;
     if (!r || r.removed) return true;
     if (run.workItem === undefined || !routine.devops) return false;
-    const tries = (r.tries ?? 0) + 1, fold = (t: string) => t.trim().toLowerCase();
+    const tries = (r.tries ?? 0) + 1;
     let status: 'done' | 'not-verified' | 'failed' = 'not-verified', note = '';
     try {
       if (tries > RETRIGGER_UNTAG_TRIES) {
         const on = (await devops().tags(routine.devops.organization, [run.workItem])).get(run.workItem);
-        if (!on || r.tags.some(t => on.some(x => fold(x) === fold(t)))) return false;
+        if (!on || r.tags.some(t => on.some(x => foldTag(x) === foldTag(t)))) {
+          // said once per process: from here only a person takes the tag off, and the item waits until then
+          if (on && !gaveUp.has(runId)) { gaveUp.add(runId); warn(`retrigger tag still on the item after ${RETRIGGER_UNTAG_TRIES} tries: take it off by hand, then add it again to start the item`, { runId, workItem: run.workItem, tags: r.tags }); }
+          return false;
+        }
         status = 'done';
       } else {
         const writes = await executeWrites(writeContext(runId, attempt, routine.steps[0]!, run, tries, signal, undefined, 'retrigger'), [{ op: 'tags', remove: r.tags }]);
@@ -365,11 +371,13 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
   }
 
   /** The watch's retry of a retrigger tag removal that was not confirmed when its run started (the run may be over);
-   *  true once the tags are off the work item. */
+   *  true once the tags are off the work item. A run another live process holds (a `routine resume` in another
+   *  terminal) is left to it: its files are written only under its own attempt. */
   async function settleRetrigger(runId: string): Promise<boolean> {
     try {
       const run = store.read(runId);
       if (!run.retrigger || run.retrigger.removed) return true;
+      if (!running.has(runId) && lockNames(run).some(name => options.locks?.holder(name))) return false;
       const removed = await consumeRetrigger(runId, run.attempt, new AbortController().signal);
       if (!running.has(runId)) writeReport(store, store.read(runId));
       return removed;
@@ -778,14 +786,14 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
   }
 
   function buildPrompt(def: RoutineStep, run: RunRecord, dir: string, guidance: RunEscalation['answer'] | undefined, lastError: string | undefined, testDbNote: string | undefined, itemText?: string, devopsMcp = false, browserNote?: string, nodeNote?: string): string {
-    const parts = [`# Routine ${routine.title} · step ${def.title}`, '', fillPlaceholders(def.prompt, run, organization)];
+    const parts = [`# Routine ${routine.title} · step ${def.title}`, '', fillPlaceholders(def.prompt, run, organization, usesEntries(routine))];
     const inputs = Object.entries(run.inputs);
     if (inputs.length) parts.push('', '## Inputs', ...inputs.map(([k, v]) => `- ${k}: ${v}`));
     if (run.workItem !== undefined) parts.push('', '## Work item', `This run is about work item ${run.workItem}${organization ? ` (${itemUrl(undefined, run.workItem)})` : ''}. DevOps writes target only this item and go in ${STEP_RESULT_FILE}, never through a tool.`);
     if (itemText) parts.push('', itemText);
-    const entry = routine.entries?.find(e => e.name === run.entry);
+    const entry = routine.entries?.find(e => e.name === run.entry), first = routine.steps.find(s => s.id === run.startStep);
     if (entry || run.retrigger) parts.push('', '## Entry', [
-      entry ? `This run entered the routine as "${entry.name}" (tag ${entry.when.tag} on the work item): it starts from step ${routine.steps.find(s => s.id === entry.startStep)?.title ?? entry.startStep}; the steps before it were not run again.` : 'This run takes the default entry: it starts from the first step.',
+      `${entry ? `This run entered the routine as "${entry.name}" (tag ${entry.when.tag} on the work item)` : 'This run takes the default entry'}: ${first ? `it starts from step ${first.title}; the steps before it were not run again` : 'it starts from the first step'}.`,
       ...(run.retrigger ? [`The tag ${run.retrigger.tags.join(', ')} started this work item again after its previous run; the runtime takes the tag off the item, never add it back.`] : []),
     ].join(' '));
     if (run.previousRunId) parts.push('', '## Previous run', previousRunNote(run.previousRunId));

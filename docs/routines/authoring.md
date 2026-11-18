@@ -118,11 +118,13 @@ found the fix incomplete (ADR 0323). A package that uses neither runs exactly as
   started again when one of them is on the item, the item's last run is over (`done`, `needs-human` or `failed`) and
   no run of it is going on. The item's state and its other tags no longer matter: it only has to be an item this
   package started once. Without the tag nothing changes: an item is started once, as always. The caps of a new item
-  hold (`maxPerHour`, `maxActive`, the locks).
+  hold (`maxPerHour`, `maxActive`, the locks). A tag matches when it is the same text, spaces at the ends and case
+  aside ("AI-Retest" is "ai-retest"; a look-alike with a non-breaking space is another tag).
 - **One tag, one run.** The new run takes the tag off the work item before its first step, through the runtime's own
   tags write (so `devops.ops` must include `tags`), and the removal is in the run's `events.jsonl`, ledger and
   `report.md`. If DevOps refuses it, the run goes on, the watch tries again at each poll (five tries in all) and the
-  item does not start again until the tag is off; a person can take it off by hand.
+  item does not start again until the tag is off; a person can take it off by hand. The same holds for a
+  `routine run` by hand that took the tag.
 - **`routine.entries`**: named ways into the routine. The first entry whose `when.tag` is on the work item decides the
   step the run starts from (`startStep`); the steps before it are recorded as skipped. No match, or no entries, is the
   entry `default`: the first step. `routine watch` and `routine run` both choose from the work item's tags, read when

@@ -21,14 +21,18 @@ Two things stopped a package from handling the same work item twice.
    over (`done`, `needs-human` or `failed`) and the usual caps allow it (`maxPerHour`, `maxActive`, the work item and
    workspace locks). The item's state and other tags are not asked again: it only has to be one this package started.
    A `cancelled` or `running` run is not over: it is resumed by the watch as before, never replaced. Without the tag,
-   or without the option, nothing changes.
+   or without the option, nothing changes. Tags are compared trimmed and without case, exactly as the tags write does
+   (no Unicode folding): a tag that starts a run is always the tag that run takes off. The item's tags are read again
+   just before the restart.
 2. **One tag, one run.** The new run records the retrigger tags it took (`run.json` `retrigger`) and takes them off
    the work item before its first step, with a `tags` write through the write adapter (`executeWrites`: the run's
    ledger, verified on DevOps). So `devops.ops` must include `tags`; the preflight says so. The removal is an event of
    the run (`write`, step number 0), a ledger entry and a line of `report.md`. As for every DevOps write, a refusal
-   does not stop the run. An item whose run still holds a tag it could not remove **does not start again**: the watch
+   does not stop the run. An item with a run that still holds a tag it could not remove **does not start again**,
+   whoever started that run (the watch or a `routine run` by hand): the watch
    tries the removal again at each poll (`settleRetrigger`, five tries in all, then it only looks whether a person took
-   the tag off). Any run that starts on an item carrying a retrigger tag takes it: a first run and a manual
+   the tag off, and says so once). It leaves alone a run another live process holds (a `routine resume` in another
+   terminal). Any run that starts on an item carrying a retrigger tag takes it: a first run and a manual
    `routine run` too, or the same tag would start the item a second time.
 3. **A crash never doubles a restart.** As for a first start, the subject is saved before the run starts: here with
    the run it follows (`restart.from`). At the next poll a run that names that previous run is taken as the item's run;

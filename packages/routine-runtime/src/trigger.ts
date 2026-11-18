@@ -5,9 +5,10 @@
 // package (escalation.park) is driven by comments: each pass first offers every started item to `resume` (a parked
 // run goes on when its contact answered), then starts new items that `admit` accepts, at most `maxActive` at once.
 // trigger.retriggerTags (ADR 0323): a started item whose run ended (done, needs-human, failed) starts again, once, while
-// one of those tags is on it; the new run takes the tag off the item, and until that is confirmed the item waits.
+// one of those tags is on it; the new run takes the tag off the item, and until that is confirmed the item waits
+// (whoever started the run that took it: this loop or a `routine run` by hand).
 import type { FlowAutomationConfig, FlowDetectionResult } from '../../../src/shared/flow-automation';
-import type { RoutineTrigger } from './format';
+import { foldTag as fold, type RoutineTrigger } from './format';
 import type { RunRecord, RunStore, TriggerState } from './run-store';
 import type { Clock, RuntimeLog, TokenProvider } from './ports';
 import { createDevOpsDetector } from './devops-detector';
@@ -23,7 +24,8 @@ export interface TriggerLoopOptions {
   start(workItem: number, inputs: Record<string, string>, how?: TriggerRestart): { runId: string } | Promise<{ runId: string }>;
   /** the tags of started items now (runtime.itemTags), for trigger.retriggerTags; an item that is not returned waits */
   tags?(workItems: number[]): Promise<Map<number, string[]>>;
-  /** tries again to take a run's retrigger tags off its item (runtime.settleRetrigger); true = they are off */
+  /** tries again to take a run's retrigger tags off its item (runtime.settleRetrigger); true = they are off. Asked for
+   *  every run of a started item whose removal is not confirmed, also one this loop did not start */
   settle?(runId: string): Promise<boolean>;
   /** resumes a started item's run when it is parked and answered (runtime.resumeParked); null = nothing to do */
   resume?(runId: string): Promise<{ runId: string } | null>;
@@ -48,7 +50,6 @@ export const subjectKeyOf = (workItem: number): string => `item:${workItem}`;
 const HOUR = 3_600_000;
 /** the run statuses after which a retrigger tag may start the item again; a cancelled run is recovered, never replaced */
 const ENDED: ReadonlySet<RunRecord['status']> = new Set<RunRecord['status']>(['done', 'needs-human', 'failed']);
-const fold = (tag: string): string => tag.normalize('NFKC').trim().toLowerCase();
 
 export function createTriggerLoop(options: TriggerLoopOptions) {
   const clock = options.clock ?? { now: () => Date.now() };
@@ -63,6 +64,21 @@ export function createTriggerLoop(options: TriggerLoopOptions) {
   const config = (trigger: FlowAutomationConfig['trigger']): FlowAutomationConfig => ({ flowId: options.routineId, flowVersion: 1, trigger, scope: {}, inputs: {}, priority: 'normal' });
   const busyNow = () => options.trigger.maxActive !== undefined && (options.active?.() ?? 0) >= options.trigger.maxActive;
   const message = (error: unknown) => error instanceof Error ? error.message : String(error);
+  // runs with no retrigger tag left to take off: a run gets its tags at its start and a removal is final, so they are
+  // never read again; the others (few) are read at each pass
+  const settledRuns = new Set<string>();
+  /** The runs of this runs root whose retrigger tag is not confirmed off their work item, whoever started them. */
+  function pendingRemovals(): RunRecord[] {
+    const pending: RunRecord[] = [];
+    for (const runId of options.store.runIds()) {
+      if (settledRuns.has(runId)) continue;
+      try {
+        const run = options.store.read(runId);
+        if (run.retrigger && !run.retrigger.removed) pending.push(run); else settledRuns.add(runId);
+      } catch { /* not readable now: looked at again at the next pass */ }
+    }
+    return pending;
+  }
 
   async function pass(signal: AbortSignal): Promise<TickResult> {
     const state: TriggerState = options.store.trigger();
@@ -158,21 +174,33 @@ export function createTriggerLoop(options: TriggerLoopOptions) {
     let tagsNow: Map<number, string[]>;
     try { tagsNow = await options.tags(known.map(k => k.id)); }
     catch (error) { options.log?.warn('routine', 'retrigger tags not read', { cause: message(error) }); return out; }
+    const pending = pendingRemovals();
     for (const { key, id, subject } of known) {
       if (signal.aborted) break;
-      const tags = tagsNow.get(id);
-      if (!tags) continue;
+      const seen = tagsNow.get(id);
+      if (!seen) continue;
       let run: RunRecord;
       try { run = options.store.read(subject.runId); } catch { continue; }
-      // the tag that started this run is still to be taken off: never a second start on it
-      if (run.retrigger && !run.retrigger.removed) {
-        let off = false;
-        try { off = options.settle ? await options.settle(subject.runId) : false; } catch (error) { options.log?.warn('routine', 'retrigger tag not removed', { data: { workItem: id }, cause: message(error) }); }
+      // a run of this item took the tag and it is still to be taken off (this loop's run, or a `routine run` by hand):
+      // never a second start on it
+      const taking = pending.filter(r => r.workItem === id);
+      if (taking.length) {
+        let off = true;
+        for (const r of taking) {
+          try { if (!options.settle || !await options.settle(r.runId)) off = false; }
+          catch (error) { off = false; options.log?.warn('routine', 'retrigger tag not removed', { data: { workItem: id, runId: r.runId }, cause: message(error) }); }
+        }
         if (!off) out.waiting++;
         continue; // off only now: the tags read above are older, the next pass sees the item as it is
       }
-      if (!tags.some(t => wanted.includes(fold(t)))) continue;
+      if (!seen.some(t => wanted.includes(fold(t)))) continue;
       if (!ENDED.has(run.status) || (max && starts.length >= max) || busyNow()) { out.waiting++; continue; }
+      // read again just before the start: a run by hand may have taken the tag since the read of all the items above
+      let tags: string[] | undefined;
+      try { tags = (await options.tags([id])).get(id); }
+      catch (error) { options.log?.warn('routine', 'retrigger tags not read', { data: { workItem: id }, cause: message(error) }); out.waiting++; continue; }
+      if (!tags?.some(t => wanted.includes(fold(t)))) continue;
+      if (pendingRemovals().some(r => r.workItem === id)) { out.waiting++; continue; }
       // saved before the start, with the run it follows: a crash in between never starts the item twice
       const previousRunId = subject.runId;
       state.subjects[key] = { ...subject, runId: '', restart: { from: previousRunId } };
@@ -188,7 +216,14 @@ export function createTriggerLoop(options: TriggerLoopOptions) {
       state.subjects[key] = { runId: handle.runId, at, ...(subject.title ? { title: subject.title } : {}), previous: [...(subject.previous ?? []), previousRunId].slice(-20) };
       options.store.setTrigger({ ...state, starts });
       starts.push(at);
-      out.again.push({ workItem: id, runId: handle.runId, tags: (options.trigger.retriggerTags ?? []).filter(t => tags.some(x => fold(x) === fold(t))), previousRunId });
+      const on = tags;
+      out.again.push({ workItem: id, runId: handle.runId, tags: (options.trigger.retriggerTags ?? []).filter(t => on.some(x => fold(x) === fold(t))), previousRunId });
+    }
+    // a run by hand on an item this loop never started: its removal is tried again too, so its report tells the truth
+    const mine = new Set(known.map(k => k.id));
+    if (options.settle) for (const r of pending) {
+      if (signal.aborted) break;
+      if (r.workItem !== undefined && !mine.has(r.workItem)) try { await options.settle(r.runId); } catch { /* tried again at the next pass */ }
     }
     return out;
   }

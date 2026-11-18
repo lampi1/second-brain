@@ -7,6 +7,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createRoutineRuntime, createTriggerLoop, readRun, type RoutinePackage, type RoutineTrigger, type RunRecord } from '../../../packages/routine-runtime/src/index';
+import { createLocks, type Locks } from '../../../packages/routine-runtime/src/locks';
+import { fillPlaceholders } from '../../../packages/routine-runtime/src/runtime';
 import { main, parseArgs } from '../../../packages/routine-runtime/src/cli';
 import type { FlowDetectionResult } from '../../../src/shared/flow-automation';
 import { done, fakeDevOps, routinePackage, scriptedEngine, tempDir, type Script } from './fakes';
@@ -16,13 +18,13 @@ const ENTRIES = [{ name: 'retest', when: { tag: 'ai-retest' }, startStep: 'repor
 /** the detector's answer for item 42: every poll sees it (a subject already started is skipped by the loop) */
 const detect = async (): Promise<FlowDetectionResult> => ({ items: [{ key: 'k', title: '#42 Login fails', inputs: { 'work-item-id': '42' } }], cursor: { 42: '3' }, summary: '1 item.' });
 
-function setup(over: { trigger?: Partial<RoutineTrigger>; entries?: RoutinePackage['routine']['entries']; script?: Script; active?: () => number } = {}) {
+function setup(over: { trigger?: Partial<RoutineTrigger>; entries?: RoutinePackage['routine']['entries']; script?: Script; active?: () => number; locks?: Locks } = {}) {
   const root = tempDir(), devops = fakeDevOps();
   devops.addItem({ id: 42, fields: { 'System.Title': 'Login fails', 'System.State': 'New', 'System.Tags': 'ai-fixable' } });
   const trigger = { ...TRIGGER, ...over.trigger };
   const pkg = routinePackage({ trigger, ...(over.entries ? { entries: over.entries } : {}) });
   const engine = scriptedEngine(over.script ?? (r => done(`${r.stepId} ok`)));
-  const runtime = createRoutineRuntime({ pkg, paths: { runsRoot: path.join(root, 'runs'), workspace: id => path.join(root, 'ws', id) }, engine, devops: { authorization: devops.authorization, request: devops.request } });
+  const runtime = createRoutineRuntime({ pkg, paths: { runsRoot: path.join(root, 'runs'), workspace: id => path.join(root, 'ws', id) }, engine, devops: { authorization: devops.authorization, request: devops.request }, ...(over.locks ? { locks: over.locks } : {}) });
   const finished: Promise<RunRecord>[] = [];
   const loop = createTriggerLoop({
     routineId: pkg.routine.id, trigger, store: runtime.store, detect,
@@ -153,6 +155,72 @@ describe('trigger.retriggerTags', () => {
     expect(t.runtime.store.trigger().subjects['item:42']!.previous).toEqual([first, second]);
   });
 
+  it('a run by hand whose tag removal failed holds the item too: the watch takes the tag off, then starts nothing', async () => {
+    const t = setup(RETRIGGER);
+    await t.poll();
+    t.tag('ai-fixable; ai-retest');
+    t.devops.fault({ method: 'PATCH', path: /\/workitems\/42$/i, mode: 'status', status: 400 });
+    const manual = await t.runtime.startFor({ workItem: 42 });
+    expect(await manual.finished).toMatchObject({ status: 'done', retrigger: { removed: false, tries: 1 } });
+    expect(t.tagsNow()).toBe('ai-fixable; ai-retest');
+    // the watch's own run of the item ended long ago and the tag is on: still this is the manual run's tag
+    const result = await t.poll();
+    expect(result.started).toEqual([]);
+    expect(t.tagsNow()).toBe('ai-fixable');
+    expect(t.runtime.store.read(manual.runId).retrigger).toMatchObject({ removed: true, tries: 2 });
+    expect(readRun(t.runtime.store.runDir(manual.runId)).report).toMatch(/Retrigger tag ai-retest: removed from the work item/);
+    expect((await t.poll()).started).toEqual([]);
+    expect(t.engine.requests).toHaveLength(6);
+  });
+
+  it('a tag that only looks the same (a non-breaking space, full-width letters) starts nothing: the tag matched is the tag removed', async () => {
+    const t = setup({ trigger: { retriggerTags: ['ai retest'] } });
+    await t.poll();
+    for (const lookalike of ['ai\u00a0retest', '\uff41\uff49 retest']) {
+      t.tag(`ai-fixable; ${lookalike}`);
+      expect((await t.poll()).started).toEqual([]);
+      expect(t.tagsNow()).toBe(`ai-fixable; ${lookalike}`);
+    }
+    t.tag('ai-fixable;  AI Retest ');
+    expect((await t.poll()).retriggered).toHaveLength(1);
+    expect(t.tagsNow()).toBe('ai-fixable');
+    expect((await t.poll()).started).toEqual([]);
+    expect(t.engine.requests).toHaveLength(6);
+  });
+
+  it('a pending removal of a run another live process holds is left to it', async () => {
+    const dir = tempDir();
+    const t = setup({ ...RETRIGGER, locks: createLocks(dir, { alive: () => true }) });
+    await t.poll();
+    t.tag('ai-fixable; ai-retest');
+    t.devops.fault({ method: 'PATCH', path: /\/workitems\/42$/i, mode: 'status', status: 400 });
+    const second = (await t.poll()).started[0]!.runId;
+    expect(t.runtime.store.read(second).retrigger).toMatchObject({ removed: false, tries: 1 });
+    // a `routine resume` of that run in another terminal holds its item: the watch writes nothing of that run
+    const elsewhere = createLocks(dir, { alive: () => true, pid: 4_000_000 });
+    expect(elsewhere.acquire('item-contoso-42', second)).toMatchObject({ owner: second, pid: 4_000_000 });
+    expect(await t.runtime.settleRetrigger(second)).toBe(false);
+    expect((await t.poll()).started).toEqual([]);
+    expect(t.runtime.store.read(second).retrigger).toMatchObject({ removed: false, tries: 1 });
+    expect(t.tagsNow()).toBe('ai-fixable; ai-retest');
+    elsewhere.release(['item-contoso-42'], second);
+    expect((await t.poll()).started).toEqual([]);
+    expect(t.runtime.store.read(second).retrigger).toMatchObject({ removed: true, tries: 2 });
+    expect(t.tagsNow()).toBe('ai-fixable');
+  });
+
+  it('the tags are read again just before a restart: a tag taken off meanwhile starts nothing', async () => {
+    const t = setup(RETRIGGER);
+    const first = (await t.poll()).started[0]!.runId;
+    const reads: number[][] = [];
+    const stale = createTriggerLoop({ routineId: 'demo', trigger: { ...TRIGGER, retriggerTags: ['ai-retest'] }, store: t.runtime.store, detect,
+      tags: async ids => { reads.push(ids); return new Map([[42, reads.length === 1 ? ['ai-fixable', 'ai-retest'] : ['ai-fixable']]]); },
+      start: () => { throw new Error('never'); } });
+    expect(await stale.tick()).toMatchObject({ started: [], skipped: 1 });
+    expect(reads).toEqual([[42], [42]]);
+    expect(t.runtime.store.trigger().subjects['item:42']).toMatchObject({ runId: first });
+  });
+
   it('a restart cut between its save and its start is settled at the next poll, never doubled', async () => {
     // no run was made: the item is as before, and its tag starts it once
     const cut = setup(RETRIGGER);
@@ -257,7 +325,18 @@ describe('routine.entries', () => {
     const forced = await t.runtime.startFor({ workItem: 42, entry: 'default' });
     expect((await forced.finished).steps.map(s => s.attempts)).toEqual([1, 1, 1]);
     const from = await t.runtime.startFor({ workItem: 42, entry: 'retest', fromStep: 'fix' });
-    expect(await from.finished).toMatchObject({ entry: 'retest', steps: [{ attempts: 0, summary: 'skipped (started from step fix)' }, { attempts: 1 }, { attempts: 1 }] });
+    expect(await from.finished).toMatchObject({ entry: 'retest', startStep: 'fix', steps: [{ attempts: 0, summary: 'skipped (started from step fix)' }, { attempts: 1 }, { attempts: 1 }] });
+    // the prompt names the step the run really started from
+    const promptOf = (runId: string) => t.engine.requests.find(r => r.runId === runId)!.prompt;
+    expect(promptOf(from.runId)).toContain('This run entered the routine as "retest" (tag ai-retest on the work item): it starts from step Fix; the steps before it were not run again.');
+    expect(promptOf(forced.runId)).not.toContain('## Entry');
+    // a retrigger tag with no entry of its own, started by hand from a later step
+    t.tag('ai-fixable; ai-retest');
+    const plain = setup(RETRIGGER);
+    plain.tag('ai-retest');
+    const late = await plain.runtime.startFor({ workItem: 42, fromStep: 'report' });
+    await late.finished;
+    expect(plain.engine.requests[0]!.prompt).toContain('This run takes the default entry: it starts from step Report; the steps before it were not run again. The tag ai-retest started this work item again');
     await expect(t.runtime.startFor({ workItem: 42, entry: 'nope' })).rejects.toThrow('No entry "nope" in this routine (entries: default, retest)');
     // a work item DevOps does not return starts nothing
     await expect(t.runtime.startFor({ workItem: 999 })).rejects.toThrow(/Work item 999 was not found on DevOps/);
@@ -266,6 +345,13 @@ describe('routine.entries', () => {
 });
 
 describe('a package without entries and retrigger tags', () => {
+  it('keeps {{entry}} and {{previousRun}} as written: they are filled only for a package that uses the options', () => {
+    const run = { inputs: {} };
+    expect(fillPlaceholders('{{entry}} / {{previousRun}}', run)).toBe('{{entry}} / {{previousRun}}');
+    expect(fillPlaceholders('{{entry}} / {{previousRun}}', run, undefined, true)).toBe('default / ');
+    expect(fillPlaceholders('{{entry}}', { inputs: { entry: 'retest' } }, undefined, true)).toBe('retest');
+  });
+
   it('runs as before: no tags read, no entry input, no tag write, and a tagged ended item never starts again', async () => {
     const t = setup();
     t.tag('ai-fixable; ai-retest');

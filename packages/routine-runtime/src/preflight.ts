@@ -4,7 +4,7 @@
 // {{placeholders}}, DevOps trigger/grant/escalation coherence, entries and retrigger tags (ADR 0323), login rules without a login, test DB logins, MCP tools
 // a step cannot reach, and anything left from the old role-based routines (roles, app MCP tools). Every problem comes
 // with the field path and the fix in plain words. Pure: no network, no file system, no secrets in the messages.
-import { parseRoutinePackage, RoutineFormatError, SECRET_PLACEHOLDER, usesEntries, type RoutinePackage } from './format';
+import { foldTag, parseRoutinePackage, RoutineFormatError, SECRET_PLACEHOLDER, usesEntries, type RoutinePackage } from './format';
 import { checkTestDbTarget, type RecognisedTestDb } from './testdb-guard';
 
 export interface PreflightIssue { path: string; message: string; fix: string; /** a secret only the user can type */ secret?: true }
@@ -27,7 +27,6 @@ const BUILTIN = new Set(['workItem', 'work-item-id', 'work-item-url']);
 /** Inputs the runtime fills for a package with entries or retrigger tags (ADR 0323): the entry's name and the folder
  *  of the previous run of the same work item. */
 const TAGGED = new Set(['entry', 'previousRun']);
-const foldTag = (t: string): string => t.normalize('NFKC').trim().toLowerCase();
 /** The app's role names: a package step is a plain Claude Code session, never a role (ADR 0175 item 2). */
 const ROLE = /\b(Orchestrator|Strategist|Scout|Artisan|Sentinel|Herald)\b/;
 /** App-only MCP tools and servers a plain session does not have. */

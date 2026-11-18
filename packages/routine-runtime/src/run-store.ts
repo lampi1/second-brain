@@ -68,6 +68,8 @@ export interface RunRecord {
   /** the package entry this run took (routine.entries; "default" = the first step): only for a package that uses
    *  entries or retrigger tags (ADR 0323) */
   entry?: string;
+  /** the step that run started from, when it is not the first (its entry's startStep, or --from-step); same packages only */
+  startStep?: string;
   /** the previous run of the same work item in this runs root: its folder is the run's read-only `previousRun` input */
   previousRunId?: string;
   /** the retrigger tags this run's start took from its work item (trigger.retriggerTags) */

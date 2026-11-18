@@ -130,7 +130,9 @@ const strs = (v: unknown, what: string, max = 64): string[] => list(v, what, max
 const opt = <T>(v: Obj, key: string, read: (value: unknown) => T): Partial<Record<string, T>> => v[key] === undefined ? {} : { [key]: read(v[key]) };
 /** A DevOps tag: one tag, so no ";" (the separator of System.Tags). */
 const tag = (v: unknown, what: string): string => { const t = str(v, what, 100).trim(); return t.includes(';') ? fail(`${what}: one tag, without ";"`) : t; };
-const foldTag = (t: string): string => t.normalize('NFKC').trim().toLowerCase();
+/** How two DevOps tags are the same one for entries and retrigger tags: trimmed and without case, exactly as the tags
+ *  write compares them (devops.ts), so a tag that starts a run is always the tag that run takes off. */
+export const foldTag = (t: string): string => t.trim().toLowerCase();
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const ORG = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,49}$/;
 
