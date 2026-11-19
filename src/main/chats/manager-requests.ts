@@ -44,7 +44,7 @@ export const ASK_AGAIN_MAX = 2;
 const ASKING_TOOL = /show_ui|AskUserQuestion|ask_user|ask_question|request_user_input/i;
 const APP_READS = /(?:^|_)(?:app_(?:chats|chat_items|state|digest|guide|task_events|work_list|agents_recap)|task_estimate)$/;
 const noWork = (item: Extract<ChatItem, { kind: 'tool' }>): boolean =>
-  ASKING_TOOL.test(`${item.name} ${item.summary ?? ''}`) || !mayWrite(item.name) || APP_READS.test(item.name);
+  ASKING_TOOL.test(item.name) || (item.name === 'Tool' && ASKING_TOOL.test(item.summary ?? '')) || !mayWrite(item.name) || APP_READS.test(item.name);
 const EXPLAIN_HERE = 'bloccato: il suo messaggio chiede una spiegazione, non decide la domanda. Non passarlo alla chat: spiegagli tu qui, in parole semplici, cosa decide la domanda e cosa cambia per lui con ogni scelta (leggi il riepilogo in app_pending, o la chat con app_chat_items), e lascia la domanda aperta nella sua riga. La chiudi quando ti scrive cosa sceglie.';
 
 /** A question request's identity for #379: its questions and their options, in order. */

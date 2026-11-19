@@ -143,10 +143,15 @@ describe('the user answers in his own words', () => {
     w.sink!.item({ kind: 'tool', id: 't1', name: 'Bash', input: { command: 'git commit -m x' }, status: 'ok', output: 'done', at: Date.now() } as ChatItem, true);
     w.sink!.pending(ask('q5b', COMMIT));
     expect(w.added).toEqual(['q1', 'q2', 'q3', 'q4']);
+    // work that only names a question tool in its command is work: the same question after it is his again
+    w.sink!.item({ kind: 'tool', id: 't3', name: 'Bash', summary: 'Bash: sed -i s/ask_user/x/ src/a.ts', input: {}, status: 'ok', at: Date.now() } as ChatItem, false);
+    w.sink!.pending(ask('q5c', COMMIT));
+    expect(w.added).toEqual(['q1', 'q2', 'q3', 'q4', 'q5c']);
+    await m.answer(chat.id, 'q5c', words(COMMIT, 'cioè?'));
     // the turn ended: the next turn's question is shown
     w.sink!.item({ kind: 'result', id: 'r1', isError: false, costUsd: 0, durationMs: 1, turns: 1, at: Date.now() } as ChatItem, false);
     w.sink!.pending(ask('q6', COMMIT));
-    expect(w.added).toEqual(['q1', 'q2', 'q3', 'q4', 'q6']);
+    expect(w.added).toEqual(['q1', 'q2', 'q3', 'q4', 'q5c', 'q6']);
   });
 
   it('«sì» typed instead of clicked is the option, and a text of the app is not his words: no note, nothing held', async () => {

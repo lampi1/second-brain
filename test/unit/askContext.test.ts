@@ -107,6 +107,7 @@ describe('askContext of a second question in the same turn (the user, 2026-10-13
       think('th2', 'Solo su questo PC'), { ...tool('t-toolu_2', 'AskUserQuestion', pezzo), status: 'running' } as ChatItem];
     expect(askContext(byApp(reaskNote('su tutte le piattaforme?')), again('toolu_2')).again).toEqual({ answer: 'su tutte le piattaforme?' });
     expect(askContext(byApp(reaskNote('cosa intendi con «rebase»?')), again('toolu_2')).again).toEqual({ answer: 'cosa intendi con «rebase»?' });
+    expect(askContext(byApp(`${reaskNote('prima')} · ${reaskNote('seconda')}`), again('toolu_2')).again).toEqual({ answer: 'prima' });
     expect(askContext(byApp(ownCopyNote('QA', 'c1', 'q1')), again('toolu_2')).again).toBeUndefined();
   });
   it('ends at the request\'s own tool row: what the chat wrote after it is not its context', () => {
