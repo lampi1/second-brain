@@ -2,8 +2,7 @@
      and the run / resume / watch commands. Read by people. The app has no routine section (ADR 0325). -->
 # routine: run routine packages from a terminal
 
-A routine package is a folder with a `routine.json` (or the `.zip` the app exports). `routine` runs it with the same
-runtime as the app. Each step is a plain Claude Code session (`claude -p`). A step is done when it writes
+A routine package is a folder with a `routine.json` (or a `.zip` of it). Each step is a plain Claude Code session (`claude -p`). A step is done when it writes
 `step-result.json`. The runtime does the DevOps writes. When a step needs a person, the runtime asks in a DevOps
 comment and waits for the answer there. No app and no brain folder are needed.
 

@@ -286,6 +286,8 @@ export class BrowserTabs {
     if (this.tabsOf(group).length >= MAX_TABS_PER_GROUP) throw new Error(`Too many tabs (${MAX_TABS_PER_GROUP}) in this group: close some with tabs_close.`);
     const envExplicit = opts.env !== undefined && opts.env !== '';
     const env = envExplicit ? envSlug(opts.env) : envForUrl(url);
+    // the sessions the former routine browser left in the profile (ADR 0325) stay shut, cookies and all
+    if (env.startsWith('routine-')) throw new Error('Archived routine browser sessions cannot be reopened');
     const id = opts.id ?? `t${++this.seq}`;
     if (!opts.view) this.sessionFor(env);
     const view = opts.view ?? (opts.webContents

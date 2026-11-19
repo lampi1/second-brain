@@ -277,10 +277,13 @@ function valid(x: unknown): StoredChat | null {
 }
 
 /** A chat of the in-app routine executor, retired with ADR 0179 and out of the app with ADR 0325: its record carries
- *  one of that executor's marks. The app keeps such records in chats.json and never loads them (ChatStore.load). */
+ *  one of that executor's marks, in the shape that executor wrote (a malformed one was never a mark). The app keeps
+ *  such records in chats.json and never loads them (ChatStore.load). */
 const isRetired = (c: unknown): boolean => {
   const r = c as Record<string, unknown> | null;
-  return !!r && typeof r === 'object' && (r.routineArchived === true || !!r.routine && typeof r.routine === 'object' || typeof r.routinePackage === 'string');
+  const step = r?.routine as { runId?: unknown; stepId?: unknown } | null | undefined;
+  return !!r && typeof r === 'object' && (r.routineArchived === true || !!step && typeof step === 'object' && typeof step.runId === 'string' && typeof step.stepId === 'string'
+    || typeof r.routinePackage === 'string' && /^[a-f0-9]{64}$/.test(r.routinePackage));
 };
 
 export class ChatStore {
@@ -291,12 +294,21 @@ export class ChatStore {
   private retired: unknown[] = [];
   /** Their ids: the runs of a retired chat are never shown, delivered or ended (ChatManager). */
   retiredIds: ReadonlySet<string> = new Set();
+  /** The last load found the file and could neither read nor copy it: no write may replace it (until a restart). */
+  private unread = false;
   private body(chats: StoredChat[]): string { return `${JSON.stringify({ version: 2, chats: this.retired.length ? [...chats, ...this.retired] : chats })}\n`; }
 
   load(): StoredChat[] {
     cleanOrphanTmps(this.file);
     let text: string;
-    try { text = fs.readFileSync(this.file, 'utf8'); } catch { return []; }
+    try { text = fs.readFileSync(this.file, 'utf8'); } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      // the file is there and was not read (a lock, a permission): what was not read is never written over
+      const copy = `${this.file}.unread-${Date.now()}`;
+      try { fs.copyFileSync(this.file, copy); } catch { this.unread = true; }
+      log.error('chats', 'chats.json could not be read, starting empty', { cause: errText(e), hint: this.unread ? 'the file is left as it is and not written in this session: close what holds it, then restart' : `a copy is kept as ${copy}` });
+      return [];
+    }
     try {
       const data = JSON.parse(text) as { chats?: unknown };
       const rows: unknown[] = Array.isArray(data.chats) ? data.chats : [];
@@ -333,6 +345,7 @@ export class ChatStore {
     try { this.write(chats); } finally { slowStep('chats.json write', performance.now() - t); }
   }
   private write(chats: StoredChat[]): void {
+    if (this.unread) return;
     const body = this.body(chats);
     // a deferred write in flight is superseded (gen): this body is written even when equal to the last one
     if (body === this.last && !this.inflight) return;
@@ -358,6 +371,7 @@ export class ChatStore {
     const t = performance.now();
     const body = this.body(chats);
     slowStep('chats.json serialize', performance.now() - t);
+    if (this.unread) return true;
     if (body === this.last && !this.inflight) return true;
     const gen = ++this.gen;
     this.inflight++;
@@ -379,6 +393,7 @@ export class ChatStore {
     try { this.checkpointNow(chats); } finally { slowStep('chats.json checkpoint', performance.now() - t); }
   }
   private checkpointNow(chats: StoredChat[]): void {
+    if (this.unread) throw new Error('Archivio chat non letto: aggiornamento fermato.');
     const body = this.body(chats);
     this.last = null;
     this.gen++;

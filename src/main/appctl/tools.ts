@@ -351,7 +351,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       },
     },
     {
-      name: 'app_agent_context', description: 'Read the frozen launch context manifest for one visible work chat: selected memory IDs/provenance, omission reasons, skill hashes and estimated host-instruction size. No fact values, no live archive injection, no vendor-system prompt. Lexical scores are not probabilities; token estimates are characters/3. Legacy chats return unknown; sealed routines load no ambient memory.',
+      name: 'app_agent_context', description: 'Read the frozen launch context manifest for one visible work chat: selected memory IDs/provenance, omission reasons, skill hashes and estimated host-instruction size. No fact values, no live archive injection, no vendor-system prompt. Lexical scores are not probabilities; token estimates are characters/3. Legacy chats return unknown.',
       inputSchema: obj({ chatId: str('chat id') }, ['chatId']),
       run: a => { const id = contentOf(String(a.chatId)); const chat = d.chats.list().find(c => c.id === id); if (!chat) throw new Error('Chat unavailable'); return { manifest: chat.launchContext ?? null, known: !!chat.launchContext }; },
     },

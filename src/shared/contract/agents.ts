@@ -1,4 +1,4 @@
-// Agents and automations: roles, avatars, work threads, scheduled requests, connectors and MCP servers, the Guida.
+// Agents: roles, avatars, work threads, connectors and MCP servers, the Guida.
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
 import type { AgentImages } from '../agent-images';

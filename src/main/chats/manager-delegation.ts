@@ -438,7 +438,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     const orchestrator = this.openOrchestrator(), run = this.runs.get(runId), result = run?.report?.canonical;
     if (!orchestrator) throw new Error('Open an Orchestrator before requesting synthesis.');
     if (source.kind !== 'user' && !(source.kind === 'chat' && source.chatId === orchestrator.s.id)) throw new Error('Only the user or current Orchestrator may request root synthesis.');
-    if (!run || !result || !['orchestrator', 'user'].includes(run.startedBy) || run.parentRunId || this.chats.get(run.chatId)?.s.parentId) throw new Error('Only a root task result is available for synthesis.');
+    if (!run || !result || !['orchestrator', 'user'].includes(run.startedBy) || run.parentRunId || this.store.retiredIds.has(run.chatId) || this.chats.get(run.chatId)?.s.parentId) throw new Error('Only a root task result is available for synthesis.');
     if (run.delivery?.synthesisSubmittedAt || this.synthesizing.has(runId)) return;
     const worker = this.chats.get(run.chatId);
     if (worker?.s.run?.runId === runId && (worker.working || this.midTurn(worker))) throw new Error('The worker is still finishing this result.');

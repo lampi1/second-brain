@@ -69,7 +69,7 @@ never writes those files into a brain.
 
 **Page.** Routine has three tabs: Adesso (only what needs the user, then runs working by themselves with their heal
 banner), Routine (each routine in plain words, its trigger switch and queue; open one for steps, per-step models,
-filters, export and dry run), Storico (finished runs with receipts). Mockups: `docs/mockups/routines/`.
+filters, export and dry run), Storico (finished runs with receipts). Mockups: `docs/mockups/routines/` (removed with ADR 0325).
 
 ## Consequences
 
