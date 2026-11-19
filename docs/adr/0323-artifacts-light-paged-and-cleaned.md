@@ -1,6 +1,6 @@
 # ADR 0323 · Artifacts: twenty at a time, light pictures, and a daily cleanup of old screenshots
 
-Date: 2026-11-18 · Status: accepted (owner, 2026-11-18: «la sezione artifact deve essere più essenziale chi se ne
+Date: 2026-11-18 · Status: partly superseded by ADR 0328 (points 3 and 4, the star and the daily cleanup, are gone; the page of twenty and the light pictures stay); accepted (owner, 2026-11-18: «la sezione artifact deve essere più essenziale chi se ne
 fotte di tutti gli screen di sempre, cioè quanto meno una paginazione perchè se la apro mi impalla l'app e secondo me
 ci dovrebbe essere una pulizia periodica che ne pensi?»; to the proposal «solo gli ultimi 20 artifact e carica gli
 altri a pagine, con anteprime leggere … una pulizia automatica che archivia o cancella gli screenshot più vecchi di 30

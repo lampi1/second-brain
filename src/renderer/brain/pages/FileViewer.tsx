@@ -1,5 +1,6 @@
 // The one read-only viewer for every file link (SPEC 22): markdown rendered, code and config highlighted (highlight.js,
 // one lazy chunk per language), CSV/TSV and JSONL as tables, JSON pretty-printed, images, PDFs (pdf.js, canvas only),
+// a Word, Excel or PowerPoint file as its text and tables (main/office-preview.ts, ADR 0328),
 // HTML reports as a sanitized page (ReportHtml.tsx) and Markdown with its images (embedded or local files read by main,
 // never remote; ReportImages.tsx), each image opening large on a click (issue #83);
 // a big text file comes one page at a time (main cuts it at line ends; a cited line opens its own page); "Compare" shows
@@ -141,7 +142,8 @@ function Pdf({data,name}:{data:Uint8Array;name:string}){
       .then(doc=>{if(live)setState({doc});}).catch(()=>{if(live)setState('error');});
     return()=>{live=false;destroy?.();};
   },[data]);
-  useEffect(()=>{const el=host.current;if(!el)return;const fit=()=>setWidth(Math.min(1100,Math.floor((el.clientWidth-24)/40)*40));fit();const observer=new ResizeObserver(fit);observer.observe(el);return()=>observer.disconnect();},[]);
+  useEffect(()=>{const el=host.current;if(!el)return;// full screen (ViewerOverlay .is-full): a page may grow wider than the panel's reading width
+    const fit=()=>setWidth(Math.min(el.closest('.is-full')?1680:1100,Math.floor((el.clientWidth-24)/40)*40));fit();const observer=new ResizeObserver(fit);observer.observe(el);return()=>observer.disconnect();},[]);
   const doc=state&&state!=='error'?state.doc:null,total=doc?.numPages??0;
   // the pages near the viewport (from each page's observer) decide which few pages keep a drawn canvas
   const near=useRef(new Set<number>()),[drawn,setDrawn]=useState<ReadonlySet<number>>(()=>new Set());
@@ -164,6 +166,13 @@ function ImageBody({result}:{result:Extract<FileViewResult,{kind:'image'}>}){
   <button type="button" className={`viewer-image-open${fitWidth?' is-wide':''}`} onClick={()=>setOpen(true)} aria-label={t('viewer.imageZoom')}>
     <img src={result.dataUrl} alt={name}/>
   </button>{open&&<Suspense fallback={null}><ImageZoom images={[{src:result.dataUrl,caption:name,imagePath:result.path,reportFile:result.path}]} index={0} onMove={()=>{}} onClose={close} testBase="viewer"/></Suspense>}</>;
+}
+
+/** A Word, Excel or PowerPoint file: its text and tables (main read them: office-preview.ts), with a line that says
+ *  it is not the original layout. */
+function OfficeBody({result}:{result:Extract<FileViewResult,{kind:'office'}>}){
+  return <><p className="vw-office-note small muted" data-testid="viewer-office-note">{t(result.cut?'viewer.officeCut':'viewer.officeNote')}</p>
+    <Markdown text={result.markdown} files={new Set()} root="" name={baseName(result.path)} testId="viewer-office"/></>;
 }
 
 /** Where a page sits in a file that does not fit one page, with first/previous/next/last (none for a UTF-16 file). */
@@ -222,7 +231,7 @@ async function showInFolder(path:string){
 
 /** The colour family of a file's badge in the header. */
 function badgeTone(path:string,kind:FileViewResult['kind']|undefined):string{
-  if(kind==='image')return'image';if(kind==='pdf')return'pdf';
+  if(kind==='image')return'image';if(kind==='pdf')return'pdf';if(kind==='office')return extOf(path)==='xlsx'?'csv':extOf(path)==='pptx'?'html':'markdown';
   const v=viewOf(path);return v==='code'?'code':v;
 }
 /** A 24-unit stroke icon (the header's actions). */
@@ -263,7 +272,7 @@ export function CitedFile({reference,chrome}:{reference:FileReference;chrome?:Vi
   const shownPath=real??reference.path,name=baseName(shownPath)||shownPath,folder=shownPath.slice(0,Math.max(0,shownPath.length-name.length)).replace(/[\\/]$/,'');
   const ext=(extOf(shownPath)||'txt').slice(0,4).toUpperCase(),kind=result?.kind;
   // Ctrl+F (or F3) searches the text on screen; nothing to search in a PDF or an image
-  const searchable=kind==='text';
+  const searchable=kind==='text'||kind==='office';
   const[find,setFind]=useState<{key:number}|null>(null);
   const host=useRef<HTMLDivElement>(null),[main,setMain]=useState<HTMLDivElement|null>(null);
   useEffect(()=>{
@@ -292,7 +301,7 @@ export function CitedFile({reference,chrome}:{reference:FileReference;chrome?:Vi
         <div className="vw-meta">
           {folder&&<span className="vw-path" title={shownPath}><bdi>{folder}</bdi></span>}
           {result&&'size'in result&&<span className="vw-chip">{fmtBytes(result.size)}</span>}
-          {(kind==='text'||kind==='image'||kind==='pdf')&&<span className="vw-chip">{t(`vw.kind.${kind==='text'?viewOf(shownPath):kind}`)}</span>}
+          {(kind==='text'||kind==='image'||kind==='pdf'||kind==='office')&&<span className="vw-chip">{t(`vw.kind.${kind==='text'?viewOf(shownPath):kind}`)}</span>}
           <span className="vw-chip vw-chip-ro">{t('viewer.readOnly')}</span>
         </div>
       </div>
@@ -318,6 +327,7 @@ export function CitedFile({reference,chrome}:{reference:FileReference;chrome?:Vi
             <ReportReview key={real??ref} file={real??reference.path} snapshot={result&&'size'in result?{size:result.size,...('mtimeMs'in result&&typeof result.mtimeMs==='number'?{mtimeMs:result.mtimeMs}:{}),...(result.kind==='text'?{offset:result.offset,shown:result.shown}:{})}:undefined}>{!result?<p role="status" className="vw-loading">{t('viewer.loading')}</p>:reason?<Empty title={t(`viewer.${reason}`)}/>
               :result.kind==='image'?<ImageBody key={result.path} result={result}/>
               :result.kind==='pdf'?<Pdf key={ref} data={result.data} name={baseName(result.path)}/>
+              :result.kind==='office'?<OfficeBody key={ref} result={result}/>
               :result.kind==='text'?<TextBody key={ref} result={result} line={page.line} go={go} picked={picked} onPick={copyLine}/>:null}</ReportReview>
           </div>
         </div>

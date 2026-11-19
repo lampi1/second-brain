@@ -1,10 +1,11 @@
-// The demo's artifacts (ADR 0319): a few fictional reports, documents, screenshots and a PDF written into the demo brain's
-// reviews/, tmp/ and evidence/ and into two demo chats' evidence folders, dated around the demo's clock, so Memoria →
-// Artifact has content with no real brain: a report with two versions (one file regenerated, one copied with -v2), an
-// HTML report, a PDF, screenshots, and one file that went (shown as missing). Fictional data only. Used by index.ts in
-// demo mode, before the first scan.
+// The demo's artifacts (ADR 0328): a few fictional reports, documents and a plan written into the demo brain's reviews/
+// and dated around the demo's clock, then saved as its chats would save them (artifact_save), so Memoria → Artifact
+// has content with no real brain: a report with two versions, an HTML report, a PDF, a table, a Word document, and
+// one file that went (shown as missing). No screenshot and no scratch file: those are never artifacts. Fictional data
+// only. Used by index.ts in demo mode.
 import fs from 'node:fs';
 import path from 'node:path';
+import { writeZip } from '../agents/pack/zip';
 
 const H = 3600e3, D = 24 * H;
 
@@ -59,45 +60,53 @@ const NOTES_MD = `# Note di rilascio · sconti percentuali\n\nLo sconto percentu
 const OLD_MD = `# Bozza del confronto prezzi\n\nUna prima bozza del confronto dei prezzi dei fornitori, poi cancellata dal disco.\n`;
 
 const REFUNDS_CSV = 'scenario;esito;tempo_s;note\nRimborso totale;ok;4.2;\nRimborso parziale;ok;3.9;\nDoppio clic su Rimborsa;ok;4.0;un solo rimborso\nCarta scaduta;ok;2.1;messaggio chiaro\nImporto oltre il pagato;ok;1.8;bloccato\nRimborso dopo 90 giorni;ok;2.4;bloccato\n';
-const FLOW_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" font-family="Segoe UI,system-ui,sans-serif" font-size="15">
-<rect width="480" height="300" fill="#f7f8fb"/>
-<g fill="#fff" stroke="#5b8def" stroke-width="2"><rect x="30" y="40" width="130" height="56" rx="10"/><rect x="320" y="40" width="130" height="56" rx="10"/><rect x="175" y="200" width="130" height="56" rx="10"/></g>
-<g stroke="#5b8def" stroke-width="2" fill="none"><path d="M160 68h160"/><path d="M385 96v60H240v44"/></g>
-<g fill="#1d2330" text-anchor="middle"><text x="95" y="73">Ordine</text><text x="385" y="73">Rimborso</text><text x="240" y="233">Conferma</text></g>
-<text x="240" y="150" fill="#5b6475" font-size="12" text-anchor="middle">un solo rimborso per ordine</text>
-</svg>`;
 
-/** Writes the demo's artifacts (once per folder) and dates them around `now`; returns what a chat «linked» in the
- *  demo (chat id → texts) and the file to delete after the first scan (it then shows as missing). */
-export function seedDemoArtifacts(o: { brain: string; userData: string; appPath: string; now: number }): { links: Record<string, string[]>; vanish: string } {
-  const w = (rel: string, body: string | Buffer, ago: number, root = o.brain) => {
-    const file = path.join(root, rel);
+const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+const para = (text: string, style?: string) => `<w:p>${style ? `<w:pPr><w:pStyle w:val="${style}"/></w:pPr>` : ''}<w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
+const row = (cells: readonly string[]) => `<w:tr>${cells.map(c => `<w:tc>${para(c)}</w:tc>`).join('')}</w:tr>`;
+/** A small real Word file (a title, two paragraphs, a table): the viewer shows its text and its table. */
+export function demoDocx(): Buffer {
+  const body = [
+    para('Verbale della riunione di rilascio', 'Title'),
+    para('Presenti: prodotto, sviluppo e assistenza. Si decide di rilasciare la 1.0 dopo la pulizia delle impostazioni.'),
+    para('Decisioni', 'Heading1'),
+    `<w:tbl>${[['Decisione', 'Chi', 'Entro'], ['Togliere le voci doppie dalle impostazioni', 'Sviluppo', '14 novembre'], ['Firmare l’installer', 'Sviluppo', '21 novembre'], ['Scrivere la guida dei primi dieci minuti', 'Assistenza', '28 novembre']].map(row).join('')}</w:tbl>`,
+    para('Prossima riunione il primo lunedì dopo il rilascio.'),
+  ].join('');
+  return writeZip(new Map([
+    ['[Content_Types].xml', Buffer.from('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>')],
+    ['_rels/.rels', Buffer.from('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>')],
+    ['word/document.xml', Buffer.from(`<?xml version="1.0" encoding="UTF-8"?><w:document ${W}><w:body>${body}</w:body></w:document>`)],
+  ]));
+}
+
+export interface DemoSave { chat: string; path: string; title?: string; summary?: string }
+
+/** Writes the demo's artifacts (once per folder) and dates them around `now`; returns what its chats «save» (in this
+ *  order: the first version of a report before its second) and the file to delete after it (it then shows as missing). */
+export function seedDemoArtifacts(o: { brain: string; now: number }): { saves: DemoSave[]; vanish: string } {
+  const w = (rel: string, body: string | Buffer, ago: number) => {
+    const file = path.join(o.brain, rel);
     fs.mkdirSync(path.dirname(file), { recursive: true });
     if (!fs.existsSync(file)) fs.writeFileSync(file, body);
     const at = new Date(o.now - ago);
     fs.utimesSync(file, at, at);
     return file;
   };
-  const qa = w(path.join('reviews', 'qa-rimborsi', 'report.html'), QA_HTML, 1.5 * H);
-  w(path.join('reviews', 'analisi-costi-agenti.md'), COSTS_V1, 6 * D);
-  const costs = w(path.join('reviews', 'analisi-costi-agenti-v2.md'), COSTS_V2, 3 * H);
-  w(path.join('reviews', 'piano-rilascio-1-0.md'), PLAN_MD, 26 * H);
-  w(path.join('tmp', 'confronto-motori.html'), ENGINES_HTML, 3 * D);
-  w(path.join('reviews', 'note-rilascio-sconti.md'), NOTES_MD, 5 * H);
-  w(path.join('reviews', 'audit-sicurezza.pdf'), tinyPdf('Audit sicurezza - novembre', ['Nessuna chiave nei file del repository.', 'MCP solo su 127.0.0.1.', 'Due dipendenze da aggiornare entro fine mese.']), 12 * D);
-  const vanish = w(path.join('tmp', 'bozza-confronto-prezzi.md'), OLD_MD, 40 * D);
-  // every kind of file (the owner: «un po' tutto»): a table, a picture drawn as SVG, a Word document (an empty shell)
-  const csv = w(path.join('tmp', 'export-rimborsi.csv'), REFUNDS_CSV, 1.6 * H);
-  w(path.join('reviews', 'qa-rimborsi', 'flusso-rimborsi.svg'), FLOW_SVG, 1.7 * H);
-  w(path.join('reviews', 'verbale-riunione-rilascio.docx'), Buffer.concat([Buffer.from('PK\x03\x04', 'latin1'), Buffer.alloc(26)]), 2 * D);
-  // three small pictures of the app itself (docs/demo-pictures, PNG: the card thumbnails are made by nativeImage)
-  const shots = path.join(o.appPath, 'docs', 'demo-pictures');
-  const ev = path.join(o.userData, 'evidence');
-  for (const [name, chat, ago] of [['grindhouse.png', 'qa', 2 * H], ['project-map.png', 'qa', 2.2 * H], ['trends.png', 'fix', 30 * H]] as const) {
-    try { w(path.join(`chat-${chat}`, `schermata-${name}`), fs.readFileSync(path.join(shots, name)), ago, ev); } catch { /* the demo goes on without it */ }
-  }
+  const vanish = w(path.join('reviews', 'bozza-confronto-prezzi.md'), OLD_MD, 40 * D);
   return {
-    links: { qa: [`Report pronto: ${qa}`, `Dati grezzi: ${csv}`], mappa: [`Analisi aggiornata: [costi](${costs})`] },
+    saves: [
+      { chat: 'qa', path: vanish },
+      { chat: 'mappa', path: w(path.join('reviews', 'audit-sicurezza.pdf'), tinyPdf('Audit sicurezza - novembre', ['Nessuna chiave nei file del repository.', 'MCP solo su 127.0.0.1.', 'Due dipendenze da aggiornare entro fine mese.']), 12 * D), title: 'Audit di sicurezza di novembre', summary: 'Nessuna chiave nei file, MCP solo in locale, due dipendenze da aggiornare entro fine mese.' },
+      { chat: 'mappa', path: w(path.join('reviews', 'analisi-costi-agenti.md'), COSTS_V1, 6 * D) },
+      { chat: 'qa', path: w(path.join('reviews', 'confronto-motori.html'), ENGINES_HTML, 3 * D), summary: 'Stessi dieci compiti su tre motori: quanti chiusi al primo colpo e con che costo.' },
+      { chat: 'mappa', path: w(path.join('reviews', 'verbale-riunione-rilascio.docx'), demoDocx(), 2 * D), title: 'Verbale della riunione di rilascio', summary: 'Chi fa cosa ed entro quando per arrivare alla 1.0.' },
+      { chat: 'mappa', path: w(path.join('reviews', 'piano-rilascio-1-0.md'), PLAN_MD, 26 * H) },
+      { chat: 'fix', path: w(path.join('reviews', 'note-rilascio-sconti.md'), NOTES_MD, 5 * H) },
+      { chat: 'mappa', path: w(path.join('reviews', 'analisi-costi-agenti-v2.md'), COSTS_V2, 3 * H) },
+      { chat: 'qa', path: w(path.join('reviews', 'qa-rimborsi', 'export-rimborsi.csv'), REFUNDS_CSV, 1.6 * H), title: 'Scenari di rimborso provati', summary: 'I dodici scenari con esito, tempo e note.' },
+      { chat: 'qa', path: w(path.join('reviews', 'qa-rimborsi', 'report.html'), QA_HTML, 1.5 * H) },
+    ],
     vanish,
   };
 }

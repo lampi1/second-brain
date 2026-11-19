@@ -3,6 +3,7 @@ import fs from'node:fs';import os from'node:os';import path from'node:path';
 import{afterEach,expect,it}from'vitest';
 import{readFileView,FILE_VIEW_BYTES,PDF_BYTES,REPORT_BYTES}from'../../src/main/file-view';
 import{fileReference,fileViewArg,readFileViewArg,type FileViewResult}from'../../src/shared/file-view';
+import{demoDocx}from'../../src/main/library/demo';
 const temporary:string[]=[];const setup=()=>{const base=fs.mkdtempSync(path.join(os.tmpdir(),'sb-viewer-'));temporary.push(base);const root=path.join(base,'work');fs.mkdirSync(root);return{base,root};};
 afterEach(()=>{for(const dir of temporary.splice(0))fs.rmSync(dir,{recursive:true,force:true});});
 it('preserves Windows and POSIX citation coordinates in a validated internal route',async()=>{
@@ -100,4 +101,13 @@ it('reads an HTML or Markdown report whole from its top (embedded screenshots ar
  const log=await readFileView('report.log',{cwd:root});expect(log.kind==='text'&&log.more).toBe(true);
  const later=await readFileView('report.html',{cwd:root,offset:10});expect(later.kind==='text'&&later.text.length).toBeLessThanOrEqual(FILE_VIEW_BYTES);
  expect(REPORT_BYTES).toBeGreaterThan(FILE_VIEW_BYTES);
+});
+it('opens a Word file as its text (ADR 0328); an unreadable one says so; a GIF is a picture',async()=>{
+ const{root}=setup(),docx=demoDocx();fs.writeFileSync(path.join(root,'verbale.docx'),docx);
+ const shown=await readFileView('verbale.docx',{cwd:root});expect(shown).toMatchObject({kind:'office',format:'docx',size:docx.length,cut:false});
+ expect(shown.kind==='office'&&shown.markdown).toContain('# Verbale della riunione di rilascio');
+ fs.writeFileSync(path.join(root,'old.xlsx'),'not a workbook, long enough to pass the size floor');expect(await readFileView('old.xlsx',{cwd:root})).toMatchObject({kind:'unsupported',reason:'office'});
+ const gif=Buffer.concat([Buffer.from('GIF89a'),Buffer.from([2,0,3,0,0,0,0,0x3b])]);fs.writeFileSync(path.join(root,'anim.gif'),gif);
+ const picture=await readFileView('anim.gif',{cwd:root});expect(picture.kind==='image'&&picture.dataUrl).toBe(`data:image/gif;base64,${gif.toString('base64')}`);
+ fs.writeFileSync(path.join(root,'fake.gif'),'<svg>not a gif</svg>');expect((await readFileView('fake.gif',{cwd:root})).kind).not.toBe('image');
 });

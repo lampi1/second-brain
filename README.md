@@ -202,16 +202,16 @@ format: each one is a package with its own Scripts, saved queries, references an
 
 ### Artifacts
 
-Every report, analysis, document and image your chats produce shows up in **Memory › Artifacts** by itself, left
-where it is on disk: HTML, Markdown, PDF, pictures, tables (csv, Excel), documents (Word, PowerPoint, text), video and
-audio. It comes in when a chat links it, when it sits in the brain's `reviews`, `tmp` or `evidence` folders, and once
-from your past chats. Search it, filter by type, area, period or chat, and open one in the viewer, formatted, with a
-bar that leads back to the chat that made it, to its earlier versions (a report regenerated later is one artifact with
-its history) and to related ones; what the viewer does not render opens with your system's app. A file that went is
-kept, marked missing. The gallery shows twenty at a time, and a daily cleanup takes out pictures older than 30 days
-unless you kept them with the star (the app's own screenshots are deleted; files elsewhere stay on disk).
+**Memory › Artifacts** holds only what you asked to have: a report, an analysis, a document, a plan, a comparison.
+The agent that writes it declares it by itself (the `artifact_save` tool), and the file stays where it is on disk;
+screenshots, logs and working files never come in. It is one list, newest first, with search, twenty at a time. Every
+artifact opens in the app's viewer: HTML and Markdown formatted, PDFs, pictures, tables, and Word, Excel and PowerPoint
+as text and tables (their original layout is one click away, in your system's app). A bar leads back to the chat that
+made it, to its earlier versions (a report rewritten later is one artifact with its history) and to related ones. A
+file that went is kept, marked missing; the ✕ on a card takes it off the list, never off the disk. The viewer's full
+screen takes the whole screen.
 
-<p align="center"><img src="docs/screenshots/artifacts.webp" alt="Memory › Artifacts: cards grouped by day with their pictures, an HTML report drawn small, a csv's first lines, a diagram, screenshots and a Markdown report with two versions" width="760"></p>
+<p align="center"><img src="docs/screenshots/artifacts.webp" alt="Memory › Artifacts: one list of cards grouped by day, an HTML report drawn small, a csv's first lines and Markdown reports, one with two versions" width="760"></p>
 
 ### Maintenance
 

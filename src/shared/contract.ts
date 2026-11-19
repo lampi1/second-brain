@@ -132,7 +132,7 @@ export interface EventMap {
   'impara:tutor': { lesson: string; turn: string; text: string };
   /** the «Giornale» (ADR 0265, 0280): the paper changed (a refresh's progress, a story marked, an edition or a source edited) */
   'news:changed': NewsState;
-  /** Memoria → Artifact (ADR 0319): the index changed (a scan, a chat's turn, the past chats looked through) */
+  /** Memoria → Artifact (ADR 0328): the index changed (an agent saved one, the user removed one, a file went) */
   'library:changed': void;
 }
 
@@ -152,7 +152,7 @@ export const INVOKE_CHANNELS = [
   'chat:synthesize', 'memory:reviewList', 'memory:docs', 'memory:retract', 'memory:delete', 'learning:evidence', 'learning:state', 'learning:import', 'learning:replay', 'learning:saveCandidate', 'learning:promote', 'learning:compare', 'proposals:list', 'proposals:count', 'proposals:decide',
   'maintenance:run', 'maintenance:status', 'maintenance:stop',
   'agents:list', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'agents:judgingEstimate', 'run:outcome', 'run:touch', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
-  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:copyFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:plan', 'chat:stop',
+  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:fullScreen', 'app:copyFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:plan', 'chat:stop',
   'brain:share', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'queries:list', 'queries:get', 'queries:delete', 'brainmodel:noise', 'brainmodel:link', 'brainmodel:remove', 'morning:brief', 'agents:trialDecide', 'agents:lifecycleDecide',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:prewarm', 'chat:set', 'chat:remoteControl', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'chat:undoTurn', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
@@ -177,7 +177,7 @@ export const INVOKE_CHANNELS = [
   'usecount:add', 'usecount:report',
   'projectmap:list', 'projectmap:view', 'projectmap:size',
   'chess:move', 'chess:stop', 'chess:save', 'chess:history',
-  'library:list', 'library:refresh', 'library:thumb', 'library:open', 'library:pin',
+  'library:list', 'library:thumb', 'library:open', 'library:remove',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'work:changed',

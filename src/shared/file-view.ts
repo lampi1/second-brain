@@ -1,14 +1,16 @@
 // Read-only local file references: preserve citation coordinates without exposing file URLs or executable actions.
 // A text result is one page: `shown` bytes from byte `offset` (at most FILE_PAGE_BYTES, cut at a line end; `more` = the
 // file goes on after it); `firstLine` = the line number of its first line, absent when main did not count that far;
-// `paged: false` = only the top can be shown (a UTF-16 file).
+// `paged: false` = only the top can be shown (a UTF-16 file). An `office` result is a Word, Excel or PowerPoint file's
+// text and tables as Markdown (main/office-preview.ts, ADR 0328), `cut` when part of it was left out.
 export interface FileReference { path:string; line?:number; column?:number; chatId?:string }
 export const FILE_PAGE_BYTES=1_000_000;
-export type FileReadReason='outside'|'unsupported'|'missing'|'changed'|'binary'|'image'|'pdf';
+export type FileReadReason='outside'|'unsupported'|'missing'|'changed'|'binary'|'image'|'pdf'|'office';
 export type FileViewResult=
  |{kind:'text';path:string;size:number;mtimeMs?:number;offset:number;shown:number;text:string;more:boolean;firstLine?:number;paged?:false}
  |{kind:'pdf';path:string;size:number;mtimeMs?:number;data:Uint8Array}
  |{kind:'image';path:string;size:number;mtimeMs?:number;dataUrl:string}
+ |{kind:'office';path:string;size:number;mtimeMs?:number;format:'docx'|'xlsx'|'pptx';markdown:string;cut:boolean}
  |{kind:'refused'|'missing'|'unsupported';reason:FileReadReason};
 /**
  * The one line rule of main (file-view.ts counts "\n" bytes for `firstLine` and cited lines) and the viewer (its rows

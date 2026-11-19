@@ -91,6 +91,7 @@ export const TOOL_CATALOG: Readonly<Record<string, ToolInfo>> = {
   list_chats: t('chat', 'The user\'s chats you can write to with send_to_chat.'),
   send_to_chat: t('chat', 'Send a message to another chat of the user, never as his approval.'),
   show_ui: t('chat', 'Show the user a visual from the app\'s component catalog instead of a wall of text.'),
+  artifact_save: t('chat', 'Declare the report, document or plan you wrote because the user asked for one: it shows in Memoria → Artifact.'),
   memory_recall: t('chat', 'Read the scoped memory of your role and project as quoted data.'),
   memory_propose: t('chat', 'Propose a scoped memory record for the user to review.'),
   brain_search: t('chat', 'Search the user\'s brain by meaning and words.'),

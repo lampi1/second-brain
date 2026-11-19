@@ -1,20 +1,20 @@
-// Memoria → Artifact (ADR 0319): the artifact index as the page sees it, shared by the tab (components/library/*) and
+// Memoria → Artifact (ADR 0328): the artifact index as the page sees it, shared by the tab (components/library/*) and
 // the viewer's artifact bar: loaded once on first use, reloaded on 'library:changed' (only the newest answer lands),
 // with the OS the page runs on for comparing paths. A card's picture is asked once per artifact and version and kept.
 import { useSyncExternalStore } from 'react';
 import { extOf, type Artifact, type ArtifactList, type ArtifactThumb } from '@shared/library';
 import { t } from '../i18n';
 
-const EMPTY: ArtifactList = { artifacts: [], scanning: false, scannedAt: null, backfilled: false, dropped: 0, cleaned: 0 };
+const EMPTY: ArtifactList = { artifacts: [] };
 let state: { list: ArtifactList; loaded: boolean; error: string | null } = { list: EMPTY, loaded: false, error: null };
 const subs = new Set<() => void>();
 let rev = 0, started = false;
 const set = (next: typeof state) => { state = next; for (const fn of subs) fn(); };
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
 
-async function load(channel: 'library:list' | 'library:refresh' = 'library:list', scan = false): Promise<void> {
+async function load(check = false): Promise<void> {
   const mine = ++rev;
-  try { const list = await (channel === 'library:list' ? window.sb.invoke(channel, { scan }) : window.sb.invoke(channel, undefined)); if (mine === rev) set({ list, loaded: true, error: null }); }
+  try { const list = await window.sb.invoke('library:list', { check }); if (mine === rev) set({ list, loaded: true, error: null }); }
   catch (e) { if (mine === rev) set({ ...state, loaded: true, error: errText(e) }); }
 }
 
@@ -32,11 +32,8 @@ export function useLibrary(): typeof state {
   return useSyncExternalStore(subscribe, snapshot, snapshot);
 }
 
-/** The tab opened: the index, and a look through the folders when the last one is older than a minute. */
-export const openedLibrary = (): Promise<void> => (typeof window === 'undefined' || !window.sb ? Promise.resolve() : load('library:list', true));
-
-/** «Aggiorna»: the folders looked through now. */
-export const refreshLibrary = (): Promise<void> => load('library:refresh');
+/** The tab opened: the index, and every known file looked at again (gone, back, rewritten). */
+export const openedLibrary = (): Promise<void> => (typeof window === 'undefined' || !window.sb ? Promise.resolve() : load(true));
 
 /** The OS for comparing paths (Windows and macOS disks ignore case). */
 export const pagePlatform = (): string => {
@@ -58,13 +55,13 @@ export function thumbOf(id: string, stamp: number): Promise<ArtifactThumb | null
 }
 
 const NAMED_BADGE: ReadonlySet<Artifact['kind']> = new Set(['html', 'markdown', 'pdf']);
-/** A card's or a related button's badge: HTML, MD, PDF; every other file by its own extension (PNG, CSV, DOCX, MP4). */
+/** A card's or a related button's badge: HTML, MD, PDF; every other file by its own extension (PNG, CSV, DOCX). */
 export const badgeOf = (a: Pick<Artifact, 'kind' | 'path'>): string => (NAMED_BADGE.has(a.kind) ? t(`lib.badge.${a.kind as 'html' | 'markdown' | 'pdf'}`) : (extOf(a.path) || t('lib.badge.image')).slice(0, 5).toUpperCase());
 
-/** Keeps an artifact (the cleanup never takes it) or lets it go again (ADR 0323). */
-export async function pinArtifact(id: string, pinned: boolean): Promise<void> {
+/** Takes an artifact off the list (its file stays where it is). */
+export async function removeArtifact(id: string): Promise<void> {
   const mine = ++rev;
-  try { const list = await window.sb.invoke('library:pin', { id, pinned }); if (mine === rev) set({ list, loaded: true, error: null }); }
+  try { const list = await window.sb.invoke('library:remove', { id }); if (mine === rev) set({ list, loaded: true, error: null }); }
   catch (e) { if (mine === rev) set({ ...state, error: errText(e) }); }
 }
 

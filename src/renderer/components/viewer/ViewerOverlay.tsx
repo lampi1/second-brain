@@ -1,9 +1,12 @@
 // The file viewer as an overlay above the page (the owner, 2026-10-22: «il viewer non in un'altra pagina ma in una
 // modale o un overlay che si può espandere a tutto schermo, con una UI fighissima»): every file link, the palette's
 // sb://file/… and sb://esplora/… links and a before/after pair of screenshots open here, and the page under it keeps its
-// state (a chat's scroll, a draft, a table's filter). A floating panel by default, edge to edge with "Espandi" (F11);
-// Esc, Ctrl+W, the × or a click outside close it; ‹ › and Alt+←/→ move between everything opened in it this session
-// (lib/viewer-stack.ts). It leaves the Orchestrator column free (shell.css --orchestrator-r) and registers as an overlay,
+// state (a chat's scroll, a draft, a table's filter). A floating panel by default, which leaves the Orchestrator column
+// free (shell.css --orchestrator-r). "Schermo intero" (F11) is a real full screen (ADR 0328, the owner 2026-11-19: «deve
+// prendere davvero tutto lo schermo»): the viewer covers the whole window, the Orchestrator column, the top bar and the
+// navigation included, the window itself goes on the whole screen ('app:fullScreen', main/full-screen.ts) and the file
+// uses all the width; Esc goes back to the panel. Esc again, Ctrl+W, the × or a click outside close it; ‹ › and Alt+←/→
+// move between everything opened in it this session (lib/viewer-stack.ts). It registers as an overlay,
 // so the browser tabs' native views (WebContentsViews, always above the page) hide under it (lib/viewports.ts). The
 // keys inside it stay inside it: Tab cycles in the panel, nothing reaches the page. Mounted by App.tsx while the viewer
 // is open; the file itself is brain/pages/FileViewer.tsx (CitedFile), the screenshots ShotsCompare.tsx.
@@ -38,6 +41,13 @@ export function ViewerOverlay() {
     panel.current?.focus({ preventScroll: true });
     return () => { if (prev?.isConnected) prev.focus({ preventScroll: true }); };
   }, []);
+  // the full screen: the app window on the whole screen while it lasts (a closed viewer leaves it: this effect's end)
+  const full = v.full && v.open;
+  useEffect(() => {
+    if (!full || !window.sb) return;
+    void window.sb.invoke('app:fullScreen', { on: true }).catch(() => undefined);
+    return () => { void window.sb.invoke('app:fullScreen', { on: false }).catch(() => undefined); };
+  }, [full]);
   // another entry: the keyboard is on the panel (the old entry's focused control is gone)
   const id = entry ? (entry.kind === 'file' ? entry.arg : `${entry.before.path ?? ''}|${entry.after.path ?? ''}`) : '';
   useEffect(() => { if (!panel.current?.contains(document.activeElement)) panel.current?.focus({ preventScroll: true }); }, [id]);
@@ -74,10 +84,10 @@ export function ViewerOverlay() {
           ? reference ? <CitedFile key={entry.arg} reference={reference} chrome={chrome} /> : <Empty title={t('viewer.chooseFile')} />
           : <ShotsCompare key={id} entry={entry} chrome={chrome} />}
         <footer className="vw-foot" aria-hidden="true">
-          <span><Keys combo="Esc" /> {t('vw.hintClose')}</span>
+          <span><Keys combo="Esc" /> {v.full ? t('vw.restore') : t('vw.hintClose')}</span>
           {entry.kind === 'file' && <span><Keys combo="Ctrl+F" /> {t('vw.hintFind')}</span>}
           <span><Keys combo="Alt+← →" /> {t('vw.hintNav')}</span>
-          <span><Keys combo="F11" /> {v.full ? t('vw.restore') : t('vw.expand')}</span>
+          {!v.full && <span><Keys combo="F11" /> {t('vw.expand')}</span>}
         </footer>
         <Toaster />
       </section>

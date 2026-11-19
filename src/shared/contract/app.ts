@@ -189,6 +189,9 @@ export interface AppInvokeMap {
   'app:createBrain': [CreateBrainRequest, CreatedBrain | null];
   /** the viewer's "Show in folder": a local file selected in Explorer, never opened or run (main/open-path.ts) */
   'app:showInFolder': [{ path: string }, OpenPathResult];
+  /** the viewer's full screen: the app window on the whole screen, and back (main/full-screen.ts, ADR 0328); `on` in the
+   *  answer = the window is in full screen now (false in an agent's hidden run, which never moves its window) */
+  'app:fullScreen': [{ on: boolean }, { on: boolean }];
   /** The viewer's copy icon: the file on the clipboard (its text, an image, or the file itself), main/file-copy.ts. */
   'app:copyFile': [{ path: string }, CopyFileResult];
   /** A user-opened file link: any local file, never a network share, read-only and bounded; text one page at a time

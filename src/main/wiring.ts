@@ -897,7 +897,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     judging: { estimate: now => judgingEstimate(manager.runs.list(), now, { shares: judgeShares(), capUsd: Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD, lastBatch: judgeSampler.lastBatch() }) },
     phonePort: createPhonePort(manager, ctx.emitter, awayCommands),
     worktreePool,
-    chats, browser, recordings, learn, news, projectMaps, brain, mcp, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, modelLists, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, quips, userCorrections,
+    chats, browser, recordings, learn, news, projectMaps, brain, mcp, addChatTools, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, modelLists, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, quips, userCorrections,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : null),
       checkpoint: () => manager.checkpointForUpdate(),

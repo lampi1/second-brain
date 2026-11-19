@@ -131,6 +131,7 @@ row and its line here in the same change.
 | `project_map_update` | work chats | Say which elements of a map you work on, update the status of what you finished, add `paths` or `drop_paths` by id (ADR 0316). |
 | `brain_queries` | work chats | The brain's saved queries (SQL, KQL, GraphQL…). |
 | `brain_query_add` | work chats | Save a new query in the brain right after it gave the right answer. |
+| `artifact_save` | work chats | Declare the report, document or plan you wrote because the user asked for one: it shows in Memoria → Artifact (ADR 0328). |
 | `maintenance_pack` | work chats | The data pack of a «Manutenzione» research, one section at a time. |
 | `maintenance_propose` | work chats | Turn one maintenance finding into a card for the user. |
 | `maintenance_role_trial` | work chats | Propose one revised role text as a trial for the user to approve. |

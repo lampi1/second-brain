@@ -426,7 +426,8 @@ export function openViewer(entry:ViewerEntry):void{
 }
 /** A before/after pair of screenshots in the viewer: side by side, or one over the other with a slider. */
 export const openShots=(before:Shot,after:Shot,title?:string):void=>openViewer({kind:'shots',before,after,...(title?{title}:{})});
-export const closeViewer=():void=>setViewer(v=>v.open?{...v,open:false}:v);
+// closing leaves the full screen too: the next file opens as a panel, never over the whole screen by surprise
+export const closeViewer=():void=>setViewer(v=>v.open?{...v,open:false,full:false}:v);
 export const viewerStep=(d:-1|1):void=>setViewer(v=>stepEntry(v,d));
 export const toggleViewerFull=():void=>setViewer(v=>({...v,full:!v.full}));
 
