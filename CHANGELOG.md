@@ -102,6 +102,12 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   OpenCode, OpenRouter included; the chat's model and plan mode go through OpenCode's session options (ADR 0216).
 
 ### Changed
+- Questions: one question, one row, one answer. An answer you type is your answer and the chat is told so: if you
+  ask something («in che senso?», «perché?»), it replies in plain words first and only then may the same question
+  come back; a re-ask without that reply never becomes a row. The Orchestrator explains a work chat's question itself
+  and never asks it again as its own; at the PC a relayed question is not written a second time. The open card says
+  each thing once, in reading order (question, why, the two roads, then the details), scrolls as one page, and a
+  brief no longer needs «Cosa ho fatto» (ADR 0326).
 - Memory › Artifacts is lighter: it shows the newest twenty and «Mostra altri» loads twenty more, the card pictures
   are smaller, and a daily cleanup takes out pictures older than 30 days that were not kept with the card's star (the
   app's own screenshots in `<userData>/evidence` are deleted; pictures in the brain or a project stay on disk and are
