@@ -85,10 +85,20 @@ test('with a card open, what he writes in the Orchestrator field answers that ro
     await input.fill('solo da zero, però valuta anche uno stack modulare');
     await shot(page, 'orchestrator-field-answers-card');
 
+    // closed and opened again while he writes: another opening, the text is no longer that card's answer
+    await row.getByTestId('orchestrator-ask-toggle').click();
+    await expect(page.getByTestId('orchestrator-input-answers')).toHaveCount(0);
+    await row.getByTestId('orchestrator-ask-toggle').click();
+    await expect(page.getByTestId('qwin-card-via-input')).toBeVisible();
+    await expect(page.getByTestId('orchestrator-input-answers')).toHaveCount(0);
+    await input.fill('');
+    await expect(page.getByTestId('orchestrator-input-answers')).toHaveCount(1);
+
     // he asks about the question: it is a message for the Orchestrator (here it waits behind the Orchestrator's own
     // open question, as any message does) and answers nothing; the row stays open
     const before = ((await demo('answers')) as unknown[]).length;
     await input.fill('in che senso?');
+    await expect(page.getByTestId('orchestrator-input-answers')).toHaveCount(0); // the line is the route
     await input.press('Enter');
     await expect(page.getByTestId('orchestrator-input-queued-0')).toContainText('in che senso?');
     await expect(row).toHaveCount(1);

@@ -110,7 +110,7 @@ export interface UiState {
  *  shown = on screen now (the browser views hide under it); aside = stepped aside for a file opened from it (the viewer
  *  in front, the window a pill until it is called again or the page changes; QuestionsWindow.tsx); card = the key of
  *  the row whose card is open in the Orchestrator's column (its field answers that row: lib/field-answer.ts). */
-export interface QWin { open: boolean; first: string | null; call: number; shown: boolean; aside?: boolean; card?: string | null }
+export interface QWin { open: boolean; first: string | null; call: number; shown: boolean; aside?: boolean; card?: string | null; cardSeq?: number }
 
 const PREFS_KEY = 'sb.prefs.v1';
 export const defaultPrefs: Prefs = {
@@ -315,8 +315,9 @@ export const callQuestions = (key: string | null) => ui.set(s => ({ ...s, qwin: 
 /** A file link clicked in the questions window: the window steps aside (a pill, nothing answered or put off) so the
  *  viewer it opened is in front; Ctrl+J, the pill or leaving the file page bring it back. */
 export const setQuestionsAside = (aside: boolean) => { if (!!ui.get().qwin.aside !== aside) ui.set(s => ({ ...s, qwin: { ...s.qwin, aside } })); };
-/** The row whose card is open in the Orchestrator's column (null: none). */
-export const setOpenCard = (card: string | null) => { if ((ui.get().qwin.card ?? null) !== card) ui.set(s => ({ ...s, qwin: { ...s.qwin, card } })); };
+/** The row whose card is open in the Orchestrator's column (null: none). cardSeq counts the openings: a card closed
+ *  and opened again is another opening (a text begun under the first is not the second's answer: ChatInput.tsx). */
+export const setOpenCard = (card: string | null) => { if ((ui.get().qwin.card ?? null) !== card) ui.set(s => ({ ...s, qwin: { ...s.qwin, card, cardSeq: (s.qwin.cardSeq ?? 0) + 1 } })); };
 export const setQuestionsShown = (shown: boolean) => { if (ui.get().qwin.shown !== shown) ui.set(s => ({ ...s, qwin: { ...s.qwin, shown } })); };
 
 /** Synchronous checkpoint of the actual in-memory preferences/read state; storage failures must propagate. */

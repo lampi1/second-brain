@@ -33,18 +33,21 @@ Not known: whether the card was open in each of those cases (the transcript does
    `ChatInput.tsx`, `QuestionsWindow.tsx` publishes the open card in `ui.qwin.card`). His words go straight to the row,
    the same way a click on one of its buttons does, and the row leaves at once: an engine question takes them as the
    answer of each of its questions (`chat:answer`, with the app's note of ADR 0327); a plan takes them as what to
-   change, or as the ok when the whole text is an approval (`isPlanApproval`, `chat:plan`). Nothing waits for the
-   Orchestrator's engine, which learns of the answer as it does of a click.
+   change, or as the ok when the whole text is an approval (`isPlanApproval`) or a bare yes («sì», «ok», «va bene»,
+   «procedi»: under the open card of a plan it can only be its ok; a yes with anything after it is a change)
+   (`chat:plan`). Nothing waits for the Orchestrator's engine, which learns of the answer as it does of a click.
 2. **Only a text begun under that card.** The app opens cards too (a recap, Ctrl+J), and he may click a row only to
    read it: a message he was already writing when the card opened stays a message for the Orchestrator. So does a
    text another page put in the field («Discuti», «Cambia qualcosa» on a map, a quoted selection) and one begun under
-   another card. The field remembers under which open card its text was begun, by typing or dictating into an empty
-   field (`begunUnder` in `ChatInput.tsx`).
+   another card, or continued after he closed the card: opened again, it is another opening (`ui.qwin.cardSeq`). The
+   field remembers under which opening its text was begun, by typing or dictating into an empty field (`begunUnder`
+   in `ChatInput.tsx`).
 3. **The field says so, and the line is the route.** A line over it: «Quello che scrivi va a ‹chi chiede›, come
    risposta. Per scrivere all'Orchestrator chiudi la domanda.», with the placeholder naming who asks. The line shows
-   exactly when Enter would send the text to the row: not with «Fast» or «Plan» ticked, with an image, or over a text
-   begun elsewhere. A toast confirms where an answer went; a refused answer (a newer proposal, an engine down) comes
-   back in the field.
+   exactly when Enter would send the text to the row: not with «Fast» or «Plan» ticked, with an image, over a text
+   begun elsewhere, or while the text is a «/» command or a request to explain. A toast confirms where an answer
+   went; a refused answer (a newer proposal, an engine down) comes back in the field, still that card's answer if
+   he wrote nothing meanwhile.
 4. **Still the Orchestrator's, also with a card open**: a request to explain the question (`asksToExplain`, ADR 0327:
    the Orchestrator explains and the row stays; a toast says it went there, because the rule reads how the text opens
    and can take an instruction that ends with «, ok?» for a question), a «/» command, a message with images, a «Fast» or
