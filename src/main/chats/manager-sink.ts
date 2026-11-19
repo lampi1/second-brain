@@ -59,6 +59,7 @@ export abstract class ManagerSink extends ManagerWork {
         // a cold note's turn stays out of the tile (ADR 0031): only its result settles the turn
         if (r.handoffTurn?.quiet && item.kind !== 'system') { if (item.kind === 'result' && !replace) this.turnEnded(r, item); return; }
         this.addItem(r, item, replace);
+        if (item.kind === 'assistant' && r.replaying !== r.session) this.repliedAfterWords(r, item.text);
         if (item.kind === 'result') runtimePerformance.item(chatId, item.kind, false, r.replaying === r.session);
         // a skill Claude loaded while the run is open joins its tags (only Claude reports skills as a tool)
         if (item.kind === 'tool' && item.name === 'Skill' && r.s.harness === 'claude' && r.s.run) {
@@ -81,7 +82,7 @@ export abstract class ManagerSink extends ManagerWork {
         if (whole !== undefined) req = { ...req, input: shown };
         // decided on the real input above; parked for night mode, shown and kept masked from here (ADR 0237)
         req = maskTypedRequest(req);
-        if (this.heldAsTwin(r, req)) return;
+        if (this.heldAsRepeat(r, req) || this.heldAsTwin(r, req)) return;
         this.exposeRequest(r, req);
       },
       rateLimit: msg => { const on = this.opts.onRateLimit; if (live() && on) this.hook('onRateLimit', () => on(msg)); },

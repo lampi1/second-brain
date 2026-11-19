@@ -4,7 +4,7 @@ Date: 2026-11-09 · Status: partly superseded by ADR 0275 (the «reserved» answ
 la userà principalmente da telegram o remote control quindi tutto deve essere fatto parlando solo con
 l'orchestrator») · Builds on: ADR 0017 (command requests, run results), ADR 0219 (Telegram bridge), ADR 0229 (Remote
 Control), ADR 0083 (requests hosted by the nearest open chat) · Pattern source: davidondrej/cloudroom (a child's
-blocker is told to its parent, which resolves it from context or asks the user; it never approves for the user) · Amended by: ADR 0272
+blocker is told to its parent, which resolves it from context or asks the user; it never approves for the user) · Amended by: ADR 0272, ADR 0326 (at the PC a question is not relayed)
 
 ## Context
 On the PC every work chat's request already shows in the Orchestrator (renderer `child-requests.ts requestHost`),

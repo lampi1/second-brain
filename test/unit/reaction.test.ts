@@ -46,7 +46,8 @@ describe('the Orchestrator speaks only when it is useful (owner, 2026-10-20)', (
   });
   it('news presents canonical outcomes and original panels, never routine progress or a bare reaction', () => {
     expect(WAKE_RULE).toContain('Present final outcomes automatically in this conversation');
-    expect(WAKE_RULE).toContain('do not paraphrase, duplicate or answer them');
+    expect(WAKE_RULE).toContain('never ask one again as yours'); // ADR 0326: one question, one row
+    expect(WAKE_RULE).toContain('explain it to him in plain words');
     expect(WAKE_RULE).not.toContain('👍');
     expect(WAKE_RULE).toContain('Plain starts and progress stay quiet');
     expect(ORCHESTRATOR_ROLE).toContain(WAKE_RULE); // once per session, in the frame

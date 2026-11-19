@@ -96,19 +96,22 @@ const SCHEMAS: { [K in UiComponent]: V<Extract<UiSpec, { component: K }>['props'
   board: obj({ lanes: arr(obj({ title: str(60), items: arr(obj({ title: str(160) }, { detail: str(300), status, links: arr(link, 4) }), 50) }, { status }), 8, 1) }, {}),
   diffList: obj({ groups: arr(obj({ area: str(80), files: arr(obj({ path: str(300) }, { why: str(200), added: count, removed: count, href }), 100, 1) }, {}), 20, 1) }, {}),
   barChart: obj({ bars: arr(obj({ label: str(60), value: num }, { note: str(80) }), 40, 1) }, { unit: str(12) }),
-  brief: obj({ done: (v, at) => arr(str(200), 5, 1)(typeof v === 'string' ? [v] : v, at), ifYes: str(200), ifNo: str(200) }, {
+  // done is optional (ADR 0326: a question asked before any work has nothing done to list); absent = []
+  brief: (v, at) => { const b = BRIEF(v, at); return { ...b, done: b.done ?? [] }; },
+};
+const BRIEF = obj({ ifYes: str(200), ifNo: str(200) }, {
+    done: (v, at) => arr(str(200), 5)(typeof v === 'string' ? [v] : v, at),
     why: str(240), yesLabel: str(32), noLabel: str(32), yesOption: str(60), noOption: str(60), yesSteps: arr(str(90), 4), noSteps: arr(str(90), 4),
     change: obj({ before: str(24), after: str(24) }, { what: str(60) }), todo: arr(str(120), 5),
     checks: arr(obj({ label: str(60), status }, { detail: str(120) }), 8),
     images: arr(obj({ path: str(1000) }, { caption: str(120) }), 4),
     files: arr(obj({ path: str(300) }, { why: str(200), added: count, removed: count, href }), 10),
-  }),
-};
+});
 
 /** One complete show_ui call for a brief, valid as it is (#440): in show_ui's description, in its shape refusal and in
  *  the refusal of a question without a brief (shared/yes-no.ts BRIEF_REFUSAL), so the first brief passes. Its texts say
  *  what goes there, never a made-up result: a call copied as it is shows no fake green check. */
-export const BRIEF_EXAMPLE = '{"title":"What the question is about","summary":"What you did and what the user decides, in one or two plain sentences.","component":"brief","target":"next-ask","props":{"done":["What you did, one short line"],"ifYes":"What happens if the user says yes","ifNo":"What happens if the user says no","checks":[{"label":"A test or command you ran","status":"ok"}]}}';
+export const BRIEF_EXAMPLE = '{"title":"What the question is about","summary":"What the user decides, in one or two plain sentences.","component":"brief","target":"next-ask","props":{"why":"What is at stake for the user and why you recommend your option, in plain words","ifYes":"What happens next if the user says yes","ifNo":"What happens next if the user says no","yesLabel":"Sì, <the action>","done":["What you did, one short line"],"checks":[{"label":"A test or command you ran","status":"ok"}]}}';
 
 export type UiCheck = { ok: true; spec: UiSpec } | { ok: false; error: string };
 
@@ -135,7 +138,7 @@ export function describeUi(spec: UiSpec): string {
     case 'board': return `Bacheca: ${spec.props.lanes.map(l => `${l.title} ${l.items.length}`).join(' · ')}`;
     case 'diffList': return `File cambiati: ${spec.props.groups.reduce((n, g) => n + g.files.length, 0)} in ${spec.props.groups.length} aree`;
     case 'barChart': return `Grafico: ${spec.props.bars.map(b => `${b.label} ${b.value}${spec.props.unit ?? ''}`).join(' · ')}`;
-    case 'brief': return `Fatto: ${spec.props.done.join(' · ')}`;
+    case 'brief': return spec.props.done.length ? `Fatto: ${spec.props.done.join(' · ')}` : `Se Sì: ${spec.props.ifYes} · Se No: ${spec.props.ifNo}`;
   }
 }
 
@@ -188,7 +191,7 @@ export function textOfUi(spec: UiSpec, title?: string): string {
       if (p.why) out.push(p.why, '');
       if (p.change) out.push(`${p.change.what ? `${p.change.what}: ` : ''}${p.change.before} → ${p.change.after}`, '');
       if (p.todo?.length) out.push('**Tocca a te**', ...p.todo.map((d, i) => `${i + 1}. ${d}`), '');
-      out.push('**Cosa ho fatto**', ...p.done.map(d => `- ${d}`));
+      if (p.done.length) out.push('**Cosa ho fatto**', ...p.done.map(d => `- ${d}`));
       if (p.checks?.length) out.push('', ...p.checks.map(c => `- [${STATUS_IT[c.status]}] ${c.label}${c.detail ? `: ${c.detail}` : ''}`));
       if (p.images?.length) out.push('', ...p.images.map(i => `- ${i.caption ? `${i.caption}: ` : ''}${i.path}`));
       if (p.files?.length) out.push('', ...p.files.map(f => `- \`${f.path}\`${f.why ? `: ${f.why}` : ''}`));

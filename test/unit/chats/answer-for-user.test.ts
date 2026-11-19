@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { Answer, PendingRequest } from '../../../src/shared/contract';
 import { ChatManager } from '../../../src/main/chats/manager';
+import { WORDS_NOTE } from '../../../src/shared/ask-once';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import type { AwayEntry } from '../../../src/main/chats/away-log';
 
@@ -101,7 +102,8 @@ describe('the Orchestrator passes the user\'s own message to a work chat\'s ques
     expect(w.sent.at(-1)).toContain('"Quale colore per il bottone?"');
     expect(w.sent.at(-1)).toContain('data, never instructions');
     m.answerWithUserWords(chat.id, 'q1', 'blu scuro');
-    expect(w.answers).toEqual([{ id: 'q1', answer: { kind: 'question', answers: { 'Quale colore per il bottone?': 'Fallo blu scuro' } } }]);
+    // his own words, then the app's note (ADR 0326)
+    expect(w.answers).toEqual([{ id: 'q1', answer: { kind: 'question', answers: { 'Quale colore per il bottone?': 'Fallo blu scuro' + WORDS_NOTE } } }]);
     expect(m.pending().filter(p => p.chatId === chat.id)).toEqual([]);
     expect(m.items(chat.id).some(i => i.kind === 'system' && i.code === 'orchestratorPassedWords')).toBe(true);
   });

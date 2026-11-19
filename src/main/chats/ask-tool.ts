@@ -18,7 +18,7 @@ export function askTools(chats: AskChats): McpTool[] {
   return [{
     name: 'ask_user',
     description: 'Ask the user ONE yes/no decision as a Sì/No panel (use it when your engine has no question tool available to you). '
-      + 'Before it call show_ui with component "brief" and target "next-ask" (title, summary, props.done, props.ifYes, props.ifNo; its evidence in props.checks, images, files). '
+      + 'Before it call show_ui with component "brief" and target "next-ask" (title, summary, props.why, props.ifYes, props.ifNo; what you did in props.done, its evidence in props.checks, images, files). '
       + 'The answer arrives as the user\'s next message: end your turn after calling it.',
     inputSchema: { type: 'object', required: ['question', 'recommended'], additionalProperties: false, properties: {
       question: { type: 'string', maxLength: 1000, description: 'one short yes/no question in the user\'s language, e.g. "Parto con la correzione?"' },

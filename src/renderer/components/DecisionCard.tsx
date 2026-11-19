@@ -11,7 +11,8 @@
 // plain sentence of context (`why`, else the agent's own lead), a before → after when there is one (`change`), the
 // evidence with what was done as numbered steps (no green ticks), and the two answers as roads: «Se Sì» / «Se No», what
 // happens next in numbered steps (`yesSteps` / `noSteps`, else ifYes / ifNo), the button at the bottom of each road
-// saying the action («Sì, faccio il commit»). The answers block is pinned to the bottom of the questions window.
+// saying the action («Sì, faccio il commit»). In the Orchestrator's column (`actionsFirst`, ADR 0326) the roads come
+// right after the question and its why, the evidence after them, and the card scrolls as one page: nothing pinned.
 // Opened in the Orchestrator's column (WriteViaOrchestrator), the card has no box of its own: the user writes to the
 // Orchestrator, which passes his words on when they answer it (lib/write-via-orchestrator.ts, ADR 0274).
 import { forwardRef, useContext, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
@@ -60,6 +61,9 @@ export interface DecisionProps {
   rootProps?: Record<string, unknown>;
   /** under the answers (a turn's commands) */
   footer?: ReactNode;
+  /** the answers right under the question and its context, the evidence after them (the Orchestrator's column, ADR
+   *  0326): the decision reads top to bottom with no scrolling, the details are below for who wants them */
+  actionsFirst?: boolean;
   /** voice mode (ADR 0152): who asks, said before the question («Lo Scout ti chiede una cosa»), and what it did (a
    *  brief's ✓ lines); the same request shown twice shares `voiceId` so it is read once */
   speakFrom?: string;
@@ -140,29 +144,9 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
   );
   const roads = !!(p.ifYes || p.ifNo || p.yesSteps?.length || p.noSteps?.length);
   const context = p.why ?? p.lead;
-
-  return (
-    <div ref={ref} tabIndex={0} role="group" onKeyDown={onKey} aria-busy={busy} aria-label={p.question}
-      className={`dc ${p.compact ? 'compact' : ''} ${busy ? 'sent' : ''} ${p.className ?? ''}`} data-testid={p.testBase} data-decision="" {...p.rootProps}>
-      <div className="dc-head">{p.head}</div>
-      <h2 className="dc-q" data-testid={`${p.testBase}-q`}>{p.question}</h2>
-      {context && <p className="dc-ctx" data-testid={`${p.testBase}-ctx-lead`}>{context}</p>}
-      {p.change && (
-        <div className="dc-change" data-testid={`${p.testBase}-change`}>
-          {p.change.what && <span className="dc-change-what">{p.change.what}</span>}
-          <span className="dc-change-v before"><small>{t('genui.decision.before')}</small><s>{p.change.before}</s></span>
-          <span className="dc-change-arrow" aria-hidden="true">→</span>
-          <span className="dc-change-v after"><small>{t('genui.decision.after')}</small><b>{p.change.after}</b></span>
-        </div>
-      )}
-      {!!p.todo?.length && (
-        <div className="dc-todo" data-testid={`${p.testBase}-todo`}>
-          <div className="dc-brief-k">{t('genui.decision.todo')}</div>
-          <ol className="dc-steps">{p.todo.map((s, i) => <li key={i}><span className="dc-step-n" aria-hidden="true">{i + 1}</span><span>{s}</span></li>)}</ol>
-        </div>
-      )}
-      {p.children && <div className="dc-evidence" data-testid={`${p.testBase}-evidence`}>{p.children}</div>}
-      {/* the answers stay in sight at the bottom of the questions window while the evidence above scrolls */}
+  const evidence = p.children ? <div className="dc-evidence" data-testid={`${p.testBase}-evidence`}>{p.children}</div> : null;
+  const actions = (
+    <>
       <div className="dc-actions" data-testid={`${p.testBase}-actions`}>
       {roads ? (
         <div className="dc-fork" data-testid={`${p.testBase}-effects`}>
@@ -213,6 +197,32 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
         </div>
       )}
       </div>
+    </>
+  );
+
+  return (
+    <div ref={ref} tabIndex={0} role="group" onKeyDown={onKey} aria-busy={busy} aria-label={p.question}
+      className={`dc ${p.compact ? 'compact' : ''} ${busy ? 'sent' : ''} ${p.className ?? ''}`} data-testid={p.testBase} data-decision="" {...p.rootProps}>
+      <div className="dc-head">{p.head}</div>
+      <h2 className="dc-q" data-testid={`${p.testBase}-q`}>{p.question}</h2>
+      {context && <p className="dc-ctx" data-testid={`${p.testBase}-ctx-lead`}>{context}</p>}
+      {p.change && (
+        <div className="dc-change" data-testid={`${p.testBase}-change`}>
+          {p.change.what && <span className="dc-change-what">{p.change.what}</span>}
+          <span className="dc-change-v before"><small>{t('genui.decision.before')}</small><s>{p.change.before}</s></span>
+          <span className="dc-change-arrow" aria-hidden="true">→</span>
+          <span className="dc-change-v after"><small>{t('genui.decision.after')}</small><b>{p.change.after}</b></span>
+        </div>
+      )}
+      {!!p.todo?.length && (
+        <div className="dc-todo" data-testid={`${p.testBase}-todo`}>
+          <div className="dc-brief-k">{t('genui.decision.todo')}</div>
+          <ol className="dc-steps">{p.todo.map((s, i) => <li key={i}><span className="dc-step-n" aria-hidden="true">{i + 1}</span><span>{s}</span></li>)}</ol>
+        </div>
+      )}
+      {!p.actionsFirst && evidence}
+      {actions}
+      {p.actionsFirst && evidence}
       {p.footer}
     </div>
   );
@@ -225,8 +235,10 @@ export function BriefEvidence({ brief, testBase, onFile, size = 'l' }: { brief: 
       <div className="dc-brief-main">
         {!!brief.images?.length && <AskImages images={brief.images.map(i => ({ path: i.path, caption: i.caption ?? i.path.split(/[\\/]/).pop() ?? '' }))} testBase={testBase} size={size} />}
         <div className="dc-brief-done">
-          <div className="dc-brief-k">{t('genui.decision.done')}</div>
-          <ol className="dc-done">{brief.done.map((d, i) => <li key={i}><span className="dc-step-n" aria-hidden="true">{i + 1}</span><span>{d}</span></li>)}</ol>
+          {brief.done.length > 0 && <>
+            <div className="dc-brief-k">{t('genui.decision.done')}</div>
+            <ol className="dc-done">{brief.done.map((d, i) => <li key={i}><span className="dc-step-n" aria-hidden="true">{i + 1}</span><span>{d}</span></li>)}</ol>
+          </>}
           {!!brief.checks?.length && (
             <div className="dc-checks" data-testid={`${testBase}-checks`}>
               {brief.checks.map((c, i) => (

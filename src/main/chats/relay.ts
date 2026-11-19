@@ -1,5 +1,6 @@
 // Single entry (ADR 0239): a work chat's Sì/No question reaches the user through the Orchestrator's own conversation,
 // so it works where only the Orchestrator is seen (Remote Control on claude.ai, a phone conversation, the PC). The
+// (at the PC a question is never relayed: it is already a row under the Orchestrator's chat, ADR 0326). The
 // Orchestrator calls app_relay_question for a chat; the app records which question it relays and hands back its exact
 // text, which the Orchestrator writes to the user. The user's NEXT own message in the Orchestrator chat answers it
 // when it is just «sì» or «no» (any channel: the PC, the paired phone, Remote Control), from the user's words and by
@@ -34,6 +35,9 @@ const ASK_TOOL = 'AskUserQuestion';   // exactly: a connector tool named …__As
 type Channel = 'phone' | 'remote';
 /** relay_question's refusal of a command Telegram cannot show (#390): what the Orchestrator tells him instead */
 const TELEGRAM_HIDES = (title: string): string => `Not relayed: the user is writing from Telegram, which hides commands, paths and addresses, and his «sì» never runs a command he did not read whole. Do not ask him yes or no. Tell him in one line that a command of «${title}» waits for him: he approves it with Esegui on the PC, or from Remote Control, where he reads it whole.`;
+
+/** relay_question's refusal of a question while the user writes from the PC (ADR 0326): one question, one row */
+const AT_THE_PC = (title: string): string => `Not relayed: the user is at the PC and the question of «${title}» is already in front of him, in its row under your chat. Do not write it again. If he asks about it, explain it in plain words (what it decides, what each choice changes for him). When his message decides it, pass his words with app_resolve_question (words); if his goal, the brain or the plan settle it, answer it for him.`;
 
 /** Remote Control (#425): the question goes into the Orchestrator's own AskUserQuestion, whose pick the app delivers */
 const askText = (ask: string, before?: string): string =>
@@ -116,6 +120,9 @@ export class QuestionRelay {
       throw new Error(`The user has not answered the question of «${other}» yet: one relayed question at a time. Relay this one after that answer.`);
     }
     if (!isNativeQuestion(p)) throw new Error('This is not the engine\'s own question: write it to the user yourself, then answer it for him with app_resolve_question with what he says.');
+    // he is at the PC, where this question is already a row under the Orchestrator's chat: writing it again in the chat
+    // would show it twice (ADR 0326); what he then writes reaches it through app_resolve_question `words`
+    if (this.lastChannel(orchestratorId) === 'pc') throw new Error(AT_THE_PC(c.title));
     this.armed(orchestratorId);
     let brief;
     try { brief = briefFor(p, this.d.items(chatId)); } catch { brief = undefined; }

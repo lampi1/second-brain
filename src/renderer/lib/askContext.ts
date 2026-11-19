@@ -8,6 +8,7 @@
 // block) and ChatItems.tsx (thinking shown open); pinned by test/unit/askContext.test.ts.
 import type { ChatItem, PendingRequest } from '@shared/contract';
 import { LOCAL_START } from './pathPatterns';
+import { withoutAppNote } from '@shared/ask-once';
 
 export interface ContextPiece { id: string; kind: 'text' | 'thinking'; text: string }
 export interface ContextLink { kind: 'web' | 'file'; href: string; label: string }
@@ -124,7 +125,7 @@ const askedTexts = (input: unknown): string => {
 };
 /** The user's answer as the CLI wrote it in the ask's result: `"question"="answer"` pairs. */
 const answerIn = (output: string | undefined): string =>
-  [...(output ?? '').matchAll(/"(?:[^"\\]|\\.)*"="((?:[^"\\]|\\.)*)"/g)].map(m => m[1]!).join(' · ');
+  [...(output ?? '').matchAll(/"(?:[^"\\]|\\.)*"="((?:[^"\\]|\\.)*)"/g)].map(m => withoutAppNote(m[1]!.replace(/\\n/g, '\n'))).join(' · ');
 
 /** The part of the turn that belongs to this request: after the previous ask the user answered in the same turn
  *  (its reasoning was about that question: the user, 2026-10-13, "con il ragionamento della domanda precedente") and

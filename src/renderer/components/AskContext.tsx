@@ -79,7 +79,7 @@ function docsOf(pieces: readonly { id: string; kind: string; text: string }[]): 
     : []));
 }
 
-export const AskContext = memo(function AskContext({ req, defaultOpen, testBase, onToggle, layout = 'panel', question, lead, noVisuals, thinking, label }: {
+export const AskContext = memo(function AskContext({ req, defaultOpen, testBase, onToggle, layout = 'panel', question, lead, answers, noVisuals, thinking, label }: {
   req: PendingRequest; defaultOpen: boolean; testBase: string; onToggle?: () => void; layout?: 'panel' | 'window';
   /** the decision card draws the attached visuals itself (ADR 0150) */
   noVisuals?: boolean;
@@ -92,8 +92,10 @@ export const AskContext = memo(function AskContext({ req, defaultOpen, testBase,
   question?: ReactNode;
   /** the questions window: the context sentence the agent wrote in front of its question (lib/askSplit.ts) */
   lead?: string;
+  /** the questions window: the answers, drawn right under the question and before the context (ADR 0326) */
+  answers?: ReactNode;
 }) {
-  if (layout === 'window') return <WindowContext req={req} testBase={testBase} question={question} lead={lead} />;
+  if (layout === 'window') return <WindowContext req={req} testBase={testBase} question={question} lead={lead} answers={answers} />;
   return <PanelContext req={req} defaultOpen={defaultOpen} testBase={testBase} onToggle={onToggle} noVisuals={noVisuals} thinking={thinking} label={label} />;
 });
 
@@ -130,7 +132,7 @@ export const AskThought = memo(function AskThought({ req, testBase }: { req: Pen
  *  previews are open on their own cards. What is above
  *  the question is fixed at mount: what loads later goes under it, so the question never moves. Without `question` (a
  *  command card) only the context block. */
-function WindowContext({ req, testBase, question, lead }: { req: PendingRequest; testBase: string; question?: ReactNode; lead?: string }) {
+function WindowContext({ req, testBase, question, lead, answers }: { req: PendingRequest; testBase: string; question?: ReactNode; lead?: string; answers?: ReactNode }) {
   const items = useAskItems(req.chatId);
   const closed = useApp(s => !!s.chats[req.chatId]?.closedAt); // a closed chat's request is stale: no disk read for it
   useEffect(() => { if (items === undefined && !closed) void loadItems(req.chatId); }, [items, closed, req.chatId]);
@@ -183,6 +185,7 @@ function WindowContext({ req, testBase, question, lead }: { req: PendingRequest;
     <>
       {lead && <p className="wq-lead" data-testid={`${testBase}-ctx-lead`}>{lead}</p>}
       {question}
+      {answers}
       {body}
     </>
   );

@@ -5,7 +5,7 @@ non direttamente nella modale ma magari nel messaggio che ha scritto prima di ap
 si no diversi, voglio uniformare»; on the mockups: «la prima, spingi tanto nella generative UI», «l'importante è che sia
 sempre chiaro il contesto della domanda»; on memory: «mi propongono troppi fatti per le memorie degli agenti, voglio
 vedere solo skill e rule») · Builds on: ADR 0033 (generative UI), 0049 (the questions window), 0129 (memory keeps
-reusable knowledge), 0135 (yes/no questions and the recap)
+reusable knowledge), 0135 (yes/no questions and the recap) · Amended by: ADR 0326 (a brief needs no `done`; the open card's order)
 
 ## Context
 After ADR 0135 every agent question was yes/no, but what it was about still lived in the chat text before it: the

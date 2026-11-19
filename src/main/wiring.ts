@@ -314,6 +314,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // the Orchestrator's own Sì/No panel for a relayed question carries its brief in the text (#425)
     briefReady: chatId => relayRef.current?.panelArmed(chatId) || (briefRef.current?.hasBrief(chatId) ?? true),
     briefOptions: chatId => briefRef.current?.briefOptions(chatId) ?? null,
+    relayPanel: chatId => relayRef.current?.panelArmed(chatId) ?? false,
     prepareDelegation: delegateWorktrees.prepare,
     reopenBlocked: delegateWorktrees.reopenBlocked,
     nextDelegationCwd: cwd => worktreePool.nextCwd(cwd),
