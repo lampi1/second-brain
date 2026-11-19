@@ -50,6 +50,9 @@ import { BriefEvidence, DecisionCard } from './DecisionCard';
 import { AskArtifacts, openFile } from './GenUi';
 import { AgentAvatar } from './AgentAvatar';
 
+/** a brief with something to show beside its roads (done is optional, ADR 0327) */
+const briefHasEvidence = (b: UiBrief): boolean => !!(b.done.length || b.checks?.length || b.images?.length || b.files?.length);
+
 /** plain = a question alone, inside a host card that already says who asks (a Strategist's plan card, StrategyPanel.tsx) */
 type Variant = 'lane' | 'tile' | 'orchestrator' | 'compact' | 'window' | 'plain';
 
@@ -301,9 +304,10 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
           {total > 1 && <span className="wq-step" data-testid={`${testBase}-step`}>{draft.step + 1} {t('genui.request.of')} {total}</span>}
           {q?.multiSelect && <span className="wq-step">{t('genui.request.multiple')}</span>}
         </div>
+        {/* the question, its answers, then the context (ADR 0327): the choice is in sight before the long text */}
         <AskContext req={req} defaultOpen testBase={testBase} layout="window" lead={split?.lead}
-          question={<h2 className="wq-q" data-testid={isPerm ? `${testBase}-explain` : `${testBase}-q`}>{split?.ask ?? title}</h2>} />
-        {isPerm ? (
+          question={<h2 className="wq-q" data-testid={isPerm ? `${testBase}-explain` : `${testBase}-q`}>{split?.ask ?? title}</h2>}
+          answers={isPerm ? (
           <>
             {/* the whole command, wrapped: it is what the user approves */}
             {rawFull && <pre className="ask-cmd wq-raw" data-testid={`${testBase}-raw`}>{rawFull}</pre>}
@@ -329,7 +333,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
               </div>
             )}
           </>
-        ) : null}
+        ) : null} />
         {formRefuse}
       </div>
     );
@@ -476,7 +480,10 @@ const AskDecision = forwardRef<HTMLDivElement, {
   const chat = useApp(s => s.chats[p.req.chatId]);
   const brief = useMemo(() => (items ?? []).filter((i): i is Art => i.kind === 'artifact' && i.askId === p.req.id && i.ui.component === 'brief').pop(), [items, p.req.id]);
   const b = brief?.ui.component === 'brief' ? brief.ui.props as UiBrief : null;
-  const message = p.context ? <AskContext key={b ? 'brief' : 'none'} req={p.req} defaultOpen={p.ctxOpen} testBase={p.testBase} noVisuals thinking={p.ctxOpen ? 'none' : 'last'} label={t('genui.decision.chatText')} /> : null;
+  // the Orchestrator's own question with its brief (ADR 0327): its message is the chat right above the card, never
+  // repeated inside it; a work chat's message stays (the user never opens that chat)
+  const ownAbove = p.inWindow && !!chat?.isOrchestrator && !!b;
+  const message = p.context && !ownAbove ? <AskContext key={b ? 'brief' : 'none'} req={p.req} defaultOpen={p.ctxOpen} testBase={p.testBase} noVisuals thinking={p.ctxOpen ? 'none' : 'last'} label={t('genui.decision.chatText')} /> : null;
   const desc = (label: 'yes' | 'no') => { const o = p.q.options.find(x => yesNoOf(x.label) === label); return o?.description ? cleanDescription(withoutImages(o.description)) : undefined; };
   const agent = chat?.agent;
   const who = chat?.title ?? p.chatTitle ?? '';
@@ -496,20 +503,20 @@ const AskDecision = forwardRef<HTMLDivElement, {
   const split = splitAsk(withoutImages(p.q.question));
   const onFile = (h: string) => void openFile(/^[a-z]:[\\/]|^\/|^file:|^https?:/i.test(h) || !cwd ? h : `${cwd.replace(/[\\/]+$/, '')}${cwd.startsWith('/') ? '/' : '\\'}${h}`, p.req.chatId);
   return (
-    <DecisionCard ref={ref} testBase={p.testBase} head={head} question={b?.why ? withoutImages(p.q.question) : split?.ask ?? withoutImages(p.q.question)} lead={b?.why ? undefined : split?.lead} compact={p.compact} busy={p.sent}
+    <DecisionCard ref={ref} testBase={p.testBase} head={head} question={b ? withoutImages(p.q.question) : split?.ask ?? withoutImages(p.q.question)} lead={b ? undefined : split?.lead} compact={p.compact} busy={p.sent}
       rootProps={{ 'data-request-key': p.keyAttr, 'data-kind': 'question', 'data-brief': b ? '' : undefined, 'aria-label': t('genui.decision.label', { chat: who }) }}
-      ifYes={b?.ifYes ?? desc('yes')} ifNo={b?.ifNo ?? desc('no')} why={b?.why} yesSteps={b?.yesSteps} noSteps={b?.noSteps} change={b?.change} todo={b?.todo}
+      ifYes={b?.ifYes ?? desc('yes')} ifNo={b?.ifNo ?? desc('no')} why={b?.why ?? (b ? brief?.summary : undefined)} actionsFirst={p.inWindow} yesSteps={b?.yesSteps} noSteps={b?.noSteps} change={b?.change} todo={b?.todo}
       yes={{ onChoose: p.onYes, recommended: p.recommended === 'yes', testid: p.yesTestid, label: b?.yesLabel }}
       no={{ onChoose: p.onNo, recommended: p.recommended === 'no', testid: p.noTestid, label: b?.noLabel }}
       write={{ onSend: p.onWrite, initial: p.otherInitial, onDraft: p.onOtherDraft, onClose: p.onOtherClose }}
       skip={{ onChoose: p.onSkip, hint: t('genui.decision.skipHint') }}
-      speakFrom={agent?.name ?? (who || undefined)} speakDone={b?.done.join('. ')} voiceId={`req:${p.req.chatId}/${p.req.id}/${p.q.question}`}
+      speakFrom={agent?.name ?? (who || undefined)} speakDone={b?.done.length ? b.done.join('. ') : undefined} voiceId={`req:${p.req.chatId}/${p.req.id}/${p.q.question}`}
       onLater={p.onLater} laterButton={!p.inWindow} className={p.inWindow ? 'wq' : undefined}
       footer={<>{p.commands}{p.keysTo && createPortal(<span>{t('genui.decision.keys')}</span>, p.keysTo)}</>}>
       {/* the chat's message open first, its last reasoning piece folded under the evidence (the owner, 2026-11-11: «il
           messaggio è molto più importante»). A small card (lane, compact) keeps both in one fold at the bottom. */}
       {p.ctxOpen && message}
-      {b && <BriefEvidence brief={b} testBase={p.testBase} size={p.compact ? 'm' : 'l'} onFile={onFile} />}
+      {b && briefHasEvidence(b) && <BriefEvidence brief={b} testBase={p.testBase} size={p.compact ? 'm' : 'l'} onFile={onFile} />}
       {p.context && <AskArtifacts req={p.req} testBase={p.testBase} noBrief />}
       {!b && p.context && p.ctxOpen && <p className="dc-nobrief" data-testid={`${p.testBase}-nobrief`}>{t('genui.decision.noBrief')}</p>}
       {p.context && p.ctxOpen && <AskThought req={p.req} testBase={p.testBase} />}

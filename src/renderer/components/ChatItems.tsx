@@ -317,6 +317,10 @@ const ProcessGroup = memo(function ProcessGroup({ id, items, open: openIds, mark
 function ChatArtifact({ item }: { item: Extract<ChatItem, { kind: 'artifact' }> }) {
   const chatId = useContext(ChatIdCtx);
   const cwd = useApp(s => (chatId ? s.chats[chatId]?.cwd : undefined));
+  // a brief whose question is still open is drawn once, in that question's card (ADR 0327: never the same text twice
+  // in the column); answered, it stays here as the record of what was asked
+  const asking = useApp(s => item.ui.component === 'brief' && !!item.askId && s.pending.some(p => p.id === item.askId && (!chatId || p.chatId === chatId)));
+  if (asking) return null;
   return <ArtifactCard item={item} cwd={item.cwd ?? cwd} chatId={chatId??undefined}/>;
 }
 

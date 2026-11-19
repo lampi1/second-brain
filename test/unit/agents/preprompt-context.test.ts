@@ -16,7 +16,8 @@ describe('Orchestrator context ownership', () => {
     for (const rule of [
       'Production and shared-system operations stay with the user',
       'execution permission checks still apply',
-      'free text is a clarification, never implicit approval',
+      'A free-text answer is his answer: act on what it says, never implicit approval of more',
+      'never the same question again without that reply',
       'exactly two options "Sì" and "No"',
       'What you say counts as the user\'s own, always',
       'Never send him to a chat or the PC',

@@ -8,6 +8,7 @@
 // block) and ChatItems.tsx (thinking shown open); pinned by test/unit/askContext.test.ts.
 import type { ChatItem, PendingRequest } from '@shared/contract';
 import { LOCAL_START } from './pathPatterns';
+import { isAppAnswer, withoutAppNote } from '@shared/ask-once';
 
 export interface ContextPiece { id: string; kind: 'text' | 'thinking'; text: string }
 export interface ContextLink { kind: 'web' | 'file'; href: string; label: string }
@@ -124,7 +125,7 @@ const askedTexts = (input: unknown): string => {
 };
 /** The user's answer as the CLI wrote it in the ask's result: `"question"="answer"` pairs. */
 const answerIn = (output: string | undefined): string =>
-  [...(output ?? '').matchAll(/"(?:[^"\\]|\\.)*"="((?:[^"\\]|\\.)*)"/g)].map(m => m[1]!).join(' · ');
+  [...(output ?? '').matchAll(/"(?:[^"\\]|\\.)*"="((?:[^"\\]|\\.)*)"/g)].map(m => withoutAppNote(m[1]!.replace(/\\n/g, '\n'))).join(' · ');
 
 /** The part of the turn that belongs to this request: after the previous ask the user answered in the same turn
  *  (its reasoning was about that question: the user, 2026-10-13, "con il ragionamento della domanda precedente") and
@@ -165,7 +166,10 @@ export function askContext(items: readonly ChatItem[] | undefined, req: PendingR
   const turnProse = turn.flatMap(it => ((it.kind === 'assistant' || it.kind === 'thinking') && it.text.trim() ? [it.text] : []));
   const links = linksIn([...turnProse, ...requestTexts(req)], writtenDocs(turn));
   const asked = req.questions?.map(q => q.question).join('\n') ?? '';
-  const again = prevAsk && asked && askedTexts(prevAsk.input) === asked ? { answer: answerIn(prevAsk.output) } : null;
+  // an ask the app answered for him (ADR 0327) is not what he said: his words are the ones its note quotes, or none
+  const said = prevAsk ? answerIn(prevAsk.output) : '';
+  const his = isAppAnswer(said) ? /^Not asked again:[^«]*«(.*?)»\) and you have not/s.exec(said)?.[1] ?? null : said;
+  const again = prevAsk && asked && askedTexts(prevAsk.input) === asked && his !== null ? { answer: his } : null;
   return { pieces, links, ...(again ? { again } : {}) };
 }
 

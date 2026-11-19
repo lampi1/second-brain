@@ -216,7 +216,7 @@
    Consenti/Nega on the row when one click answers it; ✕ = later */
 .oask { --kc: var(--amber); position: relative; border-top: 1px solid var(--border); transition: background-color var(--dur-fast) var(--ease); }
 .oasks > .oask:first-child { border-top: 0; }
-/* (above the card's sticky answers, which reach the row's edge: the rule runs whole down an open card) */
+/* (above the card: the rule runs whole down an open card) */
 .oask::before { content: ""; position: absolute; z-index: 3; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 2px; background: var(--kc); }
 .oask.k-orch { --kc: var(--violet); }
 .oask.k-perm { --kc: var(--red); }
@@ -249,10 +249,14 @@
    long chat the card is never the one that gives way (the owner 2026-11-13: «tagliatissime illeggibili»). */
 .oasks:has(.oask.open) { max-height: none; flex: 0 1 auto; min-height: 160px; }
 .orchestrator-tile:has(.oask.open) > .items-wrap { flex: 0 9999 auto; min-height: 72px; }
-/* the answers stay in sight at the bottom of the scrolling rows while a long card is read */
-.oask-card .dc-actions { position: sticky; bottom: 0; z-index: 2; margin: 0 -12px; padding: 10px 12px; background: var(--surface); border-top: 1px solid var(--border); }
-/* the chat's long message above a question scrolls in its own box: the question's answers come right after it */
-.oask-card .wctx-body { max-height: 120px; overflow-y: auto; scrollbar-width: thin; }
+/* one page, one scroll (ADR 0327; the owner 2026-11-19: «le domande se espanse siano veramente leggibili per intero»):
+   the question, why, the two roads with their buttons, then the details. Nothing is pinned over the text and no part
+   scrolls in a box of its own: the rows' own scroll reads the card from its first line to its last. */
+.oask-card .dc-actions { margin: 0; padding: 0; }
+.oask-card .ctx-body { max-height: none; overflow: visible; }
+.oask-card .dc-q, .oask-card .wq-q { font-size: 17px; line-height: 1.35; }
+.oask-card .dc-ctx, .oask-card .wq-lead { font-size: var(--fs-l); line-height: 1.55; color: var(--text); max-width: 72ch; }
+.oask-card .dc-evidence { background: none; border: 0; border-top: 1px solid var(--border); border-radius: 0; padding: 12px 0 0; }
 .oask-foot { display: flex; align-items: center; gap: 8px; padding-top: 8px; margin-top: 8px; border-top: 1px solid var(--border); }
 /* the keys still work (1-9, arrows, Enter, Esc); their legend only repeated the numbers on the options */
 .oask-foot .qwin-keys { display: none; }
