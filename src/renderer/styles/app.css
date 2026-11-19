@@ -632,6 +632,8 @@ button.lc-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 1
 .composer-box.is-drop { border-style: dashed; border-color: var(--accent-line); background: var(--accent-bg); }
 .composer-images { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 2px; }
 .img-reading { font-size: 11.5px; color: var(--text-3); }
+/* a row's card is open over the Orchestrator's field: whom the words go to (ChatInput.tsx, ADR 0328) */
+.composer-to { font-size: 11.5px; line-height: 1.35; color: var(--text-3); padding: 2px 2px 0; }
 
 /* image previews (composer, history) and the big view */
 .img-strip { display: flex; flex-wrap: wrap; gap: 6px; }

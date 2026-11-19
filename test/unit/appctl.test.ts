@@ -685,7 +685,7 @@ describe('app control tools', () => {
     const sent: (string | undefined)[] = [];
     const list = [{ id: 'r1', title: 'Orchestrator', harness: 'cursor', isOrchestrator: true, state: 'idle' }, { id: 'w', title: 'W', harness: 'cursor', state: 'idle' }];
     const chats = {
-      list: () => list,
+      list: () => list, pending: () => [],
       send: async (_id: string, _t: string, _i?: unknown, _r?: boolean, from?: string) => { sent.push(from); },
     } as unknown as ChatService;
     const orchestratorChats = { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '', cursorReasoning: 'medium', cursorFast: false };

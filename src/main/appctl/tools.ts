@@ -30,7 +30,7 @@ import { engineLabel, engineOf } from '../engines/registry';
 import { agentsMayOpen, crossRefusal, openRefusal } from '../engines/policy';
 import type { BrainService, BrowserService, ChatService } from '../services';
 import { log, redact } from '../log';
-import { sameWords } from '../../shared/answer-in-words';
+import { answerableInWords, sameWords } from '../../shared/answer-in-words';
 import { isPlanApproval } from '../../shared/strategy';
 import { withPasswordsHidden } from '../browser/shot-mask';
 import { fmtFactor, previewOf } from '../browser/preview';
@@ -187,6 +187,15 @@ const brief = (c: ChatSummary, warn: number) => c.parentId ? statusOnly(c) : ({
   // a role chat's run: its runId is what agent_metrics and agent_children show (never the chat id)
   ...(c.run ? { run: { runId: c.run.runId, taskId: c.run.taskId ?? c.run.runId, taskVersion: c.run.taskVersion ?? 1, agentId: c.run.agentId, version: c.run.version, state: c.run.endedAt === undefined ? 'running' : 'ended' } } : {}),
 });
+/** What the Orchestrator reads after writing to a chat that waits on the user (ADR 0328; on the owner's PC, 2026-11-19,
+ *  it passed his answer as a message twice and the row stayed): a chat reads no message while its own question is
+ *  open, and a plan's row stays until the plan is decided. Null: the chat waits on nothing of his. */
+export function waitsOnUser(chat: Pick<ChatSummary, 'id' | 'title' | 'plan' | 'closedAt'>, pending: readonly PendingRequest[]): string | null {
+  const ask = pending.find(p => p.chatId === chat.id && answerableInWords(p));
+  if (ask) return `But «${chat.title}» waits on its open question (requestId ${ask.id}) and reads this message only after the answer: the user still sees the question. If his last message decides it, call app_resolve_question now (chatId ${chat.id}, requestId ${ask.id}, words quoted from his message, or answers): its row closes.`;
+  if (!chat.closedAt && chat.plan?.phase === 'proposed') return `But the plan of «${chat.title}» still waits for the user's ok and its row stays open. What he wants changed in a plan goes with app_resolve_question (chatId ${chat.id}, requestId plan, decision change with text, or words quoted from his message): its row closes and the plan comes back revised.`;
+  return null;
+}
 /** "queued (CPU 92%, RAM 40% free, 7/7 cold starts, position 1)": an agent's cold start waiting for a slot or for the
  *  emergency brake (ADR 0222) */
 export const queuedLine = (q: NonNullable<ChatSummary['queued']>): string => `queued (CPU ${q.cpu}%, RAM ${q.freeRam}% free${q.slots ? `, ${q.starting ?? 0}/${q.slots} cold starts` : ''}, position ${q.position})`;
@@ -697,8 +706,10 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         // on the project map the agent shows the change until it takes it (zero tokens)
         if (authed()) d.projectMaps?.sent(String(a.chatId), text, busy && a.now !== true);
         log.info('appctl', 'agent message sent to chat', { chat: String(a.chatId), data: { chars: text.length } });
-        const q = d.chats.list().find(c => c.id === String(a.chatId))?.queued;
-        return q ? queuedLine(q) : 'sent';
+        const after = d.chats.list().find(c => c.id === String(a.chatId)), q = after?.queued;
+        // the Orchestrator wrote to a chat that waits on the user: the row stays open (ADR 0328), so it is told how to close it
+        const waits = authed() && after && !after.parentId ? waitsOnUser(after, d.chats.pending()) : null;
+        return `${q ? queuedLine(q) : 'sent'}${waits ? `. ${waits}` : ''}`;
       },
     },
     {

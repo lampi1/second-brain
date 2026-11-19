@@ -12,7 +12,8 @@
 // ↑↓ choose, Tab or Invio completes "/<name> ", Esc closes; lib/slash.ts), read from main ('chat:commands') when the
 // list opens. An Orchestrator's input also has «Fast» and «Plan» (ADR 0034, 0296): ticked, the message goes with the
 // line that asks for a quick answer of its own without delegating, or for a Strategist's plan (shared/newchat.ts); one
-// at a time, it resets after a send.
+// at a time, it resets after a send. While a row's card is open in its column, the Orchestrator's field is that
+// row's answer box (lib/field-answer.ts, ADR 0328): a line over it says whom the words go to.
 // The inline suggestion (issue #167, ADR 0118): grey text after the caret, from local sources first (past prompts,
 // "/" commands, roles, skills, chat titles, the chat's files: lib/composer-suggest.ts, zero tokens; the model part was
 // removed, ADR 0201). Tab accepts it, Esc hides it, any other key goes on as usual; with no suggestion Tab moves the focus as always.
@@ -28,9 +29,12 @@ import { IMAGES_MAX_TOTAL, type ChatCommand, type ChatSummary, type ImageAttachm
 import { applyCommand, filterCommands, slashQuery } from '../lib/slash';
 import { fullSrc, imageFiles, pasteKind, roomFor, toAttachment } from '../lib/images';
 import { isBusy, type QueuedMsg } from '../store/state';
-import { answer, app, onChatRemoved, send, sendQueuedNow, unqueue, useApp } from '../store/store';
-import { answerableInWords, wordsAnswer } from '@shared/answer-in-words';
-import { toast } from '../store/ui';
+import { answer, app, onChatRemoved, planDecide, send, sendQueuedNow, unqueue, useApp } from '../store/store';
+import { answerableInWords } from '@shared/answer-in-words';
+import { toast, ui } from '../store/ui';
+import { reqKey } from '../actions';
+import { fieldRoute, type FieldCard } from '../lib/field-answer';
+import { planAskOf, planWaits } from '../lib/plan-ask';
 import { IconBolt, IconBranch, IconSend, IconSpinner, IconX } from './Icons';
 import { ImageStrip } from './ImageStrip';
 import { Kbd } from './ui';
@@ -53,6 +57,7 @@ const drafts = new CheckpointMap<string, string>();
 const onSentHooks = new Map<string, { fn: () => void; sig: string }>();
 const draftSubs = new Set<(chatId: string, quiet?: boolean) => void>(); // quiet: the text changes, the focus stays where it is
 const freshDrafts = new Set<string>(); // set from elsewhere, not yet shown: the input takes the focus with the caret at the end
+const placedDrafts = new Set<string>(); // the text in the input started as a draft another page put there: it is for this chat, never an open card's answer
 const modeOn = new CheckpointMap<string, SendMode>(); // the Orchestrators with "Strategist" ticked (kept across a remount, like the draft)
 
 /** Put `text` in the chat's input, not sent; what the user was already writing there stays above it. `onSent` runs
@@ -64,6 +69,7 @@ export function setDraft(chatId: string, text: string, onSent?: () => void): voi
   const sig = (text.trim().split('\n')[0] ?? '').slice(0, 60);
   if (onSent) onSentHooks.set(chatId, { fn: onSent, sig }); else onSentHooks.delete(chatId);
   freshDrafts.add(chatId);
+  placedDrafts.add(chatId);
   for (const fn of draftSubs) fn(chatId);
 }
 /** A text selected on screen and right-clicked (ADR 0300, lib/quote.ts): it goes at the end of the chat's input as
@@ -118,7 +124,7 @@ function loadCommands(chatId: string, done: (list: ChatCommand[]) => void): void
 // a chat that left the app for good takes its draft, images, hooks and caches with it (a draft lives as long as its chat)
 onChatRemoved(chatId => {
   for (const m of [drafts, draftImages, modeOn] as Map<string, unknown>[]) if (m.has(chatId)) m.delete(chatId);
-  onSentHooks.delete(chatId); freshDrafts.delete(chatId); prewarmAt.delete(chatId); commandCache.delete(chatId);
+  onSentHooks.delete(chatId); freshDrafts.delete(chatId); placedDrafts.delete(chatId); prewarmAt.delete(chatId); commandCache.delete(chatId);
   if (readingN.delete(chatId)) changed();
 });
 
@@ -280,23 +286,40 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
   };
   // its own open question (the Orchestrator's included): what the user writes here is its answer (ADR 0274)
   const ownAsk = useApp(s => s.pending.find(p => p.chatId === chat.id && answerableInWords(p)));
+  // the row whose card is open in the Orchestrator's column: this field is its answer box (lib/field-answer.ts)
+  const cardKey = ui.use(s => (orchestrator ? s.qwin.card ?? null : null));
+  const cardReq = useApp(s => (cardKey ? s.pending.find(p => reqKey(p) === cardKey && answerableInWords(p)) : undefined));
+  const cardPlan = useApp(s => { const a = cardKey ? planAskOf(cardKey) : null; return a && planWaits(s.chats[a.chatId]) && s.chats[a.chatId]!.plan!.at === a.at ? cardKey : null; });
+  const planOf = cardPlan ? planAskOf(cardPlan) : null;
+  const card: FieldCard | null = cardReq ? { kind: 'question', req: cardReq } : planOf ? { kind: 'plan', chatId: planOf.chatId, at: planOf.at } : null;
+  // another chat's row (the Orchestrator's own question is `ownAsk`): whose it is, shown over the field
+  const cardChat = card && (card.kind === 'plan' || card.req.chatId !== chat.id) ? (card.kind === 'plan' ? card.chatId : card.req.chatId) : null;
+  const cardName = useApp(s => (cardChat ? s.chats[cardChat]?.agent?.name || s.chats[cardChat]?.title || 'Chat' : null));
   const busy = isBusy(chat) || chat.state === 'waiting' || chat.pending > 0;
   const enterNow = queued.length > 0 && !text.trim() && !images.length; // Enter = "Invia subito" on the last queued
-  const placeholder = ownAsk && !orchestrator ? t('chat.input.placeholderAnswer') : enterNow ? t('chat.input.placeholderEnter') : voiceOn ? t('voice.placeholder') : orchestrator && mode ? t(mode === 'fast' ? 'chat.input.placeholderFast' : 'chat.input.placeholderPlan') : orchestrator ? t('chat.input.placeholderOrchestrator') : chat.pending > 0 ? t('chat.input.placeholderPending') : busy ? t('chat.input.placeholderBusy') : chat.state === 'closed' ? t('chat.input.placeholderClosed') : t('chat.input.placeholderDefault');
+  // the line over the field and the send button say so (a draft another page put here is for the Orchestrator)
+  const toCard = !!cardName && !placedDrafts.has(chat.id) && !context;
+  const placeholder = cardName ? t('chat.input.placeholderAnswerTo', { name: cardName }) : ownAsk && !orchestrator ? t('chat.input.placeholderAnswer') : enterNow ? t('chat.input.placeholderEnter') : voiceOn ? t('voice.placeholder') : orchestrator && mode ? t(mode === 'fast' ? 'chat.input.placeholderFast' : 'chat.input.placeholderPlan') : orchestrator ? t('chat.input.placeholderOrchestrator') : chat.pending > 0 ? t('chat.input.placeholderPending') : busy ? t('chat.input.placeholderBusy') : chat.state === 'closed' ? t('chat.input.placeholderClosed') : t('chat.input.placeholderDefault');
   const ready = (text.trim() !== '' || images.length > 0) && reading === 0;
   const submit = (as = mode) => {
     if(updateIsFrozen())return;
     if (reading) return; // a screenshot is still being read: it goes with this message, so wait for it
     if (as && !text.trim()) { toast(t('chat.input.emptyMode'), 'info'); return; } // a mode needs a request in words
-    // the chat asks: his words answer it and its row goes (an image goes as a message, as always)
-    if (ownAsk && !as && text.trim() && !images.length) {
-      const words = text;
-      void answer(ownAsk, wordsAnswer(ownAsk, words)).then(ok => { if (!ok) setText(v => v || words); });
+    // the chat asks, or a row's card is open over the Orchestrator's field: his words answer it and its row goes (an
+    // image goes as a message, as always; a question about another chat's row goes to the Orchestrator, which explains)
+    const route = fieldRoute(text, { chatId: chat.id, card, own: ownAsk, plain: !as && !images.length, drafted: placedDrafts.has(chat.id) || !!context });
+    if (route) {
+      // refused (a newer proposal, an engine down): his words come back in the field; delivered to another chat's row: a toast says to whom
+      const words = text, to = cardName && (route.to === 'plan' || route.req.chatId !== chat.id) ? cardName : null;
+      const back = (ok: boolean) => { if (!ok) setText(v => v || words); else if (to) toast(t('chat.input.answeredTo', { name: to }), 'info'); };
+      if (route.to === 'plan') void planDecide(route.chatId, route.decision, route.at, route.text).then(back);
+      else void answer(route.req, route.answer).then(back);
       rememberPrompt(text);
       history.current = null;
       setGhost(null);
       setText('');
       drafts.delete(chat.id);
+      placedDrafts.delete(chat.id);
       return;
     }
     const r = send(chat.id, as && orchestrator ? withMode(as, text) : text, images);
@@ -307,6 +330,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
     setGhost(null);
     setText('');
     drafts.delete(chat.id);
+    placedDrafts.delete(chat.id);
     const hook = onSentHooks.get(chat.id);
     onSentHooks.delete(chat.id);
     if (hook && text.includes(hook.sig)) hook.fn(); // another message written over the draft: not the draft
@@ -394,6 +418,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
         </div>
       )}
       <div className={`composer-box ${dragging ? 'is-drop' : ''} ${voiceOn ? 'is-voice' : ''}`} onDragOver={onDragOver} onDragLeave={() => setDragging(false)} onDrop={onDrop}>
+        {toCard && <div className="composer-to" data-testid={`${testid}-answers`}>{t('chat.input.answersTo', { name: cardName })}</div>}
         {context && <ReviewedContextPreview context={context} onRemove={() => { setText(context.message); drafts.set(chat.id, context.message); onSentHooks.delete(chat.id); ta.current?.focus(); }}/>}
         {(images.length > 0 || reading > 0) && (
           <div className="composer-images">
@@ -414,7 +439,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
             onFocus={() => { setFocused(true); if (suggestOn && !cmds) loadCommands(chat.id, setCmds); }} onBlur={() => setFocused(false)}
             onScroll={e => { if (mirror.current) mirror.current.scrollTop = e.currentTarget.scrollTop; }}
             aria-activedescendant={slashOpen ? `${testid}-slash-o${Math.min(sel, matches.length - 1)}` : undefined}
-            onChange={e => { const next = withReviewedContext(e.target.value, context); setText(next); setCaret(e.target.selectionStart); drafts.set(chat.id, next); if (!next.trim()) onSentHooks.delete(chat.id); else prewarm(chat.id); if (!e.target.value.startsWith('/')) setSlashOff(null); refreshGhost(e.target.value, e.target.selectionStart); }}
+            onChange={e => { const next = withReviewedContext(e.target.value, context); setText(next); setCaret(e.target.selectionStart); drafts.set(chat.id, next); if (!next.trim()) { onSentHooks.delete(chat.id); placedDrafts.delete(chat.id); } else prewarm(chat.id); if (!e.target.value.startsWith('/')) setSlashOff(null); refreshGhost(e.target.value, e.target.selectionStart); }}
             onSelect={e => setCaret(e.currentTarget.selectionStart)}
             onPaste={onPaste}
             onKeyDown={e => {
@@ -443,7 +468,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
               data-testid={`${testid}-mode-${m}`}>{m === 'fast' ? <IconBolt size={12} /> : <IconBranch size={12} />}<span>{t(`chat.mode.${m}`)}</span></button>
           ))}
           {ready ? (
-            <button type="button" className="send" onClick={() => submit()} aria-label={mode ? t(busy ? 'chat.input.queueAsMode' : 'chat.input.sendAsMode', { mode: t(`chat.mode.${mode}`) }) : busy ? t('chat.input.queue') : t('chat.input.send')} data-tip={mode ? t(busy ? 'chat.input.queueAsModeTip' : 'chat.input.sendAsModeTip', { mode: t(`chat.mode.${mode}`) }) : busy ? t('chat.input.queueShort') : t('chat.input.sendShort')} data-testid={`${testid}-send`}><IconSend size={14} /></button>
+            <button type="button" className="send" onClick={() => submit()} aria-label={mode ? t(busy ? 'chat.input.queueAsMode' : 'chat.input.sendAsMode', { mode: t(`chat.mode.${mode}`) }) : busy && !toCard ? t('chat.input.queue') : t('chat.input.send')} data-tip={mode ? t(busy ? 'chat.input.queueAsModeTip' : 'chat.input.sendAsModeTip', { mode: t(`chat.mode.${mode}`) }) : busy && !toCard ? t('chat.input.queueShort') : t('chat.input.sendShort')} data-testid={`${testid}-send`}><IconSend size={14} /></button>
           ) : voice ? (
             // the mic takes the «Invio» key's place; what Enter does now (send the queued one) still shows
             enterNow || (busy && !orchestrator) ? <span className="composer-hint" aria-hidden="true">{enterNow ? t('chat.input.hintNow') : t('chat.input.queuedInQueue')}</span> : null

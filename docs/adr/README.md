@@ -322,6 +322,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0325](0325-routines-leave-the-app.md) Routines leave the app — accepted
 - [0326](0326-maps-tell-how-far-the-project-is.md) The maps tell how far the project is: a percentage, a progress card, the plan in the side panel — accepted
 - [0327](0327-one-question-one-row-one-answer.md) One question, one row, one answer: his own words are his answer, the same question only after a reply to them — accepted
+- [0328](0328-an-open-card-takes-the-orchestrators-field.md) An open card takes what he writes in the Orchestrator's field: his words go straight to that row — accepted
 
 ## Replaced
 
