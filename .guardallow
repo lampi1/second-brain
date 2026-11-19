@@ -559,3 +559,6 @@ docs/demo-pictures/project-map.png binary-media sha256:a01aef06a38026ccc261c7974
 docs/demo-pictures/trends.png binary-media sha256:8ed386b1ba4649eaea2aa3159f256df4ce25afb83c907e7c41c66a52cb42d98a
 docs/screenshots/project-map.webp binary-media sha256:d49fe76071a983d004930b7272d7495a3a52c16bce2763cb4b3881bce21d5ef1
 docs/screenshots/plan.webp binary-media sha256:a8aaf4bccee267d7472a9019d714cd1c198a366258c9d4646937b0fce4689aa2
+# README screenshot regenerated for ADR 0328 (Memory › Artifacts as one list of what the user asked for): frozen demo data
+# only, looked at 2026-11-19.
+docs/screenshots/artifacts.webp binary-media sha256:8c7666e682cc902b50b737ef84317791266442e4e5737dbac60e3a8bb90249aa

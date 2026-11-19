@@ -1,37 +1,32 @@
-// Memoria → Artifact (ADR 0319, the owner 2026-11-16: «one place to browse every report, analysis and document that my
-// chats produce over time, similar to Claude's artifacts»): a gallery of what the chats produced, newest first and
-// grouped by day, with a search, filters (type, area, period, chat), a sort and a grid or list view. Each card shows its
-// picture (ArtifactThumb.tsx), title, date, area, a short summary, its versions and the chat it came from; a click opens
-// it in the app's viewer (HTML rendered, Markdown formatted, PDF paged, images zoomable, csv as a table, text as text;
-// the owner 2026-11-16: «potranno essere sia html che png che pdf, insomma un po' tutto»: Word, Excel, video and the
-// rest open from there with the system's app), where the artifact bar
-// (ArtifactBar.tsx) links the source chat, the versions and related artifacts. A missing file stays, marked. Data:
-// lib/library.ts ('library:list', reloaded on 'library:changed'); the filters: shared/library.ts filterArtifacts.
-// Rendered by brain-model/MemoryPage.tsx for the 'artifact' tab. Styles: styles/library.css (lib-*).
-// ADR 0323 (the owner 2026-11-18: «deve essere più essenziale … se la apro mi impalla l'app»): the gallery draws the
-// newest LIBRARY_PAGE and «Mostra altri» adds as many again; a card's star keeps it from the cleanup of old pictures.
+// Memoria → Artifact (ADR 0328, the owner 2026-11-19: «solo gli artifact che produce l'app su richiesta dell'utente e
+// non divisi per file»): ONE list, newest first, of the reports, documents, plans and analyses the agents made because
+// the user asked for one (an agent declares its file with artifact_save: nothing is picked up from folders or chats).
+// No tabs or filters by file type: a search, and a grid or a list. Each card shows its picture (ArtifactThumb.tsx),
+// title, date, area, a short summary, its versions and the chat it came from; a click opens it in the app's viewer,
+// whatever its format (HTML rendered, Markdown formatted, PDF paged, images, csv as a table, Word, Excel and PowerPoint
+// as their text and tables), where the artifact bar (ArtifactBar.tsx) links the source chat, the versions and related
+// artifacts. A missing file stays, marked, until the user takes the card off (✕: the list only, never the file). Data:
+// lib/library.ts ('library:list', reloaded on 'library:changed'); the search: shared/library.ts searchArtifacts.
+// Rendered by brain-model/MemoryPage.tsx for the 'artifact' tab. Styles: styles/library.css (lib-*). The list draws
+// the newest LIBRARY_PAGE and «Mostra altri» adds as many again (ADR 0323's lightness stays).
 import { useDeferredValue, useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { ARTIFACT_KINDS, CLEANUP_DAYS, LIBRARY_PAGE, NO_FILTER, filterArtifacts, type Artifact, type ArtifactFilter, type ArtifactKind, type ArtifactRange, type ArtifactSort } from '@shared/library';
+import { LIBRARY_PAGE, searchArtifacts, type Artifact } from '@shared/library';
 import { openChatRef } from '../../actions';
 import { locale, t } from '../../i18n';
-import { badgeOf, openedLibrary, pinArtifact, refreshLibrary, useLibrary } from '../../lib/library';
+import { badgeOf, openedLibrary, removeArtifact, useLibrary } from '../../lib/library';
 import { now as clockNow } from '../../lib/clock';
-import { IconChat, IconGrid, IconList, IconRefresh, IconSearch, IconStar, IconX } from '../Icons';
+import { IconChat, IconGrid, IconList, IconSearch, IconX } from '../Icons';
 import { HubIntro } from '../brain-model/HubIntro';
 import { ArtifactThumb } from './ArtifactThumb';
 import { openArtifact } from './open';
 import '../../styles/skill-library.css';
 import '../../styles/library.css';
 
-/** Always on the kind row; the others (data, documents, video and audio, other files) only once one is indexed. */
-const CORE_KINDS: ReadonlySet<ArtifactKind | 'all'> = new Set(['all', 'html', 'markdown', 'pdf', 'image']);
-const RANGES: readonly ArtifactRange[] = ['all', 'today', 'week', 'month'];
-const SORTS: readonly ArtifactSort[] = ['newest', 'oldest', 'title', 'versions'];
 type View = 'grid' | 'list';
 const VIEW_KEY = 'sb.library.view';
 const readView = (): View => { try { return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'grid'; } catch { return 'grid'; } };
-// the filters stay while the app is open (a tab left and opened again shows the same gallery)
-let kept: ArtifactFilter = NO_FILTER;
+// the search stays while the app is open (a tab left and opened again shows the same list)
+let kept = '';
 
 const DAY = 864e5;
 function dayStart(ms: number): number { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); }
@@ -52,7 +47,9 @@ const when = (ms: number, nowMs: number) => {
 };
 
 function Card({ a, nowMs, i, list }: { a: Artifact; nowMs: number; i: number; list: boolean }) {
-  const chat = a.chatId ? (a.chatTitle ? t('lib.fromChat', { title: a.chatTitle }) : t('lib.fromChatGone')) : t('lib.found');
+  const chat = a.chatId ? (a.chatTitle ? t('lib.fromChat', { title: a.chatTitle }) : t('lib.fromChatGone')) : '';
+  // ✕ asks once on the card itself (no dialog): the second click takes it off
+  const [asking, setAsking] = useState(false);
   return <article className="lib-card" data-kind={a.kind} data-missing={a.missing || undefined} style={{ '--i': Math.min(i, 24) } as CSSProperties} data-testid="lib-card" data-id={a.id}>
     <button type="button" className="lib-card-open" onClick={() => openArtifact(a)} aria-label={t('lib.open', { title: a.title })} data-testid="lib-card-open">
       {!list && <ArtifactThumb a={a} />}
@@ -68,112 +65,62 @@ function Card({ a, nowMs, i, list }: { a: Artifact; nowMs: number; i: number; li
         {a.summary ? <span className="lib-card-sum">{a.summary}</span> : <span className="lib-card-sum lib-card-file" title={a.path}>{a.path.split(/[\\/]/).slice(-2).join('/')}</span>}
       </span>
     </button>
-    <footer className="lib-card-foot">
-      <button type="button" className="lib-pin" aria-pressed={!!a.pinned} onClick={() => void pinArtifact(a.id, !a.pinned)}
-        title={a.pinned ? t('lib.unpinTip') : t('lib.pinTip', { days: CLEANUP_DAYS })} aria-label={a.pinned ? t('lib.unpin') : t('lib.pin')} data-testid="lib-card-pin">
-        <IconStar size={12} filled={!!a.pinned} /></button>
+    <footer className="lib-card-foot" onMouseLeave={() => setAsking(false)}>
       <span className="lib-area" title={t('lib.area')}>{a.area}</span>
-      {a.chatId ? <button type="button" className="lib-chat" onClick={() => openChatRef(a.chatId!)} title={t('lib.openChat')} data-testid="lib-card-chat"><IconChat size={12} /><span>{chat}</span></button>
-        : <span className="lib-chat lib-chat-none">{chat}</span>}
+      {a.chatId && <button type="button" className="lib-chat" onClick={() => openChatRef(a.chatId!)} title={t('lib.openChat')} data-testid="lib-card-chat"><IconChat size={12} /><span>{chat}</span></button>}
+      <span className="sp" />
+      {asking
+        ? <button type="button" className="lib-remove is-asking" onClick={() => void removeArtifact(a.id)} onBlur={() => setAsking(false)} title={t('lib.removeTip')} data-testid="lib-card-remove-yes">{t('lib.removeYes')}</button>
+        : <button type="button" className="lib-remove" onClick={() => setAsking(true)} title={t('lib.removeTip')} aria-label={t('lib.remove', { title: a.title })} data-testid="lib-card-remove"><IconX size={12} /></button>}
     </footer>
   </article>;
 }
 
-function Select<T extends string>({ label, value, onChange, items, testId }: { label: string; value: T; onChange: (v: T) => void; items: readonly { id: T; label: string }[]; testId: string }) {
-  return <label className="lib-select" data-on={value !== 'all' && value !== 'newest' ? 'true' : undefined}>
-    <span>{label}</span>
-    <select value={value} onChange={e => onChange(e.target.value as T)} data-testid={testId}>
-      {items.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-    </select>
-  </label>;
-}
-
 export function ArtifactsTab() {
   const { list, loaded, error } = useLibrary();
-  const [f, setF] = useState<ArtifactFilter>(kept);
-  useEffect(() => { kept = f; }, [f]);
-  // the tab opened: a look through the folders when the last one is older than a minute
+  const [query, setQuery] = useState(kept);
+  useEffect(() => { kept = query; }, [query]);
+  // the tab opened: every known file is looked at again (one that went shows as missing)
   useEffect(() => { void openedLibrary(); }, []);
   const [view, setViewState] = useState<View>(readView);
   const setView = (v: View) => { setViewState(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* this session only */ } };
   const [nowMs, setNow] = useState(() => clockNow());
   useEffect(() => { const id = setInterval(() => { if (!document.hidden) setNow(clockNow()); }, 60_000); return () => clearInterval(id); }, []);
-  const q = useDeferredValue(f.q);
+  const q = useDeferredValue(query);
   const all = list.artifacts;
-  const shown = useMemo(() => filterArtifacts(all, { ...f, q }, nowMs), [all, f, q, nowMs]);
-  const areas = useMemo(() => [...new Set(all.map(a => a.area))].sort((x, y) => x.localeCompare(y)), [all]);
-  const chats = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const a of all) if (a.chatId && a.chatTitle && !m.has(a.chatId)) m.set(a.chatId, a.chatTitle);
-    return [...m].sort((x, y) => x[1].localeCompare(y[1]));
-  }, [all]);
-  const kindCounts = useMemo(() => {
-    const m = new Map<ArtifactKind | 'all', number>([['all', all.length]]);
-    for (const a of all) m.set(a.kind, (m.get(a.kind) ?? 0) + 1);
-    return m;
-  }, [all]);
-  const kindCount = (k: ArtifactKind | 'all') => kindCounts.get(k) ?? 0;
-  // a page at a time: other filters start again from the first page
+  const shown = useMemo(() => searchArtifacts(all, q), [all, q]);
+  // a page at a time: another search starts again from the first page
   const [limit, setLimit] = useState(LIBRARY_PAGE);
-  useEffect(() => { setLimit(LIBRARY_PAGE); }, [f.kind, f.area, f.chat, f.range, f.sort, q]);
+  useEffect(() => { setLimit(LIBRARY_PAGE); }, [q]);
   const page = useMemo(() => shown.slice(0, limit), [shown, limit]);
   const left = shown.length - page.length;
   const groups = useMemo(() => {
-    if (f.sort !== 'newest' && f.sort !== 'oldest') return [{ key: 'all', label: '', items: page }];
     const out: { key: string; label: string; items: Artifact[] }[] = [];
     for (const a of page) { const g = dayGroup(a.at, nowMs); const last = out[out.length - 1]; if (last?.key === g.key) last.items.push(a); else out.push({ ...g, items: [a] }); }
     return out;
-  }, [page, f.sort, nowMs]);
-  const filtered = f.q || f.kind !== 'all' || f.area !== 'all' || f.chat !== 'all' || f.range !== 'all';
-  const set = <K extends keyof ArtifactFilter>(k: K, v: ArtifactFilter[K]) => setF(x => ({ ...x, [k]: v }));
-  const [busy, setBusy] = useState(false);
-  const refresh = () => { setBusy(true); void refreshLibrary().finally(() => setBusy(false)); };
-  const scanning = busy || list.scanning;
+  }, [page, nowMs]);
   let i = 0;
 
   return <div className="lib-page" data-testid="lib-page" data-view={view}>
-    <HubIntro lead={loaded ? (all.length ? t('lib.lead', { n: all.length }) : t('lib.lead0')) : '…'} actions={
-      <button type="button" className="btn btn-ghost btn-s lib-refresh" onClick={refresh} disabled={busy} title={t('lib.refreshTip')} data-busy={scanning || undefined} data-testid="lib-refresh">
-        <IconRefresh size={14} /> {scanning ? t('lib.scanning') : t('lib.refresh')}
-      </button>} />
+    <HubIntro lead={loaded ? (all.length ? t('lib.lead', { n: all.length }) : t('lib.lead0')) : '…'} />
     {error && <p className="sl-error" role="alert">{t('lib.loadError')} {error}</p>}
-    <div className="lib-bar" role="search">
-      <div className="lib-bar-row">
-        <div className="sl-search lib-search">
-          <IconSearch size={14} />
-          <input type="search" value={f.q} onChange={e => set('q', e.target.value)} placeholder={t('lib.search')} aria-label={t('lib.searchLabel')} spellCheck={false} data-testid="lib-search" />
-          {f.q && <button type="button" className="sl-clear" onClick={() => set('q', '')} aria-label={t('lib.clear')}><IconX size={12} /></button>}
-        </div>
-        <div className="lib-views" role="group" aria-label={t('lib.view')}>
-          <button type="button" aria-pressed={view === 'grid'} onClick={() => setView('grid')} aria-label={t('lib.view.grid')} title={t('lib.view.grid')} data-testid="lib-view-grid"><IconGrid size={14} /></button>
-          <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')} aria-label={t('lib.view.list')} title={t('lib.view.list')} data-testid="lib-view-list"><IconList size={14} /></button>
-        </div>
+    {all.length > 0 && <div className="lib-bar" role="search">
+      <div className="sl-search lib-search">
+        <IconSearch size={14} />
+        <input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder={t('lib.search')} aria-label={t('lib.searchLabel')} spellCheck={false} data-testid="lib-search" />
+        {query && <button type="button" className="sl-clear" onClick={() => setQuery('')} aria-label={t('lib.clear')}><IconX size={12} /></button>}
       </div>
-      <div className="lib-bar-row">
-        <div className="lib-kinds" role="group" aria-label={t('lib.kindLabel')}>
-          {(['all', ...ARTIFACT_KINDS] as const).filter(k => CORE_KINDS.has(k) || f.kind === k || kindCount(k) > 0).map(k => <button key={k} type="button" aria-pressed={f.kind === k} onClick={() => set('kind', k)} data-testid={`lib-kind-${k}`} data-kind={k}>
-            {t(`lib.kind.${k}`)}<span className="sl-n">{kindCount(k)}</span></button>)}
-        </div>
-        <div className="lib-selects">
-          <Select label={t('lib.area')} value={f.area} onChange={v => set('area', v)} testId="lib-area" items={[{ id: 'all', label: t('lib.area.all') }, ...areas.map(a => ({ id: a, label: a }))]} />
-          <Select label={t('lib.range')} value={f.range} onChange={v => set('range', v)} testId="lib-range" items={RANGES.map(r => ({ id: r, label: t(`lib.range.${r}`) }))} />
-          <Select label={t('lib.chat')} value={f.chat} onChange={v => set('chat', v)} testId="lib-chat" items={[{ id: 'all', label: t('lib.chat.all') }, ...chats.map(([id, title]) => ({ id, label: title }))]} />
-          <Select label={t('lib.sort')} value={f.sort} onChange={v => set('sort', v)} testId="lib-sort" items={SORTS.map(s => ({ id: s, label: t(`lib.sort.${s}`) }))} />
-        </div>
+      <span className="lib-count small" aria-live="polite" data-testid="lib-count">{t('lib.count', { shown: shown.length, n: all.length })}</span>
+      <div className="lib-views" role="group" aria-label={t('lib.view')}>
+        <button type="button" aria-pressed={view === 'grid'} onClick={() => setView('grid')} aria-label={t('lib.view.grid')} title={t('lib.view.grid')} data-testid="lib-view-grid"><IconGrid size={14} /></button>
+        <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')} aria-label={t('lib.view.list')} title={t('lib.view.list')} data-testid="lib-view-list"><IconList size={14} /></button>
       </div>
-    </div>
-    <div className="lib-count small" aria-live="polite">
-      <span data-testid="lib-count">{t('lib.count', { shown: shown.length, n: all.length })}</span>
-      {filtered && <button type="button" className="sl-link" onClick={() => setF({ ...NO_FILTER, sort: f.sort })} data-testid="lib-reset">{t('lib.reset')}</button>}
-      {list.dropped > 0 && <span>· {t('lib.dropped', { n: list.dropped })}</span>}
-      {list.cleaned > 0 && <span title={t('lib.cleanedTip', { days: CLEANUP_DAYS })} data-testid="lib-cleaned">· {t('lib.cleaned', { n: list.cleaned, days: CLEANUP_DAYS })}</span>}
-      {!list.backfilled && loaded && <span className="lib-note">· {t('lib.backfilling')}</span>}
-    </div>
-    {!loaded ? <div className="lib-grid" aria-busy="true">{Array.from({ length: 6 }, (_, k) => <div key={k} className="lib-card lib-skel" />)}</div>
+    </div>}
+    {!loaded ? <div className="lib-grid" aria-busy="true">{Array.from({ length: 3 }, (_, k) => <div key={k} className="lib-card lib-skel" />)}</div>
       : !all.length ? <p className="lib-empty" data-testid="lib-empty">{t('lib.empty')}</p>
         : !shown.length ? <p className="lib-empty" data-testid="lib-empty">{t('lib.emptyFilter')}</p>
-          : groups.map(g => <section key={g.key} className="lib-group" aria-label={g.label || undefined}>
-            {g.label && <h3 className="lib-day"><span>{g.label}</span></h3>}
+          : groups.map(g => <section key={g.key} className="lib-group" aria-label={g.label}>
+            <h3 className="lib-day"><span>{g.label}</span></h3>
             <div className={view === 'list' ? 'lib-rows' : 'lib-grid'} data-testid="lib-grid">
               {g.items.map(a => <Card key={a.id} a={a} nowMs={nowMs} i={i++} list={view === 'list'} />)}
             </div>

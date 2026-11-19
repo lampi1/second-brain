@@ -1,26 +1,28 @@
-// Memoria → Artifact (ADR 0319), the index in main: a scan of the brain's reviews/tmp/evidence and the chats' evidence
-// folders, a chat's turn links, the one-time backfill, versions (a rewritten file keeps its old text as a copy, a -v2
-// joins its report), a file that went shown as missing (never dropped), the brain's own folders left out, areas, the
-// index kept across a restart, a card's picture. Temp folders only; no timers.
+// Memoria → Artifact (ADR 0328), the index in main: only what an agent declares (save) is an artifact, nothing is
+// looked for in folders or chats; versions (a rewritten file keeps its old content as a copy, a -v2 joins its report),
+// a file that went shown as missing until the user removes the card (the file itself is never touched), areas, the
+// index kept across a restart, an index of ADR 0319 migrated, a card's picture, the artifact_save tool. Temp folders
+// only; no timers.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ChatItem } from '../../src/shared/contract';
-import { LibraryService, answerTexts, type LibraryChat, type LibraryPorts } from '../../src/main/library/service';
-import { tinyPdf } from '../../src/main/library/demo';
-import { walk } from '../../src/main/library/walk';
+import { LibraryService, migrate, type LibraryChat, type LibraryPorts } from '../../src/main/library/service';
+import { demoDocx, seedDemoArtifacts, tinyPdf } from '../../src/main/library/demo';
+import { artifactSaveTool } from '../../src/main/library/tools';
+import { ToolRefusal } from '../../src/main/mcp/refusal';
+import type { CallCtx } from '../../src/main/mcp/server';
 
 const temporary: string[] = [];
 afterEach(() => { for (const d of temporary.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
-function setup(chats: LibraryChat[] = [], history: Record<string, ChatItem[]> = {}) {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-library-'));
+function setup(chats: LibraryChat[] = []) {
+  const base = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-library-')));
   temporary.push(base);
   const brain = path.join(base, 'brain'), userData = path.join(base, 'user');
   fs.mkdirSync(brain, { recursive: true }); fs.mkdirSync(userData, { recursive: true });
   let changed = 0;
-  const ports: LibraryPorts = { userData, brainRoot: () => brain, chats: () => chats, history: id => history[id] ?? [], changed: () => { changed++; }, now: () => 1_000 };
+  const ports: LibraryPorts = { userData, brainRoot: () => brain, chats: () => chats, changed: () => { changed++; } };
   const write = (rel: string, body: string | Buffer, mtime?: number, root = brain) => {
     const f = path.join(root, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, body);
     if (mtime) fs.utimesSync(f, new Date(mtime), new Date(mtime));
@@ -28,367 +30,272 @@ function setup(chats: LibraryChat[] = [], history: Record<string, ChatItem[]> = 
   };
   return { base, brain, userData, ports, write, changed: () => changed, make: (p: Partial<LibraryPorts> = {}) => new LibraryService({ ...ports, ...p }) };
 }
-const chat = (id: string, cwd: string, title = id, extra: Partial<LibraryChat> = {}): LibraryChat => ({ id, title, cwd, updatedAt: 1, isOrchestrator: false, ...extra });
-const said = (text: string, at = 1): ChatItem => ({ kind: 'assistant', id: `a${at}`, at, text });
+const chat = (id: string, cwd: string, title = id, extra: Partial<LibraryChat> = {}): LibraryChat => ({ id, title, cwd, isOrchestrator: false, ...extra });
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
 
-describe('the scan', () => {
-  it('indexes reports, documents, PDFs and images in the work folders; the brain’s own folders stay out', async () => {
+describe('what is an artifact', () => {
+  it('is only what an agent declares: files lying in the brain or a chat’s folder are never picked up', async () => {
     const t = setup();
-    t.write('reviews/2026-11-10-analisi.md', '# Analisi dei costi\n\nIn una settimana gli agenti hanno speso 31 dollari.\n', Date.UTC(2026, 10, 10));
-    t.write('reviews/qa/report.html', '<title>QA rimborsi</title><p>Dodici scenari provati sul checkout di prova.</p>');
-    t.write('tmp/audit.pdf', tinyPdf('Audit', ['ok']));
-    t.write('evidence/fix-1/before.png', Buffer.from('not really a png'));
-    t.write('journal/2026-11-10.md', '# Diario');
-    t.write('memory/fatto.md', '# Fatto');
-    t.write('reviews/README.md', '# Leggimi');
-    t.write('tmp/node_modules/x/doc.md', '# doc');
+    t.write('reviews/report.html', '<title>Mai dichiarato</title>');
+    t.write('tmp/scratch.md', '# Appunti');
+    t.write('evidence/shot.png', PNG);
+    t.write('evidence/chat-c1/shot.png', PNG, undefined, t.userData);
     const lib = t.make();
-    await lib.scan();
-    const list = lib.list();
-    expect(list.artifacts.map(a => a.title).sort()).toEqual(['Analisi dei costi', 'Audit', 'Before', 'QA rimborsi']);
-    expect(list.artifacts.find(a => a.kind === 'markdown')).toMatchObject({ summary: 'In una settimana gli agenti hanno speso 31 dollari.', area: 'Brain', origin: 'scan', missing: false });
-    expect(list.scannedAt).toBe(1_000);
-    expect(t.changed()).toBeGreaterThan(0);
+    expect(lib.list({ check: true }).artifacts).toEqual([]);
+    await lib.refresh();
+    expect(lib.list().artifacts).toEqual([]);
   });
 
-  it('makes a -v2 and a rewritten file versions of one artifact, the old text kept as a copy', async () => {
-    const t = setup();
-    t.write('reviews/costi.md', '# Costi\n\nPrima versione del documento sui costi.\n', Date.UTC(2026, 10, 1));
+  it('saves the file where it is, with the agent’s title and summary or the document’s own', async () => {
+    const project = path.join(os.tmpdir(), 'x');
+    const t = setup([chat('c1', project, 'Analisi costi')]);
+    const own = t.write('reviews/costi.md', '# Costi di novembre\n\nIn una settimana gli agenti hanno speso 31 $ su 46 compiti.\n', 5_000);
+    const named = t.write('reviews/piano.html', '<title>x</title><p>y</p>', 6_000);
     const lib = t.make();
-    await lib.scan();
-    t.write('reviews/costi-v2.md', '# Costi\n\nSeconda versione del documento sui costi.\n', Date.UTC(2026, 10, 5));
+    const first = await lib.save('c1', { path: own });
+    expect(first).toMatchObject({ created: true, versions: 1, artifact: { title: 'Costi di novembre', summary: 'In una settimana gli agenti hanno speso 31 $ su 46 compiti.', kind: 'markdown', chatId: 'c1', chatTitle: 'Analisi costi', path: own, missing: false } });
+    await lib.save('c1', { path: named, title: '  Piano di  rilascio ', summary: 'Tre passi per la 1.0.' });
+    const list = lib.list().artifacts;
+    expect(list.map(a => a.title)).toEqual(['Piano di rilascio', 'Costi di novembre']);
+    expect(list[0]).toMatchObject({ summary: 'Tre passi per la 1.0.', kind: 'html' });
+    expect(list[0]).not.toHaveProperty('given');
+    expect(t.changed()).toBe(2);
+    // the file was not moved, and the app kept a copy of it
+    expect(fs.existsSync(own)).toBe(true);
+    expect(fs.readFileSync(list[1]!.versions[0]!.copy!, 'utf8')).toContain('Costi di novembre');
+    // saved again as it is: nothing new
+    expect(await lib.save('c1', { path: own })).toMatchObject({ created: false, versions: 1 });
+    expect(t.changed()).toBe(2);
+  });
+
+  it('takes a path relative to the chat’s folder, then to the brain', async () => {
+    const t = setup();
+    const project = path.join(t.base, 'shop');
+    const chats = [chat('c1', project)];
+    const inProject = t.write('docs/piano.md', '# Piano', undefined, project);
+    const inBrain = t.write('reviews/analisi.md', '# Analisi');
+    const lib = t.make({ chats: () => chats });
+    expect((await lib.save('c1', { path: 'docs/piano.md' })).artifact).toMatchObject({ path: inProject, area: 'shop' });
+    expect((await lib.save('c1', { path: 'reviews/analisi.md' })).artifact).toMatchObject({ path: inBrain, area: 'shop' });
+    // without a chat: the brain only
+    expect((await lib.save(undefined, { path: t.write('reviews/solo.md', '# Solo') })).artifact).toMatchObject({ area: 'Brain' });
+  });
+
+  it('refuses what is not a file the viewer opens, an empty file, a missing one and a credential', async () => {
+    const t = setup();
+    const lib = t.make();
+    await expect(lib.save(undefined, { path: '' })).rejects.toThrow(/path: required/);
+    await expect(lib.save(undefined, { path: t.write('reviews/demo.mp4', 'x') })).rejects.toThrow(/html, md, pdf/);
+    await expect(lib.save(undefined, { path: t.write('reviews/main.ts', 'x') })).rejects.toThrow(/an artifact is one of/);
+    await expect(lib.save(undefined, { path: path.join(t.brain, 'reviews', 'manca.md') })).rejects.toThrow(/no file at/);
+    await expect(lib.save(undefined, { path: t.write('reviews/vuoto.md', '') })).rejects.toThrow(/empty/);
+    await expect(lib.save(undefined, { path: t.write('reviews/note.md', `# Note\n\n${'pass'}word = ${'y'.repeat(12)}\n`) })).rejects.toThrow(/credential/);
+    await expect(lib.save(undefined, { path: t.write('reviews/storage-state.json', '{}') })).rejects.toThrow(/an artifact is one of/);
+    expect(lib.list().artifacts).toEqual([]);
+    expect(t.changed()).toBe(0);
+  });
+
+  it('takes every format the viewer opens, binary ones copied too', async () => {
+    const t = setup();
+    const lib = t.make();
+    const files = { 'a.pdf': tinyPdf('Audit', ['riga']), 'b.docx': demoDocx(), 'c.csv': 'ordine;totale\n1;12\n', 'd.png': PNG, 'e.txt': 'Verbale\n\nSi è deciso di spostare il rilascio a lunedì prossimo.\n', 'f.json': '{"a":1}' };
+    let at = 1_000;
+    for (const [name, body] of Object.entries(files)) await lib.save(undefined, { path: t.write(`reviews/${name}`, body, at += 1_000) });
+    const list = lib.list().artifacts;
+    expect(list.map(a => a.kind)).toEqual(['data', 'document', 'image', 'data', 'document', 'pdf']);
+    expect(list.find(a => a.path.endsWith('c.csv'))).toMatchObject({ summary: 'ordine · totale' });
+    expect(list.find(a => a.path.endsWith('e.txt'))).toMatchObject({ summary: 'Si è deciso di spostare il rilascio a lunedì prossimo.' });
+    for (const a of list) expect(fs.statSync(a.versions[0]!.copy!).size).toBe(a.size);
+  });
+});
+
+describe('versions', () => {
+  it('makes a -v2 and a rewritten file versions of one artifact, the old content kept as a copy', async () => {
+    const t = setup();
+    const v1 = t.write('reviews/analisi-costi.md', '# Analisi\n\nPrima versione del testo dei costi.\n', 10_000);
+    const lib = t.make();
+    await lib.save('c1', { path: v1, title: 'Analisi dei costi' });
+    const v2 = t.write('reviews/analisi-costi-v2.md', '# Analisi\n\nSeconda versione.\n', 20_000);
+    expect(await lib.save('c2', { path: v2 })).toMatchObject({ created: false, versions: 2, artifact: { path: v2, title: 'Analisi dei costi', chatId: 'c2' } });
+    // the same file written again: seen when the tab opens, with no call of the agent
+    fs.writeFileSync(v2, '# Analisi\n\nTerza versione, riscritta.\n'); fs.utimesSync(v2, new Date(30_000), new Date(30_000));
     await lib.refresh();
-    let a = lib.list().artifacts;
-    expect(a).toHaveLength(1);
-    expect(a[0]!.versions.map(v => path.basename(v.path))).toEqual(['costi-v2.md', 'costi.md']);
-    // the newest file rewritten: a third version, the second one's text kept as a copy that still reads as it was
-    t.write('reviews/costi-v2.md', '# Costi\n\nTerza versione del documento sui costi.\n', Date.UTC(2026, 10, 9));
-    await lib.refresh();
-    a = lib.list().artifacts;
-    expect(a[0]!.versions).toHaveLength(3);
-    expect(a[0]!.summary).toContain('Terza');
-    const old = a[0]!.versions[1]!;
-    expect(old).toMatchObject({ missing: true });
-    expect(fs.readFileSync(old.copy!, 'utf8')).toContain('Seconda');
+    const [a] = lib.list().artifacts;
+    expect(lib.list().artifacts).toHaveLength(1);
+    expect(a!.versions.map(v => [path.basename(v.path), v.at, !!v.missing])).toEqual([['analisi-costi-v2.md', 30_000, false], ['analisi-costi-v2.md', 20_000, true], ['analisi-costi.md', 10_000, false]]);
+    expect(fs.readFileSync(a!.versions[1]!.copy!, 'utf8')).toContain('Seconda versione');
+    expect(a!.title).toBe('Analisi dei costi');
   });
 
   it('keeps a file that went, marked missing, and unmarks it when it is back', async () => {
     const t = setup();
-    const f = t.write('tmp/bozza.md', '# Bozza\n\nUna bozza che poi viene cancellata dal disco.\n');
+    const f = t.write('reviews/bozza.md', '# Bozza del confronto\n\nUna prima bozza del confronto dei prezzi.\n', 10_000);
     const lib = t.make();
-    await lib.scan();
+    await lib.save(undefined, { path: f });
     fs.rmSync(f);
     await lib.refresh();
-    expect(lib.list().artifacts[0]).toMatchObject({ title: 'Bozza', missing: true });
-    expect(lib.list().artifacts[0]!.versions[0]!.copy).toBeTruthy();
-    // the card's picture of a missing HTML or Markdown is not read from the gone file
-    expect(await lib.thumb(lib.list().artifacts[0]!.id)).toBeNull();
-    t.write('tmp/bozza.md', '# Bozza\n\nUna bozza che poi viene cancellata dal disco.\n');
+    expect(lib.list().artifacts[0]).toMatchObject({ missing: true, title: 'Bozza del confronto' });
+    t.write('reviews/bozza.md', '# Bozza del confronto\n\nUna prima bozza del confronto dei prezzi.\n', 10_000);
     await lib.refresh();
-    expect(lib.list().artifacts[0]!.missing).toBe(false);
+    expect(lib.list().artifacts[0]).toMatchObject({ missing: false });
   });
+});
 
-  it('gives a chat’s evidence folder to that chat, with its project as area', async () => {
-    const t = setup([chat('c_7', path.join(os.tmpdir(), 'alfa-shop'), 'Fix totale')]);
-    t.write('chat-c_7/shot.png', Buffer.from('x'), undefined, path.join(t.userData, 'evidence'));
-    const lib = t.make();
-    await lib.scan();
-    expect(lib.list().artifacts[0]).toMatchObject({ chatId: 'c_7', chatTitle: 'Fix totale', origin: 'chat', area: 'alfa-shop' });
-  });
-
-  it('keeps the index across a restart and starts over from an unreadable one', async () => {
+describe('taking a card off the list', () => {
+  it('drops the index entry and the app’s copies, never the user’s file', async () => {
     const t = setup();
-    t.write('reviews/a.md', '# A\n');
-    await t.make().scan();
-    const again = t.make();
-    expect(again.list().artifacts.map(a => a.title)).toEqual(['A']);
-    fs.writeFileSync(path.join(t.userData, 'library', 'index.json'), '{broken');
+    const f = t.write('reviews/report.html', '<title>Report</title><p>Un paragrafo abbastanza lungo da essere un riassunto.</p>');
+    const lib = t.make();
+    const { artifact } = await lib.save(undefined, { path: f });
+    const copy = lib.list().artifacts[0]!.versions[0]!.copy!;
+    expect(fs.existsSync(copy)).toBe(true);
+    expect((await lib.remove(artifact.id)).artifacts).toEqual([]);
+    expect(fs.existsSync(copy)).toBe(false);
+    expect(fs.existsSync(f)).toBe(true);
+    // an unknown id changes nothing; the same file can be an artifact again
+    await lib.remove('nope');
+    expect((await lib.save(undefined, { path: f })).created).toBe(true);
+  });
+});
+
+describe('the index on disk', () => {
+  it('is kept across a restart and started over from an unreadable one', async () => {
+    const t = setup();
+    await t.make().save('c1', { path: t.write('reviews/a.md', '# A'), title: 'Titolo dato' });
+    expect(t.make().list().artifacts).toMatchObject([{ title: 'Titolo dato', chatId: 'c1' }]);
+    fs.writeFileSync(path.join(t.userData, 'library', 'index.json'), '{nope');
     expect(t.make().list().artifacts).toEqual([]);
-    expect(fs.readdirSync(path.join(t.userData, 'library')).some(f => f.startsWith('index.json.bad-'))).toBe(true);
+    expect(fs.readdirSync(path.join(t.userData, 'library')).some(n => n.startsWith('index.json.bad-'))).toBe(true);
   });
-});
 
-describe('a chat’s links', () => {
-  it('indexes what a turn links (absolute, relative to its folder or the brain), for that chat', async () => {
+  it('keeps of an ADR 0319 index only what the user starred and the documents a chat reported', async () => {
     const t = setup();
-    const proj = path.join(t.base, 'alfa-shop');
-    fs.mkdirSync(proj);
-    const chats = [chat('c1', proj, 'QA rimborsi', { run: { tags: { app: 'Shop', repo: 'alfa-shop' } } })];
-    const t2 = { ...t, ports: { ...t.ports, chats: () => chats } };
-    const abs = t.write('reviews/qa.html', '<title>QA</title>');
-    t.write('out/esito.md', '# Esito\n', undefined, proj);
-    t.write('tmp/mappa.md', '# Mappa\n');
-    const lib = new LibraryService(t2.ports);
-    const items: ChatItem[] = [
-      { kind: 'user', id: 'u0', at: 0, text: 'vecchio C:\\nope.md' }, said('prima'),
-      { kind: 'user', id: 'u1', at: 2, text: 'fai il report' },
-      said(`Fatto: ${abs}, poi \`out/esito.md\` e tmp/mappa.md; README.md e https://x.y/z.md no.`, 3),
-      { kind: 'tool', id: 't1', at: 4, name: 'mcp__app__agent_report', summary: '', input: { output: 'vedi out/esito.md' }, status: 'ok' },
+    const copies = path.join(t.userData, 'library', 'versions');
+    fs.mkdirSync(copies, { recursive: true });
+    const kept = path.join(copies, 'kept.html'), orphan = path.join(copies, 'orphan.md');
+    fs.writeFileSync(kept, '<p>x</p>'); fs.writeFileSync(orphan, '# x');
+    fs.mkdirSync(path.join(t.userData, 'library', 'thumbs')); fs.writeFileSync(path.join(t.userData, 'library', 'thumbs', 'a.jpg'), 'x');
+    const report = t.write('reviews/report.html', '<title>Report</title>', 10_000);
+    const old = (id: string, file: string, kind: string, extra: object) => ({ id, title: id, kind, area: 'Brain', summary: '', path: file, at: 10_000, size: 21, missing: false, versions: [{ path: file, at: 10_000, size: 21 }], ...extra });
+    const artifacts = [
+      old('report', report, 'html', { origin: 'chat', chatId: 'c1', versions: [{ path: report, at: 10_000, size: 21, copy: kept }] }),
+      old('starred', path.join(t.brain, 'evidence', 'shot.png'), 'image', { origin: 'scan', pinned: true }),
+      old('shot', path.join(t.userData, 'evidence', 'chat-c1', 'a.png'), 'image', { origin: 'chat', chatId: 'c1' }),
+      old('scratch', path.join(t.brain, 'tmp', 'note.md'), 'markdown', { origin: 'scan', versions: [{ path: path.join(t.brain, 'tmp', 'note.md'), at: 1, size: 3, copy: orphan }] }),
+      old('linked-md', path.join(t.brain, 'docs', 'x.md'), 'markdown', { origin: 'chat', chatId: 'c1' }),
+      old('video', path.join(t.brain, 'tmp', 'demo.mp4'), 'media', { origin: 'chat', pinned: true }),
     ];
-    await lib.noteTurn('c1', items);
-    const list = lib.list().artifacts;
-    expect(list.map(a => a.title).sort()).toEqual(['Esito', 'Mappa', 'QA']);
-    expect(list.every(a => a.chatId === 'c1' && a.origin === 'chat' && a.area === 'Shop')).toBe(true);
-  });
-
-  it('a chat that links a scanned file becomes its source', async () => {
-    const t = setup([chat('c2', '/nowhere', 'Analisi')]);
-    const f = t.write('reviews/x.md', '# X\n');
+    fs.writeFileSync(path.join(t.userData, 'library', 'index.json'), JSON.stringify({ v: 1, backfilled: true, scannedAt: 1, dropped: 0, copyBytes: 0, cleaned: 0, cleanedAt: null, artifacts }));
     const lib = t.make();
-    await lib.scan();
-    expect(lib.list().artifacts[0]!.chatId).toBeUndefined();
-    await lib.linkFromChat('c2', [`ecco ${f}`]);
-    expect(lib.list().artifacts[0]).toMatchObject({ chatId: 'c2', origin: 'chat' });
-  });
-
-  it('looks through past chats once (backfill), after the first scan', async () => {
-    const t = setup([chat('old', '/nowhere', 'Vecchia chat')]);
-    const f = t.write('tmp/vecchio.md', '# Vecchio report\n');
-    const lib = t.make({ history: () => [said(`report: ${f}`)] });
-    await lib.backfill();
-    expect(lib.list()).toMatchObject({ backfilled: true });
-    expect(lib.list().artifacts[0]).toMatchObject({ chatId: 'old', title: 'Vecchio report' });
-    // once: a second call reads no history
-    let asked = 0;
-    const again = t.make({ history: () => { asked++; return []; } });
-    await again.backfill();
-    expect(asked).toBe(0);
-  });
-
-  it('reads answer texts and report tools only', () => {
-    expect(answerTexts([said('a'), { kind: 'tool', id: 't', at: 1, name: 'Read', summary: '', input: { file_path: '/x.md' }, status: 'ok' }, { kind: 'tool', id: 'r', at: 1, name: 'agent_report', summary: '', input: { output: 'y' }, status: 'ok' }])).toEqual(['a', 'y']);
+    expect(lib.list().artifacts.map(a => a.id).sort()).toEqual(['report', 'starred']);
+    expect(lib.list().artifacts[0]).not.toHaveProperty('origin');
+    expect(lib.list().artifacts.find(a => a.id === 'starred')).not.toHaveProperty('pinned');
+    // the first look at the files also deletes the app's own copies and pictures nobody lists any more
+    await lib.refresh();
+    expect([fs.existsSync(kept), fs.existsSync(orphan), fs.existsSync(path.join(t.userData, 'library', 'thumbs'))]).toEqual([true, false, false]);
+    expect(JSON.parse(fs.readFileSync(path.join(t.userData, 'library', 'index.json'), 'utf8')).v).toBe(2);
+    expect(migrate([])).toEqual([]);
   });
 });
 
-describe('every kind of file', () => {
-  it('indexes tables, documents, recordings and other files; a text one gets a summary, its lines and a kept copy', async () => {
+describe('areas', () => {
+  it('names the chat’s app or repo, the brain’s project, the project folder, the chat’s folder, Brain', async () => {
     const t = setup();
-    const csv = t.write('tmp/ordini.csv', 'ordine;cliente;totale\n1;Rossi;12\n');
-    t.write('reviews/verbale.docx', Buffer.from('PK\x03\x04 not really a docx'));
-    t.write('evidence/fix-1/demo.mp4', Buffer.from('mp4'));
-    t.write('tmp/run.ps1', 'Write-Host x');
-    t.write('tmp/package.json', '{}');
-    t.write('tmp/storage-state.json', '{"cookies":[]}');
-    t.write('tmp/esportazione.json', `{"access_${'token'}": "${'x'.repeat(16)}"}`);
-    const lib = t.make();
-    await lib.scan();
-    // a login's state is never indexed; a json holding a token is, without its text on the card
-    const secret = lib.list().artifacts.find(a => a.title === 'Esportazione')!;
-    expect(secret.summary).toBe('');
-    expect(await lib.thumb(secret.id)).toBeNull();
-    await lib.linkFromChat('c9', [`export: ${csv}`]);
-    const all = lib.list().artifacts.filter(a => a !== secret && a.id !== secret.id);
-    expect(all.map(a => a.kind).sort()).toEqual(['data', 'document', 'media']);
-    const table = all.find(a => a.kind === 'data')!;
-    expect(table).toMatchObject({ title: 'Ordini', summary: 'ordine · cliente · totale' });
-    expect(await lib.thumb(table.id)).toEqual({ kind: 'text', text: expect.stringContaining('1;Rossi;12') });
-    expect(await lib.thumb(all.find(a => a.kind === 'document')!.id)).toBeNull();
-    fs.rmSync(csv);
-    await lib.refresh();
-    const gone = lib.list().artifacts.find(a => a.title === 'Ordini')!;
-    expect(gone.missing).toBe(true);
-    expect(gone.versions[0]!.copy).toMatch(/\.csv$/);
-    expect(await lib.thumb(gone.id)).toEqual({ kind: 'text', text: expect.stringContaining('Rossi') });
+    const shop = path.join(t.base, 'shop');
+    fs.mkdirSync(shop, { recursive: true });
+    const chats = [chat('tagged', shop, 'T', { run: { tags: { app: 'alfa', repo: 'alfa-repo' } } }), chat('plain', shop), chat('orch', t.brain, 'O', { isOrchestrator: true })];
+    const lib = t.make({ chats: () => chats });
+    expect(lib.areaOf(path.join(t.brain, 'reviews', 'x.md'), 'tagged')).toBe('alfa');
+    expect(lib.areaOf(path.join(t.brain, 'projects', 'beta', 'x.md'))).toBe('beta');
+    expect(lib.areaOf(path.join(shop, 'docs', 'x.md'))).toBe('shop');
+    expect(lib.areaOf(path.join(t.brain, 'reviews', 'x.md'), 'plain')).toBe('shop');
+    expect(lib.areaOf(path.join(t.brain, 'reviews', 'x.md'), 'orch')).toBe('Brain');
+    expect(lib.areaOf(path.join(t.base, 'altrove', 'x.md'))).toBe('altrove');
   });
+});
 
-  it('shows a GIF or an SVG as it is, when it is one', async () => {
+describe('card pictures and the system’s app', () => {
+  it('gives an HTML head to draw, a text’s first lines, an image scaled by the port (cached) and a GIF as it is', async () => {
     const t = setup();
-    t.write('reviews/anim.gif', Buffer.concat([Buffer.from('GIF89a'), Buffer.alloc(20)]));
-    t.write('reviews/fake.gif', Buffer.from('nope'));
-    t.write('reviews/flow.svg', '<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"></svg>');
-    const lib = t.make();
-    await lib.scan();
-    const by = (name: string) => lib.list().artifacts.find(a => path.basename(a.path) === name)!;
-    expect(await lib.thumb(by('anim.gif').id)).toMatchObject({ kind: 'image', dataUrl: expect.stringMatching(/^data:image\/gif;base64,/) });
-    expect(await lib.thumb(by('fake.gif').id)).toBeNull();
-    expect(await lib.thumb(by('flow.svg').id)).toMatchObject({ kind: 'image', dataUrl: expect.stringMatching(/^data:image\/svg\+xml;base64,/) });
+    let made = 0;
+    const lib = t.make({ thumbnail: async () => { made++; return 'data:image/jpeg;base64,AAAA'; } });
+    const id = async (rel: string, body: string | Buffer) => (await lib.save(undefined, { path: t.write(rel, body) })).artifact.id;
+    expect(await lib.thumb(await id('reviews/r.html', '<title>R</title><p>ciao</p>'))).toMatchObject({ kind: 'html', text: '<title>R</title><p>ciao</p>' });
+    expect(await lib.thumb(await id('reviews/t.csv', 'a;b\n1;2\n'))).toEqual({ kind: 'text', text: 'a;b\n1;2\n' });
+    expect(await lib.thumb(await id('reviews/m.md', '# Titolo'))).toBeNull();
+    const png = await id('reviews/p.png', PNG);
+    expect(await lib.thumb(png)).toEqual({ kind: 'image', dataUrl: 'data:image/jpeg;base64,AAAA' });
+    expect(await lib.thumb(png)).toEqual({ kind: 'image', dataUrl: 'data:image/jpeg;base64,AAAA' });
+    expect(made).toBe(1);
+    const gif = Buffer.concat([Buffer.from('GIF89a', 'latin1'), Buffer.alloc(20)]);
+    expect(await lib.thumb(await id('reviews/g.gif', gif))).toEqual({ kind: 'image', dataUrl: `data:image/gif;base64,${gif.toString('base64')}` });
+    expect(await lib.thumb(await id('reviews/fake.gif', 'not a gif'))).toBeNull();
+    expect(await lib.thumb('nope')).toBeNull();
   });
 
   it('opens only an indexed file with the system’s app, a gone one by its kept copy', async () => {
     const t = setup();
     const opened: string[] = [];
-    const doc = t.write('reviews/verbale.docx', Buffer.from('PK'));
-    const md = t.write('reviews/nota.md', '# Nota\n\nUna nota che poi viene cancellata dal disco.\n');
     const lib = t.make({ openPath: async f => { opened.push(f); return ''; } });
-    await lib.scan();
-    expect(await lib.open(doc)).toEqual({ ok: true });
-    expect(await lib.open(path.join(t.brain, 'secret.exe'))).toMatchObject({ ok: false });
-    fs.rmSync(md);
+    const f = t.write('reviews/verbale.docx', demoDocx());
+    await lib.save(undefined, { path: f });
+    expect(await lib.open(f)).toEqual({ ok: true });
+    expect(await lib.open(path.join(t.brain, 'reviews', 'altro.docx'))).toEqual({ ok: false, error: 'not an artifact' });
+    fs.rmSync(f);
     await lib.refresh();
-    const copy = lib.list().artifacts.find(a => a.kind === 'markdown')!.versions[0]!.copy!;
-    expect(await lib.open(md)).toEqual({ ok: true });
-    expect(await lib.open(copy)).toEqual({ ok: true });
-    expect(opened).toEqual([fs.realpathSync.native(doc), copy, copy]); // the file as the disk names it (macOS: /private/var)
-    expect(await t.make().open(doc)).toMatchObject({ ok: false });
-  });
-});
-
-describe('card pictures and the walk', () => {
-  it('gives an HTML head to draw and an image scaled by the port, cached', async () => {
-    const t = setup();
-    t.write('reviews/r.html', '<title>R</title><p>x</p>');
-    t.write('reviews/s.png', Buffer.from('png'));
-    let made = 0;
-    const lib = t.make({ thumbnail: async () => { made++; return 'data:image/jpeg;base64,AAAA'; } });
-    await lib.scan();
-    const [html, img] = ['html', 'image'].map(k => lib.list().artifacts.find(a => a.kind === k)!);
-    expect(await lib.thumb(html!.id)).toMatchObject({ kind: 'html', text: expect.stringContaining('<title>R</title>') });
-    expect(await lib.thumb(img!.id)).toEqual({ kind: 'image', dataUrl: 'data:image/jpeg;base64,AAAA' });
-    expect(await lib.thumb(img!.id)).toEqual({ kind: 'image', dataUrl: 'data:image/jpeg;base64,AAAA' });
-    expect(made).toBe(1);
-    expect(await lib.thumb('nope')).toBeNull();
-  });
-
-  it('never follows a link and skips empty files and tool folders', async () => {
-    const t = setup();
-    t.write('reviews/ok.md', '# ok');
-    t.write('reviews/empty.md', '');
-    t.write('reviews/bin/x.md', '# no');
-    try { fs.symlinkSync(path.join(t.brain, 'reviews'), path.join(t.brain, 'reviews', 'loop')); } catch { /* no symlinks here */ }
-    const found = await walk([{ dir: path.join(t.brain, 'reviews'), depth: 5 }]);
-    expect(found.map(f => path.basename(f.path))).toEqual(['ok.md']);
-  });
-});
-
-describe('what is kept', () => {
-  it('copies a report always, a scratch table only when a chat linked it', async () => {
-    const t = setup([chat('c1', '/nowhere')]);
-    t.write('tmp/a.csv', 'x;y\n1;2\n');
-    const linked = t.write('tmp/b.csv', 'x;y\n3;4\n');
-    t.write('reviews/r.md', '# R\n');
-    const lib = t.make();
-    await lib.scan();
-    await lib.linkFromChat('c1', [`vedi ${linked}`]);
-    const copy = (name: string) => lib.list().artifacts.find(a => path.basename(a.path) === name)!.versions[0]!.copy;
-    expect([!!copy('a.csv'), !!copy('b.csv'), !!copy('r.md')]).toEqual([false, true, true]);
-  });
-
-  it('takes a relative link outside the brain only for a file written during the turn', async () => {
-    const t = setup();
-    const proj = path.join(t.base, 'proj');
-    t.write('docs/guida.md', '# Guida del progetto\n', Date.UTC(2020, 0, 1), proj);
-    t.write('out/esito.md', '# Esito\n', Date.UTC(2026, 10, 16, 10), proj);
-    const lib = new LibraryService({ ...t.ports, chats: () => [chat('c1', proj)] });
-    await lib.noteTurn('c1', [{ kind: 'user', id: 'u', at: Date.UTC(2026, 10, 16, 9), text: 'fai' }, said('Scritto out/esito.md seguendo docs/guida.md', Date.UTC(2026, 10, 16, 10))]);
-    expect(lib.list().artifacts.map(a => a.title)).toEqual(['Esito']);
-  });
-
-  it('starts a look through the folders only when the tab asks', async () => {
-    const t = setup();
-    t.write('reviews/a.md', '# A\n');
-    const lib = t.make();
-    expect(lib.list().artifacts).toEqual([]);
-    expect(lib.list().scanning).toBe(false);
-    lib.list({ scan: true });
-    expect(lib.list().scanning).toBe(true);
-    await lib.refresh();
-    expect(lib.list().artifacts.map(a => a.title)).toEqual(['A']);
+    const copy = lib.list().artifacts[0]!.versions[0]!.copy!;
+    expect(await lib.open(f)).toEqual({ ok: true });
+    expect(opened).toEqual([f, copy]);
   });
 });
 
 describe('a brain reached through a link', () => {
   it('compares real paths (a junction on Windows, /var → /private/var on macOS)', async () => {
-    const t = setup([chat('c_7', '/nowhere', 'Fix totale')]);
-    const linkBrain = path.join(t.base, 'brain-link'), linkUser = path.join(t.base, 'user-link');
-    try { fs.symlinkSync(t.brain, linkBrain, 'junction'); fs.symlinkSync(t.userData, linkUser, 'junction'); } catch { return; /* no links on this machine */ }
-    const md = t.write('reviews/nota.md', '# Nota\n\nUna nota che poi viene cancellata dal disco.\n');
-    t.write('chat-c_7/shot.png', Buffer.from('x'), undefined, path.join(t.userData, 'evidence'));
-    const opened: string[] = [];
-    const lib = t.make({ brainRoot: () => linkBrain, userData: linkUser, openPath: async f => { opened.push(f); return ''; } });
-    await lib.scan();
+    const t = setup();
+    const link = path.join(t.base, 'brain-link');
+    try { fs.symlinkSync(t.brain, link, 'junction'); } catch { return; }
+    const lib = t.make({ brainRoot: () => link });
+    const f = t.write('projects/beta/piano.md', '# Piano');
+    expect((await lib.save(undefined, { path: path.join(link, 'projects', 'beta', 'piano.md') })).artifact).toMatchObject({ path: f, area: 'beta' });
+  });
+});
+
+describe('artifact_save', () => {
+  const ctx = (chatId: string): CallCtx => ({ mount: 'chat', params: { chatId }, sessionId: '', signal: new AbortController().signal, progress: () => false });
+  it('declares the calling chat’s file and answers what was saved', async () => {
+    const t = setup([chat('c1', path.join(os.tmpdir(), 'x'), 'Scrive il piano')]);
+    const lib = t.make();
+    const tool = artifactSaveTool(lib);
+    const f = t.write('reviews/piano.md', '# Piano di rilascio\n\nTre passi.\n');
+    expect(JSON.parse(await tool.run({ path: f, summary: 'Tre passi per la 1.0.' }, ctx('c1')) as string)).toMatchObject({ saved: true, title: 'Piano di rilascio', path: f, versions: 1, note: 'In Memoria → Artifact now.' });
+    expect(lib.list().artifacts).toMatchObject([{ chatId: 'c1', chatTitle: 'Scrive il piano', summary: 'Tre passi per la 1.0.' }]);
+    fs.writeFileSync(f, '# Piano di rilascio\n\nQuattro passi.\n'); fs.utimesSync(f, new Date(90_000_000), new Date(90_000_000));
+    expect(JSON.parse(await tool.run({ path: f }, ctx('c1')) as string)).toMatchObject({ versions: 2, note: 'Saved as «Piano di rilascio» (2 versions).' });
+  });
+  it('answers a wrong path or format as a refusal the agent can fix, and says when a file is an artifact', async () => {
+    const t = setup();
+    const tool = artifactSaveTool(t.make());
+    await expect(tool.run({ path: t.write('evidence/demo.mp4', 'x') }, ctx('c1'))).rejects.toBeInstanceOf(ToolRefusal);
+    await expect(tool.run({}, ctx('c1'))).rejects.toThrow(/path: required/);
+    expect(tool.description).toMatch(/report.*document.*plan/);
+    expect(tool.description).toMatch(/Never for screenshots/);
+    expect(tool.inputSchema).toMatchObject({ required: ['path'], additionalProperties: false });
+  });
+});
+
+describe('the demo', () => {
+  it('seeds reports, a plan, a table, a PDF and a Word file, with one report in two versions and one file to lose', async () => {
+    const t = setup([chat('qa', path.join(os.tmpdir(), 'q'), 'QA'), chat('mappa', path.join(os.tmpdir(), 'm')), chat('fix', path.join(os.tmpdir(), 'f'))]);
+    const lib = t.make();
+    const seeded = seedDemoArtifacts({ brain: t.brain, now: Date.UTC(2026, 10, 19, 12) });
+    for (const s of seeded.saves) await lib.save(s.chat, s);
+    fs.rmSync(seeded.vanish);
+    await lib.refresh();
     const list = lib.list().artifacts;
-    expect(list.find(a => a.title === 'Nota')).toMatchObject({ area: 'Brain' });
-    expect(list.find(a => a.kind === 'image')).toMatchObject({ chatId: 'c_7', origin: 'chat' });
-    // the viewer's path through the link, then the same file gone
-    expect(await lib.open(path.join(linkBrain, 'reviews', 'nota.md'))).toEqual({ ok: true });
-    fs.rmSync(md);
-    await lib.refresh();
-    expect(await lib.open(path.join(linkBrain, 'reviews', 'nota.md'))).toEqual({ ok: true });
-    expect(opened).toHaveLength(2);
-  });
-});
-
-describe('the cleanup of old pictures (ADR 0323)', () => {
-  const NOW = Date.UTC(2026, 10, 18), DAY = 864e5;
-  it('takes out pictures older than 30 days not kept; deletes only the app’s own screenshots; a scan does not take them back', async () => {
-    const t = setup();
-    let now = NOW;
-    const appShot = t.write('evidence/chat-c1/old.png', Buffer.from('png'), NOW - 40 * DAY, t.userData);
-    const brainShot = t.write('evidence/fix/old-brain.png', Buffer.from('png'), NOW - 40 * DAY);
-    t.write('evidence/fix/kept.png', Buffer.from('png'), NOW - 20 * DAY);
-    t.write('reviews/old-report.md', '# Vecchio report\n\nUn report di due mesi fa resta.\n', NOW - 60 * DAY);
-    t.write('evidence/fix/fresh.png', Buffer.from('png'), NOW - DAY);
-    const lib = t.make({ now: () => now });
-    await lib.scan();
-    // the first scan already cleans: old pictures are not even taken in
-    expect(lib.list().artifacts.map(a => path.basename(a.path)).sort()).toEqual(['fresh.png', 'kept.png', 'old-report.md']);
-    expect(fs.existsSync(appShot)).toBe(true);
-    // one kept with the star; ten days later the other one is 30 days old too
-    const keptId = lib.list().artifacts.find(a => a.path.endsWith('kept.png'))!.id;
-    expect((await lib.pin(keptId, true)).artifacts.find(a => a.id === keptId)!.pinned).toBe(true);
-    now = NOW + 15 * DAY;
-    await lib.refresh();
-    const names = lib.list().artifacts.map(a => path.basename(a.path)).sort();
-    expect(names).toEqual(['fresh.png', 'kept.png', 'old-report.md']);
-    expect(fs.existsSync(brainShot)).toBe(true);
-  });
-
-  it('deletes an indexed old screenshot in the app’s evidence folder, only de-indexes one in the brain, once a day', async () => {
-    const t = setup();
-    let now = NOW;
-    const appShot = t.write('evidence/chat-c1/shot.png', Buffer.from('png'), NOW - DAY, t.userData);
-    const brainShot = t.write('evidence/fix/shot-brain.png', Buffer.from('png'), NOW - DAY);
-    const lib = t.make({ now: () => now });
-    await lib.scan();
-    expect(lib.list().artifacts).toHaveLength(2);
-    // 31 days on: both are old; the cleanup ran today already only if less than a day passed
-    now = NOW + 31 * DAY;
-    await lib.refresh();
-    expect(lib.list().artifacts).toHaveLength(0);
-    expect(lib.list().cleaned).toBe(2);
-    expect(fs.existsSync(appShot)).toBe(false);
-    expect(fs.existsSync(brainShot)).toBe(true);
-    // a picture 29.5 days old: half a day later it is past 30, but the cleanup waits for its next day
-    t.write('evidence/fix/almost.png', Buffer.from('png'), now - 29.5 * DAY);
-    await lib.refresh();
-    now += DAY / 2;
-    await lib.refresh();
-    expect(lib.list().artifacts).toHaveLength(1);
-    now += DAY;
-    await lib.refresh();
-    expect(lib.list().artifacts).toHaveLength(0);
-    expect(lib.list().cleaned).toBe(3);
-    t.write('evidence/fix/fresh.png', Buffer.from('png'), now - DAY);
-    await lib.refresh();
-    // a restart keeps the count and the pin
-    const id = lib.list().artifacts[0]!.id;
-    await lib.pin(id, true);
-    const again = t.make({ now: () => now + 40 * DAY });
-    await again.refresh();
-    expect(again.list().artifacts.map(a => a.pinned)).toEqual([true]);
-    expect(again.list().cleaned).toBe(3);
-    await again.pin(id, false);
-    expect(again.list().artifacts[0]!.pinned).toBeUndefined();
-  });
-});
-
-describe('the cleanup never deletes a new picture (ADR 0323)', () => {
-  const NOW = Date.UTC(2026, 10, 18), DAY = 864e5;
-  it('keeps a screenshot written again under an old name, and an agent’s download', async () => {
-    const t = setup();
-    let now = NOW;
-    const shot = t.write('evidence/g1/step-3-login.png', Buffer.from('png'), NOW - DAY, t.userData);
-    const download = t.write('evidence/g1/downloads/fattura.png', Buffer.from('png'), NOW - DAY, t.userData);
-    const lib = t.make({ now: () => now });
-    await lib.scan();
-    expect(lib.list().artifacts).toHaveLength(2);
-    // 40 days on an agent writes the same name again; the first scan of the day sees the new file, not an old one
-    now = NOW + 40 * DAY;
-    t.write('evidence/g1/step-3-login.png', Buffer.from('png, new'), now - 60_000, t.userData);
-    await lib.refresh();
-    expect(fs.existsSync(shot)).toBe(true);
-    expect(lib.list().artifacts.map(a => path.basename(a.path))).toEqual(['step-3-login.png']);
-    // the download is only hidden
-    expect(fs.existsSync(download)).toBe(true);
+    expect(list).toHaveLength(seeded.saves.length - 1);
+    expect(list.every(a => a.kind !== 'image')).toBe(true);
+    expect(list.find(a => a.title === 'Analisi dei costi degli agenti')!.versions).toHaveLength(2);
+    expect(list.filter(a => a.missing).map(a => a.title)).toEqual(['Bozza del confronto prezzi']);
+    expect(list[0]).toMatchObject({ title: 'QA rimborsi · esito della giornata', chatTitle: 'QA' });
   });
 });

@@ -22,6 +22,7 @@ import { fileReference } from '../../shared/file-view';
 import { fileRoots } from '../file-roots';
 import { copyFile, type ClipboardLike } from '../file-copy';
 import { showLocal } from '../open-path';
+import { fullScreenSwitch } from '../full-screen';
 import { systemLang } from '../lang';
 import { useCounts } from '../use-counter';
 import type { HandlerContext, HandlersOf } from './context';
@@ -39,6 +40,7 @@ const CLIPBOARD: ClipboardLike = {
 const HIDDEN_CLIPBOARD: ClipboardLike = { writeText: async () => {}, writeRaw: async () => {}, writeImageFromPath: async () => true };
 
 export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, defaultBrain, updates, search, hiddenShell, bumpBrainChoice, rendererErrors }: HandlerContext): HandlersOf<'app' | 'cli' | 'source' | 'update' | 'setup' | 'profile' | 'overlay' | 'log' | 'search' | 'tasks' | 'feed' | 'usecount' | 'worktrees'> {
+  const fullScreen = fullScreenSwitch(win, () => hiddenRun() || process.env.SB_TEST === '1');
   /** where a file named in a chat's message is read from: an absolute path from the chat's folder (the brain without
    *  one), as before; a relative one from the first folder the app knows where it is a file (file-roots.ts) */
   const cwdFor = (raw: string, chatId: unknown): string | undefined => {
@@ -84,6 +86,7 @@ export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, 
       return dir;
     },
     // an agent's run (SB_HIDDEN, the e2e suite) never opens Explorer: it records what it would have shown
+    'app:fullScreen': a => fullScreen(a?.on === true),
     'app:showInFolder': a => showLocal(String(a?.path ?? '').slice(0, 4096), hiddenRun() ? hiddenShell : shell),
     // an agent's hidden run never overwrites the user's clipboard: the copy is checked and dropped
     'app:copyFile': a => copyFile(String(a?.path ?? '').slice(0, 4096), hiddenRun() ? HIDDEN_CLIPBOARD : CLIPBOARD),

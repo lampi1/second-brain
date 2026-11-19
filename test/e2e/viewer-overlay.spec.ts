@@ -229,10 +229,18 @@ for (const scheme of ['dark', 'light'] as const) {
       await viewer.getByTestId('viewer-forward').click();
       await expect(viewer.getByTestId('viewer-name')).toHaveText('SettingsForm.tsx');
 
-      // full screen beside the Orchestrator column, and back
+      // full screen takes the whole window, the Orchestrator's column too (ADR 0328); Esc leaves it before it closes
       await viewer.getByTestId('viewer-expand').click();
       await expect(overlay).toHaveAttribute('data-full', 'true');
-      await expect(page.locator('[data-orchestrator-overlay]')).toBeVisible();
+      const whole = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+      await expect.poll(async () => { const b = (await page.locator('.vw-panel').boundingBox())!; return { width: Math.round(b.width), height: Math.round(b.height) }; }).toEqual(whole);
+      await page.mouse.move(2, 2);
+      await shot(page, `viewer-overlay-full-${scheme}`);
+      await page.keyboard.press('Escape');
+      await expect(overlay).not.toHaveAttribute('data-full', 'true');
+      await expect(overlay).toBeVisible();
+      await viewer.getByTestId('viewer-expand').click();
+      await expect(overlay).toHaveAttribute('data-full', 'true');
 
       // Compare against HEAD: side by side with the changed words, or unified
       await viewer.getByTestId('viewer-compare').click();

@@ -1,7 +1,8 @@
 /* The file viewer overlay (components/viewer/ViewerOverlay.tsx, brain/pages/FileViewer.tsx, ShotsCompare.tsx,
-   brain/components/FindBar.tsx and Toc.tsx): a floating panel over a blurred page, edge to edge when expanded, always
-   beside the Orchestrator column (--orchestrator-r/-b, set on .app). Above the Orchestrator overlay's backdrop layer
-   only where it does not sit (z 34 < its 35), under the questions window (38), the toasts (39) and the dialogs (40).
+   brain/components/FindBar.tsx and Toc.tsx): a floating panel over a blurred page, beside the Orchestrator column
+   (--orchestrator-r/-b, set on .app): above the Orchestrator overlay's backdrop layer only where it does not sit
+   (z 34 < its 35). In full screen (ADR 0328) it covers the whole window, the Orchestrator column included (z 37), and
+   the file uses all the width. Always under the questions window (38), the toasts (39) and the dialogs (40).
    Colours, type and radii come from styles/tokens.css through the brain's --bx-* aliases (brain.css), so dark and light
    follow the app theme; no external font or image (CSP). Prefix vw-. */
 
@@ -11,7 +12,7 @@
   background: var(--backdrop); backdrop-filter: blur(5px) saturate(1.05);
   animation: fadeIn var(--dur) var(--ease);
 }
-.vw-layer.is-full { padding: 0 var(--orchestrator-r, 0px) var(--orchestrator-b, 0px) 0; }
+.vw-layer.is-full { padding: 0; z-index: 37; background: var(--surface); backdrop-filter: none; animation: none; }
 
 .vw-panel {
   --vw-edge: color-mix(in srgb, var(--text) 9%, transparent);
@@ -22,7 +23,7 @@
   container: vw / inline-size;
   animation: vwIn 240ms var(--ease);
 }
-.vw-layer.is-full .vw-panel { width: 100%; border-radius: 0; border-width: 0 1px 0 0; box-shadow: none; animation: none; }
+.vw-layer.is-full .vw-panel { width: 100%; border-radius: 0; border: 0; box-shadow: none; animation: none; }
 @keyframes vwIn { from { opacity: 0; transform: translateY(12px) scale(0.982); } to { opacity: 1; transform: none; } }
 
 /* ── header ─────────────────────────────────────────────────────────────────────────────────────────────────── */
@@ -101,7 +102,11 @@
 .vw-body { flex: 1; min-height: 0; overflow: auto; padding: 20px 28px 32px; scroll-padding-top: 20px; overscroll-behavior: contain; }
 .vw-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; align-items: start; max-width: 1240px; margin: 0 auto; }
 .vw-grid:has(> .vw-toc) { grid-template-columns: 208px minmax(0, 1fr); }
-.vw-layer.is-full .vw-grid { max-width: 1480px; }
+/* full screen: the file takes the whole width (a report, a table, a PDF, code); a text keeps a readable measure, centred */
+.vw-layer.is-full .vw-grid { max-width: none; }
+.vw-layer.is-full .vw-body { padding: 14px 20px 20px; }
+.vw-layer.is-full .vw-main .bx-md { font-size: 15px; max-width: 96ch; margin-inline: auto; }
+.vw-office-note { margin: 0; }
 .vw-main { min-width: 0; display: grid; gap: 14px; align-content: start; }
 .vw-main > .bx-row, .vw-main .vw-tools { gap: 8px; }
 .vw-loading { color: var(--bx-text-3); }
@@ -156,6 +161,8 @@
 .vw-main .viewer-image-open img { max-height: calc(100vh - 280px); border-radius: var(--r-m); box-shadow: 0 16px 40px -18px rgba(0, 0, 0, 0.6); }
 .vw-main .viewer-image-open.is-wide img { max-height: none; width: 100%; height: auto; }
 .vw-main .bx-pdf { max-height: calc(100vh - 210px); border-radius: var(--r-l); padding: 18px; }
+.vw-layer.is-full .vw-main .bx-pdf { max-height: calc(100vh - 150px); }
+.vw-layer.is-full .vw-main .viewer-image-open img { max-height: calc(100vh - 190px); }
 .vw-layer:not(.is-full) .vw-main .bx-pdf { max-height: calc(100vh - 270px); }
 .vw-main .bx-pdf-page { border-radius: 3px; box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.55); }
 .vw-main .bx-diff-panel { border-radius: var(--r-l); padding: 12px 14px; }

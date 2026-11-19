@@ -1,6 +1,8 @@
 /** Read dimensions before allocating a decoded raster. The native decoder still validates the complete image. */
 export function rasterSize(data: Buffer, mime: string): { width: number; height: number } | null {
   if (mime === 'image/png' && data.length >= 33 && data.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) && data.readUInt32BE(8) === 13 && data.toString('ascii', 12, 16) === 'IHDR') return { width: data.readUInt32BE(16), height: data.readUInt32BE(20) };
+  // a GIF's logical screen: every frame is drawn inside it
+  if (mime === 'image/gif' && data.length >= 10 && /^GIF8[79]a$/.test(data.toString('latin1', 0, 6))) return { width: data.readUInt16LE(6), height: data.readUInt16LE(8) };
   if (mime === 'image/webp' && data.length >= 30 && data.toString('ascii', 0, 4) === 'RIFF' && data.toString('ascii', 8, 12) === 'WEBP') {
     const kind = data.toString('ascii', 12, 16);
     // A small extended canvas does not bound every later frame. Refuse before native decoding.
