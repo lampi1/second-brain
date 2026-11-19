@@ -308,7 +308,9 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
   const enterNow = queued.length > 0 && !text.trim() && !images.length; // Enter = "Invia subito" on the last queued
   // what is in the field was begun under this card (or the field is empty): the line over the field, the placeholder
   // and the send button say that it goes to the row; a mode, an image or a text begun elsewhere make it a message
-  const cardSeq = ui.use(s => s.qwin.cardSeq ?? 0);
+  const cardSeq = ui.use(s => (orchestrator ? s.qwin.cardSeq ?? 0 : 0));
+  // a refused answer back in the field under its card: from here on it follows this opening, like a typed text
+  useEffect(() => { if (cardKey && begunUnder.get(chat.id) === cardKey) begunUnder.set(chat.id, cardSeq); }, [cardKey, cardSeq, chat.id, text]);
   const begun = begunUnder.get(chat.id), begunHere = !!cardKey && (begun === cardSeq || begun === cardKey);
   // the line over the field is the route: shown exactly when Enter sends the text to the row (not for a «/» command
   // or a request to explain, which stay the Orchestrator's)

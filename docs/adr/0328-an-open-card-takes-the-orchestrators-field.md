@@ -39,7 +39,8 @@ Not known: whether the card was open in each of those cases (the transcript does
 2. **Only a text begun under that card.** The app opens cards too (a recap, Ctrl+J), and he may click a row only to
    read it: a message he was already writing when the card opened stays a message for the Orchestrator. So does a
    text another page put in the field («Discuti», «Cambia qualcosa» on a map, a quoted selection) and one begun under
-   another card, or continued after he closed the card: opened again, it is another opening (`ui.qwin.cardSeq`). The
+   another card, or continued after he closed the card: opened again, it is another opening (`ui.qwin.cardSeq`
+   counts his and the app's openings and closings, not a row that leaves and comes back under an open card). The
    field remembers under which opening its text was begun, by typing or dictating into an empty field (`begunUnder`
    in `ChatInput.tsx`).
 3. **The field says so, and the line is the route.** A line over it: «Quello che scrivi va a ‹chi chiede›, come

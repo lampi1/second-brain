@@ -17,7 +17,7 @@ import { qwinStats } from '../lib/questions';
 import { commandsOfTurn, orchestratorIdOf } from '../lib/orchestrator-route';
 import { sameList } from '../store/state';
 import { answer, app, useApp } from '../store/store';
-import { parkQuestions, setOpenCard, ui } from '../store/ui';
+import { newCardOpening, parkQuestions, setOpenCard, ui } from '../store/ui';
 import { answerLater, openQueue, requestPostponed } from '../lib/later';
 import { HarnessMark, IconArrowRight, IconChevronDown, IconChevronRight, IconQuestion, IconX } from './Icons';
 import { ago } from '../lib/format';
@@ -84,6 +84,7 @@ export function OrchestratorAsks() {
   }, [q.call, q.open, q.first]);
   // the open card's row, for the Orchestrator's field under it: what he writes there answers that row (lib/field-answer.ts)
   const shownCard = openKey !== null && ordered.some(p => reqKey(p) === openKey) ? openKey : null;
+  useEffect(() => { newCardOpening(); }, [openKey]);
   useEffect(() => { setOpenCard(shownCard); }, [shownCard]);
   useEffect(() => () => setOpenCard(null), []);
   if (!ordered.length) return null;

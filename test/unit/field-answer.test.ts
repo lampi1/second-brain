@@ -45,7 +45,7 @@ describe('fieldRoute: an open card takes what he writes in the Orchestrator\'s f
   it('a bare yes under the open card of a plan is its ok; a yes with more, or a no, is a change', () => {
     for (const text of ['sì', 'Si.', 'ok', 'Va bene!', 'procedi', 'ok, procedi', 'yes'])
       expect(route(text, { card: plan })).toMatchObject({ to: 'plan', decision: 'approve', text });
-    for (const text of ['sì ma senza la fase 3', 'ok però prima i test', 'no', 'va bene il primo passo'])
+    for (const text of ['sì ma senza la fase 3', 'ok però prima i test', 'no', 'va bene il primo passo', 'sì?', 'ok?', 'Sì: ma'])
       expect(route(text, { card: plan })).toMatchObject({ to: 'plan', decision: 'change' });
     // a question's «sì» is its answer, as always
     expect(route('sì', { card })).toMatchObject({ to: 'question' });

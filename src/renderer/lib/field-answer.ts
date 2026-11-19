@@ -16,7 +16,6 @@ import type { Answer, PendingRequest } from '@shared/contract';
 import { answerableInWords, wordsAnswer } from '@shared/answer-in-words';
 import { asksToExplain } from '@shared/ask-once';
 import { isPlanApproval } from '@shared/strategy';
-import { yesNoOf } from '@shared/yes-no';
 
 /** A row whose free answer is written in the Orchestrator's field: a plan to approve or an engine question (never a
  *  permission, a command, an MCP form, a work proposal: those keep their own box or buttons). */
@@ -34,7 +33,7 @@ export type FieldRoute =
  *  that plan (in the Strategist's own chat it is not: isPlanApproval). A yes with anything after it is a change. */
 const bareYes = (words: string): boolean => {
   const w = words.toLocaleLowerCase('it').replace(/[.!,]+/g, ' ').replace(/\s+/g, ' ').trim();
-  return yesNoOf(w) === 'yes' || ['ok', 'okay', 'va bene', 'procedi', 'vai', 'ok procedi', 'sì procedi', 'si procedi', 'sì vai', 'si vai'].includes(w);
+  return ['sì', 'si', 'yes', 'ja', 'ok', 'okay', 'va bene', 'procedi', 'vai', 'ok procedi', 'sì procedi', 'si procedi', 'sì vai', 'si vai'].includes(w);
 };
 
 /** What happens to `text` typed in the field of chat `chatId` (null: it is a message for that chat, as always).
