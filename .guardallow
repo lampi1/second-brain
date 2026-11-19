@@ -548,3 +548,12 @@ docs/screenshots/maintenance.webp binary-media sha256:eb1d1724d672311141783269ba
 docs/screenshots/project-map.webp binary-media sha256:1f13827e08f3c5dff017ff85b0ea07b125e30b58f186813878f6124edb500547
 docs/screenshots/plan.webp binary-media sha256:9c445ed92c876634a3b2231d51ed2ee5da7b585c7c22ec18fde6c16fdf091f15
 docs/screenshots/artifacts.webp binary-media sha256:b78fd05f58c18516a589c38dfdfd456899882bb3cddf98c67e7414f7e384c532
+# README screenshots retaken without the Routine page and without scheduled requests (ADR 0325), and the three small
+# pictures of the app the demo shows in Memoria, Artifact (docs/demo-pictures, cut from README screenshots): demo data
+# only, looked at 2026-11-19.
+docs/screenshots/grindhouse.webp binary-media sha256:b57f98aef290819a42ddeabc6f795eb2d60695ac88be00bc90923d33692859c1
+docs/screenshots/agents.webp binary-media sha256:8de6a28c0a652d76b8ada69fe60c1af07aed9ea88654036afa223ca640c86d14
+docs/screenshots/artifacts.webp binary-media sha256:d20bc73ac8675e7f9fcb795b9cbac6de6625e5916e838c00795cb9c84dcca621
+docs/demo-pictures/grindhouse.png binary-media sha256:b6cfee82836de761d3bb735fae71d05c7f94879566690f1f03833501b96b25f0
+docs/demo-pictures/project-map.png binary-media sha256:a01aef06a38026ccc261c7974aff68c4957556b9d883bd346b75012d93894590
+docs/demo-pictures/trends.png binary-media sha256:8ed386b1ba4649eaea2aa3159f256df4ce25afb83c907e7c41c66a52cb42d98a
