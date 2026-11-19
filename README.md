@@ -157,13 +157,13 @@ Code, Cline and more), all off: install one and sign in yourself, then "Turn on"
 
 Tick **Plan** to have a Strategist turn the job into steps. It interviews you first, one yes/no panel at a time (you
 can always type your own answer, and **Basta domande** ends the interview early), then draws the plan on the project's
-map: each step on the box it works on, the pieces that do not exist yet dashed as planned. You read it there and press
-**Approve and start**; nothing is delegated before. While the agents work the boxes follow the steps and turn green as
+map: each step on the box it works on, the pieces that do not exist yet dashed as planned, and every step told in the
+side panel. You read it there and press **Approve and start**; nothing is delegated before. While the agents work the boxes follow the steps and turn green as
 they finish, and a piece found on the way joins the plan without a new approval. Work that is not on a project keeps
 the plain step list. The roles' default skills and their prompt costs are listed in
 [Skill alignment](docs/design/skills-alignment.md).
 
-<p align="center"><img src="docs/screenshots/plan.webp" alt="A Strategist's plan drawn on the shop's project map: steps on the boxes they work on, the release notes as a planned piece, Approve and start in the side column" width="720"></p>
+<p align="center"><img src="docs/screenshots/plan.webp" alt="A Strategist's plan drawn on the shop's project map: steps on the boxes they work on, the release notes as a planned piece, every step told in the side panel, Approve and start on the line over the drawing" width="720"></p>
 
 ### Parallel work without collisions
 
@@ -249,7 +249,10 @@ environments and documents, with the links and a status on each. Click a system 
 pieces of its own to step further; each box tells its rules, what it keeps, how big it is, why it is made so and its
 key files, which open in the viewer. Paths tell a question («What happens when a customer pays?») stop by stop on the
 boxes. The agents at work sit beside the boxes they work on. With Plan mode the Strategist proposes the plan on the map itself: the pieces to
-build show as planned, you approve from the map and the boxes turn green as the agents finish.
+build show as planned, you approve from the map and the boxes turn green as the agents finish. A map that tells a plan
+also says how far the project is: a percentage in the header, and a side panel that opens with the phase under way,
+what is being done and by whom, what waits for you, what comes next and a bar for every phase; each plan has its own
+card there, one row per step.
 
 <p align="center"><img src="docs/screenshots/project-map.webp" alt="A project map: people, the shop system, external systems and environments linked, with statuses, what waits for you and the agents at work" width="640"></p>
 

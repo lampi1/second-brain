@@ -83,6 +83,10 @@ test('a plan is drawn on the map: steps in their box, a planned piece, approval 
     const view = page.getByTestId('pm-view');
     await expect(view.getByTestId('pm-plan')).toContainText('Sconti in percentuale');
     await expect(view.getByTestId('pm-plan')).toContainText('1 di 4 passi fatti');
+    // the plan is told in the side panel, with its percentage; the header carries it too (ADR 0326)
+    await expect(view.getByTestId('pm-side').getByTestId('pm-plan')).toContainText('25%');
+    await expect(view.getByTestId('pm-progress-chip')).toContainText('25%');
+    await expect(view.getByTestId('pm-plan-ask')).toHaveCount(0);
     await expect(view.getByTestId('pm-node-note-di-rilascio')).toBeVisible();
     await view.getByTestId('pm-node-negozio').click();
     await expect(view.getByTestId('pm-works-ordini')).toContainText('Applico lo sconto % sul prezzo pieno'); // the step under way first (ADR 0302)
@@ -90,7 +94,9 @@ test('a plan is drawn on the map: steps in their box, a planned piece, approval 
     await shot(page, 'project-map-plan');
     // a plan that waits for the user: the pieces dashed, the approval on the map
     await app.evaluate(() => { const d = (globalThis as unknown as { __sbDemo: { plan(id: string, p: unknown): void } }).__sbDemo; d.plan('tree-plan', { phase: 'proposed', at: 5, map: 'alfa-shop', clarified: [], steps: [{ title: 'Scrivo i resi parziali', role: 'artisan', state: 'todo', on: 'rimborsi' }] }); });
-    await expect(view.getByTestId('pm-plan-approve')).toBeVisible();
+    // one line over the drawing holds the approval; every step is open in the side panel
+    await expect(view.getByTestId('pm-plan-ask').getByTestId('pm-plan-approve')).toBeVisible();
+    await expect(view.getByTestId('pm-stepcard-1')).toContainText('su Rimborsi');
     await shot(page, 'project-map-plan-proposed');
     await view.getByTestId('pm-plan-approve').click();
     await expect(view.getByTestId('pm-plan-approve')).toHaveCount(0);
@@ -191,12 +197,12 @@ test('the map shows what moves, the order of the steps, the passage into a syste
     await app.evaluate(() => (globalThis as unknown as { __sbDemo: { tree(): void } }).__sbDemo.tree());
     await page.getByTestId('maps-btn').click();
     const view = page.getByTestId('pm-view');
-    // the plan's steps in order: three turns, the third holds two steps that go together
+    // the plan's steps in order, one row each in the side panel (ADR 0326): the third and the fourth go together
     const flow = view.getByTestId('pm-flow');
     await expect(flow.getByTestId('pm-step-2')).toHaveAttribute('data-s', 'now');
-    await expect(flow.getByTestId('pm-turn-3')).toHaveAttribute('data-par', '');
-    await expect(flow.getByTestId('pm-turn-3')).toContainText('insieme');
-    await expect(flow.getByTestId('pm-turn-4')).toHaveCount(0);
+    await expect(flow.locator('.pm-planstep')).toHaveCount(4);
+    await flow.getByTestId('pm-step-head-3').click();
+    await expect(flow.getByTestId('pm-stepcard-3')).toContainText('Va insieme al passo 4.');
     // somebody works on the shop and on the notes right now; nobody on the payments
     await expect(view.getByTestId('pm-node-negozio')).toHaveAttribute('data-running', '');
     await expect(view.getByTestId('pm-node-note-di-rilascio')).toHaveAttribute('data-running', '');
@@ -213,7 +219,8 @@ test('the map shows what moves, the order of the steps, the passage into a syste
     await expect(view.getByTestId('pm-level')).toHaveAttribute('data-enter', 'out');
     await expect(view.getByTestId('pm-node-negozio')).toHaveClass(/came/);
     // a step of the plan shows the box it works on
-    await flow.getByTestId('pm-step-4').click();
+    await flow.getByTestId('pm-step-head-4').click();
+    await flow.getByTestId('pm-stepcard-on-4').click();
     await expect(view.getByTestId('pm-detail')).toContainText('Note di rilascio');
     // the projects are a list beside the drawing, not a menu
     const nav = view.getByTestId('pm-nav');
@@ -243,17 +250,17 @@ test('the map tells every step, every box and every arrow in full, and «Aggiorn
     // a plan under way: the step being done, told in full (when it starts, how far it is, who does it, on which box)
     const now = view.getByTestId('pm-stepcard-2');
     await expect(now).toContainText('Parte quando è finito il passo 1.');
-    await expect(now).toContainText('in corso');
+    await expect(view.getByTestId('pm-step-2')).toContainText('in corso');
     await expect(now).toContainText('lo fa Artisan');
     await expect(now).toContainText('su Ordini e sconti');
     await expect(view.getByTestId('pm-stepcard-1')).toHaveCount(0);
-    // all of them on a click: the two that go together say so
-    await view.getByTestId('pm-flow-all').click();
+    // any other on a click on its row: the two that go together say so
+    for (const n of [1, 3, 4]) await view.getByTestId(`pm-step-head-${n}`).click();
     for (const n of [1, 2, 3, 4]) await expect(view.getByTestId(`pm-stepcard-${n}`)).toBeVisible();
     await expect(view.getByTestId('pm-stepcard-1')).toContainText('Parte per primo.');
     await expect(view.getByTestId('pm-stepcard-3')).toContainText('Va insieme al passo 4.');
     await shot(page, 'project-map-steps');
-    await view.getByTestId('pm-flow-all').click();
+    await view.getByTestId('pm-step-head-1').click();
     await expect(view.getByTestId('pm-stepcard-1')).toHaveCount(0);
 
     // into the shop: with nothing picked, the side tells the system on screen
@@ -382,5 +389,48 @@ test('a map of phases is a line, the steps inside too; the panel tells proofs an
     await expect(view.getByTestId('pm-node-verifica')).toBeVisible();
     await expect(view.getByTestId('pm-label-verifica--preparazione')).toBeVisible();
     await shot(page, 'project-map-phases-full');
+  } finally { await app.close(); }
+});
+
+// ADR 0326 (the owner 2026-11-19): «le mappe servono per tracciare l'andamento di un piano, sarebbe bello ci fosse anche
+// un progressivo, una percentuale, e più dettagli nella parte dx». The percentage in the header, the progress card in
+// the side panel (where the project is, what is under way, what comes next, every phase with its bar), each phase's
+// own count on its box and in its panel; nothing over the drawing.
+test('the map tells how far the project is: the percentage, the phase under way, each phase with its bar', async () => {
+  const { app, page } = await launchDemo();
+  try {
+    await page.getByTestId('maps-btn').click();
+    const view = page.getByTestId('pm-view');
+    await view.getByTestId('pm-nav-gamma-migrazione').click();
+    const card = view.getByTestId('pm-progress');
+    await expect(view.getByTestId('pm-progress-chip')).toContainText('40%');
+    await expect(card.getByTestId('pm-progress-pct')).toHaveText('40%');
+    await expect(card).toContainText('4 di 10 passi fatti · 1 di 4 fasi chiuse');
+    await expect(card.getByTestId('pm-progress-at')).toContainText('Preparazione');
+    await expect(card.getByTestId('pm-progress-now')).toContainText('Prova di ripristino');
+    await expect(card.getByTestId('pm-progress-now')).toContainText('Ripristino a metà: mancano gli allegati');
+    await expect(card.getByTestId('pm-progress-next')).toContainText('Via libera');
+    await expect(card.getByTestId('pm-progress-groups').locator('li')).toHaveCount(4);
+    await expect(card.getByTestId('pm-progress-group-analisi')).toContainText('2/2');
+    // each phase wears its own count on its box
+    await expect(view.getByTestId('pm-count-preparazione')).toHaveText('2/4');
+    await expect(view.getByTestId('pm-count-verifica')).toHaveCount(0); // nothing inside it
+    await expect(view.locator('.pm-plancard, .pm-planask')).toHaveCount(0); // no plan here, and nothing over the drawing
+    await shot(page, 'project-map-progress');
+    // into a phase from its row: the card folds to its first lines, the phase tells its own count
+    await card.getByTestId('pm-progress-group-preparazione').click();
+    await expect(view.getByTestId('pm-node-ripristino')).toBeVisible();
+    await expect(card.getByTestId('pm-progress-groups')).toHaveCount(0);
+    await expect(card.getByTestId('pm-progress-pct')).toHaveText('40%');
+    await expect(view.getByTestId('pm-here-progress')).toContainText('50%');
+    await expect(view.getByTestId('pm-here-progress')).toContainText('2 di 4 passi fatti');
+    await card.getByTestId('pm-progress-more').click();
+    await expect(card.getByTestId('pm-progress-groups')).toBeVisible();
+    await shot(page, 'project-map-progress-phase');
+    // a map that is a picture of a system, with no plan on it, has no progress
+    await view.getByTestId('pm-nav-beta-crm').click();
+    await expect(view.getByTestId('pm-node-crm')).toBeVisible();
+    await expect(view.getByTestId('pm-progress')).toHaveCount(0);
+    await expect(view.getByTestId('pm-progress-chip')).toHaveCount(0);
   } finally { await app.close(); }
 });

@@ -1,10 +1,10 @@
-// Unit tests of the words under a plan's steps on the map (ADR 0307, PlanFlow.tsx): when a step starts (first, after
+// Unit tests of the words under a plan's steps on the map (ADR 0307, PlanCard.tsx): when a step starts (first, after
 // which steps, together with which) and how far it is (to do, under way since, done in so long, blocked); and of the
 // full screen the maps take when the user opens them, not when the Orchestrator does (actions.ts openMaps).
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(), on: () => () => {} } }));
 import type { MapFlowStep, MapPlan } from '../../src/shared/project-map';
-import { followOf, stateOf, whenOf } from '../../src/renderer/components/project-map/PlanFlow';
+import { followOf, stateOf, whenOf } from '../../src/renderer/components/project-map/PlanCard';
 import { openMaps, uiCommand } from '../../src/renderer/actions';
 import { setMapsFull, ui } from '../../src/renderer/store/ui';
 
