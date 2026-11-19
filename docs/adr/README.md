@@ -323,6 +323,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0326](0326-maps-tell-how-far-the-project-is.md) The maps tell how far the project is: a percentage, a progress card, the plan in the side panel — accepted
 - [0327](0327-one-question-one-row-one-answer.md) One question, one row, one answer: his own words are his answer, the same question only after a reply to them — accepted
 - [0328](0328-artifacts-only-what-the-user-asked-for.md) Artifacts: only what the user asked for, one list, all opened in the app, and a real full screen — accepted
+- [0329](0329-an-open-card-takes-the-orchestrators-field.md) An open card takes what he writes in the Orchestrator's field: his words go straight to that row — accepted
 
 ## Replaced
 

@@ -57,6 +57,78 @@ test('an open question keeps the Orchestrator input in sight; its ✕ answers la
   } finally { await app.close(); }
 });
 
+// ADR 0329 (the owner 2026-11-19: «se mi compare una domanda dello stratega … e rispondo dal campo dell'orchestrator la
+// domanda non scompare»): with a row's card open the Orchestrator's field is that row's answer box. His words reach the
+// row at once and it leaves, whatever the Orchestrator's engine does; a request to explain goes to the Orchestrator and
+// the row stays; a plan takes them as what to change. A text begun before the card opened stays a message.
+test('with a card open, what he writes in the Orchestrator field answers that row at once', async () => {
+  const { app, page } = await launchDemo({ width: 1600, height: 900 });
+  const demo = (fn: string, ...args: unknown[]) => app.evaluate((_e, [f, a]) => ((globalThis as unknown as { __sbDemo: Record<string, (...x: unknown[]) => unknown> }).__sbDemo[f as string]!)(...(a as unknown[])), [fn, args] as const);
+  const Q = 'Il report valuta anche l\'opzione «costruito sopra Air»?';
+  try {
+    await demo('tree');
+    await demo('ask', 'tree-scout', { type: 'question', tool: 'AskUserQuestion', title: Q, detail: Q, input: {}, questions: [{ question: Q, header: 'Report', multiSelect: false, options: [{ label: 'Sì (consigliato)' }, { label: 'No' }] }] });
+    const row = page.locator('[data-ask-row^="tree-scout/"]');
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    const input = page.getByTestId('orchestrator-input');
+    await expect(page.getByTestId('orchestrator-input-answers')).toHaveCount(0); // no card open: the field is the Orchestrator's
+    // a message he was already writing when the card opens (the app opens cards too) stays a message: no line over the
+    // field (the line is the route: lib/field-answer.ts `drafted`, unit-tested); emptied, the field is the card's
+    await input.fill('ok vai');
+    await row.getByTestId('orchestrator-ask-toggle').click();
+    await expect(page.getByTestId('qwin-card-via-input')).toBeVisible();
+    await expect(page.getByTestId('orchestrator-input-answers')).toHaveCount(0);
+    await input.fill('');
+    // the field says whom the words go to
+    await expect(page.getByTestId('orchestrator-input-answers')).toContainText('va a Scout');
+    await expect(input).toHaveAttribute('placeholder', 'Scrivi la tua risposta per Scout…');
+    await input.fill('solo da zero, però valuta anche uno stack modulare');
+    await shot(page, 'orchestrator-field-answers-card');
+
+    // closed and opened again while he writes: another opening, the text is no longer that card's answer
+    await row.getByTestId('orchestrator-ask-toggle').click();
+    await expect(page.getByTestId('orchestrator-input-answers')).toHaveCount(0);
+    await row.getByTestId('orchestrator-ask-toggle').click();
+    await expect(page.getByTestId('qwin-card-via-input')).toBeVisible();
+    await expect(page.getByTestId('orchestrator-input-answers')).toHaveCount(0);
+    await input.fill('');
+    await expect(page.getByTestId('orchestrator-input-answers')).toHaveCount(1);
+
+    // he asks about the question: it is a message for the Orchestrator (here it waits behind the Orchestrator's own
+    // open question, as any message does) and answers nothing; the row stays open
+    const before = ((await demo('answers')) as unknown[]).length;
+    await input.fill('in che senso?');
+    await expect(page.getByTestId('orchestrator-input-answers')).toHaveCount(0); // the line is the route
+    await input.press('Enter');
+    await expect(page.getByTestId('orchestrator-input-queued-0')).toContainText('in che senso?');
+    await expect(row).toHaveCount(1);
+    expect(((await demo('answers')) as unknown[]).length).toBe(before);
+    await page.getByTestId('orchestrator-input-unqueue-0').click();
+
+    // his answer: straight to the row, which leaves; nothing new in the Orchestrator's chat
+    await input.fill('solo da zero, però valuta anche uno stack modulare');
+    await input.press('Enter');
+    await expect(row).toHaveCount(0);
+    await expect(input).toHaveValue('');
+    const sent = (await demo('answers')) as { chatId: string; answer: { answers: Record<string, string> } }[];
+    expect(sent.at(-1)).toMatchObject({ chatId: 'tree-scout', answer: { kind: 'question', answers: { [Q]: 'solo da zero, però valuta anche uno stack modulare' } } });
+    await expect(page.locator('.orchestrator-tile .items-wrap').getByText('solo da zero')).toHaveCount(0);
+    await expect(page.getByTestId('orchestrator-input-answers')).toHaveCount(0);
+
+    // a plan to approve, open: what he writes is what to change, and its row leaves
+    const at = Date.now();
+    await demo('plan', 'tree-plan', { phase: 'proposed', at, asked: 3, doneWhen: 'plan.md approvato', steps: [{ title: 'Elenco delle modifiche', role: 'scout', state: 'todo' }], clarified: [] });
+    const plan = page.locator(`[data-ask-row="tree-plan/plan@${at}"]`);
+    await expect(plan).toBeVisible();
+    await plan.getByTestId('orchestrator-ask-toggle').click();
+    await expect(page.getByTestId('orchestrator-input-answers')).toContainText('va a Strategist');
+    await input.fill('vorrei fosse chiaro anche lo sdoppiamento della tab cartella l\'hai compreso?');
+    await input.press('Enter');
+    await expect(plan).toHaveCount(0);
+    await expect(input).toHaveValue('');
+  } finally { await app.close(); }
+});
+
 // The owner 2026-11-13: «le domande dall'orchestratore sono tagliatissime illeggibili»: under a LONG Orchestrator chat
 // the rows kept a strip of 90 px (flex shrinks by content size). Closed: every row whole, its Sì / No in sight; open:
 // the chat gives way to the card (down to a strip of the last messages), the answers and the input in sight.

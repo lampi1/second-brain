@@ -108,6 +108,23 @@ describe('the Orchestrator passes the user\'s own message to a work chat\'s ques
     expect(m.items(chat.id).some(i => i.kind === 'system' && i.code === 'orchestratorPassedWords')).toBe(true);
   });
 
+  it('the note with the open rows: a wish for one is its answer and never a plain message; a delegated chat\'s question is not listed (ADR 0329, 0083)', async () => {
+    const w = world(false), m = manager(w), dir = tmp();
+    const parent = await m.create({ harness: 'anthropic', cwd: dir, title: 'Lavoro' });
+    const work = w.sink!;
+    await m.create({ harness: 'anthropic', cwd: dir, parentId: parent.id, title: 'Figlia', delegation: { role: 'scout', goal: 'Cerca', doneWhen: ['Trovato'], at: Date.now() } }, 'agent');
+    const child = w.sink!;
+    const o = await m.create({ harness: 'anthropic', cwd: tmp(), orchestrator: true });
+    work.pending(ask('q1', 'Quale colore per il bottone?', ['Rosso', 'Blu']));
+    child.pending(ask('q2', 'Cerco anche nei log di ieri?'));
+    await m.send(o.id, 'vorrei anche il bordo, ok?');
+    const told = w.sent.at(-1)!;
+    expect(told).toContain('"Quale colore per il bottone?"');
+    expect(told).toContain('says what he wants changed or added in it (also when it ends with a question)');
+    expect(told).toContain('Never pass his answer with app_send_to_chat');
+    expect(told).not.toContain('Cerco anche nei log di ieri?');
+  });
+
   it('never words he did not write, a message older than the question, or the Orchestrator\'s own question', async () => {
     const { w, m, chat, work, o } = await setup();
     await m.send(o.id, 'Blu');

@@ -8,7 +8,7 @@
 // row into one folded line «N da rispondere dopo» (lib/later.ts). A chat's own tile never shows its requests: one line says they went to the Orchestrator
 // (InWindowLine). A command the chat left before its question comes first (ADR 0259). Mounted by OrchestratorTile.tsx.
 import { WriteViaOrchestrator } from '../lib/write-via-orchestrator';
-import { answerableInWords } from '@shared/answer-in-words';
+import { answeredInField } from '../lib/field-answer';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Harness, PendingRequest } from '@shared/contract';
 import { isYesNo, yesNoOf } from '@shared/yes-no';
@@ -17,7 +17,7 @@ import { qwinStats } from '../lib/questions';
 import { commandsOfTurn, orchestratorIdOf } from '../lib/orchestrator-route';
 import { sameList } from '../store/state';
 import { answer, app, useApp } from '../store/store';
-import { parkQuestions, ui } from '../store/ui';
+import { newCardOpening, parkQuestions, setOpenCard, ui } from '../store/ui';
 import { answerLater, openQueue, requestPostponed } from '../lib/later';
 import { HarnessMark, IconArrowRight, IconChevronDown, IconChevronRight, IconQuestion, IconX } from './Icons';
 import { ago } from '../lib/format';
@@ -82,6 +82,11 @@ export function OrchestratorAsks() {
       el?.querySelector<HTMLElement>('[data-request-key]')?.focus({ preventScroll: true });
     });
   }, [q.call, q.open, q.first]);
+  // the open card's row, for the Orchestrator's field under it: what he writes there answers that row (lib/field-answer.ts)
+  const shownCard = openKey !== null && ordered.some(p => reqKey(p) === openKey) ? openKey : null;
+  useEffect(() => { newCardOpening(); }, [openKey]);
+  useEffect(() => { setOpenCard(shownCard); }, [shownCard]);
+  useEffect(() => () => setOpenCard(null), []);
   if (!ordered.length) return null;
   const n = now.length;
   // the ones set aside fold into one quiet line (opened by a click, or when one of them is called by name)
@@ -176,7 +181,7 @@ function AskCard({ ask, name, harness, onLater }: { ask: Ask; name: string; harn
   // interview too); the rest (work proposals, commands, forms, the app's own steps) keeps its own box
   // with no Orchestrator yet there is no input under the card: it keeps its own free-answer box
   const hasOrchestrator = useApp(s => orchestratorIdOf(s) !== null);
-  const viaOrchestrator = hasOrchestrator && !isDurable(ask) && (ask.type === 'plan' || answerableInWords(ask));
+  const viaOrchestrator = hasOrchestrator && !isDurable(ask) && answeredInField(ask);
   // the card reads the chat as it was when it opened (lib/askItems.tsx)
   const frozen = useFrozenItems(ask.chatId, k);
   const items = ask.type === 'question' ? frozen.items : undefined;

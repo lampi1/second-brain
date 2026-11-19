@@ -108,8 +108,9 @@ export interface UiState {
  *  shows the postponed requests too, until the queue is empty or set aside again; first = the request shown
  *  first; call = a new nonce when the user asks for it (it shows at once, typing or not, and takes the keyboard);
  *  shown = on screen now (the browser views hide under it); aside = stepped aside for a file opened from it (the viewer
- *  in front, the window a pill until it is called again or the page changes; QuestionsWindow.tsx). */
-export interface QWin { open: boolean; first: string | null; call: number; shown: boolean; aside?: boolean }
+ *  in front, the window a pill until it is called again or the page changes; QuestionsWindow.tsx); card = the key of
+ *  the row whose card is open in the Orchestrator's column (its field answers that row: lib/field-answer.ts). */
+export interface QWin { open: boolean; first: string | null; call: number; shown: boolean; aside?: boolean; card?: string | null; cardSeq?: number }
 
 const PREFS_KEY = 'sb.prefs.v1';
 export const defaultPrefs: Prefs = {
@@ -314,6 +315,12 @@ export const callQuestions = (key: string | null) => ui.set(s => ({ ...s, qwin: 
 /** A file link clicked in the questions window: the window steps aside (a pill, nothing answered or put off) so the
  *  viewer it opened is in front; Ctrl+J, the pill or leaving the file page bring it back. */
 export const setQuestionsAside = (aside: boolean) => { if (!!ui.get().qwin.aside !== aside) ui.set(s => ({ ...s, qwin: { ...s.qwin, aside } })); };
+/** The row whose card is open in the Orchestrator's column (null: none). */
+export const setOpenCard = (card: string | null) => { if ((ui.get().qwin.card ?? null) !== card) ui.set(s => ({ ...s, qwin: { ...s.qwin, card } })); };
+/** He, or the app, opened or closed a card: cardSeq counts these acts. A card closed and opened again is another
+ *  opening (a text begun under the first is not the second's answer: ChatInput.tsx); a row that leaves and comes back
+ *  under a card left open (a refused answer) is the same one. */
+export const newCardOpening = () => ui.set(s => ({ ...s, qwin: { ...s.qwin, cardSeq: (s.qwin.cardSeq ?? 0) + 1 } }));
 export const setQuestionsShown = (shown: boolean) => { if (ui.get().qwin.shown !== shown) ui.set(s => ({ ...s, qwin: { ...s.qwin, shown } })); };
 
 /** Synchronous checkpoint of the actual in-memory preferences/read state; storage failures must propagate. */
