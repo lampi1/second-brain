@@ -57,7 +57,11 @@ const drafts = new CheckpointMap<string, string>();
 const onSentHooks = new Map<string, { fn: () => void; sig: string }>();
 const draftSubs = new Set<(chatId: string, quiet?: boolean) => void>(); // quiet: the text changes, the focus stays where it is
 const freshDrafts = new Set<string>(); // set from elsewhere, not yet shown: the input takes the focus with the caret at the end
-const placedDrafts = new Set<string>(); // the text in the input started as a draft another page put there: it is for this chat, never an open card's answer
+// per chat: the open card (its key) under which the text now in the input was begun, by typing or dictating into an
+// empty field; null when it was begun with no card open or put there by another page (a draft, a quote). Only a text
+// begun under the card that is open now is that card's answer (lib/field-answer.ts): one written before the card
+// opened, or a draft from elsewhere, stays the chat's own message
+const begunUnder = new Map<string, string | null>();
 const modeOn = new CheckpointMap<string, SendMode>(); // the Orchestrators with "Strategist" ticked (kept across a remount, like the draft)
 
 /** Put `text` in the chat's input, not sent; what the user was already writing there stays above it. `onSent` runs
@@ -69,7 +73,7 @@ export function setDraft(chatId: string, text: string, onSent?: () => void): voi
   const sig = (text.trim().split('\n')[0] ?? '').slice(0, 60);
   if (onSent) onSentHooks.set(chatId, { fn: onSent, sig }); else onSentHooks.delete(chatId);
   freshDrafts.add(chatId);
-  placedDrafts.add(chatId);
+  begunUnder.set(chatId, null);
   for (const fn of draftSubs) fn(chatId);
 }
 /** A text selected on screen and right-clicked (ADR 0300, lib/quote.ts): it goes at the end of the chat's input as
@@ -80,6 +84,7 @@ export function quoteInDraft(chatId: string, selected: string, quiet = false): b
   const old = drafts.get(chatId) ?? '', next = draftWithQuote(old, selected);
   if (next === old) return false;
   drafts.set(chatId, next);
+  begunUnder.set(chatId, null);
   if (!quiet) freshDrafts.add(chatId);
   for (const fn of draftSubs) fn(chatId, quiet);
   return true;
@@ -88,6 +93,7 @@ export function quoteInDraft(chatId: string, selected: string, quiet = false): b
 onDictated((chatId, text) => {
   if (updateIsFrozen()) return;
   const old = drafts.get(chatId) ?? '';
+  if (!old.trim()) begunUnder.set(chatId, ui.get().qwin.card ?? null);
   drafts.set(chatId, !old.trim() ? text : /\s$/.test(old) ? `${old}${text}` : `${old} ${text}`);
   freshDrafts.add(chatId);
   for (const fn of draftSubs) fn(chatId);
@@ -124,7 +130,7 @@ function loadCommands(chatId: string, done: (list: ChatCommand[]) => void): void
 // a chat that left the app for good takes its draft, images, hooks and caches with it (a draft lives as long as its chat)
 onChatRemoved(chatId => {
   for (const m of [drafts, draftImages, modeOn] as Map<string, unknown>[]) if (m.has(chatId)) m.delete(chatId);
-  onSentHooks.delete(chatId); freshDrafts.delete(chatId); placedDrafts.delete(chatId); prewarmAt.delete(chatId); commandCache.delete(chatId);
+  onSentHooks.delete(chatId); freshDrafts.delete(chatId); begunUnder.delete(chatId); prewarmAt.delete(chatId); commandCache.delete(chatId);
   if (readingN.delete(chatId)) changed();
 });
 
@@ -297,9 +303,11 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
   const cardName = useApp(s => (cardChat ? s.chats[cardChat]?.agent?.name || s.chats[cardChat]?.title || 'Chat' : null));
   const busy = isBusy(chat) || chat.state === 'waiting' || chat.pending > 0;
   const enterNow = queued.length > 0 && !text.trim() && !images.length; // Enter = "Invia subito" on the last queued
-  // the line over the field and the send button say so (a draft another page put here is for the Orchestrator)
-  const toCard = !!cardName && !placedDrafts.has(chat.id) && !context;
-  const placeholder = cardName ? t('chat.input.placeholderAnswerTo', { name: cardName }) : ownAsk && !orchestrator ? t('chat.input.placeholderAnswer') : enterNow ? t('chat.input.placeholderEnter') : voiceOn ? t('voice.placeholder') : orchestrator && mode ? t(mode === 'fast' ? 'chat.input.placeholderFast' : 'chat.input.placeholderPlan') : orchestrator ? t('chat.input.placeholderOrchestrator') : chat.pending > 0 ? t('chat.input.placeholderPending') : busy ? t('chat.input.placeholderBusy') : chat.state === 'closed' ? t('chat.input.placeholderClosed') : t('chat.input.placeholderDefault');
+  // what is in the field was begun under this card (or the field is empty): the line over the field, the placeholder
+  // and the send button say that it goes to the row; a mode, an image or a text begun elsewhere make it a message
+  const begunHere = !!cardKey && begunUnder.get(chat.id) === cardKey;
+  const toCard = !!cardName && !mode && !images.length && reading === 0 && !context && (!text.trim() || begunHere);
+  const placeholder = toCard ? t('chat.input.placeholderAnswerTo', { name: cardName! }) : ownAsk && !orchestrator ? t('chat.input.placeholderAnswer') : enterNow ? t('chat.input.placeholderEnter') : voiceOn ? t('voice.placeholder') : orchestrator && mode ? t(mode === 'fast' ? 'chat.input.placeholderFast' : 'chat.input.placeholderPlan') : orchestrator ? t('chat.input.placeholderOrchestrator') : chat.pending > 0 ? t('chat.input.placeholderPending') : busy ? t('chat.input.placeholderBusy') : chat.state === 'closed' ? t('chat.input.placeholderClosed') : t('chat.input.placeholderDefault');
   const ready = (text.trim() !== '' || images.length > 0) && reading === 0;
   const submit = (as = mode) => {
     if(updateIsFrozen())return;
@@ -307,11 +315,20 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
     if (as && !text.trim()) { toast(t('chat.input.emptyMode'), 'info'); return; } // a mode needs a request in words
     // the chat asks, or a row's card is open over the Orchestrator's field: his words answer it and its row goes (an
     // image goes as a message, as always; a question about another chat's row goes to the Orchestrator, which explains)
-    const route = fieldRoute(text, { chatId: chat.id, card, own: ownAsk, plain: !as && !images.length, drafted: placedDrafts.has(chat.id) || !!context });
+    const route = fieldRoute(text, { chatId: chat.id, card, own: ownAsk, plain: !as && !images.length, drafted: !begunHere || !!context });
+    // written under the open card, yet a message: he asks about the question, and the Orchestrator explains (told after the send)
+    const asked = toCard && !as && !route && !text.trim().startsWith('/') ? cardName : null;
     if (route) {
-      // refused (a newer proposal, an engine down): his words come back in the field; delivered to another chat's row: a toast says to whom
-      const words = text, to = cardName && (route.to === 'plan' || route.req.chatId !== chat.id) ? cardName : null;
-      const back = (ok: boolean) => { if (!ok) setText(v => v || words); else if (to) toast(t('chat.input.answeredTo', { name: to }), 'info'); };
+      // delivered to another chat's row: a toast says to whom. Refused (a newer proposal, an engine down): his words
+      // come back in the field and in its draft, before whatever he wrote meanwhile
+      const words = text, to = cardName && (route.to === 'plan' || route.req.chatId !== chat.id) ? cardName : null, id = chat.id;
+      const back = (ok: boolean) => {
+        if (ok) { if (to) toast(t('chat.input.answeredTo', { name: to }), 'info'); return; }
+        const now = drafts.get(id) ?? '', next = now.trim() ? `${words}\n${now}` : words;
+        drafts.set(id, next);
+        begunUnder.set(id, null);
+        for (const fn of draftSubs) fn(id, true);
+      };
       if (route.to === 'plan') void planDecide(route.chatId, route.decision, route.at, route.text).then(back);
       else void answer(route.req, route.answer).then(back);
       rememberPrompt(text);
@@ -319,7 +336,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
       setGhost(null);
       setText('');
       drafts.delete(chat.id);
-      placedDrafts.delete(chat.id);
+      begunUnder.delete(chat.id);
       return;
     }
     const r = send(chat.id, as && orchestrator ? withMode(as, text) : text, images);
@@ -330,7 +347,8 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
     setGhost(null);
     setText('');
     drafts.delete(chat.id);
-    placedDrafts.delete(chat.id);
+    begunUnder.delete(chat.id);
+    if (asked) toast(t('chat.input.askedOrchestrator', { name: asked }), 'info');
     const hook = onSentHooks.get(chat.id);
     onSentHooks.delete(chat.id);
     if (hook && text.includes(hook.sig)) hook.fn(); // another message written over the draft: not the draft
@@ -419,7 +437,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
       )}
       <div className={`composer-box ${dragging ? 'is-drop' : ''} ${voiceOn ? 'is-voice' : ''}`} onDragOver={onDragOver} onDragLeave={() => setDragging(false)} onDrop={onDrop}>
         {toCard && <div className="composer-to" data-testid={`${testid}-answers`}>{t('chat.input.answersTo', { name: cardName })}</div>}
-        {context && <ReviewedContextPreview context={context} onRemove={() => { setText(context.message); drafts.set(chat.id, context.message); onSentHooks.delete(chat.id); ta.current?.focus(); }}/>}
+        {context && <ReviewedContextPreview context={context} onRemove={() => { setText(context.message); drafts.set(chat.id, context.message); onSentHooks.delete(chat.id); if (!context.message.trim()) begunUnder.delete(chat.id); ta.current?.focus(); }}/>}
         {(images.length > 0 || reading > 0) && (
           <div className="composer-images">
             <ImageStrip images={images.map(im => ({ thumb: im.thumb ?? fullSrc(im), full: fullSrc(im) }))} onRemove={i => setImages(cur => cur.filter((_, k) => k !== i))} testid={`${testid}-images`} />
@@ -439,7 +457,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
             onFocus={() => { setFocused(true); if (suggestOn && !cmds) loadCommands(chat.id, setCmds); }} onBlur={() => setFocused(false)}
             onScroll={e => { if (mirror.current) mirror.current.scrollTop = e.currentTarget.scrollTop; }}
             aria-activedescendant={slashOpen ? `${testid}-slash-o${Math.min(sel, matches.length - 1)}` : undefined}
-            onChange={e => { const next = withReviewedContext(e.target.value, context); setText(next); setCaret(e.target.selectionStart); drafts.set(chat.id, next); if (!next.trim()) { onSentHooks.delete(chat.id); placedDrafts.delete(chat.id); } else prewarm(chat.id); if (!e.target.value.startsWith('/')) setSlashOff(null); refreshGhost(e.target.value, e.target.selectionStart); }}
+            onChange={e => { const next = withReviewedContext(e.target.value, context); setText(next); setCaret(e.target.selectionStart); drafts.set(chat.id, next); if (!next.trim()) { onSentHooks.delete(chat.id); begunUnder.delete(chat.id); } else { if (!text.trim()) begunUnder.set(chat.id, cardKey); prewarm(chat.id); } if (!e.target.value.startsWith('/')) setSlashOff(null); refreshGhost(e.target.value, e.target.selectionStart); }}
             onSelect={e => setCaret(e.currentTarget.selectionStart)}
             onPaste={onPaste}
             onKeyDown={e => {

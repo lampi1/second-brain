@@ -16,6 +16,7 @@ export const chatIt = {
   'chat.input.placeholderAnswerTo': (p: { name: string }) => `Scrivi la tua risposta per ${p.name}…`,
   'chat.input.answersTo': (p: { name: string }) => `Quello che scrivi va a ${p.name}, come risposta. Per scrivere all’Orchestrator chiudi la domanda.`,
   'chat.input.answeredTo': (p: { name: string }) => `Risposta mandata a ${p.name}.`,
+  'chat.input.askedOrchestrator': (p: { name: string }) => `Sembra una domanda sulla richiesta di ${p.name}: è andata all’Orchestrator, la riga resta aperta.`,
   'chat.input.placeholderPending': 'Rispondi sopra o scrivi…',
   'chat.input.placeholderBusy': 'Scrivi: va in coda…',
   'chat.input.placeholderClosed': 'Scrivi per riprendere la chat…',

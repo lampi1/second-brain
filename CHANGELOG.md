@@ -272,6 +272,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   key is gone (ADR 0291).
 
 ### Fixed
+- An answer written in the Orchestrator's field closes its question. With a question or a plan open in the
+  Orchestrator's column, what you write in the field under it goes straight to who asks and the row leaves at once (a
+  line over the field says to whom); before, the row closed only if the Orchestrator then chose to pass the words on.
+  A request to explain still goes to the Orchestrator, and so does everything written with no card open (ADR 0328).
 - An open question in the Orchestrator's column is as tall as what it says: a short one no longer takes the whole
   column with an empty panel under «Ci penso dopo» while the chat above is squeezed to a strip with its last card cut.
   A long one still takes everything but that strip, with the input in sight. The colour rule on the question's left

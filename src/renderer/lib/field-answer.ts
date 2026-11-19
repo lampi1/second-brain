@@ -7,8 +7,9 @@
 // they went to the Orchestrator as a message (queued while it worked) and the row closed only if its engine then chose
 // to pass them on (app_resolve_question `words`): measured on the owner's PC on 2026-11-19, it did not in 4 of the
 // messages that answered a row. Still the Orchestrator's: a request to explain the question (asksToExplain, ADR 0327),
-// a text with images, a «Fast» / «Plan» message, a draft another page put in the field («Discuti», «Cambia qualcosa»
-// on a map), and everything written while no card is open.
+// a text with images, a «Fast» / «Plan» message, a «/» command, a text not begun under that card (written before the
+// card opened: the app opens cards too, e.g. for a recap; or put in the field by another page: «Discuti», «Cambia
+// qualcosa» on a map, a quoted selection), and everything written while no card is open.
 // Pure. Used by components/ChatInput.tsx (the route) and components/QuestionsWindow.tsx (which rows have no box);
 // unit test: test/unit/field-answer.test.ts.
 import type { Answer, PendingRequest } from '@shared/contract';
@@ -30,8 +31,9 @@ export type FieldRoute =
 
 /** What happens to `text` typed in the field of chat `chatId` (null: it is a message for that chat, as always).
  *  card = the row open in the Orchestrator's column (only the Orchestrator's field has one); own = the chat's own open
- *  question (ADR 0274: what he writes there is its answer); plain = no mode and no images; drafted = the text started
- *  as a draft another page put in the field (it is for the Orchestrator, whatever card is open). */
+ *  question (ADR 0274: what he writes there is its answer); plain = no mode and no images; drafted = the text was not
+ *  begun under the card open now (typed before it opened, or put in the field by another page): it is a message for
+ *  the chat, whatever card is open. */
 export function fieldRoute(text: string, o: { chatId: string; card: FieldCard | null; own?: PendingRequest; plain: boolean; drafted?: boolean }): FieldRoute | null {
   const words = text.trim();
   if (!words || !o.plain) return null;

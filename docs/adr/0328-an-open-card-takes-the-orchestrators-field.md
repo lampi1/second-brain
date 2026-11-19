@@ -35,18 +35,28 @@ Not known: whether the card was open in each of those cases (the transcript does
    answer of each of its questions (`chat:answer`, with the app's note of ADR 0327); a plan takes them as what to
    change, or as the ok when the whole text is an approval (`isPlanApproval`, `chat:plan`). Nothing waits for the
    Orchestrator's engine, which learns of the answer as it does of a click.
-2. **The field says so.** A line over it: «Quello che scrivi va a ‹chi chiede›, come risposta. Per scrivere
-   all'Orchestrator chiudi la domanda.»; the placeholder names who asks; a toast confirms where the answer went.
-3. **Still the Orchestrator's, also with a card open**: a request to explain the question (`asksToExplain`, ADR 0327:
-   the Orchestrator explains and the row stays), a «/» command, a message with images, a «Fast» or «Plan» message, and a
-   draft another page put in the field («Discuti», «Cambia qualcosa» on a map). With another chat's card open they are
-   a message, never the answer to the Orchestrator's own open question.
-4. **With no card open nothing changes**: the Orchestrator decides whether his message answers a row (ADR 0274). Two
+2. **Only a text begun under that card.** The app opens cards too (a recap, Ctrl+J), and he may click a row only to
+   read it: a message he was already writing when the card opened stays a message for the Orchestrator. So does a
+   text another page put in the field («Discuti», «Cambia qualcosa» on a map, a quoted selection) and one begun under
+   another card. The field remembers under which open card its text was begun, by typing or dictating into an empty
+   field (`begunUnder` in `ChatInput.tsx`).
+3. **The field says so, and the line is the route.** A line over it: «Quello che scrivi va a ‹chi chiede›, come
+   risposta. Per scrivere all'Orchestrator chiudi la domanda.», with the placeholder naming who asks. The line shows
+   exactly when Enter would send the text to the row: not with «Fast» or «Plan» ticked, with an image, or over a text
+   begun elsewhere. A toast confirms where an answer went; a refused answer (a newer proposal, an engine down) comes
+   back in the field.
+4. **Still the Orchestrator's, also with a card open**: a request to explain the question (`asksToExplain`, ADR 0327:
+   the Orchestrator explains and the row stays; a toast says it went there, because the rule reads how the text opens
+   and can take an instruction that ends with «, ok?» for a question), a «/» command, a message with images, a «Fast» or
+   «Plan» message. With another chat's card open they are a message, never the answer to the Orchestrator's own open
+   question.
+5. **With no card open nothing changes**: the Orchestrator decides whether his message answers a row (ADR 0274). Two
    things help it there. The note with the open rows now says that what he wants changed or added in one is its answer,
-   also when it ends with a question, and that an answer never goes with `app_send_to_chat`. And `app_send_to_chat`
-   from the Orchestrator to a chat that waits on its own question, or whose plan waits for his ok, still sends, and its
-   result says that the row is still open and how to close it (`waitsOnUser` in `appctl/tools.ts`; not for a delegated
-   chat, which its parent answers).
+   also when it ends with a question, and that an answer never goes with `app_send_to_chat`; it no longer lists a
+   delegated chat's question, which `app_resolve_question` refuses anyway (ADR 0083: its parent answers it, or he in
+   its row or with its card open). And `app_send_to_chat` from the Orchestrator to a chat that waits on its own
+   question, or whose plan waits for his ok, still sends, and its result says that the row is still open and how to
+   close it (`waitsOnUser` in `appctl/tools.ts`; not for a delegated chat).
 
 ## Consequences
 
@@ -57,6 +67,8 @@ Not known: whether the card was open in each of those cases (the transcript does
   closing the card gives the field back to the Orchestrator.
 - «Sì procedi, ma …» on an open plan is a change (the plan comes back revised), as it was in the card's own box before
   ADR 0274: only a whole approval starts a plan.
+- Voice talk mode sends what he says to the Orchestrator as before, card open or not (dictation into the field
+  follows the field's rule); the card's own voice answers are unchanged.
 - With no card open the row still closes only if the Orchestrator passes his words on. The counts above have to be
   taken again after some days of use.
 - Untried on a real PC. Tests: `test/unit/field-answer.test.ts`, `test/unit/appctl-waits-on-user.test.ts`,

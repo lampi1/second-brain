@@ -60,7 +60,7 @@ test('an open question keeps the Orchestrator input in sight; its ✕ answers la
 // ADR 0328 (the owner 2026-11-19: «se mi compare una domanda dello stratega … e rispondo dal campo dell'orchestrator la
 // domanda non scompare»): with a row's card open the Orchestrator's field is that row's answer box. His words reach the
 // row at once and it leaves, whatever the Orchestrator's engine does; a request to explain goes to the Orchestrator and
-// the row stays; a plan takes them as what to change.
+// the row stays; a plan takes them as what to change. A text begun before the card opened stays a message.
 test('with a card open, what he writes in the Orchestrator field answers that row at once', async () => {
   const { app, page } = await launchDemo({ width: 1600, height: 900 });
   const demo = (fn: string, ...args: unknown[]) => app.evaluate((_e, [f, a]) => ((globalThis as unknown as { __sbDemo: Record<string, (...x: unknown[]) => unknown> }).__sbDemo[f as string]!)(...(a as unknown[])), [fn, args] as const);
@@ -72,8 +72,13 @@ test('with a card open, what he writes in the Orchestrator field answers that ro
     await expect(row).toBeVisible({ timeout: 15_000 });
     const input = page.getByTestId('orchestrator-input');
     await expect(page.getByTestId('orchestrator-input-answers')).toHaveCount(0); // no card open: the field is the Orchestrator's
+    // a message he was already writing when the card opens (the app opens cards too) stays a message: no line over the
+    // field (the line is the route: lib/field-answer.ts `drafted`, unit-tested); emptied, the field is the card's
+    await input.fill('ok vai');
     await row.getByTestId('orchestrator-ask-toggle').click();
     await expect(page.getByTestId('qwin-card-via-input')).toBeVisible();
+    await expect(page.getByTestId('orchestrator-input-answers')).toHaveCount(0);
+    await input.fill('');
     // the field says whom the words go to
     await expect(page.getByTestId('orchestrator-input-answers')).toContainText('va a Scout');
     await expect(input).toHaveAttribute('placeholder', 'Scrivi la tua risposta per Scout…');
