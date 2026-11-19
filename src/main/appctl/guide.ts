@@ -3,7 +3,7 @@
 // hand-kept description: the map is read when asked, from the code that draws the app. The renderer gives what the UI
 // holds (window.__sbAppMap, renderer/lib/app-map.ts: the rail as drawn, pages, Memoria tabs, Settings sections,
 // palette actions with their keys, the "?" help texts, the view); main adds the settings schema with the current values,
-// the static terminal-only routine guidance (never scans run data), the usage counter's summary (ADR 0202: which pages and
+// the usage counter's summary (ADR 0202: which pages and
 // actions the user used most in 14 days, local counts, on the authenticated Orchestrator's mount only),
 // the concepts of the Guida page (shared/concept-guide.ts), the caller's own tools and, from appctl/tool-catalog.ts,
 // every other tool of the app (the work chats', the browser's, the brain hooks'), so it knows the whole app (ADR 0208). Called on demand only, so it
@@ -15,7 +15,6 @@ import type { SettingDef, Settings } from '../../shared/contract';
 import { CONCEPTS, textOf, type GuideLang } from '../../shared/concept-guide';
 import { getAt } from '../brain/settings-schema';
 import type { ToolDef } from './tools';
-import { ROUTINE_AUTHORING_SUMMARY } from '../flows/capabilities';
 import { MOUNT_LABEL, TOOL_CATALOG, type ToolMount } from './tool-catalog';
 import { useCounts } from '../use-counter';
 import type { PhoneStatus } from '../../shared/contract/phone';
@@ -73,13 +72,6 @@ const PHONE_BRIDGE = 'Telefono (ADR 0219, Impostazioni › Telefono): the user\'
 const REMOTE_CONTROL = 'Controllo remoto (ADR 0229): the phone icon on the Orchestrator\'s head (Claude engine only) turns on Claude Code Remote Control of the Orchestrator\'s own session. A line under the head shows the claude.ai/code link: the user opens it on the phone (Claude app or browser) and continues the same session there; no QR code (no library), «Copia link» instead. Messages typed on the phone appear in the app chat marked «dal telefono»; permission questions also go to the phone; a work chat\'s Sì/No question reaches it through relay_question (ADR 0239), the user answers «sì» or «no» there. It survives an app restart (same link, reattached). Only the user turns it on or off with that button: there is no agent tool, so tell the user where it is. Works also when Telegram is blocked.';
 /** The usage counter (ADR 0202): what it counts and where, before its numbers. */
 const USAGE_ABOUT = 'Andamento → Uso (app_ui page andamento/uso): page and tab opens and main actions (new request, Orchestrator, Discuti, focus mode, stop all, dictation, file opens…) counted per day on this PC, kept 90 days, zero tokens, never sent anywhere; for deciding which features to keep. Read only: nothing to approve, no setting.';
-/** How the app prepares and observes terminal routines (ADR 0179), so the Orchestrator answers from the code's rules. One
- *  entry each: app_guide cuts an entry's text at 700 characters. */
-const ROUTINE_RULES: [title: string, text: string][] = [
-  ['Routine: terminal only', 'The terminal routine CLI is the only executor: run, watch and resume keep their existing behavior. The app never starts, advances, retries, cancels, settles or reconciles a run. Triggers and automation belong only to routine watch. Give the user the terminal command; do not launch it from an app chat.'],
-  ['Routine: live view and history', 'Open Routine, select a run to watch steps, actions, screenshots, evidence and reports. Only that open view watches its run folder. Closing it stops the watch; there are no background scans, polling, routine notifications or questions. app_routine_status reads progress only when the user explicitly asks; generic recaps must not scan routines. Old app runs are read-only archives, including unresolved writes.'],
-  ['Routine: packages and export', 'The app can prepare, import and export a package for the terminal without executing it. app_routine_export fills known secret placeholders and writes the zip in the terminal packages folder, returning its path and secret names only. Never copy credentials into a repository or the brain. Old definitions can be converted explicitly; conversion never resumes their runs.'],
-];
 
 
 /** Runs one of the renderer's fixed readers (never code an agent wrote) with a time limit. */
@@ -139,8 +131,6 @@ export function entries(ui: UiMap | null, d: GuideDeps, lang: GuideLang): Entry[
   out.push({ kind: 'concept', title: 'Telefono: stato adesso (phone bridge status, Telegram, pairing)', text: phoneNow(d) });
   out.push({ kind: 'usage', title: 'Uso dell\'app: funzioni e pagine usate di più (usage counter, most used features, quali funzioni uso di più, cosa uso poco)',
     text: `${USAGE_ABOUT} ${values ? (d.usage ?? (() => useCounts.summary()))() : 'The counts are shown only on the Orchestrator\'s own endpoint.'}` });
-  for (const [title, text] of ROUTINE_RULES) out.push({ kind: 'routine', title, text });
-  out.push({ kind: 'routine', title: 'Routine: creare un pacchetto (author a routine package from the user need)', text: ROUTINE_AUTHORING_SUMMARY });
   for (const c of CONCEPTS) out.push({ kind: 'concept', title: textOf(c.title, lang), text: `${textOf(c.summary, lang)} ${c.points.slice(0, 3).map(p => textOf(p, lang)).join(' ')} (more: the Guida page)` });
   const own = d.tools();
   for (const t of own) out.push({ kind: 'tool', title: t.name, text: t.description });
@@ -196,7 +186,6 @@ function index(ui: UiMap | null, d: GuideDeps, lang: GuideLang): string {
     lines.push('Help topics: ' + ui.help.map(h => h.title).join(', '));
   } else lines.push('(the window did not answer: pages and sections missing; try again)');
   lines.push('Usage: which pages and actions the user uses most (local counter, 14 days): app_guide topic "uso", page andamento/uso.');
-  lines.push('Routines: terminal execution only; open Routine for live progress and history, or ask app_routine_status explicitly.');
   lines.push('Concepts (Guida page): ' + CONCEPTS.map(c => textOf(c.title, lang)).join(', '));
   const byMount = new Map<ToolMount, string[]>();
   const mine = new Set(d.tools().map(t => t.name));

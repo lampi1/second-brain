@@ -1,7 +1,7 @@
 <!-- Routines run by the app, not by the Orchestrator chat: runner, triggers, single-item starts, scripts/queries, prod safety, Routine page. For maintainers and reviewers. -->
 # 0155 — The app runs routines; the Orchestrator observes
 
-Date: 2026-10-24 · Status: partly superseded by ADR 0179 (app-execution portions); accepted
+Date: 2026-10-24 · Status: partly superseded by ADR 0179 (app-execution portions), ADR 0325 (the app has no routine section any more); accepted
 
 ## Context
 
@@ -69,7 +69,7 @@ never writes those files into a brain.
 
 **Page.** Routine has three tabs: Adesso (only what needs the user, then runs working by themselves with their heal
 banner), Routine (each routine in plain words, its trigger switch and queue; open one for steps, per-step models,
-filters, export and dry run), Storico (finished runs with receipts). Mockups: `docs/mockups/routines/`.
+filters, export and dry run), Storico (finished runs with receipts). Mockups: `docs/mockups/routines/` (removed with ADR 0325).
 
 ## Consequences
 

@@ -6,7 +6,7 @@ export function AgentContextInspector({ chat, onClose }: { chat: ChatSummary; on
   const context = chat.launchContext;
   return <Modal isolateWorkspace onClose={onClose} closeButton size="m" label={t('rt.context.title')} title={t('rt.context.title')} subtitle={chat.title} testid="agent-context-inspector">
     {!context ? <p>{t('rt.context.unknown')}</p> : <>
-      <p>{t(context.mode === 'sealed' ? 'rt.context.sealed' : 'rt.context.scoped')}</p>
+      <p>{t('rt.context.scoped')}</p>
       <p><strong>≈ {context.instructions.estimatedTokens}</strong> {t('rt.context.tokens')} · {context.instructions.characters} {t('rt.context.characters')}</p>
       <p className="rt-muted">{t('rt.context.estimateHint')}</p>
       <h3>{t('rt.context.memory')}</h3>

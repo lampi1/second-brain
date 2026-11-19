@@ -135,8 +135,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
 
   /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
   /** by: who asks; 'app' = one of the app's own jobs (the sampled Sentinel reviews, agents/judge-sample.ts): like an agent, its run says startedBy 'app' */
-  override async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; routinePackage?: string; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { routine?: ChatSummary['routine']; boundByOrchestrator?: boolean; intake?: IntakeSource; continuation?: boolean; continuationOf?: string } = {}): Promise<ChatSummary> {
-    if (opts.routine || inherited?.routinePackage) throw new Error('Routine execution is terminal-only.');
+  override async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { boundByOrchestrator?: boolean; intake?: IntakeSource; continuation?: boolean; continuationOf?: string } = {}): Promise<ChatSummary> {
     const createdT0 = Date.now();
     this.deliveryPolicy(req.deliveryPolicy, !!req.parentId);
     if (req.doneWhen && (req.doneWhen.length > 12 || req.doneWhen.some(x => typeof x !== 'string' || !x.trim() || x.length > 300))) throw new Error('Invalid task criteria.');
@@ -168,7 +167,6 @@ export class ChatManager extends ManagerRemote implements ChatService {
     // A root chat the Orchestrator opens is bound by its own role (and the user's defaults), not by the Orchestrator's
     // policy: the Orchestrator plans, the Artisan it starts writes (ADR 0083)
     const forkSrc = req.resumeSessionId?.trim() ? [...this.chats.values()].find(r => r.s.sessionId === req.resumeSessionId?.trim()) : undefined;
-    if (forkSrc?.s.routineArchived || forkSrc?.s.routine || forkSrc?.s.routinePackage) throw new Error('Archived routine chats cannot be forked.');
     // a chat from the unauthenticated /mcp/app mount (any local process can call it) runs no wider than the Orchestrator
     const bound = opts.boundByOrchestrator ? [...this.chats.values()].find(r => r.s.isOrchestrator && !r.s.closedAt) : undefined;
     if (opts.boundByOrchestrator && !bound) throw new Error('Senza un Orchestrator aperto questo endpoint non apre chat.');
@@ -358,7 +356,6 @@ export class ChatManager extends ManagerRemote implements ChatService {
   override async send(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, source?: TaskSource, receipt?: SubmissionReceipt, appText = false): Promise<void> {
     updateActivity.assertOpen();
     const r = this.need(chatId);
-    if (r.s.routineArchived || r.s.routine || r.s.routinePackage) throw new Error('Archived routine chat: use the terminal routine CLI.');
     // the user (or the owner of its work) writes to it: a Sì that waited for its command's run is over, the worker goes
     // on with this message (#371); the app's own deliveries (a run's result) leave the wait
     if (!appText && !resumed && source?.kind !== 'app') this.dropAwaitingRun(chatId);
@@ -546,7 +543,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     if (!t && !imgs.length) throw new Error('Messaggio vuoto.');
     if (!resumed && r.s.resumedAt) { delete r.s.resumedAt; this.updated(r); }
     this.ensureHistory(r);
-    const warning = r.s.routinePackage || engineOf(r.s.harness)?.kind === 'claude' ? '' : await recallWarning(t, this.opts.recall);
+    const warning = engineOf(r.s.harness)?.kind === 'claude' ? '' : await recallWarning(t, this.opts.recall);
     if (this.quitting || this.chats.get(chatId) !== r) throw new Error('La chat non è attiva.');
     if (liveOnly && ((!r.session && r.s.state !== 'idle') || r.archiving || r.s.closedAt)) throw new Error('La chat non è attiva: la posta resta da leggere.');
     if (r.archiving) await r.archiving; // never into a session that is closing: the archive ends first, then this reopens
@@ -658,7 +655,6 @@ export class ChatManager extends ManagerRemote implements ChatService {
 
   async set(chatId: string, patch: { model?: string; effort?: Effort; permissionMode?: PermissionMode; title?: string; workStatus?: 'assigned'|'waiting-mail'|'completed' }): Promise<ChatSummary> {
     const r = this.need(chatId);
-    if (r.s.routineArchived) throw new Error('Archived routine chats are read-only.');
     const sess = r.session;
     if(patch.workStatus !== undefined){
       if(Object.keys(patch).some(key=>key!=='workStatus'))throw new Error('Aggiorna lo stato incarico separatamente dalle altre impostazioni.');

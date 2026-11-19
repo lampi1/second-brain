@@ -363,9 +363,3 @@ describe('agent policy on chats', () => {
     expect(FAIL_CLOSED.ceiling).toBe('plan');
   });
 });
-
-it('refuses archived routine execution before launching any engine', async () => {
-  const f = fixture();
-  await expect(f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'Do not launch' }, 'app', undefined, {}, { routine: { runId: 'old', stepId: 'web', browserWrite: true } })).rejects.toThrow('terminal-only');
-  expect(f.starts).toHaveLength(0);
-});

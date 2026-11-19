@@ -27,8 +27,6 @@ export interface McpServerDef {
   importedFrom?: McpImportSource;
   /** off: no chat gets it, the test still works */
   enabled: boolean;
-  /** User confirmation: this connector account and its targets are restricted to non-production routine work. */
-  routineTest?: true;
   /** Added by the Orchestrator, or its command / arguments / variables / address changed by it (ADR 0207): off until
    *  the user's own click «Attiva», which names exactly this `runs` (runsOf); no test before it. */
   awaiting?: { runs: string; at: number };

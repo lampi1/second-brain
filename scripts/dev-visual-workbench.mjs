@@ -1,7 +1,6 @@
 // Additional hidden native-dev captures for PR review: a work chat's launch context and the voice diagnostics.
-// Synthetic read models only, no e2e runner or paid services. The legacy Routine workbench and component catalog
-// captures are gone with that UI (ADR 0175, 0176). Used by dev-visual-smoke.mjs.
-export async function captureRoutineWorkbench(app, page, capture) {
+// Synthetic read models only, no e2e runner or paid services. Used by dev-visual-smoke.mjs.
+export async function captureWorkbench(app, page, capture) {
   await page.getByTestId('nav-home').click();
   await page.evaluate(() => document.activeElement?.blur()); await page.keyboard.press('g'); await page.keyboard.press('a');
   await page.getByTestId('catalog-flip-artisan').click(); await page.getByTestId('catalog-open-artisan').click();

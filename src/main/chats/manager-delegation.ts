@@ -174,7 +174,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
   private queueChildResult(parentId: string, childId: string, title: string, message: string, runId?: string, correction = 0): void {
     const target = this.chats.get(parentId);
     // a parent the user closed gets no late result: it would reopen it (its record stays on the child: agent_children)
-    if (target?.s.routineArchived || target && this.closedByUser(target)) return;
+    if (target && this.closedByUser(target)) return;
     const q = this.childResults.get(parentId) ?? { items: [], timer: null };
     if (q.items.some(item => item.title === title && item.message === message)) return;
     const item: HeldChildResult = { id: runId ? `result-${runId}${correction ? `-c${correction}` : ''}` : crypto.randomUUID(), ...(runId ? { runId } : {}), title, message, chatId: childId };
@@ -202,7 +202,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     this.childResults.delete(parentId);
     if (q.timer) clearTimeout(q.timer);
     const parent = this.chats.get(parentId);
-    if (!parent || parent.s.routineArchived || this.closedByUser(parent) || !q.items.length) return;
+    if (!parent || this.closedByUser(parent) || !q.items.length) return;
     parent.heldResults = uniqueChildResults([...(parent.heldResults ?? []), ...q.items]);
     // A restored queue may alias heldResults. Freeze this batch before asynchronous engine startup;
     // later reports must never join its acknowledgment without joining its submitted message body.
@@ -222,7 +222,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
       if (acknowledged || retrying) return;
       retrying = true;
       const parent = this.chats.get(parentId);
-      if (parent && !parent.s.routineArchived && !this.quitting) {
+      if (parent && !this.quitting) {
         const retry = this.childResults.get(parentId) ?? { items: [], timer: null };
         // a result corrected meanwhile is not sent again after its correction
         const old = batch.filter(item => supersededResult(item, item.runId ? this.runs.get(item.runId)?.report?.corrections : 0));
@@ -438,7 +438,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     const orchestrator = this.openOrchestrator(), run = this.runs.get(runId), result = run?.report?.canonical;
     if (!orchestrator) throw new Error('Open an Orchestrator before requesting synthesis.');
     if (source.kind !== 'user' && !(source.kind === 'chat' && source.chatId === orchestrator.s.id)) throw new Error('Only the user or current Orchestrator may request root synthesis.');
-    if (!run || !result || !['orchestrator', 'user'].includes(run.startedBy) || run.parentRunId || this.chats.get(run.chatId)?.s.parentId) throw new Error('Only a root task result is available for synthesis.');
+    if (!run || !result || !['orchestrator', 'user'].includes(run.startedBy) || run.parentRunId || this.store.retiredIds.has(run.chatId) || this.chats.get(run.chatId)?.s.parentId) throw new Error('Only a root task result is available for synthesis.');
     if (run.delivery?.synthesisSubmittedAt || this.synthesizing.has(runId)) return;
     const worker = this.chats.get(run.chatId);
     if (worker?.s.run?.runId === runId && (worker.working || this.midTurn(worker))) throw new Error('The worker is still finishing this result.');
@@ -499,7 +499,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
       if (superseded.has(run.runId)) continue;
       if (run.delivery?.policy !== 'synthesize' || run.delivery.synthesisSubmittedAt || !(run.startedBy === 'orchestrator' || run.startedBy === 'user' && run.delivery.synthesisRequestedAt !== undefined) || run.parentRunId) continue;
       const worker = this.chats.get(run.chatId);
-      if (worker?.s.routineArchived || worker?.s.parentId || worker?.s.run?.runId === run.runId && (worker.working || this.midTurn(worker))) continue;
+      if (this.store.retiredIds.has(run.chatId) || worker?.s.parentId || worker?.s.run?.runId === run.runId && (worker.working || this.midTurn(worker))) continue;
       void this.synthesizeResult(run.runId, run.startedBy === 'user' ? { kind: 'user' } : { kind: 'chat', chatId: orchestrator.s.id }).catch(e => log.warn('chats', 'synthesis delivery deferred', { cause: errText(e), hint: 'the persisted result stays available' }));
     }
   }
@@ -535,7 +535,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     const orchestrator = this.openOrchestrator(), changed = new Set<Rec>(), superseded = this.supersededRuns();
     for (const run of this.runs.list().slice().sort((a, b) => a.startedAt - b.startedAt)) {
       const result = run.report?.canonical, worker = this.chats.get(run.chatId);
-      if (worker?.s.routineArchived || !result || worker?.s.isOrchestrator || superseded.has(run.runId)) continue;
+      if (this.store.retiredIds.has(run.chatId) || !result || worker?.s.isOrchestrator || superseded.has(run.runId)) continue;
       if (run.startedBy === 'parent' && !run.delivery?.ownerNotice) continue;
       const local = run.startedBy === 'user' || run.startedBy === 'app' && run.taskContract?.reportExpected;
       const target = run.startedBy === 'orchestrator' || run.startedBy === 'parent' || run.startedBy === 'user' ? orchestrator : local ? worker : undefined;
@@ -562,7 +562,6 @@ export abstract class ManagerDelegation extends ManagerContinuity {
    *  clean, else a message that wakes the Orchestrator; once. A clean one the user waits for also leaves the app's notice in
    *  the Orchestrator's chat (sys resultReady: the summary and the chat to open; no turn, no token). */
   protected releaseResult(r: Rec): void {
-    if (r.s.routineArchived) return;
     const held = r.heldResult;
     if (!held) return;
     const orchestrator = held.local ? r : this.openOrchestrator();

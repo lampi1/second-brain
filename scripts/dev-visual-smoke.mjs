@@ -6,8 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { build as bundle } from 'esbuild';
 import { createRequire } from 'node:module';
-import { captureTerminalRoutine, startRoutineTrace, idleRoutineTrace, captureIdlePerformance } from './dev-visual-routines.mjs';
-import { captureRoutineWorkbench } from './dev-visual-workbench.mjs';
+import { captureIdlePerformance } from './dev-visual-idle.mjs';
+import { captureWorkbench } from './dev-visual-workbench.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const output = path.join(root, 'test-results/dev-visual-smoke');
@@ -151,17 +151,10 @@ try {
   await page.getByTestId('mh-tab-file').click();
   await page.getByTestId('mb-page').waitFor();
   await capture('memory');
-  // The Routine page on the package model (ADR 0175, 0176): the demo's packages and runs, no run is started.
-  await page.getByTestId('nav-flussi').click();
-  await page.getByTestId('routines-page').waitFor();
-  await capture('routines');
-  await page.locator('[data-testid^="routine-card-"]').first().click();
-  await page.getByTestId('routine-detail').waitFor();
-  await capture('routine-detail');
   // The demo has no review services. A separate isolated SB_TEST instance reads a clearly synthetic memory
   // store through real services; automatic token-spending work stays disabled. Production read-only pollers are
   // enabled for the subsequent idle trace, so it can expose background process launches and stalls.
-  await captureRoutineWorkbench(app, page, capture);
+  await captureWorkbench(app, page, capture);
   await app.close();
   app = undefined;
   const brain = path.join(profile, 'synthetic-brain'), realProfile = path.join(profile, 'review-profile');
@@ -193,11 +186,10 @@ try {
     sourceEventId: 'synthetic-event', sourceRunId: 'synthetic-run', observedAt, validFrom: observedAt, validTo: null,
     status: 'confirmed', supersedes: null, transitions: [{ at: observedAt, status: 'confirmed' }],
   }], null, 2));
-  const routineRuns = path.join(profile, 'terminal-runs');
   const usageFixture = path.join(profile, 'synthetic-usage');
   await fs.mkdir(usageFixture, { recursive: true });
   await fs.writeFile(path.join(usageFixture, 'cursor-ledger.jsonl'), Array.from({ length: 5000 }, (_, i) => JSON.stringify({ at: Date.now() - i * 1000, source: 'hook', conversationId: 'visual-conversation', generationId: `visual-${i}`, model: 'grok-4.7', input: 100, cacheWrite: 0, cacheRead: 0, output: 10 })).join('\n'));
-  const reviewEnv = { ...env, ROUTINE_RUNS_DIR: routineRuns, SB_BRAIN: brain, SB_USER_DATA: realProfile, SB_CURSOR_LEDGER: usageFixture, SB_DOWNLOADS: usageFixture, SB_BENCH_TIMERS: '1', SB_ORCHESTRATOR_EVENTS: '0', SB_RUN_RESULTS: '0', SB_BRAIN_JOBS: '0', SB_COMPARE_QUEUE: '0' };
+  const reviewEnv = { ...env, SB_BRAIN: brain, SB_USER_DATA: realProfile, SB_CURSOR_LEDGER: usageFixture, SB_DOWNLOADS: usageFixture, SB_BENCH_TIMERS: '1', SB_ORCHESTRATOR_EVENTS: '0', SB_RUN_RESULTS: '0', SB_BRAIN_JOBS: '0', SB_COMPARE_QUEUE: '0' };
   delete reviewEnv.SB_DEMO;
   delete reviewEnv.SB_DEMO_FREEZE;
   app = await electron.launch({ cwd: root, args: ['.'], env: reviewEnv, timeout: 30_000 });
@@ -236,9 +228,6 @@ try {
   manifest.readPerformance.endedAt = new Date().toISOString();
   if (readResult.estimates.accuracy.n !== manifest.readPerformance.before.accuracyN) throw new Error('Worker estimate differs from synchronous reference');
   await fs.writeFile(path.join(output, 'read-performance.json'), JSON.stringify(manifest.readPerformance, null, 2));
-  await startRoutineTrace(app, [routineRuns, path.join(realProfile, 'flows'), path.join(realProfile, 'routines'), path.join(realProfile, 'routine-runs')]);
-  manifest.routineIdle = await idleRoutineTrace(app, 'home before opening routines');
-  await captureTerminalRoutine({ app, page, capture, root, profile, runs: routineRuns, output, manifest });
   manifest.idlePerformance = await captureIdlePerformance(app, page, output);
   await page.getByTestId('nav-memoria').click();
   // Facts no longer enter the proposals deck (ADR 0150). Inspect the saved fact in Approvate and check

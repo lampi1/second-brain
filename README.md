@@ -322,10 +322,6 @@ Parakeet or Whisper hears you and Piper speaks, all on your PC: no audio leaves 
   per role. Remote servers log in with the MCP OAuth flow.
 - **Settings that find themselves.** One page with a section list, search that highlights the matching row, instant
   save with Undo.
-- **Routines on a schedule.** Write a request once and choose when (every day at a time, every few hours, once): the
-  Orchestrator receives it at that time and does it with the agents. Or just tell the Orchestrator "every morning at 8".
-- **Routines as packages, run from the terminal.** Prepare a routine package with the Orchestrator, export it, and run it
-  anywhere with `routine run`, `watch` or `resume` ([packages/routine-runtime](packages/routine-runtime/README.md)).
 - **Tasks.** The Task page lists your Azure DevOps work items and PRs, with builds, votes and QA results.
 - **Chess against your agents.** The **Chess** page seats the six agents as opponents, from the Scout (about 600) to
   the Orchestrator (2200 and up, full-strength Stockfish). They think, they trash-talk about what really happens on the

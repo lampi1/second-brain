@@ -40,8 +40,6 @@ import { SearchService, demoBranchOf, brainHitsFrom } from './search/service';
 import { gitBranch } from './search/sources';
 import { findTranscript, readHistory } from './chats/transcript';
 import { FROZEN_EPOCH } from './demo';
-import { createDemoRoutines } from './routines/demo';
-import type { Routines } from './routines/service';
 import { readWorker } from './read-work';
 import { systemLang } from './lang';
 import { setUiLangSource } from './locale';
@@ -131,17 +129,6 @@ app.whenReady().then(async () => {
   // the Log page (ADR 0111): the app's own events, readable and live, kept 7 days at most; zero tokens
   const activity = attachActivity({ userData: app.getPath('userData'), emitter, chats: () => s.chats.list(), brainRoot: () => s.brain.info().brainRoot });
   if (process.env.SB_DEMO === '1') journal.seed(demoLog(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now()));
-  /** The Routine section's service; the demo gets seeded run folders read by the same code. */
-  let demoRoutines: Routines | undefined;
-  const stopRoutineView = () => { s.routines?.stop(); demoRoutines?.stop(); };
-  win.webContents.on('render-process-gone', stopRoutineView);
-  win.webContents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => { if (isMainFrame && !isInPlace) stopRoutineView(); });
-  win.on('closed', stopRoutineView);
-  const routinesOf = (): Routines => {
-    if (s.routines) return s.routines;
-    if (process.env.SB_DEMO === '1') return demoRoutines ??= createDemoRoutines(app.getPath('userData'), process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now(), change => emitter.emit('routines:progress', change));
-    throw new Error('Routine non disponibili: riavvia l’app.');
-  };
   const requireReviewRoot = (expected: unknown): void => {
     const actual = s.brain.info().brainRoot;
     if (!actual || typeof expected !== 'string' || path.resolve(expected) !== path.resolve(actual)) throw new Error('Brain changed: reload the review before acting.');
@@ -276,7 +263,7 @@ app.whenReady().then(async () => {
     const news = () => { if (!s.news) throw new Error('Le News non sono disponibili.'); return s.news; };
   const ctx: HandlerContext = {
     s, win: () => win, emitter, demo, outDir, activity, overlay, profile, agentImages, defaultBrain, updates, workflows, orchestrator,
-    voice, recordings, mcpServers, connectors, research, learn, news, routinesOf, requireReviewRoot, search, clip, hiddenShell,
+    voice, recordings, mcpServers, connectors, research, learn, news, requireReviewRoot, search, clip, hiddenShell,
     proposals: () => proposals, bumpBrainChoice: () => { brainChoiceRevision++; }, rendererErrors,
   };
   const handlers: Handlers = {

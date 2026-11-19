@@ -1867,59 +1867,6 @@ export const CONCEPTS: readonly ConceptCard[] = [
     sources: ['src/renderer/components/Notice.tsx', 'src/renderer/lib/notice.ts', 'src/renderer/lib/sounds.ts'],
   },
   {
-    id: 'routines',
-    title: b('Le routine: pianificate nell’app, o dal terminale',
-      'Routines: scheduled in the app, or from the terminal'),
-    summary: b('Due tipi: una routine pianificata è una richiesta che l’Orchestrator riceve all’ora che scegli; un pacchetto è una serie di passi che gira dal terminale con il comando routine.',
-      'Two kinds: a scheduled routine is a request the Orchestrator receives at the time you choose; a package is a series of steps that runs from the terminal with the routine command.'),
-    points: [
-      // src/renderer/components/ScheduledRoutines.tsx, src/shared/schedules.ts#nextDue
-      b('«Pianificate»: scrivi la richiesta come la scriveresti all’Orchestrator e scegli quando (ogni giorno a un’ora, giorni feriali o scelti, ogni tot ore, una volta, solo a mano). All’ora scelta l’Orchestrator la riceve e la fa con gli agenti, come se l’avessi scritta tu. Pausa, «Esegui ora», modifica ed elimina sono sulla riga.',
-        '«Scheduled»: write the request as you would write it to the Orchestrator and choose when (every day at a time, weekdays or chosen days, every few hours, once, by hand only). At that time the Orchestrator receives it and does it with the agents, as if you had written it. Pause, «Run now», edit and delete are on the row.'),
-      // src/main/schedules/service.ts#tick
-      b('Una routine pianificata parte con l’app aperta. Se all’ora scelta l’app era chiusa, parte una volta sola alla prima apertura e dice di quanto è in ritardo. La riga mostra la prossima esecuzione e l’ultima consegna.',
-        'A scheduled routine starts while the app is open. If the app was closed at that time, it starts once at the next opening and says how late it is. The row shows the next run and the last hand-over.'),
-      // src/main/appctl/schedules.ts
-      b('Puoi anche dirlo all’Orchestrator («ogni mattina alle 8 aggiorna il giornale»): crea, cambia, mette in pausa ed elimina le routine pianificate da solo, senza conferme.',
-        'You can also tell the Orchestrator («every morning at 8 refresh the news»): it makes, changes, pauses and deletes scheduled routines by itself, with no confirmation.'),
-      // packages/routine-runtime/README.md
-      b('Per i pacchetti il terminale è l’unico esecutore: routine run fa una run, routine resume la riprende dal passo non finito, routine watch segue il trigger DevOps e avvia una run per ogni work item nuovo.',
-        'For packages the terminal is the only executor: routine run does one run, routine resume continues it from the step that did not finish, routine watch follows the DevOps trigger and starts one run per new work item.'),
-      // packages/routine-runtime/README.md
-      b('Ogni passo è una sessione Claude Code; quando serve una persona, il runtime chiede in un commento DevOps e aspetta la risposta lì.',
-        'Each step is a Claude Code session; when a person is needed, the runtime asks in a DevOps comment and waits for the answer there.'),
-      // src/renderer/brain/pages/Routines.tsx (ADR 0179)
-      b('Nell’app prepari il pacchetto con l’Orchestrator, inserisci le credenziali e lo esporti; la pagina Routine non avvia e non riprova mai un pacchetto.',
-        'In the app you prepare the package with the Orchestrator, enter its credentials and export it; the Routines page never starts or retries a package.'),
-      // src/renderer/brain/pages/Routines.tsx RunPage
-      b('Aprendo una run vedi dal vivo passi, azioni, screenshot, prove e rapporto; chiudendo la vista l’osservazione si ferma. Le vecchie run fatte dall’app restano un archivio in sola lettura.',
-        'Opening a run shows its steps, actions, screenshots, evidence and report live; closing the view stops the watching. The old runs made by the app stay a read-only archive.'),
-      // src/main/appctl/tools.ts app_routine_status
-      b('L’Orchestrator legge stato e prove di una run di pacchetto solo quando glielo chiedi, e non la esegue mai.',
-        'The Orchestrator reads a package run’s state and evidence only when you ask, and never executes it.'),
-    ],
-    analogy: b('Come una ricetta scritta per la cucina: la prepari a tavolino, poi in cucina la segue chi è ai fornelli; tu guardi dalla finestrella quando vuoi.',
-      'Like a recipe written for the kitchen: you prepare it at the desk, then whoever is at the stove follows it; you look through the hatch when you want.'),
-    diagram: { kind: 'flow', steps: [b('Prepara', 'Prepare'), b('Esporta', 'Export'), b('routine run', 'routine run'), b('Guarda la run', 'Watch the run')] },
-    tech: [
-      tech(WHERE, 'Pagina Routine (barra a sinistra, o G U); runtime in packages/routine-runtime (comando routine).',
-        'Routines page (left rail, or G U); runtime in packages/routine-runtime (the routine command).'),
-      tech(FILES, 'userData/schedules.json: le routine pianificate, la prossima esecuzione e le ultime 20 consegne di ciascuna.',
-        'userData/schedules.json: the scheduled routines, each one’s next run and its last 20 hand-overs.'),
-      tech(LIMITS, 'Al massimo 50 routine pianificate, intervallo da 15 minuti a 7 giorni, controllo una volta al minuto. Per i pacchetti nessun timer o scansione nell’app: solo una run aperta osserva i suoi file (run.json, events.jsonl, report.md).',
-        'At most 50 scheduled routines, interval from 15 minutes to 7 days, checked once a minute. For packages no timer or scan in the app: only an open run watches its files (run.json, events.jsonl, report.md).'),
-    ],
-    anchors: {
-      0: ['src/renderer/components/ScheduledRoutines.tsx', 'src/shared/schedules.ts#nextDue'],
-      1: ['src/main/schedules/service.ts'],
-      2: ['src/main/appctl/schedules.ts'],
-      5: ['src/renderer/brain/pages/Routines.tsx'],
-      6: ['src/renderer/brain/pages/Routines.tsx#RunPage', 'src/renderer/components/LegacyRoutineHistory.tsx'],
-      7: ['src/main/appctl/tools.ts#app_routine_status'],
-    },
-    sources: ['packages/routine-runtime/README.md', 'src/renderer/brain/pages/Routines.tsx', 'src/renderer/components/LegacyRoutineHistory.tsx', 'src/main/appctl/tools.ts', 'docs/adr/0179-terminal-only-routines.md', 'src/shared/schedules.ts', 'src/main/schedules/service.ts', 'src/main/appctl/schedules.ts', 'src/renderer/components/ScheduledRoutines.tsx', 'docs/adr/0281-scheduled-routines.md'],
-  },
-  {
     id: 'settings',
     title: b('Le Impostazioni', 'Settings'),
     summary: b('Una pagina sola per le poche scelte che contano: profilo, aggiornamenti, connettori, account, ruoli, il tuo spazio, voce, aspetto, notifiche e avanzate.',

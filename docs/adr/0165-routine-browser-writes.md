@@ -1,7 +1,7 @@
 <!-- Explicit browser effects and host-only site logins; used by routine authors and maintainers. -->
 # ADR 0165: Scoped routine browser writes and encrypted site logins
 
-Status: partly superseded by ADR 0179 (app-execution portions); accepted (user request, 2026-10-26).
+Status: partly superseded by ADR 0179 (app-execution portions), ADR 0325 (the app has no routine section any more); accepted (user request, 2026-10-26).
 
 ## Why
 

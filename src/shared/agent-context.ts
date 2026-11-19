@@ -14,10 +14,9 @@ export interface RunExampleSelection {
   skipped?: true;
 }
 export interface AgentContextSnapshot {
-  schema: 1; at: number; mode: 'scoped' | 'sealed';
+  schema: 1; at: number; mode: 'scoped';
   memory: MemorySelection; skills: { name: string; sha256: string }[];
   instructions: { sha256: string; characters: number; estimatedTokens: number };
-  packageDigest?: string;
   /** absent on launches before ADR 0236 and on the Orchestrator's */
   examples?: RunExampleSelection;
 }
@@ -26,16 +25,15 @@ export function readAgentContext(value: unknown): AgentContextSnapshot | undefin
   if (!value || typeof value !== 'object' || JSON.stringify(value).length > 24_000) return;
   const v = value as AgentContextSnapshot, num = (n: unknown) => typeof n === 'number' && Number.isFinite(n) && n >= 0;
   const string = (s: unknown, max = 200) => typeof s === 'string' && s.length <= max;
-  if (v.schema !== 1 || !num(v.at) || !['scoped', 'sealed'].includes(v.mode) || !v.memory || !Array.isArray(v.memory.records) || v.memory.records.length > 8 || !v.memory.omitted
+  if (v.schema !== 1 || !num(v.at) || v.mode !== 'scoped' || !v.memory || !Array.isArray(v.memory.records) || v.memory.records.length > 8 || !v.memory.omitted
     || typeof v.memory.available !== 'boolean' || !['ineligible', 'unmatched', 'budget'].every(k => num(v.memory.omitted[k as keyof MemorySelection['omitted']])) || !num(v.memory.estimatedTokens) || !num(v.memory.budgetTokens)
     || v.memory.records.some(r => !r || !string(r.id) || !string(r.status, 30) || !num(r.estimatedTokens) || !num(r.score) || (r.sourceEventId !== undefined && !string(r.sourceEventId)) || (r.sourceRunId !== undefined && !string(r.sourceRunId)))
     || !Array.isArray(v.skills) || v.skills.length > 50 || v.skills.some(s => !s || !string(s.name) || !/^[a-f0-9]{64}$/.test(s.sha256))
-    || !v.instructions || !/^[a-f0-9]{64}$/.test(v.instructions.sha256) || !num(v.instructions.characters) || !num(v.instructions.estimatedTokens)
-    || (v.packageDigest !== undefined && !/^[a-f0-9]{64}$/.test(v.packageDigest))) return;
+    || !v.instructions || !/^[a-f0-9]{64}$/.test(v.instructions.sha256) || !num(v.instructions.characters) || !num(v.instructions.estimatedTokens)) return;
   // a malformed examples record drops only itself, never the memory and skills provenance
   const ex = v.examples, examplesOk = !!ex && typeof ex === 'object' && Array.isArray(ex.examples) && ex.examples.length <= 4 && num(ex.candidates)
     && (ex.skipped === undefined || ex.skipped === true) && !ex.examples.some(e => !e || !/^r_[a-f0-9]{12}$/.test(e.runId) || !num(e.score) || !num(e.estimatedTokens));
-  return { schema: 1, at: v.at, mode: v.mode, ...(v.packageDigest ? { packageDigest: v.packageDigest } : {}),
+  return { schema: 1, at: v.at, mode: v.mode,
     ...(examplesOk ? { examples: { candidates: ex!.candidates, ...(ex!.skipped ? { skipped: true as const } : {}), examples: ex!.examples.map(e => ({ runId: e.runId, score: e.score, estimatedTokens: e.estimatedTokens })) } } : {}),
     memory: { available: v.memory.available, records: v.memory.records.map(r => ({ id: r.id, status: r.status, estimatedTokens: r.estimatedTokens, score: r.score, ...(r.sourceEventId ? { sourceEventId: r.sourceEventId } : {}), ...(r.sourceRunId ? { sourceRunId: r.sourceRunId } : {}) })),
       omitted: { ineligible: v.memory.omitted.ineligible, unmatched: v.memory.omitted.unmatched, budget: v.memory.omitted.budget }, estimatedTokens: v.memory.estimatedTokens, budgetTokens: v.memory.budgetTokens },

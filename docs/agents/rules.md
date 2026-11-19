@@ -32,10 +32,8 @@ app (each CLI logs in itself) with these exceptions:
 - the Telegram bot token the user types in Settings → Telefono, encrypted with safeStorage in its own slot, write-only
   from the UI, used only by the main process in its calls to `api.telegram.org`, redacted from logs (`addRedaction`,
   `src/main/log.ts`), never given to an engine, a chat, an agent or a file (ADR 0219);
-- historical routine site passwords stay encrypted in the app profile and are read only during explicit package
-  preparation/export for the terminal, never printed in transcripts, evidence or logs (ADR 0179).
-
-The app no longer has a routine browser host.
+- the site passwords of the former Routine section stay encrypted in the app profile (`routine-site-credentials.json`);
+  the app no longer reads or writes them (ADR 0325).
 
 ## 3. Dependencies
 
@@ -52,9 +50,9 @@ the Cursor CLI.
 
 ## 5. No production from agents or routines
 
-No agent, tool or routine runner ever runs a prod command (prod DB, ops scripts, write `az`). The app never executes
-routine commands, including production steps; historical receipts are read-only (ADR 0179). The terminal runtime's
-production boundary remains unchanged.
+No agent, tool or routine runner ever runs a prod command (prod DB, ops scripts, write `az`). The app has no routine
+section (ADR 0325): it never prepares, starts or reads a routine. The terminal runtime's production boundary
+(`packages/routine-runtime`) remains unchanged.
 
 ## 6. Coexistence
 

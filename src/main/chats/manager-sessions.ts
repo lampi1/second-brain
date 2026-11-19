@@ -130,7 +130,6 @@ export abstract class ManagerSessions extends ManagerPersistence {
 
   /** Starts the chat's engine if it is not running (a resumed Cursor chat: waits until its replayed past has landed). */
   protected async ensureSession(r: Rec): Promise<void> {
-    if (r.s.routineArchived) throw new Error('Archived routine chats are read-only.');
     updateActivity.assertOpen();
     if (r.releasing) await r.releasing; // never into an engine released for idleness: it ends, then this resumes
     if (!r.session) {
@@ -303,7 +302,6 @@ export abstract class ManagerSessions extends ManagerPersistence {
   }
 
   protected startSession(r: Rec): void {
-    if (r.s.routineArchived) throw new Error('Archived routine chats are read-only.');
     r.s.effortStatus = initialEffort(!!engineOf(r.s.harness)?.caps.effort, r.choice.effort);
     const chatId = r.s.id;
     let sessionId = r.s.sessionId;

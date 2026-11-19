@@ -9,7 +9,7 @@ import type { Bi } from './concept-guide';
 
 /** page id → card id */
 export const PAGE_CARDS: Readonly<Record<string, string>> = {
-  home: 'grindhouse', agenti: 'agents', task: 'tasks', flussi: 'routines', idee: 'memory-hub', andamento: 'trends',
+  home: 'grindhouse', agenti: 'agents', task: 'tasks', idee: 'memory-hub', andamento: 'trends',
   script: 'brain-scripts', log: 'log', skill: 'skills',
   impostazioni: 'settings', regole: 'errors-rules', memoria: 'memory-hub',
   collegamenti: 'brain-map', guida: 'guide', registrazioni: 'recordings', impara: 'impara', scacchi: 'chess',

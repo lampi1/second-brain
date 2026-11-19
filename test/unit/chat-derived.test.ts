@@ -9,7 +9,7 @@ import { originOf } from '../../src/renderer/lib/chat-origin';
 import { orchestratorTally } from '../../src/renderer/lib/orchestrator-tally';
 import { queuedCount, runningCount } from '../../src/renderer/store/state';
 import {
-  chatList, firstQueuedOf, openKidsOf, originFor, queuedOf, routineIdList, runningOf, sameOrigin, sameTally, sameTree, sidebarTree, stripTiles,
+  chatList, firstQueuedOf, openKidsOf, originFor, queuedOf, runningOf, sameOrigin, sameTally, sameTree, sidebarTree, stripTiles,
   stripTree, tabOwners, tallyOf, titlesKeyOf,
 } from '../../src/renderer/lib/chat-derived';
 
@@ -24,7 +24,6 @@ const chats: Record<string, ChatSummary> = {
   k1: chat('k1', { parentId: 'r', delegation: { role: 'scout', goal: 'g', doneWhen: [], at: 2 } as unknown as ChatSummary['delegation'] }),
   k2: chat('k2', { parentId: 'r', delegation: { role: 'scout', goal: 'g', doneWhen: [], at: 1 } as unknown as ChatSummary['delegation'], queued: { position: 1 } as ChatSummary['queued'] }),
   gone: chat('gone', { closedAt: 5, state: 'closed' }),
-  w: chat('w', { routineArchived: true } as Partial<ChatSummary>),
 };
 const order = Object.keys(chats);
 const tabs = [{ id: 't1', ownerChatId: 'r', url: 'https://x', title: 'x' }, { id: 't2', url: 'https://y', title: 'y' }] as BrowserTab[];
@@ -32,13 +31,12 @@ const tabs = [{ id: 't1', ownerChatId: 'r', url: 'https://x', title: 'x' }, { id
 describe('derived once per chats object, same as the pure functions', () => {
   it('trees, tiles and owners', () => {
     const tree = stripTree(order, chats);
-    expect(tree).toEqual(chatTree(order.filter(id => id !== 'w'), chats));
+    expect(tree).toEqual(chatTree(order, chats));
     expect(stripTree(order, chats)).toBe(tree);
     expect(stripTree(order, { ...chats })).not.toBe(tree);
     expect(stripTiles(order, chats, tabs).map(t => t.id)).toContain('t1');
     expect(stripTiles(order, chats, tabs)).toBe(stripTiles(order, chats, tabs));
-    expect(sidebarTree(order, chats)).toEqual(chatTree(['r', 'k1', 'k2', 'gone'], chats)); // no Orchestrator or routine worker
-    expect(routineIdList(chats)).toEqual(['w']);
+    expect(sidebarTree(order, chats)).toEqual(chatTree(['r', 'k1', 'k2', 'gone'], chats)); // no Orchestrator
     expect(tabOwners(tabs)).toEqual({ t1: 'r' });
     expect(chatList(chats)).toBe(chatList(chats));
   });

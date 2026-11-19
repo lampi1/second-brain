@@ -68,7 +68,7 @@ function startSession(engine: EngineDef, opts: SessionOptions, sink: SessionSink
     case 'claude': {
       // the brain as a plugin (off by default); a read-only run (comparison side b) takes nothing that could act; a role
       // chat takes the brain without its skills and its launch's own plugin (only the skills it was given)
-      const launch = opts.readOnly ? null : claudeLaunch(ctx.userData, opts.env?.SB_ROUTINE_PACKAGE || opts.env?.SB_ROUTINE_BROWSER ? { domains: [], on: false } : undefined, { skills: !opts.agentAssets, ...(opts.worktree || opts.inWorktree ? {} : { cwd: opts.cwd }) }); // a worktree chat runs in a copy: only the plugin's hooks are sure to be there
+      const launch = opts.readOnly ? null : claudeLaunch(ctx.userData, undefined, { skills: !opts.agentAssets, ...(opts.worktree || opts.inWorktree ? {} : { cwd: opts.cwd }) }); // a worktree chat runs in a copy: only the plugin's hooks are sure to be there
       const brain = launch ? [...launch.args, ...(opts.agentAssets ? ['--plugin-dir', opts.agentAssets.pluginDir] : [])] : [];
       return prepared({ kind: 'claude', options: { ...opts, ...(brain.length ? { extraArgs: [...brain, ...(opts.extraArgs ?? [])] } : {}), ...(launch?.productHooks ? { productHooks: launch.productHooks } : {}), ...(ctx.path ? { claudePath: ctx.path } : {}) } }, sink);
     }
@@ -76,7 +76,7 @@ function startSession(engine: EngineDef, opts: SessionOptions, sink: SessionSink
       const command = engine.command ?? engine.id;
       const key = engine.keyEnv ? boundKey() : null;
       const agentPolicy = opts.toolPolicy || opts.ceiling ? { tools: opts.toolPolicy ?? null, ceiling: opts.ceiling ?? null } : null;
-      const launch = codexLaunch({ ...(opts.env?.SB_ROUTINE_PACKAGE ? { domains: [], brain: false } : {}), cwd: opts.cwd, mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, extMcp: ctx.extMcp ?? [], readOnly: opts.readOnly, chatId: opts.chatId, agentPolicy });
+      const launch = codexLaunch({ cwd: opts.cwd, mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, extMcp: ctx.extMcp ?? [], readOnly: opts.readOnly, chatId: opts.chatId, agentPolicy });
       return prepared({ kind: 'codex', options: {
         ...opts, mcpConfig: null, engineId: engine.id, label: engine.label, command, args: engine.args ?? ['app-server'],
         configArgs: launch.configArgs, developerInstructions: launch.developerInstructions, skillRoots: opts.readOnly ? [] : opts.agentAssets ? [opts.agentAssets.skillRoot] : launch.skillRoots,
@@ -95,7 +95,7 @@ function startSession(engine: EngineDef, opts: SessionOptions, sink: SessionSink
         : null;
       const env = key && engine.keyEnv || perms ? { ...opts.env, ...perms, ...(key && engine.keyEnv ? { [engine.keyEnv]: key } : {}) } : null;
       return prepared({ kind: 'acp', options: {
-        brainInstructions: opts.env?.SB_ROUTINE_PACKAGE ? null : acpRules(opts.readOnly),
+        brainInstructions: acpRules(opts.readOnly),
         ...opts, mcpConfig: null, mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, extMcp: opts.readOnly ? [] : ctx.extMcp ?? [], showReplay: ctx.showReplay,
         engineId: engine.id, label: engine.label, args: engine.args ?? [], acpCommand: command,
         ...(engine.modelFlag ? { modelFlag: engine.modelFlag } : {}),

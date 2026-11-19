@@ -1,9 +1,9 @@
-<!-- Current routine architecture: terminal-only execution, retained here so old documentation links remain useful. -->
-# Terminal-only routines
+<!-- Where routines went: out of the app (ADR 0325), retained here so old documentation links remain useful. -->
+# Routines are no longer part of the app
 
-The in-app flows executor, automation rules, triggers, approval panels and `app_flow_*` tools are retired
-(ADR [0179](adr/0179-terminal-only-routines.md)). The app never starts, advances, settles or reconciles routine runs.
+The app has no Routine page, no routine tools for the Orchestrator and no scheduled requests
+(ADR [0325](adr/0325-routines-leave-the-app.md)). It never prepares, starts, advances or reads a routine run.
 
-Use the [package authoring guide](routines/authoring.md) and `packages/routine-runtime` (`routine run | watch | resume`).
-The app prepares packages on request and observes runs only while their view is open or when the user explicitly
-asks the Orchestrator. Historical app runs remain read-only evidence; unknown DevOps outcomes are never retried.
+The terminal engine is still in `packages/routine-runtime` (`routine run | watch | resume`), with its
+[package authoring guide](routines/authoring.md). It is leaving this repository too: the owner's brain becomes its
+home, and the package is removed here once that copy is confirmed to work. Folders of past runs are never touched.

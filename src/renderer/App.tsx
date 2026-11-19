@@ -13,7 +13,6 @@ import { goSequence, resolveShortcut } from './lib/keys';
 import { schedule, setBlocked, setKnownTabs } from './lib/viewports';
 import { liveSource } from './lib/liveSource';
 import { sameList } from './store/state';
-import { routinePlacements } from './lib/routine-chats';
 import { useApp } from './store/store';
 import { openModal, closeModal, pageLabel, setFullOrch, setMap, setPrefs, toast, ui } from './store/ui';
 import {
@@ -236,8 +235,6 @@ export function App() {
   const modal = ui.use(s => s.modal);
   const focused = ui.use(s => s.focused);
   const tabIds = useApp(s => s.tabs.map(t => t.id), sameList);
-  const routineFocus = useApp(state => focusMode && routinePlacements(state.chats).has(focusMode) ? focusMode : null);
-  useEffect(() => { if (routineFocus) focusChat(routineFocus); }, [routineFocus]);
   const focusChatExists = useApp(s => (focusMode ? !!s.chats[focusMode] : true));
   const dock = useDockReserve();
 
@@ -256,7 +253,7 @@ export function App() {
   useEffect(() => { if (!focusChatExists) ui.set(s => ({ ...s, focusMode: null })); }, [focusChatExists]);
 
   // full screen (ADR 0287): one chat's window, or a browser tab without a strip, over the whole app window
-  const fullChat = !!focusMode && !routineFocus && page === 'home' && !map ? focusMode : null;
+  const fullChat = !!focusMode && page === 'home' && !map ? focusMode : null;
   const fullTab = !fullChat && maximized?.startsWith('browser:') && page === 'home' && !map && tabIds.includes(maximized.slice(8)) ? maximized.slice(8) : null;
   const full = !!fullChat || !!fullTab;
   // the column beside a full screen belongs to that full screen: however it ended (a closed chat or tab, a page), the next one starts without it

@@ -140,7 +140,7 @@ export function startStore(): void {
     loaded = true;
     for (const a of buffer.splice(0)) dispatch(a);
     // closed chats load on demand (a view that shows one, a reopen): a day of archived transcripts is not read at start
-    for (const c of chats) if (!c.routineArchived && !c.closedAt) void loadItems(c.id);
+    for (const c of chats) if (!c.closedAt) void loadItems(c.id);
   });
 }
 
@@ -190,7 +190,7 @@ export async function loadClosedErrors(): Promise<void> {
   closedErrorsRead = true;
   for (const c of Object.values(app.get().chats)) {
     const s = app.get();
-    if (!c.closedAt || c.routineArchived || s.items[c.id] || s.closedErrors[c.id]) continue;
+    if (!c.closedAt || s.items[c.id] || s.closedErrors[c.id]) continue;
     try { dispatch({ type: 'closedErrors', chatId: c.id, items: await sb.invoke('chat:items', { chatId: c.id, limit: CHAT_WINDOW_ITEMS, maxBytes: CHAT_WINDOW_BYTES }) }); } catch { /* left out */ }
     await new Promise(r => setTimeout(r, 30)); // one read at a time, the window keeps its frames
   }

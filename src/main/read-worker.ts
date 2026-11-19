@@ -1,4 +1,4 @@
-// Read-only worker entry bundled beside main. Receives explicit requests only, with no scheduler or routine imports.
+// Read-only worker entry bundled beside main. Receives explicit requests only, with no scheduler imports.
 import { parentPort } from 'node:worker_threads';
 import { runsOf, withRuns, type ReadMessage, type ReadRequest } from './read-protocol';
 import type { AgentRun } from '../shared/agents';

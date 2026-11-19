@@ -152,7 +152,7 @@ export abstract class ManagerSink extends ManagerWork {
    *  they are (an error the user or the parent sees). */
   private recoverCrash(r: Rec): void {
     // a delegated child is not resumed: owedReport already gave its parent a blocked result, the parent decides (#152)
-    if (r.crashResumed || r.s.delegation || r.s.research || r.s.routineArchived || this.closedByUser(r)) return;
+    if (r.crashResumed || r.s.delegation || r.s.research || this.closedByUser(r)) return;
     r.crashResumed = true;
     const chatId = r.s.id;
     setTimeout(() => {

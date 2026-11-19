@@ -79,7 +79,7 @@ export abstract class ManagerPersistence extends ManagerCore {
   protected finishRun(run: AgentRun | undefined, reason: AgentRunEnd, at = Date.now(), cause?: AgentRunEndCause): void {
     if (!run || run.endedAt !== undefined) return;
     const r = this.chats.get(run.chatId), mine = !!r && r.s.run === run;
-    if (r?.s.routineArchived) return;
+    if (this.store.retiredIds.has(run.chatId)) return;
     if (mine) this.ranUntil(r!, at);
     endRun(run, reason, at, cause);
     // the receipts' verdict now, unless a turn's files are still coming (receiptTurn settles it then)
@@ -164,7 +164,6 @@ export abstract class ManagerPersistence extends ManagerCore {
   }
 
   protected override restore(c: StoredChat): Rec {
-    if (c.routineArchived || c.routine || c.routinePackage) c = { ...c, routineArchived: true, closedAt: c.closedAt ?? c.createdAt, closedBy: 'auto' };
     const restored = new AgentChildrenReducer(c.agentChildren);
     restored.end();
     const children = new AgentChildrenReducer(restored.snapshot());
@@ -178,9 +177,6 @@ export abstract class ManagerPersistence extends ManagerCore {
       s: {
         agent: restoredOwner(c),
         ...(c.launchContext ? { launchContext: c.launchContext } : {}),
-        ...(c.routineArchived ? { routineArchived: true as const } : {}),
-        ...(c.routine ? { routine: c.routine } : {}),
-        ...(c.routinePackage ? { routinePackage: c.routinePackage, routinePromptHash: c.routinePromptHash } : {}),
         ...(run ? { run } : {}),
         ...(c.work ? {work:c.work} : {}),
         effortStatus: initialEffort(!!engineOf(c.harness)?.caps.effort, c.effort),
@@ -250,9 +246,6 @@ export abstract class ManagerPersistence extends ManagerCore {
     return [...this.chats.values()].map(r => ({
       ...(r.s.launchContext ? { launchContext: r.s.launchContext } : {}),
       id: r.s.id, harness: r.s.harness, cwd: r.s.cwd, sessionId: r.s.sessionId, ...(r.forkFrom ? { forkFrom: r.forkFrom } : {}),
-      ...(r.s.routineArchived ? { routineArchived: true as const } : {}),
-      ...(r.s.routine ? { routine: r.s.routine } : {}),
-      ...(r.s.routinePackage ? { routinePackage: r.s.routinePackage, routinePromptHash: r.s.routinePromptHash } : {}),
       ...(r.s.agent ? { agent: r.s.agent, agentInstructions: r.agentInstructions ?? '' } : {}),
       ...(r.agentAssets ? { agentAssets: r.agentAssets } : {}),
       ...(r.skills ? { agentSkills: r.skills } : {}),

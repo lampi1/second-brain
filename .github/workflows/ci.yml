@@ -145,10 +145,8 @@ jobs:
       - run: npm run setup
       - name: Build dev app
         run: node scripts/build.mjs --dev
-      - name: Build terminal CLI and install its browser for the live view proof
-        run: |
-          node packages/routine-runtime/scripts/build.mjs
-          npx playwright install chromium
+      - name: Build the terminal routine CLI (it stays in the repository until ADR 0325's second step)
+        run: node packages/routine-runtime/scripts/build.mjs
       - name: Capture frozen dev app (no E2E suite, no live providers)
         run: xvfb-run --auto-servernum -s "-screen 0 1920x1200x24" node scripts/dev-visual-smoke.mjs
       - name: Dev visual review images
