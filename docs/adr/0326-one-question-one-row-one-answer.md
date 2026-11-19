@@ -67,10 +67,11 @@ every engine (`chats/manager-requests.ts`), so they do not depend on a model fol
    rispondere». After two app answers in a row the question is shown anyway, so a chat can never be stuck.
    - «The same question» is strict: the same words once case, punctuation and the «(consigliato)» mark are gone, or
      one text with a few words added to the other (at least 60% in common). One changed word is another decision
-     («file A» / «file B», «commit» / «push», «staging» / «prod») and is always shown.
-   - «At once» is the exchange that was measured: the memory of his words ends when the chat does work (any tool that
-     is not a card or a question), ends its turn, receives a new message or its engine ends. What he wrote never
-     answers a later decision.
+     («file A» / «file B», «commit» / «push», «staging» / «prod») and is always shown; so is an added «e», «o» or
+     «non» («… su main e cancello il ramo?»).
+   - «At once» is the exchange that was measured: the memory of his words ends when the chat does work (a new call
+     of a tool that may change something: not a card, a question or a read), ends its turn, receives a new message or
+     its engine ends. What he wrote never answers a later decision.
    - Only words he typed start the rule. A picked option does not («Applico anche il prossimo file?» asked again
      after a Sì stays his to answer), nor does «sì» typed instead of clicked, nor a text the app sends as an answer (a
      run's result, «Non voglio rispondere», «Basta domande»).

@@ -168,7 +168,7 @@ export function askContext(items: readonly ChatItem[] | undefined, req: PendingR
   const asked = req.questions?.map(q => q.question).join('\n') ?? '';
   // an ask the app answered for him (ADR 0326) is not what he said: his words are the ones its note quotes, or none
   const said = prevAsk ? answerIn(prevAsk.output) : '';
-  const his = isAppAnswer(said) ? /^Not asked again:[^«]*«([^»]*)»/.exec(said)?.[1] ?? null : said;
+  const his = isAppAnswer(said) ? /^Not asked again:[^«]*«(.*)»\) and you have not/s.exec(said)?.[1] ?? null : said;
   const again = prevAsk && asked && askedTexts(prevAsk.input) === asked && his !== null ? { answer: his } : null;
   return { pieces, links, ...(again ? { again } : {}) };
 }

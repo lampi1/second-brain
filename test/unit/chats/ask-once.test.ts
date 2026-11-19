@@ -136,6 +136,13 @@ describe('the user answers in his own words', () => {
     w.sink!.item({ kind: 'tool', id: 't2', name: 'mcp__second-brain__show_ui', input: {}, status: 'ok', at: Date.now() } as ChatItem, false);
     w.sink!.pending(ask('q5', COMMIT));
     expect(w.added).toEqual(['q1', 'q2', 'q3', 'q4']);
+    // nor is a read, the app's own reading tool, an ACP engine's row of the brief («Tool», its name in the summary),
+    // or a row that started before his answer and only gets its output now
+    for (const [i, row] of [{ name: 'Read' }, { name: 'mcp__second-brain-app__app_chat_items' }, { name: 'Tool', summary: 'Tool: second-brain_show_ui' }].entries())
+      w.sink!.item({ kind: 'tool', id: `n${i}`, input: {}, status: 'ok', at: Date.now(), ...row } as ChatItem, false);
+    w.sink!.item({ kind: 'tool', id: 't1', name: 'Bash', input: { command: 'git commit -m x' }, status: 'ok', output: 'done', at: Date.now() } as ChatItem, true);
+    w.sink!.pending(ask('q5b', COMMIT));
+    expect(w.added).toEqual(['q1', 'q2', 'q3', 'q4']);
     // the turn ended: the next turn's question is shown
     w.sink!.item({ kind: 'result', id: 'r1', isError: false, costUsd: 0, durationMs: 1, turns: 1, at: Date.now() } as ChatItem, false);
     w.sink!.pending(ask('q6', COMMIT));

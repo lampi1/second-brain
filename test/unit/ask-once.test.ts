@@ -28,8 +28,11 @@ describe('the same question', () => {
       ['Vuoi che lanci la migrazione del database su staging?', 'Vuoi che lanci la migrazione del database su prod?'], ['Cancello la tabella orders_old?', 'Cancello la tabella orders?'],
       ['Procedo con il merge su main?', 'Procedo con il merge su dev?']] as const)
       expect(sameAsk(a, b), `${a} / ${b}`).toBe(false);
-    // the re-asks measured in the owner's chats: the same question with words added
-    expect(sameAsk('Demo su MCP, con UTCP lasciato a un eventuale nostro agente futuro?', 'Demo su MCP con login Keycloak, e UTCP lasciato a un eventuale nostro agente futuro?')).toBe(true);
+    // words added that add an action or turn the question round are another decision too
+    for (const [a, b] of [['Faccio ora il merge su main?', 'Faccio ora il merge su main e cancello il ramo?'], ['Cancello i file temporanei?', 'Cancello i file temporanei e i log?'],
+      ['Faccio il merge su main?', 'Non faccio il merge su main?'], ['Demo su MCP, con UTCP lasciato a un eventuale nostro agente futuro?', 'Demo su MCP con login Keycloak, e UTCP lasciato a un eventuale nostro agente futuro?']] as const)
+      expect(sameAsk(a, b), `${a} / ${b}`).toBe(false);
+    expect(sameAsk('Tolgo i tre freni nella cartella di AI-DLC?', 'Tolgo i tre freni nella cartella di AI-DLC, guardia solo sui comandi?')).toBe(true);
   });
   it('is not another decision, nor two short questions that only look alike', () => {
     expect(sameAsk('Faccio il merge su main?', 'Apro la pull request verso main?')).toBe(false);
@@ -96,12 +99,14 @@ describe('a message that asks about the question instead of deciding it', () => 
   it('asks to explain, or is a question that opens with a question word', () => {
     for (const t of ['spiegami meglio', 'Spiega cosa cambia', 'non ho capito', 'in che senso?', 'perché su main?', 'cosa succede se dico no?', 'che vuol dire rebase?', 'Quale dei due è più sicuro?', 'e se poi si rompe?', 'why main?', 'what does it mean?', 'warum?',
       'Mi spieghi meglio?', 'Me lo spieghi?', 'mi fai un esempio?', 'Qual è la differenza?', 'Cos\'è il rebase?', 'Ma perché?', 'Scusa, non ho capito', 'Non è chiaro', 'Boh, in che senso?', 'ok ma cosa cambia?', 'quindi cosa devo fare?',
-      'Si può annullare dopo?', 'Can you explain?', 'I don\'t get it', 'Wieso?', 'Kannst du das erklären?'])
+      'Si può annullare dopo?', 'Can you explain?', 'I don\'t get it', 'Wieso?', 'Kannst du das erklären?',
+      // a decision word inside the question is not a decision
+      'Cosa succede se procedi?', 'Cosa cambia se vai avanti?', 'perché non usa dev?', 'che ramo usa?', 'Come si usa?', 'in che senso procedi?', 'spiegami cosa fai se dico vai', 'what happens if I proceed?'])
       expect(asksToExplain(t), t).toBe(true);
   });
   it('is never a decision, also one that ends with a question mark or opens like a question', () => {
     for (const t of ['sì', 'Sì, ma sul ramo dev?', 'si, ma su dev?', 'no', 'ok vai', 'usa dev', 'usa dev, ok?', 'fallo blu scuro', 'procedi ma senza test?', '', 'prima fai il backup',
-      'Perché no, vai', 'Why not, go ahead', 'Che ne dici di dev?', 'E se usassimo dev?', 'come prima?', 'Spiegami dopo, intanto procedi con il sì', 'Cosa cambia non mi interessa, vai'])
+      'Perché no, vai', 'Why not, go ahead', 'Che ne dici di dev?', 'E se usassimo dev?', 'come prima?', 'Spiegami dopo, intanto procedi con il sì', 'Cosa cambia non mi interessa, vai', 'Perché no', 'why not?'])
       expect(asksToExplain(t), t).toBe(false);
   });
 });

@@ -25,6 +25,7 @@ const fold = (text: string): string => text.toLowerCase().replace(MARK, ' ').rep
 /** every word of a question, each once (numbers and short words too: «test 7» is not «test 8») */
 const words = (text: string): Set<string> => new Set(fold(text).split(' ').filter(w => /[\p{L}\p{N}]/u.test(w)));
 
+const JOINS = new Set(['e', 'ed', 'o', 'oppure', 'non', 'anche', 'poi', 'and', 'or', 'not', 'also', 'then', 'und', 'oder', 'nicht', 'auch', 'dann']);
 /** How much of the longer question the shorter one must be, when one only adds words to the other. */
 export const SAME_ASK = 0.6;
 
@@ -38,6 +39,8 @@ export function sameAsk(a: string, b: string): boolean {
   const [less, more] = wa.size <= wb.size ? [wa, wb] : [wb, wa];
   if (less.size < 3) return false; // «Procedo?» against «Procedo ora?»: too short to tell, only equal counts
   for (const w of less) if (!more.has(w)) return false;
+  // an added «e», «o», «non» adds a second action or turns the question round: «… su main e cancello il ramo?»
+  for (const w of more) if (!less.has(w) && JOINS.has(w)) return false;
   return less.size / more.size >= SAME_ASK;
 }
 
@@ -108,8 +111,9 @@ export function withWordsNote(req: Pick<PendingRequest, 'questions'>, answer: An
 /** words that open a message without saying what it is: «ma perché?», «scusa, non ho capito», «ok ma cosa cambia?» */
 const FILLER = /^(?:(?:ma|scusa(?:mi)?|boh|per[oò]|aspetta|quindi|allora|ok(?:ay)?[\s,]+(?:ma|per[oò])|but|sorry|wait|aber)[\s,.!…]+)+/iu;
 const GO = /^(?:sì(?![\p{L}])|si(?=\s*(?:$|[,.;:!?]))|(?:yes|ja|no|nein|ok|okay|va bene|vai|procedi|confermo|approvo|fallo|esegui(?:lo)?|lancia(?:lo)?)(?![\p{L}]))/iu;
-/** a decision said inside a question («perché no, vai», «spiegami dopo, intanto procedi») or a counter-proposal */
-const DECIDES = /(?:^|[\s,;:])(?:vai|procedi|fallo|usa|usiamo|usassimo|go ahead|proceed|mach weiter)(?=$|[\s,.;:!?])|^(?:che\s+ne\s+di(?:ci|resti)|come\s+prima)(?![\p{L}])/iu;
+/** a decision said where a clause opens («perché no, vai», «spiegami dopo, intanto procedi», «usa dev, ok?»), a bare
+ *  «perché no» (a yes) or a counter-proposal: an answer, whatever comes before it. «Cosa succede se procedi?» is not. */
+const DECIDES = /(?:^|[,;:.!]\s*)(?:(?:intanto|poi|allora|quindi|e|per[oò]|ma)\s+)?(?:vai|procedi|fallo|usa|usiamo|go ahead|proceed|mach weiter)(?=$|[\s,.;:!?])|^(?:e\s+se\s+us|che\s+ne\s+di(?:ci|resti)(?![\p{L}])|come\s+prima(?![\p{L}])|(?:perch[eé]\s+no|why\s+not)\s*[.!?]*$)/iu;
 const EXPLAIN = /^(?:(?:(?:mi|me\s+l[oa]|ce\s+l[oa])\s+)?spieg(?:a|hi|ami|armi|amelo|amela|atemi)?(?![\p{L}])|puoi\s+spiegar|(?:mi\s+fai\s+|fammi\s+)?un\s+esempio|non\s+(?:ho\s+)?cap(?:ito|isco)|non\s+(?:mi\s+)?è\s+chiar|in\s+che\s+senso|che\s+(?:cosa\s+)?(?:vuol\s+dire|significa|intend)|cosa\s+(?:vuol\s+dire|significa|intend|cambia|succede|comporta)|qual(?:e|i)?\s*[’']?\s*è|(?:cos|com)[’']è|perch[eé](?![\p{L}])|(?:can\s+you\s+)?explain(?![\p{L}])|what\s+do(?:es)?\s+(?:it|that|this|you)\s+mean|why(?![\p{L}])|i\s+do(?:n[’']t|\s+not)\s+(?:understand|get)|was\s+hei[sß]t|warum(?![\p{L}])|wieso(?![\p{L}])|(?:kannst\s+du\s+(?:das\s+)?)?erkl[aä]r)/iu;
 /** how a question about the question opens (never an instruction that ends with «, ok?») */
 const ASKS = /^(?:cio[eè]|cosa|come|quale|quali|che|chi|dove|quando|quant[oaie]|e\s+se|si\s+pu[oò]|what|which|how|who|where|when|wie|was|welche[rs]?|wo|wann)(?![\p{L}])/iu;

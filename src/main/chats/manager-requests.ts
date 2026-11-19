@@ -3,6 +3,7 @@
 // the count of a run's requests and «Comando da eseguire» asks.
 import { phoneQuestionReserved } from './phone-port';
 import { touchesProdDbAzure } from './ask-text';
+import { mayWrite } from './write-barrier';
 import { withClarified } from './plan-interview';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -37,8 +38,13 @@ const PROD_FOR_USER = 'bloccato: questo permesso tocca produzione, un database o
 /** How many times in a row the app answers a question asked again after the user's own words before it shows it as
  *  it is (never a chat stuck in a loop it cannot leave). */
 export const ASK_AGAIN_MAX = 2;
-/** the tools between his words and the same question again that are no work: a card, a brief, the question itself */
+/** the tools between his words and the same question again that are no work: a card, a brief, the question itself
+ *  (an ACP engine names an MCP row «Tool» and keeps the tool's own name in its summary), a tool that only reads
+ *  (write-barrier.ts) and the app's own reading tools */
 const ASKING_TOOL = /show_ui|AskUserQuestion|ask_user|ask_question|request_user_input/i;
+const APP_READS = /(?:^|_)(?:app_(?:chats|chat_items|state|digest|guide|task_events|work_list|agents_recap)|task_estimate)$/;
+const noWork = (item: Extract<ChatItem, { kind: 'tool' }>): boolean =>
+  ASKING_TOOL.test(`${item.name} ${item.summary ?? ''}`) || !mayWrite(item.name) || APP_READS.test(item.name);
 const EXPLAIN_HERE = 'bloccato: il suo messaggio chiede una spiegazione, non decide la domanda. Non passarlo alla chat: spiegagli tu qui, in parole semplici, cosa decide la domanda e cosa cambia per lui con ogni scelta (leggi il riepilogo in app_pending, o la chat con app_chat_items), e lascia la domanda aperta nella sua riga. La chiudi quando ti scrive cosa sceglie.';
 
 /** A question request's identity for #379: its questions and their options, in order. */
@@ -133,13 +139,14 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
   protected newMessageFor(r: Rec): void { delete r.wordsAnswer; }
 
   /** What the chat did after his own words. A reply: the longest one counts as its answer to them (EXPLAINED). Work
-   *  (a tool that is not a card or a question) or the end of its turn: it acted on them, so the next question is a new
-   *  one, his to answer («Faccio il commit?» · «sì» · … · «Faccio il push?»). */
-  protected afterWords(r: Rec, item: ChatItem): void {
+   *  (a new row of a tool that may change something: not a card, a question or a read) or the end of its turn: it
+   *  acted on them, so the next question is a new one, his to answer («Faccio il commit?» · «sì» · … · «Faccio il
+   *  push?»). A row that started before his answer and only gets its output now is no work of this exchange. */
+  protected afterWords(r: Rec, item: ChatItem, replace: boolean): void {
     const w = r.wordsAnswer;
     if (!w) return;
     if (item.kind === 'assistant') w.replied = Math.max(w.replied, item.text.trim().length);
-    else if (item.kind === 'result' || (item.kind === 'tool' && !ASKING_TOOL.test(item.name))) delete r.wordsAnswer;
+    else if (item.kind === 'result' || (item.kind === 'tool' && !replace && !noWork(item))) delete r.wordsAnswer;
   }
 
   /** The chat's engine ended: nothing of the last exchange holds for the next one. */
@@ -356,7 +363,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       if (ok && sameChat()) this.dropPending(r, requestId);
       // the Orchestrator's own question answered in words typed on the PC (not an option clicked): they are his last
       // message too, so the Orchestrator may pass them to a work chat's question they answer (ADR 0274)
-      if (ok && r.s.isOrchestrator && by === 'pc' && answer.kind === 'question') {
+      if (ok && r.s.isOrchestrator && by === 'pc' && !byApp && answer.kind === 'question') {
         const typed = Object.entries(answer.answers).flatMap(([q, v]) => (Array.isArray(v) ? v : [v]).filter(x => !req.questions?.find(k => k.question === q)?.options.some(o => o.label === x)));
         if (typed.length) r.userSaid = { text: typed.join('\n'), at: Date.now() };
       }
