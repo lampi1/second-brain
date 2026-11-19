@@ -187,7 +187,7 @@ const brief = (c: ChatSummary, warn: number) => c.parentId ? statusOnly(c) : ({
   // a role chat's run: its runId is what agent_metrics and agent_children show (never the chat id)
   ...(c.run ? { run: { runId: c.run.runId, taskId: c.run.taskId ?? c.run.runId, taskVersion: c.run.taskVersion ?? 1, agentId: c.run.agentId, version: c.run.version, state: c.run.endedAt === undefined ? 'running' : 'ended' } } : {}),
 });
-/** What the Orchestrator reads after writing to a chat that waits on the user (ADR 0328; on the owner's PC, 2026-11-19,
+/** What the Orchestrator reads after writing to a chat that waits on the user (ADR 0329; on the owner's PC, 2026-11-19,
  *  it passed his answer as a message twice and the row stayed): a chat reads no message while its own question is
  *  open, and a plan's row stays until the plan is decided. Null: the chat waits on nothing of his. */
 export function waitsOnUser(chat: Pick<ChatSummary, 'id' | 'title' | 'plan' | 'closedAt'>, pending: readonly PendingRequest[]): string | null {
@@ -707,7 +707,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (authed()) d.projectMaps?.sent(String(a.chatId), text, busy && a.now !== true);
         log.info('appctl', 'agent message sent to chat', { chat: String(a.chatId), data: { chars: text.length } });
         const after = d.chats.list().find(c => c.id === String(a.chatId)), q = after?.queued;
-        // the Orchestrator wrote to a chat that waits on the user: the row stays open (ADR 0328), so it is told how to close it
+        // the Orchestrator wrote to a chat that waits on the user: the row stays open (ADR 0329), so it is told how to close it
         const waits = authed() && after && !after.parentId ? waitsOnUser(after, d.chats.pending()) : null;
         return `${q ? queuedLine(q) : 'sent'}${waits ? `. ${waits}` : ''}`;
       },

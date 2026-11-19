@@ -1,4 +1,4 @@
-# ADR 0328 · An open card takes what he writes in the Orchestrator's field
+# ADR 0329 · An open card takes what he writes in the Orchestrator's field
 
 Date: 2026-11-19 · Status: accepted (owner, 2026-11-19: «non capisco perché se mi compare una domanda dello stratega ad
 esempio e rispondo dal campo dell'orchestrator la domanda non scompare» · 2026-11-12: «da espansa voglio vedere sempre

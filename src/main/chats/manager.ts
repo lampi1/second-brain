@@ -513,7 +513,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
   /** The user writes to the Orchestrator while work chats wait on his answer (ADR 0274): it reads which, so his words
    *  answer one when they are about it (app_resolve_question `words`) and leave them open when he talks of other things.
    *  Only for a message written with no card open: an open card takes his words itself (renderer lib/field-answer.ts,
-   *  ADR 0328). A wish for a plan counts as its answer and never goes as a plain message (seen on 2026-11-19). */
+   *  ADR 0329). A wish for a plan counts as its answer and never goes as a plain message (seen on 2026-11-19). */
   private openAsksHint(): string {
     const line = (q: string, r: Rec, id: string) => `- ${JSON.stringify(q.replace(/\s+/g, ' ').slice(0, 140))} (chat ${JSON.stringify(r.s.title)}, chatId ${r.s.id}, requestId ${id})`;
     const rows = [

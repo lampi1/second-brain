@@ -23,6 +23,7 @@ export function magicMatches(mime: string, head: Buffer): boolean {
   if (mime === 'image/png') return head.length >= 8 && head.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
   if (mime === 'image/jpeg') return head.length >= 3 && head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
   if (mime === 'image/webp') return head.length >= 12 && head.toString('latin1', 0, 4) === 'RIFF' && head.toString('latin1', 8, 12) === 'WEBP';
+  if (mime === 'image/gif') return head.length >= 6 && /^GIF8[79]a$/.test(head.toString('latin1', 0, 6));
   return false;
 }
 

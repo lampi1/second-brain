@@ -1,4 +1,4 @@
-// The Orchestrator wrote to a chat that waits on the user (src/main/appctl/tools.ts waitsOnUser, ADR 0328): a chat
+// The Orchestrator wrote to a chat that waits on the user (src/main/appctl/tools.ts waitsOnUser, ADR 0329): a chat
 // reads no message while its own question is open and a plan's row stays until the plan is decided, so the tool's
 // result says how to close the row (on the owner's PC, 2026-11-19, his answer went as a plain message and the row stayed).
 import { describe, expect, it } from 'vitest';

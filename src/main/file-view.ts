@@ -2,12 +2,14 @@
 // the PC, no exceptions"), never a network share: a UNC path or a link to one would send the Windows login to that host.
 // Text comes one page at a time (at most FILE_PAGE_BYTES, see readFileView's options); a PDF comes whole up to PDF_BYTES
 // as bytes for the renderer's pdf.js (canvas only); an HTML or Markdown report opened at its top comes whole up to
-// REPORT_BYTES (its embedded screenshots stay intact). Async reads, so a long line count never holds the app up. Bounded,
+// REPORT_BYTES (its embedded screenshots stay intact); a Word, Excel or PowerPoint file comes as its text and tables
+// (office-preview.ts, ADR 0328). Async reads, so a long line count never holds the app up. Bounded,
 // nothing written, run or opened in another app. Used by index.ts (app:readFile); pinned by test/unit/file-view.test.ts.
 import fs from'node:fs';import type{FileHandle}from'node:fs/promises';import path from'node:path';
 import{fileReference,FILE_PAGE_BYTES,type FileViewResult}from'../shared/file-view';
 import{resolvePeek}from'./peek-file';import{linksToShare}from'./open-path';
 import{magicMatches}from'./ask-image';import{rasterSize}from'./agents/raster';
+import{OFFICE_BYTES,OFFICE_FORMATS,officePreview}from'./office-preview';
 export const FILE_VIEW_BYTES=FILE_PAGE_BYTES;
 /** How far line numbers are counted (a page further on shows no numbers; a cited line further on is not found). */
 export const FILE_SCAN_BYTES=64_000_000;
@@ -19,7 +21,7 @@ const REPORT_EXT=new Set(['.html','.htm','.md','.markdown']);
 const IMAGE_BYTES=4_000_000;
 /** Lines shown above a cited line when its page does not start at the top of the file (fewer when they are long). */
 const LINE_CONTEXT=100;
-const MIME:Record<string,string>={'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp'};
+const MIME:Record<string,string>={'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.gif':'image/gif'};
 const key=(value:string)=>process.platform==='win32'?value.toLowerCase():value;
 const share=(value:string)=>/^[\\/]{2}/.test(value);
 const NL=0x0a,CHUNK=1_000_000;
@@ -93,6 +95,13 @@ export async function readFileView(raw:string,options:{cwd?:string;offset?:numbe
  try{
   fd=await fs.promises.open(real,'r');const opened=await fd.stat();
   if(!same(opened,initial))return{kind:'refused',reason:'changed'};
+  const office=OFFICE_FORMATS[ext];
+  if(office){
+   if(opened.size>OFFICE_BYTES)return{kind:'unsupported',reason:'office'};
+   const all=await readAt(fd,0,opened.size+1),final=await fd.stat();if(!same(final,opened)||final.size!==all.length)return{kind:'refused',reason:'changed'};
+   const preview=officePreview(all,office);if(!preview)return{kind:'unsupported',reason:'office'};
+   return{kind:'office',path:real,size:all.length,mtimeMs:final.mtimeMs,format:office,...preview};
+  }
   if(mime||pdf){
    const cap=pdf?PDF_BYTES:IMAGE_BYTES;if(opened.size>cap)return{kind:'unsupported',reason:pdf?'pdf':'image'};
    const all=await readAt(fd,0,cap+1),final=await fd.stat();if(!same(final,opened))return{kind:'refused',reason:'changed'};

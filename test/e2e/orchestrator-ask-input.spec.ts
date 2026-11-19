@@ -57,7 +57,7 @@ test('an open question keeps the Orchestrator input in sight; its ✕ answers la
   } finally { await app.close(); }
 });
 
-// ADR 0328 (the owner 2026-11-19: «se mi compare una domanda dello stratega … e rispondo dal campo dell'orchestrator la
+// ADR 0329 (the owner 2026-11-19: «se mi compare una domanda dello stratega … e rispondo dal campo dell'orchestrator la
 // domanda non scompare»): with a row's card open the Orchestrator's field is that row's answer box. His words reach the
 // row at once and it leaves, whatever the Orchestrator's engine does; a request to explain goes to the Orchestrator and
 // the row stays; a plan takes them as what to change. A text begun before the card opened stays a message.

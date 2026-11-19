@@ -13,7 +13,7 @@
 // list opens. An Orchestrator's input also has «Fast» and «Plan» (ADR 0034, 0296): ticked, the message goes with the
 // line that asks for a quick answer of its own without delegating, or for a Strategist's plan (shared/newchat.ts); one
 // at a time, it resets after a send. While a row's card is open in its column, the Orchestrator's field is that
-// row's answer box (lib/field-answer.ts, ADR 0328): a line over it says whom the words go to.
+// row's answer box (lib/field-answer.ts, ADR 0329): a line over it says whom the words go to.
 // The inline suggestion (issue #167, ADR 0118): grey text after the caret, from local sources first (past prompts,
 // "/" commands, roles, skills, chat titles, the chat's files: lib/composer-suggest.ts, zero tokens; the model part was
 // removed, ADR 0201). Tab accepts it, Esc hides it, any other key goes on as usual; with no suggestion Tab moves the focus as always.

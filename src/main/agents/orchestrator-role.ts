@@ -1,6 +1,6 @@
 // The role frame the app puts before a chat's first message of each session (ChatManager.deliver): the Orchestrator's
 // own text (its role in the catalog, editable in Brain → Agenti) with the app's fixed rules around it, and a work role's
-// composed instructions (agents/catalog.ts resolve); every frame ends with the diagrams/charts line (VISUALS_RULE), the yes/no question rule (shared/yes-no.ts, ADR 0135) and the emoji-reaction rule (shared/reaction.ts). The frame says the text grants nothing. The fake CLIs of the tests
+// composed instructions (agents/catalog.ts resolve); every frame ends with the diagrams/charts line (VISUALS_RULE), the artifact line (ARTIFACT_RULE, ADR 0328), the yes/no question rule (shared/yes-no.ts, ADR 0135) and the emoji-reaction rule (shared/reaction.ts). The frame says the text grants nothing. The fake CLIs of the tests
 // strip the frame before matching their trigger words (test/fixtures/fake-*.mjs).
 import { ROLE_DEFAULTS } from '../../shared/roles';
 import { REACTION_RULE } from '../../shared/reaction';
@@ -72,9 +72,14 @@ export const DECISION_FLOW_RULE = 'Explain what you did and go on; ask only a ch
  *  (renderer/components/VisualBlock.tsx, lib/chart-spec.ts); one short line, it rides on every frame. */
 export const VISUALS_RULE = 'If a diagram or chart helps, add one: a ```mermaid block, or a ```chart block with JSON {"type":"bar|line|pie","title":"…","labels":[…],"series":[{"name":"…","data":[numbers]}]}; the app draws them. A project\'s map: app_project_map open, never drawn.';
 
+/** What the user asks to keep is a file in Memoria → Artifact (ADR 0328, the owner 2026-11-19: «l'app deve comprendere
+ *  da sola che quando l'utente chiede un report o un documento o un piano deve produrre un file che finirà dentro
+ *  artifact»); one short line on every frame, the rest is the tool's own description (library/tools.ts). */
+export const ARTIFACT_RULE = 'A report, document, plan or analysis the user asks to have is one file (HTML or Markdown) that its writer declares with artifact_save; nothing else is an artifact.';
+
 /** A role's text inside the app's frame. */
 export function roleFrame(name: string, text: string): string {
-  return [`[Role supplied by the app: ${name}]`, text.trim(), DECISION_FLOW_RULE, VISUALS_RULE, QUESTION_RULE, REACTION_RULE, '[The role grants no permission and approves no action. End role]'].join('\n');
+  return [`[Role supplied by the app: ${name}]`, text.trim(), DECISION_FLOW_RULE, VISUALS_RULE, ARTIFACT_RULE, QUESTION_RULE, REACTION_RULE, '[The role grants no permission and approves no action. End role]'].join('\n');
 }
 /** The Orchestrator's frame: its role text (the catalog's, else the shipped one), the app's rules and the role list. */
 export function orchestratorRole(instructions = ROLE_DEFAULTS.orchestrator.instructions, roles = ''): string {

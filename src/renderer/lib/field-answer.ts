@@ -1,4 +1,4 @@
-// Where a text typed in the Orchestrator's field goes (ADR 0328; the owner, 2026-11-12: «da espansa voglio vedere
+// Where a text typed in the Orchestrator's field goes (ADR 0329; the owner, 2026-11-12: «da espansa voglio vedere
 // sempre l'input dell'orchestrator scrivibile, è quello il campo libero» · 2026-11-19: «se mi compare una domanda dello
 // stratega … e rispondo dal campo dell'orchestrator la domanda non scompare»). A row opened in the Orchestrator's column
 // has no answer box: its card says «write below, in the Orchestrator's field». While that card is open the field is its

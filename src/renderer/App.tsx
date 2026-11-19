@@ -88,13 +88,13 @@ function onKey(e: KeyboardEvent): void {
     return;
   }
   // the file viewer in front (the keys inside it are its own, ViewerOverlay.tsx): Alt+←/→ move between its files, F11
-  // expands it, Esc and Ctrl+W close it; the palette and Ctrl+J still work; nothing acts on the page under it
+  // puts it on the whole screen, Esc leaves the full screen first and then closes it, Ctrl+W closes it; the palette and Ctrl+J still work; nothing acts on the page under it
   if (u.viewer.open && !u.qwin.shown) {
     switch (cmd.type) {
       case 'back': viewerStep(-1); break;
       case 'forward': viewerStep(1); break;
       case 'maximize': toggleViewerFull(); break;
-      case 'escape': closeViewer(); break;
+      case 'escape': if (u.viewer.full) toggleViewerFull(); else closeViewer(); break;
       case 'closeFocused': if (!e.repeat) closeViewer(); break;
       case 'palette': openModal('palette'); break;
       case 'next': nextThing(); break;

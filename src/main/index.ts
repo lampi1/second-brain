@@ -29,6 +29,7 @@ import { libraryHandlers } from './ipc-handlers/library';
 import { LibraryService } from './library/service';
 import { nativeThumb } from './library/thumbs';
 import { seedDemoArtifacts } from './library/demo';
+import { artifactSaveTool } from './library/tools';
 import { APP_ID, ensureShortcuts, taskbarDetails } from './shortcuts';
 import { installAppMenu } from './app-menu';
 import { agentsMayOpen, engineOn } from './engines/policy';
@@ -38,7 +39,7 @@ import { jobGuard } from './chats/jobguard';
 import { clipReader } from './clipboard-image';
 import { SearchService, demoBranchOf, brainHitsFrom } from './search/service';
 import { gitBranch } from './search/sources';
-import { findTranscript, readHistory } from './chats/transcript';
+import { findTranscript } from './chats/transcript';
 import { FROZEN_EPOCH } from './demo';
 import { readWorker } from './read-work';
 import { systemLang } from './lang';
@@ -205,39 +206,30 @@ app.whenReady().then(async () => {
   const chessEngine = new ChessEngine({ start: () => (chessScript?.length ? scriptedProc(chessScript) : spawnStockfish(path.join(outDir, 'chess-engine', ENGINE_JS))) });
   chessGames.init(demo ? { userData: null, seed: DEMO_CHESS_GAMES, ...(process.env.SB_DEMO_FREEZE === '1' ? { now: () => FROZEN_EPOCH } : {}) } : { userData: app.getPath('userData') });
   app.on('will-quit', () => { recordings.dispose(); voice.dispose(); useCounts.close(); chessEngine.stop(); chessGames.close(); });
-  // Memoria → Artifact (ADR 0319): the chats' reports indexed where they are; a turn's links at its end, the folders at
-  // start and when the tab asks, the past chats once
+  // Memoria → Artifact (ADR 0328): only what an agent declares with artifact_save (a report, a document, a plan the
+  // user asked for), indexed where it is; no folder is looked through and no chat's answer is read for links
   // the demo's artifacts live in its throwaway brain (or a folder of its own profile when it runs without one)
   const demoLibraryBrain = demo ? process.env.SB_BRAIN ?? path.join(app.getPath('userData'), 'demo-brain') : null;
   const library = new LibraryService({
     userData: app.getPath('userData'),
     brainRoot: () => (demo ? demoLibraryBrain : s.brain.info().brainRoot),
     chats: () => s.chats.list(),
-    history: id => {
-      const live = s.chats.items(id);
-      if (live.length || demo) return live;
-      const c = s.chats.list().find(x => x.id === id);
-      const file = c?.harness === 'claude' && c.sessionId ? findTranscript(c.sessionId, c.cwd) : null;
-      return file ? readHistory(file, { cwd: c!.cwd, maxBytes: 4 * 1024 * 1024 }).items : [];
-    },
     projectRoots: () => (s.projectMaps?.roots() ?? []).filter((r): r is string => typeof r === 'string'),
     thumbnail: nativeThumb(nativeImage),
     // the demo (and its e2e) never starts a program of the system
     openPath: demo ? async () => '' : file => shell.openPath(file),
     changed: () => emitter.emit('library:changed', undefined),
-    ...(demo && process.env.SB_DEMO_FREEZE === '1' ? { now: () => FROZEN_EPOCH } : {}),
   });
-  const onTurns = (s.chats as { onTurnEnded?: (fn: (info: { chatId: string }) => void) => () => void }).onTurnEnded;
-  onTurns?.call(s.chats, info => { void library.noteTurn(info.chatId, s.chats.items(info.chatId)); });
+  s.addChatTools?.([artifactSaveTool(library)]);
   if (demo && demoLibraryBrain) {
-    // the demo: its files written and dated around its clock, two chats' links, then one file gone (shown as missing)
-    const seeded = seedDemoArtifacts({ brain: demoLibraryBrain, userData: app.getPath('userData'), appPath: app.getAppPath(), now: process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now() });
-    void library.scan().then(async () => {
-      for (const [id, texts] of Object.entries(seeded.links)) await library.linkFromChat(id, texts);
+    // the demo: its files written and dated around its clock, saved as its chats would, then one file gone (missing)
+    const seeded = seedDemoArtifacts({ brain: demoLibraryBrain, now: process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now() });
+    void (async () => {
+      for (const a of seeded.saves) await library.save(a.chat, a);
       fs.rmSync(seeded.vanish, { force: true });
       await library.refresh();
-    }).catch(e => log.warn('library', 'demo artifacts not seeded', { cause: String(e), hint: 'the demo goes on without them' }));
-  } else { const startLibrary = setTimeout(() => { void library.scan(); }, 20_000); startLibrary.unref(); }
+    })().catch(e => log.warn('library', 'demo artifacts not seeded', { cause: String(e), hint: 'the demo goes on without them' }));
+  }
   // the phone bridge (ADR 0219): only the stable instance polls Telegram; dev gets a fake server from SB_PHONE_TEST_API
   // (loopback only) or stays 'dev-disabled'; the demo has no chats port, so its page shows a disabled controller
   const phoneTokens = initPhoneTokenStore(app.getPath('userData'), safeStorageCipher(safeStorage));

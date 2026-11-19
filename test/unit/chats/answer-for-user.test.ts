@@ -108,7 +108,7 @@ describe('the Orchestrator passes the user\'s own message to a work chat\'s ques
     expect(m.items(chat.id).some(i => i.kind === 'system' && i.code === 'orchestratorPassedWords')).toBe(true);
   });
 
-  it('the note with the open rows: a wish for one is its answer and never a plain message; a delegated chat\'s question is not listed (ADR 0328, 0083)', async () => {
+  it('the note with the open rows: a wish for one is its answer and never a plain message; a delegated chat\'s question is not listed (ADR 0329, 0083)', async () => {
     const w = world(false), m = manager(w), dir = tmp();
     const parent = await m.create({ harness: 'anthropic', cwd: dir, title: 'Lavoro' });
     const work = w.sink!;

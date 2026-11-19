@@ -25,7 +25,7 @@ import type { Emitter } from './ipc';
 import type { BrainService, BrowserService, ChatService, SkillsApi, TasksApi } from './services';
 import type { BrainModelService } from './brainmodel/service';
 import type { ResearchService } from './brainmodel/research';
-import type { McpServer } from './mcp/server';
+import type { McpServer, McpTool } from './mcp/server';
 import type { Workflows } from './workflows/service';
 import type { McpServersService } from './mcp-servers/service';
 import type { CommandRunner } from './run/runner';
@@ -98,6 +98,9 @@ export interface Wired {
   skillLessons: SkillLessons;
   /** The local MCP server: browser routes, /mcp/app (app control). */
   mcp: McpServer;
+  /** more tools on every chat's own endpoint, added after the services are made (index.ts: artifact_save, ADR 0328);
+   *  absent in the demo, which has no chat endpoints */
+  addChatTools?: (tools: McpTool[]) => void;
   /** the MCP servers the user added in Settings → Connettori, given to each chat by role (ADR 0086) */
   mcpServers?: McpServersService;
   /** code blocks run by the user's click ("Esegui"), output streamed back (run:updated) */

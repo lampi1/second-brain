@@ -1,4 +1,4 @@
-// Where a text typed in the Orchestrator's field goes (src/renderer/lib/field-answer.ts, ADR 0328): with a row's card
+// Where a text typed in the Orchestrator's field goes (src/renderer/lib/field-answer.ts, ADR 0329): with a row's card
 // open the field is that row's answer box, so the words reach the row at once and never depend on the Orchestrator's
 // engine; a request to explain, a mode, images or a draft from another page stay the Orchestrator's.
 import { describe, expect, it } from 'vitest';

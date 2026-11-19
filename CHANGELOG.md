@@ -107,6 +107,13 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   OpenCode, OpenRouter included; the chat's model and plan mode go through OpenCode's session options (ADR 0216).
 
 ### Changed
+- Memory › Artifacts holds only what you asked to have (a report, an analysis, a document, a plan): the agent that
+  writes it declares it with the new `artifact_save` tool, and nothing is collected from folders or chats any more
+  (no screenshots, logs or working files). It is one list, newest first, without type chips, filters or the star; ✕
+  takes a card off the list, never off the disk. Every artifact opens in the app: Word, Excel and PowerPoint as text
+  and tables, GIFs as pictures. From the old list stay what you starred and the HTML, PDF and Office documents a chat
+  had reported. The viewer's «Schermo intero» (F11) now takes the whole screen: the window goes full screen and the
+  file fills it; Esc leaves it (ADR 0328).
 - Questions: one question, one row, one answer. An answer you type is your answer and the chat is told so: if you
   ask something («in che senso?», «perché?»), it replies in plain words first and only then may the same question
   come back; a re-ask without that reply never becomes a row. The Orchestrator explains a work chat's question itself
@@ -275,7 +282,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - An answer written in the Orchestrator's field closes its question. With a question or a plan open in the
   Orchestrator's column, what you write in the field under it goes straight to who asks and the row leaves at once (a
   line over the field says to whom); before, the row closed only if the Orchestrator then chose to pass the words on.
-  A request to explain still goes to the Orchestrator, and so does everything written with no card open (ADR 0328).
+  A request to explain still goes to the Orchestrator, and so does everything written with no card open (ADR 0329).
 - An open question in the Orchestrator's column is as tall as what it says: a short one no longer takes the whole
   column with an empty panel under «Ci penso dopo» while the chat above is squeezed to a strip with its last card cut.
   A long one still takes everything but that strip, with the input in sight. The colour rule on the question's left
