@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatItem, PendingRequest } from '../../src/shared/contract';
 import { askContext, linksIn, thinkingBeforeAsk, turnItems, withoutCommand, writtenDocs } from '../../src/renderer/lib/askContext';
+import { ownCopyNote, reaskNote } from '../../src/shared/ask-once';
 
 const user = (id: string, text = 'fai'): ChatItem => ({ kind: 'user', id, at: 1, text } as ChatItem);
 const say = (id: string, text: string): ChatItem => ({ kind: 'assistant', id, at: 1, text } as ChatItem);
@@ -99,6 +100,13 @@ describe('askContext of a second question in the same turn (the user, 2026-10-13
     const other = { ...again('toolu_2'), questions: [{ question: 'Il pezzo 2 ti è chiaro?', multiSelect: false, options: [] }] };
     expect(askContext(items, other).again).toBeUndefined();
     expect(askContext([user('u'), think('t', 'x')], again()).again).toBeUndefined();
+  });
+  it('an ask the app answered for him is not what he said: his words are the ones its note quotes (ADR 0326)', () => {
+    const byApp = (note: string) => [user('u', '/explain'), answered,
+      { ...tool('t-toolu_1b', 'AskUserQuestion', pezzo), output: `The user answered: "Il pezzo 1 ti è chiaro?"="${note}". Read the answers carefully` } as ChatItem,
+      think('th2', 'Solo su questo PC'), { ...tool('t-toolu_2', 'AskUserQuestion', pezzo), status: 'running' } as ChatItem];
+    expect(askContext(byApp(reaskNote('su tutte le piattaforme?')), again('toolu_2')).again).toEqual({ answer: 'su tutte le piattaforme?' });
+    expect(askContext(byApp(ownCopyNote('QA', 'c1', 'q1')), again('toolu_2')).again).toBeUndefined();
   });
   it('ends at the request\'s own tool row: what the chat wrote after it is not its context', () => {
     const later = [...items, say('after', 'scritto dopo la domanda')];

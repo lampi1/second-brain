@@ -6,7 +6,7 @@ import { touchesProdDbAzure } from './ask-text';
 import { withClarified } from './plan-interview';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import type { Answer, PendingRequest } from '../../shared/contract';
+import type { Answer, ChatItem, PendingRequest } from '../../shared/contract';
 import { backedAnswer } from './ran-check';
 
 import { errText, log } from '../log';
@@ -37,6 +37,8 @@ const PROD_FOR_USER = 'bloccato: questo permesso tocca produzione, un database o
 /** How many times in a row the app answers a question asked again after the user's own words before it shows it as
  *  it is (never a chat stuck in a loop it cannot leave). */
 export const ASK_AGAIN_MAX = 2;
+/** the tools between his words and the same question again that are no work: a card, a brief, the question itself */
+const ASKING_TOOL = /show_ui|AskUserQuestion|ask_user|ask_question|request_user_input/i;
 const EXPLAIN_HERE = 'bloccato: il suo messaggio chiede una spiegazione, non decide la domanda. Non passarlo alla chat: spiegagli tu qui, in parole semplici, cosa decide la domanda e cosa cambia per lui con ogni scelta (leggi il riepilogo in app_pending, o la chat con app_chat_items), e lascia la domanda aperta nella sua riga. La chiudi quando ti scrive cosa sceglie.';
 
 /** A question request's identity for #379: its questions and their options, in order. */
@@ -81,41 +83,47 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
   }
 
   /** The user's own words answered a question (ADR 0326): the chat reads them with the app's note and the question is
-   *  remembered, so the same one asked again before a new message is answered here, never shown twice. */
-  private toldInWords(r: Rec, req: Omit<PendingRequest, 'chatId'>, answer: Answer): Answer {
-    const words = isNativeQuestion(req) ? typedWords(req, answer) : null;
+   *  remembered until the chat replies, works or ends its turn, so the same one asked again at once is answered here,
+   *  never shown twice. byApp: the text is the app's (a run's result), not his words. */
+  private toldInWords(r: Rec, req: Omit<PendingRequest, 'chatId'>, answer: Answer, byApp = false): Answer {
+    const words = !byApp && isNativeQuestion(req) ? typedWords(req, answer) : null;
     if (words === null) { delete r.wordsAnswer; return answer; }
     r.wordsAnswer = { asked: askedText(req), words, again: 0, replied: 0 };
     return withWordsNote(req, answer);
   }
 
   /** One question, one row (ADR 0326). True = answered here, the user never sees it:
-   *  - the question he just answered in his own words, asked again before the chat replied to them (the chat is told to
-   *    answer what he wrote, ASK_AGAIN_MAX times in a row, then it shows as it is; after a reply of EXPLAINED
-   *    characters it is a row again, with that reply);
+   *  - the question he just answered in his own words, asked again at once: before the chat replied to them, worked or
+   *    ended its turn (afterWords). The chat is told to answer what he wrote, ASK_AGAIN_MAX times in a row, then it
+   *    shows as it is; after a reply of EXPLAINED characters it is a row again, with that reply;
    *  - the Orchestrator asking as its own a question a work chat already has open in its row (unless it relays it to
-   *    Remote Control, chats/relay.ts). */
+   *    Remote Control, chats/relay.ts), ASK_AGAIN_MAX times for the same row. */
   protected heldAsRepeat(r: Rec, req: Omit<PendingRequest, 'chatId'>): boolean {
     if (!isNativeQuestion(req) || !req.questions?.length) return false;
     const asked = askedText(req);
     const said = (note: string): Answer => ({ kind: 'question', answers: Object.fromEntries(req.questions!.map(q => [q.question, q.multiSelect ? [note] : note])) });
     const before = r.wordsAnswer;
-    if (before && sameAsk(before.asked, asked)) {
+    // (a question about production, a database or Azure is always his to see)
+    if (before && sameAsk(before.asked, asked) && !touchesProdDbAzure(asked)) {
       // it replied to his words (or was told twice): the question comes back, with that reply, as a row again
       if (before.replied >= EXPLAINED || before.again >= ASK_AGAIN_MAX) { delete r.wordsAnswer; return false; }
       before.again++;
       log.info('chats', 'the question the user answered in his own words was asked again: answered by the app', { chat: r.s.id, data: { request: req.id, again: before.again } });
       try { return this.policyAnswer(r, req, said(reaskNote(before.words)), 'asked-once'); }
-      catch (e) { log.warn('chats', 'repeated question not answered by the app', { chat: r.s.id, cause: errText(e), hint: 'it is shown to the user as it is' }); return false; }
+      catch (e) { log.warn('chats', 'repeated question not answered by the app', { chat: r.s.id, cause: errText(e), hint: 'read the request\'s receipt in the journal: the chat may still wait on it' }); return false; }
     }
     if (r.s.isOrchestrator && !this.opts.relayPanel?.(r.s.id)) {
       for (const other of this.chats.values()) {
         if (other === r || other.s.closedAt || other.s.isOrchestrator) continue;
         const open = [...other.pending.values()].find(p => isNativeQuestion(p) && sameAsk(askedText(p), asked));
         if (!open) continue;
+        // told ASK_AGAIN_MAX times for the same row, then its question shows: never a question that can not be asked
+        const copy = r.ownCopy?.of === open.id ? r.ownCopy : (r.ownCopy = { of: open.id, again: 0 });
+        if (copy.again >= ASK_AGAIN_MAX) { delete r.ownCopy; return false; }
+        copy.again++;
         log.info('chats', 'the Orchestrator asked a work chat\'s open question as its own: answered by the app', { chat: r.s.id, data: { request: req.id, of: other.s.id } });
         try { return this.policyAnswer(r, req, said(ownCopyNote(other.s.title || 'Chat', other.s.id, open.id)), 'asked-once'); }
-        catch (e) { log.warn('chats', 'copied question not answered by the app', { chat: r.s.id, cause: errText(e), hint: 'it is shown to the user as it is' }); return false; }
+        catch (e) { log.warn('chats', 'copied question not answered by the app', { chat: r.s.id, cause: errText(e), hint: 'read the request\'s receipt in the journal: the chat may still wait on it' }); return false; }
       }
     }
     return false;
@@ -124,10 +132,18 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
   /** A new message reached the chat (the user's, the Orchestrator's, its parent's): what he answered before is past. */
   protected newMessageFor(r: Rec): void { delete r.wordsAnswer; }
 
-  /** The chat wrote a reply after his own words: the longest one counts as its answer to them (EXPLAINED). */
-  protected repliedAfterWords(r: Rec, text: string): void {
-    if (r.wordsAnswer) r.wordsAnswer.replied = Math.max(r.wordsAnswer.replied, text.trim().length);
+  /** What the chat did after his own words. A reply: the longest one counts as its answer to them (EXPLAINED). Work
+   *  (a tool that is not a card or a question) or the end of its turn: it acted on them, so the next question is a new
+   *  one, his to answer («Faccio il commit?» · «sì» · … · «Faccio il push?»). */
+  protected afterWords(r: Rec, item: ChatItem): void {
+    const w = r.wordsAnswer;
+    if (!w) return;
+    if (item.kind === 'assistant') w.replied = Math.max(w.replied, item.text.trim().length);
+    else if (item.kind === 'result' || (item.kind === 'tool' && !ASKING_TOOL.test(item.name))) delete r.wordsAnswer;
   }
+
+  /** The chat's engine ended: nothing of the last exchange holds for the next one. */
+  protected wordsPast(r: Rec): void { delete r.wordsAnswer; delete r.ownCopy; }
 
   /** #379 «questions sometimes reach me twice»: the same question again while its first copy is still open (an engine
    *  retrying its ask, two asks in one message) waits behind the first, unseen, and takes the same answer. */
@@ -305,7 +321,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
 
   /** The user's answer. by = where they gave it: the PC (the panel) or the paired phone (phone bridge: only a question,
    *  never a permission or a command; chats/phone-port.ts checks the rest before it calls this) */
-  async answer(chatId: string, requestId: string, answer: Answer, by: 'pc' | 'phone' | 'relay' = 'pc'): Promise<void> {
+  async answer(chatId: string, requestId: string, answer: Answer, by: 'pc' | 'phone' | 'relay' = 'pc', byApp = false): Promise<void> {
     const r = this.need(chatId);
     if (by === 'relay') throw new Error('Una risposta inoltrata da un agente non è una decisione dell’utente.');
     // the app's own question (a run stopped on a step only the user can do, #358): answered here, never by an engine
@@ -332,7 +348,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       const backed = this.opts.runs ? backedAnswer(req, answer, this.opts.runs(chatId)) : answer;
       if (backed !== answer) log.info('chats', 'a Yes on «did you run it?» with no run behind it: told to the chat', { chat: chatId, data: { requestId } });
       // his own words: the chat reads them with the app's note and may not ask the same question again (ADR 0326)
-      const told = backed === answer ? this.toldInWords(r, req, answer) : backed;
+      const told = backed === answer ? this.toldInWords(r, req, answer, byApp) : backed;
       ok = await this.deliverAnswer(r, req, told, { kind: 'user', channel: by });
       // its twins take the same answer before it leaves, so its resolution never shows them (#379)
       if (ok && sameChat()) this.answerTwins(r, requestId, told, { kind: 'user', channel: by });

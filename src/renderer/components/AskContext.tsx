@@ -127,7 +127,8 @@ export const AskThought = memo(function AskThought({ req, testBase }: { req: Pen
 
 /** The questions window's context, always open (the owner, 2026-10-22: «tutto il contesto nella modale deve essere
  *  sempre espanso»). With `question` (a question or permission) it reads top to bottom: the agent's own context
- *  sentence as a short lead (`lead`, lib/askSplit.ts), the question, then the whole context under a small label: images,
+ *  sentence as a short lead (`lead`, lib/askSplit.ts), the question, its answers when the host passes them (`answers`,
+ *  ADR 0326: the options right under the question), then the whole context under a small label: images,
  *  "te la richiede", visuals, the turn's prose (its reasoning too), the links, the text to approve. The options'
  *  previews are open on their own cards. What is above
  *  the question is fixed at mount: what loads later goes under it, so the question never moves. Without `question` (a

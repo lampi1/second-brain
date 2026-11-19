@@ -304,7 +304,7 @@
     "src/shared/agents.ts#PERMISSION_CEILINGS": "bd3600e025764e87",
     "src/shared/agents.ts#VERSIONED_CHANGES": "86e3f77aa1cb8c04",
     "src/shared/answer-in-words.ts": "26e35a50e7100524",
-    "src/shared/ask-once.ts": "4c009695f113fcd8",
+    "src/shared/ask-once.ts": "f56f5cd821d6a38c",
     "src/shared/auto-close.ts#AutoCloseWaiting": "102cef94b2f3ec0a",
     "src/shared/brain-layout.ts": "b3dad0963aae39a1",
     "src/shared/chess.ts#CHESS_BOTS": "9f6b9d4af26cb08e",

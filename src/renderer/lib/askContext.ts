@@ -8,7 +8,7 @@
 // block) and ChatItems.tsx (thinking shown open); pinned by test/unit/askContext.test.ts.
 import type { ChatItem, PendingRequest } from '@shared/contract';
 import { LOCAL_START } from './pathPatterns';
-import { withoutAppNote } from '@shared/ask-once';
+import { isAppAnswer, withoutAppNote } from '@shared/ask-once';
 
 export interface ContextPiece { id: string; kind: 'text' | 'thinking'; text: string }
 export interface ContextLink { kind: 'web' | 'file'; href: string; label: string }
@@ -166,7 +166,10 @@ export function askContext(items: readonly ChatItem[] | undefined, req: PendingR
   const turnProse = turn.flatMap(it => ((it.kind === 'assistant' || it.kind === 'thinking') && it.text.trim() ? [it.text] : []));
   const links = linksIn([...turnProse, ...requestTexts(req)], writtenDocs(turn));
   const asked = req.questions?.map(q => q.question).join('\n') ?? '';
-  const again = prevAsk && asked && askedTexts(prevAsk.input) === asked ? { answer: answerIn(prevAsk.output) } : null;
+  // an ask the app answered for him (ADR 0326) is not what he said: his words are the ones its note quotes, or none
+  const said = prevAsk ? answerIn(prevAsk.output) : '';
+  const his = isAppAnswer(said) ? /^Not asked again:[^«]*«([^»]*)»/.exec(said)?.[1] ?? null : said;
+  const again = prevAsk && asked && askedTexts(prevAsk.input) === asked && his !== null ? { answer: his } : null;
   return { pieces, links, ...(again ? { again } : {}) };
 }
 

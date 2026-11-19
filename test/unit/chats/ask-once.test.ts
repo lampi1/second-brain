@@ -115,6 +115,57 @@ describe('the user answers in his own words', () => {
     expect(w.added).toEqual(['q1', 'q2']); // never answered for him: each file is his own yes
   });
 
+  it('his words never answer the next decision: after work or the end of the turn, a like question is his again', async () => {
+    const w = world(), m = manager(w);
+    const chat = await m.create({ harness: 'anthropic', cwd: tmp(), title: 'Lavoro' });
+    const COMMIT = 'Faccio il commit delle modifiche su questo ramo?';
+    // one word changed is another question, at once
+    w.sink!.pending(ask('q1', COMMIT));
+    await m.answer(chat.id, 'q1', words(COMMIT, 'va bene, fallo'));
+    w.sink!.pending(ask('q2', 'Faccio il push delle modifiche su questo ramo?'));
+    expect(w.added).toEqual(['q1', 'q2']);
+    await m.answer(chat.id, 'q2', words('Faccio il push delle modifiche su questo ramo?', 'No'));
+    // the very same question after the chat worked on his words: a new decision
+    w.sink!.pending(ask('q3', COMMIT));
+    await m.answer(chat.id, 'q3', words(COMMIT, 'va bene, fallo'));
+    w.sink!.item({ kind: 'tool', id: 't1', name: 'Bash', input: { command: 'git commit -m x' }, status: 'ok', at: Date.now() } as ChatItem, false);
+    w.sink!.pending(ask('q4', COMMIT));
+    expect(w.added).toEqual(['q1', 'q2', 'q3', 'q4']);
+    // a brief is no work: the same question right after it is still held
+    await m.answer(chat.id, 'q4', words(COMMIT, 'cioè?'));
+    w.sink!.item({ kind: 'tool', id: 't2', name: 'mcp__second-brain__show_ui', input: {}, status: 'ok', at: Date.now() } as ChatItem, false);
+    w.sink!.pending(ask('q5', COMMIT));
+    expect(w.added).toEqual(['q1', 'q2', 'q3', 'q4']);
+    // the turn ended: the next turn's question is shown
+    w.sink!.item({ kind: 'result', id: 'r1', isError: false, costUsd: 0, durationMs: 1, turns: 1, at: Date.now() } as ChatItem, false);
+    w.sink!.pending(ask('q6', COMMIT));
+    expect(w.added).toEqual(['q1', 'q2', 'q3', 'q4', 'q6']);
+  });
+
+  it('«sì» typed instead of clicked is the option, and a text of the app is not his words: no note, nothing held', async () => {
+    const w = world(), m = manager(w);
+    const chat = await m.create({ harness: 'anthropic', cwd: tmp(), title: 'Lavoro' });
+    w.sink!.pending(ask('q1', Q));
+    await m.answer(chat.id, 'q1', words(Q, 'sì'));
+    expect(w.answers[0]!.answer).toEqual(words(Q, 'sì'));
+    w.sink!.pending(ask('q2', Q));
+    expect(w.added).toEqual(['q1', 'q2']);
+    await m.answer(chat.id, 'q2', words(Q, 'Comando finito: exit 0, 12 righe'), 'pc', true); // a run's result (wiring-shared.ts)
+    expect(w.answers[1]!.answer).toEqual(words(Q, 'Comando finito: exit 0, 12 righe'));
+    w.sink!.pending(ask('q3', Q));
+    expect(w.added).toEqual(['q1', 'q2', 'q3']);
+  });
+
+  it('a question about production is never answered by the app, also the same one again', async () => {
+    const w = world(), m = manager(w);
+    const chat = await m.create({ harness: 'anthropic', cwd: tmp(), title: 'Lavoro' });
+    const PROD = 'Lancio la migrazione sul database di produzione?';
+    w.sink!.pending(ask('q1', PROD));
+    await m.answer(chat.id, 'q1', words(PROD, 'in che senso?'));
+    w.sink!.pending(ask('q2', PROD));
+    expect(w.added).toEqual(['q1', 'q2']);
+  });
+
   it('a work chat reads his words with the same note', async () => {
     const w = world(), m = manager(w);
     const chat = await m.create({ harness: 'anthropic', cwd: tmp(), title: 'Lavoro' });
@@ -142,10 +193,20 @@ describe('the Orchestrator and a work chat\'s open question', () => {
     const told = textOf(w.answers.find(a => a.id === 'o1')!.answer, 'Rilancio il test 7 anche su master?');
     expect(told).toContain('«QA · Rimborsi» already has this question open');
     expect(told).toContain(`chatId ${chat.id}, requestId q1`);
-    // its own, different question is shown
+    // its own, different question is shown, also one that differs by a word
     orch.pending(ask('o2', 'Da quale dei due progetti riparto oggi?'));
-    expect(w.added).toEqual(['q1', 'o2']);
+    orch.pending(ask('o3', 'Rilancio il test 8 anche su master?'));
+    expect(w.added).toEqual(['q1', 'o2', 'o3']);
     expect(m.pending().some(p => p.chatId === o.id && p.id === 'o2')).toBe(true);
+  });
+
+  it('told twice for the same row, its copy is shown: never a question that can not be asked', async () => {
+    const { w, work, orch } = await setup();
+    work.pending(ask('q1', 'Rilancio il test 7 anche su master?'));
+    for (let i = 1; i <= ASK_AGAIN_MAX; i++) orch.pending(ask(`o${i}`, 'Rilancio il test 7 anche su master?'));
+    expect(w.added).toEqual(['q1']);
+    orch.pending(ask('shown', 'Rilancio il test 7 anche su master?'));
+    expect(w.added).toEqual(['q1', 'shown']);
   });
 
   it('a question it relays to Remote Control in its own panel is shown (chats/relay.ts)', async () => {

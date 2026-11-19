@@ -325,9 +325,11 @@ export interface Rec {
   costTotalUsd: number;
   items: ChatItem[];
   pending: Map<string, PendingRequest>;
-  /** the question the user last answered in his own words (shared/ask-once.ts, ADR 0326): asked again before a new
-   *  message reaches the chat, the app answers it (at most ASK_AGAIN_MAX times in a row) and no second row shows */
+  /** the question the user last answered in his own words (shared/ask-once.ts, ADR 0326): asked again before the chat
+   *  replied, worked or ended its turn, the app answers it (at most ASK_AGAIN_MAX times in a row) and no second row shows */
   wordsAnswer?: { asked: string; words: string; again: number; replied: number };
+  /** the work chat's open question the Orchestrator asked as its own, and how many times it was told so (ADR 0326) */
+  ownCopy?: { of: string; again: number };
   /** the same question asked again while its first copy is open, by that copy's id: never shown, it takes the first's answer (#379) */
   twins?: Map<string, Omit<PendingRequest, 'chatId'>[]>;
   session: HarnessSession | null;

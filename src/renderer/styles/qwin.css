@@ -253,6 +253,7 @@
    the question, why, the two roads with their buttons, then the details. Nothing is pinned over the text and no part
    scrolls in a box of its own: the rows' own scroll reads the card from its first line to its last. */
 .oask-card .dc-actions { margin: 0; padding: 0; }
+.oask-card .ctx-body { max-height: none; overflow: visible; }
 .oask-card .dc-q, .oask-card .wq-q { font-size: 17px; line-height: 1.35; }
 .oask-card .dc-ctx, .oask-card .wq-lead { font-size: var(--fs-l); line-height: 1.55; color: var(--text); max-width: 72ch; }
 .oask-card .dc-evidence { background: none; border: 0; border-top: 1px solid var(--border); border-radius: 0; padding: 12px 0 0; }

@@ -33,7 +33,7 @@ export interface ChatService {
   assignTask?(chatId: string, text: string, options?: TaskAssignmentOptions): Promise<void>;
   userEvents?(chatId: string, afterSeq?: number): UserTaskEvents;
   synthesizeResult?(runId: string, source: TaskSource): Promise<void>;
-  answer(chatId: string, requestId: string, answer: Answer, by?: 'pc' | 'phone' | 'relay'): Promise<void>;
+  answer(chatId: string, requestId: string, answer: Answer, by?: 'pc' | 'phone' | 'relay', byApp?: boolean): Promise<void>;
   /** The Orchestrator answers a work chat's yes/no question for the user (ADR 0269); refused on what is the user's alone. */
   answerForUser(chatId: string, requestId: string, answer: Answer, confirmed?: boolean): void;
   /** the user's last message typed to the Orchestrator on the PC (ADR 0274): app_resolve_question `words` come from it */

@@ -5,7 +5,7 @@ domande, il rischio di doppioni o di domande in coda: voglio logica semplice chi
 domande se espanse siano veramente leggibili per intero e che siano scritte bene» · «a volte quando rispondo su altro a
 una domanda chiedendo spiegazioni mi risponde con un'altra domanda uguale senza realmente spiegarmi» · «l'orchestrator
 deve prendere per mano l'utente e spiegare bene le cose» · «io parlo sempre e solo con l'orchestrator») · Amends:
-ADR 0150, 0239, 0259, 0269, 0274
+ADR 0150, 0259, 0269, 0274
 
 ## Context
 
@@ -60,22 +60,33 @@ every engine (`chats/manager-requests.ts`), so they do not depend on a model fol
    engine with one app note after it: these are his words; if they decide, act and do not ask to confirm; if they ask
    something, answer in the reply, in plain words (what each choice changes for him, one example); only after that
    reply may the question come back, and a brief is not that reply.
-2. **The same question comes back only after a reply to his words.** After a words answer, the same question (same
-   words once case, punctuation and the «(consigliato)» mark are gone, or at least 60% of its words shared) asked
-   again before the chat wrote a reply of at least 120 characters is answered by the app with the same instruction and
-   never becomes a row. After the reply it is a row again: he reads the reply with it (the Orchestrator's chat, or a
-   work chat's message in the question's card) and answers with a click, and it counts in «Da rispondere». After two
-   app answers in a row the question is shown anyway, so a chat can never be stuck. A new message of his clears the
-   rule. A picked option never starts it: «Applico anche il prossimo file?» asked again after a Sì stays his to answer.
-3. **The Orchestrator never asks a worker's open question as its own.** Its copy is answered by the app: the row is
-   already under its chat; answer it for him with `app_resolve_question` or leave it there. (Away, the relay's own
-   question panel still works: ADR 0255, unchanged.)
+2. **The same question comes back only after a reply to his words.** After a words answer, the same question asked
+   again at once, before the chat wrote a reply of at least 120 characters, is answered by the app with the same
+   instruction and never becomes a row. After the reply it is a row again: he reads the reply with it (the
+   Orchestrator's chat, or a work chat's message in the question's card) and answers with a click, and it counts in «Da
+   rispondere». After two app answers in a row the question is shown anyway, so a chat can never be stuck.
+   - «The same question» is strict: the same words once case, punctuation and the «(consigliato)» mark are gone, or
+     one text with a few words added to the other (at least 60% in common). One changed word is another decision
+     («file A» / «file B», «commit» / «push», «staging» / «prod») and is always shown.
+   - «At once» is the exchange that was measured: the memory of his words ends when the chat does work (any tool that
+     is not a card or a question), ends its turn, receives a new message or its engine ends. What he wrote never
+     answers a later decision.
+   - Only words he typed start the rule. A picked option does not («Applico anche il prossimo file?» asked again
+     after a Sì stays his to answer), nor does «sì» typed instead of clicked, nor a text the app sends as an answer (a
+     run's result, «Non voglio rispondere», «Basta domande»).
+   - A question about production, a database or Azure is never answered by the app.
+3. **The Orchestrator never asks a worker's open question as its own.** Its copy (the same strict match) is answered by
+   the app: the row is already under its chat; answer it for him with `app_resolve_question` or leave it there. Told
+   twice for the same row, its question is shown. (Away, the relay's own question panel still works: ADR 0255,
+   unchanged.)
 4. **A request to explain never leaves the Orchestrator.** `app_resolve_question` with `words` refuses when his message
    asks about the question instead of deciding it (it opens with «spiegami», «non ho capito», «perché», «cosa
    significa», or with a question word and ends with «?»; «sì, ma su dev?» and «usa dev, ok?» are answers). The
    Orchestrator explains in its chat and the row stays open.
-5. **At the PC a question is not written again.** `relay_question` refuses a worker's question when his last message
-   came from the app: its row is already there. Commands are still relayed (ADR 0239).
+5. **At the PC a question is not written again, by rule.** The news rule tells the Orchestrator that a worker's
+   question keeps its own row and is brought with `relay_question` only when he is away (Remote Control, phone). The
+   app does not refuse the relay: it can not know where he is (his last message from the PC does not mean he is
+   still there), and a refused relay would leave Remote Control without the question.
 6. **The rules say one thing.** `DECISION_FLOW_RULE`: a free-text answer is his answer; if it asks, answer it in the
    reply first; never the same question again without that reply; never a question the request, the brain or an
    earlier answer settles. News rule: a worker's question keeps its row; never asked again as the Orchestrator's; explained in
@@ -94,8 +105,9 @@ every engine (`chats/manager-requests.ts`), so they do not depend on a model fol
 
 - The Orchestrator's role is 465 characters longer (15,095; the cap is 16,000).
 - A chat that ignores the note costs at most two short app answers before its question is shown again.
-- «The same question» is a word count, not meaning: a re-ask in very different words still gets a row. Then the note of
-  point 1 is the only guard. «A reply» is a length, not a judgement: 120 characters of anything count.
+- «The same question» is words, not meaning: a re-ask with a word changed still gets a row (of the 17 measured, the
+  ones reworded that way). Then the note of point 1 is the only guard. «A reply» is a length, not a judgement: 120
+  characters of anything count.
 - A brief without `done` is valid; older briefs draw as before.
 - Untried on a real PC: the count above was taken before this change and has to be taken again after some days of
   use.
@@ -108,6 +120,10 @@ every engine (`chats/manager-requests.ts`), so they do not depend on a model fol
 - **Answer every repeated question by itself, option picks too.** Refused: «Applico anche il prossimo?» is a new
   decision each time; only his own words are carried over.
 - **Make `why` required.** Refused: one more send-back for every question; the card falls back to the brief's summary.
+- **A looser match (60% of the words in common, whatever changed).** The first version. Refused in review: it took
+  «Faccio il commit?» and «Faccio il push?» for one question and let «sì» to the first answer the second.
+- **Refuse `relay_question` when his last message came from the PC.** The first version. Refused in review: see
+  point 5.
 - **A model that judges whether two questions are the same.** Refused: tokens and a delay on every question, for a case
   the word count covers.
 - **Keep «free text is a clarification».** It was written so that «ok» to something else never approved a production

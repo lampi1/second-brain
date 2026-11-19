@@ -1,7 +1,8 @@
 // One question, one row, one answer (ADR 0326; the owner, 2026-11-19: «il rischio di doppioni o di domande in coda,
 // voglio logica semplice chiara che non crei mai casini» · «quando rispondo … chiedendo spiegazioni mi risponde con
 // un'altra domanda uguale senza realmente spiegarmi»). The pure rules behind it:
-// - sameAsk: two question texts ask the same thing (the same words in another order or with a few changed);
+// - sameAsk: two question texts ask the same thing (the same words, in another order or with a few added; one word
+//   changed is another decision: «file A» / «file B», «staging» / «prod»);
 // - typedWords: the user answered in his own words, not with an option; the chat then reads them with WORDS_NOTE (they
 //   are his answer; a question of his is answered in the reply, and only after that reply may the question come back);
 // - reaskNote: what a chat reads when it asks the same question again without that reply (the app answers it, the user
@@ -16,41 +17,52 @@
 // Pure, no Node or DOM: used by main (chats/manager-requests.ts, manager.ts) and the renderer (lib/askContext.ts).
 // Unit tests: test/unit/ask-once.test.ts.
 import type { Answer, PendingRequest } from './contract';
+import { ENOUGH_QUESTIONS } from './strategy';
+import { bareLabel, yesNoOf } from './yes-no';
 
 const MARK = /\s*\((consigliat[oa]|recommended|empfohlen)\)\s*/gi;
-const fold = (text: string): string => text.toLowerCase().replace(MARK, ' ').replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-/** the words that carry a question's meaning: longer than two letters, each once */
-const words = (text: string): Set<string> => new Set(fold(text).split(' ').filter(w => w.length > 2));
+const fold = (text: string): string => text.toLowerCase().replace(MARK, ' ').replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').replace(/[^\p{L}\p{N}_-]+/gu, ' ').trim(); // «orders_old» and «orders-old» stay one word
+/** every word of a question, each once (numbers and short words too: «test 7» is not «test 8») */
+const words = (text: string): Set<string> => new Set(fold(text).split(' ').filter(w => /[\p{L}\p{N}]/u.test(w)));
 
-/** How much two question texts must share to be the same question (shared words over all words). */
+/** How much of the longer question the shorter one must be, when one only adds words to the other. */
 export const SAME_ASK = 0.6;
 
-/** Two question texts ask the same thing: equal once case, punctuation and marks are gone, or mostly the same words. */
+/** Two question texts ask the same thing: equal once case, punctuation and marks are gone, or one is the other with a
+ *  few words added (in any order). A changed word is another question: only what is certainly the same decision. */
 export function sameAsk(a: string, b: string): boolean {
   const fa = fold(a), fb = fold(b);
   if (!fa || !fb) return false;
   if (fa === fb) return true;
   const wa = words(a), wb = words(b);
-  if (wa.size < 3 || wb.size < 3) return false; // «Procedo?» against «Procedo ora?»: too short to tell, only equal counts
-  let shared = 0;
-  for (const w of wa) if (wb.has(w)) shared++;
-  return shared / (wa.size + wb.size - shared) >= SAME_ASK;
+  const [less, more] = wa.size <= wb.size ? [wa, wb] : [wb, wa];
+  if (less.size < 3) return false; // «Procedo?» against «Procedo ora?»: too short to tell, only equal counts
+  for (const w of less) if (!more.has(w)) return false;
+  return less.size / more.size >= SAME_ASK;
 }
 
 /** The request's question texts, one string (what sameAsk compares). */
 export const askedText = (req: Pick<PendingRequest, 'questions' | 'title'>): string =>
   req.questions?.length ? req.questions.map(q => q.question).join('\n') : req.title;
 
-/** What the user wrote himself in an answer (no option label of the question it answers), or null when every answer is
- *  an option he picked. */
+/** texts the app sends as an answer that are not the user's words («Non voglio rispondere», «Basta domande») */
+const APP_SAYS = /^(?:L[’']utente non vuole rispondere|The user does not want to answer|Der Benutzer möchte diese Frage nicht)/i;
+/** x is one of the question's options: its label, or the same label without its mark, in another case, or a bare yes / no */
+const isOption = (q: { options: readonly { label: string }[] }, x: string): boolean => {
+  const bare = bareLabel(x).toLowerCase(), yn = yesNoOf(x);
+  return q.options.some(o => o.label === x || bareLabel(o.label).toLowerCase() === bare || (yn !== null && yesNoOf(o.label) === yn));
+};
+const isTyped = (q: { options: readonly { label: string }[] }, x: string): boolean =>
+  !!x.trim() && !isOption(q, x) && x.trim() !== ENOUGH_QUESTIONS && !APP_SAYS.test(x.trim());
+
+/** What the user wrote himself in an answer (no option of the question it answers, also typed as «sì» or without its
+ *  mark, and no text of the app), or null when every answer is an option he picked. */
 export function typedWords(req: Pick<PendingRequest, 'questions'>, answer: Answer): string | null {
   if (answer.kind !== 'question') return null;
   const out: string[] = [];
   for (const q of req.questions ?? []) {
     const v = answer.answers[q.question];
-    for (const x of Array.isArray(v) ? v : v === undefined ? [] : [v]) {
-      if (x.trim() && !q.options.some(o => o.label === x)) out.push(x.trim());
-    }
+    for (const x of Array.isArray(v) ? v : v === undefined ? [] : [v]) if (isTyped(q, x)) out.push(x.trim());
   }
   return out.length ? out.join('\n') : null;
 }
@@ -77,29 +89,39 @@ export const withoutAppNote = (text: string): string => {
   return at < 0 ? text : text.slice(0, at).trimEnd();
 };
 
-/** The answer with the app's note after each of the user's own words (an option he picked stays as it is). */
+/** An answer the app gave for the user (reaskNote, ownCopyNote): never what he said. */
+export const isAppAnswer = (text: string): boolean => /^Not asked(?: again)?:/.test(text.trim());
+
+/** The answer with the app's note after the user's own words (an option he picked stays as it is; in a list the note
+ *  follows the last thing he typed). */
 export function withWordsNote(req: Pick<PendingRequest, 'questions'>, answer: Answer, note: string = WORDS_NOTE): Answer {
   if (answer.kind !== 'question' || typedWords(req, answer) === null) return answer;
-  const typed = (q: PendingRequest['questions'] extends (infer Q)[] | undefined ? Q : never, x: string) => !!x.trim() && !q.options.some(o => o.label === x);
   const answers: Record<string, string | string[]> = { ...answer.answers };
   for (const q of req.questions ?? []) {
     const v = answers[q.question];
-    if (typeof v === 'string') { if (typed(q, v)) answers[q.question] = v + note; }
-    else if (Array.isArray(v) && v.some(x => typed(q, x))) answers[q.question] = v.map((x, i) => (i === v.length - 1 ? x + note : x));
+    if (typeof v === 'string') { if (isTyped(q, v)) answers[q.question] = v + note; }
+    else if (Array.isArray(v)) { const at = v.findLastIndex(x => isTyped(q, x)); if (at >= 0) answers[q.question] = v.map((x, i) => (i === at ? x + note : x)); }
   }
   return { ...answer, answers };
 }
 
-const GO = /^(?:s[iì]|yes|ja|no|nein|ok|okay|va bene|vai|procedi|confermo|approvo|fallo|esegui(?:lo)?|lancia(?:lo)?)(?![\p{L}])/iu;
-const EXPLAIN = /^(?:(?:mi\s+)?spiega(?:mi|melo|mela)?(?![\p{L}])|puoi\s+spiegar|non\s+(?:ho\s+)?cap(?:ito|isco)|non\s+mi\s+è\s+chiar|in\s+che\s+senso|che\s+(?:cosa\s+)?(?:vuol\s+dire|significa|intend)|cosa\s+(?:vuol\s+dire|significa|intend|cambia|succede|comporta)|perch[eé](?![\p{L}])|explain(?![\p{L}])|what\s+do(?:es)?\s+(?:it|that|this|you)\s+mean|why(?![\p{L}])|i\s+do(?:n't|\s+not)\s+understand|was\s+hei[sß]t|warum(?![\p{L}])|erkl[aä]r)/iu;
+/** words that open a message without saying what it is: «ma perché?», «scusa, non ho capito», «ok ma cosa cambia?» */
+const FILLER = /^(?:(?:ma|scusa(?:mi)?|boh|per[oò]|aspetta|quindi|allora|ok(?:ay)?[\s,]+(?:ma|per[oò])|but|sorry|wait|aber)[\s,.!…]+)+/iu;
+const GO = /^(?:sì(?![\p{L}])|si(?=\s*(?:$|[,.;:!?]))|(?:yes|ja|no|nein|ok|okay|va bene|vai|procedi|confermo|approvo|fallo|esegui(?:lo)?|lancia(?:lo)?)(?![\p{L}]))/iu;
+/** a decision said inside a question («perché no, vai», «spiegami dopo, intanto procedi») or a counter-proposal */
+const DECIDES = /(?:^|[\s,;:])(?:vai|procedi|fallo|usa|usiamo|usassimo|go ahead|proceed|mach weiter)(?=$|[\s,.;:!?])|^(?:che\s+ne\s+di(?:ci|resti)|come\s+prima)(?![\p{L}])/iu;
+const EXPLAIN = /^(?:(?:(?:mi|me\s+l[oa]|ce\s+l[oa])\s+)?spieg(?:a|hi|ami|armi|amelo|amela|atemi)?(?![\p{L}])|puoi\s+spiegar|(?:mi\s+fai\s+|fammi\s+)?un\s+esempio|non\s+(?:ho\s+)?cap(?:ito|isco)|non\s+(?:mi\s+)?è\s+chiar|in\s+che\s+senso|che\s+(?:cosa\s+)?(?:vuol\s+dire|significa|intend)|cosa\s+(?:vuol\s+dire|significa|intend|cambia|succede|comporta)|qual(?:e|i)?\s*[’']?\s*è|(?:cos|com)[’']è|perch[eé](?![\p{L}])|(?:can\s+you\s+)?explain(?![\p{L}])|what\s+do(?:es)?\s+(?:it|that|this|you)\s+mean|why(?![\p{L}])|i\s+do(?:n[’']t|\s+not)\s+(?:understand|get)|was\s+hei[sß]t|warum(?![\p{L}])|wieso(?![\p{L}])|(?:kannst\s+du\s+(?:das\s+)?)?erkl[aä]r)/iu;
 /** how a question about the question opens (never an instruction that ends with «, ok?») */
-const ASKS = /^(?:cio[eè]|cosa|come|quale|quali|che|chi|dove|quando|quant[oaie]|e\s+se|what|which|how|who|where|when|wie|was|welche[rs]?|wo|wann)(?![\p{L}])/iu;
+const ASKS = /^(?:cio[eè]|cosa|come|quale|quali|che|chi|dove|quando|quant[oaie]|e\s+se|si\s+pu[oò]|what|which|how|who|where|when|wie|was|welche[rs]?|wo|wann)(?![\p{L}])/iu;
 
 /** His message asks about the question instead of deciding it: it opens by asking to explain, or it is a question that
- *  opens with a question word. Narrow on purpose: «sì, ma sul branch dev?», «usa dev, ok?» and «usa dev» are answers. */
+ *  opens with a question word. Narrow on purpose: «sì, ma sul branch dev?», «usa dev, ok?», «perché no, vai» and «usa
+ *  dev» are answers; what it misses reaches the chat as his words, with WORDS_NOTE. */
 export function asksToExplain(text: string): boolean {
   const t = text.trim().replace(/^[«"'“]+/, '');
-  if (!t || GO.test(t)) return false;
-  if (EXPLAIN.test(t)) return true;
-  return ASKS.test(t) && /\?\s*[»"'”]?$/.test(t);
+  if (!t || DECIDES.test(t)) return false;
+  const u = t.replace(FILLER, '');
+  if (!u || GO.test(u)) return false;
+  if (EXPLAIN.test(u)) return true;
+  return ASKS.test(u) && /\?\s*[»"'”]?$/.test(u);
 }
