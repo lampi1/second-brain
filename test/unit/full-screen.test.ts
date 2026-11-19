@@ -27,15 +27,17 @@ it('leaves a window the user put in full screen by themselves as it was', () => 
   expect(w.calls).toEqual([]);
 });
 
-it('forgets its own full screen when the user left it meanwhile', () => {
-  const { w, win } = fakeWindow();
+it('leaves its own full screen even when the window does not say it is in one yet (macOS animates the change)', () => {
+  const w = { calls: [] as boolean[] };
+  // the window answers «not full screen» the whole time, as during the animation
+  const win: FullScreenWindow = { isDestroyed: () => false, isFullScreen: () => false, setFullScreen: on => { w.calls.push(on); } };
   const set = fullScreenSwitch(() => win, () => false);
   set(true);
-  w.full = false; // the user pressed the system's own key
   expect(set(false)).toEqual({ on: false });
-  w.full = true; // then went full screen by themselves
-  expect(set(false)).toEqual({ on: true });
-  expect(w.calls).toEqual([true]);
+  expect(w.calls).toEqual([true, false]);
+  // and only once: a second «off» has nothing of ours to undo
+  set(false);
+  expect(w.calls).toEqual([true, false]);
 });
 
 it('never moves a hidden or test run, a missing or a closed window', () => {

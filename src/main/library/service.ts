@@ -51,7 +51,7 @@ export interface LibraryPorts {
 
 /** What the agent said of its artifact (kept across versions: a rewritten file keeps its given title). */
 type StoredArtifact = Omit<Artifact, 'chatTitle'> & { given?: { title?: string; summary?: string } };
-interface Stored { v: 2; copyBytes: number; artifacts: StoredArtifact[] }
+interface Stored { v: 2; copyBytes: number; artifacts: StoredArtifact[]; /** an old index was migrated and its unused copies are not deleted yet */ sweep?: true }
 /** An artifact of ADR 0319's index, as far as `migrate` reads it. */
 type OldArtifact = StoredArtifact & { origin?: string; pinned?: boolean };
 
@@ -123,12 +123,14 @@ export class LibraryService {
   private load(): Stored {
     const empty: Stored = { v: 2, copyBytes: 0, artifacts: [] };
     try {
-      const raw = readLocal(this.file) as { v?: number; artifacts?: OldArtifact[] } | undefined;
+      const raw = readLocal(this.file) as { v?: number; artifacts?: OldArtifact[]; sweep?: boolean } | undefined;
       if (!raw || (raw.v !== 1 && raw.v !== 2) || !Array.isArray(raw.artifacts)) return empty;
       const version = (v: unknown): v is ArtifactVersion => !!v && typeof (v as ArtifactVersion).path === 'string' && typeof (v as ArtifactVersion).at === 'number' && typeof (v as ArtifactVersion).size === 'number'
         && ((v as ArtifactVersion).copy === undefined || typeof (v as ArtifactVersion).copy === 'string');
       const valid = raw.artifacts.filter(a => a && typeof a.id === 'string' && typeof a.path === 'string' && typeof a.at === 'number' && Array.isArray(a.versions) && a.versions.length > 0 && a.versions.every(version) && artifactKind(a.path) === a.kind);
       const artifacts = (raw.v === 1 ? migrate(valid) : valid).slice(0, LIBRARY_MAX);
+      // still to do after a restart: the app may be closed before the tab is ever opened
+      if (raw.sweep === true) this.sweepDue = true;
       if (raw.v === 1) {
         this.sweepDue = true;
         log.info('library', 'artifact index of ADR 0319 migrated', { data: { before: raw.artifacts.length, kept: artifacts.length } });
@@ -136,7 +138,7 @@ export class LibraryService {
       // the copies' budget is what the kept copies weigh now (one file per content, shared by equal versions)
       const copies = new Map<string, number>();
       for (const a of artifacts) for (const v of a.versions) if (v.copy) copies.set(v.copy, v.size);
-      return { v: 2, artifacts, copyBytes: [...copies.values()].reduce((n, x) => n + x, 0) };
+      return { v: 2, artifacts, copyBytes: [...copies.values()].reduce((n, x) => n + x, 0), ...(this.sweepDue ? { sweep: true as const } : {}) };
     } catch (e) {
       log.warn('library', 'artifact index unreadable: starting a new one', { cause: String(e), hint: 'the old file is kept as it is; agents add artifacts again as they make them' });
       try { fs.renameSync(this.file, `${this.file}.bad-${Date.now()}`); } catch { /* nothing to keep */ }
@@ -167,8 +169,10 @@ export class LibraryService {
     this.reals.clear();
     const run = this.serial(async () => {
       const changed = await this.check();
-      if (this.sweepDue) { this.sweepDue = false; await this.sweep(); }
-      if (changed) { this.persist(); this.p.changed(); }
+      const swept = this.sweepDue;
+      if (swept) { await this.sweep(); this.sweepDue = false; delete this.data.sweep; }
+      if (changed || swept) this.persist();
+      if (changed) this.p.changed();
     });
     this.checking = run.catch(e => log.warn('library', 'artifacts not checked', { cause: String(e), hint: 'the list stays as it was; opening the tab again tries again' })).finally(() => { this.checking = null; });
     return this.checking;
@@ -216,6 +220,8 @@ export class LibraryService {
     try {
       const body = await fs.promises.readFile(file);
       if (body.length > COPY_BYTES) return undefined;
+      // a declared file rewritten later with a credential in it is never copied into the app's folder
+      if (readsText(file) && secretHead(body.toString('utf8', 0, 64 * 1024))) return undefined;
       const sha = crypto.createHash('sha256').update(body).digest('hex').slice(0, 32);
       // the copy keeps the original's extension so the viewer renders it the same way
       const named = path.join(this.copies, `${sha}.${extOf(file)}`);
@@ -329,16 +335,16 @@ export class LibraryService {
     for (const a of [...this.data.artifacts]) {
       for (const v of [...a.versions]) {
         if (++n % 200 === 0) await yieldNow();
-        // a past version of a rewritten file stays missing: its content is the copy
-        if (a.versions.some(o => o !== v && o.at > v.at && this.same(o.path, v.path))) continue;
+        // a past version of a rewritten file stays missing: its content is the copy, the file is another version's
+        if (a.versions.some(o => o !== v && !o.missing && this.same(o.path, v.path))) continue;
         let st: fs.Stats | null = null;
         try { st = await fs.promises.stat(v.path); } catch { /* gone */ }
-        const gone = !st?.isFile();
-        if (!gone && st && (Math.round(st.mtimeMs) !== v.at || st.size !== v.size) && !v.missing) {
-          if (st.size > 0 && (await this.upsert({ path: v.path, kind: a.kind, mtimeMs: st.mtimeMs, size: st.size }, v.chatId)).changed) changed = true;
-          continue;
-        }
-        if (gone !== !!v.missing) { if (gone) v.missing = true; else delete v.missing; changed = true; }
+        if (!st?.isFile()) { if (!v.missing) { v.missing = true; changed = true; } continue; }
+        const at = Math.round(st.mtimeMs);
+        if (at === v.at && st.size === v.size) { if (v.missing) { delete v.missing; changed = true; } continue; }
+        // another content at this path (newer or older than the one indexed): a version of its own, once
+        if (v.missing && a.versions.some(o => o !== v && o.at === at && o.size === st.size && this.same(o.path, v.path))) continue;
+        if (st.size > 0 && (await this.upsert({ path: v.path, kind: a.kind, mtimeMs: st.mtimeMs, size: st.size }, v.chatId)).changed) changed = true;
       }
       const newest = a.versions.find(v => !v.missing) ?? a.versions[0]!;
       const missing = !a.versions.some(v => !v.missing);
@@ -383,6 +389,11 @@ export class LibraryService {
         const [a] = this.data.artifacts.splice(i, 1);
         for (const [k, v] of this.byKey) if (v === a) this.byKey.delete(k);
         await this.release(a!.versions);
+        for (const file of new Set([a!.path, ...a!.versions.flatMap(v => (v.copy ? [v.copy] : []))])) {
+          const name = this.thumbName(file, a!);
+          this.thumbCache.delete(name);
+          await fs.promises.unlink(path.join(this.thumbs, `${name}.jpg`)).catch(() => undefined);
+        }
         this.persist();
         this.p.changed();
       }
@@ -391,6 +402,9 @@ export class LibraryService {
   }
 
   // ── a card's picture ──
+  private thumbName(file: string, a: { at: number; size: number }): string {
+    return crypto.createHash('sha1').update(`${pathKey(file, this.platform)}|${a.at}|${a.size}`).digest('hex').slice(0, 24);
+  }
   async thumb(id: string): Promise<ArtifactThumb | null> {
     const a = this.data.artifacts.find(x => x.id === id);
     if (!a) return null;
@@ -402,7 +416,7 @@ export class LibraryService {
     // a Markdown card is drawn from its title and summary; a text holding a credential shows none of it
     if (a.kind !== 'markdown' && readsText(a.path)) { const text = await head(file, 6 * 1024); return text.trim() && !secretHead(text) ? { kind: 'text', text } : null; }
     if (a.kind !== 'image' || !this.p.thumbnail) return null;
-    const name = crypto.createHash('sha1').update(`${pathKey(file, this.platform)}|${a.at}|${a.size}`).digest('hex').slice(0, 24);
+    const name = this.thumbName(file, a);
     const hit = this.thumbCache.get(name);
     if (hit) return { kind: 'image', dataUrl: hit };
     const cached = path.join(this.thumbs, `${name}.jpg`);

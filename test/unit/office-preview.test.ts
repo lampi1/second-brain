@@ -135,6 +135,28 @@ describe('what is not a readable Office file', () => {
     expect(officePreview(bytes, 'docx')).toBeNull();
   });
 
+  it('reads past elements that are never closed (a file made to hurt is scanned once, not once per tag)', () => {
+    const open = '<w:tbl><w:tr><w:tc>'.repeat(20_000);
+    const r = officePreview(doc(`<w:p><w:r><w:t>prima</w:t></w:r></w:p>${open}<w:p><w:r><w:t>dopo</w:t></w:r></w:p>`), 'docx')!;
+    expect(r.markdown).toBe('prima\n\ndopo');
+    const cells = officePreview(zip({
+      'xl/workbook.xml': '<workbook><sheets><sheet name="A" r:id="rId1"/></sheets></workbook>',
+      'xl/_rels/workbook.xml.rels': '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+      'xl/worksheets/sheet1.xml': `<worksheet><sheetData><row><c t="inlineStr"><is><t>ok</t></is></c>${'<c r="'.repeat(20_000)}</row></sheetData></worksheet>`,
+    }), 'xlsx')!;
+    expect(cells.markdown).toBe('## A\n\n| ok |\n| --- |');
+  });
+
+  it('says the preview is cut when a sheet is too big to read', () => {
+    const big = Buffer.concat([Buffer.from('<worksheet><sheetData>'), Buffer.alloc(30_000_001, 0x20), Buffer.from('</sheetData></worksheet>')]);
+    const bytes = writeZip(new Map([
+      ['xl/workbook.xml', Buffer.from('<workbook><sheets><sheet name="Dati" r:id="rId1"/></sheets></workbook>')],
+      ['xl/_rels/workbook.xml.rels', Buffer.from('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>')],
+      ['xl/worksheets/sheet1.xml', big],
+    ]), { packed: 40_000_000, unpacked: 80_000_000, entries: 10, file: 40_000_000, ratio: 100_000, depth: 8 });
+    expect(officePreview(bytes, 'xlsx')).toEqual({ markdown: '## Dati', cut: true });
+  });
+
   it('knows the three formats by extension', () => {
     expect(OFFICE_FORMATS).toEqual({ '.docx': 'docx', '.xlsx': 'xlsx', '.pptx': 'pptx' });
   });

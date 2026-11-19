@@ -141,6 +141,53 @@ describe('versions', () => {
   });
 });
 
+describe('a file rewritten behind the app’s back', () => {
+  it('with an older date becomes the current version once, and every later look changes nothing', async () => {
+    const t = setup();
+    const f = t.write('reviews/report.md', '# Report\n\nIl testo nuovo del report.\n', 20_000);
+    const lib = t.make();
+    await lib.save(undefined, { path: f });
+    // put back from a backup: other content, an older date
+    t.write('reviews/report.md', '# Report\n\nIl testo di prima.\n', 10_000);
+    await lib.refresh();
+    const shape = () => lib.list().artifacts[0]!.versions.map(v => [v.at, !!v.missing]);
+    expect(shape()).toEqual([[20_000, true], [10_000, false]]);
+    expect(lib.list().artifacts[0]).toMatchObject({ at: 10_000, missing: false });
+    const seen = t.changed();
+    await lib.refresh();
+    await lib.refresh();
+    expect(shape()).toEqual([[20_000, true], [10_000, false]]);
+    expect(t.changed()).toBe(seen);
+  });
+
+  it('a file that went and came back with other content is a new version, the old one stays as its copy', async () => {
+    const t = setup();
+    const f = t.write('reviews/report.md', '# Report\n\nPrima stesura.\n', 10_000);
+    const lib = t.make();
+    await lib.save(undefined, { path: f });
+    fs.rmSync(f);
+    await lib.refresh();
+    t.write('reviews/report.md', '# Report\n\nSeconda stesura, più lunga.\n', 30_000);
+    await lib.refresh();
+    await lib.refresh();
+    expect(lib.list().artifacts[0]!.versions.map(v => [v.at, !!v.missing, !!v.copy])).toEqual([[30_000, false, true], [10_000, true, true]]);
+  });
+
+  it('with a credential in it is still listed, but the app keeps no copy of that text', async () => {
+    const t = setup();
+    const f = t.write('reviews/results.json', '{"scenari": 12, "passati": 10}', 10_000);
+    const lib = t.make();
+    await lib.save(undefined, { path: f });
+    // built here: a value shaped like a credential never sits in the repo (the guard)
+    t.write('reviews/results.json', JSON.stringify({ ['access' + '_token']: 'x'.repeat(36) }), 20_000);
+    await lib.refresh();
+    const [now, before] = lib.list().artifacts[0]!.versions;
+    expect([now!.at, now!.copy]).toEqual([20_000, undefined]);
+    expect(fs.readFileSync(before!.copy!, 'utf8')).toContain('scenari');
+    for (const name of fs.readdirSync(path.join(t.userData, 'library', 'versions'))) expect(fs.readFileSync(path.join(t.userData, 'library', 'versions', name), 'utf8')).not.toContain('access_token');
+  });
+});
+
 describe('taking a card off the list', () => {
   it('drops the index entry and the app’s copies, never the user’s file', async () => {
     const t = setup();
@@ -152,6 +199,16 @@ describe('taking a card off the list', () => {
     expect((await lib.remove(artifact.id)).artifacts).toEqual([]);
     expect(fs.existsSync(copy)).toBe(false);
     expect(fs.existsSync(f)).toBe(true);
+    // a picture's card image goes with it
+    const withThumb = t.make({ thumbnail: async () => 'data:image/jpeg;base64,AAAA' });
+    const png = t.write('reviews/grafico.png', PNG);
+    const picture = (await withThumb.save(undefined, { path: png })).artifact.id;
+    await withThumb.thumb(picture);
+    const thumbs = path.join(t.userData, 'library', 'thumbs');
+    expect(fs.readdirSync(thumbs)).toHaveLength(1);
+    await withThumb.remove(picture);
+    expect(fs.readdirSync(thumbs)).toEqual([]);
+    expect(fs.existsSync(png)).toBe(true);
     // an unknown id changes nothing; the same file can be an artifact again
     await lib.remove('nope');
     expect((await lib.save(undefined, { path: f })).created).toBe(true);
@@ -190,7 +247,13 @@ describe('the index on disk', () => {
     expect(lib.list().artifacts.map(a => a.id).sort()).toEqual(['report', 'starred']);
     expect(lib.list().artifacts[0]).not.toHaveProperty('origin');
     expect(lib.list().artifacts.find(a => a.id === 'starred')).not.toHaveProperty('pinned');
+    // the app closed before the tab was ever opened: the index is the new one already, the cleaning is still owed
+    expect(JSON.parse(fs.readFileSync(path.join(t.userData, 'library', 'index.json'), 'utf8'))).toMatchObject({ v: 2, sweep: true });
+    expect(fs.existsSync(orphan)).toBe(true);
+    const again = t.make();
     // the first look at the files also deletes the app's own copies and pictures nobody lists any more
+    await again.refresh();
+    expect(JSON.parse(fs.readFileSync(path.join(t.userData, 'library', 'index.json'), 'utf8'))).not.toHaveProperty('sweep');
     await lib.refresh();
     expect([fs.existsSync(kept), fs.existsSync(orphan), fs.existsSync(path.join(t.userData, 'library', 'thumbs'))]).toEqual([true, false, false]);
     expect(JSON.parse(fs.readFileSync(path.join(t.userData, 'library', 'index.json'), 'utf8')).v).toBe(2);

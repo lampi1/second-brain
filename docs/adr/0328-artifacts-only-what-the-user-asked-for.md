@@ -35,14 +35,16 @@ not look like a full screen. The page's own `requestFullscreen` is refused by th
    indexed files are still there (`library:list { check: true }`).
 3. **Formats, all opened in the app:** `html, md, pdf, png, jpg, webp, gif, csv, tsv, json, txt, docx, xlsx, pptx`.
    Anything else is refused by the tool with the list (so is a missing or empty file, a path outside what the chat can
-   name, a file whose name or first lines look like a credential). SVG, video, audio and «other» files are no longer
+   name, a file whose name or first lines look like a credential). A declared file rewritten later with a credential
+   in it stays listed, but the app keeps no copy of that text. SVG, video, audio and «other» files are no longer
    artifacts: the viewer cannot show them as what they are.
 4. **Word, Excel and PowerPoint open in the viewer** as text (`src/main/office-preview.ts`, `FileViewResult` kind
    `office`): a document's headings, paragraphs, lists and tables, a workbook's sheets as tables (shared strings,
    dates, booleans; 300 rows, 40 columns, 12 sheets), a deck's slides in the deck's order with title, points and
    tables, written as Markdown and drawn by the viewer's Markdown. No dependency (rule 3): an Office file is a ZIP of
-   XML, read with a bounded reader of its own (central directory, one part inflated at a time, sizes capped); nothing
-   is run, no link followed. It is the content, not the layout: a note above says so and «Apri con l'app» stays for the
+   XML, read with a bounded reader of its own (central directory, one part inflated at a time, sizes capped, elements
+   found with `indexOf` so a file made to hurt is scanned in linear time on main's thread); nothing is run, no link
+   followed. It is the content, not the layout: a note above says so and «Apri con l'app» stays for the
    original. A file that is not a readable Office file (old binary format, encrypted, damaged) says so. GIF opens as a
    picture.
 5. **One list.** No kind chips, no area, period, chat or sort selects, no star: search (title, summary, path, area,
@@ -51,7 +53,8 @@ not look like a full screen. The page's own `requestFullscreen` is refused by th
    version copies and card picture are deleted.
 6. **What an old index keeps.** An index of ADR 0319 (`v: 1`) is read once: it keeps what the user starred and the
    HTML, PDF, Word, Excel and PowerPoint files a chat had reported; everything else leaves the list (the files stay
-   where they are) and the copies and pictures the app made for them are deleted. Markdown is not kept: the old index
+   where they are) and the copies and pictures the app made for them are deleted the first time the tab is opened
+   (owed across restarts: `sweep` in the index). Markdown is not kept: the old index
    held every note and scratch file a chat linked. The Orchestrator can put any file back with `artifact_save`.
 7. **The daily cleanup is gone** with what it cleaned: pictures no longer come in. Nothing in
    `<userData>/evidence` is deleted by the library any more.

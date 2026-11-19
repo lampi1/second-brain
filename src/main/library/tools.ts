@@ -4,7 +4,7 @@
 // agents «understand by themselves» (the owner 2026-11-19): a request for something to keep and read again is a file
 // plus this call; a screenshot, a log or a scratch file never is. One short line of it rides on every role's frame too
 // (agents/orchestrator-role.ts ARTIFACT_RULE). Used by index.ts (Services.addChatTools); listed in
-// appctl/tool-catalog.ts; pinned by test/unit/library-tools.test.ts.
+// appctl/tool-catalog.ts; pinned by test/unit/library-service.test.ts.
 import { ARTIFACT_FORMATS } from '../../shared/library';
 import type { McpTool } from '../mcp/server';
 import { ToolRefusal } from '../mcp/refusal';
