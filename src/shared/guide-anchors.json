@@ -202,7 +202,7 @@
     "src/renderer/components/brain-model/MapPage.tsx#MapPage": "c5e13c15fba36a75",
     "src/renderer/components/brain-model/MemoryBrowser.tsx": "4d91a2dbafb2d340",
     "src/renderer/components/brain-model/RulesPage.tsx": "e96dea64948c1516",
-    "src/renderer/components/ChatInput.tsx": "b0ccce49a16825e2",
+    "src/renderer/components/ChatInput.tsx": "12232f8f4eabe421",
     "src/renderer/components/ChatTile.tsx": "5cee1909d3ffc503",
     "src/renderer/components/chess/ChessBoard.tsx": "f5be3cb317d3a0b4",
     "src/renderer/components/chess/ChessGame.tsx": "d9b3c93ae0734371",
