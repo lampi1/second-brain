@@ -94,7 +94,7 @@ export function PlanCard({ plan, now, waiting, nameOf, onShow, onChat }: {
   return <section className="pm-plancard" data-phase={plan.phase} data-testid="pm-plan">
     <span className="dash-eyebrow">{t('pm.plan')} · {t(`pm.planPhase.${plan.phase}`)}</span>
     <h3>{plan.title}</h3>
-    <ProgressHead pct={p.pct} count={count} state={p.blocked.length ? 'blocked' : p.done === p.total && p.total > 0 ? 'done' : 'now'} />
+    <ProgressHead pct={p.pct} count={count} of={plan.title} state={p.blocked.length ? 'blocked' : p.done === p.total && p.total > 0 ? 'done' : 'now'} />
     {plan.doneWhen && <p className="pm-plan-when"><b>{t('pm.plan.doneWhen')}</b> {plan.doneWhen}</p>}
     <ol className="pm-plansteps" aria-label={t('pm.plan.steps')} data-testid="pm-flow">
       {flow.map(f => <StepRow key={f.step} f={f} flow={flow} now={now} open={open.has(f.step)} you={p.you.includes(f)} nameOf={nameOf} onToggle={() => toggle(f.step)} onShow={onShow} onChat={onChat} />)}

@@ -21,19 +21,21 @@ box, the paths and the agents, never the state of the whole.
    page).
 2. **A count read from the map** (`src/shared/project-map-progress.ts`, pure, no model and no token).
    - What is counted: the pieces of work with nothing inside them (a step, a part, a system or a document without
-     pieces). People and external systems are context, never work. Done = status `ok`, as saved: a file edited later
-     turns the box «da verificare» on the drawing but does not take the step back.
+     pieces). People and external systems are context, never work; on a level that has phases or steps, whatever
+     stands beside them (an environment, a document, a system) is context too. A level made of one piece only (a
+     project box that holds the phases) is read as what is inside it. Done = status `ok`, as saved: a file edited
+     later turns the box «da verificare» on the drawing but does not take the step back.
    - The percentage is done / all, whole; 100 only when every piece is done, never 0 once one is.
    - The groups are the top-level pieces, each with its own count and a state (closed, under way, blocked, to start).
-     They are in order when the level is a line (ADR 0322), when it is made of phases and steps (whatever stands beside
-     them), or when its boxes are chained by their links from the first to the last with no fork and no way back (a
+     They are in order when the level is a line (ADR 0322), when it has phases and steps, or when its boxes are chained by their links from the first to the last with no fork and no way back (a
      map drawn as numbered systems joined by «poi»). In order, the map also says where the project is (the first
      group not closed) and what comes next (the first piece not started).
    - Under way = status `work`, or somebody works on it right now (a plan's step under way on it, an agent at work
-     bound to it). Stuck = every piece of any depth, and every link, with status `blocked`: the ones whose actor is
+     bound to it; a box with pieces inside is named itself when the work is bound to it and to none of its pieces). Stuck = every piece of any depth, and every link, with status `blocked`: the ones whose actor is
      the user are told first, as «tocca a te».
-   - Which maps have a progress (`progressOf`): the ones told as phases and steps, and the ones whose top-level pieces
-     are in order with something still to do. Any other map is a picture of a system, not a plan: it has no progress
+   - Which maps have a progress (`progressOf`): the ones told as phases and steps (the level is made of them, or
+     every piece counted is a step: one step deep inside a system does not make the map a plan), and the ones whose
+     top-level pieces are in order with something still to do. Any other map is a picture of a system, not a plan: it has no progress
      of its own, and the percentage shown is the one of the plan under way on it. `countOf` counts any level.
 3. **Where it shows.**
    - The header: «Avanzamento», a small bar and the percentage, always in sight (the map's own, else the plan's).

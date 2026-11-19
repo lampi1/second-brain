@@ -19,13 +19,13 @@
 // Used by wiring-shared.ts (chat tools) and appctl/tools.ts (the Orchestrator's); pinned by test/unit/projectmap-tools.test.ts.
 import type { EventMap } from '@shared/contract';
 import { EDIT_OPS, MAP_ACTORS, MAP_KINDS, MAP_LAYOUTS, MAP_LIMITS, MAP_STATES, elementText, mapText, type ProjectMap, type ProjectMapView } from '@shared/project-map';
-import { progressLine } from '@shared/project-map-progress';
+import { progressLine, workingOf } from '@shared/project-map-progress';
 import type { McpTool } from '../mcp/server';
 import type { ProjectMaps } from './service';
 
 const json = (v: unknown) => JSON.stringify(v);
 /** A map as text for a read, closed by how far the project is (ADR 0326): the number the user sees on the map. */
-const readText = (v: ProjectMapView): string => [mapText(v, Date.now()), progressLine(v.map)].filter(Boolean).join('\n');
+const readText = (v: ProjectMapView): string => [mapText(v, Date.now()), progressLine(v.map, workingOf(v))].filter(Boolean).join('\n');
 const STATES = MAP_STATES.join(' | '), KINDS = MAP_KINDS.join(' | '), ACTORS = MAP_ACTORS.join(' | ');
 
 const ELEMENT = {

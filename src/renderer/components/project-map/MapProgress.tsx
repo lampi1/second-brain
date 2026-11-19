@@ -25,9 +25,9 @@ export function ProgressChip({ pct, tip }: { pct: number; tip: string }) {
 }
 
 /** The head of a count: the percentage in large type, the bar, and under them what was counted. */
-export function ProgressHead({ pct, count, state }: { pct: number; count: ReactNode; state?: 'done' | 'now' | 'blocked' | 'todo' }) {
+export function ProgressHead({ pct, count, state, of }: { pct: number; count: ReactNode; state?: 'done' | 'now' | 'blocked' | 'todo'; /** what the bar counts, for a screen reader (a plan's title, a box's name) */ of?: string }) {
   return <>
-    <div className="pm-prog-head"><b className="pm-prog-pct" data-testid="pm-progress-pct">{pct}%</b><Meter pct={pct} {...(state ? { state } : {})} label={t('pm.prog.title')} /></div>
+    <div className="pm-prog-head"><b className="pm-prog-pct" data-testid="pm-progress-pct">{pct}%</b><Meter pct={pct} {...(state ? { state } : {})} label={of ? `${t('pm.prog.title')}: ${of}` : t('pm.prog.title')} /></div>
     <p className="pm-prog-count">{count}</p>
   </>;
 }
@@ -55,13 +55,13 @@ export function ProgressCard({ p, compact, whoOf, onShow }: {
   const open = !compact || more;
   const closed = p.groups.filter(g => g.state === 'done').length;
   const at = p.at !== undefined ? p.groups[p.at] : undefined;
-  const count = [countText(p), ...(p.ordered ? [t('pm.prog.phases', { done: closed, total: p.groups.length })] : []), ...(p.unknown ? [t('pm.prog.unknown', { n: p.unknown })] : [])].join(' · ');
+  const count = [countText(p), ...(p.ordered && p.groups.some(g => g.total > 1) ? [t('pm.prog.phases', { done: closed, total: p.groups.length })] : []), ...(p.unknown ? [t('pm.prog.unknown', { n: p.unknown })] : [])].join(' · ');
   return <section className="pm-prog" data-compact={open ? undefined : ''} data-testid="pm-progress">
     <div className="pm-prog-top"><span className="dash-eyebrow">{t('pm.prog.title')}</span>
       {compact && <button type="button" className="pm-prog-more" aria-expanded={open} onClick={() => setMore(m => !m)} data-testid="pm-progress-more">{t(open ? 'pm.prog.less' : 'pm.prog.more')}</button>}</div>
     <ProgressHead pct={p.pct} count={count} />
     {open && <dl className="pm-prog-facts">
-      {p.total > 0 && p.done === p.total && <><dt>{t('pm.prog.at')}</dt><dd data-testid="pm-progress-at">{t('pm.prog.allDone')}</dd></>}
+      {p.total > 0 && p.done === p.total && !p.you.length && !p.blocked.length && <><dt>{t('pm.prog.at')}</dt><dd data-testid="pm-progress-at">{t('pm.prog.allDone')}</dd></>}
       {at && <><dt>{t('pm.prog.at')}</dt><dd data-testid="pm-progress-at"><button type="button" onClick={() => onShow(at.id)}>{at.name}</button><small>{t('pm.prog.of', { done: at.done, total: at.total })}</small></dd></>}
       {p.now.length > 0 && <><dt>{t('pm.prog.now')}</dt><dd><ul data-testid="pm-progress-now">{p.now.map(x => <Item key={x.id} x={x} who={whoOf(x.id)} onShow={onShow} />)}</ul></dd></>}
       {p.you.length > 0 && <><dt className="pm-prog-you">{t('pm.youMeans')}</dt><dd><ul data-testid="pm-progress-you">{p.you.map(x => <Item key={x.id} x={x} onShow={onShow} />)}</ul></dd></>}

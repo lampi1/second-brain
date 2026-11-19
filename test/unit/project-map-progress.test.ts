@@ -4,7 +4,7 @@
 // user, which maps have a progress at all, a plan's own count, and the line of text for the Orchestrator.
 import { describe, expect, it } from 'vitest';
 import { checkMap, type MapPlan, type ProjectMap } from '../../src/shared/project-map';
-import { countOf, pctOf, planProgress, progressLine, progressOf } from '../../src/shared/project-map-progress';
+import { countOf, pctOf, planProgress, progressLine, progressOf, workingOf } from '../../src/shared/project-map-progress';
 
 const T = 1_000_000_000;
 const mapOf = (drawing: unknown): ProjectMap => ({ project: 'n', title: 'N', version: 1, updatedAt: T, by: 'x', summary: '', corrections: [], ...checkMap(drawing, T) });
@@ -56,7 +56,8 @@ describe('a map told as phases and steps', () => {
   });
   it('a piece somebody works on right now is under way whatever its status, and is not what comes next', () => {
     const live = progressOf(phased, new Set(['p4', 'migra']))!;
-    expect(live.now.map(x => x.id)).toEqual(['p2', 'p4']);
+    // «Migrazione» is worked on as a phase, with none of its steps under way: the phase itself is named
+    expect(live.now.map(x => x.id)).toEqual(['p2', 'p4', 'migra']);
     expect(live.next?.id).toBe('m1');
     expect(live.groups[2]!.state).toBe('now');
     // a done step somebody touches again stays done
@@ -137,5 +138,54 @@ describe('the progress as a line of text', () => {
   it('tells the Orchestrator the number the user sees', () => {
     expect(progressLine(phased)).toBe('Avanzamento: 3 di 8 passi (38%); siamo a «Preparazione»; in corso: Prova di ripristino; aspettano l\'utente: Via libera; poi: Avviso');
     expect(progressLine({ elements: [], links: [] })).toBe('');
+  });
+});
+
+describe('what stands around the work (independent review of ADR 0326)', () => {
+  const steps = [
+    { id: 'p1', kind: 'phase', name: 'Prima', status: 'ok' }, { id: 'a', kind: 'step', name: 'A', parent: 'p1', status: 'ok' },
+    { id: 'p2', kind: 'phase', name: 'Seconda', status: 'unknown' }, { id: 'b', kind: 'step', name: 'B', parent: 'p2', status: 'unknown' }, { id: 'c', kind: 'step', name: 'C', parent: 'p2', status: 'planned' },
+  ];
+  it('a box beside the phases (an environment, a document) is not a step and does not break their order', () => {
+    const m = mapOf({ elements: [...steps, { id: 'prod', kind: 'env', name: 'Produzione', status: 'ok' }, { id: 'man', kind: 'doc', name: 'Manuale', status: 'ok' }], links: [] });
+    const p = progressOf(m)!;
+    expect([p.done, p.total, p.pct, p.steps, p.ordered, p.at]).toEqual([1, 3, 33, true, true, 1]);
+    expect(p.groups.map(g => g.name)).toEqual(['Prima', 'Seconda']);
+    // a blocked one is still told
+    const stuck = mapOf({ elements: [...steps, { id: 'prod', kind: 'env', name: 'Produzione', status: 'blocked', actor: 'user' }], links: [] });
+    expect(progressOf(stuck)!.you.map(x => x.name)).toEqual(['Produzione']);
+  });
+  it('a step deep inside a system does not turn a picture of systems into a plan', () => {
+    const m = mapOf({ elements: [
+      { id: 'web', kind: 'system', name: 'Web', status: 'ok' }, { id: 'api', kind: 'system', name: 'API', status: 'ok' }, { id: 'db', kind: 'system', name: 'DB', status: 'unknown' },
+      { id: 'part', kind: 'part', name: 'Parte', parent: 'api', status: 'ok' },
+      { id: 's1', kind: 'step', name: 'Uno', parent: 'part', status: 'ok' }, { id: 's2', kind: 'step', name: 'Due', parent: 'part', status: 'planned' },
+    ], links: [{ from: 'web', to: 'api', label: 'chiama' }, { from: 'web', to: 'db', label: 'legge' }] });
+    expect(progressOf(m)).toBeNull();
+    expect(countOf(m)!.steps).toBe(false);
+  });
+  it('a map with one box that holds the phases is read from inside that box', () => {
+    const m = mapOf({ elements: [{ id: 'prj', kind: 'system', name: 'Progetto', status: 'work' }, ...steps.map(e => (e.kind === 'phase' ? { ...e, parent: 'prj' } : e))], links: [] });
+    const p = progressOf(m)!;
+    expect(p.groups.map(g => g.name)).toEqual(['Prima', 'Seconda']);
+    expect([p.ordered, p.at, p.next?.name, p.next?.within]).toEqual([true, 1, 'B', 'Seconda']);
+  });
+  it('a phase somebody works on, with no step of its own under way, is the one under way', () => {
+    const m = mapOf({ elements: steps, links: [] });
+    const p = progressOf(m, new Set(['p2']))!;
+    expect(p.now.map(x => x.name)).toEqual(['Seconda']);
+    expect(p.groups[1]!.state).toBe('now');
+    // once one of its steps is under way the step is named, not the phase
+    expect(progressOf(m, new Set(['p2', 'b']))!.now.map(x => x.name)).toEqual(['B']);
+    // a closed phase is never under way
+    expect(progressOf(m, new Set(['p1']))!.now).toEqual([]);
+  });
+  it('the line for the agents counts who is at work, as the map does', () => {
+    const chain = mapOf({ elements: [{ id: 'a', kind: 'system', name: 'A', status: 'ok' }, { id: 'b', kind: 'system', name: 'B', status: 'unknown' }], links: [{ from: 'a', to: 'b', label: 'poi' }] });
+    expect(progressLine(chain)).toBe('');
+    const work = (state: 'now' | 'done') => ({ title: 'x', state, chatId: 'c', step: 1, chatIds: [], wave: 1 });
+    const working = workingOf({ works: { b: [work('now')] }, agents: [] });
+    expect(progressLine(chain, working)).toBe('Avanzamento: 1 di 2 parti (50%); siamo a «B»; in corso: B');
+    expect([...workingOf({ works: { b: [work('done')] }, agents: [{ chatId: 'c', title: 'T', mark: 'run', done: 0, total: 0, elements: ['a'] }, { chatId: 'd', title: 'U', mark: 'wait', done: 0, total: 0, elements: ['b'] }] })]).toEqual(['a']);
   });
 });

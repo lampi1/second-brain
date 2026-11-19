@@ -10,12 +10,12 @@
 //   steps; a card lights its boxes on the map and opens its chat.
 // - The history slider plays every version from the first drawing to now. Live: 'projectmap:changed' reloads it.
 // - Planning (ADR 0276): a piece that does not exist yet is dashed «previsto»; a box shows the steps of the plans that
-//   work on it (the view's works, live); the side column shows each plan drawn on the map, with «Approva e parti» while
-//   it waits, and on an agent's card the change the Orchestrator sent it and when the agent took it. Nothing is edited
+//   work on it (the view's works, live); the side column shows each plan drawn on the map (the approval is a line over
+//   the drawing while it waits, ADR 0326), and on an agent's card the change the Orchestrator sent it and when the agent took it. Nothing is edited
 //   here: the Orchestrator changes the map from what the user tells it, and is told the box picked (ui.mapPicked).
 // - What moves (ADR 0302, the owner 2026-11-13): a box somebody works on right now breathes, quietly, and a line under
-//   work carries a moving mark; a plan shows its steps in order, one turn after the other, the steps of one turn stacked
-//   («insieme»), and each step on a box wears its turn; entering a system zooms into its box and coming back shows the
+//   work carries a moving mark; a plan shows its steps in order, one turn after the other, and each step on a box wears
+//   its turn; entering a system zooms into its box and coming back shows the
 //   box left; with more than one project they are a list on the left (a row of pills on a narrow page), not a menu.
 // - Told in full (ADR 0307, the owner 2026-11-14): the maps the user opens start full screen; a picked box, the system
 //   on screen or a picked arrow tells how it works beside the drawing (MapDetail.tsx); a plan tells each step
@@ -35,7 +35,7 @@
 // Rendered by brain-model/MapPage.tsx (view «Progetti», pageArg progetti/<project>/<system>), beside the Orchestrator's
 // column: «Mappe», Ctrl+Shift+S and app_project_map open land there (actions.ts openMaps).
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { countOf, planProgress, progressOf } from '@shared/project-map-progress';
+import { countOf, planProgress, progressOf, workingOf } from '@shared/project-map-progress';
 import { NEW_MS, descendantsOf, levelOf, pathTo, shownStatus, type MapLink, type MapPlan, type MapWork, type Level, type LevelEdge, type LevelNode, type MapAgent, type MapElement, type MapState, type ProjectMapInfo, type ProjectMapView as View, type MapPath } from '@shared/project-map';
 import { brainBridge, openChatRef, openFileViewer, openInAppBrowser, orchestratorId } from '../../actions';
 import { t } from '../../i18n';
@@ -306,13 +306,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   const lv = useMemo(() => (map ? levelOf(map, shownLevel, now) : null), [map, shownLevel, now]);
   // How far the project is (ADR 0326), counted once per version of the view, not on every pan or zoom tick. The pieces
   // somebody works on right now (a plan's step under way, an agent at work) count as under way whatever their status.
-  const working = useMemo(() => {
-    const on = new Set<string>();
-    if (!view || !live) return on;
-    for (const [id, ws] of Object.entries(view.works)) if (ws.some(w => w.state === 'now')) on.add(id);
-    for (const a of view.agents) if (a.mark === 'run') for (const id of a.elements) on.add(id);
-    return on;
-  }, [view, live]);
+  const working = useMemo(() => (view && live ? workingOf(view) : new Set<string>()), [view, live]);
   const progress = useMemo(() => (map ? progressOf(map, working) : null), [map, working]);
   // on a map that tells a plan, each box with pieces inside wears its own count
   const counts = useMemo(() => {
@@ -464,7 +458,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   const change = (p: MapPlan) => { setFull(false); if (!brainBridge.draftToOrchestrator(t('pm.planChangeDraft', { title: p.title }), () => {})) toast(t('pm.noOrchestrator'), 'warn'); };
   const waiting = [...map.elements, ...map.links].filter(x => x.status === 'blocked' && x.actor === 'user').length;
   // the number in the header: the project's own count, else the one of the plan under way on this map
-  const mainPlan = plans.find(p => p.phase === 'running') ?? plans[0];
+  const mainPlan = plans.find(p => p.phase === 'running') ?? plans.find(p => p.phase !== 'done');
   const headline = progress ? { pct: progress.pct, tip: countText(progress) }
     : mainPlan ? { pct: planProgress(mainPlan).pct, tip: `${mainPlan.title}: ${t('pm.planSteps', { done: mainPlan.done, total: mainPlan.steps })}` } : null;
   const cap = (x: string) => (x ? x[0]!.toUpperCase() + x.slice(1) : x);

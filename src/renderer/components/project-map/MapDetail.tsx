@@ -86,7 +86,7 @@ export function ElementDetail({ map, el, state, stateOfLink, stateOfEl, confirme
     <h3>{el.name}</h3>
     {el.description && <p>{el.description}</p>}
     <p><i className={`pm-dot s-${state}`} />{t(`pm.state.${state}`)}{el.note ? `: ${el.note}` : ''}</p>
-    {count && <div className="pm-detail-prog" data-testid={`${testid}-progress`}><ProgressHead pct={count.pct} count={countText(count)} /></div>}
+    {count && <div className="pm-detail-prog" data-testid={`${testid}-progress`}><ProgressHead pct={count.pct} count={countText(count)} of={el.name} /></div>}
     {(el.details || !seq) && <h4>{t('pm.how')}</h4>}
     {el.details ? <Paras text={el.details} /> : !seq ? <p className="pm-muted" data-testid="pm-no-details">{t('pm.noDetails')}</p> : null}
     {el.proofs?.length ? <><h4>{t('pm.proofs')}</h4><ul className="pm-proofs" data-testid="pm-proofs">{el.proofs.map((x, i) => <li key={i}><span>{x.text}</span>{x.file ? <FileLink path={x.file} onFile={onFile} testid={`pm-proof-file-${i}`} /> : null}{x.href ? <WebLink href={x.href} onLink={onLink} testid={`pm-proof-link-${i}`} /> : null}</li>)}</ul></> : null}
