@@ -50,7 +50,7 @@ export const dialogsEn: typeof dialogsIt = {
 
   // LoginsDialog
   'dialogs.logins.title': 'Credentials',
-  'dialogs.logins.hint': "Routine site and brain logins",
+  'dialogs.logins.hint': "Logins from the brain's credentials file",
   'dialogs.logins.filterPlaceholder': 'Filter: test, prod, local…',
   'dialogs.logins.filterLabel': 'Filter credentials',
   'dialogs.logins.none': "No logins in the brain file.",
@@ -60,7 +60,7 @@ export const dialogsEn: typeof dialogsIt = {
   'dialogs.logins.copyPasswordLabel': 'Copy password',
   'dialogs.logins.openTip': 'Open the URL in a tab of the app\'s internal browser',
   'dialogs.logins.openButton': 'Open',
-  'dialogs.logins.passwordSafe': "Routine passwords are encrypted. Brain passwords copy on click and clear from the clipboard after 30 seconds. With a test entry that has its url, an agent signs in by itself: the app types the password, the agent never reads it.",
+  'dialogs.logins.passwordSafe': "Passwords copy on click and clear from the clipboard after 30 seconds. With a test entry that has its url, an agent signs in by itself: the app types the password, the agent never reads it.",
   'dialogs.logins.readError': (p: { error: string }) => `Credentials not read: ${p.error}`,
   'dialogs.logins.copyError': (p: { error: string }) => `Copy failed: ${p.error}`,
   'dialogs.logins.notFound': 'Entry not found: the credentials file changed, reopen the panel',

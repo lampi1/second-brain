@@ -1,5 +1,5 @@
-<!-- The terminal guide of the routine runtime (ADR 0175): install, run a package exported from the app on any machine
-     (a VM included), and the run / resume / watch commands. Read by people; the same commands the app shows. -->
+<!-- The terminal guide of the routine runtime (ADR 0175): install, run a package on any machine (a VM included),
+     and the run / resume / watch commands. Read by people. The app has no routine section (ADR 0325). -->
 # routine: run routine packages from a terminal
 
 A routine package is a folder with a `routine.json` (or the `.zip` the app exports). `routine` runs it with the same
@@ -40,8 +40,8 @@ Check: `routine --help`.
 
 ## Get a package onto the machine
 
-1. In the app, export the routine from its Routine page. This gives a `.zip` with `routine.json` inside.
-2. Copy the zip to the machine (VM, server, another PC).
+1. Write the package (`docs/routines/authoring.md`): a folder, or a `.zip`, with `routine.json` inside.
+2. Copy it to the machine (VM, server, another PC).
 3. Open `routine.json` and replace every `<set-by-user>` value: the site login (`credentials`), the DevOps PAT
    (`secrets.devopsPat`) and the test DB logins. The file then holds secrets: keep it out of git and shared folders.
    The runtime masks these values as `***` in every run file. `routine` refuses to start while any

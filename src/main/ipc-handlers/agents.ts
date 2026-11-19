@@ -1,4 +1,4 @@
-// IPC handlers, Agents: roles and their versions, metrics and estimates, avatars, work threads and lessons, routines,
+// IPC handlers, Agents: roles and their versions, metrics and estimates, avatars, work threads and lessons,
 // connectors and MCP servers, the Guida. Registered by src/main/index.ts with every other group (Handlers
 // in ipc.ts keeps the set complete); each channel's shape is in src/shared/contract/*.ts.
 import { FROZEN_EPOCH } from '../demo';
@@ -6,11 +6,9 @@ import { checkRunIds, demoEstimateRuns, mergeRuns } from '../agents/run-estimate
 import { errText, log } from '../log';
 import { judgingEstimate, lastNight } from '../agents/judge-sample';
 import { readWorker } from '../read-work';
-import { parseScheduleEdit } from '@shared/schedules';
 import type { HandlerContext, HandlersOf } from './context';
 
-export function agentsHandlers({ s, demo, agentImages, workflows, orchestrator, mcpServers, connectors, routinesOf }: HandlerContext): HandlersOf<'agents' | 'avatars' | 'work' | 'routines' | 'schedules' | 'connectors' | 'mcpservers' | 'guide'> {
-  const schedules = () => { if (!s.schedules) throw new Error('Le routine pianificate non sono disponibili.'); return s.schedules; };
+export function agentsHandlers({ s, demo, agentImages, workflows, orchestrator, mcpServers, connectors }: HandlerContext): HandlersOf<'agents' | 'avatars' | 'work' | 'connectors' | 'mcpservers' | 'guide'> {
   return {
     'connectors:list': () => connectors.service.list(),
     'connectors:login': a => connectors.service.login(a?.provider),
@@ -77,18 +75,6 @@ export function agentsHandlers({ s, demo, agentImages, workflows, orchestrator, 
       const target = orchestrator.get();
       if (a.feedback && target) void s.chats.send(target.id, `[evento app] L’utente chiede una proposta diversa per la regola ${reviewed.id}. Proposta rifiutata: ${JSON.stringify(reviewed.rule)}. Risposta: ${JSON.stringify(reviewed.note)}. Prepara la nuova proposta nella modale; nessuna modifica è approvata.`, undefined, false, 'Decisioni', false, { kind: 'app' }).catch(e => log.warn('chats', 'lesson feedback wake failed', { cause: errText(e), hint: 'The feedback is saved in the lesson review record.' }));
     },
-    // the Routine section (ADR 0175, 0176): package secrets stay in main, the renderer only sees which slots are set
-    'schedules:state': () => schedules().state(),
-    'schedules:edit': a => schedules().edit(parseScheduleEdit(a, Date.now())),
-    'routines:list': () => routinesOf().snapshot(),
-    'routines:import': a => routinesOf().importZip(Buffer.from(String(a.data), 'base64')),
-    'routines:export': a => routinesOf().exportForTerminal(String(a.id)),
-    'routines:setSecrets': a => routinesOf().setSecrets(a.id, a.values && typeof a.values === 'object' ? a.values : {}),
-    'routines:image': a => routinesOf().image(a.ref, a.path),
-    'routines:watch': a => routinesOf().watch(a.ref, a.subscription),
-    'routines:unwatch': a => routinesOf().unwatch(a.subscription),
-    'routines:archive': () => s.routineArchive?.snapshot() ?? { contextKey: 'unavailable', drafts: [], versions: [], active: {}, runs: [] },
-    'routines:convert': a => routinesOf().convert(a.flowId),
     'work:list': () => workflows.list(),
     'work:decide': a => {
       const row = workflows.decide(a);

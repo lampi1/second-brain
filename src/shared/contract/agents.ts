@@ -1,4 +1,4 @@
-// Agents and automations: roles, avatars, work threads, routines, connectors and MCP servers, the Guida.
+// Agents and automations: roles, avatars, work threads, scheduled requests, connectors and MCP servers, the Guida.
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
 import type { AgentImages } from '../agent-images';
@@ -7,38 +7,15 @@ import type { AgentLifecycleDecide, AgentLifecycleSnapshot } from '../agent-life
 import type { LearnedRuleProposal } from '../agent-pack';
 import type { AgentCatalog, AgentDraft, AgentMetrics, AgentMetricsFilter, AgentProfile, AgentUndo, AgentVersion, JudgingEstimate } from '../agents';
 import type { ConnectorId, ConnectorState, ConnectorToken } from '../connectors';
-import type { FileViewResult } from '../file-view';
-import type { FlowSnapshot } from '../flows';
 import type { GuideAnswer, GuideAskRequest, GuideStaleState } from '../guide-ask';
 import type { McpImportCandidate, McpServerDef, McpServersState, McpToolAccess } from '../mcp-servers';
 import type { RoleId } from '../roles';
-import type { RoutineRunDetail, RoutineRunRef, RoutineTerminalExport, RoutinesSnapshot } from '../routines';
-import type { ScheduleEdit, SchedulesState } from '../schedules';
 import type { RunEstimates } from '../task-estimate';
 import type { WorkDecision, WorkThread } from '../workflows';
 import type { Lang } from './settings';
 
 /** renderer → main, agents: each entry [argument, result]. Part of InvokeMap (src/shared/contract.ts). */
 export interface AgentsInvokeMap {
-  /** scheduled routines (ADR 0281, main/schedules/): the user's planned requests; an edit creates, changes, pauses,
-   *  deletes or runs one now ('schedules:changed' follows every change and run) */
-  'schedules:state': [void, SchedulesState];
-  'schedules:edit': [ScheduleEdit, SchedulesState];
-  // the Routine section (ADR 0175, 0176): packages, their trigger and secrets, runs read from the run folders
-  'routines:list': [void, RoutinesSnapshot];
-  'routines:import': [{ data: string }, RoutinesSnapshot];
-  /** writes the filled zip under %LOCALAPPDATA%/routine-runtime/packages/<id>/ in main: the zip never crosses IPC */
-  'routines:export': [{ id: string }, RoutineTerminalExport];
-  'routines:setSecrets': [{ id: string; values: Record<string, string> }, RoutinesSnapshot];
-  'routines:image': [{ ref: RoutineRunRef; path: string }, FileViewResult];
-  'routines:watch': [{ ref: RoutineRunRef; subscription: string }, RoutineRunDetail];
-  'routines:unwatch': [{ subscription: string }, void];
-  'routines:convert': [{ flowId: string }, RoutinesSnapshot];
-  'routines:archive': [void, FlowSnapshot];
-  /** the routine package (ADR 0156): what it would hold; then built, guard-scanned and saved where the user picks (null = cancelled) */
-  /** a routine package zip (base64): what importing it would write; then the routine as a new draft plus the ticked items */
-  // the app's routine runner (ADR 0155): the user's own controls on the Routine page
-  /** «Esegui» on a prod step: only this click runs a prod command; `command` is the exact text the user saw */
   'work:lessons': [void, LearnedRuleProposal[]];
   'work:lessonDecide': [{ id: string; rule: string; approve: boolean; feedback?: string }, void];
   'work:list': [void, WorkThread[]];

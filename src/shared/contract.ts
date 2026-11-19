@@ -22,11 +22,9 @@ import type { BudgetAlert, SettingChange, SettingProposal, Settings, SettingsInv
 import type { AnswerLater, HeldNewsState, OverlayAction, OverlayModel, SearchIndexStatus, SyncState, UiInvokeMap } from './contract/ui';
 import type { ImparaState, Lesson } from './lesson';
 import type { NewsState } from './news';
-import type { SchedulesState } from './schedules';
 import type { MaintenanceDone } from './maintenance-research';
 import type { McpServersState } from './mcp-servers';
 import type { RecState } from './recordings';
-import type { RoutineRunDetail } from './routines';
 import type { VoiceHeard, VoiceSpeech, VoiceState } from './voice';
 import type { WorkThread } from './workflows';
 export type { MorningBrief, MorningChange, MorningIdea, MorningNext, MorningOp, MorningOutcome, MorningPr, MorningRun, MorningStalled, MorningState } from './morning';
@@ -54,7 +52,6 @@ export interface InvokeMap extends
 
 /** main → renderer. */
 export interface EventMap {
-  'routines:progress': { subscription: string; run?: RoutineRunDetail; error?: string };
   'work:changed': WorkThread[];
   'update:state': AppUpdateState;
   'update:checkpointRequest': UpdateCheckpointRequest;
@@ -135,8 +132,6 @@ export interface EventMap {
   'impara:tutor': { lesson: string; turn: string; text: string };
   /** the «Giornale» (ADR 0265, 0280): the paper changed (a refresh's progress, a story marked, an edition or a source edited) */
   'news:changed': NewsState;
-  /** scheduled routines (ADR 0281): the list changed (an edit, a run, a next time) */
-  'schedules:changed': SchedulesState;
   /** Memoria → Artifact (ADR 0319): the index changed (a scan, a chat's turn, the past chats looked through) */
   'library:changed': void;
 }
@@ -148,10 +143,6 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
-  'schedules:state', 'schedules:edit',
-  'routines:list', 'routines:import', 'routines:export', 'routines:setSecrets', 'routines:watch', 'routines:unwatch', 'routines:convert',
-  'routines:image',
-  'routines:archive',
   'work:lessons', 'work:lessonDecide', 'work:list', 'work:decide',
   'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect', 'connectors:useToken',
   'mcpservers:state', 'mcpservers:save', 'mcpservers:remove', 'mcpservers:setSecret', 'mcpservers:deleteSecret', 'mcpservers:setAccess', 'mcpservers:test', 'mcpservers:importScan', 'mcpservers:importApply', 'mcpservers:undo', 'mcpservers:activate', 'mcpservers:login', 'mcpservers:logout',
@@ -189,7 +180,7 @@ export const INVOKE_CHANNELS = [
   'library:list', 'library:refresh', 'library:thumb', 'library:open', 'library:pin',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
-  'routines:progress', 'work:changed',
+  'work:changed',
   'proposals:changed', 'maintenance:changed', 'maintenance:done',
   'update:state', 'update:checkpointRequest', 'update:checkpointRelease',
   'chat:autoCloseStatus',
@@ -203,7 +194,7 @@ export const EVENT_CHANNELS = [
   'voice:changed', 'voice:heard', 'voice:speech', 'voice:committed',
   'rec:changed',
   'impara:changed', 'impara:tutor',
-  'news:changed', 'schedules:changed',
+  'news:changed',
   'projectmap:changed',
   'library:changed',
 ] as const satisfies readonly EventChannel[];

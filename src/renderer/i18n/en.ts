@@ -1,8 +1,7 @@
 // The English UI dictionary, the same keys as it.ts, built from the area files under i18n/areas. Used by the
 // renderer's t() when the language is English; the i18n unit tests check it covers every Italian key.
 import { flowsEn } from './areas/flows.en';
-import { routineEn } from './areas/routine.en';
-import { routinesEn } from './areas/routines.en';
+import { diagnosticsEn } from './areas/diagnostics.en';
 import { appTextEn } from './areas/app-text.en';
 import { brainTextEn } from './areas/brain-text.en';
 import { learningReviewEn } from './areas/learning-review.en';
@@ -70,8 +69,7 @@ import { viewerOverlayEn } from './areas/viewer-overlay.en';
 
 export const en: Dict = {
   ...flowsEn,
-  ...routineEn,
-  ...routinesEn,
+  ...diagnosticsEn,
   ...learningReviewEn,
   ...auditEn,
   ...auditExpressionsEn,

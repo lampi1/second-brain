@@ -69,7 +69,6 @@ export function chatsHandlers({ s, activity, orchestrator, clip }: HandlerContex
     // a run answers the "Comando da eseguire" request of that block (Esegui on the card or under the block); a run that
     // did not start (already: the identical command runs, or ended recently and needs a yes, ADR 0299) answers nothing
     'run:start': a => {
-      if (s.chats.list().some(c => c.id === a.chatId && c.routineArchived)) throw new Error('Archived routine chats are read-only.');
       const run = s.runner.start({ chatId: a.chatId, itemId: a.itemId, code: a.code, ...(a.lang ? { lang: a.lang } : {}), confirmProd: a.confirmProd === true, confirmRerun: a.confirmRerun === true });
       if (!run.already) s.asks.ran(run.chatId, run.itemId, run.code, run.state !== 'running');
       return run;

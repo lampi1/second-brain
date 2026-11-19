@@ -50,7 +50,7 @@ export const dialogsDe: typeof dialogsIt = {
 
   // LoginsDialog
   'dialogs.logins.title': 'Zugangsdaten',
-  'dialogs.logins.hint': "Routine-Websites und Brain-Zugänge",
+  'dialogs.logins.hint': "Zugänge aus der Zugangsdaten-Datei des Brains",
   'dialogs.logins.filterPlaceholder': 'Filtern: test, prod, local…',
   'dialogs.logins.filterLabel': 'Zugangsdaten filtern',
   'dialogs.logins.none': "Keine Zugangsdaten in der Brain-Datei.",
@@ -60,7 +60,7 @@ export const dialogsDe: typeof dialogsIt = {
   'dialogs.logins.copyPasswordLabel': 'Passwort kopieren',
   'dialogs.logins.openTip': 'URL in einem Tab des internen Browsers der App öffnen',
   'dialogs.logins.openButton': 'Öffnen',
-  'dialogs.logins.passwordSafe': "Routine-Passwörter sind verschlüsselt. Brain-Passwörter werden per Klick kopiert und nach 30 Sekunden aus der Zwischenablage gelöscht. Mit einem Test-Eintrag samt url meldet sich ein Agent selbst an: Die App tippt das Passwort, der Agent liest es nie.",
+  'dialogs.logins.passwordSafe': "Passwörter werden per Klick kopiert und nach 30 Sekunden aus der Zwischenablage gelöscht. Mit einem Test-Eintrag samt url meldet sich ein Agent selbst an: Die App tippt das Passwort, der Agent liest es nie.",
   'dialogs.logins.readError': (p: { error: string }) => `Zugangsdaten nicht gelesen: ${p.error}`,
   'dialogs.logins.copyError': (p: { error: string }) => `Kopieren fehlgeschlagen: ${p.error}`,
   'dialogs.logins.notFound': 'Eintrag nicht gefunden: Die Zugangsdaten-Datei hat sich geändert, öffne das Panel neu',

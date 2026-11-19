@@ -12,7 +12,6 @@ import type { OverlayLayer } from '../overlay';
 import type { Shell } from '../open-path';
 import type { clipReader } from '../clipboard-image';
 import type { SearchService } from '../search/service';
-import type { Routines } from '../routines/service';
 import type { ProfileService } from '../brain/profile';
 import type { AgentImageStore } from '../agents/agent-images';
 import type { createAppUpdates } from '../update/wiring';
@@ -49,7 +48,6 @@ export interface HandlerContext {
   research: () => NonNullable<Wired['research']>;
   learn: () => NonNullable<Wired['learn']>;
   news: () => NonNullable<Wired['news']>;
-  routinesOf: () => Routines;
   /** throws when the brain changed since the review page read it */
   requireReviewRoot: (expected: unknown) => void;
   search: SearchService;

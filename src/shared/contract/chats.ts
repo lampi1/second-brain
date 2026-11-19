@@ -30,12 +30,6 @@ export interface QueuedInfo { kind: 'start' | 'turn'; position: number; since: n
 
 export interface ChatSummary {
   launchContext?: AgentContextSnapshot;
-  /** Host-only immutable routine identity, never accepted by app_create_chat. */
-  /** Retired routine worker or descendant: transcript only, never an executable session. */
-  routineArchived?: true;
-  routine?: { browserWrite?: true; runId: string; stepId: string };
-  routinePackage?: string;
-  routinePromptHash?: string;
   userEvents?: { latestSeq: number; acknowledgedSeq: number };
   /** Root results the user can synthesize; private delegated results are excluded. */
   availableResultIds?: string[];

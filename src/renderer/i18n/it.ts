@@ -1,8 +1,7 @@
 // The Italian UI dictionary (the source language: en.ts and de.ts follow its keys), built from the area files under
 // i18n/areas. Used by the renderer's t() through i18n/index; the keys are checked against en/de by the i18n unit tests.
 import { flowsIt } from './areas/flows.it';
-import { routineIt } from './areas/routine.it';
-import { routinesIt } from './areas/routines.it';
+import { diagnosticsIt } from './areas/diagnostics.it';
 import { appTextIt } from './areas/app-text.it';
 import { brainTextIt } from './areas/brain-text.it';
 import { learningReviewIt } from './areas/learning-review.it';
@@ -71,8 +70,7 @@ import { viewerOverlayIt } from './areas/viewer-overlay.it';
 
 export const it = {
   ...flowsIt,
-  ...routineIt,
-  ...routinesIt,
+  ...diagnosticsIt,
   ...learningReviewIt,
   ...auditIt,
   ...auditExpressionsIt,

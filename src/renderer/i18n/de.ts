@@ -1,8 +1,7 @@
 // The German UI dictionary, the same keys as it.ts, built from the area files under i18n/areas. Used by the
 // renderer's t() when the language is German; the i18n unit tests check it covers every Italian key.
 import { flowsDe } from './areas/flows.de';
-import { routineDe } from './areas/routine.de';
-import { routinesDe } from './areas/routines.de';
+import { diagnosticsDe } from './areas/diagnostics.de';
 import { suggestDe } from './areas/suggest.de';
 import { appTextDe } from './areas/app-text.de';
 import { brainTextDe } from './areas/brain-text.de';
@@ -70,8 +69,7 @@ import { viewerOverlayDe } from './areas/viewer-overlay.de';
 
 export const de: Dict = {
   ...flowsDe,
-  ...routineDe,
-  ...routinesDe,
+  ...diagnosticsDe,
   ...learningReviewDe,
   ...auditDe,
   ...auditExpressionsDe,

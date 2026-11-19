@@ -90,8 +90,6 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - The «Giornale» goes by editions: any subject with its own sources, sections and key words, a front page of a few
   stories (7 by default), «Meno così», a source tried before it is added; the Orchestrator creates editions and adds
   or removes sources by itself (`app_news`, `app_news_edition`, `app_news_source`, `app_news_refresh`; ADR 0280).
-- Scheduled routines: a request written once that the Orchestrator receives at its time (daily, every few hours,
-  once), on the Routine page above the terminal packages or through the Orchestrator (`app_schedule`; ADR 0281).
 - Impara «News»: an AI newspaper from 28 chosen sources (merged, ranked, one AI summary pass with its token cost), in
   three columns beside a «Pull Request» tab with the same layout; sources editable in the app (ADR 0265).
 - Episodic memory: a role starts with up to 2 short examples of its own verified past successes on similar tasks in
@@ -248,6 +246,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   terminal routines.
 
 ### Removed
+- Routines left the app: no Routine page, no `app_routine_*` tools for the Orchestrator, no scheduled requests
+  (`app_schedule`). Nothing on disk is deleted: saved packages, run folders, `schedules.json` and the old routine
+  chats in `chats.json` stay as they are, unread by the app. The terminal engine `packages/routine-runtime` stays for
+  now (ADR 0325).
 - The helpers at a bench no longer carry a coloured dot over their heads: their scene says what they do, the name
   tag says it in words (ADR 0315).
 - «Flash», the read-only tab beside the Orchestrator, with its card, level, MCP role and brief: the Orchestrator's «Fast»

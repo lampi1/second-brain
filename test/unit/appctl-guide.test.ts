@@ -75,11 +75,9 @@ describe('app_guide', () => {
     expect(search(list, 'zzz qqq')).toEqual([]);
   });
 
-  it('explains terminal execution without reading any routine data', async () => {
+  it('says nothing about routines: they live outside the app (ADR 0325)', async () => {
     const out = String(await guideTool(deps()).run({ topic: 'routine' }));
-    expect(out).toContain('terminal');
-    expect(out).not.toContain('app_flow_start');
-    expect(out).not.toContain('app_config area routine');
+    expect(out).not.toMatch(/app_routine|routine run|routine watch|terminal routine/i);
   });
 
 });

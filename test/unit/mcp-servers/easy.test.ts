@@ -250,9 +250,8 @@ describe('app_config connector actions (the Orchestrator)', () => {
     svc.save({ def: { ...svc.store.def('docs')!, enabled: true }, previousId: 'docs' });
     expect(svc.store.def('docs')).toMatchObject({ enabled: true });
     expect(svc.store.def('docs')?.awaiting).toBeUndefined();
-    await tool.run({ action: 'add', area: 'connector', def: { label: 'Prod', transport: 'http', url: 'https://prod.example.com/mcp', routineTest: true, importedFrom: 'claude', awaiting: null, enabled: true } });
+    await tool.run({ action: 'add', area: 'connector', def: { label: 'Prod', transport: 'http', url: 'https://prod.example.com/mcp', importedFrom: 'claude', awaiting: null, enabled: true } });
     expect(svc.store.def('prod')).toMatchObject({ enabled: false, awaiting: { runs: 'https://prod.example.com/mcp' } });
-    expect(svc.store.def('prod')?.routineTest).toBeUndefined();
     expect(svc.store.def('prod')?.importedFrom).toBeUndefined();
     expect(runsOf({ transport: 'http', url: 'https://x.example.com/' })).toBe('https://x.example.com/');
     // the card's action is checked again in main: a script's event never names anything else

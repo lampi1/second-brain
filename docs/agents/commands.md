@@ -83,12 +83,6 @@ row and its line here in the same change.
 | `app_skill_write` | Orchestrator only | Create, change or delete a skill or one of its files (SKILL.md, scripts/, references/, assets/), logged with Undo; an app skill becomes a brain copy. |
 | `app_skill_roles` | Orchestrator only | Give a skill to roles or take it away (a role's default skills stay on its own page). |
 | `app_skill_undo` | Orchestrator only | Undo one change from a skill's history. |
-| `app_routine_export` | Orchestrator only | Export a routine package for the terminal `routine` CLI, secrets filled in the zip. |
-| `app_routine_status` | Orchestrator only | Routine packages and run history, read only, when the user asks. |
-| `app_routine_capabilities` | Orchestrator only | What a routine package is and can do: read before writing one. |
-| `app_routine_connectors` | Orchestrator only | The MCP servers a routine step can use and how to declare one. |
-| `app_routine_save` | Orchestrator only | Validate and save a routine package written from the user's need; never runs it. |
-| `app_routine_packages` | Orchestrator only | The saved routine packages, secrets masked. |
 | `app_work_list` | Orchestrator only | The persistent feature threads with stage, proposals and evidence. |
 | `app_work_create` | Orchestrator only | Create one persistent thread for a feature, bugfix or investigation. |
 | `app_work_report` | Orchestrator only | Update a thread's stage with concrete evidence. |
@@ -103,7 +97,6 @@ row and its line here in the same change.
 | `app_news_edition` | Orchestrator only | Create, change or delete an edition of the newspaper: name, what the user wants from it, sections, key words. |
 | `app_news_source` | Orchestrator only | Try a link at zero tokens, then add, remove, pause or resume a source of an edition. |
 | `app_news_refresh` | Orchestrator only | Refresh one edition or all now: reads the sources, one AI pass per edition, returns what it brought and its cost. |
-| `app_schedule` | Orchestrator only | The user's scheduled routines: list, create (daily at a time, every N minutes, once), change, pause, resume, delete or run one now. |
 | `app_project_map` | Orchestrator only | The user's project maps: list, read as text, open in the maps window (ADR 0275), the brief for a Scout that draws one, the user's corrections, piece-by-piece edits from the talk with the user (also a piece's place in the order, «together with the one before», a level as a line or in layers, an arrow to the next step: ADR 0322) and undo (ADR 0276); a brief with `question` has a Scout answer it as a path on the map (ADR 0316). |
 | `app_agents_recap` | Orchestrator only | The recap: one short line per agent that works, waits or finished; with detail, one block per agent with its last steps. |
 | `app_child_output` | Orchestrator only | The latest report of a chat in its tree, delegates included: summary and criteria; full: the output, max 4,000 chars. |

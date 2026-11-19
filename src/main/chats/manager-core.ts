@@ -84,11 +84,7 @@ export abstract class ManagerCore {
     this.home = opts.claudeHome ?? claudeHome();
     this.max = opts.maxItems ?? 2000;
     const stored = this.store.load();
-    // Existing chat metadata is already loaded. Archive the full routine tree without reading any routine file.
-    const archived = new Set(stored.filter(c => c.routineArchived || c.routine || c.routinePackage).map(c => c.id));
-    let added = true;
-    while (added) { added = false; for (const c of stored) if (c.parentId && archived.has(c.parentId) && !archived.has(c.id)) { archived.add(c.id); added = true; } }
-    for (const c of stored) this.chats.set(c.id, this.restore(archived.has(c.id) ? { ...c, routineArchived: true } : c));
+    for (const c of stored) this.chats.set(c.id, this.restore(c));
     if (stored.some(c => !c.agent)) this.persist();
     process.on('exit', this.onExit); // Windows keeps orphaned children alive: kill them when the app dies
     // the plan windows stay fresh in the top bar even while a long turn runs (get_usage spends no model call)
@@ -96,7 +92,7 @@ export abstract class ManagerCore {
     if ((opts.coldEveryMs ?? 60_000) > 0) { this.coldTimer = setInterval(() => this.coldTick(), opts.coldEveryMs ?? 60_000); this.coldTimer.unref?.(); }
     if ((opts.runEveryMs ?? 600_000) > 0) { this.runTimer = setInterval(() => this.staleRuns(), opts.runEveryMs ?? 600_000); this.runTimer.unref?.(); }
     if (opts.prewarm) {
-      const last = [...this.chats.values()].filter(r => !r.s.routineArchived && !!engineOf(r.s.harness)?.caps.warm && r.s.origin === 'app' && !r.s.isOrchestrator).sort((a, b) => b.createdAt - a.createdAt)[0];
+      const last = [...this.chats.values()].filter(r => !!engineOf(r.s.harness)?.caps.warm && r.s.origin === 'app' && !r.s.isOrchestrator).sort((a, b) => b.createdAt - a.createdAt)[0];
       if (last && fs.existsSync(last.s.cwd)) this.warm.schedule(last.s.cwd, opts.prewarmDelayMs ?? 20000);
       // the Orchestrator's engine resumes ahead of the user's first message of the day: no 10-17 s start then, and an idle
       // engine makes no model call
@@ -113,7 +109,7 @@ export abstract class ManagerCore {
    *  root runs it started in top-level chats. One pass over the runs, kept in their order, and only when the runs changed
    *  (runs.revision): summary() runs for every open chat every second and updated() several times per assistant message,
    *  and a pass over up to 5000 runs each time grew with the day's history (2026-10-29). Which chat a run belongs to
-   *  (routine archive, delegated child) is checked when it is read, so the cached index never goes stale on a chat. */
+   *  (a retired chat, a delegated child) is checked when it is read, so the cached index never goes stale on a chat. */
   private resultCache: { rev: number; index: ResultIndex } | null = null;
   protected resultIndex(): ResultIndex {
     const rev = this.runs.revision;
@@ -130,8 +126,8 @@ export abstract class ManagerCore {
   }
   protected refreshTaskSummary(r: Rec, index: ResultIndex = this.resultIndex()): void {
     if (r.userTaskEvents) r.s.userEvents = { latestSeq: r.userTaskEvents.latestSeq, acknowledgedSeq: r.userTaskEvents.acknowledgedSeq };
-    const shown = (run: AgentRun): boolean => { const c = this.chats.get(run.chatId)?.s; return !c?.routineArchived && (!r.s.isOrchestrator || !c?.parentId); };
-    const runs = (r.s.isOrchestrator ? index.roots : r.s.routineArchived ? [] : index.byChat.get(r.s.id) ?? []).filter(shown);
+    const shown = (run: AgentRun): boolean => { const c = this.chats.get(run.chatId)?.s; return !this.store.retiredIds.has(run.chatId) && (!r.s.isOrchestrator || !c?.parentId); };
+    const runs = (r.s.isOrchestrator ? index.roots : index.byChat.get(r.s.id) ?? []).filter(shown);
     r.s.availableResultIds = runs.filter(run => !run.delivery?.synthesisSubmittedAt).map(run => run.runId);
     r.s.pendingResultIds = runs.filter(run => !run.delivery?.displayedAt || run.delivery?.synthesisPending).map(run => run.runId);
   }

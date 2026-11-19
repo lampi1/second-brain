@@ -14,8 +14,7 @@
 //   logins stay the user's;
 // - profile: Settings → Il mio profilo (the managed fields of the brain's me.md: name, role, language, main work, reply
 //   style) via the same save as the page (ADR 0207), its revision checked; undo = set the "before" value back;
-// - later: «Rispondi dopo»;
-//   and the global pause: the Routine page's own calls (ADR 0155), never approving a trigger, a DevOps write or «Esegui».
+// - later: «Rispondi dopo».
 // Every change needs the user's own typed message to this Orchestrator, or their «Sì» to one of its native questions,
 // with nothing else written to it since (userAsked: appctl/user-words.ts), in the last minutes or still in the turn it
 // started (the owner, 2026-11-01: «ti devo sempre scrivere in chat le parole esatte»), so neither app news, an agent's
@@ -114,8 +113,8 @@ export function configTool(d: ConfigDeps): ToolDef {
         return publicDraft(pick);
       }
       if (a.def && typeof a.def === 'object') {
-        // never the user's own confirmations or origin: routineTest (non-production account), importedFrom, awaiting
-        const { routineTest: _r, importedFrom: _i, awaiting: _w, ...given } = a.def as Record<string, unknown>; void _r; void _i; void _w;
+        // never the user's own origin marks: importedFrom, awaiting
+        const { importedFrom: _i, awaiting: _w, ...given } = a.def as Record<string, unknown>; void _i; void _w;
         const def = { enabled: true, secrets: [], ...given } as unknown as McpServerDef;
         if (!def.id && typeof def.label === 'string') def.id = def.label.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'server';
         return { def, tokens: (def.secrets ?? []).map(x => x.name), dropped: [] };

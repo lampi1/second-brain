@@ -3,7 +3,6 @@ import type { brainPagesIt } from './brainPages.it';
 
 export const brainPagesEn: typeof brainPagesIt = {
   // index.tsx - brain page labels
-  'brainPages.nav.flussi': 'Routines',
   'brainPages.nav.home': 'Grindhouse',
   'brainPages.nav.dashboard': 'Dashboard',
   'brainPages.nav.guida': 'Guide',

@@ -1,12 +1,7 @@
-// The Routine page run by the app's runner (ADR 0155): tabs, run cards, the open routine, the start dialog, the dry-run.
-export const routineEn = {
-  'rt.start': "Start",
-  'rt.cancel': "Cancel",
-  'rt.save': "Save",
-  'rt.item': "Work item (optional)",
+// A work chat's launch context (AgentContextInspector.tsx) and the voice diagnostics: what was loaded, measured locally.
+export const diagnosticsEn = {
   'rt.context.title': "Agent context",
   'rt.context.unknown': "This chat has no recorded launch manifest.",
-  'rt.context.sealed': "Sealed routine: no ambient memory or skills added.",
   'rt.context.scoped': "Task-relevant selection frozen at launch.",
   'rt.context.tokens': "host-instruction tokens",
   'rt.context.characters': "characters",

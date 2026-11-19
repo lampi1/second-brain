@@ -20,7 +20,6 @@ import type { ModelLists } from './engines/model-lists';
 import type { RecordingStore } from './recordings/store';
 import type { LearnService } from './learn/service';
 import type { NewsService } from './news/service';
-import type { SchedulesService } from './schedules/service';
 import type { ProjectMaps } from './projectmap/service';
 import type { Emitter } from './ipc';
 import type { BrainService, BrowserService, ChatService, SkillsApi, TasksApi } from './services';
@@ -28,7 +27,6 @@ import type { BrainModelService } from './brainmodel/service';
 import type { ResearchService } from './brainmodel/research';
 import type { McpServer } from './mcp/server';
 import type { Workflows } from './workflows/service';
-import type { Routines } from './routines/service';
 import type { McpServersService } from './mcp-servers/service';
 import type { CommandRunner } from './run/runner';
 import type { CommandAsks } from './run/asks';
@@ -41,7 +39,6 @@ import type { AgentRunStore } from './agents/runs';
 import type { HybridSearch } from './search/hybrid/service';
 import type { UserCorrectionStore } from './brain/user-corrections';
 import type { BrainQueries } from './brain/queries';
-import type { LegacyArchive } from './routines/legacy';
 import type { GuideService } from './guide/service';
 import type { DailyQuipsService } from './quips/daily';
 import type { PhonePort } from '../shared/contract/phone';
@@ -65,9 +62,6 @@ export interface Wired {
   /** the user's corrections counted at chat:send (ADR 0197); absent in the demo */
   userCorrections?: UserCorrectionStore;
   workflows?: Workflows;
-  routineArchive?: LegacyArchive;
-  /** the Routine section's packages and runs (routines:* IPC); absent in the demo */
-  routines?: Routines;
   updateChats?: { problem: () => string | null; checkpoint: () => void };
   autoClose: AutoCloseService;
   /** the writing delegations' reused worktrees and their cleanup (ADR 0227); the demo's knows no repository */
@@ -90,8 +84,6 @@ export interface Wired {
   projectMaps?: ProjectMaps;
   /** Impara «News» (ADR 0265, news/service.ts): the AI newspaper; absent = the news:* channels say it is not available */
   news?: NewsService;
-  /** scheduled routines (ADR 0281, schedules/service.ts); absent = the schedules:* channels say it is not available */
-  schedules?: SchedulesService;
   /** the engines of the brain, which definitions the user turned on, the API keys (ADR 0046) */
   engines: EnginesApi;
   /** the engines' live model lists (ADR 0256, engines/model-lists.ts); absent (demo) = 'models:refresh' answers nothing */

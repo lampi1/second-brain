@@ -38,7 +38,6 @@ export abstract class ManagerContinuity extends ManagerRequests {
    *  token-free note built by the app (source 'auto'). Refused while the chat works or waits for the user. */
   async handoff(chatId: string, opts: HandoffOptions = {}): Promise<HandoffInfo> {
     const r = this.need(chatId);
-    if (r.s.routineArchived) throw new Error('Archived routine chats are read-only.');
     if (r.handoffTurn) throw new Error('La chat sta già facendo un turno breve dell’app (passaggio di consegne o riassunto): riprova tra poco.');
     this.ensureHistory(r);
     const hasTurns = r.lastTurnAt > 0 || r.items.some(i => i.kind === 'result' || i.kind === 'user');
@@ -82,7 +81,6 @@ export abstract class ManagerContinuity extends ManagerRequests {
 
   private async doContinue(chatId: string, opts: { allowStart?: boolean; promptPrefix?: string }): Promise<ChatSummary> {
     const r = this.need(chatId);
-    if (r.s.routineArchived) throw new Error('Archived routine chats are read-only.');
     if (r.s.isOrchestrator) throw new Error('L’Orchestrator non si riprende così: usa «Ricomincia da capo» dal suo menu.');
     const next = r.s.continuedBy && this.chats.get(r.s.continuedBy.id);
     if (next) return { ...next.s };
@@ -105,8 +103,8 @@ export abstract class ManagerContinuity extends ManagerRequests {
       ...(r.s.route ? { route: { ...r.s.route, ledgerId: r.s.route.ledgerId ?? `app:${r.s.id}`, handoffs: (r.s.route.handoffs ?? 0) + 1 } } : {}),
       prompt: `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}`,
       ...(parentRec ? { parentId: parentRec.s.id, ...(r.s.delegation ? { delegation: structuredClone(r.s.delegation) } : {}) } : {}),
-    }, 'user', { ...(r.s.launchContext ? { launchContext: r.s.launchContext } : {}), ...(r.s.run?.tier ? { tier: r.s.run.tier } : {}), ...(r.s.routinePackage ? { routinePackage: r.s.routinePackage, routinePromptHash: r.s.routinePromptHash } : {}), owner: r.s.agent ?? plainOwner(r.s.harness, r.choice.model), instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.skills ? { skills: [...r.skills] } : {}), ...(r.maxContext ? { maxContext: r.maxContext } : {}) },
-    {}, { ...(r.s.routine ? { routine: r.s.routine } : {}), continuation: !!parentRec, continuationOf: r.s.id });
+    }, 'user', { ...(r.s.launchContext ? { launchContext: r.s.launchContext } : {}), ...(r.s.run?.tier ? { tier: r.s.run.tier } : {}), owner: r.s.agent ?? plainOwner(r.s.harness, r.choice.model), instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.skills ? { skills: [...r.skills] } : {}), ...(r.maxContext ? { maxContext: r.maxContext } : {}) },
+    {}, { continuation: !!parentRec, continuationOf: r.s.id });
     const nr = this.chats.get(c.id);
     // the worktree hint follows the chain (A → B → C)
     if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; this.updated(nr); }
@@ -198,7 +196,6 @@ export abstract class ManagerContinuity extends ManagerRequests {
     const on = this.coldOn(), idle = this.opts.coldIdleMs?.() ?? 50 * 60_000, day = !!this.opts.orchestratorDayCompact?.();
     let n = 0;
     for (const r of this.chats.values()) {
-      if (r.s.routineArchived) continue;
       if ((r.deliveryHolds ?? 0) > 0 || this.observedChildrenBusy(r)) continue;
       if (this.freshReady(r, now)) {
         const existing = this.handoffs.read(r.s.id);
@@ -400,5 +397,5 @@ export abstract class ManagerContinuity extends ManagerRequests {
   contextSince(chatId: string): number | undefined { return this.chats.get(chatId)?.ctxSince; }
 
   // ---- implemented in a later layer (ADR 0200: manager.ts and its manager-*.ts layers)
-  abstract create(req: NewChat, by?: 'user' | 'agent' | 'app', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; routinePackage?: string; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links?: RunLinks, opts?: { routine?: ChatSummary['routine']; boundByOrchestrator?: boolean; intake?: IntakeSource; continuation?: boolean; continuationOf?: string }): Promise<ChatSummary>;
+  abstract create(req: NewChat, by?: 'user' | 'agent' | 'app', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links?: RunLinks, opts?: { boundByOrchestrator?: boolean; intake?: IntakeSource; continuation?: boolean; continuationOf?: string }): Promise<ChatSummary>;
 }

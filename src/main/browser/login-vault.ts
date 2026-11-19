@@ -3,7 +3,6 @@
 // engines' API keys, engines/secrets.ts) in a JSON file, and an import of the CSV that Google Password Manager, Chrome,
 // Edge and Firefox export. Callers see only site and user name; a password is decrypted only to fill a form of its own
 // site or for «Copia», never logged. Pure apart from the JSON file; unit-tested (test/unit/browser-login-vault.test.ts);
-// used by browser/site-vault.ts (the agents' sign-ins) and the routines' secret fill.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { SecretCipher } from '../engines/secrets';

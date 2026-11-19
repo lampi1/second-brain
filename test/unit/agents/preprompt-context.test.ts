@@ -2,30 +2,18 @@
 // details, so changing supported adapters cannot leave a contradictory instruction in every Orchestrator session.
 import { describe, expect, it } from 'vitest';
 import { ORCHESTRATOR_ROLE, orchestratorRole } from '../../../src/main/agents/orchestrator-role';
-import { packageTools } from '../../../src/main/flows/package-tools';
-
-const unavailable = (): never => { throw new Error('Prompt checks must not call a service'); };
-const tools = [
-  ...packageTools({ store: unavailable, brainRoot: () => null, authed: () => true }),
-];
-const description = (name: string): string => tools.find(tool => tool.name === name)!.description;
 
 describe('Orchestrator context ownership', () => {
-  it('keeps flow mechanics in current tool descriptions rather than an obsolete universal adapter list', () => {
-    expect(ORCHESTRATOR_ROLE).toContain('read app_routine_capabilities');
-    expect(ORCHESTRATOR_ROLE).toContain('save it with app_routine_save');
+  it('carries no routine or schedule rule: both live outside the app (ADR 0325)', () => {
+    expect(ORCHESTRATOR_ROLE).not.toMatch(/routine|app_schedule/i);
+    expect(orchestratorRole('My coordination preference')).not.toMatch(/app_routine|app_schedule|routine run|terminal/i);
     expect(ORCHESTRATOR_ROLE).not.toContain('All company adapters remain unavailable');
     expect(ORCHESTRATOR_ROLE).not.toContain('explicit organization/project/area/type/states');
-    expect(description('app_routine_save')).toContain('preflight');
-    expect(description('app_routine_save')).toContain('Never pass a password');
   });
 
   it('keeps single-entry routing, exact approvals and production boundaries even with a custom role', () => {
     const frame = orchestratorRole('My coordination preference');
     for (const rule of [
-      'Routine packages execute only in the user terminal',
-      'no routine scans in generic recaps',
-      'Never write or ask for a password or PAT',
       'Production and shared-system operations stay with the user',
       'execution permission checks still apply',
       'free text is a clarification, never implicit approval',

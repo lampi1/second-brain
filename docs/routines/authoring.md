@@ -1,14 +1,13 @@
 # Authoring a routine package
 
-How a routine is written (ADR 0175, 0176): by the Orchestrator from the user's plain-language need, or by hand. The
-Orchestrator reads the same rules live (`app_routine_capabilities`, `app_routine_connectors`, the `app_guide` topic
-"routine"); this page is the long form, with two worked examples that pass the preflight in the unit tests
-(`test/unit/routine-examples.test.ts`).
+How a routine package is written (ADR 0175, 0176), by hand or by any AI you ask. The app has no part in it
+(ADR 0325): it has no Routine page and no routine tools. This page is the long form, with two worked examples that pass
+the preflight in the unit tests (`test/unit/routine-runtime/examples.test.ts`).
 
 ## The model
 
 - A routine is a **package**: one `routine.json` (and the secrets the user typed into it). Only the terminal CLI
-  (`routine run`, `watch`, `resume`) executes it through `packages/routine-runtime`; the app prepares packages and reads run evidence on demand.
+  (`routine run`, `watch`, `resume`) executes it through `packages/routine-runtime`.
 - Each **step is one plain Claude Code session**: a prompt, an optional model and effort, the Claude Code tools it may
   use (`allowedTools`), the MCP servers the package declares. No app roles, no app chats, no app tools, no approval
   steps.
@@ -143,20 +142,16 @@ found the fix incomplete (ADR 0324). A package that uses neither runs exactly as
 - A retrigger replaces a parked run: the new run becomes the item's run, and a later `@AI` comment no longer resumes
   the parked one.
 
-## Workflow (the Orchestrator)
+## Workflow
 
-1. Ask the user only what the need leaves open: inputs, the site and its test account, the DevOps project, area,
-   states and tags, who is asked when a person is needed (a DevOps identity GUID: never guessed).
-2. Write the know-how into the step prompts (read the brain now: a run never reads the brain).
-3. `app_routine_save { package }` (or `packagePath`, a JSON file inside the brain; `dryRun: true` only checks). It runs
-   the preflight:
-   - `invalid`: each error has `path`, `message` and `fix`; fix them and propose again. Nothing was saved.
-   - `needs-secrets`: saved in `<userData>/routines/<id>/routine.json`; the errors marked `secret: true` are the
-     values the user types on the Routine page. Tell them which.
-   - `ready`: saved.
-4. A password or PAT in a proposal is refused. A revision of the same routine id keeps the secrets the user already
-   stored (same `loginUrl` and user; same test DB id and user).
-5. Saving runs nothing and switches no trigger on: the user executes `routine run`, `routine watch` or `routine resume` in a terminal. The app never launches the CLI.
+1. Settle what the need leaves open: inputs, the site and its test account, the DevOps project, area, states and tags,
+   who is asked when a person is needed (a DevOps identity GUID: never guessed).
+2. Write the know-how into the step prompts (a run never reads the brain).
+3. Save `routine.json` in a folder of its own and type the secrets into it there. `routine run` starts with the
+   preflight: each error has `path`, `message` and `fix`; the errors marked `secret: true` are the values only the
+   owner can type.
+4. Writing the package runs nothing and switches no trigger on: its owner executes `routine run`, `routine watch` or
+   `routine resume` in a terminal.
 
 ## Example 1: Air bugfix (DevOps, browser, escalation)
 

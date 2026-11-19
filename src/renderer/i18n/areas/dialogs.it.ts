@@ -48,7 +48,7 @@ export const dialogsIt = {
 
   // LoginsDialog
   'dialogs.logins.title': 'Credenziali',
-  'dialogs.logins.hint': "Accessi dei siti delle routine e del brain",
+  'dialogs.logins.hint': "Accessi dal file delle credenziali del brain",
   'dialogs.logins.filterPlaceholder': 'Filtra: test, prod, local…',
   'dialogs.logins.filterLabel': 'Filtra le credenziali',
   'dialogs.logins.none': "Nessuna credenziale nel file del brain.",
@@ -58,7 +58,7 @@ export const dialogsIt = {
   'dialogs.logins.copyPasswordLabel': 'Copia password',
   'dialogs.logins.openTip': 'Apri l\'indirizzo in una scheda del browser interno',
   'dialogs.logins.openButton': 'Apri',
-  'dialogs.logins.passwordSafe': "Password cifrate per le routine. Quelle del brain si copiano al clic e si cancellano dagli appunti dopo 30 secondi. Con una voce di test che ha il suo url, un agente fa l’accesso da solo: la password la scrive l’app, l’agente non la legge.",
+  'dialogs.logins.passwordSafe': "Le password si copiano al clic e si cancellano dagli appunti dopo 30 secondi. Con una voce di test che ha il suo url, un agente fa l’accesso da solo: la password la scrive l’app, l’agente non la legge.",
   'dialogs.logins.readError': (p: { error: string }) => `Credenziali non lette: ${p.error}`,
   'dialogs.logins.copyError': (p: { error: string }) => `Copia non riuscita: ${p.error}`,
   'dialogs.logins.notFound': 'Voce non trovata: il file delle credenziali è cambiato, riapri il pannello',

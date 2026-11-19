@@ -44,10 +44,6 @@ export interface HeldRootResult {
 }
 export interface StoredChat {
   launchContext?: AgentContextSnapshot;
-  routineArchived?: true;
-  routine?: { runId: string; stepId: string; browserWrite?: true };
-  routinePackage?: string;
-  routinePromptHash?: string;
   userTaskEvents?: UserTaskEvents;
   id: string;
   agent?: AgentOwnerSnapshot;
@@ -178,11 +174,7 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
     ...(readOwner(c.agent) ? { agent: readOwner(c.agent)! } : {}),
     // Cursor carries two bounded skill documents in addition to the 8000-character profile; every role also carries its
     // memory block (up to 4000 + 2000 characters with its hint, agents/pack/flows.ts) beside the role text and skills line
-    ...(typeof c.routinePromptHash === 'string' && /^[a-f0-9]{64}$/.test(c.routinePromptHash) ? { routinePromptHash: c.routinePromptHash } : {}),
-    ...(c.routine && typeof c.routine === 'object' && typeof (c.routine as { runId?: unknown }).runId === 'string' && typeof (c.routine as { stepId?: unknown }).stepId === 'string' && (c.routine as { runId: string }).runId.length <= 200 && (c.routine as { stepId: string }).stepId.length <= 80 ? { routine: c.routine as { runId: string; stepId: string } } : {}),
-    ...(c.routineArchived === true ? { routineArchived: true as const } : {}),
-    ...(typeof c.routinePackage === 'string' && /^[a-f0-9]{64}$/.test(c.routinePackage) ? { routinePackage: c.routinePackage } : {}),
-    ...(typeof c.agentInstructions === 'string' && c.agentInstructions.length <= (c.harness === 'cursor' && validAssets(c.agentAssets) ? 4 * 1024 * 1024 + 16384 : c.routinePackage ? 64000 : 16384) ? { agentInstructions: c.agentInstructions } : {}),
+    ...(typeof c.agentInstructions === 'string' && c.agentInstructions.length <= (c.harness === 'cursor' && validAssets(c.agentAssets) ? 4 * 1024 * 1024 + 16384 : 16384) ? { agentInstructions: c.agentInstructions } : {}),
     ...(validAssets(c.agentAssets) ? { agentAssets: c.agentAssets } : {}),
     ...(Array.isArray(c.agentSkills) && c.agentSkills.length <= 64 && c.agentSkills.every(x => typeof x === 'string' && /^[a-z0-9][a-z0-9_-]{0,79}$/.test(x)) ? { agentSkills: c.agentSkills as string[] } : {}),
     ...(c.agentChildren ? { agentChildren: sanitizeAgentChildren(c.agentChildren) } : {}),
@@ -284,9 +276,22 @@ function valid(x: unknown): StoredChat | null {
   };
 }
 
+/** A chat of the in-app routine executor, retired with ADR 0179 and out of the app with ADR 0325: its record carries
+ *  one of that executor's marks. The app keeps such records in chats.json and never loads them (ChatStore.load). */
+const isRetired = (c: unknown): boolean => {
+  const r = c as Record<string, unknown> | null;
+  return !!r && typeof r === 'object' && (r.routineArchived === true || !!r.routine && typeof r.routine === 'object' || typeof r.routinePackage === 'string');
+};
+
 export class ChatStore {
   readonly file: string;
   constructor(userData: string) { this.file = path.join(userData, 'chats.json'); }
+
+  /** The retired chats of the last load, as they were in the file: every write puts them back unchanged. */
+  private retired: unknown[] = [];
+  /** Their ids: the runs of a retired chat are never shown, delivered or ended (ChatManager). */
+  retiredIds: ReadonlySet<string> = new Set();
+  private body(chats: StoredChat[]): string { return `${JSON.stringify({ version: 2, chats: this.retired.length ? [...chats, ...this.retired] : chats })}\n`; }
 
   load(): StoredChat[] {
     cleanOrphanTmps(this.file);
@@ -294,7 +299,18 @@ export class ChatStore {
     try { text = fs.readFileSync(this.file, 'utf8'); } catch { return []; }
     try {
       const data = JSON.parse(text) as { chats?: unknown };
-      return (Array.isArray(data.chats) ? data.chats : []).map(valid).filter((c): c is StoredChat => !!c);
+      const rows: unknown[] = Array.isArray(data.chats) ? data.chats : [];
+      // retired chats and every chat below one: set aside as they are, never loaded
+      const idOf = (c: unknown, key: 'id' | 'parentId') => { const v = (c as Record<string, unknown> | null)?.[key]; return typeof v === 'string' ? v : null; };
+      const retired = new Set(rows.filter(isRetired));
+      const ids = new Set([...retired].map(c => idOf(c, 'id')).filter((id): id is string => !!id));
+      for (let added = true; added;) {
+        added = false;
+        for (const c of rows) if (!retired.has(c) && ids.has(idOf(c, 'parentId') ?? '')) { retired.add(c); const id = idOf(c, 'id'); if (id) ids.add(id); added = true; }
+      }
+      this.retired = rows.filter(c => retired.has(c));
+      this.retiredIds = ids;
+      return rows.filter(c => !retired.has(c)).map(valid).filter((c): c is StoredChat => !!c);
     } catch (e) {
       const bad = `${this.file}.bad-${Date.now()}`;
       try { fs.renameSync(this.file, bad); } catch { /* keep it */ }
@@ -317,7 +333,7 @@ export class ChatStore {
     try { this.write(chats); } finally { slowStep('chats.json write', performance.now() - t); }
   }
   private write(chats: StoredChat[]): void {
-    const body = `${JSON.stringify({ version: 2, chats })}\n`;
+    const body = this.body(chats);
     // a deferred write in flight is superseded (gen): this body is written even when equal to the last one
     if (body === this.last && !this.inflight) return;
     this.gen++;
@@ -340,7 +356,7 @@ export class ChatStore {
    *  = the write failed (the caller schedules a retry), true = written, unchanged or superseded. */
   async saveAsync(chats: StoredChat[]): Promise<boolean> {
     const t = performance.now();
-    const body = `${JSON.stringify({ version: 2, chats })}\n`;
+    const body = this.body(chats);
     slowStep('chats.json serialize', performance.now() - t);
     if (body === this.last && !this.inflight) return true;
     const gen = ++this.gen;
@@ -363,7 +379,7 @@ export class ChatStore {
     try { this.checkpointNow(chats); } finally { slowStep('chats.json checkpoint', performance.now() - t); }
   }
   private checkpointNow(chats: StoredChat[]): void {
-    const body = `${JSON.stringify({ version: 2, chats })}\n`;
+    const body = this.body(chats);
     this.last = null;
     this.gen++;
     fs.mkdirSync(path.dirname(this.file), { recursive: true });

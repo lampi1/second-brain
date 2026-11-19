@@ -7,7 +7,6 @@
 // test/unit/chat-derived.test.ts.
 import type { BrowserTab, ChatSummary } from '@shared/contract';
 import { memoLast, memoPerKey } from './memo';
-import { routineChatIds } from './routine-chats';
 import { chatTree, type TreeNode } from './chat-tree';
 import { workspaceTiles, type TileRef } from './grid';
 import { originOf, type ChatOriginLine } from './chat-origin';
@@ -20,23 +19,14 @@ type Chats = Readonly<Record<string, ChatSummary>>;
 /** Object.values(chats), one array per chats object. */
 export const chatList = memoLast((chats: Chats): ChatSummary[] => Object.values(chats));
 
-/** The routine workers (lib/routine-chats.ts): they live on the Routine page, never in the Grindhouse or the sidebar. */
-export const routineIds = memoLast((chats: Chats): Set<string> => routineChatIds(chats));
-export const routineIdList = memoLast((chats: Chats): string[] => [...routineIds(chats)]);
-
-/** The Grindhouse's delegation tree (AgentStrips.tsx): every open chat but the routine workers. */
-export const stripTree = memoLast((order: readonly string[], chats: Chats): TreeNode[] => {
-  const routines = routineIds(chats);
-  return chatTree(order.filter(id => !routines.has(id)), chats);
-});
+/** The Grindhouse's delegation tree (AgentStrips.tsx): every open chat. */
+export const stripTree = memoLast((order: readonly string[], chats: Chats): TreeNode[] => chatTree(order, chats));
 /** The Grindhouse's tiles in tree order, browsers under their chats (lib/grid.ts). */
 export const stripTiles = memoLast((order: readonly string[], chats: Chats, tabs: readonly BrowserTab[]): TileRef[] =>
-  workspaceTiles(stripTree(order, chats).map(n => n.id), chats, tabs, routineIds(chats)));
-/** The sidebar's tree (SidebarTree.tsx): no Orchestrator, no routine worker. */
-export const sidebarTree = memoLast((order: readonly string[], chats: Chats): TreeNode[] => {
-  const routines = routineIds(chats);
-  return chatTree(order.filter(id => !routines.has(id) && !chats[id]?.isOrchestrator), chats);
-});
+  workspaceTiles(stripTree(order, chats).map(n => n.id), chats, tabs));
+/** The sidebar's tree (SidebarTree.tsx): no Orchestrator. */
+export const sidebarTree = memoLast((order: readonly string[], chats: Chats): TreeNode[] =>
+  chatTree(order.filter(id => !chats[id]?.isOrchestrator), chats));
 /** browser tab id → the chat that drives it */
 export const tabOwners = memoLast((tabs: readonly BrowserTab[]): Readonly<Record<string, string>> =>
   Object.fromEntries(tabs.filter(t => t.ownerChatId).map(t => [t.id, t.ownerChatId!])));

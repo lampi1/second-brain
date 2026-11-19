@@ -241,7 +241,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     const done = new Set<Rec>(), results: PromiseSettledResult<void>[] = [];
     // a child bound while the close awaited (a delegation already past its checks) is found by the next pass
     for (let pass = 0; pass < 8; pass++) {
-      const tree = this.descendantsOf(chatId).filter(r => !r.s.routineArchived && !done.has(r));
+      const tree = this.descendantsOf(chatId).filter(r => !done.has(r));
       for (const r of tree) { r.userClosing = true; done.add(r); } // before any await: a late report or result finds them closing
       if (!tree.length) break;
       results.push(...await Promise.allSettled(tree.map(r => this.cancelOne(r))));
@@ -366,7 +366,6 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
   /** Back on the grid; the session resumes on the next message (Claude --resume, Cursor session/load). */
   async reopen(chatId: string): Promise<ChatSummary> {
     const r = this.need(chatId);
-    if (r.s.routineArchived || r.s.routine || r.s.routinePackage) throw new Error('Archived routine chat: use the terminal routine CLI.');
     if (r.s.closedAt) this.unarchive(r);
     return { ...r.s };
   }
@@ -375,7 +374,6 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
   override staleRuns(now = Date.now()): number {
     let n = 0;
     for (const r of this.chats.values()) {
-      if (r.s.routineArchived) continue;
       const run = r.s.run;
       if (!run || run.endedAt !== undefined) continue;
       const waiting = r.pending.size > 0 || !!r.commandsOpen?.size || !!r.working || !!r.session?.busy || !!r.s.queued;
@@ -394,7 +392,6 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     for (const r of this.chats.values()) if (r.heldResult && !r.working) this.releaseResult(r);
     // child results the last quit held back reach their parent now, as one batch
     for (const r of this.chats.values()) {
-      if (r.s.routineArchived) continue;
       // an entry its own run corrected since (agent_report amends) is dropped: only the newest result goes
       const held = r.heldResults?.filter(item => !item.runId || !this.runs.get(item.runId)?.delivery?.synthesisSubmittedAt && !supersededResult(item, this.runs.get(item.runId)?.report?.corrections));
       const removed = (r.heldResults?.length ?? 0) !== (held?.length ?? 0);

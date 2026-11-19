@@ -151,8 +151,8 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0152](0152-voice-mode.md) Voice mode: talk to the Orchestrator and Flash, hear the answers — accepted, partly superseded by 0296
 - [0153](0153-one-click-maintenance.md) One-click «Manutenzione»: proposals only on the user's click, issues opened from a card — accepted, partly superseded by 0258
 - [0154](0154-call-recordings.md) Call recordings: PC audio + microphone, transcribed on the PC, known to the Orchestrator — accepted
-- [0155](0155-app-owned-routine-runner.md) The app runs routines; the Orchestrator observes — accepted, partly superseded by 0179
-- [0156](0156-routine-package.md) A routine travels as one package: steps, cited files, rules, skills, roles, scripts and memory — accepted, partly superseded by 0179
+- [0155](0155-app-owned-routine-runner.md) The app runs routines; the Orchestrator observes — accepted, partly superseded by 0179, 0325
+- [0156](0156-routine-package.md) A routine travels as one package: steps, cited files, rules, skills, roles, scripts and memory — accepted, partly superseded by 0179, 0325
 - [0157](0157-continuous-voice-lifecycle.md) Continuous voice needs identity, cancellation and measured turn taking — accepted
 - [0158](0158-self-contained-routines.md) Versioned routine packages, scoped effects and observable runs — accepted, partly superseded by 0168, 0179
 - [0159](0159-unattended-routine-completion.md) Unattended routine completion on shared test environments — implemented, partly superseded by 0168, 0179
@@ -161,7 +161,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0162](0162-repeat-routine-test-deploys.md) Sequential test deployments within a routine run — accepted, partly superseded by 0179
 - [0163](0163-renderer-budgets-and-tool-pages.md) bounded renderer histories and agent tool pages — accepted
 - [0164](0164-routine-push-recovery.md) Routine push recovery without full-history bundles — accepted, partly superseded by 0179
-- [0165](0165-routine-browser-writes.md) Scoped routine browser writes and encrypted site logins — accepted, partly superseded by 0179
+- [0165](0165-routine-browser-writes.md) Scoped routine browser writes and encrypted site logins — accepted, partly superseded by 0179, 0325
 - [0166](0166-routine-execution-capabilities.md) Composable routine execution capabilities — accepted, partly superseded by 0179
 - [0167](0167-user-write-reconciliation.md) User reconciliation of uncertain routine writes — accepted, partly superseded by 0169, 0179
 - [0168](0168-routine-test-deploy-started-release.md) A routine test deploy creates one started release; a stuck draft is deleted — accepted, partly superseded by 0179
@@ -171,11 +171,11 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0172](0172-engines-below-normal-priority.md) Engines run below normal CPU priority; stalls say whether the app was working or waiting — accepted
 - [0173](0173-working-line-shows-real-activity.md) The working line shows what the chat really does — accepted
 - [0174](0174-classifiers-calibrated-under-approval.md) Classifiers learn from confirmed outcomes, under the user's approval — accepted
-- [0175](0175-shared-routine-runtime-package.md) One routine runtime for the app and the terminal: `packages/routine-runtime` — accepted, partly superseded by 0179; amended by 0324
-- [0176](0176-routine-package-embedded-secrets.md) Routine packages carry their secrets in clear text (exception to AGENTS.md rule 2) — accepted, partly superseded by 0179
+- [0175](0175-shared-routine-runtime-package.md) One routine runtime for the app and the terminal: `packages/routine-runtime` — accepted, partly superseded by 0179, 0325; amended by 0324
+- [0176](0176-routine-package-embedded-secrets.md) Routine packages carry their secrets in clear text (exception to AGENTS.md rule 2) — accepted, partly superseded by 0179, 0325
 - [0177](0177-bounded-routine-polling.md) Bound routine polling to the records it needs — accepted, partly superseded by 0179
 - [0178](0178-mcp-form-and-report-compatibility.md) Accept supported MCP forms and recover harmless report shape errors — accepted
-- [0179](0179-terminal-only-routines.md) terminal-only routines, demand-driven app observation — accepted
+- [0179](0179-terminal-only-routines.md) terminal-only routines, demand-driven app observation — accepted, partly superseded by 0325
 - [0180](0180-requested-statistics-and-forgotten-skills.md) Requested statistics and durable forgotten skills — accepted
 - [0181](0181-remove-fatto-and-standup.md) Fatto e standup removed — accepted
 - [0182](0182-task-list-and-detail.md) Task page: one strip per record, detail beside it — accepted
@@ -276,7 +276,6 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0278](0278-roles-use-any-installed-skill.md) A role may use any installed skill, and looking never asks — accepted
 - [0279](0279-onboarding-in-three-moments.md) Onboarding in three moments: language and name, your AI, the first real request — accepted
 - [0280](0280-newspaper-by-editions.md) The newspaper goes by editions: any subject, a few stories, the Orchestrator edits it — accepted
-- [0281](0281-scheduled-routines.md) Scheduled routines: a request the Orchestrator receives at its time — accepted
 - [0282](0282-first-turn-takes-its-checkpoint.md) A chat's first turn takes its checkpoint, and a follow-up turn has its own files — accepted
 - [0283](0283-longer-run-archive-cold-runs.md) A longer archive of runs, and a save that costs what the runs at work weigh — accepted
 - [0284](0284-performance-by-model.md) The level is the role's, the performance is the model's — accepted
@@ -320,6 +319,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0322](0322-project-maps-told-as-a-line-of-phases.md) Project maps told as a line of phases and steps, with a richer and wider panel — accepted
 - [0323](0323-artifacts-light-paged-and-cleaned.md) Artifacts: twenty at a time, light pictures, and a daily cleanup of old screenshots — accepted
 - [0324](0324-retrigger-tags-and-entries-for-routine-packages.md) A routine package can run a work item again: retrigger tags and entries — accepted
+- [0325](0325-routines-leave-the-app.md) Routines leave the app — accepted
 
 ## Replaced
 
@@ -338,3 +338,4 @@ Kept for the history only: the record named on each line holds the current decis
 - [0107](0107-flash-agent-with-its-own-model.md) «Flash»: the quick lane is an agent with its own model; both columns show theirs — superseded by 0296
 - [0115](0115-fatto-lists-macro-tasks.md) Fatto lists the work the user asked for, with what it cost in all — superseded by 0181
 - [0133](0133-personal-browser.md) A personal browser for the user, apart from the agents' browsers — superseded by 0212
+- [0281](0281-scheduled-routines.md) Scheduled routines: a request the Orchestrator receives at its time — superseded by 0325

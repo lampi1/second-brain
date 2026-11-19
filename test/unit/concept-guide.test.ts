@@ -24,7 +24,7 @@ describe('concept guide content', () => {
     const ids = CONCEPTS.map(c => c.id);
     for (const id of ['agents', 'orchestrator', 'runs', 'metrics', 'errors-rules', 'classifiers', 'permissions', 'questions',
       'grindhouse', 'memory-hub', 'tasks', 'brain', 'search', 'file-viewer', 'costs', 'updates', 'fast', 'orchestrator-app',
-      'voice', 'recordings', 'notifications', 'routines']) expect(ids).toContain(id);
+      'voice', 'recordings', 'notifications']) expect(ids).toContain(id);
   });
 
   for (const c of CONCEPTS) {

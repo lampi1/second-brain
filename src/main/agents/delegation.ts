@@ -377,7 +377,6 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
    *  noted twice, about one skill change per Maintenance. Further lines are left out with a warning, never a refusal. */
   function rememberLines(a: Record<string, unknown>, self: ChatSummary | undefined, warnings: string[]): (() => number) {
     if (a.remember === undefined) return () => 0;
-    if (self?.routine || self?.routinePackage) throw new Error('Archived routine chats cannot submit new work; use the terminal CLI.');
     // The lesson is one line of text. A bare string is that line; of a list only the first entry counts, the others
     // are left out with a warning and never checked; line breaks become spaces. None of these refuses the report.
     const given: unknown[] = typeof a.remember === 'string' ? [a.remember] : Array.isArray(a.remember) ? a.remember : [null];

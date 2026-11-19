@@ -202,7 +202,6 @@ export abstract class ManagerWork extends ManagerLifecycle {
   /** An explicit assignment reuses the conversation, but creates a separately accountable task run. */
   async assignTask(chatId: string, prompt: string, options: TaskAssignmentOptions = {}): Promise<void> {
     const r = this.need(chatId);
-    if (r.s.routineArchived) throw new Error('Archived routine chats are read-only.');
     if (!prompt.trim()) throw new Error('Task prompt is required.');
     if (options.expectedVersion !== undefined && options.expectedVersion !== (r.s.run?.taskVersion ?? 1)) throw new Error('Task version changed; refresh before assigning.');
     const source = options.source ?? { kind: 'user' as const };
@@ -328,7 +327,6 @@ export abstract class ManagerWork extends ManagerLifecycle {
    *  an open run ends as completed, an ended one keeps how it ended. */
   markRun(chatId: string, verdict: AgentRunOutcome['verdict'], note?: string): ChatSummary {
     const r = this.need(chatId);
-    if (r.s.routineArchived) throw new Error('Archived routine chats are read-only.');
     const run = r.s.run;
     if (!run) throw new Error('Questa chat non è un’esecuzione di un Agente.');
     if (!['success', 'partial', 'fail', 'unknown'].includes(verdict)) throw new Error('Esito non valido.');
@@ -345,7 +343,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
    *  (no run, the same sign). */
   touchRun(chatId: string, sign: 1 | -1): boolean {
     const r = this.need(chatId), run = r.s.run;
-    if (!run || r.s.routineArchived || run.touch?.sign === sign) return false;
+    if (!run || run.touch?.sign === sign) return false;
     run.touch = { sign, at: Date.now() };
     this.runSave(); this.persist();
     // the page learns it, the chat's clock does not: a pat is no activity (it must not reset a stalled child's time)

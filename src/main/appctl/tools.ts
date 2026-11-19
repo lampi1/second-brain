@@ -64,8 +64,6 @@ import type { BrainChangelog } from '../brain/changelog';
 import { scriptWriteTools } from '../brain/scripts-tools';
 import { AGENT_LABEL, ORCHESTRATOR_USER_LABEL } from '../../shared/agent-label';
 import { voiceDiagnostics } from '../voice/diagnostics';
-import { packageTools } from '../flows/package-tools';
-import type { RoutinePackageStore } from '../flows/package-authoring';
 import { workflowTools, type WorkAway } from '../workflows/tools';
 import type { Workflows } from '../workflows/service';
 import { guideTool, screenOutline } from './guide';
@@ -73,7 +71,6 @@ import { CONFIG_ASK_MIN, CONFIG_TURN_MIN, configTool, type ConfigDeps } from './
 import { lastAnswered, lastTyped, userAsked } from './user-words';
 import { recordingTools, type RecordingsRead } from './recordings';
 import { newsTools, type NewsControl } from './news';
-import { scheduleTools, type SchedulesControl } from './schedules';
 import { imparaTools, type ImparaControl } from './impara';
 import { childOutputTool } from './child-output';
 import { agentsRecapTool } from './agents-recap';
@@ -82,7 +79,6 @@ import { userShellName } from '../platform';
 import type { ProjectMaps } from '../projectmap/service';
 import { skillTools } from './skills';
 import type { SkillLibrary } from '../skills/library';
-import type { RoutineTerminalExport, RoutineRunRef } from '../../shared/routines';
 
 export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
 export interface ToolDef { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(args: Record<string, unknown>): Promise<ToolOut> | ToolOut }
@@ -91,8 +87,6 @@ export interface AppCtlDeps {
   workflows?: Workflows;
   /** «Modalità notte» (ADR 0191): proposals approved for the absent user (workflows/tools.ts) */
   away?: WorkAway;
-  /** the routine package store (ADR 0175): app_routine_save saves there; absent = no package authoring tools */
-  routinePackages?: () => RoutinePackageStore;
   agentLearning?: AgentPackLearning;
   agents?: () => AgentCatalog;
   /** the catalog's resolve (agents/catalog.ts): the engine, model and effort a role chat starts with */
@@ -135,29 +129,10 @@ export interface AppCtlDeps {
   impara?: ImparaControl;
   /** the «Giornale» (ADR 0280): app_news, app_news_edition, app_news_source, app_news_refresh on the Orchestrator's own endpoint */
   news?: NewsControl;
-  /** scheduled routines (ADR 0281): app_schedule on the Orchestrator's own endpoint */
-  schedules?: SchedulesControl;
   /** the configuration the Orchestrator changes for the user (app_config, ADR 0149); settings come from `brain` */
   config?: Omit<ConfigDeps, 'callerId' | 'userAsked' | 'brain'>;
-  /** the Routine section's packages (routines/service.ts): app_routine_export on the Orchestrator's own endpoint */
-  routines?: { has(id: string): boolean; exportForTerminal(id: string): RoutineTerminalExport; snapshot(): object; archive?(): object; run(ref: RoutineRunRef): Promise<object> };
 }
 
-/** app_routine_export: the filled package zip for the terminal; the answer names secrets, never carries a value. */
-export function routineExportTool(r: NonNullable<AppCtlDeps['routines']>): ToolDef {
-  return {
-    name: 'app_routine_export',
-    description: 'Export a routine package (Routine section) for the terminal `routine` CLI: the app first fills every <set-by-user> secret it already holds (DevOps token from the Azure DevOps connector, site logins from the routine site passwords, the test-only SQL login for a test DB), then writes the zip only to %LOCALAPPDATA%/routine-runtime/packages/<id>/. Returns only the zip path and the names of the filled and missing secrets with the reason: never a value. Never copy the zip into a repository or the brain.',
-    inputSchema: { type: 'object', properties: { id: { type: 'string', description: 'the package id (its folder name on the Routine page)' } }, required: ['id'] },
-    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-    run: a => {
-      const id = typeof a.id === 'string' ? a.id.trim() : '';
-      if (!id || !r.has(id)) throw new Error(`Routine non trovata: ${id.slice(0, 64)} (l'id è il nome del pacchetto nella sezione Routine)`);
-      const out = r.exportForTerminal(id);
-      return { path: out.path, filled: out.filled, missing: out.missing };
-    },
-  };
-}
 
 /** agent_learn_propose on the app endpoints: all proposals require a renderer user decision before application;
  *  on any other app endpoint the lesson waits like a work chat's (no rule). */
@@ -262,21 +237,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const tools: ToolDef[] = [
     guideTool(guideDeps),
     ...(authed() ? [{ name: 'app_voice_diagnostics', description: 'Read local content-free voice diagnostics: rolling recognition/synthesis timing samples, stale events, cancellations and failures. No audio or transcript content. Coverage explicitly excludes end-to-end latency and accuracy. Unknown values stay null; small-sample p95 is not a reliability claim.', inputSchema: obj(), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }, run: () => { if (!authed()) throw new Error('Authenticated Orchestrator required'); return { diagnostics: voiceDiagnostics() }; } }] : []),
-    ...(d.routines && authed() ? [routineExportTool(d.routines), {
-      name: 'app_routine_status', description: 'Read routine packages and run history only when the user asks about routines. Supply source (terminal or app), routineId and runId for the live progress and evidence of one run; omit all three for the list. archive: true reads the old state.json history (including unresolved writes). Never executes, resumes, reconciles or cleans up a run. Old app runs are archived. Execution belongs to the terminal routine CLI.',
-      inputSchema: obj({ archive: { type: 'boolean' }, source: { type: 'string', enum: ['terminal', 'app'] }, routineId: { type: 'string' }, runId: { type: 'string' } }),
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-      run: (a: Record<string, unknown>) => { if (!authed()) throw new Error('Authenticated Orchestrator required');
-        if (a.archive === true) {
-          if (a.source !== undefined || a.routineId !== undefined || a.runId !== undefined) throw new Error('Archive cannot be combined with a run reference');
-          return d.routines!.archive?.() ?? { runs: [] };
-        }
-        if (a.source === undefined && a.routineId === undefined && a.runId === undefined) return d.routines!.snapshot();
-        if (!['terminal', 'app'].includes(String(a.source)) || typeof a.routineId !== 'string' || typeof a.runId !== 'string') throw new Error('Supply source, routineId and runId together');
-        return d.routines!.run({ source: a.source as 'terminal' | 'app', routineId: a.routineId, runId: a.runId }); },
-    }] : []),
     ...(d.config && authed() ? [configTool({ ...d.config, brain: d.brain, callerId: callerId!, userAsked: () => configAsked(callerId!) })] : []),
-    ...(d.routinePackages && authed() ? packageTools({ store: d.routinePackages, brainRoot: () => d.brain.info().brainRoot, authed }) : []),
     ...(d.workflows && authed() ? workflowTools(d.workflows, id => d.chats.list().some(c => c.id === id && !c.parentId && !c.isOrchestrator), id => d.chats.list().find(c => c.id === id), d.away) : []),
     ...(d.agentLearning ? [learnTool(d, callerId, authed())] : []),
     ...(d.agentLearning && authed() ? [toolDef(lessonReviewTool(d.agentLearning))] : []),
@@ -286,7 +247,6 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     ...(d.projectMaps && authed() ? [appProjectMapTool(d.projectMaps, d.emitUi)] : []),
     ...(d.impara && authed() ? imparaTools(d.impara, d.emitUi, () => imparaAsked(callerId!)) : []),
     ...(d.news && authed() ? newsTools(d.news, d.emitUi) : []),
-    ...(d.schedules && authed() ? scheduleTools(d.schedules, d.emitUi) : []),
     ...(d.skillLibrary && authed() ? skillTools(d.skillLibrary, () => caller()?.title || 'Orchestrator') : []),
     ...(authed() ? [childOutputTool({ chats: () => d.chats.list(), runs: () => d.runFeedback?.runList() ?? [] }), agentsRecapTool({ chats: () => d.chats.list(), items: id => d.chats.items(id), pending: () => [...d.chats.pending(), ...(d.commandAsks?.() ?? [])], runs: () => d.runFeedback?.runList() ?? [] })] : []),
     ...(d.runFeedback && authed() ? [metricsTool(d.runFeedback)] : []),

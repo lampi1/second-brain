@@ -90,10 +90,10 @@ export function seedDemoArtifacts(o: { brain: string; userData: string; appPath:
   const csv = w(path.join('tmp', 'export-rimborsi.csv'), REFUNDS_CSV, 1.6 * H);
   w(path.join('reviews', 'qa-rimborsi', 'flusso-rimborsi.svg'), FLOW_SVG, 1.7 * H);
   w(path.join('reviews', 'verbale-riunione-rilascio.docx'), Buffer.concat([Buffer.from('PK\x03\x04', 'latin1'), Buffer.alloc(26)]), 2 * D);
-  const shots = path.join(o.appPath, 'docs', 'mockups', 'routines', 'png');
+  const shots = path.join(o.appPath, 'docs', 'screenshots');
   const ev = path.join(o.userData, 'evidence');
-  for (const [name, chat, ago] of [['app-routine-list.png', 'qa', 2 * H], ['app-routine-detail.png', 'qa', 2.2 * H], ['app-routine-now.png', 'fix', 30 * H]] as const) {
-    try { w(path.join(`chat-${chat}`, name.replace(/^app-/, 'schermata-')), fs.readFileSync(path.join(shots, name)), ago, ev); } catch { /* the demo goes on without it */ }
+  for (const [name, chat, ago] of [['grindhouse.webp', 'qa', 2 * H], ['project-map.webp', 'qa', 2.2 * H], ['trends.webp', 'fix', 30 * H]] as const) {
+    try { w(path.join(`chat-${chat}`, `schermata-${name}`), fs.readFileSync(path.join(shots, name)), ago, ev); } catch { /* the demo goes on without it */ }
   }
   return {
     links: { qa: [`Report pronto: ${qa}`, `Dati grezzi: ${csv}`], mappa: [`Analisi aggiornata: [costi](${costs})`] },

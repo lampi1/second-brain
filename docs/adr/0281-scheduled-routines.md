@@ -1,6 +1,6 @@
 # ADR 0281 · Scheduled routines: a request the Orchestrator receives at its time
 
-Date: 2026-11-13 · Status: accepted (owner, thread «Preparare la 1.0 con analisi profonda»: «voglio che oltre a farle
+Date: 2026-11-13 · Status: superseded by ADR 0325 (scheduled requests left the app with the Routine section). Earlier: accepted (owner, thread «Preparare la 1.0 con analisi profonda»: «voglio che oltre a farle
 come pacchetto da lanciare da terminale se ne possa pianificare una tipo il pianificati di Claude direttamente dentro
 l'app … enterprise level, facile da usare, senza blocchi di permessi») · Amends: ADR 0179 (terminal-only routines)
 

@@ -1,5 +1,5 @@
 // Read-only change tokens for the shipped chat/cost scripts. Live and UsageMonitor keep their existing cadence,
-// but launch a child only after an input changes. No timers, content reads or routine-folder watches here.
+// but launch a child only after an input changes. No timers, content reads or folder watches here.
 // Missing roots are watched through their nearest existing parent; unsupported watches fall back to polling.
 import fs from 'node:fs';
 import path from 'node:path';

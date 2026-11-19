@@ -79,12 +79,8 @@ import { createBrowserModule, mcpPortFromEnv } from './browser/service';
 import { Workflows } from './workflows/service';
 import { WorkDriver } from './workflows/driver';
 import { WakeLater } from './chats/wake-later';
-import { SchedulesService, scheduledText } from './schedules/service';
 import { QuestionRelay } from './chats/relay';
 import { CoordinationStore } from './coordination/store';
-import { createRoutines } from './routines/service';
-import { devopsPatFromConnectors, devopsPatFromCursorConfig } from './routines/secret-fill';
-import { testDbCredential } from './flows/test-db-env';
 import { AGENT_LABEL } from './appctl/tools';
 import { readUi } from './appctl/guide';
 import { ChatMail, mailTools } from './chats/mail';
@@ -108,7 +104,7 @@ import { askImageRoots, readAskImage } from './ask-image';
 import { electronNode, runNode } from './brain/node';
 import path from 'node:path';
 import { templateRoot } from './rules/tools';
-import { log, errText, addRedaction } from './log';
+import { log, errText } from './log';
 import { REQUEST_KINDS } from './later';
 import { attachAway, AwayLog } from './chats/away-log';
 import type { Artifacts} from './genui/artifacts';
@@ -137,8 +133,6 @@ import { brainQueriesTool, chatQueryAddTool } from './brain/queries-tools';
 import { AutoScripts } from './brain/auto-scripts';
 import { mountRecallTool, RECALL_ENV } from './search/hybrid/recall';
 import { timersFor } from './timers';
-import { createLegacyArchive } from './routines/legacy';
-import { createFolderPackageStore } from './flows/package-authoring';
 import { GuideService } from './guide/service';
 import { DailyQuipsService } from './quips/daily';
 import { repoRootOf } from './guide/anchors';
@@ -162,7 +156,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   // the brain folder (bound below, once the brain exists) holds the credentials file of login hand-offs
   let brainRoot: () => string | null = () => null;
-  const { service: browser, mcp, addChatTools, setBrowserAccess, setChatToolFilter, sitePackageLogin } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
+  const { service: browser, mcp, addChatTools, setBrowserAccess, setChatToolFilter } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
   // the brain's chats.mjs poll leaves out the app's own chats (bound below, once the chat manager exists)
   let isOwn: (id: string) => boolean = () => false;
   // Retire the legacy global quiet flag before notifications start; postponement is request-local in the renderer.
@@ -588,31 +582,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const autoCloseTimer = setInterval(() => { void autoCloseService.tick().catch(e => log.warn('chats', 'automatic archive suspended', { cause: errText(e) })); }, 1000);
   autoCloseTimer.unref();
   agentPacks.learning.evidenceRuns = () => manager.runs.list();
-  const routineArchive = createLegacyArchive({ userData: ctx.userData, brainRoot: () => brain.info().brainRoot });
-  const routines = createRoutines({ userData: ctx.userData, legacy: routineArchive,
-    changed: change => ctx.emitter.emit('routines:progress', change),
-    // the '<set-by-user>' secrets the app already holds (owner, 2026-10-27): values go only into the package, each one
-    // redacted from the logs; the export never lands in this repo or the brain
-    secrets: {
-      devopsPat: () => devopsPatFromConnectors(mcpServers.store.servers(), (id, slot) => mcpServers.store.secret(id, slot)),
-      // Cursor's MCP config, read only (AGENTS.md rule 6; the owner's request, ADR 0176)
-      cursorDevopsPat: organization => {
-        let text: string | null = null;
-        try { text = fs.readFileSync(path.join(os.homedir(), '.cursor', 'mcp.json'), 'utf8'); } catch { /* no Cursor config */ }
-        const r = devopsPatFromCursorConfig(text, organization);
-        if ('value' in r) addRedaction(r.value);
-        return r;
-      },
-      siteLogin: origin => { const r = sitePackageLogin(origin); if ('value' in r) addRedaction(r.value.password); return r; },
-      testDbLogin: () => {
-        const [user, password] = [testDbCredential('SQLCMD_TEST_RO_USER'), testDbCredential('SQLCMD_TEST_RO_PASSWORD')];
-        if (!user || !password) return { reason: 'login DB di test non configurato (SQLCMD_TEST_RO_USER/PASSWORD)' };
-        addRedaction(password);
-        return { value: { user, password } };
-      },
-    },
-    forbiddenRoots: () => [source.repo(), app.getAppPath(), process.cwd(), brain.info().brainRoot],
-  });
   const workflows = workflowsRef = new Workflows(path.join(ctx.userData, 'work-threads.json'), rows => ctx.emitter.emit('work:changed', rows), Date.now, row => {
     const linked = chats.list().filter(c => row.chatIds.includes(c.id) && c.plan);
     const approved = linked.filter(c => ['running', 'done'].includes(c.plan!.phase) && (c.run?.plan?.approvedAt ?? 0) > 0);
@@ -719,15 +688,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const wakeLater = new WakeLater({ file: path.join(ctx.userData, 'wake-later.json'), chats: () => manager.list(),
     send: (chatId, text) => manager.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }) });
   addChatTools([wakeLater.tool()]);
-  // scheduled routines (ADR 0281): the user's planned requests go to the Orchestrator at their time, by the same minute
-  // tick; a time missed while the app was closed runs once at the first tick
-  const schedules = new SchedulesService({ file: path.join(ctx.userData, 'schedules.json'), changed: st => ctx.emitter.emit('schedules:changed', st),
-    run: async (task, late) => {
-      const o = manager.list().find(c => c.isOrchestrator && !c.closedAt);
-      if (!o) throw new Error('Nessun Orchestrator aperto.');
-      await manager.send(o.id, scheduledText(task, late), undefined, false, 'App', false, { kind: 'app' });
-      return { chatId: o.id };
-    } });
   // single entry (ADR 0239): a work chat's Sì/No question goes to the user through the Orchestrator's conversation, and
   // the user's own «sì» / «no» there (PC, phone, Remote Control) answers it
   // a command a chat left, decided away from the PC (ADR 0259 §4: Telegram's Sì, a relayed «sì»): the same run as Esegui
@@ -769,15 +729,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     void relay.userSaid(chatId, item.text, item.via === 'phone' ? item.remote ? 'remote' : 'phone' : undefined);
   });
   const workDriverTimer = prodPollers ? setInterval(() => {
-    try { wakeLater.tick(); schedules.tick(); workDriver.tick(); } catch (e) { log.warn('workflows', 'approved-work check failed', { cause: errText(e), hint: 'the next minute retries' }); }
+    try { wakeLater.tick(); workDriver.tick(); } catch (e) { log.warn('workflows', 'approved-work check failed', { cause: errText(e), hint: 'the next minute retries' }); }
   }, 60_000) : null;
   workDriverTimer?.unref();
   // a role chat's route says how its active version has done so far
   const agentStats = (agentId: string, version: number) => agentStatsLine(runMetrics(manager.runs.list(), { rollups: manager.runs.rolledUp() }).find(m => m.agentId === agentId)?.versions.find(v => v.version === version));
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
-  // routine packages the Orchestrator authors (ADR 0175): <userData>/routines/<id>/routine.json, the Routine section's store
-  const routinePackageStore = createFolderPackageStore(path.join(ctx.userData, 'routines'));
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, balancedMode, away: { on: awayOn, log: e => awayLog.add(e) }, routinePackages: () => routinePackageStore, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, schedules, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps,
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, balancedMode, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps,
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },
@@ -792,7 +750,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       // Il mio profilo (ADR 0207): the page's own reader and writer of me.md (stateless: each save checks the revision)
       profile: (() => { const p = new ProfileService({ root: () => brain.settings().brainRoot, template: (() => { try { return fs.readFileSync(path.join(app.getAppPath(), 'brain-template', 'me.template.md'), 'utf8'); } catch { return ''; } })() }); return { get: () => p.get(), save: req => p.save(req) }; })(),
     } };
-  appDeps.routines = { has: id => routines.has(id), exportForTerminal: id => routines.exportForTerminal(id), snapshot: () => routines.snapshot(), archive: () => routineArchive.snapshot(), run: ref => routines.run(ref) };
   attachAppTools(mcp, appDeps, source, false, orchestratorTokens);
 
   // Task page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
@@ -933,13 +890,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     stallMin: () => checkedDelegation(brain.settings().delegation).stallMin, lastEventAt: id => manager.lastEventAt(id) });
 
   return {
-    workflows, routineArchive, routines, brainModel, research, memoryReview, learningReview, queries: brainQueries,
+    workflows, brainModel, research, memoryReview, learningReview, queries: brainQueries,
     morning,
     mcpServers,
     judging: { estimate: now => judgingEstimate(manager.runs.list(), now, { shares: judgeShares(), capUsd: Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD, lastBatch: judgeSampler.lastBatch() }) },
     phonePort: createPhonePort(manager, ctx.emitter, awayCommands),
     worktreePool,
-    chats, browser, recordings, learn, news, schedules, projectMaps, brain, mcp, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, modelLists, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, quips, userCorrections,
+    chats, browser, recordings, learn, news, projectMaps, brain, mcp, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, modelLists, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, quips, userCorrections,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : null),
       checkpoint: () => manager.checkpointForUpdate(),
@@ -947,7 +904,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { news.dispose(); projectMaps.stop(); routines.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (worktreeFirst) clearTimeout(worktreeFirst); if (worktreeTimer) clearInterval(worktreeTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); if (workDriverTimer) clearInterval(workDriverTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); modelLists.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { news.dispose(); projectMaps.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (worktreeFirst) clearTimeout(worktreeFirst); if (worktreeTimer) clearInterval(worktreeTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); if (workDriverTimer) clearInterval(workDriverTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); modelLists.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { manager.killAll(); runner.shutdown(); },
   };
 }
