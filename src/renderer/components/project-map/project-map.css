@@ -149,13 +149,6 @@
 .pm-worklist li { display: flex; gap: 8px; align-items: baseline; }
 .pm-worklist li > span { flex: 1; min-width: 0; }
 .pm-worklist small { color: var(--text-3); font-size: var(--fs-xs); text-transform: capitalize; }
-/* a plan sits over the drawing, one line: its «Approva e parti» is in sight without scrolling */
-.pm-plan { border: 1px solid var(--border-2); border-radius: var(--r-l); padding: 8px 14px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; background: var(--surface); }
-.pm-plan-n { flex: 1; min-width: 120px; }
-.pm-plan[data-phase='proposed'] { border-color: var(--violet); background: var(--violet-bg); }
-.pm-plan h3 { margin: 0; font-size: var(--fs-l); }
-.pm-plan p { margin: 0; }
-.pm-plan-act { display: flex; gap: 8px; flex-wrap: wrap; }
 .pm-agent-change { color: var(--amber); }
 .pm-agent-change[data-seen] { color: var(--text-2); }
 .pm-agent-change[data-seen] b { color: var(--green); }
@@ -176,7 +169,6 @@
   .pm-body.with-nav { grid-template-columns: 172px minmax(0, 1fr); }
   .pm-body.with-nav .pm-sidewrap { grid-column: 1 / -1; }
   .pm-body.with-nav .pm-resize { display: none; }
-  .pm-step { max-width: 190px; }
 }
 /* a really narrow page: the projects are a row of pills over the drawing */
 @container (max-width: 700px) {
@@ -186,25 +178,6 @@
   .pm-nav button { width: auto; max-width: 260px; padding: 6px 10px; }
 }
 
-/* ADR 0302 · the plan's steps in order: the turns left to right, an arrow between them, the steps of one turn stacked */
-.pm-flow { list-style: none; margin: 4px 0 2px; padding: 0; flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 0; min-width: 0; }
-.pm-turn { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; max-width: 100%; }
-.pm-turn + .pm-turn { margin-left: 30px; }
-.pm-turn + .pm-turn::before { content: '→'; position: absolute; left: -22px; top: 50%; transform: translateY(-50%); color: var(--text-3); font-size: 14px; }
-.pm-turn[data-par] { padding: 5px 6px 6px 8px; border-left: 2px solid var(--accent-line); border-radius: var(--r-s); background: var(--surface-2); }
-.pm-together { font-style: normal; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); font-weight: 600; }
-.pm-step { appearance: none; display: inline-flex; align-items: center; gap: 7px; max-width: 250px; min-width: 0; padding: 4px 10px 4px 4px; border: 1px solid var(--border-2); border-radius: 999px; background: var(--surface); color: var(--text-2); font: inherit; font-size: 12.5px; cursor: pointer; }
-.pm-step:disabled { cursor: default; }
-.pm-step:not(:disabled):hover { color: var(--text); border-color: var(--text-3); }
-.pm-step:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.pm-step > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pm-step > i { font-style: normal; flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--surface-4); color: var(--text-2); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.pm-step[data-s='done'] { color: var(--text-3); }
-.pm-step[data-s='done'] > i { background: color-mix(in srgb, var(--green) 22%, transparent); color: var(--green); }
-.pm-step[data-s='blocked'] { border-color: var(--red); }
-.pm-step[data-s='blocked'] > i { background: var(--red); color: var(--bg); }
-.pm-step[data-s='now'] { border-color: var(--accent); color: var(--text); }
-.pm-step[data-s='now'] > i { background: var(--accent); color: var(--bg); }
 /* a step's turn on a box and in the detail list: «2», «2∥» when it goes together with another */
 .pm-turn-n { flex: none; font-size: 10.5px; font-weight: 700; line-height: 1; padding: 2px 4px; border-radius: 4px; background: var(--surface-4); color: var(--text-2); font-variant-numeric: tabular-nums; align-self: center; }
 .pm-turn-n[data-par] { background: var(--accent-bg); color: var(--accent); }
@@ -213,7 +186,6 @@
 .pm-node.running { animation: pm-breathe 2.4s ease-out infinite; }
 .pm-node.running.picked, .pm-node.running.lit, .pm-node.running:hover { animation: none; }
 .pm-node.running .pm-foot > .pm-dot, .pm-dot.run { animation: pm-beat 1.6s ease-in-out infinite; }
-.pm-step[data-s='now'] > i { animation: pm-beat 1.6s ease-in-out infinite; }
 .pm-edge-run { fill: none; stroke: var(--text); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 4 96; opacity: .75; animation: pm-travel 2.2s linear infinite; }
 @keyframes pm-breathe { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); } 70%, 100% { box-shadow: 0 0 0 9px transparent; } }
 @keyframes pm-beat { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.8); } }
@@ -234,7 +206,7 @@
 @media (prefers-reduced-motion: reduce) {
   .pm-node.running { animation: none; }
   .pm-node.running:not(.picked):not(.lit):not(:hover) { box-shadow: 0 0 0 3px var(--accent-bg); }
-  .pm-node.running .pm-foot > .pm-dot, .pm-dot.run, .pm-step[data-s='now'] > i, .pm-node.came { animation: none; }
+  .pm-node.running .pm-foot > .pm-dot, .pm-dot.run, .pm-planstep[data-s='now'] .pm-planstep-head > i, .pm-node.came { animation: none; }
   .pm-edge-run { display: none; }
   .pm-level[data-enter] { animation: none; }
   .pm-plane.zooming, .pm-plane.zooming .pm-level { transition: none; }
@@ -242,36 +214,12 @@
 /* the legend never runs under the zoom buttons in a narrow drawing */
 .pm-legend { max-width: calc(100% - 72px); gap: 4px 14px; }
 
-/* ADR 0307 · told in full: a plan's steps as cards, how a piece works beside the drawing, a picked arrow, «Aggiorna» */
+/* ADR 0307 · told in full: how a piece works beside the drawing, a picked arrow, «Aggiorna» */
 .pm-refresh { gap: 6px; }
 button.pm-label { font: inherit; font-size: 12px; cursor: pointer; }
 button.pm-label:hover { color: var(--text); border-color: var(--text-3); }
 button.pm-label:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .pm-label.picked { border-color: var(--accent); color: var(--text); box-shadow: 0 0 0 3px var(--accent-bg); }
-.pm-flowbox { flex: 1 0 100%; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
-.pm-flowrow { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
-.pm-flow-all { flex: none; margin-top: 4px; }
-.pm-step[aria-pressed='true'] { background: var(--surface-3); color: var(--text); }
-.pm-stepcards { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); max-height: 34vh; overflow: auto; }
-.pm-stepcards[data-all] { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
-.pm-stepcard { display: flex; flex-direction: column; gap: 5px; padding: 10px 12px; border: 1px solid var(--border-2); border-radius: var(--r-m); background: var(--surface-2); min-width: 0; }
-/* one step told alone: a single line, so the drawing keeps its height */
-.pm-stepcards:not([data-all]) .pm-stepcard { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding: 7px 12px; }
-.pm-stepcards:not([data-all]) .pm-stepcard > p:not(.pm-muted) { flex: 1 0 100%; order: 3; }
-.pm-stepcard[data-s='now'] { border-color: var(--accent); }
-.pm-stepcard[data-s='blocked'] { border-color: var(--red); }
-.pm-stepcard-head { display: flex; align-items: flex-start; gap: 8px; font-size: 13.5px; line-height: 1.3; }
-.pm-stepcard-head > i { font-style: normal; flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--surface-4); color: var(--text-2); font-size: 11px; font-weight: 700; }
-.pm-stepcard[data-s='now'] .pm-stepcard-head > i { background: var(--accent); color: var(--bg); }
-.pm-stepcard[data-s='done'] .pm-stepcard-head > i { background: color-mix(in srgb, var(--green) 22%, transparent); color: var(--green); }
-.pm-stepcard[data-s='blocked'] .pm-stepcard-head > i { background: var(--red); color: var(--bg); }
-.pm-stepcard p { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--text-2); }
-.pm-stepcard p.pm-muted { color: var(--text-3); }
-.pm-stepcard-meta { display: flex; flex-wrap: wrap; gap: 4px 6px; font-size: 12px; color: var(--text-2); }
-.pm-stepcard-meta > * { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border-2); background: var(--surface); color: inherit; font: inherit; font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pm-stepcard-meta > button { cursor: pointer; }
-.pm-stepcard-meta > button:hover { color: var(--text); border-color: var(--text-3); }
-.pm-stepcard-meta > [data-k='state'] { font-weight: 600; color: var(--text); }
 /* the detail of a piece: headings, the long text, the passages in and out */
 .pm-detail h4 { margin: 12px 0 4px; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); font-weight: 600; }
 .pm-detail p.pm-long { font-size: 13px; line-height: 1.5; color: var(--text); margin: 0 0 6px; }
@@ -289,8 +237,6 @@ button.pm-label:focus-visible { outline: 2px solid var(--focus); outline-offset:
 .pm-partlist li span { color: var(--text-2); }
 .pm-linkcard + .pm-linkcard { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .pm-linkends { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
-/* full screen has the room: a wider column to read in */
-.pm.pm-full .pm-step { max-width: 320px; }
 /* more substance on a piece (ADR 0316): short lists of facts, the files as code-type links, the paths through it */
 .pm-facts { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.45; color: var(--text); }
 .pm-facts li::marker { color: var(--text-3); }
@@ -362,3 +308,93 @@ button.pm-label:focus-visible { outline: 2px solid var(--focus); outline-offset:
 .pm-steplist li > button { display: flex; align-items: center; gap: 6px; text-align: left; }
 .pm-steplist .pm-ord { flex: none; }
 .pm-steplist li > span { padding-left: 24px; }
+
+/* ADR 0326 · how far the project is: the percentage in the header, the progress card and the plan cards in the side
+   panel, a box's own count along its bottom edge. Nothing sits over the drawing but one line while a plan waits. */
+.pm-meter { display: block; flex: 1; min-width: 40px; height: 6px; border-radius: 3px; background: var(--surface-4); overflow: hidden; }
+.pm-meter > i { display: block; height: 100%; border-radius: 3px; background: var(--accent); transition: width .3s ease-out; }
+.pm-meter[data-s='done'] > i { background: var(--green); }
+.pm-meter[data-s='blocked'] > i { background: var(--red); }
+.pm-meter[data-s='todo'] > i { background: var(--text-3); }
+.pm-prog-chip { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); border: 1px solid var(--border-2); padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+.pm-prog-chip .pm-meter { flex: none; width: 72px; }
+.pm-prog-chip b { color: var(--text); font-variant-numeric: tabular-nums; }
+.pm-prog, .pm-plancard { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: var(--r-l); background: var(--surface); border: 1px solid var(--border-2); min-width: 0; }
+.pm-plancard[data-phase='proposed'], .pm-plancard[data-phase='revising'] { border-color: var(--violet); background: var(--violet-bg); }
+.pm-plancard h3 { margin: 0; font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
+.pm-plancard > .btn { align-self: flex-start; }
+.pm-prog .dash-eyebrow, .pm-plancard .dash-eyebrow, .pm-planask .dash-eyebrow { text-transform: uppercase; }
+.pm-planstep-head > small .pm-you { margin: 0; }
+.pm-prog-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.pm-prog-more { appearance: none; background: none; border: 0; padding: 0; font: inherit; font-size: 12.5px; color: var(--accent); cursor: pointer; }
+.pm-prog-more:hover { text-decoration: underline; }
+.pm-prog-more:focus-visible, .pm-prog button:focus-visible, .pm-planstep-head:focus-visible, .pm-planstep-meta > button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: 3px; }
+.pm-prog-head { display: flex; align-items: center; gap: 12px; }
+.pm-prog-pct { font-size: 26px; line-height: 1; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.pm-prog-head .pm-meter { height: 8px; border-radius: 4px; }
+.pm-prog-count { margin: 0; font-size: 12.5px; color: var(--text-2); }
+.pm-plan-when { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text-2); }
+.pm-plan-when b { color: var(--text); }
+/* the facts: what each line is about on the left, the pieces on the right */
+.pm-prog-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 7px 12px; margin: 6px 0 0; padding-top: 10px; border-top: 1px solid var(--border); font-size: 13px; line-height: 1.4; }
+.pm-prog-facts dt { color: var(--text-3); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; font-weight: 600; padding-top: 2px; }
+.pm-prog-facts dt.pm-prog-you { color: var(--amber); }
+.pm-prog-facts dt.pm-prog-stuck { color: var(--red); }
+.pm-prog-facts dd { margin: 0; min-width: 0; }
+.pm-prog-facts ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pm-prog-facts li, .pm-prog-facts dd { overflow-wrap: anywhere; }
+.pm-prog-facts li > span { display: block; color: var(--text-2); font-size: 12.5px; }
+.pm-prog-facts small { color: var(--text-3); font-size: 12px; margin-left: 6px; }
+.pm-prog-facts small.pm-prog-who { color: var(--accent); }
+.pm-prog-facts button { appearance: none; background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--text); cursor: pointer; text-align: left; }
+.pm-prog-facts button:hover { color: var(--accent); text-decoration: underline; }
+/* every phase with its own bar */
+.pm-prog-groups { list-style: none; margin: 6px 0 0; padding: 8px 0 0; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 2px; }
+.pm-prog-groups button { appearance: none; display: grid; grid-template-columns: 20px minmax(0, 1fr) 64px 38px; align-items: center; gap: 8px; width: 100%; padding: 5px 6px; border: 0; border-radius: var(--r-s); background: none; color: var(--text-2); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.pm-prog-groups button:hover { background: var(--surface-2); color: var(--text); }
+.pm-prog-groups button > span:not(.pm-meter) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-prog-groups button > i, .pm-planstep-head > i { font-style: normal; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--surface-4); color: var(--text-2); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pm-prog-groups button > small { color: var(--text-3); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+.pm-prog-groups .pm-meter { min-width: 0; }
+.pm-prog-groups li[data-s='done'] button > i, .pm-planstep[data-s='done'] .pm-planstep-head > i { background: color-mix(in srgb, var(--green) 22%, transparent); color: var(--green); }
+.pm-prog-groups li[data-s='blocked'] button > i, .pm-planstep[data-s='blocked'] .pm-planstep-head > i { background: var(--red); color: var(--bg); }
+.pm-prog-groups li[data-s='now'] button > i, .pm-planstep[data-s='now'] .pm-planstep-head > i { background: var(--accent); color: var(--bg); }
+.pm-prog-groups li[data-at] button { color: var(--text); font-weight: 600; }
+/* a plan's steps, one row each; an open row tells the step in full */
+.pm-plansteps { list-style: none; margin: 4px 0 2px; padding: 6px 0 0; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 2px; }
+.pm-planstep { border-radius: var(--r-m); min-width: 0; }
+.pm-planstep[data-open] { background: var(--surface-2); }
+.pm-plancard[data-phase='proposed'] .pm-planstep[data-open], .pm-plancard[data-phase='revising'] .pm-planstep[data-open] { background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.pm-planstep-head { appearance: none; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: start; gap: 8px; width: 100%; padding: 6px; border: 0; border-radius: var(--r-m); background: none; color: var(--text); font: inherit; font-size: 13px; line-height: 1.35; text-align: left; cursor: pointer; }
+.pm-planstep-head:hover { background: var(--surface-2); }
+.pm-planstep-head > b { font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
+.pm-planstep[data-s='done'] .pm-planstep-head > b { color: var(--text-2); }
+.pm-planstep[data-s='now'] .pm-planstep-head > b { font-weight: 600; }
+.pm-planstep-head > small { color: var(--text-3); font-size: 12px; white-space: nowrap; padding-top: 1px; }
+.pm-planstep[data-s='now'] .pm-planstep-head > small { color: var(--accent); }
+.pm-planstep[data-s='blocked'] .pm-planstep-head > small { color: var(--red); }
+.pm-planstep[data-s='now'] .pm-planstep-head > i { animation: pm-beat 1.6s ease-in-out infinite; }
+.pm-planstep-more { display: flex; flex-direction: column; gap: 5px; padding: 0 8px 9px 34px; }
+.pm-planstep-more p { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text-2); overflow-wrap: anywhere; }
+.pm-planstep-more p.pm-muted { color: var(--text-3); }
+.pm-planstep-meta { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.pm-planstep-meta > * { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2); font: inherit; font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-planstep-meta > button { cursor: pointer; }
+.pm-planstep-meta > button:hover { color: var(--text); border-color: var(--text-3); }
+/* the one line over the drawing while a plan waits for the user's ok */
+.pm-planask { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 14px; border: 1px solid var(--violet); border-radius: var(--r-l); background: var(--violet-bg); font-size: 13.5px; }
+.pm-planask > b { min-width: 0; overflow-wrap: anywhere; }
+/* a box's own count: the number in its foot, the bar along its bottom edge */
+.pm-cnt { flex: none; font-size: 11.5px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.pm-node-meter { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--surface-4); }
+.pm-node-meter > i { display: block; height: 100%; background: var(--green); }
+.pm-detail-prog { display: flex; flex-direction: column; gap: 4px; margin: 8px 0 4px; }
+.pm-detail-prog .pm-prog-pct { font-size: 20px; }
+@media (prefers-reduced-motion: reduce) { .pm-meter > i { transition: none; } }
+/* On the page (not full screen), with the panel beside the drawing: the drawing keeps the height of the window and the
+   panel scrolls beside it. A long panel (a plan with every step open, many agents) no longer stretches the drawing. */
+@container (min-width: 980.01px) {
+  .pm:not(.pm-full) .pm-body { flex: none; }
+  .pm:not(.pm-full) .pm-canvas { height: max(520px, calc(100vh - 360px)); }
+  .pm:not(.pm-full) .pm-sidewrap > .pm-side { position: absolute; inset: 0; }
+}

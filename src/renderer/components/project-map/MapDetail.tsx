@@ -11,11 +11,14 @@
 // address), its links, and the steps inside it in order, each with its status and opened by a click; a section with
 // nothing to say is not drawn (a phase or a step without written details has no «Come funziona»); the arrow to the
 // following step is told without a status.
+// Its own count (ADR 0326): a piece with pieces inside shows how many of them are done, with the bar.
 import { useEffect, useState, type ReactNode } from 'react';
 import { descendantsOf, layoutOf, passagesOf, type MapElement, type MapLink, type MapPath, type MapState, type MapWork, type ProjectMap } from '@shared/project-map';
+import type { MapProgress } from '@shared/project-map-progress';
 import { t } from '../../i18n';
 import { IconChat, IconFile, IconGlobe } from '../Icons';
-import { Turn } from './PlanFlow';
+import { ProgressHead, countText } from './MapProgress';
+import { Turn } from './PlanCard';
 
 type Shown = MapState | 'stale';
 const WORK_MARK = { todo: '○', now: '●', done: '✓', blocked: '✕' } as const;
@@ -59,7 +62,9 @@ function Passage({ l, other, dir, state, onShow }: { l: MapLink; other: MapEleme
   </li>;
 }
 
-export function ElementDetail({ map, el, state, stateOfLink, stateOfEl, confirmed, works, onTalk, onShow, onFile, onLink, onWalk, testid = 'pm-detail', lead }: {
+export function ElementDetail({ map, el, state, stateOfLink, stateOfEl, confirmed, works, onTalk, onShow, onFile, onLink, onWalk, testid = 'pm-detail', lead, count }: {
+  /** how much of what is inside it is done (ADR 0326), on a map that tells a plan */
+  count?: MapProgress | undefined;
   map: ProjectMap; el: MapElement; state: Shown; stateOfLink: (l: MapLink) => Shown; stateOfEl: (e: MapElement) => Shown; confirmed: string; works: MapWork[];
   onTalk: () => void; onShow: (id: string) => void; onFile: (path: string) => void; onLink: (href: string) => void; onWalk: (path: MapPath, stop: number) => void; testid?: string; lead?: ReactNode;
 }) {
@@ -81,6 +86,7 @@ export function ElementDetail({ map, el, state, stateOfLink, stateOfEl, confirme
     <h3>{el.name}</h3>
     {el.description && <p>{el.description}</p>}
     <p><i className={`pm-dot s-${state}`} />{t(`pm.state.${state}`)}{el.note ? `: ${el.note}` : ''}</p>
+    {count && <div className="pm-detail-prog" data-testid={`${testid}-progress`}><ProgressHead pct={count.pct} count={countText(count)} of={el.name} /></div>}
     {(el.details || !seq) && <h4>{t('pm.how')}</h4>}
     {el.details ? <Paras text={el.details} /> : !seq ? <p className="pm-muted" data-testid="pm-no-details">{t('pm.noDetails')}</p> : null}
     {el.proofs?.length ? <><h4>{t('pm.proofs')}</h4><ul className="pm-proofs" data-testid="pm-proofs">{el.proofs.map((x, i) => <li key={i}><span>{x.text}</span>{x.file ? <FileLink path={x.file} onFile={onFile} testid={`pm-proof-file-${i}`} /> : null}{x.href ? <WebLink href={x.href} onLink={onLink} testid={`pm-proof-link-${i}`} /> : null}</li>)}</ul></> : null}

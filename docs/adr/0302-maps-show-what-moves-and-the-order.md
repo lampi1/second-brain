@@ -3,7 +3,8 @@
 Date: 2026-11-13 · Status: accepted (owner, 2026-11-13: «vorrei che nelle mappe fosse evidente con una discreta
 animazione la parte in corso se presente se non sono tutte finite, che si capisse quando i lavori sono in parallelo o
 uno dopo l'altro, e che la transizione da una mappa padre a una mappa interna fosse meglio, e cambia quel dropdown con
-una selezione laterale tipo quella della sezione giornale») · Builds on: ADR 0271, ADR 0275, ADR 0276
+una selezione laterale tipo quella della sezione giornale») · Builds on: ADR 0271, ADR 0275, ADR 0276 · Amended by:
+ADR 0326 (the strip of steps over the drawing is gone: the plan is a card in the side panel)
 
 ## Context
 

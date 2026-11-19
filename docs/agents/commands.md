@@ -97,7 +97,7 @@ row and its line here in the same change.
 | `app_news_edition` | Orchestrator only | Create, change or delete an edition of the newspaper: name, what the user wants from it, sections, key words. |
 | `app_news_source` | Orchestrator only | Try a link at zero tokens, then add, remove, pause or resume a source of an edition. |
 | `app_news_refresh` | Orchestrator only | Refresh one edition or all now: reads the sources, one AI pass per edition, returns what it brought and its cost. |
-| `app_project_map` | Orchestrator only | The user's project maps: list, read as text, open in the maps window (ADR 0275), the brief for a Scout that draws one, the user's corrections, piece-by-piece edits from the talk with the user (also a piece's place in the order, «together with the one before», a level as a line or in layers, an arrow to the next step: ADR 0322) and undo (ADR 0276); a brief with `question` has a Scout answer it as a path on the map (ADR 0316). |
+| `app_project_map` | Orchestrator only | The user's project maps: list, read as text (ending with how far the project is, ADR 0326), open in the maps window (ADR 0275), the brief for a Scout that draws one, the user's corrections, piece-by-piece edits from the talk with the user (also a piece's place in the order, «together with the one before», a level as a line or in layers, an arrow to the next step: ADR 0322) and undo (ADR 0276); a brief with `question` has a Scout answer it as a path on the map (ADR 0316). |
 | `app_agents_recap` | Orchestrator only | The recap: one short line per agent that works, waits or finished; with detail, one block per agent with its last steps. |
 | `app_child_output` | Orchestrator only | The latest report of a chat in its tree, delegates included: summary and criteria; full: the output, max 4,000 chars. |
 | `agent_metrics` | Orchestrator only | Success rate, cost, time and corrections per role and version (numbers only). |
@@ -126,7 +126,7 @@ row and its line here in the same change.
 | `brain_search` | work chats | Search the user's brain by meaning and words. |
 | `brain_scripts` | work chats | The brain's tested reusable scripts with usage. |
 | `brain_script_add` | work chats | Save a new script in the brain right after it ran and worked. |
-| `project_map_read` | work chats | The user's project maps: the list, one map as text with statuses and agents, or one `element` in full (details, files, links). |
+| `project_map_read` | work chats | The user's project maps: the list, one map as text with statuses and agents and, on a map that tells a plan, how far the project is (ADR 0326), or one `element` in full (details, files, links). |
 | `project_map_save` | work chats | Draw or redraw a project's map (people, systems, parts inside parts up to four levels, links, statuses, evidence files, `rules`, `keeps`, `why`, `keyFiles`, `paths`; ADR 0316), or as a sequence: kinds `phase` and `step` drawn in a line in the saved order, `par`, `layout`, links of kind `next`, `proofs`, `refs` (ADR 0322). |
 | `project_map_update` | work chats | Say which elements of a map you work on, update the status of what you finished, add `paths` or `drop_paths` by id (ADR 0316). |
 | `brain_queries` | work chats | The brain's saved queries (SQL, KQL, GraphQL…). |

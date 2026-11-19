@@ -4,7 +4,7 @@ Date: 2026-11-14 · Status: accepted (owner, 2026-11-14: «le mappe quando le ap
 voglio che si capisca bene ogni passaggio e vorrei anche poterle aggiornare da un tasto volendo, secondo me hanno un
 gran potenziale ma il contenuto testuale non è molto dettagliato») · Builds on: ADR 0271, ADR 0275, ADR 0276, ADR 0302 ·
 Amends: ADR 0276 (where the map opens when the user opens it) · Amended by: ADR 0316 (the side tells rules, keeps, size,
-why, key files and paths)
+why, key files and paths), ADR 0326 (a plan's steps are told in the side panel, not over the drawing)
 
 ## Context
 
@@ -54,5 +54,5 @@ where a drawing of ten boxes is small.
   Orchestrator.
 - ADR 0276's «the map is a page beside the Orchestrator, never over it» now holds after Esc and when the Orchestrator
   opens it; opened by the user it starts over everything.
-- Tests: `test/unit/project-map-details.test.ts`, `test/unit/plan-flow.test.ts`, `test/e2e/project-map.spec.ts`
+- Tests: `test/unit/project-map-details.test.ts`, `test/unit/plan-card.test.ts`, `test/e2e/project-map.spec.ts`
   (e2e runs with reduced motion and, headless, may not get the OS full screen: the view still covers the window).
