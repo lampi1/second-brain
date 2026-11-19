@@ -3,7 +3,8 @@
 Date: 2026-11-18 · Status: accepted (owner, issue #443: «Project maps should read as a simple sequence: phases one after
 the other, and steps inside each phase one after the other. Today a map looks like a free graph and is hard to
 follow»; thread «Risolvere le issue aperte»: «sistema anche l'ultima issue aperta sulle mappe») · Amends: ADR 0271 (the
-kinds and the layout), ADR 0307 and ADR 0316 (the side panel)
+kinds and the layout), ADR 0307 and ADR 0316 (the side panel) · Amended by: ADR 0326 (the side panel opens with the
+project's progress)
 
 ## Context
 

@@ -272,7 +272,8 @@ test('README screenshot: worktree pool', async () => {
 
 test('README showcase: the Strategist\'s plan to approve on the project map', async () => {
   // ADR 0276: in Plan mode the Strategist proposes the plan on the project map: its steps on the boxes they work on,
-  // the piece that does not exist yet dashed, «Approve and start» in the map's side column
+  // the piece that does not exist yet dashed, every step told in the side panel, «Approve and start» on the line over
+  // the drawing (ADR 0326)
   await page.keyboard.press('Escape');
   await goPage(page, 'home');
   if (await page.getByTestId('bench-back').count()) await page.getByTestId('bench-back').click(); // the benches, not an open chat (ADR 0311)

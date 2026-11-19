@@ -6,6 +6,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- Project maps tell how far the project is: the header shows a percentage, and the side panel opens with the progress:
+  steps done, the phase under way, what is being done and by whom, what waits for you, what is blocked, what comes
+  next, and a bar for every phase; each phase wears its count on its box. A plan drawn on a map is a card in the side
+  panel, with its percentage and one row per step (a click tells the step in full). Reading a map as text ends with
+  the same count (ADR 0326).
 - Routines: a package can run a work item again. `trigger.retriggerTags` lists tags a person adds: `routine watch`
   starts an item it already handled again, once per tag, when its last run is over; the new run takes the tag off the
   work item and logs it. `routine.entries` name where a run starts by the work item's tags (`startStep`), for `watch`
@@ -246,6 +251,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   terminal routines.
 
 ### Removed
+- Project maps: the strip of a plan's steps over the drawing («insieme», the step cards, «Chiudi i passi»). The plan is
+  told in the side panel; one line over the drawing stays only while a plan waits for «Approva e parti» (ADR 0326).
 - Routines left the app: no Routine page, no `app_routine_*` tools for the Orchestrator, no scheduled requests
   (`app_schedule`). Nothing on disk is deleted: saved packages, run folders, `schedules.json` and the old routine
   chats in `chats.json` stay as they are, unread by the app. The terminal engine `packages/routine-runtime` stays for

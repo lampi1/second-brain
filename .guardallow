@@ -557,3 +557,5 @@ docs/screenshots/artifacts.webp binary-media sha256:d20bc73ac8675e7f9fcb795b9cba
 docs/demo-pictures/grindhouse.png binary-media sha256:b6cfee82836de761d3bb735fae71d05c7f94879566690f1f03833501b96b25f0
 docs/demo-pictures/project-map.png binary-media sha256:a01aef06a38026ccc261c7974aff68c4957556b9d883bd346b75012d93894590
 docs/demo-pictures/trends.png binary-media sha256:8ed386b1ba4649eaea2aa3159f256df4ce25afb83c907e7c41c66a52cb42d98a
+docs/screenshots/project-map.webp binary-media sha256:d49fe76071a983d004930b7272d7495a3a52c16bce2763cb4b3881bce21d5ef1
+docs/screenshots/plan.webp binary-media sha256:a8aaf4bccee267d7472a9019d714cd1c198a366258c9d4646937b0fce4689aa2

@@ -14,13 +14,18 @@
 // - A project told as a sequence (#443, ADR 0322): kinds phase and step, drawn in a line in the saved order; par on a
 //   step that goes together with the one before; layout on the map and on a piece (linear | auto); a link of kind
 //   next = the arrow to the following step; proofs and refs on a piece. edit: par, layout, before (its place), next.
+// - How far the project is (ADR 0326): a read ends with one line, «Avanzamento: 3 di 8 passi (38%)…», the count the
+//   map shows the user (shared/project-map-progress.ts), on the maps that tell a plan.
 // Used by wiring-shared.ts (chat tools) and appctl/tools.ts (the Orchestrator's); pinned by test/unit/projectmap-tools.test.ts.
 import type { EventMap } from '@shared/contract';
-import { EDIT_OPS, MAP_ACTORS, MAP_KINDS, MAP_LAYOUTS, MAP_LIMITS, MAP_STATES, elementText, mapText, type ProjectMap } from '@shared/project-map';
+import { EDIT_OPS, MAP_ACTORS, MAP_KINDS, MAP_LAYOUTS, MAP_LIMITS, MAP_STATES, elementText, mapText, type ProjectMap, type ProjectMapView } from '@shared/project-map';
+import { progressLine } from '@shared/project-map-progress';
 import type { McpTool } from '../mcp/server';
 import type { ProjectMaps } from './service';
 
 const json = (v: unknown) => JSON.stringify(v);
+/** A map as text for a read, closed by how far the project is (ADR 0326): the number the user sees on the map. */
+const readText = (v: ProjectMapView): string => [mapText(v, Date.now()), progressLine(v.map)].filter(Boolean).join('\n');
 const STATES = MAP_STATES.join(' | '), KINDS = MAP_KINDS.join(' | '), ACTORS = MAP_ACTORS.join(' | ');
 
 const ELEMENT = {
@@ -91,7 +96,7 @@ export function chatMapTools(d: ChatMapDeps): McpTool[] {
         if (typeof a.project !== 'string' || !a.project.trim()) return json({ projects: d.maps.list() });
         const v = d.maps.view(projectOf(d.maps, a.project))!;
         if (typeof a.element === 'string' && a.element) return elementText(v.map, a.element, Date.now(), v.changed);
-        return mapText(v, Date.now());
+        return readText(v);
       },
     },
     {
@@ -211,7 +216,7 @@ export function appProjectMapTool(maps: ProjectMaps, emitUi: (cmd: EventMap['ui:
       // open with no project: the maps window as the user left it (or «nessun progetto disegnato» with what to ask)
       if (action === 'open' && !(typeof a.project === 'string' && a.project)) { emitUi({ action: 'maps', value: '' }); return maps.list().length ? 'ok' : 'ok: nessuna mappa ancora, la finestra dice come chiederla'; }
       const project = projectOf(maps, a.project);
-      if (action === 'read') return typeof a.element === 'string' && a.element ? elementText(maps.view(project)!.map, a.element, Date.now(), maps.view(project)!.changed) : mapText(maps.view(project)!, Date.now());
+      if (action === 'read') return typeof a.element === 'string' && a.element ? elementText(maps.view(project)!.map, a.element, Date.now(), maps.view(project)!.changed) : readText(maps.view(project)!);
       if (action === 'open') {
         const el = typeof a.element === 'string' && a.element ? a.element : '';
         if (el && !maps.view(project)!.map.elements.some(e => e.id === el)) throw new Error(`element: no «${el}» in this map`);
