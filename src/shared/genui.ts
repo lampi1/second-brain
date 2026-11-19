@@ -96,7 +96,7 @@ const SCHEMAS: { [K in UiComponent]: V<Extract<UiSpec, { component: K }>['props'
   board: obj({ lanes: arr(obj({ title: str(60), items: arr(obj({ title: str(160) }, { detail: str(300), status, links: arr(link, 4) }), 50) }, { status }), 8, 1) }, {}),
   diffList: obj({ groups: arr(obj({ area: str(80), files: arr(obj({ path: str(300) }, { why: str(200), added: count, removed: count, href }), 100, 1) }, {}), 20, 1) }, {}),
   barChart: obj({ bars: arr(obj({ label: str(60), value: num }, { note: str(80) }), 40, 1) }, { unit: str(12) }),
-  // done is optional (ADR 0326: a question asked before any work has nothing done to list); absent = []
+  // done is optional (ADR 0327: a question asked before any work has nothing done to list); absent = []
   brief: (v, at) => { const b = BRIEF(v, at); return { ...b, done: b.done ?? [] }; },
 };
 const BRIEF = obj({ ifYes: str(200), ifNo: str(200) }, {

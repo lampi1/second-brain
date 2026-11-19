@@ -120,7 +120,7 @@ describe('brief: a question\'s context (ADR 0150)', () => {
     expect(text).toContain('- Ho corretto il bottone');
     expect(text).toContain('[OK] 42/42 test');
     expect(text).toContain('**Se Sì:** Faccio il merge');
-    // ADR 0326: a question needs what each choice does; «Cosa ho fatto» only when there is something to tell
+    // ADR 0327: a question needs what each choice does; «Cosa ho fatto» only when there is something to tell
     const bare = checkUi('brief', { ifYes: 'Faccio il merge', ifNo: 'Resta sul branch', why: 'Così la correzione arriva a tutti' });
     expect(bare.ok && bare.spec.component === 'brief' && bare.spec.props.done).toEqual([]);
     if (bare.ok) expect(describeUi(bare.spec)).toBe('Se Sì: Faccio il merge · Se No: Resta sul branch');

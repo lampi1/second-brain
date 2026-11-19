@@ -1,4 +1,4 @@
-// One question, one row, one answer (ADR 0326), in the ChatManager: the user's own words reach the chat with the app's
+// One question, one row, one answer (ADR 0327), in the ChatManager: the user's own words reach the chat with the app's
 // note; the same question asked again before the chat replied to them is answered by the app and never shown; the Orchestrator
 // never shows as its own a question a work chat has open; a message that asks about a question is never passed to the
 // work chat as its answer. A fake engine, temp folders only.

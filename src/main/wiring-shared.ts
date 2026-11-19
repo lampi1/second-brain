@@ -144,7 +144,7 @@ export function attachRunResults(ctx: Pick<Ctx, 'emitter'>, chats: Pick<ChatServ
     const open = chats.pending().filter(p => p.chatId === chatId);
     const q = open[0];
     if (open.length !== 1 || !q || !isNativeQuestion(q) || q.questions?.length !== 1 || !isYesNo(q.questions[0]!)) return false;
-    await chats.answer(chatId, q.id, { kind: 'question', answers: { [q.questions[0]!.question]: text } }, 'pc', true); // the run's result, not his words (ADR 0326)
+    await chats.answer(chatId, q.id, { kind: 'question', answers: { [q.questions[0]!.question]: text } }, 'pc', true); // the run's result, not his words (ADR 0327)
     return true;
   };
   const results = new RunResults({ send: (chatId, text) => chats.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }), enabled: on, list: () => chats.list(), ...(groupMs ? { groupMs } : {}),

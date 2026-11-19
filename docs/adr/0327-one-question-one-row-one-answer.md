@@ -1,4 +1,4 @@
-# ADR 0326 · One question, one row, one answer
+# ADR 0327 · One question, one row, one answer
 
 Date: 2026-11-19 · Status: accepted (owner, 2026-11-19: «vorrei che gestissi in maniera nettamente migliore la UI delle
 domande, il rischio di doppioni o di domande in coda: voglio logica semplice chiara che non crei mai casini» · «le

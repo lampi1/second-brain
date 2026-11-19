@@ -249,7 +249,7 @@
    long chat the card is never the one that gives way (the owner 2026-11-13: «tagliatissime illeggibili»). */
 .oasks:has(.oask.open) { max-height: none; flex: 0 1 auto; min-height: 160px; }
 .orchestrator-tile:has(.oask.open) > .items-wrap { flex: 0 9999 auto; min-height: 72px; }
-/* one page, one scroll (ADR 0326; the owner 2026-11-19: «le domande se espanse siano veramente leggibili per intero»):
+/* one page, one scroll (ADR 0327; the owner 2026-11-19: «le domande se espanse siano veramente leggibili per intero»):
    the question, why, the two roads with their buttons, then the details. Nothing is pinned over the text and no part
    scrolls in a box of its own: the rows' own scroll reads the card from its first line to its last. */
 .oask-card .dc-actions { margin: 0; padding: 0; }

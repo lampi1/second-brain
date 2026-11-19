@@ -101,7 +101,7 @@ describe('askContext of a second question in the same turn (the user, 2026-10-13
     expect(askContext(items, other).again).toBeUndefined();
     expect(askContext([user('u'), think('t', 'x')], again()).again).toBeUndefined();
   });
-  it('an ask the app answered for him is not what he said: his words are the ones its note quotes (ADR 0326)', () => {
+  it('an ask the app answered for him is not what he said: his words are the ones its note quotes (ADR 0327)', () => {
     const byApp = (note: string) => [user('u', '/explain'), answered,
       { ...tool('t-toolu_1b', 'AskUserQuestion', pezzo), output: `The user answered: "Il pezzo 1 ti è chiaro?"="${note}". Read the answers carefully` } as ChatItem,
       think('th2', 'Solo su questo PC'), { ...tool('t-toolu_2', 'AskUserQuestion', pezzo), status: 'running' } as ChatItem];

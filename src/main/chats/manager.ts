@@ -359,7 +359,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     // the user (or the owner of its work) writes to it: a Sì that waited for its command's run is over, the worker goes
     // on with this message (#371); the app's own deliveries (a run's result) leave the wait
     if (!appText && !resumed && source?.kind !== 'app') this.dropAwaitingRun(chatId);
-    // a new message for the chat (never the app's own notes): the question he answered in words may be asked again (ADR 0326)
+    // a new message for the chat (never the app's own notes): the question he answered in words may be asked again (ADR 0327)
     // (the Orchestrator: only the user's own message; mail from a chat is not his reply)
     if (!appText && !resumed && source?.kind !== 'app' && (!r.s.isOrchestrator || (from === undefined && ownerSource(source)))) this.newMessageFor(r);
     // the user's ✕ cancelled it (or its tree): only the user's own message reopens it, never an agent, mail or the app

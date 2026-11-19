@@ -1,4 +1,4 @@
-// One question, one row, one answer (ADR 0326; the owner, 2026-11-19: «il rischio di doppioni o di domande in coda,
+// One question, one row, one answer (ADR 0327; the owner, 2026-11-19: «il rischio di doppioni o di domande in coda,
 // voglio logica semplice chiara che non crei mai casini» · «quando rispondo … chiedendo spiegazioni mi risponde con
 // un'altra domanda uguale senza realmente spiegarmi»). The pure rules behind it:
 // - sameAsk: two question texts ask the same thing (the same words, in another order or with a few added; one word

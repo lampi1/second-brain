@@ -11,7 +11,7 @@
 // plain sentence of context (`why`, else the agent's own lead), a before → after when there is one (`change`), the
 // evidence with what was done as numbered steps (no green ticks), and the two answers as roads: «Se Sì» / «Se No», what
 // happens next in numbered steps (`yesSteps` / `noSteps`, else ifYes / ifNo), the button at the bottom of each road
-// saying the action («Sì, faccio il commit»). In the Orchestrator's column (`actionsFirst`, ADR 0326) the roads come
+// saying the action («Sì, faccio il commit»). In the Orchestrator's column (`actionsFirst`, ADR 0327) the roads come
 // right after the question and its why, the evidence after them, and the card scrolls as one page: nothing pinned.
 // Opened in the Orchestrator's column (WriteViaOrchestrator), the card has no box of its own: the user writes to the
 // Orchestrator, which passes his words on when they answer it (lib/write-via-orchestrator.ts, ADR 0274).
@@ -62,7 +62,7 @@ export interface DecisionProps {
   /** under the answers (a turn's commands) */
   footer?: ReactNode;
   /** the answers right under the question and its context, the evidence after them (the Orchestrator's column, ADR
-   *  0326): the decision reads top to bottom with no scrolling, the details are below for who wants them */
+   *  0327): the decision reads top to bottom with no scrolling, the details are below for who wants them */
   actionsFirst?: boolean;
   /** voice mode (ADR 0152): who asks, said before the question («Lo Scout ti chiede una cosa»), and what it did (a
    *  brief's ✓ lines); the same request shown twice shares `voiceId` so it is read once */

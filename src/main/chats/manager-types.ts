@@ -33,7 +33,7 @@ export interface ChatManagerOptions {
   /** the engine's own Sì / No labels this chat's waiting brief declares (genui/artifacts.ts briefOptions, #378) */
   briefOptions?: (chatId: string) => OptionMap | null;
   /** the Orchestrator's next Sì/No panel carries a relayed question (chats/relay.ts panelArmed, #425): the one case in
-   *  which it may ask a work chat's open question as its own (ADR 0326) */
+   *  which it may ask a work chat's open question as its own (ADR 0327) */
   relayPanel?: (chatId: string) => boolean;
   /** the roles in a few lines, for the Orchestrator's first message of a session (agents/discovery.ts roleCatalogBrief) */
   roleCatalogBrief?: () => string;
@@ -325,10 +325,10 @@ export interface Rec {
   costTotalUsd: number;
   items: ChatItem[];
   pending: Map<string, PendingRequest>;
-  /** the question the user last answered in his own words (shared/ask-once.ts, ADR 0326): asked again before the chat
+  /** the question the user last answered in his own words (shared/ask-once.ts, ADR 0327): asked again before the chat
    *  replied, worked or ended its turn, the app answers it (at most ASK_AGAIN_MAX times in a row) and no second row shows */
   wordsAnswer?: { asked: string; words: string; again: number; replied: number };
-  /** the work chat's open question the Orchestrator asked as its own, and how many times it was told so (ADR 0326) */
+  /** the work chat's open question the Orchestrator asked as its own, and how many times it was told so (ADR 0327) */
   ownCopy?: { of: string; again: number };
   /** the same question asked again while its first copy is open, by that copy's id: never shown, it takes the first's answer (#379) */
   twins?: Map<string, Omit<PendingRequest, 'chatId'>[]>;

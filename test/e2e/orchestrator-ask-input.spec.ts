@@ -5,7 +5,7 @@
 // (the user writes to the Orchestrator, ADR 0274), its ✕ is «Ci penso dopo», and what he writes to the Orchestrator
 // answers the Orchestrator's own question. A short question (the owner 2026-11-18, a screenshot: half the column an
 // empty panel, the chat a strip) is as tall as what it says and the chat keeps the rest. Frozen demo; screenshots in
-// test-results/shots/orchestrator-ask-input-*.png, orchestrator-asks-*.png. ADR 0326 (the owner 2026-11-19: «le domande
+// test-results/shots/orchestrator-ask-input-*.png, orchestrator-asks-*.png. ADR 0327 (the owner 2026-11-19: «le domande
 // se espanse siano veramente leggibili per intero»): the open card says each thing once, why first, answers before the
 // details.
 import { expect, test } from '@playwright/test';
@@ -108,7 +108,7 @@ test('a short open question is as tall as what it says: no empty panel under it,
     if (!(await page.getByTestId('qwin').count())) await row.getByTestId('orchestrator-ask-toggle').click();
     await expect(page.getByTestId('qwin-card-opt-1')).toBeInViewport({ ratio: 1 });
     await shot(page, 'orchestrator-asks-short-open');
-    // ADR 0326, one question, one text: the brief is drawn once (in the card, not also in the chat above), no box that
+    // ADR 0327, one question, one text: the brief is drawn once (in the card, not also in the chat above), no box that
     // repeats the chat's last message, why first, the answers before «Cosa ho fatto»
     await expect(page.locator('.orchestrator-tile').getByText('Analisi di 25 run e 39 fermate')).toHaveCount(1);
     await expect(page.getByTestId('qwin').getByText('Messaggio della chat')).toHaveCount(0);

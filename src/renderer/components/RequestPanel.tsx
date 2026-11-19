@@ -50,7 +50,7 @@ import { BriefEvidence, DecisionCard } from './DecisionCard';
 import { AskArtifacts, openFile } from './GenUi';
 import { AgentAvatar } from './AgentAvatar';
 
-/** a brief with something to show beside its roads (done is optional, ADR 0326) */
+/** a brief with something to show beside its roads (done is optional, ADR 0327) */
 const briefHasEvidence = (b: UiBrief): boolean => !!(b.done.length || b.checks?.length || b.images?.length || b.files?.length);
 
 /** plain = a question alone, inside a host card that already says who asks (a Strategist's plan card, StrategyPanel.tsx) */
@@ -304,7 +304,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
           {total > 1 && <span className="wq-step" data-testid={`${testBase}-step`}>{draft.step + 1} {t('genui.request.of')} {total}</span>}
           {q?.multiSelect && <span className="wq-step">{t('genui.request.multiple')}</span>}
         </div>
-        {/* the question, its answers, then the context (ADR 0326): the choice is in sight before the long text */}
+        {/* the question, its answers, then the context (ADR 0327): the choice is in sight before the long text */}
         <AskContext req={req} defaultOpen testBase={testBase} layout="window" lead={split?.lead}
           question={<h2 className="wq-q" data-testid={isPerm ? `${testBase}-explain` : `${testBase}-q`}>{split?.ask ?? title}</h2>}
           answers={isPerm ? (
@@ -480,7 +480,7 @@ const AskDecision = forwardRef<HTMLDivElement, {
   const chat = useApp(s => s.chats[p.req.chatId]);
   const brief = useMemo(() => (items ?? []).filter((i): i is Art => i.kind === 'artifact' && i.askId === p.req.id && i.ui.component === 'brief').pop(), [items, p.req.id]);
   const b = brief?.ui.component === 'brief' ? brief.ui.props as UiBrief : null;
-  // the Orchestrator's own question with its brief (ADR 0326): its message is the chat right above the card, never
+  // the Orchestrator's own question with its brief (ADR 0327): its message is the chat right above the card, never
   // repeated inside it; a work chat's message stays (the user never opens that chat)
   const ownAbove = p.inWindow && !!chat?.isOrchestrator && !!b;
   const message = p.context && !ownAbove ? <AskContext key={b ? 'brief' : 'none'} req={p.req} defaultOpen={p.ctxOpen} testBase={p.testBase} noVisuals thinking={p.ctxOpen ? 'none' : 'last'} label={t('genui.decision.chatText')} /> : null;

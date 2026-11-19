@@ -88,7 +88,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     }
   }
 
-  /** The user's own words answered a question (ADR 0326): the chat reads them with the app's note and the question is
+  /** The user's own words answered a question (ADR 0327): the chat reads them with the app's note and the question is
    *  remembered until the chat replies, works or ends its turn, so the same one asked again at once is answered here,
    *  never shown twice. byApp: the text is the app's (a run's result), not his words. */
   private toldInWords(r: Rec, req: Omit<PendingRequest, 'chatId'>, answer: Answer, byApp = false): Answer {
@@ -98,7 +98,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     return withWordsNote(req, answer);
   }
 
-  /** One question, one row (ADR 0326). True = answered here, the user never sees it:
+  /** One question, one row (ADR 0327). True = answered here, the user never sees it:
    *  - the question he just answered in his own words, asked again at once: before the chat replied to them, worked or
    *    ended its turn (afterWords). The chat is told to answer what he wrote, ASK_AGAIN_MAX times in a row, then it
    *    shows as it is; after a reply of EXPLAINED characters it is a row again, with that reply;
@@ -275,7 +275,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       choice = req.questions.map(q => { const v = answer.answers[q.question]!; return Array.isArray(v) ? v.join(', ') : v; }).join(' · ');
       // a Sì to «did you run it?» with no run since the question carries the NOT_RAN note, as the user's own does (#372)
       given = this.opts.runs ? backedAnswer(req, answer, this.opts.runs(chatId)) : answer;
-      // the Orchestrator's own words for him: the chat acts on them and never asks the same again (ADR 0326)
+      // the Orchestrator's own words for him: the chat acts on them and never asks the same again (ADR 0327)
       if (given === answer && !(r.s.plan && isNativeQuestion(req))) given = this.toldInWords(r, req, answer);
     }
     const said = () => {
@@ -304,7 +304,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     if (r.s.isOrchestrator || !answerableInWords(req)) throw new Error('bloccato: le sue parole rispondono solo alla domanda di una chat di lavoro (non a un permesso, un comando, un modulo o una tua domanda)');
     const said = this.openOrchestrator()?.userSaid;
     if (!said || said.at < req.at || !sameWords(said.text, words)) throw new Error('bloccato: words deve essere copiato dal suo ultimo messaggio, scritto dopo la domanda; se non risponde a questa domanda lasciala aperta');
-    // he asks about the question: the Orchestrator explains, the work chat (which he never reads) is not asked (ADR 0326)
+    // he asks about the question: the Orchestrator explains, the work chat (which he never reads) is not asked (ADR 0327)
     if (asksToExplain(said.text)) throw new Error(EXPLAIN_HERE);
     if (!r.session) { this.dropPending(r, requestId); throw new Error('La chat non è più attiva: la richiesta è scaduta.'); }
     if (this.answering.get(r)?.has(requestId)) throw new Error('Request already answered; delivery is still pending.');
@@ -354,7 +354,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       // a Yes on «hai eseguito il comando?» that no run of this chat backs reaches it with the app's note (#372)
       const backed = this.opts.runs ? backedAnswer(req, answer, this.opts.runs(chatId)) : answer;
       if (backed !== answer) log.info('chats', 'a Yes on «did you run it?» with no run behind it: told to the chat', { chat: chatId, data: { requestId } });
-      // his own words: the chat reads them with the app's note and may not ask the same question again (ADR 0326)
+      // his own words: the chat reads them with the app's note and may not ask the same question again (ADR 0327)
       const told = backed === answer ? this.toldInWords(r, req, answer, byApp) : backed;
       ok = await this.deliverAnswer(r, req, told, { kind: 'user', channel: by });
       // its twins take the same answer before it leaves, so its resolution never shows them (#379)

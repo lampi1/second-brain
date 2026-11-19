@@ -1,4 +1,4 @@
-// One question, one row, one answer (ADR 0326): the pure rules of shared/ask-once.ts. The same question in other
+// One question, one row, one answer (ADR 0327): the pure rules of shared/ask-once.ts. The same question in other
 // words, the user's own words told apart from an option he picked, the app's note after them and off again for the
 // screen, and a message that asks about a question instead of deciding it.
 import { describe, expect, it } from 'vitest';

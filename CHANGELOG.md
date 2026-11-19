@@ -107,7 +107,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   come back; a re-ask without that reply never becomes a row. The Orchestrator explains a work chat's question itself
   and never asks it again as its own. The open card says
   each thing once, in reading order (question, why, the two roads, then the details), scrolls as one page, and a
-  brief no longer needs «Cosa ho fatto» (ADR 0326).
+  brief no longer needs «Cosa ho fatto» (ADR 0327).
 - Memory › Artifacts is lighter: it shows the newest twenty and «Mostra altri» loads twenty more, the card pictures
   are smaller, and a daily cleanup takes out pictures older than 30 days that were not kept with the card's star (the
   app's own screenshots in `<userData>/evidence` are deleted; pictures in the brain or a project stay on disk and are
