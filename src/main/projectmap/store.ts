@@ -32,6 +32,7 @@ export function asMap(v: unknown, project: string): ProjectMap | null {
     // #443: a layout the drawing knows, a real «together», proofs and links held to their shape and limits
     if (!isMapLayout(x.layout)) delete x.layout;
     if (x.par !== true) delete x.par;
+    delete x.busy; // the live view's own mark (#456), never a saved one
     const proofs = Array.isArray(x.proofs) ? x.proofs.filter(f => obj(f) && str(f.text) && f.text).map(f => ({ text: (f.text as string).slice(0, MAP_LIMITS.proof), ...(str(f.file) && inside(f.file) ? { file: f.file.slice(0, MAP_LIMITS.path) } : {}), ...(isMapHref(f.href) ? { href: f.href } : {}) })).slice(0, MAP_LIMITS.proofs) : [];
     if (proofs.length) x.proofs = proofs; else delete x.proofs;
     const refs = Array.isArray(x.refs) ? x.refs.filter(f => obj(f) && str(f.label) && f.label && isMapHref(f.href)).map(f => ({ label: (f.label as string).slice(0, MAP_LIMITS.label), href: f.href as string })).slice(0, MAP_LIMITS.refs) : [];

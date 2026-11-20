@@ -562,3 +562,7 @@ docs/screenshots/plan.webp binary-media sha256:a8aaf4bccee267d7472a9019d714cd1c1
 # README screenshot regenerated for ADR 0328 (Memory › Artifacts as one list of what the user asked for): frozen demo data
 # only, looked at 2026-11-19.
 docs/screenshots/artifacts.webp binary-media sha256:8c7666e682cc902b50b737ef84317791266442e4e5737dbac60e3a8bb90249aa
+# README screenshots regenerated for ADR 0330 (a box says what its pieces say: «Negozio web» reads blocked with «You»):
+# frozen demo data only, looked at 2026-11-20.
+docs/screenshots/project-map.webp binary-media sha256:69f69d2a54035ff1294c8dd9d57ee53a66cddef4c65f9853da741a2e43a95f40
+docs/screenshots/plan.webp binary-media sha256:867ce48ff0ffc8f266204293b42992f9ef4fcf01bbc7924c138c02d9ced54164

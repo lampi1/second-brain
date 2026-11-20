@@ -8,7 +8,9 @@
 // - The groups: the top-level pieces (the phases), each with its own count. When they come one after the other (a
 //   level drawn as a line, phases and steps in their saved order, or boxes chained by their links from the first to
 //   the last) the map also says where the project is (the first phase not closed) and what comes next.
-// - What stops it: the pieces and links that are blocked, the ones that wait for the user first.
+// - What stops it: the pieces and links that are blocked, the ones that wait for the user first. Only the pieces with
+//   nothing inside are read (#456, ADR 0330): a box that holds pieces says what they say together, never its own
+//   saved status (project-map-status.ts).
 // - Which maps have a progress (progressOf): the ones told as phases and steps, and the ones whose top-level pieces are
 //   chained in order with something still to do. Any other map is a picture of how things are, not a plan: there the
 //   progress shown is the one of the Strategist's plan drawn on it. countOf counts any level (a phase's own bar).
@@ -123,14 +125,14 @@ export function countOf(map: Tree, root: string | null = null, working: Readonly
   // under way in a group: its pieces, and a box with pieces inside that somebody works on while none of its pieces is
   // under way yet (an agent bound to the phase, not to a step)
   const nowOf = (g: { e: MapElement; units: MapElement[] }): MapElement[] => [
-    ...holdersOf(g.e).filter(h => { if (!working.has(h.id) || h.status === 'blocked') return false; const ls = leaves(h); return !ls.every(isDone) && !ls.some(isNow); }),
+    ...holdersOf(g.e).filter(h => { if (!working.has(h.id)) return false; const ls = leaves(h); return !ls.every(isDone) && !ls.some(isNow) && !ls.some(u => u.status === 'blocked'); }),
     ...g.units.filter(isNow),
   ];
   const stateOf = (g: { e: MapElement; units: MapElement[] }): ProgressState => {
     const d = g.units.filter(isDone).length;
     if (d === g.units.length) return 'done';
-    if (g.e.status === 'blocked' || g.units.some(u => u.status === 'blocked')) return 'blocked';
-    return d > 0 || g.e.status === 'work' || nowOf(g).length > 0 ? 'now' : 'todo';
+    if (g.units.some(u => u.status === 'blocked')) return 'blocked';
+    return d > 0 || nowOf(g).length > 0 ? 'now' : 'todo';
   };
   const list = groups.map(g => { const d = g.units.filter(isDone).length; return { id: g.e.id, name: g.e.name, done: d, total: g.units.length, pct: pctOf(d, g.units.length), state: stateOf(g) }; });
   const ordered = !!ordered0 && top.length > 1;
@@ -141,7 +143,8 @@ export function countOf(map: Tree, root: string | null = null, working: Readonly
   const walk = (id: string) => { for (const k of kidsOf(id)) if (!under.has(k.id)) { under.add(k.id); walk(k.id); } };
   for (const e of map.elements.filter(x => (x.parent ?? null) === root)) { under.add(e.id); walk(e.id); }
   const holder = (e: MapElement): MapElement => { let cur = e; for (let n = 0; n < 50 && cur.parent && cur.parent !== lvl && cur.parent !== root; n++) { const p = map.elements.find(x => x.id === cur.parent); if (!p) break; cur = p; } return cur; };
-  const stuckEls = map.elements.filter(e => under.has(e.id) && e.status === 'blocked');
+  // the stuck pieces themselves, not the boxes that hold them
+  const stuckEls = map.elements.filter(e => under.has(e.id) && e.status === 'blocked' && !kidsOf(e.id).length);
   const stuckLinks: MapLink[] = root === null ? map.links.filter(l => l.status === 'blocked' && l.kind !== 'next') : [];
   const linkItem = (l: MapLink): ProgressItem => ({ id: l.id, name: l.label || `${l.from} → ${l.to}`, ...(l.note ? { note: l.note } : {}), link: true });
   return {

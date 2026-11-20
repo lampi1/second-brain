@@ -266,12 +266,12 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0268](0268-brief-maps-engine-labels-to-yes-no.md) A brief maps an engine's own option labels to Sì / No — accepted
 - [0269](0269-questions-live-in-the-orchestrator.md) Questions live in the Orchestrator; it speaks for the user — accepted
 - [0270](0270-short-recap-by-default.md) The recap is short by default; the detail on request — accepted
-- [0271](0271-project-maps.md) Project maps: a project drawn in place of its code, kept current by its agents — accepted; amended by 0316, 0322
+- [0271](0271-project-maps.md) Project maps: a project drawn in place of its code, kept current by its agents — accepted; amended by 0316, 0322, 0330
 - [0272](0272-esegui-precheck.md) Esegui commands are checked before the user sees them — accepted
 - [0273](0273-mcp-oauth-login.md) Remote MCP connectors log in with the MCP OAuth flow — accepted
 - [0274](0274-answers-in-the-users-words.md) The user answers in his own words; the Orchestrator's column has no answer box — accepted
 - [0275](0275-orchestrator-counts-as-the-user.md) What the Orchestrator says counts as the user's own, always; the project maps take «Stato»'s place — accepted
-- [0276](0276-planning-on-the-project-maps.md) Planning on the project maps: the Strategist proposes a map, the app keeps it live — accepted; amended by 0326
+- [0276](0276-planning-on-the-project-maps.md) Planning on the project maps: the Strategist proposes a map, the app keeps it live — accepted; amended by 0326, 0330
 - [0277](0277-brain-documents-in-the-brain-rules-skill.md) The brain tools find the brain's own documents at the root or in the `brain-rules` skill — accepted
 - [0278](0278-roles-use-any-installed-skill.md) A role may use any installed skill, and looking never asks — accepted
 - [0279](0279-onboarding-in-three-moments.md) Onboarding in three moments: language and name, your AI, the first real request — accepted
@@ -316,14 +316,15 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0319](0319-artifacts-in-memoria.md) Artifacts in Memoria: every file the chats produce, indexed where it is — accepted, partly superseded by 0328; amended by 0323
 - [0320](0320-maintenance-fixes-one-line-of-an-always-loaded-file.md) The maintenance fixes one line of an always-loaded file — accepted
 - [0321](0321-a-routine-step-can-leave-the-login-page-unsigned.md) A routine step can leave the login page as it is (`relogin: false`); the routine runtime of feat/routine-park is on main — accepted
-- [0322](0322-project-maps-told-as-a-line-of-phases.md) Project maps told as a line of phases and steps, with a richer and wider panel — accepted; amended by 0326
+- [0322](0322-project-maps-told-as-a-line-of-phases.md) Project maps told as a line of phases and steps, with a richer and wider panel — accepted; amended by 0326, 0330
 - [0323](0323-artifacts-light-paged-and-cleaned.md) Artifacts: twenty at a time, light pictures, and a daily cleanup of old screenshots — accepted, partly superseded by 0328
 - [0324](0324-retrigger-tags-and-entries-for-routine-packages.md) A routine package can run a work item again: retrigger tags and entries — accepted
 - [0325](0325-routines-leave-the-app.md) Routines leave the app — accepted
-- [0326](0326-maps-tell-how-far-the-project-is.md) The maps tell how far the project is: a percentage, a progress card, the plan in the side panel — accepted
+- [0326](0326-maps-tell-how-far-the-project-is.md) The maps tell how far the project is: a percentage, a progress card, the plan in the side panel — accepted; amended by 0330
 - [0327](0327-one-question-one-row-one-answer.md) One question, one row, one answer: his own words are his answer, the same question only after a reply to them — accepted
 - [0328](0328-artifacts-only-what-the-user-asked-for.md) Artifacts: only what the user asked for, one list, all opened in the app, and a real full screen — accepted
 - [0329](0329-an-open-card-takes-the-orchestrators-field.md) An open card takes what he writes in the Orchestrator's field: his words go straight to that row — accepted
+- [0330](0330-maps-follow-their-chats.md) The maps follow their chats: a box says what its pieces say, a step that is ok is «fatto» — accepted
 
 ## Replaced
 

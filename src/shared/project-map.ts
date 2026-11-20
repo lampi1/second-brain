@@ -24,9 +24,12 @@
 //   carries its proofs (what shows it is done: a text, a file, an address) and its refs (addresses worth opening).
 // Shared by main (projectmap/: store, service, tools) and the renderer (components/project-map/); pure, no I/O.
 // Pinned by test/unit/project-map.test.ts.
-// The boxes and arrows of a level, their sizes and the line of phases and steps live in project-map-line.ts.
+// The boxes and arrows of a level, their sizes and the line of phases and steps live in project-map-line.ts; what each
+// piece shows as its status (its own, or what the pieces inside it say together: #456) in project-map-status.ts.
 import { BOX, ROW_MAX, lineOf, type Level, type LevelEdge, type LevelNode } from './project-map-line';
+import { LABEL_IT, shownStatus, stateLabel, statusesOf } from './project-map-status';
 export { BOX, LINE_MAX, ROW_MAX, type Level, type LevelEdge, type LevelNode } from './project-map-line';
+export { LABEL_IT, STALE_MS, shownStatus } from './project-map-status';
 
 export const MAP_KINDS = ['person', 'system', 'external', 'env', 'doc', 'part', 'phase', 'step'] as const;
 export type MapKind = (typeof MAP_KINDS)[number];
@@ -79,6 +82,9 @@ export interface MapElement {
   proofs?: MapProof[];
   /** addresses worth opening about it: an issue, a pull request, a document */
   refs?: MapRef[];
+  /** on the live view only, never saved (#456): somebody works on this box itself right now (a chat linked to it, a
+   *  plan's step on it), so a box with pieces inside reads under way whatever they say, unless one of them is stuck */
+  busy?: true;
 }
 /** A proof of a piece (#443): what it shows in a line, and maybe the project file or the address that holds it. */
 export interface MapProof { text: string; file?: string; href?: string }
@@ -166,9 +172,6 @@ export interface ProjectMapView {
 /** a piece added to a drawing reads «nuovo» this long */
 export const NEW_MS = 3600_000;
 
-/** A status nobody confirmed for this long reads «da verificare» (work and blocked only: a done part stays done
- *  unless its files change). */
-export const STALE_MS = 2 * 3600_000;
 export const MAP_LIMITS = { elements: 200, links: 400, name: 80, description: 300, details: 1500, linkDetails: 800, note: 200, label: 80, evidence: 20, path: 300, corrections: 30, correction: 300, summary: 300, title: 80,
   /** levels of pieces under a top-level system (ADR 0316): system › part › piece › … */
   depth: 4,
@@ -502,22 +505,11 @@ export function applyEdit(map: ProjectMap, ops: unknown, now: number, plan?: str
     if (o.par !== undefined) { if (o.par === true) el.par = true; else delete el.par; }
     if (o.layout !== undefined) el.layout = o.layout === '' ? null : o.layout;
     place(el.id, o.before, key);
-    did.push(`~ ${String(el.name)}${isMapState(o.status) ? `: ${LABEL_IT[o.status]}` : ''}`);
+    did.push(`~ ${String(el.name)}${isMapState(o.status) ? `: ${stateLabel(o.status, String(el.kind))}` : ''}`);
   });
   const out = checkMap({ elements: els, links }, now, map);
   const elements = out.elements.map(e => (added.includes(e.id) ? { ...e, addedAt: now, ...(plan ? { plan } : {}) } : e.status !== 'planned' && e.plan ? (({ plan: _p, ...rest }) => rest)(e) : e));
   return { elements, links: out.links, did, added };
-}
-
-/** What the drawing shows for an element or a link: its status, or «unknown» when nobody confirmed a work/blocked
- *  status lately, or its files changed after it was confirmed. `stale` = it fell to unknown that way. */
-export function shownStatus(x: { status: MapState; confirmedAt: number }, now: number, changedAt?: number): { status: MapState; stale: boolean } {
-  if (x.status === 'unknown') return { status: 'unknown', stale: false };
-  // a planned piece has nothing to verify yet
-  if (x.status === 'planned') return { status: 'planned', stale: false };
-  if (changedAt !== undefined && changedAt > x.confirmedAt) return { status: 'unknown', stale: true };
-  if ((x.status === 'work' || x.status === 'blocked') && now - x.confirmedAt > STALE_MS) return { status: 'unknown', stale: true };
-  return { status: x.status, stale: false };
 }
 
 /** The element whose evidence covers a file (the longest match wins), for the edits of an agent. `file` relative to the root. */
@@ -663,12 +655,15 @@ const goesWith = (map: Pick<ProjectMap, 'elements' | 'layout'>, e: MapElement): 
  *  with its status, then the links, then what waits for the user. */
 export function mapText(v: Pick<ProjectMapView, 'map' | 'agents' | 'changed'> & Partial<Pick<ProjectMapView, 'works' | 'plans'>>, now: number): string {
   const { map } = v;
+  // a box with pieces inside tells what they say together (#456); «fatto» on a phase or a step, «funziona» elsewhere
+  const shown = statusesOf(map, now, v.changed);
+  const stEl = (e: MapElement) => { const s = shown.get(e.id)!; return stateLabel(s.stale ? 'stale' : s.status, e.kind); };
   const st = (x: { status: MapState; confirmedAt: number }, id: string) => { const s = shownStatus(x, now, v.changed[id]); return s.stale ? 'da verificare' : LABEL_IT[s.status]; };
   const MARK = { todo: '○', now: '●', done: '✓', blocked: '✕' } as const;
   const works = (id: string) => { const w = v.works?.[id]; return w?.length ? ` · lavori: ${w.map(x => `${MARK[x.state]} ${x.title}`).join('; ')}` : ''; };
   const plans = (v.plans ?? []).map(p => `- «${p.title}» (chatId ${p.chatId}): ${p.phase === 'proposed' ? 'aspetta «Approva e parti»' : p.phase === 'revising' ? 'in revisione' : p.phase === 'done' ? 'finito' : 'in corso'}, ${p.done}/${p.steps} passi`);
   const who = (id: string) => v.agents.filter(a => a.elements.includes(id)).map(a => `${a.title} (${a.mark})`).join(', ');
-  const row = (e: MapElement, depth: number) => `${'  '.repeat(depth)}- ${e.id} · ${e.kind} · ${e.name}${goesWith(map, e) ? ' (insieme al precedente)' : ''} — ${st(e, e.id)}${e.note ? `: ${e.note}` : ''}${e.actor === 'user' && e.status === 'blocked' ? ' [tocca all\'utente]' : ''}${who(e.id) ? ` · agenti: ${who(e.id)}` : ''}${works(e.id)}${map.elements.some(x => x.parent === e.id) ? line(e.id) : ''}`;
+  const row = (e: MapElement, depth: number) => `${'  '.repeat(depth)}- ${e.id} · ${e.kind} · ${e.name}${goesWith(map, e) ? ' (insieme al precedente)' : ''} — ${stEl(e)}${e.note ? `: ${e.note}` : ''}${shown.get(e.id)!.status === 'blocked' && shown.get(e.id)!.actor === 'user' ? ' [tocca all\'utente]' : ''}${who(e.id) ? ` · agenti: ${who(e.id)}` : ''}${works(e.id)}${map.elements.some(x => x.parent === e.id) ? line(e.id) : ''}`;
   const tree = (parent: string | undefined, depth: number): string[] => map.elements.filter(e => e.parent === parent).flatMap(e => [row(e, depth), ...tree(e.id, depth + 1)]);
   const links = map.links.map(l => (l.kind === 'next' ? `- ${l.id}: ${l.from} → ${l.to} (passo successivo${l.label ? `: «${l.label}»` : ''})${l.note ? `: ${l.note}` : ''}`
     : `- ${l.id}: ${l.from} → ${l.to} «${l.label}» — ${st(l, l.id)}${l.note ? `: ${l.note}` : ''}`));
@@ -690,15 +685,17 @@ export function elementText(map: Pick<ProjectMap, 'elements' | 'links' | 'title'
   const e = map.elements.find(x => x.id === id);
   if (!e) throw new Error(`element: no «${id.slice(0, 48)}» in this map`);
   const name = (x: string) => map.elements.find(y => y.id === x)?.name ?? x;
-  const st = (x: { status: MapState; confirmedAt: number }, key?: string) => { const s = shownStatus(x, now, key ? changed[key] : undefined); return s.stale ? 'da verificare' : LABEL_IT[s.status]; };
+  const shown = statusesOf(map, now, changed);
+  const stEl = (x: MapElement) => { const s = shown.get(x.id)!; return stateLabel(s.stale ? 'stale' : s.status, x.kind); };
+  const st = (x: { status: MapState; confirmedAt: number }) => { const s = shownStatus(x, now); return s.stale ? 'da verificare' : LABEL_IT[s.status]; };
   const link = (l: MapLink, other: string, arrow: string) => `- ${arrow} ${name(other)} (${other}) ${l.kind === 'next' ? `(passo successivo${l.label ? `: «${l.label}»` : ''})` : `«${l.label}» — ${st(l)}`}${l.note ? `: ${l.note}` : ''}${l.details ? `\n  ${l.details.replace(/\n/g, '\n  ')}` : ''}`;
   const p = passagesOf(map, id), out = p.out.map(l => link(l, l.to, '→')), into = p.into.map(l => link(l, l.from, '←'));
   // the steps of a line are told in order, each with its status; the parts of a system as before
   const inLine = layoutOf(map, id) === 'linear';
-  const parts = map.elements.filter(x => x.parent === id).map(x => `- ${x.id} · ${x.name}${inLine ? `${goesWith(map, x) ? ' (insieme al precedente)' : ''} — ${st(x, x.id)}` : ''}${x.description ? `: ${x.description}` : ''}`);
+  const parts = map.elements.filter(x => x.parent === id).map(x => `- ${x.id} · ${x.name}${inLine ? `${goesWith(map, x) ? ' (insieme al precedente)' : ''} — ${stEl(x)}` : ''}${x.description ? `: ${x.description}` : ''}`);
   const list = (head: string, xs: readonly string[] | undefined) => (xs?.length ? [head, ...xs.map(x => `- ${x}`)] : []);
   const inner = descendantsOf(map, id);
-  return [`«${e.name}» (${e.id}, ${e.kind}${e.parent ? `, in ${name(e.parent)}` : ''}) — ${st(e, e.id)}${e.note ? `: ${e.note}` : ''}`,
+  return [`«${e.name}» (${e.id}, ${e.kind}${e.parent ? `, in ${name(e.parent)}` : ''}) — ${stEl(e)}${e.note ? `: ${e.note}` : ''}`,
     ...(e.description ? [e.description] : []), ...(e.details ? ['Come funziona:', e.details] : ['Nessun dettaglio scritto: un ridisegno lo aggiunge.']),
     ...list('Regole:', e.rules), ...list('Cosa tiene e dove:', e.keeps), ...list('Perché è fatto così:', e.why),
     ...list('File chiave:', e.keyFiles?.map(f => `${f.path}: ${f.what}`)),
@@ -707,4 +704,3 @@ export function elementText(map: Pick<ProjectMap, 'elements' | 'links' | 'title'
     ...(out.length || into.length ? ['Collegamenti:', ...out, ...into] : []),
     ...list('Percorsi che passano di qui:', (map.paths ?? []).filter(x => x.stops.some(s => s.on === id || inner.has(s.on))).map(x => `${x.id}: «${x.question}»`))].join('\n');
 }
-export const LABEL_IT: Record<MapState, string> = { ok: 'funziona', work: 'in lavorazione', blocked: 'bloccato', unknown: 'da capire', planned: 'previsto' };

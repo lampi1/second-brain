@@ -63,7 +63,10 @@ export function seedDemoMap(brainRoot: string, maps: ProjectMaps, now: number): 
   v3 = set(v3, 'notifiche', { status: 'work', note: 'SMS doppio quando l\'ordine cambia stato due volte', confirmedAt: now - 3 * H });
   v3 = set(v3, 'notifiche--provider-sms', { status: 'unknown', note: 'risposta lenta del provider in test?', confirmedAt: now - 3 * H });
   let v4: ProjectMap = { ...v3, version: 4, updatedAt: now - 30 * MIN, by: 'Fix totale ordine', summary: 'ordini in lavorazione: sconto sul prezzo pieno' };
+  // a box with pieces inside says what they say together (#456): the piece under way is the discount code, so the
+  // orders part and the shop around it read under way too
   v4 = set(v4, 'ordini', { status: 'work', note: 'Sconto applicato dopo l\'IVA: lo sposto sul prezzo pieno', confirmedAt: now - 30 * MIN });
+  v4 = set(v4, 'sconti', { status: 'work', note: 'Lo sconto va sul prezzo pieno, prima dell\'IVA', confirmedAt: now - 30 * MIN });
   v4 = set(v4, 'negozio', { status: 'work', confirmedAt: now - 30 * MIN });
   let v5: ProjectMap = { ...v4, version: 5, updatedAt: now - 4 * MIN, by: 'QA · Rimborsi', summary: 'rimborsi bloccati: il test case 7 aspetta la tua decisione' };
   v5 = set(v5, 'rimborsi', { status: 'blocked', actor: 'user', note: 'Il test case 7 fallisce anche su master: decidi tu', confirmedAt: now - 4 * MIN });
@@ -126,7 +129,8 @@ export function seedDemoMap(brainRoot: string, maps: ProjectMaps, now: number): 
 }
 
 function bind(maps: ProjectMaps): void {
+  // shown on their pieces, without moving them: the demo's statuses are the ones drawn here (#456)
   for (const [chatId, elements] of [['fix', ['ordini']], ['qa', ['rimborsi']], ['sms', ['notifiche']]] as const) {
-    try { maps.update('alfa-shop', { workingOn: [...elements], chatId, by: 'demo' }); } catch { /* a map edited by hand without that element: no binding */ }
+    try { maps.bind('alfa-shop', chatId, [...elements]); } catch { /* a map edited by hand without that element: no binding */ }
   }
 }

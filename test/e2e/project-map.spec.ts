@@ -335,6 +335,9 @@ test('a map of phases is a line, the steps inside too; the panel tells proofs an
     // the arrows to the next phase say nothing, least of all «da capire»; the only label is on the way back
     await expect(view.locator('.pm-label')).toHaveCount(1);
     await expect(view.getByTestId('pm-label-verifica--preparazione')).toHaveText('se un controllo fallisce');
+    // a phase says what its steps say, and a finished one reads «fatto», not «funziona» (#456, ADR 0330)
+    await expect(view.getByTestId('pm-st-analisi')).toHaveText('fatto');
+    await expect(view.getByTestId('pm-st-preparazione')).toHaveText('in lavorazione');
     await shot(page, 'project-map-phases');
 
     // into a phase: its steps in a line, two together; the panel lists them, each with its status

@@ -74,7 +74,7 @@ import { newsTools, type NewsControl } from './news';
 import { imparaTools, type ImparaControl } from './impara';
 import { childOutputTool } from './child-output';
 import { agentsRecapTool } from './agents-recap';
-import { appProjectMapTool } from '../projectmap/tools';
+import { MAP_LINK_SCHEMA, appProjectMapTool, mapHint, mapLinkOf } from '../projectmap/tools';
 import { userShellName } from '../platform';
 import type { ProjectMaps } from '../projectmap/service';
 import { skillTools } from './skills';
@@ -512,7 +512,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         freshReview: { type: 'boolean', description: 'with reviewOf: open a fresh review chat although one already reported on this work; only when the user asked for it or it reviews a part no review chat covers' },
         kind: str(`optional kind of task: ${TASK_KINDS.join(' | ')}; omitted: read from title and prompt`),
         cwd: str('optional absolute folder (repo or worktree); default: the brain folder'),
-        balanced: BALANCED_ASK_SCHEMA,
+        balanced: BALANCED_ASK_SCHEMA, map: MAP_LINK_SCHEMA,
         userModel: { type: 'object', additionalProperties: false, required: ['model'], description: 'only when the user named the model for this task: that chat runs it, the role\'s card is not changed; engine omitted = the engine whose list has it (agent_catalog with models true)',
           properties: { engine: { type: 'string' }, model: { type: 'string', maxLength: 128 }, effort: { type: 'string', enum: ['low', 'medium', 'high', 'xhigh', 'max'] } } },
       }, ['title']),
@@ -539,6 +539,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         }
         const cwd = typeof a.cwd === 'string' && a.cwd.trim() ? a.cwd.trim() : d.brain.info().brainRoot;
         if (!cwd) throw new Error('nessuna cartella: il brain non è collegato');
+        // the map pieces this work is on (#456): checked before the chat exists, linked once it does
+        const mapLink = mapLinkOf(authed() ? d.projectMaps : undefined, a.map);
         if (a.freshReview !== undefined && typeof a.freshReview !== 'boolean') throw new Error('freshReview: true or false.');
         // one review chat per piece of work (#387, ADR 0309): a second one for work a review chat already reported on is
         // refused, naming the chat that re-reviews the fix delta
@@ -603,6 +605,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
           // the plain /mcp/app mount is open to any local process: its chats run no wider than the Orchestrator
           { boundByOrchestrator: !authed(), ...intake });
         d.balancedMode?.record(choice);
+        if (mapLink) d.projectMaps!.link(mapLink.project, chat.id, mapLink.on);
+        const unlinked = mapLink || !authed() ? undefined : mapHint(d.projectMaps, cwd);
         log.info('appctl', 'agent created a chat', { chat: chat.id, data: { harness, title, model: model || null, effort, route: route.source, kind: route.kind, area: route.area, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } });
         // a skill whose tools the role lacks (issue #93): said now, so the Orchestrator can pick another role or ask the user
         const known = d.skillTools ? new Map(d.skillTools().map(x => [x.name, x.tools])) : null;
@@ -613,7 +617,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const estimate = d.runFeedback ? estimateTask(new SimilarIndex(d.runFeedback.runList(), d.priceOf ?? null), { text: task.estimate, agentId: roleId, model: model || resolved.request.model || null }) : null;
         return { chatId: chat.id, title: chat.title, harness, cwd, model: model || null, effort, ...(warnings.length ? { warnings } : {}), ...(chat.queued ? { status: queuedLine(chat.queued) } : {}),
           ...(estimate ? { estimate: { timeMs: estimate.timeMs, costUsd: estimate.costUsd, n: estimate.n, confidence: estimate.confidence, parts: estimate.parts, path: estimate.path } } : {}), route: { source: route.source, kind: route.kind, area: route.area, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}), ...(route.balanced ? { balanced: route.balanced } : {}) },
-          ...(choice?.suggestedRole ? { suggestedRole: choice.suggestedRole } : {}) };
+          ...(choice?.suggestedRole ? { suggestedRole: choice.suggestedRole } : {}), ...(mapLink ? { map: mapLink } : unlinked ? { map: unlinked } : {}) };
       },
     },
     // Balanced mode's data for the Orchestrator's own pick (ADR 0218): the engines it may start, read locally
@@ -629,6 +633,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         expectedEventSeq: { type: 'integer', minimum: 0, description: 'optional: latestSeq from app_task_events you have read' },
         deliveryPolicy: { type: 'string', enum: ['display', 'notify', 'synthesize'] },
         reviewOf: str('Only for a review chat: the run it reviews now (the implementation chat\'s current run); default: that chat\'s current run'),
+        map: { ...MAP_LINK_SCHEMA, description: `${MAP_LINK_SCHEMA.description} Omitted: the chat stays on the pieces it was linked to.` },
       }, ['chatId', 'mode', 'roleId', 'cwd']),
       run: async a => {
         const orchestrator = caller();
@@ -664,9 +669,11 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (a.expectedEventSeq !== undefined && (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0)) throw new Error('Invalid user event cursor.');
         if (a.deliveryPolicy !== undefined && !['display', 'notify', 'synthesize'].includes(String(a.deliveryPolicy))) throw new Error('Invalid delivery policy.');
         const userInstructions = d.chats.userEvents ? unreadInstructions(d.chats.userEvents(target.id)) : [];
+        const mapLink = mapLinkOf(d.projectMaps, a.map);
         await d.chats.assignTask(target.id, `${voice()}\n\n${delta ? `${DELTA_REVIEW}\n\n` : ''}${prompt}`, { ...(reviewOf ? { reviewOf } : {}), ...intakeOf(a, a.roleId === 'strategist' && a.mode === 'new-task' && !!target.plan), mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: a.expectedVersion === undefined ? target.run?.taskVersion ?? 1 : Number(a.expectedVersion), ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), ...(a.deliveryPolicy ? { deliveryPolicy: a.deliveryPolicy as 'display' | 'notify' | 'synthesize' } : {}), ...(doneWhen ? { doneWhen } : {}), ...(task.contractFields ? { contractFields: task.contractFields } : {}), source: { kind: 'chat', chatId: orchestrator.id } });
+        if (mapLink) d.projectMaps!.link(mapLink.project, target.id, mapLink.on);
         const assigned = d.chats.list().find(c => c.id === target.id);
-        return { chatId: target.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions } : {}), ...(task.warnings.length ? { warnings: task.warnings } : {}) };
+        return { ...(mapLink ? { map: mapLink } : {}), chatId: target.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions } : {}), ...(task.warnings.length ? { warnings: task.warnings } : {}) };
       },
     },
     {

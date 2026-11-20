@@ -16,10 +16,13 @@
 //   next = the arrow to the following step; proofs and refs on a piece. edit: par, layout, before (its place), next.
 // - How far the project is (ADR 0326): a read ends with one line, «Avanzamento: 3 di 8 passi (38%)…», the count the
 //   map shows the user (shared/project-map-progress.ts), on the maps that tell a plan.
+// - The map follows the chats (issue #456, ADR 0330): a chat linked to pieces (working_on by itself; `map` on
+//   app_create_chat / app_assign_task or app_project_map link by the Orchestrator: mapLinkOf, mapHint) moves their
+//   status by itself; a box with pieces inside takes its status from them, whatever status is sent for it.
 // Used by wiring-shared.ts (chat tools) and appctl/tools.ts (the Orchestrator's); pinned by test/unit/projectmap-tools.test.ts.
 import type { EventMap } from '@shared/contract';
 import { EDIT_OPS, MAP_ACTORS, MAP_KINDS, MAP_LAYOUTS, MAP_LIMITS, MAP_STATES, elementText, mapText, type ProjectMap, type ProjectMapView } from '@shared/project-map';
-import { progressLine, workingOf } from '@shared/project-map-progress';
+import { progressLine, progressOf, workingOf } from '@shared/project-map-progress';
 import type { McpTool } from '../mcp/server';
 import type { ProjectMaps } from './service';
 
@@ -45,7 +48,7 @@ const ELEMENT = {
     keeps: { type: 'array', items: { type: 'string' }, description: 'what it keeps and where (a table, a file, a cache), one line each, up to 6' },
     why: { type: 'array', items: { type: 'string' }, description: 'why it is built this way: the decisions behind it (an ADR, a constraint), one line each, up to 6' },
     keyFiles: { type: 'array', items: { type: 'object', properties: { path: { type: 'string', description: 'relative to the root' }, what: { type: 'string', description: 'what it holds, one line' } }, required: ['path', 'what'] }, description: 'the 1-4 files worth opening first to see it at work (the user opens them in the app\'s viewer), up to 8' },
-    status: { type: 'string', enum: [...MAP_STATES], description: 'ok = works or done; work = being built; blocked = stuck; planned = not started yet (planned, not there); unknown = not known. Omit to keep the previous one.' },
+    status: { type: 'string', enum: [...MAP_STATES], description: 'ok = works or done; work = being built; blocked = stuck; planned = not started yet (planned, not there); unknown = not known. Omit to keep the previous one. A piece with pieces inside takes its status from them: give it to the pieces.' },
     note: { type: 'string', description: `one short line, at most ${MAP_LIMITS.note} characters: what is missing, what the user must do` },
     actor: { type: 'string', enum: [...MAP_ACTORS], description: 'who must act when it is blocked: user, agent, other (a colleague, a team)' },
     evidence: { type: 'array', items: { type: 'string' }, description: `the project files or folders (ending in /) it was read from, relative to the root (up to ${MAP_LIMITS.evidence}): the app watches them. Only paths inside the root: an absolute path or one with ../ is refused; name a source outside it (another repo, a wiki, the brain) in the note or details text instead.` },
@@ -127,7 +130,7 @@ export function chatMapTools(d: ChatMapDeps): McpTool[] {
     },
     {
       name: 'project_map_update',
-      description: `Keep a project's map current while you work: working_on = the element ids you work on now (you show on the map beside them, with your progress); changes = the new status of what you finished, broke or found blocked (each confirmed now; a status nobody confirms for 2 hours, or whose files changed after it, reads «da verificare»). Call it when you start on a mapped project and before your report. statuses: ${STATES} (planned = a piece of a plan, not there yet); actor (who must act when blocked): ${ACTORS}. It changes only status, note (at most ${MAP_LIMITS.note} characters) and actor of existing ids, and the paths: a name, a description, a new box or link need project_map_save. A step of a plan drawn on the map moves its element by itself: no call needed for it. paths = add or tell again (same id) the project's questions as walks on the map; drop_paths = path ids to take away. A structural change (a new system, part or link) is a redraw: project_map_save.`,
+      description: `Keep a project's map current while you work: working_on = the element ids you work on now (you show on the map beside them, with your progress, and their status then follows you by itself: under way while you work, stuck while you wait for the user or fail, done when you report done; a box with pieces inside counts for its open pieces); changes = the new status of anything else you finished, broke or found blocked (each confirmed now; a status nobody confirms for 2 hours, or whose files changed after it, reads «da verificare»; a box with pieces inside takes its status from them). Call it when you start on a mapped project. statuses: ${STATES} (planned = a piece of a plan, not there yet); actor (who must act when blocked): ${ACTORS}. It changes only status, note (at most ${MAP_LIMITS.note} characters) and actor of existing ids, and the paths: a name, a description, a new box or link need project_map_save. A step of a plan drawn on the map moves its element by itself: no call needed for it. paths = add or tell again (same id) the project's questions as walks on the map; drop_paths = path ids to take away. A structural change (a new system, part or link) is a redraw: project_map_save.`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -181,9 +184,11 @@ export function pathBrief(map: ProjectMap, question: string): string {
 export function appProjectMapTool(maps: ProjectMaps, emitUi: (cmd: EventMap['ui:command']) => void): Tool {
   return {
     name: 'app_project_map',
-    description: 'The user\'s project maps (Mappa page → Progetti, ADR 0271): each project drawn as people, systems, parts, environments and links, with their status, who must act, the agents at work on each part and the history from the first drawing. Use it when the user asks how a project is built, where it stands, or for its map, diagram, schema, lines («fili»): open shows the real map in a window (never draw your own diagram of a project with app_show_ui); none drawn yet → brief a Scout. action: list | read (the map as text, to answer; with element = that piece in full: how it works, its files, every link with what goes along it) | open (the maps window on screen, at project, element = a system to step into; no project = the maps window as it is) | brief (the task for a Scout chat that draws or redraws it: pass title and root for a new one, then start the Scout with app_create_chat, cwd = root; with question = the user\'s question about the project, the Scout answers it as a path on the map, a walk box by box) | correct (text = the user\'s correction, kept for every later drawing; then brief a redraw if the drawing must change) | edit (ops = the pieces the talk with the user adds, changes or removes, at once and without a redraw: only you change a map, the user never does by hand; a new piece is «previsto», dashed, until work starts on it; read first for the ids; say what changed in one line) | undo (the last change comes back). The user\'s message says which map and box he looks at ([app · the user looks at …]): «qui», «questo» mean that one. Work planned in Plan mode is drawn by its Strategist; to change a plan under way, write to that Strategist (app_send_to_chat).',
+    description: 'The user\'s project maps (Mappa page → Progetti, ADR 0271): each project drawn as people, systems, parts, environments and links, with their status, who must act, the agents at work on each part and the history from the first drawing. Use it when the user asks how a project is built, where it stands, or for its map, diagram, schema, lines («fili»): open shows the real map in a window (never draw your own diagram of a project with app_show_ui); none drawn yet → brief a Scout. action: list | read (the map as text, to answer; with element = that piece in full: how it works, its files, every link with what goes along it) | open (the maps window on screen, at project, element = a system to step into; no project = the maps window as it is) | brief (the task for a Scout chat that draws or redraws it: pass title and root for a new one, then start the Scout with app_create_chat, cwd = root; with question = the user\'s question about the project, the Scout answers it as a path on the map, a walk box by box) | correct (text = the user\'s correction, kept for every later drawing; then brief a redraw if the drawing must change) | edit (ops = the pieces the talk with the user adds, changes or removes, at once and without a redraw: only you change a map, the user never does by hand; a new piece is «previsto», dashed, until work starts on it; read first for the ids; say what changed in one line) | undo (the last change comes back) | link (chatId + elements = the pieces a work chat works on; [] unlinks; the same as `map` on app_create_chat / app_assign_task). A linked chat moves its pieces by itself, no status edit: under way when it starts, stuck while it waits for the user or fails, done when it reports done. A box with pieces inside always shows what they say together (all done = done, one under way = under way, one stuck = stuck): set statuses on the pieces, link the piece worked on. The user\'s message says which map and box he looks at ([app · the user looks at …]): «qui», «questo» mean that one. Work planned in Plan mode is drawn by its Strategist; to change a plan under way, write to that Strategist (app_send_to_chat).',
     inputSchema: { type: 'object', properties: {
-      action: { type: 'string', enum: ['list', 'read', 'open', 'brief', 'correct', 'edit', 'undo'] },
+      action: { type: 'string', enum: ['list', 'read', 'open', 'brief', 'correct', 'edit', 'undo', 'link'] },
+      chatId: { type: 'string', description: 'link: the work chat' },
+      elements: { type: 'array', items: { type: 'string' }, maxItems: 20, description: 'link: the element ids it works on ([] = none any more)' },
       project: { type: 'string', description: 'the map\'s name or id' },
       element: { type: 'string', description: 'open: a system to zoom into; read: the piece to tell in full' },
       title: { type: 'string', description: 'brief: the new project\'s name' },
@@ -226,7 +231,33 @@ export function appProjectMapTool(maps: ProjectMaps, emitUi: (cmd: EventMap['ui:
       if (action === 'correct') { const m = maps.correct(project, typeof a.text === 'string' ? a.text : ''); return { ok: true, version: m.version, corrections: m.corrections.length }; }
       if (action === 'edit') { const r = maps.edit(project, a.ops, 'Orchestrator'); return { ok: true, version: r.map.version, changed: r.did, added: r.added }; }
       if (action === 'undo') { const m = maps.undo(project, 'Orchestrator'); return { ok: true, version: m.version, summary: m.summary }; }
-      throw new Error('action: list | read | open | brief | correct | edit | undo');
+      if (action === 'link') { const r = maps.link(project, typeof a.chatId === 'string' ? a.chatId : '', a.elements); return { ok: true, project: r.project, linked: r.elements }; }
+      throw new Error('action: list | read | open | brief | correct | edit | undo | link');
     },
   };
+}
+
+/** `map` on app_create_chat and app_assign_task (#456): the map pieces the work is on. */
+export const MAP_LINK_SCHEMA = { type: 'object', additionalProperties: false, required: ['project', 'on'],
+  description: 'when this work is a piece of a project map (app_project_map): the map and the element ids it works on (the most specific piece; a box with pieces inside counts for its open pieces). The chat shows on them and their status follows it by itself: under way when it starts, stuck while it waits for the user or fails, done when it reports done. No status edit needed.',
+  properties: { project: { type: 'string', description: 'the map\'s name or id' }, on: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 20, description: 'element ids' } } };
+
+/** The checked `map` of a call, before any chat is started for it; null when none was given. */
+export function mapLinkOf(maps: ProjectMaps | undefined, v: unknown): { project: string; on: string[] } | null {
+  if (v === undefined || v === null) return null;
+  if (!maps) throw new Error('map: only the Orchestrator links a chat to a project map.');
+  const o = v && typeof v === 'object' ? v as Record<string, unknown> : {};
+  const project = projectOf(maps, o.project);
+  const on = maps.linkable(project, o.on);
+  if (!on.length) throw new Error('map.on: at least one element id of the map');
+  return { project, on };
+}
+
+/** One line for the Orchestrator when it starts work, unlinked, in the folder of a map that tells a plan still open:
+ *  how to link it, so the map follows the chat. undefined when there is nothing to say. */
+export function mapHint(maps: ProjectMaps | undefined, cwd: string): string | undefined {
+  const m = maps?.mapOfFolder(cwd);
+  const p = m ? progressOf(m) : null;
+  if (!m || !p || p.pct >= 100) return undefined;
+  return `not linked to the map «${m.project}» (${p.pct}%): if this work is one of its pieces, app_project_map { action: "link", project: "${m.project}", chatId, elements } and the map follows the chat.`;
 }
