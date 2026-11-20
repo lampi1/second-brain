@@ -20,8 +20,9 @@
 //   as before). A box with pieces inside holds no status of its own: every save settles it from its pieces, a status
 //   meant for it lands on the pieces it can speak for (shared/project-map-status.ts settle, spread), and while a
 //   linked chat or a plan's step works on the box itself the view marks it `busy`: it reads under way. A chat's own
-//   edits never turn its piece «da verificare», a chat at work again after its done report shows under way without a
-//   new version, and what a piece's chats said is forgotten once none speaks for it (the next one starts afresh).
+//   edits never turn its piece «da verificare» (they are not counted as a change of its files), a chat at work or
+//   waiting again after its done report shows so without a new version, a report it gave before it was linked to a
+//   piece is not about that piece, and what a piece's chats said is forgotten once none speaks for it.
 // Used by wiring-shared.ts attachProjectMaps; pinned by test/unit/projectmap-service.test.ts and projectmap-follow.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -51,8 +52,11 @@ export interface ProjectMapsDeps {
   debounceMs?: number;
 }
 
-/** own = the elements the chat was linked to on purpose (#456): their status follows the chat */
-interface Focus { project: string; elements: string[]; at: number; own?: string[] }
+/** own = the elements the chat was linked to on purpose (#456): their status follows the chat; since = element → when
+ *  it was linked there (a report the chat gave before is not about that piece) */
+interface Focus { project: string; elements: string[]; at: number; own?: string[]; since?: Record<string, number> }
+/** what the chats linked to one piece say, and when the last of their turns ended */
+interface Said { list: ChatSay[]; at: number }
 interface Sent { text: string; at: number; seenAt?: number }
 /** followed = `project/element` → the last status the app saved there from its linked chats (#456) */
 interface State { focus: Record<string, Focus>; changed: Record<string, Record<string, number>>; sent?: Record<string, Sent>; mirrored?: Record<string, MapState>; followed?: Record<string, MapState> }
@@ -108,17 +112,10 @@ export class ProjectMaps {
 
   private now(): number { return this.d.now?.() ?? Date.now(); }
 
-  /** The maps, each with how many things wait for the user: for a map with linked chats, the ones waiting right now too. */
+  /** The maps, each with how many things wait for the user right now: the same count as the map's header. */
   list(): ProjectMapInfo[] {
-    const linked = new Set(Object.values(this.state.focus).filter(f => f.own?.length).map(f => f.project));
-    if (!linked.size) return this.d.store.list();
     const now = this.now();
-    return this.d.store.list().map(i => {
-      const m = linked.has(i.project) ? this.d.store.get(i.project) : null;
-      if (!m) return i;
-      const live = this.overlay(m, now);
-      return { ...i, waiting: waitingOf(live, statusesOf(live, now, this.state.changed[i.project] ?? {})) };
-    });
+    return this.d.store.list(m => { const live = this.overlay(m, now); return waitingOf(live, statusesOf(live, now, this.state.changed[m.project] ?? {})); });
   }
   /** the maps' project folders (where a file named in a message may be, file-roots.ts) */
   roots(): string[] {
@@ -148,16 +145,20 @@ export class ProjectMaps {
 
   /** What the chats linked on purpose to a map's pieces say now (#456): linked element → one say per chat. A chat
    *  that ended long ago, or that says nothing, is not counted. */
-  private says(map: ProjectMap): Map<string, ChatSay[]> {
-    const out = new Map<string, ChatSay[]>(), now = this.now();
+  private says(map: ProjectMap): Map<string, Said> {
+    const out = new Map<string, Said>(), now = this.now();
     const linked = Object.entries(this.state.focus).filter(([, f]) => f.project === map.project && f.own?.length);
     if (!linked.length) return out;
     const all = this.d.chats(), asks = this.d.pending(), ids = new Set(map.elements.map(e => e.id));
     for (const [chatId, f] of linked) {
       const c = all.find(x => x.id === chatId);
       if (!c || ((c.closedAt || c.state === 'closed') && now - (c.closedAt ?? c.updatedAt) > ENDED_MS)) continue;
-      const say = sayOf(c, all, asks);
-      if (say) for (const id of f.own!) if (ids.has(id)) out.set(id, [...(out.get(id) ?? []), say]);
+      for (const id of f.own!) {
+        const say = ids.has(id) ? sayOf(c, all, asks, f.since?.[id] ?? 0) : null;
+        if (!say) continue;
+        const was = out.get(id);
+        out.set(id, { list: [...(was?.list ?? []), say], at: Math.max(was?.at ?? 0, c.lastResult?.at ?? 0) });
+      }
     }
     return out;
   }
@@ -170,11 +171,11 @@ export class ProjectMaps {
   private overlay(map: ProjectMap, now: number, stepsNow: ReadonlySet<string> = new Set()): ProjectMap {
     const says = this.says(map);
     const stuck = new Map<string, MapActor>(), waits = new Map<string, MapActor>(), vouched = new Map<string, number>(), busy = new Set<string>(), redo = new Set<string>();
-    const isBox = (id: string) => map.elements.some(e => e.parent === id), edited = this.state.changed[map.project] ?? {};
+    const isBox = (id: string) => map.elements.some(e => e.parent === id);
     const mark = (m: Map<string, MapActor>, id: string, actor: MapActor) => { if (m.get(id) !== 'user') m.set(id, actor); };
     for (const id of stepsNow) if (isBox(id)) busy.add(id);
-    for (const [id, list] of says) {
-      const w = wantOf(list), box = isBox(id);
+    for (const [id, said] of says) {
+      const w = wantOf(said.list), box = isBox(id);
       if (w.live) {
         // a box: the pieces inside that can say so for it, else the box itself (a system whose parts are all done)
         const on = box ? spreadIds(map, id) : [id];
@@ -182,9 +183,9 @@ export class ProjectMaps {
       }
       if (box && (w.durable === 'work' || w.redo)) busy.add(id);
       if (!box && w.redo) redo.add(id);
-      // its own edits never turn its piece «da verificare»: at work now = confirmed now, between two turns = confirmed
-      // at its last edit (the 2 hours count from there)
-      if (w.durable === 'work' || w.redo) for (const e of leavesOf(map.elements, id)) if (!box || e.status === 'work') vouched.set(e.id, Math.max(vouched.get(e.id) ?? 0, w.running ? now : edited[e.id] ?? 0));
+      // the app sees its chats: at work now = confirmed now, between two turns = confirmed when the last turn ended
+      // (the 2 hours count from there, not from the start of a long turn)
+      if (w.durable === 'work' || w.redo) for (const e of leavesOf(map.elements, id)) if (!box || e.status === 'work') vouched.set(e.id, Math.max(vouched.get(e.id) ?? 0, w.running ? now : said.at));
     }
     if (!stuck.size && !waits.size && !vouched.size && !busy.size && !redo.size) return map;
     return { ...map, elements: map.elements.map(e => {
@@ -216,15 +217,12 @@ export class ProjectMaps {
     const planned = this.works(project).works;
     // the pieces a chat is linked to directly are its own: a chat linked to the box around them leaves them alone
     const direct = new Set([...says.keys()].filter(id => { const l = leavesOf(map.elements, id); return l.length === 1 && l[0]!.id === id; }));
-    const changes = new Map<string, MapState>(), told = new Map<string, MapState>(), done = new Set<string>();
-    for (const [id, list] of says) {
-      const want = wantOf(list).durable, key = `${project}/${id}`;
+    const changes = new Map<string, MapState>(), told = new Map<string, MapState>();
+    for (const [id, said] of says) {
+      const want = wantOf(said.list).durable, key = `${project}/${id}`;
       if (!want || memo[key] === want || planned[id]?.length) continue;
       told.set(key, want);
-      const skip = direct.has(id) ? undefined : direct;
-      for (const c of spread(map.elements, id, want, skip)) changes.set(c.id, c.status);
-      // done: what was edited on the piece (and on the pieces it speaks for) is what its chats say done
-      if (want === 'ok') { done.add(id); for (const e of leavesOf(map.elements, id)) if (!skip?.has(e.id)) done.add(e.id); }
+      for (const c of spread(map.elements, id, want, direct.has(id) ? undefined : direct)) changes.set(c.id, c.status);
     }
     if (!told.size) { if (forgot) this.persist(); return; }
     if (changes.size) {
@@ -234,8 +232,6 @@ export class ProjectMaps {
       catch (err) { log.warn('projectmap', 'chats not mirrored on their map', { cause: errText(err), hint: 'the map keeps its last statuses; the next change of a linked chat retries' }); return; }
     }
     for (const [key, want] of told) memo[key] = want;
-    const edited = this.state.changed[project];
-    if (edited) for (const id of done) delete edited[id];
     this.persist();
     this.changed(project);
   }
@@ -248,13 +244,34 @@ export class ProjectMaps {
     const ids = this.linkable(project, elements);
     if (!this.d.chats().some(c => c.id === chatId)) throw new Error(`link: no chat «${chatId.slice(0, 80)}» (app_chats lists them)`);
     if (!ids.length) { const f = this.state.focus[chatId]; if (f?.project === project) delete this.state.focus[chatId]; }
-    else this.state.focus[chatId] = { project, elements: ids, at: this.now(), own: ids };
-    // a new link speaks afresh: what the chats said there before does not hold the piece back
-    for (const id of ids) delete this.state.followed?.[`${project}/${id}`];
+    else this.own(project, chatId, ids, this.now());
     this.persist();
     this.follow(project);
     this.changed(project);
     return { project, elements: ids };
+  }
+  /** A chat is linked on purpose to these pieces. A piece it was not on before speaks afresh: what the chats said
+   *  there does not hold it back, and what this chat reported before is not about it. A piece it was already on keeps
+   *  what was said (a status set by hand stands through a repeated link). */
+  private own(project: string, chatId: string, ids: string[], now: number): void {
+    const was = this.state.focus[chatId], before = was?.project === project ? was : undefined;
+    const since: Record<string, number> = {};
+    for (const id of ids) {
+      if (before?.own?.includes(id)) { since[id] = before.since?.[id] ?? 0; continue; }
+      since[id] = now;
+      delete this.state.followed?.[`${project}/${id}`];
+    }
+    this.state.focus[chatId] = { project, elements: ids, at: now, ...(ids.length ? { own: ids, since } : {}) };
+  }
+  /** Whether a chat, or one that delegated it, is linked on purpose to a piece or to a box around it: it speaks for it. */
+  private speaksFor(map: ProjectMap, chat: ChatSummary, all: readonly ChatSummary[], el: string): boolean {
+    const up = new Set<string>();
+    for (let e = map.elements.find(x => x.id === el), n = 0; e && n < 50 && !up.has(e.id); n++) { up.add(e.id); e = e.parent ? map.elements.find(x => x.id === e!.parent) : undefined; }
+    for (let c: ChatSummary | undefined = chat, n = 0; c && n < 10; n++, c = c.parentId ? all.find(x => x.id === c!.parentId) : undefined) {
+      const f = this.state.focus[c.id];
+      if (f?.project === map.project && f.own?.some(id => up.has(id))) return true;
+    }
+    return false;
   }
   /** A chat shown on pieces without moving them (the demo's chats): bound as one that edited their files is. */
   bind(project: string, chatId: string, elements: string[]): void {
@@ -496,10 +513,7 @@ export class ProjectMaps {
       const unknown = (a.workingOn as string[]).filter(id => !prev.elements.some(e => e.id === id));
       if (unknown.length) throw new Error(`working_on: no element ${unknown.join(', ')} (project_map_read lists them)`);
       // it said so itself: the status of these pieces follows it from now on (#456)
-      const own = [...new Set(a.workingOn as string[])];
-      this.state.focus[a.chatId] = { project, elements: own, at: now, ...(own.length ? { own } : {}) };
-      // a new link speaks afresh (the pieces whose status it sets in this same call keep that status, below)
-      for (const id of own) delete this.state.followed?.[`${project}/${id}`];
+      this.own(project, a.chatId, [...new Set(a.workingOn as string[])], now);
       this.persist();
     }
     if (!next && !walks) { if (a.workingOn !== undefined) this.follow(project); this.changed(project); return { map: null, touched: [] }; }
@@ -512,7 +526,7 @@ export class ProjectMaps {
     if (a.by !== 'app' && touched.length) {
       // a status somebody set by hand stands (#456): the app moves that piece again only when its linked chats say something new
       const says = this.says(map), memo = (this.state.followed ??= {});
-      for (const id of touched) { const w = wantOf(says.get(id) ?? []).durable; if (w) memo[`${project}/${id}`] = w; }
+      for (const id of touched) { const w = wantOf(says.get(id)?.list ?? []).durable; if (w) memo[`${project}/${id}`] = w; }
     }
     this.persist();
     this.changed(project);
@@ -627,7 +641,9 @@ export class ProjectMaps {
       const { m, base } = hit;
       const el = elementOfFile(m.elements, abs.slice(base.length + 1));
       if (!el) continue;
-      (this.state.changed[m.project] ??= {})[el] = item.at;
+      // an edit by the chat that speaks for the piece (linked to it or to a box around it, or delegated by one that is)
+      // is its own work: only somebody else's edit turns the piece «da verificare» (#456)
+      if (!this.speaksFor(m, chat, chats, el)) (this.state.changed[m.project] ??= {})[el] = item.at;
       const f = this.state.focus[chatId];
       // a chat linked on purpose to another map stays there: the edit only dates this map's piece (#456)
       if (!f || (f.project !== m.project && !f.own?.length)) this.state.focus[chatId] = { project: m.project, elements: [el], at: item.at };

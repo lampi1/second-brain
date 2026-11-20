@@ -129,6 +129,8 @@ export function countOf(map: Tree, root: string | null = null, working: Readonly
     ...g.units.filter(isNow),
   ];
   const stateOf = (g: { e: MapElement; units: MapElement[] }): ProgressState => {
+    // a chat on the box itself waits and no piece inside says so (the live view's `waits`, #456)
+    if (holdersOf(g.e).some(h => h.waits)) return 'blocked';
     const d = g.units.filter(isDone).length;
     if (d === g.units.length) return 'done';
     if (g.units.some(u => u.status === 'blocked')) return 'blocked';
@@ -145,6 +147,8 @@ export function countOf(map: Tree, root: string | null = null, working: Readonly
   const holder = (e: MapElement): MapElement => { let cur = e; for (let n = 0; n < 50 && cur.parent && cur.parent !== lvl && cur.parent !== root; n++) { const p = map.elements.find(x => x.id === cur.parent); if (!p) break; cur = p; } return cur; };
   // the stuck pieces themselves, not the boxes that hold them
   const stuckEls = map.elements.filter(e => under.has(e.id) && e.status === 'blocked' && !kidsOf(e.id).length);
+  // and the boxes a linked chat waits on while no piece inside can say so (the live view's `waits`)
+  const waitEls = map.elements.filter(e => under.has(e.id) && e.waits && kidsOf(e.id).length);
   const stuckLinks: MapLink[] = root === null ? map.links.filter(l => l.status === 'blocked' && l.kind !== 'next') : [];
   const linkItem = (l: MapLink): ProgressItem => ({ id: l.id, name: l.label || `${l.from} → ${l.to}`, ...(l.note ? { note: l.note } : {}), link: true });
   return {
@@ -152,8 +156,8 @@ export function countOf(map: Tree, root: string | null = null, working: Readonly
     ...(at >= 0 ? { at } : {}),
     now: groups.flatMap(g => nowOf(g).map(u => item(u, g.e))),
     ...(firstTodo ? { next: item(firstTodo.u, firstTodo.g) } : {}),
-    you: [...stuckEls.filter(e => e.actor === 'user').map(e => item(e, holder(e))), ...stuckLinks.filter(l => l.actor === 'user').map(linkItem)],
-    blocked: [...stuckEls.filter(e => e.actor !== 'user').map(e => item(e, holder(e))), ...stuckLinks.filter(l => l.actor !== 'user').map(linkItem)],
+    you: [...stuckEls.filter(e => e.actor === 'user').map(e => item(e, holder(e))), ...waitEls.filter(e => e.waits === 'user').map(e => item(e, holder(e))), ...stuckLinks.filter(l => l.actor === 'user').map(linkItem)],
+    blocked: [...stuckEls.filter(e => e.actor !== 'user').map(e => item(e, holder(e))), ...waitEls.filter(e => e.waits !== 'user').map(e => item(e, holder(e))), ...stuckLinks.filter(l => l.actor !== 'user').map(linkItem)],
   };
 }
 

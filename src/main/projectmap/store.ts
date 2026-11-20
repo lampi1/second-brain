@@ -94,14 +94,15 @@ export class ProjectMapStore {
     return path.join(d, project);
   }
 
-  list(): ProjectMapInfo[] {
+  /** `waiting` = how the caller counts what waits for the user on a map (the live count, service.ts); as saved otherwise. */
+  list(waiting: (m: ProjectMap) => number = waitingOf): ProjectMapInfo[] {
     const d = this.dir();
     if (!d) return [];
     let names: string[] = [];
     try { names = fs.readdirSync(d).filter(n => SLUG.test(n)); } catch { return []; }
     return names.map(n => this.get(n)).filter((m): m is ProjectMap => !!m)
       .map(m => ({ project: m.project, title: m.title, version: m.version, updatedAt: m.updatedAt, elements: m.elements.length,
-        waiting: waitingOf(m) }))
+        waiting: waiting(m) }))
       .sort((a, b) => b.updatedAt - a.updatedAt);
   }
 

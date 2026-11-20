@@ -26,22 +26,26 @@ open, and another read «previsto» over a step that was stuck.
      pieces: a project's work conversation goes on), or `app_project_map` `link` for a chat already there
      (`elements: []` unlinks). A chat the app bound only because it edited a piece's file moves nothing: that piece
      reads «da verificare», as before.
-   - What a chat says (`sayOf`): at work (it runs, or a chat it delegated does) · at work again after its done report
-     (the turn that reported goes on, a message followed) · on it (between two turns, or a partial report) · waits for the user (an open request of its own or of a chat it delegated, or its last answer
+   - What a chat says (`sayOf`): at work (it runs, or a chat it delegated does) · at work again, or waiting for the
+     user again, after its done report (the turn that reported goes on, a message followed, a closing question) · on
+     it (between two turns, or a partial report) · waits for the user (an open request of its own or of a chat it delegated, or its last answer
      says so) · failed · reported blocked · done (it reported done; a chat with no report to give is done when the app
      closed it after a turn that ended well) · nothing (never started, stopped by the user, closed by hand).
    - What is saved, one version by «app» per real change: «in lavorazione» when the work starts, «bloccato» on a
      blocked report, done when every chat on the piece is done. Only when what the chats say moved since the last
-     time: a status an agent or the Orchestrator set by hand after it stays. What the chats said on a piece is
-     forgotten once none speaks for it (stopped, unlinked, removed) and when a new chat is linked to it: the next
-     one starts it again. A chat that is removed is followed like one that changes. A save that fails is remembered
+     time: a status an agent or the Orchestrator set by hand after it stays, also through a repeated link. What the
+     chats said on a piece is forgotten once none speaks for it (stopped, unlinked, removed) and when a chat that was
+     not on it is linked to it: the next one starts it again. A report a chat gave before it was linked to a piece is
+     not about that piece (the link's time is kept per piece). A chat that is removed is followed like one that changes. A save that fails is remembered
      as not done: the next change of the chat tries again (the same for a plan's steps).
    - What is only shown, and saves nothing: stuck on the user («Tu») while a chat waits for him, stuck on the agent
-     while every chat on the piece stands on an error; under way again while a chat that reported done works after a
-     message that followed (the piece stays saved done). A question or a follow-up message does not write a version.
-     A chat's own edits never turn its piece «da verificare»: while it runs the app vouches for the piece, between
-     two turns the piece counts as confirmed at the chat's last edit (the 2 hours run from there), and a done report
-     confirms what was edited on the piece and on the pieces it speaks for.
+     while every chat on the piece stands on an error; under way again, or stuck on the user again, while a chat that
+     reported done works or asks after a message that followed (the piece stays saved done). A question or a
+     follow-up message does not write a version.
+   - A chat's own edits never turn its piece «da verificare»: an edit by the chat that speaks for a piece (linked to
+     it or to a box around it, or delegated by one that is) is not counted as a change of its files; anybody else's
+     is. While it runs the app vouches for the piece, and between two turns the piece counts as confirmed when the
+     last turn ended (the 2 hours run from there).
    - A link made on purpose holds: an edit of a file of another map, or a plan's step on another map, dates that
      piece and leaves the chat where it was linked.
    - When the Orchestrator starts a chat, unlinked, in the folder of a map that tells a plan still open, the answer
@@ -75,11 +79,13 @@ open, and another read «previsto» over a step that was stuck.
 - A version per start and per end of a linked chat: the history grows with the work, not with its questions.
 - The Orchestrator has to link the chat: the app cannot know which piece a new chat is for. The parameter sits on the
   two tools it already uses to start work, and the hint reminds it where a plan is open.
-- The projects list counts what waits for the user once: the pieces with nothing inside, never their box too, and
-  for a map with linked chats the ones waiting right now (`waitingOf`, the same count as the map's header).
+- The projects list counts what waits for the user as the map's header does (`waitingOf` on what the drawing shows
+  now): the pieces with nothing inside, never their box too, the chats waiting right now, and nothing that fell to
+  «da verificare». The progress lists a box marked `waits` among what waits for the user.
 - Not done: no link from a chat's title or prompt by guessing; nobody tried it on a real PC with real chats.
-- After the independent review of PR #457 (8 findings, all taken): the forgotten memo, the link that holds, the
-  chat's own edits, the removed chat, `waits`, the retry, the follow-up message without a version, the count.
+- After two independent reviews of PR #457 (8 and 7 findings, all taken): the forgotten memo, the link that holds,
+  the chat's own edits, the removed chat, `waits`, the retry, the follow-up message and question without a version,
+  the report older than the link, the repeated link, the counts.
 
 ## Tests
 
@@ -88,5 +94,6 @@ the boxes, a busy box, the words, the saved file, a status meant for a box, the 
 (what a chat says in each state, what the chats on a piece say together, start → wait → done → a new assignment, an
 error and a blocked report, a chat linked to a box, a sub-chat at work, `working_on`, a chat bound by a file, unlink,
 the Orchestrator's link and hint; and the corner cases of the review: a stopped chat and a new link, an edit in
-another map, the chat's own edits on a piece and on a box, a removed chat, a system that waits, the count, a failed
-save, a message after a done report).
+another map, the chat's own edits on a piece and on a box and somebody else's, a removed chat, a system that waits,
+the counts, a failed save of a chat's status and of a plan's step, a message and a question after a done report, a
+report older than the link, a repeated link).
