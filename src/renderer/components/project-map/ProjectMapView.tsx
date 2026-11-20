@@ -32,10 +32,14 @@
 //   opens with the progress (MapProgress.tsx: where the project is, what is done now and by whom, what waits for the
 //   user, what comes next, every phase with its bar) and with each plan drawn on the map (PlanCard.tsx: its bar and its
 //   steps, one row each). Nothing sits over the drawing any more, except one line while a plan waits for the ok.
+// - The status of a box (issue #456, ADR 0330): a box with pieces inside shows what they say together, never a status
+//   of its own (shared/project-map-status.ts statusesOf); a phase or a step that is ok reads «fatto», anything else
+//   «funziona»; the statuses move by themselves with the chats linked to the pieces (main/projectmap/service.ts).
 // Rendered by brain-model/MapPage.tsx (view «Progetti», pageArg progetti/<project>/<system>), beside the Orchestrator's
 // column: «Mappe», Ctrl+Shift+S and app_project_map open land there (actions.ts openMaps).
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { countOf, planProgress, progressOf, workingOf } from '@shared/project-map-progress';
+import { isStepKind, statusesOf, waitingOf, type ShownState } from '@shared/project-map-status';
 import { NEW_MS, descendantsOf, levelOf, pathTo, shownStatus, type MapLink, type MapPlan, type MapWork, type Level, type LevelEdge, type LevelNode, type MapAgent, type MapElement, type MapState, type ProjectMapInfo, type ProjectMapView as View, type MapPath } from '@shared/project-map';
 import { brainBridge, openChatRef, openFileViewer, openInAppBrowser, orchestratorId } from '../../actions';
 import { t } from '../../i18n';
@@ -45,7 +49,7 @@ import { send, useApp } from '../../store/store';
 import { closeModal, setMapPicked, setMapsArg, setMapsFull, toast, ui } from '../../store/ui';
 import { IconArrowLeft, IconChat, IconMaximize, IconMinimize, IconRefresh } from '../Icons';
 import { AgentAvatar } from '../AgentAvatar';
-import { ElementDetail, LinkDetail } from './MapDetail';
+import { ElementDetail, LinkDetail, stateText } from './MapDetail';
 import { PathList, PathPanel, type Walk } from './MapPaths';
 import { ProgressCard, ProgressChip, countText } from './MapProgress';
 import { PlanAsk, PlanCard, Turn } from './PlanCard';
@@ -308,6 +312,8 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   // somebody works on right now (a plan's step under way, an agent at work) count as under way whatever their status.
   const working = useMemo(() => (view && live ? workingOf(view) : new Set<string>()), [view, live]);
   const progress = useMemo(() => (map ? progressOf(map, working) : null), [map, working]);
+  // what each box shows (#456): its own status, or for a box with pieces inside what they say together
+  const statuses = useMemo(() => (map ? statusesOf(map, now, view?.changed ?? {}) : new Map<string, ShownState>()), [map, now, view]);
   // on a map that tells a plan, each box with pieces inside wears its own count
   const counts = useMemo(() => {
     const out = new Map<string, NonNullable<ReturnType<typeof countOf>>>();
@@ -439,7 +445,9 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   const agents = live ? view!.agents : [];
   const of = (id: string) => agents.filter(a => a.elements.some(x => x === id || pathTo(map, x).some(p => p.id === id)));
   const lit = new Set(agentOn ? agents.find(a => a.chatId === agentOn)?.elements.flatMap(x => pathTo(map, x).map(p => p.id)) ?? [] : []);
-  const st = (e: MapElement) => shown(shownStatus(e, now, view!.changed[e.id]));
+  const st = (e: MapElement) => shown(statuses.get(e.id) ?? shownStatus(e, now, view!.changed[e.id]));
+  /** it waits for the user: the piece itself, or a piece inside it */
+  const yours = (e: MapElement) => statuses.get(e.id)?.status === 'blocked' && statuses.get(e.id)?.actor === 'user';
   // the plan steps on a box: its own, and for a system those of its parts (and theirs, at every depth)
   const worksOf = (id: string): MapWork[] => (live ? [...(view!.works[id] ?? []), ...[...descendantsOf(map, id)].flatMap(x => view!.works[x] ?? [])] : []);
   // the path walked on the drawing: each box shows the stops on it or inside it, the stop on screen stands out
@@ -456,7 +464,8 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   const plans: MapPlan[] = live ? view!.plans : [];
   const decide = (p: MapPlan) => { void window.sb.invoke('chat:plan', { chatId: p.chatId, decision: 'approve', at: p.at }).catch(() => toast(t('pm.planGone'), 'warn')); };
   const change = (p: MapPlan) => { setFull(false); if (!brainBridge.draftToOrchestrator(t('pm.planChangeDraft', { title: p.title }), () => {})) toast(t('pm.noOrchestrator'), 'warn'); };
-  const waiting = [...map.elements, ...map.links].filter(x => x.status === 'blocked' && x.actor === 'user').length;
+  // what waits for the user: the pieces themselves (a box that holds one is not counted again) and the links
+  const waiting = waitingOf(map, statuses);
   // the number in the header: the project's own count, else the one of the plan under way on this map
   const mainPlan = plans.find(p => p.phase === 'running') ?? plans.find(p => p.phase !== 'done');
   const headline = progress ? { pct: progress.pct, tip: countText(progress) }
@@ -504,6 +513,9 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
   };
+  // the legend's word for ok: «fatto» on a level of phases and steps, «funziona» on a level of systems, both when mixed
+  const own = lv.nodes.filter(n => !n.ctx).map(n => isStepKind(byId.get(n.id)?.kind));
+  const okWords = own.length && own.every(Boolean) ? t('pm.state.done') : own.some(Boolean) ? `${t('pm.state.ok')} / ${t('pm.state.done')}` : t('pm.state.ok');
   const trail = pathTo(map, shownLevel);
   const hist = view!.history;
   const at = version === null ? hist.length - 1 : hist.findIndex(h => h.version === version);
@@ -549,7 +561,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   const talk = (e: MapElement) => {
     const s = st(e), where = pathTo(map, e.parent ?? null).map(x => x.name);
     const text = t('pm.talkDraft', { project: map.title, name: e.name, kind: t(`pm.kind.${e.kind}`), where: where.length ? ` (${where.join(' › ')})` : '',
-      state: t(`pm.state.${s}`), note: e.note ? `: ${e.note.replace(/[.\s]+$/, '')}` : '', desc: e.description ? ` ${e.description}.` : '' });
+      state: stateText(s, e.kind), note: e.note ? `: ${e.note.replace(/[.\s]+$/, '')}` : '', desc: e.description ? ` ${e.description}.` : '' });
     setFull(false);
     closeModal();
     if (!brainBridge.draftToOrchestrator(text, () => {})) toast(t('pm.noOrchestrator'), 'warn');
@@ -610,6 +622,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
             </svg>
             {lv.nodes.map(n => {
               const e = byId.get(n.id)!, s = st(e), k = kids(e.id), who = of(e.id), ws = n.ctx ? [] : worksOf(e.id), cnt = n.ctx ? undefined : counts.get(e.id);
+              const faces = live && yours(e) ? 1 : 3;
               // somebody works on it right now: a step of a plan under way, or an agent at work on it
               const running = live && (worksOf(e.id).some(w => w.state === 'now') || who.some(a => a.mark === 'run'));
               const style: CSSProperties = { left: n.x, top: n.y, width: n.w, height: n.h };
@@ -619,15 +632,16 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
                 <span className="pm-kind">{n.n !== undefined && <i className="pm-ord" data-testid={`pm-ord-${e.id}`}>{n.n}</i>}{t(`pm.kind.${e.kind}`)}{k && !n.ctx ? ` · ${t(stepsIn(e.id) ? 'pm.stepsCount' : 'pm.parts', { n: k })}` : ''}{n.par && <em className="pm-par" title={t('pm.withPrev')} data-testid={`pm-par-${e.id}`}>∥</em>}</span>
                 {stopsOn.has(e.id) && <span className="pm-stopnum" data-testid={`pm-stopnum-${e.id}`}>{stopsOn.get(e.id)!.slice(0, 4).join(' · ')}{stopsOn.get(e.id)!.length > 4 ? ' …' : ''}</span>}
                 <b className="pm-name">{e.name}</b>
-                {!n.ctx && (ws.length && !(e.status === 'blocked' && e.note)
+                {!n.ctx && (ws.length && !(s === 'blocked' && e.note)
                   ? <span className="pm-works" data-testid={`pm-works-${e.id}`}>{(ws.length > 2 ? [ws.find(w => w.state === 'now') ?? ws.find(w => w.state !== 'done') ?? ws[0]!] : ws).map(w => <span key={`${w.chatId}-${w.step}`} data-s={w.state}><i>{WORK_MARK[w.state]}</i><Turn wave={w.wave} par={w.par} />{w.title}</span>)}{ws.length > 2 && <span className="pm-works-more">{t('pm.worksMore', { n: ws.length - 1, done: ws.filter(w => w.state === 'done').length, total: ws.length })}</span>}</span>
-                  : <span className="pm-desc">{e.status === 'blocked' && e.note ? e.note : e.description}</span>)}
+                  : <span className="pm-desc">{s === 'blocked' && e.note ? e.note : e.description}</span>)}
                 {!n.ctx && <span className="pm-foot">
-                  <i className={`pm-dot s-${s}`} /><span className="pm-st">{t(`pm.state.${s}`)}</span>
+                  <i className={`pm-dot s-${s}`} /><span className="pm-st" data-testid={`pm-st-${e.id}`}>{stateText(s, e.kind)}</span>
                   {cnt && <span className="pm-cnt" title={countText(cnt)} data-testid={`pm-count-${e.id}`}>{cnt.done}/{cnt.total}</span>}
-                  {who.slice(0, 3).map(a => <span key={a.chatId} className="pm-who" data-mark={a.mark} title={a.title}>{(a.role ?? a.title)[0]?.toUpperCase()}</span>)}
-                  {who.length > 3 && <span className="pm-who more">+{who.length - 3}</span>}
-                  {live && e.status === 'blocked' && e.actor === 'user' && <em className="pm-you">{t('pm.you')}</em>}
+                  {/* with the «Tu» badge one face only: the status word keeps its place */}
+                  {who.slice(0, faces).map(a => <span key={a.chatId} className="pm-who" data-mark={a.mark} title={a.title}>{(a.role ?? a.title)[0]?.toUpperCase()}</span>)}
+                  {who.length > faces && <span className="pm-who more">+{who.length - faces}</span>}
+                  {live && yours(e) && <em className="pm-you">{t('pm.you')}</em>}
                   {live && e.addedAt !== undefined && now - e.addedAt < NEW_MS && <em className="pm-new">{t('pm.new')}</em>}
                 </span>}
                 {/* its own count along the bottom edge: how much of what is inside is done */}
@@ -652,7 +666,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
           <button type="button" className="btn btn-s" onClick={refit} aria-label={t('pm.fit')} data-tip={t('pm.fit')} data-testid="pm-fit">⤢</button>
         </div>
         <div className="pm-legend" aria-label={t('bm.map.legendLabel')}>
-          {(['ok', 'work', 'blocked', 'planned', 'stale'] as const).map(s => <span key={s}><i className={`pm-dot s-${s}`} />{t(`pm.state.${s}`)}</span>)}
+          {(['ok', 'work', 'blocked', 'planned', 'stale'] as const).map(s => <span key={s}><i className={`pm-dot s-${s}`} />{s === 'ok' ? okWords : t(`pm.state.${s}`)}</span>)}
           {live && lv.nodes.some(n => of(n.id).some(a => a.mark === 'run') || worksOf(n.id).some(w => w.state === 'now')) && <span data-testid="pm-legend-run"><i className="pm-dot s-work run" />{t('pm.runningNow')}</span>}
           <span><em className="pm-you">{t('pm.you')}</em>{t('pm.youMeans')}</span>
         </div>

@@ -6,7 +6,7 @@ piace che rimanga la chat dell'orchestrator a destra, l'orchestrator deve sempre
 visualizzando ma in generale ogni punto dell'app»; «lo stratega deve proporre le mappe non più i piani come oggi e ogni
 riquadro un agente o N agenti»; «se uso la plan mode … voglio che si utilizzino le mappe, per task su cui non uso la
 plan mode invece no»; «il sync automatico deve essere invisibile per l'utente e consumare pochi token»; «le mappe già
-fatte devono funzionare bene») · Builds on: ADR 0271 (project maps), ADR 0108 (the Strategist's plan), ADR 0275 · Amended by: ADR 0307 (opened by the user the map starts full screen), ADR 0326 (the plan is told in the side panel; «Approva e parti» on one line over the drawing)
+fatte devono funzionare bene») · Builds on: ADR 0271 (project maps), ADR 0108 (the Strategist's plan), ADR 0275 · Amended by: ADR 0307 (opened by the user the map starts full screen), ADR 0326 (the plan is told in the side panel; «Approva e parti» on one line over the drawing), ADR 0330 (a step on a box with pieces inside moves its pieces)
 
 ## Context
 

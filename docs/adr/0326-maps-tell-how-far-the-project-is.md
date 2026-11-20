@@ -3,7 +3,8 @@
 Date: 2026-11-19 · Status: accepted (owner, 2026-11-19: «nella mappa la parte in alto dei passi è completamente inutile
 rimuovila occupa solo spazio … le mappe servono per tracciare l'andamento di un piano sarebbe bello ci fosse anche un
 progressivo una percentuale e più dettagli nella parte dx») · Amends: ADR 0302 and ADR 0307 (where a plan's steps are
-told), ADR 0276 (where «Approva e parti» sits), ADR 0322 (the side panel)
+told), ADR 0276 (where «Approva e parti» sits), ADR 0322 (the side panel) · Amended by: ADR 0330 (what is stuck is read
+from the pieces, not from the boxes around them)
 
 ## Context
 

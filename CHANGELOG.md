@@ -6,6 +6,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- Project maps follow their chats: a chat linked to a piece (the Orchestrator links it when it starts it, or the chat
+  says what it works on) turns it "in lavorazione" when it starts, "bloccato" with "Tu" while it waits for the user's
+  answer, and "fatto" when it reports it has finished, with zero tokens. A box with pieces inside says what they say
+  (all done = done, one under way = under way, one blocked = blocked), and a finished phase or step reads "fatto",
+  not "funziona" (ADR 0330, #456).
 - Project maps tell how far the project is: the header shows a percentage, and the side panel opens with the progress:
   steps done, the phase under way, what is being done and by whom, what waits for you, what is blocked, what comes
   next, and a bar for every phase; each phase wears its count on its box. A plan drawn on a map is a card in the side

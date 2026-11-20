@@ -4,7 +4,8 @@ Date: 2026-11-12 · Status: accepted (owner, issue #385 and the thread of 2026-1
 posto del codice, una mappa … la struttura di un progetto nei vari sistemi, connessione, utenti … e l'avanzamento di
 ogni agente con un colpo d'occhio»; «entrare dentro un sistema e vedere anche altri sistemi»; «sia tutto sempre
 aggiornato, navigabile dall'inizio alla fine e riconsultabile chiedendolo all'Orchestrator») · Amended by: ADR 0316 (parts
-inside parts, substance, paths), ADR 0322 (phases and steps in a line)
+inside parts, substance, paths), ADR 0322 (phases and steps in a line), ADR 0330 (a chat linked to a piece moves its
+status; a box says what its pieces say)
 
 ## Context
 

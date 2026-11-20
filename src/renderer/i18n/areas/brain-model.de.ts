@@ -95,7 +95,7 @@ export const brainModelDe: typeof brainModelIt = {
   'pm.ago': (p: { at: string }) => `vor ${p.at}`,
   'pm.backNow': 'Zurück zu jetzt', 'pm.you': 'Du', 'pm.youMeans': 'du bist dran',
   'pm.kind.person': 'Personen', 'pm.kind.system': 'Dein System', 'pm.kind.external': 'Externes System', 'pm.kind.env': 'Umgebung', 'pm.kind.doc': 'Dokument', 'pm.kind.part': 'Teil',
-  'pm.state.ok': 'funktioniert', 'pm.state.work': 'in Arbeit', 'pm.state.blocked': 'blockiert', 'pm.state.unknown': 'unklar', 'pm.state.stale': 'zu prüfen',
+  'pm.state.ok': 'funktioniert', 'pm.state.done': 'erledigt', 'pm.state.work': 'in Arbeit', 'pm.state.blocked': 'blockiert', 'pm.state.unknown': 'unklar', 'pm.state.stale': 'zu prüfen',
   'pm.state.planned': 'geplant', 'pm.new': 'neu', 'pm.plan': 'Plan', 'pm.planPhase.proposed': 'wartet auf dein Ok', 'pm.planPhase.revising': 'wird überarbeitet', 'pm.planPhase.running': 'läuft', 'pm.planPhase.done': 'fertig',
   'pm.planSteps': (p: { done: number; total: number }) => `${p.done} von ${p.total} Schritten erledigt`, 'pm.planApprove': 'Genehmigen und starten', 'pm.planChange': 'Etwas ändern', 'pm.planChangeDraft': (p: { title: string }) => `Ändere den Plan «${p.title}»: `, 'pm.planGone': 'Der Plan hat sich geändert: sieh dir die neue Version an.',
   'pm.changeSent': (p: { at: string }) => `Änderung gesendet ${p.at}:`, 'pm.changeSeen': (p: { at: string }) => `Änderung erhalten ${p.at}:`, 'pm.worksMore': (p: { n: number; done: number; total: number }) => `+${p.n} weitere · ${p.done}/${p.total} erledigt`,

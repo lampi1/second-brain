@@ -62,8 +62,8 @@ row and its line here in the same change.
 | `app_logs` | Orchestrator, /mcp/app | Recent structured log entries (redacted), filtered by level, scope, chat or text. |
 | `app_screenshot` | Orchestrator, /mcp/app | A screenshot of the app window and of each browser tab on screen. |
 | `app_ui` | Orchestrator, /mcp/app | Steer the UI without taking focus: open a page, maximize a chat, or read the screen outline. |
-| `app_create_chat` | Orchestrator, /mcp/app | Open a work chat that runs one role, started with a self-contained prompt. |
-| `app_assign_task` | Orchestrator, /mcp/app | Give a finished work chat a new measured task in the same role and project. |
+| `app_create_chat` | Orchestrator, /mcp/app | Open a work chat that runs one role, started with a self-contained prompt; `map` links it to the pieces of a project map it works on (ADR 0330). |
+| `app_assign_task` | Orchestrator, /mcp/app | Give a finished work chat a new measured task in the same role and project; `map` moves it to other pieces of the map. |
 | `app_task_events` | Orchestrator, /mcp/app | The ordered user decisions of a root task (optional: app_assign_task returns the unread ones). |
 | `app_send_to_chat` | Orchestrator, /mcp/app | Send a message to an active app chat, labelled as not the user's approval. |
 | `app_close_chat` | Orchestrator, /mcp/app | Close a chat for the user, like ✕: its engine, the tools it started and its delegation tree end; refused while it or an open descendant waits for the user. |
@@ -97,7 +97,7 @@ row and its line here in the same change.
 | `app_news_edition` | Orchestrator only | Create, change or delete an edition of the newspaper: name, what the user wants from it, sections, key words. |
 | `app_news_source` | Orchestrator only | Try a link at zero tokens, then add, remove, pause or resume a source of an edition. |
 | `app_news_refresh` | Orchestrator only | Refresh one edition or all now: reads the sources, one AI pass per edition, returns what it brought and its cost. |
-| `app_project_map` | Orchestrator only | The user's project maps: list, read as text (ending with how far the project is, ADR 0326), open in the maps window (ADR 0275), the brief for a Scout that draws one, the user's corrections, piece-by-piece edits from the talk with the user (also a piece's place in the order, «together with the one before», a level as a line or in layers, an arrow to the next step: ADR 0322) and undo (ADR 0276); a brief with `question` has a Scout answer it as a path on the map (ADR 0316). |
+| `app_project_map` | Orchestrator only | The user's project maps: list, read as text (ending with how far the project is, ADR 0326), open in the maps window (ADR 0275), the brief for a Scout that draws one, the user's corrections, piece-by-piece edits from the talk with the user (also a piece's place in the order, «together with the one before», a level as a line or in layers, an arrow to the next step: ADR 0322) and undo (ADR 0276); a brief with `question` has a Scout answer it as a path on the map (ADR 0316); `link` ties a work chat to the pieces it works on, and their status then follows the chat by itself (ADR 0330). |
 | `app_agents_recap` | Orchestrator only | The recap: one short line per agent that works, waits or finished; with detail, one block per agent with its last steps. |
 | `app_child_output` | Orchestrator only | The latest report of a chat in its tree, delegates included: summary and criteria; full: the output, max 4,000 chars. |
 | `agent_metrics` | Orchestrator only | Success rate, cost, time and corrections per role and version (numbers only). |
@@ -128,7 +128,7 @@ row and its line here in the same change.
 | `brain_script_add` | work chats | Save a new script in the brain right after it ran and worked. |
 | `project_map_read` | work chats | The user's project maps: the list, one map as text with statuses and agents and, on a map that tells a plan, how far the project is (ADR 0326), or one `element` in full (details, files, links). |
 | `project_map_save` | work chats | Draw or redraw a project's map (people, systems, parts inside parts up to four levels, links, statuses, evidence files, `rules`, `keeps`, `why`, `keyFiles`, `paths`; ADR 0316), or as a sequence: kinds `phase` and `step` drawn in a line in the saved order, `par`, `layout`, links of kind `next`, `proofs`, `refs` (ADR 0322). |
-| `project_map_update` | work chats | Say which elements of a map you work on, update the status of what you finished, add `paths` or `drop_paths` by id (ADR 0316). |
+| `project_map_update` | work chats | Say which elements of a map you work on (their status then follows the chat by itself, ADR 0330), update the status of anything else you finished, add `paths` or `drop_paths` by id (ADR 0316). |
 | `brain_queries` | work chats | The brain's saved queries (SQL, KQL, GraphQL…). |
 | `brain_query_add` | work chats | Save a new query in the brain right after it gave the right answer. |
 | `artifact_save` | work chats | Declare the report, document or plan you wrote because the user asked for one: it shows in Memoria → Artifact (ADR 0328). |

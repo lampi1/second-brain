@@ -12,15 +12,19 @@
 // nothing to say is not drawn (a phase or a step without written details has no «Come funziona»); the arrow to the
 // following step is told without a status.
 // Its own count (ADR 0326): a piece with pieces inside shows how many of them are done, with the bar.
+// The status in words (#456, ADR 0330): a phase or a step that is ok reads «fatto», anything else «funziona» (stateText).
 import { useEffect, useState, type ReactNode } from 'react';
 import { descendantsOf, layoutOf, passagesOf, type MapElement, type MapLink, type MapPath, type MapState, type MapWork, type ProjectMap } from '@shared/project-map';
 import type { MapProgress } from '@shared/project-map-progress';
+import { isStepKind } from '@shared/project-map-status';
 import { t } from '../../i18n';
 import { IconChat, IconFile, IconGlobe } from '../Icons';
 import { ProgressHead, countText } from './MapProgress';
 import { Turn } from './PlanCard';
 
 type Shown = MapState | 'stale';
+/** A status in the user's words: ok is «fatto» on a phase or a step (work to do), «funziona» on what exists. */
+export const stateText = (s: Shown, kind?: string): string => t(s === 'ok' && isStepKind(kind) ? 'pm.state.done' : `pm.state.${s}`);
 const WORK_MARK = { todo: '○', now: '●', done: '✓', blocked: '✕' } as const;
 const Paras = ({ text }: { text: string }) => <>{text.split('\n').map((p, i) => <p key={i} className="pm-long">{p}</p>)}</>;
 const List = ({ items, id }: { items: string[]; id: string }) => <ul className="pm-facts" data-testid={id}>{items.map((x, i) => <li key={i}>{x}</li>)}</ul>;
@@ -85,7 +89,7 @@ export function ElementDetail({ map, el, state, stateOfLink, stateOfEl, confirme
     <span className="dash-eyebrow">{lead ?? t(`pm.kind.${el.kind}`).toUpperCase()}</span>
     <h3>{el.name}</h3>
     {el.description && <p>{el.description}</p>}
-    <p><i className={`pm-dot s-${state}`} />{t(`pm.state.${state}`)}{el.note ? `: ${el.note}` : ''}</p>
+    <p data-testid={`${testid}-state`}><i className={`pm-dot s-${state}`} />{stateText(state, el.kind)}{el.note ? `: ${el.note}` : ''}</p>
     {count && <div className="pm-detail-prog" data-testid={`${testid}-progress`}><ProgressHead pct={count.pct} count={countText(count)} of={el.name} /></div>}
     {(el.details || !seq) && <h4>{t('pm.how')}</h4>}
     {el.details ? <Paras text={el.details} /> : !seq ? <p className="pm-muted" data-testid="pm-no-details">{t('pm.noDetails')}</p> : null}
@@ -94,7 +98,7 @@ export function ElementDetail({ map, el, state, stateOfLink, stateOfEl, confirme
     {el.rules?.length ? <><h4>{t('pm.rules')}</h4><List items={el.rules} id="pm-rules" /></> : null}
     {el.keeps?.length ? <><h4>{t('pm.keeps')}</h4><List items={el.keeps} id="pm-keeps" /></> : null}
     {parts.length > 0 && <><h4>{t(line ? 'pm.stepsOf' : 'pm.partsOf')}</h4><ul className={`pm-partlist${line ? ' pm-steplist' : ''}`} data-testid="pm-partlist">{parts.map((p, i) => <li key={p.id} data-testid={`pm-part-${p.id}`}>
-      <button type="button" onClick={() => onShow(p.id)}>{line && <><i className="pm-ord">{ord[i]}</i><i className={`pm-dot s-${stateOfEl(p)}`} title={t(`pm.state.${stateOfEl(p)}`)} /></>}{p.name}{line && p.par && i > 0 ? <em className="pm-par" title={t('pm.withPrev')}>∥</em> : null}{kidsOf(p.id) ? <small> · {t(line ? 'pm.stepsCount' : 'pm.parts', { n: kidsOf(p.id) })}</small> : null}</button>
+      <button type="button" onClick={() => onShow(p.id)}>{line && <><i className="pm-ord">{ord[i]}</i><i className={`pm-dot s-${stateOfEl(p)}`} title={stateText(stateOfEl(p), p.kind)} /></>}{p.name}{line && p.par && i > 0 ? <em className="pm-par" title={t('pm.withPrev')}>∥</em> : null}{kidsOf(p.id) ? <small> · {t(line ? 'pm.stepsCount' : 'pm.parts', { n: kidsOf(p.id) })}</small> : null}</button>
       {p.description ? <span>{p.description}</span> : null}</li>)}</ul></>}
     {(out.length > 0 || into.length > 0) && <><h4>{t('pm.passages')}</h4><ul className="pm-passes" data-testid="pm-passes">
       {out.map(l => <Passage key={l.id} l={l} other={byId.get(l.to)} dir="out" state={stateOfLink(l)} onShow={onShow} />)}

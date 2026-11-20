@@ -95,7 +95,7 @@ export const brainModelEn: typeof brainModelIt = {
   'pm.ago': (p: { at: string }) => `${p.at} ago`,
   'pm.backNow': 'Back to now', 'pm.you': 'You', 'pm.youMeans': 'your turn',
   'pm.kind.person': 'People', 'pm.kind.system': 'Your system', 'pm.kind.external': 'External system', 'pm.kind.env': 'Environment', 'pm.kind.doc': 'Document', 'pm.kind.part': 'Part',
-  'pm.state.ok': 'works', 'pm.state.work': 'in progress', 'pm.state.blocked': 'blocked', 'pm.state.unknown': 'unclear', 'pm.state.stale': 'to check',
+  'pm.state.ok': 'works', 'pm.state.done': 'done', 'pm.state.work': 'in progress', 'pm.state.blocked': 'blocked', 'pm.state.unknown': 'unclear', 'pm.state.stale': 'to check',
   'pm.state.planned': 'planned', 'pm.new': 'new', 'pm.plan': 'Plan', 'pm.planPhase.proposed': 'waits for your ok', 'pm.planPhase.revising': 'being revised', 'pm.planPhase.running': 'under way', 'pm.planPhase.done': 'finished',
   'pm.planSteps': (p: { done: number; total: number }) => `${p.done} of ${p.total} steps done`, 'pm.planApprove': 'Approve and start', 'pm.planChange': 'Change something', 'pm.planChangeDraft': (p: { title: string }) => `Change the plan «${p.title}»: `, 'pm.planGone': 'The plan changed: look at the new version.',
   'pm.changeSent': (p: { at: string }) => `Change sent ${p.at}:`, 'pm.changeSeen': (p: { at: string }) => `Change received ${p.at}:`, 'pm.worksMore': (p: { n: number; done: number; total: number }) => `+${p.n} more · ${p.done}/${p.total} done`,

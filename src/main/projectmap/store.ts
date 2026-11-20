@@ -7,6 +7,7 @@
 // test/unit/projectmap-store.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
+import { waitingOf } from '@shared/project-map-status';
 import { MAP_LIMITS, canHold, canSitInside, isMapHref, isMapLayout, prunePaths, type MapPath, type MapVersionInfo, type ProjectMap, type ProjectMapInfo } from '@shared/project-map';
 
 export const HISTORY_MAX = 400;
@@ -32,6 +33,7 @@ export function asMap(v: unknown, project: string): ProjectMap | null {
     // #443: a layout the drawing knows, a real «together», proofs and links held to their shape and limits
     if (!isMapLayout(x.layout)) delete x.layout;
     if (x.par !== true) delete x.par;
+    delete x.busy; delete x.waits; // the live view's own marks (#456), never saved ones
     const proofs = Array.isArray(x.proofs) ? x.proofs.filter(f => obj(f) && str(f.text) && f.text).map(f => ({ text: (f.text as string).slice(0, MAP_LIMITS.proof), ...(str(f.file) && inside(f.file) ? { file: f.file.slice(0, MAP_LIMITS.path) } : {}), ...(isMapHref(f.href) ? { href: f.href } : {}) })).slice(0, MAP_LIMITS.proofs) : [];
     if (proofs.length) x.proofs = proofs; else delete x.proofs;
     const refs = Array.isArray(x.refs) ? x.refs.filter(f => obj(f) && str(f.label) && f.label && isMapHref(f.href)).map(f => ({ label: (f.label as string).slice(0, MAP_LIMITS.label), href: f.href as string })).slice(0, MAP_LIMITS.refs) : [];
@@ -92,14 +94,15 @@ export class ProjectMapStore {
     return path.join(d, project);
   }
 
-  list(): ProjectMapInfo[] {
+  /** `waiting` = how the caller counts what waits for the user on a map (the live count, service.ts); as saved otherwise. */
+  list(waiting: (m: ProjectMap) => number = waitingOf): ProjectMapInfo[] {
     const d = this.dir();
     if (!d) return [];
     let names: string[] = [];
     try { names = fs.readdirSync(d).filter(n => SLUG.test(n)); } catch { return []; }
     return names.map(n => this.get(n)).filter((m): m is ProjectMap => !!m)
       .map(m => ({ project: m.project, title: m.title, version: m.version, updatedAt: m.updatedAt, elements: m.elements.length,
-        waiting: [...m.elements, ...m.links].filter(x => x.status === 'blocked' && x.actor === 'user').length }))
+        waiting: waiting(m) }))
       .sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
