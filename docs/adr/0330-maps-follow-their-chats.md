@@ -26,16 +26,24 @@ open, and another read «previsto» over a step that was stuck.
      pieces: a project's work conversation goes on), or `app_project_map` `link` for a chat already there
      (`elements: []` unlinks). A chat the app bound only because it edited a piece's file moves nothing: that piece
      reads «da verificare», as before.
-   - What a chat says (`sayOf`): at work (it runs, or a chat it delegated does) · on it (between two turns, or a
-     partial report) · waits for the user (an open request of its own or of a chat it delegated, or its last answer
+   - What a chat says (`sayOf`): at work (it runs, or a chat it delegated does) · at work again after its done report
+     (the turn that reported goes on, a message followed) · on it (between two turns, or a partial report) · waits for the user (an open request of its own or of a chat it delegated, or its last answer
      says so) · failed · reported blocked · done (it reported done; a chat with no report to give is done when the app
      closed it after a turn that ended well) · nothing (never started, stopped by the user, closed by hand).
    - What is saved, one version by «app» per real change: «in lavorazione» when the work starts, «bloccato» on a
      blocked report, done when every chat on the piece is done. Only when what the chats say moved since the last
-     time: a status an agent or the Orchestrator set by hand after it stays.
+     time: a status an agent or the Orchestrator set by hand after it stays. What the chats said on a piece is
+     forgotten once none speaks for it (stopped, unlinked, removed) and when a new chat is linked to it: the next
+     one starts it again. A chat that is removed is followed like one that changes. A save that fails is remembered
+     as not done: the next change of the chat tries again (the same for a plan's steps).
    - What is only shown, and saves nothing: stuck on the user («Tu») while a chat waits for him, stuck on the agent
-     while every chat on the piece stands on an error. A question does not write a version. While a chat runs the app
-     vouches for the piece: it never falls to «da verificare».
+     while every chat on the piece stands on an error; under way again while a chat that reported done works after a
+     message that followed (the piece stays saved done). A question or a follow-up message does not write a version.
+     A chat's own edits never turn its piece «da verificare»: while it runs the app vouches for the piece, between
+     two turns the piece counts as confirmed at the chat's last edit (the 2 hours run from there), and a done report
+     confirms what was edited on the piece and on the pieces it speaks for.
+   - A link made on purpose holds: an edit of a file of another map, or a plan's step on another map, dates that
+     piece and leaves the chat where it was linked.
    - When the Orchestrator starts a chat, unlinked, in the folder of a map that tells a plan still open, the answer
      carries one line that says how to link it.
 2. **A box with pieces inside says what they say together** (`src/shared/project-map-status.ts`), at every depth: one
@@ -45,7 +53,9 @@ open, and another read «previsto» over a step that was stuck.
    a box is ignored: it goes on the pieces.
 3. **A status meant for a box** (a chat linked to it, a plan's step on it) lands on what holds one (`spread`). Under
    way saves nothing, since which piece is under way is not known: the live view marks the box `busy` and it reads
-   under way while the work lasts (a field of the view only, never saved, dropped when read from a file). Done turns
+   under way while the work lasts (a field of the view only, never saved, dropped when read from a file). Waiting
+   for the user or standing on an error shows on the pieces under way, else on the first step still open, else (a
+   system whose parts are all done) on the box itself: the view marks it `waits`, the same kind of field. Done turns
    its pieces under way to done, and its steps not started too: a finished phase has finished steps; the parts of a
    system that nobody worked on keep what they say. Stuck turns its pieces under way to stuck, else its first step
    still open. A piece a chat is linked to directly is left to that chat.
@@ -65,8 +75,11 @@ open, and another read «previsto» over a step that was stuck.
 - A version per start and per end of a linked chat: the history grows with the work, not with its questions.
 - The Orchestrator has to link the chat: the app cannot know which piece a new chat is for. The parameter sits on the
   two tools it already uses to start work, and the hint reminds it where a plan is open.
-- Not done: no link from a chat's title or prompt by guessing; the waiting count of the projects list still reads the
-  saved statuses; nobody tried it on a real PC with real chats.
+- The projects list counts what waits for the user once: the pieces with nothing inside, never their box too, and
+  for a map with linked chats the ones waiting right now (`waitingOf`, the same count as the map's header).
+- Not done: no link from a chat's title or prompt by guessing; nobody tried it on a real PC with real chats.
+- After the independent review of PR #457 (8 findings, all taken): the forgotten memo, the link that holds, the
+  chat's own edits, the removed chat, `waits`, the retry, the follow-up message without a version, the count.
 
 ## Tests
 
@@ -74,4 +87,6 @@ open, and another read «previsto» over a step that was stuck.
 the boxes, a busy box, the words, the saved file, a status meant for a box, the progress), `test/unit/projectmap-follow.test.ts`
 (what a chat says in each state, what the chats on a piece say together, start → wait → done → a new assignment, an
 error and a blocked report, a chat linked to a box, a sub-chat at work, `working_on`, a chat bound by a file, unlink,
-the Orchestrator's link and hint).
+the Orchestrator's link and hint; and the corner cases of the review: a stopped chat and a new link, an edit in
+another map, the chat's own edits on a piece and on a box, a removed chat, a system that waits, the count, a failed
+save, a message after a done report).

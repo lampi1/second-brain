@@ -6,7 +6,8 @@
 //   blocked status lately, or its files changed since).
 // - A piece with pieces inside shows what they say together (rollUp), all the way down: its own saved status is never
 //   read, so a phase cannot read done over steps still open. The saved file follows too (settle, at every save).
-//   While somebody works on the box itself (`busy`, set by the app on the live view) it reads under way.
+//   While somebody works on the box itself (`busy`, set by the app on the live view) it reads under way; while a chat
+//   linked to the box itself waits and no piece inside can say so (`waits`) it reads stuck.
 // - A status that comes from outside the piece (a plan's step, a chat linked to it: main/projectmap/service.ts) lands
 //   on what holds a status: the piece itself, or, for a box, the pieces inside it that it can speak for (spread).
 // - The words: `ok` reads «fatto» on a phase or a step and «funziona» on everything else (stateLabel).
@@ -77,8 +78,10 @@ export function statusesOf(map: { elements: Tree }, now: number, changed: Record
       path.add(e.id);
       s = rollUp(own.map(k => visit(k, path)));
       path.delete(e.id);
+      // a chat on the box itself waits and no piece inside says so: stuck (on the user, when it or a piece waits for him)
+      if (e.waits) s = { status: 'blocked', stale: false, actor: s.status === 'blocked' && s.actor === 'user' ? 'user' : e.waits };
       // somebody works on the box itself right now: under way, unless a piece inside is stuck
-      if (e.busy && s.status !== 'blocked') s = { status: 'work', stale: false };
+      else if (e.busy && s.status !== 'blocked') s = { status: 'work', stale: false };
       // its own files (the ones no piece inside covers) changed after everything in it was done: to verify
       else if (s.status === 'ok' && changed[e.id] !== undefined && changed[e.id]! > e.confirmedAt) s = { status: 'unknown', stale: true };
     }
@@ -137,4 +140,12 @@ export function spread(elements: Tree, id: string, want: 'work' | 'ok' | 'blocke
   const open = leaves.filter(e => !skip.has(e.id)), now = open.filter(e => e.status === 'work');
   const todo = open.filter(e => isStepKind(e.kind) && (e.status === 'planned' || e.status === 'unknown'));
   return (want === 'ok' ? [...now, ...todo] : now.length ? now : todo.slice(0, 1)).map(e => ({ id: e.id, status: want }));
+}
+
+/** How many things of a map wait for the user: the pieces with nothing inside that read stuck on him, the boxes a chat
+ *  linked to them waits on him for (`waits`), the links stuck on him. `shown` = statusesOf of the same map. */
+export function waitingOf(map: { elements: Tree; links: readonly { status: MapState; actor?: MapActor }[] }, shown?: ReadonlyMap<string, ShownState>): number {
+  const boxes = new Set(map.elements.map(e => e.parent).filter(Boolean));
+  const yours = (e: MapElement) => { const s = shown ? shown.get(e.id) : e; return s?.status === 'blocked' && s.actor === 'user'; };
+  return map.elements.filter(e => (boxes.has(e.id) ? e.waits === 'user' : yours(e))).length + map.links.filter(x => x.status === 'blocked' && x.actor === 'user').length;
 }

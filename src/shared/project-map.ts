@@ -85,6 +85,9 @@ export interface MapElement {
   /** on the live view only, never saved (#456): somebody works on this box itself right now (a chat linked to it, a
    *  plan's step on it), so a box with pieces inside reads under way whatever they say, unless one of them is stuck */
   busy?: true;
+  /** on the live view only, never saved (#456): a chat linked to this box itself waits for the user (or stands on an
+   *  error) and no piece inside can say so for it: the box reads stuck on that actor */
+  waits?: MapActor;
 }
 /** A proof of a piece (#443): what it shows in a line, and maybe the project file or the address that holds it. */
 export interface MapProof { text: string; file?: string; href?: string }

@@ -2,17 +2,18 @@
 // was working on a map element but the map still showed it as "planned" … maps update themselves: when a chat linked
 // to a map element starts, waits, finishes or fails, the element status moves automatically to work / blocked / ok».
 // The app already holds all of it (zero tokens): the chat's state, its open requests, its sub-chats, its report.
-// - sayOf: one chat → run (at work now, it or a chat it delegated) · work (on it, between turns or with a partial
-//   report) · wait (it waits for the user: an open request, or its last answer says so) · fail (its turn ended on an
+// - sayOf: one chat → run (at work now, it or a chat it delegated) · redo (at work again after it reported done: a
+//   message that followed, the end of the turn that reported) · work (on it, between turns or with a partial report) · wait (it waits for the user: an open request, or its last answer says so) · fail (its turn ended on an
 //   error) · stuck (it reported blocked) · done (it reported done, or, with no report to give, the app closed it after
 //   a turn that ended well) · null (never started, stopped by the user, closed by hand: it says nothing).
 // - wantOf: the chats linked to one piece → the status to save (work, blocked, ok: these change rarely) and what shows
-//   only while it lasts (stuck on the user or on an error: never saved, so a question does not write a version).
+//   only while it lasts (stuck on the user or on an error, under way again after a done report: never saved, so a
+//   question or a message that follows does not write a version).
 // Pure. Used by projectmap/service.ts; pinned by test/unit/projectmap-follow.test.ts.
 import type { ChatSummary, PendingRequest } from '@shared/contract';
 import type { MapActor } from '@shared/project-map';
 
-export type ChatSay = 'run' | 'work' | 'wait' | 'fail' | 'stuck' | 'done';
+export type ChatSay = 'run' | 'redo' | 'work' | 'wait' | 'fail' | 'stuck' | 'done';
 
 const ended = (c: ChatSummary) => !!c.closedAt || c.state === 'closed';
 const busy = (c: ChatSummary) => c.state === 'running' || c.state === 'starting' || !!c.queued;
@@ -37,7 +38,7 @@ export function sayOf(c: ChatSummary, all: readonly ChatSummary[], asks: readonl
     const kids = below(c, all), mine = new Set([c.id, ...kids.map(k => k.id)]);
     // a delegated chat's question is its parent's to answer: the work waits either way
     if (asks.some(r => mine.has(r.chatId)) || c.state === 'waiting' || kids.some(k => k.state === 'waiting')) return 'wait';
-    if (busy(c) || kids.some(busy) || (c.background ?? 0) > 0) return 'run';
+    if (busy(c) || kids.some(busy) || (c.background ?? 0) > 0) return reportOf(c) === 'done' ? 'redo' : 'run';
     if (c.waitsOn === 'user') return 'wait';
   }
   if (c.state === 'error' || c.lastResult?.isError) return 'fail';
@@ -58,16 +59,19 @@ export interface Want {
   live: { actor: MapActor } | null;
   /** a chat is at work on it right now: the app vouches for the status (never «da verificare» meanwhile) */
   running: boolean;
+  /** shown only while it lasts: every chat on it reported done and one is at work again (the piece stays saved done) */
+  redo: boolean;
 }
 
 /** What the chats linked to one piece say together. */
 export function wantOf(says: readonly ChatSay[]): Want {
-  if (!says.length) return { durable: null, live: null, running: false };
+  if (!says.length) return { durable: null, live: null, running: false, redo: false };
   const has = (s: ChatSay) => says.includes(s);
   const open = has('run') || has('work') || has('wait') || has('fail');
   return {
     durable: open ? 'work' : has('stuck') ? 'blocked' : 'ok',
-    live: has('wait') ? { actor: 'user' } : has('fail') && !has('run') && !has('work') ? { actor: 'agent' } : null,
-    running: has('run'),
+    live: has('wait') ? { actor: 'user' } : has('fail') && !has('run') && !has('redo') && !has('work') ? { actor: 'agent' } : null,
+    running: has('run') || has('redo'),
+    redo: has('redo') && !open && !has('stuck'),
   };
 }

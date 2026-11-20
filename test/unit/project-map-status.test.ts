@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { elementText, mapText, type MapElement, type MapState, type ProjectMap } from '../../src/shared/project-map';
 import { countOf } from '../../src/shared/project-map-progress';
-import { STALE_MS, leavesOf, rollUp, settle, spread, stateLabel, statusesOf } from '../../src/shared/project-map-status';
+import { STALE_MS, leavesOf, rollUp, settle, spread, stateLabel, statusesOf, waitingOf } from '../../src/shared/project-map-status';
 
 const T = 1_000_000_000;
 const el = (id: string, status: MapState, x: Partial<MapElement> = {}): MapElement => ({ id, kind: 'step', name: id.toUpperCase(), status, evidence: [], confirmedAt: T, ...x });
@@ -64,6 +64,17 @@ describe('statusesOf', () => {
     expect(statusesOf(busy('f2'), T).get('f2')).toEqual(s('blocked', { actor: 'user' }));
     // on a piece with nothing inside the mark means nothing
     expect(statusesOf(busy('a'), T).get('a')).toEqual(s('ok'));
+  });
+  it('a box whose chat waits and no piece inside can say so reads stuck on that actor, and counts once among what waits', () => {
+    const waits = (id: string, actor: 'user' | 'agent') => map(m.elements.map(e => (e.id === id ? { ...e, waits: actor } : e)));
+    expect(statusesOf(waits('f3', 'user'), T).get('f3')).toEqual(s('blocked', { actor: 'user' }));
+    expect(statusesOf(waits('f3', 'agent'), T).get('f3')).toEqual(s('blocked', { actor: 'agent' }));
+    // a piece inside already waits for the user: it stays the user's turn
+    expect(statusesOf(waits('f2', 'agent'), T).get('f2')).toEqual(s('blocked', { actor: 'user' }));
+    const w = waits('f3', 'user');
+    expect(waitingOf(w, statusesOf(w, T))).toBe(waitingOf(m, statusesOf(m, T)) + 1);
+    // as saved (no drawing at hand): the pieces with nothing inside, never their box too
+    expect(waitingOf(m)).toBe(m.elements.filter(e => !m.elements.some(k => k.parent === e.id) && e.status === 'blocked' && e.actor === 'user').length);
   });
   it('the map\'s text says the same, with «fatto» on phases and steps and «funziona» elsewhere', () => {
     const text = mapText({ map: m, agents: [], changed: {} }, T);

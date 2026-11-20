@@ -3,6 +3,9 @@
 // service.ts moves the pieces it is linked to: saved when it starts, reports done or reports blocked (one version per
 // real change), shown only while it waits or stands on an error; a chat linked to a box moves its open pieces; a box is
 // saved with what its pieces say; a chat bound only because it edited a file moves nothing; a status set by hand stands.
+// The review of PR #457 added: what the chats said is forgotten when none speaks any more, a link survives an edit in
+// another map, a chat's own edits never read «da verificare», a removed chat is followed, a box whose pieces cannot say
+// «waits» says it itself, a failed save is tried again, a message after a done report writes no version.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,7 +15,7 @@ import type { ChatItem, ChatSummary, PendingRequest } from '../../src/shared/con
 import { sayOf, wantOf } from '../../src/main/projectmap/follow';
 import { ProjectMaps } from '../../src/main/projectmap/service';
 import { ProjectMapStore } from '../../src/main/projectmap/store';
-import { statusesOf } from '../../src/shared/project-map-status';
+import { statusesOf, waitingOf } from '../../src/shared/project-map-status';
 import { appProjectMapTool, mapHint, mapLinkOf } from '../../src/main/projectmap/tools';
 
 const chat = (p: Partial<ChatSummary> & { id: string }): ChatSummary => ({
@@ -52,6 +55,12 @@ describe('sayOf', () => {
     // a report of an earlier assignment is not this one's
     expect(say({ state: 'idle', lastResult: { at: 30, isError: false }, run: { ...run('done'), startedAt: 25 } })).toBe('work');
   });
+  it('at work again after its done report (the turn that reported goes on, a message followed): redo, not a new start', () => {
+    expect(say({ state: 'running', run: run('done') })).toBe('redo');
+    expect(say({ state: 'running', run: run('partial') })).toBe('run');
+    // a new assignment is a new start
+    expect(say({ state: 'running', run: { ...run('done'), startedAt: 25 } })).toBe('run');
+  });
   it('with no report to give it is done when the app closed it after a turn that ended well', () => {
     expect(say({ state: 'closed', closedAt: 50, closedBy: 'auto', lastResult: { at: 30, isError: false } })).toBe('done');
     expect(say({ state: 'closed', closedAt: 50, closedBy: 'user', lastResult: { at: 30, isError: false } })).toBeNull();
@@ -65,16 +74,19 @@ describe('sayOf', () => {
 
 describe('wantOf', () => {
   it('what the chats on one piece say together', () => {
-    expect(wantOf([])).toEqual({ durable: null, live: null, running: false });
-    expect(wantOf(['run'])).toEqual({ durable: 'work', live: null, running: true });
-    expect(wantOf(['done', 'done'])).toEqual({ durable: 'ok', live: null, running: false });
-    expect(wantOf(['done', 'work'])).toEqual({ durable: 'work', live: null, running: false });
-    expect(wantOf(['done', 'stuck'])).toEqual({ durable: 'blocked', live: null, running: false });
+    expect(wantOf([])).toEqual({ durable: null, live: null, running: false, redo: false });
+    expect(wantOf(['run'])).toEqual({ durable: 'work', live: null, running: true, redo: false });
+    expect(wantOf(['done', 'done'])).toEqual({ durable: 'ok', live: null, running: false, redo: false });
+    expect(wantOf(['done', 'work'])).toEqual({ durable: 'work', live: null, running: false, redo: false });
+    expect(wantOf(['done', 'stuck'])).toEqual({ durable: 'blocked', live: null, running: false, redo: false });
     // it waits for the user: saved under way, shown stuck on him while it lasts
-    expect(wantOf(['run', 'wait'])).toEqual({ durable: 'work', live: { actor: 'user' }, running: true });
+    expect(wantOf(['run', 'wait'])).toEqual({ durable: 'work', live: { actor: 'user' }, running: true, redo: false });
     // an error shows only when nobody else goes on
-    expect(wantOf(['fail'])).toEqual({ durable: 'work', live: { actor: 'agent' }, running: false });
-    expect(wantOf(['fail', 'run'])).toEqual({ durable: 'work', live: null, running: true });
+    expect(wantOf(['fail'])).toEqual({ durable: 'work', live: { actor: 'agent' }, running: false, redo: false });
+    expect(wantOf(['fail', 'run'])).toEqual({ durable: 'work', live: null, running: true, redo: false });
+    // at work again after a done report: the piece stays saved done, it shows under way while it lasts
+    expect(wantOf(['redo', 'done'])).toEqual({ durable: 'ok', live: null, running: true, redo: true });
+    expect(wantOf(['redo', 'work'])).toEqual({ durable: 'work', live: null, running: true, redo: false });
   });
 });
 
@@ -90,7 +102,7 @@ const drawing = {
 };
 
 let dir: string, now: number, chats: ChatSummary[], pending: PendingRequest[];
-const make = () => new ProjectMaps({ store: new ProjectMapStore(() => dir), chats: () => chats, items: (): ChatItem[] => [], pending: () => pending,
+const make = (store = new ProjectMapStore(() => dir)) => new ProjectMaps({ store, chats: () => chats, items: (): ChatItem[] => [], pending: () => pending,
   emit: () => {}, stateFile: path.join(dir, 'state.json'), now: () => now, debounceMs: 10 });
 /** the chat changed: main tells the page, the maps hear it */
 const set = (m: ProjectMaps, id: string, p: Partial<ChatSummary>) => { chats = chats.map(c => (c.id === id ? { ...c, ...p } : c)); m.observe('chat:updated', chats.find(c => c.id === id)); };
@@ -243,5 +255,151 @@ describe('the Orchestrator links a chat', () => {
     expect(() => mapLinkOf(undefined, { project: 'shop', on: ['c'] })).toThrow('only the Orchestrator');
     expect(mapHint(m, 'C:\\repo\\shop\\src')).toContain('not linked to the map «shop» (25%)');
     expect(mapHint(m, 'C:\\repo\\other')).toBeUndefined();
+  });
+});
+
+describe('the follow holds in the corner cases (review of PR #457)', () => {
+  const start = () => { const m = make(); m.save({ title: 'shop', root: 'C:\\repo\\shop', map: drawing, by: 'Scout', summary: '' }); return m; };
+  /** what the drawing shows for a piece right now */
+  const shown = (m: ProjectMaps, id: string) => { const v = m.view('shop')!; return statusesOf(v.map, now, v.changed).get(id); };
+  const edit = (m: ProjectMaps, chatId: string, file: string, at: number) => m.observe('chat:item', { chatId, item: { kind: 'tool', name: 'Edit', status: 'ok', at, input: { file_path: file } } });
+
+  it('what the chats said is forgotten when none speaks any more: the next chat on the piece starts it again', () => {
+    const m = start();
+    m.link('shop', 'w', ['c']);
+    set(m, 'w', { state: 'running' });
+    expect(saved('c')).toBe('work');
+    // the user stops it; the Orchestrator puts the piece back
+    set(m, 'w', { state: 'idle', lastResult: { at: 30, isError: false, interrupted: true } });
+    m.update('shop', { changes: [{ id: 'c', status: 'planned' }], by: 'Orchestrator' });
+    chats.push(chat({ id: 'w2' }));
+    m.link('shop', 'w2', ['c']);
+    set(m, 'w2', { state: 'running' });
+    expect(saved('c')).toBe('work');
+  });
+
+  it('a new link speaks afresh, also while an older chat is still on the piece', () => {
+    const m = start();
+    m.link('shop', 'w', ['c']);
+    set(m, 'w', { state: 'running' });
+    set(m, 'w', { state: 'idle', lastResult: { at: 30, isError: false } });
+    m.update('shop', { changes: [{ id: 'c', status: 'planned' }], by: 'Orchestrator' });
+    expect(saved('c')).toBe('planned'); // set by hand: it stands while the chats say nothing new
+    chats.push(chat({ id: 'w2', state: 'running' }));
+    m.link('shop', 'w2', ['c']);
+    expect(saved('c')).toBe('work');
+  });
+
+  it('a linked chat that edits a file of another map keeps its link', () => {
+    const m = start();
+    m.save({ title: 'lib', root: 'C:\\repo\\lib', map: { elements: [{ id: 'core', kind: 'system', name: 'Core', status: 'ok', evidence: ['src/'] }] }, by: 'Scout', summary: '' });
+    m.link('shop', 'w', ['c']);
+    set(m, 'w', { state: 'running' });
+    edit(m, 'w', 'C:\\repo\\lib\\src\\x.ts', now + 1);
+    expect(m.view('shop')!.agents.map(a => a.elements)).toEqual([['c']]);
+    expect(m.view('lib')!.changed).toEqual({ core: now + 1 }); // the edit still dates the other map's piece
+    set(m, 'w', { state: 'idle', run: run('done'), lastResult: { at: 30, isError: false } });
+    expect(saved('c')).toBe('ok');
+  });
+
+  it('a chat\'s own edits never turn its piece «da verificare»: at work, between two turns, and when it reports done', () => {
+    const m = start();
+    m.link('shop', 'w', ['d']);
+    set(m, 'w', { state: 'running' });
+    now += 60_000;
+    edit(m, 'w', 'C:\\repo\\shop\\src\\pay\\a.ts', now);
+    expect(shown(m, 'd')).toEqual({ status: 'work', stale: false });
+    // between two turns: confirmed at its last edit, and the two hours count from there
+    set(m, 'w', { state: 'idle', lastResult: { at: now, isError: false } });
+    expect(shown(m, 'd')).toEqual({ status: 'work', stale: false });
+    now += 3 * 3600_000;
+    expect(shown(m, 'd')).toEqual({ status: 'unknown', stale: true });
+    set(m, 'w', { state: 'idle', run: { ...run('done'), startedAt: 10 }, lastResult: { at: now, isError: false } });
+    expect(shown(m, 'd')).toEqual({ status: 'ok', stale: false });
+  });
+
+  it('a chat linked to a box with files of its own: done is done, not «da verificare»', () => {
+    const m = make();
+    m.save({ title: 'shop', root: 'C:\\repo\\shop', map: { elements: [
+      { id: 'f2', kind: 'phase', name: 'Fatture', status: 'planned', evidence: ['src/inv/'] },
+      { id: 'c', kind: 'step', name: 'Pulsanti', parent: 'f2', status: 'planned' },
+    ] }, by: 'Scout', summary: '' });
+    m.link('shop', 'w', ['f2']);
+    set(m, 'w', { state: 'running' });
+    now += 60_000;
+    edit(m, 'w', 'C:\\repo\\shop\\src\\inv\\x.ts', now);
+    set(m, 'w', { state: 'idle', run: run('done'), lastResult: { at: now, isError: false } });
+    expect(saved('c')).toBe('ok');
+    expect(shown(m, 'f2')).toEqual({ status: 'ok', stale: false });
+  });
+
+  it('a removed chat is followed: the piece says what the chats left on it say', () => {
+    const m = start();
+    chats.push(chat({ id: 'w2' }));
+    m.link('shop', 'w', ['c']);
+    m.link('shop', 'w2', ['c']);
+    set(m, 'w', { state: 'idle', run: run('done'), lastResult: { at: 30, isError: false } });
+    set(m, 'w2', { state: 'running' });
+    expect(saved('c')).toBe('work');
+    chats = chats.filter(c => c.id !== 'w2');
+    m.observe('chat:removed', { chatId: 'w2' });
+    expect(saved('c')).toBe('ok');
+  });
+
+  it('a system whose parts are all done: the chat linked to it waits → the system itself reads stuck on the user', () => {
+    const m = make();
+    m.save({ title: 'shop', root: 'C:\\repo\\shop', map: { elements: [
+      { id: 'web', kind: 'system', name: 'Web', status: 'ok' },
+      { id: 'cart', kind: 'part', name: 'Carrello', parent: 'web', status: 'ok' },
+    ] }, by: 'Scout', summary: '' });
+    m.link('shop', 'w', ['web']);
+    set(m, 'w', { state: 'running' });
+    expect(m.list()[0]!.waiting).toBe(0);
+    pending = [ask('w')];
+    set(m, 'w', { state: 'waiting' });
+    const v = m.view('shop')!;
+    expect(statusesOf(v.map, now, v.changed).get('web')).toEqual({ status: 'blocked', stale: false, actor: 'user' });
+    expect(statusesOf(v.map, now, v.changed).get('cart')).toEqual({ status: 'ok', stale: false });
+    // the header and the projects list count it once
+    expect(waitingOf(v.map, statusesOf(v.map, now, v.changed))).toBe(1);
+    expect(m.list()[0]!.waiting).toBe(1);
+    // answered, and it goes on: under way, and the mark was never saved
+    pending = [];
+    set(m, 'w', { state: 'running' });
+    expect(statusesOf(m.view('shop')!.map, now).get('web')).toEqual({ status: 'work', stale: false });
+    m.update('shop', { changes: [{ id: 'cart', status: 'work' }], by: 'Artisan' });
+    expect(fs.readFileSync(path.join(dir, 'projects', 'shop', 'map.json'), 'utf8')).not.toMatch(/"waits"|"busy"/);
+  });
+
+  it('the projects list counts a piece that waits for the user once, not its box too', () => {
+    const m = start();
+    m.update('shop', { changes: [{ id: 'c', status: 'blocked', actor: 'user', note: 'serve una scelta' }], by: 'Artisan' });
+    expect(saved('f2')).toBe('blocked');
+    expect(m.list()[0]!.waiting).toBe(1);
+  });
+
+  it('a save that failed is tried again at the next change of the chat', () => {
+    const store = new ProjectMapStore(() => dir), m = make(store);
+    m.save({ title: 'shop', root: 'C:\\repo\\shop', map: drawing, by: 'Scout', summary: '' });
+    m.link('shop', 'w', ['c']);
+    vi.spyOn(store, 'save').mockImplementationOnce(() => { throw new Error('disk full'); });
+    set(m, 'w', { state: 'running' });
+    expect(saved('c')).toBe('planned');
+    set(m, 'w', { state: 'running', costUsd: 1 });
+    expect(saved('c')).toBe('work');
+  });
+
+  it('a message after its done report writes no version: the piece stays saved done and shows under way while it lasts', () => {
+    const m = start();
+    m.link('shop', 'w', ['c']);
+    set(m, 'w', { state: 'running', run: run() });
+    set(m, 'w', { state: 'idle', run: run('done'), lastResult: { at: 30, isError: false } });
+    const v = version();
+    set(m, 'w', { state: 'running' });
+    expect([saved('c'), version()]).toEqual(['ok', v]);
+    expect(shown(m, 'c')).toEqual({ status: 'work', stale: false });
+    set(m, 'w', { state: 'idle', lastResult: { at: 60, isError: false } });
+    expect([saved('c'), version()]).toEqual(['ok', v]);
+    expect(shown(m, 'c')).toEqual({ status: 'ok', stale: false });
   });
 });

@@ -39,7 +39,7 @@
 // column: «Mappe», Ctrl+Shift+S and app_project_map open land there (actions.ts openMaps).
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { countOf, planProgress, progressOf, workingOf } from '@shared/project-map-progress';
-import { isStepKind, statusesOf } from '@shared/project-map-status';
+import { isStepKind, statusesOf, waitingOf, type ShownState } from '@shared/project-map-status';
 import { NEW_MS, descendantsOf, levelOf, pathTo, shownStatus, type MapLink, type MapPlan, type MapWork, type Level, type LevelEdge, type LevelNode, type MapAgent, type MapElement, type MapState, type ProjectMapInfo, type ProjectMapView as View, type MapPath } from '@shared/project-map';
 import { brainBridge, openChatRef, openFileViewer, openInAppBrowser, orchestratorId } from '../../actions';
 import { t } from '../../i18n';
@@ -313,7 +313,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   const working = useMemo(() => (view && live ? workingOf(view) : new Set<string>()), [view, live]);
   const progress = useMemo(() => (map ? progressOf(map, working) : null), [map, working]);
   // what each box shows (#456): its own status, or for a box with pieces inside what they say together
-  const statuses = useMemo(() => (map ? statusesOf(map, now, view?.changed ?? {}) : new Map<string, ReturnType<typeof shownStatus> & { actor?: string }>()), [map, now, view]);
+  const statuses = useMemo(() => (map ? statusesOf(map, now, view?.changed ?? {}) : new Map<string, ShownState>()), [map, now, view]);
   // on a map that tells a plan, each box with pieces inside wears its own count
   const counts = useMemo(() => {
     const out = new Map<string, NonNullable<ReturnType<typeof countOf>>>();
@@ -465,7 +465,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   const decide = (p: MapPlan) => { void window.sb.invoke('chat:plan', { chatId: p.chatId, decision: 'approve', at: p.at }).catch(() => toast(t('pm.planGone'), 'warn')); };
   const change = (p: MapPlan) => { setFull(false); if (!brainBridge.draftToOrchestrator(t('pm.planChangeDraft', { title: p.title }), () => {})) toast(t('pm.noOrchestrator'), 'warn'); };
   // what waits for the user: the pieces themselves (a box that holds one is not counted again) and the links
-  const waiting = map.elements.filter(e => !kids(e.id) && yours(e)).length + map.links.filter(x => x.status === 'blocked' && x.actor === 'user').length;
+  const waiting = waitingOf(map, statuses);
   // the number in the header: the project's own count, else the one of the plan under way on this map
   const mainPlan = plans.find(p => p.phase === 'running') ?? plans.find(p => p.phase !== 'done');
   const headline = progress ? { pct: progress.pct, tip: countText(progress) }
