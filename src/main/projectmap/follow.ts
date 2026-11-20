@@ -26,18 +26,17 @@ function below(c: ChatSummary, all: readonly ChatSummary[]): ChatSummary[] {
   return out;
 }
 
-/** The report of the work the chat does now: its run's (a role chat), else its delegation's. A report older than
- *  `since` (when the chat was linked to the piece) does not speak for that piece. */
-function reportOf(c: ChatSummary, since: number): 'done' | 'partial' | 'blocked' | undefined {
+/** The report of the work the chat does now: its run's (a role chat), else its delegation's; when it was given. */
+export function reportOf(c: ChatSummary): { outcome: 'done' | 'partial' | 'blocked'; at: number } | undefined {
   const r = c.run?.report;
-  if (r && r.at >= c.run!.startedAt) return r.at >= since ? r.outcome : undefined;
+  if (r && r.at >= c.run!.startedAt) return { outcome: r.outcome, at: r.at };
   const d = c.delegation?.result;
-  return d && !d.noReport && d.at >= c.delegation!.at && d.at >= since ? d.outcome : undefined;
+  return d && !d.noReport && d.at >= c.delegation!.at ? { outcome: d.outcome, at: d.at } : undefined;
 }
 
-/** `since` = when the chat was linked to the piece it speaks for: what it reported before is about something else. */
+/** `since` = when the chat was linked to the piece it speaks for: a report it gave before is about something else. */
 export function sayOf(c: ChatSummary, all: readonly ChatSummary[], asks: readonly PendingRequest[], since = 0): ChatSay | null {
-  const report = reportOf(c, since);
+  const given = reportOf(c), old = !!given && given.at < since, report = old ? undefined : given?.outcome;
   if (!ended(c)) {
     const kids = below(c, all), mine = new Set([c.id, ...kids.map(k => k.id)]);
     // a delegated chat's question is its parent's to answer: the work waits either way
@@ -50,6 +49,9 @@ export function sayOf(c: ChatSummary, all: readonly ChatSummary[], asks: readonl
   if (report === 'done') return 'done';
   if (report === 'partial') return 'work';
   if (c.lastResult?.interrupted) return null;
+  // linked after its report: on the piece once a turn ended after the link, and it says nothing until then (a
+  // finished chat linked afterwards writes nothing: whoever links it sets the status)
+  if (old) return !ended(c) && c.lastResult && c.lastResult.at >= since ? 'work' : null;
   // no report to give: finished = the app closed it after a turn that ended well; closed by hand = cancelled
   if (ended(c)) return c.closedBy !== 'user' && c.lastResult ? 'done' : null;
   return c.lastResult || c.waitsOnWork ? 'work' : null;

@@ -33,7 +33,7 @@ import { planWaves, type PlanStep } from '@shared/strategy';
 import { askLine } from '../appctl/digest';
 import { markOf, progressOf } from '../appctl/agents-recap';
 import { errText, log } from '../log';
-import { sayOf, wantOf, type ChatSay } from './follow';
+import { reportOf, sayOf, wantOf, type ChatSay } from './follow';
 import { sizeOf, type PieceSize } from './size';
 import type { ProjectMapStore } from './store';
 
@@ -115,7 +115,7 @@ export class ProjectMaps {
   /** The maps, each with how many things wait for the user right now: the same count as the map's header. */
   list(): ProjectMapInfo[] {
     const now = this.now();
-    return this.d.store.list(m => { const live = this.overlay(m, now); return waitingOf(live, statusesOf(live, now, this.state.changed[m.project] ?? {})); });
+    return this.d.store.list(m => { const live = this.live(m, this.works(m.project).works, now); return waitingOf(live, statusesOf(live, now, this.state.changed[m.project] ?? {})); });
   }
   /** the maps' project folders (where a file named in a message may be, file-roots.ts) */
   roots(): string[] {
@@ -137,10 +137,15 @@ export class ProjectMaps {
     const map = version === undefined ? this.d.store.get(project) : this.d.store.version(project, version);
     if (!map) return null;
     const { works, plans } = version === undefined ? this.works(project) : { works: {}, plans: [] };
+    return { map: version === undefined ? this.live(map, works, this.now()) : map, history: this.d.store.history(project), agents: this.agents(project), changed: this.state.changed[project] ?? {}, works, plans };
+  }
+
+  /** The current version as it shows right now: what the plans' steps and the linked chats add to the saved file. */
+  private live(map: ProjectMap, works: Record<string, MapWork[]>, now: number): ProjectMap {
     // a step under way vouches for its element now: the app sees it, so the status never reads «da verificare» meanwhile
-    const now = this.now();
-    const live = map.elements.some(e => works[e.id]?.some(w => w.state === 'now')) ? { ...map, elements: map.elements.map(e => (works[e.id]?.some(w => w.state === 'now') ? { ...e, confirmedAt: now } : e)) } : map;
-    return { map: version === undefined ? this.overlay(live, now, new Set(Object.keys(works).filter(id => works[id]!.some(w => w.state === 'now')))) : live, history: this.d.store.history(project), agents: this.agents(project), changed: this.state.changed[project] ?? {}, works, plans };
+    const stepsNow = new Set(Object.keys(works).filter(id => works[id]!.some(w => w.state === 'now')));
+    const vouched = map.elements.some(e => stepsNow.has(e.id)) ? { ...map, elements: map.elements.map(e => (stepsNow.has(e.id) ? { ...e, confirmedAt: now } : e)) } : map;
+    return this.overlay(vouched, now, stepsNow);
   }
 
   /** What the chats linked on purpose to a map's pieces say now (#456): linked element → one say per chat. A chat
@@ -231,7 +236,12 @@ export class ProjectMaps {
       // nothing is remembered: the next change of a linked chat tries again
       catch (err) { log.warn('projectmap', 'chats not mirrored on their map', { cause: errText(err), hint: 'the map keeps its last statuses; the next change of a linked chat retries' }); return; }
     }
-    for (const [key, want] of told) memo[key] = want;
+    const edited = this.state.changed[project];
+    for (const [key, want] of told) {
+      memo[key] = want;
+      // done: the files of the linked piece itself are what its chats say done (a box's own files, edited before the link)
+      if (want === 'ok' && edited) delete edited[key.slice(project.length + 1)];
+    }
     this.persist();
     this.changed(project);
   }
@@ -251,17 +261,18 @@ export class ProjectMaps {
     return { project, elements: ids };
   }
   /** A chat is linked on purpose to these pieces. A piece it was not on before speaks afresh: what the chats said
-   *  there does not hold it back, and what this chat reported before is not about it. A piece it was already on keeps
-   *  what was said (a status set by hand stands through a repeated link). */
-  private own(project: string, chatId: string, ids: string[], now: number): void {
+   *  there does not hold it back, and what this chat reported before `fresh` is not about it. A piece it was already on
+   *  keeps what was said (a status set by hand stands through a repeated link). */
+  private own(project: string, chatId: string, ids: string[], now: number, fresh = now): void {
     const was = this.state.focus[chatId], before = was?.project === project ? was : undefined;
     const since: Record<string, number> = {};
     for (const id of ids) {
       if (before?.own?.includes(id)) { since[id] = before.since?.[id] ?? 0; continue; }
-      since[id] = now;
+      since[id] = fresh;
       delete this.state.followed?.[`${project}/${id}`];
     }
-    this.state.focus[chatId] = { project, elements: ids, at: now, ...(ids.length ? { own: ids, since } : {}) };
+    // two arrays: `elements` grows with the files the chat edits, `own` never does
+    this.state.focus[chatId] = { project, elements: [...ids], at: now, ...(ids.length ? { own: [...ids], since } : {}) };
   }
   /** Whether a chat, or one that delegated it, is linked on purpose to a piece or to a box around it: it speaks for it. */
   private speaksFor(map: ProjectMap, chat: ChatSummary, all: readonly ChatSummary[], el: string): boolean {
@@ -361,7 +372,11 @@ export class ProjectMaps {
 
   /** An element that left the drawing leaves the chats' bindings and what the app remembers of it. */
   private prune(project: string, ids: ReadonlySet<string>): void {
-    for (const f of Object.values(this.state.focus)) if (f.project === project) { f.elements = f.elements.filter(id => ids.has(id)); if (f.own) f.own = f.own.filter(id => ids.has(id)); }
+    for (const f of Object.values(this.state.focus)) if (f.project === project) {
+      f.elements = f.elements.filter(id => ids.has(id));
+      if (f.own) f.own = f.own.filter(id => ids.has(id));
+      if (f.since) for (const id of Object.keys(f.since)) if (!ids.has(id)) delete f.since[id];
+    }
     for (const k of Object.keys(this.state.followed ?? {})) if (k.startsWith(`${project}/`) && !ids.has(k.slice(project.length + 1))) delete this.state.followed![k];
   }
 
@@ -513,7 +528,9 @@ export class ProjectMaps {
       const unknown = (a.workingOn as string[]).filter(id => !prev.elements.some(e => e.id === id));
       if (unknown.length) throw new Error(`working_on: no element ${unknown.join(', ')} (project_map_read lists them)`);
       // it said so itself: the status of these pieces follows it from now on (#456)
-      this.own(project, a.chatId, [...new Set(a.workingOn as string[])], now);
+      // it names the pieces in the same turn in which it reported: that report is about them
+      const c = this.d.chats().find(x => x.id === a.chatId), given = c ? reportOf(c) : undefined;
+      this.own(project, a.chatId, [...new Set(a.workingOn as string[])], now, given && given.at > (c!.lastResult?.at ?? 0) ? Math.min(given.at, now) : now);
       this.persist();
     }
     if (!next && !walks) { if (a.workingOn !== undefined) this.follow(project); this.changed(project); return { map: null, touched: [] }; }

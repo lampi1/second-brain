@@ -36,7 +36,9 @@ open, and another read «previsto» over a step that was stuck.
      time: a status an agent or the Orchestrator set by hand after it stays, also through a repeated link. What the
      chats said on a piece is forgotten once none speaks for it (stopped, unlinked, removed) and when a chat that was
      not on it is linked to it: the next one starts it again. A report a chat gave before it was linked to a piece is
-     not about that piece (the link's time is kept per piece). A chat that is removed is followed like one that changes. A save that fails is remembered
+     not about that piece (the link's time is kept per piece): linked while it works, it starts the piece; linked
+     after it had finished, it says nothing until a turn of its ends, and whoever links it sets the status. The one
+     exception is the chat's own `working_on` in the same turn as its report: that report is about those pieces. A chat that is removed is followed like one that changes. A save that fails is remembered
      as not done: the next change of the chat tries again (the same for a plan's steps).
    - What is only shown, and saves nothing: stuck on the user («Tu») while a chat waits for him, stuck on the agent
      while every chat on the piece stands on an error; under way again, or stuck on the user again, while a chat that
@@ -45,7 +47,9 @@ open, and another read «previsto» over a step that was stuck.
    - A chat's own edits never turn its piece «da verificare»: an edit by the chat that speaks for a piece (linked to
      it or to a box around it, or delegated by one that is) is not counted as a change of its files; anybody else's
      is. While it runs the app vouches for the piece, and between two turns the piece counts as confirmed when the
-     last turn ended (the 2 hours run from there).
+     last turn ended (the 2 hours run from there). A done report also confirms the own files of the piece the chat
+     is linked to (a box's files it edited before the link). A file it edits on another piece shows the chat there
+     and links nothing.
    - A link made on purpose holds: an edit of a file of another map, or a plan's step on another map, dates that
      piece and leaves the chat where it was linked.
    - When the Orchestrator starts a chat, unlinked, in the folder of a map that tells a plan still open, the answer
@@ -83,7 +87,7 @@ open, and another read «previsto» over a step that was stuck.
   now): the pieces with nothing inside, never their box too, the chats waiting right now, and nothing that fell to
   «da verificare». The progress lists a box marked `waits` among what waits for the user.
 - Not done: no link from a chat's title or prompt by guessing; nobody tried it on a real PC with real chats.
-- After two independent reviews of PR #457 (8 and 7 findings, all taken): the forgotten memo, the link that holds,
+- After three independent reviews of PR #457 (8, 7 and 5 findings, all taken): the forgotten memo, the link that holds,
   the chat's own edits, the removed chat, `waits`, the retry, the follow-up message and question without a version,
   the report older than the link, the repeated link, the counts.
 

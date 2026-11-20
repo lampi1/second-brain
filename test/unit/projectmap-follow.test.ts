@@ -7,7 +7,8 @@
 // another map, a chat's own edits never read «da verificare» (somebody else's do), a removed chat is followed, a box
 // whose pieces cannot say «waits» says it itself, a failed save is tried again, a message or a question after a done
 // report writes no version, a report given before a link is not about the newly linked piece, a repeated link keeps a
-// status set by hand, the projects list counts like the header.
+// status set by hand, the projects list counts like the header; a file edited on another piece links nothing, a chat
+// that had finished before its link says nothing, working_on in the turn of the report, a box's files edited before.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -73,6 +74,9 @@ describe('sayOf', () => {
     expect(sayOf(c, [], [], 20)).toBe('redo');
     expect(sayOf(c, [], [], 21)).toBe('run');
     expect(sayOf({ ...c, state: 'idle', lastResult: { at: 30, isError: false } }, [], [], 21)).toBe('work');
+    // it did nothing since the link: it says nothing (also when the app closed it)
+    expect(sayOf({ ...c, state: 'idle', lastResult: { at: 20, isError: false } }, [], [], 21)).toBeNull();
+    expect(sayOf({ ...c, state: 'closed', closedAt: 50, closedBy: 'auto', lastResult: { at: 20, isError: false } }, [], [], 21)).toBeNull();
   });
   it('with no report to give it is done when the app closed it after a turn that ended well', () => {
     expect(say({ state: 'closed', closedAt: 50, closedBy: 'auto', lastResult: { at: 30, isError: false } })).toBe('done');
@@ -382,6 +386,8 @@ describe('the follow holds in the corner cases (review of PR #457)', () => {
     m.save({ title: 'shop', root: 'C:\\repo\\shop', map: { elements: [
       { id: 'web', kind: 'system', name: 'Web', status: 'ok' },
       { id: 'cart', kind: 'part', name: 'Carrello', parent: 'web', status: 'ok' },
+      { id: 'api', kind: 'system', name: 'Api', status: 'ok' },
+      { id: 'auth', kind: 'part', name: 'Accesso', parent: 'api', status: 'planned' },
     ] }, by: 'Scout', summary: '' });
     m.link('shop', 'w', ['web']);
     set(m, 'w', { state: 'running' });
@@ -394,7 +400,7 @@ describe('the follow holds in the corner cases (review of PR #457)', () => {
     // the header, the projects list and the progress count it once
     expect(waitingOf(v.map, statusesOf(v.map, now, v.changed))).toBe(1);
     expect(m.list()[0]!.waiting).toBe(1);
-    expect(countOf(v.map, null)).toMatchObject({ you: [{ id: 'web', name: 'Web' }] });
+    expect(countOf(v.map, null)).toMatchObject({ you: [{ id: 'web', name: 'Web' }], groups: [{ id: 'web', state: 'blocked' }, { id: 'api', state: 'todo' }] });
     // the mark belongs to the live view: a file that got it by mistake reads without it
     const store = new ProjectMapStore(() => dir);
     store.save({ ...v.map, version: v.map.version + 1 });
@@ -496,5 +502,81 @@ describe('the follow holds in the corner cases (review of PR #457)', () => {
     expect(saved('d')).toBe('blocked');
     m.link('shop', 'w', ['b', 'c', 'd']);
     expect([saved('b'), saved('d')]).toEqual(['work', 'blocked']);
+  });
+});
+
+describe('the link is exact (third review of PR #457)', () => {
+  const start = () => { const m = make(); m.save({ title: 'shop', root: 'C:\\repo\\shop', map: drawing, by: 'Scout', summary: '' }); return m; };
+  const shown = (m: ProjectMaps, id: string) => { const v = m.view('shop')!; return statusesOf(v.map, now, v.changed).get(id); };
+  const edit = (m: ProjectMaps, chatId: string, file: string, at: number) => m.observe('chat:item', { chatId, item: { kind: 'tool', name: 'Edit', status: 'ok', at, input: { file_path: file } } });
+
+  it('a file the linked chat edits on another piece shows the chat there and links nothing: that piece keeps its status', () => {
+    const m = start();
+    m.link('shop', 'w', ['c']);
+    set(m, 'w', { state: 'running' });
+    edit(m, 'w', 'C:\\repo\\shop\\src\\pay\\a.ts', now + 1);
+    expect(m.view('shop')!.agents.map(a => a.elements)).toEqual([['c', 'd']]);
+    expect(m.view('shop')!.changed).toEqual({ d: now + 1 }); // not its piece: the edit counts
+    set(m, 'w', { state: 'idle', run: run('done', now), lastResult: { at: now + 30, isError: false } });
+    expect([saved('c'), saved('d')]).toEqual(['ok', 'planned']);
+    // the link is still the one made on purpose after a restart
+    m.flush();
+    const again = make();
+    set(again, 'w', { state: 'running', run: { ...run(undefined, now), startedAt: now + 40 } });
+    expect([saved('c'), saved('d')]).toEqual(['work', 'planned']);
+  });
+
+  it('a chat that had finished before it was linked says nothing: whoever links it sets the status', () => {
+    const m = start();
+    set(m, 'w', { state: 'idle', run: run('done', now), lastResult: { at: now + 30, isError: false } });
+    now += 60_000;
+    const v = version();
+    m.link('shop', 'w', ['c']);
+    expect([saved('c'), version()]).toEqual(['planned', v]);
+    // the same for one the app closed
+    set(m, 'w', { state: 'closed', closedAt: now, closedBy: 'auto' });
+    m.link('shop', 'w', ['c', 'd']);
+    expect([saved('c'), saved('d'), version()]).toEqual(['planned', 'planned', v]);
+  });
+
+  it('working_on in the same turn as the report: the report is about those pieces', () => {
+    const m = start();
+    chats = chats.map(c => ({ ...c, state: 'running' as const, run: run('done', now) }));
+    now += 60;
+    m.update('shop', { workingOn: ['c'], chatId: 'w', by: 'Artisan' });
+    expect(saved('c')).toBe('ok');
+    // in a later turn it is new work
+    set(m, 'w', { state: 'idle', lastResult: { at: now + 10, isError: false } });
+    now += 60_000;
+    set(m, 'w', { state: 'running' });
+    m.update('shop', { workingOn: ['c', 'd'], chatId: 'w', by: 'Artisan' });
+    expect([saved('c'), saved('d')]).toEqual(['ok', 'work']);
+  });
+
+  it('a box\'s own files edited before the chat was linked to it: its done report confirms them', () => {
+    const m = make();
+    m.save({ title: 'shop', root: 'C:\\repo\\shop', map: { elements: [
+      { id: 'f2', kind: 'phase', name: 'Fatture', status: 'planned', evidence: ['src/inv/'] },
+      { id: 'c', kind: 'step', name: 'Pulsanti', parent: 'f2', status: 'planned' },
+    ] }, by: 'Scout', summary: '' });
+    set(m, 'w', { state: 'running' });
+    edit(m, 'w', 'C:\\repo\\shop\\src\\inv\\x.ts', now + 1);
+    expect(m.view('shop')!.changed).toEqual({ f2: now + 1 });
+    now += 60_000;
+    m.link('shop', 'w', ['f2']);
+    set(m, 'w', { state: 'idle', run: run('done', now), lastResult: { at: now + 30, isError: false } });
+    expect(shown(m, 'f2')).toEqual({ status: 'ok', stale: false });
+  });
+
+  it('the projects list and the header agree also on a piece a plan\'s step works on', () => {
+    const m = start();
+    m.update('shop', { changes: [{ id: 'c', status: 'blocked', actor: 'user' }], by: 'Artisan' });
+    const plan = { phase: 'running', clarified: [], at: 1, map: 'shop', steps: [{ title: 'Pulsanti', state: 'now', on: 'c' }] } as StrategyPlan;
+    chats.push(chat({ id: 's', state: 'running', plan }));
+    now += 3 * 3600_000;
+    const v = m.view('shop')!;
+    // the step under way vouches for the piece: still the user's turn, in both
+    expect(waitingOf(v.map, statusesOf(v.map, now, v.changed))).toBe(1);
+    expect(m.list()[0]!.waiting).toBe(1);
   });
 });
