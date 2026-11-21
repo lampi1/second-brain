@@ -71,9 +71,10 @@ export function gitBashPath(env: NodeJS.ProcessEnv = process.env, platform: Node
   const w = path.win32;
   const perUser = env.LOCALAPPDATA ? [w.join(env.LOCALAPPDATA, 'Programs', 'Git', 'bin', 'bash.exe')] : [];
   // a plain copy of the environment keeps Windows' own spelling (Path), process.env answers to both
-  const onPath = (env.PATH ?? env.Path ?? '').split(';').map(d => d.trim().replace(/^"(.*)"$/, '$1')).filter(Boolean)
+  // only absolute entries (a drive and a slash, or a UNC share): a relative one resolves against the current folder
+  const onPath = (env.PATH ?? env.Path ?? '').split(';').map(d => d.trim().replace(/^"(.*)"$/, '$1')).filter(d => /^(?:[a-z]:[\\/]|\\\\)/i.test(d))
     .filter(d => exists(w.join(d, 'git.exe')))
-    .flatMap(d => [w.join(d, '..', 'bin', 'bash.exe'), w.join(d, '..', '..', 'bin', 'bash.exe')]);
+    .flatMap(d => [w.join(d, '..', 'bin', 'bash.exe'), ...(/[\\/]mingw64[\\/]bin[\\/]?$/i.test(d) ? [w.join(d, '..', '..', 'bin', 'bash.exe')] : [])]);
   const cands = [env.CLAUDE_CODE_GIT_BASH_PATH, 'C:\\Program Files\\Git\\bin\\bash.exe', 'C:\\Program Files (x86)\\Git\\bin\\bash.exe', ...perUser, ...onPath].filter((p): p is string => !!p);
   return cands.find(exists) ?? null;
 }

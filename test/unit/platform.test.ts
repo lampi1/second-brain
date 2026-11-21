@@ -102,6 +102,13 @@ describe('gitBashPath (run_code Bash, the hooks guard)', () => {
     expect(gitBashPath({ PATH: 'D:\\Tools\\Git\\mingw64\\bin' }, 'win32', only('D:\\Tools\\Git\\mingw64\\bin\\git.exe', bash))).toBe(bash);
     expect(gitBashPath({ PATH: 'C:\\Windows\\System32' }, 'win32', only('C:\\Windows\\System32\\bash.exe'))).toBeNull();
   });
+  it('Windows PATH: two levels up only from mingw64/bin; a relative PATH entry is never used', () => {
+    // a git.exe in some other folder: its grandparent's bin/bash.exe is not Git Bash
+    expect(gitBashPath({ PATH: 'D:\\Tools\\Other\\sub' }, 'win32', only('D:\\Tools\\Other\\sub\\git.exe', 'D:\\Tools\\bin\\bash.exe'))).toBeNull();
+    // relative to the current folder: whatever is there, never trusted
+    expect(gitBashPath({ PATH: 'tools\\git\\cmd' }, 'win32', only('tools\\git\\cmd\\git.exe', 'tools\\git\\bin\\bash.exe'))).toBeNull();
+    expect(gitBashPath({ PATH: 'D:tools\\cmd' }, 'win32', only('D:tools\\cmd\\git.exe', 'D:tools\\bin\\bash.exe'))).toBeNull();
+  });
   it('Windows: CLAUDE_CODE_GIT_BASH_PATH first, then Program Files; elsewhere /bin/sh', () => {
     const pf = 'C:\\Program Files\\Git\\bin\\bash.exe';
     expect(gitBashPath({ CLAUDE_CODE_GIT_BASH_PATH: 'E:\\b.exe', LOCALAPPDATA: 'C:\\L' }, 'win32', only('E:\\b.exe', pf))).toBe('E:\\b.exe');

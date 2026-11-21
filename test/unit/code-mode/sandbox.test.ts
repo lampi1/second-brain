@@ -3,7 +3,7 @@
 // leak in, and the limits hold (a fake clock: no real deadlines).
 import { describe, expect, it, vi } from 'vitest';
 import { log } from '../../../src/main/log';
-import { release, runSandboxed, StopScript, type SandboxHost } from '../../../src/main/code-mode/sandbox';
+import { release, runSandboxed, settleDeferred, StopScript, type SandboxHost } from '../../../src/main/code-mode/sandbox';
 
 const host = (answer: (tool: string, input: unknown) => unknown): SandboxHost & { seen: string[] } => {
   const seen: string[] = [];
@@ -147,6 +147,21 @@ describe('runSandboxed', () => {
     for (const f of late) f();
     await new Promise(res => setImmediate(res));
     expect(await runSandboxed('return 1;', [], h)).toMatchObject({ ok: true, value: 1 });
+  });
+
+  it('a settle that throws keeps its promise for release() and logs it; a settle that works frees both', () => {
+    const warn = vi.spyOn(log, 'warn');
+    try {
+      const freed: string[] = [];
+      const d = { dispose: () => freed.push('deferred') }, h = { dispose: () => freed.push('value') };
+      const open = new Set([d]);
+      settleDeferred(open, d, h, () => { throw new Error('interrupted'); });
+      expect(freed).toEqual(['value']);
+      expect(open.has(d)).toBe(true); // release() frees it at the end, never a live handle left behind
+      expect(warn).toHaveBeenCalledWith('code-mode', expect.stringMatching(/settl/), expect.objectContaining({ cause: expect.stringMatching(/interrupted/) }));
+      settleDeferred(open, d, h, () => {});
+      expect(open.has(d)).toBe(false);
+    } finally { warn.mockRestore(); }
   });
 
   it('a failure while freeing the instance never throws past the result (a WASM abort there is logged)', () => {

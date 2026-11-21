@@ -134,7 +134,7 @@
     "src/main/chats/orchestrator-wake.ts#seen": "be43c8b1f9f6fb63",
     "src/main/chess/engine.ts": "7db29e3ca35203bd",
     "src/main/chess/store.ts": "bdbef723e59301e3",
-    "src/main/code-mode/sandbox.ts": "67d70c230e9207b9",
+    "src/main/code-mode/sandbox.ts": "0efaf1b02e409557",
     "src/main/file-view.ts": "0d8cc0afa6c1a722",
     "src/main/guide/anchors.ts#staleInRepo": "8ae92d5be188d2df",
     "src/main/ipc-handlers/phone.ts": "ed48f0f42709456d",

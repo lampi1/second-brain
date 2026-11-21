@@ -89,6 +89,14 @@ function compiled(): Promise<WebAssembly.Module> {
  *  does; and the memory goes away with the run. The memory is whole from the start, never grown: a growth during a
  *  host-side allocation (newString of a large tool result, a few MB) corrupted QuickJS's heap, and JS_FreeRuntime
  *  then aborted on objects left in gc_obj_list (the Scout crash, 2026-11-21). Untouched pages cost no RAM. */
+/** Settles one host call's promise with h (its value or error) and always frees h. A settle that throws (an
+ *  interrupted call into QuickJS) is logged and its promise is left in `open`, so release() still frees it. */
+export function settleDeferred<D extends { dispose(): void }>(open: Set<D>, deferred: D, h: { dispose(): void }, fn: () => void): void {
+  try { fn(); open.delete(deferred); } catch (e) {
+    log.warn('code-mode', 'sandbox: settling a tool call failed', { cause: errText(e), hint: 'the script then waits on nothing and ends with that error; its promise is freed with the instance (release)' });
+  } finally { h.dispose(); }
+}
+
 export async function quickjs(memoryBytes = DEFAULT_LIMITS.memoryBytes): Promise<QuickJSWASMModule> {
   const maximum = Math.ceil((memoryBytes + WASM_HEADROOM) / PAGE);
   const wasmMemory = new WebAssembly.Memory({ initial: maximum, maximum });
@@ -150,8 +158,7 @@ export async function runSandboxed(code: string, tools: readonly string[], host:
     const deferred = vm.newPromise();
     open.add(deferred);
     // the returned handle belongs to QuickJS from here (newFunction consumes it); settling frees the resolvers
-    // a settle that throws (an interrupted call into QuickJS) still frees its value: a live handle at the end is a leak
-    const settleWith = (h: QuickJSHandle, fn: () => void): void => { try { fn(); } catch { /* the script then waits on nothing: reported */ } finally { h.dispose(); open.delete(deferred); } };
+    const settleWith = (h: QuickJSHandle, fn: () => void): void => settleDeferred(open, deferred, h, fn);
     const fail = (message: string): void => { if (!alive) return; const err = vm.newError(message); settleWith(err, () => deferred.reject(err)); };
     if (stopped) { fail(stopped); return deferred.handle; }
     if (++calls > limits.maxCalls) { limit ??= `more than ${limits.maxCalls} tool calls`; fail(limit); return deferred.handle; }
