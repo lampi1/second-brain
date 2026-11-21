@@ -28,6 +28,7 @@ import { supersededResult } from '../../../src/main/chats/manager-helpers';
 // the text inside the app's envelope (ADR 0261, pinned by chats/agent-message.test.ts)
 import { withoutAgentMessage } from '../../../src/main/chats/agent-message';
 import { ADR0083_DEFAULTS } from '../../../src/main/agents/role-migrate';
+import { closeAppDbs } from '../../../src/main/app-db';
 import type { PermissionCeiling, ToolClass } from '../../../src/shared/agents';
 
 /** Roles a user narrowed: tools, ceiling and launches per role (the rest stays the default). */
@@ -39,7 +40,21 @@ const shape = (id: RoleId, n: Narrowed = {}) => { const r = ROLE_DEFAULTS[id]; r
 const roots: string[] = [], managers: ChatManager[] = [];
 /** the delegation tools' clock (the stall check); undefined = Date.now */
 let clock: (() => number) | undefined;
-afterEach(async () => { clock = undefined; vi.useRealTimers(); for (const m of managers.splice(0)) await m.shutdown(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); });
+// a late save after a manager's shutdown (another manager's await lets its timers run) reopens app.db: every handle
+// is closed before the folders go, or Windows refuses the removal (EBUSY)
+afterEach(async () => {
+  clock = undefined; vi.useRealTimers();
+  try { for (const m of managers.splice(0)) await m.shutdown(); }
+  finally { closeAppDbs(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
+});
+
+/** A manager started again on a fixture's folder (a restart), with fake engines: never the real CLI, whose process
+ *  would keep the folder busy (EBUSY at teardown on Windows) and spend tokens. */
+const restartedManager = (userData: string): ChatManager => new ChatManager({ userData, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0,
+  sessionFactory: (_h, _o, s) => ({ harness: 'claude', sessionId: null, pid: null, root: null, alive: true, busy: false,
+    start() { s.changed({ state: 'idle' }); }, send() {}, close: async () => { s.changed({ state: 'closed' }); s.exit({ code: 0, error: null }); },
+    killNow() {}, interrupt: async () => {}, answer: () => true, rename: async () => {}, setModel: async () => {}, setEffort: async () => {},
+    setPermissionMode: async () => {}, contextUsage: async () => null, usage: async () => null } as unknown as HarnessSession) });
 
 const catalog = (n: Narrowed = {}): AgentCatalog => ({ problem: null, archived: [], models: [], profiles: ROLE_IDS.map(id => {
   const r = ROLE_DEFAULTS[id], x = shape(id, n);
@@ -468,7 +483,7 @@ describe('agent_delegate', () => {
     const parent = await f.root('strategist');
     const child = (await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Persistente')] })).children[0].chatId;
     await f.m.shutdown();
-    const again = new ChatManager({ userData: f.dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0 });
+    const again = restartedManager(f.dir);
     managers.push(again);
     expect(again.list().find(c => c.id === child)).toMatchObject({ parentId: parent.id, delegation: { role: 'scout', goal: 'Goal of Persistente' } });
   });
@@ -866,7 +881,7 @@ describe('versioned task continuity and canonical results', () => {
     f.m.reportRoot(local.id, checkResult(result, []));
     f.m.reportRoot(app.id, checkResult({ ...result, output: 'PRIVATE REPLAY' }, []));
     await f.m.shutdown();
-    const again = new ChatManager({ userData: f.dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0 }); managers.push(again);
+    const again = restartedManager(f.dir); managers.push(again);
     again.resumeInterrupted(); again.resumeInterrupted();
     expect(again.items(o.id).filter(i => i.kind === 'system' && i.code === 'resultReady')).toHaveLength(0);
     expect(again.items(local.id).filter(i => i.kind === 'system' && i.code === 'resultReady')).toHaveLength(0);
@@ -973,7 +988,7 @@ describe('versioned task continuity and canonical results', () => {
     expect(f.m.userEvents(c.id).acknowledgedSeq).toBe(3);
     expect(f.m.list().find(row => row.id === c.id)?.run?.taskVersion).toBe(2);
     await f.m.shutdown();
-    const again = new ChatManager({ userData: f.dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0 }); managers.push(again);
+    const again = restartedManager(f.dir); managers.push(again);
     expect(again.userEvents(c.id)).toMatchObject({ latestSeq: 3, acknowledgedSeq: 3 });
     expect(again.userEvents(c.id).events[0]?.text).toBe(long);
     expect(again.userEvents(c.id, 2).events.map(e => e.text)).toEqual(['A newer constraint']);
@@ -1076,7 +1091,7 @@ describe('versioned task continuity and canonical results', () => {
     const file = path.join(f.dir, 'chats.json'), saved = JSON.parse(fs.readFileSync(file, 'utf8'));
     delete saved.chats.find((c: { id: string }) => c.id === old).heldResult;
     fs.writeFileSync(file, JSON.stringify(saved));
-    const again = new ChatManager({ userData: f.dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0 });
+    const again = restartedManager(f.dir);
     managers.push(again);
     const o = await again.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
     again.resumeInterrupted(); again.resumeInterrupted();
@@ -1094,7 +1109,7 @@ describe('versioned task continuity and canonical results', () => {
     await f.m.assignTask(child, 'Continue investigation', { source: { kind: 'chat', chatId: p.id }, expectedVersion: 1 });
     expect(f.m.list().find(c => c.id === child)!.run!.taskVersion).toBe(2);
     await f.m.shutdown();
-    const again = new ChatManager({ userData: f.dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0 });
+    const again = restartedManager(f.dir);
     managers.push(again);
     const o = await again.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
     again.resumeInterrupted(); again.resumeInterrupted();
@@ -1124,7 +1139,7 @@ describe('versioned task continuity and canonical results', () => {
     await f.call('agent_report', unseen.id, { ...result, output: 'UNSEEN DELIVERABLE' });
     delete f.m.runs.get(unseen.run!.runId)!.delivery!.displayedAt; f.m.runs.save();
     await f.m.shutdown();
-    const again = new ChatManager({ userData: f.dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0 });
+    const again = restartedManager(f.dir);
     managers.push(again);
     again.resumeInterrupted(); again.resumeInterrupted();
     expect(again.runs.get(legacy.runId)?.report?.canonical?.output).toBe('FULL DELIVERABLE');
@@ -1132,7 +1147,7 @@ describe('versioned task continuity and canonical results', () => {
     expect(notices().map(i => (i as unknown as { result: { output: string } }).result.output)).toEqual(['UNSEEN DELIVERABLE']);
     // shown now: the next restart brings nothing back
     await again.shutdown();
-    const third = new ChatManager({ userData: f.dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0 });
+    const third = restartedManager(f.dir);
     managers.push(third);
     third.resumeInterrupted();
     expect(third.items(o.id).filter(i => i.kind === 'system' && i.code === 'resultReady')).toHaveLength(0);

@@ -67,6 +67,36 @@ describe('Claude rules for run_code', () => {
     expect(readClaudeRuleSet({ files: [asDir], inline: null, cwd }, home).ok).toBe(false);
   });
 
+  it('unchanged sources give the cached set; a changed or broken file is read again (still fail closed)', () => {
+    const cwd = tmp(), home = tmp();
+    const f = settings(home, { deny: ['Bash(sqlcmd *)'] });
+    fs.utimesSync(f, 1_000, 1_000);
+    const src = { files: [f], inline: null, cwd };
+    const first = ok(readClaudeRuleSet(src, home));
+    expect(readClaudeRuleSet(src, home)).toBe(first);
+    // other inline settings are other sources
+    expect(readClaudeRuleSet({ ...src, inline: { permissions: { deny: ['Bash(az *)'] } } }, home)).not.toBe(first);
+    fs.writeFileSync(f, JSON.stringify({ permissions: { deny: ['Bash(sqlcmd *)', 'Bash(az rest*--method post*)'] } }));
+    fs.utimesSync(f, 2_000, 2_000);
+    const next = ok(readClaudeRuleSet(src, home));
+    expect(claudeVerdict(next, 'Bash', { command: 'cd x && az rest --uri y --method post' }, cwd, home)?.kind).toBe('deny');
+    fs.writeFileSync(f, '{ broken');
+    fs.utimesSync(f, 3_000, 3_000);
+    expect(readClaudeRuleSet(src, home).ok).toBe(false);
+    expect(readClaudeRuleSet(src, home).ok).toBe(false);
+  });
+
+  it('compiled rules match the same with many rules and repeated calls', () => {
+    const cwd = tmp(), home = tmp();
+    const filler = Array.from({ length: 2000 }, (_, i) => `Bash(tool${i} --x:*)`);
+    const set = ok(readClaudeRuleSet({ files: [settings(home, { deny: [...filler, 'PowerShell(Invoke-Sqlcmd*)', 'Bash(*write-all*)'] })], inline: null, cwd }, home));
+    for (let i = 0; i < 3; i++) {
+      expect(claudeVerdict(set, 'Bash', { command: 'powershell -c "invoke-sqlcmd -Q x"' }, cwd, home)?.kind).toBe('deny');
+      expect(claudeVerdict(set, 'Bash', { command: 'cd /c/x && bash run.sh write-all' }, cwd, home)?.kind).toBe('deny');
+      expect(claudeVerdict(set, 'Bash', { command: 'git status' }, cwd, home)).toBeNull();
+    }
+  });
+
   it('path rules: Read deny keeps files out of a search; ~ and project-relative bases', () => {
     const cwd = tmp(), home = tmp();
     const set = ok(readClaudeRuleSet({ files: [settings(home, { deny: ['Read(~/.secrets/**)', 'Read(**/.env*)', 'Edit(/docs/**)'] })], inline: null, cwd }, home));
