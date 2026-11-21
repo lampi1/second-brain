@@ -651,7 +651,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
   }
 
   /** The brain's declared read-only tools (read-only-tools.md), resolved from the chat's folder (issue #93). */
-  private readScripts(r: Rec): ReadScripts {
+  protected readScripts(r: Rec): ReadScripts {
     return { cwd: r.s.cwd, paths: readOnlyTools(this.opts.brainRoot?.() ?? null) };
   }
 

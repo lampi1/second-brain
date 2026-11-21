@@ -1,22 +1,23 @@
 // Code Mode's wiring (ADR 0331), kept out of wiring.ts (over its size): adds run_code to the chat endpoint, bound to
-// the ChatManager (decideFor, the tool rows, the chat's folder), the chat's own endpoint tools (browser module) and its
+// the ChatManager (decideFor, the tool rows, where the wrappers run), the chat's own endpoint tools (browser module) and its
 // connectors (mcp-servers gateway); and makes the product guard the manager passes internal calls to (the brain's
 // PreToolUse rules, as a Claude session answers them in process). Used by wiring.ts.
-import type { ChatItem, ChatSummary } from '../../shared/contract';
+import type { ChatItem } from '../../shared/contract';
 import type { McpTool } from '../mcp/server';
 import { runHook } from '../rules/runtime';
 import type { HookInput } from '../rules/types';
 import { productHooksOf, type ProductHooks } from '../brain/adapters/claude-plugin';
-import type { InternalVerdict } from '../chats/manager-sink';
+import type { DecideOpts, InternalVerdict } from '../chats/manager-sink';
+import type { BridgeDeps } from './bridge';
 import { runCodeTool } from './tool';
 
 export interface CodeModeWiring {
   addChatTools(tools: McpTool[]): void;
   chatToolsFor(chatId: string): McpTool[];
   manager: {
-    decideFor(chatId: string, tool: string, input: unknown, opts: { signal?: AbortSignal; waited?: (ms: number) => void }): Promise<InternalVerdict>;
+    decideFor(chatId: string, tool: string, input: unknown, opts: DecideOpts): Promise<InternalVerdict>;
     codeModeRow(chatId: string, item: Extract<ChatItem, { kind: 'tool' }>, replace?: boolean): void;
-    summary(chatId: string): ChatSummary | undefined;
+    codeModeContext: BridgeDeps['context'];
   };
   gateway: { chatServers(chatId: string): string[]; chatServerTools(chatId: string, server: string): Promise<McpTool[]> };
 }
@@ -28,7 +29,7 @@ export function wireCodeMode(w: CodeModeWiring): void {
     appTools: chatId => w.chatToolsFor(chatId),
     extServers: chatId => w.gateway.chatServers(chatId),
     extTools: (chatId, server) => w.gateway.chatServerTools(chatId, server),
-    cwd: chatId => w.manager.summary(chatId)?.cwd ?? null,
+    context: chatId => w.manager.codeModeContext(chatId),
   })]);
 }
 

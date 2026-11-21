@@ -8,10 +8,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { ChatManager } from '../../../src/main/chats/manager';
-import type { HarnessSession, SessionOptions } from '../../../src/main/chats/session';
+import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
 import type { ChatItem, PendingRequest } from '../../../src/shared/contract';
 import type { CallCtx } from '../../../src/main/mcp/server';
-import { runCodeTool } from '../../../src/main/code-mode/tool';
+import { runCodeTool, type RunCodeDeps } from '../../../src/main/code-mode/tool';
+import type { NativeEnv } from '../../../src/main/code-mode/natives';
+import { stableGuards } from '../../../src/main/chats/claude';
 
 const dirs: string[] = [], managers: ChatManager[] = [];
 const tmp = (): string => { const d = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-cm-'))); dirs.push(d); return d; };
@@ -23,32 +25,37 @@ const RULES = [
   { id: 'secret', action: 'never-print', why: 'secrets are never printed', tools: ['command'], match: ['cat .*\\.env'] },
 ];
 
-interface Setup { m: ChatManager; id: string; cwd: string; events: { ch: string; p: unknown }[]; seen: SessionOptions[]; ran: string[] }
+interface Setup { m: ChatManager; id: string; cwd: string; events: { ch: string; p: unknown }[]; seen: SessionOptions[]; ran: string[]; envs: NativeEnv[]; sink: SessionSink; claude: Claude }
+/** what the fake Claude session tells run_code (ClaudeSession.toolContext): its settings files, its --settings, the
+ *  folder it works in (null: a worktree not named yet), its env */
+interface Claude { files: string[]; inline: Record<string, unknown> | null; cwd?: string | null; context?: false }
 
-async function setup(on: boolean, guard: (tool: string) => string | null = () => null, harness: 'claude' | 'cursor' = 'claude'): Promise<Setup> {
+async function setup(on: boolean, guard: (tool: string) => string | null = () => null, harness: 'claude' | 'cursor' = 'claude', claude: Claude = { files: [], inline: null }): Promise<Setup> {
   const userData = tmp(), cwd = tmp(), brain = tmp();
   fs.writeFileSync(path.join(brain, 'permissions.json'), JSON.stringify({ version: 1, rules: RULES }));
   const events: Setup['events'] = [], seen: SessionOptions[] = [], ran: string[] = [];
+  let sink!: SessionSink;
   const m = new ChatManager({
     userData, emitter: { emit: (ch: string, p: unknown) => { events.push({ ch, p }); } } as never, brainRoot: () => brain,
     mcpUrlFor: id => `http://127.0.0.1:4000/mcp/chat/${id}`, codeMode: () => on, productGuard: c => guard(c.tool),
-    sessionFactory: (h, options, sink): HarnessSession => { seen.push(options); return { harness: h, state: 'idle', sessionId: options.sessionId ?? null, pid: null, root: null, busy: false, alive: true,
-      start: () => { sink.changed({ state: 'idle' }); }, send: () => {}, answer: () => false, interrupt: async () => {}, setModel: async () => {}, setPermissionMode: async () => {}, setEffort: async () => {},
-      rename: async () => {}, contextUsage: async () => null, usage: async () => null, close: async () => {}, killNow: () => {} }; },
+    sessionFactory: (h, options, s): HarnessSession => { seen.push(options); sink = s; return { harness: h, state: 'idle', sessionId: options.sessionId ?? null, pid: null, root: null, busy: false, alive: true,
+      start: () => { s.changed({ state: 'idle' }); }, send: () => {}, answer: () => false, interrupt: async () => {}, setModel: async () => {}, setPermissionMode: async () => {}, setEffort: async () => {},
+      rename: async () => {}, contextUsage: async () => null, usage: async () => null, close: async () => {}, killNow: () => {},
+      ...(claude.context === false ? {} : { toolContext: () => ({ files: claude.files, inline: claude.inline, cwd: claude.cwd === undefined ? options.cwd : claude.cwd, env: { SB_CHAT_ENV: options.chatId } }) }) }; },
   });
   managers.push(m);
   const chat = await m.create({ harness, cwd, title: 'Code Mode' });
   await m.send(chat.id, 'ciao');
-  return { m, id: chat.id, cwd, events, seen, ran };
+  return { m, id: chat.id, cwd, events, seen, ran, envs: [], sink, claude };
 }
 
-function tool(s: Setup) {
+function tool(s: Setup, over: Partial<RunCodeDeps> = {}) {
   return runCodeTool({
     decideFor: (c, t, i, o) => s.m.decideFor(c, t, i, o),
     row: (c, item, replace) => s.m.codeModeRow(c, item, replace),
-    appTools: () => [], extServers: () => [], extTools: async () => [], cwd: () => s.cwd,
-    native: async (t, input) => { s.ran.push(`${t} ${String(input.command ?? input.file_path ?? '')}`); return t === 'Bash' ? { exitCode: 0, stdout: 'done', stderr: '' } : 'ok'; },
-    progressEveryMs: 1e9,
+    appTools: () => [], extServers: () => [], extTools: async () => [], context: c => s.m.codeModeContext(c),
+    native: async (t, input, env) => { s.ran.push(`${t} ${String(input.command ?? input.file_path ?? '')}`); s.envs.push(env); return t === 'Bash' ? { exitCode: 0, stdout: 'done', stderr: '' } : 'ok'; },
+    progressEveryMs: 1e9, ...over,
   });
 }
 
@@ -103,12 +110,9 @@ describe('run_code internal calls through ChatManager.decideFor', () => {
   it('a call left to the user waits for his panel; his yes lets it run, and the wait is reported', async () => {
     const s = await setup(true);
     const waited: number[] = [];
-    const t = runCodeTool({
+    const t = tool(s, {
       decideFor: (c, name, i, o) => s.m.decideFor(c, name, i, { ...o, waited: ms => { waited.push(ms); o.waited?.(ms); } }),
-      row: (c, item, replace) => s.m.codeModeRow(c, item, replace),
-      appTools: () => [], extServers: () => [], extTools: async () => [], cwd: () => s.cwd,
       native: async (n, input) => { s.ran.push(`${n} ${String(input.command)}`); return { exitCode: 0, stdout: 'pushed', stderr: '' }; },
-      progressEveryMs: 1e9,
     });
     const running = t.run({ code: 'return (await tools.Bash({ command: "git push origin main" })).stdout;' }, ctx(s.id));
     const panel = await waitPending(s);
@@ -143,6 +147,76 @@ describe('run_code internal calls through ChatManager.decideFor', () => {
     const out = body(await running);
     expect(out.ok).toBe(false);
     expect(s.events.some(e => e.ch === 'pending:resolved' && (e.p as { requestId?: string; id?: string }).requestId === panel.id)).toBe(true);
+  });
+});
+
+describe('run_code meets what a native call meets (Sentinel review fixes)', () => {
+  const settingsFile = (permissions: object): string => { const f = path.join(tmp(), 'settings.json'); fs.writeFileSync(f, JSON.stringify({ permissions })); return f; };
+
+  it('a deny rule of the user\'s Claude settings refuses the call, which never runs', async () => {
+    const s = await setup(true, () => null, 'claude', { files: [settingsFile({ deny: ['Bash(az webapp deploy:*)'] })], inline: null });
+    const out = body(await tool(s).run({ code: 'try { await tools.Bash({ command: "ls; az webapp deploy -n prod" }); } catch (e) { return e.message; }' }, ctx(s.id)));
+    expect(String(out.value)).toMatch(/denied by the user's Claude settings \(Bash\(az webapp deploy:\*\)\)/);
+    expect(s.ran).toEqual([]);
+  });
+
+  it('the stable app\'s guard rails (its --settings) refuse a kill', async () => {
+    const s = await setup(true, () => null, 'claude', { files: [], inline: stableGuards(tmp()) });
+    const out = body(await tool(s).run({ code: 'await tools.Bash({ command: "taskkill /F /PID 1" }); return 1;' }, ctx(s.id)));
+    expect(out.ok).toBe(false);
+    expect(out.error).toMatch(/Claude settings \(Bash\(taskkill:\*\)\)/);
+    expect(s.ran).toEqual([]);
+  });
+
+  it('rules that cannot be read refuse every call (fail closed)', async () => {
+    const bad = path.join(tmp(), 'settings.json'); fs.writeFileSync(bad, '{ broken');
+    const s = await setup(true, () => null, 'claude', { files: [bad], inline: null });
+    expect(await s.m.decideFor(s.id, 'Bash', { command: 'ls' })).toMatchObject({ kind: 'deny', message: expect.stringMatching(/cannot be read/) });
+    const none = await setup(true, () => null, 'claude', { files: [], inline: null, context: false });
+    expect(await none.m.decideFor(none.id, 'Read', { file_path: 'a' })).toMatchObject({ kind: 'deny' });
+  });
+
+  it('an ask rule sends a call the gates would allow to the user', async () => {
+    const s = await setup(true, () => null, 'claude', { files: [settingsFile({ ask: ['Bash(ls:*)'] })], inline: null });
+    const running = tool(s).run({ code: 'return (await tools.Bash({ command: "ls -la" })).stdout;' }, ctx(s.id));
+    const panel = await waitPending(s);
+    expect(panel.tool).toBe('Bash');
+    await s.m.answer(s.id, panel.id, { kind: 'permission', allow: true });
+    expect(body(await running)).toMatchObject({ ok: true, value: 'done' });
+  });
+
+  it('the wrappers run in the folder the engine works in (a --worktree chat), with the chat\'s env and the time left', async () => {
+    const wt = tmp();
+    const s = await setup(true, () => null, 'claude', { files: [], inline: null, cwd: wt });
+    body(await tool(s).run({ code: 'await tools.Bash({ command: "ls" }); return 1;' }, ctx(s.id)));
+    expect(s.envs[0]).toMatchObject({ cwd: wt, env: { SB_CHAT_ENV: s.id } });
+    expect(s.envs[0]!.maxMs).toBeGreaterThan(0);
+    expect(s.envs[0]!.maxMs).toBeLessThanOrEqual(280_000);
+    // a worktree not named yet: nothing runs in a guessed folder
+    const early = await setup(true, () => null, 'claude', { files: [], inline: null, cwd: null });
+    const out = body(await tool(early).run({ code: 'await tools.Read({ file_path: "a" }); return 1;' }, ctx(early.id)));
+    expect(out.error).toMatch(/worktree is not known yet/);
+    expect(early.ran).toEqual([]);
+  });
+
+  it('plan mode: no Write, no Edit, no command that writes; a reading command runs', async () => {
+    const s = await setup(true);
+    s.sink.changed({ permissionMode: 'plan' });
+    expect(await s.m.decideFor(s.id, 'Write', { file_path: 'a', content: 'x' })).toMatchObject({ kind: 'deny', message: expect.stringMatching(/plan mode/) });
+    expect(await s.m.decideFor(s.id, 'Edit', { file_path: 'a', old_string: 'a', new_string: 'b' })).toMatchObject({ kind: 'deny' });
+    expect(await s.m.decideFor(s.id, 'Bash', { command: 'rm -rf src' })).toMatchObject({ kind: 'deny', message: expect.stringMatching(/plan mode/) });
+    expect(await s.m.decideFor(s.id, 'Bash', { command: 'git status' })).toMatchObject({ kind: 'allow' });
+  });
+
+  it('a call still waiting when the script ends loses its panel and never runs', async () => {
+    const s = await setup(true);
+    const out = body(await tool(s).run({ code: 'tools.Bash({ command: "git push" }).catch(() => {}); await tools.Bash({ command: "ls" }); return 1;' }, ctx(s.id)));
+    expect(out.ok).toBe(true);
+    for (let i = 0; i < 20; i++) await new Promise(r => setImmediate(r));
+    const added = s.events.filter(e => e.ch === 'pending:added').map(e => (e.p as PendingRequest).id);
+    const gone = s.events.filter(e => e.ch === 'pending:resolved').map(e => (e.p as { requestId?: string }).requestId);
+    for (const id of added) expect(gone).toContain(id);
+    expect(s.ran).toEqual(['Bash ls']);
   });
 });
 

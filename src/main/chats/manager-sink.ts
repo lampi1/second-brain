@@ -8,7 +8,8 @@ import { randomUUID } from 'node:crypto';
 import { errText, log } from '../log';
 import { permissionText } from './claude-map';
 import { trimInput } from './session';
-import { aboveCeiling, allowsClass, toolClassOf } from '../agents/tool-policy';
+import { aboveCeiling, allowsClass, readOnlyCommand, toolClassOf } from '../agents/tool-policy';
+import { claudeVerdict, readableBy, readClaudeRuleSet, type ClaudeRuleSet } from '../code-mode/claude-rules';
 import { AFTER_CALLS } from './continuity';
 import { HANDOFF_END, HANDOFF_START } from './handoff';
 import type { HarnessSession, SessionPatch, SessionSink } from './session';
@@ -27,19 +28,40 @@ import { maskTypedItem, maskTypedRequest } from './typed-text';
  *  sees; esegui = only the user runs it (the Esegui button), the script stops there. */
 export type InternalVerdict = { kind: 'allow' } | { kind: 'deny'; message: string } | { kind: 'esegui'; message: string };
 const refused = (message: string): InternalVerdict => ({ kind: 'deny', message });
+/** decideFor's options: the run's signal (its end takes a pending panel away), and the user's wait (start, length). */
+export interface DecideOpts { signal?: AbortSignal; asking?: () => void; waited?: (ms: number) => void }
 
 /** What a session reports (items, requests, state patches) turned into the chat record and contract events. */
 export abstract class ManagerSink extends ManagerWork {
   /** The one permission chain for a run_code internal call (ADR 0331), in the order a native call meets it: the chat
-   *  must be live in Code Mode; a tool class its role was not given is refused (as Claude's --tools would); the
-   *  chat's in-process PreToolUse hook and the brain's product guard may refuse it; then the same gates as a native
+   *  must be live in Code Mode; in plan mode a write is refused; a Claude chat's own deny rules refuse and its ask
+   *  rules send the call to the user (code-mode/claude-rules.ts, fail closed); a tool class its role was not given
+   *  is refused (as Claude's --tools would); the chat's in-process PreToolUse hook and the brain's product guard may refuse it; then the same gates as a native
    *  request (gateDecision: role gate, read-only commands, auto-permit). A request they leave to the user is shown as
-   *  his panel, with no «always» (no engine would keep the rule), and waits for his answer: `waited` gets the time
-   *  spent, which never counts against the script's limits. A refusal by a brain rule shows its line in the chat, as
-   *  a native one does; its message reaches the model as the call's error (no after-turn note is needed). */
-  async decideFor(chatId: string, tool: string, input: unknown, opts: { signal?: AbortSignal; waited?: (ms: number) => void } = {}): Promise<InternalVerdict> {
+   *  his panel, with no «always» (no engine would keep the rule), and waits for his answer: `asking` says the wait
+   *  began and `waited` gets the time spent, which never counts against the script's limits. A refusal by a brain
+   *  rule shows its line in the chat, as a native one does; its message reaches the model as the call's error. */
+  async decideFor(chatId: string, tool: string, input: unknown, opts: DecideOpts = {}): Promise<InternalVerdict> {
     const r = this.chats.get(chatId);
     if (!r?.session || !r.codeMode) return refused('This chat does not run in Code Mode: run_code cannot call tools for it.');
+    if (opts.signal?.aborted) return refused('The call was cancelled.');
+    // plan mode only reads (as Claude's own plan mode): no file write, no command that does not only read
+    if (r.s.permissionMode === 'plan') {
+      const command = (input as { command?: unknown } | null)?.command;
+      if (tool === 'Write' || tool === 'Edit' || (tool === 'Bash' && !readOnlyCommand(command, this.readScripts(r)))) {
+        log.info('chats', 'code mode: write refused in plan mode', { chat: chatId, data: { tool } });
+        return refused(`The chat is in plan mode: ${tool === 'Bash' ? 'only commands that read run' : `${tool} is not allowed`}. Present the plan instead.`);
+      }
+    }
+    // Claude's own deny and ask rules (its settings files, the session's --settings, the stable app's guard rails):
+    // a native call meets them in the CLI, an internal one here; rules that cannot be read refuse every call
+    const ctx = this.codeModeRules(r);
+    if ('error' in ctx) return refused(ctx.error);
+    const claude = ctx.set ? claudeVerdict(ctx.set, tool, input, ctx.cwd) : null;
+    if (claude?.kind === 'deny') {
+      log.info('chats', 'code mode: denied by Claude settings', { chat: chatId, data: { tool, rule: claude.rule } });
+      return refused(`Permission to use ${tool} has been denied by the user's Claude settings (${claude.rule}).`);
+    }
     const c = toolClassOf(tool);
     if (r.policy?.tools && c && !allowsClass(r.policy, c)) {
       log.info('chats', 'code mode: tool class not given to the role', { chat: chatId, data: { tool } });
@@ -56,10 +78,12 @@ export abstract class ManagerSink extends ManagerWork {
       catch (e) { why = 'Product safety guard could not verify this operation.'; log.warn('chats', 'code mode: product guard failed: call refused', { chat: chatId, cause: errText(e), hint: 'check brain.json and the rules folder' }); }
       if (why) return refused(why);
     }
-    const t = permissionText(tool, input, { cwd: r.s.cwd });
+    const t = permissionText(tool, input, { cwd: ctx.cwd });
     const req: Omit<PendingRequest, 'chatId'> = { id: `code-${randomUUID()}`, type: 'permission', tool, title: `(run_code) ${t.title}`, detail: t.detail, input, at: Date.now(), noAlways: true };
     const d = this.gateDecision(r, req, true);
-    if (d.kind === 'allow') return { kind: 'allow' };
+    // a Claude «ask» rule, or an app tool in plan mode: the gates may refuse it, never allow it without the user
+    const userOnly = claude?.kind === 'ask' || (r.s.permissionMode === 'plan' && tool.startsWith('mcp__'));
+    if (d.kind === 'allow' && !userOnly) return { kind: 'allow' };
     if (d.kind === 'deny') {
       this.addItem(r, d.item, false);
       this.updated(r);
@@ -68,10 +92,38 @@ export abstract class ManagerSink extends ManagerWork {
     return this.askInternal(r, { ...req, input: trimInput(input) }, opts);
   }
 
+  /** Where run_code's wrappers work for this chat and what they meet (ADR 0331): the folder (a Claude --worktree
+   *  chat's worktree, once its engine named it), the chat's own engine environment, and a Claude chat's rules (a
+   *  search leaves out files a Read deny covers). An error: they cannot run (fail closed). */
+  codeModeContext(chatId: string): { cwd: string; env: NodeJS.ProcessEnv; readable?: (abs: string) => boolean } | { error: string } {
+    const r = this.chats.get(chatId);
+    if (!r?.session || !r.codeMode) return { error: 'This chat does not run in Code Mode.' };
+    const ctx = this.codeModeRules(r);
+    if ('error' in ctx) return ctx;
+    return { cwd: ctx.cwd, env: ctx.env, ...(ctx.set ? { readable: readableBy(ctx.set, ctx.cwd) } : {}) };
+  }
+
+  /** A Code Mode chat's folder, env and (Claude) rule set, read again at each call: a settings file changed mid-run
+   *  applies at once. */
+  private codeModeRules(r: Rec): { cwd: string; env: NodeJS.ProcessEnv; set: Extract<ClaudeRuleSet, { ok: true }> | null } | { error: string } {
+    const chatEnv = { ...process.env, ...this.opts.env, SB_EVENT_CONTEXT: '' };
+    if (engineOf(r.s.harness)?.kind !== 'claude') return { cwd: r.s.cwd, env: chatEnv, set: null };
+    const ctx = r.session?.toolContext?.();
+    if (!ctx) return { error: 'Claude\'s permission rules for this chat cannot be read: run_code refuses every call.' };
+    if (!ctx.cwd) return { error: 'The chat\'s worktree is not known yet: run the call again in a moment.' };
+    const set = readClaudeRuleSet({ files: ctx.files, inline: ctx.inline, cwd: ctx.cwd });
+    if (!set.ok) {
+      log.warn('chats', 'code mode: Claude settings unreadable, every call refused', { chat: r.s.id, cause: set.error, hint: 'fix the settings file: Claude itself would not start the same way' });
+      return { error: `Claude's settings cannot be read (${set.error}): run_code refuses every call until they can.` };
+    }
+    return { cwd: ctx.cwd, env: ctx.env, set };
+  }
+
   /** An internal call the gates left to the user: his panel, as a native request is shown (night mode may answer it),
    *  settled by deliverAnswer through internalAsks; the script's call cancelled (its MCP request gone) takes it away. */
-  private askInternal(r: Rec, req: Omit<PendingRequest, 'chatId'>, opts: { signal?: AbortSignal; waited?: (ms: number) => void }): Promise<InternalVerdict> {
+  private askInternal(r: Rec, req: Omit<PendingRequest, 'chatId'>, opts: DecideOpts): Promise<InternalVerdict> {
     const started = Date.now();
+    opts.asking?.();
     return new Promise<InternalVerdict>(resolve => {
       const finish = (v: InternalVerdict): void => {
         opts.signal?.removeEventListener('abort', cancel);

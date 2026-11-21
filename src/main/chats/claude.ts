@@ -55,6 +55,7 @@ import { claudeMcp, claudeTools, suggestedAbove } from '../agents/tool-policy';
 import { asYesNo, BRIEF_GRACE_MS, BRIEF_REFUSAL, engineLabel, mappedYesNo, twoOptionQuestion, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape, type OptionMap } from '../../shared/yes-no';
 import { mcpForm, mcpFormAnswer, type McpForm } from '../../shared/mcp-form';
 import { WriteBarrier } from './write-barrier';
+import { claudeRuleFiles } from '../code-mode/claude-rules';
 import { recordWire } from './wire-record';
 import { claudeModels } from '../engines/model-lists';
 
@@ -302,6 +303,11 @@ export class ClaudeSession implements HarnessSession {
   private exitDone!: () => void;
   private readonly exitPromise = new Promise<void>(r => { this.exitDone = r; });
 
+  /** Code Mode (toolContext): the inline --settings of the last args(), the env the CLI got, the folder init named */
+  private inlineSettings: Record<string, unknown> | null | undefined;
+  private spawnEnv: NodeJS.ProcessEnv | null = null;
+  private workCwd: string | null = null;
+
   constructor(private readonly opts: ClaudeOptions, private readonly sink: SessionSink) {
     this.selectedEffort = opts.effort ?? null;
     this.childTelemetry = new AgentChildrenReporter(sink);
@@ -320,6 +326,15 @@ export class ClaudeSession implements HarnessSession {
   /** Working: a turn in flight, a question open or still booting (stopAll counts these). */
   get busy(): boolean {
     return !this.exited && (this.turnOpen || this.calls.size > 0 || this.state === 'starting' || this.state === 'running' || this.state === 'waiting');
+  }
+
+  /** Code Mode's view of this session (HarnessSession.toolContext): the rules Claude reads, where it works, its env. */
+  toolContext(): { files: string[]; inline: Record<string, unknown> | null; cwd: string | null; env: NodeJS.ProcessEnv } {
+    const env = this.spawnEnv ?? { ...process.env, ...this.opts.env };
+    // a --worktree chat works in the copy the CLI made: until init names it, no folder is sure
+    const cwd = this.workCwd ?? (this.opts.worktree || this.opts.inWorktree ? null : this.opts.cwd);
+    if (this.inlineSettings === undefined) this.args();
+    return { files: claudeRuleFiles(cwd ?? this.opts.cwd, env), inline: this.inlineSettings ?? null, cwd, env };
   }
 
   /** The CLI arguments (exported for tests and the log). */
@@ -359,6 +374,7 @@ export class ClaudeSession implements HarnessSession {
     if (op.remoteControl && !op.readOnly) a.push('--replay-user-messages');
     const stable = op.stable ?? !!releaseId();
     const settings = mergeSettings(op.settings, compactSettings(op.compactWindowTokens), op.readOnly ? (op.webOnly ? WEB_ONLY_SETTINGS : READ_ONLY_SETTINGS) : null, op.readOnly && op.denyRead?.length ? { permissions: { deny: op.denyRead.map(claudeReadRule) } } : null, agentMcp && !agentMcp.connectors ? { disableClaudeAiConnectors: true } : null, roleSkills ? { permissions: { ask: ['Skill'] } } : null, stable ? stableGuards(op.localAppData ? path.join(op.localAppData, 'second-brain') : sharedDir()) : null);
+    this.inlineSettings = settings;
     if (settings) a.push('--settings', JSON.stringify(settings)); // inline: session-only, no file is written
     if (op.mcpConfig && !op.readOnly) a.push('--mcp-config', op.mcpConfig); // variadic flag: keep it after the plain ones
     return [...a, ...(op.extraArgs ?? [])];
@@ -380,6 +396,7 @@ export class ClaudeSession implements HarnessSession {
     env.CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS = '1';         // session_state_changed: the authoritative running/idle
     if (this.opts.readOnly) env.ENABLE_CLAUDEAI_MCP_SERVERS = '0'; // a hidden read-only run never loads claude.ai connectors
     const args = this.args();
+    this.spawnEnv = env;
     const c = commandFor(cli, args, env);
     const startedAt = Date.now();
     this.spawnedAt = startedAt;
@@ -1318,6 +1335,7 @@ export class ClaudeSession implements HarnessSession {
       case 'init': {
         const sid = s(m.session_id);
         if (s(m.claude_code_version)) this.cliVersion = s(m.claude_code_version);
+        if (s(m.cwd)) this.workCwd = s(m.cwd); // a --worktree chat: the worktree the CLI made (Code Mode's wrappers work there)
         if (!sid) this.drift('init field', 'session_id', m);
         // Init confirms the native id even when it matches the UUID requested at launch.
         if (sid) { this.sessionId = sid; this.sink.changed({ sessionId: sid }); }

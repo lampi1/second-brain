@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import type { ChatItem } from '../../shared/contract';
 import type { CallCtx, McpTool, ToolOutput } from '../mcp/server';
 import { errText, log } from '../log';
-import type { InternalVerdict } from '../chats/manager-sink';
+import type { DecideOpts, InternalVerdict } from '../chats/manager-sink';
 import { gateName, NATIVE_WRAPPERS, RUN_CODE, type NativeWrapper } from './policy';
 import { runNative, type NativeEnv } from './natives';
 import { StopScript, type SandboxHost } from './sandbox';
@@ -15,15 +15,16 @@ import { StopScript, type SandboxHost } from './sandbox';
 type ToolRow = Extract<ChatItem, { kind: 'tool' }>;
 
 export interface BridgeDeps {
-  decideFor(chatId: string, tool: string, input: unknown, opts: { signal?: AbortSignal; waited?: (ms: number) => void }): Promise<InternalVerdict>;
+  decideFor(chatId: string, tool: string, input: unknown, opts: DecideOpts): Promise<InternalVerdict>;
   row(chatId: string, item: ToolRow, replace?: boolean): void;
   /** the chat's own endpoint tools (browser, app tools), as its MCP endpoint lists them */
   appTools(chatId: string): McpTool[];
   /** the connectors this chat may use, and one's tools */
   extServers(chatId: string): string[];
   extTools(chatId: string, server: string): Promise<McpTool[]>;
-  /** the chat's folder (relative paths of the wrappers) */
-  cwd(chatId: string): string | null;
+  /** where the wrappers run for this chat (ChatManager.codeModeContext): the folder it really works in, its engine's
+   *  environment, a search filter; an error = they cannot run */
+  context(chatId: string): { cwd: string; env: NodeJS.ProcessEnv; readable?: (abs: string) => boolean } | { error: string };
   /** tests: the native wrappers (default natives.ts) */
   native?: (tool: NativeWrapper, input: Record<string, unknown>, env: NativeEnv) => Promise<unknown>;
 }
@@ -74,15 +75,20 @@ export interface Bridge extends SandboxHost {
   calls: { tool: string; decision: string; ok: boolean }[];
 }
 
-/** The host of one script run of a chat. `ctx` is run_code's own call (its abort signal and progress). */
-export function bridge(deps: BridgeDeps, chatId: string, entries: Entry[], ctx: Pick<CallCtx, 'signal' | 'progress' | 'sessionId'>): Bridge {
+/** The host of one script run of a chat. `ctx` carries the run's own signal (aborted when the script ends: a pending
+ *  panel goes away, a running command is killed, an app tool is cancelled) and run_code's progress; `remainingMs` is
+ *  the time the run has left (a command never outlives it). */
+export function bridge(deps: BridgeDeps, chatId: string, entries: Entry[], ctx: Pick<CallCtx, 'signal' | 'progress' | 'sessionId'>, opts: { remainingMs?: () => number; now?: () => number } = {}): Bridge {
   const byName = new Map(entries.map(e => [e.name, e]));
-  let paused = 0;
+  const now = opts.now ?? Date.now;
+  // the user's waits, counted while they last too (two panels at once count once): never against the wall limit
+  let paused = 0, waits = 0, waitFrom = 0;
   const calls: Bridge['calls'] = [];
   return {
     calls,
-    pausedMs: () => paused,
+    pausedMs: () => paused + (waits ? now() - waitFrom : 0),
     async call(name, input) {
+      if (ctx.signal.aborted) throw new Error('The run has ended.');
       const e = byName.get(name);
       if (!e) throw new Error(`No tool named ${name} here. The tools are: ${[...byName.keys()].join(', ')}`);
       const args = (input && typeof input === 'object' && !Array.isArray(input) ? input : {}) as Record<string, unknown>;
@@ -91,7 +97,17 @@ export function bridge(deps: BridgeDeps, chatId: string, entries: Entry[], ctx: 
       const row = (status: ToolRow['status'], summary: string, output?: string, exitCode?: number): ToolRow =>
         ({ kind: 'tool', id, at, name: `run_code · ${name}`, summary, input: args, status, ...(output !== undefined ? { output: clip(output) } : {}), ...(exitCode !== undefined ? { exitCode } : {}) });
       let asked = false;
-      const v = await deps.decideFor(chatId, gate, args, { signal: ctx.signal, waited: ms => { asked = true; paused += ms; } });
+      let waiting = false;
+      const endWait = (): void => { if (!waiting) return; waiting = false; if (--waits === 0) paused += now() - waitFrom; };
+      let v: InternalVerdict;
+      try {
+        v = await deps.decideFor(chatId, gate, args, {
+          signal: ctx.signal,
+          asking: () => { asked = true; waiting = true; if (waits++ === 0) waitFrom = now(); },
+          waited: () => { asked = true; endWait(); },
+        });
+      } finally { endWait(); }
+      if (ctx.signal.aborted) throw new Error('The run has ended.');
       if (v.kind !== 'allow') {
         const esegui = v.kind === 'esegui';
         calls.push({ tool: name, decision: esegui ? 'esegui' : asked ? 'refused by the user' : 'denied', ok: false });
@@ -105,9 +121,11 @@ export function bridge(deps: BridgeDeps, chatId: string, entries: Entry[], ctx: 
       try {
         let value: unknown;
         if (e.kind === 'native') {
-          const cwd = deps.cwd(chatId);
-          if (!cwd) throw new Error('This chat has no folder: the native tools cannot run.');
-          value = await (deps.native ?? runNative)(e.tool, args, { cwd, signal: ctx.signal });
+          const where = deps.context(chatId);
+          if ('error' in where) throw new Error(where.error);
+          const left = opts.remainingMs?.();
+          value = await (deps.native ?? runNative)(e.tool, args, { cwd: where.cwd, env: where.env, signal: ctx.signal,
+            ...(where.readable ? { readable: where.readable } : {}), ...(left !== undefined ? { maxMs: left } : {}) });
         } else {
           const callCtx: CallCtx = { mount: e.kind === 'app' ? 'chat' : 'ext', params: { chatId, ...(e.kind === 'ext' ? { server: e.server } : {}) }, sessionId: ctx.sessionId, signal: ctx.signal, progress: ctx.progress };
           value = outputValue(await e.tool.run(args, callCtx));

@@ -233,6 +233,10 @@ export interface HarnessSession {
   /** An engine with no question tool of its own (OpenCode over ACP): the app's ask_user MCP tool puts a yes/no question
    *  on this chat; the user's answer comes back as the user's next message. A string = refused, with how to ask. */
   askUser?(q: AppAsk): Promise<string | null>;
+  /** Code Mode (ADR 0331), Claude only: what run_code's internal calls need from this session so they meet Claude's
+   *  own checks: its settings files and inline --settings (code-mode/claude-rules.ts), the folder it really works in
+   *  (a --worktree chat's worktree once init named it; null until then) and the environment its tools run with. */
+  toolContext?(): { files: string[]; inline: Record<string, unknown> | null; cwd: string | null; env: NodeJS.ProcessEnv };
   setModel(model: string | null): Promise<void>;
   setPermissionMode(mode: PermissionMode): Promise<void>;
   setEffort(effort: Effort | null): Promise<void>;
