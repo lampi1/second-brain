@@ -2,7 +2,8 @@
 // (quickjs-emscripten, no native build for Electron), with no fs, net, require or timers. Its only way out is the
 // global `tools`: each call goes to the host (code-mode/bridge.ts), which passes it through the app's permission chain
 // first. Memory (a fresh instance per run in a bounded WebAssembly memory), stack, CPU and wall-clock limits (held
-// during host calls too); the wall clock leaves out the time spent waiting for the user.
+// during host calls too); the wall clock leaves out the time spent waiting for the user. Freeing the instance never
+// replaces a script's result (a WASM abort there, as QuickJS's JS_FreeRuntime leak assertion, is logged).
 // Used by code-mode/tool.ts (the run_code MCP tool).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -10,6 +11,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { newQuickJSWASMModuleFromVariant, newVariant, type QuickJSDeferredPromise, type QuickJSHandle, type QuickJSWASMModule } from 'quickjs-emscripten-core';
 import RELEASE_SYNC from '@jitl/quickjs-wasmfile-release-sync';
+import { errText, log } from '../log';
 
 /** Thrown by the host when the script must stop at this call (an action only the user runs, from the Esegui button):
  *  the script gets no chance to go on, its result says why. */
@@ -84,10 +86,12 @@ function compiled(): Promise<WebAssembly.Module> {
 
 /** A fresh QuickJS instance for one run, in a WebAssembly memory that cannot grow past the run's limit plus QuickJS's
  *  own headroom: QuickJS's memory limit does not count every buffer (typed arrays go past it), the bounded memory
- *  does; and the memory goes away with the run. */
+ *  does; and the memory goes away with the run. The memory is whole from the start, never grown: a growth during a
+ *  host-side allocation (newString of a large tool result, a few MB) corrupted QuickJS's heap, and JS_FreeRuntime
+ *  then aborted on objects left in gc_obj_list (the Scout crash, 2026-11-21). Untouched pages cost no RAM. */
 export async function quickjs(memoryBytes = DEFAULT_LIMITS.memoryBytes): Promise<QuickJSWASMModule> {
   const maximum = Math.ceil((memoryBytes + WASM_HEADROOM) / PAGE);
-  const wasmMemory = new WebAssembly.Memory({ initial: Math.min(256, maximum), maximum });
+  const wasmMemory = new WebAssembly.Memory({ initial: maximum, maximum });
   return newQuickJSWASMModuleFromVariant(newVariant(RELEASE_SYNC, { wasmModule: await compiled(), wasmMemory }));
 }
 
@@ -137,7 +141,8 @@ export async function runSandboxed(code: string, tools: readonly string[], host:
   const errorText = (h: QuickJSHandle): string => {
     const e = vm.dump(h) as unknown;
     if (e && typeof e === 'object') { const o = e as { name?: unknown; message?: unknown; stack?: unknown }; return `${typeof o.name === 'string' ? o.name : 'Error'}: ${typeof o.message === 'string' ? o.message : JSON.stringify(e)}`; }
-    return String(e);
+    // QuickJS throws a bare null when it cannot even allocate its out-of-memory error
+    return e === null ? 'null: thrown by the script, or out of memory' : String(e);
   };
 
   const callFn = vm.newFunction('__sbCall', (nameH, inputH) => {
@@ -145,7 +150,9 @@ export async function runSandboxed(code: string, tools: readonly string[], host:
     const deferred = vm.newPromise();
     open.add(deferred);
     // the returned handle belongs to QuickJS from here (newFunction consumes it); settling frees the resolvers
-    const fail = (message: string): void => { if (!alive) return; const err = vm.newError(message); deferred.reject(err); err.dispose(); open.delete(deferred); };
+    // a settle that throws (an interrupted call into QuickJS) still frees its value: a live handle at the end is a leak
+    const settleWith = (h: QuickJSHandle, fn: () => void): void => { try { fn(); } catch { /* the script then waits on nothing: reported */ } finally { h.dispose(); open.delete(deferred); } };
+    const fail = (message: string): void => { if (!alive) return; const err = vm.newError(message); settleWith(err, () => deferred.reject(err)); };
     if (stopped) { fail(stopped); return deferred.handle; }
     if (++calls > limits.maxCalls) { limit ??= `more than ${limits.maxCalls} tool calls`; fail(limit); return deferred.handle; }
     let input: unknown;
@@ -153,7 +160,7 @@ export async function runSandboxed(code: string, tools: readonly string[], host:
     void host.call(name, input).then(value => {
       if (!alive) return;
       const s = vm.newString(JSON.stringify(value === undefined ? null : value));
-      deferred.resolve(s); s.dispose(); open.delete(deferred);
+      settleWith(s, () => deferred.resolve(s));
     }, (e: unknown) => {
       if (e instanceof StopScript) stopped ??= e.message;
       fail(e instanceof Error ? e.message : String(e));
@@ -164,7 +171,10 @@ export async function runSandboxed(code: string, tools: readonly string[], host:
   const logFn = vm.newFunction('__sbLog', h => { if (logs.length < limits.maxOutput * 2) logs += `${vm.getString(h)}\n`; });
   vm.setProp(vm.global, '__sbLog', logFn); logFn.dispose();
 
-  const done = (r: Omit<SandboxResult, 'logs' | 'calls' | 'cpuMs'>): SandboxResult => ({ ...r, logs: clip(logs, limits.maxOutput), calls, cpuMs: Math.round(cpuMs) });
+  // QuickJS's own "out of memory" says nothing of why: most often a tool result too big to parse in the script's memory
+  const oom = (e: string | undefined): string | undefined => e && /out of memory/i.test(e)
+    ? `${e}: the script's memory (${Math.round(limits.memoryBytes / 1048576)} MB) is full, often a tool result too large to parse: ask for less (filters, offset/limit) and return only what you need` : e;
+  const done = (r: Omit<SandboxResult, 'logs' | 'calls' | 'cpuMs'>): SandboxResult => ({ ...r, ...(r.error !== undefined ? { error: oom(r.error) } : {}), logs: clip(logs, limits.maxOutput), calls, cpuMs: Math.round(cpuMs) });
   const abort = (): void => settle();
   opts.signal?.addEventListener('abort', abort);
   try {
@@ -199,11 +209,22 @@ export async function runSandboxed(code: string, tools: readonly string[], host:
   } finally {
     alive = false;
     opts.signal?.removeEventListener('abort', abort);
-    for (const d of open) d.dispose();
-    open.clear();
-    vm.dispose();
-    runtime.dispose();
+    release(open, vm, runtime);
   }
+}
+
+/** Frees a run's QuickJS objects. A failure here never replaces the run's result (the script's value is already
+ *  computed, or its error already said): the instance and its memory are this run's own (quickjs() makes a fresh one
+ *  per run) and go away with it. QuickJS aborts the WASM in JS_FreeRuntime when an object is still alive at that point
+ *  (quickjs.c, "list_empty(&rt->gc_obj_list)"): logged, so a leak stays visible. */
+export function release(open: Set<QuickJSDeferredPromise>, vm: { dispose(): void }, runtime: { dispose(): void }): void {
+  const step = (what: string, fn: () => void): void => {
+    try { fn(); } catch (e) { log.warn('code-mode', `sandbox: freeing ${what} failed`, { cause: errText(e), hint: 'the run result is kept; a QuickJS handle was left alive: see sandbox.ts' }); }
+  };
+  for (const d of open) step('a pending call', () => d.dispose());
+  open.clear();
+  step('the context', () => vm.dispose());
+  step('the runtime', () => runtime.dispose());
 }
 
 /** The names a script can call as tools.<name>: valid identifiers; others only through tools.call(name, input). */

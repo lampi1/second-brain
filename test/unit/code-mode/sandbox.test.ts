@@ -1,8 +1,9 @@
 // Code Mode's QuickJS sandbox (src/main/code-mode/sandbox.ts, ADR 0331): a script returns a value through tools.*
 // answered by the host, a refused call is an error it may catch, a StopScript ends it even when caught, no host APIs
 // leak in, and the limits hold (a fake clock: no real deadlines).
-import { describe, expect, it } from 'vitest';
-import { runSandboxed, StopScript, type SandboxHost } from '../../../src/main/code-mode/sandbox';
+import { describe, expect, it, vi } from 'vitest';
+import { log } from '../../../src/main/log';
+import { release, runSandboxed, StopScript, type SandboxHost } from '../../../src/main/code-mode/sandbox';
 
 const host = (answer: (tool: string, input: unknown) => unknown): SandboxHost & { seen: string[] } => {
   const seen: string[] = [];
@@ -100,5 +101,60 @@ describe('runSandboxed', () => {
     const r = await runSandboxed('return (', [], host(() => null));
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/SyntaxError/);
+  });
+
+  it('a large tool result (MBs) comes back whole, and the instance frees clean (the Scout crash)', async () => {
+    // before: the WASM memory grew while the host copied the result in, QuickJS's heap broke and JS_FreeRuntime
+    // aborted (list_empty(&rt->gc_obj_list)): that abort replaced the run's result
+    const warn = vi.spyOn(log, 'warn');
+    try {
+      const str = await runSandboxed('const a = await tools.Read({}); return a.length;', ['Read'], host(() => 'x'.repeat(8_000_000)));
+      expect(str).toMatchObject({ ok: true, value: 8_000_000 });
+      const rows = await runSandboxed('const a = await tools.Read({}); return a.rows.length;', ['Read'], host(() => ({ rows: Array.from({ length: 300_000 }, (_, i) => ({ i, s: `abc${i}` })) })));
+      expect(rows).toMatchObject({ ok: true, value: 300_000 });
+      expect(warn.mock.calls.filter(c => String(c[1]).startsWith('sandbox: freeing'))).toEqual([]);
+    } finally { warn.mockRestore(); }
+  }, 60_000);
+
+  it('a script out of memory says so, with what to do', async () => {
+    const r = await runSandboxed('const k = []; for (;;) k.push({ a: [1, 2, 3], s: "x" + k.length });', [], host(() => null), { limits: { memoryBytes: 8 * 1024 * 1024 } });
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/out of memory.*ask for less/s);
+  }, 60_000);
+
+  it('objects, closures and promises held across host calls, calls left pending at the end: the run ends clean', async () => {
+    // the shape of the Scout script that crashed in JS_FreeRuntime: state kept in closures and maps across awaits,
+    // a Promise.all that rejects while its other calls are still out, a call never awaited, answers after the end
+    const late: Array<() => void> = [];
+    const h: SandboxHost = { call: (tool, input) => {
+      if (tool === 'Slow') return new Promise(res => { late.push(() => res({ big: 'x'.repeat(10_000) })); });
+      if (tool === 'Bad') return Promise.reject(new Error('refused'));
+      return Promise.resolve({ tool, input, rows: Array.from({ length: 50 }, (_, i) => ({ i, tags: ['a', 'b'] })) });
+    } };
+    const code = `
+      const seen = new Map(); const keep = [];
+      const remember = name => value => { seen.set(name, value); keep.push(() => value.rows.length); return value; };
+      for (let i = 0; i < 5; i++) await tools.Read({ i }).then(remember('r' + i));
+      tools.Slow({});
+      const pending = tools.Slow({}).then(v => v.big.length);
+      let why = '';
+      try { await Promise.all([tools.Slow({}), tools.Bad({}), tools.Read({})]); } catch (e) { why = e.message; }
+      return { n: seen.size, sum: keep.reduce((a, f) => a + f(), 0), why, hasPending: typeof pending.then };`;
+    for (let run = 0; run < 3; run++) {
+      const r = await runSandboxed(code, ['Read', 'Slow', 'Bad'], h);
+      expect(r).toMatchObject({ ok: true, value: { n: 5, sum: 250, why: 'refused', hasPending: 'function' } });
+    }
+    for (const f of late) f();
+    await new Promise(res => setImmediate(res));
+    expect(await runSandboxed('return 1;', [], h)).toMatchObject({ ok: true, value: 1 });
+  });
+
+  it('a failure while freeing the instance never throws past the result (a WASM abort there is logged)', () => {
+    const boom = (): never => { throw new Error('Aborted(Assertion failed: list_empty(&rt->gc_obj_list))'); };
+    const open = new Set([{ dispose: boom }]) as unknown as Parameters<typeof release>[0];
+    let runtimeFreed = false;
+    expect(() => release(open, { dispose: boom }, { dispose: () => { runtimeFreed = true; } })).not.toThrow();
+    expect(runtimeFreed).toBe(true);
+    expect(open.size).toBe(0);
   });
 });
