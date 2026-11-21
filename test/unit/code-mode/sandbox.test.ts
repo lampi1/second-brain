@@ -73,6 +73,23 @@ describe('runSandboxed', () => {
     expect(r2.error).toMatch(/time limit/);
   });
 
+  it('typed arrays and ArrayBuffers cannot grow past the memory limit', async () => {
+    const r = await runSandboxed('const a = []; for (let i = 0; i < 10; i++) a.push(new Uint8Array(30 * 1024 * 1024)); return a.length;', [], host(() => null));
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/out of memory/);
+    const big = await runSandboxed('return new ArrayBuffer(200 * 1024 * 1024).byteLength;', [], host(() => null));
+    expect(big.ok).toBe(false);
+    // the next run starts clean: a fresh instance per run
+    expect(await runSandboxed('return new Uint8Array(8 * 1024 * 1024).length;', [], host(() => null))).toMatchObject({ ok: true, value: 8 * 1024 * 1024 });
+  });
+
+  it('the wall limit holds while a host call never answers', async () => {
+    let t = 0;
+    const r = await runSandboxed('await tools.Hang({}); return 1;', ['Hang'], { call: () => new Promise(() => {}) },
+      { limits: { wallMs: 2_000 }, now: () => t, setTimer: (fn, ms) => { queueMicrotask(() => { t += ms; fn(); }); return () => {}; } });
+    expect(r).toMatchObject({ ok: false, error: expect.stringMatching(/time limit of 2 s/) });
+  });
+
   it('caps the number of internal calls', async () => {
     const r = await runSandboxed('for (let i = 0; i < 10; i++) await tools.Read({}); return 1;', ['Read'], host(() => 'x'), { limits: { maxCalls: 3 } });
     expect(r.ok).toBe(false);

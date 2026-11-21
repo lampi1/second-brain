@@ -1,7 +1,8 @@
 // Code Mode's sandbox (ADR 0331): runs a script the model wrote inside QuickJS compiled to WebAssembly
 // (quickjs-emscripten, no native build for Electron), with no fs, net, require or timers. Its only way out is the
 // global `tools`: each call goes to the host (code-mode/bridge.ts), which passes it through the app's permission chain
-// first. Memory, stack, CPU and wall-clock limits; the wall clock leaves out the time spent waiting for the user.
+// first. Memory (a fresh instance per run in a bounded WebAssembly memory), stack, CPU and wall-clock limits (held
+// during host calls too); the wall clock leaves out the time spent waiting for the user.
 // Used by code-mode/tool.ts (the run_code MCP tool).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -52,9 +53,18 @@ export interface SandboxOptions {
   signal?: AbortSignal;
   /** the clock (tests pass their own: no real deadlines) */
   now?: () => number;
+  /** wakes the run after ms while it waits on a host call (the wall limit holds there too); returns its cancel.
+   *  Default setTimeout; tests pass their own. */
+  setTimer?: (fn: () => void, ms: number) => () => void;
 }
 
-let modulePromise: Promise<QuickJSWASMModule> | null = null;
+const realTimer = (fn: () => void, ms: number): (() => void) => { const t = setTimeout(fn, ms); t.unref?.(); return () => clearTimeout(t); };
+
+let modulePromise: Promise<WebAssembly.Module> | null = null;
+
+/** what QuickJS itself needs beside the script's own memory limit (its heap, stack, the bridge's strings) */
+const WASM_HEADROOM = 32 * 1024 * 1024;
+const PAGE = 65_536;
 
 /** The QuickJS .wasm: next to the main bundle in a build (scripts/build.mjs copies it to out/main/quickjs.wasm), else
  *  the package's own (tests, a run from sources). */
@@ -65,15 +75,20 @@ function wasmPath(): string {
   return createRequire(import.meta.url).resolve('@jitl/quickjs-wasmfile-release-sync/wasm');
 }
 
-/** One compiled module per process, made on the first script. */
-export function quickjs(): Promise<QuickJSWASMModule> {
-  modulePromise ??= (async () => {
-    const buf = fs.readFileSync(wasmPath());
-    const wasmBinary = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
-    return newQuickJSWASMModuleFromVariant(newVariant(RELEASE_SYNC, { wasmBinary }));
-  })();
+/** The compiled .wasm, once per process, made on the first script. */
+function compiled(): Promise<WebAssembly.Module> {
+  modulePromise ??= WebAssembly.compile(fs.readFileSync(wasmPath()));
   modulePromise.catch(() => { modulePromise = null; });
   return modulePromise;
+}
+
+/** A fresh QuickJS instance for one run, in a WebAssembly memory that cannot grow past the run's limit plus QuickJS's
+ *  own headroom: QuickJS's memory limit does not count every buffer (typed arrays go past it), the bounded memory
+ *  does; and the memory goes away with the run. */
+export async function quickjs(memoryBytes = DEFAULT_LIMITS.memoryBytes): Promise<QuickJSWASMModule> {
+  const maximum = Math.ceil((memoryBytes + WASM_HEADROOM) / PAGE);
+  const wasmMemory = new WebAssembly.Memory({ initial: Math.min(256, maximum), maximum });
+  return newQuickJSWASMModuleFromVariant(newVariant(RELEASE_SYNC, { wasmModule: await compiled(), wasmMemory }));
 }
 
 const IDENT = /^[A-Za-z_$][\w$]*$/;
@@ -100,7 +115,7 @@ const clip = (s: string, max: number): string => s.length > max ? `${s.slice(0, 
 export async function runSandboxed(code: string, tools: readonly string[], host: SandboxHost, opts: SandboxOptions = {}): Promise<SandboxResult> {
   const limits = { ...DEFAULT_LIMITS, ...opts.limits };
   const now = opts.now ?? Date.now;
-  const qjs = await quickjs();
+  const qjs = await quickjs(limits.memoryBytes);
   const runtime = qjs.newRuntime();
   runtime.setMemoryLimit(limits.memoryBytes);
   runtime.setMaxStackSize(limits.stackBytes);
@@ -175,7 +190,10 @@ export async function runSandboxed(code: string, tools: readonly string[], host:
         const o = over();
         if (o) return done({ ok: false, error: o });
         if (!open.size) return done({ ok: false, error: 'the script waits on something that never comes: await only tools.* calls (no timers, no fetch)' });
-        await new Promise<void>(res => { wake = res; });
+        // a host call may never answer (a hung connector): the wall limit wakes the run there too; a wait for the
+        // user moves the deadline (pausedMs grows), so the timer is armed again for what is left
+        const cancel = (opts.setTimer ?? realTimer)(settle, Math.max(1, limits.wallMs - wall() + 1));
+        try { await new Promise<void>(res => { wake = res; }); } finally { cancel(); }
       }
     } finally { promise.dispose(); }
   } finally {

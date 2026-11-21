@@ -39,6 +39,21 @@ preToolUse checks, the brain's PreToolUse product hooks, the user's rules in per
    prefer it.
 7. **Measured from the logs**: each turn logs tokens, turns, duration and the flag (scope chats, «timing: turn usage»,
    `codeMode`); each script logs «run_code finished» (scope code-mode: calls, CPU, wall, waited).
+8. **What a native call meets, an internal one meets too** (review of 2026-11-21). With Code Mode on, Claude's own
+   deny and ask rules no longer see the calls, so `decideFor` reads them itself (`code-mode/claude-rules.ts`): managed,
+   user, project and local settings files, the session's `--settings` (the stable app's guard rails included,
+   `ClaudeSession.toolContext`). A deny refuses; an ask goes to the user even when the gates would allow; a file that
+   exists but cannot be read or parsed refuses every call (fail closed). Read deny rules also filter what Grep and Glob
+   return. In plan mode Write, Edit and commands that do not only read are refused, and app tools always ask.
+9. **Run-scoped execution**: the wrappers run in the folder the engine reports at init (a `--worktree` chat's
+   worktree; before that every call is refused), with the chat's engine environment, never the main process's. Each
+   run has its own AbortController, aborted when the script ends: a pending panel goes away, a running command is
+   killed, an app or connector call gets its signal. Bash's timeout never passes the run's time left; the sandbox wakes
+   at the wall limit even while a host call hangs. Read, Grep and Glob run in a worker thread
+   (`out/main/code-mode-fs-worker.js`) with a 30 s limit (it ends the thread: a regex that backtracks cannot block the
+   main process), 10 MB per file, 20,000 files per walk, 1,000-character patterns. Each run gets a fresh QuickJS
+   instance in a bounded WebAssembly memory (the limit plus 32 MB), since QuickJS's own limit does not count typed
+   arrays.
 
 ## Dependencies
 
@@ -48,5 +63,6 @@ preToolUse checks, the brain's PreToolUse product hooks, the user's rules in per
 ## Consequences
 
 - One more global switch; with it off nothing changes (no run_code, no hidden tools).
-- Known limit: the wall-clock limit is checked when the script runs or a host call settles, so one host call that hangs
-  is bounded by that tool's own timeout, not by the script's.
+- A fresh QuickJS instance costs about 50-70 ms per run (measured in the unit tests on 2026-11-21).
+- Claude's rule matching is the app's reading of its documented syntax (`Tool(prefix:*)`, path globs, `mcp__server`);
+  a rule form it does not know never matches, so the gates and the user's panel still apply to that call.
