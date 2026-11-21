@@ -77,7 +77,7 @@ export abstract class ManagerSink extends ManagerWork {
         // the gates read the input as the engine sent it (ADR 0290): the one in the request is shortened for the screen
         const shown = req.input;
         if (whole !== undefined) req = { ...req, input: whole };
-        if (this.gated(r, req) || this.refusedCommand(r, req) || this.autoPermitted(r, req, whole !== undefined)) return;
+        if (this.answeredByGates(r, req, whole !== undefined)) return;
         // what the gates marked on the request (no «always», the rule that holds it) stays; its input is the short one again
         if (whole !== undefined) req = { ...req, input: shown };
         // decided on the real input above; parked for night mode, shown and kept masked from here (ADR 0237)

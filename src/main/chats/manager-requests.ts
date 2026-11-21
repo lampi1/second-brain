@@ -47,6 +47,14 @@ const noWork = (item: Extract<ChatItem, { kind: 'tool' }>): boolean =>
   ASKING_TOOL.test(item.name) || (item.name === 'Tool' && ASKING_TOOL.test(item.summary ?? '')) || !mayWrite(item.name) || APP_READS.test(item.name);
 const EXPLAIN_HERE = 'bloccato: il suo messaggio chiede una spiegazione, non decide la domanda. Non passarlo alla chat: spiegagli tu qui, in parole semplici, cosa decide la domanda e cosa cambia per lui con ogni scelta (leggi il riepilogo in app_pending, o la chat con app_chat_items), e lascia la domanda aperta nella sua riga. La chiudi quando ti scrive cosa sceglie.';
 
+/** What the app's gates say about a tool request (gateDecision, ADR 0331): «user» = the user decides (night mode
+ *  included); allow and deny are answered by the app under their policy's name. A deny carries the line the chat
+ *  shows and, when a brain rule refused it, that rule (action «esegui»: only the user runs it, from the Esegui button). */
+export type GateDecision =
+  | { kind: 'user' }
+  | { kind: 'allow'; policy: 'role-gate' | 'auto-permit'; patch?: AnswerPatch }
+  | { kind: 'deny'; policy: 'role-gate' | 'read-only-role' | 'auto-permit'; message: string; item: ChatItem; rule?: { id: string; action: string } };
+
 /** A question request's identity for #379: its questions and their options, in order. */
 const questionSig = (req: Pick<PendingRequest, 'questions'>): string =>
   JSON.stringify((req.questions ?? []).map(q => [q.question, !!q.multiSelect, q.options.map(o => o.label)]));
@@ -488,57 +496,83 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     if (!r.commandsOpen.size && !r.pending.size) this.idleAgain(r);
   }
 
+  /** The gates' one verdict on a tool request before it reaches the user (ADR 0331): the role gate, the read-only
+   *  commands, auto-permit, in this order. Read by the native permission path (answeredByGates, from sink.pending) and by
+   *  run_code's internal calls (decideFor, manager-sink.ts): one function, never a copy. The marks it puts on the request
+   *  (no «always», the brain rule that holds it) stay on it for the user's panel. */
+  protected gateDecision(r: Rec, req: Omit<PendingRequest, 'chatId'>, whole = false): GateDecision {
+    return this.roleDecision(r, req) ?? this.commandDecision(r, req) ?? this.permitDecision(r, req, whole);
+  }
+
+  /** The native path: the gates' verdict answered here (true: allowed, or refused visibly with its reason) or the
+   *  request goes on to the user (false). */
+  protected answeredByGates(r: Rec, req: Omit<PendingRequest, 'chatId'>, whole = false): boolean {
+    const d = this.gateDecision(r, req, whole);
+    if (d.kind === 'user') return false;
+    if (d.kind === 'allow') { this.policyAnswer(r, req, { kind: 'permission', allow: true }, d.policy, d.patch); return true; }
+    this.addItem(r, d.item, false);
+    this.policyAnswer(r, req, { kind: 'permission', allow: false, message: d.message }, d.policy);
+    this.noteRefusal(r, d);
+    return true;
+  }
+
+  /** A brain rule refused a request: only Claude reads the refusal's message as the tool's result; Codex and the ACP
+   *  engines (Cursor, OpenCode) get a bare «declined» and may end the turn on it: the app tells them after the turn
+   *  (manager-delegation.ts), once per rule and run (a chat with no run: once per rule until the user's own next
+   *  message), so the chat goes on. */
+  protected noteRefusal(r: Rec, d: Extract<GateDecision, { kind: 'deny' }>): void {
+    if (!d.rule) return;
+    const key = `${d.rule.id}:${r.s.run?.runId ?? 'chat'}`;
+    if (engineOf(r.s.harness)?.kind !== 'claude' && !r.refusalTold?.has(key)) r.refusalNote = { rule: d.rule.id, message: d.message, at: Date.now(), key };
+  }
+
   /** The role gate (agents/role-gate.ts) on a request before it reaches the user: a skill is allowed at once (ADR 0278;
-   *  one the user's own rules name, or any while those rules cannot be read, goes on to autoPermitted), an engine
+   *  one the user's own rules name, or any while those rules cannot be read, goes on to permitDecision), an engine
    *  sub-agent other than a search and a request beyond the delegating chat's permissions are refused, visibly.
-   *  True = answered here. */
-  protected gated(r: Rec, req: Omit<PendingRequest, 'chatId'>): boolean {
+   *  null = the gate has nothing to say. */
+  private roleDecision(r: Rec, req: Omit<PendingRequest, 'chatId'>): GateDecision | null {
     const owner = r.s.agent, parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
-    if (owner?.source !== 'catalog' || (r.s.isOrchestrator && req.tool !== 'Skill')) return false;
+    if (owner?.source !== 'catalog' || (r.s.isOrchestrator && req.tool !== 'Skill')) return null;
     const verdict = gateRequest(req, { role: { id: owner.id, name: owner.name }, skills: r.skills ?? [],
       rewrite: engineOf(r.s.harness)?.kind === 'claude',
       policy: r.policy ?? null, brainRoot: this.opts.brainRoot?.() ?? null, readScripts: this.readScripts(r), cwd: r.s.cwd,
       ...(r.agentAssets ? { plugin: runtimePluginName(r.agentAssets.pluginDir) } : {}),
       ...(r.s.parentId ? { parent: { policy: parent ? parent.policy ?? null : r.policy ?? null, title: parent?.s.title ?? r.s.parentId } } : {}) });
-    if (verdict.kind === 'pass') return false;
+    if (verdict.kind === 'pass') return null;
     if (verdict.kind === 'allow') {
       // the user's rules (permissions.json) hold a skill they name, as in a plain chat; unreadable rules ask
       if (req.tool === 'Skill') {
         const policy = loadPolicy(this.opts.brainRoot?.() ?? null);
         const read = policyRead(policy, req.tool, req.input, COMMAND_TOOLS, req.title);
-        if (policy.state === 'broken' || read.rule || (read.unread && policyCovers(policy, req.tool, COMMAND_TOOLS, req.title))) return false;
+        if (policy.state === 'broken' || read.rule || (read.unread && policyCovers(policy, req.tool, COMMAND_TOOLS, req.title))) return null;
       }
-      this.policyAnswer(r, req, { kind: 'permission', allow: true }, 'role-gate', verdict.patch);
       log.info('chats', 'role gate allowed', { chat: r.s.id, data: { tool: req.tool, qualified: !!verdict.patch } });
-      return true;
+      return { kind: 'allow', policy: 'role-gate', ...(verdict.patch ? { patch: verdict.patch } : {}) };
     }
-    this.addItem(r, sysItem(verdict.code, verdict.params, 'warn'), false);
-    this.policyAnswer(r, req, { kind: 'permission', allow: false, message: verdict.message }, 'role-gate');
     log.info('chats', 'role gate refused', { chat: r.s.id, data: { tool: req.tool, code: verdict.code } });
-    return true;
+    return { kind: 'deny', policy: 'role-gate', message: verdict.message, item: sysItem(verdict.code, verdict.params, 'warn') };
   }
 
   /** A role that may only read commands (shell-read): a command it asks to run that does not only read is refused at
    *  once, visibly, and never reaches the user, unless a delegating chat that may run any command is above it (beyond
-   *  the role, within the parent: the user's call; one beyond the parent never got here, gated). One that reads, or
-   *  that the user decides, reaches the user without "always" (a rule would let later commands through unchecked). */
-  protected refusedCommand(r: Rec, req: Omit<PendingRequest, 'chatId'>): boolean {
-    if (req.type !== 'permission' || !COMMAND_TOOLS.includes(req.tool) || !commandsReadOnly(r.policy)) return false;
+   *  the role, within the parent: the user's call; one beyond the parent never got here, roleDecision). One that reads,
+   *  or that the user decides, reaches the user without "always" (a rule would let later commands through unchecked). */
+  private commandDecision(r: Rec, req: Omit<PendingRequest, 'chatId'>): GateDecision | null {
+    if (req.type !== 'permission' || !COMMAND_TOOLS.includes(req.tool) || !commandsReadOnly(r.policy)) return null;
     const command = (req.input as { command?: unknown } | null)?.command;
     const parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
     const parentRuns = !!parent && !commandsReadOnly(parent.policy) && allowsClass(parent.policy, 'shell');
-    if (readOnlyCommand(command, this.readScripts(r)) || parentRuns) { req.noAlways = true; delete req.alwaysRules; return false; }
+    if (readOnlyCommand(command, this.readScripts(r)) || parentRuns) { req.noAlways = true; delete req.alwaysRules; return null; }
     const shown = typeof command === 'string' ? command.slice(0, 120) : req.tool;
     log.info('chats', 'command refused: read-only role', { chat: r.s.id, data: { tool: req.tool } });
-    this.addItem(r, sysItem('commandReadOnly', { command: shown }, 'warn'), false);
-    this.policyAnswer(r, req, { kind: 'permission', allow: false, message: `This role may only run commands that read (shell-read): ${shown} was refused. Use a reading command, or report what you need to your parent.` }, 'read-only-role');
-    return true;
+    return { kind: 'deny', policy: 'read-only-role', item: sysItem('commandReadOnly', { command: shown }, 'warn'),
+      message: `This role may only run commands that read (shell-read): ${shown} was refused. Use a reading command, or report what you need to your parent.` };
   }
 
   /** ADR 0103, 0254: the app answers a permission request itself (chats/auto-permit.ts): everything passes but what the
    *  user's brain rules hold (permissions.json: refused visibly with the rule's reason, or sent to the user) and what
-   *  the user's own role limits keep for them. True = answered. */
-  protected autoPermitted(r: Rec, req: Omit<PendingRequest, 'chatId'>, whole = false): boolean {
+   *  the user's own role limits keep for them. */
+  private permitDecision(r: Rec, req: Omit<PendingRequest, 'chatId'>, whole = false): GateDecision {
     const policy = loadPolicy(this.opts.brainRoot?.() ?? null);
     if (policy.state === 'broken' && r.policyWarned !== policy.error) {
       r.policyWarned = policy.error;
@@ -547,9 +581,9 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     }
     // whatever reaches the user for a tool the rules could hold gets no «always»: a remembered grant would let a later
     // request they hold run without coming back here
-    const toUser = (): false => {
+    const toUser = (): GateDecision => {
       if (req.type === 'permission' && policyCovers(policy, req.tool, COMMAND_TOOLS, req.title)) { req.noAlways = true; delete req.alwaysRules; }
-      return false;
+      return { kind: 'user' };
     };
     // a class the role was not given, or a writing command of a role that may only read commands, stays the user's call
     // (Cursor and Codex do not enforce the role's tools themselves)
@@ -566,19 +600,12 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       return toUser();
     }
     if (v.kind === 'allow') {
-      this.policyAnswer(r, req, { kind: 'permission', allow: true }, 'auto-permit');
       log.info('chats', 'auto-permit allowed', { chat: r.s.id, data: { tool: req.tool } });
-      return true;
+      return { kind: 'allow', policy: 'auto-permit' };
     }
-    this.addItem(r, sysItem(v.rule.action === 'esegui' ? 'policyEsegui' : 'policyNeverPrint', { command: v.shown, rule: v.rule.id, why: v.rule.why.slice(0, 160) }, 'warn'), false);
-    this.policyAnswer(r, req, { kind: 'permission', allow: false, message: v.message }, 'auto-permit');
-    // only Claude reads the refusal's message as the tool's result; Codex and the ACP engines (Cursor, OpenCode) get a
-    // bare «declined» and may end the turn on it: the app tells them after the turn (manager-delegation.ts), once per
-    // rule and run (a chat with no run: once per rule until the user's own next message), so the chat goes on
-    const key = `${v.rule.id}:${r.s.run?.runId ?? 'chat'}`;
-    if (engineOf(r.s.harness)?.kind !== 'claude' && !r.refusalTold?.has(key)) r.refusalNote = { rule: v.rule.id, message: v.message, at: Date.now(), key };
     log.info('chats', 'brain rule refused', { chat: r.s.id, data: { tool: req.tool, rule: v.rule.id, action: v.rule.action } });
-    return true;
+    return { kind: 'deny', policy: 'auto-permit', message: v.message, rule: { id: v.rule.id, action: v.rule.action },
+      item: sysItem(v.rule.action === 'esegui' ? 'policyEsegui' : 'policyNeverPrint', { command: v.shown, rule: v.rule.id, why: v.rule.why.slice(0, 160) }, 'warn') };
   }
 
   /** «Modalità notte» (ADR 0191): nobody will answer, so a question gets its recommended option (shared/away.ts) and a
