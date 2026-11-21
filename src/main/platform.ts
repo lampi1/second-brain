@@ -3,7 +3,9 @@
 // run without the build (release.mjs, doctor.mjs, logs.mjs) carry the same three-line rule, pointing here.
 // Used by wiring.ts (releases root, sync), chats/cli.ts (embedded engine), chats/claude.ts (stable guards),
 // brain/cursor-ledger.ts (shared ledger), shortcuts.ts; the process helpers (own process group, restart waiter, user
-// shell, ps elapsed time) by chats/claude.ts, chats/acp.ts, chats/cli.ts, chats/proctree.ts, run/runner.ts, wiring.ts.
+// shell, ps elapsed time) by chats/claude.ts, chats/acp.ts, chats/cli.ts, chats/proctree.ts, run/runner.ts, wiring.ts;
+// Git Bash by skills/guard.ts and code-mode/natives.ts.
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -58,6 +60,14 @@ export function userShell(code: string, env: NodeJS.ProcessEnv = process.env, pl
 export function userShellName(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): { name: string; fence: string } {
   if (platform === 'win32') return { name: 'PowerShell 5.1', fence: 'powershell' };
   return { name: env.SHELL && path.posix.isAbsolute(env.SHELL) ? path.posix.basename(env.SHELL) : 'sh', fence: 'bash' };
+}
+
+/** Git Bash, as Claude Code uses it on Windows (CLAUDE_CODE_GIT_BASH_PATH, else the usual install folders; null = none
+ *  found); elsewhere /bin/sh. Read by skills/guard.ts (the user's hooks) and code-mode/natives.ts (run_code's Bash). */
+export function gitBashPath(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, exists: (p: string) => boolean = p => fs.existsSync(p)): string | null {
+  if (platform !== 'win32') return '/bin/sh';
+  const cands = [env.CLAUDE_CODE_GIT_BASH_PATH, 'C:\\Program Files\\Git\\bin\\bash.exe', 'C:\\Program Files (x86)\\Git\\bin\\bash.exe'].filter((p): p is string => !!p);
+  return cands.find(exists) ?? null;
 }
 
 /** Seconds from ps's etime ([[dd-]hh:]mm:ss): the one elapsed-time column that both Linux procps and macOS BSD ps

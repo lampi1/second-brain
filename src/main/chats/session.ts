@@ -148,6 +148,9 @@ export interface SessionOptions {
   compactWindowTokens?: number;
   env?: NodeJS.ProcessEnv;
   extraArgs?: string[];
+  /** Code Mode (ADR 0331): the chat sees the app's run_code; Cursor allows it natively (app-tool-approval.ts
+   *  CODE_MODE_RULE), Claude through extraArgs */
+  codeMode?: boolean;
   /** a hidden run that must change nothing (the comparison's side b, compare/headless.ts): each adapter adds its own
    *  read-only means (Claude: plan mode, read tools only, no MCP, no hooks, no transcript; ACP: its read-only mode,
    *  the engine's allow rules left out). Its owner still answers every permission itself. */

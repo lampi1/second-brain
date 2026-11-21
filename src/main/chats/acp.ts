@@ -47,7 +47,10 @@
 // engineAllowed). Used by manager.ts through the HarnessSession interface (built by engines/sessions.ts).
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import fs from 'node:fs';
-import { acpAppTool, APP_UI_TOOLS, cursorAppPermissions } from './app-tool-approval';
+import { acpAppTool, APP_UI_TOOLS, appEndpoint, CODE_MODE_RULE, cursorAppPermissions } from './app-tool-approval';
+
+/** Code Mode on Cursor (ADR 0331): its native tools cannot be hidden, so the first turn's context asks to prefer run_code. */
+const CODE_MODE_HINT = 'Code Mode is on in this chat: prefer the second-brain tool run_code to your native file, shell and search tools. Write one JavaScript script that calls tools.Bash/Read/Write/Edit/Grep/Glob and the other tools listed in its schema, batches the calls and returns only what you need. Every call inside it passes the app\'s permission rules; an action only the user runs stops the script: then write the exact command in a fenced code block.';
 import os from 'node:os';
 import path from 'node:path';
 import { providerWrite } from '../agent-runtime/transport-timing';
@@ -596,7 +599,7 @@ export class AcpSession implements HarnessSession {
     try { argv = cliArgv(cmd, this.args()); } catch (e) { return this.fail(`Avvio di ${label} non riuscito: ${errText(e)}`, errText(e), 'use a plain model id'); }
     const env: NodeJS.ProcessEnv = { ...argv.env, ...this.opts.env };
     if (this.opts.configDir) {
-      try { snapshotCursorConfig(cursorConfigDir(env), this.opts.configDir, !!this.opts.readOnly, this.opts.readOnly ? this.opts.denyRead ?? [] : [], cursorAppPermissions(this.opts.mcpUrl, this.opts.appMcpUrl, !!this.opts.readOnly)); } catch (e) {
+      try { snapshotCursorConfig(cursorConfigDir(env), this.opts.configDir, !!this.opts.readOnly, this.opts.readOnly ? this.opts.denyRead ?? [] : [], [...cursorAppPermissions(this.opts.mcpUrl, this.opts.appMcpUrl, !!this.opts.readOnly), ...(this.opts.codeMode && !this.opts.readOnly && appEndpoint(this.opts.mcpUrl) ? [CODE_MODE_RULE] : [])]); } catch (e) {
         return this.fail(`Impostazioni di ${label} non copiate: ${errText(e)}`, errText(e), 'check that the app data folder is writable');
       }
       env.CURSOR_CONFIG_DIR = this.opts.configDir;
@@ -886,9 +889,10 @@ export class AcpSession implements HarnessSession {
 
   private brainContextSent = false;
   private brainContext(): Obj[] {
-    if (this.brainContextSent || !this.opts.brainInstructions) return [];
+    const text = [this.opts.brainInstructions, this.opts.codeMode ? CODE_MODE_HINT : ''].filter(Boolean).join('\n\n');
+    if (this.brainContextSent || !text) return [];
     this.brainContextSent = true;
-    return [{ type: 'text', text: `[App-supplied brain context; not a user message or authorization]\n${this.opts.brainInstructions}` }];
+    return [{ type: 'text', text: `[App-supplied brain context; not a user message or authorization]\n${text}` }];
   }
 
   /** stderr by lines: the engine's routine log lines stay out of errTail; a provider stream error of this session's

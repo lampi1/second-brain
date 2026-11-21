@@ -20,6 +20,10 @@ export const APP_CHAT_TOOLS = ['send_to_chat', 'list_chats', 'agent_delegate', '
  *  APP_CHAT_TOOLS, which also feeds Claude's --allowedTools, Codex's approval_mode and tool-visibility. */
 export const APP_UI_TOOLS = ['show_ui', 'ask_user'] as const;
 
+/** Code Mode's tool (ADR 0331): allowed natively on Cursor, as on Claude (--allowedTools), only when the chat runs in
+ *  Code Mode; each call inside the script asks the app's permission chain itself (ChatManager.decideFor). */
+export const CODE_MODE_RULE = 'Mcp(second-brain:run_code)';
+
 /** Cursor's allow rules for the app's endpoints; uiOnly (read-only chats, whose user allow rules are stripped): only
  *  the question surfaces, never the delegation or mail tools. */
 export function cursorAppPermissions(mcpUrl?: string | null, appMcpUrl?: string | null, uiOnly = false): string[] {

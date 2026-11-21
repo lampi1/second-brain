@@ -89,6 +89,17 @@ export class McpGateway {
     return all.filter(id => !ok.has(id));
   }
 
+  /** Code Mode (ADR 0331): the servers this chat may use, for run_code's in-process forwarding. */
+  chatServers(chatId: string): string[] {
+    const ctx = this.deps.context(chatId);
+    return ctx ? serversFor(this.deps.servers(), ctx, this.deps.roleAccess) : [];
+  }
+
+  /** One of those servers' tools as the chat's own endpoint lists them (each run checks the role again). */
+  chatServerTools(chatId: string, server: string): Promise<McpTool[]> {
+    return this.offered(chatId, server) ? this.toolsFor(chatId, server) : Promise.resolve([]);
+  }
+
   private offered(chatId: string, server: string): boolean {
     const ctx = this.deps.context(chatId);
     return !!ctx && serversFor(this.deps.servers(), ctx, this.deps.roleAccess).includes(server);

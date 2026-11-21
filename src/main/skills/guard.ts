@@ -11,6 +11,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { errText, log } from '../log';
+import { gitBashPath } from '../platform';
 
 export interface HookRefusal { command: string; message: string }
 export interface GuardInput { home: string; root: string | null; filePath: string; content: string }
@@ -53,12 +54,8 @@ export function writeHooks(home: string, root: string | null): HookDef[] {
   return out;
 }
 
-/** Git Bash, as Claude Code uses it for hooks on Windows; null = run through cmd.exe. */
-function bashPath(): string | null {
-  const env = process.env.CLAUDE_CODE_GIT_BASH_PATH;
-  const cands = [env, 'C:\\Program Files\\Git\\bin\\bash.exe', 'C:\\Program Files (x86)\\Git\\bin\\bash.exe'].filter((p): p is string => !!p);
-  return process.platform === 'win32' ? cands.find(p => fs.existsSync(p)) ?? null : '/bin/sh';
-}
+/** Git Bash, as Claude Code uses it for hooks on Windows (platform.ts); null = run through cmd.exe. */
+const bashPath = (): string | null => gitBashPath();
 
 /** Why the hook's answer refuses the write, or null. */
 export function refusal(code: number | null, stdout: string, stderr: string): string | null {

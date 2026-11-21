@@ -4,7 +4,7 @@
 // resolved), so `node <that file> [args]` passes the read-only classifier (tool-policy.ts readOnlyCommand) and any other
 // script stays refused. The list is the user's: the role gate refuses every role's edit of this file
 // (agents/role-gate.ts), and a declared script is trusted to only read: the user vouches for it by listing it.
-// Cached by the file's mtime. Used by chats/manager.ts (refusedCommand, the role gate).
+// Cached by the file's mtime. Used by chats/manager-requests.ts (commandDecision, the role gate).
 import fs from 'node:fs';
 import path from 'node:path';
 

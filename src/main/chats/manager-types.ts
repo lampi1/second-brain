@@ -3,7 +3,7 @@
 import type { OptionMap } from '../../shared/yes-no';
 import type { ChatCommand, ChatItem, ChatSummary, CursorReasoning, Effort, HandoffInfo, Harness, Lang, NewChat, PendingRequest, PermissionMode, RunInfo, SeenModel } from '../../shared/contract';
 import type { Emitter } from '../ipc';
-import type { HarnessSession, SessionOptions, SessionSink } from './session';
+import type { HarnessSession, PreToolHook, SessionOptions, SessionSink } from './session';
 import type { HeldChildResult, PastSession } from './store';
 import type { AdmissionLimits, LoadSampler } from './admission';
 import type { ResolvedRole } from '../agents/catalog';
@@ -160,6 +160,11 @@ export interface ChatManagerOptions {
   brainRoot?: () => string | null;
   /** how long a chat may take to write its hand-off before the app builds one itself (default 5 min) */
   handoffTimeoutMs?: number;
+  /** Code Mode (ADR 0331): whether the setting is on now (read at each engine start); absent = off */
+  codeMode?: () => boolean;
+  /** the brain's product PreToolUse guard (rules/runtime.ts) for a run_code internal call: the reason it refuses it,
+   *  null = no say. Absent = no product brain. */
+  productGuard?: (call: { chatId: string; sessionId: string; tool: string; input: unknown }) => string | null;
 }
 
 export interface HandoffOptions {
@@ -286,6 +291,11 @@ export interface Rec {
   skills?: string[];
   /** the agent's tool policy and permission ceiling, frozen at start like its instructions (A2) */
   policy?: AgentPolicy | null;
+  /** the in-process PreToolUse hook its engine got at start (Claude: the Orchestrator's budget, a role's sub-agent
+   *  gate): run_code's internal calls pass it too (decideFor, ADR 0331) */
+  preToolUse?: PreToolHook | null;
+  /** Code Mode (ADR 0331) as it was when its engine started: run_code shown, the native tools hidden on Claude */
+  codeMode?: boolean;
   /** a delegated chat's ancestors' catalog roles (parent first), frozen at its creation and persisted: its managed MCP
    *  access stays bounded by them after the parent closes or is pruned (ADR 0086) */
   mcpAncestors?: (string | null)[];

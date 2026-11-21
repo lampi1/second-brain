@@ -20,6 +20,7 @@ import { aboveCeiling, browserAccess, claudeDefaultMode, claudeDefaultSetting, t
 import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { toolShownToChat, toolShownToUnknown, toolShownToWarm } from './tool-visibility';
+import { codeModeFor, CODE_MODE_HIDDEN, RUN_CODE } from '../code-mode/policy';
 import { AgentChildrenReducer } from './agent-children';
 import { initialEffort } from './effort';
 import type { Rec } from './manager-types';
@@ -256,6 +257,8 @@ export abstract class ManagerSessions extends ManagerPersistence {
    *  endpoint (second-brain-app); a chat with no parent has no one to ask. */
   chatToolShown(chatId: string, tool: string): boolean {
     const r = this.chats.get(chatId);
+    // run_code only for a chat whose engine was started in Code Mode (ADR 0331): off = the tool does not exist for it
+    if (tool === RUN_CODE) return r ? r.codeMode === true : this.warmViews.get(chatId)?.codeMode === true;
     if (r) return toolShownToChat(r.s, r.launches, tool, appAsks(engineOf(r.s.harness)));
     const warm = this.warmViews.get(chatId)?.view;
     return warm ? toolShownToWarm(warm, tool) : toolShownToUnknown(tool);
@@ -321,7 +324,11 @@ export abstract class ManagerSessions extends ManagerPersistence {
     r.children = new AgentChildrenReducer(past);
     r.children.coverage(engine.kind === 'api' ? 'complete' : 'unknown');
     r.s.agentChildren = r.children.snapshot();
+    r.codeMode = codeModeFor(r.s, this.opts.codeMode?.() === true);
     const extraArgs = this.extraArgsFor(r.s.harness, chatId, r);
+    // kept on the chat too: run_code's internal calls pass the same hook (decideFor, ADR 0331)
+    const preToolUse = engine.kind !== 'claude' ? null : r.s.isOrchestrator ? new TurnToolBudget() : subagentGateFor(r.policy?.tools, r.s.cwd).preToolUse ?? null;
+    r.preToolUse = preToolUse;
     const opts: SessionOptions = {
       chatId, cwd: r.s.cwd, model: r.choice.model, effort: r.choice.effort, permissionMode: this.launchMode(r), title: r.s.title,
       ...(r.policy ? { toolPolicy: r.policy.tools, ceiling: r.policy.ceiling } : {}),
@@ -329,8 +336,8 @@ export abstract class ManagerSessions extends ManagerPersistence {
       // the Orchestrator's turn stays short: a few workspace calls, then it delegates (ADR 0090, issue #98)
       // a role chat with the sub-agent tool: only the Explore search (and an AI-DLC project's own aidlc-* agents), since
       // Claude asks no permission to start one
-      ...(engine.kind !== 'claude' ? {} : r.s.isOrchestrator ? { preToolUse: new TurnToolBudget() }
-        : subagentGateFor(r.policy?.tools, r.s.cwd)),
+      ...(preToolUse ? { preToolUse } : {}),
+      ...(r.codeMode ? { codeMode: true } : {}),
       sessionId, resume, fork, worktree: r.worktree && !resume, ...(r.worktree || r.inWorktree ? { inWorktree: true } : {}), mcpConfig: this.mcpConfig(chatId), costBaseUsd: r.costTotalUsd,
       compactWindowTokens: r.maxContext ?? this.compactWindow(),
       // Native subagents inherit this environment: a per-chat model cannot prove a memory event's producer.
@@ -354,13 +361,18 @@ export abstract class ManagerSessions extends ManagerPersistence {
   /** pre-allowed on Claude: the Orchestrator's app-control tools (/mcp/app), and every chat's mail to other chats and
    *  delegation tools (app-tool-approval.ts; mail is text only, labelled as not the user's; the auto-mode classifier sometimes refused the same message sent
    *  with Bash, 12/10). r = undefined: a warm engine (warm.ts), never an Orchestrator. */
-  private extraArgsFor(harness: Harness, chatId: string, r: Rec | undefined): string[] | null {
+  private extraArgsFor(harness: Harness, chatId: string, r: Rec | undefined, codeMode = r?.codeMode === true): string[] | null {
+    const claude = engineOf(harness)?.kind === 'claude';
+    const url = this.opts.mcpUrlFor?.(chatId);
     const allowed = !engineOf(harness)?.caps.preAllow ? [] : [
       ...(this.appMcpFor(r) ? ['mcp__second-brain-app'] : []),
-      ...(this.opts.mcpUrlFor?.(chatId) ? APP_CHAT_TOOLS.map(t => `mcp__second-brain__${t}`) : []),
+      ...(url ? APP_CHAT_TOOLS.map(t => `mcp__second-brain__${t}`) : []),
+      // Code Mode (ADR 0331): run_code asks no permission of the engine, each of its internal calls passes the app's own
+      ...(url && codeMode ? [`mcp__second-brain__${RUN_CODE}`] : []),
     ];
-    // the managed MCP servers this chat may not use: refused by name, also when the user's own Claude config has one so named
-    const denied = engineOf(harness)?.kind === 'claude' ? (this.opts.extMcp?.(chatId).denied ?? []).map(id => `mcp__${id}`) : [];
+    // the managed MCP servers this chat may not use: refused by name, also when the user's own Claude config has one so
+    // named; in Code Mode Claude's own file and shell tools too (run_code's wrappers do their work)
+    const denied = claude ? [...(this.opts.extMcp?.(chatId).denied ?? []).map(id => `mcp__${id}`), ...(codeMode && url ? CODE_MODE_HIDDEN : [])] : [];
     const extra = [...(allowed.length ? ['--allowedTools', allowed.join(',')] : []), ...(denied.length ? ['--disallowedTools', denied.join(',')] : [])];
     return this.opts.extraArgs || extra.length ? [...(this.opts.extraArgs ?? []), ...extra] : null;
   }
@@ -409,7 +421,7 @@ export abstract class ManagerSessions extends ManagerPersistence {
   }
 
   private spawnWarmAs(chatId: string, sessionId: string, cwd: string, launch: WarmLaunch): WarmEngine {
-    const extraArgs = this.extraArgsFor('claude', chatId, undefined);
+    const extraArgs = this.extraArgsFor('claude', chatId, undefined, launch.codeMode === true);
     const opts: SessionOptions = {
       chatId, cwd, model: null, effort: null, permissionMode: null, title: null, sessionId, resume: false, fork: false, worktree: false,
       ...(launch.toolPolicy !== undefined || launch.ceiling !== undefined ? { toolPolicy: launch.toolPolicy ?? null, ceiling: launch.ceiling ?? null } : {}),
@@ -425,9 +437,9 @@ export abstract class ManagerSessions extends ManagerPersistence {
 
   /** How a chat's engine is launched, as far as a waiting engine must match it: its role's tools and ceiling, its skills
    *  plugin and its own context window; nothing of these = a plain launch (sig ''). */
-  protected warmLaunch(policy: AgentPolicy | null | undefined, assets: { pluginDir: string; skillRoot: string } | undefined, maxContext: number | undefined, view?: WarmLaunch['view']): WarmLaunch {
-    if (!policy && !assets && !maxContext && !view) return PLAIN_LAUNCH;
-    const fields = { toolPolicy: policy?.tools ?? null, ceiling: policy?.ceiling ?? null, ...(assets ? { agentAssets: assets } : {}), ...(maxContext ? { compactWindowTokens: maxContext } : {}), ...(view ? { view } : {}) };
+  protected warmLaunch(policy: AgentPolicy | null | undefined, assets: { pluginDir: string; skillRoot: string } | undefined, maxContext: number | undefined, view?: WarmLaunch['view'], codeMode = false): WarmLaunch {
+    if (!policy && !assets && !maxContext && !view && !codeMode) return PLAIN_LAUNCH;
+    const fields = { toolPolicy: policy?.tools ?? null, ceiling: policy?.ceiling ?? null, ...(assets ? { agentAssets: assets } : {}), ...(maxContext ? { compactWindowTokens: maxContext } : {}), ...(view ? { view } : {}), ...(codeMode ? { codeMode: true as const } : {}) };
     return { sig: crypto.createHash('sha256').update(JSON.stringify(fields)).digest('hex').slice(0, 16), ...fields };
   }
 
@@ -436,6 +448,11 @@ export abstract class ManagerSessions extends ManagerPersistence {
   protected adoptWarm(r: Rec, w: WarmEngine): void {
     const sess = w.session;
     this.warmViews.delete(w.chatId);
+    // launched for Code Mode or not (its launch signature, ADR 0331): the chat is what its engine is
+    r.codeMode = w.launch?.codeMode === true;
+    // a warm engine's own hook is a role's sub-agent gate (spawnWarmAs): it guards only the native Agent tool, which no
+    // script can call, so its internal calls lose nothing without it
+    r.preToolUse = null;
     r.session = sess;
     r.s.state = 'starting';
     r.activeAt = Date.now();

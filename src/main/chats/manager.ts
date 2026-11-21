@@ -37,6 +37,7 @@ import { coldPrompt } from './handoff';
 import { cut, isUuid, nextId } from './session';
 import { updateActivity } from '../update/activity';
 import { PLAIN_LAUNCH } from './warm';
+import { codeModeFor } from '../code-mode/policy';
 import { isAppChat } from '../brain/routing';
 import { engineOf, engineOrThrow } from '../engines/registry';
 import { runtimePerformance } from '../runtime-performance';
@@ -219,7 +220,9 @@ export class ChatManager extends ManagerRemote implements ChatService {
     const ancestors = delegator ? this.mcpContext(delegator.s.id)?.roles ?? null : undefined;
     const role = agent.owner?.source === 'catalog' ? agent.owner.id : null;
     const launch = this.warmLaunch(policy, agent.assets, agent.maxContext, delegator ? (ancestors ? { role, launches: agent.launches ?? null, child: { ancestors } } : undefined)
-      : policy ? { role, launches: agent.launches ?? null } : undefined);
+      : policy ? { role, launches: agent.launches ?? null } : undefined,
+      // Code Mode's flags are fixed at launch too (ADR 0331): only an engine launched the same way fits
+      codeModeFor({ harness: req.harness, isOrchestrator: !!req.orchestrator, ...(req.research ? { research: true as const } : {}) }, this.opts.codeMode?.() === true));
     // a child whose parent has no known role chain starts cold, as before (fail closed: no managed server)
     const childOk = !delegator || !!ancestors;
     const now = Date.now();

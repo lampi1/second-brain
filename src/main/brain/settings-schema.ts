@@ -147,6 +147,9 @@ const BASE: readonly SettingDef[] = [
   // whose credits a delegation spends (the owner, 2026-11-01: «Balanced mode», ADR 0218): protected, an agent only proposes it
   { key: 'balancedMode', type: 'boolean', default: false, protected: true, label: 'Balanced mode',
     description: 'Le chat che un agente delega scelgono motore, modello ed effort in base ai crediti rimasti di ogni provider e ai risultati del ruolo, così i crediti finiscono insieme. Spenta: decide la scheda del ruolo.' },
+  // how a chat calls its tools (the owner, 2026-11-21: Code Mode in the app, ADR 0331): protected, an agent only proposes it
+  { key: 'codeMode', type: 'boolean', default: false, protected: true, label: 'Code Mode',
+    description: 'Le chat Claude e Cursor (non l’Orchestrator) lavorano con uno script: più letture, ricerche e tool in una sola chiamata (run_code), in un sandbox. Ogni chiamata dentro lo script passa dalle stesse regole dei permessi; un’azione da Esegui ferma lo script e ti lascia il solito bottone. Su Claude i tool nativi di file e shell spariscono, su Cursor restano. Vale per le chat che partono dopo.' },
   { key: 'orchestratorEvents', type: 'boolean', default: true, protected: true, label: 'Eventi all’Orchestrator',
     description: "Quando una chat di lavoro finisce, si ferma su un errore, aspetta una tua risposta o ti lascia un comando, l'app lo scrive all’Orchestrator (una riga per chat, al massimo una volta ogni 2 minuti per chat) e lo sveglia se è fermo: decide lui se dirtelo. Ogni risveglio è un turno dell’Orchestrator." },
   // the chat learns how its command went (the user, 2026-10-12: "vorrei che ti accorgessi da sola quando eseguo un
@@ -282,7 +285,7 @@ export function defaults(): Settings {
     loadQueue: true, loadQueueCpu: LOAD_BRAKE_CPU, loadQueueRam: LOAD_BRAKE_RAM, coldStartSlots: 0,
     worktreePoolPerRepo: WORKTREE_DEFAULTS.perRepo, worktreePoolTotal: WORKTREE_DEFAULTS.total, worktreeDiskCapGb: WORKTREE_DEFAULTS.diskGb,
     suggestOn: true,
-    voiceAsr: 'fast', voiceName: 'paola', voicePtt: false, awayMode: false, balancedMode: false,
+    voiceAsr: 'fast', voiceName: 'paola', voicePtt: false, awayMode: false, balancedMode: false, codeMode: false,
     delegation: { ...DELEGATION_DEFAULTS }, modelTiers: {},
   };
 }

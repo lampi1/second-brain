@@ -63,6 +63,9 @@ const questionSig = (req: Pick<PendingRequest, 'questions'>): string =>
 export abstract class ManagerRequests extends ManagerCheckpoints {
   private coordinationStore?: CoordinationStore;
   private readonly answering = new WeakMap<Rec, Set<string>>();
+  /** run_code's internal calls waiting for the user (decideFor, ADR 0331), by request id: the answer settles the
+   *  script's call, no engine is told (none asked). */
+  protected readonly internalAsks = new Map<string, (answer: Answer) => void>();
   /** Same SQLite journal as Workflows, opened lazily. No function-valued or Electron dependency crosses the boundary. */
   protected get coordination(): CoordinationStore {
     return this.coordinationStore ??= new CoordinationStore(path.join(this.opts.userData, 'app.db'));
@@ -88,6 +91,8 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     const delivered = (ok: boolean): boolean => { store.finishDelivery(delivery.id, ok ? 'delivered' : 'failed'); return ok; };
     const uncertain = (e: unknown): never => { store.finishDelivery(delivery.id, 'uncertain'); throw e; };
     try {
+      const inner = this.internalAsks.get(req.id);
+      if (inner) { this.internalAsks.delete(req.id); inner(answer); return delivered(true); }
       const session = r.session;
       if (session?.answerConsumed) return session.answerConsumed(req.id, answer, patch).then(delivered, uncertain);
       return delivered(session?.answer(req.id, answer, patch) ?? false);

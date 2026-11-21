@@ -61,6 +61,8 @@ export interface WarmLaunch {
    *  role's catalog id and the roles it may launch (null = unknown); `child` = an engine for a delegated chat, with the
    *  role chain of the parent it will work under (its managed MCP servers are bounded by it, as for a cold child) */
   view?: { role: string | null; launches: string[] | null; child?: { ancestors: (string | null)[] } };
+  /** launched for Code Mode (ADR 0331): run_code allowed, the native file and shell tools hidden */
+  codeMode?: true;
 }
 export const PLAIN_LAUNCH: WarmLaunch = { sig: '' };
 

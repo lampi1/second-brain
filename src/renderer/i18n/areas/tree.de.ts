@@ -61,6 +61,8 @@ export const treeDe: typeof treeIt = {
   'delegation.desc': 'Wie weit Rollen delegieren dürfen und auf welchen Modellen ihre Stufen laufen.',
   'delegation.balanced': 'Balanced mode',
   'delegation.balanced.hint': 'Alle Rollen: der delegierende Agent wählt Engine, Modell und Aufwand nach dem verbleibenden Guthaben jedes Anbieters und den Statistiken der Rolle (die Formel schlägt vor), damit das Guthaben gleichmäßig aufgebraucht wird. Hauptschalter: das Modellmenü des Orchestrators. Aus: jede Rollenkarte entscheidet.',
+  'delegation.codeMode': 'Code Mode',
+  'delegation.codeMode.hint': 'Claude- und Cursor-Chats (nicht der Orchestrator) arbeiten mit einem Skript: viele Lese-, Such- und Tool-Aufrufe in einem Aufruf (run_code), in einer Sandbox. Jeder Aufruf durchläuft dieselben Berechtigungsregeln; eine Esegui-Aktion stoppt das Skript und hinterlässt die übliche Schaltfläche. Gilt für danach gestartete Chats.',
   'delegation.maxDepth': 'Maximale Tiefe',
   'delegation.maxDepth.hint': 'Wie viele Ebenen unter einem Haupt-Chat: bei 2 darf ein Kind delegieren, ein Enkel nicht.',
   'delegation.maxParallel': 'Kinder gleichzeitig',

@@ -44,6 +44,17 @@ export interface ClaudeLaunch { args: string[]; pluginDir: string | null; rulesF
 /** stop = Stop is answered in process too (rules/delivery.ts stopInProcess): the plugin's hooks.json has no runner then */
 export interface ProductHooks { root: string; state: string; launch: LaunchFacts; stop?: true }
 
+/** The product hooks a Claude session of the current brain answers in process, as claudeLaunch gives them, without
+ *  building the plugin: Code Mode's internal calls pass the same PreToolUse guard (code-mode/wire.ts, ADR 0331). null =
+ *  no product brain, its launch off, or its hooks off. */
+export function productHooksOf(userData: string): ProductHooks | null {
+  const rules = launchRules();
+  const root = rules?.domains[0]?.root;
+  if (!root || !isProduct(root) || !(rules?.claude || configOf(root).claudeLaunch) || !enabled(root)) return null;
+  const fwd = ensureTools(root)?.replace(/\\/g, '/');
+  return { root, state: path.join(userData, 'claude-plugin', 'rule-state'), launch: fwd ? { tools: fwd, correctionHook: true } : {} };
+}
+
 /** Legacy brains fail open with a warning. Migrated brains fail closed if product hooks cannot be delivered. */
 /** `skills: false` = a role chat: the brain's skills stay out (its launch's own plugin carries the ones it was given). */
 /** `cwd` = the chat's folder: the template's Stop hooks it runs by itself are left out of the plugin (ownStopHooks). */

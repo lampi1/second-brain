@@ -60,6 +60,9 @@ for (const f of ['icon.ico', 'icon.png']) fs.copyFileSync(path.join(root, 'build
 // the chess engine of the Scacchi page (ADR 0304): Stockfish's two files with its licence, copied as they are; the app
 // starts the script as its own process and speaks UCI to it (src/main/chess/engine.ts), nothing of it is bundled
 fs.cpSync(path.join(root, 'vendor', 'stockfish'), path.join(root, 'out', 'chess-engine'), { recursive: true });
+// Code Mode's sandbox (ADR 0331): QuickJS's WASM binary beside the main bundle (code-mode/sandbox.ts reads it from
+// there); its JS glue is bundled, so a release (a copy of out/) needs no node_modules for it
+fs.copyFileSync(path.join(root, 'node_modules', '@jitl', 'quickjs-wasmfile-release-sync', 'dist', 'emscripten-module.wasm'), path.join(root, 'out', 'main', 'quickjs.wasm'));
 // the notices a release (a copy of out/) must carry: the third-party entries, and the licences of the chess pieces
 // and of chess.js, both bundled by the renderer
 fs.copyFileSync(path.join(root, 'NOTICE'), path.join(root, 'out', 'NOTICE'));

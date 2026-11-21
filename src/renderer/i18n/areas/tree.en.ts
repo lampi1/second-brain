@@ -61,6 +61,8 @@ export const treeEn: typeof treeIt = {
   'delegation.desc': 'How far roles may delegate and which models their tiers run on.',
   'delegation.balanced': 'Balanced mode',
   'delegation.balanced.hint': 'All roles: the agent that delegates picks engine, model and effort from the credit left on each provider and the role stats (the formula proposes), so the credits run out together. Main switch: the Orchestrator model menu. Off: each role card decides.',
+  'delegation.codeMode': 'Code Mode',
+  'delegation.codeMode.hint': 'Claude and Cursor chats (not the Orchestrator) work through a script: many reads, searches and tools in one call (run_code), in a sandbox. Every call meets the same permission rules; an Esegui action stops the script and leaves you the usual button. Applies to chats started afterwards.',
   'delegation.maxDepth': 'Maximum depth',
   'delegation.maxDepth.hint': 'How many levels below a root chat: with 2 a child may delegate, a grandchild may not.',
   'delegation.maxParallel': 'Children at once',

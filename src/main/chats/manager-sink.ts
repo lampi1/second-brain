@@ -1,14 +1,18 @@
 // ChatManager layer (ADR 0200): the session sink. Each engine session reports items, questions and permissions and
 // state patches; sinkFor turns them into the chat record and the contract events (chat:item, pending:added, chat:updated)
-// and applyPatch applies a state change (turn start and end, the Orchestrator's own turn, held results).
+// and applyPatch applies a state change (turn start and end, the Orchestrator's own turn, held results). decideFor is
+// the same permission chain for run_code's internal calls (Code Mode, ADR 0331; code-mode/bridge.ts).
 import { isNativeQuestion } from '../../shared/yes-no';
-import type { PendingRequest } from '../../shared/contract';
+import type { Answer, ChatItem, PendingRequest } from '../../shared/contract';
+import { randomUUID } from 'node:crypto';
 import { errText, log } from '../log';
+import { permissionText } from './claude-map';
+import { trimInput } from './session';
+import { aboveCeiling, allowsClass, toolClassOf } from '../agents/tool-policy';
 import { AFTER_CALLS } from './continuity';
 import { HANDOFF_END, HANDOFF_START } from './handoff';
 import type { HarnessSession, SessionPatch, SessionSink } from './session';
 import { engineOf } from '../engines/registry';
-import { aboveCeiling } from '../agents/tool-policy';
 import { addSkill, addTurn } from '../agents/runs';
 import { AgentChildrenReducer } from './agent-children';
 import { effortValue, initialEffort, observeEffort, submitEffort } from './effort';
@@ -19,8 +23,85 @@ import { pausedState } from './remote-control';
 import { runtimePerformance } from '../runtime-performance';
 import { maskTypedItem, maskTypedRequest } from './typed-text';
 
+/** The app's verdict on one internal call of a run_code script (decideFor, ADR 0331): deny = an error the script
+ *  sees; esegui = only the user runs it (the Esegui button), the script stops there. */
+export type InternalVerdict = { kind: 'allow' } | { kind: 'deny'; message: string } | { kind: 'esegui'; message: string };
+const refused = (message: string): InternalVerdict => ({ kind: 'deny', message });
+
 /** What a session reports (items, requests, state patches) turned into the chat record and contract events. */
 export abstract class ManagerSink extends ManagerWork {
+  /** The one permission chain for a run_code internal call (ADR 0331), in the order a native call meets it: the chat
+   *  must be live in Code Mode; a tool class its role was not given is refused (as Claude's --tools would); the
+   *  chat's in-process PreToolUse hook and the brain's product guard may refuse it; then the same gates as a native
+   *  request (gateDecision: role gate, read-only commands, auto-permit). A request they leave to the user is shown as
+   *  his panel, with no «always» (no engine would keep the rule), and waits for his answer: `waited` gets the time
+   *  spent, which never counts against the script's limits. A refusal by a brain rule shows its line in the chat, as
+   *  a native one does; its message reaches the model as the call's error (no after-turn note is needed). */
+  async decideFor(chatId: string, tool: string, input: unknown, opts: { signal?: AbortSignal; waited?: (ms: number) => void } = {}): Promise<InternalVerdict> {
+    const r = this.chats.get(chatId);
+    if (!r?.session || !r.codeMode) return refused('This chat does not run in Code Mode: run_code cannot call tools for it.');
+    const c = toolClassOf(tool);
+    if (r.policy?.tools && c && !allowsClass(r.policy, c)) {
+      log.info('chats', 'code mode: tool class not given to the role', { chat: chatId, data: { tool } });
+      return refused(`${tool} is not among this role's tools.`);
+    }
+    try {
+      const pre = await r.preToolUse?.decide({ tool, input });
+      if (pre) return refused(pre.deny);
+    } catch (e) { log.warn('chats', 'code mode: the chat\'s PreToolUse hook failed, the call goes on', { chat: chatId, cause: errText(e), hint: 'as on the native path, a failing hook never blocks a call' }); }
+    if (this.opts.productGuard) {
+      let why: string | null;
+      // a guard that cannot read the brain fails closed, as its runner does on the native path
+      try { why = this.opts.productGuard({ chatId, sessionId: r.s.sessionId ?? chatId, tool, input }); }
+      catch (e) { why = 'Product safety guard could not verify this operation.'; log.warn('chats', 'code mode: product guard failed: call refused', { chat: chatId, cause: errText(e), hint: 'check brain.json and the rules folder' }); }
+      if (why) return refused(why);
+    }
+    const t = permissionText(tool, input, { cwd: r.s.cwd });
+    const req: Omit<PendingRequest, 'chatId'> = { id: `code-${randomUUID()}`, type: 'permission', tool, title: `(run_code) ${t.title}`, detail: t.detail, input, at: Date.now(), noAlways: true };
+    const d = this.gateDecision(r, req, true);
+    if (d.kind === 'allow') return { kind: 'allow' };
+    if (d.kind === 'deny') {
+      this.addItem(r, d.item, false);
+      this.updated(r);
+      return d.rule?.action === 'esegui' ? { kind: 'esegui', message: d.message } : refused(d.message);
+    }
+    return this.askInternal(r, { ...req, input: trimInput(input) }, opts);
+  }
+
+  /** An internal call the gates left to the user: his panel, as a native request is shown (night mode may answer it),
+   *  settled by deliverAnswer through internalAsks; the script's call cancelled (its MCP request gone) takes it away. */
+  private askInternal(r: Rec, req: Omit<PendingRequest, 'chatId'>, opts: { signal?: AbortSignal; waited?: (ms: number) => void }): Promise<InternalVerdict> {
+    const started = Date.now();
+    return new Promise<InternalVerdict>(resolve => {
+      const finish = (v: InternalVerdict): void => {
+        opts.signal?.removeEventListener('abort', cancel);
+        opts.waited?.(Date.now() - started);
+        resolve(v);
+      };
+      // whoever takes the waiter out settles it, once: deliverAnswer (the user, night mode) or here
+      const done = (v: InternalVerdict): void => { if (this.internalAsks.delete(req.id)) finish(v); };
+      const cancel = (): void => { if (!this.internalAsks.has(req.id)) return; done(refused('The call was cancelled.')); this.dropPending(r, req.id); };
+      this.internalAsks.set(req.id, (a: Answer) => finish(a.kind === 'permission' && a.allow ? { kind: 'allow' }
+        : refused(a.kind === 'permission' && a.message ? `The user refused this call: ${a.message}` : 'The user refused this call.')));
+      if (opts.signal?.aborted) { cancel(); return; }
+      opts.signal?.addEventListener('abort', cancel);
+      try { this.exposeRequest(r, maskTypedRequest(req)); }
+      catch (e) {
+        log.warn('chats', 'code mode: internal request not shown', { chat: r.s.id, cause: errText(e), hint: 'the script gets a refusal; read the request journal' });
+        done(refused('The request could not be shown to the user.'));
+      }
+    });
+  }
+
+  /** One compact row in the chat for a run_code internal call (ADR 0331): name, input, decision, outcome. replace = the
+   *  same row updated (running → its outcome). */
+  codeModeRow(chatId: string, item: Extract<ChatItem, { kind: 'tool' }>, replace = false): void {
+    const r = this.chats.get(chatId);
+    if (!r) return;
+    this.addItem(r, maskTypedItem(item), replace);
+    this.updated(r);
+  }
+
   /** A request past the gates: answered by night mode, else shown (also a held twin whose first left, #379). */
   protected exposeRequest(r: Rec, req: Omit<PendingRequest, 'chatId'>): void {
     if (this.awayAnswered(r, req)) return;
@@ -268,6 +349,10 @@ export abstract class ManagerSink extends ManagerWork {
       // Engines publish result before accounting. Completion or reassignment can happen between the two.
       const owner = r.turnAccounting ? r.turnAccounting.pending.shift() : run;
       if (owner) { addTurn(owner, p.costKnown === false ? null : p.turnCostUsd, p.turnTokens, !!r.turnAccounting); this.runSaveSoon(); }
+      // one line per settled turn on every engine, with Code Mode's flag: the A/B reads tokens, turns and time here
+      // (`npm run logs -- --scope chats --grep "timing: turn usage"`, ADR 0331)
+      log.info('chats', 'timing: turn usage', { chat: r.s.id, data: { harness: r.s.harness, codeMode: r.codeMode === true, tokens: p.turnTokens ?? null, costUsd: p.turnCostUsd,
+        turns: owner?.turns ?? null, turnMs: r.turnAt !== undefined ? Date.now() - r.turnAt : null } });
     }
     if (p.contextMaxTokens !== undefined) r.s.contextMaxTokens = p.contextMaxTokens;
     if (p.turnCostUsd !== undefined || p.liveCostUsd !== undefined) {

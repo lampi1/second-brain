@@ -1,5 +1,5 @@
 // Impostazioni → Ruoli e deleghe (ADR 0083): the «Balanced mode» switch (ADR 0218: delegated chats follow the credits
-// left), the limits of delegation between role chats (how deep a chain of children
+// left), the «Code Mode» switch (ADR 0331: Claude and Cursor chats work through run_code, off by default), the limits of delegation between role chats (how deep a chain of children
 // may go, how many children of one parent work at once, after how many quiet minutes a child counts as stalled; the
 // independent reviews are one switch on the Agenti page now (JudgingSwitch, 2026-10-22); stallMin is read by agents/delegation.ts stalledMin) and the model each tier (leggero / medio / alto) runs on per engine.
 // Each change saves at once through settings:set (the main side checks the range; agents cannot change these keys).
@@ -20,11 +20,16 @@ export function DelegationSettings() {
   const tiers = useApp(s => s.settings?.modelTiers);
   const engines = useEngines().filter(e => e.kind !== 'api');
   const auto = useApp(s => s.settings?.balancedMode === true);
+  const codeMode = useApp(s => s.settings?.codeMode === true);
   if (!limits) return null;
   return <>
     <div className="st-row" data-testid="st-balanced-mode">
       <div className="st-text"><label className="st-title" htmlFor="st-balanced-mode-on">{t('delegation.balanced')}</label><p className="st-desc">{t('delegation.balanced.hint')}</p></div>
       <div className="st-ctl"><button id="st-balanced-mode-on" type="button" role="switch" aria-checked={auto} aria-label={t('delegation.balanced')} className={`st-switch ${auto ? 'on' : ''}`} onClick={() => void setSetting({ balancedMode: !auto })} data-testid="st-balanced-mode-on"><span className="st-knob" aria-hidden="true" /></button></div>
+    </div>
+    <div className="st-row" data-testid="st-code-mode">
+      <div className="st-text"><label className="st-title" htmlFor="st-code-mode-on">{t('delegation.codeMode')}</label><p className="st-desc">{t('delegation.codeMode.hint')}</p></div>
+      <div className="st-ctl"><button id="st-code-mode-on" type="button" role="switch" aria-checked={codeMode} aria-label={t('delegation.codeMode')} className={`st-switch ${codeMode ? 'on' : ''}`} onClick={() => void setSetting({ codeMode: !codeMode })} data-testid="st-code-mode-on"><span className="st-knob" aria-hidden="true" /></button></div>
     </div>
     {KEYS.map(k => <div className="st-row" key={k}>
       <div className="st-text"><span className="st-title-line"><label className="st-title" htmlFor={`st-delegation-${k}`}>{t(`delegation.${k}`)}</label>{k === 'stallMin' && <HelpTip title={t('explain.stall.title')} testid="st-stall-help"><p>{t('explain.stall.p1')}</p><p>{t('explain.stall.p2')}</p></HelpTip>}</span><p className="st-desc">{t(`delegation.${k}.hint`)}</p></div>

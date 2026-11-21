@@ -75,6 +75,7 @@ export const TOOL_CATALOG: Readonly<Record<string, ToolInfo>> = {
   agent_delegate: t('chat', 'Delegate independent parts of the task to other roles as visible child chats.'),
   agent_children: t('chat', 'The chats you delegated: role, state, goal, result, open requests, cost, and why a task was closed early (endCause).'),
   agent_ask_parent: t('chat', 'Ask the chat that delegated you, before the user.'),
+  run_code: t('chat', 'Code Mode (setting codeMode, ADR 0331): run a JavaScript script in a sandbox that calls many tools in one go; each call meets the same permission rules.'),
   agent_answer_child: t('chat', 'Answer a question one of your delegated chats asked you.'),
   agent_report: t('chat', 'Your one final result for the chat that started you.'),
   agent_close_child: t('chat', 'Close one of your delegated chats and its tree, never while it waits for the user.'),
