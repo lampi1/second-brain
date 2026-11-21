@@ -1,7 +1,7 @@
 // Per-OS folders and engine package (src/main/platform.ts, ADR 0054): the shared folder never lands inside the stable
 // userData, the XDG variables are honoured on Linux, and the engine package matches the npm names Anthropic ships.
 import { describe, expect, it } from 'vitest';
-import { claudeEnginePackage, etimeSeconds, launcherName, linuxDesktopEntry, macCommandFile, ownProcessGroup, restartWaiter, sharedDir, userShell, userShellName } from '../../src/main/platform';
+import { claudeEnginePackage, etimeSeconds, gitBashPath, launcherName, linuxDesktopEntry, macCommandFile, ownProcessGroup, restartWaiter, sharedDir, userShell, userShellName } from '../../src/main/platform';
 
 describe('sharedDir', () => {
   it('Windows: %LOCALAPPDATA%/second-brain, with the profile fallback when the variable is missing', () => {
@@ -87,5 +87,25 @@ describe('desktop launchers of macOS and Linux (ADR 0054 stage 4)', () => {
   });
   it('the .command file runs launch.sh as one shell word', () => {
     expect(macCommandFile("/Users/o'k/launch.sh")).toContain(String.raw`exec /bin/sh '/Users/o'\''k/launch.sh'`);
+  });
+});
+
+describe('gitBashPath (run_code Bash, the hooks guard)', () => {
+  const only = (...paths: string[]) => (p: string): boolean => paths.map(x => x.toLowerCase()).includes(p.toLowerCase());
+  it('Windows: the per-user Git for Windows install under %LOCALAPPDATA%/Programs/Git', () => {
+    const bash = 'C:\\Users\\u\\AppData\\Local\\Programs\\Git\\bin\\bash.exe';
+    expect(gitBashPath({ LOCALAPPDATA: 'C:\\Users\\u\\AppData\\Local' }, 'win32', only(bash))).toBe(bash);
+  });
+  it('Windows: the Git on PATH (cmd or mingw64/bin), its root/bin/bash.exe; never a bash.exe without git.exe beside it', () => {
+    const bash = 'D:\\Tools\\Git\\bin\\bash.exe';
+    expect(gitBashPath({ Path: 'C:\\Windows\\System32;"D:\\Tools\\Git\\cmd"' }, 'win32', only('D:\\Tools\\Git\\cmd\\git.exe', bash))).toBe(bash);
+    expect(gitBashPath({ PATH: 'D:\\Tools\\Git\\mingw64\\bin' }, 'win32', only('D:\\Tools\\Git\\mingw64\\bin\\git.exe', bash))).toBe(bash);
+    expect(gitBashPath({ PATH: 'C:\\Windows\\System32' }, 'win32', only('C:\\Windows\\System32\\bash.exe'))).toBeNull();
+  });
+  it('Windows: CLAUDE_CODE_GIT_BASH_PATH first, then Program Files; elsewhere /bin/sh', () => {
+    const pf = 'C:\\Program Files\\Git\\bin\\bash.exe';
+    expect(gitBashPath({ CLAUDE_CODE_GIT_BASH_PATH: 'E:\\b.exe', LOCALAPPDATA: 'C:\\L' }, 'win32', only('E:\\b.exe', pf))).toBe('E:\\b.exe');
+    expect(gitBashPath({ LOCALAPPDATA: 'C:\\L' }, 'win32', only(pf, 'C:\\L\\Programs\\Git\\bin\\bash.exe'))).toBe(pf);
+    expect(gitBashPath({}, 'linux', () => false)).toBe('/bin/sh');
   });
 });
