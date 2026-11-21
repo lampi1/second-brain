@@ -1,12 +1,18 @@
 // run_code's thin wrappers for the native tools a Code Mode chat no longer sees (ADR 0331): Bash (Git Bash on
-// Windows, as Claude Code; /bin/sh elsewhere), Read, Write, Edit, Grep and Glob over Node fs, with Claude's own input
-// names. They only execute: the permission chain ran before (code-mode/bridge.ts → ChatManager.decideFor). Paths are
-// the chat's folder's when relative. Used by code-mode/bridge.ts and its tests (a fake spawn: no real process).
+// Windows, as Claude Code; /bin/sh elsewhere), Read, Write, Edit, Grep and Glob, with Claude's own input names. They
+// only execute: the permission chain ran before (code-mode/bridge.ts → ChatManager.decideFor). Paths are relative to
+// the folder the chat really works in (a --worktree chat's worktree), Bash gets the chat's engine environment, and
+// every wrapper stops when its run ends (the run's signal: the script finished, hit a limit, or was cancelled). Bash
+// never outlives the run's remaining time; Read, Grep and Glob run in a worker thread with a time limit
+// (code-mode/fs-run.ts), never on the main process. Used by code-mode/bridge.ts and its tests (a fake spawn and a
+// direct file runner: no real process, no thread).
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn as nodeSpawn, type SpawnOptions } from 'node:child_process';
 import { gitBashPath } from '../platform';
 import type { NativeWrapper } from './policy';
+import { FS_LIMITS } from './fs-ops';
+import { workerRunner, type FsRunner } from './fs-run';
 
 /** the subset of child_process.spawn the Bash wrapper uses (tests pass a fake) */
 export type Spawn = (command: string, args: string[], opts: SpawnOptions) => {
@@ -15,13 +21,23 @@ export type Spawn = (command: string, args: string[], opts: SpawnOptions) => {
   kill(signal?: NodeJS.Signals): unknown;
 };
 
-export interface NativeEnv { cwd: string; spawn?: Spawn; shell?: string | null; env?: NodeJS.ProcessEnv; signal?: AbortSignal }
+export interface NativeEnv {
+  cwd: string; spawn?: Spawn; shell?: string | null;
+  /** the chat's engine environment (Bash's); default this process's */
+  env?: NodeJS.ProcessEnv;
+  /** the run's signal: an abort kills a running command and drops a pending read */
+  signal?: AbortSignal;
+  /** ms the run has left: a command's timeout never goes past it */
+  maxMs?: number;
+  /** a search leaves out what this refuses (a Claude Read deny rule) */
+  readable?: (abs: string) => boolean;
+  /** the file reads' runner (default the worker thread) */
+  fsRun?: FsRunner;
+}
 
 const OUT_MAX = 30_000;
-const BASH_DEFAULT_MS = 120_000, BASH_MAX_MS = 600_000;
-const READ_LINES = 2000, LINE_MAX = 2000;
-const WALK_MAX = 20_000;
-const SKIP_DIRS = new Set(['node_modules', '.git']);
+const BASH_DEFAULT_MS = 120_000, BASH_MAX_MS = 600_000, FS_MAX_MS = 30_000;
+const READ_LINES = 2000;
 
 const str = (v: unknown, name: string): string => { if (typeof v !== 'string' || !v) throw new Error(`${name} is required (a string)`); return v; };
 const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
@@ -31,45 +47,59 @@ type In = Record<string, unknown>;
 
 /** One native wrapper call. Throws an Error the script may catch (a missing file, a failed edit). */
 export async function runNative(tool: NativeWrapper, input: In, env: NativeEnv): Promise<unknown> {
+  if (env.signal?.aborted) throw new Error('The call was cancelled.');
   switch (tool) {
     case 'Bash': return bash(input, env);
-    case 'Read': return read(input, env.cwd);
+    case 'Read': return read(input, env);
     case 'Write': return write(input, env.cwd);
     case 'Edit': return edit(input, env.cwd);
-    case 'Grep': return grep(input, env.cwd);
-    case 'Glob': return glob(input, env.cwd);
+    case 'Grep': return grep(input, env);
+    case 'Glob': return glob(input, env);
   }
+}
+
+/** A command's time: the asked one (1 s to 10 min, default 2 min), never past what the run has left. */
+export function bashTimeout(asked: number | undefined, maxMs?: number): number {
+  const ms = Math.min(Math.max(asked ?? BASH_DEFAULT_MS, 1000), BASH_MAX_MS);
+  if (maxMs === undefined) return ms;
+  if (maxMs < 1000) throw new Error('run_code has no time left for a command: return what you have');
+  return Math.min(ms, Math.floor(maxMs));
 }
 
 function bash(input: In, env: NativeEnv): Promise<{ exitCode: number | null; stdout: string; stderr: string; timedOut?: true }> {
   const command = str(input.command, 'command');
   const shell = env.shell === undefined ? gitBashPath() : env.shell;
   if (!shell) throw new Error('Git Bash not found (set CLAUDE_CODE_GIT_BASH_PATH): Bash cannot run');
-  const ms = Math.min(Math.max(num(input.timeout) ?? BASH_DEFAULT_MS, 1000), BASH_MAX_MS);
+  const ms = bashTimeout(num(input.timeout), env.maxMs);
   const spawn = env.spawn ?? (nodeSpawn as unknown as Spawn);
   return new Promise((resolve, reject) => {
     const child = spawn(shell, ['-c', command], { cwd: env.cwd, env: env.env ?? process.env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-    let out = '', err = '', timedOut = false;
+    let out = '', err = '', timedOut = false, aborted = false;
     const keep = (s: string, add: string): string => { const n = s + add; return n.length > OUT_MAX * 2 ? n.slice(-OUT_MAX * 2) : n; };
     child.stdout?.on('data', (d: Buffer | string) => { out = keep(out, String(d)); });
     child.stderr?.on('data', (d: Buffer | string) => { err = keep(err, String(d)); });
     const timer = setTimeout(() => { timedOut = true; child.kill(); }, ms);
     timer.unref?.();
-    const abort = (): void => { child.kill(); };
+    const abort = (): void => { aborted = true; child.kill(); };
     env.signal?.addEventListener('abort', abort);
     child.on('error', e => { clearTimeout(timer); env.signal?.removeEventListener('abort', abort); reject(new Error(`Bash did not start: ${e.message}`)); });
     child.on('close', code => {
       clearTimeout(timer); env.signal?.removeEventListener('abort', abort);
+      if (aborted) { reject(new Error('The command was stopped: its run ended.')); return; }
       resolve({ exitCode: code, stdout: tail(out), stderr: tail(err), ...(timedOut ? { timedOut: true as const } : {}) });
     });
   });
 }
 
-function read(input: In, cwd: string): string {
-  const file = at(cwd, str(input.file_path, 'file_path'));
-  const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+const fsTimeout = (env: NativeEnv): number => Math.max(1000, Math.min(FS_MAX_MS, env.maxMs ?? FS_MAX_MS));
+const fsOpts = (env: NativeEnv): { timeoutMs: number; signal?: AbortSignal } => ({ timeoutMs: fsTimeout(env), ...(env.signal ? { signal: env.signal } : {}) });
+const runner = (env: NativeEnv): FsRunner => env.fsRun ?? workerRunner;
+
+async function read(input: In, env: NativeEnv): Promise<string> {
+  const file = at(env.cwd, str(input.file_path, 'file_path'));
   const from = Math.max(1, num(input.offset) ?? 1), count = Math.max(1, num(input.limit) ?? READ_LINES);
-  return lines.slice(from - 1, from - 1 + count).map((l, i) => `${from + i}\t${l.length > LINE_MAX ? `${l.slice(0, LINE_MAX)}…` : l}`).join('\n');
+  const r = await runner(env)({ op: 'read', file, from, count }, fsOpts(env));
+  return r.op === 'read' ? r.text : '';
 }
 
 function write(input: In, cwd: string): string {
@@ -85,29 +115,13 @@ function edit(input: In, cwd: string): string {
   const old = str(input.old_string, 'old_string');
   if (typeof input.new_string !== 'string') throw new Error('new_string is required (a string)');
   if (old === input.new_string) throw new Error('old_string and new_string are the same');
+  if (fs.statSync(file).size > FS_LIMITS.maxFileBytes) throw new Error(`${file} is over ${FS_LIMITS.maxFileBytes / 1048576} MB: Edit does not take it`);
   const text = fs.readFileSync(file, 'utf8');
   const n = text.split(old).length - 1;
   if (!n) throw new Error(`old_string not found in ${file}`);
   if (n > 1 && input.replace_all !== true) throw new Error(`old_string found ${n} times in ${file}: give more context or replace_all true`);
   fs.writeFileSync(file, input.replace_all === true ? text.split(old).join(input.new_string) : text.replace(old, () => input.new_string as string), 'utf8');
   return `edited ${file} (${input.replace_all === true ? n : 1} replacement${n > 1 && input.replace_all === true ? 's' : ''})`;
-}
-
-/** Every file under dir (node_modules and .git left out), relative paths with /, at most WALK_MAX. */
-function walk(dir: string): string[] {
-  const out: string[] = [];
-  const go = (d: string, rel: string): void => {
-    let ents: fs.Dirent[];
-    try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
-    for (const e of ents) {
-      if (out.length >= WALK_MAX) return;
-      const r = rel ? `${rel}/${e.name}` : e.name;
-      if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) go(path.join(d, e.name), r); }
-      else if (e.isFile()) out.push(r);
-    }
-  };
-  go(dir, '');
-  return out;
 }
 
 /** A glob (**, *, ?, {a,b}) as a RegExp over a relative path with /; a pattern with no / matches the file name anywhere. */
@@ -124,32 +138,29 @@ export function globRegExp(pattern: string): RegExp {
   return new RegExp(`^${pattern.includes('/') ? '' : '(?:.*/)?'}${re}$`, process.platform === 'win32' ? 'i' : '');
 }
 
-function glob(input: In, cwd: string): string[] {
-  const root = at(cwd, typeof input.path === 'string' && input.path ? input.path : '.');
-  const re = globRegExp(str(input.pattern, 'pattern'));
-  return walk(root).filter(f => re.test(f)).map(f => path.join(root, f));
+/** The files under a search's root (or the root itself, a file), less what the chat's rules keep from reading. */
+async function files(root: string, env: NativeEnv, only: RegExp | null): Promise<{ base: string; list: string[] }> {
+  const r = await runner(env)({ op: 'walk', root }, fsOpts(env));
+  if (r.op !== 'walk') return { base: root, list: [] };
+  const base = r.single ? path.dirname(root) : root;
+  const list = r.files.filter(f => (r.single || !only || only.test(f)) && (!env.readable || env.readable(path.join(base, f))));
+  return { base, list };
 }
 
-function grep(input: In, cwd: string): string {
-  const root = at(cwd, typeof input.path === 'string' && input.path ? input.path : '.');
-  const re = new RegExp(str(input.pattern, 'pattern'), input['-i'] === true ? 'i' : '');
+async function glob(input: In, env: NativeEnv): Promise<string[]> {
+  const root = at(env.cwd, typeof input.path === 'string' && input.path ? input.path : '.');
+  const re = globRegExp(str(input.pattern, 'pattern'));
+  const { base, list } = await files(root, env, null);
+  return list.filter(f => re.test(f)).map(f => path.join(base, f));
+}
+
+async function grep(input: In, env: NativeEnv): Promise<string> {
+  const root = at(env.cwd, typeof input.path === 'string' && input.path ? input.path : '.');
+  const pattern = str(input.pattern, 'pattern');
+  new RegExp(pattern); // a bad pattern fails here, before any thread work (compiling never runs it)
   const only = typeof input.glob === 'string' && input.glob ? globRegExp(input.glob) : null;
   const mode = input.output_mode === 'content' || input.output_mode === 'count' ? input.output_mode : 'files_with_matches';
-  const limit = num(input.head_limit) ?? 250;
-  const single = fs.existsSync(root) && fs.statSync(root).isFile();
-  const files = single ? [path.basename(root)] : walk(root).filter(f => !only || only.test(f));
-  const base = single ? path.dirname(root) : root;
-  const out: string[] = [];
-  for (const f of files) {
-    if (limit > 0 && out.length >= limit) break;
-    let text: string;
-    try { text = fs.readFileSync(path.join(base, f), 'utf8'); } catch { continue; }
-    if (text.includes('\u0000')) continue; // a binary file
-    const full = path.join(base, f);
-    if (mode === 'files_with_matches') { if (re.test(text)) out.push(full); continue; }
-    const lines = text.split(/\r?\n/);
-    if (mode === 'count') { const n = lines.filter(l => re.test(l)).length; if (n) out.push(`${full}:${n}`); continue; }
-    lines.forEach((l, i) => { if ((limit <= 0 || out.length < limit) && re.test(l)) out.push(`${full}:${i + 1}:${l.length > LINE_MAX ? `${l.slice(0, LINE_MAX)}…` : l}`); });
-  }
-  return tail(out.join('\n'));
+  const { base, list } = await files(root, env, only);
+  const r = await runner(env)({ op: 'grep', base, files: list, pattern, ignoreCase: input['-i'] === true, mode, limit: num(input.head_limit) ?? 250 }, fsOpts(env));
+  return tail(r.op === 'grep' ? r.lines.join('\n') : '');
 }
