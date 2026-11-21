@@ -57,4 +57,13 @@ describe('explainTool', () => {
     expect(actionWords('wit_my_work_items')).toBe('legge i tuoi work items');
     expect(actionWords('strange')).toBe('strange');
   });
+
+  it('Code Mode: the run_code row says so, and each inner call names its tool and the decision (not "Consentito" alone)', () => {
+    expect(explainTool('mcp__second-brain__run_code', { code: 'return 1' }).line).toBe('Code Mode (run_code): esegue uno script');
+    expect(explainTool('run_code · Read', { file_path: 'C:/a/now.md' }, 'consentito').line).toBe('Read · Legge now.md · Consentito');
+    expect(explainTool('run_code · Read', { file_path: 'C:/a/now.md' }, 'consentito').raw).toBe('C:/a/now.md');
+    expect(explainTool('run_code · Bash', { command: 'git status' }, 'consentito dall’utente').line).toBe('Bash · Esegue git status · Consentito dall’utente');
+    expect(explainTool('run_code · navigate', { url: 'https://x.test/a' }, 'consentito').line).toBe('navigate · Browser dell’app: apre x.test · Consentito');
+    expect(explainTool('run_code · oris-knowledge__kb_search', { query: 'q' }, 'negato').line).toBe('oris-knowledge__kb_search · oris knowledge: cerca · Negato');
+  });
 });

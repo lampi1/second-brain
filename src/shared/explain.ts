@@ -87,6 +87,8 @@ function mcp(name: string, input: Obj): Explained | null {
   if (!m) return null;
   const server = m[1]!, tool = m[2]!;
   if (server === 'second-brain' && Object.hasOwn(DELEGATION, tool)) return { line: DELEGATION[tool]!(input), raw: tool };
+  // Code Mode's own tool (ADR 0331): a script, not a browser action ("esegue code" before)
+  if (server === 'second-brain' && tool === 'run_code') return { line: 'Code Mode (run_code): esegue uno script', raw: '' };
   const t = tool.replace(/^browser_/, '');
   const browserish = /browser|chrome|second-brain|^Claude_Browser$/i.test(server);
   const action = browserish ? (Object.hasOwn(BROWSER, t) ? BROWSER[t]!(input) : null) ?? actionWords(t) : actionWords(tool);
@@ -94,11 +96,27 @@ function mcp(name: string, input: Obj): Explained | null {
   return { line: `${serverName(server)}: ${action}`, raw: [tool, arg && !action.includes(host(arg)) ? cut(arg, 300) : ''].filter(Boolean).join(' · ') };
 }
 
+/** A call made inside a run_code script (code-mode/bridge.ts names its row "run_code · <script name>", the decision in
+ *  its summary): the inner tool's name, what it does and the decision ("Read · Legge now.md · Consentito"), never the
+ *  decision alone. Script names are the native tools (Read, Bash…), the app's tools (navigate) or "<server>__<tool>". */
+function codeModeCall(name: string, input: unknown, decision: string): Explained | null {
+  const m = /^run_code · (.+)$/.exec(name);
+  if (!m) return null;
+  const tool = m[1]!.trim();
+  const full = tool.includes('__') ? `mcp__${tool}` : /^[a-z]/.test(tool) ? `mcp__second-brain__${tool}` : tool;
+  const ex = explainTool(full, input);
+  const what = ex.line && ex.line !== full && ex.line !== tool ? ` · ${ex.line}` : '';
+  const said = decision.trim();
+  return { line: cut(`${tool}${what}${said ? ` · ${cap(said)}` : ''}`, 160), raw: ex.raw };
+}
+
 /** What a tool call does, in one plain line.
  *  - name: the tool name (Claude: "Bash", "Read", "mcp__x__y"; Cursor: the ACP kind name "Shell", "Read", "Edit"…)
  *  - input: its arguments (Claude's tool input; Cursor's rawInput)
  *  - title: the engine's own one-line title (Cursor's tool_call title), used when the input says too little */
 export function explainTool(name: string, input: unknown, title = ''): Explained {
+  const inner = codeModeCall(name, input, title);
+  if (inner) return inner;
   const i = obj(input);
   const file = str(i.file_path) || str(i.notebook_path) || str(i.target_file) || str(i.path) || str(i.filePath);
   const desc = str(i.description) || str(i.explanation);
