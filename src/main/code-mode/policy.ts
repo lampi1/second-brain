@@ -10,14 +10,6 @@ export const RUN_CODE = 'run_code';
  *  the app's permission chain. Agent, Skill, web, todo and plan tools stay native. */
 export const CODE_MODE_HIDDEN = ['Bash', 'PowerShell', 'Read', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Grep', 'Glob'] as const;
 
-/** Claude's system-prompt line for a Code Mode chat (--append-system-prompt, manager-sessions.ts extraArgsFor). Claude
- *  defers MCP tools behind ToolSearch: without it the model saw no Read/Bash/Grep/Glob, searched for them by name or by
- *  "read file shell grep", never found run_code and stopped (real-app test, 2026-11-21). */
-export const CLAUDE_CODE_MODE_HINT = 'Code Mode is on in this chat: the native Bash, PowerShell, Read, Edit, Write, Grep and Glob tools are not available. ' +
-  'Do all file, shell and search work with the second-brain tool mcp__second-brain__run_code (if it is deferred, load it first with ToolSearch query "select:mcp__second-brain__run_code"). ' +
-  'Write one JavaScript script that calls tools.Bash/Read/Write/Edit/Grep/Glob and the other tools listed in its schema, batches the calls and returns only what you need. ' +
-  'Every call inside it passes the app\'s permission rules; an action only the user runs stops the script: then write the exact command in a fenced code block.';
-
 /** The wrappers a script reaches as tools.<Name>: the same names, inputs and checks as the native ones. */
 export const NATIVE_WRAPPERS = ['Bash', 'Read', 'Write', 'Edit', 'Grep', 'Glob'] as const;
 export type NativeWrapper = typeof NATIVE_WRAPPERS[number];

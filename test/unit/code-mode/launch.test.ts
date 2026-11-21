@@ -12,6 +12,7 @@ import { ClaudeSession } from '../../../src/main/chats/claude';
 import type { HarnessSession, SessionOptions } from '../../../src/main/chats/session';
 import type { AgentPolicy } from '../../../src/main/agents/tool-policy';
 import { runCodeTool } from '../../../src/main/code-mode/tool';
+import { toolListEntry } from '../../../src/main/mcp/server';
 import { plainOwner } from '../../../src/main/agents/catalog';
 
 const dirs: string[] = [], managers: ChatManager[] = [];
@@ -40,17 +41,17 @@ async function roleChat(on: boolean, harness: 'claude' | 'cursor' = 'claude'): P
 const flag = (args: string[], name: string): string | undefined => { const i = args.lastIndexOf(name); return i < 0 ? undefined : args[i + 1]; };
 
 describe('Code Mode on the real Claude spawn path (role allowlist + codeMode)', () => {
-  it('on: run_code shown and pre-allowed, natives hidden, and the system prompt tells the model to use run_code', async () => {
+  it('on: run_code shown and pre-allowed, natives hidden, no system-prompt line (run_code is loaded upfront instead)', async () => {
     const { m, id, opts } = await roleChat(true);
     expect(m.chatToolShown(id, 'run_code')).toBe(true);
     const args = new ClaudeSession(opts, { changed: () => {} } as never).args();
     expect(args.find(a => a.startsWith('--tools='))).toMatch(/Read/); // the role's allowlist, as in the real app
     expect(flag(args, '--allowedTools')!.split(',')).toContain('mcp__second-brain__run_code');
     expect(flag(args, '--disallowedTools')!.split(',')).toEqual(expect.arrayContaining(['Bash', 'Read', 'Grep', 'Glob', 'Edit', 'Write']));
-    // the fix: Claude defers MCP tools, so the model must be told where its file and shell tools went
-    const hint = flag(args, '--append-system-prompt');
-    expect(hint).toMatch(/mcp__second-brain__run_code/);
-    expect(hint).toMatch(/select:mcp__second-brain__run_code/);
+    // Claude defers MCP tools behind ToolSearch: run_code's own _meta (anthropic/alwaysLoad) loads it upfront, the
+    // documented mechanism, so no system-prompt line points the model at it (ADR 0331 point 6)
+    expect(args).not.toContain('--append-system-prompt');
+    expect(args.join(' ')).not.toMatch(/select:mcp__second-brain__run_code/);
     expect(JSON.parse(flag(args, '--mcp-config')!).mcpServers['second-brain'].url).toContain(`/mcp/chat/${id}/`);
   });
 
@@ -68,6 +69,28 @@ describe('Code Mode on the real Claude spawn path (role allowlist + codeMode)', 
     expect(m.chatToolShown(id, 'run_code')).toBe(true);
     expect(opts.codeMode).toBe(true);
     expect((opts.extraArgs ?? []).join(' ')).not.toMatch(/disallowedTools|append-system-prompt/);
+  });
+
+  it('Cursor (ACP): no documented way to load or hide tools, so the first prompt keeps the Code Mode line', async () => {
+    const { opts } = await roleChat(true, 'cursor');
+    const { AcpSession } = await import('../../../src/main/chats/acp');
+    const s = new AcpSession({ ...opts, engineId: 'cursor', label: 'Cursor', args: [], brainInstructions: 'Regole.' }, { changed: () => {} } as never) as unknown as { brainContext(): { text: string }[] };
+    expect(s.brainContext()[0]?.text).toMatch(/prefer the second-brain tool run_code/);
+  });
+
+  it('Codex, OpenCode: no Code Mode (codeModeFor), so no run_code and no Code Mode flag', async () => {
+    for (const h of ['codex', 'opencode'] as const) {
+      const { m, id, opts } = await roleChat(true, h as never);
+      expect(m.chatToolShown(id, 'run_code')).toBe(false);
+      expect(opts.codeMode).toBeUndefined();
+      expect((opts.extraArgs ?? []).join(' ')).not.toMatch(/run_code|disallowedTools|append-system-prompt/);
+    }
+  });
+
+  it('run_code\'s tools/list entry carries _meta anthropic/alwaysLoad (Claude loads it without ToolSearch); other tools none', () => {
+    const t = runCodeTool({ decideFor: async () => ({ kind: 'deny', reason: '' }) as never, row: () => {}, appTools: () => [], extServers: () => [], extTools: async () => [], context: () => ({ error: 'x' }) });
+    expect(toolListEntry(t, { chatId: 'c1' })).toMatchObject({ name: 'run_code', _meta: { 'anthropic/alwaysLoad': true } });
+    expect(toolListEntry({ name: 'x', description: 'd', inputSchema: {}, run: () => ({ text: '' }) as never }, {})).not.toHaveProperty('_meta');
   });
 
   it('a keyword ToolSearch for the hidden natives finds run_code: its description names them first', () => {

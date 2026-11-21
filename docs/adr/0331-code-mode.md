@@ -37,9 +37,16 @@ preToolUse checks, the brain's PreToolUse product hooks, the user's rules in per
 6. **Harnesses**: on Claude, run_code is allowed and the native Bash/Read/Edit/Write/Grep/Glob are passed in
    `--disallowedTools`. On Cursor (ACP) natives cannot be hidden: they stay, run_code is allowed and the prompt asks to
    prefer it. Amended 2026-11-21: Claude defers MCP tools behind ToolSearch, so a chat with its natives hidden saw no
-   file or shell tool and nothing pointed it at run_code (an Opus Scout gave up after a keyword search). A Claude Code
-   Mode chat gets `--append-system-prompt` naming run_code and its `select:` query, and run_code's description starts
-   with the words such a search uses (read file, shell, Bash, grep, glob). Checked on the real CLI by
+   file or shell tool and nothing pointed it at run_code (an Opus Scout gave up after a keyword search). Amended again
+   the same day (owner: the documented mechanism per harness, «a condizione che funzioni per tutti»): run_code's
+   tools/list entry carries `_meta: { "anthropic/alwaysLoad": true }`, the per-tool flag Claude Code documents for a
+   tool to load upfront instead of behind ToolSearch (https://code.claude.com/docs/en/mcp#per-tool-alwaysload); only
+   run_code, never the whole server (that would load every second-brain tool). The `--append-system-prompt` line is
+   gone; run_code's description still starts with the words a keyword search uses (read file, shell, Bash, grep, glob).
+   Cursor documents no way to load, hide or prefer a tool (CLI parameters, ACP; its deny rules refuse calls, are not
+   documented to hide tools, and are a permission change the owner declined), so its first prompt keeps the "prefer
+   run_code" line. Codex and OpenCode get no Code Mode (`codeModeFor`): Codex documents per-server MCP filters
+   (`enabled_tools`, `disabled_tools`) but no switch for its built-in shell. Checked on the real CLI by
    `test/live/code-mode.live.test.ts` (SB_LIVE=1); on the real Cursor agent by `test/live/code-mode-cursor.live.test.ts`
    (SB_LIVE_CURSOR=1, a rule-4 exception the owner granted for this check, 2026-11-21).
 7. **Measured from the logs**: each turn logs tokens, turns, duration and the flag (scope chats, «timing: turn usage»,

@@ -71,8 +71,11 @@ describe.skipIf(process.env.SB_LIVE !== '1')('live: Code Mode on the real Claude
 
     expect(tools).toContain('mcp__second-brain__run_code');
     for (const hidden of ['Read', 'Bash', 'Grep', 'Glob', 'Edit', 'Write', 'PowerShell']) expect(tools).not.toContain(hidden);
-    // told by the system prompt, the model never reaches for a hidden native (before the fix it tried Read and Bash
-    // first, and an Opus Scout gave up after a keyword ToolSearch: 2026-11-21)
+    // no system-prompt line any more: run_code's _meta anthropic/alwaysLoad loads it upfront, so the model calls it
+    // without a ToolSearch and never reaches for a hidden native (before: it tried Read and Bash first, and an Opus
+    // Scout gave up after a keyword ToolSearch, 2026-11-21)
+    expect(sess.args()).not.toContain('--append-system-prompt');
+    expect(toolRows.filter(r => r.name === 'ToolSearch')).toEqual([]);
     expect(toolRows.filter(r => ['Read', 'Bash', 'Grep', 'Glob', 'Edit', 'Write', 'PowerShell'].includes(r.name)).map(r => r.name)).toEqual([]);
     // the model found run_code and read the file through it
     expect(toolRows.some(r => r.name === 'run_code · Read' && r.status === 'ok')).toBe(true);

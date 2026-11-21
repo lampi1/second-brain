@@ -55,6 +55,9 @@ export function runCodeTool(deps: RunCodeDeps): McpTool {
   return {
     // the literal name, so test/unit/tool-catalog.test.ts finds this definition (RUN_CODE is the same string)
     name: 'run_code', description: DESCRIPTION,
+    // Claude Code defers MCP tools behind ToolSearch; this documented per-tool flag loads run_code upfront, so a chat
+    // whose natives are hidden sees it at once (https://code.claude.com/docs/en/mcp#per-tool-alwaysload). Others ignore it.
+    meta: { 'anthropic/alwaysLoad': true },
     inputSchema: schemaFor({ ...deps, appTools: () => [], extServers: () => [] }, ''),
     inputSchemaFor: params => schemaFor(deps, params.chatId ?? ''),
     async run(args, ctx) {

@@ -64,6 +64,9 @@ export interface McpTool {
   /** the schema a given caller sees (route params, e.g. its chatId); absent = inputSchema for everyone */
   inputSchemaFor?: (params: Record<string, string>) => Record<string, unknown>;
   annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean; title?: string };
+  /** the entry's MCP _meta in tools/list, e.g. { 'anthropic/alwaysLoad': true }: Claude Code loads that tool upfront
+   *  instead of deferring it behind ToolSearch (run_code in Code Mode, ADR 0331) */
+  meta?: Record<string, unknown>;
   run(args: Record<string, unknown>, ctx: CallCtx): ToolOutput | Promise<ToolOutput>;
 }
 
@@ -256,7 +259,7 @@ export class McpServer {
         }
         case 'ping': return ok(id, {});
         case 'tools/list':
-          return ok(id, { tools: (await this.toolsOf(mount, ctx)).map(({ name, description, inputSchema, inputSchemaFor, annotations }) => ({ name, description, inputSchema: inputSchemaFor?.(ctx.params) ?? inputSchema, ...(annotations ? { annotations } : {}) })) });
+          return ok(id, { tools: (await this.toolsOf(mount, ctx)).map(t => toolListEntry(t, ctx.params)) });
         case 'tools/call': {
           const name = typeof p.name === 'string' ? p.name : '';
           const tool = (await this.toolsOf(mount, ctx)).find(t => t.name === name);
@@ -329,6 +332,11 @@ function readBody(req: http.IncomingMessage, max: number): Promise<Buffer | null
 
 function callKey(mount: Mount, ctx: CallCtx, id: string | number | null): string {
   return `${mount.name}|${JSON.stringify(ctx.params)}|${ctx.sessionId}|${typeof id}:${String(id)}`;
+}
+
+/** One tool as tools/list shows it to a caller (route params): its schema for that caller, annotations and _meta if any. */
+export function toolListEntry({ name, description, inputSchema, inputSchemaFor, annotations, meta }: McpTool, params: Record<string, string>): Record<string, unknown> {
+  return { name, description, inputSchema: inputSchemaFor?.(params) ?? inputSchema, ...(annotations ? { annotations } : {}), ...(meta ? { _meta: meta } : {}) };
 }
 
 /** A tools/call request's _meta.progressToken (string or number), else undefined. */

@@ -20,7 +20,7 @@ import { aboveCeiling, browserAccess, claudeDefaultMode, claudeDefaultSetting, t
 import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { toolShownToChat, toolShownToUnknown, toolShownToWarm } from './tool-visibility';
-import { CLAUDE_CODE_MODE_HINT, codeModeFor, CODE_MODE_HIDDEN, RUN_CODE } from '../code-mode/policy';
+import { codeModeFor, CODE_MODE_HIDDEN, RUN_CODE } from '../code-mode/policy';
 import { AgentChildrenReducer } from './agent-children';
 import { initialEffort } from './effort';
 import type { Rec } from './manager-types';
@@ -373,9 +373,8 @@ export abstract class ManagerSessions extends ManagerPersistence {
     // the managed MCP servers this chat may not use: refused by name, also when the user's own Claude config has one so
     // named; in Code Mode Claude's own file and shell tools too (run_code's wrappers do their work)
     const denied = claude ? [...(this.opts.extMcp?.(chatId).denied ?? []).map(id => `mcp__${id}`), ...(codeMode && url ? CODE_MODE_HIDDEN : [])] : [];
-    // Claude defers MCP tools behind ToolSearch: with its natives hidden the model must be told run_code is the way
-    const hint = claude && codeMode && url ? ['--append-system-prompt', CLAUDE_CODE_MODE_HINT] : [];
-    const extra = [...(allowed.length ? ['--allowedTools', allowed.join(',')] : []), ...(denied.length ? ['--disallowedTools', denied.join(',')] : []), ...hint];
+    // no system-prompt line: run_code's _meta anthropic/alwaysLoad (code-mode/tool.ts) loads it upfront (ADR 0331 point 6)
+    const extra = [...(allowed.length ? ['--allowedTools', allowed.join(',')] : []), ...(denied.length ? ['--disallowedTools', denied.join(',')] : [])];
     return this.opts.extraArgs || extra.length ? [...(this.opts.extraArgs ?? []), ...extra] : null;
   }
 
