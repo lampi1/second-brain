@@ -149,17 +149,29 @@ describe('runSandboxed', () => {
     expect(await runSandboxed('return 1;', [], h)).toMatchObject({ ok: true, value: 1 });
   });
 
+  it('a tool result that cannot reach the script ends the run at once with that error, not at the time limit', async () => {
+    const warn = vi.spyOn(log, 'warn');
+    try {
+      let t = 0;
+      // the wall timer, if armed and left to fire, moves the fake clock to the limit: "at once" = the clock never moved
+      const setTimer = (fn: () => void, ms: number): (() => void) => { let on = true; setImmediate(() => setImmediate(() => setImmediate(() => { if (on) { t += ms; fn(); } }))); return () => { on = false; }; };
+      const r = await runSandboxed('return await tools.Read({});', ['Read'], { call: async () => ({ n: 1n }) }, { now: () => t, setTimer });
+      expect(r).toMatchObject({ ok: false, error: expect.stringMatching(/could not be passed to the script.*BigInt/) });
+      expect(t).toBe(0);
+    } finally { warn.mockRestore(); }
+  });
+
   it('a settle that throws keeps its promise for release() and logs it; a settle that works frees both', () => {
     const warn = vi.spyOn(log, 'warn');
     try {
       const freed: string[] = [];
       const d = { dispose: () => freed.push('deferred') }, h = { dispose: () => freed.push('value') };
       const open = new Set([d]);
-      settleDeferred(open, d, h, () => { throw new Error('interrupted'); });
+      expect(settleDeferred(open, d, () => h, () => { throw new Error('interrupted'); })).toMatch(/interrupted/);
       expect(freed).toEqual(['value']);
       expect(open.has(d)).toBe(true); // release() frees it at the end, never a live handle left behind
       expect(warn).toHaveBeenCalledWith('code-mode', expect.stringMatching(/settl/), expect.objectContaining({ cause: expect.stringMatching(/interrupted/) }));
-      settleDeferred(open, d, h, () => {});
+      expect(settleDeferred(open, d, () => h, () => {})).toBeUndefined();
       expect(open.has(d)).toBe(false);
     } finally { warn.mockRestore(); }
   });

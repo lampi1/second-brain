@@ -84,19 +84,23 @@ function compiled(): Promise<WebAssembly.Module> {
   return modulePromise;
 }
 
+/** Settles one host call's promise with the handle make() builds (its value or error) and always frees that handle.
+ *  A settle that throws (a result JSON cannot hold, an interrupted call into QuickJS) is logged, its promise is left
+ *  in `open` so release() still frees it, and its error is returned: the caller ends the run with it at once. */
+export function settleDeferred<D extends { dispose(): void }, H extends { dispose(): void }>(open: Set<D>, deferred: D, make: () => H, fn: (h: H) => void): string | undefined {
+  let h: H | undefined;
+  try { h = make(); fn(h); open.delete(deferred); return undefined; } catch (e) {
+    const cause = errText(e);
+    log.warn('code-mode', 'sandbox: settling a tool call failed', { cause, hint: 'the run ends at once with this error; its promise is freed with the instance (release)' });
+    return cause;
+  } finally { h?.dispose(); }
+}
+
 /** A fresh QuickJS instance for one run, in a WebAssembly memory that cannot grow past the run's limit plus QuickJS's
  *  own headroom: QuickJS's memory limit does not count every buffer (typed arrays go past it), the bounded memory
  *  does; and the memory goes away with the run. The memory is whole from the start, never grown: a growth during a
  *  host-side allocation (newString of a large tool result, a few MB) corrupted QuickJS's heap, and JS_FreeRuntime
  *  then aborted on objects left in gc_obj_list (the Scout crash, 2026-11-21). Untouched pages cost no RAM. */
-/** Settles one host call's promise with h (its value or error) and always frees h. A settle that throws (an
- *  interrupted call into QuickJS) is logged and its promise is left in `open`, so release() still frees it. */
-export function settleDeferred<D extends { dispose(): void }>(open: Set<D>, deferred: D, h: { dispose(): void }, fn: () => void): void {
-  try { fn(); open.delete(deferred); } catch (e) {
-    log.warn('code-mode', 'sandbox: settling a tool call failed', { cause: errText(e), hint: 'the script then waits on nothing and ends with that error; its promise is freed with the instance (release)' });
-  } finally { h.dispose(); }
-}
-
 export async function quickjs(memoryBytes = DEFAULT_LIMITS.memoryBytes): Promise<QuickJSWASMModule> {
   const maximum = Math.ceil((memoryBytes + WASM_HEADROOM) / PAGE);
   const wasmMemory = new WebAssembly.Memory({ initial: maximum, maximum });
@@ -158,16 +162,18 @@ export async function runSandboxed(code: string, tools: readonly string[], host:
     const deferred = vm.newPromise();
     open.add(deferred);
     // the returned handle belongs to QuickJS from here (newFunction consumes it); settling frees the resolvers
-    const settleWith = (h: QuickJSHandle, fn: () => void): void => settleDeferred(open, deferred, h, fn);
-    const fail = (message: string): void => { if (!alive) return; const err = vm.newError(message); settleWith(err, () => deferred.reject(err)); };
+    const settleWith = (make: () => QuickJSHandle, fn: (h: QuickJSHandle) => void): void => {
+      const err = settleDeferred(open, deferred, make, fn);
+      if (err) limit ??= `a tool result could not be passed to the script: ${err}`;
+    };
+    const fail = (message: string): void => { if (alive) settleWith(() => vm.newError(message), h => deferred.reject(h)); };
     if (stopped) { fail(stopped); return deferred.handle; }
     if (++calls > limits.maxCalls) { limit ??= `more than ${limits.maxCalls} tool calls`; fail(limit); return deferred.handle; }
     let input: unknown;
     try { input = JSON.parse(raw); } catch { fail('the input is not JSON'); return deferred.handle; }
     void host.call(name, input).then(value => {
       if (!alive) return;
-      const s = vm.newString(JSON.stringify(value === undefined ? null : value));
-      settleWith(s, () => deferred.resolve(s));
+      settleWith(() => vm.newString(JSON.stringify(value === undefined ? null : value)), h => deferred.resolve(h));
     }, (e: unknown) => {
       if (e instanceof StopScript) stopped ??= e.message;
       fail(e instanceof Error ? e.message : String(e));
