@@ -181,6 +181,13 @@ command for your click, asks you (from the phone too), or forbids printing a sec
 with the rest. No file, no blocks (ADR 0254). The Orchestrator answers the agents for you, except for what touches
 production, a database or Azure: that waits for your own yes.
 
+### Code Mode: many tool calls in one step
+
+An optional switch (Settings › Roles and delegation, off by default): Claude and Cursor work chats write one short
+script that reads, searches and calls tools many times in a single step, in a QuickJS sandbox with no file or network
+access of its own. Every call inside the script meets the same rules as above; an action held for your click stops the
+script and leaves you the usual button (ADR 0331).
+
 ### Agents that drive a real browser
 
 Ask for a QA run and the agent opens your test environment in a browser tab inside the app, next to its chat: it

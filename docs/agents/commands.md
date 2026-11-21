@@ -105,6 +105,7 @@ row and its line here in the same change.
 | `agent_delegate` | work chats | Delegate independent parts of the task to other roles as visible child chats. |
 | `agent_children` | work chats | The chats you delegated: role, state, goal, result, open requests, cost, and why a task was closed early (`endCause`). |
 | `agent_ask_parent` | work chats | Ask the chat that delegated you, before the user. |
+| `run_code` | work chats (Code Mode on) | Run a JavaScript script in a QuickJS sandbox that calls many tools in one go; each call meets the same permission rules, an Esegui action stops the script (ADR 0331). |
 | `agent_answer_child` | work chats | Answer a question one of your delegated chats asked you. |
 | `agent_report` | work chats | Your one final result for the chat that started you; `amends: true` corrects it (at most 2 corrections, ADR 0224). |
 | `agent_close_child` | work chats | Close one of your delegated chats and its tree, never while it waits for the user. |
