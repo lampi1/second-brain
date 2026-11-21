@@ -40,7 +40,8 @@ preToolUse checks, the brain's PreToolUse product hooks, the user's rules in per
    file or shell tool and nothing pointed it at run_code (an Opus Scout gave up after a keyword search). A Claude Code
    Mode chat gets `--append-system-prompt` naming run_code and its `select:` query, and run_code's description starts
    with the words such a search uses (read file, shell, Bash, grep, glob). Checked on the real CLI by
-   `test/live/code-mode.live.test.ts` (SB_LIVE=1).
+   `test/live/code-mode.live.test.ts` (SB_LIVE=1); on the real Cursor agent by `test/live/code-mode-cursor.live.test.ts`
+   (SB_LIVE_CURSOR=1, a rule-4 exception the owner granted for this check, 2026-11-21).
 7. **Measured from the logs**: each turn logs tokens, turns, duration and the flag (scope chats, «timing: turn usage»,
    `codeMode`); each script logs «run_code finished» (scope code-mode: calls, CPU, wall, waited).
 8. **What a native call meets, an internal one meets too** (review of 2026-11-21). With Code Mode on, Claude's own

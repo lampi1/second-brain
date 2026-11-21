@@ -4,7 +4,7 @@
 // spawned as the real ClaudeSession with the arguments the app builds, its second-brain endpoint served by the real
 // MCP server with the real run_code (real native wrappers, the real permission chain). Asserts from the engine's own
 // init tool list that run_code is there and Read/Bash/Grep/Glob are not, that the model uses run_code to read a file,
-// and that `echo execute-script.sh` (a brain rule «esegui») never runs. Never runs Cursor (AGENTS.md rule 4). The
+// and that `echo execute-script.sh` (a brain rule «esegui») never runs. Never runs Cursor (AGENTS.md rule 4; its own check, SB_LIVE_CURSOR=1, is code-mode-cursor.live.test.ts). The
 // facts (tool list, calls, cost) land in test-results/live-code-mode.json.
 import { afterAll, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
