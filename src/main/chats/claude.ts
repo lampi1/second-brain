@@ -270,6 +270,8 @@ export class ClaudeSession implements HarnessSession {
   private job: number | null = null;  // its Job Object (jobguard.ts)
   private jobKilled = false;          // its tree was terminated through the job
   private sawInit = false;
+  /** the tool names the engine's first init reported (deferred MCP tools included): Code Mode's live check reads it */
+  toolsAtInit: string[] | null = null;
   private cmdList: unknown[] | null = null;  // the engine's commands (initialize, commands_changed), for the "/" list
   private skillNames = new Set<string>();    // init's `skills`: which of those commands are skills
   private pendingTitle: string | null = null; // a fork renamed before its own id is known
@@ -1359,6 +1361,7 @@ export class ClaudeSession implements HarnessSession {
         if (!this.sawInit) {
           this.sawInit = true;
           this.initAt = Date.now();
+          this.toolsAtInit = arr(m.tools).map(s).filter(Boolean);
           const servers = arr(m.mcp_servers).map(o);
           const pending = servers.filter(x => s(x.status) === 'pending').map(x => s(x.name));
           this.initMcp = { mcpAtInit: servers.length, ...(pending.length ? { mcpPendingAtInit: pending.slice(0, 10) } : {}), plugins: arr(m.plugins).length };

@@ -32,7 +32,9 @@ export function toolList(deps: BridgeDeps, chatId: string): string {
   ].filter(Boolean).join('\n');
 }
 
-const DESCRIPTION = 'Runs a JavaScript script (async; use await and return a JSON-able value) in a sandbox with no fs, net, require or timers. ' +
+// its first words carry what a model looks for when its natives are hidden: a ToolSearch by keyword must find it
+const DESCRIPTION = 'Read files, run shell (Bash) commands, grep and glob search, edit and write files, call app tools and connectors: all through one script. ' +
+  'Runs a JavaScript script (async; use await and return a JSON-able value) in a sandbox with no fs, net, require or timers. ' +
   'Prefer it to the native tools: batch many reads, searches and tool calls in one script, filter in the script, return only what you need. ' +
   'Call tools as `await tools.Name(input)` or `await tools.call(name, input)`; console.log output comes back too. ' +
   'Every call passes the app\'s permission rules: a refused one throws (catch it if you want to go on); an action only the user runs (Esegui) stops the script: then write the exact command in a fenced code block, as usual.';

@@ -36,7 +36,11 @@ preToolUse checks, the brain's PreToolUse product hooks, the user's rules in per
    afterwards; the Orchestrator itself keeps its native tools.
 6. **Harnesses**: on Claude, run_code is allowed and the native Bash/Read/Edit/Write/Grep/Glob are passed in
    `--disallowedTools`. On Cursor (ACP) natives cannot be hidden: they stay, run_code is allowed and the prompt asks to
-   prefer it.
+   prefer it. Amended 2026-11-21: Claude defers MCP tools behind ToolSearch, so a chat with its natives hidden saw no
+   file or shell tool and nothing pointed it at run_code (an Opus Scout gave up after a keyword search). A Claude Code
+   Mode chat gets `--append-system-prompt` naming run_code and its `select:` query, and run_code's description starts
+   with the words such a search uses (read file, shell, Bash, grep, glob). Checked on the real CLI by
+   `test/live/code-mode.live.test.ts` (SB_LIVE=1).
 7. **Measured from the logs**: each turn logs tokens, turns, duration and the flag (scope chats, «timing: turn usage»,
    `codeMode`); each script logs «run_code finished» (scope code-mode: calls, CPU, wall, waited).
 8. **What a native call meets, an internal one meets too** (review of 2026-11-21). With Code Mode on, Claude's own
