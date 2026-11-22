@@ -49,6 +49,7 @@ import { send, useApp } from '../../store/store';
 import { closeModal, setMapPicked, setMapsArg, setMapsFull, toast, ui } from '../../store/ui';
 import { IconArrowLeft, IconChat, IconMaximize, IconMinimize, IconRefresh } from '../Icons';
 import { AgentAvatar } from '../AgentAvatar';
+import { GroupHubs } from './GroupHubs';
 import { ElementDetail, LinkDetail, stateText } from './MapDetail';
 import { PathList, PathPanel, type Walk } from './MapPaths';
 import { ProgressCard, ProgressChip, countText } from './MapProgress';
@@ -636,7 +637,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
               })}
               {/* where a group splits (top edge of its frame) and where it joins again (bottom edge) */}
               {/* a point only where an arrow passes: no split point for a group that opens its phase, no join point for one that closes it */}
-              {(lv.groups ?? []).flatMap(g => [g.split, g.join].filter((_, i) => lv.edges.some(e => i === 0 ? g.ids.includes(e.to) && !g.ids.includes(e.from) : g.ids.includes(e.from) && !g.ids.includes(e.to))).map((c, i) => <circle key={`h-${g.ids[0]}-${i}`} cx={c[0]} cy={c[1]} r={6} className="pm-hub" />))}
+              <GroupHubs groups={lv.groups} />
             </svg>
             {lv.nodes.filter(n => !n.frame).map(n => {
               const e = byId.get(n.id)!, s = st(e), k = kids(e.id), who = of(e.id), ws = n.ctx ? [] : worksOf(e.id), cnt = n.ctx ? undefined : counts.get(e.id);

@@ -26,7 +26,10 @@ export interface LevelEdge { id: string; from: string; to: string; label: string
  *  join point on its bottom edge */
 export interface LevelGroup { ids: string[]; n: number; x: number; y: number; w: number; h: number; split: [number, number]; join: [number, number];
   /** the open piece it sits in, if any */
-  in?: string }
+  in?: string;
+  /** an arrow really passes through its split point (into the group from the place before) or its join point (out of
+   *  it to the place after): only those are drawn; a back arrow or one to an outside box runs along the lane instead */
+  usesSplit?: true; usesJoin?: true }
 export interface Level { nodes: LevelNode[]; edges: LevelEdge[]; width: number; height: number;
   /** drawn as a line, in the saved order (#443) */
   linear?: boolean;
@@ -72,7 +75,7 @@ export function lineOf(own: readonly MapElement[], ctx: readonly string[], edges
   const ctxW = (k: number) => k * BOX.ctxW + (k - 1) * COL_GAP;
   const widest = Math.max(BOX.w, ...places.map(placeW), ...ctxRows.map(r => ctxW(r.length)));
   const axis = BOX.pad + widest / 2;
-  const nodes: LevelNode[] = [], groups: LevelGroup[] = [];
+  const nodes: LevelNode[] = [], groups: LevelGroup[] = [], groupAt = new Map<number, LevelGroup>();
   /** each place: the top and bottom of its boxes (where the arrows touch them) and of the whole place */
   const rows: { top: number; bot: number; ptop: number; pbot: number }[] = [];
   let y = BOX.pad;
@@ -87,7 +90,8 @@ export function lineOf(own: readonly MapElement[], ctx: readonly string[], edges
       const w = placeW(p), x = axis - w / 2, tall = Math.max(...p.map(e => sizeOf(e).h)), h = GTOP + tall + GBOT;
       let xx = x + GPAD;
       for (const e of p) { const s = sizeOf(e); nodes.push({ id: e.id, x: xx, y: y + GTOP, w: s.w, h: s.h, ctx: false, n, par: true, ...(open.has(e.id) ? { frame: true } : {}) }); xx += s.w + COL_GAP; }
-      groups.push({ ids: p.map(e => e.id), n, x, y, w, h, split: [axis, y], join: [axis, y + h] });
+      const g: LevelGroup = { ids: p.map(e => e.id), n, x, y, w, h, split: [axis, y], join: [axis, y + h] };
+      groups.push(g); groupAt.set(i, g);
       rows.push({ top: y + GTOP, bot: y + GTOP + tall, ptop: y, pbot: y + h });
       y += h;
     }
@@ -120,7 +124,8 @@ export function lineOf(own: readonly MapElement[], ctx: readonly string[], edges
       // to the next place: down the axis, through the split and join points of a group
       const ga = places[pa]!.length > 1, gb = places[pb]!.length > 1;
       const r: [number, number][] = [[cx(a), a.y + a.h]];
-      if (ga) r.push([cx(a), rows[pa]!.bot + RAIL], [axis, rows[pa]!.bot + RAIL], [axis, rows[pa]!.pbot]);
+      if (ga) { r.push([cx(a), rows[pa]!.bot + RAIL], [axis, rows[pa]!.bot + RAIL], [axis, rows[pa]!.pbot]); groupAt.get(pa)!.usesJoin = true; }
+      if (gb) groupAt.get(pb)!.usesSplit = true;
       if (gb) r.push([axis, rows[pb]!.ptop], [axis, rows[pb]!.top - RAIL], [cx(b), rows[pb]!.top - RAIL]);
       r.push([cx(b), b.y]);
       // drop the corners that do not turn (a straight stretch)
