@@ -42,13 +42,14 @@ uses for OpenCode and the catalog engines (`src/main/chats/acp.ts`). It differs 
 
 5. **Its folder as the long real path, and no read-only chats** (`realCwd`, `noReadOnly`). With the brain under
    `%TEMP%` behind an 8.3 short name (a `~1` segment) agy once wrote a file without asking
-   `session/request_permission`; with a normal path it asked. The cause is not isolated, so: the engine starts and opens
-   its session in `fs.realpathSync.native` of the chat folder (short names expanded; the path as given when it cannot be
-   resolved), and `engines/sessions.ts` refuses an Antigravity session for a read-only run (a comparison side, the
-   ceiling «plan», a role allowed neither edits, commands nor brain writes: by default Strategist, Router, Judge, Scout, Herald), whose
-   only guard would be
-   agy's own requests. Both stay until a live check on a short-name path explains the skip; balanced mode and
-   delegation do not filter it yet, so such a pick fails at start with a message naming another engine.
+   `session/request_permission`; with a normal path it asked. The cause is not isolated. The mitigation for that write,
+   until a live check on a short-name path explains it, is `realCwd`: the engine starts and opens its session in
+   `fs.realpathSync.native` of the chat folder (short names expanded; the path as given when it cannot be resolved).
+   On top of it, `engines/sessions.ts` (`readOnlyRun`) refuses an Antigravity session only for a run whose sole guard
+   would be agy's own requests: the comparison's side b (`readOnly`), the ceiling «plan», and a role the user restricted
+   on its card to none of edits, commands and brain writes. There is no filter by role id: with ADR 0085's defaults every
+   role has every permission, so no default role is refused. Balanced mode and delegation do not filter these runs yet:
+   such a pick fails at start, its message saying the chat is read-only and to use another engine.
 
 ## Consequences
 

@@ -65,7 +65,7 @@ function startSession(engine: EngineDef, opts: SessionOptions, sink: SessionSink
     if (!/^[a-f0-9]{64}$/.test(path.basename(pluginDir)) || path.resolve(path.dirname(pluginDir)) !== path.resolve(base)
       || path.resolve(skillRoot) !== path.resolve(pluginDir, 'skills') || fs.lstatSync(pluginDir).isSymbolicLink() || fs.lstatSync(skillRoot).isSymbolicLink()) throw new Error('Invalid agent skill snapshot');
   }
-  if (engine.noReadOnly && readOnlyRun(opts)) throw new Error(`${engine.label} non esegue ancora chat di sola lettura: scegli un altro motore per questo ruolo.`);
+  if (engine.noReadOnly && readOnlyRun(opts)) throw new Error(`${engine.label} non esegue ancora chat di sola lettura (il lato b di un confronto, il limite «plan», permessi ristretti senza modifiche, comandi né scritture nel cervello): usa un altro motore per questa chat.`);
   // A running session retains its endpoint/command. A key for a replacement definition must never reach it.
   const binding = fingerprint(engine);
   const boundKey = (): string | null => {
