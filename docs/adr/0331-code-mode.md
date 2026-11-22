@@ -71,6 +71,30 @@ preToolUse checks, the brain's PreToolUse product hooks, the user's rules in per
    instance in a bounded WebAssembly memory (the limit plus 32 MB), since QuickJS's own limit does not count typed
    arrays.
 
+## Amendment 2026-11-22: batching, short output, PowerShell
+
+A Scout audit of real runs found 52% of scripts with at most one call, 12% returning over 8k characters, stdout handed
+back as an escaped JSON string with the call list around it, and PowerShell broken inside Bash (bash ate `$_`). What
+changed, much of it taken from Cloudflare's Code Mode (blog.cloudflare.com/code-mode, the agents SDK's `codemode`):
+
+- **Typed API** (`code-mode/types.ts`): the code input's description is a `declare const tools: { … }` block, one
+  JSDoc line and one TypeScript signature per tool (input and output types, from the JSON schema for app tools;
+  hand-written for the natives), as Cloudflare does; connectors stay lazy behind `list_tools`, which now returns each
+  tool's signature. The prompt says plain JavaScript, no TypeScript syntax (Cloudflare's wording).
+- **Batching in the description**: one script per step, `Promise.all`, filter inside the script, with a concrete example;
+  after three scripts in a row with at most one call each, the result carries a one-line hint.
+- **Result as text** (`resultText`): a string value as is, anything else as JSON; the value cut at 6,000 characters
+  with Cloudflare's structural shrink (the biggest string or array halved first, a marker where it cut, still valid
+  JSON); only the failed calls listed. The sandbox's own 40,000-character cap stays as the outer bound.
+- **Inputs checked first**: an app or connector call without a required input fails before any panel, with the
+  tool's signature (Cloudflare validates inputs against the schema).
+- **PowerShell native**: `tools.PowerShell({command})` runs the script as `-EncodedCommand` (UTF-16LE base64, no
+  quoting can change it), or a temporary BOM `.ps1` when too long; UTF-8 output, no progress bars. It is a command
+  like Bash for every gate: Claude's Bash rules, plan mode, the shell class, the product guard.
+- **Grep**: a leading `(?i)` becomes ignore-case; a bad regex says Grep takes JavaScript regexes and `"-i": true`.
+
+Not taken: Cloudflare's Worker isolates and its per-call output schemas for connectors (their output stays `unknown`).
+
 ## Dependencies
 
 - `quickjs-emscripten-core` 0.32.0 and `@jitl/quickjs-wasmfile-release-sync` 0.32.0 (MIT, published 2026-02-16): the
