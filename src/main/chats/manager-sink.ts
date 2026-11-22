@@ -10,6 +10,7 @@ import { permissionText } from './claude-map';
 import { trimInput } from './session';
 import { aboveCeiling, allowsClass, readOnlyCommand, toolClassOf } from '../agents/tool-policy';
 import { claudeVerdict, readableBy, readClaudeRuleSet, type ClaudeRuleSet } from '../code-mode/claude-rules';
+import { COMMAND_WRAPPERS } from '../code-mode/policy';
 import { AFTER_CALLS } from './continuity';
 import { HANDOFF_END, HANDOFF_START } from './handoff';
 import type { HarnessSession, SessionPatch, SessionSink } from './session';
@@ -48,9 +49,10 @@ export abstract class ManagerSink extends ManagerWork {
     // plan mode only reads (as Claude's own plan mode): no file write, no command that does not only read
     if (r.s.permissionMode === 'plan') {
       const command = (input as { command?: unknown } | null)?.command;
-      if (tool === 'Write' || tool === 'Edit' || (tool === 'Bash' && !readOnlyCommand(command, this.readScripts(r)))) {
+      const shell = COMMAND_WRAPPERS.includes(tool);
+      if (tool === 'Write' || tool === 'Edit' || (shell && !readOnlyCommand(command, this.readScripts(r)))) {
         log.info('chats', 'code mode: write refused in plan mode', { chat: chatId, data: { tool } });
-        return refused(`The chat is in plan mode: ${tool === 'Bash' ? 'only commands that read run' : `${tool} is not allowed`}. Present the plan instead.`);
+        return refused(`The chat is in plan mode: ${shell ? 'only commands that read run' : `${tool} is not allowed`}. Present the plan instead.`);
       }
     }
     // Claude's own deny and ask rules (its settings files, the session's --settings, the stable app's guard rails):

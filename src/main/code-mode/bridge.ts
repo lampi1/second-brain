@@ -1,16 +1,17 @@
 // Code Mode's bridge (ADR 0331): the host side of one run_code script. It lists the tools the script may call (the
-// native wrappers, the chat's own app tools, its MCP connectors) and runs each internal call in three steps: the app's
-// permission chain (ChatManager.decideFor, the same one a native call meets), the call itself (code-mode/natives.ts,
-// or the McpTool in-process), and a compact tool row in the chat (name, input, decision, outcome). A refusal becomes an
+// native wrappers, the chat's own app tools, its MCP connectors) and runs each internal call, its required inputs
+// checked first (code-mode/types.ts), in three steps: the app's permission chain (ChatManager.decideFor, the same
+// one a native call meets), the call itself (code-mode/natives.ts, or the McpTool in-process), and a compact tool row in the chat (name, input, decision, outcome). A refusal becomes an
 // Error the script may catch; an Esegui action stops the script (StopScript). Used by code-mode/tool.ts and its tests.
 import { randomUUID } from 'node:crypto';
 import type { ChatItem } from '../../shared/contract';
 import type { CallCtx, McpTool, ToolOutput } from '../mcp/server';
 import { errText, log } from '../log';
 import type { DecideOpts, InternalVerdict } from '../chats/manager-sink';
-import { gateName, NATIVE_WRAPPERS, RUN_CODE, type NativeWrapper } from './policy';
+import { COMMAND_WRAPPERS, gateName, NATIVE_WRAPPERS, RUN_CODE, type NativeWrapper } from './policy';
 import { runNative, type NativeEnv } from './natives';
 import { StopScript, type SandboxHost } from './sandbox';
+import { missingRequired, NATIVE_TYPES, toolSignature } from './types';
 
 type ToolRow = Extract<ChatItem, { kind: 'tool' }>;
 
@@ -35,19 +36,10 @@ export type Entry =
   | { name: string; kind: 'app'; tool: McpTool }
   | { name: string; kind: 'ext'; server: string; tool: McpTool };
 
-const NATIVE_HELP: Record<NativeWrapper, string> = {
-  Bash: '{command, timeout?} → {exitCode, stdout, stderr} (Git Bash)',
-  Read: '{file_path, offset?, limit?} → numbered lines',
-  Write: '{file_path, content}',
-  Edit: '{file_path, old_string, new_string, replace_all?}',
-  Grep: '{pattern (JS regex), path?, glob?, output_mode?: files_with_matches|content|count, -i?, head_limit?}',
-  Glob: '{pattern, path?} → paths',
-};
-
 /** Every tool a script of this chat may call, by script name: natives, app tools (run_code itself left out), then each
  *  connector's as <server>__<tool>. A connector that does not answer is left out (logged), never the whole run. */
 export async function catalog(deps: BridgeDeps, chatId: string): Promise<Entry[]> {
-  const out: Entry[] = NATIVE_WRAPPERS.map(t => ({ name: t, kind: 'native' as const, tool: t, description: NATIVE_HELP[t] }));
+  const out: Entry[] = NATIVE_WRAPPERS.map(t => ({ name: t, kind: 'native' as const, tool: t, description: NATIVE_TYPES[t].doc }));
   for (const t of deps.appTools(chatId)) if (t.name !== RUN_CODE) out.push({ name: t.name, kind: 'app', tool: t });
   for (const server of deps.extServers(chatId)) {
     try { for (const t of await deps.extTools(chatId, server)) out.push({ name: `${server}__${t.name}`, kind: 'ext', server, tool: t }); }
@@ -92,6 +84,11 @@ export function bridge(deps: BridgeDeps, chatId: string, entries: Entry[], ctx: 
       const e = byName.get(name);
       if (!e) throw new Error(`No tool named ${name} here. The tools are: ${[...byName.keys()].join(', ')}`);
       const args = (input && typeof input === 'object' && !Array.isArray(input) ? input : {}) as Record<string, unknown>;
+      // a call without its required inputs fails here, before any permission panel, with the signature to fix it
+      if (e.kind !== 'native') {
+        const missing = missingRequired(e.tool, chatId, args);
+        if (missing.length) throw new Error(`${name}: missing required input ${missing.join(', ')}; its signature: ${toolSignature(e.tool, chatId)}`);
+      }
       const gate = e.kind === 'native' ? gateName('native', e.tool) : e.kind === 'app' ? gateName('app', e.tool.name) : gateName('ext', e.tool.name, e.server);
       const id = `cm-${randomUUID()}`, at = Date.now();
       const row = (status: ToolRow['status'], summary: string, output?: string, exitCode?: number): ToolRow =>
@@ -130,7 +127,7 @@ export function bridge(deps: BridgeDeps, chatId: string, entries: Entry[], ctx: 
           const callCtx: CallCtx = { mount: e.kind === 'app' ? 'chat' : 'ext', params: { chatId, ...(e.kind === 'ext' ? { server: e.server } : {}) }, sessionId: ctx.sessionId, signal: ctx.signal, progress: ctx.progress };
           value = outputValue(await e.tool.run(args, callCtx));
         }
-        const exit = e.kind === 'native' && e.tool === 'Bash' && value && typeof value === 'object' ? (value as { exitCode?: unknown }).exitCode : undefined;
+        const exit = e.kind === 'native' && COMMAND_WRAPPERS.includes(e.tool) && value && typeof value === 'object' ? (value as { exitCode?: unknown }).exitCode : undefined;
         const failed = typeof exit === 'number' && exit !== 0;
         calls.push({ tool: name, decision: asked ? 'allowed by the user' : 'allowed', ok: !failed });
         deps.row(chatId, row(failed ? 'error' : 'ok', decision, show(value), typeof exit === 'number' ? exit : undefined), true);

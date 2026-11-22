@@ -49,8 +49,12 @@ async function setup(on: boolean, guard: (tool: string) => string | null = () =>
   return { m, id: chat.id, cwd, events, seen, ran, envs: [], sink, claude };
 }
 
+type Body = { ok: boolean; value?: unknown; stopped?: string; error?: string; calls: { tool: string; decision: string; ok: boolean }[]; text: string };
+/** the last run's structured result (onResult), with the text the model read */
+let last: Omit<Body, 'text'> | null = null;
 function tool(s: Setup, over: Partial<RunCodeDeps> = {}) {
   return runCodeTool({
+    onResult: (r, calls) => { last = { ok: r.ok, value: r.value, ...(r.stopped ? { stopped: r.stopped } : {}), ...(r.error ? { error: r.error } : {}), calls: [...calls] }; },
     decideFor: (c, t, i, o) => s.m.decideFor(c, t, i, o),
     row: (c, item, replace) => s.m.codeModeRow(c, item, replace),
     appTools: () => [], extServers: () => [], extTools: async () => [], context: c => s.m.codeModeContext(c),
@@ -60,8 +64,7 @@ function tool(s: Setup, over: Partial<RunCodeDeps> = {}) {
 }
 
 const ctx = (chatId: string): CallCtx => ({ mount: 'chat', params: { chatId }, sessionId: 's', signal: new AbortController().signal, progress: () => true });
-const body = (o: unknown): { ok: boolean; value?: unknown; stopped?: string; error?: string; calls: { tool: string; decision: string; ok: boolean }[] } =>
-  JSON.parse(((o as { raw: { content: { text: string }[] } }).raw.content[0]!).text);
+const body = (o: unknown): Body => ({ ...last!, text: ((o as { raw: { content: { text: string }[] } }).raw.content[0]!).text });
 const rows = (s: Setup): Extract<ChatItem, { kind: 'tool' }>[] => s.events.filter(e => e.ch === 'chat:item').map(e => (e.p as { item: ChatItem }).item).filter((i): i is Extract<ChatItem, { kind: 'tool' }> => i.kind === 'tool');
 const sysCodes = (s: Setup): string[] => s.events.filter(e => e.ch === 'chat:item').map(e => (e.p as { item: ChatItem }).item).filter(i => i.kind === 'system').map(i => String((i as { code?: unknown }).code ?? ''));
 
@@ -99,7 +102,7 @@ describe('run_code internal calls through ChatManager.decideFor', () => {
     const code = 'await tools.Bash({ command: "ls" }); try { await tools.Bash({ command: \'sqlcmd -S prod -Q "DELETE FROM t"\' }); } catch (e) { } await tools.Bash({ command: "echo after" }); return "end";';
     const out = body(await tool(s).run({ code }, ctx(s.id)));
     expect(out.ok).toBe(false);
-    expect(out.stopped).toMatch(/Only the user runs this, by pressing Esegui[\s\S]*fenced code block/);
+    expect(out.text).toMatch(/^Stopped: [\s\S]*Only the user runs this, by pressing Esegui[\s\S]*fenced code block/);
     // the call after it never ran, even though the script caught the stop
     expect(s.ran).toEqual(['Bash ls']);
     expect(out.calls.map(c => c.decision)).toEqual(['allowed', 'esegui']);
@@ -206,6 +209,9 @@ describe('run_code meets what a native call meets (Sentinel review fixes)', () =
     expect(await s.m.decideFor(s.id, 'Edit', { file_path: 'a', old_string: 'a', new_string: 'b' })).toMatchObject({ kind: 'deny' });
     expect(await s.m.decideFor(s.id, 'Bash', { command: 'rm -rf src' })).toMatchObject({ kind: 'deny', message: expect.stringMatching(/plan mode/) });
     expect(await s.m.decideFor(s.id, 'Bash', { command: 'git status' })).toMatchObject({ kind: 'allow' });
+    // PowerShell is a command too: in plan mode only a reading one runs
+    expect(await s.m.decideFor(s.id, 'PowerShell', { command: 'Remove-Item -Recurse src' })).toMatchObject({ kind: 'deny', message: expect.stringMatching(/plan mode: only commands that read/) });
+    expect(await s.m.decideFor(s.id, 'PowerShell', { command: 'git status' })).toMatchObject({ kind: 'allow' });
   });
 
   it('a call still waiting when the script ends loses its panel and never runs', async () => {

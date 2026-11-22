@@ -10,8 +10,9 @@ export const RUN_CODE = 'run_code';
  *  the app's permission chain. Agent, Skill, web, todo and plan tools stay native. */
 export const CODE_MODE_HIDDEN = ['Bash', 'PowerShell', 'Read', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Grep', 'Glob'] as const;
 
-/** The wrappers a script reaches as tools.<Name>: the same names, inputs and checks as the native ones. */
-export const NATIVE_WRAPPERS = ['Bash', 'Read', 'Write', 'Edit', 'Grep', 'Glob'] as const;
+/** The wrappers a script reaches as tools.<Name>: the same names, inputs and checks as the native ones. PowerShell runs
+ *  its command as PowerShell itself reads it (never through Git Bash, which eats `$_` and `$var`). */
+export const NATIVE_WRAPPERS = ['Bash', 'PowerShell', 'Read', 'Write', 'Edit', 'Grep', 'Glob'] as const;
 export type NativeWrapper = typeof NATIVE_WRAPPERS[number];
 
 /** Code Mode for one chat, the setting being `on`: a Claude, Cursor or Antigravity chat of the user or of a role; never
@@ -19,6 +20,9 @@ export type NativeWrapper = typeof NATIVE_WRAPPERS[number];
 export function codeModeFor(s: Pick<ChatSummary, 'harness' | 'isOrchestrator' | 'research'>, on: boolean): boolean {
   return on && !s.isOrchestrator && !s.research && (s.harness === 'claude' || s.harness === 'cursor' || s.harness === 'antigravity');
 }
+
+/** The wrappers that run a command (their calls meet Bash and PowerShell rules, plan mode, an exit code). */
+export const COMMAND_WRAPPERS: readonly string[] = ['Bash', 'PowerShell'];
 
 /** A tool name as a script writes it, made the name the app's gates know: the Claude form (mcp__<server>__<tool>) for
  *  an MCP tool, the bare name for a native wrapper. `app` = a tool of the chat's own endpoint. */

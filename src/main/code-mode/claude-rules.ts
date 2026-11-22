@@ -90,7 +90,7 @@ function readRuleSetNow(src: ClaudeRuleSources, home: string): ClaudeRuleSet {
   return { ok: true, deny, ask };
 }
 
-/** The rule kinds a wrapper call meets: Bash meets Bash and PowerShell rules, Read/Grep/Glob meet Read rules, Write
+/** The rule kinds a wrapper call meets: Bash and PowerShell meet Bash and PowerShell rules, Read/Grep/Glob meet Read rules, Write
  *  and Edit meet every file-editing tool's rules. */
 const READS = new Set(['Read', 'Grep', 'Glob']), EDITS = new Set(['Write', 'Edit']);
 const EDIT_RULES = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
@@ -195,7 +195,7 @@ function matches(r: ClaudeRule, v: CallView): boolean {
   switch (c.kind) {
     case 'none': return false;
     case 'mcp': return tool.startsWith(`mcp__${c.server}__`) && (!c.name || c.name === '*' || tool === `mcp__${c.server}__${c.name}`);
-    case 'cmd': return tool === 'Bash' && (c.every || partsOf(v).some(c.test!));
+    case 'cmd': return (tool === 'Bash' || tool === 'PowerShell') && (c.every || partsOf(v).some(c.test!));
     case 'file': {
       const reads = c.tool === 'Read' && READS.has(tool), edits = EDIT_RULES.has(c.tool) && EDITS.has(tool);
       if (!reads && !edits && c.tool !== tool) return false;

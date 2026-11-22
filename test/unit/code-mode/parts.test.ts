@@ -148,12 +148,12 @@ const deps = (over: Partial<BridgeDeps> = {}): BridgeDeps => ({
 
 describe('the bridge and run_code\'s schema', () => {
   it('lists natives, the chat\'s app tools (not run_code) and each answering connector', async () => {
-    expect((await catalog(deps(), 'c')).map(e => e.name)).toEqual(['Bash', 'Read', 'Write', 'Edit', 'Grep', 'Glob', 'navigate', 'outlook__send_email']);
+    expect((await catalog(deps(), 'c')).map(e => e.name)).toEqual(['Bash', 'PowerShell', 'Read', 'Write', 'Edit', 'Grep', 'Glob', 'navigate', 'outlook__send_email']);
     const list = toolList(deps(), 'c');
-    expect(list).toMatch(/^Native: Bash/);
-    expect(list).toMatch(/App: navigate \(/);
+    expect(list).toMatch(/^declare const tools: \{\n  \/\*\* A Git Bash command/);
+    expect(list).toMatch(/  navigate: \(input\?: Record<string, unknown>\) => Promise<string>;/);
     expect(list).not.toMatch(/run_code/);
-    expect(list).toMatch(/Connectors: outlook, broken/);
+    expect(list).toMatch(/servers: outlook, broken/);
     const schema = runCodeTool(deps()).inputSchemaFor!({ chatId: 'c' }) as { properties: { code: { description: string } } };
     expect(schema.properties.code.description).toContain('navigate');
   });
@@ -166,8 +166,7 @@ describe('the bridge and run_code\'s schema', () => {
   it('a script reaches app tools and connectors in-process, and list_tools reads the list', async () => {
     const out = await runCodeTool({ ...deps(), progressEveryMs: 1e9 }).run({ code: 'const a = await tools.navigate({ url: "x" }); const b = await tools.call("outlook__send_email", {}); const l = await tools.list_tools({ server: "outlook" }); return [a, b, l.length];' },
       { mount: 'chat', params: { chatId: 'c' }, sessionId: 's', signal: new AbortController().signal, progress: () => true });
-    const body = JSON.parse((out as { raw: { content: { text: string }[] } }).raw.content[0]!.text) as { value: unknown };
-    expect(body.value).toEqual(['ok', 'sent', 1]);
+    expect(JSON.parse((out as { raw: { content: { text: string }[] } }).raw.content[0]!.text)).toEqual(['ok', 'sent', 1]);
   });
   it('a user\'s wait counts as paused while it lasts, two at once count once', async () => {
     let t = 0, release!: () => void;
@@ -189,8 +188,7 @@ describe('the bridge and run_code\'s schema', () => {
     const out = await runCodeTool({ ...deps({ appTools: () => [hang], extServers: () => [] }), progressEveryMs: 1e9, limits: { wallMs: 1_000 }, now: () => t,
       setTimer: (fn, ms) => { queueMicrotask(() => { t += ms; fn(); }); return () => {}; } })
       .run({ code: 'await tools.hang({}); return 1;' }, { mount: 'chat', params: { chatId: 'c' }, sessionId: 's', signal: new AbortController().signal, progress: () => true });
-    const r = JSON.parse((out as { raw: { content: { text: string }[] } }).raw.content[0]!.text) as { ok: boolean; error?: string };
-    expect(r).toMatchObject({ ok: false, error: expect.stringMatching(/time limit of 1 s/) });
+    expect((out as { raw: { content: { text: string }[]; isError?: boolean } }).raw).toMatchObject({ isError: true, content: [{ text: expect.stringMatching(/^Error: time limit of 1 s/) }] });
     expect(cancelled).toBe(true);
   });
 

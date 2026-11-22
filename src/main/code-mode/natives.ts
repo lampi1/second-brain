@@ -1,5 +1,6 @@
 // run_code's thin wrappers for the native tools a Code Mode chat no longer sees (ADR 0331): Bash (Git Bash on
-// Windows, as Claude Code; /bin/sh elsewhere), Read, Write, Edit, Grep and Glob, with Claude's own input names. They
+// Windows, as Claude Code; /bin/sh elsewhere), PowerShell (Windows PowerShell 5.1, pwsh elsewhere; the command travels
+// encoded, never through a shell's quoting), Read, Write, Edit, Grep and Glob, with Claude's own input names. They
 // only execute: the permission chain ran before (code-mode/bridge.ts → ChatManager.decideFor). Paths are relative to
 // the folder the chat really works in (a --worktree chat's worktree), Bash gets the chat's engine environment, and
 // every wrapper stops when its run ends (the run's signal: the script finished, hit a limit, or was cancelled). Bash
@@ -7,7 +8,9 @@
 // (code-mode/fs-run.ts), never on the main process. Used by code-mode/bridge.ts and its tests (a fake spawn and a
 // direct file runner: no real process, no thread).
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { spawn as nodeSpawn, type SpawnOptions } from 'node:child_process';
 import { gitBashPath } from '../platform';
 import type { NativeWrapper } from './policy';
@@ -23,6 +26,8 @@ export type Spawn = (command: string, args: string[], opts: SpawnOptions) => {
 
 export interface NativeEnv {
   cwd: string; spawn?: Spawn; shell?: string | null;
+  /** PowerShell's executable (default powershell.exe on Windows, pwsh elsewhere); null: none here */
+  psShell?: string | null;
   /** the chat's engine environment (Bash's); default this process's */
   env?: NodeJS.ProcessEnv;
   /** the run's signal: an abort kills a running command and drops a pending read */
@@ -50,6 +55,7 @@ export async function runNative(tool: NativeWrapper, input: In, env: NativeEnv):
   if (env.signal?.aborted) throw new Error('The call was cancelled.');
   switch (tool) {
     case 'Bash': return bash(input, env);
+    case 'PowerShell': return powershell(input, env);
     case 'Read': return read(input, env);
     case 'Write': return write(input, env.cwd);
     case 'Edit': return edit(input, env.cwd);
@@ -66,14 +72,48 @@ export function bashTimeout(asked: number | undefined, maxMs?: number): number {
   return Math.min(ms, Math.floor(maxMs));
 }
 
-function bash(input: In, env: NativeEnv): Promise<{ exitCode: number | null; stdout: string; stderr: string; timedOut?: true }> {
+type CommandResult = { exitCode: number | null; stdout: string; stderr: string; timedOut?: true };
+
+function bash(input: In, env: NativeEnv): Promise<CommandResult> {
   const command = str(input.command, 'command');
   const shell = env.shell === undefined ? gitBashPath() : env.shell;
   if (!shell) throw new Error('Git Bash not found (set CLAUDE_CODE_GIT_BASH_PATH): Bash cannot run');
+  return runCommand('Bash', shell, ['-c', command], bashTimeout(num(input.timeout), env.maxMs), env);
+}
+
+/** -EncodedCommand's limit: Windows' command line holds 32,767 characters; a longer script goes through a file */
+const ENCODED_MAX = 30_000;
+/** what every PowerShell command starts with: UTF-8 output (5.1 writes the OEM code page to a pipe) and no progress
+ *  bars (they reach stderr as CLIXML) */
+const PS_PRELUDE = "$ProgressPreference = 'SilentlyContinue'; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8\n";
+
+/** How the PowerShell wrapper starts its command: the script as -EncodedCommand (UTF-16LE base64: no quoting can
+ *  change it), or as a temporary .ps1 (UTF-8 with BOM, -File) when it is too long for a command line. */
+export function powershellArgs(command: string, tmpFile: () => string): { args: string[]; file?: string } {
+  const script = PS_PRELUDE + command;
+  const base = ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass'];
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  if (encoded.length <= ENCODED_MAX) return { args: [...base, '-EncodedCommand', encoded] };
+  const file = tmpFile();
+  fs.writeFileSync(file, `\uFEFF${script}`, 'utf8');
+  return { args: [...base, '-File', file], file };
+}
+
+function powershell(input: In, env: NativeEnv): Promise<CommandResult> {
+  const command = str(input.command, 'command');
+  const shell = env.psShell === undefined ? (process.platform === 'win32' ? 'powershell.exe' : 'pwsh') : env.psShell;
+  if (!shell) throw new Error('PowerShell not found: use Bash');
   const ms = bashTimeout(num(input.timeout), env.maxMs);
+  const { args, file } = powershellArgs(command, () => path.join(os.tmpdir(), `sb-run-code-${randomUUID()}.ps1`));
+  const done = (): void => { if (file) fs.rm(file, { force: true }, () => {}); };
+  return runCommand('PowerShell', shell, args, ms, env).finally(done);
+}
+
+/** One command process: its output kept to the last OUT_MAX characters each, killed at its timeout or the run's end. */
+function runCommand(name: string, shell: string, args: string[], ms: number, env: NativeEnv): Promise<CommandResult> {
   const spawn = env.spawn ?? (nodeSpawn as unknown as Spawn);
   return new Promise((resolve, reject) => {
-    const child = spawn(shell, ['-c', command], { cwd: env.cwd, env: env.env ?? process.env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(shell, args, { cwd: env.cwd, env: env.env ?? process.env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '', err = '', timedOut = false, aborted = false;
     const keep = (s: string, add: string): string => { const n = s + add; return n.length > OUT_MAX * 2 ? n.slice(-OUT_MAX * 2) : n; };
     child.stdout?.on('data', (d: Buffer | string) => { out = keep(out, String(d)); });
@@ -82,7 +122,7 @@ function bash(input: In, env: NativeEnv): Promise<{ exitCode: number | null; std
     timer.unref?.();
     const abort = (): void => { aborted = true; child.kill(); };
     env.signal?.addEventListener('abort', abort);
-    child.on('error', e => { clearTimeout(timer); env.signal?.removeEventListener('abort', abort); reject(new Error(`Bash did not start: ${e.message}`)); });
+    child.on('error', e => { clearTimeout(timer); env.signal?.removeEventListener('abort', abort); reject(new Error(`${name} did not start: ${e.message}`)); });
     child.on('close', code => {
       clearTimeout(timer); env.signal?.removeEventListener('abort', abort);
       if (aborted) { reject(new Error('The command was stopped: its run ended.')); return; }
@@ -156,11 +196,15 @@ async function glob(input: In, env: NativeEnv): Promise<string[]> {
 
 async function grep(input: In, env: NativeEnv): Promise<string> {
   const root = at(env.cwd, typeof input.path === 'string' && input.path ? input.path : '.');
-  const pattern = str(input.pattern, 'pattern');
-  new RegExp(pattern); // a bad pattern fails here, before any thread work (compiling never runs it)
+  // a leading (?i) (PCRE, ripgrep) is read as -i: JavaScript has no such inline flag
+  const asked = str(input.pattern, 'pattern'), inline = /^\(\?i\)/.test(asked);
+  const pattern = inline ? asked.slice(4) : asked;
+  if (!pattern) throw new Error('pattern is required (a string)');
+  // a bad pattern fails here, before any thread work (compiling never runs it)
+  try { new RegExp(pattern); } catch (e) { throw new Error(`${(e as Error).message}: pattern is a JavaScript regex (no inline flags such as (?s); case-insensitive is "-i": true)`); }
   const only = typeof input.glob === 'string' && input.glob ? globRegExp(input.glob) : null;
   const mode = input.output_mode === 'content' || input.output_mode === 'count' ? input.output_mode : 'files_with_matches';
   const { base, list } = await files(root, env, only);
-  const r = await runner(env)({ op: 'grep', base, files: list, pattern, ignoreCase: input['-i'] === true, mode, limit: num(input.head_limit) ?? 250 }, fsOpts(env));
+  const r = await runner(env)({ op: 'grep', base, files: list, pattern, ignoreCase: inline || input['-i'] === true, mode, limit: num(input.head_limit) ?? 250 }, fsOpts(env));
   return tail(r.op === 'grep' ? r.lines.join('\n') : '');
 }

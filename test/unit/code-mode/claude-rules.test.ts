@@ -26,6 +26,8 @@ describe('Claude rules for run_code', () => {
     expect(claudeVerdict(set, 'Bash', { command: 'ls && FOO=1 sqlcmd -S prod -Q "x"' }, cwd, home)).toMatchObject({ kind: 'deny', rule: 'Bash(sqlcmd *)' });
     expect(claudeVerdict(set, 'Bash', { command: 'echo $(sqlcmd -Q x)' }, cwd, home)?.kind).toBe('deny');
     expect(claudeVerdict(set, 'Bash', { command: 'az account list' }, cwd, home)).toBeNull();
+    // a Bash rule holds for the PowerShell wrapper too: the same command through another shell
+    expect(claudeVerdict(set, 'PowerShell', { command: 'az webapp deploy --name x' }, cwd, home)).toMatchObject({ kind: 'deny', rule: 'Bash(az webapp deploy:*)' });
     expect(commandParts('a | b; c && d')).toEqual(['a | b; c && d', 'a', 'b', 'c', 'd']);
   });
 
