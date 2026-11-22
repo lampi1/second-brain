@@ -50,8 +50,8 @@ describe('a Claude work chat with the web class reads the web, Code Mode on and 
       for (const t of ['WebSearch', 'WebFetch', 'Agent']) expect(flag(args, '--disallowedTools')).not.toContain(t);
       expect(opts.codeMode === true).toBe(codeMode);
       // Claude starts the agent with no permission request: the PreToolUse hook is the gate that decides
-      expect(opts.preToolUse?.decide(fetchCall)).toBeNull();
-      expect(opts.preToolUse?.decide({ tool: 'Agent', input: { subagent_type: 'general-purpose', prompt: 'x' } })?.deny).toContain('refused');
+      expect(await opts.preToolUse?.decide(fetchCall)).toBeNull();
+      expect((await opts.preToolUse?.decide({ tool: 'Agent', input: { subagent_type: 'general-purpose', prompt: 'x' } }))?.deny).toContain('refused');
     });
   }
 
