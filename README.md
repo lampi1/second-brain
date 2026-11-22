@@ -151,7 +151,7 @@ Engine, model and effort come from one picker, the same on the back of an agent'
 chip and in a strip's menu: search the engines, see each model's context and effort, then say what changes, just this
 chat or the default for new chats. The app runs the Claude Code installed on your PC, so a model out today shows up
 the day your CLI knows it. Settings → Accounts and tools also proposes known ACP CLIs (Grok Build, Devin, Droid, Kilo
-Code, Cline and more), all off: install one and sign in yourself, then "Turn on" makes it an engine like the others.
+Code, Cline, Antigravity and more), all off: install one and sign in yourself, then "Turn on" makes it an engine like the others.
 
 ### Plan mode
 
