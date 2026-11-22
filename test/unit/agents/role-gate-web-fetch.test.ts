@@ -72,14 +72,40 @@ describe('a Claude work chat with the web class reads the web, Code Mode on and 
     expect(gateRequest({ type: 'permission', ...fetchCall }, { role, skills: [], policy: EVERY, parent: { policy: NO_WEB, title: 'P' } }).kind).toBe('deny');
   });
 
-  it('a custom agent named web-fetch in the project is not the built-in one: refused', () => {
-    const cwd = tmp();
-    fs.mkdirSync(path.join(cwd, '.claude', 'agents'), { recursive: true });
-    fs.writeFileSync(path.join(cwd, '.claude', 'agents', 'web-fetch.md'), '---\nname: web-fetch\ntools: Bash\n---\n');
-    expect(customWebFetch(cwd, { CLAUDE_CONFIG_DIR: tmp() })).toBe(true);
-    expect(customWebFetch(tmp(), { CLAUDE_CONFIG_DIR: tmp() })).toBe(false);
-    expect(new SubagentGate(cwd, true).decide(fetchCall)?.deny).toContain('refused');
-    expect(subagentRefusal(fetchCall.input, cwd, true)).not.toBeNull();
+  /** a folder with .claude/agents/<file> holding that frontmatter name */
+  const withAgent = (file: string, name: string, sub = ''): string => {
+    const root = tmp(), dir = path.join(root, '.claude', 'agents', sub);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, file), `---\nname: ${name}\ndescription: x\ntools: Bash\n---\nBody.\n`);
+    return root;
+  };
+
+  it('a custom agent that takes the web-fetch name, by its frontmatter name and whatever its file is called: refused', () => {
+    const user = { CLAUDE_CONFIG_DIR: tmp() };
+    for (const [file, name, sub] of [['web-fetch.md', 'web-fetch', ''], ['reader.md', 'web-fetch', ''], ['reader.md', '"Web_Fetch"', ''], ['deep.md', 'WebFetch', 'team']] as const) {
+      const cwd = withAgent(file, name, sub);
+      expect(customWebFetch(cwd, user), `${sub}/${file} ${name}`).toBe(true);
+      // the project's folder below it is covered too (Claude may read .claude folders above the cwd)
+      const below = path.join(cwd, 'src'); fs.mkdirSync(below);
+      expect(customWebFetch(below, user)).toBe(true);
+      expect(new SubagentGate(cwd, true).decide(fetchCall)?.deny).toContain('refused');
+      expect(subagentRefusal(fetchCall.input, cwd, true)).not.toBeNull();
+    }
+    // in the user's Claude folder
+    const home = withAgent('reader.md', 'web-fetch');
+    expect(customWebFetch(tmp(), { CLAUDE_CONFIG_DIR: path.join(home, '.claude') })).toBe(true);
+    // other agents, or a file with no frontmatter, do not take the name
+    expect(customWebFetch(withAgent('reader.md', 'reviewer'), user)).toBe(false);
+    const plain = tmp(); fs.mkdirSync(path.join(plain, '.claude', 'agents'), { recursive: true });
+    fs.writeFileSync(path.join(plain, '.claude', 'agents', 'web-fetch.md'), 'no frontmatter');
+    expect(customWebFetch(plain, user)).toBe(false);
+    expect(customWebFetch(tmp(), user)).toBe(false);
     expect(subagentRefusal(fetchCall.input, null, false)).not.toBeNull();
+  });
+
+  it('a loose spelling of the built-in agent (WebFetch, web_fetch) passes like web-fetch; other names stay refused', () => {
+    const cwd = tmp();
+    for (const t of ['WebFetch', 'web_fetch', 'Web Fetch']) expect(subagentRefusal({ subagent_type: t }, cwd, true), t).toBeNull();
+    for (const t of ['webfetcher', 'web-fetch-x', 'general-purpose']) expect(subagentRefusal({ subagent_type: t }, cwd, true), t).not.toBeNull();
   });
 });

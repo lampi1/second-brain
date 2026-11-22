@@ -63,12 +63,53 @@ export const SEARCH_SUBAGENT = 'Explore';
  *  no way to read a page but the app browser (ADR 0333). */
 export const WEB_FETCH_SUBAGENT = 'web-fetch';
 
-/** True when a definition of its own named web-fetch is in the chat's project or the user's Claude folder: that agent
- *  replaces the built-in one, with whatever tools it declares, so the web exemption does not hold there. */
+/** A sub-agent name as Claude Code compares it with web-fetch (NFKC, lower case, no spaces, dashes or underscores):
+ *  "WebFetch" and "web_fetch" name the same agent. */
+export const agentNameKey = (name: string): string => name.normalize('NFKC').toLowerCase().replace(/[\p{White_Space}\p{Pd}_]+/gu, '');
+const WEB_FETCH_KEY = agentNameKey(WEB_FETCH_SUBAGENT);
+/** Bounds of the scan for a custom agent (customWebFetch): past them the answer is «custom», never «none». */
+const AGENT_SCAN = { files: 500, depth: 4, bytes: 256 * 1024 };
+
+/** The frontmatter `name` of an agent file (Claude Code takes the agent's type from it, not from the file name); '' when
+ *  the file has no frontmatter or no name; null when it cannot be read. */
+function agentFileName(file: string): string | null {
+  try {
+    const fd = fs.openSync(file, 'r');
+    try {
+      const buf = Buffer.alloc(AGENT_SCAN.bytes);
+      const text = buf.subarray(0, fs.readSync(fd, buf, 0, buf.length, 0)).toString('utf8').replace(/^\uFEFF/, '');
+      const head = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1];
+      const name = head ? /^name:[ \t]*(.*?)[ \t]*$/m.exec(head)?.[1] ?? '' : '';
+      return name.replace(/^(['"])(.*)\1$/, '$2');
+    } finally { fs.closeSync(fd); }
+  } catch { return null; }
+}
+
+/** True when a definition of its own takes the web-fetch name (frontmatter `name` equal under agentNameKey) in the user's
+ *  Claude folder or in the .claude folder of the chat's folder or any folder above it: that agent replaces the built-in
+ *  one, with whatever tools, prompt and settings it declares, so the web exemption does not hold. Fails closed: a file
+ *  it cannot read, or a scan past its bounds, counts as custom. `env` = the session's environment (CLAUDE_CONFIG_DIR). */
 export function customWebFetch(cwd: string | null | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
-  const user = env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
-  const dirs = [user, ...(cwd && path.isAbsolute(cwd) ? [path.join(cwd, '.claude')] : [])];
-  return dirs.some(d => fs.existsSync(path.join(d, 'agents', `${WEB_FETCH_SUBAGENT}.md`)));
+  const roots = [path.join(env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'agents')];
+  if (cwd && path.isAbsolute(cwd)) for (let d = path.resolve(cwd); ; d = path.dirname(d)) {
+    roots.push(path.join(d, '.claude', 'agents'));
+    if (path.dirname(d) === d) break;
+  }
+  let files = 0;
+  const custom = (dir: string, depth: number): boolean => {
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return (e as NodeJS.ErrnoException).code !== 'ENOENT'; }
+    for (const e of entries) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) { if (depth >= AGENT_SCAN.depth || custom(p, depth + 1)) return true; continue; }
+      if (!e.name.toLowerCase().endsWith('.md')) continue;
+      if (++files > AGENT_SCAN.files) return true;
+      const name = agentFileName(p);
+      if (name === null || agentNameKey(name) === WEB_FETCH_KEY) return true;
+    }
+    return false;
+  };
+  return [...new Set(roots)].some(r => custom(r, 0));
 }
 
 /** An AI-DLC sub-agent's name: the harness's own reviewer/developer agents (`aidlc-developer-agent`, ADR 0083 amendment). */
@@ -90,7 +131,8 @@ export function aidlcSubagent(cwd: string | null | undefined, type: string): boo
 export function subagentRefusal(input: unknown, cwd?: string | null, web = false): { type: string; message: string } | null {
   const type = field(input, 'subagent_type', 'agent_type', 'type') || 'general-purpose';
   if (type === SEARCH_SUBAGENT || aidlcSubagent(cwd, type)) return null;
-  if (type === WEB_FETCH_SUBAGENT && web && !customWebFetch(cwd)) return null;
+  // Claude reads a loose spelling (WebFetch, web_fetch) as the built-in agent too when no custom agent takes the name
+  if (web && agentNameKey(type) === WEB_FETCH_KEY && !customWebFetch(cwd)) return null;
   return { type, message: `Sub-agent «${type}» refused: hand delegated work to another role with agent_delegate (a visible chat). Engine sub-agents are only for a quick read-only search (${SEARCH_SUBAGENT}).` };
 }
 

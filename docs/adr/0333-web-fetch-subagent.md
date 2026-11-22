@@ -18,8 +18,12 @@ WebSearch stays a native tool (deferred behind ToolSearch); Code Mode hides neit
 1. `subagentRefusal` lets `web-fetch` through when the chat may use the web: in the PreToolUse hook, its policy
    (already narrowed by its parent's, `belowParent`) has `web`; in the permission gate, its policy and its parent's both
    allow `web`. A role without `web` stays refused. The WebFetch calls inside the agent still pass the app's gates.
-2. Not when a custom agent takes the name (`agents/web-fetch.md` in the project's or the user's Claude folder): it would
-   replace the built-in one with whatever tools it declares.
+2. Not when a custom agent takes the name: Claude Code names an agent by its frontmatter `name`, compared after NFKC,
+   lower case and without spaces, dashes or underscores, whatever its file is called. Every `*.md` under the user's
+   Claude `agents` folder and under `.claude/agents` of the chat's folder and each folder above it is read; one with
+   that name, an unreadable one or a scan past its bounds (500 files, 4 levels) refuses the exemption: that agent
+   would replace the built-in one with whatever tools, prompt and settings it declares. A loose spelling of the
+   built-in name (`WebFetch`, `web_fetch`) passes like `web-fetch`, as Claude reads it the same way.
 3. Code Mode needs nothing more: the Agent tool and WebSearch stay native there.
 
 ## Consequences
