@@ -44,6 +44,13 @@ export interface EngineContext {
   brainRoot?: string | null;
 }
 
+/** A run that must not change anything: a read-only run (comparison side b), the ceiling «plan», or a role allowed
+ *  neither edits, commands nor brain writes. */
+export function readOnlyRun(opts: Pick<SessionOptions, 'readOnly' | 'ceiling' | 'toolPolicy'>): boolean {
+  const allow = opts.toolPolicy?.allow;
+  return !!opts.readOnly || opts.ceiling === 'plan' || !!allow && !allow.some(c => c === 'edit' || c === 'shell' || c === 'brain-write');
+}
+
 /** The session of a chat on this engine, with the turn-start watchdog around it (chats/turn-watchdog.ts, ADR 0221):
  *  a sent turn with no first event in SB_TURN_WATCHDOG_MS (default 120 s) is shown and logged, never restarted. */
 export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: SessionSink, ctx: EngineContext): HarnessSession {
@@ -58,6 +65,7 @@ function startSession(engine: EngineDef, opts: SessionOptions, sink: SessionSink
     if (!/^[a-f0-9]{64}$/.test(path.basename(pluginDir)) || path.resolve(path.dirname(pluginDir)) !== path.resolve(base)
       || path.resolve(skillRoot) !== path.resolve(pluginDir, 'skills') || fs.lstatSync(pluginDir).isSymbolicLink() || fs.lstatSync(skillRoot).isSymbolicLink()) throw new Error('Invalid agent skill snapshot');
   }
+  if (engine.noReadOnly && readOnlyRun(opts)) throw new Error(`${engine.label} non esegue ancora chat di sola lettura: scegli un altro motore per questo ruolo.`);
   // A running session retains its endpoint/command. A key for a replacement definition must never reach it.
   const binding = fingerprint(engine);
   const boundKey = (): string | null => {
@@ -101,6 +109,7 @@ function startSession(engine: EngineDef, opts: SessionOptions, sink: SessionSink
         ...(engine.modelFlag ? { modelFlag: engine.modelFlag } : {}),
         ...(engine.modelOption ? { modelOption: true } : {}),
         ...(engine.mcpHttp ? { mcpHttp: true } : {}),
+        ...(engine.realCwd ? { realCwd: true } : {}),
         ...(appAsks(engine) ? { appAsk: true } : {}),
         loginCommand: engine.login.length ? [command, ...engine.login].join(' ') : null,
         ...(env ? { env } : {}),

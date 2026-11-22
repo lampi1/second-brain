@@ -1,13 +1,16 @@
 // Antigravity CLI ("agy acp", ADR 0332) on the shared ACP adapter, in process: its catalog entry (no permission bypass,
 // the model as a config option, http MCP without the capability), the app's tools it names mcp_<server>_<tool> answered
 // without a panel (run_code only in Code Mode), its MCP servers passed though initialize announces none, the model
-// picker winning over its per-thinking-level "models", and its working mode "default", never "auto" or "accept-edits".
+// picker winning over its per-thinking-level "models", its working mode "default", never "auto" or "accept-edits", its
+// folder as the long real path, and no read-only chats.
 // The session/new answer below is agy 1.5.14's own (real run 2026-11-22). No real engine ever runs here.
 import { afterEach, describe, expect, it } from 'vitest';
-import { AcpSession } from '../../../src/main/chats/acp';
+import fs from 'node:fs';
+import { AcpSession, longPath } from '../../../src/main/chats/acp';
 import { acpAppTool } from '../../../src/main/chats/app-tool-approval';
 import { codeModeFor } from '../../../src/main/code-mode/policy';
 import { engineOf } from '../../../src/main/engines/registry';
+import { readOnlyRun, sessionFor } from '../../../src/main/engines/sessions';
 import { tmp } from './helpers';
 
 const MCP = 'http://127.0.0.1:4329/mcp/chat-1';
@@ -57,7 +60,7 @@ function agy(extra: object = {}): Inside {
 describe('Antigravity engine (ADR 0332)', () => {
   it('is a catalog proposal that starts agy acp without any permission bypass, off and untrusted until the user turns it on', () => {
     const e = engineOf('antigravity')!;
-    expect(e).toMatchObject({ kind: 'acp', command: 'agy', args: ['acp', '--disable-telemetry'], login: ['acp', '--login'], modelOption: true, mcpHttp: true, defaultOn: false, source: 'catalog', trusted: false });
+    expect(e).toMatchObject({ kind: 'acp', command: 'agy', args: ['acp', '--disable-telemetry'], login: ['acp', '--login'], modelOption: true, mcpHttp: true, realCwd: true, noReadOnly: true, defaultOn: false, source: 'catalog', trusted: false });
     expect(e.modelFlag).toBeUndefined();
     expect(e.args!.join(' ')).not.toMatch(/dangerously|skip-permissions|yolo/);
     expect(e.catalog).toMatchObject({ signIn: 'agy acp --login', installUrl: 'https://antigravity.google' });
@@ -120,6 +123,31 @@ describe('Antigravity engine (ADR 0332)', () => {
     expect(sent).toEqual([['session/set_mode', { sessionId: 'sid', modeId: 'default' }]]);
     s.modes = ['accept-edits', 'auto', 'plan'];
     await expect((s as unknown as AcpSession).setPermissionMode('default' as never)).rejects.toThrow(/non ha la modalità/);
+  });
+
+  it('opens its session in the long real path of the chat folder (8.3 short names expanded), the path as given when it cannot be resolved', async () => {
+    const dir = tmp('cwd');
+    expect(longPath(dir)).toBe(fs.realpathSync.native(dir));
+    expect(longPath(dir + '-missing')).toBe(dir + '-missing');
+    const s = agy({ cwd: dir, realCwd: true });
+    const sent: [string, Record<string, unknown>][] = [];
+    s.request = async (m, p) => { sent.push([m, p as Record<string, unknown>]); return AGY_NEW; };
+    s.caps = {};
+    await (s as unknown as { openSession(): Promise<void> }).openSession();
+    expect(sent[0]![0]).toBe('session/new');
+    expect(sent[0]![1].cwd).toBe(fs.realpathSync.native(dir));
+    expect((s as unknown as { cwd: string }).cwd).toBe(fs.realpathSync.native(dir));
+  });
+
+  it('never runs a read-only chat: a comparison side, the ceiling «plan», or a role without edits, commands or brain writes', () => {
+    expect(readOnlyRun({ readOnly: true })).toBe(true);
+    expect(readOnlyRun({ ceiling: 'plan' })).toBe(true);
+    expect(readOnlyRun({ toolPolicy: { allow: ['read', 'shell-read', 'web'] } })).toBe(true);
+    expect(readOnlyRun({ toolPolicy: { allow: ['read', 'edit'] } })).toBe(false);
+    expect(readOnlyRun({ ceiling: 'default', toolPolicy: null })).toBe(false);
+    const e = engineOf('antigravity')!;
+    const sink = { changed: () => {}, item: () => {}, models: () => {}, pending: () => {} } as never;
+    expect(() => sessionFor(e, { chatId: 'c', cwd: tmp('cwd'), toolPolicy: { allow: ['read', 'shell-read'] } } as never, sink, {} as never)).toThrow(/sola lettura/);
   });
 
   it('stays out of Code Mode: agy does not hand run_code to its model (ADR 0332)', () => {

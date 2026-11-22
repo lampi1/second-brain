@@ -44,6 +44,12 @@ export interface EngineDef extends EngineInfo, EngineStart {
   /** ACP: the engine takes the app's http MCP servers though its initialize announces no mcpCapabilities.http
    *  (Antigravity `agy acp` 1.5.14, ADR 0332); without it the app passes MCP only to an engine that announces it */
   mcpHttp?: boolean;
+  /** ACP: the engine starts and opens its session in the folder's long real path, 8.3 short names expanded
+   *  (chats/acp.ts realCwd; Antigravity, ADR 0332) */
+  realCwd?: boolean;
+  /** never runs a read-only chat (a comparison side, a role without edits or commands, ceiling «plan»): its own
+   *  permission requests are not yet trusted to hold every write (Antigravity, ADR 0332); engines/sessions.ts refuses */
+  noReadOnly?: boolean;
 }
 
 /** The shape of an engine id: a chat saved on an engine since removed stays readable (it cannot start). */

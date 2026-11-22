@@ -128,13 +128,17 @@ export interface AcpOptions extends SessionOptions {
   /** after the engine logs a provider stream error on stderr (streamErrorOf), how long the turn waits for any sign of
    *  life before it is stopped as failed (default 10 s; an out-of-credits error stops it at once) */
   streamErrorGraceMs?: number;
-  /** the model is the session's configOptions entry of category "model" (OpenCode `opencode acp`): its options are the
-   *  models offered and the chat's model is set there (session/set_config_option, session-only) once the session is
-   *  open. Only for an engine whose session/new answers no `models` and keeps the choice in the session (never for
-   *  Cursor, whose model change writes its global config) */
+  /** the model is the session's configOptions entry of category "model" (OpenCode `opencode acp`, Antigravity `agy
+   *  acp`): its options are the models offered and the chat's model is set there (session/set_config_option,
+   *  session-only) once the session is open. The picker wins over any `models` block session/new also answers
+   *  (Antigravity's lists one id per thinking level, ADR 0332). Only for an engine that keeps the choice in the session
+   *  (never for Cursor, whose model change writes its global config) */
   modelOption?: boolean;
   /** pass the app's http MCP servers even though initialize announces no mcpCapabilities.http (Antigravity, ADR 0332) */
   mcpHttp?: boolean;
+  /** start the engine and open its session in the folder's long, real path (fs.realpathSync.native): Windows 8.3 short
+   *  names (`PROGRA~1`) expanded. Antigravity, ADR 0332: on a short-name path it wrote without asking the app */
+  realCwd?: boolean;
   /** the engine has no question tool that reaches the app (engines/registry.ts appAsks: OpenCode): the app's ask_user
    *  MCP tool asks for it (askUser), the answer goes back as the user's next message */
   appAsk?: boolean;
@@ -330,9 +334,14 @@ export function acpWhole(tc: Record<string, unknown>, earlier: unknown): Record<
   const raw = own ?? (earlier && typeof earlier === 'object' && !Array.isArray(earlier) && Object.keys(earlier).length ? earlier as Record<string, unknown> : undefined);
   return raw ? { ...raw, ...(tc.locations !== undefined ? { locations: tc.locations } : {}) } : undefined;
 }
-/** ACP tool kinds → the tool name a row and a permission panel show (PendingRequest.tool). */
+/** A folder's long, real path (fs.realpathSync.native: Windows 8.3 short names expanded, junctions followed); the path
+ *  as given when it cannot be resolved (a missing folder is reported by start). */
+export function longPath(p: string): string {
+  try { return fs.realpathSync.native(p); } catch { return p; }
+}
 /** Modes the app never picks as the working one: read-only, or approving edits and commands without the app's gates. */
 const NOT_WORKING_MODES: ReadonlySet<string> = new Set(['plan', 'ask', 'auto', 'accept-edits', 'acceptEdits', 'bypassPermissions', 'yolo']);
+/** ACP tool kinds → the tool name a row and a permission panel show (PendingRequest.tool). */
 export const KIND_NAME: Record<string, string> = {
   execute: 'Shell', read: 'Read', edit: 'Edit', delete: 'Delete', move: 'Move', search: 'Search', fetch: 'Fetch', think: 'Think', switch_mode: 'Mode', other: 'Tool',
 };
@@ -551,7 +560,11 @@ export class AcpSession implements HarnessSession {
   /** resolves when the session is open (or failed): the manager waits for it before adding a message to a resumed chat */
   readonly ready = new Promise<void>(r => { this.readyDone = r; });
 
+  /** the folder the engine starts and opens its session in: the chat's, as its long real path with realCwd */
+  private readonly cwd: string;
+
   constructor(private readonly opts: AcpOptions, private readonly sink: SessionSink, private readonly command?: CliCommand | null) {
+    this.cwd = opts.realCwd ? longPath(opts.cwd) : opts.cwd;
     this.childTelemetry = new AgentChildrenReporter(sink);
     this.harness = opts.engineId;
     this.sessionId = opts.resume ? opts.sessionId ?? null : null;
@@ -611,13 +624,13 @@ export class AcpSession implements HarnessSession {
     const startedAt = Date.now();
     this.spawnedAt = startedAt;
     try {
-      this.proc = spawn(argv.command, argv.args, { cwd: this.opts.cwd, env, windowsHide: true, detached: ownProcessGroup(), stdio: ['pipe', 'pipe', 'pipe'], windowsVerbatimArguments: argv.verbatim });
+      this.proc = spawn(argv.command, argv.args, { cwd: this.cwd, env, windowsHide: true, detached: ownProcessGroup(), stdio: ['pipe', 'pipe', 'pipe'], windowsVerbatimArguments: argv.verbatim });
     } catch (e) {
       return this.fail(`Avvio di ${label} non riuscito: ${errText(e)}`, errText(e), `check the ${label} CLI install`);
     }
     const p = this.proc;
     lowerEnginePriority(p.pid); // below the app's window: a busy PC slows agents, not the app (jobguard.ts)
-    log.info('chats', 'acp session start', { chat, data: { engine, pid: p.pid, kind: cmd.kind, command: cmd.display, cwd: this.opts.cwd, args: this.args() } });
+    log.info('chats', 'acp session start', { chat, data: { engine, pid: p.pid, kind: cmd.kind, command: cmd.display, cwd: this.cwd, args: this.args() } });
     p.stdout.setEncoding('utf8');
     p.stdout.on('data', (d: string) => timedStep('engine acp output', () => this.onStdout(d)));
     recordWire(p, { engine, chatId: chat }); // opt-in NDJSON record mode, redacted (wire-record.ts)
@@ -687,7 +700,7 @@ export class AcpSession implements HarnessSession {
   }
 
   private async openSession(): Promise<void> {
-    const base = { cwd: this.opts.cwd, mcpServers: this.mcpServers() };
+    const base = { cwd: this.cwd, mcpServers: this.mcpServers() };
     if (this.opts.resume && this.opts.sessionId) {
       if (this.caps.loadSession === true) {
         // the agent replays the past as updates before it answers: shown only when the chat has no items yet (restored
