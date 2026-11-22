@@ -173,8 +173,13 @@ export function pickedEffort(p: FullPresets, id: PresetId, model: string, asked:
   return PRESET_IDS.some(x => !ids.includes(x) && p[x].model === model && p[x].effort === asked) ? undefined : asked;
 }
 
-/** The preset a named model (and effort) is, among `ids`: the exact effort first, else the first with that model. */
+/** The preset a named model (and effort) is, among `ids`: the exact effort first, else the first with that model.
+ *  Presets equal in model and effort are one preset: Base when it is one of them (an empty Minimo or Massimo is a copy
+ *  of Base, so a Base pick is never recorded as Minimo), else the last of them. */
 export function presetNamed(p: FullPresets, model: string, effort: Effort | undefined, ids: readonly PresetId[] = PRESET_IDS): PresetId | null {
   const same = ids.filter(id => p[id].model === model);
-  return same.find(id => effort !== undefined && p[id].effort === effort) ?? same[0] ?? null;
+  const first = same.find(id => effort !== undefined && p[id].effort === effort) ?? same[0];
+  if (!first) return null;
+  const twins = same.filter(id => p[id].effort === p[first].effort);
+  return twins.includes('base') ? 'base' : twins[twins.length - 1]!;
 }

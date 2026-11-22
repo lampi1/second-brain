@@ -97,6 +97,17 @@ describe('presetsUpTo, presetNamed and the run record', () => {
     expect(presetNamed(same, 'mid', 'high')).toBe('max');
     expect(presetNamed(same, 'mid', undefined)).toBe('min');
   });
+  it('an empty Minimo (a copy of Base) is named Base, never Minimo', () => {
+    const empty: FullPresets = { min: { model: 'mid', effort: 'high' }, base: { model: 'mid', effort: 'high' }, max: { model: 'top' } };
+    expect(presetNamed(empty, 'mid', 'high', ['min', 'base'])).toBe('base');
+    expect(presetNamed(empty, 'mid', undefined, ['min', 'base'])).toBe('base');
+    expect(presetNamed(empty, 'mid', 'low', ['min', 'base'])).toBe('base');
+    // Minimo and Massimo both empty: the user's pick of the Base model is Base, not the last preset
+    const all: FullPresets = { min: { model: 'mid' }, base: { model: 'mid' }, max: { model: 'mid' } };
+    expect(presetNamed(all, 'mid', undefined)).toBe('base');
+    // Minimo alone below Base: still Minimo
+    expect(presetNamed(empty, 'mid', 'high', ['min'])).toBe('min');
+  });
   it('the run keeps preset, effort, asked, why, kind and delegator; a malformed record is dropped', () => {
     const c = choosePreset({ presets: P, ask: { preset: 'max', presetWhy: 'x', taskKind: 'review' }, delegator: { role: 'scout', model: 'mid' }, price });
     const rec = runPresetOf(c);
