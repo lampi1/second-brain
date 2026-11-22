@@ -56,6 +56,13 @@ describe('the run_code result the model reads', () => {
     expect(back.note).toBe('small');
     expect(JSON.stringify(back.files)).toMatch(/more (items|characters)/);
     expect(shrinkValue({ a: 1 }, 100)).toEqual({ value: { a: 1 }, cut: false });
+    // thousands of small keys, or many mid-size strings: still valid JSON within the limit
+    const keys = Object.fromEntries(Array.from({ length: 3_000 }, (_, i) => [`k${i}`, i]));
+    const k = shrinkValue(keys, 2_000);
+    expect(JSON.stringify(k.value).length).toBeLessThanOrEqual(2_000);
+    expect((k.value as Record<string, string>)['--- TRUNCATED ---']).toMatch(/^\d+ more keys$/);
+    const mid = Object.fromEntries(Array.from({ length: 300 }, (_, i) => [`s${i}`, 'm'.repeat(120)]));
+    expect(JSON.stringify(shrinkValue(mid, 3_000).value).length).toBeLessThanOrEqual(3_000);
   });
 
   it('three scripts in a row with one call each get the batching hint, then the count starts again', async () => {
@@ -90,6 +97,7 @@ describe('the tools as a typed TypeScript API', () => {
     const d = deps({ decideFor: async () => { asked++; return { kind: 'allow' }; } });
     const b = bridge(d, 'c', await catalog(d, 'c'), { signal: new AbortController().signal, progress: () => true, sessionId: 's' });
     expect(missingRequired(typed, 'c', { tab: 1 })).toEqual(['url']);
+    expect(missingRequired(typed, 'c', { url: null })).toEqual([]);
     await expect(b.call('navigate', { tab: 1 })).rejects.toThrow(/navigate: missing required input url; its signature: \(input: \{ url: string/);
     expect(asked).toBe(0);
     await expect(b.call('navigate', { url: 'x' })).resolves.toBe('ok');
@@ -115,7 +123,8 @@ describe('the PowerShell wrapper', () => {
     expect(args.slice(0, 5)).toEqual(['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass']);
     expect(args[5]).toBe('-EncodedCommand');
     const decoded = Buffer.from(args[6]!, 'base64').toString('utf16le');
-    expect(decoded.endsWith(cmd)).toBe(true);
+    expect(decoded).toContain(cmd + '\n$__sbOk = $?; $__sbCode = $global:LASTEXITCODE');
+    expect(decoded).toMatch(/if \(\$__sbCode\) \{ exit \$__sbCode \} elseif \(-not \$__sbOk\) \{ exit 1 \} else \{ exit 0 \}\n$/);
     expect(decoded).toMatch(/OutputEncoding = \[System\.Text\.Encoding\]::UTF8/);
   });
 
@@ -127,7 +136,8 @@ describe('the PowerShell wrapper', () => {
     expect(args.slice(-2)).toEqual(['-File', f]);
     const body = fs.readFileSync(f, 'utf8');
     expect(body.charCodeAt(0)).toBe(0xfeff);
-    expect(body.endsWith(cmd)).toBe(true);
+    expect(body).toContain(cmd + '\n$__sbOk = $?');
+    expect(body).toMatch(/exit 0 \}\n$/);
   });
 
   it('runNative runs PowerShell with its own executable, not Git Bash, and gives the exit code', async () => {

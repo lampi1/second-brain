@@ -91,5 +91,5 @@ export function declarations(natives: readonly NativeWrapper[], app: McpTool[], 
 /** The required inputs a call of an app or connector tool left out, by its schema: [] when none. */
 export function missingRequired(t: McpTool, chatId: string, input: unknown): string[] {
   const given = obj(input);
-  return strings(schemaOf(t, chatId).required).filter(k => given[k] === undefined || given[k] === null);
+  return strings(schemaOf(t, chatId).required).filter(k => given[k] === undefined);
 }

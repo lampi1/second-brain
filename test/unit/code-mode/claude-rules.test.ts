@@ -28,6 +28,9 @@ describe('Claude rules for run_code', () => {
     expect(claudeVerdict(set, 'Bash', { command: 'az account list' }, cwd, home)).toBeNull();
     // a Bash rule holds for the PowerShell wrapper too: the same command through another shell
     expect(claudeVerdict(set, 'PowerShell', { command: 'az webapp deploy --name x' }, cwd, home)).toMatchObject({ kind: 'deny', rule: 'Bash(az webapp deploy:*)' });
+    // PowerShell's call and dot-source operators, a quoted name, a background & do not get around it
+    for (const command of ['& az webapp deploy --name x', ". az webapp deploy", "& 'az' webapp deploy", 'ls & az webapp deploy -n x'])
+      expect(claudeVerdict(set, 'PowerShell', { command }, cwd, home)?.kind, command).toBe('deny');
     expect(commandParts('a | b; c && d')).toEqual(['a | b; c && d', 'a', 'b', 'c', 'd']);
   });
 

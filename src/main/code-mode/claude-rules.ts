@@ -135,11 +135,13 @@ function pathGlobs(pattern: string, base: string, cwd: string, home: string): st
 }
 
 /** The parts of a command line a rule can name: the whole, and each command of a compound one (`;`, `&&`, `||`, `|`, a
- *  new line, `$(…)`, backticks, a quoted `-c "…"`), with leading `VAR=value` assignments and `sudo` taken off. */
+ *  new line, `$(…)`, backticks, a single `&`, a quoted `-c "…"`), with leading `VAR=value` assignments, `sudo` and
+ *  PowerShell's call (`&`) and dot-source (`.`) operators taken off; the whole line without quotes too (`& 'git' push`). */
 export function commandParts(command: string): string[] {
-  const parts = command.split(/&&|\|\||[;|\n`]|\$\(|\(|\)|\{|\}|["']/).map(s => s.trim()).filter(Boolean);
-  const bare = (s: string): string => s.replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)+/, '').replace(/^(?:sudo|exec|command|nohup|env)\s+/, '');
-  return [...new Set([command.trim(), ...parts, ...parts.map(bare)].filter(Boolean))];
+  const parts = command.split(/&&|\|\||[;|&\n`]|\$\(|\(|\)|\{|\}|["']/).map(s => s.trim()).filter(Boolean);
+  const bare = (s: string): string => s.replace(/^(?:&|\.)\s+/, '').replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)+/, '').replace(/^(?:sudo|exec|command|nohup|env)\s+/, '');
+  const unquoted = bare(command.replace(/["']/g, '').trim());
+  return [...new Set([command.trim(), ...parts, ...parts.map(bare), unquoted].filter(Boolean))];
 }
 
 /** A Bash/PowerShell rule's pattern as a test over one command part: `prefix:*` (or a trailing ` *`) a part starting

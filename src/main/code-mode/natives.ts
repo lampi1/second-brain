@@ -87,10 +87,14 @@ const ENCODED_MAX = 30_000;
  *  bars (they reach stderr as CLIXML) */
 const PS_PRELUDE = "$ProgressPreference = 'SilentlyContinue'; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8\n";
 
+/** After the command, an exit code that reflects it, as run/runner.ts wrapScript does: a native program's own code,
+ *  else 1 when the last command failed (-File and -EncodedCommand alone give 0 or 1 whatever happened) */
+const PS_EPILOGUE = '\n$__sbOk = $?; $__sbCode = $global:LASTEXITCODE\nif ($__sbCode) { exit $__sbCode } elseif (-not $__sbOk) { exit 1 } else { exit 0 }\n';
+
 /** How the PowerShell wrapper starts its command: the script as -EncodedCommand (UTF-16LE base64: no quoting can
  *  change it), or as a temporary .ps1 (UTF-8 with BOM, -File) when it is too long for a command line. */
 export function powershellArgs(command: string, tmpFile: () => string): { args: string[]; file?: string } {
-  const script = PS_PRELUDE + command;
+  const script = PS_PRELUDE + command + PS_EPILOGUE;
   const base = ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass'];
   const encoded = Buffer.from(script, 'utf16le').toString('base64');
   if (encoded.length <= ENCODED_MAX) return { args: [...base, '-EncodedCommand', encoded] };

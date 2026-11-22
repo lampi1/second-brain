@@ -71,13 +71,15 @@ const ARR_MARK = /^--- TRUNCATED --- \((\d+) more items\)$/;
 const json = (v: unknown): string => JSON.stringify(v, null, 1) ?? 'null';
 
 /** A returned value made to fit max characters of JSON keeping its shape (after Cloudflare's truncateResult): the
- *  largest string or array is halved first, again and again, each cut one marked with MARK and what it dropped; a
- *  value that still does not fit (thousands of small keys) is cut as text by the caller. */
+ *  largest string or array is halved first (an object's keys only when none is left), again and again, each cut one marked with MARK and what it
+ *  dropped (an object's under the key MARK), so the result stays valid JSON; the caller's text cut is only a last net. */
 export function shrinkValue(value: unknown, max: number): { value: unknown; cut: boolean } {
   const box: { v: unknown } = { v: JSON.parse(json(value === undefined ? null : value)) as unknown };
   let cut = false;
-  for (let round = 0; round < 400 && json(box.v).length > max; round++) {
-    let best: { parent: Record<string | number, unknown>; key: string | number; size: number } | null = null;
+  for (let round = 0; round < 4_000 && json(box.v).length > max; round++) {
+    type Pick = { parent: Record<string | number, unknown>; key: string | number; size: number };
+    // strings and arrays first; an object loses keys only when nothing else is left to halve
+    let best: Pick | null = null, bestObj: Pick | null = null;
     const walk = (node: unknown, parent: Record<string | number, unknown>, key: string | number): void => {
       if (typeof node === 'string' && node.length > 80) { if (!best || node.length > best.size) best = { parent, key, size: node.length }; return; }
       if (!node || typeof node !== 'object') return;
@@ -87,17 +89,24 @@ export function shrinkValue(value: unknown, max: number): { value: unknown; cut:
         node.forEach((x, i) => { walk(x, node as unknown as Record<number, unknown>, i); });
         return;
       }
-      for (const [k, x] of Object.entries(node)) walk(x, node as Record<string, unknown>, k);
+      const keys = Object.keys(node).filter(k => k !== MARK);
+      if (keys.length > 1) { const size = json(node).length; if (!bestObj || size > bestObj.size) bestObj = { parent, key, size }; }
+      for (const [k, x] of Object.entries(node)) if (k !== MARK) walk(x, node as Record<string, unknown>, k);
     };
     walk(box.v, box as unknown as Record<string, unknown>, 'v');
-    if (!best) break;
-    const { parent, key } = best as { parent: Record<string | number, unknown>; key: string | number };
+    const chosen = (best ?? bestObj) as Pick | null;
+    if (!chosen) break;
+    const { parent, key } = chosen;
     const node = parent[key];
     cut = true;
     if (typeof node === 'string') {
       const prev = STR_MARK.exec(node), body = prev ? node.slice(0, prev.index) : node, dropped = Number(prev?.[1] ?? 0);
       const keep = Math.floor(body.length / 2);
       parent[key] = `${body.slice(0, keep)} ${MARK} (${dropped + body.length - keep} more characters)`;
+    } else if (!Array.isArray(node)) {
+      const o = node as Record<string, unknown>, keys = Object.keys(o).filter(k => k !== MARK);
+      const dropped = Number(/^(\d+) more keys$/.exec(String(o[MARK] ?? ''))?.[1] ?? 0), keep = Math.max(1, Math.floor(keys.length / 2));
+      parent[key] = { ...Object.fromEntries(keys.slice(0, keep).map(k => [k, o[k]])), [MARK]: `${dropped + keys.length - keep} more keys` };
     } else {
       const arr = node as unknown[];
       const last = arr[arr.length - 1], prev = typeof last === 'string' ? ARR_MARK.exec(last) : null;
@@ -170,7 +179,7 @@ export function runCodeTool(deps: RunCodeDeps): McpTool {
         deps.onResult?.(r, h.calls);
         const single = h.calls.length <= 1 ? (streaks.get(chatId) ?? 0) + 1 : 0;
         const nudge = single >= NUDGE_AFTER;
-        streaks.set(chatId, nudge ? 0 : single);
+        if (nudge || !single) streaks.delete(chatId); else streaks.set(chatId, single);
         return { raw: { content: [{ type: 'text', text: resultText(r, h.calls, nudge) }], isError: !r.ok } };
       } finally {
         clearInterval(timer);
