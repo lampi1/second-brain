@@ -42,7 +42,8 @@ export const NUDGE_AFTER = 3;
 const DESCRIPTION = 'Read files, run shell (Bash) commands, grep and glob search, edit and write files, call app tools and connectors: all through one script. ' +
   'Runs a JavaScript script (async; use await and return a JSON-able value) in a sandbox with no fs, net, require or timers. ' +
   'Prefer it to the native tools, and put a whole step in ONE script: batch every read, search and command you need ' +
-  '(Promise.all for independent ones), filter inside the script and return only what you need: a returned value over ' +
+  '(Promise.all for independent ones); read a whole file, or several parts or files, in one script, not slice by slice in separate scripts; ' +
+  'filter inside the script and return only what you need: a returned value over ' +
   `${VALUE_MAX} characters is cut, a string comes back as plain text. Example: ` +
   '`const [a, hits, log] = await Promise.all([tools.Read({file_path: "src/a.ts", limit: 80}), ' +
   'tools.Grep({pattern: "TODO", path: "src", output_mode: "content", "-i": true}), tools.Bash({command: "git log --oneline -5"})]); ' +
