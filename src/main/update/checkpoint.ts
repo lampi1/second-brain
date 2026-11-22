@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { UPDATE_CHECKPOINT_MAX_BYTES, UPDATE_SNAPSHOT_KEYS, type UpdateCheckpointAnswer, type UpdateCheckpointRequest, type UpdateRecovery, type UpdateSnapshot } from '../../shared/app-update';
-import { readLocal } from '../agents/local-store';
+import { readLocal, renameWithRetry } from '../agents/local-store';
 
 interface SavedCheckpoint { version: 1; id: string; from: string; target: string; phase: 'captured' | 'armed' | 'aborted'; adopted: string[]; snapshot: UpdateSnapshot }
 interface CheckpointDeps {
@@ -127,7 +127,7 @@ export class UpdateCheckpoint {
     let fd: number | undefined;
     try {
       fd = fs.openSync(tmp, 'wx', 0o600); fs.writeFileSync(fd, body, 'utf8'); fs.fsyncSync(fd); fs.closeSync(fd); fd = undefined;
-      fs.renameSync(tmp, this.file);
+      renameWithRetry(tmp, this.file);
       if (fs.readFileSync(this.file, 'utf8') !== body) throw new Error('Verifica del salvataggio non riuscita.');
       this.record = row;
     } finally { if (fd !== undefined) fs.closeSync(fd); try { fs.unlinkSync(tmp); } catch { /* renamed or not created */ } }

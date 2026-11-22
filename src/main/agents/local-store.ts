@@ -2,7 +2,8 @@
 // The rename step retries a few times on EPERM/EACCES/EBUSY: on Windows an antivirus, the search indexer or a backup tool
 // can hold the target open for a moment (issue #71), and under load (a full test run, a busy disk) for longer than 300 ms:
 // the waits back off to about 1.3 s in all. A retry that worked logs a warn; only a rename that never worked throws.
-// renameWithRetry is the app's one rename-over-a-file helper: every temp-file save in src/main uses it.
+// renameWithRetry is the app's rename-over-a-file helper: the temp-file saves in src/main use it (brain/config.ts and
+// tasks/service.ts keep their own retry, which ends in a direct write).
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
