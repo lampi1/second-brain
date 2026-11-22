@@ -42,7 +42,9 @@ const sb = {
 export default tseslint.config(
   // brain-template/: the files a new user's brain starts from (plain Node scripts and page code run in the brain, not in
   // the app), checked by test/unit/brain-template.test.ts (every script parses, nothing personal), not by these rules
-  { ignores: ['out/**', 'node_modules/**', 'test-results/**', 'docs/**', 'brain-template/**', 'vendor/**', 'scripts/shot.cjs', 'scripts/make-icon.cjs'] },
+  // .sb-*/ and .claude/worktrees/: git worktrees of other branches some chats keep inside the checkout (their own code,
+  // linted in their own checkout, never part of this one); packages/*/dist/: local bundles (gitignored), built code
+  { ignores: ['out/**', 'node_modules/**', '.sb-*/**', '.claude/worktrees/**', 'packages/*/dist/**', 'test-results/**', 'docs/**', 'brain-template/**', 'vendor/**', 'scripts/shot.cjs', 'scripts/make-icon.cjs'] },
   ...tseslint.configs.recommended,
   {
     rules: {

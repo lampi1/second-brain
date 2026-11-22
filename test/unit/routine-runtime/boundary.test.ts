@@ -15,7 +15,8 @@ function sources(dir: string): string[] {
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => {
     const f = path.join(dir, e.name);
-    if (e.isDirectory()) return e.name === 'node_modules' || e.name === 'runs' ? [] : sources(f);
+    // dist/: the local bundle (gitignored) inlines the libraries, whose own strings are not the package's names
+    if (e.isDirectory()) return e.name === 'node_modules' || e.name === 'runs' || e.name === 'dist' ? [] : sources(f);
     return /\.(m?[jt]s|json|md)$/.test(e.name) ? [f] : [];
   });
 }
