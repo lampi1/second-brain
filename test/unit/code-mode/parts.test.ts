@@ -24,14 +24,19 @@ const tmp = (): string => { const d = fs.realpathSync.native(fs.mkdtempSync(path
 afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
 describe('who runs in Code Mode', () => {
-  it('Claude and Cursor chats with the setting on; never the Orchestrator, the research or another engine', () => {
+  it('Claude, Cursor and Antigravity chats with the setting on; never the Orchestrator, the research or another engine', () => {
     const c = (o: object) => ({ harness: 'claude', isOrchestrator: false, research: false, ...o }) as never;
     expect(codeModeFor(c({}), true)).toBe(true);
     expect(codeModeFor(c({ harness: 'cursor' }), true)).toBe(true);
+    expect(codeModeFor(c({ harness: 'antigravity' }), true)).toBe(true);
     expect(codeModeFor(c({}), false)).toBe(false);
+    expect(codeModeFor(c({ harness: 'antigravity' }), false)).toBe(false);
     expect(codeModeFor(c({ isOrchestrator: true }), true)).toBe(false);
+    expect(codeModeFor(c({ harness: 'antigravity', isOrchestrator: true }), true)).toBe(false);
     expect(codeModeFor(c({ research: true }), true)).toBe(false);
+    expect(codeModeFor(c({ harness: 'antigravity', research: true }), true)).toBe(false);
     expect(codeModeFor(c({ harness: 'codex' }), true)).toBe(false);
+    expect(codeModeFor(c({ harness: 'opencode' }), true)).toBe(false);
   });
   it('names a call the way the gates know it', () => {
     expect(gateName('native', 'Bash')).toBe('Bash');
@@ -230,6 +235,7 @@ describe('the Code Mode setting and the Orchestrator', () => {
     const card = (on: boolean) => entries(null, { settings: { schema, get: () => ({ ...DEFAULTS, codeMode: on }) }, window: () => null, tools: () => [] } as never, 'it')
       .find(e => e.kind === 'concept' && e.title.startsWith('Code Mode'))!;
     expect(card(false).text).toMatch(/app_config area setting key codeMode/);
+    expect(card(false).text).toMatch(/Claude, Cursor or Antigravity/);
     expect(card(false).text).toMatch(/When it pays/);
     expect(card(false).text).toMatch(/Now: off\.$/);
     expect(card(true).text).toMatch(/Now: on\.$/);

@@ -22,7 +22,7 @@ afterEach(async () => { for (const m of managers.splice(0)) await m.shutdown(50)
 /** a Scout-like role: reads, read-only commands, web, the app's MCP servers */
 const SCOUT: AgentPolicy = { tools: { allow: ['read', 'shell-read', 'web', 'mcp'] }, ceiling: null };
 
-async function roleChat(on: boolean, harness: 'claude' | 'cursor' = 'claude'): Promise<{ m: ChatManager; id: string; opts: SessionOptions }> {
+async function roleChat(on: boolean, harness: 'claude' | 'cursor' | 'antigravity' = 'claude'): Promise<{ m: ChatManager; id: string; opts: SessionOptions }> {
   const seen: SessionOptions[] = [];
   const m = new ChatManager({
     userData: tmp(), emitter: { emit: () => {} } as never, brainRoot: () => null,
@@ -76,6 +76,22 @@ describe('Code Mode on the real Claude spawn path (role allowlist + codeMode)', 
     const { AcpSession } = await import('../../../src/main/chats/acp');
     const s = new AcpSession({ ...opts, engineId: 'cursor', label: 'Cursor', args: [], brainInstructions: 'Regole.' }, { changed: () => {} } as never) as unknown as { brainContext(): { text: string }[] };
     expect(s.brainContext()[0]?.text).toMatch(/prefer the second-brain tool run_code/);
+  });
+
+  it('Antigravity (ACP): run_code exposed and first-turn hint added when on, neither when off, no Claude-only flags', async () => {
+    const { AcpSession } = await import('../../../src/main/chats/acp');
+    const on = await roleChat(true, 'antigravity');
+    expect(on.m.chatToolShown(on.id, 'run_code')).toBe(true);
+    expect(on.opts.codeMode).toBe(true);
+    expect((on.opts.extraArgs ?? []).join(' ')).not.toMatch(/disallowedTools|append-system-prompt/);
+    const sOn = new AcpSession({ ...on.opts, engineId: 'antigravity', label: 'Antigravity', args: [], brainInstructions: 'Regole.' }, { changed: () => {} } as never) as unknown as { brainContext(): { text: string }[] };
+    expect(sOn.brainContext()[0]?.text).toMatch(/prefer the second-brain tool run_code/);
+
+    const off = await roleChat(false, 'antigravity');
+    expect(off.m.chatToolShown(off.id, 'run_code')).toBe(false);
+    expect(off.opts.codeMode).toBeUndefined();
+    const sOff = new AcpSession({ ...off.opts, engineId: 'antigravity', label: 'Antigravity', args: [], brainInstructions: 'Regole.' }, { changed: () => {} } as never) as unknown as { brainContext(): { text: string }[] };
+    expect(sOff.brainContext()[0]?.text).not.toMatch(/run_code/);
   });
 
   it('Codex, OpenCode: no Code Mode (codeModeFor), so no run_code and no Code Mode flag', async () => {

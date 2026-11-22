@@ -45,7 +45,11 @@ preToolUse checks, the brain's PreToolUse product hooks, the user's rules in per
    gone; run_code's description still starts with the words a keyword search uses (read file, shell, Bash, grep, glob).
    Cursor documents no way to load, hide or prefer a tool (CLI parameters, ACP; its deny rules refuse calls, are not
    documented to hide tools, and are a permission change the owner declined), so its first prompt keeps the "prefer
-   run_code" line. Codex and OpenCode get no Code Mode (`codeModeFor`): Codex documents per-server MCP filters
+   run_code" line. Amended 2026-11-22 (owner: extend Code Mode to Antigravity chats, like Cursor): Antigravity
+   (`agy acp`, ADR 0332) joins Claude and Cursor in `codeModeFor`. Like Cursor, its native tools stay visible, `run_code`
+   is exposed on the chat endpoint and auto-allowed through `acpAppTool` (`mcp_second-brain_run_code`), and the first
+   prompt carries the same `CODE_MODE_HINT` (`src/main/chats/acp.ts`); with `codeMode` off, neither `run_code` nor the
+   hint is sent. Codex and OpenCode get no Code Mode (`codeModeFor`): Codex documents per-server MCP filters
    (`enabled_tools`, `disabled_tools`) but no switch for its built-in shell. Checked on the real CLI by
    `test/live/code-mode.live.test.ts` (SB_LIVE=1); on the real Cursor agent by `test/live/code-mode-cursor.live.test.ts`
    (SB_LIVE_CURSOR=1, a rule-4 exception the owner granted for this check, 2026-11-21).

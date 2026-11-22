@@ -62,7 +62,7 @@ export const treeIt = {
   'delegation.balanced': 'Balanced mode',
   'delegation.balanced.hint': 'Tutti i ruoli: l’agente che delega sceglie motore, modello ed effort in base ai crediti rimasti di ogni provider e alle statistiche del ruolo (la formula propone), così i crediti finiscono insieme. Interruttore principale: il menu modelli dell’Orchestrator. Spenta: decide la card di ogni ruolo.',
   'delegation.codeMode': 'Code Mode',
-  'delegation.codeMode.hint': 'Le chat Claude e Cursor (non l’Orchestrator) lavorano con uno script: più letture, ricerche e tool in una sola chiamata (run_code), in un sandbox. Ogni chiamata passa dalle stesse regole dei permessi; un’azione da Esegui ferma lo script e ti lascia il solito bottone. Vale per le chat che partono dopo.',
+  'delegation.codeMode.hint': 'Le chat Claude, Cursor e Antigravity (non l’Orchestrator) lavorano con uno script: più letture, ricerche e tool in una sola chiamata (run_code), in un sandbox. Ogni chiamata passa dalle stesse regole dei permessi; un’azione da Esegui ferma lo script e ti lascia il solito bottone. Vale per le chat che partono dopo.',
   'delegation.maxDepth': 'Profondità massima',
   'delegation.maxDepth.hint': 'Quanti livelli sotto una chat principale: con 2 una chat figlia può delegare, una nipote no.',
   'delegation.maxParallel': 'Figlie in parallelo',

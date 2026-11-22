@@ -14,10 +14,10 @@ export const CODE_MODE_HIDDEN = ['Bash', 'PowerShell', 'Read', 'Edit', 'Write', 
 export const NATIVE_WRAPPERS = ['Bash', 'Read', 'Write', 'Edit', 'Grep', 'Glob'] as const;
 export type NativeWrapper = typeof NATIVE_WRAPPERS[number];
 
-/** Code Mode for one chat, the setting being `on`: a Claude or Cursor chat of the user or of a role; never the
- *  Orchestrator (a short turn of app calls, ADR 0090) nor the app's maintenance research (read-only, its own frame). */
+/** Code Mode for one chat, the setting being `on`: a Claude, Cursor or Antigravity chat of the user or of a role; never
+ *  the Orchestrator (a short turn of app calls, ADR 0090) nor the app's maintenance research (read-only, its own frame). */
 export function codeModeFor(s: Pick<ChatSummary, 'harness' | 'isOrchestrator' | 'research'>, on: boolean): boolean {
-  return on && !s.isOrchestrator && !s.research && (s.harness === 'claude' || s.harness === 'cursor');
+  return on && !s.isOrchestrator && !s.research && (s.harness === 'claude' || s.harness === 'cursor' || s.harness === 'antigravity');
 }
 
 /** A tool name as a script writes it, made the name the app's gates know: the Claude form (mcp__<server>__<tool>) for

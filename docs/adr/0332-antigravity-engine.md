@@ -34,11 +34,13 @@ uses for OpenCode and the catalog engines (`src/main/chats/acp.ts`). It differs 
 3. **The app's own MCP tools pass without a panel** (`acpAppTool`, `src/main/chats/app-tool-approval.ts`): the
    `mcp_<server>_` spelling joins `<server>_` and `mcp__<server>__`, still bound to the app's own endpoint and the
    listed tools; a look-alike server still asks. `request_permission` reads the tool from `name` before `title`.
-4. **No Code Mode on Antigravity for now** (`CODE_MODE_ENGINES` stays Claude and Cursor). Live, with Code Mode on, agy
-   fetched and cached the `run_code` schema, but neither Gemini 3.8 Flash nor Claude Sonnet 4.6 running inside agy saw
-   the tool: Sonnet answered that `mcp_second-brain_run_code` was not among its tools. Why agy drops it is still to be
-   verified (its schema or description may be filtered). `acpAppTool` keeps a `codeMode` parameter so an ACP engine
-   that does expose `run_code` only needs its line in `CODE_MODE_ENGINES`.
+4. **Code Mode on Antigravity** (originally off: live on 2026-11-22 with Gemini 3.8 Flash and Claude Sonnet 4.6 inside
+   agy, agy fetched and cached the `run_code` schema but those models did not report seeing `mcp_second-brain_run_code`).
+   Amended 2026-11-22 (owner: extend Code Mode to Antigravity chats like Cursor, for Sentinel chats on Gemini 4 Neon):
+   `codeModeFor` (`src/main/code-mode/policy.ts`) now includes `'antigravity'`. When `codeMode` is on (never for the
+   Orchestrator or maintenance research), `run_code` is exposed on the chat endpoint, auto-allowed by `acpAppTool`, and
+   the first turn includes `CODE_MODE_HINT` (`src/main/chats/acp.ts`) while native tools stay visible; when `codeMode` is
+   off, `run_code` is not exposed and no hint is sent.
 
 5. **Its folder as the long real path, and no read-only chats** (`realCwd`, `noReadOnly`). With the brain under
    `%TEMP%` behind an 8.3 short name (a `~1` segment) agy once wrote a file without asking

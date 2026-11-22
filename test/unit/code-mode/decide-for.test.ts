@@ -30,7 +30,7 @@ interface Setup { m: ChatManager; id: string; cwd: string; events: { ch: string;
  *  folder it works in (null: a worktree not named yet), its env */
 interface Claude { files: string[]; inline: Record<string, unknown> | null; cwd?: string | null; context?: false }
 
-async function setup(on: boolean, guard: (tool: string) => string | null = () => null, harness: 'claude' | 'cursor' = 'claude', claude: Claude = { files: [], inline: null }): Promise<Setup> {
+async function setup(on: boolean, guard: (tool: string) => string | null = () => null, harness: 'claude' | 'cursor' | 'antigravity' = 'claude', claude: Claude = { files: [], inline: null }): Promise<Setup> {
   const userData = tmp(), cwd = tmp(), brain = tmp();
   fs.writeFileSync(path.join(brain, 'permissions.json'), JSON.stringify({ version: 1, rules: RULES }));
   const events: Setup['events'] = [], seen: SessionOptions[] = [], ran: string[] = [];
@@ -245,6 +245,19 @@ describe('the Code Mode setting', () => {
     expect(s.m.chatToolShown(s.id, 'run_code')).toBe(true);
     expect(s.seen.at(-1)?.codeMode).toBe(true);
     expect((s.seen.at(-1)?.extraArgs ?? []).join(' ')).not.toMatch(/disallowedTools/);
+  });
+
+  it('on/off: an Antigravity chat gets run_code when on (natives kept, decideFor works) and none when off', async () => {
+    const on = await setup(true, () => null, 'antigravity');
+    expect(on.m.chatToolShown(on.id, 'run_code')).toBe(true);
+    expect(on.seen.at(-1)?.codeMode).toBe(true);
+    expect((on.seen.at(-1)?.extraArgs ?? []).join(' ')).not.toMatch(/disallowedTools/);
+    expect(await on.m.decideFor(on.id, 'Bash', { command: 'ls' })).toEqual({ kind: 'allow' });
+
+    const off = await setup(false, () => null, 'antigravity');
+    expect(off.m.chatToolShown(off.id, 'run_code')).toBe(false);
+    expect(off.seen.at(-1)?.codeMode).toBeUndefined();
+    expect(await off.m.decideFor(off.id, 'Bash', { command: 'ls' })).toMatchObject({ kind: 'deny' });
   });
 });
 

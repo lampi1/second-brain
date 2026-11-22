@@ -37,6 +37,7 @@ interface Inside {
   caps: Record<string, unknown>; sessionId: string | null; modes: string[];
   models: { current: string | null; available: string[] } | null; modelOption: string | null; params: { id: string; category?: string }[];
   mcpServers(): { name: string; type: string; url: string }[];
+  brainContext(): { text: string }[];
   readState(r: object): void;
   request: (method: string, params: object) => Promise<object>;
   respond: (id: number | string, result: object) => void;
@@ -150,8 +151,23 @@ describe('Antigravity engine (ADR 0332)', () => {
     expect(() => sessionFor(e, { chatId: 'c', cwd: tmp('cwd'), toolPolicy: { allow: ['read', 'shell-read'] } } as never, sink, {} as never)).toThrow(/sola lettura/);
   });
 
-  it('stays out of Code Mode: agy does not hand run_code to its model (ADR 0332)', () => {
-    expect(codeModeFor({ harness: 'antigravity', isOrchestrator: false, research: false } as never, true)).toBe(false);
+  it('runs in Code Mode like Cursor when enabled: run_code auto-allowed and first-turn hint sent, neither when off (ADR 0331, 0332)', async () => {
+    expect(codeModeFor({ harness: 'antigravity', isOrchestrator: false, research: false } as never, true)).toBe(true);
+    expect(codeModeFor({ harness: 'antigravity', isOrchestrator: false, research: false } as never, false)).toBe(false);
     expect(codeModeFor({ harness: 'antigravity', isOrchestrator: true, research: false } as never, true)).toBe(false);
+    expect(codeModeFor({ harness: 'antigravity', isOrchestrator: false, research: true } as never, true)).toBe(false);
+
+    const on = agy({ codeMode: true, brainInstructions: 'Regole.' });
+    const answers: [number | string, object][] = [], panels: object[] = [];
+    on.respond = (id, r) => { answers.push([id, r]); };
+    on.pending = req => { panels.push(req); };
+    const options = [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }, { optionId: 'deny', name: 'Deny', kind: 'reject_once' }];
+    await on.onAgentRequest('1', 'session/request_permission', { sessionId: 'x', options, toolCall: { toolCallId: 'c', name: 'mcp_second-brain_run_code', kind: 'other', title: 'Run mcp_second-brain_run_code', rawInput: {} } });
+    expect(answers).toEqual([['1', { outcome: { outcome: 'selected', optionId: 'allow' } }]]);
+    expect(panels).toHaveLength(0);
+    expect(on.brainContext()[0]?.text).toMatch(/prefer the second-brain tool run_code/);
+
+    const off = agy({ brainInstructions: 'Regole.' });
+    expect(off.brainContext()[0]?.text).not.toMatch(/run_code/);
   });
 });

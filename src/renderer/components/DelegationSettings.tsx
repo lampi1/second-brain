@@ -1,5 +1,5 @@
 // Impostazioni → Ruoli e deleghe (ADR 0083): the «Balanced mode» switch (ADR 0218: delegated chats follow the credits
-// left), the «Code Mode» switch (ADR 0331: Claude and Cursor chats work through run_code, off by default), the limits of delegation between role chats (how deep a chain of children
+// left), the «Code Mode» switch (ADR 0331: Claude, Cursor and Antigravity chats work through run_code, off by default), the limits of delegation between role chats (how deep a chain of children
 // may go, how many children of one parent work at once, after how many quiet minutes a child counts as stalled; the
 // independent reviews are one switch on the Agenti page now (JudgingSwitch, 2026-10-22); stallMin is read by agents/delegation.ts stalledMin) and the model each tier (leggero / medio / alto) runs on per engine.
 // Each change saves at once through settings:set (the main side checks the range; agents cannot change these keys).

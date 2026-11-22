@@ -49,7 +49,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import fs from 'node:fs';
 import { acpAppTool, APP_UI_TOOLS, appEndpoint, CODE_MODE_RULE, cursorAppPermissions } from './app-tool-approval';
 
-/** Code Mode on Cursor (ADR 0331): its native tools cannot be hidden, so the first turn's context asks to prefer run_code. */
+/** Code Mode on ACP engines (Cursor, Antigravity; ADR 0331): native tools cannot be hidden, so the first turn's context asks to prefer run_code. */
 const CODE_MODE_HINT = 'Code Mode is on in this chat: prefer the second-brain tool run_code to your native file, shell and search tools. Write one JavaScript script that calls tools.Bash/Read/Write/Edit/Grep/Glob and the other tools listed in its schema, batches the calls and returns only what you need. Every call inside it passes the app\'s permission rules; an action only the user runs stops the script: then write the exact command in a fenced code block.';
 import os from 'node:os';
 import path from 'node:path';

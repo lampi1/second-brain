@@ -126,7 +126,7 @@ export interface Settings {
   /** «Balanced mode» (ADR 0218): a role chat started by an agent gets its engine, model and effort from the credits left in
    *  each provider and the role's stats, instead of its card's engine; off = the card decides, as before */
   balancedMode?: boolean;
-  /** «Code Mode» (ADR 0331): a Claude or Cursor chat (not the Orchestrator) works through the app's run_code tool, a
+  /** «Code Mode» (ADR 0331): a Claude, Cursor or Antigravity chat (not the Orchestrator) works through the app's run_code tool, a
    *  script in a sandbox whose every tool call passes the app's permission rules; on Claude the native file and shell
    *  tools are hidden. Off by default; read at each chat's start */
   codeMode?: boolean;
