@@ -183,7 +183,7 @@ production, a database or Azure: that waits for your own yes.
 
 ### Code Mode: many tool calls in one step
 
-An optional switch (Settings › Roles and delegation, off by default): Claude and Cursor work chats write one short
+An optional switch (Settings › Roles and delegation, off by default): Claude, Cursor and Antigravity work chats write one short
 script that reads, searches and calls tools many times in a single step, in a QuickJS sandbox with no file or network
 access of its own. Every call inside the script meets the same rules as above; an action held for your click stops the
 script and leaves you the usual button (ADR 0331).
