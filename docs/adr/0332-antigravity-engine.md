@@ -68,8 +68,8 @@ uses for OpenCode and the catalog engines (`src/main/chats/acp.ts`). It differs 
   and the per-chat MCP mount compacts verbose tool descriptions (`compactMcpTool`: tool descriptions cut to 180
   characters, property descriptions to 80, every parameter name, type, enum and required field intact) so the full
   `second-brain` tool set measures ~41 KB and every workflow tool stays declared and callable. Trade-off: Antigravity
-  chats have no direct Outlook/Teams tools until Code Mode reaches them for Antigravity (`run_code`); before this,
-  about half of those tools, every send tool included, were evicted anyway. Taken from cloudroom
+  chats keep the connectors only through Code Mode's `run_code` (ADR 0331), none with Code Mode off; before this,
+  about half of their tools, every send tool included, were evicted anyway. Taken from cloudroom
   (`core/src/runtime/antigravity.rs`, Apache 2.0), which gives Antigravity `mcpServers: []` and reaches its tools
   another way: a small MCP surface is the only one this engine keeps whole.
 - **Background shell commands (`acpBackgroundEvent`, amended 2026-11-22):** `agy acp` backgrounds slow `run_command`
