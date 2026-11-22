@@ -13,7 +13,7 @@
     "src/main/agents/collector.ts": "0a5c047073eb3fb1",
     "src/main/agents/delegation.ts#agent_answer_child": "e00301033a313ffc",
     "src/main/agents/delegation.ts#agent_ask_parent": "ac0f91b2695da053",
-    "src/main/agents/discovery.ts": "882a8b209b852dde",
+    "src/main/agents/discovery.ts": "3814e188a2163846",
     "src/main/agents/discovery.ts#agent_catalog": "79b3065685f98c87",
     "src/main/agents/discovery.ts#roleCatalogBrief": "67386b811493276f",
     "src/main/agents/judge-sample.ts#byReceipts": "792b08e1c36a9904",
