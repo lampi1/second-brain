@@ -161,13 +161,13 @@ export function withApiModels(seen: ModelsSeen): ModelsSeen {
 }
 
 /** What only the Cursor CLI has: its config folder snapshot, the subagent hooks, its price fallback, the model options
- *  from Settings. A read-only run (the comparison's side b; readOnlyRun = its chat id) gets a folder of its own per run
+ *  from Settings. A read-only run (the comparison's side b; readOnlyChat = its chat id) gets a folder of its own per run
  *  (its copy has no allow rules and the run's own deny rules: a chat or another run starting meanwhile must not change
  *  them) and no subagent hooks (they would capture its subagents as new comparison rounds). */
-function cursorOptions(engine: EngineDef, ctx: EngineContext, readOnlyRun: string | null): Partial<AcpOptions> {
+function cursorOptions(engine: EngineDef, ctx: EngineContext, readOnlyChat: string | null): Partial<AcpOptions> {
   return {
-    subagentHooks: !readOnlyRun, priceFallback: true,
-    configDir: readOnlyRun ? readOnlyConfigDir(ctx.userData, engine.id, readOnlyRun) : path.join(ctx.userData, `${engine.id}-config`), modelConfig: ctx.acpModelConfig,
+    subagentHooks: !readOnlyChat, priceFallback: true,
+    configDir: readOnlyChat ? readOnlyConfigDir(ctx.userData, engine.id, readOnlyChat) : path.join(ctx.userData, `${engine.id}-config`), modelConfig: ctx.acpModelConfig,
   };
 }
 
