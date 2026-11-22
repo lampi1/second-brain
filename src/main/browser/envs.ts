@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserSessionStatus } from '../../shared/contract';
 import { uiLocale } from '../locale';
+import { renameWithRetry } from '../agents/local-store';
 
 export interface EnvRecord { id: string; createdAt: number; lastUsedAt: number; lastLoginAt: number | null; hosts: string[]; lastUrl?: string; agents?: boolean }
 
@@ -140,7 +141,7 @@ export class EnvStore {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
       const tmp = `${this.file}.tmp`;
       fs.writeFileSync(tmp, JSON.stringify({ version: 1, envs: this.list() }, null, 1));
-      fs.renameSync(tmp, this.file);
+      renameWithRetry(tmp, this.file);
     } catch { /* disk full or locked: the list is a convenience, keep running */ }
   }
 }

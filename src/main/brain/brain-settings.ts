@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { renameWithRetry } from '../agents/local-store';
 
 export const BRAIN_SETTINGS = 'brain-settings.json';
 const MAX_BYTES = 256 * 1024;
@@ -49,7 +50,7 @@ export function migrateCrossHarness(root: string): 'unchanged' | 'migrated' | 'u
     const current = fs.lstatSync(file);
     if (!current.isFile() || current.nlink !== 1 || current.ino !== before.ino || current.dev !== before.dev || current.size !== before.size || current.mtimeMs !== before.mtimeMs)
       throw new Error('brain-settings.json changed during messaging migration; retry on the next start');
-    fs.renameSync(tmp, file);
+    renameWithRetry(tmp, file);
     return 'migrated';
   } finally { try { fs.unlinkSync(tmp); } catch { /* renamed or already removed */ } }
 }

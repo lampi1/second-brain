@@ -19,6 +19,7 @@ import { errText, log } from '../log';
 import type { Root } from './proctree';
 import { sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { cut, lastLine, nextId, tokenUsage, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
+import { renameWithRetry } from '../agents/local-store';
 
 export type ApiProtocol = 'openai' | 'anthropic';
 
@@ -352,7 +353,7 @@ export class ApiSession implements HarnessSession {
       fs.mkdirSync(path.dirname(file), { recursive: true });
       const tmp = `${file}.${process.pid}.tmp`;
       fs.writeFileSync(tmp, JSON.stringify(data));
-      fs.renameSync(tmp, file);
+      renameWithRetry(tmp, file);
     } catch (e) {
       log.warn('chats', 'api history not saved', { chat: this.opts.chatId, data: errText(e), cause: 'history file not writable', hint: 'check that the app data folder is writable' });
     }

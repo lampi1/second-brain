@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { MAINTENANCE_JOBS, type BrainChange } from '../../shared/brain-model';
-import { readLocal, writeLocal } from '../agents/local-store';
+import { readLocal, writeLocal, renameWithRetry } from '../agents/local-store';
 import { validSeed, type ClaimSeed } from './evidence';
 import type { MemoryTidyUndo } from '../rules/memory-records';
 import type { SuccessCheck } from '../../shared/maintenance-research';
@@ -48,7 +48,7 @@ export function writeText(file: string, text: string | null): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${randomBytes(3).toString('hex')}.tmp`;
   fs.writeFileSync(tmp, text, 'utf8');
-  try { fs.renameSync(tmp, file); } catch (e) { fs.rmSync(tmp, { force: true }); throw e; }
+  try { renameWithRetry(tmp, file); } catch (e) { fs.rmSync(tmp, { force: true }); throw e; }
 }
 
 export class ChangeLog {

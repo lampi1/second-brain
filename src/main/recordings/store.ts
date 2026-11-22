@@ -4,6 +4,7 @@
 // (the owner's choice, 2026-10-24: «Solo sul PC (dati app)»). The audio is appended as it arrives, so a crash loses at
 // most the last second: at start a recording left «recording» gets its WAV header fixed from the file's size.
 import fs from 'node:fs';
+import { renameWithRetry } from '../agents/local-store';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { REC_RATE, transcriptText, wavHeader, wavMs, type Recording, type RecSegment } from '@shared/recordings';
@@ -34,7 +35,7 @@ export class RecordingStore {
   private save(r: Recording): Recording {
     const file = path.join(this.dir(r.id), 'meta.json');
     fs.writeFileSync(`${file}.tmp`, JSON.stringify(r, null, 2));
-    fs.renameSync(`${file}.tmp`, file);
+    renameWithRetry(`${file}.tmp`, file);
     return r;
   }
 

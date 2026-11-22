@@ -12,6 +12,7 @@ import path from 'node:path';
 import type { Harness, SecretsStatus } from '../../shared/contract';
 import { addRedaction, log } from '../log';
 import { ENGINE_ID, REMOVED_ENGINES } from './registry';
+import { renameWithRetry } from '../agents/local-store';
 
 /** Keys of features the app removed that are not engines: the cloud agents' Cursor key (ADR 0080, removed by ADR 0201). */
 const REMOVED_KEYS: ReadonlySet<string> = new Set(['cursor-cloud']);
@@ -123,6 +124,6 @@ export class SecretStore {
   private write(keys: Record<string, Saved>): void {
     const tmp = `${this.file}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify({ version: 1, keys }, null, 2), { mode: 0o600 });
-    fs.renameSync(tmp, this.file);
+    renameWithRetry(tmp, this.file);
   }
 }

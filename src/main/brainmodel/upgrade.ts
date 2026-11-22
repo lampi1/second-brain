@@ -20,7 +20,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { BRAIN_LAYOUT, pendingSections, sectionHash, type LayoutRecord, type LayoutSection, type MarkedItemsReceives } from '../../shared/brain-layout';
-import { readLocal, writeLocal } from '../agents/local-store';
+import { readLocal, writeLocal, renameWithRetry } from '../agents/local-store';
 import { secretLine, withHeader } from '../brain/scripts';
 import { queryNote } from '../brain/queries';
 import type { ChangeLog } from './changes';
@@ -101,7 +101,7 @@ export function writeRecord(root: string, userData: string, record: LayoutRecord
   if (json) {
     const tmp = `${file}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, `${JSON.stringify({ ...json, layout: record }, null, 2)}\n`, 'utf8');
-    fs.renameSync(tmp, file);
+    renameWithRetry(tmp, file);
     return;
   }
   const all = (readLocal(fallbackFile(userData)) as Record<string, unknown> | undefined) ?? {};

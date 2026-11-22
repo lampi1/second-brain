@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { CacheKind, CacheTotals, ContextStats } from '../../shared/contract';
 import { errText, log } from '../log';
+import { renameWithRetry } from '../agents/local-store';
 
 const OVER = 200_000;
 const COLD = 100_000;
@@ -77,7 +78,7 @@ export class ContextCounters {
     try {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
       fs.writeFileSync(`${this.file}.tmp`, JSON.stringify(this.s), 'utf8');
-      fs.renameSync(`${this.file}.tmp`, this.file);
+      renameWithRetry(`${this.file}.tmp`, this.file);
     } catch (e) {
       log.warn('chats', 'context-stats.json not saved', { cause: errText(e), hint: 'the counters go on in memory; check that userData is writable' });
     }

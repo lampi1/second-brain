@@ -15,6 +15,7 @@ import type { ChatItem, ChatSummary, HandoffInfo } from '../../shared/contract';
 import { errText, log } from '../log';
 import { cut } from './session';
 import { engineLabel } from '../engines/registry';
+import { renameWithRetry } from '../agents/local-store';
 
 export const HANDOFF_START = '<<<PASSAGGIO';
 export const HANDOFF_END = 'PASSAGGIO>>>';
@@ -223,7 +224,7 @@ export class HandoffStore {
     fs.mkdirSync(this.dir, { recursive: true });
     const tmp = `${file}.tmp`;
     fs.writeFileSync(tmp, body, 'utf8');
-    fs.renameSync(tmp, file);
+    renameWithRetry(tmp, file);
     return { ...info, chatId, path: file };
   }
 

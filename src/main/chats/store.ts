@@ -22,7 +22,7 @@ import { sanitizeAgentChildren } from './agent-children';
 import { readDelegation, type ChatDelegation } from '../../shared/delegation';
 import { readPlan, type StrategyPlan } from '../../shared/strategy';
 import { slowStep } from '../perf';
-import { cleanOrphanTmps, writeLocalTextAsync } from '../agents/local-store';
+import { cleanOrphanTmps, writeLocalTextAsync, renameWithRetry } from '../agents/local-store';
 
 function validAssets(value: unknown): value is NonNullable<StoredChat['agentAssets']> {
   if (!value || typeof value !== 'object') return false;
@@ -354,7 +354,7 @@ export class ChatStore {
     try {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
       fs.writeFileSync(tmp, body, 'utf8');
-      fs.renameSync(tmp, this.file);
+      renameWithRetry(tmp, this.file);
       this.last = body;
     } catch (e) {
       this.last = null;
@@ -404,7 +404,7 @@ export class ChatStore {
     let fd: number | undefined;
     try {
       fd = fs.openSync(tmp, 'wx', 0o600); fs.writeFileSync(fd, body, 'utf8'); fs.fsyncSync(fd); fs.closeSync(fd); fd = undefined;
-      fs.renameSync(tmp, this.file);
+      renameWithRetry(tmp, this.file);
       if (fs.readFileSync(this.file, 'utf8') !== body) throw new Error('Salvataggio chat non verificato.');
       this.last = body;
     } finally { if (fd !== undefined) fs.closeSync(fd); try { fs.unlinkSync(tmp); } catch { /* renamed or not created */ } }

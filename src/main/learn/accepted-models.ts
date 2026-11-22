@@ -7,6 +7,7 @@
 // tests: test/unit/learn-teachers.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
+import { renameWithRetry } from '../agents/local-store';
 
 /** One model id as a CLI prints it in its list: never a flag, no spaces or shell characters. */
 const ID = /^[A-Za-z0-9][\w.:-]{0,99}$/;
@@ -81,7 +82,7 @@ export class AcceptedModels {
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const tmp = `${this.file}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(all));
-    fs.renameSync(tmp, this.file);
+    renameWithRetry(tmp, this.file);
     this.cache = all;
   }
 }

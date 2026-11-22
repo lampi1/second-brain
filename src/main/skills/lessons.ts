@@ -7,6 +7,7 @@
 // one change with its Undo) was made only before ADR 0257; those wait for Maintenance like the noted ones now.
 // Stored in the app's data folder (skill-lessons.json), bounded. Pinned by test/unit/skills/lessons.test.ts.
 import fs from 'node:fs';
+import { renameWithRetry } from '../agents/local-store';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { SKILL_NAME } from '../../shared/skill-library';
@@ -89,7 +90,7 @@ export class SkillLessons {
     fs.mkdirSync(path.dirname(this.d.file), { recursive: true });
     const tmp = `${this.d.file}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify({ schema: 1, lessons: keep, ...(dropped + over ? { dropped: dropped + over } : {}) }, null, 1));
-    fs.renameSync(tmp, this.d.file);
+    renameWithRetry(tmp, this.d.file);
   }
 
   /** One noted lesson. The same line already noted for the same skill is the same entry: a waiting one counts one more

@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { CredentialEntry, HandoffAccount } from '../../shared/contract';
 import { ToolRefusal } from '../mcp/refusal';
+import { renameWithRetry } from '../agents/local-store';
 
 export const DEFAULT_CREDENTIALS_FILE = 'ops/credentials.md';
 const USER_KEYS = ['email', 'username', 'user', 'login'] as const;
@@ -141,7 +142,7 @@ export function looksProduction(e: Pick<Entry, 'group' | 'url' | 'loginUrls'>): 
  *  brain) with its own mode, through a temporary file beside it and a rename. */
 function writeKeeping(f: string, text: string): void {
   const real = fs.realpathSync(f), mode = fs.statSync(real).mode & 0o777, tmp = `${real}.${process.pid}.tmp`;
-  try { fs.writeFileSync(tmp, text, { mode }); fs.chmodSync(tmp, mode); fs.renameSync(tmp, real); } catch (e) { try { fs.rmSync(tmp, { force: true }); } catch { /* none */ } throw e; }
+  try { fs.writeFileSync(tmp, text, { mode }); fs.chmodSync(tmp, mode); renameWithRetry(tmp, real); } catch (e) { try { fs.rmSync(tmp, { force: true }); } catch { /* none */ } throw e; }
 }
 
 export class Credentials {

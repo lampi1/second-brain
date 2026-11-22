@@ -21,6 +21,7 @@ import { McpClientError, connect, describeError, type Endpoint, type Upstream } 
 import { scanImports } from './import';
 import { McpOAuth, type OAuthSession } from './oauth';
 import type { ChatMcpContext } from './access';
+import { renameWithRetry } from '../agents/local-store';
 
 export interface McpServersOptions {
   userData: string;
@@ -111,7 +112,7 @@ export class McpServersService {
     try {
       fs.mkdirSync(path.dirname(this.undoFile), { recursive: true });
       const tmp = `${this.undoFile}.${crypto.randomBytes(4).toString('hex')}.tmp`;
-      try { fs.writeFileSync(tmp, JSON.stringify({ version: 1, entries: this.undos }, null, 2), { mode: 0o600 }); fs.renameSync(tmp, this.undoFile); }
+      try { fs.writeFileSync(tmp, JSON.stringify({ version: 1, entries: this.undos }, null, 2), { mode: 0o600 }); renameWithRetry(tmp, this.undoFile); }
       finally { fs.rmSync(tmp, { force: true }); }
     } catch (e) { log.warn('mcp-servers', 'mcp-undo.json not written: a connector «Annulla» works until the app closes', { cause: errText(e) }); }
     this.store.keepParked(this.undos.map(e => e.key));

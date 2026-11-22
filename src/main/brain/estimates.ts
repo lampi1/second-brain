@@ -16,6 +16,7 @@ import { log } from '../log';
 import { runNode, type NodeRunner } from './node';
 import { brainScript } from '../rules/tools';
 import { engineOf, engines } from '../engines/registry';
+import { renameWithRetry } from '../agents/local-store';
 
 // ── ledger ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 export interface JobRecord {
@@ -66,7 +67,7 @@ export class FileJobStore implements JobStore {
     const tmp = `${this.file}.${process.pid}.tmp`;
     try {
       fs.writeFileSync(tmp, rows.map(r => `${JSON.stringify(r)}\n`).join(''));
-      fs.renameSync(tmp, this.file);
+      renameWithRetry(tmp, this.file);
       log.info('brain', 'job ledger compacted', { data: { lines, rows: rows.length } });
     } catch (e) {
       try { fs.rmSync(tmp, { force: true }); } catch { /* nothing to remove */ }

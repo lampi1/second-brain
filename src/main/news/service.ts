@@ -12,6 +12,7 @@
 // Wired in wiring-builders.ts (buildNews) and demo-wiring.ts; IPC news:* in ipc-handlers/media.ts; the Orchestrator's
 // tools in appctl/news.ts; tests: test/unit/news-service.test.ts.
 import fs from 'node:fs';
+import { renameWithRetry } from '../agents/local-store';
 import path from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import type { Lang } from '@shared/contract';
@@ -172,7 +173,7 @@ export class NewsService {
   private save(): void {
     fs.mkdirSync(this.d.dir, { recursive: true });
     fs.writeFileSync(`${this.file}.tmp`, JSON.stringify(this.s));
-    fs.renameSync(`${this.file}.tmp`, this.file);
+    renameWithRetry(`${this.file}.tmp`, this.file);
   }
 
   private emit(): void { this.d.changed(this.state()); }

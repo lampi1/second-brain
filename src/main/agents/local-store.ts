@@ -1,13 +1,15 @@
 // Local Agent/setup records: bounded atomic writes and corrupt-read preservation, used by the catalog and UI services.
 // The rename step retries a few times on EPERM/EACCES/EBUSY: on Windows an antivirus, the search indexer or a backup tool
-// can hold the target open for a moment (issue #71). A retry that worked logs a warn; only a rename that never worked throws.
+// can hold the target open for a moment (issue #71), and under load (a full test run, a busy disk) for longer than 300 ms:
+// the waits back off to about 1.3 s in all. A retry that worked logs a warn; only a rename that never worked throws.
+// renameWithRetry is the app's one rename-over-a-file helper: every temp-file save in src/main uses it.
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { log } from '../log';
 
 const RETRY_CODES = new Set(['EPERM', 'EACCES', 'EBUSY']);
-const RENAME_WAITS_MS = [20, 40, 60, 80, 100];
+const RENAME_WAITS_MS = [20, 40, 80, 160, 320, 640];
 const sleeper = new Int32Array(new SharedArrayBuffer(4));
 /** Synchronous short wait (writeLocal is synchronous by contract: callers save in-line after a mutation). */
 function waitSync(ms: number): void { Atomics.wait(sleeper, 0, 0, ms); }

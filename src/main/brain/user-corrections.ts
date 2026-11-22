@@ -18,6 +18,7 @@ import type { AgentRun } from '../../shared/agents';
 import type { UserCorrectionDay, UserCorrections } from '../../shared/contract';
 import { isCorrection as isTagged } from '../../shared/correction';
 import { log, errText } from '../log';
+import { renameWithRetry } from '../agents/local-store';
 
 /** Copy of the brain template's ops/tools/signals-regex.mjs CORRECTION (the hook's fallback), pinned equal by the test. */
 export const CORRECTION = /\b(no[,.!]|no$|non (così|va|è|devi|serve|funziona)(?![\wàèéìòù])|ti ho (già )?detto|te l'ho detto|sbagliat|di nuovo|ancora una volta|ma (perché|come mai)|mai più|ricordati|smett|basta\b)/i;
@@ -159,7 +160,7 @@ export class UserCorrectionStore {
       fs.mkdirSync(path.dirname(this.d.file), { recursive: true });
       const tmp = `${this.d.file}.tmp`;
       fs.writeFileSync(tmp, JSON.stringify({ since: this.since, ...(this.arSince !== null ? { afterReportSince: this.arSince } : {}), days: [...this.days.values()].sort((a, b) => a.date.localeCompare(b.date)) }));
-      fs.renameSync(tmp, this.d.file);
+      renameWithRetry(tmp, this.d.file);
     } catch (e) {
       log.warn('quality', 'user corrections not saved', { cause: errText(e), hint: 'check that userData is writable; the counts stay in memory until the app closes' });
     }

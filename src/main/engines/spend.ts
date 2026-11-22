@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { ApiSpendInfo, ApiSpendLine, Harness } from '../../shared/contract';
 import { errText, log } from '../log';
+import { renameWithRetry } from '../agents/local-store';
 
 interface SpendFile { version: 1; months: Record<string, Record<Harness, ApiSpendLine>> }
 
@@ -67,7 +68,7 @@ export class ApiSpend {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
       const tmp = `${this.file}.${process.pid}.tmp`;
       fs.writeFileSync(tmp, JSON.stringify(this.data));
-      fs.renameSync(tmp, this.file);
+      renameWithRetry(tmp, this.file);
     } catch (e) {
       log.warn('engines', 'api spend not saved', { data: errText(e), cause: 'api-spend.json not writable', hint: 'check that the app data folder is writable' });
     }

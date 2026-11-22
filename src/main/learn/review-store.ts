@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { schedule, type CardDraft, type ReviewCard, type ReviewGrade, type ReviewLog } from '@shared/review';
 import type { Lesson } from '@shared/lesson';
+import { renameWithRetry } from '../agents/local-store';
 
 const LOG_MAX = 3000;
 interface File { v: 1; cards: ReviewCard[]; log: ReviewLog[] }
@@ -37,7 +38,7 @@ export class ReviewStore {
     const d = this.read();
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     fs.writeFileSync(`${this.file}.tmp`, JSON.stringify(d));
-    fs.renameSync(`${this.file}.tmp`, this.file);
+    renameWithRetry(`${this.file}.tmp`, this.file);
   }
 
   cards(): ReviewCard[] { return this.read().cards; }

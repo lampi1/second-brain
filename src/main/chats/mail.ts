@@ -18,6 +18,7 @@
 import { timersFor } from '../timers';
 const { setInterval, clearInterval } = timersFor('chats/mail');
 import fs from 'node:fs';
+import { renameWithRetry } from '../agents/local-store';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type { ChatSummary, Harness, HeldNewsItem, HeldNewsWhy } from '../../shared/contract';
@@ -165,7 +166,7 @@ export function sendMail(dir: string, o: { from: string; fromHarness: Harness; t
   noteHarness(dir, slug(o.from), o.fromHarness);
   const tmp = path.join(box, `.${id}.tmp`);
   fs.writeFileSync(tmp, JSON.stringify(msg, null, 2));
-  fs.renameSync(tmp, path.join(box, `${id}.json`)); // a reader never sees half a file
+  renameWithRetry(tmp, path.join(box, `${id}.json`)); // a reader never sees half a file
   appendLog(dir, { action: 'sent', id, from: msg.from, to: msg.to, hop, via: 'app' });
   return msg;
 }

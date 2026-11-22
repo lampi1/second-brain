@@ -12,6 +12,7 @@ import { addRedaction, log } from '../log';
 import type { SecretCipher } from '../engines/secrets';
 import { maskOf } from '../engines/secrets';
 import { MCP_ACCESS_ROLES, MCP_ID, RESERVED_IDS, SECRET_NAME, checkAccess, defaultAccess, secretLooking, slotKey, type McpSecretSlot, type McpServerDef, type McpTestResult, type McpToolAccess, type RoleMcpAccess } from '../../shared/mcp-servers';
+import { renameWithRetry } from '../agents/local-store';
 
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
 const HEADER_NAME = /^[A-Za-z0-9-]{1,64}$/;
@@ -133,7 +134,7 @@ interface FileShape { version: 1; servers: McpServerDef[]; access: Record<string
 const writeAtomic = (file: string, data: unknown): void => {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${crypto.randomBytes(4).toString('hex')}.tmp`;
-  try { fs.writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 }); fs.renameSync(tmp, file); }
+  try { fs.writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 }); renameWithRetry(tmp, file); }
   finally { fs.rmSync(tmp, { force: true }); }
 };
 

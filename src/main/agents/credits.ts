@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Harness } from '../../shared/contract';
 import { errText, log } from '../log';
+import { renameWithRetry } from './local-store';
 
 export type PoolStatus = 'ok' | 'low' | 'exhausted' | 'unknown' | 'probation';
 export interface PoolState {
@@ -271,7 +272,7 @@ export class CreditBook {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
       const tmp = `${this.file}.tmp`;
       fs.writeFileSync(tmp, JSON.stringify({ version: 1, pools: [...this.pools.values()], picks: this.picks }, null, 1));
-      fs.renameSync(tmp, this.file);
+      renameWithRetry(tmp, this.file);
     } catch (e) {
       log.warn('agents', 'credits.json not written', { cause: errText(e), hint: 'check that the app data folder is writable; the credit states stay in memory' });
     }

@@ -18,6 +18,7 @@ import { modelKey, priceOf, warnUnpriced } from '../chats/cursor-prices';
 import { romeDay } from './live';
 import { sharedDir } from '../platform';
 import { uiLocale } from '../locale';
+import { renameWithRetry } from '../agents/local-store';
 
 /** One turn: tokens as billing counts them (input = only the uncached part). */
 export interface LedgerRow {
@@ -292,7 +293,7 @@ export function installHook(dir = ledgerDir()): string {
   // write then rename: Cursor may run the script while the stable or the dev app rewrites it
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, HOOK_SOURCE);
-  fs.renameSync(tmp, file);
+  renameWithRetry(tmp, file);
   return file;
 }
 

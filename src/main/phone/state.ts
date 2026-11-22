@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { PhoneAction } from '../../shared/contract/phone';
+import { renameWithRetry } from '../agents/local-store';
 
 export const RECENT_MAX = 20;
 export const DEFAULT_QUIET = { from: 22, to: 7 };
@@ -74,7 +75,7 @@ export function saveState(file: string, s: PhoneState): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(s, null, 2), { mode: 0o600 });
-  fs.renameSync(tmp, file);
+  renameWithRetry(tmp, file);
 }
 
 /** Adds an action, keeping the last RECENT_MAX. */

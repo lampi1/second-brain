@@ -15,6 +15,7 @@ import { ARTIFACT_MAX_PER_CHAT, ARTIFACT_TARGETS, BRIEF_EXAMPLE, SUMMARY_MAX, TI
 import type { McpTool } from '../mcp/server';
 import { ToolRefusal } from '../mcp/refusal';
 import { log, errText } from '../log';
+import { renameWithRetry } from '../agents/local-store';
 
 export type Artifact = Extract<ChatItem, { kind: 'artifact' }>;
 /** how long a next-ask visual waits for the chat's question before it shows as a card in the chat */
@@ -229,7 +230,7 @@ export class Artifacts {
       fs.mkdirSync(this.d.dir, { recursive: true });
       const tmp = `${file}.tmp`;
       fs.writeFileSync(tmp, JSON.stringify(list));
-      fs.renameSync(tmp, file);
+      renameWithRetry(tmp, file);
     } catch (e) {
       log.warn('genui', 'could not save the visuals', { chat: chatId, cause: errText(e), hint: `check that ${this.d.dir} is writable; they still show until the app restarts` });
     }

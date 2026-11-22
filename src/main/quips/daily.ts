@@ -9,6 +9,7 @@
 // Never more than DAILY_TRIES tries a day per language, none while the setting quipsDaily is off. The renderer asks
 // through IPC agents:quips (lib/daily-quips.ts). Built by wiring.ts; none in the demo.
 import fs from 'node:fs';
+import { renameWithRetry } from '../agents/local-store';
 import path from 'node:path';
 import type { Lang } from '../../shared/contract';
 import { QUIP_CHARACTER, QUIP_KINDS, QUIP_ROLES, QUIP_X_KINDS, QUIP_X_REST, cleanDailyQuips, fixedQuips, mergeDailyQuips, parseDailyQuips, type DailyQuips, type QuipKind, type QuipRole } from '../../shared/agent-quips';
@@ -108,7 +109,7 @@ export class DailyQuipsService {
     fs.mkdirSync(path.dirname(this.d.file), { recursive: true });
     const tmp = `${this.d.file}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(out));
-    fs.renameSync(tmp, this.d.file);
+    renameWithRetry(tmp, this.d.file);
   }
   /** The kept lines of a language, the newest day first (at most DAILY_MAX for a moment: the oldest give way). */
   private pool(s: Stored, lang: Lang): DailyQuips {

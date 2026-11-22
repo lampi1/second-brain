@@ -6,6 +6,7 @@
 // breaks the others, and a map's name is always its folder's. Used by projectmap/service.ts; pinned by
 // test/unit/projectmap-store.test.ts.
 import fs from 'node:fs';
+import { renameWithRetry } from '../agents/local-store';
 import path from 'node:path';
 import { waitingOf } from '@shared/project-map-status';
 import { MAP_LIMITS, canHold, canSitInside, isMapHref, isMapLayout, prunePaths, type MapPath, type MapVersionInfo, type ProjectMap, type ProjectMapInfo } from '@shared/project-map';
@@ -140,13 +141,13 @@ export class ProjectMapStore {
     fs.mkdirSync(dir, { recursive: true });
     const file = path.join(dir, 'map.json');
     fs.writeFileSync(`${file}.tmp`, `${JSON.stringify(map, null, 2)}\n`);
-    fs.renameSync(`${file}.tmp`, file);
+    renameWithRetry(`${file}.tmp`, file);
     const hist = path.join(dir, 'history.jsonl');
     const lines = [...this.lines(map.project), JSON.stringify(map)];
     if (lines.length > HISTORY_MAX) {
       const kept = [lines[0]!, ...lines.slice(lines.length - (HISTORY_MAX - 1))];
       fs.writeFileSync(`${hist}.tmp`, `${kept.join('\n')}\n`);
-      fs.renameSync(`${hist}.tmp`, hist);
+      renameWithRetry(`${hist}.tmp`, hist);
     } else fs.appendFileSync(hist, `${JSON.stringify(map)}\n`);
     return map;
   }

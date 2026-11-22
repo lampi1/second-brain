@@ -5,6 +5,7 @@
 // are mean-pooled and L2-normalised, so cosine = dot product. Runs only in the worker thread (hybrid/worker.ts).
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import { renameWithRetry } from '../../agents/local-store';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 
@@ -56,7 +57,7 @@ export async function downloadModel(dir: string, progress: (done: number) => voi
       await new Promise<void>((res2, rej) => out.end((e?: Error | null) => (e ? rej(e) : res2())));
       const got = hash.digest('hex');
       if (got !== f.sha256) throw new Error(`${f.name}: sha256 mismatch (got ${got.slice(0, 12)}…)`);
-      fs.renameSync(part, dest);
+      renameWithRetry(part, dest);
     } catch (e) {
       out.destroy();
       try { fs.rmSync(part, { force: true }); } catch { /* best effort */ }

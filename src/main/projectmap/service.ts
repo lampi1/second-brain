@@ -25,6 +25,7 @@
 //   piece is not about that piece, and what a piece's chats said is forgotten once none speaks for it.
 // Used by wiring-shared.ts attachProjectMaps; pinned by test/unit/projectmap-service.test.ts and projectmap-follow.test.ts.
 import fs from 'node:fs';
+import { renameWithRetry } from '../agents/local-store';
 import path from 'node:path';
 import type { ChatItem, ChatSummary, PendingRequest } from '@shared/contract';
 import { applyChanges, applyEdit, checkMap, checkPaths, elementOfFile, isMapId, isMapLayout, MAP_LAYOUTS, MAP_LIMITS, mergePaths, projectSlug, prunePaths, type MapActor, type MapAgent, type MapElement, type MapPlan, type MapState, type MapWork, type ProjectMap, type ProjectMapInfo, type ProjectMapView } from '@shared/project-map';
@@ -688,7 +689,7 @@ export class ProjectMaps {
     try {
       fs.mkdirSync(path.dirname(this.d.stateFile), { recursive: true });
       fs.writeFileSync(`${this.d.stateFile}.tmp`, JSON.stringify(this.state));
-      fs.renameSync(`${this.d.stateFile}.tmp`, this.d.stateFile);
+      renameWithRetry(`${this.d.stateFile}.tmp`, this.d.stateFile);
     } catch (err) { log.warn('projectmap', 'project map bindings not saved', { cause: errText(err), hint: 'the bindings live in memory until the next save' }); }
   }
 

@@ -9,6 +9,7 @@ import path from 'node:path';
 import { AGENT_IMAGE_BYTES, AGENT_IMAGE_SIDE, type AgentImages } from '../../shared/agent-images';
 import { ROLE_IDS, isRoleId, type RoleId } from '../../shared/roles';
 import { log } from '../log';
+import { renameWithRetry } from './local-store';
 
 const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
 
@@ -38,7 +39,7 @@ export class AgentImageStore {
     fs.mkdirSync(this.dir, { recursive: true });
     const tmp = `${this.file(role)}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, png);
-    fs.renameSync(tmp, this.file(role));
+    renameWithRetry(tmp, this.file(role));
     log.info('agents', 'role picture set', { data: { role, bytes: png.length } });
     return this.update();
   }

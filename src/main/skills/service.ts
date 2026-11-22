@@ -5,6 +5,7 @@
 // renderer sends back is checked against them. Also gives the "/" list of a chat whose engine has not spoken yet
 // (skills for its engine and folder). Used by wiring.ts / demo-wiring.ts (index.ts 'skills:*' handlers).
 import fs from 'node:fs';
+import { renameWithRetry } from '../agents/local-store';
 import path from 'node:path';
 import type { ChatCommand, Harness, MdIssue, SkillCatalog, SkillDoc, SkillEntry, SkillKind, SkillPlace, SkillSave, SkillSaveResult, SkillScope } from '../../shared/contract';
 import { checkMd, field, generatedBy, parseMd } from '../../shared/skillmd';
@@ -174,7 +175,7 @@ export class SkillsService {
       fs.mkdirSync(path.dirname(target), { recursive: true });
       const tmp = `${target}.${process.pid}.tmp`;
       fs.writeFileSync(tmp, text, 'utf8');
-      fs.renameSync(tmp, target);
+      renameWithRetry(tmp, target);
       if (moving && kind === 'agent') fs.rmSync(old!, { force: true });
     } catch (e) {
       log.warn('skills', 'save failed', { data: { file: target }, cause: errText(e), hint: 'check the folder is writable and not open elsewhere' });

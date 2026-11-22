@@ -10,6 +10,7 @@ import path from 'node:path';
 import { addRedaction, log } from '../log';
 import type { SecretCipher } from '../engines/secrets';
 import { BOT_TOKEN_SHAPE } from './types';
+import { renameWithRetry } from '../agents/local-store';
 
 /** A BotFather token: "<bot id>:<secret>" (types.ts: the one shape the bridge checks too). */
 export const PHONE_TOKEN_SHAPE = BOT_TOKEN_SHAPE;
@@ -75,7 +76,7 @@ export class PhoneTokenStore {
 const writeAtomic = (file: string, data: unknown): void => {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${crypto.randomBytes(4).toString('hex')}.tmp`;
-  try { fs.writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 }); fs.renameSync(tmp, file); }
+  try { fs.writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 }); renameWithRetry(tmp, file); }
   finally { fs.rmSync(tmp, { force: true }); }
 };
 

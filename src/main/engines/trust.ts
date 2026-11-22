@@ -10,6 +10,7 @@ import path from 'node:path';
 import type { Harness, SettingChange } from '../../shared/contract';
 import { log } from '../log';
 import { ENGINE_ID, engineOf, fingerprint, setTrust } from './registry';
+import { renameWithRetry } from '../agents/local-store';
 
 const KEY = /^engineOn\.(.+)$/;
 
@@ -37,7 +38,7 @@ export class EngineTrust {
     const next = { ...this.saved, [id]: fp };
     const tmp = `${this.file}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(next, null, 2));
-    fs.renameSync(tmp, this.file);
+    renameWithRetry(tmp, this.file);
     this.saved = next;
     setTrust(next);
     log.info('engines', 'engine turned on by the user: its definition is trusted', { data: { engine: id, runs: e.runs } });

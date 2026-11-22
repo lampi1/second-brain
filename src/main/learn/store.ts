@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { summaryOf, type Lesson, type LessonSummary } from '@shared/lesson';
+import { renameWithRetry } from '../agents/local-store';
 
 const ID = /^\d{8}-\d{6}-[0-9a-f]{4}$/;
 const FILE = /^[\w.-]{1,40}$/;
@@ -52,7 +53,7 @@ export class LessonStore {
     fs.mkdirSync(dir, { recursive: true });
     const file = path.join(dir, 'lesson.json');
     fs.writeFileSync(`${file}.tmp`, JSON.stringify(l, null, 1));
-    fs.renameSync(`${file}.tmp`, file);
+    renameWithRetry(`${file}.tmp`, file);
     try { this.seen.set(l.id, { mtime: fs.statSync(file).mtimeMs, summary: summaryOf(l) }); } catch { this.seen.delete(l.id); }
     return l;
   }
