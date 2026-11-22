@@ -562,7 +562,7 @@ async function probeAntigravityAcpTier(cmd: CliCommand, env: NodeJS.ProcessEnv, 
  *  `more` copies stdin to the file (no Node start, ~3 s to the first quota); elsewhere `tee`. */
 export function antigravityStatusLineCommand(file: string, platform: NodeJS.Platform = process.platform): string | null {
   const p = file.replace(/\\/g, '/');
-  if (/\s/.test(p)) return null;
+  if (/[\s&^%()<>|"!]/.test(p)) return null; // spaces split the command; cmd metacharacters would break the redirection
   return platform === 'win32' ? `cmd /d /c more > ${p}` : `tee ${p}`;
 }
 
@@ -639,6 +639,8 @@ export async function collectAntigravityUsage(o: ProviderCollectorEnv = {}): Pro
   try {
     const cached = agyQuotaCache && now - agyQuotaCache.at < agyQuotaCache.ttl ? agyQuotaCache.raw : undefined;
     if (cached) return normalizeAntigravityUsage(cached, null, now);
+    // a statusLine that failed recently: straight to the (cached) acp tier, without another `agy models` each refresh
+    if (cached === null) return { harness: 'antigravity', label: 'Antigravity', status: 'unavailable', planLabel: await probeAntigravityAcpTier(cmd, agyEnv, now), accountEmail: null, windows: [], message: 'Quote non lette dalla statusLine di agy (solo piano rilevato).', source: 'cli', at: now };
     if (!await agySignedIn(cmd, agyEnv)) {
       return { harness: 'antigravity', label: 'Antigravity', status: 'unauthenticated', planLabel: null, accountEmail: null, windows: [], message: 'Non connesso: esegui agy acp --login.', source: 'cli', at: now };
     }

@@ -143,6 +143,8 @@ describe('provider-usage normalizers', () => {
     expect(antigravityStatusLineCommand('C:\\Temp\\sb-agy-1\\status.json', 'win32')).toBe('cmd /d /c more > C:/Temp/sb-agy-1/status.json');
     expect(antigravityStatusLineCommand('/tmp/sb-agy-1/status.json', 'linux')).toBe('tee /tmp/sb-agy-1/status.json');
     expect(antigravityStatusLineCommand('C:\\Users\\A B\\Temp\\status.json', 'win32')).toBeNull();
+    expect(antigravityStatusLineCommand('C:\\Users\\A&B\\Temp\\status.json', 'win32')).toBeNull(); // cmd metacharacter
+    expect(antigravityStatusLineCommand('D:\\Tmp\\SBTEMP~1\\status.json', 'win32')).toBe('cmd /d /c more > D:/Tmp/SBTEMP~1/status.json');
   });
 });
 
