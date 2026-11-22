@@ -78,7 +78,8 @@ export function primaryWeeklyWindow(h: HarnessUsage | undefined): HarnessUsageWi
   return h.windows.find(w => w.kind === 'weekly' && !w.model)
     ?? h.windows.find(w => w.kind === 'plan' && !w.model)
     ?? h.windows.find(w => w.kind === 'weekly')
-    ?? h.windows[0]
+    // never a 5 h or daily window: the pin promises the weekly/plan limit
+    ?? h.windows.find(w => w.kind !== 'five-hour' && w.kind !== 'daily')
     ?? null;
 }
 

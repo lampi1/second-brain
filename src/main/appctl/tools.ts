@@ -24,7 +24,7 @@
 // - The skill library (app_skills, app_skill_write, app_skill_roles, app_skill_undo, ADR 0241): the Orchestrator's mount only.
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
-import type { ChatItem, ChatSummary, TasksState, Effort, EventMap, NewChat, PendingRequest, RunInfo, TaskKind } from '../../shared/contract';
+import type { ChatItem, ChatSummary, TasksState, Effort, EventMap, NewChat, PendingRequest, RunInfo, TaskKind, Usage } from '../../shared/contract';
 import { TASK_KINDS } from '../../shared/contract';
 import { engineLabel, engineOf } from '../engines/registry';
 import { agentsMayOpen, crossRefusal, openRefusal } from '../engines/policy';
@@ -52,6 +52,9 @@ import { splitMode } from '../../shared/newchat';
 import { gapLines, skillGaps } from '../agents/skill-needs';
 import type { ResolvedRole } from '../agents/catalog';
 import { BALANCED_ASK_SCHEMA, balancedAskOf, balancedStatusRun, balancedStatusTool, type BalancedMode } from '../agents/balanced-mode';
+
+/** app_state's usage for agents: the harnesses' account e-mails stay in the app (the popover shows them to the user). */
+export const usageForAgents = (u: Usage): Usage => u.harnesses ? { ...u, harnesses: u.harnesses.map(h => ({ ...h, accountEmail: null })) } : u;
 import { metricsTool, type RunFeedback } from '../agents/run-feedback';
 import { estimateTool, estimateTask, SimilarIndex } from '../agents/task-estimate';
 import type { PriceOf } from '../agents/standing';
@@ -295,7 +298,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         for (const c of chats) if (!c.closedAt) by[c.state] = (by[c.state] ?? 0) + 1;
         const q = d.chats.queueState();
         const queue = q && { enabled: q.enabled, cpu: q.cpu, freeRam: q.freeRam, ...(q.slots ? { coldStarts: q.starting ?? 0, coldStartSlots: q.slots } : {}), waiting: q.waiting.map(w => ({ chatId: w.chatId, kind: w.kind, position: w.position })) };
-        return { version: d.version, brainRoot: d.brain.info().brainRoot, chats: by, ...(queue ? { queue } : {}), closedChats: chats.filter(c => c.closedAt).length, pending: d.chats.pending().length, tabs: d.browser.list().length, usage: d.brain.usage(), ...(d.chats.contextStats ? { context: d.chats.contextStats() } : {}), logs: log.folder, health: healthSnapshot(), timers: timerSnapshot() };
+        return { version: d.version, brainRoot: d.brain.info().brainRoot, chats: by, ...(queue ? { queue } : {}), closedChats: chats.filter(c => c.closedAt).length, pending: d.chats.pending().length, tabs: d.browser.list().length, usage: usageForAgents(d.brain.usage()), ...(d.chats.contextStats ? { context: d.chats.contextStats() } : {}), logs: log.folder, health: healthSnapshot(), timers: timerSnapshot() };
       },
     },
     {

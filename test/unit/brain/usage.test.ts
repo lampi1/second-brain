@@ -127,4 +127,25 @@ describe('usage', () => {
     expect(m.ingest({ type: 'codex_rate_limits', rateLimits: { planType: 'plus', secondary: { usedPercent: 77, windowDurationMins: 10080, resetsAt: Math.floor(now / 1000) + 86_400 } } })).toBe(true);
     expect(m.get().harnesses?.find(h => h.harness === 'codex')?.windows[0]?.usedPercent).toBe(77);
   });
+
+  it('UsageMonitor: an OAuth Claude window past its reset is dropped; a Codex notification keeps the account and plan', async () => {
+    const now = Date.parse('2026-11-22T12:00:00Z');
+    const m = new UsageMonitor({
+      root: null, node: plainNode, claudeConfig: null, now: () => now,
+      providers: async () => [
+        { harness: 'claude', label: 'Claude', status: 'ok', planLabel: 'Max 5x', accountEmail: null, source: 'oauth', at: now, message: null, windows: [
+          { kind: 'five-hour', label: '5h', usedPercent: 90, resetsAt: now - 60_000 },
+          { kind: 'weekly', label: '7g', usedPercent: 40, resetsAt: now + 86_400_000 },
+        ] },
+        { harness: 'codex', label: 'Codex', status: 'ok', planLabel: 'Plus', accountEmail: 'user@example.com', source: 'oauth', at: now, message: null, windows: [
+          { kind: 'weekly', label: '7g', usedPercent: 10, resetsAt: now + 86_400_000 },
+        ] },
+      ],
+      onUsage: () => {},
+    });
+    await m.refreshProviders();
+    expect(m.get().harnesses?.find(h => h.harness === 'claude')?.windows.map(w => w.kind)).toEqual(['weekly']);
+    m.ingest({ type: 'codex_rate_limits', rateLimits: { secondary: { usedPercent: 55, windowDurationMins: 10080, resetsAt: Math.floor(now / 1000) + 86_400 } } });
+    expect(m.get().harnesses?.find(h => h.harness === 'codex')).toMatchObject({ planLabel: 'Plus', accountEmail: 'user@example.com', windows: [{ usedPercent: 55 }] });
+  });
 });

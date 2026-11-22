@@ -163,10 +163,9 @@ function buildHarnesses(
       const liveWindows: HarnessUsageWindow[] = [];
       if (u.fiveHourPct != null) liveWindows.push({ kind: 'five-hour', label: '5h', usedPercent: u.fiveHourPct, resetsAt: u.fiveHourResetsAt ?? null });
       if (u.weekPct != null) liveWindows.push({ kind: 'weekly', label: '7g', usedPercent: u.weekPct, resetsAt: u.weekResetsAt ?? null });
-      if (base && base.status === 'ok' && base.windows.length && (!limits || base.at >= limits.at)) {
-        return base;
-      }
-      if (liveWindows.length && limits) {
+      // a fresher OAuth reading wins; it falls through to the generic branch below, which drops windows past reset
+      const oauthFresher = !!base && base.status === 'ok' && base.windows.length > 0 && (!limits || base.at >= limits.at);
+      if (!oauthFresher && liveWindows.length && limits) {
         const extra = base?.windows.filter(w => w.model) ?? [];
         return {
           harness: 'claude', label, status: 'ok',
@@ -301,7 +300,13 @@ export class UsageMonitor {
     if (isObj(msg) && msg.type === 'codex_rate_limits') {
       const codex = normalizeCodexNotification(msg, this.o.now?.() ?? Date.now());
       if (!codex) return false;
-      this.harnesses.set('codex', codex);
+      // the notification carries only the windows: keep the account, plan and credits the OAuth reading found
+      const prev = this.harnesses.get('codex');
+      this.harnesses.set('codex', prev ? {
+        ...prev, ...codex,
+        planLabel: codex.planLabel ?? prev.planLabel, accountEmail: codex.accountEmail ?? prev.accountEmail,
+        ...(codex.creditsDetail ?? prev.creditsDetail ? { creditsDetail: codex.creditsDetail ?? prev.creditsDetail } : {}),
+      } : codex);
       this.o.onUsage(this.get(), this.spend());
       return true;
     }

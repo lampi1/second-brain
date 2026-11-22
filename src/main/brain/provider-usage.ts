@@ -5,7 +5,7 @@
 // Security (AGENTS.md rule 2): local CLI tokens are read in memory only in the main process, sent only to each
 // vendor's own HTTPS usage endpoint, never logged, never stored and never sent to the renderer.
 // Used by brain/usage.ts (UsageMonitor); pure normalizers are unit-tested in test/unit/brain/provider-usage.test.ts.
-import { execFile, spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,7 +13,9 @@ import type * as NodeSqlite from 'node:sqlite';
 import { promisify } from 'node:util';
 import type { Harness, HarnessUsage, HarnessUsageWindow } from '../../shared/contract';
 import { log } from '../log';
-import { readOpencodeLog, opencodeState } from '../agents/credits';
+import { opencodeLogTail, readOpencodeLog, opencodeState } from '../agents/credits';
+import { cliArgv, engineAllowed, resolveAcp, type CliCommand } from '../chats/cli';
+import { channel } from '../engines/model-probe';
 
 const execFileAsync = promisify(execFile);
 
@@ -24,6 +26,7 @@ const CURSOR_DASHBOARD_URL = 'https://api2.cursor.sh/aiserver.v1.DashboardServic
 const OPENCODE_GO_USAGE_URL = 'https://opencode.ai/zen/go/v1/usage';
 const ANTIGRAVITY_ACP_TIMEOUT_MS = 8_000;
 const ANTIGRAVITY_TIER_TTL_MS = 60 * 60_000;
+const ANTIGRAVITY_RETRY_MS = 10 * 60_000;
 
 export const USAGE_HARNESS_ORDER: readonly { id: Harness; label: string }[] = [
   { id: 'claude', label: 'Claude' },
@@ -489,10 +492,9 @@ export async function collectOpenCodeUsage(o: ProviderCollectorEnv = {}): Promis
     return fetchChatGptUsage(oaAccess, oaAccount, email, fetchFn, now, { harness: 'opencode', label: 'OpenCode', planPrefix: 'OpenAI' });
   }
   // 3) Local OpenCode log status (exhausted vs ok)
-  const logFile = path.join(env.XDG_DATA_HOME?.trim() || path.join(home, '.local', 'share'), 'opencode', 'log', 'opencode.log');
-  if (fs.existsSync(logFile)) {
+  const text = await opencodeLogTail(home, 128 * 1024);
+  if (text) {
     try {
-      const text = fs.readFileSync(logFile, 'utf8').slice(-128 * 1024);
       const facts = readOpencodeLog(text);
       for (const [prov, f] of facts) {
         const st = opencodeState(`opencode:${prov}`, f, now);
@@ -512,71 +514,47 @@ export async function collectOpenCodeUsage(o: ProviderCollectorEnv = {}): Promis
   };
 }
 
-let agyTierCache: { tier: string | null; at: number } | null = null;
+let agyTierCache: { tier: string | null; at: number; ttl: number } | null = null;
 
-async function probeAntigravityAcpTier(command: string, now: number): Promise<{ signedIn: boolean; tier: string | null }> {
-  if (agyTierCache && now - agyTierCache.at < ANTIGRAVITY_TIER_TTL_MS) {
-    return { signedIn: true, tier: agyTierCache.tier };
-  }
+/** The tier from `agy acp` session/new (_meta.antigravity.tier), as Cloudroom reads it. The same resolution and the
+ *  same JSON-lines channel the model listing uses (engines/model-probe.ts): stdin errors handled, the process tree
+ *  ended on close. A tier is kept for an hour; no answer (timeout, early exit) only for ANTIGRAVITY_RETRY_MS. */
+async function probeAntigravityAcpTier(cmd: CliCommand, now: number): Promise<{ signedIn: boolean; tier: string | null }> {
+  if (agyTierCache && now - agyTierCache.at < agyTierCache.ttl) return { signedIn: true, tier: agyTierCache.tier };
+  const env = { ...cmd.env, AGY_CLI_DISABLE_AUTO_UPDATE: '1' };
+  const models = cliArgv({ ...cmd, env }, ['models']);
   try {
-    await execFileAsync(command, ['models'], { timeout: 6_000, env: { ...process.env, AGY_CLI_DISABLE_AUTO_UPDATE: '1' }, windowsHide: true });
+    await execFileAsync(models.command, models.args, { timeout: 6_000, env: models.env, windowsHide: true, windowsVerbatimArguments: models.verbatim });
   } catch (e) {
     const out = `${(e as { stdout?: string }).stdout ?? ''}${(e as { stderr?: string }).stderr ?? ''}`;
     if (/please sign in/i.test(out)) return { signedIn: false, tier: null };
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') throw e;
   }
-  const tier = await new Promise<string | null>(resolve => {
-    let done = false;
-    let buf = '';
-    let child: ReturnType<typeof spawn>;
+  const ch = channel(cliArgv({ ...cmd, env }, ['acp', '--disable-telemetry']), os.tmpdir());
+  let tier: string | null = null;
+  if (!('error' in ch)) {
     try {
-      child = spawn(command, ['acp', '--disable-telemetry'], { cwd: os.tmpdir(), env: { ...process.env, AGY_CLI_DISABLE_AUTO_UPDATE: '1' }, stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true });
-    } catch { resolve(null); return; }
-    const finish = (v: string | null) => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      try { child.kill(); } catch { /* ignore */ }
-      resolve(v);
-    };
-    const timer = setTimeout(() => finish(null), ANTIGRAVITY_ACP_TIMEOUT_MS);
-    child.on('error', () => finish(null));
-    child.on('exit', () => finish(null));
-    child.stdout?.setEncoding('utf8');
-    child.stdout?.on('data', (chunk: string) => {
-      buf += chunk;
-      let idx = buf.indexOf('\n');
-      while (idx !== -1) {
-        const line = buf.slice(0, idx).trim();
-        buf = buf.slice(idx + 1);
-        idx = buf.indexOf('\n');
-        if (!line) continue;
-        try {
-          const msg: unknown = JSON.parse(line);
-          if (isObj(msg) && msg.id === 2 && isObj(msg.result)) {
-            const meta = isObj(msg.result._meta) ? msg.result._meta : null;
-            const ag = meta && isObj(meta.antigravity) ? meta.antigravity : null;
-            const t = ag && isObj(ag.tier) ? str(ag.tier.name) : null;
-            finish(t);
-            return;
-          }
-        } catch { /* ignore */ }
-      }
-    });
-    child.stdin?.write(
-      `${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: 1, clientCapabilities: {} } })}\n` +
-      `${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'session/new', params: { cwd: os.tmpdir(), mcpServers: [] } })}\n`,
-    );
-  });
-  agyTierCache = { tier, at: now };
+      ch.send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: 1, clientCapabilities: {} } });
+      ch.send({ jsonrpc: '2.0', id: 2, method: 'session/new', params: { cwd: os.tmpdir(), mcpServers: [] } });
+      const msg = await ch.reply(m => m.id === 2 && isObj(m.result), ANTIGRAVITY_ACP_TIMEOUT_MS);
+      const result = isObj(msg.result) ? msg.result : null;
+      const meta = result && isObj(result._meta) ? result._meta : null;
+      const ag = meta && isObj(meta.antigravity) ? meta.antigravity : null;
+      tier = ag && isObj(ag.tier) ? str(ag.tier.name) : null;
+    } catch { /* no answer: tier unknown */ } finally { ch.close(); }
+  }
+  agyTierCache = { tier, at: now, ttl: tier ? ANTIGRAVITY_TIER_TTL_MS : ANTIGRAVITY_RETRY_MS };
   return { signedIn: true, tier };
 }
 
 export async function collectAntigravityUsage(o: ProviderCollectorEnv = {}): Promise<HarnessUsage> {
   const env = o.env ?? process.env, platform = o.platform ?? process.platform, now = (o.now ?? Date.now)();
-  const command = env.SB_ANTIGRAVITY_PATH?.trim() || 'agy';
+  const notInstalled: HarnessUsage = { harness: 'antigravity', label: 'Antigravity', status: 'not_installed', planLabel: null, accountEmail: null, windows: [], message: 'Antigravity CLI (agy) non trovato.', source: 'none', at: now };
+  const cmd = resolveAcp('antigravity', 'agy', null, env);
+  if (!cmd) return notInstalled;
+  if (!engineAllowed(cmd, env)) return { ...notInstalled, status: 'unavailable', message: 'Nei test il motore reale non parte.' };
   try {
-    const { signedIn, tier } = await probeAntigravityAcpTier(command, now);
+    const { signedIn, tier } = await probeAntigravityAcpTier(cmd, now);
     if (!signedIn) {
       return { harness: 'antigravity', label: 'Antigravity', status: 'unauthenticated', planLabel: null, accountEmail: null, windows: [], message: 'Non connesso: esegui agy acp --login.', source: 'cli', at: now };
     }
@@ -590,9 +568,7 @@ export async function collectAntigravityUsage(o: ProviderCollectorEnv = {}): Pro
       source: 'cli', at: now,
     };
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { harness: 'antigravity', label: 'Antigravity', status: 'not_installed', planLabel: null, accountEmail: null, windows: [], message: 'Antigravity CLI (agy) non trovato.', source: 'none', at: now };
-    }
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return notInstalled;
     return { harness: 'antigravity', label: 'Antigravity', status: 'error', planLabel: null, accountEmail: null, windows: [], message: 'Impossibile leggere lo stato Antigravity.', source: 'cli', at: now };
   }
 }

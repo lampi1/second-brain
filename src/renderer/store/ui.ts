@@ -166,10 +166,16 @@ export function loadPrefs(raw: string | null, at = Date.now()): Prefs {
       orchestratorSize: p.orchestratorSizeV === DEFAULT_V ? sizeOf(p.orchestratorSize) : null,
       orchestratorSizeV: DEFAULT_V,
       orchestratorSeenAt: typeof p.orchestratorSeenAt === 'number' && Number.isFinite(p.orchestratorSeenAt) ? p.orchestratorSeenAt : at,
+      usagePinned: pinnedHarnesses(p.usagePinned),
       ...(typeof workProfile === 'string' ? { workProfile } : {}),
     };
   } catch { return { ...defaultPrefs, orchestratorSeenAt: at }; }
 }
+
+/** The harnesses whose weekly limit stays in the top bar: known ids only, once each; anything else = the default. */
+const USAGE_HARNESSES: readonly Harness[] = ['claude', 'cursor', 'codex', 'opencode', 'antigravity'];
+export const pinnedHarnesses = (v: unknown): Harness[] =>
+  Array.isArray(v) ? [...new Set(v.filter((h): h is Harness => USAGE_HARNESSES.includes(h as Harness)))] : [...(defaultPrefs.usagePinned ?? [])];
 
 const sizeOf = (v: unknown): DockSize | null => {
   const r = v as Partial<DockSize> | null;
