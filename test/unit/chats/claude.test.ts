@@ -31,11 +31,11 @@ describe('ClaudeSession', () => {
     expect(b.slice(-2)).toEqual(['--mcp-config', '{"mcpServers":{}}']);
   });
 
-  // ADR 0007: chats run by the STABLE app get session-only guard rails; a dev build adds nothing
+  // ADR 0007: chats run by the STABLE app get session-only guard rails; a dev build adds only the web-fetch env (ADR 0333)
   it('adds the stable guard rails inline with --settings only for the stable release', () => {
     const base = { chatId: 'c', cwd: '.', sessionId: 'abc12345' };
     const dev = new ClaudeSession({ ...base, stable: false }, recSink()).args();
-    expect(dev).not.toContain('--settings');
+    expect(JSON.parse(dev[dev.indexOf('--settings') + 1] ?? '{}')).toEqual({ env: { CLAUDE_CODE_WEB_FETCH_AGENT: '0' } });
     const local = ['D:', 'Profiles', 'x', 'AppData', 'Local'].join('\\'); // a %LOCALAPPDATA%-like folder, built at runtime
     const st = new ClaudeSession({ ...base, stable: true, localAppData: local }, recSink()).args();
     const json = st[st.indexOf('--settings') + 1] ?? '';
@@ -53,10 +53,11 @@ describe('ClaudeSession', () => {
     // the environment decides by default
     const prev = process.env.SB_RELEASE;
     try {
+      const deny = (): unknown => { const a = new ClaudeSession(base, recSink()).args(); return (JSON.parse(a[a.indexOf('--settings') + 1] ?? '{}') as { permissions?: unknown }).permissions; };
       process.env.SB_RELEASE = '0.2.0-abc';
-      expect(new ClaudeSession(base, recSink()).args()).toContain('--settings');
+      expect(deny()).toBeDefined();
       delete process.env.SB_RELEASE;
-      expect(new ClaudeSession(base, recSink()).args()).not.toContain('--settings');
+      expect(deny()).toBeUndefined();
     } finally { if (prev === undefined) delete process.env.SB_RELEASE; else process.env.SB_RELEASE = prev; }
     expect(rulePath('D:\\repo\\x\\')).toBe('//d/repo/x');
     expect(rulePath('/home/x')).toBe('//home/x');

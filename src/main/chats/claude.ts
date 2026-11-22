@@ -2,7 +2,8 @@
 // skills, CLAUDE.md and transcripts as his terminal; no SDK dependency). Protocol = what the Agent SDK speaks:
 //   claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages
 //          --permission-prompt-tool stdio --permission-mode <explicit> [--model] [--effort] [--resume=|--session-id=] …
-//          [--settings <inline JSON>: session-only; the STABLE app adds deny guard rails, ADR 0007]
+//          [--settings <inline JSON>: session-only; the STABLE app adds deny guard rails, ADR 0007; always
+//          env CLAUDE_CODE_WEB_FETCH_AGENT=0: WebFetch stays a plain tool, ADR 0333]
 //   env    CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS=1 → system/session_state_changed running/idle (authoritative)
 //   stdin  ← {"type":"user",…} turns (content: image blocks {type:image,source:{type:base64}} then the text) and {"type":"control_request",request_id,request:{subtype}} (initialize,
 //            interrupt, set_model, set_permission_mode, apply_flag_settings {effortLevel}, get_context_usage,
@@ -141,12 +142,19 @@ export function claudeReadRule(dir: string): string {
   return `Read(/${p}/**)`;
 }
 
-/** Merges inline settings objects; permission lists (allow / deny / ask) are concatenated, not replaced. */
+/** Claude Code's built-in web-fetch agent off (ADR 0333): while it is on, a session that has the Agent tool loses its own
+ *  WebFetch tool and reads pages only through that agent, which the role gate refuses. Off, WebFetch is a plain tool
+ *  again, given or not by the chat's tool policy. Inline env: it wins over a folder's own settings env. */
+export const NATIVE_WEB_FETCH: Record<string, unknown> = { env: { CLAUDE_CODE_WEB_FETCH_AGENT: '0' } };
+
+/** Merges inline settings objects; permission lists (allow / deny / ask) are concatenated, not replaced; env maps are
+ *  merged key by key. */
 export function mergeSettings(...parts: (Record<string, unknown> | null | undefined)[]): Record<string, unknown> | null {
   const out: Record<string, unknown> = {};
   for (const p of parts) {
     if (!p) continue;
     for (const [k, v] of Object.entries(p)) {
+      if (k === 'env') { out.env = { ...o(out.env), ...o(v) }; continue; }
       if (k !== 'permissions') { out[k] = v; continue; }
       const cur = o(out.permissions), add = o(v);
       const merged: Record<string, unknown> = { ...cur, ...add };
@@ -375,7 +383,7 @@ export class ClaudeSession implements HarnessSession {
     if (op.worktree && !op.resume) a.push('--worktree');
     if (op.remoteControl && !op.readOnly) a.push('--replay-user-messages');
     const stable = op.stable ?? !!releaseId();
-    const settings = mergeSettings(op.settings, compactSettings(op.compactWindowTokens), op.readOnly ? (op.webOnly ? WEB_ONLY_SETTINGS : READ_ONLY_SETTINGS) : null, op.readOnly && op.denyRead?.length ? { permissions: { deny: op.denyRead.map(claudeReadRule) } } : null, agentMcp && !agentMcp.connectors ? { disableClaudeAiConnectors: true } : null, roleSkills ? { permissions: { ask: ['Skill'] } } : null, stable ? stableGuards(op.localAppData ? path.join(op.localAppData, 'second-brain') : sharedDir()) : null);
+    const settings = mergeSettings(op.settings, compactSettings(op.compactWindowTokens), op.readOnly ? (op.webOnly ? WEB_ONLY_SETTINGS : READ_ONLY_SETTINGS) : null, op.readOnly && op.denyRead?.length ? { permissions: { deny: op.denyRead.map(claudeReadRule) } } : null, agentMcp && !agentMcp.connectors ? { disableClaudeAiConnectors: true } : null, roleSkills ? { permissions: { ask: ['Skill'] } } : null, stable ? stableGuards(op.localAppData ? path.join(op.localAppData, 'second-brain') : sharedDir()) : null, NATIVE_WEB_FETCH); // last: nothing turns the agent back on
     this.inlineSettings = settings;
     if (settings) a.push('--settings', JSON.stringify(settings)); // inline: session-only, no file is written
     if (op.mcpConfig && !op.readOnly) a.push('--mcp-config', op.mcpConfig); // variadic flag: keep it after the plain ones

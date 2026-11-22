@@ -4,9 +4,8 @@
 // (`agent-<hash16>:<name>`, agents/pack/flows.ts runtime()), and any other skill the engine can load (its own, the user's,
 // a project's). A bare name of a skill the launch gave is allowed with its input rewritten to the qualified name
 // (rewrite: an engine that runs a changed input, Claude; issue #101), so it loads the launch's own copy. An engine sub-agent (Claude's Agent/Task) is allowed only for a quick read-only search (Explore),
-// for Claude's built-in web-fetch agent when the chat may use the web (Claude Code hides its own WebFetch tool from a
-// session that has the Agent tool and reads pages only through that agent, ADR 0333), or, in a project with the AI-DLC
-// harness, for that project's own aidlc-* agents (its flow dispatches them, ADR 0083 amendment); any other type is refused because delegated work runs in a visible chat (agent_delegate); and a request of a
+// or, in a project with the AI-DLC harness, for that project's own aidlc-* agents (its flow dispatches them, ADR 0083
+// amendment); any other type is refused because delegated work runs in a visible chat (agent_delegate); and a request of a
 // delegated chat whose tool class goes beyond its parent's permissions is refused (under a parent that may only read
 // commands, a command that does not only read goes beyond it too). Everything else passes to the user
 // as before (a request beyond the role but within the parent is the user's call). A role that may write only in the
@@ -18,7 +17,6 @@
 // Refusals are visible in the chat. No state; reads the file system only to resolve links and to find an AI-DLC project's agents. Used by chats/manager.ts;
 // pinned by test/unit/agents/role-gate.test.ts.
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import type { SysCode, SysParams } from '../../shared/sys';
 import type { PreToolCall, PreToolHook } from '../chats/session';
@@ -58,59 +56,6 @@ const SUBAGENT_TOOLS = new Set(['Agent', 'Task']);
 const SKILL_KEYS = ['skill', 'command', 'name'];
 /** The one engine sub-agent a role may use: a read-only search inside its own chat. */
 export const SEARCH_SUBAGENT = 'Explore';
-/** Claude Code's built-in page reader: with the Agent tool in the session the CLI drops its own WebFetch tool and reads
- *  web pages only through this sub-agent (its one tool is WebFetch), so refusing it leaves a role with the web class
- *  no way to read a page but the app browser (ADR 0333). */
-export const WEB_FETCH_SUBAGENT = 'web-fetch';
-
-/** A sub-agent name as Claude Code compares it with web-fetch (NFKC, lower case, no spaces, dashes or underscores):
- *  "WebFetch" and "web_fetch" name the same agent. */
-export const agentNameKey = (name: string): string => name.normalize('NFKC').toLowerCase().replace(/[\p{White_Space}\p{Pd}_]+/gu, '');
-const WEB_FETCH_KEY = agentNameKey(WEB_FETCH_SUBAGENT);
-/** Bounds of the scan for a custom agent (customWebFetch): past them the answer is «custom», never «none». */
-const AGENT_SCAN = { files: 500, depth: 4, bytes: 256 * 1024 };
-
-/** The frontmatter `name` of an agent file (Claude Code takes the agent's type from it, not from the file name); '' when
- *  the file has no frontmatter or no name; null when it cannot be read. */
-function agentFileName(file: string): string | null {
-  try {
-    const fd = fs.openSync(file, 'r');
-    try {
-      const buf = Buffer.alloc(AGENT_SCAN.bytes);
-      const text = buf.subarray(0, fs.readSync(fd, buf, 0, buf.length, 0)).toString('utf8').replace(/^\uFEFF/, '');
-      const head = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1];
-      const name = head ? /^name:[ \t]*(.*?)[ \t]*$/m.exec(head)?.[1] ?? '' : '';
-      return name.replace(/^(['"])(.*)\1$/, '$2');
-    } finally { fs.closeSync(fd); }
-  } catch { return null; }
-}
-
-/** True when a definition of its own takes the web-fetch name (frontmatter `name` equal under agentNameKey) in the user's
- *  Claude folder or in the .claude folder of the chat's folder or any folder above it: that agent replaces the built-in
- *  one, with whatever tools, prompt and settings it declares, so the web exemption does not hold. Fails closed: a file
- *  it cannot read, or a scan past its bounds, counts as custom. `env` = the session's environment (CLAUDE_CONFIG_DIR). */
-export function customWebFetch(cwd: string | null | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
-  const roots = [path.join(env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'agents')];
-  if (cwd && path.isAbsolute(cwd)) for (let d = path.resolve(cwd); ; d = path.dirname(d)) {
-    roots.push(path.join(d, '.claude', 'agents'));
-    if (path.dirname(d) === d) break;
-  }
-  let files = 0;
-  const custom = (dir: string, depth: number): boolean => {
-    let entries: fs.Dirent[];
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return (e as NodeJS.ErrnoException).code !== 'ENOENT'; }
-    for (const e of entries) {
-      const p = path.join(dir, e.name);
-      if (e.isDirectory()) { if (depth >= AGENT_SCAN.depth || custom(p, depth + 1)) return true; continue; }
-      if (!e.name.toLowerCase().endsWith('.md')) continue;
-      if (++files > AGENT_SCAN.files) return true;
-      const name = agentFileName(p);
-      if (name === null || agentNameKey(name) === WEB_FETCH_KEY) return true;
-    }
-    return false;
-  };
-  return [...new Set(roots)].some(r => custom(r, 0));
-}
 
 /** An AI-DLC sub-agent's name: the harness's own reviewer/developer agents (`aidlc-developer-agent`, ADR 0083 amendment). */
 const AIDLC_SUBAGENT = /^aidlc-[a-z0-9][a-z0-9-]{0,80}$/;
@@ -125,25 +70,22 @@ export function aidlcSubagent(cwd: string | null | undefined, type: string): boo
   } catch { return false; }
 }
 
-/** The verdict on an engine sub-agent call (Agent/Task): null for the read-only Explore search, for the built-in web-fetch
- *  agent when `web` (the chat, and its parent, may use the web class) and no custom agent takes its name, or an AI-DLC
- *  project's own aidlc-* agent when `cwd` is that project; else the refusal. */
-export function subagentRefusal(input: unknown, cwd?: string | null, web = false): { type: string; message: string } | null {
+/** The verdict on an engine sub-agent call (Agent/Task): null for the read-only Explore search, or an AI-DLC project's own
+ *  aidlc-* agent when `cwd` is that project; else the refusal. */
+export function subagentRefusal(input: unknown, cwd?: string | null): { type: string; message: string } | null {
   const type = field(input, 'subagent_type', 'agent_type', 'type') || 'general-purpose';
   if (type === SEARCH_SUBAGENT || aidlcSubagent(cwd, type)) return null;
-  // Claude reads a loose spelling (WebFetch, web_fetch) as the built-in agent too when no custom agent takes the name
-  if (web && agentNameKey(type) === WEB_FETCH_KEY && !customWebFetch(cwd)) return null;
   return { type, message: `Sub-agent «${type}» refused: hand delegated work to another role with agent_delegate (a visible chat). Engine sub-agents are only for a quick read-only search (${SEARCH_SUBAGENT}).` };
 }
 
 /** The same rule as a PreToolUse hook (chats/claude.ts): Claude starts a sub-agent without a permission request, so
  *  gateRequest never sees it; a role chat whose launch has the sub-agent tool (tool-policy.ts claudeTools) gets this.
- *  cwd = the chat's folder, for the AI-DLC exemption; web = its policy (already narrowed by its parent's) has the web class. */
+ *  cwd = the chat's folder, for the AI-DLC exemption. */
 export class SubagentGate implements PreToolHook {
-  constructor(private readonly cwd?: string | null, private readonly web = false) {}
+  constructor(private readonly cwd?: string | null) {}
   decide(call: PreToolCall): { deny: string } | null {
     if (!SUBAGENT_TOOLS.has(call.tool)) return null;
-    const refused = subagentRefusal(call.input, this.cwd, this.web);
+    const refused = subagentRefusal(call.input, this.cwd);
     return refused ? { deny: refused.message } : null;
   }
   turnEnded(): void { /* no state */ }
@@ -222,8 +164,7 @@ export function gateRequest(req: GateRequest, chat: GateChat): GateVerdict {
     return { kind: 'allow' };
   }
   if (SUBAGENT_TOOLS.has(req.tool)) {
-    const web = allowsClass(chat.policy, 'web') && (!chat.parent || allowsClass(chat.parent.policy, 'web'));
-    const refused = subagentRefusal(req.input, chat.cwd, web);
+    const refused = subagentRefusal(req.input, chat.cwd);
     if (!refused) return { kind: 'pass' };
     return { kind: 'deny', code: 'subagentRefused', params: { type: refused.type }, message: refused.message };
   }

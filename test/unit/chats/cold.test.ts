@@ -67,9 +67,9 @@ describe('cold rules', () => {
     expect(compactSettings(0)).toBeNull();
     const args = (w?: number) => new ClaudeSession({ chatId: 'c', cwd: '.', sessionId: '00000000-0000-4000-8000-000000000000', ...(w !== undefined ? { compactWindowTokens: w } : {}), stable: true, localAppData: 'C:/L' }, recSink()).args();
     const settings = JSON.parse(args(300_000)[args(300_000).indexOf('--settings') + 1]!) as { env?: unknown; permissions?: { deny?: unknown[] } };
-    expect(settings.env).toEqual({ CLAUDE_CODE_AUTO_COMPACT_WINDOW: '300000' });
+    expect(settings.env).toEqual({ CLAUDE_CODE_AUTO_COMPACT_WINDOW: '300000', CLAUDE_CODE_WEB_FETCH_AGENT: '0' }); // env maps merge (ADR 0333)
     expect(settings.permissions?.deny?.length).toBeGreaterThan(0); // the stable guard rails stay
-    expect(JSON.parse(args()[args().indexOf('--settings') + 1]!).env).toBeUndefined();
+    expect(JSON.parse(args()[args().indexOf('--settings') + 1]!).env).toEqual({ CLAUDE_CODE_WEB_FETCH_AGENT: '0' });
     const claude = { harness: 'claude' as const, contextMaxTokens: 300_000 };
     expect(longAt(claude, 200_000)).toBe(240_000);
     expect(isLongChat({ ...claude, contextTokens: 230_000 }, 200_000)).toBe(false);

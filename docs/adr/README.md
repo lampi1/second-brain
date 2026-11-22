@@ -327,7 +327,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0330](0330-maps-follow-their-chats.md) The maps follow their chats: a box says what its pieces say, a step that is ok is «fatto» — accepted
 - [0331](0331-code-mode.md) Code Mode: work chats call their tools from one script (run_code), under the same permission chain — accepted; amended by 0332
 - [0332](0332-antigravity-engine.md) Antigravity (agy acp) joins the ACP engine catalog; its permissions go through the app's gates — accepted
-- [0333](0333-web-fetch-subagent.md) Role chats with the web class may run Claude's built-in web-fetch agent — accepted
+- [0333](0333-web-fetch-subagent.md) Claude chats keep WebFetch as a plain tool: built-in web-fetch agent off inline — accepted
 
 ## Replaced
 

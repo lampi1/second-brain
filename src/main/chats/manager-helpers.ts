@@ -116,10 +116,9 @@ export const RESEARCH_TITLE = 'Manutenzione';
 export const RESEARCH_FRAME = 'You are the maintenance research of the user\'s second-brain app: the user pressed «Manutenzione» and never reads this chat. You read the brain and the data pack and propose cards with maintenance_propose; you never edit files, run commands, write to other chats or start work. Answer in the user\'s language.';
 /** A role launch with Claude's sub-agent tool (tool-policy.ts claudeTools) gets the role gate's sub-agent rule as a
  *  PreToolUse hook: Claude starts a sub-agent without a permission request (role-gate.ts SubagentGate); cwd = the chat's
- *  folder (an AI-DLC project's own aidlc-* agents are allowed there); a policy with the web class may run Claude's
- *  built-in web-fetch agent, its only way to read a page once the Agent tool is there (ADR 0333). */
+ *  folder (an AI-DLC project's own aidlc-* agents are allowed there). */
 export const subagentGateFor = (tools: AgentPolicy['tools'] | null | undefined, cwd: string): Pick<SessionOptions, 'preToolUse'> =>
-  tools && claudeTools(tools).includes('Agent') ? { preToolUse: new SubagentGate(cwd, tools.allow.includes('web')) } : {};
+  tools && claudeTools(tools).includes('Agent') ? { preToolUse: new SubagentGate(cwd) } : {};
 /** the debounce of child results while siblings still work: each new result restarts it (cloudroom's 2 s per parent) */
 export const CHILD_RESULTS_MS = 2_000;
 /** the longest the first result of a batch waits, however many siblings keep reporting (a multiple of the debounce) */
