@@ -100,6 +100,7 @@ function startSession(engine: EngineDef, opts: SessionOptions, sink: SessionSink
         engineId: engine.id, label: engine.label, args: engine.args ?? [], acpCommand: command,
         ...(engine.modelFlag ? { modelFlag: engine.modelFlag } : {}),
         ...(engine.modelOption ? { modelOption: true } : {}),
+        ...(engine.mcpHttp ? { mcpHttp: true } : {}),
         ...(appAsks(engine) ? { appAsk: true } : {}),
         loginCommand: engine.login.length ? [command, ...engine.login].join(' ') : null,
         ...(env ? { env } : {}),

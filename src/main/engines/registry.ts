@@ -41,6 +41,9 @@ export interface EngineDef extends EngineInfo, EngineStart {
   catalog?: EngineCatalogInfo;
   /** ACP: the app passes the engine its permission rules at every start (OpenCode: OPENCODE_CONFIG_CONTENT, ADR 0232) */
   permissionConfig?: 'opencode';
+  /** ACP: the engine takes the app's http MCP servers though its initialize announces no mcpCapabilities.http
+   *  (Antigravity `agy acp` 1.5.14, ADR 0332); without it the app passes MCP only to an engine that announces it */
+  mcpHttp?: boolean;
 }
 
 /** The shape of an engine id: a chat saved on an engine since removed stays readable (it cannot start). */

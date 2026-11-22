@@ -133,6 +133,8 @@ export interface AcpOptions extends SessionOptions {
    *  open. Only for an engine whose session/new answers no `models` and keeps the choice in the session (never for
    *  Cursor, whose model change writes its global config) */
   modelOption?: boolean;
+  /** pass the app's http MCP servers even though initialize announces no mcpCapabilities.http (Antigravity, ADR 0332) */
+  mcpHttp?: boolean;
   /** the engine has no question tool that reaches the app (engines/registry.ts appAsks: OpenCode): the app's ask_user
    *  MCP tool asks for it (askUser), the answer goes back as the user's next message */
   appAsk?: boolean;
@@ -329,6 +331,8 @@ export function acpWhole(tc: Record<string, unknown>, earlier: unknown): Record<
   return raw ? { ...raw, ...(tc.locations !== undefined ? { locations: tc.locations } : {}) } : undefined;
 }
 /** ACP tool kinds → the tool name a row and a permission panel show (PendingRequest.tool). */
+/** Modes the app never picks as the working one: read-only, or approving edits and commands without the app's gates. */
+const NOT_WORKING_MODES: ReadonlySet<string> = new Set(['plan', 'ask', 'auto', 'accept-edits', 'acceptEdits', 'bypassPermissions', 'yolo']);
 export const KIND_NAME: Record<string, string> = {
   execute: 'Shell', read: 'Read', edit: 'Edit', delete: 'Delete', move: 'Move', search: 'Search', fetch: 'Fetch', think: 'Think', switch_mode: 'Mode', other: 'Tool',
 };
@@ -674,7 +678,7 @@ export class AcpSession implements HarnessSession {
   }
 
   private mcpServers(): Obj[] {
-    if (o(this.caps.mcpCapabilities).http !== true) return [];
+    if (o(this.caps.mcpCapabilities).http !== true && !this.opts.mcpHttp) return [];
     const list: Obj[] = [];
     if (this.opts.mcpUrl) list.push({ type: 'http', name: 'second-brain', url: this.opts.mcpUrl, headers: [] });
     if (this.opts.appMcpUrl) list.push({ type: 'http', name: 'second-brain-app', url: this.opts.appMcpUrl, headers: [] });
@@ -722,13 +726,15 @@ export class AcpSession implements HarnessSession {
     const m = o(r.models), cfg = arr(r.configOptions).map(o);
     const picker = this.opts.modelOption ? cfg.find(c => c.category === 'model' && s(c.id)) : undefined;
     let list: { id: string; name: string }[] = [];
-    if (Object.keys(m).length) {
-      list = arr(m.availableModels).map(x => ({ id: s(o(x).modelId), name: s(o(x).name) })).filter(x => x.id);
-      this.models = { current: s(m.currentModelId) || null, available: list.map(x => x.id) };
-    } else if (picker) {
+    // a modelOption engine's picker wins over `models`: Antigravity answers both, `models` with one id per thinking
+    // level (gemini-3.8-flash-high) and the picker with the bare model, its thinking level a separate thought_level
+    if (picker) {
       list = arr(picker.options).map(x => ({ id: s(o(x).value), name: s(o(x).name) || s(o(x).value) })).filter(x => x.id);
       this.modelOption = s(picker.id);
       this.models = { current: s(picker.currentValue) || null, available: list.map(x => x.id) };
+    } else if (Object.keys(m).length) {
+      list = arr(m.availableModels).map(x => ({ id: s(o(x).modelId), name: s(o(x).name) })).filter(x => x.id);
+      this.models = { current: s(m.currentModelId) || null, available: list.map(x => x.id) };
     }
     if (this.models) {
       this.params = modelParams(r.configOptions);
@@ -1190,8 +1196,9 @@ export class AcpSession implements HarnessSession {
   }
 
   async setPermissionMode(mode: PermissionMode): Promise<void> {
-    // the working mode: Cursor's "agent", else the first one that is not read-only (OpenCode's "build")
-    const modeId = mode === 'plan' ? 'plan' : this.modes.includes('agent') ? 'agent' : this.modes.find(m => m !== 'plan' && m !== 'ask') ?? 'agent';
+    // the working mode: Cursor's "agent", Antigravity's "default", else the first one that is neither read-only nor one
+    // that approves by itself (OpenCode's "build"; never Antigravity's "auto" or "accept-edits": they skip the app's gates)
+    const modeId = mode === 'plan' ? 'plan' : ['agent', 'default'].find(m => this.modes.includes(m)) ?? this.modes.find(m => !NOT_WORKING_MODES.has(m)) ?? 'agent';
     if (!this.modes.includes(modeId)) throw new Error(`${this.label} non ha la modalità ${modeId}.`);
     await this.setModeId(modeId);
     this.sink.changed({ permissionMode: mode });
@@ -1375,10 +1382,11 @@ export class AcpSession implements HarnessSession {
       const known = this.tools.get(s(tc.toolCallId)); // the tool_call that came first carries the input (command, path)
       const kindName = KIND_NAME[s(tc.kind)] ?? known?.name ?? 'Tool';
       // the app's own tools (agent_*, its MCP) on its own loopback endpoints are already granted to the chat, as Claude's
-      // --allowedTools and Cursor's Mcp(...) rules do: answered once, no panel. OpenCode names an MCP tool <server>_<tool>.
-      const tool = stripAnsi(s(tc.title)).trim();
+      // --allowedTools and Cursor's Mcp(...) rules do: answered once, no panel. OpenCode names an MCP tool <server>_<tool>
+      // in the title; Antigravity sends the tool's name apart (name: mcp_<server>_<tool>, title "Run mcp_…", ADR 0332)
+      const tool = stripAnsi(s(tc.name) || s(tc.title)).trim();
       const once = options.find(x => x.kind === 'allow_once');
-      if (kindName === 'Tool' && once && acpAppTool(tool, this.opts.mcpUrl, this.opts.appMcpUrl, !!this.opts.readOnly)) {
+      if (kindName === 'Tool' && once && acpAppTool(tool, this.opts.mcpUrl, this.opts.appMcpUrl, !!this.opts.readOnly, !!this.opts.codeMode)) {
         log.info('chats', 'acp app tool allowed', { chat: this.opts.chatId, data: { engine: this.engine, tool } });
         return this.respond(id, { outcome: { outcome: 'selected', optionId: once.optionId } });
       }

@@ -38,18 +38,20 @@ export function cursorAppPermissions(mcpUrl?: string | null, appMcpUrl?: string 
 
 /** The same scope for an ACP agent that has no allow rules of its own (OpenCode, the catalog's): true when a
  *  `session/request_permission` of kind "other" names one of the app's tools on the app's own endpoint. OpenCode names an
- *  MCP tool `<server>_<tool>` (its permission key, the request's title); `mcp__<server>__<tool>` is the other spelling an
- *  agent may use. The server names are the ones the app gives its endpoints in session/new and session/load (acp.ts):
- *  a look-alike (second-brain-evil_…) or any other server still asks. */
-export function acpAppTool(name: string, mcpUrl?: string | null, appMcpUrl?: string | null, uiOnly = false): boolean {
+ *  MCP tool `<server>_<tool>` (its permission key, the request's title); Antigravity `mcp_<server>_<tool>` (the
+ *  request's `name`, ADR 0332); `mcp__<server>__<tool>` is the other spelling an agent may use. The server names are the
+ *  ones the app gives its endpoints in session/new and session/load (acp.ts): a look-alike (second-brain-evil_…) or any
+ *  other server still asks. codeMode (ADR 0331): the chat's run_code too, whose every inner call asks the app's gates. */
+export function acpAppTool(name: string, mcpUrl?: string | null, appMcpUrl?: string | null, uiOnly = false, codeMode = false): boolean {
   const tool = (server: string): string | null => {
-    for (const pre of [`${server}_`, `mcp__${server}__`]) if (name.startsWith(pre)) return name.slice(pre.length);
+    for (const pre of [`${server}_`, `mcp_${server}_`, `mcp__${server}__`]) if (name.startsWith(pre)) return name.slice(pre.length);
     return null;
   };
   const chat = tool('second-brain');
   if (chat !== null && appEndpoint(mcpUrl)) {
     if ((APP_UI_TOOLS as readonly string[]).includes(chat)) return true;
     if (!uiOnly && (APP_CHAT_TOOLS as readonly string[]).includes(chat)) return true;
+    if (!uiOnly && codeMode && chat === 'run_code') return true;
   }
   const app = tool('second-brain-app');
   return !uiOnly && app !== null && /^[A-Za-z0-9_-]+$/.test(app) && appEndpoint(appMcpUrl);

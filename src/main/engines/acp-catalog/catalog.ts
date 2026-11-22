@@ -10,6 +10,7 @@
 // icons, model lists, permission and reasoning flags and per-agent environment variables are left out (the app runs no
 // installer, and a catalog entry starts exactly as Settings shows it); a sign-in that installs something (OpenClaw's
 // `onboard --install-daemon`) or that is the bare CLI (Droid) is left empty, so «Accedi» is off for them.
+// Antigravity (ADR 0332) is the app's own entry, not cloudroom's: `agy acp`, checked by hand against agy 1.5.14.
 import type { EngineCatalogInfo } from '../../../shared/contract';
 
 export interface CatalogEntry {
@@ -21,6 +22,10 @@ export interface CatalogEntry {
   /** the arguments of its own sign-in after the command (registry.ts EngineDef.login); empty = none */
   login: string[];
   catalog: EngineCatalogInfo;
+  /** the model is the session's "model" config option (registry.ts EngineDef.modelOption) */
+  modelOption?: boolean;
+  /** takes http MCP servers without announcing mcpCapabilities.http (registry.ts EngineDef.mcpHttp) */
+  mcpHttp?: boolean;
 }
 
 const entry = (id: string, name: string, command: string, args: string[], login: string[], installUrl: string, skillDirs: string[] = []): CatalogEntry =>
@@ -37,4 +42,8 @@ export const ACP_CATALOG: readonly CatalogEntry[] = [
   entry('droid', 'Droid', 'droid', ['exec', '--output-format', 'acp'], [], 'https://docs.factory.com/droid-cli/quickstart', ['.factory/skills', '.agents/skills']),
   entry('kilo', 'Kilo Code', 'kilo', ['acp'], ['auth', 'login'], 'https://kilo.ai/docs/cli'),
   entry('cline', 'Cline', 'cline', ['--acp'], ['auth'], 'https://docs.cline.bot/cline-cli/installation'),
+  // Antigravity CLI (ADR 0332): never --dangerously-skip-permissions (its permissions reach the app's gates through
+  // session/request_permission); no --model flag (the model is its "model" config option); it announces no
+  // mcpCapabilities but takes http MCP servers (real run 2026-11-22)
+  { ...entry('antigravity', 'Antigravity', 'agy', ['acp', '--disable-telemetry'], ['acp', '--login'], 'https://antigravity.google'), modelOption: true, mcpHttp: true },
 ];

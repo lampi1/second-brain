@@ -17,7 +17,7 @@ test('Settings: the ACP catalog proposals are listed off and one turns on only o
     await expect(kilo).toContainText('Proposta, spenta');
     await expect(kilo.locator('code')).toContainText('kilo');
     await expect(kilo.getByRole('link')).toHaveCount(1);
-    await expect(catalog.locator('[data-testid^="st-catalog-"]')).toHaveCount(9);
+    await expect(catalog.locator('[data-testid^="st-catalog-"]')).toHaveCount(10);
     // the agents page keeps its own name (a shared i18n key would rename it)
     await expect(page.locator('nav').getByText('Agenti', { exact: true }).first()).toBeVisible();
     // opening Settings turns nothing on and trusts nothing
