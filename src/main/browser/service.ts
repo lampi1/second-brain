@@ -20,6 +20,7 @@ import { browserTools, type Scope } from './tools';
 import { SHOW_UI_HINT } from '../genui/artifacts';
 import { SCREENSHOT_HINT } from '../ask-image';
 import { BROWSER_READ_TOOLS, type BrowserAccess } from '../agents/tool-policy';
+import { compactMcpTool } from '../chats/tool-visibility';
 
 export { mcpPortFromEnv } from '../mcp/server';
 
@@ -40,7 +41,7 @@ const INSTRUCTIONS = [
  *  setBrowserAccess: which of the browser tools each chat sees there (all, the reading ones for 'browser-read', or none).
  *  setChatToolFilter: which of the added tools a chat sees (ChatManager.chatToolShown). chatToolsFor: the tools a
  *  chat's endpoint lists now (run_code's in-process forwarding, ADR 0331). */
-export interface BrowserModule { service: BrowserService; mcp: McpServer; addChatTools: (tools: McpTool[]) => void; setBrowserAccess: (access: (chatId: string) => BrowserAccess) => void; setChatToolFilter: (shown: (chatId: string, tool: string) => boolean) => void; chatToolsFor: (chatId: string) => McpTool[] }
+export interface BrowserModule { service: BrowserService; mcp: McpServer; addChatTools: (tools: McpTool[]) => void; setBrowserAccess: (access: (chatId: string) => BrowserAccess) => void; setChatToolFilter: (shown: (chatId: string, tool: string) => boolean) => void; setChatToolCompact: (compact: (chatId: string) => boolean) => void; chatToolsFor: (chatId: string) => McpTool[] }
 
 /** The clipboard of Copia: the system one, or (SB_TEST=1) an in-memory one the e2e suite reads through
  *  globalThis.__sbClipboard, so a test never overwrites what the user copied. */
@@ -86,6 +87,7 @@ export async function createBrowserModule(o: { emitter: Emitter; window: () => B
   // what a chat is never allowed to call (the Orchestrator's agent_delegate, a root chat's agent_ask_parent…) is left
   // out of its list: the schema and description cost tokens in every turn and the call would only be refused
   let chatToolShown: (chatId: string, tool: string) => boolean = () => true;
+  let chatToolCompact: (chatId: string) => boolean = () => false;
   // a chat's own endpoint, also as run_code reaches it in process (Code Mode, ADR 0331)
   const chatToolsFor = (id: string): McpTool[] => {
     const access = browserAccess(id);
@@ -97,7 +99,11 @@ ${SCREENSHOT_HINT}`;
   mcp.mount('/mcp/chat/:chatId/:token', {
     // the browser's instructions only for a chat that has browser tools
     name: 'browser-chat', instructions: params => browserAccess(params.chatId ?? '') === 'none' ? CHAT_HINTS : `${INSTRUCTIONS}\n${CHAT_HINTS}`,
-    tools: ({ params }) => chatToolsFor(params.chatId ?? ''),
+    tools: ({ params }) => {
+      const id = params.chatId ?? '';
+      const list = chatToolsFor(id);
+      return chatToolCompact(id) ? list.map(compactMcpTool) : list;
+    },
     authorize: p => !!p.chatId && !!p.token && tokens.check(p.chatId, p.token),
     who: p => p.chatId,
   });
@@ -232,5 +238,5 @@ ${SCREENSHOT_HINT}`;
       await mcp.close();
     },
   };
-  return { service, mcp, addChatTools: tools => { chatTools.push(...tools); }, setBrowserAccess: access => { browserAccess = access; }, setChatToolFilter: shown => { chatToolShown = shown; }, chatToolsFor };
+  return { service, mcp, addChatTools: tools => { chatTools.push(...tools); }, setBrowserAccess: access => { browserAccess = access; }, setChatToolFilter: shown => { chatToolShown = shown; }, setChatToolCompact: compact => { chatToolCompact = compact; }, chatToolsFor };
 }

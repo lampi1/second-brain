@@ -264,6 +264,12 @@ export abstract class ManagerSessions extends ManagerPersistence {
     return warm ? toolShownToWarm(warm, tool) : toolShownToUnknown(tool);
   }
 
+  /** Whether this chat's engine needs compact MCP tool descriptions on its chat endpoint (ADR 0332). */
+  chatToolsCompact(chatId: string): boolean {
+    const r = this.chats.get(chatId);
+    return !!r && engineOf(r.s.harness)?.mcpCompact === true;
+  }
+
   private mcpConfig(chatId: string): string | null {
     const url = this.opts.mcpUrlFor?.(chatId) ?? null;
     const app = this.appMcpFor(this.chats.get(chatId));

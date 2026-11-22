@@ -109,6 +109,8 @@ function startSession(engine: EngineDef, opts: SessionOptions, sink: SessionSink
         ...(engine.modelFlag ? { modelFlag: engine.modelFlag } : {}),
         ...(engine.modelOption ? { modelOption: true } : {}),
         ...(engine.mcpHttp ? { mcpHttp: true } : {}),
+        ...(engine.mcpCompact ? { mcpCompact: true } : {}),
+        ...(engine.waitBackground ? { waitBackground: true } : {}),
         ...(engine.realCwd ? { realCwd: true } : {}),
         ...(appAsks(engine) ? { appAsk: true } : {}),
         loginCommand: engine.login.length ? [command, ...engine.login].join(' ') : null,

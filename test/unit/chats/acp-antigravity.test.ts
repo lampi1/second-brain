@@ -2,11 +2,12 @@
 // the model as a config option, http MCP without the capability), the app's tools it names mcp_<server>_<tool> answered
 // without a panel (run_code only in Code Mode), its MCP servers passed though initialize announces none, the model
 // picker winning over its per-thinking-level "models", its working mode "default", never "auto" or "accept-edits", its
-// folder as the long real path, and no read-only chats.
+// folder as the long real path, no read-only chats, no direct connectors on its tight MCP budget, and a turn that ends
+// while its own background command runs continued once instead of going idle.
 // The session/new answer below is agy 1.5.14's own (real run 2026-11-22). No real engine ever runs here.
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
-import { AcpSession, longPath } from '../../../src/main/chats/acp';
+import { AcpSession, acpBackgroundEvent, bgWaitPrompt, longPath } from '../../../src/main/chats/acp';
 import { acpAppTool } from '../../../src/main/chats/app-tool-approval';
 import { codeModeFor } from '../../../src/main/code-mode/policy';
 import { engineOf } from '../../../src/main/engines/registry';
@@ -47,6 +48,35 @@ interface Inside {
 
 const open: AcpSession[] = [];
 afterEach(async () => { await Promise.all(open.splice(0).map(s => s.close(500))); });
+
+interface Live {
+  s: Inside & { open: boolean; queue: { text: string; images: [] }[]; drain(): void; onUpdate(u: object): void };
+  changed: Record<string, unknown>[]; items: { kind: string; code?: string; text?: string }[]; prompts: string[]; end(stopReason?: string): Promise<void>;
+}
+
+/** An Antigravity session with its session open, its prompts recorded and each turn ended by end(). */
+function agyLive(extra: object = {}): Live {
+  const changed: Record<string, unknown>[] = [], items: { kind: string; code?: string }[] = [], prompts: string[] = [];
+  const sink = new Proxy({ changed: (c: Record<string, unknown>) => { changed.push(c); }, item: (i: { kind: string }) => { items.push(i); } }, { get: (t, k) => (t as Record<string | symbol, unknown>)[k] ?? (() => {}) });
+  const s = new AcpSession({
+    engineId: 'antigravity', label: 'Antigravity', args: ['acp'], acpCommand: 'agy', modelOption: true, mcpHttp: true, appAsk: true,
+    chatId: 'c', cwd: tmp('cwd'), mcpUrl: MCP, appMcpUrl: APP, ...extra,
+  }, sink as never);
+  open.push(s);
+  const inside = s as unknown as Live['s'];
+  let done: ((r: object) => void) | null = null;
+  inside.request = (m, p) => {
+    if (m !== 'session/prompt') return Promise.resolve({});
+    prompts.push(((p as { prompt: { text?: string }[] }).prompt).map(x => x.text ?? '').join('\n'));
+    return new Promise(r => { done = r; });
+  };
+  inside.open = true; inside.sessionId = 'sid';
+  const end = async (stopReason = 'end_turn'): Promise<void> => { const d = done; done = null; d?.({ stopReason }); await new Promise(r => setImmediate(r)); };
+  return { s: inside, changed, items, prompts, end };
+}
+const say = (l: Live, text: string): void => { l.s.queue.push({ text, images: [] }); l.s.drain(); };
+const toolOut = (l: Live, id: string, out: string): void => { l.s.onUpdate({ sessionUpdate: 'tool_call', toolCallId: id, title: 'run_command', status: 'completed', rawOutput: out }); };
+const bg = (l: Live): unknown[] => l.changed.filter(c => 'background' in c).map(c => c.background);
 
 /** An Antigravity session as engines/sessions.ts builds it; under tests the real CLI never starts (cli.ts engineAllowed). */
 function agy(extra: object = {}): Inside {
@@ -103,6 +133,69 @@ describe('Antigravity engine (ADR 0332)', () => {
     const other = agy({ mcpHttp: false });
     other.caps = { loadSession: true };
     expect(other.mcpServers()).toEqual([]);
+  });
+
+  it('passes no direct connector next to the app servers on the tight MCP budget (mcpCompact), every connector otherwise', () => {
+    const ext = [{ name: 'outlook-msoutlook-mcp', url: 'http://127.0.0.1:4329/mcp/ext/outlook' }];
+    const compact = agy({ mcpCompact: true, extMcp: ext });
+    compact.caps = {};
+    expect(compact.mcpServers().map(x => x.name)).toEqual(['second-brain', 'second-brain-app']);
+    const full = agy({ extMcp: ext });
+    full.caps = {};
+    expect(full.mcpServers().map(x => x.name)).toEqual(['second-brain', 'second-brain-app', 'outlook-msoutlook-mcp']);
+    expect(engineOf('antigravity')).toMatchObject({ mcpCompact: true, waitBackground: true });
+  });
+
+  it("reads agy 1.5.14's background task lines: started, still running, done, already over", () => {
+    expect(acpBackgroundEvent('Tool is running as a background task with task id: conv-1/task-3')).toEqual({ started: 'conv-1/task-3' });
+    expect(acpBackgroundEvent('Task: conv-1/task-3\nStatus: RUNNING')).toEqual({ running: 'conv-1/task-3' });
+    expect(acpBackgroundEvent('Task: conv-1/task-3\nStatus: DONE\nexit 0')).toEqual({ ended: 'conv-1/task-3' });
+    expect(acpBackgroundEvent('cannot kill task "conv-1/task-3": task is not running (status: DONE)')).toEqual({ ended: 'conv-1/task-3' });
+    expect(acpBackgroundEvent('ok, 3 files changed')).toBeNull();
+  });
+
+  it('a turn that ends while its own background command runs continues once with a visible line, then waits for it', async () => {
+    const l = agyLive({ waitBackground: true });
+    say(l, 'lancia i test');
+    toolOut(l, 't1', 'Tool is running as a background task with task id: conv-1/task-1');
+    expect(bg(l)).toEqual([1]);
+    await l.end();
+    expect(l.items.filter(i => i.kind === 'system').map(i => i.code)).toEqual(['bgWaitContinued']);
+    expect(l.prompts).toEqual(['lancia i test', bgWaitPrompt(['conv-1/task-1'])]);
+    toolOut(l, 't2', 'Task: conv-1/task-1\nStatus: RUNNING');
+    await l.end();
+    expect(l.prompts).toHaveLength(2); // one follow-up per task, never a loop
+    expect(bg(l)).toEqual([1]);       // still running: the chat shows it, owedReport and auto-close wait
+    say(l, 'com\'è andata?');
+    toolOut(l, 't3', 'Task: conv-1/task-1\nStatus: DONE');
+    expect(bg(l)).toEqual([1, 0]);
+    await l.end();
+    expect(l.prompts).toHaveLength(3);
+  });
+
+  it('no follow-up without waitBackground, after a stop by the user, or once the command ended; a task not seen again is settled', async () => {
+    const off = agyLive();
+    say(off, 'a');
+    toolOut(off, 't1', 'Tool is running as a background task with task id: conv-1/task-1');
+    await off.end();
+    expect(off.prompts).toEqual(['a']);
+    say(off, 'b');
+    await off.end();
+    expect(bg(off)).toEqual([1, 0]);
+
+    const cancelled = agyLive({ waitBackground: true });
+    say(cancelled, 'a');
+    toolOut(cancelled, 't1', 'Tool is running as a background task with task id: conv-1/task-1');
+    await cancelled.end('cancelled');
+    expect(cancelled.prompts).toEqual(['a']);
+
+    const over = agyLive({ waitBackground: true });
+    say(over, 'a');
+    toolOut(over, 't1', 'Tool is running as a background task with task id: conv-1/task-1');
+    toolOut(over, 't2', 'Task: conv-1/task-1\nStatus: DONE');
+    await over.end();
+    expect(over.prompts).toEqual(['a']);
+    expect(bg(over)).toEqual([1, 0]);
   });
 
   it('reads the model from its "model" option, not from models (one id per thinking level), with thought_level as the effort', () => {

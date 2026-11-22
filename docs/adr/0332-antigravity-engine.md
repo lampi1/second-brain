@@ -34,13 +34,11 @@ uses for OpenCode and the catalog engines (`src/main/chats/acp.ts`). It differs 
 3. **The app's own MCP tools pass without a panel** (`acpAppTool`, `src/main/chats/app-tool-approval.ts`): the
    `mcp_<server>_` spelling joins `<server>_` and `mcp__<server>__`, still bound to the app's own endpoint and the
    listed tools; a look-alike server still asks. `request_permission` reads the tool from `name` before `title`.
-4. **Code Mode on Antigravity** (originally off: live on 2026-11-22 with Gemini 3.8 Flash and Claude Sonnet 4.6 inside
-   agy, agy fetched and cached the `run_code` schema but those models did not report seeing `mcp_second-brain_run_code`).
-   Amended 2026-11-22 (owner: extend Code Mode to Antigravity chats like Cursor, for Sentinel chats on Gemini 4 Neon):
-   `codeModeFor` (`src/main/code-mode/policy.ts`) now includes `'antigravity'`. When `codeMode` is on (never for the
-   Orchestrator or maintenance research), `run_code` is exposed on the chat endpoint, auto-allowed by `acpAppTool`, and
-   the first turn includes `CODE_MODE_HINT` (`src/main/chats/acp.ts`) while native tools stay visible; when `codeMode` is
-   off, `run_code` is not exposed and no hint is sent.
+4. **No Code Mode on Antigravity for now** (`CODE_MODE_ENGINES` stays Claude and Cursor). Live, with Code Mode on, agy
+   fetched and cached the `run_code` schema, but neither Gemini 3.8 Flash nor Claude Sonnet 4.6 running inside agy saw
+   the tool: Sonnet answered that `mcp_second-brain_run_code` was not among its tools. Why agy drops it is still to be
+   verified (its schema or description may be filtered). `acpAppTool` keeps a `codeMode` parameter so an ACP engine
+   that does expose `run_code` only needs its line in `CODE_MODE_ENGINES`.
 
 5. **Its folder as the long real path, and no read-only chats** (`realCwd`, `noReadOnly`). With the brain under
    `%TEMP%` behind an 8.3 short name (a `~1` segment) agy once wrote a file without asking
@@ -62,6 +60,26 @@ uses for OpenCode and the catalog engines (`src/main/chats/acp.ts`). It differs 
   its history and ran a new turn.
 - Known risk until the live 8.3 check (Decision 5): a write gate that depends on agy's own requests. Work chats keep the
   app's auto-permit and the user's rules, as on every ACP engine.
+- **MCP eager schema budget (`mcpCompact`, amended 2026-11-22):** `agy 1.5.14` enforces a ~60 KB eager MCP schema
+  budget across all servers in `session/new` (`mcpServers`) and drops the largest tools first, with no lazy tool loader
+  in ACP (calling a dropped tool fails with `unknown tool`). Passing external connectors (e.g. Outlook + Teams, ~83 KB)
+  alongside `second-brain` (~65 KB) evicted `agent_delegate`, `agent_report`, `send_to_chat`, `show_ui` and `run_code`.
+  With `mcpCompact: true` on the Antigravity catalog entry, `AcpSession.mcpServers()` omits direct `extMcp` servers
+  and the per-chat MCP mount compacts verbose tool descriptions (`compactMcpTool`: tool descriptions cut to 180
+  characters, property descriptions to 80, every parameter name, type, enum and required field intact) so the full
+  `second-brain` tool set measures ~41 KB and every workflow tool stays declared and callable. Trade-off: Antigravity
+  chats have no direct Outlook/Teams tools until Code Mode reaches them for Antigravity (`run_code`); before this,
+  about half of those tools, every send tool included, were evicted anyway. Taken from cloudroom
+  (`core/src/runtime/antigravity.rs`, Apache 2.0), which gives Antigravity `mcpServers: []` and reaches its tools
+  another way: a small MCP surface is the only one this engine keeps whole.
+- **Background shell commands (`acpBackgroundEvent`, amended 2026-11-22):** `agy acp` backgrounds slow `run_command`
+  calls and resolves `session/prompt` with `end_turn` while the command still runs. `AcpSession` tracks background task
+  ids from tool output (started, `Status: RUNNING`, `Status: DONE`, «task is not running») and reports
+  `background > 0`, as cloudroom derives its `Event::Background` from the engine's own task list rather than from a
+  process count. A task neither started nor seen running in a turn is taken as settled when that turn ends. With
+  `waitBackground: true`, an `end_turn` with a tracked task still running and nothing queued sends one app follow-up
+  per task (`bgWaitPrompt`, line «sys.bgWaitContinued»): the chat waits for its command instead of going idle on
+  «Attendo…» and reporting too early.
 - An ACP engine's models are known only after its first `session/new`: a chat created with a model before that is
   refused, as for the other catalog engines. Amended 2026-11-22 (owner: «fix it directly»): that left Antigravity with
   no first chat, because the Orchestrator can open one only with a listed model. Antigravity's list now comes from

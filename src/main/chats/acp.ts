@@ -49,7 +49,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import fs from 'node:fs';
 import { acpAppTool, APP_UI_TOOLS, appEndpoint, CODE_MODE_RULE, cursorAppPermissions } from './app-tool-approval';
 
-/** Code Mode on ACP engines (Cursor, Antigravity; ADR 0331): native tools cannot be hidden, so the first turn's context asks to prefer run_code. */
+/** Code Mode on Cursor (ADR 0331): its native tools cannot be hidden, so the first turn's context asks to prefer run_code. */
 const CODE_MODE_HINT = 'Code Mode is on in this chat: prefer the second-brain tool run_code to your native file, shell and search tools. Write one JavaScript script that calls tools.Bash/Read/Write/Edit/Grep/Glob and the other tools listed in its schema, batches the calls and returns only what you need. Every call inside it passes the app\'s permission rules; an action only the user runs stops the script: then write the exact command in a fenced code block.';
 import os from 'node:os';
 import path from 'node:path';
@@ -136,6 +136,12 @@ export interface AcpOptions extends SessionOptions {
   modelOption?: boolean;
   /** pass the app's http MCP servers even though initialize announces no mcpCapabilities.http (Antigravity, ADR 0332) */
   mcpHttp?: boolean;
+  /** tight eager MCP schema budget (Antigravity, ADR 0332): omit direct extMcp servers from session/new so large
+   *  connectors never evict core second-brain workflow tools (agent_delegate, agent_report, send_to_chat, show_ui) */
+  mcpCompact?: boolean;
+  /** a turn that ends (end_turn) while a background task it tracks still runs gets one app follow-up per task, so the
+   *  chat waits for its own command instead of going idle (Antigravity backgrounds slow commands, ADR 0332) */
+  waitBackground?: boolean;
   /** start the engine and open its session in the folder's long, real path (fs.realpathSync.native): Windows 8.3 short
    *  names (`PROGRA~1`) expanded. Antigravity, ADR 0332: on a short-name path it wrote without asking the app */
   realCwd?: boolean;
@@ -148,6 +154,9 @@ export interface AcpOptions extends SessionOptions {
 export const netRetryPrompt = (label: string): string =>
   `Il turno si è interrotto per un errore di rete di ${label}: continua da dove eri, senza rifare quello già fatto.`;
 const NET_RETRY_DELAYS = [5000, 20000];
+/** The prompt that continues a turn the engine ended while its own background command still runs (waitBackground). */
+export const bgWaitPrompt = (tasks: readonly string[]): string =>
+  `Il comando in background ${tasks.join(', ')} è ancora in corso: il turno non è finito. Aspettalo (controllane lo stato con il tool dei task) e poi completa il lavoro; chiudi il turno solo quando è finito.`;
 /** a user's stop waits this long for the engine to end its prompt, then the engine is restarted (watchCancel) */
 const CANCEL_GRACE_MS = 5000;
 
@@ -353,6 +362,21 @@ export function acpExitCode(rawOutput: unknown): { exitCode?: number } {
   const v = out.exitCode ?? out.exit_code ?? (out.exitStatus && typeof out.exitStatus === 'object' ? (out.exitStatus as Obj).exitCode : undefined);
   return Number.isSafeInteger(v) && (v as number) >= 0 ? { exitCode: v as number } : {};
 }
+/** A background shell/command task reported in an ACP tool output (Antigravity `agy acp` backgrounds slow commands and
+ *  resolves session/prompt with end_turn while the command still runs): tracks start, a status still RUNNING, and
+ *  completion/kill, so the app keeps background > 0 instead of treating the mid-wait pause as a finished turn.
+ *  Strings as agy 1.5.14 writes them (its conversation store, 2026-11-22). */
+export function acpBackgroundEvent(text: string): { started?: string; running?: string; ended?: string } | null {
+  const started = /Tool is running as a background task with task id:\s*([^\s"'<>]+)/i.exec(text);
+  if (started?.[1]) return { started: started[1] };
+  const status = /\bTask:\s*([^\s"'<>]+)[\s\S]*?\bStatus:\s*(RUNNING|DONE|COMPLETED|FAILED|CANCELLED|KILLED|EXITED)\b/i.exec(text);
+  if (status?.[1]) return status[2]!.toUpperCase() === 'RUNNING' ? { running: status[1] } : { ended: status[1] };
+  const notRunning = /cannot kill task\s+"?([^\s"'<>]+?)"?:\s*task is not running/i.exec(text);
+  if (notRunning?.[1]) return { ended: notRunning[1] };
+  const killed = /\b(?:Killed|Stopped|Terminated)\s+task\s+([^\s"'<>]+)/i.exec(text);
+  if (killed?.[1]) return { ended: killed[1] };
+  return null;
+}
 const PLAN_Q = 'Approvi il piano?';
 // The ACP vocabulary the app knows (drift.ts reports anything else): stop reasons of session/prompt, updates it
 // knowingly ignores, the protocol version it speaks. Checked against Cursor CLI 2026.07.23 and agentclientprotocol.com.
@@ -529,6 +553,13 @@ export class AcpSession implements HarnessSession {
   private subagents = new Map<string, { at: number; type: string; task: string; description: string; model: string | null }>();
   private readonly childTelemetry: AgentChildrenReporter;
   private childTasks = new Map<string, { task: string | null; state: ChildObservation['state']; source: ChildObservation['source'] }>();
+  /** background shell/command tasks started by the engine and not yet settled (Antigravity `run_command` backgrounding) */
+  /** background task ids the engine reported started and not yet ended (acpBackgroundEvent) */
+  private bgTasks = new Set<string>();
+  /** the ids this turn started or saw still RUNNING: the others are settled when it ends */
+  private turnBg = new Set<string>();
+  /** the ids already given their one follow-up (waitBackground) */
+  private bgNudged = new Set<string>();
   /** pending subagent hook runs (tests wait on them) */
   readonly hookRuns: Promise<void>[] = [];
   private planItemId: string | null = null;
@@ -695,7 +726,11 @@ export class AcpSession implements HarnessSession {
     const list: Obj[] = [];
     if (this.opts.mcpUrl) list.push({ type: 'http', name: 'second-brain', url: this.opts.mcpUrl, headers: [] });
     if (this.opts.appMcpUrl) list.push({ type: 'http', name: 'second-brain-app', url: this.opts.appMcpUrl, headers: [] });
-    for (const ext of this.opts.extMcp ?? []) if (!list.some(x => x.name === ext.name)) list.push({ type: 'http', name: ext.name, url: ext.url, headers: [] });
+    // engines with a tight eager MCP schema budget (Antigravity, ADR 0332) omit direct extMcp servers so large
+    // connectors cannot evict core second-brain workflow tools (ADR 0332; connectors come back through Code Mode's run_code)
+    if (!this.opts.mcpCompact) {
+      for (const ext of this.opts.extMcp ?? []) if (!list.some(x => x.name === ext.name)) list.push({ type: 'http', name: ext.name, url: ext.url, headers: [] });
+    }
     return list;
   }
 
@@ -880,6 +915,7 @@ export class AcpSession implements HarnessSession {
       prompt = [{ type: 'text', text: next.text || '(immagini non inviate)' }];
     }
     this.prompting = true;
+    this.turnBg.clear();
     this.turnStart = Date.now();
     this.costAtTurnStart = this.sessionCost;
     this.planItemId = null;
@@ -1008,9 +1044,28 @@ export class AcpSession implements HarnessSession {
     log.info('chats', 'acp turn done', { chat: this.opts.chatId, op: 'invoke_agent', data: { engine: this.engine, stopReason: stop || null, error: err ? errText(err) : null, costUsd: cost, usage: !!usage, netError: net } });
     this.reportEstimate();
     this.prompting = false;
+    // a task neither started nor seen RUNNING in this turn is taken as settled (agy reports no end once it delivered it)
+    const settled = [...this.bgTasks].filter(t => !this.turnBg.has(t));
+    if (settled.length) { for (const t of settled) this.bgTasks.delete(t); this.sink.changed({ background: this.bgTasks.size }); }
     if (net && !this.retryOff && this.retryNet(err ? errText(err) : this.lastAnswer)) return;
+    if (this.waitBackground(stop, !!err || !!provider || net || interrupted || !!stopped)) return;
     if (this.queue.length) this.drain();
     else this.setState(this.asks.size ? 'waiting' : 'idle');
+  }
+
+  /** waitBackground: an end_turn with the engine's own command still running and nothing queued sends one follow-up
+   *  per task (a visible line), so the chat keeps working until the command ends instead of going idle on «Attendo…».
+   *  False when it does not apply: the turn ends as usual. */
+  private waitBackground(stop: string, broken: boolean): boolean {
+    if (!this.opts.waitBackground || stop !== 'end_turn' || broken || this.queue.length || this.retryTimer) return false;
+    const fresh = [...this.bgTasks].filter(t => !this.bgNudged.has(t));
+    if (!fresh.length) return false;
+    for (const t of fresh) this.bgNudged.add(t);
+    log.info('chats', 'acp turn ended with a background task running: continuing', { chat: this.opts.chatId, data: { engine: this.engine, tasks: fresh.length } });
+    this.sysCode('bgWaitContinued', { label: this.label, tasks: fresh.join(', ') }, 'info');
+    this.queue.unshift({ text: bgWaitPrompt(fresh), images: [] });
+    this.drain();
+    return true;
   }
 
   /** A turn cut by the engine's network error: "continue" goes by itself after a growing wait (the chat stays running,
@@ -1682,6 +1737,18 @@ export class AcpSession implements HarnessSession {
     this.tools.set(id, item);
     if (u.rawInput !== undefined && Object.keys(o(u.rawInput)).length) this.wholeInputs.set(id, u.rawInput);
     if (item.status !== 'running') this.wholeInputs.delete(id);
+    if (text && !this.loading) {
+      const bg = acpBackgroundEvent(text);
+      const live = bg?.started ?? bg?.running;
+      if (live) {
+        const before = this.bgTasks.size;
+        this.bgTasks.add(live);
+        this.turnBg.add(live);
+        if (this.bgTasks.size !== before) this.sink.changed({ background: this.bgTasks.size });
+      } else if (bg?.ended && this.bgTasks.delete(bg.ended)) {
+        this.sink.changed({ background: this.bgTasks.size });
+      }
+    }
     this.sink.item(item, !isNew || !!prev);
     this.subagentHooks(id, u, item.status);
   }
@@ -1769,6 +1836,7 @@ export class AcpSession implements HarnessSession {
     for (const t of this.tools.values()) if (t.status === 'running') this.sink.item({ ...t, status: 'error', output: t.output ?? 'interrotto' }, true);
     for (const id of [...this.subagents.keys()]) this.subagentHooks(id, {}, 'error'); // interrupted: its stop hook too
     this.tools.clear(); this.wholeInputs.clear();
+    this.bgTasks.clear(); this.turnBg.clear(); this.bgNudged.clear();
     this.queue = [];
     this.prompting = false;
     this.setState(state);

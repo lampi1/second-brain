@@ -85,6 +85,7 @@ export const SYS_IT = {
   'sys.netRetryCancelledStopped': 'Ripartenza automatica annullata (interrotta).',
   'sys.netRetryCancelledHandoff': 'Ripartenza automatica annullata (passaggio di consegne interrotto).',
   'sys.netRetryCancelledClosed': 'Ripartenza automatica annullata (sessione chiusa).',
+  'sys.bgWaitContinued': (p: { label: string; tasks: string }) => `${p.label} ha chiuso il turno con un comando in background ancora in corso (${p.tasks}): la faccio continuare finché non finisce.`,
   // ---- turn-watchdog.ts: a sent turn with no first event from the engine ----
   'sys.turnNoStart': (p: { label: string; seconds: string | number }) => `${p.label} non ha ancora risposto dopo ${p.seconds} s: il messaggio è inviato, la sessione resta aperta. Aspetta, oppure premi Stop e rimandalo.`,
   'sys.turnStartLate': (p: { label: string; seconds: string | number }) => `${p.label} ha iniziato a rispondere dopo ${p.seconds} s.`,
@@ -236,6 +237,7 @@ export const SYS_EN: typeof SYS_IT = {
   'sys.netRetryCancelledStopped': 'Automatic retry cancelled (stopped).',
   'sys.netRetryCancelledHandoff': 'Automatic retry cancelled (hand-off interrupted).',
   'sys.netRetryCancelledClosed': 'Automatic retry cancelled (session closed).',
+  'sys.bgWaitContinued': (p: { label: string; tasks: string }) => `${p.label} ended its turn with a background command still running (${p.tasks}): it continues until the command ends.`,
   'sys.turnNoStart': (p: { label: string; seconds: string | number }) => `${p.label} has not answered yet after ${p.seconds} s: the message was sent, the session stays open. Wait, or press Stop and send it again.`,
   'sys.turnStartLate': (p: { label: string; seconds: string | number }) => `${p.label} started answering after ${p.seconds} s.`,
   'sys.todos': (p: { list: string }) => `Tasks:\n${p.list}`,
@@ -357,6 +359,7 @@ export const SYS_DE: typeof SYS_IT = {
   'sys.netRetryCancelledStopped': 'Automatische Wiederholung abgebrochen (gestoppt).',
   'sys.netRetryCancelledHandoff': 'Automatische Wiederholung abgebrochen (Übergabe unterbrochen).',
   'sys.netRetryCancelledClosed': 'Automatische Wiederholung abgebrochen (Sitzung geschlossen).',
+  'sys.bgWaitContinued': (p: { label: string; tasks: string }) => `${p.label} hat den Zug beendet, während ein Hintergrundbefehl noch läuft (${p.tasks}): es geht weiter, bis der Befehl fertig ist.`,
   'sys.turnNoStart': (p: { label: string; seconds: string | number }) => `${p.label} hat nach ${p.seconds} s noch nicht geantwortet: Die Nachricht ist gesendet, die Sitzung bleibt offen. Warte oder drücke Stopp und sende sie erneut.`,
   'sys.turnStartLate': (p: { label: string; seconds: string | number }) => `${p.label} hat nach ${p.seconds} s zu antworten begonnen.`,
   'sys.todos': (p: { list: string }) => `Aufgaben:\n${p.list}`,

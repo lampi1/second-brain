@@ -157,7 +157,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   // the brain folder (bound below, once the brain exists) holds the credentials file of login hand-offs
   let brainRoot: () => string | null = () => null;
-  const { service: browser, mcp, addChatTools, setBrowserAccess, setChatToolFilter, chatToolsFor } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
+  const { service: browser, mcp, addChatTools, setBrowserAccess, setChatToolFilter, setChatToolCompact, chatToolsFor } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
   // the brain's chats.mjs poll leaves out the app's own chats (bound below, once the chat manager exists)
   let isOwn: (id: string) => boolean = () => false;
   // Retire the legacy global quiet flag before notifications start; postponement is request-local in the renderer.
@@ -463,6 +463,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   isOwn = id => manager.isOwnSession(id);
   setBrowserAccess(id => manager.browserAccess(id));
   setChatToolFilter((id, tool) => manager.chatToolShown(id, tool));
+  setChatToolCompact(id => manager.chatToolsCompact(id));
   wireCodeMode({ addChatTools, chatToolsFor, manager, gateway: mcpServers.gateway });
   // a closed chat's browser tabs go away and its per-chat MCP token stops working
   const closeChat = manager.close.bind(manager);

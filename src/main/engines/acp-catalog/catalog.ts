@@ -26,6 +26,10 @@ export interface CatalogEntry {
   modelOption?: boolean;
   /** takes http MCP servers without announcing mcpCapabilities.http (registry.ts EngineDef.mcpHttp) */
   mcpHttp?: boolean;
+  /** tight eager MCP schema budget: omits direct extMcp and compacts chat-endpoint descriptions (registry.ts EngineDef.mcpCompact) */
+  mcpCompact?: boolean;
+  /** an end_turn with its own background command still running gets one follow-up (registry.ts EngineDef.waitBackground) */
+  waitBackground?: boolean;
   /** starts in the folder's long real path (registry.ts EngineDef.realCwd) */
   realCwd?: boolean;
   /** never runs a read-only chat (registry.ts EngineDef.noReadOnly) */
@@ -53,5 +57,5 @@ export const ACP_CATALOG: readonly CatalogEntry[] = [
   // mcpCapabilities but takes http MCP servers (real run 2026-11-22); its folder as the long real path, and no read-only
   // chats until a live check explains why it once wrote without asking on an 8.3 short-name path; its models from
   // `agy models` (no session, no token), so a first chat can already name one
-  { ...entry('antigravity', 'Antigravity', 'agy', ['acp', '--disable-telemetry'], ['acp', '--login'], 'https://antigravity.google'), modelOption: true, mcpHttp: true, realCwd: true, noReadOnly: true, modelsArgs: ['models'] },
+  { ...entry('antigravity', 'Antigravity', 'agy', ['acp', '--disable-telemetry'], ['acp', '--login'], 'https://antigravity.google'), modelOption: true, mcpHttp: true, mcpCompact: true, waitBackground: true, realCwd: true, noReadOnly: true, modelsArgs: ['models'] },
 ];
