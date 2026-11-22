@@ -70,11 +70,7 @@ export const auditExpressionsIt = {
   "auditExpression.UpdatePanel.text214": "Aggiornamenti non disponibili in questa installazione.",
   "auditExpression.UpdateRecoveryPanel.text215": (p: { v0: string | number }) => `Bozza conservata ${p.v0}`,
   "auditExpression.UsageBar.text216": "Nessun dato recente",
-  "auditExpression.UsageBar.text217": (p: { v0: string | number; v1: string | number; v2: string | number }) => `Si azzera ${p.v0}${p.v1} · ${p.v2}`,
   "auditExpression.UsageBar.text218": "alle ",
-  "auditExpression.UsageBar.text219": "Orario di azzeramento non noto",
   "auditExpression.UsageBar.text220": (p: { v0: string | number }) => `Il conteggio completo dalle chat è delle ${p.v0}; poi si aggiunge a ogni messaggio`,
-  "auditExpression.UsageBar.text222": "Claude a prezzo di listino API: sull’abbonamento è un costo equivalente, non una fattura.",
-  "auditExpression.UsageBar.text223": "Cursor non espone l’uso del piano.",
   "auditExpression.UsageBar.text226": (p: { v0: string | number }) => `Utilizzo: ${p.v0}`,
 };

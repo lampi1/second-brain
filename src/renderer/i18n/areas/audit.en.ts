@@ -99,14 +99,7 @@ export const auditEn: Record<keyof typeof auditIt, string> = {
   "audit.UpdateRecoveryPanel.thisVersionCannotReadTheBackup": "This version cannot read the backup content. Automatic recovery stopped without deleting it.",
   "audit.UsageBar.todaySSpending": "Today’s spending",
   "audit.UsageBar.live": "live",
-  "audit.UsageBar.updated": "updated",
   "audit.UsageBar.estimate": "estimate",
-  "audit.UsageBar.claudePlan": "Claude plan",
-  "audit.UsageBar.read": "read",
-  "audit.UsageBar.5HourWindow": "5-hour window",
-  "audit.UsageBar.week": "Week",
-  "audit.UsageBar.cursorPlan": "Cursor plan",
-  "audit.UsageBar.unavailable": "Unavailable",
   "audit.UsageBar.todaySChatsMostExpensiveFirst": "Today’s chats, most expensive first",
   "audit.UsageBar.today": "Today"
 };

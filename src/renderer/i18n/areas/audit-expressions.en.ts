@@ -72,11 +72,7 @@ export const auditExpressionsEn: typeof auditExpressionsIt = {
   "auditExpression.UpdatePanel.text214": "Updates unavailable in this installation.",
   "auditExpression.UpdateRecoveryPanel.text215": (p: { v0: string | number }) => `Saved draft ${p.v0}`,
   "auditExpression.UsageBar.text216": "No recent data",
-  "auditExpression.UsageBar.text217": (p: { v0: string | number; v1: string | number; v2: string | number }) => `Resets ${p.v0}${p.v1} · ${p.v2}`,
   "auditExpression.UsageBar.text218": "at ",
-  "auditExpression.UsageBar.text219": "Reset time unknown",
   "auditExpression.UsageBar.text220": (p: { v0: string | number }) => `The complete chat total was read at ${p.v0}; each message adds to it afterwards`,
-  "auditExpression.UsageBar.text222": "Claude at API list prices: on a subscription this is an equivalent cost, not a bill.",
-  "auditExpression.UsageBar.text223": "Cursor does not expose plan usage.",
   "auditExpression.UsageBar.text226": (p: { v0: string | number }) => `Usage: ${p.v0}`,
 };

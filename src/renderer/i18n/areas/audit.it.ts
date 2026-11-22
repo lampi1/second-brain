@@ -98,14 +98,7 @@ export const auditIt = {
   "audit.UpdateRecoveryPanel.thisVersionCannotReadTheBackup": "Il contenuto della copia non è leggibile in questa versione. Il recupero automatico si è fermato senza cancellarla.",
   "audit.UsageBar.todaySSpending": "Spesa di oggi",
   "audit.UsageBar.live": "dal vivo",
-  "audit.UsageBar.updated": "aggiornata",
   "audit.UsageBar.estimate": "stima",
-  "audit.UsageBar.claudePlan": "Piano Claude",
-  "audit.UsageBar.read": "letto",
-  "audit.UsageBar.5HourWindow": "Finestra di 5 ore",
-  "audit.UsageBar.week": "Settimana",
-  "audit.UsageBar.cursorPlan": "Piano Cursor",
-  "audit.UsageBar.unavailable": "Non disponibile",
   "audit.UsageBar.todaySChatsMostExpensiveFirst": "Chat di oggi, dalla più cara",
   "audit.UsageBar.today": "Oggi"
 };
