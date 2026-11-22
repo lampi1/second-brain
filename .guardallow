@@ -566,3 +566,5 @@ docs/screenshots/artifacts.webp binary-media sha256:8c7666e682cc902b50b737ef8431
 # frozen demo data only, looked at 2026-11-20.
 docs/screenshots/project-map.webp binary-media sha256:69f69d2a54035ff1294c8dd9d57ee53a66cddef4c65f9853da741a2e43a95f40
 docs/screenshots/plan.webp binary-media sha256:867ce48ff0ffc8f266204293b42992f9ef4fcf01bbc7924c138c02d9ced54164
+docs/screenshots/project-map.webp binary-media sha256:c50fe1d29b1137acf7caf49139525aad696243b90e7b303cedfbcfb1da08bc08
+docs/screenshots/plan.webp binary-media sha256:157dd2eb453ccb6de91b79226d9a3e6fb5ce777d9626e353806e306e75865b22
