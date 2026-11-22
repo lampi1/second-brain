@@ -12,7 +12,7 @@ import { engineStatuses } from './cli';
 import { engineReadiness } from './engines/readiness';
 import { engineInfos, engineOf, enginePathsFromEnv, engines as engineList, priceEnginesOf } from './engines/registry';
 import { ModelLists } from './engines/model-lists';
-import { cliProbe, fetchJson } from './engines/model-probe';
+import { cliListText, cliProbe, fetchJson } from './engines/model-probe';
 import { RunFeedback } from './agents/run-feedback';
 import { qualifiedSkillsLine, runtimePluginName } from './agents/role-gate';
 import { createAgentPacks } from './agents/pack/wiring';
@@ -237,6 +237,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // only the engines turned on; a failure keeps the cached list (brain.recordModels' file), then models.json
   const modelLists = new ModelLists({
     engines: () => engineList().filter(e => engineOn(brain.settings(), e.id)), open: cliProbe(path.join(ctx.userData, 'model-probe')), fetchJson,
+    listText: cliListText(path.join(ctx.userData, 'model-probe')),
     key: h => engines.keyFor(h), store: { get: () => brain.modelsSeen(), record: (h, list) => brain.recordModels(h, list) },
     registry: e => registryModels(priceEnginesOf(e)), appVersion: app.getVersion(), changed: () => agents.refresh(),
   });

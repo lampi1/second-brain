@@ -61,4 +61,11 @@ uses for OpenCode and the catalog engines (`src/main/chats/acp.ts`). It differs 
 - Known risk until the live 8.3 check (Decision 5): a write gate that depends on agy's own requests. Work chats keep the
   app's auto-permit and the user's rules, as on every ACP engine.
 - An ACP engine's models are known only after its first `session/new`: a chat created with a model before that is
-  refused, as for the other catalog engines.
+  refused, as for the other catalog engines. Amended 2026-11-22 (owner: «fix it directly»): that left Antigravity with
+  no first chat, because the Orchestrator can open one only with a listed model. Antigravity's list now comes from
+  `agy models` (`modelsArgs`, engines/model-lists.ts `textModels`), which opens no session and spends no token; the
+  executable runs with no shell (a `.cmd` shim is refused: cmd.exe spawns from the app fail intermittently). Its
+  `id<TAB>name` lines carry the thinking level in the id (`gemini-4-neon-high`), so they fold into the bare model
+  with its efforts, the ids the session's model picker sets; `userModel` takes the suffixed id too, as that bare
+  model with that effort (agents/discovery.ts `userModelOf`). The list refreshes with the others (about two minutes
+  after the start, then every six hours, or «Aggiorna elenco»).

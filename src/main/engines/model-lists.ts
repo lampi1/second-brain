@@ -5,9 +5,11 @@
 //   claude  Claude Code's own `initialize` reply (stream-json control_request): `models` [{value, resolvedModel,
 //           displayName, supportedEffortLevels}], what the user's login can run; no prompt is ever sent
 //   codex   `codex app-server`: initialize, then model/list {data:[{model|id, displayName, hidden}]}
-//   acp     any ACP CLI (Cursor, OpenCode, a catalog engine): only what its chats' session/new listed (acpModels
-//           parses the same shape). It is never started only to ask: rule 4 (`agent` only for Cursor chats) and a
-//           session/new would leave an empty session in the user's own history
+//   acp     any ACP CLI (Cursor, OpenCode, a catalog engine): what its chats' session/new listed (acpModels
+//           parses the same shape). It is never started in ACP mode only to ask: rule 4 (`agent` only for Cursor
+//           chats) and a session/new would leave an empty session in the user's own history. An engine whose own CLI
+//           prints its models with no session and no token (EngineDef.modelsArgs: Antigravity `agy models`, ADR 0332)
+//           is asked that way, so its list exists before its first chat (textModels)
 //   api     the endpoint's own listing with the engine's own key (ADR 0046: the key goes only to its engine's header):
 //           OpenAI-compatible GET <baseUrl>/models, Anthropic GET <baseUrl>/models (the Models API)
 // The result goes to the ModelsSeenStore (brain/models-seen.ts), which is the cache. Fallback when a source fails: the
@@ -57,6 +59,26 @@ export function acpModels(result: unknown): SeenModel[] {
   return cleanModels(arr(picker?.options).map(o).map(x => ({ id: s(x.value), name: s(x.name) || s(x.value) })));
 }
 
+/** A CLI's plain model listing (`agy models`, ADR 0332): one `id<TAB>name` per line, other lines skipped. A
+ *  thinking-level suffix (gemini-4-neon-high, «Gemini 4 Neon (High)») folds into its bare model with that effort, as
+ *  the session's model picker names it (the bare model, the level being its thought_level option: chats/acp.ts
+ *  readState), so the list matches what the chat can set. */
+export function textModels(text: string): SeenModel[] {
+  const rows = new Map<string, { name: string; efforts: Effort[] }>();
+  for (const line of text.split(/\r?\n/)) {
+    const [rawId, ...rest] = line.split('\t');
+    const full = s(rawId), label = s(rest.join(' '));
+    if (!full || !label || /\s/.test(full)) continue;
+    const lv = /^(.+)-(low|medium|high|xhigh|max)$/.exec(full);
+    const id = lv ? lv[1]! : full, effort = lv ? lv[2] as Effort : null;
+    const name = lv ? label.replace(/\s*\([^)]*\)\s*$/, '') || id : label;
+    const row = rows.get(id) ?? { name, efforts: [] };
+    if (effort && !row.efforts.includes(effort)) row.efforts.push(effort);
+    rows.set(id, row);
+  }
+  return cleanModels([...rows].map(([id, r]) => ({ id, name: r.name, ...(r.efforts.length ? { efforts: EFFORTS.filter(e => r.efforts.includes(e)) } : {}) })));
+}
+
 /** An HTTP engine's model listing: OpenAI's {data:[{id}]} or the Anthropic Models API's {data:[{id, display_name,
  *  max_input_tokens}]} (OpenRouter's context_length too). */
 export function httpModels(json: unknown): SeenModel[] {
@@ -78,6 +100,8 @@ export interface LineChannel {
 /** Starts an engine's CLI only to list its models; an error = it cannot start (not installed, not allowed). */
 export type OpenProbe = (engine: EngineDef) => LineChannel | { error: string };
 export type FetchJson = (url: string, headers: Record<string, string>) => Promise<unknown>;
+/** Runs an engine's CLI with its modelsArgs and returns what it printed; an error = it could not run or answer. */
+export type ListText = (engine: EngineDef) => Promise<string>;
 
 const STEP_MS = 30_000;
 const rpcError = (m: Obj): string | null => (m.error ? s(o(m.error).message) || 'errore senza messaggio' : null);
@@ -119,6 +143,8 @@ export interface ModelListDeps {
   engines: () => readonly EngineDef[];
   open: OpenProbe;
   fetchJson: FetchJson;
+  /** an ACP engine with modelsArgs: its CLI's listing (model-probe.ts cliListText); absent = such engines not asked */
+  listText?: ListText;
   /** the engine's own API key (engines/secrets.ts); null = none */
   key: (engine: Harness) => string | null;
   store: { get(): ModelsSeen; record(engine: Harness, list: SeenModel[]): void };
@@ -143,7 +169,10 @@ export class ModelLists {
 
   /** One engine's models from its live source now; throws why not. */
   async live(e: EngineDef): Promise<SeenModel[]> {
-    if (e.kind === 'acp') throw new Error('elenco dalle sue chat (la CLI non parte solo per chiedere)');
+    if (e.kind === 'acp') {
+      if (!e.modelsArgs?.length || !this.d.listText) throw new Error('elenco dalle sue chat (la CLI non parte solo per chiedere)');
+      return textModels(await this.d.listText(e));
+    }
     if (e.kind === 'api') {
       const key = this.d.key(e.id);
       if (!key) throw new Error('nessuna chiave API');
@@ -167,8 +196,10 @@ export class ModelLists {
   }
 
   private async run(only?: Harness): Promise<ModelRefreshOutcome[]> {
-    // ACP engines are not asked (their chats list them): no outcome, no warning, nothing counted as a failure
-    const targets = this.d.engines().filter(e => e.kind !== 'acp' && (!only || e.id === only));
+    // ACP engines are not asked (their chats list them): no outcome, no warning, nothing counted as a failure; one whose
+    // CLI lists its models without a session (modelsArgs) is
+    const asked = (e: EngineDef): boolean => e.kind !== 'acp' || (!!e.modelsArgs?.length && !!this.d.listText);
+    const targets = this.d.engines().filter(e => asked(e) && (!only || e.id === only));
     const before = JSON.stringify(this.d.store.get());
     const out = await Promise.all(targets.map(async (e): Promise<ModelRefreshOutcome> => {
       try {

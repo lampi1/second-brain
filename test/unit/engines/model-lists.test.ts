@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ModelsSeen, SeenModel } from '../../../src/shared/contract';
-import { acpModels, claudeModels, codexModels, httpModels, ModelLists, type LineChannel, type ModelListDeps } from '../../../src/main/engines/model-lists';
+import { acpModels, claudeModels, codexModels, httpModels, ModelLists, textModels, type LineChannel, type ModelListDeps } from '../../../src/main/engines/model-lists';
 import { ModelsSeenStore } from '../../../src/main/brain/models-seen';
 import { engineOf } from '../../../src/main/engines/registry';
 import { withApiModels } from '../../../src/main/engines/sessions';
@@ -48,6 +48,10 @@ const acpCli = (session: Obj) => fakeCli(m => m.method === 'initialize' ? { json
   : m.method === 'session/new' ? { jsonrpc: '2.0', id: m.id, result: session } : undefined);
 
 const ids = (l: readonly SeenModel[] | undefined) => (l ?? []).map(m => m.id);
+/** `agy models` as agy 1.5.14 prints it (abridged) */
+const AGY_MODELS = ['Fetching available models...', 'gemini-4-neon-high\tGemini 4 Neon (High)', 'gemini-4-neon-xhigh\tGemini 4 Neon (XHigh)',
+  'gemini-4-neon-medium\tGemini 4 Neon (Medium)', 'gemini-4-neon-low\tGemini 4 Neon (Low)', 'gemini-4-hydrogen-high\tGemini 4 Hydrogen (High)',
+  'gemini-pro-orchestrator-neon\tOrchestrator (Neon)', 'claude-opus-5-5-low\tClaude Opus 5.5 (Low)', 'claude-opus-5-5-high\tClaude Opus 5.5 (High)', ''].join('\r\n');
 
 /** A ModelLists on a temp store, with one opener per engine and a fetch. */
 function lists(over: Partial<ModelListDeps> & { open?: ModelListDeps['open'] }) {
@@ -69,6 +73,17 @@ describe('the parsers of each live source', () => {
       { id: 'claude-haiku-4-5-20251001', name: 'Haiku 4.5', efforts: [] },
     ]);
     expect(claudeModels(null)).toEqual([]);
+  });
+
+  it('a CLI\'s text listing (agy models): thinking levels folded into the bare model, other lines skipped', () => {
+    expect(textModels(AGY_MODELS)).toEqual([
+      { id: 'gemini-4-neon', name: 'Gemini 4 Neon', efforts: ['low', 'medium', 'high', 'xhigh'] },
+      { id: 'gemini-4-hydrogen', name: 'Gemini 4 Hydrogen', efforts: ['high'] },
+      { id: 'gemini-pro-orchestrator-neon', name: 'Orchestrator (Neon)' },
+      { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', efforts: ['low', 'high'] },
+    ]);
+    expect(textModels('')).toEqual([]);
+    expect(textModels('Error: not signed in\n')).toEqual([]);
   });
 
   it('Codex model/list, ACP session/new (models or OpenCode configOptions), HTTP /models', () => {
@@ -133,6 +148,24 @@ describe('each harness: live, cached, fallback', () => {
     setPriceTable(() => TEST_REGISTRY);
     try { expect(ids(withApiModels({}).cursor?.ids)).toEqual(['grok-4.7']); } finally { setPriceTable(() => null); }
     warn.mockRestore();
+  });
+
+  it('Antigravity (ACP): live from `agy models` before any chat, folded into bare models with their efforts; cached on a failure', async () => {
+    const open = vi.fn(() => acpCli({}));
+    const listText = vi.fn(async () => AGY_MODELS);
+    const a = lists({ engines: () => [engineOf('antigravity')!, engineOf('cursor')!], open, listText });
+    expect(await a.m.refresh()).toEqual([{ engine: 'antigravity', ok: true, count: 4 }]); // Cursor still not asked
+    expect(listText).toHaveBeenCalledWith(engineOf('antigravity'));
+    expect(open).not.toHaveBeenCalled(); // never started in ACP mode only to ask
+    expect(a.store.get().antigravity?.ids.find(m => m.id === 'gemini-4-neon')).toEqual({ id: 'gemini-4-neon', name: 'Gemini 4 Neon', efforts: ['low', 'medium', 'high', 'xhigh'] });
+    expect(a.changed).toHaveBeenCalled();
+    const warn = vi.spyOn(log, 'warn');
+    listText.mockRejectedValueOnce(new Error('la CLI è uscita (1)'));
+    expect(await a.m.refresh('antigravity')).toEqual([{ engine: 'antigravity', ok: false, count: 4, error: 'la CLI è uscita (1)', using: 'cache' }]);
+    expect(ids(a.store.get().antigravity?.ids)).toEqual(['gemini-4-neon', 'gemini-4-hydrogen', 'gemini-pro-orchestrator-neon', 'claude-opus-5-5']);
+    warn.mockRestore();
+    // without the listing (demo, an engine without modelsArgs) it is not asked
+    expect(await lists({ engines: () => [engineOf('antigravity')!] }).m.refresh()).toEqual([]);
   });
 
   it('closes a CLI still answering when the app quits', async () => {

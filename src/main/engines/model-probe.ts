@@ -1,14 +1,16 @@
 // Starts an engine's CLI only to ask for its models (ADR 0256), for engines/model-lists.ts: the same binary and the
 // same resolution the chats use (chats/cli.ts), no prompt ever sent (no token spent), killed as soon as the answer
 // came or the app quits (ModelLists.stop). Claude Code runs with no MCP server, no claude.ai connector, no hook and no
-// saved session; Codex's app-server opens no thread. ACP CLIs are never started here (rule 4: `agent` only for Cursor
-// chats; their lists come from their chats). Tests never start a real CLI (engineAllowed); the channel is tested with
-// an injected spawn (test/unit/engines/model-probe.test.ts).
+// saved session; Codex's app-server opens no thread. ACP CLIs are never started here in ACP mode (rule 4: `agent` only
+// for Cursor chats; their lists come from their chats); one with modelsArgs (Antigravity `agy models`, ADR 0332) runs
+// only that listing (cliListText), the binary itself with no shell (cmd.exe spawns from the app fail intermittently).
+// Tests never start a real CLI (engineAllowed); the channel is tested with an injected spawn
+// (test/unit/engines/model-probe.test.ts).
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import { cliArgv, commandFor, engineAllowed, killTrees, resolveAcp, resolveClaude } from '../chats/cli';
 import { ownProcessGroup } from '../platform';
-import type { LineChannel, OpenProbe } from './model-lists';
+import type { LineChannel, ListText, OpenProbe } from './model-lists';
 import type { EngineDef } from './registry';
 
 type Obj = Record<string, unknown>;
@@ -36,6 +38,37 @@ export function cliProbe(cwd: string, spawnFn: Spawn = spawn): OpenProbe {
     } else return { error: `${e.label}: non parte solo per chiedere i modelli` };
     return channel(start, cwd, spawnFn);
   };
+}
+
+const LIST_MS = 30_000, LIST_MAX = 256 * 1024;
+
+/** An ACP engine's model listing (its modelsArgs, `agy models`): its stdout once it exits 0; a .cmd/.bat shim, a
+ *  failure, a non-zero exit or no answer in 30 s is an error (the process killed). cwd is an empty folder. */
+export function cliListText(cwd: string, spawnFn: Spawn = spawn): ListText {
+  return (e: EngineDef) => new Promise((resolve, reject) => {
+    if (e.kind !== 'acp' || !e.modelsArgs?.length) { reject(new Error(`${e.label}: non elenca i modelli da sola`)); return; }
+    const cmd = resolveAcp(e.id, e.command ?? e.id);
+    if (!cmd) { reject(new Error(`${e.label} CLI non trovata`)); return; }
+    if (!engineAllowed(cmd)) { reject(new Error('nei test il motore reale non parte')); return; }
+    if (cmd.kind === 'cmd') { reject(new Error(`${e.label}: elenco dei modelli solo dall'eseguibile, non da cmd.exe`)); return; }
+    try { fs.mkdirSync(cwd, { recursive: true }); } catch { /* spawn reports it */ }
+    const start = cliArgv(cmd, e.modelsArgs);
+    let proc: ReturnType<typeof spawn>;
+    try {
+      proc = spawnFn(start.command, start.args, { cwd, env: start.env, windowsHide: true, detached: ownProcessGroup(), stdio: ['ignore', 'pipe', 'ignore'] });
+    } catch (err) { reject(err instanceof Error ? err : new Error(String(err))); return; }
+    let out = '', done = false;
+    const finish = (err: Error | null): void => {
+      if (done) return;
+      done = true; clearTimeout(t);
+      if (err) { if (proc.pid) killTrees([proc.pid], { fallback: () => proc.kill() }); else proc.kill(); reject(err); } else resolve(out);
+    };
+    const t = setTimeout(() => finish(new Error(`nessuna risposta in ${LIST_MS / 1000} s`)), LIST_MS);
+    proc.stdout?.setEncoding('utf8');
+    proc.stdout?.on('data', (chunk: string) => { out += chunk; if (out.length > LIST_MAX) finish(new Error('elenco dei modelli troppo lungo')); });
+    proc.on('error', err => finish(err));
+    proc.on('close', code => finish(code === 0 ? null : new Error(`la CLI è uscita (${String(code)})`)));
+  });
 }
 
 /** A JSON-lines channel on a started CLI (exported for its unit test). */

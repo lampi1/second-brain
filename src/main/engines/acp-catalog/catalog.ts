@@ -30,6 +30,8 @@ export interface CatalogEntry {
   realCwd?: boolean;
   /** never runs a read-only chat (registry.ts EngineDef.noReadOnly) */
   noReadOnly?: boolean;
+  /** prints its models without a session (registry.ts EngineDef.modelsArgs) */
+  modelsArgs?: string[];
 }
 
 const entry = (id: string, name: string, command: string, args: string[], login: string[], installUrl: string, skillDirs: string[] = []): CatalogEntry =>
@@ -49,6 +51,7 @@ export const ACP_CATALOG: readonly CatalogEntry[] = [
   // Antigravity CLI (ADR 0332): never --dangerously-skip-permissions (its permissions reach the app's gates through
   // session/request_permission); no --model flag (the model is its "model" config option); it announces no
   // mcpCapabilities but takes http MCP servers (real run 2026-11-22); its folder as the long real path, and no read-only
-  // chats until a live check explains why it once wrote without asking on an 8.3 short-name path
-  { ...entry('antigravity', 'Antigravity', 'agy', ['acp', '--disable-telemetry'], ['acp', '--login'], 'https://antigravity.google'), modelOption: true, mcpHttp: true, realCwd: true, noReadOnly: true },
+  // chats until a live check explains why it once wrote without asking on an 8.3 short-name path; its models from
+  // `agy models` (no session, no token), so a first chat can already name one
+  { ...entry('antigravity', 'Antigravity', 'agy', ['acp', '--disable-telemetry'], ['acp', '--login'], 'https://antigravity.google'), modelOption: true, mcpHttp: true, realCwd: true, noReadOnly: true, modelsArgs: ['models'] },
 ];

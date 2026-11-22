@@ -38,7 +38,9 @@ export function discoverRoles(source: CatalogSource, args: Record<string, unknow
 
 /** The model the user named for one task (app_create_chat's userModel, ADR 0296) → engine + model + effort. The engine,
  *  when omitted, is the one whose list has that model id or name (the role's own engine first); unknown = refused,
- *  so a typo never starts a chat on a model nobody asked for. */
+ *  so a typo never starts a chat on a model nobody asked for. An id with a thinking-level suffix the engine's own CLI
+ *  uses (Antigravity's gemini-4-neon-high, ADR 0332) is its listed bare model with that effort, when the model takes
+ *  it (or its efforts are unknown); an explicit different effort is refused. */
 export function userModelOf(v: unknown, models: readonly AgentModelChoice[], roleEngine: string): UserModelPick | undefined {
   if (v === undefined) return undefined;
   const o = v as { engine?: unknown; model?: unknown; effort?: unknown } | null;
@@ -50,7 +52,16 @@ export function userModelOf(v: unknown, models: readonly AgentModelChoice[], rol
   const same = (x: { id: string; name: string }) => x.id === want || x.name.toLowerCase() === want.toLowerCase();
   const order = [...models].sort((a, b) => Number(b.engine === roleEngine) - Number(a.engine === roleEngine));
   const engines = o.engine !== undefined ? order.filter(m => m.engine === o.engine) : order;
-  const hit = engines.map(m => ({ m, x: m.models.find(same) })).find(h => h.x);
+  let hit = engines.map(m => ({ m, x: m.models.find(same) })).find(h => h.x);
+  let suffix: UserModelPick['effort'] | undefined;
+  const lv = hit ? null : /^(.+)-(low|medium|high|xhigh|max)$/.exec(want);
+  if (lv) {
+    const base = lv[1]!, effort = lv[2] as NonNullable<UserModelPick['effort']>;
+    hit = engines.map(m => ({ m, x: m.models.find(x => x.id === base && (!x.efforts || x.efforts.includes(effort))) })).find(h => h.x);
+    if (hit) suffix = effort;
+  }
+  if (suffix && o.effort !== undefined && o.effort !== suffix) throw Error(`userModel: ${want} already names the effort ${suffix}; effort ${String(o.effort)} contradicts it.`);
+  if (suffix) return { engine: hit!.m.engine, model: hit!.x!.id, effort: suffix };
   if (!hit) throw Error(`userModel: ${want} is not in ${o.engine ? `${String(o.engine)}'s` : 'any engine\'s'} model list (agent_catalog with models true); ask the user which one he means.`);
   return { engine: hit.m.engine, model: hit.x!.id, ...(o.effort !== undefined ? { effort: o.effort as UserModelPick['effort'] } : {}) };
 }

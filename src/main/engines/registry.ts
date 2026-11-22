@@ -50,6 +50,10 @@ export interface EngineDef extends EngineInfo, EngineStart {
   /** never runs a read-only chat (a comparison side, a role without edits or commands, ceiling «plan»): its own
    *  permission requests are not yet trusted to hold every write (Antigravity, ADR 0332); engines/sessions.ts refuses */
   noReadOnly?: boolean;
+  /** ACP: the arguments after the command that print its models as `id<TAB>name` lines, with no session and no token
+   *  (Antigravity `agy models`, ADR 0332), so the model list exists before a first chat (model-lists.ts). App entries
+   *  only: a brain entry cannot set it */
+  modelsArgs?: string[];
 }
 
 /** The shape of an engine id: a chat saved on an engine since removed stays readable (it cannot start). */
