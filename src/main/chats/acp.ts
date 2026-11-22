@@ -553,7 +553,6 @@ export class AcpSession implements HarnessSession {
   private subagents = new Map<string, { at: number; type: string; task: string; description: string; model: string | null }>();
   private readonly childTelemetry: AgentChildrenReporter;
   private childTasks = new Map<string, { task: string | null; state: ChildObservation['state']; source: ChildObservation['source'] }>();
-  /** background shell/command tasks started by the engine and not yet settled (Antigravity `run_command` backgrounding) */
   /** background task ids the engine reported started and not yet ended (acpBackgroundEvent) */
   private bgTasks = new Set<string>();
   /** the ids this turn started or saw still RUNNING: the others are settled when it ends */
