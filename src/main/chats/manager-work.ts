@@ -247,7 +247,10 @@ export abstract class ManagerWork extends ManagerLifecycle {
     const next = this.runs.start({ chatId: r.s.id, agentId: previous.agentId, version: previous.version,
       goal: prompt, startedBy: previous.startedBy, startedAt: at, costKnown: previous.costUsd !== null,
       requestOrigin: mode === 'new-task' ? (options.source?.kind === 'chat' ? 'agent' : options.source?.kind === 'app' ? 'app' : 'user') : previous.requestOrigin ?? 'app',
-      tags: previous.tags ? { ...previous.tags, skills: [] } : undefined, tier: previous.tier, model: previous.model,
+      tags: previous.tags ? { ...previous.tags, skills: [] } : undefined, tier: previous.tier,
+      // the preset this task asked for (ADR 0336, agent_assign_task), else the one the chat already runs on
+      model: options.preset ? options.preset.model : previous.model,
+      ...(options.preset ? { presetChoice: options.preset.choice } : previous.presetChoice ? { presetChoice: previous.presetChoice } : {}),
       ...(r.s.parentId && this.chats.get(r.s.parentId)?.s.run ? { parentRunId: this.chats.get(r.s.parentId)!.s.run!.runId } : {}),
       ...(mode === 'rework' ? { reworkOf: previous.runId } : {}),
       // a review chat's next round stays a review (#387): its run names the run it reviews now

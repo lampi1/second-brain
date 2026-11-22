@@ -1,7 +1,7 @@
 // Impostazioni → Ruoli e deleghe (ADR 0083): the «Balanced mode» switch (ADR 0218: delegated chats follow the credits
 // left), the «Code Mode» switch (ADR 0331: Claude, Cursor and Antigravity chats work through run_code, off by default), the limits of delegation between role chats (how deep a chain of children
 // may go, how many children of one parent work at once, after how many quiet minutes a child counts as stalled; the
-// independent reviews are one switch on the Agenti page now (JudgingSwitch, 2026-10-22); stallMin is read by agents/delegation.ts stalledMin) and the model each tier (leggero / medio / alto) runs on per engine.
+// independent reviews are one switch on the Agenti page now (JudgingSwitch, 2026-10-22); stallMin is read by agents/delegation.ts stalledMin) and the model each tier (leggero / medio / alto) runs on per engine, then each work role's three presets Minimo / Base / Massimo (RolePresets.tsx, ADR 0336).
 // Each change saves at once through settings:set (the main side checks the range; agents cannot change these keys).
 // Mounted by SettingsPage.tsx.
 import { useEffect, useState } from 'react';
@@ -11,6 +11,7 @@ import { useEngines } from '../lib/engines';
 import { t } from '../i18n';
 import { Select } from './Select';
 import { HelpTip } from './HelpTip';
+import { RolePresets } from './RolePresets';
 
 const KEYS = ['maxDepth', 'maxParallel', 'stallMin'] as const satisfies readonly (keyof Limits)[];
 const range = (k: keyof Limits): number[] => { const r = DELEGATION_RANGE[k]; return Array.from({ length: r.max - r.min + 1 }, (_, i) => r.min + i); };
@@ -46,6 +47,7 @@ export function DelegationSettings() {
         </div>)}
       </div>
     </div>
+    <RolePresets />
   </>;
 }
 

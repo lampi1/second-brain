@@ -301,7 +301,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     claudeLimits: () => { const u = brain.usage(); return u.limitsAt ? { fiveHourPct: u.fiveHourPct, fiveHourResetsAt: u.fiveHourResetsAt, weekPct: u.weekPct, weekResetsAt: u.weekResetsAt ?? null, at: u.limitsAt } : null; },
     opencodeLog: () => opencodeLogTail(os.homedir()) });
   const balancedMode = new BalancedMode({ on: () => brain.settings().balancedMode === true, book: credits,
-    role: id => { const p = agents.list().profiles.find(x => x.id === id); return p ? { engine: p.engine, model: p.model, effort: p.effort ?? null, tier: p.tier, tierMax: p.tierMax } : null; },
+    role: id => { const p = agents.list().profiles.find(x => x.id === id); return p ? { engine: p.engine, model: p.model, effort: p.effort ?? null, tier: p.tier, tierMax: p.tierMax, presets: agents.presetsOf(p) } : null; },
     engines: () => agents.list().models, tierModel: (e, t) => tierModel(e, t, brain.modelRegistry(), brain.settings().modelTiers),
     tierModels: (e, t) => tierCandidates(e, t, brain.modelRegistry(), brain.settings().modelTiers),
     runs: () => manager.runs.list() });
@@ -641,7 +641,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools(delegationTools({
     integrate: async (parent, child) => stageDelegatedChanges(delegateWorktrees.allocation(parent, child), parent, child, brain.info().brainRoot),
     integrateMany: async (parent, children) => stageDelegatedChangesMany(children.map(child => ({ owned: delegateWorktrees.allocation(parent, child), child })), parent, brain.info().brainRoot), chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
-    engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), balancedMode, label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools,
+    engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), balancedMode, presetChoice: (roleId, ask, delegator) => agents.presetChoice(roleId, ask, delegator), label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools,
     remember: (roleId, line, chat) => { skillLessons.propose({ role: portableId(roleId), text: line, chatId: chat.id, ...(chat.run?.runId ? { runId: chat.run.runId } : {}) }); } }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
   addChatTools(strategyTools(manager, awayOn, projectMaps));
@@ -743,7 +743,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // a role chat's route says how its active version has done so far
   const agentStats = (agentId: string, version: number) => agentStatsLine(runMetrics(manager.runs.list(), { rollups: manager.runs.rolledUp() }).find(m => m.agentId === agentId)?.versions.find(v => v.version === version));
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, balancedMode, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps,
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, balancedMode, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), presetChoice: (roleId, ask, delegator) => agents.presetChoice(roleId, ask, delegator), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps,
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },

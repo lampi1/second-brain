@@ -330,6 +330,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0333](0333-web-fetch-subagent.md) Claude chats keep WebFetch as a plain tool: built-in web-fetch agent off inline — accepted
 - [0334](0334-multi-harness-usage-bar.md) Multi-harness plan usage popover and pinned weekly limits (Claude, Cursor, Codex, OpenCode, Antigravity) — accepted
 - [0335](0335-project-map-line-top-to-bottom-with-parallel-frames.md) A line of phases and steps is drawn top to bottom, with parallel groups in their own frame; the Strategist plans with dependencies — accepted
+- [0336](0336-model-presets.md) Per-task model presets Minimo / Base / Massimo on each role card, picked by delegation under the delegator's price ceiling — accepted
 
 ## Replaced
 

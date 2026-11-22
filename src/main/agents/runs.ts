@@ -13,6 +13,7 @@ import { goalText } from '../../shared/agent-label';
 import { errText, log } from '../log';
 import { MAX_CORRECTIONS, checkResult } from '../../shared/delegation';
 import { MODEL_TIERS, type ModelTier } from '../../shared/roles';
+import { readRunPreset, type RunPresetChoice } from '../../shared/model-presets';
 import { SUMMARY_MAX } from './run-report';
 import { rollUp, SAMPLE_MAX, type RunTally, type TagTally } from './run-metrics';
 import { cleanOrphanTmps, readLocal, renameWithRetry, writeLocalText, writeLocalTextAsync } from './local-store';
@@ -196,6 +197,7 @@ export function readRun(v: unknown): AgentRun | null {
     runId: r.runId, chatId: r.chatId, agentId: r.agentId, version: r.version, goal: r.goal, startedBy: r.startedBy as AgentRun['startedBy'], startedAt: r.startedAt,
     ...(r.parentRunId ? { parentRunId: r.parentRunId as string } : {}),
     ...(r.tier ? { tier: r.tier as ModelTier } : {}), ...(r.model !== undefined ? { model: r.model as string | null } : {}),
+    ...(readRunPreset(r.presetChoice) ? { presetChoice: readRunPreset(r.presetChoice)! } : {}),
     ...(r.reviewOf ? { reviewOf: r.reviewOf as string } : {}), ...(r.reworkOf ? { reworkOf: r.reworkOf as string } : {}),
     ...(r.continuedFrom ? { continuedFrom: r.continuedFrom as string } : {}),
     ...(batch ? { reviewBatch: batch } : {}),
@@ -258,7 +260,7 @@ export function addTurn(run: AgentRun, usd: number | null, tokens: AgentRunToken
 /** Links a new run may carry: the delegating chat's run (agent_delegate), the run an independent review (a Sentinel) reviews, the run it reworks;
  *  each must name a run the store knows. */
 export interface RunLinks { parentRunId?: string; reviewOf?: string; reworkOf?: string }
-export interface RunStart extends RunLinks { chatId: string; agentId: string; version: number; goal: string; startedBy: AgentRun['startedBy']; requestOrigin?: AgentRun['requestOrigin']; startedAt: number; costKnown: boolean; tags?: AgentRunTags; tier?: ModelTier; model?: string | null }
+export interface RunStart extends RunLinks { chatId: string; agentId: string; version: number; goal: string; startedBy: AgentRun['startedBy']; requestOrigin?: AgentRun['requestOrigin']; startedAt: number; costKnown: boolean; tags?: AgentRunTags; tier?: ModelTier; model?: string | null; /** the preset it runs on and why (ADR 0336) */ presetChoice?: RunPresetChoice }
 
 const sample = (v: unknown): boolean => { const s = v as { n?: unknown; values?: unknown; sum?: unknown } | null; return !!s && count(s.n) && Array.isArray(s.values) && s.values.length <= SAMPLE_MAX && s.values.length <= s.n && s.values.every(time)
   && (s.sum === undefined || typeof s.sum === 'number' && Number.isFinite(s.sum) && s.sum >= 0); };
@@ -590,7 +592,7 @@ export class AgentRunStore {
       runId: newRunId(), chatId: s.chatId, agentId: s.agentId, version: s.version, goal: goalText(s.goal).slice(0, GOAL_MAX), startedBy: s.startedBy, startedAt: s.startedAt,
       requestOrigin: s.requestOrigin ?? (s.startedBy === 'user' ? 'user' : s.startedBy === 'app' ? 'app' : 'agent'),
       ...(s.parentRunId ? { parentRunId: s.parentRunId } : {}),
-      ...(s.tier ? { tier: s.tier } : {}), ...(s.model !== undefined ? { model: s.model } : {}),
+      ...(s.tier ? { tier: s.tier } : {}), ...(s.model !== undefined ? { model: s.model } : {}), ...(s.presetChoice ? { presetChoice: { ...s.presetChoice } } : {}),
       ...(s.reviewOf ? { reviewOf: s.reviewOf } : {}), ...(s.reworkOf ? { reworkOf: s.reworkOf } : {}),
       counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null },
       costUsd: s.costKnown ? 0 : null, turns: 0, tokens: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 },

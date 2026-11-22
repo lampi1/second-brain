@@ -12,6 +12,7 @@ import { engineInfos, engineOf } from './engines/registry';
 import { withApiModels } from './engines/sessions';
 import { AgentCatalogService } from './agents/catalog';
 import { tierCandidates, tierModel } from './agents/model-tier';
+import { tokenPriceOf, unitPriceOf } from './agents/list-price';
 import { CATALOG_GUIDANCE } from './agents/discovery';
 import { engineOn } from './engines/policy';
 import type { EnginesApi } from './engines/service';
@@ -252,6 +253,7 @@ function templateRegistry(): ModelRegistry | null {
 /** Shared by real and demo wiring. */
 export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: EnginesApi, cli: () => Record<Harness, CliStatus> | null, onCustomized?: () => void): AgentCatalogService {
   return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}),
+    price: unitPriceOf(tokenPriceOf(() => brain.modelRegistry())),
     tierModel: (engine, tier) => tierModel(engine, tier, brain.modelRegistry(), brain.settings().modelTiers),
     tierModels: (engine, tier) => tierCandidates(engine, tier, brain.modelRegistry(), brain.settings().modelTiers),
     models: () => {

@@ -15,7 +15,7 @@ import { characterOf, isCharacterId } from '../../shared/characters';
 import { readLocal, writeLocal } from './local-store';
 import { AgentHistory, behaviourOf, firstVersion, sameBehaviour, versionedChanges } from './versions';
 import { checkedTools, type AgentPolicy } from './tool-policy';
-import { cappedTier, withinTierMax } from './model-tier';
+import { PRESET_IDS, cardPresets, checkedPresets, choosePreset, presetAskOf, presetNamed, presetOrderProblem, presetsUpTo, type Delegator, type FullPresets, type PresetAsk, type PresetChoice, type RolePresets, type UnitPrice } from '../../shared/model-presets';
 import { fiveRolesTextFor, fullDefaultsFor, shippedTextFor, skillAlignmentFor } from './role-migrate';
 import { engineOf } from '../engines/registry';
 import { log, errText } from '../log';
@@ -45,6 +45,9 @@ export interface AgentCatalogDeps {
   tierModel?: (engine: Harness, tier: ModelTier) => string | null;
   /** every model of a tier on an engine (tierCandidates): a Balanced mode pick must be one of a tier up to tierMax */
   tierModels?: (engine: Harness, tier: ModelTier) => readonly string[];
+  /** one price per token of a model (input + output, the one price table): the presets' order on save and the ceiling of
+   *  a delegation (ADR 0336); absent = neither is checked */
+  price?: UnitPrice;
   emit?: (catalog: AgentCatalog) => void;
   now?: () => number;
   onCustomized?: () => void;
@@ -57,6 +60,8 @@ export interface ResolvedRole {
   maxContext?: number; skills: string[]; launches: string[];
   /** the model tier a role chat runs on */
   tier?: ModelTier;
+  /** the preset it runs on and what chose it (ADR 0336): the run's record and the delegator's warnings */
+  presetChoice?: PresetChoice;
 }
 
 export function ownerOf(p: AgentProfile): AgentOwnerSnapshot {
@@ -92,7 +97,7 @@ export function readOwner(v: unknown): AgentOwnerSnapshot | null {
 }
 
 /** The editable fields, validated. Name, purpose and character always come from the role. */
-type Behaviour = Pick<AgentProfile, 'instructions' | 'engine' | 'model' | 'effort' | 'tools' | 'permissionCeiling' | 'knowhow' | 'pack' | 'maxContext' | 'tier' | 'tierMax' | 'launches' | 'skills'>;
+type Behaviour = Pick<AgentProfile, 'instructions' | 'engine' | 'model' | 'effort' | 'tools' | 'permissionCeiling' | 'knowhow' | 'pack' | 'maxContext' | 'tier' | 'tierMax' | 'presets' | 'launches' | 'skills'>;
 
 export class AgentCatalogService {
   private readonly file: string;
@@ -255,6 +260,7 @@ export class AgentCatalogService {
     if (!(p.model === null || p.model === undefined || typeof p.model === 'string' && MODEL.test(p.model))) throw new Error('Modello non valido.');
     let model = (p.model ?? null) as string | null;
     if (p.effort !== undefined && p.effort !== null && !has(EFFORTS, p.effort)) throw new Error('Effort non valido.');
+    let presets = checkedPresets(p.presets);
     if (current) {
       const e = this.d.models().find(x => x.engine === engine);
       if (!e) throw new Error('Il motore selezionato non è disponibile.');
@@ -275,6 +281,18 @@ export class AgentCatalogService {
         throw new Error(`Il modello «${model}» non è tra quelli noti del motore ${engine}. ${ids.length ? `Modelli noti: ${shown}.` : 'Nessun modello noto.'} Usa uno di questi, oppure nessun modello (quello del livello).`);
       }
       if (p.effort && !e.effort) throw new Error('Questo motore non supporta la scelta dell’effort.');
+      // the presets live on the card's one engine (ADR 0336): carried along unchanged to another engine they are dropped
+      // (the card goes back to its Base only), a new or changed one must be a model that engine is known to have
+      if (presets && base && base.engine !== engine && JSON.stringify(presets) === JSON.stringify(base.presets ?? null)) presets = undefined;
+      for (const [id, x] of Object.entries(presets ?? {}) as [string, { model: string | null; effort?: Effort }][]) {
+        if (!e.modelSelectable) throw new Error(e.modelReason ?? 'Questo motore non applica una scelta di modello: niente preset Minimo o Massimo.');
+        const was = base && base.engine === engine ? (base.presets as RolePresets | undefined)?.[id as 'min' | 'max'] : undefined;
+        if (!(keep && was?.model === x.model) && !e.models.some(m => m.id === x.model)) throw new Error(`Preset ${id === 'min' ? 'Minimo' : 'Massimo'}: il modello «${x.model}» non è tra quelli noti del motore ${engine}.`);
+        if (x.effort && !e.effort) throw new Error('Questo motore non supporta la scelta dell’effort.');
+      }
+      // on a save (not at launch): Minimo <= Base <= Massimo by price, when the prices are known
+      const problem = presets && this.d.price && Object.keys(value).length ? presetOrderProblem(cardPresets({ model, ...(p.effort ? { effort: p.effort as Effort } : {}), presets }, this.d.tierModel?.(engine, p.tier as ModelTier) ?? null), this.d.price) : null;
+      if (problem) throw new Error(problem);
     }
     // the API engine has no tools: a role on it reads only (every class allowed by default, ADR 0085, means nothing there)
     if (engineOf(engine)?.kind === 'api') p.tools = { allow: ['read'] };
@@ -292,7 +310,7 @@ export class AgentCatalogService {
       ...(p.knowhow !== undefined && p.knowhow !== null ? { knowhow: checkedKnowhow(p.knowhow) } : {}),
       ...(p.pack !== undefined && p.pack !== null ? { pack: checkedPackIdentity(p.pack) } : {}),
       ...(typeof p.maxContext === 'number' ? { maxContext: p.maxContext } : {}),
-      tier: p.tier as ModelTier, tierMax: p.tierMax as ModelTier, launches: [...p.launches as string[]], skills: [...p.skills as string[]] };
+      tier: p.tier as ModelTier, tierMax: p.tierMax as ModelTier, ...(presets ? { presets } : {}), launches: [...p.launches as string[]], skills: [...p.skills as string[]] };
   }
   /** The renderer's draft checked like a save, without saving (the editor's live check). */
   validateDraft(value: unknown, id: string): AgentDraft {
@@ -316,7 +334,7 @@ export class AgentCatalogService {
     }
     const version = old.version + 1;
     // a trial of a model or a tier alone is still a version (it is compared with its baseline): it keeps those names
-    if (!changed.length && state === 'trial') changed.push(...(old.engine !== next.engine || (old.model ?? null) !== (next.model ?? null) || old.effort !== next.effort ? ['model' as const] : []), ...(old.tier !== next.tier || old.tierMax !== next.tierMax ? ['tier' as const] : []));
+    if (!changed.length && state === 'trial') changed.push(...(old.engine !== next.engine || (old.model ?? null) !== (next.model ?? null) || old.effort !== next.effort || JSON.stringify(old.presets ?? null) !== JSON.stringify(next.presets ?? null) ? ['model' as const] : []), ...(old.tier !== next.tier || old.tierMax !== next.tierMax ? ['tier' as const] : []));
     const profile: AgentProfile = { ...this.face(old.id), ...next, id: old.id, scope: old.scope, createdAt: old.createdAt, updatedAt: at, version, activeVersion: version, ...who,
       ...(state === 'trial' ? { trial: { version, baseline: old.activeVersion, startedAt: at } } : {}) };
     this.commit(this.profiles.map(p => p.id === old.id ? profile : p), [{ agentId: old.id, version, parentVersion: old.activeVersion, behaviour: behaviourOf(profile), author, reason: text(reason, 600, 'Motivo'), at, state, changed }],
@@ -417,10 +435,11 @@ export class AgentCatalogService {
     // launches and limits, so an undo never widens what the user narrowed since, and today's engine, model, effort and
     // tier (they all change in place)
     const kept = { tools: p.tools, permissionCeiling: p.permissionCeiling, launches: p.launches, ...(typeof p.maxContext === 'number' ? { maxContext: p.maxContext } : {}),
-      engine: p.engine, model: p.model, tier: p.tier, tierMax: p.tierMax, ...(p.effort !== undefined ? { effort: p.effort } : {}) };
+      engine: p.engine, model: p.model, tier: p.tier, tierMax: p.tierMax, ...(p.effort !== undefined ? { effort: p.effort } : {}), ...(p.presets ? { presets: p.presets } : {}) };
     const target = { ...(entry.behaviour as unknown as Record<string, unknown>), ...kept };
     if (typeof p.maxContext !== 'number') delete target.maxContext;
     if (p.effort === undefined) delete target.effort;
+    if (!p.presets) delete target.presets;
     const profile: AgentProfile = { ...rest, ...this.behaviour(target, id, true, rest as Behaviour), activeVersion: version,
       updatedAt: Math.max(this.now(), p.updatedAt + 1), lastEditedBy: by, ...(by === 'user' ? { userLocked: true } : {}) };
     // the version's own record takes what was kept, as any in-place change of the active version does: a trial's
@@ -453,34 +472,54 @@ export class AgentCatalogService {
     if (req.roleVersion !== undefined && req.roleVersion !== p.activeVersion) throw new Error('Il ruolo è cambiato: rileggilo prima di avviarlo.');
     // known availability again at launch, never falling back to another engine or model
     this.behaviour({}, p.id, true, p, false);
-    if (req.tier !== undefined && (!has(MODEL_TIERS, req.tier) || tierRank(req.tier) > tierRank(p.tierMax))) throw new Error(`${p.name} arriva al massimo al livello ${p.tierMax}.`);
-    const tier = cappedTier(req.tier ?? p.tier, p.tierMax);
+    // the preset of this task (ADR 0336): the delegator's pick among the card's three (its old name `tier` is read as
+    // one), Base without a reason, never priced above the delegator's own model; never another engine, never a free model
+    const presets = this.presetsOf(p);
+    const ask = presetAskOf({ preset: req.preset, presetWhy: req.presetWhy, taskKind: req.taskKind }, '', req.tier !== undefined ? { tier: req.tier, card: p.tier } : undefined);
+    const asked = choosePreset({ presets, ask, ...(req.delegator ? { delegator: req.delegator } : {}), price: this.d.price ?? (() => null) });
+    const tier = p.tier;
     // «Balanced mode» (ADR 0218): the engine, model and effort the caller picked from the credits left, when that engine
     // may run now; the card's tools, ceiling, skills and tierMax still hold
     const balancedEngine = req.balancedRoute ? this.d.models().find(x => x.engine === req.balancedRoute!.engine) : undefined;
     // the user's own pick for this run (ADR 0296) beats the credits; it is not held to tierMax: the user asked for it
     const user = req.userModel ?? null;
     const chosen = user ?? (req.balancedRoute && balancedEngine?.enabled && balancedEngine.trusted ? req.balancedRoute : null);
-    // tierMax again (ADR 0218): the card's own model, else a model of a tier up to tierMax on that engine
-    if (chosen && !user && !(chosen.engine === p.engine && chosen.model === p.model) && !withinTierMax(t => this.tierModels(chosen.engine, t), chosen.model, p.tierMax)) {
-      throw new Error(`${p.name} arriva al massimo al livello ${p.tierMax}: ${chosen.model} su ${chosen.engine} non è un modello di quei livelli.`);
+    // only the card's presets (ADR 0336), on its one engine: the user's pick any of the three (not held to the
+    // delegator's ceiling: the user asked), Balanced mode one up to the preset chosen above
+    let choice = asked;
+    if (chosen) {
+      if (chosen.engine !== p.engine) throw new Error(`${p.name} gira su ${p.engine}: ${chosen.model} su ${chosen.engine} è un altro motore (un ruolo ha un solo motore, i suoi preset sono su quello).`);
+      const ids = user ? PRESET_IDS : presetsUpTo(asked.preset);
+      const named = presetNamed(presets, chosen.model, chosen.effort, ids);
+      if (!named) throw new Error(`${p.name}: ${chosen.model} non è ${user ? 'uno dei preset' : `un preset fino a ${asked.preset}`} della sua scheda (${ids.map(id => `${id} ${presets[id].model ?? 'modello del livello'}`).join(', ')}). Scegli un preset, o aggiungi il modello alla scheda (Impostazioni → Ruoli e deleghe).`);
+      const effortOf = chosen.effort ?? presets[named].effort;
+      const { effort: _x, asked: _y, ...kept } = asked; void _x; void _y;
+      choice = { ...kept, preset: named, model: presets[named].model, ...(effortOf ? { effort: effortOf } : {}), ...(named !== (ask.preset ?? 'base') ? { asked: ask.preset ?? 'base' } : {}),
+        warnings: [...asked.warnings, ...(user ? [`the user asked for ${chosen.model}: preset ${named}`] : [])] };
     }
-    const engine = chosen ? chosen.engine : p.engine;
+    const engine = p.engine;
     const e = this.d.models().find(x => x.engine === engine);
     if (!e) throw new Error(`Motore sconosciuto: ${engine}.`);
     if (!e.enabled || !e.trusted) throw new Error(user ? `${e.label} è spento o va riconfermato nelle Impostazioni: ${user.model} non può partire.` : `Il motore di ${p.name} è spento o va riconfermato nelle Impostazioni.`);
-    if (chosen && !e.modelSelectable) throw new Error(e.modelReason ?? (user ? `${e.label} non può applicare una scelta di modello.` : `${e.label} non può applicare una scelta di modello: Balanced mode non lo usa.`));
+    if ((chosen || choice.model !== presets.base.model) && !e.modelSelectable) throw new Error(e.modelReason ?? (user ? `${e.label} non può applicare una scelta di modello.` : `${e.label} non può applicare una scelta di modello: Balanced mode non lo usa.`));
     // the role's own model, else its tier's model (owner, 2026-10-30: no routing table, ADR 0210). A review's
     // independence is its clean session (it never sees its parent's reasoning), never another model (ADR 0091)
-    const picked = { model: chosen ? chosen.model : p.model ?? this.d.tierModel?.(p.engine, tier) ?? null };
+    const picked = { model: choice.model };
     // the effort the model really takes (ADR 0211): a level it lacks becomes the nearest lower one, none when it takes none
-    const effort = effortOn(chosen ? chosen.effort ?? null : p.effort ?? req.effort, picked.model ? e.models.find(m => m.id === picked.model)?.efforts : undefined) ?? undefined;
-    const { model: _m, effort: _e, balancedRoute: _a, userModel: _u, ...rest } = req; void _m; void _e; void _a; void _u;
+    const effort = effortOn(choice.effort ?? (chosen ? null : req.effort ?? null), picked.model ? e.models.find(m => m.id === picked.model)?.efforts : undefined) ?? undefined;
+    const { model: _m, effort: _e, balancedRoute: _a, userModel: _u, preset: _p, presetWhy: _w, taskKind: _k, delegator: _d, tier: _t, ...rest } = req; void _m; void _e; void _a; void _u; void _p; void _w; void _k; void _d; void _t;
     const r = ROLE_DEFAULTS[p.id as RoleId];
     const instructions = `${ROLE_PREAMBLE}\n\nRole: ${p.name}.\n${p.instructions}\nOutput: ${r.output}`;
     return { request: { ...rest, harness: engine, ...(picked.model ? { model: picked.model } : {}), ...(effort ? { effort } : {}) }, owner: { ...ownerOf(p), engine, model: picked.model },
       instructions, policy: p.tools || p.permissionCeiling ? { tools: p.tools ? structuredClone(p.tools) : null, ceiling: p.permissionCeiling } : null,
       ...(typeof p.maxContext === 'number' ? { maxContext: p.maxContext } : {}), skills: [...p.skills, ...(p.knowhow?.linked ?? [])].filter((s, i, a) => a.indexOf(s) === i), launches: [...p.launches],
-      tier };
+      tier, presetChoice: { ...choice, ...(effort ? { effort } : {}) } };
+  }
+
+  /** The three presets of a role's card (ADR 0336): Base = its model, else its tier's on its engine. */
+  presetsOf(p: AgentProfile): FullPresets { return cardPresets(p, this.d.tierModel?.(p.engine, p.tier) ?? null); }
+  /** The preset a delegation of `roleId` would get (resolve's guards, nothing started): Balanced mode picks only up to it. */
+  presetChoice(roleId: string, ask: PresetAsk, delegator?: Delegator): PresetChoice {
+    return choosePreset({ presets: this.presetsOf(this.find(roleId)), ask, ...(delegator ? { delegator } : {}), price: this.d.price ?? (() => null) });
   }
 }

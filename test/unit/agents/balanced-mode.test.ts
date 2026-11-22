@@ -82,15 +82,19 @@ describe('suggestRole', () => {
   });
 });
 
+// the role's three presets (ADR 0336): Balanced mode picks only among them, on the role's one engine
+const PRESETS = { min: { model: 'claude-light', effort: 'low' as const }, base: { model: 'claude-mid' }, max: { model: 'claude-top', effort: 'high' as const } };
+type Presets = { min: { model: string; effort?: 'low' | 'high' }; base: { model: string; effort?: 'low' | 'high' }; max: { model: string; effort?: 'low' | 'high' } };
+const roleOf = (presets: Presets = PRESETS, engine: Harness = 'claude') => () => ({ engine, model: presets.base.model, effort: null, tier: 'mid' as const, tierMax: 'top' as const, presets });
+
 describe('BalancedMode', () => {
   const engines = () => [
-    { engine: 'claude' as Harness, enabled: true, trusted: true, models: [{ id: 'sonnet', name: 'S', efforts: ['low', 'medium', 'high'] as never }] },
+    { engine: 'claude' as Harness, enabled: true, trusted: true, models: [{ id: 'claude-light', name: 'L' }, { id: 'claude-mid', name: 'M', efforts: ['low', 'medium', 'high'] as never }, { id: 'claude-top', name: 'T' }] },
     { engine: 'cursor' as Harness, enabled: true, trusted: true, models: [] },
     { engine: 'codex' as Harness, enabled: false, trusted: true, models: [] },
+    { engine: 'opencode' as Harness, enabled: true, trusted: true, models: [{ id: 'openai/gpt-5-mini', name: 'G' }, { id: 'anthropic/sonnet', name: 'S' }] },
   ];
-  const make = (on: boolean, book: CreditBook) => new BalancedMode({ on: () => on, book,
-    role: () => ({ engine: 'claude', model: null, effort: null, tier: 'mid', tierMax: 'top' }),
-    engines, tierModel: (e, t) => `${e}-${t}`, runs: () => [], now: () => NOW });
+  const make = (on: boolean, book: CreditBook, role = roleOf()) => new BalancedMode({ on: () => on, book, role, engines, tierModel: (e, t) => `${e}-${t}`, runs: () => [], now: () => NOW });
 
   it('off: nothing chosen, no check', async () => {
     const book = new CreditBook(null, {}, () => NOW);
@@ -99,26 +103,36 @@ describe('BalancedMode', () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it('on: picks among the engines that may run, checks once, then reads only the cache', async () => {
+  it('on: keeps the preset chosen on the role\'s one engine (one pool), checks once, then reads only the cache', async () => {
     const claudeLimits = vi.fn(() => ({ fiveHourPct: 10, fiveHourResetsAt: NOW + HOUR, weekPct: 20, weekResetsAt: NOW + 3.5 * DAY, at: NOW }));
     const book = new CreditBook(null, { claudeLimits }, () => NOW);
     const auto = make(true, book);
-    const a = await auto.choose({ roleId: 'artisan', title: 't', prompt: 'p', canRun: h => h !== 'cursor' });
-    expect(a!.balancedRoute).toMatchObject({ engine: 'claude', model: 'claude-mid', pool: 'claude' });
-    expect(a!.balanced).toMatchObject({ pool: 'claude' });
+    const a = await auto.choose({ roleId: 'artisan', preset: 'base', title: 't', prompt: 'p', canRun: () => true });
+    expect(a!.balancedRoute).toEqual({ engine: 'claude', model: 'claude-mid', effort: 'medium', pool: 'claude' });
     expect(claudeLimits).toHaveBeenCalledTimes(1);
     auto.record(a);
-    await auto.choose({ roleId: 'artisan', title: 't', prompt: 'p', canRun: () => true });
+    const top = await auto.choose({ roleId: 'artisan', preset: 'max', title: 't', prompt: 'p', canRun: () => true });
+    expect(top!.balancedRoute).toEqual({ engine: 'claude', model: 'claude-top', effort: 'high', pool: 'claude' });
+    // missing preset = Base, never the Massimo
+    expect((await auto.choose({ roleId: 'artisan', title: 't', prompt: 'p', canRun: () => true }))!.balancedRoute!.model).toBe('claude-mid');
     expect(claudeLimits).toHaveBeenCalledTimes(1);
     expect(book.recentPicks()).toEqual(['claude']);
   });
 
-  it('a batch counts its earlier picks (pending) before their chats exist', async () => {
+  it('never another engine: the role\'s engine not open to the caller = no pick (the preset chosen stands)', async () => {
+    const c = await make(true, new CreditBook(null, {}, () => NOW)).choose({ roleId: 'artisan', preset: 'max', title: 't', prompt: 'p', canRun: h => h !== 'claude' });
+    expect(c!.balancedRoute).toBeNull();
+  });
+
+  it('a batch counts its earlier picks (pending): presets on two pools of one engine (OpenCode providers) spread', async () => {
     const book = new CreditBook(null, {}, () => NOW);
-    const auto = make(true, book);
-    const first = await auto.choose({ roleId: 'artisan', title: 't', prompt: 'p', canRun: () => true });
-    const second = await auto.choose({ roleId: 'artisan', title: 't', prompt: 'p', canRun: () => true, pending: [first!.balancedRoute!.pool] });
-    expect(second!.balancedRoute!.pool).not.toBe(first!.balancedRoute!.pool);
+    const auto = make(true, book, roleOf({ min: { model: 'openai/gpt-5-mini' }, base: { model: 'anthropic/sonnet' }, max: { model: 'anthropic/sonnet' } }, 'opencode'));
+    const first = await auto.choose({ roleId: 'artisan', preset: 'base', title: 't', prompt: 'p', canRun: () => true });
+    const second = await auto.choose({ roleId: 'artisan', preset: 'base', title: 't', prompt: 'p', canRun: () => true, pending: [first!.balancedRoute!.pool] });
+    expect([first!.balancedRoute!.pool, second!.balancedRoute!.pool].sort()).toEqual(['opencode:anthropic', 'opencode:openai']);
+    // Minimo only: never up to the Base
+    const low = await auto.choose({ roleId: 'artisan', preset: 'min', title: 't', prompt: 'p', canRun: () => true, pending: ['opencode:openai', 'opencode:openai'] });
+    expect(low!.balancedRoute!.model).toBe('openai/gpt-5-mini');
   });
 
   it('suggests another role when the work fits it, in the reason and the route', async () => {
@@ -137,63 +151,59 @@ describe('BalancedMode', () => {
   });
 });
 
-describe('BalancedMode: the agent picks (ADR 0218 §4)', () => {
+describe('BalancedMode: the agent picks (ADR 0218 §4, presets ADR 0336)', () => {
   const engines = () => [
-    { engine: 'claude' as Harness, enabled: true, trusted: true, models: [{ id: 'sonnet', name: 'S', efforts: ['low', 'medium', 'high'] as never }, { id: 'opus', name: 'O' }, { id: 'fable', name: 'F' }] },
+    { engine: 'claude' as Harness, enabled: true, trusted: true, models: [{ id: 'claude-light', name: 'L' }, { id: 'claude-mid', name: 'M', efforts: ['low', 'medium', 'high'] as never }, { id: 'claude-top', name: 'T' }] },
     { engine: 'cursor' as Harness, enabled: true, trusted: true, models: [{ id: 'gpt-5', name: 'G' }] },
     { engine: 'codex' as Harness, enabled: false, trusted: true, models: [] },
   ];
-  // every model of a tier, the first is the tier's model: a second «top» model (opus) and one in no tier (fable)
-  const TIERS: Record<string, Record<string, string[]>> = { claude: { light: ['claude-light'], mid: ['claude-mid', 'sonnet'], top: ['claude-top', 'opus'] }, cursor: { mid: ['cursor-mid', 'gpt-5'] } };
   const rows = [
-    { agentId: 'artisan', goal: 'Fix del totale ordini', startedAt: NOW - 30 * 60e3, ...run('sonnet', 'success', 2) },
-    { agentId: 'artisan', goal: 'Fix del totale ordini', startedAt: NOW - 90 * 60e3, ...run('sonnet', 'fail', 4) },
+    { agentId: 'artisan', goal: 'Fix del totale ordini', startedAt: NOW - 30 * 60e3, ...run('claude-mid', 'success', 2) },
+    { agentId: 'artisan', goal: 'Fix del totale ordini', startedAt: NOW - 90 * 60e3, ...run('claude-mid', 'fail', 4) },
     { agentId: 'scout', goal: 'Cerca nei log', startedAt: NOW - 10 * 60e3, ...run('gpt-5', 'success', 1) },
   ].map(r => ({ ...r, endedAt: NOW }));
-  const make = (book: CreditBook, on = true) => new BalancedMode({ on: () => on, book,
-    role: () => ({ engine: 'claude', model: null, effort: null, tier: 'mid', tierMax: 'mid' }),
-    engines, tierModel: (e, t) => `${e}-${t}`, tierModels: (e, t) => TIERS[e]?.[t] ?? [], runs: () => rows as never, now: () => NOW });
+  const make = (book: CreditBook, on = true) => new BalancedMode({ on: () => on, book, role: roleOf(), engines, tierModel: (e, t) => `${e}-${t}`, runs: () => rows as never, now: () => NOW });
   const base = { roleId: 'artisan', title: 't', prompt: 'p', canRun: (h: Harness) => h !== 'opencode' };
 
-  it('takes the agent\'s pick within the limits: by agent, its why and the formula\'s proposal in the reason', async () => {
+  it('takes the agent\'s pick among the presets up to the one chosen: by agent, its why and the formula\'s proposal', async () => {
     const mode = make(new CreditBook(null, {}, () => NOW));
-    const c = await mode.choose({ ...base, asked: { engine: 'cursor', model: 'gpt-5', why: 'il Scout va meglio su gpt-5' } });
-    expect(c!.balancedRoute).toEqual({ engine: 'cursor', model: 'gpt-5', effort: 'medium', pool: 'cursor' });
-    expect(c!.balanced).toMatchObject({ by: 'agent', pool: 'cursor' });
-    expect(c!.reason).toMatch(/^Balanced mode, scelta dell'agente: il Scout va meglio su gpt-5 · cursor .* formula proponeva /);
-    mode.record(c);
-    expect((await mode.choose({ ...base, asked: { engine: 'claude', model: 'sonnet', effort: 'high', why: 'x' } }))!.balancedRoute).toEqual({ engine: 'claude', model: 'sonnet', effort: 'high', pool: 'claude' });
+    const c = await mode.choose({ ...base, preset: 'base', asked: { engine: 'claude', model: 'claude-light', why: 'basta il minimo' } });
+    expect(c!.balancedRoute).toEqual({ engine: 'claude', model: 'claude-light', effort: 'low', pool: 'claude' });
+    expect(c!.balanced).toMatchObject({ by: 'agent', pool: 'claude' });
+    expect(c!.reason).toMatch(/^Balanced mode, scelta dell'agente: basta il minimo · claude .* formula proponeva /);
+    expect((await mode.choose({ ...base, asked: { engine: 'claude', model: 'claude-mid', effort: 'high', why: 'x' } }))!.balancedRoute).toEqual({ engine: 'claude', model: 'claude-mid', effort: 'high', pool: 'claude' });
   });
 
-  it('refuses only the hard limits, each with its reason', async () => {
-    const book = new CreditBook(null, {}, () => NOW);
-    book.signal('cursor', 'usage limit reached');
-    const mode = make(book);
-    const ask = (engine: string, model: string) => mode.choose({ ...base, asked: { engine: engine as Harness, model, why: 'x' } });
+  it('refuses the hard limits: another engine, a preset above the one chosen, a model off the card, an exhausted pool', async () => {
+    const mode = make(new CreditBook(null, {}, () => NOW));
+    const ask = (engine: string, model: string, preset?: 'min' | 'base' | 'max') => mode.choose({ ...base, ...(preset ? { preset } : {}), asked: { engine: engine as Harness, model, why: 'x' } });
     await expect(ask('codex', 'codex-mid')).rejects.toThrow(/switched off/);
     await expect(ask('opencode', 'openai/gpt-5')).rejects.toThrow(/switched off|may not open/);
-    await expect(ask('claude', 'claude-top')).rejects.toThrow(/above the role's tierMax/);
-    await expect(ask('claude', 'opus')).rejects.toThrow(/above the role's tierMax/);
-    await expect(ask('claude', 'fable')).rejects.toThrow(/in no tier up to/);
-    await expect(ask('claude', 'mystery')).rejects.toThrow(/in no tier up to/);
-    await expect(ask('cursor', 'gpt-5')).rejects.toThrow(/credit is exhausted/);
+    await expect(ask('cursor', 'gpt-5')).rejects.toThrow(/runs on claude only/);
+    await expect(ask('claude', 'claude-top')).rejects.toThrow(/a preset above base/);
+    await expect(ask('claude', 'claude-top', 'min')).rejects.toThrow(/a preset above min/);
+    await expect(ask('claude', 'mystery', 'max')).rejects.toThrow(/not one of the role's presets up to max/);
+    expect((await ask('claude', 'claude-top', 'max'))!.balancedRoute!.model).toBe('claude-top');
+    const book = new CreditBook(null, {}, () => NOW);
+    book.signal('claude', 'usage limit reached');
+    await expect(make(book).choose({ ...base, asked: { engine: 'claude', model: 'claude-mid', why: 'x' } })).rejects.toThrow(/credit is exhausted/);
   });
 
   it('off: a pick by the agent is refused', async () => {
-    await expect(make(new CreditBook(null, {}, () => NOW), false).choose({ ...base, asked: { engine: 'claude', model: 'sonnet', why: 'x' } })).rejects.toThrow(/only with Balanced mode on/);
+    await expect(make(new CreditBook(null, {}, () => NOW), false).choose({ ...base, asked: { engine: 'claude', model: 'claude-mid', why: 'x' } })).rejects.toThrow(/only with Balanced mode on/);
   });
 
-  it('status: pools with target and share, stats per role × model × kind, the formula\'s proposal, no network', async () => {
+  it('status: the role\'s pool with target and share, stats per role × model × kind, the formula\'s proposal, no network', async () => {
     const claudeLimits = vi.fn(() => ({ fiveHourPct: 10, fiveHourResetsAt: NOW + HOUR, weekPct: 40, weekResetsAt: NOW + 3.5 * DAY, at: NOW }));
     const mode = make(new CreditBook(null, { claudeLimits }, () => NOW));
     const s = await mode.status({ roleId: 'artisan', title: 'Piano del rilascio', canRun: base.canRun });
     expect(s.on).toBe(true);
-    expect(s.pools.map(p => p.pool).sort()).toEqual(['claude', 'cursor']);
-    const claude = s.pools.find(p => p.pool === 'claude')!;
+    expect(s.pools.map(p => p.pool)).toEqual(['claude']);
+    const claude = s.pools[0]!;
     expect(claude.left).toBeCloseTo(0.6);
-    expect(claude.target! + s.pools.find(p => p.pool === 'cursor')!.target!).toBeCloseTo(1);
-    expect(s.stats).toEqual([expect.objectContaining({ roleId: 'artisan', model: 'sonnet', runs: 2, avgCostUsd: 3 })]);
-    expect(s.proposal).toMatchObject({ pool: expect.any(String), reason: expect.stringMatching(/^Balanced mode, scelta della formula/) });
+    expect(claude.target).toBeCloseTo(1);
+    expect(s.stats).toEqual([expect.objectContaining({ roleId: 'artisan', model: 'claude-mid', runs: 2, avgCostUsd: 3 })]);
+    expect(s.proposal).toMatchObject({ pool: 'claude', model: 'claude-top', reason: expect.stringMatching(/^Balanced mode, scelta della formula/) });
     expect(s.suggestedRole).toBe('strategist');
     expect(s.howTo).toMatch(/balanced \{engine, model/);
     await mode.status({ canRun: () => true });

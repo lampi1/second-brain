@@ -5,6 +5,7 @@ import type { AgentKnowhow, AgentPackIdentity } from './agent-pack';
 
 import type { CharacterId } from './characters';
 import type { ModelTier } from './roles';
+import type { RolePresets, RunPresetChoice } from './model-presets';
 import type { RoleJudges } from './ppi';
 
 /** One-shot purposes: the service and persisted run reader share this list so new jobs survive a restart. */
@@ -50,8 +51,13 @@ export interface AgentDraft {
    *  null/omitted = the user's setting (Impostazioni → compattazione). Honoured where the engine supports it
    *  (AgentModelChoice.maxContext; today the Claude engines, CLAUDE_CODE_AUTO_COMPACT_WINDOW). */
   maxContext?: number | null;
+  /** the old model class: what a null model means (the tier's model on the engine); a request's tier is read as a
+   *  preset (model-presets.ts presetOfTier) */
   tier: ModelTier;
+  /** kept for older cards and versions; the Massimo preset is the ceiling of a delegation now (ADR 0336) */
   tierMax: ModelTier;
+  /** the Minimo and Massimo presets on the card's engine (ADR 0336); Base = model and effort above; absent = the Base */
+  presets?: RolePresets;
   /** the roles it may launch with agent_delegate */
   launches: string[];
   /** the brain's skills it loads at every launch (it may use any other skill its engine can load too, ADR 0278) */
@@ -72,7 +78,7 @@ export function effortOn(asked: Effort | null | undefined, efforts: readonly Eff
   return lower.length ? lower.reduce((a, b) => order.indexOf(b) > order.indexOf(a) ? b : a) : efforts[0]!;
 }
 /** Fields that change what a run does. Saving a change to any of them creates a new version. */
-export const BEHAVIOUR_FIELDS = ['instructions', 'engine', 'model', 'effort', 'tools', 'permissionCeiling', 'knowhow', 'maxContext', 'tier', 'tierMax', 'launches', 'skills'] as const;
+export const BEHAVIOUR_FIELDS = ['instructions', 'engine', 'model', 'effort', 'tools', 'permissionCeiling', 'knowhow', 'maxContext', 'tier', 'tierMax', 'presets', 'launches', 'skills'] as const;
 export type AgentBehaviour = Pick<AgentDraft, (typeof BEHAVIOUR_FIELDS)[number]>;
 export interface AgentProfile extends AgentDraft {
   id: string; createdAt: number; updatedAt: number;
@@ -126,6 +132,9 @@ export const RUN_END_CAUSES = ['user', 'agent', 'auto', 'replaced', 'parent', 'n
 export type AgentRunEndCause = (typeof RUN_END_CAUSES)[number];
 /** Only `human` and `reviewed-evidence` count for keep-or-rollback (AGENTS-DESIGN §1.2, §4.4). `receipts` = the app's
  *  deterministic verdict from what the run did (agents/receipts.ts, ADR 0130): repo checks run after the last change. */
+/** The per-run preset record (ADR 0336): which of the role's three presets, its effort, why and for what kind of task,
+ *  and the role that delegated it (model-presets.ts). */
+export type { RunPresetChoice } from './model-presets';
 export interface AgentRunOutcome {
   verdict: 'success' | 'partial' | 'fail' | 'unknown';
   basis: 'human' | 'reviewed-evidence' | 'receipts' | 'orchestrator-opinion' | 'self-report' | 'unknown';
@@ -299,6 +308,9 @@ export interface AgentRun {
   goal: string; startedBy: 'user' | 'orchestrator' | 'parent' | 'app'; startedAt: number;
   /** the model tier and the model the run started on (role × skills × tier is the loop's unit of comparison) */
   tier?: ModelTier; model?: string | null;
+  /** the preset the run started on and what chose it (ADR 0336): with model, costUsd, outcome and the reviewOf / reworkOf
+   *  links, the per-run record the cost report reads; absent on runs before presets and on chats without a delegation */
+  presetChoice?: RunPresetChoice;
   /** the run of the chat that delegated this one (agent_delegate), or of the run an independent review (a Sentinel's) is about */
   parentRunId?: string;
   reviewOf?: string; reworkOf?: string;

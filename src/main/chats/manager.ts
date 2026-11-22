@@ -46,6 +46,7 @@ import { plainOwner, type ResolvedRole } from '../agents/catalog';
 import { withinParent } from '../agents/worktrees';
 import { FAIL_CLOSED, aboveCeiling, belowParent, narrowest, within, type AgentPolicy } from '../agents/tool-policy';
 import type { AgentOwnerSnapshot } from '../../shared/agents';
+import { runPresetOf } from '../../shared/model-presets';
 import type { RunLinks } from '../agents/runs';
 import { newRequest } from '../agents/task-estimate';
 import { AWAY_BACK, AWAY_RULE } from '../../shared/away';
@@ -156,7 +157,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
       if (current && req.replaces !== current.id) return current;
       req = { ...req, orchestrator: true, title: ORCHESTRATOR_TITLE };
     }
-    const agent: Pick<ResolvedRole, 'request' | 'owner' | 'instructions' | 'policy' | 'maxContext' | 'tier' | 'launchContext'> & { skills?: string[]; launches?: string[]; assets?: { pluginDir: string; skillRoot: string } } = inherited ? { ...inherited, policy: inherited.policy ?? null, request: req }
+    const agent: Pick<ResolvedRole, 'request' | 'owner' | 'instructions' | 'policy' | 'maxContext' | 'tier' | 'launchContext' | 'presetChoice'> & { skills?: string[]; launches?: string[]; assets?: { pluginDir: string; skillRoot: string } } = inherited ? { ...inherited, policy: inherited.policy ?? null, request: req }
       : req.research ? { request: req, owner: { ...plainOwner(req.harness, req.model ?? null), name: RESEARCH_TITLE }, instructions: RESEARCH_FRAME,
         policy: { tools: { allow: req.research.web ? ['read', 'web'] : ['read'] }, ceiling: 'default' } }
       : this.opts.resolveAgent?.(req) ?? { request: req, owner: plainOwner(req.harness, req.model ?? null), instructions: '', policy: null };
@@ -290,7 +291,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     // Finish every await and bind live delegation authority before a durable child run exists.
     bindDelegation?.(id);
     if (agent.owner.source === 'catalog' && !req.orchestrator) this.startRun(r, { agentId: agent.owner.id, version: agent.owner.version ?? 1, goal: req.goal ?? prompt ?? title, startedBy: delegator ? 'parent' : by === 'app' ? 'app' : by === 'agent' ? 'orchestrator' : 'user', costKnown: caps.cost, ...links,
-      tags: { ...asked, repo: repoOf(cwd) }, ...(agent.tier ? { tier: agent.tier } : {}), model: req.model ?? null });
+      tags: { ...asked, repo: repoOf(cwd) }, ...(agent.tier ? { tier: agent.tier } : {}), model: req.model ?? null, ...(agent.presetChoice ? { presetChoice: runPresetOf(agent.presetChoice) } : {}) });
     if (r.s.run) { r.s.run.taskContract = { ...(by === 'app' && req.doneWhen !== undefined ? { reportExpected: true } : {}), goal: r.s.run.goal, doneWhen: req.doneWhen ?? req.delegation?.doneWhen ?? [], deliveryPolicy: this.deliveryPolicy(req.deliveryPolicy, !!delegator), ...(req.contractFields?.length ? { fields: req.contractFields } : {}) }; this.runSave(); }
     if (r.s.run?.startedBy === 'app' && r.s.run.reviewOf && r.s.run.taskContract?.reportExpected && !r.s.work) r.s.work = { status: 'assigned', updatedAt: now };
     // the Orchestrator opened it while answering the user's own message: the user waits for what it finds (#123)

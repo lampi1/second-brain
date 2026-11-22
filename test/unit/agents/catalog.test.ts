@@ -29,20 +29,24 @@ describe('the user\'s model for one task (ADR 0296)', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-catalog-um-')); roots.push(dir);
     return new AgentCatalogService({ userData: dir, models: list, tierModel: (_e, tier) => (tier === 'top' ? 'm-top' : 'm-mid') });
   };
-  it('runs that chat on the model the user named, past tierMax, and leaves the role\'s card as it is', () => {
-    const catalog = make(two), before = catalog.list().profiles.find(p => p.id === 'scout')!;
-    const r = catalog.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout', userModel: { engine: 'codex', model: 'gpt-x', effort: 'max' } });
-    expect(r.request).toMatchObject({ harness: 'codex', model: 'gpt-x', effort: 'high' }); // max is not a level of gpt-x: the nearest lower one
+  // since ADR 0336 the user's pick is one of the card's three presets, on its one engine (any of the three: the user
+  // asked, so not held to a delegator's ceiling)
+  it('runs that chat on the preset the user named and leaves the role\'s card as it is', () => {
+    const catalog = make(two), scout = catalog.list().profiles.find(p => p.id === 'scout')!;
+    const before = catalog.save(edit(scout, { presets: { max: { model: 'm-top', effort: 'high' } } }), 'scout');
+    const r = catalog.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout', userModel: { engine: 'claude', model: 'm-top' } });
+    expect(r.request).toMatchObject({ harness: 'claude', model: 'm-top', effort: 'high' });
+    expect(r.presetChoice).toMatchObject({ preset: 'max', model: 'm-top' });
     expect(r.request).not.toHaveProperty('userModel');
     expect(catalog.list().profiles.find(p => p.id === 'scout')).toEqual(before);
-    expect(catalog.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout' }).request.harness).toBe(before.engine);
+    expect(catalog.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout' }).request.model).toBe('m-mid');
   });
-  it('refuses an engine that is off or that cannot pick a model, with the model in the words', () => {
-    const off = make(() => two().map(m => (m.engine === 'codex' ? { ...m, enabled: false } : m)));
-    expect(() => off.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout', userModel: { engine: 'codex', model: 'gpt-x' } })).toThrow(/gpt-x non può partire/);
-    const fixed = make(() => two().map(m => (m.engine === 'codex' ? { ...m, modelSelectable: false, modelReason: null } : m)));
-    expect(() => fixed.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout', userModel: { engine: 'codex', model: 'gpt-x' } })).toThrow(/non può applicare/);
-    expect(() => off.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout', userModel: { engine: 'nope' as never, model: 'x' } })).toThrow(/Motore sconosciuto/);
+  it('refuses another engine or a model off the card, with the model in the words', () => {
+    const catalog = make(two);
+    expect(() => catalog.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout', userModel: { engine: 'codex', model: 'gpt-x' } })).toThrow(/gpt-x su codex è un altro motore/);
+    expect(() => catalog.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout', userModel: { engine: 'claude', model: 'm-top' } })).toThrow(/m-top non è uno dei preset/);
+    const off = make(() => two().map(m => (m.engine === 'claude' ? { ...m, enabled: false } : m)));
+    expect(() => off.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout', userModel: { engine: 'claude', model: 'm-mid' } })).toThrow();
   });
 });
 
@@ -165,8 +169,9 @@ describe('role catalog', () => {
     expect(scout.owner).toMatchObject({ id: 'scout', name: 'Scout', source: 'catalog' });
     expect(scout.tier).toBe(ROLE_DEFAULTS.scout.tier); expect(scout.request.model).toBe('m-mid');
     expect(scout.instructions).toContain('Role: Scout.');
-    expect(catalog.resolve({ harness: 'claude', roleId: 'scout', tier: 'top' } as never).request.model).toBe('m-top');
-    expect(() => catalog.resolve({ harness: 'claude', roleId: 'herald', tier: 'top' } as never)).toThrow('massimo');
+    // tier is the old name of preset (ADR 0336): top = Massimo, which a card without one keeps at its Base
+    expect(catalog.resolve({ harness: 'claude', roleId: 'scout', tier: 'top' } as never).request.model).toBe('m-mid');
+    expect(catalog.resolve({ harness: 'claude', roleId: 'herald', tier: 'top', presetWhy: 'x' } as never).presetChoice).toMatchObject({ preset: 'max', model: 'm-mid' });
     expect(() => catalog.resolve({ harness: 'claude', roleId: 'orchestrator' } as never)).toThrow('coordinatore');
     expect(() => catalog.resolve({ harness: 'claude', roleId: 'reviewer' } as never)).toThrow('Ruolo sconosciuto');
     expect(catalog.resolve({ harness: 'claude', orchestrator: true, model: 'session' } as never).owner).toMatchObject({ id: 'orchestrator', model: 'session' });
@@ -278,24 +283,28 @@ describe('«Balanced mode» (ADR 0218)', () => {
   };
   // every model of a tier, the tier's model first: a second «top» model and none for «light» on Cursor
   const TIERS: Record<string, Record<string, string[]>> = { claude: { light: ['m-light'], mid: ['m-mid'], top: ['m-top', 'm-top2'] }, cursor: { mid: ['cursor-mid', 'gpt-5'] } };
-  it('a pick never goes over the role\'s tierMax: not a second model of a higher tier, not a model in no tier', () => {
-    const catalog = mk(() => two().map(m => m.engine === 'claude' ? { ...m, models: [...m.models, { id: 'm-top2', name: 'Top 2' }, { id: 'outside', name: 'Out' }] } : m));
-    const herald = (engine: string, model: string) => catalog.resolve({ harness: 'claude', roleId: 'herald', balancedRoute: { engine, model, pool: engine } } as never);
-    expect(() => herald('claude', 'm-top2')).toThrow(/al massimo al livello mid/);
-    expect(() => herald('claude', 'outside')).toThrow(/al massimo al livello mid/);
-    expect(herald('cursor', 'gpt-5').request).toMatchObject({ harness: 'cursor', model: 'gpt-5' });
+  // since ADR 0336 a pick is one of the role's presets up to the one chosen for the task, on the role's one engine
+  it('a pick is only one of the role\'s presets up to the one chosen: not a model off the card, not a higher preset', () => {
+    const catalog = mk(() => two().map(m => m.engine === 'claude' ? { ...m, models: [...m.models, { id: 'm-light', name: 'Light' }, { id: 'outside', name: 'Out' }] } : m));
+    const h = catalog.list().profiles.find(p => p.id === 'herald')!;
+    catalog.save(edit(h, { presets: { min: { model: 'm-light' }, max: { model: 'm-top' } } }), 'herald');
+    const herald = (engine: string, model: string, preset?: string) => catalog.resolve({ harness: 'claude', roleId: 'herald', ...(preset ? { preset, presetWhy: 'x' } : {}), balancedRoute: { engine, model, pool: engine } } as never);
+    expect(() => herald('claude', 'outside')).toThrow(/outside non è un preset fino a base/);
+    expect(() => herald('claude', 'm-top')).toThrow(/m-top non è un preset fino a base/);
+    expect(herald('claude', 'm-light').presetChoice).toMatchObject({ preset: 'min', model: 'm-light', asked: 'base' });
+    expect(herald('claude', 'm-top', 'max').request).toMatchObject({ harness: 'claude', model: 'm-top' });
   });
-  it('a pick on an engine that cannot apply a model is refused', () => {
-    const catalog = mk(() => two().map(m => m.engine === 'cursor' ? { ...m, modelSelectable: false, modelReason: 'no model flag' } : m));
-    expect(() => catalog.resolve({ harness: 'claude', roleId: 'scout', balancedRoute: { engine: 'cursor', model: 'gpt-5', pool: 'cursor' } } as never)).toThrow(/no model flag/);
+  it('a pick on another engine is refused: one engine per role', () => {
+    const catalog = mk(two);
+    expect(() => catalog.resolve({ harness: 'claude', roleId: 'scout', balancedRoute: { engine: 'cursor', model: 'gpt-5', pool: 'cursor' } } as never)).toThrow(/gpt-5 su cursor è un altro motore/);
   });
-  it('a pick on an engine that may run replaces the card\'s engine, model and effort; the card\'s tools stay', () => {
+  it('a pick of a preset keeps the card\'s engine and tools, with the preset\'s model and effort', () => {
     const catalog = mk(two);
     const plain = catalog.resolve({ harness: 'claude', roleId: 'scout' } as never);
-    const r = catalog.resolve({ harness: 'claude', roleId: 'scout', balancedRoute: { engine: 'cursor', model: 'gpt-5', effort: 'high', pool: 'cursor' } } as never);
-    expect(r.request).toMatchObject({ harness: 'cursor', model: 'gpt-5', effort: 'medium' });
+    const r = catalog.resolve({ harness: 'claude', roleId: 'scout', balancedRoute: { engine: 'claude', model: 'm-mid', effort: 'high', pool: 'claude' } } as never);
+    expect(r.request).toMatchObject({ harness: 'claude', model: 'm-mid', effort: 'high' });
     expect('balancedRoute' in r.request).toBe(false);
-    expect(r.owner).toMatchObject({ engine: 'cursor', model: 'gpt-5' });
+    expect(r.owner).toMatchObject({ engine: 'claude', model: 'm-mid' });
     expect(r.policy).toEqual(plain.policy);
   });
   it('a pick on an engine switched off is ignored: the card decides', () => {

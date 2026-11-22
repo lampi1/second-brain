@@ -45,12 +45,14 @@ import { closeRefusal } from '../chats/close-rules';
 import { unreadInstructions } from '../../shared/user-events';
 import type { PullResult } from '../update/source';
 import type { AgentCatalog } from '../../shared/agents';
-import { isWorkRole, MODEL_TIERS, ROLE_IDS, type ModelTier } from '../../shared/roles';
+import { isWorkRole, MODEL_TIERS, ROLE_IDS } from '../../shared/roles';
 import { contractField, taskPrompt } from './task-contract';
 import { agentCatalogTool, userModelOf, type SkillToolsSource } from '../agents/discovery';
 import { splitMode } from '../../shared/newchat';
 import { gapLines, skillGaps } from '../agents/skill-needs';
 import type { ResolvedRole } from '../agents/catalog';
+import { PRESET_SCHEMA } from '../agents/preset-schema';
+import { presetAskOf, type Delegator, type PresetAsk, type PresetChoice } from '../../shared/model-presets';
 import { BALANCED_ASK_SCHEMA, balancedAskOf, balancedStatusRun, balancedStatusTool, type BalancedMode } from '../agents/balanced-mode';
 
 /** app_state's usage for agents: the harnesses' account e-mails stay in the app (the popover shows them to the user). */
@@ -94,6 +96,8 @@ export interface AppCtlDeps {
   agents?: () => AgentCatalog;
   /** the catalog's resolve (agents/catalog.ts): the engine, model and effort a role chat starts with */
   resolveRole?: (req: NewChat) => ResolvedRole;
+  /** the preset a delegation of a role would get (catalog.presetChoice, ADR 0336): Balanced mode picks only up to it */
+  presetChoice?: (roleId: string, ask: PresetAsk, delegator?: Delegator) => PresetChoice;
   /** agent_metrics for the Orchestrator's own endpoint */
   runFeedback?: RunFeedback;
   /** list prices for the estimates' runs whose engine reported no cost (agents/list-price.ts, ADR 0284) */
@@ -509,7 +513,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         roleVersion: { type: 'integer', description: 'Expected active role version; refused if it changed.' },
         doneWhen: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 300 } },
         deliveryPolicy: { type: 'string', enum: ['display', 'notify', 'synthesize'], description: 'display expands the full result without AI; notify also adds quiet news; synthesize requests an AI integration turn' },
-        tier: { type: 'string', enum: [...MODEL_TIERS], description: 'optional model tier, at most the role\'s tierMax; omitted = the role\'s own' },
+        tier: { type: 'string', enum: [...MODEL_TIERS], description: 'old name of preset (light = min, mid = base, top = max relative to the role); pass preset instead' },
+        ...PRESET_SCHEMA,
         skills: { type: 'array', items: { type: 'string' }, maxItems: 16, description: 'the brain skills this chat may use (their SKILL.md names)' },
         intakeQuestion: intakeField, reviewOf: str('Run being reviewed'), reworkOf: str('Run being reworked'), goal: str('Run goal, up to 2000 characters'),
         freshReview: { type: 'boolean', description: 'with reviewOf: open a fresh review chat although one already reported on this work; only when the user asked for it or it reviews a part no review chat covers' },
@@ -576,19 +581,25 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         // engine's tokens, so it starts only when the user allows chats across engines (engines/policy.ts)
         const orchestrator = caller();
         const from = orchestrator?.harness ?? 'claude';
-        const roleId = a.roleId, tier = a.tier as ModelTier | undefined;
+        const roleId = a.roleId;
+        // the preset of the role's card (ADR 0336): one of its three, why in one line, never above the Orchestrator's own model
+        const card = d.agents().profiles.find(p => p.id === roleId);
+        const ask = presetAskOf(a, '', a.tier !== undefined ? { tier: a.tier, card: card?.tier ?? 'mid' } : undefined);
+        const delegator = { role: 'orchestrator', model: orchestrator?.model ?? d.agents().profiles.find(p => p.id === 'orchestrator')?.model ?? null };
+        const cap = d.presetChoice ? d.presetChoice(roleId, ask, delegator) : null;
+        const presetFields = { ...(ask.preset ? { preset: ask.preset } : {}), ...(ask.presetWhy ? { presetWhy: ask.presetWhy } : {}), ...(ask.taskKind ? { taskKind: ask.taskKind } : {}), delegator };
         // «Balanced mode» on (ADR 0218): engine, model and effort from the credits left among the engines this caller may
         // start, the caller's own pick (`balanced`) when it passes one; off: the role's card decides engine, model (its
         // tier's when it names none) and effort (ADR 0210)
         const userModel = d.agents ? userModelOf(a.userModel, d.agents().models, d.agents().profiles.find(p => p.id === roleId)?.engine ?? from) : undefined;
         if (userModel && !authed()) throw new Error('userModel: only the authenticated Orchestrator passes the user\'s own pick.');
         if (userModel && a.balanced !== undefined) throw new Error('userModel and balanced: one or the other (the user\'s pick wins, pass only userModel).');
-        if (userModel && a.tier !== undefined) throw new Error('userModel and tier: one or the other.');
+        if (userModel && (a.tier !== undefined || a.preset !== undefined)) throw new Error('userModel and preset: one or the other (the user\'s pick must be one of the card\'s presets).');
         const asked = balancedAskOf(a.balanced, 'balanced');
         if (asked && !d.balancedMode) throw new Error('balanced: only with Balanced mode on; otherwise the role\'s card decides (Brain → Agenti).');
-        const choice = userModel ? null : await d.balancedMode?.choose({ roleId, ...(tier ? { tier } : {}), title, prompt, canRun: h => !openRefusal(s, from, h), ...(asked ? { asked } : {}) }) ?? null;
+        const choice = userModel ? null : await d.balancedMode?.choose({ roleId, ...(cap ? { preset: cap.preset } : {}), title, prompt, canRun: h => !openRefusal(s, from, h), ...(asked ? { asked } : {}) }) ?? null;
         const balancedRoute = choice?.balancedRoute ?? undefined;
-        const resolved = d.resolveRole({ harness: from, cwd, roleId, title, prompt, ...(tier ? { tier } : {}), ...(links.roleVersion ? { roleVersion: links.roleVersion } : {}), ...(balancedRoute ? { balancedRoute } : {}), ...(userModel ? { userModel } : {}) });
+        const resolved = d.resolveRole({ harness: from, cwd, roleId, title, prompt, ...presetFields, ...(links.roleVersion ? { roleVersion: links.roleVersion } : {}), ...(balancedRoute ? { balancedRoute } : {}), ...(userModel ? { userModel } : {}) });
         const profile = d.agents().profiles.find(p => p.id === roleId)!;
         const agent = { id: roleId, name: profile.name, version: profile.activeVersion, harness: resolved.request.harness, model: resolved.request.model ?? null, effort: resolved.request.effort ?? null,
           chosenBy: 'orchestrator' as const, ...(resolved.tier ? { tier: resolved.tier } : {}), stats: d.agentStats?.(roleId, profile.activeVersion) ?? null };
@@ -603,7 +614,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
           : choice ? { ...routed.route, reason: choice.reason, ...(choice.balanced ? { balanced: choice.balanced } : {}) } : routed.route;
         const refused = openRefusal(s, from, harness);
         if (refused) throw new Error(`bloccato: ${refused}`);
-        const chat = await d.chats.create({ harness, cwd, title, prompt: `${voice()}\n\n${prompt}`, ...links, orchestrator: false, roleId, ...(tier ? { tier } : {}), ...(skills.length ? { skills } : {}),
+        const chat = await d.chats.create({ harness, cwd, title, prompt: `${voice()}\n\n${prompt}`, ...links, orchestrator: false, roleId, ...presetFields, ...(skills.length ? { skills } : {}),
           ...(model ? { model } : {}), ...(effort ? { effort } : {}), route, ...(balancedRoute ? { balancedRoute } : {}), ...(userModel ? { userModel } : {}) }, 'agent', undefined, undefined,
           // the plain /mcp/app mount is open to any local process: its chats run no wider than the Orchestrator
           { boundByOrchestrator: !authed(), ...intake });
@@ -613,12 +624,12 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         log.info('appctl', 'agent created a chat', { chat: chat.id, data: { harness, title, model: model || null, effort, route: route.source, kind: route.kind, area: route.area, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } });
         // a skill whose tools the role lacks (issue #93): said now, so the Orchestrator can pick another role or ask the user
         const known = d.skillTools ? new Map(d.skillTools().map(x => [x.name, x.tools])) : null;
-        const warnings = [...(known ? gapLines(profile.name, skillGaps([...new Set([...resolved.skills, ...skills])], n => known.get(n), resolved.policy)) : []), ...task.warnings];
+        const warnings = [...(resolved.presetChoice?.warnings ?? []), ...(known ? gapLines(profile.name, skillGaps([...new Set([...resolved.skills, ...skills])], n => known.get(n), resolved.policy)) : []), ...task.warnings];
         if (warnings.length) log.info('appctl', 'chat started with a skill its role lacks tools for', { chat: chat.id, data: { role: roleId, warnings: warnings.length } });
         // the machine is busy: the chat exists, its first turn waits in the cold-start queue (ADR 0222)
         // the estimate from similar past tasks (ADR 0087): the same figure the strip shows, so the plan is checked with data
         const estimate = d.runFeedback ? estimateTask(new SimilarIndex(d.runFeedback.runList(), d.priceOf ?? null), { text: task.estimate, agentId: roleId, model: model || resolved.request.model || null }) : null;
-        return { chatId: chat.id, title: chat.title, harness, cwd, model: model || null, effort, ...(warnings.length ? { warnings } : {}), ...(chat.queued ? { status: queuedLine(chat.queued) } : {}),
+        return { chatId: chat.id, title: chat.title, harness, cwd, model: model || null, effort, ...(resolved.presetChoice ? { preset: resolved.presetChoice.preset } : {}), ...(warnings.length ? { warnings } : {}), ...(chat.queued ? { status: queuedLine(chat.queued) } : {}),
           ...(estimate ? { estimate: { timeMs: estimate.timeMs, costUsd: estimate.costUsd, n: estimate.n, confidence: estimate.confidence, parts: estimate.parts, path: estimate.path } } : {}), route: { source: route.source, kind: route.kind, area: route.area, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}), ...(route.balanced ? { balanced: route.balanced } : {}) },
           ...(choice?.suggestedRole ? { suggestedRole: choice.suggestedRole } : {}), ...(mapLink ? { map: mapLink } : unlinked ? { map: unlinked } : {}) };
       },

@@ -72,6 +72,13 @@ export const treeEn: typeof treeIt = {
   'delegation.off': 'None',
   'delegation.tiers': 'Models per tier',
   'delegation.tiers.hint': 'The model each tier uses on each engine. Empty = the one in the brain\'s model registry.',
+  'delegation.presets': 'Models per task',
+  'delegation.presets.hint': 'Each role has three presets on its engine. Whoever delegates picks Minimum, Base or Maximum for the task; with no pick, Base. Empty Minimum and Maximum = the same as Base.',
+  'delegation.presets.fixed': 'This engine applies no model choice: Base only.',
+  'delegation.preset.min': 'Minimum',
+  'delegation.preset.base': 'Base',
+  'delegation.preset.max': 'Maximum',
+  'delegation.preset.asBase': 'Same as Base',
   // the reused worktrees of the delegated chats (WorktreeSettings.tsx, ADR 0227)
   'worktrees.title': 'Working copies of delegated chats',
   'worktrees.hint': 'Each delegated chat that writes works in a copy of the repository (worktree) on its own branch. The app reuses free, clean copies instead of making a new one, and deletes the ones over the limits by itself. A copy with changes or unpushed commits is never touched: it is only listed here.',

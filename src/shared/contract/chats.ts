@@ -7,6 +7,7 @@ import type { AutoClosePresence, AutoCloseStatus } from '../auto-close';
 import type { ChatDelegation, DelegationLimitHit } from '../delegation';
 import type { ChatEffortStatus } from '../effort';
 import type { ModelTier } from '../roles';
+import type { Delegator, PresetId } from '../model-presets';
 import type { RuntimeDiagnostic } from '../runtime-performance';
 import type { StrategyPlan } from '../strategy';
 import type { SysCode, SysParams } from '../sys';
@@ -359,8 +360,16 @@ export interface NewChat {
   /** set only by agent_delegate (main): the delegating chat and the contract; the child is bounded by that chat */
   parentId?: string;
   delegation?: ChatDelegation;
-  /** the model tier a delegation asks for (at most the role's tierMax); absent = the role's own */
+  /** the old name of `preset` (model-presets.ts presetOfTier): below the card's tier = min, same = base, above = max */
   tier?: ModelTier;
+  /** the role card's preset a delegation asks for (ADR 0336): min | base | max; absent = base */
+  preset?: PresetId;
+  /** why that preset, one line: a preset other than base without it runs on base (with a warning) */
+  presetWhy?: string;
+  /** a short label of the task (the per-run record: which preset fits which kind of task) */
+  taskKind?: string;
+  /** who delegates and the model its own chat runs on: no preset priced above it (ADR 0336); set by main only */
+  delegator?: Delegator;
   harness: Harness;
   cwd: string;
   prompt?: string;

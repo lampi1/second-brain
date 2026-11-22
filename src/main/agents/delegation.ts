@@ -12,7 +12,7 @@
 // with the slots reserved synchronously (two calls at once cannot both pass the last slot) and a refusal shows in the
 // parent's chat. A child may run on another engine only when the user allows chats across engines. Used by wiring.ts.
 import path from 'node:path';
-import type { ChatSummary, Harness, NewChat, PermissionMode } from '../../shared/contract';
+import type { ChatSummary, Effort, Harness, NewChat, PermissionMode } from '../../shared/contract';
 import type { AgentCatalog, AgentRun, UserTaskEvents } from '../../shared/agents';
 import { canLaunch, isWorkRole, launchGap, ROLE_DEFAULTS, WORK_ROLE_IDS, type DelegationSettings } from '../../shared/roles';
 import { oneLine } from '../../shared/agent-label';
@@ -28,6 +28,8 @@ import { childReviewers, DELTA_REVIEW, type ReviewWorld } from './one-review';
 import { gapLines, skillGaps } from './skill-needs';
 import { BALANCED_ASK_SCHEMA, balancedAskOf, balancedDecision, balancedStatusTool, type BalancedChoice, type BalancedMode } from './balanced-mode';
 import type { SkillToolsSource } from './discovery';
+import { PRESET_SCHEMA } from './preset-schema';
+import { presetAskOf, runPresetOf, type Delegator, type PresetAsk, type PresetChoice } from '../../shared/model-presets';
 import { log } from '../log';
 import { checkMemoryWorth } from '../rules/memory-worth';
 import { closeRefusal, descendantIds } from '../chats/close-rules';
@@ -46,6 +48,8 @@ const USER_INSTRUCTIONS_NOTE = 'The user wrote or answered these in the child si
 export interface DelegationChats {
   list(): ChatSummary[];
   assignTask?(chatId: string, prompt: string, options: TaskAssignmentOptions): Promise<void>;
+  /** a reused child's model and effort for its next task's preset (ADR 0336, ChatManager.set); absent = a preset change is refused */
+  set?(chatId: string, patch: { model?: string; effort?: Effort }): Promise<unknown>;
   userEvents?(chatId: string, afterSeq?: number): UserTaskEvents;
   create(req: NewChat, by: 'agent'): Promise<ChatSummary>;
   agentPolicy(chatId: string): AgentPolicy | null;
@@ -89,6 +93,9 @@ export interface DelegationDeps {
   remember?: (roleId: string, line: string, chat: ChatSummary) => void;
   /** «Balanced mode» (agents/balanced-mode.ts, ADR 0218): each child's engine from the credits left; absent or off = the card */
   balancedMode?: Pick<BalancedMode, 'enabled' | 'choose' | 'record' | 'status'>;
+  /** the preset a delegation of a role would get (catalog.presetChoice, ADR 0336): Balanced mode picks only up to it;
+   *  absent = Base, no ceiling (tests) */
+  presetChoice?: (roleId: string, ask: PresetAsk, delegator?: Delegator) => PresetChoice;
   /** the clock (tests) */
   now?: () => number;
 }
@@ -149,6 +156,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (parent.run && parent.run.endedAt !== undefined) throw new Error('agent_delegate: your assignment is over (you reported): ask your parent for a new one.');
     const catalog = d.roles(), own = catalog.profiles.find(p => p.id === parent.agent!.id);
     if (!own) throw new Error('agent_delegate: your role is not in the catalog.');
+    // the ceiling of every part's preset (ADR 0336): the model this chat runs on, else its card's
+    const delegator: Delegator = { role: own.id, model: parent.model || own.model || null };
     const raw = a.tasks;
     if (!Array.isArray(raw) || !raw.length || raw.length > TASKS_MAX) throw new Error(`agent_delegate: tasks = 1 to ${TASKS_MAX} parts.`);
     // read before the limits: from here to the reservation nothing waits, so two calls cannot both take the last slot
@@ -180,7 +189,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     const plans = raw.map((value, i) => {
       const t = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
       if (!t) throw new Error(`tasks[${i}]: object required.`);
-      const extra = Object.keys(t).find(k => !['role', 'title', 'contract', 'cwd', 'step', 'balanced', 'freshReview'].includes(k));
+      const extra = Object.keys(t).find(k => !['role', 'title', 'contract', 'cwd', 'step', 'balanced', 'freshReview', 'preset', 'presetWhy', 'taskKind'].includes(k));
       if (extra) throw new Error(`tasks[${i}]: unknown field ${extra}.`);
       const role = t.role;
       if (!isWorkRole(role)) throw new Error(`tasks[${i}].role: one of ${WORK_ROLE_IDS.join(', ')}.`);
@@ -216,7 +225,12 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       // a refusal would make the parent send every contract again for a field that changes nothing.
       const offered = balancedAskOf(t.balanced, `tasks[${i}].balanced`);
       const asked = d.balancedMode?.enabled ? offered : undefined;
-      return { role, title, contract, cwd, profile, step, asked, balancedOff: !!offered && !asked };
+      // the preset of the role's card (ADR 0336): one of its three, why in one line, never above your own model;
+      // contract.tier is its old name
+      const ask = presetAskOf(t, `tasks[${i}]`, contract.tier ? { tier: contract.tier, card: profile.tier } : undefined);
+      const cap = d.presetChoice?.(role, ask, delegator) ?? null;
+      const presetFields = { ...(ask.preset ? { preset: ask.preset } : {}), ...(ask.presetWhy ? { presetWhy: ask.presetWhy } : {}), ...(ask.taskKind ? { taskKind: ask.taskKind } : {}), delegator };
+      return { role, title, contract, cwd, profile, step, asked, balancedOff: !!offered && !asked, cap, presetFields };
     });
     reserved.set(parent.id, (reserved.get(parent.id) ?? 0) + plans.length);
     try {
@@ -227,7 +241,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       const pending: string[] = [];
       for (const [i, p] of plans.entries()) {
         const c = d.balancedMode?.enabled ? await d.balancedMode.choose({ roleId: p.role, ...(p.contract.tier ? { tier: p.contract.tier } : {}), title: p.title, prompt: p.contract.goal,
-          canRun: h => !d.engineRefusal(parent.harness, h), pending, ...(p.asked ? { asked: p.asked } : {}) }) : null;
+          canRun: h => !d.engineRefusal(parent.harness, h), pending, ...(p.cap ? { preset: p.cap.preset } : {}), ...(p.asked ? { asked: p.asked } : {}) }) : null;
         if (c?.balancedRoute) pending.push(c.balancedRoute.pool);
         else {
           // the card's own engine (the mode chose it, or was turned off since the check above): its refusal stands
@@ -240,7 +254,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
         harness: choices[i]?.balancedRoute?.engine ?? p.profile.engine, cwd: p.cwd, title: p.title, roleId: p.role, parentId: parent.id, goal: p.contract.goal,
         ...(choices[i]?.balancedRoute ? { balancedRoute: choices[i]!.balancedRoute! } : {}),
         ...(choices[i] ? { route: balancedDecision(choices[i]!, { roleId: p.role, version: p.profile.activeVersion, ...(p.contract.tier ? { tier: p.contract.tier } : {}), title: p.title, prompt: p.contract.goal, now: at }) } : {}),
-        ...(p.contract.tier ? { tier: p.contract.tier } : {}), ...(p.contract.skills ? { skills: p.contract.skills } : {}),
+        ...p.presetFields, ...(p.contract.skills ? { skills: p.contract.skills } : {}),
         delegation: { role: p.role, goal: p.contract.goal, doneWhen: p.contract.doneWhen, at, ...(p.contract.tools ? { tools: p.contract.tools } : {}) },
         contractFields: contractFields(p.contract),
         prompt: `${d.label}\n\n${delegationPrompt(p.contract, { role: p.role, parentTitle: parent.title, title: p.title, skills: p.contract.skills ?? [] })}`,
@@ -248,7 +262,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       const known = d.skillTools ? new Map(d.skillTools().map(x => [x.name, x.tools])) : null;
       // a skill whose tools the child lacks (its own policy, already narrowed by yours)
       const warnings = (i: number, chatId: string): { warnings?: string[] } => {
-        const p = plans[i]!, lines = [...(known ? gapLines(p.profile.name, skillGaps([...new Set([...p.profile.skills, ...(p.contract.skills ?? [])])], n => known.get(n), d.chats.agentPolicy(chatId))) : []), ...contractWarnings(p.contract), ...(p.balancedOff ? ['balanced left out: Balanced mode is off, the role\'s card decided (Brain → Agenti).'] : [])];
+        const p = plans[i]!, lines = [...(p.cap?.warnings ?? []), ...(known ? gapLines(p.profile.name, skillGaps([...new Set([...p.profile.skills, ...(p.contract.skills ?? [])])], n => known.get(n), d.chats.agentPolicy(chatId))) : []), ...contractWarnings(p.contract), ...(p.balancedOff ? ['balanced left out: Balanced mode is off, the role\'s card decided (Brain → Agenti).'] : [])];
         return lines.length ? { warnings: lines } : {};
       };
       settled.forEach((s, i) => { if (s.status === 'fulfilled') d.balancedMode?.record(choices[i] ?? null); });
@@ -257,7 +271,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
         return c ? { route: { reason: c.reason, ...(c.balanced ? { balanced: c.balanced } : {}) }, ...(c.suggestedRole ? { suggestedRole: c.suggestedRole } : {}) } : {};
       };
       const children = settled.map((s, i) => s.status === 'fulfilled'
-        ? { role: plans[i]!.role, title: s.value.title, chatId: s.value.id, cwd: s.value.cwd, harness: s.value.harness, model: s.value.model, state: s.value.queued ? 'queued' : s.value.state, ...warnings(i, s.value.id), ...balancedOf(i) }
+        ? { role: plans[i]!.role, title: s.value.title, chatId: s.value.id, cwd: s.value.cwd, harness: s.value.harness, model: s.value.model, ...(plans[i]!.cap ? { preset: plans[i]!.cap!.preset } : {}), state: s.value.queued ? 'queued' : s.value.state, ...warnings(i, s.value.id), ...balancedOf(i) }
         : { role: plans[i]!.role, title: plans[i]!.title, error: s.reason instanceof Error ? s.reason.message : String(s.reason) });
       // each step of the plan with its started children: the strip shows it under way
       const steps = new Map<number, string[]>();
@@ -275,7 +289,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
   async function assignChild(a: Record<string, unknown>, callerId: string): Promise<unknown> {
     const initial = activeParent(callerId, 'agent_assign_task'), initialCwd = initial.cwd, initialRunId = initial.run?.runId;
     if (!d.chats.assignTask || !d.chats.userEvents) throw new Error('agent_assign_task is unavailable.');
-    const extra = Object.keys(a).find(k => !['chatId', 'roleId', 'cwd', 'mode', 'expectedVersion', 'expectedEventSeq', 'contract', 'step'].includes(k));
+    const extra = Object.keys(a).find(k => !['chatId', 'roleId', 'cwd', 'mode', 'expectedVersion', 'expectedEventSeq', 'contract', 'step', 'preset', 'presetWhy', 'taskKind'].includes(k));
     if (extra) throw new Error(`agent_assign_task: unknown field ${extra}.`);
     const initialChild = typeof a.chatId === 'string' ? chat(a.chatId) : undefined;
     if (!initialChild || initialChild.parentId !== callerId) throw new Error('agent_assign_task: chatId must be one of YOUR direct children (agent_children).');
@@ -302,6 +316,17 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     const contractRaw = a.contract;
     if (!contractRaw || typeof contractRaw !== 'object' || Array.isArray(contractRaw) || Object.keys(contractRaw).some(k => !['goal', 'output', 'context', 'doneWhen', 'why', 'alreadyDecided', 'inScope', 'outOfScope', 'constraints', 'steps', 'askIf'].includes(k))) throw new Error('Reuse contract allows only goal, output, context, doneWhen and the hybrid fields (why, alreadyDecided, inScope, outOfScope, constraints, steps, askIf); tools, skills and tier require a fresh chat.');
     const contract = checkContract(contractRaw, a.roleId);
+    // the preset of this task (ADR 0336): as agent_delegate's, missing = Base; the child switches to it when it runs on
+    // another model or effort. A child an older Balanced pick put on another engine keeps its model (no preset there)
+    const ask = presetAskOf(a, '');
+    let preset = d.presetChoice?.(a.roleId, ask, { role: own.id, model: parent.model || own.model || null }) ?? null;
+    if (preset && child.harness !== profile.engine) {
+      if (ask.preset) throw new Error(`preset: this child runs on ${child.harness}, not on its role's engine ${profile.engine}, so the role's presets do not apply: leave preset out or delegate a fresh chat.`);
+      preset = null;
+    }
+    const switchTo = preset && (preset.model !== child.model || (preset.effort !== undefined && preset.effort !== child.effort)) ? preset : null;
+    if (switchTo && !d.chats.set) throw new Error('preset: this child cannot change model here; delegate a fresh chat.');
+    const presetWarnings = [...(preset?.warnings ?? []), ...(switchTo ? [`the child switches to preset ${switchTo.preset} (${switchTo.model ?? 'the engine default'}${switchTo.effort ? `, effort ${switchTo.effort}` : ''}) from ${child.model ?? 'the engine default'}${child.effort ? `, effort ${child.effort}` : ''}`] : [])];
     const parentPolicy = d.chats.agentPolicy(parent.id), childPolicy = d.chats.agentPolicy(child.id);
     if (launchGap(profile.tools?.allow ?? [], parentPolicy?.tools?.allow ?? null).length) throw new Error('Child role needs permissions your current policy does not allow.');
     const normalized = (policy: AgentPolicy | null) => JSON.stringify({ ceiling: policy?.ceiling ?? null, tools: policy?.tools ? { allow: [...policy.tools.allow].sort(), mcp: policy.tools.mcp ? [...policy.tools.mcp].sort() : null } : null });
@@ -336,10 +361,19 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       // its next round on the work it already reviewed: only the delta (a new task is reviewed whole)
       const delta = a.roleId === 'sentinel' && a.mode !== 'new-task' && !!child.delegation.result ? `${DELTA_REVIEW}\n\n` : '';
       const prompt = `${d.label}\n\n${delta}${delegationPrompt(contract, { role: a.roleId, parentTitle: parent.title, title: child.title, skills: [] })}`;
-      await d.chats.assignTask(child.id, prompt, { mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: version, ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), doneWhen: contract.doneWhen, contractFields: contractFields(contract), ...(step !== null ? { planStep: step } : {}), source: { kind: 'chat', chatId: parent.id } });
+      const was = { model: child.model ?? '', ...(child.effort ? { effort: child.effort } : {}) };
+      if (switchTo) await d.chats.set!(child.id, { model: switchTo.model ?? '', ...(switchTo.effort ? { effort: switchTo.effort } : {}) });
+      try {
+        await d.chats.assignTask(child.id, prompt, { mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: version, ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), doneWhen: contract.doneWhen, contractFields: contractFields(contract), ...(step !== null ? { planStep: step } : {}), source: { kind: 'chat', chatId: parent.id },
+          ...(preset ? { preset: { choice: runPresetOf(preset), model: preset.model } } : {}) });
+      } catch (e) {
+        // nothing was assigned: the child goes back to the model it ran on
+        if (switchTo) await d.chats.set!(child.id, was).catch(() => undefined);
+        throw e;
+      }
       const assigned = chat(child.id);
-      const warned = contractWarnings(contract);
-      return { chatId: child.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions, note: USER_INSTRUCTIONS_NOTE } : {}), ...(warned.length ? { warnings: warned } : {}) };
+      const warned = [...presetWarnings, ...contractWarnings(contract)];
+      return { chatId: child.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(preset ? { preset: preset.preset } : {}), ...(userInstructions.length ? { userInstructions, note: USER_INSTRUCTIONS_NOTE } : {}), ...(warned.length ? { warnings: warned } : {}) };
     } finally {
       assigning.delete(child.id);
       const left = (reserved.get(parent.id) ?? 0) - 1;
@@ -575,6 +609,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
         cwd: { ...str, description: 'optional absolute folder inside yours or one of your repository\'s worktrees; default: your folder; writing children receive a new isolated worktree from that committed baseline. Never another repository: for that, report the part with agent_report as a ready contract (outcome blocked, with the folder) so the Orchestrator opens the chat there (app_create_chat with cwd)' },
         step: { type: 'integer', minimum: 1, description: 'with a plan approved by the user (plan_propose): the step number this part does' },
         balanced: BALANCED_ASK_SCHEMA,
+        ...PRESET_SCHEMA,
         freshReview: { type: 'boolean', description: 'only for role sentinel: open a fresh one although a Sentinel of yours already reviewed this task; only when the user asked for it or it checks a part none of them covers' },
         contract: { type: 'object', required: ['goal', 'doneWhen'], additionalProperties: false, properties: {
           goal: { ...str, description: 'the wanted outcome, one checkable sentence' }, output: { ...str, description: 'what to give back; default: the role\'s output' },
@@ -588,7 +623,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
           context: { ...str, description: 'facts, sources and constraints the child needs' },
           tools: { type: 'array', items: str, description: 'optional: narrows the role\'s tool classes' },
           skills: { type: 'array', items: str, description: 'brain skills it may use (their SKILL.md names)' },
-          tier: { type: 'string', enum: ['light', 'mid', 'top'] },
+          tier: { type: 'string', enum: ['light', 'mid', 'top'], description: 'old name of the part\'s preset (light = min, mid = base, top = max relative to the role); pass preset instead' },
         } },
       } } },
     } },
@@ -602,6 +637,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       mode: { type: 'string', enum: ['continue', 'new-task', 'rework'] },
       expectedVersion: { type: 'integer', minimum: 1 }, expectedEventSeq: { type: 'integer', minimum: 0 },
       step: { type: 'integer', minimum: 1 },
+      ...PRESET_SCHEMA,
       contract: { type: 'object', required: ['goal', 'doneWhen'], additionalProperties: false, properties: {
         goal: str, output: str, context: str, doneWhen: { type: 'array', items: str, minItems: 1, maxItems: 12 },
         why: { ...str, description: 'what the result is for, who asks, what they will decide with it' },

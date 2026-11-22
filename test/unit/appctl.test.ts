@@ -258,9 +258,10 @@ describe('app control tools', () => {
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'scout', orchestrator: true }))).rejects.toThrow(/Orchestrator/);
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y' }))).rejects.toThrow(/roleId required/);
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'reviewer' }))).rejects.toThrow(/roleId required/);
-    // a tier up to the role's maximum; above it, refused
-    expect(await t.run({ title: 'Ordini · Fix 2', prompt: 'p', roleId: 'artisan', tier: 'top' })).toMatchObject({ model: 'm-top', route: { agent: { tier: 'top' } } });
-    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'herald', tier: 'top' }))).rejects.toThrow(/massimo/);
+    // the old tier is an alias of a preset (ADR 0336): top = Massimo, without presetWhy Base (the card has no Massimo
+    // here, so Base anyway); a value that is not one of the three presets is refused, nothing created
+    expect(await t.run({ title: 'Ordini · Fix 2', prompt: 'p', roleId: 'artisan', tier: 'top' })).toMatchObject({ model: 'm-mid' });
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'herald', preset: 'huge' }))).rejects.toThrow(/preset/);
     expect(made).toHaveLength(2);
     // a role on Cursor while «Gli Orchestrator possono usare Cursor» is off: refused, nothing created
     catalog.save({ ...catalog.list().profiles.find(p => p.id === 'scout')!, engine: 'cursor', model: null }, 'scout');
@@ -281,19 +282,20 @@ describe('app control tools', () => {
     const catalog = new AgentCatalogService({ userData: fs.mkdtempSync(path.join(os.tmpdir(), 'sb-appctl-um-')), models, tierModel: (_e, tier) => `m-${tier}` });
     const all = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: req => catalog.resolve(req) }, 'r');
     const t = all.find(x => x.name === 'app_create_chat')!;
-    const card = catalog.list().profiles.find(p => p.id === 'artisan')!;
-    // the engine from the model's own list; the effort the model takes
-    expect(await t.run({ title: 'Ordini · Fix', prompt: 'p', roleId: 'artisan', userModel: { model: 'gpt-x', effort: 'high' } })).toMatchObject({ harness: 'codex', model: 'gpt-x', effort: 'high', route: { reason: expect.stringContaining('the user asked for gpt-x') } });
-    expect(made[0]).toMatchObject({ harness: 'codex', model: 'gpt-x', userModel: { engine: 'codex', model: 'gpt-x', effort: 'high' } });
-    // by its name too; the card is the same as before
-    expect(await t.run({ title: 'Ordini · Fix 2', prompt: 'p', roleId: 'artisan', userModel: { model: 'Opus 5.5' } })).toMatchObject({ harness: 'claude', model: 'claude-opus-5-5' });
+    // since ADR 0336 the user's pick is one of the card's presets on its one engine: the card's Massimo here
+    const card = catalog.save({ ...catalog.list().profiles.find(p => p.id === 'artisan')!, presets: { max: { model: 'claude-opus-5-5', effort: 'high' } } }, 'artisan');
+    // by its name; the effort the model takes; the card is the same as before
+    expect(await t.run({ title: 'Ordini · Fix', prompt: 'p', roleId: 'artisan', userModel: { model: 'Opus 5.5', effort: 'max' } })).toMatchObject({ harness: 'claude', model: 'claude-opus-5-5', effort: 'max', route: { reason: expect.stringContaining('the user asked for claude-opus-5-5') } });
+    expect(made[0]).toMatchObject({ harness: 'claude', model: 'claude-opus-5-5', userModel: { engine: 'claude', model: 'claude-opus-5-5', effort: 'max' } });
     expect(catalog.list().profiles.find(p => p.id === 'artisan')).toEqual(card);
+    // a model on another engine than the role's: refused, nothing created
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan', userModel: { model: 'gpt-x', effort: 'high' } }))).rejects.toThrow(/un altro motore/);
     // a model no engine lists, an unknown engine, a mix with balanced or tier: refused, nothing created
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan', userModel: { model: 'gpt-y' } }))).rejects.toThrow(/not in any engine/);
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan', userModel: { engine: 'claude', model: 'gpt-x' } }))).rejects.toThrow(/claude's model list/);
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan', userModel: { engine: 'nope', model: 'gpt-x' } }))).rejects.toThrow(/userModel.engine/);
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan', tier: 'top', userModel: { model: 'gpt-x' } }))).rejects.toThrow(/one or the other/);
-    expect(made).toHaveLength(2);
+    expect(made).toHaveLength(1);
     // agent_catalog lists each engine's models when asked
     const rawCat = await all.find(x => x.name === 'agent_catalog')!.run({ models: true });
     const cat = (typeof rawCat === 'string' ? JSON.parse(rawCat) : rawCat) as { engines: { engine: string; models: { id: string }[] }[] };
@@ -302,10 +304,10 @@ describe('app control tools', () => {
     items = [{ kind: 'user', at: 1, text: '[fast] Rispondi tu, subito.\n\nquanto costa?' }];
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan' }))).rejects.toThrow(/Fast mode/);
     await expect(Promise.resolve(all.find(x => x.name === 'app_assign_task')!.run({ chatId: 'n1', mode: 'continue', roleId: 'artisan', cwd: 'C:/brain', prompt: 'p' }))).rejects.toBeInstanceOf(ToolRefusal);
-    expect(made).toHaveLength(2);
+    expect(made).toHaveLength(1);
     items = [{ kind: 'user', at: 2, text: 'fallo' }];
     await t.run({ title: 'Ordini · Fix 3', prompt: 'p', roleId: 'artisan' });
-    expect(made).toHaveLength(3);
+    expect(made).toHaveLength(2);
   });
 
   it('app_create_chat takes the structured contract: rendered once, its criteria and fields reach the new chat (#355)', async () => {

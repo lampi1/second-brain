@@ -8,10 +8,15 @@
 import type { ModelRegistry } from '../../shared/contract';
 import { priceRows } from '../chats/cursor-prices';
 import type { PriceOf, TokenPrice } from './standing';
+import type { UnitPrice } from '../../shared/model-presets';
 
 /** "openai/gpt-6-astra[1m]" → "gpt-6-astra"; dots and dashes compare alike ("claude-opus-5.5" = "claude-opus-5-5");
  *  a dated id is its model ("claude-opus-5-5-20261001"). */
 const key = (model: string): string => model.toLowerCase().trim().replace(/\[.*\]$/, '').split('/').pop()!.replace(/-\d{8}$/, '').replace(/\./g, '-').trim();
+
+/** One price per token of a model for comparing two models (the presets' order, a delegation's ceiling, ADR 0336):
+ *  input + output USD per million tokens; null = not priced. */
+export const unitPriceOf = (priceOf: PriceOf): UnitPrice => model => { const p = priceOf(model); return p ? p.input + p.output : null; };
 
 export function tokenPriceOf(registry: () => ModelRegistry | null): PriceOf {
   return model => {

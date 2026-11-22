@@ -16,7 +16,8 @@ import type { CallCtx, McpTool } from '../mcp/server';
 import { MIN_SUCCESS_SAMPLE, runsSuccess } from '../../shared/success';
 import { taskOf, type TaskKind } from '../../shared/work-concepts';
 import { poolOf, type CreditBook, type PoolState } from './credits';
-import { cappedTier, withinTierMax } from './model-tier';
+import { cappedTier } from './model-tier';
+import { presetsUpTo, type FullPresets, type PresetId } from '../../shared/model-presets';
 
 /** One engine the caller may start, with the tier's model on it. */
 export interface BalancedCandidate {
@@ -24,6 +25,8 @@ export interface BalancedCandidate {
   model: string;
   /** the efforts the model takes (undefined = any, [] = none) */
   efforts?: readonly Effort[];
+  /** the effort of the role's preset this candidate is (ADR 0336) */
+  effort?: Effort;
 }
 
 export type BalancedRun = Pick<AgentRun, 'model' | 'costUsd' | 'endedAt' | 'report' | 'corrections' | 'counters' | 'outcome'>;
@@ -120,7 +123,7 @@ export function pickRoute(input: BalancedInput): BalancedResult {
     || (a.cost ?? Infinity) - (b.cost ?? Infinity)
     || a.pool.localeCompare(b.pool))[0]!;
 
-  const effort = effortOn(input.roleEffort ?? TIER_EFFORT[input.tier], best.c.efforts);
+  const effort = effortOn(best.c.effort ?? input.roleEffort ?? TIER_EFFORT[input.tier], best.c.efforts);
   const share = n ? (counts.get(best.pool) ?? 0) / n : 0, target = best.weight / total;
   const s = best.state;
   const credit = s?.left != null ? `credito ${pct(s.left)}` : s?.status === 'probation' ? 'chat di prova dopo il limite' : 'credito non leggibile';
@@ -138,8 +141,8 @@ export interface BalancedModeDeps {
   /** the «Balanced mode» setting */
   on: () => boolean;
   book: Pick<CreditBook, 'state' | 'list' | 'refresh' | 'recentPicks' | 'recordPick'>;
-  /** the role's card: engine, own model and effort, tier and tierMax */
-  role: (id: string) => { engine: Harness; model: string | null; effort: Effort | null; tier: ModelTier; tierMax: ModelTier } | null;
+  /** the role's card: engine, own model and effort, tier and tierMax, its three presets (ADR 0336) */
+  role: (id: string) => { engine: Harness; model: string | null; effort: Effort | null; tier: ModelTier; tierMax: ModelTier; presets: FullPresets } | null;
   /** every engine with its state and models (catalog.models) */
   engines: () => readonly (Pick<AgentModelChoice, 'engine' | 'enabled' | 'trusted' | 'models'> & { modelSelectable?: boolean })[];
   tierModel: (engine: Harness, tier: ModelTier) => string | null;
@@ -167,11 +170,11 @@ export interface BalancedStatus {
   howTo: string;
 }
 
-interface LaunchArgs { roleId: string; tier?: ModelTier; title: string; prompt: string; canRun: (h: Harness) => boolean; pending?: readonly string[]; asked?: BalancedAsk }
+interface LaunchArgs { roleId: string; tier?: ModelTier; /** the highest preset a pick may be (ADR 0336); missing = Base */ preset?: PresetId; title: string; prompt: string; canRun: (h: Harness) => boolean; pending?: readonly string[]; asked?: BalancedAsk }
 type Role = NonNullable<ReturnType<BalancedModeDeps['role']>>;
 
 const STATS_MAX = 40;
-const HOW_TO = 'Balanced mode on: pick engine, model and effort yourself from these data and pass them as balanced {engine, model, effort?, why} in app_create_chat / agent_delegate. Prefer the proposal unless the stats say otherwise (e.g. a model that does badly on this kind of work). Pass nothing and the formula decides. The app refuses only an exhausted pool, an engine you may not open, a model that is neither the card\'s own nor one of a tier up to the role\'s tierMax.';
+const HOW_TO = 'Balanced mode on: pick engine, model and effort yourself from these data and pass them as balanced {engine, model, effort?, why} in app_create_chat / agent_delegate. Prefer the proposal unless the stats say otherwise (e.g. a model that does badly on this kind of work). Pass nothing and the formula decides. The app refuses only an exhausted pool, an engine you may not open, another engine than the role\'s, a model that is not one of the role\'s presets up to the one chosen for the task (preset, ADR 0336).';
 
 /** «Balanced mode» for one launch: the setting, the credit book and the role's stats together. */
 export class BalancedMode {
@@ -181,20 +184,20 @@ export class BalancedMode {
 
   private now(): number { return this.d.now?.() ?? Date.now(); }
 
-  private tierModels(engine: Harness, tier: ModelTier): readonly string[] {
-    if (this.d.tierModels) return this.d.tierModels(engine, tier);
-    const m = this.d.tierModel(engine, tier);
-    return m ? [m] : [];
-  }
 
-  private candidates(role: Role, tier: ModelTier, canRun: (h: Harness) => boolean): BalancedCandidate[] {
+  /** The role's presets up to `upTo` (ADR 0336), on its one engine only, each model once, `upTo` first: one engine is
+   *  mostly one pool, so the formula keeps the preset chosen unless a lower one is on another pool (OpenCode's
+   *  providers). Never another engine or a model off the card. None when the engine is off, not selectable or not open
+   *  to the caller: the preset chosen stands. */
+  private candidates(role: Role, upTo: PresetId, canRun: (h: Harness) => boolean): BalancedCandidate[] {
+    const e = this.d.engines().find(x => x.engine === role.engine);
+    if (!e || !e.enabled || !e.trusted || e.modelSelectable === false || !canRun(e.engine)) return [];
     const out: BalancedCandidate[] = [];
-    for (const e of this.d.engines()) {
-      if (!e.enabled || !e.trusted || e.modelSelectable === false || !canRun(e.engine)) continue;
-      const model = (e.engine === role.engine ? role.model : null) ?? this.d.tierModel(e.engine, tier);
-      if (!model) continue;
+    for (const id of presetsUpTo(upTo).reverse()) {
+      const { model, effort } = role.presets[id];
+      if (!model || out.some(c => c.model === model)) continue;
       const efforts = e.models.find(m => m.id === model)?.efforts;
-      out.push({ engine: e.engine, model, ...(efforts ? { efforts } : {}) });
+      out.push({ engine: e.engine, model, ...(efforts ? { efforts } : {}), ...(effort ? { effort } : {}) });
     }
     return out;
   }
@@ -223,7 +226,8 @@ export class BalancedMode {
     const role = this.d.role(a.roleId);
     if (!role) return null;
     const tier = cappedTier(a.tier ?? role.tier, role.tierMax);
-    const candidates = this.candidates(role, tier, a.canRun);
+    const upTo = a.preset ?? 'base';
+    const candidates = this.candidates(role, upTo, a.canRun);
     const pools = candidates.map(c => poolOf(c.engine, c.model));
     if (a.asked) pools.push(poolOf(a.asked.engine, a.asked.model));
     await this.d.book.refresh(pools, { costly: tier === 'top' });
@@ -231,7 +235,7 @@ export class BalancedMode {
     const fit = suggestRole(taskOf(a.title, a.prompt, undefined), a.title);
     const suggestedRole = fit && fit !== a.roleId ? fit : null;
     const hint = suggestedRole ? ` · ruolo suggerito: ${suggestedRole}` : '';
-    if (a.asked) return this.agentPick(a.asked, role, tier, a.canRun, r, pools, a.pending ?? [], suggestedRole, hint);
+    if (a.asked) return this.agentPick(a.asked, role, tier, upTo, a.canRun, r, pools, a.pending ?? [], suggestedRole, hint);
     if (!r.pick) return { balancedRoute: null, reason: `${r.reason}${hint}`.slice(0, 300), balanced: null, suggestedRole };
     const p = r.pick;
     return { balancedRoute: { engine: p.engine, model: p.model, ...(p.effort ? { effort: p.effort } : {}), pool: p.pool },
@@ -240,23 +244,24 @@ export class BalancedMode {
   }
 
   /** The agent's pick, refused only on a hard limit (ADR 0218 §4): an engine off or not allowed to the caller, an
-   *  unknown model, a model above the role's tierMax, an exhausted pool. */
-  private agentPick(ask: BalancedAsk, role: Role, tier: ModelTier, canRun: (h: Harness) => boolean, r: BalancedResult, pools: readonly string[], pending: readonly string[], suggestedRole: RoleId | null, hint: string): BalancedChoice {
+   *  unknown model, another engine or a model off the role's presets up to `upTo` (ADR 0336), an exhausted pool. */
+  private agentPick(ask: BalancedAsk, role: Role, tier: ModelTier, upTo: PresetId, canRun: (h: Harness) => boolean, r: BalancedResult, pools: readonly string[], pending: readonly string[], suggestedRole: RoleId | null, hint: string): BalancedChoice {
     const e = this.d.engines().find(x => x.engine === ask.engine);
     if (!e || !e.enabled || !e.trusted) throw new Error(`balanced.engine ${ask.engine}: switched off or to confirm again in Settings → Engines.`);
     if (e.modelSelectable === false) throw new Error(`balanced.engine ${ask.engine}: it cannot apply a model choice, so its tier cannot be held; pick another engine or pass nothing.`);
     if (!canRun(ask.engine)) throw new Error(`balanced.engine ${ask.engine}: you may not open chats on this engine (Settings → Engines).`);
-    // only the card's own model or a model of a tier up to tierMax (any of the tier's models): never one in no tier
-    const own = ask.engine === role.engine && role.model === ask.model;
-    const models = (t: ModelTier) => this.tierModels(ask.engine, t);
-    if (!own && !withinTierMax(models, ask.model, role.tierMax)) {
-      if (MODEL_TIERS.some(t => models(t).includes(ask.model))) throw new Error(`balanced.model ${ask.model}: above the role's tierMax (${role.tierMax}).`);
-      throw new Error(`balanced.model ${ask.model}: in no tier up to the role's tierMax (${role.tierMax}) on ${ask.engine}: pick a model of balanced_status or Settings → Roles → tiers.`);
+    // only the role's own engine and one of its presets up to the one chosen for the task (ADR 0336)
+    if (ask.engine !== role.engine) throw new Error(`balanced.engine ${ask.engine}: the role runs on ${role.engine} only (one engine per role, its presets are there).`);
+    const ids = presetsUpTo(upTo);
+    const preset = ids.find(id => role.presets[id].model === ask.model);
+    if (!preset) {
+      if (Object.values(role.presets).some(p => p.model === ask.model)) throw new Error(`balanced.model ${ask.model}: a preset above ${upTo}, the highest allowed for this task.`);
+      throw new Error(`balanced.model ${ask.model}: not one of the role's presets up to ${upTo} (${ids.map(id => `${id} ${role.presets[id].model ?? '-'}`).join(', ')}): pick one of them.`);
     }
     const pool = poolOf(ask.engine, ask.model);
     const state = this.d.book.state(pool);
     if (state?.status === 'exhausted') throw new Error(`balanced: the ${pool} credit is exhausted (${state.note ?? 'limit reached'}); pick another engine or pass nothing.`);
-    const effort = effortOn(ask.effort ?? role.effort ?? TIER_EFFORT[tier], e.models.find(m => m.id === ask.model)?.efforts);
+    const effort = effortOn(ask.effort ?? role.presets[preset].effort ?? role.effort ?? TIER_EFFORT[tier], e.models.find(m => m.id === ask.model)?.efforts);
     const skipped = r.pick ? r.pick.skipped : r.skipped;
     const all = [...new Set(pools)];
     const w = this.shares(all, pending).get(pool)!;
@@ -274,7 +279,7 @@ export class BalancedMode {
   async status(a: { roleId?: string; tier?: ModelTier; title?: string; prompt?: string; canRun: (h: Harness) => boolean }): Promise<BalancedStatus> {
     const role = a.roleId ? this.d.role(a.roleId) : null;
     const tier = role ? cappedTier(a.tier ?? role.tier, role.tierMax) : (a.tier ?? 'mid');
-    const candidates = role ? this.candidates(role, tier, a.canRun)
+    const candidates = role ? this.candidates(role, 'max', a.canRun)
       : this.d.engines().filter(e => e.enabled && e.trusted && a.canRun(e.engine)).flatMap(e => { const m = this.d.tierModel(e.engine, tier); return m ? [{ engine: e.engine, model: m }] : []; });
     const pools = [...new Set([...candidates.map(c => poolOf(c.engine, c.model)), ...this.d.book.list().map(s => s.pool)])];
     await this.d.book.refresh(pools, { costly: tier === 'top' });

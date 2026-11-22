@@ -1,7 +1,7 @@
 // The agent runs in userData/app.db (ADR 0199): the one-time move from agent-runs.json (counts equal, the JSON kept as
 // agent-runs.json.migrated-<date>), the JSON fallback when the move or the database fails, writes of only the changed
 // runs, the prune into rollups, a reopen after a restart, a corrupt database moved aside and rebuilt from the migrated
-// copy, the schema version, and the read-only export the levels CLI uses.
+// copy, the schema version, the read-only export the levels CLI uses, and a run's preset (ADR 0336) read back.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -431,5 +431,20 @@ describe('a longer archive at the cost of the runs at work (ADR 0283)', () => {
     expect(inDb.list()).toHaveLength(n);
     expect(inJson.list().length).toBeLessThan(n);
     inDb.close();
+  });
+});
+
+describe('the preset of a run (ADR 0336)', () => {
+  it('keeps preset, effort, the preset asked, why, kind and delegator across a reopen; a malformed one is dropped', () => {
+    const dir = tmp();
+    const choice = { preset: 'base' as const, asked: 'max' as const, effort: 'medium' as const, presetWhy: 'migrazione', taskKind: 'migration', delegatorRole: 'orchestrator' };
+    const s = new AgentRunStore(dir);
+    const r = s.start(start({ model: 'm-mid', presetChoice: choice }), false);
+    s.start(start({ chatId: 'c2', presetChoice: { preset: 'huge' } as never }), false);
+    s.save(); s.close();
+    const again = new AgentRunStore(dir);
+    expect(again.list().find(x => x.runId === r.runId)).toMatchObject({ model: 'm-mid', presetChoice: choice });
+    expect(again.list().find(x => x.chatId === 'c2')?.presetChoice).toBeUndefined();
+    again.close();
   });
 });
