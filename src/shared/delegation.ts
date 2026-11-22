@@ -8,6 +8,7 @@ import { TOOL_CLASSES, type ToolClass, type TaskDeliveryPolicy } from './agents'
 import { MODEL_TIERS, ROLE_DEFAULTS, currentRoleId, isWorkRole, type ModelTier, type WorkRoleId } from './roles';
 import { AGENT_LABEL, oneLine } from './agent-label';
 import type { RunPresetChoice } from './model-presets';
+import type { Effort } from './contract';
 
 /** Stable provenance for task assignment; display titles never authorize lifecycle changes. */
 /** phone = the user's own words from the paired phone (Telegram bridge, ADR phone bridge): the user's like a typed message
@@ -30,8 +31,10 @@ export interface TaskAssignmentOptions {
   contractFields?: string[];
   /** a review chat's next round (#387): the run it reviews now; the new run keeps the review's link and verdict fields */
   reviewOf?: string;
-  /** the preset this task runs on (ADR 0336), with its model: stored on the new run; absent = the previous run's */
-  preset?: { choice: RunPresetChoice; model: string | null };
+  /** the preset this task runs on (ADR 0336), with its model: stored on the new run; absent = the previous run's.
+   *  `switchTo`: the model ('' = the engine default) and effort (null = the default) the chat moves to, applied by
+   *  ChatManager.assignTask only once every guard passed (put back when the assignment still fails before it starts) */
+  preset?: { choice: RunPresetChoice; model: string | null; switchTo?: { model: string; effort: Effort | null } };
 }
 
 export interface DelegationContract {

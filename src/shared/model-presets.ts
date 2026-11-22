@@ -147,6 +147,9 @@ export function choosePreset(a: { presets: FullPresets; ask: PresetAsk; delegato
     if (used !== preset) {
       warnings.push(`preset ${preset} (${a.presets[preset].model}) costs more than your own model ${own}: ${fits ? used : 'min (the cheapest)'} used (${a.presets[used].model}).`);
       preset = used;
+    } else if (!fits) {
+      // already at Minimo and still above the ceiling: nothing cheaper on the card, said all the same
+      warnings.push(`preset ${preset} (${a.presets[preset].model}) costs more than your own model ${own}: it is the cheapest preset of the card, used anyway.`);
     }
     if (cost(preset) === null && a.presets[preset].model) warnings.push(`preset ${preset}: ${a.presets[preset].model} has no price in harness/models.json, the ceiling was not checked.`);
   } else if (preset !== 'base' && preset === asked && cost(preset) !== null) {
@@ -160,6 +163,15 @@ export function choosePreset(a: { presets: FullPresets; ask: PresetAsk; delegato
 
 /** The presets a pick may come from (Balanced mode, the user's own model): Minimo up to `upTo`, in that order. */
 export const presetsUpTo = (upTo: PresetId): PresetId[] => PRESET_IDS.slice(0, PRESET_IDS.indexOf(upTo) + 1);
+
+/** The effort a Balanced pick of `model` runs with as preset `id` (ADR 0336): the preset's own effort; a preset
+ *  without one takes the asked effort, unless that is the effort of a preset outside `ids` on the same model (presets may
+ *  differ only by effort: a pick recorded as Base never runs with Massimo's effort). */
+export function pickedEffort(p: FullPresets, id: PresetId, model: string, asked: Effort | undefined, ids: readonly PresetId[]): Effort | undefined {
+  if (p[id].effort) return p[id].effort;
+  if (!asked) return undefined;
+  return PRESET_IDS.some(x => !ids.includes(x) && p[x].model === model && p[x].effort === asked) ? undefined : asked;
+}
 
 /** The preset a named model (and effort) is, among `ids`: the exact effort first, else the first with that model. */
 export function presetNamed(p: FullPresets, model: string, effort: Effort | undefined, ids: readonly PresetId[] = PRESET_IDS): PresetId | null {

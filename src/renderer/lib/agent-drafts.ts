@@ -41,7 +41,7 @@ const SKILL = /^[a-z0-9][a-z0-9._-]{0,79}$/i;
 function validDraft(value: unknown): value is AgentDraft {
   const d = value as AgentDraft | null;
   if (!d || typeof d !== 'object' || !text(d.name, 80) || !text(d.purpose, 400) || !text(d.instructions, 8000) || !text(d.engine, 160)) return false;
-  if (d.model !== null && !text(d.model, 300) || d.effort !== undefined && !EFFORTS.includes(d.effort)) return false;
+  if (d.model !== null && !text(d.model, 300) || d.effort !== undefined && d.effort !== null && !EFFORTS.includes(d.effort)) return false;
   if (d.avatar?.kind !== 'character' || !isCharacterId(d.avatar.value)) return false;
   if (d.tools !== null && (!d.tools || !list(d.tools.allow, c => TOOL_CLASSES.includes(c as never), TOOL_CLASSES.length))) return false;
   if (d.permissionCeiling !== null && !PERMISSION_CEILINGS.includes(d.permissionCeiling)) return false;

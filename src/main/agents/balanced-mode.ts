@@ -17,7 +17,7 @@ import { MIN_SUCCESS_SAMPLE, runsSuccess } from '../../shared/success';
 import { taskOf, type TaskKind } from '../../shared/work-concepts';
 import { poolOf, type CreditBook, type PoolState } from './credits';
 import { cappedTier } from './model-tier';
-import { presetsUpTo, type FullPresets, type PresetId } from '../../shared/model-presets';
+import { pickedEffort, presetNamed, presetsUpTo, type FullPresets, type PresetId } from '../../shared/model-presets';
 
 /** One engine the caller may start, with the tier's model on it. */
 export interface BalancedCandidate {
@@ -253,7 +253,7 @@ export class BalancedMode {
     // only the role's own engine and one of its presets up to the one chosen for the task (ADR 0336)
     if (ask.engine !== role.engine) throw new Error(`balanced.engine ${ask.engine}: the role runs on ${role.engine} only (one engine per role, its presets are there).`);
     const ids = presetsUpTo(upTo);
-    const preset = ids.find(id => role.presets[id].model === ask.model);
+    const preset = presetNamed(role.presets, ask.model, ask.effort, ids);
     if (!preset) {
       if (Object.values(role.presets).some(p => p.model === ask.model)) throw new Error(`balanced.model ${ask.model}: a preset above ${upTo}, the highest allowed for this task.`);
       throw new Error(`balanced.model ${ask.model}: not one of the role's presets up to ${upTo} (${ids.map(id => `${id} ${role.presets[id].model ?? '-'}`).join(', ')}): pick one of them.`);
@@ -261,7 +261,8 @@ export class BalancedMode {
     const pool = poolOf(ask.engine, ask.model);
     const state = this.d.book.state(pool);
     if (state?.status === 'exhausted') throw new Error(`balanced: the ${pool} credit is exhausted (${state.note ?? 'limit reached'}); pick another engine or pass nothing.`);
-    const effort = effortOn(ask.effort ?? role.presets[preset].effort ?? role.effort ?? TIER_EFFORT[tier], e.models.find(m => m.id === ask.model)?.efforts);
+    // the matched preset's effort, never a higher preset's (pickedEffort)
+    const effort = effortOn(pickedEffort(role.presets, preset, ask.model, ask.effort, ids) ?? role.effort ?? TIER_EFFORT[tier], e.models.find(m => m.id === ask.model)?.efforts);
     const skipped = r.pick ? r.pick.skipped : r.skipped;
     const all = [...new Set(pools)];
     const w = this.shares(all, pending).get(pool)!;

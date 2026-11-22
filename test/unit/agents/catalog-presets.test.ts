@@ -4,8 +4,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AgentCatalogService } from '../../../src/main/agents/catalog';
+vi.mock('../../../src/renderer/store/agents', () => ({ useAgents: () => ({ catalog: null }), saveAgent: vi.fn() }));
+import { presetChange } from '../../../src/renderer/components/RolePresets';
 import type { AgentModelChoice, AgentProfile } from '../../../src/shared/agents';
 
 const roots: string[] = [];
@@ -85,5 +87,33 @@ describe('resolve and presetChoice: the guards on a real card', () => {
     const r = c.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout', tier: 'light' });
     expect(r.presetChoice?.preset).toBe('base');
     expect(r.presetChoice?.asked).toBe('min');
+  });
+});
+
+describe('Sentinel fixes on the presets (ADR 0336)', () => {
+  it('Settings\' «Predefinito» on Base effort clears the saved effort (presetChange through save)', () => {
+    const c = make(); onClaude(c);
+    c.save(edit(role(c), { effort: 'high' }), 'scout');
+    expect(role(c).effort).toBe('high');
+    const p = c.save({ ...edit(role(c), {}), ...presetChange(role(c), 'base', 'm-mid', '') } as never, 'scout');
+    expect(p.effort).toBeUndefined();
+    expect(role(c).effort).toBeUndefined();
+  });
+  it('a Balanced pick recorded as Base never runs with Massimo\'s effort when the presets differ only by effort', () => {
+    const c = make(); onClaude(c);
+    c.save(edit(role(c), { effort: 'medium', presets: { min: { model: 'm-low', effort: 'low' }, max: { model: 'm-mid', effort: 'high' } } }), 'scout');
+    const r = c.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout', preset: 'base', balancedRoute: { engine: 'claude', model: 'm-mid', effort: 'high', pool: 'claude' } } as never);
+    expect(r.presetChoice).toMatchObject({ preset: 'base', effort: 'medium' });
+    expect(r.request.effort).toBe('medium');
+  });
+  it('a trial rolled back takes the presets it added with it', () => {
+    const c = make(); onClaude(c);
+    const before = role(c);
+    expect(before.presets).toBeUndefined();
+    c.approveTrial('scout', { ...edit(before, { presets: { max: { model: 'm-top', effort: 'high' } } }) }, 'prova Massimo');
+    expect(role(c).presets).toEqual({ max: { model: 'm-top', effort: 'high' } });
+    const back = c.resolveTrial('scout', 'rollback');
+    expect(back.presets).toBeUndefined();
+    expect(role(c).presets).toBeUndefined();
   });
 });

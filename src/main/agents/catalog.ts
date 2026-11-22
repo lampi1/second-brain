@@ -15,7 +15,7 @@ import { characterOf, isCharacterId } from '../../shared/characters';
 import { readLocal, writeLocal } from './local-store';
 import { AgentHistory, behaviourOf, firstVersion, sameBehaviour, versionedChanges } from './versions';
 import { checkedTools, type AgentPolicy } from './tool-policy';
-import { PRESET_IDS, cardPresets, checkedPresets, choosePreset, presetAskOf, presetNamed, presetOrderProblem, presetsUpTo, type Delegator, type FullPresets, type PresetAsk, type PresetChoice, type RolePresets, type UnitPrice } from '../../shared/model-presets';
+import { PRESET_IDS, cardPresets, checkedPresets, choosePreset, pickedEffort, presetAskOf, presetNamed, presetOrderProblem, presetsUpTo, type Delegator, type FullPresets, type PresetAsk, type PresetChoice, type RolePresets, type UnitPrice } from '../../shared/model-presets';
 import { fiveRolesTextFor, fullDefaultsFor, shippedTextFor, skillAlignmentFor } from './role-migrate';
 import { engineOf } from '../engines/registry';
 import { log, errText } from '../log';
@@ -373,9 +373,11 @@ export class AgentCatalogService {
     const baseline = decision === 'rollback' ? this.store.get(id, p.trial.baseline) : undefined;
     if (decision === 'rollback' && !baseline) throw new Error('La versione di partenza non è più nella cronologia.');
     const { trial: _t, ...rest } = p; void _t;
-    const profile: AgentProfile = { ...rest, ...(baseline ? this.behaviour(baseline.behaviour as unknown as Record<string, unknown>, id, false, { ...rest, knowhow: undefined, effort: undefined, maxContext: undefined }) : {}),
+    const profile: AgentProfile = { ...rest, ...(baseline ? this.behaviour(baseline.behaviour as unknown as Record<string, unknown>, id, false, { ...rest, knowhow: undefined, effort: undefined, maxContext: undefined, presets: undefined }) : {}),
       activeVersion: baseline?.version ?? p.activeVersion, updatedAt: Math.max(this.now(), p.updatedAt + 1) };
     if (baseline && !baseline.behaviour.knowhow) delete profile.knowhow;
+    // presets a trial added go with it (ADR 0336)
+    if (baseline && !(baseline.behaviour as { presets?: unknown }).presets) delete profile.presets;
     const states: Parameters<AgentHistory['commit']>[1] = [{ agentId: id, version: p.activeVersion, state: decision === 'keep' ? 'kept' : 'rejected' }];
     if (baseline) states.push({ agentId: id, version: baseline.version, state: 'active' });
     this.commit(this.profiles.map(x => x.id === id ? profile : x), [], states);
@@ -492,7 +494,8 @@ export class AgentCatalogService {
       const ids = user ? PRESET_IDS : presetsUpTo(asked.preset);
       const named = presetNamed(presets, chosen.model, chosen.effort, ids);
       if (!named) throw new Error(`${p.name}: ${chosen.model} non è ${user ? 'uno dei preset' : `un preset fino a ${asked.preset}`} della sua scheda (${ids.map(id => `${id} ${presets[id].model ?? 'modello del livello'}`).join(', ')}). Scegli un preset, o aggiungi il modello alla scheda (Impostazioni → Ruoli e deleghe).`);
-      const effortOf = chosen.effort ?? presets[named].effort;
+      // Balanced mode runs the matched preset's effort, never a higher preset's on the same model (pickedEffort)
+      const effortOf = user ? chosen.effort ?? presets[named].effort : pickedEffort(presets, named, chosen.model, chosen.effort, ids);
       const { effort: _x, asked: _y, ...kept } = asked; void _x; void _y;
       choice = { ...kept, preset: named, model: presets[named].model, ...(effortOf ? { effort: effortOf } : {}), ...(named !== (ask.preset ?? 'base') ? { asked: ask.preset ?? 'base' } : {}),
         warnings: [...asked.warnings, ...(user ? [`the user asked for ${chosen.model}: preset ${named}`] : [])] };

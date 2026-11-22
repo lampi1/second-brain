@@ -107,3 +107,11 @@ describe('presetsUpTo, presetNamed and the run record', () => {
     expect(readRunPreset(null)).toBeUndefined();
   });
 });
+
+describe('choosePreset: an explicit Minimo above the ceiling', () => {
+  it('warns that even the cheapest preset costs more than the delegator\'s own model', () => {
+    const c = choosePreset({ presets: P, ask: { preset: 'min', presetWhy: 'lettura' }, delegator: { model: 'cheap' }, price: m => m === 'cheap' ? 0.5 : price(m) });
+    expect(c.preset).toBe('min');
+    expect(c.warnings.join(' ')).toMatch(/preset min \(light\) costs more than your own model cheap/);
+  });
+});

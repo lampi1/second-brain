@@ -43,7 +43,8 @@ export interface AgentDraft {
   engine: Harness;
   /** null = the model of the role's tier on its engine (Impostazioni → Ruoli e deleghe), else this exact model */
   model: string | null;
-  effort?: Effort;
+  /** null (a draft only, e.g. Settings' «Predefinito») clears it: the engine's default; a saved card omits it then */
+  effort?: Effort | null;
   avatar: AgentAvatar;
   tools: AgentToolPolicy | null;
   permissionCeiling: PermissionCeiling | null;
@@ -81,6 +82,8 @@ export function effortOn(asked: Effort | null | undefined, efforts: readonly Eff
 export const BEHAVIOUR_FIELDS = ['instructions', 'engine', 'model', 'effort', 'tools', 'permissionCeiling', 'knowhow', 'maxContext', 'tier', 'tierMax', 'presets', 'launches', 'skills'] as const;
 export type AgentBehaviour = Pick<AgentDraft, (typeof BEHAVIOUR_FIELDS)[number]>;
 export interface AgentProfile extends AgentDraft {
+  /** a saved card has an effort or none (a draft's null clears it) */
+  effort?: Effort;
   id: string; createdAt: number; updatedAt: number;
   /** always a role: one of the six (the Orchestrator and the five work roles) */
   scope: 'role';

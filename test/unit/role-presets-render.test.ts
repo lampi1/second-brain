@@ -45,7 +45,7 @@ describe('presetChange', () => {
   const scout = profiles[1] as AgentProfile;
   it('Base changes the card\'s model and effort only', () => {
     expect(presetChange(scout, 'base', 'm-low', 'low')).toEqual({ model: 'm-low', effort: 'low' });
-    expect(presetChange(scout, 'base', '', '')).toEqual({ model: null, effort: undefined });
+    expect(presetChange(scout, 'base', '', '')).toEqual({ model: null, effort: null });
   });
   it('Minimo / Massimo change only their preset; empty drops it, the last one leaves {}', () => {
     expect(presetChange(scout, 'min', 'm-low', 'low')).toEqual({ presets: { min: { model: 'm-low', effort: 'low' }, max: { model: 'm-top', effort: 'high' } } });

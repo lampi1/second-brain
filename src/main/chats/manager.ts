@@ -663,7 +663,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     } finally { releaseDelivery(); }
   }
 
-  async set(chatId: string, patch: { model?: string; effort?: Effort; permissionMode?: PermissionMode; title?: string; workStatus?: 'assigned'|'waiting-mail'|'completed' }): Promise<ChatSummary> {
+  async set(chatId: string, patch: { model?: string; effort?: Effort | null; permissionMode?: PermissionMode; title?: string; workStatus?: 'assigned'|'waiting-mail'|'completed' }): Promise<ChatSummary> {
     const r = this.need(chatId);
     const sess = r.session;
     if(patch.workStatus !== undefined){
@@ -700,7 +700,17 @@ export class ChatManager extends ManagerRemote implements ChatService {
         if (sess) this.addItem(r, sysItem('modelChangeQueued', { model: m ?? '', label: engine.label, reopen: r.reopen ? 1 : 0 }, 'info'), false);
       } else await apply('model', sess ? () => sess.setModel(m) : undefined);
     }
-    if (patch.effort !== undefined) {
+    if (patch.effort === null) {
+      // back to the engine's default (a preset without effort, ADR 0336): no session takes «no effort» live, so it
+      // reopens without one on the same history, now when idle, else after this turn
+      if (r.choice.effort !== null || r.s.effort) {
+        const engine = engineOrThrow(r.s.harness);
+        r.choice.effort = null; r.s.effort = null;
+        r.s.effortStatus = selectEffort(r.s.effortStatus ?? initialEffort(engine.caps.effort, null), null);
+        const live = r.session;
+        if (live && !live.busy) await this.closeKeeping(r, live); else if (live) r.reopen = true;
+      }
+    } else if (patch.effort !== undefined) {
       if (!EFFORTS.includes(patch.effort)) throw new Error(`Effort non valido: ${patch.effort}`);
       const engine = engineOrThrow(r.s.harness);
       if (!engine.caps.effort) throw new Error(`L’effort non si imposta con ${engine.label}: scegli il modello.`);

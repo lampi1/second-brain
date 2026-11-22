@@ -189,6 +189,14 @@ describe('BalancedMode: the agent picks (ADR 0218 §4, presets ADR 0336)', () =>
     await expect(make(book).choose({ ...base, asked: { engine: 'claude', model: 'claude-mid', why: 'x' } })).rejects.toThrow(/credit is exhausted/);
   });
 
+  it('presets differing only by effort: a pick recorded as Base never takes Massimo\'s effort', async () => {
+    const same = { min: { model: 'claude-light', effort: 'low' as const }, base: { model: 'claude-mid' }, max: { model: 'claude-mid', effort: 'high' as const } };
+    const mode = new BalancedMode({ on: () => true, book: new CreditBook(null, {}, () => NOW), role: roleOf(same), engines, tierModel: (e, t) => `${e}-${t}`, runs: () => rows as never, now: () => NOW });
+    const c = await mode.choose({ ...base, preset: 'base', asked: { engine: 'claude', model: 'claude-mid', effort: 'high', why: 'x' } });
+    expect(c!.balancedRoute!.effort).not.toBe('high');
+    expect((await mode.choose({ ...base, preset: 'max', asked: { engine: 'claude', model: 'claude-mid', effort: 'high', why: 'x' } }))!.balancedRoute!.effort).toBe('high');
+  });
+
   it('off: a pick by the agent is refused', async () => {
     await expect(make(new CreditBook(null, {}, () => NOW), false).choose({ ...base, asked: { engine: 'claude', model: 'claude-mid', why: 'x' } })).rejects.toThrow(/only with Balanced mode on/);
   });

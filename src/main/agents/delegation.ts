@@ -270,8 +270,10 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
         const c = choices[i];
         return c ? { route: { reason: c.reason, ...(c.balanced ? { balanced: c.balanced } : {}) }, ...(c.suggestedRole ? { suggestedRole: c.suggestedRole } : {}) } : {};
       };
+      // the preset the chat really started on (its run's record: Balanced mode may pick a lower one), else the guards'
+      const presetOf = (i: number, c: ChatSummary) => c.run?.presetChoice?.preset ?? plans[i]!.cap?.preset;
       const children = settled.map((s, i) => s.status === 'fulfilled'
-        ? { role: plans[i]!.role, title: s.value.title, chatId: s.value.id, cwd: s.value.cwd, harness: s.value.harness, model: s.value.model, ...(plans[i]!.cap ? { preset: plans[i]!.cap!.preset } : {}), state: s.value.queued ? 'queued' : s.value.state, ...warnings(i, s.value.id), ...balancedOf(i) }
+        ? { role: plans[i]!.role, title: s.value.title, chatId: s.value.id, cwd: s.value.cwd, harness: s.value.harness, model: s.value.model, ...(presetOf(i, s.value) ? { preset: presetOf(i, s.value) } : {}), state: s.value.queued ? 'queued' : s.value.state, ...warnings(i, s.value.id), ...balancedOf(i) }
         : { role: plans[i]!.role, title: plans[i]!.title, error: s.reason instanceof Error ? s.reason.message : String(s.reason) });
       // each step of the plan with its started children: the strip shows it under way
       const steps = new Map<number, string[]>();
@@ -324,8 +326,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       if (ask.preset) throw new Error(`preset: this child runs on ${child.harness}, not on its role's engine ${profile.engine}, so the role's presets do not apply: leave preset out or delegate a fresh chat.`);
       preset = null;
     }
-    const switchTo = preset && (preset.model !== child.model || (preset.effort !== undefined && preset.effort !== child.effort)) ? preset : null;
-    if (switchTo && !d.chats.set) throw new Error('preset: this child cannot change model here; delegate a fresh chat.');
+    // a preset without effort is the engine's default: a child left on another effort goes back to it (null)
+    const switchTo = preset && ((preset.model ?? null) !== (child.model ?? null) || (preset.effort ?? null) !== (child.effort ?? null)) ? preset : null;
     const presetWarnings = [...(preset?.warnings ?? []), ...(switchTo ? [`the child switches to preset ${switchTo.preset} (${switchTo.model ?? 'the engine default'}${switchTo.effort ? `, effort ${switchTo.effort}` : ''}) from ${child.model ?? 'the engine default'}${child.effort ? `, effort ${child.effort}` : ''}`] : [])];
     const parentPolicy = d.chats.agentPolicy(parent.id), childPolicy = d.chats.agentPolicy(child.id);
     if (launchGap(profile.tools?.allow ?? [], parentPolicy?.tools?.allow ?? null).length) throw new Error('Child role needs permissions your current policy does not allow.');
@@ -361,16 +363,9 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       // its next round on the work it already reviewed: only the delta (a new task is reviewed whole)
       const delta = a.roleId === 'sentinel' && a.mode !== 'new-task' && !!child.delegation.result ? `${DELTA_REVIEW}\n\n` : '';
       const prompt = `${d.label}\n\n${delta}${delegationPrompt(contract, { role: a.roleId, parentTitle: parent.title, title: child.title, skills: [] })}`;
-      const was = { model: child.model ?? '', ...(child.effort ? { effort: child.effort } : {}) };
-      if (switchTo) await d.chats.set!(child.id, { model: switchTo.model ?? '', ...(switchTo.effort ? { effort: switchTo.effort } : {}) });
-      try {
-        await d.chats.assignTask(child.id, prompt, { mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: version, ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), doneWhen: contract.doneWhen, contractFields: contractFields(contract), ...(step !== null ? { planStep: step } : {}), source: { kind: 'chat', chatId: parent.id },
-          ...(preset ? { preset: { choice: runPresetOf(preset), model: preset.model } } : {}) });
-      } catch (e) {
-        // nothing was assigned: the child goes back to the model it ran on
-        if (switchTo) await d.chats.set!(child.id, was).catch(() => undefined);
-        throw e;
-      }
+      // the switch itself happens inside assignTask, after its guards (busy, queued, version, held result)
+      await d.chats.assignTask(child.id, prompt, { mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: version, ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), doneWhen: contract.doneWhen, contractFields: contractFields(contract), ...(step !== null ? { planStep: step } : {}), source: { kind: 'chat', chatId: parent.id },
+          ...(preset ? { preset: { choice: runPresetOf(preset), model: preset.model, ...(switchTo ? { switchTo: { model: switchTo.model ?? '', effort: switchTo.effort ?? null } } : {}) } } : {}) });
       const assigned = chat(child.id);
       const warned = [...presetWarnings, ...contractWarnings(contract)];
       return { chatId: child.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(preset ? { preset: preset.preset } : {}), ...(userInstructions.length ? { userInstructions, note: USER_INSTRUCTIONS_NOTE } : {}), ...(warned.length ? { warnings: warned } : {}) };

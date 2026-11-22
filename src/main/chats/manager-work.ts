@@ -3,7 +3,7 @@
 // the run metrics, the Strategist's plan (ADR 0108: propose, update, approve or change).
 import crypto from 'node:crypto';
 import path from 'node:path';
-import type { ChatSummary } from '../../shared/contract';
+import type { ChatSummary, Effort } from '../../shared/contract';
 import { errText, log } from '../log';
 import { ToolRefusal } from '../mcp/refusal';
 import type { UserTaskEvents, AgentRun, AgentRunOutcome } from '../../shared/agents';
@@ -224,7 +224,10 @@ export abstract class ManagerWork extends ManagerLifecycle {
     if (this.midTurn(r) || r.pending.size || r.s.queued || r.opening || r.releasing || r.switching || r.archiving || this.deliveries.has(chatId)) throw new ToolRefusal('The chat is busy or has queued work: nothing was assigned. Assign again once its current work has ended; a retry now gets the same answer.');
     if (options.reviewOf !== undefined) this.runs.checkLinks({ reviewOf: options.reviewOf }); // before the previous run ends
     const freshBoundary = this.freshReady(r, Date.now());
-    this.beginAssignment(r, prompt, options);
+    // the task's preset (ADR 0336, agent_assign_task): the switch comes after every guard above, so a refused
+    // assignment never leaves the chat on another model; put back when the assignment itself still fails
+    const restore = await this.presetSwitch(r, options.preset?.switchTo);
+    try { this.beginAssignment(r, prompt, options); } catch (e) { await restore(); throw e; }
     if (freshBoundary) r.freshAssignmentRun = r.s.run?.runId;
     if (options.mode === 'new-task' && r.s.plan) prompt += `\n\n${strategyPrompt(r.s.plan)}`;
     if (options.planStep !== undefined && r.s.parentId) this.planDelegated(r.s.parentId, options.planStep, [chatId]);
@@ -232,6 +235,19 @@ export abstract class ManagerWork extends ManagerLifecycle {
     const from = source.kind === 'chat' ? this.need(source.chatId).s.title : source.kind === 'app' ? 'App' : undefined;
     try { await this.send(chatId, prompt, undefined, false, from, false, source); }
     finally { r.freshAssignmentRun = undefined; }
+  }
+
+  /** The chat's settings (ChatManager.set): effort null = back to the engine's default. */
+  abstract set(chatId: string, patch: { model?: string; effort?: Effort | null }): Promise<ChatSummary>;
+
+  /** Moves the chat to a preset's model and effort; the returned undo puts back what it ran on (best effort). */
+  private async presetSwitch(r: Rec, to: { model: string; effort: Effort | null } | undefined): Promise<() => Promise<void>> {
+    if (!to) return async () => {};
+    const was = { model: r.choice.model ?? '', effort: r.choice.effort };
+    const patch = { model: to.model, ...(to.effort !== (r.choice.effort ?? null) ? { effort: to.effort } : {}) };
+    const undo = async () => { await this.set(r.s.id, { model: was.model, ...('effort' in patch ? { effort: was.effort } : {}) }).catch(() => undefined); };
+    try { await this.set(r.s.id, patch); } catch (e) { await undo(); throw e; }
+    return undo;
   }
 
   protected beginAssignment(r: Rec, prompt: string, options: TaskAssignmentOptions): void {

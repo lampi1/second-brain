@@ -28,10 +28,11 @@ export function RolePresets() {
 }
 
 /** The change a pick makes on the card: Base is the card's model and effort, Minimo and Massimo its presets (empty =
- *  dropped, the same as Base; `{}` clears the last one). */
+ *  dropped, the same as Base; `{}` clears the last one; Base's effort null = the engine default). */
 export function presetChange(profile: AgentProfile, id: PresetId, model: string, effort: string): Partial<AgentDraft> {
   const e = EFFORTS.find(x => x === effort);
-  if (id === 'base') return { model: model || null, effort: e };
+  // Base's «Predefinito» is null, never undefined: a save drops undefined fields and would keep the old effort
+  if (id === 'base') return { model: model || null, effort: e ?? null };
   const next: Presets = { ...(profile.presets ?? {}) };
   if (model) next[id] = { model, ...(e ? { effort: e } : {}) }; else delete next[id];
   return { presets: next };
