@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  antigravityStatusLineCommand,
   collectClaudeUsage,
   collectCodexUsage,
   collectCursorUsage,
@@ -14,6 +15,8 @@ import {
   normalizeCodexUsage,
   normalizeCursorUsage,
   normalizeOpenCodeGoUsage,
+  readAntigravityStatus,
+  sweepStaleAgyDirs,
 } from '../../../src/main/brain/provider-usage';
 import { tmpDir } from './helpers';
 
@@ -109,6 +112,38 @@ describe('provider-usage normalizers', () => {
     expect(ag.planLabel).toBe('Google AI Pro');
     expect(ag.windows.map(w => [w.label, w.usedPercent])).toEqual([['5h', 25], ['7g', 19], ['7g · 3P', 50]]);
   });
+
+  it('reads agy 1.5.14 statusLine JSON: Gemini 5h and weekly, unused 3P and other buckets left out', () => {
+    // the shape agy wrote on Windows (anonymized): the first status has no quota yet, the second has five buckets
+    const first = JSON.stringify({ product: 'antigravity', agent_state: 'initializing', email: 'dev@example.com' });
+    const second = JSON.stringify({
+      product: 'antigravity', plan_tier: 'Google AI Pro', email: 'dev@example.com',
+      quota: {
+        '3p-5h': { remaining_fraction: 1, reset_time: '2026-11-23T00:07:06Z', reset_in_seconds: 17998 },
+        '3p-weekly': { remaining_fraction: 1, reset_time: '2026-11-29T19:07:06Z', reset_in_seconds: 604798 },
+        'gemini-5h': { remaining_fraction: 0, reset_time: '2026-11-22T21:23:54Z', reset_in_seconds: 8206 },
+        'gemini-argon-wtu-weekly': { remaining_fraction: 1, reset_time: '2026-11-29T19:07:06Z', reset_in_seconds: 604798 },
+        'gemini-weekly': { remaining_fraction: 0.71170133, reset_time: '2026-11-29T16:23:54Z', reset_in_seconds: 595006 },
+      },
+    });
+    expect(readAntigravityStatus(first)).toBeNull();
+    expect(readAntigravityStatus(second.slice(0, 40))).toBeNull(); // half-written
+    expect(readAntigravityStatus('')).toBeNull();
+    const raw = readAntigravityStatus(`${second}\r\n`);
+    expect(raw).not.toBeNull();
+    const ag = normalizeAntigravityUsage(raw, null, NOW);
+    expect(ag).toMatchObject({ status: 'ok', planLabel: 'Google AI Pro' });
+    expect(ag.windows.map(w => [w.kind, w.label, w.usedPercent, w.resetsAt])).toEqual([
+      ['five-hour', '5h', 100, Date.parse('2026-11-22T21:23:54Z')],
+      ['weekly', '7g', 28.8, Date.parse('2026-11-29T16:23:54Z')],
+    ]);
+  });
+
+  it('builds the statusLine command without quotes (agy splits on spaces): none for a path with a space', () => {
+    expect(antigravityStatusLineCommand('C:\\Temp\\sb-agy-1\\status.json', 'win32')).toBe('cmd /d /c more > C:/Temp/sb-agy-1/status.json');
+    expect(antigravityStatusLineCommand('/tmp/sb-agy-1/status.json', 'linux')).toBe('tee /tmp/sb-agy-1/status.json');
+    expect(antigravityStatusLineCommand('C:\\Users\\A B\\Temp\\status.json', 'win32')).toBeNull();
+  });
 });
 
 describe('provider-usage collectors with injected local files and fetch', () => {
@@ -173,5 +208,21 @@ describe('provider-usage collectors with injected local files and fetch', () => 
     expect(oc.status).toBe('ok');
     expect(oc.planLabel).toBe('OpenAI · Plus');
     expect(oc.windows[0]?.usedPercent).toBe(61);
+  });
+});
+
+describe('sweepStaleAgyDirs', () => {
+  it('removes only old sb-agy-XXXXXX folders, keeps fresh ones and other names', () => {
+    const base = tmpDir('sb-sweep-');
+    const old = path.join(base, 'sb-agy-abc123'), fresh = path.join(base, 'sb-agy-def456'), other = path.join(base, 'sb-agy-probe');
+    for (const d of [old, fresh, other]) fs.mkdirSync(d);
+    const t = Date.now();
+    fs.utimesSync(old, new Date(t - 3_600_000), new Date(t - 3_600_000));
+    fs.utimesSync(other, new Date(t - 3_600_000), new Date(t - 3_600_000));
+    sweepStaleAgyDirs(t, base);
+    expect(fs.existsSync(old)).toBe(false);
+    expect(fs.existsSync(fresh)).toBe(true);
+    expect(fs.existsSync(other)).toBe(true);
+    fs.rmSync(base, { recursive: true, force: true });
   });
 });

@@ -5,7 +5,7 @@
 // Security (AGENTS.md rule 2): local CLI tokens are read in memory only in the main process, sent only to each
 // vendor's own HTTPS usage endpoint, never logged, never stored and never sent to the renderer.
 // Used by brain/usage.ts (UsageMonitor); pure normalizers are unit-tested in test/unit/brain/provider-usage.test.ts.
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -14,7 +14,8 @@ import { promisify } from 'node:util';
 import type { Harness, HarnessUsage, HarnessUsageWindow } from '../../shared/contract';
 import { log } from '../log';
 import { opencodeLogTail, readOpencodeLog, opencodeState } from '../agents/credits';
-import { cliArgv, engineAllowed, resolveAcp, type CliCommand } from '../chats/cli';
+import { cliArgv, engineAllowed, killTrees, resolveAcp, type CliCommand } from '../chats/cli';
+import { ownProcessGroup } from '../platform';
 import { channel } from '../engines/model-probe';
 
 const execFileAsync = promisify(execFile);
@@ -27,6 +28,8 @@ const OPENCODE_GO_USAGE_URL = 'https://opencode.ai/zen/go/v1/usage';
 const ANTIGRAVITY_ACP_TIMEOUT_MS = 8_000;
 const ANTIGRAVITY_TIER_TTL_MS = 60 * 60_000;
 const ANTIGRAVITY_RETRY_MS = 10 * 60_000;
+const ANTIGRAVITY_STATUS_TIMEOUT_MS = 20_000;
+const ANTIGRAVITY_QUOTA_TTL_MS = 5 * 60_000;
 
 export const USAGE_HARNESS_ORDER: readonly { id: Harness; label: string }[] = [
   { id: 'claude', label: 'Claude' },
@@ -243,8 +246,10 @@ export function normalizeAntigravityUsage(raw: unknown, planTierFallback: string
   };
   const has5h = pushBucket('gemini-5h', 'five-hour', '5h');
   const has7d = pushBucket('gemini-weekly', 'weekly', '7g');
-  pushBucket('3p-5h', 'five-hour', '5h · 3P', '3p');
-  pushBucket('3p-weekly', 'weekly', '7g · 3P', '3p');
+  // third-party model buckets only once used (a full one is noise next to the Gemini windows)
+  const used = (key: string): boolean => { const b = quota[key]; const rem = isObj(b) ? num(b.remaining_fraction) : null; return rem !== null && rem < 1; };
+  if (used('3p-5h')) pushBucket('3p-5h', 'five-hour', '5h · 3P', '3p');
+  if (used('3p-weekly')) pushBucket('3p-weekly', 'weekly', '7g · 3P', '3p');
   if (!has5h && !has7d) {
     for (const [k, b] of Object.entries(quota)) {
       if (k === '3p-5h' || k === '3p-weekly' || !isObj(b) || b.disabled === true) continue;
@@ -515,21 +520,26 @@ export async function collectOpenCodeUsage(o: ProviderCollectorEnv = {}): Promis
 }
 
 let agyTierCache: { tier: string | null; at: number; ttl: number } | null = null;
+let agyQuotaCache: { raw: Obj | null; at: number; ttl: number } | null = null;
 
-/** The tier from `agy acp` session/new (_meta.antigravity.tier), as Cloudroom reads it. The same resolution and the
- *  same JSON-lines channel the model listing uses (engines/model-probe.ts): stdin errors handled, the process tree
- *  ended on close. A tier is kept for an hour; no answer (timeout, early exit) only for ANTIGRAVITY_RETRY_MS. */
-async function probeAntigravityAcpTier(cmd: CliCommand, now: number): Promise<{ signedIn: boolean; tier: string | null }> {
-  if (agyTierCache && now - agyTierCache.at < agyTierCache.ttl) return { signedIn: true, tier: agyTierCache.tier };
-  const env = { ...cmd.env, AGY_CLI_DISABLE_AUTO_UPDATE: '1' };
+/** `agy models`: false only when it says the user must sign in; ENOENT is rethrown (not installed). */
+async function agySignedIn(cmd: CliCommand, env: NodeJS.ProcessEnv): Promise<boolean> {
   const models = cliArgv({ ...cmd, env }, ['models']);
   try {
     await execFileAsync(models.command, models.args, { timeout: 6_000, env: models.env, windowsHide: true, windowsVerbatimArguments: models.verbatim });
   } catch (e) {
     const out = `${(e as { stdout?: string }).stdout ?? ''}${(e as { stderr?: string }).stderr ?? ''}`;
-    if (/please sign in/i.test(out)) return { signedIn: false, tier: null };
+    if (/please sign in/i.test(out)) return false;
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') throw e;
   }
+  return true;
+}
+
+/** The tier from `agy acp` session/new (_meta.antigravity.tier), the fallback when the statusLine gave nothing. The
+ *  same resolution and JSON-lines channel the model listing uses (engines/model-probe.ts). A tier is kept for an
+ *  hour; no answer (timeout, early exit) only for ANTIGRAVITY_RETRY_MS. */
+async function probeAntigravityAcpTier(cmd: CliCommand, env: NodeJS.ProcessEnv, now: number): Promise<string | null> {
+  if (agyTierCache && now - agyTierCache.at < agyTierCache.ttl) return agyTierCache.tier;
   const ch = channel(cliArgv({ ...cmd, env }, ['acp', '--disable-telemetry']), os.tmpdir());
   let tier: string | null = null;
   if (!('error' in ch)) {
@@ -544,7 +554,79 @@ async function probeAntigravityAcpTier(cmd: CliCommand, now: number): Promise<{ 
     } catch { /* no answer: tier unknown */ } finally { ch.close(); }
   }
   agyTierCache = { tier, at: now, ttl: tier ? ANTIGRAVITY_TIER_TTL_MS : ANTIGRAVITY_RETRY_MS };
-  return { signedIn: true, tier };
+  return tier;
+}
+
+/** The statusLine command that saves agy's status JSON to `file`. agy splits the command on spaces and passes no
+ *  quotes through (measured with agy 1.5.14 on Windows), so a path with a space cannot be used: null. Windows: cmd's
+ *  `more` copies stdin to the file (no Node start, ~3 s to the first quota); elsewhere `tee`. */
+export function antigravityStatusLineCommand(file: string, platform: NodeJS.Platform = process.platform): string | null {
+  const p = file.replace(/\\/g, '/');
+  if (/\s/.test(p)) return null;
+  return platform === 'win32' ? `cmd /d /c more > ${p}` : `tee ${p}`;
+}
+
+/** The last status JSON agy wrote, when it carries quota buckets; anything else (half-written, no quota yet) = null. */
+export function readAntigravityStatus(text: string | null): Obj | null {
+  if (!text?.trim()) return null;
+  try {
+    const j: unknown = JSON.parse(text.trim());
+    return isObj(j) && isObj(j.quota) && Object.keys(j.quota).length ? j : null;
+  } catch { return null; }
+}
+
+/** Removes sb-agy-XXXXXX folders older than ANTIGRAVITY_RETRY_MS that an earlier probe could not remove (agy still
+ *  running, the app closed first). Only mkdtemp's exact name shape, so no other folder is touched. */
+export function sweepStaleAgyDirs(now: number, base = os.tmpdir()): void {
+  let names: string[];
+  try { names = fs.readdirSync(base); } catch { return; }
+  for (const n of names) {
+    if (!/^sb-agy-[A-Za-z0-9]{6}$/.test(n)) continue;
+    const p = path.join(base, n);
+    try { if (now - fs.statSync(p).mtimeMs > ANTIGRAVITY_RETRY_MS) fs.rmSync(p, { recursive: true, force: true }); } catch { /* best effort */ }
+  }
+}
+
+/** Starts the interactive agy (no PTY, stdin closed, no prompt: no turn, no conversation saved) with a session-only
+ *  statusLine, as Cloudroom's antigravity-status.ts does; waits for the first status with quota, then ends agy's
+ *  process tree and removes the temp folder. A quota is kept for ANTIGRAVITY_QUOTA_TTL_MS, no answer for
+ *  ANTIGRAVITY_RETRY_MS. */
+async function probeAntigravityStatusLine(cmd: CliCommand, env: NodeJS.ProcessEnv, platform: NodeJS.Platform, now: number): Promise<Obj | null> {
+  if (agyQuotaCache && now - agyQuotaCache.at < agyQuotaCache.ttl) return agyQuotaCache.raw;
+  const raw = await new Promise<Obj | null>(resolve => {
+    if (cmd.kind === 'cmd') { resolve(null); return; } // a .cmd shim would leave agy orphaned on timeout
+    sweepStaleAgyDirs(now);
+    let dir: string;
+    try { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-agy-')); } catch { resolve(null); return; }
+    const out = path.join(dir, 'status.json'), settings = path.join(dir, 'settings.json');
+    const line = antigravityStatusLineCommand(out, platform);
+    const cleanup = (): void => { try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch { /* best effort */ } };
+    if (!line) { cleanup(); resolve(null); return; }
+    let child: ReturnType<typeof spawn>;
+    try {
+      fs.writeFileSync(settings, JSON.stringify({ statusLine: { type: 'command', command: line } }));
+      const start = cliArgv({ ...cmd, env }, ['--settings', settings]);
+      child = spawn(start.command, start.args, { cwd: dir, env: start.env, windowsHide: true, detached: ownProcessGroup(platform), stdio: ['ignore', 'ignore', 'ignore'] });
+    } catch { cleanup(); resolve(null); return; }
+    let done = false;
+    const read = (): Obj | null => { try { return readAntigravityStatus(fs.readFileSync(out, 'utf8')); } catch { return null; } };
+    const finish = (v: Obj | null): void => {
+      if (done) return;
+      done = true; clearInterval(poll); clearTimeout(timer);
+      if (child.pid) killTrees([child.pid], { fallback: () => child.kill() }); else child.kill();
+      // agy runs with the folder as cwd, so Windows refuses to remove it until agy has exited (1.5-2.5 s after the
+      // end): remove it on exit, with a late fallback; a folder still left is swept by the next probe.
+      if (child.exitCode !== null || child.signalCode !== null) cleanup();
+      else { child.once('exit', () => setTimeout(cleanup, 200)); setTimeout(cleanup, 8_000).unref?.(); }
+      resolve(v);
+    };
+    const poll = setInterval(() => { const v = read(); if (v) finish(v); }, 250);
+    const timer = setTimeout(() => finish(read()), ANTIGRAVITY_STATUS_TIMEOUT_MS);
+    child.on('error', () => finish(null));
+    child.on('exit', () => finish(read()));
+  });
+  agyQuotaCache = { raw, at: now, ttl: raw ? ANTIGRAVITY_QUOTA_TTL_MS : ANTIGRAVITY_RETRY_MS };
+  return raw;
 }
 
 export async function collectAntigravityUsage(o: ProviderCollectorEnv = {}): Promise<HarnessUsage> {
@@ -553,20 +635,17 @@ export async function collectAntigravityUsage(o: ProviderCollectorEnv = {}): Pro
   const cmd = resolveAcp('antigravity', 'agy', null, env);
   if (!cmd) return notInstalled;
   if (!engineAllowed(cmd, env)) return { ...notInstalled, status: 'unavailable', message: 'Nei test il motore reale non parte.' };
+  const agyEnv = { ...cmd.env, AGY_CLI_DISABLE_AUTO_UPDATE: '1' };
   try {
-    const { signedIn, tier } = await probeAntigravityAcpTier(cmd, now);
-    if (!signedIn) {
+    const cached = agyQuotaCache && now - agyQuotaCache.at < agyQuotaCache.ttl ? agyQuotaCache.raw : undefined;
+    if (cached) return normalizeAntigravityUsage(cached, null, now);
+    if (!await agySignedIn(cmd, agyEnv)) {
       return { harness: 'antigravity', label: 'Antigravity', status: 'unauthenticated', planLabel: null, accountEmail: null, windows: [], message: 'Non connesso: esegui agy acp --login.', source: 'cli', at: now };
     }
-    // Cloudroom's statusLine PTY probe is POSIX-only (antigravity-status.ts skips win32). On Windows, agy does not
-    // yet expose quota fractions without a PTY, so we report the detected tier honestly without faking 0%.
-    return {
-      harness: 'antigravity', label: 'Antigravity', status: 'unavailable', planLabel: tier, accountEmail: null, windows: [],
-      message: platform === 'win32'
-        ? 'Quote 5h/7g non esposte da agy CLI su Windows (solo piano rilevato).'
-        : 'Nessuna finestra di quota riportata da agy.',
-      source: 'cli', at: now,
-    };
+    const status = await probeAntigravityStatusLine(cmd, agyEnv, platform, now);
+    if (status) return normalizeAntigravityUsage(status, null, now);
+    const tier = await probeAntigravityAcpTier(cmd, agyEnv, now);
+    return { harness: 'antigravity', label: 'Antigravity', status: 'unavailable', planLabel: tier, accountEmail: null, windows: [], message: 'Quote non lette dalla statusLine di agy (solo piano rilevato).', source: 'cli', at: now };
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return notInstalled;
     return { harness: 'antigravity', label: 'Antigravity', status: 'error', planLabel: null, accountEmail: null, windows: [], message: 'Impossibile leggere lo stato Antigravity.', source: 'cli', at: now };
