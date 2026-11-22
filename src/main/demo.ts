@@ -339,7 +339,32 @@ export function seed(E: number): Seed {
     ev('f-e5', 9 * 1440 * MIN, 'error', 'Errore', 'quiet', 'Strumento MCP', 'MCP server "browser" disconnected (code 1006)', { chatId: 'mappa', away: true }),
     ev('f-e6', 4 * 1440 * MIN, 'error', 'Errore', 'quiet', 'File mancante', "ENOENT: no such file or directory, open 'C:\\progetti\\shop\\config\\test.json'", { chatId: 'sms', away: true }),
   ];
-  const usage: Usage = { todayUsd: 38.2, fiveHourPct: 42, fiveHourResetsAt: E + 133 * MIN, weekPct: 31, weekResetsAt: E + 4 * 1440 * MIN + 95 * MIN, cursorTodayUsd: 1.84, cursorExact: false, cursorMarginPct: 9, cursorNote: 'Cursor: stima ±9% (fattore dal CSV del 10/10)', cursorPlanNote: CURSOR_PLAN_NOTE };
+  const usage: Usage = {
+    todayUsd: 38.2, fiveHourPct: 42, fiveHourResetsAt: E + 133 * MIN, weekPct: 31, weekResetsAt: E + 4 * 1440 * MIN + 95 * MIN,
+    cursorTodayUsd: 1.84, cursorExact: false, cursorMarginPct: 9, cursorNote: 'Cursor: stima ±9% (fattore dal CSV del 10/10)', cursorPlanNote: CURSOR_PLAN_NOTE,
+    harnesses: [
+      { harness: 'claude', label: 'Claude', status: 'ok', planLabel: 'Max', accountEmail: null, source: 'oauth', at: E, message: null, windows: [
+        { kind: 'five-hour', label: '5h', usedPercent: 42, resetsAt: E + 133 * MIN },
+        { kind: 'weekly', label: '7g', usedPercent: 31, resetsAt: E + 4 * 1440 * MIN + 95 * MIN },
+      ] },
+      { harness: 'cursor', label: 'Cursor', status: 'ok', planLabel: 'Pro', accountEmail: null, source: 'dashboard', at: E, message: null, windows: [
+        { kind: 'plan', label: 'Piano', usedPercent: 64, resetsAt: E + 12 * 1440 * MIN },
+        { kind: 'plan', label: 'Modelli 3P', model: '3p', usedPercent: 28, resetsAt: E + 12 * 1440 * MIN },
+      ] },
+      { harness: 'codex', label: 'Codex', status: 'ok', planLabel: 'Plus', accountEmail: null, source: 'oauth', at: E, message: null, windows: [
+        { kind: 'five-hour', label: '5h', usedPercent: 18, resetsAt: E + 195 * MIN },
+        { kind: 'weekly', label: '7g', usedPercent: 74, resetsAt: E + 3 * 1440 * MIN + 210 * MIN },
+      ] },
+      { harness: 'opencode', label: 'OpenCode', status: 'ok', planLabel: 'OpenAI · Plus', accountEmail: null, source: 'oauth', at: E, message: null, windows: [
+        { kind: 'five-hour', label: '5h', usedPercent: 12, resetsAt: E + 240 * MIN },
+        { kind: 'weekly', label: '7g', usedPercent: 45, resetsAt: E + 5 * 1440 * MIN },
+      ] },
+      { harness: 'antigravity', label: 'Antigravity', status: 'ok', planLabel: 'Google AI Pro', accountEmail: null, source: 'cli', at: E, message: null, windows: [
+        { kind: 'five-hour', label: '5h', usedPercent: 25, resetsAt: E + 160 * MIN },
+        { kind: 'weekly', label: '7g', usedPercent: 19, resetsAt: E + 6 * 1440 * MIN },
+      ] },
+    ],
+  };
   // in the UI language (demo-text.ts: Italian as written, English through its table)
   return localize({ chats, items, pending, tabs, feed, usage });
 }
@@ -969,8 +994,14 @@ export class DemoBrain implements BrainService {
   usage(): Usage {
     const today = Math.round((this.base + this.chats.list().reduce((a, c) => a + c.costUsd, 0)) * 100) / 100;
     const pct = Math.min(100, Math.round((this.initial.usage.fiveHourPct ?? 0) + (today - this.startToday) * 1.5));
-    return { ...this.initial.usage, todayUsd: today, fiveHourPct: pct, costKnown: true, limitsSource: 'stream', limitsAt: this.chats.now(), at: this.chats.now() };
+    const now = this.chats.now();
+    const harnesses = this.initial.usage.harnesses?.map(h => h.harness === 'claude'
+      ? { ...h, at: now, windows: h.windows.map(w => w.kind === 'five-hour' ? { ...w, usedPercent: pct } : w) }
+      : { ...h, at: now });
+    return { ...this.initial.usage, todayUsd: today, fiveHourPct: pct, ...(harnesses ? { harnesses } : {}), costKnown: true, limitsSource: 'stream', limitsAt: now, at: now };
   }
+
+  async refreshUsage(): Promise<Usage> { return this.usage(); }
 
   info() { return { brainRoot: this.cfg.get().brainRoot ?? DEMO_BRAIN }; }
 

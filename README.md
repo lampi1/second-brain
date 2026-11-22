@@ -275,6 +275,11 @@ Notes, chats, agents and tools as a 3D map you can spin, glowing along the links
 getting heavy), **Quality**, **Learning** and **Usage**. The **Log** shows everything the app did, live: who chose
 whom, what it cost, which answer was a duplicate. Both read local data and spend zero tokens.
 
+The top bar keeps today's spend and the weekly limit in sight. One click opens every harness (Claude, Cursor, Codex,
+OpenCode, Antigravity) with its session and weekly or plan limits and when they reset, read the way Cloudroom reads
+them (each CLI's own local login, sent only to its vendor's usage endpoint). A pin keeps any harness's weekly limit in
+the bar.
+
 <p align="center">
   <img src="docs/screenshots/log.webp" alt="The Log page: today's events, tasks, flags and the chain of a delegated task" width="420">
   <img src="docs/screenshots/costs.webp" alt="The Costs page: spending per chat today and the context each chat is using" width="420">

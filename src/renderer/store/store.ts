@@ -82,6 +82,14 @@ export async function synthesizeResult(runId: string): Promise<boolean> {
   catch (e) { fail(t('chat.resultSynthesize'))(e); return false; }
 }
 
+/** Re-reads live plan usage for all harnesses on demand. */
+export async function refreshUsage(): Promise<void> {
+  try {
+    const usage = await sb.invoke('app:usageRefresh', undefined);
+    dispatch({ type: 'usage', usage });
+  } catch (e) { fail(t('appText.usageBar.title'))(e); }
+}
+
 let started = false;
 /** Subscribe to main's events (buffered until the first load lands), then load everything once. */
 export function startStore(): void {

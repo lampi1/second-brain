@@ -58,6 +58,8 @@ export interface Prefs {
   orchestratorSeenAt: number;
   newChat: { harness: Harness; cwd: string; model: string; effort: Effort | ''; permissionMode: PermissionMode | '' };
   lastFocus: string | null;
+  /** Harnesses whose weekly/plan limit stays pinned in the top-bar usage strip (default: ['claude']). */
+  usagePinned?: Harness[];
 }
 
 /** An in-app notice (components/Notice.tsx). `text` is the title; a rich one (lib/notice.ts notify) also has a small
@@ -116,7 +118,7 @@ const PREFS_KEY = 'sb.prefs.v1';
 export const defaultPrefs: Prefs = {
   appearance:readAppearance(null),chatPanelsV:2,chatExpanded:{},agentView:{},agentSplit:{},treeCollapsed:{},
   density: 'comfortable', theme: 'dark', orchestratorOpen: true, orchestratorSize: null, orchestratorSizeV: DEFAULT_V, orchestratorSeenAt: 0,
-  newChat: { harness: 'claude', cwd: '', model: '', effort: '', permissionMode: '' }, lastFocus: null,
+  newChat: { harness: 'claude', cwd: '', model: '', effort: '', permissionMode: '' }, lastFocus: null, usagePinned: ['claude'],
 };
 const READ_KEY = 'sb.read.v1';
 function readRead(): ReadState {

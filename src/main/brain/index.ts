@@ -19,6 +19,7 @@ import { ConfigStore } from './config';
 import { Live, KINDS, stamp, cut, feedAction, type RawEvent } from './live';
 import { Notifier, type Toast } from './notify';
 import { UsageMonitor, claudeConfigFile } from './usage';
+import { collectAllProviderUsage } from './provider-usage';
 import { cursorToday, installHook } from './cursor-ledger';
 import { BudgetWatcher, type Spend } from './budget';
 import { FileJobStore, Ledger } from './estimates';
@@ -183,6 +184,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
       ...(costScript ? { costInputs: new FileRevision(costInputs(root!, costScript, node.env)) } : {}),
       // tests point it at their own folders (never the user's ledger or Downloads)
       ...(!testing || env.SB_CURSOR_LEDGER ? { cursor: () => cursorToday({ dir: env.SB_CURSOR_LEDGER || undefined, downloads: env.SB_DOWNLOADS || undefined }) } : {}),
+      ...(!testing ? { providers: () => collectAllProviderUsage({ env }) } : {}),
       onUsage: (u, spend) => { lastUsage = u; ctx.emitter.emit('usage', u); onSpend(spend); },
     });
     usage.start();
@@ -242,6 +244,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   return {
     feed: () => feed.slice(),
     usage: () => lastUsage ?? usage?.get() ?? { todayUsd: 0, fiveHourPct: null, fiveHourResetsAt: null, weekPct: null },
+    refreshUsage: async () => (usage ? usage.refreshAll() : lastUsage ?? { todayUsd: 0, fiveHourPct: null, fiveHourResetsAt: null, weekPct: null }),
     info: () => {
       const root = cfg.brainRoot();
       if (cfg.loadError || !root) return { brainRoot: root, brainProblem: cfg.loadError ?? 'nessuna cartella del brain scelta' };

@@ -104,4 +104,27 @@ describe('usage', () => {
     await m.refresh();
     expect(got[0]).toMatchObject({ todayUsd: 0, costKnown: false, costNote: expect.stringMatching(/cost\.mjs/) });
   });
+
+  it('UsageMonitor merges provider snapshots, feeds Claude OAuth into weekPct/fiveHourPct, and ingests Codex notifications', async () => {
+    const now = Date.parse('2026-11-22T12:00:00Z');
+    const got: Usage[] = [];
+    const m = new UsageMonitor({
+      root: null, node: plainNode, claudeConfig: null, now: () => now,
+      providers: async () => [
+        { harness: 'claude', label: 'Claude', status: 'ok', planLabel: 'Max', accountEmail: null, source: 'oauth', at: now, message: null, windows: [
+          { kind: 'five-hour', label: '5h', usedPercent: 22, resetsAt: now + 3600_000 },
+          { kind: 'weekly', label: '7g', usedPercent: 48, resetsAt: now + 86_400_000 * 4 },
+        ] },
+        { harness: 'cursor', label: 'Cursor', status: 'ok', planLabel: 'Pro', accountEmail: null, source: 'dashboard', at: now, message: null, windows: [
+          { kind: 'plan', label: 'Piano', usedPercent: 65, resetsAt: now + 86_400_000 * 10 },
+        ] },
+      ],
+      onUsage: u => got.push(u),
+    });
+    await m.refreshProviders();
+    expect(m.get()).toMatchObject({ fiveHourPct: 22, weekPct: 48, limitsSource: 'oauth' });
+    expect(m.get().harnesses?.find(h => h.harness === 'cursor')?.windows[0]?.usedPercent).toBe(65);
+    expect(m.ingest({ type: 'codex_rate_limits', rateLimits: { planType: 'plus', secondary: { usedPercent: 77, windowDurationMins: 10080, resetsAt: Math.floor(now / 1000) + 86_400 } } })).toBe(true);
+    expect(m.get().harnesses?.find(h => h.harness === 'codex')?.windows[0]?.usedPercent).toBe(77);
+  });
 });

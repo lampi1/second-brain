@@ -1,6 +1,6 @@
 // E2E of the usage strip in the top bar (UsageBar.tsx) on the frozen demo: today's spend, the Claude week (the 5-hour
-// window from 70%, ADR 0298), the reset times in the panel, Cursor's estimate (≈ with its margin), and the detail panel with
-// the reason Cursor's plan usage is missing; screenshots in dark and light theme and at 1280 px
+// window from 70%, ADR 0298), every harness's windows in the panel with a pin toggle (ADR 0334), Cursor's estimate (≈ with
+// its margin); screenshots in dark and light theme and at 1280 px
 // (test-results/shots/usage-*.png). Then the real app on a Cursor ledger and a usage CSV in test folders
 // (SB_CURSOR_LEDGER, SB_DOWNLOADS): "≈ $" while estimated, exact once the CSV covers the day, and the Costi page says
 // the same. The app runs hidden (SB_HIDDEN).
@@ -38,10 +38,15 @@ for (const scheme of ['dark', 'light'] as const) {
     await bar.click();
     const pop = page.getByTestId('usage-pop');
     await expect(pop).toBeVisible();
-    await expect(page.getByTestId('usage-pop-5h')).toContainText('Si azzera alle');
-    await expect(page.getByTestId('usage-pop-week')).toContainText('Si azzera');
-    await expect(page.getByTestId('usage-pop-cursor')).toContainText('Non disponibile');
-    await expect(page.getByTestId('usage-pop-cursor')).toContainText('export CSV');
+    // every harness with its session and weekly/plan windows (ADR 0334)
+    for (const h of ['claude', 'cursor', 'codex', 'opencode', 'antigravity']) await expect(page.getByTestId(`usage-harness-${h}`)).toBeVisible();
+    await expect(page.getByTestId('usage-harness-claude')).toContainText('31%');
+    await expect(page.getByTestId('usage-harness-codex')).toContainText('74%');
+    // pin Codex: its weekly limit joins the bar, unpin: it leaves
+    await page.getByTestId('usage-pin-toggle-codex').click();
+    await expect(page.getByTestId('usage-pin-codex')).toContainText('74%');
+    await page.getByTestId('usage-pin-toggle-codex').click();
+    await expect(page.getByTestId('usage-pin-codex')).toHaveCount(0);
     await expect(pop).toContainText('±9%');
     await expect(page.getByTestId('usage-pop-cursor-est')).toHaveText('stima');
     // every chat of the day by cost, most first, live

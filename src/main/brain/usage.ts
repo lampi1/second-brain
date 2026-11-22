@@ -14,7 +14,7 @@ const { setInterval, clearInterval } = timersFor('brain/usage');
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { Usage } from '../../shared/contract';
+import type { Harness, HarnessUsage, HarnessUsageWindow, Usage } from '../../shared/contract';
 import { log } from '../log';
 import { romeDay } from './live';
 import { runNode, type NodeRunner } from './node';
@@ -23,13 +23,14 @@ import type { ChatSpend, Spend } from './budget';
 import type { CursorDay } from './cursor-ledger';
 import { uiLocale } from '../locale';
 import type { InputRevision } from './input-revision';
+import { USAGE_HARNESS_ORDER, normalizeCodexNotification } from './provider-usage';
 
-// Checked 2026-10-11 (cursor-cost research note §1, §3, outside the repo): no documented usage API for a personal account (the
-// Admin API is for team admins), the CLI's ACP mode sends no tokens (bug confirmed by Cursor), the dashboard's internal
-// endpoints would need the user's session token and fall under the ToS ban on extracting data. So: said, never guessed.
-export const CURSOR_PLAN_NOTE = "Cursor non offre un'API d'uso per gli account personali (solo agli amministratori del team): la quota del piano non si vede. Il costo è stimato dai token di ogni turno (hook stop di Cursor) e diventa esatto quando un export CSV è in Download (dashboard Cursor → Usage → Export CSV).";
+// Checked 2026-10-11: no documented usage API for a personal account. Since 2026-11-22 (owner's request, ADR 0334) the
+// plan quota is read like Cloudroom does, from the dashboard's own GetCurrentPeriodUsage with Cursor's local login
+// (brain/provider-usage.ts); this note is the fallback when that reading fails.
+export const CURSOR_PLAN_NOTE = "La quota del piano Cursor arriva dal suo dashboard con il login locale di Cursor; se non si legge, resta solo il costo: stimato dai token di ogni turno (hook stop di Cursor), esatto quando un export CSV è in Download (dashboard Cursor → Usage → Export CSV).";
 
-export interface Limits { fiveHourPct: number | null; fiveHourResetsAt: number | null; weekPct: number | null; weekResetsAt: number | null; source: 'stream' | 'get_usage' | 'claude-cache'; at: number;
+export interface Limits { fiveHourPct: number | null; fiveHourResetsAt: number | null; weekPct: number | null; weekResetsAt: number | null; source: 'stream' | 'get_usage' | 'claude-cache' | 'oauth'; at: number;
   /** the week came from weekFallback (one model's window): it never replaces an all-models week (ADR 0298) */
   weekScoped?: boolean }
 /** at = when cost.mjs started reading (set by UsageMonitor.refresh): what the app's chats spend after it is not in todayUsd */
@@ -148,8 +149,48 @@ export function readClaudeCache(file: string, now = Date.now()): Limits | null {
   } catch { return null; }
 }
 
+/** Build the ordered per-harness list for the popover, merging live Claude limits when fresher than OAuth. */
+function buildHarnesses(
+  raw: ReadonlyMap<Harness, HarnessUsage> | null | undefined,
+  limits: Limits | null,
+  u: Usage,
+  now: number,
+): HarnessUsage[] | undefined {
+  if (!raw?.size && !limits) return undefined;
+  return USAGE_HARNESS_ORDER.map(({ id, label }): HarnessUsage => {
+    const base = raw?.get(id);
+    if (id === 'claude') {
+      const liveWindows: HarnessUsageWindow[] = [];
+      if (u.fiveHourPct != null) liveWindows.push({ kind: 'five-hour', label: '5h', usedPercent: u.fiveHourPct, resetsAt: u.fiveHourResetsAt ?? null });
+      if (u.weekPct != null) liveWindows.push({ kind: 'weekly', label: '7g', usedPercent: u.weekPct, resetsAt: u.weekResetsAt ?? null });
+      if (base && base.status === 'ok' && base.windows.length && (!limits || base.at >= limits.at)) {
+        return base;
+      }
+      if (liveWindows.length && limits) {
+        const extra = base?.windows.filter(w => w.model) ?? [];
+        return {
+          harness: 'claude', label, status: 'ok',
+          planLabel: base?.planLabel ?? null, accountEmail: base?.accountEmail ?? null,
+          windows: [...liveWindows, ...extra],
+          message: null, ...(base?.creditsDetail ? { creditsDetail: base.creditsDetail } : {}),
+          source: limits.source === 'claude-cache' ? 'cache' : limits.source === 'oauth' ? 'oauth' : 'stream',
+          at: limits.at,
+        };
+      }
+    }
+    if (base) {
+      // Drop expired windows on stale readings so reset timers don't show negative/past data
+      const windows = base.windows.filter(w => w.resetsAt === null || w.resetsAt >= now);
+      return base.status === 'ok' && base.windows.length && !windows.length
+        ? { ...base, windows: [], message: 'Finestra azzerata: aggiorna per rileggere.' }
+        : { ...base, windows };
+    }
+    return { harness: id, label, status: 'unavailable', planLabel: null, accountEmail: null, windows: [], message: 'Nessun dato letto ancora.', source: 'none', at: now };
+  });
+}
+
 /** Snapshot for the top bar from the last cost and the freshest limits. Windows past their reset become unknown. */
-export function composeUsage(cost: CostSnapshot | null, limits: Limits | null, now = Date.now(), cursor: CursorDay | null = null): Usage {
+export function composeUsage(cost: CostSnapshot | null, limits: Limits | null, now = Date.now(), cursor: CursorDay | null = null, harnesses?: ReadonlyMap<Harness, HarnessUsage> | null): Usage {
   const u: Usage = { todayUsd: cost?.todayUsd ?? 0, fiveHourPct: null, fiveHourResetsAt: null, weekPct: null, weekResetsAt: null, limitsSource: null, limitsAt: null, at: now,
     costKnown: !!cost?.costKnown, costNote: cost?.costNote ?? 'costi in calcolo…', cursorTodayUsd: cost?.cursorTodayUsd ?? null, cursorNote: cost?.cursorNote ?? '', cursorPlanNote: CURSOR_PLAN_NOTE };
   if (cost?.costKnown && cost.at !== undefined) {
@@ -163,6 +204,8 @@ export function composeUsage(cost: CostSnapshot | null, limits: Limits | null, n
   } else if (cursor && u.cursorTodayUsd == null) u.cursorNote = cursor.note;
   if (!limits) {
     u.limitsNote = 'Limiti 5 ore / 7 giorni non disponibili: arrivano da una chat Claude aperta nell\'app (o, per un\'ora, da /usage in Claude Code)';
+    const hs = buildHarnesses(harnesses, null, u, now);
+    if (hs) u.harnesses = hs;
     return u;
   }
   const live = (pct: number | null, resets: number | null) => (resets !== null && resets < now ? null : pct);
@@ -173,7 +216,9 @@ export function composeUsage(cost: CostSnapshot | null, limits: Limits | null, n
   u.limitsSource = limits.source;
   u.limitsAt = limits.at;
   const age = Math.round((now - limits.at) / 6e4);
-  u.limitsNote = `${limits.source === 'claude-cache' ? 'Da Claude Code' : 'Da una chat Claude'}, ${age <= 1 ? 'adesso' : `${age} min fa`}`;
+  u.limitsNote = `${limits.source === 'claude-cache' ? 'Da Claude Code' : limits.source === 'oauth' ? 'Da account Claude' : 'Da una chat Claude'}, ${age <= 1 ? 'adesso' : `${age} min fa`}`;
+  const hs = buildHarnesses(harnesses, limits, u, now);
+  if (hs) u.harnesses = hs;
   return u;
 }
 
@@ -184,6 +229,8 @@ export interface UsageMonitorOptions {
   claudeConfig?: string | null;  // null = do not read Claude Code's cache (tests)
   cursor?: () => CursorDay;      // today's Cursor ledger (brain/cursor-ledger.ts cursorToday); absent = cost.mjs's CSV only
   cursorEveryMs?: number;        // default 30 s
+  providers?: () => Promise<HarnessUsage[]>; // multi-harness collectors (provider-usage.ts); absent in tests
+  providersEveryMs?: number;     // default 3 min
   costTimeoutMs?: number;        // cost.mjs's time limit, default COST_TIMEOUT_MS
   now?: () => number;            // clock (tests)
   costInputs?: InputRevision;    // only known shipped inputs; failed watches retain the normal poll
@@ -194,9 +241,12 @@ export class UsageMonitor {
   private cost: CostSnapshot | null = null;
   private cursor: CursorDay | null = null;
   private limits: Limits | null = null;
+  private harnesses = new Map<Harness, HarnessUsage>();
   private timer: NodeJS.Timeout | null = null;
   private cursorTimer: NodeJS.Timeout | null = null;
+  private providerTimer: NodeJS.Timeout | null = null;
   private running = false;
+  private providersRunning: Promise<void> | null = null;
   private warned = false;
   private timeoutWarnAt = -Infinity;
   private costRevision: string | null = null;
@@ -209,6 +259,10 @@ export class UsageMonitor {
     this.timer = setInterval(() => void this.refresh(false), this.o.everyMs ?? 180e3);
     // Re-read the local Cursor ledger so a turn appears within half a minute.
     if (this.o.cursor) this.cursorTimer = setInterval(() => { if (this.readCursor()) this.o.onUsage(this.get(), this.spend()); }, this.o.cursorEveryMs ?? 30e3);
+    if (this.o.providers) {
+      void this.refreshProviders();
+      this.providerTimer = setInterval(() => void this.refreshProviders(), this.o.providersEveryMs ?? 180e3);
+    }
   }
 
   stop(): void {
@@ -216,7 +270,8 @@ export class UsageMonitor {
     this.o.costInputs?.stop();
     if (this.timer) clearInterval(this.timer);
     if (this.cursorTimer) clearInterval(this.cursorTimer);
-    this.timer = null; this.cursorTimer = null;
+    if (this.providerTimer) clearInterval(this.providerTimer);
+    this.timer = null; this.cursorTimer = null; this.providerTimer = null;
   }
 
   /** true when today's Cursor figure changed */
@@ -231,7 +286,7 @@ export class UsageMonitor {
     } catch (e) { log.warn('brain', 'cursor ledger unreadable', { data: { error: String(e) } }); return false; }
   }
 
-  get(): Usage { return composeUsage(this.cost, this.freshest(), Date.now(), this.cursor); }
+  get(): Usage { return composeUsage(this.cost, this.freshest(), this.o.now?.() ?? Date.now(), this.cursor, this.harnesses); }
 
   spend(): Spend {
     const u = this.get();
@@ -243,11 +298,59 @@ export class UsageMonitor {
   }
 
   ingest(msg: unknown): boolean {
+    if (isObj(msg) && msg.type === 'codex_rate_limits') {
+      const codex = normalizeCodexNotification(msg, this.o.now?.() ?? Date.now());
+      if (!codex) return false;
+      this.harnesses.set('codex', codex);
+      this.o.onUsage(this.get(), this.spend());
+      return true;
+    }
     const l = parseRateLimits(msg);
     if (!l) return false;
     this.limits = !this.limits || l.at >= this.limits.at ? mergeLimits(l, this.limits) : mergeLimits(this.limits, l);
     this.o.onUsage(this.get(), this.spend());
     return true;
+  }
+
+  async refreshProviders(): Promise<void> {
+    if (!this.o.providers || this.stopped) return;
+    if (this.providersRunning) { await this.providersRunning; return; }
+    this.providersRunning = (async () => {
+      try {
+        const list = await this.o.providers!();
+        if (this.stopped) return;
+        for (const h of list) {
+          const prev = this.harnesses.get(h.harness);
+          // Retain last good reading if a refresh hit a transient error (Cloudroom pattern)
+          if (h.status === 'error' && prev?.status === 'ok' && prev.windows.length) {
+            this.harnesses.set(h.harness, { ...prev, message: h.message });
+          } else {
+            this.harnesses.set(h.harness, h);
+          }
+          if (h.harness === 'claude' && h.status === 'ok' && h.windows.length) {
+            const five = h.windows.find(w => w.kind === 'five-hour');
+            const week = h.windows.find(w => w.kind === 'weekly' && !w.model) ?? h.windows.find(w => w.kind === 'weekly');
+            if (five || week) {
+              const l: Limits = {
+                fiveHourPct: five?.usedPercent ?? null, fiveHourResetsAt: five?.resetsAt ?? null,
+                weekPct: week?.usedPercent ?? null, weekResetsAt: week?.resetsAt ?? null,
+                source: 'oauth', at: h.at, ...(week?.model ? { weekScoped: true } : {}),
+              };
+              this.limits = !this.limits || l.at >= this.limits.at ? mergeLimits(l, this.limits) : mergeLimits(this.limits, l);
+            }
+          }
+        }
+        this.o.onUsage(this.get(), this.spend());
+      } catch (e) {
+        log.warn('brain', 'provider usage refresh failed', { data: { error: String(e) } });
+      }
+    })().finally(() => { this.providersRunning = null; });
+    await this.providersRunning;
+  }
+
+  async refreshAll(): Promise<Usage> {
+    await Promise.all([this.refreshProviders(), this.refresh(true)]);
+    return this.get();
   }
 
   private freshest(): Limits | null {

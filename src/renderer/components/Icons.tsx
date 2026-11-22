@@ -68,6 +68,7 @@ export const IconMoon = (p: P) => <Svg {...p}><path d="M19.5 14.5A8 8 0 0 1 9.5 
 export const IconDice = (p: P) => <Svg {...p}><rect x="4" y="4" width="16" height="16" rx="3.5" /><circle cx="8.8" cy="8.8" r=".9" fill="currentColor" /><circle cx="15.2" cy="15.2" r=".9" fill="currentColor" /><circle cx="15.2" cy="8.8" r=".9" fill="currentColor" /><circle cx="8.8" cy="15.2" r=".9" fill="currentColor" /><circle cx="12" cy="12" r=".9" fill="currentColor" /></Svg>;
 export const IconHistory = (p: P) => <Svg {...p}><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4.5v3.8h3.8" /><path d="M12 8v4.2l2.8 1.6" /></Svg>;
 export const IconStar = ({ filled, ...p }: P & { filled?: boolean }) => <Svg {...p}><path d="m12 3.8 2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.8l-5.1 2.7 1-5.7-4.1-4 5.7-.8z" fill={filled ? 'currentColor' : 'none'} /></Svg>;
+export const IconPin = ({ filled, ...p }: P & { filled?: boolean }) => <Svg {...p}><path d="M12 17v4.5M8.5 4.5h7l-.8 5.2 2.3 2.3v1.5H7v-1.5l2.3-2.3z" fill={filled ? 'currentColor' : 'none'} /></Svg>;
 export const IconKey = (p: P) => <Svg {...p}><circle cx="8" cy="15" r="4" /><path d="m11 12 8.5-8.5M16.5 7l2.5 2.5M14 9.5l2 2" /></Svg>;
 export const IconTrash = (p: P) => <Svg {...p}><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5M10 11v5M14 11v5" /></Svg>;
 export const IconPanel =(p: P) => <Svg {...p}><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><path d="M3.5 9h17" /></Svg>;
@@ -94,8 +95,36 @@ export function HarnessMark({ harness, orchestrator, size = 20 }: { harness: Har
       </span>
     );
   }
+  if (harness === 'codex') {
+    return (
+      <span className="mark mark-codex" style={{ width: size, height: size }} aria-hidden="true">
+        <svg width={size * 0.66} height={size * 0.66} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="12 3 19.5 7.5 19.5 16.5 12 21 4.5 16.5 4.5 7.5" />
+          <circle cx="12" cy="12" r="2.6" />
+        </svg>
+      </span>
+    );
+  }
+  if (harness === 'opencode') {
+    return (
+      <span className="mark mark-opencode" style={{ width: size, height: size }} aria-hidden="true">
+        <svg width={size * 0.66} height={size * 0.66} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M8 7 3.5 12 8 17M16 7l4.5 5-4.5 5M13.5 5.5 10.5 18.5" />
+        </svg>
+      </span>
+    );
+  }
+  if (harness === 'antigravity') {
+    return (
+      <span className="mark mark-antigravity" style={{ width: size, height: size }} aria-hidden="true">
+        <svg width={size * 0.66} height={size * 0.66} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3.5 19 20.5l-7-4-7 4z" />
+        </svg>
+      </span>
+    );
+  }
   if (harness !== 'claude') {
-    // any other engine (Kimi, one from the brain): its initial, never another vendor's mark
+    // any other engine (one from the brain): its initial, never another vendor's mark
     return <span className="mark mark-engine" style={{ width: size, height: size, fontSize: Math.round(size * 0.5) }} aria-hidden="true">{harness.charAt(0).toUpperCase()}</span>;
   }
   return (

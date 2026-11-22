@@ -139,7 +139,7 @@ export function diffCounts(diff: string): { added: number; removed: number } {
 const QUIET = new Set([
   'thread/started', 'thread/status/changed', 'thread/name/updated', 'thread/archived', 'thread/unarchived', 'thread/settings/updated',
   'thread/environment/connected', 'turn/diff/updated', 'item/reasoning/summaryPartAdded', 'item/fileChange/outputDelta', 'item/plan/delta',
-  'item/mcpToolCall/progress', 'account/rateLimits/updated', 'account/updated', 'account/login/completed', 'mcpServer/startupStatus/updated',
+  'item/mcpToolCall/progress', 'account/updated', 'account/login/completed', 'mcpServer/startupStatus/updated',
   'mcpServer/oauthLogin/completed', 'skills/changed', 'hook/started', 'hook/completed', 'model/rerouted', 'sessionConfigured',
 ]);
 const ITEM_TYPES = new Set([
@@ -898,6 +898,7 @@ export class CodexSession implements HarnessSession {
         if (text && method !== 'deprecationNotice') this.sys(`${this.label}: ${cut(text, 300)}`, 'warn');
         return;
       }
+      case 'account/rateLimits/updated': this.sink.rateLimit?.({ type: 'codex_rate_limits', ...p }); return;
       default: if (!QUIET.has(method)) this.drift('notification', method, p);
     }
   }

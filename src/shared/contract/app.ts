@@ -129,13 +129,47 @@ export interface ProjectsFolderInfo { saved: string | null; detected: { path: st
  *  it can be older and not know the newest models, ADR 0267). */
 export interface CliStatus { found: boolean; path: string | null; version: string | null; loggedIn: boolean | null; account?: string | null; fallback?: true }
 
+/** Status of one provider's plan-usage reading (adapted from Cloudroom's provider-usage model, ADR 0334). */
+export type HarnessUsageStatus = 'ok' | 'unauthenticated' | 'expired' | 'not_installed' | 'unavailable' | 'error';
+
+/** One rate-limit or plan window of a harness (5 h session, 7 d weekly, monthly plan, on-demand spend). */
+export interface HarnessUsageWindow {
+  kind: 'five-hour' | 'weekly' | 'daily' | 'plan' | 'spend' | 'custom';
+  /** Short human label ("5h", "7g", "Piano", "7g · Sonnet", "3P", "On-demand"). */
+  label: string;
+  /** 0-100 */
+  usedPercent: number;
+  /** Epoch ms when this window resets, or null when not reported. */
+  resetsAt: number | null;
+  /** Optional model/pool scope (e.g. "sonnet", "3p") for secondary windows. */
+  model?: string;
+  /** Optional spend pair in USD cents (Cursor on-demand). */
+  cost?: { usedUsdCents: number; limitUsdCents: number };
+}
+
+/** One harness's plan-usage snapshot shown in the top-bar popover and pinnable to the top bar. */
+export interface HarnessUsage {
+  harness: Harness;
+  label: string;
+  status: HarnessUsageStatus;
+  planLabel: string | null;
+  accountEmail: string | null;
+  windows: HarnessUsageWindow[];
+  /** Reason when status !== 'ok' or when a plan reports no windows (never a credential). */
+  message: string | null;
+  /** Extra usage / pay-as-you-go active notice, if any. */
+  creditsDetail?: string | null;
+  source: 'oauth' | 'stream' | 'cache' | 'dashboard' | 'cli' | 'log' | 'none';
+  at: number;
+}
+
 /** Top-bar usage. todayUsd = Claude at API list price (on a subscription an "equivalent" cost, not a bill), from the
  *  brain's cost.mjs; the plan windows (5 h / 7 d, 0-100) are null when no source has them (see limitsNote). */
 export interface Usage {
   todayUsd: number; fiveHourPct: number | null; fiveHourResetsAt: number | null; weekPct: number | null;
   weekResetsAt?: number | null;
-  /** where the plan windows come from: a running app chat's stream, a get_usage answer, Claude Code's own 1-hour cache */
-  limitsSource?: 'stream' | 'get_usage' | 'claude-cache' | null;
+  /** where the plan windows come from: a running app chat's stream, a get_usage answer, Claude Code's own 1-hour cache, or OAuth */
+  limitsSource?: 'stream' | 'get_usage' | 'claude-cache' | 'oauth' | null;
   limitsAt?: number | null;   // when the plan windows were read (ms)
   limitsNote?: string;        // Italian, why they are missing or how old they are
   costKnown?: boolean;        // false = cost.mjs missing or failed: todayUsd is 0 only as a placeholder
@@ -156,6 +190,8 @@ export interface Usage {
   cursorUnpriced?: { chats: string[]; models: string[] };
   /** Italian: why Cursor's plan usage (included quota, on-demand spend) cannot be shown, and what does give its cost */
   cursorPlanNote?: string;
+  /** Per-harness plan usage snapshots (Claude, Cursor, Codex, OpenCode, Antigravity) for the top-bar popover & pins. */
+  harnesses?: HarnessUsage[];
   at?: number;                // when this snapshot was computed
   /** when cost.mjs started reading the transcripts behind todayUsd (ms): the live total adds what the app's Claude
    *  chats spent after it (renderer lib/live-costs.ts); absent = no cost run yet */
@@ -179,6 +215,8 @@ export interface AppInvokeMap {
   'profile:save': [ProfileSave, OwnerProfile];
   'app:info': [void, AppInfo];
   'app:usage': [void, Usage];
+  /** Re-reads live plan usage for every harness (Claude, Cursor, Codex, OpenCode, Antigravity) on demand. */
+  'app:usageRefresh': [void, Usage];
   /** native folder chooser for the brain folder; sets brainRoot (by the user) and returns it, null if cancelled */
   'app:pickBrain': [void, string | null];
   'app:pickRepo': [void, string | null];

@@ -255,7 +255,7 @@
     "src/renderer/components/SuggestSettings.tsx": "0bebfb9b95fa2f94",
     "src/renderer/components/TopBar.tsx": "8dce2da89f1eee83",
     "src/renderer/components/ui.tsx#Modal": "68df7f1eb564ae1a",
-    "src/renderer/components/UsageBar.tsx": "393a406ed9b3ec97",
+    "src/renderer/components/UsageBar.tsx": "873b0d96d9825e33",
     "src/renderer/components/viewer/ViewerOverlay.tsx": "075da0deaebf8421",
     "src/renderer/components/VoiceSettings.tsx": "efce435bf543ea2c",
     "src/renderer/components/WorktreeSettings.tsx": "c1438258effbb6f7",

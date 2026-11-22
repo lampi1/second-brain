@@ -108,6 +108,7 @@ export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, 
       repos: [s.brain.settings().appRepo, fs.existsSync(path.join(outDir, '..', '.git')) ? path.dirname(outDir) : null],
     })),
     'app:usage': () => s.brain.usage(),
+    'app:usageRefresh': () => s.brain.refreshUsage(),
     // the usage counter (ADR 0202): local only, zero tokens; the page's batch is checked in use-counter.ts
     'usecount:add': a => useCounts.add(a),
     'usecount:report': a => useCounts.report(a?.days),

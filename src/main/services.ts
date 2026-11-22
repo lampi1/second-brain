@@ -134,6 +134,8 @@ export interface FeedInput { kind: string; title: string; detail?: string; who?:
 export interface BrainService {
   feed(): FeedEvent[];
   usage(): Usage;
+  /** Re-reads plan limits for all harnesses on demand and returns the updated snapshot. */
+  refreshUsage(): Promise<Usage>;
   info(): Pick<AppInfo, 'brainRoot' | 'brainProblem'>;
   settings(): Settings;
   /** The user's own change from the UI (by 'user'). */

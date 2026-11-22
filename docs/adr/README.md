@@ -328,6 +328,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0331](0331-code-mode.md) Code Mode: work chats call their tools from one script (run_code), under the same permission chain — accepted; amended by 0332
 - [0332](0332-antigravity-engine.md) Antigravity (agy acp) joins the ACP engine catalog; its permissions go through the app's gates — accepted
 - [0333](0333-web-fetch-subagent.md) Claude chats keep WebFetch as a plain tool: built-in web-fetch agent off inline — accepted
+- [0334](0334-multi-harness-usage-bar.md) Multi-harness plan usage popover and pinned weekly limits (Claude, Cursor, Codex, OpenCode, Antigravity) — accepted
 
 ## Replaced
 
