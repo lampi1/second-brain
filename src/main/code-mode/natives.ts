@@ -106,7 +106,9 @@ function powershell(input: In, env: NativeEnv): Promise<CommandResult> {
   const ms = bashTimeout(num(input.timeout), env.maxMs);
   const { args, file } = powershellArgs(command, () => path.join(os.tmpdir(), `sb-run-code-${randomUUID()}.ps1`));
   const done = (): void => { if (file) fs.rm(file, { force: true }, () => {}); };
-  return runCommand('PowerShell', shell, args, ms, env).finally(done);
+  // Windows PowerShell ends its lines with CRLF: a script splits on \n, so its output comes back with LF
+  const lf = (s: string): string => s.replace(/\r\n/g, '\n');
+  return runCommand('PowerShell', shell, args, ms, env).then(r => ({ ...r, stdout: lf(r.stdout), stderr: lf(r.stderr) })).finally(done);
 }
 
 /** One command process: its output kept to the last OUT_MAX characters each, killed at its timeout or the run's end. */

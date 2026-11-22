@@ -102,7 +102,7 @@ function fakeSpawn(seen: { cmd: string; args: string[] }[]): Spawn {
     seen.push({ cmd, args });
     const stdout = new EventEmitter(), stderr = new EventEmitter(), child = new EventEmitter() as EventEmitter & { stdout: unknown; stderr: unknown; kill: () => void };
     child.stdout = stdout; child.stderr = stderr; child.kill = () => {};
-    queueMicrotask(() => { stdout.emit('data', 'done\n'); child.emit('close', 0); });
+    queueMicrotask(() => { stdout.emit('data', 'done\r\n'); child.emit('close', 0); });
     return child as never;
   }) as unknown as Spawn;
 }
