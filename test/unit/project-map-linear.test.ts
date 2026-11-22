@@ -1,6 +1,6 @@
 // Unit tests of the project maps told as a sequence (issue #443, ADR 0322; src/shared/project-map.ts): phases and
-// steps checked like any piece, a level made of them drawn in a line in the saved order (numbered, the arrow to the
-// following step drawn by the line itself), a split only where a step says `par`, the layout a level asks for, the
+// steps checked like any piece, a level made of them drawn top to bottom in the saved order (numbered, the arrow to the
+// following step drawn by the line itself, never wrapping; ADR 0335), a group in a frame only where steps say `par`, a phase drawn open, the layout a level asks for, the
 // `next` link that has no status of its own, proofs and refs, the edit ops that place a piece in the order, the map
 // file read back, and a map drawn before all this laid out as before.
 import fs from 'node:fs';
@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, errText: (e: unknown) => String(e) }));
-import { BOX, LINE_MAX, applyChanges, applyEdit, checkMap, elementText, layoutOf, levelOf, mapText, type ProjectMap } from '../../src/shared/project-map';
+import { BOX, applyChanges, applyEdit, checkMap, elementText, layoutOf, levelOf, mapText, type ProjectMap } from '../../src/shared/project-map';
 import { ProjectMaps } from '../../src/main/projectmap/service';
 import { ProjectMapStore, asMap } from '../../src/main/projectmap/store';
 
@@ -29,40 +29,62 @@ const mapOf = (drawing: unknown, extra: Partial<ProjectMap> = {}): ProjectMap =>
 const xs = (lv: ReturnType<typeof levelOf>, ids: string[]) => ids.map(id => lv.nodes.find(n => n.id === id)!);
 
 describe('a level of phases or steps is a line', () => {
-  it('phases left to right in the saved order, numbered, one row, with the arrow to the next drawn by the line', () => {
+  it('phases top to bottom in the saved order, numbered, one column, with the arrow to the next drawn by the line', () => {
     const lv = levelOf(mapOf(phased), null, T);
     expect(lv.linear).toBe(true);
     const [a, b, c] = xs(lv, ['analisi', 'prep', 'migra']);
     expect([a!.n, b!.n, c!.n]).toEqual([1, 2, 3]);
-    expect(a!.x).toBeLessThan(b!.x); expect(b!.x).toBeLessThan(c!.x);
-    expect(new Set([a!.y, b!.y, c!.y]).size).toBe(1);
-    expect(lv.edges.map(e => [e.from, e.to, e.kind, e.label, e.status, e.ids.length])).toEqual([['analisi', 'prep', 'next', '', 'ok', 0], ['prep', 'migra', 'next', '', 'ok', 0]]);
+    expect(a!.y + a!.h).toBeLessThan(b!.y); expect(b!.y + b!.h).toBeLessThan(c!.y);
+    // one axis: every place is centred on it, nothing goes on in a second row or column
+    expect(new Set([a!, b!, c!].map(n => n.x + n.w / 2)).size).toBe(1);
+    expect(lv.edges.filter(e => !/^p\d$/.test(e.from) && !/^p\d$/.test(e.to)).map(e => [e.from, e.to, e.kind, e.label, e.status, e.ids.length])).toEqual([['analisi', 'prep', 'next', '', 'ok', 0], ['prep', 'migra', 'next', '', 'ok', 0]]);
     // the saved order, not the names nor the links: the same pieces sent the other way round are drawn the other way round
     const back = levelOf(mapOf({ elements: [phased.elements[2], phased.elements[1], phased.elements[0]], links: [{ from: 'analisi', to: 'migra', label: 'x' }] }), null, T);
     expect(xs(back, ['migra', 'prep', 'analisi']).map(n => n.n)).toEqual([1, 2, 3]);
   });
 
-  it('inside a phase the steps are a line too; a split only for a step marked par', () => {
+  it('a phase with steps is drawn open: a frame holding its steps, in order, inside it (ADR 0335)', () => {
+    const lv = levelOf(mapOf(phased), null, T);
+    const prep = lv.nodes.find(n => n.id === 'prep')!;
+    expect(prep.frame).toBe(true);
+    expect(lv.nodes.find(n => n.id === 'analisi')!.frame).toBeUndefined();
+    const inner = xs(lv, ['p1', 'p2', 'p3', 'p4']);
+    expect(inner.every(n => n.in === 'prep')).toBe(true);
+    for (const n of inner) { expect(n.x).toBeGreaterThanOrEqual(prep.x); expect(n.x + n.w).toBeLessThanOrEqual(prep.x + prep.w); expect(n.y).toBeGreaterThan(prep.y); expect(n.y + n.h).toBeLessThanOrEqual(prep.y + prep.h); }
+    expect(lv.groups!.map(g => g.ids)).toEqual([['p2', 'p3']]);
+    expect(lv.groups![0]!.in).toBe('prep');
+  });
+
+  it('inside a phase the steps are a column; steps marked par sit side by side in a group that splits and joins', () => {
     const lv = levelOf(mapOf(phased), 'prep', T);
     expect(lv.linear).toBe(true);
     const [p1, p2, p3, p4] = xs(lv, ['p1', 'p2', 'p3', 'p4']);
     expect([p1!.n, p2!.n, p3!.n, p4!.n]).toEqual([1, 2, 2, 3]);
-    // together = the same place of the line, one above the other; the others never share a column
-    expect(p3!.x).toBe(p2!.x); expect(p3!.y).toBeGreaterThanOrEqual(p2!.y + BOX.h);
+    // together = one row of the column, side by side; the others are one under the other
+    expect(p3!.y).toBe(p2!.y); expect(p3!.x).toBeGreaterThanOrEqual(p2!.x + BOX.w);
+    expect(p1!.y + p1!.h).toBeLessThan(p2!.y); expect(p2!.y + p2!.h).toBeLessThan(p4!.y);
     expect([p2!.par, p3!.par, p1!.par, p4!.par]).toEqual([true, true, undefined, undefined]);
-    expect(new Set([p1!.x, p2!.x, p4!.x]).size).toBe(3);
     expect(lv.edges.map(e => `${e.from}>${e.to}`)).toEqual(['p1>p2', 'p1>p3', 'p2>p4', 'p3>p4']);
-    // without the mark the same steps are never side by side in one place
+    // the arrows into and out of the group wear its colour; they pass through its split and join points
+    expect(lv.edges.every(e => e.fan)).toBe(true);
+    const g = lv.groups![0]!;
+    expect(g.ids).toEqual(['p2', 'p3']); expect(g.split[1]).toBe(g.y); expect(g.join[1]).toBe(g.y + g.h);
+    for (const n of [p2!, p3!]) { expect(n.x).toBeGreaterThan(g.x); expect(n.x + n.w).toBeLessThan(g.x + g.w); expect(n.y).toBeGreaterThan(g.y); expect(n.y + n.h).toBeLessThan(g.y + g.h); }
+    expect(g.y).toBeGreaterThan(p1!.y + p1!.h); expect(g.y + g.h).toBeLessThan(p4!.y);
+    // without the mark the same steps are one under the other, with no group
     const plain = levelOf(mapOf({ ...phased, elements: phased.elements.map(e => ({ ...e, par: undefined })) }), 'prep', T);
-    expect(new Set(xs(plain, ['p1', 'p2', 'p3', 'p4']).map(n => n.x)).size).toBe(4);
-    expect(plain.nodes.every(n => !n.par)).toBe(true);
+    expect(new Set(xs(plain, ['p1', 'p2', 'p3', 'p4']).map(n => n.y)).size).toBe(4);
+    expect(plain.nodes.every(n => !n.par)).toBe(true); expect(plain.groups ?? []).toEqual([]);
+    expect(plain.edges.some(e => e.fan)).toBe(false);
   });
 
-  it('a long line goes on in the next row, read like text; no box overlaps another', () => {
-    const many = Array.from({ length: LINE_MAX + 2 }, (_, i) => ({ id: `f${i}`, kind: 'phase', name: `Fase ${i}`, ...(i === 1 ? { par: true } : {}) }));
+  it('a long line never wraps: it goes on downwards; no box overlaps another', () => {
+    const many = Array.from({ length: 14 }, (_, i) => ({ id: `f${i}`, kind: 'phase', name: `Fase ${i}`, ...(i === 1 ? { par: true } : {}) }));
     const lv = levelOf(mapOf({ elements: many }), null, T);
-    const first = lv.nodes.find(n => n.id === 'f0')!, wrapped = lv.nodes.find(n => n.id === `f${LINE_MAX + 1}`)!;
-    expect(wrapped.x).toBe(first.x); expect(wrapped.y).toBeGreaterThan(lv.nodes.find(n => n.id === 'f1')!.y);
+    const ys = Array.from({ length: 14 }, (_, i) => lv.nodes.find(n => n.id === `f${i}`)!.y);
+    expect(ys[1]).toBe(ys[0]);
+    for (let i = 2; i < 14; i++) expect(ys[i]).toBeGreaterThan(ys[i - 1]!);
+    expect(lv.width).toBeLessThan(3 * BOX.w + 200);
     for (const a of lv.nodes) for (const b of lv.nodes) if (a !== b) expect(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y).toBe(true);
     for (const n of lv.nodes) { expect(n.x + n.w).toBeLessThanOrEqual(lv.width); expect(n.y + n.h).toBeLessThanOrEqual(lv.height); }
   });
@@ -185,51 +207,51 @@ describe('an arrow of a line never runs behind a box', () => {
   const steps = (n: number, more: Record<string, object> = {}) => Array.from({ length: n }, (_, i) => ({ id: `s${i + 1}`, kind: 'step', name: `S${i + 1}`, ...more[`s${i + 1}`] }));
   const edge = (lv: ReturnType<typeof levelOf>, from: string, to: string) => lv.edges.find(e => e.from === from && e.to === to)!;
 
-  it('the arrow to the place beside runs side to side; a jump goes over the row, a way back under it', () => {
+  it('the arrow to the place below runs straight down; a jump and a way back go along the lane beside the column', () => {
     const lv = levelOf(mapOf({ elements: steps(4), links: [{ from: 's1', to: 's3', kind: 'next', label: 'se è piccolo' }, { from: 's4', to: 's1', label: 'da rifare' }, { from: 's3', to: 's2', label: 'corregge' }] }), null, T);
-    expect([edge(lv, 's1', 's2').side, edge(lv, 's3', 's2').side, edge(lv, 's1', 's2').route]).toEqual([true, true, undefined]);
-    const [s1, s3] = xs(lv, ['s1', 's3']);
-    const jump = edge(lv, 's1', 's3').route!, back = edge(lv, 's4', 's1').route!;
-    expect(jump[0]).toEqual([s1!.x + s1!.w, s1!.y + s1!.h / 2 - 28]); expect(jump.at(-1)).toEqual([s3!.x, s3!.y + s3!.h / 2 - 28]);
-    expect(Math.min(...jump.map(c => c[1]))).toBeLessThan(s1!.y); expect(Math.min(...jump.map(c => c[1]))).toBeGreaterThan(0);
-    expect(Math.max(...back.map(c => c[1]))).toBeGreaterThan(s1!.y + s1!.h); expect(Math.max(...back.map(c => c[1]))).toBeLessThan(lv.height);
-    expect(crossed(lv)).toEqual([]);
-  });
-
-  it('the arrow to the next row goes round the row, also from and to steps that go together', () => {
-    const lv = levelOf(mapOf({ elements: steps(LINE_MAX + 5, { s2: { par: true }, s8: { par: true }, s10: { par: true } }) }), null, T);
-    // s7 and s8 share the last place of the first row, s9 and s10 the first of the second: four arrows go round
-    expect(xs(lv, ['s8', 's9']).map(n => n!.n)).toEqual([LINE_MAX, LINE_MAX + 1]);
-    const round = lv.edges.filter(e => ['s7', 's8'].includes(e.from) && ['s9', 's10'].includes(e.to));
-    expect(round).toHaveLength(4); expect(round.every(e => e.route && e.route.every(c => c[0] >= 0 && c[0] <= lv.width))).toBe(true);
+    const [s1, s2, s3, s4] = xs(lv, ['s1', 's2', 's3', 's4']);
+    const right = Math.max(...[s1!, s2!, s3!, s4!].map(n => n.x + n.w));
+    for (const [a, b] of [['s1', 's3'], ['s4', 's1']]) {
+      const r = edge(lv, a!, b!).route!;
+      expect(r.length).toBeGreaterThan(3); expect(Math.max(...r.map(p => p[0]))).toBeGreaterThan(right); expect(Math.max(...r.map(p => p[0]))).toBeLessThanOrEqual(lv.width);
+    }
     expect(crossed(lv)).toEqual([]);
     for (const e of lv.edges) expect(!!e.side || !!e.route).toBe(true);
   });
 
-  it('an arrow to or from an outside box runs along the lanes, whatever column and row it starts from', () => {
-    const els = [{ id: 'sys', kind: 'system', name: 'Sys' }, ...steps(LINE_MAX + 2, { s2: { par: true } }).map(e => ({ ...e, parent: 'sys' })), { id: 'ext', kind: 'external', name: 'Ext' }, { id: 'doc', kind: 'doc', name: 'Doc' }];
+  it('a long line with groups: every arrow has its way and none runs behind a box', () => {
+    const lv = levelOf(mapOf({ elements: steps(13, { s2: { par: true }, s8: { par: true }, s10: { par: true } }) }), null, T);
+    expect(lv.groups!.map(g => g.ids)).toEqual([['s1', 's2'], ['s7', 's8'], ['s9', 's10']]);
+    // a group right after a group: four arrows from one to the other, each through the join and the split point
+    const across = lv.edges.filter(e => ['s7', 's8'].includes(e.from) && ['s9', 's10'].includes(e.to));
+    expect(across).toHaveLength(4); expect(across.every(e => e.fan && e.route && e.route.every(c => c[0] >= 0 && c[0] <= lv.width))).toBe(true);
+    expect(crossed(lv)).toEqual([]);
+    for (const e of lv.edges) expect(!!e.side || !!e.route).toBe(true);
+  });
+
+  it('an arrow to or from an outside box runs along the lanes, whatever place it starts from', () => {
+    const els = [{ id: 'sys', kind: 'system', name: 'Sys' }, ...steps(9, { s2: { par: true } }).map(e => ({ ...e, parent: 'sys' })), { id: 'ext', kind: 'external', name: 'Ext' }, { id: 'doc', kind: 'doc', name: 'Doc' }];
     const lv = levelOf(mapOf({ elements: els, links: [{ from: 's1', to: 'ext', label: 'chiede' }, { from: 'doc', to: 's3', label: 'spiega' }, { from: 's8', to: 'doc', label: 'aggiorna' }] }), 'sys', T);
     expect(lv.linear).toBe(true);
     expect(lv.nodes.filter(n => n.ctx).map(n => n.id).sort()).toEqual(['doc', 'ext']);
     for (const [a, b] of [['s1', 'ext'], ['doc', 's3'], ['s8', 'doc']]) expect(edge(lv, a!, b!).route!.length).toBeGreaterThan(3);
     expect(crossed(lv)).toEqual([]);
-    // two rows of outside boxes: they sit on the line's columns, so an arrow from the second row passes between the first
+    // two rows of outside boxes under the line: every arrow still finds its way between them
     const outs = Array.from({ length: 6 }, (_, i) => ({ id: `x${i + 1}`, kind: 'external', name: `X${i + 1}` }));
     const many = levelOf(mapOf({ elements: [{ id: 'sys', kind: 'system', name: 'Sys', layout: 'linear' }, ...steps(4).map(e => ({ ...e, kind: 'part', parent: 'sys' })), ...outs],
       links: [...outs.map((o, i) => ({ from: o.id, to: `s${((i + 2) % 4) + 1}`, label: 'entra' })), ...outs.map((o, i) => ({ from: `s${(i % 4) + 1}`, to: o.id, label: 'esce' }))] }), 'sys', T);
     expect(many.linear).toBe(true); expect(many.nodes.filter(n => n.ctx)).toHaveLength(6);
     expect(new Set(many.nodes.filter(n => n.ctx).map(n => n.y)).size).toBe(2);
-    expect(many.edges.filter(e => e.route)).toHaveLength(12);
+    expect(many.edges.filter(e => e.kind !== 'next' && e.route)).toHaveLength(12);
     expect(crossed(many)).toEqual([]);
   });
 
   it('three steps together: an arrow from the first to the third goes round the second', () => {
     const lv = levelOf(mapOf({ elements: steps(4, { s2: { par: true }, s3: { par: true } }), links: [{ from: 's1', to: 's3', label: 'passa i dati' }, { from: 's1', to: 's2', label: 'avvisa' }] }), null, T);
     expect(xs(lv, ['s1', 's2', 's3']).map(n => n!.n)).toEqual([1, 1, 1]);
-    const [s1, , s3] = xs(lv, ['s1', 's2', 's3']);
-    expect(edge(lv, 's1', 's3').route).toEqual([[s1!.x + s1!.w, s1!.y + s1!.h / 2], [s1!.x + s1!.w + 20, s1!.y + s1!.h / 2], [s3!.x + s3!.w + 20, s3!.y + s3!.h / 2], [s3!.x + s3!.w, s3!.y + s3!.h / 2]]);
+    expect(edge(lv, 's1', 's3').route!.length).toBeGreaterThan(2);
     // the two next to each other keep the plain arrow from one to the other
-    expect([edge(lv, 's1', 's2').route, edge(lv, 's1', 's2').side]).toEqual([undefined, undefined]);
+    expect(edge(lv, 's1', 's2').side).toBe(true);
     expect(crossed(lv)).toEqual([]);
   });
 

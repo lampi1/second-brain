@@ -116,7 +116,7 @@ export const brainModelIt = {
   'pm.step.waits': 'aspetta te', 'pm.plan.steps': 'I passi del piano, in ordine', 'pm.plan.doneWhen': 'Finito quando:', 'pm.plan.blocked': (p: N) => (p.n === 1 ? '1 bloccato' : `${p.n} bloccati`),
   'pm.plan.nowOne': (p: { steps: string }) => `ora il passo ${p.steps}`, 'pm.plan.nowMany': (p: { steps: string }) => `ora i passi ${p.steps}`,
   // #443 · phases and steps in a line, the arrow to the following step, proofs and links, the panel's width
-  'pm.kind.phase': 'Fase', 'pm.kind.step': 'Passo', 'pm.next': 'Passo successivo', 'pm.nextShort': 'poi', 'pm.withPrev': 'Insieme al precedente',
+  'pm.kind.phase': 'Fase', 'pm.kind.step': 'Passo', 'pm.next': 'Passo successivo', 'pm.nextShort': 'poi', 'pm.withPrev': 'Insieme al precedente', 'pm.parGroup': (p: { n: number }) => `∥ ${p.n} in parallelo`, 'pm.parLegend': 'in parallelo: si fanno insieme, si va avanti quando sono finiti tutti',
   'pm.stepsOf': 'I suoi passi', 'pm.proofs': 'Prove', 'pm.refs': 'Link', 'pm.openLink': 'Apri nel browser dell’app',
   'pm.resize': 'Larghezza del pannello: trascina, o frecce sinistra e destra; doppio clic per quella iniziale',
   'pm.stepsCount': (p: N) => (p.n === 1 ? '1 passo' : `${p.n} passi`),

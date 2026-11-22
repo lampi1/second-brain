@@ -41,7 +41,7 @@ export function strategyTools(chats: StrategyChats, away: () => boolean = () => 
         title: { ...str, description: 'one short plain line, e.g. "Trovo dove si calcola lo sconto"' }, role: { type: 'string', enum: [...WORK_ROLE_IDS] },
         detail: { ...str, description: 'optional: one short line on what the step covers, e.g. "carrello, ordine e reso"' },
         on: { ...str, description: 'the map element this step works on (an existing id, or one you add in map.add)' },
-        par: { type: 'boolean', description: 'true = it goes together with the step before it, in parallel; leave out for a step that waits for it' },
+        par: { type: 'boolean', description: 'true = it does not depend on the step before it and runs together with it, in the same parallel group (delegated in the same agent_delegate call); leave out for a step that waits for the steps before it' },
       } } },
       map: { type: 'object', additionalProperties: false, description: 'the project map the plan is drawn on', properties: {
         project: { ...str, description: 'an existing map\'s name or id' }, title: { ...str, description: 'the project\'s name, when it has no map yet: only the pieces this work touches get drawn' },

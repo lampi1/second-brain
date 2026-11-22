@@ -599,28 +599,46 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
       <div className="pm-canvas" ref={box} onPointerDown={down} data-testid="pm-canvas" data-scale={scale.toFixed(3)}
         style={{ backgroundPosition: `${cam.x}px ${cam.y}px`, backgroundSize: `${22 * scale}px ${22 * scale}px` }}
         onClickCapture={e => { if (dragged.current) { e.stopPropagation(); e.preventDefault(); dragged.current = false; } }}
-        onDoubleClick={e => { if (!(e.target as HTMLElement).closest('.pm-node, .pm-talk, .pm-tools, .pm-legend, .pm-up, .pm-label')) up(); }}
+        onDoubleClick={e => { if (!(e.target as HTMLElement).closest('.pm-node, .pm-frame-head, .pm-talk, .pm-tools, .pm-legend, .pm-up, .pm-label')) up(); }}
         onMouseUp={e => { if (e.button === 3) { e.preventDefault(); e.stopPropagation(); up(); } }}>
         {shownLevel && <button type="button" className="btn btn-s pm-up" onClick={up} data-testid="pm-up" data-tip={t('pm.upTip')}>
           <IconArrowLeft size={13} />{parentOf ? byId.get(parentOf)?.name : t('pm.top')}</button>}
         <div className="pm-stage">
           <div className={`pm-plane${zooming ? ' zooming' : ''}${walkPath ? ' walking' : ''}`} style={{ width: lv.width, height: lv.height, transform: `translate(${cam.x}px, ${cam.y}px) scale(${scale})` }}>
             <div className="pm-level" key={`${project}/${shownLevel ?? ''}`} data-enter={enter?.dir} data-layout={lv.linear ? 'linear' : 'auto'} data-testid="pm-level">
+            {/* a phase drawn open (ADR 0335): a frame with its name, its count and its bar; its steps sit inside it */}
+            {lv.nodes.filter(n => n.frame).map(n => {
+              const e = byId.get(n.id)!, cnt = counts.get(e.id);
+              return <div key={`fr-${n.id}`} className={`pm-frame s-${st(e)}${picked === e.id ? ' picked' : ''}${lit.has(e.id) ? ' lit' : ''}`} style={{ left: n.x, top: n.y, width: n.w, height: n.h }} data-testid={`pm-frame-${e.id}`}>
+                <button type="button" className="pm-frame-head" onClick={() => click(n)} title={e.description} data-testid={`pm-node-${e.id}`}>
+                  {n.n !== undefined && <i className="pm-ord" data-testid={`pm-ord-${e.id}`}>{n.n}</i>}<b>{e.name}</b>
+                  <i className={`pm-dot s-${st(e)}`} /><span className="pm-st" data-testid={`pm-st-${e.id}`}>{stateText(st(e), e.kind)}</span>
+                  {cnt && <span className="pm-cnt" title={countText(cnt)} data-testid={`pm-count-${e.id}`}>{cnt.done}/{cnt.total}</span>}
+                </button>
+                {cnt && <span className="pm-frame-meter" aria-hidden><i style={{ width: `${cnt.pct}%` }} /></span>}
+              </div>;
+            })}
+            {/* the boxes that go together (ADR 0335): a dashed frame in the colour of «together», never a status colour */}
+            {(lv.groups ?? []).map(g => <div key={`g-${g.ids.join('+')}`} className="pm-pgroup" style={{ left: g.x, top: g.y, width: g.w, height: g.h }} data-testid={`pm-group-${g.ids[0]}`}>
+              <span className="pm-pgroup-label">{t('pm.parGroup', { n: g.ids.length })}</span></div>)}
             <svg className="pm-edges" width={lv.width} height={lv.height} aria-hidden>
-              <defs>{(['ok', 'work', 'blocked', 'unknown', 'stale', 'planned', 'next'] as const).map(s => <marker key={s} id={`pm-arrow-${s}`} viewBox="0 0 10 10" refX={9} refY={5} markerWidth={7} markerHeight={7} orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" className={`pm-arrow s-${s}`} /></marker>)}</defs>
+              <defs>{(['ok', 'work', 'blocked', 'unknown', 'stale', 'planned', 'next', 'fan'] as const).map(s => <marker key={s} id={`pm-arrow-${s}`} viewBox="0 0 10 10" refX={9} refY={5} markerWidth={7} markerHeight={7} orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" className={`pm-arrow s-${s}`} /></marker>)}</defs>
               {lv.edges.map(e => {
                 const a = lv.nodes.find(n => n.id === e.from), b = lv.nodes.find(n => n.id === e.to);
                 if (!a || !b) return null;
                 // the arrow to the following step: plain, whatever the statuses around it (#443)
-                const p = ends(a, b, e), s = e.kind === 'next' ? 'next' : shown(e);
+                const p = ends(a, b, e), s = e.fan ? 'fan' : e.kind === 'next' ? 'next' : shown(e);
                 return <g key={`${e.from}>${e.to}`} data-testid={e.kind === 'next' ? `pm-next-${e.from}-${e.to}` : undefined}>
                   <path d={curve(p)} className={`pm-edge s-${s}`} markerEnd={`url(#pm-arrow-${s})`} />
                   {/* a line under work carries a mark that travels along it */}
                   {live && s === 'work' && <path d={curve(p)} className="pm-edge-run" pathLength={100} />}
                 </g>;
               })}
+              {/* where a group splits (top edge of its frame) and where it joins again (bottom edge) */}
+              {/* a point only where an arrow passes: no split point for a group that opens its phase, no join point for one that closes it */}
+              {(lv.groups ?? []).flatMap(g => [g.split, g.join].filter((_, i) => lv.edges.some(e => i === 0 ? g.ids.includes(e.to) && !g.ids.includes(e.from) : g.ids.includes(e.from) && !g.ids.includes(e.to))).map((c, i) => <circle key={`h-${g.ids[0]}-${i}`} cx={c[0]} cy={c[1]} r={6} className="pm-hub" />))}
             </svg>
-            {lv.nodes.map(n => {
+            {lv.nodes.filter(n => !n.frame).map(n => {
               const e = byId.get(n.id)!, s = st(e), k = kids(e.id), who = of(e.id), ws = n.ctx ? [] : worksOf(e.id), cnt = n.ctx ? undefined : counts.get(e.id);
               const faces = live && yours(e) ? 1 : 3;
               // somebody works on it right now: a step of a plan under way, or an agent at work on it
@@ -649,7 +667,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
               </button>;
             })}
             {/* «Discuti» on every box: its own button at the box's corner (a button never sits inside another) */}
-            {lv.nodes.map(n => <button type="button" key={`talk-${n.id}`} className="pm-talk" style={{ left: n.x + n.w - 30, top: n.y + 6, transform: `scale(${1 / scale})` }}
+            {lv.nodes.map(n => <button type="button" key={`talk-${n.id}`} className="pm-talk" style={{ left: n.x + n.w - 30, top: n.y + (n.frame ? 12 : 6), transform: `scale(${1 / scale})` }}
               onClick={() => talk(byId.get(n.id)!)} aria-label={t('pm.talkOn', { name: byId.get(n.id)!.name })} data-tip={t('pm.talk')} data-testid={`pm-talk-${n.id}`}><IconChat size={13} /></button>)}
             {/* the labels above the boxes: a label in a narrow gap is never hidden under one */}
             {labels.map(({ e, left, top }) => <button type="button" key={`l${e.from}>${e.to}`} className={`pm-label s-${e.kind === 'next' ? 'next' : shown(e)}${pickedLinks?.includes(e.id) ? ' picked' : ''}`} style={{ left, top }} title={e.note}
@@ -669,6 +687,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
           {(['ok', 'work', 'blocked', 'planned', 'stale'] as const).map(s => <span key={s}><i className={`pm-dot s-${s}`} />{s === 'ok' ? okWords : t(`pm.state.${s}`)}</span>)}
           {live && lv.nodes.some(n => of(n.id).some(a => a.mark === 'run') || worksOf(n.id).some(w => w.state === 'now')) && <span data-testid="pm-legend-run"><i className="pm-dot s-work run" />{t('pm.runningNow')}</span>}
           <span><em className="pm-you">{t('pm.you')}</em>{t('pm.youMeans')}</span>
+          {!!lv.groups?.length && <span data-testid="pm-legend-par"><i className="pm-legend-par" />{t('pm.parLegend')}</span>}
         </div>
       </div>
       <div className="pm-sidewrap" data-testid="pm-sidewrap">

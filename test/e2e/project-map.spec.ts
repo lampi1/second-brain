@@ -315,8 +315,8 @@ test('the map tells every step, every box and every arrow in full, and «Aggiorn
   } finally { await app.close(); }
 });
 
-// Issue #443, ADR 0322: a project told as a sequence. The phases are a line in the saved order, numbered, with the
-// plain arrow to the next; inside a phase the steps are a line too, two of them together; a step's panel tells its
+// Issue #443, ADR 0322, ADR 0335: a project told as a sequence. The phases are a column in the saved order, numbered, with the
+// plain arrow to the next, a phase with steps drawn open; inside a phase the steps are a column too, two of them side by side in a group; a step's panel tells its
 // status, proofs and links, a phase's lists its steps, each opened by a click; the panel is dragged wider by its left
 // edge and the width is remembered, the drawing keeping its room.
 test('a map of phases is a line, the steps inside too; the panel tells proofs and steps and is resized', async () => {
@@ -328,13 +328,19 @@ test('a map of phases is a line, the steps inside too; the panel tells proofs an
     await view.getByTestId('pm-nav-gamma-migrazione').click();
     await expect(view.getByTestId('pm-level')).toHaveAttribute('data-layout', 'linear');
     const ids = ['analisi', 'preparazione', 'migrazione', 'verifica'];
-    const boxes = await Promise.all(ids.map(async id => (await view.getByTestId(`pm-node-${id}`).boundingBox())!));
-    for (let i = 1; i < boxes.length; i++) { expect(boxes[i]!.x).toBeGreaterThan(boxes[i - 1]!.x + boxes[i - 1]!.width - 1); expect(Math.abs(boxes[i]!.y - boxes[0]!.y)).toBeLessThan(2); }
+    // a phase drawn open is its frame; the others their box
+    const boxes = await Promise.all(ids.map(async id => (await view.locator(`[data-testid="pm-frame-${id}"], .pm-node[data-testid="pm-node-${id}"]`).boundingBox())!));
+    // top to bottom, on one axis, never wrapping (ADR 0335)
+    for (let i = 1; i < boxes.length; i++) { expect(boxes[i]!.y).toBeGreaterThan(boxes[i - 1]!.y + boxes[i - 1]!.height - 1); expect(Math.abs(boxes[i]!.x + boxes[i]!.width / 2 - boxes[0]!.x - boxes[0]!.width / 2)).toBeLessThan(2); }
     for (const [i, id] of ids.entries()) await expect(view.getByTestId(`pm-ord-${id}`)).toHaveText(String(i + 1));
     await expect(view.getByTestId('pm-next-analisi-preparazione')).toHaveCount(1);
-    // the arrows to the next phase say nothing, least of all «da capire»; the only label is on the way back
-    await expect(view.locator('.pm-label')).toHaveCount(1);
+    // the arrows to the next phase say nothing, least of all «da capire»; the labels are the way back and a step's condition
+    await expect(view.locator('.pm-label')).toHaveCount(2);
     await expect(view.getByTestId('pm-label-verifica--preparazione')).toHaveText('se un controllo fallisce');
+    // a phase with steps is drawn open, its steps inside it; the two together sit in the pink frame
+    await expect(view.getByTestId('pm-frame-preparazione')).toBeVisible();
+    await expect(view.getByTestId('pm-group-ripristino')).toContainText('2 in parallelo');
+    await expect(view.getByTestId('pm-legend-par')).toBeVisible();
     // a phase says what its steps say, and a finished one reads «fatto», not «funziona» (#456, ADR 0330)
     await expect(view.getByTestId('pm-st-analisi')).toHaveText('fatto');
     await expect(view.getByTestId('pm-st-preparazione')).toHaveText('in lavorazione');
@@ -347,7 +353,7 @@ test('a map of phases is a line, the steps inside too; the panel tells proofs an
     await expect(view.getByTestId('pm-par-avviso')).toBeVisible();
     await expect(view.getByTestId('pm-par-script')).toHaveCount(0);
     const [a, b] = [(await view.getByTestId('pm-node-ripristino').boundingBox())!, (await view.getByTestId('pm-node-avviso').boundingBox())!];
-    expect(Math.abs(a.x - b.x)).toBeLessThan(2); expect(b.y).toBeGreaterThan(a.y + a.height - 1);
+    expect(Math.abs(a.y - b.y)).toBeLessThan(2); expect(b.x).toBeGreaterThan(a.x + a.width - 1);
     await expect(view.getByTestId('pm-label-ripristino--via-libera')).toHaveText('solo se riesce');
     await expect(view.getByTestId('pm-here')).toContainText('I suoi passi');
     await expect(view.getByTestId('pm-here').getByTestId('pm-no-details')).toHaveCount(0);

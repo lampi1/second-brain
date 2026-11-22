@@ -28,7 +28,7 @@
 // piece shows as its status (its own, or what the pieces inside it say together: #456) in project-map-status.ts.
 import { BOX, ROW_MAX, lineOf, type Level, type LevelEdge, type LevelNode } from './project-map-line';
 import { LABEL_IT, shownStatus, stateLabel, statusesOf } from './project-map-status';
-export { BOX, LINE_MAX, ROW_MAX, type Level, type LevelEdge, type LevelNode } from './project-map-line';
+export { BOX, FRAME_HEAD, ROW_MAX, type Level, type LevelEdge, type LevelGroup, type LevelNode } from './project-map-line';
 export { LABEL_IT, STALE_MS, shownStatus } from './project-map-status';
 
 export const MAP_KINDS = ['person', 'system', 'external', 'env', 'doc', 'part', 'phase', 'step'] as const;
@@ -540,7 +540,7 @@ export function layoutOf(map: Pick<ProjectMap, 'elements' | 'layout'>, parent: s
 /** The elements shown at one level: the top (parent null) or inside a system; around a system, the outside elements
  *  linked to its parts (ctx) so the drawing still shows where it connects. Links between deeper parts are drawn between
  *  the shown elements that hold them. Layered: people on top, then each element under what calls it. */
-export function levelOf(map: Pick<ProjectMap, 'elements' | 'links' | 'layout'>, parent: string | null, now: number): Level {
+export function levelOf(map: Pick<ProjectMap, 'elements' | 'links' | 'layout'>, parent: string | null, now: number, flat = false): Level {
   const byId = new Map(map.elements.map(e => [e.id, e]));
   const inside = (id: string): string | null => {
     // the shown element holding `id` at this level: itself or an ancestor whose parent is `parent`
@@ -566,7 +566,8 @@ export function levelOf(map: Pick<ProjectMap, 'elements' | 'links' | 'layout'>, 
   const edges = new Map<string, LevelEdge>();
   for (const l of map.links) {
     let a = inside(l.from), b = inside(l.to);
-    if (parent !== null) {
+    // a level drawn open inside its holder (flat, ADR 0335) shows no outside boxes: its holder's line has them
+    if (parent !== null && !flat) {
       // a link from a part of this system to the outside: the outside element (its top-level holder) is context
       if (a && !b) { b = outside(l.to); if (!b) continue; ctx.add(b); }
       else if (b && !a) { a = outside(l.from); if (!a) continue; ctx.add(a); }
@@ -585,7 +586,12 @@ export function levelOf(map: Pick<ProjectMap, 'elements' | 'links' | 'layout'>, 
     edges.set(key, { id: l.id, from: a, to: b, label: l.label, status: st.status, stale: st.stale, ...(l.note ? { note: l.note } : {}), ...(l.actor ? { actor: l.actor } : {}), count: 1, ids: [l.id], ...(l.kind === 'next' ? { kind: 'next' as const } : {}) });
   }
   const ids = [...own, ...[...ctx].filter(id => !own.includes(id))];
-  if (layoutOf(map, parent) === 'linear') return lineOf(own.map(id => byId.get(id)!), ids.filter(id => !own.includes(id)), edges);
+  if (layoutOf(map, parent) === 'linear') {
+    // a phase (or a step) with steps of its own is drawn open, its steps inside it (ADR 0335): one level deep
+    const open = new Map<string, Level>();
+    if (!flat) for (const id of own) if (map.elements.some(e => e.parent === id) && layoutOf(map, id) === 'linear' && map.elements.filter(e => e.parent === id).every(e => e.kind === 'step')) open.set(id, levelOf(map, id, now, true));
+    return lineOf(own.map(id => byId.get(id)!), ids.filter(id => !own.includes(id)), edges, open);
+  }
   // layers: people first; then longest path along the links (a cycle is cut where it closes). Environments and documents
   // serve the rest: they sit on a row of their own at the bottom, and their links do not push anything down.
   const base = (id: string) => { const k = byId.get(id)?.kind; return k === 'env' || k === 'doc'; };

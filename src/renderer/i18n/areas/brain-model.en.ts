@@ -109,7 +109,7 @@ export const brainModelEn: typeof brainModelIt = {
   'pm.step.waits': 'waits for you', 'pm.plan.steps': 'The plan\'s steps, in order', 'pm.plan.doneWhen': 'Finished when:', 'pm.plan.blocked': (p: N) => `${p.n} blocked`,
   'pm.plan.nowOne': (p: { steps: string }) => `now step ${p.steps}`, 'pm.plan.nowMany': (p: { steps: string }) => `now steps ${p.steps}`,
   // #443 · phases and steps in a line, the arrow to the following step, proofs and links, the panel's width
-  'pm.kind.phase': 'Phase', 'pm.kind.step': 'Step', 'pm.next': 'Next step', 'pm.nextShort': 'then', 'pm.withPrev': 'Together with the one before',
+  'pm.kind.phase': 'Phase', 'pm.kind.step': 'Step', 'pm.next': 'Next step', 'pm.nextShort': 'then', 'pm.withPrev': 'Together with the one before', 'pm.parGroup': (p: { n: number }) => `∥ ${p.n} in parallel`, 'pm.parLegend': 'in parallel: done together, the line goes on when all are done',
   'pm.stepsOf': 'Its steps', 'pm.proofs': 'Proofs', 'pm.refs': 'Links', 'pm.openLink': 'Open in the app’s browser',
   'pm.resize': 'Panel width: drag, or left and right arrows; double click for the starting one',
   'pm.stepsCount': (p: N) => (p.n === 1 ? '1 step' : `${p.n} steps`),

@@ -316,7 +316,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0319](0319-artifacts-in-memoria.md) Artifacts in Memoria: every file the chats produce, indexed where it is — accepted, partly superseded by 0328; amended by 0323
 - [0320](0320-maintenance-fixes-one-line-of-an-always-loaded-file.md) The maintenance fixes one line of an always-loaded file — accepted
 - [0321](0321-a-routine-step-can-leave-the-login-page-unsigned.md) A routine step can leave the login page as it is (`relogin: false`); the routine runtime of feat/routine-park is on main — accepted
-- [0322](0322-project-maps-told-as-a-line-of-phases.md) Project maps told as a line of phases and steps, with a richer and wider panel — accepted; amended by 0326, 0330
+- [0322](0322-project-maps-told-as-a-line-of-phases.md) Project maps told as a line of phases and steps, with a richer and wider panel — accepted; amended by 0326, 0330, 0335
 - [0323](0323-artifacts-light-paged-and-cleaned.md) Artifacts: twenty at a time, light pictures, and a daily cleanup of old screenshots — accepted, partly superseded by 0328
 - [0324](0324-retrigger-tags-and-entries-for-routine-packages.md) A routine package can run a work item again: retrigger tags and entries — accepted
 - [0325](0325-routines-leave-the-app.md) Routines leave the app — accepted
@@ -329,6 +329,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0332](0332-antigravity-engine.md) Antigravity (agy acp) joins the ACP engine catalog; its permissions go through the app's gates — accepted
 - [0333](0333-web-fetch-subagent.md) Claude chats keep WebFetch as a plain tool: built-in web-fetch agent off inline — accepted
 - [0334](0334-multi-harness-usage-bar.md) Multi-harness plan usage popover and pinned weekly limits (Claude, Cursor, Codex, OpenCode, Antigravity) — accepted
+- [0335](0335-project-map-line-top-to-bottom-with-parallel-frames.md) A line of phases and steps is drawn top to bottom, with parallel groups in their own frame; the Strategist plans with dependencies — accepted
 
 ## Replaced
 
