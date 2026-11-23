@@ -1,6 +1,6 @@
 // The Agenti page: the six roles (the Orchestrator first, then the five work roles), each a card that flips
 // to its instructions and skills (#81) and opens the role's own page (AgentStudio: the editor, its versions).
-// The decisions that change a role's reach or cost (a trial to keep, a tier suggestion: ADR 0083) are cards of Memoria →
+// The decisions that change a role's reach or cost (a trial to keep, a model suggestion: ADR 0083) are cards of Memoria →
 // Proposte (ADR 0123): a line on top points there, only while one waits. The cards come first (ADR 0287): the count sits
 // in the header with the page's explanation behind its "?", the nightly review switch is one row under the grid. No role is created here: the catalog is fixed, a missing know-how
 // becomes a skill. The work roles' cards say when the nightly review last updated their levels (ADR 0203). Rendered by

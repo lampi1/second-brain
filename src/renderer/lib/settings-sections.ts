@@ -13,7 +13,7 @@ export function settingsSections(engineNames: readonly string[]): Record<Setting
     update: { id: 'update', description:t('essential.desc.update'),title:t('update.group'),search:'aggiorna update versione version GitHub' },
     connectors: { id: 'connectors', description:t('essential.desc.connectors'),title:t('connector.group'),search:'GitHub Jira Azure DevOps collegamenti connectors projects MCP server strumenti tools token importa import Claude Cursor Codex' },
     accounts: { id: 'accounts', description:t('essential.desc.accounts'),title:t('essential.accounts'),search:engineNames.join(' ')+' '+t('autonomy.title') },
-    roles: { id: 'roles', description:t('delegation.desc'),title:t('delegation.group'),search:'ruoli roles deleghe delegation profondità depth parallelo parallel revisioni reviews Sentinel modelli models livelli tiers' },
+    roles: { id: 'roles', description:t('delegation.desc'),title:t('delegation.group'),search:'ruoli roles deleghe delegation profondità depth revisioni reviews Sentinel' },
     space: { id: 'space', description:t('essential.desc.space'),title:t('essential.space'),search:[t('essential.memory'),t('share.title'),'zip esporta export colleghi condividi share',t('essential.archive'),t('setup.settings.projects'),'ruolo role Dev QA PO CTO progetti projects repository'].join(' ') },
     writing: { id: 'writing', description:t('suggest.groupDesc'),title:t('suggest.group'),search:[t('suggest.title'),'tab autocomplete suggerimenti suggestions'].join(' ') },
     voice: { id: 'voice', description:t('voice.groupDesc'),title:t('voice.group'),search:[t('voice.asrTitle'),t('voice.nameTitle'),t('voice.modelsTitle'),'voce microfono whisper piper parla ascolta voice mic speech Ctrl+M'].join(' ') },

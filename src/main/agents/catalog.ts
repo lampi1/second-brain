@@ -1,9 +1,9 @@
 // The role catalog: the Orchestrator and the five work roles (shared/roles.ts), kept in
 // <userData>/roles.json with every behaviour change as a version (role-history.json). The user edits a role's tools,
-// ceiling, engine, model tier, launches, skills and instructions (Brain → Agenti); "Ripristina predefinito" goes back to
+// ceiling, engine, model and presets, launches, skills and instructions (Brain → Agenti); "Ripristina predefinito" goes back to
 // the shipped role. No role is ever created or removed by the user; a retired role's stored entry (Router, Judge, Scribe,
 // ADR 0100) is left out on load and a launches list naming one drops it, so an older roles.json still loads. resolve() turns a role id into what a chat starts with: engine,
-// model (the role's tier on that engine), the composed instructions, the tool policy. Used by ChatManager, the IPC
+// model (the card's or the preset's; a card with none takes the brain registry's), the composed instructions, the tool policy. Used by ChatManager, the IPC
 // handlers (index.ts), the packs (pack/flows.ts) and the maintenance jobs (brainmodel/).
 import type { AgentContextSnapshot } from '../../shared/agent-context';
 import path from 'node:path';

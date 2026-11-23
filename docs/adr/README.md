@@ -333,6 +333,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0337](0337-model-choice-on-the-role-card.md) Model choice and Code Mode live on the role card; Settings has none; one approved model choice guide — accepted
 - [0338](0338-no-leftover-processes.md) No leftover processes: no breakaway from an engine's job, engines recorded at once, leased stacks spared — accepted
 - [0340](0340-no-guide-page-and-a-four-tab-memory.md) No Guida page, and a Memoria of four tabs with a real Skill view — accepted
+- [0341](0341-ten-principles-of-the-app.md) Ten principles of the app, and what was removed to follow them — accepted
 
 ## Replaced
 

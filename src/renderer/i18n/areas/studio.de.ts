@@ -55,7 +55,7 @@ export const studioDe: typeof studioIt = {
   'studio.builtIn': 'Standard',
   'studio.trial': 'Auf Probe',
   'studio.versions': 'Versionen',
-  'studio.versionsHint': 'Eine neue Version entsteht nur, wenn sich Text oder Skills ändern; Modell, Stufe, Tools, Berechtigungen und Grenzen aktualisieren die aktive. Offene Chats behalten ihre.',
+  'studio.versionsHint': 'Eine neue Version entsteht nur, wenn sich Text oder Skills ändern; Modell, Tools, Berechtigungen und Grenzen aktualisieren die aktive. Offene Chats behalten ihre.',
   'studio.models': 'Nach Modell',
   'studio.modelsHint': 'Das Level gehört der Rolle und ändert sich nicht mit dem Modell. Die Leistung gehört dem Modell: Sie startet bei der Leistung der Rolle mit ihren anderen Modellen und bewegt sich mit seinen Urteilen. Gezählt werden die Läufe, die noch im Archiv sind.',
   'studio.modelsModel': 'Modell',

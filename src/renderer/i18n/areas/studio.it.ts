@@ -56,7 +56,7 @@ export const studioIt = {
   'studio.trial': 'In prova',
   // «Modello», not «Livello»: on the card «Livello» is only the agent's level (ADR 0100)
   'studio.versions': 'Versioni',
-  'studio.versionsHint': 'Una nuova versione nasce solo quando cambiano testo o skill; modello, livello, strumenti, permessi e limiti aggiornano quella in uso. Le chat aperte restano sulla loro.',
+  'studio.versionsHint': 'Una nuova versione nasce solo quando cambiano testo o skill; modello, strumenti, permessi e limiti aggiornano quella in uso. Le chat aperte restano sulla loro.',
   'studio.models': 'Per modello',
   'studio.modelsHint': 'Il livello è del ruolo e non cambia col modello. La performance è del modello: parte da quella del ruolo con gli altri modelli e si sposta con i suoi verdetti. Conta i lavori ancora in archivio.',
   'studio.modelsModel': 'Modello',

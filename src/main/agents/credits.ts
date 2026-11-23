@@ -37,8 +37,6 @@ export const STALE_MS = 30 * 60e3;
 /** A costly delegation (tier top) wants a state no older than this. */
 export const COSTLY_STALE_MS = 5 * 60e3;
 export const COOL_MIN_MS = HOUR, COOL_MAX_MS = DAY;
-/** The balanced picks the deficit pick compares with the targets. */
-export const PICK_WINDOW_MS = DAY;
 /** Below this share left a pool counts as low (it still takes work, in proportion). */
 const LOW_LEFT = 0.15;
 
@@ -119,7 +117,6 @@ export interface CreditProbes {
 /** The cached state of every pool, the local checks and the signals. */
 export class CreditBook {
   private pools = new Map<string, PoolState>();
-  private picks: { pool: string; at: number }[] = [];
   private checking: Promise<void> | null = null;
 
   constructor(private readonly file: string | null, private readonly probes: CreditProbes = {}, private readonly now: () => number = Date.now) {
@@ -135,19 +132,6 @@ export class CreditBook {
   }
 
   list(): PoolState[] { return [...this.pools.keys()].map(k => this.state(k)!); }
-
-  /** The pools of the balanced picks of the last 24 h (the deficit pick's history), oldest first. */
-  recentPicks(): string[] {
-    const from = this.now() - PICK_WINDOW_MS;
-    return this.picks.filter(p => p.at >= from).map(p => p.pool);
-  }
-
-  /** An balanced pick went to this pool (recorded right after its chat was created). */
-  recordPick(pool: string): void {
-    const from = this.now() - PICK_WINDOW_MS;
-    this.picks = [...this.picks.filter(p => p.at >= from), { pool, at: this.now() }].slice(-500);
-    this.write();
-  }
 
   private recovered(s: PoolState): boolean {
     const t = this.now();
@@ -250,11 +234,7 @@ export class CreditBook {
 
   private read(): void {
     try {
-      const j = JSON.parse(fs.readFileSync(this.file!, 'utf8')) as { version?: number; pools?: unknown[]; picks?: unknown[] };
-      for (const v of Array.isArray(j.picks) ? j.picks.slice(-500) : []) {
-        const p = v as { pool?: unknown; at?: unknown };
-        if (typeof p.pool === 'string' && /^[a-z][\w:.-]{0,60}$/.test(p.pool) && typeof p.at === 'number') this.picks.push({ pool: p.pool, at: p.at });
-      }
+      const j = JSON.parse(fs.readFileSync(this.file!, 'utf8')) as { version?: number; pools?: unknown[] };
       for (const v of Array.isArray(j.pools) ? j.pools : []) {
         const s = v as Partial<PoolState>;
         if (typeof s.pool !== 'string' || !/^[a-z][\w:.-]{0,60}$/.test(s.pool) || !['ok', 'low', 'exhausted', 'unknown', 'probation'].includes(String(s.status)) || typeof s.at !== 'number') continue;
@@ -271,7 +251,7 @@ export class CreditBook {
     try {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
       const tmp = `${this.file}.tmp`;
-      fs.writeFileSync(tmp, JSON.stringify({ version: 1, pools: [...this.pools.values()], picks: this.picks }, null, 1));
+      fs.writeFileSync(tmp, JSON.stringify({ version: 1, pools: [...this.pools.values()] }, null, 1));
       renameWithRetry(tmp, this.file);
     } catch (e) {
       log.warn('agents', 'credits.json not written', { cause: errText(e), hint: 'check that the app data folder is writable; the credit states stay in memory' });

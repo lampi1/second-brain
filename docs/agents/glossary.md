@@ -8,12 +8,13 @@ there points to this page.
   never their content, ADR 0083).
 - **role** = one of the five fixed work roles (Strategist, Scout, Artisan, Sentinel, Herald) or the Orchestrator, that
   a chat runs (Router, Judge and Scribe are retired, ADR 0100).
-- **delegation** = a role chat starting visible child chats with `agent_delegate` (permissions only go down, questions
+- **delegation** = the Orchestrator or a Strategist starting visible child chats (a Strategist with `agent_delegate`; the
+  other roles never delegate, ADR 0341; permissions only go down, questions
   go to the parent first, one `agent_report` back, ADR 0083).
 - **Grindhouse** = the home page, the one place for the agents (a strip each, the browsers they drive under them; the
   old Mosaico / Corsie views are retired, ADR 0068).
-- **agent** = who works: a chat running a role, whose tools, ceiling, tier and skills decide its engine, model and
-  permissions (not a per-chat choice or a routing row, ADR 0078, 0083).
+- **agent** = who works: a chat running a role, whose card decides its engine, model (one of three presets), tools
+  and permissions (not a per-chat choice or a routing row, ADR 0078, 0083, 0337).
 - **skill** = how a job is done (`SKILL.md`, shared, loaded on demand; there are no "procedures", ADR 0077).
 - **Brain** section = Agenti, Memoria (the hub: Proposte, Approvate, Skill, Regole, Idee, File as tabs; no Dashboard,
   ADR 0122; scripts and queries are files of their skill, ADR 0263), Mappa.

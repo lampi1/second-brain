@@ -157,17 +157,13 @@ describe('CreditBook', () => {
     expect(book.state('claude')!.status).toBe('probation');
   });
 
-  it('keeps states and picks across a restart; picks older than 24 h drop out', () => {
-    let now = 100 * HOUR;
+  it('keeps states across a restart', () => {
+    const now = 100 * HOUR;
     const file = tmpFile();
     const a = new CreditBook(file, {}, () => now);
-    a.recordPick('claude'); a.recordPick('cursor');
     a.signal('cursor', 'quota exceeded');
     const b = new CreditBook(file, {}, () => now);
-    expect(b.recentPicks()).toEqual(['claude', 'cursor']);
     expect(b.state('cursor')).toMatchObject({ status: 'exhausted', source: 'signal' });
-    now += 25 * HOUR;
-    expect(b.recentPicks()).toEqual([]);
   });
 
   it('a broken file is an empty cache', () => {

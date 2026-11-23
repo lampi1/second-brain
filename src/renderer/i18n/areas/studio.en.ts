@@ -55,7 +55,7 @@ export const studioEn: typeof studioIt = {
   'studio.builtIn': 'Default',
   'studio.trial': 'On trial',
   'studio.versions': 'Versions',
-  'studio.versionsHint': 'A new version comes only when the text or the skills change; model, tier, tools, permissions and limits update the one in use. Open chats keep theirs.',
+  'studio.versionsHint': 'A new version comes only when the text or the skills change; model, tools, permissions and limits update the one in use. Open chats keep theirs.',
   'studio.models': 'By model',
   'studio.modelsHint': 'The level is the role’s and does not change with the model. The performance is the model’s: it starts from the role’s on its other models and moves with its verdicts. It counts the runs still in the archive.',
   'studio.modelsModel': 'Model',

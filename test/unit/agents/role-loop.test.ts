@@ -68,13 +68,15 @@ describe('trial evaluation', () => {
 });
 
 describe('tier suggestions (daily, local)', () => {
-  const roles = [{ id: 'artisan', name: 'Artisan', scope: 'role', tier: 'mid', tierMax: 'top' } as AgentProfile];
+  const roles = [{ id: 'artisan', name: 'Artisan', scope: 'role', model: null, tier: 'mid', tierMax: 'top' } as AgentProfile];
   it('proposes the tier that does clearly better within the same skill set (Artisan + example-app-test: mid 40% vs top 100%)', () => {
     const mid = Array.from({ length: TIER_MIN_KNOWN }, (_, i) => run({ outcome: { verdict: i < TIER_MIN_KNOWN * 0.4 ? 'success' : 'fail', basis: 'human', by: 'user', at: 1 } }));
     const top = Array.from({ length: TIER_MIN_KNOWN }, () => run({ tier: 'top' }));
     const [p] = suggestTiers({ roles, runs: [...mid, ...top] }, T0 + DAY);
     expect(p).toMatchObject({ kind: 'tier', agentIds: ['artisan'], tier: 'top', skills: ['example-app-test'], state: 'pending' });
     expect(p!.reason).toMatch(/40%.*100%|100%.*40%/);
+    // a card with its own model never gets one: the model wins over the tier (ADR 0337)
+    expect(suggestTiers({ roles: roles.map(r => ({ ...r, model: 'sonnet' })), runs: [...mid, ...top] }, T0 + DAY)).toEqual([]);
   });
   it('needs enough known outcomes on both sides; opinions and self-reports never count', () => {
     const mid = Array.from({ length: TIER_MIN_KNOWN }, () => run({ outcome: { verdict: 'fail', basis: 'human', by: 'user', at: 1 } }));

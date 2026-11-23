@@ -1,6 +1,7 @@
 // The daily local rule of the "Da approvare" queue (ADR 0083): a role whose runs do clearly better, or as well for less,
 // on another model tier within the same skill set gets a tier proposal (Artisan + example-app-test: mid 45% vs top 85% → top).
-// Only verified outcomes count (the user's verdict, a verified independent review, the facts once settled: ADR 0100,
+// Only a role whose card names no model gets one: a card's own model wins over its tier (ADR 0337), so a tier trial would
+// change nothing there. Only verified outcomes count (the user's verdict, a verified independent review, the facts once settled: ADR 0100,
 // shared/run-verdict.ts); nothing is applied here and no model is
 // called. Pure: used by lifecycle.ts daily(), pinned by test/unit/agents/role-loop.test.ts.
 import type { AgentProfile, AgentRun } from '../../shared/agents';
@@ -32,7 +33,7 @@ const pct = (v: number) => `${Math.round(v * 100)}%`;
 export function suggestTiers(input: SuggestionInput, now: number): AgentLifecycleProposal[] {
   const out: AgentLifecycleProposal[] = [];
   const starts = reworkStartsOf(input.runs), verdictOf = (r: AgentRun) => verifiedVerdict(r, starts.get(r.runId), now);
-  for (const role of input.roles.filter(r => r.scope === 'role' && r.id !== 'orchestrator' && !r.trial)) {
+  for (const role of input.roles.filter(r => r.scope === 'role' && r.id !== 'orchestrator' && !r.trial && r.model === null)) {
     const own = input.runs.filter(r => r.agentId === role.id && r.tier && r.endedAt !== undefined && r.endedAt <= now && now - r.endedAt < WINDOW_MS && r.source !== 'oneshot');
     const cohorts = new Map<string, Map<ModelTier, AgentRun[]>>();
     for (const r of own) {
