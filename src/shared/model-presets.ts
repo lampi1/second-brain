@@ -20,7 +20,8 @@ export type FullPresets = Record<PresetId, ModelPreset>;
 export const PRESET_WHY_MAX = 200;
 export const TASK_KIND_MAX = 60;
 const EFFORT_IDS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
-const MODEL = /^[\w.:@/[\]][\w.:@/=[\],-]{0,119}$/;
+/** The shape of a model id a card may hold (agents/catalog.ts refuses to read any other). */
+export const CARD_MODEL = /^[\w.:@/[\]][\w.:@/=[\],-]{0,119}$/;
 
 /** The three presets of a card: Base = its model (else `tierModel`, the model of its tier) and effort; Minimo and
  *  Massimo = their own, else the Base. */
@@ -43,7 +44,7 @@ export function checkedPresets(v: unknown): RolePresets | undefined {
     if (p === undefined || p === null) continue;
     if (typeof p !== 'object' || Array.isArray(p) || Object.keys(p).some(k => k !== 'model' && k !== 'effort')) throw new Error(`Preset ${id}: { model, effort? }.`);
     const { model, effort } = p as Record<string, unknown>;
-    if (typeof model !== 'string' || !MODEL.test(model)) throw new Error(`Preset ${id}: un modello del motore del ruolo.`);
+    if (typeof model !== 'string' || !CARD_MODEL.test(model)) throw new Error(`Preset ${id}: un modello del motore del ruolo.`);
     if (effort !== undefined && effort !== null && !(EFFORT_IDS as readonly unknown[]).includes(effort)) throw new Error(`Preset ${id}: effort non valido.`);
     out[id] = { model, ...(typeof effort === 'string' ? { effort: effort as Effort } : {}) };
   }

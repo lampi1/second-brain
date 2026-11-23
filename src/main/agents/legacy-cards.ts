@@ -2,15 +2,18 @@
 // esclusivamente dalle card degli agenti oppure che lo setti l'orchestrator, non dalle impostazioni»; Code Mode per
 // role, on every engine). What moves: the per-tier models (modelTiers.*) become the model of each card that named none;
 // the global Code Mode switch goes to every work role; the Orchestrator's «Chat aperte dall'Orchestrator» model, effort,
-// Cursor reasoning and fast go to the Orchestrator's card (its engine stays the setting orchestratorChats.harness).
-// brain/config.ts captures the old values from config.json into userData/legacy-model-settings.json before it drops
+// Cursor reasoning and fast go to the Orchestrator's card (its engine stays the setting orchestratorChats.harness); the
+// last two, which applied to every Cursor chat, also to the work cards on Cursor. A value out of shape is left out: a
+// card holding one would make the whole catalog unreadable at the next start. brain/config.ts captures the old values from config.json into userData/legacy-model-settings.json before it drops
 // them (legacyOf, writeLegacy); wiring.ts applies them once (catalog.migrateLegacy, a marker file). Pure but for the
 // two file helpers; tests: test/unit/agents/legacy-cards.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Effort, Harness } from '../../shared/contract';
 import type { AgentProfile } from '../../shared/agents';
+import { CARD_MODEL, type ModelPreset } from '../../shared/model-presets';
 import { MODEL_TIERS, type ModelTier } from '../../shared/roles';
+import { ENGINE_ID, REMOVED_ENGINES } from '../engines/registry';
 import type { ModelTiers } from './model-tier';
 
 export interface LegacyModelSettings {
@@ -24,7 +27,12 @@ export const LEGACY_MARK = 'migrated-role-cards';
 type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj | null => (v && typeof v === 'object' && !Array.isArray(v) ? v as Obj : null);
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 200) : undefined);
-const MODEL = /^[\w.:@/[\]=,-]{1,200}$/;
+const modelOf = (v: unknown): string | undefined => { const m = str(v); return m && CARD_MODEL.test(m) ? m : undefined; };
+const engineIdOf = (v: unknown): string | undefined => { const e = str(v); return e && ENGINE_ID.test(e) && !REMOVED_ENGINES.has(e) ? e : undefined; };
+const EFFORTS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 'max'] satisfies readonly Effort[];
+const effortOf = (v: unknown): Effort | undefined => { const e = str(v); return e && EFFORTS.includes(e) ? e as Effort : undefined; };
+/** The check of each text value of orchestratorChats: one that fails it is left out. */
+const TEXTS = { harness: engineIdOf, claudeModel: modelOf, cursorModel: modelOf, claudeEffort: effortOf, cursorReasoning: effortOf } as const;
 
 /** The retired keys config.json still holds; null = none (nothing to migrate). */
 export function legacyOf(raw: unknown): LegacyModelSettings | null {
@@ -37,7 +45,7 @@ export function legacyOf(raw: unknown): LegacyModelSettings | null {
     for (const [engine, v] of Object.entries(tiers)) {
       const o = obj(v); if (!o) continue;
       const row: Partial<Record<ModelTier, string>> = {};
-      for (const tier of MODEL_TIERS) { const m = str(o[tier]); if (m && MODEL.test(m)) row[tier] = m; }
+      for (const tier of MODEL_TIERS) { const m = modelOf(o[tier]); if (m) row[tier] = m; }
       if (Object.keys(row).length) t[engine as Harness] = row;
     }
     if (Object.keys(t).length) out.modelTiers = t;
@@ -46,7 +54,7 @@ export function legacyOf(raw: unknown): LegacyModelSettings | null {
   const oc = obj(r.orchestratorChats);
   if (oc) {
     const o: NonNullable<LegacyModelSettings['orchestrator']> = {};
-    for (const k of ['harness', 'claudeModel', 'cursorModel', 'claudeEffort', 'cursorReasoning'] as const) { const v = str(oc[k]); if (v) o[k] = v; }
+    for (const k of Object.keys(TEXTS) as (keyof typeof TEXTS)[]) { const v = TEXTS[k](oc[k]); if (v) o[k] = v; }
     if (oc.cursorFast === true) o.cursorFast = true;
     if (o.claudeModel || o.cursorModel || o.claudeEffort || o.cursorReasoning || o.cursorFast) out.orchestrator = o;
   }
@@ -86,8 +94,17 @@ export function markLegacyDone(userData: string): void {
   fs.writeFileSync(path.join(userData, LEGACY_MARK), `${new Date().toISOString()}\n`);
 }
 
-const EFFORTS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 'max'] satisfies readonly Effort[];
-const effortOf = (v: string | undefined): Effort | undefined => (v && EFFORTS.includes(v) ? v as Effort : undefined);
+/** The effort and fast a card has none of; null = it has them (nothing to change). A preset with no effort of its own
+ *  ran at Cursor's reasoning too. */
+function withEffort(p: AgentProfile, effort: Effort | undefined, fast: boolean, presets = false): AgentProfile | null {
+  const patch: Partial<AgentProfile> = { ...(effort && !p.effort ? { effort } : {}), ...(fast && !p.fast ? { fast: true } : {}) };
+  if (effort && presets && p.presets) {
+    const own = (x: ModelPreset | undefined): ModelPreset | undefined => (x && !x.effort ? { ...x, effort } : x);
+    const { min, max } = { min: own(p.presets.min), max: own(p.presets.max) };
+    if (min !== p.presets.min || max !== p.presets.max) patch.presets = { ...(min ? { min } : {}), ...(max ? { max } : {}) };
+  }
+  return Object.keys(patch).length ? { ...p, ...patch } : null;
+}
 
 /** The cards after the move: only the ones it changed. `tierModel(engine, tier, overrides)` = what a tier resolved to
  *  with the old Settings (model-tier.ts). A card the user already gave a model keeps it; the Orchestrator never gets
@@ -101,13 +118,18 @@ export function migratedCards(profiles: readonly AgentProfile[], legacy: LegacyM
       const engine = (o.harness ?? p.engine) as Harness;
       const model = engine === 'claude' ? o.claudeModel : engine === 'cursor' ? o.cursorModel : undefined;
       const effort = effortOf(engine === 'claude' ? o.claudeEffort : engine === 'cursor' ? o.cursorReasoning : undefined);
-      if (next.model === null && (model || effort || (engine === 'cursor' && o.cursorFast))) {
-        // the card moves to the engine the Orchestrator runs on: its presets lived on its old engine (ADR 0336)
-        const moved = engine !== p.engine;
-        next = { ...next, engine, ...(moved ? { presets: undefined } : {}), model: model ?? null,
-          ...(effort ? { effort } : moved ? { effort: undefined } : {}), ...(engine === 'cursor' && o.cursorFast ? { fast: true } : {}) };
+      const fast = engine === 'cursor' && o.cursorFast === true;
+      // a card already on that engine keeps its own model, effort and fast, and takes the ones it has none of
+      if (engine === p.engine) {
+        if (model && p.model === null) next = { ...p, model };
+        next = withEffort(next, effort, fast) ?? next;
       }
+      // else the card moves to the engine the Orchestrator runs on, unless it names a model of its own engine: its
+      // presets, effort and fast lived on its old engine (ADR 0336)
+      else if (p.model === null && (model || effort || fast)) next = { ...p, engine, model: model ?? null, presets: undefined, effort, fast: fast || undefined };
     }
+    // Cursor's reasoning and fast applied to every Cursor chat, whatever its role
+    if (p.id !== 'orchestrator' && o && p.engine === 'cursor') next = withEffort(next, effortOf(o.cursorReasoning), o.cursorFast === true, true) ?? next;
     // a card with no model gets the one its tier resolved to before the move (the old Settings' pick, else the registry's)
     if (next.model === null) {
       const before = tierModel(next.engine, next.tier, legacy.modelTiers);

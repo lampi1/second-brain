@@ -9,18 +9,18 @@ import type { AgentContextSnapshot } from '../../shared/agent-context';
 import path from 'node:path';
 import { checkedKnowhow, checkedPackIdentity, packName } from '../../shared/agent-pack';
 import type { Effort, Harness, NewChat } from '../../shared/contract';
-import { BEHAVIOUR_FIELDS, MAX_CONTEXT_RANGE, PERMISSION_CEILINGS, effortOn, type AgentAuthor, type AgentCatalog, type AgentDraft, type AgentModelChoice, type AgentOwnerSnapshot, type AgentProfile, type AgentVersion, type PermissionCeiling } from '../../shared/agents';
+import { BEHAVIOUR_FIELDS, MAX_CONTEXT_RANGE, PERMISSION_CEILINGS, effortOn, type AgentAuthor, type AgentCatalog, type AgentDraft, type AgentModelChoice, type AgentOwnerSnapshot, type AgentProfile, type AgentVersion, type EngineChoice, type PermissionCeiling } from '../../shared/agents';
 import { MODEL_TIERS, ROLE_DEFAULTS, ROLE_IDS, ROLE_PREAMBLE, currentLaunches, currentRoleId, isRetiredRoleId, isRoleId, isWorkRole, roleName, tierRank, type ModelTier, type RoleId } from '../../shared/roles';
 import { characterOf, isCharacterId } from '../../shared/characters';
 import { readLocal, writeLocal } from './local-store';
 import { AgentHistory, behaviourOf, firstVersion, sameBehaviour, versionedChanges } from './versions';
 import { checkedTools, type AgentPolicy } from './tool-policy';
-import { PRESET_IDS, cardPresets, checkedPresets, choosePreset, presetAskOf, presetNamed, presetOrderProblem, type Delegator, type FullPresets, type PresetAsk, type PresetChoice, type RolePresets, type UnitPrice } from '../../shared/model-presets';
+import { CARD_MODEL, PRESET_IDS, cardPresets, checkedPresets, choosePreset, presetAskOf, presetNamed, presetOrderProblem, type Delegator, type FullPresets, type PresetAsk, type PresetChoice, type RolePresets, type UnitPrice } from '../../shared/model-presets';
 import { fiveRolesTextFor, fullDefaultsFor, shippedTextFor, skillAlignmentFor } from './role-migrate';
 import { engineOf } from '../engines/registry';
 import { log, errText } from '../log';
 
-const MODEL = /^[\w.:@/[\]][\w.:@/=[\],-]{0,119}$/;
+const MODEL = CARD_MODEL;
 const ID = /^[a-z][a-z0-9_-]{0,79}$/;
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 const AUTHORS: readonly AgentAuthor[] = ['default', 'user', 'maintenance'];
@@ -33,6 +33,20 @@ const CATALOG_IDS: readonly string[] = [...ROLE_IDS];
 function text(v: unknown, max: number, label: string, empty = false): string {
   if (typeof v !== 'string' || v.length > max || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(v) || (!empty && !v.trim())) throw new Error(`${label}: testo ${empty ? 'fino a' : 'da 1 a'} ${max} caratteri.`);
   return v.trim();
+}
+
+/** A stored card's parked choices (AgentProfile.parked): one out of shape is left out, never an error on load. */
+function parkedOf(v: unknown): Record<string, EngineChoice> | undefined {
+  const out: Record<string, EngineChoice> = {};
+  for (const [engine, value] of Object.entries(obj(v))) {
+    const c = obj(value);
+    if (!ID.test(engine) || !(c.model === null || typeof c.model === 'string' && MODEL.test(c.model)) || !(c.effort === undefined || has(EFFORTS, c.effort))) continue;
+    try {
+      const presets = checkedPresets(c.presets);
+      out[engine] = { model: c.model, ...(c.effort ? { effort: c.effort } : {}), ...(presets ? { presets } : {}), ...(c.fast === true ? { fast: true } : {}) };
+    } catch { /* out of shape: left out */ }
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 export interface AgentCatalogDeps {
@@ -132,14 +146,14 @@ export class AgentCatalogService {
     for (const value of rows) {
       const p = obj(value);
       if (typeof p.id !== 'string' || !CATALOG_IDS.includes(p.id) || out.some(x => x.id === p.id)) continue;
-      const trial = p.trial === undefined ? undefined : obj(p.trial);
+      const trial = p.trial === undefined ? undefined : obj(p.trial), parked = parkedOf(p.parked);
       if (typeof p.createdAt !== 'number' || !Number.isFinite(p.createdAt) || typeof p.updatedAt !== 'number' || !Number.isFinite(p.updatedAt)
         || !count(p.version) || !count(p.activeVersion) || p.activeVersion > p.version || !has(AUTHORS, p.lastEditedBy) || typeof p.userLocked !== 'boolean'
         || (trial && (!count(trial.version) || trial.version > p.version || !count(trial.baseline) || trial.baseline > p.version || typeof trial.startedAt !== 'number'))) throw new Error('Versione del ruolo non valida.');
       out.push({ ...this.face(p.id), ...this.behaviour(p, p.id, false), id: p.id, scope: 'role',
         createdAt: p.createdAt, updatedAt: p.updatedAt, version: p.version, activeVersion: p.activeVersion,
         ...(trial ? { trial: { version: trial.version as number, baseline: trial.baseline as number, startedAt: trial.startedAt as number } } : {}),
-        lastEditedBy: p.lastEditedBy, userLocked: p.userLocked });
+        ...(parked ? { parked } : {}), lastEditedBy: p.lastEditedBy, userLocked: p.userLocked });
     }
     return out;
   }
@@ -222,10 +236,14 @@ export class AgentCatalogService {
    *  renderer gets the fresh catalog even when no role changed (issue #96). */
   refresh(): void { this.d.emit?.(this.list()); }
   /** The one-off move of the retired model Settings onto the cards (agents/legacy-cards.ts): in place, like an engine
-   *  rebind (no new version: the role runs what it ran). Returns the roles it changed; throws when it cannot write. */
+   *  rebind (no new version: the role runs what it ran). A card the next start could not read (read()) keeps its old
+   *  values. Returns the roles it changed; throws when it cannot write. */
   migrateLegacy(changed: (profiles: readonly AgentProfile[]) => AgentProfile[]): string[] {
     this.writable();
-    const updated = changed(this.profiles).map(p => ({ ...p, updatedAt: Math.max(this.now(), p.updatedAt + 1) }));
+    const updated = changed(this.profiles).filter(p => {
+      try { this.behaviour(p as unknown as Record<string, unknown>, p.id, false); return true; }
+      catch (e) { log.warn('agents', 'model settings not moved onto a role card', { cause: errText(e), hint: 'the card keeps its values: choose its model in Agenti', data: { role: p.id } }); return false; }
+    }).map(p => ({ ...p, updatedAt: Math.max(this.now(), p.updatedAt + 1) }));
     if (!updated.length) return [];
     const byId = new Map(updated.map(p => [p.id, p]));
     this.commit(this.profiles.map(p => byId.get(p.id) ?? p), [], [], updated.map(p => ({ agentId: p.id, version: p.activeVersion, behaviour: behaviourOf(p), at: p.updatedAt, by: 'default' as const, reason: 'Impostazioni dei modelli spostate sulla scheda' })));
@@ -250,7 +268,11 @@ export class AgentCatalogService {
       // still at its defaults: its tools follow the engine (the API engine reads only, the others get the role's defaults)
       const tools = isRoleId(p.id) ? { allow: engineOf(engine)?.kind === 'api' ? ['read' as const] : [...ROLE_DEFAULTS[p.id].tools] } : p.tools;
       // in place (ADR 0186): an engine the app rebinds is not a change the role made, so no new version
-      const updated: AgentProfile = { ...p, engine, tools, updatedAt: Math.max(this.now(), p.updatedAt + 1) };
+      // model, effort, presets and fast belong to the engine it leaves (the new one would refuse them at launch): parked
+      // with that engine, and what was parked for the new one comes back
+      const { model, effort, presets, fast, parked, ...rest } = p, { [engine]: back, ...others } = parked ?? {};
+      const left = { ...others, ...(model !== null || effort || presets || fast ? { [p.engine]: { model, ...(effort ? { effort } : {}), ...(presets ? { presets } : {}), ...(fast ? { fast } : {}) } } : {}) };
+      const updated: AgentProfile = { ...rest, model: null, ...back, ...(Object.keys(left).length ? { parked: left } : {}), engine, tools, updatedAt: Math.max(this.now(), p.updatedAt + 1) };
       changed.push(updated); return updated;
     });
     if (!changed.length) return;
@@ -369,13 +391,14 @@ export class AgentCatalogService {
     this.d.onCustomized?.();
     return p;
   }
-  /** "Ripristina predefinito": the shipped role again (its skills from packs and maintenance stay). */
+  /** "Ripristina predefinito": the shipped role again (its skills from packs and maintenance stay), with nothing parked
+   *  for an engine it left. */
   reset(id: string): AgentProfile {
     this.writable();
-    const old = this.find(id);
+    const { parked, ...old } = this.find(id);
     if (old.trial) throw new Error('C’è una prova in corso su questo ruolo: chiudila prima di ripristinarlo.');
     const next = { ...this.defaults(id), ...(old.knowhow ? { knowhow: old.knowhow } : {}), ...(old.pack ? { pack: old.pack } : {}) };
-    if (sameBehaviour(old, next) && !old.userLocked) return structuredClone(old);
+    if (sameBehaviour(old, next) && !old.userLocked && !parked) return structuredClone(old);
     return this.version(old, next, 'default', 'Ripristinato il ruolo predefinito');
   }
   history(id: string): AgentVersion[] { this.find(id); return this.store.list(id); }

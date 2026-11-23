@@ -86,9 +86,13 @@ export function effortOn(asked: Effort | null | undefined, efforts: readonly Eff
 /** Fields that change what a run does. Saving a change to any of them creates a new version. */
 export const BEHAVIOUR_FIELDS = ['instructions', 'engine', 'model', 'effort', 'tools', 'permissionCeiling', 'knowhow', 'maxContext', 'tier', 'tierMax', 'presets', 'codeMode', 'fast', 'launches', 'skills'] as const;
 export type AgentBehaviour = Pick<AgentDraft, (typeof BEHAVIOUR_FIELDS)[number]>;
+/** What a card names on one engine only. */
+export interface EngineChoice { model: string | null; effort?: Effort; presets?: RolePresets; fast?: boolean }
 export interface AgentProfile extends AgentDraft {
   /** a saved card has an effort or none (a draft's null clears it) */
   effort?: Effort;
+  /** what the card named on the engines the app rebound it away from (catalog.rebind): back on one, it has them again */
+  parked?: Record<string, EngineChoice>;
   id: string; createdAt: number; updatedAt: number;
   /** always a role: one of the six (the Orchestrator and the five work roles) */
   scope: 'role';
