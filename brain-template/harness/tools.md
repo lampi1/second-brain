@@ -39,8 +39,8 @@ Same in both (rules name only these):
   an old chat by words: `node "{{BRAIN}}/ops/tools/session-find.mjs" <words>` (both). Read-only, secrets masked.
 - **Waits** (build, stack, a background helper): a background command or agent; the harness wakes the chat when it ends
   (Cursor: an automatic turn "Briefly inform the user…": bring the result to {{OWNER}}). Never end a turn "waiting" without one.
-- **Delegated work** (both): in the second-brain app a role chat hands a part to another role with `agent_delegate`
-  (a visible chat under it, which answers with `agent_report`); the harness's own sub-agents only for a quick read-only
+- **Delegated work** (both): in the second-brain app only the Orchestrator and the Strategist hand a part to another
+  role (the Strategist with `agent_delegate`: a visible chat under it, which answers with `agent_report`); the harness's own sub-agents only for a quick read-only
   search (Claude `Explore`), never for delegated work.
 
 | Differs | Claude Code (Opus 5.5) | Cursor (Grok 4.7) | Why |
