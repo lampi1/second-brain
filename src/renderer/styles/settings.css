@@ -230,13 +230,12 @@
 /* Aggiornamenti (AppUpdateSettings.tsx): the new commits from GitHub */
 .st-update-list { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; color: var(--text-2); font-size: 13px; }
 .st-update-list code { font-size: 12px; opacity: .75; margin-right: 4px; }
-/* Ruoli e deleghe: the model of each tier per engine (DelegationSettings.tsx) */
+/* A small table (WorktreeSettings.tsx: the repositories with their working copies) */
 .st-tiers { display:grid; gap:6px; width:100%; margin-top:8px; }
 .st-tiers-row { display:grid; grid-template-columns:minmax(90px, 140px) repeat(3, minmax(0, 1fr)); gap:8px; align-items:center; }
 .st-tiers-head { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--text-3); }
 .st-tiers-engine { font-weight:600; color:var(--text-2); }
-.st-tier-input { width:100%; min-width:0; font-family:var(--mono); font-size:12px; }
-/* Ruoli e deleghe: each work role's presets Minimo / Base / Massimo (RolePresets.tsx, ADR 0336) */
+/* A role's presets Minimo / Base / Massimo on its own page (RolePresets.tsx, ADR 0336) */
 .st-presets { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:12px; width:100%; margin-top:8px; }
 .st-presets-role { display:grid; gap:6px; padding:10px; border:1px solid var(--border); border-radius:8px; min-width:0; }
 .st-presets-head { display:flex; align-items:baseline; gap:8px; }

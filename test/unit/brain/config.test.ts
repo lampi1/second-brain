@@ -112,24 +112,20 @@ describe('engine switches (ADR 0046)', () => {
 });
 
 describe('Chat aperte dall’Orchestrator (orchestratorChats)', () => {
-  it('protected keys (engine and model choose whose credits are spent), CLI defaults by default', () => {
-    for (const k of ['orchestratorChats.harness', 'orchestratorChats.claudeModel', 'orchestratorChats.claudeEffort', 'orchestratorChats.cursorModel']) expect(defOf(k)!.protected, k).toBe(true);
-    expect(DEFAULTS.orchestratorChats).toEqual({ harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '', cursorReasoning: 'medium', cursorFast: false });
+  it('only the engine stays a protected setting; model, effort and fast live on the Orchestrator card (2026-11-23)', () => {
+    expect(defOf('orchestratorChats.harness')!.protected).toBe(true);
+    for (const k of ['orchestratorChats.claudeModel', 'orchestratorChats.claudeEffort', 'orchestratorChats.cursorModel', 'orchestratorChats.cursorReasoning', 'orchestratorChats.cursorFast']) expect(defOf(k), k).toBeFalsy();
+    expect(DEFAULTS.orchestratorChats).toEqual({ harness: 'claude' });
   });
-  it('model ids as the CLIs take them, trimmed; nothing that could become a CLI flag or a path', () => {
-    expect(validate('orchestratorChats.cursorModel', ' grok-4.7 ')).toMatchObject({ ok: true, value: 'grok-4.7' });
-    expect(validate('orchestratorChats.cursorModel', 'gpt-5.6-sol[effort=high]')).toMatchObject({ ok: true });
-    expect(validate('orchestratorChats.claudeModel', '')).toMatchObject({ ok: true, value: '' });
-    for (const v of ['grok 4.7', 'a;b', '"x"', 'x'.repeat(121), 7, null]) expect(validate('orchestratorChats.claudeModel', v).ok, String(v)).toBe(false);
-    expect(validate('orchestratorChats.claudeEffort', 'xhigh')).toMatchObject({ ok: true });
-    expect(validate('orchestratorChats.claudeEffort', 'huge').ok).toBe(false);
+  it('the engine must be a known one', () => {
     expect(validate('orchestratorChats.harness', 'nope').ok).toBe(false);
+    expect(validate('orchestratorChats.harness', 'cursor')).toMatchObject({ ok: true, value: 'cursor' });
   });
   it('a config saved before this setting gets the defaults; a saved choice survives a restart', () => {
     expect(fromSaved({ view: 'corsie' }).orchestratorChats).toEqual(DEFAULTS.orchestratorChats);
     const dir = tmpDir();
-    new ConfigStore(dir, {}).set({ orchestratorChats: { harness: 'cursor', cursorModel: 'grok-4.7', claudeEffort: 'high' } });
-    expect(new ConfigStore(dir, {}).get().orchestratorChats).toEqual({ harness: 'cursor', claudeModel: '', cursorModel: 'grok-4.7', claudeEffort: 'high', cursorReasoning: 'medium', cursorFast: false });
+    new ConfigStore(dir, {}).set({ orchestratorChats: { harness: 'cursor' } });
+    expect(new ConfigStore(dir, {}).get().orchestratorChats).toEqual({ harness: 'cursor' });
   });
 });
 
@@ -283,7 +279,7 @@ describe('retired view setting', () => {
     const dir = tmpDir();
     const file = path.join(dir, 'config.json');
     const domains = [path.join(dir, 'other-domain')];
-    const choices = { theme: 'light', language: 'it', engineOn: { cursor: false }, engines: { cursor: false }, orchestratorChats: { claudeModel: 'claude-opus-5-5' } };
+    const choices = { theme: 'light', language: 'it', engineOn: { cursor: false }, engines: { cursor: false }, orchestratorChats: { harness: 'cursor' } };
     const oldChange = { id: 'chg_old_view', at: 1, by: 'user', key: 'view', before: 'mosaico', after: 'corsie' };
     fs.writeFileSync(file, JSON.stringify({ view: 'corsie', ...choices, domains }));
     fs.writeFileSync(path.join(dir, 'changes.jsonl'), `${JSON.stringify(oldChange)}

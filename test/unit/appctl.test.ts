@@ -258,16 +258,16 @@ describe('app control tools', () => {
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'scout', orchestrator: true }))).rejects.toThrow(/Orchestrator/);
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y' }))).rejects.toThrow(/roleId required/);
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'reviewer' }))).rejects.toThrow(/roleId required/);
-    // the old tier is an alias of a preset (ADR 0336): top = Massimo, without presetWhy Base (the card has no Massimo
-    // here, so Base anyway); a value that is not one of the three presets is refused, nothing created
-    expect(await t.run({ title: 'Ordini · Fix 2', prompt: 'p', roleId: 'artisan', tier: 'top' })).toMatchObject({ model: 'm-mid' });
+    // the old tier param is gone (2026-11-23): refused with the way to the preset; a value that is not one of the three
+    // presets is refused too; nothing created
+    await expect(Promise.resolve(t.run({ title: 'Ordini · Fix 2', prompt: 'p', roleId: 'artisan', tier: 'top' }))).rejects.toThrow(/tier: gone/);
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'herald', preset: 'huge' }))).rejects.toThrow(/preset/);
-    expect(made).toHaveLength(2);
+    expect(made).toHaveLength(1);
     // a role on Cursor while «Gli Orchestrator possono usare Cursor» is off: refused, nothing created
     catalog.save({ ...catalog.list().profiles.find(p => p.id === 'scout')!, engine: 'cursor', model: null }, 'scout');
     cursorOn = false;
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'y', roleId: 'scout' }))).rejects.toThrow(/Gli Orchestrator possono usare Cursor/);
-    expect(made).toHaveLength(2);
+    expect(made).toHaveLength(1);
   });
 
   it('userModel runs that one chat on the model the user named, the role\'s card unchanged; Fast refuses any delegation (ADR 0296)', async () => {
@@ -290,11 +290,11 @@ describe('app control tools', () => {
     expect(catalog.list().profiles.find(p => p.id === 'artisan')).toEqual(card);
     // a model on another engine than the role's: refused, nothing created
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan', userModel: { model: 'gpt-x', effort: 'high' } }))).rejects.toThrow(/un altro motore/);
-    // a model no engine lists, an unknown engine, a mix with balanced or tier: refused, nothing created
+    // a model no engine lists, an unknown engine, the removed tier: refused, nothing created
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan', userModel: { model: 'gpt-y' } }))).rejects.toThrow(/not in any engine/);
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan', userModel: { engine: 'claude', model: 'gpt-x' } }))).rejects.toThrow(/claude's model list/);
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan', userModel: { engine: 'nope', model: 'gpt-x' } }))).rejects.toThrow(/userModel.engine/);
-    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan', tier: 'top', userModel: { model: 'gpt-x' } }))).rejects.toThrow(/one or the other/);
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan', tier: 'top', userModel: { model: 'gpt-x' } }))).rejects.toThrow(/tier: gone/);
     expect(made).toHaveLength(1);
     // agent_catalog lists each engine's models when asked
     const rawCat = await all.find(x => x.name === 'agent_catalog')!.run({ models: true });

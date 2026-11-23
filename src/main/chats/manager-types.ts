@@ -116,8 +116,9 @@ export interface ChatManagerOptions {
   onDone?: (chatId: string) => void;
   /** the CLI died in the middle of a turn, with an error and no result (→ feed "chat finita con errore") */
   onCrash?: (chatId: string, error: string) => void;
-  /** the user's reasoning and fast for every ACP chat, read at each session start (settings orchestratorChats.*) */
-  acpModelConfig?: () => { reasoning: CursorReasoning | ''; fast: boolean } | null;
+  /** Cursor's reasoning fallback and fast for a chat of this role (its card's fast), read at each session start;
+   *  roleId undefined = a chat with no role */
+  acpModelConfig?: (roleId: string | undefined) => { reasoning: CursorReasoning | ''; fast: boolean } | null;
   /** min ms between two get_usage asks after turns (default 60 s) */
   usageEveryMs?: number;
 
@@ -160,8 +161,9 @@ export interface ChatManagerOptions {
   brainRoot?: () => string | null;
   /** how long a chat may take to write its hand-off before the app builds one itself (default 5 min) */
   handoffTimeoutMs?: number;
-  /** Code Mode (ADR 0331): whether the setting is on now (read at each engine start); absent = off */
-  codeMode?: () => boolean;
+  /** Code Mode (ADR 0331): whether this role's card has it on (read at each engine start); roleId undefined = a chat
+   *  with no role (off); absent = off */
+  codeMode?: (roleId: string | undefined) => boolean;
   /** the brain's product PreToolUse guard (rules/runtime.ts) for a run_code internal call: the reason it refuses it,
    *  null = no say. Absent = no product brain. */
   productGuard?: (call: { chatId: string; sessionId: string; tool: string; input: unknown }) => string | null;

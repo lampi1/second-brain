@@ -41,7 +41,7 @@ export interface AgentDraft {
   purpose: string;
   instructions: string;
   engine: Harness;
-  /** null = the model of the role's tier on its engine (Impostazioni → Ruoli e deleghe), else this exact model */
+  /** null = the engine's registry model for the role's internal tier (agents/model-tier.ts), else this exact model */
   model: string | null;
   /** null (a draft only, e.g. Settings' «Predefinito») clears it: the engine's default; a saved card omits it then */
   effort?: Effort | null;
@@ -52,13 +52,18 @@ export interface AgentDraft {
    *  null/omitted = the user's setting (Impostazioni → compattazione). Honoured where the engine supports it
    *  (AgentModelChoice.maxContext; today the Claude engines, CLAUDE_CODE_AUTO_COMPACT_WINDOW). */
   maxContext?: number | null;
-  /** the old model class: what a null model means (the tier's model on the engine); a request's tier is read as a
-   *  preset (model-presets.ts presetOfTier) */
+  /** internal, never chosen in a request (2026-11-23): what a null model means (the registry's model of this class on
+   *  the engine), and the class the flows and the lifecycle read */
   tier: ModelTier;
   /** kept for older cards and versions; the Massimo preset is the ceiling of a delegation now (ADR 0336) */
   tierMax: ModelTier;
   /** the Minimo and Massimo presets on the card's engine (ADR 0336); Base = model and effort above; absent = the Base */
   presets?: RolePresets;
+  /** Code Mode for this role's chats (ADR 0331, per role since 2026-11-23): run_code in place of the engine's own file
+   *  and shell tools, at the level its engine allows (shared/code-mode-level.ts); absent = off; never the Orchestrator */
+  codeMode?: boolean;
+  /** Cursor only: its «fast» option for this role's chats (was Settings orchestratorChats.cursorFast); absent = off */
+  fast?: boolean;
   /** the roles it may launch with agent_delegate */
   launches: string[];
   /** the brain's skills it loads at every launch (it may use any other skill its engine can load too, ADR 0278) */
@@ -79,7 +84,7 @@ export function effortOn(asked: Effort | null | undefined, efforts: readonly Eff
   return lower.length ? lower.reduce((a, b) => order.indexOf(b) > order.indexOf(a) ? b : a) : efforts[0]!;
 }
 /** Fields that change what a run does. Saving a change to any of them creates a new version. */
-export const BEHAVIOUR_FIELDS = ['instructions', 'engine', 'model', 'effort', 'tools', 'permissionCeiling', 'knowhow', 'maxContext', 'tier', 'tierMax', 'presets', 'launches', 'skills'] as const;
+export const BEHAVIOUR_FIELDS = ['instructions', 'engine', 'model', 'effort', 'tools', 'permissionCeiling', 'knowhow', 'maxContext', 'tier', 'tierMax', 'presets', 'codeMode', 'fast', 'launches', 'skills'] as const;
 export type AgentBehaviour = Pick<AgentDraft, (typeof BEHAVIOUR_FIELDS)[number]>;
 export interface AgentProfile extends AgentDraft {
   /** a saved card has an effort or none (a draft's null clears it) */
@@ -390,7 +395,14 @@ export interface AgentModelChoice {
   /** Known models do not imply the adapter can select them. */
   modelSelectable: boolean;
   modelReason: string | null;
+  /** how much of a role's Code Mode this engine honours (ADR 0331, code-mode/policy.ts): full = its native tools hidden
+   *  (Claude); partial = hint + the app refuses the natives' permission requests (ACP, Codex); none = no tools (API);
+   *  absent = unknown (an old catalog) */
+  codeMode?: CodeModeLevel;
 }
+export type CodeModeLevel = 'full' | 'partial' | 'none';
+/** The level of an engine kind (engines/registry.ts EngineDef.kind). */
+export const codeModeLevel = (kind: string | undefined): CodeModeLevel => kind === 'claude' ? 'full' : kind === 'acp' || kind === 'codex' ? 'partial' : 'none';
 export interface AgentCatalog {
   /** The six roles in their fixed order. */
   profiles: AgentProfile[];

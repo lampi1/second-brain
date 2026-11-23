@@ -1,9 +1,9 @@
 // Per-task model presets (shared/model-presets.ts, ADR 0336): each guard of a delegation's preset (only the three,
 // missing = Base, not Base without a reason = Base with a warning, never priced above the delegator's own model, an
-// unknown price said), the old `tier` read as a preset, the card's presets defaulting to its Base (the migration), the
-// stored shape and its order by price, and the per-run record read back.
+// unknown price said), the card's presets defaulting to its Base (the migration), the stored shape and its order by
+// price, and the per-run record read back.
 import { describe, expect, it } from 'vitest';
-import { cardPresets, checkedPresets, choosePreset, presetAskOf, presetNamed, presetOfTier, presetOrderProblem, presetsUpTo, readRunPreset, runPresetOf, type FullPresets } from '../../../src/shared/model-presets';
+import { cardPresets, checkedPresets, choosePreset, presetAskOf, presetNamed, presetOrderProblem, readRunPreset, runPresetOf, type FullPresets } from '../../../src/shared/model-presets';
 
 const PRICE: Record<string, number> = { light: 1, mid: 5, top: 20, gpt: 4 };
 const price = (m: string) => PRICE[m] ?? null;
@@ -43,14 +43,6 @@ describe('presetAskOf (the tool fields)', () => {
     expect(() => presetAskOf({ presetWhy: 'a\nb' })).toThrow(/presetWhy: one line/);
     expect(() => presetAskOf({ taskKind: 'x'.repeat(61) })).toThrow(/taskKind: one line, at most 60/);
   });
-  it('the old tier is a preset relative to the card\'s tier; both together are refused', () => {
-    expect(presetOfTier('light', 'mid')).toBe('min');
-    expect(presetOfTier('mid', 'mid')).toBe('base');
-    expect(presetOfTier('top', 'mid')).toBe('max');
-    expect(presetAskOf({}, '', { tier: 'top', card: 'mid' })).toEqual({ preset: 'max' });
-    expect(() => presetAskOf({ preset: 'min' }, '', { tier: 'top', card: 'mid' })).toThrow(/pass only preset/);
-    expect(() => presetAskOf({}, '', { tier: 'huge', card: 'mid' })).toThrow(/light \| mid \| top/);
-  });
 });
 
 describe('choosePreset (the guards)', () => {
@@ -87,10 +79,8 @@ describe('choosePreset (the guards)', () => {
   });
 });
 
-describe('presetsUpTo, presetNamed and the run record', () => {
-  it('picks come from Minimo up to the preset chosen; a model names its preset', () => {
-    expect(presetsUpTo('min')).toEqual(['min']);
-    expect(presetsUpTo('max')).toEqual(['min', 'base', 'max']);
+describe('presetNamed and the run record', () => {
+  it('a model names its preset', () => {
     expect(presetNamed(P, 'top', undefined)).toBe('max');
     expect(presetNamed(P, 'top', undefined, ['min', 'base'])).toBeNull();
     const same: FullPresets = { min: { model: 'mid', effort: 'low' }, base: { model: 'mid' }, max: { model: 'mid', effort: 'high' } };

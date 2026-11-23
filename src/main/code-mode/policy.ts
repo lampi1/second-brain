@@ -2,6 +2,7 @@
 // tool names a script may call. Pure: read by the ChatManager (manager-sessions.ts: launch flags, tool visibility),
 // by run_code (code-mode/tool.ts) and by their tests.
 import type { ChatSummary } from '../../shared/contract';
+import { engineOf } from '../engines/registry';
 
 /** the app's MCP tool that runs a script (on the chat endpoint: mcp__second-brain__run_code on Claude) */
 export const RUN_CODE = 'run_code';
@@ -15,12 +16,14 @@ export const CODE_MODE_HIDDEN = ['Bash', 'PowerShell', 'Read', 'Edit', 'Write', 
 export const NATIVE_WRAPPERS = ['Bash', 'PowerShell', 'Read', 'Write', 'Edit', 'Grep', 'Glob'] as const;
 export type NativeWrapper = typeof NATIVE_WRAPPERS[number];
 
-/** Code Mode for one chat, the setting being `on`: a Claude, Cursor or Antigravity chat of the user or of a role; never
- *  the Orchestrator (a short turn of app calls, ADR 0090) nor the app's maintenance research (read-only, its own frame). */
+/** Code Mode for one chat, its role card's switch being `on` (AgentProfile.codeMode, per role since 2026-11-23; the
+ *  global Settings switch is gone): any engine with tools (Claude hides its natives; ACP and Codex get the hint and the
+ *  app refuses their natives' permission requests); never the API engine (no tools), the Orchestrator (a short turn of
+ *  app calls, ADR 0090) nor the app's maintenance research (read-only, its own frame). */
 export function codeModeFor(s: Pick<ChatSummary, 'harness' | 'isOrchestrator' | 'research'>, on: boolean): boolean {
-  return on && !s.isOrchestrator && !s.research && (s.harness === 'claude' || s.harness === 'cursor' || s.harness === 'antigravity');
+  const kind = engineOf(s.harness)?.kind;
+  return on && !s.isOrchestrator && !s.research && !!kind && kind !== 'api';
 }
-
 /** The wrappers that run a command (their calls meet Bash and PowerShell rules, plan mode, an exit code). */
 export const COMMAND_WRAPPERS: readonly string[] = ['Bash', 'PowerShell'];
 

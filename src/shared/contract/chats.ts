@@ -6,7 +6,6 @@ import type { AgentChildren, AgentOwnerSnapshot, AgentRun, CanonicalResult, Task
 import type { AutoClosePresence, AutoCloseStatus } from '../auto-close';
 import type { ChatDelegation, DelegationLimitHit } from '../delegation';
 import type { ChatEffortStatus } from '../effort';
-import type { ModelTier } from '../roles';
 import type { Delegator, PresetId } from '../model-presets';
 import type { RuntimeDiagnostic } from '../runtime-performance';
 import type { StrategyPlan } from '../strategy';
@@ -337,13 +336,8 @@ export interface RunDismissed { same?: { runId: string; state: RunInfo['state'];
   /** running and this chat gets its result when it ends (the run results are on) */
   resultComes?: boolean } }
 
-/** The engine, model and effort «Balanced mode» picked for one role chat, and the credit pool it spends (ADR 0218). */
-export interface BalancedRoute { engine: Harness; model: string; effort?: Effort; pool: string }
-/** What a delegating agent passes in «Balanced mode» (app_create_chat, agent_delegate): its own pick after reading
- *  balanced_status, and why in a few words. The app checks only the hard limits (ADR 0218 §4). */
-/** A model the user asked for one run by name (app_create_chat `userModel`, ADR 0296). */
+/** A model the user asked for one run by name (app_create_chat `userModel`, ADR 0296): one of the role card's presets. */
 export interface UserModelPick { engine: Harness; model: string; effort?: Effort }
-export interface BalancedAsk { engine: Harness; model: string; effort?: Effort; why: string }
 export interface NewChat {
   deliveryPolicy?: TaskDeliveryPolicy;
   doneWhen?: string[];
@@ -360,8 +354,6 @@ export interface NewChat {
   /** set only by agent_delegate (main): the delegating chat and the contract; the child is bounded by that chat */
   parentId?: string;
   delegation?: ChatDelegation;
-  /** the old name of `preset` (model-presets.ts presetOfTier): below the card's tier = min, same = base, above = max */
-  tier?: ModelTier;
   /** the role card's preset a delegation asks for (ADR 0336): min | base | max; absent = base */
   preset?: PresetId;
   /** why that preset, one line: a preset other than base without it runs on base (with a warning) */
@@ -388,11 +380,8 @@ export interface NewChat {
   replaces?: string;
   worktree?: boolean;         // claude --worktree
   route?: RouteDecision;      // set by app_create_chat and chat:createRouted: how the engine was chosen (role, defaults, override)
-  /** main only («Balanced mode», ADR 0218): the engine, model and effort picked from the credits left; the role's resolve
-   *  uses them instead of its card's engine when that engine is on and trusted. chat:create drops it */
-  balancedRoute?: BalancedRoute;
-  /** the model the user named for this one run (ADR 0296): engine, model and effort for this chat only; the role's card
-   *  keeps its own. Wins over the card's tier and «Balanced mode»; the engine must be on and able to pick a model. */
+  /** the model the user named for this one run (ADR 0296): engine, model and effort for this chat only, one of the role
+   *  card's presets; the card keeps its own. Wins over `preset`; the engine must be on and able to pick a model. */
   userModel?: UserModelPick;
   /** run tags (AGENTS-DESIGN §4.8): the skill ids the chat starts with (`^[a-z0-9][a-z0-9_-]{0,79}$`, at most 16) */
   skills?: string[];

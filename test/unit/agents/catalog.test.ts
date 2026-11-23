@@ -169,9 +169,9 @@ describe('role catalog', () => {
     expect(scout.owner).toMatchObject({ id: 'scout', name: 'Scout', source: 'catalog' });
     expect(scout.tier).toBe(ROLE_DEFAULTS.scout.tier); expect(scout.request.model).toBe('m-mid');
     expect(scout.instructions).toContain('Role: Scout.');
-    // tier is the old name of preset (ADR 0336): top = Massimo, which a card without one keeps at its Base
+    // a launch picks a preset, never a tier (2026-11-23): an old `tier` field is ignored; Massimo on a card without one is its Base
     expect(catalog.resolve({ harness: 'claude', roleId: 'scout', tier: 'top' } as never).request.model).toBe('m-mid');
-    expect(catalog.resolve({ harness: 'claude', roleId: 'herald', tier: 'top', presetWhy: 'x' } as never).presetChoice).toMatchObject({ preset: 'max', model: 'm-mid' });
+    expect(catalog.resolve({ harness: 'claude', roleId: 'herald', preset: 'max', presetWhy: 'x' } as never).presetChoice).toMatchObject({ preset: 'max', model: 'm-mid' });
     expect(() => catalog.resolve({ harness: 'claude', roleId: 'orchestrator' } as never)).toThrow('coordinatore');
     expect(() => catalog.resolve({ harness: 'claude', roleId: 'reviewer' } as never)).toThrow('Ruolo sconosciuto');
     expect(catalog.resolve({ harness: 'claude', orchestrator: true, model: 'session' } as never).owner).toMatchObject({ id: 'orchestrator', model: 'session' });
@@ -194,8 +194,8 @@ describe('role catalog', () => {
     const sentinel = catalog.resolve({ harness: 'claude', roleId: 'sentinel', title: 'Verifica · test', prompt: 'p' } as never);
     expect(sentinel.request.model).toBe(`m-${own.tier}`);
     expect(sentinel).not.toHaveProperty('modelFrom');
-    // a launch that asks a tier gets that tier's model
-    expect(catalog.resolve({ harness: 'claude', roleId: 'sentinel', title: 'Verifica · x', tier: 'top' } as never).request.model).toBe('m-top');
+    // a launch cannot ask a tier any more: the card's own tier decides
+    expect(catalog.resolve({ harness: 'claude', roleId: 'sentinel', title: 'Verifica · x', tier: 'top' } as never).request.model).toBe(`m-${own.tier}`);
     // the role's own effort and model are never replaced
     const p = catalog.list().profiles.find(x => x.id === 'sentinel')!;
     catalog.save(edit(p, { effort: 'high' }), 'sentinel');
@@ -274,42 +274,22 @@ describe('default engine (issue #96)', () => {
   });
 });
 
-describe('«Balanced mode» (ADR 0218)', () => {
-  const two = (): AgentModelChoice[] => [...models(), { ...models()[0]!, engine: 'cursor', label: 'Cursor', models: [{ id: 'gpt-5', name: 'GPT-5', efforts: ['low', 'medium'] }] }];
-  const mk = (list: () => AgentModelChoice[]) => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-catalog-')); roots.push(dir);
-    return new AgentCatalogService({ userData: dir, models: list, tierModel: (_e, tier) => (tier === 'top' ? 'm-top' : 'm-mid'),
-      tierModels: (e, tier) => TIERS[e]?.[tier] ?? [] });
-  };
-  // every model of a tier, the tier's model first: a second «top» model and none for «light» on Cursor
-  const TIERS: Record<string, Record<string, string[]>> = { claude: { light: ['m-light'], mid: ['m-mid'], top: ['m-top', 'm-top2'] }, cursor: { mid: ['cursor-mid', 'gpt-5'] } };
-  // since ADR 0336 a pick is one of the role's presets up to the one chosen for the task, on the role's one engine
-  it('a pick is only one of the role\'s presets up to the one chosen: not a model off the card, not a higher preset', () => {
-    const catalog = mk(() => two().map(m => m.engine === 'claude' ? { ...m, models: [...m.models, { id: 'm-light', name: 'Light' }, { id: 'outside', name: 'Out' }] } : m));
-    const h = catalog.list().profiles.find(p => p.id === 'herald')!;
-    catalog.save(edit(h, { presets: { min: { model: 'm-light' }, max: { model: 'm-top' } } }), 'herald');
-    const herald = (engine: string, model: string, preset?: string) => catalog.resolve({ harness: 'claude', roleId: 'herald', ...(preset ? { preset, presetWhy: 'x' } : {}), balancedRoute: { engine, model, pool: engine } } as never);
-    expect(() => herald('claude', 'outside')).toThrow(/outside non è un preset fino a base/);
-    expect(() => herald('claude', 'm-top')).toThrow(/m-top non è un preset fino a base/);
-    expect(herald('claude', 'm-light').presetChoice).toMatchObject({ preset: 'min', model: 'm-light', asked: 'base' });
-    expect(herald('claude', 'm-top', 'max').request).toMatchObject({ harness: 'claude', model: 'm-top' });
-  });
-  it('a pick on another engine is refused: one engine per role', () => {
-    const catalog = mk(two);
-    expect(() => catalog.resolve({ harness: 'claude', roleId: 'scout', balancedRoute: { engine: 'cursor', model: 'gpt-5', pool: 'cursor' } } as never)).toThrow(/gpt-5 su cursor è un altro motore/);
-  });
-  it('a pick of a preset keeps the card\'s engine and tools, with the preset\'s model and effort', () => {
-    const catalog = mk(two);
-    const plain = catalog.resolve({ harness: 'claude', roleId: 'scout' } as never);
-    const r = catalog.resolve({ harness: 'claude', roleId: 'scout', balancedRoute: { engine: 'claude', model: 'm-mid', effort: 'high', pool: 'claude' } } as never);
-    expect(r.request).toMatchObject({ harness: 'claude', model: 'm-mid', effort: 'high' });
-    expect('balancedRoute' in r.request).toBe(false);
-    expect(r.owner).toMatchObject({ engine: 'claude', model: 'm-mid' });
-    expect(r.policy).toEqual(plain.policy);
-  });
-  it('a pick on an engine switched off is ignored: the card decides', () => {
-    const catalog = mk(() => two().map(m => m.engine === 'cursor' ? { ...m, enabled: false } : m));
-    const r = catalog.resolve({ harness: 'claude', roleId: 'scout', balancedRoute: { engine: 'cursor', model: 'gpt-5', pool: 'cursor' } } as never);
-    expect(r.request).toMatchObject({ harness: 'claude', model: 'm-mid' });
+describe('Code Mode and Fast on the role card (2026-11-23)', () => {
+  it('saves per role, never on the Orchestrator, and launchFlags reads them; an omitted field keeps the stored value', () => {
+    const { catalog } = setup();
+    const scout = catalog.list().profiles.find(p => p.id === 'scout')!;
+    expect(catalog.launchFlags('scout')).toEqual({ codeMode: false, fast: false });
+    const on = catalog.save(edit(scout, { codeMode: true, fast: true }), 'scout');
+    expect(on).toMatchObject({ codeMode: true, fast: true, version: 1 });
+    expect(catalog.launchFlags('scout')).toEqual({ codeMode: true, fast: true });
+    // a save that does not name them (another field of the card) keeps them
+    catalog.save(edit(on, { maxContext: 100_000 }), 'scout');
+    expect(catalog.launchFlags('scout')).toEqual({ codeMode: true, fast: true });
+    catalog.save(edit(catalog.list().profiles.find(p => p.id === 'scout')!, { codeMode: false }), 'scout');
+    expect(catalog.launchFlags('scout').codeMode).toBe(false);
+    const orch = catalog.list().profiles.find(p => p.id === 'orchestrator')!;
+    expect(() => catalog.save(edit(orch, { codeMode: true }), 'orchestrator')).toThrow(/Orchestrator/);
+    expect(() => catalog.save(edit(scout, { codeMode: 'yes' as never }), 'scout')).toThrow(/Code Mode/);
+    expect(catalog.launchFlags(undefined)).toEqual({ codeMode: false, fast: false });
   });
 });

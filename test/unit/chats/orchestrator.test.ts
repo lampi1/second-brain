@@ -131,20 +131,19 @@ describe('OrchestratorService', () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 
-  it('ensure routes like an Orchestrator: «Chat aperte dall’Orchestrator» gives model and effort, a named model beats it (ADR 0210)', async () => {
+  it('ensure routes like an Orchestrator: no Settings model (its card gives it, at resolve), a named model beats the default (ADR 0210)', async () => {
     const make = () => {
       const made: Record<string, unknown>[] = [];
       const create = async (req: Record<string, unknown>) => { made.push(req); return summary({ id: `o${made.length}`, isOrchestrator: true }); };
       const s = new OrchestratorService({ list: () => [], create } as unknown as Pick<ChatService, 'list' | 'create'>, () => 'C:/brain', {
         route: r => routeChat(r, DEMO_REGISTRY, null, 7), engineOn: () => true, agentsMayOpen: () => true,
-        orchestratorChats: () => ({ harness: 'claude', claudeModel: 'claude-opus-5-5', cursorModel: '', claudeEffort: 'medium', cursorReasoning: 'medium', cursorFast: false }),
       });
       return { made, s };
     };
     const a = make();
     await a.s.ensure({ harness: 'claude' });
-    expect(a.made[0]).toMatchObject({ harness: 'claude', model: 'claude-opus-5-5', effort: 'medium', orchestrator: true, title: 'Orchestrator', cwd: 'C:/brain' });
-    expect(a.made[0]!.route).toMatchObject({ kind: 'orchestrator', source: 'default' });
+    expect(a.made[0]).toMatchObject({ harness: 'claude', orchestrator: true, title: 'Orchestrator', cwd: 'C:/brain' });
+    expect(a.made[0]!.route).toMatchObject({ kind: 'orchestrator' });
     const b = make();
     await b.s.ensure({ harness: 'claude', model: 'claude-sonnet-5-5' });
     expect(b.made[0]).toMatchObject({ model: 'claude-sonnet-5-5' });

@@ -1,15 +1,13 @@
-// Impostazioni → Ruoli e deleghe, «Modelli per compito» (ADR 0336): each work role's three presets on its one engine,
-// shown once, then the rows Minimo / Base / Massimo with a model and an effort each. Base is the card's own model and
-// effort (the same ones the card and the Agenti page edit); Minimo and Massimo empty = the same as Base. Each change
-// saves the card at once (agents:save, the main side checks the models and the order by price and its error is shown
-// under the role). A delegation picks one of the three (agent_delegate / agent_assign_task / app_create_chat preset).
-// Mounted by DelegationSettings.tsx; the same rows (RolePresetRows) on a role's own page, Agenti → a role
-// (AgentStudio.tsx, owner 2026-11-23: «lo volevo settabile anche dalla card degli agenti»), there with Annulla after each
-// save and only Base for the Orchestrator. Styles: styles/settings.css (.st-presets).
+// A role's «Modelli per compito» (ADR 0336) on its own page, Agenti → a role (AgentStudio.tsx; the owner, 2026-11-23:
+// the preset is chosen «solo ed esclusivamente dalle card degli agenti oppure che lo setti l'orchestrator, non dalle
+// impostazioni»): its engine, then the rows Minimo / Base / Massimo with a model and an effort each. Base is the card's
+// own model and effort; Minimo and Massimo empty = the same as Base. Each change saves the card at once (agents:save,
+// the main side checks the models and the order by price and its error is shown under the role), with Annulla after
+// it; the Orchestrator shows only Base. A delegation picks one of the three (agent_delegate / agent_assign_task /
+// app_create_chat preset). Styles: styles/settings.css (.st-presets).
 import { useState } from 'react';
 import type { AgentDraft, AgentProfile } from '@shared/agents';
 import { PRESET_IDS, cardPresets, type PresetId, type RolePresets as Presets } from '@shared/model-presets';
-import { isWorkRole } from '@shared/roles';
 import { agentDraftOf } from '../lib/agent-drafts';
 import { EFFORTS, effortLabel } from '../lib/format';
 import { saveAgent, useAgents } from '../store/agents';
@@ -19,17 +17,6 @@ import { t } from '../i18n';
 import '../styles/settings.css';
 
 const LABEL = { min: 'delegation.preset.min', base: 'delegation.preset.base', max: 'delegation.preset.max' } as const satisfies Record<PresetId, string>;
-
-export function RolePresets() {
-  const { catalog } = useAgents();
-  if (!catalog) return null;
-  const roles = catalog.profiles.filter(p => isWorkRole(p.id));
-  if (!roles.length) return null;
-  return <div className="st-row st-row-block" data-testid="st-presets">
-    <div className="st-text"><b className="st-title">{t('delegation.presets')}</b><p className="st-desc">{t('delegation.presets.hint')}</p></div>
-    <div className="st-presets">{roles.map(p => <RolePresetRows key={p.id} profile={p} />)}</div>
-  </div>;
-}
 
 /** The change a pick makes on the card: Base is the card's model and effort, Minimo and Massimo its presets (empty =
  *  dropped, the same as Base; `{}` clears the last one; Base's effort null = the engine default). */

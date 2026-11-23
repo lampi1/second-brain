@@ -27,6 +27,9 @@ import type { Rec } from './manager-types';
 import { PREWARM_UNUSED_MS, workBehind, subagentGateFor } from './manager-helpers';
 import { ManagerPersistence } from './manager-persistence';
 
+/** The catalog role a chat runs as (its card's launch switches: Code Mode, Cursor's fast); undefined = no role. */
+const catalogRole = (s: Rec['s']): string | undefined => s.agent?.source === 'catalog' ? s.agent.id : undefined;
+
 /** A work chat that delivered its result releases its idle engine after this long (#360). */
 export const DELIVERED_RELEASE_MS = 5 * 60_000;
 
@@ -330,7 +333,8 @@ export abstract class ManagerSessions extends ManagerPersistence {
     r.children = new AgentChildrenReducer(past);
     r.children.coverage(engine.kind === 'api' ? 'complete' : 'unknown');
     r.s.agentChildren = r.children.snapshot();
-    r.codeMode = codeModeFor(r.s, this.opts.codeMode?.() === true);
+    // per role (its card, ADR 0331 since 2026-11-23): a chat with no catalog role runs without it
+    r.codeMode = codeModeFor(r.s, this.opts.codeMode?.(catalogRole(r.s)) === true);
     const extraArgs = this.extraArgsFor(r.s.harness, chatId, r);
     // kept on the chat too: run_code's internal calls pass the same hook (decideFor, ADR 0331)
     const preToolUse = engine.kind !== 'claude' ? null : r.s.isOrchestrator ? new TurnToolBudget() : subagentGateFor(r.policy?.tools, r.s.cwd).preToolUse ?? null;
@@ -408,7 +412,7 @@ export abstract class ManagerSessions extends ManagerPersistence {
     return sessionFor(engineOrThrow(harness), opts, sink, {
       userData: this.opts.userData, mcpUrl: this.opts.mcpUrlFor?.(opts.chatId) ?? null, appMcpUrl: this.appMcpFor(r),
       extMcp: this.opts.extMcp?.(opts.chatId).servers ?? [],
-      showReplay: !r?.items.length, acpModelConfig: this.acpModelConfig(), key: () => this.opts.keyFor?.(harness) ?? null, brainRoot: this.opts.brainRoot?.() ?? null,
+      showReplay: !r?.items.length, acpModelConfig: this.acpModelConfig(r ? catalogRole(r.s) : undefined), key: () => this.opts.keyFor?.(harness) ?? null, brainRoot: this.opts.brainRoot?.() ?? null,
       ...(override ? { path: override } : {}), ...(this.opts.appVersion ? { appVersion: this.opts.appVersion } : {}),
     });
   }
@@ -500,8 +504,8 @@ export abstract class ManagerSessions extends ManagerPersistence {
     try { return this.opts.compactWindowTokens?.() ?? 0; } catch { return 0; }
   }
 
-  private acpModelConfig(): { reasoning: CursorReasoning | ''; fast: boolean } | null {
-    try { return this.opts.acpModelConfig?.() ?? null; } catch (e) { log.warn('chats', 'ACP model settings not read', { data: errText(e) }); return null; }
+  private acpModelConfig(roleId: string | undefined): { reasoning: CursorReasoning | ''; fast: boolean } | null {
+    try { return this.opts.acpModelConfig?.(roleId) ?? null; } catch (e) { log.warn('chats', 'ACP model settings not read', { data: errText(e) }); return null; }
   }
 
   // ---- implemented in a later layer (ADR 0200: manager.ts and its manager-*.ts layers)

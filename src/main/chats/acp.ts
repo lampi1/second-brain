@@ -47,10 +47,9 @@
 // engineAllowed). Used by manager.ts through the HarnessSession interface (built by engines/sessions.ts).
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import fs from 'node:fs';
-import { acpAppTool, APP_UI_TOOLS, appEndpoint, CODE_MODE_RULE, cursorAppPermissions } from './app-tool-approval';
-
-/** Code Mode on ACP engines (Cursor, Antigravity; ADR 0331): native tools cannot be hidden, so the first turn's context asks to prefer run_code. */
-const CODE_MODE_HINT = 'Code Mode is on in this chat: prefer the second-brain tool run_code to your native file, shell and search tools. Write one JavaScript script that calls tools.Bash/Read/Write/Edit/Grep/Glob and the other tools listed in its schema, batches the calls and returns only what you need. Every call inside it passes the app\'s permission rules; an action only the user runs stops the script: then write the exact command in a fenced code block.';
+import { acpAppTool, APP_UI_TOOLS, appEndpoint, CODE_MODE_HINT, CODE_MODE_RULE, codeModeRefuses, cursorAppPermissions } from './app-tool-approval';
+// Code Mode on ACP engines (Cursor, Antigravity, OpenCode; ADR 0331): native tools cannot be hidden, so the first turn's
+// context asks to prefer run_code (CODE_MODE_HINT) and the app refuses their permission requests (codeModeRefuses)
 import os from 'node:os';
 import path from 'node:path';
 import { providerWrite } from '../agent-runtime/transport-timing';
@@ -115,8 +114,9 @@ export interface AcpOptions extends SessionOptions {
   /** with subagentHooks, the hooks file those commands come from: default ~/.cursor/hooks.json, none under tests
    *  unless given */
   hooksFile?: string | null;
-  /** Cursor only: the user's reasoning and fast for every Cursor chat (settings orchestratorChats.cursorReasoning/cursorFast);
-   *  params the chat's own model id pins in brackets ("gpt-5.6-sol[reasoning=high]") win */
+  /** Cursor only: the chat's role card's fast (AgentProfile.fast) and a fallback reasoning (none since the Settings'
+   *  orchestratorChats.cursorReasoning moved onto the Orchestrator's card as its effort, 2026-11-23); params the chat's
+   *  own model id pins in brackets ("gpt-5.6-sol[reasoning=high]") win */
   modelConfig?: { reasoning: CursorReasoning | ''; fast: boolean } | null;
   /** Cursor only: price the prompt's token usage with Cursor's list prices (cursor-prices.ts). Default false: the
    *  cost is only what the engine reports (usage_update.cost) */
@@ -1456,6 +1456,12 @@ export class AcpSession implements HarnessSession {
       if (kindName === 'Tool' && once && acpAppTool(tool, this.opts.mcpUrl, this.opts.appMcpUrl, !!this.opts.readOnly, !!this.opts.codeMode)) {
         log.info('chats', 'acp app tool allowed', { chat: this.opts.chatId, data: { engine: this.engine, tool } });
         return this.respond(id, { outcome: { outcome: 'selected', optionId: once.optionId } });
+      }
+      // Code Mode (ADR 0331): a native file, shell or search tool is refused; the hint (CODE_MODE_HINT) names run_code
+      const reject = options.find(x => x.kind === 'reject_once');
+      if (this.opts.codeMode && !this.opts.readOnly && reject && codeModeRefuses(kindName)) {
+        log.info('chats', 'acp native tool refused in code mode', { chat: this.opts.chatId, data: { engine: this.engine, tool: kindName } });
+        return this.respond(id, { outcome: { outcome: 'selected', optionId: reject.optionId } });
       }
       const view = permissionView(tc, known, kindName);
       this.asks.set(rid, { rpcId: id, method, options });

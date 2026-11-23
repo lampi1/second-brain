@@ -36,7 +36,7 @@ export interface EngineContext {
   /** show the past an ACP engine replays when a session is loaded (a chat restored after a restart has no items) */
   showReplay: boolean;
   appVersion?: string;
-  /** ACP model options (reasoning, fast) the user chose in Settings */
+  /** Cursor's model options for this chat: its role card's fast (AgentProfile.fast); reasoning = a fallback, '' = none */
   acpModelConfig: { reasoning: CursorReasoning | ''; fast: boolean } | null;
   /** the user's API key for this engine, read when needed; null = none (the engine uses its own login) */
   key: () => string | null;
@@ -84,7 +84,7 @@ function startSession(engine: EngineDef, opts: SessionOptions, sink: SessionSink
       const command = engine.command ?? engine.id;
       const key = engine.keyEnv ? boundKey() : null;
       const agentPolicy = opts.toolPolicy || opts.ceiling ? { tools: opts.toolPolicy ?? null, ceiling: opts.ceiling ?? null } : null;
-      const launch = codexLaunch({ cwd: opts.cwd, mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, extMcp: ctx.extMcp ?? [], readOnly: opts.readOnly, chatId: opts.chatId, agentPolicy });
+      const launch = codexLaunch({ cwd: opts.cwd, mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, extMcp: ctx.extMcp ?? [], readOnly: opts.readOnly, chatId: opts.chatId, agentPolicy, ...(opts.codeMode ? { codeMode: true } : {}) });
       return prepared({ kind: 'codex', options: {
         ...opts, mcpConfig: null, engineId: engine.id, label: engine.label, command, args: engine.args ?? ['app-server'],
         configArgs: launch.configArgs, developerInstructions: launch.developerInstructions, skillRoots: opts.readOnly ? [] : opts.agentAssets ? [opts.agentAssets.skillRoot] : launch.skillRoots,

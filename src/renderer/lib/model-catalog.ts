@@ -3,7 +3,7 @@
 // createAgentCatalog, the same list a role card may hold), grouped by engine with its state (ready, empty, off, not
 // selectable, with the reason), each model with its effort levels and context window, the chosen id kept even when the
 // engine no longer lists it. The first row of a group is its default: «Predefinito della CLI» for a chat (the engine's
-// own model), «Modello del livello» for a role (resolved at launch from the role's tier): two different things, never
+// own model), «Predefinito del ruolo» for a role (resolved at launch from the brain's model registry): two things, never
 // the same label. Pure functions, no React: ModelPicker.tsx renders them, test/unit/model-catalog.test.ts checks them.
 import type { Effort, Harness } from '@shared/contract';
 import type { AgentModelChoice } from '@shared/agents';

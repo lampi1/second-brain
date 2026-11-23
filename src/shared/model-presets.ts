@@ -5,10 +5,9 @@
 // presets, no reason = Base (with a warning), and never a preset priced above the delegator's own model (one price per
 // token from the one price table, harness/models.json, across engines too): above it the highest allowed preset, said
 // in a warning. No automatic escalation: a failed task is the delegator's decision. Pure: used by main
-// (agents/catalog.ts resolve and save, agents/balanced-mode.ts, agents/delegation.ts, appctl/tools.ts), the renderer
+// (agents/catalog.ts resolve and save, agents/delegation.ts, appctl/tools.ts), the renderer
 // (RolePresets.tsx) and the tests (test/unit/agents/model-presets.test.ts).
 import type { Effort } from './contract';
-import { tierRank, type ModelTier } from './roles';
 
 export const PRESET_IDS = ['min', 'base', 'max'] as const;
 export type PresetId = (typeof PRESET_IDS)[number];
@@ -67,13 +66,9 @@ export function presetOrderProblem(p: FullPresets, price: UnitPrice): string | n
 /** What a delegation asks: one of the three presets, why in one line, and a short label of the task. */
 export interface PresetAsk { preset?: PresetId; presetWhy?: string; taskKind?: string }
 
-/** The old request field `tier` (light / mid / top) as a preset: below the card's tier = Minimo, the same = Base, above
- *  = Massimo. Kept so older prompts still work; `preset` is the field now. */
-export const presetOfTier = (asked: ModelTier, card: ModelTier): PresetId => tierRank(asked) < tierRank(card) ? 'min' : tierRank(asked) > tierRank(card) ? 'max' : 'base';
-
-/** The preset fields of a tool call, checked: only the three presets, presetWhy one line, taskKind a short label. The
- *  old `tier` is read as its preset (presetOfTier) when no preset is given; both together are refused. Throws. */
-export function presetAskOf(a: Record<string, unknown>, where = '', tierAlias?: { tier: unknown; card: ModelTier }): PresetAsk {
+/** The preset fields of a tool call, checked: only the three presets, presetWhy one line, taskKind a short label.
+ *  The old `tier` field is gone (owner, 2026-11-23): the callers refuse it. Throws. */
+export function presetAskOf(a: Record<string, unknown>, where = ''): PresetAsk {
   const at = (k: string) => where ? `${where}.${k}` : k;
   if (a.preset !== undefined && !isPresetId(a.preset)) throw new Error(`${at('preset')}: one of ${PRESET_IDS.join(' | ')} (the role's card presets; no other model).`);
   const oneLine = (v: unknown, k: string, max: number): string | undefined => {
@@ -82,12 +77,7 @@ export function presetAskOf(a: Record<string, unknown>, where = '', tierAlias?: 
     return v.trim() || undefined;
   };
   const presetWhy = oneLine(a.presetWhy, 'presetWhy', PRESET_WHY_MAX), taskKind = oneLine(a.taskKind, 'taskKind', TASK_KIND_MAX);
-  let preset = a.preset as PresetId | undefined;
-  if (tierAlias && tierAlias.tier !== undefined) {
-    if (preset !== undefined) throw new Error(`${at('tier')} and ${at('preset')}: pass only preset (tier is its old name).`);
-    if (tierAlias.tier !== 'light' && tierAlias.tier !== 'mid' && tierAlias.tier !== 'top') throw new Error(`${at('tier')}: light | mid | top (old name of preset).`);
-    preset = presetOfTier(tierAlias.tier, tierAlias.card);
-  }
+  const preset = a.preset as PresetId | undefined;
   return { ...(preset ? { preset } : {}), ...(presetWhy ? { presetWhy } : {}), ...(taskKind ? { taskKind } : {}) };
 }
 
@@ -159,18 +149,6 @@ export function choosePreset(a: { presets: FullPresets; ask: PresetAsk; delegato
   return { preset, model: p.model, ...(p.effort ? { effort: p.effort } : {}), ...(asked !== preset ? { asked } : {}),
     ...(a.ask.presetWhy ? { presetWhy: a.ask.presetWhy } : {}), ...(a.ask.taskKind ? { taskKind: a.ask.taskKind } : {}),
     ...(a.delegator?.role ? { delegatorRole: a.delegator.role } : {}), warnings };
-}
-
-/** The presets a pick may come from (Balanced mode, the user's own model): Minimo up to `upTo`, in that order. */
-export const presetsUpTo = (upTo: PresetId): PresetId[] => PRESET_IDS.slice(0, PRESET_IDS.indexOf(upTo) + 1);
-
-/** The effort a Balanced pick of `model` runs with as preset `id` (ADR 0336): the preset's own effort; a preset
- *  without one takes the asked effort, unless that is the effort of a preset outside `ids` on the same model (presets may
- *  differ only by effort: a pick recorded as Base never runs with Massimo's effort). */
-export function pickedEffort(p: FullPresets, id: PresetId, model: string, asked: Effort | undefined, ids: readonly PresetId[]): Effort | undefined {
-  if (p[id].effort) return p[id].effort;
-  if (!asked) return undefined;
-  return PRESET_IDS.some(x => !ids.includes(x) && p[x].model === model && p[x].effort === asked) ? undefined : asked;
 }
 
 /** The preset a named model (and effort) is, among `ids`: the exact effort first, else the first with that model.

@@ -82,11 +82,11 @@ describe('resolve and presetChoice: the guards on a real card', () => {
     expect(capped.warnings[0]).toMatch(/costs more than your own model/);
     expect(c.presetChoice('scout', { preset: 'max', presetWhy: 'x' }, { model: 'gpt-x' })).toMatchObject({ preset: 'min', model: 'm-low', effort: 'low' });
   });
-  it('the old tier is read as a preset relative to the card', () => {
+  it('an old tier field is no preset any more: the launch runs on Base (2026-11-23)', () => {
     const c = ready();
-    const r = c.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout', tier: 'light' });
-    expect(r.presetChoice?.preset).toBe('base');
-    expect(r.presetChoice?.asked).toBe('min');
+    const r = c.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout', tier: 'light' } as never);
+    expect(r.presetChoice).toMatchObject({ preset: 'base' });
+    expect(r.presetChoice?.asked).toBeUndefined();
   });
 });
 
@@ -99,10 +99,10 @@ describe('Sentinel fixes on the presets (ADR 0336)', () => {
     expect(p.effort).toBeUndefined();
     expect(role(c).effort).toBeUndefined();
   });
-  it('a Balanced pick recorded as Base never runs with Massimo\'s effort when the presets differ only by effort', () => {
+  it('Base never runs with Massimo\'s effort when the presets differ only by effort', () => {
     const c = make(); onClaude(c);
     c.save(edit(role(c), { effort: 'medium', presets: { min: { model: 'm-low', effort: 'low' }, max: { model: 'm-mid', effort: 'high' } } }), 'scout');
-    const r = c.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout', preset: 'base', balancedRoute: { engine: 'claude', model: 'm-mid', effort: 'high', pool: 'claude' } } as never);
+    const r = c.resolve({ harness: 'claude', cwd: '/x', roleId: 'scout', preset: 'base' } as never);
     expect(r.presetChoice).toMatchObject({ preset: 'base', effort: 'medium' });
     expect(r.request.effort).toBe('medium');
   });

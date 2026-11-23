@@ -17,6 +17,7 @@ import { ENGINE_ID, REMOVED_ENGINES } from '../engines/registry';
 import { domainsOfConfig } from './domains';
 import { samePolicyPath } from './adapters/codex-policy';
 import { log } from '../log';
+import { hasLegacyKeys, legacyOf, writeLegacy } from '../agents/legacy-cards';
 
 export { validate, schema };
 export const DEFAULTS: Settings = defaults();
@@ -36,7 +37,7 @@ export function fromSaved(raw: unknown): Settings {
   let s = defaults();
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return s;
   for (const d of schema()) {
-    if (d.key === 'mute.*' || /^(engineOn|engines|modelTiers)\./.test(d.key)) continue;
+    if (d.key === 'mute.*' || /^(engineOn|engines)\./.test(d.key)) continue;
     const v = d.key.split('.').reduce<unknown>((o, p) => (o && typeof o === 'object' ? (o as Record<string, unknown>)[p] : undefined), raw);
     if (v === undefined) continue;
     const c = validate(d.key, v);
@@ -63,12 +64,6 @@ export function fromSaved(raw: unknown): Settings {
       const c = validate(`${group}.${id}`, v);
       if (c.ok) s = setAt(s, c.key, c.value);
     }
-  }
-  // the tier models of every engine the file names, also one the brain defines later
-  const tiers = (raw as { modelTiers?: unknown }).modelTiers;
-  if (tiers && typeof tiers === 'object' && !Array.isArray(tiers)) for (const [id, o] of Object.entries(tiers)) {
-    if (REMOVED_ENGINES.has(id) || !o || typeof o !== 'object' || Array.isArray(o)) continue;
-    for (const [tier, v] of Object.entries(o)) { const c = validate(`modelTiers.${id}.${tier}`, v); if (c.ok && c.value) s = setAt(s, c.key, c.value); }
   }
   // the Orchestrator's engine, also one the brain defines later (an unknown one is refused when a chat starts on it)
   const orchestratorEngine = (raw as { orchestratorChats?: { harness?: unknown } }).orchestratorChats?.harness;
@@ -123,6 +118,7 @@ export class ConfigStore {
     this.loadChanges();
     this.migrateView(raw);
     this.migrateRetired(raw);
+    this.migrateModelSettings(raw);
     this.migrateTasks(raw);
     this.migrateMessaging(raw);
     this.migrateCompactWindow(raw !== undefined && raw !== null);
@@ -150,6 +146,21 @@ export class ConfigStore {
       log.info('settings', 'retired settings removed', { data: { keys: RETIRED_KEYS.filter(k => k in raw) } });
     } catch (e) {
       log.warn('settings', 'retired settings removal not saved', { cause: e instanceof Error ? e.message : String(e), hint: 'the old values are ignored; the next start retries' });
+    }
+  }
+
+  /** The model Settings moved onto the role cards (2026-11-23: modelTiers.*, codeMode, balancedMode and the
+   *  Orchestrator's models in orchestratorChats): their values are kept in userData/legacy-model-settings.json for the
+   *  cards' one-off move (agents/legacy-cards.ts, applied by wiring.ts), then dropped from config.json. */
+  private migrateModelSettings(raw: unknown): void {
+    if (!hasLegacyKeys(raw)) return;
+    try {
+      const legacy = legacyOf(raw);
+      if (legacy) writeLegacy(this.userData, legacy);
+      this.save(this.saved);
+      log.info('settings', 'model settings moved to the role cards', { data: { codeMode: legacy?.codeMode === true, tiers: Object.keys(legacy?.modelTiers ?? {}), orchestrator: !!legacy?.orchestrator } });
+    } catch (e) {
+      log.warn('settings', 'model settings move not saved', { cause: e instanceof Error ? e.message : String(e), hint: 'the old keys stay in config.json; the next start retries' });
     }
   }
 

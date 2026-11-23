@@ -4,14 +4,14 @@
 import { app } from 'electron';
 import type { CliStatus, Harness, ModelRegistry, RunInfo, SeenModel } from '../shared/contract';
 import { isNativeQuestion, isYesNo } from '../shared/yes-no';
-import type { AgentModelChoice } from '../shared/agents';
+import { codeModeLevel, type AgentModelChoice } from '../shared/agents';
 import { modelRow } from './brain/routing';
 import { templateRoot } from './rules/tools';
 import { SEND_MODE_RULE } from '../shared/newchat';
 import { engineInfos, engineOf } from './engines/registry';
 import { withApiModels } from './engines/sessions';
 import { AgentCatalogService } from './agents/catalog';
-import { tierCandidates, tierModel } from './agents/model-tier';
+import { tierModel } from './agents/model-tier';
 import { tokenPriceOf, unitPriceOf } from './agents/list-price';
 import { CATALOG_GUIDANCE } from './agents/discovery';
 import { engineOn } from './engines/policy';
@@ -254,15 +254,15 @@ function templateRegistry(): ModelRegistry | null {
 export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: EnginesApi, cli: () => Record<Harness, CliStatus> | null, onCustomized?: () => void): AgentCatalogService {
   return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}),
     price: unitPriceOf(tokenPriceOf(() => brain.modelRegistry())),
-    tierModel: (engine, tier) => tierModel(engine, tier, brain.modelRegistry(), brain.settings().modelTiers),
-    tierModels: (engine, tier) => tierCandidates(engine, tier, brain.modelRegistry(), brain.settings().modelTiers),
+    tierModel: (engine, tier) => tierModel(engine, tier, brain.modelRegistry()),
     models: () => {
       const seen = withApiModels(brain.modelsSeen()), reg = brain.modelRegistry();
       return engineInfos().map(e => ({ engine: e.id, label: e.label, enabled: engineOn(brain.settings(), e.id), trusted: e.trusted, effort: e.caps.effort, maxContext: e.kind === 'claude',
         models: (seen[e.id]?.ids ?? []).map(m => withModelFacts(m, reg)), source: seen[e.id]?.ids.length ? seen[e.id]!.at > 0 ? 'observed' as const : 'registry' as const : 'unknown' as const,
         installed: e.kind === 'api' ? null : cli()?.[e.id]?.found ?? null, authenticated: e.kind === 'api' ? engines.hasKey(e.id) : cli()?.[e.id]?.loggedIn ?? null,
         defaultModel: e.kind !== 'api', modelSelectable: e.kind !== 'acp' || !!engineOf(e.id)?.modelFlag || !!engineOf(e.id)?.modelOption,
-        modelReason: e.kind === 'acp' && !engineOf(e.id)?.modelFlag && !engineOf(e.id)?.modelOption ? 'Questo adattatore non può applicare una scelta di modello. È disponibile il default CLI.' : null }));
+        modelReason: e.kind === 'acp' && !engineOf(e.id)?.modelFlag && !engineOf(e.id)?.modelOption ? 'Questo adattatore non può applicare una scelta di modello. È disponibile il default CLI.' : null,
+        codeMode: codeModeLevel(e.kind) }));
     },
     preferredEngine: () => brain.settings().orchestratorChats.harness ?? null,
     emit: catalog => ctx.emitter.emit('agents:changed', catalog),

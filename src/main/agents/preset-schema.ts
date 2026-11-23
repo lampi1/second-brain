@@ -5,7 +5,7 @@
 import { PRESET_IDS, PRESET_WHY_MAX, TASK_KIND_MAX } from '../../shared/model-presets';
 
 export const PRESET_SCHEMA = {
-  preset: { type: 'string', enum: [...PRESET_IDS], description: 'optional: which of the role card\'s three presets (agent_catalog presets) this task runs on: min for a known fact or a simple text, base for normal work, max for hard work. Omitted = base. Never above your own model by price: above it the highest preset that is not is used (said in warnings). No other model.' },
-  presetWhy: { type: 'string', maxLength: PRESET_WHY_MAX, description: 'why this preset, one line; required for min or max (without it base is used, with a warning)' },
+  preset: { type: 'string', enum: [...PRESET_IDS], description: 'one of the role card\'s three presets; omitted = base; how to choose: app_guide topic «model choice»' },
+  presetWhy: { type: 'string', maxLength: PRESET_WHY_MAX, description: 'why this preset, one line; needed for min or max (else base)' },
   taskKind: { type: 'string', maxLength: TASK_KIND_MAX, description: 'optional short label of the task (e.g. "log search", "brain note", "refactoring"), kept on the run record' },
 } as const;

@@ -19,7 +19,8 @@ import fs from 'node:fs';
 import type { CodexApproval, CodexSandbox } from '../../chats/codex';
 import { codexPolicyFor } from './codex-policy';
 import type { AgentPolicy } from '../../agents/tool-policy';
-import { APP_CHAT_TOOLS, appEndpoint } from '../../chats/app-tool-approval';
+import { APP_CHAT_TOOLS, appEndpoint, CODE_MODE_HINT } from '../../chats/app-tool-approval';
+import { RUN_CODE } from '../../code-mode/policy';
 
 export interface CodexLaunch {
   configArgs: string[];
@@ -43,18 +44,23 @@ export interface CodexLaunchInput {
   chatId?: string;
   /** the agent's tool policy and ceiling (A2): they only narrow the folder's policy */
   agentPolicy?: AgentPolicy | null;
+  /** Code Mode (ADR 0331, per role): run_code approved like the mail and delegation tools, and the hint in the
+   *  developer instructions */
+  codeMode?: boolean;
 }
 
 /** A value safe on a cmd.exe command line and in a -c override (chats/cli.ts cliArgv's plain-argument rule). */
 const PLAIN = /^[\w.:@/=[\],-]+$/;
 
 // Match Claude: every app-control tool, but only mail/list and delegation on the browser server.
-function attachMcp(config: string[], server: 'second-brain' | 'second-brain-app', raw: string | null): void {
+function attachMcp(config: string[], server: 'second-brain' | 'second-brain-app', raw: string | null, codeMode = false): void {
   if (!raw || !PLAIN.test(raw)) return;
   config.push(`mcp_servers.${server}.url=${raw}`);
   if (!appEndpoint(raw)) return;
   config.push(`mcp_servers.${server}.default_tools_approval_mode=${server === 'second-brain-app' ? 'approve' : 'prompt'}`);
-  if (server === 'second-brain') for (const tool of APP_CHAT_TOOLS) config.push(`mcp_servers.${server}.tools.${tool}.approval_mode=approve`);
+  if (server !== 'second-brain') return;
+  // Code Mode: run_code asks nothing of the engine, each of its inner calls passes the app's own gates (as on Claude)
+  for (const tool of [...APP_CHAT_TOOLS, ...(codeMode ? [RUN_CODE] : [])]) config.push(`mcp_servers.${server}.tools.${tool}.approval_mode=approve`);
 }
 
 /** An app-managed server through the gateway (ADR 0086): only its URL, which carries no secret (the gateway adds the
@@ -88,7 +94,7 @@ export function codexLaunch(i: CodexLaunchInput): CodexLaunch {
   if (approval === 'never') c.push('sandbox_workspace_write.exclude_tmpdir_env_var=true', 'sandbox_workspace_write.exclude_slash_tmp=true', 'sandbox_workspace_write.network_access=false');
   // a read-only run (the comparison's side b) gets no MCP: it must change nothing, as Claude's read-only run
   if (!i.readOnly) {
-    attachMcp(c, 'second-brain', i.mcpUrl);
+    attachMcp(c, 'second-brain', i.mcpUrl, i.codeMode === true);
     attachMcp(c, 'second-brain-app', i.appMcpUrl);
     for (const ext of i.extMcp ?? []) attachExt(c, ext.name, ext.url);
   }
@@ -96,7 +102,7 @@ export function codexLaunch(i: CodexLaunchInput): CodexLaunch {
   return {
     configArgs: c.flatMap(v => ['-c', v]),
     approvalPolicy: approval, sandbox,
-    developerInstructions: brain ? codexInstructions(domains, i.readOnly === true) : null,
+    developerInstructions: [brain ? codexInstructions(domains, i.readOnly === true) : null, i.codeMode && !i.readOnly && i.mcpUrl ? CODE_MODE_HINT : null].filter(Boolean).join('\n\n') || null,
     // with the app's skills of each fresh brain (rules.appRules): the topic rules are skills there since #366
     skillRoots: brain && !i.readOnly ? [...skillDirs(domains, ['.agents/skills', '.claude/skills']), ...appSkillRoots(domains)] : [],
   };

@@ -94,12 +94,15 @@ describe('Code Mode on the real Claude spawn path (role allowlist + codeMode)', 
     expect(sOff.brainContext()[0]?.text).not.toMatch(/run_code/);
   });
 
-  it('Codex, OpenCode: no Code Mode (codeModeFor), so no run_code and no Code Mode flag', async () => {
+  it('Codex, OpenCode: Code Mode at Cursor\'s level (2026-11-23): run_code shown, the flag on, no Claude-only flags; off = none', async () => {
     for (const h of ['codex', 'opencode'] as const) {
-      const { m, id, opts } = await roleChat(true, h as never);
-      expect(m.chatToolShown(id, 'run_code')).toBe(false);
-      expect(opts.codeMode).toBeUndefined();
-      expect((opts.extraArgs ?? []).join(' ')).not.toMatch(/run_code|disallowedTools|append-system-prompt/);
+      const on = await roleChat(true, h as never);
+      expect(on.m.chatToolShown(on.id, 'run_code')).toBe(true);
+      expect(on.opts.codeMode).toBe(true);
+      expect((on.opts.extraArgs ?? []).join(' ')).not.toMatch(/disallowedTools|append-system-prompt/);
+      const off = await roleChat(false, h as never);
+      expect(off.m.chatToolShown(off.id, 'run_code')).toBe(false);
+      expect(off.opts.codeMode).toBeUndefined();
     }
   });
 

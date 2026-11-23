@@ -4,13 +4,11 @@
 // agents:save, the active version updated in place: ADR 0284), the context window in its own list, saved at once and stopping at
 // the model's window; the line under them says what a run really gets when the model lacks the effort asked
 // (shared/agents.ts effortOn: the same rule the launch applies). Used by AgentCatalogCard. Styles:
-// styles/agent-catalog.css (.catalog-model). With «Balanced mode» on the button reads «Balanced» (ADR 0218).
+// styles/agent-catalog.css (.catalog-model).
 import { useRef, useState } from 'react';
 import { MAX_CONTEXT_RANGE, effortOn, type AgentProfile } from '@shared/agents';
-import { isWorkRole } from '@shared/roles';
 import { agentDraftOf } from '../lib/agent-drafts';
 import { saveAgent, useAgents } from '../store/agents';
-import { useApp } from '../store/store';
 import { Select } from './Select';
 import { HarnessMark } from './Icons';
 import { ModelPicker } from './ModelPicker';
@@ -37,21 +35,17 @@ export function AgentCardModel({ profile }: { profile: AgentProfile }) {
     finally { setBusy(false); }
   };
   const id = profile.id;
-  // «Balanced mode» on (ADR 0218): the delegating agent picks; the card's own choice is kept for when it goes off. Only
-  // work roles: the Orchestrator always runs on its card
-  const balanced = useApp(s => s.settings?.balancedMode === true) && isWorkRole(profile.id);
   return <section className="catalog-model" aria-label={t('studio.model')} data-testid={`catalog-model-${id}`}>
     <h4>{t('agentCard.modelTitle')}</h4>
     {/* engine, model and effort in the shared picker (ModelPicker.tsx): the default of the role's new chats */}
     <div className="catalog-model-row"><span>{t('studio.model')}</span>
       <button ref={anchor} type="button" className="ui-select catalog-model-button" aria-haspopup="dialog" aria-expanded={picker}
         onClick={() => setPicker(o => !o)} data-testid={`catalog-model-pick-${id}`}>
-        {!balanced && <HarnessMark harness={profile.engine} size={13} />}
-        <span className="catalog-model-button-text" data-balanced={balanced || undefined}>{balanced ? t('mp.balanced.card') : t('mp.cardButton', { engine: choice?.label ?? profile.engine,
-          model: [model?.name ?? profile.model ?? t('agentCard.tierModel', { tier: t(`roles.tier.${profile.tier}`) }), profile.effort].filter(Boolean).join(' · ') })}</span>
+        <HarnessMark harness={profile.engine} size={13} />
+        <span className="catalog-model-button-text">{t('mp.cardButton', { engine: choice?.label ?? profile.engine,
+          model: [model?.name ?? profile.model ?? t('mp.roleDefault'), profile.effort].filter(Boolean).join(' · ') })}</span>
         <span aria-hidden="true">▾</span>
       </button></div>
-    {balanced && <small className="catalog-model-note" data-testid={`catalog-balanced-${id}`}>{t('mp.balanced.cardNote')}</small>}
     <ModelPicker scope={{ kind: 'role', profile }} anchor={anchor} open={picker} onClose={() => setPicker(false)} testid={`catalog-picker-${id}`} />
     {profile.effort && real !== profile.effort && <small className="catalog-model-note" data-testid={`catalog-effort-real-${id}`}>
       {real ? t('agentCard.effortClamped', { asked: profile.effort, real }) : t('agentCard.effortNone')}</small>}
