@@ -68,7 +68,7 @@ export const skillLibraryDe: typeof skillLibraryIt = {
   'sl.delete': 'Löschen',
   'sl.restore': 'Original wiederherstellen',
   'sl.deleteTitle': (p: { name: string }) => `„${p.name}“ löschen?`,
-  'sl.deleteBody': 'Der Skill wird mit allen Dateien gelöscht. Er bleibt im Verlauf: „Rückgängig“ stellt ihn wieder her.',
+  'sl.deleteBody': 'Der Skill wird mit allen Dateien gelöscht. Er bleibt unter „Zuletzt gelöscht“ unter der Liste: „Rückgängig“ stellt ihn wieder her.',
   'sl.restoreTitle': (p: { name: string }) => `Zum „${p.name}“ der App zurück?`,
   'sl.restoreBody': 'Deine Kopie verlässt das Brain, das Original der App gilt wieder. „Rückgängig“ im Verlauf holt deine Kopie zurück.',
   'sl.deleted': (p: { name: string }) => `„${p.name}“ gelöscht`,
@@ -157,5 +157,7 @@ export const skillLibraryDe: typeof skillLibraryIt = {
   'sl.un.move': 'Verschieben',
   'sl.un.moved': (p: { file: string }) => `Verschoben nach ${p.file}`,
   'sl.un.kind.script': 'Skript',
+  'sl.del.title': 'Zuletzt gelöscht',
+  'sl.del.undoLabel': (p: { name: string }) => `Löschen von „${p.name}“ rückgängig machen`,
   'sl.un.kind.query': 'Abfrage',
 };

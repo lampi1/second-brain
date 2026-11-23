@@ -25,7 +25,8 @@ of them rarely used, and its Skill tab hid the files a skill is made of.
 5. **The Skill view** is a searchable list ordered by most used, least used, name, last used or source, with two boards
    (most and least used) when nothing is selected. A skill opens on its SKILL.md; its files are grouped by kind (scripts,
    queries, references, other assets, `src/renderer/lib/skill-files.ts`), each opens with highlighted content and can be
-   edited or deleted through the change log, so every change has «Annulla». Editing an app skill makes the user's copy
+   edited or deleted through the change log, so every change has «Annulla»; a deleted skill keeps its own in the toast, then in «Eliminate di recente» under the
+   list, and what Undo could not put back (binary, not UTF-8, linked, hidden files) is not deleted from here. Editing an app skill makes the user's copy
    («Ripristina originale» brings it back); an app skill cannot be deleted and the button says why.
 6. **Use counts** come from the agent runs' skill tags (`AgentRun.tags.skills`). Only Claude reports the skills it loads:
    the other engines and the plain chats are not counted, and the view says so.

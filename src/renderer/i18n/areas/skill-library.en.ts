@@ -68,7 +68,7 @@ export const skillLibraryEn: typeof skillLibraryIt = {
   'sl.delete': 'Delete',
   'sl.restore': 'Restore original',
   'sl.deleteTitle': (p: { name: string }) => `Delete “${p.name}”?`,
-  'sl.deleteBody': 'The skill is deleted with all its files. It stays in History: “Undo” puts it back as it was.',
+  'sl.deleteBody': 'The skill is deleted with all its files. It stays in “Recently deleted”, under the list: “Undo” puts it back as it was.',
   'sl.restoreTitle': (p: { name: string }) => `Go back to the app’s “${p.name}”?`,
   'sl.restoreBody': 'Your copy leaves the brain and the app’s original is used again. “Undo” in History brings your copy back.',
   'sl.deleted': (p: { name: string }) => `“${p.name}” deleted`,
@@ -157,5 +157,7 @@ export const skillLibraryEn: typeof skillLibraryIt = {
   'sl.un.move': 'Move',
   'sl.un.moved': (p: { file: string }) => `Moved to ${p.file}`,
   'sl.un.kind.script': 'script',
+  'sl.del.title': 'Recently deleted',
+  'sl.del.undoLabel': (p: { name: string }) => `Undo the deletion of “${p.name}”`,
   'sl.un.kind.query': 'query',
 };

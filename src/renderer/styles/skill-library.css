@@ -252,6 +252,15 @@ textarea.sl-input{height:auto;padding:8px 10px;resize:vertical;line-height:1.5}
 .sl-part-tested[data-state=ok]{color:var(--green);background:var(--green-bg);border-color:transparent}
 .sl-part-tested[data-state=failed]{color:var(--red);border-color:color-mix(in srgb,var(--red) 40%,transparent)}
 
+/* ── «Eliminate di recente»: the deleted skills that can come back, under the list ── */
+.sl-del{flex:none;margin:-10px -12px 0;border-top:1px solid var(--border);padding:4px 0}
+.sl-del-toggle{display:flex;align-items:center;gap:6px;width:100%;padding:6px 12px;border:0;background:none;color:var(--text-2);font:inherit;font-size:var(--fs-s);text-align:start;cursor:pointer}
+.sl-del-toggle:hover{color:var(--text)}
+.sl-del ul{list-style:none;margin:0;padding:0 8px 4px;max-height:180px;overflow-y:auto}
+.sl-del-line{display:flex;align-items:center;gap:8px;padding:4px}
+.sl-del-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.sl-del-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-s)}
+
 /* ── «Da assegnare»: scripts and queries the move could not place ── */
 .sl-un{margin:0 0 10px;border:1px solid var(--amber-line);border-radius:var(--r-m);background:var(--amber-bg)}
 .sl-un-head{display:flex;align-items:center;gap:10px;padding:8px 8px 8px 12px}

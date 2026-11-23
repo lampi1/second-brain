@@ -12,7 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
-import { SKILL_NAME, SKILL_PATH, type LibSkill, type SkillFile, type SkillFileText, type SkillLibraryState, type SkillOrigin, type SkillVersion, type SkillWrite, type SkillWriteResult } from '../../shared/skill-library';
+import { SKILL_NAME, SKILL_PATH, type DeletedSkill, type LibSkill, type SkillFile, type SkillFileText, type SkillLibraryState, type SkillOrigin, type SkillVersion, type SkillWrite, type SkillWriteResult } from '../../shared/skill-library';
 import { checkMd, field, parseMd } from '../../shared/skillmd';
 import { lintSkill } from '../../shared/skill-lint';
 import type { ChangeLog, StoredChange } from '../brainmodel/changes';
@@ -25,6 +25,8 @@ import type { AssetAssign, AssetAssignResult } from '../../shared/skill-library'
 
 /** Who writes: `page` = the user's own click on the Skill page (the only writer of skills outside the brain). */
 export interface SkillWriter { who: string; reason?: string; page?: boolean }
+/** Who reads a history or undoes a change: the page also reaches the user's home folders, an agent never does. */
+export type SkillReader = Pick<SkillWriter, 'page'>;
 
 export interface SkillLibraryDeps {
   root: () => string | null;
@@ -51,7 +53,7 @@ export interface SkillLibraryDeps {
   assetsBackup?: string | null;
 }
 
-const MAX_TEXT = 256 * 1024, MAX_FILES = 400, MAX_DEPTH = 5;
+const MAX_TEXT = 256 * 1024, MAX_FILES = 400, MAX_DEPTH = 5, MAX_DELETED = 20;
 const isText = (buf: Buffer): boolean => !buf.subarray(0, 8000).includes(0);
 const posix = (p: string) => p.split(path.sep).join('/');
 const real = (p: string): string => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
@@ -102,6 +104,8 @@ function everyFile(folder: string, max = 2000): string[] {
   return out;
 }
 const isTextFile = (file: string): boolean => { try { const fd = fs.openSync(file, 'r'); try { const b = Buffer.alloc(8000); const n = fs.readSync(fd, b, 0, b.length, 0); return isText(b.subarray(0, n)); } finally { fs.closeSync(fd); } } catch { return true; } };
+/** Text the history puts back byte by byte: not UTF-8 would come back changed. */
+const isUtf8File = (file: string): boolean => { try { const b = fs.readFileSync(file); return Buffer.from(b.toString('utf8'), 'utf8').equals(b); } catch { return false; } };
 const sameFile = (a: string, b: string): boolean => { try { return fs.readFileSync(a).equals(fs.readFileSync(b)); } catch { return false; } };
 
 /** The skill's area for the filter: frontmatter `area:` or `metadata:` → `area:`. */
@@ -236,15 +240,38 @@ export class SkillLibrary {
     };
   }
 
-  /** The skill folders a change may have written: the brain's (both names of the one folder) or the user's. */
-  private folders(f: Pick<Found, 'name' | 'folder' | 'origin'>): string[] {
+  /** The skill folders a change may have written: the brain's (both names of the one folder) or the user's. The user's
+   *  own page looks in every folder of the name, so a copy that went away keeps its Undo whatever holds the name now.
+   *  A folder that is gone is also looked up through its parent's real path: the history logs real paths. */
+  private folders(f: Pick<Found, 'name' | 'folder' | 'origin'>, page = false): string[] {
     const root = this.root();
-    const dirs = [f.folder, ...(root && f.origin !== 'home' ? [path.join(brainSkillsDir(root), f.name), path.join(claudeSkillsDir(root), f.name)] : [])];
-    return [...new Set(dirs.flatMap(d => [path.resolve(d), real(d)]))];
+    const dirs = [f.folder, ...(root && (page || f.origin !== 'home') ? [path.join(brainSkillsDir(root), f.name), path.join(claudeSkillsDir(root), f.name)] : []), ...(page ? this.homeFolders(f.name) : [])];
+    return [...new Set(dirs.flatMap(d => [path.resolve(d), real(d), path.join(real(path.dirname(d)), path.basename(d))]))];
   }
-  private touches(c: StoredChange, f: Pick<Found, 'name' | 'folder' | 'origin'>): boolean {
-    const dirs = this.folders(f);
-    return c.files.some(x => dirs.some(d => inside(d, path.resolve(x.file))));
+  private homeFolders(name: string): string[] {
+    return this.d.home ? ['.agents', '.claude'].map(k => path.join(this.d.home!, k, 'skills', name)) : [];
+  }
+
+  /** Whole skills deleted lately that can still come back, newest first, one per name (the page's «Eliminate di
+   *  recente»): a name no skill has now, whose deletion is in the history and can be undone. */
+  private deleted(history: StoredChange[], taken: ReadonlySet<string>): DeletedSkill[] {
+    const out = new Map<string, DeletedSkill>(), log = this.d.changes();
+    for (const c of [...history].reverse()) {
+      if (out.size >= MAX_DELETED) break;
+      const name = c.target;
+      if (c.kind !== 'skill' || c.action !== 'remove' || c.rolledBackAt || !SKILL_NAME.test(name) || taken.has(name) || out.has(name)) continue;
+      const gone = this.gone(name, true), dirs = gone ? this.folders(gone, true) : [];
+      // a removed file is also a «remove»: a whole skill is one whose SKILL.md went
+      if (!c.files.length || c.files.some(x => x.after !== null) || !c.files.some(x => dirs.some(d => path.relative(d, path.resolve(x.file)) === 'SKILL.md'))) continue;
+      if (log.canRollback(c, NO_AGENT)) out.set(name, { name, changeId: c.id, at: c.at, files: c.files.length });
+    }
+    return [...out.values()];
+  }
+  /** Where a skill that no longer exists was: the brain's folder, and for the user's own page the home ones. */
+  private gone(name: string, page: boolean): Pick<Found, 'name' | 'folder' | 'origin'> | null {
+    if (!SKILL_NAME.test(name)) return null;
+    const root = this.root(), home = page ? this.homeFolders(name)[0] : undefined;
+    return root ? { name, folder: path.join(brainSkillsDir(root), name), origin: 'brain' } : home ? { name, folder: home, origin: 'home' } : null;
   }
 
   async state(): Promise<SkillLibraryState> {
@@ -252,6 +279,7 @@ export class SkillLibrary {
     const root = this.root(), history = this.d.changes().all(), runs = this.safe(() => this.d.runs(), []), roles = this.safe(() => this.d.roles(), []).filter(r => r.scope === 'role');
     const found = this.found(root), latestBy = this.latestByFolder(history, new Set(found.flatMap(f => this.folders(f)))), bySkill = SkillLibrary.runsBySkill(runs);
     return { root, skills: found.map(f => this.info(f, latestBy, bySkill, roles)).sort((a, b) => a.name.localeCompare(b.name)), roles: roles.map(r => ({ id: r.id, name: r.name })),
+      deleted: this.safe(() => this.deleted(history, new Set(found.map(f => f.name))), []),
       unassigned: root ? this.safe(() => unassignedAssets(root, found, this.d.changes()), []) : [] };
   }
   private safe<T>(fn: () => T, fallback: T): T { try { return fn(); } catch { return fallback; } }
@@ -373,12 +401,14 @@ export class SkillLibrary {
     if (!f) return { ok: false, error: `Skill non trovata: ${name}` };
     if (f.origin === 'app') return { ok: false, error: 'Una skill dell’app non si elimina: puoi toglierla ai ruoli.' };
     if (f.origin === 'home' && !by.page) return { ok: false, error: 'Le skill della tua cartella utente si eliminano solo dalla pagina Skill.' };
+    // Undo writes the files back, not the link to them
+    try { if (fs.lstatSync(f.folder).isSymbolicLink()) return { ok: false, error: 'La cartella della skill è un collegamento: la cronologia non potrebbe rimetterlo, eliminalo dalla cartella.' }; } catch { /* gone meanwhile: nothing is found below */ }
     const files = packageFiles(f.folder);
     if (files.some(x => x.text && x.size > MAX_TEXT)) return { ok: false, error: 'Un file della skill è troppo grande per la cronologia: eliminala dalla cartella.' };
-    // the history keeps text only: a file it could not put back (binary, hidden, linked, too deep) stops the delete,
+    // the history keeps text only: a file it could not put back (binary, not UTF-8, hidden, linked, too deep) stops the delete,
     // unless it is the app's own copy of an override (the original stays in the app)
     const app = f.overridesApp ? this.appFolder(f.name) : null;
-    const lost = everyFile(f.folder).filter(rel => !files.some(x => x.text && x.path === rel) && !(app && sameFile(path.join(f.folder, ...rel.split('/')), path.join(app, ...rel.split('/')))));
+    const lost = everyFile(f.folder).filter(rel => !files.some(x => x.text && x.path === rel && isUtf8File(path.join(f.folder, ...rel.split('/')))) && !(app && sameFile(path.join(f.folder, ...rel.split('/')), path.join(app, ...rel.split('/')))));
     if (lost.length) return { ok: false, error: `La cronologia non potrebbe rimettere ${lost.length === 1 ? 'questo file' : 'questi file'}: ${lost.slice(0, 5).join(', ')}${lost.length > 5 ? '…' : ''}. Toglili dalla cartella della skill, poi eliminala.` };
     const c = this.d.changes().apply({ job: 'user', kind: 'skill', action: 'remove', target: f.name, summary: f.overridesApp ? `Ripristinata la skill dell’app «${f.name}» (tolta la copia del brain) (${by.who})` : `Skill «${f.name}» eliminata (${by.who})`, reason: by.reason?.slice(0, 500) || 'Scelta tua sulla pagina Skill.', evidence: [] },
       files.filter(x => x.text).map(x => ({ file: path.join(f.folder, ...x.path.split('/')), text: null })));
@@ -389,13 +419,13 @@ export class SkillLibrary {
     return { ok: true, changeId: c?.id ?? null, skill: null };
   }
 
-  /** The skill's history, newest first: every change that wrote one of its files (#363). */
-  async history(name: string): Promise<SkillVersion[]> {
+  /** The skill's history, newest first: every change that wrote one of its files (#363), a deleted skill's too. */
+  async history(name: string, by: SkillReader = {}): Promise<SkillVersion[]> {
     await this.ready();
-    const f = this.find(String(name)) ?? (() => { const root = this.root(); return root ? { name: String(name), folder: path.join(brainSkillsDir(root), String(name)), origin: 'brain' as const } : null; })();
+    const page = by.page === true, f = this.find(String(name)) ?? this.gone(String(name), page);
     if (!f) return [];
-    const log = this.d.changes(), dirs = this.folders(f);
-    return log.all().filter(c => this.touches(c, f)).reverse().slice(0, 100).map(c => ({
+    const log = this.d.changes(), dirs = this.folders(f, page);
+    return log.all().filter(c => c.files.some(x => dirs.some(d => inside(d, path.resolve(x.file))))).reverse().slice(0, 100).map(c => ({
       id: c.id, at: c.at, job: c.job, summary: c.summary, reason: c.reason, undoneAt: c.rolledBackAt ?? null,
       canUndo: log.canRollback(c, NO_AGENT),
       files: c.files.filter(x => dirs.some(d => inside(d, path.resolve(x.file)))).map(x => {
@@ -405,13 +435,14 @@ export class SkillLibrary {
     }));
   }
 
-  /** Undo one change of a skill's history. */
-  async undo(name: string, changeId: string): Promise<SkillVersion[]> {
-    const h = await this.history(name);
+  /** Undo one change of a skill's history (a deletion too). The user's home skills only from the page, as their writes. */
+  async undo(name: string, changeId: string, by: SkillReader = {}): Promise<SkillVersion[]> {
+    if (!by.page && this.find(String(name))?.origin === 'home') throw new Error('Le skill della tua cartella utente si cambiano solo dalla pagina Skill.');
+    const h = await this.history(name, by);
     if (!h.some(v => v.id === changeId)) throw new Error('Questa modifica non è della skill.');
     this.d.undo(changeId);
     this.d.changed?.();
-    return this.history(name);
+    return this.history(name, by);
   }
 
   /** Which roles load the skill: gives it to `roles` and takes it from the others (#364). */
