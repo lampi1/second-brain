@@ -9,7 +9,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { BrowserActions } from '../../src/main/browser/actions';
-import { addLoginUrl, Credentials, looksProduction, sameSite } from '../../src/main/browser/logins';
+import { addLoginUrl, Credentials, LinkRefusal, looksProduction } from '../../src/main/browser/logins';
+import { Handoffs } from '../../src/main/browser/handoffs';
 import { isCopyKey, MOD } from '../../src/main/browser/keys';
 import { browserTools } from '../../src/main/browser/tools';
 import { loginRefusal } from '../../src/main/browser/rules';
@@ -58,31 +59,22 @@ describe('which account the app may type where', () => {
   });
 
   it('refuses an entry on another site, and one without a url, with the fix', () => {
-    const other = refusal(creds(), 'luigi', 'https://evil.example.net/login');
-    expect(other).toMatch(/is for test-3\.example\.com, and this sign-in form is on evil\.example\.net/);
-    // a host that is not a test one: only a report; a test host: the agent's own fix (2026-11-23); never a wait
-    expect(other).toMatch(/never add it to the entry.*report it to your parent\. Never wait for the user/);
-    expect(refusal(creds(), 'luigi', 'https://test-1.example.net/login')).toMatch(/cred-entry\.mjs add-host "luigi" <the entry's url> https:\/\/test-1\.example\.net\/.*otherwise report it to your parent\. Never wait for the user/);
-    // an entry without a url: the agent adds it (cred-entry.mjs set-url)
-    expect(refusal(creds(), 'nourl', 'https://test-3.example.com/login')).toMatch(/without a url.*cred-entry\.mjs set-url "nourl" https:\/\/test-3\.example\.com\/.*report it to your parent\. Never wait for the user/);
-    for (const r of [other, refusal(creds(), 'nourl', 'https://test-3.example.com/login')]) expect(r).not.toMatch(/handoff_to_user|the user adds|ask them/);
+    expect(refusal(creds(), 'luigi', 'https://evil.example.net/login')).toMatch(/is for test-3\.example\.com, and this sign-in form is on evil\.example\.net/);
+    // an entry without a url: the user can link this site to it (#429)
+    expect(refusal(creds(), 'nourl', 'https://test-3.example.com/login')).toMatch(/without a url.*asked the user.*whether to link test-3\.example\.com/);
     // a port is part of the site: the same name on another port is another site
     expect(refusal(creds(), 'dev', 'http://localhost:9999/login')).toMatch(/is for localhost:4200/);
   });
 
   it('refuses an unknown account naming the ones of the site, and a site without entries', () => {
     expect(refusal(creds(), 'ghost', 'https://test-3.example.com/login')).toMatch(/no account "ghost".*Entries for test-3\.example\.com: "mario@example\.com", "luigi"/);
-    // no entry is never a hand-off: the agent reports to its parent (2026-11-23)
-    expect(refusal(creds(), '', 'https://nothing.example.net/login')).toMatch(/no entry for nothing\.example\.net.*report it to your parent.*never wait for the user/);
-    expect(refusal(creds(), '', 'https://nothing.example.net/login')).not.toMatch(/handoff_to_user/);
-    expect(refusal(creds(), 'ghost', 'https://nothing.example.net/login')).toMatch(/no entry for nothing\.example\.net: report it to your parent/);
+    expect(refusal(creds(), '', 'https://nothing.example.net/login')).toMatch(/no entry for nothing\.example\.net.*handoff_to_user/);
     expect(refusal(creds(), 'x', 'about:blank')).toMatch(/not in a web page/);
-    expect(refusal(new Credentials(() => null), 'x', 'https://a.example.com/')).toMatch(/no credentials file.*Report it to your parent/);
+    expect(refusal(new Credentials(() => null), 'x', 'https://a.example.com/')).toMatch(/no credentials file/);
   });
 
   it('never types an account that looks like production', () => {
-    // the Read + type route; a hand-off only on a real MFA or CAPTCHA page (2026-11-23)
-    expect(refusal(creds(), 'boss@example.com', 'https://www.example.com/login')).toMatch(/looks like a production account\. The app types test accounts only: if your instructions give you the Read \+ type route for it, sign in with type \/ fill_form yourself.*handoff_to_user kind "login" only when the page really shows MFA or a CAPTCHA/);
+    expect(refusal(creds(), 'boss@example.com', 'https://www.example.com/login')).toMatch(/looks like a production account.*handoff_to_user/);
     expect(looksProduction({ group: 'ExampleApp · Production' })).toBe(true);
     expect(looksProduction({ group: 'Shop', url: 'https://prod.example.com/' })).toBe(true);
     expect(looksProduction({ group: 'Product catalog · test', url: 'https://products.example.com/' })).toBe(false);   // a word, never a part of one
@@ -205,28 +197,11 @@ describe('fill_credential', () => {
     expect(tool.inputSchema.required).toEqual(['password_ref']);
     expect(tool.description).toMatch(/without ever reading the password/);
     expect(loginRefusal({ url: 'http://localhost:4200/login', account: '', accounts: ['dev'], file: 'ops/credentials.md' })).toMatch(/fill_credential/);
-    // a login hand-off without the account: sign in yourself first, a hand-off only on a real MFA or CAPTCHA page
-    expect(loginRefusal({ url: 'https://test-3.example.com/login', account: '', accounts: ['luigi'], file: 'ops/credentials.md' })).toMatch(/Sign in yourself with fill_credential \(account = one of them\)\. A hand-off only when the page really shows MFA or a CAPTCHA/);
-    // the tool texts: no entry and an account without a password are never hand-off reasons (2026-11-23)
-    const all = browserTools({} as BrowserTabs, {} as BrowserActions, () => ({ group: 'g', owner: null, chatId: null }));
-    expect(tool.description).toMatch(/handoff_to_user kind "login" only when the page really shows MFA or a CAPTCHA; no entry: report it to your parent, never wait for the user/);
-    expect(all.find(t => t.name === 'handoff_to_user')!.description).toMatch(/a missing credentials entry is not a reason: report it to your parent/);
-    for (const t of all) expect([t.name, t.description]).not.toEqual([t.name, expect.stringMatching(/account without (a password|an entry)|no entry for the account/)]);
-  });
-  it('the MCP server instructions and the sign-in page notice: a hand-off only on a real MFA or CAPTCHA page, no entry = report to the parent', async () => {
-    // service.ts imports Electron: its instructions are checked in its source text
-    const BROWSER_INSTRUCTIONS = fs.readFileSync(path.join(__dirname, '../../src/main/browser/service.ts'), 'utf8').split('const INSTRUCTIONS = [')[1]!.split('].join')[0]!;
-    expect(BROWSER_INSTRUCTIONS).toMatch(/Only when the page really shows MFA or a CAPTCHA, call handoff_to_user with kind "login".*No entry for the site: report it to your parent, never wait for the user/);
-    expect(BROWSER_INSTRUCTIONS).not.toMatch(/If there is no entry for the site, or the page asks for MFA/);
-    const { actions, tab } = page('https://test-3.example.com/Account/Login');
-    const notice = await actions.loginNotice(tab);
-    expect(notice).toMatch(/Only when the page really shows MFA or a CAPTCHA, call handoff_to_user with kind "login"; no entry for the site: report it to your parent, never wait for the user/);
-    expect(notice).not.toMatch(/account without a password/);
   });
 });
 
-// #429, ADR 0317, changed 2026-11-23: a test environment that moved host on the same site is linked by the app itself
-// (the origin goes into the entry's loginUrl) and signed in; nothing waits on the user.
+// #429, ADR 0317: a test environment that moved host. The refusal offers the user one click to link the page's site to
+// the entry; Sì adds the origin to its loginUrl, and the next fill types the account there (and still on the old host).
 describe('linking a sign-in page\'s site to an account', () => {
   const writable = (text: string) => {
     const file = { text };
@@ -234,16 +209,29 @@ describe('linking a sign-in page\'s site to an account', () => {
     return { c, file };
   };
 
-  it('a named test account on another host of the same site is linked by the app and signed in, without asking (2026-11-23)', () => {
+  it('a named test account on another host comes with a link offer, never a password; production and twins do not', () => {
+    const r = creds().siteCredential('luigi', 'https://test-4.example.com/Account/Login?x=1');
+    expect(r).toMatchObject({ link: { user: 'luigi', host: 'test-4.example.com', origin: 'https://test-4.example.com/', sites: ['test-3.example.com'] } });
+    expect('refusal' in r && r.refusal).toMatch(/asked the user, with a banner on your tab, whether to link test-4\.example\.com.*handoff_to_user.*Do not navigate to the entry's old host/);
+    expect(JSON.stringify(r)).not.toContain('Synthetic-');
+    expect(creds().siteCredential('boss@example.com', 'https://test-4.example.com/')).not.toHaveProperty('link');
+    const twins = JSON.stringify([{ url: 'https://a.example.com/', username: 'same', password: PW('a') }, { url: 'https://b.example.com/', username: 'same', password: PW('b') }]);
+    expect(creds(twins).siteCredential('same', 'https://c.example.com/')).not.toHaveProperty('link');
+    expect(refusal(creds(), '', 'https://test-4.example.com/')).toMatch(/call fill_credential with account = its user name: the app asks the user to link/);
+    // a production-looking host is never offered: linking it would make the whole entry refused
+    expect(creds().siteCredential('luigi', 'https://app.prod.example.com/login')).not.toHaveProperty('link');
+  });
+
+  it('Sì writes the origin into that entry\'s loginUrl only; a second site makes it a list; both hosts then sign in', () => {
     const { c, file } = writable(FILE);
-    expect(c.siteCredential('luigi', 'https://test-4.example.com/Account/Login?x=1')).toEqual({ user: 'luigi', password: PW('luigi'), linked: 'test-4.example.com' });
-    const luigi = () => (JSON.parse(file.text) as { ExampleApp: { test: Record<string, unknown>[] } }).ExampleApp.test[1]!;
-    expect(luigi()).toEqual({ url: 'https://test-3.example.com/', username: 'luigi', password: PW('luigi'), loginUrl: 'https://test-4.example.com/' });
-    // linked once: the next fill is a plain one, and the old host still signs in
+    const offer = (c.siteCredential('luigi', 'https://test-4.example.com/login') as { link: { entryId: string; origin: string } }).link;
+    expect(c.linkSite(offer.entryId, offer.origin)).toEqual({ ok: true });
     expect(c.siteCredential('luigi', 'https://test-4.example.com/login')).toEqual({ user: 'luigi', password: PW('luigi') });
     expect(c.siteCredential('luigi', 'https://test-3.example.com/login')).toEqual({ user: 'luigi', password: PW('luigi') });
-    // a second site makes loginUrl a list
-    expect(c.siteCredential('luigi', 'https://test-5.example.com/')).toMatchObject({ linked: 'test-5.example.com' });
+    const luigi = () => (JSON.parse(file.text) as { ExampleApp: { test: Record<string, unknown>[] } }).ExampleApp.test[1]!;
+    expect(luigi()).toEqual({ url: 'https://test-3.example.com/', username: 'luigi', password: PW('luigi'), loginUrl: 'https://test-4.example.com/' });
+    const again = (c.siteCredential('luigi', 'https://test-5.example.com/') as { link: { entryId: string; origin: string } }).link;
+    expect(c.linkSite(again.entryId, again.origin)).toEqual({ ok: true });
     expect(luigi().loginUrl).toEqual(['https://test-4.example.com/', 'https://test-5.example.com/']);
     // every other entry is as it was
     const before = JSON.parse(FILE) as { ExampleApp: { test: unknown[]; prod: unknown[] } }, after = JSON.parse(file.text) as typeof before;
@@ -262,87 +250,27 @@ describe('linking a sign-in page\'s site to an account', () => {
     expect(addLoginUrl(text, 3, 'https://new.example.com/')).toBeNull();
   });
 
-  it('production entries, twins, production-looking hosts and other sites are never linked; the file stays as it was', () => {
+  it('a file changed meanwhile, or an entry that now looks like production, is not linked', () => {
     const { c, file } = writable(FILE);
-    expect(refusal(c, 'boss@example.com', 'https://test-4.example.com/')).toMatch(/www\.example\.com/);
-    for (const url of ['https://app.prod.example.com/login', 'https://test-4.prod.example.com/login', 'https://evil.example.net/login']) {
-      const other = refusal(c, 'luigi', url);
-      expect(other).toMatch(/never add it to the entry.*report it to your parent/);
-      expect(other).not.toMatch(/cred-entry|handoff_to_user|ask the user/);
-    }
-    expect(file.text).toBe(FILE);
-    const twins = JSON.stringify([{ url: 'https://a.example.com/', username: 'same', password: PW('a') }, { url: 'https://b.example.com/', username: 'same', password: PW('b') }]);
-    const t = writable(twins);
-    expect(t.c.siteCredential('same', 'https://test-9.example.com/')).toHaveProperty('refusal');
-    expect(t.file.text).toBe(twins);
-  });
-
-  it('a host that is not a test or local one is never linked, even on the same domain and without «prod» in its name: no password, the file stays as it was', () => {
-    for (const host of ['www.example.com', 'example.com', 'app.example.com', 'shop.example.com', 'latest.example.com', 'contest.example.com', 'attestation.example.com', 'devices.example.com', 'my-latest-app.example.com']) {
-      const { c, file } = writable(FILE);
-      const r = refusal(c, 'luigi', `https://${host}/login`);
-      expect([host, file.text]).toEqual([host, FILE]);
-      // no text that invites the agent to add that host itself
-      expect([host, r]).toEqual([host, expect.stringMatching(/not a test or local one.*never add it to the entry.*report it to your parent/)]);
-      expect(r).not.toMatch(/cred-entry|add-host|set-url/);
-    }
-    // a word of the domain itself says nothing about the host
-    const own = JSON.stringify([{ url: 'https://app.test.example/', username: 'ada', password: PW('ada') }]);
-    const t = writable(own);
-    expect(t.c.siteCredential('ada', 'https://www.test.example/')).toHaveProperty('refusal');
-    expect(t.file.text).toBe(own);
-  });
-
-  it('fill_credential types nothing on a same-domain host that is not a test one', async () => {
-    const { c, file } = writable(FILE);
-    const { actions, tab, typed } = page('https://www.example.com/login', c);
-    await expect(actions.fillCredential(tab, { account: 'luigi', password_ref: 'e12' })).rejects.toThrow(/not a test or local one/);
-    expect(typed).toEqual({});
-    expect(file.text).toBe(FILE);
-  });
-
-  it('a same-site test host, and another port of localhost or of a loopback address, are still linked', () => {
-    for (const host of ['test-4.example.com', 'app-test.example.com', 'qa.example.com', 'uat2.example.com', 'app.staging.example.com', 'dev.example.com:8443', 'my-stage.example.com']) {
-      expect(writable(FILE).c.siteCredential('luigi', `https://${host}/`), host).toEqual({ user: 'luigi', password: PW('luigi'), linked: host });
-    }
-    expect(writable(FILE).c.siteCredential('dev', 'http://localhost:5001/login')).toMatchObject({ user: 'dev', linked: 'localhost:5001' });
-    for (const [url, next] of [['http://127.0.0.1:4200/', '127.0.0.1:5001'], ['http://[::1]:4200/', '[::1]:5001'], ['http://app.localhost:4200/', 'app.localhost:5001']] as const) {
-      expect(writable(JSON.stringify([{ url, username: 'loop', password: PW('loop') }])).c.siteCredential('loop', `http://${next}/`), next).toMatchObject({ linked: next });
-    }
-  });
-
-  it('no refusal invites linking a host that is not a test one: an entry without a url, no account named', () => {
-    expect(refusal(creds(), 'nourl', 'https://www.example.com/login')).not.toMatch(/cred-entry|set-url/);
-    expect(refusal(creds(), '', 'https://shop.example.com/login')).not.toMatch(/links/);
-    expect(refusal(creds(), '', 'https://test-9.example.com/login')).toMatch(/the app links a test page of the same site/);
-    // a test host of another domain: the agent may add it itself, when it is that account's environment
-    expect(refusal(creds(), 'luigi', 'https://test-1.example.net/login')).toMatch(/If test-1\.example\.net is a test environment of that account.*cred-entry\.mjs add-host "luigi"/);
-  });
-
-  it('a shared hosting suffix is not one site: another app under the same hosting domain is not linked', () => {
-    expect(sameSite('test-4.example.com', ['test-3.example.com'])).toBe(true);
-    expect(sameSite('localhost:5001', ['localhost:5000'])).toBe(true);
-    expect(sameSite('a.example.net', ['test-3.example.com'])).toBe(false);
-    expect(sameSite('evil-shop.herokuapp.com', ['good-shop.herokuapp.com'])).toBe(false);
-    expect(sameSite('shop.co.uk', ['bank.co.uk'])).toBe(false);
-    expect(sameSite('203.0.113.2', ['203.0.113.1'])).toBe(false);
-  });
-
-  it('a file the app cannot write back, or one changed meanwhile, is not linked: the refusal says why and the fix', () => {
-    const c = new Credentials(() => ROOT, () => FILE, () => { throw new Error('read-only'); });
-    expect(refusal(c, 'luigi', 'https://test-4.example.com/login')).toMatch(/could not link test-4\.example\.com.*cannot be written.*cred-entry\.mjs add-host/);
-    expect(writable(FILE).c.linkSite('no-such-entry', 'https://a.example.com/')).toEqual({ error: expect.stringMatching(/changed meanwhile/) });
+    const offer = (c.siteCredential('luigi', 'https://test-4.example.com/login') as { link: { entryId: string; origin: string } }).link;
+    file.text = FILE.replace('"luigi"', '"luigi2"');
+    expect(c.linkSite(offer.entryId, offer.origin)).toEqual({ error: expect.stringMatching(/changed meanwhile/) });
     expect(new Credentials(() => null).linkSite('x', 'https://a.example.com/')).toEqual({ error: 'there is no credentials file' });
   });
 
-  it('fill_credential types the account on the moved host and says the app linked it; no hand-off is opened', async () => {
-    const { c, file } = writable(FILE);
-    const { actions, tab, typed } = page('https://test-4.example.com/Account/Login', c);
-    const r = await actions.fillCredential(tab, { account: 'luigi', password_ref: 'e12' });
-    expect(r).toMatch(/the app linked test-4\.example\.com to this test account/);
-    expect(r).not.toContain('Synthetic-');
-    expect(typed.e12).toBe(PW('luigi'));
-    expect(file.text).toContain('https://test-4.example.com/');
+  it('fill_credential opens a «link» banner on the tab and tells the agent to wait on it; the banner holds no password', async () => {
+    const { actions: real, tab } = page('https://test-4.example.com/Account/Login');
+    let thrown: unknown;
+    try { await real.fillCredential(tab, { account: 'luigi', password_ref: 'e12' }); } catch (e) { thrown = e; }
+    expect(thrown).toBeInstanceOf(LinkRefusal);
+    const handoffs = new Handoffs(() => {});
+    const tabs = { handoffs, tabFor: () => tab, setLastAction: () => {} } as unknown as BrowserTabs;
+    const actions = { act: (_t: Tab, _l: string, fn: () => Promise<string>) => fn(), fillCredential: () => Promise.reject(thrown) } as unknown as BrowserActions;
+    const tool = browserTools(tabs, actions, () => ({ group: 'chat:c1', owner: 'c1', chatId: 'c1' })).find(t => t.name === 'fill_credential')!;
+    await expect(tool.run({ account: 'luigi', password_ref: 'e12' }, { params: {}, signal: new AbortController().signal, progress: () => false } as never)).rejects.toThrow(/handoff_id "h1"/);
+    const [h] = handoffs.list();
+    expect(h).toMatchObject({ kind: 'link', chatId: 'c1', tabId: 't1', account: { user: 'luigi' }, link: { host: 'test-4.example.com', origin: 'https://test-4.example.com/', sites: ['test-3.example.com'] } });
+    expect(JSON.stringify(h)).not.toContain('Synthetic-');
   });
 
   it('the real write keeps a linked file a link (secrets outside the brain) and its mode', () => {
@@ -355,7 +283,8 @@ describe('linking a sign-in page\'s site to an account', () => {
       const link = path.join(brain, 'ops', 'credentials.md');
       try { fs.symlinkSync(outside, link); } catch { return; }    // no symlinks here (Windows without the right): nothing to check
       const c = new Credentials(() => brain);
-      expect(c.siteCredential('luigi', 'https://test-4.example.com/')).toMatchObject({ linked: 'test-4.example.com' });
+      const offer = (c.siteCredential('luigi', 'https://test-4.example.com/') as { link: { entryId: string; origin: string } }).link;
+      expect(c.linkSite(offer.entryId, offer.origin)).toEqual({ ok: true });
       expect(fs.lstatSync(link).isSymbolicLink()).toBe(true);
       expect(fs.readFileSync(outside, 'utf8')).toContain('https://test-4.example.com/');
       if (process.platform !== 'win32') expect(fs.statSync(outside).mode & 0o777).toBe(0o600);

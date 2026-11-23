@@ -14,6 +14,7 @@ import path from 'node:path';
 import type { NativeImage, WebFrameMain } from 'electron';
 import { log, errText, redact, addRedaction } from '../log';
 import { ToolRefusal } from '../mcp/refusal';
+import { LinkRefusal } from './logins';
 import type { BrowserTabs, Tab } from './tabs';
 import { pageCall, walkPage, locateRef, frameBox, inputInfo, focusSelect, selectOptions, pageText, probe, angularStable, hasPasswordField,
   type WalkMode, type WalkResult, type PointResult, type InputInfo, type FrameMarker } from './page';
@@ -196,8 +197,7 @@ export class BrowserActions {
   }
 
   /** When the tab shows a sign-in page: the agent signs in itself (any host, ADR 0237), with fill_credential when the
-   *  user's credentials file has an entry for the site (ADR 0310); the hand-off only for a real MFA or CAPTCHA page,
-   *  no entry = a report to the parent (2026-11-23). */
+   *  user's credentials file has an entry for the site (ADR 0310); the hand-off stays for MFA, CAPTCHA or no entry. */
   async loginNotice(tab: Tab): Promise<string> {
     if (tab.wc.isDestroyed()) return '';
     const url = tab.wc.getURL();
@@ -207,7 +207,7 @@ export class BrowserActions {
     const host = hostOf(url);
     const mine = this.tabs.credentials.accountsFor(url).map(u => `"${u}"`).join(', ');
     return `Sign-in page in environment ${tab.env} (${host}): sign in yourself with ${mine ? `fill_credential (test account${mine.includes(',') ? 's' : ''} ${mine} in the user's credentials file: the app types the password, never read the file)` : 'fill_credential when the user\'s credentials file has an entry for this site, or type / fill_form and the account you were given'} ` +
-      `(password values come back masked). Only when the page really shows MFA or a CAPTCHA, call handoff_to_user with kind "login"; no entry for the site: report it to your parent, never wait for the user; ` +
+      `(password values come back masked). For MFA, CAPTCHA or an account without a password, call handoff_to_user with kind "login"; ` +
       `environment ${tab.env} keeps the session.`;
   }
 
@@ -444,8 +444,7 @@ export class BrowserActions {
     }
     const site = siteOf(frameUrl(frame));
     const c = this.tabs.credentials.siteCredential(typeof a.account === 'string' ? a.account : '', frameUrl(frame));
-    if ('refusal' in c) throw new ToolRefusal(c.refusal);
-    if (c.linked) log.info('browser', 'credential site linked by the app', { data: { tab: tab.id, host: c.linked } });
+    if ('refusal' in c) throw c.link ? new LinkRefusal(c.refusal, c.link) : new ToolRefusal(c.refusal);
     addRedaction(c.password);                             // logs, console and network output never show it either
     tab.secretTyped = true;
     // checked again right before each field is typed: the page may have changed the field or the frame meanwhile
@@ -455,7 +454,7 @@ export class BrowserActions {
       if (r === userRef && i.password) throw new ToolRefusal(`Refused: ${userRef} became a password field: nothing was typed there.`);
     });
     const typed = lines.split('\n').some(l => l.startsWith(`${ref} `));
-    return `Account ${c.user}, typed by the app from the user's credentials file (you never see the password)${c.linked ? `; the app linked ${c.linked} to this test account (same site as its entry)` : ''}:\n${lines}\n${typed ? 'Submit the form now (click its button, or key Enter).' : 'The password was not typed: read the form again and call fill_credential once more.'}`;
+    return `Account ${c.user}, typed by the app from the user's credentials file (you never see the password):\n${lines}\n${typed ? 'Submit the form now (click its button, or key Enter).' : 'The password was not typed: read the form again and call fill_credential once more.'}`;
   }
 
   async key(tab: Tab, keys: string, repeat = 1): Promise<string> {

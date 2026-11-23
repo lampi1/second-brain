@@ -3,7 +3,7 @@
 // waits (with progress notifications, see mcp/server.ts) and can be called again to keep waiting. When the user answers
 // and no tool call takes the outcome (the agent ended its turn), service.ts wakes the chat with a message (delivered()).
 // Pure (no Electron), unit-tested; used by browser/tabs.ts, browser/tools.ts and browser/service.ts.
-import type { BrowserHandoff, HandoffAccount } from '../../shared/contract';
+import type { BrowserHandoff, HandoffAccount, HandoffLink } from '../../shared/contract';
 
 export class Handoffs {
   private readonly items = new Map<string, BrowserHandoff>();
@@ -15,7 +15,7 @@ export class Handoffs {
   constructor(private readonly onChange: (h: BrowserHandoff) => void, private readonly now: () => number = Date.now) {}
 
   /** Opens a hand-off on a tab, or returns the one already open there. */
-  open(p: { tabId: string; chatId: string | null; reason: string; instructions: string; url: string; env?: string; kind?: BrowserHandoff['kind']; account?: HandoffAccount }): BrowserHandoff {
+  open(p: { tabId: string; chatId: string | null; reason: string; instructions: string; url: string; env?: string; kind?: BrowserHandoff['kind']; account?: HandoffAccount; link?: HandoffLink }): BrowserHandoff {
     const existing = this.openFor(p.tabId);
     if (existing) return existing;
     const h: BrowserHandoff = { id: `h${++this.seq}`, ...p, state: 'open', at: this.now() };
