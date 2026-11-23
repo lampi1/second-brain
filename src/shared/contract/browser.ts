@@ -56,18 +56,8 @@ export interface BrowserHandoff {
   at: number;
   resolvedAt?: number;
   env?: string;               // the environment of the tab
-  kind?: 'login' | 'other' | 'link';   // login = "rifai l'accesso a <env>": the user signs in, the env keeps the session;
-                              // link = fill_credential asks Sì/No to link this page's site to an account (#429)
-  account?: HandoffAccount;   // kind login and link: the account, looked up in the user's credentials file
-  link?: HandoffLink;         // kind link: what Sì adds to the entry
-}
-
-/** What a «link» hand-off proposes (#429): the page's site added to an account of the credentials file. No password. */
-export interface HandoffLink {
-  host: string;               // the sign-in page's host, with port ("test-4.example.com")
-  origin: string;             // what goes into the entry's loginUrl ("https://test-4.example.com/")
-  sites: string[];            // the hosts the entry is for today
-  entryId: string;            // the entry (logins.ts entryId): refused at Sì when the file changed meanwhile
+  kind?: 'login' | 'other';   // login = "rifai l'accesso a <env>": the user signs in, the env keeps the session
+  account?: HandoffAccount;   // kind login: the account, looked up in the user's credentials file
 }
 
 /** The account a login hand-off shows. Never the password: main copies it from the file on the user's click

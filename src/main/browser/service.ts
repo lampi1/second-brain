@@ -150,9 +150,7 @@ ${SCREENSHOT_HINT}`;
       const h = tabs.handoffs.get(id);
       if (!h || !h.chatId || tabs.handoffs.wasDelivered(id)) return;
       const where = h.env ? ` (ambiente ${h.env}, scheda ${h.tabId})` : ` (scheda ${h.tabId})`;
-      const text = h.kind === 'link'
-        ? (h.state === 'done' ? `Ho collegato ${h.link?.host ?? 'il sito'} all'account ${h.account?.user ?? ''}${where}: chiama di nuovo fill_credential.` : `Non ho collegato ${h.link?.host ?? 'il sito'} all'account${where}${h.note ? `: ${h.note}` : ''}: entra in un altro modo.`)
-        : h.state === 'done'
+      const text = h.state === 'done'
         ? (h.kind === 'login' ? `Ho fatto l'accesso nel browser${where}: riprendi da dove eri.` : `Ho fatto quello che chiedevi nel browser${where}: riprendi da dove eri.`)
         : `Nel browser non ci sono riuscito${where}${h.note ? `: ${h.note}` : ''}.`;
       tabs.handoffs.delivered(id);
@@ -191,15 +189,6 @@ ${SCREENSHOT_HINT}`;
     mcpUrlFor: chatId => (chatId ? mcp.url(`/mcp/chat/${encodeURIComponent(chatId)}/${tokens.tokenFor(chatId)}`) : mcp.url('/mcp')),
     handoffs: () => tabs.handoffs.list(),
     resolveHandoff: (id, outcome, note) => {
-      // #429: Sì on a «link» banner adds the page's site to the entry first; a file that cannot take it answers failed
-      const open = tabs.handoffs.get(id);
-      if (open?.state === 'open' && open.kind === 'link' && open.link && outcome === 'done') {
-        const r = tabs.credentials.linkSite(open.link.entryId, open.link.origin);
-        if ('error' in r) {
-          log.warn('browser', 'credential site not linked', { chat: open.chatId ?? undefined, cause: r.error, hint: 'the agent is told the user said yes but the file was not changed; it can sign in another way' });
-          outcome = 'failed'; note = `l'app non ha potuto collegare il sito: ${r.error}`;
-        } else log.info('browser', 'credential site linked by the user', { chat: open.chatId ?? undefined, data: { id, host: open.link.host } });
-      }
       const h = tabs.handoffs.resolve(id, outcome, note);
       log.info('browser', 'hand-off answered by the user', { chat: h.chatId ?? undefined, data: { id, outcome } });
       wakeIfNobodyWaits(id);
@@ -208,7 +197,6 @@ ${SCREENSHOT_HINT}`;
       const h = tabs.handoffs.get(id);
       if (!h || h.state !== 'open' || !h.account) return false;
       if (field === 'user') { clip.writeText(h.account.user); return true; }
-      if (h.kind === 'link') return false;                 // a link banner never hands out the password (#429)
       const pw = h.account.found ? tabs.credentials.password(h.account.user, h.url) : null;
       if (!pw) return false;
       copyPassword(pw);

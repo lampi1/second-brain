@@ -13,10 +13,11 @@
 // sign-in page lives on another host) and never for an entry that looks like production. The agent names the account;
 // the value goes from the file to the page's password field, never to the agent.
 // Linking a site (#429, changed 2026-11-23: agents sign in alone, never a wait on the user): when the named test
-// account's entry is for another host of the same site (a test environment that moved, sameSite), siteCredential()
-// itself calls linkSite(), which adds the page's origin to the entry's loginUrl (a string, or a list once it has
-// several), and types the account. Only that key of that entry changes. Any other host is refused with the fix the
-// agent makes itself (the brain's credential script) or a report to its parent; production entries are never linked.
+// account's entry is for another host of the same site (sameSite) and the page's host is a test or local one by its own
+// name (looksTest: a test environment that moved), siteCredential() itself calls linkSite(), which adds the page's
+// origin to the entry's loginUrl (a string, or a list once it has several), and types the account. Only that key of that
+// entry changes. Any other host is refused: a test host with the fix the agent makes itself (the brain's credential
+// script), every other one with a report to its parent only; production entries and hosts are never linked.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -32,9 +33,13 @@ interface Entry { user: string; password: string; url?: string; loginUrls?: stri
 /** What fill_credential may type (linked = the page's host the app just linked to the entry), or why not (a text for the
  *  agent, with the fix it makes itself; never a password, never «wait for the user»). */
 export type SiteCredential = { user: string; password: string; linked?: string } | { refusal: string };
-/** The fix of an entry that is for another site: the agent copies it to this host with the brain's credential script,
- *  else reports to its parent (2026-11-23: never a wait on the user for a login). */
-const FIX_ENTRY = (account: string, host: string): string => `The app types a password only on the site of its entry. If ${host} is a test environment of that account, add it yourself: run the brain's credential script (cred-entry.mjs add-host "${account}" <the entry's url> https://${host}/ when the brain has it), then call fill_credential again; otherwise report it to your parent. Never wait for the user and never ask for the password.`;
+const NOT_TEST = (host: string): string => `${host} is not a test or local one by its name: the app does not link it, and you never add it to the entry; report it to your parent. Never wait for the user and never ask for the password.`;
+/** The fix of an entry that is for another site: on a test host the agent copies it there with the brain's credential
+ *  script, else reports to its parent (2026-11-23: never a wait on the user for a login). A host that is not a test one
+ *  gets no script at all: a test account is never added to what may be production. */
+const FIX_ENTRY = (account: string, host: string): string => `The app types a password only on the site of its entry. ${isTestHost(host)
+  ? `If ${host} is a test environment of that account, add it yourself: run the brain's credential script (cred-entry.mjs add-host "${account}" <the entry's url> https://${host}/ when the brain has it), then call fill_credential again; otherwise report it to your parent. Never wait for the user and never ask for the password.`
+  : NOT_TEST(host)}`;
 
 const oneLine = (s: string, max: number) => s.replace(/\s+/g, ' ').trim().slice(0, max);
 const hostOf = (u: string | undefined): string => { try { return u ? new URL(u).host.toLowerCase() : ''; } catch { return ''; } };
@@ -42,16 +47,33 @@ const hostOf = (u: string | undefined): string => { try { return u ? new URL(u).
 const SHARED_SUFFIXES = new Set(['co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'com.au', 'net.au', 'co.jp', 'co.nz', 'com.br', 'co.in', 'com.cn', 'co.za']);
 /** Shared hosting, where hosts under one suffix belong to different owners: each host is its own site there. */
 const SHARED_HOSTING = ['azurewebsites.net', 'azurestaticapps.net', 'cloudapp.azure.com', 'cloudapp.net', 'trafficmanager.net', 'azurefd.net', 'azureedge.net', 'herokuapp.com', 'github.io', 'netlify.app', 'vercel.app', 'pages.dev', 'workers.dev', 'web.app', 'firebaseapp.com', 'appspot.com', 'amazonaws.com', 'cloudfront.net', 'ngrok.io', 'ngrok-free.app', 'onrender.com', 'fly.dev'];
+/** The host name without port and IPv6 brackets. */
+const nameOf = (host: string): string => host.replace(/:\d+$/, '').replace(/^\[|\]$/g, '');
 const siteOf = (host: string): string => {
-  const name = host.replace(/:\d+$/, '').replace(/^\[|\]$/g, '');
+  const name = nameOf(host);
   if (/^[\d.]+$/.test(name) || name.includes(':') || !name.includes('.')) return name;   // an IP or localhost: itself
   if (SHARED_HOSTING.some(s => name === s || name.endsWith(`.${s}`))) return name;
   const two = name.split('.').slice(-2).join('.');
   return SHARED_SUFFIXES.has(two) ? name : two;
 };
 /** A host of the same site as one of the entry's (test-4.example.com next to test-3.example.com, another port of
- *  localhost): an environment that moved, which the app links without asking (2026-11-23); any other host is not. */
+ *  localhost). Says nothing on its own about being a test host (www.example.com is the same site too): see looksTest. */
 export const sameSite = (host: string, sites: readonly string[]): boolean => !!host && sites.some(s => siteOf(s) === siteOf(host));
+const TEST_WORD = /^(?:test|testing|dev|stage|staging|qa|uat)\d*$/;
+/** A test or local host by its own name: localhost, a loopback address, or a whole word (a label, or a part of one
+ *  between hyphens) such as test, dev or staging before the registered domain. Never a piece of a word (latest, contest)
+ *  nor a word of the domain itself (www.test.example). */
+const looksTest =(host: string): boolean => {
+  const name = nameOf(host.toLowerCase());
+  if (name === 'localhost' || name.endsWith('.localhost') || name === '::1' || /^127(?:\.\d{1,3}){3}$/.test(name)) return true;
+  if (/^[\d.]+$/.test(name) || name.includes(':')) return false;   // any other IP says nothing
+  const shared = SHARED_HOSTING.find(s => name.endsWith(`.${s}`));
+  const labels = name.split('.');
+  const own = shared ? name.slice(0, -shared.length - 1).split('.') : labels.slice(0, SHARED_SUFFIXES.has(labels.slice(-2).join('.')) ? -3 : -2);
+  return own.some(l => l.split('-').some(w => TEST_WORD.test(w)));
+};
+/** A test host that nothing in its name makes a production one: the only host a test account may be linked to. */
+const isTestHost = (host: string): boolean => looksTest(host) && !looksProduction({ group: '', loginUrls: [`https://${host}/`] });
 /** "https://test-4.example.com/" of a page URL ('' for a page that is not http or https). */
 const originOf = (u: string): string => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? `${x.origin}/` : ''; } catch { return ''; } };
 
@@ -224,23 +246,24 @@ export class Credentials {
       if (!e && same.length) {
         const sites = [...new Set(same.flatMap(hostsOf))];
         const head = `Refused: account "${account.trim()}" in the user's credentials file (${file}) is ${sites.length ? `for ${sites.join(', ')}` : 'without a url'}, and this sign-in form is on ${host}.`;
-        // one test entry with that name and a test page of the same site (an environment that moved): the app links the
-        // page's origin to the entry itself and signs in, without asking (2026-11-23; #429 asked the user on a banner)
+        // one test entry with that name and a page of the same site on a test or local host (an environment that moved):
+        // the app links the page's origin to the entry itself and signs in, without asking (2026-11-23; #429 asked the user)
         const linkable = same.map(x => ({ x, i: all.indexOf(x) })).filter(({ x }) => !looksProduction(x));
         const origin = originOf(pageUrl);
-        // a production-looking host is never linked: it would turn the whole entry into one the app refuses
-        if (linkable.length === 1 && origin && !looksProduction({ group: '', loginUrls: [origin] }) && sameSite(host, hostsOf(linkable[0]!.x))) {
+        // a host must say it is a test one: production rarely carries «prod» in its name, so its absence proves nothing
+        if (linkable.length === 1 && origin && isTestHost(host) && sameSite(host, hostsOf(linkable[0]!.x))) {
           const { x, i } = linkable[0]!;
           const linked = this.linkSite(entryId(x, i), origin);
           if ('ok' in linked) return { user: x.user, password: x.password, linked: host };
           return { refusal: `${head} The app could not link ${host} to it (${linked.error}). ${FIX_ENTRY(account.trim(), host)}` };
         }
+        if (!sites.length && !isTestHost(host)) return { refusal: `${head} ${NOT_TEST(host)}` };
         if (!sites.length) return { refusal: `${head} Add the url to the entry yourself: run the brain's credential script (cred-entry.mjs set-url "${account.trim()}" https://${host}/ when the brain has it), then call fill_credential again; without such a script, report it to your parent. Never wait for the user and never ask for the password.` };
         return { refusal: `${head} ${FIX_ENTRY(account.trim(), host)}` };
       }
       if (!e) return { refusal: `Refused: no account "${account.trim()}" in the user's credentials file (${file}). ${names ? `Entries for ${host}: ${names}.` : `It has no entry for ${host}: report it to your parent (which account, which site); never wait for the user.`}` };
     } else {
-      if (!here.length) return { refusal: `Refused: the user's credentials file (${file}) has no entry for ${host}. If one of its test accounts is meant for this site, call fill_credential with account = its user name: the app links a page of the same site to it by itself. Otherwise report it to your parent (which site, which account you need); never wait for the user and never ask for a password in chat.` };
+      if (!here.length) return { refusal: `Refused: the user's credentials file (${file}) has no entry for ${host}. ${isTestHost(host) ? 'If one of its test accounts is meant for this site, call fill_credential with account = its user name: the app links a test page of the same site to it by itself. Otherwise report it' : 'You never add this host to an entry yourself; report it'} to your parent (which site, which account you need); never wait for the user and never ask for a password in chat.` };
       if (new Set(here.map(x => x.user.toLowerCase())).size > 1) return { refusal: `Refused: several accounts for ${host} in the user's credentials file (${file}): ${names}. Call fill_credential again with account = one of them.` };
       e = here[0]!;
     }

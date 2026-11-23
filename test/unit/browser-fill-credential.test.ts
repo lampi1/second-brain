@@ -60,8 +60,9 @@ describe('which account the app may type where', () => {
   it('refuses an entry on another site, and one without a url, with the fix', () => {
     const other = refusal(creds(), 'luigi', 'https://evil.example.net/login');
     expect(other).toMatch(/is for test-3\.example\.com, and this sign-in form is on evil\.example\.net/);
-    // the fix is the agent's own (2026-11-23): copy the entry to this host with the brain's script, else report; never a wait
-    expect(other).toMatch(/cred-entry\.mjs add-host "luigi" <the entry's url> https:\/\/evil\.example\.net\/.*otherwise report it to your parent\. Never wait for the user/);
+    // a host that is not a test one: only a report; a test host: the agent's own fix (2026-11-23); never a wait
+    expect(other).toMatch(/never add it to the entry.*report it to your parent\. Never wait for the user/);
+    expect(refusal(creds(), 'luigi', 'https://test-1.example.net/login')).toMatch(/cred-entry\.mjs add-host "luigi" <the entry's url> https:\/\/test-1\.example\.net\/.*otherwise report it to your parent\. Never wait for the user/);
     // an entry without a url: the agent adds it (cred-entry.mjs set-url)
     expect(refusal(creds(), 'nourl', 'https://test-3.example.com/login')).toMatch(/without a url.*cred-entry\.mjs set-url "nourl" https:\/\/test-3\.example\.com\/.*report it to your parent\. Never wait for the user/);
     for (const r of [other, refusal(creds(), 'nourl', 'https://test-3.example.com/login')]) expect(r).not.toMatch(/handoff_to_user|the user adds|ask them/);
@@ -264,15 +265,58 @@ describe('linking a sign-in page\'s site to an account', () => {
   it('production entries, twins, production-looking hosts and other sites are never linked; the file stays as it was', () => {
     const { c, file } = writable(FILE);
     expect(refusal(c, 'boss@example.com', 'https://test-4.example.com/')).toMatch(/www\.example\.com/);
-    expect(refusal(c, 'luigi', 'https://app.prod.example.com/login')).toMatch(/cred-entry\.mjs add-host "luigi"/);
-    const other = refusal(c, 'luigi', 'https://evil.example.net/login');
-    expect(other).toMatch(/add-host "luigi" <the entry's url> https:\/\/evil\.example\.net\/.*report it to your parent/);
-    expect(other).not.toMatch(/handoff_to_user|ask the user/);
+    for (const url of ['https://app.prod.example.com/login', 'https://test-4.prod.example.com/login', 'https://evil.example.net/login']) {
+      const other = refusal(c, 'luigi', url);
+      expect(other).toMatch(/never add it to the entry.*report it to your parent/);
+      expect(other).not.toMatch(/cred-entry|handoff_to_user|ask the user/);
+    }
     expect(file.text).toBe(FILE);
     const twins = JSON.stringify([{ url: 'https://a.example.com/', username: 'same', password: PW('a') }, { url: 'https://b.example.com/', username: 'same', password: PW('b') }]);
     const t = writable(twins);
-    expect(t.c.siteCredential('same', 'https://c.example.com/')).toHaveProperty('refusal');
+    expect(t.c.siteCredential('same', 'https://test-9.example.com/')).toHaveProperty('refusal');
     expect(t.file.text).toBe(twins);
+  });
+
+  it('a host that is not a test or local one is never linked, even on the same domain and without «prod» in its name: no password, the file stays as it was', () => {
+    for (const host of ['www.example.com', 'example.com', 'app.example.com', 'shop.example.com', 'latest.example.com', 'contest.example.com', 'attestation.example.com', 'devices.example.com', 'my-latest-app.example.com']) {
+      const { c, file } = writable(FILE);
+      const r = refusal(c, 'luigi', `https://${host}/login`);
+      expect([host, file.text]).toEqual([host, FILE]);
+      // no text that invites the agent to add that host itself
+      expect([host, r]).toEqual([host, expect.stringMatching(/not a test or local one.*never add it to the entry.*report it to your parent/)]);
+      expect(r).not.toMatch(/cred-entry|add-host|set-url/);
+    }
+    // a word of the domain itself says nothing about the host
+    const own = JSON.stringify([{ url: 'https://app.test.example/', username: 'ada', password: PW('ada') }]);
+    const t = writable(own);
+    expect(t.c.siteCredential('ada', 'https://www.test.example/')).toHaveProperty('refusal');
+    expect(t.file.text).toBe(own);
+  });
+
+  it('fill_credential types nothing on a same-domain host that is not a test one', async () => {
+    const { c, file } = writable(FILE);
+    const { actions, tab, typed } = page('https://www.example.com/login', c);
+    await expect(actions.fillCredential(tab, { account: 'luigi', password_ref: 'e12' })).rejects.toThrow(/not a test or local one/);
+    expect(typed).toEqual({});
+    expect(file.text).toBe(FILE);
+  });
+
+  it('a same-site test host, and another port of localhost or of a loopback address, are still linked', () => {
+    for (const host of ['test-4.example.com', 'app-test.example.com', 'qa.example.com', 'uat2.example.com', 'app.staging.example.com', 'dev.example.com:8443', 'my-stage.example.com']) {
+      expect(writable(FILE).c.siteCredential('luigi', `https://${host}/`), host).toEqual({ user: 'luigi', password: PW('luigi'), linked: host });
+    }
+    expect(writable(FILE).c.siteCredential('dev', 'http://localhost:5001/login')).toMatchObject({ user: 'dev', linked: 'localhost:5001' });
+    for (const [url, next] of [['http://127.0.0.1:4200/', '127.0.0.1:5001'], ['http://[::1]:4200/', '[::1]:5001'], ['http://app.localhost:4200/', 'app.localhost:5001']] as const) {
+      expect(writable(JSON.stringify([{ url, username: 'loop', password: PW('loop') }])).c.siteCredential('loop', `http://${next}/`), next).toMatchObject({ linked: next });
+    }
+  });
+
+  it('no refusal invites linking a host that is not a test one: an entry without a url, no account named', () => {
+    expect(refusal(creds(), 'nourl', 'https://www.example.com/login')).not.toMatch(/cred-entry|set-url/);
+    expect(refusal(creds(), '', 'https://shop.example.com/login')).not.toMatch(/links/);
+    expect(refusal(creds(), '', 'https://test-9.example.com/login')).toMatch(/the app links a test page of the same site/);
+    // a test host of another domain: the agent may add it itself, when it is that account's environment
+    expect(refusal(creds(), 'luigi', 'https://test-1.example.net/login')).toMatch(/If test-1\.example\.net is a test environment of that account.*cred-entry\.mjs add-host "luigi"/);
   });
 
   it('a shared hosting suffix is not one site: another app under the same hosting domain is not linked', () => {
