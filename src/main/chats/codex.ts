@@ -272,7 +272,7 @@ export class CodexSession implements HarnessSession {
       this.exitedRoot = { pid: p.pid, created: startedAt, exited: Date.now(), job: this.job };
       if (!this.keepChildren && reapEnabled()) void reapEngine(this.exitedRoot, { chatId: chat, what: label });
     });
-    void jobGuard.add(p.pid, chat).then(job => {
+    void jobGuard.add(p.pid, chat, p.spawnfile).then(job => {
       this.job = job;
       if (this.exitedRoot) { this.exitedRoot.job = job; if (!this.keepChildren) void jobGuard.release(job); }
     });

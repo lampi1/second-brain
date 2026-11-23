@@ -72,6 +72,8 @@ Each one has a vice for the quiet moments:
   model presets (Minimo, Base, Massimo) and its code mode.
 - **Plans you can see.** The Strategist draws the plan on the project's map; boxes turn green as the crew finishes.
 - **No collisions.** Every writing agent gets its own git worktree.
+- **No leftovers.** A number beside Grindhouse counts the agents at work; when one ends, what it started ends with it,
+  except the shared environments held by a lease.
 - **Your rules.** A `permissions.json` in your brain decides what waits for your click. Production, databases and the
   cloud always wait for your own yes.
 - **A real browser.** QA agents drive your test environment in a tab next to their chat and bring back screenshots.

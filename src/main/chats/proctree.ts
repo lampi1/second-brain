@@ -9,12 +9,15 @@
 // Limit: a process whose launcher already exited (`Start-Process` from a shell that ended, `cmd /c start`) has a parent
 // id that points to nothing we can see, so it is not found. Hence reapEngine: when the engine ran in a Job Object
 // (jobguard.ts) its job lists every process it started, orphans included, in milliseconds; this walk is the fallback.
+// Never a process of a leased shared environment, nor what it started (leased-procs.ts); while a lease is held killSparing
+// replaces `taskkill /T`, which spares nothing (cli.ts killTrees).
 // Used by claude.ts, acp.ts and manager.ts when an engine exits or its chat really closes.
 import { execFile, spawn } from 'node:child_process';
 import { errText, log } from '../log';
 import { etimeSeconds } from '../platform';
 import { killTrees } from './cli';
 import { jobGuard, type JobMember } from './jobguard';
+import { leasedIn, leasedPids } from './leased-procs';
 import { listLinuxProcesses } from './linux-procs';
 
 export interface Proc { pid: number; ppid: number; /** creation time, ms since epoch */ created: number; /** image name, e.g. node.exe */ name?: string }
@@ -44,11 +47,13 @@ export function parseProcList(text: string): Proc[] {
 
 /** Every live tool process descending from the exited engine `root` (never a live process holding its pid: the
  *  engine is dead, so that one is someone else). A process that is not a tool is left alone with all it started. */
-export function descendants(procs: readonly Proc[], root: Root, opts: { live?: boolean } = {}): Proc[] {
+export function descendants(procs: readonly Proc[], root: Root, opts: { live?: boolean; /** pids never taken nor walked into */ spare?: ReadonlySet<number> } = {}): Proc[] {
+  // a bad time would remove a bound and reach whoever reused the pid: nothing is walked
+  if (!Number.isFinite(root.created) || !(opts.live || Number.isFinite(root.exited))) return [];
   const kids = new Map<number, Proc[]>();
   for (const p of procs) { if (p.pid !== p.ppid) kids.set(p.ppid, [...(kids.get(p.ppid) ?? []), p]); }
   const out: Proc[] = [];
-  const seen = new Set<number>([root.pid]);
+  const seen = new Set<number>([root.pid, ...leasedPids(), ...(opts.spare ?? [])]); // a leased environment is never walked into
   // the engine's own children were born before it exited, and before any process that took its pid since; `live`:
   // the engine still runs (the list holds the engine itself, not a reuser), so no upper bound
   const reuser = opts.live ? undefined : procs.find(p => p.pid === root.pid);
@@ -149,7 +154,7 @@ export function quitReapScript(roots: { pid: number; created: number; /** when i
     // pid, creation, and the kill time read by the caller, never the time this script got to run (seconds later under
     // load: a short-lived process that took the pid meanwhile could have started tools that would pass the guards)
     // (the unary comma keeps one engine an array of one triple: @(@(a, b, c)) would flatten into three numbers)
-    `$roots = @(${roots.map(r => `,@(${r.pid}, ${r.created}, ${r.exited})`).join('; ')}); $tool = ${q(TOOL.source)}`,
+    `$roots = @(${roots.map(r => `,@(${r.pid}, ${r.created}, ${r.exited})`).join('; ')}); $tool = ${q(TOOL.source)}; $leased = @(${[...leasedPids()].join(', ')})`,
     // tests (doneDir): a marker per phase, so a reaper that never ends says where it stopped
     doneDir ? `$mark = { param($ph) foreach ($r in $roots) { Set-Content -LiteralPath (Join-Path ${q(doneDir)} ('{0}.{1}' -f $r[0], $ph)) -Value $ph } }; & $mark 'started'` : '',
     // the engines are being terminated as this starts: wait for them, so a live process holding a pid is a reuser
@@ -160,7 +165,7 @@ export function quitReapScript(roots: { pid: number; created: number; /** when i
     "  foreach ($r in $roots) {",
     "    $root = [int]$r[0]",
     `    $until = $r[2] + ${CHILD_SLACK_MS}; $reuser = $all | Where-Object { $_.Id -eq $root } | Select-Object -First 1; if ($reuser -and $reuser.Made -lt $until) { $until = $reuser.Made }`,
-    "    $seen = @{ $root = $true }; $out = New-Object System.Collections.ArrayList; $queue = New-Object System.Collections.Queue",
+    "    $seen = @{ $root = $true }; foreach ($l in $leased) { $seen[[int]$l] = $true }; $out = New-Object System.Collections.ArrayList; $queue = New-Object System.Collections.Queue",
     `    $queue.Enqueue(@($root, ($r[1] - ${ROOT_SLACK_MS}), $until))`,
     "    while ($queue.Count) {",
     "      $n = $queue.Dequeue()",
@@ -179,13 +184,16 @@ export function quitReapScript(roots: { pid: number; created: number; /** when i
   ].join('\n');
 }
 
+/** The roots whose times can be trusted (a bad one would remove a bound of the walk). */
+export const quitReapRoots = <R extends { created: number; exited: number }>(roots: R[]): R[] => roots.filter(r => Number.isFinite(r.created) && r.created > 0 && Number.isFinite(r.exited));
+
 /** The quit's last resort for engines terminated directly at the cap: when snapshotTrees had no picture yet (WMI slow
  *  under load) or an engine started more since, and the detached taskkill had not read its tree, their children would
  *  live on until the next start's orphan sweep (2026-10-13, manager.test at 100% CPU). A detached PowerShell that
  *  outlives the app finds and stops them after the engines are gone. SB_QUIT_REAP_DONE (a folder; tests) gets
  *  `<pid>.done` for each engine when it ends. */
 export function reapAfterQuit(roots: { pid: number; created: number; exited: number }[]): void {
-  const ok = roots.filter(r => r.created > 0);
+  const ok = quitReapRoots(roots);
   if (process.platform !== 'win32' || !ok.length) return;
   const ps = ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(quitReapScript(ok, process.env.SB_QUIT_REAP_DONE || undefined), 'utf16le').toString('base64')];
   // a detached PowerShell has no console and exits at once without running anything (measured 2026-10-14): a detached
@@ -197,6 +205,31 @@ export function reapAfterQuit(roots: { pid: number; created: number; exited: num
     k.on('error', e => log.warn('chats', 'quit reaper did not start', { data: { pids: ok.map(r => r.pid) }, cause: errText(e), hint: "the next start's orphan sweep kills what the engines left" }));
     k.unref();
   } catch (e) { log.warn('chats', 'quit reaper did not start', { data: { pids: ok.map(r => r.pid) }, cause: errText(e), hint: "the next start's orphan sweep kills what the engines left" }); }
+}
+
+/** What a sparing kill uses (tests pass their own): the process list, the kill of one pid. */
+export interface SparingDeps { list?: typeof listProcesses; end?: (pid: number) => void }
+
+/** The tree kill while a lease is held: each process by its pid, children first, the leased ones and what they started
+ *  left running. A root not born by `since` (when the kill was decided) is someone who took its pid: not killed. No
+ *  process list = the roots alone (`fallback` if given: the child handles, which no reused pid can fool). */
+export async function killSparing(pids: readonly number[], opts: SparingDeps & { fallback?: () => void; since?: number } = {}): Promise<void> {
+  const since = opts.since ?? Date.now();
+  const end = (pid: number): void => { if (!leasedPids().has(pid)) try { if (opts.end) opts.end(pid); else process.kill(pid, 'SIGKILL'); } catch { /* gone */ } };
+  const procs = await (opts.list ?? listProcesses)();
+  const leased = leasedPids();
+  if (!procs) {
+    log.warn('chats', 'process list unavailable: only the engine is killed, its tools wait for the sweep', { data: { pids }, cause: 'Get-CimInstance Win32_Process failed or timed out', hint: 'a leased environment is held, so taskkill /T is not used' });
+    if (!opts.fallback || pids.some(p => leased.has(p))) return pids.forEach(end);
+    try { opts.fallback(); } catch { /* gone */ }
+    return;
+  }
+  for (const pid of pids) {
+    const self = procs.find(p => p.pid === pid);
+    if (!self || self.created > since || leased.has(pid)) continue;
+    for (const c of descendants(procs, { pid, created: self.created, exited: Infinity }, { live: true }).reverse()) end(c.pid);
+    end(pid);
+  }
 }
 
 /** Reaping is on in the app; unit tests turn it on only where they check it (SB_REAP=1): one WMI list per closed
@@ -246,7 +279,9 @@ export function jobTools(members: JobMember[], rootPid: number): JobMember[] {
  *  members, then the job is released so the user's programs outlive the app; without one: the process-list walk. */
 export async function reapEngine(root: Root, ctx: { chatId: string; what: string }): Promise<number> {
   if (!jobGuard.has(root.job)) return reapTree(root, ctx);
-  const left = jobTools(await jobGuard.members(root.job), root.pid);
+  const members = await jobGuard.members(root.job), spared = leasedIn(members);
+  const left = jobTools(members, root.pid).filter(p => !spared.has(p.pid));
+  if (spared.size) log.info('chats', 'leased processes left running', { chat: ctx.chatId, data: { root: root.pid, pids: [...spared] } });
   if (left.length) {
     log.info('chats', `${ctx.what} left processes behind, killing them`, { chat: ctx.chatId, data: { root: root.pid, via: 'job', procs: left.map(p => `${p.pid} ${p.name}`) } });
     for (const p of left) { try { process.kill(p.pid); } catch { /* gone */ } }

@@ -11,6 +11,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { log } from '../log';
 import { releaseEngine } from '../release';
+import { leasedPids } from './leased-procs';
+import { killSparing, type SparingDeps } from './proctree';
 import { bundledClaude, claudeScriptCommand, cursorInstall, discoverClaude, findCli, isClaudePackageScript } from './discovery.mjs';
 export { findCli, isClaudePackageScript, newestCursorVersion } from './discovery.mjs';
 export type { ClaudeSource } from './discovery.mjs';
@@ -140,10 +142,17 @@ export const CLOSE_GRACE_MS = 10000;
  *  taskkill takes ~1.6 s on a quiet box but 15-40 s on a loaded one (it walks every process; measured 2026-10-11).
  *  It reads the process tree as it starts, so once started it kills the children even if the parent is gone by then.
  *  Never waited for: detached and never killed, it finishes the tree even after the app is gone (the quit's bounded
- *  wait is killTreesWithin). If taskkill cannot start, `fallback` terminates the processes alone. */
-export function killTrees(pids: (number | null | undefined)[], opts: { fallback?: () => void; /** false: only these pids, not their children */ tree?: boolean } = {}): void {
-  const list = pids.filter((p): p is number => typeof p === 'number' && p > 0);
+ *  wait is killTreesWithin). If taskkill cannot start, `fallback` terminates the processes alone.
+ *  While a shared environment is leased neither /T nor a group kill is used: they would take it down (killSparing,
+ *  ADR 0338); `since`: when the kill was decided, for a kill that comes later. */
+export function killTrees(pids: (number | null | undefined)[], opts: { fallback?: () => void; /** false: only these pids, not their children */ tree?: boolean; since?: number; /** tests */ sparing?: SparingDeps } = {}): void {
+  const leased = leasedPids();
+  const all = pids.filter((p): p is number => typeof p === 'number' && p > 0), list = all.filter(p => !leased.has(p));
   if (!list.length) return;
+  if (leased.size && opts.tree !== false) {
+    void killSparing(list, { ...opts.sparing, ...(opts.fallback && list.length === all.length ? { fallback: opts.fallback } : {}), ...(opts.since !== undefined ? { since: opts.since } : {}) });
+    return;
+  }
   const fallback = (): void => { try { opts.fallback?.(); } catch { /* gone */ } };
   try {
     if (process.platform !== 'win32') {
@@ -182,10 +191,11 @@ export async function killTreesWithin(pids: (number | null | undefined)[], ms: n
   const stop = until - Math.max(QUIT_RESERVE_MIN_MS, 2 * spawnMs);
   while (list.some(pidAlive) && Date.now() < stop) await new Promise(r => setTimeout(r, Math.max(1, Math.min(50, stop - Date.now()))));
   const killed: number[] = [];
+  const leased = leasedPids(); // the picture may be older than a lease
   for (const p of list) {
-    if (!pidAlive(p)) continue;
+    if (leased.has(p) || !pidAlive(p)) continue;
     // its children first, while it still runs (the picture was taken under it: no pid reuse yet), then itself
-    for (const k of opts.kids?.(p) ?? []) { try { process.kill(k); } catch { /* gone */ } }
+    for (const k of opts.kids?.(p) ?? []) { if (!leased.has(k)) try { process.kill(k); } catch { /* gone */ } }
     try { process.kill(p); killed.push(p); } catch { /* gone */ }
   }
   if (killed.length) opts.after?.(killed, Date.now());

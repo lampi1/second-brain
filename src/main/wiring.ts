@@ -51,6 +51,8 @@ import { createEngines } from './engines/service';
 import { safeStorageCipher } from './engines/secrets';
 import { RecordingStore } from './recordings/store';
 import { EngineSweeper } from './chats/sweep';
+import { jobGuard } from './chats/jobguard';
+import { readLeasedPids, setLeaseReader } from './chats/leased-procs';
 import { ChatManager, workBehind } from './chats/manager';
 import type { BrainService, ChatService } from './services';
 import { SkillsService } from './skills/service';
@@ -482,8 +484,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   syncBeforeCreate(manager, () => brain.syncBeforeRead());
   const chats: ChatService = manager;
   // idle engines released after engineIdleMin, orphans of ended engines swept every 15 min (ADR 0026; zero tokens)
-  const sweeper = new EngineSweeper({ userData: ctx.userData, owners: () => manager.engines(), releaseIdle: ms => manager.releaseIdle(ms), idleMin: () => brain.settings().engineIdleMin ?? 30 });
-  if (!process.env.SB_TEST) sweeper.start();
+  const sweeper = new EngineSweeper({ userData: ctx.userData, owners: () => manager.engines(), releaseIdle: ms => manager.releaseIdle(ms), idleMin: () => brain.settings().engineIdleMin ?? 30, spareLeased: () => jobGuard.loosenLeased() });
+  setLeaseReader(() => readLeasedPids(brain.info().brainRoot));
+  // every chat engine is noted in engines.json as it spawns, so the next start reaps it even if this run dies soon
+  if (!process.env.SB_TEST) { sweeper.start(); jobGuard.onAdd((pid, chatId, name) => { if (chatId && chatId !== 'agent-runtime') sweeper.noteSpawn(pid, chatId, name); }); }
   // what grows over a day, every 10 minutes in the perf log (ADR 0187)
   const fileKb = (name: string): number | null => { try { return Math.round(fs.statSync(path.join(ctx.userData, name)).size / 1024); } catch { return null; } };
   const stopHealth = process.env.SB_TEST ? () => {} : startHealthLog(() => {

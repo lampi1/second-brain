@@ -6,7 +6,7 @@
 // Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
 // removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { JobGuard, parseMembers, type JobMember } from '../../../src/main/chats/jobguard';
+import { helperCommand, JOB_FLAGS, JobGuard, parseMembers, type JobMember } from '../../../src/main/chats/jobguard';
 import { jobTools } from '../../../src/main/chats/proctree';
 import { killStray } from './helpers';
 
@@ -30,6 +30,22 @@ describe('jobguard', () => {
     const list = [m(100, 1, 'claude.exe'), m(200, 100, 'powershell.exe'), m(201, 200, 'chrome.exe'), m(202, 201, 'node.exe'),
       m(203, 200, 'EXCEL.EXE'), m(204, 999, 'node.exe'), m(205, 100, 'cmd.exe')];
     expect(jobTools(list, 100).map(x => x.pid)).toEqual([200, 204, 205]);
+  });
+
+  it('an engine job allows no breakaway: Git Bash leaves any job that does (ADR 0338)', () => {
+    expect(JOB_FLAGS & 0x2000).toBe(0x2000); // kill-on-close
+    expect(JOB_FLAGS & (0x0800 | 0x1000)).toBe(0); // breakaway: explicit, silent
+    const script = Buffer.from(helperCommand(), 'base64').toString('utf16le');
+    expect(script).toContain(`Limit(j, ${JOB_FLAGS})`);
+  });
+
+  it('reaps the shells, builds and dev apps an agent started, whose own parents already ended', () => {
+    const list = [m(100, 1, 'claude.exe'), m(300, 999, 'bash.exe'), m(301, 998, 'electron.exe'), m(302, 997, 'node.exe'), m(303, 996, 'dotnet.exe')];
+    expect(jobTools(list, 100).map(x => x.pid)).toEqual([300, 301, 302, 303]);
+  });
+
+  it('the helper still fits in a Windows command line, its other arguments included', () => {
+    expect(helperCommand().length).toBeLessThan(32767 - 200);
   });
 
   it('is off under tests unless asked (no helper, every call a no-op)', async () => {

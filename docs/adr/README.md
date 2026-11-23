@@ -34,7 +34,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0023](0023-full-text-search.md) Full-text search in Ctrl+K — accepted
 - [0024](0024-quality-four-true-metrics.md) Qualità: four true metrics, each with its source; /api/quality answered by main — accepted
 - [0025](0025-warm-claude-engine.md) A Claude engine started ahead for the next new chat; start-up timings in the logs — accepted
-- [0026](0026-engine-processes-and-self-healing.md) Engine processes in Job Objects, idle release, orphan sweep; the app heals itself — accepted
+- [0026](0026-engine-processes-and-self-healing.md) Engine processes in Job Objects, idle release, orphan sweep; the app heals itself — accepted; amended by 0338
 - [0027](0027-light-branch-check.md) Light check on branches, full check only on main — accepted, partly superseded by 0231
 - [0028](0028-regia-widget-bottom-right.md) The Regia as a widget docked bottom-right, always visible — accepted
 - [0029](0029-devops-alerts-and-record-chats.md) DevOps alerts with a sound, and "Apri chat" on every DevOps record — accepted
@@ -331,6 +331,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0335](0335-project-map-line-top-to-bottom-with-parallel-frames.md) A line of phases and steps is drawn top to bottom, with parallel groups in their own frame; the Strategist plans with dependencies — accepted
 - [0336](0336-model-presets.md) Per-task model presets Minimo / Base / Massimo on each role card, picked by delegation under the delegator's price ceiling — accepted; amended by 0337
 - [0337](0337-model-choice-on-the-role-card.md) Model choice and Code Mode live on the role card; Settings has none; one approved model choice guide — accepted
+- [0338](0338-no-leftover-processes.md) No leftover processes: no breakaway from an engine's job, engines recorded at once, leased stacks spared — accepted
 - [0340](0340-no-guide-page-and-a-four-tab-memory.md) No Guida page, and a Memoria of four tabs with a real Skill view — accepted
 
 ## Replaced
