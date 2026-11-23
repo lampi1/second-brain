@@ -19,6 +19,7 @@ import {workProfile} from '../../shared/work-profiles';
 import { SidebarTree } from './SidebarTree';
 import { useProposalCount } from '../lib/proposals';
 import { HUB_PAGES } from '../lib/memory-hub';
+import { workingCount } from '../lib/working-count';
 
 const ICON: Record<BrainPageId, ReactNode> = {
   home: <IconGrid />,
@@ -55,6 +56,7 @@ export function Sidebar() {
   const read = ui.use(s => s.read);
   const feed = useApp(s => s.feed);
   const waiting = useApp(s => s.pending.length);
+  const working = useApp(s => workingCount(s.chats));
   const tasksUnread = useTasks(s => s?.unread ?? 0);
   // Task only while the brain can read it: hidden once the read says the brain has no devops-me.mjs
   const tasksOn = useTasks(s => s !== null && s.error?.kind !== 'script'); // not before the first read: no flash
@@ -70,11 +72,14 @@ export function Sidebar() {
     </button>
   );
   // the agents live in the Grindhouse (SPEC 19): its entry carries the count of agents waiting for an answer
+  // and, before it, the count of agents working now (hidden at 0)
   const waitingBadge = <span className="nav-badge amber" data-testid="nav-badge-waiting" aria-label={t('dialogs.sidebar.waiting', { count: waiting })}>{waiting}</span>;
+  const workingBadge = <span className="nav-badge" data-testid="nav-badge-working" aria-label={t('dialogs.sidebar.working', { count: working })}>{working > 99 ? '99+' : working}</span>;
+  const homeBadge = working || waiting ? <>{working ? workingBadge : null}{waiting ? waitingBadge : null}</> : null;
   const page1 = (id: BrainPageId) => {
     const p = BRAIN_PAGES.find(x => x.id === id)!;
     return item(p.id, p.id==='agenti'?t('catalog.title'):p.label, ICON[p.id] ?? <IconBrain />, page === p.id && !map, () => go({ page: p.id }), {
-      key: p.key, testid: `nav-${p.id}`, badge: p.id === 'home' && waiting ? waitingBadge : p.id === 'memoria' && proposals ? <span className="nav-badge amber nav-badge-pulse" data-testid="nav-badge-proposals" aria-label={t('mh.badge', { n: proposals })}>{proposals > 99 ? '99+' : proposals}</span> : <span data-testid={`nav-badge-${p.id}`}><Badge n={p.id === 'task' ? tasksUnread : b[p.id] ?? 0} warn={WARN_SECTIONS.has(p.id)} /></span>,
+      key: p.key, testid: `nav-${p.id}`, badge: p.id === 'home' && homeBadge ? homeBadge : p.id === 'memoria' && proposals ? <span className="nav-badge amber nav-badge-pulse" data-testid="nav-badge-proposals" aria-label={t('mh.badge', { n: proposals })}>{proposals > 99 ? '99+' : proposals}</span> : <span data-testid={`nav-badge-${p.id}`}><Badge n={p.id === 'task' ? tasksUnread : b[p.id] ?? 0} warn={WARN_SECTIONS.has(p.id)} /></span>,
     });
   };
   const title = (txt: string, id: string) => <div className="nav-title" data-testid={`nav-group-${id}`}>{txt}</div>;

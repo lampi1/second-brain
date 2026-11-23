@@ -1,6 +1,6 @@
 # ADR 0026 · Engine processes in Job Objects, idle release, orphan sweep; the app heals itself
 
-Date: 2026-10-13 · Status: accepted
+Date: 2026-10-13 · Status: accepted; amended by 0338
 
 ## Context
 The stable warn log (48 h): "session did not exit, killing" 57, "cursor did not exit, killing" 25, "tree kill did not
@@ -24,7 +24,7 @@ Causes found:
 ## Decision
 - **One Job Object per engine** (`chats/jobguard.ts`). Node has no Job Object API. One hidden PowerShell helper
   (C# via Add-Type, compiled once into `<userData>/jobguard/`, then only loaded) holds the jobs. Each engine joins its
-  own job as soon as it is spawned. The flags: kill-on-close, explicit breakaway allowed, no silent breakaway, and
+  own job as soon as it is spawned. The flags: kill-on-close, no breakaway (explicit allowed until 0338), and
   die-on-unhandled-exception. The engine's later children are born inside the job, orphans included. Nested jobs
   decide breakaway by the innermost job, which is ours. A crashing taskkill inside the job just ends, without a dialog.
   - Killing an engine (grace over, Stop on a stuck boot, quit) is `TerminateJobObject`: the whole tree in

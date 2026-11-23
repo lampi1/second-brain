@@ -172,6 +172,10 @@ a small pool of them per repository and reuses a free, clean one, build outputs 
 changes or unpushed commits is never deleted: Settings → Advanced lists it, next to the limits and the disk space each
 repository takes.
 
+A number beside Grindhouse in the menu counts the agents at work now. When an agent ends, what it started (shells,
+builds, a dev app) ends with it, on Windows also when the app quits or crashes; shared environments held by a lease
+stay up.
+
 <p align="center"><img src="docs/screenshots/worktrees.webp" alt="Settings, Advanced: the worktree limits, the space per repository and two worktrees kept because they hold work" width="560"></p>
 
 ### Your rules, not the app's

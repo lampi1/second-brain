@@ -15,6 +15,7 @@ import type { AutoCloseWaiting } from '../../shared/auto-close';
 import type { Rec } from './manager-types';
 import { clearInterval, clearTimeout, RESUME_TEXT, supersededResult, uniqueChildResults, workBehind, WAITING_REASON } from './manager-helpers';
 import { ManagerDelegation } from './manager-delegation';
+import { stopOrKill } from './stop-kill';
 
 /** A chat's life: stop, close, archive and reopen, the automatic close's candidates, stale runs, resume after a restart, shutdown. */
 export abstract class ManagerLifecycle extends ManagerDelegation {
@@ -177,14 +178,12 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     } finally { r.archiving = undefined; r.autoClosing = false; r.autoEnding = false; }
   }
 
-  /** Interrupts whenever a process exists, whatever the shown state says (an interrupt on an idle CLI is harmless). */
+  /** Interrupts whenever a process exists, whatever the shown state says (an interrupt on an idle CLI is harmless);
+   *  an engine that does not answer the interrupt is stuck: its process tree is killed (stop-kill.ts). */
   async stop(chatId: string, keepQueued = false): Promise<void> {
     const r = this.need(chatId);
     if (!r.session) return;
-    try { await r.session.interrupt({ keepQueued, byUser: true }); } catch (e) {
-      log.warn('chats', 'interrupt failed', { chat: chatId, data: errText(e) });
-      throw new Error(`Stop non riuscito: ${errText(e)}`);
-    }
+    await stopOrKill(r.session, chatId, keepQueued);
   }
 
   /** Interrupts every live session; returns how many were working. */

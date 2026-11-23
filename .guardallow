@@ -568,3 +568,7 @@ docs/screenshots/project-map.webp binary-media sha256:69f69d2a54035ff1294c8dd9d5
 docs/screenshots/plan.webp binary-media sha256:867ce48ff0ffc8f266204293b42992f9ef4fcf01bbc7924c138c02d9ced54164
 docs/screenshots/project-map.webp binary-media sha256:c50fe1d29b1137acf7caf49139525aad696243b90e7b303cedfbcfb1da08bc08
 docs/screenshots/plan.webp binary-media sha256:157dd2eb453ccb6de91b79226d9a3e6fb5ce777d9626e353806e306e75865b22
+# README screenshots regenerated for ADR 0338 (working agents counted beside Grindhouse): frozen demo data only, looked
+# at 2026-11-23.
+docs/screenshots/grindhouse.webp binary-media sha256:4cc38f0b739dfa21c761fd7ddc80a93d07fd6e90119e1670024e683b19680274
+docs/screenshots/agents.webp binary-media sha256:e73fe3cc39c05f48882edd5f2b794283f2dd7a59bc4a3ca2b5b7c253cf82687f

@@ -4,6 +4,8 @@
 import type { AutoClosePresence, AutoCloseStatus, AutoCloseWaiting } from '../../shared/auto-close';
 
 export const AUTO_CLOSE_WARNING_MS = 120_000;
+/** A parent due while a chat below it is closing looks again this soon. */
+export const TREE_RETRY_MS = 5_000;
 export const PRESENCE_LEASE_MS = 15_000;
 /** Epoch-shaped monotonic clock: wall-clock adjustments cannot shorten leases or the warning. */
 export const autoCloseNow = (): number => performance.timeOrigin + performance.now();
@@ -132,6 +134,13 @@ export class AutoCloseService {
     this.emit();
   }
 
+  /** When the chat is expected to be gone: its deadline, a moment from now while it closes, a whole warning if held. */
+  private closesAt(id: string, now: number): number {
+    const d = this.entries.get(id)?.status.deadline;
+    if (this.inFlight.has(id) || (d != null && d <= now)) return now + TREE_RETRY_MS;
+    return d ?? now + AUTO_CLOSE_WARNING_MS;
+  }
+
   /** Call on lifecycle changes and an inexpensive main timer. A late/stalled timer never shortens the warning. */
   async tick(): Promise<void> {
     // one candidate list for the whole synchronous scan: it walks every open chat and its tree, and was built up to five
@@ -145,10 +154,13 @@ export class AutoCloseService {
       const s = e.status;
       if (this.inFlight.has(s.chatId) || s.deadline === null || now < s.deadline) continue;
       // a deeper member of its tree still open (touched later, kept open, or still closing in another pass): this one
-      // waits a new warning, so a child is never left on screen without its parent
+      // waits, so a child is never left on screen without its parent: as long as that member's own countdown (they close
+      // together, leaves first), a few seconds while it is closing, a new warning only when it is held (2026-11-23: a
+      // new warning per level kept finished trees open 2 minutes a level)
       const open = list, self = open.find(c => c.id === s.chatId);
-      if (self?.tree !== undefined && open.some(c => c.tree === self.tree && (c.depth ?? 0) > (self.depth ?? 0))) {
-        s.deadline = now + AUTO_CLOSE_WARNING_MS; s.warningStartedAt = null; s.generation = this.nextGeneration++; this.emit(); continue;
+      const deeper = self?.tree === undefined ? [] : open.filter(c => c.tree === self.tree && (c.depth ?? 0) > (self.depth ?? 0));
+      if (deeper.length) {
+        s.deadline = Math.max(...deeper.map(c => this.closesAt(c.id, now))); s.warningStartedAt = null; s.generation = this.nextGeneration++; this.emit(); continue;
       }
       const candidate = list.find(c => c.id === s.chatId);
       if (!candidate || this.hold(candidate, now)) continue;

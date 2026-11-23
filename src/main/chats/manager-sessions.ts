@@ -8,6 +8,7 @@ import { errText, log } from '../log';
 import { cliVersion, killTrees, killTreesWithin, resolveClaude } from './cli';
 import { reapAfterQuit } from './proctree';
 import { jobGuard } from './jobguard';
+import { engineEnv } from './engine-env';
 import { coldArmed, coldRoute, type ColdView } from './continuity';
 import { isSessionId, isUuid, type HarnessSession, type SessionOptions, type SessionSink } from './session';
 import { updateActivity } from '../update/activity';
@@ -347,7 +348,7 @@ export abstract class ManagerSessions extends ManagerPersistence {
       sessionId, resume, fork, worktree: r.worktree && !resume, ...(r.worktree || r.inWorktree ? { inWorktree: true } : {}), mcpConfig: this.mcpConfig(chatId), costBaseUsd: r.costTotalUsd,
       compactWindowTokens: r.maxContext ?? this.compactWindow(),
       // Native subagents inherit this environment: a per-chat model cannot prove a memory event's producer.
-      env: { ...this.opts.env, SB_EVENT_CONTEXT: '' }, ...(extraArgs ? { extraArgs } : {}),
+      env: { ...engineEnv(), ...this.opts.env, SB_EVENT_CONTEXT: '' }, ...(extraArgs ? { extraArgs } : {}),
       // the Orchestrator may turn on Remote Control (ADR 0229): its engine echoes queued messages, the phone's included
       ...(r.s.isOrchestrator && engine.kind === 'claude' ? { remoteControl: true } : {}),
     };
@@ -434,7 +435,7 @@ export abstract class ManagerSessions extends ManagerPersistence {
       ...(launch.toolPolicy !== undefined || launch.ceiling !== undefined ? { toolPolicy: launch.toolPolicy ?? null, ceiling: launch.ceiling ?? null } : {}),
       ...(launch.agentAssets ? { agentAssets: launch.agentAssets } : {}), ...subagentGateFor(launch.toolPolicy, cwd),
       mcpConfig: this.mcpConfig(chatId), costBaseUsd: 0, compactWindowTokens: launch.compactWindowTokens ?? this.compactWindow(),
-      env: { ...this.opts.env, SB_EVENT_CONTEXT: '' }, ...(extraArgs ? { extraArgs } : {}),
+      env: { ...engineEnv(), ...this.opts.env, SB_EVENT_CONTEXT: '' }, ...(extraArgs ? { extraArgs } : {}),
     };
     const sink = new BufferedSink();
     const session = this.newSession('claude', opts, sink, undefined);

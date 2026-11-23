@@ -124,5 +124,24 @@ describe('backend automatic-close warning', () => {
     for (let i = 0; i < 80 && open.size; i++) { beat(); await service.tick(); now += 5_000; }
     expect(archived).toEqual(['child', 'parent']);
   });
+
+  it('a finished tree closes in one countdown, leaves first, not a new warning per level', async () => {
+    const start = 1_000_000;
+    let now = start;
+    const tree = ['root', 'mid', 'leaf'];
+    const open = new Set(tree);
+    const archived: string[] = [];
+    // the leaf finished last: its deadline is later than its parents'
+    const service = new AutoCloseService({ now: () => now, delayMs: () => 120_000, emit: () => {},
+      candidates: () => tree.filter(id => open.has(id)).map(id => ({ id, stamp: id, activityAt: start - 900_000, eligible: id !== 'leaf' || now >= start + 60_000, depth: tree.indexOf(id), tree: 'root' })),
+      archive: async (id, _e, valid) => { if (!valid()) return false; archived.push(id); open.delete(id); return true; } });
+    while (open.size && now < start + 900_000) {
+      service.setPresence([...open].map(id => ({ chatId: id, draft: false, shown: false, browser: false, queued: 0, touchedAt: 0 })));
+      await service.tick();
+      now += 1_000;
+    }
+    expect(archived).toEqual(['leaf', 'mid', 'root']);
+    expect(now - start).toBeLessThanOrEqual(60_000 + WARNING + 2 * 5_000 + 1_000);
+  });
 });
 

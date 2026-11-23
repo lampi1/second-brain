@@ -2,14 +2,17 @@
 // children break away silently, so MCP servers, shells and background commands outlive a killed or crashed app, and
 // `taskkill /T` (15-40 s on a loaded box) misses every child whose parent already exited. Node has no Job Object API,
 // so one hidden PowerShell helper (C# via Add-Type, started once, lives as long as the app) holds one job per engine:
-// - add: the engine joins a new job (kill-on-close, explicit breakaway allowed); its later children are born inside it,
-//   orphans included (nested jobs: the innermost job, ours, decides; it allows no silent breakaway). The job also has
+// - add: the engine joins a new job (kill-on-close, no breakaway); its later children are born inside it, orphans included
+//   (nested jobs: the innermost job, ours, decides; it allows no silent breakaway, and since 2026-11-23 no explicit one:
+//   Git Bash asks to leave any job that allows it, so every command of an agent's Bash tool escaped: ADR 0338). It also has
 //   die-on-unhandled-exception (SEM_NOGPFAULTERRORBOX): the Claude CLI kills its own Bash/tool children with
 //   `taskkill /PID x /T /F`, and under load those taskkill crash (access violation, ~10 a minute on 2026-10-13), each one
 //   with a Windows error dialog and the VS JIT debugger; inside the job they just end;
 // - kill: TerminateJobObject, the whole tree at once, orphans included, in milliseconds;
 // - list: the job's members (pid, parent pid, image), for the reap after a clean exit (proctree.ts reapEngine);
 // - release: drops kill-on-close and the handle, so what the chat opened for the user outlives the app;
+// - loosen: drops kill-on-close but keeps the job: one holding a leased shared environment (leased-procs.ts) must not
+//   take it down when the app crashes; kill and quit then end its other members one by one and release it;
 // - closeall: every job not released dies (the quit's last kill);
 // - quit: closeall, then starts a booster that raises the threads of the app's process tree until the app is gone (a slow
 //   exit under load, Boost), and ends.
@@ -26,6 +29,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { errText, log } from '../log';
 import { killTrees } from './cli';
+import { leasedIn, leasedPids } from './leased-procs';
+
+/** An engine's job: kill-on-close | die-on-unhandled-exception; no breakaway flag (0x800 explicit, 0x1000 silent). */
+export const JOB_FLAGS = 0x2000 | 0x400;
 
 const CS = `
 using System; using System.Collections.Generic; using System.Diagnostics; using System.Runtime.InteropServices;
@@ -67,7 +74,7 @@ public static class SbJob {
       if (jobs.ContainsKey(id)) return "err exists";
       j = CreateJobObject(IntPtr.Zero, null);
       if (j == IntPtr.Zero) return "err create " + Err();
-      if (!Limit(j, 0x2000 | 0x800 | 0x400)) { var m = "err limit " + Err(); CloseHandle(j); return m; }
+      if (!Limit(j, ${JOB_FLAGS})) { var m = "err limit " + Err(); CloseHandle(j); return m; }
       IntPtr p = OpenProcess(0x0100 | 0x0001, false, pid);
       if (p == IntPtr.Zero) { var m = "err open " + Err(); CloseHandle(j); return m; }
       bool ok = AssignProcessToJobObject(j, p); var am = ok ? "" : "err assign " + Err(); CloseHandle(p);
@@ -90,6 +97,7 @@ public static class SbJob {
       } finally { Marshal.FreeHGlobal(buf); }
     }
     if (cmd == "kill") { bool ok = TerminateJobObject(j, 1); var m = ok ? "ok" : "err kill " + Err(); CloseHandle(j); jobs.Remove(id); return m; }
+    if (cmd == "loosen") return Limit(j, 0x400) ? "ok" : "err loosen " + Err();
     if (cmd == "release") { Limit(j, 0x800); CloseHandle(j); jobs.Remove(id); return "ok"; }
     return "err command";
   }
@@ -194,6 +202,9 @@ while ($null -ne ($l = [Console]::In.ReadLine())) {
   [Console]::Out.WriteLine($p[0] + ' ' + $r); [Console]::Out.Flush()
 }`;
 
+/** The helper's -EncodedCommand (Windows' command line: 32767 characters in all). */
+export const helperCommand = (): string => Buffer.from(PS, 'utf16le').toString('base64');
+
 export interface JobMember { pid: number; ppid: number; name: string }
 
 /** `12:4:node.exe|34:12:cmd.exe` → members (bad parts skipped). */
@@ -225,6 +236,9 @@ export class JobGuard {
   private st: GuardState = 'off';
   private readyWaiters: ((ok: boolean) => void)[] = [];
   private readonly jobs = new Set<number>();
+  private readonly loosened = new Set<number>();
+  /** `end`: ends one process (tests). */
+  constructor(private readonly end: (pid: number) => void = pid => { process.kill(pid); }) {}
 
   get state(): GuardState { return this.st; }
 
@@ -235,7 +249,6 @@ export class JobGuard {
     this.st = 'starting';
     const t0 = Date.now();
     try {
-      const enc = Buffer.from(PS, 'utf16le').toString('base64');
       const env = { ...process.env };
       delete env.SB_JOBGUARD_DLL;
       if (cacheDir) {
@@ -243,7 +256,7 @@ export class JobGuard {
         env.SB_JOBGUARD_DLL = path.join(cacheDir, `sbjob-${crypto.createHash('sha256').update(CS).digest('hex').slice(0, 12)}.dll`);
       }
       const powershell = path.join(process.env.SystemRoot || 'C:/Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe');
-      this.proc = spawn(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', enc], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], env });
+      this.proc = spawn(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', helperCommand()], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], env });
     } catch (e) { this.failed(String(e)); return; }
     const p = this.proc;
     p.stdout.setEncoding('utf8');
@@ -319,6 +332,8 @@ export class JobGuard {
 
   /** The engine joins a new job of its own: resolves with the job's id, null when it could not (no helper, gone). */
   async add(pid: number | null | undefined, chatId?: string): Promise<number | null> {
+    // every engine passes here right after spawn, job or not: the orphan sweep notes it (sweep.ts noteSpawn)
+    if (pid) for (const f of this.added) { try { f(pid, chatId); } catch (e) { log.warn('chats', 'engine spawn not noted', { data: { pid }, cause: errText(e), hint: 'the next orphan sweep records it' }); } }
     if (!pid || this.st === 'off' || this.st === 'failed') return null;
     const job = ++this.nextJob;
     const r = await this.call('add', job, pid);
@@ -331,10 +346,27 @@ export class JobGuard {
 
   has(job: number | null | undefined): boolean { return !!job && this.jobs.has(job); }
 
+  private readonly added: ((pid: number, chatId: string | undefined) => void)[] = [];
+  /** Called with every engine given to add (synchronously, before the job): wiring.ts → EngineSweeper.noteSpawn. */
+  onAdd(f: (pid: number, chatId: string | undefined) => void): () => void {
+    this.added.push(f);
+    return () => { const i = this.added.indexOf(f); if (i >= 0) this.added.splice(i, 1); };
+  }
+
   /** Terminates the whole job (orphans included). False = no such job or it failed (use taskkill). */
   async kill(job: number | null | undefined, chatId?: string): Promise<boolean> {
     if (!job || !this.jobs.has(job)) return false;
     this.jobs.delete(job);
+    this.loosened.delete(job);
+    if (leasedPids().size) {
+      const members = await this.list(job), spared = leasedIn(members);
+      if (spared.size) {
+        for (const m of members) if (!spared.has(m.pid)) { try { this.end(m.pid); } catch { /* gone */ } }
+        log.info('chats', 'engine tree killed, leased processes left running', { chat: chatId, data: { job, killed: members.length - spared.size, leased: [...spared] } });
+        await this.call('release', job);
+        return true;
+      }
+    }
     const r = await this.call('kill', job);
     if (r === 'ok') return true;
     log.warn('chats', 'job kill failed', { chat: chatId, data: { job }, cause: r, hint: 'falling back to taskkill /T' });
@@ -343,15 +375,36 @@ export class JobGuard {
 
   /** Processes still in the job (empty when none or no job). */
   async members(job: number | null | undefined): Promise<JobMember[]> {
-    if (!job || !this.jobs.has(job)) return [];
+    return job && this.jobs.has(job) ? this.list(job) : [];
+  }
+  private async list(job: number): Promise<JobMember[]> {
     const r = await this.call('list', job);
     return r.startsWith('ok') ? parseMembers(r.slice(3)) : [];
+  }
+
+  /** Every minute (sweep.ts): a job that holds a leased environment loses kill-on-close, so an app crash spares it. */
+  async loosenLeased(): Promise<void> {
+    if (!leasedPids().size) return;
+    for (const job of [...this.jobs]) {
+      if (this.loosened.has(job) || !leasedIn(await this.members(job)).size || !this.jobs.has(job)) continue;
+      const r = await this.call('loosen', job);
+      if (r === 'ok') { this.loosened.add(job); log.info('chats', 'job holds leased processes: it no longer dies with the app', { data: { job } }); }
+      else log.warn('chats', 'job not loosened', { data: { job }, cause: r, hint: 'an app crash would end the leased environment with this job' });
+    }
+  }
+
+  /** Before the jobs close at quit: the ones holding leased processes are ended member by member instead, bounded. */
+  private async endLeased(ms: number): Promise<void> {
+    if (!this.loosened.size && !leasedPids().size) return;
+    const each = [...this.jobs].map(async job => { if (this.loosened.has(job) || leasedIn(await this.members(job)).size) await this.kill(job); });
+    await Promise.race([Promise.allSettled(each), new Promise<void>(r => { setTimeout(r, ms).unref(); })]);
   }
 
   /** Drops the job without killing it: what is left lives on after the app. */
   async release(job: number | null | undefined): Promise<void> {
     if (!job || !this.jobs.has(job)) return;
     this.jobs.delete(job);
+    this.loosened.delete(job);
     await this.call('release', job);
   }
 
@@ -359,6 +412,7 @@ export class JobGuard {
    *  ended instead, which closes the jobs too. */
   async closeAll(): Promise<void> {
     if (!this.proc) return;
+    await this.endLeased(1500);
     this.jobs.clear();
     if ((await this.call('closeall', 0, 0, 2000)) !== 'ok') this.stop();
   }
@@ -368,6 +422,7 @@ export class JobGuard {
    *  20-130 s), and ends. Resolves with its answer, at most `ms`; no helper = nothing to do. */
   async quit(pid: number, ms = 1000): Promise<void> {
     if (!this.proc || this.st !== 'ready') return;
+    await this.endLeased(ms);
     this.jobs.clear();
     // no answer in time: the helper is left alone (it may be starting the booster); a stuck one dies with the app
     // (libuv's job) and its jobs with it
