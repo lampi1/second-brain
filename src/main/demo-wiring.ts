@@ -224,7 +224,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     changed: (state, lesson) => ctx.emitter.emit('impara:changed', { state, ...(lesson ? { lesson } : {}) }),
     tutorText: (lesson, turn, text) => ctx.emitter.emit('impara:tutor', { lesson, turn, text }) });
   // the project maps (ADR 0271): the demo brain holds one, the shop the demo chats work on
-  const projectMaps = attachProjectMaps(ctx, chats, () => demoBrainRoot, undefined, now); // no chat endpoints in the demo
+  const projectMaps = attachProjectMaps(ctx, chats, () => demoBrainRoot, undefined, now, (role, preset) => agents.plannedModel(role, preset)); // no chat endpoints in the demo
   seedDemoMap(demoBrainRoot, projectMaps, now());
   attachAppTools(mcp, { projectMaps, recordings, impara: learn, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), resolveRole: req => agents.resolve(req), runFeedback, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd) }, source, true);
   try { recordMcpPort(mcpPortFromEnv(), await mcp.listen(mcpPortFromEnv())); } catch (e) {
@@ -280,9 +280,9 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     /** a Strategist's plan with the user as it would be at a moment (e2e: its strip asking, proposing, under way) */
     plan: (chatId: string, plan: StrategyPlan | null) => chats.patch(chatId, { plan: plan ?? undefined }),
     /** the skills a chat's run has used, as its Grindhouse card shows them (e2e: the skill chips) */
-    skills: (chatId: string, names: string[]) => {
+    skills: (chatId: string, names: string[], loaded?: string[]) => {
       const run = chats.list().find(c => c.id === chatId)?.run;
-      if (run) chats.patch(chatId, { run: { ...structuredClone(run), tags: { skills: names, app: null, repo: null } } });
+      if (run) chats.patch(chatId, { run: { ...structuredClone(run), tags: { skills: names, app: null, repo: null } }, ...(loaded ? { loadedSkills: loaded } : {}) });
     },
     /** a feed event, as the brain would publish it (e2e: toasts, notification center, badges) */
     event: (e: { kind: string; title: string; detail?: string; chatId?: string }) => brain.publish([e]),

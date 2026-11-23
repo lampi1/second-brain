@@ -29,6 +29,19 @@ test('the menu, Ctrl+1 and Esc fold every open chat into the overview of all age
   } finally { await app.close(); }
 });
 
+test('the menu leaves a chat in focus mode and shows every agent', async () => {
+  const { app, page } = await launchDemo({ width: 1600, height: 900 });
+  try {
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press('Control+2');
+    await expect(page.getByTestId('chat-expand-fix')).toHaveCount(0);
+    await shot(page, 'grindhouse-overview-focus-before');
+    await page.getByTestId('nav-home').click();
+    await expect(page.getByTestId('chat-expand-fix')).toBeVisible();
+    await shot(page, 'grindhouse-overview-focus-after');
+  } finally { await app.close(); }
+});
+
 test('a card shows the skills its run used as chips', async () => {
   const { app, page } = await launchDemo({ width: 1600, height: 1200 });
   try {
@@ -38,6 +51,14 @@ test('a card shows the skills its run used as chips', async () => {
     await expect(chips).toBeVisible();
     await expect(chips).toContainText('code-work');
     await expect(chips).toContainText('+1');
+    // a Cursor chat reports no skill use: its role's loaded skills show, marked «uso non tracciato»
+    await demo(app, 'skills', 'sms', [], ['ops-core', 'air-qa', 'wiz-pr']);
+    const loaded = page.getByTestId('skill-chips-sms');
+    await expect(loaded).toContainText('ops-core');
+    await expect(loaded).toContainText('+1');
+    await expect(loaded).toContainText('uso non tracciato');
+    await loaded.scrollIntoViewIfNeeded();
+    await shot(page, 'grindhouse-skill-chips-untracked');
     await chips.scrollIntoViewIfNeeded();
     await shot(page, 'grindhouse-skill-chips');
   } finally { await app.close(); }
@@ -63,6 +84,8 @@ test('a plan step says role · model · preset, and a parallel group counts live
     await expect(view.getByTestId('pm-step-who-3')).toContainText('· previsto');
     await expect(view.getByTestId('pm-step-who-2')).not.toContainText('previsto');
     await expect(view.getByTestId('pm-step-who-3')).toContainText('Artisan ·');
+    // the demo wires the role cards' models too: «previsto» comes with a real model, not an empty one
+    await expect(view.getByTestId('pm-step-who-3')).toContainText(/Artisan · [A-Za-z].*· previsto/);
     await shot(page, 'grindhouse-map-plan-group');
   } finally { await app.close(); }
 });

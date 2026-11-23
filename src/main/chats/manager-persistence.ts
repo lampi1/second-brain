@@ -194,6 +194,7 @@ export abstract class ManagerPersistence extends ManagerCore {
         ...(c.plan ? { plan: c.plan } : {}),
         ...(c.waitsOn ? { waitsOn: c.waitsOn } : {}), ...(c.waitsOnWork ? { waitsOnWork: true } : {}),
         ...(c.remoteControl ? { remoteControl: pausedState(c.remoteControl)! } : {}),
+        ...(c.agentAssets && c.agentSkills?.length ? { loadedSkills: [...c.agentSkills] } : {}),
       },
       createdAt: c.createdAt,
       agentInstructions: c.agentInstructions ?? '',

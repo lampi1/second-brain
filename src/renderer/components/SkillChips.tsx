@@ -10,20 +10,23 @@ export const CHIPS_MAX = 3;
 
 /** What the card says about a chat's skills: the names (at most CHIPS_MAX, `more` = the rest) or `untracked` for a
  *  non-Claude run with none recorded; nothing for a chat that is no run, or a Claude run with no skill. */
-export function skillChipsOf(chat: Pick<ChatSummary, 'harness' | 'run'>): { names: string[]; more: number; untracked: boolean } | null {
+export function skillChipsOf(chat: Pick<ChatSummary, 'harness' | 'run' | 'loadedSkills'>): { names: string[]; more: number; untracked: boolean } | null {
   if (!chat.run) return null;
   const all = chat.run.tags?.skills ?? [];
   if (all.length) return { names: all.slice(0, CHIPS_MAX), more: Math.max(0, all.length - CHIPS_MAX), untracked: false };
-  return chat.harness === 'claude' ? null : { names: [], more: 0, untracked: true };
+  if (chat.harness === 'claude') return null;
+  // the engine tells nothing about the skills it used: the ones its role loaded, marked as not tracked (room for two beside the mark)
+  const loaded = chat.loadedSkills ?? [];
+  return { names: loaded.slice(0, 2), more: Math.max(0, loaded.length - 2), untracked: true };
 }
 
 export function SkillChips({ chat }: { chat: ChatSummary }) {
   const c = skillChipsOf(chat);
   if (!c) return null;
-  const tip = c.untracked ? t('skills.untrackedTip') : [...(chat.run?.tags?.skills ?? [])].join(', ');
+  const tip = c.untracked ? `${t('skills.untrackedTip')}${chat.loadedSkills?.length ? `: ${chat.loadedSkills.join(', ')}` : ''}` : [...(chat.run?.tags?.skills ?? [])].join(', ');
   return <div className="bench-skills" data-testid={`skill-chips-${chat.id}`} data-tip={tip}>
-    {c.untracked
-      ? <span className="skill-chip untracked">{t('skills.untracked')}</span>
-      : <>{c.names.map(n => <span key={n} className="skill-chip">{n}</span>)}{c.more > 0 && <span className="skill-chip more">+{c.more}</span>}</>}
+    {c.names.map(n => <span key={n} className={c.untracked ? 'skill-chip untracked' : 'skill-chip'}>{n}</span>)}
+    {c.more > 0 && <span className="skill-chip more">+{c.more}</span>}
+    {c.untracked && <span className="skill-chip untracked">{t('skills.untracked')}</span>}
   </div>;
 }

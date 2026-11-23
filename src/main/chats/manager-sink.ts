@@ -199,11 +199,11 @@ export abstract class ManagerSink extends ManagerWork {
         // a skill Claude loaded while the run is open joins its tags (only Claude reports skills as a tool)
         if (item.kind === 'tool' && item.name === 'Skill' && r.s.harness === 'claude' && r.s.run) {
           const input = item.input as { skill?: unknown; command?: unknown } | null;
-          if (addSkill(r.s.run, input?.skill ?? input?.command)) this.runSaveSoon();
+          if (addSkill(r.s.run, input?.skill ?? input?.command)) { this.runSaveSoon(); this.updated(r); }
         }
-        // any other engine: the skill it opened by reading its SKILL.md (they have no Skill tool)
+        // any other engine: the skill it opened by reading its SKILL.md (they have no Skill tool); the card shows it at once
         if (item.kind === 'tool' && r.s.harness !== 'claude' && r.s.run) {
-          if (addSkill(r.s.run, skillOfRead(item.input))) this.runSaveSoon();
+          if (addSkill(r.s.run, skillOfRead(item.input, item.name))) { this.runSaveSoon(); this.updated(r); }
         }
         if (item.kind === 'tool' && r.s.run) this.noteReceipt(r, item);
         if (item.kind === 'result' && !replace) { delete r.crashResumed; this.turnEnded(r, item); }

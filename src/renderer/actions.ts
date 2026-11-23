@@ -650,6 +650,11 @@ export function toggleFocusMode(): void {
 
 /** The Grindhouse entry (menu, Ctrl+1): always the all-agents overview, never a single open chat. */
 export function showOverview(): void {
+  const u = ui.get();
+  // a full-screen chat (focus mode, a maximized tile, the centre view) would reopen over the overview
+  if (u.center) setCenter(false);
+  if (u.maximized) setMaximized(null);
+  if (u.focusMode) setFocusMode(null);
   collapseAllChats();
   go({ page: 'home' });
 }
@@ -675,14 +680,7 @@ export function escapeOne(): boolean {
 /** Ctrl+0 = the Orchestrator, Ctrl+1 = back to the Grindhouse (from anywhere), Ctrl+2-9 = the (n-1)-th chat tile on screen. */
 export function focusTile(index: number): void {
   if (index === 0) { const r = orchestratorId(); if (r) focusChat(r); return; }
-  if (index === 1) {
-    const u = ui.get();
-    if (u.center) setCenter(false);
-    if (u.maximized) setMaximized(null);
-    if (u.focusMode) setFocusMode(null);
-    showOverview();
-    return;
-  }
+  if (index === 1) { showOverview(); return; }
   const el = document.querySelector<HTMLElement>(`[data-chat-index="${index - 1}"]`);
   const id = el?.dataset.chatId;
   if (id) focusChat(id);

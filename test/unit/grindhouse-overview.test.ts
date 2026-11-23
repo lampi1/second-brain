@@ -3,7 +3,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(), on: () => () => {} } }));
 import { escapeOne, focusTile, go, showOverview } from '../../src/renderer/actions';
-import { collapseAllChats, setChatExpanded, ui } from '../../src/renderer/store/ui';
+import { collapseAllChats, setCenter, setChatExpanded, setFocusMode, setMaximized, ui } from '../../src/renderer/store/ui';
 
 const openIds = () => Object.entries(ui.get().prefs.chatExpanded).filter(([, v]) => v === true).map(([id]) => id);
 
@@ -15,6 +15,18 @@ it('the menu entry folds every open chat and shows the overview, from another pa
   showOverview();
   expect(ui.get().page).toBe('home');
   expect(openIds()).toEqual([]);
+});
+
+it('the menu entry also leaves focus mode, a maximized tile and the centre view (they would reopen the chat full screen)', () => {
+  setChatExpanded('a', true);
+  setFocusMode('a'); setCenter(true);
+  showOverview();
+  expect(ui.get().focusMode).toBeNull();
+  expect(ui.get().center).toBe(false);
+  expect(ui.get().maximized).toBeNull();
+  setMaximized('chat:a');
+  showOverview();
+  expect(ui.get().maximized).toBeNull();
 });
 
 it('Ctrl+1 does the same', () => {
