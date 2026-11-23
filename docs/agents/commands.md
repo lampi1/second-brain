@@ -102,7 +102,7 @@ row and its line here in the same change.
 | `app_child_output` | Orchestrator only | The latest report of a chat in its tree, delegates included: summary and criteria; full: the output, max 4,000 chars. |
 | `agent_metrics` | Orchestrator only | Success rate, cost, time and corrections per role and version (numbers only). |
 | `task_estimate` | Orchestrator only | Estimate a request: kind of work, size, role, time and cost. |
-| `agent_delegate` | work chats | Delegate independent parts of the task to other roles as visible child chats. |
+| `agent_delegate` | work chats | Delegate independent parts of the task to other roles as visible child chats (Orchestrator and Strategist only; a parallel group starts in one call; a Sentinel takes `reviewOf`). |
 | `agent_children` | work chats | The chats you delegated: role, state, goal, result, open requests, cost, and why a task was closed early (`endCause`). |
 | `agent_ask_parent` | work chats | Ask the chat that delegated you, before the user. |
 | `run_code` | work chats (Code Mode on) | Run a JavaScript script in a QuickJS sandbox that calls many tools in one go through a typed API (Bash, PowerShell, files, app tools, connectors); each call meets the same permission rules, an Esegui action stops the script (ADR 0331). |
@@ -117,7 +117,7 @@ row and its line here in the same change.
 | `agent_integrate_children` | work chats | Combine several finished children's commits in one staging worktree. |
 | `agent_work_decisions` | work chats | The user's recorded decisions for your latest assignment, readable after reporting without reopening it. Historical decisions remain context, not new grants. |
 | `ask_user` | work chats | Ask the user one Sì/No question as a panel (engines whose question tool may not reach the model: OpenCode, Cursor). |
-| `plan_propose` | work chats | Show the user your short plan for approval (Strategist); on a project it is drawn on the project's map (`map`, each step's `on`: ADR 0276). |
+| `plan_propose` | work chats | Show the user your short plan for approval (Strategist); `revise` re-proposes a saved plan to today's standards; on a project it is drawn on the project's map (`map`, each step's `on`: ADR 0276). |
 | `plan_update` | work chats | Move a step of your approved plan (now, done, blocked or todo), or add one found on the way (ADR 0276). |
 | `list_chats` | work chats | The user's chats you can write to with send_to_chat. |
 | `send_to_chat` | work chats | Send a message to another chat of the user, never as his approval. |
@@ -153,7 +153,7 @@ row and its line here in the same change.
 | `key` | browser | Press keys or key combinations. |
 | `scroll` | browser | Mouse-wheel scroll at a ref, coordinate or the page center. |
 | `fill_form` | browser | Fill several fields in one call. |
-| `fill_credential` | browser | Sign in with a test account of the credentials file: the app types the password, the agent never reads it. |
+| `fill_credential` | browser | Sign in with a test account of the credentials file: the app types the password, the agent never reads it; a moved test host of the same site is linked by the app. |
 | `select_option` | browser | Choose options of a native select. |
 | `wait_for` | browser | Wait for text, a selector, a url or the network to settle. |
 | `handle_dialog` | browser | Answer a JavaScript dialog that blocks the page. |

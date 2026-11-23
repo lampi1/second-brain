@@ -21,7 +21,6 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { CredentialEntry, HandoffAccount } from '../../shared/contract';
-import { ToolRefusal } from '../mcp/refusal';
 import { renameWithRetry } from '../agents/local-store';
 
 export const DEFAULT_CREDENTIALS_FILE = 'ops/credentials.md';

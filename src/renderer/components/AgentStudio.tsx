@@ -1,7 +1,8 @@
 // A role's own page (Brain → Agenti → a role) and its editor. The page leads with who the role is (its character at
 // 96 px, English name, what it is for, engine, model tier, trial and customized chips, Avvia), its run numbers, the
 // permissions card (RolePermissions: tool classes and ceiling, each with its "?", ADR 0085), the instructions it runs
-// with, its configuration (tools, permission ceiling, the roles it may launch), the skills it loads at every launch, its
+// with, its configuration (tools, permission ceiling, the roles it may launch: only the Orchestrator and the Strategist
+// launch, the other roles say they never delegate), the skills it loads at every launch, its
 // versions (a new one only for text or skills, ADR 0284; each with its runs, verified outcomes and success ±, ADR
 // 0186). "Modifica" opens the editor in place: only the
 // behaviour is editable (instructions, engine, model, tier, launches, skills, context; the permissions on their own
@@ -16,7 +17,7 @@ import { Select } from './Select';
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { completedRuns, MAX_CONTEXT_RANGE, type AgentDraft, type AgentMetrics, type AgentProfile, type AgentVersion, type VersionMetrics } from '@shared/agents';
 import { MIN_SUCCESS_SAMPLE, successInterval } from '@shared/success';
-import { MODEL_TIERS, WORK_ROLE_IDS, isRoleId, isWorkRole, roleName, tierRank, type ModelTier } from '@shared/roles';
+import { MODEL_TIERS, WORK_ROLE_IDS, isDelegatorRole, isRoleId, isWorkRole, roleName, tierRank, type ModelTier } from '@shared/roles';
 import { PRESET_IDS } from '@shared/model-presets';
 import { characterOf } from '@shared/characters';
 import { agentHistory, refreshAgents, resetAgent, restoreAgentVersion, saveAgent, useAgents } from '../store/agents';
@@ -195,8 +196,11 @@ function RoleEditor({ profile, draft, busy, canSave, tierOk, change, firstField,
           {tierOk ? <small className="agent-editor-note">{t('studio.tierMaxHint')}</small> : <p role="alert">{t('studio.tierInvalid')}</p>}
           {choice?.effort && <label className="field"><span>{t('studio.effort')}</span><Select value={draft.effort ?? ''} onChange={e => change({ effort: EFFORTS.find(effort => effort === e.target.value) })}><option value="">{t('studio.defaultModel')}</option>{EFFORTS.map(e => <option key={e} value={e}>{effortLabel(e)}</option>)}</Select></label>}
           <p className="agent-editor-note" data-testid="agent-editor-perms-note">{t('perm.editorNote')}</p>
-          {profile.scope === 'role' && <fieldset className="agent-editor-checks" data-testid="agent-launches"><legend>{t('studio.launches')}</legend><p className="agent-editor-note">{t('studio.launchesHint')}</p>
-            <div className="agent-editor-checkgrid">{WORK_ROLE_IDS.filter(id => id !== profile.id).map(id => <label key={id} className="field-check"><input type="checkbox" checked={draft.launches.includes(id)} onChange={() => toggleLaunch(id)} /><AgentAvatar avatar={{ kind: 'character', value: id }} name={roleName(id)} size={20} /><span>{roleName(id)}</span></label>)}</div></fieldset>}
+          {/* only the Orchestrator and the Strategist delegate (2026-11-23): the other roles show why they launch nobody */}
+          {profile.scope === 'role' && (isDelegatorRole(profile.id)
+            ? <fieldset className="agent-editor-checks" data-testid="agent-launches"><legend>{t('studio.launches')}</legend><p className="agent-editor-note">{t('studio.launchesHint')}</p>
+              <div className="agent-editor-checkgrid">{WORK_ROLE_IDS.filter(id => id !== profile.id).map(id => <label key={id} className="field-check"><input type="checkbox" checked={draft.launches.includes(id)} onChange={() => toggleLaunch(id)} /><AgentAvatar avatar={{ kind: 'character', value: id }} name={roleName(id)} size={20} /><span>{roleName(id)}</span></label>)}</div></fieldset>
+            : <p className="agent-editor-note" data-testid="agent-launches-never"><strong>{t('studio.launches')}</strong>: {t('studio.launchesNever')}</p>)}
           <label className="field"><span>{t('studio.maxContext')}</span><input type="number" inputMode="numeric" min={MAX_CONTEXT_RANGE.min / 1000} max={MAX_CONTEXT_RANGE.max / 1000} step={10}
             value={draft.maxContext ? Math.round(draft.maxContext / 1000) : ''} placeholder={t('studio.maxContextDefault')} data-testid="agent-max-context"
             onChange={e => { const k = Number(e.target.value); change({ maxContext: e.target.value === '' || !Number.isFinite(k) ? null : Math.round(k) * 1000 }); }} />
@@ -298,7 +302,7 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
     [t('studio.maxContext'), profile.maxContext ? t('studio.maxContextValue', { n: Math.round(profile.maxContext / 1000) }) : t('studio.maxContextDefault')],
     [t('studio.tools'), profile.tools && !profile.tools.allow.length ? t('agentDetail.toolsNone') : permissionSummary(profile).text],
     [t('studio.ceiling'), profile.permissionCeiling ? t(`studio.ceiling.${profile.permissionCeiling}`) : t('studio.ceilingNone')],
-    [t('studio.launches'), profile.launches.map(roleName).join(', ') || t('studio.launchesNone')],
+    [t('studio.launches'), profile.scope === 'role' && !isDelegatorRole(profile.id) ? t('studio.launchesNever') : profile.launches.map(roleName).join(', ') || t('studio.launchesNone')],
     [t('agentDetail.version'), profile.activeVersion === profile.version ? `v${profile.activeVersion}` : `v${profile.activeVersion} / v${profile.version}`],
     [t('agentDetail.updated'), new Date(profile.updatedAt).toLocaleString(locale(), { dateStyle: 'medium', timeStyle: 'short' })],
   ];

@@ -143,7 +143,7 @@ describe('parent child task continuity',()=>{
     const f=fixture();
     // a stale roles.json: the Scout still lists launches, and the parent runs as a Scout
     (f.catalog.profiles[1] as {launches?:string[]}).launches=['scout'];
-    f.parent.agent={id:'scout',source:'catalog',version:1};
+    f.parent.agent={...f.parent.agent!,id:'scout'};
     await expect(f.call('agent_delegate',{tasks:[{role:'scout',title:'Nipote',contract:{goal:'Read',doneWhen:['Evidence']}}]})).rejects.toThrow(/does not delegate/);
     await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/does not delegate|only the Orchestrator and the Strategist/);
     expect(f.create).not.toHaveBeenCalled();

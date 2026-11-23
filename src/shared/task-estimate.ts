@@ -10,7 +10,8 @@ import type { TaskKind } from './contract';
  *  of work on any agent (ADR 0285). */
 export type EstimateBasis = 'agent-model' | 'agent' | 'kind';
 export type EstimateConfidence = 'high' | 'medium' | 'low';
-/** self = the Orchestrator answers itself; one-agent = one chat, no children; tree = a plan of several parts */
+/** self = the Orchestrator answers itself; one-agent = one part; tree = several parts. The path never names the role:
+ *  a change that is not small and clear goes to a Strategist on either (2026-11-23) */
 export type FastPath = 'self' | 'one-agent' | 'tree';
 
 export interface TaskEstimate {

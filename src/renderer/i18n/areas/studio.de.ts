@@ -32,6 +32,7 @@ export const studioDe: typeof studioIt = {
   'studio.launches': 'Rollen, die sie starten darf',
   'studio.launchesHint': 'Mit agent_delegate, in sichtbaren Chats unter ihrem eigenen. Ein Kind hat nie mehr Berechtigungen als sein Elternchat.',
   'studio.launchesNone': 'Keine',
+  'studio.launchesNever': 'Keine: macht den eigenen Teil und delegiert nicht. Nur der Orchestrator und der Stratege delegieren.',
   'studio.skills': 'Bei jedem Start geladene Skills',
   'studio.skillsHint': 'Die Rolle startet immer mit diesen, plus denen, die ihr Starter mitgibt. Sie darf auch die Skills der Engine und deine persönlichen nutzen.',
   'studio.skillAdd': 'Skill hinzufügen',

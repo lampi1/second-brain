@@ -10,7 +10,7 @@ import type { HeldChildResult } from './store';
 import { waitsForPeople, waitsForWork } from '../../shared/waiting';
 import type { TaskDeliveryPolicy } from '../../shared/agents';
 import { reportOf } from '../agents/run-report';
-import { MAX_CORRECTIONS, RESULT_OUTPUT_MAX, checkResult, resultMessage, type DelegationLimitHit, type DelegationResult, type TaskSource } from '../../shared/delegation';
+import { MAX_CORRECTIONS, RESULT_OUTPUT_MAX, checkResult, resultMessage, type DelegationResult, type TaskSource } from '../../shared/delegation';
 import { finishPlan, afterReport } from '../../shared/strategy';
 import { APP_EVENT_LABEL } from './orchestrator-wake';
 import type { SubmissionReceipt, TurnEndInfo, Rec } from './manager-types';
