@@ -34,7 +34,7 @@ import { workflowState } from './store/workflows';
 import { engineLabel } from './lib/engines';
 import {
   askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
-  openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, callQuestions, setQuestionsAside, setChatExpanded, setTreeCollapsed, setBrowserOpen, setAgentView, setFullOrch, setMapsFull, setViewer, type Place,type BrainPageId,
+  openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, callQuestions, setQuestionsAside, setChatExpanded, collapseAllChats, setTreeCollapsed, setBrowserOpen, setAgentView, setFullOrch, setMapsFull, setViewer, type Place,type BrainPageId,
 } from './store/ui';
 import { currentEntry, pushEntry, stepEntry, type Shot, type ViewerEntry } from './lib/viewer-stack';
 import { applyViewPrefs } from './lib/view-prefs';
@@ -648,6 +648,17 @@ export function toggleFocusMode(): void {
   requestFocus(id);
 }
 
+/** The Grindhouse entry (menu, Ctrl+1): always the all-agents overview, never a single open chat. */
+export function showOverview(): void {
+  const u = ui.get();
+  // a full-screen chat (focus mode, a maximized tile, the centre view) would reopen over the overview
+  if (u.center) setCenter(false);
+  if (u.maximized) setMaximized(null);
+  if (u.focusMode) setFocusMode(null);
+  collapseAllChats();
+  go({ page: 'home' });
+}
+
 /** Esc: back out one level. Returns false when there was nothing to back out of. */
 export function escapeOne(): boolean {
   const u = ui.get();
@@ -661,6 +672,7 @@ export function escapeOne(): boolean {
   if (u.maximized) { const k = u.maximized; setMaximized(null); flashTile(k); return true; }
   if (u.focusMode && u.page === 'home') { const id = u.focusMode; setFocusMode(null); flashTile(`chat:${id}`); return true; }
   if (u.page !== 'home') { go({ page: 'home' }); return true; }
+  if (collapseAllChats()) return true; // an open chat: Esc shows the overview of every agent
   if (u.focusMode) { setFocusMode(null); return true; }
   return false;
 }
@@ -668,14 +680,7 @@ export function escapeOne(): boolean {
 /** Ctrl+0 = the Orchestrator, Ctrl+1 = back to the Grindhouse (from anywhere), Ctrl+2-9 = the (n-1)-th chat tile on screen. */
 export function focusTile(index: number): void {
   if (index === 0) { const r = orchestratorId(); if (r) focusChat(r); return; }
-  if (index === 1) {
-    const u = ui.get();
-    if (u.center) setCenter(false);
-    if (u.maximized) setMaximized(null);
-    if (u.focusMode) setFocusMode(null);
-    go({ page: 'home' });
-    return;
-  }
+  if (index === 1) { showOverview(); return; }
   const el = document.querySelector<HTMLElement>(`[data-chat-index="${index - 1}"]`);
   const id = el?.dataset.chatId;
   if (id) focusChat(id);

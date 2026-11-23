@@ -15,7 +15,7 @@ import { characterOf, isCharacterId } from '../../shared/characters';
 import { readLocal, writeLocal } from './local-store';
 import { AgentHistory, behaviourOf, firstVersion, sameBehaviour, versionedChanges } from './versions';
 import { checkedTools, type AgentPolicy } from './tool-policy';
-import { CARD_MODEL, PRESET_IDS, cardPresets, checkedPresets, choosePreset, presetAskOf, presetNamed, presetOrderProblem, type Delegator, type FullPresets, type PresetAsk, type PresetChoice, type RolePresets, type UnitPrice } from '../../shared/model-presets';
+import { CARD_MODEL, PRESET_IDS, type PresetId, cardPresets, checkedPresets, choosePreset, presetAskOf, presetNamed, presetOrderProblem, type Delegator, type FullPresets, type PresetAsk, type PresetChoice, type RolePresets, type UnitPrice } from '../../shared/model-presets';
 import { fiveRolesTextFor, fullDefaultsFor, shippedTextFor, skillAlignmentFor } from './role-migrate';
 import { engineOf } from '../engines/registry';
 import { log, errText } from '../log';
@@ -558,6 +558,11 @@ export class AgentCatalogService {
 
   /** The three presets of a role's card (ADR 0336): Base = its model, else its tier's on its engine. */
   presetsOf(p: AgentProfile): FullPresets { return cardPresets(p, this.d.tierModel?.(p.engine, p.tier) ?? null); }
+  /** The model a role's card has for one of its presets (null: unknown role or no model): the map's «previsto». */
+  plannedModel(roleId: string, preset: PresetId): string | null {
+    const p = this.profiles.find(x => x.id === roleId);
+    return p ? this.presetsOf(p)[preset].model : null;
+  }
   /** The preset a delegation of `roleId` would get (resolve's guards, nothing started). */
   presetChoice(roleId: string, ask: PresetAsk, delegator?: Delegator): PresetChoice {
     return choosePreset({ presets: this.presetsOf(this.find(roleId)), ask, ...(delegator ? { delegator } : {}), price: this.d.price ?? (() => null) });

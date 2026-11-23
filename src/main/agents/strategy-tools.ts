@@ -62,11 +62,11 @@ export function strategyTools(chats: StrategyChats, away: () => boolean = () => 
       revise: { type: 'boolean', description: 'true = bring this plan to the current standard (also under way): started and done steps come back as { keep: n }, the rest is checked as new; the user approves again' },
       steps: { type: 'array', minItems: 1, maxItems: 16, items: { type: 'object', additionalProperties: false, properties: {
         keep: { type: 'integer', minimum: 1, description: 'revise only: the old number of a step to keep as it is (then only par besides it)' },
-        preset: { type: 'string', enum: ['min', 'base', 'max'], description: 'the role card\'s preset for this step; leave out for Base' },
         title: { ...str, description: 'one short plain line, e.g. "Trovo dove si calcola lo sconto"' }, role: { type: 'string', enum: [...WORK_ROLE_IDS] },
         detail: { ...str, description: 'optional: one short line on what the step covers, e.g. "carrello, ordine e reso"' },
         on: { ...str, description: 'the map element this step works on (an existing id, or one you add in map.add)' },
         par: { type: 'boolean', description: 'true = it does not depend on the step before it and runs together with it, in the same parallel group (delegated in the same agent_delegate call); leave out for a step that waits for the steps before it' },
+        preset: { type: 'string', enum: ['min', 'base', 'max'], description: 'the role card\'s preset for this step; leave out for Base; the map shows role · model · preset' },
       } } },
       map: { type: 'object', additionalProperties: false, description: 'the project map the plan is drawn on', properties: {
         project: { ...str, description: 'an existing map\'s name or id' }, title: { ...str, description: 'the project\'s name, when it has no map yet: only the pieces this work touches get drawn' },

@@ -25,6 +25,7 @@ import { isBusy, sameList, showsWork } from '../store/state';
 import { closeChat, send, stop, useApp } from '../store/store';
 import { DEFAULT_SPLIT, setAgentSplit, setAgentView, setFocused, setChatExpanded, ui, type AgentView } from '../store/ui';
 import {t}from'../i18n';
+import {SkillChips}from'./SkillChips';
 import {schedule,suspendViews}from'../lib/viewports';
 import { openQueue, requestPostponed } from '../lib/later';
 import { admitNow, reqKey, toggleMaximize } from '../actions';
@@ -259,6 +260,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
           </h3>
           <span className="bench-now">{topic && <span className="bench-role" data-testid={`chat-topic-${chatId}`}>{name}</span>}<span className="chat-strip-line">{busyShown?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.plan?.phase==='proposed'?t('tree.plan.ready'):chat.lastText.slice(0,140)}</span></span>
           <div className="bench-meta"><StripMeta chat={chat} workMs={work} /></div>
+          <SkillChips chat={chat} />
         </div>
       </header> : !embedded && <header className="tile-head">
         <div className="th-row">

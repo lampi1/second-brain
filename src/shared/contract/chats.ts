@@ -39,6 +39,9 @@ export interface ChatSummary {
   agent?: AgentOwnerSnapshot;
   /** the agent run this chat is (a chat started from a catalog agent): a mirror of its agent-runs.json record */
   run?: AgentRun;
+  /** the skills the role's card loaded into this chat (its plugin's skills): what a card shows, marked «uso non tracciato»,
+   *  for an engine that does not report which skill it used */
+  loadedSkills?: string[];
   agentChildren?: AgentChildren;
   harness: Harness;
   origin: ChatOrigin;

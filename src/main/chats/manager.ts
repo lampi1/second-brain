@@ -269,6 +269,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
         ...(req.route ? { route: req.route } : {}),
         ...(delegator ? { parentId: delegator.s.id, ...(req.delegation ? { delegation: req.delegation } : {}) } : {}),
         ...(plan ? { plan } : {}),
+        ...(agent.assets && agent.skills?.length ? { loadedSkills: [...agent.skills] } : {}),
       },
       createdAt: now,
       agentInstructions: agent.instructions,

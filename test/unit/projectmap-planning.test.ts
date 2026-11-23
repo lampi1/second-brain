@@ -129,8 +129,8 @@ describe('ProjectMaps planning', () => {
     m.observe('chat:updated', chats[0]);
     let v = m.view('shop')!;
     expect(v.plans).toEqual([{ chatId: 's1', title: 'Strategist · Resi', phase: 'proposed', at: 1, steps: 3, done: 0, flow: [
-      { step: 1, title: 'Scrivo i resi', state: 'todo', wave: 1, on: 'resi', role: 'artisan' }, { step: 2, title: 'Provo i resi', state: 'todo', wave: 2, on: 'resi', role: 'sentinel' },
-      { step: 3, title: 'Ritocco il carrello', state: 'todo', wave: 3, on: 'cart', role: 'artisan' }] }]);
+      { step: 1, title: 'Scrivo i resi', state: 'todo', wave: 1, on: 'resi', role: 'artisan', model: null, preset: 'base', planned: true }, { step: 2, title: 'Provo i resi', state: 'todo', wave: 2, on: 'resi', role: 'sentinel', model: null, preset: 'base', planned: true },
+      { step: 3, title: 'Ritocco il carrello', state: 'todo', wave: 3, on: 'cart', role: 'artisan', model: null, preset: 'base', planned: true }] }]);
     expect(v.works.resi!.map(w => [w.step, w.title, w.state])).toEqual([[1, 'Scrivo i resi', 'todo'], [2, 'Provo i resi', 'todo']]);
     expect(v.map.elements.find(e => e.id === 'resi')!.status).toBe('planned'); // nothing moves before the user's ok
     // approved, step 1 delegated

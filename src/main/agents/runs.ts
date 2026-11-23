@@ -82,6 +82,40 @@ function readTags(v: unknown): AgentRunTags | null {
   if (!t || typeof t !== 'object' || !skillList(t.skills) || !(t.app === null || tagName(t.app, APP_MAX)) || !(t.repo === null || tagName(t.repo, REPO_MAX))) return null;
   return { skills: [...t.skills], app: t.app as string | null, repo: t.repo as string | null };
 }
+const SKILL_FILE = /[\\/]skills[\\/]([^\\/]+)[\\/]SKILL\.md$/i;
+/** The skill an engine opened by reading its `…/skills/<name>/SKILL.md` (engine-neutral: only Claude has a Skill tool;
+ *  Codex, Cursor and OpenCode read the file). Looks at the path fields of a tool call's input; null = no skill file. */
+export function skillOfRead(input: unknown, tool = 'Read'): string | null {
+  if (!input || typeof input !== 'object') return null;
+  const o = input as Record<string, unknown>;
+  // only a read opens a skill: an edit, a delete or a move of its file is not a use (the field names differ per engine and case)
+  if (/^(shell|bash|powershell)$/i.test(tool)) return typeof o.command === 'string' ? skillOfCommand(o.command) : null;
+  if (!/^read/i.test(tool)) return null;
+  for (const [k, v] of Object.entries(o)) {
+    if (!PATH_FIELDS.has(k.toLowerCase())) continue;
+    const m = typeof v === 'string' ? SKILL_FILE.exec(v.replace(/^file:\/\//, '')) : null;
+    if (m) return m[1]!;
+  }
+  return null;
+}
+const PATH_FIELDS: ReadonlySet<string> = new Set(['file_path', 'filepath', 'path', 'target_file', 'targetfile', 'file', 'uri', 'absolutepath']);
+/** The programs that print a file (the first word after a separator or wrapper quote): their SKILL.md arguments are a read. */
+const READERS = /(?:^|[\s"'`;&|(])(?:cat|type|get-content|gc|head|tail|less|more|bat|nl|sed(?=\s+-n\b))(?=\s)/gi;
+/** The skill a shell command reads: a SKILL.md path among the arguments of a printing program, up to the next `;`, `&` or
+ *  `|`, and never one that is the target of a redirect. rm, ls, grep, tee, mv and echo mention the file without reading it. */
+function skillOfCommand(command: string): string | null {
+  for (const hit of command.matchAll(READERS)) {
+    const rest = command.slice(hit.index + hit[0].length).split(/[;&|]/)[0]!;
+    let prev = '';
+    for (const tok of rest.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)) {
+      const word = (tok[1] ?? tok[2] ?? tok[3] ?? '').replace(/["'`]+$/, '');
+      const m = prev.startsWith('>') || word.startsWith('>') ? null : SKILL_FILE.exec(word);
+      if (m) return m[1]!;
+      prev = word;
+    }
+  }
+  return null;
+}
 /** A skill the run's engine loaded while it was open (Claude's Skill tool): added once, up to SKILLS_MAX; frozen at the end.
  *  `name` may be a plugin-qualified `plugin:skill`: the part after the last colon is the id. */
 export function addSkill(run: AgentRun, name: unknown): boolean {

@@ -325,6 +325,9 @@ button.pm-label:focus-visible { outline: 2px solid var(--focus); outline-offset:
 .pm-plancard > .btn { align-self: flex-start; }
 .pm-prog .dash-eyebrow, .pm-plancard .dash-eyebrow, .pm-planask .dash-eyebrow { text-transform: uppercase; }
 .pm-planstep-head > small .pm-you { margin: 0; }
+.pm-planstep-head > .pm-step-who { grid-column: 2 / 4; color: var(--text-2); font-size: 12px; overflow-wrap: anywhere; }
+.pm-step-who em { font-style: normal; color: var(--text-3); }
+.pm-plangroup { list-style: none; margin: 6px 0 0; padding: 2px 6px; font-size: 12px; font-weight: 600; color: var(--violet); border-left: 2px dashed var(--violet); }
 .pm-prog-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .pm-prog-more { appearance: none; background: none; border: 0; padding: 0; font: inherit; font-size: 12.5px; color: var(--accent); cursor: pointer; }
 .pm-prog-more:hover { text-decoration: underline; }
