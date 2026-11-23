@@ -35,7 +35,7 @@ const TASKS_SHOWN = 12;
 const STREAM_SHOWN = 150;
 
 /** Where a brain change's history and restore live, by the changelog's kind of change. */
-const CHANGE_PAGE: Record<string, BrainPageId> = { script: 'script', rule: 'regole', skill: 'skill', agent: 'agenti', procedure: 'skill', note: 'memoria', other: 'memoria' };
+const CHANGE_PAGE: Record<string, BrainPageId> = { script: 'script', rule: 'memoria', skill: 'skill', agent: 'agenti', procedure: 'skill', note: 'memoria', other: 'memoria' };
 type HistoryEvent = LogEvent & { page?: BrainPageId };
 
 /** The brain's changelog (changelog.md) as Log events: the history of the brain's changes lives here now. */

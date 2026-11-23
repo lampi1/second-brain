@@ -2,8 +2,8 @@
 // why, the evidence and "Annulla" (or why it can no longer be undone) and the last pass (running is the one «Manutenzione»
 // button's, ADR 0153). No
 // approval anywhere: the jobs apply their changes and the user can take any of them back. The migration report (former
-// runbook and routine sections turned into skills) is a separate block for the Skill page. Used by SkillsPage.tsx,
-// RulesPage.tsx and MemoryPage.tsx (the Memoria hub's tabs, ADR 0122); Change also by LearningPage.tsx. Each change shows its evidence claim (ADR 0109): the
+// runbook and routine sections turned into skills) is a separate block for the Skill page. Used by SkillsPage.tsx
+// and MemoryPage.tsx (the Memoria hub's tabs, ADR 0122); Change also by LearningPage.tsx. Each change shows its evidence claim (ADR 0109): the
 // hypothesis, where it is measured and what the data say so far, with the verdict. Styles: styles/brain-model.css.
 import { useState } from 'react';
 import type { BrainChange, MigrationReport } from '@shared/brain-model';

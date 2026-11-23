@@ -50,7 +50,6 @@ import { settingsShellEn } from './areas/settings-shell.en';
 import { mcpAddEn } from './areas/mcp-add.en';
 import { profileEn } from './areas/profile.en';
 import { homeEn } from './areas/home.en';
-import { guideEn } from './areas/guide.en';
 import { treeEn } from './areas/tree.en';
 import { aliveEn } from './areas/alive.en';
 import { modelPickerEn } from './areas/model-picker.en';
@@ -81,7 +80,6 @@ export const en: Dict = {
   ...setupEn,
   ...viewerOverlayEn,
   ...homeEn,
-  ...guideEn,
   ...treeEn,
   ...aliveEn,
   ...modelPickerEn,

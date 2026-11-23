@@ -14,7 +14,7 @@ import { closeSetup, goPage } from '../e2e/helpers';
 import { demoBrain } from '../../scripts/demo-brain.mjs';
 
 const repo = path.resolve(import.meta.dirname, '..', '..');
-const SECTIONS = ['idee', 'costi', 'qualita'] as const;
+const SECTIONS = ['costi', 'qualita'] as const;
 const temp = (prefix: string) => fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
 
 test('the packaged stable copy starts, takes the chosen brain and every section shows data', async () => {
@@ -62,7 +62,7 @@ test('the packaged stable copy starts, takes the chosen brain and every section 
     await expect(page.getByTestId('brain-setup')).toHaveCount(0, { timeout: 30000 }); // the chosen brain was taken
     for (const id of SECTIONS) {
       await goPage(page, id);
-      const sec = page.getByTestId(id === 'idee' ? 'mh-panel-idee' : id === 'costi' || id === 'qualita' ? `an-panel-${id}` : `brain-page-${id}`); // Costi, Qualità: Andamento tabs (ADR 0202)
+      const sec = page.getByTestId(`an-panel-${id}`); // Costi, Qualità: Andamento tabs (ADR 0202)
       await expect(sec).toBeVisible({ timeout: 30000 });
       // loading finished and nothing failed
       // every block loaded (no skeleton left): slow sources (30 days of costs) get 3 minutes

@@ -12,12 +12,12 @@ const event = (app: ElectronApplication, e: { kind: string; title: string; detai
 const SENTINEL = { kind: 'sync-blocked', title: 'Segnale di fine' };
 
 // Secondary pages remain in Ctrl+K after the Grindhouse redesign removed their default rail entries.
-async function openPage(page: Page, id: 'costi' | 'idee') {
+async function openPage(page: Page, id: 'costi' | 'skill') {
   await page.keyboard.press('Control+K');
   await page.getByTestId('palette-input').fill(`sb://${id}`);
   await page.getByTestId('palette-item-link').click();
-  // Idee is a tab of Memoria (ADR 0122), Costi a tab of Andamento (ADR 0202): their old links land there
-  await expect(page.getByTestId(id === 'idee' ? 'page-memoria' : 'page-andamento')).toBeVisible();
+  // Skill is a tab of Memoria (ADR 0122), Costi a tab of Andamento (ADR 0202): their old links land there
+  await expect(page.getByTestId(id === 'skill' ? 'page-memoria' : 'page-andamento')).toBeVisible();
 }
 
 test('an important event shows a toast above everything; its action opens the place and highlights it', async () => {
@@ -137,8 +137,8 @@ test('the bell counts only what needs the user; the center keeps everything else
 test('back/forward, recents, Ctrl+1, G-letter keys, the persistent Orchestrator on a page', async () => {
   const { app, page } = await launchDemo();
   await openPage(page, 'costi');
-  await openPage(page, 'idee');
-  await expect(page.getByTestId('mh-panel-idee')).toBeVisible();
+  await openPage(page, 'skill');
+  await expect(page.getByTestId('mh-panel-skill')).toBeVisible();
   await page.keyboard.press('Alt+ArrowLeft');
   await expect(page.getByTestId('an-panel-costi')).toBeVisible();
   await page.keyboard.press('Alt+ArrowLeft');
@@ -195,7 +195,7 @@ test('copy an internal link and paste it in Ctrl+K: it goes there and highlights
   await expect(page.getByTestId('view-agents')).toBeVisible();
   await expect(page.locator('[data-sb-id="chat-qa"][data-highlighted="true"]')).toBeVisible();
   // an old page link lands on its Memoria tab (ADR 0122); no «Copia link» at the top of a page (owner, 2026-10-22)
-  await openPage(page, 'idee');
+  await openPage(page, 'skill');
   await expect(page.getByTestId('page-copy-link')).toHaveCount(0);
   await app.close();
 });

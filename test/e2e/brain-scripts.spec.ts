@@ -16,12 +16,13 @@ test('Skill: a skill shows its scripts and queries; the old ones not in a skill 
   await expect(page.locator('#mh-tab-script')).toHaveCount(0);
   await page.getByTestId('bm-skill-pulizia-ambiente').click();
   const parts = page.getByTestId('sl-parts');
-  await expect(parts.getByTestId('sl-parts-scripts')).toContainText('Pulisci i branch già uniti');
-  await expect(parts.getByTestId('sl-parts-scripts')).toContainText('PowerShell');
-  await expect(parts.getByTestId('sl-parts-queries')).toContainText('Errori 5xx per servizio');
+  await expect(parts.getByTestId('sl-parts-script')).toContainText('Pulisci i branch già uniti');
+  await expect(parts.getByTestId('sl-parts-script')).toContainText('PowerShell');
+  await expect(parts.getByTestId('sl-parts-query')).toContainText('Errori 5xx per servizio');
   await shot(page, 'skill-parts');
   await parts.getByTestId('sl-part-scripts/pulisci-branch.ps1').click();
   await expect(page.getByTestId('sl-files')).toBeVisible();
+  await page.getByTestId('sl-file-edit').click();
   await expect(page.getByTestId('sk-md')).toHaveValue(/@title Pulisci i branch/);
 
   // the demo leaves a few in the brain's old folders: the user picks the skill
@@ -34,7 +35,7 @@ test('Skill: a skill shows its scripts and queries; the old ones not in a skill 
   await line.getByTestId('sl-un-move').click();
   await expect(un.getByTestId('sl-un-query-login-falliti.md')).toHaveCount(0);
   await page.getByTestId('sl-tab-read').click();
-  await expect(page.getByTestId('sl-parts-queries')).toContainText('Login falliti per utente');
+  await expect(page.getByTestId('sl-parts-query')).toContainText('Login falliti per utente');
 });
 
 test('Log: the brain changelog is on the Log page; the tasks are chains, a step opens its details', async () => {

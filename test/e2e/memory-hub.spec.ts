@@ -1,14 +1,14 @@
 // E2E of the Memoria hub (ADR 0122) on the frozen demo brain: the live top (the day's sentence, the counters, the latest
 // changes, the one «Manutenzione»), the tab bar in order with counts and arrow keys, a deep link memoria/<tab>, the old
-// pages' G-keys (G S, G L, G T, G I, G D; G J opens Andamento → Apprendimento since ADR 0202) landing on their tab with the rail free of them, and the trash in
-// «Approvate» with «Annulla» that puts the rule back. Screenshots of every tab dark and light: test-results/shots/hub-*.png.
+// pages' G-keys (G S, G T, G D; G J opens Andamento → Apprendimento since ADR 0202) landing on their tab with the rail free
+// of them, and the four tabs only (ADR 0340). Screenshots of every tab dark and light: test-results/shots/hub-*.png.
 import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { goPage, launchDemo, shot } from './helpers';
 
-// the synthetic brain of test/fixtures/brain-ui answers the brain pages (Idee, Script) as in discuss.spec.ts
+// the synthetic brain of test/fixtures/brain-ui answers the brain pages
 const FIX = path.resolve(import.meta.dirname, '..', 'fixtures', 'brain-ui');
 function fixtureBrain(): string {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-hub-'));
@@ -18,7 +18,7 @@ function fixtureBrain(): string {
   return d;
 }
 
-const TABS = ['proposte', 'approvate', 'skill', 'regole', 'idee', 'file', 'artifact'] as const;
+const TABS = ['file', 'artifact', 'skill', 'proposte'] as const;
 
 async function theme(page: Page, scheme: 'dark' | 'light') {
   await page.evaluate(t => window.sb.invoke('settings:set', { theme: t }), scheme);
@@ -43,7 +43,7 @@ async function openTab(page: Page, id: (typeof TABS)[number]) {
   await page.waitForTimeout(450); // the panel's entry and the ink settle
 }
 
-test('Memoria hub: live top, tabs with keys and deep links, old G-keys, trash with undo, every tab dark and light', async () => {
+test('Memoria hub: live top, tabs with keys and deep links, old G-keys, every tab dark and light', async () => {
   test.setTimeout(240_000);
   const { app, page } = await launchDemo({ height: 1000, width: 1440, env: { SB_BRAIN: fixtureBrain() } });
   try {
@@ -66,20 +66,19 @@ test('Memoria hub: live top, tabs with keys and deep links, old G-keys, trash wi
     for (const [i, id] of TABS.entries()) await expect(tabs.nth(i)).toHaveAttribute('data-testid', `mh-tab-${id}`);
     await expect(page.getByRole('tab', { name: /Script/ })).toHaveCount(0); // scripts and queries are in their skills (ADR 0263)
     await page.getByTestId('mh-tab-proposte').focus();
+    await page.keyboard.press('ArrowRight'); // wraps to the first
+    await expect(mem).toHaveAttribute('data-tab', 'file');
+    await expect(page.getByTestId('mh-tab-file')).toBeFocused();
     await page.keyboard.press('ArrowRight');
-    await expect(mem).toHaveAttribute('data-tab', 'approvate');
-    await expect(page.getByTestId('mh-tab-approvate')).toBeFocused();
-    await page.keyboard.press('End');
     await expect(mem).toHaveAttribute('data-tab', 'artifact');
-    await expect(page.getByTestId('mh-tab-artifact')).toBeFocused();
-    await page.keyboard.press('Home');
+    await page.keyboard.press('End');
     await expect(mem).toHaveAttribute('data-tab', 'proposte');
     await expect(page.getByTestId('mh-tab-proposte')).toBeFocused();
-    await page.keyboard.press('ArrowLeft');
-    await expect(mem).toHaveAttribute('data-tab', 'artifact');
+    await page.keyboard.press('Home');
+    await expect(mem).toHaveAttribute('data-tab', 'file');
 
     // the old G-keys land on their tab
-    const keys: [Parameters<typeof goPage>[1], string][] = [['skill', 'skill'], ['regole', 'regole'], ['script', 'skill'], ['idee', 'idee'], ['dashboard', 'proposte']];
+    const keys: [Parameters<typeof goPage>[1], string][] = [['skill', 'skill'], ['script', 'skill'], ['dashboard', 'proposte']];
     for (const [key, tab] of keys) {
       await goPage(page, key);
       await expect(page.getByTestId('page-memoria')).toBeVisible();
@@ -93,22 +92,6 @@ test('Memoria hub: live top, tabs with keys and deep links, old G-keys, trash wi
     await expect(mem).toHaveAttribute('data-tab', 'file');
     await expect(mem.getByTestId('bm-maint-memory')).toBeVisible();
 
-    // «Approvate»: the bin takes a rule out, «Annulla» puts it back
-    await openTab(page, 'approvate');
-    const ap = mem.getByTestId('mh-approved');
-    for (const g of ['skill', 'rule', 'script']) await expect(ap.getByTestId(`mh-ap-group-${g}`)).toBeVisible();
-    const rule = ap.getByTestId('mh-ap-group-rule').locator('[data-testid^="mh-ap-rule-"]:not([data-locked="true"])').first();
-    const rowId = await rule.getAttribute('data-testid');
-    const delId = rowId!.replace('mh-ap-', 'mh-del-');
-    await ap.getByTestId(delId).click();
-    await expect(ap.getByTestId(rowId!)).toHaveCount(0);
-    const undo = page.getByTestId('toast').filter({ hasText: 'eliminat' }).getByTestId('toast-action');
-    await expect(undo).toHaveText('Annulla');
-    await undo.click();
-    await expect(ap.getByTestId(rowId!)).toBeVisible();
-    await expect(page.getByTestId('toast').filter({ hasText: 'rimess' })).toBeVisible();
-    for (const x of await page.getByTestId('toast-close').all()) await x.click().catch(() => undefined);
-
     // every tab, dark then light
     await visit(page, 'sb://memoria/proposte');
     await page.waitForTimeout(800); // the counters finish counting
@@ -118,30 +101,18 @@ test('Memoria hub: live top, tabs with keys and deep links, old G-keys, trash wi
     await openTab(page, 'proposte');
     await shot(page, 'hub-top-light');
     for (const id of TABS) { await openTab(page, id); await shot(page, `hub-${id}-light`); }
-    // Idee: yours and the AI's, «Rispolvera» brings an old one back
-    await openTab(page, 'idee');
-    await expect(page.getByTestId('bx-tab-mie')).toBeVisible();
-    await expect(page.getByTestId('bx-tab-ia')).toBeVisible();
-    await page.getByTestId('mh-dust').click();
-    await expect(page.getByTestId('mh-dusted')).toBeVisible();
-    await page.waitForTimeout(400);
-    await shot(page, 'hub-idee-dust-light');
-    await page.getByTestId('bx-tab-ia').click();
-    await expect(page.getByTestId('bx-tab-ia')).toHaveAttribute('aria-selected', 'true');
-    await page.waitForTimeout(300);
-    await shot(page, 'hub-idee-ia-light');
   } finally { await app.close(); }
 });
 
-// Regression: a narrow center pane must expose every tab and complete approved-memory text.
+// Regression: a narrow center pane must expose every tab.
 // Authored for the normal E2E run on main; do not run as part of this branch fix.
-test('Memoria keeps all tabs and long approved entries readable in a narrow pane', async () => {
+test('Memoria keeps all tabs readable in a narrow pane', async () => {
   const { app, page } = await launchDemo({ height: 900, width: 1200, env: { SB_BRAIN: fixtureBrain() } });
   try {
     await page.getByTestId('nav-memoria').click();
     const mem = page.getByTestId('bm-memory-page');
     await mem.evaluate(el => { el.style.width = '580px'; el.style.maxWidth = '100%'; });
-    await page.getByTestId('mh-tab-approvate').click();
+    await page.getByTestId('mh-tab-skill').click();
     const bar = page.getByTestId('mh-tabs');
     await expect.poll(() => bar.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     for (const id of TABS) {
@@ -151,11 +122,6 @@ test('Memoria keeps all tabs and long approved entries readable in a narrow pane
         return box.left >= parent.left && box.right <= parent.right && box.bottom <= parent.bottom;
       })).toBe(true);
     }
-    const row = mem.locator('.mh-row-name').first();
-    await expect(row).toBeVisible();
-    await row.evaluate(el => { (el.querySelector('code') ?? el).textContent = 'Una regola con un nome molto lungo che deve restare leggibile '.repeat(3); });
-    await expect.poll(() => row.evaluate(el => el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1)).toBe(true);
-    await shot(page, 'hub-narrow-approved-unclipped');
     await page.getByTestId('mh-tab-file').click();
     await expect(mem).toHaveAttribute('data-tab', 'file');
     await shot(page, 'hub-narrow-unclipped');

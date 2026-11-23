@@ -41,8 +41,8 @@ it('prepares discussion beside Memoria without navigating or sending', () => {
   expect(onSent).not.toHaveBeenCalled();
 });
 it('keeps detail pages where the coordinator is already visible', () => {
-  go({ page: 'regole' }); // a Memoria tab since ADR 0122
+  go({ page: 'skill' }); // a Memoria tab since ADR 0122
   focusChat('r');
   expect(ui.get().page).toBe('memoria');
-  expect(ui.get().pageArg).toBe('regole');
+  expect(ui.get().pageArg).toBe('skill');
 });

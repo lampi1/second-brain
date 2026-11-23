@@ -79,10 +79,10 @@ One line each; the full text, its exceptions and ADRs: the same number in `docs/
 10. **Every file starts with a header comment** (what, why, who uses it); decisions go to `docs/adr/`.
 11. **Parallel agents**: one worktree and one module each; shared files only by the integrator.
 12. **Orchestrator capability contract**: every user-facing feature reachable through the live `app_guide`.
-13. **Docs keep up with the code**: new tools, pages and screens update the tool catalog, the Guida and the English
+13. **Docs keep up with the code**: new tools, pages and screens update the tool catalog and the English
     README with fresh screenshots in the same change; `check:branch` fails otherwise.
 
 Enforced by lints, each failing with its fix: file header (`sb/file-header`), file size over 800 lines
 (`sb/max-lines`, a warning), `log.error` with `cause` + `hint` (typed), process boundaries (`no-restricted-imports`),
-e2e «nuovi rossi» (`npm run check`), doc freshness (`check:branch`: tool catalog, Guida coverage, README). Table:
+e2e «nuovi rossi» (`npm run check`), doc freshness (`check:branch`: tool catalog, README). Table:
 `docs/agents/rules.md#enforced-by-lints`.

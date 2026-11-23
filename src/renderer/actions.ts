@@ -159,7 +159,7 @@ const samePlace = (a: Place | undefined, b: Place) => !!a && a.page === b.page &
 export function placeOf(target: string): Place | null {
   const [head = '', ...rest] = target.replace(/^#/, '').split('/');
   const page = ALIAS[head] ?? head;
-  const arg = head === 'spunti' ? 'ia' : rest.join('/') || null;
+  const arg = rest.join('/') || null;
   // an old statistics page ("costi/30", "qualita") → its Andamento tab (ADR 0202)
   const trend = trendRedirect(page, arg);
   if (trend) return trend;
@@ -185,17 +185,17 @@ export function goTarget(target: string): void {
   if (p) go(p); else toast(t('appText.actions.unknownPage', { page: target }), 'warn');
 }
 
-/** Old page names (app-control docs, links made before; the agents' workspace page is the Grindhouse since SPEC 19) → today's ids; "spunti" (the AI's ideas) opens Idee on "Dall'IA". */
-const ALIAS: Record<string, string> = { oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', fatto: 'log', diario: 'log', workspace: 'home', grid: 'home', chat: 'home', chats: 'home', map: 'mappa', spunti: 'idee',esplora:'file', procedure: 'skill', procedura: 'skill', miglioramento: 'regole', dashboard: 'memoria', confronto: 'qualita' };
+/** Old page names (app-control docs, links made before; the agents' workspace page is the Grindhouse since SPEC 19) → today's ids; the deleted Idee and Regole (2026-11-23) open Memoria. */
+const ALIAS: Record<string, string> = { oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', fatto: 'log', diario: 'log', workspace: 'home', grid: 'home', chat: 'home', chats: 'home', map: 'mappa', idee: 'memoria', spunti: 'memoria', regole: 'memoria', miglioramento: 'memoria', esplora: 'file', procedure: 'skill', procedura: 'skill', dashboard: 'memoria', confronto: 'qualita' };
 
 /** Go to a place: a brain page (the Grindhouse holds the agents) or the map; `element` is highlighted for 1.5 s on arrival. */
 export function go(place: Place, opts: { push?: boolean } = {}): void {
-  // Skill, Regole, Script, Idee and Apprendimento are tabs of Memoria (ADR 0122): their ids, links and G-keys land there
+  // Skill and Script are Memoria's Skill tab (ADR 0122, 0263): their ids, links and G-keys land there
   const aliased = (ALIAS[place.page] ?? place.page) as string;
   // Costi, Qualità and Memoria's Apprendimento are tabs of Andamento (ADR 0202): same, before the hub
   const trend = trendRedirect(aliased, place.arg);
   if (trend) place = { ...place, ...trend };
-  const hub = trend ? null : hubRedirect(aliased, (place.page as string) === 'spunti' ? 'ia' : place.arg);
+  const hub = trend ? null : hubRedirect(aliased, place.arg);
   if (hub) place = { ...place, ...hub };
   const page = (ALIAS[place.page] ?? place.page) as Place['page'];
   // a file opens in the viewer overlay above the page, which keeps its state; the old 'file' page route (sb://file/…,
@@ -204,7 +204,7 @@ export function go(place: Place, opts: { push?: boolean } = {}): void {
   // going to another place (the palette, a link, the sidebar, a toast) is leaving the file: the viewer closes
   closeViewer();
   if (page !== 'mappa' && !isBrainPage(page)) { toast(t('appText.actions.unknownPage', { page: place.page }), 'warn'); return; }
-  const target: Place = { page:page==='file'&&!place.arg?'home':page, arg:page==='file'&&place.arg?normalizeFileArg(place.arg):(place.page as string) === 'spunti' ? 'ia' : place.arg ?? null, element: place.element ?? null };
+  const target: Place = { page:page==='file'&&!place.arg?'home':page, arg:page==='file'&&place.arg?normalizeFileArg(place.arg):place.arg ?? null, element: place.element ?? null };
   // the usage counter (ADR 0202, zero tokens, local): one open per place change, never the same place again
   const was = ui.get();
   if (page === 'mappa' ? !was.map : (was.map || was.page !== target.page || (was.pageArg ?? null) !== (target.arg ?? null))) trackPlace(target.page, target.arg ?? null);
@@ -252,7 +252,7 @@ export function openLink(text: string): boolean {
   const l = parseLink(text);
   if (!l) return false;
   const page = (ALIAS[l.page] ?? l.page) as Place['page'];
-  go(page === 'home' ? { page, element: l.element } : { page, arg: l.page === 'spunti' ? 'ia' : l.element });
+  go(page === 'home' ? { page, element: l.element } : { page, arg: l.element });
   return true;
 }
 
@@ -533,12 +533,12 @@ async function nextAfterPending(): Promise<void> {
     : next.kind === 'stalled' ? t('alive.next.stalled', { title: next.chat.title, min: next.chat.quietMin }) : t('alive.next.idea', { title: next.idea.title }), 'info');
 }
 
-/** Where a morning row leads: the Task page for a PR, Memoria → Proposte, the stalled chat, the ideas. */
+/** Where a morning row leads: the Task page for a PR, Memoria → Proposte, the stalled chat, the ideas file. */
 export function openMorningNext(next: MorningNext): void {
   if (next.kind === 'pr') go({ page: 'task' });
   else if (next.kind === 'approvals') go({ page: 'memoria', arg: 'proposte' });
   else if (next.kind === 'stalled') focusChat(next.chat.chatId);
-  else go({ page: 'idee', arg: 'mie' });
+  else go({ page: 'file', arg: 'ideas.md' });
 }
 
 const chatOfTile = (key: string | null): string | null => {

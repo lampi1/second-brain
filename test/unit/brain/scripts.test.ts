@@ -1,6 +1,6 @@
 // The brain's scripts and changelog (ADR 0076): header parse and write, save / fix / delete with their changelog lines,
-// the refusal of a script holding a credential, the word search behind brain_scripts, the Orchestrator-only write tools,
-// and the renderer's filters (Script page). Real files in a temp folder.
+// the refusal of a script holding a credential, the word search behind brain_scripts, and the
+// Orchestrator-only write tools. Real files in a temp folder.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,7 +9,6 @@ import { BrainScripts, findScripts, parseHeader, stripHeader, touchesScripts, wi
 import { BrainChangelog, formatEntry, parseChangelog } from '../../../src/main/brain/changelog';
 import { brainScriptsTool, scriptWriteTools } from '../../../src/main/brain/scripts-tools';
 import { writeDemoScripts } from '../../../src/main/brain/scripts-demo';
-import { filterScripts } from '../../../src/renderer/brain/lib/brain-sections';
 import { ChangeLog } from '../../../src/main/brainmodel/changes';
 import type { SkillPlace } from '../../../src/main/brain/scripts';
 
@@ -188,9 +187,6 @@ describe('BrainScripts', () => {
     expect(findScripts(list, 'ticket csv').map(s => s.id)).toEqual(['note-di-rilascio/export-ticket.py']);
     expect(findScripts(list, 'backup').map(s => s.id)).toEqual(['backup-note.mjs']);
     expect(findScripts(list, 'nulla di simile')).toEqual([]);
-    expect(filterScripts(list, '').map(s => s.id)).not.toContain('conta-righe-log.sh'); // last test failed: hidden
-    expect(filterScripts(list, '').length).toBe(3);
-    expect(filterScripts(list, 'branch').map(s => s.id)).toEqual(['pulizia-ambiente/pulisci-branch.ps1']);
   });
 
   it('knows which watcher paths touch it', () => {

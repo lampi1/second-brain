@@ -1,7 +1,7 @@
 // Themes (SPEC 23 b): ai-errors.md or ideas.md grouped by meaning, from /api/themes (main: search/hybrid/themes.ts).
 // Each theme shows its size, whether it is growing (last 7 days vs the 7 before) and its entries; near-identical entries
-// are flagged as duplicates. Once the Dashboard's Temi tab; since ADR 0122 the ideas' themes close Memoria → Idee and the
-// errors' themes sit on Qualità. Without the search model the panel says so instead of showing nothing.
+// are flagged as duplicates. Once the Dashboard's Temi tab; since ADR 0122 the errors' themes sit on
+// Qualità; the ideas' ones lost their page (ADR 0340) and stay in /api/themes. Without the search model the panel says so instead of showing nothing.
 import { useState, type ReactNode } from 'react';
 import { normThemes, type Theme, type ThemeKind, type Themes } from '@shared/themes';
 import { goTarget } from '../actions';
@@ -44,7 +44,7 @@ function KindPanel({ kind, data, ui }: { kind: ThemeKind; data: Loaded<Themes>; 
   </Panel>;
 }
 
-/** One kind's themes with its source line: the ideas' under Memoria → Idee, the errors' on Qualità (ADR 0122). */
+/** One kind's themes with its source line: the errors' on Qualità (ADR 0122). */
 export function ThemesPanel({ kind }: { kind: ThemeKind }) {
   const data = useBrain(`/api/themes?kind=${kind}`, normThemes, { pollMs: 60_000 });
   return <div className="dash-themes-block" data-testid={`themes-${kind}`}><PARTS.Source data={data} name={FILE[kind]} /><KindPanel kind={kind} data={data} ui={PARTS} /></div>;

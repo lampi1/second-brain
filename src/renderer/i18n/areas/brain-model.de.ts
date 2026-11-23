@@ -5,7 +5,6 @@ type N = { n: number };
 export const brainModelDe: typeof brainModelIt = {
   'bm.loading': 'Lese das Brain…',
   'bm.noBrain': 'Wähl zuerst den Brain-Ordner.',
-  'bm.open': 'Öffnen',
   'bm.lines': (p: N) => (p.n === 1 ? '1 Zeile' : `${p.n} Zeilen`),
   'bm.changed': (p: { at: string }) => `geändert ${p.at}`,
 
@@ -31,14 +30,6 @@ export const brainModelDe: typeof brainModelIt = {
   'bm.mig.lessons': (p: { lines: number; agents: number }) => `${p.lines} gelernte Regeln in die Rolle von ${p.agents === 1 ? '1 Agenten' : `${p.agents} Agenten`} verschoben.`,
   'bm.mig.noAgent': 'kein Agent',
 
-  'bm.rules.lead': (p: { n: number; chars: number; budget: number; app: boolean }) => `Was jeder Chat beim Start bekommt: ${p.n === 1 ? '1 Datei' : `${p.n} Dateien`} deines Brain, ${p.chars.toLocaleString('de-DE')} Zeichen von ${p.budget.toLocaleString('de-DE')}${p.app ? ', plus die festen Regeln der App' : ''}. Alles andere sind Skills, geladen bei Bedarf.`,
-  'bm.rules.lead0': 'Was jeder Chat beim Start bekommt. Alles andere sind Skills, geladen bei Bedarf.',
-  'bm.rules.loaded.always': 'Immer', 'bm.rules.loaded.topic': 'Bei Bedarf', 'bm.rules.loaded.none': 'Nicht mehr geladen',
-  'bm.rules.loadedHint.always': 'Von Anfang an Teil jedes Chats.',
-  'bm.rules.loadedHint.topic': 'Kommt in einen Chat, wenn die Anfrage, ein Tool oder eine Datei sie betrifft.',
-  'bm.rules.loadedHint.none': 'Kommt nicht mehr in Chats: Themenregeln sind Skills geworden. Die Migration bringt ihre Abläufe in Skills.',
-  'bm.rules.oldTitle': 'Nicht mehr geladen',
-  'bm.rules.empty': 'Keine festen Dateien im Brain: jeder Chat bekommt nur die festen Regeln der App.',
 
   'bm.mem.title': 'Gedächtnis',
 

@@ -136,7 +136,6 @@ export const proposalsEn: typeof proposalsIt = {
   'proposals.done.lead': 'Nothing else to decide for now.',
   'proposals.done.approved': () => 'approved or kept',
   'proposals.done.rejected': () => 'rejected or undone',
-  'proposals.done.toApproved': 'Go to Approved',
   'proposals.done.reviewRejected': 'Review the rejected ones',
   'proposals.done.hideRejected': 'Hide the rejected ones',
   'proposals.done.rejectedList': 'Rejected in this session',

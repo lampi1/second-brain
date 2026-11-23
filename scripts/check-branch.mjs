@@ -6,7 +6,7 @@
 // gate of main and of `npm run promote`: a branch needs only this one to be merged. Used by package.json
 // "check:branch"; test/unit/check-branch.test.ts checks it starts no e2e. Whatever the branch changed, it also runs the doc
 // freshness checks (ADR 0208): scripts/readme-check.mjs against the merge base and the DOC_TESTS (every MCP tool in
-// app_guide and docs/agents/commands.md, every page and Settings section with its Guida card, the cards' anchors).
+// app_guide and docs/agents/commands.md).
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,8 +14,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const git = (...a) => execFileSync('git', a, { encoding: 'utf8' }).trim();
 
-/** The doc freshness tests (ADR 0208): run on every branch, since a new tool, page or card rarely touches their imports. */
-export const DOC_TESTS = ['test/unit/tool-catalog.test.ts', 'test/unit/guide-anchors.test.ts', 'test/unit/concept-guide.test.ts', 'test/unit/guide-link.test.ts', 'test/unit/readme-check.test.ts'];
+/** The doc freshness tests (ADR 0208): run on every branch, since a new tool or page rarely touches their imports. */
+export const DOC_TESTS = ['test/unit/tool-catalog.test.ts', 'test/unit/readme-check.test.ts'];
 
 /** characters of file names per eslint call: well below cmd.exe's 8191 with the command and the separators */
 const LINT_CHARS = 6000;
@@ -60,7 +60,7 @@ function main() {
   else for (const files of chunks(lintable, LINT_CHARS)) run('lint', 'npx', ['eslint', '--no-warn-ignored', ...files]);
   run('unit', 'npx', ['vitest', 'run', '--changed', base, '--passWithNoTests']);
   // the docs keep up with the code (ADR 0208): the README (English, images, screenshots fresh against the base) and the
-  // tool catalog, the Guida's coverage and anchors; each failure names its fix
+  // tool catalog; each failure names its fix
   run('readme', 'node', ['scripts/readme-check.mjs', '--base', base]);
   run('doc freshness', 'npx', ['vitest', 'run', ...DOC_TESTS]);
   // the repo is public product (ADR 0061): the guard on the changed files (seconds, same scanner and deny list as the

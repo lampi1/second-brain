@@ -7,7 +7,7 @@ export interface WorkProfile { id: string; title: string; pageIds: readonly stri
 export const WORK_PROFILES: readonly WorkProfile[] = [
   { id: 'dev', title: 'Dev', pageIds: ['agenti', 'task', 'skill'], homePageId: 'agenti' },
   { id: 'qa', title: 'QA', pageIds: ['andamento', 'agenti', 'task', 'skill'], homePageId: 'andamento' },
-  { id: 'po', title: 'PO', pageIds: ['idee', 'agenti', 'task'], homePageId: 'idee' },
+  { id: 'po', title: 'PO', pageIds: ['agenti', 'task'], homePageId: 'task' },
   { id: 'cto', title: 'CTO', pageIds: ['andamento', 'agenti', 'task'], homePageId: 'andamento' },
 ];
 

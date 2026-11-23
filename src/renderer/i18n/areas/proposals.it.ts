@@ -136,7 +136,6 @@ export const proposalsIt = {
   'proposals.done.lead': 'Per ora non c’è altro da decidere.',
   'proposals.done.approved': (p: N): string => (p.n === 1 ? 'approvata o tenuta' : 'approvate o tenute'),
   'proposals.done.rejected': (p: N): string => (p.n === 1 ? 'rifiutata o annullata' : 'rifiutate o annullate'),
-  'proposals.done.toApproved': 'Vai alle Approvate',
   'proposals.done.reviewRejected': 'Rivedi le rifiutate',
   'proposals.done.hideRejected': 'Nascondi le rifiutate',
   'proposals.done.rejectedList': 'Rifiutate in questa sessione',

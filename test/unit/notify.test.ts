@@ -46,8 +46,8 @@ describe('notify', () => {
   });
 
   it('sections of the badges', () => {
-    expect(sectionOf('idea')).toBe('idee');
-    expect(sectionOf('reflection')).toBe('idee');
+    expect(sectionOf('idea')).toBeNull(); // the Idee page is gone (2026-11-23): its file opens instead
+    expect(sectionOf('reflection')).toBeNull();
     expect(sectionOf('budget')).toBe('andamento'); // Costi and Qualità are Andamento's tabs (ADR 0202)
     expect(sectionOf('error')).toBe('andamento');
     expect(sectionOf('chat-done')).toBe('home');
@@ -81,15 +81,14 @@ describe('notify', () => {
 
   it('internal links', () => {
     expect(linkOfEvent(ev('1', 'error', 1, { chatId: 'qa' }))).toBe('sb://home/chat-qa');
-    // ideas and reflections open Idee filtered by author (the AI's: "Dall'IA"), not the raw file
-    expect(linkOfEvent(ev('7', 'idea', 1, { file: 'ideas.md', who: "dell'IA" }))).toBe('sb://idee/ia');
-    expect(linkOfEvent(ev('8', 'idea', 1, { file: 'ideas.md', who: 'tua' }))).toBe('sb://idee/mie');
-    expect(linkOfEvent(ev('9', 'reflection', 1, { file: 'ai-reflections.md', who: 'Orchestrator' }))).toBe('sb://idee/ia');
+    // ideas and reflections open their brain file
+    expect(linkOfEvent(ev('7', 'idea', 1, { file: 'ideas.md', who: "dell'IA" }))).toBe('sb://esplora/ideas.md');
+    expect(linkOfEvent(ev('9', 'reflection', 1, { file: 'ai-reflections.md', who: 'Orchestrator' }))).toBe('sb://esplora/ai-reflections.md');
     expect(linkOfEvent(ev('10', 'proposal', 1, { file: 'rules/x.md' }))).toBe('sb://esplora/rules/x.md');
     expect(parseLink('sb://esplora/ops/runbook/x.md')).toEqual({ page: 'esplora', element: 'ops/runbook/x.md' });
     expect(parseLink('sb://workspace/chat-qa')).toEqual({ page: 'workspace', element: 'chat-qa' });
     expect(parseLink(' sb://costi ')).toEqual({ page: 'costi', element: null });
     expect(parseLink('https://example.com')).toBeNull();
-    expect(makeLink('idee', 'feed-1')).toBe('sb://idee/feed-1');
+    expect(makeLink('memoria', 'skill')).toBe('sb://memoria/skill');
   });
 });

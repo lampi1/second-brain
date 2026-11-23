@@ -175,9 +175,5 @@ test('"?" explanations across the app: Orchestrator, strips, Agenti summary, Set
     await open('st-toasts-help', 'Urgenti', 'explain-settings-toasts-dark');
     await open('st-stall-help', 'agent_children', 'explain-settings-stall-dark');
     await open('st-tiers-help', 'leggero', 'explain-settings-tiers-dark');
-    await theme(page, 'light');
-    await goPage(page, 'skill');
-    await expect(page.getByTestId('skills-page')).toBeVisible();
-    await open('sk-help', 'SKILL.md', 'explain-skills-light');
   } finally { await app.close(); }
 });

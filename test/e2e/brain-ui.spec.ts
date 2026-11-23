@@ -2,7 +2,7 @@
 // synthetic brain whose data server is test/fixtures/brain-ui/brain-site.mjs (the real API shapes, fictional data).
 // Every section is rendered through the test route (#brain-test/<page>), its key content asserted, and one screenshot
 // saved per section in test-results/shots/brain-*.png (Qualità: its demo shot is in qualita.spec.ts); then the 3D map (WebGL), its 2D fallback and a flow, the
-// error state, the virtualized table, the side peek with the keyboard, and the light theme.
+// error state and the light theme.
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -38,7 +38,7 @@ test.beforeAll(async () => {
   ({ app, page } = await launch({ SB_BRAIN: brain }));
   await page.emulateMedia({ colorScheme: "dark" }); // the app default; one light shot at the end
   await expect(page.getByTestId('app')).toBeVisible();
-  await open('idee', true);
+  await open('costi', true);
 });
 test.afterAll(async () => { await app?.close(); });
 
@@ -59,49 +59,6 @@ test('Fatto e standup is gone: its old links open the Log', async () => {
   await expect(page.getByTestId('brain-page-log')).toBeVisible();
   await open('diario');
   await expect(page.getByTestId('brain-page-log')).toBeVisible();
-});
-
-test('Idee: table with filters (state, area, who), side peek by keyboard, Esc closes it', async () => {
-  await open('idee');
-  const p = page.getByTestId('brain-page-idee');
-  await settled();
-  await expect(p.getByTestId('bx-table-idee')).toContainText('9 righe');
-  await p.getByRole('button', { name: 'Filtra per Chi' }).click();
-  await page.locator('.ui-select-list [data-value="IA"]').click();
-  await expect(p.getByTestId('bx-table-idee')).toContainText('4 di 9 righe');
-  await p.getByRole('button', { name: 'Filtra per Chi' }).click();
-  await page.locator('.ui-select-list [data-value=""]').click();
-  const grid = p.getByRole('grid', { name: 'Idee' });
-  await grid.focus();
-  await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('Enter');
-  await expect(p.getByTestId('bx-peek')).toBeVisible();
-  await page.waitForTimeout(300); // the peek slides in
-  await shot(page, 'brain-idee');
-  await page.keyboard.press('Escape');
-  await expect(p.getByTestId('bx-peek')).toHaveCount(0);
-});
-
-test("Idee · Dall'IA: the AI's ideas with their reasoning in the peek, filter by audience, reflections below; old spunti links land here", async () => {
-  await open('spunti/riflessioni');
-  const p = page.getByTestId('brain-page-idee');
-  await settled();
-  await expect(p.getByTestId('bx-tab-ia')).toHaveAttribute('aria-selected', 'true');
-  await expect(p.getByTestId('bx-table-idee')).toContainText('4 righe');
-  await expect(p.getByLabel('Filtra per Per')).toBeVisible();
-  await expect(p.getByTestId('bx-riflessione')).toHaveCount(2);
-  await p.getByRole('row').filter({ hasText: 'Rileggere i propri errori' }).click();
-  await expect(p.getByTestId('bx-peek').getByTestId('bx-reason')).toContainText('Ho notato');
-  await page.waitForTimeout(300);
-  await shot(page, 'brain-idee-ia');
-  await page.keyboard.press('Escape');
-  await p.getByTestId('bx-tab-mie').click();
-  await expect(p.getByTestId('bx-tab-mie')).toHaveAttribute('aria-selected', 'true');
-  await expect(p.getByTestId('bx-table-idee')).toContainText('5 righe');
-  await expect(p.getByTestId('bx-riflessione')).toHaveCount(0);
-  await p.getByTestId('bx-tab-tutte').click();
-  await expect(p.getByTestId('bx-table-idee')).toContainText('9 righe');
 });
 
 test('Costi: KPIs, savings, charts by day / kind / model / area, chats table; period switch', async () => {
@@ -186,35 +143,12 @@ test('Mappa: direct exploration, optional filters, keyboard and accessible fallb
   await shot(page,'brain-map-flat');await page.getByTestId('bx-map-close').click();
 });
 
-test('Sempre caricato: a brain without ops/improve/improve.mjs shows the tab, never an error or a stack', async () => {
-  // this fixture brain has no improve CLI (like a new user's): main answers /api/improve itself (brain/learn.ts); the tab
-  // («Regole» until #366, ADR 0243) no longer shows the learned rules at all
-  await page.evaluate(() => { location.hash = ''; location.reload(); });
-  await page.waitForLoadState('domcontentloaded');
-  await expect(page.getByTestId('app')).toBeVisible();
-  try {
-    await goPage(page, 'regole');
-    const p = page.getByTestId('bm-rules-page');
-    await expect(p).toBeVisible();
-    await page.waitForTimeout(500);
-    await expect(page.getByTestId('page-miglioramento')).toHaveCount(0);
-    await expect(p.getByTestId('bx-error')).toHaveCount(0);
-    await expect(p).not.toContainText('Cannot find module');
-    await expect(p).not.toContainText('MODULE_NOT_FOUND');
-    // a stack frame ("at fn (file:1:2)" or "at file:1:2"); a plain '    at ' would match "aggiornato" once whitespace is normalized
-    await expect(p).not.toContainText(/\bat (?:\S+ \()?\S+:\d+:\d+\)?/);
-    await shot(page, 'brain-regole-senza-ciclo');
-  } finally {
-    await open('idee', true);
-  }
-});
-
 test('States: technical details stay collapsed until requested', async () => {
   const failure = path.join(brain, 'FAIL_tables');
   fs.writeFileSync(failure, 'Error: Data source unavailable\n    at readData (fixture.mjs:12:3)');
   try {
-    await open('idee', true);
-    const p = page.getByTestId('brain-page-idee');
+    await open('qualita', true);
+    const p = page.getByTestId('brain-page-qualita');
     await expect(p.getByTestId('bx-error-cause')).toHaveText('Data source unavailable');
     const details = p.getByTestId('bx-error-details');
     await expect(details.locator('pre')).toBeHidden();
@@ -229,18 +163,18 @@ test('States: technical details stay collapsed until requested', async () => {
 
 test('States: a failing data source shows its cause and Riprova; light theme follows the app', async () => {
   fs.writeFileSync(path.join(brain, 'FAIL_tables'), '');
-  await open('idee', true);
-  const p = page.getByTestId('brain-page-idee');
+  await open('qualita', true);
+  const p = page.getByTestId('brain-page-qualita');
   await expect(p.getByTestId('bx-error-cause')).toHaveText('errore simulato su /api/tables');
   await expect(p.getByTestId('bx-error-details')).toHaveCount(0); // one line: nothing to fold
   await shot(page, 'brain-error');
   fs.rmSync(path.join(brain, 'FAIL_tables'));
   await p.getByRole('button', { name: 'Riprova' }).click();
-  await expect(p.getByTestId('bx-table-idee')).toBeVisible({ timeout: 15000 });
+  await expect(p.getByTestId('bx-error-cause')).toHaveCount(0, { timeout: 15000 });
 
   await page.emulateMedia({ colorScheme: 'light' });
-  await open('idee');
+  await open('qualita');
   await settled();
-  await shot(page, 'brain-idee-light');
+  await shot(page, 'brain-qualita-light');
   await page.emulateMedia({ colorScheme: 'dark' });
 });

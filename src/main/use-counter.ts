@@ -195,7 +195,7 @@ export function demoUseCounts(now: number): Row[] {
   const plan: [string, number][] = [
     ['page:home', 14], ['action:orchestrator', 9], ['page:memoria/proposte', 6], ['action:new-request', 5], ['page:task', 5],
     ['action:discuss', 3], ['page:andamento/costi', 3], ['page:impara', 2], ['page:log', 2], ['action:dictation', 2],
-    ['page:memoria/skill', 1], ['page:andamento/qualita', 1], ['action:next-thing', 2], ['page:registrazioni', 1], ['page:guida', 1],
+    ['page:memoria/skill', 1], ['page:andamento/qualita', 1], ['action:next-thing', 2], ['page:registrazioni', 1],
   ];
   const out: Row[] = [];
   for (let i = 0; i < SHOW_DAYS; i++) {

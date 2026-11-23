@@ -323,14 +323,14 @@ export class BrainModelService {
     this.d.emit();
     return this.state();
   }
-  /** The Memoria hub's trash (ADR 0122): removes one brain skill (its whole folder), one rules/ file or one script
+  /** A research card's removal (the Memoria trash was deleted, ADR 0340): removes one brain skill (its whole folder), one rules/ file or one script
    *  through the change log, so its «Annulla» puts every file back. Only what lives in the brain: the user's own and
    *  Cursor's skills, the always-loaded files (CLAUDE.md and the like) and files too big to keep a copy of are refused. */
   remove(kind: 'skill' | 'rule' | 'script', target: string, by?: { job: 'research'; reason: string; evidence: string[] }): { state: BrainModelState; changeId: string } {
     const root = this.root();
     if (!root) throw new Error('Scegli prima la cartella del brain.');
     const decisions: { file: string; text: string }[] = [];
-    let files: string[] = [], summary = '', reason = by?.reason ?? 'Eliminata da te in Memoria → Approvate.', evidence: string[] = [];
+    let files: string[] = [], summary = '', reason = by?.reason ?? 'Eliminata da te.', evidence: string[] = [];
     if (kind === 'skill') {
       const skill = readSkills(this.skillDirs(root), root, []).find(x => x.name === target && x.home === 'brain');
       if (!skill) throw new Error('Skill del brain non trovata.');
@@ -351,7 +351,7 @@ export class BrainModelService {
     } else {
       if (!this.d.scripts) throw new Error('Gli script non si possono eliminare qui.');
       files = [this.d.scripts.file(target)];
-      summary = `Script «${target}» eliminato`; reason = by?.reason ?? 'Eliminato da te in Memoria → Approvate.'; evidence = [`scripts/${target}`];
+      summary = `Script «${target}» eliminato`; reason = by?.reason ?? 'Eliminato da te.'; evidence = [`scripts/${target}`];
     }
     if (!files.length) throw new Error('Niente da eliminare.');
     if (files.length > 64 || files.some(f => { try { return fs.statSync(f).size > 256 * 1024; } catch { return true; } })) throw new Error('Troppo grande per poterlo annullare: eliminalo dal disco.');

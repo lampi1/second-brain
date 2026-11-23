@@ -16,7 +16,7 @@ import { t, locale } from '../../i18n';
 import { renderMarkdown } from '../../lib/markdown';
 import { canUndo, decide, dismissRefusal, groupCounts, openCards, refreshProposals, reportShown, tally, undoAuto, undoLast, useDeck } from '../../lib/proposals';
 import { cardWords, whyText } from '../../lib/proposal-ask';
-import { go, openChatRef, openFileViewer } from '../../actions';
+import { openChatRef, openFileViewer } from '../../actions';
 import { app } from '../../store/store';
 import { AgentAvatar } from '../AgentAvatar';
 import { LearningEvidenceInspector } from './LearningEvidence';
@@ -333,7 +333,6 @@ export function ProposalsDeck() {
           </div>
           <div className="pd-done-actions">
             {undoable && <button type="button" className="btn btn-m" data-testid="pd-done-undo" onClick={undo}>{t('proposals.undoLast')}</button>}
-            <button type="button" className="btn btn-m btn-primary" data-testid="pd-to-approved" onClick={() => go({ page: 'memoria', arg: 'approvate' })}>{t('proposals.done.toApproved')}</button>
             {sum.rejected > 0 && <button type="button" className="btn btn-m btn-ghost" aria-expanded={showRejected} data-testid="pd-review-rejected" onClick={() => setShowRejected(v => !v)}>{showRejected ? t('proposals.done.hideRejected') : t('proposals.done.reviewRejected')}</button>}
           </div>
           {showRejected && <ul className="pd-rejected" aria-label={t('proposals.done.rejectedList')} data-testid="pd-rejected-list">{sum.rejectedCards.map(c => <li key={c.id} className={`pd-g-${c.group}`}>

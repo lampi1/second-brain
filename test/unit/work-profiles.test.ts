@@ -8,7 +8,7 @@ it('a work profile shows only the pages this build has, and an unknown saved id 
   expect(workProfile('dev', pages)).toMatchObject({ id: 'dev', homePageId: 'agenti', pageIds: ['agenti', 'task', 'skill'] });
   expect(workProfile('qa', pages)?.pageIds).toEqual(['andamento', 'agenti', 'task', 'skill']);
   expect(workProfile('cto', pages)?.pageIds).toEqual(['andamento', 'agenti', 'task']); // Costi and Qualità are Andamento's tabs (ADR 0202)
-  expect(workProfile('po', pages)).toBeNull(); // its reference page (idee) is missing
+  expect(workProfile('po', ['agenti'])).toBeNull(); // its reference page (task) is missing
   for (const saved of ['missing', undefined, 3, { id: 'dev' }]) expect(workProfile(saved, pages)).toBeNull();
   expect(new Set(WORK_PROFILES.map(p => p.id)).size).toBe(WORK_PROFILES.length);
 });

@@ -65,7 +65,6 @@ export const IconExternal = (p: P) => <Svg {...p}><path d="M14 4h6v6M20 4l-9 9" 
 export const IconCopy = (p: P) => <Svg {...p}><rect x="8.5" y="8.5" width="11" height="11" rx="2" /><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2" /></Svg>;
 export const IconPlay = (p: P) => <Svg {...p}><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" /></Svg>;
 export const IconMoon = (p: P) => <Svg {...p}><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z" /></Svg>;
-export const IconDice = (p: P) => <Svg {...p}><rect x="4" y="4" width="16" height="16" rx="3.5" /><circle cx="8.8" cy="8.8" r=".9" fill="currentColor" /><circle cx="15.2" cy="15.2" r=".9" fill="currentColor" /><circle cx="15.2" cy="8.8" r=".9" fill="currentColor" /><circle cx="8.8" cy="15.2" r=".9" fill="currentColor" /><circle cx="12" cy="12" r=".9" fill="currentColor" /></Svg>;
 export const IconHistory = (p: P) => <Svg {...p}><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4.5v3.8h3.8" /><path d="M12 8v4.2l2.8 1.6" /></Svg>;
 export const IconStar = ({ filled, ...p }: P & { filled?: boolean }) => <Svg {...p}><path d="m12 3.8 2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.8l-5.1 2.7 1-5.7-4.1-4 5.7-.8z" fill={filled ? 'currentColor' : 'none'} /></Svg>;
 export const IconPin = ({ filled, ...p }: P & { filled?: boolean }) => <Svg {...p}><path d="M12 17v4.5M8.5 4.5h7l-.8 5.2 2.3 2.3v1.5H7v-1.5l2.3-2.3z" fill={filled ? 'currentColor' : 'none'} /></Svg>;

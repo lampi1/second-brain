@@ -1,5 +1,5 @@
 // IPC handlers, Agents: roles and their versions, metrics and estimates, avatars, work threads and lessons,
-// connectors and MCP servers, the Guida. Registered by src/main/index.ts with every other group (Handlers
+// connectors and MCP servers. Registered by src/main/index.ts with every other group (Handlers
 // in ipc.ts keeps the set complete); each channel's shape is in src/shared/contract/*.ts.
 import { FROZEN_EPOCH } from '../demo';
 import { checkRunIds, demoEstimateRuns, mergeRuns } from '../agents/run-estimates';
@@ -8,7 +8,7 @@ import { judgingEstimate, lastNight } from '../agents/judge-sample';
 import { readWorker } from '../read-work';
 import type { HandlerContext, HandlersOf } from './context';
 
-export function agentsHandlers({ s, demo, agentImages, workflows, orchestrator, mcpServers, connectors }: HandlerContext): HandlersOf<'agents' | 'avatars' | 'work' | 'connectors' | 'mcpservers' | 'guide'> {
+export function agentsHandlers({ s, demo, agentImages, workflows, orchestrator, mcpServers, connectors }: HandlerContext): HandlersOf<'agents' | 'avatars' | 'work' | 'connectors' | 'mcpservers'> {
   return {
     'connectors:list': () => connectors.service.list(),
     'connectors:login': a => connectors.service.login(a?.provider),
@@ -82,9 +82,6 @@ export function agentsHandlers({ s, demo, agentImages, workflows, orchestrator, 
       if (target) void s.chats.send(target.id, `[evento app] Decisione registrata nel filo ${row.id}. Rileggi app_work_list e prosegui dalla decisione salvata; questa notifica non concede altri permessi.`, undefined, false, 'Lavoro', false, { kind: 'app' }).catch(e => log.warn('chats', 'workflow decision wake failed', { cause: errText(e), hint: 'The decision is saved; Fai il punto resumes it.' }));
       return row;
     },
-    // «Chiedi alla Guida» and the cards «da verificare» (main/guide/service.ts, ADR 0196); none in the demo
-    'guide:ask': async a => s.guide ? s.guide.ask(a) : { ok: false, text: '', cards: [], files: [], costUsd: null, costBasis: 'unknown', model: null, reason: 'unavailable', noEngine: true },
-    'guide:stale': () => s.guide?.stale() ?? { checked: false, cards: [] },
     // the little people's lines of the day (main/quips/daily.ts, ADR 0305); none in the demo: the fixed lines are said
     'agents:quips': async a => !s.quips ? { lines: {}, pending: false } : a?.wait === true ? s.quips.ensure(a?.lang) : s.quips.get(a?.lang),
   };

@@ -221,7 +221,7 @@ export function ConnectorsHub() {
     return onMcpDraft(take);
   }, []);
   return <div className="hub" data-testid="connectors-hub">
-    <p className="hub-lead">{t('hub.lead')}<HelpTip title={t('hub.whatTitle')} label={t('hub.whatTitle')} wide guide="mcp-servers">{t('hub.whatTip')}</HelpTip></p>
+    <p className="hub-lead">{t('hub.lead')}<HelpTip title={t('hub.whatTitle')} label={t('hub.whatTitle')} wide>{t('hub.whatTip')}</HelpTip></p>
     <HubTotalsRow servers={servers} connectors={connectors} />
     <section className="hub-section" aria-labelledby="hub-catalog" data-testid="hub-catalog">
       <header className="hub-section-head"><h3 id="hub-catalog">{t('hub.catalog')}</h3><p>{t('hub.serversLead')}</p></header>

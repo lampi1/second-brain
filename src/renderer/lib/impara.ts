@@ -4,10 +4,10 @@
 // 0230): localStorage, a convenience only) and the colours a lit
 // piece gets on the diagram, taken from the theme's tokens as hex (mermaid's classDef cannot take rgba).
 // The tutor's answers as they stream (ADR 0190: 'impara:tutor', `tutorLive`), and the start form's draft when another
-// page sends the user here to learn something («Capiscila», «Spiegamelo», «Imparalo»: `learnAbout`).
+// page sends the user here to learn something («Capiscila»: `learnAbout`).
 // The «Studio» column (ADR 0205): a tile's run (`makeStudio`), a lesson's quiz played as a review session
 // (`studioQuizArg`), and which tab of the side column is open (`side`, remembered).
-// Used by components/impara/, brain/components/RecordLearnButton.tsx, brain-model/ApprovedTab.tsx, GuidePage.tsx.
+// Used by components/impara/ and brain/components/RecordDiscussButton.tsx.
 import type { StudioKind } from '@shared/lesson-studio';
 import { DEFAULT_LESSON_MODE, type ImparaState, type Lesson, type LessonConfidence, type LessonDepth, type LessonExtraKind, type LessonKind, type LessonLevel, type LessonMode, type LessonStart, type LessonTeacher, type FocusColors, type TutorMode } from '@shared/lesson';
 import type { ReviewCard, ReviewGrade, ReviewItem, ReviewMode } from '@shared/review';

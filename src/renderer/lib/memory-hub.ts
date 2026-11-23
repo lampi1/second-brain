@@ -1,17 +1,18 @@
-// The Memoria hub's places (ADR 0122; the «Idee dell'app» tab of ADR 0132 is gone since ADR 0153: its ideas are in Idee
-// and its issues are cards in Proposte, so 'app' opens Proposte): its tabs in order, the page arg that opens one ("memoria/<tab>[/<more>]"), and
-// the old pages that became tabs (Skill, Regole, Script, Idee: their ids, links and G-keys still exist and land on the
-// matching tab; Script lands on Skill since ADR 0263). Apprendimento left for Andamento (ADR 0202, lib/andamento.ts redirects "memoria/apprendimento"); Statistiche is gone (ADR 0248): "memoria/statistiche" opens Skill, where skill use lives. Pure: used by actions.ts go() (the redirect), components/brain-model/MemoryPage.tsx (the
-// tab bar; «Artifact» after «Diario e note», ADR 0319) and Sidebar.tsx (which entries leave the rail). Tests: test/unit/memory-hub.test.ts.
+// The Memoria hub's places (ADR 0122): its tabs in order, the page arg that opens one ("memoria/<tab>[/<more>]"), and
+// the old pages that became tabs (Skill, Script: their ids, links and G-keys still exist and land on the Skill tab;
+// Script lands on Skill since ADR 0263). Owner 2026-11-23 («io voglio solo vedere il diario gli artifact e le skill e la
+// parte proposte della manutenzione»): only Diario (id 'file', MemoryBrowser), Artifact, Skill and Proposte are left; the
+// Approvate, Sempre caricato and Idee tabs are deleted, and their old tab names open the default tab. Pure: used by actions.ts go() (the redirect), components/brain-model/MemoryPage.tsx (the
+// tab bar) and Sidebar.tsx (which entries leave the rail). Tests: test/unit/memory-hub.test.ts.
 
-export const HUB_TABS = ['proposte', 'approvate', 'skill', 'regole', 'idee', 'file', 'artifact'] as const;
+export const HUB_TABS = ['file', 'artifact', 'skill', 'proposte'] as const;
 export type HubTab = (typeof HUB_TABS)[number];
 export const DEFAULT_TAB: HubTab = 'proposte';
 
 /** The former pages that are tabs of Memoria now: page id → tab. */
-export const HUB_PAGES: Readonly<Record<string, HubTab>> = { skill: 'skill', regole: 'regole', script: 'skill', idee: 'idee' };
+export const HUB_PAGES: Readonly<Record<string, HubTab>> = { skill: 'skill', script: 'skill' };
 /** A few tab names people (and the Orchestrator) may type: they open the same tab. */
-const TAB_ALIAS: Readonly<Record<string, HubTab>> = { skills: 'skill', rules: 'regole',  ideas: 'idee', app: 'proposte', 'idee-app': 'proposte', 'app-ideas': 'proposte', files: 'file', artifacts: 'artifact', artefatti: 'artifact', report: 'artifact', reports: 'artifact', stats: 'skill', statistiche: 'skill', proposals: 'proposte', approved: 'approvate' };
+const TAB_ALIAS: Readonly<Record<string, HubTab>> = { skills: 'skill', app: 'proposte', 'idee-app': 'proposte', 'app-ideas': 'proposte', files: 'file', diario: 'file', journal: 'file', note: 'file', artifacts: 'artifact', artefatti: 'artifact', report: 'artifact', reports: 'artifact', stats: 'skill', statistiche: 'skill', proposals: 'proposte', manutenzione: 'proposte' };
 
 const isTab = (s: string): s is HubTab => (HUB_TABS as readonly string[]).includes(s);
 /** The «Script & Query» tab is gone (ADR 0263): scripts and queries are files of their skill. Its links open the Skill
@@ -44,15 +45,4 @@ export function hubRedirect(page: string, arg: string | null | undefined): { pag
   // the old Script page's arg is a script id: its skill (above) is the Skill tab's arg
   if (page === 'script') return { page: 'memoria', arg: hubArg(tab, parseHubArg(`script/${arg ?? ''}`).rest) };
   return { page: 'memoria', arg: hubArg(tab, arg ?? null) };
-}
-
-/** «Rispolvera» (Memoria → Idee): an idea at random, preferring the ones still open and at least 30 days old, then any
- *  still open, then any; never the one shown now when there is another. `rnd` is injectable for the tests. */
-export function pickOld<T extends { data: string; stato: string; titolo: string }>(list: readonly T[], today: string, current: string | null, rnd: () => number = Math.random): T | null {
-  const open = list.filter(i => !/fatta|scartata/i.test(i.stato));
-  const cutoff = Date.parse(`${today}T12:00:00Z`) - 30 * 864e5;
-  const old = open.filter(i => Date.parse(`${i.data}T12:00:00Z`) <= cutoff);
-  const pool = old.length ? old : open.length ? open : [...list];
-  const fresh = pool.length > 1 ? pool.filter(i => i.titolo !== current) : pool;
-  return fresh.length ? fresh[Math.min(fresh.length - 1, Math.floor(rnd() * fresh.length))]! : null;
 }

@@ -70,7 +70,7 @@ export const BRAIN_LAYOUT: readonly LayoutSection[] = [
   { id: 'now', place: 'now.md', since: '0.1.0', page: 'memoria', holds: 'What every open chat is doing right now, one line each.' },
   { id: 'journal', place: 'journal/', since: '0.1.0', page: 'memoria', holds: 'One file per day: what happened that day.' },
   {
-    id: 'ideas', place: 'ideas.md', since: '0.1.0', page: 'idee',
+    id: 'ideas', place: 'ideas.md', since: '0.1.0', page: 'memoria',
     holds: 'Ideas the owner or the agents noted for later: a what-if, something to try or build, an improvement to pick up one day, one entry each. Not: a task already planned with a date, a decision taken, a fact, a reminder, a note about what happened.',
     receives: {
       kind: 'marked-items', write: 'append-items',
@@ -79,7 +79,7 @@ export const BRAIN_LAYOUT: readonly LayoutSection[] = [
     },
   },
   { id: 'errors', place: 'ai-errors.md', since: '0.1.0', page: 'memoria', holds: 'Mistakes the AI made and the owner corrected.' },
-  { id: 'rules', place: 'rules/', since: '0.1.0', page: 'regole', holds: 'The brain\'s own rules: how agents must work in this brain.' },
+  { id: 'rules', place: 'rules/', since: '0.1.0', page: 'memoria', holds: 'The brain\'s own rules: how agents must work in this brain.' },
   { id: 'skills', place: '.claude/skills/', since: '0.1.0', page: 'skill', holds: 'Skills: reusable know-how, one folder with a SKILL.md each (old runbook sections are moved here by the migration job).' },
   { id: 'agents', place: 'agents/', since: '0.1.0', page: 'memoria', holds: 'Each role\'s own memory (agents/<role>/memory.md; memory/shared.md for what several roles share).' },
   { id: 'knowledge', place: 'folders named after a group (clienti/, ambienti/, persone/, …)', since: '0.1.0', page: 'memoria', holds: 'Reference notes: customers, environments, people, projects.' },
@@ -99,7 +99,7 @@ export const BRAIN_LAYOUT: readonly LayoutSection[] = [
 /** The Brain pages that keep no brain content of their own (they show runs, logs, the app's state or other pages'
  *  content): a page missing from both lists fails test/unit/brainmodel/upgrade.test.ts, so a new page that holds
  *  content cannot ship without its layout entry. */
-export const PAGES_WITHOUT_CONTENT: readonly string[] = ['home', 'agenti', 'task', 'dashboard', 'andamento', 'file', 'guida', 'registrazioni', 'impara', 'collegamenti', 'scacchi'];
+export const PAGES_WITHOUT_CONTENT: readonly string[] = ['home', 'agenti', 'task', 'dashboard', 'andamento', 'file', 'registrazioni', 'impara', 'collegamenti', 'scacchi'];
 
 /** A short stable hash of an entry (FNV-1a over its fields): changes when what the entry means changes. */
 export function sectionHash(s: LayoutSection): string {

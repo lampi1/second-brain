@@ -20,7 +20,7 @@ const git = (...a) => execFileSync('git', a, { encoding: 'utf8' }).trim();
 const ARG_CHARS = 6000;
 const SOURCE_EXT = /\.(ts|tsx|mts|mjs|js|cjs)$/;
 const TEST_FILE = /\.test\.ts$/;
-/** a changed path the doc freshness tests read: src (tool scan, Guida anchors hash code anywhere), docs, the README */
+/** a changed path the doc freshness tests read: src (tool scan), docs, the README */
 const DOC_INPUTS = /^(src\/|docs\/|README\.md$|scripts\/readme-check\.mjs$)/;
 
 const posix = p => p.split(path.sep).join('/');

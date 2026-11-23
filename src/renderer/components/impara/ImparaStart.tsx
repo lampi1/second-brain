@@ -8,8 +8,8 @@
 // the subjects with their level and quiz) and the saved lessons (their diagram as a thumbnail, how far they got, their
 // subject, filtered by subject), each reopening where it was left. The user's PRs have their own tab since ADR 0265
 // (ImparaPrTab.tsx). This is the «Lezioni» tab of Impara (ImparaTabs.tsx).
-// Another page can send the user here with the field filled in (ADR 0190: «Capiscila» from Task, «Spiegamelo» from
-// Memoria, «Imparalo» from the Guide; lib/impara.ts learnAbout), with the subject it belongs to; the user starts it.
+// Another page can send the user here with the field filled in (ADR 0190: «Capiscila» from Task; lib/impara.ts
+// learnAbout), with the subject it belongs to; the user starts it.
 // Used by ImparaPage.tsx.
 import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import type { LessonFile, LessonKind, LessonStart, LessonSummary } from '@shared/lesson';
