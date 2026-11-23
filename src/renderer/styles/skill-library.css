@@ -153,7 +153,7 @@
 .sl-empty{margin:24px 12px;color:var(--text-3);font-size:var(--fs-s);line-height:1.6;text-align:center}
 .sl-error{margin:8px 0;padding:8px 10px;border-radius:var(--r-s);background:var(--red-bg);color:var(--red);font-size:var(--fs-s);white-space:pre-wrap}
 .sl-prose{max-width:76ch;color:var(--md-text);font-size:var(--fs-l);line-height:1.7}
-.sl-prose h1:first-child{display:none}
+.sl-read .sl-prose h1:first-child{display:none}
 
 /* files */
 .sl-files{display:grid;grid-template-columns:minmax(170px,230px) minmax(0,1fr);gap:16px;min-height:420px}
