@@ -217,6 +217,14 @@ export function saveWorkProfile(id: string | undefined, expected: string | undef
   localStorage.setItem(PREFS_KEY, JSON.stringify(next));
   ui.set(s => ({ ...s, prefs: next }));
 }
+/** The all-agents overview: every expanded chat folds (drafts and transcripts stay mounted), so the Grindhouse shows
+ *  the whole bench, never one agent (owner, 2026-11-23). Returns whether anything was open. */
+export function collapseAllChats():boolean{
+  const cur=ui.get().prefs.chatExpanded;
+  if(!Object.values(cur).some(v=>v===true))return false;
+  setPrefs({chatExpanded:Object.fromEntries(Object.keys(cur).map(id=>[id,false]))});
+  return true;
+}
 /** Expansion is independent of transcript/draft state. Collapsing never unmounts the input or item list. */
 export function setChatExpanded(id:string,expanded:boolean):void{
   if(expanded)ui.set(s=>s.opened===id?s:{...s,opened:id});

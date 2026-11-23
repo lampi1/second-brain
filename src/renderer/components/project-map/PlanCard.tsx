@@ -14,7 +14,7 @@ import { useEffect, useState } from 'react';
 import type { MapFlowStep, MapPlan } from '@shared/project-map';
 import { planProgress } from '@shared/project-map-progress';
 import { t } from '../../i18n';
-import { ago } from '../../lib/format';
+import { ago, prettyModel } from '../../lib/format';
 import { useApp } from '../../store/store';
 import { ProgressHead } from './MapProgress';
 
@@ -42,14 +42,34 @@ export function stateOf(f: MapFlowStep, now: number): string {
 export function followOf(plan: MapPlan): number | 'all' | null {
   return plan.phase === 'proposed' || plan.phase === 'revising' ? 'all' : plan.flow.find(f => f.state === 'now')?.step ?? null;
 }
+/** Who does a step, on one line: «Artisan · Sonnet 5.5 · Base»; a step not started adds «previsto» (the role card's own
+ *  model for the planned preset). null for a step the Strategist does itself. */
+export function whoOf(f: MapFlowStep): { text: string; planned: boolean } | null {
+  if (!f.role) return null;
+  const parts = [f.role[0]!.toUpperCase() + f.role.slice(1), ...(f.model !== undefined ? [prettyModel(f.model)] : []), ...(f.preset ? [t(`delegation.preset.${f.preset}`)] : [])];
+  return { text: parts.join(' · '), planned: f.planned === true };
+}
+
+/** A parallel group is the steps of one turn when there are two or more: either together or one after the other,
+ *  never «possible» (owner, 2026-11-23). Its label counts them live: «5 in parallelo · 3 al lavoro, 2 fatti». */
+export function groupLabel(flow: readonly MapFlowStep[], wave: number): string | null {
+  const g = flow.filter(f => f.wave === wave);
+  if (g.length < 2) return null;
+  const n = (s: MapFlowStep['state']) => g.filter(f => f.state === s).length;
+  const live = [[n('now'), 'pm.grp.working'], [n('done'), 'pm.grp.done'], [n('blocked'), 'pm.grp.blocked'], [n('todo'), 'pm.grp.idle']] as const;
+  const parts = live.filter(([k]) => k > 0).map(([k, key]) => t(key, { n: k }));
+  return `${t('pm.grp.head', { n: g.length })}${parts.length ? ` · ${parts.join(', ')}` : ''}`;
+}
 const MARK = (f: MapFlowStep) => (f.state === 'done' ? '✓' : f.state === 'blocked' ? '✕' : f.step);
 
 function StepRow({ f, flow, now, open, you, nameOf, onToggle, onShow, onChat }: { f: MapFlowStep; flow: MapFlowStep[]; now: number; open: boolean; you: boolean; nameOf: (id: string) => string | undefined; onToggle: () => void; onShow: (on: string) => void; onChat: (chatId: string) => void }) {
   const titles = useApp(s => (f.chatIds ?? []).map(id => s.chats[id]?.title ?? '').join('\n')).split('\n');
-  const box = f.on ? nameOf(f.on) : undefined;
+  const box = f.on ? nameOf(f.on) : undefined, who = whoOf(f);
   return <li className="pm-planstep" data-s={f.state} data-open={open ? '' : undefined} data-you={you ? '' : undefined} data-testid={`pm-step-${f.step}`}>
     <button type="button" className="pm-planstep-head" aria-expanded={open} onClick={onToggle} data-testid={`pm-step-head-${f.step}`}>
-      <i>{MARK(f)}</i><b>{f.title}{f.added && <em className="pm-new">{t('pm.new')}</em>}</b><small data-k="state">{you ? <em className="pm-you">{t('pm.step.waits')}</em> : stateOf(f, now)}</small>
+      <i>{MARK(f)}</i><b>{f.title}{f.added && <em className="pm-new">{t('pm.new')}</em>}</b>
+      <small data-k="state">{you ? <em className="pm-you">{t('pm.step.waits')}</em> : stateOf(f, now)}</small>
+      {who && <small className="pm-step-who" data-testid={`pm-step-who-${f.step}`} data-planned={who.planned ? '' : undefined} title={who.planned ? t('pm.step.plannedTip') : undefined}>{who.text}{who.planned && <em> · {t('pm.step.planned')}</em>}</small>}
     </button>
     {open && <div className="pm-planstep-more" data-testid={`pm-stepcard-${f.step}`}>
       {f.detail && <p>{f.detail}</p>}
@@ -97,7 +117,11 @@ export function PlanCard({ plan, now, waiting, nameOf, onShow, onChat }: {
     <ProgressHead pct={p.pct} count={count} of={plan.title} state={p.blocked.length ? 'blocked' : p.done === p.total && p.total > 0 ? 'done' : 'now'} />
     {plan.doneWhen && <p className="pm-plan-when"><b>{t('pm.plan.doneWhen')}</b> {plan.doneWhen}</p>}
     <ol className="pm-plansteps" aria-label={t('pm.plan.steps')} data-testid="pm-flow">
-      {flow.map(f => <StepRow key={f.step} f={f} flow={flow} now={now} open={open.has(f.step)} you={p.you.includes(f)} nameOf={nameOf} onToggle={() => toggle(f.step)} onShow={onShow} onChat={onChat} />)}
+      {flow.flatMap((f, i) => {
+        const label = i === 0 || flow[i - 1]!.wave !== f.wave ? groupLabel(flow, f.wave) : null;
+        return [...(label ? [<li key={`g${f.wave}`} className="pm-plangroup" data-testid={`pm-group-${f.wave}`}>{label}</li>] : []),
+          <StepRow key={f.step} f={f} flow={flow} now={now} open={open.has(f.step)} you={p.you.includes(f)} nameOf={nameOf} onToggle={() => toggle(f.step)} onShow={onShow} onChat={onChat} />];
+      })}
     </ol>
     <button type="button" className="btn btn-ghost btn-s" onClick={() => onChat(plan.chatId)} data-testid="pm-plan-chat">{t('pm.openChat')}</button>
   </section>;

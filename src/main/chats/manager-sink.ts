@@ -15,7 +15,7 @@ import { AFTER_CALLS } from './continuity';
 import { HANDOFF_END, HANDOFF_START } from './handoff';
 import type { HarnessSession, SessionPatch, SessionSink } from './session';
 import { engineOf } from '../engines/registry';
-import { addSkill, addTurn } from '../agents/runs';
+import { addSkill, addTurn, skillOfRead } from '../agents/runs';
 import { AgentChildrenReducer } from './agent-children';
 import { effortValue, initialEffort, observeEffort, submitEffort } from './effort';
 import type { Rec } from './manager-types';
@@ -200,6 +200,10 @@ export abstract class ManagerSink extends ManagerWork {
         if (item.kind === 'tool' && item.name === 'Skill' && r.s.harness === 'claude' && r.s.run) {
           const input = item.input as { skill?: unknown; command?: unknown } | null;
           if (addSkill(r.s.run, input?.skill ?? input?.command)) this.runSaveSoon();
+        }
+        // any other engine: the skill it opened by reading its SKILL.md (they have no Skill tool)
+        if (item.kind === 'tool' && r.s.harness !== 'claude' && r.s.run) {
+          if (addSkill(r.s.run, skillOfRead(item.input))) this.runSaveSoon();
         }
         if (item.kind === 'tool' && r.s.run) this.noteReceipt(r, item);
         if (item.kind === 'result' && !replace) { delete r.crashResumed; this.turnEnded(r, item); }

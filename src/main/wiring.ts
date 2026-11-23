@@ -529,7 +529,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // brain_script_add on every chat's own endpoint: a work chat saves the script it ran with success itself
   addChatTools([chatScriptAddTool(brainScripts, id => chats.list().find(c => c.id === id)?.title ?? null, roleSkillOf)]);
   // the project maps (ADR 0271): drawn and kept current by the agents (their own endpoint), live state from the chats
-  const projectMaps = attachProjectMaps(ctx, chats, () => brain.info().brainRoot, addChatTools);
+  const projectMaps = attachProjectMaps(ctx, chats, () => brain.info().brainRoot, addChatTools, undefined, (role, preset) => agents.plannedModel(role, preset));
   // brain_query_add the same way: a query that ran and someone reruns goes to its skill's assets/queries/ (ADR 0124, 0263)
   addChatTools([chatQueryAddTool(brainQueries, id => chats.list().find(c => c.id === id)?.title ?? null, roleSkillOf)]);
   const asks = attachCommandAsks(ctx, runner, brain, undefined, chats);

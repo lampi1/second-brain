@@ -28,6 +28,7 @@
 // piece shows as its status (its own, or what the pieces inside it say together: #456) in project-map-status.ts.
 import { BOX, ROW_MAX, lineOf, type Level, type LevelEdge, type LevelNode } from './project-map-line';
 import { LABEL_IT, shownStatus, stateLabel, statusesOf } from './project-map-status';
+import type { PresetId } from './model-presets';
 export { BOX, FRAME_HEAD, ROW_MAX, type Level, type LevelEdge, type LevelGroup, type LevelNode } from './project-map-line';
 export { LABEL_IT, STALE_MS, shownStatus } from './project-map-status';
 
@@ -157,7 +158,10 @@ export interface MapWork {
 /** A plan's step in the order of the plan (ADR 0302): the map shows which come one after the other and which together. */
 export interface MapFlowStep { step: number; title: string; state: MapWork['state']; wave: number; par?: boolean; on?: string; role?: string;
   /** what tells the step in full (ADR 0307): its detail line, the chats working on it, when it started and ended, added on the way */
-  detail?: string; chatIds?: string[]; startedAt?: number; endedAt?: number; added?: boolean }
+  detail?: string; chatIds?: string[]; startedAt?: number; endedAt?: number; added?: boolean;
+  /** the model and preset of the step: of its chat once started, else the role card's own for the planned preset
+   *  (`planned`, shown «previsto»); a step the Strategist does itself carries none */
+  model?: string | null; preset?: PresetId; planned?: true }
 /** A Strategist's plan drawn on this map: `proposed` waits for the user's «Approva e parti». */
 export interface MapPlan { chatId: string; title: string; phase: 'proposed' | 'revising' | 'running' | 'done'; at: number; steps: number; done: number; doneWhen?: string;
   /** every step in order, with its turn (ADR 0302) */

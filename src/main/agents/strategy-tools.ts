@@ -42,6 +42,7 @@ export function strategyTools(chats: StrategyChats, away: () => boolean = () => 
         detail: { ...str, description: 'optional: one short line on what the step covers, e.g. "carrello, ordine e reso"' },
         on: { ...str, description: 'the map element this step works on (an existing id, or one you add in map.add)' },
         par: { type: 'boolean', description: 'true = it does not depend on the step before it and runs together with it, in the same parallel group (delegated in the same agent_delegate call); leave out for a step that waits for the steps before it' },
+        preset: { type: 'string', enum: ['min', 'base', 'max'], description: 'the model preset of the role\'s card you plan for this step (default base); the map shows role · model · preset' },
       } } },
       map: { type: 'object', additionalProperties: false, description: 'the project map the plan is drawn on', properties: {
         project: { ...str, description: 'an existing map\'s name or id' }, title: { ...str, description: 'the project\'s name, when it has no map yet: only the pieces this work touches get drawn' },

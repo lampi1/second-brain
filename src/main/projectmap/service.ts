@@ -31,6 +31,7 @@ import type { ChatItem, ChatSummary, PendingRequest } from '@shared/contract';
 import { applyChanges, applyEdit, checkMap, checkPaths, elementOfFile, isMapId, isMapLayout, MAP_LAYOUTS, MAP_LIMITS, mergePaths, projectSlug, prunePaths, type MapActor, type MapAgent, type MapElement, type MapPlan, type MapState, type MapWork, type ProjectMap, type ProjectMapInfo, type ProjectMapView } from '@shared/project-map';
 import { leavesOf, settle, spread, stateLabel, statusesOf, waitingOf } from '@shared/project-map-status';
 import { planWaves, type PlanStep } from '@shared/strategy';
+import type { PresetId } from '@shared/model-presets';
 import { askLine } from '../appctl/digest';
 import { markOf, progressOf } from '../appctl/agents-recap';
 import { errText, log } from '../log';
@@ -51,6 +52,8 @@ export interface ProjectMapsDeps {
   stateFile: string;
   now?: () => number;
   debounceMs?: number;
+  /** the model a role's card has for a preset (catalog.plannedModel): what a step not started shows as «previsto» */
+  plannedModel?(role: string, preset: PresetId): string | null;
 }
 
 /** own = the elements the chat was linked to on purpose (#456): their status follows the chat; since = element → when
@@ -314,8 +317,17 @@ export class ProjectMaps {
 
   /** The plans drawn on a project's map and their steps, per element: read from the chats, never saved (ADR 0276). */
   private works(project: string): { works: Record<string, MapWork[]>; plans: MapPlan[] } {
-    const works: Record<string, MapWork[]> = {}, plans: MapPlan[] = [], now = this.now();
-    for (const c of this.d.chats()) {
+    const works: Record<string, MapWork[]> = {}, plans: MapPlan[] = [], now = this.now(), all = this.d.chats();
+    // a step's model and preset: its newest chat's own once started, else the role card's for the planned preset («previsto»)
+    const modelOf = (x: PlanStep) => {
+      if (!x.role) return {};
+      const chat = [...(x.chatIds ?? [])].reverse().map(id => all.find(k => k.id === id)).find(k => !!k);
+      if (chat) { const preset = chat.run?.presetChoice?.preset ?? x.preset; return { model: chat.model, ...(preset ? { preset } : {}) }; }
+      if (x.state !== 'todo') return x.preset ? { preset: x.preset } : {}; // started, its chat gone: say nothing we do not know
+      const preset = x.preset ?? 'base';
+      return { model: this.d.plannedModel?.(x.role, preset) ?? null, preset, planned: true as const };
+    };
+    for (const c of all) {
       const p = c.plan;
       if (!p || p.map !== project || p.phase === 'asking') continue;
       if ((c.closedAt || c.state === 'closed') && (p.phase !== 'done' && p.phase !== 'running' || now - (c.closedAt ?? c.updatedAt) > ENDED_MS)) continue;
@@ -324,7 +336,7 @@ export class ProjectMaps {
       const par = (x: PlanStep, i: number) => waves.filter(w => w === waves[i]).length > 1 || (x.state === 'now' && running > 1);
       plans.push({ chatId: c.id, title: c.title, phase: p.phase, at: p.at, steps: p.steps.length, done: p.steps.filter(x => x.state === 'done').length, ...(p.doneWhen ? { doneWhen: p.doneWhen } : {}),
         flow: p.steps.map((x, i) => ({ step: i + 1, title: x.title, state: x.state, wave: waves[i]!, ...(par(x, i) ? { par: true } : {}), ...(x.on ? { on: x.on } : {}), ...(x.role ? { role: x.role } : {}),
-          ...(x.detail ? { detail: x.detail } : {}), ...(x.chatIds?.length ? { chatIds: [...x.chatIds] } : {}), ...(x.startedAt ? { startedAt: x.startedAt } : {}), ...(x.endedAt ? { endedAt: x.endedAt } : {}), ...(x.added ? { added: true } : {}) })) });
+          ...(x.detail ? { detail: x.detail } : {}), ...(x.chatIds?.length ? { chatIds: [...x.chatIds] } : {}), ...(x.startedAt ? { startedAt: x.startedAt } : {}), ...(x.endedAt ? { endedAt: x.endedAt } : {}), ...(x.added ? { added: true } : {}), ...modelOf(x) })) });
       p.steps.forEach((x, i) => { if (x.on) (works[x.on] ??= []).push({ title: x.title, state: x.state, ...(x.role ? { role: x.role } : {}), chatId: c.id, step: i + 1, chatIds: x.chatIds ?? [], ...(x.added ? { added: true } : {}), wave: waves[i]!, ...(par(x, i) ? { par: true } : {}) }); });
     }
     return { works, plans: plans.sort((a, b) => b.at - a.at) };

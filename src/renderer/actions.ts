@@ -34,7 +34,7 @@ import { workflowState } from './store/workflows';
 import { engineLabel } from './lib/engines';
 import {
   askConfirm, closeModal, flashTile, highlight, isBrainPage, openModal, openPage, requestFocus, setCenter, setClosing, setFocusMode, setLanePeek, setMap, setMaximized,
-  openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, callQuestions, setQuestionsAside, setChatExpanded, setTreeCollapsed, setBrowserOpen, setAgentView, setFullOrch, setMapsFull, setViewer, type Place,type BrainPageId,
+  openOrchestratorRenew, setRead, setOrchestratorOpen, toast, ui, callQuestions, setQuestionsAside, setChatExpanded, collapseAllChats, setTreeCollapsed, setBrowserOpen, setAgentView, setFullOrch, setMapsFull, setViewer, type Place,type BrainPageId,
 } from './store/ui';
 import { currentEntry, pushEntry, stepEntry, type Shot, type ViewerEntry } from './lib/viewer-stack';
 import { applyViewPrefs } from './lib/view-prefs';
@@ -648,6 +648,12 @@ export function toggleFocusMode(): void {
   requestFocus(id);
 }
 
+/** The Grindhouse entry (menu, Ctrl+1): always the all-agents overview, never a single open chat. */
+export function showOverview(): void {
+  collapseAllChats();
+  go({ page: 'home' });
+}
+
 /** Esc: back out one level. Returns false when there was nothing to back out of. */
 export function escapeOne(): boolean {
   const u = ui.get();
@@ -661,6 +667,7 @@ export function escapeOne(): boolean {
   if (u.maximized) { const k = u.maximized; setMaximized(null); flashTile(k); return true; }
   if (u.focusMode && u.page === 'home') { const id = u.focusMode; setFocusMode(null); flashTile(`chat:${id}`); return true; }
   if (u.page !== 'home') { go({ page: 'home' }); return true; }
+  if (collapseAllChats()) return true; // an open chat: Esc shows the overview of every agent
   if (u.focusMode) { setFocusMode(null); return true; }
   return false;
 }
@@ -673,7 +680,7 @@ export function focusTile(index: number): void {
     if (u.center) setCenter(false);
     if (u.maximized) setMaximized(null);
     if (u.focusMode) setFocusMode(null);
-    go({ page: 'home' });
+    showOverview();
     return;
   }
   const el = document.querySelector<HTMLElement>(`[data-chat-index="${index - 1}"]`);

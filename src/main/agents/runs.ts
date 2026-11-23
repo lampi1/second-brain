@@ -82,6 +82,19 @@ function readTags(v: unknown): AgentRunTags | null {
   if (!t || typeof t !== 'object' || !skillList(t.skills) || !(t.app === null || tagName(t.app, APP_MAX)) || !(t.repo === null || tagName(t.repo, REPO_MAX))) return null;
   return { skills: [...t.skills], app: t.app as string | null, repo: t.repo as string | null };
 }
+const SKILL_FILE = /[\\/]skills[\\/]([^\\/]+)[\\/]SKILL\.md$/i;
+/** The skill an engine opened by reading its `…/skills/<name>/SKILL.md` (engine-neutral: only Claude has a Skill tool;
+ *  Codex, Cursor and OpenCode read the file). Looks at the path fields of a tool call's input; null = no skill file. */
+export function skillOfRead(input: unknown): string | null {
+  if (!input || typeof input !== 'object') return null;
+  const o = input as Record<string, unknown>;
+  for (const k of ['file_path', 'filePath', 'path', 'target_file', 'file', 'uri']) {
+    const v = o[k];
+    const m = typeof v === 'string' ? SKILL_FILE.exec(v.replace(/^file:\/\//, '')) : null;
+    if (m) return m[1]!;
+  }
+  return null;
+}
 /** A skill the run's engine loaded while it was open (Claude's Skill tool): added once, up to SKILLS_MAX; frozen at the end.
  *  `name` may be a plugin-qualified `plugin:skill`: the part after the last colon is the id. */
 export function addSkill(run: AgentRun, name: unknown): boolean {

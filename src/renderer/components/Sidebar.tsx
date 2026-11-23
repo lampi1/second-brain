@@ -10,7 +10,7 @@ import { badges, WARN_SECTIONS } from '../lib/notify';
 import { useApp } from '../store/store';
 import { useTasks } from '../store/tasks';
 import { ui } from '../store/ui';
-import { go } from '../actions';
+import { go, showOverview } from '../actions';
 import {
   IconLearn, IconBrain, IconChess, IconChart, IconGrid, IconHistory, IconLayers, IconLightbulb, IconList, IconMap, IconMic, IconQuestion, IconSettings, IconShield, IconSparkle, IconTerminal, IconTicket,
 } from './Icons';
@@ -73,7 +73,7 @@ export function Sidebar() {
   const waitingBadge = <span className="nav-badge amber" data-testid="nav-badge-waiting" aria-label={t('dialogs.sidebar.waiting', { count: waiting })}>{waiting}</span>;
   const page1 = (id: BrainPageId) => {
     const p = BRAIN_PAGES.find(x => x.id === id)!;
-    return item(p.id, p.id==='agenti'?t('catalog.title'):p.label, ICON[p.id] ?? <IconBrain />, page === p.id && !map, () => go({ page: p.id }), {
+    return item(p.id, p.id==='agenti'?t('catalog.title'):p.label, ICON[p.id] ?? <IconBrain />, page === p.id && !map, () => (p.id === 'home' ? showOverview() : go({ page: p.id })), {
       key: p.key, testid: `nav-${p.id}`, badge: p.id === 'home' && waiting ? waitingBadge : p.id === 'memoria' && proposals ? <span className="nav-badge amber nav-badge-pulse" data-testid="nav-badge-proposals" aria-label={t('mh.badge', { n: proposals })}>{proposals > 99 ? '99+' : proposals}</span> : <span data-testid={`nav-badge-${p.id}`}><Badge n={p.id === 'task' ? tasksUnread : b[p.id] ?? 0} warn={WARN_SECTIONS.has(p.id)} /></span>,
     });
   };

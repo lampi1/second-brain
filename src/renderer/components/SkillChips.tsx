@@ -1,0 +1,29 @@
+// The skills a chat used, as small chips on its Grindhouse card (owner, 2026-11-23: «le skill usate le voglio vedere a
+// colpo d'occhio»). Claude reports them as a tool (run.tags.skills); every other engine only shows the ones it opened by
+// reading a SKILL.md (main/agents/runs.ts skillOfRead); an engine with none recorded says «uso non tracciato» rather
+// than hiding the gap. Used by ChatTile.tsx; the rule of what shows is the pure skillChipsOf.
+import type { ChatSummary } from '@shared/contract';
+import { t } from '../i18n';
+
+/** Chips shown before «+N». */
+export const CHIPS_MAX = 3;
+
+/** What the card says about a chat's skills: the names (at most CHIPS_MAX, `more` = the rest) or `untracked` for a
+ *  non-Claude run with none recorded; nothing for a chat that is no run, or a Claude run with no skill. */
+export function skillChipsOf(chat: Pick<ChatSummary, 'harness' | 'run'>): { names: string[]; more: number; untracked: boolean } | null {
+  if (!chat.run) return null;
+  const all = chat.run.tags?.skills ?? [];
+  if (all.length) return { names: all.slice(0, CHIPS_MAX), more: Math.max(0, all.length - CHIPS_MAX), untracked: false };
+  return chat.harness === 'claude' ? null : { names: [], more: 0, untracked: true };
+}
+
+export function SkillChips({ chat }: { chat: ChatSummary }) {
+  const c = skillChipsOf(chat);
+  if (!c) return null;
+  const tip = c.untracked ? t('skills.untrackedTip') : [...(chat.run?.tags?.skills ?? [])].join(', ');
+  return <div className="bench-skills" data-testid={`skill-chips-${chat.id}`} data-tip={tip}>
+    {c.untracked
+      ? <span className="skill-chip untracked">{t('skills.untracked')}</span>
+      : <>{c.names.map(n => <span key={n} className="skill-chip">{n}</span>)}{c.more > 0 && <span className="skill-chip more">+{c.more}</span>}</>}
+  </div>;
+}
