@@ -1,7 +1,8 @@
 // The Skill page's order (owner 2026-11-10: «facile capire quali vengono usate di più»; 2026-11-23: least used and source
 // too): ties by name, the input list untouched. Pins renderer/lib/skill-sort.ts.
 import { describe, expect, it } from 'vitest';
-import { SORTS, sortSkills } from '../../../src/renderer/lib/skill-sort';
+import type { SORTS} from '../../../src/renderer/lib/skill-sort';
+import { sortSkills } from '../../../src/renderer/lib/skill-sort';
 import type { LibSkill, SkillOrigin } from '../../../src/shared/skill-library';
 
 const skill = (name: string, totalUses: number, lastUse: number | null, changedAt: number | null, origin: SkillOrigin = 'brain') => ({ name, totalUses, lastUse, changedAt, origin }) as LibSkill;
