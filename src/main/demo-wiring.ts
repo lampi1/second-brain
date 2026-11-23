@@ -279,6 +279,11 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     },
     /** a Strategist's plan with the user as it would be at a moment (e2e: its strip asking, proposing, under way) */
     plan: (chatId: string, plan: StrategyPlan | null) => chats.patch(chatId, { plan: plan ?? undefined }),
+    /** the skills a chat's run has used, as its Grindhouse card shows them (e2e: the skill chips) */
+    skills: (chatId: string, names: string[]) => {
+      const run = chats.list().find(c => c.id === chatId)?.run;
+      if (run) chats.patch(chatId, { run: { ...structuredClone(run), tags: { skills: names, app: null, repo: null } } });
+    },
     /** a feed event, as the brain would publish it (e2e: toasts, notification center, badges) */
     event: (e: { kind: string; title: string; detail?: string; chatId?: string }) => brain.publish([e]),
     /** show_ui as the chat would call it (e2e: a visual in the chat, in its Orchestrator, on its next question); the error text on a wrong call */
