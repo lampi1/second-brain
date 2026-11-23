@@ -49,12 +49,12 @@ needs you.
 Each one has a vice for the quiet moments:
 
 <p align="center">
-  <img src="docs/vices/orchestrator.webp" alt="The Orchestrator at rest: a long pipe and smoke rings" width="160">
-  <img src="docs/vices/strategist.webp" alt="The Strategist at rest: two moves on a chess board, then fists on the table" width="160">
-  <img src="docs/vices/scout.webp" alt="The Scout at rest: a sip from a metal hip flask" width="160">
-  <img src="docs/vices/artisan.webp" alt="The Artisan at rest: a stein of beer" width="160">
-  <img src="docs/vices/sentinel.webp" alt="The Sentinel at rest: an energy drink, then a flex" width="160">
-  <img src="docs/vices/herald.webp" alt="The Herald at rest: a glass of red wine" width="160">
+  <img src="docs/vices/orchestrator.webp" alt="The Orchestrator at rest: a long pipe and smoke rings" width="128">
+  <img src="docs/vices/strategist.webp" alt="The Strategist at rest: two moves on a chess board, then fists on the table" width="128">
+  <img src="docs/vices/scout.webp" alt="The Scout at rest: a sip from a metal hip flask" width="128">
+  <img src="docs/vices/artisan.webp" alt="The Artisan at rest: a stein of beer" width="128">
+  <img src="docs/vices/sentinel.webp" alt="The Sentinel at rest: an energy drink, then a flex" width="128">
+  <img src="docs/vices/herald.webp" alt="The Herald at rest: a glass of red wine" width="128">
 </p>
 
 | Role | Does |
