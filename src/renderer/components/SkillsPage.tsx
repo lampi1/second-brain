@@ -25,6 +25,7 @@ import { IconPlus, IconSearch, IconX } from './Icons';
 import { lintLabel, SkillDetail, type DetailTab } from './skills/SkillDetail';
 import { KIND_ICON } from './skills/SkillParts';
 import { UnassignedPanel } from './skills/UnassignedPanel';
+import { DeletedPanel } from './skills/DeletedPanel';
 import { UsageMeter, UsageOverview } from './skills/SkillUsage';
 import { kindCounts } from '../lib/skill-files';
 import { SORTS, sortSkills, type SortBy } from '../lib/skill-sort';
@@ -149,6 +150,15 @@ export function SkillsPage() {
     if (!dirtyRef.current) { go(); return; }
     askConfirm({ title: t('sl.files.unsavedTitle'), body: t('sl.files.unsavedBody'), confirmLabel: t('sl.files.leave'), danger: true, onConfirm: () => { dirtyRef.current = false; go(); } });
   };
+  /** «Annulla» of a deletion: every file comes back, then the skill opens (unless unsaved edits are kept) */
+  const undoDelete = async (name: string, changeId: string) => {
+    try {
+      await window.sb.invoke('skills:undo', { skill: name, changeId });
+      toast(t('sl.history.undoneToast'), 'ok');
+      await load();
+      guard(() => { setCreating(false); setPick(name); });
+    } catch (e) { toast(errText(e), 'err'); }
+  };
   const main = useRef<HTMLElement>(null);
   // a skill picked by the user opens at its top with the whole shell in view: no scroll back up to read it
   const choose = (name: string) => guard(() => {
@@ -206,11 +216,12 @@ export function SkillsPage() {
               : <ul className="sl-list" ref={list} onKeyDown={onListKey} data-testid="bm-skill-grid">
                 {sorted.map(s => <Row key={s.name} s={s} active={!creating && s.name === pick} max={max} roleName={roleName} onPick={() => choose(s.name)} />)}
               </ul>}
+          {!!lib?.deleted.length && <DeletedPanel items={lib.deleted} onUndo={undoDelete} />}
         </aside>
         <section className="sl-main" ref={main}>
           {creating ? <CreateForm onCancel={() => setCreating(false)} taken={n => skills.some(s => s.name === n)} onCreated={name => { void load().then(() => { setPick(name); setTab('files'); setCreating(false); }); }} />
             : current ? <SkillDetail key={current.name} skill={current} roles={lib?.roles ?? []} maxUses={max} hasBrain={!!lib?.root} tab={tab} onTab={next => { if (next !== tab) guard(() => setTab(next)); }}
-              onDirty={d => { dirtyRef.current = d; }} onChanged={() => void load()} onGone={() => { setPick(null); void load(); }} />
+              onDirty={d => { dirtyRef.current = d; }} onChanged={() => void load()} onGone={() => { setPick(null); void load(); }} onUndo={(name, id) => void undoDelete(name, id)} />
               : <p className="sl-empty">{t('sl.pick')}</p>}
         </section>
       </div>

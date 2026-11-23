@@ -82,6 +82,9 @@ export interface LibSkill {
 
 export interface SkillRole { id: string; name: string; emoji?: string }
 
+/** A whole skill deleted lately that can still come back (skills:undo with its changeId). */
+export interface DeletedSkill { name: string; changeId: string; at: number; files: number }
+
 export interface SkillLibraryState {
   /** null = no brain folder: only the app's and the user's skills, nothing can be created */
   root: string | null;
@@ -89,6 +92,8 @@ export interface SkillLibraryState {
   roles: SkillRole[];
   /** brain-level scripts and queries waiting for a skill (ADR 0263) */
   unassigned: UnassignedAsset[];
+  /** newest first, one per name, only names no skill has now */
+  deleted: DeletedSkill[];
 }
 
 export interface SkillFileText { skill: string; path: string; text: string | null; size: number; mtime: number; origin: SkillOrigin }

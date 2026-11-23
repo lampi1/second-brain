@@ -68,7 +68,7 @@ export const skillLibraryIt = {
   'sl.delete': 'Elimina',
   'sl.restore': 'Ripristina originale',
   'sl.deleteTitle': (p: { name: string }) => `Eliminare «${p.name}»?`,
-  'sl.deleteBody': 'La skill viene eliminata con tutti i suoi file. La trovi in Cronologia: «Annulla» la rimette com’era.',
+  'sl.deleteBody': 'La skill viene eliminata con tutti i suoi file. Resta in «Eliminate di recente», sotto l’elenco: «Annulla» la rimette com’era.',
   'sl.restoreTitle': (p: { name: string }) => `Tornare alla «${p.name}» dell’app?`,
   'sl.restoreBody': 'La tua copia esce dal brain e torna in uso l’originale dell’app. «Annulla» in Cronologia rimette la tua copia.',
   'sl.deleted': (p: { name: string }) => `«${p.name}» eliminata`,
@@ -157,5 +157,7 @@ export const skillLibraryIt = {
   'sl.un.move': 'Sposta',
   'sl.un.moved': (p: { file: string }) => `Spostato in ${p.file}`,
   'sl.un.kind.script': 'script',
+  'sl.del.title': 'Eliminate di recente',
+  'sl.del.undoLabel': (p: { name: string }) => `Annulla l’eliminazione di «${p.name}»`,
   'sl.un.kind.query': 'query',
 };
