@@ -8,13 +8,16 @@
 // card); name and summary belong to the role; the character can be swapped for the user's own picture
 // (AgentImagePicker, under the badge). The card back's «Modifica il ruolo» lands straight in the editor (EDIT_ELEMENT, #126):
 // «Chiudi senza salvare» or Esc then goes back to the catalogue. "Ripristina predefinito" goes back to the shipped role
-// after an inline confirmation. Editing never changes running chats. Rendered by AgentCatalogPage.tsx. Styles:
+// after an inline confirmation. The Configurazione card also edits the role's Minimo / Base / Massimo presets in place
+// (RolePresetRows, the same rows as Impostazioni → Ruoli e deleghe; the Orchestrator: Base only, ADR 0336). Editing
+// never changes running chats. Rendered by AgentCatalogPage.tsx. Styles:
 // styles/agent-studio.css.
 import { Select } from './Select';
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { completedRuns, MAX_CONTEXT_RANGE, type AgentDraft, type AgentMetrics, type AgentProfile, type AgentVersion, type VersionMetrics } from '@shared/agents';
 import { MIN_SUCCESS_SAMPLE, successInterval } from '@shared/success';
-import { MODEL_TIERS, WORK_ROLE_IDS, isRoleId, roleName, tierRank, type ModelTier } from '@shared/roles';
+import { MODEL_TIERS, WORK_ROLE_IDS, isRoleId, isWorkRole, roleName, tierRank, type ModelTier } from '@shared/roles';
+import { PRESET_IDS } from '@shared/model-presets';
 import { characterOf } from '@shared/characters';
 import { agentHistory, refreshAgents, resetAgent, restoreAgentVersion, saveAgent, useAgents } from '../store/agents';
 import { toast, ui } from '../store/ui';
@@ -24,6 +27,7 @@ import { EFFORTS, effortLabel, formatCost } from '../lib/format';
 import { characterTone } from '../lib/character-art';
 import { agentDraftOf, forgetAgentEditor, readAgentEditor, rememberAgentEditor } from '../lib/agent-drafts';
 import { RolePermissions, permissionSummary } from './RolePermissions';
+import { RolePresetRows } from './RolePresets';
 import { holdUpdate } from '../lib/update-barrier';
 import { back, go } from '../actions';
 import { locale, t } from '../i18n';
@@ -37,6 +41,9 @@ import '../styles/agent-studio.css';
 import '../styles/brain-model.css';
 import { rolePurpose } from '../lib/role-text';
 import { errText as reason } from '../lib/ipc-error';
+
+/** The Orchestrator is never delegated to: of the presets only Base, its own model and effort. */
+const BASE_ONLY = ['base'] as const;
 
 const percent = (v: number) => new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: 0 }).format(v);
 const usd = (v: number) => formatCost(v);
@@ -337,6 +344,11 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
           <section className="ad-card" aria-labelledby={`ad-config-${profile.id}`}>
             <header className="ad-card-head"><h3 id={`ad-config-${profile.id}`}>{t('agentDetail.config')}</h3></header>
             <dl className="ad-config">{config.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+            <section className="ad-presets" aria-label={t('delegation.presets')} data-testid="agent-presets">
+              <h4>{t('delegation.presets')}</h4>
+              <p className="ad-hint">{t(isWorkRole(profile.id) ? 'agentDetail.presets.hint' : 'agentDetail.presets.baseOnly')}</p>
+              <RolePresetRows profile={profile} ids={isWorkRole(profile.id) ? PRESET_IDS : BASE_ONLY} undoable />
+            </section>
           </section>
           <section className="ad-card bm-studio-skills" aria-labelledby={`ad-skills-${profile.id}`} data-testid="agent-skills">
             <header className="ad-card-head"><h3 id={`ad-skills-${profile.id}`}>{t('studio.skills')}</h3></header>

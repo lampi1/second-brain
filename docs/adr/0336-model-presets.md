@@ -42,7 +42,10 @@ card, and nothing recorded which model a task ran on and why, so the cost per ki
    one is dropped on read (`readRunPreset`).
 7. **UI**: Impostazioni › Ruoli e deleghe › «Modelli per compito» (`RolePresets.tsx`): each work role's engine once,
    then the rows Minimo / Base / Massimo with a model and an effort, saved at once through `agents:save`.
-   `agent_catalog` shows each role's three presets.
+   The same rows (`RolePresetRows`) sit in each role's own page, Agenti › a role › Configurazione (owner, 2026-11-23:
+   «lo volevo settabile anche dalla card degli agenti»), with a toast «Annulla» after each save that puts the card's
+   model, effort and presets back; the Orchestrator shows only Base (it is never delegated to). Both edit the same card
+   fields, in place like every model change (ADR 0284): no new version. `agent_catalog` shows each role's three presets.
 
 ## Consequences
 
@@ -52,4 +55,5 @@ card, and nothing recorded which model a task ran on and why, so the cost per ki
 - The card values (which models each role's presets name) are the user's: this change ships the mechanism only.
 - Tests: `test/unit/agents/model-presets.test.ts` (each guard), `catalog-presets.test.ts` (migration, save, resolve),
   `delegation-presets.test.ts` (the tools), `balanced-mode.test.ts`, `runs-db.test.ts` (the record),
-  `test/unit/role-presets-render.test.ts` (the UI).
+  `test/unit/role-presets-render.test.ts` (the UI), `test/unit/renderer/agent-card-presets.test.ts` (the role's page),
+  `test/e2e/agent-card-presets.spec.ts` (the page's picture).

@@ -63,6 +63,10 @@
 .ad-config>div{display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:8px 0;border-bottom:1px solid var(--border);font-size:var(--fs-s)}
 .ad-config>div:last-child{border-bottom:0}
 .ad-config dt{color:var(--text-3);flex:none}.ad-config dd{margin:0;text-align:right;color:var(--text);min-width:0}
+/* the role's Minimo / Base / Massimo (RolePresetRows, the same rows as Impostazioni → Ruoli e deleghe) */
+.ad-presets{display:grid;gap:6px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.ad-presets h4{margin:0;font-size:var(--fs-s);font-weight:600}
+.ad-presets .ad-hint{margin:0}
 
 /* the editor: a card with two columns (text left, identity and engine right) and its actions at the foot */
 .agent-editor{padding:20px 22px;border:1px solid color-mix(in srgb,var(--tone) 35%,var(--border-2));border-radius:var(--r-l);background:linear-gradient(160deg,var(--surface-2),var(--surface) 70%);box-shadow:0 18px 40px -28px var(--tone);min-width:0;animation:ad-enter 240ms var(--ease) both}

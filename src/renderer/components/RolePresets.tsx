@@ -3,7 +3,9 @@
 // effort (the same ones the card and the Agenti page edit); Minimo and Massimo empty = the same as Base. Each change
 // saves the card at once (agents:save, the main side checks the models and the order by price and its error is shown
 // under the role). A delegation picks one of the three (agent_delegate / agent_assign_task / app_create_chat preset).
-// Mounted by DelegationSettings.tsx; styles: styles/settings.css (.st-presets).
+// Mounted by DelegationSettings.tsx; the same rows (RolePresetRows) on a role's own page, Agenti → a role
+// (AgentStudio.tsx, owner 2026-11-23: «lo volevo settabile anche dalla card degli agenti»), there with Annulla after each
+// save and only Base for the Orchestrator. Styles: styles/settings.css (.st-presets).
 import { useState } from 'react';
 import type { AgentDraft, AgentProfile } from '@shared/agents';
 import { PRESET_IDS, cardPresets, type PresetId, type RolePresets as Presets } from '@shared/model-presets';
@@ -11,8 +13,10 @@ import { isWorkRole } from '@shared/roles';
 import { agentDraftOf } from '../lib/agent-drafts';
 import { EFFORTS, effortLabel } from '../lib/format';
 import { saveAgent, useAgents } from '../store/agents';
+import { toast } from '../store/ui';
 import { Select } from './Select';
 import { t } from '../i18n';
+import '../styles/settings.css';
 
 const LABEL = { min: 'delegation.preset.min', base: 'delegation.preset.base', max: 'delegation.preset.max' } as const satisfies Record<PresetId, string>;
 
@@ -23,7 +27,7 @@ export function RolePresets() {
   if (!roles.length) return null;
   return <div className="st-row st-row-block" data-testid="st-presets">
     <div className="st-text"><b className="st-title">{t('delegation.presets')}</b><p className="st-desc">{t('delegation.presets.hint')}</p></div>
-    <div className="st-presets">{roles.map(p => <RoleRows key={p.id} profile={p} />)}</div>
+    <div className="st-presets">{roles.map(p => <RolePresetRows key={p.id} profile={p} />)}</div>
   </div>;
 }
 
@@ -38,7 +42,23 @@ export function presetChange(profile: AgentProfile, id: PresetId, model: string,
   return { presets: next };
 }
 
-function RoleRows({ profile }: { profile: AgentProfile }) {
+/** The draft that puts back a card's model, effort and presets as they were before a pick (Annulla on the role's page):
+ *  null and {} rather than undefined, since a save keeps the fields a draft leaves out. */
+export function presetUndo(before: AgentProfile): AgentDraft {
+  return { ...agentDraftOf(before), model: before.model ?? null, effort: before.effort ?? null, presets: before.presets ?? {} };
+}
+
+/** Saves one pick on the card (agents:save); `undoable`: then a toast with Annulla that puts the card back as it was. */
+export async function savePreset(profile: AgentProfile, id: PresetId, model: string, effort: string, undoable: boolean): Promise<void> {
+  await saveAgent({ ...agentDraftOf(profile), ...presetChange(profile, id, model, effort) }, profile.id);
+  if (undoable) toast(t('agentDetail.presets.saved', { preset: t(LABEL[id]) }), 'ok', { label: t('agentDetail.presets.undo'), run: () => {
+    saveAgent(presetUndo(profile), profile.id).catch((e: unknown) => toast(e instanceof Error ? e.message : String(e), 'err'));
+  } });
+}
+
+/** One role's engine and its rows: all three for a work role, `ids` to show fewer (the Orchestrator: Base only);
+ *  `undoable` offers Annulla after each save (the role's page). */
+export function RolePresetRows({ profile, ids = PRESET_IDS, undoable = false }: { profile: AgentProfile; ids?: readonly PresetId[]; undoable?: boolean }) {
   const { catalog } = useAgents();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +67,7 @@ function RoleRows({ profile }: { profile: AgentProfile }) {
   const own = (id: PresetId) => id === 'base' ? { model: profile.model ?? null, effort: profile.effort } : profile.presets?.[id] ?? { model: null, effort: undefined };
   const save = async (id: PresetId, model: string, effort: string) => {
     setBusy(true); setError(null);
-    try { await saveAgent({ ...agentDraftOf(profile), ...presetChange(profile, id, model, effort) }, profile.id); }
+    try { await savePreset(profile, id, model, effort, undoable); }
     catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   };
@@ -56,7 +76,7 @@ function RoleRows({ profile }: { profile: AgentProfile }) {
     <div className="st-presets-head"><b>{profile.name}</b><span className="st-presets-engine" data-testid={`st-presets-engine-${profile.id}`}>{engine?.label ?? profile.engine}</span></div>
     {fixed && <p className="st-desc">{t('delegation.presets.fixed')}</p>}
     <div role="table" aria-label={`${profile.name} · ${t('delegation.presets')}`}>
-      {PRESET_IDS.map(id => {
+      {ids.map(id => {
         const set = own(id), model = set.model ?? '', shown = all[id];
         const efforts = engine?.models.find(m => m.id === (shown.model ?? ''))?.efforts;
         const models = engine?.models ?? [];
