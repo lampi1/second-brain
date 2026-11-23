@@ -225,12 +225,11 @@ test('a child\'s question waits as a row in the Orchestrator; a permission above
   }
 });
 
-test('three Scouts run at once, each one writable; a call over the parallel limit is refused and shown', async () => {
+test('three Scouts run at once, each one writable; more in a second call start too (no limit at once)', async () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));
   const { app, page, home } = await start(undefined, { FAKE_CLAUDE_TASK_MS: '60000' });
   try {
     await closeSetup(page);
-    await page.evaluate(() => window.sb.invoke('settings:set', { delegation: { maxParallel: 4 } }));
     // Real background work keeps their slots occupied while allowing another user message. An idle fake turn
     // without a report would instead trigger the app's missing-report recovery and its decision window.
     const three = ['Ordini', 'Clienti', 'Fatture'].map(a => task('scout', `${a} · ricerca`, `Cerca in ${a}. background`, 'Elenco'));
@@ -254,14 +253,13 @@ test('three Scouts run at once, each one writable; a call over the parallel limi
     // the parent learns it (a line now, the note with its next message), so its plan stays consistent
     await expect.poll(async () => (await items(page, parent.id)).some(i => i.kind === 'system' && i.code === 'userWroteChild'), { timeout: 15000 }).toBe(true);
 
-    // two more would make five, over the limit of four: refused, and the parent shows the limit it hit
-    await page.getByTestId('bench-back').click(); // back to the workshop: the limit shows on the parent's bench
+    // two more make five: no limit on children at once (the owner, 2026-11-23), both start and no limit mark shows
+    await page.getByTestId('bench-back').click();
     await page.evaluate(([id, text]) => window.sb.invoke('chat:send', { chatId: id, text }), [parent.id, delegate([task('scout', 'Resi', 'Cerca nei resi.', 'Elenco'), task('scout', 'Spedizioni', 'Cerca nelle spedizioni.', 'Elenco')])] as const);
-    await expect(page.getByTestId(`tree-limit-${parent.id}`)).toContainText('4', { timeout: 20000 });
-    expect((await childrenOf(page, parent.id)).length).toBe(3);
-    await expect.poll(async () => (await items(page, parent.id)).some(i => i.kind === 'system' && i.code === 'delegationParallel'), { timeout: 15000 }).toBe(true);
+    await expect.poll(async () => (await childrenOf(page, parent.id)).length, { timeout: 20000 }).toBe(5);
+    await expect(page.getByTestId(`tree-limit-${parent.id}`)).toHaveCount(0);
     await page.mouse.move(2, 2);
-    await shot(page, 'delegation-parallel-limit');
+    await shot(page, 'delegation-five-at-once');
   } finally {
     await app.close();
     fs.rmSync(home, { recursive: true, force: true });

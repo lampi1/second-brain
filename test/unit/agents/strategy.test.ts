@@ -19,13 +19,13 @@ import { Workflows } from '../../../src/main/workflows/service';
 import { digest } from '../../../src/main/appctl/digest';
 import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
 import { delegationTools } from '../../../src/main/agents/delegation';
-import { strategyTools } from '../../../src/main/agents/strategy-tools';
+import { stepModelOf, strategyTools } from '../../../src/main/agents/strategy-tools';
 import { ROLE_DEFAULTS, ROLE_IDS, DELEGATION_DEFAULTS, isWorkRole, type DelegationSettings, type RoleId } from '../../../src/shared/roles';
 import type { AgentCatalog } from '../../../src/shared/agents';
 import type { NewChat } from '../../../src/shared/contract';
 import type { McpTool } from '../../../src/main/mcp/server';
 import type { PermissionCeiling, ToolClass } from '../../../src/shared/agents';
-import { finishPlan, afterReport, isPlanApproval, checkProposal, delegationGate, proposalGate, ENOUGH_QUESTIONS, PLAN_APPROVED, planWaves, readPlan, STRATEGY_FLOW, stopsQuestions, withDelegated, withStep, type StrategyPlan } from '../../../src/shared/strategy';
+import { finishPlan, afterReport, isPlanApproval, checkProposal, checkRevision, parallelSplit, delegationGate, proposalGate, ENOUGH_QUESTIONS, PLAN_APPROVED, planWaves, readPlan, STRATEGY_FLOW, stopsQuestions, withDelegated, withStep, type StrategyPlan } from '../../../src/shared/strategy';
 
 /** Roles a user narrowed: tools, ceiling and launches per role (the rest stays the default). */
 type Narrowed = Partial<Record<RoleId, { tools: ToolClass[]; ceiling: PermissionCeiling | null; launches: string[] }>>;
@@ -427,6 +427,50 @@ describe('a Strategist\'s plan with the user', () => {
     await expectUnconfirmedPlan(f, s.id, pending, 'dispatching');
   });
 
+  it('a parallel group starts in one agent_delegate call: a split group is refused, the whole group starts (2026-11-23)', async () => {
+    const f = fixture();
+    const s = await f.root('strategist');
+    await answerPanel(f, s.id, 'Vuoi aggiungere vincoli?', ENOUGH_QUESTIONS);
+    await f.call('plan_propose', s.id, { steps: [{ title: 'Cerco negli ordini', role: 'scout' }, { title: 'Cerco nei resi', role: 'scout', par: true }, { title: 'Applico', role: 'artisan' }] });
+    await decide(f, s.id, 'approve');
+    await expect(f.call('agent_delegate', s.id, { tasks: [{ ...f.task('scout', 'Ordini · Dove'), step: 1 }] })).rejects.toThrow(/step 1 is in a parallel group with step 2.*one call/);
+    expect(f.m.list().filter(c => c.parentId === s.id)).toEqual([]);
+    await f.call('agent_delegate', s.id, { tasks: [{ ...f.task('scout', 'Ordini · Dove'), step: 1 }, { ...f.task('scout', 'Resi · Dove'), step: 2 }] });
+    expect(planOf(f, s.id).steps.map(x => x.state)).toEqual(['now', 'now', 'todo']);
+    // a sequential step after the group is its own call
+    await f.call('agent_delegate', s.id, { tasks: [{ ...f.task('artisan', 'Ordini · Sconto'), step: 3 }] });
+    expect(planOf(f, s.id).steps[2]!.state).toBe('now');
+  });
+
+  it('«aggiorna il piano»: plan_propose revise keeps the started steps and their chats, re-checks the groups, and waits for the user again', async () => {
+    const f = fixture();
+    const s = await f.root('strategist');
+    await answerPanel(f, s.id, 'Vuoi aggiungere vincoli?', ENOUGH_QUESTIONS);
+    await f.call('plan_propose', s.id, PLAN);
+    await decide(f, s.id, 'approve');
+    await f.call('agent_delegate', s.id, { tasks: [{ ...f.task('scout', 'Ordini · Dove'), step: 1 }] });
+    const kid = f.m.list().find(c => c.parentId === s.id)!.id;
+    // without revise a plan under way is never proposed again
+    await expect(f.call('plan_propose', s.id, PLAN)).rejects.toThrow(/revise: true/);
+    // a started step must come back with keep, a kept step only once, a step to do never beside a started one
+    await expect(f.call('plan_propose', s.id, { revise: true, steps: [{ title: 'Nuovo', role: 'scout' }] })).rejects.toThrow(/step 1 «Trovo dove si calcola lo sconto» \(now\) already started: pass it as \{ keep: 1 \}/);
+    await expect(f.call('plan_propose', s.id, { revise: true, steps: [{ keep: 1 }, { keep: 1 }] })).rejects.toThrow(/kept twice/);
+    await expect(f.call('plan_propose', s.id, { revise: true, steps: [{ keep: 1 }, { title: 'Insieme', role: 'scout', par: true }] })).rejects.toThrow(/same parallel group as a started step/);
+    await expect(f.call('plan_propose', s.id, { revise: true, steps: [{ keep: 1, title: 'altro' }] })).rejects.toThrow(/only keep and par/);
+    const out = await f.call('plan_propose', s.id, { revise: true, steps: [{ keep: 1 }, { title: 'Applico lo sconto', role: 'artisan', preset: 'max' }, { title: 'Controllo il codice', role: 'sentinel', par: true }] });
+    expect(out).toMatchObject({ shown: true, steps: 3 });
+    const plan = planOf(f, s.id);
+    expect(plan.phase).toBe('proposed');
+    expect(plan.doneWhen).toBe('I test passano'); // the old line when none is given
+    expect(plan.steps[0]).toMatchObject({ title: 'Trovo dove si calcola lo sconto', role: 'scout', state: 'now', chatIds: [kid] });
+    expect(plan.steps[1]).toMatchObject({ role: 'artisan', state: 'todo', preset: 'max' });
+    expect(planWaves(plan.steps)).toEqual([1, 2, 2]);
+    // the user's approval is required again
+    await expect(f.call('agent_delegate', s.id, { tasks: [{ ...f.task('artisan', 'Ordini · Sconto'), step: 2 }] })).rejects.toThrow(/not approved|waits for the user/);
+    await decide(f, s.id, 'approve');
+    expect(planOf(f, s.id)).toMatchObject({ phase: 'running', steps: [{ state: 'now', chatIds: [kid] }, { state: 'todo' }, { state: 'todo' }] });
+  });
+
   it('the plan survives a restart, and its gate with it', async () => {
     const f = fixture();
     const s = await f.root('strategist');
@@ -543,6 +587,48 @@ describe('shared/strategy.ts', () => {
     expect(p.clarified).toHaveLength(8);
     expect(p.clarified[0]).toEqual({ q: 'q2', a: 'a, b' });
     expect(p.clarified[7]!.a).toHaveLength(120);
+  });
+  it('an old saved plan (no model or preset, a parallel group) comes to the current standard with revise', () => {
+    // a plan saved before 2026-11-23: no preset or model, a group of two with its first step done
+    const saved = JSON.parse(JSON.stringify({ phase: 'running', at: 1, clarified: [], doneWhen: 'fatto', steps: [
+      { title: 'Cerco', role: 'scout', state: 'done', outcome: 'done', chatIds: ['c_1'], startedAt: 2, endedAt: 3 },
+      { title: 'Cerco ancora', role: 'scout', state: 'todo', par: true },
+      { title: 'Applico', role: 'artisan', state: 'todo' },
+    ] }));
+    const old = readPlan(saved)!;
+    expect(old.steps.every(x => x.preset === undefined && x.model === undefined)).toBe(true);
+    // the group now mixes a done step and one to do: it must be split
+    expect(() => checkRevision(old, { steps: [{ keep: 1 }, { keep: 2, par: true }, { keep: 3 }] })).toThrow(/same parallel group/);
+    const { steps, doneWhen } = checkRevision(old, { steps: [{ keep: 1 }, { keep: 2 }, { keep: 3 }] });
+    expect(doneWhen).toBe('fatto');
+    expect(steps[0]).toEqual({ title: 'Cerco', role: 'scout', state: 'done', outcome: 'done', chatIds: ['c_1'], startedAt: 2, endedAt: 3 });
+    expect(steps[1]!.par).toBeUndefined();
+    // the app fills model and preset on every step: a started one from its chat, the others from the card
+    const of = stepModelOf(id => id === 'c_1' ? { model: 'sonnet-x', run: { runId: 'r', presetChoice: { preset: 'min' } } } as never : id === 'me' ? { model: 'opus-x' } as never : undefined,
+      (role, preset) => ({ preset: preset ?? 'base', model: `${role}-${preset ?? 'base'}` }));
+    expect(steps.map(x => of('me', x))).toEqual([{ preset: 'min', model: 'sonnet-x' }, { preset: 'base', model: 'scout-base' }, { preset: 'base', model: 'artisan-base' }]);
+    expect(of('me', { title: 'Riepilogo', state: 'todo' })).toEqual({ model: 'opus-x' });
+    // saved and read back with them
+    const next: StrategyPlan = { ...old, phase: 'proposed', steps: steps.map(x => ({ ...x, ...of('me', x) })) };
+    expect(readPlan(JSON.parse(JSON.stringify(next)))).toEqual(next);
+    expect(planWaves(next.steps)).toEqual([1, 2, 3]);
+  });
+  it('parallelSplit: the steps of a group to do are named together, started steps and own steps aside', () => {
+    const p: StrategyPlan = { phase: 'running', at: 1, clarified: [], steps: [
+      { title: 'a', role: 'scout', state: 'todo' }, { title: 'b', role: 'scout', state: 'todo', par: true }, { title: 'c', state: 'todo', par: true }, { title: 'd', role: 'artisan', state: 'todo' },
+    ] };
+    expect(parallelSplit(p, [0])).toMatch(/step 1 is in a parallel group with step 2, and a parallel group starts in one call/);
+    expect(parallelSplit(p, [0, 1])).toBeNull(); // c is the Strategist's own
+    expect(parallelSplit(p, [3])).toBeNull();
+    expect(parallelSplit(p, [])).toBeNull();
+    expect(parallelSplit({ ...p, steps: p.steps.map((x, i) => i === 1 ? { ...x, state: 'now' as const } : x) }, [0])).toBeNull(); // reused first with agent_assign_task
+  });
+  it('the flow text: a group is parallel or sequential, checked on real resources, a Sentinel with reviewOf, «aggiorna il piano» with revise', () => {
+    expect(STRATEGY_FLOW).toMatch(/free worktree slots and env leases, test nodes, local stacks/);
+    expect(STRATEGY_FLOW).toMatch(/in one agent_delegate call/);
+    expect(STRATEGY_FLOW).toMatch(/one Sentinel with reviewOf/);
+    expect(STRATEGY_FLOW).toMatch(/«aggiorna il piano».*revise: true.*keep/s);
+    expect(STRATEGY_FLOW).not.toMatch(/possib|at most \d+ (children|at once)|parallel limit/i);
   });
   it('reads a saved plan only when it is whole', () => {
     const p = withDelegated(plan(), 0, ['c_1'], 5);

@@ -10,7 +10,7 @@ import path from 'node:path';
 import { checkedKnowhow, checkedPackIdentity, packName } from '../../shared/agent-pack';
 import type { Effort, Harness, NewChat } from '../../shared/contract';
 import { BEHAVIOUR_FIELDS, MAX_CONTEXT_RANGE, PERMISSION_CEILINGS, effortOn, type AgentAuthor, type AgentCatalog, type AgentDraft, type AgentModelChoice, type AgentOwnerSnapshot, type AgentProfile, type AgentVersion, type PermissionCeiling } from '../../shared/agents';
-import { MODEL_TIERS, ROLE_DEFAULTS, ROLE_IDS, ROLE_PREAMBLE, currentLaunches, currentRoleId, isRetiredRoleId, isRoleId, isWorkRole, roleName, tierRank, type ModelTier, type RoleId } from '../../shared/roles';
+import { MODEL_TIERS, ROLE_DEFAULTS, ROLE_IDS, currentLaunches, currentRoleId, isDelegatorRole, isRetiredRoleId, isRoleId, isWorkRole, roleName, rolePreamble, tierRank, type ModelTier, type RoleId } from '../../shared/roles';
 import { characterOf, isCharacterId } from '../../shared/characters';
 import { readLocal, writeLocal } from './local-store';
 import { AgentHistory, behaviourOf, firstVersion, sameBehaviour, versionedChanges } from './versions';
@@ -195,7 +195,8 @@ export class AgentCatalogService {
     }
     // a later shipped text replaced since (role-migrate.ts SHIPPED_BEFORE, #145)
     for (const old of [...this.profiles]) {
-      const fields = skillAlignmentFor(old) ?? shippedTextFor(old);
+      const shipped = shippedTextFor(old), aligned = skillAlignmentFor(old);
+      const fields = shipped || aligned ? { ...shipped, ...aligned } : null;
       if (!fields) continue;
       try { this.version(old, this.behaviour({ ...fields }, old.id, false, old), 'default', 'Istruzioni e skill del ruolo aggiornate', 'active', true); }
       catch (e) { log.warn('agents', 'role text not moved to the shipped one', { cause: errText(e), hint: 'check that roles.json and role-history.json in the app data folder are writable', data: { role: old.id } }); }
@@ -302,6 +303,9 @@ export class AgentCatalogService {
     if (!has(MODEL_TIERS, p.tier) || !has(MODEL_TIERS, p.tierMax) || tierRank(p.tier) > tierRank(p.tierMax)) throw new Error('Livello del modello non valido: il livello non supera il massimo.');
     // a role ADR 0100 retired, named by a stored profile or version, is dropped from the list (never an error on load)
     if (Array.isArray(p.launches)) p.launches = currentLaunches(p.launches as string[]);
+    // only the Orchestrator and the Strategist delegate (2026-11-23): another role's launches are always empty, so a
+    // stale roles.json, an old version restored or a draft from an older editor never gives one children
+    if (!isDelegatorRole(id)) p.launches = [];
     if (!Array.isArray(p.launches) || !p.launches.every(isWorkRole) || new Set(p.launches).size !== p.launches.length || (p.launches as string[]).includes(id)) throw new Error('Ruoli avviabili non validi: solo ruoli di lavoro, mai sé stesso.');
     if (!Array.isArray(p.skills) || p.skills.length > 40 || !p.skills.every(packName) || new Set(p.skills).size !== p.skills.length) throw new Error('Abilità non valide: nomi di abilità del brain, al massimo 40.');
     return { instructions: text(p.instructions, 8000, 'Istruzioni', true), engine, model,
@@ -512,10 +516,10 @@ export class AgentCatalogService {
     const effort = effortOn(choice.effort ?? (chosen ? null : req.effort ?? null), picked.model ? e.models.find(m => m.id === picked.model)?.efforts : undefined) ?? undefined;
     const { model: _m, effort: _e, balancedRoute: _a, userModel: _u, preset: _p, presetWhy: _w, taskKind: _k, delegator: _d, tier: _t, ...rest } = req; void _m; void _e; void _a; void _u; void _p; void _w; void _k; void _d; void _t;
     const r = ROLE_DEFAULTS[p.id as RoleId];
-    const instructions = `${ROLE_PREAMBLE}\n\nRole: ${p.name}.\n${p.instructions}\nOutput: ${r.output}`;
+    const instructions = `${rolePreamble(p.id)}\n\nRole: ${p.name}.\n${p.instructions}\nOutput: ${r.output}`;
     return { request: { ...rest, harness: engine, ...(picked.model ? { model: picked.model } : {}), ...(effort ? { effort } : {}) }, owner: { ...ownerOf(p), engine, model: picked.model },
       instructions, policy: p.tools || p.permissionCeiling ? { tools: p.tools ? structuredClone(p.tools) : null, ceiling: p.permissionCeiling } : null,
-      ...(typeof p.maxContext === 'number' ? { maxContext: p.maxContext } : {}), skills: [...p.skills, ...(p.knowhow?.linked ?? [])].filter((s, i, a) => a.indexOf(s) === i), launches: [...p.launches],
+      ...(typeof p.maxContext === 'number' ? { maxContext: p.maxContext } : {}), skills: [...p.skills, ...(p.knowhow?.linked ?? [])].filter((s, i, a) => a.indexOf(s) === i), launches: isDelegatorRole(p.id) ? [...p.launches] : [],
       tier, presetChoice: { ...choice, ...(effort ? { effort } : {}) } };
   }
 

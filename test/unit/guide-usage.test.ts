@@ -69,7 +69,7 @@ describe('diagrams from the code', () => {
     const d = delegationDiagram('en', { ...DELEGATION_DEFAULTS, maxDepth: 3 });
     expect(d).toContain('l2 -->|"agent_delegate"| l3');
     expect(d).not.toContain('l4');
-    expect(delegationDiagram('de')).toContain(`höchstens ${DELEGATION_DEFAULTS.maxParallel}`);
+    expect(delegationDiagram('de')).not.toContain('höchstens'); // no children-at-once limit (2026-11-23)
   });
   it('groups the contract\'s channels by area', () => {
     const g = ipcGroups();

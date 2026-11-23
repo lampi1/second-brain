@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ChatSummary } from '@shared/contract';
+import { shownLimit } from '@shared/delegation';
 import { childState, kidCounts, type ChildState } from '../lib/chat-tree';
 import { openKidsOf } from '../lib/chat-derived';
 import { useSteady } from '../lib/steady';
@@ -136,7 +137,7 @@ function HelperTag({ id, name, state, tone, label, anchor, frame, tick, onEnter,
 /** The bench's foot line about its team: how many, how many at work, waiting, stuck, done, and the limit it hit. */
 export function BenchKidsSum({ chatId }: { chatId: string }) {
   const team = useTeam(chatId);
-  const limit = useApp(s => s.chats[chatId]?.limitHit);
+  const limit = shownLimit(useApp(s => s.chats[chatId]?.limitHit));
   // held like each helper's state: a helper's short stop does not move the counts
   const { run, wait, stuck, done } = useSteady(kidCounts(team.map(k => childState(k))), c => c.run > 0, c => c.stuck > 0);
   if (!team.length) return null;
@@ -148,6 +149,6 @@ export function BenchKidsSum({ chatId }: { chatId: string }) {
     {done > 0 && <span>{t('tree.kidsDone', { n: done })}</span>}
     {/* the limit it hit, said while it still matters (something at work), with what it means under the pointer */}
     {limit && run > 0 && <span className="pill pill-wait tree-limit" data-testid={`tree-limit-${chatId}`} tabIndex={0}
-      data-tip={t(`tree.limit.${limit.kind}Tip`, { limit: limit.limit })}>{t(`tree.limit.${limit.kind}`, { limit: limit.limit })}</span>}
+      data-tip={t('tree.limit.depthTip', { limit: limit.limit })}>{t('tree.limit.depth', { limit: limit.limit })}</span>}
   </span>;
 }

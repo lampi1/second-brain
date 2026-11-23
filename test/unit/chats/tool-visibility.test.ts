@@ -40,6 +40,20 @@ describe('tool visibility', () => {
     expect(toolShownToWarm({ role: 'scout', launches: null }, 'agent_ask_parent')).toBe(false);
     expect(toolShownToWarm({ role: 'scout', launches: null, child: { ancestors: [] } }, 'agent_ask_parent')).toBe(true);
   });
+  it('only the Orchestrator and the Strategist delegate: Scout, Artisan, Sentinel and Herald never see agent_delegate or agent_assign_task, stale launches or not (2026-11-23)', () => {
+    for (const role of ['scout', 'artisan', 'sentinel', 'herald']) {
+      const c = chat({ agent: { id: role, source: 'catalog' } });
+      for (const tool of ['agent_delegate', 'agent_assign_task', 'agent_children']) {
+        expect([role, tool, toolShownToChat(c, ['scout', 'sentinel'], tool)]).toEqual([role, tool, false]);
+        expect([role, tool, toolShownToWarm({ role, launches: ['scout', 'sentinel'] }, tool)]).toEqual([role, tool, false]);
+      }
+      expect(toolShownToChat(chat({ agent: { id: role, source: 'catalog' }, parentId: 'p' }), [], 'agent_report')).toBe(true);
+    }
+    expect(toolShownToChat(chat({ agent: { id: 'strategist', source: 'catalog' } }), ['scout'], 'agent_delegate')).toBe(true);
+    expect(toolShownToChat(chat({ agent: { id: 'strategist', source: 'catalog' } }), ['scout'], 'agent_assign_task')).toBe(true);
+    // a plain chat (no catalog role) keeps what its launches say
+    expect(toolShownToChat(chat({ agent: { id: 'plain', source: 'plain' } }), ['scout'], 'agent_delegate')).toBe(true);
+  });
 });
 
 describe('compact tool metadata (Antigravity, ADR 0332)', () => {

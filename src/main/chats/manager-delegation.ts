@@ -593,12 +593,13 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     if (!r.s.parentId && r.s.run?.delivery?.policy === 'synthesize') this.resumeRootSyntheses();
   }
 
-  /** agent_delegate refused by a delegation limit: the parent's transcript says so and the chat carries the mark. */
-  limitNotice(chatId: string, kind: DelegationLimitHit['kind'], limit: number): void {
+  /** agent_delegate refused by the depth limit (the only delegation limit left): the parent's transcript says so and
+   *  the chat carries the mark. */
+  limitNotice(chatId: string, kind: 'depth', limit: number): void {
     const r = this.chats.get(chatId);
     if (!r) return;
     r.s.limitHit = { kind, limit, at: Date.now() };
-    this.addItem(r, sysItem(kind === 'depth' ? 'delegationDepth' : 'delegationParallel', { limit }, 'warn'), false);
+    this.addItem(r, sysItem('delegationDepth', { limit }, 'warn'), false);
     this.updated(r);
   }
 

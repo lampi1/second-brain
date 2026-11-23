@@ -279,7 +279,7 @@ describe('agent_delegate', () => {
   });
 
   it('one review chat per piece of work: a Sentinel that reported re-reviews the fix delta, a second one is refused (#387)', async () => {
-    const f = fixture(), parent = await f.root('artisan');
+    const f = fixture(), parent = await f.root('strategist');
     // two Sentinels started side by side for two parts are fine: neither has reported yet
     const first = (await f.call('agent_delegate', parent.id, { tasks: [f.task('sentinel', 'Review · sconto')] })).children[0].chatId as string;
     const second = (await f.call('agent_delegate', parent.id, { tasks: [f.task('sentinel', 'Review · sicurezza')] })).children[0].chatId as string;
@@ -321,26 +321,24 @@ describe('agent_delegate', () => {
     }
   });
 
-  it('refuses beyond the parallel limit, visibly, and reserves the slots atomically', async () => {
-    const f = fixture({ maxParallel: 5 });
+  it('has no limit on children at once: two separate calls of three each both start', async () => {
+    const f = fixture();
     const parent = await f.root('strategist');
     const [a, b] = await Promise.allSettled([
       f.call('agent_delegate', parent.id, { tasks: [1, 2, 3].map(n => f.task('scout', `A${n}`)) }),
       f.call('agent_delegate', parent.id, { tasks: [1, 2, 3].map(n => f.task('scout', `B${n}`)) }),
     ]);
-    expect([a.status, b.status].sort()).toEqual(['fulfilled', 'rejected']);
-    expect(f.m.list().filter(c => c.parentId === parent.id)).toHaveLength(3);
-    await expect(f.call('agent_delegate', parent.id, { tasks: [1, 2, 3].map(n => f.task('scout', `C${n}`)) })).rejects.toThrow(/3 of 5 children/);
-    const p = f.m.list().find(c => c.id === parent.id)!;
-    expect(p.limitHit).toMatchObject({ kind: 'parallel', limit: 5 });
-    expect(f.m.items(parent.id).some(i => i.kind === 'system' && i.code === 'delegationParallel')).toBe(true);
+    expect([a.status, b.status]).toEqual(['fulfilled', 'fulfilled']);
+    expect(f.m.list().filter(c => c.parentId === parent.id)).toHaveLength(6);
+    expect(f.m.list().find(c => c.id === parent.id)!.limitHit).toBeUndefined();
   });
 
   it('refuses beyond the depth limit, visibly', async () => {
-    const f = fixture({ maxDepth: 2 });
-    const root = await f.root('artisan');
-    const one = (await f.call('agent_delegate', root.id, { tasks: [f.task('sentinel', 'Livello 1')] })).children[0].chatId;
-    const two = (await f.call('agent_delegate', one, { tasks: [f.task('scout', 'Livello 2')] })).children[0].chatId;
+    // only Strategists delegate below the root: a catalog where the Strategist may launch a Strategist builds the chain
+    const f = fixture({ maxDepth: 2 }, undefined, () => { const c = catalog(); c.profiles.find(p => p.id === 'strategist')!.launches.push('strategist'); return c; });
+    const root = await f.root('strategist');
+    const one = (await f.call('agent_delegate', root.id, { tasks: [f.task('strategist', 'Livello 1')] })).children[0].chatId;
+    const two = (await f.call('agent_delegate', one, { tasks: [f.task('strategist', 'Livello 2')] })).children[0].chatId;
     expect(depthOf(two, id => f.m.list().find(c => c.id === id)?.parentId)).toBe(2);
     await expect(f.call('agent_delegate', two, { tasks: [f.task('scout', 'Livello 3')] })).rejects.toThrow(/depth limit 2/);
     expect(f.m.list().filter(c => c.parentId === two)).toHaveLength(0);
@@ -360,7 +358,7 @@ describe('agent_delegate', () => {
     expect(cwdHelp).toMatch(/Never another repository.*app_create_chat with cwd/);
     await expect(f.m.create({ harness: 'claude', cwd: os.tmpdir(), roleId: 'scout', parentId: parent.id }, 'agent')).rejects.toThrow(/dentro quella del genitore/);
     // a planner narrowed to ADR 0083's launches never launches a writing role: the work goes in its report
-    await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('artisan', 'Fix')] })).rejects.toThrow(/may not launch Artisan.*the Orchestrator starts it/);
+    await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('artisan', 'Fix')] })).rejects.toThrow(/may not launch Artisan.*your parent launches it/);
     const ok = await f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Leggi'), cwd: sub }] });
     const child = ok.children[0];
     expect(child.chatId).toBeTruthy();
@@ -369,22 +367,26 @@ describe('agent_delegate', () => {
     expect([...(start.toolPolicy?.allow ?? [])].sort()).toEqual(['read', 'web']);
     expect(start.ceiling).toBe(NARROW.strategist!.ceiling);
     const scout = (await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'S')] })).children[0].chatId;
-    await expect(f.call('agent_delegate', scout, { tasks: [f.task('artisan', 'X')] })).rejects.toThrow(/may not launch Artisan/);
+    await expect(f.call('agent_delegate', scout, { tasks: [f.task('artisan', 'X')] })).rejects.toThrow(/Scout does not delegate/);
   });
 
-  it('a Scout delegated by an Artisan keeps its read-only commands and browser (the Artisan\'s shell and browser include them)', async () => {
-    const f = fixture({}, undefined, undefined, undefined, NARROW);
-    const parent = await f.root('artisan');
-    const kid = (await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Cerca')] })).children[0].chatId;
-    expect([...(f.starts.get(kid)?.toolPolicy?.allow ?? [])].sort()).toEqual(['browser-read', 'read', 'shell-read', 'web']);
+  it('only the Orchestrator and the Strategist delegate: an Artisan, a Sentinel, a Herald are refused even with stale launches', async () => {
+    // a roles.json saved before 2026-11-23 still lists launches for the workers
+    const stale = () => { const c = catalog(); for (const p of c.profiles) if (p.id !== 'strategist' && p.id !== 'orchestrator') p.launches = ['scout', 'sentinel']; return c; };
+    const f = fixture({}, undefined, stale);
+    for (const role of ['artisan', 'sentinel', 'herald'] as const) {
+      const parent = await f.root(role);
+      await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Cerca')] })).rejects.toThrow(/does not delegate \(only the Orchestrator and the Strategist do\).*your parent launches it/);
+      expect(f.m.list().filter(c => c.parentId === parent.id)).toEqual([]);
+    }
   });
 
   it('every default launch fits (every role has every permission); under a planner the user narrowed, a role that needs more is refused, visibly', async () => {
     for (const id of WORK_ROLE_IDS) for (const kid of ROLE_DEFAULTS[id].launches) expect([id, kid, launchGap(ROLE_DEFAULTS[kid].tools, ROLE_DEFAULTS[id].tools)]).toEqual([id, kid, []]);
     expect(ROLE_DEFAULTS.strategist.launches).toEqual(['scout', 'artisan', 'sentinel', 'herald']);
-    expect(ROLE_DEFAULTS.artisan.launches).toEqual(['scout', 'sentinel']);
-    expect(ROLE_DEFAULTS.sentinel.launches).toEqual(['scout']);
-    expect(ROLE_DEFAULTS.herald.launches).toEqual(['scout']);
+    expect(ROLE_DEFAULTS.artisan.launches).toEqual([]);
+    expect(ROLE_DEFAULTS.sentinel.launches).toEqual([]);
+    expect(ROLE_DEFAULTS.herald.launches).toEqual([]);
     // read-only classes are narrowed away, never a reason to refuse; a writing class is
     expect(launchGap(['read', 'web', 'shell-read', 'browser-read'], ['read'])).toEqual([]);
     expect(launchGap(['read', 'edit', 'shell'], ['read', 'web'])).toEqual(['edit', 'shell']);

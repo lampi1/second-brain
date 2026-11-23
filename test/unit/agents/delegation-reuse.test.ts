@@ -19,7 +19,7 @@ function fixture(worktrees: DelegationDeps['worktrees'] = async()=>[]) {
   const assign=vi.fn(async (_id:string,_prompt:string,_options:TaskAssignmentOptions)=>{ child.run={...child.run!,runId:'new',taskVersion:2}; });
   const create=vi.fn(async()=>child);
   const chats:DelegationChats={list:()=>all,create,assignTask:assign,userEvents:()=>structuredClone(ledger),agentPolicy:()=>({tools:{allow:['read']},ceiling:null}),reportDelegation:()=>({parentId:'parent',delivered:true}),limitNotice:vi.fn(),send:async()=>{}};
-  const tools=delegationTools({chats,roles:()=>catalog,settings:()=>({...DELEGATION_DEFAULTS,maxParallel:1}),engineRefusal:()=>null,label:'[agent]',runs:()=>[],worktrees});
+  const tools=delegationTools({chats,roles:()=>catalog,settings:()=>DELEGATION_DEFAULTS,engineRefusal:()=>null,label:'[agent]',runs:()=>[],worktrees});
   const call=async(name:string,args:Record<string,unknown>,caller='parent')=>JSON.parse(await tools.find(t=>t.name===name)!.run(args,{params:{chatId:caller}} as never) as string);
   const args=()=>({chatId:'child',roleId:'scout',cwd,mode:'continue',expectedVersion:1,expectedEventSeq:1,contract:{goal:'Follow up',output:'Evidence',context:'User constraints',doneWhen:['New criterion']}});
   return {parent,child,catalog,ledger,chats,assign,create,call,args};
@@ -129,15 +129,25 @@ describe('parent child task continuity',()=>{
     expect(samePath('/A/b','/a/b','linux')).toBe(false);
     expect(samePath('/A/b','/a/b','win32')).toBe(true);
   });
-  it('reserves the last slot across reuse and creation, releases it after failure',async()=>{
+  it('has no slot to reserve: a new child starts while a reuse is pending, and the reuse works again after a failure',async()=>{
     const f=fixture();let reject!:(e:Error)=>void;
     f.assign.mockImplementationOnce(()=>new Promise<void>((_resolve,no)=>{reject=no;}));
     const reuse=f.call('agent_assign_task',f.args());
     // Flush the worktree lookup, without timers or a runtime engine.
     await Promise.resolve();await Promise.resolve();
-    await expect(f.call('agent_delegate',{tasks:[{role:'scout',title:'New child',contract:{goal:'Read',doneWhen:['Evidence']}}]})).rejects.toThrow(/already running/);
+    await expect(f.call('agent_delegate',{tasks:[{role:'scout',title:'New child',contract:{goal:'Read',doneWhen:['Evidence']}}]})).resolves.toMatchObject({children:[expect.any(Object)]});
     reject(new Error('Assignment refused'));await expect(reuse).rejects.toThrow(/Assignment refused/);
     await expect(f.call('agent_assign_task',f.args())).resolves.toMatchObject({chatId:'child'});
+  });
+  it('refuses a role that does not delegate, whatever its saved launches say',async()=>{
+    const f=fixture();
+    // a stale roles.json: the Scout still lists launches, and the parent runs as a Scout
+    (f.catalog.profiles[1] as {launches?:string[]}).launches=['scout'];
+    f.parent.agent={id:'scout',source:'catalog',version:1};
+    await expect(f.call('agent_delegate',{tasks:[{role:'scout',title:'Nipote',contract:{goal:'Read',doneWhen:['Evidence']}}]})).rejects.toThrow(/does not delegate/);
+    await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/does not delegate|only the Orchestrator and the Strategist/);
+    expect(f.create).not.toHaveBeenCalled();
+    expect(f.assign).not.toHaveBeenCalled();
   });
   it('passes approved step identity into the atomic assignment and refuses unapproved plans',async()=>{
     const f=fixture();

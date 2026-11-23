@@ -4,10 +4,11 @@
 // tools, ceiling and launches, and the new instructions where its text is still the 0083 text (a maintenance lesson in
 // the text is kept). ADR 0100 (five work roles): such a role whose text is still the pre-0100 default (it named Router or
 // Judge, or lacked the job it took over from them) gets the current text, and so does one whose text is a later
-// shipped text replaced since (SHIPPED_BEFORE, #145). Anything else is left alone; the retired
+// shipped text replaced since (SHIPPED_BEFORE, #145). A role that does not delegate reads back with no launches at
+// all (catalog.ts behaviour, 2026-11-23), so its launches never decide a move here. Anything else is left alone; the retired
 // roles' own profiles are dropped by the catalog. Pure; used by agents/catalog.ts at start, pinned by test/unit/agents/role-migrate.test.ts.
 import type { AgentProfile, PermissionCeiling, ToolClass } from '../../shared/agents';
-import { ROLE_DEFAULTS, previousRoleDefaults, currentLaunches, isRoleId, type RetiredRoleId, type RoleId } from '../../shared/roles';
+import { BEFORE_AFTER, ROLE_DEFAULTS, previousRoleDefaults, currentLaunches, isDelegatorRole, isRoleId, type RetiredRoleId, type RoleId } from '../../shared/roles';
 
 interface Old { tools: ToolClass[]; ceiling: PermissionCeiling; launches: string[]; instructions?: string }
 /** The eight work roles of ADR 0083, frozen (ADR 0100 retired three of them). */
@@ -59,6 +60,13 @@ export const SHIPPED_BEFORE: Partial<Record<RoleId, readonly string[]>> = {
   artisan: ['Make the change the contract asks for, following the repository’s AGENTS.md / CLAUDE.md: branch, small commits, its checks. Preserve existing work. Documents and brain notes too: clear for their reader, sourced, consistent with the brain’s rules (the brain-edit skill holds them when your launch gives it); write only the files your contract names. Delegate a fact-finding detour to Scout and the verification to Sentinel when it is more than a quick run; never claim a check you did not run.'],
   sentinel: ['Verify the work against its done-criteria: run the tests and checks, reproduce the bug or the fix, look for regressions. Report each criterion as met or not with the command and its output. When nothing can be run (a document, a plan, a message, a result you only have as evidence), give an independent verdict from the evidence you are given and what you can read: does it meet each criterion, is it correct and well made, what is missing; quote what supports each point. You run in a clean session: judge what you see, never the author’s intentions. Do not fix what you find: report it.'],
 };
+// 2026-11-23, only the Orchestrator and the Strategist delegate: the Artisan text that sent detours to Scout and checks to
+// Sentinel, and the Strategist text without the resource check, the one-call group and the Sentinel review it opens;
+// each before (PRE_ALIGNMENT) and after the skill line roles.ts appends
+const ARTISAN_DELEGATING = 'Make the change the contract asks for, following the repository’s AGENTS.md / CLAUDE.md: branch, small commits, its checks. Preserve existing work. Documents and brain notes too: clear for their reader, sourced, consistent with the brain’s rules (the brain-edit skill holds them when your launch gives it); write only the files your contract names. Delegate a fact-finding detour to Scout and the verification to Sentinel when it is more than a quick run; never claim a check you did not run. ' + BEFORE_AFTER;
+const STRATEGIST_LIMITED = 'When missing information would change the goal, scope, constraints or success criteria, ask the user one focused question before planning; do not invent their preferences. Turn the goal into a plan of independent parts with clear owners and done-criteria, with, for every part, the parts it depends on; parts that depend on each other wait, independent ones form a parallel group. Delegate each part with agent_delegate to the role that fits (Scout for facts, Artisan for a change, a document or a brain note, Sentinel for running checks or an independent verdict, Herald for a message): a whole parallel group in one call, so its parts run at the same time; a part starts once the parts it depends on are done. A launch refused because your permissions were narrowed goes in your report as a ready contract (role, goal, done-criteria) for the Orchestrator. Then merge the results into one decision-ready answer. Do not do the parts yourself.';
+SHIPPED_BEFORE.artisan = [...SHIPPED_BEFORE.artisan!, ARTISAN_DELEGATING, `${ARTISAN_DELEGATING}\nUse implement-change to choose the smallest regression check and preserve existing behavior during refactoring.`];
+SHIPPED_BEFORE.strategist = [STRATEGIST_LIMITED, `${STRATEGIST_LIMITED}\nUse plan-work to reuse answered choices and give every step an observable acceptance criterion.`];
 /** Today's text for a role the user never edited whose text is an older shipped one (SHIPPED_BEFORE); null = leave it. */
 export function shippedTextFor(p: Pick<AgentProfile, 'id' | 'userLocked' | 'lastEditedBy' | 'trial' | 'instructions'>): Pick<AgentProfile, 'instructions'> | null {
   if (!isRoleId(p.id) || p.userLocked || p.lastEditedBy === 'user' || p.trial) return null;
@@ -81,7 +89,10 @@ export type MigratedFields = Pick<AgentProfile, 'tools' | 'permissionCeiling' | 
 export function fullDefaultsFor(p: Pick<AgentProfile, 'id' | 'userLocked' | 'lastEditedBy' | 'trial' | 'tools' | 'permissionCeiling' | 'launches' | 'instructions'>): MigratedFields | null {
   if (!isRoleId(p.id) || p.userLocked || p.lastEditedBy === 'user' || p.trial) return null;
   const old = ADR0083_DEFAULTS[p.id], now = ROLE_DEFAULTS[p.id];
-  if (!p.tools || p.tools.mcp || !sameSet(p.tools.allow, old.tools) || p.permissionCeiling !== old.ceiling || !sameSet(currentLaunches(p.launches), currentLaunches(old.launches))) return null;
+  // a role that does not delegate reads back with launches [] whatever was stored (catalog.ts behaviour, 2026-11-23):
+  // its launches say nothing about an edit, so only its tools and ceiling are compared
+  const sameLaunches = !isDelegatorRole(p.id) || sameSet(currentLaunches(p.launches), currentLaunches(old.launches));
+  if (!p.tools || p.tools.mcp || !sameSet(p.tools.allow, old.tools) || p.permissionCeiling !== old.ceiling || !sameLaunches) return null;
   return { tools: { allow: [...now.tools] }, permissionCeiling: now.ceiling, launches: [...now.launches],
     instructions: old.instructions !== undefined && p.instructions === old.instructions ? now.instructions : p.instructions };
 }

@@ -8,11 +8,11 @@ import { EVENT_CHANNELS, INVOKE_CHANNELS } from './contract';
 import { DELEGATION_DEFAULTS, ROLE_DEFAULTS, WORK_ROLE_IDS } from './roles';
 import type { GuideLang } from './concept-guide';
 
-type Words = Record<'you' | 'root' | 'level' | 'delegate' | 'ask' | 'report' | 'parallel' | 'stall' | 'page' | 'main' | 'channels' | 'events' | 'others' | 'tier', string>;
+type Words = Record<'you' | 'root' | 'level' | 'delegate' | 'ask' | 'report' | 'stall' | 'page' | 'main' | 'channels' | 'events' | 'others' | 'tier', string>;
 const WORDS: Record<GuideLang, Words> = {
-  it: { you: 'Tu', root: 'Chat radice', level: 'livello', delegate: 'agent_delegate', ask: 'domande', report: 'agent_report', parallel: 'al massimo', stall: 'ferma dopo', page: 'Pagina (renderer)', main: 'Main (servizi)', channels: 'canali per area', events: 'eventi', others: 'altri', tier: 'livello modello' },
-  en: { you: 'You', root: 'Root chat', level: 'level', delegate: 'agent_delegate', ask: 'questions', report: 'agent_report', parallel: 'at most', stall: 'stalled after', page: 'Page (renderer)', main: 'Main (services)', channels: 'channels by area', events: 'events', others: 'others', tier: 'model tier' },
-  de: { you: 'Du', root: 'Wurzel-Chat', level: 'Ebene', delegate: 'agent_delegate', ask: 'Fragen', report: 'agent_report', parallel: 'höchstens', stall: 'steht nach', page: 'Seite (Renderer)', main: 'Main (Dienste)', channels: 'Kanäle nach Bereich', events: 'Ereignisse', others: 'weitere', tier: 'Modellstufe' },
+  it: { you: 'Tu', root: 'Chat radice', level: 'livello', delegate: 'agent_delegate', ask: 'domande', report: 'agent_report', stall: 'ferma dopo', page: 'Pagina (renderer)', main: 'Main (servizi)', channels: 'canali per area', events: 'eventi', others: 'altri', tier: 'livello modello' },
+  en: { you: 'You', root: 'Root chat', level: 'level', delegate: 'agent_delegate', ask: 'questions', report: 'agent_report', stall: 'stalled after', page: 'Page (renderer)', main: 'Main (services)', channels: 'channels by area', events: 'events', others: 'others', tier: 'model tier' },
+  de: { you: 'Du', root: 'Wurzel-Chat', level: 'Ebene', delegate: 'agent_delegate', ask: 'Fragen', report: 'agent_report', stall: 'steht nach', page: 'Seite (Renderer)', main: 'Main (Dienste)', channels: 'Kanäle nach Bereich', events: 'Ereignisse', others: 'weitere', tier: 'Modellstufe' },
 };
 
 /** The text of a mermaid label: quotes and brackets out, so data never breaks the syntax. */
@@ -33,7 +33,7 @@ export function delegationDiagram(lang: GuideLang, limits = DELEGATION_DEFAULTS)
   const w = WORDS[lang];
   const lines = ['flowchart TB', `  l0[${q(w.root)}]`];
   for (let i = 1; i <= limits.maxDepth; i++) {
-    lines.push(`  l${i}[${q(`${w.level} ${i} · ${w.parallel} ${limits.maxParallel}`)}]`);
+    lines.push(`  l${i}[${q(`${w.level} ${i}`)}]`);
     lines.push(`  l${i - 1} -->|${q(w.delegate)}| l${i}`);
     lines.push(`  l${i} -.->|${q(`${w.ask} · ${w.report}`)}| l${i - 1}`);
   }
