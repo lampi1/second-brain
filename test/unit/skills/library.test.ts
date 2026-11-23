@@ -110,7 +110,7 @@ describe('SkillLibrary', () => {
     const { root, lib, links } = setup({ roles: [{ id: 'scout', name: 'Scout', skills: ['a'] }, { id: 'sentinel', name: 'Sentinel', skills: [], knowhow: { linked: [] } as never }] });
     const withHome = new SkillLibrary({ root: () => null, home, appSkills: () => null, changes: () => new ChangeLog(tmp()), undo: () => {}, roles: () => [], link: () => {}, runs: () => [], unify: false, guard: async () => null });
     expect(await withHome.write({ skill: 'mia', path: 'SKILL.md', text: md('mia') }, { who: 'Orchestrator' })).toMatchObject({ ok: false });
-    expect(await withHome.write({ skill: 'mia', path: 'SKILL.md', text: md('mia') }, { who: 'tu', page: true })).toMatchObject({ ok: true, skill: { origin: 'home' } });
+    expect(await withHome.write({ skill: 'mia', path: 'SKILL.md', text: md('mia') }, { who: 'tu', page: true })).toMatchObject({ ok: true, skill: { origin: 'brain' } }); // the user's own skills show as Brain (two sources only)
     expect(fs.existsSync(path.join(home, '.claude/skills/mia/SKILL.md'))).toBe(true);
     expect(await withHome.write({ skill: 'mia', path: 'scripts/x.mjs', text: 'x' }, { who: 'Orchestrator' })).toMatchObject({ ok: false, error: expect.stringContaining('pagina Skill') });
     expect((await withHome.remove('mia', { who: 'Orchestrator' })).ok).toBe(false);

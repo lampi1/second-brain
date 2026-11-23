@@ -1,16 +1,15 @@
 // "Skill" (G S; the «Skill» tab of Memoria, ADR 0122): the skill library (ADR 0241, #362). Owner 2026-11-09: with
 // skills only, this page is the main way he sees and changes how his agents work; it must be very easy, fast and look
-// really good; the app's own skills are visible and editable too. Left, the list: search (name, description, file
-// names), filters by origin (brain, app, the user's own), usage, role and area, each row with what the skill is for, who
-// loads it and how often it ran. Right, the chosen skill (skills/SkillDetail.tsx): Leggi, File (its package's tree and
-// an editor for every text file), Ruoli, Cronologia (diff and Undo per change), plus «Prova» (/name in the Orchestrator).
-// «Nuova skill» asks a name and a sentence, then opens the new SKILL.md. Owner 2026-11-10 («facile capire quali vengono
-// usate di più e da chi, quante volte»): the list sorts by name, uses, last use or last change, and a strip above it
-// names the most used skills (who uses each most in its tooltip); a click opens one. The reload after a change is
-// coalesced (one read for a burst of brainmodel:changed), so opening the page does not stutter. The two panes fit the
-// window and scroll on their own (a skill picked low in the list shows at once, without scrolling back up). Data: skills:library (main/skills/library.ts),
-// read again on brainmodel:changed (an edit by the Orchestrator shows at once). Rendered by brain-model/MemoryPage.tsx;
-// styles/skill-library.css. The one-time migration's report stays below while it has items (#367).
+// really good. Owner 2026-11-23: «veramente figa navigabile ordinabile», most and least used clear, delete and edit all,
+// Brain or App obvious (his own home skills count as Brain). On top, the most and least used (skills/SkillUsage.tsx; a
+// head sorts the list). Left, the list: search (name, description, file names), Tutte/Brain/App, usage, role and area
+// filters, the order (most used first), each row with its source, what it is for, what its package holds, who loads it
+// and a usage meter. Right, the chosen skill (skills/SkillDetail.tsx): Leggi, File (every file by kind, read or edited),
+// Ruoli, Cronologia (diff and Undo per change), plus «Prova» (/name in the Orchestrator). «Nuova skill» asks a name and a
+// sentence, then opens the new SKILL.md. The reload after a change is coalesced (one read for a burst of
+// brainmodel:changed). The two panes fit the window and scroll on their own. Data: skills:library
+// (main/skills/library.ts), read again on brainmodel:changed (an edit by the Orchestrator shows at once). Rendered by
+// brain-model/MemoryPage.tsx; styles/skill-library.css. The one-time migration's report stays below while it has items.
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import type { LibSkill, SkillLibraryState, SkillOrigin } from '@shared/skill-library';
 import { SKILL_NAME } from '@shared/skill-library';
@@ -22,16 +21,18 @@ import { errText } from '../lib/ipc-error';
 import { HubIntro } from './brain-model/HubIntro';
 import { MigrationReportPanel } from './brain-model/MaintenancePanel';
 import { Select } from './Select';
-import { HelpTip } from './HelpTip';
 import { IconPlus, IconSearch, IconX } from './Icons';
 import { lintLabel, SkillDetail, type DetailTab } from './skills/SkillDetail';
+import { KIND_ICON } from './skills/SkillParts';
 import { UnassignedPanel } from './skills/UnassignedPanel';
+import { UsageMeter, UsageOverview } from './skills/SkillUsage';
+import { kindCounts } from '../lib/skill-files';
 import { SORTS, sortSkills, type SortBy } from '../lib/skill-sort';
 import '../styles/skill-library.css';
 
 type OriginFilter = 'all' | SkillOrigin;
 type UsageFilter = 'all' | 'used' | 'unused';
-const ORIGINS: OriginFilter[] = ['all', 'brain', 'app', 'home'];
+const ORIGINS: OriginFilter[] = ['all', 'brain', 'app'];
 /** what the search looks in: the name, the description and the package's file paths */
 export function matches(s: LibSkill, q: string): boolean {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
@@ -41,7 +42,7 @@ export function matches(s: LibSkill, q: string): boolean {
 }
 
 /** The page remembers the chosen skill and tab while the app is open (back from a chat lands where it was). */
-let lastPick: { name: string | null; tab: DetailTab; sort: SortBy } = { name: null, tab: 'read', sort: 'name' };
+let lastPick: { name: string | null; tab: DetailTab; sort: SortBy } = { name: null, tab: 'read', sort: 'uses' };
 
 function CreateForm({ onCancel, onCreated, taken }: { onCancel: () => void; onCreated: (name: string) => void; taken: (n: string) => boolean }) {
   const [name, setName] = useState('');
@@ -76,7 +77,7 @@ function CreateForm({ onCancel, onCreated, taken }: { onCancel: () => void; onCr
   </form>;
 }
 
-function Row({ s, active, roleName, onPick }: { s: LibSkill; active: boolean; roleName: (id: string) => string; onPick: () => void }) {
+function Row({ s, active, max, roleName, onPick }: { s: LibSkill; active: boolean; max: number; roleName: (id: string) => string; onPick: () => void }) {
   return <li>
     <button type="button" className="sl-row" aria-current={active ? 'true' : undefined} onClick={onPick} data-testid={`bm-skill-${s.name}`} data-origin={s.origin} data-unused={!s.totalUses}>
       <span className="sl-row-top">
@@ -88,8 +89,9 @@ function Row({ s, active, roleName, onPick }: { s: LibSkill; active: boolean; ro
       <span className="sl-row-desc">{s.description || t('sl.noDescription')}</span>
       <span className="sl-row-meta">
         <span className="sl-row-roles">{s.roles.slice(0, 3).map(id => <span key={id} className="sl-role-dot" title={roleName(id)}>{roleName(id).slice(0, 1)}</span>)}{s.roles.length > 3 && <span className="sl-role-more">+{s.roles.length - 3}</span>}</span>
+        {kindCounts(s.files).map(k => <span key={k.kind} className="sl-row-kind" data-kind={k.kind} title={`${t(`sl.kind.${k.kind}`)}: ${k.n}`}>{KIND_ICON[k.kind](12)}{k.n}</span>)}
         <span className="sp" />
-        <span className={s.totalUses ? 'sl-uses' : 'sl-uses none'}>{s.totalUses ? t('sl.uses', { n: s.totalUses }) : t('sl.noUses')}</span>
+        <UsageMeter skill={s} max={max} />
       </span>
     </button>
   </li>;
@@ -131,7 +133,7 @@ export function SkillsPage() {
     && (!role || (role === '-' ? !s.roles.length : s.roles.includes(role)))
     && (!area || s.area === area) && matches(s, q)), [skills, origin, usage, role, area, q]);
   const sorted = useMemo(() => sortSkills(shown, sort), [shown, sort]);
-  const top = useMemo(() => sortSkills(skills.filter(s => s.totalUses > 0), 'uses').slice(0, 5), [skills]);
+  const max = useMemo(() => Math.max(1, ...skills.map(s => s.totalUses)), [skills]);
   const filtered = origin !== 'all' || usage !== 'all' || !!role || !!area || !!q;
   const current = skills.find(s => s.name === pick) ?? null;
   // a link to one skill (a script's or query's old link, ADR 0263) opens it, once: a reload of the list keeps the pick
@@ -168,11 +170,7 @@ export function SkillsPage() {
       <HubIntro lead={lib ? t('sl.lead', { n: skills.length, app: appCount }) : '…'}
         actions={<button type="button" className="btn btn-primary btn-s" onClick={() => guard(() => setCreating(true))} disabled={!lib} data-testid="sk-new-skill"><IconPlus size={13} /> {t('sl.new')}</button>} />
       {err && <p className="sl-error" role="alert">{t('sl.loadError')} {err}</p>}
-      {top.length > 0 && <div className="sl-top" data-testid="sl-top"><span className="sl-top-label">{t('sl.top')}</span>
-        {top.map(s => { const who = s.uses[0] ? roleName(s.uses[0].role) : '';
-          return <button key={s.name} type="button" className="sl-top-chip" aria-current={s.name === pick ? 'true' : undefined} title={t('sl.topTip', { name: s.name, n: s.totalUses, who })} onClick={() => choose(s.name)} data-testid={`sl-top-${s.name}`}>
-            <span className="mono">{s.name}</span><span className="sl-n">{s.totalUses}</span></button>; })}
-      </div>}
+      <UsageOverview skills={skills} sort={sort} pick={pick} roleName={roleName} onSort={setSort} onPick={choose} />
       {!!lib?.unassigned.length && <UnassignedPanel items={lib.unassigned} skills={skills} onMoved={name => { void load().then(() => setPick(name)); }} />}
       <div className="sl-shell sl-fit">
         <aside className="sl-rail" aria-label={t('sl.searchLabel')}>
@@ -202,17 +200,16 @@ export function SkillsPage() {
               {areas.map(a => <option key={a} value={a}>{a}</option>)}
             </Select>}
           </div>
-          <div className="sl-count small" aria-live="polite">{t('sl.count', { shown: shown.length, n: skills.length })}{filtered && <button type="button" className="sl-link" onClick={clear}>{t('sl.clearFilters')}</button>}
-            <HelpTip title={t('explain.skills.title')} wide guide="skills" testid="sk-help"><p>{t('explain.skills.p1')}</p><p>{t('explain.skills.p2')}</p></HelpTip></div>
+          <div className="sl-count small" aria-live="polite">{t('sl.count', { shown: shown.length, n: skills.length })}{filtered && <button type="button" className="sl-link" onClick={clear}>{t('sl.clearFilters')}</button>}</div>
           {!skills.length && lib ? <p className="sl-empty" data-testid="sk-empty">{t('sl.empty')}</p>
             : !shown.length && lib ? <p className="sl-empty" data-testid="sk-empty">{t('sl.emptySearch')}</p>
               : <ul className="sl-list" ref={list} onKeyDown={onListKey} data-testid="bm-skill-grid">
-                {sorted.map(s => <Row key={s.name} s={s} active={!creating && s.name === pick} roleName={roleName} onPick={() => choose(s.name)} />)}
+                {sorted.map(s => <Row key={s.name} s={s} active={!creating && s.name === pick} max={max} roleName={roleName} onPick={() => choose(s.name)} />)}
               </ul>}
         </aside>
         <section className="sl-main" ref={main}>
           {creating ? <CreateForm onCancel={() => setCreating(false)} taken={n => skills.some(s => s.name === n)} onCreated={name => { void load().then(() => { setPick(name); setTab('files'); setCreating(false); }); }} />
-            : current ? <SkillDetail key={current.name} skill={current} roles={lib?.roles ?? []} hasBrain={!!lib?.root} tab={tab} onTab={next => { if (next !== tab) guard(() => setTab(next)); }}
+            : current ? <SkillDetail key={current.name} skill={current} roles={lib?.roles ?? []} maxUses={max} hasBrain={!!lib?.root} tab={tab} onTab={next => { if (next !== tab) guard(() => setTab(next)); }}
               onDirty={d => { dirtyRef.current = d; }} onChanged={() => void load()} onGone={() => { setPick(null); void load(); }} />
               : <p className="sl-empty">{t('sl.pick')}</p>}
         </section>

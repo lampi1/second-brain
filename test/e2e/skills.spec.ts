@@ -55,12 +55,12 @@ test('Skill: list and filters, create from the form, editor checks and hook refu
     await expect(pg.getByTestId('bm-skill-spiega')).toHaveCount(0);
     await expect(pg.getByTestId('sk-empty')).toBeVisible();
     await choose(pg.getByTestId('sl-usage'), 'all');
-    // the order (owner 2026-11-10): by name by default; nothing ran yet, so no «Le più usate» strip
+    // the order (owner 2026-11-10): by name by default; nothing ran yet, so no «Le più usate» board
     const names = () => pg.locator('[data-testid="bm-skill-grid"] .sl-row .sl-row-name').allTextContents();
     expect((await names()).indexOf('rivedi-pr')).toBeLessThan((await names()).indexOf('spiega'));
     await choose(pg.getByTestId('sl-sort'), 'uses');
     await expect(pg.getByTestId('sl-sort')).toHaveAttribute('data-value', 'uses');
-    await expect(pg.getByTestId('sl-top')).toHaveCount(0);
+    await expect(pg.getByTestId('sl-board-uses')).toHaveCount(0);
     await choose(pg.getByTestId('sl-sort'), 'name');
     // picking the last skill shows it at once, its title in view, without scrolling the page back up
     await pg.locator('[data-testid="bm-skill-grid"] .sl-row').last().click();
@@ -87,6 +87,7 @@ test('Skill: list and filters, create from the form, editor checks and hook refu
 
     // the file editor (the new skill opens on its files): a broken SKILL.md is refused with the reason
     const raw = pg.getByTestId('sk-md');
+    if (await raw.count() === 0) await pg.getByTestId('sl-file-edit').click();
     await expect(raw).toHaveValue(/name: riassunto-giornata/);
     await raw.fill('---\nname: riassunto-giornata\n');
     await pg.getByTestId('sk-save').click();
