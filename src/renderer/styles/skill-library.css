@@ -128,7 +128,7 @@
 .sl-desc{margin:2px 0 0;max-width:72ch;color:var(--text-2);font-size:var(--fs-l);line-height:1.55}
 .sl-desc i{color:var(--amber);font-style:normal}
 .sl-facts{display:flex;flex-wrap:wrap;gap:4px 14px;margin:6px 0 0;color:var(--text-3)}
-.sl-facts>span+span::before{content:"·";margin-inline-end:14px;color:var(--border-3)}
+.sl-facts>span+span:not(.sl-folder)::before{content:"·";margin-inline-end:14px;color:var(--border-3)}
 .sl-folder{display:inline-flex;min-width:0}
 .sl-folder>span{display:inline-block;max-width:46ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
 
@@ -173,12 +173,12 @@
 .sl-tree-add{display:flex;align-items:center;gap:6px;height:28px;margin-top:6px;padding:0 10px;border:1px dashed var(--border-2);border-radius:var(--r-m);background:none;color:var(--text-3);font-size:var(--fs-s);cursor:pointer}
 .sl-tree-add:hover,.sl-tree-add[aria-expanded=true]{border-color:var(--accent-line);color:var(--accent)}
 .sl-editor{display:flex;flex-direction:column;gap:8px;min-width:0}
-.sl-editor-head{display:flex;align-items:center;gap:8px;min-height:28px;min-width:0}
+.sl-editor-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-height:28px;min-width:0}
 .sl-view{min-width:0}
 .sl-view-code .bx-code{max-height:none}
 .sl-view-binary{display:grid;gap:12px;justify-items:start}
 .sl-view-binary img{max-width:100%;max-height:60vh;border-radius:var(--r-m);border:1px solid var(--border)}
-.sl-editor-path{font-size:var(--fs-s);color:var(--text-2);display:inline-flex;align-items:center;gap:6px;min-width:0;overflow-wrap:anywhere}
+.sl-editor-path{flex:1 1 200px;font-size:var(--fs-s);color:var(--text-2);display:inline-flex;align-items:center;gap:6px;min-width:0;overflow-wrap:anywhere}
 .sl-dirty{color:var(--amber);font-size:9px}
 .sl-code{flex:1;min-height:380px;width:100%;resize:vertical;padding:14px 16px;border-radius:var(--r-m);border:1px solid var(--border-2);background:var(--bg-2);color:var(--text);
   font-size:12.5px;line-height:1.65;tab-size:2;caret-color:var(--accent);outline:none;transition:border-color var(--dur-fast) var(--ease)}
