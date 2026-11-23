@@ -59,7 +59,7 @@ export const treeDe: typeof treeIt = {
   'tree.sidebar': 'Agenten bei der Arbeit',
   'delegation.group': 'Rollen und Delegation',
   'delegation.desc': 'Wie weit Rollen delegieren dürfen.',
-  'delegation.modelsOnCards': 'Modell, die Voreinstellungen Minimum / Basis / Maximum, Aufwand und Code Mode wählst du auf der Seite jeder Rolle (Agenten → die Rolle), oder der Orchestrator wählt sie beim Delegieren.',
+  'delegation.modelsOnCards': 'Modell, die Voreinstellungen Minimum / Basis / Maximum, Aufwand und Code Mode wählst du auf der Seite jeder Rolle (Agenten → die Rolle); wer delegiert (Orchestrator oder Strategist), wählt nur die Voreinstellung der Aufgabe.',
   'delegation.maxDepth': 'Maximale Tiefe',
   'delegation.maxDepth.hint': 'Wie viele Ebenen unter einem Haupt-Chat: bei 2 darf ein Kind delegieren, ein Enkel nicht.',
   'delegation.maxParallel': 'Kinder gleichzeitig',

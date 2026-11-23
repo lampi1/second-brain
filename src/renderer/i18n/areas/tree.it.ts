@@ -59,7 +59,7 @@ export const treeIt = {
   'tree.sidebar': 'Agenti al lavoro',
   'delegation.group': 'Ruoli e deleghe',
   'delegation.desc': 'Quanto possono delegare i ruoli.',
-  'delegation.modelsOnCards': 'Modello, preset Minimo / Base / Massimo, effort e Code Mode si scelgono sulla pagina di ogni ruolo (Agenti → il ruolo), oppure li sceglie l’Orchestrator quando delega.',
+  'delegation.modelsOnCards': 'Modello, preset Minimo / Base / Massimo, effort e Code Mode si scelgono sulla pagina di ogni ruolo (Agenti → il ruolo); chi delega (Orchestrator o Strategist) sceglie solo il preset del compito.',
   'delegation.maxDepth': 'Profondità massima',
   'delegation.maxDepth.hint': 'Quanti livelli sotto una chat principale: con 2 una chat figlia può delegare, una nipote no.',
   'delegation.maxParallel': 'Figlie in parallelo',

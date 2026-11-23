@@ -59,7 +59,7 @@ export const treeEn: typeof treeIt = {
   'tree.sidebar': 'Agents at work',
   'delegation.group': 'Roles and delegation',
   'delegation.desc': 'How far roles may delegate.',
-  'delegation.modelsOnCards': 'Model, the Minimum / Base / Maximum presets, effort and Code Mode are chosen on each role\'s page (Agents → the role), or the Orchestrator picks them when it delegates.',
+  'delegation.modelsOnCards': 'Model, the Minimum / Base / Maximum presets, effort and Code Mode are chosen on each role\'s page (Agents → the role); whoever delegates (Orchestrator or Strategist) picks only the task’s preset.',
   'delegation.maxDepth': 'Maximum depth',
   'delegation.maxDepth.hint': 'How many levels below a root chat: with 2 a child may delegate, a grandchild may not.',
   'delegation.maxParallel': 'Children at once',

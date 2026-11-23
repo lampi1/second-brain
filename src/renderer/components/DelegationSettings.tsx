@@ -24,6 +24,6 @@ export function DelegationSettings() {
         {range(k).map(n => <option key={n} value={n}>{n}</option>)}
       </Select></div>
     </div>)}
-    <p className="st-desc" data-testid="st-models-on-cards">{t('delegation.modelsOnCards')}</p>
+    <div className="st-row"><div className="st-text"><p className="st-desc" data-testid="st-models-on-cards">{t('delegation.modelsOnCards')}</p></div></div>
   </>;
 }
