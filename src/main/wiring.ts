@@ -747,7 +747,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },
-      agents: { list: () => agents.list(), save: (draft, id, reason) => agentPacks.learning.save(draft, id, reason), history: id => agents.history(id), restore: (id, version) => agents.restoreVersion(id, version) },
+      agents: { list: () => agents.list(), save: (draft, id, reason) => agentPacks.learning.save(draft, id, reason), history: id => agents.history(id), restore: (id, version) => agents.restoreVersion(id, version), presetsOf: p => agents.presetsOf(p) },
       mcp: { state: () => mcpServers.state(), save: a => mcpServers.save(a), setAccess: a => mcpServers.setAccess(a),
         agentSave: (def, previousId) => mcpServers.agentSave(def, previousId), agentRemove: id => mcpServers.agentRemove(id), agentAccess: (role, server, access) => mcpServers.agentAccess(role, server, access),
         undo: key => mcpServers.undo(key), test: id => mcpServers.test(id) },
