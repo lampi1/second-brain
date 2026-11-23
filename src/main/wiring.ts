@@ -485,7 +485,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const sweeper = new EngineSweeper({ userData: ctx.userData, owners: () => manager.engines(), releaseIdle: ms => manager.releaseIdle(ms), idleMin: () => brain.settings().engineIdleMin ?? 30, spareLeased: () => jobGuard.loosenLeased() });
   setLeaseReader(() => readLeasedPids(brain.info().brainRoot));
   // every chat engine is noted in engines.json as it spawns, so the next start reaps it even if this run dies soon
-  if (!process.env.SB_TEST) { sweeper.start(); jobGuard.onAdd((pid, chatId) => { if (chatId && chatId !== 'agent-runtime') sweeper.noteSpawn(pid, chatId); }); }
+  if (!process.env.SB_TEST) { sweeper.start(); jobGuard.onAdd((pid, chatId, name) => { if (chatId && chatId !== 'agent-runtime') sweeper.noteSpawn(pid, chatId, name); }); }
   // what grows over a day, every 10 minutes in the perf log (ADR 0187)
   const fileKb = (name: string): number | null => { try { return Math.round(fs.statSync(path.join(ctx.userData, name)).size / 1024); } catch { return null; } };
   const stopHealth = process.env.SB_TEST ? () => {} : startHealthLog(() => {

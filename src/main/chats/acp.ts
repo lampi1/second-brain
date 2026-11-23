@@ -679,7 +679,7 @@ export class AcpSession implements HarnessSession {
       if (!this.keepChildren && reapEnabled()) void reapEngine(this.exitedRoot, { chatId: chat, what: label });
     });
     // its own job before it starts anything (MCP servers come seconds later): later children, orphans too, stay in it
-    void jobGuard.add(p.pid, chat).then(job => {
+    void jobGuard.add(p.pid, chat, p.spawnfile).then(job => {
       this.job = job;
       if (this.exitedRoot) { this.exitedRoot.job = job; if (!this.keepChildren) void jobGuard.release(job); } // exited first: the walk reaped it
     });

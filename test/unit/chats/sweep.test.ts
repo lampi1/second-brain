@@ -16,7 +16,7 @@ describe('sweep', () => {
   it('remembers a running engine with its real creation time and kills nothing of it', () => {
     const procs = [p(100, 1, 0, 'claude.exe'), p(200, 100, 1000, 'node.exe')];
     const r = sweepOnce([], procs, { live: [{ chatId: 'c1', pid: 100 }], open: ['c1'] }, T + 5000, RUN);
-    expect(r.roots).toEqual([{ pid: 100, created: T, chatId: 'c1', run: RUN, lastSeen: T + 5000, exited: null }]);
+    expect(r.roots).toEqual([{ pid: 100, created: T, name: 'claude.exe', chatId: 'c1', run: RUN, lastSeen: T + 5000, exited: null }]);
     expect(r.orphans).toEqual([]);
   });
 
@@ -46,7 +46,7 @@ describe('sweep', () => {
   });
 
   it('an engine of an earlier run still alive after its app died: its tools, then the engine; Excel stays', () => {
-    const root: EngineRoot = { pid: 100, created: T, chatId: 'c1', run: '999-1', lastSeen: T + 1000, exited: null };
+    const root: EngineRoot = { pid: 100, created: T, name: 'claude.exe', chatId: 'c1', run: '999-1', lastSeen: T + 1000, exited: null };
     const procs = [p(100, 1, 0, 'claude.exe'), p(200, 100, 1000, 'bash.exe'), p(201, 200, 2000, 'electron.exe'), p(202, 100, 3000, 'EXCEL.EXE')];
     const r = sweepOnce([root], procs, { live: [], open: [] }, T + 99_000, RUN);
     expect(r.orphans.map(x => [x.pid, x.reason])).toEqual([
@@ -55,7 +55,7 @@ describe('sweep', () => {
   });
 
   it('never an engine whose earlier run is still alive (a slow quit), nor a pid the app did not start', () => {
-    const root: EngineRoot = { pid: 100, created: T, chatId: 'c1', run: `500-${T - 3000}`, lastSeen: T + 1000, exited: null };
+    const root: EngineRoot = { pid: 100, created: T, name: 'claude.exe', chatId: 'c1', run: `500-${T - 3000}`, lastSeen: T + 1000, exited: null };
     const procs = [p(500, 1, -4000, 'electron.exe'), p(100, 1, 0, 'claude.exe'), p(200, 100, 1000, 'node.exe'), p(300, 1, 0, 'claude.exe')];
     expect(sweepOnce([root], procs, { live: [], open: [] }, T + 99_000, RUN).orphans).toEqual([]);
     // the run is gone, but the pid is now someone else's (another creation time): untracked, never killed
@@ -64,13 +64,13 @@ describe('sweep', () => {
   });
 
   it('a root noted at spawn (our clock) matches its engine within the slack only', () => {
-    const noted: EngineRoot = { pid: 100, created: T + 300, approx: true, chatId: 'c1', run: '999-1', lastSeen: T + 1000, exited: null };
+    const noted: EngineRoot = { pid: 100, created: T + 300, approx: true, name: 'claude.exe', chatId: 'c1', run: '999-1', lastSeen: T + 1000, exited: null };
     const procs = [p(100, 1, 0, 'claude.exe'), p(200, 100, 1000, 'node.exe')];
     expect(sweepOnce([noted], procs, { live: [], open: [] }, T + 99_000, RUN).orphans.map(x => x.pid)).toEqual([200, 100]);
     expect(sweepOnce([{ ...noted, created: T + SPAWN_SLACK_MS + 1 }], procs, { live: [], open: [] }, T + 99_000, RUN).orphans).toEqual([]);
     // this run: a sweep that sees it live makes it exact
     const mine = sweepOnce([{ ...noted, run: RUN }], procs, { live: [{ chatId: 'c1', pid: 100 }], open: ['c1'] }, T + 5000, RUN);
-    expect(mine.roots).toEqual([{ pid: 100, created: T, chatId: 'c1', run: RUN, lastSeen: T + 5000, exited: null }]);
+    expect(mine.roots).toEqual([{ pid: 100, created: T, name: 'claude.exe', chatId: 'c1', run: RUN, lastSeen: T + 5000, exited: null }]);
   });
 
   it('an ended engine of this run: its grandchildren go too (dev Electron, tsc --watch, dotnet under its shell)', () => {
@@ -86,8 +86,8 @@ describe('sweep', () => {
   });
 
   it('touchRoots notes a spawn at once and ends this run\'s roots no longer live, without a process list', () => {
-    const a = touchRoots([], [], T, RUN, { pid: 100, chatId: 'c1' });
-    expect(a).toEqual([{ pid: 100, created: T, approx: true, chatId: 'c1', run: RUN, lastSeen: T, exited: null }]);
+    const a = touchRoots([], [], T, RUN, { pid: 100, chatId: 'c1', name: 'claude.exe' });
+    expect(a).toEqual([{ pid: 100, created: T, approx: true, name: 'claude.exe', chatId: 'c1', run: RUN, lastSeen: T, exited: null }]);
     const b = touchRoots(a, [{ chatId: 'c1', pid: 100 }], T + 60_000, RUN);
     expect(b[0]).toMatchObject({ lastSeen: T + 60_000, exited: null });
     const c = touchRoots([...b, { pid: 7, created: 0, chatId: 'x', run: 'other', lastSeen: 0, exited: null }], [], T + 120_000, RUN);
@@ -121,7 +121,7 @@ describe('sweep', () => {
     expect(sw.idleTick()).toBe(0);
     expect(idleAsked).toBe(-1);
     // a spawn is in engines.json at once, before any sweep
-    sw.noteSpawn(4242, 'c9');
-    expect(JSON.parse(fs.readFileSync(path.join(ud, 'engines.json'), 'utf8'))).toContainEqual(expect.objectContaining({ pid: 4242, chatId: 'c9', approx: true, exited: null }));
+    sw.noteSpawn(4242, 'c9', 'claude.exe');
+    expect(JSON.parse(fs.readFileSync(path.join(ud, 'engines.json'), 'utf8'))).toContainEqual(expect.objectContaining({ pid: 4242, chatId: 'c9', approx: true, name: 'claude.exe', exited: null }));
   });
 });
