@@ -80,6 +80,9 @@ Each one has a vice for the quiet moments:
 - **A brain that learns.** Skills, journal and artifacts in plain Markdown. **Maintenance** reads the past work and
   proposes only the skill changes that matter, each with a reason and an Undo.
 - **Voice and phone.** Dictation, voice conversation, call transcripts, Telegram. All speech runs on your PC.
+- **Also on board.** The **Tasks** page for your work items, **Trends** and the **Log**, **Memory** with the brain
+  **Map**, **Scripts**, **Recordings**, lessons in **Learn**, a searchable **Settings** page, and **Chess** against
+  your agents.
 
 <p align="center"><img src="docs/screenshots/plan.webp" alt="A Strategist's plan drawn on the project map, every step told in the side panel, Approve and start above the drawing" width="720"></p>
 
