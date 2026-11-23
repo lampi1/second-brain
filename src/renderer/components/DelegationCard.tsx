@@ -11,6 +11,7 @@
 // Mounted by AgentStrips.tsx; the sidebar tree (SidebarTree.tsx) brings a card on screen with focusChat.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import type { ChatItem, ChatSummary, PendingRequest } from '@shared/contract';
+import { shownLimit } from '@shared/delegation';
 import { useApp, loadItems, answer, send, stop } from '../store/store';
 import { setChatExpanded, setFocusMode, setTreeCollapsed, ui } from '../store/ui';
 import { sameList, showsWork } from '../store/state';
@@ -224,7 +225,7 @@ export function KidsBar({ chatId }: { chatId: string }) {
   const kids = useApp(s => openKidsOf(s.chats, chatId), sameKids);
   const folded = ui.use(s => s.prefs.treeCollapsed[chatId] === true);
   const title = useApp(s => s.chats[chatId]?.title ?? '');
-  const limit = useApp(s => s.chats[chatId]?.limitHit);
+  const limit = shownLimit(useApp(s => s.chats[chatId]?.limitHit));
   if (!kids.length) return null;
   const states = kids.map(k => childState(k));
   const { run, wait, stuck, done } = kidCounts(states);
@@ -237,6 +238,6 @@ export function KidsBar({ chatId }: { chatId: string }) {
       {stuck > 0 && <span className="kid-sum" data-testid={`tree-kids-stuck-${chatId}`}><span className="kid-dot err" />{t('tree.kidsStuck', { n: stuck })}</span>}
       {done > 0 && <span className="kid-sum"><span className="kid-dot done" />{t('tree.kidsDone', { n: done })}</span>}
     </button>
-    {limit && <span className="pill pill-wait tree-limit" data-testid={`tree-limit-${chatId}`} tabIndex={0} data-tip={t(`tree.limit.${limit.kind}Tip`, { limit: limit.limit })}>{t(`tree.limit.${limit.kind}`, { limit: limit.limit })}</span>}
+    {limit && <span className="pill pill-wait tree-limit" data-testid={`tree-limit-${chatId}`} tabIndex={0} data-tip={t('tree.limit.depthTip', { limit: limit.limit })}>{t('tree.limit.depth', { limit: limit.limit })}</span>}
   </div>;
 }

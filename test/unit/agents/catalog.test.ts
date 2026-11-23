@@ -87,8 +87,11 @@ describe('role catalog', () => {
   });
   it('refuses a role launching itself, a non-work role, a tier above its maximum and an unknown model', () => {
     const { catalog } = setup(), artisan = catalog.list().profiles.find(p => p.id === 'artisan')!;
-    expect(() => catalog.save(edit(artisan, { launches: ['artisan'] }), 'artisan')).toThrow('mai sé stesso');
-    expect(() => catalog.save(edit(artisan, { launches: ['orchestrator'] }), 'artisan')).toThrow();
+    const strategist = catalog.list().profiles.find(p => p.id === 'strategist')!;
+    expect(() => catalog.save(edit(strategist, { launches: ['strategist'] }), 'strategist')).toThrow('mai sé stesso');
+    expect(() => catalog.save(edit(strategist, { launches: ['orchestrator'] }), 'strategist')).toThrow();
+    // only the Orchestrator and the Strategist delegate (2026-11-23): another role's launches are saved empty
+    expect(catalog.save(edit(artisan, { launches: ['scout', 'sentinel'] }), 'artisan').launches).toEqual([]);
     expect(() => catalog.save(edit(artisan, { tier: 'top', tierMax: 'light' }), 'artisan')).toThrow();
     expect(() => catalog.save(edit(artisan, { model: 'nope' }), 'artisan')).toThrow('modello');
     // the refusal names the ids the engine knows, so an agent can pick one instead of retrying (#327)
@@ -152,10 +155,25 @@ describe('role catalog', () => {
     // a migration changes the active version in place (ADR 0186), and says so on it
     expect(again.history('strategist').flatMap(v => (v.amended ?? []).map(a => a.reason))).toContain('Cinque ruoli di lavoro (ADR 0100)');
     expect(get('strategist')).toMatchObject({ version: 1, activeVersion: 1 });
-    expect(get('artisan')).toMatchObject({ launches: ['scout', 'sentinel'], instructions: 'My own Artisan text.' });
+    // an edited Artisan keeps its text but launches nobody (only the Orchestrator and the Strategist delegate, 2026-11-23)
+    expect(get('artisan')).toMatchObject({ launches: [], instructions: 'My own Artisan text.' });
     // a stored version naming a retired launch restores without an error
     expect(again.restoreVersion('artisan', 1).launches).not.toContain('judge');
     expect(() => again.resolve({ harness: 'claude', roleId: 'judge' } as never)).toThrow(/Sentinel/);
+  });
+  it('a saved roles.json where Scout, Artisan, Sentinel or Herald launch roles loads with no launches (only the Orchestrator and the Strategist delegate, 2026-11-23)', () => {
+    const { dir, make } = setup(), file = path.join(dir, 'roles.json');
+    const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as { roles: Record<string, unknown>[] };
+    for (const id of ['scout', 'artisan', 'sentinel', 'herald']) Object.assign(raw.roles.find(r => r.id === id)!, { launches: ['scout', 'sentinel'], userLocked: true, lastEditedBy: 'user', instructions: `My own ${id} text.` });
+    fs.writeFileSync(file, JSON.stringify(raw));
+    const again = make(), list = again.list();
+    expect(list.problem).toBeNull();
+    for (const id of ['scout', 'artisan', 'sentinel', 'herald']) {
+      expect([id, list.profiles.find(p => p.id === id)!.launches]).toEqual([id, []]);
+      expect(list.profiles.find(p => p.id === id)!.instructions).toBe(`My own ${id} text.`); // the user's edit is kept
+      expect(again.restoreVersion(id, 1).launches).toEqual([]); // an old version restored launches nobody either
+    }
+    expect(list.profiles.find(p => p.id === 'strategist')!.launches).toEqual(['scout', 'artisan', 'sentinel', 'herald']);
   });
   it('an old chat of a retired role shows as its successor (ADR 0100)', () => {
     const owner = { id: 'judge', name: 'Judge', purpose: 'old', avatar: { kind: 'character', value: 'judge' }, engine: 'claude', model: null, revision: 1, source: 'catalog', version: 3 };

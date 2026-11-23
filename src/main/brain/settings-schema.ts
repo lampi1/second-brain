@@ -155,9 +155,7 @@ const BASE: readonly SettingDef[] = [
     description: 'Dove tieni i tuoi progetti (i repository git). La configurazione iniziale la trova da sola se può, altrimenti te la chiede. Vuoto = non ancora indicata.' },
   // delegation between role chats (ADR 0083). Protected: an agent raising its own limits would launch more than the user allowed
   { key: 'delegation.maxDepth', type: 'int', ...DELEGATION_RANGE.maxDepth, default: DELEGATION_DEFAULTS.maxDepth, protected: true, label: 'Deleghe: profondità massima',
-    description: 'Quanti livelli sotto una chat principale: con 2 una chat figlia può delegare, una nipote no.' },
-  { key: 'delegation.maxParallel', type: 'int', ...DELEGATION_RANGE.maxParallel, default: DELEGATION_DEFAULTS.maxParallel, protected: true, label: 'Deleghe: figlie in parallelo',
-    description: 'Quante chat figlie di uno stesso genitore lavorano insieme. Oltre, la delega è rifiutata e il genitore lo vede.' },
+    description: 'Quanti livelli sotto una chat principale: con 2 uno Stratega figlio può ancora delegare, uno nipote no. Delegano solo Orchestrator e Stratega.' },
   { key: 'delegation.stallMin', type: 'int', ...DELEGATION_RANGE.stallMin, default: DELEGATION_DEFAULTS.stallMin, protected: true, label: 'Deleghe: ferma dopo (minuti)',
     description: 'Una chat figlia senza alcun evento per tanti minuti risulta ferma: l’Orchestrator e il genitore lo sanno.' },
 ];

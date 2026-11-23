@@ -31,7 +31,7 @@ function fixture(o: { set?: boolean; childModel?: string; childEffort?: string; 
   const chats: DelegationChats = { list: () => all, create, assignTask: assign, userEvents: () => structuredClone(ledger), agentPolicy: () => ({ tools: { allow: ['read'] }, ceiling: null }),
     reportDelegation: () => ({ parentId: 'parent', delivered: true }), limitNotice: vi.fn(), send: async () => {}, ...(o.set === false ? {} : { set }) };
   const presetChoice = vi.fn((_role: string, ask: PresetAsk, delegator?: Delegator) => choosePreset({ presets: PRESETS, ask, ...(delegator ? { delegator } : {}), price: m => PRICE[m] ?? null }));
-  const tools = delegationTools({ chats, roles: () => catalog, settings: () => ({ ...DELEGATION_DEFAULTS, maxParallel: 3 }), engineRefusal: () => null, label: '[agent]', runs: () => [], worktrees: async () => [], presetChoice });
+  const tools = delegationTools({ chats, roles: () => catalog, settings: () => DELEGATION_DEFAULTS, engineRefusal: () => null, label: '[agent]', runs: () => [], worktrees: async () => [], presetChoice });
   const call = async (name: string, args: Record<string, unknown>) => JSON.parse(await tools.find(t => t.name === name)!.run(args, { params: { chatId: 'parent' } } as never) as string);
   const assignArgs = (extra: Record<string, unknown> = {}) => ({ chatId: 'child', roleId: 'scout', cwd, mode: 'continue', expectedVersion: 1, contract: { goal: 'Follow up', output: 'Evidence', doneWhen: ['New criterion'] }, ...extra });
   const delegateArgs = (extra: Record<string, unknown> = {}) => ({ tasks: [{ role: 'scout', title: 'Ordini · Log', cwd, contract: { goal: 'Look', output: 'Evidence', doneWhen: ['Found'] }, ...extra }] });

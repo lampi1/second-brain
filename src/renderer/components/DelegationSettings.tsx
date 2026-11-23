@@ -1,5 +1,5 @@
 // Impostazioni → Ruoli e deleghe (ADR 0083): the limits of delegation between role chats (how deep a chain of children
-// may go, how many children of one parent work at once, after how many quiet minutes a child counts as stalled;
+// may go; no limit on children at once since 2026-11-23; after how many quiet minutes a child counts as stalled;
 // stallMin is read by agents/delegation.ts stalledMin). The independent reviews are one switch on the Agenti page
 // (JudgingSwitch, 2026-10-22). Models, presets, effort and Code Mode are chosen on each role's card since 2026-11-23
 // (the owner: «solo ed esclusivamente dalle card degli agenti oppure che lo setti l'orchestrator, non dalle
@@ -11,7 +11,7 @@ import { t } from '../i18n';
 import { Select } from './Select';
 import { HelpTip } from './HelpTip';
 
-const KEYS = ['maxDepth', 'maxParallel', 'stallMin'] as const satisfies readonly (keyof Limits)[];
+const KEYS = ['maxDepth', 'stallMin'] as const satisfies readonly (keyof Limits)[];
 const range = (k: keyof Limits): number[] => { const r = DELEGATION_RANGE[k]; return Array.from({ length: r.max - r.min + 1 }, (_, i) => r.min + i); };
 
 export function DelegationSettings() {

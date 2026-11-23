@@ -26,6 +26,7 @@ export const studioIt = {
   'studio.launches': 'Ruoli che può avviare',
   'studio.launchesHint': 'Con agent_delegate, in chat visibili sotto la sua. Un figlio non ha mai più permessi del genitore.',
   'studio.launchesNone': 'Nessuno',
+  'studio.launchesNever': 'Nessuno: fa la sua parte e non delega. Delegano solo l\'Orchestrator e lo Stratega.',
   'studio.skills': 'Skill caricate a ogni avvio',
   'studio.skillsHint': 'Il ruolo parte sempre con queste, più quelle che gli passa chi lo avvia. Può usare anche le skill del motore e le tue personali.',
   'studio.skillAdd': 'Aggiungi skill',

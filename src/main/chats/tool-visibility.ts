@@ -7,6 +7,7 @@ import type { McpTool } from '../mcp/server';
 import { RUN_CODE } from '../code-mode/policy';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import type { WarmLaunch } from './warm';
+import { isDelegatorRole } from '../../shared/roles';
 
 /** chat-endpoint tools the Orchestrator can never use (chatToolShown): it does not delegate, report, ask a parent or
  *  list children (its chats are roots), and
@@ -17,8 +18,9 @@ const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['agent_work_decisions'
   // it reads, opens and corrects the project maps with app_project_map, and has a Scout draw them (ADR 0271)
   'project_map_read', 'project_map_save', 'project_map_update',
 ]);
-/** the tools only a chat that may delegate can use (chatToolShown): a role that launches no role (Scout, Judge) never
- *  sees them (~1 500 tokens of schemas in every call, each call refused) */
+/** the tools only a chat that may delegate can use (chatToolShown): only the Strategist among the work roles (the
+ *  Orchestrator has its own endpoint); Scout, Artisan, Sentinel and Herald never see them (2026-11-23), nor a role that
+ *  launches nobody (~1 500 tokens of schemas in every call, each call refused) */
 const DELEGATING_ONLY: ReadonlySet<string> = new Set(['agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_children', 'agent_answer_child', 'agent_close_child', 'agent_catalog']);
 /** the Strategist's plan tools (agents/strategy-tools.ts): shown only where a plan with the user exists */
 const PLAN_TOOLS: ReadonlySet<string> = new Set(['plan_propose', 'plan_update']);
@@ -38,12 +40,12 @@ export const toolShownToUnknown = (tool: string): boolean => !RESEARCH_TOOLS.has
 
 /** A waiting engine launched for a role: what that role's root chat would see (it lists tools once, at start). */
 export function toolShownToWarm(warm: NonNullable<WarmLaunch['view']>, tool: string): boolean {
-  return !ORCHESTRATOR_ONLY.has(tool) && !(DELEGATING_ONLY.has(tool) && warm.launches?.length === 0) && (tool !== 'agent_ask_parent' || !!warm.child) && !PLAN_TOOLS.has(tool) && !RESEARCH_TOOLS.has(tool) && tool !== ASK_TOOL;
+  return !ORCHESTRATOR_ONLY.has(tool) && !(DELEGATING_ONLY.has(tool) && (warm.launches?.length === 0 || (warm.role !== undefined && !isDelegatorRole(warm.role)))) && (tool !== 'agent_ask_parent' || !!warm.child) && !PLAN_TOOLS.has(tool) && !RESEARCH_TOOLS.has(tool) && tool !== ASK_TOOL;
 }
 
 /** A chat of the app: `launches` = the roles it may launch (undefined = unknown); `appAsks` = its engine has no
  *  question tool of its own (engines/registry.ts appAsks), so it asks with ask_user. */
-export function toolShownToChat(s: Pick<ChatSummary, 'research' | 'isOrchestrator' | 'parentId' | 'plan' | 'run'>, launches: readonly string[] | undefined, tool: string, appAsks = false): boolean {
+export function toolShownToChat(s: Pick<ChatSummary, 'research' | 'isOrchestrator' | 'parentId' | 'plan' | 'run'> & { agent?: Pick<NonNullable<ChatSummary['agent']>, 'id' | 'source'> }, launches: readonly string[] | undefined, tool: string, appAsks = false): boolean {
   if (tool === ASK_TOOL) return appAsks && !s.research;
   // the maintenance research (ADR 0132): its two tools and nothing of the app's mail, delegation or plans
   if (s.research) return RESEARCH_TOOLS.has(tool) || (!RESEARCH_HIDDEN.has(tool) && !tool.startsWith('agent_'));
@@ -55,6 +57,8 @@ export function toolShownToChat(s: Pick<ChatSummary, 'research' | 'isOrchestrato
   if (PLAN_TOOLS.has(tool)) return !!s.plan;
   // a role that launches nobody; launches unknown (a chat saved before they were kept) = shown, as before
   if (DELEGATING_ONLY.has(tool) && launches?.length === 0) return false;
+  // a catalog role that does not delegate, whatever a stale launches list says (shared/roles.ts DELEGATOR_ROLE_IDS)
+  if (DELEGATING_ONLY.has(tool) && s.agent?.source === 'catalog' && !isDelegatorRole(s.agent.id)) return false;
   // App background jobs report only when their creation explicitly supplied a task contract.
   if (tool === 'agent_report' && !s.parentId && s.run?.startedBy === 'app' && !s.run.taskContract?.reportExpected) return false;
   return true;

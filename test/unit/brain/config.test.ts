@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { ConfigStore, DEFAULTS, applyPatch, fromSaved } from '../../../src/main/brain/config';
+import { ConfigStore, DEFAULTS, applyPatch, fromSaved, savedHas } from '../../../src/main/brain/config';
 import { schema, defOf, flattenPatch, validate } from '../../../src/main/brain/settings-schema';
 import type { SettingChange } from '../../../src/shared/contract';
 import { tmpDir } from './helpers';
@@ -375,5 +375,20 @@ describe('settings of removed features (ADR 0201)', () => {
     // a file without them is not rewritten
     new ConfigStore(dir, {});
     expect(fs.readFileSync(file, 'utf8')).toBe(migrated);
+  });
+
+  it('drops the saved delegation.maxParallel once (no limit on children at once, 2026-11-23), keeping the other delegation keys', () => {
+    expect(savedHas({ delegation: { maxParallel: 3 } }, 'delegation.maxParallel')).toBe(true);
+    expect(savedHas({ delegation: {} }, 'delegation.maxParallel')).toBe(false);
+    expect(savedHas({ delegation: 3 }, 'delegation.maxParallel')).toBe(false);
+    const dir = tmpDir();
+    const file = path.join(dir, 'config.json');
+    fs.writeFileSync(file, JSON.stringify({ theme: 'light', delegation: { maxParallel: 3, maxDepth: 3 } }));
+    const store = new ConfigStore(dir, {});
+    expect(store.get().delegation).not.toHaveProperty('maxParallel');
+    expect(store.get().delegation.maxDepth).toBe(3);
+    const saved = JSON.parse(fs.readFileSync(file, 'utf8')) as { delegation: Record<string, unknown> };
+    expect(saved.delegation).not.toHaveProperty('maxParallel');
+    expect(saved.delegation.maxDepth).toBe(3);
   });
 });

@@ -52,11 +52,14 @@ export abstract class ManagerWork extends ManagerLifecycle {
     return r.session.askUser(q);
   }
 
-  /** plan_propose (agents/strategy-tools.ts): the Strategist's plan waits for the user's ok on its strip. */
-  planPropose(chatId: string, steps: PlanStep[], doneWhen?: string, map?: string): StrategyPlan {
+  /** plan_propose (agents/strategy-tools.ts): the Strategist's plan waits for the user's ok on its strip. `revise`
+   *  («aggiorna il piano», 2026-11-23): the same plan again, its started steps kept (shared/strategy.ts checkRevision),
+   *  also once approved or finished; the user approves it as any plan. */
+  planPropose(chatId: string, steps: PlanStep[], doneWhen?: string, map?: string, revise = false): StrategyPlan {
     const r = this.need(chatId), plan = r.s.plan;
     if (!plan) throw new Error('plan_propose: only a Strategist the Orchestrator or the user started has a plan with the user.');
-    if (plan.phase === 'running' || plan.phase === 'done') throw new Error('plan_propose: the plan is approved and under way; update its steps with plan_update.');
+    if (!revise && (plan.phase === 'running' || plan.phase === 'done')) throw new Error('plan_propose: the plan is approved and under way; update its steps with plan_update, or bring it to the current standard with plan_propose revise: true.');
+    if (!revise && plan.steps.some(s => s.state !== 'todo')) throw new Error('plan_propose: some steps of this plan already started; propose it again with revise: true, keeping them with { keep: <number> }.');
     // «Modalità notte» (ADR 0191): nobody will click «Approva e parti», so the plan starts as proposed (its recommended
     // choice) and the tool says so; the recap tells the user
     const away = !!this.opts.away?.();
@@ -79,7 +82,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     this.persist(away);
     if (accepted) store.recordApplication(accepted.id);
     this.updated(r);
-    log.info('chats', 'plan proposed', { chat: chatId, data: { steps: steps.length } });
+    log.info('chats', 'plan proposed', { chat: chatId, data: { steps: steps.length, revise } });
     return structuredClone(r.s.plan);
   }
 

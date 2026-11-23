@@ -58,7 +58,7 @@ test('keyboard focus opens the explanation, Esc closes it and stays on the page;
   // Settle scrolling before opening: moving the anchor intentionally dismisses its tooltip.
   await mark.scrollIntoViewIfNeeded();
   // Tab from the control just before it: a real keyboard focus (focus-visible)
-  await page.getByTestId('st-delegation-maxParallel').focus();
+  await page.getByTestId('st-delegation-maxDepth').focus();
   await page.keyboard.press('Tab');
   await expect(mark).toBeFocused();
   await expect(bubble).toBeVisible();

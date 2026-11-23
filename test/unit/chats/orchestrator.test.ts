@@ -96,6 +96,19 @@ describe('ChatManager with the Orchestrator', () => {
     expect(ORCHESTRATOR_ROLE).toMatch(/open one chat per request yourself, all in the same turn \(parallel app_create_chat calls\)/);
     expect(ORCHESTRATOR_ROLE).toMatch(/sentinel chat.*not verified.*more than about 100 lines.*security, contracts or IPC/);
     expect(ORCHESTRATOR_ROLE).not.toMatch(/router|judge|scribe/i);
+    // routing (2026-11-23): a change goes to ONE Strategist chat unless small and clear; only it and the Orchestrator delegate
+    expect(ORCHESTRATOR_ROLE).toMatch(/a request that changes something goes by default to ONE strategist chat .*asks the user what it needs to understand, plans, launches the parts and their Sentinel review, follows them, reports/);
+    expect(ORCHESTRATOR_ROLE).toMatch(/Only a small, already clear change \(path "one-agent": one point, expected result and check known\) goes straight to an artisan; read-only work to a scout, a message to a herald/);
+    expect(ORCHESTRATOR_ROLE).toMatch(/path "self" .*answer it yourself, no chat/);
+    expect(ORCHESTRATOR_ROLE).not.toMatch(/\(two parts or more\)|of the role that fits|artisan for changes/);
+    // the review verdict goes to whoever delegated; only findings checked on the code reach the Artisan (2026-11-23)
+    expect(ORCHESTRATOR_ROLE).toMatch(/The verdict goes to whoever delegated \(you or the Strategist\), never to the Artisan: check each finding on the code \(a targeted read; a scout when long\) before any rework/);
+    expect(ORCHESTRATOR_ROLE).toMatch(/Only confirmed findings go, by app_assign_task rework, to the same implementation chat/);
+    expect(ORCHESTRATOR_ROLE).toMatch(/Tell the user a false positive or a disputed functional finding in plain words, never send it to the Artisan/);
+    expect(ORCHESTRATOR_ROLE).toMatch(/Only the Orchestrator and the Strategist delegate: the other roles never launch chats/);
+    expect(ORCHESTRATOR_ROLE).not.toMatch(/one chat per part in parallel|without agent_delegate/);
+    // «aggiorna il piano»: the plan's Strategist revises it; if that chat is gone a new Strategist gets the old plan
+    expect(ORCHESTRATOR_ROLE).toMatch(/Aggiorna il piano.*plan's Strategist chat asking plan_propose with revise; if that chat is gone, start a new strategist chat .*old plan.*The user approves/);
   });
   it('starts from the edited Orchestrator role and composes its instructions once', async () => {
     const f = fixture(), seed = f.agents.list().profiles.find(p => p.id === ORCHESTRATOR_AGENT_ID)!;

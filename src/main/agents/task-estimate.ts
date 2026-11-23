@@ -1,7 +1,7 @@
 // The task estimate (ADR 0087; owner, 2026-10-19: «l'orchestratore deve essere bravo a capire se può cavarsela in fretta
 // anche con le stime per task simile»): how long and how much a request should take, from the agent runs of similar past
-// tasks, and the path that follows: the Orchestrator answers a small question itself, starts ONE agent with no children
-// for a quick single-part job, and plans a delegation tree only for work of several parts. Similar (ADR 0285) = the
+// tasks, and the path that follows: the Orchestrator answers a small question itself; a change that is not small and
+// already clear goes to ONE Strategist chat, read-only work to a Scout (the owner, 2026-11-23). Similar (ADR 0285) = the
 // same agent on the same model, else the same agent on any model, else the same kind of work on any agent
 // (shared/work-concepts.ts taskOf on the run's goal); a request with no agent yet rests on its kind. The most recent
 // MAX_SIMILAR of the first group with MIN_SIMILAR or more. A run whose engine reported tokens and no cost counts at
@@ -249,16 +249,16 @@ export function estimateTask(index: SimilarIndex, input: EstimateInput): TaskEst
   const timeMs = t ? Math.round(t.mid * cal.time) : null, costUsd = c ? Math.round(c.mid * cal.cost * 1000) / 1000 : null;
   const quick = timeMs !== null && timeMs <= QUICK_MS && (costUsd === null || costUsd <= QUICK_USD);
   const shortQuestion = !MAKES.includes(kind) && QUESTION.test(normalize(text)) && text.trim().length <= SELF_CHARS;
-  // a tree only for three parts or more, or two parts of a long, slow request (ADR 0186: 25 trees came from requests
-  // under 300 characters); two small parts are one agent's work
-  const path: FastPath = parts >= 3 || (parts === 2 && !quick && text.trim().length > SELF_CHARS) ? 'tree'
+  // two parts or more are a tree (this replaces ADR 0186's «two small parts are one agent's work»); the role is the
+  // Orchestrator's choice, said in `why`: a change goes to one Strategist chat unless small and clear (2026-11-23)
+  const path: FastPath = parts >= 2 ? 'tree'
     : shortQuestion && parts === 1 && (quick || timeMs === null) ? 'self' : 'one-agent';
   const figure = timeMs !== null ? `similar tasks took ~${mins(timeMs)} (median of ${samples.length}${cal.time !== 1 ? `, ×${cal.time.toFixed(2)} from past estimates of this kind` : ''})` : basis ? `${samples.length} similar tasks, no measured time` : `fewer than ${MIN_SIMILAR} similar tasks, no figure`;
   const why = path === 'self'
     ? `A short question, ${parts} part; ${figure}: answer it yourself, without starting a chat.`
     : path === 'one-agent'
-      ? `${parts === 1 ? 'One part' : 'Two small parts'}; ${figure}${timeMs !== null && timeMs > LONG_MS ? ' (long: tell the user)' : ''}: start ONE agent with app_create_chat and tell it to do the work itself, without agent_delegate.`
-      : `${parts} independent parts; ${figure}: plan it (a strategist, or one chat per part in parallel).`;
+      ? `One part; ${figure}${timeMs !== null && timeMs > LONG_MS ? ' (long: tell the user)' : ''}: a change that is not small and already clear goes to ONE strategist chat; a small clear change, read-only work or a message to ONE chat of the role that fits, which does it itself.`
+      : `${parts} parts; ${figure}: a change goes to ONE strategist chat, which plans the parts and delegates them; read-only work to a scout.`;
   const scale = (v: number, k: number) => Math.round(v * k);
   return {
     kind, basis, n: samples.length,
@@ -288,7 +288,7 @@ export function runEstimates(runs: readonly AgentRun[], runIds: readonly string[
 export function estimateTool(runs: () => readonly AgentRun[], priceOf: PriceOf | null = null): ToolDef {
   return {
     name: 'task_estimate',
-    description: 'Estimate a request (a user\'s message already ends with this estimate as "[app estimate · …]": call it only for another wording or a given role) from similar past tasks (the same agent first, then the same kind): median work time, cost, the middle-half range, how many similar tasks it rests on (n), confidence, the independent parts it has, and the path: "self" = a short question you answer yourself; "one-agent" = start ONE chat with app_create_chat that does it alone (no agent_delegate children); "tree" = several parts, plan them. Numbers only, never a run\'s content.',
+    description: 'Estimate a request (a user\'s message already ends with this estimate as "[app estimate · …]": call it only for another wording or a given role) from similar past tasks (the same agent first, then the same kind): median work time, cost, the middle-half range, how many similar tasks it rests on (n), confidence, the independent parts it has, and the path: "self" = a short question you answer yourself; "one-agent" = one part: ONE chat of the role that fits does it alone (scout to read, herald for a message, artisan for a small, already clear change), but a change that is not small and clear goes to ONE strategist chat; "tree" = two parts or more: a change goes to ONE strategist chat, which plans and delegates them, read-only work to a scout. Numbers only, never a run\'s content.',
     inputSchema: { type: 'object', required: ['request'], additionalProperties: false, properties: {
       request: { type: 'string', description: 'the user\'s request, as you would give it to the agent' },
       agentId: { type: 'string', description: 'optional: the role that would run it (agent_catalog); omitted = any agent' },

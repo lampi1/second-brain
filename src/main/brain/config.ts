@@ -29,8 +29,15 @@ const newId = (p: string) => `${p}_${crypto.randomUUID().slice(0, 12)}`;
 /** Feed kinds renamed with the Task section (ADR 0079): a mute saved under the old kind keeps silencing the new one. */
 const LEGACY_MUTE: Record<string, string> = { devops: 'task', 'devops-alert': 'task-alert' };
 
-/** Top-level keys of removed features (ADR 0201): never read, dropped from config.json at the next start. */
-export const RETIRED_KEYS: readonly string[] = ['pulse', 'headlineOn', 'headlineModel', 'headlineEffort', 'suggestModel', 'suggestDailyUsd'];
+/** Keys of removed features (ADR 0201), a dotted path for a nested one: never read, dropped from config.json at the
+ *  next start. delegation.maxParallel: no limit on children at once (the owner, 2026-11-23). */
+export const RETIRED_KEYS: readonly string[] = ['pulse', 'headlineOn', 'headlineModel', 'headlineEffort', 'suggestModel', 'suggestDailyUsd', 'delegation.maxParallel'];
+/** Whether a saved file holds a retired key (dotted = nested). */
+export const savedHas = (raw: object, key: string): boolean => {
+  let o: unknown = raw;
+  for (const p of key.split('.')) { if (!o || typeof o !== 'object' || !(p in o)) return false; o = (o as Record<string, unknown>)[p]; }
+  return true;
+};
 
 /** Saved file → settings. Each known key is validated on its own: a bad value falls back to its default, never a crash. */
 export function fromSaved(raw: unknown): Settings {
@@ -140,10 +147,10 @@ export class ConfigStore {
   /** Settings of features removed by ADR 0201 (Battito, its headline, the composer's model suggestions): fromSaved
    *  ignores them; drop them from the file once so it holds only live keys. */
   private migrateRetired(raw: unknown): void {
-    if (!raw || typeof raw !== 'object' || !RETIRED_KEYS.some(k => k in raw)) return;
+    if (!raw || typeof raw !== 'object' || !RETIRED_KEYS.some(k => savedHas(raw, k))) return;
     try {
       this.save(this.saved);
-      log.info('settings', 'retired settings removed', { data: { keys: RETIRED_KEYS.filter(k => k in raw) } });
+      log.info('settings', 'retired settings removed', { data: { keys: RETIRED_KEYS.filter(k => savedHas(raw, k)) } });
     } catch (e) {
       log.warn('settings', 'retired settings removal not saved', { cause: e instanceof Error ? e.message : String(e), hint: 'the old values are ignored; the next start retries' });
     }

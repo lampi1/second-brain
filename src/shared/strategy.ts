@@ -6,11 +6,14 @@
 // results make, and the app's fixed text that tells the Strategist this flow. Pure: used by main/chats/manager.ts,
 // main/agents/strategy-tools.ts, main/agents/delegation.ts and the renderer (StrategyPanel.tsx, and with "Popup" on the
 // questions window's plan card, PlanApproval.tsx). The app enforces the flow, not only the text (ADR 0121): a first
-// proposal needs three answers or the user’s stop (proposalGate), and no delegation before the user's ok
-// (delegationGate).
+// proposal needs three answers or the user’s stop (proposalGate), no delegation before the user's ok
+// (delegationGate), and a parallel group starts in one agent_delegate call (parallelSplit). «Aggiorna il piano»
+// (2026-11-23) proposes the plan again with `revise` (checkRevision): started and finished steps stay, and the user
+// approves again.
 import { isWorkRole, type WorkRoleId } from './roles';
 import type { DelegationOutcome } from './delegation';
 import { reservedText } from './away';
+import { isPresetId, PRESET_IDS, type PresetId } from './model-presets';
 
 /** asking = it questions the user · proposed = the plan waits for the user's ok · revising = the user asked for changes ·
  *  running = approved, steps under way · done = every step done */
@@ -36,6 +39,11 @@ export interface PlanStep {
   added?: true;
   /** it goes together with the step before it, in parallel (ADR 0302); absent: it comes after it */
   par?: true;
+  /** the role card's preset the step runs on (ADR 0336): the one its chat started on, else the one the plan asks
+   *  (absent in plans saved before 2026-11-23: Base) */
+  preset?: PresetId;
+  /** the model behind that preset (its chat's, else the card's), filled by the app when the plan is proposed */
+  model?: string;
 }
 /** One answer the user gave while it asked: what was asked (the question's short header, else the question) and the answer. */
 export interface Clarified {
@@ -88,8 +96,9 @@ export const ENOUGH_QUESTIONS = 'Basta domande: proponi ora il piano con quello 
 export const STRATEGY_FLOW = [
   '[app · how you work with the user here]',
   `1. Use the existing question panel, one concrete yes/no question at a time. Check the evidence before asking; cover the goal, scope, constraints or acceptance criteria that still matter. Offer Sì / No with a short reason for the recommended choice and accept a typed answer. Count at least ${QUESTIONS_MIN} answered questions, including the intake answer when supplied. Never repeat a settled choice. Stop at ${QUESTIONS_MAX}, or sooner when the user says «Basta domande». A concrete drawback warrants one counterproposal; if the user confirms their choice, proceed with it.`,
-  `2. Then propose the plan with plan_propose: 2 to 6 steps, each one short plain line in the user's language with the role that does it (and, if useful, a short \`detail\`); no jargon, no sub-steps. Say for every step which steps it depends on: its \`detail\` starts with "dopo 1, 2" (in the user's language) or "subito" when it needs none. Steps that do not depend on each other are one parallel group: put them one after the other and give every one but the first \`par: true\`; a step that needs the group comes after it, without \`par\` (the user sees a dashed frame for each group and where it joins again). When the work is on a project (its code or systems), draw the plan on the project's map: pass \`map\` (the project; \`add\` = the pieces that do not exist yet) and each step's \`on\` (the element it works on; one element may hold several steps and agents). The user reads the map, not a list. The user's approval is required, always: end your turn and wait; the user approves with the panel ("${PLAN_APPROVED}") or an explicit typed approval, or writes what to change, and then you propose again. The app refuses agent_delegate and agent_assign_task until the user approved.`,
-  '3. Once approved, inspect agent_children and reuse a compatible child with agent_assign_task, or delegate new work with agent_delegate, giving its number as `step`: delegate a whole parallel group in one agent_delegate call, one task per step, so its steps really run at the same time, and start a step only when every step it depends on is done (when the parallel limit refuses some, delegate the rest as soon as one reports). A step you do yourself: plan_update it to "now", then to "done". A piece you discover on the way: plan_update `add` it and go on, no new approval. The user follows the steps on your strip and on the map. At the end, agent_report as usual.',
+  `2. Then propose the plan with plan_propose: 2 to 6 steps, each one short plain line in the user's language with the role that does it (and, if useful, a short \`detail\`); no jargon, no sub-steps. Say for every step which steps it depends on: its \`detail\` starts with "dopo 1, 2" (in the user's language) or "subito" when it needs none. Steps that do not depend on each other are one parallel group: put them one after the other and give every one but the first \`par: true\`; a step that needs the group comes after it, without \`par\` (the user sees a dashed frame for each group and where it joins again). Mark a group parallel only after checking that its steps can really run at the same time now: free worktree slots and env leases, test nodes, local stacks; when one is not free, put those steps one after the other. A step is parallel or sequential, nothing in between. Give a step \`preset\` (min, base, max of its role's card) when it needs other than Base; the app shows every step's role, model and preset. When the work is on a project (its code or systems), draw the plan on the project's map: pass \`map\` (the project; \`add\` = the pieces that do not exist yet) and each step's \`on\` (the element it works on; one element may hold several steps and agents). The user reads the map, not a list. The user's approval is required, always: end your turn and wait; the user approves with the panel ("${PLAN_APPROVED}") or an explicit typed approval, or writes what to change, and then you propose again. The app refuses agent_delegate and agent_assign_task until the user approved.`,
+  '3. Once approved, inspect agent_children and reuse a compatible child with agent_assign_task, or delegate new work with agent_delegate, giving its number as `step`: delegate a whole parallel group in one agent_delegate call, one task per step, so its steps really run at the same time (reuse a child for one of them with agent_assign_task first, then the rest in one call; the app refuses a group split over several agent_delegate calls), and start a step only when every step it depends on is done. After a step that changed code or files, delegate one Sentinel with reviewOf = that child\'s run. A step you do yourself: plan_update it to "now", then to "done". A piece you discover on the way: plan_update `add` it and go on, no new approval. The user follows the steps on your strip and on the map. At the end, agent_report as usual.',
+  '4. When the user asks to bring the plan to the current standard («aggiorna il piano»), also once it is under way: plan_propose with `revise: true` and the whole plan again. Every step already started or done stays: pass it as `{ keep: <its number> }` (its title, role, chats and state are kept); the steps still to do you may change. Check every parallel group again as in 2 (resources, parallel or sequential); a step to do cannot be parallel with a started one. The app fills each step\'s model and preset (a started step from its chat, the others from the role card). The user approves the revised plan as any plan: end your turn and wait.',
 ].join('\n');
 
 const line = (v: unknown, max: number, what: string): string => {
@@ -103,19 +112,62 @@ const line = (v: unknown, max: number, what: string): string => {
 export function checkProposal(a: Record<string, unknown>): { steps: PlanStep[]; doneWhen?: string } {
   const raw = a.steps;
   if (!Array.isArray(raw) || raw.length < STEPS_MIN || raw.length > STEPS_MAX) throw new Error(`plan_propose: steps = ${STEPS_MIN} to ${STEPS_MAX} items.`);
-  const steps = raw.map((v, i): PlanStep => {
-    const s = v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : null;
-    if (!s) throw new Error(`steps[${i}]: object required.`);
-    const extra = Object.keys(s).find(k => k !== 'title' && k !== 'role' && k !== 'detail' && k !== 'on' && k !== 'par');
-    if (s.par !== undefined && typeof s.par !== 'boolean') throw new Error(`steps[${i}].par: true or false.`);
-    if (s.on !== undefined && !(typeof s.on === 'string' && /^[a-z0-9][a-z0-9-]{0,47}$/.test(s.on))) throw new Error(`steps[${i}].on: a map element id.`);
-    if (extra) throw new Error(`steps[${i}]: unknown field ${extra}.`);
-    if (s.role !== undefined && !isWorkRole(s.role)) throw new Error(`steps[${i}].role: one of the work roles, or leave it out for a step you do yourself.`);
-    const detail = s.detail === undefined || s.detail === '' ? undefined : line(s.detail, STEP_DETAIL_MAX, `steps[${i}].detail`);
-    return { title: line(s.title, STEP_TITLE_MAX, `steps[${i}].title`), ...(detail ? { detail } : {}), ...(s.role !== undefined ? { role: s.role as WorkRoleId } : {}), state: 'todo', ...(s.on !== undefined ? { on: s.on as string } : {}), ...(s.par === true ? { par: true as const } : {}) };
-  });
+  const steps = raw.map((v, i) => checkOne(v, i));
   const doneWhen = a.doneWhen === undefined ? undefined : line(a.doneWhen, DONE_WHEN_MAX, 'doneWhen');
   return { steps, ...(doneWhen ? { doneWhen } : {}) };
+}
+
+function checkOne(v: unknown, i: number): PlanStep {
+  const s = v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : null;
+  if (!s) throw new Error(`steps[${i}]: object required.`);
+  const extra = Object.keys(s).find(k => !['title', 'role', 'detail', 'on', 'par', 'preset'].includes(k));
+  if (s.par !== undefined && typeof s.par !== 'boolean') throw new Error(`steps[${i}].par: true or false.`);
+  if (s.on !== undefined && !(typeof s.on === 'string' && /^[a-z0-9][a-z0-9-]{0,47}$/.test(s.on))) throw new Error(`steps[${i}].on: a map element id.`);
+  if (extra) throw new Error(`steps[${i}]: unknown field ${extra}${extra === 'keep' ? ' (keep is for revise: true)' : ''}.`);
+  if (s.role !== undefined && !isWorkRole(s.role)) throw new Error(`steps[${i}].role: one of the work roles, or leave it out for a step you do yourself.`);
+  if (s.preset !== undefined && !isPresetId(s.preset)) throw new Error(`steps[${i}].preset: one of ${PRESET_IDS.join(' | ')} (the role card's presets).`);
+  const detail = s.detail === undefined || s.detail === '' ? undefined : line(s.detail, STEP_DETAIL_MAX, `steps[${i}].detail`);
+  return { title: line(s.title, STEP_TITLE_MAX, `steps[${i}].title`), ...(detail ? { detail } : {}), ...(s.role !== undefined ? { role: s.role as WorkRoleId } : {}), state: 'todo', ...(s.on !== undefined ? { on: s.on as string } : {}), ...(s.par === true ? { par: true as const } : {}), ...(s.preset !== undefined ? { preset: s.preset as PresetId } : {}) };
+}
+
+/** plan_propose with `revise: true` («aggiorna il piano», 2026-11-23): the whole plan again over a plan already shown,
+ *  approved or under way. A started or finished step must come back as `{ keep: n }` (its old number, optionally `par`)
+ *  and is kept as it is, chats and times included; the steps to do are checked as new ones. A step to do cannot share a
+ *  parallel group with a started one (that group could no longer start in one call). Throws with what to change. */
+export function checkRevision(old: StrategyPlan, a: Record<string, unknown>): { steps: PlanStep[]; doneWhen?: string } {
+  const raw = a.steps;
+  if (!Array.isArray(raw) || raw.length < STEPS_MIN || raw.length > STEPS_ALL_MAX) throw new Error(`plan_propose: steps = ${STEPS_MIN} to ${STEPS_ALL_MAX} items.`);
+  const kept = new Set<number>();
+  const steps = raw.map((v, i): PlanStep => {
+    const s = v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : null;
+    if (!s || s.keep === undefined) return checkOne(v, i);
+    const extra = Object.keys(s).find(k => k !== 'keep' && k !== 'par');
+    if (extra) throw new Error(`steps[${i}]: a kept step takes only keep and par (its ${extra} stays as it was).`);
+    if (s.par !== undefined && typeof s.par !== 'boolean') throw new Error(`steps[${i}].par: true or false.`);
+    const n = stepIndex(old, s.keep, `steps[${i}].keep`);
+    if (kept.has(n)) throw new Error(`steps[${i}].keep: step ${n + 1} is kept twice.`);
+    kept.add(n);
+    const { par: _p, ...rest } = old.steps[n]!;
+    return { ...rest, ...(s.par === true ? { par: true as const } : {}) };
+  });
+  const lost = old.steps.map((s, n) => ({ s, n })).filter(x => x.s.state !== 'todo' && !kept.has(x.n));
+  if (lost.length) throw new Error(`plan_propose revise: ${lost.map(x => `step ${x.n + 1} «${x.s.title}» (${x.s.state})`).join(', ')} already started: pass it as { keep: ${lost[0]!.n + 1} }.`);
+  const waves = planWaves(steps);
+  const mixed = steps.findIndex((s, i) => s.state === 'todo' && steps.some((t, k) => k !== i && waves[k] === waves[i] && t.state !== 'todo'));
+  if (mixed >= 0) throw new Error(`steps[${mixed}]: it is to do but in the same parallel group as a started step; make it its own step after them (leave par out) or group it with steps to do.`);
+  const doneWhen = a.doneWhen === undefined ? old.doneWhen : line(a.doneWhen, DONE_WHEN_MAX, 'doneWhen');
+  return { steps, ...(doneWhen ? { doneWhen } : {}) };
+}
+
+/** agent_delegate on an approved plan (2026-11-23, «o parallelo o non parallelo»): the steps a call names, 0-based; a
+ *  parallel group is launched in one call, so every other step of that group still to do (and done by a role) must be in
+ *  the same call. Null = fine, else the refusal. Steps the Strategist does itself and steps already started are left out. */
+export function parallelSplit(plan: StrategyPlan, named: readonly number[]): string | null {
+  if (!named.length) return null;
+  const waves = planWaves(plan.steps), set = new Set(named);
+  const missing = plan.steps.map((s, i) => i).filter(i => !set.has(i) && plan.steps[i]!.state === 'todo' && plan.steps[i]!.role !== undefined && named.some(n => waves[n] === waves[i]));
+  if (!missing.length) return null;
+  return `agent_delegate refused: step ${[...set].map(n => n + 1).join(', ')} is in a parallel group with step ${missing.map(n => n + 1).join(', ')}, and a parallel group starts in one call. Delegate the whole group in this same call, one task per step (reuse a child for one of them with agent_assign_task first, then delegate the rest together). If they cannot run together now, ask the user to approve the plan with those steps one after the other (plan_propose revise: true).`;
 }
 
 /** One step given on the way (plan_update add), checked like a proposed one. */
@@ -242,7 +294,9 @@ export function readPlan(v: unknown): StrategyPlan | null {
     phase: p.phase as PlanPhase, at: p.at as number, clarified: (p.clarified as Clarified[]).map(c => ({ q: c.q, a: c.a, ...(typeof c.pcOnly === 'boolean' ? { pcOnly: c.pcOnly } : {}), ...(typeof c.questionHash === 'string' && /^[0-9a-f]{64}$/.test(c.questionHash) ? { questionHash: c.questionHash } : {}) })),
     ...(p.pcOnly === true ? { pcOnly: true } : {}), ...(p.asked ? { asked: p.asked as number } : {}), ...(p.enough === true ? { enough: true } : {}),
     steps: (p.steps as PlanStep[]).map(s => ({ title: s.title, ...(s.detail ? { detail: s.detail } : {}), ...(s.role ? { role: s.role } : {}), state: s.state, ...(s.outcome ? { outcome: s.outcome } : {}), ...(s.chatIds ? { chatIds: [...s.chatIds] } : {}),
-      ...(s.startedAt ? { startedAt: s.startedAt } : {}), ...(s.endedAt ? { endedAt: s.endedAt } : {}), ...(s.on ? { on: s.on } : {}), ...(s.added === true ? { added: true as const } : {}), ...(s.par === true ? { par: true as const } : {}) })),
+      ...(s.startedAt ? { startedAt: s.startedAt } : {}), ...(s.endedAt ? { endedAt: s.endedAt } : {}), ...(s.on ? { on: s.on } : {}), ...(s.added === true ? { added: true as const } : {}), ...(s.par === true ? { par: true as const } : {}),
+      // read leniently: a bad preset or model (or none, before 2026-11-23) is left out, the plan stays
+      ...(isPresetId(s.preset) ? { preset: s.preset } : {}), ...(str(s.model, 120) && !/[\r\n]/.test(s.model!) ? { model: s.model } : {}) })),
     ...(p.doneWhen ? { doneWhen: p.doneWhen as string } : {}), ...(p.map ? { map: p.map as string } : {}),
   };
 }

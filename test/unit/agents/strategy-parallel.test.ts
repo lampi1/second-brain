@@ -20,4 +20,11 @@ describe('the Strategist plans parallel groups from dependencies', () => {
     expect(flow).toContain('only when every step it depends on is done');
     expect(role).toContain('a whole parallel group in one call');
   });
+  it('the review verdict comes to the Strategist, which checks each finding before any rework (2026-11-23)', () => {
+    expect(role).toMatch(/The verdict comes to you, never to the Artisan: check each finding on the code \(a targeted read; a Scout when long\) before any rework/);
+    expect(role).toMatch(/Only confirmed findings go, with agent_assign_task rework, to the same implementation chat/);
+    expect(role).toMatch(/report a false positive or a disputed functional finding to the user in plain words, never to the Artisan/);
+    // no role's text makes the reviewer answer the developer
+    for (const r of Object.values(ROLE_DEFAULTS)) expect(r.instructions).not.toMatch(/fix what it finds|verdict (?:goes|comes) to the artisan/i);
+  });
 });

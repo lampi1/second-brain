@@ -8,17 +8,20 @@
 // askUser); only what needs a person (a permission, an irreversible or external action, a choice that changes the goal,
 // what the parent could not answer) is asked of the user. What holds whoever asks: permissions only go down (a contract asking for a
 // tool class beyond the parent's is refused, and the child's policy is narrowed by the parent's, chats/manager.ts), the
-// child's folder stays inside the parent's, the depth and parallel limits of Impostazioni → Ruoli e deleghe are checked
-// with the slots reserved synchronously (two calls at once cannot both pass the last slot) and a refusal shows in the
-// parent's chat. A child may run on another engine only when the user allows chats across engines. Used by wiring.ts.
+// child's folder stays inside the parent's, the depth limit of Impostazioni → Ruoli e deleghe is checked and a refusal
+// shows in the parent's chat. Only the Orchestrator and the Strategist delegate (2026-11-23; the Orchestrator through
+// app_create_chat): any other role is refused whatever its saved launches say, and a parallel group of an approved plan
+// starts in one agent_delegate call (shared/strategy.ts parallelSplit). There is no limit on children at once (the owner,
+// 2026-11-23): the Strategist checks the real resources when it plans. A child may run on another engine only when the
+// user allows chats across engines. Used by wiring.ts.
 import path from 'node:path';
 import type { ChatSummary, Effort, Harness, NewChat, PermissionMode } from '../../shared/contract';
 import type { AgentCatalog, AgentRun, UserTaskEvents } from '../../shared/agents';
-import { canLaunch, isWorkRole, launchGap, ROLE_DEFAULTS, WORK_ROLE_IDS, type DelegationSettings } from '../../shared/roles';
+import { canLaunch, isDelegatorRole, isWorkRole, launchGap, ROLE_DEFAULTS, WORK_ROLE_IDS, type DelegationSettings } from '../../shared/roles';
 import { oneLine } from '../../shared/agent-label';
-import { CRITERION_MAX, EVIDENCE_MAX, MAX_CORRECTIONS, RESULT_OUTPUT_MAX, SUMMARY_MAX, USER_ACTION_COMMAND_MAX, USER_ACTION_KINDS, USER_ACTION_TEXT_MAX, USER_ONLY_BLOCKER, capText, checkContract, checkResult, contractFields, contractWarnings, delegationPrompt, depthOf, type DelegationLimitHit, type DelegationResult, type DelegationIntegration, type TaskAssignmentOptions } from '../../shared/delegation';
+import { CRITERION_MAX, EVIDENCE_MAX, MAX_CORRECTIONS, RESULT_OUTPUT_MAX, SUMMARY_MAX, USER_ACTION_COMMAND_MAX, USER_ACTION_KINDS, USER_ACTION_TEXT_MAX, USER_ONLY_BLOCKER, capText, checkContract, checkResult, contractFields, contractWarnings, delegationPrompt, depthOf, type DelegationResult, type DelegationIntegration, type TaskAssignmentOptions } from '../../shared/delegation';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
-import { delegationGate, stepIndex, type StrategyPlan } from '../../shared/strategy';
+import { delegationGate, parallelSplit, stepIndex, type StrategyPlan } from '../../shared/strategy';
 import type { McpTool } from '../mcp/server';
 import { callerOf } from '../mcp/caller';
 import { ToolRefusal } from '../mcp/refusal';
@@ -57,7 +60,8 @@ export interface DelegationChats {
   reportDelegation(chatId: string, result: DelegationResult): { parentId: string; delivered: boolean };
   /** a root role chat the Orchestrator opened reports to it (issue #93); absent = refused as before */
   reportRoot?(chatId: string, result: DelegationResult): { orchestratorId: string | null; delivered: boolean };
-  limitNotice(chatId: string, kind: DelegationLimitHit['kind'], limit: number): void;
+  /** the depth limit refused a delegation (the only delegation limit) */
+  limitNotice(chatId: string, kind: 'depth', limit: number): void;
   /** a message from another chat (from = its title): agent_ask_parent, agent_answer_child */
   send(chatId: string, text: string, images?: unknown, resumed?: boolean, from?: string): Promise<void>;
   /** when the chat last produced anything (a transcript item, a state change, a send): the stall check (stalledMin) */
@@ -112,7 +116,7 @@ export function withoutReviewFields(schema: Record<string, unknown>): Record<str
   return { ...schema, properties };
 }
 
-/** A delegated child counts against its parent's parallel limit until it reports or closes. */
+/** A delegated child is busy until it reports or closes (stalled children, agent_children). */
 export const busyChild = (c: ChatSummary): boolean => !c.closedAt && !c.delegation?.result;
 
 /** Minutes a delegated child has been stalled, or null: it is still busy (not reported, not closed), working (starting or
@@ -130,8 +134,6 @@ export const USER_ACTION_REFUSAL = 'agent_report not sent yet: it names a step o
 export function delegationTools(d: DelegationDeps): McpTool[] {
   /** the runs already sent back once for a missing userAction (#358): the second identical call goes through */
   const askedUserAction = new Set<string>();
-  // slots taken by agent_delegate calls still creating their chats, per parent (checked and taken synchronously)
-  const reserved = new Map<string, number>();
   const chat = (id: string) => d.chats.list().find(c => c.id === id);
   /** what the one-review rule reads (#387, one-review.ts) */
   const reviewWorld = (): ReviewWorld => ({ chats: d.chats.list(), runs: d.runs(), profile: id => d.roles().profiles.find(p => p.id === id) });
@@ -153,11 +155,13 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (parent.run && parent.run.endedAt !== undefined) throw new Error('agent_delegate: your assignment is over (you reported): ask your parent for a new one.');
     const catalog = d.roles(), own = catalog.profiles.find(p => p.id === parent.agent!.id);
     if (!own) throw new Error('agent_delegate: your role is not in the catalog.');
+    // only the Orchestrator and the Strategist delegate (2026-11-23), whatever an older roles.json says
+    if (!isDelegatorRole(own.id)) throw new Error(`agent_delegate refused: ${own.name} does not delegate (only the Orchestrator and the Strategist do). Do your own part; put a part for another role in your agent_report as a ready contract (role, goal, done-criteria): your parent launches it.`);
     // the ceiling of every part's preset (ADR 0336): the model this chat runs on, else its card's
     const delegator: Delegator = { role: own.id, model: parent.model || own.model || null };
     const raw = a.tasks;
     if (!Array.isArray(raw) || !raw.length || raw.length > TASKS_MAX) throw new Error(`agent_delegate: tasks = 1 to ${TASKS_MAX} parts.`);
-    // read before the limits: from here to the reservation nothing waits, so two calls cannot both take the last slot
+    // read before the Git lookups: a parent whose assignment or folder changed meanwhile is refused below
     const parentCwd = parent.cwd, parentRunId = parent.run?.runId;
     // only folders outside the parent's need Git, each looked up alone: a full listing verifies every worktree
     const outside = [...new Set(raw.map(t => t && typeof t === 'object' && typeof (t as { cwd?: unknown }).cwd === 'string' ? ((t as { cwd: string }).cwd).trim() : '')
@@ -172,11 +176,6 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       d.chats.limitNotice(parent.id, 'depth', limits.maxDepth);
       throw new Error(`agent_delegate refused: depth limit ${limits.maxDepth} reached (Settings → Roles and delegation). Do this part yourself or report it to your parent.`);
     }
-    const running = all.filter(c => c.parentId === parent.id && busyChild(c)).length + (reserved.get(parent.id) ?? 0);
-    if (running + raw.length > limits.maxParallel) {
-      d.chats.limitNotice(parent.id, 'parallel', limits.maxParallel);
-      throw new Error(`agent_delegate refused: ${running} of ${limits.maxParallel} children already running, ${raw.length} more asked (Settings → Roles and delegation). Wait for a result, then delegate again.`);
-    }
     // a Strategist that planned with the user delegates only once the user approved the plan (its strip, ADR 0108)
     const plan = d.chats.planOf?.(parent.id) ?? null;
     const gate = delegationGate(plan, 'agent_delegate');
@@ -186,11 +185,11 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     const plans = raw.map((value, i) => {
       const t = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
       if (!t) throw new Error(`tasks[${i}]: object required.`);
-      const extra = Object.keys(t).find(k => !['role', 'title', 'contract', 'cwd', 'step', 'freshReview', 'preset', 'presetWhy', 'taskKind'].includes(k));
+      const extra = Object.keys(t).find(k => !['role', 'title', 'contract', 'cwd', 'step', 'freshReview', 'preset', 'presetWhy', 'taskKind', 'reviewOf'].includes(k));
       if (extra) throw new Error(`tasks[${i}]: unknown field ${extra}.`);
       const role = t.role;
       if (!isWorkRole(role)) throw new Error(`tasks[${i}].role: one of ${WORK_ROLE_IDS.join(', ')}.`);
-      if (!canLaunch(own.launches, role)) throw new Error(`tasks[${i}]: ${own.name} may not launch ${ROLE_DEFAULTS[role].name} (it launches ${own.launches.join(', ') || 'none'}). Put this part in your report as a ready contract (role, goal, done-criteria): the Orchestrator starts it.`);
+      if (!canLaunch(own.id, own.launches, role)) throw new Error(`tasks[${i}]: ${own.name} may not launch ${ROLE_DEFAULTS[role].name} (it launches ${own.launches.join(', ') || 'none'}). Put this part in your report as a ready contract (role, goal, done-criteria): your parent launches it.`);
       const profile = catalog.profiles.find(p => p.id === role);
       if (!profile) throw new Error(`tasks[${i}]: ${role} is not in the catalog.`);
       // a child is narrowed by its parent: a role that needs a class the parent lacks (read-only ones aside) could not
@@ -207,6 +206,10 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       if (outside.length) throw new Error(`tasks[${i}].contract.tools: ${outside.join(', ')} is not among ${profile.name}'s tools; contract.tools only narrows them.`);
       const cwd = typeof t.cwd === 'string' && t.cwd.trim() ? t.cwd.trim() : parent.cwd;
       if (t.freshReview !== undefined && typeof t.freshReview !== 'boolean') throw new Error(`tasks[${i}].freshReview: true or false.`);
+      // the run this Sentinel reviews (2026-11-23, as app_create_chat's reviewOf): one of your direct children's runs
+      if (t.reviewOf !== undefined && (role !== 'sentinel' || typeof t.reviewOf !== 'string' || !t.reviewOf.trim())) throw new Error(`tasks[${i}].reviewOf: only a sentinel task takes it, the runId of the run it reviews (agent_children).`);
+      const reviewOf = typeof t.reviewOf === 'string' ? t.reviewOf.trim() : undefined;
+      if (reviewOf && !d.runs().some(r => r.runId === reviewOf && all.some(c => c.id === r.chatId && c.parentId === parent.id))) throw new Error(`tasks[${i}].reviewOf: ${reviewOf} is not a run of one of your children; agent_children shows each child's runId.`);
       // one review chat per piece of work (#387, ADR 0309): a Sentinel of yours that already reported on this task
       // re-reviews its fix; a new one would review everything again
       const reviewed = role === 'sentinel' && t.freshReview !== true ? childReviewers(reviewWorld(), parent, cwd) : [];
@@ -220,14 +223,16 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       const ask = presetAskOf(t, `tasks[${i}]`);
       const cap = d.presetChoice?.(role, ask, delegator) ?? null;
       const presetFields = { ...(ask.preset ? { preset: ask.preset } : {}), ...(ask.presetWhy ? { presetWhy: ask.presetWhy } : {}), ...(ask.taskKind ? { taskKind: ask.taskKind } : {}), delegator };
-      return { role, title, contract, cwd, profile, step, cap, presetFields };
+      return { role, title, contract, cwd, profile, step, cap, presetFields, reviewOf };
     });
-    reserved.set(parent.id, (reserved.get(parent.id) ?? 0) + plans.length);
-    try {
+    // a parallel group of the approved plan starts in this one call (2026-11-23, «o parallelo o non parallelo»)
+    const split = plan && (plan.phase === 'running' || plan.phase === 'done') ? parallelSplit(plan, plans.flatMap(p => p.step === null ? [] : [p.step])) : null;
+    if (split) throw new Error(split);
+    {
       const at = Date.now();
       const settled = await Promise.allSettled(plans.map(p => d.chats.create({
         harness: p.profile.engine, cwd: p.cwd, title: p.title, roleId: p.role, parentId: parent.id, goal: p.contract.goal,
-        ...p.presetFields, ...(p.contract.skills ? { skills: p.contract.skills } : {}),
+        ...p.presetFields, ...(p.contract.skills ? { skills: p.contract.skills } : {}), ...(p.reviewOf ? { reviewOf: p.reviewOf } : {}),
         delegation: { role: p.role, goal: p.contract.goal, doneWhen: p.contract.doneWhen, at, ...(p.contract.tools ? { tools: p.contract.tools } : {}) },
         contractFields: contractFields(p.contract),
         prompt: `${d.label}\n\n${delegationPrompt(p.contract, { role: p.role, parentTitle: parent.title, title: p.title, skills: p.contract.skills ?? [] })}`,
@@ -249,9 +254,6 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       for (const [i, ids] of steps) d.chats.planDelegated?.(parent.id, i, ids);
       log.info('agents', 'delegated', { chat: parent.id, data: { children: children.map(c => ({ role: c.role, chatId: 'chatId' in c ? c.chatId : null })), depth } });
       return { children, note: 'Each child reports to you with agent_report (it arrives as a message); agent_children shows their state. Do not wait idle: go on with your own part.' };
-    } finally {
-      const left = (reserved.get(parent.id) ?? 0) - plans.length;
-      if (left > 0) reserved.set(parent.id, left); else reserved.delete(parent.id);
     }
   }
 
@@ -273,7 +275,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     // a Sentinel child is continued as any other (#387, ADR 0309): after a fix it reviews only the delta
     if (!isWorkRole(a.roleId) || child.agent?.source !== 'catalog' || child.agent.id !== a.roleId || child.delegation.role !== a.roleId) throw new Error('Role mismatch: delegate a fresh chat.');
     const catalog = d.roles(), own = catalog.profiles.find(p => p.id === parent.agent!.id), profile = catalog.profiles.find(p => p.id === a.roleId);
-    if (!own || !canLaunch(own.launches, a.roleId)) throw new Error('Your current role may not launch this child role.');
+    if (!own || !canLaunch(own.id, own.launches, a.roleId)) throw new Error(own && !isDelegatorRole(own.id) ? `agent_assign_task refused: ${own.name} does not delegate (only the Orchestrator and the Strategist do); put the work in your agent_report as a ready contract.` : 'Your current role may not launch this child role.');
     // the revision too: tools, permissions and limits change the version in use in place (ADR 0186)
     if (!profile || profile.activeVersion !== child.agent.version || profile.updatedAt !== child.agent.revision || profile.engine !== child.harness) throw new Error('Role configuration changed: delegate a fresh chat.');
     // cwd only confirms the project (#427): the child's own folder (its worktree) or yours; omitted = the child's. The
@@ -313,16 +315,12 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (depthOf(parent.id, id => all.find(c => c.id === id)?.parentId) + 1 > limits.maxDepth) {
       d.chats.limitNotice(parent.id, 'depth', limits.maxDepth); throw new Error('Delegation depth limit reached.');
     }
-    const running = all.filter(c => c.parentId === parent.id && c.id !== child.id && busyChild(c)).length + (reserved.get(parent.id) ?? 0);
-    if (running + 1 > limits.maxParallel) {
-      d.chats.limitNotice(parent.id, 'parallel', limits.maxParallel); throw new Error('Delegation parallel limit reached; wait for a child result.');
-    }
     // ChatManager checks the version again; the user's entries in the child you have not seen come back here, readable
     // (the child already has them: they are not repeated in its prompt)
     const userInstructions = unreadInstructions(d.chats.userEvents(child.id));
     const version = a.expectedVersion === undefined ? child.run.taskVersion ?? 1 : Number(a.expectedVersion);
     if (version !== (child.run.taskVersion ?? 1)) throw new Error('Task version changed; refresh agent_children.');
-    reserved.set(parent.id, (reserved.get(parent.id) ?? 0) + 1); assigning.add(child.id);
+    assigning.add(child.id);
     try {
       // its next round on the work it already reviewed: only the delta (a new task is reviewed whole)
       const delta = a.roleId === 'sentinel' && a.mode !== 'new-task' && !!child.delegation.result ? `${DELTA_REVIEW}\n\n` : '';
@@ -335,8 +333,6 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       return { chatId: child.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(preset ? { preset: preset.preset } : {}), ...(userInstructions.length ? { userInstructions, note: USER_INSTRUCTIONS_NOTE } : {}), ...(warned.length ? { warnings: warned } : {}) };
     } finally {
       assigning.delete(child.id);
-      const left = (reserved.get(parent.id) ?? 0) - 1;
-      if (left > 0) reserved.set(parent.id, left); else reserved.delete(parent.id);
     }
   }
 
@@ -561,7 +557,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     } };
   return [{
     name: 'agent_delegate',
-    description: 'Delegate parts of your task to other roles, only when it has several independent parts: a quick single-part task you do yourself (a child costs more tokens and time than it saves; task_estimate on the Orchestrator says which). each part starts a visible chat under yours, running the role you name (only roles your role may launch: agent_catalog). The child sees only its contract, never this conversation: write it self-contained. Several parts start at once (parallel). It never gets more permissions than you, uses an isolated Git worktree when it can write (a clean committed baseline is required), and returns one result with agent_report that reaches you as a message. Limits (depth, children running at once) are the user\'s. One review chat per piece of work: once a Sentinel of yours reported on this task, a new Sentinel is refused; re-review the fix in that chat with agent_assign_task (only the fix delta). Each part runs on its role\'s card: preset picks one of its three (omitted = base).',
+    description: 'Delegate the parts of your task to other roles: each part starts a visible chat under yours, running the role you name (only roles your role may launch: agent_catalog). The child sees only its contract, never this conversation: write it self-contained. Several parts start at once (parallel): a parallel group of your approved plan goes in one call. It never gets more permissions than you, uses an isolated Git worktree when it can write (a clean committed baseline is required), and returns one result with agent_report that reaches you as a message. The depth limit is the user\'s. A Sentinel reviewing a child\'s work: reviewOf = that child\'s runId. One review chat per piece of work: once a Sentinel of yours reported on this task, a new Sentinel is refused; re-review the fix in that chat with agent_assign_task (only the fix delta). Each part runs on its role\'s card: preset picks one of its three (omitted = base).',
     inputSchema: { type: 'object', required: ['tasks'], additionalProperties: false, properties: {
       tasks: { type: 'array', minItems: 1, maxItems: TASKS_MAX, items: { type: 'object', required: ['role', 'title', 'contract'], additionalProperties: false, properties: {
         role: { type: 'string', enum: [...WORK_ROLE_IDS] }, title: { ...str, description: '"Area · what", e.g. "Ordini · Log degli errori"' },
@@ -569,6 +565,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
         step: { type: 'integer', minimum: 1, description: 'with a plan approved by the user (plan_propose): the step number this part does' },
         ...PRESET_SCHEMA,
         freshReview: { type: 'boolean', description: 'only for role sentinel: open a fresh one although a Sentinel of yours already reviewed this task; only when the user asked for it or it checks a part none of them covers' },
+        reviewOf: { ...str, description: 'only for role sentinel: the runId of your child\'s run it reviews (agent_children)' },
         contract: { type: 'object', required: ['goal', 'doneWhen'], additionalProperties: false, properties: {
           goal: { ...str, description: 'the wanted outcome, one checkable sentence' }, output: { ...str, description: 'what to give back; default: the role\'s output' },
           doneWhen: { type: 'array', items: str, minItems: 1, maxItems: 12, description: 'checkable criteria, each with the expected evidence' },

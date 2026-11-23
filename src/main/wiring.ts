@@ -37,7 +37,7 @@ import { CreditBook, opencodeLogTail } from './agents/credits';
 import { tierModel } from './agents/model-tier';
 import { markLegacyDone, migratedCards, readLegacy } from './agents/legacy-cards';
 import { workDecisionTools } from './agents/work-decisions';
-import { strategyTools } from './agents/strategy-tools';
+import { stepModelOf, strategyTools } from './agents/strategy-tools';
 import { askTools } from './chats/ask-tool';
 import { portableId } from './agents/pack/flows';
 import { memoryTools } from './rules/memory-tool';
@@ -649,7 +649,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), presetChoice: (roleId, ask, delegator) => agents.presetChoice(roleId, ask, delegator), label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools,
     remember: (roleId, line, chat) => { skillLessons.propose({ role: portableId(roleId), text: line, chatId: chat.id, ...(chat.run?.runId ? { runId: chat.run.runId } : {}) }); } }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
-  addChatTools(strategyTools(manager, awayOn, projectMaps));
+  // every step's model and preset (2026-11-23): a started step's chat, else the role card's preset
+  addChatTools(strategyTools(manager, awayOn, projectMaps, stepModelOf(id => manager.list().find(c => c.id === id), (roleId, preset) => {
+    try { return agents.presetChoice(roleId, preset ? { preset, presetWhy: 'plan step' } : {}); } catch { return null; }
+  })));
   // the yes/no question of a chat whose engine has no question tool of its own (OpenCode over ACP)
   addChatTools(askTools(manager));
   addChatTools(workDecisionTools({ chats: manager, workflows, runs: manager.runs }));

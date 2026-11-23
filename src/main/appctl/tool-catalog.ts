@@ -71,7 +71,7 @@ export const TOOL_CATALOG: Readonly<Record<string, ToolInfo>> = {
   task_estimate: t('orchestrator', 'Estimate a request: kind of work, size, role, time and cost.'),
 
   // every work chat's own endpoint (wiring.ts addChatTools)
-  agent_delegate: t('chat', 'Delegate independent parts of the task to other roles as visible child chats.'),
+  agent_delegate: t('chat', 'Delegate independent parts of the task to other roles as visible child chats (Orchestrator and Strategist only; a parallel group starts in one call; a Sentinel takes reviewOf).'),
   agent_children: t('chat', 'The chats you delegated: role, state, goal, result, open requests, cost, and why a task was closed early (endCause).'),
   agent_ask_parent: t('chat', 'Ask the chat that delegated you, before the user.'),
   run_code: t('chat', 'Code Mode (the role card\'s switch, ADR 0331): run a JavaScript script in a sandbox that calls many tools in one go; each call meets the same permission rules.'),
@@ -86,7 +86,7 @@ export const TOOL_CATALOG: Readonly<Record<string, ToolInfo>> = {
   agent_integrate_children: t('chat', 'Combine several finished children\'s commits in one staging worktree.'),
   agent_work_decisions: t('chat', 'The user\'s recorded decisions for your current assignment.'),
   ask_user: t('chat', 'Ask the user one Sì/No question as a panel (engines whose question tool may not reach the model: OpenCode, Cursor).'),
-  plan_propose: t('chat', 'Show the plan for approval after three answers or the user’s early stop (Strategist).'),
+  plan_propose: t('chat', 'Show the plan for approval after three answers or the user’s early stop (Strategist); revise re-proposes a saved plan to today’s standards.'),
   plan_update: t('chat', 'Move a step of your approved plan (now, done, blocked or todo), or add one found on the way.'),
   list_chats: t('chat', 'The user\'s chats you can write to with send_to_chat.'),
   send_to_chat: t('chat', 'Send a message to another chat of the user, never as his approval.'),

@@ -10,7 +10,7 @@ import type { HeldChildResult } from './store';
 import { waitsForPeople, waitsForWork } from '../../shared/waiting';
 import type { TaskDeliveryPolicy } from '../../shared/agents';
 import { reportOf } from '../agents/run-report';
-import { MAX_CORRECTIONS, RESULT_OUTPUT_MAX, checkResult, resultMessage, type DelegationLimitHit, type DelegationResult, type TaskSource } from '../../shared/delegation';
+import { MAX_CORRECTIONS, RESULT_OUTPUT_MAX, checkResult, resultMessage, type DelegationResult, type TaskSource } from '../../shared/delegation';
 import { finishPlan, afterReport } from '../../shared/strategy';
 import { APP_EVENT_LABEL } from './orchestrator-wake';
 import type { SubmissionReceipt, TurnEndInfo, Rec } from './manager-types';
@@ -593,12 +593,13 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     if (!r.s.parentId && r.s.run?.delivery?.policy === 'synthesize') this.resumeRootSyntheses();
   }
 
-  /** agent_delegate refused by a delegation limit: the parent's transcript says so and the chat carries the mark. */
-  limitNotice(chatId: string, kind: DelegationLimitHit['kind'], limit: number): void {
+  /** agent_delegate refused by the depth limit (the only delegation limit left): the parent's transcript says so and
+   *  the chat carries the mark. */
+  limitNotice(chatId: string, kind: 'depth', limit: number): void {
     const r = this.chats.get(chatId);
     if (!r) return;
     r.s.limitHit = { kind, limit, at: Date.now() };
-    this.addItem(r, sysItem(kind === 'depth' ? 'delegationDepth' : 'delegationParallel', { limit }, 'warn'), false);
+    this.addItem(r, sysItem('delegationDepth', { limit }, 'warn'), false);
     this.updated(r);
   }
 

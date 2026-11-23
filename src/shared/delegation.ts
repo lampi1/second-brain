@@ -129,8 +129,11 @@ export interface DelegationIntegration {
   whitespace?: { command: 'git diff --cached --check'; exit: number | null; at: number; tree: string };
 }
 
-/** A delegation limit the chat hit, shown on it until it delegates again. */
+/** A delegation limit the chat hit, shown on it until it delegates again. 'parallel' only in chats saved before
+ *  2026-11-23 (the children-at-once limit is gone): never written, never shown. */
 export interface DelegationLimitHit { kind: 'depth' | 'parallel'; limit: number; at: number }
+/** The limit mark a chat shows: only the depth limit still exists. */
+export const shownLimit = (h: DelegationLimitHit | undefined): DelegationLimitHit | undefined => h?.kind === 'depth' ? h : undefined;
 
 export const GOAL_MAX = 2000, OUTPUT_MAX = 2000, CONTEXT_MAX = 6000, CRITERION_MAX = 300, CRITERIA_MAX = 12, SUMMARY_MAX = 300, RESULT_OUTPUT_MAX = 12000, EVIDENCE_MAX = 1000;
 /** corrections (agent_report amends: true) one assignment may send after its first report; the next one is refused */
