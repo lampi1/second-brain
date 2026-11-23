@@ -134,10 +134,7 @@ import { brainQueriesTool, chatQueryAddTool } from './brain/queries-tools';
 import { AutoScripts } from './brain/auto-scripts';
 import { mountRecallTool, RECALL_ENV } from './search/hybrid/recall';
 import { timersFor } from './timers';
-import { GuideService } from './guide/service';
 import { DailyQuipsService } from './quips/daily';
-import { repoRootOf } from './guide/anchors';
-import { guideIndex } from './appctl/guide';
 const { setInterval, clearInterval } = timersFor('wiring/auto-close');
 
 import { attachAppTools, createLater, commandRunner, attachCommandAsks, attachOrchestratorWake, attachRunResults, attachProjectMaps, attachArtifacts, createAppSource, createAgentCatalog } from './wiring-shared';
@@ -809,9 +806,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     settings: () => brain.settings(), registry: () => brain.modelRegistry(),
     hasKey: id => engines.hasKey(id), addApiSpend: (id, usd) => engines.addSpend(id, usd), fallback: () => brain.settings().jobs?.fallback ?? 'auto',
     headless, text: engines.text, runs: manager.runs });
-  // «Chiedi alla Guida» (ADR 0196): one light one-shot on the Scout's engine; the anchors are checked only in a run from the repo
-  const guide = new GuideService({ runOnce: r => oneShot.runOnce(r), repoRoot: repoRootOf(path.dirname(fileURLToPath(import.meta.url))),
-    index: lang => guideIndex({ window: ctx.window, settings: { schema: () => brain.settingsSchema(), get: () => brain.settings() }, tools: () => [], showValues: () => false }, lang) });
   // the little people's lines of the day (ADR 0305): three light one-shots a day per language on the Herald's engine
   // (twice when the first try was not whole), when the setting is on; never in a test run
   const quips = new DailyQuipsService({ file: path.join(ctx.userData, 'quips-daily.json'), runOnce: r => oneShot.runOnce(r), on: () => !process.env.SB_TEST && brain.settings().quipsDaily !== false });
@@ -854,7 +848,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   void skillLibrary.ready().then(() => brainScripts.invalidate());
   // the one-click maintenance (ADR 0132, 0153): the free cleanup, the invisible research chat, its cards in Proposte
   const issuesUrl = issuesUrlOf(app.getAppPath()), appIssuesUrl = () => issuesUrl;
-  const research = new ResearchService({ guideRepo: () => repoRootOf(path.dirname(fileURLToPath(import.meta.url))), userData: ctx.userData, lang: uiLang, root: () => brain.info().brainRoot, appVersion: () => app.getVersion(), issuesUrl: appIssuesUrl, appDir: () => app.getAppPath(),
+  const research = new ResearchService({ userData: ctx.userData, lang: uiLang, root: () => brain.info().brainRoot, appVersion: () => app.getVersion(), issuesUrl: appIssuesUrl, appDir: () => app.getAppPath(),
     // engines that are on, read files (an API engine has no tools here) and report their cost (the cap is enforced on
     // it: Codex and the ACP engines report none, so the research would run to the hour with "0 $" on screen)
     engines: () => engineInfos().filter(e => e.kind !== 'api' && e.caps.cost && e.caps.tools && engineOn(brain.settings(), e.id)).map(e => ({ harness: e.id, label: e.label, web: true, effort: e.caps.effort })),
@@ -912,7 +906,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     judging: { estimate: now => judgingEstimate(manager.runs.list(), now, { shares: judgeShares(), capUsd: Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD, lastBatch: judgeSampler.lastBatch() }) },
     phonePort: createPhonePort(manager, ctx.emitter, awayCommands),
     worktreePool,
-    chats, browser, recordings, learn, news, projectMaps, brain, mcp, addChatTools, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, modelLists, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, quips, userCorrections,
+    chats, browser, recordings, learn, news, projectMaps, brain, mcp, addChatTools, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, modelLists, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, quips, userCorrections,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : null),
       checkpoint: () => manager.checkpointForUpdate(),

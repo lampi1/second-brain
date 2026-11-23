@@ -12,10 +12,10 @@
 // screen (FindBar.tsx), a table of contents beside a Markdown document with three or more headings (Toc.tsx), wrapped or
 // unwrapped code, and a click on a line number copies the internal link to that line (sb://file/…). A file that is one of
 // Memoria's artifacts gets the artifact bar on top (components/library/ArtifactBar.tsx, ADR 0319).
-import {lazy,Suspense,useCallback,useEffect,useMemo,useRef,useState,type MouseEvent as ReactMouseEvent,type ReactNode} from 'react';
-import DOMPurify from 'dompurify';
+import {lazy,Suspense,useCallback,useEffect,useMemo,useRef,useState,type ReactNode} from 'react';
 import {DataTable,type Col} from '../components/DataTable';
 import {Markdown} from '../components/Markdown';
+import {Code} from '../components/CodeBlock';
 import {ReportHtml} from '../components/ReportHtml';
 import {ReportReview} from '../components/ReportReview';
 import {Empty} from '../components/States';
@@ -23,62 +23,16 @@ import {copyText,IconCopy,IconSearch,Seg,toast} from '../components/ui';
 import {FindBar} from '../components/FindBar';
 import {Toc} from '../components/Toc';
 import {baseName} from '../lib/text';
-import {extOf,fmtBytes,highlightLines,parseCsv,prettyJson,viewOf,type FileView} from '../lib/file-format';
+import {extOf,fmtBytes,parseCsv,prettyJson,viewOf,type FileView} from '../lib/file-format';
 import {fileLink} from '../lib/viewer-tools';
-import {indentGuides} from '../lib/indent-guides';
 import {Compare} from './FileDiff';
 import {ArtifactBar} from '../../components/library/ArtifactBar';
 import type {PDFDocumentProxy,PDFPageProxy} from '../lib/pdf';
 import {pdfPagesToDraw,samePages} from '../lib/pdf-window';
 import {t} from '../../i18n';
 const ImageZoom=lazy(()=>import('../../components/ImageZoom').then(m=>({default:m.ImageZoom})));
-import {FILE_PAGE_BYTES,lineCount,lineText,readFileViewArg,type FileReference,type FileViewResult} from '@shared/file-view';
+import {FILE_PAGE_BYTES,lineCount,readFileViewArg,type FileReference,type FileViewResult} from '@shared/file-view';
 type TextResult=Extract<FileViewResult,{kind:'text'}>;
-const WINDOW=4000;
-/** Above this many characters the text is shown without highlighting (highlight.js would hold the page up). */
-const HIGHLIGHT_CHARS=200_000;
-let purify:ReturnType<typeof DOMPurify>|null=null;
-const clean=(html:string)=>(purify??=DOMPurify(window)).sanitize(html,{ALLOWED_TAGS:['span'],ALLOWED_ATTR:['class']});
-/** `text` has only \n line ends (DOMPurify's HTML parser would turn a lone \r into \n and shift the lines). */
-function useHighlight(text:string,path:string,on:boolean):string[]|null{
-  const [state,setState]=useState<{text:string;path:string;lines:string[]|null}>({text:'',path:'',lines:null});
-  useEffect(()=>{
-    if(!on||text.length>HIGHLIGHT_CHARS)return;
-    let live=true;
-    void highlightLines(text,path,clean).then(lines=>{if(live)setState({text,path,lines});}).catch(()=>{if(live)setState({text,path,lines:null});});
-    return()=>{live=false;};
-  },[on,text,path]);
-  return on&&state.text===text&&state.path===path?state.lines:null;
-}
-/** `base` = the file line number of the text's first line (none: main did not count that far, so no numbers).
- *  `wrap` = long lines wrap under themselves (the numbers keep their column); `onPick` = a line number was clicked. */
-function Code({ text, path, line, base=1, wrap=false, picked, onPick }: { text: string; path: string; line?: number; base?: number|null; wrap?: boolean; picked?: number; onPick?: (n:number)=>void }) {
-  const ref = useRef<HTMLPreElement>(null);
-  // rows follow main's line rule (lineCount): a lone \r stays inside its row, so a page's numbers match main's
-  const flat = useMemo(()=>lineText(text),[text]);
-  const lines = useMemo(()=>flat.split('\n'),[flat]);
-  const at = line&&base?line-base+1:undefined;
-  // a very long text without a cited line is one plain block, so it is not highlighted either
-  const html = useHighlight(flat,path,lines.length<=WINDOW||!!at);
-  const w = String(lines.length+(base??1)).length;
-  const guides = useMemo(()=>indentGuides(lines),[lines]);
-  useEffect(() => {const target=line?ref.current?.querySelector<HTMLElement>(`[data-l="${line}"]`):null;target?.scrollIntoView({block:'center',inline:'nearest'});}, [line, text, html]);
-  const cls=`bx-code bx-scroll${wrap?' is-wrap':''}`;
-  // a very long text stays one text block (one element per line would slow the page down)
-  if (lines.length > WINDOW&&!at) return <pre ref={ref} className={cls} data-testid="bx-code" data-wrap={wrap?'true':undefined}>{text}</pre>;
-  const first=lines.length>WINDOW?Math.max(0,Math.min(lines.length-WINDOW,(at??1)-WINDOW/2)):0,number=(i:number)=>base?i+base:null;
-  const pick=(e:ReactMouseEvent<HTMLPreElement>)=>{const n=Number((e.target as HTMLElement).closest('.bx-ln')?.parentElement?.dataset.l);if(onPick&&n>0)onPick(n);};
-  return (
-    <pre ref={ref} className={`${cls} hljs`} style={{['--ln-w' as string]:`${w+2}ch`,['--ig' as string]:`${guides.unit}ch`}} data-testid="bx-code" data-highlighted={html?'true':undefined} data-wrap={wrap?'true':undefined} onClick={pick}>
-      {first>0&&<div className="bx-code-window" data-find-skip>{t('viewer.window',{first:first+(base??1),last:Math.min(lines.length,first+WINDOW)+(base??1)-1,total:lines.length+(base??1)-1})}</div>}
-      {lines.slice(first,first+WINDOW).map((l, offset) => {const i=first+offset,h=html?.[i],n=number(i);
-        return <div key={i} className={`bx-cl${n!==null&&n===line?' is-cited':''}${n!==null&&n===picked?' is-picked':''}`} data-l={n??undefined} style={n!==null&&n === line ? { background: 'var(--bx-amber-bg)' } : undefined}>
-          {n!==null&&<span className={`bx-ln${onPick?' is-link':''}`} data-find-skip title={onPick?t('vw.lineLink',{n}):undefined}>{n}</span>}
-          <span className="bx-lc">{guides.cols[i]?<span className="bx-ig" aria-hidden data-find-skip style={{width:`${guides.cols[i]}ch`}}/>:null}{h?<span dangerouslySetInnerHTML={{__html:h||' '}}/>:l || ' '}</span></div>;})}
-    </pre>
-  );
-}
-
 function Jsonl({ text, name }: { text: string; name: string }) {
   const rows = useMemo(() => text.split(/\r?\n/).filter(Boolean).map(l => {
     try { const o = JSON.parse(l) as Record<string, unknown>; return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === 'object' && v !== null ? JSON.stringify(v) : v])); } catch { return { [t('viewer.jsonlLine')]: l }; }

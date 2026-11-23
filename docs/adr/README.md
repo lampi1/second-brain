@@ -119,7 +119,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0119](0119-simple-onboarding.md) Simple onboarding: the language first, six steps, tool tiles — accepted, partly superseded by 0279
 - [0120](0120-one-language-for-ui-and-ai.md) One language for the UI and the AI, switched from the top bar — accepted
 - [0121](0121-strategist-really-asks.md) The Strategist really asks: a question before the plan, the plan's approval in the questions window — accepted
-- [0122](0122-memoria-hub.md) Memoria is the hub: one page with tabs, no Dashboard — accepted, partly superseded by 0243, 0263
+- [0122](0122-memoria-hub.md) Memoria is the hub: one page with tabs, no Dashboard — accepted, partly superseded by 0243, 0263, 0340
 - [0123](0123-proposals-deck.md) Memoria → Proposte: every proposal is one card in one deck — accepted
 - [0124](0124-saved-queries-and-ideas-migration.md) Saved queries next to scripts, and the ideas scattered in the notes move to ideas.md — accepted, partly superseded by 0263
 - [0125](0125-every-role-levels-up-from-outcomes.md) Every role levels up from outcomes; no copy-link bar button, no agent packs — accepted, partly superseded by 0203
@@ -192,7 +192,6 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0193](0193-proposals-ask-only-when-not-obvious.md) Proposte asks only when the answer is not obvious — accepted
 - [0194](0194-itemized-maintenance-lint-and-success-criteria.md) Maintenance quality: itemized changes, a brain lint and «riuscito se…» — accepted
 - [0195](0195-candidate-brain-and-role-reflection.md) The maintenance writes a candidate brain, and reflects on one role's text as a trial — accepted
-- [0196](0196-guide-knows-when-stale.md) The Guida knows when it is stale, answers questions, draws from the code and picks cards for the user — accepted, partly superseded by 0296
 - [0197](0197-corrections-kind-examples-and-ppi.md) The user's corrections counted by the app, the kind of work by examples, and PPI for role success — accepted, partly superseded by 0291
 - [0198](0198-developer-speed-typecheck-e2e-baseline-agents-map.md) Developer speed: TypeScript 7 typecheck, an e2e baseline of known reds, AGENTS.md as a map — accepted
 - [0199](0199-agent-runs-in-sqlite.md) The agent runs move from agent-runs.json to SQLite (userData/app.db) — accepted
@@ -204,7 +203,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0205](0205-impara-studio-visuals-and-quality.md) Impara: the «Studio» column, a visual for each piece, and a quality gate — accepted
 - [0206](0206-impara-file-driven-web-research.md) Impara: web research driven by the user's files, through a deterministic filter — accepted
 - [0207](0207-settings-redesign-and-easy-mcp.md) Settings redesign, MCP servers in one paste, the Orchestrator configures everything — accepted, partly superseded by 0296
-- [0208](0208-docs-keep-up-with-the-code.md) Docs keep up with the code: tool catalog, Guida coverage, README freshness — accepted
+- [0208](0208-docs-keep-up-with-the-code.md) Docs keep up with the code: tool catalog, Guida coverage, README freshness — accepted, partly superseded by 0340
 - [0209](0209-strategist-asks-more-and-varied-reactions.md) The Strategist asks at least three questions; reactions fit the message; Flash writes the brief — accepted, partly superseded by 0220, 0223, 0296
 - [0210](0210-remove-model-routing.md) Remove the model-routing classifier: every agent runs on its own card's model — accepted, partly superseded by 0291
 - [0211](0211-small-fixes-and-real-effort.md) Agent card picks model, effort and context; real effort names; owner's small fixes of 2026-10-31 — accepted
@@ -332,6 +331,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0335](0335-project-map-line-top-to-bottom-with-parallel-frames.md) A line of phases and steps is drawn top to bottom, with parallel groups in their own frame; the Strategist plans with dependencies — accepted
 - [0336](0336-model-presets.md) Per-task model presets Minimo / Base / Massimo on each role card, picked by delegation under the delegator's price ceiling — accepted; amended by 0337
 - [0337](0337-model-choice-on-the-role-card.md) Model choice and Code Mode live on the role card; Settings has none; one approved model choice guide — accepted
+- [0340](0340-no-guide-page-and-a-four-tab-memory.md) No Guida page, and a Memoria of four tabs with a real Skill view — accepted
 
 ## Replaced
 
@@ -350,4 +350,5 @@ Kept for the history only: the record named on each line holds the current decis
 - [0107](0107-flash-agent-with-its-own-model.md) «Flash»: the quick lane is an agent with its own model; both columns show theirs — superseded by 0296
 - [0115](0115-fatto-lists-macro-tasks.md) Fatto lists the work the user asked for, with what it cost in all — superseded by 0181
 - [0133](0133-personal-browser.md) A personal browser for the user, apart from the agents' browsers — superseded by 0212
+- [0196](0196-guide-knows-when-stale.md) The Guida knows when it is stale, answers questions, draws from the code and picks cards for the user — superseded by 0340
 - [0281](0281-scheduled-routines.md) Scheduled routines: a request the Orchestrator receives at its time — superseded by 0325

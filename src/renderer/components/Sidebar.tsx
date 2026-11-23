@@ -1,7 +1,7 @@
 // The app rail groups work, the Brain (ADR 0077: Agenti, Memoria and the Mappa of their links; Memoria is the one hub of
-// the brain's content since ADR 0122, with Skill, Regole and Idee as its tabs, and carries the count of
+// the brain's content since ADR 0122, with Diario, Artifact, Skill and Proposte as its tabs, and carries the count of
 // proposals waiting for the user), Andamento (one page since ADR 0202: Costi, Qualità, Apprendimento, Uso) and app
-// tools (Log = everything the app did, live, ADR 0111, Guida; the Dashboard is gone, ADR 0122). Role-specific pages
+// tools (Log = everything the app did, live, ADR 0111). Role-specific pages
 // exclude destinations already supplied by the shell. Under the Grindhouse entry, the open agents as a delegation
 // tree (SidebarTree.tsx). Used by App.tsx.
 import type { ReactNode } from 'react';
@@ -12,7 +12,7 @@ import { useTasks } from '../store/tasks';
 import { ui } from '../store/ui';
 import { go, showOverview } from '../actions';
 import {
-  IconLearn, IconBrain, IconChess, IconChart, IconGrid, IconHistory, IconLayers, IconLightbulb, IconList, IconMap, IconMic, IconQuestion, IconSettings, IconShield, IconSparkle, IconTerminal, IconTicket,
+  IconLearn, IconBrain, IconChess, IconChart, IconGrid, IconHistory, IconLayers, IconList, IconMap, IconMic, IconSettings, IconSparkle, IconTerminal, IconTicket,
 } from './Icons';
 import { t } from '../i18n';
 import {workProfile} from '../../shared/work-profiles';
@@ -23,16 +23,15 @@ import { HUB_PAGES } from '../lib/memory-hub';
 const ICON: Record<BrainPageId, ReactNode> = {
   home: <IconGrid />,
   agenti: <IconLayers />,
-  idee: <IconLightbulb />,
   andamento: <IconChart />, script: <IconTerminal />, log: <IconList />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
-  guida: <IconQuestion />, registrazioni: <IconMic />, impara: <IconLearn />, scacchi: <IconChess />,
-  regole: <IconShield />, memoria: <IconHistory />, collegamenti: <IconMap />,
+  registrazioni: <IconMic />, impara: <IconLearn />, scacchi: <IconChess />,
+  memoria: <IconHistory />, collegamenti: <IconMap />,
 };
 
 /** The pages of the two lower groups, in order (Lavoro is built by hand: Task can hide). */
 const BRAIN_GROUP: BrainPageId[] = [];
 /** The Brain section: always shown, whatever the role (ADR 0077; the owner, 2026-10-19: the brain must be visible; its
- *  changelog is on the Log page, ADR 0111). Skill, Regole, Script and Idee are Memoria's tabs (ADR 0122). */
+ *  changelog is on the Log page, ADR 0111). Skill and Script are Memoria's Skill tab (ADR 0122, 0263). */
 const BRAIN_CORE: BrainPageId[] = ['agenti', 'memoria', 'collegamenti'];
 /** Andamento: how the work goes (money, quality, learning, the app's own use) in one page; always shown
  *  (ADR 0101, 0109, 0202), last entry of the Brain group (owner, 2026-10-31: no group of its own for one entry). */
@@ -49,7 +48,7 @@ export function Sidebar() {
   const saved=ui.use(s=>s.prefs.workProfile);
   const composition=workProfile(saved,BRAIN_PAGES.map(page=>page.id));
   const show=(id:BrainPageId)=>!composition||composition.pageIds.includes(id);
-  const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','log','guida','registrazioni','impara','scacchi','task','impostazioni',...BRAIN_CORE,...TRENDS,...IN_MEMORIA].includes(id)):BRAIN_GROUP;
+  const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','log','registrazioni','impara','scacchi','task','impostazioni',...BRAIN_CORE,...TRENDS,...IN_MEMORIA].includes(id)):BRAIN_GROUP;
   const page = ui.use(s => s.page);
   const map = ui.use(s => s.map);
   const read = ui.use(s => s.read);
@@ -93,7 +92,6 @@ export function Sidebar() {
         {TRENDS.map(page1)}
         {title(t('dialogs.sidebar.app'), 'app')}
         {page1('log')}
-        {page1('guida')}
         {page1('scacchi')}
       </div>
     </nav>

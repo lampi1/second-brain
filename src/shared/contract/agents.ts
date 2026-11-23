@@ -1,4 +1,4 @@
-// Agents: roles, avatars, work threads, connectors and MCP servers, the Guida.
+// Agents: roles, avatars, work threads, connectors and MCP servers.
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
 import type { AgentImages } from '../agent-images';
@@ -7,7 +7,6 @@ import type { AgentLifecycleDecide, AgentLifecycleSnapshot } from '../agent-life
 import type { LearnedRuleProposal } from '../agent-pack';
 import type { AgentCatalog, AgentDraft, AgentMetrics, AgentMetricsFilter, AgentProfile, AgentUndo, AgentVersion, JudgingEstimate } from '../agents';
 import type { ConnectorId, ConnectorState, ConnectorToken } from '../connectors';
-import type { GuideAnswer, GuideAskRequest, GuideStaleState } from '../guide-ask';
 import type { McpImportCandidate, McpServerDef, McpServersState, McpToolAccess } from '../mcp-servers';
 import type { RoleId } from '../roles';
 import type { RunEstimates } from '../task-estimate';
@@ -73,10 +72,6 @@ export interface AgentsInvokeMap {
   'avatars:get': [void, AgentImages];
   'avatars:set': [{ id: RoleId; bytes: Uint8Array }, AgentImages];
   'avatars:reset': [{ id: RoleId }, AgentImages];
-  /** «Chiedi alla Guida» (ADR 0196): one light model, no tools, the Guida cards as context */
-  'guide:ask': [GuideAskRequest, GuideAnswer];
-  /** the Guida cards whose anchored code changed (a run from the repo; checked: false in a packaged build) */
-  'guide:stale': [void, GuideStaleState];
   /** the little people's lines of the day (main/quips/daily.ts, ADR 0305): the lines to say now; `wait` writes
    *  today's first when they are due (three light model calls, at most twice a day per language) */
   'agents:quips': [{ lang: Lang; wait?: boolean }, { lines: DailyQuips; pending: boolean }];

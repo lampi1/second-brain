@@ -20,7 +20,7 @@ test('record a call, see it transcribed with Tu and Altri, stop from the pill', 
     await shot(page, 'recordings-live-dark');
 
     // the pill stays on another page and stops the call
-    await goPage(page, 'guida');
+    await goPage(page, 'task');
     await expect(pill).toBeVisible();
     await page.getByTestId('rec-pill-stop').click();
     await expect(pill).toHaveCount(0);

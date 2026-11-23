@@ -18,8 +18,8 @@ for (const lang of ['it', 'en']) test(`Home is the default Grindhouse and keeps 
     await shot(page, `home-${lang}`);
     await expect(page.getByTestId('nav-home')).toHaveAttribute('aria-label', 'Grindhouse');
     await expect(page.getByTestId('nav-workspace')).toHaveCount(0);
-    // Agenti is in the Brain group (ADR 0077), Andamento (Costi, Qualità… as tabs, ADR 0202) in its group; Idee only in a
-    // work profile that lists it; Confronto is gone (ADR 0201)
+    // Agenti is in the Brain group (ADR 0077), Andamento (Costi, Qualità… as tabs, ADR 0202) in its group; Confronto
+    // (ADR 0201) and Idee (ADR 0340) are gone
     for (const id of ['agenti', 'andamento']) await expect(page.getByTestId(`nav-${id}`)).toBeVisible();
     for (const id of ['costi', 'qualita', 'classificatori']) await expect(page.getByTestId(`nav-${id}`)).toHaveCount(0);
     for (const id of ['confronto', 'idee']) await expect(page.getByTestId(`nav-${id}`)).toHaveCount(0);

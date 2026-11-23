@@ -128,14 +128,12 @@ change. Do not expose user-only confirmation or widen worker permissions.
 
 ## 13. Docs keep up with the code
 
-The README (always English, with fresh screenshots), the Guida and the Orchestrator's `app_guide` describe the app as it
+The README (always English, with fresh screenshots) and the Orchestrator's `app_guide` describe the app as it
 is now, in the same change that alters it (owner, 2026-10-30; ADR 0208). `npm run check:branch` fails, with the fix in
 its message, when:
 
 - an MCP tool the app registers has no row in `src/main/appctl/tool-catalog.ts` (what `app_guide` reads for the tools
   of other mounts) or no line in [commands.md «MCP tools»](commands.md#mcp-tools), or a row names a tool that is gone;
-- a page of `BRAIN_PAGES` or a Settings section has no Guida card in Italian, English and German
-  (`src/shared/guide-coverage.ts`), or a card describes code that changed after its text (the anchors, ADR 0196);
 - README.md reads as Italian or German, shows an image that does not exist or a screenshot that
   `test/shots/readme.spec.ts` does not take, or never mentions a page of `BRAIN_PAGES`;
 - the branch changed the UI a screenshot shows (its sources in `docs/readme-shots.json`) without taking it again
@@ -154,5 +152,4 @@ Each check fails (or warns) with the fix in its message, so an agent can act on 
 | Process boundaries | `no-restricted-imports` in `eslint.config.js` | error | the renderer never imports main, preload, Node or Electron; main never imports the renderer; the routine runtime never imports Electron, main or the renderer |
 | e2e red on main | `scripts/e2e-verdict.mjs` in `npm run check` | check fails on «nuovi rossi» | fix the test; a test red on main for another reason goes in `test/e2e/known-red.json` with `node scripts/e2e-baseline.mjs --update` |
 | Tools documented (rule 13) | `test/unit/tool-catalog.test.ts`, always run by `npm run check:branch` | test fails | add the tool's row to `src/main/appctl/tool-catalog.ts` and its line to commands.md «MCP tools»; drop the rows of a removed tool |
-| Guida covers the app (rule 13) | `test/unit/guide-anchors.test.ts` and `node scripts/guide-anchors.mjs --check` | test fails | write the card (it, en, de) or map the page/section to one in `src/shared/guide-coverage.ts`; re-read a stale card, then `node scripts/guide-anchors.mjs` |
 | README fresh (rule 13) | `scripts/readme-check.mjs` in `npm run check:branch`; `test/unit/readme-check.test.ts` | check fails | write it in English, take the shot (`npm run shots`) and map it in `docs/readme-shots.json`, mention the page; or `shots: unchanged-visually [shot]` in a commit message for a change nobody can see |

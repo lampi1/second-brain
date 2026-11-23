@@ -51,7 +51,6 @@ import { settingsShellDe } from './areas/settings-shell.de';
 import { mcpAddDe } from './areas/mcp-add.de';
 import { profileDe } from './areas/profile.de';
 import { homeDe } from './areas/home.de';
-import { guideDe } from './areas/guide.de';
 import { treeDe } from './areas/tree.de';
 import { aliveDe } from './areas/alive.de';
 import { modelPickerDe } from './areas/model-picker.de';
@@ -81,7 +80,6 @@ export const de: Dict = {
   ...setupDe,
   ...viewerOverlayDe,
   ...homeDe,
-  ...guideDe,
   ...treeDe,
   ...aliveDe,
   ...modelPickerDe,

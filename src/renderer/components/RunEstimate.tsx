@@ -45,7 +45,7 @@ function EstimateHelp({ view, agent, summary }: { view: RunEstimateView; agent: 
   const kind = kindWord(e.kind);
   const basis = t(`estimate.basis.${e.basis!}` as 'estimate.basis.kind', { agent });
   const est = estimateText(e);
-  return <HelpTip title={t('estimate.tipTitle')} label={t('estimate.tipTitle')} wide guide="classifiers" testid={`estimate-help-${view.runId}`} example={t('estimate.example')}>
+  return <HelpTip title={t('estimate.tipTitle')} label={t('estimate.tipTitle')} wide testid={`estimate-help-${view.runId}`} example={t('estimate.example')}>
     <p>{t('estimate.tipBody', { n: e.n, basis, kind })}</p>
     <p>{t('estimate.tipFigures')}</p>
     {e.timeLowMs !== null && e.timeHighMs !== null && <p>{t('estimate.tipRange', { low: minutes(e.timeLowMs), high: minutes(e.timeHighMs) })}</p>}

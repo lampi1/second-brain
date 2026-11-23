@@ -1,7 +1,7 @@
 // The skill library (#361-#364, ADR 0241): every skill a chat can load, as a whole package (SKILL.md, scripts/,
 // references/, assets/), for the Memoria «Skill» tab and the Orchestrator's skill tools (appctl/skills.ts). Origins:
-// the brain's `.agents/skills` (the one copy, skills/layout.ts), the user's own ~/.agents and ~/.claude skills, and the
-// app's shipped skills (the rendered copy of brain-template/harness/claude/skills). The brain wins a name, then the
+// the brain's `.agents/skills` (the one copy, skills/layout.ts), the user's own ~/.agents and ~/.claude skills (shown as
+// Brain: two sources only, owner 2026-11-23), and the app's shipped skills (the rendered copy of brain-template/harness/claude/skills). The brain wins a name, then the
 // user's, then the app's, as at launch (agents/pack/shared-skills.ts). Every text write goes through the brain's change
 // log (brainmodel/changes.ts), so each skill has its own history with a diff and Undo (#363); the user's PreToolUse
 // hooks see every write first (skills/guard.ts, ADR 0018). An app skill is read-only where it ships: its first edit
@@ -58,7 +58,11 @@ const real = (p: string): string => { try { return fs.realpathSync(p); } catch {
 const inside = (dir: string, file: string): boolean => { const r = path.relative(dir, file); return !!r && !r.startsWith('..') && !path.isAbsolute(r); };
 const NO_AGENT = { activeVersion: () => null, restore: () => { throw new Error('not a role change'); } };
 
-interface Found { name: string; origin: SkillOrigin; folder: string; overridesApp: boolean }
+/** Where a skill folder lives: the user's own ~/.claude or ~/.agents folder stays `home` inside (only the page writes
+ *  it) and shows as `brain` (owner 2026-11-23: his own skills are part of the brain). */
+type Place = SkillOrigin | 'home';
+const shown = (p: Place): SkillOrigin => (p === 'home' ? 'brain' : p);
+interface Found { name: string; origin: Place; folder: string; overridesApp: boolean }
 
 /** Every file of a skill package (links and hidden files left out), bounded. */
 export function packageFiles(folder: string): SkillFile[] {
@@ -146,7 +150,7 @@ export class SkillLibrary {
   }
 
   /** The folders to look in, in launch order, with their origin. */
-  private places(root: string | null): { dir: string; origin: SkillOrigin }[] {
+  private places(root: string | null): { dir: string; origin: Place }[] {
     const app = this.d.appSkills();
     return [
       ...(root ? [{ dir: brainSkillsDir(root), origin: 'brain' as const }, { dir: claudeSkillsDir(root), origin: 'brain' as const }] : []),
@@ -221,7 +225,7 @@ export class SkillLibrary {
     let changedAt: number | null = null;
     try { changedAt = fs.statSync(skillMd).mtimeMs; } catch { /* gone */ }
     return {
-      name: f.name, description: (field(p, 'description') ?? '').trim(), origin: f.origin, overridesApp: f.overridesApp, folder: f.folder,
+      name: f.name, description: (field(p, 'description') ?? '').trim(), origin: shown(f.origin), overridesApp: f.overridesApp, folder: f.folder,
       files, parts: skillParts(f.folder, files), area: areaOf(text),
       roles: roles.filter(r => r.skills.includes(f.name) || !!r.knowhow?.linked.includes(f.name)).map(r => r.id),
       uses: [...byRole].map(([role, u]) => ({ role, ...u })).sort((a, b) => b.uses - a.uses),
@@ -271,7 +275,7 @@ export class SkillLibrary {
     const st = fs.statSync(file);
     if (!st.isFile()) throw new Error('Non è un file.');
     const buf = st.size > MAX_TEXT ? null : fs.readFileSync(file);
-    return { skill: f.name, path: rel, text: buf && isText(buf) ? buf.toString('utf8') : null, size: st.size, mtime: st.mtimeMs, origin: f.origin };
+    return { skill: f.name, path: rel, text: buf && isText(buf) ? buf.toString('utf8') : null, size: st.size, mtime: st.mtimeMs, origin: shown(f.origin) };
   }
 
   /** The absolute file of `rel` in `folder`: a plain path that stays inside, through no link. */

@@ -1,8 +1,8 @@
 // The small statistics parts the Dashboard used to hold, kept after it left (ADR 0122: its cards moved to Memoria, Costi,
-// Qualità and Idee): a panel with its "Discuti" (a source-preserving draft for the Orchestrator, never sent by itself),
+// Qualità): a panel with its "Discuti" (a source-preserving draft for the Orchestrator, never sent by itself),
 // an empty state, the source line with its refresh, a number tile with its "?" and a count-up that eases a number to
 // its new value (the last frame is always the exact value; none under prefers-reduced-motion). Used by
-// AppErrors.tsx (Qualità: the app's own errors), Themes.tsx (the themes on Memoria → Idee and Qualità), BrainNotesMap.tsx
+// AppErrors.tsx (Qualità: the app's own errors), Themes.tsx (the errors' themes on Qualità), BrainNotesMap.tsx
 // and components/brain-model/MemoryPage.tsx (the live counters). Styles: dashboard.css.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { brainBridge } from '../actions';

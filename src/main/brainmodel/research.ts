@@ -40,8 +40,7 @@ import { allPolicies, issueCardsWanted } from '../proposals/policy';
 import { defaultPrompt, MAX_PROMPT, researchFrame, researchMessage } from './research-prompt';
 import { ResearchStore } from './research-store';
 import { CandidateService, isCandidateFinding, type CandidatePorts } from './research-candidate';
-import { guideMaintenanceSection } from '../guide/maintenance';
-import { GUIDE_SECTION, LESSONS_SECTION } from './research-tools';
+import { LESSONS_SECTION } from './research-tools';
 import type { SkillLesson } from '../skills/lessons';
 import { checkRoleText, pickRole, reflectSection, REFLECT_BUDGET_SHARE, ROLE_REFLECT_SECTION, type ReflectPick } from './role-reflect';
 import { readLocal, writeLocal } from '../agents/local-store';
@@ -109,9 +108,6 @@ export interface ResearchDeps {
   /** starts a trial version of a role with a revised text (catalog approveTrial), refused when the role is no longer on
    *  `baseVersion` (ADR 0195); absent = the research gets no role reflection */
   roleTrial?: (role: string, text: string, baseVersion: number, reason: string) => void;
-  /** the app's own repository when run from a clone (guide/anchors.ts repoRootOf): the Guida cards whose code changed
-   *  and the German left to translate (ADR 0196), read as the pack section «guide»; absent or null = not offered */
-  guideRepo?: () => string | null;
   /** Bounded direct conversation samples from the host's history readers; no engine launch. */
   conversations?: () => readonly Conversation[];
   /** the chats and work threads active since `since` (the previous maintenance), newest first; kind: who wrote in it
@@ -456,7 +452,6 @@ export class ResearchService {
       const start = Number(at), next = start + 10;
       return `${r.fence.note}\n${r.fence.wrap(JSON.stringify({ ...this.inventory, issues: this.inventory.issues.slice(start, next), total: this.inventory.issues.length, nextOffset: next < this.inventory.issues.length ? next : null }))}`;
     }
-    if (section === GUIDE_SECTION) { const repo = this.d.guideRepo?.() ?? null; return repo ? guideMaintenanceSection(repo) : 'Not offered: the app is not running from its repository.'; }
     if (section === LESSONS_SECTION) { r.lessons.read = true; return r.lessons.text; }
     if (section === ROLE_REFLECT_SECTION) return reflectSection(r.reflect, { clean: t => scrub(t, this.privacy()), budgetLeft: this.reflectBudget(r), fence: r.fence });
     if (!PACK_SECTIONS.includes(s)) throw new Error(`section: one of ${PACK_SECTIONS.join(', ')}.`);

@@ -3,9 +3,10 @@
 // Shapes shared by main (skills/library.ts, appctl/skills.ts) and the Memoria «Skill» tab (SkillsPage.tsx).
 import type { SkillLint } from './skill-lint';
 
-/** brain = the brain's `.agents/skills` (the one copy, `.claude/skills` links to it); app = shipped with the app
- *  (read-only: an edit makes a brain copy that replaces it); home = the user's own ~/.claude or ~/.agents skills */
-export type SkillOrigin = 'brain' | 'app' | 'home';
+/** brain = the user's skills: the brain's `.agents/skills` (the one copy, `.claude/skills` links to it) and the user's
+ *  own ~/.claude or ~/.agents skills (owner 2026-11-23: «quelle mie ... fanno parte del brain»); app = shipped with the
+ *  app (read-only: an edit makes a brain copy that replaces it). Only these two sources are shown. */
+export type SkillOrigin = 'brain' | 'app';
 
 export interface SkillFile {
   /** path inside the skill's folder, with `/` (`SKILL.md`, `scripts/run.mjs`, `assets/query.sql`) */
@@ -43,6 +44,11 @@ export interface UnassignedAsset {
 }
 export interface AssetAssign { kind: 'script' | 'query'; name: string; skill: string }
 export type AssetAssignResult = { ok: true; changeId: string | null; file: string } | { ok: false; error: string };
+
+/** The engines whose runs record which skill an agent opened (Claude's Skill tool, main/chats/manager-sink.ts); the
+ *  others do not yet, so the Skill page says their uses are not counted. */
+export const USAGE_TRACKED_ENGINES: readonly string[] = ['Claude'];
+export const USAGE_UNTRACKED_ENGINES: readonly string[] = ['Codex', 'Cursor', 'OpenCode', 'Antigravity'];
 
 export interface SkillRoleUse { role: string; uses: number; lastAt: number }
 

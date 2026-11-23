@@ -1,6 +1,6 @@
 // The Brain section's view helpers and pages (ADR 0077): one skill list from the brain model and the skill editor,
-// filters, the Mappa links graph, the agent-choice match, "no data yet" instead of zero, and the Regole / Memoria
-// pages rendered from a fixed state in both languages.
+// filters, the Mappa links graph, the agent-choice match, "no data yet" instead of zero, and the Memoria
+// page rendered from a fixed state in both languages.
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -16,7 +16,6 @@ vi.mock('../../../src/renderer/store/brain-model', () => ({
 }));
 vi.mock('../../../src/renderer/brain/api', () => ({ useBrain: () => ({ data: null, loading: true, refreshing: false, error: null, at: null, reload: () => {} }) }));
 import { brainModel } from '../../../src/renderer/store/brain-model';
-import { RulesPage } from '../../../src/renderer/components/brain-model/RulesPage';
 import { MemoryPage } from '../../../src/renderer/components/brain-model/MemoryPage';
 import { MaintenancePanel } from '../../../src/renderer/components/brain-model/MaintenancePanel';
 import { setLang } from '../../../src/renderer/i18n';
@@ -87,23 +86,16 @@ describe('links and sections', () => {
 });
 
 describe('pages', () => {
-  it('renders Regole and Memoria from the model, in both languages, with the maintenance log', () => {
+  it('renders Memoria from the model, in both languages, with the maintenance log', () => {
     brainModel.set(() => ({ state, error: null, busy: false }));
     setLang('it');
-    const rules = renderToStaticMarkup(createElement(RulesPage));
-    // «Sempre caricato» (#366): the fixed core first, the old topic and rule files below as no longer loaded
-    expect(rules).toContain('Regole fisse');
-    expect(rules.indexOf('Regole fisse')).toBeLessThan(rules.indexOf('Non più caricate'));
-    expect(rules).toContain('Vecchia');
-    expect(rules).not.toContain('Quando serve');
     tab('file');
     const mem = renderToStaticMarkup(createElement(MemoryPage));
-    expect(mem).toContain('data-testid="mb-page"'); // «Diario e note» (#368): the documents come from memory:docs
-    expect(mem).toContain('Diario e note');
+    expect(mem).toContain('data-testid="mb-page"'); // «Diario» (#368): the documents come from memory:docs
+    expect(mem).toContain('<span class="mh-tab-label">Diario</span>');
     expect(mem).toContain('Merged one line');
     setLang('en');
-    expect(renderToStaticMarkup(createElement(RulesPage))).toContain('No longer loaded');
-    expect(renderToStaticMarkup(createElement(MemoryPage))).toContain('Journal &amp; notes');
+    expect(renderToStaticMarkup(createElement(MemoryPage))).toContain('<span class="mh-tab-label">Journal</span>');
   });
   it('has no Statistiche tab and no lines-in-memory counter (ADR 0248: rules and notes are gone)', () => {
     brainModel.set(() => ({ state, error: null, busy: false }));

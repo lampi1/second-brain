@@ -54,7 +54,7 @@ export function AgentCatalogPage() {
       <p className="catalog-count" data-testid="catalog-summary"><strong>{t('agentsGrid.count', { n: profiles.filter(p => p.scope === 'role').length })}</strong>
         {working > 0 && <span data-state="working"><i aria-hidden="true" />{t('agentsGrid.workingCount', { n: working })}</span>}
         {trial > 0 && <span data-state="trial"><i aria-hidden="true" />{t('agentsGrid.trialCount', { n: trial })}</span>}
-        <HelpTip title={t('explain.team.title')} guide="agents" wide testid="catalog-summary-help"><p>{t('explain.team.p1')}</p><p>{t('explain.team.p2')}</p><p>{t('catalog.intro')}</p><p>{t('catalog.note')}</p></HelpTip></p>
+        <HelpTip title={t('explain.team.title')} wide testid="catalog-summary-help"><p>{t('explain.team.p1')}</p><p>{t('explain.team.p2')}</p><p>{t('catalog.intro')}</p><p>{t('catalog.note')}</p></HelpTip></p>
     </header>
     {(error || catalog?.problem) && <p role="alert">{error || catalog?.problem}<button type="button" className="link-btn" onClick={() => void refreshAgents()}>{t('studio.retry')}</button></p>}
     {!catalog && !error && <p role="status">{t('studio.loading')}</p>}

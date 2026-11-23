@@ -155,9 +155,6 @@ export interface BrainInvokeMap {
   'brainmodel:noise': [{ key: string; known: boolean }, BrainModelState];
   /** the user declares (on) or drops (off) a skill for an agent */
   'brainmodel:link': [{ skill: string; agentId: string; on: boolean }, BrainModelState];
-  /** the Memoria hub's «Approvate» trash (ADR 0122): removes a brain skill (by name), a rules/ file or a script (by id)
-   *  through the change log, so «Annulla» (brainmodel:rollback of the returned change) puts it back */
-  'brainmodel:remove': [{ kind: 'skill' | 'rule' | 'script'; target: string }, { state: BrainModelState; changeId: string }];
   /** the morning block (ADR 0102, main/morning/): presence = the user is here (the block opens on the first presence of
    *  the day or after 4 h away), get = the brief now (Ctrl+J's fallback), dismiss = Esc / Ok (not again that day) */
   'morning:brief': [{ op: MorningOp } | undefined, MorningState];

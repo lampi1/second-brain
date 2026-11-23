@@ -82,7 +82,7 @@ describe('caughtWeeks', () => {
 describe('quote topics', () => {
   const t: Topic = { kind: 'quote', quote: { id: 'err|fatto-non-verificato', what: 'errore', title: 'fatto non verificato', source: 'ai-errors.md', facts: ['3 volte', '', 'aree: QA (2)'] } };
   it('quotes source and facts and ends with the error question', () => {
-    expect(discussText(t, null)).toBe(`Let's discuss the recurring error «fatto non verificato» (source: ai-errors.md).\n\n- 3 volte\n- aree: QA (2)\n\n${ERROR_QUESTION}`);
+    expect(discussText(t)).toBe(`Let's discuss the recurring error «fatto non verificato» (source: ai-errors.md).\n\n- 3 volte\n- aree: QA (2)\n\n${ERROR_QUESTION}`);
   });
   it('keys by id', () => {
     expect(topicKey(t)).toBe('quote|err|fatto-non-verificato');

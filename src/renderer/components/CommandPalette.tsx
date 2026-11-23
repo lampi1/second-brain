@@ -28,7 +28,7 @@ import {
   toggleMaximize, toggleOrchestrator, askRenewOrchestrator, askClearOrchestrator, orchestratorId, newBrowser, newRequest,
   openMaps } from '../actions';
 import {
-  HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconLearn, IconChess, IconBranch, IconFile, IconBrain, IconChart, IconShield, IconFocus, IconGlobe,
+  HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconLearn, IconChess, IconBranch, IconFile, IconBrain, IconChart, IconFocus, IconGlobe,
   IconHistory, IconKeyboard, IconLayers, IconLightbulb, IconLink, IconList, IconLogin, IconMap, IconMaximize, IconMic, IconPlus, IconQuestion, IconSearch, IconSettings, IconStop,
   IconSparkle, IconTerminal, IconTicket,
 } from './Icons';
@@ -43,10 +43,9 @@ interface Cmd {
 const PAGE_ICON: Record<BrainPageId, ReactNode> = {
   home: <IconBrain />,
   agenti: <IconLayers />,
-  idee: <IconLightbulb />,
   andamento: <IconChart />, script: <IconTerminal />, log: <IconList />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
-  guida: <IconQuestion />, registrazioni: <IconMic />, impara: <IconLearn />, scacchi: <IconChess />,
-  regole: <IconShield />, memoria: <IconHistory />, collegamenti: <IconMap />,
+  registrazioni: <IconMic />, impara: <IconLearn />, scacchi: <IconChess />,
+  memoria: <IconHistory />, collegamenti: <IconMap />,
 };
 
 function buildCommands(): Cmd[] {
@@ -116,7 +115,7 @@ function buildCommands(): Cmd[] {
   for (const a of actions) out.push({ ...a, group: 'Azioni' });
   // the Grindhouse holds the agents (SPEC 19): Ctrl+1 and a search for "agenti" or "chat" land there
   for (const p of BRAIN_PAGES) out.push({ id: `page:${p.id}`, group: 'Vai a', title: p.label, shortcut: p.id === 'home' ? 'Ctrl+1' : p.key, icon: PAGE_ICON[p.id], run: () => go({ page: p.id }),
-    ...(p.id === 'home' ? { sub: t('home.workspace'), text: `${p.label} ${t('home.agents')} chat agents home` } : p.id === 'guida' ? { sub: t('guide.title'), text: `${p.label} guida guide aiuto help concetti concepts come funziona how it works` } : {}) });
+    ...(p.id === 'home' ? { sub: t('home.workspace'), text: `${p.label} ${t('home.agents')} chat agents home` } : {}) });
   // every Settings section by its title, description and search words (ADR 0207): «notifiche», «tema», «MCP» land on it
   for (const st of Object.values(settingsSections([]))) out.push({ id: `settings:${st.id}`, group: 'Vai a', title: `${t('essential.title')} › ${st.title}`, sub: st.description, icon: <IconSettings />,
     run: () => go({ page: 'impostazioni', arg: st.id }), text: `${t('essential.title')} ${st.title} ${st.description} ${st.search}` });

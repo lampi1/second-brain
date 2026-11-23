@@ -1,15 +1,15 @@
-// Memoria → Diario e note (#368): the pure part of the memory browser (components/brain-model/MemoryBrowser.tsx). The
-// shelves a document sits on (Diario: now.md and the journal days; Idee; Errori; Note: knowledge, shared and the roles'
-// old memories), the search (every word must appear, accents and case ignored) with how many lines match and the first
+// Memoria → Diario (#368): the pure part of the memory browser (components/brain-model/MemoryBrowser.tsx). The
+// shelves a document sits on (Diario: now.md and the journal days; Errori; Note: ideas.md, knowledge, shared and
+// the roles' old memories), the search (every word must appear, accents and case ignored) with how many lines match and the first
 // one as a snippet, and the order (Adesso first, then the newest journal day). DOM-free; tests:
 // test/unit/brain-ui/memory-browse.test.ts.
 import type { MemoryDoc } from '@shared/brain-model';
 
-export const SHELVES = ['all', 'diary', 'ideas', 'errors', 'notes'] as const;
+export const SHELVES = ['all', 'diary', 'errors', 'notes'] as const;
 export type Shelf = (typeof SHELVES)[number];
 
 export function shelfOf(kind: MemoryDoc['kind']): Exclude<Shelf, 'all'> {
-  return kind === 'now' || kind === 'journal' ? 'diary' : kind === 'ideas' ? 'ideas' : kind === 'errors' ? 'errors' : 'notes';
+  return kind === 'now' || kind === 'journal' ? 'diary' : kind === 'errors' ? 'errors' : 'notes';
 }
 
 const fold = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();

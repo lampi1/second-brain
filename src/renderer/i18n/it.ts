@@ -51,7 +51,6 @@ import { settingsShellIt } from './areas/settings-shell.it';
 import { mcpAddIt } from './areas/mcp-add.it';
 import { profileIt } from './areas/profile.it';
 import { homeIt } from './areas/home.it';
-import { guideIt } from './areas/guide.it';
 import { treeIt } from './areas/tree.it';
 import { aliveIt } from './areas/alive.it';
 import { modelPickerIt } from './areas/model-picker.it';
@@ -82,7 +81,6 @@ export const it = {
   ...setupIt,
   ...viewerOverlayIt,
   ...homeIt,
-  ...guideIt,
   ...treeIt,
   ...aliveIt,
   ...modelPickerIt,

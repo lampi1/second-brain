@@ -1,4 +1,4 @@
-/* Task: the page head comes from styles/agent-catalog.css (catalog-head, as on Agenti and Guida, issue #85); this file
+/* Task: the page head comes from styles/agent-catalog.css (catalog-head, as on Agenti, issue #85); this file
    adds the list of strips and the detail pane (ADR 0182). Only theme tokens, so dark and light follow the app; the
    entrance animations are catalog's own, off under reduced motion. Used by pages/Task.tsx. */
 .tk-page { display: block; min-width: 0; padding-top: 6px; color: var(--text); font-size: var(--fs-m); }

@@ -1,6 +1,6 @@
 # 0208 — Docs keep up with the code: tool catalog, Guida coverage, README freshness
 
-Status: accepted. Builds on ADR 0027, ADR 0149, ADR 0196 and ADR 0198.
+Status: partly superseded by ADR 0340 (D2, the Guida coverage: the Guida is gone); accepted. Builds on ADR 0027, ADR 0149, ADR 0196 and ADR 0198.
 
 2026-10-30.
 

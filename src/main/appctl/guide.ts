@@ -5,7 +5,7 @@
 // palette actions with their keys, the "?" help texts, the view); main adds the settings schema with the current values,
 // the usage counter's summary (ADR 0202: which pages and
 // actions the user used most in 14 days, local counts, on the authenticated Orchestrator's mount only),
-// the concepts of the Guida page (shared/concept-guide.ts), the caller's own tools and, from appctl/tool-catalog.ts,
+// the app's concepts (shared/concept-guide.ts), the caller's own tools and, from appctl/tool-catalog.ts,
 // every other tool of the app (the work chats', the browser's, the brain hooks'), so it knows the whole app (ADR 0208). Called on demand only, so it
 // costs no tokens in the Orchestrator's other turns (the token plan, ADR 0089). Without a topic: a short index; with
 // one: the matching entries in full. The outline (window.__sbScreen) is what is on screen now, private content left out
@@ -123,7 +123,6 @@ export function entries(ui: UiMap | null, d: GuideDeps, lang: GuideLang): Entry[
   out.push({ kind: 'concept', title: 'Impostazioni: ricerca, «Salvato» e Annulla (settings search, saved, undo, protected)', text: SETTINGS_PAGE });
   out.push({ kind: 'concept', title: 'Domande iniziali, skill dei ruoli e Plan', text: 'Per un nuovo lavoro l’Orchestrator verifica se resta una scelta importante. Il ruolo che la incontra chiede direttamente, una domanda Sì/No alla volta. Se vede uno svantaggio concreto propone una sola alternativa. In Plan contano tre risposte, inclusa la prima risposta verificata tramite intakeQuestion su app_create_chat o app_assign_task new-task. «Basta domande» chiude le domande. L’approvazione del piano resta nel suo pannello. agent_catalog elenca le skill di ogni ruolo; app_config apre la configurazione agenti. Le skill si leggono per il compito e non concedono permessi.' });
   out.push({ kind: 'concept', title: 'Connettori: moduli MCP elicitation nelle domande', text: 'Claude MCP forms appear in Da rispondere: up to eight flat text, enum, boolean or numeric fields; Altro accepts typed input. The user fills or refuses the form; defaults never approve it and there is no always-allow. Empty forms ask for confirmation. Nested schemas, unsupported constraints, URL requests and credential fields are cancelled with an explanation; use the connector login route for credentials. app_pending lists requests read-only; the user answers in the question panel.' });
-  out.push({ kind: 'concept', title: 'Guida: Chiedi alla Guida, Per te, da verificare (ask the guide)', text: 'The Guida page (app_ui page guida) has a question box on top, «Chiedi alla Guida»: the user\'s question goes to one light model with no tools (the Scout\'s engine, its lightest model) with the matching concept cards and this index; the answer cites cards (clickable) and source files, with its cost. Only the user\'s click asks; no approval (no tools). «Per te» lists the three cards this user needs most from local counters (the "?" opened, cards opened, questions to the Orchestrator, Log errors), zero tokens. A card marked «da verificare» describes code that changed after its text (only in a run from the repo). Cards about roles, delegation and the app\'s IPC show a diagram drawn from the code.' });
   for (const [title, text] of MEASURES_0197) out.push({ kind: 'measure', title, text });
   out.push({ kind: 'page', title: 'Andamento tabs (Trends: costi, qualita, apprendimento, uso)', text: ANDAMENTO_TABS });
   out.push({ kind: 'guide', title: 'Model choice: quale preset per ogni compito (model choice guide, Minimo/Base/Massimo, preset)', text: MODEL_CHOICE_GUIDE.trim() });
@@ -136,7 +135,7 @@ export function entries(ui: UiMap | null, d: GuideDeps, lang: GuideLang): Entry[
   out.push({ kind: 'concept', title: 'Telefono: stato adesso (phone bridge status, Telegram, pairing)', text: phoneNow(d) });
   out.push({ kind: 'usage', title: 'Uso dell\'app: funzioni e pagine usate di più (usage counter, most used features, quali funzioni uso di più, cosa uso poco)',
     text: `${USAGE_ABOUT} ${values ? (d.usage ?? (() => useCounts.summary()))() : 'The counts are shown only on the Orchestrator\'s own endpoint.'}` });
-  for (const c of CONCEPTS) out.push({ kind: 'concept', title: textOf(c.title, lang), text: `${textOf(c.summary, lang)} ${c.points.slice(0, 3).map(p => textOf(p, lang)).join(' ')} (more: the Guida page)` });
+  for (const c of CONCEPTS) out.push({ kind: 'concept', title: textOf(c.title, lang), text: `${textOf(c.summary, lang)} ${c.points.slice(0, 3).map(p => textOf(p, lang)).join(' ')}` });
   const own = d.tools();
   for (const t of own) out.push({ kind: 'tool', title: t.name, text: t.description });
   for (const [name, text] of otherTools(own)) out.push({ kind: 'tool', title: name, text });
@@ -191,7 +190,7 @@ function index(ui: UiMap | null, d: GuideDeps, lang: GuideLang): string {
     lines.push('Help topics: ' + ui.help.map(h => h.title).join(', '));
   } else lines.push('(the window did not answer: pages and sections missing; try again)');
   lines.push('Usage: which pages and actions the user uses most (local counter, 14 days): app_guide topic "uso", page andamento/uso.');
-  lines.push('Concepts (Guida page): ' + CONCEPTS.map(c => textOf(c.title, lang)).join(', '));
+  lines.push('Concepts: ' + CONCEPTS.map(c => textOf(c.title, lang)).join(', '));
   const byMount = new Map<ToolMount, string[]>();
   const mine = new Set(d.tools().map(t => t.name));
   for (const [name, info] of Object.entries(TOOL_CATALOG)) if (!mine.has(name)) for (const w of info.where) { const l = byMount.get(w) ?? []; l.push(name); byMount.set(w, l); }
@@ -201,15 +200,10 @@ function index(ui: UiMap | null, d: GuideDeps, lang: GuideLang): string {
   return lines.join('\n');
 }
 
-/** app_guide's index without a topic, read live (the Guida's «Chiedi alla Guida» gives it to its model, ADR 0196). */
-export async function guideIndex(d: GuideDeps, lang: GuideLang): Promise<string> {
-  return index(await readUi<UiMap>(d.window(), 'typeof window.__sbAppMap === "function" ? window.__sbAppMap() : null'), d, lang);
-}
-
 export function guideTool(d: GuideDeps): ToolDef {
   return {
     name: 'app_guide',
-    description: 'How this app works and where everything is, read live from the app\'s own code: pages and the left rail with shortcuts, Memoria tabs, Impostazioni sections, every setting with its current value, palette actions and keys, the "?" help texts, the Guida concepts and your tools. No topic: a short index. An exact tool name returns its complete live description (bounded), including approval rules. topic: words in the user\'s language ("dove cambio il tema", "chiusura automatica") → the matching entries. Use it before answering a question about the app or telling the user where to click; for what is on screen now use app_ui action "outline"; to change a configuration use app_config.',
+    description: 'How this app works and where everything is, read live from the app\'s own code: pages and the left rail with shortcuts, Memoria tabs, Impostazioni sections, every setting with its current value, palette actions and keys, the "?" help texts, the app concepts and your tools. No topic: a short index. An exact tool name returns its complete live description (bounded), including approval rules. topic: words in the user\'s language ("dove cambio il tema", "chiusura automatica") → the matching entries. Use it before answering a question about the app or telling the user where to click; for what is on screen now use app_ui action "outline"; to change a configuration use app_config.',
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: { type: 'object', additionalProperties: false, properties: { topic: { type: 'string', description: 'optional: what to look up' } } },
     run: async a => {

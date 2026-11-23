@@ -1,5 +1,5 @@
 // The demo brain (SB_DEMO=1): a small made-up brain folder in the demo's userData (the same folder the demo's agent
-// packs use), so the Brain pages (Skill, Sempre caricato, Memoria, Mappa) and the one-time migration of the former runbook and
+// packs use), so the Brain pages (Skill, Memoria, Mappa) and the one-time migration of the former runbook and
 // routines sections into skills (ADR 0077) run for real without the user's brain. Generic content only (no real
 // customers, hosts or products). One line holds a fake connection string with a password, to show (and test) that it is
 // masked in the skill made from it; one file named like credentials, to show it is never read. File dates are relative

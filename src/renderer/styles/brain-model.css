@@ -11,13 +11,6 @@
 .bm-page .catalog-card[data-kind=memory]{--tone:var(--blue)}
 .bm-page .catalog-card[data-kind=agent]{--tone:var(--violet)}
 .bm-page .catalog-card[data-unused=true]{--tone:var(--text-4)}
-.bm-card-head{display:flex;align-items:flex-start;gap:10px;min-width:0}
-.bm-card-head>div{flex:1;min-width:0}
-.bm-card-head h3{margin:0;font-size:var(--fs-l);font-weight:600;letter-spacing:-.2px;line-height:1.35;overflow-wrap:anywhere}
-.bm-card-head h3 code{font-family:var(--mono);font-size:13px}
-.bm-card-sub{margin:3px 0 0;font-size:var(--fs-xs);color:var(--text-3);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.bm-page .bm-desc{margin:0;font-size:var(--fs-m);line-height:1.55;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.bm-badges{display:flex;gap:6px;flex-wrap:wrap;flex:none}
 .bm-badge{display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);font-weight:550;color:var(--text-2);border:1px solid var(--border-2);background:var(--surface-2);border-radius:var(--r-l);padding:2px 8px;white-space:nowrap}
 .bm-badge[data-tone=amber]{color:var(--amber);border-color:var(--amber-line);background:var(--amber-bg)}
 .bm-badge[data-tone=green]{color:var(--green);border-color:color-mix(in srgb,var(--green) 40%,transparent);background:var(--green-bg)}
@@ -30,9 +23,6 @@
 .bm-chip{max-width:100%;font-size:var(--fs-xs);color:var(--text-2);border:1px solid var(--border-2);background:var(--surface-3);border-radius:var(--r-xs);padding:2px 7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bm-chip[data-kind=tool]{font-family:var(--mono);font-size:10.5px;color:var(--text-3);background:transparent}
 button.bm-chip{cursor:pointer;font:inherit;font-size:var(--fs-xs)}button.bm-chip:hover{border-color:var(--border-3);color:var(--text)}
-.bm-card-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:10px;border-top:1px solid var(--border);font-size:var(--fs-xs);color:var(--text-3)}
-.bm-card-foot .sp{flex:1}
-.bm-card-foot .btn{position:relative;z-index:1}
 .bm-preview{margin:0;padding:8px 10px;list-style:none;display:grid;gap:4px;border:1px solid var(--border);border-left:2px solid var(--tone);border-radius:var(--r-s);background:color-mix(in srgb,var(--bg) 45%,transparent);font-size:var(--fs-s);color:var(--text-2)}
 .bm-preview li{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 

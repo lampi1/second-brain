@@ -1,6 +1,6 @@
 // What Impara's research may use besides the material (ADR 0188): the engines the user may pick to explain, with their
 // models and efforts (the start form's «Chi spiega»), and the app's own guide as one markdown file the files research
-// reads when the ask is about the app (the Guida page's concepts, shared/concept-guide.ts: written from the code, so
+// reads when the ask is about the app (the concept cards, shared/concept-guide.ts: written from the code, so
 // the lesson explains the app as it is). Used by wiring.ts and demo-wiring.ts.
 import type { Lang } from '@shared/contract';
 import { CONCEPTS, cardText, type GuideLang } from '@shared/concept-guide';
@@ -29,7 +29,7 @@ export function teacherOption(e: { id: string; label: string; kind: string; caps
   return { engine: e.id, label: e.label, models, efforts: e.caps.effort ? [...TEACHER_EFFORTS] : [], web: e.kind === 'claude' };
 }
 
-/** The app's guide: every concept card of the Guida page, in the user's language. */
+/** The app's guide: every concept card, in the user's language. */
 export function appGuide(lang: Lang): string {
   const l: GuideLang = lang === 'en' || lang === 'de' ? lang : 'it';
   return CONCEPTS.map(c => cardText(c, l)).join('\n\n---\n\n');

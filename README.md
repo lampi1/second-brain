@@ -1,10 +1,10 @@
-<!-- Product overview and source setup for users and contributors. Detailed operating rules live in AGENTS.md. -->
+<!-- Product overview for humans: what the app is, why it matters, how to start it. Operating rules for agents live in AGENTS.md. -->
 <p align="center"><img src="build/icon.png" width="96" alt="second-brain"></p>
 <h1 align="center">second-brain</h1>
 
 <p align="center">
-  <b>One Orchestrator for all your coding agents, and a brain that remembers what they learn.</b><br>
-  Claude Code, Codex, Cursor, OpenCode and other ACP agents on one screen, with your own logins.
+  <b>One chat commands every coding agent you have. A brain remembers what they learn.</b><br>
+  Claude Code, Codex, Cursor, OpenCode and ACP agents on one screen, with your own logins.
 </p>
 
 <p align="center">
@@ -16,362 +16,99 @@
 
 ![The Grindhouse: a Strategist's work as a tree of one-line rows, the Orchestrator's column on the right](docs/screenshots/grindhouse.webp)
 
-## What it is
-
-second-brain is a desktop app that does two things.
-
-**It orchestrates agents across harnesses.** You talk to one chat, the Orchestrator. It splits the work and hands it
-to five roles (Strategist, Scout, Artisan, Sentinel, Herald), each running on the engine and model you pick: one
-role on Claude Code, another on Codex, a third on Cursor. Every delegated job is a visible chat in a tree, with its
-steps, its cost and its result. Questions and permissions come back to one place, and the Orchestrator can answer
-most of them for you.
-
-**It keeps a brain.** Skills and memory live in a folder of plain Markdown that you own and can read without the app.
-Agents start a job with the skills and the facts that fit it, and what they learn comes back as proposals. A
-Maintenance pass merges duplicates, files the lessons from your corrections and proposes skill changes, each with a
-reason and an Undo.
-
-The app drives the official CLIs with your accounts and never touches their settings.
-
-```text
-                  you   (desktop · Telegram · claude.ai Remote Control)
-                   │
-            ┌──────▼───────┐
-            │ Orchestrator │   plans, delegates, answers the agents, tells you what waits
-            └──────┬───────┘
-   Strategist · Scout · Artisan · Sentinel · Herald        roles, each on its own engine and model
-                   │
-   Claude Code · Codex · Cursor · OpenCode · ACP agents    your CLIs, your logins
-                   │
-            ┌──────▼───────┐
-            │    brain     │   skills · memory · journal: a Markdown folder you own
-            └──────────────┘
-```
-
 > **Full disclosure:** the developer of this app has never written a single line of its code, and has not *read* one
 > either. AI agents wrote all of it, the agents reviewed it, and the agents wrote this sentence too. The developer
 > mostly types wishes in Italian and drinks coffee. It works surprisingly well, which is either the point of the app or
 > a warning.
 
-## Contents
+## The idea
 
-- [Quick start](#quick-start)
-- [Orchestration](#orchestration)
-- [The brain](#the-brain)
-- [See what happens](#see-what-happens)
-- [Learn](#learn)
-- [Voice, calls and the phone](#voice-calls-and-the-phone)
-- [Also on board](#also-on-board)
-- [Documentation](#documentation) · [Contributing](#contributing) · [License](#license)
+You talk to **one** chat: the **Orchestrator**. It plans, splits the job and sends each piece to a crew of five, every
+one on the engine and model you chose for it. You watch them work side by side, and you only step in for what really
+needs you.
+
+```text
+                  you
+                   │
+            ┌──────▼───────┐
+            │ Orchestrator │   plans, delegates, answers the crew, tells you what waits
+            └──────┬───────┘
+   Strategist · Scout · Artisan · Sentinel · Herald        the crew, each on its own engine
+                   │
+   Claude Code · Codex · Cursor · OpenCode · ACP agents    your CLIs, your logins
+                   │
+            ┌──────▼───────┐
+            │    brain     │   skills · journal · artifacts: a Markdown folder you own
+            └──────────────┘
+```
+
+## Meet the crew
+
+<p align="center"><img src="docs/screenshots/crew.webp" alt="The six roles: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald" width="544"></p>
+
+Each one has a vice for the quiet moments:
+
+<p align="center">
+  <img src="docs/vices/orchestrator.webp" alt="The Orchestrator at rest: a long pipe and smoke rings" width="128">
+  <img src="docs/vices/strategist.webp" alt="The Strategist at rest: two moves on a chess board, then fists on the table" width="128">
+  <img src="docs/vices/scout.webp" alt="The Scout at rest: a sip from a metal hip flask" width="128">
+  <img src="docs/vices/artisan.webp" alt="The Artisan at rest: a stein of beer" width="128">
+  <img src="docs/vices/sentinel.webp" alt="The Sentinel at rest: an energy drink, then a flex" width="128">
+  <img src="docs/vices/herald.webp" alt="The Herald at rest: a glass of red wine" width="128">
+</p>
+
+| Role | Does |
+|------|------|
+| **Orchestrator** | Your single entry. Routes the work, answers the crew's questions, asks you only what is yours. |
+| **Strategist** | Turns a big job into a plan on the project map, waits for your OK, launches the steps and their reviews. |
+| **Scout** | Finds things: code, logs, docs. Reads, never writes. |
+| **Artisan** | Makes the change and proves it works. |
+| **Sentinel** | Reviews the diff with fresh eyes. Trusts nothing. |
+| **Herald** | Drafts messages for people and outside services. Nothing is sent without your OK. |
+
+## What you get
+
+- **Every engine, per role.** Claude Code on one role, Codex on another, Cursor on a third. Each role card holds its
+  model presets (Minimo, Base, Massimo) and its code mode.
+- **Plans you can see.** The Strategist draws the plan on the project's map; boxes turn green as the crew finishes.
+- **No collisions.** Every writing agent gets its own git worktree.
+- **Your rules.** A `permissions.json` in your brain decides what waits for your click. Production, databases and the
+  cloud always wait for your own yes.
+- **A real browser.** QA agents drive your test environment in a tab next to their chat and bring back screenshots.
+- **A brain that learns.** Skills, journal and artifacts in plain Markdown. **Maintenance** reads the past work and
+  proposes only the skill changes that matter, each with a reason and an Undo.
+- **Voice and phone.** Dictation, voice conversation, call transcripts, Telegram. All speech runs on your PC.
+
+<p align="center"><img src="docs/screenshots/plan.webp" alt="A Strategist's plan drawn on the project map, every step told in the side panel, Approve and start above the drawing" width="720"></p>
 
 ## Quick start
 
-There is no installer yet: the app runs from source. You need git and Node.js 22 or newer.
+No installer yet: it runs from source. You need git and Node.js 22 or newer.
 
 ```sh
 git clone https://github.com/lampi1/second-brain.git
 cd second-brain
-npm run setup    # pinned dependencies with install scripts off, the Electron binary, the git hooks
-npm run demo     # the whole app on fictional data: no CLI, no login, no tokens
+npm run setup    # pinned dependencies, the Electron binary, the git hooks
+npm run demo     # the whole app on fictional data: no login, no tokens
 ```
 
-When you want the real thing, log in to at least one of `claude`, `codex` or Cursor's `agent` yourself, then:
+For the real thing, log in to at least one of `claude`, `codex` or Cursor's `agent`, then:
 
 ```sh
 npm run build && npm start
-npm run doctor   # says in plain words what is still missing on this machine
+npm run doctor   # says in plain words what is still missing
 ```
 
-Updating later is one click, **Settings → Updates → Update** (it pulls `main`, rebuilds and restarts), or
-`npm run pull` in a terminal.
+Lost? Ask the Orchestrator. It knows the app inside out and changes any setting for you, with an Undo.
 
-### Or let your agent do it
+## More
 
-Open Claude Code, Codex, Cursor or whatever agent you trust with a terminal, and paste this:
+[AGENTS.md](AGENTS.md) (for AI agents) · [CONTRIBUTING.md](CONTRIBUTING.md) · [Vision](docs/VISION.md) ·
+[Architecture](docs/architecture.md) · [Decisions](docs/adr/README.md) · [Changelog](CHANGELOG.md) ·
+[Security](SECURITY.md)
 
-```text
-Set up the second-brain desktop app for me, from source, so I can use it and also hack on it.
+Agents run commands on your machine with the permissions you give them: read what they propose before you approve it,
+and check your vendors' terms before using a subscription.
 
-1. Check my machine first: git, Node.js (the version in package.json "engines", 22 or newer), npm, and the GitHub
-   CLI `gh`. If something is missing, tell me what and how you would install it the normal way for my OS
-   (Windows: winget; macOS: Homebrew; Linux: my package manager or nvm), and install it only after I say yes.
-2. Get the code. If `gh auth status` says I'm not logged in, run `gh auth login` and let me finish it myself.
-   If I can't push to lampi1/second-brain (most people can't), ask me before forking it, then clone my fork:
-   `gh repo fork lampi1/second-brain --clone`; otherwise `git clone https://github.com/lampi1/second-brain.git`.
-   Make sure `upstream` points to lampi1/second-brain.
-3. Read AGENTS.md and CONTRIBUTING.md in the clone, and follow them from here on.
-4. Install: `npm run setup` (pinned deps with install scripts off, the Electron binary, the git hooks).
-   On Linux, if Electron fails to start, tell me which system libraries it asks for (e.g. libnss3, libgtk-3,
-   libasound2), install them after I say yes, and try again.
-5. Build and start: `npm run build`, then `npm start`. The first start opens a short setup window: I'll go
-   through it myself. Then run `npm run doctor` and tell me in plain words what is still missing
-   (for example: logging in to at least one of `claude`, `codex` or Cursor's `agent`, which I do myself).
-6. Leave the clone ready for issues and pull requests: `gh repo view` works, `main` tracks upstream, and tell me
-   the loop: a branch per change, `npm run check:quick` and a review before the merge, Conventional Commits in English,
-   never `--no-verify`, the PR template in .github/. Don't push or open anything without asking me.
-
-Finish with a three-line summary: where the code lives, how I start the app, and how I update it.
-```
-
-## Orchestration
-
-<p align="center"><img src="docs/screenshots/crew.webp" alt="The six roles: Orchestrator, Strategist, Scout, Artisan, Sentinel, Herald" width="544"></p>
-
-Each role has a little person of its own in the Grindhouse, and at rest it indulges a vice:
-
-<p align="center">
-  <img src="docs/vices/orchestrator.webp" alt="The Orchestrator at rest: a long pipe and smoke rings" width="160">
-  <img src="docs/vices/strategist.webp" alt="The Strategist at rest: two moves on a chess board, then fists on the table" width="160">
-  <img src="docs/vices/scout.webp" alt="The Scout at rest: a sip from a metal hip flask" width="160">
-  <img src="docs/vices/artisan.webp" alt="The Artisan at rest: a stein of beer" width="160">
-  <img src="docs/vices/sentinel.webp" alt="The Sentinel at rest: an energy drink, then a flex" width="160">
-  <img src="docs/vices/herald.webp" alt="The Herald at rest: a glass of red wine" width="160">
-</p>
-
-### The Orchestrator
-
-The **Orchestrator** is where work starts: it plans, hands each job to the right role, answers their mail and tells you
-what is waiting. Worker questions, permissions, Strategist interviews and plan approvals show up in its column. Every
-chat keeps its own reply field, so you can still write to any agent directly. Ask for a recap in your own words and
-you get a short list per agent.
-
-Two switches sit beside its input. **Fast** makes it answer you itself, at once and in a few lines, without delegating
-or guessing: if the question needs real work, it says so. **Plan** has it draw the plan first and wait for your OK. Name
-a model in your request ("do it with GPT-5 high") and that one job runs on it, without touching the role's card.
-
-<p align="center"><img src="docs/screenshots/orchestrator-column.webp" alt="The Orchestrator's column with its subagents and a decision" width="380"></p>
-
-The Orchestrator also knows the app inside out. "Where is the spending limit?", "turn notifications off", "give the
-Scout the GitHub connector", "add this MCP server": it reads the app's live map and changes the setting for you, with
-an Undo. Secrets stay yours, and a server it adds stays off until you read its command and click **Activate**.
-
-### Any engine, per role
-
-Engine, model and effort come from one picker, the same on the back of an agent's card, on the Orchestrator's model
-chip and in a strip's menu: search the engines, see each model's context and effort, then say what changes, just this
-chat or the default for new chats. The app runs the Claude Code installed on your PC, so a model out today shows up
-the day your CLI knows it. Settings → Accounts and tools also proposes known ACP CLIs (Grok Build, Devin, Droid, Kilo
-Code, Cline, Antigravity and more), all off: install one and sign in yourself, then "Turn on" makes it an engine like the others.
-
-### Plan mode
-
-Tick **Plan** to have a Strategist turn the job into steps. It interviews you first, one yes/no panel at a time (you
-can always type your own answer, and **Basta domande** ends the interview early), then draws the plan on the project's
-map: each step on the box it works on, the pieces that do not exist yet dashed as planned, and every step told in the
-side panel. You read it there and press **Approve and start**; nothing is delegated before. While the agents work the boxes follow the steps and turn green as
-they finish, and a piece found on the way joins the plan without a new approval. Work that is not on a project keeps
-the plain step list. The roles' default skills and their prompt costs are listed in
-[Skill alignment](docs/design/skills-alignment.md).
-
-<p align="center"><img src="docs/screenshots/plan.webp" alt="A Strategist's plan drawn on the shop's project map: steps on the boxes they work on, the release notes as a planned piece, every step told in the side panel, Approve and start on the line over the drawing" width="720"></p>
-
-### Parallel work without collisions
-
-A delegated chat that writes gets its own git worktree, on a fresh branch at the parent's current HEAD. The app keeps
-a small pool of them per repository and reuses a free, clean one, build outputs included. A worktree with uncommitted
-changes or unpushed commits is never deleted: Settings → Advanced lists it, next to the limits and the disk space each
-repository takes.
-
-<p align="center"><img src="docs/screenshots/worktrees.webp" alt="Settings, Advanced: the worktree limits, the space per repository and two worktrees kept because they hold work" width="560"></p>
-
-### Your rules, not the app's
-
-Agents may do everything by default. What stops them is a `permissions.json` file in your brain: a rule holds a
-command for your click, asks you (from the phone too), or forbids printing a secret. After a refusal the agent goes on
-with the rest. No file, no blocks (ADR 0254). The Orchestrator answers the agents for you, except for what touches
-production, a database or Azure: that waits for your own yes.
-
-### Code Mode: many tool calls in one step
-
-An optional switch (Settings › Roles and delegation, off by default): Claude, Cursor and Antigravity work chats write one short
-script that reads, searches and calls tools many times in a single step, in a QuickJS sandbox with no file or network
-access of its own. Every call inside the script meets the same rules as above; an action held for your click stops the
-script and leaves you the usual button (ADR 0331).
-
-### Agents that drive a real browser
-
-Ask for a QA run and the agent opens your test environment in a browser tab inside the app, next to its chat: it
-navigates, clicks, fills forms and takes screenshots on its own, and every step shows on its strip. The evidence
-(screenshots, the failing value) lands in the report.
-
-<p align="center"><img src="docs/screenshots/browser.webp" alt="Automated test: the QA chat on the left, the test environment's refund page it drives on the right, with the wrong refund total in red" width="760"></p>
-
-## The brain
-
-### Memory you swipe
-
-Everything the agents learn lands as a card: a fact, a skill, a rule, a setting. Swipe right to keep it, left to drop
-it (or the arrow keys, with Z to undo), and every card says who proposed it, in which chat and when. Behind the deck,
-**Memory** is one hub with tabs (Proposals, Approved, Skills, the Rules always loaded, Ideas, Files, Artifacts). **Skills** follow the Agent Skills
-format: each one is a package with its own Scripts, saved queries, references and assets.
-
-<p align="center"><img src="docs/screenshots/memory.webp" alt="Memory: the live header with its counters, the tabs, and a proposal card swiped toward APPROVE" width="560"></p>
-
-### Artifacts
-
-**Memory › Artifacts** holds only what you asked to have: a report, an analysis, a document, a plan, a comparison.
-The agent that writes it declares it by itself (the `artifact_save` tool), and the file stays where it is on disk;
-screenshots, logs and working files never come in. It is one list, newest first, with search, twenty at a time. Every
-artifact opens in the app's viewer: HTML and Markdown formatted, PDFs, pictures, tables, and Word, Excel and PowerPoint
-as text and tables (their original layout is one click away, in your system's app). A bar leads back to the chat that
-made it, to its earlier versions (a report rewritten later is one artifact with its history) and to related ones. A
-file that went is kept, marked missing; the ✕ on a card takes it off the list, never off the disk. The viewer's full
-screen takes the whole screen.
-
-<p align="center"><img src="docs/screenshots/artifacts.webp" alt="Memory › Artifacts: one list of cards grouped by day, an HTML report drawn small, a csv's first lines and Markdown reports, one with two versions" width="760"></p>
-
-### Maintenance
-
-Press **Maintenance** and walk away. The free part merges duplicate skills, files lessons from your corrections and
-moves scripts and ideas where they belong. Then an invisible agent (the strongest model, capped at $20) reads every
-chat and work thread since the last Maintenance and proposes skill changes or new skills only where they are really
-needed, plus improvements and app bugs. Roles never ask you about a skill change after each job, and every change has
-a reason and an Undo.
-
-### Agents that level up
-
-Every role in **Agents** earns its level from verified outcomes only: a delegated job counts when its parent's work
-checks out, and the Sentinel, the one who judges, is judged by what happens next. Reviews are cheap: free signals
-first, then a sample of finished runs reviewed together in one quiet session on the first idle moment of the night.
-
-<p align="center"><img src="docs/screenshots/agent-levels.webp" alt="Agent cards for the Orchestrator, the Artisan and the Sentinel, each with its level, verified successes and performance percentage" width="720"></p>
-
-### Quality you can measure
-
-**Quality**, a tab of **Trends**, counts the AI's mistakes instead of its compliments: errors you had to catch
-yourself per 100 turns, rules that actually stopped their error (or didn't, within 14 days), PRs held by a failed
-build or QA, bugs that came back. Every number says where it comes from and how many cases it covers.
-
-<p align="center">
-  <img src="docs/screenshots/quality.webp" alt="The Quality page: errors you had to catch per 100 turns and the rules whose error came back, each with its source" width="420">
-  <img src="docs/screenshots/maintenance.webp" alt="The Memory page with the «Maintenance done» notice: one proposal and three issues to open" width="420">
-</p>
-
-## See what happens
-
-### Your projects, drawn
-
-**Map → Projects** shows a project instead of its code: who uses it, your systems and the external ones they talk to,
-environments and documents, with the links and a status on each. Click a system to step inside it, and a part with
-pieces of its own to step further; each box tells its rules, what it keeps, how big it is, why it is made so and its
-key files, which open in the viewer. Paths tell a question («What happens when a customer pays?») stop by stop on the
-boxes. The agents at work sit beside the boxes they work on. With Plan mode the Strategist proposes the plan on the map itself: the pieces to
-build show as planned, you approve from the map and the boxes turn green as the agents finish. A map that tells a plan
-also says how far the project is: a percentage in the header, and a side panel that opens with the phase under way,
-what is being done and by whom, what waits for you, what comes next and a bar for every phase; each plan has its own
-card there, one row per step.
-
-<p align="center"><img src="docs/screenshots/project-map.webp" alt="A project map: people, the shop system, external systems and environments linked, with statuses, what waits for you and the agents at work" width="640"></p>
-
-### The brain map
-
-Notes, chats, agents and tools as a 3D map you can spin, glowing along the links where the work is happening right now.
-
-<p align="center"><img src="docs/screenshots/brain-map.webp" alt="The 3D brain map: notes, chats, agents and tools linked, the live ones glowing" width="640"></p>
-
-### Trends, Log and costs
-
-**Trends** puts the statistics on one page with tabs: **Costs** (where the money went, which chat's context is
-getting heavy), **Quality**, **Learning** and **Usage**. The **Log** shows everything the app did, live: who chose
-whom, what it cost, which answer was a duplicate. Both read local data and spend zero tokens.
-
-The top bar keeps today's spend and the weekly limit in sight. One click opens every harness (Claude, Cursor, Codex,
-OpenCode, Antigravity) with its session and weekly or plan limits and when they reset, read the way Cloudroom reads
-them (each CLI's own local login, sent only to its vendor's usage endpoint). A pin keeps any harness's weekly limit in
-the bar.
-
-<p align="center">
-  <img src="docs/screenshots/log.webp" alt="The Log page: today's events, tasks, flags and the chain of a delegated task" width="420">
-  <img src="docs/screenshots/costs.webp" alt="The Costs page: spending per chat today and the context each chat is using" width="420">
-</p>
-
-<p align="center"><img src="docs/screenshots/trends.webp" alt="Trends, the Usage tab: the pages and actions opened in the last 14 days, most used first" width="640"></p>
-
-## Learn
-
-### A newspaper from your sources
-
-**Learn** opens on the **News** tab: a newspaper of your own, by **editions**. An edition is any subject you follow
-(AI for people who build agents, electric cars, your own field) with its sources, sections and key words; make one
-by pasting links, from the ready-made AI edition, or ask the Orchestrator to find and try the sources for you.
-**Refresh** reads them at zero tokens, merges the same story told by several sources, ranks the paper, and one AI pass
-per edition writes a short summary and "why it matters to you". The front page holds a few stories only (7 by
-default); "Less like this" drops one and its source weighs less. Three columns with keys (J/K, S save, U read, E learn
-it, O open the source).
-
-<p align="center"><img src="docs/screenshots/news.webp" alt="The News tab: the editions on top, the sections with unread counts, the short front page, and the open story with why it matters, its summary and links" width="640"></p>
-
-### Understand what your agents built
-
-Paste a PR link, a concept or a long text, drop in files or folders, and Learn explains it piece by piece on a
-blackboard: flowcharts, sequence diagrams, mind maps, highlighted code and charts that grow as you go, out loud if you
-like. By default a lesson is an **Explanation** with no questions at all; pick **Quiz** to be tested instead, with an
-honest score and review cards.
-
-<p align="center"><img src="docs/screenshots/learn.webp" alt="A Learn lesson about a PR: the blackboard diagram, piece 2 of 3, and the buttons Got it, Explain it better, Give me an example, Show me the code" width="640"></p>
-
-## Voice, calls and the phone
-
-- **Dictation.** Hit **Ctrl+M** and speak into the Orchestrator: it types, you send.
-- **Voice conversation.** **Ctrl+Shift+Space** and just talk: the answer is read out loud while it is still being
-  written. Talk over it and it stops and listens. A spoken "yes" or "no" counts as the click.
-- **Recordings.** **Record call** grabs your mic and the PC's audio (Teams, Meet, whatever) and writes the transcript
-  locally, "You" and "Others". Later you tell the Orchestrator "open a bug from this morning's call".
-- **Telegram.** Settings → Phone links a private bot of yours: write or send a voice note from the phone and answer
-  questions with a button.
-- **Remote Control.** The phone icon on the Orchestrator turns on Claude Code Remote Control: open the link in the
-  Claude app or a browser and keep going from there.
-
-Parakeet or Whisper hears you and Piper speaks, all on your PC: no audio leaves it, and it costs nothing.
-
-<p align="center">
-  <img src="docs/screenshots/voice-talk.webp" alt="The Orchestrator in a voice conversation: the spoken question, its answer, the red Listening bar" width="400">
-  <img src="docs/screenshots/recordings.webp" alt="The Recordings page: a call transcribed with You and Others lines, search, Ask the Orchestrator" width="400">
-</p>
-
-## Also on board
-
-- **Emoji instead of essays.** Say "thanks" and you get a 🙏 on your message, not a paragraph. Any agent with nothing
-  to add reacts instead of replying, on every engine, so those tokens go to work.
-- **Connectors in one paste.** Paste a README's JSON, a command line or a URL and the MCP server is ready; switch it on
-  per role. Remote servers log in with the MCP OAuth flow.
-- **Settings that find themselves.** One page with a section list, search that highlights the matching row, instant
-  save with Undo.
-- **Tasks.** The Task page lists your Azure DevOps work items and PRs, with builds, votes and QA results.
-- **Chess against your agents.** The **Chess** page seats the six agents as opponents, from the Scout (about 600) to
-  the Orchestrator (2200 and up, full-strength Stockfish). They think, they trash-talk about what really happens on the
-  board, and the weak ones answer at once, so you can premove through a bullet game. Your fastest wins and your win
-  streak against each one go on record. The engine runs on your PC as a separate program, only while you play.
-- **A guide inside.** Every concept of the app as a card in the **Guide**: how it works, an everyday analogy, the
-  source files. **Discuss** sends the card to the Orchestrator.
-- **Three languages.** The UI speaks Italian, English and German.
-- **Just the brain.** The template works without the app: `node brain-template/install.mjs`.
-
-<p align="center"><img src="docs/screenshots/chess.webp" alt="A game against the Strategist: the board, the clock and the opponent saying its opening line" width="640"></p>
-
-## Documentation
-
-| | |
-|---|---|
-| [AGENTS.md](AGENTS.md) | The map for AI agents working on this repository: commands and rules |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | From a fresh clone to a merged change |
-| [docs/VISION.md](docs/VISION.md) | What the project wants to be |
-| [docs/architecture.md](docs/architecture.md) | How the pieces fit |
-| [docs/adr/](docs/adr/README.md) | Every decision, the ones in force first |
-| [CHANGELOG.md](CHANGELOG.md) | What changed |
-| [SECURITY.md](SECURITY.md) | How to report a vulnerability |
-
-## Contributing
-
-Issues and pull requests are welcome, from people and from their agents. Start with
-[CONTRIBUTING.md](CONTRIBUTING.md); `npm run demo` gives you the whole app on fictional data, and
-`npm run check:quick` is the gate of a branch.
-
-Use the app at your own risk: agents run commands on your machine with the permissions you give them, so read what
-they propose before you approve it. Check the Anthropic, OpenAI and Cursor terms before you use it with a
-subscription.
-
-## License
-
-[MIT](LICENSE). Third-party notices are in [NOTICE](NOTICE): the chess engine, Stockfish, is a separate GPLv3 program
+[MIT](LICENSE). Third-party notices in [NOTICE](NOTICE): the chess engine, Stockfish, is a separate GPLv3 program
 shipped unmodified in `vendor/stockfish/`.

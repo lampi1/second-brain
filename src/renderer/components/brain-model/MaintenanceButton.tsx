@@ -1,7 +1,7 @@
 // The «Manutenzione» button (#150, ADR 0132; one click since ADR 0153). Always on the top bar (`bar`), on the
 // Orchestrator's head (`compact`) and in Memoria's hero. One click and nothing else: the free cleanup runs at once, then
 // an invisible research with the app's best choice works in the background; its findings arrive as cards in Memoria →
-// Proposte (skills, rules, what to forget, «Apri issue»), app ideas also in Idee; the end notice says what it made
+// Proposte (skills, rules, what to forget, «Apri issue»), app ideas also in ideas.md; the end notice says what it made
 // (lib/maintenance-notice.ts). While it works the button breathes; when it ends it sparkles for a moment. The hero
 // shows the last result and, while it works, «Ferma». Used by TopBar.tsx (bar), OrchestratorTile.tsx (compact) and
 // MemoryPage.tsx. Styles: styles/memory.css (mm-maint-*).
@@ -49,7 +49,7 @@ export function MaintenanceButton({ testId = 'bm-maint-now', compact = false, ba
               {research && <button type="button" className="btn btn-ghost btn-s" onClick={() => void stopMaintenance()} data-testid={`${testId}-stop`}>{t('mm.one.stop')}</button>}
             </>
             : <span className="mm-maint-last" data-testid={`${testId}-last`}>{status?.last ? t('mm.one.last', { at: when(status.last.at), what: maintenanceSummary(status.last) }) : state?.lastRun ? t('bm.maint.last', { at: when(state.lastRun.at) }) : t('bm.maint.never')}</span>}
-          <HelpTip title={t('mm.maint.helpTitle')} label={t('mm.maint.button')} wide guide="maintenance">
+          <HelpTip title={t('mm.maint.helpTitle')} label={t('mm.maint.button')} wide>
             <p>{t('mm.maint.help1')}</p><p>{t('mm.maint.help2')}</p><p>{t('mm.maint.help3')}</p>
           </HelpTip>
         </>}

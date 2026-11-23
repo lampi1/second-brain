@@ -351,16 +351,8 @@ test('the tutor beside a lesson (ADR 0190): coach first, «Dimmelo e basta», ci
     await page.getByTestId('impara-tutor-input').press('Escape');
     await expect(tutor).toHaveCount(0);
 
-    // learning from where you are: the Guide…
+    // learning from where you are: the Task page (a PR: its lesson)
     await page.keyboard.press('Escape');
-    await goPage(page, 'guida');
-    await page.getByTestId('guide-learn-impara').click();
-    await expect(page.getByTestId('impara-start')).toBeVisible();
-    await expect(page.getByTestId('impara-ask-what')).toHaveValue(/^Come funziona «Impara: lezioni a pezzi» in second-brain\?/);
-    await expect(page.getByTestId('impara-from')).toContainText('Dalla Guida');
-    await expect(page.getByTestId('impara-from')).toContainText('second-brain');
-    await expect(page.getByTestId('impara-start-btn')).toBeFocused();
-    // …the Task page (a PR: its lesson)…
     await page.getByTestId('nav-task').click();
     const dv = page.getByTestId('brain-page-task');
     await dv.getByTestId('task-refresh').click();
@@ -370,13 +362,6 @@ test('the tutor beside a lesson (ADR 0190): coach first, «Dimmelo e basta», ci
     await expect(page.getByTestId('impara-kind')).toHaveAttribute('data-kind', 'pr');
     await expect(page.getByTestId('impara-ask-what')).toHaveValue(/812/);
     await expect(page.getByTestId('impara-from')).toHaveCount(0);
-    // …and Memoria: «Il mio brain»
-    await goPage(page, 'memoria');
-    await page.getByTestId('mh-tab-approvate').click();
-    const learn = page.getByTestId('mh-approved').locator('[data-testid^="mh-learn-rule-"]').first();
-    await learn.click();
-    await expect(page.getByTestId('impara-ask-what')).toHaveValue(/^Spiegami la regola «/);
-    await expect(page.getByTestId('impara-from')).toContainText('Il mio brain');
     await page.getByTestId('impara-start-btn').click();
     await expect(page.getByTestId('impara-preparing')).toBeVisible();
   } finally {

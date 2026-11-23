@@ -43,8 +43,6 @@ export function isActionable(e: Ev & Partial<Pick<FeedEvent, 'chatId'>>, open?: 
 
 /** Nav section a kind counts for: brain page ids ('home' = the Grindhouse, where the agents are). */
 export function sectionOf(kind: string): string | null {
-  if (kind === 'idea') return 'idee';
-  if (kind === 'reflection') return 'idee';
   // Costi and Qualità are tabs of Andamento (ADR 0202): one badge for both
   if (kind === 'error' || kind === 'win' || kind === 'proposal' || kind === 'budget') return 'andamento';
   if (kind.startsWith('chat-')) return 'home';
@@ -52,9 +50,6 @@ export function sectionOf(kind: string): string | null {
   if (kind === 'task' || kind === 'task-alert') return 'task';
   return null;
 }
-
-/** The `who` of an idea event written by the AI (main/brain/live.ts). */
-export const AI_WHO = "dell'IA";
 
 /** Sections whose badge is a warning (amber), not a plain count. */
 export const WARN_SECTIONS = new Set(['andamento']);
@@ -111,12 +106,9 @@ export function toastGroups(feed: readonly FeedEvent[], opts: { since: number; d
   return [...groups.values()].sort((a, b) => b.at - a.at).slice(0, opts.max ?? 2);
 }
 
-/** Where an event leads: its chat in the Grindhouse; an idea or reflection to Idee filtered by its author (the AI's: "Dall'IA");
- *  else the brain file it is about (Esplora), else its section (none: the Grindhouse). */
-export function linkOfEvent(e: Pick<FeedEvent, 'id' | 'kind' | 'chatId' | 'file' | 'who'>): string {
+/** Where an event leads: its chat in the Grindhouse, else the brain file it is about (Esplora), else its section (none: the Grindhouse). */
+export function linkOfEvent(e: Pick<FeedEvent, 'id' | 'kind' | 'chatId' | 'file'>): string {
   if (e.chatId) return `sb://home/chat-${e.chatId}`;
-  if (e.kind === 'reflection' || (e.kind === 'idea' && e.who === AI_WHO)) return 'sb://idee/ia';
-  if (e.kind === 'idea') return 'sb://idee/mie';
   if (e.file) return `sb://esplora/${e.file}`;
   const sec = sectionOf(e.kind);
   return `sb://${sec ?? 'home'}`;

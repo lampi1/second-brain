@@ -5,7 +5,6 @@ type N = { n: number };
 export const brainModelIt = {
   'bm.loading': 'Leggo il brain…',
   'bm.noBrain': 'Scegli prima la cartella del brain.',
-  'bm.open': 'Apri',
   'bm.lines': (p: N) => (p.n === 1 ? '1 riga' : `${p.n} righe`),
   'bm.changed': (p: { at: string }) => `modificato ${p.at}`,
 
@@ -36,14 +35,6 @@ export const brainModelIt = {
 
   // Skill page
   // Regole page
-  'bm.rules.lead': (p: { n: number; chars: number; budget: number; app: boolean }) => `Quello che ogni chat riceve all’avvio: ${p.n === 1 ? '1 file' : `${p.n} file`} del tuo brain, ${p.chars.toLocaleString('it-IT')} caratteri su ${p.budget.toLocaleString('it-IT')}${p.app ? ', più le regole fisse dell’app' : ''}. Tutto il resto sono skill, caricate quando servono.`,
-  'bm.rules.lead0': 'Quello che ogni chat riceve all’avvio. Tutto il resto sono skill, caricate quando servono.',
-  'bm.rules.loaded.always': 'Sempre', 'bm.rules.loaded.topic': 'Quando serve', 'bm.rules.loaded.none': 'Non più caricata',
-  'bm.rules.loadedHint.always': 'Entra in ogni chat dall’inizio.',
-  'bm.rules.loadedHint.topic': 'Entra nella chat quando la richiesta, uno strumento o un file la riguardano.',
-  'bm.rules.loadedHint.none': 'Non entra più nelle chat: le regole per argomento sono diventate skill. La migrazione porta le sue procedure nelle skill.',
-  'bm.rules.oldTitle': 'Non più caricate',
-  'bm.rules.empty': 'Nessun file fisso nel brain: ogni chat riceve solo le regole fisse dell’app.',
 
   // Memoria page
   'bm.mem.title': 'Memoria',

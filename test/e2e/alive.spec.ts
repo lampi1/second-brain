@@ -20,10 +20,9 @@ test('strips say their step; the morning line unfolds and Ok dismisses it; no Ba
   await shot(page, 'alive-morning-line');
   await page.getByTestId('morning-line-ok').click();
   await expect(line).toHaveCount(0);
-  // the Battito is gone (ADR 0201): Settings → Notifiche has no row of its own, Memoria → Idee «Dell'AI» no board
+  // the Battito is gone (ADR 0201): Settings → Notifiche has no row of its own
   await goPage(page, 'impostazioni');
   await expect(page.getByTestId('st-pulse')).toHaveCount(0);
-  await page.keyboard.press('Control+K'); await page.getByTestId('palette-input').fill('sb://memoria/idee/ia'); await page.keyboard.press('Enter');
   await expect(page.locator('[data-testid="context-pulse"]')).toHaveCount(0);
   await app.close();
 });

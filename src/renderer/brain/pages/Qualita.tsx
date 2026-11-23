@@ -42,7 +42,7 @@ function Metric({ id, title, help, value, unit, tone, reading, find, next, sourc
 }) {
   return (
     <section className={`bx-card bx-q ${tone ?? ''}`} data-testid={`bx-q-${id}`} aria-labelledby={`bx-q-${id}-h`}>
-      <h2 className="bx-eyebrow"><span id={`bx-q-${id}-h`}>{title}</span>{help && <HelpTip label={title} guide="quality" testid={`bx-q-${id}-help`}>{help}</HelpTip>}</h2>
+      <h2 className="bx-eyebrow"><span id={`bx-q-${id}-h`}>{title}</span>{help && <HelpTip label={title} testid={`bx-q-${id}-help`}>{help}</HelpTip>}</h2>
       <p className="bx-q-v"><span className="bx-big">{value}</span>{unit && <span className="u"> {unit}</span>}</p>
       {reading && <Reading t={reading} testId={`bx-q-${id}-reading`} />}
       <Explain find={find} next={next} />
@@ -94,7 +94,7 @@ export function Qualita({ nav, embedded = false }: { arg?: string; nav: Navigate
         lead={caught && app ? <>
           {caught.per100 !== null ? <><b>{tr('brainText.qualita.leadCaught', { n: num(caught.per100) })}</b>{tr('brainText.qualita.leadCaughtRest')}</> : <>{tr('brainText.qualita.leadNotMeasured')}</>}; {app.prs.at ? <><b>{tr('brainText.qualita.leadPrs', { n: app.prs.blocked.length })}</b></> : <>{tr('brainText.qualita.leadPrsUnread')}</>}; {app.reopen.at ? <><b>{tr('brainText.qualita.leadBugs', { n: app.reopen.bugs.length })}</b>{tr('brainText.qualita.leadBugsRest', { days: app.reopen.days })}</> : <>{tr('brainText.qualita.leadBugsUnread')}</>}.
         </> : undefined}
-        what={tr('brainText.qualita.what')} guide="quality" />
+        what={tr('brainText.qualita.what')} />
       <Async loading={t.loading && !d} error={d ? null : t.error} onRetry={reload} lines={6} block>
         {() => d && (
           <div className="bx-section" data-testid="bx-quality">

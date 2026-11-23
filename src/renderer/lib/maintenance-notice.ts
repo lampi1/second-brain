@@ -26,7 +26,7 @@ export function maintenanceSummary(d: MaintenanceDone): string {
 
 export function announceMaintenanceDone(d: MaintenanceDone): void {
   const chips = parts(d), cards = d.proposals + d.issues;
-  const open = { label: t('mm.done.open'), run: () => go({ page: 'memoria', arg: cards ? 'proposte' : 'idee/ia' }) };
+  const open = { label: t('mm.done.open'), run: () => go(cards ? { page: 'memoria', arg: 'proposte' } : { page: 'file', arg: 'ideas.md' }) };
   const bad = cut(d);
   notify({
     tone: bad ? 'warn' : chips.length ? 'celebrate' : 'ok',

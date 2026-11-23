@@ -1,17 +1,14 @@
 // "Memoria" (G Y, ADR 0077, 0122): the one hub of what the brain holds. On top, alive: the live counters (proposals waiting, agents at work, agents waiting for you, changes of the
 // last 24 hours; each eases to its new value) and the latest changes as they happen, then the one
 // «Manutenzione» button. Below, a tab bar (pills with a count each, arrows / Home / End, the page arg "memoria/<tab>"
-// so a link opens a tab: lib/memory-hub.ts): Proposte (ProposalsDeck.tsx), Approvate (ApprovedTab.tsx: everything in
-// the brain now, deleted in one click with Annulla), Skill (SkillsPage.tsx), Regole (RulesPage.tsx), Idee (brain/pages/Idee.tsx: yours and the AI's, «Rispolvera»), File (the
-// «Diario e note»: MemoryBrowser.tsx, ADR 0245), Artifact (the chats' reports, documents and images:
-// library/ArtifactsTab.tsx, ADR 0319); Apprendimento moved to Andamento (ADR 0202); Statistiche is gone (ADR
-// 0248: it counted rules and notes; skill use is in the Skill tab); Script & Query is gone (ADR 0263: scripts and queries
-// are files of their skill, shown in its «Leggi»). The old Skill, Regole, Script, Idee and Dashboard
-// pages land here (actions.ts go()). Memory never travels with an exported agent. Rendered by App.tsx
+// so a link opens a tab: lib/memory-hub.ts). Owner 2026-11-23: only four tabs, Diario (MemoryBrowser.tsx, ADR 0245),
+// Artifact (the chats' reports, documents and images: library/ArtifactsTab.tsx, ADR 0319), Skill (SkillsPage.tsx) and
+// Proposte (ProposalsDeck.tsx: the maintenance's proposals); Approvate, Sempre caricato and Idee are deleted. The old
+// Skill, Regole, Script, Idee and Dashboard pages land here (actions.ts go()). Memory never travels with an exported agent. Rendered by App.tsx
 // PageFrame for 'memoria'. Styles: styles/memory-hub.css (mh-*), memory.css (mm-*).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import type { BrainChange } from '@shared/brain-model';
-import { brainBridge, go, goTarget } from '../../actions';
+import { go } from '../../actions';
 import { locale, t, type TextKey } from '../../i18n';
 import { useBrainModel } from '../../store/brain-model';
 import { useApp } from '../../store/store';
@@ -19,19 +16,11 @@ import { ui } from '../../store/ui';
 import { HUB_TABS, hubArg, parseHubArg, type HubTab } from '../../lib/memory-hub';
 import { useProposalCount } from '../../lib/proposals';
 import { now as clockNow } from '../../lib/clock';
-import { useBrain } from '../../brain/api';
-import { normTables } from '../../brain/types';
-import { Toaster } from '../../brain/components/ui';
-import { DiscussContext } from '../../brain/components/Discuss';
-import { Idee } from '../../brain/pages/Idee';
-import { ThemesPanel } from '../../dashboard/Themes';
 import { useCountUp } from '../../dashboard/parts';
-import { IconBolt, IconCheck, IconFile, IconLayers, IconLightbulb, IconShield, IconSparkle } from '../Icons';
+import { IconBolt, IconFile, IconLayers, IconSparkle } from '../Icons';
 import { SkillsPage } from '../SkillsPage';
 import { MaintenancePanel } from './MaintenancePanel';
 import { MaintenanceButton } from './MaintenanceButton';
-import { RulesPage } from './RulesPage';
-import { ApprovedTab, useApprovedCount } from './ApprovedTab';
 import { ProposalsDeck } from './ProposalsDeck';
 import { MemoryBrowser } from './MemoryBrowser';
 import { ArtifactsTab } from '../library/ArtifactsTab';
@@ -63,7 +52,7 @@ const ago = (ms: number, nowMs: number): string => {
 };
 /** where a change is shown: its Memoria tab; a role's change (what it proved) in Andamento → Apprendimento (ADR 0202) */
 const PLACE_OF_KIND: Record<BrainChange['kind'], { page: 'memoria' | 'andamento'; arg: string }> = {
-  skill: { page: 'memoria', arg: hubArg('skill') }, rule: { page: 'memoria', arg: hubArg('regole') }, memory: { page: 'memoria', arg: hubArg('file') },
+  skill: { page: 'memoria', arg: hubArg('skill') }, rule: { page: 'memoria', arg: hubArg('proposte') }, memory: { page: 'memoria', arg: hubArg('file') },
   agent: { page: 'andamento', arg: 'apprendimento' }, script: { page: 'memoria', arg: hubArg('skill') },
 };
 
@@ -116,20 +105,15 @@ function Hero({ onTab }: { onTab: (tab: HubTab) => void }) {
 
 // ── the tab bar ─────────────────────────────────────────────────────────────────────────────────────────────────────
 const ICON: Record<HubTab, ReactNode> = {
-  proposte: <IconBolt />, approvate: <IconCheck />, skill: <IconSparkle />, regole: <IconShield />,
-  idee: <IconLightbulb />, file: <IconFile />, artifact: <IconLayers />,
+  file: <IconFile />, artifact: <IconLayers />, skill: <IconSparkle />, proposte: <IconBolt />,
 };
 
 function useCounts(): Partial<Record<HubTab, number>> {
   const { state } = useBrainModel();
   const proposals = useProposalCount();
-  const approved = useApprovedCount();
-  const tables = useBrain('/api/tables', normTables);
   const library = useLibrary();
   return {
-    proposte: proposals, approvate: approved,
-    skill: state?.skills.length, regole: state?.rules.length,
-    idee: tables.data?.ideas.length,
+    proposte: proposals, skill: state?.skills.length,
     artifact: library.loaded ? library.list.artifacts.length : undefined,
   };
 }
@@ -152,7 +136,7 @@ function TabBar({ tab, onTab }: { tab: HubTab; onTab: (tab: HubTab) => void }) {
       bar.current.querySelectorAll('button').forEach(button => ro?.observe(button));
     }
     return () => ro?.disconnect();
-  }, [tab, counts.skill, counts.idee, counts.approvate, counts.artifact]);
+  }, [tab, counts.skill, counts.proposte, counts.artifact]);
   const key = (e: KeyboardEvent, i: number) => {
     const n = HUB_TABS.length;
     const next = e.key === 'ArrowRight' ? (i + 1) % n : e.key === 'ArrowLeft' ? (i + n - 1) % n : e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : null;
@@ -176,35 +160,23 @@ function TabBar({ tab, onTab }: { tab: HubTab; onTab: (tab: HubTab) => void }) {
   </div></div>;
 }
 
-/** Idee in the hub: the brain page inside its own `.bx` scope, its "Discuti" through the app's Orchestrator. */
-function IdeasTab({ rest }: { rest: string | null }) {
-  return <div className="bx mh-bx"><DiscussContext.Provider value={brainBridge}>
-    <Idee arg={rest ?? undefined} embedded nav={target => goTarget(target)} />
-    {/* the ideas' themes close the tab (once Dashboard → Temi) */}
-    <section className="bx-section mh-idee-themes"><ThemesPanel kind="ideas" /></section>
-  </DiscussContext.Provider><Toaster /></div>;
-}
-
-function TabContent({ tab, rest }: { tab: HubTab; rest: string | null }) {
+function TabContent({ tab }: { tab: HubTab }) {
   switch (tab) {
     case 'proposte': return <div className="mh-deck"><ProposalsDeck /></div>;
-    case 'approvate': return <ApprovedTab />;
     case 'skill': return <SkillsPage />;
-    case 'regole': return <RulesPage />;
-    case 'idee': return <IdeasTab rest={rest} />;
     case 'file': return <><MemoryBrowser /><MaintenancePanel kinds={['memory']} testId="bm-maint-memory" /></>;
     case 'artifact': return <ArtifactsTab />;
   }
 }
 
-/** Tabs that work with no brain folder chosen: the deck, the brain's server pages, the skills in ~/.claude/skills and
- *  the artifacts (the chats' evidence folders are the app's own). */
-const NO_BRAIN_OK: ReadonlySet<HubTab> = new Set(['proposte', 'skill', 'idee', 'artifact']);
+/** Tabs that work with no brain folder chosen: the deck, the skills in ~/.claude/skills and the artifacts (the chats'
+ *  evidence folders are the app's own). */
+const NO_BRAIN_OK: ReadonlySet<HubTab> = new Set(['proposte', 'skill', 'artifact']);
 
 export function MemoryPage() {
   const { state, error } = useBrainModel();
   const arg = ui.use(s => s.pageArg);
-  const { tab, rest } = useMemo(() => parseHubArg(arg), [arg]);
+  const { tab } = useMemo(() => parseHubArg(arg), [arg]);
   // a tab change is a place of its own (back / forward, links); within a tab, its own arg stays as it is
   const onTab = (next: HubTab) => { if (next !== tab) go({ page: 'memoria', arg: hubArg(next) }); };
   // scrolled down (the tab bar stuck on top), a new tab starts from its own top, right under the bar
@@ -225,7 +197,7 @@ export function MemoryPage() {
     {error && <p role="alert">{error}</p>}
     <TabBar tab={tab} onTab={onTab} />
     <section ref={panel} className="mh-panel" role="tabpanel" id="mh-panel" aria-labelledby={`mh-tab-${tab}`} key={tab} data-testid={`mh-panel-${tab}`}>
-      {state && !state.root && !NO_BRAIN_OK.has(tab) ? <p className="bm-empty">{t('bm.noBrain')}</p> : <TabContent tab={tab} rest={rest} />}
+      {state && !state.root && !NO_BRAIN_OK.has(tab) ? <p className="bm-empty">{t('bm.noBrain')}</p> : <TabContent tab={tab} />}
     </section>
   </div>;
 }

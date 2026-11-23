@@ -1,11 +1,12 @@
-// One skill of the library (ADR 0241, #362-#364): its head (name, origin, what it is for, «Prova», delete or restore the
-// app's original) and four tabs. Leggi: what the package holds by group (SkillParts.tsx: scripts, queries, references,
-// assets, ADR 0263; a row opens its file in File), then SKILL.md rendered, without its frontmatter. File: the package's tree (SKILL.md,
-// scripts/, references/, assets/) and an editor for every text file, with Ctrl+S, «Nuovo file» and «Togli file»; a
-// binary file is listed, never edited. Ruoli: which roles load it at start, each with its own usage; a role's default
-// skill is marked and changed from the role. Cronologia: every change with who and when, its diff (brain/pages/FileDiff
-// DiffView, before → after) and «Annulla». Every write is skills:write / skills:remove (main/skills/library.ts: the
-// user's hooks first, then one change-log entry). Used by SkillsPage.tsx; styles/skill-library.css.
+// One skill of the library (ADR 0241, #362-#364; owner 2026-11-23): its head (name, Brain or App badge, what it is for, how
+// much it is used, «Prova», «Modifica», delete, or why it cannot be deleted) and four tabs. Leggi: what the package holds
+// by kind (SkillParts.tsx; a row opens its file), then SKILL.md rendered without its frontmatter. File: every file by
+// kind (AssetNav) and the open one's content (SkillFileView: rendered, highlighted, image), «Modifica» turns it into an
+// editor with Ctrl+S, «Nuovo file» and «Togli file»; a binary file is shown or opened in the viewer, never edited. Ruoli:
+// which roles load it at start, each with its own usage; a role's default skill is marked and changed from the role.
+// Cronologia: every change with who and when, its diff (brain/pages/FileDiff DiffView, before → after) and «Annulla».
+// Every write is skills:write / skills:remove (main/skills/library.ts: the user's hooks first, then one change-log
+// entry). Used by SkillsPage.tsx; styles/skill-library.css.
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import type { SkillLint } from '@shared/skill-lint';
 import type { LibSkill, SkillFileText, SkillRole, SkillVersion } from '@shared/skill-library';
@@ -18,12 +19,14 @@ import { errText } from '../../lib/ipc-error';
 import { ago } from '../../lib/format';
 import { Markdown } from '../../brain/components/Markdown';
 import { DiffView } from '../../brain/pages/FileDiff';
-import { IconFile, IconFolder, IconHistory, IconPlay, IconPlus, IconTrash } from '../Icons';
-import { SkillParts } from './SkillParts';
+import { IconEdit, IconHistory, IconPlay, IconTrash } from '../Icons';
+import { deleteAction, isMarkdownPath, kindOfFile } from '../../lib/skill-files';
+import { AssetNav, fileSize, KindBadge, SkillParts } from './SkillParts';
+import { SkillFileView } from './SkillFileView';
+import { SkillUsageLine } from './SkillUsage';
 
 export type DetailTab = 'read' | 'files' | 'roles' | 'history';
 const TABS: DetailTab[] = ['read', 'files', 'roles', 'history'];
-const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${Math.round(n / 102.4) / 10} KB` : `${Math.round(n / 1024 / 102.4) / 10} MB`);
 const whoOf = (job: string) => (job === 'user' ? t('sl.who.user') : job === 'migration' ? t('sl.who.migration') : job === 'research' ? t('sl.who.research') : t('sl.who.job'));
 
 /** A package warning in words (#373, shared/skill-lint.ts). */
@@ -52,24 +55,7 @@ function ReadTab({ skill, onOpen }: { skill: LibSkill; onOpen: (path: string) =>
   </div>;
 }
 
-/** The package as folders and files: SKILL.md, then each folder with its files. */
-function Tree({ skill, path, onPick, adding, onAdd }: { skill: LibSkill; path: string; onPick: (p: string) => void; adding: boolean; onAdd: () => void }) {
-  const groups = useMemo(() => {
-    const out = new Map<string, LibSkill['files']>();
-    for (const f of skill.files) { const dir = f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : ''; out.set(dir, [...(out.get(dir) ?? []), f]); }
-    return [...out].sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)));
-  }, [skill.files]);
-  return <nav className="sl-tree" aria-label={t('sl.files.tree')} data-testid="sl-tree">
-    {groups.map(([dir, files]) => <div key={dir || '.'} className="sl-tree-group">
-      {dir && <div className="sl-tree-dir"><IconFolder size={13} />{dir}/</div>}
-      {files.map(f => <button key={f.path} type="button" className="sl-tree-file" aria-current={f.path === path ? 'true' : undefined} onClick={() => onPick(f.path)} data-testid={`sl-file-${f.path}`} data-binary={!f.text} style={{ paddingInlineStart: dir ? 26 : 10 }}>
-        <IconFile size={13} /><span>{f.path.slice(dir ? dir.length + 1 : 0)}</span><span className="sl-tree-size">{size(f.size)}</span></button>)}
-    </div>)}
-    <button type="button" className="sl-tree-add" onClick={onAdd} aria-expanded={adding} data-testid="sl-file-new"><IconPlus size={13} />{t('sl.files.new')}</button>
-  </nav>;
-}
-
-function FilesTab({ skill, start, onDirty, onChanged }: { skill: LibSkill; start: string; onDirty: (d: boolean) => void; onChanged: () => void }) {
+function FilesTab({ skill, start, startEdit, onDirty, onChanged }: { skill: LibSkill; start: string; /** open it as an editor («Modifica» in the head) */ startEdit: boolean; onDirty: (d: boolean) => void; onChanged: () => void }) {
   const [path, setPath] = useState(start);
   const [doc, setDoc] = useState<SkillFileText | null>(null);
   const [text, setText] = useState('');
@@ -77,19 +63,21 @@ function FilesTab({ skill, start, onDirty, onChanged }: { skill: LibSkill; start
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [newPath, setNewPath] = useState('');
+  const [editing, setEditing] = useState(startEdit);
+  const [source, setSource] = useState(false);
   const fresh = doc === null && !skill.files.some(f => f.path === path);
   const dirty = doc ? doc.text !== null && text !== doc.text : fresh && text.length > 0;
   useEffect(() => { onDirty(dirty); }, [dirty, onDirty]);
   useEffect(() => () => onDirty(false), [onDirty]);
   const open = useCallback((p: string) => {
-    setPath(p); setError(null);
+    setPath(p); setError(null); setSource(false);
     if (!skill.files.some(f => f.path === p)) { setDoc(null); setText(''); return; }
     void window.sb.invoke('skills:file', { skill: skill.name, path: p }).then(d => { setDoc(d); setText(d.text ?? ''); }, e => setError(errText(e)));
   }, [skill.name, skill.files]);
   useEffect(() => { open(skill.files.some(f => f.path === start) ? start : 'SKILL.md'); }, [skill.name, start]); // only when another skill or file opens
   const pick = (p: string) => {
-    if (!dirty) { open(p); return; }
-    askConfirm({ title: t('sl.files.unsavedTitle'), body: t('sl.files.unsavedBody'), confirmLabel: t('sl.files.leave'), danger: true, onConfirm: () => open(p) });
+    if (!dirty) { setEditing(false); open(p); return; }
+    askConfirm({ title: t('sl.files.unsavedTitle'), body: t('sl.files.unsavedBody'), confirmLabel: t('sl.files.leave'), danger: true, onConfirm: () => { setEditing(false); open(p); } });
   };
   const save = async () => {
     if (busy || !dirty) { if (!dirty) toast(t('sl.files.same'), 'info'); return; }
@@ -99,22 +87,23 @@ function FilesTab({ skill, start, onDirty, onChanged }: { skill: LibSkill; start
       if (!r.ok) { setError(r.error); return; }
       toast(t('sl.files.saved', { path }), 'ok');
       const d = await window.sb.invoke('skills:file', { skill: skill.name, path });
-      setDoc(d); setText(d.text ?? text);
+      setDoc(d); setText(d.text ?? text); setEditing(false);
       onChanged();
     } catch (e) { setError(errText(e)); } finally { setBusy(false); }
   };
   const remove = () => askConfirm({ title: t('sl.files.removeTitle', { path }), body: t('sl.files.removeBody'), confirmLabel: t('sl.files.remove'), danger: true, onConfirm: () => {
-    void window.sb.invoke('skills:write', { skill: skill.name, path, text: null }).then(r => { if (r.ok) { onChanged(); open('SKILL.md'); } else setError(r.error); }, e => setError(errText(e)));
+    void window.sb.invoke('skills:write', { skill: skill.name, path, text: null }).then(r => { if (r.ok) { setEditing(false); onChanged(); open('SKILL.md'); } else setError(r.error); }, e => setError(errText(e)));
   } });
   const add = () => {
     const p = newPath.trim().replace(/^\/+/, '');
     if (!SKILL_PATH.test(p) || p.split('/').includes('..')) return;
-    setAdding(false); setNewPath(''); setDoc(null); setText(''); setPath(p); setError(null);
+    setAdding(false); setNewPath(''); setDoc(null); setText(''); setPath(p); setError(null); setEditing(true);
   };
+  const cancel = () => { setText(doc?.text ?? ''); setEditing(false); if (fresh) open('SKILL.md'); };
   const onKey = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); e.stopPropagation(); void save(); } };
   const binary = doc && doc.text === null;
   return <div className="sl-files" data-testid="sl-files">
-    <Tree skill={skill} path={path} onPick={pick} adding={adding} onAdd={() => setAdding(a => !a)} />
+    <AssetNav skill={skill} path={path} onPick={pick} adding={adding} onAdd={() => setAdding(a => !a)} />
     <div className="sl-editor" onKeyDown={onKey}>
       {adding && <form className="sl-newfile" onSubmit={e => { e.preventDefault(); add(); }}>
         <input className="sl-input mono" autoFocus value={newPath} onChange={e => setNewPath(e.target.value)} placeholder={t('sl.files.newPlaceholder')} spellCheck={false} data-testid="sl-newfile-path" aria-invalid={!!newPath && !SKILL_PATH.test(newPath.trim())} />
@@ -122,16 +111,20 @@ function FilesTab({ skill, start, onDirty, onChanged }: { skill: LibSkill; start
         <p className="sl-hint">{t('sl.files.newHint')}</p>
       </form>}
       <header className="sl-editor-head">
-        <span className="sl-editor-path mono">{path}{dirty && <span className="sl-dirty" aria-label="*">●</span>}</span>
+        <KindBadge kind={kindOfFile(path)} /><span className="sl-editor-path mono">{path}{dirty && <span className="sl-dirty" aria-label="*">●</span>}</span>
         <span className="sp" />
-        {path !== 'SKILL.md' && !fresh && <button type="button" className="btn btn-subtle btn-s" onClick={remove} data-testid="sl-file-remove"><IconTrash size={13} />{t('sl.files.remove')}</button>}
-        {dirty && doc && <button type="button" className="btn btn-subtle btn-s" onClick={() => setText(doc.text ?? '')} data-testid="sk-revert">{t('sl.files.revert')}</button>}
-        {!binary && <button type="button" className="btn btn-primary btn-s" onClick={() => void save()} disabled={busy || !dirty} title={t('sl.files.saveTip')} data-testid="sk-save">{busy ? t('sl.files.saving') : t('sl.files.save')}</button>}
+        {!editing && doc && !binary && isMarkdownPath(path) && <button type="button" className="btn btn-subtle btn-s" aria-pressed={source} onClick={() => setSource(s => !s)} data-testid="sl-file-source">{source ? t('sl.files.rendered') : t('sl.files.source')}</button>}
+        {!editing && path !== 'SKILL.md' && !fresh && <button type="button" className="btn btn-subtle btn-s" onClick={remove} data-testid="sl-file-remove"><IconTrash size={13} />{t('sl.files.remove')}</button>}
+        {editing ? <>
+          <button type="button" className="btn btn-subtle btn-s" onClick={cancel} data-testid="sk-revert">{dirty ? t('sl.files.revert') : t('sl.files.close')}</button>
+          <button type="button" className="btn btn-primary btn-s" onClick={() => void save()} disabled={busy || !dirty} title={t('sl.files.saveTip')} data-testid="sk-save">{busy ? t('sl.files.saving') : t('sl.files.save')}</button>
+        </> : doc && !binary && <button type="button" className="btn btn-primary btn-s" onClick={() => setEditing(true)} data-testid="sl-file-edit"><IconEdit size={13} />{t('sl.files.edit')}</button>}
       </header>
       {error && <p className="sl-error" role="alert" data-testid="sk-refused">{error}</p>}
-      {binary ? <p className="sl-note">{t('sl.files.binary', { size: size(doc.size) })}</p>
-        : <textarea className="sl-code mono" value={text} onChange={e => setText(e.target.value)} spellCheck={false} aria-label={t('sl.files.editorLabel', { path })} data-testid="sk-md" />}
-      <p className="sl-hint">{skill.origin === 'app' ? t('sl.appNote') : t('sl.files.skillDir')}</p>
+      {(editing || fresh) && !binary ? <textarea className="sl-code mono" value={text} onChange={e => setText(e.target.value)} spellCheck={false} aria-label={t('sl.files.editorLabel', { path })} data-testid="sk-md" />
+        : doc ? <SkillFileView key={doc.path} doc={doc} folder={skill.folder} source={source} /> : <p className="sl-muted">…</p>}
+      {editing && <p className="sl-hint">{skill.origin === 'app' ? t('sl.appNote') : t('sl.files.skillDir')}</p>}
+      {!editing && binary && <p className="sl-hint">{fileSize(doc.size)}</p>}
     </div>
   </div>;
 }
@@ -210,11 +203,11 @@ function HistoryTab({ skill, onChanged }: { skill: LibSkill; onChanged: () => vo
   </div>;
 }
 
-export function SkillDetail({ skill, roles, hasBrain, tab, onTab, onDirty, onChanged, onGone }: {
-  skill: LibSkill; roles: SkillRole[]; hasBrain: boolean; tab: DetailTab; onTab: (t: DetailTab) => void;
+export function SkillDetail({ skill, roles, maxUses, hasBrain, tab, onTab, onDirty, onChanged, onGone }: {
+  skill: LibSkill; roles: SkillRole[]; /** the most used skill's count: the usage bar's full width */ maxUses: number; hasBrain: boolean; tab: DetailTab; onTab: (t: DetailTab) => void;
   onDirty: (d: boolean) => void; onChanged: () => void; onGone: () => void;
 }) {
-  const removable = skill.origin !== 'app';
+  const action = deleteAction(skill);
   const remove = () => askConfirm({
     title: skill.overridesApp ? t('sl.restoreTitle', { name: skill.name }) : t('sl.deleteTitle', { name: skill.name }),
     body: skill.overridesApp ? t('sl.restoreBody') : t('sl.deleteBody'), danger: !skill.overridesApp,
@@ -227,7 +220,11 @@ export function SkillDetail({ skill, roles, hasBrain, tab, onTab, onDirty, onCha
   });
   // a row of «Nel pacchetto» opens its file in the File tab
   const [fileAt, setFileAt] = useState('SKILL.md');
-  const openFile = (p: string) => { setFileAt(p); onTab('files'); };
+  const [editAt, setEditAt] = useState(false);
+  const openFile = (p: string) => { setFileAt(p); setEditAt(false); onTab('files'); };
+  const edit = () => { setFileAt('SKILL.md'); setEditAt(true); onTab('files'); };
+  const goTab = (id: DetailTab) => { if (id !== tab) setEditAt(false); onTab(id); };
+  const roleName = useCallback((id: string) => roles.find(r => r.id === id)?.name ?? id, [roles]);
   const now = Date.now();
   const tryIt = () => { if (!brainBridge.draftToOrchestrator(`/${skill.name} `, () => {})) toast(t('sl.noOrchestrator'), 'warn'); };
   return <article className="sl-detail" data-testid="sk-editor" data-origin={skill.origin}>
@@ -240,23 +237,27 @@ export function SkillDetail({ skill, roles, hasBrain, tab, onTab, onDirty, onCha
       <p className="sl-desc" data-testid="sk-desc">{skill.description || <i>{t('sl.noDescription')}</i>}</p>
       <p className="sl-facts small">
         <span>{t('sl.facts.files', { n: skill.files.length })}</span>
-        <span>{skill.totalUses ? t('sl.uses', { n: skill.totalUses }) : t('sl.noUses')}</span>
         {skill.changedAt && <span>{t('sl.facts.changed', { at: ago(skill.changedAt, now) })}{skill.madeBy ? ` ${t('sl.facts.by', { who: whoOf(skill.madeBy) })}` : ''}</span>}
         <span className="mono sl-folder" title={skill.folder}><span>{skill.folder}</span></span>
       </p>
+      <SkillUsageLine skill={skill} max={maxUses} roleName={roleName} />
     </header>
     <div className="sl-tabs" role="tablist" aria-label={t('sl.tabs')}>
-      {TABS.map(id => <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => onTab(id)} data-testid={`sl-tab-${id}`}>
+      {TABS.map(id => <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => goTab(id)} data-testid={`sl-tab-${id}`}>
         {id === 'history' && <IconHistory size={13} />}{t(`sl.tab.${id}`)}{id === 'files' && <span className="sl-n">{skill.files.length}</span>}{id === 'roles' && <span className="sl-n">{skill.roles.length}</span>}</button>)}
       <span className="sp" />
       <span className="sl-head-actions">
         <button type="button" className="btn btn-ghost btn-s" onClick={tryIt} title={t('sl.tryTip')} data-testid="sk-try"><IconPlay size={12} />{t('sl.try')}</button>
-        {removable && <button type="button" className={skill.overridesApp ? 'btn btn-ghost btn-s' : 'btn btn-danger btn-s'} onClick={remove} data-testid="sk-delete">{skill.overridesApp ? t('sl.restore') : <><IconTrash size={12} />{t('sl.delete')}</>}</button>}
+        {tab !== 'files' && <button type="button" className="btn btn-ghost btn-s" onClick={edit} data-testid="sk-edit"><IconEdit size={12} />{t('sl.files.edit')}</button>}
+        {action === 'restore' && <button type="button" className="btn btn-ghost btn-s" onClick={remove} data-testid="sk-delete">{t('sl.restore')}</button>}
+        {action === 'delete' && <button type="button" className="btn btn-danger btn-s" onClick={remove} data-testid="sk-delete"><IconTrash size={12} />{t('sl.delete')}</button>}
+        {action === 'none' && <button type="button" className="btn btn-subtle btn-s" disabled title={t('sl.noDelete')} aria-describedby="sl-no-delete" data-testid="sk-delete"><IconTrash size={12} />{t('sl.delete')}</button>}
       </span>
     </div>
+    {action === 'none' && <p className="sl-no-delete" id="sl-no-delete" data-testid="sl-no-delete">{t('sl.noDelete')}</p>}
     <div className="sl-panel" role="tabpanel">
       {tab === 'read' && <ReadTab skill={skill} onOpen={openFile} />}
-      {tab === 'files' && <FilesTab skill={skill} start={fileAt} onDirty={onDirty} onChanged={onChanged} />}
+      {tab === 'files' && <FilesTab skill={skill} start={fileAt} startEdit={editAt} onDirty={onDirty} onChanged={onChanged} />}
       {tab === 'roles' && <RolesTab skill={skill} roles={roles} hasBrain={hasBrain} onChanged={onChanged} />}
       {tab === 'history' && <HistoryTab skill={skill} onChanged={onChanged} />}
     </div>

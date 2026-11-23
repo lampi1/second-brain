@@ -136,7 +136,6 @@ export const proposalsDe: typeof proposalsIt = {
   'proposals.done.lead': 'Im Moment gibt es nichts mehr zu entscheiden.',
   'proposals.done.approved': () => 'freigegeben oder behalten',
   'proposals.done.rejected': () => 'abgelehnt oder rückgängig',
-  'proposals.done.toApproved': 'Zu Freigegeben',
   'proposals.done.reviewRejected': 'Abgelehnte ansehen',
   'proposals.done.hideRejected': 'Abgelehnte ausblenden',
   'proposals.done.rejectedList': 'In dieser Sitzung abgelehnt',
