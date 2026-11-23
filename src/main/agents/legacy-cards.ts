@@ -5,7 +5,7 @@
 // Cursor reasoning and fast go to the Orchestrator's card (its engine stays the setting orchestratorChats.harness); the
 // last two, which applied to every Cursor chat, also to the work cards on Cursor. A value out of shape is left out: a
 // card holding one would make the whole catalog unreadable at the next start. brain/config.ts captures the old values from config.json into userData/legacy-model-settings.json before it drops
-// them (legacyOf, writeLegacy); wiring.ts applies them once (catalog.migrateLegacy, a marker file). Pure but for the
+// them (legacyOf, writeLegacy; withLegacyKeys keeps them in the file when the capture failed); wiring.ts applies them once (catalog.migrateLegacy, a marker file). Pure but for the
 // two file helpers; tests: test/unit/agents/legacy-cards.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -62,18 +62,31 @@ export function legacyOf(raw: unknown): LegacyModelSettings | null {
   return out.modelTiers || out.codeMode || out.orchestrator || hasLegacyKeys(raw) ? out : null;
 }
 
-/** Whether config.json still names a retired key (its next save drops them). */
+const TOP_KEYS = ['modelTiers', 'codeMode', 'balancedMode'] as const;
+const ORCHESTRATOR_KEYS = ['claudeModel', 'cursorModel', 'claudeEffort', 'cursorReasoning', 'cursorFast'] as const;
+const pick = (o: Obj | null, keys: readonly string[]): Obj => Object.fromEntries(keys.filter(k => o && k in o).map(k => [k, o![k]]));
+
+/** Whether config.json still names a retired key (its next save drops them, unless their capture failed). */
 export const hasLegacyKeys = (raw: unknown): boolean => {
-  const r = obj(raw), oc = obj(r?.orchestratorChats);
-  return !!r && ('modelTiers' in r || 'codeMode' in r || 'balancedMode' in r || !!oc && ['claudeModel', 'cursorModel', 'claudeEffort', 'cursorReasoning', 'cursorFast'].some(k => k in oc));
+  const r = obj(raw);
+  return TOP_KEYS.some(k => r && k in r) || ORCHESTRATOR_KEYS.some(k => { const oc = obj(r?.orchestratorChats); return oc && k in oc; });
 };
 
-/** Kept beside config.json until the cards took them (never overwritten: the first capture is the user's values). */
+/** What a save of config.json must still hold while the old values are not captured: `onto` with `raw`'s retired keys
+ *  as they were, so the next start can retry. */
+export function withLegacyKeys(raw: unknown, onto: object): object {
+  const r = obj(raw), oc = pick(obj(r?.orchestratorChats), ORCHESTRATOR_KEYS);
+  return { ...onto, ...pick(r, TOP_KEYS), ...(Object.keys(oc).length ? { orchestratorChats: { ...obj((onto as Obj).orchestratorChats), ...oc } } : {}) };
+}
+
+/** Kept beside config.json until the cards took them (never overwritten: the first capture is the user's values).
+ *  Temp file, then rename: a capture cut halfway is not there, and the next start writes it. */
 export function writeLegacy(userData: string, legacy: LegacyModelSettings): void {
   const file = path.join(userData, LEGACY_FILE);
   if (fs.existsSync(file) || fs.existsSync(path.join(userData, LEGACY_MARK))) return;
   fs.mkdirSync(userData, { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify(legacy, null, 2)}\n`);
+  fs.writeFileSync(`${file}.tmp`, `${JSON.stringify(legacy, null, 2)}\n`);
+  fs.renameSync(`${file}.tmp`, file);
 }
 
 /** The captured values, or null when there are none or the cards already took them. The file holds the captured shape

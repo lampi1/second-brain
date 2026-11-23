@@ -64,6 +64,65 @@ describe('migratedCards', () => {
   });
 });
 
+describe('the old keys leave config.json only once they are captured', () => {
+  const old = { view: 'mosaico', pulse: true, codeMode: true, modelTiers: { claude: { top: 'opus' } }, orchestratorChats: { harness: 'claude', claudeModel: 'opus', claudeEffort: 'high' } };
+  const captured = { modelTiers: { claude: { top: 'opus' } }, codeMode: true, orchestrator: { harness: 'claude', claudeModel: 'opus', claudeEffort: 'high' } };
+  const LEGACY = 'legacy-model-settings.json';
+  const onDisk = (dir: string) => JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8')) as Record<string, unknown>;
+
+  it('the capture is written before any other migration saves config.json', () => {
+    const dir = tmp();
+    fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify(old));
+    const captureThere: boolean[] = [], real = fs.renameSync;
+    const spy = vi.spyOn(fs, 'renameSync').mockImplementation((a, b) => {
+      if (path.basename(String(b)) === 'config.json') captureThere.push(fs.existsSync(path.join(dir, LEGACY)));
+      real(a, b);
+    });
+    try { new ConfigStore(dir, {}); } finally { spy.mockRestore(); }
+    expect(captureThere.length).toBeGreaterThan(0);
+    expect(captureThere).not.toContain(false);
+    expect(hasLegacyKeys(onDisk(dir))).toBe(false);
+  });
+
+  it('a failed capture keeps the old keys through every save of that start, and the next start takes them', () => {
+    const dir = tmp();
+    fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify(old));
+    const real = fs.writeFileSync, warned = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
+    const spy = vi.spyOn(fs, 'writeFileSync').mockImplementation((f, ...rest) => {
+      if (path.basename(String(f)).startsWith(LEGACY)) throw new Error('ENOSPC');
+      real(f, ...rest);
+    });
+    try {
+      const store = new ConfigStore(dir, {});
+      expect(onDisk(dir)).toMatchObject({ codeMode: true, modelTiers: old.modelTiers, orchestratorChats: old.orchestratorChats });
+      // the other migrations still ran, and a setting the user changes is saved
+      expect(onDisk(dir)).not.toHaveProperty('view');
+      store.set({ orchestratorChats: { harness: 'cursor' } });
+      store.set({ orchestratorChats: { harness: 'claude' } });
+      store.set({ mute: { task: true } });
+      expect(onDisk(dir)).toMatchObject({ mute: { task: true }, codeMode: true, modelTiers: old.modelTiers, orchestratorChats: old.orchestratorChats });
+      expect(store.get()).not.toHaveProperty('codeMode');
+      expect(warned.mock.calls.filter(c => c[1] === 'model settings move not saved')).toHaveLength(1);
+    } finally { spy.mockRestore(); warned.mockRestore(); }
+    expect(readLegacy(dir)).toBeNull();
+    new ConfigStore(dir, {});
+    expect(readLegacy(dir)).toEqual(captured);
+    expect(hasLegacyKeys(onDisk(dir))).toBe(false);
+    expect(onDisk(dir)).toMatchObject({ mute: { task: true } });
+  });
+
+  it('a capture cut halfway is never taken for a done one', () => {
+    const dir = tmp(), real = fs.writeFileSync;
+    const spy = vi.spyOn(fs, 'writeFileSync').mockImplementation((f, text, ...rest) => {
+      real(f, String(text).slice(0, 5), ...rest);
+      throw new Error('cut');
+    });
+    try { expect(() => writeLegacy(dir, { codeMode: true })).toThrow('cut'); } finally { spy.mockRestore(); }
+    writeLegacy(dir, { codeMode: true });
+    expect(readLegacy(dir)).toEqual({ codeMode: true });
+  });
+});
+
 describe('a malformed config.json never breaks the catalog', () => {
   it('legacyOf drops an engine id out of shape or removed and a model id the catalog could not read back', () => {
     const oc = { harness: 'Not an engine', claudeModel: 'opus 4', cursorModel: '-gpt', claudeEffort: 'high' };

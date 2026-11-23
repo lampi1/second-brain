@@ -17,7 +17,7 @@ import { ENGINE_ID, REMOVED_ENGINES } from '../engines/registry';
 import { domainsOfConfig } from './domains';
 import { samePolicyPath } from './adapters/codex-policy';
 import { log } from '../log';
-import { hasLegacyKeys, legacyOf, writeLegacy } from '../agents/legacy-cards';
+import { hasLegacyKeys, legacyOf, withLegacyKeys, writeLegacy } from '../agents/legacy-cards';
 
 export { validate, schema };
 export const DEFAULTS: Settings = defaults();
@@ -102,6 +102,8 @@ export class ConfigStore {
   private proposals = new Map<string, SettingProposal>();
   /** the brain's other domain folders (config.json `domains`, ADR 0059); SB_DOMAINS (newline-separated) overrides it */
   private domainList: string[] = [];
+  /** config.json as read, while the retired model keys in it could not be captured: every save of this run keeps them */
+  private uncaptured: unknown = null;
   /** set when config.json exists but could not be read (shown by the UI next to the brain folder chooser) */
   loadError: string | null = null;
   private listeners = new Set<ChangeListener>();
@@ -123,9 +125,9 @@ export class ConfigStore {
     this.saved = fromSaved(raw);
     this.domainList = domainsOfConfig(raw);
     this.loadChanges();
+    this.migrateModelSettings(raw); // first: every save drops the keys it captures
     this.migrateView(raw);
     this.migrateRetired(raw);
-    this.migrateModelSettings(raw);
     this.migrateTasks(raw);
     this.migrateMessaging(raw);
     this.migrateCompactWindow(raw !== undefined && raw !== null);
@@ -158,12 +160,15 @@ export class ConfigStore {
 
   /** The model Settings moved onto the role cards (2026-11-23: modelTiers.*, codeMode, balancedMode and the
    *  Orchestrator's models in orchestratorChats): their values are kept in userData/legacy-model-settings.json for the
-   *  cards' one-off move (agents/legacy-cards.ts, applied by wiring.ts), then dropped from config.json. */
+   *  cards' one-off move (agents/legacy-cards.ts, applied by wiring.ts), then dropped from config.json. Not captured =
+   *  kept in config.json by every save of this run, so the next start retries. */
   private migrateModelSettings(raw: unknown): void {
     if (!hasLegacyKeys(raw)) return;
+    this.uncaptured = raw;
     try {
       const legacy = legacyOf(raw);
       if (legacy) writeLegacy(this.userData, legacy);
+      this.uncaptured = null;
       this.save(this.saved);
       log.info('settings', 'model settings moved to the role cards', { data: { codeMode: legacy?.codeMode === true, tiers: Object.keys(legacy?.modelTiers ?? {}), orchestrator: !!legacy?.orchestrator } });
     } catch (e) {
@@ -384,7 +389,8 @@ export class ConfigStore {
     // the domains list is not a setting: whoever edited the file since (setup-pc.mjs, the user) wins, re-read it now
     try { if (fs.existsSync(this.file)) this.domainList = domainsOfConfig(JSON.parse(fs.readFileSync(this.file, 'utf8').replace(/^﻿/, ''))); }
     catch { /* unreadable now: keep the list read at start */ }
-    const text = JSON.stringify(this.domainList.length ? { ...s, domains: this.domainList } : s, null, 2);
+    const kept = this.uncaptured ? withLegacyKeys(this.uncaptured, s) : s;
+    const text = JSON.stringify(this.domainList.length ? { ...kept, domains: this.domainList } : kept, null, 2);
     const tmp = `${this.file}.tmp`;
     fs.writeFileSync(tmp, text);
     for (let i = 0; i < 5; i++) {
