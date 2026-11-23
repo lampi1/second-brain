@@ -17,12 +17,12 @@ const engine = (id: string, ids: string[]): AgentModelChoice => ({ engine: id, l
   models: ids.map(m => ({ id: m, name: m })), installed: true, authenticated: true });
 const PRICE: Record<string, number> = { 'm-low': 1, 'm-mid': 5, 'm-top': 20, 'gpt-x': 3 };
 
-function setup() {
+function setup(tierModel: string | null = 'm-mid', model: string | null = 'm-mid') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-config-presets-')); roots.push(dir);
   const c = new AgentCatalogService({ userData: dir, models: () => [engine('claude', ['m-low', 'm-mid', 'm-top']), engine('codex', ['gpt-x'])],
-    tierModel: (_e, tier) => (tier === 'top' ? 'm-top' : 'm-mid'), price: m => PRICE[m] ?? null });
+    tierModel: (_e, tier) => (tierModel === null ? null : tier === 'top' ? 'm-top' : tierModel), price: m => PRICE[m] ?? null });
   const scout = c.list().profiles.find(p => p.id === 'scout')!;
-  c.save({ instructions: scout.instructions, engine: 'claude', model: 'm-mid', effort: 'medium', tools: scout.tools, permissionCeiling: scout.permissionCeiling,
+  c.save({ instructions: scout.instructions, engine: 'claude', model, effort: 'medium', tools: scout.tools, permissionCeiling: scout.permissionCeiling,
     tier: scout.tier, tierMax: scout.tierMax, launches: scout.launches, skills: scout.skills }, 'scout');
   const store = new ConfigStore(tmpDir(), {});
   const d: ConfigDeps = { callerId: 'orch-1', userAsked: () => true,
@@ -52,7 +52,8 @@ describe('app_config: a role card\'s presets', () => {
     expect(r.changed).toBe('presets');
     expect(r.before).toEqual({ min: BASE, base: BASE, max: BASE });
     expect(r.after).toEqual({ min: { model: 'm-low', effort: 'low' }, base: BASE, max: { model: 'm-top', effort: 'high' } });
-    expect(r.undo).toMatchObject({ key: 'presets', value: r.before });
+    // the undo is what the card stored (no Minimo or Massimo), not the expanded view
+    expect(r.undo).toMatchObject({ key: 'presets', value: { base: BASE } });
     // the card's change log: the version in use, amended with the Orchestrator's reason (in place, like the model)
     const h = await run({ action: 'history', area: 'agent', agentId: 'scout' }) as { amended?: string[] }[];
     expect(h.at(-1)!.amended?.at(-1)).toMatch(/Modificato dall’Orchestrator/);
@@ -66,8 +67,24 @@ describe('app_config: a role card\'s presets', () => {
     const r = await run(set({ base: BASE, max: { model: 'm-top', effort: 'high' } })) as { undo: { value: unknown } };
     expect(card().presets).toBeDefined();
     await run(set(r.undo.value));
+    expect(card().presets).toBeUndefined();
     const [scout] = await run({ action: 'get', area: 'agent', agentId: 'scout' }) as { presets: unknown }[];
     expect(scout!.presets).toEqual({ min: BASE, base: BASE, max: BASE });
+    // a card that had a Massimo gets exactly that back
+    await run(set({ base: BASE, max: { model: 'm-top' } }));
+    const u = await run(set({ base: BASE, min: { model: 'm-low' }, max: { model: 'm-top', effort: 'high' } })) as { undo: { value: unknown } };
+    expect(u.undo.value).toEqual({ base: BASE, max: { model: 'm-top' } });
+    await run(set(u.undo.value));
+    expect(card().presets).toEqual({ max: { model: 'm-top' } });
+  });
+
+  it('undo on a card without a model and a tier without a model does not throw', async () => {
+    const { run, card } = setup(null, null);
+    const r = await run(set({ base: { model: null, effort: 'medium' }, max: { model: 'm-top' } })) as { undo: { value: unknown } };
+    expect(card().presets).toEqual({ max: { model: 'm-top' } });
+    expect(r.undo.value).toEqual({ base: { model: null, effort: 'medium' } });
+    await run(set(r.undo.value));
+    expect(card().presets).toBeUndefined();
   });
 
   it('refuses a missing base, a base other than the card\'s model, another engine and an unknown model', async () => {
