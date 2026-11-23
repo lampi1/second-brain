@@ -1,22 +1,22 @@
 // A role's own page (Brain → Agenti → a role) and its editor. The page leads with who the role is (its character at
-// 96 px, English name, what it is for, engine, model tier, trial and customized chips, Avvia), its run numbers, the
+// 96 px, English name, what it is for, engine, model, trial and customized chips, Avvia), its run numbers, the
 // permissions card (RolePermissions: tool classes and ceiling, each with its "?", ADR 0085), the instructions it runs
 // with, its configuration (tools, permission ceiling, the roles it may launch), the skills it loads at every launch, its
 // versions (a new one only for text or skills, ADR 0284; each with its runs, verified outcomes and success ±, ADR
 // 0186). "Modifica" opens the editor in place: only the
-// behaviour is editable (instructions, engine, model, tier, launches, skills, context; the permissions on their own
+// behaviour is editable (instructions, engine, model, effort, launches, skills, context; the permissions on their own
 // card); name and summary belong to the role; the character can be swapped for the user's own picture
 // (AgentImagePicker, under the badge). The card back's «Modifica il ruolo» lands straight in the editor (EDIT_ELEMENT, #126):
 // «Chiudi senza salvare» or Esc then goes back to the catalogue. "Ripristina predefinito" goes back to the shipped role
 // after an inline confirmation. The Configurazione card also edits the role's Minimo / Base / Massimo presets in place
-// (RolePresetRows, the same rows as Impostazioni → Ruoli e deleghe; the Orchestrator: Base only, ADR 0336). Editing
-// never changes running chats. Rendered by AgentCatalogPage.tsx. Styles:
+// (RolePresetRows; the Orchestrator: Base only, ADR 0336) and its Code Mode and Fast switches (RoleCodeMode, ADR 0331):
+// since 2026-11-23 the only place in the UI where they are chosen. Editing never changes running chats. Rendered by AgentCatalogPage.tsx. Styles:
 // styles/agent-studio.css.
 import { Select } from './Select';
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { completedRuns, MAX_CONTEXT_RANGE, type AgentDraft, type AgentMetrics, type AgentProfile, type AgentVersion, type VersionMetrics } from '@shared/agents';
 import { MIN_SUCCESS_SAMPLE, successInterval } from '@shared/success';
-import { MODEL_TIERS, WORK_ROLE_IDS, isRoleId, isWorkRole, roleName, tierRank, type ModelTier } from '@shared/roles';
+import { WORK_ROLE_IDS, isRoleId, isWorkRole, roleName } from '@shared/roles';
 import { PRESET_IDS } from '@shared/model-presets';
 import { characterOf } from '@shared/characters';
 import { agentHistory, refreshAgents, resetAgent, restoreAgentVersion, saveAgent, useAgents } from '../store/agents';
@@ -28,6 +28,7 @@ import { characterTone } from '../lib/character-art';
 import { agentDraftOf, forgetAgentEditor, readAgentEditor, rememberAgentEditor } from '../lib/agent-drafts';
 import { RolePermissions, permissionSummary } from './RolePermissions';
 import { RolePresetRows } from './RolePresets';
+import { RoleCodeMode } from './RoleCodeMode';
 import { holdUpdate } from '../lib/update-barrier';
 import { back, go } from '../actions';
 import { locale, t } from '../i18n';
@@ -47,7 +48,6 @@ const BASE_ONLY = ['base'] as const;
 
 const percent = (v: number) => new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: 0 }).format(v);
 const usd = (v: number) => formatCost(v);
-const tierLabel = (tier: ModelTier) => t(`roles.tier.${tier}`);
 const SKILL = /^[a-z0-9][a-z0-9._-]{0,79}$/i;
 
 const draftOf = agentDraftOf;
@@ -119,8 +119,7 @@ export function AgentStudio({ profile, children }: { profile: AgentProfile; chil
   const keptModel = !!editing && editing.engine === shown.engine && editing.model === shown.model;
   const knownModel = !!choice && (editing?.model === null || keptModel || choice.modelSelectable && choice.models.some(m => m.id === editing?.model));
   const stale = !!editing && shown.updatedAt !== base;
-  const tierOk = !!editing && tierRank(editing.tier) <= tierRank(editing.tierMax);
-  const canSave = !!editing && !stale && !shown.trial && tierOk && !!choice?.enabled && !!choice.trusted && knownModel && !busy && !catalog?.problem;
+  const canSave = !!editing && !stale && !shown.trial &&!!choice?.enabled && !!choice.trusted && knownModel && !busy && !catalog?.problem;
   const save = async () => {
     if (!editing || !canSave) return;
     setBusy(true); setProblem(null);
@@ -145,14 +144,14 @@ export function AgentStudio({ profile, children }: { profile: AgentProfile; chil
     {(error || catalog?.problem) && <p role="alert" className="studio-alert">{error || catalog?.problem}<button type="button" className="link-btn" onClick={() => void refreshAgents()}>{t('studio.retry')}</button></p>}
     {!catalog && !error && <p role="status">{t('studio.loading')}</p>}
   </>;
-  const editor = editing && catalog ? <RoleEditor profile={shown} draft={editing} busy={busy} canSave={canSave} tierOk={tierOk} change={change} firstField={firstField}
+  const editor = editing && catalog ? <RoleEditor profile={shown} draft={editing} busy={busy} canSave={canSave} change={change} firstField={firstField}
     onSave={() => void save()} onClose={cancel} /> : null;
   return <RoleDetail profile={shown} busy={busy} editorOpen={!!editing} resetting={resetting} status={status} editor={editor}
     onEdit={() => { fromCard.current = false; openEditor(); }} onReset={() => setResetting(true)} onResetCancel={() => setResetting(false)} onResetConfirm={() => void reset()}>{children}</RoleDetail>;
 }
 
-function RoleEditor({ profile, draft, busy, canSave, tierOk, change, firstField, onSave, onClose }: {
-  profile: AgentProfile; draft: AgentDraft; busy: boolean; canSave: boolean; tierOk: boolean; change: (patch: Partial<AgentDraft>) => void;
+function RoleEditor({ profile, draft, busy, canSave, change, firstField, onSave, onClose }: {
+  profile: AgentProfile; draft: AgentDraft; busy: boolean; canSave: boolean; change: (patch: Partial<AgentDraft>) => void;
   firstField: RefObject<HTMLTextAreaElement | null>; onSave: () => void; onClose: () => void;
 }) {
   const { catalog } = useAgents();
@@ -181,18 +180,13 @@ function RoleEditor({ profile, draft, busy, canSave, tierOk, change, firstField,
         <div className="agent-editor-col">
           <div className="field-row"><label className="field"><span>{t('studio.engine')}</span><Select value={draft.engine} onChange={e => change({ engine: e.target.value, model: null, effort: undefined })} data-testid="agent-engine">{(catalog?.models ?? []).map(e => <option key={e.engine} value={e.engine} disabled={!e.enabled || !e.trusted}>{e.label}{!e.enabled ? ` · ${t('studio.disabled')}` : !e.trusted ? ` · ${t('studio.trust')}` : ''}</option>)}</Select></label>
             <label className="field"><span>{t('studio.model')}</span><Select value={draft.model ?? ''} onChange={e => change({ model: e.target.value || null })} data-testid="agent-model">
-              <option value="">{t('studio.tierModel')}</option>
+              <option value="">{t('mp.roleDefault')}</option>
               {choice?.modelSelectable && choice.models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               {draft.model && (!choice?.modelSelectable || !choice.models.some(m => m.id === draft.model)) && <option value={draft.model} disabled>{draft.model} · {t('studio.unavailable')}</option>}
             </Select></label></div>
-          {draft.model === null && <small className="agent-editor-note">{t('studio.tierModelHint')}</small>}
+          {draft.model === null && <small className="agent-editor-note">{t('mp.roleDefaultMeta')}</small>}
           <AgentReadiness choice={choice} />
           {!choice?.modelSelectable && choice?.modelReason && <p role="status">{choice.modelReason}</p>}
-          <div className="field-row">
-            <label className="field"><span>{t('studio.tier')}</span><Select value={draft.tier} onChange={e => change({ tier: MODEL_TIERS.find(x => x === e.target.value) ?? draft.tier })} data-testid="agent-tier">{MODEL_TIERS.map(x => <option key={x} value={x}>{tierLabel(x)}</option>)}</Select></label>
-            <label className="field"><span>{t('studio.tierMax')}</span><Select value={draft.tierMax} onChange={e => change({ tierMax: MODEL_TIERS.find(x => x === e.target.value) ?? draft.tierMax })} data-testid="agent-tier-max">{MODEL_TIERS.map(x => <option key={x} value={x}>{tierLabel(x)}</option>)}</Select></label>
-          </div>
-          {tierOk ? <small className="agent-editor-note">{t('studio.tierMaxHint')}</small> : <p role="alert">{t('studio.tierInvalid')}</p>}
           {choice?.effort && <label className="field"><span>{t('studio.effort')}</span><Select value={draft.effort ?? ''} onChange={e => change({ effort: EFFORTS.find(effort => effort === e.target.value) })}><option value="">{t('studio.defaultModel')}</option>{EFFORTS.map(e => <option key={e} value={e}>{effortLabel(e)}</option>)}</Select></label>}
           <p className="agent-editor-note" data-testid="agent-editor-perms-note">{t('perm.editorNote')}</p>
           {profile.scope === 'role' && <fieldset className="agent-editor-checks" data-testid="agent-launches"><legend>{t('studio.launches')}</legend><p className="agent-editor-note">{t('studio.launchesHint')}</p>
@@ -292,8 +286,7 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
   const instructions = profile.instructions.trim();
   const config: [string, string][] = [
     [t('catalog.engine'), engine],
-    [t('studio.model'), profile.model ?? `${t('studio.tierModel')} · ${tierLabel(profile.tier)}`],
-    [t('studio.tier'), `${tierLabel(profile.tier)} · ${t('studio.tierMax')}: ${tierLabel(profile.tierMax)}`],
+    [t('studio.model'), profile.model ?? t('mp.roleDefault')],
     [t('studio.effort'), profile.effort ? effortLabel(profile.effort) ?? profile.effort : t('studio.defaultModel')],
     [t('studio.maxContext'), profile.maxContext ? t('studio.maxContextValue', { n: Math.round(profile.maxContext / 1000) }) : t('studio.maxContextDefault')],
     [t('studio.tools'), profile.tools && !profile.tools.allow.length ? t('agentDetail.toolsNone') : permissionSummary(profile).text],
@@ -314,7 +307,6 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
           <div className="ad-chips">
             <span className="ad-badge" data-state={state}><i aria-hidden="true" />{profile.trial ? t('studio.trial') : working > 0 ? t('agentsGrid.working') : t('catalog.active')}</span>
             <span className="ad-chip">{engine}</span>
-            <span className="ad-chip">{t('studio.tierChip', { tier: tierLabel(profile.tier) })}</span>
             {profile.model && <span className="ad-chip ad-chip-mono">{profile.model}</span>}
           </div>
         </div>
@@ -349,6 +341,7 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
               <p className="ad-hint">{t(isWorkRole(profile.id) ? 'agentDetail.presets.hint' : 'agentDetail.presets.baseOnly')}</p>
               <RolePresetRows profile={profile} ids={isWorkRole(profile.id) ? PRESET_IDS : BASE_ONLY} undoable />
             </section>
+            <RoleCodeMode profile={profile} />
           </section>
           <section className="ad-card bm-studio-skills" aria-labelledby={`ad-skills-${profile.id}`} data-testid="agent-skills">
             <header className="ad-card-head"><h3 id={`ad-skills-${profile.id}`}>{t('studio.skills')}</h3></header>

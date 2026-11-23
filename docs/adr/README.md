@@ -214,7 +214,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0215](0215-faster-recording-transcription.md) 0215. Faster recording transcription: fewer, longer pieces for Whisper — accepted
 - [0216](0216-opencode-engine.md) 0216. OpenCode as a built-in ACP engine — accepted
 - [0217](0217-close-cancels-the-tree.md) 0217. Closing a chat with ✕ cancels its whole tree — accepted
-- [0218](0218-balanced-mode.md) 0218. «Balanced mode»: the engine, model and effort of a delegation follow the credits left — proposed; amended by 0331
+- [0218](0218-balanced-mode.md) 0218. «Balanced mode»: the engine, model and effort of a delegation follow the credits left — proposed; amended by 0331; choice logic retired by 0337
 - [0219](0219-phone-bridge-telegram.md) 0219. Phone bridge: the Orchestrator through a private Telegram bot — accepted
 - [0220](0220-role-skill-alignment.md) Scoped role skills and verified Plan intake — accepted
 - [0221](0221-acp-catalog-wire-replay.md) 0221. An ACP agent catalog, a record/replay harness for the engine wires, a turn-start watchdog — accepted; amended by 0332
@@ -325,12 +325,13 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0328](0328-artifacts-only-what-the-user-asked-for.md) Artifacts: only what the user asked for, one list, all opened in the app, and a real full screen — accepted
 - [0329](0329-an-open-card-takes-the-orchestrators-field.md) An open card takes what he writes in the Orchestrator's field: his words go straight to that row — accepted
 - [0330](0330-maps-follow-their-chats.md) The maps follow their chats: a box says what its pieces say, a step that is ok is «fatto» — accepted
-- [0331](0331-code-mode.md) Code Mode: work chats call their tools from one script (run_code), under the same permission chain — accepted; amended by 0332
+- [0331](0331-code-mode.md) Code Mode: work chats call their tools from one script (run_code), under the same permission chain — accepted; amended by 0332, 0337
 - [0332](0332-antigravity-engine.md) Antigravity (agy acp) joins the ACP engine catalog; its permissions go through the app's gates — accepted
 - [0333](0333-web-fetch-subagent.md) Claude chats keep WebFetch as a plain tool: built-in web-fetch agent off inline — accepted
 - [0334](0334-multi-harness-usage-bar.md) Multi-harness plan usage popover and pinned weekly limits (Claude, Cursor, Codex, OpenCode, Antigravity) — accepted
 - [0335](0335-project-map-line-top-to-bottom-with-parallel-frames.md) A line of phases and steps is drawn top to bottom, with parallel groups in their own frame; the Strategist plans with dependencies — accepted
-- [0336](0336-model-presets.md) Per-task model presets Minimo / Base / Massimo on each role card, picked by delegation under the delegator's price ceiling — accepted
+- [0336](0336-model-presets.md) Per-task model presets Minimo / Base / Massimo on each role card, picked by delegation under the delegator's price ceiling — accepted; amended by 0337
+- [0337](0337-model-choice-on-the-role-card.md) Model choice and Code Mode live on the role card; Settings has none; one approved model choice guide — accepted
 
 ## Replaced
 

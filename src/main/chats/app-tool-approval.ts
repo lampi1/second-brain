@@ -24,6 +24,10 @@ export const APP_UI_TOOLS = ['show_ui', 'ask_user'] as const;
  *  Code Mode; each call inside the script asks the app's permission chain itself (ChatManager.decideFor). */
 export const CODE_MODE_RULE = 'Mcp(second-brain:run_code)';
 
+/** The instruction a Code Mode chat gets on an engine that cannot hide its native tools (ACP: Cursor, Antigravity,
+ *  OpenCode; Codex in its developer instructions). Claude needs none: its natives are hidden (--disallowedTools). */
+export const CODE_MODE_HINT = 'Code Mode is on in this chat: prefer the second-brain tool run_code to your native file, shell and search tools. Write one JavaScript script that calls tools.Bash/Read/Write/Edit/Grep/Glob and the other tools listed in its schema, batches the calls and returns only what you need. Every call inside it passes the app\'s permission rules; an action only the user runs stops the script: then write the exact command in a fenced code block.';
+
 /** Cursor's allow rules for the app's endpoints; uiOnly (read-only chats, whose user allow rules are stripped): only
  *  the question surfaces, never the delegation or mail tools. */
 export function cursorAppPermissions(mcpUrl?: string | null, appMcpUrl?: string | null, uiOnly = false): string[] {
@@ -56,3 +60,10 @@ export function acpAppTool(name: string, mcpUrl?: string | null, appMcpUrl?: str
   const app = tool('second-brain-app');
   return !uiOnly && app !== null && /^[A-Za-z0-9_-]+$/.test(app) && appEndpoint(appMcpUrl);
 }
+
+/** The native tool kinds a Code Mode chat on an engine without a hidden-tools flag (ACP: Cursor, Antigravity, OpenCode;
+ *  Codex) does its work through run_code instead (ADR 0331, per role since 2026-11-23): the app refuses their permission
+ *  requests. Only what the engine asks for reaches the app, so a native call the engine runs without asking (Cursor's
+ *  reads in its own workspace) still runs: the level shown on the role card is «parziale» there. */
+export const CODE_MODE_REFUSED = ['Shell', 'Read', 'Edit', 'Delete', 'Move', 'Search'] as const;
+export function codeModeRefuses(kindName: string): boolean { return (CODE_MODE_REFUSED as readonly string[]).includes(kindName); }

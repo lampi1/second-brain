@@ -735,6 +735,13 @@ export class CodexSession implements HarnessSession {
     const at = Date.now();
     const rid = nextId('ask');
     if (method === 'mcpServer/elicitation/request') return this.elicitation(id, rid, p, at);
+    // Code Mode (ADR 0331): a native command or file change that asks is declined; the developer instructions name
+    // run_code (CODE_MODE_HINT). What the sandbox lets run without asking still runs (level «parziale» on the card)
+    if (this.opts.codeMode && !this.opts.readOnly && (method === 'item/commandExecution/requestApproval' || method === 'item/fileChange/requestApproval')) {
+      log.info('chats', 'codex native tool declined in code mode', { chat: this.opts.chatId, data: { engine: this.engine, method } });
+      this.respond(id, { decision: 'decline' });
+      return;
+    }
     if (method === 'item/commandExecution/requestApproval') {
       const known = this.tools.get(s(p.itemId));
       // the whole line: the request's own, else the running item's as the engine sent it; the shortened copy only shows

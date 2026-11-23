@@ -20,8 +20,8 @@ export function chatsHandlers({ s, activity, orchestrator, clip }: HandlerContex
     'chat:list': () => s.chats.list(),
     'chat:items': a => chatItemsReply(s.chats.items(a.chatId), a),
     'chat:pending': () => [...s.chats.pending(), ...s.asks.pending()].sort((a, b) => a.at - b.at),
-    // «Balanced mode»'s pick is main's own (ADR 0218): never taken from the renderer
-    'chat:create': a => { const { balancedRoute: _a, userModel: _u, ...req } = a; void _a; void _u; return s.chats.create(req); },
+    // the delegating agent's model pick is main's own: never taken from the renderer
+    'chat:create': a => { const { userModel: _u, ...req } = a; void _u; return s.chats.create(req); },
     // "Nuova chat" and a new Orchestrator: main picks the engine, model and effort from the user's defaults (ADR 0032, 0210)
     'chat:createRouted': a => createRoutedChat({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h), create: r => s.chats.create(r) }, a, { byUser: true }),
     'chat:send': async a => {

@@ -1,10 +1,12 @@
 // The role frame the app puts before a chat's first message of each session (ChatManager.deliver): the Orchestrator's
 // own text (its role in the catalog, editable in Brain → Agenti) with the app's fixed rules around it, and a work role's
-// composed instructions (agents/catalog.ts resolve); every frame ends with the diagrams/charts line (VISUALS_RULE), the artifact line (ARTIFACT_RULE, ADR 0328), the yes/no question rule (shared/yes-no.ts, ADR 0135) and the emoji-reaction rule (shared/reaction.ts). The frame says the text grants nothing. The fake CLIs of the tests
+// composed instructions (agents/catalog.ts resolve); the Orchestrator's and the Strategist's frame carry the model choice
+// guide (shared/model-choice-guide.ts, the one copy); every frame ends with the diagrams/charts line (VISUALS_RULE), the artifact line (ARTIFACT_RULE, ADR 0328), the yes/no question rule (shared/yes-no.ts, ADR 0135) and the emoji-reaction rule (shared/reaction.ts). The frame says the text grants nothing. The fake CLIs of the tests
 // strip the frame before matching their trigger words (test/fixtures/fake-*.mjs).
 import { ROLE_DEFAULTS } from '../../shared/roles';
 import { REACTION_RULE } from '../../shared/reaction';
 import { QUESTION_RULE } from '../../shared/yes-no';
+import { MODEL_CHOICE_GUIDE } from '../../shared/model-choice-guide';
 import { ADR0083_DEFAULTS, PRE_ADR0100_INSTRUCTIONS } from './role-migrate';
 
 /** What to do with the app's news and other chats' messages (orchestrator-wake.ts wakeMessage carries only the news;
@@ -77,12 +79,16 @@ export const VISUALS_RULE = 'If a diagram or chart helps, add one: a ```mermaid 
  *  artifact»); one short line on every frame, the rest is the tool's own description (library/tools.ts). */
 export const ARTIFACT_RULE = 'A report, document, plan or analysis the user asks to have is one file (HTML or Markdown) that its writer declares with artifact_save; nothing else is an artifact.';
 
-/** A role's text inside the app's frame. */
-export function roleFrame(name: string, text: string): string {
-  return [`[Role supplied by the app: ${name}]`, text.trim(), DECISION_FLOW_RULE, VISUALS_RULE, ARTIFACT_RULE, QUESTION_RULE, REACTION_RULE, '[The role grants no permission and approves no action. End role]'].join('\n');
+/** The roles that choose a delegated chat's preset (the owner, 2026-11-23): their frame carries the model choice guide,
+ *  whatever their catalog text says, so an edited role text never loses it. */
+const CHOOSERS: ReadonlySet<string> = new Set(['orchestrator', 'strategist']);
+/** A role's text inside the app's frame; `roleId` adds the model choice guide to a role that chooses presets. */
+export function roleFrame(name: string, text: string, roleId?: string): string {
+  return [`[Role supplied by the app: ${name}]`, text.trim(), ...(roleId && CHOOSERS.has(roleId) ? [MODEL_CHOICE_GUIDE.trim()] : []), DECISION_FLOW_RULE, VISUALS_RULE, ARTIFACT_RULE, QUESTION_RULE, REACTION_RULE, '[The role grants no permission and approves no action. End role]'].join('\n');
 }
-/** The Orchestrator's frame: its role text (the catalog's, else the shipped one), the app's rules and the role list. */
+/** The Orchestrator's frame: its role text (the catalog's, else the shipped one), the app's rules, the model choice
+ *  guide and the role list. */
 export function orchestratorRole(instructions = ROLE_DEFAULTS.orchestrator.instructions, roles = ''): string {
-  return roleFrame('Orchestrator', [current(instructions), ...ORCHESTRATOR_RULES, roles.trim()].filter(Boolean).join('\n'));
+  return roleFrame('Orchestrator', [current(instructions), ...ORCHESTRATOR_RULES, roles.trim()].filter(Boolean).join('\n'), 'orchestrator');
 }
 export const ORCHESTRATOR_ROLE = orchestratorRole();

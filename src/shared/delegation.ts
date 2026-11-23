@@ -5,7 +5,7 @@
 // main/agents/delegation.ts (the tools), main/chats/manager.ts (the result delivery) and the renderer (the child cards).
 import type { IntakeSource } from './strategy';
 import { TOOL_CLASSES, type ToolClass, type TaskDeliveryPolicy } from './agents';
-import { MODEL_TIERS, ROLE_DEFAULTS, currentRoleId, isWorkRole, type ModelTier, type WorkRoleId } from './roles';
+import { ROLE_DEFAULTS, currentRoleId, isWorkRole, type WorkRoleId } from './roles';
 import { AGENT_LABEL, oneLine } from './agent-label';
 import type { RunPresetChoice } from './model-presets';
 import type { Effort } from './contract';
@@ -50,8 +50,6 @@ export interface DelegationContract {
   skills?: string[];
   /** the facts and sources it needs: the child does not see the parent's conversation */
   context?: string;
-  /** a model tier above the role's own, up to its tierMax */
-  tier?: ModelTier;
   // the hybrid contract (#355, ADR 0247): what travels with the task besides the goal and the criteria
   /** what it is for, who asks, what they will decide with the result */
   why?: string;
@@ -163,21 +161,21 @@ const only = (o: Record<string, unknown>, keys: readonly string[], what: string)
 /** A contract as the tool received it, checked strictly; `role` gives the default output. */
 export function checkContract(v: unknown, role: WorkRoleId): DelegationContract {
   const o = object(v, 'contract');
-  only(o, ['goal', 'output', 'doneWhen', 'tools', 'skills', 'context', 'tier', 'why', 'alreadyDecided', 'inScope', 'outOfScope', 'constraints', 'steps', 'askIf'], 'contract');
+  // the model is the preset argument's (app_guide «model choice»), never the contract's (2026-11-23)
+  if (o.tier !== undefined) throw new Error('contract.tier: gone; pass the preset argument (min | base | max).');
+  only(o, ['goal', 'output', 'doneWhen', 'tools', 'skills', 'context', 'why', 'alreadyDecided', 'inScope', 'outOfScope', 'constraints', 'steps', 'askIf'], 'contract');
   const doneWhen = o.doneWhen;
   if (!Array.isArray(doneWhen) || !doneWhen.length || doneWhen.length > CRITERIA_MAX) throw new Error(`contract.doneWhen: 1 to ${CRITERIA_MAX} criteria.`);
   const tools = o.tools === undefined ? undefined : Array.isArray(o.tools) && o.tools.every(c => (TOOL_CLASSES as readonly unknown[]).includes(c)) ? [...new Set(o.tools as ToolClass[])] : null;
   if (tools === null) throw new Error(`contract.tools: classes among ${TOOL_CLASSES.join(', ')}.`);
   const skills = o.skills === undefined ? undefined : Array.isArray(o.skills) && o.skills.length <= 16 && o.skills.every(s => typeof s === 'string' && SKILL.test(s)) ? [...new Set(o.skills as string[])] : null;
   if (skills === null) throw new Error('contract.skills: up to 16 skill names (SKILL.md names).');
-  if (o.tier !== undefined && !(MODEL_TIERS as readonly unknown[]).includes(o.tier)) throw new Error(`contract.tier: ${MODEL_TIERS.join(' | ')}.`);
   return {
     goal: text(o.goal, GOAL_MAX, 'contract.goal'),
     output: o.output === undefined ? ROLE_DEFAULTS[role].output : text(o.output, OUTPUT_MAX, 'contract.output'),
     doneWhen: doneWhen.map((c, i) => text(c, CRITERION_MAX, `contract.doneWhen[${i}]`)),
     ...(tools ? { tools } : {}), ...(skills?.length ? { skills } : {}),
     ...(o.context !== undefined ? { context: text(o.context, CONTEXT_MAX, 'contract.context') } : {}),
-    ...(o.tier !== undefined ? { tier: o.tier as ModelTier } : {}),
     ...contractNotes(o, 'contract'),
   };
 }
@@ -196,8 +194,8 @@ export function contractNotes(o: Record<string, unknown>, what: string): Pick<De
 }
 
 /** The structured contract the Orchestrator passes to app_create_chat / app_assign_task (#355): the text fields only
- *  (tools, skills and tier are the tool's own arguments there), checked like a delegation's. */
-export function checkTaskContract(v: unknown): Omit<DelegationContract, 'output' | 'tools' | 'skills' | 'tier'> & { output?: string } {
+ *  (tools, skills and preset are the tool's own arguments there), checked like a delegation's. */
+export function checkTaskContract(v: unknown): Omit<DelegationContract, 'output' | 'tools' | 'skills'> & { output?: string } {
   const o = object(v, 'contract');
   only(o, CONTRACT_FIELDS, 'contract');
   const doneWhen = o.doneWhen;

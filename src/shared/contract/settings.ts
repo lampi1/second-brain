@@ -62,14 +62,11 @@ export interface Settings {
   codexAutonomyRoots?: string[];
   /** limits of delegation between role chats (Impostazioni → Ruoli e deleghe; shared/roles.ts DELEGATION_DEFAULTS) */
   delegation: DelegationSettings;
-  /** the model each tier means on an engine (engine id → tier → model id; '' or absent = the brain's registry) */
-  modelTiers: Partial<Record<Harness, Partial<Record<ModelTier, string>>>>;
   /** minutes an idle long Claude chat waits before writing its hand-off for the invisible continuation (the cache lasts
    *  ~60 min since the last call) */
   coldHandoffMin?: number;
-  /** the chats the Orchestrator opens (app_create_chat without harness/model) and where the "Nuova chat" dialog starts:
-   *  engine, model per engine ('' = the CLI default), Claude effort ('' = the CLI default); Cursor reasoning and fast
-   *  apply to every Cursor chat */
+  /** the engine of the chats the Orchestrator opens (app_create_chat without harness) and where the "Nuova chat" dialog
+   *  starts; their model and effort come from the Orchestrator's role card since 2026-11-23 (agents/legacy-cards.ts) */
   orchestratorChats: OrchestratorChatDefaults;
   /** minutes a finished work chat stays on the grid before it closes by itself (archived, reopenable); 0 = never */
   autoCloseMin: number;
@@ -123,27 +120,14 @@ export interface Settings {
   /** «Modalità notte» (ADR 0191): the user is away; no questions reach them, every agent goes on with the recommended
    *  choice until the job is done; production, secrets, permissions and messages to people wait for their return */
   awayMode?: boolean;
-  /** «Balanced mode» (ADR 0218): a role chat started by an agent gets its engine, model and effort from the credits left in
-   *  each provider and the role's stats, instead of its card's engine; off = the card decides, as before */
-  balancedMode?: boolean;
-  /** «Code Mode» (ADR 0331): a Claude, Cursor or Antigravity chat (not the Orchestrator) works through the app's run_code tool, a
-   *  script in a sandbox whose every tool call passes the app's permission rules; on Claude the native file and shell
-   *  tools are hidden. Off by default; read at each chat's start */
-  codeMode?: boolean;
   /** fields forced by the environment (SB_BRAIN, SB_MCP_PORT): shown read-only, never saved */
   locked?: ('brainRoot' | 'mcpPort')[];
 }
-export interface OrchestratorChatDefaults {
-  harness: Harness; claudeModel: string; cursorModel: string; claudeEffort: Effort | '';
-  /** reasoning of every Cursor chat (ACP session config option of category thought_level), '' = the model's default */
-  cursorReasoning: CursorReasoning | '';
-  /** Cursor's "fast" option for every Cursor chat (faster, spends more usage) */
-  cursorFast: boolean;
-}
+export interface OrchestratorChatDefaults { harness: Harness }
+/** a Cursor chat's reasoning (ACP session config option of category thought_level): its role card's effort */
 export type CursorReasoning = 'low' | 'medium' | 'high' | 'xhigh';
-export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engineOn' | 'engines' | 'messaging' | 'orchestratorChats' | 'tasks' | 'delegation' | 'modelTiers'>> & {
+export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engineOn' | 'engines' | 'messaging' | 'orchestratorChats' | 'tasks' | 'delegation'>> & {
   delegation?: Partial<DelegationSettings>;
-  modelTiers?: Partial<Record<Harness, Partial<Record<ModelTier, string>>>>;
   engines?: Partial<Settings['engines']>;
   tasks?: Partial<Settings['tasks']>;
   engineOn?: Partial<Settings['engineOn']>;
@@ -158,8 +142,8 @@ export type SettingKey =
   | 'jobs.fallback' | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'quipsDaily' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
   | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'judging' | 'judgingSince' | 'judgingCapUsd' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'coldStartSlots' | 'worktreePoolPerRepo' | 'worktreePoolTotal' | 'worktreeDiskCapGb' | 'codexAutonomyRoots'
-  | 'suggestOn' | 'voiceAsr' | 'voiceName' | 'voicePtt' | 'voiceSpeed' | 'awayMode' | 'balancedMode' | 'codeMode'
-  | `delegation.${keyof DelegationSettings}` | `modelTiers.${Harness}.${ModelTier}`;
+  | 'suggestOn' | 'voiceAsr' | 'voiceName' | 'voicePtt' | 'voiceSpeed' | 'awayMode'
+  | `delegation.${keyof DelegationSettings}`;
 export interface SettingDef {
   key: SettingKey;            // 'mute.*' stands for every feed kind
   type: 'path' | 'int' | 'boolean' | 'enum' | 'usd' | 'model' | 'repo-paths';
@@ -260,12 +244,12 @@ export interface RouteDecision {
   ledgerId?: string;
   /** how many hand-offs led to this chat */
   handoffs?: number;
-  /** «Balanced mode» chose the engine (ADR 0218): the credit pool, its share of the recent balanced picks and its target */
+  /** Read back only on routes written before 2026-11-23, when a credit-weighted mode chose the engine (ADR 0218,
+   *  removed): the credit pool, its share of the recent picks and its target. Nothing writes it any more. */
   balanced?: RouteBalanced;
 }
-/** What «Balanced mode» weighed: who chose (the delegating agent from balanced_status, or the formula when the agent
- *  passed nothing), the pool picked, its share of the last 24 h's balanced picks before this one and the share its credit
- *  left asks for (0..1), the pools left out and why, and the role the work fits when it is not the one asked. */
+/** What the removed credit-weighted mode weighed on an old route: who chose, the pool picked, its share and target
+ *  (0..1), the pools left out and why, and the role the work fitted. Kept so old route records still read. */
 export interface RouteBalanced { by: 'agent' | 'formula'; pool: string; share: number; target: number; skipped: { pool: string; why: string }[]; suggestedRole?: string }
 /** The role a routed chat runs: who launched it, its model tier, and where its model came from (the role's own model,
  *  its tier on the engine, or the engine's default; 'table' only on chats from before ADR 0210). */

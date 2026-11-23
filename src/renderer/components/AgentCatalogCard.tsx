@@ -32,7 +32,6 @@ import { HelpTip } from './HelpTip';
 import { formatCost } from '../lib/format';
 import { useApp } from '../store/store';
 import { isBusy } from '../store/state';
-import { isWorkRole } from '@shared/roles';
 
 /** How many open chats of this role are working right now (a turn running or starting), from the live chat list: «Al
  *  lavoro» says what is true now, never an open run whose chat waits, closed or went away (2026-10-22). */
@@ -172,13 +171,10 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
   const person = !ownPicture && profile.avatar.kind === 'character' && isSpriteId(profile.avatar.value) ? profile.avatar.value : null;
   const state = trial ? 'trial' : working ? 'working' : 'active';
   const origin = t(profile.userLocked ? 'studio.customized' : 'studio.builtIn');
-  // «Balanced mode» on (ADR 0218): a work role's engine and model are picked per delegation, so the card names no fixed one
-  const balanced = useApp(s => s.settings?.balancedMode === true) && isWorkRole(profile.id);
-  const tier = t('studio.tierChip', { tier: t(`roles.tier.${profile.tier}`) });
-  // the model the role really ran on last (its newest «Per modello» row, ADR 0284): the tier's name may not match it
+  // the model the role really ran on last (its newest «Per modello» row, ADR 0284) when the card names none
   const lastModel = standing?.models?.reduce<{ model: string; lastAt: number } | null>((best, m) => (!best || m.lastAt > best.lastAt ? m : best), null)?.model;
-  const shownModel = profile.model ?? lastModel ?? tier;
-  const engineModel = balanced ? t('mp.balanced.card') : `${engine} · ${shownModel}`;
+  const shownModel = profile.model ?? lastModel ?? t('mp.roleDefault');
+  const engineModel = `${engine} · ${shownModel}`;
   const skills = profile.skills;
   const last = lastStart === null ? unknown : new Date(lastStart).toLocaleString(locale());
   const prompt = profile.instructions.trim();

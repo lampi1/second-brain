@@ -2,10 +2,16 @@
 // details, so changing supported adapters cannot leave a contradictory instruction in every Orchestrator session.
 import { describe, expect, it } from 'vitest';
 import { ORCHESTRATOR_ROLE, orchestratorRole } from '../../../src/main/agents/orchestrator-role';
+import { MODEL_CHOICE_GUIDE } from '../../../src/shared/model-choice-guide';
+
+// the approved model choice guide (2026-11-23) rides in the frame verbatim: its table's "routine message" (a Herald
+// task kind) is not a scheduled routine, and its size is the owner's text, not a flow manual
+const withoutGuide = (s: string) => s.replace(MODEL_CHOICE_GUIDE.trim(), '');
 
 describe('Orchestrator context ownership', () => {
   it('carries no routine or schedule rule: both live outside the app (ADR 0325)', () => {
-    expect(ORCHESTRATOR_ROLE).not.toMatch(/routine|app_schedule/i);
+    expect(ORCHESTRATOR_ROLE).toContain(MODEL_CHOICE_GUIDE.trim());
+    expect(withoutGuide(ORCHESTRATOR_ROLE)).not.toMatch(/routine|app_schedule/i);
     expect(orchestratorRole('My coordination preference')).not.toMatch(/app_routine|app_schedule|routine run|terminal/i);
     expect(ORCHESTRATOR_ROLE).not.toContain('All company adapters remain unavailable');
     expect(ORCHESTRATOR_ROLE).not.toContain('explicit organization/project/area/type/states');
@@ -43,7 +49,7 @@ describe('Orchestrator context ownership', () => {
 
   it('bounds shipped overhead without truncating editable role instructions', () => {
     // Baseline ce759437: 17,457 UTF-16 characters. This ceiling catches accidental reinsertion of flow manuals.
-    expect(ORCHESTRATOR_ROLE.length).toBeLessThan(16_000);
+    expect(withoutGuide(ORCHESTRATOR_ROLE).length).toBeLessThan(16_000);
     const custom = 'A user-specific instruction. '.repeat(700);
     expect(orchestratorRole(custom)).toContain(custom.trim());
   });

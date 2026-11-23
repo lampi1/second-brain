@@ -54,14 +54,15 @@ export function modelRow(model: string | null | undefined, reg: ModelRegistry | 
 export const isFable = (m: Pick<RegistryModel, 'id'> | null | undefined): boolean => !!m && /fable/i.test(m.id);
 /** does the engine take an effort (Claude's thinking budget)? */
 const takesEffort = (h: Harness): boolean => !!engineOf(h)?.caps.effort;
-/** The user's default effort is the Claude one (orchestratorChats.claudeEffort): another engine that takes an effort
- *  (Cursor, through its thought_level) keeps its own setting (cursorReasoning) unless the chat names one. */
+/** The default effort applies to Claude only: another engine that takes an effort (Cursor, through its thought_level)
+ *  keeps its own default unless the chat or its role card names one. */
 const defaultEffort = (h: Harness, defaults: { effort: Effort | null }): Effort | null => h === 'claude' ? defaults.effort : null;
 const looksClaude = (m: string | null): boolean => /\b(claude|opus|sonnet|haiku|fable|mythos)\b/i.test(String(m ?? '').replace(/[-_.]/g, ' '));
 
 /** Explicit null selects the engine default; omission takes the user's defaults. Neither grants permission. */
 export interface RouteAsk { harness?: Harness; model?: string | null; effort?: Effort | null; reason?: string }
-/** The user's "Chat aperte dall'Orchestrator": the engine, each engine's model ('' / null = the CLI's) and the Claude effort. */
+/** The defaults of a chat no role decides: the engine (orchestratorChats.harness), each engine's model ('' / null = the
+ *  CLI's) and the Claude effort; the Orchestrator's own model and effort are its role card's (2026-11-23). */
 export interface RouteDefaults { harness: Harness; models: Record<Harness, string | null>; effort: Effort | null }
 export type Resolved = { harness: Harness; model: string | null; effort: Effort | null; source: RouteDecision['source']; reason: string | null } | { error: string };
 
@@ -176,7 +177,7 @@ export function validRoute(v: unknown): RouteDecision | null {
 }
 const POOL = /^[a-z][\w:.-]{0,60}$/;
 const share = (x: unknown): number | null => typeof x === 'number' && Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : null;
-/** «Balanced mode»'s weights on a route (ADR 0218), read back. */
+/** The removed credit-weighted mode's weights on an old route (ADR 0218, gone 2026-11-23), read back. */
 function validBalanced(v: unknown): RouteBalanced | null {
   const a = v as Partial<RouteBalanced> | null;
   if (!a || typeof a !== 'object' || typeof a.pool !== 'string' || !POOL.test(a.pool) || share(a.share) === null || share(a.target) === null) return null;

@@ -93,11 +93,11 @@ describe('agent_assign_task with a preset', () => {
     await f.call('agent_assign_task', f.assignArgs());
     expect(f.assign.mock.calls[0]![2].preset?.switchTo).toEqual({ model: 'm-mid', effort: null });
   });
-  it('a child on another engine: an explicit preset is refused, none keeps its model', async () => {
+  it('a child on another engine (an old Balanced chat, mode removed 2026-11-23) is never reused: a fresh chat', async () => {
     const f = fixture({ childHarness: 'codex', childModel: 'gpt-x' });
-    await expect(f.call('agent_assign_task', f.assignArgs({ preset: 'max', presetWhy: 'x' }))).rejects.toThrow(/presets do not apply/);
-    await f.call('agent_assign_task', f.assignArgs());
+    await expect(f.call('agent_assign_task', f.assignArgs({ preset: 'max', presetWhy: 'x' }))).rejects.toThrow(/Role configuration changed/);
+    await expect(f.call('agent_assign_task', f.assignArgs())).rejects.toThrow(/Role configuration changed/);
     expect(f.set).not.toHaveBeenCalled();
-    expect(f.assign.mock.calls[0]![2].preset).toBeUndefined();
+    expect(f.assign).not.toHaveBeenCalled();
   });
 });

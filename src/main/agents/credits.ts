@@ -1,4 +1,4 @@
-// The credit left in each source the app spends on (ADR 0218, «Balanced mode»): a pool per engine, and per provider inside
+// The credit left in each source the app spends on (ADR 0218; kept as cost data after its credit-weighted mode left, 2026-11-23): a pool per engine, and per provider inside
 // OpenCode (`openai/…` and the free `opencode/…` Zen models are two pools). Why: the owner, 2026-11-01, wants delegations
 // spread across his providers in proportion to the credit each has left, and a quick choice that checks the credits
 // «solo quando serve». So the state of every pool is cached with the moment it was read (<userData>/credits.json); a pick
@@ -6,7 +6,7 @@
 // exhausted past its reset or cool-down, a costly delegation on an old state); a limit error in a chat's turn (`limitSignal`)
 // writes the state at once. Local checks only: Claude's plan windows from the usage monitor, OpenCode's own log. Cursor,
 // Codex and the API engines are not readable here: they are learnt from their errors, then retried on probation.
-// Used by agents/balanced-mode.ts and wiring.ts; tests in test/unit/agents/credits.test.ts.
+// Used by wiring.ts (limit signals, the cost/quality data); tests in test/unit/agents/credits.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Harness } from '../../shared/contract';

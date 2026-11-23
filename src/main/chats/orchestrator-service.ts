@@ -1,13 +1,14 @@
 // Engine-agnostic binding for the fixed right column. Reading never starts a model; ensure is single-flight.
 // ChatManager enforces the single Orchestrator, including the replacement entry points (Ricomincia, Cambia motore).
-// ensure routes like every Orchestrator (chats/routed.ts, kind 'orchestrator'): the engine the user picked beats the row; the model
-// and effort come from the table's row on that engine, else the user's "Chat aperte dall'Orchestrator" defaults.
-import type { ChatSummary, Harness, Settings } from '../../shared/contract';
+// ensure routes like every Orchestrator (chats/routed.ts, kind 'orchestrator'): the engine the user picked beats the row;
+// the model and effort come from the Orchestrator's role card when it is on that engine (agents/catalog.ts resolve; the
+// Settings' «Chat aperte dall'Orchestrator» models moved onto the card, 2026-11-23), else the engine's default.
+import type { ChatSummary, Harness } from '../../shared/contract';
 import type { ChatService } from '../services';
 import { createRoutedChat, type RoutedChatDeps } from './routed';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 
-export type OrchestratorRouting = Omit<RoutedChatDeps, 'create'> & { orchestratorChats(): Settings['orchestratorChats'] };
+export type OrchestratorRouting = Omit<RoutedChatDeps, 'create'>;
 
 export class OrchestratorService {
   private pending: Promise<ChatSummary> | null = null;
@@ -32,11 +33,9 @@ export class OrchestratorService {
     const base = { cwd, title: ORCHESTRATOR_TITLE, orchestrator: true };
     if (!this.routing) return this.chats.create({ ...choice, ...base });
     const { route, engineOn, agentsMayOpen } = this.routing;
-    const def = this.routing.orchestratorChats();
-    const defModel = choice.harness === 'claude' ? def.claudeModel : choice.harness === 'cursor' ? def.cursorModel : '';
     return createRoutedChat({ route, engineOn, agentsMayOpen, create: r => this.chats.create(r) }, {
       ...base, prompt: '',
-      defaults: { harness: choice.harness, ...(defModel ? { model: defModel } : {}), ...(choice.harness === 'claude' && def.claudeEffort ? { effort: def.claudeEffort } : {}) },
+      defaults: { harness: choice.harness },
       ask: { harness: choice.harness, ...(choice.model ? { model: choice.model } : {}), reason: 'motore scelto dall’utente' },
     }, { byUser: true });
   }

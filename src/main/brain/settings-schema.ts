@@ -11,7 +11,7 @@ import path from 'node:path';
 import type { Settings, SettingDef, SettingKey, SettingsPatch, WorktreeLimits } from '../../shared/contract';
 import { ENGINE_ID, engineLabel, engineOf, engines } from '../engines/registry';
 import { canonicalRepoRoot } from './adapters/codex-policy';
-import { DELEGATION_DEFAULTS, DELEGATION_RANGE, MODEL_TIERS, type ModelTier } from '../../shared/roles';
+import { DELEGATION_DEFAULTS, DELEGATION_RANGE } from '../../shared/roles';
 
 /** The compaction window of the app's Claude chats (ADR 0031): 200000 since 2026-10-14 (the user: «ripartenza a ~200k
  *  token di contesto»; 300000 before, ADR 0051). */
@@ -124,19 +124,9 @@ const BASE: readonly SettingDef[] = [
     description: "Interruttore generale degli avvisi di spesa (all'80% e al 100%)." },
   ...budgetDefs('claude'),
   ...budgetDefs('cursor'),
-  // the chats the Orchestrator opens (and where "Nuova chat" starts). Protected: an agent choosing the engine or the model
-  // chooses whose credits and how many are spent
-  { key: 'orchestratorChats.claudeModel', type: 'model', default: '', protected: true, label: 'Modello per le chat Claude',
-    description: 'Il modello delle chat Claude aperte dall’Orchestrator. Vuoto = il predefinito di Claude Code.' },
-  { key: 'orchestratorChats.claudeEffort', type: 'enum', values: ['', 'low', 'medium', 'high', 'xhigh', 'max'], default: '', protected: true, label: 'Effort per le chat Claude',
-    description: 'Quanto ragiona Claude prima di rispondere. Vuoto = il predefinito di Claude Code.' },
-  { key: 'orchestratorChats.cursorModel', type: 'model', default: '', protected: true, label: 'Modello per le chat Cursor',
-    description: 'Il modello delle chat Cursor aperte dall’Orchestrator. Vuoto = il predefinito di Cursor.' },
-  // every Cursor chat (the user, 2026-10-12: Grok medium, fast off): applied with ACP session/set_config_option
-  { key: 'orchestratorChats.cursorReasoning', type: 'enum', values: ['', 'low', 'medium', 'high', 'xhigh'], default: 'medium', protected: true, label: 'Ragionamento per le chat Cursor',
-    description: 'Quanto ragiona il modello di ogni chat Cursor. Vuoto = il predefinito del modello. Se il modello non lo offre, la chat lo dice.' },
-  { key: 'orchestratorChats.cursorFast', type: 'boolean', default: false, protected: true, label: 'Fast per le chat Cursor',
-    description: 'Acceso: ogni chat Cursor usa la variante fast del modello, se c’è (più veloce, consuma di più).' },
+  // the chats' models, efforts, Cursor fast and Code Mode live on the role cards since 2026-11-23 (the owner: «solo ed
+  // esclusivamente dalle card degli agenti oppure che lo setti l'orchestrator, non dalle impostazioni»;
+  // agents/legacy-cards.ts moved the old values once)
   // the floating Orchestrator (ADR 0021; the user, 2026-10-12: "voglio poter scegliere l'opacità dell’Orchestrator")
   { key: 'orchestratorOpacity', type: 'int', min: 40, max: 100, default: 100, protected: false, label: 'Opacità dell’Orchestrator (%)',
     description: 'Quanto si vede il riquadro dell’Orchestrator sopra le chat. Con il mouse sopra o mentre scrivi torna pieno.' },
@@ -144,12 +134,6 @@ const BASE: readonly SettingDef[] = [
   // the user goes away (the owner, 2026-10-29: «non faccia domande e prosegua tutta la notte», ADR 0191)
   { key: 'awayMode', type: 'boolean', default: false, protected: false, label: 'Modalità notte',
     description: 'Sei via: nessuna domanda ti raggiunge. Ogni agente e l’Orchestrator vanno avanti con la scelta consigliata finché il lavoro è finito, e il PC non va in sospensione. Produzione, segreti, permessi e messaggi a persone restano per il tuo ritorno. Quando la spegni trovi il riepilogo nella chat dell’Orchestrator.' },
-  // whose credits a delegation spends (the owner, 2026-11-01: «Balanced mode», ADR 0218): protected, an agent only proposes it
-  { key: 'balancedMode', type: 'boolean', default: false, protected: true, label: 'Balanced mode',
-    description: 'Le chat che un agente delega scelgono motore, modello ed effort in base ai crediti rimasti di ogni provider e ai risultati del ruolo, così i crediti finiscono insieme. Spenta: decide la scheda del ruolo.' },
-  // how a chat calls its tools (the owner, 2026-11-21: Code Mode in the app, ADR 0331): protected, an agent only proposes it
-  { key: 'codeMode', type: 'boolean', default: false, protected: true, label: 'Code Mode',
-    description: 'Le chat Claude, Cursor e Antigravity (non l’Orchestrator) lavorano con uno script: più letture, ricerche e tool in una sola chiamata (run_code), in un sandbox. Ogni chiamata dentro lo script passa dalle stesse regole dei permessi; un’azione da Esegui ferma lo script e ti lascia il solito bottone. Su Claude i tool nativi di file e shell spariscono, su Cursor e Antigravity restano. Vale per le chat che partono dopo.' },
   { key: 'orchestratorEvents', type: 'boolean', default: true, protected: true, label: 'Eventi all’Orchestrator',
     description: "Quando una chat di lavoro finisce, si ferma su un errore, aspetta una tua risposta o ti lascia un comando, l'app lo scrive all’Orchestrator (una riga per chat, al massimo una volta ogni 2 minuti per chat) e lo sveglia se è fermo: decide lui se dirtelo. Ogni risveglio è un turno dell’Orchestrator." },
   // the chat learns how its command went (the user, 2026-10-12: "vorrei che ti accorgessi da sola quando eseguo un
@@ -182,14 +166,6 @@ export const MODEL_ID = /^[\w.:@/=[\],-]{0,120}$/;
 
 const MUTE_KEY = /^mute\.([a-z][a-z-]{0,40})$/;
 const ENGINE_KEY = /^(engineOn|engines)\.(.+)$/;
-const TIER_KEY = /^modelTiers\.([^.]+)\.(light|mid|top)$/;
-const TIER_LABEL: Record<ModelTier, string> = { light: 'leggero', mid: 'medio', top: 'alto' };
-
-// the model a role's tier means on an engine (agents/model-tier.ts). Protected: the model decides whose credits and how many
-function tierDef(id: string, tier: ModelTier): SettingDef {
-  return { key: `modelTiers.${id}.${tier}`, type: 'model', default: '', protected: true, label: `${engineLabel(id)}: modello di livello ${TIER_LABEL[tier]}`,
-    description: 'Il modello che i ruoli di questo livello usano su questo motore. Vuoto = quello del registro dei modelli del brain.' };
-}
 
 // the engines (ADR 0046, engines/policy.ts): each on or off, and whether the Orchestrators may use it; engines.* keeps the key
 // older releases read, with the same meaning (safe rollback). Default: on only for the built-ins (registry defaultOn)
@@ -210,7 +186,7 @@ function orchestratorEngineDef(): SettingDef {
 
 /** Every setting, the engines' ones for the engines in the registry now. */
 export function schema(): SettingDef[] {
-  return [...BASE, orchestratorEngineDef(), ...engines().flatMap(e => [engineDef('engineOn', e.id), engineDef('engines', e.id), ...MODEL_TIERS.map(t => tierDef(e.id, t))])];
+  return [...BASE, orchestratorEngineDef(), ...engines().flatMap(e => [engineDef('engineOn', e.id), engineDef('engines', e.id)])];
 }
 
 export function defOf(key: string): SettingDef | null {
@@ -218,8 +194,6 @@ export function defOf(key: string): SettingDef | null {
   const eng = ENGINE_KEY.exec(key);
   if (eng) return ENGINE_ID.test(eng[2]!) ? engineDef(eng[1] as 'engineOn' | 'engines', eng[2]!) : null;
   if (key === 'orchestratorChats.harness') return orchestratorEngineDef();
-  const tier = TIER_KEY.exec(key);
-  if (tier) return ENGINE_ID.test(tier[1]!) ? tierDef(tier[1]!, tier[2] as ModelTier) : null;
   return BASE.find(d => d.key === key && d.key !== 'mute.*') ?? null;
 }
 
@@ -273,7 +247,7 @@ export function defaults(): Settings {
     messaging: { crossHarness: true },
     tasks: { enabled: false, everyMin: 30, sound: true },
     budget: { enabled: true, claude: { mode: 'warn', dailyUsd: null, perChatUsd: null }, cursor: { mode: 'warn', dailyUsd: null, perChatUsd: null } },
-    orchestratorChats: { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '', cursorReasoning: 'medium', cursorFast: false },
+    orchestratorChats: { harness: 'claude' },
     orchestratorOpacity: 100,
     orchestratorEvents: true,
     runResults: true,
@@ -285,8 +259,8 @@ export function defaults(): Settings {
     loadQueue: true, loadQueueCpu: LOAD_BRAKE_CPU, loadQueueRam: LOAD_BRAKE_RAM, coldStartSlots: 0,
     worktreePoolPerRepo: WORKTREE_DEFAULTS.perRepo, worktreePoolTotal: WORKTREE_DEFAULTS.total, worktreeDiskCapGb: WORKTREE_DEFAULTS.diskGb,
     suggestOn: true,
-    voiceAsr: 'fast', voiceName: 'paola', voicePtt: false, awayMode: false, balancedMode: false, codeMode: false,
-    delegation: { ...DELEGATION_DEFAULTS }, modelTiers: {},
+    voiceAsr: 'fast', voiceName: 'paola', voicePtt: false, awayMode: false,
+    delegation: { ...DELEGATION_DEFAULTS },
   };
 }
 
@@ -316,7 +290,7 @@ export function flattenPatch(patch: unknown): [string, unknown][] {
   const walk = (o: Record<string, unknown>, prefix: string) => {
     for (const [k, v] of Object.entries(o)) {
       const key = prefix ? `${prefix}.${k}` : k;
-      if ((['jobs'].includes(key) || key === 'mute' || key === 'engineOn' || key === 'engines' || key === 'messaging' || key === 'orchestratorChats' || key === 'tasks' || key === 'budget' || key === 'budget.claude' || key === 'budget.cursor' || key === 'delegation' || key === 'modelTiers' || /^modelTiers\.[^.]+$/.test(key))) {
+      if ((['jobs'].includes(key) || key === 'mute' || key === 'engineOn' || key === 'engines' || key === 'messaging' || key === 'orchestratorChats' || key === 'tasks' || key === 'budget' || key === 'budget.claude' || key === 'budget.cursor' || key === 'delegation')) {
         if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error(`${key}: oggetto atteso`);
         walk(v as Record<string, unknown>, key);
       } else if (key === 'locked') continue; // echoed back by a client: never settable

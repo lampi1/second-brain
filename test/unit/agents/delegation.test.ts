@@ -245,12 +245,10 @@ describe('agent_delegate', () => {
     expect(remembered).toHaveLength(1);
   });
 
-  it('a part that names `balanced` is not refused: with Balanced mode off it is left out with a warning', async () => {
+  it('a part that names the removed `balanced` field is refused like any unknown field (2026-11-23)', async () => {
     const f = fixture();
     const parent = await f.root('strategist');
-    const r = await f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Ordini · Log'), balanced: { engine: 'claude', model: 'sonnet', why: 'cheap read' } }] });
-    expect(r.children[0]).toMatchObject({ role: 'scout', warnings: expect.arrayContaining([expect.stringContaining('balanced left out')]) });
-    await expect(f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Ordini · Altro'), balanced: { engine: 'claude' } }] })).rejects.toThrow(/balanced/);
+    await expect(f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Ordini · Log'), balanced: { engine: 'claude', model: 'sonnet', why: 'cheap read' } }] })).rejects.toThrow(/unknown field balanced/);
     await expect(f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Ordini · Altro'), bilanced: 1 }] })).rejects.toThrow(/unknown field bilanced/);
   });
 

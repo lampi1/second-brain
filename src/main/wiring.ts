@@ -33,9 +33,9 @@ import { maintenanceEvent, proposalEvent } from './brain/announce';
 import { MorningService } from './morning/service';
 import { createAgentLoop } from './agents/loop';
 import { delegationTools } from './agents/delegation';
-import { BalancedMode } from './agents/balanced-mode';
 import { CreditBook, opencodeLogTail } from './agents/credits';
-import { tierCandidates, tierModel } from './agents/model-tier';
+import { tierModel } from './agents/model-tier';
+import { markLegacyDone, migratedCards, readLegacy } from './agents/legacy-cards';
 import { workDecisionTools } from './agents/work-decisions';
 import { strategyTools } from './agents/strategy-tools';
 import { askTools } from './chats/ask-tool';
@@ -230,6 +230,15 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // release template's), re-read at most every 30 s; set before the catalog reads its models (issue #96)
   setPriceTable(priceTableSource(() => brain.modelRegistry(), () => { try { return path.join(templateRoot(), 'harness', 'models.json'); } catch { return null; } }));
   const agents = createAgentCatalog(ctx, brain, engines, () => ({ ...cliCache, ...engineReadiness() }));
+  // the retired model Settings (tiers, Code Mode, the Orchestrator's models) onto the role cards, once (legacy-cards.ts)
+  const legacy = readLegacy(ctx.userData);
+  if (legacy) {
+    try {
+      const roles = agents.migrateLegacy(list => migratedCards(list, legacy, (e, t, o) => tierModel(e, t, brain.modelRegistry(), o)));
+      markLegacyDone(ctx.userData);
+      log.info('agents', 'model settings moved onto the role cards', { data: { roles: roles.join(', ') || 'none' } });
+    } catch (e) { log.warn('agents', 'model settings not moved onto the role cards', { cause: errText(e), hint: 'check that roles.json in the app data folder is writable; the next start retries' }); }
+  }
   // Probe only after registry/trust initialization; reconcile untouched seeds when readiness arrives and tell the
   // renderer (issue #96: the role editor showed the startup snapshot). Tests never run installed vendors.
   if (!process.env.SB_TEST) void engineStatuses().then(all => { cliCache = all; agents.refresh(); ctx.emitter.emit('cli:ready', all); });
@@ -242,7 +251,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     registry: e => registryModels(priceEnginesOf(e)), appVersion: app.getVersion(), changed: () => agents.refresh(),
   });
   if (!process.env.SB_TEST && !process.env.SB_DEMO) modelLists.start();
-  brain.onSettingChange(c => { if (c.key === 'brainRoot' || c.key.startsWith('engineOn.') || c.key === 'orchestratorChats.harness' || c.key.startsWith('modelTiers.')) agents.refresh(); });
+  brain.onSettingChange(c => { if (c.key === 'brainRoot' || c.key.startsWith('engineOn.') || c.key === 'orchestratorChats.harness') agents.refresh(); });
   // the Brain pages' reader, set once they are built (the skills a role's tools need)
   const brainModelRef: { current?: BrainModelService } = {};
   const researchRef: { current?: ResearchService } = {};
@@ -296,15 +305,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // «Modalità notte» (ADR 0191): the user is away; what the app chooses or parks for them waits for the recap
   const awayLog = new AwayLog(path.join(ctx.userData, 'away-log.json'));
   const awayOn = () => brain.settings().awayMode === true;
-  // «Balanced mode» (ADR 0218): the cached credit of each provider (local reads only) and the pick a launch uses when on
+  // the cached credit of each provider (local reads only, ADR 0218): cost data kept after Balanced mode left (2026-11-23)
   const credits = new CreditBook(path.join(ctx.userData, 'credits.json'), {
     claudeLimits: () => { const u = brain.usage(); return u.limitsAt ? { fiveHourPct: u.fiveHourPct, fiveHourResetsAt: u.fiveHourResetsAt, weekPct: u.weekPct, weekResetsAt: u.weekResetsAt ?? null, at: u.limitsAt } : null; },
     opencodeLog: () => opencodeLogTail(os.homedir()) });
-  const balancedMode = new BalancedMode({ on: () => brain.settings().balancedMode === true, book: credits,
-    role: id => { const p = agents.list().profiles.find(x => x.id === id); return p ? { engine: p.engine, model: p.model, effort: p.effort ?? null, tier: p.tier, tierMax: p.tierMax, presets: agents.presetsOf(p) } : null; },
-    engines: () => agents.list().models, tierModel: (e, t) => tierModel(e, t, brain.modelRegistry(), brain.settings().modelTiers),
-    tierModels: (e, t) => tierCandidates(e, t, brain.modelRegistry(), brain.settings().modelTiers),
-    runs: () => manager.runs.list() });
   // the runs of Esegui, built after the manager (#371, #372): a Yes and a user step are read against them
   const runsRef: { current: CommandRunner | null } = { current: null };
   // list prices for the runs whose engine reported tokens and no cost (ADR 0284): the standings and the estimates
@@ -389,7 +393,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // brain hooks: plan limits, the job ledger (real cost and time), the live feed and notifications
     onRateLimit: msg => brain.ingestRateLimits(msg),
     onModels: (h, list) => { brain.recordModels(h, list); agents.refresh(); },
-    acpModelConfig: () => { const r = brain.settings().orchestratorChats; return { reasoning: r.cursorReasoning, fast: r.cursorFast }; },
+    // Cursor's fast from the chat's role card (was Settings orchestratorChats.cursorFast; the reasoning is the card's effort)
+    acpModelConfig: roleId => ({ reasoning: '', fast: agents.launchFlags(roleId).fast }),
     onTurnEnd: info => {
       replyRules.turnEnded(info.chatId, info.reply, info.isError);
       credits.observe(info.harness, info.model, info.errorText, info.isError); // the engine's limit error or a clean turn (ADR 0218)
@@ -446,8 +451,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       return tool && fs.existsSync(tool) ? tool : null;
     },
     brainRoot: () => brain.info().brainRoot,
-    // Code Mode (ADR 0331): the Settings switch, and the brain's PreToolUse guard for run_code's internal calls
-    codeMode: () => brain.settings().codeMode === true,
+    // Code Mode (ADR 0331): the role card's switch, and the brain's PreToolUse guard for run_code's internal calls
+    codeMode: roleId => agents.launchFlags(roleId).codeMode,
     productGuard: productGuard(ctx.userData),
     // #375: the app writes the journal's «fatto» line of a role's result, through the brain's mem.mjs (the app's copy
     // for a product brain)
@@ -641,7 +646,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools(delegationTools({
     integrate: async (parent, child) => stageDelegatedChanges(delegateWorktrees.allocation(parent, child), parent, child, brain.info().brainRoot),
     integrateMany: async (parent, children) => stageDelegatedChangesMany(children.map(child => ({ owned: delegateWorktrees.allocation(parent, child), child })), parent, brain.info().brainRoot), chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
-    engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), balancedMode, presetChoice: (roleId, ask, delegator) => agents.presetChoice(roleId, ask, delegator), label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools,
+    engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), presetChoice: (roleId, ask, delegator) => agents.presetChoice(roleId, ask, delegator), label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools,
     remember: (roleId, line, chat) => { skillLessons.propose({ role: portableId(roleId), text: line, chatId: chat.id, ...(chat.run?.runId ? { runId: chat.run.runId } : {}) }); } }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
   addChatTools(strategyTools(manager, awayOn, projectMaps));
@@ -743,7 +748,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // a role chat's route says how its active version has done so far
   const agentStats = (agentId: string, version: number) => agentStatsLine(runMetrics(manager.runs.list(), { rollups: manager.runs.rolledUp() }).find(m => m.agentId === agentId)?.versions.find(v => v.version === version));
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, balancedMode, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), presetChoice: (roleId, ask, delegator) => agents.presetChoice(roleId, ask, delegator), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps,
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps,
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },

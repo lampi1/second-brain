@@ -54,6 +54,6 @@ card, and nothing recorded which model a task ran on and why, so the cost per ki
   `agent_assign_task` without a preset brings a child back to Base.
 - The card values (which models each role's presets name) are the user's: this change ships the mechanism only.
 - Tests: `test/unit/agents/model-presets.test.ts` (each guard), `catalog-presets.test.ts` (migration, save, resolve),
-  `delegation-presets.test.ts` (the tools), `balanced-mode.test.ts`, `runs-db.test.ts` (the record),
+  `delegation-presets.test.ts` (the tools), `runs-db.test.ts` (the record),
   `test/unit/role-presets-render.test.ts` (the UI), `test/unit/renderer/agent-card-presets.test.ts` (the role's page),
   `test/e2e/agent-card-presets.spec.ts` (the page's picture).

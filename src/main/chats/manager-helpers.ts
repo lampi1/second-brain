@@ -54,7 +54,7 @@ export function turnReply(items: readonly ChatItem[]): string {
 }
 
 /** The engine's error notices since the last user message, joined: what the engine said went wrong, never the agent's
- *  prose (the Balanced mode's limit signal reads only these, ADR 0218). */
+ *  prose (the credit book's limit signal reads only these, ADR 0218). */
 export function turnErrors(items: readonly ChatItem[]): string {
   const out: string[] = [];
   for (let i = items.length - 1; i >= 0; i--) {

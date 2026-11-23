@@ -223,7 +223,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     const launch = this.warmLaunch(policy, agent.assets, agent.maxContext, delegator ? (ancestors ? { role, launches: agent.launches ?? null, child: { ancestors } } : undefined)
       : policy ? { role, launches: agent.launches ?? null } : undefined,
       // Code Mode's flags are fixed at launch too (ADR 0331): only an engine launched the same way fits
-      codeModeFor({ harness: req.harness, isOrchestrator: !!req.orchestrator, ...(req.research ? { research: true as const } : {}) }, this.opts.codeMode?.() === true));
+      codeModeFor({ harness: req.harness, isOrchestrator: !!req.orchestrator, ...(req.research ? { research: true as const } : {}) }, this.opts.codeMode?.(role ?? undefined) === true));
     // a child whose parent has no known role chain starts cold, as before (fail closed: no managed server)
     const childOk = !delegator || !!ancestors;
     const now = Date.now();
@@ -610,7 +610,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     // the role once per context: the Orchestrator's with the role catalog, a role chat's composed instructions; a
     // resumed session already holds it in its history, so it goes again only when the text changed or was compacted away
     const roleText = r.s.isOrchestrator ? `${orchestratorRole(r.agentInstructions || undefined, this.opts.roleCatalogBrief?.())}\n\n`
-      : r.agentInstructions ? `${roleFrame(r.s.agent?.name ?? 'Chat', r.agentInstructions)}\n\n` : '';
+      : r.agentInstructions ? `${roleFrame(r.s.agent?.name ?? 'Chat', r.agentInstructions, r.s.agent?.id)}\n\n` : '';
     const roleSig = roleText ? crypto.createHash('sha256').update(roleText).digest('hex').slice(0, 16) : '';
     // a changed text is checked once per engine start (as before this, never mid-session: a catalog edit would resend it)
     const role = roleText && (!r.rolePrimed || (!r.roleChecked && r.rolePrimed.sig !== roleSig)) ? roleText : '';

@@ -171,7 +171,6 @@ app.whenReady().then(async () => {
     { store: new CoordinationStore(path.join(app.getPath('userData'), 'app.db')), chats: () => s.chats.list(), pending: () => s.chats.pending() });
   const orchestrator = new OrchestratorService(s.chats, () => s.brain.info().brainRoot, {
     route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h),
-    orchestratorChats: () => s.brain.settings().orchestratorChats,
   });
   // voice mode (ADR 0152): the local speech engine in its own utility process, started on first use
   const voice = new VoiceService({

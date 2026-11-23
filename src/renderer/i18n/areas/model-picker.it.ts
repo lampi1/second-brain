@@ -1,5 +1,5 @@
 // Italian texts of the shared model picker (ModelPicker.tsx): the search, the engine groups with their state, the two
-// defaults (the CLI's for a chat, the tier's for a role), effort and context, the loading/error/empty states and the
+// defaults (the CLI's for a chat, the role's for a role), effort and context, the loading/error/empty states and the
 // scope actions («Solo questa chat», «Predefinito dell'Orchestrator», «Salva nel ruolo»).
 export const modelPickerIt = {
   'mp.search': 'Cerca motore o modello',
@@ -24,8 +24,8 @@ export const modelPickerIt = {
   'mp.block.notSelectable': 'solo il predefinito della CLI',
   'mp.cliDefault': 'Predefinito della CLI',
   'mp.cliDefaultMeta': 'il modello che il motore sceglie da sé',
-  'mp.tierDefault': (p: { tier: string }) => `Modello del livello (${p.tier})`,
-  'mp.tierDefaultMeta': 'scelto all’avvio dal livello del ruolo',
+  'mp.roleDefault': 'Predefinito del ruolo',
+  'mp.roleDefaultMeta': 'scelto all’avvio dal registro dei modelli del brain',
   'mp.registry': 'dal registro',
   'mp.missing': 'non più nell’elenco del motore',
   'mp.context': (p: { size: string }) => `contesto ${p.size}`,
@@ -40,11 +40,6 @@ export const modelPickerIt = {
   'mp.apply.orchestratorTip': 'Salva nella scheda dell’Orchestrator: vale dal prossimo Orchestrator su quel motore.',
   'mp.apply.role': 'Salva nel ruolo',
   'mp.chatMenu': 'Modello ed effort…',
-  'mp.cardButton': (p: { engine: string; model: string }) => `${p.engine} · ${p.model}`,
-  'mp.balanced': 'Balanced mode',
-  'mp.balanced.hint': 'Tutti i ruoli: chi delega sceglie motore, modello ed effort in base ai crediti rimasti e alle statistiche. Spenta: ogni ruolo usa la sua card.',
-  'mp.balanced.card': 'Balanced',
-  'mp.balanced.cardNote': 'Balanced mode attiva: motore, modello ed effort li sceglie chi delega. Questa scelta torna a valere quando la spegni.',
-  'modelChip.tip': (p: { engine: string; model: string }) => `${p.engine} · ${p.model}: clicca per cambiare modello`,
+  'mp.cardButton': (p: { engine: string; model: string }) => `${p.engine} · ${p.model}`,  'modelChip.tip': (p: { engine: string; model: string }) => `${p.engine} · ${p.model}: clicca per cambiare modello`,
   'chat.clearContext': 'Svuota il contesto (come /clear)',
 };

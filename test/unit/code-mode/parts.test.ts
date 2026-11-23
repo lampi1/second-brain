@@ -15,8 +15,7 @@ import type { FsRunner } from '../../../src/main/code-mode/fs-run';
 import { bridge, catalog, outputValue, type BridgeDeps } from '../../../src/main/code-mode/bridge';
 import { runCodeTool, toolList } from '../../../src/main/code-mode/tool';
 import type { McpTool } from '../../../src/main/mcp/server';
-import { configTool, type ConfigDeps } from '../../../src/main/appctl/config';
-import { ConfigStore, DEFAULTS, schema } from '../../../src/main/brain/config';
+import { DEFAULTS, schema } from '../../../src/main/brain/config';
 import { entries } from '../../../src/main/appctl/guide';
 
 const dirs: string[] = [];
@@ -24,7 +23,7 @@ const tmp = (): string => { const d = fs.realpathSync.native(fs.mkdtempSync(path
 afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
 describe('who runs in Code Mode', () => {
-  it('Claude, Cursor and Antigravity chats with the setting on; never the Orchestrator, the research or another engine', () => {
+  it('every engine with tools when the role card has it on; never the Orchestrator, the research or the API engine', () => {
     const c = (o: object) => ({ harness: 'claude', isOrchestrator: false, research: false, ...o }) as never;
     expect(codeModeFor(c({}), true)).toBe(true);
     expect(codeModeFor(c({ harness: 'cursor' }), true)).toBe(true);
@@ -35,8 +34,12 @@ describe('who runs in Code Mode', () => {
     expect(codeModeFor(c({ harness: 'antigravity', isOrchestrator: true }), true)).toBe(false);
     expect(codeModeFor(c({ research: true }), true)).toBe(false);
     expect(codeModeFor(c({ harness: 'antigravity', research: true }), true)).toBe(false);
-    expect(codeModeFor(c({ harness: 'codex' }), true)).toBe(false);
-    expect(codeModeFor(c({ harness: 'opencode' }), true)).toBe(false);
+    // per role on every harness (owner, 2026-11-23): Codex and OpenCode too, partial like Cursor
+    expect(codeModeFor(c({ harness: 'codex' }), true)).toBe(true);
+    expect(codeModeFor(c({ harness: 'opencode' }), true)).toBe(true);
+    expect(codeModeFor(c({ harness: 'opencode', isOrchestrator: true }), true)).toBe(false);
+    expect(codeModeFor(c({ harness: 'anthropic-api' }), true)).toBe(false);
+    expect(codeModeFor(c({ harness: 'unknown-engine' }), true)).toBe(false);
   });
   it('names a call the way the gates know it', () => {
     expect(gateName('native', 'Bash')).toBe('Bash');
@@ -198,44 +201,19 @@ describe('the bridge and run_code\'s schema', () => {
   });
 });
 
-function configDeps(): ConfigDeps & { store: ConfigStore } {
-  const store = new ConfigStore(tmp(), {});
-  return { store, callerId: 'orch-1', userAsked: () => true, brain: {
-    settings: () => store.get(), settingsSchema: () => store.schema(), settingsHistory: n => store.history(n),
-    undoSetting: (id, by = 'user', origin) => store.undo(id, { by, ...origin }), requestSetting: (k, v, o) => store.request(k, v, o),
-  } };
-}
-
-describe('the Code Mode setting and the Orchestrator', () => {
-  it('is a protected boolean, off by default, with label and description', () => {
-    const e = schema().find(x => x.key === 'codeMode');
-    expect(e).toMatchObject({ type: 'boolean', default: false, protected: true, label: 'Code Mode' });
-    expect(e?.description).toMatch(/run_code/);
-    expect(DEFAULTS.codeMode).toBe(false);
+describe('Code Mode is a role card field (2026-11-23), not a setting', () => {
+  it('Settings has no codeMode key any more', () => {
+    expect(schema().some(x => (x.key as string) === 'codeMode')).toBe(false);
+    expect('codeMode' in DEFAULTS).toBe(false);
   });
-  it('the Orchestrator reads it, turns it on on the user\'s words (change log), and Annulla turns it off', async () => {
-    const d = configDeps(), tool = configTool(d);
-    const got = await tool.run({ action: 'get', area: 'setting', query: 'code mode' }) as { key: string; value: unknown }[];
-    expect(got.find(x => x.key === 'codeMode')).toMatchObject({ value: false });
-    const r = await tool.run({ action: 'set', area: 'setting', key: 'codeMode', value: true, reason: 'prova Code Mode' }) as { changed: string; changeId: string };
-    expect(r.changed).toBe('codeMode');
-    expect(d.store.get().codeMode).toBe(true);
-    expect(d.store.history(1)[0]).toMatchObject({ by: 'agent', chatId: 'orch-1', key: 'codeMode' });
-    await tool.run({ action: 'undo', area: 'setting', changeId: r.changeId });
-    expect(d.store.get().codeMode).toBe(false);
-  });
-  it('another agent only proposes it', () => {
-    const store = new ConfigStore(tmp(), {});
-    expect('proposal' in store.request('codeMode', true, { by: 'agent', chatId: 'w' })).toBe(true);
-    expect(store.get().codeMode).toBe(false);
-  });
-  it('the guide explains what it does and when it pays, with its state now', () => {
-    const card = (on: boolean) => entries(null, { settings: { schema, get: () => ({ ...DEFAULTS, codeMode: on }) }, window: () => null, tools: () => [] } as never, 'it')
+  it('the guide explains the role field, the level per engine and when it pays, with the roles it is on for', () => {
+    const card = (roles: string[]) => entries(null, { settings: { schema, get: () => DEFAULTS }, window: () => null, tools: () => [], showValues: () => true, codeModeRoles: () => roles } as never, 'it')
       .find(e => e.kind === 'concept' && e.title.startsWith('Code Mode'))!;
-    expect(card(false).text).toMatch(/app_config area setting key codeMode/);
-    expect(card(false).text).toMatch(/Claude, Cursor or Antigravity/);
-    expect(card(false).text).toMatch(/When it pays/);
-    expect(card(false).text).toMatch(/Now: off\.$/);
-    expect(card(true).text).toMatch(/Now: on\.$/);
+    expect(card([]).text).toMatch(/app_config area agent field codeMode/);
+    expect(card([]).text).toMatch(/Claude full/);
+    expect(card([]).text).toMatch(/Codex partial/);
+    expect(card([]).text).toMatch(/When it pays/);
+    expect(card([]).text).toMatch(/Now on for: no role\.$/);
+    expect(card(['scout', 'artisan']).text).toMatch(/Now on for: scout, artisan\.$/);
   });
 });

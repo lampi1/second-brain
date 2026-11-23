@@ -4,15 +4,13 @@
 // from), each model with its context window and effort levels, the effort for the chosen row (what a run really gets
 // when the model lacks the level asked) and the actions of its scope, each saying what it changes:
 // - a chat (the Orchestrator's chip, a strip's ⋯ menu): «Solo questa chat» changes that chat only (its own engine: a
-//   chat never moves engine); on the Orchestrator «Predefinito dell'Orchestrator» saves engine and model on its card
-//   instead (the next Orchestrator on that engine starts with it, catalog.ts resolve);
+//   chat never moves engine); on the Orchestrator «Predefinito dell'Orchestrator» saves engine, model and effort on its
+//   card instead (the next Orchestrator and the chats it opens on that engine start with them, catalog.ts resolve);
 // - a role (the back of an Agenti card): «Salva nel ruolo», the default of the role's new chats.
-// The default row says which default it is: «Predefinito della CLI» on a chat (the engine picks), «Modello del livello»
-// on a role (resolved at launch from the tier). Loading, error (with «Riprova»), no engine and no match are always said.
-// «Aggiorna elenco» asks every engine on for its models now (ADR 0256); a model with no known price says so.
-// On the Orchestrator's chip the top row is «Balanced mode»'s main switch (ADR 0218): every role then follows the
-// delegating agent's pick from the credits left, until it goes off.
-// Used by ModelChip, ChatMenu (through ChatTile) and AgentCardModel. Styles: styles/model-picker.css.
+// The default row says which default it is: «Predefinito della CLI» on a chat (the engine picks), «Predefinito del
+// registro» on a role (the brain's model registry at launch). Loading, error (with «Riprova»), no engine and no match
+// are always said. «Aggiorna elenco» asks every engine on for its models now (ADR 0256); a model with no known price
+// says so. Used by ModelChip, ChatMenu (through ChatTile) and AgentCardModel. Styles: styles/model-picker.css.
 import { useEffect, useMemo, useState, type KeyboardEvent, type RefObject } from 'react';
 import type { ChatSummary, Effort } from '@shared/contract';
 import type { AgentProfile } from '@shared/agents';
@@ -22,7 +20,7 @@ import { engineName } from '../lib/engines';
 import { agentDraftOf } from '../lib/agent-drafts';
 import { catalogGroups, findRow, kTokens, realEffort, rowEfforts, searchGroups, usd, type CatalogRow, type EngineGroup } from '../lib/model-catalog';
 import { refreshAgents, refreshModelLists, saveAgent, useAgents } from '../store/agents';
-import { setChat, setSetting, useApp } from '../store/store';
+import { setChat } from '../store/store';
 import { HarnessMark } from './Icons';
 import { Popover } from './ui';
 import { t } from '../i18n';
@@ -64,11 +62,10 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
 
   const card = scope.kind === 'chat' ? scope.card ?? null : null;
   const orchestrator = card?.id === ORCHESTRATOR_ROLE_ID;
-  const balanced = useApp(s => s.settings?.balancedMode === true);
   const chatApply = scope.kind === 'chat';
   // only a card may move engine: a strip without one keeps its engine
   const engineFree = scope.kind === 'role' || !!card;
-  const defaultName = scope.kind === 'role' ? t('mp.tierDefault', { tier: t(`roles.tier.${scope.profile.tier}`) }) : t('mp.cliDefault');
+  const defaultName = scope.kind === 'role' ? t('mp.roleDefault') : t('mp.cliDefault');
   const current = startOf(scope);
   const groups = useMemo(() => catalogGroups(catalog?.models ?? [], { engine: current.engine, model: current.id }, defaultName),
     [catalog, current.engine, current.id, defaultName]);
@@ -125,12 +122,6 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
     : t('mp.scope.chat', { title: scope.chat.title });
   return <Popover anchor={anchor} open={open} onClose={onClose} testid={`${testid}-pop`} width={380} kind="dialog" label={t('studio.model')}>
     <div className="mp" data-testid={`${testid}-picker`}>
-      {/* «Balanced mode» (ADR 0218): its main switch, one click, for every role (Settings → Ruoli e deleghe mirrors it) */}
-      {orchestrator && <div className="mp-balanced">
-        <span className="mp-balanced-text"><b>{t('mp.balanced')}</b><small>{t('mp.balanced.hint')}</small></span>
-        <button type="button" role="switch" aria-checked={balanced} aria-label={t('mp.balanced')} className={`mp-switch${balanced ? ' on' : ''}`}
-          onClick={() => void setSetting({ balancedMode: !balanced })} data-testid={`${testid}-balanced`}><span aria-hidden="true" /></button>
-      </div>}
       <p className="mp-scope" data-testid={`${testid}-scope`}>{title}</p>
       <div className="mp-searchbar">
         <input className="mp-search" type="search" value={query} placeholder={t('mp.search')} aria-label={t('mp.search')}
@@ -158,7 +149,7 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
           {g.block === 'not-selectable' && g.reason && <p className="mp-note">{g.reason}</p>}
           {g.rows.map(r => {
             const on = pick.engine === g.engine && pick.id === r.id;
-            const meta = r.id === null ? (scope.kind === 'role' ? t('mp.tierDefaultMeta') : t('mp.cliDefaultMeta'))
+            const meta = r.id === null ? (scope.kind === 'role' ? t('mp.roleDefaultMeta') : t('mp.cliDefaultMeta'))
               : [r.contextWindow ? t('mp.context', { size: kTokens(r.contextWindow) }) : '',
                  r.efforts ? (r.efforts.length ? t('mp.efforts', { list: r.efforts.join(' · ') }) : t('mp.noEffort')) : '',
                  r.price === null ? t('mp.priceUnknown') : r.price ? t('mp.price', { input: usd(r.price.input), output: usd(r.price.output) }) : '',
@@ -173,8 +164,7 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
           {g.engine === pick.engine && !g.models.length && g.block === null && <p className="mp-note" data-testid={`${testid}-group-empty-${g.engine}`}>{t('mp.groupEmpty', { engine: g.label })}</p>}
         </section>)}
       </div>}
-      {/* the Orchestrator's card ignores an effort (catalog.ts resolve): there it is this chat's only, on its engine */}
-      {group?.effort && (!orchestrator || pick.engine === chatEngine) && <div className="mp-effort" role="group" aria-label={t('mp.effort')}>
+      {group?.effort && <div className="mp-effort" role="group" aria-label={t('mp.effort')}>
         <span className="mp-effort-label">{t('mp.effort')}</span>
         {effortDefault && <button type="button" className={`mp-chip${pick.effort === null ? ' on' : ''}`} aria-pressed={pick.effort === null}
           disabled={busy} onClick={() => setPick(p => ({ ...p, effort: null }))} data-testid={`${testid}-effort-default`}>
@@ -191,7 +181,7 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
           onClick={() => void applyChat()} data-testid={`${testid}-apply-chat`}>{t('mp.apply.chat')}</button>}
         {card && orchestrator && <button type="button" className="mp-btn" disabled={busy || !catalog || !group || group.block === 'off' || group.block === 'untrusted'}
           title={t('mp.apply.orchestratorTip')}
-          onClick={() => void saveCard(card, false)} data-testid={`${testid}-apply-default`}>
+          onClick={() => void saveCard(card, true)} data-testid={`${testid}-apply-default`}>
           {t('mp.apply.orchestrator')}</button>}
         {scope.kind === 'role' && <button type="button" className="mp-btn primary" disabled={busy || !catalog || !group || group.block === 'off' || group.block === 'untrusted'}
           onClick={() => void saveCard(scope.profile, true)} data-testid={`${testid}-apply-role`}>{t('mp.apply.role')}</button>}
