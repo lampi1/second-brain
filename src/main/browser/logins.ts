@@ -12,10 +12,11 @@
 // password of an entry, only for the site the entry is for (the host of its url, or of an optional loginUrl when the
 // sign-in page lives on another host) and never for an entry that looks like production. The agent names the account;
 // the value goes from the file to the page's password field, never to the agent.
-// Linking a site (#429): when the named account's entry is for another host (a test environment that moved), the
-// refusal carries a link offer; the browser shows the user a Sì/No banner on the tab (hand-off kind "link": the user's
-// click only, never an agent or the Orchestrator), and Sì makes linkSite() add the page's origin to the entry's loginUrl
-// (a string, or a list once it has several). Only that key of that entry changes; the password is never read for it.
+// Linking a site (#429, changed 2026-11-23: agents sign in alone, never a wait on the user): when the named test
+// account's entry is for another host of the same site (a test environment that moved, sameSite), siteCredential()
+// itself calls linkSite(), which adds the page's origin to the entry's loginUrl (a string, or a list once it has
+// several), and types the account. Only that key of that entry changes. Any other host is refused with the fix the
+// agent makes itself (the brain's credential script) or a report to its parent; production entries are never linked.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -29,20 +30,29 @@ const USER_KEYS = ['email', 'username', 'user', 'login'] as const;
 /** group: the keys that lead to the entry ("ExampleApp · test"), array indexes left out. */
 interface Entry { user: string; password: string; url?: string; loginUrls?: string[]; note?: string; group: string }
 
-/** An entry fill_credential could use on this page once the user links the page's site to it (#429). */
-export interface LinkOffer { entryId: string; user: string; group: string; sites: string[]; host: string; origin: string }
-
-/** fill_credential's refusal that comes with a link the user can allow (tools.ts opens the banner). */
-export class LinkRefusal extends ToolRefusal {
-  constructor(message: string, readonly link: LinkOffer) { super(message); }
-}
-
-/** What fill_credential may type, or why not (a text for the agent, with the fix; never a password), and maybe the link
- *  the user can allow with one click. */
-export type SiteCredential = { user: string; password: string } | { refusal: string; link?: LinkOffer };
+/** What fill_credential may type (linked = the page's host the app just linked to the entry), or why not (a text for the
+ *  agent, with the fix it makes itself; never a password, never «wait for the user»). */
+export type SiteCredential = { user: string; password: string; linked?: string } | { refusal: string };
+/** The fix of an entry that is for another site: the agent copies it to this host with the brain's credential script,
+ *  else reports to its parent (2026-11-23: never a wait on the user for a login). */
+const FIX_ENTRY = (account: string, host: string): string => `The app types a password only on the site of its entry. If ${host} is a test environment of that account, add it yourself: run the brain's credential script (cred-entry.mjs add-host "${account}" <the entry's url> https://${host}/ when the brain has it), then call fill_credential again; otherwise report it to your parent. Never wait for the user and never ask for the password.`;
 
 const oneLine = (s: string, max: number) => s.replace(/\s+/g, ' ').trim().slice(0, max);
 const hostOf = (u: string | undefined): string => { try { return u ? new URL(u).host.toLowerCase() : ''; } catch { return ''; } };
+/** Two-label public suffixes where the last two labels are not one owner's domain (a sibling there proves nothing). */
+const SHARED_SUFFIXES = new Set(['co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'com.au', 'net.au', 'co.jp', 'co.nz', 'com.br', 'co.in', 'com.cn', 'co.za']);
+/** Shared hosting, where hosts under one suffix belong to different owners: each host is its own site there. */
+const SHARED_HOSTING = ['azurewebsites.net', 'azurestaticapps.net', 'cloudapp.azure.com', 'cloudapp.net', 'trafficmanager.net', 'azurefd.net', 'azureedge.net', 'herokuapp.com', 'github.io', 'netlify.app', 'vercel.app', 'pages.dev', 'workers.dev', 'web.app', 'firebaseapp.com', 'appspot.com', 'amazonaws.com', 'cloudfront.net', 'ngrok.io', 'ngrok-free.app', 'onrender.com', 'fly.dev'];
+const siteOf = (host: string): string => {
+  const name = host.replace(/:\d+$/, '').replace(/^\[|\]$/g, '');
+  if (/^[\d.]+$/.test(name) || name.includes(':') || !name.includes('.')) return name;   // an IP or localhost: itself
+  if (SHARED_HOSTING.some(s => name === s || name.endsWith(`.${s}`))) return name;
+  const two = name.split('.').slice(-2).join('.');
+  return SHARED_SUFFIXES.has(two) ? name : two;
+};
+/** A host of the same site as one of the entry's (test-4.example.com next to test-3.example.com, another port of
+ *  localhost): an environment that moved, which the app links without asking (2026-11-23); any other host is not. */
+export const sameSite = (host: string, sites: readonly string[]): boolean => !!host && sites.some(s => siteOf(s) === siteOf(host));
 /** "https://test-4.example.com/" of a page URL ('' for a page that is not http or https). */
 const originOf = (u: string): string => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? `${x.origin}/` : ''; } catch { return ''; } };
 
@@ -204,7 +214,7 @@ export class Credentials {
   siteCredential(account: string, pageUrl: string): SiteCredential {
     const host = hostOf(pageUrl), file = this.describe(), all = this.entries();
     if (!host) return { refusal: 'Refused: the password field is not in a web page (http or https). Open the sign-in page first.' };
-    if (!this.file()) return { refusal: 'Refused: there is no credentials file (no brain folder, or credentialsFile points outside it). Use handoff_to_user kind "login".' };
+    if (!this.file()) return { refusal: 'Refused: there is no credentials file (no brain folder, or credentialsFile points outside it). Report it to your parent (which site, which account you need); never wait for the user.' };
     const here = all.filter(e => hostsOf(e).includes(host));
     const names = [...new Set(here.map(e => e.user))].map(u => `"${u}"`).join(', ');
     const want = account.trim().toLowerCase();
@@ -215,28 +225,31 @@ export class Credentials {
       if (!e && same.length) {
         const sites = [...new Set(same.flatMap(hostsOf))];
         const head = `Refused: account "${account.trim()}" in the user's credentials file (${file}) is ${sites.length ? `for ${sites.join(', ')}` : 'without a url'}, and this sign-in form is on ${host}.`;
-        // one test entry with that name: the user can link this site to it with one click (#429)
+        // one test entry with that name and a test page of the same site (an environment that moved): the app links the
+        // page's origin to the entry itself and signs in, without asking (2026-11-23; #429 asked the user on a banner)
         const linkable = same.map(x => ({ x, i: all.indexOf(x) })).filter(({ x }) => !looksProduction(x));
         const origin = originOf(pageUrl);
         // a production-looking host is never linked: it would turn the whole entry into one the app refuses
-        if (linkable.length === 1 && origin && !looksProduction({ group: '', loginUrls: [origin] })) {
+        if (linkable.length === 1 && origin && !looksProduction({ group: '', loginUrls: [origin] }) && sameSite(host, hostsOf(linkable[0]!.x))) {
           const { x, i } = linkable[0]!;
-          return { refusal: `${head} The app asked the user, with a banner on your tab, whether to link ${host} to this account: wait for the answer (handoff_to_user with the handoff_id below). On Sì call fill_credential again; on No sign in another way (handoff_to_user kind "login"). Do not navigate to the entry's old host meanwhile.`,
-            link: { entryId: entryId(x, i), user: x.user, group: x.group, sites: hostsOf(x), host, origin } };
+          const linked = this.linkSite(entryId(x, i), origin);
+          if ('ok' in linked) return { user: x.user, password: x.password, linked: host };
+          return { refusal: `${head} The app could not link ${host} to it (${linked.error}). ${FIX_ENTRY(account.trim(), host)}` };
         }
-        return { refusal: `${head} The app types a password only on the site of its entry${sites.length ? ': open that site' : ''}; if ${host} is its sign-in page, the user adds "${sites.length ? 'loginUrl' : 'url'}": "https://${host}/…" to the entry (ask them in one line, never for the password).` };
+        if (!sites.length) return { refusal: `${head} Add the url to the entry yourself: run the brain's credential script (cred-entry.mjs set-url "${account.trim()}" https://${host}/ when the brain has it), then call fill_credential again; without such a script, report it to your parent. Never wait for the user and never ask for the password.` };
+        return { refusal: `${head} ${FIX_ENTRY(account.trim(), host)}` };
       }
-      if (!e) return { refusal: `Refused: no account "${account.trim()}" in the user's credentials file (${file}). ${names ? `Entries for ${host}: ${names}.` : `It has no entry for ${host}: the user adds one ({ "user", "password", "url" }), or use handoff_to_user kind "login".`}` };
+      if (!e) return { refusal: `Refused: no account "${account.trim()}" in the user's credentials file (${file}). ${names ? `Entries for ${host}: ${names}.` : `It has no entry for ${host}: report it to your parent (which account, which site); never wait for the user.`}` };
     } else {
-      if (!here.length) return { refusal: `Refused: the user's credentials file (${file}) has no entry for ${host}. If one of its accounts is meant for this site, call fill_credential with account = its user name: the app asks the user to link the site to it. Otherwise the user adds one ({ "user", "password", "url": "https://${host}/…" }), or use handoff_to_user kind "login". Never ask for a password in chat.` };
+      if (!here.length) return { refusal: `Refused: the user's credentials file (${file}) has no entry for ${host}. If one of its test accounts is meant for this site, call fill_credential with account = its user name: the app links a page of the same site to it by itself. Otherwise report it to your parent (which site, which account you need); never wait for the user and never ask for a password in chat.` };
       if (new Set(here.map(x => x.user.toLowerCase())).size > 1) return { refusal: `Refused: several accounts for ${host} in the user's credentials file (${file}): ${names}. Call fill_credential again with account = one of them.` };
       e = here[0]!;
     }
-    if (looksProduction(e)) return { refusal: `Refused: account "${e.user}"${e.group ? ` (${e.group})` : ''} looks like a production account. The app types test accounts only: use handoff_to_user kind "login" with this account.` };
+    if (looksProduction(e)) return { refusal: `Refused: account "${e.user}"${e.group ? ` (${e.group})` : ''} looks like a production account. The app types test accounts only: if your instructions give you the Read + type route for it, sign in with type / fill_form yourself (never repeat the password in chat); call handoff_to_user kind "login" only when the page really shows MFA or a CAPTCHA.` };
     return { user: e.user, password: e.password };
   }
 
-  /** The user said Sì to linking a site (#429): the origin goes into the loginUrl of the entry with that id, read from
+  /** Links a site to an entry (siteCredential, for a same-site test host): the origin goes into the loginUrl of the entry with that id, read from
    *  the file now. Refused when the file changed so that the id names no entry (or two), or the entry looks like
    *  production. Never reads or writes the password. */
   linkSite(id: string, origin: string): { ok: true } | { error: string } {

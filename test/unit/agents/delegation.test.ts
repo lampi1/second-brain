@@ -16,7 +16,7 @@ import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/ma
 import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
 import { delegationTools, stalledMin } from '../../../src/main/agents/delegation';
 import { gateRequest } from '../../../src/main/agents/role-gate';
-import { ROLE_DEFAULTS, ROLE_PREAMBLE, ROLE_IDS, WORK_ROLE_IDS, DELEGATION_DEFAULTS, isWorkRole, launchGap, type DelegationSettings, type RoleId } from '../../../src/shared/roles';
+import { ROLE_DEFAULTS, ROLE_PREAMBLE, rolePreamble, ROLE_IDS, WORK_ROLE_IDS, DELEGATION_DEFAULTS, isWorkRole, launchGap, type DelegationSettings, type RoleId } from '../../../src/shared/roles';
 import { capText, checkContract, checkResult, delegationPrompt, depthOf, readDelegation, resultMessage } from '../../../src/shared/delegation';
 import { AGENT_LABEL, oneLine } from '../../../src/shared/agent-label';
 import type { AgentCatalog } from '../../../src/shared/agents';
@@ -344,6 +344,18 @@ describe('agent_delegate', () => {
     expect(f.m.list().filter(c => c.parentId === two)).toHaveLength(0);
     expect(f.m.list().find(c => c.id === two)?.limitHit).toMatchObject({ kind: 'depth', limit: 2 });
     expect(f.m.items(two).some(i => i.kind === 'system' && i.code === 'delegationDepth')).toBe(true);
+  });
+
+  it('a Strategist launches the Sentinel of a child\'s run with reviewOf; another role, or a run not of its children, is refused (2026-11-23)', async () => {
+    const f = fixture();
+    const root = await f.root('strategist');
+    const artisan = (await f.call('agent_delegate', root.id, { tasks: [f.task('artisan', 'Modifica')] })).children[0].chatId as string;
+    const runId = f.m.list().find(c => c.id === artisan)!.run!.runId;
+    await expect(f.call('agent_delegate', root.id, { tasks: [{ ...f.task('artisan', 'Altro'), reviewOf: runId }] })).rejects.toThrow(/reviewOf: only a sentinel task takes it/);
+    await expect(f.call('agent_delegate', root.id, { tasks: [{ ...f.task('sentinel', 'Revisione'), reviewOf: 'r_000000000000' }] })).rejects.toThrow(/is not a run of one of your children/);
+    const review = (await f.call('agent_delegate', root.id, { tasks: [{ ...f.task('sentinel', 'Revisione'), reviewOf: runId }] })).children[0].chatId as string;
+    expect(f.m.list().find(c => c.id === review)!.run).toMatchObject({ reviewOf: runId });
+    expect(JSON.stringify(f.tool('agent_delegate').inputSchema)).toMatch(/only for role sentinel: the runId of your child's run it reviews/);
   });
 
   it('permissions only go down under a parent the user narrowed: tools beyond it, a folder outside it and a role it may not launch are refused', async () => {
@@ -748,6 +760,18 @@ describe('the pure parts', () => {
     expect(() => checkResult({ outcome: 'partial', summary: 's', output: 'o', doneWhen: [{ criterion: 'a', met: false }], amends: 'yes' }, ['a'])).toThrow(/amends/);
     expect(resultMessage('scout', 'T', r, { correction: 2 })).toContain('[correzione 2/2 del risultato · Scout «T»] (sostituisce il risultato precedente di questa chat)');
     expect(resultMessage('scout', 'T', r)).toContain('[risultato · Scout «T»]');
+  });
+  it('only the Orchestrator and the Strategist read the delegation line; the other roles read that they never delegate (2026-11-23)', () => {
+    for (const id of ['orchestrator', 'strategist']) expect(rolePreamble(id)).toBe(ROLE_PREAMBLE);
+    for (const id of ['scout', 'artisan', 'sentinel', 'herald']) {
+      const text = rolePreamble(id);
+      expect(text, id).toMatch(/You do your own part and do not delegate: you have no agent_delegate or agent_assign_task/);
+      expect(text, id).toMatch(/goes in your agent_report as a ready contract \(role, goal, done-criteria\): your parent launches it/);
+      expect(text, id).not.toMatch(/use agent_delegate for a new child|agent_close_child/);
+      // the rest of the frame is the same: approvals, safety, agent_report
+      expect(text, id).toContain('Never write to production or shared systems');
+      expect(text, id).toContain('mcp__second-brain__agent_report');
+    }
   });
   it('the role frame names agent_report with its full MCP name and says it may be deferred (#144)', () => {
     expect(ROLE_PREAMBLE).toContain('mcp__second-brain__agent_report');

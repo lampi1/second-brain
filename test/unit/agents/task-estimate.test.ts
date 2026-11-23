@@ -57,7 +57,7 @@ describe('estimate from similar tasks', () => {
     expect(e.timeLowMs).toBeLessThanOrEqual(e.timeMs!);
     expect(e.timeHighMs).toBeGreaterThanOrEqual(e.timeMs!);
     expect(e.costUsd).toBeCloseTo(0.12);
-    expect(e.why).toMatch(/ONE agent/);
+    expect(e.why).toMatch(/ONE chat of the role that fits/);
   });
   it('falls back to the agent on any model, then to the kind on any agent, else gives no figure', () => {
     const runs = [...fixes(4, 'artisan'), ...Array.from({ length: 3 }, (_, i) => run({ agentId: 'sentinel', goal: `Esegui i test case ${i} in staging`, min: 9 })),
@@ -79,16 +79,20 @@ describe('estimate from similar tasks', () => {
     const cut = [...runs].sort((a, b) => a.endedAt! - b.endedAt!)[5]!.endedAt!;
     expect(estimateTask(idx, { text: 'fix bug', agentId: 'artisan', before: cut }).n).toBe(5);
   });
-  it('picks the path: self for a short question, a tree for several parts or two slow ones', () => {
+  it('picks the path: self for a short question, one role for one part, one Strategist chat for two parts or more (2026-11-23)', () => {
     const idx = new SimilarIndex([...fixes(5), ...Array.from({ length: 5 }, (_, i) => run({ agentId: 'scout', goal: `Quanti ordini ${i} ieri?`, min: 2 }))]);
     expect(estimateTask(idx, { text: 'Quanti ordini sono in sospeso?' }).path).toBe('self');
     expect(estimateTask(idx, { text: 'Quanti ordini sono in sospeso?' + ' x'.repeat(300) }).path).toBe('one-agent');
     expect(estimateTask(idx, { text: '- correggi il bug A\n- correggi il bug B\n- correggi il bug C' }).path).toBe('tree');
-    expect(estimateTask(idx, { text: 'Correggi il bug A; poi correggi il bug B', agentId: 'artisan' }).path).toBe('one-agent'); // two quick parts
-    const slow = new SimilarIndex(fixes(5, 'artisan', 60)), long = ` ${'nel modulo dei totali degli ordini '.repeat(12)}`;
-    expect(estimateTask(slow, { text: 'Correggi il bug A; poi correggi il bug B', agentId: 'artisan' })).toMatchObject({ path: 'one-agent', quick: false }); // short: one agent
-    expect(estimateTask(slow, { text: `Correggi il bug A${long}; poi correggi il bug B`, agentId: 'artisan' })).toMatchObject({ path: 'tree', quick: false });
-    expect(estimateTask(slow, { text: 'Correggi il bug A', agentId: 'artisan' }).why).toMatch(/long/);
+    // two parts, quick or not, short or long: the Strategist plans them
+    const two = estimateTask(idx, { text: 'Correggi il bug A; poi correggi il bug B', agentId: 'artisan' });
+    expect(two.path).toBe('tree');
+    expect(two.why).toMatch(/2 parts.*ONE strategist chat with app_create_chat; it plans the parts and delegates them/);
+    const slow = new SimilarIndex(fixes(5, 'artisan', 60));
+    expect(estimateTask(slow, { text: 'Correggi il bug A; poi correggi il bug B', agentId: 'artisan' })).toMatchObject({ path: 'tree', quick: false });
+    const one = estimateTask(slow, { text: 'Correggi il bug A', agentId: 'artisan' });
+    expect(one.path).toBe('one-agent');
+    expect(one.why).toMatch(/^One part; .*\(long: tell the user\): start ONE chat of the role that fits with app_create_chat; it does the work itself\.$/);
   });
   it('learns only from ended, measured, non one-shot runs', () => {
     const r = run({ agentId: 'a', goal: 'x' });

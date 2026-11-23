@@ -13,7 +13,6 @@ import { containsPaste, maskKeys } from './keys';
 import { fmtFactor } from './preview';
 import { snapshotDelta } from './delta';
 import { ToolRefusal } from '../mcp/refusal';
-import { LinkRefusal } from './logins';
 
 export interface Scope { group: string; owner: string | null; chatId: string | null }
 
@@ -260,29 +259,13 @@ PNG ${shot.width}x${shot.height}` : ''}${dialog}`, images: [{ data: img.data, mi
     },
     {
       name: 'fill_credential', annotations: WRITE,
-      description: 'Sign in with a test account of the user\'s credentials file without ever reading the password: the app reads the entry and types it into the sign-in form itself; you only get the account name and a masked value ("•••"). Never open or read the credentials file, never ask the user for a password. password_ref = the form\'s password field (find "password"); user_ref = its user name / e-mail field (optional: leave it out when it is already filled or on an earlier step); account = the entry\'s user name or e-mail (optional when the file has one entry for this site; a refusal lists the names). The entry must be for this site (its "url", or "loginUrl" for a sign-in page on another host) and not a production account, else the call is refused with the fix; when the entry of the named account is for another host (an environment that moved), the app asks the user on your tab whether to link this site to it, and the refusal gives the handoff_id to wait on (handoff_to_user): on Sì call fill_credential again. Then submit the form yourself (click its button). Afterwards this tab takes no javascript and no copy keys until the page is left or reloaded. For MFA, a CAPTCHA or an account without an entry use handoff_to_user kind "login".',
+      description: 'Sign in with a test account of the user\'s credentials file without ever reading the password: the app reads the entry and types it into the sign-in form itself; you only get the account name and a masked value ("•••"). Never open or read the credentials file, never ask the user for a password. password_ref = the form\'s password field (find "password"); user_ref = its user name / e-mail field (optional: leave it out when it is already filled or on an earlier step); account = the entry\'s user name or e-mail (optional when the file has one entry for this site; a refusal lists the names). The entry must be for this site (its "url", or "loginUrl" for a sign-in page on another host) and not a production account, else the call is refused with the fix you make yourself; when the named test account\'s entry is for another host of the same site (an environment that moved), the app links this site to it and signs in, without asking. Then submit the form yourself (click its button). Afterwards this tab takes no javascript and no copy keys until the page is left or reloaded. handoff_to_user kind "login" only when the page really shows MFA or a CAPTCHA; no entry: report it to your parent, never wait for the user.',
       inputSchema: schema({
         account: { type: 'string', description: 'User name or e-mail of the entry (never a password). Optional when the file has one entry for this site.' },
         password_ref: { type: 'string', description: 'Ref of the password field (from read_page/find).' },
         user_ref: { type: 'string', description: 'Ref of the user name / e-mail field, in the same frame (optional).' },
       }, ['password_ref']),
-      run: async (a, ctx) => {
-        try {
-          return await write(x => `fill_credential ${typeof x.account === 'string' ? x.account.slice(0, 80) : ''}`.trim(), (tab, x) => { str(x.password_ref, 'password_ref'); return actions.fillCredential(tab, x); })(a, ctx);
-        } catch (e) {
-          if (!(e instanceof LinkRefusal)) throw e;
-          // #429: the user links the page's site to the entry with one click (Sì/No on the tab); never an agent
-          const s = scopeOf(ctx), tab = tabOf(ctx, a), l = e.link;
-          const h = tabs.handoffs.open({ tabId: tab.id, chatId: s.chatId, reason: `Collegare ${l.host} all'account ${l.user}?`,
-            instructions: `La pagina di accesso è su ${l.host}, ma nel tuo file delle credenziali l'account ${l.user}${l.group ? ` (${l.group})` : ''} è per ${l.sites.join(', ') || 'nessun sito'}. Sì: l'app aggiunge ${l.origin} all'account (loginUrl) e l'agente entra da solo, ora e le prossime volte. La password resta nel file.`,
-            url: redact(tab.wc.getURL()), env: tab.env, kind: 'link', account: { user: l.user, found: true },
-            link: { host: l.host, origin: l.origin, sites: l.sites, entryId: l.entryId } });
-          handoffGroup.set(h.id, s.group);
-          tabs.setLastAction(tab, `waiting for the user: ${h.reason}`);
-          log.info('browser', 'credential site link asked', { chat: s.chatId ?? undefined, data: { id: h.id, tab: tab.id, host: l.host } });
-          throw new ToolRefusal(`${e.message}\nhandoff_id "${h.id}"`);
-        }
-      },
+      run: write(x => `fill_credential ${typeof x.account === 'string' ? x.account.slice(0, 80) : ''}`.trim(), (tab, x) => { str(x.password_ref, 'password_ref'); return actions.fillCredential(tab, x); }),
     },
     {
       name: 'wait_for', annotations: RO,
@@ -316,7 +299,7 @@ PNG ${shot.width}x${shot.height}` : ''}${dialog}`, images: [{ data: img.data, mi
     },
     {
       name: 'handoff_to_user', annotations: WRITE,
-      description: 'Ask the user to act in your tab themselves (a login you cannot do yourself: MFA, CAPTCHA, no entry for the account in the credentials file, so fill_credential was refused; or a choice only they can make): the app shows them a banner on your tab with your reason and instructions until they click Fatto (done) or Non riesco (failed). kind "login" = sign in to this environment (also announced in their feed as "Rifai l\'accesso a <env>"); the environment keeps the session for later runs. Open the sign-in page in your tab first. On a local stack whose test accounts are in the user\'s credentials file a login hand-off is refused: sign in yourself. For a login pass account = the user name or e-mail of the entry in the user\'s credentials file (required, refused otherwise, when the file has entries for the page\'s host): the banner shows that account and its sign-in URL with Copia buttons, and the app copies the password from the file only when the user clicks (never put a password in any argument, never read it out, never write it in chat). The call keeps waiting (progress notifications; default 600 s, max 1800) and returns as soon as they answer; if it returns "still waiting", call it again with the same handoff_id. If you end your turn instead, the app messages you when they answer.',
+      description: 'Ask the user to act in your tab themselves (a page that really shows MFA or a CAPTCHA, or a choice only they can make; a missing credentials entry is not a reason: report it to your parent): the app shows them a banner on your tab with your reason and instructions until they click Fatto (done) or Non riesco (failed). kind "login" = sign in to this environment (also announced in their feed as "Rifai l\'accesso a <env>"); the environment keeps the session for later runs. Open the sign-in page in your tab first. On a local stack whose test accounts are in the user\'s credentials file a login hand-off is refused: sign in yourself. For a login pass account = the user name or e-mail of the entry in the user\'s credentials file (required, refused otherwise, when the file has entries for the page\'s host): the banner shows that account and its sign-in URL with Copia buttons, and the app copies the password from the file only when the user clicks (never put a password in any argument, never read it out, never write it in chat). The call keeps waiting (progress notifications; default 600 s, max 1800) and returns as soon as they answer; if it returns "still waiting", call it again with the same handoff_id. If you end your turn instead, the app messages you when they answer.',
       inputSchema: schema({
         reason: { type: 'string', description: 'One short line, e.g. "Login richiesto su example-test-3"' }, instructions: { type: 'string' },
         kind: { type: 'string', enum: ['login', 'other'] },

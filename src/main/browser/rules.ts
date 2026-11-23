@@ -56,5 +56,5 @@ export function loginRefusal(c: LoginCheck): string | null {
   const want = c.account.trim().toLowerCase();
   if (want && c.accounts.some(a => a.toLowerCase() === want)) return null;
   return `Refused: ${want ? `account "${c.account.trim()}" is not among the` : 'no account given; there are'} entries for ${host} in the user's credentials file (${c.file}): ${list}. ` +
-    'Call handoff_to_user again with account = one of them: the banner shows its URL and account with a Copia password button (never write a password or sign-in steps in chat).';
+    'Sign in yourself with fill_credential (account = one of them). A hand-off only when the page really shows MFA or a CAPTCHA: then call handoff_to_user again with account = one of them (the banner shows its URL and account with a Copia password button; never write a password or sign-in steps in chat).';
 }

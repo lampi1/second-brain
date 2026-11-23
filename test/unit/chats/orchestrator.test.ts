@@ -96,6 +96,13 @@ describe('ChatManager with the Orchestrator', () => {
     expect(ORCHESTRATOR_ROLE).toMatch(/open one chat per request yourself, all in the same turn \(parallel app_create_chat calls\)/);
     expect(ORCHESTRATOR_ROLE).toMatch(/sentinel chat.*not verified.*more than about 100 lines.*security, contracts or IPC/);
     expect(ORCHESTRATOR_ROLE).not.toMatch(/router|judge|scribe/i);
+    // routing (2026-11-23): one part to its role, two or more to ONE Strategist chat; only it and the Orchestrator delegate
+    expect(ORCHESTRATOR_ROLE).toMatch(/path "one-agent" \(one part\): .*start ONE chat of it with app_create_chat; it does the work itself/);
+    expect(ORCHESTRATOR_ROLE).toMatch(/path "tree" \(two parts or more\): start ONE strategist chat with app_create_chat .*launches them and their Sentinel review/);
+    expect(ORCHESTRATOR_ROLE).toMatch(/Only the Orchestrator and the Strategist delegate: Scout, Artisan, Sentinel and Herald never launch other chats/);
+    expect(ORCHESTRATOR_ROLE).not.toMatch(/one chat per part in parallel|without agent_delegate/);
+    // «aggiorna il piano»: the plan's Strategist revises it; if that chat is gone a new Strategist gets the old plan
+    expect(ORCHESTRATOR_ROLE).toMatch(/Aggiorna il piano.*plan's Strategist chat asking plan_propose with revise; if that chat is gone, start a new strategist chat .*old plan.*The user approves/);
   });
   it('starts from the edited Orchestrator role and composes its instructions once', async () => {
     const f = fixture(), seed = f.agents.list().profiles.find(p => p.id === ORCHESTRATOR_AGENT_ID)!;
