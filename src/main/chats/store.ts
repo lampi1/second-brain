@@ -135,7 +135,7 @@ export interface StoredChat {
   waitsOn?: 'user' | 'colleagues';
   waitsOnWork?: true;
   /** stopped on its provider's credit limit: it waits for another model on its role's card (ADR 0346) */
-  creditWait?: { at: number; model: string | null; otherEngine?: string };
+  creditWait?: { at: number; model: string | null; card?: string };
   /** its engine ended with an error or in the middle of a turn: not finished, it never closes by itself */
   unfinished?: true;
   /** how its engine was chosen (role, defaults or override; ADR 0032, 0210) */
@@ -170,9 +170,9 @@ function readChatWork(value:unknown):NonNullable<StoredChat['work']>{
   return {status:'assigned',updatedAt:0};
 }
 function readCreditWait(value: unknown): StoredChat['creditWait'] | undefined {
-  const w = value as { at?: unknown; model?: unknown; otherEngine?: unknown } | null;
+  const w = value as { at?: unknown; model?: unknown; card?: unknown } | null;
   if (!w || typeof w !== 'object' || typeof w.at !== 'number' || !Number.isFinite(w.at)) return undefined;
-  return { at: w.at, model: typeof w.model === 'string' && w.model && w.model.length <= 120 ? w.model : null, ...(typeof w.otherEngine === 'string' && /^[\w.-]{1,40}$/.test(w.otherEngine) ? { otherEngine: w.otherEngine } : {}) };
+  return { at: w.at, model: typeof w.model === 'string' && w.model && w.model.length <= 120 ? w.model : null, ...(typeof w.card === 'string' && w.card.length <= 200 ? { card: w.card } : {}) };
 }
 function readLastResult(value: unknown): StoredChat['lastResult'] | undefined {
   const v = value as Record<string, unknown> | null | undefined;

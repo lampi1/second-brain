@@ -117,8 +117,9 @@ export interface ChatSummary {
   waitsOn?: 'user' | 'colleagues';
   /** its last turn stopped on the provider's credit or plan limit (ADR 0346): a role chat waits, it is not failed nor
    *  closed, until its role's card names another model for its preset (it then switches and goes on by itself) or a new
-   *  turn starts. `model` = the one that ran out; `otherEngine` = the card moved to this engine, which the chat cannot follow */
-  creditWait?: { at: number; model: string | null; otherEngine?: string };
+   *  turn starts. `model` = the one that ran out (as the engine named it); `card` = the role card's engine and model
+   *  («engine:model») this wait already answered: it moves again only when the card names something else */
+  creditWait?: { at: number; model: string | null; card?: string };
   /** Explicit assignment/mailbox hold. A provider result never completes it; no expiration or consent semantics. */
   work?: {status:'assigned'|'waiting-mail'|'completed';updatedAt:number};
   /** closed (archived) at: out of the grid, found with Ctrl+K (the palette's "Chiuse" group); its history stays and a reopen resumes it */

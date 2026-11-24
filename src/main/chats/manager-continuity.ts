@@ -113,7 +113,12 @@ export abstract class ManagerContinuity extends ManagerRequests {
     // the worktree hint follows the chain (A → B → C)
     if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; this.updated(nr); }
     // the agent's work goes on in a new run: the old one counts as reworked (§5)
-    if (nr?.s.run && r.s.run && this.runs.get(r.s.run.runId)) { nr.s.run.continuedFrom = r.s.run.runId; this.runSave(); }
+    if (nr?.s.run && r.s.run && this.runs.get(r.s.run.runId)) {
+      nr.s.run.continuedFrom = r.s.run.runId;
+      // the preset it ran on goes on with it (ADR 0346): a later credit wait reads the card for that preset
+      if (r.s.run.presetChoice && !nr.s.run.presetChoice) nr.s.run.presetChoice = r.s.run.presetChoice;
+      this.runSave();
+    }
     r.s.continuedBy = { id: c.id, title: c.title };
     // the plan step it worked for follows it (ADR 0346): the step's chat is now the one that goes on and will report,
     // never the old one, which reports nothing more

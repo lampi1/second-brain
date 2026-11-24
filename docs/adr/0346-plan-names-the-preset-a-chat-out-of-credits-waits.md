@@ -36,10 +36,18 @@ cambiare il modello») · Amends: ADR 0336 (presets), ADR 0343 (the plan's boxes
   - Another engine: a chat never changes engine, so the work goes on in a new chat of the same role on the card's
     engine: «Riprendi» with the app's own hand-off note, since the old engine cannot be asked
     (`ChatManager.creditContinue`). The same child of the same parent, contract and worktree; the plan step now names
-    the new chat. When the parent may not start that engine, or the new chat does not start, the chat keeps waiting
-    and says so once.
+    the new chat, and the old chat owes nothing more (no report asked, it holds no parent busy). Its preset goes on
+    with it. When the parent may not start that engine the chat keeps waiting and says so.
+  - The card is compared with the card the wait already answered (`creditWait.card`, «engine:model», from the run the
+    chat started on), never with the chat's own model: an ACP engine shows its running variant there
+    (`grok-4.7[context=…]`), which would read as a change on every look. A move that stays or fails records the card:
+    it is tried again only after the next change. A failure says why in the chat (`creditMoveFailed`) and the chat
+    keeps waiting.
+  - A job the user stopped («Ferma», ADR 0342), the chat's own or an ancestor's, moves nothing.
 - **No automatic fallback**: the app never picks another model or preset. Only the card moves a waiting chat. A card
   that already names another model for that preset when the wait begins counts at once: it is the user's own choice.
+  The rule lives in `credit-wait.ts` alone, where a later choice of engine by limits could plug in (the owner asked for
+  one on 2026-11-24, after this issue: a separate change).
 - **Estimates**: a plan and its steps show none. The estimate on a chat's strip rests on its run's model
   (`task-estimate.ts`), which after a resume is the card's new one.
 
@@ -50,12 +58,18 @@ cambiare il modello») · Amends: ADR 0336 (presets), ADR 0343 (the plan's boxes
 - Credits that come back by themselves (a plan window that resets) do not resume a waiting chat: the user changes the
   card or writes to the chat.
 - The Agenti page does not list the chats that wait on a card.
-- Untried on the owner's PC with a real provider limit: the limit texts are the ones `limitSignal` already knew.
+- A writing child with uncommitted work in its worktree cannot go on on another engine: «Riprendi» refuses a dirty
+  worktree (`DelegateWorktrees.prepare`, unchanged). It keeps waiting and says why; a model of its own engine on the
+  card resumes it.
+- Untried on the owner's PC with a real provider limit: the limit texts are the ones `limitSignal` already knew. A
+  short Claude `rate_limit` answer («Usage limit reached…») also reads as a limit, so a brief throttle may leave a
+  chat waiting until the user writes to it or changes the card.
 
 ## Tests
 
 - `test/unit/agents/credit-wait.test.ts`: `creditMove` and the watch; on a real ChatManager with fake engines the wait,
-  what the parent and the maps see, the resume on the card's model, the new chat on the card's engine, the restart.
+  what the parent and the maps see, the resume on the card's model, the new chat on the card's engine, the restart; an engine's model variant never moves
+  a wait, a stopped job, a resume that cannot be sent, a continued chat that owes nothing.
 - `test/unit/agents/delegation-presets.test.ts`: a part takes its step's preset; `catalog-presets.test.ts`: `cardNow`.
 - `test/unit/plan-who-group.test.ts`, `workmap-shared.test.ts`, `agents/strategy.test.ts`: no model on a step, a box or a
   flow step; an old saved model is dropped.

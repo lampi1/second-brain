@@ -11,6 +11,7 @@ import { waitsForPeople, waitsForWork } from '../../shared/waiting';
 import type { TaskDeliveryPolicy } from '../../shared/agents';
 import { reportOf } from '../agents/run-report';
 import { limitSignal } from '../agents/credits';
+import { creditCardKey } from '../agents/credit-wait';
 import { MAX_CORRECTIONS, RESULT_OUTPUT_MAX, checkResult, resultMessage, type DelegationResult, type TaskSource } from '../../shared/delegation';
 import { finishPlan, afterReport } from '../../shared/strategy';
 import { APP_EVENT_LABEL } from './orchestrator-wake';
@@ -37,7 +38,8 @@ export abstract class ManagerDelegation extends ManagerContinuity {
   }
   /** A delegated child still owes this chat its result (open, no agent_report yet): the parent waits for it. */
   private delegatedBusy(parentId: string): boolean {
-    for (const c of this.chats.values()) if (c.s.parentId === parentId && !c.s.closedAt && c.s.delegation && !c.s.delegation.result) return true;
+    // a chat that went on in another one («Riprendi») holds nothing: its successor carries the delegation
+    for (const c of this.chats.values()) if (c.s.parentId === parentId && !c.s.closedAt && !c.s.continuedBy && c.s.delegation && !c.s.delegation.result) return true;
     return false;
   }
 
@@ -125,8 +127,9 @@ export abstract class ManagerDelegation extends ManagerContinuity {
   protected owedReport(r: Rec, why: 'idle' | 'exit'): void {
     const d = r.s.delegation;
     if (!d || !r.s.parentId || d.result || r.s.closedAt || this.quitting || r.archiving || this.chats.get(r.s.id) !== r) return;
-    // out of credits (ADR 0346): it waits for its role's card, its delegation stays open and its step under way
-    if (r.s.creditWait) return;
+    // out of credits (ADR 0346): it waits for its role's card, its delegation stays open and its step under way; a chat
+    // that went on in another one («Riprendi») owes nothing: its successor reports
+    if (r.s.creditWait || r.s.continuedBy) return;
     // whatever ended the turn, a child still waiting on its parent's answer, its own children or a request owes nothing yet
     if (r.pending.size > 0 || r.askedParentAt !== undefined || this.delegatedBusy(r.s.id) || (r.s.agentChildren?.active ?? 0) > 0) return;
     if (why === 'idle') {
@@ -155,8 +158,12 @@ export abstract class ManagerDelegation extends ManagerContinuity {
    *  model on the chat) and the Orchestrator follows its own card: neither waits here. */
   protected creditStop(r: Rec, errorText: string | null | undefined): boolean {
     if (!limitSignal(errorText) || r.s.closedAt || r.s.isOrchestrator || !r.s.agent || r.s.agent.source !== 'catalog') return false;
-    r.s.creditWait = { at: Date.now(), model: r.s.model };
-    this.addItem(r, sysItem('creditWait', { role: r.s.agent.name, model: r.s.model ?? '' }, 'warn'), false);
+    if (r.s.creditWait) return true; // a limit result and then the engine's exit: one wait, one line
+    // the card this chat started from (its run names the model it asked for, never the engine's running variant): the
+    // wait moves only when the card names something else (agents/credit-wait.ts); unknown = the watch reads it first
+    const run = r.s.run && r.s.run.endedAt === undefined && r.s.run.model !== undefined ? r.s.run : undefined;
+    r.s.creditWait = { at: Date.now(), model: r.s.model?.replace(/\[.*\]$/, '') || null, ...(run ? { card: creditCardKey({ engine: r.s.harness, model: run.model ?? null }) } : {}) };
+    this.addItem(r, sysItem('creditWait', { role: r.s.agent.name, model: r.s.creditWait.model ?? '' }, 'warn'), false);
     log.info('chats', 'role chat waits: its model is out of credits', { chat: r.s.id, data: { role: r.s.agent.id, engine: r.s.harness, model: r.s.model, parent: r.s.parentId ?? null } });
     return true;
   }
