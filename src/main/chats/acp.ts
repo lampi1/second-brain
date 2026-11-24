@@ -53,7 +53,7 @@ import { acpAppTool, APP_UI_TOOLS, appEndpoint, CODE_MODE_HINT, CODE_MODE_RULE, 
 import os from 'node:os';
 import path from 'node:path';
 import { providerWrite } from '../agent-runtime/transport-timing';
-import { requestFailed } from '../agent-runtime/request-failure';
+import { NOT_ACTIVE, requestFailed } from '../agent-runtime/request-failure';
 import type { Answer, ChatItem, ChatState, CursorReasoning, Effort, ImageAttachment, PendingRequest, PermissionMode, Question } from '../../shared/contract';
 import { missFragment, sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { errText, log } from '../log';
@@ -313,7 +313,6 @@ const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 export const authHelp = (label: string, loginCommand: string | null): string => (loginCommand
   ? `Accedi a ${label}: premi “Accedi a ${label}” (apre \`${loginCommand}\` in un terminale), completa il login e riprova.`
   : `Accedi a ${label}: salva la sua chiave API in Impostazioni → Motori, oppure accedi dentro la sua CLI, e riprova.`);
-const NOT_ACTIVE = 'La sessione non è attiva.';
 
 class RpcError extends Error {
   constructor(message: string, readonly code: number) { super(message); }
@@ -1358,9 +1357,14 @@ export class AcpSession implements HarnessSession {
 
   // ---- JSON-RPC ----
 
+  /** The engine exited or its input is closed: nothing can be written to it any more. */
+  private inputClosed(): boolean {
+    return !this.proc || this.exited || !this.proc.stdin.writable;
+  }
+
   private write(obj: Obj): void {
     const p = this.proc;
-    if (!p || this.exited || !p.stdin.writable) throw new Error(NOT_ACTIVE);
+    if (!p || this.inputClosed()) throw new Error(NOT_ACTIVE);
     p.stdin.write(`${JSON.stringify(obj)}\n`);
     if (obj.method === 'session/prompt') providerWrite(this.opts.chatId);
   }
@@ -1435,7 +1439,7 @@ export class AcpSession implements HarnessSession {
       } else rpc.resolve(o(m.result));
       return;
     }
-    if (method && hasId) { void this.onAgentRequest(m.id as number | string, method, o(m.params)).catch(e => requestFailed(e, { chatId: this.opts.chatId, what: method, kill: () => this.killNow() })); return; }
+    if (method && hasId) { void this.onAgentRequest(m.id as number | string, method, o(m.params)).catch(e => requestFailed(e, { chatId: this.opts.chatId, what: method, kill: () => this.killNow(), gone: () => this.inputClosed() })); return; }
     if (method) return this.onNotification(method, o(m.params));
   }
 
@@ -1522,7 +1526,7 @@ export class AcpSession implements HarnessSession {
           w.timer = null;
           if (this.exited || this.procExited) { this.briefWaited.delete(id); return; }
           // The recheck must see that grace already elapsed, even when briefReady crosses the runtime broker.
-          void this.onAgentRequest(id, method, p).catch(e => requestFailed(e, { chatId: this.opts.chatId, what: method, kill: () => this.killNow() })).finally(() => {
+          void this.onAgentRequest(id, method, p).catch(e => requestFailed(e, { chatId: this.opts.chatId, what: method, kill: () => this.killNow(), gone: () => this.inputClosed() })).finally(() => {
             if (this.briefWaited.get(id) === w) this.briefWaited.delete(id);
           });
         }, BRIEF_GRACE_MS);

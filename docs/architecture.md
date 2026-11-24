@@ -57,7 +57,7 @@ layer classes in `chats/manager-*.ts` under `chats/manager.ts` (layout: `docs/ag
   (`HeldNews.tsx`), a click lists chat, kind, since when and why.
 - **Delegation** (ADR 0083): a role chat calls `agent_delegate` on its own endpoint (`/mcp/chat/:chatId/:token`,
   `agents/delegation.ts`) → limits and permissions checked, slots reserved → `ChatManager.create(..., 'agent')` with
-  `parentId` and the contract → the child's requests pass `agents/role-gate.ts` (skills, sub-agents, above-parent
+  `parentId`, the contract and its folder (any existing one, also of another repository: ADR 0345) → the child's requests pass `agents/role-gate.ts` (skills, sub-agents, above-parent
   refused) → a question goes up one level at a time (worker → its Strategist → Orchestrator → user: `chats/manager-ladder.ts`,
   `shared/question-ladder.ts`, ADR 0344; `agent_ask_parent` / `agent_answer_child`) → `agent_report` → `reportDelegation` sends the
   result to the parent. The renderer builds the tree from `parentId` (`lib/chat-tree.ts`), the steps from the

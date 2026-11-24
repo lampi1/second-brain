@@ -8,8 +8,9 @@
 // agent_answer_child from what it knows or passes it up with askUser, and only what no agent may or can decide reaches
 // the user. What holds whoever asks: permissions only go down (a contract asking for a
 // tool class beyond the parent's is refused, and the child's policy is narrowed by the parent's, chats/manager.ts), the
-// child's folder stays inside the parent's, the depth limit of Impostazioni → Ruoli e deleghe is checked and a refusal
-// shows in the parent's chat. Only the Orchestrator and the Strategist delegate (2026-11-23; the Orchestrator through
+// depth limit of Impostazioni → Ruoli e deleghe is checked and a refusal shows in the parent's chat. A child's folder
+// is any existing one, also of another repository (ADR 0345, #460: a plan often spans several projects); the folder is
+// no permission. Only the Orchestrator and the Strategist delegate (2026-11-23; the Orchestrator through
 // app_create_chat): any other role is refused whatever its saved launches say, and a parallel group of an approved plan
 // starts in one agent_delegate call (shared/strategy.ts parallelSplit). There is no limit on children at once (the owner,
 // 2026-11-23): the Strategist checks the real resources when it plans. A child may run on another engine only when the
@@ -26,7 +27,7 @@ import type { McpTool } from '../mcp/server';
 import { callerOf } from '../mcp/caller';
 import { ToolRefusal } from '../mcp/refusal';
 import { allowsClass, belowParent, type AgentPolicy } from './tool-policy';
-import { withinParent } from './worktrees';
+import { delegableFolder } from './worktrees';
 import { childReviewers, DELTA_REVIEW, type ReviewWorld } from './one-review';
 import { gapLines, skillGaps } from './skill-needs';
 import type { SkillToolsSource } from './discovery';
@@ -83,8 +84,6 @@ export interface DelegationDeps {
   engineRefusal: (from: Harness, to: Harness) => string | null;
   /** the label every agent-written first message starts with (appctl AGENT_LABEL) */
   label: string;
-  /** the git worktrees of the repository at a folder (agents/worktrees.ts); a child may work in one of its parent's */
-  worktrees?: (cwd: string, target?: string) => Promise<string[]>;
   /** Host-owned staging only: no parent checkout mutation, branch merge, push or arbitrary command. */
   integrateMany?: (parent: ChatSummary, children: ChatSummary[]) => Promise<DelegationIntegration>;
   integrate?: (parent: ChatSummary, child: ChatSummary) => Promise<DelegationIntegration>;
@@ -150,7 +149,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
   }
 
   async function delegate(a: Record<string, unknown>, callerId: string): Promise<unknown> {
-    let parent = activeParent(callerId, 'agent_delegate');
+    const parent = activeParent(callerId, 'agent_delegate');
     if (parent.isOrchestrator) throw new Error('agent_delegate: the Orchestrator opens root chats with app_create_chat.');
     if (parent.agent?.source !== 'catalog' || !isWorkRole(parent.agent.id)) throw new Error('agent_delegate: only a role chat delegates (start one from Agenti).');
     if (parent.run && parent.run.endedAt !== undefined) throw new Error('agent_delegate: your assignment is over (you reported): ask your parent for a new one.');
@@ -162,14 +161,6 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     const delegator: Delegator = { role: own.id, model: parent.model || own.model || null };
     const raw = a.tasks;
     if (!Array.isArray(raw) || !raw.length || raw.length > TASKS_MAX) throw new Error(`agent_delegate: tasks = 1 to ${TASKS_MAX} parts.`);
-    // read before the Git lookups: a parent whose assignment or folder changed meanwhile is refused below
-    const parentCwd = parent.cwd, parentRunId = parent.run?.runId;
-    // only folders outside the parent's need Git, each looked up alone: a full listing verifies every worktree
-    const outside = [...new Set(raw.map(t => t && typeof t === 'object' && typeof (t as { cwd?: unknown }).cwd === 'string' ? ((t as { cwd: string }).cwd).trim() : '')
-      .filter(c => c && !withinParent(parentCwd, c, [])))];
-    const trees = d.worktrees ? (await Promise.all(outside.map(c => d.worktrees!(parentCwd, c)))).flat() : [];
-    parent = activeParent(callerId, 'agent_delegate');
-    if (parent.cwd !== parentCwd || parent.run?.runId !== parentRunId) throw new Error('Parent assignment or project changed; discard this stale delegation request.');
     const limits = d.settings(), all = d.chats.list();
     const parentOf = (id: string) => all.find(c => c.id === id)?.parentId;
     const depth = depthOf(parent.id, parentOf) + 1;
@@ -215,7 +206,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       // re-reviews its fix; a new one would review everything again
       const reviewed = role === 'sentinel' && t.freshReview !== true ? childReviewers(reviewWorld(), parent, cwd) : [];
       if (reviewed.length) throw new Error(`tasks[${i}]: one review chat per piece of work. Your Sentinel ${reviewed.slice(0, 3).map(c => `«${c.title}» (chatId ${c.id})`).join(', ')} already reviewed this task: re-review the fix there with agent_assign_task { chatId, roleId: "sentinel", cwd: "${reviewed[0]!.cwd}", mode: "continue", contract } naming only the fix delta (what changed since its review). A fresh Sentinel only when the user asked for one, it checks a part none of them covers, or agent_assign_task refuses that chat (engine, settings, permissions): then add freshReview true to this part.`);
-      if (!withinParent(parent.cwd, cwd, trees)) throw new Error(`tasks[${i}].cwd: ${cwd} is outside your folder (${parent.cwd}) and its repository's worktrees; a child never leaves its parent's repository. For work in another repository: leave this part out and report it with agent_report (outcome blocked or partial) as a ready contract (role, goal, done-criteria, the folder): the Orchestrator opens that chat there (app_create_chat with cwd).`);
+      // any existing folder, also of another repository (ADR 0345): the plan decides where its parts are done
+      if (!delegableFolder(parent.cwd, cwd)) throw new Error(`tasks[${i}].cwd: ${cwd} is not an existing absolute folder. Pass the folder of the repository this part works in (any repository your plan touches), or omit cwd for your own folder (${parent.cwd}).`);
       const refused = d.engineRefusal(parent.harness, profile.engine);
       if (refused) throw new Error(`tasks[${i}]: ${profile.name} runs on ${profile.engine}: ${refused}`);
       if (t.step !== undefined && !plan) throw new Error(`tasks[${i}].step: only a plan approved by the user has steps; leave it out.`);
@@ -260,18 +252,12 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
 
   /** A parent reuses only its own compatible child; policy changes require a fresh session. */
   async function assignChild(a: Record<string, unknown>, callerId: string): Promise<unknown> {
-    const initial = activeParent(callerId, 'agent_assign_task'), initialCwd = initial.cwd, initialRunId = initial.run?.runId;
+    const parent = activeParent(callerId, 'agent_assign_task');
     if (!d.chats.assignTask || !d.chats.userEvents) throw new Error('agent_assign_task is unavailable.');
     const extra = Object.keys(a).find(k => !['chatId', 'roleId', 'cwd', 'mode', 'expectedVersion', 'expectedEventSeq', 'contract', 'step', 'preset', 'presetWhy', 'taskKind'].includes(k));
     if (extra) throw new Error(`agent_assign_task: unknown field ${extra}.`);
-    const initialChild = typeof a.chatId === 'string' ? chat(a.chatId) : undefined;
-    if (!initialChild || initialChild.parentId !== callerId) throw new Error('agent_assign_task: chatId must be one of YOUR direct children (agent_children).');
-    const childCwd = initialChild.cwd;
-    const trees = d.worktrees ? await d.worktrees(initialCwd, childCwd) : [];
-    const parent = activeParent(callerId, 'agent_assign_task'), child = typeof a.chatId === 'string' ? chat(a.chatId) : undefined;
-    if (parent.cwd !== initialCwd || parent.run?.runId !== initialRunId) throw new Error('Parent assignment or project changed; discard this stale assignment request.');
+    const child = typeof a.chatId === 'string' ? chat(a.chatId) : undefined;
     if (!child || child.parentId !== callerId || !child.delegation || !child.run || child.isOrchestrator) throw new Error('agent_assign_task: chatId must be one of YOUR direct children (agent_children).');
-    if (child.cwd !== childCwd) throw new Error('Child project changed; discard this stale assignment request.');
     if (assigning.has(child.id)) throw new Error('agent_assign_task: this child already has an assignment in progress.');
     // a Sentinel child is continued as any other (#387, ADR 0309): after a fix it reviews only the delta
     if (!isWorkRole(a.roleId) || child.agent?.source !== 'catalog' || child.agent.id !== a.roleId || child.delegation.role !== a.roleId) throw new Error('Role mismatch: delegate a fresh chat.');
@@ -282,7 +268,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     // cwd only confirms the project (#427): the child's own folder (its worktree) or yours; omitted = the child's. The
     // folder never changes on a reuse, so a cwd naming another one is refused with the child's folder in the message
     if (a.cwd !== undefined && (typeof a.cwd !== 'string' || !path.isAbsolute(a.cwd) || !(samePath(a.cwd, child.cwd) || samePath(a.cwd, parent.cwd)))) throw new Error(`Project mismatch: this child works in ${child.cwd}; a reuse keeps its folder, so pass that folder (or yours, ${parent.cwd}) as cwd or omit cwd. For another folder delegate a fresh chat.`);
-    if (!withinParent(parent.cwd, child.cwd, trees)) throw new Error(`Project mismatch: this child's folder ${child.cwd} is no longer inside your folder or one of your repository's worktrees; delegate a fresh chat.`);
+    if (!delegableFolder(parent.cwd, child.cwd)) throw new Error(`Project mismatch: this child's folder ${child.cwd} no longer exists; delegate a fresh chat.`);
     // expectedVersion and expectedEventSeq are optional (cloudroom P6): honoured when given, else the current version
     if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || (a.expectedVersion !== undefined && (!Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1))) throw new Error('Invalid assignment mode/version.');
     if (a.expectedEventSeq !== undefined && (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0)) throw new Error('Invalid user event cursor.');
@@ -543,11 +529,11 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     } };
   return [{
     name: 'agent_delegate',
-    description: 'Delegate the parts of your task to other roles: each part starts a visible chat under yours, running the role you name (only roles your role may launch: agent_catalog). The child sees only its contract, never this conversation: write it self-contained. Several parts start at once (parallel): a parallel group of your approved plan goes in one call. It never gets more permissions than you, uses an isolated Git worktree when it can write (a clean committed baseline is required), and returns one result with agent_report that reaches you as a message. The depth limit is the user\'s. A Sentinel reviewing a child\'s work: reviewOf = that child\'s runId. One review chat per piece of work: once a Sentinel of yours reported on this task, a new Sentinel is refused; re-review the fix in that chat with agent_assign_task (only the fix delta). Each part runs on its role\'s card: preset picks one of its three (omitted = base).',
+    description: 'Delegate the parts of your task to other roles: each part starts a visible chat under yours, running the role you name (only roles your role may launch: agent_catalog). The child sees only its contract, never this conversation: write it self-contained. Several parts start at once (parallel): a parallel group of your approved plan goes in one call. It never gets more permissions than you, works in the folder you name (cwd: any repository your plan touches), uses an isolated Git worktree when it can write (a clean committed baseline is required), and returns one result with agent_report that reaches you as a message. The depth limit is the user\'s. A Sentinel reviewing a child\'s work: reviewOf = that child\'s runId. One review chat per piece of work: once a Sentinel of yours reported on this task, a new Sentinel is refused; re-review the fix in that chat with agent_assign_task (only the fix delta). Each part runs on its role\'s card: preset picks one of its three (omitted = base).',
     inputSchema: { type: 'object', required: ['tasks'], additionalProperties: false, properties: {
       tasks: { type: 'array', minItems: 1, maxItems: TASKS_MAX, items: { type: 'object', required: ['role', 'title', 'contract'], additionalProperties: false, properties: {
         role: { type: 'string', enum: [...WORK_ROLE_IDS] }, title: { ...str, description: '"Area · what", e.g. "Ordini · Log degli errori"' },
-        cwd: { ...str, description: 'optional absolute folder inside yours or one of your repository\'s worktrees; default: your folder; writing children receive a new isolated worktree from that committed baseline. Never another repository: for that, report the part with agent_report as a ready contract (outcome blocked, with the folder) so the Orchestrator opens the chat there (app_create_chat with cwd)' },
+        cwd: { ...str, description: 'optional absolute folder the part works in: yours (the default), one inside it, or any other existing folder, also of another repository your plan touches; a writing child receives a new isolated worktree of that folder\'s repository from its committed baseline' },
         step: { type: 'integer', minimum: 1, description: 'with a plan approved by the user (plan_propose): the step number this part does' },
         ...PRESET_SCHEMA,
         freshReview: { type: 'boolean', description: 'only for role sentinel: open a fresh one although a Sentinel of yours already reviewed this task; only when the user asked for it or it checks a part none of them covers' },
@@ -592,13 +578,13 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: async (a, ctx) => JSON.stringify(await assignChild(a, callerOf(ctx.params))),
   }, {
     name: 'agent_integrate_child',
-    description: 'Stage one finished direct child’s committed changes in a fresh detached worktree. Never changes your checkout, merges a branch or pushes. Returns pinned heads, staging cwd and a whitespace-only check; repository tests and independent review are still required. Dirty sources and missing host isolation are blocked.',
+    description: 'Stage one finished direct child’s committed changes in a fresh detached worktree. Never changes your checkout, merges a branch or pushes. A child that works in another repository is staged in that repository. Returns pinned heads (parentHead = the head of the checkout it is staged from), staging cwd and a whitespace-only check; repository tests and independent review are still required. Dirty sources and missing host isolation are blocked.',
     inputSchema: { type: 'object', required: ['chatId'], additionalProperties: false, properties: { chatId: str } },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: async (a, ctx) => JSON.stringify(await integrateChildren(a, callerOf(ctx.params))),
   }, {
     name: 'agent_integrate_children',
-    description: 'Combine 1 to 10 finished direct children’s committed changes into one fresh detached staging worktree. Uses host-owned allocations and pinned commits; reports conflicts and a whitespace-only receipt. Run repository checks and independent review on the returned union tree. Never merges branches, changes your checkout or pushes.',
+    description: 'Combine 1 to 10 finished direct children’s committed changes into one fresh detached staging worktree. Uses host-owned allocations and pinned commits; reports conflicts and a whitespace-only receipt. One repository per call: children that work in another repository are staged there, in a call of their own. Run repository checks and independent review on the returned union tree. Never merges branches, changes your checkout or pushes.',
     inputSchema: { type: 'object', required: ['chatIds'], additionalProperties: false, properties: { chatIds: { type: 'array', items: str, minItems: 1, maxItems: TASKS_MAX, uniqueItems: true } } },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: async (a, ctx) => JSON.stringify(await integrateChildren(a, callerOf(ctx.params), true)),

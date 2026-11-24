@@ -6,6 +6,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- A Strategist opens its children in any folder, also of another repository: a plan that spans several projects stays
+  one tree, each child reports to it and a writing child gets its worktree in the repository of its folder. Permissions
+  still only go down (#460, ADR 0345).
 - A map for every job: each Strategist job, or idea, has its own, created by the app and kept through restarts. The plan
   is that map: a box per step with role, model and preset, parallel steps side by side, «Approva e parti» and «Approva,
   parti dopo» on it; the stacked lists of steps on the strip, the questions' card and the project map are gone. Started

@@ -31,7 +31,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { providerWrite } from '../agent-runtime/transport-timing';
-import { requestFailed } from '../agent-runtime/request-failure';
+import { NOT_ACTIVE, requestFailed } from '../agent-runtime/request-failure';
 import { RuntimeOperationError } from '../agent-runtime/channel';
 import type { Answer, ChatItem, ChatState, Effort, ImageAttachment, PendingRequest, PermissionMode } from '../../shared/contract';
 import { sysEn, type SysCode, type SysParams } from '../../shared/sys';
@@ -202,7 +202,8 @@ const END_TASK = new Set(['completed', 'failed', 'killed', 'stopped']);
 const LIVE_TASK = new Set(['pending', 'running', 'in_progress']);
 // What the CLI sends that the app knowingly ignores (drift.ts: anything else outside the handled cases is reported).
 // Checked against CLI 2.1.283 (thinking_tokens, background_tasks_changed, vcs_state_changed are new there and carry
-// nothing the app shows, #155); a new CLI's first run warns once for each new name (`npm run logs -- --scope drift`).
+// nothing the app shows, #155); session_title_changed (a later CLI's own title of the session, #458) is ignored too: a
+// chat's title is the app's. A new CLI's first run warns once for each new name (`npm run logs -- --scope drift`).
 const QUIET_TYPES = new Set(['keep_alive', 'auth_status', 'tool_progress', 'tool_use_summary', 'prompt_suggestion']);
 const QUIET_STREAM = new Set(['message_stop', 'ping']);
 /** stop reasons that end the model's reply. After any other the CLI goes on by itself (a tool's result, a paused server
@@ -211,7 +212,7 @@ const QUIET_STREAM = new Set(['message_stop', 'ping']);
 const REPLY_ENDS = new Set(['end_turn', 'stop_sequence', 'refusal']);
 const QUIET_DELTAS = new Set(['input_json_delta', 'signature_delta', 'citations_delta']);
 const QUIET_BLOCKS = new Set(['tool_use', 'server_tool_use', 'redacted_thinking', 'mcp_tool_use', 'mcp_tool_result', 'web_search_tool_result', 'web_fetch_tool_result', 'code_execution_tool_result']);
-const QUIET_SYSTEM = new Set(['hook_started', 'hook_progress', 'hook_response', 'files_persisted', 'elicitation_complete', 'task_progress', 'thinking_tokens', 'background_tasks_changed', 'vcs_state_changed']);
+const QUIET_SYSTEM = new Set(['hook_started', 'hook_progress', 'hook_response', 'files_persisted', 'elicitation_complete', 'task_progress', 'thinking_tokens', 'background_tasks_changed', 'vcs_state_changed', 'session_title_changed']);
 const SESSION_STATES = new Set(['running', 'idle', 'requires_action']);
 
 /** The shape a message is recorded under (drift.ts record): type, then the sub-kind that picks the parser branch. */
@@ -474,7 +475,7 @@ export class ClaudeSession implements HarnessSession {
   }
 
   send(text: string, images: readonly ImageAttachment[] = []): void {
-    if (this.exited || !this.proc) throw new Error('La sessione non è attiva.');
+    if (this.exited || !this.proc) throw new Error(NOT_ACTIVE);
     // images first, then the text (the Messages API order recommended for image questions)
     const content: Obj[] = images.map(im => ({ type: 'image', source: { type: 'base64', media_type: im.mimeType, data: im.data } }));
     if (text || !content.length) content.push({ type: 'text', text });
@@ -658,9 +659,14 @@ export class ClaudeSession implements HarnessSession {
 
   // ---- process I/O ----
 
+  /** The engine exited or its input is closed: nothing can be written to it any more. */
+  private inputClosed(): boolean {
+    return !this.proc || this.exited || !this.proc.stdin.writable;
+  }
+
   private write(obj: Obj): void {
     const p = this.proc;
-    if (!p || this.exited || !p.stdin.writable) throw new Error('La sessione non è attiva.');
+    if (!p || this.inputClosed()) throw new Error(NOT_ACTIVE);
     p.stdin.write(`${JSON.stringify(obj)}\n`);
     if (obj.type === 'user') providerWrite(this.opts.chatId);
   }
@@ -672,7 +678,7 @@ export class ClaudeSession implements HarnessSession {
 
   /** A control request; resolves with the whole success envelope ({subtype, request_id, response, pending_…}). */
   private controlRaw(request: Obj, timeoutMs = 20000): Promise<Obj> {
-    if (this.exited || !this.proc) return Promise.reject(new Error('La sessione non è attiva.'));
+    if (this.exited || !this.proc) return Promise.reject(new Error(NOT_ACTIVE));
     const id = crypto.randomBytes(6).toString('hex');
     const subtype = s(request.subtype);
     return new Promise<Obj>((resolve, reject) => {
@@ -840,7 +846,7 @@ export class ClaudeSession implements HarnessSession {
 
   private onMessage(m: Obj): void {
     switch (m.type) {
-      case 'control_request': void this.onControlRequest(m).catch(e => requestFailed(e, { chatId: this.opts.chatId, what: 'control_request', kill: () => this.killNow() })); return;
+      case 'control_request': void this.onControlRequest(m).catch(e => requestFailed(e, { chatId: this.opts.chatId, what: 'control_request', kill: () => this.killNow(), gone: () => this.inputClosed() })); return;
       case 'control_response': return this.onControlResponse(o(m.response));
       case 'control_cancel_request': {
         const id = s(m.request_id);
@@ -955,7 +961,7 @@ export class ClaudeSession implements HarnessSession {
       setTimeout(() => {
         if (this.exited || this.procExited || !this.briefWaited.has(id)) { this.briefWaited.delete(id); return; }
         // Keep the elapsed-grace marker while the broker's async recheck runs, or it schedules another grace forever.
-        void this.onControlRequest(m).catch(e => requestFailed(e, { chatId: this.opts.chatId, what: 'control_request', kill: () => this.killNow() })).finally(() => this.briefWaited.delete(id));
+        void this.onControlRequest(m).catch(e => requestFailed(e, { chatId: this.opts.chatId, what: 'control_request', kill: () => this.killNow(), gone: () => this.inputClosed() })).finally(() => this.briefWaited.delete(id));
       }, BRIEF_GRACE_MS).unref?.();
       return true;
     }

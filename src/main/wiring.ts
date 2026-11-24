@@ -116,7 +116,7 @@ import { releaseId } from './release';
 import { sharedDir } from './platform';
 import { HeadlessRunner } from './compare/headless';
 import { OneShotService } from './agents/oneshot';
-import { DelegateWorktrees, GitSession, gitWorktrees, worktreeGit } from './agents/worktrees';
+import { DelegateWorktrees, GitSession, worktreeGit } from './agents/worktrees';
 import { WorktreeHold } from './chats/worktree-hold';
 import { WorktreePool } from './agents/worktree-pool';
 import { within } from './agents/tool-policy';
@@ -328,7 +328,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     resumeWithinMs: () => (brain.settings().engineIdleMin ?? 30) * 60_000,
     continuationContext: chatId => workflowsRef ? JSON.stringify(workflowsRef.list().filter(row => row.chatIds.includes(chatId))) : null,
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
-    worktrees: gitWorktrees,
     resolveAgent: req => {
       const resolved = agents.resolve(req);
       const roleId = req.orchestrator ? 'orchestrator' : req.roleId;
@@ -649,7 +648,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools(delegationTools({
     integrate: async (parent, child) => stageDelegatedChanges(delegateWorktrees.allocation(parent, child), parent, child, brain.info().brainRoot),
     integrateMany: async (parent, children) => stageDelegatedChangesMany(children.map(child => ({ owned: delegateWorktrees.allocation(parent, child), child })), parent, brain.info().brainRoot), chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
-    engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), presetChoice: (roleId, ask, delegator) => agents.presetChoice(roleId, ask, delegator), label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools,
+    engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), presetChoice: (roleId, ask, delegator) => agents.presetChoice(roleId, ask, delegator), label: AGENT_LABEL, runs: () => manager.runs.list(), skillTools,
     remember: (roleId, line, chat) => { skillLessons.propose({ role: portableId(roleId), text: line, chatId: chat.id, ...(chat.run?.runId ? { runId: chat.run.runId } : {}) }); } }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
   // every step's model and preset (2026-11-23): a started step's chat, else the role card's preset

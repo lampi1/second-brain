@@ -1,5 +1,6 @@
 // Stages app-owned delegated changes for review in one fresh detached worktree. Used by integration tools;
 // never moves a branch or writes the parent's checkout, and never treats whitespace checks as tests or approval.
+// Children that work in another repository than their parent's (ADR 0345) are staged in that repository.
 import type { ChatSummary } from '../../shared/contract';
 import type { DelegationIntegration } from '../../shared/delegation';
 import { cleanRepository, createIsolatedWorktree, requiredGit, worktreeGit, type IsolatedDelegation } from './worktrees';
@@ -16,7 +17,12 @@ export async function stageDelegatedChangesMany(children: readonly { owned: Isol
   if (!children.length || children.length > 10 || new Set(children.map(x => x.child.id)).size !== children.length) return blocked('Choose 1 to 10 distinct completed child chats.');
   let stagingCwd: string | undefined;
   try {
-    const target = await cleanRepository(parent.cwd, brainRoot);
+    // children of another repository (ADR 0345) are staged there, from the checkout they were branched from: one
+    // repository and one checkout per call, since one staging worktree holds one of them
+    const first = children[0]!.owned;
+    if (children.some(x => x.owned.sourceRoot !== first.sourceRoot || (first.sourceRoot !== undefined && x.owned.common !== first.common))) return blocked('These children work in different repositories (or checkouts of one): integrate the children of each in a call of its own.');
+    const elsewhere = first.sourceRoot !== undefined, targetCwd = first.sourceRoot ?? parent.cwd;
+    const target = await cleanRepository(targetCwd, brainRoot);
     const pinned: { chatId: string; childHead: string; baseHead: string; root: string; patch: string }[] = [];
     for (const { owned, child } of [...children].sort((a, b) => a.child.id < b.child.id ? -1 : a.child.id > b.child.id ? 1 : 0)) {
       if (owned.childId !== child.id || owned.parentId !== parent.id || child.parentId !== parent.id || owned.parentRunId !== parent.run?.runId || owned.parentTaskVersion !== parent.run?.taskVersion) return blocked('Child ownership does not match this parent assignment.');
@@ -50,7 +56,7 @@ export async function stageDelegatedChangesMany(children: readonly { owned: Isol
     // This receipt is deliberately whitespace-only. No repository script, hook, test or custom driver runs.
     const check = await worktreeGit(stage.root, ['diff', '--cached', '--check']);
     const tree = await requiredGit(stage.root, ['write-tree']);
-    if ((await cleanRepository(parent.cwd, brainRoot)).head !== target.head) return { ...common, status: 'blocked', reason: 'Parent changed during integration; this staging result is stale.' };
+    if ((await cleanRepository(targetCwd, brainRoot)).head !== target.head) return { ...common, status: 'blocked', reason: `${elsewhere ? 'The children\'s repository' : 'Parent'} changed during integration; this staging result is stale.` };
     for (const source of pinned) if ((await cleanRepository(source.root)).head !== source.childHead) return { ...common, status: 'blocked', reason: 'A child changed during integration; this staging result is stale.' };
     return { ...common, status: 'staged', tree,
       reason: 'Committed child changes are combined in one detached worktree. Run repository checks and independent review on this union tree through a normal permitted chat. No semantic verification, merge or push has occurred.',
