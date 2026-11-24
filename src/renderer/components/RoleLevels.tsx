@@ -17,7 +17,7 @@ import { HarnessMark } from './Icons';
 import { Select } from './Select';
 import { t } from '../i18n';
 
-type Route = Record<PresetId, { engine: string; model: string | null; reason: string; state: 'ok' | 'pace' | 'out' | 'unknown' } | null>;
+type Route = Record<PresetId, { engine: string; model: string | null; index: number; reason: string; state: 'ok' | 'pace' | 'out' | 'unknown' } | null>;
 
 const modelName = (e: AgentModelChoice | undefined, id: string | null) => id === null ? t('rolePage.add.default') : e?.models.find(m => m.id === id)?.name || id;
 
@@ -75,7 +75,7 @@ export function RoleLevels({ profile }: { profile: AgentProfile }) {
           <div className="rl-chips" data-own={own(id)}>
             {/* a level that follows Base shows no chip of its own: only «+ Aggiungi» and the note */}
             {own(id) && list.map((x, i) => {
-              const e = engineOf(x.engine), chosen = !!now && now.engine === x.engine && now.model === x.model;
+              const e = engineOf(x.engine), chosen = !!now && now.index === i;
               const efforts = e?.models.find(m => m.id === x.model)?.efforts;
               return <span key={`${x.engine}:${x.model}`} className="rl-chip" data-on={chosen} data-off={!e?.enabled || undefined} draggable={!busy && own(id)}
                 onDragStart={() => setDrag({ id, i })} onDragOver={ev => { if (drag?.id === id) ev.preventDefault(); }} onDrop={drop(id, i)} onDragEnd={() => setDrag(null)}

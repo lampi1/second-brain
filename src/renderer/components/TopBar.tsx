@@ -32,7 +32,8 @@ import '../styles/settings.css';
 
 function CliRow({ engine: { id: harness, name, trusted }, st, toggle }: { engine: EngineInfo; st: CliStatus | undefined; toggle?: boolean }) {
   const ok = !!st?.found && st.loggedIn !== false;
-  const on = useApp(s => s.settings?.engineOn[harness] === true && s.settings.engines[harness] !== false);
+  // on = what agentsMayOpen reads (engines/policy.ts): an engine on for the user only is off for the agents
+  const on = useApp(s => s.settings?.engineOn[harness] === true && s.settings.engines[harness] === true);
   // the engine's switch (owner, 2026-11-24, ADR 0347: «da qui voglio poter accendere e spegnere in fretta i motori»):
   // on = it starts and the agents may use it; off = the app never picks it
   const flip = () => void setSetting(on ? { engineOn: { [harness]: false } } : { engineOn: { [harness]: true }, engines: { [harness]: true } });

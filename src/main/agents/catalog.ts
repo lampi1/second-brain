@@ -16,7 +16,7 @@ import { readLocal, writeLocal } from './local-store';
 import { AgentHistory, behaviourOf, firstVersion, sameBehaviour, versionedChanges } from './versions';
 import { checkedTools, type AgentPolicy } from './tool-policy';
 import { CARD_MODEL, PRESET_IDS, type PresetId, cardPresets, checkedPresets, choosePreset, presetAskOf, presetOrderProblem, type Delegator, type FullPresets, type PresetAsk, type PresetChoice, type RolePresets, type UnitPrice } from '../../shared/model-presets';
-import { checkedLevels, headPresets, levelNamed, levelsOf, pickInLevel, type FullLevels, type LevelModel, type Room } from '../../shared/model-levels';
+import { checkedLevels, headPresets, levelNamed, levelsOf, pickInLevel, type FullLevels, type LevelModel, type RoleLevels, type Room } from '../../shared/model-levels';
 import { fiveRolesTextFor, fullDefaultsFor, shippedTextFor, skillAlignmentFor } from './role-migrate';
 import { engineOf } from '../engines/registry';
 import { log, errText } from '../log';
@@ -308,11 +308,26 @@ export class AgentCatalogService {
       const head = (id: 'min' | 'max') => { const x = levels![id]?.[0]; return x && x.model && x.engine === p.engine ? { model: x.model, ...(x.effort ? { effort: x.effort } : {}) } : undefined; };
       const min = head('min'), max = head('max');
       p.presets = min || max ? { ...(min ? { min } : {}), ...(max ? { max } : {}) } : undefined;
-    } else if (levels && base && (value.engine !== undefined || value.model !== undefined || value.effort !== undefined)) {
-      // a change of the card's own model (app_config, an older editor) moves the head of the Base list with it
-      const b: LevelModel = { engine: String(p.engine), model: (p.model ?? null) as string | null, ...(typeof p.effort === 'string' ? { effort: p.effort as Effort } : {}) };
-      levels = { ...levels, base: [b, ...(levels.base ?? []).slice(1).filter(x => x.engine !== b.engine || x.model !== b.model)] };
     }
+    // a change of the card's own model or presets without lists (app_config, an older editor) moves the heads of the
+    // lists with it; done once the engine's fallbacks below have settled the model and effort (a new engine drops the
+    // old engine's model, it is never carried into the list)
+    const followHeads = !!levels && !!base && value.levels === undefined && (value.engine !== undefined || value.model !== undefined || value.effort !== undefined || value.presets !== undefined);
+    let headsMoved = false;
+    const moveHeads = (engine: string, model: string | null, presets: RolePresets | undefined) => {
+      if (!followHeads || headsMoved || !levels) return;
+      headsMoved = true;
+      const put = (list: LevelModel[] | undefined, x: LevelModel) => [x, ...(list ?? []).filter((y, i) => i > 0 && (y.engine !== x.engine || y.model !== x.model))];
+      const next: RoleLevels = { ...levels };
+      if (value.engine !== undefined || value.model !== undefined || value.effort !== undefined)
+        next.base = put(levels.base, { engine, model, ...(typeof p.effort === 'string' ? { effort: p.effort as Effort } : {}) });
+      for (const id of ['min', 'max'] as const) {
+        const now = presets?.[id], was = (base!.presets as RolePresets | undefined)?.[id];
+        if (value.presets !== undefined && now && JSON.stringify(now) !== JSON.stringify(was ?? null) && next[id]?.length)
+          next[id] = put(next[id], { engine, model: now.model, ...(now.effort ? { effort: now.effort } : {}) });
+      }
+      levels = next;
+    };
     const engine = text(p.engine, 60, 'Motore');
     if (!/^[a-z][a-z0-9_-]*$/.test(engine)) throw new Error('Motore non valido.');
     if (!(p.model === null || p.model === undefined || typeof p.model === 'string' && MODEL.test(p.model))) throw new Error('Modello non valido.');
@@ -348,13 +363,17 @@ export class AgentCatalogService {
         if (!(keep && was?.model === x.model) && !e.models.some(m => m.id === x.model)) throw new Error(`Preset ${id === 'min' ? 'Minimo' : 'Massimo'}: il modello «${x.model}» non è tra quelli noti del motore ${engine}.`);
         if (x.effort && !e.effort) throw new Error('Questo motore non supporta la scelta dell’effort.');
       }
+      moveHeads(engine, model, presets);
       // on a save (not at launch): Minimo <= Base <= Massimo by price, when the prices are known
       const problem = presets && this.d.price && Object.keys(value).length ? presetOrderProblem(cardPresets({ model, ...(p.effort ? { effort: p.effort as Effort } : {}), presets }, this.d.tierModel?.(engine, p.tier as ModelTier) ?? null), this.d.price) : null;
       if (problem) throw new Error(problem);
       // each model of the lists (ADR 0347) on a save: a known engine, and a model it is known to have (one already on
       // the card is kept as it is, #128); at launch the pick skips what is not usable instead
       if (levels && Object.keys(value).length) {
-        const had = new Set(Object.values(base?.levels ?? {}).flat().map(x => `${x.engine}\u0000${x.model ?? ''}`));
+        // what the card already ran with: its lists, else its own model and presets on its engine (an alias such as
+        // 'sonnet', a model from the legacy migration)
+        const was = base ? levelsOf(base, cardPresets(base, this.d.tierModel?.(base.engine, base.tier) ?? null)) : null;
+        const had = new Set(was ? PRESET_IDS.flatMap(id => was[id]).map(x => `${x.engine}\u0000${x.model ?? ''}`) : []);
         for (const [id, list] of Object.entries(levels) as [PresetId, LevelModel[]][]) for (const x of list) {
           const en = this.d.models().find(m => m.engine === x.engine);
           const where = `${id === 'min' ? 'Minimo' : id === 'max' ? 'Massimo' : 'Base'}`;
@@ -365,6 +384,7 @@ export class AgentCatalogService {
         }
       }
     }
+    moveHeads(engine, model, presets);
     // every role may do everything (owner, 2026-11-24: «i permessi degli agenti toglili, voglio tutto concesso sempre»,
     // ADR 0347): the stored tools and ceiling go back to the role's defaults (every class, no ceiling) on a save; on load
     // allowAll() does it in memory, after the migrations that read the stored values
@@ -583,7 +603,7 @@ export class AgentCatalogService {
       candidates = [{ ...named.at, ...(effortOf ? { effort: effortOf } : {}) }];
     }
     // the model of the level (ADR 0347): the first whose engine is on and whose plan has room, in the user's order
-    const got = this.pickIn(candidates);
+    const got = this.pickIn(candidates, user ? undefined : req.delegator);
     if (!got) throw new Error(user ? `${user.model} non può partire: ${this.unusable(candidates[0]!) ?? 'motore non pronto'}.`
       : `Nessun modello del livello ${choice.preset} di ${p.name} può partire: ${candidates.map(x => `${x.model ?? 'predefinito'} su ${x.engine} (${this.unusable(x)})`).join(', ')}. Accendi un motore dal menu ⚙ o aggiungi un modello al livello.`);
     const engine = got.chosen.engine;
@@ -592,7 +612,7 @@ export class AgentCatalogService {
     const picked = { model: got.chosen.model };
     // the effort the model really takes (ADR 0211): a level it lacks becomes the nearest lower one, none when it takes none
     const effort = effortOn(got.chosen.effort ?? (user ? null : req.effort ?? null), picked.model ? e.models.find(m => m.id === picked.model)?.efforts : undefined) ?? undefined;
-    choice = { ...choice, model: picked.model, engine, route: got.reason, ...(effort ? { effort } : {}) };
+    { const { effort: _h, ...noEffort } = choice; void _h; choice = { ...noEffort, model: picked.model, engine, route: got.reason, ...(effort ? { effort } : {}) }; }
     const { model: _m, effort: _e, userModel: _u, preset: _p, presetWhy: _w, taskKind: _k, delegator: _d, ...rest } = req; void _m; void _e; void _u; void _p; void _w; void _k; void _d;
     const r = ROLE_DEFAULTS[p.id as RoleId];
     const instructions = `${rolePreamble(p.id)}\n\nRole: ${p.name}.\n${p.instructions}\nOutput: ${r.output}`;
@@ -604,15 +624,20 @@ export class AgentCatalogService {
   }
 
   /** The three lists of a role's card (ADR 0347): its own lists, else its preset of each level on its engine. */
-  levelsFor(p: AgentProfile): FullLevels { return levelsOf(p, cardPresets(p, this.d.tierModel?.(p.engine, p.tier) ?? null)); }
+  levelsFor(p: AgentProfile): FullLevels {
+    const l = levelsOf(p, cardPresets(p, this.d.tierModel?.(p.engine, p.tier) ?? null));
+    // a model left to the engine is the role's tier model there, as for the card's own model (ADR 0210)
+    const fill = (x: LevelModel): LevelModel => x.model === null ? { ...x, model: this.d.tierModel?.(x.engine, p.tier) ?? null } : x;
+    return { min: l.min.map(fill), base: l.base.map(fill), max: l.max.map(fill) };
+  }
   /** The three presets of a role's card (ADR 0336): the head of each level's list (ADR 0347). */
   presetsOf(p: AgentProfile): FullPresets { return headPresets(this.levelsFor(p)); }
   /** The room of every model of a role's levels now (the role page's «ora userebbe»): the same pick a launch makes. */
-  levelRoute(roleId: string): Record<PresetId, { engine: string; model: string | null; reason: string; state: Room['state'] } | null> {
+  levelRoute(roleId: string): Record<PresetId, { engine: string; model: string | null; index: number; reason: string; state: Room['state'] } | null> {
     const levels = this.levelsFor(this.find(roleId));
     const one = (id: PresetId) => {
       const g = this.pickIn(levels[id]);
-      return g ? { engine: g.chosen.engine, model: g.chosen.model, reason: g.reason, state: g.considered.find(c => c.at === g.chosen)?.room.state ?? 'unknown' } : null;
+      return g ? { engine: g.chosen.engine, model: g.chosen.model, index: levels[id].indexOf(g.chosen), reason: g.reason, state: g.considered.find(c => c.at === g.chosen)?.room.state ?? 'unknown' } : null;
     };
     return { min: one('min'), base: one('base'), max: one('max') };
   }
@@ -624,8 +649,13 @@ export class AgentCatalogService {
     if (x.model !== null && !e.modelSelectable) return e.modelReason ?? `${e.label} non applica una scelta di modello`;
     return this.d.engineBlock?.(x.engine) ?? null;
   }
-  private pickIn(list: readonly LevelModel[]) {
-    return pickInLevel(list, x => this.unusable(x), x => this.d.room?.(x.engine, x.model) ?? { state: 'unknown', why: '', resetsAt: null });
+  /** The pick in a level. With a delegator's price ceiling (ADR 0336), a model priced above it is passed over while
+   *  another of the level fits (or has no known price): a fallback is held to the ceiling as the head is. */
+  private pickIn(list: readonly LevelModel[], delegator?: Delegator) {
+    const price = this.d.price, own = delegator?.model ?? null, cap = own && price ? price(own) : null;
+    const over = (x: LevelModel) => cap !== null && !!x.model && (price!(x.model) ?? -1) > cap;
+    const fits = cap !== null && list.some(x => !over(x) && this.unusable(x) === null);
+    return pickInLevel(list, x => this.unusable(x) ?? (fits && over(x) ? `costa più del modello di chi delega (${own})` : null), x => this.d.room?.(x.engine, x.model) ?? { state: 'unknown', why: '', resetsAt: null });
   }
   /** What a role's card gives a chat of that role now, for a preset (ADR 0346: a chat that waited on its credits
    *  follows its card): the card's engine and that preset's model and effort, as a launch would get them (resolve's
@@ -640,7 +670,9 @@ export class AgentCatalogService {
   presetChoice(roleId: string, ask: PresetAsk, delegator?: Delegator): PresetChoice {
     const p = this.find(roleId), levels = this.levelsFor(p);
     const c = choosePreset({ presets: headPresets(levels), ask, ...(delegator ? { delegator } : {}), price: this.d.price ?? (() => null) });
-    const g = this.pickIn(levels[c.preset]);
-    return g ? { ...c, engine: g.chosen.engine, model: g.chosen.model, route: g.reason, ...(g.chosen.effort ? { effort: g.chosen.effort } : {}) } : c;
+    const g = this.pickIn(levels[c.preset], delegator);
+    if (!g) return c;
+    const { effort: _h, ...rest } = c; void _h;
+    return { ...rest, engine: g.chosen.engine, model: g.chosen.model, route: g.reason, ...(g.chosen.effort ? { effort: g.chosen.effort } : {}) };
   }
 }

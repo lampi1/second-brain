@@ -102,3 +102,36 @@ describe('permissions: everything, always', () => {
     expect(start(c).policy).toBeNull();
   });
 });
+
+describe('review fixes', () => {
+  it('a change of engine without lists drops the old engine\'s model from the Base head instead of refusing', () => {
+    const c = make(); withLevels(c);
+    const p = c.save(edit(role(c), { engine: 'codex', model: 'm-mid', effort: undefined }), 'artisan');
+    expect(p.levels?.base?.[0]).toMatchObject({ engine: 'codex', model: null });
+  });
+  it('the first lists save keeps a card model the engine list does not name (an alias)', () => {
+    const c = make();
+    const fs2 = c as unknown as { profiles: AgentProfile[] };
+    fs2.profiles = fs2.profiles.map(p => p.id === 'artisan' ? { ...p, model: 'sonnet' } : p);
+    const p = c.save(edit(role(c), { levels: { base: [{ engine: 'claude', model: 'sonnet' }, { engine: 'codex', model: 'gpt-x' }] } }), 'artisan');
+    expect(p.levels?.base?.[0]?.model).toBe('sonnet');
+  });
+  it('a preset changed without lists moves the head of that level', () => {
+    const c = make(); withLevels(c);
+    c.save(edit(role(c), { levels: { ...LEVELS, max: [{ engine: 'claude', model: 'm-top' }, { engine: 'codex', model: 'gpt-x' }] } }), 'artisan');
+    const p = c.save(edit(role(c), { presets: { max: { model: 'm-low' } } }), 'artisan');
+    expect(p.levels?.max?.map(x => x.model)).toEqual(['m-low', 'gpt-x']);
+  });
+  it('a model left to the engine reads as the role\'s tier model, and levelRoute says its index', () => {
+    const c = make();
+    c.save(edit(role(c), { levels: { base: [{ engine: 'claude', model: null }] } }), 'artisan');
+    expect(c.levelRoute('artisan').base).toMatchObject({ model: 'm-mid', index: 0 });
+  });
+  it('a fallback takes its own effort, not the head\'s', () => {
+    const c = make({ room: { claude: 'out' } }); withLevels(c);
+    const r = start(c);
+    expect(r.request.model).toBe('gpt-x');
+    expect(r.request.effort).toBeUndefined();
+    expect(r.presetChoice?.effort).toBeUndefined();
+  });
+});

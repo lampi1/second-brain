@@ -4,14 +4,16 @@ export async function captureWorkbench(app, page, capture) {
   await page.getByTestId('nav-home').click();
   await page.evaluate(() => document.activeElement?.blur()); await page.keyboard.press('g'); await page.keyboard.press('a');
   await page.getByTestId('catalog-flip-artisan').click(); await page.getByTestId('catalog-open-artisan').click();
-  const skill = page.getByTestId('agent-skill-input');
+  // the role's page (ADR 0347): «+ Skill» opens a field; the page's own focus (the instructions) must not take it back
+  await page.getByTestId('agent-skill-add').click();
+  const skill = page.getByTestId('agent-skill-name');
   await skill.fill('brain-edit');
   // Observe beyond the former delayed focus: the user's selected field and text must remain intact.
   await page.waitForTimeout(100);
   if (await skill.inputValue() !== 'brain-edit' || !await skill.evaluate(el => el === document.activeElement)) throw new Error('Role editor stole skill input focus');
   await capture('role-editor-skill-focus');
-  await page.getByTestId('agent-skill-add').click();
-  await page.getByTestId('agent-skills-edit').getByRole('button', { name: /brain-edit/ }).waitFor();
+  await skill.press('Enter');
+  await page.getByTestId('agent-skills').getByRole('button', { name: 'brain-edit', exact: true }).waitFor();
   await page.getByTestId('nav-home').click();
   const child = await page.evaluate(async () => (await window.sb.invoke('chat:list', undefined)).find(c => c.parentId && c.delegation && !c.closedAt));
   if (!child) throw new Error('Synthetic delegated chat missing');
