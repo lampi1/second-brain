@@ -1,7 +1,7 @@
 // The app's top bar, kept to what is used all the time (ADR 0287): history, the project maps, search, ONE usage figure
 // (today's spend and the plan window; the rest on click: UsageBar.tsx), «Da rispondere», «Ferma tutti», the bell and one
 // menu (the gear). Everything used now and then lives in that menu: a new browser, «Manutenzione» (ADR 0132), the
-// language (ADR 0120), the engines' sign-in state, the environment credentials, the shortcuts, the settings. What is out
+// language (ADR 0120), the engines' sign-in state with a switch each to turn them on and off (ADR 0347), the environment credentials, the shortcuts, the settings. What is out
 // of the norm comes back on the bar by itself: an engine signed out, chats queued for the machine's load, a work queue
 // that failed to load, the brain sync when it is on, a recording, a maintenance at work. Used by App.tsx; fit steps
 // keep the actions reachable in a narrow window.
@@ -28,11 +28,17 @@ import { SyncStatus } from './SyncStatus';
 import { MapsButton } from './MapsButton';
 import { MaintenanceButton } from './brain-model/MaintenanceButton';
 import { IconButton, Keys, MenuItem, MenuLabel, MenuSep, Popover } from './ui';
+import '../styles/settings.css';
 
-function CliRow({ engine: { id: harness, name }, st }: { engine: EngineInfo; st: CliStatus | undefined }) {
+function CliRow({ engine: { id: harness, name, trusted }, st, toggle }: { engine: EngineInfo; st: CliStatus | undefined; toggle?: boolean }) {
   const ok = !!st?.found && st.loggedIn !== false;
+  // on = what agentsMayOpen reads (engines/policy.ts): an engine on for the user only is off for the agents
+  const on = useApp(s => s.settings?.engineOn[harness] === true && s.settings.engines[harness] === true);
+  // the engine's switch (owner, 2026-11-24, ADR 0347: «da qui voglio poter accendere e spegnere in fretta i motori»):
+  // on = it starts and the agents may use it; off = the app never picks it
+  const flip = () => void setSetting(on ? { engineOn: { [harness]: false } } : { engineOn: { [harness]: true }, engines: { [harness]: true } });
   return (
-    <div className="cli-row" data-testid={`cli-${harness}`}>
+    <div className="cli-row" data-off={toggle && !on ? true : undefined} data-testid={`cli-${harness}`}>
       <span className={`cli-dot ${!st ? 'unknown' : ok ? 'ok' : 'bad'}`} aria-hidden="true" />
       <span className="cli-text">
         <b>{name}</b>
@@ -41,7 +47,10 @@ function CliRow({ engine: { id: harness, name }, st }: { engine: EngineInfo; st:
       {st?.found && st.loggedIn !== true && (
         <button type="button" className="btn btn-primary btn-s" onClick={() => void cliLogin(harness)} data-testid={`cli-login-${harness}`}><IconLogin size={13} />{' '}{auditText('audit.TopBar.signIn')}</button>
       )}
-      <button type="button" className="icon-btn" aria-label={auditText('auditExpression.TopBar.text182', { v0: name })} data-tip={auditText('audit.TopBar.checkAgain')} onClick={() => void cliCheck(harness)} data-testid={`cli-check-${harness}`}><IconRefresh size={13} /></button>
+      <button type="button" className="icon-btn cli-check" aria-label={auditText('auditExpression.TopBar.text182', { v0: name })} data-tip={auditText('audit.TopBar.checkAgain')} onClick={() => void cliCheck(harness)} data-testid={`cli-check-${harness}`}><IconRefresh size={13} /></button>
+      {toggle && (trusted
+        ? <button type="button" role="switch" aria-checked={on} aria-label={t('engineSwitch.label', { engine: name })} className={`st-switch ${on ? 'on' : ''}`} onClick={flip} data-testid={`engine-switch-${harness}`}><span className="st-knob" aria-hidden="true" /></button>
+        : <small className="cli-trust" title={t('engineSwitch.trust')}>{t('engineSwitch.trust')}</small>)}
     </div>
   );
 }
@@ -104,7 +113,8 @@ function SettingsButton() {
       <MenuItem onSelect={run(() => openModal('credentials'))} testid="more-credentials">{auditText('audit.TopBar.environmentCredentials')}</MenuItem>
       <MenuSep />
       <MenuLabel>{auditText('audit.TopBar.theClisUsedByTheApp')}</MenuLabel>
-      <div data-testid="cli-pop">{engines.map(e => <CliRow key={e.id} engine={e} st={cli?.[e.id]} />)}</div>
+      <div data-testid="cli-pop">{engines.map(e => <CliRow key={e.id} engine={e} st={cli?.[e.id]} toggle />)}</div>
+      <p className="menu-note">{t('engineSwitch.note')}</p>
       <MenuSep />
       <MenuLabel>{t('langSwitch.heading')}</MenuLabel>
       {LANG_MODES.map(m => <MenuItem key={m} checked={m === mode} onSelect={run(() => { if (m !== mode) void setSetting({ language: m }); })} testid={`topbar-lang-${m}`}>{langName(m)}</MenuItem>)}

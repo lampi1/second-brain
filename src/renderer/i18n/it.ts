@@ -29,7 +29,6 @@ import { imparaStudioIt } from './areas/impara-studio.it';
 import { imparaV3It } from './areas/impara-v3.it';
 import { newsIt } from './areas/news.it';
 import {studioIt}from'./areas/studio.it';
-import { permissionsIt } from './areas/permissions.it';
 import { langSwitchIt } from './areas/lang-switch.it';
 import { chatIt } from './areas/chat.it';
 import { visualsIt } from './areas/visuals.it';
@@ -45,6 +44,7 @@ import { agentsGridIt } from './areas/agents-grid.it';
 import { levelsIt } from './areas/levels.it';
 import { explainIt } from './areas/explain.it';
 import { agentDetailIt } from './areas/agent-detail.it';
+import { rolePageIt } from './areas/role-page.it';
 import { agentImageIt } from './areas/agent-image.it';
 import { proposalsIt } from './areas/proposals.it';
 import {settingsIt}from'./areas/settings.it';
@@ -118,7 +118,6 @@ export const it = {
   'genui.permission.session': 'Per tutta la sessione',
   'genui.permission.deny': 'Non procedere',
   ...studioIt,
-  ...permissionsIt,
   ...langSwitchIt,
   ...brainModelIt,
   ...workMapIt,
@@ -130,6 +129,7 @@ export const it = {
   ...levelsIt,
   ...explainIt,
   ...agentDetailIt,
+  ...rolePageIt,
   ...agentImageIt,
   ...proposalsIt,
   ...settingsIt,

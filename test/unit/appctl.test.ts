@@ -338,8 +338,8 @@ describe('app control tools', () => {
     expect(await t.run({ title: 'Ordini · Fix', prompt: 'p', roleId: 'artisan', userModel: { model: 'Opus 5.5', effort: 'max' } })).toMatchObject({ harness: 'claude', model: 'claude-opus-5-5', effort: 'max', route: { reason: expect.stringContaining('the user asked for claude-opus-5-5') } });
     expect(made[0]).toMatchObject({ harness: 'claude', model: 'claude-opus-5-5', userModel: { engine: 'claude', model: 'claude-opus-5-5', effort: 'max' } });
     expect(catalog.list().profiles.find(p => p.id === 'artisan')).toEqual(card);
-    // a model on another engine than the role's: refused, nothing created
-    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan', userModel: { model: 'gpt-x', effort: 'high' } }))).rejects.toThrow(/un altro motore/);
+    // a model on another engine that is not in any of the role's levels: refused, nothing created (ADR 0347)
+    await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan', userModel: { model: 'gpt-x', effort: 'high' } }))).rejects.toThrow(/non è tra i modelli dei suoi livelli/);
     // a model no engine lists, an unknown engine, the removed tier: refused, nothing created
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan', userModel: { model: 'gpt-y' } }))).rejects.toThrow(/not in any engine/);
     await expect(Promise.resolve(t.run({ title: 'X', prompt: 'p', roleId: 'artisan', userModel: { engine: 'claude', model: 'gpt-x' } }))).rejects.toThrow(/claude's model list/);
@@ -437,7 +437,7 @@ describe('app control tools', () => {
     expect(await t.run({ title: 'X', prompt: 'x'.repeat(CHAT_PROMPT_MAX), roleId: 'scout' })).toMatchObject({ chatId: 'n1' });
   });
 
-  it('app_create_chat warns when a passed skill needs tools the role lacks (#93); with full permissions it does not', async () => {
+  it('app_create_chat gives no skill warning: every role has every tool (#93, ADR 0347)', async () => {
     const chats = { list: () => [{ id: 'r', harness: 'claude', model: 'claude-opus-5-5', isOrchestrator: true, title: 'Orchestrator' }], create: async (req: Record<string, unknown>) => ({ id: 'n1', title: req.title }) } as unknown as ChatService;
     const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true }, engines: { claude: true }, orchestratorChats: { harness: 'claude' } }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
     const catalog = roleCatalog();
@@ -446,12 +446,9 @@ describe('app control tools', () => {
     expect(await t.run({ title: 'Issue · Bozza', prompt: 'apri la issue', roleId: 'herald', skills: ['issue-open'] })).not.toHaveProperty('warnings');
     const herald = catalog.list().profiles.find(p => p.id === 'herald')!;
     catalog.save({ ...herald, tools: { allow: ['read', 'web', 'mail-draft'] } }, 'herald');
-    const out = await t.run({ title: 'Issue · Bozza 2', prompt: 'apri la issue', roleId: 'herald', skills: ['issue-open'] }) as { warnings?: string[] };
-    expect(out.warnings).toHaveLength(1);
-    expect(out.warnings![0]).toMatch(/skill «issue-open» needs edit, shell, which Herald lacks/);
-    const cat = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), skillTools }, 'r').find(x => x.name === 'agent_catalog')!;
-    const listed = await cat.run({ id: 'herald', skills: ['issue-open'] }) as { roles: { skillWarnings?: string[] }[] };
-    expect(listed.roles[0]!.skillWarnings?.[0]).toMatch(/issue-open/);
+    // since ADR 0347 every role may do everything: a narrowing is widened on save, so no warning either
+    expect(catalog.list().profiles.find(p => p.id === 'herald')!.tools?.allow).toEqual(expect.arrayContaining(['edit', 'shell']));
+    expect(await t.run({ title: 'Issue · Bozza 2', prompt: 'apri la issue', roleId: 'herald', skills: ['issue-open'] })).not.toHaveProperty('warnings');
   });
 
   it('the Orchestrator\'s own mount has task_estimate, and app_create_chat answers with the estimate from similar tasks (ADR 0087)', async () => {

@@ -6,6 +6,7 @@ import type { AgentKnowhow, AgentPackIdentity } from './agent-pack';
 import type { CharacterId } from './characters';
 import type { ModelTier } from './roles';
 import type { RolePresets, RunPresetChoice } from './model-presets';
+import type { RoleLevels } from './model-levels';
 import type { RoleJudges } from './ppi';
 
 /** One-shot purposes: the service and persisted run reader share this list so new jobs survive a restart. */
@@ -59,6 +60,8 @@ export interface AgentDraft {
   tierMax: ModelTier;
   /** the Minimo and Massimo presets on the card's engine (ADR 0336); Base = model and effort above; absent = the Base */
   presets?: RolePresets;
+  /** several models per level, across engines, in the user's order (ADR 0347); a level absent = its preset above */
+  levels?: RoleLevels;
   /** Code Mode for this role's chats (ADR 0331, per role since 2026-11-23): run_code in place of the engine's own file
    *  and shell tools, at the level its engine allows (shared/code-mode-level.ts); absent = off; never the Orchestrator */
   codeMode?: boolean;
@@ -84,7 +87,7 @@ export function effortOn(asked: Effort | null | undefined, efforts: readonly Eff
   return lower.length ? lower.reduce((a, b) => order.indexOf(b) > order.indexOf(a) ? b : a) : efforts[0]!;
 }
 /** Fields that change what a run does. Saving a change to any of them creates a new version. */
-export const BEHAVIOUR_FIELDS = ['instructions', 'engine', 'model', 'effort', 'tools', 'permissionCeiling', 'knowhow', 'maxContext', 'tier', 'tierMax', 'presets', 'codeMode', 'fast', 'launches', 'skills'] as const;
+export const BEHAVIOUR_FIELDS = ['instructions', 'engine', 'model', 'effort', 'tools', 'permissionCeiling', 'knowhow', 'maxContext', 'tier', 'tierMax', 'presets', 'levels', 'codeMode', 'fast', 'launches', 'skills'] as const;
 export type AgentBehaviour = Pick<AgentDraft, (typeof BEHAVIOUR_FIELDS)[number]>;
 /** What a card names on one engine only. */
 export interface EngineChoice { model: string | null; effort?: Effort; presets?: RolePresets; fast?: boolean }

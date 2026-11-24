@@ -118,5 +118,4 @@ export const brainModelDe: typeof brainModelIt = {
   'bm.card.skills': 'Skills', 'bm.card.noSkills': 'Keine angegebenen Skills: arbeitet mit seiner Rolle.',
 
   'bm.card.back': 'Zurück',
-  'bm.studio.manage': 'Skills verwalten',
 };

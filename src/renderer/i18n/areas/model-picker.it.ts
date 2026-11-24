@@ -40,6 +40,6 @@ export const modelPickerIt = {
   'mp.apply.orchestratorTip': 'Salva nella scheda dell’Orchestrator: vale dal prossimo Orchestrator su quel motore.',
   'mp.apply.role': 'Salva nel ruolo',
   'mp.chatMenu': 'Modello ed effort…',
-  'mp.cardButton': (p: { engine: string; model: string }) => `${p.engine} · ${p.model}`,  'modelChip.tip': (p: { engine: string; model: string }) => `${p.engine} · ${p.model}: clicca per cambiare modello`,
+  'modelChip.tip': (p: { engine: string; model: string }) => `${p.engine} · ${p.model}: clicca per cambiare modello`,
   'chat.clearContext': 'Svuota il contesto (come /clear)',
 };

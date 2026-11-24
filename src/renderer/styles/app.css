@@ -930,6 +930,12 @@ button.lc-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 1
 .cli-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: var(--r-m); }
 .cli-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .cli-text small { color: var(--text-3); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the engines' switches of the gear menu (ADR 0347): an engine off fades, the re-check shows under the pointer */
+.cli-row[data-off] .cli-text, .cli-row[data-off] .cli-dot { opacity: 0.45; }
+.cli-row .st-switch { flex: none; }
+.cli-row .cli-check { opacity: 0; }
+.cli-row:hover .cli-check, .cli-row .cli-check:focus-visible { opacity: 1; }
+.cli-trust { flex: none; max-width: 90px; font-size: 11px; color: var(--text-3); text-align: right; line-height: 1.3; }
 
 /* ---------- Dialogs (components/ui.tsx Modal): one look for every dialog and for the questions window (qwin.css).
    Three sizes (s: a confirmation, m: a dialog, side: a panel down the right edge); a head with the title (--fs-xl, the display
