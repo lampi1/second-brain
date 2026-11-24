@@ -19,6 +19,7 @@ export function agentsHandlers({ s, demo, agentImages, workflows, orchestrator, 
     'connectors:useToken': a => connectors.service.useToken(a),
     // the user's MCP servers (ADR 0086): the user's clicks only; a token goes in once and never comes back
     'mcpservers:state': () => mcpServers().state(),
+    'mcpservers:views': () => mcpServers().views(),
     'mcpservers:save': a => mcpServers().save(a),
     'mcpservers:remove': a => mcpServers().remove(a?.id),
     'mcpservers:setSecret': a => mcpServers().setSecret(a),

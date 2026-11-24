@@ -23,7 +23,11 @@ ADR 0287 (what the top bar holds)
   DevOps) with state, «Accedi» (the same sign-in as the cards, `connectors:login`) and «Prova»; the MCP servers with
   state, «Accedi» for a remote server's OAuth login (`mcpservers:login`, ADR 0273), «Prova» (`mcpservers:test`),
   «Token» (opens Settings › Connettori, where the secret is typed); «Gestisci connettori e MCP» at the bottom.
-- The full cards, the add form and the roles stay in Settings › Connettori; the chip adds no new IPC for connectors.
+- The chip reads the servers with `mcpservers:views`: the same cards' data without the OS keyring check of
+  `mcpservers:state`. That check (Electron `safeStorage`) can reach the macOS Keychain, and the chip is on screen from
+  the start: with the full state the packaged stable copy hung on macOS CI. The keyring is asked only when the user
+  opens Settings or clicks «Accedi»/«Prova».
+- The full cards, the add form and the roles stay in Settings › Connettori.
 - The engines' sign-in stays where it was (gear menu, and the bar only when one is signed out).
 
 ## Consequences

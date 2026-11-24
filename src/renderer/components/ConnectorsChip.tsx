@@ -2,14 +2,14 @@
 // and on click a panel like the usage one: the app's accounts (Azure DevOps, GitHub, Jira) and the MCP servers the
 // agents use, each with its state and the one action it needs: «Accedi» (account sign-in, or a remote server's OAuth
 // login), «Prova» (test again). The full cards stay in Settings → Connettori («Gestisci»). Data: 'connectors:list' and
-// the shared MCP state (lib/mcp-servers.ts, with the chip's pure count). Used by TopBar.tsx.
+// 'mcpservers:views' (no keyring check at start), the chip's pure count in lib/mcp-servers.ts. Used by TopBar.tsx.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ConnectorId, ConnectorState } from '@shared/connectors';
-import type { McpServersState } from '@shared/mcp-servers';
+import type { McpServerView, McpServersState } from '@shared/mcp-servers';
 import { t } from '../i18n';
 import { go } from '../actions';
 import { toast } from '../store/ui';
-import { accountStatus, chipSummary, monogram, serverStatus, useMcpServers, type ServerStatus } from '../lib/mcp-servers';
+import { accountStatus, chipSummary, monogram, serverStatus, type ServerStatus } from '../lib/mcp-servers';
 import { offersLogin } from './ConnectorsHub';
 import { IconLink, IconRefresh } from './Icons';
 import { Popover } from './ui';
@@ -30,13 +30,19 @@ function Row({ mark, name, sub, status, children, testid }: { mark: string; name
 }
 
 export function ConnectorsChip() {
-  const { state, set } = useMcpServers();
+  // the servers without the keyring check ('mcpservers:views'): on macOS that check can reach the Keychain, and this
+  // chip is on screen from the start (the full state stays for Settings, which the user opens)
+  const [servers, setServers] = useState<McpServerView[]>([]);
   const [accounts, setAccounts] = useState<ConnectorState[]>([]);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const ref = useRef<HTMLButtonElement>(null);
-  const reload = useCallback(() => window.sb.invoke('connectors:list', undefined).then(setAccounts, () => {}), []);
+  const reload = useCallback(() => Promise.all([
+    window.sb.invoke('connectors:list', undefined).then(setAccounts, () => {}),
+    window.sb.invoke('mcpservers:views', undefined).then(setServers, () => {}),
+  ]), []);
   useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => window.sb.on('mcpservers:changed', st => setServers(st.servers)), []);
   useEffect(() => { if (open) void reload(); }, [open, reload]);
   // a sign-in runs in main; while one is open, read the list again until it ends
   const signing = accounts.some(a => a.signingIn);
@@ -46,14 +52,13 @@ export function ConnectorsChip() {
     return () => clearInterval(timer);
   }, [signing, reload]);
 
-  const servers = state?.servers ?? [];
   const sum = chipSummary(accounts, servers);
   const run = async (key: string, fn: () => Promise<unknown>) => {
     if (busy) return;
     setBusy(key);
     try { await fn(); } catch (e) { toast(errText(e), 'err'); } finally { setBusy(null); }
   };
-  const mcp = (key: string, fn: () => Promise<McpServersState>) => run(key, async () => set(await fn()));
+  const mcp = (key: string, fn: () => Promise<McpServersState>) => run(key, async () => setServers((await fn()).servers));
   const account = (key: string, fn: () => Promise<unknown>) => run(key, async () => { try { await fn(); } finally { await reload(); } });
 
   const label = sum.total ? t('appText.topBar.connectorsTip', { ok: sum.ok, total: sum.total }) + (sum.bad ? ` · ${t('appText.topBar.connectorsBad', { n: sum.bad })}` : '') : t('appText.topBar.connectorsNone');

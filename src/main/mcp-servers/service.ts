@@ -13,7 +13,7 @@ import path from 'node:path';
 import { log, errText } from '../log';
 import type { McpServer } from '../mcp/server';
 import type { SecretCipher } from '../engines/secrets';
-import type { McpImportCandidate, McpServerDef, McpServersState, McpTestResult } from '../../shared/mcp-servers';
+import type { McpImportCandidate, McpServerDef, McpServerView, McpServersState, McpTestResult } from '../../shared/mcp-servers';
 import { runsOf, slotKey } from '../../shared/mcp-servers';
 import { McpServerStore, type McpServerSnapshot } from './store';
 import { McpGateway } from './gateway';
@@ -118,10 +118,16 @@ export class McpServersService {
     this.store.keepParked(this.undos.map(e => e.key));
   }
 
+  /** The servers as the cards show them, without asking the OS keyring whether it works: the top bar's chip reads this
+   *  at start (ADR 0349), and on macOS that question can reach the Keychain before the user opened anything. */
+  views(): McpServerView[] {
+    return this.store.servers().map(s => ({ ...s, secretMasks: this.store.masks(s.id), lastTest: this.store.test(s.id), login: s.transport === 'http' ? this.store.oauthLabel(s.id) : null }));
+  }
+
   state(): McpServersState {
     const why = this.store.secretsAvailable();
     return {
-      servers: this.store.servers().map(s => ({ ...s, secretMasks: this.store.masks(s.id), lastTest: this.store.test(s.id), login: s.transport === 'http' ? this.store.oauthLabel(s.id) : null })),
+      servers: this.views(),
       access: this.store.access(), secretsAvailable: why === null, ...(why ? { secretsWhy: why } : {}),
     };
   }

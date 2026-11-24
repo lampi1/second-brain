@@ -48,3 +48,20 @@ describe('connectors chip', () => {
     expect(chipSummary([acc('github', 'pending'), acc('jira', 'pending')], [])).toEqual({ ok: 0, total: 0, bad: 0, tone: 'idle' });
   });
 });
+
+describe('the chip reads the servers without the keyring check', () => {
+  it('views() never asks the cipher whether it works (macOS Keychain at start)', async () => {
+    const { McpServersService } = await import('../../src/main/mcp-servers/service');
+    const { McpServer } = await import('../../src/main/mcp/server');
+    const { tmp } = await import('./chats/helpers');
+    let asked = 0;
+    const cipher = { unavailable: () => { asked++; return null; }, encrypt: (s: string) => Buffer.from(s), decrypt: (b: Buffer) => b.toString() };
+    const svc = new McpServersService({ userData: tmp('chip-svc'), cipher, mcp: new McpServer({ name: 't', version: '1' }), context: () => null, home: tmp('chip-home') });
+    svc.save({ def: { id: 'docs', label: 'Docs', transport: 'stdio', command: 'node', args: [], secrets: [], enabled: true } });
+    asked = 0;
+    expect(svc.views().map(s => s.id)).toEqual(['docs']);
+    expect(asked).toBe(0);
+    svc.state();
+    expect(asked).toBeGreaterThan(0);
+  });
+});
