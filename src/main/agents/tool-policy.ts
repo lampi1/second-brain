@@ -93,7 +93,7 @@ export function allowsClass(p: AgentPolicy | null | undefined, c: ToolClass): bo
   if (c === 'browser') return allow.includes('browser-read');
   return false;
 }
-/** True when `child` is `parent` or a folder inside it, links resolved (a delegated chat never leaves its parent's folder). */
+/** True when `child` is `parent` or a folder inside it, links resolved. */
 export function within(parent: string, child: string): boolean {
   if (!child || !path.isAbsolute(child) || !path.isAbsolute(parent)) return false;
   // a link inside the parent's folder that points outside it is outside

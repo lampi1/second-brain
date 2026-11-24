@@ -578,13 +578,13 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: async (a, ctx) => JSON.stringify(await assignChild(a, callerOf(ctx.params))),
   }, {
     name: 'agent_integrate_child',
-    description: 'Stage one finished direct child’s committed changes in a fresh detached worktree. Never changes your checkout, merges a branch or pushes. Returns pinned heads, staging cwd and a whitespace-only check; repository tests and independent review are still required. Dirty sources and missing host isolation are blocked.',
+    description: 'Stage one finished direct child’s committed changes in a fresh detached worktree. Never changes your checkout, merges a branch or pushes. A child that works in another repository is staged in that repository. Returns pinned heads (parentHead = the head of the checkout it is staged from), staging cwd and a whitespace-only check; repository tests and independent review are still required. Dirty sources and missing host isolation are blocked.',
     inputSchema: { type: 'object', required: ['chatId'], additionalProperties: false, properties: { chatId: str } },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: async (a, ctx) => JSON.stringify(await integrateChildren(a, callerOf(ctx.params))),
   }, {
     name: 'agent_integrate_children',
-    description: 'Combine 1 to 10 finished direct children’s committed changes into one fresh detached staging worktree. Uses host-owned allocations and pinned commits; reports conflicts and a whitespace-only receipt. Run repository checks and independent review on the returned union tree. Never merges branches, changes your checkout or pushes.',
+    description: 'Combine 1 to 10 finished direct children’s committed changes into one fresh detached staging worktree. Uses host-owned allocations and pinned commits; reports conflicts and a whitespace-only receipt. One repository per call: children that work in another repository are staged there, in a call of their own. Run repository checks and independent review on the returned union tree. Never merges branches, changes your checkout or pushes.',
     inputSchema: { type: 'object', required: ['chatIds'], additionalProperties: false, properties: { chatIds: { type: 'array', items: str, minItems: 1, maxItems: TASKS_MAX, uniqueItems: true } } },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: async (a, ctx) => JSON.stringify(await integrateChildren(a, callerOf(ctx.params), true)),

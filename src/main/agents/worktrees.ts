@@ -132,14 +132,21 @@ export function blockingChanges(porcelain: string, appOwned: boolean): string[] 
 /** A checkout as git names it: its top folder, its repository (the common dir its worktrees share) and its commit. */
 type Checkout = { root: string; common: string; head: string };
 
+/** The folder is no Git repository with a commit; any other failure of git (a timeout, a blocked configuration) is a
+ *  plain Error, so a repository that could not be read is never taken for a missing one. */
+class NoRepository extends Error {}
+const NO_REPOSITORY = 'Writing delegation requires a Git repository with a commit; no shared-folder fallback.';
+
 /** Real repository identity and pinned commit, read by one rev-parse: the three come from the same git process, so they
  *  cannot disagree (before 2026-11-07 four separate spawns, each 1-6 s under load). Paths as git prints them. */
 async function repositoryIdentity(cwd: string, session: GitSession): Promise<Checkout> {
-  if (!cwd || !path.isAbsolute(cwd) || !isDir(cwd)) throw new Error('Writing delegation requires a Git repository with a commit; no shared-folder fallback.');
+  if (!cwd || !path.isAbsolute(cwd) || !isDir(cwd)) throw new NoRepository(NO_REPOSITORY);
   const ids = await session.git(cwd, ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir', 'HEAD^{commit}']);
   if (ids.error) throw new Error(ids.error);
+  // 128 is git's own «not a repository» (or no commit yet); a killed or otherwise failed git says nothing about it
+  if (ids.exit === 128) throw new NoRepository(NO_REPOSITORY);
   const [root = '', common = '', head = ''] = ids.exit === 0 ? ids.out.split(/\r?\n/).map(l => l.trim()) : [];
-  if (!common || !path.isAbsolute(common)) throw new Error('Writing delegation requires a Git repository with a commit; no shared-folder fallback.');
+  if (!common || !path.isAbsolute(common)) throw new Error(NO_REPOSITORY);
   if (!root || !path.isAbsolute(root)) throw new Error('Repository identity could not be verified.');
   if (!/^[a-f0-9]{40,64}$/.test(head)) throw new Error('Repository has no valid committed baseline.');
   return { root, common, head };
@@ -229,13 +236,19 @@ export class DelegateWorktrees {
     let parentRepo: Checkout | null = null, source: Checkout;
     if (samePath(parent.cwd, cwd)) parentRepo = source = await cleanRepository(cwd, brain, session);
     else {
-      const parentId = await repositoryIdentity(parent.cwd, session).catch(() => null), sourceId = await repositoryIdentity(cwd, session);
+      // only a parent folder that is no repository counts as «another repository»: a git that failed is an error
+      const parentId = await repositoryIdentity(parent.cwd, session).catch((e: unknown) => { if (e instanceof NoRepository) return null; throw e; });
+      const sourceId = await repositoryIdentity(cwd, session);
       if (parentId && samePath(parentId.common, sourceId.common)) parentRepo = await requireClean(parentId, brain, session);
       source = await requireClean(sourceId, brain, session);
     }
     let base = source.head;
+    // the checkout a child of another repository is staged in: its own, or for a continued child (whose folder is its
+    // predecessor's worktree) the one its predecessor was branched from
+    let sourceRoot = source.root;
     if (continuationOf !== undefined) {
       const previous = this.allocation(parent, { id: continuationOf, parentId: parent.id, cwd } as ChatSummary);
+      sourceRoot = previous.sourceRoot ?? sourceRoot;
       if (previous.common !== source.common || !samePath(previous.root, source.root)
         || await session.required(source.root, ['symbolic-ref', '--short', 'HEAD']) !== previous.branch
         || (await session.git(source.root, ['merge-base', '--is-ancestor', previous.base, source.head])).exit !== 0) throw new Error('Continuation source no longer matches its original isolated baseline.');
@@ -258,7 +271,7 @@ export class DelegateWorktrees {
       log.info('agents', 'delegation worktree ready', { data: { reused: isolated.reused, statusMs: t1 - t0, takeMs: t2 - t1, verifyMs: Date.now() - t2, spawns: session.spawns + again.spawns } });
       return { cwd: childCwd, ...provenance, bind: childId => {
         const owned: IsolatedDelegation = { childId, parentId: parent.id, ...provenance, parentCwd: parent.cwd,
-          common: source.common, root: isolated.root, cwd: childCwd, branch: isolated.branch, base, ...(parentRepo ? {} : { sourceRoot: source.root }) };
+          common: source.common, root: isolated.root, cwd: childCwd, branch: isolated.branch, base, ...(parentRepo ? {} : { sourceRoot }) };
         if (!this.valid(owned)) throw new Error('Invalid host-owned isolation provenance.');
         // a reused slot belongs to this child only: an earlier child's record of the same worktree goes
         const next = new Map([...this.allocations].filter(([, a]) => !samePath(a.root, isolated.root))); next.set(real(childCwd), owned);

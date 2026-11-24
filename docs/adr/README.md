@@ -222,7 +222,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0224](0224-report-corrections-batching-caps.md) Report corrections, a short child-result debounce, caps instead of refusals — accepted
 - [0225](0225-delegates-talk-up-close-children-assign-without-handshake.md) 0225. Delegates write up their tree, parents close their children, assignments without a handshake — accepted
 - [0226](0226-orchestrator-reads-child-reports.md) The Orchestrator reads any report in its tree (app_child_output) — accepted
-- [0227](0227-worktree-pool.md) 0227. Reused worktree pool per repository, and warm engines in the most used folders — accepted
+- [0227](0227-worktree-pool.md) 0227. Reused worktree pool per repository, and warm engines in the most used folders — accepted; amended by 0345
 - [0228](0228-parallel-checkpoint.md) The checkpoint runs while the message goes; the first write waits for it; a restart resumes only recent turns — accepted
 - [0229](0229-orchestrator-remote-control.md) 0229. «Controllo remoto»: Claude Code Remote Control of the Orchestrator — accepted
 - [0230](0230-impara-explain-mode.md) 0230. Impara: «Spiegazione», a lesson with pictures and no quiz — accepted
