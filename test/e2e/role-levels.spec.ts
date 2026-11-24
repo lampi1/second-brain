@@ -21,7 +21,7 @@ test('a role\'s page shows its models per level; the card back its engines; the 
     const levels = page.getByTestId('role-levels');
     await expect(levels).toBeVisible();
     for (const id of ['min', 'base', 'max']) {
-      await expect(levels.getByTestId(`role-level-${id}-0`)).toBeVisible();
+      if (id === 'base') await expect(levels.getByTestId(`role-level-${id}-0`)).toBeVisible();
       await expect(levels.getByTestId(`role-level-${id}-now`)).toBeVisible();
     }
     await expect(page.getByTestId('role-permissions')).toHaveCount(0);

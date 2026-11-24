@@ -39,7 +39,8 @@ describe('the levels on a role\'s page (ADR 0347)', () => {
     expect(html).toContain('Modelli per livello');
     for (const id of ['min', 'base', 'max']) {
       expect(html).toContain(`data-testid="role-level-${id}"`);
-      expect(html).toContain(`data-testid="role-level-${id}-0"`);
+      // Minimo follows Base here: no chip of its own
+      if (id !== 'min') expect(html).toContain(`data-testid="role-level-${id}-0"`);
       expect(html).toContain(`data-testid="role-level-${id}-now"`);
     }
   });
@@ -59,6 +60,7 @@ describe('the levels on a role\'s page (ADR 0347)', () => {
     const html = levelsOf(page(scout));
     const min = html.slice(html.indexOf('data-testid="role-level-min"'), html.indexOf('data-testid="role-level-base"'));
     expect(min).toContain('Vuoto: usa i modelli di Base.');
+    expect(min).not.toContain('role-level-min-0');
     const max = html.slice(html.indexOf('data-testid="role-level-max"'));
     expect(max).not.toContain('Vuoto: usa i modelli di Base.');
   });

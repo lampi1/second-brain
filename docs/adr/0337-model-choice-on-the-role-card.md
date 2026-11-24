@@ -1,6 +1,6 @@
 # ADR 0337: Model choice and Code Mode live on the role card; Settings has none
 
-**Status:** Accepted (2026-11-23)
+**Status:** Accepted (2026-11-23). Amended by ADR 0347 (the models live on the role's page as lists per level; the card back shows engines).
 
 ## Context
 

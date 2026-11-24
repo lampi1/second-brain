@@ -43,9 +43,9 @@ test('agent cards: big centred character, level and performance with their "?" f
     await expect(artisan.getByTestId('catalog-perf-spread-artisan')).toContainText(/±\d+/);
     // ADR 0131: the Orchestrator (its decisions) levels up too
     expect(Number(await overview.getByTestId('catalog-level-orchestrator').getAttribute('data-level'))).toBeGreaterThan(1);
-    // the front is the person and the name (ADR 0312): what it is for, the engine and the model are on the back
+    // the front is the person and the name (ADR 0312): what it is for and its engines are on the back (ADR 0347: no model)
     await expect(artisan.locator('.catalog-purpose, .catalog-chips, .catalog-level-medal')).toHaveCount(0);
-    await expect(artisan.getByTestId('catalog-engine-artisan')).toHaveText(/ · \S/); // the model it last ran on, else its tier
+    await expect(artisan.getByTestId('catalog-engine-artisan').locator('.mark').first()).toBeAttached();
     const big = await artisan.locator('.catalog-hero .agent-sprite').boundingBox(); // the role's little person (ADR 0295)
     expect(big!.width).toBeGreaterThanOrEqual(96);
     // a new role: still warming up; the Battito's card is gone (ADR 0201)

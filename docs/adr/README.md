@@ -86,7 +86,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0082](0082-orchestrator-agent-changes-apply-and-learned-rules-in-regole.md) The Orchestrator changes agents by itself; learned rules live on the Regole page — accepted, partly superseded by 0243
 - [0083](0083-generic-roles-and-direct-delegation.md) Nine fixed roles, direct parent-to-child delegation in visible chats — accepted, partly superseded by 0125, 0186, 0100; amended by 0345
 - [0084](0084-finished-workers-close-by-themselves.md) Finished workers close by themselves; held ones say what they wait for — accepted
-- [0085](0085-full-default-permissions-narrowed-from-the-card.md) Every role may do everything by default; the user narrows it from its card — accepted, partly superseded by 0186
+- [0085](0085-full-default-permissions-narrowed-from-the-card.md) Every role may do everything by default; the user narrows it from its card — accepted, partly superseded by 0186, 0347
 - [0086](0086-app-managed-mcp-servers.md) MCP servers managed by the app, given to every engine through a local gateway — accepted
 - [0087](0087-quick-path-and-task-estimates.md) The quick path and task estimates from similar tasks — accepted
 - [0088](0088-shareable-brain-without-the-app.md) The brain without the app: a shareable zip and a standalone install — accepted, partly superseded by 0125
@@ -213,7 +213,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0215](0215-faster-recording-transcription.md) 0215. Faster recording transcription: fewer, longer pieces for Whisper — accepted
 - [0216](0216-opencode-engine.md) 0216. OpenCode as a built-in ACP engine — accepted
 - [0217](0217-close-cancels-the-tree.md) 0217. Closing a chat with ✕ cancels its whole tree — accepted
-- [0218](0218-balanced-mode.md) 0218. «Balanced mode»: the engine, model and effort of a delegation follow the credits left — proposed; amended by 0331; choice logic retired by 0337
+- [0218](0218-balanced-mode.md) 0218. «Balanced mode»: the engine, model and effort of a delegation follow the credits left — proposed; amended by 0331; choice logic retired by 0337; the pick by room is ADR 0347
 - [0219](0219-phone-bridge-telegram.md) 0219. Phone bridge: the Orchestrator through a private Telegram bot — accepted
 - [0220](0220-role-skill-alignment.md) Scoped role skills and verified Plan intake — accepted
 - [0221](0221-acp-catalog-wire-replay.md) 0221. An ACP agent catalog, a record/replay harness for the engine wires, a turn-start watchdog — accepted; amended by 0332
@@ -329,8 +329,8 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0333](0333-web-fetch-subagent.md) Claude chats keep WebFetch as a plain tool: built-in web-fetch agent off inline — accepted
 - [0334](0334-multi-harness-usage-bar.md) Multi-harness plan usage popover and pinned weekly limits (Claude, Cursor, Codex, OpenCode, Antigravity) — accepted
 - [0335](0335-project-map-line-top-to-bottom-with-parallel-frames.md) A line of phases and steps is drawn top to bottom, with parallel groups in their own frame; the Strategist plans with dependencies — accepted
-- [0336](0336-model-presets.md) Per-task model presets Minimo / Base / Massimo on each role card, picked by delegation under the delegator's price ceiling — accepted; amended by 0337, 0346
-- [0337](0337-model-choice-on-the-role-card.md) Model choice and Code Mode live on the role card; Settings has none; one approved model choice guide — accepted
+- [0336](0336-model-presets.md) Per-task model presets Minimo / Base / Massimo on each role card, picked by delegation under the delegator's price ceiling — accepted; amended by 0337, 0346, 0347
+- [0337](0337-model-choice-on-the-role-card.md) Model choice and Code Mode live on the role card; Settings has none; one approved model choice guide — accepted; amended by 0347
 - [0338](0338-no-leftover-processes.md) No leftover processes: no breakaway from an engine's job, engines recorded at once, leased stacks spared — accepted
 - [0340](0340-no-guide-page-and-a-four-tab-memory.md) No Guida page, and a Memoria of four tabs with a real Skill view — accepted
 - [0341](0341-ten-principles-of-the-app.md) Ten principles of the app, and what was removed to follow them — accepted
@@ -338,7 +338,8 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0343](0343-the-plan-is-its-map.md) The plan is its map, the maps are a list — accepted; amended by 0346
 - [0344](0344-question-ladder-and-open-doubts.md) A worker's question goes up one level at a time; the Strategist's open doubts block its plan — accepted
 - [0345](0345-a-child-works-in-any-repository.md) A delegated chat works in any folder its parent names, also of another repository — accepted
-- [0346](0346-plan-names-the-preset-a-chat-out-of-credits-waits.md) A plan names the preset, never the model; a chat out of credits waits for its role's card — accepted
+- [0346](0346-plan-names-the-preset-a-chat-out-of-credits-waits.md) A plan names the preset, never the model; a chat out of credits waits for its role's card — accepted; amended by 0347
+- [0347](0347-models-per-level-across-engines.md) Several models per level across engines, picked by the room of each plan; one page per role, no permissions — accepted
 
 ## Replaced
 

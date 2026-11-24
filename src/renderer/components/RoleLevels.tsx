@@ -73,7 +73,8 @@ export function RoleLevels({ profile }: { profile: AgentProfile }) {
         <div className="rl-name"><b>{t(`rolePage.level.${id}`)}</b><small>{t(`rolePage.level.${id}.hint`)}</small></div>
         <div className="rl-body">
           <div className="rl-chips" data-own={own(id)}>
-            {list.map((x, i) => {
+            {/* a level that follows Base shows no chip of its own: only «+ Aggiungi» and the note */}
+            {own(id) && list.map((x, i) => {
               const e = engineOf(x.engine), chosen = !!now && now.engine === x.engine && now.model === x.model;
               const efforts = e?.models.find(m => m.id === x.model)?.efforts;
               return <span key={`${x.engine}:${x.model}`} className="rl-chip" data-on={chosen} data-off={!e?.enabled || undefined} draggable={!busy && own(id)}
