@@ -25,7 +25,8 @@ of questions)
   Strategist's plan approval are never held.
 - **The level is woken** with the question and the call that answers it. The answer (`agent_answer_child`,
   `app_resolve_question`: `answer` + `why`, the source) goes into the engine's still-open request; with no request open
-  (`agent_ask_parent`, a restart) it goes as a message. `askUser` is one level up, never the panel.
+  (`agent_ask_parent`, a restart) it goes as a message. The app's card of it, once the user's, is answered from the phone,
+  by relay and in words like an engine's own (`isUserQuestion`). `askUser` is one level up, never the panel.
 - **Never hangs**: a level closed, in error, out of turns, already reported, or silent for 10 minutes
   (`LADDER_SILENT_MS`) is skipped, and the record says why.
 - **Never an agent's**: `ladderReserved` refuses an agent's answer about production, a database, Azure, permissions, the
@@ -33,8 +34,9 @@ of questions)
   (`ANSWER_RULE`). An agent's answer says in its text that it is not the user's consent, and is not recorded as his.
 - **Asked once** (ADR 0327): the same question, in either shape, is the same record; the Orchestrator asking a held
   question as its own sends that one to the user, with its own words.
-- **Night mode** answers first, as before (ADR 0191). **A restart** keeps every open question: its level is woken again,
-  or the app shows its own card; the engine asking it again takes its place.
+- **Night mode** answers first, as before (ADR 0191); switched on later, it settles the app's cards in his row too.
+  **A restart** keeps every open question: its level is woken again, or the app shows its own card; the engine asking it
+  again takes its place.
 - **Who answered and why**: `ChatSummary.questions` (`LadderQuestion`: `level`, `holder`, `trail`, `answered`), which the
   map reads, and the lines `ladderAsked`, `ladderPassed`, `ladderAnswered` in the worker's chat.
 - **A held question is never «ti aspetta»**: `heldOnly` / `heldBy` (`shared/question-ladder.ts`) are the one reading. The
@@ -67,4 +69,6 @@ of questions)
 - `ask_user` (OpenCode, Cursor, Antigravity over ACP) ends the turn: the answer is the next message, not a tool result.
 - OpenAI-compatible API chats ask no questions (`api.ts`).
 - ADR 0275 stays: at the user's level the Orchestrator may still answer for him what is not reserved, and decide a
-  permission or a plan as him. That is his recorded choice, outside the ladder.
+  permission or a plan as him. That is his recorded choice, outside the ladder. Two things are narrower than there: a
+  Strategist's interview it answers is recorded as the Orchestrator's (`orchestrator-for-user`: no clarified answer, no
+  doubt closed as his), and a delegated chat's question takes only his own words (`words`).

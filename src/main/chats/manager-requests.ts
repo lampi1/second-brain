@@ -243,6 +243,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
   protected ladderHeld(_r: Rec, _req: Omit<PendingRequest, 'chatId'>): boolean { return false; }
   protected requestAnswered(_r: Rec, _req: Pick<PendingRequest, 'id'>, _answer: Answer, _actor: DecisionActor): void { /* manager-ladder.ts */ }
   protected ladderOwnAsk(_asked: string): { r: Rec; id: string } | null { return null; }
+  protected ladderAway(): number { return 0; }
 
   /** True claims this request for policy handling; a remote delivery is still dispatching until its acknowledgement.
    *  Recaps and pending removal must wait too. Failure stays journaled and is never retried as user consent. */
@@ -270,7 +271,8 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
    *  valere come se l'avessi detto io SEMPRE»): any open question of a chat (an option or free words, an MCP form, a
    *  Strategist's interview, a delegated chat's), and any permission, except one that runs a command on production, a
    *  database or Azure (that one waits for his own click, as Esegui does). Never the Orchestrator's own question: that is
-   *  the user's. Recorded as policy «orchestrator-for-user» with a line in the chat that says who answered. */
+   *  the user's. Recorded as policy «orchestrator-for-user» with a line in the chat that says who answered: never as the
+   *  user's own answer, a Strategist's interview included (no clarified answer, no doubt closed as his, ADR 0344). */
   answerForUser(chatId: string, requestId: string, answer: Answer, confirmed = false): void {
     const r = this.need(chatId);
     const req = r.pending.get(requestId);
@@ -301,18 +303,13 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       // a Sì to «did you run it?» with no run since the question carries the NOT_RAN note, as the user's own does (#372)
       given = this.opts.runs ? backedAnswer(req, answer, this.opts.runs(chatId)) : answer;
       // the Orchestrator's own words for him: the chat acts on them and never asks the same again (ADR 0327)
-      if (given === answer && !(r.s.plan && isNativeQuestion(req))) given = this.toldInWords(r, req, answer);
+      if (given === answer) given = this.toldInWords(r, req, answer);
     }
     const said = () => {
       this.addItem(r, sysItem('orchestratorAnswered', { choice: choice.length > 200 ? `${choice.slice(0, 199)}…` : choice }, 'info'), false);
       this.updated(r);
       log.info('chats', 'the Orchestrator answered for the user', { chat: r.s.id, data: { requestId, type: req.type } });
     };
-    // a Strategist's interview: his answer, recorded as the plan's clarified answer as the user's own would be
-    if (r.s.plan && req.type === 'question' && isNativeQuestion(req)) {
-      void this.answer(chatId, requestId, given, 'pc').then(said, e => log.warn('chats', 'the Orchestrator\'s answer to an interview was not delivered', { chat: r.s.id, cause: errText(e), hint: 'the question stays in the user\'s row' }));
-      return;
-    }
     if (this.answering.get(r)?.has(requestId)) throw new Error('Request already answered; delivery is still pending.');
     if (!this.policyAnswer(r, req, given, 'orchestrator-for-user', undefined, said)) throw new Error('La risposta non è arrivata alla chat: la richiesta resta nella riga dell’utente.');
   }
@@ -478,6 +475,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
           .catch(e => log.warn('chats', 'away: plan not started', { chat: r.s.id, cause: errText(e), hint: 'the plan stays on its strip for the user' }));
       }
     }
+    n += this.ladderAway();
     if (n) log.info('chats', 'away: open requests settled', { data: { n } });
     return n;
   }

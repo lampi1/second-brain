@@ -21,6 +21,13 @@ import { BRIEF_EXAMPLE, UI_STATUSES } from './genui';
 const NATIVE_QUESTIONS = new Set(['AskUserQuestion', 'AskQuestion', 'AskUser']);
 export const isNativeQuestion = (req: Pick<PendingRequest, 'type' | 'tool'>): boolean =>
   req.type === 'question' && NATIVE_QUESTIONS.has(req.tool);
+/** The app's own card for a worker's question that reached the user with no engine request open (agent_ask_parent, a
+ *  restart; main/chats/manager-ladder.ts, ADR 0344). */
+export const LADDER_TOOL = 'app_ladder_question';
+/** A question the user answers as an engine's own: from the phone, by relay, in words. Never what feeds the ladder or the
+ *  interview: those read isNativeQuestion. */
+export const isUserQuestion = (req: Pick<PendingRequest, 'type' | 'tool'>): boolean =>
+  isNativeQuestion(req) || req.type === 'question' && req.tool === LADDER_TOOL;
 /** What the role frame tells every chat about asking the user. */
 export const QUESTION_RULE = 'Ask only genuine yes/no decisions with AskUserQuestion (or your engine\'s question tool, else ask_user), one at a time: one short question that says what it decides (≤120 chars, no code, paths or ids), exactly two options "Sì" and "No", the recommended one marked "(consigliato)" (the one that moves the task forward; stopping needs a concrete reason). Never ask whether the user ran a command: the app runs it with Esegui and sends you the result. Act yourself; if the user must act, list the steps in todo. Before asking, show_ui component "brief" target "next-ask": why (what is at stake for him and why you recommend your option), ifYes, ifNo (what concretely happens next), yesLabel/noLabel (the action: "Sì, pubblica"); when useful done, yesSteps/noSteps, change, todo, evidence. The user reads only this card, often on the phone, and did not follow your work: plain words, no jargon, self-contained.';
 

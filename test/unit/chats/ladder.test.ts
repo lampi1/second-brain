@@ -13,6 +13,7 @@ import { LADDER_TOOL } from '../../../src/main/chats/manager-ladder';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import { LADDER_SILENT_MS, openQuestions } from '../../../src/shared/question-ladder';
 import { closeAppDbs } from '../../../src/main/app-db';
+import { checkResult } from '../../../src/shared/delegation';
 import { isWorkRole, ROLE_DEFAULTS } from '../../../src/shared/roles';
 
 const roots: string[] = [], managers: ChatManager[] = [];
@@ -58,10 +59,10 @@ const fake = () => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Da
 const last = (w: World, id: string) => w.sent.get(id)?.at(-1) ?? '';
 
 /** The Orchestrator, a Strategist it started, and a worker of the Strategist. */
-async function team(w: World, o: { orchestrator?: boolean; harness?: string } = {}) {
+async function team(w: World, o: { orchestrator?: boolean; harness?: string; plan?: boolean } = {}) {
   const m = manager(w);
   const orch = o.orchestrator === false ? null : await m.create({ harness: 'claude', cwd: w.cwd, orchestrator: true });
-  const strategist = await m.create({ harness: 'claude', cwd: w.cwd, title: 'Ordini', ...(orch ? { roleId: 'strategist' } : {}) } as never, orch ? 'agent' : 'user');
+  const strategist = await m.create({ harness: 'claude', cwd: w.cwd, title: 'Ordini', ...(orch ? { roleId: 'strategist' } : {}), ...(o.plan ? { prompt: 'Aggiungi il nome nuovo' } : {}) } as never, orch ? 'agent' : 'user');
   const worker = await m.create({ harness: o.harness ?? 'claude', cwd: w.cwd, parentId: strategist.id, title: 'Ordini · Log', delegation: { role: 'scout', goal: 'Leggi i log', doneWhen: ['fatto'], at: Date.now() } } as never, 'agent');
   w.sinks.get(worker.id)!.changed({ state: 'running' });
   return { m, orch: orch!, s: strategist, k: worker };
@@ -215,6 +216,19 @@ describe('a level that can not answer never hangs the question', () => {
     expect(q(t2.m, t2.k.id).level).not.toBe('strategist');
   });
 
+  it('a Strategist that reported this run is skipped; given new work, it holds its workers\' questions again', async () => {
+    const w = world(), { m, orch, s, k } = await team(w);
+    m.reportRoot(s.id, checkResult({ outcome: 'done', summary: 'fatto', output: 'fatto', doneWhen: [] }, []));
+    expect(chat(m, s.id).run!.report).toMatchObject({ via: 'agent_report' });
+    pend(w, k.id, ask('r1'));
+    expect(q(m, k.id)).toMatchObject({ level: 'orchestrator', holder: orch.id });
+    expect(JSON.stringify(q(m, k.id).trail)).toContain('ha già consegnato il suo lavoro');
+    await m.ladderReply(orch.id, { chatId: k.id, answer: 'Sì', why: 'richiesta' });
+    w.sinks.get(s.id)!.changed({ state: 'idle' });
+    await m.assignTask(s.id, 'Aggiungi i resi', { source: { kind: 'chat', chatId: orch.id } });
+    pend(w, k.id, ask('r2', 'Anche i resi?'));
+    expect(q(m, k.id)).toMatchObject({ level: 'strategist', holder: s.id });
+  });
   it('parent that can not be woken: up', async () => {
     const w = world(), { m, orch, s, k } = await team(w);
     w.deaf.add(s.id);
@@ -325,6 +339,15 @@ describe('what is never held or answered by an agent', () => {
       expect(w.answers.map(a => a.id)).toEqual(['r1']);
     }
   });
+  it('its options count as its words, at the user\'s level too: the Orchestrator answers none of them for him', async () => {
+    const w = world(), { m, orch, s, k } = await team(w), options = ['Faccio il deploy in produzione (consigliato)', 'Aspetto'];
+    pend(w, k.id, ask('r1', 'Come procedo?', options));
+    await expect(m.ladderReply(s.id, { chatId: k.id, answer: 'Aspetto', why: 'x' })).rejects.toThrow(/solo l’utente/);
+    await m.ladderReply(s.id, { chatId: k.id, askUser: true });
+    await m.ladderReply(orch.id, { chatId: k.id, askUser: true });
+    expect(() => m.answerForUser(k.id, 'r1', { kind: 'question', answers: { 'Come procedo?': options[0]! } })).toThrow(/solo l’utente/);
+    expect(w.answers).toEqual([]);
+  });
   it('the Orchestrator may not answer for the user what an agent still holds; an answer needs its source', async () => {
     const w = world(), { m, s, k } = await team(w);
     pend(w, k.id, ask('r1'));
@@ -346,6 +369,21 @@ describe('what is never held or answered by an agent', () => {
     await m.ladderReply(orch.id, { chatId: k.id, askUser: true });
     expect(w.answers.at(-1)).toMatchObject({ id: 'r2' });
     expect(q(m, k.id).answered).toMatchObject({ by: 'app', name: 'Modalità notte' });
+  });
+  it('night mode switched on settles the app\'s card too, by its recommended option; a card without one stays', async () => {
+    const w = world(), { m, orch, s, k } = await team(w);
+    for (const [question, options] of [['Uso il nome nuovo?', ['Sì (consigliato)', 'No']], ['Quale colore?', ['Rosso', 'Blu']]] as const) {
+      m.ladderAsk(k.id, { question, options: [...options] });
+      await m.ladderReply(s.id, { chatId: k.id, askUser: true });
+      await m.ladderReply(orch.id, { chatId: k.id, askUser: true });
+    }
+    expect(m.pending().map(p => [p.tool, p.title])).toEqual([[LADDER_TOOL, 'Uso il nome nuovo?'], [LADDER_TOOL, 'Quale colore?']]);
+    w.away.on = true;
+    expect(m.settleForAway()).toBe(1);
+    await flush();
+    expect(m.pending().map(p => p.title)).toEqual(['Quale colore?']);
+    expect(chat(m, k.id).questions!.find(x => x.asks[0]!.question === 'Uso il nome nuovo?')!.answered).toMatchObject({ by: 'app', name: 'Modalità notte', answer: 'Sì (consigliato)' });
+    expect(last(w, k.id)).toContain('Sì (consigliato)');
   });
 });
 
@@ -370,6 +408,41 @@ describe('who answered and why', () => {
     await m.ladderReply(orch.id, { chatId: s.id, answer: 'Sì', why: 'codice' });
     expect(chat(m, s.id).plan?.clarified ?? []).toEqual([]);
     expect(q(m, s.id).answered).toMatchObject({ by: 'orchestrator', name: 'Orchestrator' });
+  });
+  it('a Strategist\'s interview the Orchestrator answers for the user, once in his row, is never recorded as his', async () => {
+    const w = world(), { m, orch, s } = await team(w, { plan: true });
+    pend(w, s.id, ask('r1'));
+    await m.ladderReply(orch.id, { chatId: s.id, askUser: true });
+    expect(chat(m, s.id).plan).toBeDefined();
+    const before = m.userEvents(s.id).events.length;
+    m.answerForUser(s.id, 'r1', { kind: 'question', answers: { 'Uso il nome nuovo?': 'Sì' } });
+    await flush();
+    expect(w.answers.at(-1)).toMatchObject({ chat: s.id, id: 'r1', answer: { answers: { 'Uso il nome nuovo?': 'Sì' } } });
+    expect(chat(m, s.id).plan!.clarified).toEqual([]);
+    expect(m.doubtEvidence(s.id).clarified).toEqual([]);
+    expect(m.userEvents(s.id).events).toHaveLength(before);
+    expect(q(m, s.id).answered).toMatchObject({ by: 'orchestrator', name: 'Orchestrator', why: 'risponde per l’utente' });
+    // his own words, passed on by the Orchestrator, stay his
+    pend(w, s.id, ask('r2', 'Anche i resi?'));
+    await m.ladderReply(orch.id, { chatId: s.id, askUser: true });
+    await m.send(orch.id, 'no, niente resi');
+    m.answerWithUserWords(s.id, 'r2', 'no, niente resi');
+    await flush();
+    expect(chat(m, s.id).plan!.clarified).toMatchObject([{ q: 'Anche i resi?' }]);
+    expect(q(m, s.id).answered).toMatchObject({ by: 'user' });
+  });
+  it('the app\'s card in his row takes his words from the Orchestrator\'s chat, which lists it', async () => {
+    const w = world(), { m, orch, s, k } = await team(w);
+    m.ladderAsk(k.id, { question: 'Uso il nome nuovo?', options: [] });
+    await m.ladderReply(s.id, { chatId: k.id, askUser: true });
+    await m.ladderReply(orch.id, { chatId: k.id, askUser: true });
+    const card = m.pending()[0]!;
+    expect(card.tool).toBe(LADDER_TOOL);
+    await m.send(orch.id, 'sì, usa quello nuovo');
+    expect(last(w, orch.id)).toContain(`requestId ${card.id}`);
+    m.answerWithUserWords(k.id, card.id, 'sì, usa quello nuovo');
+    await flush();
+    expect(q(m, k.id).answered).toMatchObject({ by: 'user', answer: 'sì, usa quello nuovo' });
   });
 });
 

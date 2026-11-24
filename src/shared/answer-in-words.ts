@@ -5,11 +5,11 @@
 // and passes his words with app_resolve_question `words` (appctl/tools.ts), checked against what he wrote (sameWords).
 import type { PendingRequest } from './contract';
 import { isMcpFormRequest } from './mcp-form';
-import { isNativeQuestion } from './yes-no';
+import { isUserQuestion } from './yes-no';
 
-/** An engine's own question (never a permission, a command, an MCP form or the app's own step question). */
+/** An engine's own question, or the app's card of a worker's question (never a permission, a command, an MCP form or the app's own step question). */
 export const answerableInWords = (req: Pick<PendingRequest, 'type' | 'tool' | 'questions'>): boolean =>
-  isNativeQuestion(req) && !isMcpFormRequest(req) && !!req.questions?.length;
+  isUserQuestion(req) && !isMcpFormRequest(req) && !!req.questions?.length;
 
 /** The answer his words give: every question of the request reads them (a multi-select takes them as its one pick). */
 export function wordsAnswer(req: Pick<PendingRequest, 'questions'>, words: string): { kind: 'question'; answers: Record<string, string | string[]> } {

@@ -9,6 +9,7 @@ describe('answer in words', () => {
   it('an engine question takes them; a permission, a command, an MCP form or a question without questions does not', () => {
     expect(answerableInWords(q())).toBe(true);
     expect(answerableInWords(q({ tool: 'AskUser' }))).toBe(true);
+    expect(answerableInWords(q({ tool: 'app_ladder_question' }))).toBe(true); // the app's card of a worker's question (ADR 0344)
     expect(answerableInWords(q({ type: 'permission', tool: 'Bash' }))).toBe(false);
     expect(answerableInWords(q({ type: 'command', tool: 'Esegui' }))).toBe(false);
     expect(answerableInWords(q({ tool: 'mcp__srv' }))).toBe(false);

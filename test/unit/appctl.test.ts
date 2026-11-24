@@ -169,6 +169,8 @@ describe('app control tools', () => {
         ladderHeldBy: (id: string) => id === 'orchestrator' && level === 'orchestrator' ? [{ chatId: 'kid', title: 'Figlio', q }] : [],
         ladderReply: async (callerId: string, a: { askUser?: boolean }) => { replies.push({ callerId, ...a }); return { answered: 'Figlio', askUser: !!a.askUser }; },
         answerForUser: (chatId: string, requestId: string) => { answered.push({ chatId, requestId }); },
+        answerWithUserWords: (chatId: string, requestId: string, words: string) => { answered.push({ chatId, requestId, words }); },
+        planDecide: async () => { throw new Error('never a delegated chat\'s plan'); },
       } as unknown as ChatService;
       const tools = appControlTools({ chats, browser: {} as BrowserService, brain: {} as BrainService, window: () => null, emitUi: () => {}, version: '0' }, caller);
       const run = (name: string, a: Record<string, unknown>) => Promise.resolve().then(() => tools.find(t => t.name === name)!.run(a));
@@ -191,11 +193,16 @@ describe('app control tools', () => {
       await expect(run('app_resolve_question', { chatId: 'kid', requestId: 'q-1', answer: 'Sì', why: 'x' })).rejects.toThrow(/solo l’Orchestrator/);
       expect(replies).toEqual([]);
     });
-    it('a delegated chat\'s question that climbed to the user is in his row and may be answered for him there', async () => {
+    it('a delegated chat\'s question that climbed to the user takes only his own words; its permissions and plan stay refused', async () => {
       const { replies, answered, run } = setup('orchestrator', 'user');
       expect(await run('app_pending', {})).toEqual([expect.objectContaining({ id: 'r1', type: 'question' })]);
-      await run('app_resolve_question', { chatId: 'kid', requestId: 'r1', answers: { [ask.question]: 'Sì' } });
-      expect(answered).toEqual([{ chatId: 'kid', requestId: 'r1' }]);
+      await expect(run('app_resolve_question', { chatId: 'kid', requestId: 'r1', answers: { [ask.question]: 'Sì' } })).rejects.toThrow(/sue parole/);
+      await expect(run('app_resolve_question', { chatId: 'kid', requestId: 'r1', answer: 'Sì', why: 'x' })).rejects.toThrow(/sue parole/);
+      await expect(run('app_resolve_question', { chatId: 'kid', requestId: 'perm', allow: true })).rejects.toThrow(/chat delegata/);
+      await expect(run('app_resolve_question', { chatId: 'kid', requestId: 'plan', decision: 'approve' })).rejects.toThrow(/chat delegata/);
+      expect(answered).toEqual([]);
+      await run('app_resolve_question', { chatId: 'kid', requestId: 'r1', words: 'sì, quello nuovo' });
+      expect(answered).toEqual([{ chatId: 'kid', requestId: 'r1', words: 'sì, quello nuovo' }]);
       expect(replies).toEqual([]);
     });
   });

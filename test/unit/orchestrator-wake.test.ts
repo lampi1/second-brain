@@ -641,5 +641,6 @@ it('a worker Sì/No question tells the Orchestrator to relay it away from the PC
   expect(awayNote(yn)).toContain('pulsanti Sì/No');
   expect(awayNote({ ...yn, questions: [{ question: 'Quale?', multiSelect: false, options: [{ label: 'A' }, { label: 'B' }] }] })).not.toContain('relay_question');
   expect(awayNote({ ...yn, tool: 'mcp__x__ask' })).not.toContain('relay_question');
+  expect(awayNote({ ...yn, tool: 'app_ladder_question' })).toContain('relay_question {"chatId":"qa"}'); // the app's card (ADR 0344)
   expect(awayNote({ type: 'permission', tool: 'Bash', chatId: 'fb' })).toContain('si decide solo lì');
 });

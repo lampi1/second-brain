@@ -1,8 +1,18 @@
 // Yes/no questions only (shared/yes-no.ts, ADR 0135): the shape check the question gates use and when the gate is on.
 import { describe, expect, it } from 'vitest';
-import { QUESTION_RULE, YESNO_REFUSAL, isYesNo, ranCommandQuestion, yesNoGateOn, yesNoOf, yesNoShape } from '../../src/shared/yes-no';
+import { LADDER_TOOL, QUESTION_RULE, YESNO_REFUSAL, isNativeQuestion, isUserQuestion, isYesNo, ranCommandQuestion, yesNoGateOn, yesNoOf, yesNoShape } from '../../src/shared/yes-no';
 
 const q = (...labels: string[]) => ({ options: labels.map(label => ({ label })), multiSelect: false });
+
+describe('whose question it is', () => {
+  it('the app\'s card of a worker\'s question is the user\'s like an engine\'s own, and never an engine\'s own', () => {
+    const card = { type: 'question' as const, tool: LADDER_TOOL };
+    expect([isNativeQuestion(card), isUserQuestion(card)]).toEqual([false, true]);
+    expect([isNativeQuestion({ ...card, tool: 'AskUser' }), isUserQuestion({ ...card, tool: 'AskUser' })]).toEqual([true, true]);
+    expect(isUserQuestion({ ...card, tool: 'mcp__srv__ask' })).toBe(false);
+    expect(isUserQuestion({ type: 'permission', tool: LADDER_TOOL })).toBe(false);
+  });
+});
 
 describe('yes/no questions', () => {
   it('reads Sì / No in the app languages, with the recommended mark and punctuation aside', () => {

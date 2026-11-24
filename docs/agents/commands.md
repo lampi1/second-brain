@@ -57,7 +57,7 @@ row and its line here in the same change.
 | `app_agent_context` | Orchestrator, /mcp/app | The frozen launch context of one work chat: memories chosen, omissions, skill hashes. |
 | `app_command_runs` | Orchestrator, /mcp/app | The commands the user ran from a chat code block with «Esegui», read only. |
 | `app_pending` | Orchestrator, /mcp/app | The worker questions the Orchestrator holds, and the questions, permissions and commands waiting for the user, read only. |
-| `app_resolve_question` | Orchestrator, /mcp/app | Answer a worker's question it holds (`answer` + `why`, or `askUser`: one level up to the user, ADR 0344); else answer a work chat's question, permission or plan as the user (ADR 0275: it counts as his own); a production/DB/Azure permission needs `confirmed` after his yes. |
+| `app_resolve_question` | Orchestrator, /mcp/app | Answer a worker's question it holds (`answer` + `why`, or `askUser`: one level up to the user, ADR 0344); else answer a work chat's question, permission or plan as the user (ADR 0275: it counts as his own), a delegated chat's question only with his `words`; a production/DB/Azure permission needs `confirmed` after his yes. |
 | `app_feed` | Orchestrator, /mcp/app | Recent live feed events (ideas, errors, chats done or waiting). |
 | `app_logs` | Orchestrator, /mcp/app | Recent structured log entries (redacted), filtered by level, scope, chat or text. |
 | `app_screenshot` | Orchestrator, /mcp/app | A screenshot of the app window and of each browser tab on screen. |

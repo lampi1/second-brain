@@ -26,6 +26,13 @@ describe('app_guide', () => {
     expect(out).toContain('defaults never approve');
     expect(out).toContain('app_pending');
   });
+  it('tells the doubts on the map and the question ladder, not the old three answers (ADR 0344)', async () => {
+    const out = String(await guideTool(deps()).run({ topic: 'Domande iniziali, skill dei ruoli e Plan' }));
+    expect(out).not.toContain('contano tre risposte');
+    expect(out).not.toContain('chiede direttamente');
+    expect(out).toContain('dubbi');
+    expect(out).toMatch(/Stratega.*Orchestrator.*utente/);
+  });
   it('explains a page\'s error card and where interface errors are logged (ADR 0192)', async () => {
     const out = String(await guideTool(deps()).run({ topic: 'errore pagina' }));
     expect(out).toContain('Questa pagina ha avuto un errore');

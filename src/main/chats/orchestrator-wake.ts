@@ -43,7 +43,7 @@ import { timersFor } from '../timers';
 const { setTimeout, clearTimeout } = timersFor('chats/orchestrator-wake');
 import type { ChatState, ChatSummary, EventMap, Harness, HeldNewsItem, PendingRequest } from '../../shared/contract';
 import { errText, log } from '../log';
-import { isNativeQuestion, isYesNo } from '../../shared/yes-no';
+import { isUserQuestion, isYesNo } from '../../shared/yes-no';
 import { engineLabel, engineOf } from '../engines/registry';
 import { heldWhy, newsClass, passes, ORCHESTRATOR_GROUP_MS, ORCHESTRATOR_PER_CHAT_MS, orchestratorGate, type DeliveryClass, type OrchestratorGate } from './orchestrator-delivery';
 
@@ -112,7 +112,7 @@ export function wakeMessage(events: WakeEvent[]): string {
  *  left (ADR 0259 §4: «sì» runs it on the PC, never production, databases or Azure); the rest waits for the PC. */
 export function awayNote(p: Pick<PendingRequest, 'type' | 'tool' | 'questions' | 'chatId'>): string {
   const q = p.questions?.[0];
-  if (isNativeQuestion(p) && p.questions?.length === 1 && q && isYesNo(q)) {
+  if (isUserQuestion(p) && p.questions?.length === 1 && q && isYesNo(q)) {
     return `Il pannello è nell’Orchestrator sul PC; Telegram, se collegato, mostra i pulsanti Sì/No quando la domanda non è riservata. Se l’utente è lontano dal PC (Remote Control, telefono), portagliela con relay_question {"chatId":"${p.chatId}"} e scrivi esattamente il testo che restituisce (una domanda alla volta, la più vecchia della chat); se relay_question la rifiuta, resta per il PC. Non rispondere tu.`;
   }
   if (p.type === 'command') {

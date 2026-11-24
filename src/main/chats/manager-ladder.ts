@@ -9,7 +9,7 @@
 // The records are ChatSummary.questions (shared/question-ladder.ts). Unit tests: test/unit/chats/ladder.test.ts.
 import { randomUUID } from 'node:crypto';
 import type { Answer, PendingRequest, Question } from '../../shared/contract';
-import { isNativeQuestion } from '../../shared/yes-no';
+import { LADDER_TOOL, isNativeQuestion } from '../../shared/yes-no';
 import { askedText, asksToExplain, sameAsk, withoutAppNote } from '../../shared/ask-once';
 import { recommendedAnswers } from '../../shared/away';
 import { sameWords } from '../../shared/answer-in-words';
@@ -26,8 +26,7 @@ import { ManagerWork } from './manager-work';
 
 const { setTimeout, clearTimeout } = timersFor('chats/ladder');
 
-/** The app's own card for a question whose engine request is gone (agent_ask_parent, a restart). */
-export const LADDER_TOOL = 'app_ladder_question';
+export { LADDER_TOOL };
 const WHY_MAX = 300, ANSWER_MAX = 4000;
 
 interface Open { r: Rec; q: LadderQuestion; timer?: ReturnType<typeof setTimeout>; why?: string; sending?: boolean; moving?: boolean }
@@ -123,7 +122,8 @@ export abstract class ManagerLadder extends ManagerWork {
     if (rec.s.state === 'error' || rec.s.lastError) return 'chat in errore';
     const last = rec.s.lastResult;
     if (last?.isError && !last.interrupted && !rec.session?.busy && rec.s.state !== 'running' && rec.s.state !== 'starting') return 'chat in errore o turni finiti';
-    if (rec.s.delegation?.result) return 'ha già consegnato il suo lavoro';
+    // this assignment's report: a child's, or a root chat's agent_report (new work starts a run without one)
+    if (rec.s.delegation?.result || rec.s.run?.report?.via === 'agent_report') return 'ha già consegnato il suo lavoro';
     if (!rec.s.isOrchestrator && !this.chatToolShown(rec.s.id, 'agent_answer_child')) return 'non può rispondere alle chat delegate';
     return null;
   }
@@ -220,6 +220,18 @@ export abstract class ManagerLadder extends ManagerWork {
     if (on) this.hook('onWaiting', () => on(o.r.s.id, req));
   }
 
+  /** Night mode just went on: the app's cards already in the user's row, as showOwn settles a new one (ADR 0191). */
+  protected override ladderAway(): number {
+    let n = 0;
+    for (const req of [...this.userAsks.values()]) {
+      const o = req.tool === LADDER_TOOL ? this.byAsk(req.id) : undefined, night = o && !o.sending ? recommendedAnswers(req.questions ?? []) : null;
+      if (!o || !night) continue;
+      this.ownAnswered(o, { by: 'app', name: 'Modalità notte', answer: Object.values(night).flat().join(' · '), why: 'opzione consigliata', at: Date.now() });
+      n++;
+    }
+    return n;
+  }
+
   // ---- the answer
 
   /** The chat that holds a question answers it, or passes it one level up (askUser). */
@@ -235,7 +247,7 @@ export abstract class ManagerLadder extends ManagerWork {
     const answer = (a.answer ?? '').trim();
     if (!answer || answer.length > ANSWER_MAX) throw new Error(`answer = da 1 a ${ANSWER_MAX} caratteri, oppure askUser: true.`);
     if (!why) throw new Error('why = da dove viene la risposta (richiesta, decisione scritta dell’utente, cervello, codice). Senza una fonte: askUser: true.');
-    if (ladderReserved([ladderText(o.q), ...o.q.asks.flatMap(x => x.options)].join('\n'), touchesProdDbAzure)) throw new Error('bloccato: produzione, database, Azure, permessi, obiettivo, colleghi, QA, clienti o passi senza ritorno li decide solo l’utente: askUser: true.');
+    if (reserved(o.q)) throw new Error('bloccato: produzione, database, Azure, permessi, obiettivo, colleghi, QA, clienti o passi senza ritorno li decide solo l’utente: askUser: true.');
     const by = this.chats.get(callerId);
     const done: LadderAnswer = { by: o.q.level, chatId: callerId, name: by ? this.nameOfRec(by) : 'Chat', answer, why, at: Date.now() };
     const req = o.q.requestId ? r.pending.get(o.q.requestId) : undefined;
@@ -299,7 +311,7 @@ export abstract class ManagerLadder extends ManagerWork {
     const o = this.openOf(this.need(chatId)).find(x => x.q.requestId === requestId || x.q.id === requestId || askId(x.q.id) === requestId);
     if (o) {
       if (o.q.level !== 'user') throw new Error('bloccato: la domanda è ancora di un agente; risponde chi la tiene, con answer e why, o la passa con askUser: true.');
-      if (ladderReserved(ladderText(o.q), touchesProdDbAzure)) throw new Error('bloccato: questa domanda la decide solo l’utente (il suo clic o le sue parole).');
+      if (reserved(o.q)) throw new Error('bloccato: questa domanda la decide solo l’utente (il suo clic o le sue parole).');
       if (!o.q.requestId) {
         if (answer.kind !== 'question') throw new Error('È una domanda: rispondi con answers.');
         const text = Object.values(answer.answers).flat().join(' · ').trim();
@@ -429,5 +441,7 @@ export abstract class ManagerLadder extends ManagerWork {
   }
 }
 
+/** Its words and its options: what only the user decides (ladderReserved), at every level. */
+const reserved = (q: LadderQuestion): boolean => ladderReserved([ladderText(q), ...q.asks.flatMap(x => x.options)].join('\n'), touchesProdDbAzure);
 const askId = (questionId: string): string => `ladder-${questionId}`;
 const short = (s: string): string => { const t = oneLine(s); return t.length > 200 ? `${t.slice(0, 199)}…` : t; };

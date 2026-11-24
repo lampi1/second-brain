@@ -20,7 +20,7 @@
 // are relayed the same way (Esegui is a PC button). Used by wiring.ts (the tool and the emitter tap); pinned by
 // test/unit/chats/relay.test.ts.
 import type { Answer, ChatItem, ChatSummary, PendingRequest } from '../../shared/contract';
-import { isNativeQuestion, isYesNo, yesNoOf } from '../../shared/yes-no';
+import { isUserQuestion, isYesNo, yesNoOf } from '../../shared/yes-no';
 import type { PhoneCommands } from './phone-port';
 import { briefFor, commandLines, commandShownWhole, questionLines } from './ask-text';
 import { errText, log } from '../log';
@@ -115,7 +115,7 @@ export class QuestionRelay {
       const other = chats.find(x => x.id === armed.chatId)?.title ?? armed.chatId;
       throw new Error(`The user has not answered the question of «${other}» yet: one relayed question at a time. Relay this one after that answer.`);
     }
-    if (!isNativeQuestion(p)) throw new Error('This is not the engine\'s own question: write it to the user yourself, then answer it for him with app_resolve_question with what he says.');
+    if (!isUserQuestion(p)) throw new Error('This is not the engine\'s own question: write it to the user yourself, then answer it for him with app_resolve_question with what he says.');
     this.armed(orchestratorId);
     let brief;
     try { brief = briefFor(p, this.d.items(chatId)); } catch { brief = undefined; }

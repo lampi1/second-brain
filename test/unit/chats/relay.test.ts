@@ -34,6 +34,13 @@ it('relays the question and answers it with the user\'s own «sì» in the Orche
   expect(await w.r.userSaid('orch', 'no')).toBe(false);                                // used once
 });
 
+it('relays the app\'s card of a worker\'s question like an engine\'s own (ADR 0344)', async () => {
+  const w = world([yesNo('q1', 'dev', 'Uso il nome nuovo?', 'app_ladder_question')]);
+  expect(w.r.relay('orch', 'dev').write).toContain('Uso il nome nuovo?');
+  expect(await w.r.userSaid('orch', 'sì')).toBe(true);
+  expect(w.answered).toMatchObject([{ chatId: 'dev', requestId: 'q1' }]);
+});
+
 it('any other reply ends the relay: a later bare «no» is not taken as the answer', async () => {
   const w = world([yesNo('q1', 'dev')]);
   w.r.relay('orch', 'dev');

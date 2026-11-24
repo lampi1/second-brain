@@ -3,7 +3,7 @@
 // and reserved words stay for the PC. Pins chats/ask-text.ts and the command path of chats/phone-port.ts, on fakes.
 import { expect, it } from 'vitest';
 import type { ChatItem, ChatSummary, EventChannel, EventMap, PendingRequest } from '../../../src/shared/contract';
-import { createPhonePort, type PhoneChats } from '../../../src/main/chats/phone-port';
+import { createPhonePort, phoneQuestionReserved, type PhoneChats } from '../../../src/main/chats/phone-port';
 import { questionLines, touchesProdDbAzure } from '../../../src/main/chats/ask-text';
 
 type Tap = <K extends EventChannel>(channel: K, payload: EventMap[K]) => void;
@@ -35,6 +35,15 @@ it('a question carries the brief: context, before → after, what is up to the u
   const d = world([], [question]).port.listDecidable().find(x => x.ref.kind === 'question')!;
   expect(d.text).toBe(lines.join('\n'));
   expect(d.short).toBe('Faccio il commit del fix?');
+});
+
+it('the app\'s card of a worker\'s question is a simple Sì/No on the phone, as an engine\'s own; a form is not (ADR 0344)', async () => {
+  const card = { ...question, tool: 'app_ladder_question' }, form = { ...question, id: 'q2', tool: 'mcp__fixture' }, pending = [card, form];
+  const w = world([], pending);
+  expect(w.port.listDecidable().map(d => d.simple)).toEqual([true, false]);
+  expect([phoneQuestionReserved(card, () => []), phoneQuestionReserved(form, () => [])]).toEqual([false, true]);
+  expect(await w.port.answerFromPhone('dev', 'q1', true)).toBe('ok');
+  expect(await w.port.answerFromPhone('dev', 'q2', true)).toBe('gone');
 });
 
 it('a command is a simple Sì/No on the phone when it shows whole; Sì runs it on the PC, No puts it aside', async () => {

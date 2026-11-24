@@ -10,7 +10,7 @@ import { SYS_IT } from '../../shared/sys';
 import type { Answer, ChatItem, ChatSummary, EventChannel, EventMap, PendingRequest } from '../../shared/contract';
 import type { PhoneDecidable, PhoneDecideResult, PhonePort, PhoneOutcome } from '../../shared/contract/phone';
 import { reservedText } from '../../shared/away';
-import { isYesNo, yesNoOf } from '../../shared/yes-no';
+import { isUserQuestion, isYesNo, yesNoOf } from '../../shared/yes-no';
 import { errText, log } from '../log';
 import { briefFor, commandLines, commandShownWhole, questionLines } from './ask-text';
 import type { TurnEndInfo } from './manager-types';
@@ -37,9 +37,6 @@ export interface PhoneCommands {
 /** The main Emitter's tap (main/ipc.ts Emitter.tap). */
 export interface PhoneEvents { tap(fn: <K extends EventChannel>(channel: K, payload: EventMap[K]) => void): void }
 
-/** The engines' own question tools (as appctl/user-words.ts): an MCP tool's question (a workflow or learning proposal,
- *  anything an agent built) is never decided from the phone. */
-const NATIVE_QUESTIONS = new Set(['AskUserQuestion', 'AskQuestion', 'AskUser']);
 const MARK = /\((consigliat[oa]|recommended|empfohlen)\)/i;
 /** what the Strategist gets when the phone says No to its plan: nothing to change yet, the user looks at it on the PC */
 export const PHONE_PLAN_NO = 'Non approvato dal telefono: l\'utente rivede il piano al PC. Non partire e non riproporlo finché non ti scrive.';
@@ -62,7 +59,8 @@ export function phoneQuestionReserved(p: PendingRequest, readItems: () => ChatIt
       ...(b.files ?? []).flatMap(x => [x.path, x.why ?? '']), ...(b.images ?? []).map(x => x.caption ?? '')];
   });
   const words = [p.title, p.detail, ...qs.flatMap(x => [x.question, x.header ?? '', ...x.options.flatMap(o => [o.label, o.description ?? ''])]), ...brief];
-  return p.type !== 'question' || !NATIVE_QUESTIONS.has(p.tool) || reserved(words.join('\n'));
+  // an MCP tool's question (a workflow or learning proposal, anything an agent built) is never decided from the phone
+  return !isUserQuestion(p) || reserved(words.join('\n'));
 }
 
 export function createPhonePort(chats: PhoneChats, events: PhoneEvents, commands?: PhoneCommands): PhonePort {
@@ -98,7 +96,7 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents, commands
         // the short form only when it holds the whole command: a decision is never taken on a cut text
         ...(p.command.code.includes('\n') ? {} : { short: `Eseguo sul PC? ${p.command.code}` }), recommended: 'yes', simple: !!commands && commandShownWhole(p), reserved: false, orchestrator: true };
     }
-    const simple = p.type === 'question' && NATIVE_QUESTIONS.has(p.tool) && qs.length === 1 && !!q && isYesNo(q);
+    const simple = isUserQuestion(p) && qs.length === 1 && !!q && isYesNo(q);
     // nothing is reserved any more (ADR 0275): the owner decides from the phone what he decides on the PC
     const reserved = false;
     const pick = simple ? q!.options.find(o => MARK.test(o.label)) : undefined;
