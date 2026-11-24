@@ -15,7 +15,8 @@ describe('worktrees', () => {
   it('a child may work in its parent\'s folder or in any existing folder, also of another repository (#460)', () => {
     const outer = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-folders-')); roots.push(outer);
     const repo = path.join(outer, 'repo'), other = path.join(outer, 'other');
-    for (const d of [repo, other]) fs.mkdirSync(d);
+    // every folder exists: the temp folder is behind a link on macOS, where a missing one cannot be resolved
+    for (const d of [repo, other, path.join(repo, 'src')]) fs.mkdirSync(d);
     expect(delegableFolder(repo, repo)).toBe(true);
     expect(delegableFolder(repo, path.join(repo, 'src'))).toBe(true);
     expect(delegableFolder(repo, other)).toBe(true);
