@@ -1,13 +1,11 @@
-// The folders a delegated chat may work in (ADR 0083): its parent's folder, or one of the git worktrees of the parent's
-// repository (`git worktree list`), so a Strategist in the main checkout can hand an Artisan the feature worktree it
-// made, and a child in a worktree can send a Scout to read the main checkout. Anything else is outside: a child never
-// leaves its parent's repository. `git worktree list` is not trusted as is: it echoes whatever a `.git/worktrees/<id>/
-// gitdir` file says (a file any writer inside the repository can forge), so only an existing, non-prunable worktree
-// whose own git common dir is the parent's counts. Used by agents/delegation.ts (agent_delegate's early check) and
-// chats/manager.ts (the check at create, the one that counts), both fed by wiring.ts; pinned by
-// test/unit/agents/worktrees.test.ts. A writing child gets its isolated worktree from DelegateWorktrees.prepare: a reused
-// slot of the repository's pool (worktree-pool.ts, ADR 0227) or a new one, with one GitSession per prepare (the filter
-// policy read once per folder, spawns counted) and each step's ms logged as 'delegation worktree ready'.
+// The folders a delegated chat may work in (ADR 0083, ADR 0345): its parent's folder, or any other existing folder, also
+// of another repository (a Strategist's plan often spans several projects; before 2026-11-24 a child never left its
+// parent's repository, #460). The folder is no permission: tool classes and the ceiling still only go down
+// (agents/tool-policy.ts). Used by agents/delegation.ts (agent_delegate's early check) and chats/manager.ts (the check
+// at create, the one that counts). A writing child gets its isolated worktree from DelegateWorktrees.prepare, in the
+// repository of its own folder: a reused slot of that repository's pool (worktree-pool.ts, ADR 0227) or a new one, with
+// one GitSession per prepare (the filter policy read once per folder, spawns counted) and each step's ms logged as
+// 'delegation worktree ready'.
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import { randomBytes } from 'node:crypto';
@@ -20,9 +18,6 @@ import { within } from './tool-policy';
 import type { WorktreePool } from './worktree-pool';
 import { log } from '../log';
 
-const run = (cwd: string, args: string[]): Promise<string | null> => new Promise(resolve => {
-  execFile('git', ['-c', 'protocol.allow=never', '-C', cwd, ...args], { timeout: 5000, windowsHide: true, env: { ...process.env, GIT_NO_LAZY_FETCH: '1', GIT_ALLOW_PROTOCOL: '' } }, (error, stdout) => resolve(error ? null : String(stdout)));
-});
 const isDir = (p: string): boolean => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
 const real = (p: string): string => { try { return fs.realpathSync.native(p); } catch { return path.resolve(p); } };
 /** Same path, compared as the file system sees it (links resolved; case-insensitive on Windows). */
@@ -31,56 +26,11 @@ const samePath = (a: string, b: string): boolean => {
   return process.platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y;
 };
 
-/** The absolute git common dir of the repository at `cwd` (shared by all its worktrees), or null. */
-export async function gitCommonDir(cwd: string): Promise<string | null> {
-  if (!cwd || !path.isAbsolute(cwd) || !isDir(cwd)) return null;
-  const out = await run(cwd, ['rev-parse', '--path-format=absolute', '--git-common-dir']);
-  const dir = out?.trim();
-  return dir && path.isAbsolute(dir) ? dir : null;
+/** Whether a delegated chat may work in `cwd`: inside its parent's folder, or any existing absolute folder (another
+ *  checkout or repository, ADR 0345). */
+export function delegableFolder(parentCwd: string, cwd: string): boolean {
+  return within(parentCwd, cwd) || (!!cwd && path.isAbsolute(cwd) && isDir(cwd));
 }
-
-/** The `worktree <path>` entries of `git worktree list --porcelain` that are worth checking: a non-empty absolute path,
- *  neither prunable nor bare. Exported for the tests. */
-export function listedWorktrees(porcelain: string): string[] {
-  const out: string[] = [];
-  for (const block of porcelain.split(/\r?\n\r?\n/)) {
-    const lines = block.split(/\r?\n/);
-    const head = lines.find(l => l.startsWith('worktree '));
-    if (!head) continue;
-    const p = head.slice(9).trim();
-    if (!p || !path.isAbsolute(p)) continue;
-    if (lines.some(l => l === 'bare' || l === 'prunable' || l.startsWith('prunable '))) continue;
-    out.push(path.resolve(p));
-  }
-  return out;
-}
-
-/** The git worktrees of the repository at `cwd`, main checkout included, each verified: an existing folder whose git
- *  common dir is `cwd`'s; none when `cwd` is no repository. With `target`, only the listed worktrees containing it. */
-export async function gitWorktrees(cwd: string, target?: string): Promise<string[]> {
-  const common = await gitCommonDir(cwd);
-  if (!common) return [];
-  const out = await run(cwd, ['worktree', 'list', '--porcelain']);
-  if (out === null) return [];
-  // Reuse knows the exact child folder. Verify only its containing listed worktree rather than spawning a Git
-  // process per unrelated checkout: that fan-out can time out valid allocations on repositories with many trees.
-  const candidates = listedWorktrees(out).filter(w => target === undefined || within(w, target));
-  const checked = await Promise.all(candidates.map(async w => {
-    if (!isDir(w)) return null;
-    const own = await gitCommonDir(w);
-    return own && samePath(own, common) ? w : null;
-  }));
-  return checked.filter((w): w is string => w !== null);
-}
-
-/** Whether `cwd` is inside the parent's folder or inside one of its repository's (verified) worktrees; outside the
- *  parent's folder, only an existing folder counts. */
-export function withinParent(parentCwd: string, cwd: string, worktrees: readonly string[]): boolean {
-  if (within(parentCwd, cwd)) return true;
-  if (!isDir(cwd)) return false;
-  return worktrees.some(w => !!w && path.isAbsolute(w) && within(w, cwd));
-}
-
 
 /** A writer is determined by its final narrowed tool classes, never the role's display name. Unknown policies and
  * external MCP tools can write; plan mode alone does not make those external tools read-only. */
@@ -179,18 +129,25 @@ export function blockingChanges(porcelain: string, appOwned: boolean): string[] 
       || (l.startsWith('?? ') && APP_CREATED_BRAIN.test(l.slice(3))))));
 }
 
-/** Real repository identity, pinned commit and clean state. A dirty baseline is never silently omitted, except the
- *  app-owned brain files when the checkout is `brainRoot` (see APP_OWNED_BRAIN). */
-export async function cleanRepository(cwd: string, brainRoot?: string | null, session = new GitSession()): Promise<{ root: string; common: string; head: string }> {
+/** A checkout as git names it: its top folder, its repository (the common dir its worktrees share) and its commit. */
+type Checkout = { root: string; common: string; head: string };
+
+/** Real repository identity and pinned commit, read by one rev-parse: the three come from the same git process, so they
+ *  cannot disagree (before 2026-11-07 four separate spawns, each 1-6 s under load). Paths as git prints them. */
+async function repositoryIdentity(cwd: string, session: GitSession): Promise<Checkout> {
   if (!cwd || !path.isAbsolute(cwd) || !isDir(cwd)) throw new Error('Writing delegation requires a Git repository with a commit; no shared-folder fallback.');
-  // one rev-parse names the checkout, its repository and its commit: the three come from the same git process, so they
-  // cannot disagree (before 2026-11-07 four separate spawns, each 1-6 s under load)
   const ids = await session.git(cwd, ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir', 'HEAD^{commit}']);
   if (ids.error) throw new Error(ids.error);
   const [root = '', common = '', head = ''] = ids.exit === 0 ? ids.out.split(/\r?\n/).map(l => l.trim()) : [];
   if (!common || !path.isAbsolute(common)) throw new Error('Writing delegation requires a Git repository with a commit; no shared-folder fallback.');
   if (!root || !path.isAbsolute(root)) throw new Error('Repository identity could not be verified.');
   if (!/^[a-f0-9]{40,64}$/.test(head)) throw new Error('Repository has no valid committed baseline.');
+  return { root, common, head };
+}
+
+/** The clean state of an identified checkout. A dirty baseline is never silently omitted, except the app-owned brain
+ *  files when the checkout is `brainRoot` (see APP_OWNED_BRAIN). Returns it with its links resolved. */
+async function requireClean({ root, common, head }: Checkout, brainRoot: string | null | undefined, session: GitSession): Promise<Checkout> {
   // untrimmed: requiredGit's trim would eat the first line's leading status column. `normal` names an untracked folder
   // once instead of walking it (a new untracked folder still blocks, by its name)
   const status = await session.git(root, ['status', '--porcelain=v1', '--untracked-files=normal']);
@@ -199,6 +156,11 @@ export async function cleanRepository(cwd: string, brainRoot?: string | null, se
   // the first paths name what to commit or preserve: the agent cannot tell an app-written file from the user's otherwise
   if (blocking.length) throw new Error(`Repository has uncommitted or untracked changes. Commit or preserve them before delegating; the app will not discard or silently omit them. Blocking: ${blocking.slice(0, 5).map(l => l.slice(3)).join(', ')}${blocking.length > 5 ? ', …' : ''}`);
   return { root: real(root), common: real(common), head };
+}
+
+/** Real repository identity, pinned commit and clean state. */
+export async function cleanRepository(cwd: string, brainRoot?: string | null, session = new GitSession()): Promise<Checkout> {
+  return requireClean(await repositoryIdentity(cwd, session), brainRoot, session);
 }
 
 /** Provenance held by the host, not accepted from a tool argument, role instruction or mutable agent profile. */
@@ -213,6 +175,9 @@ export interface IsolatedDelegation {
   cwd: string;
   branch: string;
   base: string;
+  /** only for a child of another repository than its parent's (ADR 0345): the checkout it was branched from, where its
+   *  changes are staged (delegation-integration.ts); absent = the parent's repository */
+  sourceRoot?: string;
 }
 
 /** A new sibling worktree, always outside the source checkout and on a unique branch (or detached for integration). */
@@ -246,6 +211,7 @@ export class DelegateWorktrees {
     return !!v && typeof v === 'object' && typeof v.childId === 'string' && !!v.childId && typeof v.parentId === 'string' && !!v.parentId
       && (v.parentRunId === undefined || typeof v.parentRunId === 'string') && (v.parentTaskVersion === undefined || (Number.isSafeInteger(v.parentTaskVersion) && v.parentTaskVersion > 0))
       && [v.parentCwd, v.common, v.root, v.cwd].every(p => typeof p === 'string' && path.isAbsolute(p))
+      && (v.sourceRoot === undefined || (typeof v.sourceRoot === 'string' && path.isAbsolute(v.sourceRoot)))
       && path.basename(v.root).startsWith('.second-brain-delegate-') && within(v.root, v.cwd)
       // 12 hex since the pool (guard-safe), a UUID before it: worktree-pool.ts POOL_BRANCH
       && typeof v.branch === 'string' && /^sb\/delegate-(?:[a-f0-9]{12}|[a-f0-9-]{36})$/.test(v.branch) && typeof v.base === 'string' && /^[a-f0-9]{40,64}$/.test(v.base);
@@ -258,8 +224,15 @@ export class DelegateWorktrees {
     // One checkout is verified once, through one session (each checkout's policy read once): each Git spawn costs up to
     // seconds on Windows with real-time antivirus scanning (ADR 0227 measured the steps)
     const brain = this.brainRoot(), session = new GitSession(), t0 = Date.now();
-    const parentRepo = await cleanRepository(parent.cwd, brain, session), source = samePath(parent.cwd, cwd) ? parentRepo : await cleanRepository(cwd, brain, session);
-    if (!samePath(parentRepo.common, source.common)) throw new Error('Writing delegation cannot leave its parent repository.');
+    // the child's folder names the repository (ADR 0345): the parent's own, where the parent's checkout must be clean
+    // too, or another one, where only the child's checkout counts (the parent's folder may be no repository at all)
+    let parentRepo: Checkout | null = null, source: Checkout;
+    if (samePath(parent.cwd, cwd)) parentRepo = source = await cleanRepository(cwd, brain, session);
+    else {
+      const parentId = await repositoryIdentity(parent.cwd, session).catch(() => null), sourceId = await repositoryIdentity(cwd, session);
+      if (parentId && samePath(parentId.common, sourceId.common)) parentRepo = await requireClean(parentId, brain, session);
+      source = await requireClean(sourceId, brain, session);
+    }
     let base = source.head;
     if (continuationOf !== undefined) {
       const previous = this.allocation(parent, { id: continuationOf, parentId: parent.id, cwd } as ChatSummary);
@@ -280,12 +253,12 @@ export class DelegateWorktrees {
       // Detect source edits made during checkout; do not launch on a stale baseline. A fresh session: the checks must
       // read the checkout now. status and HEAD are checkout-wide: the parent's folder in the same checkout needs no second probe
       const again = new GitSession();
-      const after = await cleanRepository(source.root, brain, again), parentAfter = samePath(parentRepo.root, source.root) ? after : await cleanRepository(parent.cwd, brain, again);
-      if (after.head !== source.head || parentAfter.head !== parentRepo.head) throw new Error('Repository changed while preparing isolation; retry delegation.');
+      const after = await cleanRepository(source.root, brain, again), parentAfter = !parentRepo || samePath(parentRepo.root, source.root) ? after : await cleanRepository(parent.cwd, brain, again);
+      if (after.head !== source.head || (parentRepo && parentAfter.head !== parentRepo.head)) throw new Error('Repository changed while preparing isolation; retry delegation.');
       log.info('agents', 'delegation worktree ready', { data: { reused: isolated.reused, statusMs: t1 - t0, takeMs: t2 - t1, verifyMs: Date.now() - t2, spawns: session.spawns + again.spawns } });
       return { cwd: childCwd, ...provenance, bind: childId => {
         const owned: IsolatedDelegation = { childId, parentId: parent.id, ...provenance, parentCwd: parent.cwd,
-          common: source.common, root: isolated.root, cwd: childCwd, branch: isolated.branch, base };
+          common: source.common, root: isolated.root, cwd: childCwd, branch: isolated.branch, base, ...(parentRepo ? {} : { sourceRoot: source.root }) };
         if (!this.valid(owned)) throw new Error('Invalid host-owned isolation provenance.');
         // a reused slot belongs to this child only: an earlier child's record of the same worktree goes
         const next = new Map([...this.allocations].filter(([, a]) => !samePath(a.root, isolated.root))); next.set(real(childCwd), owned);

@@ -7,7 +7,7 @@ its card; the planners launch the writing roles again; §1's default tools and c
 Scout and Judge" no longer hold, the narrowing rules do) · Amended by ADR 0091 (2026-10-20, issue #99: no `independent` field and no model switch; a
 review's independence is its clean new session, §9's Judge reviews on any model) · Amended by ADR 0226 (2026-11-07: the Orchestrator reads the latest agent_report of any chat in its tree with `app_child_output`; §6 holds for everything else) · Replaces: the editable agent catalog with Italian presets and routed `legacy-*` profiles (ADR 0077, 0078), the
 Orchestrator-only sub-agent launch (`agent_start_subagent`), the brain's agent pointers, playbooks and specialist
-notebooks · Builds on: ADR 0006 (app MCP), 0021 (per-chat endpoints), 0068 (Grindhouse), 0082 (agent changes) · Amended by: ADR 0097, ADR 0102, ADR 0104, ADR 0224
+notebooks · Builds on: ADR 0006 (app MCP), 0021 (per-chat endpoints), 0068 (Grindhouse), 0082 (agent changes) · Amended by: ADR 0097, ADR 0102, ADR 0104, ADR 0224, ADR 0345 (2026-11-24: a child's folder is any existing one, also of another repository)
 
 ## Context
 Work was split among agents the user had to compose (a catalog of presets, routed profiles, owner-added pointers in the

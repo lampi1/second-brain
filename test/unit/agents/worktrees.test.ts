@@ -1,22 +1,29 @@
-// The folders a delegated chat may work in (src/main/agents/worktrees.ts, ADR 0083): the parent's folder or a worktree
-// of the parent's repository, read from a real `git worktree list`; any other folder, and a folder of no repository,
-// stays outside. A forged `.git/worktrees/<id>/gitdir` (empty, prunable, or pointing at another repository) adds nothing.
+// The folders a delegated chat may work in (src/main/agents/worktrees.ts, ADR 0083, ADR 0345): its parent's folder or
+// any other existing folder, also of another repository (#460); and what blocks a writing child's baseline in the
+// brain folder (the app-owned files do not, #324).
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { blockingChanges, listedWorktrees } from '../../../src/main/agents/worktrees';
+import os from 'node:os';
+import { blockingChanges, delegableFolder } from '../../../src/main/agents/worktrees';
 
 const roots: string[] = [];
 afterEach(() => { for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
 describe('worktrees', () => {
-  it('reads only usable entries from the porcelain list', () => {
-    const abs = path.resolve('/a/b'), other = path.resolve('/c');
-    const out = [`worktree ${abs}`, 'HEAD 1', 'branch refs/heads/main', '', 'worktree ', 'HEAD 0', 'detached',
-      'prunable gitdir file points to non-existent location', '', `worktree ${other}`, 'bare', '', 'worktree rel/x', '',
-      `worktree ${path.resolve('/d')}`, 'HEAD 0', 'prunable', ''].join('\n');
-    expect(listedWorktrees(out)).toEqual([abs]);
+  it('a child may work in its parent\'s folder or in any existing folder, also of another repository (#460)', () => {
+    const outer = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-folders-')); roots.push(outer);
+    const repo = path.join(outer, 'repo'), other = path.join(outer, 'other');
+    for (const d of [repo, other]) fs.mkdirSync(d);
+    expect(delegableFolder(repo, repo)).toBe(true);
+    expect(delegableFolder(repo, path.join(repo, 'src'))).toBe(true);
+    expect(delegableFolder(repo, other)).toBe(true);
+    expect(delegableFolder(repo, path.join(outer, 'missing'))).toBe(false);
+    expect(delegableFolder(repo, 'other')).toBe(false);
+    expect(delegableFolder(repo, '')).toBe(false);
+    fs.writeFileSync(path.join(outer, 'file.txt'), 'x');
+    expect(delegableFolder(repo, path.join(outer, 'file.txt'))).toBe(false);
   });
 
   it('lets only a modified app-owned brain file through a brain baseline', () => {

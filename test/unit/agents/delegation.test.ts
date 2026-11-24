@@ -62,12 +62,12 @@ const catalog = (n: Narrowed = {}): AgentCatalog => ({ problem: null, archived: 
     launches: [...x.launches], skills: r.skills, tools: { allow: [...x.tools] }, permissionCeiling: x.ceiling, activeVersion: 1, updatedAt: 1, instructions: r.instructions };
 }) } as unknown as AgentCatalog);
 
-function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: string, target?: string) => Promise<string[]>, roles?: () => AgentCatalog, onSend?: (chatId: string) => void, narrowed: Narrowed = {}, remembered: [string, string][] = [], extra: Partial<ChatManagerOptions> = {}) {
+function fixture(limits: Partial<DelegationSettings> = {}, roles?: () => AgentCatalog, onSend?: (chatId: string) => void, narrowed: Narrowed = {}, remembered: [string, string][] = [], extra: Partial<ChatManagerOptions> = {}) {
   roles ??= () => catalog(narrowed);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-delegation-'));
   roots.push(dir);
   const starts = new Map<string, SessionOptions>(), sinks = new Map<string, SessionSink>(), sent = new Map<string, string[]>(), answers: { chat: string; id: string; answer: { allow?: boolean; message?: string }; patch?: Record<string, string> }[] = [];
-  const m = new ChatManager({ ...extra, userData: dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0, ...(worktrees ? { worktrees } : {}),
+  const m = new ChatManager({ ...extra, userData: dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0,
     resolveAgent: (req: NewChat) => {
       const id = req.roleId as RoleId | undefined;
       if (!id || !isWorkRole(id)) return { request: req, owner: { id: 'plain', name: 'Chat', purpose: '', engine: req.harness, model: null, revision: 0, source: 'plain' as const }, instructions: '', policy: null, skills: [], launches: [] };
@@ -85,7 +85,7 @@ function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: str
       } as unknown as HarnessSession;
     } });
   managers.push(m);
-  const tools = delegationTools({ chats: m, roles, settings: () => ({ ...DELEGATION_DEFAULTS, ...limits }), engineRefusal: () => null, label: '[agente]', runs: () => m.runs.list(), ...(worktrees ? { worktrees } : {}), now: () => (clock ?? Date.now)(),
+  const tools = delegationTools({ chats: m, roles, settings: () => ({ ...DELEGATION_DEFAULTS, ...limits }), engineRefusal: () => null, label: '[agente]', runs: () => m.runs.list(), now: () => (clock ?? Date.now)(),
     remember: (role, line) => { remembered.push([role, line]); } });
   const tool = (name: string): McpTool => tools.find(t => t.name === name)!;
   const call = async (name: string, chatId: string, args: Record<string, unknown>) => JSON.parse(await tool(name).run(args, { mount: 'chat', params: { chatId }, sessionId: '', signal: new AbortController().signal } as never) as string);
@@ -185,7 +185,7 @@ describe('agent_delegate', () => {
 
   it('an over-long summary and remember line are cut with the marker, not refused; the full summary stays in output', async () => {
     const remembered: [string, string][] = [];
-    const f = fixture({}, undefined, undefined, undefined, {}, remembered);
+    const f = fixture({}, undefined, undefined, {}, remembered);
     const parent = await f.root('strategist');
     await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Lungo')] });
     const kid = f.m.list().find(c => c.parentId === parent.id)!;
@@ -233,7 +233,7 @@ describe('agent_delegate', () => {
 
   it('a lesson in an odd shape never refuses the report: a bare string is the line, line breaks become spaces, a non-text entry is left out', async () => {
     const remembered: [string, string][] = [];
-    const f = fixture({}, undefined, undefined, undefined, {}, remembered);
+    const f = fixture({}, undefined, undefined, {}, remembered);
     const parent = await f.root('strategist');
     await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log'), f.task('scout', 'Ordini · Numeri')] });
     const [a, b] = f.m.list().filter(c => c.parentId === parent.id);
@@ -254,7 +254,7 @@ describe('agent_delegate', () => {
 
   it('agent_report remember writes to the reporting role\'s memory, only once the report is accepted', async () => {
     const remembered: [string, string][] = [];
-    const f = fixture({}, undefined, undefined, undefined, {}, remembered);
+    const f = fixture({}, undefined, undefined, {}, remembered);
     const parent = await f.root('strategist');
     await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log')] });
     const scout = f.m.list().find(c => c.parentId === parent.id)!;
@@ -333,7 +333,7 @@ describe('agent_delegate', () => {
 
   it('refuses beyond the depth limit, visibly', async () => {
     // only Strategists delegate below the root: a catalog where the Strategist may launch a Strategist builds the chain
-    const f = fixture({ maxDepth: 2 }, undefined, () => { const c = catalog(); c.profiles.find(p => p.id === 'strategist')!.launches.push('strategist'); return c; });
+    const f = fixture({ maxDepth: 2 }, () => { const c = catalog(); c.profiles.find(p => p.id === 'strategist')!.launches.push('strategist'); return c; });
     const root = await f.root('strategist');
     const one = (await f.call('agent_delegate', root.id, { tasks: [f.task('strategist', 'Livello 1')] })).children[0].chatId;
     const two = (await f.call('agent_delegate', one, { tasks: [f.task('strategist', 'Livello 2')] })).children[0].chatId;
@@ -356,17 +356,17 @@ describe('agent_delegate', () => {
     expect(JSON.stringify(f.tool('agent_delegate').inputSchema)).toMatch(/only for role sentinel: the runId of your child's run it reviews/);
   });
 
-  it('permissions only go down under a parent the user narrowed: tools beyond it, a folder outside it and a role it may not launch are refused', async () => {
-    const f = fixture({}, undefined, undefined, undefined, NARROW);
+  it('permissions only go down under a parent the user narrowed: tools beyond it and a role it may not launch are refused; a folder is no permission', async () => {
+    const f = fixture({}, undefined, undefined, NARROW);
     const sub = path.join(f.dir, 'repo'); fs.mkdirSync(sub);
     const parent = await f.root('strategist');
     await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Cerca', { tools: ['shell-read'] })] })).rejects.toThrow(/shell-read goes beyond your own permissions/);
-    await expect(f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Fuori'), cwd: os.tmpdir() }] })).rejects.toThrow(/outside your folder.*report it with agent_report.*app_create_chat with cwd/);
-    // the schema says it before any refusal (#186)
-    const cwdHelp = JSON.stringify(f.tool('agent_delegate').inputSchema);
-    expect(cwdHelp).toMatch(/worktrees/);
-    expect(cwdHelp).toMatch(/Never another repository.*app_create_chat with cwd/);
-    await expect(f.m.create({ harness: 'claude', cwd: os.tmpdir(), roleId: 'scout', parentId: parent.id }, 'agent')).rejects.toThrow(/dentro quella del genitore/);
+    // a folder that does not exist is refused, by the tool and again by the manager (the check that counts)
+    const missing = path.join(os.tmpdir(), 'sb-no-such-folder-460');
+    await expect(f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Fuori'), cwd: missing }] })).rejects.toThrow(/not an existing absolute folder.*any repository your plan touches/);
+    await expect(f.m.create({ harness: 'claude', cwd: missing, roleId: 'scout', parentId: parent.id }, 'agent')).rejects.toThrow(/non esiste/);
+    // the schema says where a child may work before any refusal (#186, #460)
+    expect(JSON.stringify(f.tool('agent_delegate').inputSchema)).toMatch(/any other existing folder, also of another repository/);
     // a planner narrowed to ADR 0083's launches never launches a writing role: the work goes in its report
     await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('artisan', 'Fix')] })).rejects.toThrow(/may not launch Artisan.*your parent launches it/);
     const ok = await f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Leggi'), cwd: sub }] });
@@ -383,7 +383,7 @@ describe('agent_delegate', () => {
   it('only the Orchestrator and the Strategist delegate: an Artisan, a Sentinel, a Herald are refused even with stale launches', async () => {
     // a roles.json saved before 2026-11-23 still lists launches for the workers
     const stale = () => { const c = catalog(); for (const p of c.profiles) if (p.id !== 'strategist' && p.id !== 'orchestrator') p.launches = ['scout', 'sentinel']; return c; };
-    const f = fixture({}, undefined, stale);
+    const f = fixture({}, stale);
     for (const role of ['artisan', 'sentinel', 'herald'] as const) {
       const parent = await f.root(role);
       await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Cerca')] })).rejects.toThrow(/does not delegate \(only the Orchestrator and the Strategist do\).*your parent launches it/);
@@ -402,38 +402,37 @@ describe('agent_delegate', () => {
     expect(launchGap(['read', 'edit', 'shell'], ['read', 'web'])).toEqual(['edit', 'shell']);
     expect(launchGap(['read', 'brain-write'], ['read', 'edit'])).toEqual([]);
     expect(launchGap(['mail-draft', 'mcp'], null)).toEqual([]);
-    const edited = fixture({}, undefined, () => { const c = catalog(NARROW); c.profiles.find(p => p.id === 'strategist')!.launches.push('artisan'); return c; }, undefined, NARROW);
+    const edited = fixture({}, () => { const c = catalog(NARROW); c.profiles.find(p => p.id === 'strategist')!.launches.push('artisan'); return c; }, undefined, NARROW);
     const planner = await edited.root('strategist');
     await expect(edited.call('agent_delegate', planner.id, { tasks: [edited.task('artisan', 'Fix')] })).rejects.toThrow(/Artisan needs edit, shell, browser.*the Orchestrator starts it/);
     expect(edited.m.list().filter(c => c.parentId === planner.id)).toEqual([]);
-    const f = fixture({}, undefined, () => { const c = catalog(NARROW); c.profiles.find(p => p.id === 'strategist')!.launches.push('herald'); return c; }, undefined, NARROW);
+    const f = fixture({}, () => { const c = catalog(NARROW); c.profiles.find(p => p.id === 'strategist')!.launches.push('herald'); return c; }, undefined, NARROW);
     const parent = await f.root('strategist');
     await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('herald', 'Clienti · Avviso')] })).rejects.toThrow(/mail-draft, mcp/);
     expect(f.m.list().filter(c => c.parentId === parent.id)).toEqual([]);
   });
 
-  it('a child may work in a worktree of its parent\'s repository, never in another folder', async () => {
+  it('a child works in any existing folder, also of another repository, and stays its parent\'s child (#460, ADR 0345)', async () => {
     const outer = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-delegation-wt-')); roots.push(outer);
-    const repo = path.join(outer, 'repo'), wt = path.join(outer, 'repo-wt'), elsewhere = path.join(outer, 'elsewhere');
-    for (const d of [repo, wt, elsewhere]) fs.mkdirSync(d);
-    const asked: [string, string | undefined][] = [];
-    const f = fixture({}, async (cwd, target) => { asked.push([cwd, target]); return cwd === repo ? [repo, wt] : []; });
+    const repo = path.join(outer, 'repo'), other = path.join(outer, 'other-repo');
+    for (const d of [repo, other]) fs.mkdirSync(d);
+    const f = fixture({}, undefined, undefined, NARROW);
     const parent = await f.root('strategist', repo);
-    // a folder inside the parent's needs no Git; one outside is looked up alone, never the whole listing
-    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Nel repo')] });
-    expect(asked).toEqual([]);
-    asked.length = 0;
-    const out = await f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Nel worktree'), cwd: wt }] });
-    expect(f.m.list().find(c => c.id === out.children[0].chatId)?.cwd).toBe(wt);
-    expect(asked).toContainEqual([repo, wt]);
-    expect(asked.every(([, t]) => t !== undefined)).toBe(true);
-    await expect(f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Fuori'), cwd: elsewhere }] })).rejects.toThrow(/worktrees/);
-    // the manager checks again at create, the check that counts
-    await expect(f.m.create({ harness: 'claude', cwd: elsewhere, roleId: 'scout', parentId: parent.id, prompt: 'x' }, 'agent')).rejects.toThrow(/worktree/);
+    const out = await f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Nell\'altro repository'), cwd: other }, f.task('scout', 'Nel mio')] });
+    const [there, here] = out.children.map((c: { chatId: string }) => f.m.list().find(x => x.id === c.chatId)!);
+    expect(there).toMatchObject({ cwd: other, parentId: parent.id });
+    expect(here).toMatchObject({ cwd: repo, parentId: parent.id });
+    // it reports to the Strategist, and its permissions are still cut to the Strategist's (the folder widens nothing)
+    expect(f.m.agentPolicy(there.id)).toEqual(f.m.agentPolicy(here.id));
+    await f.call('agent_report', there.id, { outcome: 'done', summary: 'Letto.', output: 'x', doneWhen: [{ criterion: 'criterion A', met: true, evidence: 'visto' }] });
+    expect((await f.call('agent_children', parent.id, {})).children.find((c: { chatId: string }) => c.chatId === there.id)).toMatchObject({ cwd: other, result: { outcome: 'done' } });
+    // reused in its own folder, as any child
+    await expect(f.call('agent_assign_task', parent.id, { chatId: there.id, roleId: 'scout', mode: 'continue', contract: { goal: 'Ancora', doneWhen: ['criterion B'] } })).resolves.toMatchObject({ chatId: there.id });
+    expect(f.m.list().find(x => x.id === there.id)?.cwd).toBe(other);
   });
 
   it('a child asking for a permission beyond its parent is refused visibly; a hidden sub-agent too; a search is fine', async () => {
-    const f = fixture({}, undefined, undefined, undefined, NARROW);
+    const f = fixture({}, undefined, undefined, NARROW);
     const parent = await f.root('strategist');
     // an Artisan under a planner (agent_delegate never launches one; the manager's own guard still holds)
     const child = (await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'artisan', parentId: parent.id, title: 'Fix', prompt: 'x' }, 'agent')).id;
@@ -449,7 +448,7 @@ describe('agent_delegate', () => {
   });
 
   it('a command beyond a parent that may only read commands is refused, never shown; beyond the role but within the parent it is the user\'s call', async () => {
-    const f = fixture({}, undefined, undefined, undefined, NARROW);
+    const f = fixture({}, undefined, undefined, NARROW);
     // a Sentinel under a Scout: the Scout reads commands only, so the Sentinel's writing command goes beyond its parent
     const scout = await f.root('scout');
     const sentinel = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'sentinel', parentId: scout.id }, 'agent');
@@ -503,7 +502,7 @@ describe('agent_delegate', () => {
   it('"Riprendi" on a delegated chat goes on as the same child: under its parent, with its contract, its policy and its skills', async () => {
     // never a root chat, not even for a moment: when its first message reaches the engine it is already the child
     const parentAtSend = new Map<string, string | undefined>();
-    const f: ReturnType<typeof fixture> = fixture({}, undefined, undefined, id => { if (!parentAtSend.has(id)) parentAtSend.set(id, f.m.list().find(c => c.id === id)?.parentId); });
+    const f: ReturnType<typeof fixture> = fixture({}, undefined, id => { if (!parentAtSend.has(id)) parentAtSend.set(id, f.m.list().find(c => c.id === id)?.parentId); });
     const parent = await f.root('strategist');
     await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log', { skills: ['logs'] })] });
     const kid = f.m.list().find(c => c.parentId === parent.id)!;
@@ -986,7 +985,7 @@ describe('versioned task continuity and canonical results', () => {
 
   it('captures exact brain and project scope on each task launch', async () => {
     let brain = '/task-brain-a';
-    const f = fixture({}, undefined, undefined, undefined, {}, [], { brainRoot: () => brain });
+    const f = fixture({}, undefined, undefined, {}, [], { brainRoot: () => brain });
     const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'one' }, 'agent');
     expect(c.run?.scope).toEqual({ brainRoot: path.resolve(brain), projectRoot: path.resolve(f.dir) });
     brain = '/task-brain-b';

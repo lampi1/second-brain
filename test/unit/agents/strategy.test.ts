@@ -43,12 +43,12 @@ const catalog = (n: Narrowed = {}): AgentCatalog => ({ problem: null, archived: 
     launches: [...x.launches], skills: r.skills, tools: { allow: [...x.tools] }, permissionCeiling: x.ceiling, activeVersion: 1, updatedAt: 1, instructions: r.instructions };
 }) } as unknown as AgentCatalog);
 
-function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: string) => Promise<string[]>, roles?: () => AgentCatalog, onSend?: (chatId: string) => void, narrowed: Narrowed = {}, remembered: [string, string][] = [], away = false) {
+function fixture(limits: Partial<DelegationSettings> = {}, roles?: () => AgentCatalog, onSend?: (chatId: string) => void, narrowed: Narrowed = {}, remembered: [string, string][] = [], away = false) {
   roles ??= () => catalog(narrowed);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-delegation-'));
   roots.push(dir);
   const starts = new Map<string, SessionOptions>(), sinks = new Map<string, SessionSink>(), sent = new Map<string, string[]>(), answers: { chat: string; id: string; answer: { allow?: boolean; message?: string }; patch?: Record<string, string> }[] = [];
-  const m = new ChatManager({ userData: dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0, away: () => away, ...(worktrees ? { worktrees } : {}),
+  const m = new ChatManager({ userData: dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0, away: () => away,
     resolveAgent: (req: NewChat) => {
       const id = req.orchestrator ? 'orchestrator' : req.roleId as RoleId | undefined;
       if (!id || (!isWorkRole(id) && id !== 'orchestrator')) return { request: req, owner: { id: 'plain', name: 'Chat', purpose: '', engine: req.harness, model: null, revision: 0, source: 'plain' as const }, instructions: '', policy: null, skills: [], launches: [] };
@@ -66,7 +66,7 @@ function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: str
       } as unknown as HarnessSession;
     } });
   managers.push(m);
-  const tools = [...strategyTools(m), ...delegationTools({ chats: m, roles, settings: () => ({ ...DELEGATION_DEFAULTS, ...limits }), engineRefusal: () => null, label: '[agente]', runs: () => m.runs.list(), ...(worktrees ? { worktrees } : {}), now: () => (clock ?? Date.now)(),
+  const tools = [...strategyTools(m), ...delegationTools({ chats: m, roles, settings: () => ({ ...DELEGATION_DEFAULTS, ...limits }), engineRefusal: () => null, label: '[agente]', runs: () => m.runs.list(), now: () => (clock ?? Date.now)(),
     remember: (role, line) => { remembered.push([role, line]); } })];
   const tool = (name: string): McpTool => tools.find(t => t.name === name)!;
   const call = async (name: string, chatId: string, args: Record<string, unknown>) => JSON.parse(await tool(name).run(args, { mount: 'chat', params: { chatId }, sessionId: '', signal: new AbortController().signal } as never) as string);
@@ -148,7 +148,7 @@ describe('a Strategist\'s plan with the user', () => {
     } finally { store.close(); }
   });
   it('records night plan synchronous completion without a transport acknowledgement in list and digest', async () => {
-    const f = fixture({}, undefined, undefined, undefined, {}, [], true), s = await f.root('strategist');
+    const f = fixture({}, undefined, undefined, {}, [], true), s = await f.root('strategist');
     const plan = f.m.planPropose(s.id, [{ title: 'Night plan', state: 'todo' }]);
     const store = new CoordinationStore(path.join(f.dir, 'app.db'));
     try {
@@ -160,7 +160,7 @@ describe('a Strategist\'s plan with the user', () => {
     } finally { store.close(); }
   });
   it('never confirms night application when the chat checkpoint fails', async () => {
-    const f = fixture({}, undefined, undefined, undefined, {}, [], true), s = await f.root('strategist');
+    const f = fixture({}, undefined, undefined, {}, [], true), s = await f.root('strategist');
     const checkpoint = vi.spyOn(ChatStore.prototype, 'checkpoint').mockImplementationOnce(() => { throw new Error('Checkpoint failed'); });
     const store = new CoordinationStore(path.join(f.dir, 'app.db'));
     try {
@@ -407,7 +407,7 @@ describe('a Strategist\'s plan with the user', () => {
 
   it('keeps typed consent durable and exposes uncertain delivery when the engine rejects it', async () => {
     let fail = false;
-    const f = fixture({}, undefined, undefined, () => { if (fail) throw new Error('engine offline'); });
+    const f = fixture({}, undefined, () => { if (fail) throw new Error('engine offline'); });
     const s = await f.root('strategist');
     await answerPanel(f, s.id, 'Vuoi aggiungere vincoli?', ENOUGH_QUESTIONS);
     await f.call('plan_propose', s.id, PLAN);
@@ -563,7 +563,7 @@ describe('shared/strategy.ts', () => {
     expect(planOf(f, s.id).phase).toBe('proposed');
   });
   it('night mode: a plan with a doubt open does not start by itself; closed by a declared choice it does', async () => {
-    const f = fixture({}, undefined, undefined, undefined, {}, [], true), s = await f.root('strategist');
+    const f = fixture({}, undefined, undefined, {}, [], true), s = await f.root('strategist');
     const doubt = { text: 'Vale anche sulle offerte?' };
     expect(await f.call('plan_propose', s.id, { steps: STEPS3, doubts: [doubt] })).toMatchObject({ shown: false });
     expect(planOf(f, s.id).phase).toBe('asking');
