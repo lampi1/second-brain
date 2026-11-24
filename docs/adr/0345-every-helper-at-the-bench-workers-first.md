@@ -1,8 +1,10 @@
-# ADR 0314 · Every helper at the bench, the ones at work first, and a limit that says what it means
+# ADR 0345 · Every helper at the bench, the ones at work first, and a limit that says what it means
 
 Date: 2026-11-15 · Status: accepted (owner, thread «Proporre nuova Grindhouse e Orchestrator», 2026-11-15: «Non capisco
 questa cosa del limite di 5 figli. e perchè se io volessi scorrere tutti i figli dovrei poterlo fare e vorrei vedere
 quelli in attività per primi») · Amends: ADR 0312 (point 2: up to five helpers and «+N»; the limit chip)
+
+Numbered 0314 until 2026-11-24, a number the CI decision had already taken; nothing else changed.
 
 ## Context
 

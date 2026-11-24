@@ -1,7 +1,7 @@
 // The sub-agents of a bench in the Grindhouse workshop (ADR 0311; the owner picked «aiutanti allo stesso banco»,
 // 2026-11-14; ADR 0312): every chat a chat delegated, and the ones those delegated in turn, stands at its bench as a
 // smaller person doing what it does (StripFace.tsx), a grandchild smaller still, all of them, the ones at work first, in a row that scrolls sideways (the owner,
-// 2026-11-15, ADR 0314). Under the pointer
+// 2026-11-15, ADR 0345). Under the pointer
 // or the keyboard a helper shows its name tag over its head: who, and its state in words; a click on the tag (or around
 // the person) opens that chat in the Grindhouse with the whole team as tabs (AgentStrips.tsx TeamTabs), as a click in
 // the sidebar does; a click on the person itself stays a pat or a whack (ADR 0297). The bench's foot counts them

@@ -94,7 +94,7 @@ test('a Strategist launches a Scout and a Sentinel: indented children, results b
     await expect(tag).toHaveCount(0);
     await helper.hover();
     await expect(tag).toBeVisible();
-    // the tag stays inside the bench, never cut at an edge (ADR 0314)
+    // the tag stays inside the bench, never cut at an edge (ADR 0345)
     const tBox = (await tag.boundingBox())!;
     expect(tBox.x).toBeGreaterThanOrEqual(pBox.x);
     expect(tBox.x + tBox.width).toBeLessThanOrEqual(pBox.x + pBox.width + 1);
@@ -195,7 +195,7 @@ test('a child\'s question waits as a row in the Orchestrator; a permission above
     // the child's card says it waits for the user and hosts no second answer surface (lib/child-requests.ts requestHost)
     const kid = page.getByTestId(`bench-helper-${asker.id}`); // it stands at the parent's bench (ADR 0311, 0312)
     await expect(kid).toHaveAttribute('data-child-state', 'wait', { timeout: 20000 });
-    await kid.hover(); // its name tag shows under the pointer, kept inside the row (ADR 0314)
+    await kid.hover(); // its name tag shows under the pointer, kept inside the row (ADR 0345)
     await expect(page.getByTestId(`bench-helper-open-${asker.id}`)).toContainText('Ti aspetta');
     await page.mouse.move(2, 2);
     await expect(page.getByTestId(`delegation-ask-${asker.id}`)).toHaveCount(0);
