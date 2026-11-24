@@ -44,11 +44,12 @@ describe('the levels on a role\'s page (ADR 0347)', () => {
       expect(html).toContain(`data-testid="role-level-${id}-now"`);
     }
   });
-  it('the Orchestrator: only Base', () => {
+  it('the Orchestrator: only Base, as an ordered list with «+ Aggiungi» and no «ora userebbe» line (#468)', () => {
     const rows = levelsOf(page(orchestrator));
-    expect(rows).toContain('data-testid="st-preset-orchestrator-base"');
-    expect(rows).not.toContain('st-preset-orchestrator-min');
-    expect(rows).not.toContain('role-level-base-0');
+    expect(rows).toContain('data-testid="role-level-base-0"');
+    expect(rows).toContain('data-testid="role-level-base-add"');
+    expect(rows).not.toContain('role-level-min');
+    expect(rows).not.toContain('role-level-base-now');
   });
   it('Base\'s first chip is the card\'s own model', () => {
     const html = levelsOf(page(scout));

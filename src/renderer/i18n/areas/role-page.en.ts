@@ -7,7 +7,7 @@ export const rolePageEn = {
   'rolePage.last': 'last used',
   'rolePage.levels': 'Models per level',
   'rolePage.levels.hint': 'Put the models that fit in each level, from any engine. The app takes the first one of the list that still has limit left; when it is nearly spent it moves to the next. Drag to change the order.',
-  'rolePage.levels.orchestrator': 'The Orchestrator runs on its chat\'s engine: here is its base model.',
+  'rolePage.levels.orchestrator': "The Orchestrator runs on its chat's engine: it starts on the first model of this list on that engine. Drag to change the order.",
   'rolePage.level.min': 'Minimum',
   'rolePage.level.base': 'Base',
   'rolePage.level.max': 'Maximum',

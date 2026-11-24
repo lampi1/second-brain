@@ -27,6 +27,7 @@ import type { OwnerProfile, ProfileResult, ProfileSave } from '../../shared/prof
 import { runsOf, MCP_ACCESS_ROLES, effectiveAccess, type McpServerDef, type McpServersState, type McpServerView, type McpToolAccess } from '../../shared/mcp-servers';
 import { parseMcpSnippet, publicDraft } from '../../shared/mcp-paste';
 import { cardPresets, checkedPresets, type FullPresets, type ModelPreset, type RolePresets } from '../../shared/model-presets';
+import { checkedLevels, type FullLevels, type LevelModel, type RoleLevels } from '../../shared/model-levels';
 import { getAt } from '../brain/settings-schema';
 import { addRedaction, log } from '../log';
 import type { ToolDef } from './tools';
@@ -45,7 +46,9 @@ export interface ConfigDeps {
   view?: { read(): Promise<ViewPrefsRead | null>; apply(patch: Record<string, unknown>): Promise<{ ok: boolean; error?: string; view: ViewPrefsRead } | null> };
   agents?: { list(): AgentCatalog; save(draft: AgentDraft, id: string, reason?: string): AgentProfile; history(id: string): AgentVersion[]; restore(id: string, version: number): AgentProfile;
     /** the card's three presets, Base on the registry's model when it has none (catalog.presetsOf, ADR 0336); absent = cardPresets */
-    presetsOf?(p: AgentProfile): FullPresets };
+    presetsOf?(p: AgentProfile): FullPresets;
+    /** the card's three ordered lists (catalog.levelsFor, ADR 0347); absent = none shown */
+    levelsOf?(p: AgentProfile): FullLevels };
   mcp?: { state(): McpServersState; save(a: { def: unknown; previousId?: string }): McpServersState; setAccess(a: { role: string; server: string; access: McpToolAccess }): McpServersState;
     /** undoable changes (ADR 0207): each returns the key of its «Annulla» */
     agentSave?(def: unknown, previousId?: string): { id: string; undo: string }; agentRemove?(id: string): { undo: string }; agentAccess?(role: string, server: string, access: unknown): { undo: string };
@@ -65,7 +68,7 @@ export const CONFIG_TURN_MIN = 120;
 const AREAS = ['setting', 'view', 'agent', 'connector', 'profile', 'later'] as const;
 const PROFILE_FIELDS = ['name', 'role', 'language', 'mainWork', 'replyStyle'] as const;
 /** The role card's fields an edit may set (name, summary and character are the role's own, fixed) */
-export const AGENT_FIELDS = ['instructions', 'engine', 'model', 'effort', 'maxContext', 'skills', 'launches', 'tools', 'permissionCeiling', 'presets', 'codeMode', 'fast'] as const;
+export const AGENT_FIELDS = ['instructions', 'engine', 'model', 'effort', 'maxContext', 'skills', 'launches', 'tools', 'permissionCeiling', 'presets', 'levels', 'codeMode', 'fast'] as const;
 const VIEW_FIELDS = ['theme', 'density', 'workProfile'] as const;
 
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -98,8 +101,32 @@ export function presetsValue(v: unknown, card: AgentProfile, base: ModelPreset):
   if (!okModel || (be ?? null) !== (card.effort ?? null)) throw new Error(`presets: base deve restare il modello e l'effort della scheda (${showPreset(base)}); per cambiarli usa key model / effort.`);
   return checkedPresets(rest) ?? {};
 }
-const roleView = (p: AgentProfile, presets: FullPresets) => ({ id: p.id, name: p.name, activeVersion: p.activeVersion, engine: p.engine, model: p.model, effort: p.effort ?? null,
-  codeMode: p.codeMode === true, ...(p.engine === 'cursor' ? { fast: p.fast === true } : {}), maxContext: p.maxContext ?? null, skills: p.skills, launches: p.launches, tools: p.tools, permissionCeiling: p.permissionCeiling, presets, ...(p.trial ? { trial: p.trial } : {}),
+/** A card's lists as it stores them (#468): its own lists, else its Base and its own Minimo / Massimo on its engine (a level
+ *  it never set keeps following Base). The undo of a levels change sets this back. */
+export function storedLevels(p: AgentProfile): RoleLevels {
+  if (p.levels && Object.keys(p.levels).length) return structuredClone(p.levels);
+  const at = (x: ModelPreset): LevelModel => ({ engine: p.engine, model: x.model, ...(x.effort ? { effort: x.effort } : {}) });
+  return { base: [at({ model: p.model ?? null, ...(p.effort ? { effort: p.effort } : {}) })], ...(p.presets?.min?.model ? { min: [at(p.presets.min)] } : {}), ...(p.presets?.max?.model ? { max: [at(p.presets.max)] } : {}) };
+}
+/** app_config's levels value (#468): { min?, base?, max? }, each an ordered list of { engine, model | null, effort? }, from
+ *  any engine, checked like the role page (checkedLevels: at most 8 per level, no engine + model twice); the models are
+ *  checked against their engines by the card's save. The Orchestrator has Base only (it runs on its chat's engine and is
+ *  never launched at a level: the first model of the list on that engine is the one it starts on). A JSON string is read too. */
+export function levelsValue(v: unknown, card: AgentProfile): RoleLevels {
+  let o = v;
+  if (typeof o === 'string') { try { o = JSON.parse(o); } catch { throw new Error('levels: un oggetto { min?, base?, max? }, ognuno una lista ordinata di { engine, model, effort? }.'); } }
+  if (!o || typeof o !== 'object' || Array.isArray(o)) throw new Error('levels: un oggetto { min?, base?, max? }, ognuno una lista ordinata di { engine, model, effort? }.');
+  const raw = o as Record<string, unknown>;
+  if (card.id === 'orchestrator' && (raw.min !== undefined || raw.max !== undefined)) throw new Error('levels: l’Orchestrator ha solo Base (gira sul motore della sua chat e non parte mai a un livello): manda { base: [...] }.');
+  // a level left out keeps its list; an empty list ([]) sends Minimo or Massimo back to following Base
+  const kept = storedLevels(card);
+  const l = checkedLevels(card.id === 'orchestrator' ? { base: kept.base, ...raw } : { ...kept, ...raw });
+  if (!l) throw new Error('levels: serve almeno un livello con almeno un modello ({ base: [{ engine, model, effort? }] }).');
+  if (!l.base?.length) throw new Error('levels: Base ha almeno un modello.');
+  return l;
+}
+const roleView = (p: AgentProfile, presets: FullPresets, levels?: FullLevels) => ({ id: p.id, name: p.name, activeVersion: p.activeVersion, engine: p.engine, model: p.model, effort: p.effort ?? null,
+  codeMode: p.codeMode === true, ...(p.engine === 'cursor' ? { fast: p.fast === true } : {}), maxContext: p.maxContext ?? null, skills: p.skills, launches: p.launches, tools: p.tools, permissionCeiling: p.permissionCeiling, presets, ...(levels ? { levels: p.id === 'orchestrator' ? { base: levels.base } : levels } : {}), ...(p.trial ? { trial: p.trial } : {}),
   instructions: p.instructions.length > 400 ? `${p.instructions.slice(0, 400)}… (${p.instructions.length} chars)` : p.instructions });
 
 export function configTool(d: ConfigDeps): ToolDef {
@@ -236,7 +263,7 @@ export function configTool(d: ConfigDeps): ToolDef {
   };
   return {
     name: 'app_config',
-    description: `Read and change the app's configuration for the user, exactly as their own click in the app would (every change is logged with its Annulla). action "get" (read, optional query), "set", "undo", "history"; for connectors also "add", "remove", "test", "form". area: "setting" (every key of Impostazioni and more: key + value; get lists key, label, description, type, current value), "view" (theme system|light|dark, density comfortable|compact, workProfile: key + value), "agent" (a role's card in Brain → Agenti: agentId + key = one of ${AGENT_FIELDS.join('|')} + value; codeMode = true|false, the role's chats work through run_code (not the Orchestrator; full on Claude, partial elsewhere); fast = true|false (Cursor only); presets = the role's Minimo/Base/Massimo (its page, ADR 0336), value {min?, base, max?} each {model, effort?}: base must be the card's current model and effort (change them with key model|effort), min and max only models of the role's one engine, omitted = the same as Base, {base} alone clears them; get returns each role's presets; undo of presets = set the undo.value it returned; undo with agentId + version when set made a new version (text, skills), else set the "before" value back), "connector" (the MCP servers of Impostazioni → Connettori: get = each server, how it runs, its token slots set|missing and who may use it; add = (saved OFF until the user's own «Attiva» on its card, which shows what it runs; so is a change of command|args|env|url; no test before it) snippet (what the user pasted: a Claude Desktop/Cursor "mcpServers" JSON, a command line like "npx -y @x/server", or an http(s) URL; server = which one when the JSON has several) or def {label, transport stdio|http, command, args, env, url, headers, secrets:[{where env|header, name, prefix?}], purpose}; set = server + key enabled (boolean) | access (role ${MCP_ACCESS_ROLES.join('|')} + value all|read|none|{tools:[...]}) | label | purpose | command | args | env | url | headers | tokens (the token variable or header names); remove = server; test = server (opens it as a chat would and lists its tools); form = snippet or def: opens the add form prefilled for the user; undo = changeId from add/set/remove), "profile" (Il mio profilo, the brain's me.md: get, or set key name|role|language|mainWork (array of lines)|replyStyle + value), "later" («Rispondi dopo»: value true|false). Change only what the user asked: their own message, or their «Sì» to your native yes/no question naming the exact change (to ask, use that question), in the last ${CONFIG_ASK_MIN} minutes or the turn it started; then tell them in one line what changed and that Annulla is on the change's card. Never secret values: never put a token in snippet, def, env or headers (a pasted one is dropped before anything is kept); when a server needs a token, say which one and that they type it in its card (form opens it); logins stay the user's. Where a setting is on screen: app_guide / app_ui outline.`,
+    description: `Read and change the app's configuration for the user, exactly as their own click in the app would (every change is logged with its Annulla). action "get" (read, optional query), "set", "undo", "history"; for connectors also "add", "remove", "test", "form". area: "setting" (every key of Impostazioni and more: key + value; get lists key, label, description, type, current value), "view" (theme system|light|dark, density comfortable|compact, workProfile: key + value), "agent" (a role's card in Brain → Agenti: agentId + key = one of ${AGENT_FIELDS.join('|')} + value; codeMode = true|false, the role's chats work through run_code (not the Orchestrator; full on Claude, partial elsewhere); fast = true|false (Cursor only); presets = the role's Minimo/Base/Massimo (its page, ADR 0336), value {min?, base, max?} each {model, effort?}: base must be the card's current model and effort (change them with key model|effort), min and max only models of the role's one engine, omitted = the same as Base, {base} alone clears them; get returns each role's presets and levels; levels = the role's ordered model lists per level (ADR 0347, the page's «Modelli per livello»), value {min?, base?, max?} each an ordered list (first = best, at most 8, no engine + model twice) of {engine, model (null = the engine's default), effort?} from ANY engine: this is how to put models of several engines in one level; a level left out keeps its list, [] sends min/max back to following base, and the head of base becomes the card's engine, model and effort; the Orchestrator has base only (its chat starts on the first model of the list on its engine); undo of presets or levels = set the undo.value it returned (levels also posts a card with Annulla); undo with agentId + version when set made a new version (text, skills), else set the "before" value back), "connector" (the MCP servers of Impostazioni → Connettori: get = each server, how it runs, its token slots set|missing and who may use it; add = (saved OFF until the user's own «Attiva» on its card, which shows what it runs; so is a change of command|args|env|url; no test before it) snippet (what the user pasted: a Claude Desktop/Cursor "mcpServers" JSON, a command line like "npx -y @x/server", or an http(s) URL; server = which one when the JSON has several) or def {label, transport stdio|http, command, args, env, url, headers, secrets:[{where env|header, name, prefix?}], purpose}; set = server + key enabled (boolean) | access (role ${MCP_ACCESS_ROLES.join('|')} + value all|read|none|{tools:[...]}) | label | purpose | command | args | env | url | headers | tokens (the token variable or header names); remove = server; test = server (opens it as a chat would and lists its tools); form = snippet or def: opens the add form prefilled for the user; undo = changeId from add/set/remove), "profile" (Il mio profilo, the brain's me.md: get, or set key name|role|language|mainWork (array of lines)|replyStyle + value), "later" («Rispondi dopo»: value true|false). Change only what the user asked: their own message, or their «Sì» to your native yes/no question naming the exact change (to ask, use that question), in the last ${CONFIG_ASK_MIN} minutes or the turn it started; then tell them in one line what changed and that Annulla is on the change's card. Never secret values: never put a token in snippet, def, env or headers (a pasted one is dropped before anything is kept); when a server needs a token, say which one and that they type it in its card (form opens it); logins stay the user's. Where a setting is on screen: app_guide / app_ui outline.`,
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     inputSchema: { type: 'object', additionalProperties: false, required: ['action', 'area'], properties: {
       action: { type: 'string', enum: ['get', 'set', 'undo', 'history', 'add', 'remove', 'test', 'form'] }, area: { type: 'string', enum: [...AREAS] },
@@ -294,7 +321,7 @@ export function configTool(d: ConfigDeps): ToolDef {
           if (!d.agents) throw new Error('ruoli non disponibili');
           const ag = d.agents;
           const presetsOf = (p: AgentProfile) => ag.presetsOf?.(p) ?? cardPresets(p);
-          if (action === 'get') return (a.agentId ? [role(a.agentId)] : ag.list().profiles).map(p => roleView(p, presetsOf(p)));
+          if (action === 'get') return (a.agentId ? [role(a.agentId)] : ag.list().profiles).map(p => roleView(p, presetsOf(p), ag.levelsOf?.(p)));
           if (action === 'history') return d.agents.history(role(a.agentId).id).slice(-10).map(v => ({ version: v.version, at: new Date(v.at).toISOString(), author: v.author, reason: v.reason, state: v.state, ...(v.changed ? { changed: v.changed } : {}), ...(v.amended ? { amended: v.amended.map(x => x.reason) } : {}) }));
           if (action === 'undo') {
             asked('i ruoli');
@@ -312,15 +339,22 @@ export function configTool(d: ConfigDeps): ToolDef {
           if (old.id === 'orchestrator' && (key === 'tools' || key === 'permissionCeiling')) throw new Error('bloccato: i permessi dell’Orchestrator li cambia solo l’utente, dalla sua carta in Brain → Agenti');
           // "null" or "" for the model: the registry's model (an agent that cannot send a JSON null)
           // presets: { min?, base, max? } with Base the card's own model and effort (ADR 0336)
-          const value = key === 'presets' ? presetsValue(a.value, old, presetsOf(old).base) : key === 'model' && (a.value === '' || a.value === 'null') ? null : a.value;
+          const value = key === 'presets' ? presetsValue(a.value, old, presetsOf(old).base) : key === 'levels' ? levelsValue(a.value, old) : key === 'model' && (a.value === '' || a.value === 'null') ? null : a.value;
           const p = d.agents.save({ ...draftOf(old), [key]: value } as AgentDraft, old.id, `Modificato dall’Orchestrator su richiesta dell’utente${reason ? `: ${reason}` : ''}`.slice(0, 600));
           if (p.updatedAt === old.updatedAt) return { agentId: p.id, unchanged: true, note: 'già così' };
           log.info('appctl', 'Orchestrator changed a role', { chat: d.callerId, data: { role: p.id, key, version: p.activeVersion } });
-          const field = (x: AgentProfile) => key === 'presets' ? presetsOf(x) : (x as unknown as Record<string, unknown>)[key] ?? null;
+          const field = (x: AgentProfile) => key === 'presets' ? presetsOf(x) : key === 'levels' ? storedLevels(x) : (x as unknown as Record<string, unknown>)[key] ?? null;
           const before = field(old);
           // presets: the view shows all three, the undo sets back what the card stored (its own Base, and min / max only
           // when it had them: the expanded view would pin them to the Base, or fail on a Base without a model)
-          const undoValue = key === 'presets' ? { base: { model: old.model ?? null, ...(old.effort ? { effort: old.effort } : {}) }, ...(old.presets ? structuredClone(old.presets) : {}) } : before;
+          if (key === 'levels') {
+            // the change's card in the feed, with its «Annulla» (the lists change the version in use in place)
+            const list = (l: RoleLevels) => (['base', 'min', 'max'] as const).filter(id => l[id]?.length).map(id => `${id}: ${l[id]!.map(x => `${x.model ?? 'predefinito'} (${x.engine}${x.effort ? ` ${x.effort}` : ''})`).join(', ')}`).join(' · ');
+            d.announce?.({ kind: 'agent-updated', title: `${p.name}: modelli per livello cambiati dall’Orchestrator`, detail: `${list(storedLevels(p))} · ${reason ? `richiesta: ${reason}` : 'su tua richiesta'}`,
+              action: { kind: 'levels-undo', agentId: p.id, expectedRevision: p.updatedAt, levels: before as RoleLevels } });
+          }
+          // levels: a level the card did not have goes back to following Base ([]: a level left out would keep the new list)
+          const undoValue = key === 'levels' ? old.id === 'orchestrator' ? { base: storedLevels(old).base } : { min: [], max: [], ...storedLevels(old) } : key === 'presets' ? { base: { model: old.model ?? null, ...(old.effort ? { effort: old.effort } : {}) }, ...(old.presets ? structuredClone(old.presets) : {}) } : before;
           // tools, permissions and limits change the version in use in place (ADR 0186): undo = set the old value back
           return { agentId: p.id, changed: key, before, after: field(p), version: p.activeVersion,
             undo: p.activeVersion === old.activeVersion ? { agentId: p.id, key, value: undoValue, how: 'set it back with this value (same version)' } : { agentId: p.id, version: old.activeVersion } };

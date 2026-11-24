@@ -7,7 +7,8 @@ import { useState } from 'react';
 import type { FeedAction } from '@shared/contract';
 import { sb } from '../sb';
 import { go } from '../actions';
-import { refreshAgents } from '../store/agents';
+import { refreshAgents, saveAgent } from '../store/agents';
+import { agentDraftOf } from '../lib/agent-drafts';
 import { t } from '../i18n';
 
 /** Undoes a maintenance pass: newest change first; stops at the first one that cannot be undone any more. */
@@ -35,12 +36,19 @@ export function AgentFeedAction({ action }: { action?: FeedAction }) {
     try {
       if (action.kind === 'brain-undo') { await undoChanges(action.ids); setDone(true); }
       else if (action.kind === 'connector-undo') { await sb.invoke('mcpservers:undo', { undo: action.undo }); setDone(true); }
+      else if (action.kind === 'levels-undo') {
+        // the role's lists back as they were (#468), unless the card changed since: then the user looks at it first
+        const p = (await sb.invoke('agents:list', undefined)).profiles.find(x => x.id === action.agentId);
+        if (!p) throw new Error(t('appText.feedAction.levelsGone'));
+        if (p.updatedAt !== action.expectedRevision) throw new Error(t('appText.feedAction.levelsChanged'));
+        await saveAgent({ ...agentDraftOf(p), levels: action.levels }, p.id); setDone(true);
+      }
       else await sb.invoke('agents:undo', action.undo);
       await refreshAgents();
     } catch (e) { setError(String(e)); }
     finally { setBusy(false); }
   };
-  const label = t(action.kind === 'agent-proposals' ? 'appText.feedAction.review' : done ? 'appText.feedAction.undone' : action.kind === 'brain-undo' || action.kind === 'connector-undo' ? 'appText.feedAction.undo' : 'appText.feedAction.undoChange');
+  const label = t(action.kind === 'agent-proposals' ? 'appText.feedAction.review' : done ? 'appText.feedAction.undone' : action.kind === 'brain-undo' || action.kind === 'connector-undo' || action.kind === 'levels-undo' ? 'appText.feedAction.undo' : 'appText.feedAction.undoChange');
   if (action.kind === 'connector-undo' && action.activate) {
     const act = action.activate;
     return <><code className="mcp-runs" data-testid="feed-connector-runs">{act.runs}</code>

@@ -2,6 +2,7 @@
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
 import type { AgentUndo } from '../agents';
+import type { RoleLevels } from '../model-levels';
 
 export type Priority = 'urgent' | 'normal' | 'quiet';
 export interface FeedEvent {
@@ -22,7 +23,9 @@ export interface FeedEvent {
 /** brain-undo: the changes a maintenance pass the app ran by itself made (brainmodel:rollback each, newest first; ADR 0102) */
 /** connector-undo: a connector change the Orchestrator made (app_config, ADR 0207): mcpservers:undo with its key;
  *  `activate`: the server waits for the user's «Attiva» (mcpservers:activate), shown with exactly what it runs */
-export type FeedAction = { kind: 'agent-undo'; undo: AgentUndo } | { kind: 'agent-proposals' } | { kind: 'brain-undo'; ids: string[] } | { kind: 'connector-undo'; undo: string; activate?: { server: string; runs: string } };
+export type FeedAction = { kind: 'agent-undo'; undo: AgentUndo } | { kind: 'agent-proposals' } | { kind: 'brain-undo'; ids: string[] } | { kind: 'connector-undo'; undo: string; activate?: { server: string; runs: string } }
+  /** levels-undo: the Orchestrator changed a role's model lists (app_config, #468): agents:save with these lists back, when the card is still at that revision */
+  | { kind: 'levels-undo'; agentId: string; expectedRevision: number; levels: RoleLevels };
 
 // ---- DevOps (src/main/tasks): the user's Azure DevOps, read by the brain's read-only scripts, never written
 

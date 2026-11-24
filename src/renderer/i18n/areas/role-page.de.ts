@@ -7,7 +7,7 @@ export const rolePageDe = {
   'rolePage.last': 'zuletzt',
   'rolePage.levels': 'Modelle pro Stufe',
   'rolePage.levels.hint': 'Leg in jede Stufe die passenden Modelle, auch von verschiedenen Motoren. Die App nimmt das erste der Liste, das noch Limit hat; ist es fast aufgebraucht, das nächste. Ziehen ändert die Reihenfolge.',
-  'rolePage.levels.orchestrator': 'Der Orchestrator läuft auf dem Motor seines Chats: hier sein Basismodell.',
+  'rolePage.levels.orchestrator': 'Der Orchestrator läuft auf dem Motor seines Chats: er startet mit dem ersten Modell dieser Liste auf diesem Motor. Ziehen ändert die Reihenfolge.',
   'rolePage.level.min': 'Minimum',
   'rolePage.level.base': 'Basis',
   'rolePage.level.max': 'Maximum',

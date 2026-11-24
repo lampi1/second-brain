@@ -381,6 +381,9 @@ export class AgentCatalogService {
           if (x.model !== null && !en.modelSelectable) throw new Error(`${where}: ${en.modelReason ?? `${en.label} non applica una scelta di modello.`}`);
           if (x.model !== null && !(keep && had.has(`${x.engine}\u0000${x.model}`)) && !en.models.some(m => m.id === x.model)) throw new Error(`${where}: il modello «${x.model}» non è tra quelli noti di ${en.label}.`);
           if (x.effort && !en.effort) throw new Error(`${where}: ${en.label} non supporta la scelta dell’effort.`);
+          // the effort levels a model is known to take (its engine's list or the registry's row, #468), as the page offers them
+          const takes = x.model !== null && x.effort && !had.has(`${x.engine}\u0000${x.model}`) ? en.models.find(m => m.id === x.model)?.efforts : undefined;
+          if (takes && x.effort && !takes.includes(x.effort)) throw new Error(`${where}: ${x.model} su ${en.label} non prende l’effort ${x.effort} (prende: ${takes.join(', ') || 'nessuno'}).`);
         }
       }
     }
@@ -567,8 +570,15 @@ export class AgentCatalogService {
       const p = this.profiles.find(x => x.id === 'orchestrator');
       // its card's model and effort when the card is on this engine (ADR 0107; the Settings' «Chat aperte
       // dall'Orchestrator» models moved onto the card, 2026-11-23)
-      if (p?.model && p.engine === req.harness) req = { ...req, model: p.model };
-      if (p?.effort && p.engine === req.harness && req.effort === undefined) req = { ...req, effort: p.effort };
+      // its Base list (#468): the first model of the list on the chat's engine (the user orders them on its page)
+      const own = p?.levels?.base?.find(x => x.engine === req.harness);
+      if (own) {
+        if (own.model) req = { ...req, model: own.model };
+        if (own.effort && req.effort === undefined) req = { ...req, effort: own.effort };
+      } else {
+        if (p?.model && p.engine === req.harness) req = { ...req, model: p.model };
+        if (p?.effort && p.engine === req.harness && req.effort === undefined) req = { ...req, effort: p.effort };
+      }
       return { request: req, owner: orchestratorOwner(req.harness, req.model ?? null, p), instructions: p?.instructions ?? ROLE_DEFAULTS.orchestrator.instructions,
         policy: p && (p.tools || p.permissionCeiling) ? { tools: p.tools ? structuredClone(p.tools) : null, ceiling: p.permissionCeiling } : null,
         skills: [...new Set([...(p?.skills ?? ROLE_DEFAULTS.orchestrator.skills), ...(p?.knowhow?.linked ?? [])])], launches: p?.launches ?? [...ROLE_DEFAULTS.orchestrator.launches] };

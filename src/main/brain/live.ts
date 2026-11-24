@@ -13,6 +13,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import type { ChatSummary, FeedAction, FeedEvent, Priority } from '../../shared/contract';
+import { checkedLevels, type RoleLevels } from '../../shared/model-levels';
 import { log, errText } from '../log';
 import { runNode, type NodeRunner } from './node';
 import { brainScript } from '../rules/tools';
@@ -64,6 +65,12 @@ export function feedAction(v: unknown): FeedAction | undefined {
     const u = (a as { undo?: unknown }).undo, act = (a as { activate?: { server?: unknown; runs?: unknown } }).activate;
     const activate = act && typeof act.server === 'string' && /^[a-z0-9-]{1,40}$/.test(act.server) && typeof act.runs === 'string' && act.runs.length <= 8000 ? { server: act.server, runs: act.runs } : undefined;
     if (typeof u === 'string' && /^[0-9a-f]{12}$/.test(u)) return { kind: 'connector-undo', undo: u, ...(activate ? { activate } : {}) };
+  }
+  if (a?.kind === 'levels-undo') {
+    const u = a as { agentId?: unknown; expectedRevision?: unknown; levels?: unknown };
+    let levels: RoleLevels | undefined;
+    try { levels = checkedLevels(u.levels); } catch { levels = undefined; }
+    if (levels && typeof u.agentId === 'string' && /^[a-z][a-z0-9_-]{0,79}$/.test(u.agentId) && typeof u.expectedRevision === 'number' && Number.isFinite(u.expectedRevision)) return { kind: 'levels-undo', agentId: u.agentId, expectedRevision: u.expectedRevision, levels };
   }
   if (a?.kind === 'agent-undo') {
     const u = a.undo;

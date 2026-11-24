@@ -234,6 +234,8 @@ export const appTextEn: typeof appTextIt = {
   // components: AgentFeedAction, DelegationCard, CodexAutonomy, RoutingGroup
   'appText.feedAction.review': 'Review proposal',
   'appText.feedAction.undone': 'Undone',
+  'appText.feedAction.levelsGone': 'The role is gone.',
+  'appText.feedAction.levelsChanged': 'The role changed since: look at its page before undoing.',
   'appText.feedAction.undo': 'Undo',
   'appText.feedAction.undoChange': 'Undo change',
   'appText.delegation.denied': 'Denied by the user.',
