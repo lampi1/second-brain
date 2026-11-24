@@ -2,6 +2,7 @@
 // for the whole app and again at each workmap:changed; a change that comes while it reads makes it read once more; a
 // failed reading keeps the rows it had; a chat's map is read fresh.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as Store from '../../src/renderer/store/work-maps';
 import type { WorkMapInfo } from '../../src/shared/work-map';
 
 const row = (id: string, p: Partial<WorkMapInfo> = {}) => ({ id, title: id, state: 'running', touches: [], can: [], ...p }) as WorkMapInfo;
@@ -9,7 +10,7 @@ let open: WorkMapInfo[], put: WorkMapInfo[], changed: () => void, gate: Promise<
 const invoke = vi.fn(async (_c: string, q: { archived?: boolean }) => { const r = q.archived ? put : open; if (gate) await gate; return r; });
 const on = vi.fn((_c: string, fn: () => void) => { changed = fn; return () => {}; });
 const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
-let store: typeof import('../../src/renderer/store/work-maps');
+let store: typeof Store;
 
 beforeEach(async () => {
   vi.resetModules(); invoke.mockClear(); on.mockClear();
