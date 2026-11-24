@@ -47,6 +47,14 @@ describe('plan_propose on a map', () => {
   });
 });
 
+describe('what the proposal tells the Strategist', () => {
+  it('names the buttons the job map really has', async () => {
+    const r = await fixture().call('plan_propose', { steps: [{ title: 'Riepilogo' }] });
+    for (const label of ['«Approva e parti»', '«Approva, parti dopo»', '«Cambia il piano»']) expect(r.note).toContain(label);
+    expect(r.note).not.toContain('Cambia qualcosa');
+  });
+});
+
 describe('plan_update add', () => {
   it('adds a step on a new piece to an approved plan, with no new approval', async () => {
     const f = fixture({ phase: 'running', map: 'shop', steps: [{ title: 'Scrivo i resi', state: 'now', on: 'web' }] });
@@ -66,6 +74,9 @@ describe('plan_update add', () => {
     const late = fixture({ phase: 'running', map: 'shop', steps: [{ title: 'a', state: 'now' }] });
     await expect(late.call('plan_propose', { steps: [{ title: 'x' }], map: { project: 'shop', add: [{ name: 'Log' }] } })).rejects.toThrow(/approved and under way/);
     expect(late.drawn).toEqual([]);
+    const stopped = fixture({ phase: 'running', map: 'shop', stopped: true, steps: [{ title: 'a', state: 'now', on: 'web' }] });
+    await expect(stopped.call('plan_update', { add: { title: 'Altro', piece: { name: 'Log', parent: 'web' } } })).rejects.toThrow(/stopped this job/);
+    expect(stopped.drawn).toEqual([]);
   });
 });
 

@@ -24,12 +24,13 @@ chat closed before the approval. Approving and starting were one click.
    a chat is not pruned.
 5. **Stop, resume, replan.** «Ferma» marks the plan stopped and interrupts its chats; nothing new starts until «Riprendi».
    A replan is a revision: what started goes on, nothing new starts before the user's ok, and started steps the new plan
-   does not need (`remove`) stop at that ok.
+   does not need (`remove`) stop at that ok. A request that does not reach the Strategist leaves the plan as it was.
 6. **The owner chat.** Closed by the user, or by the app with steps open = stopped. No longer in the app = stopped (gone):
    resuming opens a new Strategist with the saved idea, answers and steps, and its plan needs the user's ok again. A chat
    that moves to another job leaves its first map behind and gets another; a chat that continues another takes its map.
 7. **Finished and seen goes to the archive** by itself and can be reopened. Ideas and plans to approve stay until the user
-   starts or archives them. Archiving a plan that waits answers its request without calling the Strategist back.
+   starts or archives them. Archiving a plan that waits answers its request without calling the Strategist back;
+   reopened, the job is stopped by the user and «Riprendi» asks the Strategist for the plan again (`putAway`).
 8. **Migration at load:** a chat with a plan gets its map once; an old closed job that was over goes straight to the
    archive, so the user does not meet it again.
 9. **Who acts:** the user (`workmap:*` IPC) and the authenticated Orchestrator for him (`app_project_map` jobs, job, idea,

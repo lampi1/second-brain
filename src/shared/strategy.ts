@@ -80,6 +80,8 @@ export interface StrategyPlan {
   map?: string;
   /** the user stopped the job (ADR 0342): no new step starts until they resume it */
   stopped?: true;
+  /** with `stopped`: the user put the plan in the archive before approving it; proposed again it is not stopped */
+  putAway?: true;
   /** every doubt of this job, open or closed with who closed it and its source (ADR 0344); absent = never listed */
   doubts?: PlanDoubt[];
 }
@@ -100,9 +102,11 @@ export function isPlanApproval(text: string): boolean {
 export const PLAN_RESUMED = 'Riprendi il lavoro: riparti dai passi fermi e vai avanti con il piano.';
 /** a plan waiting for the user, put in the archive: nothing starts, and the Strategist is not called back (ADR 0342) */
 export const PLAN_PUT_AWAY = 'Messo da parte: per ora non parte.';
+/** what «Riprendi» sends when that plan's job is reopened: there is no step to resume, the plan comes back to approve */
+export const PLAN_REPROPOSE = 'Riprendi il lavoro: avevo messo da parte il piano prima di approvarlo. Riproponilo con plan_propose (revise: true se qualche passo è già partito) e aspetta la mia approvazione: prima non parte niente.';
 /** replanning a job already under way (ADR 0342): the app's line after the user's own words */
 export const PLAN_REPLAN = 'Ripianifica con plan_propose revise: true: i passi già partiti restano (keep) o, se non servono più, vanno in remove; nessun passo nuovo parte prima della mia approvazione.';
-/** the user's «Cambia qualcosa»: the Strategist proposes again */
+/** the user's «Cambia il piano»: the Strategist proposes again */
 export const planChange = (text: string): string => `Cambia il piano: ${text.trim()}`;
 /** the answer «Basta domande» gives to the open question */
 export const ENOUGH_QUESTIONS = 'Basta domande: proponi ora il piano con quello che sai.';
@@ -330,7 +334,7 @@ export function afterChatsEnded(plan: StrategyPlan, outcomes: (id: string) => De
 /** A final parent report ends execution, without claiming unfinished steps met their criteria.
  * Unfinished work is partial (or retains a blocked result); explicit successful steps retain their quality. */
 export function finishPlan(plan: StrategyPlan, now: number): StrategyPlan {
-  const { stopped: _x, ...rest } = plan;
+  const { stopped: _x, putAway: _p, ...rest } = plan;
   return { ...rest, phase: 'done', at: now, steps: plan.steps.map(({ drop: _d, ...s }) => ({ ...s, state: 'done',
     outcome: s.outcome ?? (s.state === 'done' ? 'done' : s.state === 'blocked' ? 'blocked' : 'partial'),
     endedAt: s.endedAt ?? now })) };
@@ -367,7 +371,7 @@ export function readPlan(v: unknown): StrategyPlan | null {
       ...(s.startedAt ? { startedAt: s.startedAt } : {}), ...(s.endedAt ? { endedAt: s.endedAt } : {}), ...(s.on ? { on: s.on } : {}), ...(s.added === true ? { added: true as const } : {}), ...(s.par === true ? { par: true as const } : {}), ...(s.drop === true ? { drop: true as const } : {}),
       // read leniently: a bad preset or model (or none, before 2026-11-23) is left out, the plan stays
       ...(isPresetId(s.preset) ? { preset: s.preset } : {}), ...(str(s.model, 120) && !/[\r\n]/.test(s.model!) ? { model: s.model } : {}) })),
-    ...(p.doneWhen ? { doneWhen: p.doneWhen as string } : {}), ...(p.map ? { map: p.map as string } : {}), ...(p.stopped === true ? { stopped: true as const } : {}),
+    ...(p.doneWhen ? { doneWhen: p.doneWhen as string } : {}), ...(p.map ? { map: p.map as string } : {}), ...(p.stopped === true ? { stopped: true as const, ...(p.putAway === true ? { putAway: true as const } : {}) } : {}),
     ...(doubts ? { doubts } : {}),
   };
 }

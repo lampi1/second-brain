@@ -1,7 +1,7 @@
 // A Strategist's plan with the user (ADR 0108), on its chat's own MCP endpoint (/mcp/chat/:chatId/:token; the caller is
 // the token's chat, never an argument), pre-approved like the delegation tools (chats/app-tool-approval.ts) and shown
-// only to a Strategist root chat (ChatManager.chatToolShown): plan_propose puts its short plan on its strip for the
-// user's «Approva e parti» / «Cambia qualcosa» (the answer comes back as the user's message); plan_update moves a step
+// only to a Strategist root chat (ChatManager.chatToolShown): plan_propose puts its short plan on the job's map for
+// the user's «Approva e parti» / «Cambia il piano» (the answer comes back as the user's message); plan_update moves a step
 // it does itself. Delegated steps move by themselves (agent_delegate's `step`, the children's reports). A first proposal
 // lists its doubts and one open doubt keeps the plan from being shown for approval (shared/plan-doubts.ts, ADR 0344).
 // Used by wiring.ts.
@@ -130,7 +130,7 @@ export function strategyTools(chats: StrategyChats, away: () => boolean = () => 
       } else if (steps.some(s => s.on !== undefined)) throw new Error('steps[].on needs map (the project the plan is drawn on).');
       // the app approved it for the absent user
       if (chats.planPropose(id, steps, doneWhen, map, revise, doubts).phase === 'running') return JSON.stringify({ approved: true, steps: steps.length, note: AWAY_PLAN_NOTE });
-      return JSON.stringify({ shown: true, steps: steps.length, note: 'The plan is shown to the user with «Approva e parti» and «Cambia qualcosa». End your turn now: the answer arrives as the user\'s message. Delegate nothing before it.' });
+      return JSON.stringify({ shown: true, steps: steps.length, note: 'The plan is shown to the user on the job\'s map (Mappa → Lavori) with «Approva e parti», «Approva, parti dopo» and «Cambia il piano». End your turn now: the answer arrives as the user\'s message. Delegate nothing before it.' });
     },
   }, {
     name: 'plan_update',
@@ -147,7 +147,9 @@ export function strategyTools(chats: StrategyChats, away: () => boolean = () => 
       if (a.add !== undefined) {
         const { piece, ...raw } = (a.add && typeof a.add === 'object' ? a.add : {}) as Record<string, unknown>;
         let step = checkStep(raw);
-        withAdded(plan, step, 0); // refused before anything is drawn
+        // refused before anything is drawn
+        if (plan.stopped) throw new Error('plan_update add: the user stopped this job; wait for the user to resume it.');
+        withAdded(plan, step, 0);
         if (plan.map && maps) {
           if (piece !== undefined) { const drawn = maps.planDraw(id, { project: plan.map, add: [piece], keep: true }); step = { ...step, on: drawn.added[0]! }; }
           onCheck([step], maps.elementsOf(plan.map), 'add.on');

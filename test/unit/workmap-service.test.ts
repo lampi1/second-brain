@@ -38,7 +38,7 @@ function maps(extra: Partial<WorkMapsDeps> = {}): WorkMaps {
       planStop: async id => { calls.push(['planStop', id]); const c = chats.find(x => x.id === id)!; if (c.plan) set(id, c.plan.phase, { stopped: true }); },
       planResume: async id => { calls.push(['planResume', id]); const c = chats.find(x => x.id === id)!, { closedAt: _a, closedBy: _b, ...open } = c; const { stopped: _s, ...p } = c.plan ?? plan('running'); put({ ...open, ...(c.plan ? { plan: p } : {}) } as ChatSummary); },
       planReplan: async (id, text) => { calls.push(['planReplan', id, text]); set(id, 'revising'); },
-      planPutAway: id => { calls.push(['planPutAway', id]); set(id, 'revising'); },
+      planPutAway: id => { calls.push(['planPutAway', id]); set(id, 'revising', { stopped: true, putAway: true }); },
     },
     emit: id => emitted.push(id), now: () => now, newId: () => `wm_test${String(++n).padStart(2, '0')}`, ...extra,
   });
@@ -201,6 +201,10 @@ describe('the lifecycle', () => {
     now += 100;
     w.observe('chat:updated', change('a', { plan: plan('proposed', now) }));
     expect(w.get(m.id)!.state).toBe('toApprove');
+    // put away again and reopened: stopped by the user, to resume
+    await w.act(m.id, 'archive');
+    expect(await w.act(m.id, 'reopen')).toMatchObject({ state: 'stopped', stopped: { by: 'user' } });
+    expect(w.list().find(i => i.id === m.id)!.can).toEqual(['resume', 'archive']);
   });
 
   it('one action at a time on a map', async () => {

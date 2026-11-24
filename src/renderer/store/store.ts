@@ -415,7 +415,7 @@ export async function answer(req: PendingRequest, a: Answer): Promise<boolean> {
   }
 }
 
-/** A Strategist's proposed plan (ADR 0108): «Approva e parti», or «Cambia qualcosa» with what to change; false = not sent. */
+/** A Strategist's proposed plan (ADR 0108): «Approva e parti», or «Cambia il piano» with what to change; false = not sent. */
 export async function planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string): Promise<boolean> {
   try { await sb.invoke('chat:plan', { chatId, decision, at, ...(decision === 'change' ? { text } : {}) }); return true; }
   catch (e) { fail(t('appText.store.planAnswerNotSent'))(e); return false; }

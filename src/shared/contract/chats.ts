@@ -446,7 +446,7 @@ export interface ChatsInvokeMap {
    *  the Orchestrator is told when it changed, so «qui» and «questo» need no explaining */
   'chat:send': [{ chatId: string; text: string; images?: ImageAttachment[]; voice?: boolean; diagnostic?: RuntimeDiagnostic; where?: string }, void];
   'chat:answer': [{ chatId: string; requestId: string; answer: Answer }, void];
-  /** a Strategist's proposed plan: «Approva e parti», or «Cambia qualcosa» with what to change (ADR 0108) */
+  /** a Strategist's proposed plan: «Approva e parti», or «Cambia il piano» with what to change (ADR 0108) */
   /** at = the proposal the user read (StrategyPlan.at): a newer one is refused, never approved unseen */
   'chat:plan': [{ chatId: string; decision: 'approve' | 'change'; at: number; text?: string }, void];
   /** keepQueued: "Invia subito" stops only the turn; messages the engine already holds still run after it */

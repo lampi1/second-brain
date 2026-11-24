@@ -25,7 +25,7 @@ import type { AgentCatalog } from '../../../src/shared/agents';
 import type { NewChat } from '../../../src/shared/contract';
 import { DELEGATION_DEFAULTS, isWorkRole, ROLE_DEFAULTS, ROLE_IDS, type RoleId } from '../../../src/shared/roles';
 import type { PlanDoubt } from '../../../src/shared/plan-doubts';
-import { ENOUGH_QUESTIONS, PLAN_APPROVED, PLAN_REPLAN, PLAN_RESUMED, type StrategyPlan } from '../../../src/shared/strategy';
+import { ENOUGH_QUESTIONS, PLAN_APPROVED, PLAN_REPLAN, PLAN_REPROPOSE, PLAN_RESUMED, type StrategyPlan } from '../../../src/shared/strategy';
 
 const roots: string[] = [], managers: ChatManager[] = [];
 afterEach(async () => { for (const m of managers.splice(0)) await m.shutdown(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
@@ -296,6 +296,25 @@ describe('replanning a running job', () => {
     expect(f.kids(s.id)).toHaveLength(2);
   });
 
+  it('a request that does not reach the Strategist leaves the plan as it was', async () => {
+    const { f, s, kid } = await running(), send = f.m.send.bind(f.m);
+    f.m.send = async () => { throw new Error('engine down'); };
+    await expect(act(f, s.id, 'replan', 'Aggiungi i resi')).rejects.toThrow('engine down');
+    f.m.send = send;
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'running', plan: { phase: 'running', steps: [{ state: 'now', chatIds: [kid] }, {}, {}] } });
+    expect(f.maps().list()[0]!.planning).toBeFalsy();
+    // and it can be asked again
+    expect(await act(f, s.id, 'replan', 'Aggiungi i resi')).toMatchObject({ plan: { phase: 'revising' } });
+    expect(f.sent.get(s.id)!.at(-1)).toContain('Aggiungi i resi');
+  });
+
+  it('a request that does not go out never undoes what changed meanwhile', async () => {
+    const { f, s } = await running();
+    f.m.send = async () => { await f.m.planStop(s.id); throw new Error('engine down'); };
+    await expect(act(f, s.id, 'replan', 'Aggiungi i resi')).rejects.toThrow('engine down');
+    expect(f.m.planOf(s.id)).toMatchObject({ phase: 'revising', stopped: true });
+  });
+
   it('a removed step goes on until the approval, and its chat stops then', async () => {
     const { f, s, kid } = await running();
     await act(f, s.id, 'replan', 'Senza la ricerca');
@@ -346,7 +365,35 @@ describe('stop, resume and the owner chat', () => {
     expect((await act(f, s.id, 'archive')).state).toBe('archived');
     expect(f.sent.get(s.id)?.length ?? 0).toBe(before);
     expect(f.m.planOf(s.id)!.phase).toBe('revising');
-    expect((await act(f, s.id, 'reopen')).state).toBe('idea');
+    // reopened, nobody works on it: it reads stopped by the user, and «Riprendi» asks for the plan again
+    expect(await act(f, s.id, 'reopen')).toMatchObject({ state: 'stopped', stopped: { by: 'user' } });
+    expect(f.maps().list()[0]).toMatchObject({ can: ['resume', 'archive'] });
+    expect(f.maps().list()[0]!.planning).toBeFalsy();
+    expect((await act(f, s.id, 'resume')).state).not.toBe('stopped');
+    expect(f.sent.get(s.id)!.at(-1)).toContain(PLAN_REPROPOSE);
+    await f.call('plan_propose', s.id, PLAN);
+    expect(f.m.planOf(s.id)!.stopped).toBeUndefined();
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'toApprove', plan: { phase: 'proposed' } });
+    expect(f.maps().list()[0]!.can).toEqual(expect.arrayContaining(['approve', 'keep']));
+    expect((await act(f, s.id, 'approve')).state).toBe('running');
+  });
+
+  it('a plan put away and proposed again without «Riprendi» is in front of the user, not stopped', async () => {
+    const f = fixture(), s = await f.proposed();
+    await act(f, s.id, 'archive');
+    await f.m.send(s.id, 'Riproponi il piano');
+    await f.call('plan_propose', s.id, PLAN);
+    expect(f.m.planOf(s.id)!.stopped).toBeUndefined();
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'toApprove' });
+    expect(f.maps().list()[0]!.can).toEqual(expect.arrayContaining(['approve', 'keep']));
+  });
+
+  it('a plan put away starts nothing at night when it is proposed again: it waits for the user', async () => {
+    const opts = { away: false }, f = fixture(opts), s = await f.proposed();
+    await act(f, s.id, 'archive');
+    opts.away = true;
+    await f.call('plan_propose', s.id, PLAN);
+    expect(f.m.planOf(s.id)!.phase).toBe('proposed');
   });
 });
 

@@ -347,7 +347,7 @@ export interface AgentRun {
   tags?: AgentRunTags;
   /** what the run did, with its deterministic verdict (ADR 0130); missing on runs before it and on one-shots */
   receipts?: AgentRunReceipts;
-  /** a Strategist's plan with the user on this run (ADR 0108, 0131): plans proposed, «Cambia qualcosa» asked, when the
+  /** a Strategist's plan with the user on this run (ADR 0108, 0131): plans proposed, «Cambia il piano» asked, when the
    *  user approved one; a decision signal for the Orchestrator */
   plan?: AgentRunPlan;
   /** the user's pat or whack on this run's little person (ADR 0297); one per run, the last one stands */

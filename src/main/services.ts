@@ -46,7 +46,7 @@ export interface ChatService {
   answerWithUserWords?(chatId: string, requestId: string, words: string): void;
   /** the user's «fatto» to a worker's step, passed on by the Orchestrator: true when a step waited (ADR 0269) */
   userStepDone?(chatId: string, words: string): boolean;
-  /** a Strategist's proposed plan: the user's «Approva e parti» or «Cambia qualcosa» (ADR 0108); keep = approved, kept
+  /** a Strategist's proposed plan: the user's «Approva e parti» or «Cambia il piano» (ADR 0108); keep = approved, kept
    *  for later (ADR 0342) */
   planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string, by?: 'pc' | 'phone', keep?: boolean): Promise<void>;
   /** a kept plan starts; a job is stopped, resumed, replanned; a plan waiting for the user is put away (ADR 0342) */

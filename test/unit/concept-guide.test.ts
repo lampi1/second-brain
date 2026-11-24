@@ -8,6 +8,21 @@ import { CONCEPTS, cardText, textOf, type Bi } from '@shared/concept-guide';
 const root = path.resolve(import.meta.dirname, '../..');
 const full = (b: Bi) => b.it.trim().length > 0 && b.en.trim().length > 0;
 
+describe('the plan of a job in the cards (ADR 0342)', () => {
+  const all = CONCEPTS.flatMap(c => c.points);
+  it('is read and approved on the job map, never on the project map', () => {
+    for (const p of all) {
+      expect(p.it).not.toContain('propone il piano sulla mappa del progetto');
+      expect(p.it).not.toContain('Ogni piano ha lì la sua scheda');
+      expect(p.en).not.toContain('proposes the plan on the project’s map');
+      expect(p.en).not.toContain('Every plan has its card there');
+    }
+    const plan = all.find(p => p.it.startsWith('Con Plan lo Strategist'))!;
+    for (const words of ['Mappa → Lavori', '«Approva e parti»', '«Approva, parti dopo»', '«Cambia il piano»']) expect(plan.it).toContain(words);
+    for (const words of ['Map → Jobs', '«Approva e parti»', '«Approva, parti dopo»', '«Cambia il piano»']) expect(plan.en).toContain(words);
+  });
+});
+
 describe('concept guide content', () => {
   it('has unique ids and the card «Ogni compito passa da un ruolo» first', () => {
     expect(new Set(CONCEPTS.map(c => c.id)).size).toBe(CONCEPTS.length);
