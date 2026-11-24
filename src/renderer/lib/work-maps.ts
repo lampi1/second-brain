@@ -69,6 +69,10 @@ export function mapOfChat(infos: readonly WorkMapInfo[], chatId: string): WorkMa
 export const WORK_BUTTONS: readonly Exclude<WorkMapAction, 'seen'>[] = ['approve', 'keep', 'start', 'resume', 'replan', 'stop', 'reopen', 'archive'];
 export const buttonsOf = (i: Pick<WorkMapInfo, 'can'>): Exclude<WorkMapAction, 'seen'>[] => WORK_BUTTONS.filter(a => i.can.includes(a));
 
+/** The versions «Versione» lists under «Adesso», the newest first: never the last one, which is «Adesso» itself, whatever
+ *  version is on screen. */
+export const earlier = <T extends { version: number }>(history: readonly T[]): T[] => [...history].sort((a, b) => b.version - a.version).slice(1);
+
 export type WorkCall =
   | { channel: 'workmap:approve' | 'workmap:keep'; args: { id: string; at: number } }
   | { channel: 'workmap:replan'; args: { id: string; text: string } }

@@ -1,5 +1,6 @@
 // Host request bindings shared by the chat manager and deterministic tests. Never trust an agent-supplied actor or key.
 import type { ChatSummary, PendingRequest } from '../../shared/contract';
+import { requestAskedAt } from '../../shared/question-ladder';
 import { proposalHash, type CoordinationStore } from './store';
 import type { RequestKey } from './model';
 
@@ -8,7 +9,7 @@ export function requestKey(store: CoordinationStore, chat: ChatSummary, req: Omi
   // fields are reconstructed below, so a changed assignment, revision or payload still fails the exact CAS.
   const jobId = store.original(chat.id, req.id)?.key.jobId ?? store.jobFor(chat.id) ?? chat.run?.taskId ?? `chat:${chat.id}`;
   return { originalRequestId: req.id, jobId, chatId: chat.id,
-    runId: chat.run?.runId ?? null, taskVersion: chat.run?.taskVersion ?? 1, proposalRevision: req.at,
+    runId: chat.run?.runId ?? null, taskVersion: chat.run?.taskVersion ?? 1, proposalRevision: requestAskedAt(chat, req),
     proposalHash: proposalHash({ type: req.type, tool: req.tool, title: req.title, detail: req.detail, questions: req.questions, input: req.input, noAlways: req.noAlways }) };
 }
 export function registerRequest(store: CoordinationStore, chat: ChatSummary, req: Omit<PendingRequest, 'chatId'>): void {

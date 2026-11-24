@@ -49,7 +49,7 @@ export abstract class ManagerLadder extends ManagerWork {
     // the same question still open without its engine (a restart, agent_ask_parent): this request takes its place
     const again = this.openOf(r).find(o => !o.q.requestId && !o.sending && sameAsk(ladderText(o.q), askedText(req)));
     if (again) {
-      this.put(again, { requestId: req.id, via: 'request' });
+      this.put(again, { requestId: req.id, askedAt: req.at, via: 'request' });
       this.dropUserAsks(q => q.id === askId(again.q.id));
       delete r.askedParentAt;
       if (again.q.level === 'user') return false;
@@ -57,9 +57,10 @@ export abstract class ManagerLadder extends ManagerWork {
       return true;
     }
     if (!this.nextHolder(r, r)) return false;
-    const o = this.begin(r, ladderAsks(req.questions), 'request', req.id);
+    const o = this.begin(r, ladderAsks(req.questions), 'request', req);
     this.climb(o, 'asked');
-    if (o.q.level === 'user') return false; // nobody above can take it: it shows as before, its record says why
+    // nobody above can take it: it shows as before, its record says why (a twin held back until now: from now)
+    if (o.q.level === 'user') { req.at = Date.now(); return false; }
     this.hold(o, req);
     this.wake(o);
     return true;
@@ -79,9 +80,9 @@ export abstract class ManagerLadder extends ManagerWork {
     return { asked: this.nameOf(o.q) };
   }
 
-  private begin(r: Rec, asks: LadderAsk[], via: LadderQuestion['via'], requestId?: string): Open {
+  private begin(r: Rec, asks: LadderAsk[], via: LadderQuestion['via'], req?: { id: string; at: number }): Open {
     const at = Date.now();
-    const o: Open = { r, q: { id: `q-${randomUUID()}`, asks, level: 'user', at, levelAt: at, trail: [], via, ...(requestId ? { requestId } : {}) } };
+    const o: Open = { r, q: { id: `q-${randomUUID()}`, asks, level: 'user', at, levelAt: at, trail: [], via, ...(req ? { requestId: req.id, askedAt: req.at } : {}) } };
     r.s.questions = keepLadder([...(r.s.questions ?? []), o.q]);
     this.ladder.set(o.q.id, o);
     return o;
@@ -203,6 +204,8 @@ export abstract class ManagerLadder extends ManagerWork {
     const r = o.r, req = o.q.requestId ? r.pending.get(o.q.requestId) : undefined;
     if (!req) { this.showOwn(o); return; }
     delete req.ladder;
+    // his words count as its answer only from now on: before, he could not see it (ADR 0274)
+    req.at = Date.now();
     if (this.awayAnswered(r, req)) return;
     if (r.s.state === 'running') r.s.state = 'waiting';
     this.reveal(r, req);
@@ -276,7 +279,7 @@ export abstract class ManagerLadder extends ManagerWork {
   private settle(o: Open, done: LadderAnswer, line = true): void {
     if (o.q.answered) return;
     clearTimeout(o.timer);
-    const r = o.r, { holder: _h, requestId: _r, ...rest } = o.q;
+    const r = o.r, { holder: _h, requestId: _r, askedAt: _a, ...rest } = o.q;
     this.put(o, { ...rest, answered: ladderAnswer(done), trail: withStep(o.q, { level: done.by === 'app' ? o.q.level : done.by, name: done.name, at: done.at, action: 'answered', ...(done.chatId ? { chatId: done.chatId } : {}), ...(done.why ? { why: done.why } : {}) }) }, true);
     this.ladder.delete(o.q.id);
     r.s.questions = keepLadder(r.s.questions ?? []);
@@ -357,7 +360,7 @@ export abstract class ManagerLadder extends ManagerWork {
     setImmediate(() => {
       if (o.q.answered || o.q.requestId !== requestId || this.quitting || this.withdrawn(o)) return;
       if (session && r.session === session && session.alive) { this.settle(o, { by: 'app', name: 'App', answer: '—', why: 'domanda ritirata dal suo motore', at: Date.now() }); return; }
-      const { requestId: _gone, ...rest } = o.q;
+      const { requestId: _gone, askedAt: _at, ...rest } = o.q;
       this.put(o, { ...rest, via: 'message' }, true);
       if (o.q.level === 'user') this.showOwn(o);
       this.persist();

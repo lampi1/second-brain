@@ -59,8 +59,8 @@ const fake = () => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Da
 const last = (w: World, id: string) => w.sent.get(id)?.at(-1) ?? '';
 
 /** The Orchestrator, a Strategist it started, and a worker of the Strategist. */
-async function team(w: World, o: { orchestrator?: boolean; harness?: string; plan?: boolean } = {}) {
-  const m = manager(w);
+async function team(w: World, o: { orchestrator?: boolean; harness?: string; plan?: boolean; extra?: Partial<ChatManagerOptions> } = {}) {
+  const m = manager(w, o.extra);
   const orch = o.orchestrator === false ? null : await m.create({ harness: 'claude', cwd: w.cwd, orchestrator: true });
   const strategist = await m.create({ harness: 'claude', cwd: w.cwd, title: 'Ordini', ...(orch ? { roleId: 'strategist' } : {}), ...(o.plan ? { prompt: 'Aggiungi il nome nuovo' } : {}) } as never, orch ? 'agent' : 'user');
   const worker = await m.create({ harness: o.harness ?? 'claude', cwd: w.cwd, parentId: strategist.id, title: 'Ordini · Log', delegation: { role: 'scout', goal: 'Leggi i log', doneWhen: ['fatto'], at: Date.now() } } as never, 'agent');
@@ -479,6 +479,140 @@ describe('who answered and why', () => {
     m.answerWithUserWords(k.id, card.id, 'sì, usa quello nuovo');
     await flush();
     expect(q(m, k.id).answered).toMatchObject({ by: 'user', answer: 'sì, usa quello nuovo' });
+  });
+});
+
+describe('his words answer a question only from when it reaches him', () => {
+  /** a twin shows in the next event (setImmediate, not faked) */
+  const shown = () => new Promise<void>(done => setImmediate(() => setImmediate(done)));
+  const Q = 'Uso il nome nuovo?', NO = /bloccato: words deve essere copiato/;
+  // how the question reaches the user: passed up by who holds it, or ten silent minutes per level
+  const ways = {
+    askUser: async (m: ChatManager, chatId: string, holders: string[]) => { for (const h of holders) await m.ladderReply(h, { chatId, askUser: true }); },
+    'the 10-minute timer': async (m: ChatManager, chatId: string, holders: string[]) => {
+      for (const h of holders) for (let s = 0; s < LADDER_SILENT_MS / 1000 && q(m, chatId).holder === h; s++) await vi.advanceTimersByTimeAsync(1000);
+    },
+  };
+  for (const [name, reach] of Object.entries(ways)) {
+    it(`a worker's question, ${name}: words said before are refused, words said after are accepted`, async () => {
+      const w = world(), { m, orch, s, k } = await team(w);
+      fake();
+      pend(w, k.id, ask('r1'));
+      const asked = Date.now();
+      await vi.advanceTimersByTimeAsync(60_000);
+      await reach(m, k.id, [s.id]);
+      await vi.advanceTimersByTimeAsync(1000);
+      m.noteUserSaid(orch.id, 'sì');
+      // S2: an agent still holds it
+      expect(() => m.answerWithUserWords(k.id, 'r1', 'sì')).toThrow(/ancora di un agente/);
+      await vi.advanceTimersByTimeAsync(1000);
+      await reach(m, k.id, [orch.id]);
+      m.noteUserSaid(orch.id, 'vecchia');
+      const reached = Date.now();
+      expect(m.pending()).toMatchObject([{ id: 'r1', at: reached }]);
+      expect(reached).toBeGreaterThan(asked);
+      // what he wrote while an agent held it
+      vi.setSystemTime(reached - 1);
+      m.noteUserSaid(orch.id, 'sì');
+      vi.setSystemTime(reached + 1);
+      expect(() => m.answerWithUserWords(k.id, 'r1', 'sì')).toThrow(NO);
+      expect(w.answers).toEqual([]);
+      m.noteUserSaid(orch.id, 'sì, quello nuovo');
+      m.answerWithUserWords(k.id, 'r1', 'sì, quello nuovo');
+      await flush();
+      expect(w.answers).toHaveLength(1);
+      expect(q(m, k.id).answered).toMatchObject({ by: 'user' });
+    });
+
+    it(`a Strategist's interview, ${name}: words said before close no doubt and clarify nothing, words said after do`, async () => {
+      const w = world(), { m, orch, s } = await team(w, { plan: true });
+      m.planDoubts(s.id, [{ text: Q, state: 'open' }]);
+      fake();
+      pend(w, s.id, ask('r1'));
+      await vi.advanceTimersByTimeAsync(60_000);
+      await reach(m, s.id, [orch.id]);
+      // his message is still the last one: the Orchestrator's wake came before it
+      const reached = Date.now();
+      vi.setSystemTime(reached - 1);
+      m.noteUserSaid(orch.id, 'sì');
+      vi.setSystemTime(reached);
+      expect(() => m.answerWithUserWords(s.id, 'r1', 'sì')).toThrow(NO);
+      await flush();
+      expect(w.answers).toEqual([]);
+      expect(chat(m, s.id).plan!.clarified).toEqual([]);
+      expect(chat(m, s.id).plan!.doubts).toMatchObject([{ text: Q, state: 'open' }]);
+      await vi.advanceTimersByTimeAsync(1);
+      m.noteUserSaid(orch.id, 'sì');
+      m.answerWithUserWords(s.id, 'r1', 'sì');
+      await flush();
+      expect(chat(m, s.id).plan!.clarified).toMatchObject([{ q: Q, a: 'sì' }]);
+      expect(chat(m, s.id).plan!.doubts).toMatchObject([{ text: Q, state: 'closed', by: 'user' }]);
+    });
+  }
+
+  it('words never answer a question an agent still holds, even said after it was asked', async () => {
+    const w = world(), { m, orch, k } = await team(w);
+    fake();
+    pend(w, k.id, ask('r1'));
+    await vi.advanceTimersByTimeAsync(1);
+    m.noteUserSaid(orch.id, 'sì');
+    expect(() => m.answerWithUserWords(k.id, 'r1', 'sì')).toThrow(/ancora di un agente/);
+    await flush();
+    expect(w.answers).toEqual([]);
+    expect(q(m, k.id)).toMatchObject({ level: 'strategist' });
+    expect(q(m, k.id).answered).toBeUndefined();
+  });
+
+  it('a twin of a held question, left alone, reaches the user with its own journal key and takes his answer', async () => {
+    const w = world(), { m, orch, s, k } = await team(w);
+    fake();
+    pend(w, k.id, ask('r1'));
+    await vi.advanceTimersByTimeAsync(1000);
+    pend(w, k.id, ask('r2'));
+    w.sinks.get(k.id)!.resolved('r1');
+    await shown();
+    expect(q(m, k.id)).toMatchObject({ requestId: 'r2', level: 'strategist' });
+    expect(m.pending()).toEqual([]);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await ways.askUser(m, k.id, [s.id, orch.id]);
+    expect(m.pending()).toMatchObject([{ id: 'r2', at: Date.now() }]);
+    await m.answer(k.id, 'r2', { kind: 'question', answers: { [Q]: 'No' } });
+    expect(w.answers.at(-1)).toMatchObject({ chat: k.id, id: 'r2' });
+  });
+
+  it('a twin hidden behind a held question and shown with nobody left to hold it counts from that moment', async () => {
+    const w = world(), { m, orch, s, k } = await team(w);
+    fake();
+    pend(w, k.id, ask('r1'));
+    pend(w, k.id, ask('r2'));
+    await vi.advanceTimersByTimeAsync(60_000);
+    for (const above of [s, orch]) w.sinks.get(above.id)!.changed({ state: 'error' });
+    await vi.advanceTimersByTimeAsync(1000);
+    m.noteUserSaid(orch.id, 'sì');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(m.pending()).toMatchObject([{ id: 'r1' }]);
+    w.sinks.get(k.id)!.resolved('r1');
+    await shown();
+    expect(chat(m, k.id).questions).toMatchObject([{ answered: { by: 'app' } }, { requestId: 'r2', level: 'user' }]);
+    expect(m.pending()).toMatchObject([{ id: 'r2', at: Date.now() }]);
+    expect(() => m.answerWithUserWords(k.id, 'r2', 'sì')).toThrow(NO);
+  });
+
+  it('a run started before the question is asked still backs its Yes, however long agents held it', async () => {
+    const runs = [{ startedAt: 0 }], w = world(), { m, orch, s, k } = await team(w, { extra: { runs: (() => runs) as never } });
+    fake();
+    runs[0]!.startedAt = Date.now();
+    await vi.advanceTimersByTimeAsync(60_000);
+    const did = 'Hai eseguito il comando sopra?';
+    // the gate sends such a question back first, then lets it through
+    for (let i = 0; i < 6 && !openQuestions(chat(m, k.id).questions).length; i++) pend(w, k.id, ask(`r${i}`, did, ['Sì', 'No']));
+    const id = q(m, k.id).requestId!;
+    await vi.advanceTimersByTimeAsync(9 * 60_000);
+    await ways.askUser(m, k.id, [s.id]);
+    await vi.advanceTimersByTimeAsync(9 * 60_000);
+    await ways.askUser(m, k.id, [orch.id]);
+    await m.answer(k.id, id, { kind: 'question', answers: { [did]: 'Sì' } });
+    expect(w.answers.at(-1)).toMatchObject({ id, answer: { answers: { [did]: 'Sì' } } });
   });
 });
 

@@ -37,7 +37,14 @@ export interface LadderQuestion {
   via: 'request' | 'message';
   /** the engine request held open (via request); never read back: no engine request outlives the app */
   requestId?: string;
+  /** when the engine asked that request. Its own `at` becomes the moment it reaches the user's row; what must stay bound
+   *  to the first time (the journal key, the runs behind a «did you run it?») reads this one (requestAskedAt) */
+  askedAt?: number;
 }
+
+/** When the engine asked a request: the ladder's record of it, else the request's own time. */
+export const requestAskedAt = (c: { questions?: readonly LadderQuestion[] }, req: { id: string; at: number }): number =>
+  (c.questions ?? []).filter(q => q.requestId === req.id).at(-1)?.askedAt ?? req.at;
 
 export const ladderText = (q: Pick<LadderQuestion, 'asks'>): string => q.asks.map(a => a.question).join('\n');
 export const openQuestions = (qs: readonly LadderQuestion[] | undefined): LadderQuestion[] => (qs ?? []).filter(q => !q.answered);

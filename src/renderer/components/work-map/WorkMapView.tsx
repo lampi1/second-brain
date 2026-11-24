@@ -10,7 +10,7 @@ import { t } from '../../i18n';
 import { useNow } from '../../lib/clock';
 import { ago } from '../../lib/format';
 import { errText } from '../../lib/ipc-error';
-import { buttonsOf, HELD_ACTIONS, heldBy, projectsOf } from '../../lib/work-maps';
+import { buttonsOf, earlier, HELD_ACTIONS, heldBy, projectsOf } from '../../lib/work-maps';
 import { useApp } from '../../store/store';
 import { toast } from '../../store/ui';
 import { IconArrowLeft, IconChat } from '../Icons';
@@ -112,7 +112,7 @@ export function WorkMapView({ id, onBack }: { id: string; onBack: () => void }) 
       {owner && chat !== undefined && <button type="button" className="btn btn-ghost btn-s" onClick={() => openChatRef(owner)} title={chat} data-testid="wm-open-chat"><IconChat size={13} />{t('wm.openChat')}</button>}
       {history.length > 1 && <Select value={version === null ? '' : String(version)} onChange={e => { setPicked(null); setVersion(e.target.value ? Number(e.target.value) : null); }} aria-label={t('wm.version')} data-testid="wm-version">
         <option value="">{t('wm.version.now')}</option>
-        {history.filter(h => version !== null || h.version !== view.map.version).sort((a, b) => b.version - a.version).map(h => <option key={h.version} value={String(h.version)}>{t('wm.version.item', { n: h.version, at: ago(h.at, now), what: h.summary })}</option>)}
+        {earlier(history).map(h => <option key={h.version} value={String(h.version)}>{t('wm.version.item', { n: h.version, at: ago(h.at, now), what: h.summary })}</option>)}
       </Select>}
     </div>
     {version !== null && <div className="wm-old" role="status" data-testid="wm-old">{t('wm.old', { n: view.map.version })} <button type="button" className="btn btn-ghost btn-s" onClick={() => setVersion(null)} data-testid="wm-old-back">{t('wm.old.back')}</button></div>}

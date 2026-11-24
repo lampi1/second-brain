@@ -27,6 +27,7 @@ import { sysItem } from './manager-helpers';
 import { phoneTime } from './phone-reply';
 import { ManagerCheckpoints } from './manager-checkpoints';
 import { requestKey, registerRequest } from '../coordination/requests';
+import { requestAskedAt } from '../../shared/question-ladder';
 import type { DecisionActor } from '../coordination/model';
 import type { AnswerPatch } from './session';
 import { CoordinationStore } from '../coordination/store';
@@ -100,6 +101,9 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       return uncertain(e);
     }
   }
+
+  /** A request with the time its engine asked it: a run between that and the user's row backs a Yes (#372, ADR 0344). */
+  private asAsked<T extends Omit<PendingRequest, 'chatId'>>(r: Rec, req: T): T { return { ...req, at: requestAskedAt(r.s, req) }; }
 
   /** The user's own words answered a question (ADR 0327): the chat reads them with the app's note and the question is
    *  remembered until the chat replies, works or ends its turn, so the same one asked again at once is answered here,
@@ -301,7 +305,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       if (req.questions.some(q => answer.answers[q.question] === undefined || answer.answers[q.question] === '')) throw new Error('Rispondi a ogni domanda della richiesta.');
       choice = req.questions.map(q => { const v = answer.answers[q.question]!; return Array.isArray(v) ? v.join(', ') : v; }).join(' · ');
       // a Sì to «did you run it?» with no run since the question carries the NOT_RAN note, as the user's own does (#372)
-      given = this.opts.runs ? backedAnswer(req, answer, this.opts.runs(chatId)) : answer;
+      given = this.opts.runs ? backedAnswer(this.asAsked(r, req), answer, this.opts.runs(chatId)) : answer;
       // the Orchestrator's own words for him: the chat acts on them and never asks the same again (ADR 0327)
       if (given === answer) given = this.toldInWords(r, req, answer);
     }
@@ -323,6 +327,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     const r = this.need(chatId);
     const req = r.pending.get(requestId);
     if (!req) throw new Error('Questa richiesta non è più aperta.');
+    if (req.ladder) throw new Error('bloccato: la domanda è ancora di un agente, l’utente non l’ha vista; risponde chi la tiene, con answer e why, o la passa con askUser: true.');
     if (r.s.isOrchestrator || !answerableInWords(req)) throw new Error('bloccato: le sue parole rispondono solo alla domanda di una chat di lavoro (non a un permesso, un comando, un modulo o una tua domanda)');
     const said = this.openOrchestrator()?.userSaid;
     if (!said || said.at < req.at || !sameWords(said.text, words)) throw new Error('bloccato: words deve essere copiato dal suo ultimo messaggio, scritto dopo la domanda; se non risponde a questa domanda lasciala aperta');
@@ -368,13 +373,13 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     if (answering.has(requestId)) throw new Error('Request already answered; delivery is still pending.');
     this.answering.set(r, answering); answering.add(requestId);
     if (by === 'phone') (r.answeringFromPhone ??= new Set()).add(requestId); // the engine resolves it now: pending:resolved carries by 'phone'
-    const session = r.session;
+    const session = r.session, askedAt = requestAskedAt(r.s, req); // before its ladder record is settled
     // Same rule as the sink's resolved: the request leaves the chat it was asked in, whichever engine runs it now
     const sameChat = (): boolean => this.chats.get(chatId) === r;
     let ok: boolean;
     try {
       // a Yes on «hai eseguito il comando?» that no run of this chat backs reaches it with the app's note (#372)
-      const backed = this.opts.runs ? backedAnswer(req, answer, this.opts.runs(chatId)) : answer;
+      const backed = this.opts.runs ? backedAnswer(this.asAsked(r, req), answer, this.opts.runs(chatId)) : answer;
       if (backed !== answer) log.info('chats', 'a Yes on «did you run it?» with no run behind it: told to the chat', { chat: chatId, data: { requestId } });
       // his own words: the chat reads them with the app's note and may not ask the same question again (ADR 0327)
       const told = backed === answer ? this.toldInWords(r, req, answer, byApp) : backed;
@@ -405,7 +410,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     }
     if (!ok) return;
     // request/tool/asked bind the line to this question (appctl/tools.ts decidedSince): its tool item never counts as a PC answer
-    if (by === 'phone') { this.addItem(r, sysItem('phoneDecided', { time: phoneTime(Date.now()), what: 'question', request: requestId, tool: req.toolUseId ? `t-${req.toolUseId}` : '', asked: req.at }, 'info'), false); this.updated(r); }
+    if (by === 'phone') { this.addItem(r, sysItem('phoneDecided', { time: phoneTime(Date.now()), what: 'question', request: requestId, tool: req.toolUseId ? `t-${req.toolUseId}` : '', asked: askedAt }, 'info'), false); this.updated(r); }
     // Full request scope stays private (ADR 0083); shared user events carry only the user's own choices/words.
     if (r.s.isOrchestrator) {
       delete r.intakeKey;
@@ -641,7 +646,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       const choice = Object.values(answers).flat().join(', ');
       // nobody saw a run either: a recommended Sì to «hai eseguito?» carries the app's note (#372)
       const picked: Answer = { kind: 'question', answers };
-      const told = this.opts.runs ? backedAnswer(req, picked, this.opts.runs(r.s.id)) : picked;
+      const told = this.opts.runs ? backedAnswer(this.asAsked(r, req), picked, this.opts.runs(r.s.id)) : picked;
       return this.policyAnswer(r, req, told, 'away', undefined, () => {
         this.addItem(r, sysItem('awayPicked', { choice }, 'info'), false);
         this.hook('onAway', () => this.opts.onAway?.({ kind: 'picked', chatId: r.s.id, title, text: `${req.questions?.[0]?.question ?? req.title} → ${choice}` }));

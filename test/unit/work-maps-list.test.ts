@@ -3,7 +3,7 @@
 // page; which map is a chat's; the buttons, only those of WorkMapInfo.can, and the IPC call of each; the plan in rows.
 import { describe, expect, it } from 'vitest';
 import { workInfo, workStateOf, WORK_MAP_STATES, type WorkBox, type WorkMap, type WorkMapAction, type WorkMapInfo, type WorkMapState } from '../../src/shared/work-map';
-import { allProjects, arrange, buttonsOf, callOf, chatsOf, groupOf, heldBy, liveKind, mapOfChat, rowsOf, workPlace, workPlaceOf, WORK_BUTTONS, WORK_GROUPS, WORK_SORTS, type WorkFilter } from '../../src/renderer/lib/work-maps';
+import { allProjects, arrange, buttonsOf, callOf, chatsOf, earlier, groupOf, heldBy, liveKind, mapOfChat, rowsOf, workPlace, workPlaceOf, WORK_BUTTONS, WORK_GROUPS, WORK_SORTS, type WorkFilter } from '../../src/renderer/lib/work-maps';
 
 const info = (id: string, state: WorkMapState, p: Partial<WorkMapInfo> = {}): WorkMapInfo => ({ id: `wm_${id}`, title: id, touches: [], state, steps: 0, done: 0, now: 0, blocked: 0, createdAt: 1, updatedAt: 1, can: [], ...p });
 const F: WorkFilter = { tab: 'open', query: '', project: '', sort: 'recent' };
@@ -109,6 +109,16 @@ describe('buttons and calls', () => {
     expect(callOf(i, 'approve')).toBeNull();
     expect(callOf(i, 'keep')).toBeNull();
     expect(callOf(i, 'replan', ' \n')).toBeNull();
+  });
+});
+
+describe('the versions of a map', () => {
+  it('list the earlier ones, the newest first: the last is «Adesso», never twice, whatever version is on screen', () => {
+    const v = (version: number) => ({ version });
+    expect(earlier([v(1), v(2), v(3)]).map(x => x.version)).toEqual([2, 1]);
+    expect(earlier([v(3), v(1), v(2)]).map(x => x.version)).toEqual([2, 1]);
+    expect(earlier([v(1)])).toEqual([]);
+    expect(earlier([])).toEqual([]);
   });
 });
 

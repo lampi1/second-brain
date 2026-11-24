@@ -32,6 +32,9 @@ of questions)
 - **Never an agent's**: `ladderReserved` refuses an agent's answer about production, a database, Azure, permissions, the
   goal, colleagues, QA, customers or what cannot be undone; it is a floor of words, the rest is the level's judgement
   (`ANSWER_RULE`). An agent's answer says in its text that it is not the user's consent, and is not recorded as his.
+- **His only from when he can see it**: a request's `at` is the moment it reaches his row, so his words (ADR 0274) said
+  before never answer it, and a request an agent still holds takes no words at all. When the engine asked it stays on the
+  record (`askedAt`): the journal key and the runs behind a «did you run it?» read that one (`requestAskedAt`).
 - **Asked once** (ADR 0327): the same question, in either shape, is the same record; the Orchestrator asking a held
   question as its own sends that one to the user, with its own words.
 - **Night mode** answers first, as before (ADR 0191); switched on later, it settles the app's cards in his row too. An
