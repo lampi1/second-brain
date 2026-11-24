@@ -17,6 +17,8 @@ export interface ChatService {
   /** Real engine receipts; demos and mocks acknowledge their simulated sends by promise. */
   readonly submissionReceipts?: boolean;
   list(): ChatSummary[];
+  /** «Annulla» on the automatic move of a chat out of credits (ADR 0348) */
+  creditStay?(chatId: string): boolean;
   items(chatId: string): ChatItem[];
   pending(): PendingRequest[];
   /** the "/" commands the chat's engine reported; null = none yet (ADR 0018) */

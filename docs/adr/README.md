@@ -338,8 +338,9 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0343](0343-the-plan-is-its-map.md) The plan is its map, the maps are a list — accepted; amended by 0346
 - [0344](0344-question-ladder-and-open-doubts.md) A worker's question goes up one level at a time; the Strategist's open doubts block its plan — accepted
 - [0345](0345-a-child-works-in-any-repository.md) A delegated chat works in any folder its parent names, also of another repository — accepted
-- [0346](0346-plan-names-the-preset-a-chat-out-of-credits-waits.md) A plan names the preset, never the model; a chat out of credits waits for its role's card — accepted; amended by 0347
+- [0346](0346-plan-names-the-preset-a-chat-out-of-credits-waits.md) A plan names the preset, never the model; a chat out of credits waits for its role's card — accepted; amended by 0347, 0348
 - [0347](0347-models-per-level-across-engines.md) Several models per level across engines, picked by the room of each plan; one page per role, no permissions — accepted
+- [0348](0348-a-chat-out-of-credits-moves-to-the-next-model.md) A chat out of credits moves by itself to the next model of its level, with 8 seconds to cancel — accepted
 
 ## Replaced
 

@@ -119,7 +119,9 @@ export interface ChatSummary {
    *  closed, until its role's card names another model for its preset (it then switches and goes on by itself) or a new
    *  turn starts. `model` = the one that ran out (as the engine named it); `card` = the role card's engine and model
    *  («engine:model») this wait already answered: it moves again only when the card names something else */
-  creditWait?: { at: number; model: string | null; card?: string };
+  /** `next`: the model of the level the chat moves to by itself at `at` (ADR 0348: 8 s to cancel); `stay`: the user
+   *  cancelled that move, so the chat waits for its role's levels to change or for a message (ADR 0346) */
+  creditWait?: { at: number; model: string | null; card?: string; next?: { card: string; at: number }; stay?: true };
   /** Explicit assignment/mailbox hold. A provider result never completes it; no expiration or consent semantics. */
   work?: {status:'assigned'|'waiting-mail'|'completed';updatedAt:number};
   /** closed (archived) at: out of the grid, found with Ctrl+K (the palette's "Chiuse" group); its history stays and a reopen resumes it */
@@ -433,6 +435,8 @@ export interface ChatsInvokeMap {
   'chat:autoCloseGet': [void, AutoCloseStatus[]];
   'chat:autoClosePresence': [{ holds: AutoClosePresence[] }, void];
   'chat:autoCloseKeep': [{ chatId: string; keep: boolean }, void];
+  /** «Annulla» on the automatic move of a chat out of credits (ADR 0348); false = no move was announced */
+  'chat:creditStay': [{ chatId: string }, boolean];
   /** Brother's verdict on a settled agent run (Home strip); renderer only, never an agent tool. */
   'run:outcome': [{ chatId: string; verdict: 'success' | 'partial' | 'fail' }, ChatSummary];
   /** Brother's pat (+1) or whack (-1) on the little person of a chat's run (ADR 0297): a nudge a twentieth of a verdict,

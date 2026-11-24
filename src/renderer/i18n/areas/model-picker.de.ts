@@ -41,4 +41,5 @@ export const modelPickerDe: typeof modelPickerIt = {
   'mp.chatMenu': 'Modell und Effort…',
   'modelChip.tip': (p: { engine: string; model: string }) => `${p.engine} · ${p.model}: klicken, um das Modell zu ändern`,
   'chat.clearContext': 'Kontext leeren (wie /clear)',
+  'chat.creditStay': 'Abbrechen',
 };

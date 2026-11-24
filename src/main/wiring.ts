@@ -33,7 +33,7 @@ import { maintenanceEvent, proposalEvent } from './brain/announce';
 import { MorningService } from './morning/service';
 import { createAgentLoop } from './agents/loop';
 import { delegationTools } from './agents/delegation';
-import { CreditBook, opencodeLogTail, poolOf } from './agents/credits';
+import { CreditBook, limitSignal, opencodeLogTail, poolOf } from './agents/credits';
 import { creditWaitWatch } from './agents/credit-wait';
 import { levelEngines, roomOf } from '../shared/model-levels';
 import { tierModel } from './agents/model-tier';
@@ -233,6 +233,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the room of each engine's plan (ADR 0347): the usage panel's windows and a limit the app saw it hit (the credit book,
   // built further down: read only when a chat starts)
   const creditsRef: { current?: CreditBook } = {};
+  const creditWaitRef: { current?: () => void } = {};
   const agents = createAgentCatalog(ctx, brain, engines, () => ({ ...cliCache, ...engineReadiness() }), undefined, {
     room: (engine, model) => {
       const st = creditsRef.current?.state(poolOf(engine, model));
@@ -409,6 +410,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     onTurnEnd: info => {
       replyRules.turnEnded(info.chatId, info.reply, info.isError);
       credits.observe(info.harness, info.model, info.errorText, info.isError); // the engine's limit error or a clean turn (ADR 0218)
+      // a limit makes its plan spent: a chat waiting on it may now move to the next model of its level (ADR 0348)
+      if (info.isError && limitSignal(info.errorText)) setImmediate(() => creditWaitRef.current?.());
       // an API engine's turn spends the user's API credits: this month's figure in Settings → Motori (engines/spend.ts)
       const api = engineOf(info.harness);
       if (api?.kind === 'api') engines.addSpend(info.harness, info.model && listPrice(priceEnginesOf(api), info.model) ? info.costUsd : null);
@@ -854,6 +857,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   ctx.emitter.tap(ch => { if (ch === 'brainmodel:changed' || ch === 'agents:changed') brainModel.invalidate(); });
   // a role chat out of credits follows its role's card (ADR 0346): when the card changes, and when the wait begins
   const creditWait = creditWaitWatch({ chats: manager, card: (roleId, ask, delegator) => agents.cardNow(roleId, ask, delegator), engineRefusal: (from, to) => openRefusal(brain.settings(), from, to) });
+  creditWaitRef.current = creditWait;
   ctx.emitter.tap((ch, payload) => { if (ch === 'agents:changed' || (ch === 'chat:updated' && (payload as ChatSummary | undefined)?.creditWait)) creditWait(); });
   brainModelRef.current = brainModel;
   // the skill library (ADR 0241): the Memoria «Skill» tab and the Orchestrator's skill tools; the app's skills are the
