@@ -11,6 +11,8 @@ import { AskImages } from '../AskImages';
 import { openFile } from '../GenUi';
 import { IconArrowLeft, IconFile, IconGlobe } from '../Icons';
 import { stateOf, whenOf, whoOf } from '../project-map/plan-words';
+import { chatsOf } from '../../lib/work-maps';
+import { LiveChip, Stale } from './LiveBits';
 import { BoxChats } from './WorkDrawing';
 
 function Evidence({ texts, chatId }: { texts: readonly string[]; chatId: string | undefined }) {
@@ -49,10 +51,10 @@ function Step({ b, view, now, onBack }: { b: WorkBox; view: View; now: number; o
     <span className="dash-eyebrow">{t('wm.side.step', { n: b.n })}</span>
     <h3 data-testid="wm-side-title">{withoutImages(b.title)}</h3>
     {b.detail && <p className="wm-pre">{withoutImages(b.detail)}</p>}
-    <p>{stateOf(b, now)}{b.outcome && b.outcome !== 'done' ? ` · ${t(`wm.outcome.${b.outcome}`)}` : ''}</p>
+    <p>{stateOf(b, now)}{b.outcome && b.outcome !== 'done' ? ` · ${t(`wm.outcome.${b.outcome}`)}` : ''} <LiveChip live={b.live} testid="wm-side-live" /> <Stale live={b.live} now={now} testid="wm-side-stale" /></p>
     <h4>{t('wm.side.who')}</h4><p title={who?.planned ? t('pm.step.plannedTip') : undefined}>{who ? who.text : name}{who?.planned && <em className="wm-muted"> · {t('pm.step.planned')}</em>}</p>
     <h4>{t('wm.side.when')}</h4><p>{whenOf(b, view.boxes.filter(x => !x.drop))}</p>
-    {b.chatIds.length > 0 && <><h4>{t('wm.side.chats')}</h4><div className="wm-box-chats"><BoxChats ids={b.chatIds} testid="wm-side-chat" /></div></>}
+    {chatsOf(b).length > 0 && <><h4>{t('wm.side.chats')}</h4><div className="wm-box-chats"><BoxChats b={b} testid="wm-side-chat" /></div></>}
     <Evidence texts={[b.title, b.detail ?? '']} chatId={view.map.owner?.chatId} />
   </>;
 }

@@ -18,6 +18,8 @@ export const treeIt = {
   'tree.state.start': 'avviato',
   'tree.state.run': 'al lavoro',
   'tree.state.wait': 'Ti aspetta',
+  'tree.state.heldParent': 'aspetta chi l’ha avviata',
+  'tree.state.heldOrchestrator': 'aspetta l’Orchestrator',
   'tree.state.queued': 'in coda',
   'tree.state.err': 'non riuscito',
   'tree.state.stall': 'fermo',

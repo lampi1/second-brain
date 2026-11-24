@@ -6,7 +6,9 @@
 // by main/workmap/*, shared/contract/brain.ts and the renderer; pinned by test/unit/workmap-shared.test.ts.
 import type { DelegationOutcome } from './delegation';
 import type { PresetId } from './model-presets';
+import { openDoubts } from './plan-doubts';
 import type { MapVersionInfo } from './project-map';
+import { ladderText, type LadderQuestion } from './question-ladder';
 import type { WorkRoleId } from './roles';
 import { planWaves, readPlan, type StepState, type StrategyPlan } from './strategy';
 
@@ -105,11 +107,25 @@ export interface WorkMapInfo {
   stopped?: { at: number; by: WorkMapStopBy };
   createdAt: number; updatedAt: number; finishedAt?: number; seenAt?: number; archivedAt?: number;
   can: WorkMapAction[];
+  /** its plan's doubts (ADR 0344): one still open holds the approval and the start; first = the first open one */
+  doubts?: { open: number; total: number; first?: string };
   /** what its chats are doing now (see «Live status» below); absent when there is nothing to say beyond `state` */
   live?: WorkMapLive;
 }
 /** One map, whole: the record, its drawing and its versions. */
-export interface WorkMapView { map: WorkMap; info: WorkMapInfo; boxes: WorkBox[]; links: WorkLink[]; history: MapVersionInfo[] }
+export interface WorkMapView {
+  map: WorkMap; info: WorkMapInfo; boxes: WorkBox[]; links: WorkLink[]; history: MapVersionInfo[];
+  /** the questions its chats asked (ADR 0344): the open ones first, then who answered and why; none on an earlier version */
+  questions: WorkAsk[];
+}
+/** A question a chat of the map asked, as it went up (ADR 0344). */
+export interface WorkAsk {
+  chatId: string;
+  title: string;
+  /** the step it works for */
+  n?: number;
+  question: LadderQuestion;
+}
 
 export const WORK_MAP_LIMITS = { title: 160, idea: 4000, project: 64, summary: 200, by: 80, touches: 12, past: 12, change: 2000 } as const;
 export const WORK_MAP_ID = /^wm_[a-z0-9]{6,24}$/;
@@ -172,6 +188,11 @@ export function drawingOf(m: Pick<WorkMap, 'plan' | 'title' | 'owner' | 'state' 
   return { boxes, links };
 }
 
+function doubtsOf(m: WorkMap): Pick<WorkMapInfo, 'doubts'> {
+  const total = m.plan?.doubts?.length ?? 0, open = m.plan && m.state !== 'finished' && m.state !== 'archived' ? openDoubts(m.plan) : [];
+  return total ? { doubts: { open: open.length, total, ...(open[0] ? { first: open[0].text } : {}) } } : {};
+}
+
 export function workInfo(m: WorkMap): WorkMapInfo {
   const steps = (m.plan?.steps ?? []).filter(s => !s.drop), n = (st: StepState) => steps.filter(s => s.state === st).length;
   const p = m.plan?.phase, live = m.state === 'idea' || m.state === 'running';
@@ -183,7 +204,7 @@ export function workInfo(m: WorkMap): WorkMapInfo {
     steps: steps.length, done: n('done'), now: n('now'), blocked: n('blocked'),
     ...(m.stopped && m.state === 'stopped' ? { stopped: { ...m.stopped } } : {}),
     createdAt: m.createdAt, updatedAt: m.updatedAt, ...(m.finishedAt !== undefined ? { finishedAt: m.finishedAt } : {}), ...(m.seenAt !== undefined ? { seenAt: m.seenAt } : {}), ...(m.archivedAt !== undefined ? { archivedAt: m.archivedAt } : {}),
-    can: workActions(m),
+    can: workActions(m), ...doubtsOf(m),
   };
 }
 
@@ -232,6 +253,8 @@ export type WorkStopWhy = 'user' | 'closedByUser' | 'closedByAgent' | 'closedByA
 export interface WorkMapLive {
   /** the one thing to show on its row, as on a step; absent on a map that nobody is expected to work on */
   say?: WorkSay;
+  /** say = waiting: for whom */
+  waits?: WorkWaitFor;
   /** the chats at work now */
   working: WorkWorker[];
   /** the chats that wait, for the user first */
@@ -245,6 +268,9 @@ export interface WorkMapLive {
   /** a stopped map: why */
   why?: WorkStopWhy;
 }
+
+/** The user must move: its plan waits for his ok, or a chat of it waits for him (a question an agent holds does not). */
+export const waitsForUser = (i: Pick<WorkMapInfo, 'state' | 'live'>): boolean => i.state === 'toApprove' || (i.state === 'idea' || i.state === 'running') && i.live?.waits === 'user';
 
 /** The order in which what a chat is doing matters to the user. */
 export const WORK_SAYS: readonly WorkSay[] = ['waiting', 'failed', 'closed', 'gone', 'working', 'blocked', 'interrupted', 'unknown', 'between', 'partial', 'done'];
@@ -266,6 +292,8 @@ export function workText(v: WorkMapView): string {
     ...(m.idea ? [`Idea: ${m.idea}`] : []),
     ...(steps.length ? [`Steps (${info.done} of ${info.steps} done):`, ...steps.map(b => `${b.n}. [turn ${b.wave}] ${b.title} · ${b.state}${b.role ? ` · ${b.role}` : ''}${b.model ? ` · ${b.model}` : ''}${b.preset ? ` · ${b.preset}` : ''}${b.drop ? ' · removed by the replan at the user’s ok' : ''}${b.live ? ` · now: ${liveWords(b.live)}` : ''}`)] : []),
     ...(m.plan?.clarified.length ? ['Answers:', ...m.plan.clarified.map(c => `- ${c.q} → ${c.a}`)] : []),
+    ...(m.plan?.doubts?.length ? ['Doubts (one still open holds the approval):', ...m.plan.doubts.map(d => `- ${d.text} · ${d.state === 'open' ? 'open' : `closed by ${d.by}: ${d.answer} (${d.source})`}`)] : []),
+    ...(v.questions.length ? ['Questions of its chats:', ...v.questions.map(q => `- ${q.title}${q.n ? ` (step ${q.n})` : ''}: ${ladderText(q.question).replace(/\s+/g, ' ')} · ${q.question.answered ? `answered by ${q.question.answered.name}: ${q.question.answered.answer} (${q.question.answered.why})` : q.question.level === 'user' ? 'waits for the user' : `with the ${q.question.level}`}`)] : []),
     `Now: ${info.can.join(', ')}`,
   ].join('\n');
 }

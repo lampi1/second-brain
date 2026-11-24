@@ -29,7 +29,7 @@
 .wm-group ul { display: flex; flex-direction: column; gap: 4px; }
 .wm-row { display: flex; align-items: center; gap: 8px; padding-right: 8px; border: 1px solid var(--border); border-radius: var(--r-m); background: var(--surface); }
 .wm-row:hover { background: var(--surface-2); }
-.wm-row[data-s=toApprove] { border-color: var(--amber-line); background: var(--amber-bg); }
+.wm-row[data-wait] { border-color: var(--amber-line); background: var(--amber-bg); }
 .wm-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: var(--r-m); }
 .wm-row-main:focus-visible, .wm-box-main:focus-visible, .wm-boxchat:focus-visible, .wm-side-back:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .wm-row-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -43,6 +43,14 @@
 .wm-chip[data-s=toApprove], .wm-chip[data-s=stopped] { background: var(--amber-bg); color: var(--amber); }
 .wm-chip[data-s=running] { background: var(--accent-bg); color: var(--accent); }
 .wm-chip[data-s=finished], .wm-chip[data-s=archived] { background: var(--green-bg); color: var(--green); }
+.wm-live { padding: 0 8px; border-radius: 99px; font-size: 11.5px; line-height: 18px; font-weight: 600; background: var(--surface-3); color: var(--text-2); }
+.wm-live[data-k=you] { background: var(--amber-bg); color: var(--amber); }
+.wm-live[data-k=work] { background: var(--accent-bg); color: var(--accent); }
+.wm-live[data-k=bad] { background: var(--red-bg); color: var(--red); }
+.wm-live[data-k=ok] { background: var(--green-bg); color: var(--green); }
+.wm-live[data-k=dim] { color: var(--text-3); }
+.wm-who { color: var(--text-2); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wm-stale, .wm-doubt-n { color: var(--amber); font-weight: 600; }
 .wm-dots { display: inline-flex; flex-wrap: wrap; gap: 3px; }
 .wm-dots i { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--border-3); }
 .wm-dots i[data-s=done] { background: var(--green); border-color: var(--green); }
@@ -99,8 +107,44 @@
 .wm-boxchat { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 1px 7px; border: 1px solid var(--border); border-radius: 99px; background: var(--surface-2); color: var(--text-2); font: inherit; font-size: 11.5px; cursor: pointer; }
 .wm-boxchat span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wm-boxchat:hover { color: var(--text); background: var(--surface-3); }
+.wm-boxchat[data-k=bad] { border-color: var(--red); }
+.wm-boxchat[data-k=you] { border-color: var(--amber-line); }
+.wm-say { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--border-3); }
+.wm-say[data-k=you] { background: var(--amber); }
+.wm-say[data-k=wait] { background: var(--text-2); }
+.wm-say[data-k=work] { background: var(--accent); }
+.wm-say[data-k=bad] { background: var(--red); }
+.wm-say[data-k=ok] { background: var(--green); }
 .wm-dropped { width: 100%; margin-top: 18px; padding-top: 12px; border-top: 1px dashed var(--border-3); }
 .wm-dropped h4 { margin: 0 0 8px; font-size: 12px; color: var(--text-3); text-align: center; }
+
+/* the doubts and the questions */
+.wm-held { flex: 1 0 100%; font-size: 13px; font-weight: 600; color: var(--amber); overflow-wrap: anywhere; }
+.wm-doubts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 10px; align-items: start; }
+.wm-doubts details { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r-m); background: var(--surface); min-width: 0; }
+.wm-doubts details[data-open] { border-color: var(--amber-line); }
+.wm-doubts summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+.wm-doubts summary small { font-weight: 500; color: var(--text-3); margin-left: 4px; }
+.wm-doubts details[data-open] summary small { color: var(--amber); font-weight: 600; }
+.wm-doubts ul { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.wm-doubts li { min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+.wm-doubt { display: flex; gap: 8px; align-items: flex-start; }
+.wm-doubt > i { flex: none; width: 18px; height: 18px; border-radius: 50%; background: var(--green-bg); color: var(--green); font-style: normal; font-weight: 700; font-size: 11px; line-height: 18px; text-align: center; }
+.wm-doubt[data-s=open] > i { background: var(--amber-bg); color: var(--amber); }
+.wm-doubt > div { display: flex; flex-direction: column; min-width: 0; }
+.wm-doubt b, .wm-q b { font-weight: 600; }
+.wm-doubt em { font-style: normal; color: var(--amber); font-weight: 600; font-size: 12px; }
+.wm-doubt small, .wm-q small { color: var(--text-3); font-size: 12px; }
+.wm-q { display: flex; flex-direction: column; gap: 3px; padding-left: 9px; border-left: 3px solid var(--border-3); }
+.wm-q[data-s=you] { border-color: var(--amber); }
+.wm-q[data-s=done] { border-color: var(--green); }
+.wm-q-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.wm-q p { margin: 0; font-weight: 600; display: flex; flex-direction: column; }
+.wm-q p small { font-weight: 500; }
+.wm-q[data-s=you] p { color: var(--amber); }
+.wm-doubts .wm-way { list-style: none; display: flex; flex-direction: column; gap: 1px; color: var(--text-2); font-size: 12px; }
+.wm-way li { font-size: 12px; }
+.wm-way li::before { content: '↑ '; color: var(--text-4); }
 
 /* the side panel */
 .wm-side { display: flex; flex-direction: column; gap: 6px; padding: 12px; border: 1px solid var(--border); border-radius: var(--r-l); background: var(--surface); font-size: 13px; min-width: 0; overflow-wrap: anywhere; }

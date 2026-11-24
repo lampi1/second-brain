@@ -71,7 +71,10 @@ Each one has a vice for the quiet moments:
 - **Every engine, per role.** Claude Code on one role, Codex on another, Cursor on a third. Each role card holds its
   model presets (Minimo, Base, Massimo) and its code mode.
 - **Plans you can see.** Every job has its own map: you approve, start, change or stop it there, and its boxes turn
-  green as the crew finishes. **Map** lists them all by status, what waits for you on top; an idea alone is a map too.
+  green as the crew finishes, saying who works, who waits for whom and what failed. **Map** opens on all of them by
+  status, what waits for you on top; an idea alone is a map too.
+- **Only the questions nobody else can answer.** A worker's question goes to its Strategist, then to the Orchestrator,
+  then to you; the map says who answered and why. One open doubt and the plan cannot be approved.
 - **No collisions.** Every writing agent gets its own git worktree.
 - **No leftovers.** A number beside Grindhouse counts the agents at work; when one ends, what it started ends with it,
   except the shared environments held by a lease.

@@ -138,6 +138,8 @@
         "src/renderer/components/work-map/WorkDrawing.tsx",
         "src/renderer/components/work-map/WorkSide.tsx",
         "src/renderer/components/work-map/WorkBits.tsx",
+        "src/renderer/components/work-map/LiveBits.tsx",
+        "src/renderer/components/work-map/MapDoubts.tsx",
         "src/renderer/components/work-map/work-map.css"
       ]
     },
@@ -146,6 +148,7 @@
       "sources": [
         "src/renderer/components/work-map/WorksView.tsx",
         "src/renderer/components/work-map/WorkBits.tsx",
+        "src/renderer/components/work-map/LiveBits.tsx",
         "src/renderer/components/work-map/work-map.css",
         "src/renderer/lib/work-maps.ts",
         "src/main/demo-work-maps.ts"

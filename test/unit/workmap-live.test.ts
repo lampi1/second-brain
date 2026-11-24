@@ -1,13 +1,14 @@
 // Unit tests of main/workmap/live.ts (ADR 0342, live status): pure, over plain chat summaries. One test per transition of
 // a step's chat (starts, waits and for whom, fails, is interrupted, reports done, partial or blocked, is closed without a
-// report, is gone), the chats it delegated, what nobody can vouch for (stale, with its time), and why a map is stopped.
+// report, is gone), the chats it delegated, what nobody can vouch for (stale, with its time), why a map is stopped, and the
+// questions of its chats (asksOf).
 // The same through the service: test/unit/workmap-live-service.test.ts.
 import { describe, expect, it } from 'vitest';
 import type { ChatSummary, PendingRequest } from '../../src/shared/contract';
 import type { PlanStep, StrategyPlan } from '../../src/shared/strategy';
 import type { LadderQuestion } from '../../src/shared/question-ladder';
 import { liveWords, type WorkMap, type WorkMapLive, type WorkBoxLive } from '../../src/shared/work-map';
-import { liveOf, movesBelow, readingOf, STALE_MS, type LiveInput } from '../../src/main/workmap/live';
+import { asksOf, liveOf, movesBelow, readingOf, STALE_MS, type LiveInput } from '../../src/main/workmap/live';
 import { settle } from '../../src/main/workmap/follow';
 
 const NOW = 10 * 3600_000;
@@ -30,6 +31,20 @@ function live(m: WorkMap, chats: ChatSummary[], x: Partial<LiveInput> = {}): { b
 const asked = (level: LadderQuestion['level'], via: LadderQuestion['via'] = 'message'): Partial<ChatSummary> => ({ questions: [{ id: 'q-1', asks: [{ question: 'Anche i resi?', options: ['Sì', 'No'] }], level, ...(level === 'user' ? {} : { holder: 'own' }), at: 1, levelAt: 1, trail: [], via }] });
 /** One step under way whose only chat is this. */
 const one = (k: ChatSummary | null, x: Partial<LiveInput> = {}) => live(map([step('now', ['k'])]), [chat('own', turn(NOW - 5)), ...(k ? [k] : [])], x);
+
+describe('the questions of a map', () => {
+  const q = (id: string, at: number, extra: Partial<LadderQuestion> = {}): LadderQuestion => ({ id, asks: [{ question: id, options: [] }], level: 'strategist', holder: 'own', at, levelAt: at, trail: [], via: 'message', ...extra });
+  const done = (at: number) => ({ answered: { by: 'strategist' as const, name: 'S', answer: 'Sì', why: 'brief', at } });
+  it('his first, then the held ones, then the answered, each with its step and its chat', () => {
+    const chats = [chat('own', { questions: [q('own-q', 600)] }), kid('k', { questions: [q('old', 10, done(900)), q('his', 700, { level: 'user' })] }), chat('deep', { parentId: 'k', questions: [q('deep-q', 650)] })];
+    expect(asksOf(map([step('now', ['k'])]), chats).map(a => [a.question.id, a.chatId, a.n])).toEqual([['his', 'k', 1], ['deep-q', 'deep', 1], ['own-q', 'own', undefined], ['old', 'k', 1]]);
+  });
+  it('a chat outside the steps counts only in the time of the job; another job\'s chat never', () => {
+    const chats = [chat('own', { questions: [q('before', 0), q('after', 5000)] }), kid('x', { questions: [q('in', 50)] }), chat('other', { questions: [q('other-q', 50)] })];
+    expect(asksOf(map([step('done')], { createdAt: 1, finishedAt: 1000 }), chats).map(a => a.question.id)).toEqual(['in']);
+    expect(asksOf(map([]), []).length).toBe(0);
+  });
+});
 
 describe('a step follows its chat', () => {
   it('starts: at work, on the step and on the map\'s row', () => {

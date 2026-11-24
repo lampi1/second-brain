@@ -4,7 +4,7 @@
 // when the user comes back from a map. A row opens the map; its other button the owner chat. «Nuova idea» writes one down.
 // With an id in the place (`lavori/<id>`) it shows that map instead (WorkMapView.tsx). Rendered by brain-model/MapPage.tsx.
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { WORK_MAP_LIMITS, type WorkMapInfo } from '@shared/work-map';
+import { waitsForUser, WORK_MAP_LIMITS, type WorkMapInfo } from '@shared/work-map';
 import { openChatRef, openWorkMap } from '../../actions';
 import { Seg } from '../../brain/components/ui';
 import { t } from '../../i18n';
@@ -17,6 +17,7 @@ import { useApp } from '../../store/store';
 import { useWorkMaps } from '../../store/work-maps';
 import { IconChat, IconPlus, IconSearch, IconX } from '../Icons';
 import { Select } from '../Select';
+import { LiveLine, whyOf } from './LiveBits';
 import { StateChip, StepDots } from './WorkBits';
 import { WorkMapView } from './WorkMapView';
 import './work-map.css';
@@ -84,8 +85,8 @@ export function WorkList() {
 
 export function WorkRow({ info, now }: { info: WorkMapInfo; now: number }) {
   const chat = useApp(s => (info.ownerChatId ? s.chats[info.ownerChatId]?.title : undefined));
-  const why = info.stopped ? t(`wm.stop.${info.stopped.by}`) : '';
-  return <li className="wm-row" data-s={info.state} data-unseen={info.state === 'finished' ? '' : undefined} data-testid={`wm-row-${info.id}`}>
+  const why = whyOf(info);
+  return <li className="wm-row" data-s={info.state} data-wait={waitsForUser(info) ? '' : undefined} data-unseen={info.state === 'finished' ? '' : undefined} data-testid={`wm-row-${info.id}`}>
     <button type="button" className="wm-row-main" onClick={() => openWorkMap(info.id)} data-testid={`wm-open-${info.id}`}>
       <span className="wm-row-top"><b>{info.title}</b>{info.state === 'finished' && <em className="wm-new">{t('wm.unseen')}</em>}</span>
       <span className="wm-row-meta">
@@ -93,7 +94,9 @@ export function WorkRow({ info, now }: { info: WorkMapInfo; now: number }) {
         {projectsOf(info).map(p => <span key={p} className="wm-project">{p}</span>)}
         {info.steps ? <><StepDots info={info} /><span>{t('wm.steps', { done: info.done, n: info.steps })}</span></> : <span>{t('wm.noPlan')}</span>}
         {info.blocked > 0 && <span className="wm-stuck">{t('wm.row.blocked', { n: info.blocked })}</span>}
-        {why && <span>{why}</span>}
+        <LiveLine live={info.live} id={info.id} now={now} />
+        {!!info.doubts?.open && <span className="wm-doubt-n" data-testid={`wm-row-doubts-${info.id}`}>{t('wm.doubts.open', { n: info.doubts.open })}</span>}
+        {why && <span data-testid={`wm-why-${info.id}`}>{why}</span>}
         <span className="wm-at">{t('wm.row.updated', { at: ago(info.updatedAt, now) })}</span>
       </span>
     </button>

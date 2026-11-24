@@ -18,10 +18,11 @@
 // (workmap/tools.ts, through projectmap/tools.ts); pinned by test/unit/workmap-service.test.ts and test/unit/agents/work-map-chats.test.ts.
 import crypto from 'node:crypto';
 import type { ChatSummary, PendingRequest } from '@shared/contract';
-import { drawingOf, WORK_MAP_LIMITS, workActions, workInfo, type WorkMap, type WorkMapAction, type WorkMapInfo, type WorkMapState, type WorkMapView } from '@shared/work-map';
+import { approvalGate } from '@shared/plan-doubts';
+import { drawingOf, WORK_MAP_LIMITS, workActions, waitsForUser, workInfo, type WorkMap, type WorkMapAction, type WorkMapInfo, type WorkMapState, type WorkMapView } from '@shared/work-map';
 import { errText, log } from '../log';
 import { follow, left, ownsJob, requestOf, settle, stateLine, summaryOf, taskOf, titleOf } from './follow';
-import { liveOf, movesBelow, type LiveInput } from './live';
+import { asksOf, liveOf, movesBelow, type LiveInput } from './live';
 import { LiveMemory, liveKey } from './live-memory';
 import type { WorkMapStore } from './store';
 
@@ -202,11 +203,11 @@ export class WorkMaps {
     const input: LiveInput = { chats, asks: this.d.chats.pending?.() ?? [], now: this.now(), confirmed: c => this.memory.confirmed(c), crashed: !!id && this.memory.crashed(id), ...(removedBy ? { removedBy } : {}) };
     return liveOf(m, input);
   }
-  /** The live status as compared; what it confirms is remembered. */
+  /** The live status and the questions as compared; what it confirms is remembered. */
   private picture(m: WorkMap): string {
     const chats = this.d.chats.list(), l = this.live(m, chats);
     for (const w of [...l.boxes.flatMap(b => b?.chats ?? []), ...(l.map ? [...l.map.working, ...l.map.waiting] : [])]) this.memory.confirm(w, chats.find(c => c.id === w.chatId)?.lastResult?.at, this.now());
-    return JSON.stringify(l);
+    return JSON.stringify([l, asksOf(m, chats).map(a => [a.question.id, a.question.level, a.question.holder, a.question.trail.length, a.question.answered?.at])]);
   }
   private info(m: WorkMap, chats: ChatSummary[]): WorkMapInfo { const l = this.live(m, chats).map; return { ...workInfo(m), ...(l ? { live: l } : {}) }; }
 
@@ -306,10 +307,10 @@ export class WorkMaps {
   list(q: { archived?: boolean; query?: string } | void): WorkMapInfo[] {
     const words = (q?.query ?? '').toLowerCase().split(' ').filter(Boolean);
     const text = (m: WorkMap) => [m.title, m.idea ?? '', m.project ?? '', ...m.touches, ...(m.plan?.steps ?? []).map(s => s.title)].join(' ').toLowerCase();
-    const order = (m: WorkMap) => ORDER.indexOf(m.state), chats = this.d.chats.list();
+    const order = (i: WorkMapInfo) => (waitsForUser(i) ? 0 : ORDER.indexOf(i.state)), chats = this.d.chats.list();
     return [...this.maps.values()]
       .filter(m => words.length ? words.every(w => text(m).includes(w)) : q?.archived ? m.state === 'archived' : m.state !== 'archived')
-      .sort((a, b) => order(a) - order(b) || b.updatedAt - a.updatedAt || a.id.localeCompare(b.id)).map(m => this.info(m, chats));
+      .map(m => this.info(m, chats)).sort((a, b) => order(a) - order(b) || b.updatedAt - a.updatedAt || a.id.localeCompare(b.id));
   }
 
   /** The jobs that touch a project map (ProjectMapView.jobs), the archived ones left out. */
@@ -328,11 +329,11 @@ export class WorkMaps {
     if (!now) return null;
     const m = version === undefined || version === now.version ? now : this.d.store.version(id, version);
     if (!m) return null;
-    const map = structuredClone(m), { boxes, links } = drawingOf(map), history = this.d.store.history(id);
+    const map = structuredClone(m), { boxes, links } = drawingOf(map), history = this.d.store.history(id), chats = this.d.chats.list();
     // an earlier version is only what it was
-    if (map.version !== now.version) return { map, info: { ...workInfo(map), can: [] }, boxes, links, history };
-    const live = this.live(map);
-    return { map, info: { ...workInfo(map), ...(live.map ? { live: live.map } : {}) }, boxes: boxes.map((b, i) => (live.boxes[i] ? { ...b, live: live.boxes[i] } : b)), links, history };
+    if (map.version !== now.version) return { map, info: { ...workInfo(map), can: [] }, boxes, links, history, questions: [] };
+    const live = this.live(map, chats);
+    return { map, info: { ...workInfo(map), ...(live.map ? { live: live.map } : {}) }, boxes: boxes.map((b, i) => (live.boxes[i] ? { ...b, live: live.boxes[i] } : b)), links, history, questions: structuredClone(asksOf(map, chats)) };
   }
 
   /** A map from an idea alone: no chat is started. */
@@ -356,6 +357,9 @@ export class WorkMaps {
     // the screen says it of every map it shows: only a finished one moves
     if (action === 'seen' && m.state !== 'finished') return this.clone(m);
     if (!workActions(m).includes(action)) throw new Error(`Non si può ${ACTION_WORDS[action]}: la mappa è «${stateLine(m)}».`);
+    // an open doubt holds the yes on every path; the chat checks it again (ADR 0344)
+    const doubt = m.plan && (action === 'approve' || action === 'keep' || action === 'start') ? approvalGate(m.plan) : null;
+    if (doubt) throw new Error(doubt);
     if (this.busy.has(id)) throw new Error('Un’azione su questa mappa è già in corso.');
     this.busy.add(id);
     try { await this.run(m, action, a, by); } finally { this.busy.delete(id); }

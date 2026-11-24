@@ -40,6 +40,16 @@ describe('sayOf', () => {
     // a chat it delegated that closed does not count
     expect(say({ state: 'idle', lastResult: { at: 1, isError: false } }, [chat({ id: 'kid', parentId: 'w', state: 'closed', closedAt: 5 })])).toBe('work');
   });
+  it('a question an agent holds is waited for at that agent, until it reaches the user (ADR 0344)', () => {
+    const q = (level: 'strategist' | 'orchestrator' | 'user', via: 'request' | 'message' = 'message') => [{ id: 'q', asks: [], level, at: 1, levelAt: 1, trail: [], via }];
+    expect(say({ state: 'idle', waitsOn: 'user', questions: q('strategist'), lastResult: { at: 1, isError: false } })).toBe('held');
+    expect(say({ state: 'waiting', questions: q('orchestrator', 'request') })).toBe('held');
+    expect(say({ state: 'running', questions: q('strategist') })).toBe('run');
+    expect(say({ state: 'waiting', pending: 1, questions: q('user', 'request') })).toBe('wait');
+    expect(wantOf(['held'])).toMatchObject({ durable: 'work', live: { actor: 'agent' } });
+    expect(wantOf(['held', 'run']).live).toBeNull();
+    expect(wantOf(['held', 'wait']).live).toEqual({ actor: 'user' });
+  });
   it('waits for the user: an open request (its own or a delegated chat\'s), or its last answer says so', () => {
     expect(say({ state: 'waiting' })).toBe('wait');
     expect(say({ state: 'running' }, [], [ask('w')])).toBe('wait');

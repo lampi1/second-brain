@@ -2,6 +2,7 @@
 // every tile, the top bar and the palette use them, and the unit tests pin their output (test/unit/format.test.ts).
 import type { ChatState, ChatSummary, Effort, Harness, PermissionMode } from '@shared/contract';
 import { locale, t, type TextKey } from '../i18n';
+import { heldBy } from '@shared/question-ladder';
 import { waitsOnChildren } from './agent-children';
 
 /** THE money format of the app (ADR 0101): the number in the UI's locale, then " $" — 1.84 → "1,84 $" (it),
@@ -82,7 +83,7 @@ export function folderName(cwd: string): string {
 export type Tone = 'run' | 'wait' | 'done' | 'idle' | 'err' | 'off' | 'orchestrator';
 
 /** The state pill of a chat: Italian label + color tone. */
-export function stateInfo(c: Pick<ChatSummary, 'state' | 'isOrchestrator' | 'pending' | 'queued' | 'closedAt'> & { agentChildren?: ChatSummary['agentChildren']; plan?: ChatSummary['plan']; turnClosing?: ChatSummary['turnClosing'] }): { label: string; tone: Tone } {
+export function stateInfo(c: Pick<ChatSummary, 'state' | 'isOrchestrator' | 'pending' | 'queued' | 'closedAt'> & { agentChildren?: ChatSummary['agentChildren']; plan?: ChatSummary['plan']; turnClosing?: ChatSummary['turnClosing']; questions?: ChatSummary['questions']; background?: number }): { label: string; tone: Tone } {
   // a turn whose reply is complete, closing behind the scenes (ADR 0318): said as the idle chat it is about to be
   const s: ChatState = c.state === 'running' && c.turnClosing ? 'idle' : c.state;
   if (s === 'waiting' || c.pending > 0) return { label:t('ui.state.waiting'), tone: 'wait' };
@@ -90,6 +91,9 @@ export function stateInfo(c: Pick<ChatSummary, 'state' | 'isOrchestrator' | 'pen
   if (c.plan?.phase === 'proposed' && !c.closedAt && (s === 'idle' || s === 'closed')) return { label:t('ui.state.waiting'), tone: 'wait' };
   // an agent's start or turn waiting for the machine's load (ADR 0036): not finished
   if (c.queued && !c.closedAt && s !== 'running' && s !== 'error') return { label:t('ui.state.queued'), tone: 'off' };
+  // its question is with the chat above it or the Orchestrator (ADR 0344): not the user's, and not finished
+  const held = s === 'error' || c.closedAt ? undefined : heldBy({ ...c, state: s });
+  if (held) return { label: t(held === 'parent' ? 'ui.state.heldParent' : 'ui.state.heldOrchestrator'), tone: 'off' };
   if (s === 'running') return { label:t('ui.state.running'), tone: 'run' };
   if (s === 'starting') return { label:t('ui.state.starting'), tone: 'off' };
   if (s === 'error') return { label:t('ui.state.error'), tone: 'err' };

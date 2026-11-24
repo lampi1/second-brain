@@ -32,4 +32,17 @@ export const workMapIt = {
   // the side panel
   'wm.side.label': 'Dettagli', 'wm.side.job': 'Il lavoro', 'wm.side.idea': 'Richiesta', 'wm.side.doneWhen': 'Finito quando', 'wm.side.known': 'Già chiaro', 'wm.side.links': 'Link', 'wm.side.history': 'Storia', 'wm.side.pick': 'Tocca un passo per i dettagli.', 'wm.side.back': 'Tutto il lavoro', 'wm.side.step': (p: N) => `Passo ${p.n}`, 'wm.side.who': 'Chi lo fa', 'wm.side.when': 'Quando', 'wm.side.chats': 'Chat', 'wm.side.project': 'Progetto',
   'wm.outcome.partial': 'fatto in parte', 'wm.outcome.blocked': 'bloccato',
+  // the live status (what its chats do now)
+  'wm.say.waiting': 'in attesa', 'wm.say.working': 'al lavoro', 'wm.say.failed': 'ultimo turno fallito', 'wm.say.closed': 'chat chiusa senza rapporto', 'wm.say.gone': 'chat non più qui', 'wm.say.interrupted': 'turno interrotto', 'wm.say.between': 'turno finito, nessun rapporto', 'wm.say.blocked': 'ha riferito: bloccato', 'wm.say.partial': 'ha riferito: fatto in parte', 'wm.say.done': 'ha riferito: fatto', 'wm.say.unknown': 'non si sa',
+  'wm.waits.user': 'aspetta te', 'wm.waits.parent': 'aspetta chi l’ha avviata', 'wm.waits.orchestrator': 'aspetta l’Orchestrator', 'wm.waits.colleagues': 'aspetta altre persone', 'wm.waits.work': 'aspetta un lavoro in corso',
+  'wm.stale': (p: { at: string }) => `da verificare: ultima conferma ${p.at}`,
+  'wm.why.user': 'L’hai fermata tu.', 'wm.why.closedByUser': 'Hai chiuso tu la sua chat.', 'wm.why.closedByAgent': 'Un agente ha chiuso la sua chat.', 'wm.why.closedByApp': 'L’app ha chiuso la sua chat a lavoro aperto.', 'wm.why.crash': 'Il motore della sua chat è caduto e non è ripartito.', 'wm.why.gone': 'La sua chat non c’è più.', 'wm.why.replaced': 'La sua chat è passata a un altro lavoro.',
+  'wm.row.working': (p: { who: string }) => `al lavoro: ${p.who}`, 'wm.row.waiting': (p: N) => `${p.n} in attesa`, 'wm.row.failed': (p: N) => (p.n === 1 ? '1 chat fallita' : `${p.n} chat fallite`), 'wm.row.lost': (p: N) => (p.n === 1 ? '1 chat persa' : `${p.n} chat perse`),
+  // the doubts and the questions (ADR 0344)
+  'wm.doubts.label': 'Dubbi e domande', 'wm.doubts.title': 'Dubbi', 'wm.doubts.open': (p: N) => (p.n === 1 ? '1 dubbio aperto' : `${p.n} dubbi aperti`), 'wm.doubts.closed': (p: N) => (p.n === 1 ? 'chiuso' : `tutti e ${p.n} chiusi`),
+  'wm.doubt.open': 'aperto: blocca l’ok', 'wm.doubt.by.user': 'risposta tua', 'wm.doubt.by.code': 'dal codice', 'wm.doubt.by.brain': 'dal cervello', 'wm.doubt.by.choice': 'scelta dello Stratega',
+  'wm.doubt.blocks': (p: { n: number; text: string }) => (p.n === 1 ? `Si approva quando è chiuso il dubbio: «${p.text}»` : `Si approva quando sono chiusi ${p.n} dubbi. Il primo: «${p.text}»`),
+  'wm.q.title': 'Domande delle chat', 'wm.q.open': (p: N) => (p.n === 1 ? '1 aperta' : `${p.n} aperte`), 'wm.q.allAnswered': (p: N) => (p.n === 1 ? 'con risposta' : `${p.n}, tutte con risposta`),
+  'wm.q.you': 'te', 'wm.q.asked': (p: { who: string }) => `chiesta a ${p.who}`, 'wm.q.passed': (p: { who: string }) => `${p.who} la passa su`, 'wm.q.skipped': (p: { who: string }) => `${p.who} non risponde`, 'wm.q.held': (p: { who: string }) => `ce l’ha ${p.who}`,
+  'wm.q.answered': (p: { who: string; answer: string }) => `${p.who} ha risposto: «${p.answer}»`, 'wm.q.youAnswered': (p: { answer: string }) => `Hai risposto: «${p.answer}»`, 'wm.q.why': (p: { why: string }) => `perché: ${p.why}`,
 };

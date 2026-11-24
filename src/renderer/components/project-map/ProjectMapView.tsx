@@ -53,6 +53,7 @@ import { ElementDetail, LinkDetail, stateText } from './MapDetail';
 import { PathList, PathPanel, type Walk } from './MapPaths';
 import { ProgressCard, ProgressChip, countText } from './MapProgress';
 import { Turn } from './plan-words';
+import { LiveLine } from '../work-map/LiveBits';
 import { StateChip, StepDots } from '../work-map/WorkBits';
 import '../work-map/work-map.css';
 import { SIDE, clampSide, readSide, writeSide } from './side-width';
@@ -698,7 +699,7 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
         {/* how far the project is; then the jobs that touch it: each opens its own map (ADR 0343) */}
         {progress && <ProgressCard p={progress} compact={!!sel || selLinks.length > 0 || !!walkPath || !!shownLevel} whoOf={whoOf} onShow={show} />}
         {jobs.length > 0 && <section className="pm-group" data-testid="pm-jobs"><h4>{t('pm.jobs')}</h4><ul className="wm-jobs">
-          {jobs.map(j => <li key={j.id} className="wm-job" data-testid={`pm-job-${j.id}`}><b>{j.title}</b><StateChip info={j} />{j.steps > 0 && <><StepDots info={j} /><span>{t('wm.steps', { done: j.done, n: j.steps })}</span></>}<button type="button" className="btn btn-ghost btn-s" onClick={() => openJob(j.id)} data-testid={`pm-job-open-${j.id}`}>{t('wm.open')}</button></li>)}
+          {jobs.map(j => <li key={j.id} className="wm-job" data-testid={`pm-job-${j.id}`}><b>{j.title}</b><StateChip info={j} />{j.steps > 0 && <><StepDots info={j} /><span>{t('wm.steps', { done: j.done, n: j.steps })}</span></>}<LiveLine live={j.live} id={`pm-${j.id}`} now={now} /><button type="button" className="btn btn-ghost btn-s" onClick={() => openJob(j.id)} data-testid={`pm-job-open-${j.id}`}>{t('wm.open')}</button></li>)}
         </ul></section>}
         {here && !walkPath && <ElementDetail count={counts.get(here.id)} map={map} el={here} state={st(here)} stateOfLink={stLink} confirmed={t('pm.confirmed', { at: since(here.confirmedAt, now) })} works={here.kind === 'part' || here.kind === 'phase' || here.kind === 'step' ? worksOf(here.id) : []} onTalk={() => talk(here)} onShow={show} onFile={openFile} onWalk={startWalk} stateOfEl={st} onLink={openLink} testid="pm-here" lead={t('pm.youAreIn')} />}
         {!walkPath && <PathList map={map} onWalk={startWalk} onAsk={askPath} />}

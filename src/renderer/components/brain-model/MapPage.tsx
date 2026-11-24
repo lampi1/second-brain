@@ -1,4 +1,5 @@
-// "Mappa" (G B, ADR 0077): who uses what. The default view draws the links graph agent → skills → rules → memory
+// "Mappa" (G B, ADR 0077): who uses what. It opens on «Lavori», the work maps (ADR 0343), unless the place names another
+// view. «Collegamenti» draws the links graph agent → skills → rules → memory
 // (lib/brain-model-view.ts linkGraph) with an inspector: an agent shows its skills and opens its page, a skill shows
 // who uses it and opens the Skill page, a rule or a memory opens its file. "Note del brain" is the brain's notes map,
 // moved as is from the old Dashboard (dashboard/BrainNotesMap.tsx), with "Esplora in 3D". Both use dashboard/Graph.tsx
@@ -50,7 +51,7 @@ export function MapPage() {
   const arg = ui.use(s => (s.page === 'collegamenti' ? s.pageArg : null));
   const inProjects = arg === PROJECTS || !!arg?.startsWith(`${PROJECTS}/`);
   const work = workPlaceOf(arg), inWorks = !!work;
-  const [view, setView] = useState<View>(inProjects ? 'projects' : inWorks ? 'works' : 'links');
+  const [view, setView] = useState<View>(inProjects ? 'projects' : 'works');
   useEffect(() => { if (inProjects) setView('projects'); else if (inWorks) setView('works'); }, [inProjects, inWorks]);
   const pick = (v: View) => {
     setView(v); setSelected(null);

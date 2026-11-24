@@ -79,7 +79,7 @@ describe('the list row and the text', () => {
   });
   it('workText tells an agent the state, the steps and what can be done now', () => {
     const m = map({ owner, idea: 'Sconti in percentuale', plan: { ...plan('approved', [step('Cerco', 'todo', { role: 'scout', preset: 'max' })]), clarified: [{ q: 'Dove?', a: 'Negli ordini' }] } });
-    const text = workText({ map: m, info: workInfo(m), ...drawingOf(m), history: [] });
+    const text = workText({ map: m, info: workInfo(m), ...drawingOf(m), history: [], questions: [] });
     expect(text).toContain('Sconti (wm_abc123, version 1): approved, kept for later');
     expect(text).toContain('1. [turn 1] Cerco · todo · scout · max');
     expect(text).toContain('- Dove? → Negli ordini');

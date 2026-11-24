@@ -62,6 +62,8 @@ test('Brain pages: skills with links and undo, rules, memory, map; the agent car
     // ── Mappa: agent → skills → rules → memory, with an inspector
     await goPage(page, 'collegamenti');
     const map = page.getByTestId('bm-map-page');
+    await expect(map.getByTestId('wm-list')).toBeVisible(); // it opens on the jobs (ADR 0343)
+    await map.getByRole('button', { name: 'Agenti e skill', exact: true }).click();
     const graph = map.getByTestId('bm-map-graph');
     await expect(graph.locator('.dash-node').first()).toBeVisible();
     await graph.locator('.dash-node').first().click();
@@ -115,6 +117,7 @@ test('Brain pages: skills with links and undo, rules, memory, map; the agent car
     await expect(page.getByTestId('bm-memory-page')).toBeVisible();
     await shot(page, 'brain-memory-light');
     await goPage(page, 'collegamenti');
+    await page.getByTestId('bm-map-page').getByRole('button', { name: 'Agenti e skill', exact: true }).click();
     await expect(page.getByTestId('bm-map-graph').locator('.dash-node').first()).toBeVisible();
     await shot(page, 'brain-map-light');
   } finally { await app.close(); }

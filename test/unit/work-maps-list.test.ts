@@ -3,7 +3,7 @@
 // page; which map is a chat's; the buttons, only those of WorkMapInfo.can, and the IPC call of each; the plan in rows.
 import { describe, expect, it } from 'vitest';
 import { workInfo, workStateOf, WORK_MAP_STATES, type WorkBox, type WorkMap, type WorkMapAction, type WorkMapInfo, type WorkMapState } from '../../src/shared/work-map';
-import { allProjects, arrange, buttonsOf, callOf, groupOf, mapOfChat, rowsOf, workPlace, workPlaceOf, WORK_BUTTONS, WORK_GROUPS, WORK_SORTS, type WorkFilter } from '../../src/renderer/lib/work-maps';
+import { allProjects, arrange, buttonsOf, callOf, chatsOf, groupOf, heldBy, liveKind, mapOfChat, rowsOf, workPlace, workPlaceOf, WORK_BUTTONS, WORK_GROUPS, WORK_SORTS, type WorkFilter } from '../../src/renderer/lib/work-maps';
 
 const info = (id: string, state: WorkMapState, p: Partial<WorkMapInfo> = {}): WorkMapInfo => ({ id: `wm_${id}`, title: id, touches: [], state, steps: 0, done: 0, now: 0, blocked: 0, createdAt: 1, updatedAt: 1, can: [], ...p });
 const F: WorkFilter = { tab: 'open', query: '', project: '', sort: 'recent' };
@@ -17,6 +17,26 @@ describe('the list by status', () => {
     expect(shape(infos, { tab: 'finished' })).toEqual(['finished: archived finished'].map(() => 'finished: finished archived'));
     expect(WORK_GROUPS[0]).toBe('wait');
     expect(ALL.every(state => WORK_GROUPS.includes(groupOf({ state })))).toBe(true);
+  });
+  it('a job under way whose chat waits for the user is with what waits; a question an agent holds is not', () => {
+    const live = (waits: 'user' | 'parent' | 'orchestrator') => ({ say: 'waiting' as const, waits, working: [], waiting: [], failed: [], lost: [] });
+    const infos = [info('his', 'running', { live: live('user') }), info('held', 'running', { live: live('orchestrator') }), info('parent', 'running', { live: live('parent') }), info('asking', 'idea', { live: live('user') }), info('stop', 'stopped', { live: live('user') })];
+    expect(shape(infos)).toEqual(['wait: asking his', 'running: held parent', 'stopped: stop']);
+    expect((['user', 'parent', 'orchestrator'] as const).map(w => liveKind({ say: 'waiting', waits: w }))).toEqual(['you', 'wait', 'wait']);
+    expect([liveKind({ say: 'working' }), liveKind({ say: 'failed' }), liveKind({ say: 'done' }), liveKind({ say: 'between', stale: 1 })]).toEqual(['work', 'bad', 'ok', 'dim']);
+  });
+  it('an open doubt holds the approval, the start and nothing else', () => {
+    const can: WorkMapAction[] = ['approve', 'keep', 'start', 'replan'], base = { id: 'wm_1', can, planAt: 5 };
+    expect(callOf({ ...base, doubts: { open: 1, total: 2, first: 'Scadono?' } }, 'approve')).toBeNull();
+    expect(callOf({ ...base, doubts: { open: 1, total: 2 } }, 'keep')).toBeNull();
+    expect(callOf({ ...base, doubts: { open: 1, total: 2 } }, 'start')).toBeNull();
+    expect(callOf({ ...base, doubts: { open: 1, total: 2 } }, 'replan', 'Altro')).not.toBeNull();
+    expect(callOf({ ...base, doubts: { open: 0, total: 2 } }, 'approve')).not.toBeNull();
+    expect([heldBy({ doubts: { open: 2, total: 2, first: 'Scadono?' } }), heldBy({ doubts: { open: 0, total: 2 } }), heldBy({})]).toEqual([{ n: 2, first: 'Scadono?' }, null, null]);
+  });
+  it('a box carries its chats and those below that move or failed', () => {
+    const w = (chatId: string, say: 'working' | 'done' | 'failed', below?: true) => ({ chatId, title: chatId, say, ...(below ? { below } : {}) });
+    expect(chatsOf({ chatIds: ['a'], live: { say: 'working', chats: [w('own', 'working'), w('a', 'done'), w('k', 'working', true), w('x', 'done', true), w('f', 'failed', true)] } })).toEqual(['a', 'k', 'f']);
   });
   it('keeps every map in exactly one section', () => {
     const infos = Array.from({ length: 60 }, (_, n) => info(`m${n}`, ALL[n % ALL.length]!));

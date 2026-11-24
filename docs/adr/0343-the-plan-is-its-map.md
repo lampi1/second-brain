@@ -25,9 +25,15 @@ steps were listed in three places (the questions' card, the strip, the project m
    in both tabs; search, filter and order stay when the user comes back from a map.
 6. **Seen on opening.** A finished map the user opens moves to the archive at once and stays on screen.
 7. **A plan proposed on a project map opens its work map** where the project map opened before, at the same moment.
+8. **Mappa opens on «Lavori»** (the owner's answer, 2026-11-23). A place that names a view, a project map or the links still
+   lands there; `app_project_map open` too.
+9. **A map and its boxes say the live status** (ADR 0342, `LiveBits.tsx`): what is being done, for whom it waits, what failed
+   or was lost, since when nobody confirms it, why it stopped. A map that waits for the user stands in «Aspettano te»
+   whatever its state. Amber is the user's alone.
+10. **The doubts and the questions are on the map** (ADR 0344, `MapDoubts.tsx`): every doubt, its state, what closed it and the
+   source; every question of its chats, its way up, who answered and why. With a doubt open the approval buttons stay in
+   view, off, with the reason; `approve`, `keep` and `start` are refused in main too.
 
 ## Consequences
 
-- The doubts of a map and who answered them have one place ready, `work-map/MapDoubts.tsx`, empty until that data exists.
-- The screens read the live fields of a box when they are there and need none of them.
 - The demo has more than twenty maps in every state through `__sbDemo.workMaps()`; its usual seed is unchanged.

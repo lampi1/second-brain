@@ -16,6 +16,7 @@ import type {
 import type { AgentChildren, ChildObservation } from '../shared/agents';
 import { sysEn } from '../shared/sys';
 import { ROLE_DEFAULTS, type WorkRoleId } from '../shared/roles';
+import { approvalGate } from '../shared/plan-doubts';
 import { PLAN_APPROVED, planChange, type StrategyPlan } from '../shared/strategy';
 import type { BrainService, ChatService, FeedInput } from './services';
 import type { ConfigStore } from './brain/config';
@@ -648,6 +649,8 @@ export class DemoChats implements ChatService {
     if (!plan || plan.phase !== 'proposed') throw new Error('Questo piano non aspetta più una risposta.');
     if (plan.at !== at) throw new Error('Il piano è cambiato nel frattempo: rileggilo.');
     if (decision === 'change' && !text?.trim()) throw new Error('Scrivi cosa cambiare (al massimo 2000 caratteri).');
+    const held = decision === 'approve' ? approvalGate(plan) : null; // an open doubt (ADR 0344), as in the real manager
+    if (held) throw new Error(held);
     this.patch(chatId, { plan: { ...plan, phase: decision === 'change' ? 'revising' : keep ? 'approved' : 'running', at: this.now() } });
     if (!keep) this.push(chatId, { kind: 'user', id: this.nextId(), at: this.now(), text: decision === 'approve' ? PLAN_APPROVED : planChange(text!) });
   }

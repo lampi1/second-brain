@@ -4,6 +4,7 @@
 // 'orchestrator'; one that reported (or completed its assignment) is done, one idle without its report and not waiting
 // for a person is stopped. Pure; used by OrchestratorTile.tsx, pinned by test/unit/orchestrator-tally.test.ts.
 import type { ChatSummary } from '@shared/contract';
+import { heldBy } from '@shared/question-ladder';
 import { kidCounts, type ChildState } from './chat-tree';
 
 export interface OrchestratorTally { started: number; counts: ReturnType<typeof kidCounts>; startedUsd: number }
@@ -17,6 +18,8 @@ function stateOf(c: ChatSummary): ChildState {
   if (c.closedAt || c.state === 'closed') return 'closed';
   if (c.state === 'waiting' || c.pending > 0) return 'wait'; // real state only, never the words of its answer (#359)
   if (c.state === 'error') return 'err';
+  const held = heldBy(c); // its question is with an agent (ADR 0344): under way, not stopped
+  if (held) return held === 'parent' ? 'heldParent' : 'heldOrchestrator';
   if (c.state === 'running') return 'run';
   if (c.state === 'starting') return 'start';
   if (c.queued) return 'queued';

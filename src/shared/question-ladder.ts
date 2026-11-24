@@ -48,6 +48,16 @@ export const heldQuestions = (qs: readonly LadderQuestion[] | undefined): Ladder
 export const heldOnly = (c: { pending?: number; questions?: readonly LadderQuestion[] }): LadderQuestion[] =>
   c.pending || openQuestions(c.questions).some(q => q.level === 'user') ? [] : heldQuestions(c.questions);
 
+type HeldRow = { state: string; pending?: number; questions?: readonly LadderQuestion[]; background?: number; agentChildren?: { active: number | null; observedActive: number } };
+/** Whose answer a chat stands still for: the chat above it or the Orchestrator; undefined = nobody's, the user's, or it
+ *  asked by message and still works. The state words of the sidebar, its card, its bench and its tile. */
+export const heldBy = (c: HeldRow): 'parent' | 'orchestrator' | undefined => {
+  const qs = heldOnly(c);
+  const busy = c.state === 'running' || c.state === 'starting' || (c.background ?? 0) > 0 || (c.agentChildren?.active ?? c.agentChildren?.observedActive ?? 0) > 0;
+  const q = qs.find(x => x.via === 'request') ?? (busy ? undefined : qs[0]);
+  return q && (q.level === 'orchestrator' ? 'orchestrator' : 'parent');
+};
+
 const cut = (s: string, n: number): string => s.length > n ? `${s.slice(0, n - 1)}…` : s;
 /** Agent text on one line: every line break of any kind (NEL too, which \s leaves out) becomes a space. */
 export const ladderLine = (s: string): string => s.replace(/[\s\u0085]+/g, ' ').trim();

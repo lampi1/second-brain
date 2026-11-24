@@ -289,7 +289,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
         for (const i of d.ideas) { mapsClock = i.at; if (!known.has(i.title)) workMaps.idea({ title: i.title, idea: i.idea, project: i.project }); }
         for (const j of d.jobs) {
           mapsClock = j.at;
-          chats.add([j.chat], { [j.chat.id]: j.items });
+          chats.add([...j.workers.map(w => w.chat), j.chat], Object.fromEntries([...j.workers.map(w => [w.chat.id, w.items]), [j.chat.id, j.items]]));
           const m = workMaps.ofChat(j.chat.id);
           if (m && j.then && workMaps.list().find(x => x.id === m.id)?.can.includes(j.then)) await workMaps.act(m.id, j.then);
         }

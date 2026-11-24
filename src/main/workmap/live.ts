@@ -6,10 +6,11 @@
 // - readingOf: one chat alone, on top of projectmap/follow.ts sayOf (the project maps' reading of a chat).
 // - liveOf: a whole map: each step from its chats and the chats these delegated (a step with no chat, or whose chats all
 //   reported, from the owner chat), then the map's row from its owner and its open steps.
+// - asksOf: the questions the chats of a map asked, with who holds or answered each (ADR 0344).
 // Pure. Used by workmap/service.ts; the types are in shared/work-map.ts; pinned by test/unit/workmap-live.test.ts.
 import type { ChatSummary, PendingRequest } from '@shared/contract';
-import { heldOnly, openQuestions } from '@shared/question-ladder';
-import { drawingOf, WORK_SAYS, type WorkBox, type WorkBoxLive, type WorkMap, type WorkMapLive, type WorkSay, type WorkStopWhy, type WorkWaitFor, type WorkWorker } from '@shared/work-map';
+import { heldOnly, openQuestions, type LadderQuestion } from '@shared/question-ladder';
+import { drawingOf, WORK_SAYS, type WorkAsk, type WorkBox, type WorkBoxLive, type WorkMap, type WorkMapLive, type WorkSay, type WorkStopWhy, type WorkWaitFor, type WorkWorker } from '@shared/work-map';
 import { reportOf, sayOf } from '../projectmap/follow';
 
 /** A chat that ended its turn with no report is taken at its word this long; then nobody vouches for its step. */
@@ -85,6 +86,31 @@ function index(chats: readonly ChatSummary[]): { byId: Map<string, ChatSummary>;
 /** Whether chats are at work for a chat, or wait for the user: their end goes on by itself, the chat above is not dead. */
 export function movesBelow(chatId: string, chats: readonly ChatSummary[], asks: readonly PendingRequest[]): boolean {
   return index(chats).below(chatId).some(c => { const s = readingOf(c, asks).say; return s === 'working' || s === 'waiting'; });
+}
+
+/** How many questions a map shows. */
+const ASKS_CAP = 40;
+/** The questions of the chats of a map, the closed chats included: of a step's chats and of all below them, every one; of the
+ *  owner and of what it delegated outside the steps, those of this job's time. The open ones first (the user's on top), then
+ *  the answered ones, the newest first. */
+export function asksOf(m: WorkMap, chats: readonly ChatSummary[]): WorkAsk[] {
+  const byId = new Map(chats.map(c => [c.id, c])), kids = new Map<string, ChatSummary[]>(), step = new Map<string, number>();
+  for (const c of chats) if (c.parentId) kids.set(c.parentId, [...(kids.get(c.parentId) ?? []), c]);
+  for (const b of drawingOf(m).boxes) for (const id of b.chatIds) if (id !== m.owner?.chatId && !step.has(id)) step.set(id, b.n);
+  const out: WorkAsk[] = [], seen = new Set<string>();
+  const take = (id: string, n: number | undefined, inTime: boolean): void => {
+    // a step's chat is its step's, wherever it hangs
+    if (seen.has(id) || n === undefined && step.has(id)) return;
+    seen.add(id);
+    const c = byId.get(id), ok = (q: LadderQuestion): boolean => !inTime || q.at >= m.createdAt && q.at <= (m.finishedAt ?? Infinity);
+    for (const q of c?.questions ?? []) if (ok(q)) out.push({ chatId: id, title: c!.title, ...(n ? { n } : {}), question: q });
+    for (const k of kids.get(id) ?? []) take(k.id, n, inTime);
+  };
+  for (const [id, n] of step) take(id, n, false);
+  if (m.owner && m.stopped?.by !== 'replaced') take(m.owner.chatId, undefined, true);
+  const rank = (a: WorkAsk): number => a.question.answered ? 2 : a.question.level === 'user' ? 0 : 1;
+  const when = (a: WorkAsk): number => a.question.answered?.at ?? a.question.at;
+  return out.sort((a, b) => rank(a) - rank(b) || when(b) - when(a) || a.question.id.localeCompare(b.question.id)).slice(0, ASKS_CAP);
 }
 
 function whyStopped(m: WorkMap, owner: ChatSummary | undefined, i: LiveInput): WorkStopWhy | undefined {

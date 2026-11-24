@@ -9,6 +9,7 @@
 // briefly highlighted (focusChat); the ✕ on hover closes the chat like its strip's ✕ (6 s Annulla; owner, 2026-10-21). Hidden while no agent is open. Mounted by Sidebar.tsx.
 import { memo, type CSSProperties } from 'react';
 import type { ChatSummary } from '@shared/contract';
+import { heldBy } from '@shared/question-ladder';
 import { busyState, childState, kidCounts, visibleTree, type ChildState, type TreeNode } from '../lib/chat-tree';
 import { sameTree, sidebarTree } from '../lib/chat-derived';
 import { sameList } from '../store/state';
@@ -26,7 +27,7 @@ import '../styles/tree.css';
 const MAX_ROWS = 40;
 const isWorking = (s: ChildState | null) => s === 'run' || s === 'start';
 /** the dot's tint by state */
-const DOT: Record<ChildState, string> = { start: 'run', run: 'run', wait: 'wait', queued: 'off', err: 'err', stall: 'stall', refused: 'err', done: 'done', partial: 'done', blocked: 'err', noreport: 'err', closed: 'off' };
+const DOT: Record<ChildState, string> = { start: 'run', run: 'run', wait: 'wait', heldParent: 'off', heldOrchestrator: 'off', queued: 'off', err: 'err', stall: 'stall', refused: 'err', done: 'done', partial: 'done', blocked: 'err', noreport: 'err', closed: 'off' };
 const ENDED = new Set<ChildState>(['done', 'partial', 'blocked', 'noreport', 'closed']);
 
 /** A root chat's state reads like a child's: waiting, at work, failed, idle (its turn ended: done for now). */
@@ -37,6 +38,8 @@ function rowState(c: ChatSummary): ChildState {
   if (c.closedAt) return 'closed';
   if (c.state === 'waiting' || c.pending > 0) return 'wait';
   if (c.state === 'error') return 'err';
+  const held = heldBy(c); // a question its engine lost at a restart: with the Orchestrator, not done
+  if (held) return held === 'parent' ? 'heldParent' : 'heldOrchestrator';
   if (c.state === 'starting') return 'start';
   if (c.state === 'running' && !c.turnClosing) return 'run'; // its reply complete, it reads as done (ADR 0318)
   return c.queued ? 'queued' : 'done';
@@ -68,7 +71,7 @@ const Row = memo(function Row({ node, folded, on }: { node: TreeNode; folded: bo
   if (!chat || !state) return null;
   const right = state === 'wait' ? <span className="tn-w">{t('tree.state.wait')}</span>
     : kids.length ? <span className="tn-x">{t('tree.kids', { n: kids.length })}</span>
-    : node.depth > 0 || state !== 'done' ? <span className="tn-x">{t(`tree.state.${state}`)}</span> : null;
+    : node.depth > 0 || state !== 'done' ? <span className="tn-x" title={t(`tree.state.${state}`)}>{t(`tree.state.${state}`)}</span> : null;
   const level = node.depth;
   return <li className={`tn${on ? ' on' : ''}${ENDED.has(state) ? ' ended' : ''}`} style={{ '--d': level } as CSSProperties} data-testid={`nav-tree-${node.id}`} data-depth={node.depth}>
     {Array.from({ length: level }, (_, k) => <i key={k} className="tn-guide" style={{ '--g': k } as CSSProperties} aria-hidden="true" />)}

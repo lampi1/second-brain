@@ -6,6 +6,19 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- A map for every job: each Strategist job, or idea, has its own, created by the app and kept through restarts. The plan
+  is that map: a box per step with role, model and preset, parallel steps side by side, «Approva e parti» and «Approva,
+  parti dopo» on it; the stacked lists of steps on the strip, the questions' card and the project map are gone. Started
+  steps of a plan being changed go on, new ones wait for the yes (ADR 0342, 0343).
+- Mappa opens on «Lavori»: every job by status, what waits for you on top, the finished apart; search, project filter,
+  order, a link to the chat that owns it. A job can stay planned and start later (ADR 0343).
+- A work map says its live status on its row and its boxes: who works, who waits for whom, what failed or was lost, since
+  when nobody confirms it, why it stopped; a job whose chat died by itself is told to the Orchestrator (ADR 0342).
+- A worker's question goes up one level at a time: its Strategist, the Orchestrator, then the user; a level that does not
+  answer in 10 minutes is skipped. Permissions, commands and plans are never held. The worker's chat and the job's map
+  say who answered and why; a held question reads as waiting for its holder, never for the user (ADR 0344).
+- A plan lists its doubts and what closed each (the user's answer, the code, the brain, a declared choice). One open doubt
+  blocks the approval on every path; the minimum of three questions is gone (ADR 0344).
 - Project maps follow their chats: a chat linked to a piece (the Orchestrator links it when it starts it, or the chat
   says what it works on) turns it "in lavorazione" when it starts, "bloccato" with "Tu" while it waits for the user's
   answer, and "fatto" when it reports it has finished, with zero tokens. A box with pieces inside says what they say

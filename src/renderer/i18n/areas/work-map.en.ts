@@ -26,4 +26,17 @@ export const workMapEn = {
   'wm.draw.label': 'The plan, drawn', 'wm.draw.dropped': 'Removed by the new plan: they stop at your ok', 'wm.draw.drop': 'removed', 'wm.self': 'Strategist', 'wm.by.user': 'you', 'wm.by.app': 'app',
   'wm.side.label': 'Details', 'wm.side.job': 'The job', 'wm.side.idea': 'Request', 'wm.side.doneWhen': 'Done when', 'wm.side.known': 'Already clear', 'wm.side.links': 'Links', 'wm.side.history': 'History', 'wm.side.pick': 'Pick a step for its details.', 'wm.side.back': 'The whole job', 'wm.side.step': (p: N) => `Step ${p.n}`, 'wm.side.who': 'Who does it', 'wm.side.when': 'When', 'wm.side.chats': 'Chats', 'wm.side.project': 'Project',
   'wm.outcome.partial': 'done in part', 'wm.outcome.blocked': 'blocked',
+  // the live status (what its chats do now)
+  'wm.say.waiting': 'waiting', 'wm.say.working': 'at work', 'wm.say.failed': 'last turn failed', 'wm.say.closed': 'chat closed without a report', 'wm.say.gone': 'chat no longer here', 'wm.say.interrupted': 'turn interrupted', 'wm.say.between': 'turn over, no report', 'wm.say.blocked': 'reported: blocked', 'wm.say.partial': 'reported: partly done', 'wm.say.done': 'reported: done', 'wm.say.unknown': 'not known',
+  'wm.waits.user': 'waits for you', 'wm.waits.parent': 'waits for who started it', 'wm.waits.orchestrator': 'waits for the Orchestrator', 'wm.waits.colleagues': 'waits for other people', 'wm.waits.work': 'waits for work under way',
+  'wm.stale': (p: { at: string }) => `to check: last confirmed ${p.at}`,
+  'wm.why.user': 'You stopped it.', 'wm.why.closedByUser': 'You closed its chat.', 'wm.why.closedByAgent': 'An agent closed its chat.', 'wm.why.closedByApp': 'The app closed its chat with the job open.', 'wm.why.crash': 'The engine of its chat died and did not come back.', 'wm.why.gone': 'Its chat is no longer here.', 'wm.why.replaced': 'Its chat moved on to another job.',
+  'wm.row.working': (p: { who: string }) => `at work: ${p.who}`, 'wm.row.waiting': (p: N) => `${p.n} waiting`, 'wm.row.failed': (p: N) => (p.n === 1 ? '1 chat failed' : `${p.n} chats failed`), 'wm.row.lost': (p: N) => (p.n === 1 ? '1 chat lost' : `${p.n} chats lost`),
+  // the doubts and the questions (ADR 0344)
+  'wm.doubts.label': 'Doubts and questions', 'wm.doubts.title': 'Doubts', 'wm.doubts.open': (p: N) => (p.n === 1 ? '1 open doubt' : `${p.n} open doubts`), 'wm.doubts.closed': (p: N) => (p.n === 1 ? 'closed' : `all ${p.n} closed`),
+  'wm.doubt.open': 'open: it holds the ok', 'wm.doubt.by.user': 'your answer', 'wm.doubt.by.code': 'from the code', 'wm.doubt.by.brain': 'from the brain', 'wm.doubt.by.choice': 'the Strategist’s choice',
+  'wm.doubt.blocks': (p: { n: number; text: string }) => (p.n === 1 ? `It can be approved once this doubt is closed: “${p.text}”` : `It can be approved once ${p.n} doubts are closed. The first: “${p.text}”`),
+  'wm.q.title': 'Questions of the chats', 'wm.q.open': (p: N) => `${p.n} open`, 'wm.q.allAnswered': (p: N) => (p.n === 1 ? 'answered' : `${p.n}, all answered`),
+  'wm.q.you': 'you', 'wm.q.asked': (p: { who: string }) => `asked ${p.who}`, 'wm.q.passed': (p: { who: string }) => `${p.who} passes it up`, 'wm.q.skipped': (p: { who: string }) => `${p.who} does not answer`, 'wm.q.held': (p: { who: string }) => `${p.who} has it`,
+  'wm.q.answered': (p: { who: string; answer: string }) => `${p.who} answered: “${p.answer}”`, 'wm.q.youAnswered': (p: { answer: string }) => `You answered: “${p.answer}”`, 'wm.q.why': (p: { why: string }) => `why: ${p.why}`,
 } as const;

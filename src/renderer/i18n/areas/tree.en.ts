@@ -18,6 +18,8 @@ export const treeEn: typeof treeIt = {
   'tree.state.start': 'started',
   'tree.state.run': 'working',
   'tree.state.wait': 'Waiting for you',
+  'tree.state.heldParent': 'waits for who started it',
+  'tree.state.heldOrchestrator': 'waits for the Orchestrator',
   'tree.state.queued': 'queued',
   'tree.state.err': 'failed',
   'tree.state.stall': 'stalled',

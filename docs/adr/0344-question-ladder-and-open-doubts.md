@@ -37,13 +37,16 @@ of questions)
   or the app shows its own card; the engine asking it again takes its place.
 - **Who answered and why**: `ChatSummary.questions` (`LadderQuestion`: `level`, `holder`, `trail`, `answered`), which the
   map reads, and the lines `ladderAsked`, `ladderPassed`, `ladderAnswered` in the worker's chat.
+- **A held question is never «ti aspetta»**: `heldOnly` / `heldBy` (`shared/question-ladder.ts`) are the one reading. The
+  maps, the recap, the sidebar, the card, the bench and the tile name the holder; the user's counts skip it until it is his.
 
 ### The open doubts
 
 - No minimum. `StrategyPlan.doubts` (`shared/plan-doubts.ts`) lists every real doubt, open or closed `by` the user, code
   or brain, with its answer and source. A first `plan_propose` must pass the list (`[]` = nothing open).
 - **One open doubt blocks approval**: the proposal is stored and not shown, and `planPropose` and `planDecide` refuse it
-  for the PC, the phone, typed words and night mode alike. A doubt found on a proposed plan takes it back to revising.
+  for the PC, the phone, typed words and night mode alike, as do `planStart` and the work map's `approve`, `keep` and
+  `start`. A doubt found on a proposed plan takes it back to revising.
 - `by: 'user'` only with what the app recorded (his interview answer, his own words); asked in the doubt's own words, his
   answer closes it by itself. An open doubt cannot leave the list. A damaged saved list is one open doubt.
 - «Basta domande» still ends the interview: what is left is closed `by: 'choice'` with the reason, declared as the

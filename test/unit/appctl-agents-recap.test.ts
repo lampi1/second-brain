@@ -4,7 +4,7 @@
 // the phone the text is a recap. Short by default (#384): one line per agent that works, waits or finished, no steps,
 // no closed list, at most SHORT_MAX lines; the blocks only with detail.
 import { expect, it } from 'vitest';
-import { agentsRecap, agentsRecapTool, isAgentsRecap, SHORT_MAX, stepsOf, STEPS_MAX } from '../../src/main/appctl/agents-recap';
+import { agentsRecap, agentsRecapTool, isAgentsRecap, markOf, SHORT_MAX, stepsOf, STEPS_MAX } from '../../src/main/appctl/agents-recap';
 import type { ChatItem, ChatSummary, PendingRequest } from '../../src/shared/contract';
 import type { AgentRun } from '../../src/shared/agents';
 
@@ -12,6 +12,12 @@ const chat = (id: string, extra: Partial<ChatSummary> = {}) => ({ id, title: `ch
 const role = (name: string) => ({ agent: { name } as ChatSummary['agent'] });
 const todo = (todos: { content: string; status: string }[]): ChatItem => ({ kind: 'tool', id: 't', at: 1, name: 'TodoWrite', summary: '', input: { todos }, status: 'ok' });
 const said = (text: string, id = text): ChatItem => ({ kind: 'assistant', id, at: 1, text });
+
+it('a chat that waits for an agent\'s answer is not marked as waiting for the user (ADR 0344)', () => {
+  const held = [{ id: 'q', asks: [], level: 'strategist' as const, at: 1, levelAt: 1, trail: [], via: 'request' as const }];
+  expect(markOf(chat('a', { state: 'waiting', questions: held, pending: 0 }), [])).toBe('run');
+  expect(markOf(chat('a', { state: 'waiting', questions: [{ ...held[0]!, level: 'user' }], pending: 1 }), [])).toBe('wait');
+});
 
 it('takes the steps from the latest todo list: the last done ones, the current and the next', () => {
   const s = stepsOf([

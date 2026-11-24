@@ -4,6 +4,7 @@
 // below it. Pure: used by AgentStrips.tsx (the Grindhouse) and Sidebar.tsx (the tree under Grindhouse); pinned by
 // test/unit/chat-tree.test.ts.
 import type { ChatSummary } from '@shared/contract';
+import { heldBy } from '@shared/question-ladder';
 import { agentOrder } from './agent-order';
 
 export interface TreeNode {
@@ -53,10 +54,10 @@ export function visibleTree(nodes: readonly TreeNode[], collapsed: Readonly<Reco
   return nodes.filter(n => !hidden.has(n.id));
 }
 
-export type ChildState = 'start' | 'run' | 'wait' | 'queued' | 'err' | 'stall' | 'refused' | 'done' | 'partial' | 'blocked' | 'noreport' | 'closed';
-type StateRow = Pick<ChatSummary, 'state' | 'pending' | 'queued' | 'closedAt' | 'delegation' | 'background' | 'agentChildren'>;
+export type ChildState = 'start' | 'run' | 'wait' | 'heldParent' | 'heldOrchestrator' | 'queued' | 'err' | 'stall' | 'refused' | 'done' | 'partial' | 'blocked' | 'noreport' | 'closed';
+type StateRow = Pick<ChatSummary, 'state' | 'pending' | 'queued' | 'closedAt' | 'delegation' | 'background' | 'agentChildren' | 'questions'>;
 /** Where a delegated chat stands, for its card (DelegationCard.tsx, the states of the tree design): its result once it
- *  reported; otherwise asking the user, queued, failed, starting, working; a turn that ended without agent_report is
+ *  reported; otherwise asking the user, waiting for the agent that holds its question (ADR 0344), queued, failed, starting, working; a turn that ended without agent_report is
  *  "fermo" (it owes its result), or "permesso negato" when the app refused it a permission above its parent's. A
  *  turn that closes with no report yet (turnClosing, ADR 0318) stays "working": at the idle the app asks it for its
  *  report, and «fermo» with its buttons for the seconds of the Stop hooks would read as an alarm. */
@@ -70,6 +71,8 @@ export function childState(c: StateRow, refused = false): ChildState {
   if (c.state === 'waiting' || c.pending > 0) return 'wait';
   if (c.queued && c.state !== 'running' && c.state !== 'error') return 'queued';
   if (c.state === 'error') return 'err';
+  const held = heldBy(c);
+  if (held) return held === 'parent' ? 'heldParent' : 'heldOrchestrator';
   if (c.state === 'starting') return 'start';
   if (c.state === 'running' || (c.background ?? 0) > 0 || (c.agentChildren?.active ?? c.agentChildren?.observedActive ?? 0) > 0) return 'run';
   return refused ? 'refused' : 'stall';
@@ -87,9 +90,9 @@ export function busyState(state: ChildState, c: Pick<ChatSummary, 'background' |
 
 /** Still on the delegated work (its row shows the live step); the others show their result's first words. */
 export const activeState = (s: ChildState): boolean => s !== 'done' && s !== 'partial' && s !== 'blocked' && s !== 'noreport' && s !== 'closed';
-/** A parent's children counted by state, one source for every counter (KidsBar, the sidebar tree, #152): working,
- *  waiting for the user, stopped (a turn ended without a result or a report, an error, a refused permission), finished. */
+/** A parent's children counted by state, one source for every counter (KidsBar, the sidebar tree, #152): working (or with
+ *  a question an agent holds), waiting for the user, stopped (a turn ended without a result or a report, an error, a refused permission), finished. */
 export function kidCounts(states: readonly ChildState[]): { run: number; wait: number; stuck: number; done: number } {
   const n = (...of: ChildState[]) => states.filter(s => of.includes(s)).length;
-  return { run: n('run', 'start', 'queued'), wait: n('wait'), stuck: n('stall', 'err', 'refused', 'noreport'), done: n('done', 'partial') };
+  return { run: n('run', 'start', 'queued', 'heldParent', 'heldOrchestrator'), wait: n('wait'), stuck: n('stall', 'err', 'refused', 'noreport'), done: n('done', 'partial') };
 }

@@ -10,11 +10,12 @@ import { t } from '../../i18n';
 import { useNow } from '../../lib/clock';
 import { ago } from '../../lib/format';
 import { errText } from '../../lib/ipc-error';
-import { buttonsOf, projectsOf } from '../../lib/work-maps';
+import { buttonsOf, HELD_ACTIONS, heldBy, projectsOf } from '../../lib/work-maps';
 import { useApp } from '../../store/store';
 import { toast } from '../../store/ui';
 import { IconArrowLeft, IconChat } from '../Icons';
 import { Select } from '../Select';
+import { LiveLine, whyOf } from './LiveBits';
 import { MapDoubts } from './MapDoubts';
 import { actionLabel, StateChip, StepDots, useWorkAction } from './WorkBits';
 import { WorkDrawing } from './WorkDrawing';
@@ -51,24 +52,28 @@ function useView(id: string, version: number | null): View | null | undefined {
 export function noteOf(i: WorkMapInfo): string | null {
   if (i.state === 'toApprove') return t(i.replanned ? 'wm.note.replanned' : 'wm.note.toApprove');
   if (i.state === 'planned') return t('wm.note.planned');
-  if (i.state === 'stopped' && i.stopped) return t(`wm.stop.${i.stopped.by}`);
+  if (i.state === 'stopped' && i.stopped) return whyOf(i);
   if (i.planning) return t(i.state === 'running' ? 'wm.note.replanning' : 'wm.note.planning');
   return i.state === 'idea' ? t('wm.note.idea') : null;
 }
 
-/** The buttons of a map: only what WorkMapInfo.can allows; «Cambia il piano» opens the box to write what. */
+/** The buttons of a map: only what WorkMapInfo.can allows; «Cambia il piano» opens the box to write what. An open doubt holds
+ *  the approval and the start: those buttons stay, off, with the reason; a plan still in preparation shows the one to come. */
 export function WorkActions({ info }: { info: WorkMapInfo }) {
   const { busy, run } = useWorkAction();
   const [text, setText] = useState(drafts.get(info.id) ?? ''), [asking, setAsking] = useState(drafts.has(info.id));
-  const buttons = buttonsOf(info), replan = info.can.includes('replan');
+  const buttons = buttonsOf(info), replan = info.can.includes('replan'), held = heldBy(info);
+  const off = (a: WorkMapAction) => !!held && HELD_ACTIONS.includes(a), toCome = held && info.planning && !buttons.includes('approve');
   const edit = (v: string) => { keepDraft(info.id, v); setText(v); };
   const close = () => { edit(''); setAsking(false); };
   const press = (a: Exclude<WorkMapAction, 'seen'>) => { if (a === 'replan') setAsking(!asking); else void run(info, a); };
   const send = () => { void run(info, 'replan', text).then(ok => { if (ok) { close(); toast(t('wm.sent.replan'), 'info'); } }); };
   if (!buttons.length) return null;
   return <>
+    {held && <p className="wm-held" role="status" id={`wm-held-${info.id}`} data-testid="wm-held">{t('wm.doubt.blocks', { n: held.n, text: held.first })}</p>}
     <div className="wm-actions" data-testid="wm-actions">
-      {buttons.map((a, i) => <button key={a} type="button" className={`btn btn-s ${i === 0 && ['approve', 'start', 'resume'].includes(a) ? 'btn-primary' : a === 'archive' ? 'btn-subtle' : 'btn-ghost'}`} disabled={busy}
+      {toCome && <button type="button" className="btn btn-s btn-primary" disabled aria-describedby={`wm-held-${info.id}`} data-testid="wm-do-approve">{actionLabel('approve', info.state)}</button>}
+      {buttons.map((a, i) => <button key={a} type="button" className={`btn btn-s ${i === 0 && ['approve', 'start', 'resume'].includes(a) ? 'btn-primary' : a === 'archive' ? 'btn-subtle' : 'btn-ghost'}`} disabled={busy || off(a)} {...(off(a) ? { 'aria-describedby': `wm-held-${info.id}` } : {})}
         {...(a === 'replan' ? { 'aria-expanded': asking } : {})} onClick={() => press(a)} data-testid={`wm-do-${a}`}>{actionLabel(a, info.state)}</button>)}
     </div>
     {replan && asking && <form className="wm-replan" data-testid="wm-replan" onSubmit={e => { e.preventDefault(); send(); }}>
@@ -102,6 +107,7 @@ export function WorkMapView({ id, onBack }: { id: string; onBack: () => void }) 
       <StateChip info={info} />
       {projectsOf(info).map(p => <span key={p} className="wm-project" title={t('wm.side.project')}>{p}</span>)}
       {info.steps > 0 && <><StepDots info={info} /><span className="wm-muted">{t('wm.steps', { done: info.done, n: info.steps })}</span></>}
+      {version === null && <LiveLine live={info.live} id="map" now={now} />}
       <span className="sp" />
       {owner && chat !== undefined && <button type="button" className="btn btn-ghost btn-s" onClick={() => openChatRef(owner)} title={chat} data-testid="wm-open-chat"><IconChat size={13} />{t('wm.openChat')}</button>}
       {history.length > 1 && <Select value={version === null ? '' : String(version)} onChange={e => { setPicked(null); setVersion(e.target.value ? Number(e.target.value) : null); }} aria-label={t('wm.version')} data-testid="wm-version">
@@ -111,7 +117,7 @@ export function WorkMapView({ id, onBack }: { id: string; onBack: () => void }) 
     </div>
     {version !== null && <div className="wm-old" role="status" data-testid="wm-old">{t('wm.old', { n: view.map.version })} <button type="button" className="btn btn-ghost btn-s" onClick={() => setVersion(null)} data-testid="wm-old-back">{t('wm.old.back')}</button></div>}
     {version === null && <div className="wm-do" data-s={info.state}>{note && <p data-testid="wm-note">{note}</p>}<WorkActions key={info.id} info={info} /></div>}
-    <MapDoubts view={view} />
+    <MapDoubts key={`${id}-${version ?? ''}`} view={view} now={now} />
     <div className="wm-body">
       <WorkDrawing boxes={view.boxes} links={view.links} now={now} picked={picked} onPick={n => setPicked(picked === n ? null : n)} />
       <WorkSide view={view} picked={picked} now={now} onPick={setPicked} />

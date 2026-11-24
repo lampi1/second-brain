@@ -40,9 +40,9 @@ const lastRefusal = (items: readonly ChatItem[] | undefined): string => {
 };
 const hhmm = (at: number) => new Date(at).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
 /** the pill tone of a child's state (app.css pills) */
-const TONE: Record<ChildState, string> = { start: 'run', run: 'run', wait: 'wait', queued: 'off', err: 'err', stall: 'wait', refused: 'err', done: 'done', partial: 'wait', blocked: 'err', noreport: 'err', closed: 'off' };
+const TONE: Record<ChildState, string> = { start: 'run', run: 'run', wait: 'wait', heldParent: 'off', heldOrchestrator: 'off', queued: 'off', err: 'err', stall: 'wait', refused: 'err', done: 'done', partial: 'wait', blocked: 'err', noreport: 'err', closed: 'off' };
 /** the thread line's and the bar segment's tint */
-export const LINE: Record<ChildState, string> = { start: 'run', run: 'run', wait: 'wait', queued: 'off', err: 'err', stall: 'wait', refused: 'err', done: 'done', partial: 'done', blocked: 'err', noreport: 'err', closed: 'off' };
+export const LINE: Record<ChildState, string> = { start: 'run', run: 'run', wait: 'wait', heldParent: 'off', heldOrchestrator: 'off', queued: 'off', err: 'err', stall: 'wait', refused: 'err', done: 'done', partial: 'done', blocked: 'err', noreport: 'err', closed: 'off' };
 
 export function ChildPill({ state, testid, quiet }: { state: ChildState; testid?: string; quiet?: boolean }) {
   return <span className={`pill pill-${TONE[state]}${quiet ? ' sr-only' : ''}`} data-testid={testid} data-child-state={state}>{(state === 'run' || state === 'start' || state === 'wait') && <span className="pill-dot" aria-hidden="true" />}{t(`tree.state.${state}`)}</span>;

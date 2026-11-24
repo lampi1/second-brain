@@ -38,7 +38,7 @@ export const kidTone = (state: ChildState): string => LINE[state];
 const working = (s: ChildState) => s === 'run' || s === 'start';
 /** Who stands first at the bench (the owner, 2026-11-15: «vorrei vedere quelli in attività per primi»): at work,
  *  waiting for someone or between two turns, then failed or refused, then the rest. A short stop keeps its place (run, wait and stall are one group). */
-const rank = (s: ChildState) => s === 'run' || s === 'start' || s === 'queued' || s === 'wait' || s === 'stall' ? 0
+const rank = (s: ChildState) => s === 'run' || s === 'start' || s === 'queued' || s === 'wait' || s === 'heldParent' || s === 'heldOrchestrator' || s === 'stall' ? 0
   : s === 'err' || s === 'refused' || s === 'noreport' || s === 'blocked' ? 1 : 2;
 const open = (id: string) => setChatExpanded(id, true);
 

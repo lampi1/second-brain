@@ -1,7 +1,7 @@
 // A work map's plan drawn (ADR 0343; the owner, 2026-11-23: «il piano che propone deve essere solo la mappa»): the steps as
 // boxes, one row per turn, an arrow from a turn to the following one; the steps of one turn sit in a dashed frame with a
 // point where the arrow splits and one where it joins, and a label that counts them live. A box says who does it (role,
-// model, preset), how far it is, and carries its chats as buttons. The steps a replan takes away are under the drawing:
+// model, preset), how far it is and what it is doing now, and carries its chats as buttons. The steps a replan takes away are under the drawing:
 // they lead nowhere. Pure drawing: WorkMapView.tsx owns the map and the picked box.
 import type { ReactNode } from 'react';
 import { ROLE_DEFAULTS } from '@shared/roles';
@@ -9,18 +9,25 @@ import type { WorkBox, WorkLink } from '@shared/work-map';
 import { openChatRef } from '../../actions';
 import { t } from '../../i18n';
 import { withoutImages } from '../../lib/askImages';
-import { rowsOf } from '../../lib/work-maps';
+import { chatsOf, liveKind, rowsOf } from '../../lib/work-maps';
 import { useApp } from '../../store/store';
 import { AgentAvatar } from '../AgentAvatar';
 import { IconChat } from '../Icons';
 import { groupLabel, stateOf, whoOf } from '../project-map/plan-words';
+import { LiveChip, sayLabel, Stale } from './LiveBits';
 
 const MARK = (b: WorkBox): string => (b.state === 'done' ? '✓' : b.state === 'blocked' ? '✕' : String(b.n));
 
-/** The chats working on a step, each a button with its title (a chat no longer in the app is left out). */
-export function BoxChats({ ids, testid }: { ids: readonly string[]; testid: string }) {
+/** The chats working on a step, each a button with its title and what it is doing; one no longer in the app is said so when
+ *  the live status still counts on it, else left out. */
+export function BoxChats({ b, testid }: { b: WorkBox; testid: string }) {
+  const ids = chatsOf(b), said = new Map((b.live?.chats ?? []).map(w => [w.chatId, w]));
   const titles = useApp(s => ids.map(id => s.chats[id]?.title ?? '').join('\n')).split('\n');
-  return <>{ids.map((id, i) => (titles[i] ? <button key={id} type="button" className="wm-boxchat" onClick={() => openChatRef(id)} title={titles[i]} data-testid={`${testid}-${i}`}><IconChat size={11} /><span>{titles[i]}</span></button> : null))}</>;
+  return <>{ids.map((id, i) => {
+    const w = said.get(id), say = w ? sayLabel(w) : '';
+    if (!titles[i]) return w?.say === 'gone' ? <span key={id} className="wm-boxchat" data-k="bad" data-testid={`${testid}-${i}`}>{w.title || t('wm.say.gone')}</span> : null;
+    return <button key={id} type="button" className="wm-boxchat" data-k={w ? liveKind(w) : undefined} onClick={() => openChatRef(id)} title={say ? `${titles[i]} · ${say}` : titles[i]} data-testid={`${testid}-${i}`}><IconChat size={11} /><span>{titles[i]}</span>{w && <i className="wm-say" data-k={liveKind(w)} aria-label={say} />}</button>;
+  })}</>;
 }
 
 function Box({ b, now, picked, onPick }: { b: WorkBox; now: number; picked: boolean; onPick: (n: number) => void }) {
@@ -31,12 +38,14 @@ function Box({ b, now, picked, onPick }: { b: WorkBox; now: number; picked: bool
       <span className="wm-box-who"><AgentAvatar avatar={{ kind: 'character', value: b.role ?? 'strategist' }} name={name} size={20} /><span data-testid={`wm-box-who-${b.n}`}>{who ? who.text : name}</span></span>
       <span className="wm-box-state">
         <span>{stateOf(b, now)}</span>
+        <LiveChip live={b.live} testid={`wm-box-live-${b.n}`} />
+        <Stale live={b.live} now={now} testid={`wm-box-stale-${b.n}`} />
         {b.outcome && b.outcome !== 'done' && b.outcome !== b.state && <em data-k="stuck">{t(`wm.outcome.${b.outcome}`)}</em>}
         {b.added && <em data-k="new">{t('pm.new')}</em>}
         {b.drop && <em data-k="drop">{t('wm.draw.drop')}</em>}
       </span>
     </button>
-    {b.chatIds.length > 0 && <div className="wm-box-chats"><BoxChats ids={b.chatIds} testid={`wm-box-chat-${b.n}`} /></div>}
+    {chatsOf(b).length > 0 && <div className="wm-box-chats"><BoxChats b={b} testid={`wm-box-chat-${b.n}`} /></div>}
   </article>;
 }
 

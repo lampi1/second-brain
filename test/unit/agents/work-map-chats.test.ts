@@ -3,7 +3,8 @@
 // job keeps what started and starts nothing new before the approval, the removed step stops at that approval, stop and
 // resume, a closed chat leaves its map stopped, a restart keeps maps and plans, an old plan gets its map once. The live
 // status (workmap/live.ts): a step whose chat is closed, removed or lost at a restart is not «now» for ever, and what its
-// chat does shows on it.
+// chat does shows on it. An open doubt holds the approval and the start on every path (ADR 0344): the map's buttons, the
+// Orchestrator's actions and row, the phone, his typed words, night mode.
 // Pins workmap/service.ts with chats/manager-work.ts planDecide (keep), planStart, planStop, planResume, planReplan and
 // planPutAway, shared/strategy.ts (approved, stopped, drop, remove) and manager.ts create (workMap, resumePlan).
 import fs from 'node:fs';
@@ -12,16 +13,19 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ChatManager } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
+import { appControlTools } from '../../../src/main/appctl/tools';
 import { delegationTools } from '../../../src/main/agents/delegation';
 import { strategyTools } from '../../../src/main/agents/strategy-tools';
 import { CoordinationStore } from '../../../src/main/coordination/store';
 import { WorkMaps } from '../../../src/main/workmap/service';
 import { strategistStarter } from '../../../src/main/workmap/start';
+import { jobAction } from '../../../src/main/workmap/tools';
 import { WorkMapStore } from '../../../src/main/workmap/store';
 import type { AgentCatalog } from '../../../src/shared/agents';
 import type { NewChat } from '../../../src/shared/contract';
 import { DELEGATION_DEFAULTS, isWorkRole, ROLE_DEFAULTS, ROLE_IDS, type RoleId } from '../../../src/shared/roles';
-import { ENOUGH_QUESTIONS, PLAN_APPROVED, PLAN_REPLAN, PLAN_RESUMED } from '../../../src/shared/strategy';
+import type { PlanDoubt } from '../../../src/shared/plan-doubts';
+import { ENOUGH_QUESTIONS, PLAN_APPROVED, PLAN_REPLAN, PLAN_RESUMED, type StrategyPlan } from '../../../src/shared/strategy';
 
 const roots: string[] = [], managers: ChatManager[] = [];
 afterEach(async () => { for (const m of managers.splice(0)) await m.shutdown(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
@@ -160,6 +164,108 @@ describe('planned and started later', () => {
     const g = fixture({ dir: f.dir });
     expect(g.mapOf(s.id)).toMatchObject({ state: 'planned', owner: { chatId: s.id } });
     expect(g.m.planOf(s.id)).toMatchObject({ phase: 'approved' });
+  });
+});
+
+describe('an open doubt holds the yes on every path (ADR 0344)', () => {
+  const OPEN: PlanDoubt = { text: 'Vale anche sulle offerte?', state: 'open' };
+  /** A plan saved as waiting, or kept, with a doubt open: plan_propose never leaves one like this, a damaged file can. */
+  const plant = (f: F, id: string, doubts: PlanDoubt[]) => {
+    const r = (f.m as unknown as { chats: Map<string, { s: { plan: StrategyPlan } }> }).chats.get(id)!;
+    r.s.plan = { ...r.s.plan, doubts };
+    f.maps().observe('chat:updated', f.m.list().find(c => c.id === id));
+  };
+  const orchestrator = async (f: F) => {
+    const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true, title: 'Orchestrator' }, 'user');
+    const tool = appControlTools({ chats: f.m, browser: {} as never, brain: {} as never, window: () => null, emitUi: () => {}, version: '0' }, o.id).find(t => t.name === 'app_resolve_question')!;
+    return { o, resolve: async (a: Record<string, unknown>) => tool.run(a) };
+  };
+
+  it('a plan that waits: the map, the Orchestrator, the phone and typed words are refused, and nothing starts', async () => {
+    const f = fixture(), s = await f.proposed(), { o, resolve } = await orchestrator(f), at = planAt(f, s.id), job = f.mapOf(s.id).id;
+    plant(f, s.id, [OPEN]);
+    const info = f.maps().list().find(i => i.id === job)!, sent = f.sent.get(s.id)?.length ?? 0;
+    expect(info.doubts).toEqual({ open: 1, total: 1, first: OPEN.text });
+    const blocked = /dubbio aperto/;
+    for (const action of ['approve', 'keep'] as const) {
+      await expect(act(f, s.id, action)).rejects.toThrow(blocked);
+      await expect(jobAction(f.maps(), action, { job })).rejects.toThrow(blocked);
+    }
+    for (const keep of [false, true]) await expect(f.m.planDecide(s.id, 'approve', at, undefined, 'pc', keep)).rejects.toThrow(blocked);
+    await expect(f.m.planDecide(s.id, 'approve', at, undefined, 'phone')).rejects.toThrow(blocked);
+    await expect(f.m.send(s.id, 'approvo')).rejects.toThrow(blocked);
+    await expect(resolve({ chatId: s.id, requestId: 'plan', decision: 'approve' })).rejects.toThrow(blocked);
+    await f.m.send(o.id, 'Approvo il piano');
+    await expect(resolve({ chatId: s.id, requestId: 'plan', words: 'Approvo il piano' })).rejects.toThrow(blocked);
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'toApprove', plan: { phase: 'proposed' } });
+    expect(f.sent.get(s.id)?.length ?? 0).toBe(sent);
+    await expect(f.call('agent_delegate', s.id, f.task('scout', 'Sconti · Dove', 1))).rejects.toThrow(/refused/);
+    // asking for a change is not a yes: it goes on
+    await f.m.planDecide(s.id, 'change', at, 'Chiarisci le offerte');
+    expect(f.mapOf(s.id).plan!.phase).toBe('revising');
+  });
+
+  it('closed, with the same plan, every path opens', async () => {
+    const f = fixture(), s = await f.proposed();
+    plant(f, s.id, [{ ...OPEN, state: 'closed', by: 'code', answer: 'No', source: 'src/offers.ts:4' }]);
+    expect((await act(f, s.id, 'keep')).state).toBe('planned');
+    expect((await act(f, s.id, 'start')).state).toBe('running');
+  });
+
+  it('a kept plan with a doubt that came up after: the start is refused, from the map, the Orchestrator and typed words', async () => {
+    const f = fixture(), s = await f.proposed();
+    await act(f, s.id, 'keep');
+    plant(f, s.id, [OPEN]);
+    const sent = f.sent.get(s.id)?.length ?? 0;
+    await expect(act(f, s.id, 'start')).rejects.toThrow(/dubbio aperto/);
+    await expect(jobAction(f.maps(), 'start', { job: f.mapOf(s.id).id })).rejects.toThrow(/dubbio aperto/);
+    await expect(f.m.planStart(s.id)).rejects.toThrow(/dubbio aperto/);
+    await expect(f.m.send(s.id, 'parti')).rejects.toThrow(/dubbio aperto/);
+    expect(f.mapOf(s.id).state).toBe('planned');
+    expect(f.sent.get(s.id)?.length ?? 0).toBe(sent);
+  });
+
+  it('the map is told when a doubt opens and when it closes, with what closed it', async () => {
+    const f = fixture(), s = await f.root();
+    await f.call('plan_propose', s.id, { steps: PLAN.steps, doubts: [{ text: OPEN.text }, { text: 'Serve su mobile?', by: 'code', answer: 'Sì', source: 'src/mobile.ts:3' }] });
+    const info = () => f.maps().list()[0]!;
+    expect(info()).toMatchObject({ state: 'idea', doubts: { open: 1, total: 2, first: OPEN.text } });
+    const v = f.mapOf(s.id).version;
+    const q = { question: OPEN.text, options: [{ label: 'Sì' }, { label: 'No' }], multiSelect: false };
+    f.sinks.get(s.id)!.pending({ id: 'q-d', type: 'question', tool: 'AskUserQuestion', title: q.question, detail: '', input: {}, questions: [q], at: Date.now() });
+    expect(f.m.pending()).toHaveLength(1); // a Strategist's own question is his
+    await f.m.answer(s.id, 'q-d', { kind: 'question', answers: { [q.question]: 'No' } }, 'pc');
+    expect(info().doubts).toEqual({ open: 0, total: 2 });
+    expect(f.mapOf(s.id).version).toBeGreaterThan(v);
+    expect(f.maps().view(info().id)!.map.plan!.doubts).toMatchObject([{ state: 'closed', by: 'user', answer: 'No' }, { state: 'closed', by: 'code', source: 'src/mobile.ts:3' }]);
+  });
+
+  it('night mode: the plan waits with its doubt open, and starts once it is closed', async () => {
+    const f = fixture({ away: true }), s = await f.root();
+    await f.call('plan_propose', s.id, { steps: PLAN.steps, doubts: [{ text: OPEN.text }] });
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'idea', plan: { phase: 'asking' } });
+    await f.call('plan_propose', s.id, { steps: PLAN.steps, doubts: [{ text: OPEN.text, by: 'choice', answer: 'No', source: 'più prudente' }] });
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'running', plan: { doubts: [{ by: 'choice' }] } });
+  });
+});
+
+describe('who answered, on the map', () => {
+  it('a question goes up: asked, passed on with its reason, his; then who answered and why', async () => {
+    const f = fixture(), s = await f.proposed();
+    await act(f, s.id, 'approve');
+    await f.call('agent_delegate', s.id, f.task('scout', 'Sconti · Dove', 1));
+    const kid = f.kids(s.id)[0]!.id, asks = () => f.maps().view(f.mapOf(s.id).id)!.questions, versions = f.mapOf(s.id).version;
+    f.sinks.get(kid)!.changed({ state: 'idle' });
+    f.m.ladderAsk(kid, { question: 'Anche i resi?', options: [] });
+    expect(asks()).toMatchObject([{ chatId: kid, n: 1, question: { level: 'strategist', trail: [{ level: 'strategist', action: 'asked' }] } }]);
+    await f.m.ladderReply(s.id, { chatId: kid, askUser: true, why: 'non è nella richiesta' });
+    expect(asks()[0]!.question).toMatchObject({ level: 'user', trail: [{ action: 'asked' }, { action: 'passed', why: 'non è nella richiesta' }, { level: 'user' }] });
+    f.m.ladderAsk(kid, { question: 'Anche gli omaggi?', options: [] });
+    await f.call('agent_answer_child', s.id, { chatId: kid, answer: 'No', why: 'lo dice la richiesta' });
+    const answered = asks().find(a => a.question.answered)!;
+    expect(answered.question.answered).toMatchObject({ by: 'strategist', answer: 'No', why: 'lo dice la richiesta' });
+    // a question is not a version of the map
+    expect(f.mapOf(s.id).version).toBe(versions);
   });
 });
 

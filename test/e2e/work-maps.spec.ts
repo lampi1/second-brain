@@ -11,7 +11,7 @@ async function works(app: ElectronApplication, page: Page): Promise<(title: stri
   const all = await app.evaluate(() => (globalThis as unknown as { __sbDemo: { workMaps(): Promise<Seeded[]> } }).__sbDemo.workMaps());
   expect(all.length).toBeGreaterThanOrEqual(20);
   await goPage(page, 'collegamenti');
-  await page.getByTestId('bm-map-page').getByRole('button', { name: 'Lavori', exact: true }).click();
+  // the Mappa page opens on the jobs
   await expect(page.getByTestId('wm-group-wait')).toBeVisible();
   return title => all.find(m => m.title === title)!.id;
 }

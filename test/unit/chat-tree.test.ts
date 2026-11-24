@@ -3,6 +3,7 @@
 // restart (store/ui.ts loadPrefs); a child's open request shows in its ancestors' chat (lib/child-requests.ts).
 import { describe, expect, it } from 'vitest';
 import { busyState, chatTree, childState, kidCounts, visibleTree } from '../../src/renderer/lib/chat-tree';
+import { stateInfo } from '../../src/renderer/lib/format';
 import { childRequestsFor, requestHost } from '../../src/renderer/lib/child-requests';
 import type { ChatSummary, PendingRequest } from '../../src/shared/contract';
 
@@ -21,6 +22,19 @@ describe('chatTree', () => {
     expect(childState({ ...child, background: 0, agentChildren: { coverage: 'complete', active: 1, total: 1, observedActive: 1, observedTotal: 1, observedAt: 1, children: [] } })).toBe('run');
     expect(childState({ ...child, background: 0, agentChildren: { coverage: 'partial', active: null, total: null, observedActive: 1, observedTotal: 1, observedAt: 1, children: [] } })).toBe('run');
     expect(childState({ ...child, pending: 1 })).toBe('wait');
+    // its question is with an agent (ADR 0344): its holder's, never «Ti aspetta», never «fermo»
+    const q = { id: 'q', asks: [{ question: 'Sì?', options: [] }], level: 'strategist', holder: 'p', at: 1, levelAt: 1, trail: [], via: 'message' } as const;
+    const asked = { ...child, background: 0, questions: [{ ...q, asks: [], trail: [] }] };
+    expect(childState(asked)).toBe('heldParent');
+    expect(childState({ ...asked, questions: [{ ...q, asks: [], trail: [], level: 'orchestrator' }] })).toBe('heldOrchestrator');
+    expect(kidCounts([childState(asked)])).toEqual({ run: 1, wait: 0, stuck: 0, done: 0 });
+    expect(childState({ ...asked, state: 'running' })).toBe('run'); // asked by message and still at work
+    expect(childState({ ...asked, state: 'running', questions: [{ ...q, asks: [], trail: [], via: 'request' }] })).toBe('heldParent');
+    expect(childState({ ...asked, pending: 1 })).toBe('wait');
+    expect(childState({ ...asked, questions: [{ ...q, asks: [], trail: [], level: 'user' }] })).toBe('stall');
+    expect(childState({ ...asked, questions: [{ ...q, asks: [], trail: [], answered: { by: 'strategist', name: 'S', answer: 'No', why: '', at: 2 } }] })).toBe('stall');
+    expect(stateInfo({ ...asked, isOrchestrator: false })).toEqual({ label: 'aspetta chi l’ha avviata', tone: 'off' });
+    expect(stateInfo({ ...asked, isOrchestrator: false, pending: 1 }).label).toBe('ti aspetta');
     expect(childState({ ...child, state: 'error' })).toBe('err');
     expect(childState({ ...child, closedAt: 10 })).toBe('closed');
     // an engine that ended without a report is no closed chat (#354): the chat is open and still owes its result

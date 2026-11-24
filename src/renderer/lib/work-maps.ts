@@ -3,7 +3,7 @@
 // of a chat's maps is its own; how the boxes of a plan are laid in rows. The buttons a map shows are only those of
 // WorkMapInfo.can. Pure, pinned by test/unit/work-maps-list.test.ts; used by components/work-map/*, store/work-maps.ts,
 // actions.ts, lib/where.ts and StrategyPanel.tsx.
-import type { WorkBox, WorkLink, WorkMapAction, WorkMapInfo, WorkMapState } from '@shared/work-map';
+import { waitsForUser, type WorkBox, type WorkLink, type WorkMapAction, type WorkMapInfo, type WorkMapState, type WorkSay, type WorkWaitFor } from '@shared/work-map';
 
 /** The place of the work maps in the Mappa page: `lavori`, or `lavori/<id>`. */
 export const WORKS = 'lavori';
@@ -18,7 +18,17 @@ export function workPlaceOf(arg: string | null | undefined): { id: string | null
 export const WORK_GROUPS = ['wait', 'running', 'stopped', 'planned', 'idea', 'finished'] as const;
 export type WorkGroup = (typeof WORK_GROUPS)[number];
 const GROUP: Record<WorkMapState, WorkGroup> = { toApprove: 'wait', running: 'running', stopped: 'stopped', planned: 'planned', idea: 'idea', finished: 'finished', archived: 'finished' };
-export const groupOf = (i: Pick<WorkMapInfo, 'state'>): WorkGroup => GROUP[i.state];
+/** A job under way whose chat waits for the user is with what waits for him. */
+export const groupOf = (i: Pick<WorkMapInfo, 'state' | 'live'>): WorkGroup => (waitsForUser(i) ? 'wait' : GROUP[i.state]);
+
+/** How a live status is coloured: it waits for the user, for others, somebody works, something is wrong, done, not known. */
+export type LiveKind = 'you' | 'wait' | 'work' | 'bad' | 'ok' | 'dim';
+const KIND: Record<WorkSay, LiveKind> = { waiting: 'wait', failed: 'bad', closed: 'bad', gone: 'bad', blocked: 'bad', working: 'work', done: 'ok', interrupted: 'dim', unknown: 'dim', between: 'dim', partial: 'dim' };
+export const liveKind = (l: { say?: WorkSay; waits?: WorkWaitFor; stale?: number }): LiveKind => (l.stale !== undefined || !l.say ? 'dim' : l.say === 'waiting' && l.waits === 'user' ? 'you' : KIND[l.say]);
+
+/** Why «approve», «keep» and «start» wait: the first open doubt and how many are open; null = nothing holds them. */
+export const heldBy = (i: Pick<WorkMapInfo, 'doubts'>): { n: number; first: string } | null => (i.doubts?.open ? { n: i.doubts.open, first: i.doubts.first ?? '' } : null);
+export const HELD_ACTIONS: readonly WorkMapAction[] = ['approve', 'keep', 'start'];
 
 export type WorkTab = 'open' | 'finished';
 export type WorkSort = 'recent' | 'oldest' | 'title' | 'progress';
@@ -64,14 +74,17 @@ export type WorkCall =
   | { channel: 'workmap:replan'; args: { id: string; text: string } }
   | { channel: 'workmap:start' | 'workmap:stop' | 'workmap:resume' | 'workmap:archive' | 'workmap:reopen' | 'workmap:seen'; args: { id: string } };
 /** The IPC call of an action; null = the map does not allow it, or it misses what it needs (the plan's revision on
- *  screen, the words of a replan). */
-export function callOf(i: Pick<WorkMapInfo, 'id' | 'can' | 'planAt'>, action: WorkMapAction, text = ''): WorkCall | null {
-  if (!i.can.includes(action)) return null;
+ *  screen, the words of a replan), or an open doubt holds it. */
+export function callOf(i: Pick<WorkMapInfo, 'id' | 'can' | 'planAt' | 'doubts'>, action: WorkMapAction, text = ''): WorkCall | null {
+  if (!i.can.includes(action) || heldBy(i) && HELD_ACTIONS.includes(action)) return null;
   const id = i.id;
   if (action === 'approve' || action === 'keep') return i.planAt === undefined ? null : { channel: `workmap:${action}`, args: { id, at: i.planAt } };
   if (action === 'replan') return text.trim() ? { channel: 'workmap:replan', args: { id, text: text.trim() } } : null;
   return { channel: `workmap:${action}`, args: { id } };
 }
+
+/** The chats a box carries: its own, then those these delegated that work, wait or failed now. */
+export const chatsOf = (b: Pick<WorkBox, 'chatIds' | 'live'>): string[] => [...new Set([...b.chatIds, ...(b.live?.chats ?? []).filter(w => w.below && ['working', 'waiting', 'failed'].includes(w.say)).map(w => w.chatId)])];
 
 /** One row of the drawing: the boxes of one turn. `in`/`out` = an arrow comes into it, goes out of it. */
 export interface WorkRow { wave: number; boxes: WorkBox[]; in: boolean; out: boolean }
