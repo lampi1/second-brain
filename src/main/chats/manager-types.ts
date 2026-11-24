@@ -127,7 +127,8 @@ export interface ChatManagerOptions {
   coldHandoff?: () => boolean;
   /** Idle-only budget-based engine freshness; does not infer quality degradation. Default off. */
   freshSessions?: () => boolean;
-  /** Host-owned preparation sees the final narrowed policy before any delegated engine can start. */
+  /** Host-owned preparation, before any delegated engine can start: it sees the child's policy narrowed by the contract's
+   *  tool classes, to choose a shared folder or its own worktree. */
   prepareDelegation?: (parent: ChatSummary, req: NewChat, policy: AgentPolicy | null, continuationOf?: string, inherit?: boolean) => Promise<{ cwd: string; parentRunId: string | undefined; parentTaskVersion: number | undefined; bind?: (childId: string) => void }>;
   /** A delegated child was made in `cwd`: the folder where the next child of the same repository will work (the
    *  worktree pool's next free slot, ADR 0227), so its warm engine waits there; null = `cwd` itself */

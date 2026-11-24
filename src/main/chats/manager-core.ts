@@ -86,7 +86,8 @@ export abstract class ManagerCore {
     const stored = this.store.load();
     for (const c of stored) this.chats.set(c.id, this.restore(c));
     const moved = this.settlePlans();
-    if (moved || stored.some(c => !c.agent)) this.persist();
+    const widened = this.widenDelegated();
+    if (moved || widened || stored.some(c => !c.agent)) this.persist();
     process.on('exit', this.onExit); // Windows keeps orphaned children alive: kill them when the app dies
     // the plan windows stay fresh in the top bar even while a long turn runs (get_usage spends no model call)
     if (opts.onRateLimit) { this.usageTimer = setInterval(() => this.askUsage(), opts.usageEveryMs ?? 60000); this.usageTimer.unref?.(); }
@@ -328,6 +329,7 @@ export abstract class ManagerCore {
   protected abstract persist(strict?: boolean): void;
   protected abstract restore(c: StoredChat): Rec;
   protected abstract settlePlans(): boolean;
+  protected abstract widenDelegated(): boolean;
   protected abstract askUsage(prefer?: Rec): void;
   abstract coldTick(now?: number): number;
   abstract staleRuns(now?: number): number;

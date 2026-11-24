@@ -91,6 +91,7 @@ export abstract class ManagerSink extends ManagerLadder {
       this.updated(r);
       return d.rule?.action === 'esegui' ? { kind: 'esegui', message: d.message } : refused(d.message);
     }
+    if (d.kind === 'allow') log.info('chats', 'the gate leaves a request to the user', { chat: chatId, data: { tool, reason: claude?.kind === 'ask' ? 'an ask rule of the Claude settings' : 'an app tool in plan mode' } });
     return this.askInternal(r, { ...req, input: trimInput(input) }, opts);
   }
 

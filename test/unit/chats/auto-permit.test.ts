@@ -143,10 +143,10 @@ describe('autoPermit: the brain\'s rules file is the user\'s to change (ADR 0294
 
   it('a session-wide grant of a folder that holds it asks, with no «always» on any ask about the file', () => {
     const grant = (grantRoot: string) => autoPermit(perm('Edit', { files: [], grantRoot }), ctx({ policy: none, rulesFile }));
-    expect(grant(brain)).toEqual({ kind: 'ask', rulesFile: true });
+    expect(grant(brain)).toMatchObject({ kind: 'ask', rulesFile: true });
     expect(grant(root).kind).toBe('ask');
     expect(grant(path.join(root, 'elsewhere')).kind).toBe('allow');
-    expect(autoPermit(perm('Write', { file_path: rulesFile, content: '{}' }), inBrain())).toEqual({ kind: 'ask', rulesFile: true });
+    expect(autoPermit(perm('Write', { file_path: rulesFile, content: '{}' }), inBrain())).toMatchObject({ kind: 'ask', rulesFile: true });
   });
 });
 

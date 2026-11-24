@@ -16,6 +16,7 @@ import { allowsClass, COMMAND_TOOLS, commandsReadOnly, readOnlyCommand, toolClas
 import { readOnlyTools } from '../agents/read-tools';
 import { gateRequest, runtimePluginName } from '../agents/role-gate';
 import { autoPermit } from './auto-permit';
+import { heldForUser } from './delegated-holds';
 import { loadPolicy, policyCovers, policyRead, POLICY_FILE } from './permit-policy';
 import { AWAY_PARKED, AWAY_PLAN_NOTE, recommendedAnswers } from '../../shared/away';
 import { askingPlan, PLAN_APPROVED, type IntakeSource, type PlanIntake } from '../../shared/strategy';
@@ -594,8 +595,9 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
   }
 
   /** ADR 0103, 0254: the app answers a permission request itself (chats/auto-permit.ts): everything passes but what the
-   *  user's brain rules hold (permissions.json: refused visibly with the rule's reason, or sent to the user) and what
-   *  the user's own role limits keep for them. */
+   *  user's brain rules hold (permissions.json: refused visibly with the rule's reason, or sent to the user), what
+   *  the user's own role limits keep for them and, in a delegated chat, the three writes that always wait for the user
+   *  (delegated-holds.ts, ADR 0352). Each request left to the user logs why. */
   private permitDecision(r: Rec, req: Omit<PendingRequest, 'chatId'>, whole = false): GateDecision {
     const policy = loadPolicy(this.opts.brainRoot?.() ?? null);
     if (policy.state === 'broken' && r.policyWarned !== policy.error) {
@@ -605,7 +607,8 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     }
     // whatever reaches the user for a tool the rules could hold gets no «always»: a remembered grant would let a later
     // request they hold run without coming back here
-    const toUser = (): GateDecision => {
+    const toUser = (reason: string): GateDecision => {
+      log.info('chats', 'the gate leaves a request to the user', { chat: r.s.id, data: { tool: req.tool, reason } });
       if (req.type === 'permission' && policyCovers(policy, req.tool, COMMAND_TOOLS, req.title)) { req.noAlways = true; delete req.alwaysRules; }
       return { kind: 'user' };
     };
@@ -613,17 +616,20 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     // (Cursor and Codex do not enforce the role's tools themselves)
     const c = toolClassOf(req.tool);
     const command = (req.input as { command?: unknown } | null)?.command;
-    if (r.policy?.tools && c && !allowsClass(r.policy, c)) return toUser();
-    if (COMMAND_TOOLS.includes(req.tool) && commandsReadOnly(r.policy) && !readOnlyCommand(command, this.readScripts(r))) return toUser();
+    if (r.policy?.tools && c && !allowsClass(r.policy, c)) return toUser(`tool class not given to the chat: ${c}`);
+    if (COMMAND_TOOLS.includes(req.tool) && commandsReadOnly(r.policy) && !readOnlyCommand(command, this.readScripts(r))) return toUser('the chat may only run commands that read');
     const brainRoot = this.opts.brainRoot?.() ?? null;
     const v = autoPermit(whole ? { ...req, whole } : req, { cwd: r.s.cwd, ceiling: r.policy?.ceiling ?? null, readScripts: this.readScripts(r), policy, ...(brainRoot ? { rulesFile: path.join(brainRoot, POLICY_FILE) } : {}) });
     if (v.kind === 'ask') {
       // held by the user's rule: no «always» (a saved rule would let the next ones through unasked); the phone may answer
-      if (v.rule) { req.noAlways = true; delete req.alwaysRules; req.heldBy = { rule: v.rule.id, why: v.rule.why }; log.info('chats', 'brain rule asks the user', { chat: r.s.id, data: { tool: req.tool, rule: v.rule.id } }); }
-      if (v.rulesFile) { req.noAlways = true; delete req.alwaysRules; log.info('chats', 'a change of the brain rules file asks the user', { chat: r.s.id, data: { tool: req.tool } }); }
-      return toUser();
+      if (v.rule) { req.noAlways = true; delete req.alwaysRules; req.heldBy = { rule: v.rule.id, why: v.rule.why }; }
+      if (v.rulesFile) { req.noAlways = true; delete req.alwaysRules; }
+      return toUser(v.reason);
     }
     if (v.kind === 'allow') {
+      // no heldBy: the phone answers only what a rule of the user's holds
+      const hold = r.s.parentId ? heldForUser(whole ? { ...req, whole } : req, { cwd: r.s.cwd, readScripts: this.readScripts(r) }) : null;
+      if (hold) { req.noAlways = true; delete req.alwaysRules; return toUser(`${hold.kind}: ${hold.why}`); }
       log.info('chats', 'auto-permit allowed', { chat: r.s.id, data: { tool: req.tool } });
       return { kind: 'allow', policy: 'auto-permit' };
     }

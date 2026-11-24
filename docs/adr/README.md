@@ -344,6 +344,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0352](0352-any-engine-reaches-any-engine.md) Any engine reaches any engine; a changed role card never stops the work — accepted
 - [0353](0353-every-helper-at-the-bench-workers-first.md) Every helper at the bench, the ones at work first, and a limit that says what it means — accepted
 - [0354](0354-engine-limits-follow-real-data.md) Engine limits follow the real data: one rule, short pauses, and a stopped chat moves within its level — accepted
+- [0355](0355-a-contracts-tools-never-limit-what-a-delegated-chat-may-run.md) A contract's tools never limit what a delegated chat may run; three writes wait for the user — accepted
 
 ## Replaced
 

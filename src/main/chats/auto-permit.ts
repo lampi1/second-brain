@@ -38,12 +38,13 @@ export interface PermitContext {
 }
 export type PermitVerdict =
   | { kind: 'allow' }
-  /** rule: the user's policy rule that sent it to the user (no «always» then: a rule would free later ones) */
-  | { kind: 'ask'; rule?: PolicyRule; rulesFile?: true }
+  /** reason: English, for the log. rule: the user's policy rule that sent it to the user (no «always» then: a rule would
+   *  free later ones) */
+  | { kind: 'ask'; reason: string; rule?: PolicyRule; rulesFile?: true }
   /** a rule of the user's policy refused it. message: English, what the model reads */
   | { kind: 'deny'; shown: string; rule: PolicyRule; message: string };
 
-const ASK: PermitVerdict = { kind: 'ask' };
+const ask = (reason: string): PermitVerdict => ({ kind: 'ask', reason });
 const ALLOW: PermitVerdict = { kind: 'allow' };
 
 const READ_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'NotebookRead', 'Search', 'TodoWrite', 'Think', 'WebSearch']);
@@ -233,7 +234,7 @@ function refusal(rule: PolicyRule, shown: string, command: boolean): PermitVerdi
 }
 
 export function autoPermit(req: PermitRequest, ctx: PermitContext): PermitVerdict {
-  if (req.type !== 'permission' || typeof req.tool !== 'string' || req.tool === 'ExitPlanMode') return ASK;
+  if (req.type !== 'permission' || typeof req.tool !== 'string' || req.tool === 'ExitPlanMode') return ask(req.tool === 'ExitPlanMode' ? 'a plan to approve' : `not a tool permission: ${String(req.type)}`);
   if (req.title !== undefined && typeof req.title !== 'string') req = { ...req, title: String(req.title) };
   const policy = ctx.policy ?? { state: 'none' };
   const command = COMMAND_TOOLS.includes(req.tool);
@@ -241,31 +242,31 @@ export function autoPermit(req: PermitRequest, ctx: PermitContext): PermitVerdic
   // some rule could hold this tool (or the rules cannot be read): then they must read what will run, so a command
   // with no line, or a request an engine cut, is the user's call. With no rule on the tool, nothing needs reading
   const covered = policyCovers(policy, req.tool, COMMAND_TOOLS, req.title);
-  if (covered && command && (typeof raw !== 'string' || !raw.trim())) return ASK;
-  if (covered && !req.whole && cut(req.input)) return ASK;
+  if (covered && command && (typeof raw !== 'string' || !raw.trim())) return ask('a command with no line, under a brain rule');
+  if (covered && !req.whole && cut(req.input)) return ask('a request cut short, under a brain rule');
   const { rule, unread } = policyRead(policy, req.tool, req.input, COMMAND_TOOLS, req.title, ctx.now);
   if (rule) {
-    if (rule.action === 'ask-user') return { kind: 'ask', rule };
+    if (rule.action === 'ask-user') return { kind: 'ask', reason: `brain rule: ${rule.id}`, rule };
     return refusal(rule, typeof raw === 'string' ? raw.trim() : req.title?.trim() || req.tool, command);
   }
   // no rule in what they read, but they did not read it all (longer than their limit, or too slow to read): what they
   // did not see may be what they hold. Only for a tool some rule could hold
-  if (unread && covered) return ASK;
+  if (unread && covered) return ask('a request the brain rules could not read whole');
   // looking never asks, whatever the role's limit (ADR 0278: the quick-answer role, limited to «Solo piano», asked the
   // user for Read, Glob and Grep)
   const reads = command ? readOnlyCommand(raw, ctx.readScripts) : READ_TOOLS.has(req.tool);
   if (reads) return ALLOW;
-  if (ctx.ceiling === 'plan' || ctx.ceiling === 'default') return ASK;
-  if (ctx.ceiling === 'acceptEdits' && !EDIT_TOOLS.has(req.tool)) return ASK;
-  if (policy.state === 'broken') return ASK;
+  if (ctx.ceiling === 'plan' || ctx.ceiling === 'default') return ask(`the chat's limit: ${ctx.ceiling}`);
+  if (ctx.ceiling === 'acceptEdits' && !EDIT_TOOLS.has(req.tool)) return ask('the chat\'s limit: acceptEdits');
+  if (policy.state === 'broken') return ask('the brain rules cannot be read');
   // Codex's grantRoot is write access under a folder for the rest of the session: later writes never come back here,
   // so where a rule could hold an edit the grant is the user's call
-  if (obj(req.input).grantRoot !== undefined && covered) return ASK;
+  if (obj(req.input).grantRoot !== undefined && covered) return ask('write access to a folder for the session, under a brain rule');
   // the rules file is the user's to change: no «always» on it either
   if (ctx.rulesFile && policy.state !== 'none') {
     let names: boolean;
     try { names = namesRules(req, command, ctx.cwd, ctx.rulesFile); } catch { names = true; }   // a text it cannot read is the user's call
-    if (names) return { kind: 'ask', rulesFile: true };
+    if (names) return { kind: 'ask', reason: 'a change of the brain rules file', rulesFile: true };
   }
   return ALLOW;
 }

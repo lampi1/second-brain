@@ -212,15 +212,17 @@ export class ChatManager extends ManagerRemote implements ChatService {
     // it in Agenti, ADR 0085): the old chat's frozen policy bounds it only when the role has none
     const renewed = req.orchestrator && by === 'user' && !!agent.policy;
     const parent = delegator ?? forkSrc ?? (req.replaces && !renewed ? this.chats.get(req.replaces) : undefined) ?? bound;
-    // a delegated chat: its role's policy, below its parent's, narrowed again by the contract's tool classes. A chat from
+    // a delegated chat: its role's policy, below its parent's. The contract's tool classes say what the part needs: they
+    // choose its folder (prepareDelegation), never what it may run (ADR 0352, #472). A chat from
     // the unauthenticated mount reads only, in plan mode, whatever the Orchestrator may (ADR 0085: the Orchestrator's
     // default is every permission, the mount is any local process)
-    const policy = delegator ? narrowest(belowParent(agent.policy, delegator.policy, this.boundMode(delegator)), req.delegation?.tools ? { tools: { allow: req.delegation.tools }, ceiling: null } : null)
+    const policy = delegator ? belowParent(agent.policy, delegator.policy, this.boundMode(delegator))
       : narrowest(agent.policy, parent === bound && bound ? narrowest(bound.policy, FAIL_CLOSED) : parent?.policy);
     let bindDelegation: ((childId: string) => void) | undefined;
     if (delegator && this.opts.prepareDelegation) {
       const parentPermissions = JSON.stringify({ policy: delegator.policy, mode: this.modeFor(delegator) });
-      const prepared = await this.opts.prepareDelegation(structuredClone(delegator.s), req, policy, opts.continuationOf, opts.sameWorktree === true);
+      const needs = narrowest(policy, req.delegation?.tools ? { tools: { allow: req.delegation.tools }, ceiling: null } : null);
+      const prepared = await this.opts.prepareDelegation(structuredClone(delegator.s), req, needs, opts.continuationOf, opts.sameWorktree === true);
       if (delegator.s.closedAt || this.closedByUser(delegator) || this.chats.get(delegator.s.id) !== delegator || delegator.s.run?.endedAt !== undefined || delegator.s.run?.report?.via === 'agent_report' || delegator.s.delegation?.result || delegator.s.run?.runId !== prepared.parentRunId || delegator.s.run?.taskVersion !== prepared.parentTaskVersion) throw new Error('Parent assignment changed while preparing isolation.');
       if (parentPermissions !== JSON.stringify({ policy: delegator.policy, mode: this.modeFor(delegator) })) throw new Error('Parent permissions changed while preparing isolation.');
       req = { ...req, cwd: prepared.cwd };

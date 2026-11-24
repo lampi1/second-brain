@@ -32,7 +32,7 @@ export function delegableFolder(parentCwd: string, cwd: string): boolean {
   return within(parentCwd, cwd) || (!!cwd && path.isAbsolute(cwd) && isDir(cwd));
 }
 
-/** A writer is determined by its final narrowed tool classes, never the role's display name. Unknown policies and
+/** A writer is determined by the tool classes its part needs (the contract's), never the role's display name. Unknown policies and
  * external MCP tools can write; plan mode alone does not make those external tools read-only. */
 export function needsIsolatedWorktree(policy: AgentPolicy | null): boolean {
   return !policy?.tools || policy.tools.allow.some(c => ['edit', 'shell', 'brain-write', 'mcp'].includes(c));
