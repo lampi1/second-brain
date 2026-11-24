@@ -404,7 +404,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     this.addItem(r, sysItem('creditResumed', { from, to: to.model ?? '' }, 'info'), false);
     this.persist();
     this.updated(r);
-    const text = `${APP_EVENT_LABEL}\nIl tuo ultimo turno si è fermato perché i crediti ${from ? `di ${from}` : 'del tuo modello'} erano finiti. L’utente ha cambiato il modello nella scheda del tuo ruolo: ora giri su ${to.model ?? 'il modello predefinito del motore'}. Riprendi il compito da dove eri, senza rifare quello che è già fatto.${r.s.delegation && !r.s.delegation.result ? ' Quando hai finito consegna con agent_report.' : ''}`;
+    const text = `${APP_EVENT_LABEL}\nIl tuo ultimo turno si è fermato perché i crediti ${from ? `di ${from}` : 'del tuo modello'} erano finiti. L’app ti ha passato al modello successivo del livello del tuo ruolo (o l’utente ha cambiato i suoi modelli): ora giri su ${to.model ?? 'il modello predefinito del motore'}. Riprendi il compito da dove eri, senza rifare quello che è già fatto.${r.s.delegation && !r.s.delegation.result ? ' Quando hai finito consegna con agent_report.' : ''}`;
     try { await this.send(chatId, text, undefined, false, 'second-brain', false, { kind: 'app' }); }
     catch (e) { this.creditFailed(r, e); throw e; }
     // delivered: the wait is over (the turn's start usually ended it already)
@@ -423,10 +423,34 @@ export abstract class ManagerWork extends ManagerLifecycle {
     let next: ChatSummary;
     try {
       next = await this.continueChat(chatId, { allowStart: false, ask: false, on: { harness: on.engine, model: on.model, effort: on.effort },
-        promptPrefix: `${APP_EVENT_LABEL}\nLa chat «${r.s.title}» si è fermata perché i crediti ${w.model ? `di ${w.model}` : 'del suo modello'} erano finiti. L’utente ha spostato la scheda del ruolo su un altro motore: il lavoro continua qui, da dove era.` });
+        promptPrefix: `${APP_EVENT_LABEL}\nLa chat «${r.s.title}» si è fermata perché i crediti ${w.model ? `di ${w.model}` : 'del suo modello'} erano finiti. L’app l’ha passata al modello successivo del livello del ruolo, su un altro motore (o l’utente ha cambiato i modelli del ruolo): il lavoro continua qui, da dove era.` });
     } catch (e) { this.creditFailed(r, e); throw e; }
     if (next.id === chatId) return false;
     delete r.s.creditWait;
+    this.persist();
+    this.updated(r);
+    return true;
+  }
+
+  /** Announces the automatic move of a waiting chat (ADR 0348, agents/credit-wait.ts): the next model of its level, at
+   *  `next.at`; the chat shows it with «Annulla» (creditStay). */
+  creditPlan(chatId: string, next: { card: string; at: number }, on: { engine: Harness; model: string | null }): void {
+    const r = this.chats.get(chatId), w = r?.s.creditWait;
+    if (!r || !w || w.stay || w.next?.card === next.card) return;
+    r.s.creditWait = { ...w, next };
+    this.addItem(r, sysItem('creditSwitchSoon', { to: on.model ?? '', engine: engineOf(on.engine)?.label ?? on.engine, secs: Math.round((next.at - Date.now()) / 1000), card: next.card }, 'info'), false);
+    this.persist();
+    this.updated(r);
+  }
+
+  /** «Annulla» on an announced move (ADR 0348): the chat keeps waiting; it moves when its role's levels give another
+   *  model, or when the user writes to it. False: no move was announced. */
+  creditStay(chatId: string): boolean {
+    const r = this.chats.get(chatId), w = r?.s.creditWait;
+    if (!r || !w?.next) return false;
+    const { next, ...rest } = w;
+    r.s.creditWait = { ...rest, card: next.card, stay: true };
+    this.addItem(r, sysItem('creditSwitchCancelled', undefined, 'info'), false);
     this.persist();
     this.updated(r);
     return true;

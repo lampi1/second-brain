@@ -151,7 +151,7 @@ export const INVOKE_CHANNELS = [
   'mcpservers:state', 'mcpservers:views', 'mcpservers:save', 'mcpservers:remove', 'mcpservers:setSecret', 'mcpservers:deleteSecret', 'mcpservers:setAccess', 'mcpservers:test', 'mcpservers:importScan', 'mcpservers:importApply', 'mcpservers:undo', 'mcpservers:activate', 'mcpservers:login', 'mcpservers:logout',
   'update:get', 'update:apply', 'update:checkpointAnswer', 'update:recovery', 'update:recoveryAck',
   'app:createBrain', 'app:projectsFolder', 'app:pickProjects', 'worktrees:usage', 'worktrees:cleanup',
-  'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
+  'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep', 'chat:creditStay',
   'chat:synthesize', 'memory:reviewList', 'memory:docs', 'memory:retract', 'memory:delete', 'learning:evidence', 'learning:state', 'learning:import', 'learning:replay', 'learning:saveCandidate', 'learning:promote', 'learning:compare', 'proposals:list', 'proposals:count', 'proposals:decide',
   'maintenance:run', 'maintenance:status', 'maintenance:stop',
   'agents:list', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:levelRoute', 'agents:metrics', 'agents:estimates', 'agents:judgingEstimate', 'run:outcome', 'run:touch', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',

@@ -92,7 +92,7 @@ export function wakeLine(e: WakeEvent): string {
   switch (e.kind) {
     case 'done': return e.report ? `- «${e.title}» (${e.report.role}): ha consegnato: «${cut(e.detail, 200)}»` : `- ${who}: ha finito il turno.${d ? ` Ultima riga: «${d}»` : ''}`;
     case 'error': return e.credits
-      ? `- ${who}: è in attesa, non è un errore da correggere: i crediti ${e.credits.model ? `di ${e.credits.model}` : 'del suo modello'} sono finiti. Riparte da sola, da dove era, quando l'utente cambia il modello nella scheda di ${e.credits.role} (Agenti → ${e.credits.role}). Dillo all'utente con queste parole; non avviare un'altra chat per lo stesso lavoro e non scegliere tu un altro modello o preset.`
+      ? `- ${who}: è in attesa, non è un errore da correggere: i crediti ${e.credits.model ? `di ${e.credits.model}` : 'del suo modello'} sono finiti. Se un altro modello del livello di ${e.credits.role} ha ancora limite, l'app la fa ripartire da sola lì; altrimenti riparte da dove era quando l'utente cambia i modelli di ${e.credits.role} (Agenti → ${e.credits.role}). Dillo all'utente con queste parole; non avviare un'altra chat per lo stesso lavoro e non scegliere tu un altro modello o preset.`
       : `- ${who}: si è fermata su un errore${d ? `: ${d}` : '.'}`;
     case 'question': return `- ${who}: aspetta una risposta dell'utente${d ? `: ${d}` : '.'}`;
     case 'permission': return `- ${who}: aspetta un permesso dell'utente${d ? `: ${d}` : '.'}`;

@@ -104,7 +104,7 @@ export function isAgentsRecap(text: string): boolean {
 
 const creditWaits = (c: ChatSummary): boolean => !!c.creditWait && !c.closedAt && !c.queued && c.state !== 'running' && c.state !== 'starting' && c.state !== 'waiting';
 /** What a chat out of credits waits for, in the user's words. */
-const creditLine = (c: ChatSummary): string => `crediti finiti${c.creditWait?.model ? ` (${c.creditWait.model})` : ''}: cambia il modello nella scheda di ${c.agent?.name ?? 'questo ruolo'} e riparte da sola`;
+const creditLine = (c: ChatSummary): string => `crediti finiti${c.creditWait?.model ? ` (${c.creditWait.model})` : ''}: riparte da sola su un altro modello del livello di ${c.agent?.name ?? 'questo ruolo'} con limite, o quando ne cambi i modelli`;
 export function markOf(c: ChatSummary, asks: PendingRequest[]): Mark {
   // a question still with an agent is not the user's (ADR 0344)
   if (asks.length || c.state === 'waiting' && !heldOnly(c).length) return 'wait';
