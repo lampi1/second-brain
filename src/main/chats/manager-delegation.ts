@@ -140,7 +140,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
       if (!r.reportNudged) {
         r.reportNudged = true;
         log.info('chats', 'delegated chat ended its turn without agent_report: told once', { chat: r.s.id, data: { parent: r.s.parentId } });
-        const text = `${APP_EVENT_LABEL}\nIl tuo turno è finito senza agent_report e il tuo genitore aspetta il risultato. Chiamalo ora una volta: agent_report del server MCP second-brain (in Claude Code mcp__second-brain__agent_report; se è differito, caricalo prima con ToolSearch), con outcome done, partial o blocked e doneWhen per ogni criterio. Se stai aspettando una persona, chiedilo con il pannello delle domande.`;
+        const text = `${APP_EVENT_LABEL}\nIl tuo turno è finito senza agent_report e il tuo genitore aspetta il risultato. Chiamalo ora una volta: agent_report del server MCP second-brain (in Claude Code mcp__second-brain__agent_report, in Antigravity mcp_second-brain_agent_report; se è differito, caricalo prima con ToolSearch), con outcome done, partial o blocked e doneWhen per ogni criterio. Se stai aspettando una persona, chiedilo con il pannello delle domande.`;
         void this.send(r.s.id, text, undefined, false, 'second-brain', false, { kind: 'app' }).catch(e => {
           log.warn('chats', 'report reminder not delivered', { chat: r.s.id, cause: errText(e), hint: 'the delegation is closed without a report instead' });
           this.closeWithoutReport(r, 'idle');
@@ -172,8 +172,11 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     const d = r.s.delegation, run = r.s.run;
     if (!d || !r.s.parentId || d.result || r.s.closedAt) return;
     const criteria = run?.taskContract?.doneWhen ?? d.doneWhen, answer = lastAnswer(r.items).trim();
+    // a child that answered (its last message has text) and only missed the tool is not «blocked» (#463: an engine can
+    // drop agent_report from what the model sees): its answer goes up as a partial result, every criterion unverified
+    const answered = why === 'idle' && !!answer;
     const result: DelegationResult = {
-      outcome: 'blocked', summary: why === 'exit' ? 'Finita con un errore del motore, senza agent_report.' : 'Finita senza agent_report: il risultato è il suo ultimo messaggio.',
+      outcome: answered ? 'partial' : 'blocked', summary: why === 'exit' ? 'Finita con un errore del motore, senza agent_report.' : answered ? 'Finita senza agent_report: la risposta è il suo ultimo messaggio, criteri da verificare.' : 'Finita senza agent_report e senza una risposta.',
       output: answer ? answer.slice(0, RESULT_OUTPUT_MAX) : '(nessun testo)', doneWhen: criteria.map(criterion => ({ criterion, met: false, evidence: 'non riportato: la chat è finita senza agent_report' })),
       ...((run?.taskVersion ?? 1) > 1 ? { taskVersion: run!.taskVersion! } : {}),
     };
@@ -183,7 +186,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     this.endRunOf(r, 'closed', undefined, 'no-report');
     this.persist();
     this.updated(r);
-    log.warn('chats', 'delegated chat ended without agent_report', { chat: r.s.id, cause: why === 'exit' ? 'its engine stopped with an error' : 'two turns ended without agent_report', hint: 'its last answer went to the parent as a blocked result', data: { parent: r.s.parentId } });
+    log.warn('chats', 'delegated chat ended without agent_report', { chat: r.s.id, cause: why === 'exit' ? 'its engine stopped with an error' : 'two turns ended without agent_report', hint: answered ? 'its last answer went to the parent as a partial result' : 'it went to the parent as a blocked result', data: { parent: r.s.parentId } });
   }
 
   /** A child's result for its parent: while siblings still owe theirs, the batch waits a short debounce (CHILD_RESULTS_MS,
