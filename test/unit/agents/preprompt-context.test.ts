@@ -37,7 +37,8 @@ describe('Orchestrator context ownership', () => {
     const frame = orchestratorRole('Coordinate my work');
     expect(frame).toContain('Start new work by checking for a consequential choice');
     expect(frame).toContain('outside Plan proceed when clear');
-    expect(frame).toContain('The role finding a material user choice asks one question directly');
+    expect(frame).toContain('The role finding a material user choice asks one question, never one the request');
+    expect(frame).toContain('it goes up one level at a time'); // ADR 0342
     expect(frame).toContain('one alternative with a reason, then proceed on confirmation');
   });
 

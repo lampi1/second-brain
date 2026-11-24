@@ -10,6 +10,7 @@ import type { UserTaskEvents, AgentRun, AgentRunOutcome } from '../../shared/age
 import { goalText } from '../../shared/agent-label';
 import { ownerSource, type TaskAssignmentOptions } from '../../shared/delegation';
 import { PLAN_APPROVED, planChange, askingPlan, strategyPrompt, withAdded, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
+import { approvalGate, type DoubtEvidence, type PlanDoubt } from '../../shared/plan-doubts';
 import { runMetrics } from '../agents/run-metrics';
 import { standings, withStandings, type TokenPrice } from '../agents/standing';
 import { isCorrection } from '../../shared/correction';
@@ -33,7 +34,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     const jobId = this.coordination.original(r.s.id, originalRequestId)?.key.jobId ?? this.coordination.jobFor(r.s.id) ?? r.s.run?.taskId ?? `chat:${r.s.id}`;
     return { originalRequestId, jobId, chatId: r.s.id,
       runId: r.s.run?.runId ?? null, taskVersion: r.s.run?.taskVersion ?? 1, proposalRevision: plan.at,
-      proposalHash: proposalHash({ steps: plan.steps, clarified: plan.clarified, doneWhen: plan.doneWhen, pcOnly: plan.pcOnly }) };
+      proposalHash: proposalHash({ steps: plan.steps, clarified: plan.clarified, doneWhen: plan.doneWhen, pcOnly: plan.pcOnly, ...(plan.doubts ? { doubts: plan.doubts } : {}) }) };
   }
 
   /** Full instructions plus an optimistic cursor; reading never marks them acknowledged. */
@@ -55,15 +56,18 @@ export abstract class ManagerWork extends ManagerLifecycle {
   /** plan_propose (agents/strategy-tools.ts): the Strategist's plan waits for the user's ok on its strip. `revise`
    *  («aggiorna il piano», 2026-11-23): the same plan again, its started steps kept (shared/strategy.ts checkRevision),
    *  also once approved or finished; the user approves it as any plan. */
-  planPropose(chatId: string, steps: PlanStep[], doneWhen?: string, map?: string, revise = false): StrategyPlan {
+  planPropose(chatId: string, steps: PlanStep[], doneWhen?: string, map?: string, revise = false, doubts: PlanDoubt[] | undefined = this.chats.get(chatId)?.s.plan?.doubts): StrategyPlan {
     const r = this.need(chatId), plan = r.s.plan;
     if (!plan) throw new Error('plan_propose: only a Strategist the Orchestrator or the user started has a plan with the user.');
     if (!revise && (plan.phase === 'running' || plan.phase === 'done')) throw new Error('plan_propose: the plan is approved and under way; update its steps with plan_update, or bring it to the current standard with plan_propose revise: true.');
     if (!revise && plan.steps.some(s => s.state !== 'todo')) throw new Error('plan_propose: some steps of this plan already started; propose it again with revise: true, keeping them with { keep: <number> }.');
+    // one open doubt blocks the approval (ADR 0342), the night's own included: the list is kept (planDoubts), not the plan
+    const blocked = approvalGate({ doubts });
+    if (blocked) throw new Error(blocked);
     // «Modalità notte» (ADR 0191): nobody will click «Approva e parti», so the plan starts as proposed (its recommended
     // choice) and the tool says so; the recap tells the user
     const away = !!this.opts.away?.();
-    const proposed: StrategyPlan = { phase: away ? 'running' : 'proposed', clarified: plan.clarified, ...(plan.pcOnly ? { pcOnly: true } : {}), ...(plan.asked ? { asked: plan.asked } : {}), ...(plan.enough ? { enough: true } : {}), steps, ...(doneWhen ? { doneWhen } : {}), ...(map ? { map } : {}), at: Math.max(Date.now(), plan.at + 1) };
+    const proposed: StrategyPlan = { phase: away ? 'running' : 'proposed', clarified: plan.clarified, ...(plan.pcOnly ? { pcOnly: true } : {}), ...(plan.asked ? { asked: plan.asked } : {}), ...(plan.enough ? { enough: true } : {}), steps, ...(doneWhen ? { doneWhen } : {}), ...(map ? { map } : {}), ...(doubts ? { doubts } : {}), at: Math.max(Date.now(), plan.at + 1) };
     const store = this.coordination;
     const key = this.planRequestKey(r, proposed);
     const prior = store.original(r.s.id, key.originalRequestId);
@@ -84,6 +88,26 @@ export abstract class ManagerWork extends ManagerLifecycle {
     this.updated(r);
     log.info('chats', 'plan proposed', { chat: chatId, data: { steps: steps.length, revise } });
     return structuredClone(r.s.plan);
+  }
+
+  /** plan_propose with a doubt open, or with the list alone (ADR 0342): the list is kept for the user to see. A plan that
+   *  waited for the approval no longer does; one under way goes on (what was approved stays approved). */
+  planDoubts(chatId: string, doubts: PlanDoubt[]): StrategyPlan {
+    const r = this.need(chatId), plan = r.s.plan;
+    if (!plan) throw new Error('plan_propose: only a Strategist the Orchestrator or the user started has a plan with the user.');
+    r.s.plan = { ...plan, doubts, ...(plan.phase === 'proposed' ? { phase: 'revising' as const, at: Math.max(Date.now(), plan.at + 1) } : {}) };
+    this.persist();
+    this.updated(r);
+    log.info('chats', 'plan doubts', { chat: chatId, data: { doubts: doubts.length, open: doubts.filter(d => d.state === 'open').length } });
+    return structuredClone(r.s.plan);
+  }
+
+  /** What the user himself said in a Strategist's chat (ADR 0342): the interview's recorded answers and his own typed
+   *  messages (the user event ledger: never an agent's or the app's text, never a panel answer's record). */
+  doubtEvidence(chatId: string): DoubtEvidence {
+    const r = this.need(chatId), plan = r.s.plan;
+    return { clarified: plan?.clarified ?? [], said: (r.userTaskEvents?.events ?? []).map(e => e.text).filter(t => !t.startsWith('{"requestId"')),
+      mayChoose: !!plan?.enough || !!this.opts.away?.() };
   }
 
   /** plan_update: a step the Strategist does itself (or corrects) moves on. */
@@ -136,6 +160,9 @@ export abstract class ManagerWork extends ManagerLifecycle {
     const change = typeof text === 'string' ? text.trim() : '';
     if (decision === 'change' && (!change || change.length > 2000)) throw new Error('Scrivi cosa cambiare (al massimo 2000 caratteri).');
     if (decision !== 'approve' && decision !== 'change') throw new Error('Scelta non valida.');
+    // no approval with a doubt open, from anyone (pc, phone, typed, the Orchestrator for him, night mode)
+    const doubt = decision === 'approve' ? approvalGate(plan) : null;
+    if (doubt) throw new Error(doubt);
     const store = this.coordination;
     const key = this.planRequestKey(r, plan);
     // One-time migration for a proposed plan restored from pre-journal chats.json. Existing receipts are never rebound.

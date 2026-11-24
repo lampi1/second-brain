@@ -21,6 +21,7 @@ import { readPolicy, type AgentPolicy } from '../agents/tool-policy';
 import { sanitizeAgentChildren } from './agent-children';
 import { readDelegation, type ChatDelegation } from '../../shared/delegation';
 import { readPlan, type StrategyPlan } from '../../shared/strategy';
+import { readLadder, type LadderQuestion } from '../../shared/question-ladder';
 import { slowStep } from '../perf';
 import { cleanOrphanTmps, writeLocalTextAsync, renameWithRetry } from '../agents/local-store';
 
@@ -139,6 +140,8 @@ export interface StoredChat {
   delegation?: ChatDelegation;
   /** a Strategist root chat's plan with the user (shared/strategy.ts, ADR 0108) */
   plan?: StrategyPlan;
+  /** its questions on the ladder, an open one included (shared/question-ladder.ts, ADR 0342) */
+  questions?: LadderQuestion[];
   /** a delegated chat's ancestors' catalog roles, frozen at its creation (its managed MCP access, ADR 0086) */
   mcpAncestors?: (string | null)[];
 }
@@ -202,6 +205,7 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
     ...(typeof c.parentId === 'string' && /^[\w-]{1,80}$/.test(c.parentId) && c.parentId !== c.id ? { parentId: c.parentId } : {}),
     ...(readDelegation(c.delegation) ? { delegation: readDelegation(c.delegation)! } : {}),
     ...(readPlan(c.plan) ? { plan: readPlan(c.plan)! } : {}),
+    ...(readLadder(c.questions).length ? { questions: readLadder(c.questions) } : {}),
     ...(Array.isArray(c.mcpAncestors) && c.mcpAncestors.length <= 16 && c.mcpAncestors.every(x => x === null || typeof x === 'string' && /^[\w-]{1,80}$/.test(x))
       ? { mcpAncestors: c.mcpAncestors as (string | null)[] } : {}),
   };

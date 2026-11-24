@@ -2,6 +2,7 @@
 import { createHash } from 'node:crypto';
 import { reservedText } from '../../shared/away';
 import { CLARIFIED_MAX, CLARIFIED_TEXT_MAX, interviewNeedsPC, stopsQuestions, type Clarified, type StrategyPlan } from '../../shared/strategy';
+import { closeAnswered } from '../../shared/plan-doubts';
 import { yesNoOf } from '../../shared/yes-no';
 
 export function withClarified(plan: StrategyPlan, qs: { question: string; header?: string }[], answers: Record<string, string | string[]>, panelPcOnly = false): StrategyPlan {
@@ -19,6 +20,8 @@ export function withClarified(plan: StrategyPlan, qs: { question: string; header
   const line: Clarified = { q, a, ...(q !== question ? { questionHash: createHash('sha256').update(question).digest('hex') } : {}),
     ...(reserved || q.endsWith('…') || a.endsWith('…') ? { pcOnly: reserved } : {}) };
   const same = plan.clarified.findIndex(entry => entry.q === q && entry.questionHash === line.questionHash);
-  if (same >= 0) return { ...plan, ...restriction, clarified: plan.clarified.map((c, i) => i === same ? line : c) };
-  return { ...plan, ...restriction, asked: (plan.asked ?? plan.clarified.length) + 1, clarified: [...plan.clarified, line].slice(-CLARIFIED_MAX) };
+  // a doubt asked with its own words is closed by this answer (ADR 0342)
+  const closed = plan.doubts ? { doubts: closeAnswered(plan.doubts, question, answer) } : {};
+  if (same >= 0) return { ...plan, ...restriction, ...closed, clarified: plan.clarified.map((c, i) => i === same ? line : c) };
+  return { ...plan, ...restriction, ...closed, asked: (plan.asked ?? plan.clarified.length) + 1, clarified: [...plan.clarified, line].slice(-CLARIFIED_MAX) };
 }

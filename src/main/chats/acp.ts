@@ -73,6 +73,7 @@ import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, ty
 import { AgentChildrenReporter } from './agent-children';
 import type { ChildObservation } from '../../shared/agents';
 import { recordWire } from './wire-record';
+import { isLadderAnswer } from '../../shared/question-ladder';
 import { asYesNo, bareLabel, BRIEF_GRACE_MS, BRIEF_REFUSAL, mappedYesNo, NOT_RAN_NOTE, twoOptionQuestion, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoOf, yesNoShape } from '../../shared/yes-no';
 
 export interface AcpOptions extends SessionOptions {
@@ -1209,7 +1210,8 @@ export class AcpSession implements HarnessSession {
     log.info('chats', 'acp app question answered', { chat: this.opts.chatId, data: { engine: this.engine, requestId } });
     this.sink.resolved(requestId);
     this.setState(this.asks.size ? 'waiting' : 'running');
-    this.send(`Risposta dell'utente alla tua domanda «${cut(q?.text ?? '', 300)}»: ${said}`);
+    // a question the chat above answered (ADR 0342) is never told as the user's
+    this.send(`Risposta ${isLadderAnswer(said) ? '' : 'dell\'utente '}alla tua domanda «${cut(q?.text ?? '', 300)}»: ${said}`);
     return true;
   }
 

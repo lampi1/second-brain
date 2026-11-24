@@ -58,7 +58,8 @@ layer classes in `chats/manager-*.ts` under `chats/manager.ts` (layout: `docs/ag
 - **Delegation** (ADR 0083): a role chat calls `agent_delegate` on its own endpoint (`/mcp/chat/:chatId/:token`,
   `agents/delegation.ts`) → limits and permissions checked, slots reserved → `ChatManager.create(..., 'agent')` with
   `parentId` and the contract → the child's requests pass `agents/role-gate.ts` (skills, sub-agents, above-parent
-  refused) → `agent_ask_parent` / `agent_answer_child` for questions → `agent_report` → `reportDelegation` sends the
+  refused) → a question goes up one level at a time (worker → its Strategist → Orchestrator → user: `chats/manager-ladder.ts`,
+  `shared/question-ladder.ts`, ADR 0342; `agent_ask_parent` / `agent_answer_child`) → `agent_report` → `reportDelegation` sends the
   result to the parent. The renderer builds the tree from `parentId` (`lib/chat-tree.ts`), the steps from the
   transcript (`lib/run-steps.ts`) and picks the one view that shows a request (`lib/child-requests.ts`). The user's
   message in a work chat (`chat:send` → `userWrote`) is quiet news for the Orchestrator and a note for the parent.

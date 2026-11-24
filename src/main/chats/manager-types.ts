@@ -208,7 +208,7 @@ export interface Rec {
   /** Latest waiting hints or explicit final report. Only agent_report/run-report set final and may complete
    *  the assignment at a clean turn end (#86, ADR 0084); never persisted. */
   report?: { text: string; at: number; final?: true; blocked?: boolean };
-  /** a delegated child asked its parent (agent_ask_parent) and no agent message reached it since: its turn ending
+  /** a delegated child asked its parent (agent_ask_parent) and its question is still open (manager-ladder.ts): its turn ending
    *  without agent_report waits for the answer, it does not owe the report yet (#152) */
   askedParentAt?: number;
   /** a delegated child was told once that its turn ended without agent_report (#152): the next such end closes it */

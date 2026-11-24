@@ -157,6 +157,49 @@ describe('app control tools', () => {
     });
   });
 
+  describe('app_pending and app_resolve_question: a worker\'s question the Orchestrator holds (ADR 0342)', () => {
+    const ask = { question: 'Uso il nome nuovo?', options: ['Sì', 'No'] };
+    function setup(caller?: string, level: 'orchestrator' | 'user' = 'orchestrator') {
+      const replies: unknown[] = [], answered: unknown[] = [];
+      const q = { id: 'q-1', asks: [ask], level, ...(level === 'orchestrator' ? { holder: 'orchestrator' } : {}), at: 1, levelAt: 1, trail: [], via: 'request', requestId: 'r1' };
+      const chats = {
+        list: () => [{ id: 'orchestrator', isOrchestrator: true, harness: 'claude' }, { id: 'kid', parentId: 'strat', isOrchestrator: false, harness: 'claude', questions: [q] }],
+        pending: () => level === 'user' ? [{ id: 'r1', chatId: 'kid', type: 'question', tool: 'AskUserQuestion', title: ask.question, detail: '', input: {}, at: 1, questions: [{ question: ask.question, options: [{ label: 'Sì' }, { label: 'No' }], multiSelect: false }] }] : [],
+        items: () => [],
+        ladderHeldBy: (id: string) => id === 'orchestrator' && level === 'orchestrator' ? [{ chatId: 'kid', title: 'Figlio', q }] : [],
+        ladderReply: async (callerId: string, a: { askUser?: boolean }) => { replies.push({ callerId, ...a }); return { answered: 'Figlio', askUser: !!a.askUser }; },
+        answerForUser: (chatId: string, requestId: string) => { answered.push({ chatId, requestId }); },
+      } as unknown as ChatService;
+      const tools = appControlTools({ chats, browser: {} as BrowserService, brain: {} as BrainService, window: () => null, emitUi: () => {}, version: '0' }, caller);
+      const run = (name: string, a: Record<string, unknown>) => Promise.resolve().then(() => tools.find(t => t.name === name)!.run(a));
+      return { replies, answered, run };
+    }
+    it('it is listed as held with its words, answered with a source or passed up, never as the user', async () => {
+      const { replies, answered, run } = setup('orchestrator');
+      expect(await run('app_pending', {})).toEqual([expect.objectContaining({ id: 'q-1', chatId: 'kid', type: 'held', title: 'Figlio', questions: [ask] })]);
+      expect(await run('app_resolve_question', { chatId: 'kid', requestId: 'r1', answer: 'Sì', why: 'richiesta' })).toMatch(/come agente/);
+      expect(await run('app_resolve_question', { chatId: 'kid', requestId: 'q-1', askUser: true, why: 'non lo so' })).toMatch(/passata all’utente/);
+      expect(replies).toEqual([
+        { callerId: 'orchestrator', chatId: 'kid', requestId: 'q-1', answer: 'Sì', why: 'richiesta' },
+        { callerId: 'orchestrator', chatId: 'kid', requestId: 'q-1', why: 'non lo so', askUser: true },
+      ]);
+      expect(answered).toEqual([]);
+    });
+    it('the plain mount sees no held question and answers none', async () => {
+      const { replies, run } = setup();
+      expect(await run('app_pending', {})).toEqual([]);
+      await expect(run('app_resolve_question', { chatId: 'kid', requestId: 'q-1', answer: 'Sì', why: 'x' })).rejects.toThrow(/solo l’Orchestrator/);
+      expect(replies).toEqual([]);
+    });
+    it('a delegated chat\'s question that climbed to the user is in his row and may be answered for him there', async () => {
+      const { replies, answered, run } = setup('orchestrator', 'user');
+      expect(await run('app_pending', {})).toEqual([expect.objectContaining({ id: 'r1', type: 'question' })]);
+      await run('app_resolve_question', { chatId: 'kid', requestId: 'r1', answers: { [ask.question]: 'Sì' } });
+      expect(answered).toEqual([{ chatId: 'kid', requestId: 'r1' }]);
+      expect(replies).toEqual([]);
+    });
+  });
+
   describe('app_resolve_question words: his own message answers a question or a plan (ADR 0274)', () => {
     const q = { id: 'q1', chatId: 'w', type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at: 100,
       questions: [{ question: 'Quale colore?', options: [{ label: 'Rosso' }, { label: 'Blu' }], multiSelect: false }] };

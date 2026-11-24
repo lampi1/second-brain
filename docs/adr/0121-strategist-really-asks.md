@@ -5,6 +5,8 @@ qualche domanda, almeno quella di approvazione del piano tramite il popup se son
 del piano nella domanda con una bella UI») · Builds on: ADR 0108 (the Strategist plans with the user), ADR 0049 (the
 questions window)
 
+Partly superseded by ADR 0342: no minimum of questions; the plan's real doubts are listed and one open blocks approval.
+
 ## Context
 ADR 0108 gave a Strategist the Orchestrator opens a flow (questions, `plan_propose`, the user's ok, then delegation),
 but the asking lived only in the prompt: a Strategist could go straight to `plan_propose` without a single question.

@@ -3,8 +3,8 @@
 // only to a Strategist root chat (ChatManager.chatToolShown): plan_propose puts its short plan on its strip for the
 // user's «Approva e parti» / «Cambia qualcosa» (the answer comes back as the user's message); plan_update moves a step
 // it does itself. Delegated steps move by themselves (agent_delegate's `step`, the children's reports). A first proposal
-// before three answers requires the user to stop the questions (shared/strategy.ts proposalGate, ADR 0121). Used by
-// wiring.ts.
+// lists its doubts and one open doubt keeps the plan from being shown for approval (shared/plan-doubts.ts, ADR 0342).
+// Used by wiring.ts.
 import { AWAY_PLAN_NOTE } from '../../shared/away';
 import type { McpTool } from '../mcp/server';
 import type { ChatSummary } from '../../shared/contract';
@@ -12,11 +12,16 @@ import { callerOf } from '../mcp/caller';
 import type { PresetId } from '../../shared/model-presets';
 import { checkProposal, checkRevision, checkStep, proposalGate, STEP_STATES, stepIndex, type PlanStep, type StepState, type StrategyPlan, withAdded } from '../../shared/strategy';
 import { WORK_ROLE_IDS } from '../../shared/roles';
+import { checkDoubts, DOUBT_BY, DOUBTS_MAX, openDoubts, openDoubtsNote, type DoubtEvidence, type PlanDoubt } from '../../shared/plan-doubts';
 
 /** What the plan tools need from the chats (ChatManager). */
 export interface StrategyChats {
   planOf(chatId: string): StrategyPlan | null;
-  planPropose(chatId: string, steps: PlanStep[], doneWhen?: string, map?: string, revise?: boolean): StrategyPlan;
+  planPropose(chatId: string, steps: PlanStep[], doneWhen?: string, map?: string, revise?: boolean, doubts?: PlanDoubt[]): StrategyPlan;
+  /** the list of doubts of a plan not (yet) to approve */
+  planDoubts(chatId: string, doubts: PlanDoubt[]): StrategyPlan;
+  /** what the user really said, as the app recorded it: only this closes a doubt «by the user» */
+  doubtEvidence(chatId: string): DoubtEvidence;
   planUpdate(chatId: string, i: number, state: StepState): StrategyPlan;
   planAdd(chatId: string, step: PlanStep): StrategyPlan;
 }
@@ -57,8 +62,13 @@ export function strategyTools(chats: StrategyChats, away: () => boolean = () => 
   const str = { type: 'string' };
   return [{
     name: 'plan_propose',
-    description: 'Show the user your short plan for approval (on your strip, or in the questions window when the user has "Popup" on), once your questions made clear what they want: 2 to 6 steps, each one plain line in the user\'s language with the role that does it (leave role out for a step you do yourself) and an optional short detail. Ask at least 3 concrete clarifying questions first, one at a time (fewer only after the user\'s «Basta domande»), including a verified intake answer. The user approves («Piano approvato: parti.») or writes what to change, as a message: end your turn now and wait; propose again after a change, or re-show a pending plan with plan_propose if its panel was lost. An explicit direct typed approval also counts. agent_delegate is refused until the user approved. Work on a project: draw it on the project\'s map with `map` and each step\'s `on` (project_map_read shows the map and its element ids). «Aggiorna il piano»: revise: true, the whole plan again, every started or done step as { keep: n }; approval again.',
-    inputSchema: { type: 'object', required: ['steps'], additionalProperties: false, properties: {
+    description: 'Show the user your short plan for approval (on your strip, or in the questions window when the user has "Popup" on), once your questions made clear what they want: 2 to 6 steps, each one plain line in the user\'s language with the role that does it (leave role out for a step you do yourself) and an optional short detail. `doubts` = every real doubt of the job ([] when nothing is open), each closed by the user\'s recorded answer, the code or the brain with its source; while one is open the plan is not shown for approval (doubts may come alone, before the steps). The user approves («Piano approvato: parti.») or writes what to change, as a message: end your turn now and wait; propose again after a change, or re-show a pending plan with plan_propose if its panel was lost. An explicit direct typed approval also counts. agent_delegate is refused until the user approved. Work on a project: draw it on the project\'s map with `map` and each step\'s `on` (project_map_read shows the map and its element ids). «Aggiorna il piano»: revise: true, the whole plan again, every started or done step as { keep: n }; approval again.',
+    inputSchema: { type: 'object', additionalProperties: false, properties: {
+      doubts: { type: 'array', maxItems: DOUBTS_MAX, description: 'every doubt of this job, open and closed; a doubt open before must come back', items: { type: 'object', required: ['text'], additionalProperties: false, properties: {
+        text: { ...str, description: 'the doubt as a Sì/No question in the user\'s language; ask it with these words' },
+        by: { type: 'string', enum: [...DOUBT_BY], description: 'who closed it (leave out while open): user = his recorded answer; code | brain = where you read it; choice = your own, only after «Basta domande» or in night mode' },
+        answer: { ...str, description: 'code, brain, choice: the answer (for user the app fills in his)' },
+        source: { ...str, description: 'code: file and place; brain: the note; choice: why; user: the question he answered, or his exact words in this chat' } } } },
       revise: { type: 'boolean', description: 'true = bring this plan to the current standard (also under way): started and done steps come back as { keep: n }, the rest is checked as new; the user approves again' },
       steps: { type: 'array', minItems: 1, maxItems: 16, items: { type: 'object', additionalProperties: false, properties: {
         keep: { type: 'integer', minimum: 1, description: 'revise only: the old number of a step to keep as it is (then only par besides it)' },
@@ -78,14 +88,28 @@ export function strategyTools(chats: StrategyChats, away: () => boolean = () => 
     } },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: async (a, ctx) => {
-      const { map: mapArg, revise: reviseArg, ...rest } = a;
+      const { map: mapArg, revise: reviseArg, doubts: doubtsArg, ...rest } = a;
       if (reviseArg !== undefined && typeof reviseArg !== 'boolean') throw new Error('revise: true or false.');
       const revise = reviseArg === true, id = callerOf(ctx.params), plan = chats.planOf(id);
       if (revise && (!plan || !plan.steps.length)) throw new Error('plan_propose revise: there is no plan of yours to revise; propose it without revise.');
+      if (!revise && plan && (plan.phase === 'running' || plan.phase === 'done')) throw new Error('plan_propose: the plan is approved and under way; update its steps with plan_update, or bring it to the current standard with plan_propose revise: true.');
+      // the doubts first: with one open nothing is checked, drawn or shown, only the list is kept for the user to see
+      const evidence = plan ? chats.doubtEvidence(id) : null;
+      const doubts = plan && evidence ? checkDoubts(doubtsArg, plan.doubts, evidence) : undefined;
+      const open = openDoubts({ doubts });
+      if (open.length) {
+        chats.planDoubts(id, doubts!);
+        return JSON.stringify({ shown: false, openDoubts: open.map(d => d.text), note: openDoubtsNote(open, evidence!.mayChoose) });
+      }
+      // a list alone, every doubt closed: kept; the steps come with the proposal
+      if (doubts && doubtsArg !== undefined && a.steps === undefined) {
+        chats.planDoubts(id, doubts);
+        return JSON.stringify({ shown: false, openDoubts: [], note: 'Every doubt is closed: propose the plan with its steps.' });
+      }
       const checked = revise ? checkRevision(plan!, rest) : checkProposal(rest);
       const doneWhen = checked.doneWhen, steps = withModels(checked.steps, id, stepModel);
-      // «Modalità notte» (ADR 0191): nobody can answer a clarifying question, so none is required; a revision was asked
-      const refused = plan && !away() && !revise ? proposalGate(plan) : null;
+      // «Modalità notte» (ADR 0191): the plan starts as proposed, with no list asked for; a revision was asked by the user
+      const refused = plan && !away() && !revise ? proposalGate(plan, doubts !== undefined) : null;
       if (refused) throw new Error(refused);
       let map: string | undefined;
       if (mapArg !== undefined) {
@@ -103,7 +127,7 @@ export function strategyTools(chats: StrategyChats, away: () => boolean = () => 
         map = plan.map;
       } else if (steps.some(s => s.on !== undefined)) throw new Error('steps[].on needs map (the project the plan is drawn on).');
       // the app approved it for the absent user
-      if (chats.planPropose(id, steps, doneWhen, map, revise).phase === 'running') return JSON.stringify({ approved: true, steps: steps.length, note: AWAY_PLAN_NOTE });
+      if (chats.planPropose(id, steps, doneWhen, map, revise, doubts).phase === 'running') return JSON.stringify({ approved: true, steps: steps.length, note: AWAY_PLAN_NOTE });
       return JSON.stringify({ shown: true, steps: steps.length, note: 'The plan is shown to the user with «Approva e parti» and «Cambia qualcosa». End your turn now: the answer arrives as the user\'s message. Delegate nothing before it.' });
     },
   }, {

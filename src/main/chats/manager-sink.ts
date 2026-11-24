@@ -19,7 +19,7 @@ import { addSkill, addTurn, skillOfRead } from '../agents/runs';
 import { AgentChildrenReducer } from './agent-children';
 import { effortValue, initialEffort, observeEffort, submitEffort } from './effort';
 import type { Rec } from './manager-types';
-import { ManagerWork } from './manager-work';
+import { ManagerLadder } from './manager-ladder';
 import { CRASH_RESUME_TEXT, sysItem } from './manager-helpers';
 import { pausedState } from './remote-control';
 import { runtimePerformance } from '../runtime-performance';
@@ -33,7 +33,7 @@ const refused = (message: string): InternalVerdict => ({ kind: 'deny', message }
 export interface DecideOpts { signal?: AbortSignal; asking?: () => void; waited?: (ms: number) => void }
 
 /** What a session reports (items, requests, state patches) turned into the chat record and contract events. */
-export abstract class ManagerSink extends ManagerWork {
+export abstract class ManagerSink extends ManagerLadder {
   /** The one permission chain for a run_code internal call (ADR 0331), in the order a native call meets it: the chat
    *  must be live in Code Mode; in plan mode a write is refused; a Claude chat's own deny rules refuse and its ask
    *  rules send the call to the user (code-mode/claude-rules.ts, fail closed); a tool class its role was not given
@@ -156,16 +156,21 @@ export abstract class ManagerSink extends ManagerWork {
     this.updated(r);
   }
 
-  /** A request past the gates: answered by night mode, else shown (also a held twin whose first left, #379). */
+  /** A request past the gates: answered by night mode, held by the agent above (a worker's question, ADR 0342), else
+   *  shown (also a held twin whose first left, #379). */
   protected exposeRequest(r: Rec, req: Omit<PendingRequest, 'chatId'>): void {
-    if (this.awayAnswered(r, req)) return;
+    if (this.awayAnswered(r, req) || this.ladderHeld(r, req)) return;
+    this.reveal(r, { ...req, chatId: r.s.id });
+  }
+  /** Shows a request in the user's row. */
+  protected override reveal(r: Rec, full: PendingRequest): void {
+    const req = full;
     this.hook('analytics', () => this.analytics.pending(r.s, req));
     this.autoActivity(r);
-    const full: PendingRequest = { ...req, chatId: r.s.id };
     this.countRequest(r, req);
     if (r.s.isOrchestrator && isNativeQuestion(req) && req.questions?.length === 1) r.intakePanelId = req.id;
     r.pending.set(req.id, full);
-    r.s.pending = r.pending.size;
+    r.s.pending = this.shownPending(r);
     this.opts.emitter.emit('pending:added', full);
     this.updated(r);
     const on = this.opts.onWaiting;
@@ -212,7 +217,7 @@ export abstract class ManagerSink extends ManagerWork {
         if (!live()) return;
         this.coldStarted(r);
         // only the app's gate says a brain rule holds a request (it may then be answered from the phone): never an engine
-        if ('heldBy' in req) { req = { ...req }; delete req.heldBy; }
+        if ('heldBy' in req || 'ladder' in req) { req = { ...req }; delete req.heldBy; delete req.ladder; }
         // the gates read the input as the engine sent it (ADR 0290): the one in the request is shortened for the screen
         const shown = req.input;
         if (whole !== undefined) req = { ...req, input: whole };
@@ -346,7 +351,7 @@ export abstract class ManagerSink extends ManagerWork {
     if (p.state) {
       const was = r.s.state;
       // a cold note's turn is invisible (ADR 0031): the tile stays as it was
-      if (!(r.handoffTurn?.quiet && (p.state === 'running' || p.state === 'starting'))) r.s.state = p.state;
+      if (!(r.handoffTurn?.quiet && (p.state === 'running' || p.state === 'starting'))) r.s.state = p.state === 'waiting' && this.allHeld(r) ? 'running' : p.state; // held by an agent: not the user's
       // a hand-off turn is not the chat's work: never resumed after a restart
       if ((p.state === 'running' || p.state === 'waiting') && !r.working && !r.handoffTurn) {
         r.working = true; save = true;

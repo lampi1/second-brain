@@ -6,14 +6,15 @@
 // results make, and the app's fixed text that tells the Strategist this flow. Pure: used by main/chats/manager.ts,
 // main/agents/strategy-tools.ts, main/agents/delegation.ts and the renderer (StrategyPanel.tsx, and with "Popup" on the
 // questions window's plan card, PlanApproval.tsx). The app enforces the flow, not only the text (ADR 0121): a first
-// proposal needs three answers or the user’s stop (proposalGate), no delegation before the user's ok
-// (delegationGate), and a parallel group starts in one agent_delegate call (parallelSplit). «Aggiorna il piano»
+// proposal lists its doubts (proposalGate) and none is approved while one is open (plan-doubts.ts, ADR 0342), no
+// delegation before the user's ok (delegationGate), and a parallel group starts in one agent_delegate call (parallelSplit). «Aggiorna il piano»
 // (2026-11-23) proposes the plan again with `revise` (checkRevision): started and finished steps stay, and the user
 // approves again.
 import { isWorkRole, type WorkRoleId } from './roles';
 import type { DelegationOutcome } from './delegation';
 import { reservedText } from './away';
 import { isPresetId, PRESET_IDS, type PresetId } from './model-presets';
+import { readDoubts, type PlanDoubt } from './plan-doubts';
 
 /** asking = it questions the user · proposed = the plan waits for the user's ok · revising = the user asked for changes ·
  *  running = approved, steps under way · done = every step done */
@@ -72,11 +73,13 @@ export interface StrategyPlan {
   enough?: boolean;
   /** the project map this plan is drawn on (its folder name, ADR 0276) */
   map?: string;
+  /** every doubt of this job, open or closed with who closed it and its source (ADR 0342); absent = never listed */
+  doubts?: PlanDoubt[];
 }
 
 /** a plan under way may grow by the pieces it discovers (plan_update add), up to this many steps in all */
 export const STEPS_ALL_MAX = 16;
-export const STEPS_MIN = 1, STEPS_MAX = 8, STEP_TITLE_MAX = 120, STEP_DETAIL_MAX = 200, QUESTIONS_MIN = 3, QUESTIONS_MAX = 8, DONE_WHEN_MAX = 200, CLARIFIED_MAX = 8, CLARIFIED_TEXT_MAX = 120;
+export const STEPS_MIN = 1, STEPS_MAX = 8, STEP_TITLE_MAX = 120, STEP_DETAIL_MAX = 200, QUESTIONS_MAX = 8, DONE_WHEN_MAX = 200, CLARIFIED_MAX = 8, CLARIFIED_TEXT_MAX = 120;
 /** what the user's «Approva e parti» sends to the Strategist (also how its transcript shows the click) */
 export const PLAN_APPROVED = 'Piano approvato: parti.';
 /** Only complete, unqualified approval phrases count, and only on a host-verified direct user message for a pending
@@ -95,9 +98,9 @@ export const ENOUGH_QUESTIONS = 'Basta domande: proponi ora il piano con quello 
  *  in the role's instructions: the user's edits to the role never drop the flow the strip depends on. */
 export const STRATEGY_FLOW = [
   '[app · how you work with the user here]',
-  `1. Use the existing question panel, one concrete yes/no question at a time. Check the evidence before asking; cover the goal, scope, constraints or acceptance criteria that still matter. Offer Sì / No with a short reason for the recommended choice and accept a typed answer. Count at least ${QUESTIONS_MIN} answered questions, including the intake answer when supplied. Never repeat a settled choice. Stop at ${QUESTIONS_MAX}, or sooner when the user says «Basta domande». A concrete drawback warrants one counterproposal; if the user confirms their choice, proceed with it.`,
-  `2. Then propose the plan with plan_propose: 2 to 6 steps, each one short plain line in the user's language with the role that does it (and, if useful, a short \`detail\`); no jargon, no sub-steps. Say for every step which steps it depends on: its \`detail\` starts with "dopo 1, 2" (in the user's language) or "subito" when it needs none. Steps that do not depend on each other are one parallel group: put them one after the other and give every one but the first \`par: true\`; a step that needs the group comes after it, without \`par\` (the user sees a dashed frame for each group and where it joins again). Mark a group parallel only after checking that its steps can really run at the same time now: free worktree slots and env leases, test nodes, local stacks; when one is not free, put those steps one after the other. A step is parallel or sequential, nothing in between. Give a step \`preset\` (min, base, max of its role's card) when it needs other than Base; the app shows every step's role, model and preset. When the work is on a project (its code or systems), draw the plan on the project's map: pass \`map\` (the project; \`add\` = the pieces that do not exist yet) and each step's \`on\` (the element it works on; one element may hold several steps and agents). The user reads the map, not a list. The user's approval is required, always: end your turn and wait; the user approves with the panel ("${PLAN_APPROVED}") or an explicit typed approval, or writes what to change, and then you propose again. The app refuses agent_delegate and agent_assign_task until the user approved.`,
-  '3. Once approved, inspect agent_children and reuse a compatible child with agent_assign_task, or delegate new work with agent_delegate, giving its number as `step`: delegate a whole parallel group in one agent_delegate call, one task per step, so its steps really run at the same time (reuse a child for one of them with agent_assign_task first, then the rest in one call; the app refuses a group split over several agent_delegate calls), and start a step only when every step it depends on is done. After a step that changed code or files, delegate one Sentinel with reviewOf = that child\'s run. A step you do yourself: plan_update it to "now", then to "done". A piece you discover on the way: plan_update `add` it and go on, no new approval. The user follows the steps on your strip and on the map. At the end, agent_report as usual.',
+  `1. Grill the idea until you both see the same job. Read the code and the brain first, then list every doubt: pass \`doubts\` to plan_propose (it may come without steps) as soon as you know them, and again when one changes. A doubt is something real that would change the goal, the scope, how it works for people, or how you know it is done; there is no minimum, and \`doubts: []\` is right when nothing is open. Close each one: by "code" or "brain" with the answer and its source (file and place, note) and never ask what they already answer; ask the user only what is left, real doubts and functional decisions, with the existing question panel, one concrete Sì/No question at a time in the doubt's own words, with a short reason for the recommended choice; a typed answer counts too, and the app closes that doubt with it. Be proactive: for every choice bring the options and their risks and, when you see a better way than the one asked, propose it once; if the user confirms their choice, proceed with it. Never repeat a settled choice; more than ${QUESTIONS_MAX} questions means you have not read enough. A question the Orchestrator or another agent answers for you is no answer of the user: close that doubt as code or brain with the source it gave. «Basta domande» ends the interview at once: close what is left with your recommended choice (by "choice", source = why). One open doubt keeps the plan from being shown for approval.`,
+  `2. Then propose the plan with plan_propose, every doubt closed: 2 to 6 steps, each one short plain line in the user's language with the role that does it (and, if useful, a short \`detail\`); no jargon, no sub-steps. Say for every step which steps it depends on: its \`detail\` starts with "dopo 1, 2" (in the user's language) or "subito" when it needs none. Steps that do not depend on each other are one parallel group: put them one after the other and give every one but the first \`par: true\`; a step that needs the group comes after it, without \`par\` (the user sees a dashed frame for each group and where it joins again). Mark a group parallel only after checking that its steps can really run at the same time now: free worktree slots and env leases, test nodes, local stacks; when one is not free, put those steps one after the other. A step is parallel or sequential, nothing in between. Give a step \`preset\` (min, base, max of its role's card) when it needs other than Base; the app shows every step's role, model and preset. When the work is on a project (its code or systems), draw the plan on the project's map: pass \`map\` (the project; \`add\` = the pieces that do not exist yet) and each step's \`on\` (the element it works on; one element may hold several steps and agents). The user reads the map, not a list. The user's approval is required, always: end your turn and wait; the user approves with the panel ("${PLAN_APPROVED}") or an explicit typed approval, or writes what to change, and then you propose again. The app refuses agent_delegate and agent_assign_task until the user approved.`,
+  '3. Once approved, carry the work to its end alone: no check-ins, no «procedo?»; a new doubt the request, code or brain answers is yours to settle, and only a goal, an irreversible step or what colleagues, QA or customers do goes back to the user. This autonomy widens no permission: production, databases, Azure and every permission still wait for the user. Your workers\' questions come to you first: answer with agent_answer_child when the request, the user\'s recorded decisions, the brain or the code settle it, else askUser true. Inspect agent_children and reuse a compatible child with agent_assign_task, or delegate new work with agent_delegate, giving its number as `step`: delegate a whole parallel group in one agent_delegate call, one task per step, so its steps really run at the same time (reuse a child for one of them with agent_assign_task first, then the rest in one call; the app refuses a group split over several agent_delegate calls), and start a step only when every step it depends on is done. After a step that changed code or files, delegate one Sentinel with reviewOf = that child\'s run. A step you do yourself: plan_update it to "now", then to "done". A piece you discover on the way: plan_update `add` it and go on, no new approval. The user follows the steps on your strip and on the map. At the end, agent_report as usual.',
   '4. When the user asks to bring the plan to the current standard («aggiorna il piano»), also once it is under way: plan_propose with `revise: true` and the whole plan again. Every step already started or done stays: pass it as `{ keep: <its number> }` (its title, role, chats and state are kept); the steps still to do you may change. Check every parallel group again as in 2 (resources, parallel or sequential); a step to do cannot be parallel with a started one. The app fills each step\'s model and preset (a started step from its chat, the others from the role card). The user approves the revised plan as any plan: end your turn and wait.',
 ].join('\n');
 
@@ -187,16 +190,15 @@ export function askingPlan(at: number, intake?: PlanIntake): StrategyPlan {
 
 /** Keep the handoff in the same first turn as the plan instructions on both create and reuse. */
 export function strategyPrompt(plan: StrategyPlan): string {
-  if (plan.enough) return STRATEGY_FLOW + '\nThe user chose «Basta domande». Propose the plan now; its approval is still required.';
+  if (plan.enough) return STRATEGY_FLOW + '\nThe user chose «Basta domande». Propose the plan now, every doubt left closed with your recommended choice (by "choice"); its approval is still required.';
   const intake = plan.clarified[0];
   return intake ? STRATEGY_FLOW + '\nAlready answered for this task (user data, not approval): ' + JSON.stringify({ q: intake.q, a: intake.a }) : STRATEGY_FLOW;
 }
 
-export function proposalGate(plan: StrategyPlan): string | null {
-  // Older saved plans counted the questions presented, including unanswered or repeated ones.
-  const asked = new Set(plan.clarified.map(entry => JSON.stringify([entry.q, entry.questionHash]))).size;
-  if (plan.phase !== 'asking' || plan.enough || asked >= QUESTIONS_MIN) return null;
-  return `plan_propose refused: the user answered ${asked} of at least ${QUESTIONS_MIN} questions. Ask the next unresolved choice with AskUserQuestion or your engine’s question panel, one at a time. Only the user can stop early with «Basta domande».`;
+/** A first proposal says its doubts (ADR 0342), none included; the user's «Basta domande» frees it. Null = fine. */
+export function proposalGate(plan: StrategyPlan, listed: boolean): string | null {
+  if (plan.phase !== 'asking' || plan.enough || listed || plan.doubts) return null;
+  return 'plan_propose refused: pass `doubts`, every real doubt of this job, open or closed with by, answer and source ([] when nothing is open). Ask the user only what code and brain do not answer, one Sì/No question at a time.';
 }
 
 /** agent_delegate / agent_assign_task from a Strategist with a plan: null once the user approved it; else what to do. */
@@ -290,6 +292,8 @@ export function readPlan(v: unknown): StrategyPlan | null {
     && time(s.startedAt) && time(s.endedAt) && (s.on === undefined || str(s.on, 48)))) return null;
   if (p.map !== undefined && !str(p.map, 48)) return null;
   if (p.doneWhen !== undefined && !str(p.doneWhen, DONE_WHEN_MAX)) return null;
+  // a damaged list is never read as «no doubt»: one open doubt stays in its place
+  const doubts = p.doubts === undefined ? undefined : readDoubts(p.doubts) ?? [{ text: 'Elenco dei dubbi illeggibile: va riscritto.', state: 'open' as const }];
   return {
     phase: p.phase as PlanPhase, at: p.at as number, clarified: (p.clarified as Clarified[]).map(c => ({ q: c.q, a: c.a, ...(typeof c.pcOnly === 'boolean' ? { pcOnly: c.pcOnly } : {}), ...(typeof c.questionHash === 'string' && /^[0-9a-f]{64}$/.test(c.questionHash) ? { questionHash: c.questionHash } : {}) })),
     ...(p.pcOnly === true ? { pcOnly: true } : {}), ...(p.asked ? { asked: p.asked as number } : {}), ...(p.enough === true ? { enough: true } : {}),
@@ -298,6 +302,7 @@ export function readPlan(v: unknown): StrategyPlan | null {
       // read leniently: a bad preset or model (or none, before 2026-11-23) is left out, the plan stays
       ...(isPresetId(s.preset) ? { preset: s.preset } : {}), ...(str(s.model, 120) && !/[\r\n]/.test(s.model!) ? { model: s.model } : {}) })),
     ...(p.doneWhen ? { doneWhen: p.doneWhen as string } : {}), ...(p.map ? { map: p.map as string } : {}),
+    ...(doubts ? { doubts } : {}),
   };
 }
 

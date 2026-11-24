@@ -118,7 +118,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0118](0118-composer-inline-suggestion.md) The chat composer's inline suggestion: local first, a small model after a pause — accepted
 - [0119](0119-simple-onboarding.md) Simple onboarding: the language first, six steps, tool tiles — accepted, partly superseded by 0279
 - [0120](0120-one-language-for-ui-and-ai.md) One language for the UI and the AI, switched from the top bar — accepted
-- [0121](0121-strategist-really-asks.md) The Strategist really asks: a question before the plan, the plan's approval in the questions window — accepted
+- [0121](0121-strategist-really-asks.md) The Strategist really asks: a question before the plan, the plan's approval in the questions window — accepted, partly superseded by 0342
 - [0122](0122-memoria-hub.md) Memoria is the hub: one page with tabs, no Dashboard — accepted, partly superseded by 0243, 0263, 0340
 - [0123](0123-proposals-deck.md) Memoria → Proposte: every proposal is one card in one deck — accepted
 - [0124](0124-saved-queries-and-ideas-migration.md) Saved queries next to scripts, and the ideas scattered in the notes move to ideas.md — accepted, partly superseded by 0263
@@ -204,7 +204,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0206](0206-impara-file-driven-web-research.md) Impara: web research driven by the user's files, through a deterministic filter — accepted
 - [0207](0207-settings-redesign-and-easy-mcp.md) Settings redesign, MCP servers in one paste, the Orchestrator configures everything — accepted, partly superseded by 0296
 - [0208](0208-docs-keep-up-with-the-code.md) Docs keep up with the code: tool catalog, Guida coverage, README freshness — accepted, partly superseded by 0340
-- [0209](0209-strategist-asks-more-and-varied-reactions.md) The Strategist asks at least three questions; reactions fit the message; Flash writes the brief — accepted, partly superseded by 0220, 0223, 0296
+- [0209](0209-strategist-asks-more-and-varied-reactions.md) The Strategist asks at least three questions; reactions fit the message; Flash writes the brief — accepted, partly superseded by 0220, 0223, 0296, 0342
 - [0210](0210-remove-model-routing.md) Remove the model-routing classifier: every agent runs on its own card's model — accepted, partly superseded by 0291
 - [0211](0211-small-fixes-and-real-effort.md) Agent card picks model, effort and context; real effort names; owner's small fixes of 2026-10-31 — accepted
 - [0212](0212-remove-personal-browser.md) Remove the personal Browser page — accepted
@@ -334,6 +334,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0338](0338-no-leftover-processes.md) No leftover processes: no breakaway from an engine's job, engines recorded at once, leased stacks spared — accepted
 - [0340](0340-no-guide-page-and-a-four-tab-memory.md) No Guida page, and a Memoria of four tabs with a real Skill view — accepted
 - [0341](0341-ten-principles-of-the-app.md) Ten principles of the app, and what was removed to follow them — accepted
+- [0342](0342-question-ladder-and-open-doubts.md) A worker's question goes up one level at a time; the Strategist's open doubts block its plan — accepted
 
 ## Replaced
 
