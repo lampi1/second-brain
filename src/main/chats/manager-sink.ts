@@ -281,6 +281,8 @@ export abstract class ManagerSink extends ManagerLadder {
         if (!this.quitting && (error || (r.working && !r.autoEnding && !r.releasing && !r.archiving))) r.unfinished = true;
         if (!this.quitting) r.working = false; // a crash while the app runs shows as an error, it is not resumed later
         if (error) r.s.lastError = error;
+        // its engine died on the provider's credit limit (ADR 0346): it waits for its role's card, nothing is retried
+        const outOfCredits = crashed && this.creditStop(r, error);
         if (error) delete r.s.resumedAt; // a resume that failed is no "ripresa": the error shows alone
         if (r.s.state !== 'error') r.s.state = error ? 'error' : r.releasing ? 'idle' : 'closed';
         this.persist();
@@ -289,7 +291,7 @@ export abstract class ManagerSink extends ManagerLadder {
         if (error) this.owedReport(r, 'exit'); // a delegated child that died owes nothing more: its parent is told (#152)
         const onCrash = this.opts.onCrash;
         if (crashed && error && onCrash) this.hook('onCrash', () => onCrash(chatId, error));
-        if (crashed) this.recoverCrash(r);
+        if (crashed && !outOfCredits) this.recoverCrash(r);
       },
     };
   }
@@ -357,6 +359,7 @@ export abstract class ManagerSink extends ManagerLadder {
       // a hand-off turn is not the chat's work: never resumed after a restart
       if ((p.state === 'running' || p.state === 'waiting') && !r.working && !r.handoffTurn) {
         r.working = true; save = true;
+        delete r.s.creditWait; // a new turn: whoever started it (the card's new model, the user, its parent) ended the wait
         // it works again (the user wrote to it, it was reassigned): its question about the stopped step is old (#358)
         if (r.userActionAsk) this.dropUserAsks(q => q.id === r.userActionAsk);
       }

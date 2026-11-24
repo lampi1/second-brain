@@ -51,10 +51,11 @@ describe('workActions', () => {
 });
 
 describe('the drawing', () => {
-  it('has a box per step with role, model, preset and its turn; boxes of one turn run together', () => {
-    const { boxes, links } = drawingOf(map({ owner, plan: plan('running', [step('Cerco', 'done', { role: 'scout', model: 'opus', chatIds: ['k1'] }), step('Faccio', 'now', { role: 'artisan', preset: 'max' }), step('Provo', 'todo', { par: true }), step('Scrivo')]) }));
+  it('has a box per step with role, preset and its turn, never a model; boxes of one turn run together', () => {
+    const { boxes, links } = drawingOf(map({ owner, plan: plan('running', [step('Cerco', 'done', { role: 'scout', chatIds: ['k1'] }), step('Faccio', 'now', { role: 'artisan', preset: 'max' }), step('Provo', 'todo', { par: true }), step('Scrivo')]) }));
     expect(boxes.map(b => [b.n, b.title, b.wave, b.par ?? false, b.state])).toEqual([[1, 'Cerco', 1, false, 'done'], [2, 'Faccio', 2, true, 'now'], [3, 'Provo', 2, true, 'todo'], [4, 'Scrivo', 3, false, 'todo']]);
-    expect(boxes[0]).toMatchObject({ role: 'scout', model: 'opus', chatIds: ['k1'] });
+    expect(boxes[0]).toMatchObject({ role: 'scout', chatIds: ['k1'] });
+    expect(boxes[0]).not.toHaveProperty('model');
     expect(boxes[1]).toMatchObject({ role: 'artisan', preset: 'max' });
     expect(links).toEqual([{ from: 1, to: 2 }, { from: 1, to: 3 }, { from: 2, to: 4 }, { from: 3, to: 4 }]);
   });

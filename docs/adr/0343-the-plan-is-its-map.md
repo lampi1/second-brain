@@ -1,7 +1,8 @@
 # ADR 0343: The plan is its map, the maps are a list
 
 **Status:** Accepted (2026-11-24). Screens of ADR 0342. Amends ADR 0108 and 0312 (the plan's steps on the strip), 0269 (the
-plan's card among the questions), 0276 and 0326 (a plan approved on the project map).
+plan's card among the questions), 0276 and 0326 (a plan approved on the project map). Amended by ADR 0346 (a box shows
+role and preset, never a model).
 
 ## Context
 
@@ -11,7 +12,7 @@ steps were listed in three places (the questions' card, the strip, the project m
 
 ## Decision
 
-1. **One place for a plan: its work map** (`components/work-map/`). A box per step with its role, model and preset, the
+1. **One place for a plan: its work map** (`components/work-map/`). A box per step with its role and preset (no model since ADR 0346), the
    steps of one turn side by side, when it is done, the history. The stacked lists and their code are deleted:
    `PlanApproval.tsx`, `project-map/PlanCard.tsx`, the steps of `StrategyPanel.tsx`.
 2. **The buttons are `WorkMapInfo.can`, nothing else.** «Approva e parti» and «Approva, parti dopo» are two buttons;

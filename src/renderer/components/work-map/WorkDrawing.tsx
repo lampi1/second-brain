@@ -1,7 +1,7 @@
 // A work map's plan drawn (ADR 0343; the owner, 2026-11-23: «il piano che propone deve essere solo la mappa»): the steps as
 // boxes, one row per turn, an arrow from a turn to the following one; the steps of one turn sit in a dashed frame with a
-// point where the arrow splits and one where it joins, and a label that counts them live. A box says who does it (role,
-// model, preset), how far it is and what it is doing now, and carries its chats as buttons. The steps a replan takes away are under the drawing:
+// point where the arrow splits and one where it joins, and a label that counts them live. A box says who does it (role and
+// its card's preset, never a model: ADR 0346), how far it is and what it is doing now, and carries its chats as buttons. The steps a replan takes away are under the drawing:
 // they lead nowhere. Pure drawing: WorkMapView.tsx owns the map and the picked box.
 import type { ReactNode } from 'react';
 import { ROLE_DEFAULTS } from '@shared/roles';
@@ -35,7 +35,7 @@ function Box({ b, now, picked, onPick }: { b: WorkBox; now: number; picked: bool
   return <article className="wm-box" data-s={b.state} data-added={b.added ? '' : undefined} data-drop={b.drop ? '' : undefined} data-picked={picked ? '' : undefined} data-testid={`wm-box-${b.n}`}>
     <button type="button" className="wm-box-main" aria-pressed={picked} onClick={() => onPick(b.n)} data-testid={`wm-box-pick-${b.n}`}>
       <span className="wm-box-top"><i>{MARK(b)}</i><b>{withoutImages(b.title)}</b></span>
-      <span className="wm-box-who"><AgentAvatar avatar={{ kind: 'character', value: b.role ?? 'strategist' }} name={name} size={20} /><span data-testid={`wm-box-who-${b.n}`}>{who ? who.text : name}</span></span>
+      <span className="wm-box-who"><AgentAvatar avatar={{ kind: 'character', value: b.role ?? 'strategist' }} name={name} size={20} /><span data-testid={`wm-box-who-${b.n}`}>{who ?? name}</span></span>
       <span className="wm-box-state">
         <span>{stateOf(b, now)}</span>
         <LiveChip live={b.live} testid={`wm-box-live-${b.n}`} />

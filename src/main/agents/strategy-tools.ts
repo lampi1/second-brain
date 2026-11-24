@@ -33,32 +33,31 @@ export interface StrategyMaps {
   /** the element ids of a map */
   elementsOf(project: string): string[];
 }
-/** The model and preset of a step (2026-11-23: the map shows role · model · preset per step): a started step's from its
- *  chat, the others from the role card (catalog.presetChoice); the caller = the plan's Strategist, for its own steps. */
-export type StepModel = (callerId: string, step: PlanStep) => { preset?: PresetId; model?: string };
-/** The app's StepModel (wiring.ts): `chat` reads a chat, `card` = catalog.presetChoice for a role and a preset. */
-export function stepModelOf(chat: (id: string) => Pick<ChatSummary, 'model' | 'run' | 'agent'> | undefined, card: (roleId: string, preset?: PresetId) => { preset: PresetId; model: string | null } | null): StepModel {
-  const fromChat = (c: Pick<ChatSummary, 'model' | 'run'> | undefined) => c ? { ...(c.run?.presetChoice?.preset ? { preset: c.run.presetChoice.preset } : {}), ...(c.model ? { model: c.model } : {}) } : {};
+/** The preset of a step (ADR 0346: the plan names a preset, never a model): a started step's from its chat, the others
+ *  the one the plan asks, as the role card's guards would give it (catalog.presetChoice); the caller = the plan's
+ *  Strategist, for its own steps. */
+export type StepPreset = (callerId: string, step: PlanStep) => PresetId | undefined;
+/** The app's StepPreset (wiring.ts): `chat` reads a chat, `card` = catalog.presetChoice for a role and a preset. */
+export function stepPresetOf(chat: (id: string) => Pick<ChatSummary, 'run'> | undefined, card: (roleId: string, preset?: PresetId) => { preset: PresetId } | null): StepPreset {
   return (callerId, step) => {
     // a started step: what its last chat really runs on
     const started = step.state !== 'todo' && step.chatIds?.length ? chat(step.chatIds[step.chatIds.length - 1]!) : undefined;
-    if (started) return fromChat(started);
+    if (started) return started.run?.presetChoice?.preset;
     // a step the Strategist does itself: its own chat
-    if (!step.role) return fromChat(chat(callerId));
-    const c = card(step.role, step.preset);
-    return c ? { preset: c.preset, ...(c.model ? { model: c.model } : {}) } : {};
+    if (!step.role) return chat(callerId)?.run?.presetChoice?.preset;
+    return card(step.role, step.preset)?.preset;
   };
 }
-const withModels =(steps: PlanStep[], callerId: string, of?: StepModel): PlanStep[] => !of ? steps : steps.map(s => {
-  const m = of(callerId, s);
-  return { ...s, ...(m.preset ? { preset: m.preset } : {}), ...(m.model ? { model: m.model } : {}) };
+const withPresets =(steps: PlanStep[], callerId: string, of?: StepPreset): PlanStep[] => !of ? steps : steps.map(s => {
+  const preset = of(callerId, s);
+  return { ...s, ...(preset ? { preset } : {}) };
 });
 const onCheck =(steps: PlanStep[], ids: string[], what: string): void => {
   const bad = steps.filter(s => s.on !== undefined && !ids.includes(s.on)).map(s => s.on);
   if (bad.length) throw new Error(`${what}: no element ${bad.join(', ')} on the map. Its elements: ${ids.join(', ')} (new ones go in map.add).`);
 };
 
-export function strategyTools(chats: StrategyChats, away: () => boolean = () => false, maps?: StrategyMaps, stepModel?: StepModel): McpTool[] {
+export function strategyTools(chats: StrategyChats, away: () => boolean = () => false, maps?: StrategyMaps, stepPreset?: StepPreset): McpTool[] {
   const str = { type: 'string' };
   return [{
     name: 'plan_propose',
@@ -77,7 +76,7 @@ export function strategyTools(chats: StrategyChats, away: () => boolean = () => 
         detail: { ...str, description: 'optional: one short line on what the step covers, e.g. "carrello, ordine e reso"' },
         on: { ...str, description: 'the map element this step works on (an existing id, or one you add in map.add)' },
         par: { type: 'boolean', description: 'true = it does not depend on the step before it and runs together with it, in the same parallel group (delegated in the same agent_delegate call); leave out for a step that waits for the steps before it' },
-        preset: { type: 'string', enum: ['min', 'base', 'max'], description: 'the role card\'s preset for this step; leave out for Base; the map shows role · model · preset' },
+        preset: { type: 'string', enum: ['min', 'base', 'max'], description: 'the role card\'s preset for this step; leave out for Base. The map shows role · preset; the model is the card\'s when the step starts' },
       } } },
       map: { type: 'object', additionalProperties: false, description: 'the project map the plan is drawn on', properties: {
         project: { ...str, description: 'an existing map\'s name or id' }, title: { ...str, description: 'the project\'s name, when it has no map yet: only the pieces this work touches get drawn' },
@@ -109,7 +108,7 @@ export function strategyTools(chats: StrategyChats, away: () => boolean = () => 
         return JSON.stringify({ shown: false, openDoubts: [], note: 'Every doubt is closed: propose the plan with its steps.' });
       }
       const checked = revise ? checkRevision(plan!, rest) : checkProposal(rest);
-      const doneWhen = checked.doneWhen, steps = withModels(checked.steps, id, stepModel);
+      const doneWhen = checked.doneWhen, steps = withPresets(checked.steps, id, stepPreset);
       // «Modalità notte» (ADR 0191): the plan starts as proposed, with no list asked for; a revision was asked by the user
       const refused = plan && !away() && !revise ? proposalGate(plan, doubts !== undefined) : null;
       if (refused) throw new Error(refused);

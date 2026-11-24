@@ -1,4 +1,4 @@
-// A plan step on the map says who does it (role · model · preset, «previsto» before it starts), a parallel group says
+// A plan step on the map says who does it (role · preset, never the model: ADR 0346), a parallel group says
 // how many run live, and plan_propose takes a preset per step (project-map/plan-words.tsx whoOf/groupLabel, strategy.ts checkProposal,
 // projectmap/service.ts works()).
 import fs from 'node:fs';
@@ -16,10 +16,12 @@ import { ProjectMapStore } from '../../src/main/projectmap/store';
 const step = (n: number, state: StepWords['state'], wave: number, more: Partial<StepWords> = {}): StepWords => ({ n, state, wave, ...more });
 
 describe('whoOf', () => {
-  it('tells role · model · preset, and «previsto» for a step not started', () => {
-    expect(whoOf(step(1, 'todo', 1, { role: 'artisan', model: 'claude-sonnet-5-5', preset: 'base' }))).toEqual({ text: 'Artisan · Sonnet 5.5 · Base', planned: true });
-    expect(whoOf(step(2, 'now', 1, { role: 'scout', model: 'claude-haiku-5-5', preset: 'min' }))).toEqual({ text: 'Scout · Haiku 5.5 · Minimo', planned: false });
-    expect(whoOf(step(3, 'todo', 1, { role: 'scout', model: 'claude-haiku-5-5', chatIds: ['c'] }))!.planned).toBe(false);
+  it('tells role · preset and never a model (ADR 0346), started or not', () => {
+    expect(whoOf(step(1, 'todo', 1, { role: 'artisan', preset: 'base' }))).toBe('Artisan · Base');
+    expect(whoOf(step(2, 'now', 1, { role: 'scout', preset: 'min', chatIds: ['c'] }))).toBe('Scout · Minimo');
+    expect(whoOf(step(3, 'todo', 1, { role: 'scout' }))).toBe('Scout');
+    // a model that reached the words by mistake is not shown
+    expect(whoOf({ ...step(4, 'todo', 1, { role: 'artisan', preset: 'max' }), model: 'claude-sonnet-5-5' } as StepWords)).toBe('Artisan · Massimo');
   });
   it('is nothing for a step the Strategist does itself', () => {
     expect(whoOf(step(1, 'todo', 1))).toBeNull();
@@ -52,29 +54,28 @@ describe('plan_propose preset', () => {
   });
 });
 
-describe('the map flow tells the model and the preset', () => {
+describe('the map flow tells the preset, never the model', () => {
   let dir: string, maps: ProjectMaps, chats: ChatSummary[];
   const chat = (p: Partial<ChatSummary> & { id: string }): ChatSummary => ({ harness: 'claude', origin: 'app', title: p.id, cwd: '/repo/shop', sessionId: null, model: null, effort: null, permissionMode: null,
     state: 'running', costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: 0, browserTabIds: [], ...p });
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-planwho-'));
     chats = [];
-    maps = new ProjectMaps({ store: new ProjectMapStore(() => dir), chats: () => chats, items: () => [], pending: () => [], emit: () => {}, stateFile: path.join(dir, 's.json'),
-      plannedModel: (role, preset) => (role === 'artisan' ? `m-${preset}` : null) });
+    maps = new ProjectMaps({ store: new ProjectMapStore(() => dir), chats: () => chats, items: () => [], pending: () => [], emit: () => {}, stateFile: path.join(dir, 's.json') });
     maps.save({ title: 'Shop', root: '/repo/shop', map: { elements: [{ id: 'web', name: 'Web', kind: 'system', state: 'ok' }], links: [] } as never, by: 'Scout', summary: 'x' });
   });
   afterEach(() => { maps.stop(); fs.rmSync(dir, { recursive: true, force: true }); });
 
-  it('a step not started shows the role card model of its preset as planned; a started one reads its chat', () => {
+  it('a step not started shows the preset the plan asks (Base when none); a started one its chat\'s preset; no model', () => {
     const plan: StrategyPlan = { phase: 'running', clarified: [], at: 1, map: 'shop', steps: [
       { title: 'Faccio', role: 'artisan', preset: 'max', state: 'todo' },
       { title: 'Provo', role: 'artisan', state: 'todo' },
       { title: 'Leggo', role: 'scout', state: 'now', chatIds: ['a1'] }] };
-    chats = [chat({ id: 's1', title: 'Strategist', plan }), chat({ id: 'a1', model: 'claude-haiku-5-5' })];
+    chats = [chat({ id: 's1', title: 'Strategist', plan }), chat({ id: 'a1', model: 'claude-haiku-5-5', run: { runId: 'r1', presetChoice: { preset: 'min' } } as never })];
     const flow = maps.view('shop')!.plans[0]!.flow;
-    expect(flow[0]).toMatchObject({ role: 'artisan', model: 'm-max', preset: 'max', planned: true });
-    expect(flow[1]).toMatchObject({ model: 'm-base', preset: 'base', planned: true });
-    expect(flow[2]).toMatchObject({ role: 'scout', model: 'claude-haiku-5-5' });
-    expect(flow[2]).not.toHaveProperty('planned');
+    expect(flow[0]).toMatchObject({ role: 'artisan', preset: 'max' });
+    expect(flow[1]).toMatchObject({ preset: 'base' });
+    expect(flow[2]).toMatchObject({ role: 'scout', preset: 'min' });
+    for (const f of flow) { expect(f).not.toHaveProperty('model'); expect(f).not.toHaveProperty('planned'); }
   });
 });

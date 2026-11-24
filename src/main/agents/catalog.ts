@@ -15,7 +15,7 @@ import { characterOf, isCharacterId } from '../../shared/characters';
 import { readLocal, writeLocal } from './local-store';
 import { AgentHistory, behaviourOf, firstVersion, sameBehaviour, versionedChanges } from './versions';
 import { checkedTools, type AgentPolicy } from './tool-policy';
-import { CARD_MODEL, PRESET_IDS, type PresetId, cardPresets, checkedPresets, choosePreset, presetAskOf, presetNamed, presetOrderProblem, type Delegator, type FullPresets, type PresetAsk, type PresetChoice, type RolePresets, type UnitPrice } from '../../shared/model-presets';
+import { CARD_MODEL, PRESET_IDS, cardPresets, checkedPresets, choosePreset, presetAskOf, presetNamed, presetOrderProblem, type Delegator, type FullPresets, type PresetAsk, type PresetChoice, type RolePresets, type UnitPrice } from '../../shared/model-presets';
 import { fiveRolesTextFor, fullDefaultsFor, shippedTextFor, skillAlignmentFor } from './role-migrate';
 import { engineOf } from '../engines/registry';
 import { log, errText } from '../log';
@@ -558,10 +558,13 @@ export class AgentCatalogService {
 
   /** The three presets of a role's card (ADR 0336): Base = its model, else its tier's on its engine. */
   presetsOf(p: AgentProfile): FullPresets { return cardPresets(p, this.d.tierModel?.(p.engine, p.tier) ?? null); }
-  /** The model a role's card has for one of its presets (null: unknown role or no model): the map's «previsto». */
-  plannedModel(roleId: string, preset: PresetId): string | null {
-    const p = this.profiles.find(x => x.id === roleId);
-    return p ? this.presetsOf(p)[preset].model : null;
+  /** What a role's card gives a chat of that role now, for a preset (ADR 0346: a chat that waited on its credits
+   *  follows its card): the card's engine and that preset's model and effort, as a launch would get them (resolve's
+   *  guards; nothing started). Throws as resolve does: engine off, a model the engine cannot apply. */
+  cardNow(roleId: string, ask: PresetAsk, delegator?: Delegator): { engine: Harness; model: string | null; effort: Effort | null } {
+    const p = this.find(roleId);
+    const r = this.resolve({ harness: p.engine, cwd: '', roleId, ...ask, ...(delegator ? { delegator } : {}) } as NewChat);
+    return { engine: r.request.harness, model: r.request.model ?? null, effort: r.request.effort ?? null };
   }
   /** The preset a delegation of `roleId` would get (resolve's guards, nothing started). */
   presetChoice(roleId: string, ask: PresetAsk, delegator?: Delegator): PresetChoice {
