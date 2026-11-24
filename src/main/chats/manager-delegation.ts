@@ -60,7 +60,8 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     if (result.verdict !== undefined || result.verified !== undefined) throw new Error('Delegated reports cannot claim independent review fields.');
     if (this.closedByUser(r)) throw new Error('agent_report: the user closed this chat and cancelled its work; nothing more is needed. Stop here.');
     this.checkReportVersion(r, result);
-    if (r.s.plan && result.outcome !== 'blocked') r.s.plan = finishPlan(r.s.plan, Date.now());
+    // a plan kept for later is not over with the chat's report (ADR 0342)
+    if (r.s.plan && r.s.plan.phase !== 'approved' && result.outcome !== 'blocked') r.s.plan = finishPlan(r.s.plan, Date.now());
     // a correction (amends: true) replaces the result already given, up to MAX_CORRECTIONS; without amends a second
     // report is refused as before, and amends on the first report is just the first report
     const correction = this.correctionNumber(d.result ? d.result.corrections ?? 0 : null, result, 'delegation');
@@ -135,7 +136,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
       const last = r.s.lastResult;
       if (!last || last.isError || last.interrupted || r.session?.busy || r.working || r.pending.size > 0 || r.s.queued || r.handoffTurn || r.deliveryHolds) return;
       if ((r.s.background ?? 0) > 0 || r.s.waitsOn || r.s.waitsOnWork || r.askedParentAt !== undefined || this.delegatedBusy(r.s.id) || (r.s.agentChildren?.active ?? 0) > 0) return;
-      if (r.s.plan?.phase === 'proposed' || r.s.plan?.phase === 'asking' || r.s.plan?.phase === 'revising') return;
+      if (r.s.plan?.phase === 'proposed' || r.s.plan?.phase === 'asking' || r.s.plan?.phase === 'revising' || r.s.plan?.phase === 'approved' || r.s.plan?.stopped) return;
       if (!r.reportNudged) {
         r.reportNudged = true;
         log.info('chats', 'delegated chat ended its turn without agent_report: told once', { chat: r.s.id, data: { parent: r.s.parentId } });
@@ -263,7 +264,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     if (review && (!['success', 'partial', 'fail'].includes(result.verdict ?? '') || !['yes', 'partial', 'no'].includes(result.verified ?? ''))) throw new Error('Independent reviews require explicit verdict and verified fields.');
     if (review && (run.endedAt !== undefined || r.s.closedAt)) throw new Error('The review assignment has already ended.');
     this.checkReportVersion(r, result);
-    if (r.s.plan && result.outcome !== 'blocked') r.s.plan = finishPlan(r.s.plan, Date.now());
+    if (r.s.plan && r.s.plan.phase !== 'approved' && result.outcome !== 'blocked') r.s.plan = finishPlan(r.s.plan, Date.now());
     const reported = run.report?.via === 'agent_report' || r.rootReportAt !== undefined && r.rootReportAt >= (r.s.work?.updatedAt ?? 0);
     // a correction goes the same way as the first result, with the same delivery policy: display and notify stay a
     // notice (no Orchestrator turn of its own), synthesize asks for a synthesis again

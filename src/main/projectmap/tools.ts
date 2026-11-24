@@ -19,12 +19,15 @@
 // - The map follows the chats (issue #456, ADR 0330): a chat linked to pieces (working_on by itself; `map` on
 //   app_create_chat / app_assign_task or app_project_map link by the Orchestrator: mapLinkOf, mapHint) moves their
 //   status by itself; a box with pieces inside takes its status from them, whatever status is sent for it.
+// - The work maps (ADR 0342): app_project_map's job actions are in workmap/tools.ts.
 // Used by wiring-shared.ts (chat tools) and appctl/tools.ts (the Orchestrator's); pinned by test/unit/projectmap-tools.test.ts.
 import type { EventMap } from '@shared/contract';
 import { EDIT_OPS, MAP_ACTORS, MAP_KINDS, MAP_LAYOUTS, MAP_LIMITS, MAP_STATES, elementText, mapText, type ProjectMap, type ProjectMapView } from '@shared/project-map';
 import { progressLine, progressOf, workingOf } from '@shared/project-map-progress';
 import type { McpTool } from '../mcp/server';
 import type { ProjectMaps } from './service';
+import type { WorkMaps } from '../workmap/service';
+import { isJobAction, jobAction, JOB_ACTIONS, JOB_PROPS, JOB_TEXT } from '../workmap/tools';
 
 const json = (v: unknown) => JSON.stringify(v);
 /** A map as text for a read, closed by how far the project is (ADR 0326): the number the user sees on the map. */
@@ -181,20 +184,21 @@ export function pathBrief(map: ProjectMap, question: string): string {
   ].join('\n');
 }
 
-export function appProjectMapTool(maps: ProjectMaps, emitUi: (cmd: EventMap['ui:command']) => void): Tool {
+export function appProjectMapTool(maps: ProjectMaps, emitUi: (cmd: EventMap['ui:command']) => void, jobs?: WorkMaps): Tool {
   return {
     name: 'app_project_map',
-    description: 'The user\'s project maps (Mappa page → Progetti, ADR 0271): each project drawn as people, systems, parts, environments and links, with their status, who must act, the agents at work on each part and the history from the first drawing. Use it when the user asks how a project is built, where it stands, or for its map, diagram, schema, lines («fili»): open shows the real map in a window (never draw your own diagram of a project with app_show_ui); none drawn yet → brief a Scout. action: list | read (the map as text, to answer; with element = that piece in full: how it works, its files, every link with what goes along it) | open (the maps window on screen, at project, element = a system to step into; no project = the maps window as it is) | brief (the task for a Scout chat that draws or redraws it: pass title and root for a new one, then start the Scout with app_create_chat, cwd = root; with question = the user\'s question about the project, the Scout answers it as a path on the map, a walk box by box) | correct (text = the user\'s correction, kept for every later drawing; then brief a redraw if the drawing must change) | edit (ops = the pieces the talk with the user adds, changes or removes, at once and without a redraw: only you change a map, the user never does by hand; a new piece is «previsto», dashed, until work starts on it; read first for the ids; say what changed in one line) | undo (the last change comes back) | link (chatId + elements = the pieces a work chat works on; [] unlinks; the same as `map` on app_create_chat / app_assign_task). A linked chat moves its pieces by itself, no status edit: under way when it starts, stuck while it waits for the user or fails, done when it reports done. A box with pieces inside always shows what they say together (all done = done, one under way = under way, one stuck = stuck): set statuses on the pieces, link the piece worked on. The user\'s message says which map and box he looks at ([app · the user looks at …]): «qui», «questo» mean that one. Work planned in Plan mode is drawn by its Strategist; to change a plan under way, write to that Strategist (app_send_to_chat).',
+    description: 'The user\'s project maps (Mappa page → Progetti, ADR 0271): each project drawn as people, systems, parts, environments and links, with their status, who must act, the agents at work on each part and the history from the first drawing. Use it when the user asks how a project is built, where it stands, or for its map, diagram, schema, lines («fili»): open shows the real map in a window (never draw your own diagram of a project with app_show_ui); none drawn yet → brief a Scout. action: list | read (the map as text, to answer; with element = that piece in full: how it works, its files, every link with what goes along it) | open (the maps window on screen, at project, element = a system to step into; no project = the maps window as it is) | brief (the task for a Scout chat that draws or redraws it: pass title and root for a new one, then start the Scout with app_create_chat, cwd = root; with question = the user\'s question about the project, the Scout answers it as a path on the map, a walk box by box) | correct (text = the user\'s correction, kept for every later drawing; then brief a redraw if the drawing must change) | edit (ops = the pieces the talk with the user adds, changes or removes, at once and without a redraw: only you change a map, the user never does by hand; a new piece is «previsto», dashed, until work starts on it; read first for the ids; say what changed in one line) | undo (the last change comes back) | link (chatId + elements = the pieces a work chat works on; [] unlinks; the same as `map` on app_create_chat / app_assign_task). A linked chat moves its pieces by itself, no status edit: under way when it starts, stuck while it waits for the user or fails, done when it reports done. A box with pieces inside always shows what they say together (all done = done, one under way = under way, one stuck = stuck): set statuses on the pieces, link the piece worked on. The user\'s message says which map and box he looks at ([app · the user looks at …]): «qui», «questo» mean that one. Work planned in Plan mode is drawn by its Strategist; to change a plan under way, write to that Strategist (app_send_to_chat).' + (jobs ? ` ${JOB_TEXT}` : ''),
     inputSchema: { type: 'object', properties: {
-      action: { type: 'string', enum: ['list', 'read', 'open', 'brief', 'correct', 'edit', 'undo', 'link'] },
+      action: { type: 'string', enum: ['list', 'read', 'open', 'brief', 'correct', 'edit', 'undo', 'link', ...(jobs ? JOB_ACTIONS : [])] },
+      ...(jobs ? JOB_PROPS : {}),
       chatId: { type: 'string', description: 'link: the work chat' },
       elements: { type: 'array', items: { type: 'string' }, maxItems: 20, description: 'link: the element ids it works on ([] = none any more)' },
       project: { type: 'string', description: 'the map\'s name or id' },
       element: { type: 'string', description: 'open: a system to zoom into; read: the piece to tell in full' },
-      title: { type: 'string', description: 'brief: the new project\'s name' },
+      title: { type: 'string', description: 'brief: the new project\'s name; idea: the idea in one line' },
       root: { type: 'string', description: 'brief: the project\'s folder on this PC' },
       question: { type: 'string', description: 'brief: a question about the project to answer as a path on the map' },
-      text: { type: 'string', description: 'correct: the user\'s correction, in their words' },
+      text: { type: 'string', description: 'correct: the user\'s correction, in their words; idea: the idea in full; replan: what to change' },
       ops: { type: 'array', maxItems: 40, description: 'edit: the changes, in order', items: { type: 'object', required: ['op'], properties: {
         op: { type: 'string', enum: [...EDIT_OPS], description: 'add (name, kind, parent for a part or a step; before = the id it comes before, else last) | set (id + what changes; before moves it in the order) | remove (id; its parts and links go too) | link (from, to, label; next: true = the arrow to the following step) | unlink (id)' },
         id: { type: 'string' }, name: { type: 'string' }, kind: { type: 'string', enum: [...MAP_KINDS] }, description: { type: 'string' }, details: { type: 'string', description: 'how it works (an element) or what goes along it in full (a link)' }, parent: { type: 'string' },
@@ -204,6 +208,7 @@ export function appProjectMapTool(maps: ProjectMaps, emitUi: (cmd: EventMap['ui:
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: a => {
       const action = String(a.action);
+      if (jobs && isJobAction(action)) return jobAction(jobs, action, a) as ReturnType<Tool['run']>;
       if (action === 'list') return { projects: maps.list() };
       if (action === 'brief') {
         const prev = typeof a.project === 'string' && a.project ? maps.view(projectOf(maps, a.project))?.map ?? null : null;
@@ -232,7 +237,7 @@ export function appProjectMapTool(maps: ProjectMaps, emitUi: (cmd: EventMap['ui:
       if (action === 'edit') { const r = maps.edit(project, a.ops, 'Orchestrator'); return { ok: true, version: r.map.version, changed: r.did, added: r.added }; }
       if (action === 'undo') { const m = maps.undo(project, 'Orchestrator'); return { ok: true, version: m.version, summary: m.summary }; }
       if (action === 'link') { const r = maps.link(project, typeof a.chatId === 'string' ? a.chatId : '', a.elements); return { ok: true, project: r.project, linked: r.elements }; }
-      throw new Error('action: list | read | open | brief | correct | edit | undo | link');
+      throw new Error(`action: list | read | open | brief | correct | edit | undo | link${jobs ? ` | ${JOB_ACTIONS.join(' | ')}` : ''}`);
     },
   };
 }

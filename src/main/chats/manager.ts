@@ -54,7 +54,7 @@ import { ownerSource, type TaskSource } from '../../shared/delegation';
 import { answerableInWords } from '../../shared/answer-in-words';
 import { PHONE_REPLY_HINT } from './phone-reply';
 import { forEngine } from './agent-message';
-import { isPlanApproval, stopsQuestions, askingPlan, strategyPrompt, type IntakeSource } from '../../shared/strategy';
+import { isPlanApproval, stopsQuestions, askingPlan, strategyPrompt, type IntakeSource, type StrategyPlan } from '../../shared/strategy';
 import { isCorrection } from '../../shared/correction';
 import { initialEffort, selectEffort } from './effort';
 import { orchestratorRole, roleFrame } from '../agents/orchestrator-role';
@@ -137,7 +137,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
 
   /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
   /** by: who asks; 'app' = one of the app's own jobs (the sampled Sentinel reviews, agents/judge-sample.ts): like an agent, its run says startedBy 'app' */
-  override async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { boundByOrchestrator?: boolean; intake?: IntakeSource; continuation?: boolean; continuationOf?: string } = {}): Promise<ChatSummary> {
+  override async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { boundByOrchestrator?: boolean; intake?: IntakeSource; resumePlan?: StrategyPlan; workMap?: string; continuation?: boolean; continuationOf?: string } = {}): Promise<ChatSummary> {
     const createdT0 = Date.now();
     this.deliveryPolicy(req.deliveryPolicy, !!req.parentId);
     if (req.doneWhen && (req.doneWhen.length > 12 || req.doneWhen.some(x => typeof x !== 'string' || !x.trim() || x.length > 300))) throw new Error('Invalid task criteria.');
@@ -244,7 +244,10 @@ export class ChatManager extends ManagerRemote implements ChatService {
     // a Strategist the Orchestrator opens for the user (its «Strategist» send mode) asks the user, proposes a plan and
     // shows its progress on its strip (ADR 0108): the app's fixed flow follows the request, the plan starts asking
     const strategist = by === 'agent' && agent.owner.source === 'catalog' && agent.owner.id === 'strategist' && !delegator && !req.orchestrator;
-    const plan = strategist && given ? askingPlan(now, opts.intake && this.planIntake(opts.intake)) : undefined;
+    const asking = strategist && given ? askingPlan(now, opts.intake && this.planIntake(opts.intake)) : undefined, resume = opts.resumePlan;
+    // a work map's job goes on in a new chat (ADR 0342): the answers the user already gave are kept
+    const plan = asking && resume ? { ...asking, clarified: resume.clarified, ...(resume.pcOnly ? { pcOnly: true as const } : {}), ...(resume.asked ? { asked: resume.asked } : {}), ...(resume.enough ? { enough: true as const } : {}) } : asking;
+    const continued = opts.continuationOf ? this.chats.get(opts.continuationOf) : undefined;
     const prompt = given && pack ? `${given}\n\n${pack}` : given && plan ? `${given}\n\n${strategyPrompt(plan)}` : given;
     // a root chat the Orchestrator opens while answering the user's own message is the user's request: like his own
     // messages (ADR 0036) it never waits for the CPU queue (a start of 10-25 s was then followed by the queue's wait)
@@ -269,6 +272,9 @@ export class ChatManager extends ManagerRemote implements ChatService {
         ...(req.route ? { route: req.route } : {}),
         ...(delegator ? { parentId: delegator.s.id, ...(req.delegation ? { delegation: req.delegation } : {}) } : {}),
         ...(plan ? { plan } : {}),
+        // known from the first event on: the job's work map (ADR 0342) moves to this chat instead of a second one
+        ...(opts.workMap ? { workMap: opts.workMap } : {}),
+        ...(continued ? { continuedFrom: { id: continued.s.id, title: continued.s.title } } : {}),
         ...(agent.assets && agent.skills?.length ? { loadedSkills: [...agent.skills] } : {}),
       },
       createdAt: now,
@@ -394,6 +400,8 @@ export class ChatManager extends ManagerRemote implements ChatService {
       && !checkImages(images).length && isPlanApproval(text)) {
       return this.decidePlan(chatId, 'approve', r.s.plan.at, undefined, text, receipt);
     }
+    if (!resumed && !liveOnly && from === undefined && (!source || source.kind === 'user') && !phone && r.s.plan?.phase === 'approved' && !r.s.plan.stopped
+      && !checkImages(images).length && isPlanApproval(text)) return this.planStart(chatId, text, receipt);
     // its parent's message (agent_answer_child, from = the parent's title) reached it: the answer it waited for
     if (from !== undefined && r.s.parentId && from === this.chats.get(r.s.parentId)?.s.title) delete r.askedParentAt;
     if (!resumed && from === undefined && ownerSource(source)) {

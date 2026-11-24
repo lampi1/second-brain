@@ -41,7 +41,7 @@ import { log, errText } from './log';
 import { McpServer, mcpPortFromEnv } from './mcp/server';
 import { demoMcpServers } from './mcp-servers/demo';
 import { recordMcpPort } from './health';
-import { attachArtifacts, attachCommandAsks, attachOrchestratorWake, attachRunResults, commandRunner, createAppSource, createLater, attachAppTools, attachProjectMaps } from './wiring-shared';
+import { attachArtifacts, attachCommandAsks, attachOrchestratorWake, attachRunResults, commandRunner, createAppSource, createLater, attachAppTools, attachProjectMaps, attachWorkMaps } from './wiring-shared';
 import { seedDemoMap } from './projectmap/demo';
 import type { Ctx, Wired } from './wiring-types';
 import { attachHeldNews } from './chats/held-news';
@@ -226,7 +226,8 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   // the project maps (ADR 0271): the demo brain holds one, the shop the demo chats work on
   const projectMaps = attachProjectMaps(ctx, chats, () => demoBrainRoot, undefined, now, (role, preset) => agents.plannedModel(role, preset)); // no chat endpoints in the demo
   seedDemoMap(demoBrainRoot, projectMaps, now());
-  attachAppTools(mcp, { projectMaps, recordings, impara: learn, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), resolveRole: req => agents.resolve(req), runFeedback, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd) }, source, true);
+  const workMaps = attachWorkMaps(ctx, chats, projectMaps, brain, now);
+  attachAppTools(mcp, { projectMaps, workMaps, recordings, impara: learn, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), resolveRole: req => agents.resolve(req), runFeedback, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd) }, source, true);
   try { recordMcpPort(mcpPortFromEnv(), await mcp.listen(mcpPortFromEnv())); } catch (e) {
     log.warn('demo', 'MCP port busy, using a random one', { data: { error: errText(e) } });
     recordMcpPort(mcpPortFromEnv(), await mcp.listen(0), errText(e)); // the banner shows in the demo too (e2e)
@@ -342,7 +343,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   if (!news.state().items.length) void news.refresh();
 
   return {
-    morning, news, projectMaps,
+    morning, news, projectMaps, workMaps,
     chats, browser, recordings, learn, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, engines, later: createLater(ctx),
     agents, runFeedback, agentLifecycle, agentPacks, brainModel, research, queries, memoryReview, learningReview,
     setup: new SetupService(ctx.userData, true, now),

@@ -32,6 +32,7 @@ import { applyChanges, applyEdit, checkMap, checkPaths, elementOfFile, isMapId, 
 import { leavesOf, settle, spread, stateLabel, statusesOf, waitingOf } from '@shared/project-map-status';
 import { planWaves, type PlanStep } from '@shared/strategy';
 import type { PresetId } from '@shared/model-presets';
+import type { WorkMapInfo } from '@shared/work-map';
 import { askLine } from '../appctl/digest';
 import { markOf, progressOf } from '../appctl/agents-recap';
 import { errText, log } from '../log';
@@ -137,11 +138,19 @@ export class ProjectMaps {
     return all.find(m => m.project === n)?.project ?? all.find(m => m.title.toLowerCase() === n)?.project ?? all.find(m => m.project === projectSlug(name))?.project ?? null;
   }
 
+  /** The work maps that touch a project (ADR 0342), set by the work maps' own service (wiring-shared.ts). */
+  jobsOf: ((project: string) => WorkMapInfo[]) | null = null;
+
+  /** The maps a chat works in or on: the one it was linked to, the one of its folder. */
+  projectsOf(chat: Pick<ChatSummary, 'id' | 'cwd'>): string[] {
+    return [...new Set([this.state.focus[chat.id]?.project, this.mapOfFolder(chat.cwd)?.project])].filter((p): p is string => !!p);
+  }
+
   view(project: string, version?: number): ProjectMapView | null {
     const map = version === undefined ? this.d.store.get(project) : this.d.store.version(project, version);
     if (!map) return null;
     const { works, plans } = version === undefined ? this.works(project) : { works: {}, plans: [] };
-    return { map: version === undefined ? this.live(map, works, this.now()) : map, history: this.d.store.history(project), agents: this.agents(project), changed: this.state.changed[project] ?? {}, works, plans };
+    return { map: version === undefined ? this.live(map, works, this.now()) : map, history: this.d.store.history(project), agents: this.agents(project), changed: this.state.changed[project] ?? {}, works, plans, ...(version === undefined && this.jobsOf ? { jobs: this.jobsOf(project) } : {}) };
   }
 
   /** The current version as it shows right now: what the plans' steps and the linked chats add to the saved file. */

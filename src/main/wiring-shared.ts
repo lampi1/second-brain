@@ -2,7 +2,7 @@
 // tools, «Rispondi dopo», the «Esegui» runner and its requests, the emitter taps (Orchestrator wake, run results,
 // show_ui visuals), «Aggiorna» from GitHub and the role catalog. Each takes what it needs; none keeps state here.
 import { app } from 'electron';
-import type { CliStatus, Harness, ModelRegistry, RunInfo, SeenModel } from '../shared/contract';
+import type { ChatSummary, CliStatus, Harness, ModelRegistry, RunInfo, SeenModel } from '../shared/contract';
 import { isNativeQuestion, isYesNo } from '../shared/yes-no';
 import { codeModeLevel, type AgentModelChoice } from '../shared/agents';
 import type { PresetId } from '../shared/model-presets';
@@ -29,6 +29,9 @@ import { precheckCommand } from './run/precheck';
 import { ProjectMapStore } from './projectmap/store';
 import { ProjectMaps } from './projectmap/service';
 import { chatMapTools } from './projectmap/tools';
+import { WorkMapStore } from './workmap/store';
+import { WorkMaps } from './workmap/service';
+import { strategistStarter } from './workmap/start';
 import { OrchestratorWake } from './chats/orchestrator-wake';
 import { AppSourceService, cleanEnv, findNode } from './update/source';
 import { spawn } from 'node:child_process';
@@ -165,6 +168,22 @@ export function attachProjectMaps(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats:
   const send = ctx.emitter.emit.bind(ctx.emitter);
   ctx.emitter.emit = (ch, p) => { send(ch, p); maps.observe(ch, p); };
   addChatTools?.(chatMapTools({ maps, titleOf: id => chats.list().find(c => c.id === id)?.title ?? null, cwdOf: id => chats.list().find(c => c.id === id)?.cwd ?? null }));
+  return maps;
+}
+
+/** The work maps (ADR 0342): one per Strategist job or idea, kept by the app from the chats' own events (the emitter
+ *  tapped once more); in the app's data, so they outlive the chats and a restart. */
+export function attachWorkMaps(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: ChatService, projectMaps: ProjectMaps, brain: Pick<BrainService, 'info' | 'settings'>, now?: () => number): WorkMaps {
+  const folderOf = (project: string | undefined): string | null => (project ? projectMaps.view(project)?.map.root ?? null : null);
+  const orchestrator = (): ChatSummary | undefined => chats.list().find(c => c.isOrchestrator && !c.closedAt);
+  const maps = new WorkMaps({ store: new WorkMapStore(path.join(ctx.userData, 'work-maps')), chats, emit: id => ctx.emitter.emit('workmap:changed', { id }),
+    projectsOf: c => projectMaps.projectsOf(c), projectNamed: name => projectMaps.resolve(name),
+    startStrategist: strategistStarter({ chats, harness: () => brain.settings().orchestratorChats.harness,
+      folderOf: m => [m.project, ...m.touches].map(folderOf).find(f => f && fs.existsSync(f)) ?? orchestrator()?.cwd ?? brain.info().brainRoot }), ...(now ? { now } : {}) });
+  const send = ctx.emitter.emit.bind(ctx.emitter);
+  ctx.emitter.emit = (ch, p) => { send(ch, p); maps.observe(ch, p); };
+  projectMaps.jobsOf = project => maps.touching(project);
+  maps.adopt();
   return maps;
 }
 

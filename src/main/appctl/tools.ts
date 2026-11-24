@@ -81,6 +81,7 @@ import { agentsRecapTool } from './agents-recap';
 import { MAP_LINK_SCHEMA, appProjectMapTool, mapHint, mapLinkOf } from '../projectmap/tools';
 import { userShellName } from '../platform';
 import type { ProjectMaps } from '../projectmap/service';
+import type { WorkMaps } from '../workmap/service';
 import { skillTools } from './skills';
 import type { SkillLibrary } from '../skills/library';
 
@@ -123,6 +124,8 @@ export interface AppCtlDeps {
   brainScripts?: { scripts: BrainScripts; changelog: BrainChangelog };
   /** the project maps (ADR 0271): app_project_map on the Orchestrator's own endpoint */
   projectMaps?: ProjectMaps;
+  /** the work maps (ADR 0342): the job actions of app_project_map */
+  workMaps?: WorkMaps;
   /** the call recordings (ADR 0154): app_recordings / app_recording_import on the Orchestrator's own endpoint */
   recordings?: RecordingsRead;
   /** the skill library (ADR 0241): app_skills / app_skill_write / app_skill_roles / app_skill_undo on the Orchestrator's own endpoint */
@@ -255,7 +258,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     ...(d.brainScripts && authed() ? scriptWriteTools(d.brainScripts.scripts, d.brainScripts.changelog, () => caller()?.title || 'Orchestrator') : []),
     ...(d.agents ? [toolDef(agentCatalogTool(d.agents, d.skillTools))] : []),
     ...(d.recordings && authed() ? recordingTools(d.recordings, d.emitUi) : []),
-    ...(d.projectMaps && authed() ? [appProjectMapTool(d.projectMaps, d.emitUi)] : []),
+    ...(d.projectMaps && authed() ? [appProjectMapTool(d.projectMaps, d.emitUi, d.workMaps)] : []),
     ...(d.impara && authed() ? imparaTools(d.impara, d.emitUi, () => imparaAsked(callerId!)) : []),
     ...(d.news && authed() ? newsTools(d.news, d.emitUi) : []),
     ...(d.skillLibrary && authed() ? skillTools(d.skillLibrary, () => caller()?.title || 'Orchestrator') : []),

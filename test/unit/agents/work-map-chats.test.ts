@@ -1,0 +1,278 @@
+// Work maps on a real ChatManager with fake engines and the real store (ADR 0342): a Strategist has a map with no map call,
+// plan_propose without a map cannot leave it without one, a plan approved and kept starts later, a replan of a running
+// job keeps what started and starts nothing new before the approval, the removed step stops at that approval, stop and
+// resume, a closed chat leaves its map stopped, a restart keeps maps and plans, an old plan gets its map once.
+// Pins workmap/service.ts with chats/manager-work.ts planDecide (keep), planStart, planStop, planResume, planReplan and
+// planPutAway, shared/strategy.ts (approved, stopped, drop, remove) and manager.ts create (workMap, resumePlan).
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { ChatManager } from '../../../src/main/chats/manager';
+import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
+import { delegationTools } from '../../../src/main/agents/delegation';
+import { strategyTools } from '../../../src/main/agents/strategy-tools';
+import { CoordinationStore } from '../../../src/main/coordination/store';
+import { WorkMaps } from '../../../src/main/workmap/service';
+import { strategistStarter } from '../../../src/main/workmap/start';
+import { WorkMapStore } from '../../../src/main/workmap/store';
+import type { AgentCatalog } from '../../../src/shared/agents';
+import type { NewChat } from '../../../src/shared/contract';
+import { DELEGATION_DEFAULTS, isWorkRole, ROLE_DEFAULTS, ROLE_IDS, type RoleId } from '../../../src/shared/roles';
+import { ENOUGH_QUESTIONS, PLAN_APPROVED, PLAN_REPLAN, PLAN_RESUMED } from '../../../src/shared/strategy';
+
+const roots: string[] = [], managers: ChatManager[] = [];
+afterEach(async () => { for (const m of managers.splice(0)) await m.shutdown(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
+
+const catalog = (): AgentCatalog => ({ problem: null, archived: [], models: [], profiles: ROLE_IDS.map(id => {
+  const r = ROLE_DEFAULTS[id];
+  return { id, name: r.name, purpose: r.summary, scope: 'role', engine: 'claude', model: null, tier: r.tier, tierMax: r.tierMax, launches: [...r.launches], skills: r.skills, tools: { allow: [...r.tools] }, permissionCeiling: r.ceiling, activeVersion: 1, updatedAt: 1, instructions: r.instructions };
+}) } as unknown as AgentCatalog);
+
+/** A manager and the maps over it, on a folder: a second call on the same folder is a restart. */
+function fixture(opts: { dir?: string; away?: boolean; withMaps?: boolean } = {}) {
+  const dir = opts.dir ?? fs.mkdtempSync(path.join(os.tmpdir(), 'sb-workmap-'));
+  if (!opts.dir) roots.push(dir);
+  const sinks = new Map<string, SessionSink>(), sent = new Map<string, string[]>(), interrupted: string[] = [];
+  let maps: WorkMaps | undefined;
+  const m = new ChatManager({ userData: dir, emitter: { emit: (ch: string, p: unknown) => maps?.observe(ch, p) } as never, coldEveryMs: 0, runEveryMs: 0, away: () => !!opts.away,
+    resolveAgent: (req: NewChat) => {
+      const id = req.orchestrator ? 'orchestrator' : req.roleId as RoleId | undefined;
+      if (!id || (!isWorkRole(id) && id !== 'orchestrator')) return { request: req, owner: { id: 'plain', name: 'Chat', purpose: '', engine: req.harness, model: null, revision: 0, source: 'plain' as const }, instructions: '', policy: null, skills: [], launches: [] };
+      const r = ROLE_DEFAULTS[id];
+      return { request: req, owner: { id, name: r.name, purpose: r.summary, engine: 'claude', model: null, revision: 1, source: 'catalog' as const, version: 1 }, instructions: r.instructions, policy: { tools: { allow: [...r.tools] }, ceiling: r.ceiling },
+        skills: [...r.skills, ...(req.skills ?? [])], launches: [...r.launches], assets: { pluginDir: path.join(dir, 'p'), skillRoot: path.join(dir, 'p', 'skills') } };
+    },
+    sessionFactory: (_h: unknown, o: SessionOptions, s: SessionSink) => {
+      sinks.set(o.chatId, s);
+      return { harness: 'claude', sessionId: null, pid: null, root: null, alive: true, busy: false,
+        start() { s.changed({ state: 'idle' }); }, send(text: string) { sent.set(o.chatId, [...(sent.get(o.chatId) ?? []), text]); },
+        close: async () => { s.changed({ state: 'closed' }); s.exit({ code: 0, error: null }); }, killNow() {}, interrupt: async () => { interrupted.push(o.chatId); },
+        answer: () => true, rename: async () => {}, setModel: async () => {}, setEffort: async () => {}, setPermissionMode: async () => {}, contextUsage: async () => null, usage: async () => null,
+      } as unknown as HarnessSession;
+    } });
+  managers.push(m);
+  const attach = () => {
+    maps = new WorkMaps({ store: new WorkMapStore(path.join(dir, 'work-maps')), chats: m, emit: () => {}, startStrategist: strategistStarter({ chats: m, harness: () => 'claude', folderOf: () => dir }) });
+    maps.adopt();
+    return maps;
+  };
+  if (opts.withMaps !== false) attach();
+  const tools = [...strategyTools(m), ...delegationTools({ chats: m, roles: catalog, settings: () => ({ ...DELEGATION_DEFAULTS }), engineRefusal: () => null, label: '[agente]', runs: () => m.runs.list(), now: () => Date.now() })];
+  const call = async (name: string, chatId: string, args: Record<string, unknown>) => JSON.parse(await tools.find(t => t.name === name)!.run(args, { mount: 'chat', params: { chatId }, sessionId: '', signal: new AbortController().signal } as never) as string);
+  const root = (by: 'user' | 'agent' = 'agent') => m.create({ harness: 'claude', cwd: dir, roleId: 'strategist', title: 'Sconti in percentuale', prompt: 'Porta gli sconti in percentuale' }, by);
+  /** the user's answer that opens the way to a proposal today */
+  const enough = async (chatId: string) => {
+    const q = { question: 'Vuoi aggiungere vincoli?', options: [{ label: 'Sì' }, { label: 'No' }], multiSelect: false }, id = `q-${chatId}`;
+    sinks.get(chatId)!.pending({ id, type: 'question', tool: 'AskUserQuestion', title: q.question, detail: '', input: {}, questions: [q], at: Date.now() });
+    await m.answer(chatId, id, { kind: 'question', answers: { [q.question]: ENOUGH_QUESTIONS } }, 'pc');
+  };
+  const proposed = async () => { const s = await root(); await enough(s.id); await call('plan_propose', s.id, PLAN); return s; };
+  const task = (role: string, title: string, step: number) => ({ tasks: [{ role, title, step, contract: { goal: `Goal of ${title}`, doneWhen: ['criterion A'] } }] });
+  const kids = (id: string) => m.list().filter(c => c.parentId === id);
+  const mapOf = (id: string) => maps!.ofChat(id)!;
+  return { m, dir, sent, sinks, interrupted, call, root, enough, proposed, task, kids, mapOf, attach, maps: () => maps! };
+}
+const PLAN = { steps: [{ title: 'Trovo dove si calcola lo sconto', role: 'scout' }, { title: 'Applico lo sconto', role: 'artisan' }, { title: 'Scrivo il riepilogo' }], doneWhen: 'I test passano' };
+type F = ReturnType<typeof fixture>;
+const planAt = (f: F, id: string) => f.mapOf(id).plan!.at;
+const act = (f: F, id: string, action: Parameters<WorkMaps['act']>[1], text?: string) => f.maps().act(f.mapOf(id).id, action, { at: f.mapOf(id).plan?.at, text });
+
+describe('a Strategist always has a work map', () => {
+  it('started by the Orchestrator or by the user, with no map call', async () => {
+    const f = fixture(), a = await f.root('agent'), u = await f.root('user');
+    expect(f.mapOf(a.id)).toMatchObject({ title: 'Sconti in percentuale', idea: 'Porta gli sconti in percentuale', state: 'idea', plan: { phase: 'asking' } });
+    expect(f.mapOf(u.id)).toMatchObject({ title: 'Sconti in percentuale · 2', idea: 'Porta gli sconti in percentuale', owner: { chatId: u.id } });
+    expect(f.maps().list()).toHaveLength(2);
+  });
+
+  it('plan_propose without a map cannot leave it without one; a plan of one step has one too', async () => {
+    const f = fixture(), s = await f.root();
+    await f.enough(s.id);
+    await f.call('plan_propose', s.id, { steps: [{ title: 'Un passo solo', role: 'artisan', preset: 'max' }] });
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'toApprove', plan: { steps: [{ title: 'Un passo solo', role: 'artisan', preset: 'max' }] } });
+    expect(f.mapOf(s.id).plan!.map).toBeUndefined();
+    expect(f.maps().view(f.mapOf(s.id).id)!.boxes).toMatchObject([{ n: 1, title: 'Un passo solo', role: 'artisan', preset: 'max', state: 'todo' }]);
+    expect(f.maps().list()).toHaveLength(1);
+  });
+
+  it('plan_update writes the map too', async () => {
+    const f = fixture(), s = await f.proposed();
+    await act(f, s.id, 'approve');
+    await f.call('plan_update', s.id, { step: 3, state: 'now' });
+    expect(f.mapOf(s.id).plan!.steps.map(x => x.state)).toEqual(['todo', 'todo', 'now']);
+    expect(f.maps().view(f.mapOf(s.id).id)!.history.at(-1)!.summary).toBe('Passo 3 in corso: Scrivo il riepilogo');
+  });
+});
+
+describe('an idea', () => {
+  it('has a map and no chat; started, a Strategist asks about it and owns the same map', async () => {
+    const f = fixture(), idea = f.maps().idea({ title: 'Sconti a fasce', idea: 'Per quantità' });
+    expect(f.m.list()).toEqual([]);
+    const started = await f.maps().act(idea.id, 'start'), chat = f.m.list()[0]!;
+    expect(started).toMatchObject({ id: idea.id, owner: { chatId: chat.id }, state: 'idea', plan: { phase: 'asking' } });
+    expect(chat).toMatchObject({ workMap: idea.id, agent: { id: 'strategist' } });
+    expect(f.maps().list()).toHaveLength(1);
+    // the usual gate: nothing is delegated before the user's ok
+    await expect(f.call('agent_delegate', chat.id, f.task('scout', 'Sconti · Dove', 1))).rejects.toThrow(/refused/);
+  });
+});
+
+describe('planned and started later', () => {
+  it('keep approves and records it, sends nothing and starts nothing; start sends the approval', async () => {
+    const f = fixture(), s = await f.proposed(), at = planAt(f, s.id), before = f.sent.get(s.id)?.length ?? 0;
+    expect((await act(f, s.id, 'keep')).state).toBe('planned');
+    expect(f.sent.get(s.id)?.length ?? 0).toBe(before);
+    await expect(f.call('agent_delegate', s.id, f.task('scout', 'Sconti · Dove', 1))).rejects.toThrow(/keeps it for later/);
+    await expect(f.call('plan_update', s.id, { step: 3, state: 'now' })).rejects.toThrow(/not approved/);
+    expect((await act(f, s.id, 'start')).state).toBe('running');
+    expect(f.sent.get(s.id)!.at(-1)).toBe(PLAN_APPROVED);
+    await f.call('agent_delegate', s.id, f.task('scout', 'Sconti · Dove', 1));
+    expect(f.mapOf(s.id).plan!.steps[0]!.state).toBe('now');
+    await f.m.shutdown();
+    const store = new CoordinationStore(path.join(f.dir, 'app.db'));
+    try { expect(store.original(s.id, `plan:${at}`)).toMatchObject({ state: 'accepted', decision: { actor: { kind: 'user', channel: 'pc' }, answer: { decision: 'approve', keep: true } } }); } finally { store.close(); }
+  });
+
+  it('a plan the user did not see is refused, and a second approval too', async () => {
+    const f = fixture(), s = await f.proposed(), id = f.mapOf(s.id).id, at = planAt(f, s.id);
+    await expect(f.maps().act(id, 'keep', { at: at - 1 })).rejects.toThrow();
+    expect(f.mapOf(s.id).state).toBe('toApprove');
+    await f.maps().act(id, 'keep', { at });
+    await expect(f.maps().act(id, 'approve', { at })).rejects.toThrow(/Non si può approvare/);
+  });
+
+  it('kept, then changed: the plan is proposed again', async () => {
+    const f = fixture(), s = await f.proposed();
+    await act(f, s.id, 'keep');
+    expect((await act(f, s.id, 'replan', 'Meno passi')).state).toBe('idea');
+    expect(f.sent.get(s.id)!.at(-1)).toContain('Meno passi');
+    await f.call('plan_propose', s.id, { steps: [{ title: 'Tutto insieme', role: 'artisan' }] });
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'toApprove', plan: { steps: [{ title: 'Tutto insieme' }] } });
+  });
+
+  it('a kept plan survives a restart and starts after it', async () => {
+    const f = fixture(), s = await f.proposed();
+    await act(f, s.id, 'keep');
+    await f.m.shutdown();
+    const g = fixture({ dir: f.dir });
+    expect(g.mapOf(s.id)).toMatchObject({ state: 'planned', owner: { chatId: s.id } });
+    expect(g.m.planOf(s.id)).toMatchObject({ phase: 'approved' });
+  });
+});
+
+describe('replanning a running job', () => {
+  const running = async () => {
+    const f = fixture(), s = await f.proposed();
+    await act(f, s.id, 'approve');
+    await f.call('agent_delegate', s.id, f.task('scout', 'Sconti · Dove', 1));
+    return { f, s, kid: f.kids(s.id)[0]!.id };
+  };
+
+  it('keeps the started step and starts no new one before the approval', async () => {
+    const { f, s, kid } = await running();
+    expect(await act(f, s.id, 'replan', 'Aggiungi i resi')).toMatchObject({ state: 'running', plan: { phase: 'revising' } });
+    expect(f.sent.get(s.id)!.at(-1)).toContain(PLAN_REPLAN);
+    // between the request and the ok: nothing new, before the proposal and after it
+    await expect(f.call('agent_delegate', s.id, f.task('artisan', 'Sconti · Faccio', 2))).rejects.toThrow(/refused/);
+    await f.call('plan_propose', s.id, { revise: true, steps: [{ keep: 1 }, { title: 'Tolgo i resi', role: 'artisan' }] });
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'toApprove', plan: { steps: [{ state: 'now', chatIds: [kid] }, { title: 'Tolgo i resi', state: 'todo' }] } });
+    expect(f.maps().list()[0]).toMatchObject({ replanned: true, can: ['approve', 'keep', 'replan', 'stop'] });
+    await expect(f.call('agent_delegate', s.id, f.task('artisan', 'Sconti · Resi', 2))).rejects.toThrow(/refused|waits for the user/);
+    expect(f.kids(s.id).map(k => k.id)).toEqual([kid]);
+    // the started step goes on meanwhile, and its end does not need the ok
+    await f.call('agent_report', kid, { outcome: 'done', summary: 'ok', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }] });
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'toApprove', plan: { steps: [{ state: 'done' }, { state: 'todo' }] } });
+    expect((await act(f, s.id, 'approve')).state).toBe('running');
+    await f.call('agent_delegate', s.id, f.task('artisan', 'Sconti · Resi', 2));
+    expect(f.kids(s.id)).toHaveLength(2);
+  });
+
+  it('a removed step goes on until the approval, and its chat stops then', async () => {
+    const { f, s, kid } = await running();
+    await act(f, s.id, 'replan', 'Senza la ricerca');
+    await expect(f.call('plan_propose', s.id, { revise: true, steps: [{ title: 'Applico', role: 'artisan' }], remove: [2] })).rejects.toThrow(/has not started/);
+    await f.call('plan_propose', s.id, { revise: true, steps: [{ title: 'Applico', role: 'artisan' }], remove: [1] });
+    expect(f.mapOf(s.id).plan!.steps).toMatchObject([{ title: 'Applico', state: 'todo' }, { title: 'Trovo dove si calcola lo sconto', state: 'now', drop: true }]);
+    expect(f.m.list().find(c => c.id === kid)!.run?.endedAt).toBeUndefined();
+    await act(f, s.id, 'approve');
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'running', plan: { steps: [{ title: 'Applico', state: 'todo' }] } });
+    const gone = f.m.list().find(c => c.id === kid);
+    expect(!gone || gone.closedAt !== undefined || gone.run?.endedAt !== undefined).toBe(true);
+  });
+});
+
+describe('stop, resume and the owner chat', () => {
+  it('stop interrupts and starts nothing more until resume', async () => {
+    const f = fixture(), s = await f.proposed();
+    await act(f, s.id, 'approve');
+    expect(await act(f, s.id, 'stop')).toMatchObject({ state: 'stopped', stopped: { by: 'user' } });
+    await expect(f.call('agent_delegate', s.id, f.task('scout', 'Sconti · Dove', 1))).rejects.toThrow(/stopped this job/);
+    expect((await act(f, s.id, 'resume')).state).toBe('running');
+    expect(f.sent.get(s.id)!.at(-1)).toBe(PLAN_RESUMED);
+    await f.call('agent_delegate', s.id, f.task('scout', 'Sconti · Dove', 1));
+  });
+
+  it('closing the owner chat leaves the map stopped, not removed; resume opens it again', async () => {
+    const f = fixture(), s = await f.proposed();
+    await act(f, s.id, 'approve');
+    await f.m.archive(s.id);
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'stopped', stopped: { by: 'closed' }, plan: { phase: 'running', steps: [{}, {}, {}] } });
+    expect((await act(f, s.id, 'resume')).state).toBe('running');
+    expect(f.m.list().find(c => c.id === s.id)!.closedAt).toBeUndefined();
+  });
+
+  it('removed from the app for good: the map keeps the plan, and resume asks a new Strategist', async () => {
+    const f = fixture(), s = await f.proposed(), id = f.mapOf(s.id).id;
+    await f.m.archive(s.id);
+    await f.m.close(s.id);
+    expect(f.maps().get(id)).toMatchObject({ state: 'stopped', stopped: { by: 'gone' }, plan: { phase: 'proposed', steps: [{}, {}, {}] } });
+    const back = await f.maps().act(id, 'resume'), chat = f.m.list().find(c => c.id === back.owner!.chatId)!;
+    expect(back).toMatchObject({ id, past: [s.id], state: 'idea', plan: { phase: 'asking', steps: [{}, {}, {}] } });
+    expect(chat.workMap).toBe(id);
+    await expect(f.call('agent_delegate', chat.id, f.task('scout', 'Sconti · Dove', 1))).rejects.toThrow(/refused/);
+  });
+
+  it('a plan that waits, put in the archive: answered, and the Strategist is not called', async () => {
+    const f = fixture(), s = await f.proposed(), before = f.sent.get(s.id)?.length ?? 0;
+    expect((await act(f, s.id, 'archive')).state).toBe('archived');
+    expect(f.sent.get(s.id)?.length ?? 0).toBe(before);
+    expect(f.m.planOf(s.id)!.phase).toBe('revising');
+    expect((await act(f, s.id, 'reopen')).state).toBe('idea');
+  });
+});
+
+describe('a restart', () => {
+  it('keeps every map and its plan', async () => {
+    const f = fixture(), s = await f.proposed(), idea = f.maps().idea({ title: 'Poi', project: 'Casa' });
+    const before = [f.mapOf(s.id), f.maps().get(idea.id)!];
+    await f.m.shutdown();
+    const g = fixture({ dir: f.dir });
+    expect(g.maps().list()).toHaveLength(2);
+    expect(g.maps().get(before[0]!.id)).toMatchObject({ state: 'toApprove', plan: before[0]!.plan!, owner: before[0]!.owner! });
+    expect(g.maps().get(idea.id)).toEqual(before[1]);
+  });
+
+  it('a chat with an old plan gets a map once, not twice', async () => {
+    const f = fixture({ withMaps: false }), s = await f.proposed();
+    await f.m.shutdown();
+    const g = fixture({ dir: f.dir });
+    expect(g.maps().list()).toMatchObject([{ ownerChatId: s.id, state: 'toApprove', steps: 3 }]);
+    const id = g.mapOf(s.id).id;
+    await g.m.shutdown();
+    const h = fixture({ dir: f.dir });
+    expect(h.maps().list().map(i => i.id)).toEqual([id]);
+  });
+});
+
+describe('night mode (ADR 0191)', () => {
+  it('approves as proposed and starts; a job the user stopped stays stopped', async () => {
+    const f = fixture({ away: true }), s = await f.root();
+    await f.enough(s.id);
+    await f.call('plan_propose', s.id, PLAN);
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'running', plan: { phase: 'running' } });
+    await act(f, s.id, 'stop');
+    await f.call('plan_propose', s.id, { revise: true, steps: [{ title: 'Altro', role: 'artisan' }] });
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'stopped', plan: { phase: 'proposed' } });
+  });
+});

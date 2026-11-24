@@ -21,6 +21,7 @@ import type { RecordingStore } from './recordings/store';
 import type { LearnService } from './learn/service';
 import type { NewsService } from './news/service';
 import type { ProjectMaps } from './projectmap/service';
+import type { WorkMaps } from './workmap/service';
 import type { Emitter } from './ipc';
 import type { BrainService, BrowserService, ChatService, SkillsApi, TasksApi } from './services';
 import type { BrainModelService } from './brainmodel/service';
@@ -81,6 +82,8 @@ export interface Wired {
   learn?: LearnService;
   /** the project maps (ADR 0271, projectmap/service.ts); absent = the projectmap:* channels answer empty */
   projectMaps?: ProjectMaps;
+  /** the work maps (ADR 0342, workmap/service.ts): one per Strategist job or idea; absent = the workmap:* channels say so */
+  workMaps?: WorkMaps;
   /** Impara «News» (ADR 0265, news/service.ts): the AI newspaper; absent = the news:* channels say it is not available */
   news?: NewsService;
   /** the engines of the brain, which definitions the user turned on, the API keys (ADR 0046) */

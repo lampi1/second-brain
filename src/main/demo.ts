@@ -16,7 +16,7 @@ import type {
 import type { AgentChildren, ChildObservation } from '../shared/agents';
 import { sysEn } from '../shared/sys';
 import { ROLE_DEFAULTS, type WorkRoleId } from '../shared/roles';
-import { PLAN_APPROVED, planChange } from '../shared/strategy';
+import { PLAN_APPROVED, planChange, type StrategyPlan } from '../shared/strategy';
 import type { BrainService, ChatService, FeedInput } from './services';
 import type { ConfigStore } from './brain/config';
 import { BrainApi, checkApiPath, type LocalApi } from './brain/api';
@@ -643,14 +643,31 @@ export class DemoChats implements ChatService {
   }
 
   /** the user's click on a Strategist's proposed plan (ADR 0108): its phase moves on, the Strategist gets the message */
-  async planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string): Promise<void> {
+  async planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string, _by?: 'pc' | 'phone', keep = false): Promise<void> {
     const plan = this.chats.get(chatId)?.plan;
     if (!plan || plan.phase !== 'proposed') throw new Error('Questo piano non aspetta più una risposta.');
     if (plan.at !== at) throw new Error('Il piano è cambiato nel frattempo: rileggilo.');
     if (decision === 'change' && !text?.trim()) throw new Error('Scrivi cosa cambiare (al massimo 2000 caratteri).');
-    this.patch(chatId, { plan: { ...plan, phase: decision === 'approve' ? 'running' : 'revising', at: this.now() } });
-    this.push(chatId, { kind: 'user', id: this.nextId(), at: this.now(), text: decision === 'approve' ? PLAN_APPROVED : planChange(text!) });
+    this.patch(chatId, { plan: { ...plan, phase: decision === 'change' ? 'revising' : keep ? 'approved' : 'running', at: this.now() } });
+    if (!keep) this.push(chatId, { kind: 'user', id: this.nextId(), at: this.now(), text: decision === 'approve' ? PLAN_APPROVED : planChange(text!) });
   }
+  /** the work map's actions on a job (ADR 0342), with no engine behind them */
+  private planMove(chatId: string, patch: Partial<StrategyPlan>, text?: string): void {
+    const plan = this.chats.get(chatId)?.plan;
+    if (plan) this.patch(chatId, { plan: { ...plan, ...patch, at: this.now() } });
+    if (text) this.push(chatId, { kind: 'user', id: this.nextId(), at: this.now(), text });
+  }
+  async planStart(chatId: string): Promise<void> {
+    if (this.chats.get(chatId)?.plan?.phase !== 'approved') throw new Error('Questo piano non aspetta di partire.');
+    this.planMove(chatId, { phase: 'running' }, PLAN_APPROVED);
+  }
+  async planStop(chatId: string): Promise<void> { this.planMove(chatId, { stopped: true }); await this.stop(chatId); }
+  async planResume(chatId: string): Promise<void> {
+    if (this.chats.get(chatId)?.closedAt) await this.reopen(chatId);
+    this.planMove(chatId, { stopped: undefined });
+  }
+  async planReplan(chatId: string, text: string): Promise<void> { this.planMove(chatId, { phase: 'revising' }, planChange(text)); }
+  planPutAway(chatId: string): void { this.planMove(chatId, { phase: 'revising' }); }
 
   async stop(chatId: string): Promise<void> {
     const c = this.chats.get(chatId);

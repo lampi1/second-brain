@@ -124,6 +124,8 @@ export interface EventMap {
   'voice:committed': { session: string };
   /** a project map, its agents or its edit times changed (ADR 0271): read projectmap:view again */
   'projectmap:changed': { project: string };
+  /** a work map was made or changed (ADR 0342): read workmap:list or workmap:view again */
+  'workmap:changed': { id: string };
   /** call recordings (ADR 0154): the list, the one running, a transcription's progress */
   'rec:changed': RecState;
   /** Impara (ADR 0185): the list changed, and the lesson that changed (whole) when there is one */
@@ -176,6 +178,7 @@ export const INVOKE_CHANNELS = [
   'agents:quips',
   'usecount:add', 'usecount:report',
   'projectmap:list', 'projectmap:view', 'projectmap:size',
+  'workmap:list', 'workmap:view', 'workmap:idea', 'workmap:approve', 'workmap:keep', 'workmap:start', 'workmap:stop', 'workmap:resume', 'workmap:replan', 'workmap:archive', 'workmap:reopen', 'workmap:seen',
   'chess:move', 'chess:stop', 'chess:save', 'chess:history',
   'library:list', 'library:thumb', 'library:open', 'library:remove',
 ] as const satisfies readonly InvokeChannel[];
@@ -195,7 +198,7 @@ export const EVENT_CHANNELS = [
   'rec:changed',
   'impara:changed', 'impara:tutor',
   'news:changed',
-  'projectmap:changed',
+  'projectmap:changed', 'workmap:changed',
   'library:changed',
 ] as const satisfies readonly EventChannel[];
 

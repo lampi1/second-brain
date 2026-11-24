@@ -219,7 +219,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
   }
 
   /** Every chat under this one (children, grandchildren… by parentId), deepest first. */
-  private descendantsOf(chatId: string): Rec[] {
+  protected descendantsOf(chatId: string): Rec[] {
     const out: Rec[] = [], seen = new Set([chatId]);
     let frontier = new Set([chatId]);
     while (frontier.size) {
@@ -249,6 +249,14 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     const failed = results.filter(x => x.status === 'rejected').length;
     if (failed) log.warn('chats', 'delegation tree not fully cancelled', { chat: chatId, cause: errText((results.find(x => x.status === 'rejected') as PromiseRejectedResult).reason), hint: 'close the remaining child chats by hand; npm run logs -- --chat <id> shows why', data: { tree: done.size, failed } });
     log.info('chats', 'delegation tree cancelled with its chat', { chat: chatId, data: { chats: done.size, failed } });
+  }
+
+  /** One delegated chat and what it delegated, cancelled as the ✕ does (a step its plan took away, ADR 0342). */
+  protected async cancelChild(chatId: string): Promise<void> {
+    const r = this.need(chatId);
+    r.userClosing = true;
+    await this.cancelTree(chatId);
+    await this.cancelOne(r);
   }
 
   private async cancelOne(r: Rec): Promise<void> {

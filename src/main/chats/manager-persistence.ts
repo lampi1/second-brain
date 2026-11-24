@@ -53,7 +53,8 @@ export abstract class ManagerPersistence extends ManagerCore {
 
   /** Only the newest MAX_ARCHIVED archived chats stay in the app. */
   protected pruneArchived(): void {
-    const old = [...this.chats.values()].filter(r => r.s.closedAt).sort((a, b) => (b.s.closedAt ?? 0) - (a.s.closedAt ?? 0)).slice(MAX_ARCHIVED);
+    // a plan approved and kept for later needs its chat to start (ADR 0342): it is never pruned
+    const old = [...this.chats.values()].filter(r => r.s.closedAt && r.s.plan?.phase !== 'approved').sort((a, b) => (b.s.closedAt ?? 0) - (a.s.closedAt ?? 0)).slice(MAX_ARCHIVED);
     for (const r of old) {
       this.reapKept(r);
       this.chats.delete(r.s.id);
@@ -186,6 +187,7 @@ export abstract class ManagerPersistence extends ManagerCore {
         ...(engineOf(c.harness)?.caps.cost ? {} : { costKnown: false as const }),
         ...(c.context ? { contextTokens: c.context.tokens, ...(c.context.max ? { contextMaxTokens: c.context.max } : {}), ...(c.context.estimated ? { contextEstimated: true } : {}) } : {}),
         ...(c.handoffAt ? { handoffAt: c.handoffAt, handoffSource: c.handoffSource ?? 'chat' } : {}),
+        ...(c.workMap ? { workMap: c.workMap } : {}),
         ...(c.continuedFrom ? { continuedFrom: c.continuedFrom } : {}), ...(c.continuedBy ? { continuedBy: c.continuedBy } : {}),
         ...(c.closedAt ? { closedAt: c.closedAt, closedBy: c.closedBy ?? 'auto' } : {}),
         ...(c.route ? { route: c.route } : {}),
@@ -270,6 +272,7 @@ export abstract class ManagerPersistence extends ManagerCore {
       ...(r.pastSessions?.length ? { pastSessions: r.pastSessions } : {}),
       ...(r.s.contextTokens ? { context: { tokens: r.s.contextTokens, ...(r.s.contextMaxTokens ? { max: r.s.contextMaxTokens } : {}), ...(r.s.contextEstimated ? { estimated: true } : {}) } } : {}),
       ...(r.s.handoffAt ? { handoffAt: r.s.handoffAt, handoffSource: r.s.handoffSource ?? 'chat' } : {}),
+      ...(r.s.workMap ? { workMap: r.s.workMap } : {}),
       ...(r.s.continuedFrom ? { continuedFrom: r.s.continuedFrom } : {}), ...(r.s.continuedBy ? { continuedBy: r.s.continuedBy } : {}),
       ...(r.s.closedAt ? { closedAt: r.s.closedAt, closedBy: r.s.closedBy ?? 'auto' } : {}),
       ...(r.working ? { working: true as const } : {}),

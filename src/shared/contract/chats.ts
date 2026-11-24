@@ -92,6 +92,8 @@ export interface ChatSummary {
   limitHit?: DelegationLimitHit;
   /** a Strategist root chat's plan with the user (ADR 0108): its questions' answers, the steps, their progress */
   plan?: StrategyPlan;
+  /** the work map it was started for (ADR 0342): an idea started, or a job that goes on in a new chat */
+  workMap?: string;
   lastText: string;           // last assistant line, for collapsed tiles and the needs-you lane
   lastError?: string;
   updatedAt: number;

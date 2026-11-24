@@ -456,7 +456,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
         if (this.awayAnswered(r, req)) n++;
       }
       const plan = r.s.plan;
-      if (plan?.phase === 'proposed') {
+      if (plan?.phase === 'proposed' && !plan.stopped) {
         n++;
         this.hook('onAway', () => this.opts.onAway?.({ kind: 'plan', chatId: r.s.id, title: r.s.title || 'Strategist', text: plan.steps.map(x => x.title).join(' · ') }));
         void this.decidePlan(r.s.id, 'approve', plan.at, undefined, `${PLAN_APPROVED}\n${AWAY_PLAN_NOTE}`, undefined, true)
@@ -671,7 +671,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
 
   // ---- implemented in a later layer (ADR 0200: manager.ts and its manager-*.ts layers)
   abstract userWrote(chatId: string, text: string): boolean;
-  protected abstract decidePlan(chatId: string, decision: 'approve' | 'change', at: number, text?: string, message?: string, receipt?: SubmissionReceipt, byApp?: boolean, by?: 'pc' | 'phone'): Promise<void>;
+  protected abstract decidePlan(chatId: string, decision: 'approve' | 'change', at: number, text?: string, message?: string, receipt?: SubmissionReceipt, byApp?: boolean, by?: 'pc' | 'phone', keep?: boolean): Promise<void>;
   protected abstract openOrchestrator(): Rec | undefined;
   /** the user's answer to the app's own user-action question (manager-delegation.ts, #358) */
   protected abstract answerUserAction(req: PendingRequest, answer: Answer): void;

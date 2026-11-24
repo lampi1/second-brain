@@ -29,6 +29,7 @@
 import { BOX, ROW_MAX, lineOf, type Level, type LevelEdge, type LevelNode } from './project-map-line';
 import { LABEL_IT, shownStatus, stateLabel, statusesOf } from './project-map-status';
 import type { PresetId } from './model-presets';
+import type { WorkMapInfo } from './work-map';
 export { BOX, FRAME_HEAD, ROW_MAX, type Level, type LevelEdge, type LevelGroup, type LevelNode } from './project-map-line';
 export { LABEL_IT, STALE_MS, shownStatus } from './project-map-status';
 
@@ -163,7 +164,7 @@ export interface MapFlowStep { step: number; title: string; state: MapWork['stat
    *  (`planned`, shown «previsto»); a step the Strategist does itself carries none */
   model?: string | null; preset?: PresetId; planned?: true }
 /** A Strategist's plan drawn on this map: `proposed` waits for the user's «Approva e parti». */
-export interface MapPlan { chatId: string; title: string; phase: 'proposed' | 'revising' | 'running' | 'done'; at: number; steps: number; done: number; doneWhen?: string;
+export interface MapPlan { chatId: string; title: string; phase: 'proposed' | 'revising' | 'approved' | 'running' | 'done'; at: number; steps: number; done: number; doneWhen?: string;
   /** every step in order, with its turn (ADR 0302) */
   flow: MapFlowStep[] }
 export interface ProjectMapView {
@@ -175,6 +176,8 @@ export interface ProjectMapView {
   /** element id → the plan steps that work on it (ADR 0276) */
   works: Record<string, MapWork[]>;
   plans: MapPlan[];
+  /** the work maps that touch this project, archived ones left out (ADR 0342) */
+  jobs?: WorkMapInfo[];
 }
 /** a piece added to a drawing reads «nuovo» this long */
 export const NEW_MS = 3600_000;
@@ -674,7 +677,7 @@ export function mapText(v: Pick<ProjectMapView, 'map' | 'agents' | 'changed'> & 
   const st = (x: { status: MapState; confirmedAt: number }, id: string) => { const s = shownStatus(x, now, v.changed[id]); return s.stale ? 'da verificare' : LABEL_IT[s.status]; };
   const MARK = { todo: '○', now: '●', done: '✓', blocked: '✕' } as const;
   const works = (id: string) => { const w = v.works?.[id]; return w?.length ? ` · lavori: ${w.map(x => `${MARK[x.state]} ${x.title}`).join('; ')}` : ''; };
-  const plans = (v.plans ?? []).map(p => `- «${p.title}» (chatId ${p.chatId}): ${p.phase === 'proposed' ? 'aspetta «Approva e parti»' : p.phase === 'revising' ? 'in revisione' : p.phase === 'done' ? 'finito' : 'in corso'}, ${p.done}/${p.steps} passi`);
+  const plans = (v.plans ?? []).map(p => `- «${p.title}» (chatId ${p.chatId}): ${p.phase === 'proposed' ? 'aspetta «Approva e parti»' : p.phase === 'revising' ? 'in revisione' : p.phase === 'approved' ? 'approvato, non avviato' : p.phase === 'done' ? 'finito' : 'in corso'}, ${p.done}/${p.steps} passi`);
   const who = (id: string) => v.agents.filter(a => a.elements.includes(id)).map(a => `${a.title} (${a.mark})`).join(', ');
   const row = (e: MapElement, depth: number) => `${'  '.repeat(depth)}- ${e.id} · ${e.kind} · ${e.name}${goesWith(map, e) ? ' (insieme al precedente)' : ''} — ${stEl(e)}${e.note ? `: ${e.note}` : ''}${shown.get(e.id)!.status === 'blocked' && shown.get(e.id)!.actor === 'user' ? ' [tocca all\'utente]' : ''}${who(e.id) ? ` · agenti: ${who(e.id)}` : ''}${works(e.id)}${map.elements.some(x => x.parent === e.id) ? line(e.id) : ''}`;
   const tree = (parent: string | undefined, depth: number): string[] => map.elements.filter(e => e.parent === parent).flatMap(e => [row(e, depth), ...tree(e.id, depth + 1)]);

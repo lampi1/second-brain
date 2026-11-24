@@ -2,6 +2,7 @@
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
 import type { ProjectMapInfo, ProjectMapView } from '../project-map';
+import type { WorkMap, WorkMapInfo, WorkMapView } from '../work-map';
 import type { PackFinding } from '../agent-pack';
 import type { BrainModelState, MaintenanceJobId, MemoryDocs } from '../brain-model';
 import type { LearningEvidence, LearningReviewState, MemoryReviewRecord, ReplayComparison, ReplayRecord, SkillCandidateView } from '../learning-review';
@@ -110,6 +111,27 @@ export interface BrainInvokeMap {
   /** «Quanto è grande» beside a picked box (ADR 0316): the files and lines under its evidence, counted by main without
    *  tokens (bounded; capped = it stopped counting); null = no folder on this PC or nothing to count */
   'projectmap:size': [{ project: string; element: string }, { files: number; lines: number; capped: boolean } | null];
+  /** the work maps (ADR 0342, main/workmap/): one per Strategist job or idea. The list (archived ones only when asked),
+   *  one map with its drawing and versions, and what the user does with one; an action the map does not allow now
+   *  (WorkMapInfo.can) rejects with the reason. `at` = the plan's revision on screen (WorkMapInfo.planAt). */
+  'workmap:list': [{ archived?: boolean; query?: string } | void, WorkMapInfo[]];
+  'workmap:view': [{ id: string; version?: number }, WorkMapView | null];
+  /** a map from an idea alone: no chat is started */
+  'workmap:idea': [{ title: string; idea?: string; project?: string }, WorkMap];
+  /** approve and start now */
+  'workmap:approve': [{ id: string; at: number }, WorkMap];
+  /** approve and keep it planned: nothing starts until workmap:start */
+  'workmap:keep': [{ id: string; at: number }, WorkMap];
+  /** start a planned job, or open a Strategist on an idea */
+  'workmap:start': [{ id: string }, WorkMap];
+  'workmap:stop': [{ id: string }, WorkMap];
+  'workmap:resume': [{ id: string }, WorkMap];
+  /** ask for another plan, in words; a job under way keeps its started steps */
+  'workmap:replan': [{ id: string; text: string }, WorkMap];
+  'workmap:archive': [{ id: string }, WorkMap];
+  'workmap:reopen': [{ id: string }, WorkMap];
+  /** the user looked at a finished map: it moves to the archive by itself */
+  'workmap:seen': [{ id: string }, WorkMap];
   /** the shareable brain zip for colleagues (ADR 0088): rules, skills, roles, scripts, never memory; null = save dialog cancelled */
   'brain:share': [void, BrainShareResult | null];
   /** the Brain pages (ADR 0077, src/main/brainmodel): agents, skills and their links, rules, memory, the change log */

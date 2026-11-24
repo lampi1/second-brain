@@ -9,7 +9,7 @@ import { ToolRefusal } from '../mcp/refusal';
 import type { UserTaskEvents, AgentRun, AgentRunOutcome } from '../../shared/agents';
 import { goalText } from '../../shared/agent-label';
 import { ownerSource, type TaskAssignmentOptions } from '../../shared/delegation';
-import { PLAN_APPROVED, planChange, askingPlan, strategyPrompt, withAdded, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
+import { PLAN_APPROVED, PLAN_PUT_AWAY, PLAN_REPLAN, PLAN_RESUMED, planChange, askingPlan, strategyPrompt, withAdded, withDelegated, withoutDropped, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
 import { runMetrics } from '../agents/run-metrics';
 import { standings, withStandings, type TokenPrice } from '../agents/standing';
 import { isCorrection } from '../../shared/correction';
@@ -33,7 +33,8 @@ export abstract class ManagerWork extends ManagerLifecycle {
     const jobId = this.coordination.original(r.s.id, originalRequestId)?.key.jobId ?? this.coordination.jobFor(r.s.id) ?? r.s.run?.taskId ?? `chat:${r.s.id}`;
     return { originalRequestId, jobId, chatId: r.s.id,
       runId: r.s.run?.runId ?? null, taskVersion: r.s.run?.taskVersion ?? 1, proposalRevision: plan.at,
-      proposalHash: proposalHash({ steps: plan.steps, clarified: plan.clarified, doneWhen: plan.doneWhen, pcOnly: plan.pcOnly }) };
+      // what is asked for, not how far it got: the started steps of a revision go on while the user decides (ADR 0342)
+      proposalHash: proposalHash({ steps: plan.steps.map(({ outcome: _o, chatIds: _c, startedAt: _s, endedAt: _e, ...s }) => ({ ...s, state: 'todo' })), clarified: plan.clarified, doneWhen: plan.doneWhen, pcOnly: plan.pcOnly }) };
   }
 
   /** Full instructions plus an optimistic cursor; reading never marks them acknowledged. */
@@ -62,8 +63,10 @@ export abstract class ManagerWork extends ManagerLifecycle {
     if (!revise && plan.steps.some(s => s.state !== 'todo')) throw new Error('plan_propose: some steps of this plan already started; propose it again with revise: true, keeping them with { keep: <number> }.');
     // «Modalità notte» (ADR 0191): nobody will click «Approva e parti», so the plan starts as proposed (its recommended
     // choice) and the tool says so; the recap tells the user
-    const away = !!this.opts.away?.();
-    const proposed: StrategyPlan = { phase: away ? 'running' : 'proposed', clarified: plan.clarified, ...(plan.pcOnly ? { pcOnly: true } : {}), ...(plan.asked ? { asked: plan.asked } : {}), ...(plan.enough ? { enough: true } : {}), steps, ...(doneWhen ? { doneWhen } : {}), ...(map ? { map } : {}), at: Math.max(Date.now(), plan.at + 1) };
+    // (a job the user stopped stays stopped: its plan waits)
+    const away = !!this.opts.away?.() && !plan.stopped;
+    const settled = away ? withoutDropped({ ...plan, steps }) : { plan: { steps }, stop: [] };
+    const proposed: StrategyPlan = { phase: away ? 'running' : 'proposed', clarified: plan.clarified, ...(plan.pcOnly ? { pcOnly: true } : {}), ...(plan.asked ? { asked: plan.asked } : {}), ...(plan.enough ? { enough: true } : {}), steps: settled.plan.steps, ...(doneWhen ? { doneWhen } : {}), ...(map ? { map } : {}), ...(plan.stopped ? { stopped: true } : {}), at: Math.max(Date.now(), plan.at + 1) };
     const store = this.coordination;
     const key = this.planRequestKey(r, proposed);
     const prior = store.original(r.s.id, key.originalRequestId);
@@ -82,6 +85,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     this.persist(away);
     if (accepted) store.recordApplication(accepted.id);
     this.updated(r);
+    if (settled.stop.length) void this.stopDropped(chatId, settled.stop);
     log.info('chats', 'plan proposed', { chat: chatId, data: { steps: steps.length, revise } });
     return structuredClone(r.s.plan);
   }
@@ -89,7 +93,11 @@ export abstract class ManagerWork extends ManagerLifecycle {
   /** plan_update: a step the Strategist does itself (or corrects) moves on. */
   planUpdate(chatId: string, i: number, state: StepState): StrategyPlan {
     const r = this.need(chatId), plan = r.s.plan;
-    if (!plan || (plan.phase !== 'running' && plan.phase !== 'done')) throw new Error('plan_update: the user has not approved a plan yet.');
+    const step = plan?.steps[i];
+    // a revision waits for the user: the steps already started go on (ADR 0342), no other one moves
+    const going = !!step && step.state !== 'todo' && state !== 'todo';
+    if (!plan || plan.phase !== 'running' && plan.phase !== 'done' && !going) throw new Error('plan_update: the user has not approved a plan yet.');
+    if (plan.stopped && !going) throw new Error('plan_update: the user stopped this job; wait for the user to resume it.');
     r.s.plan = withStep(plan, i, state, Date.now());
     this.persist();
     this.updated(r);
@@ -100,6 +108,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
   planAdd(chatId: string, step: PlanStep): StrategyPlan {
     const r = this.need(chatId), plan = r.s.plan;
     if (!plan) throw new Error('plan_update add: only a Strategist with a plan approved by the user has steps.');
+    if (plan.stopped) throw new Error('plan_update add: the user stopped this job; wait for the user to resume it.');
     r.s.plan = withAdded(plan, step, Date.now());
     this.persist();
     this.updated(r);
@@ -123,29 +132,42 @@ export abstract class ManagerWork extends ManagerLifecycle {
 
   /** The user's click on a proposed plan (chat:plan): «Approva e parti» or «Cambia qualcosa» with what to change; the
    *  Strategist gets it as the user's message. «Basta domande» is an answer to its open question (renderer).
-   *  by 'phone' = a button on the paired phone (chats/phone-port.ts): the same checks, a «Risposto dal telefono» line. */
-  async planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string, by: 'pc' | 'phone' = 'pc'): Promise<void> {
-    return this.decidePlan(chatId, decision, at, text, undefined, undefined, false, by);
+   *  by 'phone' = a button on the paired phone (chats/phone-port.ts): the same checks, a «Risposto dal telefono» line.
+   *  keep (ADR 0342) = approved and kept for later: recorded like any approval, nothing starts until planStart. */
+  async planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string, by: 'pc' | 'phone' = 'pc', keep = false): Promise<void> {
+    return this.decidePlan(chatId, decision, at, text, undefined, undefined, false, by, keep);
   }
 
   /** Decision commits before delivery. A delivery failure never rolls accepted consent back into a fresh question. */
-  protected override async decidePlan(chatId: string, decision: 'approve' | 'change', at: number, text?: string, message?: string, receipt?: SubmissionReceipt, byApp = false, by: 'pc' | 'phone' = 'pc'): Promise<void> {
+  protected override async decidePlan(chatId: string, decision: 'approve' | 'change', at: number, text?: string, message?: string, receipt?: SubmissionReceipt, byApp = false, by: 'pc' | 'phone' = 'pc', keep = false): Promise<void> {
     const r = this.need(chatId), plan = r.s.plan;
     if (!plan || plan.phase !== 'proposed') throw new Error('Questo piano non aspetta più una risposta.');
     if (plan.at !== at) throw new Error('Il piano è cambiato nel frattempo: rileggilo.');
     const change = typeof text === 'string' ? text.trim() : '';
     if (decision === 'change' && (!change || change.length > 2000)) throw new Error('Scrivi cosa cambiare (al massimo 2000 caratteri).');
-    if (decision !== 'approve' && decision !== 'change') throw new Error('Scelta non valida.');
+    if (decision !== 'approve' && decision !== 'change' || keep && decision !== 'approve') throw new Error('Scelta non valida.');
     const store = this.coordination;
-    const key = this.planRequestKey(r, plan);
+    let key = this.planRequestKey(r, plan);
+    // a revision proposed by an older version was recorded with its steps' progress in the hash
+    const prior = store.original(r.s.id, key.originalRequestId)?.key;
+    if (prior && prior.proposalHash === proposalHash({ steps: plan.steps, clarified: plan.clarified, doneWhen: plan.doneWhen, pcOnly: plan.pcOnly })) key = { ...key, proposalHash: prior.proposalHash };
     // One-time migration for a proposed plan restored from pre-journal chats.json. Existing receipts are never rebound.
     if (!store.original(r.s.id, key.originalRequestId)) store.register({ key, kind: 'plan', at: plan.at, payload: plan });
-    const accepted = store.resolve(key, byApp ? { kind: 'policy', policy: 'away-plan' } : { kind: 'user', channel: by }, { decision, text: change });
-    const delivery = store.beginDelivery(accepted.id);
+    const accepted = store.resolve(key, byApp ? { kind: 'policy', policy: 'away-plan' } : { kind: 'user', channel: by }, { decision, text: change, ...(keep ? { keep: true } : {}) });
+    const delivery = keep ? undefined : store.beginDelivery(accepted.id);
     // The phase is a chat mirror, not the decision journal. A crash here leaves an accepted, unconfirmed delivery.
-    r.s.plan = { ...plan, phase: decision === 'approve' ? 'running' : 'revising', at: Math.max(Date.now(), plan.at + 1) };
-    this.persist();
+    // the steps the approved revision takes away leave the plan, and their chats stop (ADR 0342)
+    const { plan: kept, stop: dropped } = decision === 'approve' ? withoutDropped(plan) : { plan, stop: [] };
+    const { stopped: _stopped, ...open } = kept;
+    r.s.plan = { ...open, phase: decision === 'change' ? 'revising' : keep ? 'approved' : 'running', at: Math.max(Date.now(), plan.at + 1) };
+    this.persist(keep);
     this.updated(r);
+    if (dropped.length) await this.stopDropped(chatId, dropped);
+    if (!delivery) {
+      store.recordApplication(accepted.id);
+      this.planDecided(r, decision, byApp, by, true);
+      return;
+    }
     let settled = false;
     const finishDelivery = (state: 'delivered' | 'uncertain') => { if (!settled) { store.finishDelivery(delivery.id, state); settled = true; } };
     const tracked: SubmissionReceipt = {
@@ -154,6 +176,10 @@ export abstract class ManagerWork extends ManagerLifecycle {
       failed: error => { finishDelivery('uncertain'); receipt?.failed(error); },
     };
     await this.send(chatId, message ?? (decision === 'approve' ? PLAN_APPROVED : planChange(change)), undefined, false, undefined, false, { kind: byApp ? 'app' : 'user' }, tracked);
+    this.planDecided(r, decision, byApp, by);
+  }
+
+  private planDecided(r: Rec, decision: 'approve' | 'change', byApp: boolean, by: 'pc' | 'phone', keep = false): void {
     if (by === 'phone') { this.addItem(r, sysItem('phoneDecided', { time: phoneTime(Date.now()), what: 'plan' }, 'info'), false); this.updated(r); }
     // the user's click on the run's plan: approved as proposed, or a change asked (standing.ts decisionSignals, ADR 0131)
     const run = r.s.run;
@@ -162,7 +188,81 @@ export abstract class ManagerWork extends ManagerLifecycle {
       run.plan = decision === 'approve' ? { ...p, approvedAt: p.approvedAt ?? Date.now(), ...(byApp ? { byApp: true } : {}) } : { ...p, changes: p.changes + 1 };
       this.runSave();
     }
-    log.info('chats', 'plan decided', { chat: chatId, data: { decision, ...(by === 'phone' ? { by } : {}) } });
+    log.info('chats', 'plan decided', { chat: r.s.id, data: { decision, ...(keep ? { keep } : {}), ...(by === 'phone' ? { by } : {}) } });
+  }
+
+  /** The chats of steps the approved revision took away: cancelled with what they delegated (ADR 0342). */
+  private async stopDropped(chatId: string, ids: readonly string[]): Promise<void> {
+    const mine = new Set(this.descendantsOf(chatId).map(x => x.s.id));
+    const failed = (await Promise.allSettled(ids.filter(id => mine.has(id)).map(id => this.cancelChild(id)))).filter(x => x.status === 'rejected') as PromiseRejectedResult[];
+    if (failed.length) log.warn('chats', 'a step taken away did not stop', { chat: chatId, cause: errText(failed[0]!.reason), hint: 'close its chat by hand', data: { failed: failed.length } });
+  }
+
+  /** «Parti» on a plan approved and kept (ADR 0342): the Strategist gets the same message an approval sends. A message
+   *  that does not go out leaves it kept, to start again. text = the user's own words, when they typed them. */
+  async planStart(chatId: string, text: string = PLAN_APPROVED, receipt?: SubmissionReceipt): Promise<void> {
+    const r = this.need(chatId), plan = r.s.plan;
+    if (plan?.phase !== 'approved') throw new Error('Questo piano non aspetta di partire.');
+    const { stopped: _s, ...open } = plan;
+    const started: StrategyPlan = { ...open, phase: 'running', at: Math.max(Date.now(), plan.at + 1) };
+    r.s.plan = started;
+    this.persist();
+    this.updated(r);
+    try { await this.send(chatId, text, undefined, false, undefined, false, { kind: 'user' }, receipt); }
+    catch (e) {
+      if (r.s.plan === started) { r.s.plan = { ...plan, at: started.at + 1 }; this.persist(); this.updated(r); }
+      throw e;
+    }
+    log.info('chats', 'kept plan started', { chat: chatId });
+  }
+
+  /** «Ferma» on a job (ADR 0342): no new step starts until planResume, and what is under way is interrupted, the chats
+   *  it delegated too. Nothing is closed. */
+  async planStop(chatId: string): Promise<void> {
+    const r = this.need(chatId);
+    if (r.s.plan && r.s.plan.phase !== 'done' && !r.s.plan.stopped) { r.s.plan = { ...r.s.plan, stopped: true }; this.persist(); this.updated(r); }
+    const tree = [r, ...this.descendantsOf(chatId)].filter(x => !x.s.closedAt);
+    const failed = (await Promise.allSettled(tree.map(x => this.stop(x.s.id)))).filter(x => x.status === 'rejected') as PromiseRejectedResult[];
+    if (failed.length) log.warn('chats', 'a chat of a stopped job did not stop', { chat: chatId, cause: errText(failed[0]!.reason), hint: 'stop it from its strip', data: { failed: failed.length } });
+    log.info('chats', 'job stopped', { chat: chatId, data: { chats: tree.length } });
+  }
+
+  /** «Riprendi» (ADR 0342): the chat is open again and, unless its plan waits for the user, goes on. */
+  async planResume(chatId: string): Promise<void> {
+    const r = this.need(chatId), plan = r.s.plan;
+    if (plan?.stopped) { const { stopped: _s, ...open } = plan; r.s.plan = open; this.persist(); this.updated(r); }
+    if (plan?.phase === 'proposed' || plan?.phase === 'approved') await this.reopen(chatId);
+    else await this.send(chatId, PLAN_RESUMED, undefined, false, undefined, false, { kind: 'user' });
+    log.info('chats', 'job resumed', { chat: chatId });
+  }
+
+  /** «Ripianifica», in the user's words (ADR 0342): the Strategist proposes again. A job under way is in revision at
+   *  once, so no new step starts before the user's ok; its started steps go on. */
+  async planReplan(chatId: string, text: string): Promise<void> {
+    const r = this.need(chatId), plan = r.s.plan, change = text.trim();
+    if (!plan) throw new Error('Questo lavoro non ha ancora un piano.');
+    if (!change || change.length > 2000) throw new Error('Scrivi cosa cambiare (al massimo 2000 caratteri).');
+    if (plan.phase === 'proposed') return this.decidePlan(chatId, 'change', plan.at, change);
+    const planned = plan.phase === 'approved' || plan.phase === 'running' || plan.phase === 'done';
+    if (planned) { r.s.plan = { ...plan, phase: 'revising', at: Math.max(Date.now(), plan.at + 1) }; this.persist(); this.updated(r); }
+    await this.send(chatId, !planned ? change : plan.steps.some(s => s.state !== 'todo') ? `${planChange(change)}\n${PLAN_REPLAN}` : planChange(change), undefined, false, undefined, false, { kind: 'user' });
+    log.info('chats', 'job replanned', { chat: chatId, data: { phase: plan.phase } });
+  }
+
+  /** A plan waiting for the user, put in the archive (ADR 0342): the request is answered (nothing starts), the Strategist
+   *  is not called back. */
+  planPutAway(chatId: string): void {
+    const r = this.need(chatId), plan = r.s.plan;
+    if (plan?.phase !== 'proposed') return;
+    const store = this.coordination, key = this.planRequestKey(r, plan);
+    const prior = store.original(r.s.id, key.originalRequestId);
+    if (!prior) store.register({ key, kind: 'plan', at: plan.at, payload: plan });
+    const accepted = store.resolve(prior?.key ?? key, { kind: 'user', channel: 'pc' }, { decision: 'change', text: PLAN_PUT_AWAY });
+    r.s.plan = { ...plan, phase: 'revising', at: Math.max(Date.now(), plan.at + 1) };
+    this.persist(true);
+    store.recordApplication(accepted.id);
+    this.updated(r);
+    log.info('chats', 'plan put away', { chat: chatId });
   }
 
   /** The user typed in this chat himself (chat:send only, ADR 0083): so that nothing conflicts, the Orchestrator learns it
@@ -222,7 +322,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     }
     if (options.planStep !== undefined) {
       const plan = r.s.parentId ? this.chats.get(r.s.parentId)?.s.plan : undefined;
-      if (source.kind !== 'chat' || source.chatId !== r.s.parentId || !plan || !['running', 'done'].includes(plan.phase) || !Number.isSafeInteger(options.planStep) || !plan.steps[options.planStep]) throw new Error('Invalid or unapproved parent plan step.');
+      if (source.kind !== 'chat' || source.chatId !== r.s.parentId || !plan || !['running', 'done'].includes(plan.phase) || plan.stopped || !Number.isSafeInteger(options.planStep) || !plan.steps[options.planStep]) throw new Error('Invalid or unapproved parent plan step.');
     }
     if (this.midTurn(r) || r.pending.size || r.s.queued || r.opening || r.releasing || r.switching || r.archiving || this.deliveries.has(chatId)) throw new ToolRefusal('The chat is busy or has queued work: nothing was assigned. Assign again once its current work has ended; a retry now gets the same answer.');
     if (options.reviewOf !== undefined) this.runs.checkLinks({ reviewOf: options.reviewOf }); // before the previous run ends

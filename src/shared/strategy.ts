@@ -16,8 +16,10 @@ import { reservedText } from './away';
 import { isPresetId, PRESET_IDS, type PresetId } from './model-presets';
 
 /** asking = it questions the user · proposed = the plan waits for the user's ok · revising = the user asked for changes ·
- *  running = approved, steps under way · done = every step done */
-export type PlanPhase = 'asking' | 'proposed' | 'revising' | 'running' | 'done';
+ *  approved = approved and kept for later, nothing starts until the user says so (ADR 0342) · running = approved, steps
+ *  under way · done = every step done */
+export type PlanPhase = 'asking' | 'proposed' | 'revising' | 'approved' | 'running' | 'done';
+const PLAN_PHASES: readonly PlanPhase[] = ['asking', 'proposed', 'revising', 'approved', 'running', 'done'];
 export type StepState = 'todo' | 'now' | 'done' | 'blocked';
 export const STEP_STATES: readonly StepState[] = ['todo', 'now', 'done', 'blocked'];
 export interface PlanStep {
@@ -44,6 +46,8 @@ export interface PlanStep {
   preset?: PresetId;
   /** the model behind that preset (its chat's, else the card's), filled by the app when the plan is proposed */
   model?: string;
+  /** a replan takes this started step away (ADR 0342): it goes on until the user approves, then its chats stop */
+  drop?: true;
 }
 /** One answer the user gave while it asked: what was asked (the question's short header, else the question) and the answer. */
 export interface Clarified {
@@ -72,6 +76,8 @@ export interface StrategyPlan {
   enough?: boolean;
   /** the project map this plan is drawn on (its folder name, ADR 0276) */
   map?: string;
+  /** the user stopped the job (ADR 0342): no new step starts until they resume it */
+  stopped?: true;
 }
 
 /** a plan under way may grow by the pieces it discovers (plan_update add), up to this many steps in all */
@@ -86,6 +92,12 @@ export function isPlanApproval(text: string): boolean {
   return ['piano approvato parti', 'approvo', 'approvo il piano', 'approvo parti', 'approvo e parti', 'parti', 'ok vai',
     'approvo procedi', 'approved', 'i approve the plan', 'approve and proceed', 'go ahead'].includes(normalized);
 }
+/** what «Riprendi» on a stopped job sends to its Strategist (ADR 0342) */
+export const PLAN_RESUMED = 'Riprendi il lavoro: riparti dai passi fermi e vai avanti con il piano.';
+/** a plan waiting for the user, put in the archive: nothing starts, and the Strategist is not called back (ADR 0342) */
+export const PLAN_PUT_AWAY = 'Messo da parte: per ora non parte.';
+/** replanning a job already under way (ADR 0342): the app's line after the user's own words */
+export const PLAN_REPLAN = 'Ripianifica con plan_propose revise: true: i passi già partiti restano (keep) o, se non servono più, vanno in remove; nessun passo nuovo parte prima della mia approvazione.';
 /** the user's «Cambia qualcosa»: the Strategist proposes again */
 export const planChange = (text: string): string => `Cambia il piano: ${text.trim()}`;
 /** the answer «Basta domande» gives to the open question */
@@ -98,7 +110,7 @@ export const STRATEGY_FLOW = [
   `1. Use the existing question panel, one concrete yes/no question at a time. Check the evidence before asking; cover the goal, scope, constraints or acceptance criteria that still matter. Offer Sì / No with a short reason for the recommended choice and accept a typed answer. Count at least ${QUESTIONS_MIN} answered questions, including the intake answer when supplied. Never repeat a settled choice. Stop at ${QUESTIONS_MAX}, or sooner when the user says «Basta domande». A concrete drawback warrants one counterproposal; if the user confirms their choice, proceed with it.`,
   `2. Then propose the plan with plan_propose: 2 to 6 steps, each one short plain line in the user's language with the role that does it (and, if useful, a short \`detail\`); no jargon, no sub-steps. Say for every step which steps it depends on: its \`detail\` starts with "dopo 1, 2" (in the user's language) or "subito" when it needs none. Steps that do not depend on each other are one parallel group: put them one after the other and give every one but the first \`par: true\`; a step that needs the group comes after it, without \`par\` (the user sees a dashed frame for each group and where it joins again). Mark a group parallel only after checking that its steps can really run at the same time now: free worktree slots and env leases, test nodes, local stacks; when one is not free, put those steps one after the other. A step is parallel or sequential, nothing in between. Give a step \`preset\` (min, base, max of its role's card) when it needs other than Base; the app shows every step's role, model and preset. When the work is on a project (its code or systems), draw the plan on the project's map: pass \`map\` (the project; \`add\` = the pieces that do not exist yet) and each step's \`on\` (the element it works on; one element may hold several steps and agents). The user reads the map, not a list. The user's approval is required, always: end your turn and wait; the user approves with the panel ("${PLAN_APPROVED}") or an explicit typed approval, or writes what to change, and then you propose again. The app refuses agent_delegate and agent_assign_task until the user approved.`,
   '3. Once approved, inspect agent_children and reuse a compatible child with agent_assign_task, or delegate new work with agent_delegate, giving its number as `step`: delegate a whole parallel group in one agent_delegate call, one task per step, so its steps really run at the same time (reuse a child for one of them with agent_assign_task first, then the rest in one call; the app refuses a group split over several agent_delegate calls), and start a step only when every step it depends on is done. After a step that changed code or files, delegate one Sentinel with reviewOf = that child\'s run. A step you do yourself: plan_update it to "now", then to "done". A piece you discover on the way: plan_update `add` it and go on, no new approval. The user follows the steps on your strip and on the map. At the end, agent_report as usual.',
-  '4. When the user asks to bring the plan to the current standard («aggiorna il piano»), also once it is under way: plan_propose with `revise: true` and the whole plan again. Every step already started or done stays: pass it as `{ keep: <its number> }` (its title, role, chats and state are kept); the steps still to do you may change. Check every parallel group again as in 2 (resources, parallel or sequential); a step to do cannot be parallel with a started one. The app fills each step\'s model and preset (a started step from its chat, the others from the role card). The user approves the revised plan as any plan: end your turn and wait.',
+  '4. When the user asks to bring the plan to the current standard («aggiorna il piano»), also once it is under way: plan_propose with `revise: true` and the whole plan again. Every step already started or done stays: pass it as `{ keep: <its number> }` (its title, role, chats and state are kept); the steps still to do you may change. Check every parallel group again as in 2 (resources, parallel or sequential); a step to do cannot be parallel with a started one. The app fills each step\'s model and preset (a started step from its chat, the others from the role card). A started step that is no longer needed: leave it out of steps and put its number in `remove`; it goes on until the user approves, then its chats stop. The user approves the revised plan as any plan: end your turn and wait; the started steps go on meanwhile and no new step starts. The app keeps the map of this job by itself, plan and steps included. The user may approve and keep the plan for later: start nothing until «Piano approvato: parti.».',
 ].join('\n');
 
 const line = (v: unknown, max: number, what: string): string => {
@@ -133,11 +145,14 @@ function checkOne(v: unknown, i: number): PlanStep {
 /** plan_propose with `revise: true` («aggiorna il piano», 2026-11-23): the whole plan again over a plan already shown,
  *  approved or under way. A started or finished step must come back as `{ keep: n }` (its old number, optionally `par`)
  *  and is kept as it is, chats and times included; the steps to do are checked as new ones. A step to do cannot share a
- *  parallel group with a started one (that group could no longer start in one call). Throws with what to change. */
+ *  parallel group with a started one (that group could no longer start in one call). `remove` (ADR 0342) = the numbers of
+ *  started, unfinished steps the new plan does without: they stay, marked `drop`, until the user approves. Throws with
+ *  what to change. */
 export function checkRevision(old: StrategyPlan, a: Record<string, unknown>): { steps: PlanStep[]; doneWhen?: string } {
   const raw = a.steps;
   if (!Array.isArray(raw) || raw.length < STEPS_MIN || raw.length > STEPS_ALL_MAX) throw new Error(`plan_propose: steps = ${STEPS_MIN} to ${STEPS_ALL_MAX} items.`);
   const kept = new Set<number>();
+  const removed = removedOf(old, a.remove);
   const steps = raw.map((v, i): PlanStep => {
     const s = v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : null;
     if (!s || s.keep === undefined) return checkOne(v, i);
@@ -146,17 +161,45 @@ export function checkRevision(old: StrategyPlan, a: Record<string, unknown>): { 
     if (s.par !== undefined && typeof s.par !== 'boolean') throw new Error(`steps[${i}].par: true or false.`);
     const n = stepIndex(old, s.keep, `steps[${i}].keep`);
     if (kept.has(n)) throw new Error(`steps[${i}].keep: step ${n + 1} is kept twice.`);
+    if (removed.includes(n)) throw new Error(`steps[${i}].keep: step ${n + 1} is also in remove.`);
     kept.add(n);
-    const { par: _p, ...rest } = old.steps[n]!;
+    const { par: _p, drop: _d, ...rest } = old.steps[n]!;
     return { ...rest, ...(s.par === true ? { par: true as const } : {}) };
   });
-  const lost = old.steps.map((s, n) => ({ s, n })).filter(x => x.s.state !== 'todo' && !kept.has(x.n));
-  if (lost.length) throw new Error(`plan_propose revise: ${lost.map(x => `step ${x.n + 1} «${x.s.title}» (${x.s.state})`).join(', ')} already started: pass it as { keep: ${lost[0]!.n + 1} }.`);
+  const lost = old.steps.map((s, n) => ({ s, n })).filter(x => x.s.state !== 'todo' && !kept.has(x.n) && !removed.includes(x.n));
+  if (lost.length) throw new Error(`plan_propose revise: ${lost.map(x => `step ${x.n + 1} «${x.s.title}» (${x.s.state})`).join(', ')} already started: pass it as { keep: ${lost[0]!.n + 1} }${lost.some(x => x.s.state !== 'done') ? ', or put its number in remove when the new plan does without it' : ''}.`);
+  if (steps.length + removed.length > STEPS_ALL_MAX) throw new Error(`plan_propose: steps = ${STEPS_MIN} to ${STEPS_ALL_MAX} items, the removed ones included.`);
   const waves = planWaves(steps);
   const mixed = steps.findIndex((s, i) => s.state === 'todo' && steps.some((t, k) => k !== i && waves[k] === waves[i] && t.state !== 'todo'));
   if (mixed >= 0) throw new Error(`steps[${mixed}]: it is to do but in the same parallel group as a started step; make it its own step after them (leave par out) or group it with steps to do.`);
   const doneWhen = a.doneWhen === undefined ? old.doneWhen : line(a.doneWhen, DONE_WHEN_MAX, 'doneWhen');
+  // at the end, each its own turn: the steps that stay keep their numbers when the approval takes these away
+  for (const n of removed) { const { par: _p, ...rest } = old.steps[n]!; steps.push({ ...rest, drop: true }); }
   return { steps, ...(doneWhen ? { doneWhen } : {}) };
+}
+
+/** plan_propose revise's `remove`, checked: 0-based numbers of started steps that are not finished. */
+function removedOf(old: StrategyPlan, v: unknown): number[] {
+  if (v === undefined) return [];
+  if (!Array.isArray(v)) throw new Error('remove: step numbers.');
+  const out = v.map((x, i) => stepIndex(old, x, `remove[${i}]`));
+  if (new Set(out).size !== out.length) throw new Error('remove: a step is named twice.');
+  for (const n of out) {
+    const s = old.steps[n]!;
+    if (s.state === 'todo') throw new Error(`remove: step ${n + 1} has not started; just leave it out of steps.`);
+    if (s.state === 'done') throw new Error(`remove: step ${n + 1} is done; pass it as { keep: ${n + 1} }.`);
+  }
+  return out;
+}
+
+/** The plan without the steps its replan took away, and the chats to stop (ADR 0342), at the user's ok. A dropped step
+ *  that finished while the user decided stays, as done work. */
+export function withoutDropped(plan: StrategyPlan): { plan: StrategyPlan; stop: string[] } {
+  if (!plan.steps.some(s => s.drop)) return { plan, stop: [] };
+  const gone = plan.steps.filter(s => s.drop && s.state !== 'done');
+  const steps = plan.steps.filter(s => !gone.includes(s)).map(({ drop: _d, ...s }) => s);
+  const used = new Set(steps.flatMap(s => s.chatIds ?? []));
+  return { plan: { ...plan, steps }, stop: [...new Set(gone.flatMap(s => s.chatIds ?? []))].filter(id => !used.has(id)) };
 }
 
 /** agent_delegate on an approved plan (2026-11-23, «o parallelo o non parallelo»): the steps a call names, 0-based; a
@@ -201,7 +244,10 @@ export function proposalGate(plan: StrategyPlan): string | null {
 
 /** agent_delegate / agent_assign_task from a Strategist with a plan: null once the user approved it; else what to do. */
 export function delegationGate(plan: StrategyPlan | null, tool: 'agent_delegate' | 'agent_assign_task'): string | null {
-  if (!plan || plan.phase === 'running' || plan.phase === 'done') return null;
+  if (!plan) return null;
+  if (plan.stopped) return `${tool} refused: the user stopped this job. Start nothing: end your turn and wait for the user to resume it.`;
+  if (plan.phase === 'running' || plan.phase === 'done') return null;
+  if (plan.phase === 'approved') return `${tool} refused: the user approved your plan and keeps it for later. Start nothing: end your turn and wait for «${PLAN_APPROVED}».`;
   const next = plan.phase === 'proposed'
     ? 'Your plan waits for the user: end your turn now; the answer arrives as the user\'s message.'
     : plan.phase === 'revising'
@@ -217,7 +263,7 @@ export function stepIndex(plan: StrategyPlan, step: unknown, what: string): numb
 }
 
 /** The plan with step i set to `state` (times kept: started at the first "now", ended at done or blocked); every step
- *  done ends the plan. */
+ *  done ends the plan, unless a revision of it still waits for the user (ADR 0342: started steps go on meanwhile). */
 export function withStep(plan: StrategyPlan, i: number, state: StepState, now: number): StrategyPlan {
   const steps = plan.steps.map((s, k) => {
     if (k !== i) return s;
@@ -226,6 +272,7 @@ export function withStep(plan: StrategyPlan, i: number, state: StepState, now: n
     const { startedAt: _s, endedAt: _e, outcome, ...rest } = s;
     return { ...rest, state, ...(state === 'done' && outcome ? { outcome } : {}), ...(started !== undefined ? { startedAt: started } : {}), ...(ended !== undefined ? { endedAt: ended } : {}) };
   });
+  if (plan.phase !== 'running' && plan.phase !== 'done') return { ...plan, steps };
   const done = steps.every(s => s.state === 'done');
   return { ...plan, steps, ...(done ? { phase: 'done' as const, at: now } : plan.phase === 'done' ? { phase: 'running' as const, at: now } : {}) };
 }
@@ -263,7 +310,8 @@ export function afterReport(plan: StrategyPlan, chatId: string, outcomes: (id: s
 /** A final parent report ends execution, without claiming unfinished steps met their criteria.
  * Unfinished work is partial (or retains a blocked result); explicit successful steps retain their quality. */
 export function finishPlan(plan: StrategyPlan, now: number): StrategyPlan {
-  return { ...plan, phase: 'done', at: now, steps: plan.steps.map(s => ({ ...s, state: 'done',
+  const { stopped: _x, ...rest } = plan;
+  return { ...rest, phase: 'done', at: now, steps: plan.steps.map(({ drop: _d, ...s }) => ({ ...s, state: 'done',
     outcome: s.outcome ?? (s.state === 'done' ? 'done' : s.state === 'blocked' ? 'blocked' : 'partial'),
     endedAt: s.endedAt ?? now })) };
 }
@@ -280,7 +328,7 @@ export function stopsQuestions(text: string): boolean {
 /** A saved plan, checked (an unreadable one is dropped, never guessed). */
 export function readPlan(v: unknown): StrategyPlan | null {
   const p = v as Record<string, unknown> | null;
-  if (!p || typeof p !== 'object' || !['asking', 'proposed', 'revising', 'running', 'done'].includes(p.phase as string) || !Number.isFinite(p.at)) return null;
+  if (!p || typeof p !== 'object' || !PLAN_PHASES.includes(p.phase as PlanPhase) || !Number.isFinite(p.at)) return null;
   const str = (x: unknown, max: number) => typeof x === 'string' && x.length > 0 && x.length <= max;
   const time = (x: unknown) => x === undefined || (typeof x === 'number' && Number.isFinite(x) && x > 0);
   if (!Array.isArray(p.clarified) || p.clarified.length > CLARIFIED_MAX || !p.clarified.every(c => c && str(c.q, CLARIFIED_TEXT_MAX) && str(c.a, CLARIFIED_TEXT_MAX))) return null;
@@ -294,10 +342,10 @@ export function readPlan(v: unknown): StrategyPlan | null {
     phase: p.phase as PlanPhase, at: p.at as number, clarified: (p.clarified as Clarified[]).map(c => ({ q: c.q, a: c.a, ...(typeof c.pcOnly === 'boolean' ? { pcOnly: c.pcOnly } : {}), ...(typeof c.questionHash === 'string' && /^[0-9a-f]{64}$/.test(c.questionHash) ? { questionHash: c.questionHash } : {}) })),
     ...(p.pcOnly === true ? { pcOnly: true } : {}), ...(p.asked ? { asked: p.asked as number } : {}), ...(p.enough === true ? { enough: true } : {}),
     steps: (p.steps as PlanStep[]).map(s => ({ title: s.title, ...(s.detail ? { detail: s.detail } : {}), ...(s.role ? { role: s.role } : {}), state: s.state, ...(s.outcome ? { outcome: s.outcome } : {}), ...(s.chatIds ? { chatIds: [...s.chatIds] } : {}),
-      ...(s.startedAt ? { startedAt: s.startedAt } : {}), ...(s.endedAt ? { endedAt: s.endedAt } : {}), ...(s.on ? { on: s.on } : {}), ...(s.added === true ? { added: true as const } : {}), ...(s.par === true ? { par: true as const } : {}),
+      ...(s.startedAt ? { startedAt: s.startedAt } : {}), ...(s.endedAt ? { endedAt: s.endedAt } : {}), ...(s.on ? { on: s.on } : {}), ...(s.added === true ? { added: true as const } : {}), ...(s.par === true ? { par: true as const } : {}), ...(s.drop === true ? { drop: true as const } : {}),
       // read leniently: a bad preset or model (or none, before 2026-11-23) is left out, the plan stays
       ...(isPresetId(s.preset) ? { preset: s.preset } : {}), ...(str(s.model, 120) && !/[\r\n]/.test(s.model!) ? { model: s.model } : {}) })),
-    ...(p.doneWhen ? { doneWhen: p.doneWhen as string } : {}), ...(p.map ? { map: p.map as string } : {}),
+    ...(p.doneWhen ? { doneWhen: p.doneWhen as string } : {}), ...(p.map ? { map: p.map as string } : {}), ...(p.stopped === true ? { stopped: true as const } : {}),
   };
 }
 
