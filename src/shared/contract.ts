@@ -63,7 +63,8 @@ export interface EventMap {
   /** a role's picture was set or removed: every badge on screen redraws */
   'avatars:changed': AgentImages;
   'chat:updated': ChatSummary;
-  'chat:removed': { chatId: string };
+  /** by = who closed it; absent = the app itself (the oldest closed chats leave, pruneArchived) */
+  'chat:removed': { chatId: string; by?: 'user' | 'agent' };
   'chat:item': { chatId: string; item: ChatItem; replace?: boolean };
   'pending:added': PendingRequest;
   /** by phone = answered from the paired phone (src/main/chats/phone-port.ts); absent = anything else */

@@ -86,7 +86,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     // the parent Strategist's step for this child: done once every chat of the step reported done (ADR 0108)
     if (parent?.s.plan && (!run?.parentRunId || run.parentRunId === parent.s.run?.runId)) {
       // a sibling gone without a result (closed by the user) counts as not done: the step shows blocked, never stuck
-      const next = afterReport(parent.s.plan, chatId, id => { const c = this.chats.get(id); return c ? (!c.s.run?.parentRunId || c.s.run.parentRunId === parent.s.run?.runId ? c.s.delegation?.result?.outcome : undefined) : 'blocked'; }, at);
+      const next = afterReport(parent.s.plan, chatId, id => this.stepOutcome(parent, id), at);
       if (next !== parent.s.plan) { parent.s.plan = next; this.persist(); }
     }
     if (parent) {
@@ -118,7 +118,9 @@ export abstract class ManagerDelegation extends ManagerContinuity {
   /** agent_ask_parent (agents/delegation.ts): the child waits for its parent's answer, not on its report (#152). */
   askedParent(chatId: string): void {
     const r = this.chats.get(chatId);
-    if (r) r.askedParentAt = Date.now();
+    if (!r) return;
+    r.askedParentAt = r.s.askedParentAt = Date.now();
+    this.updated(r);
   }
 
   /** A delegated child that owes its result and has nothing left that would bring it (#152): its turn ended clean and

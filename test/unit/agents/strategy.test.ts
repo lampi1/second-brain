@@ -25,7 +25,7 @@ import type { AgentCatalog } from '../../../src/shared/agents';
 import type { NewChat } from '../../../src/shared/contract';
 import type { McpTool } from '../../../src/main/mcp/server';
 import type { PermissionCeiling, ToolClass } from '../../../src/shared/agents';
-import { finishPlan, afterReport, isPlanApproval, checkProposal, checkRevision, parallelSplit, delegationGate, proposalGate, ENOUGH_QUESTIONS, PLAN_APPROVED, planWaves, readPlan, STRATEGY_FLOW, stopsQuestions, withDelegated, withStep, type StrategyPlan } from '../../../src/shared/strategy';
+import { afterChatsEnded, finishPlan, afterReport, isPlanApproval, checkProposal, checkRevision, parallelSplit, delegationGate, proposalGate, ENOUGH_QUESTIONS, PLAN_APPROVED, planWaves, readPlan, STRATEGY_FLOW, stopsQuestions, withDelegated, withStep, type StrategyPlan } from '../../../src/shared/strategy';
 
 /** Roles a user narrowed: tools, ceiling and launches per role (the rest stays the default). */
 type Narrowed = Partial<Record<RoleId, { tools: ToolClass[]; ceiling: PermissionCeiling | null; launches: string[] }>>;
@@ -641,6 +641,31 @@ describe('shared/strategy.ts', () => {
 });
 
 // Reusing a conversation moves only the active plan association; previous run reports remain in the ledger.
+describe('a step whose chats ended without moving it (ADR 0342)', () => {
+  const p = (over: Partial<StrategyPlan> = {}): StrategyPlan => ({ phase: 'running', at: 1, clarified: [], steps: [{ title: 'Uno', state: 'now', chatIds: ['a', 'b'] }, { title: 'Due', state: 'now', chatIds: ['c'] }, { title: 'Tre', state: 'now' }, { title: 'Quattro', state: 'todo' }], ...over });
+  const gave = (o: Record<string, 'done' | 'partial' | 'blocked'>) => (id: string) => o[id];
+  it('ends with what they gave: all of them, or the step goes on', () => {
+    expect(afterChatsEnded(p(), gave({ a: 'done' }), 9)).toEqual(p());
+    const one = p();
+    expect(afterChatsEnded(one, gave({ a: 'done' }), 9)).toBe(one);
+    const next = afterChatsEnded(p(), gave({ a: 'done', b: 'blocked', c: 'partial' }), 9);
+    expect(next.steps).toMatchObject([{ state: 'blocked', outcome: 'blocked', endedAt: 9 }, { state: 'done', outcome: 'partial' }, { state: 'now' }, { state: 'todo' }]);
+  });
+  it('only the step of one chat when asked for it', () => {
+    expect(afterChatsEnded(p(), gave({ a: 'done', b: 'done', c: 'done' }), 9, 'c').steps.map(s => s.state)).toEqual(['now', 'done', 'now', 'todo']);
+  });
+  it('a chat open again takes its blocked step back; a step the Strategist blocked itself stays', () => {
+    const blocked = afterChatsEnded(p(), gave({ c: 'blocked' }), 9, 'c');
+    expect(blocked.steps[1]).toMatchObject({ state: 'blocked', outcome: 'blocked' });
+    expect(afterChatsEnded(blocked, gave({}), 10, 'c').steps[1]!.state).toBe('now');
+    const own = p({ steps: [{ title: 'Due', state: 'blocked', chatIds: ['c'] }] });
+    expect(afterChatsEnded(own, gave({}), 10, 'c')).toBe(own);
+  });
+  it('the approval under way and the user\'s stop are kept', () => {
+    expect(afterChatsEnded(p({ phase: 'proposed', at: 5, stopped: true }), gave({ c: 'blocked' }), 9)).toMatchObject({ phase: 'proposed', at: 5, stopped: true, steps: [{}, { state: 'blocked' }, {}, {}] });
+  });
+});
+
 describe('reused child plan steps', () => {
   it('moves a reused child to the new step and reopens finished execution', () => {
     const plan: StrategyPlan = {phase:'done',at:1,clarified:[],steps:[

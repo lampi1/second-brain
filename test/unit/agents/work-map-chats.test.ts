@@ -1,7 +1,9 @@
 // Work maps on a real ChatManager with fake engines and the real store (ADR 0342): a Strategist has a map with no map call,
 // plan_propose without a map cannot leave it without one, a plan approved and kept starts later, a replan of a running
 // job keeps what started and starts nothing new before the approval, the removed step stops at that approval, stop and
-// resume, a closed chat leaves its map stopped, a restart keeps maps and plans, an old plan gets its map once.
+// resume, a closed chat leaves its map stopped, a restart keeps maps and plans, an old plan gets its map once. The live
+// status (workmap/live.ts): a step whose chat is closed, removed or lost at a restart is not «now» for ever, and what its
+// chat does shows on it.
 // Pins workmap/service.ts with chats/manager-work.ts planDecide (keep), planStart, planStop, planResume, planReplan and
 // planPutAway, shared/strategy.ts (approved, stopped, drop, remove) and manager.ts create (workMap, resumePlan).
 import fs from 'node:fs';
@@ -262,6 +264,85 @@ describe('a restart', () => {
     await g.m.shutdown();
     const h = fixture({ dir: f.dir });
     expect(h.maps().list().map(i => i.id)).toEqual([id]);
+  });
+});
+
+describe('a step is never «now» for ever (live status)', () => {
+  const started = async () => {
+    const f = fixture(), s = await f.proposed();
+    await act(f, s.id, 'approve');
+    await f.call('agent_delegate', s.id, f.task('scout', 'Sconti · Dove', 1));
+    return { f, s, kid: f.kids(s.id)[0]!.id, box: (g: F = f) => g.maps().view(g.mapOf(s.id).id)!.boxes[0]! };
+  };
+
+  it('its chat closed without a report: blocked, and it says so; open again: it goes on', async () => {
+    const { f, kid, box } = await started();
+    expect(box()).toMatchObject({ state: 'now', live: { chats: [{ chatId: kid }] } });
+    await f.m.archive(kid);
+    expect(box()).toMatchObject({ state: 'blocked', live: { say: 'closed', chats: [{ chatId: kid, say: 'closed' }] } });
+    await f.m.reopen(kid);
+    expect(box()).toMatchObject({ state: 'now' });
+    expect(box().live!.say).not.toBe('closed');
+  });
+
+  it('its chat removed without a report: blocked, its chat gone', async () => {
+    const { f, kid, box } = await started();
+    await f.m.close(kid);
+    expect(box()).toMatchObject({ state: 'blocked', live: { say: 'gone' } });
+  });
+
+  it('closed after its report: the report stays', async () => {
+    const { f, kid, box } = await started();
+    await f.call('agent_report', kid, { outcome: 'done', summary: 'ok', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }] });
+    await f.m.archive(kid);
+    expect(box()).toMatchObject({ state: 'done' });
+  });
+
+  it('its chat works, asks the user, fails: the step says it at once', async () => {
+    const { f, kid, box } = await started(), sink = f.sinks.get(kid)!;
+    sink.changed({ state: 'running' });
+    expect(box().live).toMatchObject({ say: 'working' });
+    sink.pending({ id: 'q1', type: 'question', tool: 'AskUserQuestion', title: '?', detail: '', input: {}, questions: [{ question: '?', options: [{ label: 'Sì' }, { label: 'No' }], multiSelect: false }], at: 1 });
+    expect(box().live).toMatchObject({ say: 'waiting', waits: 'user' });
+    await f.m.answer(kid, 'q1', { kind: 'question', answers: { '?': 'Sì' } }, 'pc');
+    expect(box().live!.waits).not.toBe('user');
+    sink.changed({ state: 'error' });
+    expect(box().live).toMatchObject({ say: 'failed' });
+  });
+
+  it('asks its parent: it waits for the parent until the answer', async () => {
+    const { f, s, kid, box } = await started();
+    f.sinks.get(kid)!.changed({ state: 'idle' });
+    f.m.askedParent(kid);
+    expect(box().live).toMatchObject({ say: 'waiting', waits: 'parent' });
+    await f.call('agent_answer_child', s.id, { chatId: kid, answer: 'Sì, anche i resi' });
+    expect(f.m.list().find(c => c.id === kid)!.askedParentAt).toBeUndefined();
+    expect(box().live!.waits).toBeUndefined();
+  });
+
+  it('the app restarts with the step under way: still under way, nothing invented; its chat lost meanwhile: blocked', async () => {
+    const { f, s, kid, box } = await started();
+    await f.m.shutdown();
+    const g = fixture({ dir: f.dir });
+    expect(box(g)).toMatchObject({ state: 'now', live: { say: 'unknown', stale: expect.any(Number) } });
+    await g.m.shutdown();
+    // the chat's record did not survive, and no event said so
+    const file = path.join(f.dir, 'chats.json'), raw = JSON.parse(fs.readFileSync(file, 'utf8')) as unknown;
+    const drop = (v: unknown): unknown => (Array.isArray(v) ? v.filter(c => (c as { id?: string }).id !== kid) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, Array.isArray(x) ? drop(x) : x])) : v);
+    fs.writeFileSync(file, JSON.stringify(drop(raw)));
+    const h = fixture({ dir: f.dir });
+    expect(h.m.list().some(c => c.id === kid)).toBe(false);
+    expect(h.m.planOf(s.id)!.steps[0]).toMatchObject({ state: 'blocked' });
+    expect(box(h)).toMatchObject({ state: 'blocked', live: { say: 'gone' } });
+  });
+
+  it('the approval of a replan under way is not touched by a chat that closes', async () => {
+    const { f, s, kid } = await started();
+    await f.call('plan_propose', s.id, { revise: true, steps: [{ keep: 1 }, { title: 'Altro', role: 'artisan' }] });
+    const at = planAt(f, s.id);
+    await f.m.archive(kid);
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'toApprove', plan: { phase: 'proposed', at, steps: [{ state: 'blocked' }, { state: 'todo' }] } });
+    expect((await act(f, s.id, 'approve')).state).toBe('running');
   });
 });
 

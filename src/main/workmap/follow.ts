@@ -31,8 +31,8 @@ function planFrom(m: WorkMap, c: ChatSummary): StrategyPlan | undefined {
   return { ...plan, steps: m.plan.steps.map(({ drop: _d, ...s }) => ({ ...structuredClone(s), state: s.state === 'done' ? 'done' as const : 'todo' as const })) };
 }
 
-/** The map as its owner chat makes it now. `now` dates what is new. */
-export function follow(m: WorkMap, c: ChatSummary, now: number): WorkMap {
+/** The map as its owner chat makes it now. `now` dates what is new; dead = the chat's engine died and did not come back. */
+export function follow(m: WorkMap, c: ChatSummary, now: number, dead = false): WorkMap {
   const { stopped: was, finishedAt, seenAt, archivedAt, plan: _p, ...rest } = m;
   const plan = planFrom(m, c);
   const base = { ...rest, title: titleOf(c), ...(plan ? { plan } : {}) };
@@ -41,15 +41,16 @@ export function follow(m: WorkMap, c: ChatSummary, now: number): WorkMap {
   // the app closes a chat only once its turn is over and nothing waits: with no plan the job ended there
   if (c.closedAt && c.closedBy !== 'user' && !plan) return settle({ ...base, finishedAt: finishedAt ?? c.closedAt, ...(seenAt !== undefined ? { seenAt } : {}), ...(archivedAt !== undefined ? { archivedAt } : {}) });
   const wentOn = !!c.plan && archivedAt !== undefined && c.plan.at > archivedAt && ['proposed', 'approved', 'running'].includes(c.plan.phase);
-  const stopped = stopOf(c, was, now);
+  const stopped = stopOf(c, was, now, dead);
   return settle({ ...base, ...(stopped ? { stopped } : {}), ...(archivedAt !== undefined && finishedAt === undefined && !wentOn ? { archivedAt } : {}) });
 }
 
-function stopOf(c: ChatSummary, was: WorkMap['stopped'], now: number): WorkMap['stopped'] {
+function stopOf(c: ChatSummary, was: WorkMap['stopped'], now: number, dead: boolean): WorkMap['stopped'] {
   if (c.plan?.stopped) return was?.by === 'user' ? was : { at: now, by: 'user' };
   // a plan that waits for the user, or for its start, does not need its chat open: closed by the app it stays as it is
   const waits = c.plan?.phase === 'proposed' || c.plan?.phase === 'approved';
   if (c.closedAt && (c.closedBy === 'user' || !waits)) return was ?? { at: c.closedAt, by: 'closed' };
+  if (dead && !waits) return was ?? { at: now, by: 'closed' };
   if (!was || was.by === 'closed' || was.by === 'gone') return undefined;
   // a job with no plan has only the map to say it is stopped, until its chat works again
   if (was.by === 'user' && (c.plan || c.state === 'running' && (c.workSince ?? 0) > was.at)) return undefined;

@@ -610,6 +610,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const worktreeCleanup = () => { void worktreePool.autoCleanup().catch(e => log.warn('agents', 'worktree cleanup failed', { cause: errText(e), hint: 'the next run tries again; Settings → Avanzate has «Pulisci ora»' })); };
   const worktreeFirst = prodPollers ? setTimeout(worktreeCleanup, 5 * 60_000) : null, worktreeTimer = prodPollers ? setInterval(worktreeCleanup, 6 * 3600_000) : null;
   const wake = attachOrchestratorWake(ctx, chats, () => brain.settings().orchestratorEvents !== false && (!process.env.SB_TEST || process.env.SB_ORCHESTRATOR_EVENTS === '1'));
+  workMaps.tellTo(wake); // a job stopped by itself (ADR 0342): the Orchestrator takes it up again
   manager.onUserWrote(n => wake.userMessage(n)); // the user typed in a work chat: quiet news (ADR 0083)
   // a root chat's clean result wakes the Orchestrator during an active workflow, or while the user is away (ADR 0191): the
   // Orchestrator carries the work on to its end instead of waiting for the user's next message
@@ -919,7 +920,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { news.dispose(); projectMaps.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (worktreeFirst) clearTimeout(worktreeFirst); if (worktreeTimer) clearInterval(worktreeTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); if (workDriverTimer) clearInterval(workDriverTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); modelLists.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { news.dispose(); projectMaps.stop(); workMaps.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (worktreeFirst) clearTimeout(worktreeFirst); if (worktreeTimer) clearInterval(worktreeTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); if (workDriverTimer) clearInterval(workDriverTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); modelLists.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { manager.killAll(); runner.shutdown(); },
   };
 }
