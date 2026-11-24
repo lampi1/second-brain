@@ -22,6 +22,10 @@ describe('requestFailed', () => {
     expect(kill).not.toHaveBeenCalled();
     expect(log.error).not.toHaveBeenCalled();
     expect(log.info).toHaveBeenCalledWith('chats', 'control_request: the engine was gone before its answer', expect.objectContaining({ chat: 'c' }));
+    // another cause on a gone engine stays among the warnings
+    requestFailed(new Error('SQLITE_BUSY'), { chatId: 'c', what: 'control_request', kill, gone: () => true });
+    expect(log.warn).toHaveBeenCalledWith('chats', 'control_request: the engine was gone before its answer', expect.objectContaining({ data: { cause: 'SQLITE_BUSY' } }));
+    expect(log.error).not.toHaveBeenCalled();
     // the same error from a live engine is still an error
     requestFailed(new Error('La sessione non è attiva.'), { chatId: 'c', what: 'control_request', kill, gone: () => false });
     expect(log.error).toHaveBeenCalledOnce();

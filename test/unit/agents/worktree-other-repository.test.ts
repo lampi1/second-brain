@@ -11,8 +11,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type * as ChildProcess from 'node:child_process';
 import type { ChatSummary, NewChat } from '../../../src/shared/contract';
 
-type Tree = { head: string; branch: string; common: string; dirty?: boolean; killed?: boolean };
-const git = vi.hoisted(() => ({ trees: new Map<string, { head: string; branch: string; common: string; dirty?: boolean; killed?: boolean }>(), added: [] as { from: string; root: string }[],
+type Tree = { head: string; branch: string; common: string; dirty?: boolean; killed?: boolean; blocked?: boolean };
+const git = vi.hoisted(() => ({ trees: new Map<string, { head: string; branch: string; common: string; dirty?: boolean; killed?: boolean; blocked?: boolean }>(), added: [] as { from: string; root: string }[],
   /** run once when a worktree is added / a tree is written: something changes meanwhile */
   onAdd: undefined as (() => void) | undefined, onTree: undefined as (() => void) | undefined }));
 vi.mock('node:child_process', async original => ({
@@ -25,7 +25,8 @@ vi.mock('node:child_process', async original => ({
     const ok = (out = '') => queueMicrotask(() => done(null, out));
     const fail = (code: number) => queueMicrotask(() => done(Object.assign(new Error(`git exit ${code}`), { code }), ''));
     switch (rest[0]) {
-      case 'config': fail(1); break; // no filter, include or merge driver configured
+      // no filter, include or merge driver configured; `blocked` = an include the host policy refuses
+      case 'config': if (tree?.blocked) ok('include.path\0'); else fail(1); break;
       // a killed git (a timeout) has no exit code; «not a repository» is git's 128
       case 'rev-parse': if (tree?.killed) queueMicrotask(() => done(Object.assign(new Error('killed'), { killed: true }), '')); else if (tree) ok(`${root}\n${tree.common}\n${tree.head}\n`); else fail(128); break;
       case 'status': ok(tree?.dirty ? ' M src/a.ts\n' : ''); break;
@@ -95,8 +96,17 @@ describe('a writing child in another repository', () => {
     git.trees.set(sibling, { head: A, branch: 'feature', common: path.join(w.mine, '.git') });
     // the parent's checkout is dirty and its rev-parse is killed (a timeout): the dirty check must not be skipped
     Object.assign(w.tree(w.mine), { dirty: true, killed: true });
-    await expect(service.prepare(w.parent(w.mine), { cwd: sibling } as NewChat, writer)).rejects.toThrow(/requires a Git repository/);
+    await expect(service.prepare(w.parent(w.mine), { cwd: sibling } as NewChat, writer)).rejects.toThrow(/Git could not read the repository at .*mine; no child was started/);
     expect(git.added).toEqual([]);
+  });
+
+  it('a parent repository the host policy refuses does not stop a child in another repository', async () => {
+    const w = world(), service = new DelegateWorktrees();
+    w.tree(w.mine).blocked = true;
+    const made = await service.prepare(w.parent(w.mine), { cwd: w.other } as NewChat, writer); made.bind!('child');
+    expect(service.allocation(w.parent(w.mine), { id: 'child', parentId: 'parent', cwd: made.cwd } as ChatSummary)).toMatchObject({ sourceRoot: w.other });
+    // in that refused repository itself nothing starts, with the policy's own reason
+    await expect(service.prepare(w.parent(w.mine), { cwd: w.mine } as NewChat, writer)).rejects.toThrow(/includes external or conditional files/);
   });
 
   it('a continued child keeps the checkout its predecessor was branched from, also through a restart', async () => {

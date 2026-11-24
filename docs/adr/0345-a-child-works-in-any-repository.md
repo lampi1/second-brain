@@ -33,8 +33,9 @@ ADR 0227 (the worktree of a writing child)
   committed. The parent's checkout is read only when the child works in the parent's own repository, where nothing
   changes; in another repository the parent's folder may have pending edits or be no repository at all. The record of
   such a child names the checkout it was branched from (`sourceRoot`); a continued child («Riprendi») keeps its
-  predecessor's. A parent folder counts as «another repository» only when git says it is none (exit 128): a git that
-  failed or timed out is an error, never a missing repository.
+  predecessor's. A parent folder counts as «another repository» when git's rev-parse fails there with its
+  fatal exit 128 (no repository, no commit yet) or the host policy refuses that repository's configuration; a git that
+  timed out or crashed is an error («Git could not read the repository at …»), never a missing repository.
 - **Its changes are staged in its own repository** (`agent_integrate_child`, `agent_integrate_children`): a detached
   worktree of the checkout it was branched from, never of the parent's. One repository and one checkout per call:
   children of different ones are refused together, with that reason.

@@ -132,8 +132,9 @@ export function blockingChanges(porcelain: string, appOwned: boolean): string[] 
 /** A checkout as git names it: its top folder, its repository (the common dir its worktrees share) and its commit. */
 type Checkout = { root: string; common: string; head: string };
 
-/** The folder is no Git repository with a commit; any other failure of git (a timeout, a blocked configuration) is a
- *  plain Error, so a repository that could not be read is never taken for a missing one. */
+/** The folder is no Git repository with a commit, or one the host policy refuses to run git in (gitPolicy: the
+ *  refusal is the repository's own configuration, so every checkout of it gets the same one). Any other failure of
+ *  git (a timeout, a crash) is a plain Error: a repository that could not be read is never taken for a missing one. */
 class NoRepository extends Error {}
 const NO_REPOSITORY = 'Writing delegation requires a Git repository with a commit; no shared-folder fallback.';
 
@@ -142,10 +143,11 @@ const NO_REPOSITORY = 'Writing delegation requires a Git repository with a commi
 async function repositoryIdentity(cwd: string, session: GitSession): Promise<Checkout> {
   if (!cwd || !path.isAbsolute(cwd) || !isDir(cwd)) throw new NoRepository(NO_REPOSITORY);
   const ids = await session.git(cwd, ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir', 'HEAD^{commit}']);
-  if (ids.error) throw new Error(ids.error);
-  // 128 is git's own «not a repository» (or no commit yet); a killed or otherwise failed git says nothing about it
+  if (ids.error) throw new NoRepository(ids.error);
+  // 128 is git's own fatal «not a repository» (or no commit yet); a killed or otherwise failed git says nothing about it
   if (ids.exit === 128) throw new NoRepository(NO_REPOSITORY);
-  const [root = '', common = '', head = ''] = ids.exit === 0 ? ids.out.split(/\r?\n/).map(l => l.trim()) : [];
+  if (ids.exit !== 0) throw new Error(`Git could not read the repository at ${cwd}; no child was started. Retry the delegation.`);
+  const [root = '', common = '', head = ''] = ids.out.split(/\r?\n/).map(l => l.trim());
   if (!common || !path.isAbsolute(common)) throw new Error(NO_REPOSITORY);
   if (!root || !path.isAbsolute(root)) throw new Error('Repository identity could not be verified.');
   if (!/^[a-f0-9]{40,64}$/.test(head)) throw new Error('Repository has no valid committed baseline.');
@@ -236,7 +238,8 @@ export class DelegateWorktrees {
     let parentRepo: Checkout | null = null, source: Checkout;
     if (samePath(parent.cwd, cwd)) parentRepo = source = await cleanRepository(cwd, brain, session);
     else {
-      // only a parent folder that is no repository counts as «another repository»: a git that failed is an error
+      // a parent folder that is no repository, or one the host policy blocks (the child's own checkout would get the same
+      // refusal just below if it were of that repository), counts as «another repository»; a git that failed is an error
       const parentId = await repositoryIdentity(parent.cwd, session).catch((e: unknown) => { if (e instanceof NoRepository) return null; throw e; });
       const sourceId = await repositoryIdentity(cwd, session);
       if (parentId && samePath(parentId.common, sourceId.common)) parentRepo = await requireClean(parentId, brain, session);

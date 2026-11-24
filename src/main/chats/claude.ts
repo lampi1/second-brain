@@ -31,7 +31,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { providerWrite } from '../agent-runtime/transport-timing';
-import { requestFailed } from '../agent-runtime/request-failure';
+import { NOT_ACTIVE, requestFailed } from '../agent-runtime/request-failure';
 import { RuntimeOperationError } from '../agent-runtime/channel';
 import type { Answer, ChatItem, ChatState, Effort, ImageAttachment, PendingRequest, PermissionMode } from '../../shared/contract';
 import { sysEn, type SysCode, type SysParams } from '../../shared/sys';
@@ -475,7 +475,7 @@ export class ClaudeSession implements HarnessSession {
   }
 
   send(text: string, images: readonly ImageAttachment[] = []): void {
-    if (this.exited || !this.proc) throw new Error('La sessione non è attiva.');
+    if (this.exited || !this.proc) throw new Error(NOT_ACTIVE);
     // images first, then the text (the Messages API order recommended for image questions)
     const content: Obj[] = images.map(im => ({ type: 'image', source: { type: 'base64', media_type: im.mimeType, data: im.data } }));
     if (text || !content.length) content.push({ type: 'text', text });
@@ -666,7 +666,7 @@ export class ClaudeSession implements HarnessSession {
 
   private write(obj: Obj): void {
     const p = this.proc;
-    if (!p || this.inputClosed()) throw new Error('La sessione non è attiva.');
+    if (!p || this.inputClosed()) throw new Error(NOT_ACTIVE);
     p.stdin.write(`${JSON.stringify(obj)}\n`);
     if (obj.type === 'user') providerWrite(this.opts.chatId);
   }
@@ -678,7 +678,7 @@ export class ClaudeSession implements HarnessSession {
 
   /** A control request; resolves with the whole success envelope ({subtype, request_id, response, pending_…}). */
   private controlRaw(request: Obj, timeoutMs = 20000): Promise<Obj> {
-    if (this.exited || !this.proc) return Promise.reject(new Error('La sessione non è attiva.'));
+    if (this.exited || !this.proc) return Promise.reject(new Error(NOT_ACTIVE));
     const id = crypto.randomBytes(6).toString('hex');
     const subtype = s(request.subtype);
     return new Promise<Obj>((resolve, reject) => {

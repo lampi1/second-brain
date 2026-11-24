@@ -8,6 +8,9 @@
 import { errText, log } from '../log';
 import { RuntimeOperationError } from './channel';
 
+/** What a session throws when asked to write to an engine that exited or whose input is closed. */
+export const NOT_ACTIVE = 'La sessione non è attiva.';
+
 export function requestFailed(e: unknown, o: { chatId: string; what: string; kill: () => void; /** the engine exited or its input is closed */ gone?: () => boolean }): void {
   if (e instanceof RuntimeOperationError) {
     log.warn('chats', `${o.what}: runtime broker failed, engine stopped`, { chat: o.chatId, data: { outcome: e.outcome } });
@@ -15,7 +18,9 @@ export function requestFailed(e: unknown, o: { chatId: string; what: string; kil
     return;
   }
   if (o.gone?.()) {
-    log.info('chats', `${o.what}: the engine was gone before its answer`, { chat: o.chatId, data: { cause: errText(e) } });
+    // the session's own refusal to write is the expected one; any other cause is kept visible among the warnings
+    const expected = errText(e) === NOT_ACTIVE;
+    log[expected ? 'info' : 'warn']('chats', `${o.what}: the engine was gone before its answer`, { chat: o.chatId, data: { cause: errText(e) } });
     return;
   }
   log.error('chats', `${o.what} failed`, { chat: o.chatId, cause: errText(e), hint: 'the engine keeps running; see the handler in chats/' });
