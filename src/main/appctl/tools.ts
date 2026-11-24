@@ -31,6 +31,7 @@ import { agentsMayOpen, crossRefusal, openRefusal } from '../engines/policy';
 import type { BrainService, BrowserService, ChatService } from '../services';
 import { log, redact } from '../log';
 import { answerableInWords, sameWords } from '../../shared/answer-in-words';
+import { heldQuestions, openQuestions } from '../../shared/question-ladder';
 import { isPlanApproval } from '../../shared/strategy';
 import { withPasswordsHidden } from '../browser/shot-mask';
 import { fmtFactor, previewOf } from '../browser/preview';
@@ -195,9 +196,11 @@ const brief = (c: ChatSummary, warn: number) => c.parentId ? statusOnly(c) : ({
 /** What the Orchestrator reads after writing to a chat that waits on the user (ADR 0329; on the owner's PC, 2026-11-19,
  *  it passed his answer as a message twice and the row stayed): a chat reads no message while its own question is
  *  open, and a plan's row stays until the plan is decided. Null: the chat waits on nothing of his. */
-export function waitsOnUser(chat: Pick<ChatSummary, 'id' | 'title' | 'plan' | 'closedAt'>, pending: readonly PendingRequest[]): string | null {
+export function waitsOnUser(chat: Pick<ChatSummary, 'id' | 'title' | 'plan' | 'closedAt' | 'questions'>, pending: readonly PendingRequest[]): string | null {
   const ask = pending.find(p => p.chatId === chat.id && answerableInWords(p));
   if (ask) return `But «${chat.title}» waits on its open question (requestId ${ask.id}) and reads this message only after the answer: the user still sees the question. If his last message decides it, call app_resolve_question now (chatId ${chat.id}, requestId ${ask.id}, words quoted from his message, or answers): its row closes.`;
+  const held = heldQuestions(chat.questions).find(q => q.level === 'orchestrator');
+  if (!chat.closedAt && held) return `But «${chat.title}» waits on a question YOU hold (requestId ${held.id}) and may read this message only after it: answer it with app_resolve_question (chatId ${chat.id}, requestId ${held.id}, answer and why), or askUser true: it goes to the user.`;
   if (!chat.closedAt && chat.plan?.phase === 'proposed') return `But the plan of «${chat.title}» still waits for the user's ok and its row stays open. What he wants changed in a plan goes with app_resolve_question (chatId ${chat.id}, requestId plan, decision change with text, or words quoted from his message): its row closes and the plan comes back revised.`;
   return null;
 }
@@ -243,6 +246,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   /** Chat visibility is shared; ownership checks remain on operations that require an owner. */
   /** a chat another role delegated: the Orchestrator sees its state, never its content (ADR 0083) */
   const delegated = (chatId: string) => d.chats.list().some(c => c.id === chatId && !!c.parentId);
+  /** a worker's question that climbed the ladder to the user (ADR 0344): it passed the Orchestrator, which sees it whole */
+  const climbed = (p: { chatId: string; id: string }) => d.chats.list().some(c => c.id === p.chatId && openQuestions(c.questions).some(q => q.level === 'user' && (q.requestId === p.id || p.id === `ladder-${q.id}`)));
+  const muteAsk = <R extends { id: string; chatId: string; title?: string; detail?: string }>(r: R): R => mutedRequest(r, delegated(r.chatId) && !climbed(r));
   const contentOf = (chatId: string) => { if (delegated(chatId)) throw new Error('chat delegata da un altro ruolo: il suo contenuto lo legge il genitore; tu ne vedi lo stato (app_chats, app_digest)'); return chatId; };
   // app_guide's own list of the caller's tools is read when asked, so it names exactly what this endpoint offers
   const guideDeps = { window: d.window, settings: { schema: () => d.brain.settingsSchema(), get: () => d.brain.settings() },
@@ -329,7 +335,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         lastDigest.set(key, now);
         return digest({
           works: d.workflows?.projection(),
-          chats: d.chats.list().map(muted), pending: [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].map(r => mutedRequest(r, delegated(r.chatId))),
+          chats: d.chats.list().map(muted), pending: [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].map(muteAsk),
           runs: (d.runs?.() ?? []).filter(r => !delegated(r.chatId)), tasks: d.tasks?.() ?? null,
           now, since, selfId: caller()?.id, warnTokens: d.brain.settings().contextWarnTokens, branch: gitBranch,
         });
@@ -383,14 +389,17 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         .map(r => ({ id: r.id, chatId: r.chatId, state: r.state, exitCode: r.exitCode, code: redact(r.code.slice(0, 1500)), cwd: r.cwd, output: redact(r.output.slice(-4000)), startedAt: new Date(r.startedAt).toISOString(), endedAt: r.endedAt ? new Date(r.endedAt).toISOString() : null, ...(r.prod ? { prod: r.prod } : {}), ...(r.duplicateOf ? { duplicateOf: r.duplicateOf } : {}) })),
     },
     {
-      name: 'app_pending', description: 'Open questions, permission requests and commands left for the user to run (type "command": a shell block waiting for his Esegui; command.duplicateOf = the id of the first run of the identical command, when it already ran) waiting for the user. Answer them for him with app_resolve_question; a command goes to him with relay_question.',
-      inputSchema: obj(), run: () => [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].map(r => mutedRequest(r, delegated(r.chatId))),
+      name: 'app_pending', description: 'What waits. type "held": a worker\'s question YOU hold (ADR 0344), not the user\'s yet: answer it with app_resolve_question answer + why, or askUser true. The rest is waiting for the user: open questions, permission requests and commands left for the user to run (type "command": a shell block waiting for his Esegui; command.duplicateOf = the id of the first run of the identical command, when it already ran) . Answer them for him with app_resolve_question; a command goes to him with relay_question.',
+      inputSchema: obj(), run: () => [...(callerId && authed() ? d.chats.ladderHeldBy?.(callerId) ?? [] : []).map(h => ({ id: h.q.id, chatId: h.chatId, type: 'held', title: h.title, questions: h.q.asks, trail: h.q.trail, at: h.q.at })),
+        ...[...d.chats.pending(), ...(d.commandAsks?.() ?? [])].map(muteAsk)],
     },
     {
       name: 'app_resolve_question',
-      description: 'Answer for the user (ADR 0269, 0275): what you answer counts as his own, always. Any chat\'s open question (an option label or free words, every question of the request), any permission (allow true/false, message), a Strategist\'s proposed plan (requestId "plan", decision approve/change, text). Pick what his goal, the brain or the plan settle, then tell him in one line what you answered. The one exception: a permission that runs on production, a database or Azure — show him what it runs, and only after his yes pass confirmed true. A command waiting for Esegui: relay_question shows it to him and his «sì» runs it. When his last message to you answers a request, pass words (quoted from it) instead: his whole message reaches the chat.',
+      description: 'A worker\'s question you hold (app_pending type "held", or its message): answer + why (the source: his request, his recorded decisions, the brain, the code), as an agent, never his consent; askUser true when you do not know or it is his (his goal, what colleagues, QA or customers do, production, databases, Azure, what cannot be undone): it reaches his row with its own words, never ask it again as yours. For the rest, answer for the user (ADR 0269, 0275): what you answer counts as his own, always. Any chat\'s open question (an option label or free words, every question of the request), any permission (allow true/false, message), a Strategist\'s proposed plan (requestId "plan", decision approve/change, text). Pick what his goal, the brain or the plan settle, then tell him in one line what you answered. The one exception: a permission that runs on production, a database or Azure — show him what it runs, and only after his yes pass confirmed true. A command waiting for Esegui: relay_question shows it to him and his «sì» runs it. When his last message to you answers a request, pass words (quoted from it) instead: his whole message reaches the chat.',
       inputSchema: obj({
         chatId: str('the chat, from app_pending'), requestId: str('the request\'s id, from app_pending; "plan" for a Strategist\'s proposed plan'),
+        answer: str('a question you hold: your answer'), why: str('a question you hold: where the answer comes from, or why you pass it up'),
+        askUser: { type: 'boolean', description: 'a question you hold: true passes it to the user' },
         answers: { type: 'object', description: '{ "<question text>": "<an option label, or free words>" } for every question', additionalProperties: { type: 'string' } },
         allow: { type: 'boolean', description: 'a permission: true allows it once, false refuses it' },
         message: str('a refused permission: what the chat should do instead'),
@@ -402,8 +411,14 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const chatId = String(a.chatId ?? ''), requestId = String(a.requestId ?? '');
         need(chatId);
         if (!authed()) throw new Error('bloccato: solo l’Orchestrator risponde per l’utente');
+        // a question this Orchestrator holds on the ladder (ADR 0344), a delegated chat's too: its own answer, or one level up
+        const held = d.chats.ladderHeldBy?.(callerId!).find(h => h.chatId === chatId && (h.q.id === requestId || h.q.requestId === requestId));
+        if (held) {
+          const done = await d.chats.ladderReply!(callerId!, { chatId, requestId: held.q.id, ...(a.answer !== undefined ? { answer: String(a.answer) } : {}), ...(a.why !== undefined ? { why: String(a.why) } : {}), ...(a.askUser === true ? { askUser: true } : {}) });
+          return done.askUser ? 'passata all’utente: è nella sua riga con le stesse parole' : `risposto a «${done.answered}» come agente (non come l’utente)`;
+        }
         // a delegated chat: you see its state only (ADR 0083); its parent answers it, or the user in his row
-        if (delegated(chatId)) throw new Error('bloccato: è una chat delegata (ne vedi solo lo stato): la risponde la chat che l’ha delegata, o l’utente nella sua riga');
+        if (delegated(chatId) && !climbed({ chatId, id: requestId })) throw new Error('bloccato: è una chat delegata (ne vedi solo lo stato): la risponde la chat che l’ha delegata, o l’utente nella sua riga');
         // a Strategist's proposed plan: his own words, or the Orchestrator's decision for him (ADR 0274, 0275)
         if (requestId === 'plan') {
           const chats = d.chats.list(), plan = chats.find(c => c.id === chatId)?.plan;

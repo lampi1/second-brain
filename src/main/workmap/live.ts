@@ -8,6 +8,7 @@
 //   reported, from the owner chat), then the map's row from its owner and its open steps.
 // Pure. Used by workmap/service.ts; the types are in shared/work-map.ts; pinned by test/unit/workmap-live.test.ts.
 import type { ChatSummary, PendingRequest } from '@shared/contract';
+import { heldOnly, openQuestions } from '@shared/question-ladder';
 import { drawingOf, WORK_SAYS, type WorkBox, type WorkBoxLive, type WorkMap, type WorkMapLive, type WorkSay, type WorkStopWhy, type WorkWaitFor, type WorkWorker } from '@shared/work-map';
 import { reportOf, sayOf } from '../projectmap/follow';
 
@@ -24,11 +25,13 @@ export function readingOf(c: ChatSummary | undefined, asks: readonly PendingRequ
   const report = reportOf(c)?.outcome;
   if (c.closedAt) return { say: report ?? 'closed' };
   const said = sayOf(c, [], asks);
-  if (said === 'wait' || said === 'reask' || c.pending > 0) return { say: 'waiting', waits: 'user' };
+  if (said === 'wait' || said === 'reask' || c.pending > 0 || openQuestions(c.questions).some(q => q.level === 'user')) return { say: 'waiting', waits: 'user' };
+  // its question is with an agent (ADR 0344): it waits for that one, and not for the user until it reaches him
+  const held = said === 'held' ? heldOnly(c)[0] : undefined;
+  if (held) return { say: 'waiting', waits: held.level === 'orchestrator' ? 'orchestrator' : 'parent' };
   if (said === 'run' || said === 'redo' || isBusy(c)) return { say: 'working' };
   if (said === 'fail') return { say: 'failed' };
   if (report) return { say: report };
-  if (c.askedParentAt !== undefined) return { say: 'waiting', waits: 'parent' };
   // its last answer says so, and it is kept over a restart
   if (c.waitsOn) return { say: 'waiting', waits: c.waitsOn };
   if (c.lastResult?.interrupted) return { say: 'interrupted' };

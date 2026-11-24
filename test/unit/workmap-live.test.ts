@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatSummary, PendingRequest } from '../../src/shared/contract';
 import type { PlanStep, StrategyPlan } from '../../src/shared/strategy';
+import type { LadderQuestion } from '../../src/shared/question-ladder';
 import { liveWords, type WorkMap, type WorkMapLive, type WorkBoxLive } from '../../src/shared/work-map';
 import { liveOf, movesBelow, readingOf, STALE_MS, type LiveInput } from '../../src/main/workmap/live';
 import { settle } from '../../src/main/workmap/follow';
@@ -25,6 +26,8 @@ const ask = (chatId: string): PendingRequest => ({ id: `q-${chatId}`, chatId, ty
 function live(m: WorkMap, chats: ChatSummary[], x: Partial<LiveInput> = {}): { boxes: (WorkBoxLive | undefined)[]; map: WorkMapLive | undefined } {
   return liveOf(m, { chats, asks: [], now: NOW, confirmed: () => undefined, crashed: false, ...x });
 }
+/** A question of the chat, held at that level (user = it reached him). */
+const asked = (level: LadderQuestion['level'], via: LadderQuestion['via'] = 'message'): Partial<ChatSummary> => ({ questions: [{ id: 'q-1', asks: [{ question: 'Anche i resi?', options: ['Sì', 'No'] }], level, ...(level === 'user' ? {} : { holder: 'own' }), at: 1, levelAt: 1, trail: [], via }] });
 /** One step under way whose only chat is this. */
 const one = (k: ChatSummary | null, x: Partial<LiveInput> = {}) => live(map([step('now', ['k'])]), [chat('own', turn(NOW - 5)), ...(k ? [k] : [])], x);
 
@@ -46,9 +49,29 @@ describe('a step follows its chat', () => {
   });
 
   it('waits for the chat that delegated it, for colleagues, for work still running', () => {
-    expect(one(kid('k', { askedParentAt: NOW - 9, ...turn(NOW - 5) })).boxes[0]).toMatchObject({ say: 'waiting', waits: 'parent' });
+    expect(one(kid('k', { ...asked('strategist'), ...turn(NOW - 5) })).boxes[0]).toMatchObject({ say: 'waiting', waits: 'parent' });
     expect(one(kid('k', { waitsOn: 'colleagues', ...turn(NOW - 5) })).map).toMatchObject({ say: 'waiting', waits: 'colleagues' });
     expect(one(kid('k', { waitsOnWork: true, ...turn(NOW - 5) } as Partial<ChatSummary>)).boxes[0]).toMatchObject({ say: 'waiting', waits: 'work' });
+  });
+
+  it('a question an agent holds is never the user\'s: it waits for its holder, until it reaches him', () => {
+    const says = (k: ChatSummary) => { const b = one(k).boxes[0]!; return [b.say, b.waits]; };
+    expect(says(kid('k', { ...asked('strategist'), ...turn(NOW - 5) }))).toEqual(['waiting', 'parent']);
+    expect(says(kid('k', { ...asked('orchestrator'), ...turn(NOW - 5) }))).toEqual(['waiting', 'orchestrator']);
+    // the engine's own question held open: the chat reads as running, or as waiting, and waits for its holder either way
+    for (const state of ['running', 'waiting'] as const) expect(says(kid('k', { state, ...asked('strategist', 'request') }))).toEqual(['waiting', 'parent']);
+    // it asked and goes on with other work
+    expect(says(kid('k', { state: 'running', ...asked('strategist') }))).toEqual(['working', undefined]);
+    // its last answer says it waits: for the one that holds the question
+    expect(says(kid('k', { waitsOn: 'user', ...asked('orchestrator'), ...turn(NOW - 5) }))).toEqual(['waiting', 'orchestrator']);
+    // it reached him, or a permission of the same chat is his
+    expect(says(kid('k', { ...asked('user'), ...turn(NOW - 5) }))).toEqual(['waiting', 'user']);
+    expect(says(kid('k', { state: 'waiting', pending: 1, ...asked('strategist', 'request') }))).toEqual(['waiting', 'user']);
+    // answered: nothing waits
+    const q = asked('strategist').questions!.map(x => ({ ...x, answered: { by: 'strategist' as const, name: 'S', answer: 'Sì', why: 'brief', at: 2 } }));
+    expect(says(kid('k', { questions: q, ...turn(NOW - 5) }))).toEqual(['between', undefined]);
+    // the words an agent reads
+    expect(liveWords({ say: 'waiting', waits: 'orchestrator' })).toBe('waiting for orchestrator');
   });
 
   it('fails: its turn ended on an error, or its engine died', () => {

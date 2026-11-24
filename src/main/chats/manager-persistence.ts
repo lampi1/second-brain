@@ -229,7 +229,7 @@ export abstract class ManagerPersistence extends ManagerCore {
         ...(c.route ? { route: c.route } : {}),
         ...(c.parentId ? { parentId: c.parentId } : {}),
         ...(c.delegation ? { delegation: c.delegation } : {}),
-        ...(c.plan ? { plan: c.plan } : {}),
+        ...(c.plan ? { plan: c.plan } : {}), ...(c.questions?.length ? { questions: c.questions } : {}),
         ...(c.waitsOn ? { waitsOn: c.waitsOn } : {}), ...(c.waitsOnWork ? { waitsOnWork: true } : {}),
         ...(c.remoteControl ? { remoteControl: pausedState(c.remoteControl)! } : {}),
         ...(c.agentAssets && c.agentSkills?.length ? { loadedSkills: [...c.agentSkills] } : {}),
@@ -325,6 +325,7 @@ export abstract class ManagerPersistence extends ManagerCore {
       ...(r.s.parentId ? { parentId: r.s.parentId } : {}),
       ...(r.s.delegation ? { delegation: r.s.delegation } : {}),
       ...(r.s.plan ? { plan: r.s.plan } : {}),
+      ...(r.s.questions?.length ? { questions: r.s.questions.map(({ requestId: _r, ...q }) => q) } : {}),
       ...(r.mcpAncestors ? { mcpAncestors: r.mcpAncestors } : {}),
       ...(r.s.remoteControl?.on ? { remoteControl: pausedState(r.s.remoteControl)! } : {}),
     }));

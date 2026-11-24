@@ -12,6 +12,7 @@
 // steps, no closed list, at most SHORT_MAX lines; a result older than 6 hours is not «just finished». The blocks only with detail: true, when the user asks for the detail.
 import type { ChatItem, ChatSummary, PendingRequest } from '../../shared/contract';
 import type { AgentRun } from '../../shared/agents';
+import { heldOnly } from '../../shared/question-ladder';
 import { askLine } from './digest';
 
 interface Tool { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(a: Record<string, unknown>): string }
@@ -102,10 +103,11 @@ export function isAgentsRecap(text: string): boolean {
 }
 
 export function markOf(c: ChatSummary, asks: PendingRequest[]): Mark {
-  if (asks.length || c.state === 'waiting') return 'wait';
+  // a question still with an agent is not the user's (ADR 0344)
+  if (asks.length || c.state === 'waiting' && !heldOnly(c).length) return 'wait';
   if (c.state === 'error') return 'error';
   if (c.queued) return 'queue';
-  if (c.state === 'running' || c.state === 'starting') return 'run';
+  if (c.state === 'running' || c.state === 'starting' || c.state === 'waiting') return 'run';
   return c.lastResult ? (c.lastResult.interrupted ? 'stopped' : c.lastResult.isError ? 'error' : 'done') : 'idle';
 }
 

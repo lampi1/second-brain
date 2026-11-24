@@ -115,14 +115,6 @@ export abstract class ManagerDelegation extends ManagerContinuity {
       .catch(e => log.warn('brain', 'journal line not written', { chat: r.s.id, cause: errText(e), hint: 'the report is kept; the brain journal misses this «fatto» line' }));
   }
 
-  /** agent_ask_parent (agents/delegation.ts): the child waits for its parent's answer, not on its report (#152). */
-  askedParent(chatId: string): void {
-    const r = this.chats.get(chatId);
-    if (!r) return;
-    r.askedParentAt = r.s.askedParentAt = Date.now();
-    this.updated(r);
-  }
-
   /** A delegated child that owes its result and has nothing left that would bring it (#152): its turn ended clean and
    *  idle, with no question, permission, own child, background task or parent's answer pending, and its last answer
    *  does not wait for a person. The first time it is told, once, to call agent_report (with the full tool name, #144);

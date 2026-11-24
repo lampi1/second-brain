@@ -10,6 +10,7 @@ import type { TaskAssignmentOptions, TaskSource } from '../shared/delegation';
 import type { KnownOutcome, RouteRequest, RouteResult, RoutingActual, RoutingPrediction } from './brain/routing';
 
 import type { IntakeSource, StrategyPlan } from '../shared/strategy';
+import type { LadderQuestion } from '../shared/question-ladder';
 
 export interface ChatService {
   bindPlanIntake?(chatId: string, question: string): IntakeSource;
@@ -36,6 +37,9 @@ export interface ChatService {
   answer(chatId: string, requestId: string, answer: Answer, by?: 'pc' | 'phone' | 'relay', byApp?: boolean): Promise<void>;
   /** The Orchestrator answers a work chat's yes/no question for the user (ADR 0269); refused on what is the user's alone. */
   answerForUser(chatId: string, requestId: string, answer: Answer, confirmed?: boolean): void;
+  /** the question ladder (ADR 0344): the questions a chat holds, and its answer to one or askUser = one level up */
+  ladderHeldBy?(holderId: string): { chatId: string; title: string; q: LadderQuestion }[];
+  ladderReply?(callerId: string, a: { chatId: string; requestId?: string; answer?: string; why?: string; askUser?: boolean }): Promise<{ answered: string; askUser: boolean }>;
   /** the user's last message typed to the Orchestrator on the PC (ADR 0274): app_resolve_question `words` come from it */
   userSaid?(): { text: string; at: number } | null;
   /** his own message passed to a work chat's question by the Orchestrator (ADR 0274); refused on what stays his click */

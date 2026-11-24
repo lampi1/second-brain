@@ -7,7 +7,7 @@ import type { ChatSummary } from '@shared/contract';
 import type { WorkWorker } from '@shared/work-map';
 
 /** What the live status of a chat is made of. */
-export const liveKey = (c: ChatSummary): string => [c.state, c.pending, c.queued ? 1 : 0, (c.background ?? 0) > 0 ? 1 : 0, c.closedAt ?? 0, c.closedBy ?? '', c.waitsOn ?? '', c.waitsOnWork ? 1 : 0, c.askedParentAt ?? 0,
+export const liveKey = (c: ChatSummary): string => [c.state, c.pending, c.queued ? 1 : 0, (c.background ?? 0) > 0 ? 1 : 0, c.closedAt ?? 0, c.closedBy ?? '', c.waitsOn ?? '', c.waitsOnWork ? 1 : 0, (c.questions ?? []).map(q => `${q.id}:${q.answered ? 'x' : q.level}:${q.trail.length}`).join(','),
   c.lastResult ? `${c.lastResult.at}:${c.lastResult.isError ? 1 : 0}:${c.lastResult.interrupted ? 1 : 0}` : '', c.run?.runId ?? '', c.run?.report?.at ?? 0, c.delegation?.at ?? 0, c.delegation?.result?.at ?? 0, c.parentId ?? '', c.title].join('|');
 
 type Times = Map<string, number>;

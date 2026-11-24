@@ -197,9 +197,10 @@ export function workInfo(m: WorkMap): WorkMapInfo {
  *  interrupted = its turn was stopped and nothing followed · between = its turn is over, no report yet · blocked, partial,
  *  done = what it reported · unknown = nobody can say (after a restart, until the chat works again) */
 export type WorkSay = 'waiting' | 'failed' | 'closed' | 'gone' | 'working' | 'interrupted' | 'between' | 'blocked' | 'partial' | 'done' | 'unknown';
-/** user = an open question or permission, or its last answer waits for him · parent = it asked the chat that delegated it ·
+/** user = an open question or permission that reached him, or its last answer waits for him · parent = its question is with
+ *  the chat that delegated it, orchestrator = with the Orchestrator (the question ladder, ADR 0344: not the user's yet) ·
  *  colleagues = people or chats outside the job · work = work still running that the app does not see in its own chats */
-export type WorkWaitFor = 'user' | 'parent' | 'colleagues' | 'work';
+export type WorkWaitFor = 'user' | 'parent' | 'orchestrator' | 'colleagues' | 'work';
 /** One chat of the map (its owner, a step's chat, or one these delegated) and what it is doing. */
 export interface WorkWorker {
   chatId: string;

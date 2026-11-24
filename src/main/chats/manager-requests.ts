@@ -62,7 +62,7 @@ const questionSig = (req: Pick<PendingRequest, 'questions'>): string =>
 /** Questions and permissions: the user's answer, the role gate, auto-permit, «Modalità notte», counted requests. */
 export abstract class ManagerRequests extends ManagerCheckpoints {
   private coordinationStore?: CoordinationStore;
-  private readonly answering = new WeakMap<Rec, Set<string>>();
+  protected readonly answering = new WeakMap<Rec, Set<string>>();
   /** run_code's internal calls waiting for the user (decideFor, ADR 0331), by request id: the answer settles the
    *  script's call, no engine is told (none asked). */
   protected readonly internalAsks = new Map<string, (answer: Answer) => void>();
@@ -132,20 +132,27 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       catch (e) { log.warn('chats', 'repeated question not answered by the app', { chat: r.s.id, cause: errText(e), hint: 'read the request\'s receipt in the journal: the chat may still wait on it' }); return false; }
     }
     if (r.s.isOrchestrator && !this.opts.relayPanel?.(r.s.id)) {
+      // one a work chat has on the ladder, held by it or already the user's as the app's card: it goes to the user with
+      // its own words, never a second copy (ADR 0344)
+      const own = this.ladderOwnAsk(asked);
+      if (own && this.ownCopyAnswered(r, req, own.r, own.id, said)) return true;
       for (const other of this.chats.values()) {
         if (other === r || other.s.closedAt || other.s.isOrchestrator) continue;
-        const open = [...other.pending.values()].find(p => isNativeQuestion(p) && sameAsk(askedText(p), asked));
-        if (!open) continue;
-        // told ASK_AGAIN_MAX times for the same row, then its question shows: never a question that can not be asked
-        const copy = r.ownCopy?.of === open.id ? r.ownCopy : (r.ownCopy = { of: open.id, again: 0 });
-        if (copy.again >= ASK_AGAIN_MAX) { delete r.ownCopy; return false; }
-        copy.again++;
-        log.info('chats', 'the Orchestrator asked a work chat\'s open question as its own: answered by the app', { chat: r.s.id, data: { request: req.id, of: other.s.id } });
-        try { return this.policyAnswer(r, req, said(ownCopyNote(other.s.title || 'Chat', other.s.id, open.id)), 'asked-once'); }
-        catch (e) { log.warn('chats', 'copied question not answered by the app', { chat: r.s.id, cause: errText(e), hint: 'read the request\'s receipt in the journal: the chat may still wait on it' }); return false; }
+        const open = [...other.pending.values()].find(p => !p.ladder && isNativeQuestion(p) && sameAsk(askedText(p), asked));
+        if (open) return this.ownCopyAnswered(r, req, other, open.id, said);
       }
     }
     return false;
+  }
+  /** The Orchestrator's copy of a question already in the user's row, answered by the app ASK_AGAIN_MAX times for the same
+   *  row; then its question shows: never a question that can not be asked. */
+  private ownCopyAnswered(r: Rec, req: Omit<PendingRequest, 'chatId'>, other: Rec, of: string, said: (note: string) => Answer): boolean {
+    const copy = r.ownCopy?.of === of ? r.ownCopy : (r.ownCopy = { of, again: 0 });
+    if (copy.again >= ASK_AGAIN_MAX) { delete r.ownCopy; return false; }
+    copy.again++;
+    log.info('chats', 'the Orchestrator asked a work chat\'s open question as its own: answered by the app', { chat: r.s.id, data: { request: req.id, of: other.s.id } });
+    try { return this.policyAnswer(r, req, said(ownCopyNote(other.s.title || 'Chat', other.s.id, of)), 'asked-once'); }
+    catch (e) { log.warn('chats', 'copied question not answered by the app', { chat: r.s.id, cause: errText(e), hint: 'read the request\'s receipt in the journal: the chat may still wait on it' }); return false; }
   }
 
   /** A new message reached the chat (the user's, the Orchestrator's, its parent's): what he answered before is past. */
@@ -232,9 +239,14 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     });
   }
 
+  // the question ladder (manager-ladder.ts, ADR 0344)
+  protected ladderHeld(_r: Rec, _req: Omit<PendingRequest, 'chatId'>): boolean { return false; }
+  protected requestAnswered(_r: Rec, _req: Pick<PendingRequest, 'id'>, _answer: Answer, _actor: DecisionActor): void { /* manager-ladder.ts */ }
+  protected ladderOwnAsk(_asked: string): { r: Rec; id: string } | null { return null; }
+
   /** True claims this request for policy handling; a remote delivery is still dispatching until its acknowledgement.
    *  Recaps and pending removal must wait too. Failure stays journaled and is never retried as user consent. */
-  private policyAnswer(r: Rec, req: Omit<PendingRequest, 'chatId'>, answer: Answer, policy: string, patch?: AnswerPatch, consumed?: () => void): boolean {
+  protected policyAnswer(r: Rec, req: Omit<PendingRequest, 'chatId'>, answer: Answer, policy: string, patch?: AnswerPatch, consumed?: () => void): boolean {
     this.registerRequest(r, req);
     const session = r.session;
     // being answered: an engine resolution meanwhile does not show its twins (#379)
@@ -242,7 +254,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     this.answering.set(r, answering); answering.add(req.id);
     const finish = (ok: boolean): boolean => {
       answering.delete(req.id);
-      if (ok && this.chats.get(r.s.id) === r && r.session === session) { this.answerTwins(r, req.id, answer, { kind: 'policy', policy }); this.dropPending(r, req.id); consumed?.(); }
+      if (ok && this.chats.get(r.s.id) === r && r.session === session) { this.answerTwins(r, req.id, answer, { kind: 'policy', policy }); this.requestAnswered(r, req, answer, { kind: 'policy', policy }); this.dropPending(r, req.id); consumed?.(); }
       return ok;
     };
     let result: boolean | Promise<boolean>;
@@ -371,7 +383,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       const told = backed === answer ? this.toldInWords(r, req, answer, byApp) : backed;
       ok = await this.deliverAnswer(r, req, told, { kind: 'user', channel: by });
       // its twins take the same answer before it leaves, so its resolution never shows them (#379)
-      if (ok && sameChat()) this.answerTwins(r, requestId, told, { kind: 'user', channel: by });
+      if (ok && sameChat()) { this.answerTwins(r, requestId, told, { kind: 'user', channel: by }); this.requestAnswered(r, req, answer, { kind: 'user', channel: by }); }
       // The RPC acknowledgement can precede the batched resolved event. Preserve phone provenance in either order.
       if (ok && sameChat()) this.dropPending(r, requestId);
       // the Orchestrator's own question answered in words typed on the PC (not an option clicked): they are his last
@@ -412,11 +424,14 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
         : this.userWrote(chatId, JSON.stringify({ requestId, allow: answer.allow, ...(answer.message ? { message: answer.message } : {}) }));
     } finally { if (!saved) this.persist(true); } // the decision is on disk even when the event could not be recorded
     // a Strategist still asking: the answer is one more thing its strip shows as already clear (ADR 0108)
+    if (isNativeQuestion(req) && answer.kind === 'question' && req.questions?.length) this.interviewed(r, req.questions, answer.answers, pcOnly);
+  }
+  /** The user answered a question of a Strategist still asking: its plan keeps it. */
+  protected interviewed(r: Rec, questions: { question: string; header?: string }[], answers: Record<string, string | string[]>, pcOnly: boolean): void {
     const plan = r.s.plan;
-    if (plan && (plan.phase === 'asking' || plan.phase === 'revising') && isNativeQuestion(req) && answer.kind === 'question' && req.questions?.length) {
-      const next = withClarified(plan, req.questions, answer.answers, pcOnly);
-      if (next !== plan) { r.s.plan = next; this.persist(); this.updated(r); }
-    }
+    if (!plan || plan.phase !== 'asking' && plan.phase !== 'revising') return;
+    const next = withClarified(plan, questions, answers, pcOnly);
+    if (next !== plan) { r.s.plan = next; this.persist(); this.updated(r); }
   }
 
   /** Pin the answer before routing or model choice yields to another user request. */
@@ -472,9 +487,10 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     const out: { title: string; what: string }[] = [];
     for (const r of this.chats.values()) {
       if (r.s.closedAt) continue;
-      for (const req of r.pending.values()) if (req.type !== 'command') out.push({ title: r.s.title || 'Chat', what: req.type === 'question' ? (req.questions?.[0]?.question ?? req.title) : `permesso ${req.tool}` });
+      for (const req of r.pending.values()) if (req.type !== 'command' && !req.ladder) out.push({ title: r.s.title || 'Chat', what: req.type === 'question' ? (req.questions?.[0]?.question ?? req.title) : `permesso ${req.tool}` });
       if (r.s.plan?.phase === 'proposed') out.push({ title: r.s.title || 'Strategist', what: 'piano da approvare' });
     }
+    for (const ask of this.userAsks.values()) out.push({ title: this.chats.get(ask.chatId)?.s.title || 'Chat', what: ask.questions?.[0]?.question ?? ask.title });
     return out;
   }
 

@@ -18,6 +18,7 @@ function fixture(start: Partial<StrategyPlan> = {}) {
   let ids = ['web', 'cart'];
   const chats: StrategyChats = {
     planOf: () => structuredClone(plan),
+    planDoubts: (_id, doubts) => (plan = { ...plan, doubts }), doubtEvidence: () => ({ clarified: plan.clarified, said: [], mayChoose: false }),
     planPropose: (_id, steps, doneWhen, map) => (plan = { ...plan, phase: 'proposed', steps, ...(doneWhen ? { doneWhen } : {}), ...(map ? { map } : {}) }),
     planUpdate: () => plan,
     planAdd: (_id, step: PlanStep) => (plan = withAdded(plan, step, 5)),

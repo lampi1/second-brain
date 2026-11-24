@@ -76,8 +76,8 @@ function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: str
 }
 
 const STEPS3 = [{ title: 'Trovo dove si calcola lo sconto', role: 'scout' }, { title: 'Applico lo sconto', role: 'artisan' }, { title: 'Scrivo il riepilogo' }];
-/** An ordinary plan proposal. Tests of execution start after a real user stop or three answers. */
-const PLAN = { steps: STEPS3, doneWhen: 'I test passano' };
+/** An ordinary plan proposal. Its doubts are listed: none is open. */
+const PLAN = { steps: STEPS3, doneWhen: 'I test passano', doubts: [] };
 const planOf = (f: ReturnType<typeof fixture>, id: string) => f.m.list().find(c => c.id === id)!.plan!;
 /** the user's click on the plan they see now */
 const decide = (f: ReturnType<typeof fixture>, id: string, d: 'approve' | 'change', text?: string) => f.m.planDecide(id, d, planOf(f, id).at, text);
@@ -87,7 +87,12 @@ async function answerPanel(f: ReturnType<typeof fixture>, chatId: string, questi
   // Identical wording on a new panel is still a new request, never a recycled engine callback (ADR 0234).
   const id = randomUUID();
   f.sinks.get(chatId)!.pending({ id, type: 'question', tool, title: question, detail: '', input: {}, questions: [q], at: Date.now() });
+  passUp(f.m, chatId);
   await f.m.answer(chatId, id, { kind: 'question', answers: { [question]: value } }, source);
+}
+/** a chat an Orchestrator opened asks it first (ADR 0344): it does not know, the question reaches the user */
+function passUp(m: ChatManager, chatId: string) {
+  for (const o of m.list().filter(c => c.isOrchestrator)) for (const h of m.ladderHeldBy(o.id)) if (h.chatId === chatId) void m.ladderReply(o.id, { chatId, askUser: true });
 }
 
 /** Accepted consent survives transport failure and restart; the work projection exposes recovery, not a new approval. */
@@ -217,8 +222,6 @@ describe('a Strategist\'s plan with the user', () => {
     await expect(answerPanel(f, s.id, 'Posso proseguire?', ENOUGH_QUESTIONS, 'AskUserQuestion', 'relay')).rejects.toThrow(/non è una decisione/);
     expect(f.answers).toHaveLength(answered);
     expect(planOf(f, s.id).enough).not.toBe(true);
-    await expect(f.call('plan_propose', s.id, PLAN)).rejects.toThrow(/answered 2 of at least 3/);
-    await answerPanel(f, s.id, 'Serve un controllo sui resi?', 'Sì');
     await f.call('plan_propose', s.id, PLAN);
     expect(planOf(f, s.id).phase).toBe('proposed');
     await expect(start(s.id, first)).rejects.toThrow(/exact question/);
@@ -284,15 +287,16 @@ describe('a Strategist\'s plan with the user', () => {
     await expect(f.call('plan_propose', s.id, PLAN)).rejects.toThrow(/approved and under way/);
   });
 
-  it('only the user can stop a plan before three answers', async () => {
+  it('no minimum of questions: a first proposal lists its doubts, none included; «Basta domande» still ends the interview', async () => {
     const f = fixture();
     const s = await f.root('strategist');
     const bare = { steps: STEPS3 };
-    await expect(f.call('plan_propose', s.id, bare)).rejects.toThrow(/answered 0 of at least 3.*AskUserQuestion/s);
-    await expect(f.call('plan_propose', s.id, { ...bare, noQuestionReason: '   ' })).rejects.toThrow(/of at least 3/);
-    await expect(f.call('plan_propose', s.id, { ...bare, noQuestionReason: 'x'.repeat(201) })).rejects.toThrow(/of at least 3/);
+    await expect(f.call('plan_propose', s.id, bare)).rejects.toThrow(/refused: pass .doubts./);
     expect(planOf(f, s.id).phase).toBe('asking');
-    // one answered question («Basta domande» counts: the user chose to stop) opens the way
+    const free = await f.root('strategist');
+    await f.call('plan_propose', free.id, { ...bare, doubts: [] });
+    expect(planOf(f, free.id)).toMatchObject({ phase: 'proposed', clarified: [], doubts: [] });
+    // the user chose to stop: the plan may come as it is
     const q = { question: 'Vale anche sulle offerte?', header: 'Offerte', multiSelect: false, options: [{ label: 'No' }, { label: 'Sì' }] };
     f.sinks.get(s.id)!.pending({ id: 'q1', type: 'question', tool: 'AskUserQuestion', title: q.question, detail: '', input: {}, questions: [q], at: 1 });
     await f.m.answer(s.id, 'q1', { kind: 'question', answers: { [q.question]: ENOUGH_QUESTIONS } });
@@ -500,6 +504,72 @@ describe('shared/strategy.ts', () => {
     expect(() => checkProposal({ steps: [{ title: 'x', owner: 'me' }] })).toThrow(/unknown field owner/);
     expect(() => checkProposal({ steps: [{ title: 'x' }], doneWhen: 3 })).toThrow(/doneWhen/);
   });
+  it('one open doubt keeps the plan from being approved; his answer, the code or the brain closes it (ADR 0344)', async () => {
+    const f = fixture(), s = await f.root('strategist');
+    const doubts = [{ text: 'Vale anche sulle offerte?' }, { text: 'Serve su mobile?', by: 'code', answer: 'Sì', source: 'src/mobile.ts:3' }];
+    // the list may come before any step
+    expect(await f.call('plan_propose', s.id, { doubts })).toMatchObject({ shown: false, openDoubts: ['Vale anche sulle offerte?'] });
+    expect(planOf(f, s.id)).toMatchObject({ phase: 'asking', steps: [], doubts: [{ state: 'open' }, { state: 'closed', by: 'code', source: 'src/mobile.ts:3' }] });
+    // with its steps it is still not shown for approval, and nobody can approve it
+    expect(await f.call('plan_propose', s.id, { steps: STEPS3, doubts })).toMatchObject({ shown: false });
+    await expect(decide(f, s.id, 'approve')).rejects.toThrow(/non aspetta/);
+    await expect(f.call('agent_delegate', s.id, { tasks: [f.task('scout', 'A', { step: 1 })] })).rejects.toThrow(/has not approved/);
+    // it cannot be dropped, nor closed in his name
+    await expect(f.call('plan_propose', s.id, PLAN)).rejects.toThrow(/still open/);
+    await expect(f.call('plan_propose', s.id, { steps: STEPS3, doubts: [{ text: doubts[0]!.text, by: 'user', answer: 'Sì' }] })).rejects.toThrow(/did not answer/);
+    // his answer, asked with the doubt's words, closes it at once
+    await answerPanel(f, s.id, 'Vale anche sulle offerte?', 'No');
+    expect(planOf(f, s.id).doubts![0]).toMatchObject({ state: 'closed', by: 'user', answer: 'No' });
+    await f.call('plan_propose', s.id, { steps: STEPS3 });
+    expect(planOf(f, s.id)).toMatchObject({ phase: 'proposed', doubts: [{ by: 'user' }, { by: 'code' }] });
+    await decide(f, s.id, 'approve');
+    expect(planOf(f, s.id)).toMatchObject({ phase: 'running', doubts: [{ by: 'user' }, { by: 'code' }] });
+  });
+  it('a new doubt takes a proposed plan back; his own typed words close it; an agent\'s message does not', async () => {
+    const f = fixture(), s = await f.root('strategist');
+    await f.call('plan_propose', s.id, PLAN);
+    const at = planOf(f, s.id).at;
+    await f.call('plan_propose', s.id, { doubts: [{ text: 'Solo online?' }] });
+    expect(planOf(f, s.id).phase).toBe('revising');
+    await expect(f.m.planDecide(s.id, 'approve', at)).rejects.toThrow(/non aspetta/);
+    await f.m.send(s.id, 'lo sconto vale solo online', undefined, false, 'Orchestrator', false, { kind: 'app' });
+    const close = { steps: STEPS3, doubts: [{ text: 'Solo online?', by: 'user', source: 'lo sconto vale solo online' }] };
+    await expect(f.call('plan_propose', s.id, close)).rejects.toThrow(/did not answer/);
+    await f.m.send(s.id, 'Guarda che lo sconto vale solo online.');
+    await f.call('plan_propose', s.id, close);
+    expect(planOf(f, s.id)).toMatchObject({ phase: 'proposed', doubts: [{ by: 'user', answer: 'lo sconto vale solo online' }] });
+  });
+  it('«Basta domande» ends the interview: a doubt left is closed by a declared choice, never in his name', async () => {
+    const f = fixture(), s = await f.root('strategist');
+    const doubt = { text: 'Vale anche sulle offerte?' }, choice = { ...doubt, by: 'choice', answer: 'No', source: 'più prudente' };
+    await f.call('plan_propose', s.id, { doubts: [doubt] });
+    await expect(f.call('plan_propose', s.id, { steps: STEPS3, doubts: [choice] })).rejects.toThrow(/Basta domande/);
+    await answerPanel(f, s.id, doubt.text, ENOUGH_QUESTIONS);
+    expect(planOf(f, s.id)).toMatchObject({ enough: true, clarified: [], doubts: [{ state: 'open' }] });
+    expect(await f.call('plan_propose', s.id, { steps: STEPS3 })).toMatchObject({ shown: false, note: expect.stringMatching(/recommended choice/) });
+    await f.call('plan_propose', s.id, { steps: STEPS3, doubts: [choice] });
+    expect(planOf(f, s.id)).toMatchObject({ phase: 'proposed', doubts: [{ by: 'choice', answer: 'No', source: 'più prudente' }] });
+  });
+  it('the manager itself refuses an open doubt: the tool is not the only gate', async () => {
+    const f = fixture(), s = await f.root('strategist');
+    expect(() => f.m.planPropose(s.id, [{ title: 'x', state: 'todo' }], undefined, undefined, false, [{ text: 'Vale?', state: 'open' }])).toThrow(/dubbio aperto/);
+    // a plan saved as proposed with a doubt open (an older or damaged file) is never approved, by him, the phone or the night
+    const plan = f.m.planPropose(s.id, [{ title: 'x', state: 'todo' }]);
+    const rec = (f.m as unknown as { chats: Map<string, { s: { plan: StrategyPlan } }> }).chats.get(s.id)!;
+    rec.s.plan = { ...plan, doubts: [{ text: 'Vale?', state: 'open' }] };
+    await expect(f.m.planDecide(s.id, 'approve', plan.at)).rejects.toThrow(/dubbio aperto/);
+    await expect(f.m.planDecide(s.id, 'approve', plan.at, undefined, 'phone')).rejects.toThrow(/dubbio aperto/);
+    await expect(f.m.send(s.id, 'approvo')).rejects.toThrow(/dubbio aperto/);
+    expect(planOf(f, s.id).phase).toBe('proposed');
+  });
+  it('night mode: a plan with a doubt open does not start by itself; closed by a declared choice it does', async () => {
+    const f = fixture({}, undefined, undefined, undefined, {}, [], true), s = await f.root('strategist');
+    const doubt = { text: 'Vale anche sulle offerte?' };
+    expect(await f.call('plan_propose', s.id, { steps: STEPS3, doubts: [doubt] })).toMatchObject({ shown: false });
+    expect(planOf(f, s.id).phase).toBe('asking');
+    await f.call('plan_propose', s.id, { steps: STEPS3, doubts: [{ ...doubt, by: 'choice', answer: 'No', source: 'più prudente' }] });
+    expect(planOf(f, s.id).phase).toBe('running');
+  });
   it('a step marked par shares the turn of the step before it (ADR 0302)', () => {
     const steps = checkProposal({ steps: [{ title: 'a' }, { title: 'b', par: true }, { title: 'c' }, { title: 'd', par: true }, { title: 'e', par: true }, { title: 'f', par: false }] }).steps;
     expect(steps.map(x => x.par)).toEqual([undefined, true, undefined, true, true, undefined]);
@@ -513,13 +583,12 @@ describe('shared/strategy.ts', () => {
   });
   it('the gates, pure: proposal before any question, delegation before the ok', () => {
     const asking: StrategyPlan = { phase: 'asking', at: 1, clarified: [], steps: [] };
-    expect(proposalGate(asking)).toMatch(/answered 0 of at least 3/);
-    const clarified = ['Obiettivo?', 'Ambito?', 'Verifica?'].map(q => ({ q, a: 'Sì' }));
-    expect(proposalGate({ ...asking, asked: 3 })).toMatch(/answered 0 of at least 3/); // legacy counter with missing answers
-    expect(proposalGate({ ...asking, clarified: [clarified[0]!, clarified[0]!, clarified[1]!] })).toMatch(/answered 2 of at least 3/);
-    expect(proposalGate({ ...asking, clarified })).toBeNull();
-    expect(proposalGate({ ...asking, asked: 1, enough: true })).toBeNull();
-    expect(proposalGate({ ...asking, phase: 'revising' })).toBeNull();
+    expect(proposalGate(asking, false)).toMatch(/refused: pass .doubts./);
+    expect(proposalGate({ ...asking, asked: 3 }, false)).toMatch(/refused/); // a count of questions opens nothing
+    expect(proposalGate(asking, true)).toBeNull();
+    expect(proposalGate({ ...asking, doubts: [] }, false)).toBeNull(); // listed before
+    expect(proposalGate({ ...asking, asked: 1, enough: true }, false)).toBeNull();
+    expect(proposalGate({ ...asking, phase: 'revising' }, false)).toBeNull();
     expect(delegationGate(null, 'agent_delegate')).toBeNull();
     expect(delegationGate({ ...asking, phase: 'running' }, 'agent_delegate')).toBeNull();
     expect(delegationGate({ ...asking, phase: 'done' }, 'agent_delegate')).toBeNull();

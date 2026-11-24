@@ -29,7 +29,7 @@ function fixture(o: { set?: boolean; childModel?: string; childEffort?: string; 
   const create = vi.fn(async (req: NewChat) => { created.push(req); return { ...child, id: 'fresh', state: 'running', closedAt: undefined, run: { runId: 'r', taskVersion: 1, ...(o.createdPreset ? { presetChoice: { preset: o.createdPreset } } : {}) } } as unknown as ChatSummary; });
   const set = vi.fn(async (_id: string, _patch: { model?: string; effort?: string }) => ({}));
   const chats: DelegationChats = { list: () => all, create, assignTask: assign, userEvents: () => structuredClone(ledger), agentPolicy: () => ({ tools: { allow: ['read'] }, ceiling: null }),
-    reportDelegation: () => ({ parentId: 'parent', delivered: true }), limitNotice: vi.fn(), send: async () => {}, ...(o.set === false ? {} : { set }) };
+    reportDelegation: () => ({ parentId: 'parent', delivered: true }), limitNotice: vi.fn(), send: async () => {}, ladderAsk: () => ({ asked: 'x' }), ladderReply: async () => ({ answered: 'x', askUser: false }), ...(o.set === false ? {} : { set }) };
   const presetChoice = vi.fn((_role: string, ask: PresetAsk, delegator?: Delegator) => choosePreset({ presets: PRESETS, ask, ...(delegator ? { delegator } : {}), price: m => PRICE[m] ?? null }));
   const tools = delegationTools({ chats, roles: () => catalog, settings: () => DELEGATION_DEFAULTS, engineRefusal: () => null, label: '[agent]', runs: () => [], worktrees: async () => [], presetChoice });
   const call = async (name: string, args: Record<string, unknown>) => JSON.parse(await tools.find(t => t.name === name)!.run(args, { params: { chatId: 'parent' } } as never) as string);

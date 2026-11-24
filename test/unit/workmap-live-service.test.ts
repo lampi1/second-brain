@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, errText: (e: unknown) => String(e) }));
 import type { ChatSummary, PendingRequest } from '../../src/shared/contract';
+import type { LadderQuestion } from '../../src/shared/question-ladder';
 import type { PlanPhase, PlanStep, StrategyPlan } from '../../src/shared/strategy';
 import type { WorkMap } from '../../src/shared/work-map';
 import { STALE_MS } from '../../src/main/workmap/live';
@@ -52,11 +53,14 @@ describe('the page is told of a real change, and no version is written for it', 
     const w = maps(), id = job(w), versions = saved.length;
     const says = () => w.view(id)!.boxes[0]!.live;
     expect(info(w).live).toMatchObject({ say: 'working', working: [{ chatId: 'k' }] });
+    const held: LadderQuestion = { id: 'q-1', asks: [{ question: 'Anche i resi?', options: [] }], level: 'strategist', holder: 'own', at: now, levelAt: now, trail: [], via: 'message' };
     const steps: [Partial<ChatSummary>, object][] = [
       [{ state: 'waiting', pending: 1 }, { say: 'waiting', waits: 'user' }],
       [{ state: 'running', pending: 0 }, { say: 'working' }],
-      [{ state: 'idle', askedParentAt: now }, { say: 'waiting', waits: 'parent' }],
-      [{ askedParentAt: undefined, lastResult: { at: now, isError: true } as unknown as ChatSummary['lastResult'] }, { say: 'failed' }],
+      [{ state: 'idle', questions: [held] }, { say: 'waiting', waits: 'parent' }],
+      [{ questions: [{ ...held, level: 'orchestrator' }] }, { say: 'waiting', waits: 'orchestrator' }],
+      [{ questions: [{ ...held, level: 'user', holder: undefined }] }, { say: 'waiting', waits: 'user' }],
+      [{ questions: [], lastResult: { at: now, isError: true } as unknown as ChatSummary['lastResult'] }, { say: 'failed' }],
       [{ state: 'closed', closedAt: now, closedBy: 'user', lastResult: { at: now, isError: false } as unknown as ChatSummary['lastResult'] }, { say: 'closed' }],
     ];
     for (const [extra, want] of steps) {

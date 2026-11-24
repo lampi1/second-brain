@@ -8,6 +8,7 @@ import type { ChatDelegation, DelegationLimitHit } from '../delegation';
 import type { ChatEffortStatus } from '../effort';
 import type { Delegator, PresetId } from '../model-presets';
 import type { RuntimeDiagnostic } from '../runtime-performance';
+import type { LadderQuestion } from '../question-ladder';
 import type { StrategyPlan } from '../strategy';
 import type { SysCode, SysParams } from '../sys';
 import type { Harness } from './engines';
@@ -94,6 +95,8 @@ export interface ChatSummary {
   plan?: StrategyPlan;
   /** the work map it was started for (ADR 0342): an idea started, or a job that goes on in a new chat */
   workMap?: string;
+  /** its questions on the ladder (ADR 0344): who holds each one, its way up, who answered and why (what the map reads) */
+  questions?: LadderQuestion[];
   lastText: string;           // last assistant line, for collapsed tiles and the needs-you lane
   lastError?: string;
   updatedAt: number;
@@ -125,7 +128,6 @@ export interface ChatSummary {
    *  yet, turn = a message waits to wake it; position 1 = next; cpu/freeRam = the load last sampled, in % */
   queued?: QueuedInfo;
   /** a delegated chat asked its parent (agent_ask_parent) and no answer reached it since: when it asked */
-  askedParentAt?: number;
   /** how its harness, model and effort were chosen (its role's card or the user's defaults; app_create_chat, chat:createRouted) */
   route?: RouteDecision;
   /** ADR 0103: when the checkpoint before its last turn was taken (its files can go back to it); absent = none */
@@ -292,6 +294,8 @@ export interface PendingRequest {
   noAlways?: boolean;         // permission: do not offer "always allow" (the CLI forbids a rule for this ask, or has none)
   alwaysRules?: string[];     // permission: what "always allow" grants, for this session only ("Bash(git push:*)", "modalità: accetta modifiche")
   command?: CommandAsk;       // type = command
+  /** question held by an agent above the chat (ADR 0344): the user does not see it; set only by the app */
+  ladder?: 'strategist' | 'orchestrator';
   heldBy?: { rule: string; why: string }; // permission: sent to the user by a rule of their brain (ADR 0254): the phone may answer it
 }
 

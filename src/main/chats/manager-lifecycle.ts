@@ -3,6 +3,7 @@
 // restart cut (resumeInterrupted) and the app's shutdown.
 import type { ChatSummary } from '../../shared/contract';
 import type { AgentRunEndCause } from '../../shared/agents';
+import { openQuestions } from '../../shared/question-ladder';
 import { errText, log } from '../log';
 import { reapEnabled, reapEngine, snapshotTrees } from './proctree';
 import { jobGuard } from './jobguard';
@@ -71,6 +72,11 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
       return { ...c, activityAt: at };
     });
   }
+  /** A worker waits for this chat's answer (ADR 0344). */
+  private holdsQuestion(id: string): boolean {
+    for (const r of this.chats.values()) if (!r.s.closedAt && openQuestions(r.s.questions).some(q => q.holder === id)) return true;
+    return false;
+  }
   /** A chat still doing or waiting for something: running, a pending request, a turn or a delivery under way. */
   private atWork(id: string): boolean {
     const r = this.chats.get(id);
@@ -92,7 +98,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
       const finished = (c.state === 'idle' || ended) && !c.lastError &&
         !r.unfinished && ((result => result ? !result.isError && !result.interrupted : ended && !r.session && r.lastTurnAt > 0)(c.lastResult ?? r.savedResult));
       const eligible = !this.quitting && !updateActivity.frozen && !c.isOrchestrator && !held && finished &&
-        !r.working && !r.session?.busy && r.pending.size === 0 && !this.userAsks.has(r.userActionAsk ?? '') && !r.userStepAt && !this.awaitsRun(c.id) && !workBehind(c) && !c.waitsOn && c.plan?.phase !== 'proposed' && !c.queued && !r.deliveryHolds &&
+        !r.working && !r.session?.busy && r.pending.size === 0 && !openQuestions(c.questions).length && !this.holdsQuestion(c.id) && !this.userAsks.has(r.userActionAsk ?? '') && !r.userStepAt && !this.awaitsRun(c.id) && !workBehind(c) && !c.waitsOn && c.plan?.phase !== 'proposed' && !c.queued && !r.deliveryHolds &&
         !r.opening && !r.releasing && !r.switching && !r.handoffTurn && (!r.archiving || r.autoClosing) && this.childrenDone(r);
       const waiting = eligible || c.isOrchestrator ? undefined : this.waitingOf(r, held), waitingFor = waiting?.what;
       return { id: c.id, eligible: !!eligible, stamp: `${r.activityRevision ?? 0}:${r.lastTurnAt}:${c.lastResult?.at ?? 0}:${c.pending}:${c.model ?? ''}:${c.work?.status ?? ''}:${c.waitsOn ?? ''}`,
@@ -116,7 +122,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
    *  (an auto-close never comes earlier), but they never name a wait on its tile. undefined = held for another reason
    *  (busy, starting, an error, only a guess from its words, ...). */
   private waitingOf(r: Rec, external: boolean | AutoCloseWaiting): { what: AutoCloseWaiting; n?: number } | undefined {
-    const c = r.s, pend = [...r.pending.values()];
+    const c = r.s, pend = [...r.pending.values()].filter(p => !p.ladder);
     if (pend.some(p => p.type === 'permission')) return { what: 'permission' };
     if (pend.some(p => p.type === 'question')) return { what: 'answer' };
     if (c.plan?.phase === 'proposed') return { what: 'plan' }; // its plan waits for «Approva e parti» (ADR 0108)
@@ -207,6 +213,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     const sess = r.session;
     if (sess) await sess.close();
     this.reapKept(r);
+    this.ladderClosed(r);
     for (const id of [...r.pending.keys()]) this.dropPending(r, id);
     delete r.twins;
     this.dropUserAsks((q, worker) => q.chatId === chatId || worker === chatId);
@@ -274,6 +281,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     r.closeAfterCold = false;
     if (sess) await sess.close();
     this.reapKept(r);
+    this.ladderClosed(r);
     for (const p of [...r.pending.keys()]) this.dropPending(r, p);
     delete r.twins;
     this.dropUserAsks((q, worker) => q.chatId === r.s.id || worker === r.s.id);
@@ -350,6 +358,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     // close() reaped them before, and a chat archived without one left its MCP servers running all day (2026-10-29).
     // The user's ✕ leaves them to its final close (chat:close after the «Annulla» toast): an Annulla finds its dev server.
     if (!opts.undoable) this.reapKept(r);
+    this.ladderClosed(r);
     for (const id of [...r.pending.keys()]) this.dropPending(r, id);
     delete r.twins;
     this.dropUserAsks((q, worker) => q.chatId === chatId || worker === chatId);
@@ -397,6 +406,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
   /** After a start: every chat whose turn the last quit or crash cut (working still set) resumes by itself with
    *  RESUME_TEXT and the "ripresa dopo il riavvio" mark (resumedAt). Chats that had finished stay closed. */
   resumeInterrupted(): number {
+    this.ladderBoot();
     this.restoreRootNotices();
     this.resumeRootSyntheses();
     for (const r of this.chats.values()) if (r.heldResult && !r.working) this.releaseResult(r);

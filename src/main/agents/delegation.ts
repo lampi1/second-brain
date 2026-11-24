@@ -3,10 +3,10 @@
 // Cursor (chats/app-tool-approval.ts): agent_delegate starts 1..n visible child chats at once, each running a role the
 // caller's role may launch, with a self-contained contract (the child never sees the parent's conversation);
 // agent_report is the child's one result, delivered to its parent as a message; agent_children lists the caller's
-// children with their state and results. Questions go to the parent first (agent_ask_parent: a child's ambiguity reaches
-// its parent as a message, answered with agent_answer_child from what the parent knows, or sent on to the user with
-// askUser); only what needs a person (a permission, an irreversible or external action, a choice that changes the goal,
-// what the parent could not answer) is asked of the user. What holds whoever asks: permissions only go down (a contract asking for a
+// children with their state, results and open questions. A child's question, its engine's own panel or agent_ask_parent,
+// climbs the ladder one level at a time (ADR 0344, chats/manager-ladder.ts): its parent answers it with
+// agent_answer_child from what it knows or passes it up with askUser, and only what no agent may or can decide reaches
+// the user. What holds whoever asks: permissions only go down (a contract asking for a
 // tool class beyond the parent's is refused, and the child's policy is narrowed by the parent's, chats/manager.ts), the
 // child's folder stays inside the parent's, the depth limit of Impostazioni → Ruoli e deleghe is checked and a refusal
 // shows in the parent's chat. Only the Orchestrator and the Strategist delegate (2026-11-23; the Orchestrator through
@@ -15,10 +15,10 @@
 // 2026-11-23): the Strategist checks the real resources when it plans. A child may run on another engine only when the
 // user allows chats across engines. Used by wiring.ts.
 import path from 'node:path';
+import { heldQuestions, openQuestions } from '../../shared/question-ladder';
 import type { ChatSummary, Effort, Harness, NewChat, PermissionMode } from '../../shared/contract';
 import type { AgentCatalog, AgentRun, UserTaskEvents } from '../../shared/agents';
 import { canLaunch, isDelegatorRole, isWorkRole, launchGap, ROLE_DEFAULTS, WORK_ROLE_IDS, type DelegationSettings } from '../../shared/roles';
-import { oneLine } from '../../shared/agent-label';
 import { CRITERION_MAX, EVIDENCE_MAX, MAX_CORRECTIONS, RESULT_OUTPUT_MAX, SUMMARY_MAX, USER_ACTION_COMMAND_MAX, USER_ACTION_KINDS, USER_ACTION_TEXT_MAX, USER_ONLY_BLOCKER, capText, checkContract, checkResult, contractFields, contractWarnings, delegationPrompt, depthOf, type DelegationResult, type DelegationIntegration, type TaskAssignmentOptions } from '../../shared/delegation';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import { delegationGate, parallelSplit, stepIndex, type StrategyPlan } from '../../shared/strategy';
@@ -62,15 +62,16 @@ export interface DelegationChats {
   reportRoot?(chatId: string, result: DelegationResult): { orchestratorId: string | null; delivered: boolean };
   /** the depth limit refused a delegation (the only delegation limit) */
   limitNotice(chatId: string, kind: 'depth', limit: number): void;
-  /** a message from another chat (from = its title): agent_ask_parent, agent_answer_child */
+  /** a message from another chat (from = its title) */
   send(chatId: string, text: string, images?: unknown, resumed?: boolean, from?: string): Promise<void>;
   /** when the chat last produced anything (a transcript item, a state change, a send): the stall check (stalledMin) */
   lastEventAt?(chatId: string): number | undefined;
   /** a Strategist's plan with the user (ADR 0108): no delegation before the user's ok; a part names its step */
   planOf?(chatId: string): StrategyPlan | null;
   planDelegated?(chatId: string, i: number, chatIds: string[]): void;
-  /** the child now waits for its parent's answer, not on its own report (#152) */
-  askedParent?(chatId: string): void;
+  /** a child's question on the ladder (ADR 0344): who got it, and the holder's answer or askUser = one level up */
+  ladderAsk(chatId: string, ask: { question: string; options: string[]; why?: string }): { asked: string };
+  ladderReply(callerId: string, a: { chatId: string; requestId?: string; answer?: string; why?: string; askUser?: boolean }): Promise<{ answered: string; askUser: boolean }>;
   /** closes a chat and cancels its tree (ChatManager.close, ADR 0217): agent_close_child; absent = the tool refuses */
   close?(chatId: string, by?: 'user' | 'agent'): Promise<void>;
 }
@@ -103,7 +104,7 @@ export interface DelegationDeps {
 
 export const TASKS_MAX = 10;
 const TITLE_MAX = 80;
-const QUESTION_MAX = 1000, OPTIONS_MAX = 6, ANSWER_MAX = 4000, REMEMBER_MAX = 1, REMEMBER_LINE = 300;
+const QUESTION_MAX = 1000, OPTIONS_MAX = 6, REMEMBER_MAX = 1, REMEMBER_LINE = 300;
 
 /** An app-owned independent review run (the Judge's sample, ADR 0100): the only report that carries verdict / verified. */
 export function independentReview(c: ChatSummary | undefined): boolean {
@@ -123,7 +124,7 @@ export const busyChild = (c: ChatSummary): boolean => !c.closedAt && !c.delegati
  *  running, nothing waiting on the user) and produced no event for `stallMin` minutes (Impostazioni → Ruoli e deleghe →
  *  "Ferma dopo"). agent_children reports it to the parent as `stalled`. */
 export function stalledMin(c: ChatSummary, lastEventAt: number, now: number, stallMin: number): number | null {
-  if (!busyChild(c) || (c.state !== 'running' && c.state !== 'starting') || c.pending > 0) return null;
+  if (!busyChild(c) || (c.state !== 'running' && c.state !== 'starting') || c.pending > 0 || heldQuestions(c.questions).length) return null;
   const quiet = now - lastEventAt;
   return quiet >= stallMin * 60_000 ? Math.floor(quiet / 60_000) : null;
 }
@@ -472,6 +473,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       cwd: c.cwd, ...(c.userEvents ? { userEvents: c.userEvents } : {}),
       ...(c.run ? { runId: c.run.runId, taskId: c.run.taskId ?? c.run.runId, taskVersion: c.run.taskVersion ?? 1 } : {}),
       goal: c.delegation?.goal ?? null, result: c.delegation?.result ?? null, pending: c.pending,
+      // its open questions: yours to answer where holder is your chat id (agent_answer_child, requestId = id)
+      ...((qs => qs.length ? { questions: qs.map(q => ({ id: q.id, asks: q.asks, level: q.level, holder: q.holder ?? null, since: q.levelAt })) } : {})(openQuestions(c.questions))),
       ...(c.run ? { costUsd: runs.find(r => r.runId === c.run!.runId)?.costUsd ?? null } : {}),
       ...((m => m === null ? {} : { stalled: true, quietMin: m })(quiet(c))),
     })) };
@@ -501,43 +504,26 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     finally { children.forEach(c => assigning.delete(c.id)); }
   }
 
-  async function askParent(a: Record<string, unknown>, callerId: string): Promise<unknown> {
+  function askParent(a: Record<string, unknown>, callerId: string): unknown {
     const self = chat(callerId);
     if (!self?.delegation || !self.parentId) throw new Error('agent_ask_parent: only a delegated chat has a parent to ask; ask the user instead.');
     if (self.delegation.result) throw new Error('agent_ask_parent: you reported already.');
-    const parent = chat(self.parentId);
-    if (!parent || parent.closedAt) throw new Error('agent_ask_parent: your parent chat is closed: ask the user.');
     const question = typeof a.question === 'string' ? a.question.trim() : '';
     if (!question || question.length > QUESTION_MAX) throw new Error(`agent_ask_parent: question = 1 to ${QUESTION_MAX} characters.`);
     const options = a.options === undefined ? [] : Array.isArray(a.options) && a.options.length <= OPTIONS_MAX && a.options.every(o => typeof o === 'string' && o.trim() && o.length <= 200) ? (a.options as string[]).map(o => o.trim()) : null;
     if (!options) throw new Error(`agent_ask_parent: options = up to ${OPTIONS_MAX} short texts.`);
     const why = typeof a.why === 'string' ? a.why.trim().slice(0, 500) : '';
-    const role = ROLE_DEFAULTS[self.delegation.role].name;
-    // the label first, and what the child wrote flattened to one line: it cannot forge a line of the app or the user
-    const text = [d.label, '', `[domanda · ${role} «${oneLine(self.title)}» · chatId ${self.id}] ${oneLine(question)}`,
-      ...(options.length ? [`Opzioni: ${options.map((o, i) => `${i + 1}) ${oneLine(o)}`).join(' · ')}`] : []), ...(why ? [`Perché: ${oneLine(why)}`] : []),
-      `Rispondi con agent_answer_child (chatId "${self.id}", answer) da ciò che sai del compito. Se serve una persona (un permesso, un'azione irreversibile o esterna, una scelta che cambia l'obiettivo) o non lo sai, agent_answer_child con askUser: true: chiederà all'utente.`].join('\n');
-    await d.chats.send(parent.id, text, undefined, false, self.title);
-    d.chats.askedParent?.(callerId);
-    log.info('agents', 'child asked its parent', { chat: callerId, data: { parent: parent.id, options: options.length } });
-    return { asked: parent.title, note: 'Your parent answers with a message (agent_answer_child). Go on with what does not depend on it; do not ask the user the same thing meanwhile.' };
+    const { asked } = d.chats.ladderAsk(callerId, { question, options, ...(why ? { why } : {}) });
+    log.info('agents', 'child asked up the ladder', { chat: callerId, data: { options: options.length } });
+    return { asked, note: 'The answer reaches you as a message, also when it is the user\'s. Go on with what does not depend on it; do not ask the same thing again meanwhile.' };
   }
 
   async function answerChild(a: Record<string, unknown>, callerId: string): Promise<unknown> {
-    const parent = chat(callerId);
     const childId = typeof a.chatId === 'string' ? a.chatId : '';
-    const child = chat(childId);
-    if (!parent || !child || child.parentId !== callerId) throw new Error('agent_answer_child: chatId must be one of YOUR delegated chats (agent_children).');
-    if (child.closedAt || child.delegation?.result) throw new Error('agent_answer_child: that chat is closed or reported already.');
-    const askUser = a.askUser === true;
-    const answer = typeof a.answer === 'string' ? a.answer.trim() : '';
-    if (!askUser && (!answer || answer.length > ANSWER_MAX)) throw new Error(`agent_answer_child: answer = 1 to ${ANSWER_MAX} characters, or askUser: true.`);
-    // labelled and flattened like the question: the parent is an agent too, never the user nor the app
-    const head = `${d.label}\n\n[risposta di ${oneLine(parent.agent?.name ?? 'Chat')} «${oneLine(parent.title)}»]`;
-    const said = oneLine(answer.slice(0, ANSWER_MAX));
-    const text = askUser ? `${head} Non posso deciderlo io: chiedilo all'utente (una domanda chiara, con le opzioni).${said ? ` ${said}` : ''}` : `${head} ${said}`;
-    await d.chats.send(child.id, text, undefined, false, parent.title);
-    return { answered: child.title, askUser };
+    if (!chat(callerId) || !chat(childId)) throw new Error('agent_answer_child: chatId must be the chat of a question that waits for you (agent_children).');
+    const text = (v: unknown): string | undefined => typeof v === 'string' && v.trim() ? v.trim() : undefined;
+    const answer = text(a.answer), why = text(a.why), requestId = text(a.requestId);
+    return d.chats.ladderReply(callerId, { chatId: childId, ...(requestId ? { requestId } : {}), ...(answer ? { answer } : {}), ...(why ? { why } : {}), ...(a.askUser === true ? { askUser: true } : {}) });
   }
 
   const str = { type: 'string' };
@@ -633,16 +619,16 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: (a, ctx) => JSON.stringify(report(a, callerOf(ctx.params))),
   }, {
     name: 'agent_ask_parent',
-    description: 'Ask your parent for a missing fact about the assignment. When a consequential choice belongs to the user, ask it directly in your own question panel; reuse decisions already in the contract.',
+    description: 'Ask the chat that started you for a missing fact or a choice, while you go on with the rest; the answer comes as a message. When you can not go on without it, ask in your own question panel instead: the app gives it to the same chat first. Either way it climbs one level at a time (your parent, the Orchestrator, the user), so never ask the user yourself; reuse decisions already in the contract.',
     inputSchema: { type: 'object', required: ['question'], additionalProperties: false, properties: {
       question: str, options: { type: 'array', items: str, maxItems: OPTIONS_MAX }, why: { ...str, description: 'what depends on it' },
     } },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-    run: async (a, ctx) => JSON.stringify(await askParent(a, callerOf(ctx.params))),
+    run: (a, ctx) => JSON.stringify(askParent(a, callerOf(ctx.params))),
   }, {
     name: 'agent_answer_child',
-    description: 'Answer a question one of YOUR delegated chats asked you with agent_ask_parent (chatId from the question), from what you know of the task. askUser: true when it needs a person (a permission, an irreversible or external action, a choice that changes the goal) or you do not know: the child then asks the user.',
-    inputSchema: { type: 'object', required: ['chatId'], additionalProperties: false, properties: { chatId: str, answer: str, askUser: { type: 'boolean' } } },
+    description: 'Answer a question of a delegated chat that waits for you (its question panel or agent_ask_parent: chatId and requestId from the message, or agent_children), only when the request, the user\'s recorded decisions, the brain or the code settle it: why = that source. Your answer is never the user\'s consent. askUser: true when you do not know, or it changes the goal, what colleagues, QA or customers do, or cannot be undone: it goes one level up (the Orchestrator, then the user), you ask nobody. The chat waits; after 10 silent minutes it goes up by itself.',
+    inputSchema: { type: 'object', required: ['chatId'], additionalProperties: false, properties: { chatId: str, requestId: { ...str, description: 'which question, when the chat has more than one open' }, answer: str, why: { ...str, description: 'where the answer comes from; with askUser, why you can not decide it' }, askUser: { type: 'boolean' } } },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: async (a, ctx) => JSON.stringify(await answerChild(a, callerOf(ctx.params))),
   }, {

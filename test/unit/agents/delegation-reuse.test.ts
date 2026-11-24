@@ -18,7 +18,7 @@ function fixture(worktrees: DelegationDeps['worktrees'] = async()=>[]) {
   const ledger:UserTaskEvents={events:[{id:'decision',seq:1,at:2,text:'Keep the user requirement'}],latestSeq:1,acknowledgedSeq:0};
   const assign=vi.fn(async (_id:string,_prompt:string,_options:TaskAssignmentOptions)=>{ child.run={...child.run!,runId:'new',taskVersion:2}; });
   const create=vi.fn(async()=>child);
-  const chats:DelegationChats={list:()=>all,create,assignTask:assign,userEvents:()=>structuredClone(ledger),agentPolicy:()=>({tools:{allow:['read']},ceiling:null}),reportDelegation:()=>({parentId:'parent',delivered:true}),limitNotice:vi.fn(),send:async()=>{}};
+  const chats:DelegationChats={list:()=>all,create,assignTask:assign,userEvents:()=>structuredClone(ledger),agentPolicy:()=>({tools:{allow:['read']},ceiling:null}),reportDelegation:()=>({parentId:'parent',delivered:true}),limitNotice:vi.fn(),send:async()=>{},ladderAsk:()=>({asked:'x'}),ladderReply:async()=>({answered:'x',askUser:false})};
   const tools=delegationTools({chats,roles:()=>catalog,settings:()=>DELEGATION_DEFAULTS,engineRefusal:()=>null,label:'[agent]',runs:()=>[],worktrees});
   const call=async(name:string,args:Record<string,unknown>,caller='parent')=>JSON.parse(await tools.find(t=>t.name===name)!.run(args,{params:{chatId:caller}} as never) as string);
   const args=()=>({chatId:'child',roleId:'scout',cwd,mode:'continue',expectedVersion:1,expectedEventSeq:1,contract:{goal:'Follow up',output:'Evidence',context:'User constraints',doneWhen:['New criterion']}});

@@ -299,12 +299,21 @@ describe('a step is never «now» for ever (live status)', () => {
   });
 
   it('its chat works, asks the user, fails: the step says it at once', async () => {
-    const { f, kid, box } = await started(), sink = f.sinks.get(kid)!;
+    const { f, s, kid, box } = await started(), sink = f.sinks.get(kid)!;
     sink.changed({ state: 'running' });
     expect(box().live).toMatchObject({ say: 'working' });
     sink.pending({ id: 'q1', type: 'question', tool: 'AskUserQuestion', title: '?', detail: '', input: {}, questions: [{ question: '?', options: [{ label: 'Sì' }, { label: 'No' }], multiSelect: false }], at: 1 });
+    // its Strategist holds the question: nothing says it waits for the user (ADR 0344)
+    sink.changed({ state: 'waiting' });
+    expect(box().live).toMatchObject({ say: 'waiting', waits: 'parent' });
+    expect(f.m.list().find(c => c.id === kid)).toMatchObject({ state: 'running', pending: 0 });
+    expect(f.m.pending()).toEqual([]);
+    expect(JSON.stringify(f.maps().view(f.mapOf(s.id).id)!.info.live ?? {})).not.toContain('"user"');
+    await f.m.ladderReply(s.id, { chatId: kid, askUser: true, why: 'scelta sua' });
     expect(box().live).toMatchObject({ say: 'waiting', waits: 'user' });
+    expect(f.m.pending()).toHaveLength(1);
     await f.m.answer(kid, 'q1', { kind: 'question', answers: { '?': 'Sì' } }, 'pc');
+    sink.changed({ state: 'running' });
     expect(box().live!.waits).not.toBe('user');
     sink.changed({ state: 'error' });
     expect(box().live).toMatchObject({ say: 'failed' });
@@ -313,10 +322,10 @@ describe('a step is never «now» for ever (live status)', () => {
   it('asks its parent: it waits for the parent until the answer', async () => {
     const { f, s, kid, box } = await started();
     f.sinks.get(kid)!.changed({ state: 'idle' });
-    f.m.askedParent(kid);
+    f.m.ladderAsk(kid, { question: 'Anche i resi?', options: [] });
     expect(box().live).toMatchObject({ say: 'waiting', waits: 'parent' });
-    await f.call('agent_answer_child', s.id, { chatId: kid, answer: 'Sì, anche i resi' });
-    expect(f.m.list().find(c => c.id === kid)!.askedParentAt).toBeUndefined();
+    await f.call('agent_answer_child', s.id, { chatId: kid, answer: 'Sì, anche i resi', why: 'nella richiesta' });
+    expect(f.m.list().find(c => c.id === kid)!.questions).toMatchObject([{ answered: { by: 'strategist', answer: 'Sì, anche i resi', why: 'nella richiesta' } }]);
     expect(box().live!.waits).toBeUndefined();
   });
 

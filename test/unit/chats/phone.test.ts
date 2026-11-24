@@ -375,6 +375,8 @@ describe('the phone port', () => {
     expect(plan.plan?.clarified[0]?.q).not.toContain('produzione');
     const other = q.replace('La modifica va applicata in produzione?', 'Serve un test locale?');
     f.sinks.get(plan.id)!.pending(yesNo('local', other));
+    expect(f.port.listDecidable().some(x => x.chatId === plan.id)).toBe(false); // the Orchestrator's first (ADR 0344)
+    await f.m.ladderReply(o.id, { chatId: plan.id, askUser: true });
     await f.m.answer(plan.id, 'local', { kind: 'question', answers: { [other]: 'Sì' } });
     const after = f.chat(plan.id).plan!;
     expect(after.clarified).toHaveLength(2);

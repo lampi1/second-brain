@@ -286,13 +286,30 @@ export abstract class ManagerCore {
   }
 
   protected dropPending(r: Rec, requestId: string): void {
-    if (!r.pending.delete(requestId)) return;
+    const gone = r.pending.get(requestId);
+    if (!gone) return;
+    r.pending.delete(requestId);
     if (!r.pending.size && !r.commandsOpen?.size) this.idleAgain(r);
-    this.hook('analytics', () => this.analytics.resolved(r.s, requestId));
-    r.s.pending = r.pending.size;
-    this.opts.emitter.emit('pending:resolved', { chatId: r.s.id, requestId, ...(r.answeringFromPhone?.has(requestId) ? { by: 'phone' as const } : {}) });
+    r.s.pending = this.shownPending(r);
+    if (r.s.state === 'waiting' && this.allHeld(r)) r.s.state = 'running'; // what is left is with an agent, not the user's (ADR 0344)
+    if (!gone.ladder) { // one held by an agent was never shown
+      this.hook('analytics', () => this.analytics.resolved(r.s, requestId));
+      this.opts.emitter.emit('pending:resolved', { chatId: r.s.id, requestId, ...(r.answeringFromPhone?.has(requestId) ? { by: 'phone' as const } : {}) });
+    }
+    this.requestGone(r, requestId);
     this.updated(r);
   }
+  /** The open requests the user sees: one held by an agent (ADR 0344) is not his yet. */
+  protected shownPending(r: Rec): number {
+    let n = 0;
+    for (const p of r.pending.values()) if (!p.ladder) n++;
+    return n;
+  }
+  // the question ladder (manager-ladder.ts, ADR 0344), told by the layers below it
+  protected requestGone(_r: Rec, _requestId: string): void { /* manager-ladder.ts */ }
+  protected allHeld(_r: Rec): boolean { return false; }
+  protected ladderClosed(_r: Rec): void { /* manager-ladder.ts */ }
+  protected ladderBoot(): void { /* manager-ladder.ts */ }
 
   /** `title`, or `title · 2`, `· 3`… when another open chat already has its mail box (the slug of its title): two live
    *  chats with one box would hold their mail until someone renamed one (#187). */
