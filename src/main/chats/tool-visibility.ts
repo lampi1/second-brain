@@ -66,17 +66,26 @@ export function toolShownToChat(s: Pick<ChatSummary, 'research' | 'isOrchestrato
 
 const COMPACT_TOOL_DESC = 180;
 const COMPACT_PROP_DESC = 80;
+/** the tools a child cannot finish without (#463): agy drops the LARGEST tools first when over its budget, and
+ *  agent_report was the second largest of the chat endpoint (≈2.6 KB compacted), so these get the shortest metadata */
+const CORE_TOOLS: ReadonlySet<string> = new Set(['agent_report', 'agent_ask_parent']);
+const CORE_PROP_DESC = 40;
 
 const clipDesc = (text: string, max: number): string => (text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`);
 
-function compactSchemaNode(node: unknown): unknown {
-  if (Array.isArray(node)) return node.map(compactSchemaNode);
+function compactSchemaNode(node: unknown, max = COMPACT_PROP_DESC): unknown {
+  if (Array.isArray(node)) return node.map(x => compactSchemaNode(x, max));
   if (!node || typeof node !== 'object') return node;
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
-    out[k] = k === 'description' && typeof v === 'string' ? clipDesc(v, COMPACT_PROP_DESC) : compactSchemaNode(v);
+    out[k] = k === 'description' && typeof v === 'string' ? clipDesc(v, max) : compactSchemaNode(v, max);
   }
   return out;
+}
+
+/** The size of a tool list as an engine reads it (name, description, schema): the log line of a compact chat (#463). */
+export function toolListSize(tools: readonly McpTool[]): number {
+  return tools.reduce((n, t) => n + JSON.stringify({ name: t.name, description: t.description, inputSchema: t.inputSchema }).length, 0);
 }
 
 /** Compact MCP tool metadata for engines with a tight eager schema budget (Antigravity agy acp, ADR 0332): trims long
@@ -85,12 +94,13 @@ function compactSchemaNode(node: unknown): unknown {
 export function compactMcpTool(tool: McpTool): McpTool {
   const description = clipDesc(tool.description, COMPACT_TOOL_DESC);
   if (tool.name === RUN_CODE) return { ...tool, description };
-  const inputSchema = compactSchemaNode(tool.inputSchema) as Record<string, unknown>;
+  const max = CORE_TOOLS.has(tool.name) ? CORE_PROP_DESC : COMPACT_PROP_DESC;
+  const inputSchema = compactSchemaNode(tool.inputSchema, max) as Record<string, unknown>;
   const inputSchemaFor = tool.inputSchemaFor;
   return {
     ...tool,
     description,
     inputSchema,
-    ...(inputSchemaFor ? { inputSchemaFor: (params: Record<string, string>) => compactSchemaNode(inputSchemaFor(params)) as Record<string, unknown> } : {}),
+    ...(inputSchemaFor ? { inputSchemaFor: (params: Record<string, string>) => compactSchemaNode(inputSchemaFor(params), max) as Record<string, unknown> } : {}),
   };
 }

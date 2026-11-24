@@ -20,7 +20,7 @@ import { browserTools, type Scope } from './tools';
 import { SHOW_UI_HINT } from '../genui/artifacts';
 import { SCREENSHOT_HINT } from '../ask-image';
 import { BROWSER_READ_TOOLS, type BrowserAccess } from '../agents/tool-policy';
-import { compactMcpTool } from '../chats/tool-visibility';
+import { compactMcpTool, toolListSize } from '../chats/tool-visibility';
 
 export { mcpPortFromEnv } from '../mcp/server';
 
@@ -88,6 +88,8 @@ export async function createBrowserModule(o: { emitter: Emitter; window: () => B
   // out of its list: the schema and description cost tokens in every turn and the call would only be refused
   let chatToolShown: (chatId: string, tool: string) => boolean = () => true;
   let chatToolCompact: (chatId: string) => boolean = () => false;
+  /** the compact chats whose tool list was logged once (#463) */
+  const compactLogged = new Set<string>();
   // a chat's own endpoint, also as run_code reaches it in process (Code Mode, ADR 0331)
   const chatToolsFor = (id: string): McpTool[] => {
     const access = browserAccess(id);
@@ -102,7 +104,15 @@ ${SCREENSHOT_HINT}`;
     tools: ({ params }) => {
       const id = params.chatId ?? '';
       const list = chatToolsFor(id);
-      return chatToolCompact(id) ? list.map(compactMcpTool) : list;
+      if (!chatToolCompact(id)) return list;
+      const compact = list.map(compactMcpTool);
+      // what an engine with a tight schema budget was offered, once per chat (#463: which tools it could have dropped)
+      if (!compactLogged.has(id)) {
+        compactLogged.add(id);
+        const big = compact.map(t => ({ name: t.name, size: toolListSize([t]) })).sort((a, b) => b.size - a.size).slice(0, 5);
+        log.info('browser', 'compact chat tools listed', { chat: id, data: { tools: compact.length, bytes: toolListSize(compact), largest: big.map(b => `${b.name} ${b.size}`), report: compact.some(t => t.name === 'agent_report') } });
+      }
+      return compact;
     },
     authorize: p => !!p.chatId && !!p.token && tokens.check(p.chatId, p.token),
     who: p => p.chatId,

@@ -2,7 +2,7 @@
 // two tools only for the research, the Orchestrator's own endpoint tools hidden; the compact tool metadata of an engine
 // with a tight MCP schema budget (Antigravity, compactMcpTool).
 import { describe, expect, it } from 'vitest';
-import { compactMcpTool, toolShownToChat, toolShownToUnknown, toolShownToWarm } from '../../../src/main/chats/tool-visibility';
+import { compactMcpTool, toolListSize, toolShownToChat, toolShownToUnknown, toolShownToWarm } from '../../../src/main/chats/tool-visibility';
 import { appAsks } from '../../../src/main/engines/registry';
 
 const chat = (o: Record<string, unknown> = {}): Parameters<typeof toolShownToChat>[0] => ({ isOrchestrator: false, parentId: null, ...o }) as never;
@@ -90,3 +90,17 @@ describe('compact tool metadata (Antigravity, ADR 0332)', () => {
     expect(rc.description.length).toBeLessThanOrEqual(180);
   });
 });
+
+describe('the core tools stay small on a compact engine (#463)', () => {
+  it('agent_report keeps every field with descriptions of at most 40 characters', () => {
+    const long = 'x'.repeat(200);
+    const t = { name: 'agent_report', description: long, inputSchema: { type: 'object', properties: { outcome: { type: 'string', enum: ['done'], description: long } } } } as never;
+    const c = compactMcpTool(t) as unknown as { inputSchema: { properties: { outcome: { description: string; enum: string[] } } } };
+    expect(c.inputSchema.properties.outcome.description.length).toBeLessThanOrEqual(40);
+    expect(c.inputSchema.properties.outcome.enum).toEqual(['done']);
+    const other = compactMcpTool({ ...(t as object), name: 'list_chats' } as never) as unknown as typeof c;
+    expect(other.inputSchema.properties.outcome.description.length).toBe(80);
+    expect(toolListSize([c as never])).toBeLessThan(toolListSize([other as never]));
+  });
+});
+

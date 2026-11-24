@@ -343,6 +343,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0348](0348-a-chat-out-of-credits-moves-to-the-next-model.md) A chat out of credits moves by itself to the next model of its level, with 8 seconds to cancel — accepted
 - [0349](0349-pc-load-and-connectors-on-the-top-bar.md) The PC's CPU and free RAM, and the connectors with the MCP servers, on the top bar — accepted
 - [0350](0350-the-orchestrator-sets-model-lists-per-level.md) The Orchestrator sets a role's model lists per level; its own card has an ordered Base list — accepted
+- [0351](0351-a-child-that-answered-without-agent-report-is-partial.md) Antigravity keeps agent_report small; a child that answered without it goes up as partial — accepted
 
 ## Replaced
 

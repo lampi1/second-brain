@@ -282,6 +282,22 @@ describe('a delegated child out of credits (ChatManager)', () => {
     s.exit({ code: 1, error: 'spawn failed' });
     expect(f.get(child.id).delegation!.result).toMatchObject({ outcome: 'blocked', noReport: true });
   });
+  it('a child that answered but never called agent_report goes up as partial, not blocked (#463)', async () => {
+    const f = fixture(), { child } = await f.family();
+    const s = f.sinks.get(child.id)!;
+    const turn = (text: string) => {
+      s.changed({ state: 'running' });
+      s.item({ kind: 'assistant', id: `a-${Math.random()}`, at: Date.now(), text } as never, false);
+      s.item({ kind: 'result', id: `r-${Math.random()}`, at: Date.now(), costUsd: 0, durationMs: 1, turns: 1, isError: false }, false);
+      s.changed({ state: 'idle' });
+    };
+    turn('Ho trovato la causa nei log.');
+    await new Promise(r => setTimeout(r, 10));
+    expect(f.get(child.id).delegation!.result).toBeUndefined(); // told once first
+    turn('Ho trovato la causa nei log: è il proxy.');
+    await new Promise(r => setTimeout(r, 10));
+    expect(f.get(child.id).delegation!.result).toMatchObject({ outcome: 'partial', noReport: true });
+  });
   it('a chat without a role does not wait (it has no card): its user changes its model', async () => {
     const f = fixture();
     const plain = await f.m.create({ harness: 'claude', cwd: f.dir, title: 'Libera', prompt: 'x' }, 'user');
