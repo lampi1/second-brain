@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { ChatSummary } from '../../src/shared/contract';
 import { WORK_MAP_STATES, type WorkMap } from '../../src/shared/work-map';
 import { demoWorkMaps } from '../../src/main/demo-work-maps';
+import { DemoChats, seed } from '../../src/main/demo';
 import { WORK_MAPS_EN } from '../../src/main/demo-work-maps-text';
 import { setDemoLang } from '../../src/main/demo-text';
 import { WorkMaps } from '../../src/main/workmap/service';
@@ -50,6 +51,26 @@ describe('the demo\'s work maps', () => {
     expect(maps.view(of('returns').id)!.questions.map(x => [x.n, x.question.answered?.by ?? x.question.level])).toEqual([[3, 'orchestrator'], [2, 'strategist']]);
     expect(maps.view(of('push').id)!.questions.map(x => x.question.level)).toEqual(['user']);
     expect(maps.list().slice(0, 3).map(m => m.state)).not.toContain('stopped');
+  });
+  it('keep a plan to approve that was archived, then reopened, stopped with «Riprendi», as the real manager does', async () => {
+    const chats = new DemoChats(() => {}, { freeze: true }, seed(E)), id = 'mappa';
+    chats.patch(id, { plan: { phase: 'proposed', at: E, clarified: [], steps: [{ title: 'Uno', role: 'scout', state: 'todo' }] } });
+    chats.planPutAway(id);
+    expect(chats.list().find(c => c.id === id)!.plan).toMatchObject({ phase: 'revising', stopped: true, putAway: true });
+    await chats.archive(id);
+    await chats.planResume(id);
+    const plan = chats.list().find(c => c.id === id)!.plan!;
+    expect(plan.phase).toBe('proposed');
+    expect(plan).not.toHaveProperty('stopped');
+    expect(plan).not.toHaveProperty('putAway');
+    expect(chats.list().find(c => c.id === id)!.closedAt).toBeUndefined();
+  });
+  it('do not put away a plan that is not waiting for the user', () => {
+    const chats = new DemoChats(() => {}, { freeze: true }, seed(E)), id = 'mappa';
+    chats.patch(id, { plan: { phase: 'running', at: E, clarified: [], steps: [] } });
+    chats.planPutAway(id);
+    expect(chats.list().find(c => c.id === id)!.plan).toMatchObject({ phase: 'running' });
+    expect(chats.list().find(c => c.id === id)!.plan).not.toHaveProperty('stopped');
   });
   it('have their English', () => {
     setDemoLang('en');

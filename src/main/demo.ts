@@ -665,12 +665,17 @@ export class DemoChats implements ChatService {
     this.planMove(chatId, { phase: 'running' }, PLAN_APPROVED);
   }
   async planStop(chatId: string): Promise<void> { this.planMove(chatId, { stopped: true }); await this.stop(chatId); }
+  /** as the real manager: «Riprendi» clears the stop; a plan put away is proposed again (the demo has no Strategist to do it) */
   async planResume(chatId: string): Promise<void> {
     if (this.chats.get(chatId)?.closedAt) await this.reopen(chatId);
-    this.planMove(chatId, { stopped: undefined });
+    const plan = this.chats.get(chatId)?.plan;
+    if (!plan) return;
+    const { stopped: _s, putAway, ...open } = plan;
+    this.patch(chatId, { plan: { ...open, ...(putAway ? { phase: 'proposed' as const } : {}), at: this.now() } });
   }
   async planReplan(chatId: string, text: string): Promise<void> { this.planMove(chatId, { phase: 'revising' }, planChange(text)); }
-  planPutAway(chatId: string): void { this.planMove(chatId, { phase: 'revising' }); }
+  /** as the real manager: only a plan waiting for the user; the job is stopped, to be asked for again with «Riprendi» */
+  planPutAway(chatId: string): void { if (this.chats.get(chatId)?.plan?.phase === 'proposed') this.planMove(chatId, { phase: 'revising', stopped: true, putAway: true }); }
 
   async stop(chatId: string): Promise<void> {
     const c = this.chats.get(chatId);
