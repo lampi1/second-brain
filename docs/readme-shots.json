@@ -132,12 +132,23 @@
       ]
     },
     "plan": {
-      "test": "README showcase: the Strategist's plan to approve on the project map",
+      "test": "README showcase: the Strategist's plan to approve on its map",
       "sources": [
-        "src/renderer/components/project-map/",
-        "src/renderer/components/PlanApproval.tsx",
-        "src/renderer/styles/qwin.css",
-        "src/renderer/styles/plan-approval.css"
+        "src/renderer/components/work-map/WorkMapView.tsx",
+        "src/renderer/components/work-map/WorkDrawing.tsx",
+        "src/renderer/components/work-map/WorkSide.tsx",
+        "src/renderer/components/work-map/WorkBits.tsx",
+        "src/renderer/components/work-map/work-map.css"
+      ]
+    },
+    "work-maps": {
+      "test": "README screenshot: the work maps",
+      "sources": [
+        "src/renderer/components/work-map/WorksView.tsx",
+        "src/renderer/components/work-map/WorkBits.tsx",
+        "src/renderer/components/work-map/work-map.css",
+        "src/renderer/lib/work-maps.ts",
+        "src/main/demo-work-maps.ts"
       ]
     },
     "voice": {

@@ -51,7 +51,7 @@ export const brainModelIt = {
   'bm.map.legend.agent': 'Agente', 'bm.map.legend.skill': 'Skill', 'bm.map.legend.rule': 'Regola', 'bm.map.legend.memory': 'Memoria',
   'bm.map.usedBy': (p: N) => (p.n === 1 ? 'usata da 1 agente' : `usata da ${p.n} agenti`),
   'bm.map.agentSkills': (p: N) => (p.n === 1 ? '1 skill' : `${p.n} skill`),
-  'bm.map.view.projects': 'Progetti',
+  'bm.map.view.works': 'Lavori', 'bm.map.view.projects': 'Progetti',
   // Mappa → Progetti (ADR 0271)
   'pm.lead': 'I tuoi progetti disegnati al posto del codice: sistemi, collegamenti, persone e a che punto è ogni agente.',
   'pm.steps': (p: { done: number; total: number }) => `${p.done} passi fatti su ${p.total}`,
@@ -85,7 +85,6 @@ export const brainModelIt = {
   'pm.step.first': 'Parte per primo.', 'pm.step.after': (p: { steps: string }) => `Parte quando è finito il passo ${p.steps}.`, 'pm.step.afterMany': (p: { steps: string }) => `Parte quando sono finiti i passi ${p.steps}.`,
   'pm.step.with': (p: { steps: string }) => `Va insieme al passo ${p.steps}.`, 'pm.step.withMany': (p: { steps: string }) => `Va insieme ai passi ${p.steps}.`,
   'pm.step.todo': 'da fare', 'pm.step.now': 'in corso', 'pm.step.nowSince': (p: { at: string }) => `in corso da ${p.at}`, 'pm.step.done': 'fatto', 'pm.step.doneIn': (p: { time: string }) => `fatto in ${p.time}`, 'pm.step.blocked': 'bloccato',
-  'pm.step.by': (p: { role: string }) => `lo fa ${p.role}`, 'pm.step.on': (p: { name: string }) => `su ${p.name}`, 'pm.step.chat': (p: { title: string }) => `chat: ${p.title}`,
   'pm.step.planned': 'previsto', 'pm.step.plannedTip': 'Previsto: il modello della scheda del ruolo per questo preset; cambia se la chat parte con altro.',
   'pm.grp.head': (p: { n: number }) => `${p.n} in parallelo`, 'pm.grp.working': (p: { n: number }) => `${p.n} al lavoro`, 'pm.grp.done': (p: { n: number }) => `${p.n} ${p.n === 1 ? 'fatto' : 'fatti'}`,
   'pm.grp.blocked': (p: { n: number }) => `${p.n} ${p.n === 1 ? 'bloccato' : 'bloccati'}`, 'pm.grp.idle': (p: { n: number }) => `${p.n} da far partire`,
@@ -98,8 +97,8 @@ export const brainModelIt = {
   'pm.backNow': 'Torna a ora', 'pm.you': 'Tu', 'pm.youMeans': 'tocca a te',
   'pm.kind.person': 'Persone', 'pm.kind.system': 'Il tuo sistema', 'pm.kind.external': 'Sistema esterno', 'pm.kind.env': 'Ambiente', 'pm.kind.doc': 'Documento', 'pm.kind.part': 'Parte',
   'pm.state.ok': 'funziona', 'pm.state.done': 'fatto', 'pm.state.work': 'in lavorazione', 'pm.state.blocked': 'bloccato', 'pm.state.unknown': 'da capire', 'pm.state.stale': 'da verificare',
-  'pm.state.planned': 'previsto', 'pm.new': 'nuovo', 'pm.plan': 'Piano', 'pm.planPhase.proposed': 'aspetta il tuo ok', 'pm.planPhase.approved': 'approvato, tenuto per dopo', 'pm.planPhase.revising': 'in revisione', 'pm.planPhase.running': 'in corso', 'pm.planPhase.done': 'finito',
-  'pm.planSteps': (p: { done: number; total: number }) => `${p.done} di ${p.total} passi fatti`, 'pm.planApprove': 'Approva e parti', 'pm.planChange': 'Cambia qualcosa', 'pm.planChangeDraft': (p: { title: string }) => `Cambia il piano «${p.title}»: `, 'pm.planGone': 'Il piano è cambiato: guarda la versione nuova.',
+  'pm.state.planned': 'previsto', 'pm.new': 'nuovo',
+  'pm.planSteps': (p: { done: number; total: number }) => `${p.done} di ${p.total} passi fatti`,
   'pm.changeSent': (p: { at: string }) => `Modifica inviata ${p.at}:`, 'pm.changeSeen': (p: { at: string }) => `Modifica ricevuta ${p.at}:`, 'pm.worksMore': (p: { n: number; done: number; total: number }) => `+${p.n} altri · ${p.done}/${p.total} fatti`,
   'pm.parts': (p: N) => (p.n === 1 ? '1 parte' : `${p.n} parti`),
   // ADR 0326 · how far the project is: the percentage, the progress card and the plan card of the side panel
@@ -108,8 +107,6 @@ export const brainModelIt = {
   'pm.prog.within': (p: { name: string }) => `in ${p.name}`, 'pm.prog.by': (p: { who: string }) => `ci lavora ${p.who}`, 'pm.prog.of': (p: { done: number; total: number }) => `${p.done} di ${p.total}`,
   'pm.prog.at': 'Siamo a', 'pm.prog.allDone': 'Tutto fatto', 'pm.prog.now': 'In corso', 'pm.prog.next': 'Poi', 'pm.prog.more': 'Dettagli', 'pm.prog.less': 'Meno',
   'pm.prog.state.done': 'chiusa', 'pm.prog.state.now': 'in corso', 'pm.prog.state.blocked': 'bloccata', 'pm.prog.state.todo': 'da iniziare',
-  'pm.step.waits': 'aspetta te', 'pm.plan.steps': 'I passi del piano, in ordine', 'pm.plan.doneWhen': 'Finito quando:', 'pm.plan.blocked': (p: N) => (p.n === 1 ? '1 bloccato' : `${p.n} bloccati`),
-  'pm.plan.nowOne': (p: { steps: string }) => `ora il passo ${p.steps}`, 'pm.plan.nowMany': (p: { steps: string }) => `ora i passi ${p.steps}`,
   // #443 · phases and steps in a line, the arrow to the following step, proofs and links, the panel's width
   'pm.kind.phase': 'Fase', 'pm.kind.step': 'Passo', 'pm.next': 'Passo successivo', 'pm.nextShort': 'poi', 'pm.withPrev': 'Insieme al precedente', 'pm.parGroup': (p: { n: number }) => `∥ ${p.n} in parallelo`, 'pm.parLegend': 'in parallelo: si fanno insieme, si va avanti quando sono finiti tutti',
   'pm.stepsOf': 'I suoi passi', 'pm.proofs': 'Prove', 'pm.refs': 'Link', 'pm.openLink': 'Apri nel browser dell’app',

@@ -7,6 +7,7 @@ import { appTextDe } from './areas/app-text.de';
 import { brainTextDe } from './areas/brain-text.de';
 import { learningReviewDe } from './areas/learning-review.de';
 import { brainModelDe } from './areas/brain-model.de';
+import { workMapDe } from './areas/work-map.de';
 import { memoryDe } from './areas/memory.de';
 import { memoryHubDe } from './areas/memory-hub.de';
 import { statsDe } from './areas/stats.de';
@@ -118,6 +119,7 @@ export const de: Dict = {
   ...permissionsDe,
   ...langSwitchDe,
   ...brainModelDe,
+  ...workMapDe,
   ...memoryDe,
   ...memoryHubDe,
   ...statsDe,

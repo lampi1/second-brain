@@ -3,7 +3,8 @@
 // who uses it and opens the Skill page, a rule or a memory opens its file. "Note del brain" is the brain's notes map,
 // moved as is from the old Dashboard (dashboard/BrainNotesMap.tsx), with "Esplora in 3D". Both use dashboard/Graph.tsx
 // unchanged. "Progetti" (ADR 0271) draws the user's projects (project-map/ProjectMapView.tsx); its place is the page's
-// arg: progetti/<project>/<system> (app_project_map open lands there). Rendered by App.tsx PageFrame for 'collegamenti'.
+// arg: progetti/<project>/<system> (app_project_map open lands there). "Lavori" (ADR 0343) is the list of the work maps, or one of
+// them: lavori/<id>. Rendered by App.tsx PageFrame for 'collegamenti'.
 import { useEffect, useMemo, useState } from 'react';
 import { go, goTarget } from '../../actions';
 import { t } from '../../i18n';
@@ -12,12 +13,14 @@ import { linkGraph, type LinkNode } from '../../lib/brain-model-view';
 import { Seg } from '../../brain/components/ui';
 import { Graph } from '../../dashboard/Graph';
 import { BrainNotesMap } from '../../dashboard/BrainNotesMap';
+import { WORKS, workPlaceOf } from '../../lib/work-maps';
 import { ui } from '../../store/ui';
 import { ProjectMapView } from '../project-map/ProjectMapView';
+import { WorksView } from '../work-map/WorksView';
 import '../../dashboard/dashboard.css';
 import '../../styles/brain-model.css';
 
-type View = 'links' | 'notes' | 'projects';
+type View = 'works' | 'links' | 'notes' | 'projects';
 const PROJECTS = 'progetti';
 const KINDS = ['agent', 'skill', 'rule', 'memory'] as const;
 const COLOR: Record<LinkNode['kind'], string> = { agent: '#aa83ed', skill: '#36aaa5', rule: '#e17891', memory: '#659ad5' };
@@ -46,15 +49,20 @@ export function MapPage() {
   const { state } = useBrainModel();
   const arg = ui.use(s => (s.page === 'collegamenti' ? s.pageArg : null));
   const inProjects = arg === PROJECTS || !!arg?.startsWith(`${PROJECTS}/`);
-  const [view, setView] = useState<View>(inProjects ? 'projects' : 'links');
-  useEffect(() => { if (inProjects) setView('projects'); }, [inProjects]);
-  const pick = (v: View) => { setView(v); setSelected(null); if (v === 'projects' && !inProjects) go({ page: 'collegamenti', arg: PROJECTS }); else if (v !== 'projects' && inProjects) go({ page: 'collegamenti', arg: null }); };
+  const work = workPlaceOf(arg), inWorks = !!work;
+  const [view, setView] = useState<View>(inProjects ? 'projects' : inWorks ? 'works' : 'links');
+  useEffect(() => { if (inProjects) setView('projects'); else if (inWorks) setView('works'); }, [inProjects, inWorks]);
+  const pick = (v: View) => {
+    setView(v); setSelected(null);
+    const place = v === 'projects' ? PROJECTS : v === 'works' ? WORKS : null;
+    if (place ? (place === PROJECTS ? !inProjects : arg !== WORKS) : inProjects || inWorks) go({ page: 'collegamenti', arg: place });
+  };
   const [selected, setSelected] = useState<string | null>(null);
   const g = useMemo(() => linkGraph(state), [state]);
   return <div className="dashboard bm-dash bm-map" data-testid="bm-map-page">
-    <header className="dash-header"><div><span className="dash-eyebrow">{t('bm.map.eyebrow')}</span><h1>{t('bm.map.title')}</h1><p>{view === 'projects' ? t('pm.lead') : t('bm.map.lead')}</p></div></header>
-    <div className="bx bm-map-views"><Seg items={[{ id: 'projects', label: t('bm.map.view.projects') }, { id: 'links', label: t('bm.map.view.links') }, { id: 'notes', label: t('bm.map.view.notes') }]} value={view} onChange={pick} label={t('bm.map.viewLabel')} /></div>
-    {view === 'projects' ? <ProjectMapView arg={inProjects ? arg!.slice(PROJECTS.length + 1) || null : null} onArg={a => go({ page: 'collegamenti', arg: a ? `${PROJECTS}/${a}` : PROJECTS })} />
+    {!(view === 'works' && work?.id) && <header className="dash-header"><div><span className="dash-eyebrow">{t('bm.map.eyebrow')}</span><h1>{t('bm.map.title')}</h1><p>{view === 'works' ? t('wm.lead') : view === 'projects' ? t('pm.lead') : t('bm.map.lead')}</p></div></header>}
+    <div className="bx bm-map-views"><Seg items={[{ id: 'works', label: t('bm.map.view.works') }, { id: 'projects', label: t('bm.map.view.projects') }, { id: 'links', label: t('bm.map.view.links') }, { id: 'notes', label: t('bm.map.view.notes') }]} value={view} onChange={pick} label={t('bm.map.viewLabel')} /></div>
+    {view === 'works' ? <WorksView id={work?.id ?? null} /> : view === 'projects' ? <ProjectMapView arg={inProjects ? arg!.slice(PROJECTS.length + 1) || null : null} onArg={a => go({ page: 'collegamenti', arg: a ? `${PROJECTS}/${a}` : PROJECTS })} />
       : view === 'notes' ? <BrainNotesMap /> : <section className="dash-panel" data-testid="bm-map-links">
       <header><div><h3>{t('bm.map.view.links')}</h3><p>{t('bm.map.lead')}</p></div></header>
       <div className="dash-network">

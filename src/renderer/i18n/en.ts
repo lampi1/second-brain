@@ -6,6 +6,7 @@ import { appTextEn } from './areas/app-text.en';
 import { brainTextEn } from './areas/brain-text.en';
 import { learningReviewEn } from './areas/learning-review.en';
 import { brainModelEn } from './areas/brain-model.en';
+import { workMapEn } from './areas/work-map.en';
 import { memoryEn } from './areas/memory.en';
 import { memoryHubEn } from './areas/memory-hub.en';
 import { statsEn } from './areas/stats.en';
@@ -119,6 +120,7 @@ export const en: Dict = {
   ...permissionsEn,
   ...langSwitchEn,
   ...brainModelEn,
+  ...workMapEn,
   ...memoryEn,
   ...memoryHubEn,
   ...statsEn,

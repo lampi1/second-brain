@@ -40,6 +40,8 @@ import { currentEntry, pushEntry, stepEntry, type Shot, type ViewerEntry } from 
 import { applyViewPrefs } from './lib/view-prefs';
 import { importFound } from './lib/recorder';
 import { errText } from './lib/ipc-error';
+import { workPlace } from './lib/work-maps';
+import { workMapOfChat } from './store/work-maps';
 
 /** The Orchestrator's id (the right column), null while there is none. */
 export const orchestratorId = (): string | null => orchestratorIdOf(app.get());
@@ -177,6 +179,20 @@ export function openMaps(arg?: string | null, opts: { full?: boolean } = {}): vo
   // opened by the user: full screen (ADR 0307); opened by the Orchestrator while they talk: beside its column
   setMapsFull(opts.full ?? true);
   go({ page: 'collegamenti', arg: at ? `progetti/${at}` : 'progetti' });
+}
+
+/** The work maps (ADR 0343): the list, or one map. */
+export function openWorkMap(id: string | null): void {
+  if (ui.get().modal) closeModal();
+  go({ page: 'collegamenti', arg: workPlace(id) });
+}
+/** The map of a chat's job; with none, the list and why. */
+export async function openWorkMapOf(chatId: string): Promise<void> {
+  try {
+    const m = await workMapOfChat(chatId);
+    if (!m) toast(t('wm.none'), 'info');
+    openWorkMap(m?.id ?? null);
+  } catch (e) { toast(t('wm.failed', { why: errText(e) }), 'err'); }
 }
 
 /** onNavigate of the brain pages and of the map: every move goes through the history. */
@@ -726,6 +742,7 @@ export function uiCommand(cmd: EventMap['ui:command']): void {
     case 'forward': forward(); break;
     case 'palette': openModal('palette'); break;
     case 'maps': openMaps(v || null, { full: false }); break; // app_project_map open: the map at <project>/<system>, beside the Orchestrator (ADR 0276)
+    case 'workMap': void openWorkMapOf(v); break; // a Strategist just proposed its plan (projectmap/service.ts): the map of its job (ADR 0343)
     case 'next': nextThing(); break;
     case 'clock': freezeClock(Number(v)); break;
     case 'layout': setReporting(v !== 'off'); break;

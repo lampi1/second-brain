@@ -220,6 +220,14 @@ describe('the actor phone on answers and plans', () => {
     expect(f.items(s.id).some(i => i.kind === 'system' && i.code === 'phoneDecided' && i.params?.what === 'plan')).toBe(true);
   });
 
+  it('a plan reaches the phone as its steps in words, with Sì / No (ADR 0343: the map is for the PC)', async () => {
+    const f = fixture();
+    const s = await f.strategist();
+    const at = f.chat(s.id).plan!.at;
+    expect(f.decided.filter(d => d.item.ref.kind === 'plan').at(-1)).toMatchObject({ type: 'added', item: { chatId: s.id, ref: { kind: 'plan', at: String(at) }, simple: true, reserved: false,
+      text: '1. Trovo dove si calcola lo sconto\n2. Applico lo sconto\nFatto quando: I test passano' } });
+  });
+
   it('phoneTime is HH:MM', () => { expect(phoneTime(new Date(2026, 10, 5, 9, 4).getTime())).toBe('09:04'); });
 });
 

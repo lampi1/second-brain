@@ -1,0 +1,157 @@
+// Work maps of the demo (SB_DEMO=1, ADR 0343): more than twenty Strategist jobs and ideas, in every state and over three
+// made-up projects, for the list's screenshots, its e2e and a look at how it reads when there are many. Added through
+// __sbDemo.workMaps() (demo-wiring.ts), so the seed every other test reads stays as it is: the jobs are chats, and the real
+// service (workmap/service.ts) makes each map from its chat, at the moment the chat says (the hook moves the demo's clock).
+// In the UI language through demo-text.ts (the English: demo-work-maps-text.ts). Fictional data; pinned by
+// test/unit/demo-work-maps.test.ts.
+import type { ChatItem, ChatSummary } from '../shared/contract';
+import { ROLE_DEFAULTS } from '../shared/roles';
+import type { PlanPhase, PlanStep, StrategyPlan } from '../shared/strategy';
+import { localize } from './demo-text';
+
+const MIN = 60_000;
+/** `ago` = minutes since its last change; `then` = what the user did with the map once it was there. */
+interface DemoJob { id: string; title: string; goal?: string; project: string; ago: number; phase: PlanPhase; doneWhen?: string; stopped?: true; closedBy?: 'user' | 'auto'; then?: 'seen' | 'archive'; steps: PlanStep[] }
+
+const jobs = (E: number): DemoJob[] => [
+  { id: 'coupon', title: 'Codici sconto alla cassa', project: 'alfa-shop', ago: 4, phase: 'proposed', goal: 'Aggiungi i codici sconto alla cassa: un codice per ordine, con scadenza.', doneWhen: 'Un codice valido cambia il totale, uno scaduto spiega il motivo.', steps: [
+    { title: 'Trovo dove entra il codice alla cassa', role: 'scout', state: 'todo', preset: 'min', model: 'claude-haiku-5-5', on: 'ordini' },
+    { title: 'Guardo come fanno gli altri negozi', role: 'scout', state: 'todo', par: true, preset: 'min', model: 'claude-haiku-5-5' },
+    { title: 'Scrivo il campo e la regola del codice', role: 'artisan', state: 'todo', preset: 'max', model: 'claude-opus-5-5', on: 'ordini', detail: 'Un codice per ordine, mai sotto zero' },
+    { title: 'Verifico con i test', role: 'sentinel', state: 'todo', preset: 'base', model: 'claude-opus-5-5' },
+    { title: 'Scrivo le note di rilascio', role: 'herald', state: 'todo', par: true, preset: 'min', model: 'claude-haiku-5-5' },
+  ] },
+  { id: 'login-sms', title: 'Accesso con codice via SMS', project: 'app-mobile', ago: 22, phase: 'proposed', steps: [
+    { title: 'Leggo come funziona oggi', role: 'scout', state: 'todo', preset: 'min', model: 'claude-haiku-5-5' },
+    { title: 'Aggiungo la schermata del codice', role: 'artisan', state: 'todo', preset: 'base', model: 'claude-opus-5-5' },
+    { title: 'Verifico con i test', role: 'sentinel', state: 'todo', preset: 'base', model: 'claude-opus-5-5' },
+  ] },
+  { id: 'export', title: 'Esportazione mensile più veloce', project: 'gestionale', ago: 41, phase: 'proposed', steps: [
+    { title: 'Leggo come funziona oggi', role: 'scout', state: 'done', preset: 'min', model: 'claude-haiku-5-5', startedAt: E - 170 * MIN, endedAt: E - 160 * MIN },
+    { title: 'Leggo i dati a blocchi', role: 'artisan', state: 'now', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 150 * MIN },
+    { title: 'Provo una memoria più grande', role: 'artisan', state: 'now', par: true, preset: 'base', model: 'claude-opus-5-5', startedAt: E - 150 * MIN, drop: true },
+    { title: 'Verifico con i test', role: 'sentinel', state: 'todo', preset: 'base', model: 'claude-opus-5-5' },
+  ] },
+  { id: 'returns', title: 'Resi senza scontrino', project: 'alfa-shop', ago: 2, phase: 'running', steps: [
+    { title: 'Leggo come funziona oggi', role: 'scout', state: 'done', preset: 'min', model: 'claude-haiku-5-5', startedAt: E - 64 * MIN, endedAt: E - 52 * MIN },
+    { title: 'Cerco l’ordine dal numero della carta', role: 'artisan', state: 'now', preset: 'max', model: 'claude-opus-5-5', startedAt: E - 50 * MIN },
+    { title: 'Preparo i casi di prova', role: 'sentinel', state: 'now', par: true, preset: 'base', model: 'claude-opus-5-5', startedAt: E - 50 * MIN },
+    { title: 'Scrivo le note di rilascio', role: 'herald', state: 'todo', preset: 'min', model: 'claude-haiku-5-5' },
+  ] },
+  { id: 'push', title: 'Notifiche di consegna', project: 'app-mobile', ago: 9, phase: 'running', steps: [
+    { title: 'Leggo come funziona oggi', role: 'scout', state: 'done', preset: 'min', model: 'claude-haiku-5-5', startedAt: E - 200 * MIN, endedAt: E - 190 * MIN },
+    { title: 'Invio la notifica alla partenza', role: 'artisan', state: 'done', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 188 * MIN, endedAt: E - 90 * MIN },
+    { title: 'Provo su telefono vero', role: 'sentinel', state: 'blocked', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 80 * MIN, outcome: 'blocked' },
+    { title: 'Scrivo le note di rilascio', role: 'herald', state: 'todo', preset: 'min', model: 'claude-haiku-5-5' },
+  ] },
+  { id: 'search', title: 'Ricerca prodotti che perdona gli errori', project: 'alfa-shop', ago: 15, phase: 'running', steps: [
+    { title: 'Leggo come funziona oggi', role: 'scout', state: 'done', preset: 'min', model: 'claude-haiku-5-5', startedAt: E - 120 * MIN, endedAt: E - 100 * MIN },
+    { title: 'Confronto due modi di cercare', role: 'artisan', state: 'done', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 99 * MIN, endedAt: E - 40 * MIN },
+    { title: 'Metto il migliore nel catalogo', role: 'artisan', state: 'now', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 39 * MIN },
+    { title: 'Verifico con i test', role: 'sentinel', state: 'todo', preset: 'base', model: 'claude-opus-5-5' },
+  ] },
+  { id: 'billing', title: 'Fatture con più aliquote', project: 'gestionale', ago: 33, phase: 'revising', steps: [
+    { title: 'Leggo come funziona oggi', role: 'scout', state: 'done', preset: 'min', model: 'claude-haiku-5-5', startedAt: E - 400 * MIN, endedAt: E - 390 * MIN },
+    { title: 'Calcolo le aliquote riga per riga', role: 'artisan', state: 'now', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 380 * MIN },
+    { title: 'Verifico con i test', role: 'sentinel', state: 'todo', preset: 'base', model: 'claude-opus-5-5' },
+  ] },
+  { id: 'dark', title: 'Tema scuro nel negozio', project: 'alfa-shop', ago: 300, phase: 'running', stopped: true, steps: [
+    { title: 'Leggo come funziona oggi', role: 'scout', state: 'done', preset: 'min', model: 'claude-haiku-5-5', startedAt: E - 900 * MIN, endedAt: E - 880 * MIN },
+    { title: 'Cambio i colori delle pagine', role: 'artisan', state: 'now', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 870 * MIN },
+    { title: 'Verifico con i test', role: 'sentinel', state: 'todo', preset: 'base', model: 'claude-opus-5-5' },
+  ] },
+  { id: 'stock', title: 'Giacenze in tempo reale', project: 'gestionale', ago: 1500, phase: 'running', closedBy: 'user', steps: [
+    { title: 'Leggo come funziona oggi', role: 'scout', state: 'done', preset: 'min', model: 'claude-haiku-5-5', startedAt: E - 1900 * MIN, endedAt: E - 1880 * MIN },
+    { title: 'Leggo le giacenze dal magazzino', role: 'artisan', state: 'todo', preset: 'base', model: 'claude-opus-5-5' },
+    { title: 'Verifico con i test', role: 'sentinel', state: 'todo', preset: 'base', model: 'claude-opus-5-5' },
+  ] },
+  { id: 'offline', title: 'App che funziona senza rete', project: 'app-mobile', ago: 2900, phase: 'running', stopped: true, steps: [
+    { title: 'Leggo come funziona oggi', role: 'scout', state: 'todo', preset: 'min', model: 'claude-haiku-5-5' },
+    { title: 'Salvo gli ultimi ordini sul telefono', role: 'artisan', state: 'todo', preset: 'base', model: 'claude-opus-5-5' },
+    { title: 'Verifico con i test', role: 'sentinel', state: 'todo', preset: 'base', model: 'claude-opus-5-5' },
+  ] },
+  { id: 'gift', title: 'Buoni regalo', project: 'alfa-shop', ago: 120, phase: 'approved', goal: 'Vendi buoni regalo dal negozio e falli usare alla cassa.', closedBy: 'auto', steps: [
+    { title: 'Leggo come funziona oggi', role: 'scout', state: 'todo', preset: 'min', model: 'claude-haiku-5-5', on: 'ordini' },
+    { title: 'Creo il buono e il suo codice', role: 'artisan', state: 'todo', preset: 'max', model: 'claude-opus-5-5', on: 'ordini' },
+    { title: 'Aggiungo la mail con il buono', role: 'artisan', state: 'todo', par: true, preset: 'base', model: 'claude-opus-5-5' },
+    { title: 'Verifico con i test', role: 'sentinel', state: 'todo', preset: 'base', model: 'claude-opus-5-5' },
+    { title: 'Scrivo le note di rilascio', role: 'herald', state: 'todo', par: true, preset: 'min', model: 'claude-haiku-5-5' },
+  ] },
+  { id: 'backup', title: 'Copia notturna degli archivi', project: 'gestionale', ago: 700, phase: 'approved', closedBy: 'auto', steps: [
+    { title: 'Leggo come funziona oggi', role: 'scout', state: 'todo', preset: 'min', model: 'claude-haiku-5-5' },
+    { title: 'Preparo la copia', role: 'artisan', state: 'todo', preset: 'base', model: 'claude-opus-5-5' },
+    { title: 'Verifico con i test', role: 'sentinel', state: 'todo', preset: 'base', model: 'claude-opus-5-5' },
+  ] },
+  { id: 'widgets', title: 'Riquadro degli ordini sul telefono', project: 'app-mobile', ago: 1600, phase: 'approved', closedBy: 'auto', steps: [
+    { title: 'Leggo come funziona oggi', role: 'scout', state: 'todo', preset: 'min', model: 'claude-haiku-5-5' },
+    { title: 'Disegno il riquadro', role: 'artisan', state: 'todo', preset: 'base', model: 'claude-opus-5-5' },
+    { title: 'Verifico con i test', role: 'sentinel', state: 'todo', preset: 'base', model: 'claude-opus-5-5' },
+  ] },
+  { id: 'loyalty', title: 'Punti fedeltà', project: 'alfa-shop', ago: 12, phase: 'asking', steps: [] },
+  { id: 'vat', title: 'Correzione IVA sui resi', project: 'gestionale', ago: 50, phase: 'done', closedBy: 'auto', steps: [
+    { title: 'Leggo come funziona oggi', role: 'scout', state: 'done', preset: 'min', model: 'claude-haiku-5-5', startedAt: E - 300 * MIN, endedAt: E - 290 * MIN },
+    { title: 'Correggo il calcolo', role: 'artisan', state: 'done', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 289 * MIN, endedAt: E - 200 * MIN },
+    { title: 'Verifico con i test', role: 'sentinel', state: 'done', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 199 * MIN, endedAt: E - 180 * MIN },
+  ] },
+  { id: 'images', title: 'Foto prodotto più leggere', project: 'alfa-shop', ago: 90, phase: 'done', closedBy: 'auto', steps: [
+    { title: 'Riduco le foto', role: 'artisan', state: 'done', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 220 * MIN, endedAt: E - 150 * MIN },
+    { title: 'Verifico con i test', role: 'sentinel', state: 'done', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 149 * MIN, endedAt: E - 140 * MIN },
+  ] },
+  { id: 'wish', title: 'Lista dei desideri', project: 'alfa-shop', ago: 4300, phase: 'done', closedBy: 'auto', then: 'seen', steps: [
+    { title: 'Faccio la modifica', role: 'artisan', state: 'done', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 4390 * MIN, endedAt: E - 4320 * MIN },
+    { title: 'Verifico con i test', role: 'sentinel', state: 'done', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 4319 * MIN, endedAt: E - 4305 * MIN },
+  ] },
+  { id: 'langs', title: 'Negozio in tedesco', project: 'alfa-shop', ago: 8600, phase: 'done', closedBy: 'auto', then: 'seen', steps: [
+    { title: 'Faccio la modifica', role: 'artisan', state: 'done', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 8690 * MIN, endedAt: E - 8620 * MIN },
+    { title: 'Verifico con i test', role: 'sentinel', state: 'done', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 8619 * MIN, endedAt: E - 8605 * MIN },
+  ] },
+  { id: 'crash', title: 'Blocco all’avvio su tablet', project: 'app-mobile', ago: 5800, phase: 'done', closedBy: 'auto', then: 'seen', steps: [
+    { title: 'Faccio la modifica', role: 'artisan', state: 'done', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 5890 * MIN, endedAt: E - 5820 * MIN },
+    { title: 'Verifico con i test', role: 'sentinel', state: 'done', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 5819 * MIN, endedAt: E - 5805 * MIN },
+  ] },
+  { id: 'roles', title: 'Permessi per ruolo', project: 'gestionale', ago: 11500, phase: 'done', closedBy: 'auto', then: 'seen', steps: [
+    { title: 'Faccio la modifica', role: 'artisan', state: 'done', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 11590 * MIN, endedAt: E - 11520 * MIN },
+    { title: 'Verifico con i test', role: 'sentinel', state: 'done', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 11519 * MIN, endedAt: E - 11505 * MIN },
+  ] },
+  { id: 'print', title: 'Stampa delle etichette', project: 'gestionale', ago: 14400, phase: 'done', closedBy: 'auto', then: 'seen', steps: [
+    { title: 'Faccio la modifica', role: 'artisan', state: 'done', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 14490 * MIN, endedAt: E - 14420 * MIN },
+    { title: 'Verifico con i test', role: 'sentinel', state: 'done', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 14419 * MIN, endedAt: E - 14405 * MIN },
+  ] },
+  { id: 'tracking', title: 'Pagina «dov’è il mio pacco»', project: 'alfa-shop', ago: 20000, phase: 'done', closedBy: 'auto', then: 'seen', steps: [
+    { title: 'Faccio la modifica', role: 'artisan', state: 'done', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 20090 * MIN, endedAt: E - 20020 * MIN },
+    { title: 'Verifico con i test', role: 'sentinel', state: 'done', preset: 'base', model: 'claude-opus-5-5', startedAt: E - 20019 * MIN, endedAt: E - 20005 * MIN },
+  ] },
+  { id: 'kiosk', title: 'Totem in negozio', project: 'alfa-shop', ago: 6000, phase: 'approved', closedBy: 'auto', then: 'archive', steps: [
+    { title: 'Leggo come funziona oggi', role: 'scout', state: 'todo', preset: 'min', model: 'claude-haiku-5-5' },
+    { title: 'Adatto le pagine al totem', role: 'artisan', state: 'todo', preset: 'base', model: 'claude-opus-5-5' },
+  ] },
+];
+/** Ideas nobody works on yet. */
+const IDEAS: { title: string; idea?: string; project: string; ago: number }[] = [
+  { title: 'Confronto prezzi con i fornitori', idea: 'Capire ogni settimana dove compriamo troppo caro.', project: 'gestionale', ago: 60 },
+  { title: 'Recensioni con foto', project: 'alfa-shop', ago: 1000 },
+  { title: 'Risposte vocali nell’app', idea: 'Chi guida non può leggere: provare con le risposte più comuni.', project: 'app-mobile', ago: 3000 },
+];
+
+export interface DemoWorkMap { at: number; chat: ChatSummary; items: ChatItem[]; then?: 'seen' | 'archive' }
+export interface DemoIdea { at: number; title: string; idea?: string; project: string }
+
+function chatOf(j: DemoJob, E: number): ChatSummary {
+  const id = `wm-${j.id}`, at = E - j.ago * MIN, started = at - 30 * MIN, working = j.phase === 'running' && !j.stopped && !j.closedBy;
+  const plan: StrategyPlan = { phase: j.phase, at, map: j.project, clarified: j.phase === 'asking' ? [{ q: 'Chi guadagna i punti', a: 'Solo chi ha un account' }] : [], steps: j.steps, ...(j.doneWhen ? { doneWhen: j.doneWhen } : {}), ...(j.stopped ? { stopped: true as const } : {}) };
+  return {
+    id, title: j.title, harness: 'claude', origin: 'app', cwd: `C:\\progetti\\${j.project}`, sessionId: `demo-${id}`, model: 'claude-opus-5-5', effort: 'high', permissionMode: 'default',
+    state: j.closedBy ? 'closed' : working ? 'running' : 'idle', costUsd: 0.2, pending: 0, isOrchestrator: false, lastText: 'Trova i passi, proponi il piano, poi segui gli agenti.', updatedAt: at, browserTabIds: [],
+    agent: { id: 'strategist', name: 'Strategist', purpose: ROLE_DEFAULTS.strategist.summary, avatar: { kind: 'character', value: 'strategist' }, engine: 'claude', model: 'claude-opus-5-5', revision: 1, version: 1, source: 'catalog' },
+    run: { runId: `r_${id}`, chatId: id, agentId: 'strategist', version: 1, goal: j.goal ?? j.title, startedBy: 'orchestrator', startedAt: started, costUsd: 0.2, tokens: null, counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null } },
+    plan, ...(j.closedBy ? { closedAt: at, closedBy: j.closedBy } : {}),
+  };
+}
+
+/** The demo's work maps at the moment E, oldest first: the jobs as their chats, and the ideas. */
+export function demoWorkMaps(E: number): { jobs: DemoWorkMap[]; ideas: DemoIdea[] } {
+  return localize({
+    jobs: jobs(E).map(j => { const chat = chatOf(j, E); return { at: chat.updatedAt, chat, items: [{ kind: 'user', id: `${chat.id}-u1`, at: chat.run!.startedAt, text: chat.run!.goal } as ChatItem], ...(j.then ? { then: j.then } : {}) }; }).sort((a, b) => a.at - b.at),
+    ideas: IDEAS.map(({ ago, ...i }) => ({ ...i, at: E - ago * MIN })).sort((a, b) => a.at - b.at),
+  });
+}

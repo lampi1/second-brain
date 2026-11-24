@@ -120,6 +120,17 @@ describe('ProjectMaps planning', () => {
     v = m.view('shop')!;
     expect(v.plans[0]!.flow.map(f => [f.wave, !!f.par])).toEqual([[1, false], [2, false], [3, true], [4, true]]);
   });
+  it('puts the map of the job on screen once per proposal, never for a running plan (ADR 0343)', () => {
+    const shown: string[] = [];
+    const m = new ProjectMaps({ store: new ProjectMapStore(() => dir), chats: () => chats, items: () => [], pending: () => [], emit: () => {}, show: id => shown.push(id), stateFile: path.join(dir, 'state.json'), now: () => now, debounceMs: 10 });
+    m.save({ title: 'Shop', root: '/repo/shop', map: drawing, by: 'Scout', summary: 'prima' });
+    const tell = (p: Partial<StrategyPlan>) => { chats[0] = chat({ id: 's1', title: 'S', plan: plan({ map: 'shop', ...p }) }); m.observe('chat:updated', chats[0]); };
+    tell({ phase: 'proposed', at: 1 }); tell({ phase: 'proposed', at: 1 });
+    expect(shown).toEqual(['s1']);
+    tell({ phase: 'running', at: 1 });
+    tell({ phase: 'proposed', at: 2 });
+    expect(shown).toEqual(['s1', 's1']);
+  });
   it('shows the steps as works and moves statuses and agents with them, without a tool call', () => {
     const m = make();
     m.save({ title: 'Shop', root: '/repo/shop', map: drawing, by: 'Scout', summary: 'prima' });

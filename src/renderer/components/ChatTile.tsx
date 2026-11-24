@@ -298,7 +298,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
         {/* a closed bench is always as tall as the others (ADR 0312): what would grow it is one line here, by importance */}
         {queuedBar}{errorBar}
         {!holding && <AutoCloseNotice chatId={chatId} said={first ? userWait : stateText === waitText} />}
-        {chat.plan && !['asking', 'revising', 'proposed'].includes(chat.plan.phase) && <StrategyPanel chat={chat} question={planAsk} compact />}
+        {chat.plan && !['asking', 'revising'].includes(chat.plan.phase) && <StrategyPanel chat={chat} question={planAsk} compact />}
         <BenchKidsSum chatId={chatId} />
         <ChildStrips chatId={chatId} compact />
       </div> : <>
@@ -306,7 +306,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, focus, embedded 
       {!holding && <AutoCloseNotice chatId={chatId} said={!embedded && (first ? userWait : stateText === waitText)} />}
       {/* in full screen the subagents at work stay in sight, as under the strip in the Grindhouse */}
       {focus && <ChildStrips chatId={chatId} />}
-      {chat.plan && !['asking', 'revising', 'proposed'].includes(chat.plan.phase) && <StrategyPanel chat={chat} question={planAsk} />}
+      {chat.plan && !['asking', 'revising'].includes(chat.plan.phase) && <StrategyPanel chat={chat} question={planAsk} />}
       </>}
       {embedded && viewSwitch}
       <div ref={body} className={`aw-body view-${shownView}`} data-view={shownView} {...(expanded && shownView !== 'chat' ? { 'data-testid': `strip-pair-${chatId}` } : {})}>

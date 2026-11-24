@@ -47,8 +47,8 @@ export interface ProjectMapsDeps {
   pending(): PendingRequest[];
   /** tells the page a map or its agents changed */
   emit(project: string): void;
-  /** puts a project's map on screen (ADR 0276: a plan just proposed on it waits there for the user's ok) */
-  show?(project: string): void;
+  /** puts the map of a chat's job on screen (ADR 0276, 0343: a plan just proposed waits there for the user's ok) */
+  show?(chatId: string): void;
   /** userData/project-map.json */
   stateFile: string;
   now?: () => number;
@@ -450,7 +450,7 @@ export class ProjectMaps {
     const map = this.d.store.get(p.map);
     if (!map) return;
     // the owner: «quando lo stratega ha finito con le domande si apra la mappa del piano e l'utente può premere approva»
-    if (p.phase === 'proposed' && this.shown.get(c.id) !== p.at) { this.shown.set(c.id, p.at); this.d.show?.(p.map); }
+    if (p.phase === 'proposed' && this.shown.get(c.id) !== p.at) { this.shown.set(c.id, p.at); this.d.show?.(c.id); }
     const now = this.now(), ids = new Set(map.elements.map(e => e.id));
     let bound = false;
     const bind = (chatId: string, el: string) => {

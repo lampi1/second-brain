@@ -117,8 +117,6 @@ export const genuiRequestEn: typeof genuiRequestIt = {
   'genui.decision.cancel': 'Cancel',
   'genui.decision.yesKey': 'Y',
   'genui.decision.noKey': 'N',
-  'genui.decision.planYes': 'The Strategist starts these steps and hands the work to the agents.',
-  'genui.decision.planNo': 'The plan does not start: the Strategist proposes another one.',
   'genui.decision.workYes': 'This proposal goes ahead.',
   'genui.decision.workNo': 'The proposal is dropped.',
 };

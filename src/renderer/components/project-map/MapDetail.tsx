@@ -20,7 +20,7 @@ import { isStepKind } from '@shared/project-map-status';
 import { t } from '../../i18n';
 import { IconChat, IconFile, IconGlobe } from '../Icons';
 import { ProgressHead, countText } from './MapProgress';
-import { Turn } from './PlanCard';
+import { Turn } from './plan-words';
 
 type Shown = MapState | 'stale';
 /** A status in the user's words: ok is «fatto» on a phase or a step (work to do), «funziona» on what exists. */

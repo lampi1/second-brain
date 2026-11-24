@@ -4,8 +4,8 @@
 // strip shows the steps as a checklist, Claude Code style. This file holds the plan a Strategist root chat carries
 // (ChatSummary.plan, persisted with the chat), the checks of a proposed plan, the step changes that delegation and
 // results make, and the app's fixed text that tells the Strategist this flow. Pure: used by main/chats/manager.ts,
-// main/agents/strategy-tools.ts, main/agents/delegation.ts and the renderer (StrategyPanel.tsx, and with "Popup" on the
-// questions window's plan card, PlanApproval.tsx). The app enforces the flow, not only the text (ADR 0121): a first
+// main/agents/strategy-tools.ts, main/agents/delegation.ts and the renderer (StrategyPanel.tsx, and the
+// plan drawn on its map, work-map/WorkMapView.tsx). The app enforces the flow, not only the text (ADR 0121): a first
 // proposal needs three answers or the user’s stop (proposalGate), no delegation before the user's ok
 // (delegationGate), and a parallel group starts in one agent_delegate call (parallelSplit). «Aggiorna il piano»
 // (2026-11-23) proposes the plan again with `revise` (checkRevision): started and finished steps stay, and the user

@@ -5,7 +5,7 @@
 // - ProgressCard: the side panel's first card. The percentage and the count; where the project is (the phase under
 //   way), what is being done now and by whom, what waits for the user, what is blocked, what comes next; then every
 //   phase with its own bar, opened by a click. With a box picked it folds to its first lines («Dettagli» opens it).
-// The numbers come from shared/project-map-progress.ts (no model, no token). Used by ProjectMapView.tsx, PlanCard.tsx
+// The numbers come from shared/project-map-progress.ts (no model, no token). Used by ProjectMapView.tsx
 // and MapDetail.tsx.
 import { useEffect, useState, type ReactNode } from 'react';
 import type { MapProgress, ProgressItem } from '@shared/project-map-progress';

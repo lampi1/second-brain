@@ -122,7 +122,7 @@ export class Workflows {
     if (input.nextAction !== undefined) row.nextAction = input.nextAction ? text(input.nextAction, 500) : '';
     if (input.evidence !== undefined) row.evidence = input.evidence ? text(input.evidence, 3000) : '';
     if (input.action === 'propose') {
-      if (row.stage === 'plan' && this.planState?.(row).pending) throw new Error('Il piano è già nel pannello dello Strategist: usa quella sola decisione.');
+      if (row.stage === 'plan' && this.planState?.(row).pending) throw new Error('Il piano aspetta già l’ok sulla sua mappa: usa quella sola decisione.');
       if (row.stage === 'plan') row.planOverride = true;
       row.proposal = { id: randomUUID(), text: summary }; row.status = 'approval'; row.waitingOn = 'Te';
       return this.event(row, 'proposed', summary);

@@ -60,7 +60,7 @@ Each one has a vice for the quiet moments:
 | Role | Does |
 |------|------|
 | **Orchestrator** | Your single entry. Routes the work, answers the crew's questions, asks you only what is yours. |
-| **Strategist** | Turns a big job into a plan on the project map, waits for your OK, launches the steps and their reviews. |
+| **Strategist** | Turns a big job into a plan on a map of its own, waits for your OK, launches the steps and their reviews. |
 | **Scout** | Finds things: code, logs, docs. Reads, never writes. |
 | **Artisan** | Makes the change and proves it works. |
 | **Sentinel** | Reviews the diff with fresh eyes. Trusts nothing. |
@@ -70,7 +70,8 @@ Each one has a vice for the quiet moments:
 
 - **Every engine, per role.** Claude Code on one role, Codex on another, Cursor on a third. Each role card holds its
   model presets (Minimo, Base, Massimo) and its code mode.
-- **Plans you can see.** The Strategist draws the plan on the project's map; boxes turn green as the crew finishes.
+- **Plans you can see.** Every job has its own map: you approve, start, change or stop it there, and its boxes turn
+  green as the crew finishes. **Map** lists them all by status, what waits for you on top; an idea alone is a map too.
 - **No collisions.** Every writing agent gets its own git worktree.
 - **No leftovers.** A number beside Grindhouse counts the agents at work; when one ends, what it started ends with it,
   except the shared environments held by a lease.
@@ -84,7 +85,8 @@ Each one has a vice for the quiet moments:
   **Map**, **Scripts**, **Recordings**, lessons in **Learn**, a searchable **Settings** page, and **Chess** against
   your agents.
 
-<p align="center"><img src="docs/screenshots/plan.webp" alt="A Strategist's plan drawn on the project map, every step told in the side panel, Approve and start above the drawing" width="720"></p>
+<p align="center"><img src="docs/screenshots/plan.webp" alt="A Strategist's plan on its own map: a box per step with role and model, Approve and start above the drawing" width="720"></p>
+<p align="center"><img src="docs/screenshots/work-maps.webp" alt="The list of the work maps by status, with search, project filter and order" width="720"></p>
 
 ## Quick start
 

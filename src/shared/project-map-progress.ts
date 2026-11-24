@@ -15,7 +15,7 @@
 //   chained in order with something still to do. Any other map is a picture of how things are, not a plan: there the
 //   progress shown is the one of the Strategist's plan drawn on it. countOf counts any level (a phase's own bar).
 // A Strategist's plan drawn on the map has its own count (planProgress), read from its steps.
-// Pure, no I/O. Used by the renderer (components/project-map/MapProgress.tsx, PlanCard.tsx, MapDetail.tsx) and by the
+// Pure, no I/O. Used by the renderer (components/project-map/MapProgress.tsx, MapDetail.tsx) and by the
 // map's text for the Orchestrator and the agents (main/projectmap/tools.ts). Pinned by test/unit/project-map-progress.test.ts.
 import { layoutOf, type MapElement, type MapFlowStep, type MapLink, type MapPlan, type ProjectMap, type ProjectMapView } from './project-map';
 

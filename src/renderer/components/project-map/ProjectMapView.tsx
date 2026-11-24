@@ -18,8 +18,8 @@
 //   its turn; entering a system zooms into its box and coming back shows the
 //   box left; with more than one project they are a list on the left (a row of pills on a narrow page), not a menu.
 // - Told in full (ADR 0307, the owner 2026-11-14): the maps the user opens start full screen; a picked box, the system
-//   on screen or a picked arrow tells how it works beside the drawing (MapDetail.tsx); a plan tells each step
-//   (PlanCard.tsx); «Aggiorna» asks the Orchestrator to have the project read again and the map redrawn.
+//   on screen or a picked arrow tells how it works beside the drawing (MapDetail.tsx); the jobs that touch
+//   the project are rows that open their own map (work-map/WorkMapView.tsx, ADR 0343); «Aggiorna» asks the Orchestrator to have the project read again and the map redrawn.
 // - More detail (ADR 0316, the owner 2026-11-15: «vorrei capire bene come è strutturato senza vederlo»): a part holds
 //   parts of its own, entered the same way, up to four levels; a box's panel tells its rules, what it keeps, how big it
 //   is, why it is made so and its key files, each opened in the viewer; the paths (MapPaths.tsx) light the boxes of a
@@ -30,8 +30,7 @@
 // - How far it is (ADR 0326, the owner 2026-11-19: «le mappe servono per tracciare l'andamento di un piano … un
 //   progressivo, una percentuale, e più dettagli nella parte dx»): the header carries the percentage; the side panel
 //   opens with the progress (MapProgress.tsx: where the project is, what is done now and by whom, what waits for the
-//   user, what comes next, every phase with its bar) and with each plan drawn on the map (PlanCard.tsx: its bar and its
-//   steps, one row each). Nothing sits over the drawing any more, except one line while a plan waits for the ok.
+//   user, what comes next, every phase with its bar) and with the jobs of the project. Nothing sits over the drawing.
 // - The status of a box (issue #456, ADR 0330): a box with pieces inside shows what they say together, never a status
 //   of its own (shared/project-map-status.ts statusesOf); a phase or a step that is ok reads «fatto», anything else
 //   «funziona»; the statuses move by themselves with the chats linked to the pieces (main/projectmap/service.ts).
@@ -41,7 +40,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { countOf, planProgress, progressOf, workingOf } from '@shared/project-map-progress';
 import { isStepKind, statusesOf, waitingOf, type ShownState } from '@shared/project-map-status';
 import { NEW_MS, descendantsOf, levelOf, pathTo, shownStatus, type MapLink, type MapPlan, type MapWork, type Level, type LevelEdge, type LevelNode, type MapAgent, type MapElement, type MapState, type ProjectMapInfo, type ProjectMapView as View, type MapPath } from '@shared/project-map';
-import { brainBridge, openChatRef, openFileViewer, openInAppBrowser, orchestratorId } from '../../actions';
+import { brainBridge, openChatRef, openFileViewer, openWorkMap, openInAppBrowser, orchestratorId } from '../../actions';
 import { t } from '../../i18n';
 import { useNow } from '../../lib/clock';
 import { ago } from '../../lib/format';
@@ -53,7 +52,9 @@ import { GroupHubs } from './GroupHubs';
 import { ElementDetail, LinkDetail, stateText } from './MapDetail';
 import { PathList, PathPanel, type Walk } from './MapPaths';
 import { ProgressCard, ProgressChip, countText } from './MapProgress';
-import { PlanAsk, PlanCard, Turn } from './PlanCard';
+import { Turn } from './plan-words';
+import { StateChip, StepDots } from '../work-map/WorkBits';
+import '../work-map/work-map.css';
 import { SIDE, clampSide, readSide, writeSide } from './side-width';
 import './project-map.css';
 
@@ -463,8 +464,6 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
   const openLink = (href: string) => { setFull(false); void openInAppBrowser(href); };
   const askPath = () => { setFull(false); if (!brainBridge.draftToOrchestrator(t('pm.pathAskDraft', { title: map.title }), () => {})) toast(t('pm.noOrchestrator'), 'warn'); };
   const plans: MapPlan[] = live ? view!.plans : [];
-  const decide = (p: MapPlan) => { void window.sb.invoke('chat:plan', { chatId: p.chatId, decision: 'approve', at: p.at }).catch(() => toast(t('pm.planGone'), 'warn')); };
-  const change = (p: MapPlan) => { setFull(false); if (!brainBridge.draftToOrchestrator(t('pm.planChangeDraft', { title: p.title }), () => {})) toast(t('pm.noOrchestrator'), 'warn'); };
   // what waits for the user: the pieces themselves (a box that holds one is not counted again) and the links
   const waiting = waitingOf(map, statuses);
   // the number in the header: the project's own count, else the one of the plan under way on this map
@@ -477,9 +476,8 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
     const names = [...new Set([...of(id).filter(a => a.mark === 'run').map(a => cap(a.role ?? a.title)), ...worksOf(id).filter(w => w.state === 'now' && w.role).map(w => cap(w.role!))])];
     return names.length ? t('pm.prog.by', { who: names.join(', ') }) : undefined;
   };
-  const askingChats = new Set(agents.filter(a => a.mark === 'wait').map(a => a.chatId));
-  const planCard = (p: MapPlan) => <PlanCard key={p.chatId} plan={p} now={now} waiting={askingChats} nameOf={id => byId.get(id)?.name} onShow={show} onChat={id => { setFull(false); closeModal(); openChatRef(id); }} />;
-  const asking = (p: MapPlan) => p.phase === 'proposed' || p.phase === 'revising';
+  const jobs = live ? view!.jobs ?? [] : [];
+  const openJob = (id: string) => { setFull(false); closeModal(); openWorkMap(id); };
   const scale = cam.s;
   /** zoom by a factor around the canvas centre (the + / − buttons) */
   const zoomBy = (f: number) => {
@@ -587,8 +585,6 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
       <button type="button" className="btn btn-s pm-fullbtn" onClick={toggleFull} aria-pressed={full} data-testid="pm-fullscreen">{full ? <IconMinimize size={14} /> : <IconMaximize size={14} />}{t('pm.fullscreen')}</button>
     </header>
     {!live && <div className="pm-past" data-testid="pm-past">{t('pm.past', { v: map.version, at: since(map.updatedAt, now), by: map.by })} · {map.summary}<button type="button" className="btn btn-s" onClick={() => setVersion(null)}>{t('pm.backNow')}</button></div>}
-    {/* a plan that waits for the user's ok: one line over the drawing, its steps are in the side panel (ADR 0326) */}
-    {plans.filter(p => p.phase === 'proposed').map(p => <PlanAsk key={p.chatId} plan={p} onApprove={() => decide(p)} onChange={() => change(p)} />)}
     <div className={`pm-body${maps.length > 1 ? ' with-nav' : ''}`} ref={body} style={{ '--pm-side': `${sideW}px` } as CSSProperties}>
       {/* the projects, a list beside the drawing like the newspaper's sections (ADR 0302: no menu to open) */}
       {maps.length > 1 && <nav className="pm-nav" aria-label={t('pm.projects')} data-testid="pm-nav">
@@ -699,10 +695,11 @@ export function ProjectMapView({ arg, onArg, full: fullProp, onFull }: { arg: st
         {walkPath && walk && <PathPanel map={map} path={walkPath} i={walk.i} onStep={i => setWalk({ path: walkPath.id, i })} onClose={() => setWalk(null)} onShow={show} onFile={openFile} />}
         {sel && <ElementDetail count={counts.get(sel.id)} map={map} el={sel} state={st(sel)} stateOfLink={stLink} confirmed={t('pm.confirmed', { at: since(sel.confirmedAt, now) })} works={worksOf(sel.id)} onTalk={() => talk(sel)} onShow={show} onFile={openFile} onWalk={startWalk} stateOfEl={st} onLink={openLink} />}
         {selLinks.length > 0 && <LinkDetail map={map} links={selLinks} stateOfLink={stLink} onShow={show} />}
-        {/* a plan that waits for the ok first; then how far the project is; then the plans under way (ADR 0326) */}
-        {plans.filter(asking).map(planCard)}
+        {/* how far the project is; then the jobs that touch it: each opens its own map (ADR 0343) */}
         {progress && <ProgressCard p={progress} compact={!!sel || selLinks.length > 0 || !!walkPath || !!shownLevel} whoOf={whoOf} onShow={show} />}
-        {plans.filter(p => !asking(p)).map(planCard)}
+        {jobs.length > 0 && <section className="pm-group" data-testid="pm-jobs"><h4>{t('pm.jobs')}</h4><ul className="wm-jobs">
+          {jobs.map(j => <li key={j.id} className="wm-job" data-testid={`pm-job-${j.id}`}><b>{j.title}</b><StateChip info={j} />{j.steps > 0 && <><StepDots info={j} /><span>{t('wm.steps', { done: j.done, n: j.steps })}</span></>}<button type="button" className="btn btn-ghost btn-s" onClick={() => openJob(j.id)} data-testid={`pm-job-open-${j.id}`}>{t('wm.open')}</button></li>)}
+        </ul></section>}
         {here && !walkPath && <ElementDetail count={counts.get(here.id)} map={map} el={here} state={st(here)} stateOfLink={stLink} confirmed={t('pm.confirmed', { at: since(here.confirmedAt, now) })} works={here.kind === 'part' || here.kind === 'phase' || here.kind === 'step' ? worksOf(here.id) : []} onTalk={() => talk(here)} onShow={show} onFile={openFile} onWalk={startWalk} stateOfEl={st} onLink={openLink} testid="pm-here" lead={t('pm.youAreIn')} />}
         {!walkPath && <PathList map={map} onWalk={startWalk} onAsk={askPath} />}
         <div className="pm-side-head"><h3>{t('pm.agents')}</h3><span>{live ? t('pm.agentsCount', { n: agents.length, run: agents.filter(a => a.mark === 'run').length }) : t('pm.agentsPast')}</span></div>

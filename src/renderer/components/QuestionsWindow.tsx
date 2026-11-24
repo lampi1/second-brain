@@ -2,7 +2,7 @@
 // modale così invadente, sempre espandibile»; ADR 0269). Every open question, permission, command and plan from every chat
 // sits at the bottom of the Orchestrator's column as one short row each (who asks, the question, Sì / No right on the row
 // for a yes/no question, ▾): a click opens that row as the full card (the same Bivio card the old window showed:
-// RequestPanel size `window`, PlanApproval, WorkApproval), one open at a time. Nothing floats over the page, nothing takes
+// RequestPanel size `window`, PlanAskCard, WorkApproval), one open at a time. Nothing floats over the page, nothing takes
 // the keyboard by itself. Ctrl+J, the top bar's counter, a strip's «aspetta te» and the Orchestrator's recap
 // (app_unblock) open the row they name here (store/ui.ts callQuestions → qwin.first / call). «Ci penso dopo» moves a
 // row into one folded line «N da rispondere dopo» (lib/later.ts). A chat's own tile never shows its requests: one line says they went to the Orchestrator
@@ -12,7 +12,7 @@ import { answeredInField } from '../lib/field-answer';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Harness, PendingRequest } from '@shared/contract';
 import { isYesNo, yesNoOf } from '@shared/yes-no';
-import { focusChat, reqKey } from '../actions';
+import { focusChat, openWorkMapOf, reqKey } from '../actions';
 import { qwinStats } from '../lib/questions';
 import { commandsOfTurn, orchestratorIdOf } from '../lib/orchestrator-route';
 import { sameList } from '../store/state';
@@ -24,7 +24,7 @@ import { ago } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { CodeBlock } from './CodeBlock';
 import { RequestPanel } from './RequestPanel';
-import { PlanApproval } from './PlanApproval';
+import { PlanAskCard } from './PlanAskCard';
 import { planAskKeys, planAskOf, withPlans, type PlanAsk } from '../lib/plan-ask';
 import { Kbd } from './ui';
 import { t } from '../i18n';
@@ -131,7 +131,8 @@ function AskRow({ ask, open, later, onToggle, onClose }: { ask: Ask; open: boole
   const k = reqKey(ask);
   const yn = quickYesNo(ask);
   const [sent, setSent] = useState(false);
-  const title = isDurable(ask) ? ask.title : ask.type === 'plan' ? t('tree.plan.ask.kicker')
+  const job = useApp(s => s.chats[ask.chatId]?.title ?? '');
+  const title = isDurable(ask) ? ask.title : ask.type === 'plan' ? `${t('tree.plan.ask.kicker')}${job ? `: ${job}` : ''}`
     : ask.type === 'permission' ? `${t('chat.questions.permission')}: ${ask.title}`
     : ask.type === 'command' ? `${t('chat.questions.command')}: ${ask.title}`
     : (ask.questions?.[0]?.question ?? ask.title).replace(/!\[[^\]]*\]\([^)]*\)/g, '').trim();
@@ -161,6 +162,8 @@ function AskRow({ ask, open, later, onToggle, onClose }: { ask: Ask; open: boole
           <button type="button" className="oask-yn y" disabled={sent} onClick={() => allow(true)} data-testid="orchestrator-ask-allow">{t('tree.allowOnce')}</button>
           <button type="button" className="oask-yn n" disabled={sent} onClick={() => allow(false)} data-testid="orchestrator-ask-deny">{t('tree.deny')}</button>
         </>}
+        {/* a plan is approved on its map (ADR 0343) */}
+        {!isDurable(ask) && ask.type === 'plan' && !open && <button type="button" className="oask-yn y" onClick={() => void openWorkMapOf(ask.chatId)} data-testid="orchestrator-ask-map">{t('wm.open')}</button>}
         {yn && !open && <>
           <button type="button" className="oask-yn y" disabled={sent} onClick={() => quick(yn.yes)} data-testid="orchestrator-ask-yes">{t('chat.questions.yes')}</button>
           <button type="button" className="oask-yn n" disabled={sent} onClick={() => quick(yn.no)} data-testid="orchestrator-ask-no">{t('chat.questions.no')}</button>
@@ -200,7 +203,7 @@ function AskCard({ ask, name, harness, onLater }: { ask: Ask; name: string; harn
         {isDurable(ask)
           ? <WorkApproval key={k} ask={ask} onEscape={onLater} />
           : ask.type === 'plan'
-          ? <PlanApproval key={k} ask={ask} chatTitle={name} onEscape={onLater} keysTo={keysEl} testid="qwin-plan" />
+          ? <PlanAskCard key={k} ask={ask} onEscape={onLater} testid="qwin-plan" />
           : <RequestPanel key={k} req={ask} variant="window" chatTitle={name} harness={harness} commands={commands} onEscape={onLater} keysTo={keysEl} testid="qwin-card" />}
       </AskItemsProvider>
       </WriteViaOrchestrator.Provider>

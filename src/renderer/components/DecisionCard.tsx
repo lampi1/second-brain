@@ -4,7 +4,7 @@
 // and files, plus any other visual it attached; a plan's steps; a proposal's text), what Sì and No do, then always the
 // same four answers: Sì, No, «Scrivi una risposta…» and «Non voglio rispondere»; Esc = «Ci penso dopo». Keys: 1 / S
 // (Y, J) yes, 2 / N no, 3 / T write, Enter the recommended one. Presentational: each host decides what an answer does
-// (RequestPanel.tsx for agents' questions, PlanApproval.tsx, WorkApproval.tsx). In voice mode the card is
+// (RequestPanel.tsx for agents' questions, WorkApproval.tsx). In voice mode the card is
 // read aloud and a spoken answer counts as the click (lib/voice.ts useVoiceQuestion, ADR 0152). BriefEvidence draws
 // a brief; it is also GenUi.tsx's view of one shown as a plain chat card.
 // «Bivio» (ADR 0259, the owner 2026-11-10: «le domande sono una parte core dell'app»): the short question, then one

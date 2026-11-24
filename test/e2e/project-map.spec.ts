@@ -73,33 +73,34 @@ test('the project maps open full screen, Esc puts them beside the Orchestrator, 
   } finally { await app.close(); }
 });
 
-// ADR 0276: a Strategist's plan drawn on the map: its steps inside the box they work on, the piece that is not there
-// yet, the plan in the side column with «Approva e parti» while it waits for the user
-test('a plan is drawn on the map: steps in their box, a planned piece, approval from the map', async () => {
+// ADR 0276: a Strategist's plan drawn on the project map: its steps inside the box they work on, the piece that is not
+// there yet; the job itself is a row that opens its own map, where it is approved (ADR 0343)
+test('a job is drawn on the project map: steps in their box, a planned piece, a row that opens its own map', async () => {
   const { app, page } = await launchDemo();
   try {
     await app.evaluate(() => (globalThis as unknown as { __sbDemo: { tree(): void } }).__sbDemo.tree());
     await page.getByTestId('maps-btn').click();
     const view = page.getByTestId('pm-view');
-    await expect(view.getByTestId('pm-plan')).toContainText('Sconti in percentuale');
-    await expect(view.getByTestId('pm-plan')).toContainText('1 di 4 passi fatti');
-    // the plan is told in the side panel, with its percentage; the header carries it too (ADR 0326)
-    await expect(view.getByTestId('pm-side').getByTestId('pm-plan')).toContainText('25%');
-    await expect(view.getByTestId('pm-progress-chip')).toContainText('25%');
-    await expect(view.getByTestId('pm-plan-ask')).toHaveCount(0);
+    const job = view.getByTestId('pm-jobs').locator('li').filter({ hasText: 'Sconti in percentuale' });
+    await expect(job).toContainText('1 di 4 passi fatti');
+    await expect(view.getByTestId('pm-progress-chip')).toContainText('25%'); // the header carries it (ADR 0326)
     await expect(view.getByTestId('pm-node-note-di-rilascio')).toBeVisible();
     await view.getByTestId('pm-node-negozio').click();
     await expect(view.getByTestId('pm-works-ordini')).toContainText('Applico lo sconto % sul prezzo pieno'); // the step under way first (ADR 0302)
     await expect(view.getByTestId('pm-works-ordini')).toContainText('1/3 fatti');
     await shot(page, 'project-map-plan');
-    // a plan that waits for the user: the pieces dashed, the approval on the map
+    // a plan just proposed opens its own map, where it is approved (ADR 0343)
     await app.evaluate(() => { const d = (globalThis as unknown as { __sbDemo: { plan(id: string, p: unknown): void } }).__sbDemo; d.plan('tree-plan', { phase: 'proposed', at: 5, map: 'alfa-shop', clarified: [], steps: [{ title: 'Scrivo i resi parziali', role: 'artisan', state: 'todo', on: 'rimborsi' }] }); });
-    // one line over the drawing holds the approval; every step is open in the side panel
-    await expect(view.getByTestId('pm-plan-ask').getByTestId('pm-plan-approve')).toBeVisible();
-    await expect(view.getByTestId('pm-stepcard-1')).toContainText('su Rimborsi');
+    const work = page.getByTestId('wm-map');
+    await expect(work).toHaveAttribute('data-state', 'toApprove');
+    await expect(work.getByTestId('wm-box-1')).toContainText('Scrivo i resi parziali');
+    // on the project map: the piece dashed and the row of the job, no button to approve
+    await page.getByTestId('bm-map-page').getByRole('button', { name: 'Progetti', exact: true }).click();
+    await expect(job).toContainText('Aspetta il tuo ok');
     await shot(page, 'project-map-plan-proposed');
-    await view.getByTestId('pm-plan-approve').click();
-    await expect(view.getByTestId('pm-plan-approve')).toHaveCount(0);
+    await job.getByRole('button', { name: 'Apri la mappa' }).click();
+    await work.getByTestId('wm-do-approve').click();
+    await expect(work).toHaveAttribute('data-state', 'running');
   } finally { await app.close(); }
 });
 
@@ -189,20 +190,13 @@ test('the map moves like a design canvas: Ctrl+wheel zooms at the pointer, a dra
   } finally { await app.close(); }
 });
 
-// ADR 0302 (the owner 2026-11-13): the part being worked on moves, quietly; the plan's steps read in order, the ones of
-// one turn together; entering a system and coming back are a passage, not a cut; the projects are a list at the side
-test('the map shows what moves, the order of the steps, the passage into a system and the projects at the side', async () => {
+// ADR 0302 (the owner 2026-11-13): the part being worked on moves, quietly; entering a system and coming back are a passage, not a cut; the projects are a list at the side
+test('the map shows what moves, the passage into a system and the projects at the side', async () => {
   const { app, page } = await launchDemo();
   try {
     await app.evaluate(() => (globalThis as unknown as { __sbDemo: { tree(): void } }).__sbDemo.tree());
     await page.getByTestId('maps-btn').click();
     const view = page.getByTestId('pm-view');
-    // the plan's steps in order, one row each in the side panel (ADR 0326): the third and the fourth go together
-    const flow = view.getByTestId('pm-flow');
-    await expect(flow.getByTestId('pm-step-2')).toHaveAttribute('data-s', 'now');
-    await expect(flow.locator('.pm-planstep')).toHaveCount(4);
-    await flow.getByTestId('pm-step-head-3').click();
-    await expect(flow.getByTestId('pm-stepcard-3')).toContainText('Va insieme al passo 4.');
     // somebody works on the shop and on the notes right now; nobody on the payments
     await expect(view.getByTestId('pm-node-negozio')).toHaveAttribute('data-running', '');
     await expect(view.getByTestId('pm-node-note-di-rilascio')).toHaveAttribute('data-running', '');
@@ -218,17 +212,13 @@ test('the map shows what moves, the order of the steps, the passage into a syste
     await view.getByTestId('pm-up').click();
     await expect(view.getByTestId('pm-level')).toHaveAttribute('data-enter', 'out');
     await expect(view.getByTestId('pm-node-negozio')).toHaveClass(/came/);
-    // a step of the plan shows the box it works on
-    await flow.getByTestId('pm-step-head-4').click();
-    await flow.getByTestId('pm-stepcard-on-4').click();
-    await expect(view.getByTestId('pm-detail')).toContainText('Note di rilascio');
     // the projects are a list beside the drawing, not a menu
     const nav = view.getByTestId('pm-nav');
     await expect(nav.getByRole('button')).toHaveCount(3);
     await expect(nav.getByTestId('pm-nav-alfa-shop')).toHaveAttribute('aria-pressed', 'true');
     await nav.getByTestId('pm-nav-beta-crm').click();
     await expect(view.getByTestId('pm-node-crm')).toBeVisible();
-    await expect(view.getByTestId('pm-flow')).toHaveCount(0);
+    await expect(view.getByTestId('pm-jobs')).toHaveCount(0);
     await shot(page, 'project-map-projects');
     // full screen: the list at the side, the drawing, the agents
     await nav.getByTestId('pm-nav-alfa-shop').click();
@@ -239,30 +229,13 @@ test('the map shows what moves, the order of the steps, the passage into a syste
 });
 
 // ADR 0307 (the owner 2026-11-14): «voglio che si capisca bene ogni passaggio e vorrei anche poterle aggiornare da un
-// tasto… il contenuto testuale non è molto dettagliato». Every step of a plan told in full, every box with how it works
-// and what goes in and out, every arrow with what passes on it, and «Aggiorna» that asks the Orchestrator for a redraw.
-test('the map tells every step, every box and every arrow in full, and «Aggiorna» asks the Orchestrator to redraw it', async () => {
+// tasto… il contenuto testuale non è molto dettagliato». Every box with how it works and what goes in and out, every arrow with what passes on it, and «Aggiorna» that asks the Orchestrator for a redraw.
+test('the map tells every box and every arrow in full, and «Aggiorna» asks the Orchestrator to redraw it', async () => {
   const { app, page } = await launchDemo();
   try {
     await app.evaluate(() => (globalThis as unknown as { __sbDemo: { tree(): void } }).__sbDemo.tree());
     await page.getByTestId('maps-btn').click();
     const view = page.getByTestId('pm-view');
-    // a plan under way: the step being done, told in full (when it starts, how far it is, who does it, on which box)
-    const now = view.getByTestId('pm-stepcard-2');
-    await expect(now).toContainText('Parte quando è finito il passo 1.');
-    await expect(view.getByTestId('pm-step-2')).toContainText('in corso');
-    await expect(now).toContainText('lo fa Artisan');
-    await expect(now).toContainText('su Ordini e sconti');
-    await expect(view.getByTestId('pm-stepcard-1')).toHaveCount(0);
-    // any other on a click on its row: the two that go together say so
-    for (const n of [1, 3, 4]) await view.getByTestId(`pm-step-head-${n}`).click();
-    for (const n of [1, 2, 3, 4]) await expect(view.getByTestId(`pm-stepcard-${n}`)).toBeVisible();
-    await expect(view.getByTestId('pm-stepcard-1')).toContainText('Parte per primo.');
-    await expect(view.getByTestId('pm-stepcard-3')).toContainText('Va insieme al passo 4.');
-    await shot(page, 'project-map-steps');
-    await view.getByTestId('pm-step-head-1').click();
-    await expect(view.getByTestId('pm-stepcard-1')).toHaveCount(0);
-
     // into the shop: with nothing picked, the side tells the system on screen
     await view.getByTestId('pm-node-negozio').click();
     await expect(view.getByTestId('pm-here')).toContainText('Come funziona');
@@ -424,7 +397,7 @@ test('the map tells how far the project is: the percentage, the phase under way,
     // each phase wears its own count on its box
     await expect(view.getByTestId('pm-count-preparazione')).toHaveText('2/4');
     await expect(view.getByTestId('pm-count-verifica')).toHaveCount(0); // nothing inside it
-    await expect(view.locator('.pm-plancard, .pm-planask')).toHaveCount(0); // no plan here, and nothing over the drawing
+    await expect(view.getByTestId('pm-jobs')).toHaveCount(0); // no job touches this project
     await shot(page, 'project-map-progress');
     // into a phase from its row: the card folds to its first lines, the phase tells its own count
     await card.getByTestId('pm-progress-group-preparazione').click();

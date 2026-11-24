@@ -6,6 +6,7 @@ import { appTextIt } from './areas/app-text.it';
 import { brainTextIt } from './areas/brain-text.it';
 import { learningReviewIt } from './areas/learning-review.it';
 import { brainModelIt } from './areas/brain-model.it';
+import { workMapIt } from './areas/work-map.it';
 import { memoryIt } from './areas/memory.it';
 import { memoryHubIt } from './areas/memory-hub.it';
 import { statsIt } from './areas/stats.it';
@@ -120,6 +121,7 @@ export const it = {
   ...permissionsIt,
   ...langSwitchIt,
   ...brainModelIt,
+  ...workMapIt,
   ...memoryIt,
   ...memoryHubIt,
   ...statsIt,

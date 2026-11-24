@@ -1,8 +1,8 @@
 // A question opened in the Orchestrator's column (ADR 0269) on a short window (the owner 2026-11-12: «quando espando la
 // domanda spesso non riesco a scrollarla fino in fondo» · «da espansa voglio vedere sempre l'input dell'orchestrator
-// scrivibile, è quello il campo libero» · «un X per chiudere la domanda che equivale a rispondo dopo»): a long plan to
-// approve opens with the Orchestrator's input still in sight, scrolls to its last line, has no answer box of its own
-// (the user writes to the Orchestrator, ADR 0274), its ✕ is «Ci penso dopo», and what he writes to the Orchestrator
+// scrivibile, è quello il campo libero» · «un X per chiudere la domanda che equivale a rispondo dopo»): a plan to
+// approve opens with the Orchestrator's input still in sight, as one line and «Apri la mappa» (ADR 0343), has no answer
+// box of its own (the user writes to the Orchestrator, ADR 0274), its ✕ is «Ci penso dopo», and what he writes to the Orchestrator
 // answers the Orchestrator's own question. A short question (the owner 2026-11-18, a screenshot: half the column an
 // empty panel, the chat a strip) is as tall as what it says and the chat keeps the rest. Frozen demo; screenshots in
 // test-results/shots/orchestrator-ask-input-*.png, orchestrator-asks-*.png. ADR 0327 (the owner 2026-11-19: «le domande
@@ -23,20 +23,16 @@ test('an open question keeps the Orchestrator input in sight; its ✕ answers la
       clarified: Array.from({ length: 6 }, (_, i) => ({ q: `Domanda chiarita numero ${i + 1}, con un testo abbastanza lungo?`, a: 'Sì' })) });
     const row = page.locator(`[data-ask-row="tree-plan/plan@${at}"]`);
     await expect(row).toBeVisible({ timeout: 15_000 });
-    // the plan is its row only: no second copy of its steps above the messages
-    await expect(page.getByTestId('plan-tree-plan')).toHaveCount(0);
     await row.getByTestId('orchestrator-ask-toggle').click();
     const input = page.getByTestId('orchestrator-input');
     await expect(input).toBeInViewport();
-    await expect(page.getByTestId('qwin-plan-change')).toHaveCount(0); // no box of its own
-    await expect(page.getByTestId('qwin-plan-via-input')).toBeVisible();
+    await expect(row.getByTestId('qwin-plan').locator('textarea, input, li')).toHaveCount(0); // no box of its own, no steps
+    await expect(row.getByTestId('qwin-plan-map')).toBeVisible();
+    await expect(page.getByTestId('orchestrator-input-answers')).toContainText('va a Strategist');
     await shot(page, 'orchestrator-ask-input-open');
 
-    // the card scrolls to its last line, the input still in sight
-    await page.locator('.oasks').evaluate(e => { e.scrollTop = e.scrollHeight; });
+    // its foot is in sight with the input
     await expect(row.locator('.oask-foot')).toBeInViewport();
-    await expect(input).toBeInViewport();
-    await shot(page, 'orchestrator-ask-input-bottom');
 
     // ✕ on the row: «Ci penso dopo», the row folds into «N da rispondere dopo» and the input stays the Orchestrator's
     const folded = page.getByTestId('orchestrator-asks-later');

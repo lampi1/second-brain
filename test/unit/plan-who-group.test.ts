@@ -1,5 +1,5 @@
 // A plan step on the map says who does it (role · model · preset, «previsto» before it starts), a parallel group says
-// how many run live, and plan_propose takes a preset per step (PlanCard.tsx whoOf/groupLabel, strategy.ts checkProposal,
+// how many run live, and plan_propose takes a preset per step (project-map/plan-words.tsx whoOf/groupLabel, strategy.ts checkProposal,
 // projectmap/service.ts works()).
 import fs from 'node:fs';
 import os from 'node:os';
@@ -7,19 +7,19 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(), on: () => () => {} } }));
 import type { ChatSummary } from '../../src/shared/contract';
-import type { MapFlowStep } from '../../src/shared/project-map';
 import type { StrategyPlan } from '../../src/shared/strategy';
 import { checkProposal } from '../../src/shared/strategy';
-import { groupLabel, whoOf } from '../../src/renderer/components/project-map/PlanCard';
+import { groupLabel, whoOf, type StepWords } from '../../src/renderer/components/project-map/plan-words';
 import { ProjectMaps } from '../../src/main/projectmap/service';
 import { ProjectMapStore } from '../../src/main/projectmap/store';
 
-const step = (n: number, state: MapFlowStep['state'], wave: number, more: Partial<MapFlowStep> = {}): MapFlowStep => ({ step: n, title: `s${n}`, state, wave, ...more });
+const step = (n: number, state: StepWords['state'], wave: number, more: Partial<StepWords> = {}): StepWords => ({ n, state, wave, ...more });
 
 describe('whoOf', () => {
   it('tells role · model · preset, and «previsto» for a step not started', () => {
-    expect(whoOf(step(1, 'todo', 1, { role: 'artisan', model: 'claude-sonnet-5-5', preset: 'base', planned: true }))).toEqual({ text: 'Artisan · Sonnet 5.5 · Base', planned: true });
+    expect(whoOf(step(1, 'todo', 1, { role: 'artisan', model: 'claude-sonnet-5-5', preset: 'base' }))).toEqual({ text: 'Artisan · Sonnet 5.5 · Base', planned: true });
     expect(whoOf(step(2, 'now', 1, { role: 'scout', model: 'claude-haiku-5-5', preset: 'min' }))).toEqual({ text: 'Scout · Haiku 5.5 · Minimo', planned: false });
+    expect(whoOf(step(3, 'todo', 1, { role: 'scout', model: 'claude-haiku-5-5', chatIds: ['c'] }))!.planned).toBe(false);
   });
   it('is nothing for a step the Strategist does itself', () => {
     expect(whoOf(step(1, 'todo', 1))).toBeNull();
@@ -27,7 +27,7 @@ describe('whoOf', () => {
 });
 
 describe('groupLabel', () => {
-  const five = (states: MapFlowStep['state'][]) => states.map((s, i) => step(i + 1, s, 1, { par: true }));
+  const five = (states: StepWords['state'][]) => states.map((s, i) => step(i + 1, s, 1));
   it('counts live: 1 at work of 5', () => {
     expect(groupLabel(five(['now', 'todo', 'todo', 'todo', 'todo']), 1)).toBe('5 in parallelo · 1 al lavoro, 4 da far partire');
   });

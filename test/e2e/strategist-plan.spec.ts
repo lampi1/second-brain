@@ -1,13 +1,13 @@
-// A Strategist's plan with the user (ADR 0108), in the demo: under way, its steps as a checklist on its strip with the
-// role of each; while it asks, its question is a row in the Orchestrator's column (ADR 0269) and a card there points
+// A Strategist's plan with the user (ADR 0108), in the demo: under way, one line on its strip (a dot per step, the
+// count, «apri mappa») and its steps on its map (ADR 0343); while it asks, its question is a row in the Orchestrator's column (ADR 0269) and a card there points
 // to it, with what is already clear and «Basta domande», the answer reaching the chat and, between questions, no card
-// (#351); the short plan to approve is a row too and nowhere else: «No» asks for another plan, a change in the user's
-// words goes through the Orchestrator's input (ADR 0274), «Approva e parti» starts it. Hidden window (SB_HIDDEN).
+// (#351); the plan to approve is a row with «Apri la mappa»: on its map «Cambia il piano» asks for another plan and
+// «Approva e parti» starts it. Hidden window (SB_HIDDEN).
 // Screenshots: test-results/shots/strategist-plan-*.png.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import type { StrategyPlan } from '../../src/shared/strategy';
 import type { ChatItem, PendingRequest } from '../../src/shared/contract';
-import { launchDemo, openAsk, shot } from './helpers';
+import { goPage, launchDemo, openAsk, shot } from './helpers';
 
 const LEAD = 'tree-plan';
 const demo = <T,>(app: ElectronApplication, fn: string, ...args: unknown[]): Promise<T> =>
@@ -23,36 +23,43 @@ const ask = (app: ElectronApplication) => demo(app, 'ask', LEAD, { type: 'questi
   questions: [{ header: 'Offerte', question: QUESTION, multiSelect: false, options: [{ label: 'No, solo a prezzo pieno (consigliato)', description: 'niente doppio sconto' }, { label: 'Sì, si sommano' }] }] } satisfies Omit<PendingRequest, 'id' | 'chatId' | 'at'>);
 const items = (page: Page): Promise<ChatItem[]> => page.evaluate(id => window.sb.invoke('chat:items', { chatId: id }), LEAD);
 const userTexts = async (page: Page) => (await items(page)).flatMap(i => (i.kind === 'user' && 'text' in i ? [i.text as string] : []));
-/** The plan from a closed bench: its line opens the chat (ADR 0312), where a click unfolds the steps. */
+/** The plan's map, from the strip's «apri mappa». */
 async function openPlan(page: Page) {
-  await page.getByTestId(`plan-toggle-${LEAD}`).click();
-  await expect(page.getByTestId('bench-back')).toBeVisible();
-  await page.getByTestId(`plan-toggle-${LEAD}`).click();
+  await page.getByTestId(`plan-map-${LEAD}`).click();
+  await expect(page.getByTestId('wm-map')).toBeVisible();
 }
+/** Back to the Grindhouse from the map. */
+async function leaveMap(page: Page) {
+  await goPage(page, 'home');
+  await expect(page.getByTestId(`tile-chat-${LEAD}`)).toBeVisible();
+}
+const phase = (page: Page) => page.evaluate(id => window.sb.invoke('chat:list', undefined).then(l => l.find(c => c.id === id)?.plan?.phase), LEAD);
 const top = (page: Page) => page.getByTestId(`tile-chat-${LEAD}`).evaluate(el => { el.scrollIntoView({ block: 'start' }); });
 
-test('a Strategist asks, proposes a short plan to approve in the Orchestrator and shows its steps on its strip', async () => {
+test('a Strategist asks, proposes a plan approved on its map and shows one line on its strip', async () => {
   const { app, page } = await launchDemo();
   try {
     await demo(app, 'tree');
     const tile = page.getByTestId(`tile-chat-${LEAD}`);
     await expect(tile).toBeVisible({ timeout: 15_000 });
 
-    // under way: the checklist, each step with its role and state, on the collapsed strip
+    // under way: one line on the strip, the steps with their role and state on the map
     const card = page.getByTestId(`plan-${LEAD}`);
     await expect(card).toHaveAttribute('data-phase', 'running');
-    // on the closed bench the plan is one line (ADR 0312): a click opens the chat, where it unfolds
-    await expect(page.getByTestId(`plan-steps-${LEAD}`)).toHaveCount(0);
-    await openPlan(page);
-    await expect(page.getByTestId(`plan-steps-${LEAD}-1`)).toHaveAttribute('data-state', 'done');
-    await expect(page.getByTestId(`plan-steps-${LEAD}-2`)).toHaveAttribute('data-state', 'now');
-    await expect(page.getByTestId(`plan-steps-${LEAD}-3`)).toHaveAttribute('data-state', 'todo');
-    await expect(page.getByTestId(`plan-steps-${LEAD}-1`)).toContainText('Scout · 5 min');
-    await expect(page.getByTestId(`plan-steps-${LEAD}-2`)).toContainText('Artisan · da 10 min');
+    await expect(card).toContainText('1/4');
+    await expect(card.locator('li')).toHaveCount(0);
     await expect(card.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '1');
     await top(page);
+    await shot(page, 'strategist-plan-strip-dark');
+    await openPlan(page);
+    await expect(page.getByTestId('wm-map')).toHaveAttribute('data-state', 'running');
+    await expect(page.getByTestId('wm-box-1')).toHaveAttribute('data-s', 'done');
+    await expect(page.getByTestId('wm-box-2')).toHaveAttribute('data-s', 'now');
+    await expect(page.getByTestId('wm-box-3')).toHaveAttribute('data-s', 'todo');
+    await expect(page.getByTestId('wm-box-who-1')).toContainText('Scout');
+    await expect(page.getByTestId('wm-box-who-2')).toContainText('Artisan');
     await shot(page, 'strategist-plan-progress-dark');
-    await page.getByTestId('bench-back').click(); // back to the benches
+    await leaveMap(page);
 
     // asking: the question is a row in the Orchestrator, the strip says where it is and what is already clear
     await demo(app, 'plan', LEAD, plan({ clarified: [{ q: 'Dove', a: 'Carrello, ordine e reso' }] }));
@@ -80,15 +87,13 @@ test('a Strategist asks, proposes a short plan to approve in the Orchestrator an
     await page.getByTestId(`plan-enough-${LEAD}`).click();
     await expect.poll(() => demo<{ answer: { answers: Record<string, string> } }[]>(app, 'answers').then(a => a.at(-1)?.answer.answers[QUESTION])).toContain('Basta domande');
 
-    // the plan to approve is one row in the Orchestrator and nowhere else (the same steps twice took the room of the
-    // open card): its card has the steps, «No» asks for another plan, «Approva e parti» starts it
+    // the plan to approve is one row in the Orchestrator: its card names the job and opens the map, no step in it
     await demo(app, 'plan', LEAD, plan({ phase: 'proposed', steps: [...STEPS], doneWhen: 'I test ordini passano e le note sono pronte.' }));
     await openAsk(page, `${LEAD}/plan@`);
     await expect(page.getByTestId('qwin-plan')).toBeVisible();
-    await expect(page.getByTestId('qwin-plan-steps').locator('li')).toHaveCount(3);
-    await expect(page.getByTestId('qwin-plan-done-when')).toContainText('I test ordini passano');
-    await expect(card).toHaveCount(0); // no second card with the same steps
-    await expect(page.getByTestId(`plan-approve-${LEAD}`)).toHaveCount(0); // no second pair of buttons on the strip
+    await expect(page.getByTestId('qwin-plan-title')).toHaveText('Sconti in percentuale');
+    await expect(page.getByTestId('qwin-plan-count')).toContainText('3 step');
+    await expect(page.getByTestId('qwin-plan').locator('li')).toHaveCount(0);
     await expect(page.getByTestId(`chat-expand-${LEAD}`)).toHaveAttribute('aria-expanded', 'false');
     await top(page);
     await shot(page, 'strategist-plan-proposed-dark');
@@ -96,27 +101,37 @@ test('a Strategist asks, proposes a short plan to approve in the Orchestrator an
     await expect(page.getByTestId('qwin')).toHaveCount(0);
     await page.getByTestId('orchestrator-asks-later').click();
     await openAsk(page, `${LEAD}/plan@`);
-    // a change in his own words is written to the Orchestrator, in its input under the card (ADR 0274): the card has
-    // no box of its own, and its «No» asks for a different plan
-    await expect(page.getByTestId('qwin-plan-change')).toHaveCount(0);
-    await expect(page.getByTestId('orchestrator-input')).toBeVisible();
-    await page.getByTestId('qwin-plan-reject').click();
-    await expect(card).toHaveAttribute('data-phase', 'revising');
-    await expect.poll(() => userTexts(page).then(t => t.at(-1))).toContain('Non approvo questo piano');
+    await expect(page.getByTestId('orchestrator-input')).toBeVisible(); // a typed ok still counts (ADR 0274)
+    // on the map: the steps, when it is done, the buttons; a change in his own words reaches the Strategist
+    await page.getByTestId('qwin-plan-map').click();
+    const map = page.getByTestId('wm-map');
+    await expect(map).toHaveAttribute('data-state', 'toApprove');
+    await expect(map.locator('.wm-box')).toHaveCount(3);
+    await expect(map).toContainText('I test ordini passano');
+    await map.getByTestId('wm-do-replan').click();
+    await map.getByTestId('wm-replan-text').fill('Prima i test, poi lo sconto');
+    await shot(page, 'strategist-plan-change-dark');
+    await map.getByTestId('wm-replan-send').click();
+    await expect.poll(() => phase(page)).toBe('revising');
+    await expect.poll(() => userTexts(page).then(t => t.at(-1))).toBe('Cambia il piano: Prima i test, poi lo sconto');
     await demo(app, 'plan', LEAD, plan({ phase: 'proposed', steps: [...STEPS] }));
-    // the new plan is a row of its own: one click opens it
-    await openAsk(page, `${LEAD}/plan@`);
-    await page.getByTestId('qwin-plan-approve').click();
-    await expect(card).toHaveAttribute('data-phase', 'running');
+    // the new plan is a row of its own, and the open map shows it
+    await expect(page.locator(`[data-testid="orchestrator-ask"][data-ask-row^="${LEAD}/plan@"]`)).toBeVisible();
+    await expect(map).toHaveAttribute('data-state', 'toApprove');
+    await map.getByTestId('wm-do-approve').click();
+    await expect.poll(() => phase(page)).toBe('running');
     await expect.poll(() => userTexts(page).then(t => t.at(-1))).toBe('Piano approvato: parti.');
+    await leaveMap(page);
+    await expect(card).toHaveAttribute('data-phase', 'running');
     await expect(card.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0'); // its line on the bench: none done yet
 
     // light theme
     await demo(app, 'plan', LEAD, plan({ phase: 'proposed', steps: [...STEPS] }));
     await openAsk(page, `${LEAD}/plan@`);
+    await page.getByTestId('qwin-plan-map').click();
+    await expect(page.getByTestId('wm-do-approve')).toBeVisible();
     await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
     await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
-    await top(page);
     await shot(page, 'strategist-plan-proposed-light');
   } finally { await app.close(); }
 });
@@ -144,7 +159,7 @@ test('a Strategist\'s question is a row in the Orchestrator, not on its strip', 
 });
 
 // Execution completion and result quality remain distinct in the compact summary.
-test('a finished partial plan is complete, compact and expandable, with named parent links', async () => {
+test('a finished partial plan is one line on its strip and its map says what is partial', async () => {
   const { app, page } = await launchDemo();
   try {
     await demo(app, 'tree');
@@ -152,10 +167,9 @@ test('a finished partial plan is complete, compact and expandable, with named pa
     const card = page.getByTestId(`plan-${LEAD}`);
     await expect(card.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '3');
     await expect(card).toContainText('risultato parziale');
-    await expect(page.getByTestId(`plan-steps-${LEAD}`)).toBeHidden();
+    await expect(card.locator('li')).toHaveCount(0);
     await openPlan(page);
-    await expect(page.getByTestId(`plan-steps-${LEAD}`)).toBeVisible();
-    await top(page);
+    await expect(page.getByTestId('wm-box-1')).toContainText('parziale');
     await shot(page, 'strategist-plan-partial-complete');
   } finally { await app.close(); }
 });
@@ -166,13 +180,12 @@ test('a compact plan distinguishes blocked execution from an unavailable final r
   try {
     await demo(app, 'tree');
     await demo(app, 'plan', LEAD, plan({ phase: 'running', steps: STEPS.map(s => ({ ...s, state: 'blocked', outcome: 'blocked' })) }));
-    const toggle = page.getByTestId(`plan-toggle-${LEAD}`);
-    await expect(toggle).toContainText('bloccato');
-    await expect(toggle).not.toContainText('risultato parziale');
-    await expect(page.getByTestId(`plan-steps-${LEAD}`)).toBeHidden();
+    const line = page.getByTestId(`plan-${LEAD}`);
+    await expect(line).toContainText('bloccato');
+    await expect(line).not.toContainText('risultato parziale');
     await demo(app, 'plan', LEAD, plan({ phase: 'done', steps: STEPS.map(s => ({ ...s, state: 'done', outcome: 'blocked' })) }));
-    await expect(toggle).toContainText('risultato non ottenuto');
-    await expect(toggle).not.toContainText('risultato parziale');
+    await expect(line).toContainText('risultato non ottenuto');
+    await expect(line).not.toContainText('risultato parziale');
     await top(page);
     await shot(page, 'strategist-plan-blocked-complete');
   } finally { await app.close(); }

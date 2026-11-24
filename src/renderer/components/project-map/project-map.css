@@ -206,7 +206,7 @@
 @media (prefers-reduced-motion: reduce) {
   .pm-node.running { animation: none; }
   .pm-node.running:not(.picked):not(.lit):not(:hover) { box-shadow: 0 0 0 3px var(--accent-bg); }
-  .pm-node.running .pm-foot > .pm-dot, .pm-dot.run, .pm-planstep[data-s='now'] .pm-planstep-head > i, .pm-node.came { animation: none; }
+  .pm-node.running .pm-foot > .pm-dot, .pm-dot.run, .pm-node.came { animation: none; }
   .pm-edge-run { display: none; }
   .pm-level[data-enter] { animation: none; }
   .pm-plane.zooming, .pm-plane.zooming .pm-level { transition: none; }
@@ -309,8 +309,8 @@ button.pm-label:focus-visible { outline: 2px solid var(--focus); outline-offset:
 .pm-steplist .pm-ord { flex: none; }
 .pm-steplist li > span { padding-left: 24px; }
 
-/* ADR 0326 · how far the project is: the percentage in the header, the progress card and the plan cards in the side
-   panel, a box's own count along its bottom edge. Nothing sits over the drawing but one line while a plan waits. */
+/* ADR 0326 · how far the project is: the percentage in the header, the progress card in the side panel, a box's own
+   count along its bottom edge. Nothing sits over the drawing. */
 .pm-meter { display: block; flex: 1; min-width: 40px; height: 6px; border-radius: 3px; background: var(--surface-4); overflow: hidden; }
 .pm-meter > i { display: block; height: 100%; border-radius: 3px; background: var(--accent); transition: width .3s ease-out; }
 .pm-meter[data-s='done'] > i { background: var(--green); }
@@ -319,25 +319,16 @@ button.pm-label:focus-visible { outline: 2px solid var(--focus); outline-offset:
 .pm-prog-chip { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); border: 1px solid var(--border-2); padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
 .pm-prog-chip .pm-meter { flex: none; width: 72px; }
 .pm-prog-chip b { color: var(--text); font-variant-numeric: tabular-nums; }
-.pm-prog, .pm-plancard { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: var(--r-l); background: var(--surface); border: 1px solid var(--border-2); min-width: 0; }
-.pm-plancard[data-phase='proposed'], .pm-plancard[data-phase='revising'] { border-color: var(--violet); background: var(--violet-bg); }
-.pm-plancard h3 { margin: 0; font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
-.pm-plancard > .btn { align-self: flex-start; }
-.pm-prog .dash-eyebrow, .pm-plancard .dash-eyebrow, .pm-planask .dash-eyebrow { text-transform: uppercase; }
-.pm-planstep-head > small .pm-you { margin: 0; }
-.pm-planstep-head > .pm-step-who { grid-column: 2 / 4; color: var(--text-2); font-size: 12px; overflow-wrap: anywhere; }
-.pm-step-who em { font-style: normal; color: var(--text-3); }
-.pm-plangroup { list-style: none; margin: 6px 0 0; padding: 2px 6px; font-size: 12px; font-weight: 600; color: var(--violet); border-left: 2px dashed var(--violet); }
+.pm-prog { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: var(--r-l); background: var(--surface); border: 1px solid var(--border-2); min-width: 0; }
+.pm-prog .dash-eyebrow { text-transform: uppercase; }
 .pm-prog-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .pm-prog-more { appearance: none; background: none; border: 0; padding: 0; font: inherit; font-size: 12.5px; color: var(--accent); cursor: pointer; }
 .pm-prog-more:hover { text-decoration: underline; }
-.pm-prog-more:focus-visible, .pm-prog button:focus-visible, .pm-planstep-head:focus-visible, .pm-planstep-meta > button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: 3px; }
+.pm-prog-more:focus-visible, .pm-prog button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: 3px; }
 .pm-prog-head { display: flex; align-items: center; gap: 12px; }
 .pm-prog-pct { font-size: 26px; line-height: 1; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
 .pm-prog-head .pm-meter { height: 8px; border-radius: 4px; }
 .pm-prog-count { margin: 0; font-size: 12.5px; color: var(--text-2); }
-.pm-plan-when { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text-2); }
-.pm-plan-when b { color: var(--text); }
 /* the facts: what each line is about on the left, the pieces on the right */
 .pm-prog-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 7px 12px; margin: 6px 0 0; padding-top: 10px; border-top: 1px solid var(--border); font-size: 13px; line-height: 1.4; }
 .pm-prog-facts dt { color: var(--text-3); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; font-weight: 600; padding-top: 2px; }
@@ -356,37 +347,13 @@ button.pm-label:focus-visible { outline: 2px solid var(--focus); outline-offset:
 .pm-prog-groups button { appearance: none; display: grid; grid-template-columns: 20px minmax(0, 1fr) 64px 38px; align-items: center; gap: 8px; width: 100%; padding: 5px 6px; border: 0; border-radius: var(--r-s); background: none; color: var(--text-2); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
 .pm-prog-groups button:hover { background: var(--surface-2); color: var(--text); }
 .pm-prog-groups button > span:not(.pm-meter) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pm-prog-groups button > i, .pm-planstep-head > i { font-style: normal; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--surface-4); color: var(--text-2); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pm-prog-groups button > i { font-style: normal; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--surface-4); color: var(--text-2); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .pm-prog-groups button > small { color: var(--text-3); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
 .pm-prog-groups .pm-meter { min-width: 0; }
-.pm-prog-groups li[data-s='done'] button > i, .pm-planstep[data-s='done'] .pm-planstep-head > i { background: color-mix(in srgb, var(--green) 22%, transparent); color: var(--green); }
-.pm-prog-groups li[data-s='blocked'] button > i, .pm-planstep[data-s='blocked'] .pm-planstep-head > i { background: var(--red); color: var(--bg); }
-.pm-prog-groups li[data-s='now'] button > i, .pm-planstep[data-s='now'] .pm-planstep-head > i { background: var(--accent); color: var(--bg); }
+.pm-prog-groups li[data-s='done'] button > i { background: color-mix(in srgb, var(--green) 22%, transparent); color: var(--green); }
+.pm-prog-groups li[data-s='blocked'] button > i { background: var(--red); color: var(--bg); }
+.pm-prog-groups li[data-s='now'] button > i { background: var(--accent); color: var(--bg); }
 .pm-prog-groups li[data-at] button { color: var(--text); font-weight: 600; }
-/* a plan's steps, one row each; an open row tells the step in full */
-.pm-plansteps { list-style: none; margin: 4px 0 2px; padding: 6px 0 0; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 2px; }
-.pm-planstep { border-radius: var(--r-m); min-width: 0; }
-.pm-planstep[data-open] { background: var(--surface-2); }
-.pm-plancard[data-phase='proposed'] .pm-planstep[data-open], .pm-plancard[data-phase='revising'] .pm-planstep[data-open] { background: color-mix(in srgb, var(--surface) 70%, transparent); }
-.pm-planstep-head { appearance: none; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: start; gap: 8px; width: 100%; padding: 6px; border: 0; border-radius: var(--r-m); background: none; color: var(--text); font: inherit; font-size: 13px; line-height: 1.35; text-align: left; cursor: pointer; }
-.pm-planstep-head:hover { background: var(--surface-2); }
-.pm-planstep-head > b { font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
-.pm-planstep[data-s='done'] .pm-planstep-head > b { color: var(--text-2); }
-.pm-planstep[data-s='now'] .pm-planstep-head > b { font-weight: 600; }
-.pm-planstep-head > small { color: var(--text-3); font-size: 12px; white-space: nowrap; padding-top: 1px; }
-.pm-planstep[data-s='now'] .pm-planstep-head > small { color: var(--accent); }
-.pm-planstep[data-s='blocked'] .pm-planstep-head > small { color: var(--red); }
-.pm-planstep[data-s='now'] .pm-planstep-head > i { animation: pm-beat 1.6s ease-in-out infinite; }
-.pm-planstep-more { display: flex; flex-direction: column; gap: 5px; padding: 0 8px 9px 34px; }
-.pm-planstep-more p { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text-2); overflow-wrap: anywhere; }
-.pm-planstep-more p.pm-muted { color: var(--text-3); }
-.pm-planstep-meta { display: flex; flex-wrap: wrap; gap: 4px 6px; }
-.pm-planstep-meta > * { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2); font: inherit; font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pm-planstep-meta > button { cursor: pointer; }
-.pm-planstep-meta > button:hover { color: var(--text); border-color: var(--text-3); }
-/* the one line over the drawing while a plan waits for the user's ok */
-.pm-planask { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 14px; border: 1px solid var(--violet); border-radius: var(--r-l); background: var(--violet-bg); font-size: 13.5px; }
-.pm-planask > b { min-width: 0; overflow-wrap: anywhere; }
 /* a box's own count: the number in its foot, the bar along its bottom edge */
 .pm-cnt { flex: none; font-size: 11.5px; color: var(--text-2); font-variant-numeric: tabular-nums; }
 .pm-node-meter { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--surface-4); }
@@ -395,7 +362,7 @@ button.pm-label:focus-visible { outline: 2px solid var(--focus); outline-offset:
 .pm-detail-prog .pm-prog-pct { font-size: 20px; }
 @media (prefers-reduced-motion: reduce) { .pm-meter > i { transition: none; } }
 /* On the page (not full screen), with the panel beside the drawing: the drawing keeps the height of the window and the
-   panel scrolls beside it. A long panel (a plan with every step open, many agents) no longer stretches the drawing. */
+   panel scrolls beside it. A long panel (many agents, many jobs) no longer stretches the drawing. */
 @container (min-width: 980.01px) {
   .pm:not(.pm-full) .pm-body { flex: none; }
   .pm:not(.pm-full) .pm-canvas { height: max(520px, calc(100vh - 360px)); }

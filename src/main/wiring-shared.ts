@@ -164,7 +164,7 @@ export function attachRunResults(ctx: Pick<Ctx, 'emitter'>, chats: Pick<ChatServ
  *  page (the emitter tapped once more); the agents' tools on every chat's own endpoint when `addChatTools` is given. */
 export function attachProjectMaps(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Pick<ChatService, 'list' | 'items' | 'pending'>, brainRoot: () => string | null, addChatTools?: (tools: McpTool[]) => void, now?: () => number, plannedModel?: (role: string, preset: PresetId) => string | null): ProjectMaps {
   const maps = new ProjectMaps({ store: new ProjectMapStore(brainRoot), ...(plannedModel ? { plannedModel } : {}), chats: () => chats.list(), items: id => chats.items(id), pending: () => chats.pending(),
-    emit: project => ctx.emitter.emit('projectmap:changed', { project }), show: project => ctx.emitter.emit('ui:command', { action: 'maps', value: project }), stateFile: path.join(ctx.userData, 'project-map.json'), ...(now ? { now } : {}) });
+    emit: project => ctx.emitter.emit('projectmap:changed', { project }), show: chatId => ctx.emitter.emit('ui:command', { action: 'workMap', value: chatId }), stateFile: path.join(ctx.userData, 'project-map.json'), ...(now ? { now } : {}) });
   const send = ctx.emitter.emit.bind(ctx.emitter);
   ctx.emitter.emit = (ch, p) => { send(ch, p); maps.observe(ch, p); };
   addChatTools?.(chatMapTools({ maps, titleOf: id => chats.list().find(c => c.id === id)?.title ?? null, cwdOf: id => chats.list().find(c => c.id === id)?.cwd ?? null }));
