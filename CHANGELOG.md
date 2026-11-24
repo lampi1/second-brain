@@ -6,11 +6,16 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- A role chat whose model runs out of credits waits instead of failing: its step stays under way, the chat and the map
+  say «crediti finiti: cambia il modello nella scheda del ruolo», and it goes on by itself from where it was when you
+  change that card (on another engine, in a new chat of the same role). The app never moves to another model or preset
+  by itself (#462, ADR 0346).
 - A Strategist opens its children in any folder, also of another repository: a plan that spans several projects stays
   one tree, each child reports to it and a writing child gets its worktree in the repository of its folder. Permissions
   still only go down (#460, ADR 0345).
 - A map for every job: each Strategist job, or idea, has its own, created by the app and kept through restarts. The plan
-  is that map: a box per step with role, model and preset, parallel steps side by side, «Approva e parti» and «Approva,
+  is that map: a box per step with role and preset (never a model: the card's model is read when the step starts,
+  ADR 0346), parallel steps side by side, «Approva e parti» and «Approva,
   parti dopo» on it; the stacked lists of steps on the strip, the questions' card and the project map are gone. Started
   steps of a plan being changed go on, new ones wait for the yes (ADR 0342, 0343).
 - Mappa opens on «Lavori»: every job by status, what waits for you on top, the finished apart; search, project filter,

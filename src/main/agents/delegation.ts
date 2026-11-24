@@ -32,7 +32,7 @@ import { childReviewers, DELTA_REVIEW, type ReviewWorld } from './one-review';
 import { gapLines, skillGaps } from './skill-needs';
 import type { SkillToolsSource } from './discovery';
 import { PRESET_SCHEMA } from './preset-schema';
-import { presetAskOf, runPresetOf, type Delegator, type PresetAsk, type PresetChoice } from '../../shared/model-presets';
+import { presetAskOf, runPresetOf, stepAsk, type Delegator, type PresetAsk, type PresetChoice } from '../../shared/model-presets';
 import { log } from '../log';
 import { checkMemoryWorth } from '../rules/memory-worth';
 import { closeRefusal, descendantIds } from '../chats/close-rules';
@@ -212,8 +212,9 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       if (refused) throw new Error(`tasks[${i}]: ${profile.name} runs on ${profile.engine}: ${refused}`);
       if (t.step !== undefined && !plan) throw new Error(`tasks[${i}].step: only a plan approved by the user has steps; leave it out.`);
       const step = t.step !== undefined && plan ? stepIndex(plan, t.step, `tasks[${i}].step`) : null;
-      // the preset of the role's card (ADR 0336): one of its three, why in one line, never above your own model
-      const ask = presetAskOf(t, `tasks[${i}]`);
+      // the preset of the role's card (ADR 0336): one of its three, why in one line, never above your own model; a part
+      // that names none takes its plan step's (ADR 0346). The card's model for it is read now, when the part starts
+      const ask = stepAsk(presetAskOf(t, `tasks[${i}]`), step === null ? undefined : plan!.steps[step]!.preset);
       const cap = d.presetChoice?.(role, ask, delegator) ?? null;
       const presetFields = { ...(ask.preset ? { preset: ask.preset } : {}), ...(ask.presetWhy ? { presetWhy: ask.presetWhy } : {}), ...(ask.taskKind ? { taskKind: ask.taskKind } : {}), delegator };
       return { role, title, contract, cwd, profile, step, cap, presetFields, reviewOf };
@@ -275,9 +276,10 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     const contractRaw = a.contract;
     if (!contractRaw || typeof contractRaw !== 'object' || Array.isArray(contractRaw) || Object.keys(contractRaw).some(k => !['goal', 'output', 'context', 'doneWhen', 'why', 'alreadyDecided', 'inScope', 'outOfScope', 'constraints', 'steps', 'askIf'].includes(k))) throw new Error('Reuse contract allows only goal, output, context, doneWhen and the hybrid fields (why, alreadyDecided, inScope, outOfScope, constraints, steps, askIf); tools and skills require a fresh chat.');
     const contract = checkContract(contractRaw, a.roleId);
-    // the preset of this task (ADR 0336): as agent_delegate's, missing = Base; the child switches to it when it runs on
-    // another model or effort (it runs on its role's engine: checked above)
-    const ask = presetAskOf(a, '');
+    // the preset of this task (ADR 0336): as agent_delegate's, missing = its plan step's (ADR 0346), else Base; the child
+    // switches to it when it runs on another model or effort (it runs on its role's engine: checked above)
+    const steps = a.step === undefined ? undefined : d.chats.planOf?.(parent.id)?.steps;
+    const ask = stepAsk(presetAskOf(a, ''), steps && Number.isInteger(a.step) ? steps[Number(a.step) - 1]?.preset : undefined);
     const preset = d.presetChoice?.(a.roleId, ask, { role: own.id, model: parent.model || own.model || null }) ?? null;
     // a preset without effort is the engine's default: a child left on another effort goes back to it (null)
     const switchTo = preset && ((preset.model ?? null) !== (child.model ?? null) || (preset.effort ?? null) !== (child.effort ?? null)) ? preset : null;
@@ -463,6 +465,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       ...((qs => qs.length ? { questions: qs.map(q => ({ id: q.id, asks: q.asks, level: q.level, holder: q.holder ?? null, since: q.levelAt })) } : {})(openQuestions(c.questions))),
       ...(c.run ? { costUsd: runs.find(r => r.runId === c.run!.runId)?.costUsd ?? null } : {}),
       ...((m => m === null ? {} : { stalled: true, quietMin: m })(quiet(c))),
+      // out of credits (ADR 0346): it waits for its role's card, the user's move
+      ...(c.creditWait && !c.closedAt ? { waitsOn: 'credits', creditWait: { model: c.creditWait.model, since: c.creditWait.at } } : {}),
     })) };
   }
 
@@ -529,7 +533,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     } };
   return [{
     name: 'agent_delegate',
-    description: 'Delegate the parts of your task to other roles: each part starts a visible chat under yours, running the role you name (only roles your role may launch: agent_catalog). The child sees only its contract, never this conversation: write it self-contained. Several parts start at once (parallel): a parallel group of your approved plan goes in one call. It never gets more permissions than you, works in the folder you name (cwd: any repository your plan touches), uses an isolated Git worktree when it can write (a clean committed baseline is required), and returns one result with agent_report that reaches you as a message. The depth limit is the user\'s. A Sentinel reviewing a child\'s work: reviewOf = that child\'s runId. One review chat per piece of work: once a Sentinel of yours reported on this task, a new Sentinel is refused; re-review the fix in that chat with agent_assign_task (only the fix delta). Each part runs on its role\'s card: preset picks one of its three (omitted = base).',
+    description: 'Delegate the parts of your task to other roles: each part starts a visible chat under yours, running the role you name (only roles your role may launch: agent_catalog). The child sees only its contract, never this conversation: write it self-contained. Several parts start at once (parallel): a parallel group of your approved plan goes in one call. It never gets more permissions than you, works in the folder you name (cwd: any repository your plan touches), uses an isolated Git worktree when it can write (a clean committed baseline is required), and returns one result with agent_report that reaches you as a message. The depth limit is the user\'s. A Sentinel reviewing a child\'s work: reviewOf = that child\'s runId. One review chat per piece of work: once a Sentinel of yours reported on this task, a new Sentinel is refused; re-review the fix in that chat with agent_assign_task (only the fix delta). Each part runs on its role\'s card: preset picks one of its three (omitted = its plan step\'s preset, else base); the model is the one the card has now.',
     inputSchema: { type: 'object', required: ['tasks'], additionalProperties: false, properties: {
       tasks: { type: 'array', minItems: 1, maxItems: TASKS_MAX, items: { type: 'object', required: ['role', 'title', 'contract'], additionalProperties: false, properties: {
         role: { type: 'string', enum: [...WORK_ROLE_IDS] }, title: { ...str, description: '"Area · what", e.g. "Ordini · Log degli errori"' },
@@ -557,7 +561,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: async (a, ctx) => JSON.stringify(await delegate(a, callerOf(ctx.params))),
   }, {
     name: 'agent_assign_task',
-    description: 'Continue YOUR direct child in the same role and project with a separate task run. The user\'s messages and answers in that chat you have not seen come back to you readable (userInstructions): the child already has them, so they are not repeated in its prompt; account for them, and correct the child or ask the user where your contract disagrees. expectedVersion (taskVersion from agent_children) and expectedEventSeq are optional and honoured when given. Refused only while the child works or has queued work. Keeps the session, tools and skills; changed role settings require a fresh child. A Sentinel that reviewed this task is continued here after a fix (mode continue): it reviews only the fix delta. Use rework only for explicit corrections. With an approved plan, step is required. preset: one of the role card\'s three; omitted preset = base. Closed parents must first receive a new assignment from their own parent or Orchestrator.',
+    description: 'Continue YOUR direct child in the same role and project with a separate task run. The user\'s messages and answers in that chat you have not seen come back to you readable (userInstructions): the child already has them, so they are not repeated in its prompt; account for them, and correct the child or ask the user where your contract disagrees. expectedVersion (taskVersion from agent_children) and expectedEventSeq are optional and honoured when given. Refused only while the child works or has queued work. Keeps the session, tools and skills; changed role settings require a fresh child. A Sentinel that reviewed this task is continued here after a fix (mode continue): it reviews only the fix delta. Use rework only for explicit corrections. With an approved plan, step is required. preset: one of the role card\'s three; omitted preset = its plan step\'s, else base. Closed parents must first receive a new assignment from their own parent or Orchestrator.',
     inputSchema: { type: 'object', required: ['chatId', 'roleId', 'mode', 'contract'],additionalProperties: false, properties: {
       chatId: str, roleId: { type: 'string', enum: [...WORK_ROLE_IDS] }, cwd: { ...str, description: 'optional: the child\'s folder (agent_children cwd, its worktree) or yours; omitted = the child\'s. A reuse never moves the child to another folder' },
       mode: { type: 'string', enum: ['continue', 'new-task', 'rework'] },
@@ -625,7 +629,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: async (a, ctx) => JSON.stringify(await closeChild(a, callerOf(ctx.params))),
   }, {
     name: 'agent_children',
-    description: 'The chats you delegated (agent_delegate): role, title, state, goal, their result once reported, open requests and cost. endCause on a closed child says why its task ended before it was completed: user (the user closed it), auto (the app archived it), parent (closed with the chat above it), no-report (it ended with no agent_report). stalled: true (with quietMin) = a working child silent for longer than the user\'s "Ferma dopo" limit: nudge it with a message or close it.',
+    description: 'The chats you delegated (agent_delegate): role, title, state, goal, their result once reported, open requests and cost. endCause on a closed child says why its task ended before it was completed: user (the user closed it), auto (the app archived it), parent (closed with the chat above it), no-report (it ended with no agent_report). stalled: true (with quietMin) = a working child silent for longer than the user\'s "Ferma dopo" limit: nudge it with a message or close it. waitsOn: "credits" = its model ran out of credits: it is not failed and goes on by itself, from where it was, when the user changes the model on its role\'s card; do not delegate its part again, do not ask another preset for it and do not close it: go on with what does not depend on it, and say in your report that it waits for the user\'s card.',
     inputSchema: { type: 'object', additionalProperties: false, properties: {} },
     annotations: { readOnlyHint: true, openWorldHint: false },
     run: (_a, ctx) => JSON.stringify(children(callerOf(ctx.params))),

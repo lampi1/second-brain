@@ -59,7 +59,7 @@ const gateOf = (r: Pick<ChatSummary, 'state' | 'pending' | 'handoffBusy' | 'harn
 const classOf = (e: WakeEvent): DeliveryClass => e.kind === 'user-message' || e.silent ? 'quiet' : newsClass(e.kind, e.endsTurn, !!e.report);
 const isLoud = (e: WakeEvent): boolean => classOf(e) !== 'quiet';
 /** requestId: the open request it tells about (question, permission, command): answered before it goes, it is dropped */
-export interface WakeEvent { eventId?: string; seq?: number; chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a root chat's clean agent_report (cleanReport): its role and summary, quiet */ report?: { role: string }; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; requestId?: string; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean; /** a delegated chat's "finished" with nothing of the user's beside it: no text (ADR 0083) and its result goes to its parent, so it rides along and never wakes */ silent?: boolean }
+export interface WakeEvent { eventId?: string; seq?: number; chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a root chat's clean agent_report (cleanReport): its role and summary, quiet */ report?: { role: string }; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; /** kind error: no failure, its model ran out of credits and it waits for its role's card (ADR 0346) */ credits?: { role: string; model: string | null }; requestId?: string; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean; /** a delegated chat's "finished" with nothing of the user's beside it: no text (ADR 0083) and its result goes to its parent, so it rides along and never wakes */ silent?: boolean }
 
 export interface WakeSubmissionReceipt { submitted(): void; failed(error: unknown): void }
 export interface OrchestratorWakeDeps {
@@ -91,7 +91,9 @@ export function wakeLine(e: WakeEvent): string {
   const d = e.requestId ? e.detail : e.child || e.kind === 'user-message' ? '' : cut(e.detail, 200);
   switch (e.kind) {
     case 'done': return e.report ? `- «${e.title}» (${e.report.role}): ha consegnato: «${cut(e.detail, 200)}»` : `- ${who}: ha finito il turno.${d ? ` Ultima riga: «${d}»` : ''}`;
-    case 'error': return `- ${who}: si è fermata su un errore${d ? `: ${d}` : '.'}`;
+    case 'error': return e.credits
+      ? `- ${who}: è in attesa, non è un errore da correggere: i crediti di ${e.credits.model ?? 'del suo modello'} sono finiti. Riparte da sola, da dove era, quando l'utente cambia il modello nella scheda di ${e.credits.role} (Agenti → ${e.credits.role}). Dillo all'utente con queste parole; non avviare un'altra chat per lo stesso lavoro e non scegliere tu un altro modello o preset.`
+      : `- ${who}: si è fermata su un errore${d ? `: ${d}` : '.'}`;
     case 'question': return `- ${who}: aspetta una risposta dell'utente${d ? `: ${d}` : '.'}`;
     case 'permission': return `- ${who}: aspetta un permesso dell'utente${d ? `: ${d}` : '.'}`;
     case 'command': return `- ${who}: ha lasciato all'utente un comando da eseguire${d ? `: ${d}` : '.'}`;
@@ -218,7 +220,8 @@ export class OrchestratorWake {
       return;
     }
     this.autoClosed.delete(c.id);
-    if (c.state === 'error' && was.state !== 'error') this.add(c, 'error', c.lastError ?? c.lastText);
+    const credits = c.creditWait ? { role: c.agent?.name ?? 'ruolo', model: c.creditWait.model } : undefined;
+    if (c.state === 'error' && was.state !== 'error') this.add(c, 'error', c.lastError ?? c.lastText, undefined, credits);
     else if (c.state === 'idle' && IN_TURN.has(was.state) && c.pending === 0) {
       // the user stopped it himself (Stop, "Invia subito"): he is on it, nothing to tell
       if (c.lastResult?.interrupted && c.lastResult.at > was.turnResultAt) return;
@@ -228,7 +231,7 @@ export class OrchestratorWake {
       if (!failed && this.chats.get(c.id)?.reportedTurn) return;
       // a chat the app itself started (a sampled independent review): the app reads its verdict, the Orchestrator never asked for it
       if (!failed && c.run?.startedBy === 'app') return;
-      this.add(c, failed ? 'error' : 'done', c.lastText);
+      this.add(c, failed ? 'error' : 'done', c.lastText, undefined, failed ? credits : undefined);
     }
   }
 
@@ -319,7 +322,7 @@ export class OrchestratorWake {
     this.reschedule();
   }
 
-  private add(c: Pick<ChatSummary, 'id' | 'title' | 'harness' | 'parentId' | 'agent'>, kind: WakeKind, detail: string, requestId?: string): void {
+  private add(c: Pick<ChatSummary, 'id' | 'title' | 'harness' | 'parentId' | 'agent'>, kind: WakeKind, detail: string, requestId?: string, credits?: WakeEvent['credits']): void {
     if (!this.d.enabled() || !this.orchestratorId()) return;
     const at = this.now();
     // the newest news of a chat wins, except that "finished" never hides what it left for the user in the same turn
@@ -333,7 +336,7 @@ export class OrchestratorWake {
     const parent = c.parentId ? this.chats.get(c.parentId)?.title ?? this.d.list?.().find(x => x.id === c.parentId)?.title ?? '?' : null;
     const child = parent !== null ? { role: c.agent?.name ?? 'ruolo', parent } : undefined;
     const silent = !!child && kind === 'done' && !this.queued().some(event => event.chatId === c.id && event.kind === 'user-message');
-    const event = { chatId: c.id, title: c.title, harness: c.harness, kind, detail: child && !requestId ? '' : detail, at, ...(child ? { child } : {}), ...(requestId ? { requestId } : {}), ...(endsTurn ? { endsTurn } : {}), ...(silent ? { silent } : {}) };
+    const event = { chatId: c.id, title: c.title, harness: c.harness, kind, detail: child && !requestId ? '' : detail, at, ...(child ? { child } : {}), ...(credits ? { credits } : {}), ...(requestId ? { requestId } : {}), ...(endsTurn ? { endsTurn } : {}), ...(silent ? { silent } : {}) };
     this.buffer.set(slotOf(event), event);
     this.reschedule();
   }

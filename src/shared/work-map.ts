@@ -66,7 +66,7 @@ export interface WorkBox {
   title: string;
   detail?: string;
   role?: WorkRoleId;
-  model?: string;
+  /** the role card's preset the step asks; never a model (ADR 0346) */
   preset?: PresetId;
   /** its turn, from 1: boxes of one turn run together */
   wave: number;
@@ -169,7 +169,7 @@ export function workBoxes(plan: StrategyPlan | undefined): WorkBox[] {
   if (!plan) return [];
   const waves = planWaves(plan.steps);
   return plan.steps.map((s, i) => ({
-    n: i + 1, title: s.title, ...(s.detail ? { detail: s.detail } : {}), ...(s.role ? { role: s.role } : {}), ...(s.model ? { model: s.model } : {}), ...(s.preset ? { preset: s.preset } : {}),
+    n: i + 1, title: s.title, ...(s.detail ? { detail: s.detail } : {}), ...(s.role ? { role: s.role } : {}), ...(s.preset ? { preset: s.preset } : {}),
     wave: waves[i]!, ...(waves.filter(w => w === waves[i]).length > 1 ? { par: true as const } : {}), state: s.state, ...(s.outcome ? { outcome: s.outcome } : {}), ...(s.on ? { on: s.on } : {}),
     chatIds: [...(s.chatIds ?? [])], ...(s.startedAt ? { startedAt: s.startedAt } : {}), ...(s.endedAt ? { endedAt: s.endedAt } : {}), ...(s.added ? { added: true as const } : {}), ...(s.drop ? { drop: true as const } : {}),
   }));
@@ -220,8 +220,11 @@ export function workInfo(m: WorkMap): WorkMapInfo {
 export type WorkSay = 'waiting' | 'failed' | 'closed' | 'gone' | 'working' | 'interrupted' | 'between' | 'blocked' | 'partial' | 'done' | 'unknown';
 /** user = an open question or permission that reached him, or its last answer waits for him · parent = its question is with
  *  the chat that delegated it, orchestrator = with the Orchestrator (the question ladder, ADR 0344: not the user's yet) ·
- *  colleagues = people or chats outside the job · work = work still running that the app does not see in its own chats */
-export type WorkWaitFor = 'user' | 'parent' | 'orchestrator' | 'colleagues' | 'work';
+ *  colleagues = people or chats outside the job · work = work still running that the app does not see in its own chats ·
+ *  credits = its model ran out of credits: the user changes the model on its role's card and it goes on (ADR 0346) */
+export type WorkWaitFor = 'user' | 'credits' | 'parent' | 'orchestrator' | 'colleagues' | 'work';
+/** The user must move: a question or permission of his, or a role card to change. */
+export const waitsOnUser = (w: WorkWaitFor | undefined): boolean => w === 'user' || w === 'credits';
 /** One chat of the map (its owner, a step's chat, or one these delegated) and what it is doing. */
 export interface WorkWorker {
   chatId: string;
@@ -270,7 +273,7 @@ export interface WorkMapLive {
 }
 
 /** The user must move: its plan waits for his ok, or a chat of it waits for him (a question an agent holds does not). */
-export const waitsForUser = (i: Pick<WorkMapInfo, 'state' | 'live'>): boolean => i.state === 'toApprove' || (i.state === 'idea' || i.state === 'running') && i.live?.waits === 'user';
+export const waitsForUser = (i: Pick<WorkMapInfo, 'state' | 'live'>): boolean => i.state === 'toApprove' || (i.state === 'idea' || i.state === 'running') && waitsOnUser(i.live?.waits);
 
 /** The order in which what a chat is doing matters to the user. */
 export const WORK_SAYS: readonly WorkSay[] = ['waiting', 'failed', 'closed', 'gone', 'working', 'blocked', 'interrupted', 'unknown', 'between', 'partial', 'done'];
@@ -290,7 +293,7 @@ export function workText(v: WorkMapView): string {
     ...(m.project || m.touches.length ? [`Project: ${[...new Set([...(m.project ? [m.project] : []), ...m.touches])].join(', ')}`] : []),
     ...(m.owner ? [`Chat: ${m.owner.chatId}`] : ['No chat yet']),
     ...(m.idea ? [`Idea: ${m.idea}`] : []),
-    ...(steps.length ? [`Steps (${info.done} of ${info.steps} done):`, ...steps.map(b => `${b.n}. [turn ${b.wave}] ${b.title} · ${b.state}${b.role ? ` · ${b.role}` : ''}${b.model ? ` · ${b.model}` : ''}${b.preset ? ` · ${b.preset}` : ''}${b.drop ? ' · removed by the replan at the user’s ok' : ''}${b.live ? ` · now: ${liveWords(b.live)}` : ''}`)] : []),
+    ...(steps.length ? [`Steps (${info.done} of ${info.steps} done):`, ...steps.map(b => `${b.n}. [turn ${b.wave}] ${b.title} · ${b.state}${b.role ? ` · ${b.role}` : ''}${b.preset ? ` · ${b.preset}` : ''}${b.drop ? ' · removed by the replan at the user’s ok' : ''}${b.live ? ` · now: ${liveWords(b.live)}` : ''}`)] : []),
     ...(m.plan?.clarified.length ? ['Answers:', ...m.plan.clarified.map(c => `- ${c.q} → ${c.a}`)] : []),
     ...(m.plan?.doubts?.length ? ['Doubts (one still open holds the approval):', ...m.plan.doubts.map(d => `- ${d.text} · ${d.state === 'open' ? 'open' : `closed by ${d.by}: ${d.answer} (${d.source})`}`)] : []),
     ...(v.questions.length ? ['Questions of its chats:', ...v.questions.map(q => `- ${q.title}${q.n ? ` (step ${q.n})` : ''}: ${ladderText(q.question).replace(/\s+/g, ' ')} · ${q.question.answered ? `answered by ${q.question.answered.name}: ${q.question.answered.answer} (${q.question.answered.why})` : q.question.level === 'user' ? 'waits for the user' : `with the ${q.question.level}`}`)] : []),

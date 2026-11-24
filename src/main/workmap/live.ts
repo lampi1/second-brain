@@ -10,7 +10,7 @@
 // Pure. Used by workmap/service.ts; the types are in shared/work-map.ts; pinned by test/unit/workmap-live.test.ts.
 import type { ChatSummary, PendingRequest } from '@shared/contract';
 import { heldOnly, openQuestions, type LadderQuestion } from '@shared/question-ladder';
-import { drawingOf, WORK_SAYS, type WorkAsk, type WorkBox, type WorkBoxLive, type WorkMap, type WorkMapLive, type WorkSay, type WorkStopWhy, type WorkWaitFor, type WorkWorker } from '@shared/work-map';
+import { drawingOf, waitsOnUser, WORK_SAYS, type WorkAsk, type WorkBox, type WorkBoxLive, type WorkMap, type WorkMapLive, type WorkSay, type WorkStopWhy, type WorkWaitFor, type WorkWorker } from '@shared/work-map';
 import { reportOf, sayOf } from '../projectmap/follow';
 
 /** A chat that ended its turn with no report is taken at its word this long; then nobody vouches for its step. */
@@ -25,6 +25,8 @@ export function readingOf(c: ChatSummary | undefined, asks: readonly PendingRequ
   if (!c) return { say: 'gone' };
   const report = reportOf(c)?.outcome;
   if (c.closedAt) return { say: report ?? 'closed' };
+  // out of credits (ADR 0346): no failure, it waits for the user to change its role's card; a new turn ends the wait
+  if (c.creditWait && !isBusy(c)) return { say: 'waiting', waits: 'credits' };
   const said = sayOf(c, [], asks);
   if (said === 'wait' || said === 'reask' || c.pending > 0 || openQuestions(c.questions).some(q => q.level === 'user')) return { say: 'waiting', waits: 'user' };
   // its question is with an agent (ADR 0344): it waits for that one, and not for the user until it reaches him
@@ -45,7 +47,7 @@ export function readingOf(c: ChatSummary | undefined, asks: readonly PendingRequ
 /** An order where the first is what to show. Who waits for the user or failed comes before who works; what a chat below a
  *  step's chat says counts only while it works or waits for the user, or when nobody works. */
 function rank(w: WorkWorker): number {
-  if (w.say === 'waiting' && w.waits === 'user') return 0;
+  if (w.say === 'waiting' && waitsOnUser(w.waits)) return 0;
   if (w.say === 'working') return 5;
   if (w.below) return 20 + WORK_SAYS.indexOf(w.say);
   if (w.say === 'waiting') return w.waits === 'work' ? 6 : 4;
@@ -166,7 +168,7 @@ export function liveOf(m: WorkMap, i: LiveInput): { boxes: (WorkBoxLive | undefi
     }
   });
   // a chat it delegated outside the plan's steps works for the job too
-  for (const c of ownerId && owner ? below(ownerId) : []) if (!chats.has(c.id)) { const w = worker(c.id, undefined, true); if (w.say === 'working' || w.say === 'waiting' && w.waits === 'user') chats.set(c.id, w); }
+  for (const c of ownerId && owner ? below(ownerId) : []) if (!chats.has(c.id)) { const w = worker(c.id, undefined, true); if (w.say === 'working' || w.say === 'waiting' && waitsOnUser(w.waits)) chats.set(c.id, w); }
   const all = [...chats.values()].sort(byRank);
   const failed = all.filter(w => w.say === 'failed'), working = all.filter(w => w.say === 'working'), waiting = all.filter(w => w.say === 'waiting');
   const why = whyStopped(m, ownerId ? byId.get(ownerId) : undefined, i);
@@ -175,7 +177,7 @@ export function liveOf(m: WorkMap, i: LiveInput): { boxes: (WorkBoxLive | undefi
   if (open && owner) {
     const steps = boxes.flatMap((l, k) => (l && drawn[k]!.state === 'now' ? l.chats : []));
     // a chat lost or failed under one step does not hide who works on another: the row says who works, the counts the rest
-    say = [...waiting.filter(w => w.waits === 'user'), ...working, ...[owner, ...steps].sort(byRank)][0];
+    say = [...waiting.filter(w => waitsOnUser(w.waits)), ...working, ...[owner, ...steps].sort(byRank)][0];
     if (!working.length && !waiting.length && !failed.length) {
       const now = boxes.flatMap((l, k) => (l && drawn[k]!.state === 'now' ? [l] : []));
       const old = now.flatMap(l => (l.stale !== undefined ? [l.stale] : []));

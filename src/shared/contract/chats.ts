@@ -115,6 +115,10 @@ export interface ChatSummary {
   /** its last report or final answer says it waits for the user (or a decision from above) or for a colleague (another
    *  chat): never auto-closed, shown "In attesa di…" (shared/waiting.ts waitsForPeople, #86, ADR 0084) */
   waitsOn?: 'user' | 'colleagues';
+  /** its last turn stopped on the provider's credit or plan limit (ADR 0346): a role chat waits, it is not failed nor
+   *  closed, until its role's card names another model for its preset (it then switches and goes on by itself) or a new
+   *  turn starts. `model` = the one that ran out; `otherEngine` = the card moved to this engine, which the chat cannot follow */
+  creditWait?: { at: number; model: string | null; otherEngine?: string };
   /** Explicit assignment/mailbox hold. A provider result never completes it; no expiration or consent semantics. */
   work?: {status:'assigned'|'waiting-mail'|'completed';updatedAt:number};
   /** closed (archived) at: out of the grid, found with Ctrl+K (the palette's "Chiuse" group); its history stays and a reopen resumes it */

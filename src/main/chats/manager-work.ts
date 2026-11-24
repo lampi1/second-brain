@@ -3,7 +3,7 @@
 // the run metrics, the Strategist's plan (ADR 0108: propose, update, approve or change).
 import crypto from 'node:crypto';
 import path from 'node:path';
-import type { ChatSummary, Effort } from '../../shared/contract';
+import type { ChatSummary, Effort, Harness } from '../../shared/contract';
 import { errText, log } from '../log';
 import { ToolRefusal } from '../mcp/refusal';
 import type { UserTaskEvents, AgentRun, AgentRunOutcome } from '../../shared/agents';
@@ -18,6 +18,8 @@ import type { SubmissionReceipt, Rec, CleanReportNote, UserWroteNote, TurnEndInf
 import { sysItem, userNoteLine } from './manager-helpers';
 import { phoneTime } from './phone-reply';
 import { ManagerLifecycle } from './manager-lifecycle';
+import { APP_EVENT_LABEL } from './orchestrator-wake';
+import { engineOf } from '../engines/registry';
 import type { AppAsk } from './session';
 import { proposalHash } from '../coordination/store';
 import type { RequestKey } from '../coordination/model';
@@ -384,6 +386,52 @@ export abstract class ManagerWork extends ManagerLifecycle {
 
   /** The chat's settings (ChatManager.set): effort null = back to the engine's default. */
   abstract set(chatId: string, patch: { model?: string; effort?: Effort | null }): Promise<ChatSummary>;
+
+  /** Its role's card names another model for the preset of a chat that waits on its credits (ADR 0346; when:
+   *  agents/credit-wait.ts): the chat switches to it and goes on from where it was, told by the app. Its run names the
+   *  model it goes on with, so its estimate rests on that model's runs. False: it does not wait any more, or it works. */
+  async creditResume(chatId: string, to: { model: string | null; effort: Effort | null }): Promise<boolean> {
+    const r = this.chats.get(chatId), w = r?.s.creditWait;
+    if (!r || !w || r.s.closedAt || r.session?.busy || r.working) return false;
+    const from = w.model ?? '';
+    await this.set(chatId, { model: to.model ?? '' });
+    // the preset's effort, when this model takes it: a refusal keeps the chat's own (set says so) and never holds the work
+    if ((to.effort ?? null) !== (r.choice.effort ?? null)) await this.set(chatId, { effort: to.effort }).catch(e => log.warn('chats', 'preset effort not applied after a credit wait', { chat: chatId, cause: errText(e), hint: 'the chat goes on with its own effort' }));
+    if (this.chats.get(chatId) !== r || r.s.closedAt) return false;
+    delete r.s.creditWait;
+    if (r.s.run && r.s.run.endedAt === undefined) { r.s.run.model = to.model; this.runSave(); }
+    this.addItem(r, sysItem('creditResumed', { from, to: to.model ?? '' }, 'info'), false);
+    this.persist();
+    this.updated(r);
+    const text = `${APP_EVENT_LABEL}\nIl tuo ultimo turno si è fermato perché i crediti di ${from || 'del tuo modello'} erano finiti. L’utente ha cambiato il modello nella scheda del tuo ruolo: ora giri su ${to.model ?? 'il modello predefinito del motore'}. Riprendi il compito da dove eri, senza rifare quello che è già fatto.${r.s.delegation && !r.s.delegation.result ? ' Quando hai finito consegna con agent_report.' : ''}`;
+    await this.send(chatId, text, undefined, false, 'second-brain', false, { kind: 'app' });
+    return true;
+  }
+
+  /** The card of a waiting chat's role moved to another engine (ADR 0346): a chat never changes engine, so its work
+   *  goes on in a new chat of the same role on the card's engine and model: «Riprendi» with the app's own hand-off note
+   *  (the old engine has no credit to write one), the same child of the same parent, contract and worktree. */
+  async creditContinue(chatId: string, on: { engine: Harness; model: string | null; effort: Effort | null }): Promise<boolean> {
+    const r = this.chats.get(chatId);
+    if (!r || !r.s.creditWait || r.s.closedAt || r.s.continuedBy || r.session?.busy || r.working) return false;
+    const next = await this.continueChat(chatId, { allowStart: false, ask: false, on: { harness: on.engine, model: on.model, effort: on.effort },
+      promptPrefix: `${APP_EVENT_LABEL}\nLa chat «${r.s.title}» si è fermata perché i crediti di ${r.s.creditWait.model ?? 'del suo modello'} erano finiti. L’utente ha spostato la scheda del ruolo su un altro motore: il lavoro continua qui, da dove era.` });
+    delete r.s.creditWait;
+    this.persist();
+    this.updated(r);
+    return next.id !== chatId;
+  }
+
+  /** The card moved to an engine this chat cannot follow (its parent may not start it, or the new chat did not start):
+   *  it keeps waiting and says so, once per engine. */
+  creditOtherEngine(chatId: string, engine: string): void {
+    const r = this.chats.get(chatId), w = r?.s.creditWait;
+    if (!r || !w || w.otherEngine === engine) return;
+    r.s.creditWait = { ...w, otherEngine: engine };
+    this.addItem(r, sysItem('creditOtherEngine', { role: r.s.agent?.name ?? '', engine: engineOf(engine as Harness)?.label ?? engine, own: engineOf(r.s.harness)?.label ?? r.s.harness }, 'warn'), false);
+    this.persist();
+    this.updated(r);
+  }
 
   /** Moves the chat to a preset's model and effort; the returned undo puts back what it ran on (best effort). */
   private async presetSwitch(r: Rec, to: { model: string; effort: Effort | null } | undefined): Promise<() => Promise<void>> {

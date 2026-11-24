@@ -10,6 +10,7 @@ import type { HeldChildResult } from './store';
 import { waitsForPeople, waitsForWork } from '../../shared/waiting';
 import type { TaskDeliveryPolicy } from '../../shared/agents';
 import { reportOf } from '../agents/run-report';
+import { limitSignal } from '../agents/credits';
 import { MAX_CORRECTIONS, RESULT_OUTPUT_MAX, checkResult, resultMessage, type DelegationResult, type TaskSource } from '../../shared/delegation';
 import { finishPlan, afterReport } from '../../shared/strategy';
 import { APP_EVENT_LABEL } from './orchestrator-wake';
@@ -124,6 +125,8 @@ export abstract class ManagerDelegation extends ManagerContinuity {
   protected owedReport(r: Rec, why: 'idle' | 'exit'): void {
     const d = r.s.delegation;
     if (!d || !r.s.parentId || d.result || r.s.closedAt || this.quitting || r.archiving || this.chats.get(r.s.id) !== r) return;
+    // out of credits (ADR 0346): it waits for its role's card, its delegation stays open and its step under way
+    if (r.s.creditWait) return;
     // whatever ended the turn, a child still waiting on its parent's answer, its own children or a request owes nothing yet
     if (r.pending.size > 0 || r.askedParentAt !== undefined || this.delegatedBusy(r.s.id) || (r.s.agentChildren?.active ?? 0) > 0) return;
     if (why === 'idle') {
@@ -143,6 +146,19 @@ export abstract class ManagerDelegation extends ManagerContinuity {
       }
     }
     this.closeWithoutReport(r, why);
+  }
+
+  /** A role chat's turn, or its engine, stopped on the provider's credit or plan limit (credits.ts limitSignal; ADR
+   *  0346): the chat waits. It is not failed for the job nor closed as blocked: its task, its delegation and its plan
+   *  step stay as they are until its role's card names another model for its preset (creditResume) or a new turn
+   *  starts. The app never picks another model or preset for it. A chat with no role has no card (the user changes its
+   *  model on the chat) and the Orchestrator follows its own card: neither waits here. */
+  protected creditStop(r: Rec, errorText: string | null | undefined): boolean {
+    if (!limitSignal(errorText) || r.s.closedAt || r.s.isOrchestrator || !r.s.agent || r.s.agent.source !== 'catalog') return false;
+    r.s.creditWait = { at: Date.now(), model: r.s.model };
+    this.addItem(r, sysItem('creditWait', { role: r.s.agent.name, model: r.s.model ?? '' }, 'warn'), false);
+    log.info('chats', 'role chat waits: its model is out of credits', { chat: r.s.id, data: { role: r.s.agent.id, engine: r.s.harness, model: r.s.model, parent: r.s.parentId ?? null } });
+    return true;
   }
 
   private closeWithoutReport(r: Rec, why: 'idle' | 'exit'): void {
@@ -668,6 +684,8 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     this.goOnAfterRefusal(r, item);
     this.recordTurnEnd(r);
     r.s.lastResult = { at: item.at, isError: item.isError, ...(item.interrupted ? { interrupted: true } : {}) };
+    // the provider's credit or plan limit ended it (ADR 0346): a role chat waits for its card; any other end is no wait
+    if (!(item.isError && !item.interrupted && this.creditStop(r, turnErrors(r.items)))) delete r.s.creditWait;
     r.unfinished = false;
     // "Aspetto la QA…": its work still runs, whatever the engine counts (shared/waiting.ts, the chats of 2026-10-16)
     if (waitsForWork(lastAnswer(r.items))) r.s.waitsOnWork = true; else delete r.s.waitsOnWork;
