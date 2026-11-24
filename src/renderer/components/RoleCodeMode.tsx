@@ -12,13 +12,14 @@ import { saveAgent, useAgents } from '../store/agents';
 import { t } from '../i18n';
 import '../styles/settings.css';
 
-export function RoleCodeMode({ profile }: { profile: AgentProfile }) {
+export function RoleCodeMode({ profile, engines }: { profile: AgentProfile; engines?: readonly string[] }) {
   const { catalog } = useAgents();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const level = catalog?.models.find(m => m.engine === profile.engine)?.codeMode ?? 'none';
   const codeMode = profile.id !== 'orchestrator' && level !== 'none';
-  const fast = profile.engine === 'cursor';
+  // Fast is Cursor's: shown when one of the role's levels runs on Cursor (ADR 0347)
+  const fast = (engines ?? [profile.engine]).includes('cursor');
   if (!codeMode && !fast) return null;
   const flip = async (change: { codeMode?: boolean; fast?: boolean }) => {
     setBusy(true); setError(null);

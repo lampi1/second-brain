@@ -102,9 +102,14 @@ export function isAgentsRecap(text: string): boolean {
   return lines.slice(0, 2).some(head) && other.length <= 2 && other.length < lines.length / 2;
 }
 
+const creditWaits = (c: ChatSummary): boolean => !!c.creditWait && !c.closedAt && !c.queued && c.state !== 'running' && c.state !== 'starting' && c.state !== 'waiting';
+/** What a chat out of credits waits for, in the user's words. */
+const creditLine = (c: ChatSummary): string => `crediti finiti${c.creditWait?.model ? ` (${c.creditWait.model})` : ''}: cambia il modello nella scheda di ${c.agent?.name ?? 'questo ruolo'} e riparte da sola`;
 export function markOf(c: ChatSummary, asks: PendingRequest[]): Mark {
   // a question still with an agent is not the user's (ADR 0344)
   if (asks.length || c.state === 'waiting' && !heldOnly(c).length) return 'wait';
+  // out of credits (ADR 0346): it waits for the user's change of its role's card, it did not fail
+  if (creditWaits(c)) return 'wait';
   if (c.state === 'error') return 'error';
   if (c.queued) return 'queue';
   if (c.state === 'running' || c.state === 'starting' || c.state === 'waiting') return 'run';
@@ -148,7 +153,7 @@ export function agentsRecap(d: AgentsRecapDeps, o: { detail?: boolean } = {}): s
     const s: Steps = c.parentId ? { done: [] } : stepsOf(d.items(c.id));
     const rows = s.done.map(x => `- ✓ ${x}`);
     // a delegated chat's question and error text are its parent's (ADR 0083: app_digest mutes them too)
-    if (m === 'wait') rows.push(`- 🙋 ${rs.length && !c.parentId ? one(askLine(rs[0]!), 160) : 'una richiesta per te'}`);
+    if (m === 'wait') rows.push(`- 🙋 ${rs.length && !c.parentId ? one(askLine(rs[0]!), 160) : creditWaits(c) ? creditLine(c) : 'una richiesta per te'}`);
     else if (m === 'error') rows.push(`- ❗ ${(c.parentId ? report : one(c.lastError ?? report ?? c.lastText, 140)) || 'errore'}`);
     else if (m === 'stopped') rows.push('- ✋ l’hai fermata tu');
     else if (m === 'queue') rows.push(`- ⏳ posizione ${c.queued!.position}`);
@@ -162,7 +167,7 @@ export function agentsRecap(d: AgentsRecapDeps, o: { detail?: boolean } = {}): s
   // one line: a delegate waiting for the user makes its parent wait (its question stays the parent's, ADR 0083)
   const lineOf = (c: ChatSummary, m: Mark): string | null => {
     const rs = asks.get(c.id) ?? [];
-    const what = m === 'wait' ? (rs.length && !c.parentId ? `aspetta te: ${one(askLine(rs[0]!), 90)}` : 'aspetta te')
+    const what = m === 'wait' ? (rs.length && !c.parentId ? `aspetta te: ${one(askLine(rs[0]!), 90)}` : creditWaits(c) ? `aspetta te: ${creditLine(c)}` : 'aspetta te')
       : m === 'error' ? 'ferma su un errore'
       : m === 'queue' ? 'in coda'
       : m === 'run' ? (() => { const s = c.parentId ? { done: [] } as Steps : stepsOf(d.items(c.id)); return one(s.now ?? s.done.at(-1), 70) || 'al lavoro'; })()

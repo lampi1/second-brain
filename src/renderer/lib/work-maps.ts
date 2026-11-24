@@ -3,7 +3,7 @@
 // of a chat's maps is its own; how the boxes of a plan are laid in rows. The buttons a map shows are only those of
 // WorkMapInfo.can. Pure, pinned by test/unit/work-maps-list.test.ts; used by components/work-map/*, store/work-maps.ts,
 // actions.ts, lib/where.ts and StrategyPanel.tsx.
-import { waitsForUser, type WorkBox, type WorkLink, type WorkMapAction, type WorkMapInfo, type WorkMapState, type WorkSay, type WorkWaitFor } from '@shared/work-map';
+import { waitsForUser, waitsOnUser, type WorkBox, type WorkLink, type WorkMapAction, type WorkMapInfo, type WorkMapState, type WorkSay, type WorkWaitFor } from '@shared/work-map';
 
 /** The place of the work maps in the Mappa page: `lavori`, or `lavori/<id>`. */
 export const WORKS = 'lavori';
@@ -24,7 +24,7 @@ export const groupOf = (i: Pick<WorkMapInfo, 'state' | 'live'>): WorkGroup => (w
 /** How a live status is coloured: it waits for the user, for others, somebody works, something is wrong, done, not known. */
 export type LiveKind = 'you' | 'wait' | 'work' | 'bad' | 'ok' | 'dim';
 const KIND: Record<WorkSay, LiveKind> = { waiting: 'wait', failed: 'bad', closed: 'bad', gone: 'bad', blocked: 'bad', working: 'work', done: 'ok', interrupted: 'dim', unknown: 'dim', between: 'dim', partial: 'dim' };
-export const liveKind = (l: { say?: WorkSay; waits?: WorkWaitFor; stale?: number }): LiveKind => (l.stale !== undefined || !l.say ? 'dim' : l.say === 'waiting' && l.waits === 'user' ? 'you' : KIND[l.say]);
+export const liveKind = (l: { say?: WorkSay; waits?: WorkWaitFor; stale?: number }): LiveKind => (l.stale !== undefined || !l.say ? 'dim' : l.say === 'waiting' && waitsOnUser(l.waits) ? 'you' : KIND[l.say]);
 
 /** Why «approve», «keep» and «start» wait: the first open doubt and how many are open; null = nothing holds them. */
 export const heldBy = (i: Pick<WorkMapInfo, 'doubts'>): { n: number; first: string } | null => (i.doubts?.open ? { n: i.doubts.open, first: i.doubts.first ?? '' } : null);

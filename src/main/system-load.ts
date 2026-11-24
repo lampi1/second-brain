@@ -1,4 +1,4 @@
-// The PC's load for the top bar (ADR 0347): CPU busy % since the previous read (os.cpus() deltas, every core) and the free
+// The PC's load for the top bar (ADR 0349): CPU busy % since the previous read (os.cpus() deltas, every core) and the free
 // RAM in bytes and %. The renderer asks every few seconds over 'app:load' (TopBar.tsx → SystemLoad.tsx); each read
 // compares with the one before, so the figure is the average over the poll interval. Pure parts take the snapshots and
 // the memory as arguments, for the tests.

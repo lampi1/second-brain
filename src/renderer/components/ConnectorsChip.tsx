@@ -1,4 +1,4 @@
-// Connectors and MCP servers on the top bar (ADR 0347): one chip with how many work (a red count when some need a fix),
+// Connectors and MCP servers on the top bar (ADR 0349): one chip with how many work (a red count when some need a fix),
 // and on click a panel like the usage one: the app's accounts (Azure DevOps, GitHub, Jira) and the MCP servers the
 // agents use, each with its state and the one action it needs: «Accedi» (account sign-in, or a remote server's OAuth
 // login), «Prova» (test again). The full cards stay in Settings → Connettori («Gestisci»). Data: 'connectors:list' and

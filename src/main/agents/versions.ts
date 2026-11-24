@@ -15,7 +15,7 @@ const count = (n: unknown): n is number => Number.isSafeInteger(n) && (n as numb
 export function behaviourOf(p: AgentBehaviour): AgentBehaviour {
   return structuredClone({ instructions: p.instructions, engine: p.engine, model: p.model,
     ...(p.effort !== undefined ? { effort: p.effort } : {}), ...(p.knowhow !== undefined ? { knowhow: p.knowhow } : {}), tools: p.tools ?? null, permissionCeiling: p.permissionCeiling ?? null,
-    ...(typeof p.maxContext === 'number' ? { maxContext: p.maxContext } : {}), tier: p.tier, tierMax: p.tierMax, ...(p.presets ? { presets: p.presets } : {}),
+    ...(typeof p.maxContext === 'number' ? { maxContext: p.maxContext } : {}), tier: p.tier, tierMax: p.tierMax, ...(p.presets ? { presets: p.presets } : {}), ...(p.levels ? { levels: p.levels } : {}),
     ...(p.codeMode ? { codeMode: true } : {}), ...(p.fast ? { fast: true } : {}), launches: [...p.launches], skills: [...p.skills] });
 }
 /** Field-order independent: two saves of the same behaviour never create a version. */

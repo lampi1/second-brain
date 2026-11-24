@@ -1,4 +1,4 @@
-// The PC's load on the top bar (ADR 0347): CPU % and free RAM, always visible, polled every few seconds over 'app:load'
+// The PC's load on the top bar (ADR 0349): CPU % and free RAM, always visible, polled every few seconds over 'app:load'
 // (main/system-load.ts) and paused while the window is hidden. Amber and red when the PC is short of either, so the user
 // sees why chats wait in the load queue (chats/admission.ts). Used by TopBar.tsx; the pure parts tested in node.
 import { useEffect, useState } from 'react';

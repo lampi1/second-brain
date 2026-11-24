@@ -78,7 +78,7 @@ export const brainModelDe: typeof brainModelIt = {
   'pm.step.first': 'Beginnt als Erster.', 'pm.step.after': (p: { steps: string }) => `Beginnt, wenn Schritt ${p.steps} fertig ist.`, 'pm.step.afterMany': (p: { steps: string }) => `Beginnt, wenn die Schritte ${p.steps} fertig sind.`,
   'pm.step.with': (p: { steps: string }) => `Läuft zusammen mit Schritt ${p.steps}.`, 'pm.step.withMany': (p: { steps: string }) => `Läuft zusammen mit den Schritten ${p.steps}.`,
   'pm.step.todo': 'offen', 'pm.step.now': 'läuft', 'pm.step.nowSince': (p: { at: string }) => `läuft seit ${p.at}`, 'pm.step.done': 'fertig', 'pm.step.doneIn': (p: { time: string }) => `fertig in ${p.time}`, 'pm.step.blocked': 'blockiert',
-  'pm.step.planned': 'geplant', 'pm.step.plannedTip': 'Geplant: das Modell auf der Rollenkarte für dieses Preset; es ändert sich, wenn der Chat mit einem anderen startet.',
+  'pm.step.presetTip': 'Das Preset der Rollenkarte. Das Modell ist das, das die Karte beim Start des Schritts hat: Änderst du sie vorher, gilt das neue.',
   'pm.grp.head': (p: { n: number }) => `${p.n} parallel`, 'pm.grp.working': (p: { n: number }) => `${p.n} aktiv`, 'pm.grp.done': (p: { n: number }) => `${p.n} erledigt`,
   'pm.grp.blocked': (p: { n: number }) => `${p.n} blockiert`, 'pm.grp.idle': (p: { n: number }) => `${p.n} zu starten`,
   'skills.untracked': 'Nutzung nicht erfasst', 'skills.untrackedTip': 'Diese Engine sagt nicht, welche Skills sie nutzt: nur die, die sie über das Lesen einer SKILL.md öffnet, erscheinen hier.',
@@ -118,5 +118,4 @@ export const brainModelDe: typeof brainModelIt = {
   'bm.card.skills': 'Skills', 'bm.card.noSkills': 'Keine angegebenen Skills: arbeitet mit seiner Rolle.',
 
   'bm.card.back': 'Zurück',
-  'bm.studio.manage': 'Skills verwalten',
 };

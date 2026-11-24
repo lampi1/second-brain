@@ -281,10 +281,10 @@ test('README showcase: the Strategist\'s plan to approve on its map', async () =
   const at = Date.now();
   const plan = { phase: 'proposed', at, asked: 2, map: 'alfa-shop', doneWhen: 'Order tests pass and the release notes are ready.',
     steps: [
-      { title: 'Find where the discount is computed today', detail: 'cart, order and refund', role: 'scout', state: 'todo', on: 'ordini', preset: 'min', model: 'claude-haiku-5-5' },
-      { title: 'Apply the % discount to the full price', detail: 'no double discount on offers', role: 'artisan', state: 'todo', on: 'ordini', preset: 'max', model: 'claude-opus-5-5' },
-      { title: 'Check that the order tests pass', role: 'sentinel', state: 'todo', on: 'ordini', preset: 'base', model: 'claude-opus-5-5' },
-      { title: 'Write the release notes', role: 'herald', state: 'todo', on: 'note-di-rilascio', par: true, preset: 'min', model: 'claude-haiku-5-5' },
+      { title: 'Find where the discount is computed today', detail: 'cart, order and refund', role: 'scout', state: 'todo', on: 'ordini', preset: 'min' },
+      { title: 'Apply the % discount to the full price', detail: 'no double discount on offers', role: 'artisan', state: 'todo', on: 'ordini', preset: 'max' },
+      { title: 'Check that the order tests pass', role: 'sentinel', state: 'todo', on: 'ordini', preset: 'base' },
+      { title: 'Write the release notes', role: 'herald', state: 'todo', on: 'note-di-rilascio', par: true, preset: 'min' },
     ],
     clarified: [{ q: 'Where', a: 'Cart, order and refund' }, { q: 'Offers', a: 'No, full price only' }] } as StrategyPlan;
   await demo('plan', 'tree-plan', plan);

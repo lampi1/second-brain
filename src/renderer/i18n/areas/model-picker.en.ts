@@ -39,6 +39,6 @@ export const modelPickerEn: typeof modelPickerIt = {
   'mp.apply.orchestratorTip': 'Saves on the Orchestrator card: applies from the next Orchestrator on that engine.',
   'mp.apply.role': 'Save to the role',
   'mp.chatMenu': 'Model and effort…',
-  'mp.cardButton': (p: { engine: string; model: string }) => `${p.engine} · ${p.model}`,  'modelChip.tip': (p: { engine: string; model: string }) => `${p.engine} · ${p.model}: click to change the model`,
+  'modelChip.tip': (p: { engine: string; model: string }) => `${p.engine} · ${p.model}: click to change the model`,
   'chat.clearContext': 'Clear the context (like /clear)',
 };

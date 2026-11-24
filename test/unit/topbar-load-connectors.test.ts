@@ -1,4 +1,4 @@
-// The top bar's PC load and connectors chip (ADR 0347): the CPU delta between two os.cpus() reads, the free RAM, the
+// The top bar's PC load and connectors chip (ADR 0349): the CPU delta between two os.cpus() reads, the free RAM, the
 // tones and GB text of SystemLoad.tsx, and the chip's count (an account never touched and a server off are not counted).
 import { describe, expect, it } from 'vitest';
 import { busyPct, cpuSnap, loadOf, systemLoadReader } from '../../src/main/system-load';

@@ -4,9 +4,8 @@
 // the back: the owner, 2026-11-15, «si ripetono troppe info»), a live status, its level (from the XP of its verified successful runs, ADR 0131,
 // shown beside it: «Lv 7 Praticante · 124 XP», ADR 0100; for a work role, when the nightly review last updated it, ADR 0203) and performance % (a Bayesian estimate of the verdicts weighted by trust and
 // recency, with its ±, the agent's own word excluded, with the verdicts it rests on; main/agents/standing.ts), each with a "?" giving the formula, and four compact run metrics (the success rate among them: verified verdicts only, shared/success.ts, ADR 0186); a click anywhere on the card flips it in 3D (#81)
-// to the back: the model, effort and context window pickers (AgentCardModel.tsx, ADR 0211), the role's instructions, the skills it loads at every launch, its permissions («Tutto consentito» or how
-// far the user narrowed it, with "Modifica permessi" to its permissions card, where its MCP servers are too, ADR 0085,
-// 0086), the run facts, its costs (median per run, per verified success, over how many runs: the only per-agent costs in
+// to the back: the role's instructions, the skills it loads at every launch, the marks of the engines its levels use (no
+// model, no permissions, no version: owner 2026-11-24, ADR 0347), the run facts, its costs (median per run, per verified success, over how many runs: the only per-agent costs in
 // the app since Costi dropped its per-agent blocks, #125) and "Apri". A second click, or Esc, flips it back; the hidden face is inert, so
 // keyboard and screen readers only reach the visible one. The front stays quiet (ADR 0287): the origin only when the user
 // changed the role, the status only while it works or is on trial, the "?" marks only under the pointer or the focus. Under prefers-reduced-motion the faces fade instead of turning.
@@ -23,11 +22,11 @@ import { AgentAvatar } from './AgentAvatar';
 import { AgentSprite } from './AgentSprite';
 import { isSpriteId } from '../lib/agent-sprites';
 import { useOwnPicture } from '../lib/agent-images';
-import { AgentCardModel } from './AgentCardModel';
-import { PERMISSIONS_ELEMENT, permissionSummary } from './RolePermissions';
+import { cardPresets } from '@shared/model-presets';
+import { levelEngines, levelsOf } from '@shared/model-levels';
+import { HarnessMark } from './Icons';
 import { updatedWhen } from './JudgingSwitch';
 import { now as clockNow } from '../lib/clock';
-import { go } from '../actions';
 import { HelpTip } from './HelpTip';
 import { formatCost } from '../lib/format';
 import { useApp } from '../store/store';
@@ -128,7 +127,7 @@ function Standing({ id, standing: s, reviewedAt = null }: { id: string; standing
   </div>;
 }
 
-export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, onOpen, onSkill, index = 0, reviewedAt = null }: {
+export function AgentCatalogCard({ profile, metrics, loaded, engine: _engine, lastStart, onOpen, onSkill, index = 0, reviewedAt = null }: {
   profile: AgentProfile; metrics?: AgentMetrics; loaded: boolean; engine: string; lastStart: number | null; onOpen: () => void;
   /** when the nightly review last updated its verdicts (ADR 0203); null = not shown */ reviewedAt?: number | null;
   index?: number;
@@ -143,7 +142,7 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
   useEffect(() => {
     if (!flipped) return;
     // capture, and stopped: Esc flips the card back instead of leaving the page (the app's global Esc)
-    // an open picker on the back (AgentCardModel's Select lists) takes its own Esc first
+    // an open picker on the back (a Select list) takes its own Esc first
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('.ui-select-list[role="listbox"]')) { e.preventDefault(); e.stopImmediatePropagation(); flip(false); } };
     window.addEventListener('keydown', esc, true);
     return () => window.removeEventListener('keydown', esc, true);
@@ -171,14 +170,10 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
   const person = !ownPicture && profile.avatar.kind === 'character' && isSpriteId(profile.avatar.value) ? profile.avatar.value : null;
   const state = trial ? 'trial' : working ? 'working' : 'active';
   const origin = t(profile.userLocked ? 'studio.customized' : 'studio.builtIn');
-  // the model the role really ran on last (its newest «Per modello» row, ADR 0284) when the card names none
-  const lastModel = standing?.models?.reduce<{ model: string; lastAt: number } | null>((best, m) => (!best || m.lastAt > best.lastAt ? m : best), null)?.model;
-  const shownModel = profile.model ?? lastModel ?? t('mp.roleDefault');
-  const engineModel = `${engine} · ${shownModel}`;
   const skills = profile.skills;
   const last = lastStart === null ? unknown : new Date(lastStart).toLocaleString(locale());
   const prompt = profile.instructions.trim();
-  const perms = permissionSummary(profile);
+  const engines = levelEngines(levelsOf(profile, cardPresets(profile, null)));
   return <article className="catalog-card bm-flip" data-testid={`catalog-card-${profile.id}`} data-state={state} data-flipped={flipped}
     style={{ '--row-index': Math.min(index, 8), '--tone': characterTone(characterOf(profile.id)) } as CSSProperties}>
     <div className="bm-flip-inner">
@@ -211,7 +206,6 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
           <h3><button ref={back} type="button" onClick={() => flip(false)} aria-describedby={`${backId}-b`} data-testid={`catalog-unflip-${profile.id}`}>{profile.name}</button></h3>
           <span id={`${backId}-b`} className="sr-only">{t('bm.card.flipBack', { name: profile.name })}</span>
         </header>
-        <AgentCardModel profile={profile} />
         <section className="catalog-prompt" aria-label={t('agentDetail.prompt')}>
           <h4>{t('agentDetail.prompt')}{prompt && <small>{t('agentDetail.promptSize', { n: prompt.length })}</small>}</h4>
           {prompt ? <pre tabIndex={0} data-testid={`catalog-prompt-${profile.id}`}>{prompt}</pre> : <p>{t('agentDetail.promptEmpty')}</p>}
@@ -224,10 +218,8 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
             : <p>{t('bm.card.noSkills')}</p>}
         </section>
         <dl>
-          {profile.scope === 'role' && <div data-testid={`catalog-perms-${profile.id}`}><dt>{t('perm.card')}</dt><dd><span className="catalog-perms" data-full={perms.full}>{perms.text}</span>
-            <button type="button" className="link-btn" onClick={() => go({ page: 'agenti', arg: profile.id, element: PERMISSIONS_ELEMENT })} data-testid={`catalog-perms-edit-${profile.id}`}>{t('perm.card.edit')}</button></dd></div>}
-          <div><dt>{t('catalog.engine')}</dt><dd data-testid={`catalog-engine-${profile.id}`}>{engineModel}</dd></div>
-          <div><dt>{t('agentDetail.version')}</dt><dd>{origin} · v{profile.activeVersion}</dd></div>
+          {/* no model here (owner, 2026-11-24, ADR 0347): a role has several, on several engines; only their marks */}
+          <div><dt>{t('rolePage.engines')}</dt><dd className="catalog-engines" data-testid={`catalog-engine-${profile.id}`}>{engines.map(h => <HarnessMark key={h} harness={h} size={16} />)}</dd></div>
           <div><dt>{t('catalog.last')}</dt><dd>{last}</dd></div>
         </dl>
         <Costs id={profile.id} metrics={stats} wins={standing?.wins ?? null} loaded={loaded} />

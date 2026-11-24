@@ -82,12 +82,23 @@ export function presetAskOf(a: Record<string, unknown>, where = ''): PresetAsk {
   return { ...(preset ? { preset } : {}), ...(presetWhy ? { presetWhy } : {}), ...(taskKind ? { taskKind } : {}) };
 }
 
+/** What a part of an approved plan asks (ADR 0346): its own preset, else its step's (the one the user approved on the
+ *  map). The model behind it is never the plan's: the role's card gives it when the part starts. */
+export function stepAsk(ask: PresetAsk, planned: PresetId | undefined): PresetAsk {
+  if (ask.preset || !planned || planned === 'base') return ask;
+  return { ...ask, preset: planned, presetWhy: ask.presetWhy ?? 'the preset of the approved plan step' };
+}
+
 /** Who delegates: its role and the model its own chat runs on (null = the engine's default: unknown price). */
 export interface Delegator { role?: string; model: string | null }
 
 /** The preset a run starts on, with what decided it (the per-run record) and what the delegator must read. */
 export interface PresetChoice {
   preset: PresetId; model: string | null; effort?: Effort;
+  /** the engine of the model the level's list gave (ADR 0347); absent = the card's own engine */
+  engine?: string;
+  /** why that model of the level (its room, the ones skipped), one line (ADR 0347) */
+  route?: string;
   /** what the delegator asked, when it differs from the preset used */
   asked?: PresetId;
   presetWhy?: string; taskKind?: string; delegatorRole?: string;

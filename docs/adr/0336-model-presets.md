@@ -1,6 +1,6 @@
 # ADR 0336: Per-task model presets (Minimo / Base / Massimo) on each role card
 
-**Status:** Accepted (2026-11-22)
+**Status:** Accepted (2026-11-22). Amended by ADR 0346 (a plan step names the preset only; a chat out of credits waits for its card), ADR 0347 (each preset is the head of a list of models across engines).
 
 ## Context
 

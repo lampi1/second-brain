@@ -53,7 +53,7 @@ export interface AppSourceState {
   at: number;
 }
 
-/** The PC's load for the top bar (ADR 0347): CPU busy % since the last read (null on the first) and the free RAM. */
+/** The PC's load for the top bar (ADR 0349): CPU busy % since the last read (null on the first) and the free RAM. */
 export interface SystemLoad { cpu: number | null; freeRamBytes: number; totalRamBytes: number; freeRamPct: number }
 
 export interface AppInfo {

@@ -1,9 +1,9 @@
 // The app-managed MCP servers in the UI (ADR 0086): one shared state read over IPC (mcpservers:state) and kept fresh by
 // mcpservers:changed, plus the pure readings the cards show: a server's state (works, not tried, token missing, error,
-// off), how many roles may use it, the hub's totals, the top bar chip's count (ADR 0347), and the form's text fields to a definition and back; the add
+// off), how many roles may use it, the hub's totals, the top bar chip's count (ADR 0349), and the form's text fields to a definition and back; the add
 // panel's form (ADR 0207: one command line, masked tokens, who uses it) and the drafts the Orchestrator opens there
-// (app_config form → ui:command mcpDraft). Used by ConnectorsHub (Settings → Connettori), McpAddPanel and
-// AgentMcpSection (the agent card's MCP section); pure parts tested in node.
+// (app_config form → ui:command mcpDraft). Used by ConnectorsHub (Settings → Connettori) and McpAddPanel; pure parts
+// tested in node.
 import { useEffect, useState } from 'react';
 import type { ConnectorState } from '@shared/connectors';
 import type { McpServerDef, McpServerView, McpServersState, McpToolAccess } from '@shared/mcp-servers';
@@ -20,7 +20,7 @@ export function serverStatus(s: McpServerView): ServerStatus {
   return s.lastTest.ok ? 'ok' : 'failed';
 }
 
-/** The top bar's connectors chip (ADR 0347, components/ConnectorsChip.tsx). */
+/** The top bar's connectors chip (ADR 0349, components/ConnectorsChip.tsx). */
 export type ChipTone = 'ok' | 'bad' | 'idle';
 export const accountStatus = (c: ConnectorState): ServerStatus => (c.status === 'verified' ? 'ok' : c.status === 'failed' ? 'failed' : 'untested');
 

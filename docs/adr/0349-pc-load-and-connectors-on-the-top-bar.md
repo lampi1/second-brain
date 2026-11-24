@@ -1,4 +1,4 @@
-# ADR 0347 · The PC's CPU and free RAM, and the connectors with the MCP servers, on the top bar
+# ADR 0349 · The PC's CPU and free RAM, and the connectors with the MCP servers, on the top bar
 
 Date: 2026-11-24 · Status: accepted (owner: «vorrei che si vedesse sempre la cpu del pc e la ram libera … i connettori
 nella barra in alto espandibili come l'utilizzo dei vari motori per vedere lo stato e connetterli, idem mcp») · Amends:

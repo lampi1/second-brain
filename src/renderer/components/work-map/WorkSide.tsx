@@ -52,7 +52,7 @@ function Step({ b, view, now, onBack }: { b: WorkBox; view: View; now: number; o
     <h3 data-testid="wm-side-title">{withoutImages(b.title)}</h3>
     {b.detail && <p className="wm-pre">{withoutImages(b.detail)}</p>}
     <p>{stateOf(b, now)}{b.outcome && b.outcome !== 'done' ? ` · ${t(`wm.outcome.${b.outcome}`)}` : ''} <LiveChip live={b.live} testid="wm-side-live" /> <Stale live={b.live} now={now} testid="wm-side-stale" /></p>
-    <h4>{t('wm.side.who')}</h4><p title={who?.planned ? t('pm.step.plannedTip') : undefined}>{who ? who.text : name}{who?.planned && <em className="wm-muted"> · {t('pm.step.planned')}</em>}</p>
+    <h4>{t('wm.side.who')}</h4><p title={who && b.preset ? t('pm.step.presetTip') : undefined}>{who ?? name}</p>
     <h4>{t('wm.side.when')}</h4><p>{whenOf(b, view.boxes.filter(x => !x.drop))}</p>
     {chatsOf(b).length > 0 && <><h4>{t('wm.side.chats')}</h4><div className="wm-box-chats"><BoxChats b={b} testid="wm-side-chat" /></div></>}
     <Evidence texts={[b.title, b.detail ?? '']} chatId={view.map.owner?.chatId} />

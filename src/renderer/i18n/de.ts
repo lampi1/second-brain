@@ -28,7 +28,6 @@ import { imparaStudioDe } from './areas/impara-studio.de';
 import { imparaV3De } from './areas/impara-v3.de';
 import { newsDe } from './areas/news.de';
 import { studioDe } from './areas/studio.de';
-import { permissionsDe } from './areas/permissions.de';
 import { langSwitchDe } from './areas/lang-switch.de';
 import type { Dict } from './index';
 import { chatDe } from './areas/chat.de';
@@ -45,6 +44,7 @@ import { agentsGridDe } from './areas/agents-grid.de';
 import { levelsDe } from './areas/levels.de';
 import { explainDe } from './areas/explain.de';
 import { agentDetailDe } from './areas/agent-detail.de';
+import { rolePageDe } from './areas/role-page.de';
 import { agentImageDe } from './areas/agent-image.de';
 import { proposalsDe } from './areas/proposals.de';
 import { settingsDe } from './areas/settings.de';
@@ -116,7 +116,6 @@ export const de: Dict = {
   'genui.permission.session': 'Für die ganze Sitzung',
   'genui.permission.deny': 'Nicht ausführen',
   ...studioDe,
-  ...permissionsDe,
   ...langSwitchDe,
   ...brainModelDe,
   ...workMapDe,
@@ -128,6 +127,7 @@ export const de: Dict = {
   ...levelsDe,
   ...explainDe,
   ...agentDetailDe,
+  ...rolePageDe,
   ...agentImageDe,
   ...proposalsDe,
   ...settingsDe,

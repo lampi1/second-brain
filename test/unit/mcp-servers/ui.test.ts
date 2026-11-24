@@ -6,7 +6,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { defOf, emptyForm, formOf, hubTotals, monogram, rolesWith, runsAs, serverStatus } from '../../../src/renderer/lib/mcp-servers';
 import { HubTotalsRow, ServerCard } from '../../../src/renderer/components/ConnectorsHub';
-import { AgentMcpSection } from '../../../src/renderer/components/AgentMcpSection';
 import type { McpServerView, McpServersState } from '../../../src/shared/mcp-servers';
 import { setLang } from '../../../src/renderer/i18n';
 import { connectorsEn } from '../../../src/renderer/i18n/areas/connectors.en';
@@ -71,8 +70,5 @@ describe('cards', () => {
     expect(totals).toContain('help-tip');
     expect(Object.keys(connectorsEn).sort()).toEqual(Object.keys(connectorsIt).sort());
     try { setLang('en'); expect(card(ok)).toContain('1 read · 1 write'); expect(card(broken)).toContain('Not working'); } finally { setLang('it'); }
-  });
-  it('the agent card section renders before the state arrives', () => {
-    expect(renderToStaticMarkup(createElement(AgentMcpSection, { roleId: 'herald', roleName: 'Herald' }))).toContain('Server MCP');
   });
 });

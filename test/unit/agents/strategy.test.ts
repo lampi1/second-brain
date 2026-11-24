@@ -19,7 +19,7 @@ import { Workflows } from '../../../src/main/workflows/service';
 import { digest } from '../../../src/main/appctl/digest';
 import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
 import { delegationTools } from '../../../src/main/agents/delegation';
-import { stepModelOf, strategyTools } from '../../../src/main/agents/strategy-tools';
+import { stepPresetOf, strategyTools } from '../../../src/main/agents/strategy-tools';
 import { ROLE_DEFAULTS, ROLE_IDS, DELEGATION_DEFAULTS, isWorkRole, type DelegationSettings, type RoleId } from '../../../src/shared/roles';
 import type { AgentCatalog } from '../../../src/shared/agents';
 import type { NewChat } from '../../../src/shared/contract';
@@ -657,28 +657,29 @@ describe('shared/strategy.ts', () => {
     expect(p.clarified[0]).toEqual({ q: 'q2', a: 'a, b' });
     expect(p.clarified[7]!.a).toHaveLength(120);
   });
-  it('an old saved plan (no model or preset, a parallel group) comes to the current standard with revise', () => {
-    // a plan saved before 2026-11-23: no preset or model, a group of two with its first step done
+  it('an old saved plan (no preset, a parallel group) comes to the current standard with revise; a step never keeps a model (ADR 0346)', () => {
+    // a plan saved before 2026-11-23: no preset, a group of two with its first step done; one saved on 2026-11-23 had a
+    // model beside the preset: it is dropped when read
     const saved = JSON.parse(JSON.stringify({ phase: 'running', at: 1, clarified: [], doneWhen: 'fatto', steps: [
-      { title: 'Cerco', role: 'scout', state: 'done', outcome: 'done', chatIds: ['c_1'], startedAt: 2, endedAt: 3 },
+      { title: 'Cerco', role: 'scout', state: 'done', outcome: 'done', chatIds: ['c_1'], startedAt: 2, endedAt: 3, model: 'sonnet-x' },
       { title: 'Cerco ancora', role: 'scout', state: 'todo', par: true },
       { title: 'Applico', role: 'artisan', state: 'todo' },
     ] }));
     const old = readPlan(saved)!;
-    expect(old.steps.every(x => x.preset === undefined && x.model === undefined)).toBe(true);
+    expect(old.steps.every(x => x.preset === undefined && !('model' in x))).toBe(true);
     // the group now mixes a done step and one to do: it must be split
     expect(() => checkRevision(old, { steps: [{ keep: 1 }, { keep: 2, par: true }, { keep: 3 }] })).toThrow(/same parallel group/);
     const { steps, doneWhen } = checkRevision(old, { steps: [{ keep: 1 }, { keep: 2 }, { keep: 3 }] });
     expect(doneWhen).toBe('fatto');
     expect(steps[0]).toEqual({ title: 'Cerco', role: 'scout', state: 'done', outcome: 'done', chatIds: ['c_1'], startedAt: 2, endedAt: 3 });
     expect(steps[1]!.par).toBeUndefined();
-    // the app fills model and preset on every step: a started one from its chat, the others from the card
-    const of = stepModelOf(id => id === 'c_1' ? { model: 'sonnet-x', run: { runId: 'r', presetChoice: { preset: 'min' } } } as never : id === 'me' ? { model: 'opus-x' } as never : undefined,
-      (role, preset) => ({ preset: preset ?? 'base', model: `${role}-${preset ?? 'base'}` }));
-    expect(steps.map(x => of('me', x))).toEqual([{ preset: 'min', model: 'sonnet-x' }, { preset: 'base', model: 'scout-base' }, { preset: 'base', model: 'artisan-base' }]);
-    expect(of('me', { title: 'Riepilogo', state: 'todo' })).toEqual({ model: 'opus-x' });
+    // the app fills the preset on every step, never a model: a started one from its chat, the others from the card
+    const of = stepPresetOf(id => id === 'c_1' ? { model: 'sonnet-x', run: { runId: 'r', presetChoice: { preset: 'min' } } } as never : id === 'me' ? { model: 'opus-x' } as never : undefined,
+      (_role, preset) => ({ preset: preset ?? 'base' }));
+    expect(steps.map(x => of('me', x))).toEqual(['min', 'base', 'base']);
+    expect(of('me', { title: 'Riepilogo', state: 'todo' })).toBeUndefined();
     // saved and read back with them
-    const next: StrategyPlan = { ...old, phase: 'proposed', steps: steps.map(x => ({ ...x, ...of('me', x) })) };
+    const next: StrategyPlan = { ...old, phase: 'proposed', steps: steps.map(x => ({ ...x, preset: of('me', x)! })) };
     expect(readPlan(JSON.parse(JSON.stringify(next)))).toEqual(next);
     expect(planWaves(next.steps)).toEqual([1, 2, 3]);
   });

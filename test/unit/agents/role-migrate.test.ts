@@ -81,7 +81,8 @@ describe('full default permissions (ADR 0085)', () => {
     expect(get('strategist').instructions).toBe(ROLE_DEFAULTS.strategist.instructions);
     expect(get('orchestrator').instructions).toBe(ROLE_DEFAULTS.orchestrator.instructions);
     expect(get('sentinel').instructions).toBe('Sentinel with a learned lesson.');
-    expect(get('scout')).toMatchObject({ version: 1, tools: { allow: ['read', 'web'] }, permissionCeiling: 'default', userLocked: true });
+    // the user's own narrowing is kept on disk by the migration, but every role may do everything now (ADR 0347)
+    expect(get('scout')).toMatchObject({ version: 1, tools: { allow: [...TOOL_CLASSES] }, permissionCeiling: null, userLocked: true });
     const history = make().history('artisan');
     // in place (ADR 0186): the migration is a note on version 1, not a version of its own
     expect(history).toHaveLength(1);

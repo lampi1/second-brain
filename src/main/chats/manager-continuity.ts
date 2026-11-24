@@ -5,7 +5,7 @@ import type { IntakeSource, StrategyPlan } from '../../shared/strategy';
 import crypto from 'node:crypto';
 import type { ModelTier } from '../../shared/roles';
 import type { AgentContextSnapshot } from '../../shared/agent-context';
-import type { ChatSummary, ContextStats, HandoffInfo, NewChat } from '../../shared/contract';
+import type { ChatSummary, ContextStats, Effort, HandoffInfo, Harness, NewChat } from '../../shared/contract';
 import { sysEn } from '../../shared/sys';
 import { errText, log } from '../log';
 import { AFTER_CALLS, CACHE_TTL_MS, coldArmed, coldRoute, continuityStep, type ColdView, ORCHESTRATOR_COMPACT, ORCHESTRATOR_PAUSE_COMPACT, romeDay } from './continuity';
@@ -70,8 +70,10 @@ export abstract class ManagerContinuity extends ManagerRequests {
 
   /** "Riprendi": a NEW chat on the same engine, folder and choices that starts from the hand-off (written first when
    *  missing or older than the last turn). The old chat's process ends; it stays readable, linked both ways.
-   *  promptPrefix: a label put before the prompt (an agent's request is marked as not the user's). */
-  continueChat(chatId: string, opts: { allowStart?: boolean; promptPrefix?: string } = {}): Promise<ChatSummary> {
+   *  promptPrefix: a label put before the prompt (an agent's request is marked as not the user's).
+   *  ask false + on (ADR 0346, a chat out of credits whose role's card moved to another engine): the hand-off is the
+   *  app's own note, since the old engine cannot be asked, and the new chat runs on the card's engine and model. */
+  continueChat(chatId: string, opts: { allowStart?: boolean; promptPrefix?: string; ask?: false; on?: { harness: Harness; model: string | null; effort: Effort | null } } = {}): Promise<ChatSummary> {
     const running = this.continuing.get(chatId);
     if (running) return running;
     const p = this.doContinue(chatId, opts).finally(() => this.continuing.delete(chatId));
@@ -79,7 +81,7 @@ export abstract class ManagerContinuity extends ManagerRequests {
     return p;
   }
 
-  private async doContinue(chatId: string, opts: { allowStart?: boolean; promptPrefix?: string }): Promise<ChatSummary> {
+  private async doContinue(chatId: string, opts: { allowStart?: boolean; promptPrefix?: string; ask?: false; on?: { harness: Harness; model: string | null; effort: Effort | null } }): Promise<ChatSummary> {
     const r = this.need(chatId);
     if (r.s.isOrchestrator) throw new Error('L’Orchestrator non si riprende così: usa «Ricomincia da capo» dal suo menu.');
     const next = r.s.continuedBy && this.chats.get(r.s.continuedBy.id);
@@ -90,27 +92,41 @@ export abstract class ManagerContinuity extends ManagerRequests {
     const saved = this.handoffs.read(chatId);
     const fresh = saved && saved.at >= r.lastTurnAt ? saved : null;
     r.handoffStopped = false;
-    const h = fresh ?? await this.handoff(chatId, { reason: 'continue', ...(opts.allowStart === false ? { allowStart: false } : {}) });
+    const h = fresh ?? await this.handoff(chatId, { reason: 'continue', ...(opts.allowStart === false ? { allowStart: false } : {}), ...(opts.ask === false ? { ask: false } : {}) });
+    const on = opts.on, owner = r.s.agent ?? plainOwner(r.s.harness, r.choice.model);
     const taken = [...this.chats.values()].map(x => x.s.title);
     // a delegated chat goes on as the same child: under its parent, with its contract, its result still the parent's
     // (never a root chat that escapes the limits or that the Orchestrator could read, ADR 0083)
     const parentRec = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
     if (r.s.parentId && !parentRec) throw new Error('La chat che l’ha delegata non c’è più: questa non si riprende da sola.');
     const c = await this.create({
-      harness: r.s.harness, cwd: r.s.cwd, title: nextTitle(r.s.title, taken),
-      ...(r.choice.model ? { model: r.choice.model } : {}), ...(r.choice.effort ? { effort: r.choice.effort } : {}), ...(r.choice.permissionMode ? { permissionMode: r.choice.permissionMode } : {}),
+      harness: on?.harness ?? r.s.harness, cwd: r.s.cwd, title: nextTitle(r.s.title, taken),
+      ...(on ? { ...(on.model ? { model: on.model } : {}), ...(on.effort ? { effort: on.effort } : {}) } : { ...(r.choice.model ? { model: r.choice.model } : {}), ...(r.choice.effort ? { effort: r.choice.effort } : {}) }),
+      ...(r.choice.permissionMode ? { permissionMode: r.choice.permissionMode } : {}),
       // a routed job stays one outcome across hand-offs: the new chat writes on the first chat's ledger line
       ...(r.s.route ? { route: { ...r.s.route, ledgerId: r.s.route.ledgerId ?? `app:${r.s.id}`, handoffs: (r.s.route.handoffs ?? 0) + 1 } } : {}),
       prompt: `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}`,
       ...(parentRec ? { parentId: parentRec.s.id, ...(r.s.delegation ? { delegation: structuredClone(r.s.delegation) } : {}) } : {}),
-    }, 'user', { ...(r.s.launchContext ? { launchContext: r.s.launchContext } : {}), ...(r.s.run?.tier ? { tier: r.s.run.tier } : {}), owner: r.s.agent ?? plainOwner(r.s.harness, r.choice.model), instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.skills ? { skills: [...r.skills] } : {}), ...(r.maxContext ? { maxContext: r.maxContext } : {}) },
+    }, 'user', { ...(r.s.launchContext ? { launchContext: r.s.launchContext } : {}), ...(r.s.run?.tier ? { tier: r.s.run.tier } : {}), owner: on ? { ...owner, engine: on.harness, model: on.model } : owner, instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.skills ? { skills: [...r.skills] } : {}), ...(r.maxContext ? { maxContext: r.maxContext } : {}) },
     {}, { continuation: !!parentRec, continuationOf: r.s.id });
     const nr = this.chats.get(c.id);
     // the worktree hint follows the chain (A → B → C)
     if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; this.updated(nr); }
     // the agent's work goes on in a new run: the old one counts as reworked (§5)
-    if (nr?.s.run && r.s.run && this.runs.get(r.s.run.runId)) { nr.s.run.continuedFrom = r.s.run.runId; this.runSave(); }
+    if (nr?.s.run && r.s.run && this.runs.get(r.s.run.runId)) {
+      nr.s.run.continuedFrom = r.s.run.runId;
+      // the preset it ran on goes on with it (ADR 0346): a later credit wait reads the card for that preset
+      if (r.s.run.presetChoice && !nr.s.run.presetChoice) nr.s.run.presetChoice = r.s.run.presetChoice;
+      this.runSave();
+    }
     r.s.continuedBy = { id: c.id, title: c.title };
+    // the plan step it worked for follows it (ADR 0346): the step's chat is now the one that goes on and will report,
+    // never the old one, which reports nothing more
+    const plan = parentRec?.s.plan;
+    if (parentRec && plan?.steps.some(x => x.chatIds?.includes(chatId))) {
+      parentRec.s.plan = { ...plan, steps: plan.steps.map(x => x.chatIds?.includes(chatId) ? { ...x, chatIds: x.chatIds.map(id => id === chatId ? c.id : id) } : x) };
+      this.updated(parentRec);
+    }
     this.addItem(r, sysItem('continuedIn', { title: c.title }, 'info'), false);
     this.persist();
     this.updated(r);
