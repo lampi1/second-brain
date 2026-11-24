@@ -2,7 +2,8 @@
 // history.jsonl (one line per version, the whole map). They are the app's own record, so they outlive the chat that
 // worked on them and a restart. Nothing is ever deleted: a finished map is archived, not removed. The history keeps its
 // first line and the last HISTORY_MAX - 1 (a step's progress is a version too). A file that does not read is skipped with
-// a warning and never breaks the others. Used by workmap/service.ts; pinned by test/unit/workmap-store.test.ts.
+// a warning and never breaks the others. live.json beside them is what the live status remembers over a restart (when a
+// chat was last seen at work, the stops told to the Orchestrator): never a version, and lost without harm. Used by workmap/service.ts; pinned by test/unit/workmap-store.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { MapVersionInfo } from '@shared/project-map';
@@ -61,6 +62,22 @@ export class WorkMapStore {
 
   /** One version as it was. */
   version(id: string, version: number): WorkMap | null { return this.versions(id).find(m => m.version === version) ?? null; }
+
+  /** What the live status remembers; null = nothing yet, or a file that does not read. */
+  loadLive(): unknown {
+    const file = path.join(this.dir, 'live.json');
+    if (!fs.existsSync(file)) return null;
+    try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) {
+      log.warn('workmap', 'the live status of the work maps did not read', { cause: errText(e), hint: 'it starts again from what the chats say now' });
+      return null;
+    }
+  }
+  saveLive(v: unknown): void {
+    fs.mkdirSync(this.dir, { recursive: true });
+    const file = path.join(this.dir, 'live.json');
+    fs.writeFileSync(`${file}.tmp`, JSON.stringify(v));
+    renameWithRetry(`${file}.tmp`, file);
+  }
 
   /** Writes the map as its next version: map.json atomically, then one history line. */
   save(map: WorkMap): void {

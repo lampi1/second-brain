@@ -26,6 +26,17 @@ describe('WorkMapStore', () => {
     expect(again.version('wm_abc123', 9)).toBeNull();
   });
 
+  it('what the live status remembers is kept beside the maps, and one that does not read is nothing', () => {
+    expect(store.loadLive()).toBeNull();
+    store.saveLive({ seen: { a: 5 } });
+    store.save(map(1));
+    const again = new WorkMapStore(dir);
+    expect(again.loadLive()).toEqual({ seen: { a: 5 } });
+    expect(again.load().map(m => m.id)).toEqual(['wm_abc123']);
+    fs.writeFileSync(path.join(dir, 'live.json'), '{broken');
+    expect(again.loadLive()).toBeNull();
+  });
+
   it('a broken map.json falls back to its last version, and the others are read', () => {
     store.save(map(1));
     store.save(map(2));

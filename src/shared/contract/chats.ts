@@ -124,6 +124,8 @@ export interface ChatSummary {
   /** an agent's cold start waits for a slot or the emergency brake (ADR 0222): kind start = the engine is not started
    *  yet, turn = a message waits to wake it; position 1 = next; cpu/freeRam = the load last sampled, in % */
   queued?: QueuedInfo;
+  /** a delegated chat asked its parent (agent_ask_parent) and no answer reached it since: when it asked */
+  askedParentAt?: number;
   /** how its harness, model and effort were chosen (its role's card or the user's defaults; app_create_chat, chat:createRouted) */
   route?: RouteDecision;
   /** ADR 0103: when the checkpoint before its last turn was taken (its files can go back to it); absent = none */

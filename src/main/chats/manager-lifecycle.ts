@@ -174,6 +174,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
       r.s.closedAt = Date.now(); r.s.closedBy = 'auto'; r.s.state = 'closed';
       this.endRunOf(r, 'closed', r.s.closedAt, 'auto');
       this.pruneArchived(); this.persist(); this.updated(r);
+      this.stepOfEnded(r);
       return true;
     } finally { r.archiving = undefined; r.autoClosing = false; r.autoEnding = false; }
   }
@@ -215,7 +216,8 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     this.persist();
     await tree;
     log.info('chats', 'chat closed', { chat: chatId });
-    this.opts.emitter.emit('chat:removed', { chatId });
+    this.opts.emitter.emit('chat:removed', { chatId, by });
+    this.stepOfEnded(r);
   }
 
   /** Every chat under this one (children, grandchildren… by parentId), deepest first. */
@@ -367,6 +369,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     this.persist();
     log.info('chats', 'chat archived', { chat: chatId, data: { auto: !!opts.auto, ...(keep ? { engineKeptForColdNote: true } : {}) } });
     this.updated(r);
+    this.stepOfEnded(r);
     return { ...r.s };
   }
 

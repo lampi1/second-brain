@@ -18,6 +18,8 @@ import { initialEffort } from './effort';
 import { pausedState } from './remote-control';
 import type { Rec } from './manager-types';
 import { clearTimeout, workBehind, storedResult, coldDivider, MAX_ARCHIVED, RUN_SAVE_MS, restoredOwner } from './manager-helpers';
+import { afterChatsEnded } from '../../shared/strategy';
+import type { DelegationOutcome } from '../../shared/delegation';
 import { receiptsReading } from './receipt-reads';
 import { ManagerCore } from './manager-core';
 
@@ -49,6 +51,39 @@ export abstract class ManagerPersistence extends ManagerCore {
     this.persist();
     log.info('chats', 'chat reopened', { chat: r.s.id });
     this.updated(r);
+    this.stepOfEnded(r);
+  }
+
+  /** What a step's chat gave its plan (ADR 0342): its result; undefined while it works; a chat closed or gone without a
+   *  result counts as blocked. An open chat of an earlier run of the plan's chat answers for that run only. */
+  protected stepOutcome(parent: Rec, id: string): DelegationOutcome | undefined {
+    const c = this.chats.get(id);
+    if (!c) return 'blocked';
+    const result = c.s.delegation?.result?.outcome;
+    if (c.s.closedAt) return result ?? 'blocked';
+    return !c.s.run?.parentRunId || c.s.run.parentRunId === parent.s.run?.runId ? result : undefined;
+  }
+
+  /** A delegated chat was closed, removed or reopened: its parent's step follows, so it is never «now» for ever. */
+  protected stepOfEnded(r: Rec): void {
+    const parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
+    if (!parent?.s.plan) return;
+    const next = afterChatsEnded(parent.s.plan, id => this.stepOutcome(parent, id), Date.now(), r.s.id);
+    if (next === parent.s.plan) return;
+    parent.s.plan = next;
+    this.persist();
+    this.updated(parent);
+  }
+
+  /** The same at load, for the plans of every chat the last quit did not cut mid-turn (that one resumes and goes on). */
+  protected override settlePlans(): boolean {
+    let moved = false;
+    for (const r of this.chats.values()) {
+      if (!r.s.plan || r.working) continue;
+      const next = afterChatsEnded(r.s.plan, id => this.stepOutcome(r, id), Date.now());
+      if (next !== r.s.plan) { r.s.plan = next; moved = true; }
+    }
+    return moved;
   }
 
   /** Only the newest MAX_ARCHIVED archived chats stay in the app. */
@@ -59,6 +94,7 @@ export abstract class ManagerPersistence extends ManagerCore {
       this.reapKept(r);
       this.chats.delete(r.s.id);
       this.opts.emitter.emit('chat:removed', { chatId: r.s.id });
+      this.stepOfEnded(r);
     }
   }
 

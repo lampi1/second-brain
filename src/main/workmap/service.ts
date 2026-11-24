@@ -9,14 +9,20 @@
 // - The user's and the Orchestrator's actions go through the chat's own plan methods (ChatManager planDecide, planStart,
 //   planStop, planResume, planReplan), so an approval is recorded in the coordination journal as before. A job whose chat
 //   is gone, and an idea, start a new Strategist (workmap/start.ts).
+// - The live status (live.ts, live-memory.ts): what the chats of each map do now, read again at each of their events and
+//   once a minute (tick); it is never a version, and the page is told only when what it shows is different. An owner chat
+//   that died by itself (its engine, or the app closed or dropped it with the job open) stops the map, and the
+//   Orchestrator is told once per stop, so it takes the job up again; a chat closed by hand only stops it.
 // - A finished map the user looked at (seen) moves to the archive; nothing is ever deleted.
 // Used by wiring-shared.ts attachWorkMaps, ipc-handlers/brain.ts and the Orchestrator's app_project_map
 // (workmap/tools.ts, through projectmap/tools.ts); pinned by test/unit/workmap-service.test.ts and test/unit/agents/work-map-chats.test.ts.
 import crypto from 'node:crypto';
-import type { ChatSummary } from '@shared/contract';
+import type { ChatSummary, PendingRequest } from '@shared/contract';
 import { drawingOf, WORK_MAP_LIMITS, workActions, workInfo, type WorkMap, type WorkMapAction, type WorkMapInfo, type WorkMapState, type WorkMapView } from '@shared/work-map';
 import { errText, log } from '../log';
 import { follow, left, ownsJob, requestOf, settle, stateLine, summaryOf, taskOf, titleOf } from './follow';
+import { liveOf, movesBelow, type LiveInput } from './live';
+import { LiveMemory, liveKey } from './live-memory';
 import type { WorkMapStore } from './store';
 
 /** What the maps need from the chats (ChatService). */
@@ -28,9 +34,20 @@ export interface WorkChats {
   planResume(chatId: string): Promise<void>;
   planReplan(chatId: string, text: string): Promise<void>;
   planPutAway(chatId: string): void;
+  /** the open requests, for whom a chat waits */
+  pending?(): PendingRequest[];
 }
+/** Who is told of a job stopped by itself (OrchestratorWake). */
+export interface StopNews {
+  /** false = not taken: told again later */
+  stalledWork(n: { threadId: string; title: string; detail: string; at: number }): boolean;
+  /** the job moved again, or the user stopped it */
+  unstalled(threadId: string): void;
+}
+/** How long a chat whose engine died has to come back by itself before its map is stopped. */
+export const CRASH_GRACE_MS = 60_000;
 export interface WorkMapsDeps {
-  store: Pick<WorkMapStore, 'load' | 'save' | 'history' | 'version'>;
+  store: Pick<WorkMapStore, 'load' | 'save' | 'history' | 'version'> & Partial<Pick<WorkMapStore, 'loadLive' | 'saveLive'>>;
   chats: WorkChats;
   /** tells the page a map changed */
   emit(id: string): void;
@@ -59,8 +76,19 @@ export class WorkMaps {
   /** maps with an action under way: a second click waits for nothing, it is refused */
   private busy = new Set<string>();
 
+  /** map → its live status as the page last had it: an event that changes nothing there is not sent */
+  private pictures = new Map<string, string>();
+  /** chat → what its live status is made of, and who delegated it */
+  private liveKeys = new Map<string, { key: string; parent?: string }>();
+  /** owner chats whose engine died, until they come back or CRASH_GRACE_MS passed */
+  private dying = new Map<string, number>();
+  private readonly memory: LiveMemory;
+  private timer: ReturnType<typeof setInterval> | undefined;
+  private news: StopNews | undefined;
+
   constructor(private readonly d: WorkMapsDeps) {
     for (const m of d.store.load()) this.maps.set(m.id, m);
+    this.memory = new LiveMemory(d.store.loadLive?.() ?? null);
   }
 
   private now(): number { return this.d.now?.() ?? Date.now(); }
@@ -69,15 +97,40 @@ export class WorkMaps {
   /** The chats already there at start: plans of an older version get their map; a map whose chat is gone is stopped. */
   adopt(): void {
     const chats = this.d.chats.list();
-    for (const c of chats) this.safe(c.id, () => this.onChat(c, true));
+    for (const c of chats) this.safe(c.id, () => { this.hand(c); this.onChat(c, true); });
     const ids = new Set(chats.map(c => c.id));
-    for (const m of [...this.maps.values()]) if (m.owner && !ids.has(m.owner.chatId)) this.safe(m.owner.chatId, () => this.put(left(m, 'gone', this.now())));
+    for (const m of [...this.maps.values()]) if (m.owner && !ids.has(m.owner.chatId)) this.safe(m.owner.chatId, () => this.put(left(m, 'gone', this.now()), undefined, !this.memory.removedBy(m.owner!.chatId)));
+    for (const c of chats) this.liveKeys.set(c.id, { key: liveKey(c), ...(c.parentId ? { parent: c.parentId } : {}) });
+    for (const m of this.maps.values()) this.pictures.set(m.id, this.picture(m));
+  }
+
+  /** Who hears of a job stopped by itself; the stops before this call are told at the next tick. */
+  tellTo(news: StopNews): void { this.news = news; }
+
+  /** The live status kept true with no event: once a minute until stop(). */
+  start(everyMs = 60_000): void {
+    this.timer ??= setInterval(() => this.tick(), everyMs);
+    this.timer.unref?.();
+  }
+  stop(): void {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = undefined;
+    this.remember();
+  }
+
+  /** What time alone changes: a chat that did not come back, a state nobody vouches for any more, a stop still to tell. */
+  tick(): void {
+    this.safe('', () => this.bury());
+    for (const m of [...this.maps.values()]) if (m.state !== 'archived') this.safe('', () => this.refresh(m.id));
+    this.safe('', () => this.tellStops());
+    this.remember();
   }
 
   /** The events main sends to the page. */
   observe(channel: string, payload: unknown): void {
-    if (channel === 'chat:updated') { const c = payload as ChatSummary; this.safe(c.id, () => this.onChat(c)); }
-    else if (channel === 'chat:removed') { const { chatId } = payload as { chatId: string }; this.safe(chatId, () => this.onRemoved(chatId)); }
+    if (channel === 'chat:updated') { const c = payload as ChatSummary; this.safe(c.id, () => { this.hand(c); this.onChat(c); }); this.safe(c.id, () => this.onLive(c)); }
+    else if (channel === 'chat:removed') { const { chatId, by } = payload as { chatId: string; by?: 'user' | 'agent' }; this.safe(chatId, () => this.onRemoved(chatId, by)); }
+    else if (channel === 'pending:added' || channel === 'pending:resolved') { const { chatId } = payload as { chatId: string }; this.safe(chatId, () => this.refreshOf(chatId)); }
   }
   /** A map that cannot be saved never breaks the chat's own event. */
   private safe(chatId: string, fn: () => void): void {
@@ -90,13 +143,107 @@ export class WorkMaps {
     const last = this.seenChats.get(c.id);
     if (last && last.plan === c.plan && last.key === key) return;
     const m = this.mapOf(c) ?? this.create(c, atLoad);
-    if (m) this.put(this.withProjects(follow(m, c, this.now()), c));
+    if (m) this.put(this.followed(m, c), undefined, this.alone(c));
     this.seenChats.set(c.id, { plan: c.plan, key });
   }
 
-  private onRemoved(chatId: string): void {
+  private followed(m: WorkMap, c: ChatSummary): WorkMap { return this.withProjects(follow(m, c, this.now(), this.memory.crashed(c.id)), c); }
+  /** Whether a map this chat leaves stopped was stopped by the chat's own end, not by the user's hand. */
+  private alone(c: ChatSummary): boolean { return c.closedAt ? c.closedBy !== 'user' : this.memory.crashed(c.id); }
+
+  private onRemoved(chatId: string, by?: 'user' | 'agent'): void {
     this.seenChats.delete(chatId);
-    for (const m of [...this.maps.values()]) if (m.owner?.chatId === chatId) this.put(left(m, 'gone', this.now()));
+    this.dying.delete(chatId);
+    const touched = this.mapsOf(chatId), mine = [...this.maps.values()].filter(m => m.owner?.chatId === chatId);
+    this.memory.forget(chatId);
+    if (by && mine.length) this.memory.removed(chatId, by);
+    // closed by an agent = the Orchestrator's own close: it knows
+    for (const m of mine) this.put(left(m, 'gone', this.now()), undefined, !this.memory.removedBy(chatId));
+    this.liveKeys.delete(chatId);
+    for (const id of touched) this.refresh(id);
+  }
+
+  /** The user's hand on an owner chat, remembered: the chat may leave the app later, and it was still closed by hand. */
+  private hand(c: ChatSummary): void {
+    if (ownsJob(c)) this.memory.removed(c.id, c.closedAt && c.closedBy === 'user' ? 'user' : undefined);
+  }
+
+  /** The chat's event for the live status: what the page shows of its maps is read again only when something of it changed. */
+  private onLive(c: ChatSummary): void {
+    if (c.state === 'error' && !c.closedAt) { if (ownsJob(c) && !this.memory.crashed(c.id) && !this.dying.has(c.id)) this.dying.set(c.id, this.now()); } else if (c.state !== 'closed') {
+      // alive again: its map is not stopped for it any more
+      this.dying.delete(c.id);
+      if (this.memory.alive(c.id)) { this.seenChats.delete(c.id); this.onChat(c); }
+    }
+    const key = liveKey(c);
+    if (this.liveKeys.get(c.id)?.key === key) return;
+    this.liveKeys.set(c.id, { key, ...(c.parentId ? { parent: c.parentId } : {}) });
+    this.refreshOf(c.id);
+  }
+
+  /** The maps a chat counts for: its own, its step's, and those of the chats above it. */
+  private mapsOf(chatId: string): string[] {
+    const chain = new Set<string>();
+    for (let id: string | undefined = chatId; id && !chain.has(id); id = this.liveKeys.get(id)?.parent) chain.add(id);
+    return [...this.maps.values()].filter(m => m.owner && chain.has(m.owner.chatId) || m.plan?.steps.some(s => s.chatIds?.some(id => chain.has(id)))).map(m => m.id);
+  }
+  private refreshOf(chatId: string): void { for (const id of this.mapsOf(chatId)) this.refresh(id); }
+  private refresh(id: string): void {
+    const m = this.maps.get(id);
+    if (!m) return;
+    const pic = this.picture(m);
+    if (this.pictures.get(id) === pic) return;
+    this.pictures.set(id, pic);
+    this.d.emit(id);
+  }
+
+  private live(m: WorkMap, chats = this.d.chats.list()): ReturnType<typeof liveOf> {
+    const id = m.owner?.chatId, removedBy = id ? this.memory.removedBy(id) : undefined;
+    const input: LiveInput = { chats, asks: this.d.chats.pending?.() ?? [], now: this.now(), confirmed: c => this.memory.confirmed(c), crashed: !!id && this.memory.crashed(id), ...(removedBy ? { removedBy } : {}) };
+    return liveOf(m, input);
+  }
+  /** The live status as compared; what it confirms is remembered. */
+  private picture(m: WorkMap): string {
+    const chats = this.d.chats.list(), l = this.live(m, chats);
+    for (const w of [...l.boxes.flatMap(b => b?.chats ?? []), ...(l.map ? [...l.map.working, ...l.map.waiting] : [])]) this.memory.confirm(w, chats.find(c => c.id === w.chatId)?.lastResult?.at, this.now());
+    return JSON.stringify(l);
+  }
+  private info(m: WorkMap, chats: ChatSummary[]): WorkMapInfo { const l = this.live(m, chats).map; return { ...workInfo(m), ...(l ? { live: l } : {}) }; }
+
+  /** A chat whose engine died and did not come back, with nothing under way below it: its map stops. */
+  private bury(): void {
+    const chats = this.d.chats.list();
+    for (const [id, since] of [...this.dying]) {
+      const c = chats.find(x => x.id === id);
+      if (!c || c.closedAt || c.state !== 'error') { this.dying.delete(id); continue; }
+      const m = this.ofChat(id);
+      // a plan to approve or kept, and the user's stop, stay as they are
+      if (this.now() - since < CRASH_GRACE_MS || !m || m.state !== 'running' && m.state !== 'idea') continue;
+      if (movesBelow(id, chats, this.d.chats.pending?.() ?? [])) continue;
+      this.dying.delete(id);
+      this.memory.crash(id, this.now());
+      this.seenChats.delete(id);
+      this.onChat(c);
+    }
+  }
+
+  /** The stops the Orchestrator does not know yet. Not taken (off, no Orchestrator) = again at the next tick. */
+  private tellStops(): void {
+    for (const id of this.memory.untold()) {
+      const m = this.maps.get(id);
+      if (!m || m.state !== 'stopped') { this.memory.unstop(id); continue; }
+      const left = m.plan?.steps.filter(s => s.state !== 'done' && !s.drop).length ?? 0;
+      const detail = `${this.live(m).map?.why === 'crash' ? 'il motore della chat è caduto e non è ripartito' : m.stopped?.by === 'gone' ? 'la chat non è più nell’app' : 'la chat è stata chiusa dall’app a lavoro aperto'}${left ? `; passi da finire: ${left}` : ''}. L’utente non l’ha fermato: riprendilo con app_project_map, action resume, job ${m.id}.`;
+      if (this.news?.stalledWork({ threadId: m.id, title: m.title, detail, at: m.stopped!.at })) this.memory.told(id);
+    }
+  }
+  private remember(): void {
+    if (!this.d.store.saveLive) return;
+    try {
+      const ids = new Set(this.d.chats.list().map(c => c.id)), owners = new Set([...this.maps.values()].flatMap(m => (m.owner ? [m.owner.chatId] : [])));
+      const v = this.memory.toSave(id => ids.has(id), id => owners.has(id));
+      if (v) this.d.store.saveLive(v);
+    } catch (e) { log.warn('workmap', 'the live status of the work maps was not saved', { cause: errText(e), hint: 'saved again within a minute' }); }
   }
 
   /** The map of the job this chat is on, with the chat as its owner; null = it has none yet. */
@@ -141,13 +288,16 @@ export class WorkMaps {
   }
 
   /** Saved as the next version when something really changed. */
-  private put(next: WorkMap, by?: string): WorkMap {
+  private put(next: WorkMap, by?: string, alone = false): WorkMap {
     const prev = this.maps.get(next.id) ?? null;
     if (prev && content(prev) === content(next)) return prev;
     const who = (by ?? (prev && next.owner ? next.title : 'app')).slice(0, WORK_MAP_LIMITS.by);
     const saved: WorkMap = { ...next, version: (prev?.version ?? 0) + 1, updatedAt: this.now(), by: who, summary: summaryOf(prev, next) };
     this.d.store.save(saved);
     this.maps.set(saved.id, saved);
+    if (saved.state !== 'stopped' || saved.stopped?.by === 'user') { if (this.memory.unstop(saved.id)) this.news?.unstalled(saved.id); } else if (prev && prev.state !== 'stopped' && alone) { this.memory.stopped(saved.id, saved.stopped!.at); this.tellStops(); }
+    // one event for the version and for what it changes of the live status
+    this.pictures.set(saved.id, this.picture(saved));
     this.d.emit(saved.id);
     return saved;
   }
@@ -156,10 +306,10 @@ export class WorkMaps {
   list(q: { archived?: boolean; query?: string } | void): WorkMapInfo[] {
     const words = (q?.query ?? '').toLowerCase().split(' ').filter(Boolean);
     const text = (m: WorkMap) => [m.title, m.idea ?? '', m.project ?? '', ...m.touches, ...(m.plan?.steps ?? []).map(s => s.title)].join(' ').toLowerCase();
-    const order = (m: WorkMap) => ORDER.indexOf(m.state);
+    const order = (m: WorkMap) => ORDER.indexOf(m.state), chats = this.d.chats.list();
     return [...this.maps.values()]
       .filter(m => words.length ? words.every(w => text(m).includes(w)) : q?.archived ? m.state === 'archived' : m.state !== 'archived')
-      .sort((a, b) => order(a) - order(b) || b.updatedAt - a.updatedAt || a.id.localeCompare(b.id)).map(workInfo);
+      .sort((a, b) => order(a) - order(b) || b.updatedAt - a.updatedAt || a.id.localeCompare(b.id)).map(m => this.info(m, chats));
   }
 
   /** The jobs that touch a project map (ProjectMapView.jobs), the archived ones left out. */
@@ -178,8 +328,11 @@ export class WorkMaps {
     if (!now) return null;
     const m = version === undefined || version === now.version ? now : this.d.store.version(id, version);
     if (!m) return null;
-    const map = structuredClone(m);
-    return { map, info: { ...workInfo(map), ...(map.version === now.version ? {} : { can: [] }) }, ...drawingOf(map), history: this.d.store.history(id) };
+    const map = structuredClone(m), { boxes, links } = drawingOf(map), history = this.d.store.history(id);
+    // an earlier version is only what it was
+    if (map.version !== now.version) return { map, info: { ...workInfo(map), can: [] }, boxes, links, history };
+    const live = this.live(map);
+    return { map, info: { ...workInfo(map), ...(live.map ? { live: live.map } : {}) }, boxes: boxes.map((b, i) => (live.boxes[i] ? { ...b, live: live.boxes[i] } : b)), links, history };
   }
 
   /** A map from an idea alone: no chat is started. */
@@ -231,6 +384,8 @@ export class WorkMaps {
         // its chat is gone, or works on another job now: the job goes on in a new one
         if (!chat) return this.begin(m, by);
         await chats.planResume(chat.id);
+        this.memory.alive(chat.id);
+        this.dying.delete(chat.id);
         this.sync(m.id, by);
         this.edit(m.id, by, x => { if (!x.stopped) return x; const { stopped: _s, ...rest } = x; return settle(rest); });
         return;
@@ -277,7 +432,7 @@ export class WorkMaps {
   /** The map read again from its chat, in the name of who acted. */
   private sync(id: string, by: string): void {
     const m = this.maps.get(id)!, c = this.ownerChat(m);
-    if (c) this.put(this.withProjects(follow(m, c, this.now()), c), by);
+    if (c) this.put(this.followed(m, c), by, this.alone(c));
   }
   private clone(m: WorkMap): WorkMap { return structuredClone(m); }
 }

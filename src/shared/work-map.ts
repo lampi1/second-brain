@@ -81,6 +81,8 @@ export interface WorkBox {
   added?: true;
   /** the replan takes it away; it goes on until the user's ok */
   drop?: true;
+  /** what its chats are doing now (see «Live status» below); absent when there is nothing to say beyond `state` */
+  live?: WorkBoxLive;
 }
 /** An arrow between two boxes, by step number. */
 export interface WorkLink { from: number; to: number }
@@ -103,6 +105,8 @@ export interface WorkMapInfo {
   stopped?: { at: number; by: WorkMapStopBy };
   createdAt: number; updatedAt: number; finishedAt?: number; seenAt?: number; archivedAt?: number;
   can: WorkMapAction[];
+  /** what its chats are doing now (see «Live status» below); absent when there is nothing to say beyond `state` */
+  live?: WorkMapLive;
 }
 /** One map, whole: the record, its drawing and its versions. */
 export interface WorkMapView { map: WorkMap; info: WorkMapInfo; boxes: WorkBox[]; links: WorkLink[]; history: MapVersionInfo[] }
@@ -183,16 +187,83 @@ export function workInfo(m: WorkMap): WorkMapInfo {
   };
 }
 
+// ---- Live status: what the chats of a map are doing now, read by the app from the chats themselves (main/workmap/live.ts).
+// Never saved as a version; `workmap:changed` tells when it changes. It never says more than the app can see: what nobody
+// vouches for is 'unknown' and stale, with the time of the last confirmation.
+
+/** What a chat, a step or a map is doing:
+ *  waiting = it waits for someone (`waits` says whom) · failed = its last turn ended on an error · closed = its chat was
+ *  closed without a report · gone = its chat is not in the app any more · working = a turn (or its background work) runs ·
+ *  interrupted = its turn was stopped and nothing followed · between = its turn is over, no report yet · blocked, partial,
+ *  done = what it reported · unknown = nobody can say (after a restart, until the chat works again) */
+export type WorkSay = 'waiting' | 'failed' | 'closed' | 'gone' | 'working' | 'interrupted' | 'between' | 'blocked' | 'partial' | 'done' | 'unknown';
+/** user = an open question or permission, or its last answer waits for him · parent = it asked the chat that delegated it ·
+ *  colleagues = people or chats outside the job · work = work still running that the app does not see in its own chats */
+export type WorkWaitFor = 'user' | 'parent' | 'colleagues' | 'work';
+/** One chat of the map (its owner, a step's chat, or one these delegated) and what it is doing. */
+export interface WorkWorker {
+  chatId: string;
+  title: string;
+  say: WorkSay;
+  /** say = waiting: for whom */
+  waits?: WorkWaitFor;
+  /** the step it works for; absent: the job itself (its owner chat) */
+  n?: number;
+  /** delegated by a step's chat, at any depth */
+  below?: true;
+}
+/** One step, live. */
+export interface WorkBoxLive {
+  /** the one thing to show: what needs someone first, then who works */
+  say: WorkSay;
+  /** say = waiting: for whom */
+  waits?: WorkWaitFor;
+  /** its chats, what needs someone first (a step the Strategist does itself: the owner chat) */
+  chats: WorkWorker[];
+  /** nobody can vouch for it since then: show it as to be verified, with this time */
+  stale?: number;
+}
+/** Why a map is stopped, beyond `stopped.by`: user = «Ferma» · closedByUser, closedByAgent, closedByApp = who closed its chat ·
+ *  crash = its chat's engine died and did not come back · gone = its chat is not in the app any more · replaced = its chat
+ *  moved to another job. The Orchestrator was told of closedByApp, crash and a gone that nobody closed by hand. */
+export type WorkStopWhy = 'user' | 'closedByUser' | 'closedByAgent' | 'closedByApp' | 'crash' | 'gone' | 'replaced';
+/** A whole map, live. */
+export interface WorkMapLive {
+  /** the one thing to show on its row, as on a step; absent on a map that nobody is expected to work on */
+  say?: WorkSay;
+  /** the chats at work now */
+  working: WorkWorker[];
+  /** the chats that wait, for the user first */
+  waiting: WorkWorker[];
+  /** the chats whose last turn failed */
+  failed: WorkWorker[];
+  /** the chats of open steps closed without a report, or not in the app any more */
+  lost: WorkWorker[];
+  /** nobody can vouch for it since then: show it as to be verified, with this time */
+  stale?: number;
+  /** a stopped map: why */
+  why?: WorkStopWhy;
+}
+
+/** The order in which what a chat is doing matters to the user. */
+export const WORK_SAYS: readonly WorkSay[] = ['waiting', 'failed', 'closed', 'gone', 'working', 'blocked', 'interrupted', 'unknown', 'between', 'partial', 'done'];
+const SAY_WORDS: Record<WorkSay, string> = { waiting: 'waiting', failed: 'its turn failed', closed: 'its chat was closed without a report', gone: 'its chat is not in the app any more', working: 'at work', blocked: 'reported blocked', interrupted: 'interrupted', unknown: 'unknown', between: 'turn over, no report yet', partial: 'reported partial', done: 'reported done' };
+/** The live status in words, for an agent. */
+export function liveWords(l: { say?: WorkSay; waits?: WorkWaitFor; stale?: number; why?: WorkStopWhy }): string {
+  return [l.say ? `${SAY_WORDS[l.say]}${l.waits ? ` for ${l.waits}` : ''}` : '', l.why ? `why: ${l.why}` : '', l.stale !== undefined ? `not confirmed since ${new Date(l.stale).toISOString()}` : ''].filter(Boolean).join(', ');
+}
+// ---- end of the live status
+
 const STATE_WORDS: Record<WorkMapState, string> = { idea: 'idea', toApprove: 'plan waits for the user', planned: 'approved, kept for later', running: 'under way', stopped: 'stopped', finished: 'finished', archived: 'archived' };
 /** A map as text, for an agent that answers the user. */
 export function workText(v: WorkMapView): string {
   const { map: m, info } = v, steps = m.plan?.steps.length ? v.boxes : [];
   return [
-    `${m.title} (${m.id}, version ${m.version}): ${STATE_WORDS[m.state]}${info.planning ? ', being planned' : ''}${info.stopped ? ` by ${info.stopped.by}` : ''}`,
+    `${m.title} (${m.id}, version ${m.version}): ${STATE_WORDS[m.state]}${info.planning ? ', being planned' : ''}${info.stopped ? ` by ${info.stopped.by}` : ''}${info.live && liveWords(info.live) ? ` · ${liveWords(info.live)}` : ''}`,
     ...(m.project || m.touches.length ? [`Project: ${[...new Set([...(m.project ? [m.project] : []), ...m.touches])].join(', ')}`] : []),
     ...(m.owner ? [`Chat: ${m.owner.chatId}`] : ['No chat yet']),
     ...(m.idea ? [`Idea: ${m.idea}`] : []),
-    ...(steps.length ? [`Steps (${info.done} of ${info.steps} done):`, ...steps.map(b => `${b.n}. [turn ${b.wave}] ${b.title} · ${b.state}${b.role ? ` · ${b.role}` : ''}${b.model ? ` · ${b.model}` : ''}${b.preset ? ` · ${b.preset}` : ''}${b.drop ? ' · removed by the replan at the user’s ok' : ''}`)] : []),
+    ...(steps.length ? [`Steps (${info.done} of ${info.steps} done):`, ...steps.map(b => `${b.n}. [turn ${b.wave}] ${b.title} · ${b.state}${b.role ? ` · ${b.role}` : ''}${b.model ? ` · ${b.model}` : ''}${b.preset ? ` · ${b.preset}` : ''}${b.drop ? ' · removed by the replan at the user’s ok' : ''}${b.live ? ` · now: ${liveWords(b.live)}` : ''}`)] : []),
     ...(m.plan?.clarified.length ? ['Answers:', ...m.plan.clarified.map(c => `- ${c.q} → ${c.a}`)] : []),
     `Now: ${info.can.join(', ')}`,
   ].join('\n');

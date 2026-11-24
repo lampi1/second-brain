@@ -403,7 +403,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     if (!resumed && !liveOnly && from === undefined && (!source || source.kind === 'user') && !phone && r.s.plan?.phase === 'approved' && !r.s.plan.stopped
       && !checkImages(images).length && isPlanApproval(text)) return this.planStart(chatId, text, receipt);
     // its parent's message (agent_answer_child, from = the parent's title) reached it: the answer it waited for
-    if (from !== undefined && r.s.parentId && from === this.chats.get(r.s.parentId)?.s.title) delete r.askedParentAt;
+    if (from !== undefined && r.s.parentId && from === this.chats.get(r.s.parentId)?.s.title) { delete r.askedParentAt; delete r.s.askedParentAt; }
     if (!resumed && from === undefined && ownerSource(source)) {
       // A new direct request cannot inherit a prior private answer, even from a postponed panel.
       if (r.s.isOrchestrator) { delete r.intakePanelId; delete r.intakeKey; }

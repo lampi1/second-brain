@@ -307,6 +307,23 @@ export function afterReport(plan: StrategyPlan, chatId: string, outcomes: (id: s
   return next;
 }
 
+/** A step whose chats ended without moving it (one closed or gone without a report, or whose report belonged to an earlier
+ *  run of the plan's chat) is not «now» for ever (ADR 0342, live status): it ends with what its chats gave, blocked for one
+ *  that gave nothing. `outcomes` as in afterReport; `chatId` = only the step of that chat. The plan itself when nothing
+ *  moved; the approval and the user's stop are never touched. */
+export function afterChatsEnded(plan: StrategyPlan, outcomes: (id: string) => DelegationOutcome | undefined, now: number, chatId?: string): StrategyPlan {
+  let next = plan;
+  plan.steps.forEach((s, i) => {
+    if (s.state === 'now' && s.chatIds?.length && (!chatId || s.chatIds.includes(chatId))) {
+      if (s.chatIds.every(id => outcomes(id) !== undefined)) next = afterReport(next, s.chatIds[0]!, outcomes, now);
+    } else if (s.state === 'blocked' && s.outcome === 'blocked' && chatId && s.chatIds?.includes(chatId) && outcomes(chatId) === undefined) {
+      // its chat is open again with its work still to give (a blocked the Strategist wrote itself has no outcome: kept)
+      next = withStep(next, i, 'now', now);
+    }
+  });
+  return next;
+}
+
 /** A final parent report ends execution, without claiming unfinished steps met their criteria.
  * Unfinished work is partial (or retains a blocked result); explicit successful steps retain their quality. */
 export function finishPlan(plan: StrategyPlan, now: number): StrategyPlan {

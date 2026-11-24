@@ -230,6 +230,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   // the work maps follow the demo chats (ADR 0342); their clock moves while __sbDemo.workMaps() adds the older ones
   let mapsClock: number | null = null;
   const workMaps = attachWorkMaps(ctx, chats, projectMaps, brain, () => mapsClock ?? now());
+  workMaps.tellTo(wake);
   attachAppTools(mcp, { projectMaps, workMaps, recordings, impara: learn, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), resolveRole: req => agents.resolve(req), runFeedback, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd) }, source, true);
   try { recordMcpPort(mcpPortFromEnv(), await mcp.listen(mcpPortFromEnv())); } catch (e) {
     log.warn('demo', 'MCP port busy, using a random one', { data: { error: errText(e) } });
@@ -369,7 +370,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     // the demo folders do not exist: made-up branches, so the "Stato" view shows one per chat
     branches: cwds => gitBranches(cwds, c => DEMO_BRANCHES[c.split(/[\\/]/).pop() ?? ''] ?? null),
     cli: () => ({ claude: demoCli('2.3.0 (demo)', 'demo@example.com'), cursor: demoCli('2026.10.01 (demo)', 'demo@example.com') }),
-    shutdown: async () => { projectMaps.stop(); news.dispose(); engines.stop(); artifacts.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), Promise.resolve(tasks.shutdown()), brain.shutdown(), mcp.close()]); },
+    shutdown: async () => { projectMaps.stop(); workMaps.stop(); news.dispose(); engines.stop(); artifacts.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), Promise.resolve(tasks.shutdown()), brain.shutdown(), mcp.close()]); },
     killNow: () => {
       void chats.shutdown(); runner.shutdown(); // the demo starts no processes: stopping its timers is enough
       // SB_DEMO_QUIT_MS: a quit as slow as the real one's blocking taskkill of the CLIs (15-40 s on a loaded PC), so the

@@ -172,7 +172,8 @@ export function attachProjectMaps(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats:
 }
 
 /** The work maps (ADR 0342): one per Strategist job or idea, kept by the app from the chats' own events (the emitter
- *  tapped once more); in the app's data, so they outlive the chats and a restart. */
+ *  tapped once more); in the app's data, so they outlive the chats and a restart. Their live status is read again once a
+ *  minute until stop(); tellTo(wake) says who hears of a job stopped by itself. */
 export function attachWorkMaps(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: ChatService, projectMaps: ProjectMaps, brain: Pick<BrainService, 'info' | 'settings'>, now?: () => number): WorkMaps {
   const folderOf = (project: string | undefined): string | null => (project ? projectMaps.view(project)?.map.root ?? null : null);
   const orchestrator = (): ChatSummary | undefined => chats.list().find(c => c.isOrchestrator && !c.closedAt);
@@ -184,6 +185,7 @@ export function attachWorkMaps(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Ch
   ctx.emitter.emit = (ch, p) => { send(ch, p); maps.observe(ch, p); };
   projectMaps.jobsOf = project => maps.touching(project);
   maps.adopt();
+  maps.start();
   return maps;
 }
 
