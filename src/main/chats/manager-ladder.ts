@@ -208,11 +208,12 @@ export abstract class ManagerLadder extends ManagerWork {
     this.reveal(r, req);
   }
 
-  private showOwn(o: Open): void {
+  /** night: false = the app's answer just failed to arrive: the card, with no second try. */
+  private showOwn(o: Open, night = true): void {
     const q = o.q, id = askId(q.id), questions: Question[] = q.asks.map(a => ({ question: a.question, multiSelect: !!a.multiSelect, options: (a.options.length ? a.options : ['Sì', 'No']).map(label => ({ label })) }));
     // night mode: the recommended option, as for any question (ADR 0191)
-    const night = this.opts.away?.() ? recommendedAnswers(questions) : null;
-    if (night) { void this.byMessage(o, { by: 'app', name: 'Modalità notte', answer: Object.values(night).flat().join(' · '), why: 'opzione consigliata', at: Date.now() }).catch(() => {}); return; }
+    const auto = night && this.opts.away?.() ? recommendedAnswers(questions) : null;
+    if (auto) { this.giveBack(o, { by: 'app', name: 'Modalità notte', answer: Object.values(auto).flat().join(' · '), why: 'opzione consigliata', at: Date.now() }); return; }
     const req: PendingRequest = { id, chatId: o.r.s.id, type: 'question', tool: LADDER_TOOL, title: questions[0]!.question, detail: '', input: { chatId: o.r.s.id }, questions, at: Date.now() };
     this.userAsks.set(id, req);
     this.opts.emitter.emit('pending:added', req);
@@ -300,9 +301,13 @@ export abstract class ManagerLadder extends ManagerWork {
   private ownAnswered(o: Open, done: LadderAnswer): void {
     if (o.sending) throw new Error('Request already answered; delivery is still pending.');
     this.dropUserAsks(q => q.id === askId(o.q.id));
+    this.giveBack(o, done);
+  }
+  /** An answer that does not arrive puts the question, if still open, in the user's row: never tried again by itself. */
+  private giveBack(o: Open, done: LadderAnswer): void {
     void this.byMessage(o, done).catch(e => {
       log.warn('chats', 'answer not delivered to the worker: its question is back', { chat: o.r.s.id, cause: errText(e), hint: 'answer it again once the chat runs' });
-      if (!o.q.answered && this.ladder.has(o.q.id)) this.showOwn(o);
+      if (!o.q.answered && this.ladder.has(o.q.id)) this.showOwn(o, false);
     });
   }
 

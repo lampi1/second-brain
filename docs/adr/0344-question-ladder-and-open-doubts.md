@@ -34,7 +34,8 @@ of questions)
   (`ANSWER_RULE`). An agent's answer says in its text that it is not the user's consent, and is not recorded as his.
 - **Asked once** (ADR 0327): the same question, in either shape, is the same record; the Orchestrator asking a held
   question as its own sends that one to the user, with its own words.
-- **Night mode** answers first, as before (ADR 0191); switched on later, it settles the app's cards in his row too.
+- **Night mode** answers first, as before (ADR 0191); switched on later, it settles the app's cards in his row too. An
+  answer of its own that does not arrive leaves the card in his row, and is not tried again.
   **A restart** keeps every open question: its level is woken again, or the app shows its own card; the engine asking it
   again takes its place.
 - **Who answered and why**: `ChatSummary.questions` (`LadderQuestion`: `level`, `holder`, `trail`, `answered`), which the

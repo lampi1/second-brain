@@ -385,6 +385,42 @@ describe('what is never held or answered by an agent', () => {
     expect(chat(m, k.id).questions!.find(x => x.asks[0]!.question === 'Uso il nome nuovo?')!.answered).toMatchObject({ by: 'app', name: 'Modalità notte', answer: 'Sì (consigliato)' });
     expect(last(w, k.id)).toContain('Sì (consigliato)');
   });
+
+  it.each([['new at night', true], ['already there when night mode goes on', false]])('night mode\'s answer that does not reach the worker leaves the question in his row, to be answered: %s', async (_name, before) => {
+    const w = world(), { m, orch, s, k } = await team(w);
+    w.away.on = before; // true = it reaches his row at night (showOwn); false = night mode goes on later (ladderAway)
+    m.ladderAsk(k.id, { question: 'Uso il nome nuovo?', options: ['Sì (consigliato)', 'No'] });
+    await m.ladderReply(s.id, { chatId: k.id, askUser: true });
+    await flush();
+    w.deaf.add(k.id);
+    await m.ladderReply(orch.id, { chatId: k.id, askUser: true });
+    if (!before) { w.away.on = true; expect(m.settleForAway()).toBe(1); }
+    await flush();
+    expect(q(m, k.id)).toMatchObject({ level: 'user' });
+    expect(q(m, k.id).answered).toBeUndefined();
+    const card = m.pending().find(p => p.tool === LADDER_TOOL);
+    expect(card).toMatchObject({ chatId: k.id, title: 'Uso il nome nuovo?' });
+    // one card, night still on, its chat runs again: his answer goes through
+    expect(m.pending()).toHaveLength(1);
+    w.deaf.delete(k.id);
+    await m.answer(k.id, card!.id, { kind: 'question', answers: { 'Uso il nome nuovo?': 'No' } });
+    await flush();
+    expect(last(w, k.id)).toContain('No');
+    expect(q(m, k.id).answered).toMatchObject({ by: 'user', answer: 'No' });
+    expect(m.pending()).toEqual([]);
+  });
+
+  it('a night answer still on its way when its question is settled brings back no card', async () => {
+    const w = world(), { m, orch, s, k } = await team(w);
+    m.ladderAsk(k.id, { question: 'Uso il nome nuovo?', options: ['Sì (consigliato)', 'No'] });
+    await m.ladderReply(s.id, { chatId: k.id, askUser: true });
+    w.away.on = true;
+    m.send = async () => { await m.close(k.id); throw new Error('engine down'); };
+    await m.ladderReply(orch.id, { chatId: k.id, askUser: true });
+    await flush();
+    expect(m.pending()).toEqual([]);
+    expect(w.shown).toEqual([]);
+  });
 });
 
 describe('who answered and why', () => {

@@ -257,12 +257,18 @@ export abstract class ManagerWork extends ManagerLifecycle {
   }
 
   /** «Riprendi» (ADR 0342): the chat is open again and, unless its plan waits for the user, goes on; a plan put away
-   *  before its approval is proposed again. */
+   *  before its approval is proposed again. One that does not go out leaves the plan stopped. */
   async planResume(chatId: string): Promise<void> {
     const r = this.need(chatId), plan = r.s.plan;
-    if (plan?.stopped) { const { stopped: _s, putAway: _p, ...open } = plan; r.s.plan = open; this.persist(); this.updated(r); }
-    if (plan?.phase === 'proposed' || plan?.phase === 'approved') await this.reopen(chatId);
-    else await this.send(chatId, plan?.putAway ? PLAN_REPROPOSE : PLAN_RESUMED, undefined, false, undefined, false, { kind: 'user' });
+    let resumed: StrategyPlan | undefined;
+    if (plan?.stopped) { const { stopped: _s, putAway: _p, ...open } = plan; r.s.plan = resumed = open; this.persist(); this.updated(r); }
+    try {
+      if (plan?.phase === 'proposed' || plan?.phase === 'approved') await this.reopen(chatId);
+      else await this.send(chatId, plan?.putAway ? PLAN_REPROPOSE : PLAN_RESUMED, undefined, false, undefined, false, { kind: 'user' });
+    } catch (e) {
+      if (resumed && r.s.plan === resumed) { r.s.plan = plan; this.persist(); this.updated(r); }
+      throw e;
+    }
     log.info('chats', 'job resumed', { chat: chatId });
   }
 

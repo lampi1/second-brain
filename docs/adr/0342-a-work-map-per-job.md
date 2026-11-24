@@ -24,7 +24,8 @@ chat closed before the approval. Approving and starting were one click.
    a chat is not pruned.
 5. **Stop, resume, replan.** «Ferma» marks the plan stopped and interrupts its chats; nothing new starts until «Riprendi».
    A replan is a revision: what started goes on, nothing new starts before the user's ok, and started steps the new plan
-   does not need (`remove`) stop at that ok. A request that does not reach the Strategist leaves the plan as it was.
+   does not need (`remove`) stop at that ok. A request that does not reach the Strategist leaves the plan as it was: a failed
+   «Riprendi» leaves it stopped.
 6. **The owner chat.** Closed by the user, or by the app with steps open = stopped. No longer in the app = stopped (gone):
    resuming opens a new Strategist with the saved idea, answers and steps, and its plan needs the user's ok again. A chat
    that moves to another job leaves its first map behind and gets another; a chat that continues another takes its map.

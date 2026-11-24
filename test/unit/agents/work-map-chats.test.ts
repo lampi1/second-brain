@@ -340,6 +340,42 @@ describe('stop, resume and the owner chat', () => {
     await f.call('agent_delegate', s.id, f.task('scout', 'Sconti · Dove', 1));
   });
 
+  it.each([['one under way', false], ['one put away', true]])('a «Riprendi» that does not reach the Strategist leaves the job stopped: %s', async (_name, putAway) => {
+    const f = fixture(), s = await f.proposed();
+    if (putAway) { await act(f, s.id, 'archive'); await act(f, s.id, 'reopen'); }
+    else { await act(f, s.id, 'approve'); await act(f, s.id, 'stop'); }
+    const before = structuredClone(f.m.planOf(s.id)!), send = f.m.send.bind(f.m);
+    f.m.send = async () => { throw new Error('engine down'); };
+    await expect(act(f, s.id, 'resume')).rejects.toThrow('engine down');
+    expect(f.m.planOf(s.id)).toEqual(before);
+    expect(f.m.planOf(s.id)).toMatchObject({ stopped: true, ...(putAway ? { phase: 'revising', putAway: true } : { phase: 'running' }) });
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'stopped', stopped: { by: 'user' } });
+    expect(f.maps().list()[0]!.can).toContain('resume');
+    expect(f.maps().list()[0]!.planning).toBeFalsy();
+    // and it can be resumed again, with the same words
+    f.m.send = send;
+    expect((await act(f, s.id, 'resume')).state).not.toBe('stopped');
+    expect(f.sent.get(s.id)!.at(-1)).toContain(putAway ? PLAN_REPROPOSE : PLAN_RESUMED);
+  });
+
+  it('a kept plan whose chat does not open again stays stopped', async () => {
+    const f = fixture(), s = await f.proposed();
+    await act(f, s.id, 'keep');
+    await f.m.planStop(s.id);
+    f.m.reopen = async () => { throw new Error('no engine'); };
+    await expect(f.m.planResume(s.id)).rejects.toThrow('no engine');
+    expect(f.m.planOf(s.id)).toMatchObject({ phase: 'approved', stopped: true });
+  });
+
+  it('a «Riprendi» that does not go out never undoes what changed meanwhile', async () => {
+    const f = fixture(), s = await f.proposed();
+    await act(f, s.id, 'approve');
+    await act(f, s.id, 'stop');
+    f.m.send = async () => { await f.call('plan_update', s.id, { step: 3, state: 'now' }); throw new Error('engine down'); };
+    await expect(act(f, s.id, 'resume')).rejects.toThrow('engine down');
+    expect(f.m.planOf(s.id)!.steps.map(x => x.state)).toEqual(['todo', 'todo', 'now']);
+  });
+
   it('closing the owner chat leaves the map stopped, not removed; resume opens it again', async () => {
     const f = fixture(), s = await f.proposed();
     await act(f, s.id, 'approve');
