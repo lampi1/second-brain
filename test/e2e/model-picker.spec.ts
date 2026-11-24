@@ -79,18 +79,6 @@ test('one picker for strip, Orchestrator and role card; chat-only vs default act
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('orchestrator-model')).toBeFocused();
 
-    // the back of a role card: the role's default for new chats
-    await goPage(page, 'agenti');
-    await page.getByTestId('catalog-flip-scout').click();
-    await page.getByTestId('catalog-model-pick-scout').click();
-    await expect(page.getByTestId('catalog-picker-scout-scope')).toContainText('nuove chat di Scout');
-    await expect(page.getByTestId('catalog-picker-scout-row-claude-default')).toContainText('Modello del livello');
-    await expect(page.getByTestId('catalog-picker-scout-apply-chat')).toHaveCount(0);
-    await shot(page, 'model-picker-role');
-    await page.getByTestId('catalog-picker-scout-row-claude-claude-opus-5-5').click();
-    await page.getByTestId('catalog-picker-scout-apply-role').click();
-    await expect(page.getByTestId('catalog-picker-scout-pop')).toHaveCount(0);
-    await expect(page.getByTestId('catalog-model-pick-scout')).toContainText(/opus/i);
   } finally { await app.close(); }
 });
 

@@ -2,8 +2,8 @@
 // mcpservers:changed, plus the pure readings the cards show: a server's state (works, not tried, token missing, error,
 // off), how many roles may use it, the hub's totals, and the form's text fields to a definition and back; the add
 // panel's form (ADR 0207: one command line, masked tokens, who uses it) and the drafts the Orchestrator opens there
-// (app_config form → ui:command mcpDraft). Used by ConnectorsHub (Settings → Connettori), McpAddPanel and
-// AgentMcpSection (the agent card's MCP section); pure parts tested in node.
+// (app_config form → ui:command mcpDraft). Used by ConnectorsHub (Settings → Connettori) and McpAddPanel; pure parts
+// tested in node.
 import { useEffect, useState } from 'react';
 import type { McpServerDef, McpServerView, McpServersState, McpToolAccess } from '@shared/mcp-servers';
 import { MCP_ACCESS_ROLES, accessOn, idFrom, toolAllowed } from '@shared/mcp-servers';

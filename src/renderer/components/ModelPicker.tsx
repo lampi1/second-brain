@@ -10,7 +10,7 @@
 // The default row says which default it is: «Predefinito della CLI» on a chat (the engine picks), «Predefinito del
 // registro» on a role (the brain's model registry at launch). Loading, error (with «Riprova»), no engine and no match
 // are always said. «Aggiorna elenco» asks every engine on for its models now (ADR 0256); a model with no known price
-// says so. Used by ModelChip, ChatMenu (through ChatTile) and AgentCardModel. Styles: styles/model-picker.css.
+// says so. Used by ModelChip, ChatMenu (through ChatTile). Styles: styles/model-picker.css.
 import { useEffect, useMemo, useState, type KeyboardEvent, type RefObject } from 'react';
 import type { ChatSummary, Effort } from '@shared/contract';
 import type { AgentProfile } from '@shared/agents';

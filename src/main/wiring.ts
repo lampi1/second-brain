@@ -33,7 +33,8 @@ import { maintenanceEvent, proposalEvent } from './brain/announce';
 import { MorningService } from './morning/service';
 import { createAgentLoop } from './agents/loop';
 import { delegationTools } from './agents/delegation';
-import { CreditBook, opencodeLogTail } from './agents/credits';
+import { CreditBook, opencodeLogTail, poolOf } from './agents/credits';
+import { levelEngines, roomOf } from '../shared/model-levels';
 import { tierModel } from './agents/model-tier';
 import { markLegacyDone, migratedCards, readLegacy } from './agents/legacy-cards';
 import { workDecisionTools } from './agents/work-decisions';
@@ -228,7 +229,17 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // live turn costs and the Claude model list at the brain's per-model list prices (harness/models.json, else the
   // release template's), re-read at most every 30 s; set before the catalog reads its models (issue #96)
   setPriceTable(priceTableSource(() => brain.modelRegistry(), () => { try { return path.join(templateRoot(), 'harness', 'models.json'); } catch { return null; } }));
-  const agents = createAgentCatalog(ctx, brain, engines, () => ({ ...cliCache, ...engineReadiness() }));
+  // the room of each engine's plan (ADR 0347): the usage panel's windows and a limit the app saw it hit (the credit book,
+  // built further down: read only when a chat starts)
+  const creditsRef: { current?: CreditBook } = {};
+  const agents = createAgentCatalog(ctx, brain, engines, () => ({ ...cliCache, ...engineReadiness() }), undefined, {
+    room: (engine, model) => {
+      const st = creditsRef.current?.state(poolOf(engine, model));
+      const hit = st?.status === 'exhausted' ? { until: st.resetsAt ?? (st.coolMs ? st.at + st.coolMs : null) } : null;
+      return roomOf(brain.usage().harnesses?.find(h => h.harness === engine), hit, Date.now());
+    },
+    engineBlock: engine => agentsMayOpen(brain.settings(), engine) ? null : openRefusal(brain.settings(), engine, engine),
+  });
   // the retired model Settings (tiers, Code Mode, the Orchestrator's models) onto the role cards, once (legacy-cards.ts)
   const legacy = readLegacy(ctx.userData);
   if (legacy) {
@@ -308,6 +319,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const credits = new CreditBook(path.join(ctx.userData, 'credits.json'), {
     claudeLimits: () => { const u = brain.usage(); return u.limitsAt ? { fiveHourPct: u.fiveHourPct, fiveHourResetsAt: u.fiveHourResetsAt, weekPct: u.weekPct, weekResetsAt: u.weekResetsAt ?? null, at: u.limitsAt } : null; },
     opencodeLog: () => opencodeLogTail(os.homedir()) });
+  creditsRef.current = credits;
   // the runs of Esegui, built after the manager (#371, #372): a Yes and a user step are read against them
   const runsRef: { current: CommandRunner | null } = { current: null };
   // list prices for the runs whose engine reported tokens and no cost (ADR 0284): the standings and the estimates
@@ -648,7 +660,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools(delegationTools({
     integrate: async (parent, child) => stageDelegatedChanges(delegateWorktrees.allocation(parent, child), parent, child, brain.info().brainRoot),
     integrateMany: async (parent, children) => stageDelegatedChangesMany(children.map(child => ({ owned: delegateWorktrees.allocation(parent, child), child })), parent, brain.info().brainRoot), chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
-    engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), presetChoice: (roleId, ask, delegator) => agents.presetChoice(roleId, ask, delegator), label: AGENT_LABEL, runs: () => manager.runs.list(), skillTools,
+    engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), roleEngines: p => levelEngines(agents.levelsFor(p)), presetChoice: (roleId, ask, delegator) => agents.presetChoice(roleId, ask, delegator), label: AGENT_LABEL, runs: () => manager.runs.list(), skillTools,
     remember: (roleId, line, chat) => { skillLessons.propose({ role: portableId(roleId), text: line, chatId: chat.id, ...(chat.run?.runId ? { runId: chat.run.runId } : {}) }); } }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
   // every step's model and preset (2026-11-23): a started step's chat, else the role card's preset

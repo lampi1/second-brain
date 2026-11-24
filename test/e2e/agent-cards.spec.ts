@@ -97,32 +97,14 @@ test('agent cards: big centred character, level and performance with their "?" f
     await page.keyboard.press('Escape');
     await expect(artisan).toHaveAttribute('data-flipped', 'false');
 
-    // «Modifica il ruolo» on the back lands in the editor, focus in the instructions; Esc and «Chiudi senza salvare» go back (#126)
+    // the back's «Apri» lands on the role's own page, focus in the instructions (ADR 0347: one page, each change saves)
     const studio = page.getByTestId('agent-studio');
-    const instructions = page.getByTestId('agent-instructions');
     await artisan.getByTestId('catalog-flip-artisan').click();
-    await expect(artisan.getByTestId('catalog-open-artisan')).toHaveText('Modifica il ruolo');
     await artisan.getByTestId('catalog-open-artisan').click();
-    await expect(page.getByTestId('agent-editor')).toBeVisible();
-    await expect(instructions).toBeFocused();
-    const saved = await instructions.inputValue();
-    await instructions.fill(`${saved} bozza da buttare`);
-    await page.keyboard.press('Escape');
-    await expect(overview.getByTestId('catalog-card-artisan')).toBeVisible();
-    await expect(studio).toHaveCount(0);
-    await overview.getByTestId('catalog-flip-artisan').click();
-    await overview.getByTestId('catalog-open-artisan').click();
-    await expect(instructions).toHaveValue(saved); // nothing kept from the dropped edit
-    await expect(page.getByTestId('agent-edit')).toBeVisible(); // the role's page stays around the editor
-    await page.getByTestId('agent-tier').click(); // Esc in an open dropdown closes the dropdown, not the editor
-    await expect(page.getByTestId('agent-tier')).toHaveAttribute('aria-expanded', 'true');
-    await page.keyboard.press('Escape');
-    await expect(page.getByTestId('agent-tier')).toHaveAttribute('aria-expanded', 'false');
-    await expect(page.getByTestId('agent-editor')).toBeVisible();
+    await expect(studio).toBeVisible();
+    await expect(page.getByTestId('agent-instructions')).toBeFocused();
+    await expect(page.getByTestId('role-levels')).toBeVisible();
     await shot(page, 'agent-cards-edit-dark');
-    await page.getByTestId('agent-editor').getByRole('button', { name: 'Chiudi senza salvare' }).click();
-    await expect(overview.getByTestId('catalog-card-artisan')).toBeVisible();
-    await expect(studio).toHaveCount(0);
 
     await theme(page, 'light');
     await goPage(page, 'agenti');

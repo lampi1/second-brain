@@ -1,5 +1,4 @@
-/* Settings → Connettori (ConnectorsHub.tsx, onboarding AppScreen.tsx) and the agent card's MCP section
-   (AgentMcpSection.tsx): the Dashboard / Agenti card language (gradient surfaces, large radii, a hairline in the card's
+/* Settings → Connettori (ConnectorsHub.tsx, onboarding AppScreen.tsx): the Dashboard / Agenti card language (gradient surfaces, large radii, a hairline in the card's
    tone on top, tabular numbers, a status pill with a dot), three totals over a responsive grid of cards. Only theme
    tokens (tokens.css): dark and light follow the app. Narrow windows get one column; motion is off when reduced. */
 .hub { display: grid; gap: 22px; min-width: 0; color: var(--text); }

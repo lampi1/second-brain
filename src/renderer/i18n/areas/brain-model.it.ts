@@ -126,5 +126,4 @@ export const brainModelIt = {
   'bm.card.skills': 'Skill', 'bm.card.noSkills': 'Nessuna skill dichiarata: lavora con il suo ruolo.',
 
   'bm.card.back': 'Torna',
-  'bm.studio.manage': 'Gestisci le skill',
 };

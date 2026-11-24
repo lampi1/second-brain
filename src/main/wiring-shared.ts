@@ -11,7 +11,7 @@ import { templateRoot } from './rules/tools';
 import { SEND_MODE_RULE } from '../shared/newchat';
 import { engineInfos, engineOf } from './engines/registry';
 import { withApiModels } from './engines/sessions';
-import { AgentCatalogService } from './agents/catalog';
+import { AgentCatalogService, type AgentCatalogDeps } from './agents/catalog';
 import { tierModel } from './agents/model-tier';
 import { tokenPriceOf, unitPriceOf } from './agents/list-price';
 import { CATALOG_GUIDANCE } from './agents/discovery';
@@ -273,8 +273,9 @@ function templateRegistry(): ModelRegistry | null {
 }
 
 /** Shared by real and demo wiring. */
-export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: EnginesApi, cli: () => Record<Harness, CliStatus> | null, onCustomized?: () => void): AgentCatalogService {
-  return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}),
+export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: EnginesApi, cli: () => Record<Harness, CliStatus> | null, onCustomized?: () => void,
+  route: Pick<AgentCatalogDeps, 'room' | 'engineBlock'> = {}): AgentCatalogService {
+  return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}), ...route,
     price: unitPriceOf(tokenPriceOf(() => brain.modelRegistry())),
     tierModel: (engine, tier) => tierModel(engine, tier, brain.modelRegistry()),
     models: () => {

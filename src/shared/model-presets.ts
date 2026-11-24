@@ -88,6 +88,10 @@ export interface Delegator { role?: string; model: string | null }
 /** The preset a run starts on, with what decided it (the per-run record) and what the delegator must read. */
 export interface PresetChoice {
   preset: PresetId; model: string | null; effort?: Effort;
+  /** the engine of the model the level's list gave (ADR 0347); absent = the card's own engine */
+  engine?: string;
+  /** why that model of the level (its room, the ones skipped), one line (ADR 0347) */
+  route?: string;
   /** what the delegator asked, when it differs from the preset used */
   asked?: PresetId;
   presetWhy?: string; taskKind?: string; delegatorRole?: string;

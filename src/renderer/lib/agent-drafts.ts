@@ -11,7 +11,7 @@ import { t } from '../i18n';
 
 export interface AgentEditorDraft { id: string; baseRevision?: number; draft: AgentDraft }
 /** The editable behaviour of a role, from its profile: the editor's starting draft (AgentStudio.tsx) and the base of a
- *  permissions-only save (RolePermissions.tsx). */
+ *  role page's level rows (RoleLevels.tsx). */
 export const agentDraftOf = (p: AgentProfile): AgentDraft => ({
   name: p.name, purpose: p.purpose, avatar: p.avatar, instructions: p.instructions, engine: p.engine, model: p.model,
   ...(p.effort ? { effort: p.effort } : {}), tools: p.tools, permissionCeiling: p.permissionCeiling,

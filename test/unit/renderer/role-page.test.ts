@@ -1,6 +1,6 @@
-// A role's own page edits its presets (AgentStudio.tsx → RolePresets.tsx RolePresetRows, owner 2026-11-23: only there,
-// Impostazioni has no model control): a work role shows Minimo / Base / Massimo in its Configurazione card, the
-// Orchestrator only Base (Base is the card's model and effort); the Code Mode switch sits on the card too (RoleCodeMode,
+// A role's own page (AgentStudio.tsx, ADR 0347): a work role shows Minimo / Base / Massimo as ordered model chips
+// (RoleLevels.tsx), a level without its own list follows Base, the Orchestrator only its Base preset (RolePresetRows);
+// no versions, no permissions; the Code Mode switch sits on the page too (RoleCodeMode,
 // never on the Orchestrator, «parziale» named on an engine without full parity); a save on the page offers Annulla,
 // which puts back the card's model, effort and presets as they were.
 import { createElement } from 'react';
@@ -30,33 +30,42 @@ import { setLang } from '../../../src/renderer/i18n';
 beforeEach(() => { saveAgent.mockClear(); toast.mockClear(); });
 afterEach(() => setLang('it'));
 const page = (p: AgentProfile) => renderToStaticMarkup(createElement(AgentStudio, { profile: p }));
-const presetsOf = (html: string) => html.slice(html.indexOf('data-testid="agent-presets"'));
+const levelsOf = (html: string) => html.slice(html.indexOf('data-testid="role-levels"'));
 const [orchestrator, scout, artisan] = profiles as [AgentProfile, AgentProfile, AgentProfile];
 
-describe('the presets on a role\'s page', () => {
-  it('a work role: Minimo, Base and Massimo in its Configurazione card, with model and effort each', () => {
-    const html = page(scout);
-    expect(html).toContain('data-testid="agent-presets"');
-    const rows = presetsOf(html);
+describe('the levels on a role\'s page (ADR 0347)', () => {
+  it('a work role: Minimo, Base and Massimo as model chips, with what it would start on now', () => {
+    const html = levelsOf(page(scout));
+    expect(html).toContain('Modelli per livello');
     for (const id of ['min', 'base', 'max']) {
-      expect(rows).toContain(`data-testid="st-preset-scout-${id}"`);
-      expect(rows).toContain(`data-testid="st-preset-model-scout-${id}"`);
-      expect(rows).toContain(`data-testid="st-preset-effort-scout-${id}"`);
+      expect(html).toContain(`data-testid="role-level-${id}"`);
+      expect(html).toContain(`data-testid="role-level-${id}-0"`);
+      expect(html).toContain(`data-testid="role-level-${id}-now"`);
     }
-    expect(rows).toContain('Modelli per compito');
   });
   it('the Orchestrator: only Base', () => {
-    const rows = presetsOf(page(orchestrator));
+    const rows = levelsOf(page(orchestrator));
     expect(rows).toContain('data-testid="st-preset-orchestrator-base"');
     expect(rows).not.toContain('st-preset-orchestrator-min');
-    expect(rows).not.toContain('st-preset-orchestrator-max');
-    expect(rows).toContain('solo Base');
+    expect(rows).not.toContain('role-level-base-0');
   });
-  it('Base shows the card\'s own model and effort', () => {
-    const card = presetsOf(page(scout));
-    const baseRow = card.slice(card.indexOf('data-testid="st-preset-scout-base"'), card.indexOf('data-testid="st-preset-scout-max"'));
-    expect(baseRow).toMatch(/data-value="m-mid" data-testid="st-preset-model-scout-base"/);
-    expect(baseRow).toMatch(/data-value="medium" data-testid="st-preset-effort-scout-base"/);
+  it('Base\'s first chip is the card\'s own model', () => {
+    const html = levelsOf(page(scout));
+    const chip = html.slice(html.indexOf('data-testid="role-level-base-0"') - 400, html.indexOf('data-testid="role-level-base-0"'));
+    expect(html.slice(html.indexOf('data-testid="role-level-base"'))).toMatch(/rl-model[^>]*>Mid</);
+    expect(chip).toBeTruthy();
+  });
+  it('a level without its own list says it uses Base\'s models', () => {
+    const html = levelsOf(page(scout));
+    const min = html.slice(html.indexOf('data-testid="role-level-min"'), html.indexOf('data-testid="role-level-base"'));
+    expect(min).toContain('Vuoto: usa i modelli di Base.');
+    const max = html.slice(html.indexOf('data-testid="role-level-max"'));
+    expect(max).not.toContain('Vuoto: usa i modelli di Base.');
+  });
+  it('no versions and no permissions on the page', () => {
+    const html = page(scout);
+    expect(html).not.toContain('role-permissions');
+    expect(html).not.toMatch(/Versione \d/);
   });
   it('Code Mode on the card: the switch on a work role, «parziale» named only off full parity, never on the Orchestrator', () => {
     const claudeCard = page(scout);
@@ -64,12 +73,6 @@ describe('the presets on a role\'s page', () => {
     expect(claudeCard).not.toContain('Su questo motore è parziale');
     expect(page(artisan)).toContain('Su questo motore è parziale');
     expect(page(orchestrator)).not.toContain('data-testid="agent-code-mode"');
-  });
-  it('Minimo without a model reads as Base and its effort stays off until a model is picked', () => {
-    const rows = presetsOf(page(scout));
-    const min = rows.slice(rows.indexOf('data-testid="st-preset-scout-min"'), rows.indexOf('data-testid="st-preset-scout-base"'));
-    expect(min).toContain('Come Base');
-    expect(min).toMatch(/<button[^>]*disabled=""[^>]*data-testid="st-preset-effort-scout-min"/);
   });
 });
 
