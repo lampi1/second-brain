@@ -7,7 +7,7 @@ import type { AgentLifecycleDecide, AgentLifecycleSnapshot } from '../agent-life
 import type { LearnedRuleProposal } from '../agent-pack';
 import type { AgentCatalog, AgentDraft, AgentMetrics, AgentMetricsFilter, AgentProfile, AgentUndo, AgentVersion, JudgingEstimate } from '../agents';
 import type { ConnectorId, ConnectorState, ConnectorToken } from '../connectors';
-import type { McpImportCandidate, McpServerDef, McpServersState, McpToolAccess } from '../mcp-servers';
+import type { McpImportCandidate, McpServerDef, McpServerView, McpServersState, McpToolAccess } from '../mcp-servers';
 import type { RoleId } from '../roles';
 import type { RunEstimates } from '../task-estimate';
 import type { WorkDecision, WorkThread } from '../workflows';
@@ -30,6 +30,8 @@ export interface AgentsInvokeMap {
   'connectors:useToken': [ConnectorToken, ConnectorState];
   // the app-managed MCP servers (ADR 0086): only the user's clicks in Settings → Connettori and on the agent card
   'mcpservers:state': [void, McpServersState];
+  /** the servers only, without the keyring check: the top bar's chip (ADR 0349) */
+  'mcpservers:views': [void, McpServerView[]];
   'mcpservers:save': [{ def: McpServerDef; previousId?: string }, McpServersState];
   'mcpservers:remove': [{ id: string }, McpServersState];
   'mcpservers:setSecret': [{ id: string; slot: string; value: string }, McpServersState];

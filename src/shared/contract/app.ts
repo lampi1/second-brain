@@ -53,6 +53,9 @@ export interface AppSourceState {
   at: number;
 }
 
+/** The PC's load for the top bar (ADR 0349): CPU busy % since the last read (null on the first) and the free RAM. */
+export interface SystemLoad { cpu: number | null; freeRamBytes: number; totalRamBytes: number; freeRamPct: number }
+
 export interface AppInfo {
   version: string;
   brainRoot: string | null;
@@ -215,6 +218,8 @@ export interface AppInvokeMap {
   'profile:save': [ProfileSave, OwnerProfile];
   'app:info': [void, AppInfo];
   'app:usage': [void, Usage];
+  /** the PC's CPU and free RAM, polled by the top bar (main/system-load.ts) */
+  'app:load': [void, SystemLoad];
   /** Re-reads live plan usage for every harness (Claude, Cursor, Codex, OpenCode, Antigravity) on demand. */
   'app:usageRefresh': [void, Usage];
   /** native folder chooser for the brain folder; sets brainRoot (by the user) and returns it, null if cancelled */

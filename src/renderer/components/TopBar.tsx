@@ -4,7 +4,8 @@
 // language (ADR 0120), the engines' sign-in state with a switch each to turn them on and off (ADR 0347), the environment credentials, the shortcuts, the settings. What is out
 // of the norm comes back on the bar by itself: an engine signed out, chats queued for the machine's load, a work queue
 // that failed to load, the brain sync when it is on, a recording, a maintenance at work. Used by App.tsx; fit steps
-// keep the actions reachable in a narrow window.
+// keep the actions reachable in a narrow window. Always on it too (ADR 0349): the PC's CPU and free RAM (SystemLoad.tsx)
+// and the connectors and MCP servers as one chip with their panel (ConnectorsChip.tsx).
 import { useWorkflows, reloadWorkflows, reloadLessons } from '../store/workflows';
 import { durableAsks } from '../lib/work-ask';
 import { planAskKeys } from '../lib/plan-ask';
@@ -24,6 +25,8 @@ import { bellCount } from '../lib/notify';
 import { openQueue } from '../lib/later';
 import { HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconLogin, IconRefresh, IconSearch, IconSettings, IconStop } from './Icons';
 import { UsageBar } from './UsageBar';
+import { SystemLoad } from './SystemLoad';
+import { ConnectorsChip } from './ConnectorsChip';
 import { SyncStatus } from './SyncStatus';
 import { MapsButton } from './MapsButton';
 import { MaintenanceButton } from './brain-model/MaintenanceButton';
@@ -216,7 +219,9 @@ export function TopBar() {
         <IconSearch size={14} /><span className="search-text">{auditText('audit.TopBar.searchChatsIdeasOrACommand')}</span><Keys combo="Ctrl+K" />
       </button>
       <span className="sp" />
+      <SystemLoad />
       <UsageBar />
+      <ConnectorsChip />
       {queued > 0 && (
         <button type="button" className="btn btn-m btn-ghost topbar-queue" onClick={() => { if (firstQueued) focusChat(firstQueued); }} data-testid="topbar-queue"
           aria-label={auditText('auditExpression.TopBar.text197', { v0: queued })}
