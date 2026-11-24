@@ -368,6 +368,7 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
     case 'system': {
       if (item.continued) return <ColdDivider session={item.continued.session} />;
       if (item.code === 'resultReady') return <ResultReady item={item} />;
+      if (item.code === 'creditSwitchSoon') return <CreditSwitch item={item} />;
       // a step only the user can do (ADR 0269): a plain message, its command with Esegui, never a question
       if (item.code === 'userStep') return <div className="msg-assistant user-step" data-testid={`item-${item.id}`}><Message id={item.id} text={sysText(item)} /></div>;
       const recap = item.code === 'recap' || /^dove eravamo/i.test(item.text);
@@ -388,6 +389,20 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
       );
   }
 });
+
+/** The automatic move of a chat out of credits (ADR 0348): «Riparto su X tra 8 secondi» with «Annulla» while the move
+ *  is still the one announced (ChatSummary.creditWait.next); then the plain notice. */
+function CreditSwitch({ item }: { item: Extract<ChatItem, { kind: 'system' }> }) {
+  const chatId = useContext(ChatIdCtx);
+  const pending = useApp(s => chatId ? s.chats[chatId]?.creditWait?.next?.card : undefined);
+  const live = !!chatId && !!pending && pending === item.params?.card;
+  return (
+    <div className="notice notice-info" data-testid={`item-${item.id}`}>
+      <IconInfo size={13} /><span>{sysText(item)}</span>
+      {live && <button type="button" className="link-btn" onClick={() => void sb.invoke('chat:creditStay', { chatId: chatId! })} data-testid="credit-stay">{t('chat.creditStay')}</button>}
+    </div>
+  );
+}
 
 /** The divider of a cold continuation (ADR 0031): the same chat goes on in a fresh session from its hand-off note. */
 function ColdDivider({ session }: { session: string | undefined }) {

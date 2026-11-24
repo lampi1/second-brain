@@ -14,6 +14,7 @@ export function chatsHandlers({ s, activity, orchestrator, clip }: HandlerContex
   return {
     'chat:autoCloseGet': () => { s.autoClose.refresh(); return s.autoClose.state(); },
     'chat:autoClosePresence': a => s.autoClose.setPresence(Array.isArray(a?.holds) ? a.holds : []),
+    'chat:creditStay': a => { if (typeof a?.chatId !== 'string') throw new Error('Richiesta non valida.'); return s.chats.creditStay?.(a.chatId) ?? false; },
     'chat:autoCloseKeep': a => { if (typeof a?.chatId !== 'string' || typeof a.keep !== 'boolean') throw new Error('Richiesta non valida.'); s.autoClose.keepOpen(a.chatId, a.keep); },
     'run:outcome': a => markRunOutcome(s.chats, a),
     'run:touch': a => touchRunOf(s.chats, a),

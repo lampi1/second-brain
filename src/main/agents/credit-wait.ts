@@ -14,8 +14,10 @@
 // The card is compared with the card the wait answered (creditWait.card, «engine:model»), never with the chat's own
 // model: an ACP engine names its running variant there (grok-4.7[context=…]), which no card ever names. A move that
 // stays (an engine the parent may not start) or fails records the card too: tried again only after the next change.
-// The app never chooses for the user: «no automatic fallback» lives in this file alone, where a later choice of engine
-// by limits would plug in.
+// Since ADR 0348 (owner, 2026-11-24, proposal 3A) the card a wait follows is its level's pick (catalog.cardNow goes
+// through ADR 0347's pick by room): when the chat's plan is spent, the pick is the next model of the level with room,
+// and the chat moves there by itself after GRACE_MS, announced in the chat with «Annulla» (ChatManager.creditPlan,
+// creditStay). A cancelled move (`stay`) waits as before: it moves only when the role's levels change again.
 // Tests: test/unit/agents/credit-wait.test.ts.
 import type { ChatSummary, Effort, Harness } from '../../shared/contract';
 import type { Delegator, PresetAsk } from '../../shared/model-presets';
@@ -26,8 +28,13 @@ export interface CardNow { engine: Harness; model: string | null; effort: Effort
 /** The key a wait remembers for a card: its engine and model, not its effort (an effort alone gives no credit back). */
 export const creditCardKey = (c: Pick<CardNow, 'engine' | 'model'>): string => `${c.engine}:${c.model ?? ''}`;
 
+/** How long an automatic move is announced before it happens (ADR 0348): time to press «Annulla». */
+export const GRACE_MS = 8000;
+
 export interface CreditWaitDeps {
   chats: {
+    /** announces the move to `on` at `at` (the chat's «Annulla» cancels it) */
+    creditPlan(chatId: string, next: { card: string; at: number }, on: CardNow): void;
     list(): ChatSummary[];
     creditResume(chatId: string, to: { model: string | null; effort: Effort | null }): Promise<boolean>;
     creditContinue(chatId: string, on: CardNow): Promise<boolean>;
@@ -38,6 +45,9 @@ export interface CreditWaitDeps {
   card(roleId: string, ask: PresetAsk, delegator?: Delegator): CardNow;
   /** why a chat on `from` may not start one on `to` (the user's engine settings), or null */
   engineRefusal(from: Harness, to: Harness): string | null;
+  now?: () => number;
+  /** runs the watch again later (the end of a grace) */
+  later?: (fn: () => void, ms: number) => void;
 }
 
 export type CreditMove = ({ do: 'resume'; to: { model: string | null; effort: Effort | null } } | { do: 'continue'; on: CardNow }
@@ -83,7 +93,8 @@ export function creditMove(c: ChatSummary, chatOf: (id: string) => ChatSummary |
  *  chat at a time; a move that fails leaves the chat waiting, says why in it and is not tried again for the same card. */
 export function creditWaitWatch(d: CreditWaitDeps): () => void {
   const moving = new Set<string>();
-  return () => {
+  const now = d.now ?? Date.now, later = d.later ?? ((fn, ms) => { setTimeout(fn, ms).unref?.(); });
+  const watch = () => {
     const all = d.chats.list(), byId = new Map(all.map(c => [c.id, c]));
     for (const c of all) {
       if (!c.creditWait || moving.has(c.id)) continue;
@@ -91,6 +102,17 @@ export function creditWaitWatch(d: CreditWaitDeps): () => void {
       if (!move) continue;
       if (move.do === 'note') { d.chats.creditCard(c.id, move.card); continue; }
       if (move.do === 'stay') { d.chats.creditCard(c.id, move.card, move.engine); continue; }
+      // the automatic move (ADR 0348): announced first, made when its grace is over and nothing changed meanwhile; a
+      // wait the user cancelled moves at once on a new card (the user changed the role's levels)
+      const w = c.creditWait;
+      if (!w.stay) {
+        if (w.next?.card !== move.card) {
+          d.chats.creditPlan(c.id, { card: move.card, at: now() + GRACE_MS }, move.do === 'resume' ? { engine: c.harness, ...move.to } : move.on);
+          later(watch, GRACE_MS + 50);
+          continue;
+        }
+        if (w.next.at > now()) { later(watch, w.next.at - now() + 50); continue; }
+      }
       moving.add(c.id);
       const done = move.do === 'resume' ? d.chats.creditResume(c.id, move.to) : d.chats.creditContinue(c.id, move.on);
       void done.then(ok => { if (ok) log.info('agents', 'chat out of credits goes on with its card', { chat: c.id, data: { how: move.do, card: move.card } }); })
@@ -101,4 +123,5 @@ export function creditWaitWatch(d: CreditWaitDeps): () => void {
         .finally(() => moving.delete(c.id));
     }
   };
+  return watch;
 }

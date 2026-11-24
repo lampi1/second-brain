@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { ChatManager } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
-import { creditCardKey, creditMove, creditWaitWatch, type CardNow, type CreditWaitDeps } from '../../../src/main/agents/credit-wait';
+import { GRACE_MS, creditCardKey, creditMove, creditWaitWatch, type CardNow, type CreditWaitDeps } from '../../../src/main/agents/credit-wait';
 import { delegationTools } from '../../../src/main/agents/delegation';
 import { DELEGATION_DEFAULTS, ROLE_DEFAULTS, ROLE_IDS, isWorkRole, type RoleId } from '../../../src/shared/roles';
 import type { AgentCatalog } from '../../../src/shared/agents';
@@ -89,16 +89,26 @@ describe('creditMove: what the role card means for a chat that waits on its cred
 });
 
 describe('creditWaitWatch', () => {
+  // a fake clock: `later` only records, the test moves the clock past the grace and runs the watch again
+  const clock = { t: 1000 };
   const deps = (all: ChatSummary[], card: CreditWaitDeps['card'], fails = false) => {
     const move = async (): Promise<boolean> => { if (fails) throw new Error('no'); return true; };
+    const at = (id: string) => all.find(x => x.id === id);
     const chats = { list: () => all, creditResume: vi.fn<CreditWaitDeps['chats']['creditResume']>(move), creditContinue: vi.fn<CreditWaitDeps['chats']['creditContinue']>(move),
-      creditCard: vi.fn<CreditWaitDeps['chats']['creditCard']>((id, key) => { const c = all.find(x => x.id === id); if (c?.creditWait) c.creditWait = { ...c.creditWait, card: key }; }) };
-    return { chats, card, engineRefusal: () => null as string | null };
+      creditCard: vi.fn<CreditWaitDeps['chats']['creditCard']>((id, key) => { const c = at(id); if (c?.creditWait) c.creditWait = { ...c.creditWait, card: key }; }),
+      creditPlan: vi.fn<CreditWaitDeps['chats']['creditPlan']>((id, next) => { const c = at(id); if (c?.creditWait) c.creditWait = { ...c.creditWait, next }; }) };
+    return { chats, card, engineRefusal: () => null as string | null, now: () => clock.t, later: vi.fn() };
   };
+  const afterGrace = () => { clock.t += GRACE_MS + 1; };
   it('moves only the chats that wait, each as its card says', async () => {
     const all = [chat({ id: 'a' }), chat({ id: 'b', creditWait: undefined }), chat({ id: 'c', agent: { id: 'artisan', name: 'Artisan', purpose: '', engine: 'claude', model: null, revision: 1, source: 'catalog' } })];
     const d = deps(all, role => (role === 'scout' ? { engine: 'claude', model: 'm-new', effort: null } : { engine: 'opencode', model: 'x/y', effort: null }));
-    creditWaitWatch(d)();
+    const watch = creditWaitWatch(d);
+    watch();
+    // announced first (ADR 0348), moved once the grace is over
+    expect(d.chats.creditPlan.mock.calls.map(c => c[0])).toEqual(['a', 'c']);
+    expect(d.chats.creditResume).not.toHaveBeenCalled();
+    afterGrace(); watch();
     await Promise.resolve();
     expect(d.chats.creditResume.mock.calls).toEqual([['a', { model: 'm-new', effort: null }]]);
     expect(d.chats.creditContinue.mock.calls).toEqual([['c', { engine: 'opencode', model: 'x/y', effort: null }]]);
@@ -108,13 +118,13 @@ describe('creditWaitWatch', () => {
     const all = [chat({ id: 'a' })];
     const d = deps(all, () => ({ engine: 'claude', model, effort: null }), true);
     const watch = creditWaitWatch(d);
-    watch();
+    watch(); afterGrace(); watch();
     await new Promise<void>(r => setImmediate(r));
     expect(d.chats.creditCard).toHaveBeenCalledWith('a', 'claude:m-new');
     watch();
     expect(d.chats.creditResume).toHaveBeenCalledTimes(1);
     model = 'm-newer';
-    watch();
+    watch(); afterGrace(); watch();
     expect(d.chats.creditResume).toHaveBeenCalledTimes(2);
   });
   it('an engine the parent may not start is said once; an unknown card is recorded, never moved on', () => {
@@ -125,6 +135,36 @@ describe('creditWaitWatch', () => {
     watch(); watch();
     expect(d.chats.creditCard.mock.calls).toEqual([['x', 'opencode:x/y', 'opencode'], ['y', 'opencode:x/y']]);
     expect(d.chats.creditContinue).not.toHaveBeenCalled();
+  });
+});
+
+describe('the automatic move and its Annulla (ADR 0348)', () => {
+  const clock = { t: 1000 };
+  const setup = (w: ChatSummary['creditWait']) => {
+    const all = [chat({ id: 'a', creditWait: w })];
+    const chats = { list: () => all, creditResume: vi.fn(async () => true), creditContinue: vi.fn(async () => true), creditCard: vi.fn(),
+      creditPlan: vi.fn((_id: string, next: { card: string; at: number }) => { all[0]!.creditWait = { ...all[0]!.creditWait!, next }; }) };
+    const later = vi.fn();
+    return { all, chats, later, watch: creditWaitWatch({ chats, card: () => ({ engine: 'claude', model: 'm-next', effort: null }), engineRefusal: () => null, now: () => clock.t, later }) };
+  };
+  it('announces the next model once, schedules the end of the grace, and moves only after it', () => {
+    const s = setup({ at: 1, model: 'm-old', card: 'claude:m-old' });
+    s.watch(); s.watch();
+    expect(s.chats.creditPlan).toHaveBeenCalledTimes(1);
+    expect(s.chats.creditPlan.mock.calls[0]![1]).toEqual({ card: 'claude:m-next', at: clock.t + GRACE_MS });
+    expect(s.later).toHaveBeenCalled();
+    expect(s.chats.creditResume).not.toHaveBeenCalled();
+    clock.t += GRACE_MS + 1; s.watch();
+    expect(s.chats.creditResume).toHaveBeenCalledWith('a', { model: 'm-next', effort: null });
+  });
+  it('a cancelled move (stay) waits: the same card does nothing, a new one moves at once', () => {
+    const s = setup({ at: 1, model: 'm-old', card: 'claude:m-next', stay: true });
+    s.watch();
+    expect(s.chats.creditPlan).not.toHaveBeenCalled();
+    expect(s.chats.creditResume).not.toHaveBeenCalled();
+    s.all[0]!.creditWait = { at: 1, model: 'm-old', card: 'claude:m-other', stay: true };
+    s.watch();
+    expect(s.chats.creditResume).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -144,11 +184,11 @@ describe('what the app shows for a chat that waits on its credits', () => {
     expect(markOf({ ...waiting, state: 'error' }, [])).toBe('wait');
     expect(markOf({ ...waiting, creditWait: undefined, state: 'error' }, [])).toBe('error');
   });
-  it('the Orchestrator is told it waits, why, and that nothing is to be switched', () => {
+  it('the Orchestrator is told it waits, why, and that the app (not it) moves the chat', () => {
     const line = wakeLine({ chatId: 'c1', title: 'Scout · Log', harness: 'claude', kind: 'error', detail: '', at: 1, child: { role: 'Scout', parent: 'Piano' }, credits: { role: 'Scout', model: 'm-old' } });
     expect(line).toMatch(/in attesa, non è un errore/);
     expect(line).toMatch(/crediti di m-old sono finiti/);
-    expect(line).toMatch(/scheda di Scout/);
+    expect(line).toMatch(/livello di Scout ha ancora limite/);
     expect(line).toMatch(/non scegliere tu un altro modello o preset/);
   });
 });
@@ -329,14 +369,34 @@ describe('a delegated child out of credits (ChatManager)', () => {
     f.failTurn(child.id, LIMIT);
     let card: CardNow = { engine: 'claude', model: 'm-old', effort: null };
     const resume = vi.spyOn(f.m, 'creditResume');
-    const watch = creditWaitWatch({ chats: f.m, card: () => card, engineRefusal: () => null });
+    let t = Date.now();
+    const watch = creditWaitWatch({ chats: f.m, card: () => card, engineRefusal: () => null, now: () => t, later: () => {} });
     // the engine names a variant of its model: still the same card
     f.sinks.get(child.id)!.changed({ model: 'm-old[context=1m]' });
     watch(); watch();
     expect(resume).not.toHaveBeenCalled();
     card = { engine: 'claude', model: 'm-new', effort: null };
+    // announced in the chat first (ADR 0348), then moved once
+    watch();
+    expect(f.get(child.id).creditWait?.next).toMatchObject({ card: 'claude:m-new' });
+    expect(resume).not.toHaveBeenCalled();
+    t += GRACE_MS + 1;
     watch(); watch();
     expect(resume).toHaveBeenCalledTimes(1);
+  });
+  it('«Annulla» on the announced move keeps the chat waiting on a real manager', async () => {
+    const f = fixture(), { child } = await f.family();
+    f.failTurn(child.id, LIMIT);
+    const resume = vi.spyOn(f.m, 'creditResume');
+    let t = Date.now();
+    const watch = creditWaitWatch({ chats: f.m, card: () => ({ engine: 'claude', model: 'm-new', effort: null }), engineRefusal: () => null, now: () => t, later: () => {} });
+    watch(); watch();
+    expect(f.m.creditStay(child.id)).toBe(true);
+    expect(f.get(child.id).creditWait).toMatchObject({ card: 'claude:m-new', stay: true });
+    expect(f.get(child.id).creditWait?.next).toBeUndefined();
+    t += GRACE_MS + 1;
+    watch();
+    expect(resume).not.toHaveBeenCalled();
   });
   it('the wait is kept over a restart', async () => {
     const f = fixture(), { child } = await f.family();
