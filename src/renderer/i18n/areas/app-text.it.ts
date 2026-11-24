@@ -233,6 +233,8 @@ export const appTextIt = {
   // components: AgentFeedAction, DelegationCard (the deny message the chat gets), CodexAutonomy, RoutingGroup
   'appText.feedAction.review': 'Esamina proposta',
   'appText.feedAction.undone': 'Annullata',
+  'appText.feedAction.levelsGone': 'Il ruolo non c’è più.',
+  'appText.feedAction.levelsChanged': 'Il ruolo è cambiato da allora: guarda la sua pagina prima di annullare.',
   'appText.feedAction.undo': 'Annulla',
   'appText.feedAction.undoChange': 'Annulla modifica',
   'appText.delegation.denied': 'Negato dall’utente.',

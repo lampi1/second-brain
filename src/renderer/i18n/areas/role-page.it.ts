@@ -9,7 +9,7 @@ export const rolePageIt = {
   'rolePage.last': 'ultimo uso',
   'rolePage.levels': 'Modelli per livello',
   'rolePage.levels.hint': 'In ogni livello metti i modelli che vanno bene, anche di motori diversi. L’app prende il primo della lista che ha ancora limite; se è quasi finito passa al successivo. Trascina per cambiare l’ordine.',
-  'rolePage.levels.orchestrator': 'L’Orchestrator gira sul motore della sua chat: qui il suo modello di base.',
+  'rolePage.levels.orchestrator': 'L’Orchestrator gira sul motore della sua chat: parte col primo modello di questa lista su quel motore. Trascina per cambiare l’ordine.',
   'rolePage.level.min': 'Minimo',
   'rolePage.level.base': 'Base',
   'rolePage.level.max': 'Massimo',

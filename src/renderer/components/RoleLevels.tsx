@@ -30,7 +30,9 @@ function stored(levels: FullLevels, p: AgentProfile): Partial<FullLevels> {
   return Object.fromEntries(PRESET_IDS.filter(id => ownLevel(p, id)).map(id => [id, levels[id]])) as Partial<FullLevels>;
 }
 
-export function RoleLevels({ profile }: { profile: AgentProfile }) {
+/** `ids`: the levels shown (the Orchestrator has Base only, #468: it runs on its chat's engine, never at a level, and its
+ *  chat starts on the first model of the list on that engine, so no «ora userebbe» line either). */
+export function RoleLevels({ profile, ids = PRESET_IDS, hint = t('rolePage.levels.hint'), route: showRoute = true }: { profile: AgentProfile; ids?: readonly PresetId[]; hint?: string; route?: boolean }) {
   const { catalog } = useAgents();
   const [route, setRoute] = useState<Route | null>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
@@ -42,10 +44,11 @@ export function RoleLevels({ profile }: { profile: AgentProfile }) {
   useEffect(() => {
     let alive = true;
     const read = () => void sb.invoke('agents:levelRoute', { id: profile.id }).then(r => { if (alive) setRoute(r); }, () => { if (alive) setRoute(null); });
+    if (!showRoute) return () => { alive = false; };
     read();
     const timer = setInterval(read, 60_000);
     return () => { alive = false; clearInterval(timer); };
-  }, [profile.id, profile.updatedAt]);
+  }, [profile.id, profile.updatedAt, showRoute]);
   const save = async (id: PresetId, list: LevelModel[]) => {
     setBusy(true); setError(null);
     // an emptied Minimo or Massimo goes back to following Base; Base keeps at least one model
@@ -66,8 +69,8 @@ export function RoleLevels({ profile }: { profile: AgentProfile }) {
   };
   return <section className="ad-card rl-card" aria-labelledby={`rl-${profile.id}`} data-testid="role-levels">
     <header className="ad-card-head"><h3 id={`rl-${profile.id}`}>{t('rolePage.levels')}</h3></header>
-    <p className="ad-hint">{t('rolePage.levels.hint')}</p>
-    {PRESET_IDS.map(id => {
+    <p className="ad-hint">{hint}</p>
+    {ids.map(id => {
       const list = levels[id], now = route?.[id];
       return <div className="rl-level" key={id} data-testid={`role-level-${id}`}>
         <div className="rl-name"><b>{t(`rolePage.level.${id}`)}</b><small>{t(`rolePage.level.${id}.hint`)}</small></div>
@@ -97,12 +100,12 @@ export function RoleLevels({ profile }: { profile: AgentProfile }) {
           {!own(id) && <small className="rl-note">{t('rolePage.level.asBase')}</small>}
           {adding === id && <AddModel engines={engines} taken={own(id) ? list : []} busy={busy} onCancel={() => setAdding(null)}
             onAdd={x => { setAdding(null); void save(id, [...(own(id) ? list : []), x]); }} />}
-          <p className="rl-now" data-testid={`role-level-${id}-now`}>
+          {showRoute && <p className="rl-now" data-testid={`role-level-${id}-now`}>
             {now ? <><i className="rl-dot" data-state={now.state === 'out' ? 'out' : now.state === 'pace' || now.reason.includes(' · ') ? 'pace' : 'ok'} aria-hidden="true" />
               <span>{t('rolePage.now', { model: modelName(engineOf(now.engine), now.model), engine: engineOf(now.engine)?.label ?? now.engine })}</span>
               {now.reason.includes(' · ') && <small> · {now.reason.split(' · ').slice(1).join(' · ')}</small>}</>
               : route ? <span>{t('rolePage.nowNone')}</span> : null}
-          </p>
+          </p>}
         </div>
       </div>;
     })}

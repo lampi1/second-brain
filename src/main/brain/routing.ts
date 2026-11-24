@@ -48,7 +48,9 @@ const bare = (m: string): string => m.toLowerCase().trim().replace(/\[.*\]$/, ''
 export function modelRow(model: string | null | undefined, reg: ModelRegistry | null): RegistryModel | null {
   if (!model || !reg) return null;
   const id = bare(model);
-  return reg.models.find(r => r.id === id) ?? reg.models.find(r => (r.aliases ?? []).includes(id)) ?? reg.models.find(r => r.id === `claude-${id}`) ?? null;
+  const row = reg.models.find(r => r.id === id) ?? reg.models.find(r => (r.aliases ?? []).includes(id)) ?? reg.models.find(r => r.id === `claude-${id}`) ?? null;
+  // a provider-prefixed id (OpenCode, OpenRouter: "openai/gpt-5.6-terra", #468) is the registry's bare model: its efforts and price
+  return row ?? (id.includes('/') ? modelRow(id.slice(id.lastIndexOf('/') + 1), reg) : null);
 }
 /** Fable (the user, 2026-10-14: "non userei fable costa troppo"): only a role's card or the user names it. */
 export const isFable = (m: Pick<RegistryModel, 'id'> | null | undefined): boolean => !!m && /fable/i.test(m.id);
