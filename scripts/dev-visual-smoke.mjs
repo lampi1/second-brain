@@ -222,16 +222,10 @@ try {
   if (readResult.estimates.accuracy.n !== manifest.readPerformance.before.accuracyN) throw new Error('Worker estimate differs from synchronous reference');
   await fs.writeFile(path.join(output, 'read-performance.json'), JSON.stringify(manifest.readPerformance, null, 2));
   manifest.idlePerformance = await captureIdlePerformance(app, page, output);
-  await page.getByTestId('nav-memoria').click();
-  // Facts no longer enter the proposals deck (ADR 0150). Inspect the saved fact in Approvate and check
-  // its source through the read-only review API, without resurrecting the retired approval path.
-  await page.getByTestId('mh-tab-approvate').click();
-  const memory = page.getByTestId('mh-ap-fact-synthetic-visual-memory');
-  await memory.waitFor();
+  // Facts no longer enter the proposals deck (ADR 0150) and the Approvate tab that listed them is gone (ADR 0340): the
+  // saved fact's source is checked through the read-only review API, without resurrecting the retired approval path.
   const records = await page.evaluate(() => window.sb.invoke('memory:reviewList', undefined));
   if (!records.some(record => record.memoryId === 'synthetic-visual-memory' && record.sourceRunId === 'synthetic-run')) throw new Error('Synthetic memory provenance missing');
-  await memory.scrollIntoViewIfNeeded();
-  await capture('memory-saved-fact-synthetic');
   // The learning view is a tab of Andamento (once a Memoria tab); captured without running an evaluation.
   await page.getByTestId('nav-andamento').click();
   await page.getByTestId('an-tab-apprendimento').click();
@@ -239,7 +233,7 @@ try {
   await learning.getByTestId('lr-counter').waitFor();
   await learning.scrollIntoViewIfNeeded();
   await capture('learning-cold-start-synthetic');
-  manifest.reviewFixture = 'Real services; synthetic saved fact in Approvate and empty learning history in Andamento → Apprendimento; no decisions, replay or provider launched';
+  manifest.reviewFixture = 'Real services; synthetic saved fact read through the review API and empty learning history in Andamento → Apprendimento; no decisions, replay or provider launched';
   if (manifest.rendererErrors.length) throw new Error('Renderer errors; inspect manifest.json');
   console.log(`Captured ${manifest.captures.length} dev views in ${output}`);
 } catch (error) {
