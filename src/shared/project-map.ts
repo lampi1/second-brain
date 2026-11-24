@@ -160,9 +160,9 @@ export interface MapWork {
 export interface MapFlowStep { step: number; title: string; state: MapWork['state']; wave: number; par?: boolean; on?: string; role?: string;
   /** what tells the step in full (ADR 0307): its detail line, the chats working on it, when it started and ended, added on the way */
   detail?: string; chatIds?: string[]; startedAt?: number; endedAt?: number; added?: boolean;
-  /** the model and preset of the step: of its chat once started, else the role card's own for the planned preset
-   *  (`planned`, shown «previsto»); a step the Strategist does itself carries none */
-  model?: string | null; preset?: PresetId; planned?: true }
+  /** the role card's preset of the step: its chat's once started, else the one the plan asks; never a model (ADR 0346:
+   *  the card's model is read when the step starts). A step the Strategist does itself carries none */
+  preset?: PresetId }
 /** A Strategist's plan drawn on this map: `proposed` waits for the user's «Approva e parti». */
 export interface MapPlan { chatId: string; title: string; phase: 'proposed' | 'revising' | 'approved' | 'running' | 'done'; at: number; steps: number; done: number; doneWhen?: string;
   /** every step in order, with its turn (ADR 0302) */

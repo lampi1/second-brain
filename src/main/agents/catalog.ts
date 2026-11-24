@@ -627,12 +627,13 @@ export class AgentCatalogService {
   private pickIn(list: readonly LevelModel[]) {
     return pickInLevel(list, x => this.unusable(x), x => this.d.room?.(x.engine, x.model) ?? { state: 'unknown', why: '', resetsAt: null });
   }
-  /** The model a role's card has for one of its presets (null: unknown role or no model): the map's «previsto». */
-  plannedModel(roleId: string, preset: PresetId): string | null {
-    const p = this.profiles.find(x => x.id === roleId);
-    if (!p) return null;
-    const g = this.pickIn(this.levelsFor(p)[preset]);
-    return g ? g.chosen.model : this.presetsOf(p)[preset].model;
+  /** What a role's card gives a chat of that role now, for a preset (ADR 0346: a chat that waited on its credits
+   *  follows its card): the card's engine and that preset's model and effort, as a launch would get them (resolve's
+   *  guards; nothing started). Throws as resolve does: engine off, a model the engine cannot apply. */
+  cardNow(roleId: string, ask: PresetAsk, delegator?: Delegator): { engine: Harness; model: string | null; effort: Effort | null } {
+    const p = this.find(roleId);
+    const r = this.resolve({ harness: p.engine, cwd: '', roleId, ...ask, ...(delegator ? { delegator } : {}) } as NewChat);
+    return { engine: r.request.harness, model: r.request.model ?? null, effort: r.request.effort ?? null };
   }
   /** The preset a delegation of `roleId` would get (resolve's guards, nothing started), with the engine and model its
    *  level would start on now. */

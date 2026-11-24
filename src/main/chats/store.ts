@@ -134,6 +134,8 @@ export interface StoredChat {
   lastResult?: { at: number; isError: boolean; interrupted?: true };
   waitsOn?: 'user' | 'colleagues';
   waitsOnWork?: true;
+  /** stopped on its provider's credit limit: it waits for another model on its role's card (ADR 0346) */
+  creditWait?: { at: number; model: string | null; card?: string };
   /** its engine ended with an error or in the middle of a turn: not finished, it never closes by itself */
   unfinished?: true;
   /** how its engine was chosen (role, defaults or override; ADR 0032, 0210) */
@@ -166,6 +168,11 @@ function readChatWork(value:unknown):NonNullable<StoredChat['work']>{
   if(work&&['assigned','waiting-mail','completed'].includes(String(work.status))&&typeof work.updatedAt==='number'&&Number.isFinite(work.updatedAt)&&work.updatedAt>=0)return {status:work.status!,updatedAt:work.updatedAt};
   // Invalid persisted holds fail closed until an explicit lifecycle update; they never turn into completed work.
   return {status:'assigned',updatedAt:0};
+}
+function readCreditWait(value: unknown): StoredChat['creditWait'] | undefined {
+  const w = value as { at?: unknown; model?: unknown; card?: unknown } | null;
+  if (!w || typeof w !== 'object' || typeof w.at !== 'number' || !Number.isFinite(w.at)) return undefined;
+  return { at: w.at, model: typeof w.model === 'string' && w.model && w.model.length <= 120 ? w.model : null, ...(typeof w.card === 'string' && w.card.length <= 200 ? { card: w.card } : {}) };
 }
 function readLastResult(value: unknown): StoredChat['lastResult'] | undefined {
   const v = value as Record<string, unknown> | null | undefined;
@@ -279,6 +286,7 @@ function valid(x: unknown): StoredChat | null {
     ...(readLastResult(c.lastResult) ? { lastResult: readLastResult(c.lastResult)! } : {}),
     ...(c.waitsOn === 'user' || c.waitsOn === 'colleagues' ? { waitsOn: c.waitsOn } : {}),
     ...(c.waitsOnWork === true ? { waitsOnWork: true as const } : {}),
+    ...(readCreditWait(c.creditWait) ? { creditWait: readCreditWait(c.creditWait)! } : {}),
     ...(c.unfinished === true ? { unfinished: true as const } : {}),
     ...(heldResults(c.heldResults) ? { heldResults: heldResults(c.heldResults)! } : {}),
   };

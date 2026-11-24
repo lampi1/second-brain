@@ -53,8 +53,6 @@ export interface ProjectMapsDeps {
   stateFile: string;
   now?: () => number;
   debounceMs?: number;
-  /** the model a role's card has for a preset (catalog.plannedModel): what a step not started shows as «previsto» */
-  plannedModel?(role: string, preset: PresetId): string | null;
 }
 
 /** own = the elements the chat was linked to on purpose (#456): their status follows the chat; since = element → when
@@ -327,14 +325,12 @@ export class ProjectMaps {
   /** The plans drawn on a project's map and their steps, per element: read from the chats, never saved (ADR 0276). */
   private works(project: string): { works: Record<string, MapWork[]>; plans: MapPlan[] } {
     const works: Record<string, MapWork[]> = {}, plans: MapPlan[] = [], now = this.now(), all = this.d.chats();
-    // a step's model and preset: its newest chat's own once started, else the role card's for the planned preset («previsto»)
-    const modelOf = (x: PlanStep) => {
+    // a step's preset (ADR 0346, never a model): its newest chat's own once started, else the one the plan asks (Base)
+    const presetOf = (x: PlanStep): { preset?: PresetId } => {
       if (!x.role) return {};
       const chat = [...(x.chatIds ?? [])].reverse().map(id => all.find(k => k.id === id)).find(k => !!k);
-      if (chat) { const preset = chat.run?.presetChoice?.preset ?? x.preset; return { model: chat.model, ...(preset ? { preset } : {}) }; }
-      if (x.state !== 'todo') return x.preset ? { preset: x.preset } : {}; // started, its chat gone: say nothing we do not know
-      const preset = x.preset ?? 'base';
-      return { model: this.d.plannedModel?.(x.role, preset) ?? null, preset, planned: true as const };
+      const preset = chat?.run?.presetChoice?.preset ?? x.preset ?? (x.state === 'todo' ? 'base' as const : undefined);
+      return preset ? { preset } : {};
     };
     for (const c of all) {
       const p = c.plan;
@@ -345,7 +341,7 @@ export class ProjectMaps {
       const par = (x: PlanStep, i: number) => waves.filter(w => w === waves[i]).length > 1 || (x.state === 'now' && running > 1);
       plans.push({ chatId: c.id, title: c.title, phase: p.phase, at: p.at, steps: p.steps.length, done: p.steps.filter(x => x.state === 'done').length, ...(p.doneWhen ? { doneWhen: p.doneWhen } : {}),
         flow: p.steps.map((x, i) => ({ step: i + 1, title: x.title, state: x.state, wave: waves[i]!, ...(par(x, i) ? { par: true } : {}), ...(x.on ? { on: x.on } : {}), ...(x.role ? { role: x.role } : {}),
-          ...(x.detail ? { detail: x.detail } : {}), ...(x.chatIds?.length ? { chatIds: [...x.chatIds] } : {}), ...(x.startedAt ? { startedAt: x.startedAt } : {}), ...(x.endedAt ? { endedAt: x.endedAt } : {}), ...(x.added ? { added: true } : {}), ...modelOf(x) })) });
+          ...(x.detail ? { detail: x.detail } : {}), ...(x.chatIds?.length ? { chatIds: [...x.chatIds] } : {}), ...(x.startedAt ? { startedAt: x.startedAt } : {}), ...(x.endedAt ? { endedAt: x.endedAt } : {}), ...(x.added ? { added: true } : {}), ...presetOf(x) })) });
       p.steps.forEach((x, i) => { if (x.on) (works[x.on] ??= []).push({ title: x.title, state: x.state, ...(x.role ? { role: x.role } : {}), chatId: c.id, step: i + 1, chatIds: x.chatIds ?? [], ...(x.added ? { added: true } : {}), wave: waves[i]!, ...(par(x, i) ? { par: true } : {}) }); });
     }
     return { works, plans: plans.sort((a, b) => b.at - a.at) };

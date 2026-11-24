@@ -85,7 +85,7 @@ export const brainModelIt = {
   'pm.step.first': 'Parte per primo.', 'pm.step.after': (p: { steps: string }) => `Parte quando è finito il passo ${p.steps}.`, 'pm.step.afterMany': (p: { steps: string }) => `Parte quando sono finiti i passi ${p.steps}.`,
   'pm.step.with': (p: { steps: string }) => `Va insieme al passo ${p.steps}.`, 'pm.step.withMany': (p: { steps: string }) => `Va insieme ai passi ${p.steps}.`,
   'pm.step.todo': 'da fare', 'pm.step.now': 'in corso', 'pm.step.nowSince': (p: { at: string }) => `in corso da ${p.at}`, 'pm.step.done': 'fatto', 'pm.step.doneIn': (p: { time: string }) => `fatto in ${p.time}`, 'pm.step.blocked': 'bloccato',
-  'pm.step.planned': 'previsto', 'pm.step.plannedTip': 'Previsto: il modello della scheda del ruolo per questo preset; cambia se la chat parte con altro.',
+  'pm.step.presetTip': 'Il preset della scheda del ruolo. Il modello è quello che la scheda ha quando il passo parte: se la cambi prima, vale il nuovo.',
   'pm.grp.head': (p: { n: number }) => `${p.n} in parallelo`, 'pm.grp.working': (p: { n: number }) => `${p.n} al lavoro`, 'pm.grp.done': (p: { n: number }) => `${p.n} ${p.n === 1 ? 'fatto' : 'fatti'}`,
   'pm.grp.blocked': (p: { n: number }) => `${p.n} ${p.n === 1 ? 'bloccato' : 'bloccati'}`, 'pm.grp.idle': (p: { n: number }) => `${p.n} da far partire`,
   'skills.untracked': 'uso non tracciato', 'skills.untrackedTip': 'Questo motore non dice quali skill usa: ne vedi solo quelle che apre leggendo un SKILL.md.',

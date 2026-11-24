@@ -225,7 +225,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     changed: (state, lesson) => ctx.emitter.emit('impara:changed', { state, ...(lesson ? { lesson } : {}) }),
     tutorText: (lesson, turn, text) => ctx.emitter.emit('impara:tutor', { lesson, turn, text }) });
   // the project maps (ADR 0271): the demo brain holds one, the shop the demo chats work on
-  const projectMaps = attachProjectMaps(ctx, chats, () => demoBrainRoot, undefined, now, (role, preset) => agents.plannedModel(role, preset)); // no chat endpoints in the demo
+  const projectMaps = attachProjectMaps(ctx, chats, () => demoBrainRoot, undefined, now); // no chat endpoints in the demo
   seedDemoMap(demoBrainRoot, projectMaps, now());
   // the work maps follow the demo chats (ADR 0342); their clock moves while __sbDemo.workMaps() adds the older ones
   let mapsClock: number | null = null;

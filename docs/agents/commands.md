@@ -102,7 +102,7 @@ row and its line here in the same change.
 | `agent_metrics` | Orchestrator only | Success rate, cost, time and corrections per role and version (numbers only). |
 | `task_estimate` | Orchestrator only | Estimate a request: kind of work, size, role, time and cost. |
 | `agent_delegate` | work chats | Delegate independent parts of the task to other roles as visible child chats (Orchestrator and Strategist only; a parallel group starts in one call; a Sentinel takes `reviewOf`). |
-| `agent_children` | work chats | The chats you delegated: role, state, goal, result, open requests, cost, and why a task was closed early (`endCause`). |
+| `agent_children` | work chats | The chats you delegated: role, state, goal, result, open requests, cost, why a task was closed early (`endCause`), and `waitsOn: "credits"` for a child whose model ran out of credits (it goes on when the user changes its role's card, ADR 0346). |
 | `agent_ask_parent` | work chats | Ask up the ladder (the chat that delegated you, the Orchestrator, the user; ADR 0344) and go on with the rest. |
 | `run_code` | work chats (Code Mode on) | Run a JavaScript script in a QuickJS sandbox that calls many tools in one go through a typed API (Bash, PowerShell, files, app tools, connectors); each call meets the same permission rules, an Esegui action stops the script (ADR 0331). |
 | `agent_answer_child` | work chats | Answer a delegated chat's question that waits for you, or pass it one level up (`askUser`). |
@@ -116,7 +116,7 @@ row and its line here in the same change.
 | `agent_integrate_children` | work chats | Combine several finished children's commits in one staging worktree. |
 | `agent_work_decisions` | work chats | The user's recorded decisions for your latest assignment, readable after reporting without reopening it. Historical decisions remain context, not new grants. |
 | `ask_user` | work chats | Ask the user one Sì/No question as a panel (engines whose question tool may not reach the model: OpenCode, Cursor). |
-| `plan_propose` | work chats | Show the user your short plan for approval (Strategist); `doubts` lists every real doubt, open or closed by the user, code or brain with its source, and one open keeps the plan from being shown (ADR 0344); `revise` re-proposes a saved plan to today's standards; on a project it is drawn on the project's map (`map`, each step's `on`: ADR 0276); each step may carry a `preset` (`min`/`base`/`max`, the role card's) and the map shows role · model · preset. |
+| `plan_propose` | work chats | Show the user your short plan for approval (Strategist); `doubts` lists every real doubt, open or closed by the user, code or brain with its source, and one open keeps the plan from being shown (ADR 0344); `revise` re-proposes a saved plan to today's standards; on a project it is drawn on the project's map (`map`, each step's `on`: ADR 0276); each step may carry a `preset` (`min`/`base`/`max`, the role card's) and the map shows role · preset, never a model (ADR 0346). |
 | `plan_update` | work chats | Move a step of your approved plan (now, done, blocked or todo), or add one found on the way (ADR 0276). |
 | `list_chats` | work chats | The user's chats you can write to with send_to_chat. |
 | `send_to_chat` | work chats | Send a message to another chat of the user, never as his approval. |

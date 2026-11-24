@@ -34,11 +34,12 @@ import { MorningService } from './morning/service';
 import { createAgentLoop } from './agents/loop';
 import { delegationTools } from './agents/delegation';
 import { CreditBook, opencodeLogTail, poolOf } from './agents/credits';
+import { creditWaitWatch } from './agents/credit-wait';
 import { levelEngines, roomOf } from '../shared/model-levels';
 import { tierModel } from './agents/model-tier';
 import { markLegacyDone, migratedCards, readLegacy } from './agents/legacy-cards';
 import { workDecisionTools } from './agents/work-decisions';
-import { stepModelOf, strategyTools } from './agents/strategy-tools';
+import { stepPresetOf, strategyTools } from './agents/strategy-tools';
 import { askTools } from './chats/ask-tool';
 import { portableId } from './agents/pack/flows';
 import { memoryTools } from './rules/memory-tool';
@@ -546,7 +547,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // brain_script_add on every chat's own endpoint: a work chat saves the script it ran with success itself
   addChatTools([chatScriptAddTool(brainScripts, id => chats.list().find(c => c.id === id)?.title ?? null, roleSkillOf)]);
   // the project maps (ADR 0271): drawn and kept current by the agents (their own endpoint), live state from the chats
-  const projectMaps = attachProjectMaps(ctx, chats, () => brain.info().brainRoot, addChatTools, undefined, (role, preset) => agents.plannedModel(role, preset));
+  const projectMaps = attachProjectMaps(ctx, chats, () => brain.info().brainRoot, addChatTools);
   const workMaps = attachWorkMaps(ctx, chats, projectMaps, brain);
   // brain_query_add the same way: a query that ran and someone reruns goes to its skill's assets/queries/ (ADR 0124, 0263)
   addChatTools([chatQueryAddTool(brainQueries, id => chats.list().find(c => c.id === id)?.title ?? null, roleSkillOf)]);
@@ -663,8 +664,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), roleEngines: p => levelEngines(agents.levelsFor(p)), presetChoice: (roleId, ask, delegator) => agents.presetChoice(roleId, ask, delegator), label: AGENT_LABEL, runs: () => manager.runs.list(), skillTools,
     remember: (roleId, line, chat) => { skillLessons.propose({ role: portableId(roleId), text: line, chatId: chat.id, ...(chat.run?.runId ? { runId: chat.run.runId } : {}) }); } }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
-  // every step's model and preset (2026-11-23): a started step's chat, else the role card's preset
-  addChatTools(strategyTools(manager, awayOn, projectMaps, stepModelOf(id => manager.list().find(c => c.id === id), (roleId, preset) => {
+  // every step's preset, never a model (ADR 0346): a started step's chat, else the one the plan asks of the role's card
+  addChatTools(strategyTools(manager, awayOn, projectMaps, stepPresetOf(id => manager.list().find(c => c.id === id), (roleId, preset) => {
     try { return agents.presetChoice(roleId, preset ? { preset, presetWhy: 'plan step' } : {}); } catch { return null; }
   })));
   // the yes/no question of a chat whose engine has no question tool of its own (OpenCode over ACP)
@@ -851,6 +852,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     applied: changes => { const e = maintenanceEvent(changes); if (e) brain.publish([e]); } });
   // its cached state (ADR 0186) is read again after whatever the Brain pages refresh on
   ctx.emitter.tap(ch => { if (ch === 'brainmodel:changed' || ch === 'agents:changed') brainModel.invalidate(); });
+  // a role chat out of credits follows its role's card (ADR 0346): when the card changes, and when the wait begins
+  const creditWait = creditWaitWatch({ chats: manager, card: (roleId, ask, delegator) => agents.cardNow(roleId, ask, delegator), engineRefusal: (from, to) => openRefusal(brain.settings(), from, to) });
+  ctx.emitter.tap((ch, payload) => { if (ch === 'agents:changed' || (ch === 'chat:updated' && (payload as ChatSummary | undefined)?.creditWait)) creditWait(); });
   brainModelRef.current = brainModel;
   // the skill library (ADR 0241): the Memoria «Skill» tab and the Orchestrator's skill tools; the app's skills are the
   // rendered copy a brain the app made loads at launch (agents/pack/wiring.ts sharedSkills)

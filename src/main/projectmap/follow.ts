@@ -51,6 +51,8 @@ export function sayOf(c: ChatSummary, all: readonly ChatSummary[], asks: readonl
     if (kids.some(held)) return 'held';
     if (c.waitsOn === 'user') return report === 'done' ? 'reask' : 'wait';
   }
+  // out of credits (ADR 0346): not a failure, the piece is stuck on the user (he changes the role's card)
+  if (c.creditWait && !ended(c)) return report === 'done' ? 'reask' : 'wait';
   if (c.state === 'error' || c.lastResult?.isError) return 'fail';
   if (report === 'blocked') return 'stuck';
   if (report === 'done') return 'done';
