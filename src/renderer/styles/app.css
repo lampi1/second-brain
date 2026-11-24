@@ -131,7 +131,11 @@ input, textarea, .md, .bubble, .tool-pre, .diff-patch, .ask-cmd, .thinking-text 
 .sl-item[data-tone="red"] .sl-v { color: var(--red); }
 .sl-item[data-tone="none"] .sl-v { color: var(--text-4); font-weight: 500; }
 .topbar[data-fit~="2"] .sl-free { display: none; }
-.topbar[data-fit~="6"] .sl-k { display: none; }
+.topbar[data-fit~="3"] .sl-k { display: none; }
+.topbar[data-fit~="3"] .sysload { gap: 7px; padding: 0 7px; }
+.topbar[data-fit~="6"] .cc-chip .ub-v { display: none; }
+.topbar[data-fit~="6"] .sl-v { min-width: 0; }
+.topbar[data-fit~="7"] .sysload, .topbar[data-fit~="7"] .usagebar { padding: 0 6px; gap: 5px; }
 /* the connectors and MCP chip and its panel (ConnectorsChip.tsx, ADR 0349) */
 .cc-chip { gap: 7px; }
 .cc-chip[data-tone="ok"] > svg { color: var(--green); }
