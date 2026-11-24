@@ -120,6 +120,34 @@ input, textarea, .md, .bubble, .tool-pre, .diff-patch, .ask-cmd, .thinking-text 
 .topbar[data-fit~="7"] .brand { display: none; }
 .topbar[data-fit~="7"] .btn-m { padding-inline: 6px; }
 .topbar[data-fit~="7"] .topbar-main, .topbar[data-fit~="7"] .topbar-end { gap: 4px; }
+/* the PC's load (SystemLoad.tsx, ADR 0347): CPU % and free RAM, always on the bar */
+.sysload { flex: none; height: 32px; display: inline-flex; align-items: center; gap: 10px; padding: 0 9px; border-radius: var(--r-s);
+  border: 1px solid var(--border); background: var(--bg); font: 500 12px var(--font); white-space: nowrap; color: var(--text-3); }
+.sl-item { display: inline-flex; align-items: baseline; gap: 5px; }
+.sl-k { color: var(--text-4); font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }
+.sl-v { color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; min-width: 3ch; text-align: right; }
+.sl-free { color: var(--text-4); font-size: 11px; }
+.sl-item[data-tone="amber"] .sl-v { color: var(--amber); }
+.sl-item[data-tone="red"] .sl-v { color: var(--red); }
+.sl-item[data-tone="none"] .sl-v { color: var(--text-4); font-weight: 500; }
+.topbar[data-fit~="2"] .sl-free { display: none; }
+.topbar[data-fit~="6"] .sl-k { display: none; }
+/* the connectors and MCP chip and its panel (ConnectorsChip.tsx, ADR 0347) */
+.cc-chip { gap: 7px; }
+.cc-chip[data-tone="ok"] > svg { color: var(--green); }
+.cc-chip[data-tone="bad"] > svg { color: var(--red); }
+.cc-chip .connectors-label { color: var(--text-2); }
+.cc-row { display: flex; align-items: center; gap: 9px; min-height: 34px; }
+.cc-mark { flex: none; width: 24px; height: 24px; border-radius: var(--r-s); display: grid; place-items: center; font: 700 10px var(--font); color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border); }
+.cc-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cc-text b { font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-text small { font-size: 11.5px; color: var(--text-3); display: inline-flex; align-items: center; gap: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--text-4); }
+.cc-row[data-status="ok"] .cc-dot { background: var(--green); }
+.cc-row[data-status="failed"] .cc-dot, .cc-row[data-status="missing"] .cc-dot { background: var(--red); }
+.cc-row[data-status="untested"] .cc-dot { background: var(--amber); }
+.cc-actions { flex: none; display: inline-flex; align-items: center; gap: 4px; }
+.cc-foot { flex-direction: row; justify-content: flex-end; }
 /* the connectors (SPEC 21) */
 .connectors-btn { gap: 7px; }
 .connector-mark { display: inline-flex; align-items: center; gap: 4px; }

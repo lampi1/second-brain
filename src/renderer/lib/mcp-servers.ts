@@ -1,10 +1,11 @@
 // The app-managed MCP servers in the UI (ADR 0086): one shared state read over IPC (mcpservers:state) and kept fresh by
 // mcpservers:changed, plus the pure readings the cards show: a server's state (works, not tried, token missing, error,
-// off), how many roles may use it, the hub's totals, and the form's text fields to a definition and back; the add
+// off), how many roles may use it, the hub's totals, the top bar chip's count (ADR 0347), and the form's text fields to a definition and back; the add
 // panel's form (ADR 0207: one command line, masked tokens, who uses it) and the drafts the Orchestrator opens there
 // (app_config form → ui:command mcpDraft). Used by ConnectorsHub (Settings → Connettori), McpAddPanel and
 // AgentMcpSection (the agent card's MCP section); pure parts tested in node.
 import { useEffect, useState } from 'react';
+import type { ConnectorState } from '@shared/connectors';
 import type { McpServerDef, McpServerView, McpServersState, McpToolAccess } from '@shared/mcp-servers';
 import { MCP_ACCESS_ROLES, accessOn, idFrom, toolAllowed } from '@shared/mcp-servers';
 import { shellWords, type McpDraft } from '@shared/mcp-paste';
@@ -17,6 +18,19 @@ export function serverStatus(s: McpServerView): ServerStatus {
   if (Object.entries(s.secretMasks).some(([k, m]) => m === null && !(s.login && /^header:authorization$/i.test(k)))) return 'missing';
   if (!s.lastTest) return 'untested';
   return s.lastTest.ok ? 'ok' : 'failed';
+}
+
+/** The top bar's connectors chip (ADR 0347, components/ConnectorsChip.tsx). */
+export type ChipTone = 'ok' | 'bad' | 'idle';
+export const accountStatus = (c: ConnectorState): ServerStatus => (c.status === 'verified' ? 'ok' : c.status === 'failed' ? 'failed' : 'untested');
+
+/** The chip's numbers: working of what is on (accounts in use + servers on), and how many need a fix. An account never
+ *  touched (pending, no account) is not counted: a clean install shows no red. */
+export function chipSummary(accounts: readonly ConnectorState[], servers: readonly McpServerView[]): { ok: number; total: number; bad: number; tone: ChipTone } {
+  const used = accounts.filter(a => a.status !== 'pending' || a.account);
+  const st = [...used.map(accountStatus), ...servers.map(serverStatus).filter(s => s !== 'off')];
+  const ok = st.filter(s => s === 'ok').length, bad = st.filter(s => s === 'failed' || s === 'missing').length;
+  return { ok, total: st.length, bad, tone: bad ? 'bad' : st.length ? 'ok' : 'idle' };
 }
 
 /** The roles that may use at least one of the server's tools (by their card; the role's tool classes aside). */

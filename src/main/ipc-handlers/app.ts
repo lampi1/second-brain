@@ -24,6 +24,7 @@ import { copyFile, type ClipboardLike } from '../file-copy';
 import { showLocal } from '../open-path';
 import { fullScreenSwitch } from '../full-screen';
 import { systemLang } from '../lang';
+import { systemLoadReader } from '../system-load';
 import { useCounts } from '../use-counter';
 import type { HandlerContext, HandlersOf } from './context';
 
@@ -37,6 +38,8 @@ const CLIPBOARD: ClipboardLike = {
     return true;
   },
 };
+// one reader for the app: each poll reads the CPU since the previous one
+const readLoad = systemLoadReader();
 const HIDDEN_CLIPBOARD: ClipboardLike = { writeText: async () => {}, writeRaw: async () => {}, writeImageFromPath: async () => true };
 
 export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, defaultBrain, updates, search, hiddenShell, bumpBrainChoice, rendererErrors }: HandlerContext): HandlersOf<'app' | 'cli' | 'source' | 'update' | 'setup' | 'profile' | 'overlay' | 'log' | 'search' | 'tasks' | 'feed' | 'usecount' | 'worktrees'> {
@@ -108,6 +111,7 @@ export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, 
       repos: [s.brain.settings().appRepo, fs.existsSync(path.join(outDir, '..', '.git')) ? path.dirname(outDir) : null],
     })),
     'app:usage': () => s.brain.usage(),
+    'app:load': () => readLoad(),
     'app:usageRefresh': () => s.brain.refreshUsage(),
     // the usage counter (ADR 0202): local only, zero tokens; the page's batch is checked in use-counter.ts
     'usecount:add': a => useCounts.add(a),
