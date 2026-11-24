@@ -1435,7 +1435,7 @@ export class AcpSession implements HarnessSession {
       } else rpc.resolve(o(m.result));
       return;
     }
-    if (method && hasId) { void this.onAgentRequest(m.id as number | string, method, o(m.params)).catch(e => requestFailed(e, { chatId: this.opts.chatId, what: method, kill: () => this.killNow() })); return; }
+    if (method && hasId) { void this.onAgentRequest(m.id as number | string, method, o(m.params)).catch(e => requestFailed(e, { chatId: this.opts.chatId, what: method, kill: () => this.killNow(), gone: () => !this.proc || this.exited || !this.proc.stdin.writable })); return; }
     if (method) return this.onNotification(method, o(m.params));
   }
 
@@ -1522,7 +1522,7 @@ export class AcpSession implements HarnessSession {
           w.timer = null;
           if (this.exited || this.procExited) { this.briefWaited.delete(id); return; }
           // The recheck must see that grace already elapsed, even when briefReady crosses the runtime broker.
-          void this.onAgentRequest(id, method, p).catch(e => requestFailed(e, { chatId: this.opts.chatId, what: method, kill: () => this.killNow() })).finally(() => {
+          void this.onAgentRequest(id, method, p).catch(e => requestFailed(e, { chatId: this.opts.chatId, what: method, kill: () => this.killNow(), gone: () => !this.proc || this.exited || !this.proc.stdin.writable })).finally(() => {
             if (this.briefWaited.get(id) === w) this.briefWaited.delete(id);
           });
         }, BRIEF_GRACE_MS);

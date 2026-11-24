@@ -122,6 +122,7 @@ describe('Claude parser: what it does not know is reported', () => {
     for (const type of ['keep_alive', 'auth_status', 'tool_progress', 'rate_limit_event']) line(s, { type });
     line(s, { type: 'system', subtype: 'hook_started' });
     for (const subtype of ['thinking_tokens', 'background_tasks_changed', 'vcs_state_changed']) line(s, { type: 'system', subtype }); // CLI 2.1.283, #155
+    line(s, { type: 'system', subtype: 'session_title_changed', title: 'Un titolo', uuid: 'u', session_id: 's' }); // a later CLI, #458
     line(s, { type: 'stream_event', parent_tool_use_id: null, event: { type: 'message_stop' } });
     line(s, { type: 'system', subtype: 'task_updated', task_id: 't', patch: { status: 'running' } });
     line(s, { type: 'system', subtype: 'session_state_changed', state: 'idle' });
