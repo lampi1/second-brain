@@ -47,7 +47,6 @@ export function paths(root) {
   return { root, dir, log: path.join(dir, 'inbox.log'), box: who => path.join(dir, slug(who)) };
 }
 
-// Cross-engine transport is always available; legacy brain-settings.json switches are ignored.
 // Shells started by Cursor's agent carry CURSOR_AGENT=1 (verified in the Cursor CLI bundle, 2026-10-11); Claude Code's
 // carry CLAUDECODE=1.
 export const detectHarness = (env = process.env) => (env.CURSOR_AGENT === '1' ? 'cursor' : env.CLAUDECODE === '1' ? 'claude' : null);

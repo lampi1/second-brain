@@ -31,7 +31,7 @@ const LEGACY_MUTE: Record<string, string> = { devops: 'task', 'devops-alert': 't
 
 /** Keys of removed features (ADR 0201), a dotted path for a nested one: never read, dropped from config.json at the
  *  next start. delegation.maxParallel: no limit on children at once (the owner, 2026-11-23). */
-export const RETIRED_KEYS: readonly string[] = ['pulse', 'headlineOn', 'headlineModel', 'headlineEffort', 'suggestModel', 'suggestDailyUsd', 'delegation.maxParallel'];
+export const RETIRED_KEYS: readonly string[] = ['pulse', 'headlineOn', 'headlineModel', 'headlineEffort', 'suggestModel', 'suggestDailyUsd', 'delegation.maxParallel', 'messaging'];
 /** Whether a saved file holds a retired key (dotted = nested). */
 export const savedHas = (raw: object, key: string): boolean => {
   let o: unknown = raw;
@@ -129,7 +129,6 @@ export class ConfigStore {
     this.migrateView(raw);
     this.migrateRetired(raw);
     this.migrateTasks(raw);
-    this.migrateMessaging(raw);
     this.migrateCompactWindow(raw !== undefined && raw !== null);
     this.migrateLoadBrake(raw !== undefined && raw !== null);
   }
@@ -186,18 +185,6 @@ export class ConfigStore {
       log.info('settings', 'DevOps settings moved to Task');
     } catch (e) {
       log.warn('settings', 'Task settings migration not saved', { cause: e instanceof Error ? e.message : String(e), hint: 'the old values apply for this run; the next start retries' });
-    }
-  }
-
-  /** Retire the old false in config.json. fromSaved already normalizes it through the schema's defaults;
-   *  persist that compatibility value for older releases without changing engine or action permissions. */
-  private migrateMessaging(raw: unknown): void {
-    if ((raw as { messaging?: { crossHarness?: unknown } } | null)?.messaging?.crossHarness !== false) return;
-    try {
-      this.save(this.saved);
-      log.info('settings', 'retired cross-engine messaging switch migrated to always available');
-    } catch (e) {
-      log.warn('settings', 'messaging migration not saved', { cause: e instanceof Error ? e.message : String(e), hint: 'messaging is available for this run; the next start retries the migration' });
     }
   }
 

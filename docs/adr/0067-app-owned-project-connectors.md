@@ -1,6 +1,6 @@
 # 0067 — App-owned GitHub and Jira project connectors
 
-Date: 2026-10-17. Status: proposed for build 1 integration.
+Date: 2026-10-17. Status: superseded by ADR 0086 (withdrawn 2026-11-25 by the owner, ADR 0352: never built; the MCP connectors of [ADR 0086](0086-app-managed-mcp-servers.md) do it). Was: proposed for build 1 integration.
 
 The first setup must connect the user's actual tools after the AI setup. The existing
 onboarding v2 module prepares harness MCP configuration, but has no production trust,

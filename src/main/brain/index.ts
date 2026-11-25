@@ -9,7 +9,6 @@
 // state, never its tracked files). The routing table is gone (ADR 0210).
 import { Notification, shell, type BrowserWindow } from 'electron';
 import fs from 'node:fs';
-import { migrateCrossHarness } from './brain-settings';
 import path from 'node:path';
 import type { BudgetAlert, DomainSyncStatus, FeedEvent, SettingChange, Settings, SyncChoice, Usage } from '../../shared/contract';
 import type { Emitter } from '../ipc';
@@ -193,12 +192,6 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     // the domains' first sync runs beside the start (a slow remote never holds the app back); its status says the rest
     sync.refresh();
     void sync.start().catch(e => log.warn('sync', 'first sync failed', { cause: errText(e), hint: 'the sync status says which domain and why' }));
-    // Retire only a valid legacy false, visibly, so an older installed inbox also stops refusing cross-engine mail.
-    try {
-      const migration = migrateCrossHarness(root);
-      if (migration === 'migrated') log.info('settings', 'retired brain messaging switch migrated to always available', { data: { key: 'crossHarnessMessages', from: false, to: true } });
-      else if (migration === 'unreadable') log.warn('settings', 'legacy brain settings unreadable: left unchanged', { hint: 'the app still exchanges messages; update the installed inbox tool to ignore the retired switch outside the app' });
-    } catch (e) { log.warn('settings', 'legacy brain messaging migration not saved', { cause: errText(e), hint: 'the app still exchanges messages; the next start retries, or update the installed inbox tool' }); }
     live = new Live({ root, stateFile: file('live-state.json'), node: bgNode, onEvents: publishRaw, onFile: onBrainFile,
       ...(product ? { chatInputs: new FileRevision(chatInputs(root, node.env)) } : {}), ...(ctx.skipChat ? { skipChat: ctx.skipChat } : {}) });
     try { await live.start(); } catch (e) { log.error('brain', 'live feed failed to start', { cause: errText(e), hint: `check the brain folder ${root}` }); }

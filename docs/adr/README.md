@@ -12,34 +12,34 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 Read these for how the app works today. "Partly superseded" records name the later record that changed a part.
 
 - [0001](0001-stack.md) Stack: Electron + TypeScript + React + Vite, tests with Vitest and Playwright — accepted
-- [0002](0002-cli-harness.md) Chats run through the official CLIs, spoken to directly (no SDK runtime dependency) — accepted, partly superseded by 0010
-- [0003](0003-browser-mcp.md) Internal browsers exposed to agents as a hand-written local MCP server — accepted, partly superseded by 0237
+- [0002](0002-cli-harness.md) Chats run through the official CLIs, spoken to directly (no SDK runtime dependency) — accepted, partly superseded by 0010; amended by 0290
+- [0003](0003-browser-mcp.md) Internal browsers exposed to agents as a hand-written local MCP server — accepted, partly superseded by 0237; amended by 0050
 - [0004](0004-brain-and-product.md) The brain is a folder the app points to; the product never contains personal data — accepted
-- [0006](0006-ai-driven.md) The app is AI-driven: self-test, logs, doctor, and an app-control MCP — accepted
-- [0007](0007-self-hosting.md) Developing the app from the app: stable release + dev instance, promotion with green tests — accepted
+- [0006](0006-ai-driven.md) The app is AI-driven: self-test, logs, doctor, and an app-control MCP — accepted; amended by 0050
+- [0007](0007-self-hosting.md) Developing the app from the app: stable release + dev instance, promotion with green tests — accepted; amended by 0075
 - [0008](0008-live-changes.md) Live changes: settings as data, silent updates, a change log; never silent on protected things — accepted, partly superseded by 0020
 - [0009](0009-brain-settings-budget-estimates.md) Settings as data with agent proposals; calm toasts; spending limits that never stop; honest estimates — accepted
-- [0010](0010-monolith-engines.md) A monolith with two engines: Claude embedded, Cursor CLI the only external piece — accepted
+- [0010](0010-monolith-engines.md) A monolith with two engines: Claude embedded, Cursor CLI the only external piece — accepted; amended by 0267
 - [0011](0011-engines-generic.md) Any engine: one adapter interface, Claude and Cursor are only the first two — accepted
-- [0012](0012-login-handoff.md) Login hand-off: progress while waiting, the account from the credentials file, the password only on a click — accepted
+- [0012](0012-login-handoff.md) Login hand-off: progress while waiting, the account from the credentials file, the password only on a click — accepted; amended by 0310
 - [0013](0013-run-code-blocks.md) "Esegui" on a chat's shell blocks: the user's click, PowerShell 5.1 in the app, the outcome back to the chat — accepted
 - [0014](0014-long-chats-handoff.md) Long chats: context size, hand-off note and "Riprendi" in a new chat — accepted, partly superseded by 0031, 0352
 - [0015](0015-chat-mail-real-time.md) Mail between chats delivered by the app in real time; the user's interrupt is not an error — accepted
-- [0016](0016-devops-single-page.md) One DevOps page with the content inside; Oggi and Adesso removed — accepted
+- [0016](0016-devops-single-page.md) One DevOps page with the content inside; Oggi and Adesso removed — accepted; amended by 0079
 - [0017](0017-commands-news-regia-answers.md) Commands left for the user, the Regia's news, questions answered in the Regia — accepted
 - [0018](0018-skills-agents.md) Skills and agents: a section to list, create, edit and delete them; "/" in every chat input — accepted, partly superseded by 0083
-- [0019](0019-questions-context-window.md) Questions carry their context; the typing field keeps the keyboard; questions in a window (optional) — accepted
-- [0021](0021-regia-overlay-and-several-regie.md) The Regia as a floating overlay; several Regie in tabs; "Pulisci" — accepted, partly superseded by 0028, 0035, 0068, 0071
-- [0022](0022-notifications-only-actionable.md) Only what needs the user interrupts; the rest is a list he reads when he wants — accepted
+- [0019](0019-questions-context-window.md) Questions carry their context; the typing field keeps the keyboard; questions in a window (optional) — accepted; amended by 0044
+- [0021](0021-regia-overlay-and-several-regie.md) The Regia as a floating overlay; several Regie in tabs; "Pulisci" — accepted, partly superseded by 0028, 0035, 0068, 0071; amended by 0046
+- [0022](0022-notifications-only-actionable.md) Only what needs the user interrupts; the rest is a list he reads when he wants — accepted; amended by 0102
 - [0023](0023-full-text-search.md) Full-text search in Ctrl+K — accepted
 - [0024](0024-quality-four-true-metrics.md) Qualità: four true metrics, each with its source; /api/quality answered by main — accepted
 - [0025](0025-warm-claude-engine.md) A Claude engine started ahead for the next new chat; start-up timings in the logs — accepted
 - [0026](0026-engine-processes-and-self-healing.md) Engine processes in Job Objects, idle release, orphan sweep; the app heals itself — accepted; amended by 0338
-- [0027](0027-light-branch-check.md) Light check on branches, full check only on main — accepted, partly superseded by 0231
+- [0027](0027-light-branch-check.md) Light check on branches, full check only on main — accepted, partly superseded by 0231; amended by 0075
 - [0028](0028-regia-widget-bottom-right.md) The Regia as a widget docked bottom-right, always visible — accepted
-- [0029](0029-devops-alerts-and-record-chats.md) DevOps alerts with a sound, and "Apri chat" on every DevOps record — accepted
-- [0030](0030-shared-improvement-loop.md) one shared, honest self-improvement loop (step 1: estimates) — accepted, partly superseded by 0053
-- [0031](0031-compaction-window-and-cold-continuation.md) Compaction window per process, and the invisible continuation of cold chats — accepted
+- [0029](0029-devops-alerts-and-record-chats.md) DevOps alerts with a sound, and "Apri chat" on every DevOps record — accepted; amended by 0079
+- [0030](0030-shared-improvement-loop.md) one shared, honest self-improvement loop (step 1: estimates) — accepted, partly superseded by 0053; amended by 0082
+- [0031](0031-compaction-window-and-cold-continuation.md) Compaction window per process, and the invisible continuation of cold chats — accepted; amended by 0051, 0056
 - [0033](0033-generative-ui-catalog.md) Generative UI, step 1: a catalog of trusted components (show_ui) — accepted
 - [0034](0034-regia-new-chat-and-open-anywhere.md) "Nuova chat" from the Regia's input, "Apri" on the chats she opens — accepted
 - [0035](0035-one-question-popup-not-in-the-regia.md) One request popup at a time, never in the Regia; "Rispondi dopo" and the "Da rispondere" queue — accepted, partly superseded by 0044
@@ -50,15 +50,15 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0041](0041-procedures-page.md) Procedure replaces Comunicazione: the brain's procedures, read-only, copy only — accepted, partly superseded by 0181, 0182
 - [0042](0042-fast-e2e.md) Fast e2e: parallel workers, exclusive specs, close without Electron's teardown — accepted
 - [0043](0043-formatted-texts-for-colleagues.md) Texts for colleagues show formatted and copy formatted — accepted
-- [0044](0044-questions-one-centered-modal-any-order.md) The questions window is one centered modal, no waiting strip, answers in any order — accepted, partly superseded by 0269
-- [0045](0045-devops-chips-system-browser.md) A chat's DevOps link chips open in the system browser — accepted
+- [0044](0044-questions-one-centered-modal-any-order.md) The questions window is one centered modal, no waiting strip, answers in any order — accepted, partly superseded by 0269; amended by 0049
+- [0045](0045-devops-chips-system-browser.md) A chat's DevOps link chips open in the system browser — accepted; amended by 0079
 - [0046](0046-engines-keys-cross-engine-compare.md) Generic engines: one registry, API keys in Settings, one cross-engine switch, model A vs model B — accepted, partly superseded by 0065, 0352
 - [0048](0048-close-browser-tiles-like-chats.md) Browser tiles close like chats; the agent is told the user closed its tab — accepted
 - [0049](0049-questions-window-readable.md) The questions window reads as a page: question large, why folded, options as cards, a rail for the queue — accepted, partly superseded by 0269
 - [0050](0050-screenshots-on-file-scaled-for-agents.md) Screenshots go to file; the agent's image is scaled to ~1000 px — accepted
-- [0051](0051-savings-newchat-table-200k-short-regie.md) Savings: "Nuova chat" through the table, Claude chats compact at 200k, Regie compact on a new day — accepted, partly superseded by 0078
-- [0052](0052-api-credits-text-calls.md) The Max plan's API credits: the judge and text-only calls through the app — accepted
-- [0053](0053-remove-job-estimate.md) Remove the per-job cost/time estimate ("Quanto costerà?") — accepted
+- [0051](0051-savings-newchat-table-200k-short-regie.md) Savings: "Nuova chat" through the table, Claude chats compact at 200k, Regie compact on a new day — accepted, partly superseded by 0078; amended by 0056
+- [0052](0052-api-credits-text-calls.md) The Max plan's API credits: the judge and text-only calls through the app — accepted; amended by 0210
+- [0053](0053-remove-job-estimate.md) Remove the per-job cost/time estimate ("Quanto costerà?") — accepted; amended by 0101
 - [0054](0054-macos-and-linux.md) macOS and Linux beside Windows, in stages — accepted
 - [0055](0055-cli-contracts.md) CLI contracts: format drift reported, real streams recorded, versions checked — accepted
 - [0056](0056-one-regia-delivery-rule-one-continuity.md) One rule for what reaches a Regia, one "continuity" concept — accepted
@@ -67,40 +67,39 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0059](0059-brain-domains-and-multi-pc-sync.md) Brain domains and multi-PC sync: one person, many PCs, the work stays where it belongs — accepted
 - [0060](0060-codex-engine-and-per-launch-rules.md) Codex as a third chat engine, and the brain's rules loaded per launch — accepted
 - [0061](0061-one-app-repo-for-every-pc.md) One app repo for every PC: product only, guarded before each push — accepted, partly superseded by 0231
-- [0062](0062-rules-in-product.md) Rules machinery in the product: the app enforces, the brain holds the content — accepted
+- [0062](0062-rules-in-product.md) Rules machinery in the product: the app enforces, the brain holds the content — accepted; amended by 0277
 - [0063](0063-browser-rules-in-the-tools.md) Browser rules enforced by the tools, not only written in the brain — accepted
 - [0064](0064-mail-between-chats-never-waits-for-the-cpu.md) Messages between chats never wait for the CPU — accepted
 - [0065](0065-settings-search-always-messaging.md) Search settings and keep cross-engine messaging available — accepted
 - [0066](0066-agent-operating-manifest.md) Agent operating manifest — accepted, partly superseded by 0078, 0071
-- [0067](0067-app-owned-project-connectors.md) App-owned GitHub and Jira project connectors — proposed
 - [0068](0068-persistent-coordinator-column.md) The Grindhouse beside one persistent Orchestrator column — accepted
 - [0071](0071-all-workers-in-grindhouse.md) Every worker lives in the Grindhouse — accepted
 - [0072](0072-fresh-brain-starts-empty.md) A fresh brain starts empty: the app's rules, tools and agents stay in the app — accepted
-- [0073](0073-agent-loop-under-approval.md) The agents' improvement loop runs under the user's approval — accepted, partly superseded by 0077
+- [0073](0073-agent-loop-under-approval.md) The agents' improvement loop runs under the user's approval — accepted, partly superseded by 0077; amended by 0082, 0104
 - [0074](0074-update-by-asking-and-local-release-drafts.md) A developer updates by asking the app; release drafts without GitHub Actions — accepted, partly superseded by 0231
 - [0075](0075-update-button-without-tests.md) "Aggiorna" in Settings: the latest version at once, without the test suite — accepted
-- [0076](0076-brain-scripts-and-changelog.md) The brain's scripts and its changelog, two sections under Brain — accepted, partly superseded by 0096, 0263
-- [0077](0077-agents-and-skills-only.md) Agents and skills only: a self-maintaining Brain section — accepted, partly superseded by 0083, 0125, 0153, 0291
+- [0076](0076-brain-scripts-and-changelog.md) The brain's scripts and its changelog, two sections under Brain — accepted, partly superseded by 0096, 0263; amended by 0111
+- [0077](0077-agents-and-skills-only.md) Agents and skills only: a self-maintaining Brain section — accepted, partly superseded by 0083, 0125, 0153, 0291; amended by 0082, 0098, 0101
 - [0079](0079-remove-improve-section-and-rename-devops-to-task.md) "Migliora l'app" removed; DevOps renamed Task; Fatto becomes a log — accepted, partly superseded by 0181
 - [0081](0081-agent-screenshots-everywhere.md) Agent screenshots everywhere: a path is enough, nothing remote ever loads — accepted
 - [0082](0082-orchestrator-agent-changes-apply-and-learned-rules-in-regole.md) The Orchestrator changes agents by itself; learned rules live on the Regole page — accepted, partly superseded by 0243
-- [0083](0083-generic-roles-and-direct-delegation.md) Nine fixed roles, direct parent-to-child delegation in visible chats — accepted, partly superseded by 0125, 0186, 0100; amended by 0345
-- [0084](0084-finished-workers-close-by-themselves.md) Finished workers close by themselves; held ones say what they wait for — accepted
+- [0083](0083-generic-roles-and-direct-delegation.md) Nine fixed roles, direct parent-to-child delegation in visible chats — accepted, partly superseded by 0125, 0186, 0100; amended by 0085, 0091, 0226, 0097, 0102, 0104, 0224, 0345
+- [0084](0084-finished-workers-close-by-themselves.md) Finished workers close by themselves; held ones say what they wait for — accepted; amended by 0134
 - [0085](0085-full-default-permissions-narrowed-from-the-card.md) Every role may do everything by default; the user narrows it from its card — accepted, partly superseded by 0186, 0347
-- [0086](0086-app-managed-mcp-servers.md) MCP servers managed by the app, given to every engine through a local gateway — accepted
-- [0087](0087-quick-path-and-task-estimates.md) The quick path and task estimates from similar tasks — accepted
-- [0088](0088-shareable-brain-without-the-app.md) The brain without the app: a shareable zip and a standalone install — accepted, partly superseded by 0125
-- [0089](0089-token-savings-without-quality-loss.md) Token savings that keep the same content — accepted
+- [0086](0086-app-managed-mcp-servers.md) MCP servers managed by the app, given to every engine through a local gateway — accepted; amended by 0273
+- [0087](0087-quick-path-and-task-estimates.md) The quick path and task estimates from similar tasks — accepted; amended by 0101
+- [0088](0088-shareable-brain-without-the-app.md) The brain without the app: a shareable zip and a standalone install — accepted, partly superseded by 0125; amended by 0156
+- [0089](0089-token-savings-without-quality-loss.md) Token savings that keep the same content — accepted; amended by 0209
 - [0090](0090-orchestrator-turn-budget-and-qualified-skills.md) The Orchestrator's turn budget; granted skills by their qualified name — accepted
-- [0091](0091-review-independence-is-a-clean-session.md) A review's independence is its clean session; roles without a model follow the table; untouched roles follow the chosen engine — accepted
+- [0091](0091-review-independence-is-a-clean-session.md) A review's independence is its clean session; roles without a model follow the table; untouched roles follow the chosen engine — accepted; amended by 0210, 0309
 - [0092](0092-cursor-effort-and-effective-effort-label.md) Cursor takes an effort; the tiles show the effort in use — accepted
 - [0093](0093-task-reader-in-the-app-and-remembered-connectors.md) The Task page's DevOps reader ships with the app; connector verification is remembered — accepted
 - [0094](0094-hybrid-brain-search.md) Hybrid brain search: BM25 + a local multilingual embedding model — accepted
-- [0095](0095-classifier-outcomes-from-the-ledger.md) Classifier outcomes come from the ledger too; verified and unverified stay apart — accepted, partly superseded by 0291
+- [0095](0095-classifier-outcomes-from-the-ledger.md) Classifier outcomes come from the ledger too; verified and unverified stay apart — accepted, partly superseded by 0291; amended by 0100
 - [0096](0096-scripts-saved-without-the-orchestrator.md) Scripts are saved where the command ran, not by the Orchestrator alone — accepted, partly superseded by 0263
-- [0097](0097-judge-router-in-use-and-orchestrator-standing.md) The Judge's samples run in the user's own app; the Orchestrator points to Router and Judge and levels up by its decisions — accepted
+- [0097](0097-judge-router-in-use-and-orchestrator-standing.md) The Judge's samples run in the user's own app; the Orchestrator points to Router and Judge and levels up by its decisions — accepted; amended by 0100
 - [0098](0098-role-memory-through-agent-report.md) Role memory reaches Claude chats and is written through agent_report — accepted
-- [0099](0099-tokens-and-speed-of-the-orchestration.md) Tokens and speed of the orchestration: fewer model round trips, warm engines, quiet results — accepted
+- [0099](0099-tokens-and-speed-of-the-orchestration.md) Tokens and speed of the orchestration: fewer model round trips, warm engines, quiet results — accepted; amended by 0224
 - [0100](0100-five-roles-automatic-verdict-honest-levels.md) Five work roles, a verdict from facts, honest levels — accepted
 - [0101](0101-honest-stats-one-vocabulary.md) Honest statistics, one vocabulary, explanations in place — accepted
 - [0102](0102-the-app-shows-what-it-does-by-itself.md) The app shows what it does by itself — accepted
@@ -109,7 +108,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0108](0108-strategist-plans-with-the-user.md) The Strategist plans with the user: questions, a short plan to approve, its steps on the strip — accepted
 - [0109](0109-evidence-claim-on-every-brain-change.md) An evidence claim on every brain change, and the Apprendimento page — accepted
 - [0110](0110-conversation-results-and-evidence.md) Conversation continuity, canonical results and honest evidence — accepted
-- [0111](0111-the-log-page.md) One Log page for everything the app does; trees close as one — accepted
+- [0111](0111-the-log-page.md) One Log page for everything the app does; trees close as one — accepted; amended by 0134
 - [0112](0112-maintenance-reads-the-logs.md) One Manutenzione that reads the app logs and ends in the Orchestrator — accepted, partly superseded by 0132
 - [0113](0113-a-child-without-report-is-closed.md) A delegated chat that ends without agent_report is closed by the app — accepted
 - [0114](0114-one-switch-for-judging.md) One switch turns on the judging of every run, with its daily cost — accepted, partly superseded by 0203
@@ -118,7 +117,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0118](0118-composer-inline-suggestion.md) The chat composer's inline suggestion: local first, a small model after a pause — accepted
 - [0119](0119-simple-onboarding.md) Simple onboarding: the language first, six steps, tool tiles — accepted, partly superseded by 0279
 - [0120](0120-one-language-for-ui-and-ai.md) One language for the UI and the AI, switched from the top bar — accepted
-- [0121](0121-strategist-really-asks.md) The Strategist really asks: a question before the plan, the plan's approval in the questions window — accepted, partly superseded by 0344
+- [0121](0121-strategist-really-asks.md) The Strategist really asks: a question before the plan, the plan's approval in the questions window — accepted
 - [0122](0122-memoria-hub.md) Memoria is the hub: one page with tabs, no Dashboard — accepted, partly superseded by 0243, 0263, 0340
 - [0123](0123-proposals-deck.md) Memoria → Proposte: every proposal is one card in one deck — accepted
 - [0124](0124-saved-queries-and-ideas-migration.md) Saved queries next to scripts, and the ideas scattered in the notes move to ideas.md — accepted, partly superseded by 0263
@@ -131,7 +130,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0131](0131-levels-by-job-size-and-bayesian-performance.md) Levels by job size, a Bayesian performance, the Orchestrator's choices and Flash's answers — accepted, partly superseded by 0296
 - [0132](0132-maintenance-with-research-and-app-ideas.md) The maintenance with research, the «Idee dell'app» tab and the phrases of the day — accepted, partly superseded by 0153, 0173, 0258
 - [0134](0134-finished-chats-close-by-default.md) Finished chats close by default, reliably — accepted
-- [0135](0135-yes-no-questions-and-the-recap.md) Yes/no questions only, «Ci penso dopo», and a recap that unblocks everything — accepted, partly superseded by 0269
+- [0135](0135-yes-no-questions-and-the-recap.md) Yes/no questions only, «Ci penso dopo», and a recap that unblocks everything — accepted, partly superseded by 0269; amended by 0260
 - [0136](0136-persistent-developer-work-cockpit.md) Persistent developer work cockpit — accepted, partly superseded by 0141
 - [0137](0137-lesson-evidence-and-selective-memory.md) Evidence before lesson approval; selective launch memory — accepted, partly superseded by 0153
 - [0138](0138-budget-fresh-sessions.md) Fresh engine sessions at an observed idle boundary — accepted
@@ -146,7 +145,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0147](0147-routine-run-recovery.md) Recover routine executions without restarting the application — accepted
 - [0148](0148-host-driven-routine-steps.md) Advance routine agent steps in the host — accepted
 - [0149](0149-orchestrator-knows-and-configures-the-app.md) The Orchestrator knows the app and changes its configuration — accepted
-- [0150](0150-decision-card-and-automatic-facts.md) One decision card with the chat's brief; memory facts need no approval — accepted
+- [0150](0150-decision-card-and-automatic-facts.md) One decision card with the chat's brief; memory facts need no approval — accepted; amended by 0327
 - [0151](0151-one-notice-card-and-sounds.md) One notice card, one sound per kind — accepted
 - [0152](0152-voice-mode.md) Voice mode: talk to the Orchestrator and Flash, hear the answers — accepted, partly superseded by 0296
 - [0153](0153-one-click-maintenance.md) One-click «Manutenzione»: proposals only on the user's click, issues opened from a card — accepted, partly superseded by 0258
@@ -171,7 +170,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0172](0172-engines-below-normal-priority.md) Engines run below normal CPU priority; stalls say whether the app was working or waiting — accepted
 - [0173](0173-working-line-shows-real-activity.md) The working line shows what the chat really does — accepted
 - [0174](0174-classifiers-calibrated-under-approval.md) Classifiers learn from confirmed outcomes, under the user's approval — accepted
-- [0175](0175-shared-routine-runtime-package.md) One routine runtime for the app and the terminal: `packages/routine-runtime` — accepted, partly superseded by 0179, 0325; amended by 0324
+- [0175](0175-shared-routine-runtime-package.md) One routine runtime for the app and the terminal: `packages/routine-runtime` — amended, partly superseded by 0179, 0325; amended by 0324
 - [0176](0176-routine-package-embedded-secrets.md) Routine packages carry their secrets in clear text (exception to AGENTS.md rule 2) — accepted, partly superseded by 0179, 0325
 - [0177](0177-bounded-routine-polling.md) Bound routine polling to the records it needs — accepted, partly superseded by 0179
 - [0178](0178-mcp-form-and-report-compatibility.md) Accept supported MCP forms and recover harmless report shape errors — accepted
@@ -181,17 +180,17 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0182](0182-task-list-and-detail.md) Task page: one strip per record, detail beside it — accepted
 - [0183](0183-one-read-only-file-viewer.md) One read-only in-app viewer for every file link — accepted
 - [0184](0184-user-pictures-for-roles.md) The user's own picture for a role — accepted
-- [0185](0185-impara-lessons.md) Impara: lessons on a blackboard — accepted
+- [0185](0185-impara-lessons.md) Impara: lessons on a blackboard — accepted; amended by 0230
 - [0186](0186-honest-classifiers-and-statistics.md) Honest classifiers and statistics: one taxonomy, one success, fewer numbers — accepted, partly superseded by 0284, 0285, 0291, 0352
 - [0187](0187-end-of-day-smoothness.md) Closing chats frees what they started; repeated work stops growing with the day — accepted
-- [0188](0188-impara-research-and-animated-board.md) Impara: research and verification before teaching, the animated board, the user's teacher — accepted
+- [0188](0188-impara-research-and-animated-board.md) Impara: research and verification before teaching, the animated board, the user's teacher — accepted; amended by 0206
 - [0189](0189-impara-subjects-and-spaced-review.md) Impara: subjects, verified review cards, spaced review — accepted
 - [0190](0190-impara-tutor-and-entry-points.md) Impara: a tutor that answers at once, and learning from where you are — accepted
 - [0191](0191-night-mode.md) Modalità notte: the user is away, the agents go on with the recommended choices — accepted
 - [0192](0192-logs-correlation-digest-and-page-errors.md) Logs: run correlation, interface errors, a page's error card and a 90-day daily digest — accepted
 - [0193](0193-proposals-ask-only-when-not-obvious.md) Proposte asks only when the answer is not obvious — accepted
 - [0194](0194-itemized-maintenance-lint-and-success-criteria.md) Maintenance quality: itemized changes, a brain lint and «riuscito se…» — accepted
-- [0195](0195-candidate-brain-and-role-reflection.md) The maintenance writes a candidate brain, and reflects on one role's text as a trial — accepted
+- [0195](0195-candidate-brain-and-role-reflection.md) The maintenance writes a candidate brain, and reflects on one role's text as a trial — accepted; amended by 0320
 - [0197](0197-corrections-kind-examples-and-ppi.md) The user's corrections counted by the app, the kind of work by examples, and PPI for role success — accepted, partly superseded by 0291
 - [0198](0198-developer-speed-typecheck-e2e-baseline-agents-map.md) Developer speed: TypeScript 7 typecheck, an e2e baseline of known reds, AGENTS.md as a map — accepted
 - [0199](0199-agent-runs-in-sqlite.md) The agent runs move from agent-runs.json to SQLite (userData/app.db) — accepted
@@ -200,7 +199,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0202](0202-andamento-and-usage-counter.md) «Andamento»: the four statistics pages in one, and a local usage counter — accepted, partly superseded by 0291
 - [0203](0203-nightly-sampled-reviews.md) Agent levels: a nightly sample of reviews under a daily cap — accepted
 - [0204](0204-impara-one-field-quiz-kinds-and-score.md) Impara: one start field, more question kinds with instant feedback, an honest score — accepted
-- [0205](0205-impara-studio-visuals-and-quality.md) Impara: the «Studio» column, a visual for each piece, and a quality gate — accepted
+- [0205](0205-impara-studio-visuals-and-quality.md) Impara: the «Studio» column, a visual for each piece, and a quality gate — accepted; amended by 0230
 - [0206](0206-impara-file-driven-web-research.md) Impara: web research driven by the user's files, through a deterministic filter — accepted
 - [0207](0207-settings-redesign-and-easy-mcp.md) Settings redesign, MCP servers in one paste, the Orchestrator configures everything — accepted, partly superseded by 0296
 - [0208](0208-docs-keep-up-with-the-code.md) Docs keep up with the code: tool catalog, Guida coverage, README freshness — accepted, partly superseded by 0340
@@ -208,14 +207,14 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0210](0210-remove-model-routing.md) Remove the model-routing classifier: every agent runs on its own card's model — accepted, partly superseded by 0291
 - [0211](0211-small-fixes-and-real-effort.md) Agent card picks model, effort and context; real effort names; owner's small fixes of 2026-10-31 — accepted
 - [0212](0212-remove-personal-browser.md) Remove the personal Browser page — accepted
-- [0213](0213-impara-active-study.md) 0213. Impara: exercises and an oral exam — accepted
+- [0213](0213-impara-active-study.md) 0213. Impara: exercises and an oral exam — accepted; amended by 0230
 - [0214](0214-audio-parakeet-speed-podcast.md) 0214. Audio: Parakeet transcription, voice speed, a two-voice podcast, English words — accepted
 - [0215](0215-faster-recording-transcription.md) 0215. Faster recording transcription: fewer, longer pieces for Whisper — accepted
-- [0216](0216-opencode-engine.md) 0216. OpenCode as a built-in ACP engine — accepted
+- [0216](0216-opencode-engine.md) 0216. OpenCode as a built-in ACP engine — accepted; amended by 0232
 - [0217](0217-close-cancels-the-tree.md) 0217. Closing a chat with ✕ cancels its whole tree — accepted
 - [0219](0219-phone-bridge-telegram.md) 0219. Phone bridge: the Orchestrator through a private Telegram bot — accepted
 - [0220](0220-role-skill-alignment.md) Scoped role skills and verified Plan intake — accepted
-- [0221](0221-acp-catalog-wire-replay.md) 0221. An ACP agent catalog, a record/replay harness for the engine wires, a turn-start watchdog — accepted; amended by 0332
+- [0221](0221-acp-catalog-wire-replay.md) 0221. An ACP agent catalog, a record/replay harness for the engine wires, a turn-start watchdog — accepted
 - [0222](0222-cold-start-admission.md) Cold-start admission: a slot semaphore, CPU/RAM only as an emergency brake — accepted
 - [0223](0223-quiet-turn-ends.md) Plain turn ends and starts are quiet news for the Orchestrator — accepted
 - [0224](0224-report-corrections-batching-caps.md) Report corrections, a short child-result debounce, caps instead of refusals — accepted
@@ -230,13 +229,13 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0234](0234-authoritative-jobs-and-request-receipts.md) One job projection and exact request receipts — accepted
 - [0235](0235-measure-launch-memory-recall.md) Measure how well the launch memory finds the right fact — accepted
 - [0236](0236-episodic-memory-past-run-examples.md) Episodic memory: a role starts with examples of its own verified past successes — accepted
-- [0237](0237-agents-type-passwords-on-every-host.md) Agents type passwords on every host — accepted
+- [0237](0237-agents-type-passwords-on-every-host.md) Agents type passwords on every host — accepted; amended by 0310
 - [0238](0238-approved-work-continues-by-itself.md) Approved work goes on by itself: stalls, crashes, waits and pushes need no human nudge — accepted
-- [0239](0239-single-entry-through-the-orchestrator.md) Single entry: the user talks only with the Orchestrator, and a command is asked once — accepted, partly superseded by 0275, 0299
+- [0239](0239-single-entry-through-the-orchestrator.md) Single entry: the user talks only with the Orchestrator, and a command is asked once — accepted, partly superseded by 0275, 0299; amended by 0272
 - [0240](0240-idle-engines-end-and-unsaved-work-holds.md) Idle engines end with their tools; a chat with unsaved git work does not close by itself — accepted
-- [0241](0241-skill-packages-and-skill-library.md) A skill is a package in .agents/skills, with its own page, history and roles — accepted
+- [0241](0241-skill-packages-and-skill-library.md) A skill is a package in .agents/skills, with its own page, history and roles — accepted; amended by 0277
 - [0242](0242-role-skill-instead-of-role-notes.md) A role's know-how is its role skill; what it learns is a lesson the user approves — accepted, partly superseded by 0257
-- [0243](0243-fixed-core-instead-of-rules.md) Rules are gone: a fixed core is always loaded, everything else is a skill — accepted
+- [0243](0243-fixed-core-instead-of-rules.md) Rules are gone: a fixed core is always loaded, everything else is a skill — accepted; amended by 0277, 0320
 - [0244](0244-migration-moves-sections-into-skills.md) The migration moves a section into its skill, it no longer copies it — accepted
 - [0245](0245-memory-browser.md) Memoria shows the memory outside skills as one searchable shelf — accepted
 - [0246](0246-bash-backslash-writes-refused.md) A Bash command that writes text with backslashes is refused — accepted
@@ -247,13 +246,13 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0251](0251-chat-status-from-real-state.md) A chat tile has one short status, from real state only — accepted
 - [0252](0252-parent-assignment-is-approval.md) A parent's assignment is approval inside its scope — accepted
 - [0253](0253-user-only-blocks-ask-the-user.md) A run stopped on a step only the user can do asks the user at once — accepted, partly superseded by 0262
-- [0254](0254-permissions-from-the-brain.md) Permissions v3: everything is allowed, the only blocks are the user's brain rules — accepted, partly superseded by 0294
+- [0254](0254-permissions-from-the-brain.md) Permissions v3: everything is allowed, the only blocks are the user's brain rules — accepted, partly superseded by 0294; amended by 0290
 - [0255](0255-phone-answers-worker-yes-no.md) Worker Sì/No questions answered from the phone (Telegram and Remote Control) — accepted, partly superseded by 0275
-- [0256](0256-live-model-lists.md) Live model lists: every engine lists its own models; models.json only overrides — accepted
+- [0256](0256-live-model-lists.md) Live model lists: every engine lists its own models; models.json only overrides — accepted; amended by 0267
 - [0257](0257-skill-changes-only-from-maintenance.md) Skill changes come only from Maintenance, never one card per run — accepted
 - [0258](0258-maintenance-research-goes-deeper.md) The maintenance research goes deeper: 20 $ cap, extra-high effort, a quality bar for every card — accepted
-- [0259](0259-question-card-redesign.md) The question card, redesigned: still while open, «Bivio», Esegui as a question — accepted, partly superseded by 0275, 0269
-- [0260](0260-agents-recap.md) The recap is a short list per agent (app_agents_recap) — accepted
+- [0259](0259-question-card-redesign.md) The question card, redesigned: still while open, «Bivio», Esegui as a question — accepted, partly superseded by 0275, 0269; amended by 0272, 0327
+- [0260](0260-agents-recap.md) The recap is a short list per agent (app_agents_recap) — accepted; amended by 0270
 - [0261](0261-agent-message-envelope.md) What the user did not type reaches a Claude engine in an `<agent-message>` envelope — accepted
 - [0262](0262-a-yes-is-not-a-run.md) A Yes is not a run: user steps resume on evidence, «hai eseguito?» never passes as a run — accepted
 - [0263](0263-scripts-and-queries-live-in-skills.md) Scripts and queries live in their skills; the old folders move there by themselves — accepted
@@ -262,14 +261,14 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0266](0266-the-app-writes-the-journal-fatto-line.md) The app writes the journal's «fatto» line of every result — accepted
 - [0267](0267-installed-claude-code-and-registry-models.md) The installed Claude Code runs by default; every menu adds the registry's models — accepted
 - [0268](0268-brief-maps-engine-labels-to-yes-no.md) A brief maps an engine's own option labels to Sì / No — accepted
-- [0269](0269-questions-live-in-the-orchestrator.md) Questions live in the Orchestrator; it speaks for the user — accepted
+- [0269](0269-questions-live-in-the-orchestrator.md) Questions live in the Orchestrator; it speaks for the user — accepted; amended by 0274, 0275, 0327
 - [0270](0270-short-recap-by-default.md) The recap is short by default; the detail on request — accepted
 - [0271](0271-project-maps.md) Project maps: a project drawn in place of its code, kept current by its agents — accepted; amended by 0316, 0322, 0330
 - [0272](0272-esegui-precheck.md) Esegui commands are checked before the user sees them — accepted
 - [0273](0273-mcp-oauth-login.md) Remote MCP connectors log in with the MCP OAuth flow — accepted
-- [0274](0274-answers-in-the-users-words.md) The user answers in his own words; the Orchestrator's column has no answer box — accepted
+- [0274](0274-answers-in-the-users-words.md) The user answers in his own words; the Orchestrator's column has no answer box — accepted; amended by 0275, 0327, 0329
 - [0275](0275-orchestrator-counts-as-the-user.md) What the Orchestrator says counts as the user's own, always; the project maps take «Stato»'s place — accepted
-- [0276](0276-planning-on-the-project-maps.md) Planning on the project maps: the Strategist proposes a map, the app keeps it live — accepted; amended by 0326, 0330
+- [0276](0276-planning-on-the-project-maps.md) Planning on the project maps: the Strategist proposes a map, the app keeps it live — accepted; amended by 0307, 0326, 0330
 - [0277](0277-brain-documents-in-the-brain-rules-skill.md) The brain tools find the brain's own documents at the root or in the `brain-rules` skill — accepted
 - [0278](0278-roles-use-any-installed-skill.md) A role may use any installed skill, and looking never asks — accepted
 - [0279](0279-onboarding-in-three-moments.md) Onboarding in three moments: language and name, your AI, the first real request — accepted
@@ -279,15 +278,15 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0284](0284-performance-by-model.md) The level is the role's, the performance is the model's — accepted
 - [0285](0285-estimates-by-role-and-model.md) An estimate rests on the role and its model before the kind of work — accepted, partly superseded by 0291
 - [0286](0286-run-goal-close-cause-no-child-feedback.md) A run keeps its goal without the app's label and says why it was closed; `agent_child_feedback` is gone — accepted
-- [0287](0287-one-agent-window-one-full-screen.md) One agent window, one full screen, a quiet top bar — accepted; amended by 0349
+- [0287](0287-one-agent-window-one-full-screen.md) One agent window, one full screen, a quiet top bar — accepted; amended by 0292, 0298, 0301, 0311, 0349
 - [0288](0288-maintenance-bug-cards-by-answers-one-lesson.md) The maintenance stays on the click: app-bug cards follow the user's answers, a report notes one lesson — accepted
 - [0289](0289-fewer-refusals-agents-learn-by-failing.md) Fewer refusals an agent learns only by failing: long outputs are cut, the tools' commands name the copy, a question has a place without an Orchestrator — accepted
 - [0290](0290-claude-chats-start-in-default-the-app-answers.md) A Claude chat starts in «default»: the app answers its requests, not the engine's own default mode — accepted, partly superseded by 0294
 - [0291](0291-remove-kind-by-examples-and-classificatori.md) The kind of work by examples and the Classificatori section are removed — accepted
-- [0292](0292-strip-dot-time-and-cost-always.md) The strip: a state dot in front, time and cost against the estimate always in sight — accepted
-- [0293](0293-children-are-rows-face-back-on-the-strip.md) A delegated chat is one row like its parent; the role's face is back on the strip — accepted
+- [0292](0292-strip-dot-time-and-cost-always.md) The strip: a state dot in front, time and cost against the estimate always in sight — accepted; amended by 0293, 0311
+- [0293](0293-children-are-rows-face-back-on-the-strip.md) A delegated chat is one row like its parent; the role's face is back on the strip — accepted; amended by 0295, 0311
 - [0294](0294-no-app-guard-on-settings-and-hooks.md) No permission question outside the brain's rules: the app's guard on settings and hooks is removed — accepted
-- [0295](0295-little-people-as-sprites.md) The roles are little people at work on the strips — accepted
+- [0295](0295-little-people-as-sprites.md) The roles are little people at work on the strips — accepted; amended by 0311, 0312
 - [0296](0296-fast-mode-user-model-per-task-flash-removed.md) «Fast» beside «Plan», one task on the model the user names, Flash removed — accepted
 - [0297](0297-click-reactions-and-touch-nudge.md) A click on a little person: a pat or a whack of the stick, and a nudge on the run — accepted
 - [0298](0298-weekly-limit-on-the-top-bar.md) The weekly limit on the top bar, the 5-hour window from 70% — accepted
@@ -295,55 +294,55 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0300](0300-quote-what-is-on-screen.md) Quote what is on screen: select a text, right click, it is in the prompt field — accepted
 - [0301](0301-maps-button-on-the-orchestrator-head.md) The project maps button is back on the Orchestrator's head — accepted
 - [0302](0302-maps-show-what-moves-and-the-order.md) The maps show what moves, the order of the steps, and the passage between levels — accepted; amended by 0326
-- [0303](0303-little-people-speak.md) The little people speak: two words of nonsense, a character per role — accepted
+- [0303](0303-little-people-speak.md) The little people speak: two words of nonsense, a character per role — accepted; amended by 0312
 - [0304](0304-chess-against-the-agents.md) Scacchi: chess against the agents, Stockfish as a separate program — accepted
-- [0305](0305-little-people-show-the-work-lines-of-the-day.md) The little people show the work at hand, speak while they work, and get new lines every day — accepted
+- [0305](0305-little-people-show-the-work-lines-of-the-day.md) The little people show the work at hand, speak while they work, and get new lines every day — accepted; amended by 0311, 0312
 - [0306](0306-the-people-of-the-roles-grow-up.md) The people of the roles grow up: adult bodies, faces and characters — accepted
-- [0307](0307-maps-open-full-screen-and-tell-every-passage.md) The maps open full screen, tell every step and every passage, and are redrawn from a button — accepted; amended by 0316, 0322, 0326
+- [0307](0307-maps-open-full-screen-and-tell-every-passage.md) The maps open full screen, tell every step and every passage, and are redrawn from a button — accepted; amended by 0316, 0326
 - [0309](0309-one-review-chat-per-piece-of-work.md) One review chat per piece of work: after a fix it reviews only the delta — accepted, partly superseded by 0352
-- [0310](0310-sign-in-by-credential-name.md) Sign-in by credential name: the app types the password, the agent never holds it — accepted; amended by 0317
-- [0311](0311-the-grindhouse-becomes-a-workshop.md) The Grindhouse becomes a workshop: square benches, scenes without screens, a vice at rest — accepted
-- [0312](0312-benches-of-one-height-helpers-with-name-tags.md) Benches of one height, helpers with name tags, a torch for who works, people who speak only where asked — accepted
+- [0310](0310-sign-in-by-credential-name.md) Sign-in by credential name: the app types the password, the agent never holds it — accepted
+- [0311](0311-the-grindhouse-becomes-a-workshop.md) The Grindhouse becomes a workshop: square benches, scenes without screens, a vice at rest — accepted; amended by 0312
+- [0312](0312-benches-of-one-height-helpers-with-name-tags.md) Benches of one height, helpers with name tags, a torch for who works, people who speak only where asked — accepted; amended by 0313, 0353
 - [0313](0313-the-workshop-picture-and-people-in-full.md) The workshop picture behind the people, and every person in full — accepted; amended by 0315
-- [0314](0314-every-helper-at-the-bench-workers-first.md) Every helper at the bench, the ones at work first, and a limit that says what it means — accepted
 - [0314](0314-ci-green-on-three-systems.md) CI that tells the truth on Windows, Linux and macOS — accepted
 - [0315](0315-no-dot-over-the-helpers.md) No dot over the helpers' heads — accepted
 - [0316](0316-maps-in-depth-and-a-readable-viewer.md) Maps in depth, key files in the viewer, and code read as in an editor — accepted; amended by 0322
 - [0317](0317-link-a-site-to-a-credential-with-one-click.md) Link a sign-in page's site to a test account with one click — accepted
 - [0318](0318-a-chat-stops-showing-work-when-its-reply-is-complete.md) A chat stops showing work when its reply is complete — accepted
-- [0319](0319-artifacts-in-memoria.md) Artifacts in Memoria: every file the chats produce, indexed where it is — accepted, partly superseded by 0328; amended by 0323
+- [0319](0319-artifacts-in-memoria.md) Artifacts in Memoria: every file the chats produce, indexed where it is — kinds, partly superseded by 0328; amended by 0323
 - [0320](0320-maintenance-fixes-one-line-of-an-always-loaded-file.md) The maintenance fixes one line of an always-loaded file — accepted
-- [0321](0321-a-routine-step-can-leave-the-login-page-unsigned.md) A routine step can leave the login page as it is (`relogin: false`); the routine runtime of feat/routine-park is on main — accepted
+- [0321](0321-a-routine-step-can-leave-the-login-page-unsigned.md) A routine step can leave the login page as it is (`relogin: false`) — accepted
 - [0322](0322-project-maps-told-as-a-line-of-phases.md) Project maps told as a line of phases and steps, with a richer and wider panel — accepted; amended by 0326, 0330, 0335
-- [0323](0323-artifacts-light-paged-and-cleaned.md) Artifacts: twenty at a time, light pictures, and a daily cleanup of old screenshots — accepted, partly superseded by 0328
+- [0323](0323-artifacts-light-paged-and-cleaned.md) Artifacts: twenty at a time, light pictures, and a daily cleanup of old screenshots — the, partly superseded by 0328
 - [0324](0324-retrigger-tags-and-entries-for-routine-packages.md) A routine package can run a work item again: retrigger tags and entries — accepted
 - [0325](0325-routines-leave-the-app.md) Routines leave the app — accepted
 - [0326](0326-maps-tell-how-far-the-project-is.md) The maps tell how far the project is: a percentage, a progress card, the plan in the side panel — accepted; amended by 0330
-- [0327](0327-one-question-one-row-one-answer.md) One question, one row, one answer: his own words are his answer, the same question only after a reply to them — accepted
+- [0327](0327-one-question-one-row-one-answer.md) One question, one row, one answer — accepted
 - [0328](0328-artifacts-only-what-the-user-asked-for.md) Artifacts: only what the user asked for, one list, all opened in the app, and a real full screen — accepted
-- [0329](0329-an-open-card-takes-the-orchestrators-field.md) An open card takes what he writes in the Orchestrator's field: his words go straight to that row — accepted
+- [0329](0329-an-open-card-takes-the-orchestrators-field.md) An open card takes what he writes in the Orchestrator's field — accepted
 - [0330](0330-maps-follow-their-chats.md) The maps follow their chats: a box says what its pieces say, a step that is ok is «fatto» — accepted
-- [0331](0331-code-mode.md) Code Mode: work chats call their tools from one script (run_code), under the same permission chain — accepted; amended by 0332, 0337
+- [0331](0331-code-mode.md) Code Mode: work chats call their tools from one script (run_code), under the same permission chain — accepted
 - [0332](0332-antigravity-engine.md) Antigravity (agy acp) joins the ACP engine catalog; its permissions go through the app's gates — accepted
-- [0333](0333-web-fetch-subagent.md) Claude chats keep WebFetch as a plain tool: built-in web-fetch agent off inline — accepted
-- [0334](0334-multi-harness-usage-bar.md) Multi-harness plan usage popover and pinned weekly limits (Claude, Cursor, Codex, OpenCode, Antigravity) — accepted
-- [0335](0335-project-map-line-top-to-bottom-with-parallel-frames.md) A line of phases and steps is drawn top to bottom, with parallel groups in their own frame; the Strategist plans with dependencies — accepted
-- [0336](0336-model-presets.md) Per-task model presets Minimo / Base / Massimo on each role card, picked by delegation under the delegator's price ceiling — accepted; amended by 0337, 0346, 0347
-- [0337](0337-model-choice-on-the-role-card.md) Model choice and Code Mode live on the role card; Settings has none; one approved model choice guide — accepted; amended by 0347; partly superseded by 0352
-- [0338](0338-no-leftover-processes.md) No leftover processes: no breakaway from an engine's job, engines recorded at once, leased stacks spared — accepted
-- [0340](0340-no-guide-page-and-a-four-tab-memory.md) No Guida page, and a Memoria of four tabs with a real Skill view — accepted
-- [0341](0341-ten-principles-of-the-app.md) Ten principles of the app, and what was removed to follow them — accepted
-- [0342](0342-a-work-map-per-job.md) A work map per job — accepted
-- [0343](0343-the-plan-is-its-map.md) The plan is its map, the maps are a list — accepted; amended by 0346
+- [0333](0333-web-fetch-subagent.md) Claude chats keep WebFetch as a plain tool (built-in web-fetch agent off) — accepted
+- [0334](0334-multi-harness-usage-bar.md) Multi-harness plan usage popover and pinned weekly limits — not stated
+- [0335](0335-project-map-line-top-to-bottom-with-parallel-frames.md) A line of phases and steps is drawn top to bottom, with parallel groups in their own frame — accepted
+- [0336](0336-model-presets.md) Per-task model presets (Minimo / Base / Massimo) on each role card — not stated; amended by 0346, 0347
+- [0337](0337-model-choice-on-the-role-card.md) Model choice and Code Mode live on the role card; Settings has none — not stated; amended by 0347
+- [0338](0338-no-leftover-processes.md) No leftover processes: no breakaway from an engine's job, engines recorded at once, leased stacks spared — not stated
+- [0340](0340-no-guide-page-and-a-four-tab-memory.md) No Guida page, and a Memoria of four tabs with a real Skill view — not stated
+- [0341](0341-ten-principles-of-the-app.md) Ten principles of the app, and what was removed to follow them — not stated
+- [0342](0342-a-work-map-per-job.md) A work map per job — not stated
+- [0343](0343-the-plan-is-its-map.md) The plan is its map, the maps are a list — not stated; amended by 0346
 - [0344](0344-question-ladder-and-open-doubts.md) A worker's question goes up one level at a time; the Strategist's open doubts block its plan — accepted
 - [0345](0345-a-child-works-in-any-repository.md) A delegated chat works in any folder its parent names, also of another repository — accepted
 - [0346](0346-plan-names-the-preset-a-chat-out-of-credits-waits.md) A plan names the preset, never the model; a chat out of credits waits for its role's card — accepted; amended by 0347, 0348
-- [0347](0347-models-per-level-across-engines.md) Several models per level across engines, picked by the room of each plan; one page per role, no permissions — accepted; amended by 0350
+- [0347](0347-models-per-level-across-engines.md) Several models per level across engines, picked by the room of each plan; one page per role, no permissions — accepted
 - [0348](0348-a-chat-out-of-credits-moves-to-the-next-model.md) A chat out of credits moves by itself to the next model of its level, with 8 seconds to cancel — accepted
 - [0349](0349-pc-load-and-connectors-on-the-top-bar.md) The PC's CPU and free RAM, and the connectors with the MCP servers, on the top bar — accepted
 - [0350](0350-the-orchestrator-sets-model-lists-per-level.md) The Orchestrator sets a role's model lists per level; its own card has an ordered Base list — accepted
 - [0351](0351-a-child-that-answered-without-agent-report-is-partial.md) Antigravity keeps agent_report small; a child that answered without it goes up as partial — accepted
 - [0352](0352-any-engine-reaches-any-engine.md) Any engine reaches any engine; a changed role card never stops the work — accepted
+- [0353](0353-every-helper-at-the-bench-workers-first.md) Every helper at the bench, the ones at work first, and a limit that says what it means — accepted
 
 ## Replaced
 
@@ -354,6 +353,7 @@ Kept for the history only: the record named on each line holds the current decis
 - [0032](0032-model-routing.md) Model routing: a versioned table picks harness, model and effort per kind of task — superseded by 0210
 - [0036](0036-cpu-aware-admission.md) CPU-aware admission of agents' chats and turns — superseded by 0222
 - [0047](0047-routing-voted-and-priced-per-work.md) Model routing is voted and priced per work, with a sample judge — superseded by 0210
+- [0067](0067-app-owned-project-connectors.md) App-owned GitHub and Jira project connectors — superseded by 0086
 - [0070](0070-brain-pulse-addendum.md) Battito v0.1.0 isolation decisions — superseded by 0201
 - [0078](0078-agent-first-routing.md) Agent first: the profile decides, the table only fills a missing model — superseded by 0210
 - [0080](0080-cloud-agents.md) Cloud agents in the Grindhouse (Cursor, Codex, Claude Code) — superseded by 0201
@@ -363,5 +363,5 @@ Kept for the history only: the record named on each line holds the current decis
 - [0115](0115-fatto-lists-macro-tasks.md) Fatto lists the work the user asked for, with what it cost in all — superseded by 0181
 - [0133](0133-personal-browser.md) A personal browser for the user, apart from the agents' browsers — superseded by 0212
 - [0196](0196-guide-knows-when-stale.md) The Guida knows when it is stale, answers questions, draws from the code and picks cards for the user — superseded by 0340
-- [0218](0218-balanced-mode.md) 0218. «Balanced mode»: the engine, model and effort of a delegation follow the credits left — superseded by 0337, 0347
+- [0218](0218-balanced-mode.md) 0218. «Balanced mode»: the engine, model and effort of a delegation follow the credits left — superseded by 0337
 - [0281](0281-scheduled-routines.md) Scheduled routines: a request the Orchestrator receives at its time — superseded by 0325
