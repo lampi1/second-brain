@@ -13,12 +13,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Harness } from '../../shared/contract';
-import { PROBE_TTL_MS, SHORT_PAUSE_MS, creditVerdict, nextError, type CreditError, type CreditReading, type CreditVerdict } from '../../shared/credit-rule';
+import { isThirdPartyModel, PROBE_TTL_MS, SHORT_PAUSE_MS, creditVerdict, nextError, type CreditError, type CreditReading, type CreditVerdict } from '../../shared/credit-rule';
 import { errText, log } from '../log';
 import { renameWithRetry } from './local-store';
 
 /** The pool a chat on `engine` with `model` spends from: OpenCode's provider prefix splits its pools. */
 export function poolOf(engine: Harness, model: string | null | undefined): string {
+  // Antigravity: Gemini and Claude/GPT models are two quotas (ADR 0357)
+  if (engine === 'antigravity') return isThirdPartyModel(model) ? 'antigravity:3p' : 'antigravity';
   if (engine !== 'opencode') return engine;
   const prefix = String(model ?? '').trim().split('/')[0]!.toLowerCase();
   if (!prefix || !String(model).includes('/')) return 'opencode:default';

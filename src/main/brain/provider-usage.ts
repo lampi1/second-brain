@@ -234,22 +234,21 @@ export function normalizeAntigravityUsage(raw: unknown, planTierFallback: string
   const planLabel = str(raw.plan_tier) ?? planTierFallback;
   const quota = isObj(raw.quota) ? raw.quota : {};
   const windows: HarnessUsageWindow[] = [];
-  const pushBucket = (key: string, kind: HarnessUsageWindow['kind'], label: string, model?: string): boolean => {
+  const pushBucket = (key: string, kind: HarnessUsageWindow['kind'], label: string, model?: string, scope?: HarnessUsageWindow['scope']): boolean => {
     const b = quota[key];
     if (!isObj(b) || b.disabled === true) return false;
     const rem = num(b.remaining_fraction);
     if (rem === null) return false;
     const resetIn = num(b.reset_in_seconds);
     const resetsAt = parseResetMs(b.reset_time) ?? (resetIn !== null && resetIn > 0 ? now + resetIn * 1000 : null);
-    windows.push({ kind, label, usedPercent: clampPct((1 - rem) * 100), resetsAt, ...(model ? { model } : {}) });
+    windows.push({ kind, label, usedPercent: clampPct((1 - rem) * 100), resetsAt, ...(model ? { model } : {}), ...(scope ? { scope } : {}) });
     return true;
   };
-  const has5h = pushBucket('gemini-5h', 'five-hour', '5h');
-  const has7d = pushBucket('gemini-weekly', 'weekly', '7g');
-  // third-party model buckets only once used (a full one is noise next to the Gemini windows)
-  const used = (key: string): boolean => { const b = quota[key]; const rem = isObj(b) ? num(b.remaining_fraction) : null; return rem !== null && rem < 1; };
-  if (used('3p-5h')) pushBucket('3p-5h', 'five-hour', '5h · 3P', '3p');
-  if (used('3p-weekly')) pushBucket('3p-weekly', 'weekly', '7g · 3P', '3p');
+  const has5h = pushBucket('gemini-5h', 'five-hour', '5h', undefined, 'gemini');
+  const has7d = pushBucket('gemini-weekly', 'weekly', '7g', undefined, 'gemini');
+  // the Claude/GPT pool is its own quota (ADR 0357): always shown beside Gemini's, scope '3p' so only its models count it
+  pushBucket('3p-5h', 'five-hour', '5h · Claude/GPT', undefined, '3p');
+  pushBucket('3p-weekly', 'weekly', '7g · Claude/GPT', undefined, '3p');
   if (!has5h && !has7d) {
     for (const [k, b] of Object.entries(quota)) {
       if (k === '3p-5h' || k === '3p-weekly' || !isObj(b) || b.disabled === true) continue;
@@ -671,12 +670,16 @@ export async function collectAllProviderUsage(o: ProviderCollectorEnv = {}): Pro
     collectOpenCodeUsages(o),
     collectAntigravityUsage(o).then(h => [h]),
   ]);
-  return results.flat().map(h => h.pool || h.harness === 'opencode' ? h : { ...h, pool: h.harness });
+  return results.flat().map(h => h.pool || h.harness === 'opencode' ? h : { ...h, pool: h.harness }).flatMap(withAgyPools);
 }
+
+/** Antigravity's one reading serves two credit pools (ADR 0357): Gemini (`antigravity`) and Claude/GPT (`antigravity:3p`);
+ *  each window carries its scope, so each pool's verdict looks only at its own. The panel shows the first copy. */
+const withAgyPools = (h: HarnessUsage): HarnessUsage[] => h.pool === 'antigravity' ? [h, { ...h, pool: 'antigravity:3p' }] : [h];
 
 /** One harness's readings now (the credit rule's «rileggi»: at a limit error, at a reset, before a pick). */
 export async function collectProviderUsage(h: Harness, o: ProviderCollectorEnv = {}): Promise<HarnessUsage[]> {
   const one = h === 'claude' ? collectClaudeUsage(o) : h === 'cursor' ? collectCursorUsage(o) : h === 'codex' ? collectCodexUsage(o) : h === 'antigravity' ? collectAntigravityUsage(o) : null;
   if (h === 'opencode') return collectOpenCodeUsages(o);
-  return one ? [{ ...await one, pool: h }] : [];
+  return one ? withAgyPools({ ...await one, pool: h }) : [];
 }
