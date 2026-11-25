@@ -112,6 +112,8 @@ changed-card and stopped-other-engine cases of `one-review.test.ts`.
 - Fewer refusals, no manual step: a chat on any engine goes on, or moves by itself when its engine cannot run.
 - A reused chat may relaunch its engine once (same history) when its card's tools changed: one cold start.
 - A review chat whose engine cannot run is not moved: a fresh review of the same work keeps the `reviewOf` link.
+- A chat without a parent never takes back tools a card once removed, even when the card gives them back: for that,
+  a new chat of the role. The safe side, because how it was bounded at its start (mount, fork) is not kept.
 - A root chat out of credits now also waits when the card's engine is not allowed to the Orchestrators (before, only
   a delegated one did): the same `openRefusal` for every chat.
 - Pinned by `test/unit/engines/engine-freedom.test.ts` (every pair of claude, cursor, codex and opencode; active,
