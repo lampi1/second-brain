@@ -34,6 +34,31 @@ describe('OrchestratorWake', () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
+  it('tells the Orchestrator once, quietly, when the user\'s ✕ cut open work short, and drops it on a reopen', async () => {
+    const { w, up, sent, turn } = make();
+    up({ id: 'strat', title: 'Piano export', state: 'running', work: { status: 'assigned', updatedAt: 1 } });
+    up({ id: 'strat', title: 'Piano export', state: 'closed', closedAt: 10, closedBy: 'user', closedWith: 'incarico assegnato, turno in corso · run r1' });
+    expect(w.queued().map(e => e.kind)).toEqual(['user-closed']);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(sent).toEqual([]); // quiet: it never wakes the Orchestrator's work by itself
+    expect(w.heldNews().map(h => h.kind)).toEqual(['user-closed']);
+    turn(); // the Orchestrator's next turn takes it, once
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(sent.map(m => m.text).join('\n')).toMatch(/Piano export.*chiusa con ✕.*incarico assegnato, turno in corso · run r1.*app_reopen_chat/);
+    expect(w.queued()).toEqual([]);
+    // «Annulla»: reopened before it went → nothing to tell
+    up({ id: 'other', title: 'Altra', state: 'running', work: { status: 'assigned', updatedAt: 1 } });
+    up({ id: 'other', title: 'Altra', state: 'closed', closedAt: 20, closedBy: 'user', closedWith: 'turno in corso' });
+    expect(w.queued().map(e => e.chatId)).toEqual(['other']);
+    up({ id: 'other', title: 'Altra', state: 'idle' });
+    expect(w.queued()).toEqual([]);
+    // a chat the ✕ closed with nothing open, a delegated chat and the auto-close tell nothing
+    up({ id: 'idle1', state: 'idle' }); up({ id: 'idle1', state: 'closed', closedAt: 30, closedBy: 'user' });
+    up({ id: 'kid', parentId: 'strat2', state: 'running' }); up({ id: 'kid', parentId: 'strat2', state: 'closed', closedAt: 30, closedBy: 'user', closedWith: 'turno in corso' });
+    expect(w.queued().filter(e => e.kind === 'user-closed')).toEqual([]);
+    w.stop();
+  });
+
   it('uses the turn-start receipt when a report and engine result arrive before idle', async () => {
     const { w, up, sent } = make();
     const run: NonNullable<ChatSummary['run']> = { runId: 'current', chatId: 'worker', agentId: 'scout', version: 1, goal: 'Read', startedAt: 10, startedBy: 'orchestrator', costUsd: null, tokens: null,
