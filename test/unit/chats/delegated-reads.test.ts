@@ -80,10 +80,13 @@ describe('a delegated chat (#472)', () => {
     expect(f.ask('x', 'mcp__Gmail__send_message')).toBe('user');
   });
 
-  it('a chat that is not delegated is untouched: the brain\'s rules alone decide (ADR 0254)', async () => {
+  // ADR 0356 (owner, 2026-11-25: «permessi uguali su ogni harness: tutto automatico tranne scritture DB, release su nodi di
+  // produzione e scritture Azure, che aspettano Esegui»): the three wait in every chat, not only a delegated one
+  it.each(['claude', 'codex', 'cursor', 'opencode', 'antigravity'] as Harness[])('%s: a chat that is not delegated runs its reads and leaves the three writes to the user too', async harness => {
     const f = fixture();
-    await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' }, 'user');
-    for (const h of HELD) expect(f.ask(h), h).toBe('allow');
+    await f.m.create({ harness, cwd: f.dir, prompt: 'x' }, 'user');
+    for (const r of READS) expect(f.ask(r), r).toBe('allow');
+    for (const h of HELD) expect(f.ask(h), h).toBe('user');
   });
 
   it('a limit the parent really has still goes down: the user\'s own plan mode', async () => {

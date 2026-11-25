@@ -273,7 +273,8 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     onSettingChange: fn => { settingListeners.add(fn); return () => { settingListeners.delete(fn); }; },
     recordJob: job => { const r = ledger.record(job); if (!testing) brainEst.schedule(); return r; },
     modelRegistry: () => routing.registry(),
-    route: req => routeChat(req, routing.registry(), brainEst.table()),
+    // the engines' live lists decide which models run where (ADR 0356), unless the caller passes its own
+    route: req => routeChat({ ...req, known: req.known ?? (h => models.get()[h]?.ids.map(x => x.id) ?? null) }, routing.registry(), brainEst.table()),
     lastRoutingActual: id => { try { return routing.lastActual(id); } catch { return null; } },
     observeRouting: rec => {
       try { routing.observe(rec); } catch (e) { log.warn('brain', 'routing outcome not written', { cause: errText(e), hint: 'check <brain>/ops/state/improve is writable' }); }

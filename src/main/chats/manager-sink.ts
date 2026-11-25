@@ -214,8 +214,9 @@ export abstract class ManagerSink extends ManagerLadder {
           if (addSkill(r.s.run, skillOfRead(item.input, item.name))) { this.runSaveSoon(); this.updated(r); }
         }
         if (item.kind === 'tool' && r.s.run) this.noteReceipt(r, item);
-        if (item.kind === 'result' && !replace) { delete r.crashResumed; this.turnEnded(r, item); }
+        if (item.kind === 'result' && !replace) { delete r.crashResumed; this.turnEnded(r, item); if (r.replaying !== r.session) this.toolTurnEnded(r); }
       },
+      toolsLoaded: names => { if (live()) this.toolsLoaded(r, names); },
       pending: (req, whole) => {
         if (!live()) return;
         this.coldStarted(r);

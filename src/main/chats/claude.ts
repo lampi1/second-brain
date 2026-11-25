@@ -1379,6 +1379,9 @@ export class ClaudeSession implements HarnessSession {
           const servers = arr(m.mcp_servers).map(o);
           const pending = servers.filter(x => s(x.status) === 'pending').map(x => s(x.name));
           this.initMcp = { mcpAtInit: servers.length, ...(pending.length ? { mcpPendingAtInit: pending.slice(0, 10) } : {}), plugins: arr(m.plugins).length };
+          // what the engine loaded, once the app's own server is connected (a pending one lists its tools later); a list
+          // with none of the server's tools says nothing (they may be deferred behind ToolSearch): the served list decides
+          if (servers.some(x => s(x.name) === 'second-brain' && s(x.status) === 'connected') && this.toolsAtInit.some(t => t.startsWith('mcp__second-brain__'))) this.sink.toolsLoaded?.(this.toolsAtInit);
           for (const srv of servers) {
             if (s(srv.status) && !['connected', 'pending', 'needs-auth', 'disabled'].includes(s(srv.status))) this.sys(`MCP ${s(srv.name)}: ${s(srv.status)}`, 'warn');
           }

@@ -45,6 +45,25 @@ export abstract class ManagerWork extends ManagerLifecycle {
       proposalHash: proposalHash({ steps: plan.steps.map(({ outcome: _o, chatIds: _c, startedAt: _s, endedAt: _e, ...s }) => ({ ...s, state: 'todo' })), clarified: plan.clarified, doneWhen: plan.doneWhen, pcOnly: plan.pcOnly, ...(plan.doubts ? { doubts: plan.doubts } : {}) }) };
   }
 
+  /** A plan that goes on in another chat (continueChat, ADR 0356): the successor holds it, with its phase; a proposal
+   *  waiting for the user is cancelled on the old chat and registered on the new one in the same job, so the user's
+   *  «Approva» answers the chat that works and nothing waits on a closed chat. The old chat keeps no plan. */
+  protected override movePlan(from: Rec, to: Rec): void {
+    const plan = from.s.plan;
+    if (!plan || to.s.plan) return;
+    to.s.plan = structuredClone(plan);
+    if (plan.phase === 'proposed') {
+      const store = this.coordination, old = this.planRequestKey(from, plan);
+      const prior = store.original(from.s.id, old.originalRequestId);
+      store.cancelPending(from.s.id, old.originalRequestId);
+      const key = { ...this.planRequestKey(to, plan), jobId: prior?.key.jobId ?? old.jobId };
+      store.register({ key, kind: 'plan', at: plan.at, payload: to.s.plan });
+    }
+    delete from.s.plan;
+    this.updated(from);
+    log.info('chats', 'plan moved to the chat that goes on', { chat: from.s.id, data: { next: to.s.id, phase: plan.phase } });
+  }
+
   /** Full instructions plus an optimistic cursor; reading never marks them acknowledged. */
   userEvents(chatId: string, afterSeq = 0): UserTaskEvents {
     const ledger = this.need(chatId).userTaskEvents ?? { events: [], latestSeq: 0, acknowledgedSeq: 0 };

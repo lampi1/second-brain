@@ -76,6 +76,9 @@ export interface Mount {
   instructions: string | ((params: Record<string, string>) => string);
   /** a function may be async: a proxied server's tools come from that server (mcp-servers/gateway.ts) */
   tools: McpTool[] | ((ctx: { params: Record<string, string>; sessionId: string }) => McpTool[] | Promise<McpTool[]>);
+  /** the tools a tools/call may name, when wider than the listed ones (a compact chat list: what it leaves out is still
+   *  callable through the fallback command, chats/tool-cli.ts, ADR 0356); absent = the listed ones */
+  callTools?: (ctx: { params: Record<string, string>; sessionId: string }) => McpTool[] | Promise<McpTool[]>;
   /** Return false to answer 404 (an unknown or wrong token looks like a missing route). */
   authorize?: (params: Record<string, string>) => boolean;
   /** Log label for a call (e.g. the chat id), never a secret. */
@@ -262,7 +265,7 @@ export class McpServer {
           return ok(id, { tools: (await this.toolsOf(mount, ctx)).map(t => toolListEntry(t, ctx.params)) });
         case 'tools/call': {
           const name = typeof p.name === 'string' ? p.name : '';
-          const tool = (await this.toolsOf(mount, ctx)).find(t => t.name === name);
+          const tool = (mount.callTools ? await mount.callTools({ params: ctx.params, sessionId: ctx.sessionId }) : await this.toolsOf(mount, ctx)).find(t => t.name === name);
           if (!tool) return fail(id, -32602, `Unknown tool: ${name || '(none)'}. Call tools/list for the available tools.`);
           const args = (p.arguments && typeof p.arguments === 'object' ? p.arguments : {}) as Record<string, unknown>;
           const who = mount.who?.(ctx.params, ctx.sessionId);

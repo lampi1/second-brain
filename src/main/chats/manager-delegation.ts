@@ -18,6 +18,8 @@ import { APP_EVENT_LABEL } from './orchestrator-wake';
 import type { SubmissionReceipt, TurnEndInfo, Rec } from './manager-types';
 import { clearTimeout, sameChildResult, uniqueChildResults, turnReply, turnErrors, lastAnswer, sysItem, ORCHESTRATOR_OUTPUT_MAX, CHILD_RESULTS_MS, CHILD_RESULTS_CAP, supersededResult } from './manager-helpers';
 import { ManagerContinuity } from './manager-continuity';
+import { reportInText } from './text-report';
+import { toolCliHint } from './tool-cli';
 import { isUserActionRequest, sameCommand, userActionAnswer, userActionMessage, userDecisionMessage, userStepParams, type UserActionInput } from './user-action';
 import { runResultText } from '../run/results';
 
@@ -132,6 +134,16 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     if (r.s.creditWait || r.s.continuedBy) return;
     // whatever ended the turn, a child still waiting on its parent's answer, its own children or a request owes nothing yet
     if (r.pending.size > 0 || r.askedParentAt !== undefined || this.delegatedBusy(r.s.id) || (r.s.agentChildren?.active ?? 0) > 0) return;
+    // the report pasted as JSON in its last answer (ADR 0356): read as an agent_report, through the tool itself
+    const key = `${r.s.run?.runId ?? ''}:${r.s.run?.taskVersion ?? 1}:${r.s.lastResult?.at ?? 0}`;
+    if (this.opts.callChatTool && r.textReportTried !== key && (why === 'exit' || r.s.lastResult && !r.s.lastResult.interrupted)) {
+      const args = reportInText(lastAnswer(r.items));
+      if (args) {
+        r.textReportTried = key;
+        void this.reportFromText(r, args).then(ok => { if (!ok) this.owedReport(r, why); });
+        return;
+      }
+    }
     if (why === 'idle') {
       const last = r.s.lastResult;
       if (!last || last.isError || last.interrupted || r.session?.busy || r.working || r.pending.size > 0 || r.s.queued || r.handoffTurn || r.deliveryHolds) return;
@@ -140,7 +152,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
       if (!r.reportNudged) {
         r.reportNudged = true;
         log.info('chats', 'delegated chat ended its turn without agent_report: told once', { chat: r.s.id, data: { parent: r.s.parentId } });
-        const text = `${APP_EVENT_LABEL}\nIl tuo turno è finito senza agent_report e il tuo genitore aspetta il risultato. Chiamalo ora una volta: agent_report del server MCP second-brain (in Claude Code mcp__second-brain__agent_report, in Antigravity mcp_second-brain_agent_report; se è differito, caricalo prima con ToolSearch), con outcome done, partial o blocked e doneWhen per ogni criterio. Se stai aspettando una persona, chiedilo con il pannello delle domande.`;
+        const text = `${APP_EVENT_LABEL}\nIl tuo turno è finito senza agent_report e il tuo genitore aspetta il risultato. Chiamalo ora una volta: agent_report del server MCP second-brain (in Claude Code mcp__second-brain__agent_report, in Antigravity mcp_second-brain_agent_report; se è differito, caricalo prima con ToolSearch), con outcome done, partial o blocked e doneWhen per ogni criterio. ${toolCliHint(['agent_report'])} Se stai aspettando una persona, chiedilo con il pannello delle domande.`;
         void this.send(r.s.id, text, undefined, false, 'second-brain', false, { kind: 'app' }).catch(e => {
           log.warn('chats', 'report reminder not delivered', { chat: r.s.id, cause: errText(e), hint: 'the delegation is closed without a report instead' });
           this.closeWithoutReport(r, 'idle');
@@ -166,6 +178,22 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     this.addItem(r, sysItem('creditWait', { role: r.s.agent.name, model: r.s.creditWait.model ?? '' }, 'warn'), false);
     log.info('chats', 'role chat waits: its model is out of credits', { chat: r.s.id, data: { role: r.s.agent.id, engine: r.s.harness, model: r.s.model, parent: r.s.parentId ?? null } });
     return true;
+  }
+
+  /** The real agent_report with the JSON the chat wrote (ADR 0356): true when it was accepted. A refusal is logged and
+   *  the usual path goes on (the reminder, then the close without a report). */
+  private async reportFromText(r: Rec, args: Record<string, unknown>): Promise<boolean> {
+    try {
+      const out = await this.opts.callChatTool!(r.s.id, 'agent_report', args);
+      if (!/"reported"\s*:\s*true/.test(out)) throw new Error(out.slice(0, 300));
+      this.addItem(r, sysItem('reportFromText', undefined, 'info'), false);
+      this.updated(r);
+      log.info('chats', 'report read from the chat\'s text', { chat: r.s.id, data: { parent: r.s.parentId, outcome: String(args.outcome) } });
+      return true;
+    } catch (e) {
+      log.warn('chats', 'report in the chat\'s text refused', { chat: r.s.id, cause: errText(e), hint: 'the chat is reminded to call agent_report, then closed without one' });
+      return false;
+    }
   }
 
   private closeWithoutReport(r: Rec, why: 'idle' | 'exit'): void {

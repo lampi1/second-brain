@@ -99,3 +99,10 @@ it('tries again on the next pass when no Orchestrator took the news', () => {
   expect(w.driver.tick(T0 + STALL_MS)).toBe(0);
   expect(w.driver.tick(T0 + STALL_MS + 60_000)).toBe(0);
 });
+
+it('a linked chat whose plan waits for the user\'s ok is the user\'s turn, never a stall (ADR 0356, problem 2 of 2026-11-25)', () => {
+  const proposed = { ...chat(), plan: { phase: 'proposed' } } as ChatSummary;
+  expect(world([thread()], [proposed]).driver.tick(T0 + 10 * STALL_MS)).toBe(0);
+  // the old chat closed after the move, the new one holds the plan: still not stalled
+  expect(world([thread({ chatIds: ['c0', 'c1'] })], [{ ...chat(), id: 'c0', closedAt: T0 } as ChatSummary, proposed]).driver.tick(T0 + 10 * STALL_MS)).toBe(0);
+});

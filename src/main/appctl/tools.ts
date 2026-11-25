@@ -22,6 +22,7 @@
 // - A lesson in Impara when the user asks to understand something (app_learn, ADR 0190): the Orchestrator's mount only.
 // - The latest report of any chat in its tree, delegates included (app_child_output, ADR 0226); the recap (app_agents_recap, 0260).
 // - The skill library (app_skills, app_skill_write, app_skill_roles, app_skill_undo, ADR 0241): the Orchestrator's mount only.
+import { successorIn } from '../../shared/role-tools';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { ChatItem, ChatSummary, TasksState, Effort, EventMap, Harness, NewChat, PendingRequest, RunInfo, TaskKind, Usage } from '../../shared/contract';
@@ -677,7 +678,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const orchestrator = caller();
         if (fastTurn(orchestrator?.id)) throw new ToolRefusal(FAST_REFUSAL);
         if (!authed() || !orchestrator || !d.chats.assignTask) throw new Error('app_assign_task requires an authenticated Orchestrator.');
-        const target = d.chats.list().find(c => c.id === a.chatId);
+        // a chat that went on in another one (an engine change): the task goes to the one that works now (ADR 0356)
+        const target = successorIn(d.chats.list(), String(a.chatId));
         if (!target || target.parentId || target.isOrchestrator) throw new ToolRefusal('Work conversation not found; use app_chats.');
         if (!isWorkRole(a.roleId) || target.agent?.id !== a.roleId) {
           const asked = String(a.roleId).slice(0, 40), runs = target.agent?.id ?? 'no role';

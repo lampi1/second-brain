@@ -13,6 +13,11 @@ import type { Checkpoint } from './checkpoints';
 import type { AwayEntry } from './away-log';
 import type { AgentChildrenReducer } from './agent-children';
 import type { Recall } from '../search/hybrid/recall';
+import type { ToolSession } from './tool-check';
+import type { AgentContextSnapshot } from '../../shared/agent-context';
+import type { ModelTier } from '../../shared/roles';
+import type { AgentOwnerSnapshot } from '../../shared/agents';
+import type { IntakeSource, StrategyPlan } from '../../shared/strategy';
 
 /** Internal outbox receipts are tied to engine submission, never CPU queue admission. */
 export interface SubmissionReceipt { beforeSubmit(): void; submitted(): void; failed(error: unknown): void }
@@ -73,6 +78,13 @@ export interface ChatManagerOptions {
   appVersion?: string;
   /** per-chat MCP endpoint of the app (browser tools); null/undefined = none passed */
   mcpUrlFor?: ((chatId: string) => string | null) | null;
+  /** calls one of a chat's own endpoint tools in process, with that chat as the caller (the same checks as the engine's
+   *  call): a report pasted as text goes through the real agent_report (ADR 0356) */
+  callChatTool?: (chatId: string, tool: string, args: Record<string, unknown>) => Promise<string>;
+  /** a chat's work went on in another one (continueChat): the work threads follow it (workflows/service.ts followChat) */
+  onContinued?: (from: string, to: string) => void;
+  /** the folder of the fallback tool command (chats/tool-cli.ts, ADR 0356): put first on every engine's PATH */
+  toolCliDir?: string | null;
   /** the app-control MCP for the Orchestrator only: its own /mcp/app/o/<id>/<token> */
   appMcpUrl?: ((orchestratorId: string) => string | null) | null;
   /** the app-managed MCP servers a chat is given (ADR 0086, mcp-servers/service.ts launch): gateway endpoints, and the
@@ -214,6 +226,8 @@ export interface Rec {
   askedParentAt?: number;
   /** a delegated child was told once that its turn ended without agent_report (#152): the next such end closes it */
   reportNudged?: boolean;
+  /** its last answer's JSON was tried as an agent_report already (ADR 0356): once per assignment */
+  textReportTried?: string;
   /** the run whose done-criteria the engine was already given (taskHint, #170) */
   criteriaTold?: string;
   /** a root chat's agent_report for its current assignment (reportRoot): one per assignment */
@@ -318,6 +332,10 @@ export interface Rec {
   voiceTold?: string;
   /** the role text was compared with rolePrimed since the engine started */
   roleChecked?: boolean;
+  /** this engine session's facts about the chat's required tools (chats/tool-check.ts, ADR 0356); never persisted */
+  toolSession?: ToolSession;
+  /** how many times the session was reloaded for missing tools (one at most, then the fallback command) */
+  toolReloads?: number;
   children?: AgentChildrenReducer;
   deliveryHolds?: number;
   activityRevision?: number;
@@ -442,3 +460,9 @@ export interface ColdStep {
 export interface CleanReportNote { chatId: string; title: string; role: string; summary: string; at: number }
 /** One message the user typed in a work chat (userWrote): what the Orchestrator and the parent learn. */
 export interface UserWroteNote { eventId: string; seq: number; chatId: string; title: string; role: string | null; parentId: string | null; parentTitle: string | null; at: number; text: string }
+
+/** What a chat that goes on from another one inherits at its creation (ChatManager.create; continueChat, ADR 0356). */
+export interface Inherited { launchContext?: AgentContextSnapshot; tier?: ModelTier; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number; launches?: string[] }
+/** ChatManager.create's options. runStartedBy and work: a continued chat's run keeps who started the work and its state
+ *  (ADR 0356: a Strategist the Orchestrator started stays the Orchestrator's work after an engine change). */
+export interface CreateOpts { boundByOrchestrator?: boolean; intake?: IntakeSource; resumePlan?: StrategyPlan; workMap?: string; continuation?: boolean; continuationOf?: string; sameWorktree?: boolean; runStartedBy?: 'user' | 'orchestrator' | 'parent' | 'app'; work?: NonNullable<ChatSummary['work']> }

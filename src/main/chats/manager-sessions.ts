@@ -20,7 +20,10 @@ import { findTranscript } from './transcript';
 import { aboveCeiling, browserAccess, claudeDefaultMode, claudeDefaultSetting, type AgentPolicy, type BrowserAccess } from '../agents/tool-policy';
 import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
-import { toolShownToChat, toolShownToUnknown, toolShownToWarm } from './tool-visibility';
+import { needView, toolShownToChat, toolShownToUnknown, toolShownToWarm } from './tool-visibility';
+import { requiredTools } from '../../shared/role-tools';
+import { toolAction, type ToolAction } from './tool-check';
+import { toolCliEnv } from './tool-cli';
 import { codeModeFor, CODE_MODE_HIDDEN, RUN_CODE } from '../code-mode/policy';
 import { AgentChildrenReducer } from './agent-children';
 import { initialEffort } from './effort';
@@ -268,6 +271,55 @@ export abstract class ManagerSessions extends ManagerPersistence {
     return warm ? toolShownToWarm(warm, tool) : toolShownToUnknown(tool);
   }
 
+  /** The tools this chat's role must have (shared/role-tools.ts, ADR 0356); [] for a chat the app does not know. */
+  requiredToolsOf(chatId: string): string[] {
+    const r = this.chats.get(chatId);
+    return r ? requiredTools(needView(r.s, r.launches, appAsks(engineOf(r.s.harness)))) : [];
+  }
+
+  /** The endpoint served a tool list to the chat's engine (browser/service.ts): the session's check runs. */
+  toolsServed(chatId: string, names: readonly string[]): void {
+    const r = this.chats.get(chatId);
+    // a waiting engine's list (warm.ts): the chat that adopts it takes it (adoptWarm)
+    if (!r && this.warmViews.has(chatId)) { this.warmServed.set(chatId, [...names]); return; }
+    if (!r?.toolSession) return;
+    r.toolSession.served = [...names];
+    this.toolCheck(r);
+  }
+
+  /** the tool lists a waiting engine read before a chat adopted it */
+  private readonly warmServed = new Map<string, string[]>();
+
+  /** The engine said which tools it loaded (Claude's init `tools`): the session's check runs. */
+  protected toolsLoaded(r: Rec, names: readonly string[]): void {
+    if (!r.toolSession) return;
+    r.toolSession.engineSaw = [...names];
+    this.toolCheck(r);
+  }
+
+  /** A turn of this session ended: an engine that never read the endpoint is found now. */
+  protected toolTurnEnded(r: Rec): void {
+    if (!r.toolSession || r.toolSession.turnEnded) return;
+    r.toolSession.turnEnded = true;
+    this.toolCheck(r);
+  }
+
+  private toolCheck(r: Rec): void {
+    const s = r.toolSession;
+    if (!s) return;
+    const a = toolAction(this.requiredToolsOf(r.s.id), s, r.toolReloads ?? 0, !!this.opts.mcpUrlFor?.(r.s.id));
+    if (a.kind === 'ok' || a.kind === 'wait') return;
+    s.acted = a.kind;
+    if (a.kind === 'reload') r.toolReloads = (r.toolReloads ?? 0) + 1;
+    log.warn('chats', a.kind === 'reload' ? 'required tools missing: reloading the session' : 'required tools missing: fallback command given', { chat: r.s.id,
+      cause: `${a.missing.join(', ')}: ${a.why}`, hint: a.kind === 'reload' ? 'the next turn starts a fresh engine process on the same session' : 'the chat calls them with sb-tool (chats/tool-cli.ts)',
+      data: { harness: r.s.harness, missing: a.missing, served: s.served?.length ?? null, engineSaw: s.engineSaw?.length ?? null } });
+    this.toolGap(r, a);
+  }
+
+  /** What the manager does with a gap (ChatManager): reload the session, or tell the chat the fallback command. */
+  protected abstract toolGap(r: Rec, a: Extract<ToolAction, { missing: string[] }>): void;
+
   /** Whether this chat's engine needs compact MCP tool descriptions on its chat endpoint (ADR 0332). */
   chatToolsCompact(chatId: string): boolean {
     const r = this.chats.get(chatId);
@@ -352,11 +404,13 @@ export abstract class ManagerSessions extends ManagerPersistence {
       sessionId, resume, fork, worktree: r.worktree && !resume, ...(r.worktree || r.inWorktree ? { inWorktree: true } : {}), mcpConfig: this.mcpConfig(chatId), costBaseUsd: r.costTotalUsd,
       compactWindowTokens: r.maxContext ?? this.compactWindow(),
       // Native subagents inherit this environment: a per-chat model cannot prove a memory event's producer.
-      env: { ...engineEnv(), ...this.opts.env, SB_EVENT_CONTEXT: '' }, ...(extraArgs ? { extraArgs } : {}),
+      env: this.chatEnv(chatId), ...(extraArgs ? { extraArgs } : {}),
       // the Orchestrator may turn on Remote Control (ADR 0229): its engine echoes queued messages, the phone's included
       ...(r.s.isOrchestrator && engine.kind === 'claude' ? { remoteControl: true } : {}),
     };
     r.worktree = false; // created once; a resume re-enters it
+    // a new session: its required tools are checked again (ADR 0356: at every start, resume and engine change)
+    r.toolSession = { startedAt: Date.now() };
     let sess: HarnessSession | null = null;
     const sink = this.sinkFor(r, () => sess);
     r.s.state = 'starting';
@@ -367,6 +421,12 @@ export abstract class ManagerSessions extends ManagerPersistence {
     this.updated(r);
     sess.start();
     this.remoteAfterStart(r, sess);
+  }
+
+  /** A chat engine's environment: the app's, and the fallback tool command bound to this chat (chats/tool-cli.ts). */
+  private chatEnv(chatId: string): NodeJS.ProcessEnv {
+    const base = { ...engineEnv(), ...this.opts.env, SB_EVENT_CONTEXT: '' };
+    return { ...base, ...toolCliEnv(base, this.opts.toolCliDir ?? null, this.opts.mcpUrlFor?.(chatId) ?? null) };
   }
 
   /** pre-allowed on Claude: the Orchestrator's app-control tools (/mcp/app), and every chat's mail to other chats and
@@ -439,7 +499,7 @@ export abstract class ManagerSessions extends ManagerPersistence {
       ...(launch.toolPolicy !== undefined || launch.ceiling !== undefined ? { toolPolicy: launch.toolPolicy ?? null, ceiling: launch.ceiling ?? null } : {}),
       ...(launch.agentAssets ? { agentAssets: launch.agentAssets } : {}), ...subagentGateFor(launch.toolPolicy, cwd),
       mcpConfig: this.mcpConfig(chatId), costBaseUsd: 0, compactWindowTokens: launch.compactWindowTokens ?? this.compactWindow(),
-      env: { ...engineEnv(), ...this.opts.env, SB_EVENT_CONTEXT: '' }, ...(extraArgs ? { extraArgs } : {}),
+      env: this.chatEnv(chatId), ...(extraArgs ? { extraArgs } : {}),
     };
     const sink = new BufferedSink();
     const session = this.newSession('claude', opts, sink, undefined);
@@ -469,6 +529,10 @@ export abstract class ManagerSessions extends ManagerPersistence {
     r.s.state = 'starting';
     r.activeAt = Date.now();
     delete r.s.lastError;
+    // its tools are checked like a new session's, with the list the waiting engine already read (ADR 0356)
+    const served = this.warmServed.get(w.chatId);
+    this.warmServed.delete(w.chatId);
+    r.toolSession = { startedAt: Date.now(), ...(served ? { served } : {}) };
     w.sink.attach(this.sinkFor(r, () => sess));
     this.updated(r);
     const c = r.choice;

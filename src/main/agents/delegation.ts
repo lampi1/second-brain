@@ -15,6 +15,7 @@
 // starts in one agent_delegate call (shared/strategy.ts parallelSplit). There is no limit on children at once (the owner,
 // 2026-11-23): the Strategist checks the real resources when it plans. A child may run on another engine only when the
 // user allows chats across engines. Used by wiring.ts.
+import { successorIn } from '../../shared/role-tools';
 import path from 'node:path';
 import { heldQuestions, openQuestions } from '../../shared/question-ladder';
 import type { ChatSummary, Effort, Harness, NewChat } from '../../shared/contract';
@@ -270,7 +271,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (!d.chats.assignTask || !d.chats.userEvents) throw new Error('agent_assign_task is unavailable.');
     const extra = Object.keys(a).find(k => !['chatId', 'roleId', 'cwd', 'mode', 'expectedVersion', 'expectedEventSeq', 'contract', 'step', 'preset', 'presetWhy', 'taskKind'].includes(k));
     if (extra) throw new Error(`agent_assign_task: unknown field ${extra}.`);
-    const child = typeof a.chatId === 'string' ? chat(a.chatId) : undefined;
+    // a child that went on in another chat (an engine change): the task goes to the one that works now (ADR 0356)
+    const child = typeof a.chatId === 'string' ? successorIn(d.chats.list(), a.chatId) : undefined;
     if (!child || child.parentId !== callerId || !child.delegation || !child.run || child.isOrchestrator) throw new Error('agent_assign_task: chatId must be one of YOUR direct children (agent_children).');
     if (assigning.has(child.id)) throw new Error('agent_assign_task: this child already has an assignment in progress.');
     // a Sentinel child is continued as any other (#387, ADR 0309): after a fix it reviews only the delta

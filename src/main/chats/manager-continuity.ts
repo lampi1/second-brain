@@ -1,11 +1,8 @@
 // ChatManager layer (ADR 0200): long chats (ADR 0031, 0051). The hand-off note (handoff.ts) and «Riprendi»
 // (continueChat), the cold note written while the cache is warm and the cold switch to a fresh session, fresh sessions
 // on a context budget, the Orchestrator's day compaction, quiet turns and the context counters.
-import type { IntakeSource, StrategyPlan } from '../../shared/strategy';
 import type { ChatDelegation } from '../../shared/delegation';
 import crypto from 'node:crypto';
-import type { ModelTier } from '../../shared/roles';
-import type { AgentContextSnapshot } from '../../shared/agent-context';
 import type { ChatSummary, ContextStats, Effort, HandoffInfo, Harness, NewChat } from '../../shared/contract';
 import { sysEn } from '../../shared/sys';
 import { errText, log } from '../log';
@@ -16,10 +13,8 @@ import { forEngine } from './agent-message';
 import { engineOf } from '../engines/registry';
 import { updateActivity } from '../update/activity';
 import { plainOwner } from '../agents/catalog';
-import type { AgentPolicy } from '../agents/tool-policy';
-import type { AgentOwnerSnapshot } from '../../shared/agents';
 import type { RunLinks } from '../agents/runs';
-import type { HandoffOptions, Rec, ColdStep } from './manager-types';
+import type { CreateOpts, HandoffOptions, Inherited, Rec, ColdStep } from './manager-types';
 import { clearTimeout, workBehind, coldDivider, sysItem } from './manager-helpers';
 import { ManagerRequests } from './manager-requests';
 
@@ -123,10 +118,14 @@ export abstract class ManagerContinuity extends ManagerRequests {
       ...(r.choice.permissionMode ? { permissionMode: r.choice.permissionMode } : {}),
       // a routed job stays one outcome across hand-offs: the new chat writes on the first chat's ledger line
       ...(r.s.route ? { route: { ...r.s.route, ledgerId: r.s.route.ledgerId ?? `app:${r.s.id}`, handoffs: (r.s.route.handoffs ?? 0) + 1 } } : {}),
+      // the root task's own contract goes on (a delegated one travels in its delegation)
+      ...(!parentRec && r.s.run?.goal ? { goal: r.s.run.goal.slice(0, 2000) } : {}), ...(!parentRec && r.s.run?.taskContract?.doneWhen?.length ? { doneWhen: [...r.s.run.taskContract.doneWhen] } : {}),
       prompt: `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}`,
       ...(parentRec ? { parentId: parentRec.s.id, ...(r.s.delegation ? { delegation: nextDelegation(r.s.delegation, opts.assignment) } : {}) } : {}),
-    }, 'user', { ...(r.s.launchContext ? { launchContext: r.s.launchContext } : {}), ...(r.s.run?.tier ? { tier: r.s.run.tier } : {}), owner: on ? { ...owner, engine: on.harness, model: on.model } : owner, instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.skills ? { skills: [...r.skills] } : {}), ...(r.maxContext ? { maxContext: r.maxContext } : {}) },
-    {}, { continuation: !!parentRec, continuationOf: r.s.id, ...(opts.sameWorktree ? { sameWorktree: true } : {}) });
+    }, 'user', { ...(r.s.launchContext ? { launchContext: r.s.launchContext } : {}), ...(r.s.run?.tier ? { tier: r.s.run.tier } : {}), owner: on ? { ...owner, engine: on.harness, model: on.model } : owner, instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.skills ? { skills: [...r.skills] } : {}), ...(r.maxContext ? { maxContext: r.maxContext } : {}), ...(r.launches ? { launches: [...r.launches] } : {}) },
+    {}, { continuation: !!parentRec, continuationOf: r.s.id, ...(opts.sameWorktree ? { sameWorktree: true } : {}),
+      // the same work (ADR 0356): who started it, its state and its job's work map go on with it
+      ...(r.s.run?.startedBy ? { runStartedBy: r.s.run.startedBy } : {}), ...(r.s.work ? { work: structuredClone(r.s.work) } : {}), ...(r.s.workMap ? { workMap: r.s.workMap } : {}) });
     const nr = this.chats.get(c.id);
     // the worktree hint follows the chain (A → B → C)
     if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; this.updated(nr); }
@@ -138,6 +137,9 @@ export abstract class ManagerContinuity extends ManagerRequests {
       this.runSave();
     }
     r.s.continuedBy = { id: c.id, title: c.title };
+    // everything that waits goes on with the work (ADR 0356, owner 2026-11-25: «nessuna richiesta resta in una chat
+    // chiusa»): the plan and its open approval, the user's recorded instructions, the app's questions to the user
+    if (nr) this.carryOver(r, nr);
     // the plan step it worked for follows it (ADR 0346): the step's chat is now the one that goes on and will report,
     // never the old one, which reports nothing more
     const plan = parentRec?.s.plan;
@@ -154,6 +156,28 @@ export abstract class ManagerContinuity extends ManagerRequests {
     log.info('chats', 'chat continued in a new one', { chat: chatId, data: { next: c.id, handoff: h.source, fresh: !!fresh } });
     return { ...(nr?.s ?? c) };
   }
+
+  /** What a chat that goes on in another one hands over (doContinue, ADR 0356): its plan with the user, moved with its
+   *  waiting approval (movePlan), the user's recorded instructions and the app's open questions to the user, which are
+   *  answered to the successor from now on. Messages, mail and command results still addressed to the old chat follow
+   *  continuedBy (ChatManager.send). */
+  protected carryOver(from: Rec, to: Rec): void {
+    this.movePlan(from, to);
+    if (from.userTaskEvents && !to.userTaskEvents) to.userTaskEvents = structuredClone(from.userTaskEvents);
+    for (const [id, req] of this.userAsks) {
+      const input = req.input as { chatId?: unknown } | undefined;
+      if (input?.chatId !== from.s.id) continue;
+      this.userAsks.set(id, { ...req, input: { ...(input as object), chatId: to.s.id } });
+      if (from.userActionAsk === id) { delete from.userActionAsk; to.userActionAsk = id; }
+    }
+    this.hook('onContinued', () => this.opts.onContinued?.(from.s.id, to.s.id));
+    this.persist();
+    this.updated(to);
+    log.info('chats', 'work handed over to the chat that goes on', { chat: from.s.id, data: { next: to.s.id, plan: to.s.plan?.phase ?? null, events: to.userTaskEvents?.events.length ?? 0 } });
+  }
+
+  /** The plan with the user goes to the chat that goes on (manager-work.ts): a proposed one waits there for the user. */
+  protected abstract movePlan(from: Rec, to: Rec): void;
 
   /** Writes the hand-off when it is missing or older than the last turn (the auto-close calls it before archiving). */
   async ensureHandoff(chatId: string, opts: HandoffOptions = {}): Promise<HandoffInfo> {
@@ -431,5 +455,5 @@ export abstract class ManagerContinuity extends ManagerRequests {
   contextSince(chatId: string): number | undefined { return this.chats.get(chatId)?.ctxSince; }
 
   // ---- implemented in a later layer (ADR 0200: manager.ts and its manager-*.ts layers)
-  abstract create(req: NewChat, by?: 'user' | 'agent' | 'app', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links?: RunLinks, opts?: { boundByOrchestrator?: boolean; intake?: IntakeSource; resumePlan?: StrategyPlan; workMap?: string; continuation?: boolean; continuationOf?: string }): Promise<ChatSummary>;
+  abstract create(req: NewChat, by?: 'user' | 'agent' | 'app', inherited?: Inherited, links?: RunLinks, opts?: CreateOpts): Promise<ChatSummary>;
 }
