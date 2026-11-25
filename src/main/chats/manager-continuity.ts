@@ -98,7 +98,11 @@ export abstract class ManagerContinuity extends ManagerRequests {
   private async doContinue(chatId: string, opts: ContinueOptions): Promise<ChatSummary> {
     const r = this.need(chatId);
     if (r.s.isOrchestrator) throw new Error('L’Orchestrator non si riprende così: usa «Ricomincia da capo» dal suo menu.');
+    // an app move (another engine, a new task) never brings back what the user closed with ✕ (review of ADR 0352)
+    if ((opts.on || opts.assignment) && (r.userClosing || r.s.closedAt && r.s.closedBy === 'user')) throw new Error('The user closed this chat and cancelled its work: only the user can reopen it. Start a new chat for new work.');
     const next = r.s.continuedBy && this.chats.get(r.s.continuedBy.id);
+    // a new task never lands silently on a chat that already went on: the caller assigns the one that goes on
+    if (next && opts.assignment) throw new Error(`This chat already goes on in «${next.s.title}» (chatId ${next.s.id}): assign the task there.`);
     if (next) return { ...next.s };
     // never two agents on the same files: the old chat must have finished its turn (a fresh note does not cover this one)
     const hasTurns = r.lastTurnAt > 0 || r.items.some(i => i.kind === 'result' || i.kind === 'user');
@@ -125,7 +129,7 @@ export abstract class ManagerContinuity extends ManagerRequests {
     {}, { continuation: !!parentRec, continuationOf: r.s.id });
     const nr = this.chats.get(c.id);
     // the worktree hint follows the chain (A → B → C)
-    if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; if (r.bound) nr.bound = true; this.updated(nr); }
+    if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; this.updated(nr); }
     // the agent's work goes on in a new run: the old one counts as reworked (§5)
     if (nr?.s.run && r.s.run && this.runs.get(r.s.run.runId)) {
       nr.s.run.continuedFrom = r.s.run.runId;

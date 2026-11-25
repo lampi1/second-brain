@@ -57,8 +57,6 @@ export interface StoredChat {
   agentChildren?: AgentChildren;
   /** the agent's tool policy and ceiling (A2); unreadable → the narrowest policy, never none */
   agentPolicy?: AgentPolicy;
-  /** opened from the unauthenticated mount: bound by the Orchestrator for good (ADR 0352) */
-  agentBound?: true;
   /** the agent's "Contesto massimo" (tokens), frozen at start like its policy (#80) */
   agentMaxContext?: number;
   /** mirror of the chat's agent run (A5); agent-runs.json is the source of truth. */
@@ -194,7 +192,6 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
     ...(Array.isArray(c.agentSkills) && c.agentSkills.length <= 64 && c.agentSkills.every(x => typeof x === 'string' && /^[a-z0-9][a-z0-9_-]{0,79}$/.test(x)) ? { agentSkills: c.agentSkills as string[] } : {}),
     ...(c.agentChildren ? { agentChildren: sanitizeAgentChildren(c.agentChildren) } : {}),
     ...(readPolicy(c.agentPolicy) ? { agentPolicy: readPolicy(c.agentPolicy)! } : {}),
-    ...(c.agentBound === true ? { agentBound: true as const } : {}),
     ...(Number.isSafeInteger(c.agentMaxContext) && (c.agentMaxContext as number) >= 100_000 && (c.agentMaxContext as number) <= 1_000_000 ? { agentMaxContext: c.agentMaxContext as number } : {}),
     ...(run && run.chatId === c.id ? { run, ...(num(c.runIdleSince) ? { runIdleSince: c.runIdleSince } : {}) } : {}),
     ...(typeof c.runPruned === 'string' && RUN_ID.test(c.runPruned) ? { runPruned: c.runPruned } : {}),

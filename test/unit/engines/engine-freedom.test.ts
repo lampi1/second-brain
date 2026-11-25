@@ -98,6 +98,18 @@ describe('the Orchestrator on any engine reaches a chat on any engine (ADR 0352)
       expect(opts.promptPrefix).toContain('Approfondisci il punto due');
     }
   });
+  it('the move keeps the task\'s criteria, and never lands on a chat that already went on or on a stale version', async () => {
+    const f = app('claude', { harness: 'cursor' }, { off: ['cursor'], card: 'codex' });
+    await f.assign({ doneWhen: ['Tabella con le fonti'] });
+    const opts = (f.continueChat.mock.calls[0] as unknown as [string, { promptPrefix: string }])[1];
+    expect(opts.promptPrefix).toContain('- Tabella con le fonti');
+    const stale = app('claude', { harness: 'cursor' }, { off: ['cursor'], card: 'codex' });
+    await expect(stale.assign({ expectedVersion: 3 })).rejects.toThrow(/Task version changed/);
+    const gone = app('claude', { harness: 'cursor', continuedBy: { id: 'w9', title: 'Lavoro 9' } }, { off: ['cursor'], card: 'codex' });
+    await expect(gone.assign()).rejects.toThrow(/already goes on in «Lavoro 9»/);
+    expect(stale.continueChat).not.toHaveBeenCalled();
+    expect(gone.continueChat).not.toHaveBeenCalled();
+  });
 });
 
 describe('what still refuses for the Orchestrator', () => {

@@ -126,8 +126,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
 
   /** A role chat given new work takes its role's card as it is now (ADR 0352): a card changed since it started never
    *  stops the work. Its tools and permissions become the card's, below its parent's for a delegated chat (and the
-   *  contract's tool classes), below the Orchestrator's for one from the unauthenticated mount; never wider than a
-   *  fork's source. Its engine, model, folder and instructions stay its own (its history already carries them). When
+   *  contract's tool classes); any other chat only narrows to the card, never wider than it runs now. Its engine, model, folder and instructions stay its own (its history already carries them). When
    *  tools or permissions changed, the engine relaunches on the same history before the next turn (they are fixed at
    *  launch). A card that cannot be read now leaves the chat as it was. */
   protected override async adoptCard(r: Rec): Promise<void> {
@@ -138,10 +137,11 @@ export class ChatManager extends ManagerRemote implements ChatService {
     catch (e) { log.warn('chats', 'role card not read for a new assignment', { chat: r.s.id, cause: errText(e), hint: 'the chat goes on with the card it had' }); return; }
     if (card.owner.source !== 'catalog' || card.owner.id !== owner.id) return;
     const parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
-    const orchestrator = r.bound ? [...this.chats.values()].find(x => x.s.isOrchestrator && !x.s.closedAt) : undefined;
+    // a child with its parent: the card below the parent's (and the contract's tool classes). Any other chat (a root
+    // chat, a fork, one opened from the unauthenticated mount, a child whose parent is gone) never goes wider than it runs
+    // now: the card only narrows it, since how it was bounded at its start is not kept (review of ADR 0352)
     const policy = parent ? narrowest(belowParent(card.policy, parent.policy ?? null, this.boundMode(parent)), r.s.delegation?.tools ? { tools: { allow: r.s.delegation.tools }, ceiling: null } : null)
-      : r.bound ? narrowest(card.policy, narrowest(orchestrator?.policy ?? null, FAIL_CLOSED))
-      : r.forkFrom ? narrowest(card.policy, r.policy ?? null) : card.policy;
+      : narrowest(card.policy, r.policy ?? null);
     const relaunch = JSON.stringify(policy ?? null) !== JSON.stringify(r.policy ?? null);
     if (!relaunch && owner.version === card.owner.version && owner.revision === card.owner.revision) return;
     // the snapshot of the card it runs now: its version and revision, its engine and model its own
@@ -318,8 +318,6 @@ export class ChatManager extends ManagerRemote implements ChatService {
       ...(agent.assets && agent.skills ? { skills: agent.skills } : {}),
       ...(agent.launches && agent.owner.source === 'catalog' ? { launches: [...agent.launches] } : {}),
       ...(policy ? { policy } : {}),
-      // opened from the unauthenticated mount: bound by the Orchestrator for good, also when it takes a new card (ADR 0352)
-      ...(parent === bound && bound ? { bound: true as const } : {}),
       // a delegated chat freezes its parent's role chain now (a parent with no chain: the child has none either and,
       // once the parent is gone, no managed MCP server at all)
       ...(delegator && this.mcpContext(delegator.s.id) ? { mcpAncestors: this.mcpContext(delegator.s.id)!.roles } : {}),

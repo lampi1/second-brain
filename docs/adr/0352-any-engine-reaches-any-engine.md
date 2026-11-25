@@ -37,10 +37,11 @@ into one that could not take its next task.
    the authenticated Orchestrator within 10 minutes of the user's own message (phone included, ADR 0275).
 4. **A changed card never stops the work.** On every new assignment `ChatManager.assignTask` calls `adoptCard`: the
    chat takes its role card's tools and permissions as they are now, below its parent's (and the contract's tool
-   classes) for a delegated chat, below the Orchestrator's for one from the unauthenticated mount (persisted flag
-   `agentBound`), never wider than a fork's source. Engine, model, folder and instructions stay the chat's. The
-   engine relaunches on the same history only when tools or permissions changed. A card that cannot be read leaves the
-   chat as it was.
+   classes) for a delegated chat. Any other chat (a root chat, a fork, one opened from the unauthenticated mount, a
+   child whose parent is gone) only narrows to the card, never wider than it runs now: how it was bounded at its start
+   is not kept. Engine, model, folder and instructions stay the chat's. The engine relaunches on the same history only
+   when tools or permissions changed, held as a switch so no turn starts meanwhile. A card that cannot be read leaves
+   the chat as it was.
 5. **The chat stays on its engine while that engine can run.** A level that now starts on another engine is a
    preference for new chats: a reused child keeps its engine and model (the answer says so in `warnings`).
 6. **When the chat's engine cannot run**, the app moves the work by itself: `continueChat` opens a new chat of the
@@ -48,6 +49,9 @@ into one that could not take its next task.
    same parent and in the same folder, carrying the new task (`assignment`: goal and criteria, no result), linked both
    ways. The tool answers with the new `chatId` and `continuedFrom`. Refused, with both reasons, only when the card's
    engine cannot run either.
+   Never for a chat the user closed with ✕, nor onto a chat that already went on (the answer names it), nor with a
+   stale `expectedVersion`; the task's criteria go with it. A review chat is not moved: the Orchestrator opens the
+   review again with `app_create_chat` (`reviewOf`, `freshReview`), so the review link stays.
 7. **What stays**: the three waits for the user's click (database writes, production releases, Azure writes); the
    parent's permissions as a ceiling; the owner's engine switches; untrusted engines never started; chats the user
    closed; the «never relax» rules of `docs/agents/rules.md` §2; no message between agents counts as consent.
@@ -107,6 +111,8 @@ changed-card and stopped-other-engine cases of `one-review.test.ts`.
 
 - Fewer refusals, no manual step: a chat on any engine goes on, or moves by itself when its engine cannot run.
 - A reused chat may relaunch its engine once (same history) when its card's tools changed: one cold start.
-- A review chat moved to another engine loses its `reviewOf` link: the next review of that work opens a fresh one.
+- A review chat whose engine cannot run is not moved: a fresh review of the same work keeps the `reviewOf` link.
+- A root chat out of credits now also waits when the card's engine is not allowed to the Orchestrators (before, only
+  a delegated one did): the same `openRefusal` for every chat.
 - Pinned by `test/unit/engines/engine-freedom.test.ts` (every pair of claude, cursor, codex and opencode; active,
   stopped and closed by itself; the refusals that stay) and `test/unit/chats/adopt-card.test.ts`.

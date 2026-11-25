@@ -702,7 +702,12 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         // of the same role on its card's engine, from the hand-off, linked to this one (ADR 0352). Never a manual step
         const blocked = openRefusal(d.brain.settings(), target.harness);
         if (blocked) {
-          const moved = await moveToCard(target, String(a.roleId), `${delta ? `${DELTA_REVIEW}\n\n` : ''}${prompt}`, blocked);
+          // a review chat stays with the work it reviewed: a new one keeps the review link, a moved one would lose it
+          if (world) throw new ToolRefusal(`${engineLabel(target.harness)} cannot run now (${blocked}): open the review of this work again with app_create_chat (reviewOf, freshReview true) on an engine that runs.`);
+          if (a.expectedVersion !== undefined && Number(a.expectedVersion) !== (target.run?.taskVersion ?? 1)) throw new Error('Task version changed; refresh before assigning.');
+          if (target.continuedBy) throw new ToolRefusal(`«${target.title}» already goes on in «${target.continuedBy.title}» (chatId ${target.continuedBy.id}): assign the task there.`);
+          const criteria = doneWhen?.length ? `\n\nFatto quando:\n${doneWhen.map(c => `- ${c}`).join('\n')}` : '';
+          const moved = await moveToCard(target, String(a.roleId), `${prompt}${criteria}`, blocked);
           if (mapLink) d.projectMaps!.link(mapLink.project, moved.id, mapLink.on);
           return { ...(mapLink ? { map: mapLink } : {}), chatId: moved.id, continuedFrom: target.id, harness: moved.harness, note: `${engineLabel(target.harness)} cannot run now (${blocked}): the work goes on in «${moved.title}» on ${engineLabel(moved.harness)}, from the hand-off of «${target.title}». Use this chatId from now on.`, ...(userInstructions.length ? { userInstructions } : {}), ...(task.warnings.length ? { warnings: task.warnings } : {}) };
         }
