@@ -368,3 +368,66 @@ describe('the plans tool', () => {
     expect(calls).toEqual([]);
   });
 });
+
+describe('«Riprendi» never opens a second Strategist (ADR 0361)', () => {
+  const stopped = (id: string, extra: Partial<ChatSummary> = {}) => chat(id, { plan: { ...plan('running', 100, steps('now', 'todo')), stopped: true }, ...extra });
+  it('goes to the chat that has the job, open or closed; a Strategist is started only when there is none', async () => {
+    const started: string[] = [];
+    const w = maps({ startStrategist: async m => { started.push(m.id); return put(chat('fresh', { planId: m.id, plan: plan('asking', 300, []) })); } });
+    // its own chat, still there
+    const a = saw(w, stopped('a'));
+    await w.act(a.id, 'resume');
+    expect(calls.at(-1)).toEqual(['planResume', 'a']);
+    // the chat went on in another one: that one is resumed
+    const b = saw(w, stopped('b', { continuedBy: { id: 'b2', title: 'Seguito' } as unknown as ChatSummary['continuedBy'] }));
+    put(stopped('b2', { continuedFrom: { id: 'b', title: 'Lavoro b' } as unknown as ChatSummary['continuedFrom'] }));
+    await w.act(b.id, 'resume');
+    expect(calls.at(-1)).toEqual(['planResume', 'b2']);
+    expect(started).toEqual([]);
+  });
+  it('when no chat is left it starts one, once: a second click while it starts is refused', async () => {
+    const started: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>(r => { release = r; });
+    const w = maps({ startStrategist: async m => { started.push(m.id); await gate; return put(chat('fresh', { planId: m.id, plan: plan('asking', 300, []) })); } });
+    const m = saw(w, stopped('c'));
+    w.observe('chat:removed', { chatId: 'c' });
+    expect(w.get(m.id)!.stopped).toBeDefined();
+    const first = w.act(m.id, 'resume'), second = w.act(m.id, 'resume');
+    await expect(second).rejects.toThrow(/già in corso/);
+    release();
+    await first;
+    expect(started).toEqual([m.id]);
+    expect(w.get(m.id)!.owner!.chatId).toBe('fresh');
+  });
+});
+
+describe('a partial save deletes nothing (ADR 0361)', () => {
+  it('changing one field, one step or one line leaves every other thing as it was, and every save is a version', async () => {
+    const w = maps(), m = w.idea({ title: 'Sconti', idea: 'A fasce', goal: 'Meno carrelli persi', why: 'Lo chiede il negozio', project: 'Negozio', constraints: ['Niente doppio sconto'], links: [{ kind: 'link', ref: 'https://example.org/x' }] });
+    await w.change(m.id, { steps: [{ op: 'add', title: 'Cerco', after: [] }, { op: 'add', title: 'Applico', after: [1] }, { op: 'add', title: 'Scrivo', after: [2] }] as never }, 'Orchestrator');
+    const whole = () => JSON.stringify({ ...w.get(m.id)!, version: 0, updatedAt: 0, by: '', summary: '' });
+    const base = w.get(m.id)!;
+    // only the goal: the steps, the lines and the links are all there
+    await w.change(m.id, { set: { goal: 'Meno carrelli abbandonati' } });
+    let now = w.get(m.id)!;
+    expect(now.goal).toBe('Meno carrelli abbandonati');
+    expect({ ...now, goal: base.goal, version: 0, updatedAt: 0, by: '', summary: '' }).toEqual({ ...base, version: 0, updatedAt: 0, by: '', summary: '' });
+    // one line added, none lost; one removed by name, only that one
+    await w.change(m.id, { add: { constraints: ['Solo prezzo pieno'] } });
+    expect(w.get(m.id)!.constraints).toEqual(['Niente doppio sconto', 'Solo prezzo pieno']);
+    await w.change(m.id, { remove: { constraints: ['Solo prezzo pieno'] } });
+    expect(w.get(m.id)!.constraints).toEqual(['Niente doppio sconto']);
+    // one step changed: the others, their order and their states are untouched
+    await w.change(m.id, { steps: [{ op: 'set', step: 2, title: 'Applico lo sconto' }] as never });
+    now = w.get(m.id)!;
+    expect(now.plan!.steps.map(s => [s.title, s.state])).toEqual([['Cerco', 'todo'], ['Applico lo sconto', 'todo'], ['Scrivo', 'todo']]);
+    // an operation that names no step is refused whole: nothing changed, no version made
+    const v = w.get(m.id)!.version, text = whole();
+    await expect(w.change(m.id, { set: { goal: 'Altro' }, steps: [{ op: 'set', step: 9, title: 'x' }] as never })).rejects.toThrow();
+    expect(w.get(m.id)!.version).toBe(v);
+    expect(whole()).toBe(text);
+    // every save above is a version, in order
+    expect(w.view(m.id)!.history.map(h => h.version)).toEqual(Array.from({ length: w.get(m.id)!.version }, (_, i) => i + 1));
+  });
+});

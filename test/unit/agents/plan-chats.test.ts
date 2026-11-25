@@ -328,7 +328,7 @@ describe('replanning a running job', () => {
     expect(f.mapOf(s.id).plan!.steps).toMatchObject([{ title: 'Applico', state: 'todo' }, { title: 'Trovo dove si calcola lo sconto', state: 'now', drop: true }]);
     expect(f.m.list().find(c => c.id === kid)!.run?.endedAt).toBeUndefined();
     await act(f, s.id, 'approve');
-    expect(f.mapOf(s.id)).toMatchObject({ state: 'running', plan: { steps: [{ id: 's1', title: 'Applico', state: 'todo' }] } });
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'running', plan: { steps: [{ id: 's2', title: 'Applico', state: 'todo' }] } });
     const gone = f.m.list().find(c => c.id === kid);
     expect(!gone || gone.closedAt !== undefined || gone.run?.endedAt !== undefined).toBe(true);
   });
@@ -469,20 +469,20 @@ describe('a step is never «now» for ever (live status)', () => {
     return { f, s, kid: f.kids(s.id)[0]!.id, box: (g: F = f) => g.maps().view(g.mapOf(s.id).id)!.steps[0]! };
   };
 
-  it('its chat closed without a report: blocked, and it says so; open again: it goes on', async () => {
+  it('its chat closed without a report: the step keeps its state and says so; open again: it goes on', async () => {
     const { f, kid, box } = await started();
     expect(box()).toMatchObject({ state: 'now', live: { chats: [{ chatId: kid }] } });
     await f.m.archive(kid);
-    expect(box()).toMatchObject({ state: 'blocked', live: { say: 'closed', chats: [{ chatId: kid, say: 'closed' }] } });
+    expect(box()).toMatchObject({ state: 'now', live: { say: 'closed', chats: [{ chatId: kid, say: 'closed' }] } });
     await f.m.reopen(kid);
     expect(box()).toMatchObject({ state: 'now' });
     expect(box().live!.say).not.toBe('closed');
   });
 
-  it('its chat removed without a report: blocked, its chat gone', async () => {
+  it('its chat removed without a report: the step keeps its state, its chat is gone', async () => {
     const { f, kid, box } = await started();
     await f.m.close(kid);
-    expect(box()).toMatchObject({ state: 'blocked', live: { say: 'gone' } });
+    expect(box()).toMatchObject({ state: 'now', live: { say: 'gone' } });
   });
 
   it('closed after its report: the report stays', async () => {
@@ -523,7 +523,7 @@ describe('a step is never «now» for ever (live status)', () => {
     expect(box().live!.waits).toBeUndefined();
   });
 
-  it('the app restarts with the step under way: still under way, nothing invented; its chat lost meanwhile: blocked', async () => {
+  it('the app restarts with the step under way: still under way, nothing invented; its chat lost meanwhile: the state stays, the chat is gone', async () => {
     const { f, s, kid, box } = await started();
     await f.m.shutdown();
     const g = fixture({ dir: f.dir });
@@ -535,8 +535,8 @@ describe('a step is never «now» for ever (live status)', () => {
     fs.writeFileSync(file, JSON.stringify(drop(raw)));
     const h = fixture({ dir: f.dir });
     expect(h.m.list().some(c => c.id === kid)).toBe(false);
-    expect(h.m.planOf(s.id)!.steps[0]).toMatchObject({ state: 'blocked' });
-    expect(box(h)).toMatchObject({ state: 'blocked', live: { say: 'gone' } });
+    expect(h.m.planOf(s.id)!.steps[0]).toMatchObject({ state: 'now' });
+    expect(box(h)).toMatchObject({ state: 'now', live: { say: 'gone' } });
   });
 
   it('the approval of a replan under way is not touched by a chat that closes', async () => {
@@ -544,7 +544,7 @@ describe('a step is never «now» for ever (live status)', () => {
     await f.call('plan_propose', s.id, { revise: true, steps: [{ keep: 1 }, { title: 'Altro', role: 'artisan', after: [] }] });
     const at = planAt(f, s.id);
     await f.m.archive(kid);
-    expect(f.mapOf(s.id)).toMatchObject({ state: 'toApprove', plan: { phase: 'proposed', at, steps: [{ state: 'blocked' }, { state: 'todo' }] } });
+    expect(f.mapOf(s.id)).toMatchObject({ state: 'toApprove', plan: { phase: 'proposed', at, steps: [{ state: 'now' }, { state: 'todo' }] } });
     expect((await act(f, s.id, 'approve')).state).toBe('running');
   });
 });
@@ -558,5 +558,56 @@ describe('night mode (ADR 0191)', () => {
     await act(f, s.id, 'stop');
     await f.call('plan_propose', s.id, { revise: true, steps: [{ title: 'Altro', role: 'artisan', after: [] }] });
     expect(f.mapOf(s.id)).toMatchObject({ state: 'stopped', plan: { phase: 'proposed' } });
+  });
+});
+
+describe('what a plan guarantees (ADR 0361)', () => {
+  const SIX = { steps: Array.from({ length: 6 }, (_, i) => ({ title: `Passo ${i + 1}`, role: 'artisan', after: [] as number[] })) };
+  const states = (f: F, id: string) => f.mapOf(id).plan!.steps.map(x => x.state);
+
+  it('a plan of six steps, one blocked and five never started, that is closed in any way: none becomes done', async () => {
+    const f = fixture(), s = await f.root();
+    await f.enough(s.id);
+    await f.call('plan_propose', s.id, SIX);
+    await act(f, s.id, 'approve');
+    await f.call('plan_update', s.id, { step: 1, state: 'blocked' });
+    const want = ['blocked', 'todo', 'todo', 'todo', 'todo', 'todo'];
+    expect(states(f, s.id)).toEqual(want);
+    const id = f.mapOf(s.id).id;
+    // its chat is closed, then gone for good, then the plan is put away and brought back: the steps are what they were
+    await f.m.archive(s.id);
+    expect(f.maps().get(id)!.plan!.steps.map(x => x.state)).toEqual(want);
+    await f.m.close(s.id);
+    expect(f.maps().get(id)!.state).toBe('stopped');
+    expect(f.maps().get(id)!.plan!.steps.map(x => x.state)).toEqual(want);
+    await f.maps().act(id, 'archive');
+    expect(f.maps().get(id)!.plan!.steps.map(x => x.state)).toEqual(want);
+    await f.maps().act(id, 'reopen');
+    expect(f.maps().get(id)!.plan!.steps.map(x => x.state)).toEqual(want);
+    expect(f.maps().list()[0]).toMatchObject({ done: 0, percent: 0, blocked: 1 });
+  });
+
+  it('every chat closed and the app restarted: the plan comes back at the step it was at, and «Riprendi» opens its own chat, not a second one', async () => {
+    const f = fixture(), s = await f.proposed();
+    await act(f, s.id, 'approve');
+    await f.call('agent_delegate', s.id, f.task('scout', 'Sconti · Dove', 1));
+    const kid = f.kids(s.id)[0]!.id;
+    await f.call('agent_report', kid, { outcome: 'done', summary: 'trovato dove', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }] });
+    await f.call('agent_delegate', s.id, f.task('artisan', 'Sconti · Applico', 2));
+    const id = f.mapOf(s.id).id, before = f.mapOf(s.id).plan!.steps.map(x => x.state);
+    expect(before).toEqual(['done', 'now', 'todo']);
+    for (const c of f.m.list()) await f.m.archive(c.id);
+    await f.m.shutdown();
+    const g = fixture({ dir: f.dir });
+    const view = g.maps().view(id)!;
+    expect(view.steps.map(x => x.state)).toEqual(before);
+    expect(view.info).toMatchObject({ done: 1, percent: 33 });
+    expect(view.steps[0]!.proof).toBeDefined();
+    const strategists = () => g.m.list().filter(c => c.agent?.id === 'strategist' && !c.parentId).length;
+    const n = strategists();
+    await g.maps().act(id, 'resume');
+    expect(strategists()).toBe(n);
+    expect(g.maps().get(id)!.plan!.steps.map(x => x.state)).toEqual(before);
+    expect(g.maps().get(id)!.owner!.chatId).toBe(s.id);
   });
 });
