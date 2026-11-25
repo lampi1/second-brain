@@ -18,6 +18,7 @@ import { log, errText } from '../log';
 import { ToolRefusal, UpstreamError } from './refusal';
 import { timedStep } from '../perf';
 import { updateActivity } from '../update/activity';
+import { nullsHint, schemaArgs } from './json-args';
 
 export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'] as const;
 export const DEFAULT_MCP_PORT = 4319;
@@ -267,7 +268,9 @@ export class McpServer {
           const name = typeof p.name === 'string' ? p.name : '';
           const tool = (mount.callTools ? await mount.callTools({ params: ctx.params, sessionId: ctx.sessionId }) : await this.toolsOf(mount, ctx)).find(t => t.name === name);
           if (!tool) return fail(id, -32602, `Unknown tool: ${name || '(none)'}. Call tools/list for the available tools.`);
-          const args = (p.arguments && typeof p.arguments === 'object' ? p.arguments : {}) as Record<string, unknown>;
+          // a nested object or list sent as its JSON text is read back; one an engine sent as null is named in the error (#487)
+          const read = schemaArgs((p.arguments && typeof p.arguments === 'object' ? p.arguments : {}) as Record<string, unknown>, tool.inputSchemaFor?.(ctx.params) ?? tool.inputSchema);
+          const args = read.args;
           const who = mount.who?.(ctx.params, ctx.sessionId);
           const t0 = Date.now();
           const key = callKey(mount, ctx, id);
@@ -286,7 +289,7 @@ export class McpServer {
           } catch (e) {
             if (e instanceof ToolRefusal) log.info('mcp', `tool ${name} refused`, { chat: who, cause: errText(e), data: { mount: mount.name } });
             else log.warn('mcp', `tool ${name} failed`, { chat: who, cause: errText(e), data: { mount: mount.name, ms: Date.now() - t0 } });
-            return ok(id, { content: [{ type: 'text', text: `Error: ${errText(e)}` }], isError: true });
+            return ok(id, { content: [{ type: 'text', text: `Error: ${errText(e)}${read.nulls.length ? nullsHint(read.nulls) : ''}` }], isError: true });
           } finally {
               leaveActivity?.();
             ctx.signal.removeEventListener('abort', onClose);
