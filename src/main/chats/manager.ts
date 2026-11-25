@@ -25,7 +25,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ChatCommand, ChatItem, ChatSummary, Effort, NewChat, PendingRequest, PermissionMode } from '../../shared/contract';
+import type { ChatCommand, ChatItem, ChatSummary, Effort, NewChat, PendingRequest, PermissionMode, WorkRouting } from '../../shared/contract';
 import { replyLangTurn } from './reply-lang';
 import { voiceReplyHint } from './voice-reply';
 import { checkImages } from './images';
@@ -336,6 +336,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
       tags: { ...asked, repo: repoOf(cwd) }, ...(agent.tier ? { tier: agent.tier } : {}), model: req.model ?? null, ...(agent.presetChoice ? { presetChoice: runPresetOf(agent.presetChoice) } : {}) });
     // the user's own model for this work, recorded (ADR 0354 point 7); how its model was picked, said in the chat
     if (req.userModel && !delegator) r.s.userModel = { ...req.userModel };
+    if (req.routing && !delegator) r.s.routing = structuredClone(req.routing);
     const pc = agent.presetChoice;
     if (pc && (pc.skipped?.length || pc.allOut)) r.s.pick = { at: now, chosen: `${req.model ?? 'predefinito'} (${req.harness})`, skipped: pc.skipped ?? [], ...(pc.allOut ? { allOut: true as const } : {}) };
     if (r.s.run) { r.s.run.taskContract = { ...((by === 'app' && req.doneWhen !== undefined) || opts.reportExpected ? { reportExpected: true } : {}), goal: r.s.run.goal, doneWhen: req.doneWhen ?? req.delegation?.doneWhen ?? [], deliveryPolicy: this.deliveryPolicy(req.deliveryPolicy, !!delegator), ...(req.contractFields?.length ? { fields: req.contractFields } : {}) }; this.runSave(); }
@@ -711,6 +712,16 @@ export class ChatManager extends ManagerRemote implements ChatService {
     if (r.handoffTurn && !r.working) { r.working = true; this.persist(); }
     if (r.s.lastError) { delete r.s.lastError; this.updated(r); }
     } finally { releaseDelivery(); }
+  }
+
+  /** The user's engine/model per role and engines left out for the tree under this chat (ADR 0359): replaces what it had;
+   *  null/empty clears it. Read at every launch below it, so it holds for chats that start later. */
+  setRouting(chatId: string, routing: WorkRouting | null): ChatSummary {
+    const r = this.need(chatId);
+    if (routing && (routing.picks && Object.keys(routing.picks).length || routing.exclude?.length)) r.s.routing = structuredClone(routing); else delete r.s.routing;
+    this.persist(true);
+    this.updated(r);
+    return { ...r.s };
   }
 
   async set(chatId: string, patch: { model?: string; effort?: Effort | null; permissionMode?: PermissionMode; title?: string; workStatus?: 'assigned'|'waiting-mail'|'completed' }): Promise<ChatSummary> {

@@ -4,7 +4,9 @@
 // never their instructions. It grants nothing (the skill suggester is gone, ADR 0186: 3 hits in 4129). Used by wiring.ts
 // (every chat endpoint) and appctl/tools.ts (the Orchestrator's).
 import type { AgentCatalog, AgentModelChoice, AgentProfile } from '../../shared/agents';
-import type { Effort, UserModelPick } from '../../shared/contract/chats';
+import type { Effort, UserModelPick, WorkRouting } from '../../shared/contract/chats';
+import type { Harness } from '../../shared/contract';
+import { isWorkRole, ROLE_IDS } from '../../shared/roles';
 import type { McpTool } from '../mcp/server';
 import { gapLines, skillGaps } from './skill-needs';
 import { cardPresets } from '../../shared/model-presets';
@@ -68,6 +70,23 @@ export function userModelOf(v: unknown, models: readonly AgentModelChoice[], rol
   if (suffix) return { engine: hit!.m.engine, model: hit!.x!.id, effort: suffix };
   if (!hit) throw Error(`userModel: ${want} is not in ${o.engine ? `${String(o.engine)}'s` : 'any engine\'s'} model list (agent_catalog with models true); ask the user which one he means.`);
   return { engine: hit.m.engine, model: hit.x!.id, ...(o.effort !== undefined ? { effort: o.effort as UserModelPick['effort'] } : {}) };
+}
+
+/** The user's engine/model per role and the engines left out for a work tree (app_create_chat routing, app_set_routing,
+ *  ADR 0359). Each pick is checked as `userModel` is; a role is one of the work roles; an unknown engine is refused. */
+export function routingOf(v: unknown, models: readonly AgentModelChoice[], roleEngine: (roleId: string) => string): WorkRouting | undefined {
+  if (v === undefined || v === null) return undefined;
+  const o = v as { picks?: unknown; exclude?: unknown } | null;
+  if (!o || typeof o !== 'object' || Object.keys(o).some(k => k !== 'picks' && k !== 'exclude')) throw Error('routing: {picks?: {roleId: {engine?, model, effort?}}, exclude?: [engine]}.');
+  const picks: Record<string, UserModelPick> = {};
+  for (const [role, pick] of Object.entries(o.picks && typeof o.picks === 'object' ? o.picks as Record<string, unknown> : {})) {
+    if (!isWorkRole(role)) throw Error(`routing.picks: ${role} is not a work role (${ROLE_IDS.filter(r => r !== 'orchestrator').join(', ')}).`);
+    picks[role] = userModelOf(pick, models, roleEngine(role))!;
+  }
+  const exclude = [...new Set(Array.isArray(o.exclude) ? o.exclude : [])];
+  for (const e of exclude) if (typeof e !== 'string' || !models.some(m => m.engine === e)) throw Error(`routing.exclude: ${models.map(m => m.engine).join(' | ')}.`);
+  for (const [role, pick] of Object.entries(picks)) if ((exclude as string[]).includes(pick.engine)) throw Error(`routing: the pick of ${role} is on ${pick.engine}, which you also exclude.`);
+  return Object.keys(picks).length || exclude.length ? { ...(Object.keys(picks).length ? { picks } : {}), ...(exclude.length ? { exclude: exclude as Harness[] } : {}) } : undefined;
 }
 
 export function agentCatalogTool(source: CatalogSource, skillTools?: SkillToolsSource): McpTool {

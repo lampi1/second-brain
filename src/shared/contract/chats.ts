@@ -143,6 +143,10 @@ export interface ChatSummary {
   /** the model the user named for this work (app_create_chat userModel, ADR 0296), recorded: the chats its Strategist
    *  opens for the same work use it too, when it is on their role's levels (ADR 0354 point 7); never set by an agent */
   userModel?: UserModelPick;
+  /** what the user said about engines and models for the whole work tree under this chat (ADR 0359): the model per role
+   *  and the engines left out; children at any depth read the nearest ancestors' record at each launch, so a change holds
+   *  while the tree runs. Set only by the Orchestrator (app_create_chat routing, app_set_routing); never by a worker */
+  routing?: WorkRouting;
   /** how its model was picked at the start (ADR 0354): the models of the level passed over, each with why */
   pick?: { at: number; chosen: string; skipped: SkipNote[]; allOut?: true };
   /** the last automatic move of this chat out of a spent plan (ADR 0354): the chat and the recap say it */
@@ -381,6 +385,9 @@ export interface RunDismissed { same?: { runId: string; state: RunInfo['state'];
 
 /** A model the user asked for one run by name (app_create_chat `userModel`, ADR 0296): one of the role card's presets. */
 export interface UserModelPick { engine: Harness; model: string; effort?: Effort }
+/** The user's own choice for a work tree (ADR 0359): the engine and model per role (workers never choose) and the
+ *  engines no chat of the tree may use or be moved to. */
+export interface WorkRouting { picks?: Record<string, UserModelPick>; exclude?: Harness[] }
 export interface NewChat {
   deliveryPolicy?: TaskDeliveryPolicy;
   doneWhen?: string[];
@@ -426,6 +433,8 @@ export interface NewChat {
   /** the model the user named for this one run (ADR 0296): engine, model and effort for this chat only, one of the role
    *  card's presets; the card keeps its own. Wins over `preset`; the engine must be on and able to pick a model. */
   userModel?: UserModelPick;
+  /** the user's engine/model per role and excluded engines for the whole tree (ADR 0359); only the Orchestrator passes it */
+  routing?: WorkRouting;
   /** run tags (AGENTS-DESIGN §4.8): the skill ids the chat starts with (`^[a-z0-9][a-z0-9_-]{0,79}$`, at most 16) */
   skills?: string[];
   /** run tags: the product the work is about, up to 40 characters */
