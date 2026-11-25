@@ -12,11 +12,12 @@ import path from 'node:path';
 
 export const TOOL_CLI = 'sb-tool';
 export const TOOL_CLI_URL_ENV = 'SB_CHAT_TOOLS';
+export const TOOL_CLI_APP_URL_ENV = 'SB_APP_TOOLS';
 
 /** The script. `sb-tool list` lists the chat's tools; `sb-tool <tool> '<json>'`, `sb-tool <tool> --file args.json` or
  *  `sb-tool <tool> -` (arguments on stdin) calls one. Prints the tool's text; exit 1 on an error or a refusal. */
 export const TOOL_CLI_SOURCE = String.raw`'use strict';
-// second-brain fallback tool command (ADR 0356): calls one app tool on this chat's own MCP endpoint.
+// second-brain fallback tool command (ADR 0356): calls one app tool on this chat's own MCP endpoint(s).
 const fs = require('node:fs');
 function parse(argv, readFile, stdin) {
   const [tool, ...rest] = argv;
@@ -29,7 +30,7 @@ function parse(argv, readFile, stdin) {
   let args;
   try { args = JSON.parse(String(raw).replace(/^﻿/, '')); } catch (e) { throw new Error('the arguments are not valid JSON: ' + e.message); }
   if (!args || typeof args !== 'object' || Array.isArray(args)) throw new Error('the arguments must be a JSON object');
-  return { method: 'tools/call', params: { name: tool.replace(/^(?:mcp__?)?second-brain(?:__|_|:|-)/, ''), arguments: args } };
+  return { method: 'tools/call', params: { name: tool.replace(/^(?:mcp__?)?second-brain(?:-app)?(?:__|_|:|-|\.)/, ''), arguments: args } };
 }
 function render(method, reply) {
   if (reply.error) return { text: 'Error: ' + (reply.error.message || JSON.stringify(reply.error)), failed: true };
@@ -38,19 +39,43 @@ function render(method, reply) {
   const text = (r.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n');
   return { text, failed: !!r.isError };
 }
+async function post(url, req) {
+  const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: req.method, params: req.params }) });
+  if (!res.ok) return { httpError: 'sb-tool: the app answered ' + res.status + ' (is the app open? is this the chat\'s own shell?)' };
+  return { reply: await res.json() };
+}
 async function main() {
-  const url = process.env.${TOOL_CLI_URL_ENV};
+  const urls = [process.env.${TOOL_CLI_URL_ENV}, process.env.${TOOL_CLI_APP_URL_ENV}].filter(Boolean);
   const out = s => process.stdout.write(s + '\n'), err = s => process.stderr.write(s + '\n');
   let req;
   try { req = parse(process.argv.slice(2), f => fs.readFileSync(f, 'utf8'), () => fs.readFileSync(0, 'utf8')); }
   catch (e) { err('sb-tool: ' + e.message); process.exit(2); }
   if (req.help) { out("usage: sb-tool list | sb-tool <tool> '<json arguments>' | sb-tool <tool> --file args.json | sb-tool <tool> - (stdin)"); return; }
-  if (!url) { err('sb-tool: no app endpoint for this chat (' + '${TOOL_CLI_URL_ENV}' + ' is not set): run it from the chat\'s own shell'); process.exit(2); }
-  const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: req.method, params: req.params }) });
-  if (!res.ok) { err('sb-tool: the app answered ' + res.status + ' (is the app open? is this the chat\'s own shell?)'); process.exit(1); }
-  const shown = render(req.method, await res.json());
-  (shown.failed ? err : out)(shown.text);
-  if (shown.failed) process.exit(1);
+  if (!urls.length) { err('sb-tool: no app endpoint for this chat (' + '${TOOL_CLI_URL_ENV}' + ' is not set): run it from the chat\'s own shell'); process.exit(2); }
+  if (req.method === 'tools/list') {
+    const names = [], seen = new Set();
+    let lastErr = '';
+    for (const url of urls) {
+      const r = await post(url, req);
+      if (r.httpError) { lastErr = r.httpError; continue; }
+      const shown = render(req.method, r.reply);
+      if (shown.failed) { lastErr = shown.text; continue; }
+      for (const n of shown.text.split('\n').filter(Boolean)) if (!seen.has(n)) { seen.add(n); names.push(n); }
+    }
+    if (!names.length && lastErr) { err(lastErr); process.exit(1); }
+    out(names.join('\n'));
+    return;
+  }
+  for (let i = 0; i < urls.length; i++) {
+    const r = await post(urls[i], req);
+    if (r.httpError) { err(r.httpError); process.exit(1); }
+    const rep = r.reply;
+    if (rep && rep.error && rep.error.code === -32602 && /^Unknown tool:/i.test(rep.error.message || '') && i < urls.length - 1) continue;
+    const shown = render(req.method, rep);
+    (shown.failed ? err : out)(shown.text);
+    if (shown.failed) process.exit(1);
+    return;
+  }
 }
 if (require.main === module) main().catch(e => { process.stderr.write('sb-tool: ' + (e && e.message || e) + '\n'); process.exit(1); });
 module.exports = { parse, render };
@@ -77,18 +102,22 @@ const write = (file: string, text: string, mode?: number): void => {
 };
 
 /** The environment a chat's engine starts with so that its shell finds the command: the folder first on PATH (whatever
- *  the key's case, as Windows keeps «Path») and the chat's endpoint. Nothing when either is missing. */
-export function toolCliEnv(base: Record<string, string | undefined>, dir: string | null, url: string | null): Record<string, string> {
-  if (!dir || !url) return {};
+ *  the key's case, as Windows keeps «Path») and the chat's endpoint(s). Nothing when neither dir nor an endpoint exists. */
+export function toolCliEnv(base: Record<string, string | undefined>, dir: string | null, url: string | null, appUrl: string | null = null): Record<string, string> {
+  if (!dir || (!url && !appUrl)) return {};
   const key = Object.keys(base).find(k => k.toUpperCase() === 'PATH') ?? 'PATH';
   const now = base[key] ?? '';
   const parts = now.split(path.delimiter).filter(Boolean);
-  return { [key]: parts.includes(dir) ? now : [dir, ...parts].join(path.delimiter), [TOOL_CLI_URL_ENV]: url };
+  return {
+    [key]: parts.includes(dir) ? now : [dir, ...parts].join(path.delimiter),
+    ...(url ? { [TOOL_CLI_URL_ENV]: url } : {}),
+    ...(appUrl ? { [TOOL_CLI_APP_URL_ENV]: appUrl } : {}),
+  };
 }
 
 /** The line that tells a chat how to reach a tool its engine did not give it (the tool check, the report reminder). */
 export function toolCliHint(tools: readonly string[]): string {
-  // the example is the tool a chat is likeliest to miss: its report, else its first beyond show_ui
-  const one = tools.find(t => t === 'agent_report') ?? tools.find(t => t !== 'show_ui') ?? tools[0] ?? 'agent_report';
+  // the example is the tool a chat is likeliest to miss: its report, else app_create_chat, else its first beyond show_ui
+  const one = tools.find(t => t === 'agent_report') ?? tools.find(t => t === 'app_create_chat') ?? tools.find(t => t !== 'show_ui') ?? tools[0] ?? 'agent_report';
   return `Se uno strumento dell'app (${tools.join(', ') || one}) non è tra i tuoi, usa il comando locale dell'app nella tua shell: \`${TOOL_CLI} ${one} '<argomenti JSON>'\` (oppure \`${TOOL_CLI} ${one} --file args.json\`; \`${TOOL_CLI} list\` elenca i tuoi strumenti). Su Windows passa gli argomenti con --file o da stdin (\`-\`): cmd.exe altera le virgolette. Chiama lo stesso strumento con gli stessi controlli.`;
 }

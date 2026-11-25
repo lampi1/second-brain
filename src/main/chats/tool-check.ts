@@ -10,8 +10,10 @@ import { missingTools } from '../../shared/role-tools';
 export interface ToolSession {
   /** the session's start (a new engine process, a resume, a new chat after an engine change) */
   startedAt: number;
-  /** the names the endpoint served on the last tools/list since the start */
+  /** the names the chat endpoint served on the last tools/list since the start */
   served?: readonly string[];
+  /** the names the Orchestrator's app-control endpoint (second-brain-app) served since the start */
+  appServed?: readonly string[];
   /** the names the engine says it loaded (Claude's init), when it says */
   engineSaw?: readonly string[];
   /** a first turn ended in this session */
@@ -27,25 +29,34 @@ export interface ToolSession {
 export type ToolAction = { kind: 'ok' } | { kind: 'wait' } | { kind: 'reload' | 'fallback'; missing: string[]; why: string };
 
 /** What to do now. `reloads` = how many times the chat's session was already reloaded for its tools (at most one: a
- *  second gap goes to the fallback). `hasEndpoint` = the chat was given the app's endpoint at all. */
-export function toolAction(required: readonly string[], s: ToolSession, reloads: number, hasEndpoint: boolean): ToolAction {
-  if (!required.length || !hasEndpoint || s.acted === 'fallback') return { kind: 'ok' };
+ *  second gap goes to the fallback). `hasEndpoint` = the chat was given the app's chat endpoint; `hasAppEndpoint` = the
+ *  Orchestrator's app-control endpoint (second-brain-app). */
+export function toolAction(required: readonly string[], s: ToolSession, reloads: number, hasEndpoint: boolean, appRequired: readonly string[] = [], hasAppEndpoint = false): ToolAction {
+  const allRequired = [...new Set([...(hasEndpoint ? required : []), ...(hasAppEndpoint ? appRequired : [])])];
+  if (!allRequired.length || s.acted === 'fallback') return { kind: 'ok' };
   // the model says a required tool is missing (agy after a failed MCP preload, its list served in full): the fallback
   // at once, which also wakes the chat that stopped; a reload would leave it idle
   if (s.saidMissing?.length) return { kind: 'fallback', missing: [...s.saidMissing], why: 'the model said they are not among its tools' };
   // the app's own list lacked a tool: an app fault no reload fixes (the fallback reaches the full list)
-  if (s.served) {
+  if (hasEndpoint && s.served) {
     const lacking = missingTools(required, s.served);
     if (lacking.length) return { kind: 'fallback', missing: lacking, why: 'the endpoint did not list them' };
   }
+  if (hasAppEndpoint && s.appServed) {
+    const lacking = missingTools(appRequired, s.appServed);
+    if (lacking.length) return { kind: 'fallback', missing: lacking, why: 'the app endpoint did not list them' };
+  }
   if (s.engineSaw) {
-    const lost = missingTools(required, s.engineSaw);
+    const lost = missingTools(allRequired, s.engineSaw);
     if (lost.length) return s.acted || reloads >= 1 ? { kind: 'fallback', missing: lost, why: 'the engine did not load them, again after a reload' } : { kind: 'reload', missing: lost, why: 'the engine did not load them' };
     return { kind: 'ok' };
   }
-  if (s.served) return { kind: 'ok' };
-  // a first turn ended and the engine never read the endpoint in this session
-  if (s.turnEnded) return s.acted || reloads >= 1 ? { kind: 'fallback', missing: [...required], why: 'the engine never listed the app tools, again after a reload' } : { kind: 'reload', missing: [...required], why: 'the engine never listed the app tools' };
+  if ((!hasEndpoint || s.served) && (!hasAppEndpoint || s.appServed)) return { kind: 'ok' };
+  // a first turn ended and the engine never read one of its endpoints in this session
+  if (s.turnEnded) {
+    const lost = [...new Set([...(hasEndpoint && !s.served ? required : []), ...(hasAppEndpoint && !s.appServed ? appRequired : [])])];
+    return s.acted || reloads >= 1 ? { kind: 'fallback', missing: lost, why: 'the engine never listed the app tools, again after a reload' } : { kind: 'reload', missing: lost, why: 'the engine never listed the app tools' };
+  }
   return { kind: 'wait' };
 }
 
@@ -63,7 +74,7 @@ export function saysToolMissing(text: string, required: readonly string[]): stri
   const out = new Set<string>();
   for (const sentence of t.split(/(?<=[.!?\n])\s+/)) {
     if (!ABSENT.test(sentence) || !OWN_TOOLS.test(sentence)) continue;
-    for (const tool of required) if (new RegExp(`(?:^|[^a-z0-9_])(?:[a-z0-9_.:-]*second-brain[_:.-]+)?${tool}(?![a-z0-9_])`, 'i').test(sentence)) out.add(tool);
+    for (const tool of required) if (new RegExp(`(?:^|[^a-z0-9_])(?:[a-z0-9_.:-]*second-brain(?:-app)?[_:.-]+)?${tool}(?![a-z0-9_])`, 'i').test(sentence)) out.add(tool);
   }
   return [...out];
 }

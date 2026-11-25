@@ -8,7 +8,7 @@ import { RUN_CODE } from '../code-mode/policy';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import type { WarmLaunch } from './warm';
 import { isDelegatorRole } from '../../shared/roles';
-import { ALL_REQUIRED_TOOLS, requiredTools, type ToolNeedView } from '../../shared/role-tools';
+import { ALL_REQUIRED_TOOLS, ORCHESTRATOR_APP_REQUIRED, requiredTools, type ToolNeedView } from '../../shared/role-tools';
 
 /** chat-endpoint tools the Orchestrator can never use (chatToolShown): it does not delegate, report, ask a parent or
  *  list children (its chats are roots), and
@@ -78,22 +78,25 @@ export function needView(s: Pick<ChatSummary, 'research' | 'isOrchestrator' | 'p
 
 const COMPACT_TOOL_DESC = 180;
 const COMPACT_PROP_DESC = 80;
-/** the tools a child cannot finish without (#463): agy drops the LARGEST tools first when over its budget, and
- *  agent_report was the second largest of the chat endpoint (≈2.6 KB compacted), so these get the shortest metadata */
-const CORE_TOOLS: ReadonlySet<string> = ALL_REQUIRED_TOOLS;
+/** the tools a chat cannot finish without (#463, ADR 0356): agy drops the LARGEST tools first when over its budget, so
+ *  required chat-endpoint and Orchestrator app-control tools get the shortest metadata */
+const CORE_TOOLS: ReadonlySet<string> = new Set([...ALL_REQUIRED_TOOLS, ...ORCHESTRATOR_APP_REQUIRED]);
 const CORE_PROP_DESC = 40;
 const CORE_TOOL_DESC = 140;
 /** what a compact engine's list never carries (ADR 0356): the largest optional tools of the chat endpoint (#476's cause:
  *  agy dropped a large optional tool, then agent_report, the two largest, in the brain folder). They stay reachable through
  *  the fallback command (chats/tool-cli.ts) and Code Mode's run_code */
 export const COMPACT_LEFT_OUT: ReadonlySet<string> = new Set(['plans', 'brain_script_add', 'brain_query_add']);
-/** the whole compact list, well under agy's eager budget (it dropped tools from a 33.6 KB list plus the brain's skills) */
+/** the whole compact chat-endpoint list, well under agy's eager budget (it dropped tools from a 33.6 KB list plus the brain's skills) */
 export const COMPACT_BUDGET = 24_000;
+/** the Orchestrator's compact second-brain-app list: paired with second-brain (~7.4 KB), total stays under ~40 KB,
+ *  well below agy's ~51 KB eager eviction ceiling; any optional tool left out stays callable through callTools/sb-tool */
+export const APP_COMPACT_BUDGET = 32_000;
 
 /** The compact list an engine with a tight schema budget gets (ADR 0332, 0356): the tools COMPACT_LEFT_OUT names out,
- *  then the largest optional tools out until the list fits COMPACT_BUDGET. Required tools are never removed (agy drops
+ *  then the largest optional tools out until the list fits `budget`. Required tools are never removed (agy drops
  *  the largest first only when over its budget: a list under it keeps them all). `dropped` = what was left out. */
-export function fitCompact(list: readonly McpTool[], required: ReadonlySet<string>): { tools: McpTool[]; dropped: string[] } {
+export function fitCompact(list: readonly McpTool[], required: ReadonlySet<string>, budget = COMPACT_BUDGET): { tools: McpTool[]; dropped: string[] } {
   const sized = list.filter(t => required.has(t.name) || !COMPACT_LEFT_OUT.has(t.name)).map(t => ({ t, size: toolListSize([t]) }));
   const dropped = list.filter(t => !required.has(t.name) && COMPACT_LEFT_OUT.has(t.name)).map(t => t.name);
   const total = () => sized.reduce((n, x) => n + x.size, 0);
@@ -104,7 +107,7 @@ export function fitCompact(list: readonly McpTool[], required: ReadonlySet<strin
     dropped.push(big.t.name);
     return true;
   };
-  while (total() > COMPACT_BUDGET && dropLargest());
+  while (total() > budget && dropLargest());
   return { tools: sized.map(x => x.t), dropped };
 }
 

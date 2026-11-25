@@ -856,7 +856,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       // Il mio profilo (ADR 0207): the page's own reader and writer of me.md (stateless: each save checks the revision)
       profile: (() => { const p = new ProfileService({ root: () => brain.settings().brainRoot, template: (() => { try { return fs.readFileSync(path.join(app.getAppPath(), 'brain-template', 'me.template.md'), 'utf8'); } catch { return ''; } })() }); return { get: () => p.get(), save: req => p.save(req) }; })(),
     } };
-  attachAppTools(mcp, appDeps, source, false, orchestratorTokens);
+  attachAppTools(mcp, appDeps, source, false, orchestratorTokens, { compact: id => manager.chatToolsCompact(id), served: (id, names) => manager.appToolsServed(id, names) });
 
   // Task page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
   const node = electronNode();

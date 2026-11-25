@@ -64,6 +64,16 @@ export function requiredTools(v: ToolNeedView): string[] {
 /** Every tool the table can require of someone (the compact list keeps these small: chats/tool-visibility.ts). */
 export const ALL_REQUIRED_TOOLS: ReadonlySet<string> = new Set([...Object.values(ROLE_REQUIRED_TOOLS).flatMap(n => [...n.always, ...n.asChild, ...n.withPlan]), QUESTION_TOOL]);
 
+/** Essential app-control tools the Orchestrator must have on its second-brain-app endpoint, on every engine (ADR 0356). */
+export const ORCHESTRATOR_APP_REQUIRED: readonly string[] = [
+  'app_create_chat', 'app_assign_task', 'app_config', 'plans',
+  'app_chats', 'app_digest', 'app_pending', 'app_resolve_question',
+  'app_send_to_chat', 'app_reopen_chat', 'app_close_chat', 'app_chat_items',
+  'app_task_events', 'app_state', 'app_guide', 'app_agents_recap',
+  'app_unblock', 'agent_catalog', 'task_estimate',
+  'app_work_list', 'app_work_create', 'app_work_report',
+];
+
 /** The required tools that are not among `exposed`; [] = nothing missing. */
 export function missingTools(required: readonly string[], exposed: Iterable<string>): string[] {
   const have = new Set([...exposed].map(bareTool));

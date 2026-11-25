@@ -21,7 +21,7 @@ import { aboveCeiling, browserAccess, claudeDefaultMode, claudeDefaultSetting, t
 import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { needView, toolShownToChat, toolShownToUnknown, toolShownToWarm } from './tool-visibility';
-import { requiredTools } from '../../shared/role-tools';
+import { ORCHESTRATOR_APP_REQUIRED, requiredTools } from '../../shared/role-tools';
 import { saysToolMissing, toolAction, type ToolAction } from './tool-check';
 import { toolCliEnv, toolCliHint } from './tool-cli';
 import { codeModeFor, CODE_MODE_HIDDEN, RUN_CODE } from '../code-mode/policy';
@@ -290,7 +290,7 @@ export abstract class ManagerSessions extends ManagerPersistence {
     return r ? requiredTools(needView(r.s, r.launches, appAsks(engineOf(r.s.harness)))) : [];
   }
 
-  /** The endpoint served a tool list to the chat's engine (browser/service.ts): the session's check runs. */
+  /** The chat endpoint served a tool list to the chat's engine (browser/service.ts): the session's check runs. */
   toolsServed(chatId: string, names: readonly string[]): void {
     const r = this.chats.get(chatId);
     // a waiting engine's list (warm.ts): the chat that adopts it takes it (adoptWarm)
@@ -298,6 +298,19 @@ export abstract class ManagerSessions extends ManagerPersistence {
     if (!r?.toolSession) return;
     r.toolSession.served = [...names];
     this.toolCheck(r);
+  }
+
+  /** The Orchestrator's app-control endpoint (second-brain-app) served a tool list: the session's check runs. */
+  appToolsServed(chatId: string, names: readonly string[]): void {
+    const r = this.chats.get(chatId);
+    if (!r?.toolSession) return;
+    r.toolSession.appServed = [...names];
+    this.toolCheck(r);
+  }
+
+  /** App-control tools required on second-brain-app (Orchestrator only; empty for every other chat). */
+  private appRequiredOf(r: Rec): readonly string[] {
+    return r.s.isOrchestrator && this.appMcpFor(r) ? ORCHESTRATOR_APP_REQUIRED : [];
   }
 
   /** the tool lists a waiting engine read before a chat adopted it */
@@ -310,13 +323,14 @@ export abstract class ManagerSessions extends ManagerPersistence {
     this.toolCheck(r);
   }
 
-  /** A turn of this session ended: an engine that never read the endpoint is found now, and so is a model that says a
+  /** A turn of this session ended: an engine that never read its endpoint(s) is found now, and so is a model that says a
    *  required tool is not among its own (agy drops them when its MCP preload times out, with the list served: 2026-11-25) */
   protected toolTurnEnded(r: Rec): void {
     const s = r.toolSession;
     if (!s) return;
-    // only where the app cannot see what the engine loaded (an ACP engine: no init list of tools)
-    const said = s.acted === 'fallback' || s.engineSaw || engineOf(r.s.harness)?.kind !== 'acp' ? [] : saysToolMissing(turnAnswers(r.items), this.requiredToolsOf(r.s.id));
+    // only where the app cannot see what the engine loaded (ACP and Codex engines: no init list of tools)
+    const kind = engineOf(r.s.harness)?.kind;
+    const said = s.acted === 'fallback' || s.engineSaw || (kind !== 'acp' && kind !== 'codex') ? [] : saysToolMissing(turnAnswers(r.items), [...this.requiredToolsOf(r.s.id), ...this.appRequiredOf(r)]);
     if (said.length) s.saidMissing = said;
     if (s.turnEnded && !said.length) return;
     s.turnEnded = true;
@@ -328,7 +342,7 @@ export abstract class ManagerSessions extends ManagerPersistence {
   protected compactToolHint(r: Rec): string {
     const s = r.toolSession;
     if (!s || s.hinted || !engineOf(r.s.harness)?.mcpCompact) return '';
-    const need = this.requiredToolsOf(r.s.id);
+    const need = [...this.appRequiredOf(r).slice(0, 4), ...this.requiredToolsOf(r.s.id)];
     if (!need.length) return '';
     s.hinted = true;
     return `${toolCliHint(need)}\n\n`;
@@ -337,13 +351,16 @@ export abstract class ManagerSessions extends ManagerPersistence {
   private toolCheck(r: Rec): void {
     const s = r.toolSession;
     if (!s) return;
-    const a = toolAction(this.requiredToolsOf(r.s.id), s, r.toolReloads ?? 0, !!this.opts.mcpUrlFor?.(r.s.id) && (endpointGiven(engineOf(r.s.harness)) || !!s.served));
+    const eng = engineOf(r.s.harness);
+    const hasChat = !!this.opts.mcpUrlFor?.(r.s.id) && (endpointGiven(eng) || !!s.served);
+    const hasApp = !!this.appMcpFor(r) && (endpointGiven(eng) || !!s.served || !!s.appServed);
+    const a = toolAction(this.requiredToolsOf(r.s.id), s, r.toolReloads ?? 0, hasChat, this.appRequiredOf(r), hasApp);
     if (a.kind === 'ok' || a.kind === 'wait') return;
     s.acted = a.kind;
     if (a.kind === 'reload') r.toolReloads = (r.toolReloads ?? 0) + 1;
     log.warn('chats', a.kind === 'reload' ? 'required tools missing: reloading the session' : 'required tools missing: fallback command given', { chat: r.s.id,
       cause: `${a.missing.join(', ')}: ${a.why}`, hint: a.kind === 'reload' ? 'the next turn starts a fresh engine process on the same session' : 'the chat calls them with sb-tool (chats/tool-cli.ts)',
-      data: { harness: r.s.harness, missing: a.missing, served: s.served?.length ?? null, engineSaw: s.engineSaw?.length ?? null } });
+      data: { harness: r.s.harness, missing: a.missing, served: s.served?.length ?? null, appServed: s.appServed?.length ?? null, engineSaw: s.engineSaw?.length ?? null } });
     this.toolGap(r, a);
   }
 
@@ -457,7 +474,7 @@ export abstract class ManagerSessions extends ManagerPersistence {
   private chatEnv(chatId: string): NodeJS.ProcessEnv {
     const base = { ...engineEnv(), ...this.opts.env, SB_EVENT_CONTEXT: '' };
     // every session spreads this over the app's own environment: PATH is the app's, with the command's folder first
-    return { ...base, ...toolCliEnv({ ...process.env, ...base }, this.opts.toolCliDir ?? null, this.opts.mcpUrlFor?.(chatId) ?? null) };
+    return { ...base, ...toolCliEnv({ ...process.env, ...base }, this.opts.toolCliDir ?? null, this.opts.mcpUrlFor?.(chatId) ?? null, this.appMcpFor(this.chats.get(chatId))) };
   }
 
   /** pre-allowed on Claude: the Orchestrator's app-control tools (/mcp/app), and every chat's mail to other chats and

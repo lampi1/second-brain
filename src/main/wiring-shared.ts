@@ -19,6 +19,8 @@ import type { EnginesApi } from './engines/service';
 import type { BrainService, ChatService } from './services';
 import type { McpServer, McpTool, ToolOutput } from './mcp/server';
 import { type ToolDef, type ToolOut, appControlTools, orchestratorEndpointAuth } from './appctl/tools';
+import { ORCHESTRATOR_APP_REQUIRED } from '../shared/role-tools';
+import { APP_COMPACT_BUDGET, compactMcpTool, fitCompact, toolListSize } from './chats/tool-visibility';
 import type { EndpointTokens } from './mcp/tokens';
 import fs from 'node:fs';
 import { CommandRunner } from './run/runner';
@@ -52,9 +54,15 @@ export function toMcp(out: ToolOut): ToolOutput {
   return JSON.stringify(out);
 }
 
+/** Optional hooks for the Orchestrator's app-control mount: tight-budget compaction (Antigravity) and tool-list reporting (ADR 0356). */
+export interface AppToolHooks {
+  compact?: (chatId: string) => boolean;
+  served?: (chatId: string, names: readonly string[]) => void;
+}
+
 /** The app-control tools on the local MCP server: /mcp/app for test agents (acts for the Orchestrator) and
  *  /mcp/app/o/<id>/<token>, the Orchestrator's own. Only the second gets app_update_code (ADR 0074). */
-export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appControlTools>[0], 'code'>, source: AppSourceService, demo = false, orchestratorTokens?: EndpointTokens): void {
+export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appControlTools>[0], 'code'>, source: AppSourceService, demo = false, orchestratorTokens?: EndpointTokens, hooks?: AppToolHooks): void {
   const as = (t: ToolDef): McpTool => ({ name: t.name, description: t.description, inputSchema: t.inputSchema as Record<string, unknown>, ...(t.annotations ? { annotations: t.annotations } : {}), run: async a => toMcp(await t.run(a)) });
   const what = demo ? 'the second-brain app (demo data)' : 'the second-brain app itself: state, chats, open questions (read-only), feed, logs, screenshots, UI';
   // SEND_MODE_RULE: what the "Strategist" choice of the Orchestrator's input means (and the older "Nuova chat") (ADR 0034)
@@ -64,9 +72,26 @@ export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appC
   // the caller. Only an open Orchestrator with its own token answers (the token lives only here and in its config).
   mcp.mount('/mcp/app', { name: 'app', instructions, tools: appControlTools({ ...deps, code }).map(as) });
   if (orchestratorTokens) {
+    const full = (chatId?: string) => appControlTools({ ...deps, code: { ...code, pull: () => source.pull() } }, chatId).map(as);
+    const required = new Set(ORCHESTRATOR_APP_REQUIRED);
+    const compactLogged = new Set<string>();
     mcp.mount('/mcp/app/o/:chatId/:token', {
       name: 'app', instructions, authorize: orchestratorEndpointAuth(orchestratorTokens, () => deps.chats.list()), who: p => p.chatId,
-      tools: c => appControlTools({ ...deps, code: { ...code, pull: () => source.pull() } }, c.params.chatId).map(as),
+      tools: c => {
+        const id = c.params.chatId ?? '';
+        const list = full(id);
+        if (!hooks?.compact?.(id)) { hooks?.served?.(id, list.map(t => t.name)); return list; }
+        const fit = fitCompact(list.map(compactMcpTool), required, APP_COMPACT_BUDGET);
+        const compact = fit.tools;
+        hooks?.served?.(id, compact.map(t => t.name));
+        if (!compactLogged.has(id)) {
+          compactLogged.add(id);
+          const big = compact.map(t => ({ name: t.name, size: toolListSize([t]) })).sort((a, b) => b.size - a.size).slice(0, 5);
+          log.info('mcp', 'compact app tools listed', { chat: id, data: { tools: compact.length, bytes: toolListSize(compact), largest: big.map(b => `${b.name} ${b.size}`), leftOut: fit.dropped } });
+        }
+        return compact;
+      },
+      callTools: c => full(c.params.chatId),
     });
   }
 }
