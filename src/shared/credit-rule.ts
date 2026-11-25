@@ -63,9 +63,14 @@ export function clock(at: number, now: number, fmt?: (at: number) => string): st
 }
 const fmtLeft = (ms: number): string => ms >= DAY ? `${Math.floor(ms / DAY)}g ${Math.floor(ms % DAY / HOUR)}h` : ms >= HOUR ? `${Math.floor(ms / HOUR)}h ${Math.floor(ms % HOUR / MIN)}m` : `${Math.max(1, Math.round(ms / MIN))}m`;
 
+/** Models the Antigravity plan counts in its «Claude and GPT» pool (the rest is Gemini). */
+const THIRD_PARTY = /\b(claude|opus|sonnet|haiku|fable|mythos|gpt|oss)\b/i;
+
 /** A window that stops this model: the plan's own, or one of this model only (spend windows never stop the plan). */
 function binding(w: HarnessUsageWindow, model: string | null | undefined): boolean {
   if (w.kind === 'spend') return false;
+  // a pool of one engine (Antigravity: Gemini apart from Claude/GPT, ADR 0357): it stops only the models of its pool
+  if (w.scope) return w.scope === '3p' ? !!model && THIRD_PARTY.test(model) : !(model && THIRD_PARTY.test(model));
   if (!w.model) return true;
   return !!model && model.toLowerCase().includes(w.model.toLowerCase());
 }

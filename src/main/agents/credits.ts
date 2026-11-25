@@ -19,6 +19,8 @@ import { renameWithRetry } from './local-store';
 
 /** The pool a chat on `engine` with `model` spends from: OpenCode's provider prefix splits its pools. */
 export function poolOf(engine: Harness, model: string | null | undefined): string {
+  // Antigravity: Gemini and Claude/GPT models are two quotas (ADR 0357)
+  if (engine === 'antigravity') return /\b(claude|opus|sonnet|haiku|fable|mythos|gpt|oss)\b/i.test(String(model ?? '').replace(/[-_.]/g, ' ')) ? 'antigravity:3p' : 'antigravity';
   if (engine !== 'opencode') return engine;
   const prefix = String(model ?? '').trim().split('/')[0]!.toLowerCase();
   if (!prefix || !String(model).includes('/')) return 'opencode:default';

@@ -99,3 +99,24 @@ describe('the pause after limit errors', () => {
     expect(b.pauseMs).toBe(PAUSE_CAP_BLIND_MS);
   });
 });
+
+describe('Antigravity: Gemini and Claude/GPT are two quota pools (ADR 0357)', () => {
+  const gem = (p: number) => w('5h', p, T + 2 * HOUR, { scope: 'gemini' });
+  const third = (p: number) => w('5h · 3P', p, T + 2 * HOUR, { scope: '3p', model: '3p' });
+  const ag = (...ws: HarnessUsageWindow[]) => facts({ pool: 'antigravity', reading: reading(T, ws, { pool: 'antigravity' }) });
+  const on = (f: CreditFacts, model: string) => v({ ...f, model }, T + MIN).state;
+  it('Gemini spent: its Claude and GPT models still run, the Gemini ones stop', () => {
+    const f = ag(gem(100), third(3));
+    expect(on(f, 'claude-sonnet-5-5')).toBe('free');
+    expect(on(f, 'gpt-oss-120b-medium')).toBe('free');
+    expect(on(f, 'gemini-3.8-flash')).toBe('out');
+  });
+  it('Claude/GPT spent: Gemini still runs, Claude stops', () => {
+    const f = ag(gem(3), third(100));
+    expect(on(f, 'gemini-3.8-flash')).toBe('free');
+    expect(on(f, 'claude-opus-5-5')).toBe('out');
+  });
+  it('a window without a scope still stops every model (other engines unchanged)', () => {
+    expect(on(facts({ reading: reading(T, [w('5h', 100, T + 2 * HOUR)]) }), 'claude-opus-5-5')).toBe('out');
+  });
+});

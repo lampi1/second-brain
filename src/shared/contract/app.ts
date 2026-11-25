@@ -146,6 +146,9 @@ export interface HarnessUsageWindow {
   resetsAt: number | null;
   /** Optional model/pool scope (e.g. "sonnet", "3p") for secondary windows. */
   model?: string;
+  /** Which quota pool of one engine this window counts (Antigravity keeps Gemini and Claude/GPT apart): a model of the
+   *  other pool is not stopped by it (ADR 0357). No scope = every model of the engine. */
+  scope?: 'gemini' | '3p';
   /** Optional spend pair in USD cents (Cursor on-demand). */
   cost?: { usedUsdCents: number; limitUsdCents: number };
 }
