@@ -160,7 +160,7 @@ function toolDef(tool: McpTool): ToolDef {
 const lastDigest = new Map<string, number>();
 
 const obj = (props: Record<string, object> = {}, required: string[] = []) => ({ type: 'object', properties: props, required });
-const ROUTING_SCHEMA = { type: 'object', additionalProperties: false, description: 'the user\'s choice for the whole work tree (ADR 0358): the engine/model per role and the engines left out; children at any depth follow it',
+const ROUTING_SCHEMA = { type: 'object', additionalProperties: false, description: 'the user\'s choice for the whole work tree (ADR 0359): the engine/model per role and the engines left out; children at any depth follow it',
   properties: { picks: { type: 'object', description: 'roleId → {engine?, model, effort?}, only roles the user named', additionalProperties: { type: 'object', additionalProperties: false, required: ['model'], properties: { engine: { type: 'string' }, model: { type: 'string', maxLength: 128 }, effort: { type: 'string', enum: ['low', 'medium', 'high', 'xhigh', 'max'] } } } },
     exclude: { type: 'array', items: { type: 'string' }, maxItems: 12, description: 'engine ids no chat of the tree may use or be moved to' } } };
 const str = (description: string) => ({ type: 'string', description });
@@ -299,7 +299,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     },
     ...(authed() && d.chats.setRouting && d.agents ? [{
       name: 'app_set_routing',
-      description: 'Record, on a work tree\'s root chat, what the USER said about engines and models for ALL its work (ADR 0358): `picks` = the engine and model per role (e.g. scout = opencode gpt-6.2-sol), `exclude` = engines no chat of the tree may use or be moved to. Every chat the tree opens, at any depth, follows it at its launch; workers still never choose, and a change holds for chats that start after it. It replaces the root\'s record; {} clears it. Only when the user named an engine or model for the work or said "not X". With every allowed engine out the delegation is refused with the reason.',
+      description: 'Record, on a work tree\'s root chat, what the USER said about engines and models for ALL its work (ADR 0359): `picks` = the engine and model per role (e.g. scout = opencode gpt-6.2-sol), `exclude` = engines no chat of the tree may use or be moved to. Every chat the tree opens, at any depth, follows it at its launch; workers still never choose, and a change holds for chats that start after it. It replaces the root\'s record; {} clears it. Only when the user named an engine or model for the work or said "not X". With every allowed engine out the delegation is refused with the reason.',
       inputSchema: obj({ chatId: str('the root chat of the tree (app_chats)'), routing: ROUTING_SCHEMA }, ['chatId']),
       run: async (a: Record<string, unknown>) => {
         const id = String(a.chatId ?? ''), target = d.chats.list().find(c => c.id === id);
@@ -642,7 +642,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const routing = a.routing !== undefined ? routingOf(a.routing, d.agents().models, roleEngine) : undefined;
         if (routing && !authed()) throw new Error('routing: only the authenticated Orchestrator records the user\'s choice for a work tree.');
         const ownPick = userModelOf(a.userModel, d.agents().models, roleEngine(String(roleId)));
-        // the tree's pick for this role holds for the chat itself too (ADR 0358); the user's own userModel wins
+        // the tree's pick for this role holds for the chat itself too (ADR 0359); the user's own userModel wins
         const treePick = !ownPick && roleId ? routing?.picks?.[String(roleId)] : undefined;
         const userModel = ownPick ?? treePick;
         if (userModel && !authed()) throw new Error('userModel: only the authenticated Orchestrator passes the user\'s own pick.');

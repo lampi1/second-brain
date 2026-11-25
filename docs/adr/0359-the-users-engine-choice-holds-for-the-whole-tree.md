@@ -1,4 +1,4 @@
-# ADR 0358 · The user's engine choice holds for the whole work tree, and a limit stops one model
+# ADR 0359 · The user's engine choice holds for the whole work tree, and a limit stops one model
 
 Date: 2026-11-25 · Status: accepted (owner, project thread «Far rispettare il motore scelto a tutto l'albero», 2026-11-25:
 when the user names an engine or model for a task, the whole tree obeys it, and one refused model does not block its whole

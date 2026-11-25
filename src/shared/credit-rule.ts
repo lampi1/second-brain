@@ -105,7 +105,7 @@ export function creditVerdict(f: CreditFacts, now: number, o: { asker?: string; 
       return probation(f, now, o.asker, `rinnovo passato alle ${at(until)}: lettura da rifare`, readingAt, true);
     }
   }
-  // 2. a limit error the reading does not cover; the user's own explicit pick skips this assumed pause once (ADR 0358): a
+  // 2. a limit error the reading does not cover; the user's own explicit pick skips this assumed pause once (ADR 0359): a
   // new refusal sets it again, a clean turn clears it, a spent window of step 1 is real and still stops
   const e = o.ignoreError ? null : f.error;
   if (e && !(f.workedFrom !== null && f.workedFrom > e.at)) {
@@ -141,7 +141,7 @@ function probation(f: CreditFacts, now: number, asker: string | undefined, why: 
 /** The pause after a new limit error. Errors of turns that started before the current pause ended count as one; a probe
  *  that started after it and failed doubles it (cap: 1 hour on a readable pool, a day on a blind one). */
 export function nextError(prev: CreditError | null, errorAt: number, turnStartedAt: number, readable: boolean, workedFrom: number | null = null, providerMs: number | null = null): CreditError {
-  // the provider named its own reset time (ADR 0358): that is the pause, never shorter than the short pause nor longer than a day
+  // the provider named its own reset time (ADR 0359): that is the pause, never shorter than the short pause nor longer than a day
   if (providerMs !== null && providerMs > 0) return { at: errorAt, pauseFrom: errorAt, pauseMs: Math.min(PAUSE_CAP_BLIND_MS, Math.max(SHORT_PAUSE_MS, providerMs)) };
   // a clean turn after the last error proved the pool worked: a new error starts again from the short pause
   if (!prev || (workedFrom !== null && workedFrom > prev.at)) return { at: errorAt, pauseFrom: errorAt, pauseMs: SHORT_PAUSE_MS };
@@ -153,7 +153,7 @@ export function nextError(prev: CreditError | null, errorAt: number, turnStarted
 /** The line a skipped model gets in the chat and in the tools' answers: «OpenAI saltato: 5h al 100%, torna alle 22:40». */
 export function skipLine(name: string, v: Pick<CreditVerdict, 'why'>): string { return `${name} saltato: ${v.why}`; }
 
-/** Does a limit error's text say the limit is the whole account's or plan's (ADR 0358)? Otherwise it stops that model only
+/** Does a limit error's text say the limit is the whole account's or plan's (ADR 0359)? Otherwise it stops that model only
  *  (seen: gpt-6.2-astra refused with «The usage limit has been reached», two hours later gpt-6.2-sol answered). */
 export function accountWideLimit(text: string | null | undefined): boolean {
   return /(credit balance|insufficient[_ ]quota|exceeded your current quota|out of credits|subscribe to |hit your (?:usage )?limit|(?:your|account|plan|subscription|weekly|monthly|5-hour|five-hour)[^.]{0,40}\blimit)/i.test(String(text ?? ''));

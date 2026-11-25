@@ -99,7 +99,7 @@ export function creditMove(c: ChatSummary, chatOf: (id: string) => ChatSummary |
   const run = c.run?.presetChoice, preset: PresetId = run?.preset ?? 'base';
   const now = (d.now ?? Date.now)();
   const skip = (w.failed ?? []).filter(f => f.permanent).map(f => f.card);
-  // the engines the user left out for this work tree (ADR 0358): the chat never moves onto one
+  // the engines the user left out for this work tree (ADR 0359): the chat never moves onto one
   const exclude: Harness[] = [];
   { const seen = new Set<string>(); for (let x: ChatSummary | undefined = c; x && !seen.has(x.id); x = x.parentId ? chatOf(x.parentId) : undefined) { seen.add(x.id); for (const e of x.routing?.exclude ?? []) if (!exclude.includes(e)) exclude.push(e); } }
   let card: CardNow;

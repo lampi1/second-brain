@@ -76,9 +76,9 @@ export interface AgentCatalogDeps {
  *  a move already failed on, `holdLevel` = no delegator's ceiling (a chat that moves keeps its level), `claim` = this resolve
  *  starts the chat (ChatManager.create's resolveAgent, a credit move): a pool on probation is its one try. */
 export interface ResolveOptions { asker?: string; skip?: readonly string[]; holdLevel?: boolean; claim?: boolean;
-  /** engines the user left out for this work tree (ADR 0358): never picked, never a fallback; with nothing left the launch is refused */
+  /** engines the user left out for this work tree (ADR 0359): never picked, never a fallback; with nothing left the launch is refused */
   exclude?: readonly Harness[];
-  /** the model of `userModel` is the tree's pick for this role (ADR 0358): it needs not be on the card's levels */
+  /** the model of `userModel` is the tree's pick for this role (ADR 0359): it needs not be on the card's levels */
   freePick?: boolean }
 /** What a role's card gives a chat of that role now, for a preset (credit-wait.ts): its pick and why. */
 export interface CardPick { engine: Harness; model: string | null; effort: Effort | null; preset: PresetId; allOut: boolean; skipped: SkipNote[]; route: string; rooms: NonNullable<PresetChoice['rooms']> }
@@ -724,7 +724,7 @@ export function inheritUserModel<R extends Pick<NewChat, 'userModel' | 'parentId
   return req;
 }
 
-/** What the user said about engines and models for a work tree (ADR 0358): the records of the chat's ancestors, the
+/** What the user said about engines and models for a work tree (ADR 0359): the records of the chat's ancestors, the
  *  nearest first per role, the excluded engines of all of them together. Read at every launch, so a change made while the
  *  tree runs holds for what starts after it. A worker never writes one: only the Orchestrator's tools do. */
 export function routingFor(parentId: string | null | undefined, chats: readonly { id: string; parentId?: string | null; routing?: WorkRouting }[]): { picks: Record<string, UserModelPick>; exclude: Harness[] } {

@@ -40,7 +40,7 @@ export const KICK_MS = 30e3;
 export interface CreditLive {
   book: CreditBook;
   verdict(engine: Harness, model: string | null, asker?: string): CreditVerdict;
-  /** `ignoreError`: the user's own explicit pick skips an assumed pause once (ADR 0358) */
+  /** `ignoreError`: the user's own explicit pick skips an assumed pause once (ADR 0359) */
   room(engine: Harness, model: string | null, asker?: string, o?: { ignoreError?: boolean }): Room;
   /** before a pick: reads again the pools of these engines that look stopped (shared, at most FRESH_WAIT_MS) */
   fresh(models: readonly { engine: Harness; model: string | null }[]): Promise<void>;

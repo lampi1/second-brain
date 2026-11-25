@@ -66,7 +66,7 @@ export function opencodeState(pool: string, facts: { limitAt: number | null; str
 
 
 /** What the book keeps of a pool. */
-/** What the book keeps of one model of a pool whose limit stopped that model only (ADR 0358). */
+/** What the book keeps of one model of a pool whose limit stopped that model only (ADR 0359). */
 export interface ModelFacts { error: CreditError | null; workedFrom: number | null; probe: { owner: string; at: number } | null }
 const MAX_MODELS = 40;
 const mkey = (model: string | null | undefined): string => String(model ?? '').trim().toLowerCase();
@@ -110,7 +110,7 @@ export class CreditBook {
     const reading = this.d.reading(pool);
     const o = { ...(asker ? { asker } : {}), ...(fmt ? { fmt } : {}), ...(ignoreError ? { ignoreError: true as const } : {}) };
     const whole = creditVerdict({ pool, account: f?.account ?? null, model, reading, error: f?.error ?? null, workedFrom: f?.workedFrom ?? null, probe: f?.probe ?? null }, this.clock(), o);
-    // a limit of this model only (ADR 0358) stops it and no other model of the pool; the worse of the two says
+    // a limit of this model only (ADR 0359) stops it and no other model of the pool; the worse of the two says
     const m = model ? f?.models?.[mkey(model)] : undefined;
     if (!m?.error) return whole;
     const own = creditVerdict({ pool, account: f?.account ?? null, model, reading, error: m.error, workedFrom: m.workedFrom, probe: m.probe }, this.clock(), o);
@@ -145,7 +145,7 @@ export class CreditBook {
     const now = this.clock(), f = this.pools.get(pool) ?? this.empty(pool);
     const readable = this.d.readable?.(pool) ?? false, providerMs = providerPauseMs(text, now);
     const account = this.d.reading(pool)?.account ?? f.account;
-    // the provider did not say the whole account is out: this model only pauses (ADR 0358)
+    // the provider did not say the whole account is out: this model only pauses (ADR 0359)
     if (model && !accountWideLimit(text)) {
       const k = mkey(model), m = f.models?.[k] ?? { error: null, workedFrom: null, probe: null };
       const error = nextError(m.error, now, startedAt, readable, m.workedFrom, providerMs);

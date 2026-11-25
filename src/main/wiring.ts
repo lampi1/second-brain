@@ -344,7 +344,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       // chats its Strategist opens for it, when their role's levels have that model (ADR 0354 point 7); an agent never
       // passes one itself (agent_delegate has no such field)
       req = inheritUserModel(req, manager.list(), (roleId, m) => agents.namesModel(roleId, m));
-      // what the user said for the whole tree (ADR 0358): the model per role and the engines left out, from the nearest
+      // what the user said for the whole tree (ADR 0359): the model per role and the engines left out, from the nearest
       // ancestors' records at this launch (so a change made while the tree runs holds); a delegation never opens an excluded engine
       const tree = req.parentId && !req.orchestrator ? routingFor(req.parentId, manager.list()) : null;
       const treePick = tree && !req.userModel && req.roleId ? tree.picks[req.roleId] : undefined;
@@ -739,6 +739,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const wakeLater = new WakeLater({ file: path.join(ctx.userData, 'wake-later.json'), chats: () => manager.list(),
     send: (chatId, text) => manager.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }) });
   addChatTools([wakeLater.tool()]);
+  wake.useWakeLater(chatId => wakeLater.list().some(e => e.chatId === chatId)); // a Strategist with its own wake-up set is not stopped
   // single entry (ADR 0239): a work chat's Sì/No question goes to the user through the Orchestrator's conversation, and
   // the user's own «sì» / «no» there (PC, phone, Remote Control) answers it
   // a command a chat left, decided away from the PC (ADR 0259 §4: Telegram's Sì, a relayed «sì»): the same run as Esegui

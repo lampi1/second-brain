@@ -714,7 +714,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     } finally { releaseDelivery(); }
   }
 
-  /** The user's engine/model per role and engines left out for the tree under this chat (ADR 0358): replaces what it had;
+  /** The user's engine/model per role and engines left out for the tree under this chat (ADR 0359): replaces what it had;
    *  null/empty clears it. Read at every launch below it, so it holds for chats that start later. */
   setRouting(chatId: string, routing: WorkRouting | null): ChatSummary {
     const r = this.need(chatId);

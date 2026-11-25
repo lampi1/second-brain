@@ -17,7 +17,7 @@ export interface ChatService {
   /** Real engine receipts; demos and mocks acknowledge their simulated sends by promise. */
   readonly submissionReceipts?: boolean;
   list(): ChatSummary[];
-  /** the user's engine/model per role and excluded engines for the tree under a chat (ADR 0358); null clears */
+  /** the user's engine/model per role and excluded engines for the tree under a chat (ADR 0359); null clears */
   setRouting?(chatId: string, routing: WorkRouting | null): ChatSummary;
   /** «Annulla» on the automatic move of a chat out of credits (ADR 0348) */
   creditStay?(chatId: string): boolean;

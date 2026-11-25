@@ -73,7 +73,7 @@ export function userModelOf(v: unknown, models: readonly AgentModelChoice[], rol
 }
 
 /** The user's engine/model per role and the engines left out for a work tree (app_create_chat routing, app_set_routing,
- *  ADR 0358). Each pick is checked as `userModel` is; a role is one of the work roles; an unknown engine is refused. */
+ *  ADR 0359). Each pick is checked as `userModel` is; a role is one of the work roles; an unknown engine is refused. */
 export function routingOf(v: unknown, models: readonly AgentModelChoice[], roleEngine: (roleId: string) => string): WorkRouting | undefined {
   if (v === undefined || v === null) return undefined;
   const o = v as { picks?: unknown; exclude?: unknown } | null;

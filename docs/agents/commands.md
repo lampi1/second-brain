@@ -72,7 +72,7 @@ row and its line here in the same change.
 | `app_handoff_chat` | Orchestrator, /mcp/app | Have a chat write its hand-off note now. |
 | `app_continue_chat` | Orchestrator, /mcp/app | «Riprendi»: a new chat on the same engine and folder from the old chat's hand-off. |
 | `app_set_chat_effort` | Orchestrator, /mcp/app | Pick the reasoning effort of one running chat for this conversation only. |
-| `app_set_routing` | Orchestrator, /mcp/app | Record the user's engine/model per role and excluded engines for a whole work tree (ADR 0358). |
+| `app_set_routing` | Orchestrator, /mcp/app | Record the user's engine/model per role and excluded engines for a whole work tree (ADR 0359). |
 | `app_set_chat_work` | Orchestrator, /mcp/app | Declare, wait on or complete a chat's explicit assignment (holds the auto-close). |
 | `agent_catalog` | Orchestrator, /mcp/app, work chats | The roles with purpose, tools and skills, and the skills that fit a request. |
 | `agent_learn_propose` | Orchestrator, /mcp/app, work chats | Propose a lesson for a role (its text or a skill), queued for the user. |
