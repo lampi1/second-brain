@@ -49,7 +49,8 @@ import type { PullResult } from '../update/source';
 import type { AgentCatalog } from '../../shared/agents';
 import { isWorkRole, ROLE_IDS } from '../../shared/roles';
 import { contractField, taskPrompt } from './task-contract';
-import { agentCatalogTool, userModelOf, type SkillToolsSource } from '../agents/discovery';
+import { routingFor } from '../agents/catalog';
+import { agentCatalogTool, routingOf, userModelOf, type SkillToolsSource } from '../agents/discovery';
 import { splitMode } from '../../shared/newchat';
 import { gapLines, skillGaps } from '../agents/skill-needs';
 import type { ResolvedRole } from '../agents/catalog';
@@ -99,7 +100,7 @@ export interface AppCtlDeps {
   agentLearning?: AgentPackLearning;
   agents?: () => AgentCatalog;
   /** the catalog's resolve (agents/catalog.ts): the engine, model and effort a role chat starts with */
-  resolveRole?: (req: NewChat) => ResolvedRole;
+  resolveRole?: (req: NewChat, o?: { exclude?: readonly string[]; freePick?: boolean }) => ResolvedRole;
   /** the one credit rule's verdict for an engine and model now (ADR 0354, agents/credit-live.ts) */
   creditOf?: (engine: Harness, model: string | null) => { state: 'free' | 'pace' | 'out' | 'probation' | 'unknown'; why: string; until: number | null };
   /** reads again, before a pick, the engines that look stopped without a valid reading (shared, at most a few seconds) */
@@ -159,6 +160,9 @@ function toolDef(tool: McpTool): ToolDef {
 const lastDigest = new Map<string, number>();
 
 const obj = (props: Record<string, object> = {}, required: string[] = []) => ({ type: 'object', properties: props, required });
+const ROUTING_SCHEMA = { type: 'object', additionalProperties: false, description: 'the user\'s choice for the whole work tree (ADR 0359): the engine/model per role and the engines left out; children at any depth follow it',
+  properties: { picks: { type: 'object', description: 'roleId → {engine?, model, effort?}, only roles the user named', additionalProperties: { type: 'object', additionalProperties: false, required: ['model'], properties: { engine: { type: 'string' }, model: { type: 'string', maxLength: 128 }, effort: { type: 'string', enum: ['low', 'medium', 'high', 'xhigh', 'max'] } } } },
+    exclude: { type: 'array', items: { type: 'string' }, maxItems: 12, description: 'engine ids no chat of the tree may use or be moved to' } } };
 const str = (description: string) => ({ type: 'string', description });
 const num = (description: string) => ({ type: 'number', description });
 /** what a Fast turn's delegation gets back (ADR 0296) */
@@ -293,6 +297,18 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         return { chatId: updated.id, effort: updated.effortStatus ?? { supported: true, requested: updated.effort, submitted: null, effective: null, pending: true, effectiveSource: 'unknown', sessionDefault: null } };
       },
     },
+    ...(authed() && d.chats.setRouting && d.agents ? [{
+      name: 'app_set_routing',
+      description: 'Record, on a work tree\'s root chat, what the USER said about engines and models for ALL its work (ADR 0359): `picks` = the engine and model per role (e.g. scout = opencode gpt-6.2-sol), `exclude` = engines no chat of the tree may use or be moved to. Every chat the tree opens, at any depth, follows it at its launch; workers still never choose, and a change holds for chats that start after it. It replaces the root\'s record; {} clears it. Only when the user named an engine or model for the work or said "not X". With every allowed engine out the delegation is refused with the reason.',
+      inputSchema: obj({ chatId: str('the root chat of the tree (app_chats)'), routing: ROUTING_SCHEMA }, ['chatId']),
+      run: async (a: Record<string, unknown>) => {
+        const id = String(a.chatId ?? ''), target = d.chats.list().find(c => c.id === id);
+        if (!target || target.isOrchestrator) throw new Error('app_set_routing: chatId is a work chat (the root of the tree), not an Orchestrator.');
+        const routing = routingOf(a.routing ?? {}, d.agents!().models, r => d.agents!().profiles.find(p => p.id === r)?.engine ?? target.harness);
+        const s = d.chats.setRouting!(id, routing ?? null);
+        return { chatId: id, routing: s.routing ?? null };
+      },
+    }] : []),
     {
       name: 'app_set_chat_work',
       description:'Declare an explicit assignment or future-mailbox wait, or explicitly complete it. Holds prevent automatic archive and idle-session release across turns/restarts; they never approve actions or confirm a successful result. Completion never closes a chat immediately.',
@@ -326,7 +342,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const warn = d.brain.settings().contextWarnTokens;
         return {
           app: all.filter(c => !c.closedAt).map(c => brief(c, warn)),
-          closed: recentClosed(all).map(c => ({ ...brief(c, warn), closedAt: new Date(c.closedAt!).toISOString(), closedBy: c.closedBy ?? 'auto' })),
+          closed: recentClosed(all).map(c => ({ ...brief(c, warn), closedAt: new Date(c.closedAt!).toISOString(), closedBy: c.closedBy ?? 'auto', ...(c.closedWith ? { closedWith: c.closedWith } : {}) })),
         };
       },
     },
@@ -555,6 +571,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         cwd: str('optional absolute folder: any existing one (the brain, a repository, a worktree, a slot); default: the brain folder. It gives no permission'), place: PLACE_SCHEMA,
         userModel: { type: 'object', additionalProperties: false, required: ['model'], description: 'only when the user named the model: one of the card\'s presets (agent_catalog presets), see app_guide «model choice»',
           properties: { engine: { type: 'string' }, model: { type: 'string', maxLength: 128 }, effort: { type: 'string', enum: ['low', 'medium', 'high', 'xhigh', 'max'] } } },
+        routing: ROUTING_SCHEMA,
       }, ['title']),
       run: async a => {
         // only the user chooses the Orchestrator (one at a time: a new one would take the role from the agent's own chat)
@@ -620,11 +637,18 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const delegator = { role: 'orchestrator', model: orchestrator?.model ?? d.agents().profiles.find(p => p.id === 'orchestrator')?.model ?? null };
         const presetFields = { ...(ask.preset ? { preset: ask.preset } : {}), ...(ask.presetWhy ? { presetWhy: ask.presetWhy } : {}), ...(ask.taskKind ? { taskKind: ask.taskKind } : {}), delegator };
         // the role's card decides engine, model and effort (ADR 0210, 0336); the user's own pick must be one of its presets
-        const userModel = d.agents ? userModelOf(a.userModel, d.agents().models, d.agents().profiles.find(p => p.id === roleId)?.engine ?? from) : undefined;
+        const roleEngine = (r: string) => d.agents!().profiles.find(p => p.id === r)?.engine ?? from;
+        const routing = a.routing !== undefined ? routingOf(a.routing, d.agents().models, roleEngine) : undefined;
+        if (routing && !authed()) throw new Error('routing: only the authenticated Orchestrator records the user\'s choice for a work tree.');
+        const ownPick = userModelOf(a.userModel, d.agents().models, roleEngine(String(roleId)));
+        // the tree's pick for this role holds for the chat itself too (ADR 0359); the user's own userModel wins
+        const treePick = !ownPick && roleId ? routing?.picks?.[String(roleId)] : undefined;
+        const userModel = ownPick ?? treePick;
         if (userModel && !authed()) throw new Error('userModel: only the authenticated Orchestrator passes the user\'s own pick.');
-        if (userModel && a.preset !== undefined) throw new Error('userModel and preset: one or the other (the user\'s pick must be one of the card\'s presets).');
+        if (ownPick && a.preset !== undefined) throw new Error('userModel and preset: one or the other (the user\'s pick must be one of the card\'s presets).');
         await d.creditFresh?.();
-        const resolved = d.resolveRole({ harness: from, cwd, roleId, title, prompt, ...presetFields, ...(links.roleVersion ? { roleVersion: links.roleVersion } : {}), ...(userModel ? { userModel } : {}) });
+        const resolved = d.resolveRole({ harness: from, cwd, roleId, title, prompt, ...presetFields, ...(links.roleVersion ? { roleVersion: links.roleVersion } : {}), ...(userModel ? { userModel } : {}) },
+          { ...(routing?.exclude?.length ? { exclude: routing.exclude } : {}), ...(treePick ? { freePick: true } : {}) });
         const profile = d.agents().profiles.find(p => p.id === roleId)!;
         const agent = { id: roleId, name: profile.name, version: profile.activeVersion, harness: resolved.request.harness, model: resolved.request.model ?? null, effort: resolved.request.effort ?? null,
           chosenBy: 'orchestrator' as const, ...(resolved.tier ? { tier: resolved.tier } : {}), stats: d.agentStats?.(roleId, profile.activeVersion) ?? null };
@@ -642,7 +666,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const refused = openRefusal(s, harness);
         if (refused) throw new Error(`bloccato: ${refused}`);
         const chat = await d.chats.create({ harness, cwd, ...(place ? { place } : {}), title, prompt: `${voice()}\n\n${prompt}`, ...links, orchestrator: false, roleId, ...presetFields, ...(skills.length ? { skills } : {}),
-          ...(model ? { model } : {}), ...(effort ? { effort } : {}), route, ...(userModel ? { userModel } : {}) }, 'agent', undefined, undefined,
+          ...(model ? { model } : {}), ...(effort ? { effort } : {}), route, ...(ownPick ? { userModel: ownPick } : {}), ...(routing ? { routing } : {}) }, 'agent', undefined, undefined,
           // the plain /mcp/app mount is open to any local process: its chats run no wider than the Orchestrator
           { boundByOrchestrator: !authed(), ...intake });
         log.info('appctl', 'agent created a chat', { chat: chat.id, data: { harness, title, model: model || null, effort, route: route.source, kind: route.kind, area: route.area, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } });
@@ -683,7 +707,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const cwd = typeof a.cwd === 'string' && a.cwd.trim() ? a.cwd.trim() : target.cwd, place = placeOf(a.place, 'place');
         const moved = !sameFolder(cwd, target.cwd) || place === 'copy' && target.place !== 'copy', noFolder = moved ? folderProblem(cwd) : null;
         if (noFolder) throw new ToolRefusal(noFolder);
-        // the engine its role starts on now (ADR 0357): another one goes on in a linked chat, never in place
+        // the engine its role starts on now (ADR 0361): another one goes on in a linked chat, never in place
         const on = d.chats.engineNow?.(target.id) ?? undefined;
         if (!d.agents) throw new Error('app_assign_task: the role catalog is not available.');
         // a card changed since the chat started does not stop the work (ADR 0352): the chat takes the card's current
@@ -789,7 +813,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         // a delegated chat goes on under its parent, which reads its hand-off (ADR 0083): not the Orchestrator's to continue
         const target = need(contentOf(String(a.chatId)));
         // the engine must be one agents may open (on, and the Orchestrators allowed there); the caller's own plays no part
-        // the engine the user's order starts the role on now (ADR 0357), else its own
+        // the engine the user's order starts the role on now (ADR 0361), else its own
         const on = d.chats.engineNow?.(target.id) ?? undefined;
         const refused = openRefusal(d.brain.settings(), on?.harness ?? target.harness);
         if (refused) throw new Error(`bloccato: ${refused}`);
@@ -921,7 +945,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
    *  Refused, with the reason, when the card's engine cannot run either. */
   async function moveToCard(target: ChatSummary, roleId: string, prompt: string, why: string, to: { cwd?: string; place?: 'here' | 'copy' } = {}): Promise<ChatSummary> {
     if (!d.resolveRole) throw new ToolRefusal(`bloccato: ${why}.`);
-    const card = d.resolveRole({ harness: target.harness, cwd: target.cwd, roleId, title: target.title, prompt }).request;
+    // the tree's excluded engines (ADR 0359): the work never moves onto one
+    const exclude = routingFor(target.id, d.chats.list()).exclude;
+    const card = d.resolveRole({ harness: target.harness, cwd: target.cwd, roleId, title: target.title, prompt }, exclude.length ? { exclude } : undefined).request;
     const also = card.harness === target.harness ? why : openRefusal(d.brain.settings(), card.harness);
     if (also) throw new ToolRefusal(`bloccato: ${why}${card.harness !== target.harness ? `, e la scheda del ruolo parte su ${engineLabel(card.harness)}: ${also}` : ''}. Il lavoro riparte quando un motore della scheda è acceso e consentito (Impostazioni → Motori).`);
     return d.chats.continueChat(target.id, { allowStart: false, ask: false, ...to, on: { harness: card.harness, model: card.model ?? null, effort: card.effort ?? null },

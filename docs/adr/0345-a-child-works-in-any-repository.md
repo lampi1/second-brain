@@ -2,7 +2,7 @@
 
 Date: 2026-11-24 · Status: accepted (owner, issue #460: «uno stratega mi aspetto che i suoi piani a volte coinvolgano
 più progetti, deve poter aprire figli ovunque, non capisco che senso ha») · Amends: ADR 0083 §3 (the child's folder),
-ADR 0227 (the worktree of a writing child) · Partly superseded by: ADR 0358 (in place by default)
+ADR 0227 (the worktree of a writing child) · Partly superseded by: ADR 0362 (in place by default)
 
 ## Context
 

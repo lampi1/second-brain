@@ -1,4 +1,4 @@
-// The one order of the engines (ADR 0357): the user sets it once (Impostazioni → Motori, or the Orchestrator for them) and
+// The one order of the engines (ADR 0361): the user sets it once (Impostazioni → Motori, or the Orchestrator for them) and
 // it holds for every role. A level's list (ADR 0347) says which MODEL each engine runs; the order says which ENGINE comes
 // first. A role may have its own order, an exception shown on its page. Each engine may have a threshold (% used of its
 // plan): past it the next engine of the order starts, before the credits end. No order saved = the lists' own order.
@@ -31,7 +31,7 @@ export function inOrder<T extends { engine: Harness }>(list: readonly T[], order
  *  has no threshold or nothing was read. */
 export function pastThreshold(reading: CreditReading | null, model: string | null, threshold: number | null | undefined, now: number): string | null {
   if (!threshold || !reading?.ok) return null;
-  const w = reading.windows.find(x => binding(x, model) && x.usedPercent >= threshold && (x.resetsAt === null || x.resetsAt > now));
+  const w = reading.windows.find(x => binding(x, model, reading.pool) && x.usedPercent >= threshold && (x.resetsAt === null || x.resetsAt > now));
   return w ? `${w.label} al ${Math.round(w.usedPercent)}%, soglia ${threshold}%` : null;
 }
 
@@ -40,6 +40,10 @@ export const roleOrder = (own: readonly Harness[] | undefined, all: readonly Har
 
 /** A text as whole words: accents, case, punctuation and spaces do not count. */
 export const wordsOf = (text: string): string => ` ${text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9%.+/:_-]+/g, ' ').replace(/[.:-]+(?= |$)/g, '').trim()} `;
+
+/** A text as its sentences (a line, ?, !, ; or a full stop end one), each as whole words: a canonical sentence must fill one, so
+ *  «Lingua: Italiano e inglese.» is no yes to «Lingua: Italiano.». */
+export const sentencesOf = (text: string): string[] => text.split(/[\n?!;]|\.\s|\.$/).map(wordsOf);
 
 /** Whether one sentence of a text names these engines, all of them, in this order and no other known one (their labels or
  *  ids as whole words, the first mention of each): a card that says «OpenAI, poi Cursor, Claude per ultimo» names that

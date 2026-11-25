@@ -1,4 +1,4 @@
-// Configuration changes «da applicare» (src/main/appctl/pending-config.ts, ADR 0357), what a yes proves (appctl/config.ts
+// Configuration changes «da applicare» (src/main/appctl/pending-config.ts, ADR 0361), what a yes proves (appctl/config.ts
 // names, appctl/user-words.ts yesAbout) and the app's own panel, which no agent's brief dresses (genui/artifacts.ts).
 import fs from 'node:fs';
 import os from 'node:os';
@@ -120,5 +120,15 @@ describe('the app\'s own panel', () => {
     expect(store.hasBrief('o')).toBe(false);
     expect([store.briefYes('o', 'q1'), store.briefYes('o', 'q2')]).toEqual(['Faccio il merge', '']);
     store.stop();
+  });
+});
+
+describe('review of the branch (second round)', () => {
+  const cat = { profiles: [], models: [] } as unknown as AgentCatalog;
+  it('a canonical sentence must fill a sentence of the card: a yes to a longer value is no yes to a shorter one', () => {
+    const w = settingWords('theme', 'Italiano', cat);
+    expect(names('Lingua: Italiano e inglese.', { text: 'Lingua: Italiano.' })).toBe(false);
+    expect(names('Cambio. Lingua: Italiano. Applico?', { text: 'Lingua: Italiano.' })).toBe(true);
+    void w;
   });
 });

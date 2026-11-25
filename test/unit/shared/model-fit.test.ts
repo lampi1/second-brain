@@ -19,3 +19,15 @@ describe('modelRefusal', () => {
     expect(modelRefusal('cursor', null, ['x'], 'claude')).toBeNull();
   });
 });
+
+describe('Claude models on Antigravity and Cursor (ADR 0357)', () => {
+  const agy = ['gemini-3.8-flash', 'claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-oss-120b'];
+  it('accepted on antigravity and cursor when their list offers them, whatever the registry row says', () => {
+    expect(modelRefusal('antigravity', 'claude-sonnet-5-5', agy, 'claude')).toBeNull();
+    expect(modelRefusal('cursor', 'claude-sonnet-5-5', ['claude-sonnet-5-5'], 'claude')).toBeNull();
+  });
+  it('refused when the engine does not offer it; unchanged on claude', () => {
+    expect(modelRefusal('antigravity', 'claude-haiku-5-5', agy, 'claude')).toMatch(/gira solo su claude/);
+    expect(modelRefusal('claude', 'claude-sonnet-5-5', null, 'claude')).toBeNull();
+  });
+});

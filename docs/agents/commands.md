@@ -64,21 +64,22 @@ row and its line here in the same change.
 | `app_screenshot` | Orchestrator, /mcp/app | A screenshot of the app window and of each browser tab on screen. |
 | `app_ui` | Orchestrator, /mcp/app | Steer the UI without taking focus: open a page, maximize a chat, or read the screen outline. |
 | `app_create_chat` | Orchestrator, /mcp/app | Open a work chat that runs one role, started with a self-contained prompt. |
-| `app_assign_task` | Orchestrator, /mcp/app | Give a finished work chat a new measured task in the same role, on any engine; another folder (`cwd`, `place`) or the engine the user's order starts its role on now goes on in a linked chat (ADR 0357, 0358; a chat whose engine cannot run goes on in a new one on its card's engine, ADR 0352); `map` moves it to other pieces of the map. |
+| `app_assign_task` | Orchestrator, /mcp/app | Give a finished work chat a new measured task in the same role, on any engine; another folder (`cwd`, `place`) or the engine the user's order starts its role on now goes on in a linked chat (ADR 0361, 0362; a chat whose engine cannot run goes on in a new one on its card's engine, ADR 0352). |
 | `app_task_events` | Orchestrator, /mcp/app | The ordered user decisions of a root task (optional: app_assign_task returns the unread ones). |
 | `app_send_to_chat` | Orchestrator, /mcp/app | Send a message to an app chat on any engine (a stopped or auto-closed one resumes; ADR 0352), labelled as not the user's approval. |
 | `app_close_chat` | Orchestrator, /mcp/app | Close a chat for the user, like ✕: its engine, the tools it started and its delegation tree end; refused while it or an open descendant waits for the user. |
 | `app_reopen_chat` | Orchestrator, /mcp/app | Reopen a closed chat with its whole history and engine; `reopened: true` or why not (a chat the user closed: only right after his own ask). |
 | `app_handoff_chat` | Orchestrator, /mcp/app | Have a chat write its hand-off note now. |
-| `app_continue_chat` | Orchestrator, /mcp/app | «Riprendi»: a new chat from the old chat's hand-off, in the last folder it used or in `cwd`, on the engine its role starts on now (ADR 0357, 0358). |
+| `app_continue_chat` | Orchestrator, /mcp/app | «Riprendi»: a new chat from the old chat's hand-off, in the last folder it used or in `cwd`, on the engine its role starts on now (ADR 0361, 0362). |
 | `app_set_chat_effort` | Orchestrator, /mcp/app | Pick the reasoning effort of one running chat for this conversation only. |
+| `app_set_routing` | Orchestrator, /mcp/app | Record the user's engine/model per role and excluded engines for a whole work tree (ADR 0359). |
 | `app_set_chat_work` | Orchestrator, /mcp/app | Declare, wait on or complete a chat's explicit assignment (holds the auto-close). |
 | `agent_catalog` | Orchestrator, /mcp/app, work chats | The roles with purpose, tools and skills, and the skills that fit a request. |
 | `agent_learn_propose` | Orchestrator, /mcp/app, work chats | Propose a lesson for a role (its text or a skill), queued for the user. |
 | `app_unblock` | Orchestrator only | Open the questions window with everything waiting for the user, after a recap he asked for. |
 | `app_update_code` | Orchestrator only | Update the app's code from GitHub, only when the user asked in his own words. |
 | `app_voice_diagnostics` | Orchestrator only | Content-free voice timing diagnostics (recognition, synthesis, failures). |
-| `app_config` | Orchestrator only | Read and change any configuration as the user's own click would, with Undo: settings, view, role cards (their Minimo/Base/Massimo presets too), the one engine order and its thresholds (ADR 0357: a change it may not apply stays «da applicare» on a panel), MCP connectors (add, edit, test, remove, per role; never a token), profile. |
+| `app_config` | Orchestrator only | Read and change any configuration as the user's own click would, with Undo: settings, view, role cards (their Minimo/Base/Massimo presets too), the one engine order and its thresholds (ADR 0361: a change it may not apply stays «da applicare» on a panel), MCP connectors (add, edit, test, remove, per role; never a token), profile. |
 | `app_skills` | Orchestrator only | Every skill (brain, the user's folders, the app's) with files, roles and usage; one skill's files, file text or history. |
 | `app_skill_write` | Orchestrator only | Create, change or delete a skill or one of its files (SKILL.md, scripts/, references/, assets/), logged with Undo; an app skill becomes a brain copy. |
 | `app_skill_roles` | Orchestrator only | Give a skill to roles or take it away (a role's default skills stay on its own page). |
@@ -102,7 +103,7 @@ row and its line here in the same change.
 | `app_child_output` | Orchestrator only | The latest report of a chat in its tree, delegates included: summary and criteria; full: the output, max 4,000 chars. |
 | `agent_metrics` | Orchestrator only | Success rate, cost, time and corrections per role and version (numbers only). |
 | `task_estimate` | Orchestrator only | Estimate a request: kind of work, size, role, time and cost. |
-| `agent_delegate` | work chats | Delegate independent parts of the task to other roles as visible child chats (Orchestrator and Strategist only; a parallel group starts in one call; a Sentinel takes `reviewOf`; `cwd` = any existing folder, `place` = here by default or copy, ADR 0358; `contract.tools` never limits what it may run, ADR 0355). |
+| `agent_delegate` | work chats | Delegate independent parts of the task to other roles as visible child chats (Orchestrator and Strategist only; a parallel group starts in one call; a Sentinel takes `reviewOf`; `cwd` = any existing folder, `place` = here by default or copy, ADR 0362; `contract.tools` never limits what it may run, ADR 0355). |
 | `agent_children` | work chats | The chats you delegated: role, state, goal, result, open requests, cost, why a task was closed early (`endCause`), and `waitsOn: "credits"` for a child whose model ran out of credits (it goes on when the user changes its role's card, ADR 0346). |
 | `agent_ask_parent` | work chats | Ask up the ladder (the chat that delegated you, the Orchestrator, the user; ADR 0344) and go on with the rest. |
 | `run_code` | work chats (Code Mode on) | Run a JavaScript script in a QuickJS sandbox that calls many tools in one go through a typed API (Bash, PowerShell, files, app tools, connectors); each call meets the same permission rules, an Esegui action stops the script (ADR 0331). |

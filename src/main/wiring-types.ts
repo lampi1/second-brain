@@ -109,7 +109,7 @@ export interface Wired {
   runner: CommandRunner;
   /** shell blocks a chat left for the user, as open requests ("Comando da eseguire", run/asks.ts) */
   asks: CommandAsks;
-  /** configuration changes the app holds for the user (ADR 0357) */
+  /** configuration changes the app holds for the user (ADR 0361) */
   pendingConfig?: PendingConfig;
   /** the words of the last brief a chat put on its question (genui/artifacts.ts) */
   briefYes?: (chatId: string, requestId: string) => string;

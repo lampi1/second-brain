@@ -1,4 +1,4 @@
-# ADR 0357 · One order of the engines, a threshold each, the reason on every chat, and changes that are never lost
+# ADR 0361 · One order of the engines, a threshold each, the reason on every chat, and changes that are never lost
 
 Date: 2026-11-25 · Status: accepted (owner, 2026-11-25: «Claude va usato per ultimo», asked several times, and an Artisan
 still started on Claude; «un ordine dei motori unico, modificabile in un punto solo, valido per tutti i ruoli») · Amends:

@@ -137,7 +137,10 @@ export interface StoredChat {
   /** stopped on its provider's credit limit: it waits for another model on its role's card (ADR 0346) */
   creditWait?: CreditWait;
   creditMoved?: ChatSummary['creditMoved'];
+  place?: ChatSummary['place'];
+  folderNotes?: ChatSummary['folderNotes'];
   userModel?: ChatSummary['userModel'];
+  routing?: ChatSummary['routing'];
   pick?: ChatSummary['pick'];
   /** its engine ended with an error or in the middle of a turn: not finished, it never closes by itself */
   unfinished?: true;
@@ -197,6 +200,17 @@ function readUserModel(value: unknown): StoredChat['userModel'] | undefined {
   const u = value as Record<string, unknown> | null;
   if (!u || typeof u !== 'object' || typeof u.model !== 'string' || !u.model || u.model.length > 128 || typeof u.engine !== 'string' || u.engine.length > 60) return undefined;
   return { model: u.model, engine: u.engine as Harness, ...(typeof u.effort === 'string' && u.effort.length <= 10 ? { effort: u.effort as Effort } : {}) };
+}
+function readRouting(value: unknown): StoredChat['routing'] | undefined {
+  const r = value as Record<string, unknown> | null;
+  if (!r || typeof r !== 'object') return undefined;
+  const picks: Record<string, NonNullable<StoredChat['userModel']>> = {};
+  for (const [role, v] of Object.entries(r.picks && typeof r.picks === 'object' ? r.picks as Record<string, unknown> : {}).slice(0, 16)) {
+    const u = readUserModel(v);
+    if (u && /^[a-z][\w-]{0,40}$/.test(role)) picks[role] = u;
+  }
+  const exclude = (Array.isArray(r.exclude) ? r.exclude : []).filter((x): x is string => typeof x === 'string' && x.length <= 60).slice(0, 12) as Harness[];
+  return Object.keys(picks).length || exclude.length ? { ...(Object.keys(picks).length ? { picks } : {}), ...(exclude.length ? { exclude } : {}) } : undefined;
 }
 function readPick(value: unknown): StoredChat['pick'] | undefined {
   const p = value as Record<string, unknown> | null;
@@ -321,7 +335,11 @@ function valid(x: unknown): StoredChat | null {
     ...(c.waitsOnWork === true ? { waitsOnWork: true as const } : {}),
     ...(readCreditWait(c.creditWait) ? { creditWait: readCreditWait(c.creditWait)! } : {}),
     ...(readCreditMoved(c.creditMoved) ? { creditMoved: readCreditMoved(c.creditMoved)! } : {}),
+    // the copy it works in, and what it was told of its folder: kept over a restart (ADR 0362)
+    ...(c.place === 'copy' ? { place: 'copy' as const } : {}),
+    ...(Array.isArray(c.folderNotes) ? (() => { const n = c.folderNotes.filter((x: unknown): x is string => typeof x === 'string' && x.length <= 2000).slice(0, 6); return n.length ? { folderNotes: n } : {}; })() : {}),
     ...(readUserModel(c.userModel) ? { userModel: readUserModel(c.userModel)! } : {}),
+    ...(readRouting(c.routing) ? { routing: readRouting(c.routing)! } : {}),
     ...(readPick(c.pick) ? { pick: readPick(c.pick)! } : {}),
     ...(c.unfinished === true ? { unfinished: true as const } : {}),
     ...(heldResults(c.heldResults) ? { heldResults: heldResults(c.heldResults)! } : {}),

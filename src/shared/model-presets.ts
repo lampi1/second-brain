@@ -115,7 +115,7 @@ export interface PresetChoice {
 
 /** The preset part of a run's record (AgentRun.presetChoice): what ran and what decided it, no model (the run has it). */
 export interface RunPresetChoice { preset: PresetId; effort?: Effort; asked?: PresetId; presetWhy?: string; taskKind?: string; delegatorRole?: string;
-  /** which engine it started on and why, one line (ADR 0357: «OpenAI Sol: primo disponibile») */
+  /** which engine it started on and why, one line (ADR 0361: «OpenAI Sol: primo disponibile») */
   route?: string }
 export const ROUTE_MAX = 400;
 /** How a route ends when the user named the model for that work: «Riprendi» and reuse keep it. */

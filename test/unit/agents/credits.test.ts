@@ -52,3 +52,14 @@ describe('OpenCode log', () => {
   });
 });
 
+
+describe('Antigravity pools (ADR 0357)', () => {
+  it('Claude and GPT models are the antigravity:3p pool, Gemini the antigravity one', async () => {
+    const { poolOf } = await import('../../../src/main/agents/credits');
+    expect(poolOf('antigravity', 'claude-sonnet-5-5')).toBe('antigravity:3p');
+    expect(poolOf('antigravity', 'gpt-oss-120b')).toBe('antigravity:3p');
+    expect(poolOf('antigravity', 'gemini-3.8-flash')).toBe('antigravity');
+    expect(poolOf('antigravity', null)).toBe('antigravity');
+    expect(poolOf('cursor', 'claude-sonnet-5-5')).toBe('cursor');
+  });
+});

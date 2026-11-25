@@ -3,7 +3,7 @@
 // the process trees on quit, get_usage, the browser access and tool visibility a chat has.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import type { CliStatus, CursorReasoning, Harness, PermissionMode } from '../../shared/contract';
+import type { ChatItem, CliStatus, CursorReasoning, Harness, PermissionMode } from '../../shared/contract';
 import { errText, log } from '../log';
 import { cliVersion, killTrees, killTreesWithin, resolveClaude } from './cli';
 import { reapAfterQuit } from './proctree';
@@ -22,8 +22,8 @@ import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { needView, toolShownToChat, toolShownToUnknown, toolShownToWarm } from './tool-visibility';
 import { requiredTools } from '../../shared/role-tools';
-import { toolAction, type ToolAction } from './tool-check';
-import { toolCliEnv } from './tool-cli';
+import { saysToolMissing, toolAction, type ToolAction } from './tool-check';
+import { toolCliEnv, toolCliHint } from './tool-cli';
 import { codeModeFor, CODE_MODE_HIDDEN, RUN_CODE } from '../code-mode/policy';
 import { AgentChildrenReducer } from './agent-children';
 import { initialEffort } from './effort';
@@ -38,6 +38,14 @@ const catalogRole = (s: Rec['s']): string | undefined => s.agent?.source === 'ca
 export const DELIVERED_RELEASE_MS = 5 * 60_000;
 
 /** Engine sessions: start, launch options, warm engines, the kill on quit, the per-chat MCP and tool visibility. */
+/** Every assistant text of the last turn (since the last user item): a model may say a tool is missing, try something
+ *  else and end with a short line. */
+const turnAnswers = (items: readonly ChatItem[]): string => {
+  const out: string[] = [];
+  for (let i = items.length - 1; i >= 0 && items[i]!.kind !== 'user'; i--) { const it = items[i]!; if (it.kind === 'assistant') out.unshift(it.text); }
+  return out.join('\n\n');
+};
+
 /** The engine is handed the app's MCP endpoint for sure (ADR 0356): Claude and Codex always; an ACP engine only when
  *  the app knows it takes an http server (mcpHttp). An API engine has no tools and no shell, so nothing is checked; an
  *  ACP engine that may not take it is checked only from the lists it really read (no reload for a list never read). */
@@ -302,11 +310,28 @@ export abstract class ManagerSessions extends ManagerPersistence {
     this.toolCheck(r);
   }
 
-  /** A turn of this session ended: an engine that never read the endpoint is found now. */
+  /** A turn of this session ended: an engine that never read the endpoint is found now, and so is a model that says a
+   *  required tool is not among its own (agy drops them when its MCP preload times out, with the list served: 2026-11-25) */
   protected toolTurnEnded(r: Rec): void {
-    if (!r.toolSession || r.toolSession.turnEnded) return;
-    r.toolSession.turnEnded = true;
+    const s = r.toolSession;
+    if (!s) return;
+    // only where the app cannot see what the engine loaded (an ACP engine: no init list of tools)
+    const said = s.acted === 'fallback' || s.engineSaw || engineOf(r.s.harness)?.kind !== 'acp' ? [] : saysToolMissing(turnAnswers(r.items), this.requiredToolsOf(r.s.id));
+    if (said.length) s.saidMissing = said;
+    if (s.turnEnded && !said.length) return;
+    s.turnEnded = true;
     this.toolCheck(r);
+  }
+
+  /** On an engine with a tight schema budget (Antigravity) the fallback command goes with the role's text, before any
+   *  tool is missed (ADR 0356): a drop inside the engine is not always seen by the app. */
+  protected compactToolHint(r: Rec): string {
+    const s = r.toolSession;
+    if (!s || s.hinted || !engineOf(r.s.harness)?.mcpCompact) return '';
+    const need = this.requiredToolsOf(r.s.id);
+    if (!need.length) return '';
+    s.hinted = true;
+    return `${toolCliHint(need)}\n\n`;
   }
 
   private toolCheck(r: Rec): void {

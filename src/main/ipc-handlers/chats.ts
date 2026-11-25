@@ -38,7 +38,7 @@ export function chatsHandlers({ s, activity, orchestrator, clip }: HandlerContex
     'chat:synthesize': a => { if (!s.chats.synthesizeResult) throw new Error('Result synthesis unavailable.'); return s.chats.synthesizeResult(a.runId, { kind: 'user' }); },
     'chat:answer': async a => {
       activity.answered(a.chatId, a.requestId);
-      // a configuration change the app holds (ADR 0357): its panel is the app's, answered here
+      // a configuration change the app holds (ADR 0361): its panel is the app's, answered here
       if (s.pendingConfig?.owns(a.requestId)) { s.pendingConfig.answer(a.requestId, a.answer); return; }
       const req = s.chats.pending().find(r => r.chatId === a.chatId && r.id === a.requestId);
       const about = req ? yesAbout(req, s.briefYes?.(a.chatId, a.requestId) ?? '') : '';
@@ -49,7 +49,7 @@ export function chatsHandlers({ s, activity, orchestrator, clip }: HandlerContex
     'chat:plan': a => s.chats.planDecide(a.chatId, a.decision, a.at, a.text),
     'chat:stop': a => { activity.stopped(a.chatId); return s.chats.stop(a.chatId, a.keepQueued === true); },
     'chat:stopAll': () => { activity.stopped(); return s.chats.stopAll(); },
-    'chat:close': a => { activity.stopped(a.chatId); return s.chats.close(a.chatId); },
+    'chat:close': a => { activity.stopped(a.chatId); return a.keep ? s.chats.finishClose(a.chatId) : s.chats.close(a.chatId); },
     'chat:archive': a => { if (a.auto !== true) activity.stopped(a.chatId); return s.chats.archive(a.chatId, { auto: a.auto === true, undoable: a.undoable === true }); },
     'chat:reopen': async a => { const c = await s.chats.reopen(a.chatId); s.chats.resumedByUser?.(a.chatId); return s.chats.list().find(x => x.id === a.chatId) ?? c; },
     'chat:admitNow': a => s.chats.admitNow(a.chatId),

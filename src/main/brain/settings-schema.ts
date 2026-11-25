@@ -114,7 +114,7 @@ const BASE: readonly SettingDef[] = [
     description: 'Nessuna notifica di sistema; tutto resta nel feed.' },
   { key: 'mute.*', type: 'boolean', default: false, protected: true, label: 'Silenzia un tipo di novità',
     description: 'Nessuna notifica per questo tipo (idea, errore, chat finita…); resta nel feed.' },
-  // the one order of the engines (ADR 0357): which engine a role chat tries first; it changes no model, effort or permission
+  // the one order of the engines (ADR 0361): which engine a role chat tries first; it changes no model, effort or permission
   { key: 'engineOrder', type: 'engine-order', default: [], protected: true, label: 'Ordine dei motori',
     description: 'L’ordine in cui ogni ruolo prova i motori (id, dal primo all’ultimo). Vale per tutti i ruoli, salvo l’eccezione scritta nella pagina di un ruolo. Vuoto = l’ordine delle liste di ogni livello.' },
   { key: 'engineThresholds', type: 'engine-thresholds', default: {}, protected: true, label: 'Soglie dei motori',

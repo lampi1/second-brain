@@ -78,8 +78,8 @@ export abstract class ManagerContinuity extends ManagerRequests {
   /** "Riprendi": a NEW chat on the same engine, folder and choices that starts from the hand-off (written first when
    *  missing or older than the last turn). The old chat's process ends; it stays readable, linked both ways.
    *  promptPrefix: a label put before the prompt (an agent's request is marked as not the user's).
-   *  cwd / place (ADR 0358): the folder, by default the last one it used; nothing of the old one is moved. With no `on`,
-   *  the engine its role starts on now (ADR 0357).
+   *  cwd / place (ADR 0362): the folder, by default the last one it used; nothing of the old one is moved. With no `on`,
+   *  the engine its role starts on now (ADR 0361).
    *  ask false + on (ADR 0346, a chat out of credits whose role's card moved to another engine): the hand-off is the
    *  app's own note, since the old engine cannot be asked, and the new chat runs on the card's engine and model.
    *  assignment (ADR 0352, a reused child whose engine cannot run now): the new child carries this new task's goal and
@@ -104,7 +104,7 @@ export abstract class ManagerContinuity extends ManagerRequests {
     // never two agents on the same files: the old chat must have finished its turn (a fresh note does not cover this one)
     const hasTurns = r.lastTurnAt > 0 || r.items.some(i => i.kind === 'result' || i.kind === 'user');
     if (r.handoffTurn || (hasTurns && (r.session?.busy || r.pending.size > 0))) throw new Error('La chat sta lavorando o ti aspetta: si riprende quando ha finito il turno.');
-    // the engine its role starts on now (ADR 0357): another one only when the order or the limits changed since
+    // the engine its role starts on now (ADR 0361): another one only when the order or the limits changed since
     const on = opts.on ?? (this.openChildren(chatId) ? undefined : this.opts.engineNow?.({ ...r.s }) ?? undefined);
     const cwd = opts.cwd?.trim() || r.s.cwd, noFolder = folderProblem(cwd);
     if (noFolder) throw new Error(noFolder);
@@ -125,12 +125,14 @@ export abstract class ManagerContinuity extends ManagerRequests {
       ...(on ? { ...(on.model ? { model: on.model } : {}), ...(on.effort ? { effort: on.effort } : {}) } : { ...(r.choice.model ? { model: r.choice.model } : {}), ...(r.choice.effort ? { effort: r.choice.effort } : {}) }),
       ...(r.choice.permissionMode ? { permissionMode: r.choice.permissionMode } : {}),
       // a routed job stays one outcome across hand-offs: the new chat writes on the first chat's ledger line
+      // the user's choice for the work tree goes on with its root (ADR 0359)
+      ...(!parentRec && r.s.routing ? { routing: structuredClone(r.s.routing) } : {}), ...(!parentRec && r.s.userModel ? { userModel: { ...r.s.userModel } } : {}),
       ...(r.s.route ? { route: { ...r.s.route, ledgerId: r.s.route.ledgerId ?? `app:${r.s.id}`, handoffs: (r.s.route.handoffs ?? 0) + 1 } } : {}),
       // the root task's own contract goes on (a delegated one travels in its delegation)
       ...(!parentRec && !task && r.s.run?.goal ? { goal: r.s.run.goal.slice(0, 2000) } : {}), ...(!parentRec && !task && r.s.run?.taskContract?.doneWhen?.length ? { doneWhen: [...r.s.run.taskContract.doneWhen] } : {}),
       ...(r.s.run?.taskContract?.deliveryPolicy ? { deliveryPolicy: r.s.run.taskContract.deliveryPolicy } : {}), ...(r.s.run?.taskContract?.fields?.length ? { contractFields: [...r.s.run.taskContract.fields] } : {}),
       // a new task is assigned right after (assignElsewhere), with every guard of an assignment; a chat that never started
-      // begins with its own first message (ADR 0357)
+      // begins with its own first message (ADR 0361)
       ...(task ? {} : { prompt: opts.firstPrompt ?? `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${context}` }),
       ...(parentRec ? { parentId: parentRec.s.id, ...(r.s.delegation ? { delegation: nextDelegation(r.s.delegation, assignment) } : {}) } : {}),
     }, 'user', { ...(r.s.launchContext ? { launchContext: r.s.launchContext } : {}), ...(r.s.run?.tier ? { tier: r.s.run.tier } : {}), owner: on ? { ...owner, engine: on.harness, model: on.model } : owner, instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.skills ? { skills: [...r.skills] } : {}), ...(r.maxContext ? { maxContext: r.maxContext } : {}), ...(r.launches ? { launches: [...r.launches] } : {}) },

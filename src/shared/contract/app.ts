@@ -146,6 +146,9 @@ export interface HarnessUsageWindow {
   resetsAt: number | null;
   /** Optional model/pool scope (e.g. "sonnet", "3p") for secondary windows. */
   model?: string;
+  /** Which quota pool of one engine this window counts (Antigravity keeps Gemini and Claude/GPT apart): a model of the
+   *  other pool is not stopped by it (ADR 0357). No scope = every model of the engine. */
+  scope?: 'gemini' | '3p';
   /** Optional spend pair in USD cents (Cursor on-demand). */
   cost?: { usedUsdCents: number; limitUsdCents: number };
 }
@@ -231,7 +234,7 @@ export interface AppInvokeMap {
   /** native folder chooser for the brain folder; sets brainRoot (by the user) and returns it, null if cancelled */
   'app:pickBrain': [void, string | null];
   'app:pickRepo': [void, string | null];
-  /** native folder chooser for a chat's folder («Riprendi in un'altra cartella», ADR 0358), starting at `from`; saves nothing */
+  /** native folder chooser for a chat's folder («Riprendi in un'altra cartella», ADR 0362), starting at `from`; saves nothing */
   'app:pickFolder': [{ from?: string }, string | null];
   /** the first-run setup's folders: the projects folder saved or found by itself (read only), and where a new memory goes */
   'app:projectsFolder': [void, ProjectsFolderInfo];

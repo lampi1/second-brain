@@ -605,7 +605,7 @@ export function closeChat(chatId: string): void {
     pendingCloses.delete(timer);
     if (undone) return;
     undoableCloses.delete(chatId);
-    void closing.then(ok => ok ? sb.invoke('chat:close', { chatId }) : undefined).catch(fail(t('chat.close.failed'))).finally(() => hideChat(chatId, false));
+    void closing.then(ok => ok ? sb.invoke('chat:close', { chatId, keep: true }) : undefined).catch(fail(t('chat.close.failed'))).finally(() => hideChat(chatId, false));
   }, 6000);
   pendingCloses.add(timer);
   toast(t('chat.close.done', { title: c.title }), 'info', { label: t('chat.close.undo'), run: () => {

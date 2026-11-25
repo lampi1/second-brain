@@ -63,9 +63,16 @@ export function clock(at: number, now: number, fmt?: (at: number) => string): st
 }
 const fmtLeft = (ms: number): string => ms >= DAY ? `${Math.floor(ms / DAY)}g ${Math.floor(ms % DAY / HOUR)}h` : ms >= HOUR ? `${Math.floor(ms / HOUR)}h ${Math.floor(ms % HOUR / MIN)}m` : `${Math.max(1, Math.round(ms / MIN))}m`;
 
+/** Models the Antigravity plan counts in its «Claude and GPT» pool (the rest is Gemini). */
+const THIRD_PARTY = /\b(claude|opus|sonnet|haiku|fable|mythos|gpt|oss)\b/i;
+/** Does this model name belong to Antigravity's Claude/GPT pool (one rule for the pool pick and the window scope)? */
+export const isThirdPartyModel = (model: string | null | undefined): boolean => THIRD_PARTY.test(String(model ?? '').replace(/[-_.]/g, ' '));
+
 /** A window that stops this model: the plan's own, or one of this model only (spend windows never stop the plan). */
-export function binding(w: HarnessUsageWindow, model: string | null | undefined): boolean {
+export function binding(w: HarnessUsageWindow, model: string | null | undefined, pool = ''): boolean {
   if (w.kind === 'spend') return false;
+  // a pool of one engine (Antigravity: Gemini apart from Claude/GPT, ADR 0357): it stops only the models of its pool
+  if (w.scope) { const third = model ? isThirdPartyModel(model) : pool.endsWith(':3p'); return w.scope === '3p' ? third : !third; }
   if (!w.model) return true;
   return !!model && model.toLowerCase().includes(w.model.toLowerCase());
 }
@@ -77,14 +84,14 @@ export function validReading(f: Pick<CreditFacts, 'pool' | 'account' | 'reading'
 }
 
 /** The verdict for a pool now. `asker` = the chat (or launch) that asks: a probe in flight is its own, others wait. */
-export function creditVerdict(f: CreditFacts, now: number, o: { asker?: string; fmt?: (at: number) => string } = {}): CreditVerdict {
+export function creditVerdict(f: CreditFacts, now: number, o: { asker?: string; fmt?: (at: number) => string; ignoreError?: boolean } = {}): CreditVerdict {
   const r = f.reading && f.reading.ok && f.reading.pool === f.pool && !(f.account && f.reading.account && f.account !== f.reading.account) ? f.reading : null;
   const valid = !!r && validReading(f, now);
   const readingAt = r?.at ?? null;
   const at = (x: number) => clock(x, now, o.fmt);
   // 1. a window of the plan at 98% or more: spent until its reset (the farthest one); no reset = until a reading drops
   if (r) {
-    const spent = r.windows.filter(w => binding(w, f.model) && w.usedPercent >= SPENT_PCT);
+    const spent = r.windows.filter(w => binding(w, f.model, f.pool) && w.usedPercent >= SPENT_PCT);
     if (spent.length) {
       const label = spent.map(w => `${w.label} al ${Math.round(w.usedPercent)}%`).join(', ');
       if (spent.some(w => w.resetsAt === null)) {
@@ -98,8 +105,9 @@ export function creditVerdict(f: CreditFacts, now: number, o: { asker?: string; 
       return probation(f, now, o.asker, `rinnovo passato alle ${at(until)}: lettura da rifare`, readingAt, true);
     }
   }
-  // 2. a limit error the reading does not cover
-  const e = f.error;
+  // 2. a limit error the reading does not cover; the user's own explicit pick skips this assumed pause once (ADR 0359): a
+  // new refusal sets it again, a clean turn clears it, a spent window of step 1 is real and still stops
+  const e = o.ignoreError ? null : f.error;
   if (e && !(f.workedFrom !== null && f.workedFrom > e.at)) {
     const end = e.pauseFrom + e.pauseMs;
     // a valid reading taken after the pause, all under 98%: the error is over (reading below decides free or pace)
@@ -111,16 +119,16 @@ export function creditVerdict(f: CreditFacts, now: number, o: { asker?: string; 
   // 3. the reading's pace (unchanged rule, ADR 0347): the share used against the share of the window gone by
   if (r) {
     for (const w of r.windows) {
-      if (!binding(w, f.model) || w.resetsAt === null) continue;
+      if (!binding(w, f.model, f.pool) || w.resetsAt === null) continue;
       const span = WINDOW_MS[w.kind], left = w.resetsAt - now;
       if (!span || left <= 0 || w.usedPercent < 50) continue;
       const gone = Math.min(1, Math.max(0, (span - left) / span));
       if (gone >= 0.1 && w.usedPercent / gone > 100) return { state: 'pace', why: `${w.label} al ${Math.round(w.usedPercent)}% con ${fmtLeft(left)} al rinnovo: a questo ritmo finisce prima`, source: 'reading', until: w.resetsAt, readingAt };
     }
-    const top = r.windows.filter(w => binding(w, f.model)).reduce<HarnessUsageWindow | null>((a, w) => !a || w.usedPercent > a.usedPercent ? w : a, null);
+    const top = r.windows.filter(w => binding(w, f.model, f.pool)).reduce<HarnessUsageWindow | null>((a, w) => !a || w.usedPercent > a.usedPercent ? w : a, null);
     return { state: 'free', why: top ? `${top.label} al ${Math.round(top.usedPercent)}%` : 'nessun limite riportato', source: 'reading', until: null, readingAt };
   }
-  if (e) return { state: 'free', why: 'un turno è andato a buon fine dopo l’errore di limite', source: 'turn', until: null, readingAt: null };
+  if (f.error) return { state: 'free', why: 'un turno è andato a buon fine dopo l’errore di limite', source: 'turn', until: null, readingAt: null };
   return { state: 'unknown', why: 'limite non letto', source: 'none', until: null, readingAt: null };
 }
 
@@ -132,7 +140,9 @@ function probation(f: CreditFacts, now: number, asker: string | undefined, why: 
 
 /** The pause after a new limit error. Errors of turns that started before the current pause ended count as one; a probe
  *  that started after it and failed doubles it (cap: 1 hour on a readable pool, a day on a blind one). */
-export function nextError(prev: CreditError | null, errorAt: number, turnStartedAt: number, readable: boolean, workedFrom: number | null = null): CreditError {
+export function nextError(prev: CreditError | null, errorAt: number, turnStartedAt: number, readable: boolean, workedFrom: number | null = null, providerMs: number | null = null): CreditError {
+  // the provider named its own reset time (ADR 0359): that is the pause, never shorter than the short pause nor longer than a day
+  if (providerMs !== null && providerMs > 0) return { at: errorAt, pauseFrom: errorAt, pauseMs: Math.min(PAUSE_CAP_BLIND_MS, Math.max(SHORT_PAUSE_MS, providerMs)) };
   // a clean turn after the last error proved the pool worked: a new error starts again from the short pause
   if (!prev || (workedFrom !== null && workedFrom > prev.at)) return { at: errorAt, pauseFrom: errorAt, pauseMs: SHORT_PAUSE_MS };
   const end = prev.pauseFrom + prev.pauseMs;
@@ -142,3 +152,24 @@ export function nextError(prev: CreditError | null, errorAt: number, turnStarted
 
 /** The line a skipped model gets in the chat and in the tools' answers: «OpenAI saltato: 5h al 100%, torna alle 22:40». */
 export function skipLine(name: string, v: Pick<CreditVerdict, 'why'>): string { return `${name} saltato: ${v.why}`; }
+
+/** Does a limit error's text say the limit is the whole account's or plan's (ADR 0359)? Otherwise it stops that model only
+ *  (seen: gpt-6.2-astra refused with «The usage limit has been reached», two hours later gpt-6.2-sol answered). */
+export function accountWideLimit(text: string | null | undefined): boolean {
+  return /(credit balance|insufficient[_ ]quota|exceeded your current quota|out of credits|subscribe to |hit your (?:usage )?limit|claude (?:ai )?usage limit|free usage limit|(?:your|account|plan|subscription|weekly|monthly|5-hour|five-hour)[^.]{0,40}\blimit)/i.test(String(text ?? ''));
+}
+
+/** The pause the provider's own words give: «try again in 2 hours», «resets in 45 minutes», «retry after 90 seconds», an
+ *  ISO time after «reset»/«again at». null = none said. */
+export function providerPauseMs(text: string | null | undefined, now: number): number | null {
+  const t = String(text ?? '');
+  const rel = t.match(/(?:try again|retry|resets?|available again|come back)[^0-9]{0,20}?(\d+(?:\.\d+)?)\s*(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d)\b/i);
+  if (rel) {
+    const n = Number(rel[1]), u = rel[2]!.toLowerCase()[0]!;
+    const ms = n * (u === 's' ? 1e3 : u === 'm' ? MIN : u === 'h' ? HOUR : DAY);
+    return Number.isFinite(ms) && ms > 0 ? Math.round(ms) : null;
+  }
+  const iso = t.match(/(?:reset|again|after|until)[^0-9]{0,20}?(\d{4}-\d{2}-\d{2}T[\d:.]+Z?)/i);
+  if (iso) { const at = Date.parse(iso[1]!); if (Number.isFinite(at) && at > now) return at - now; }
+  return null;
+}

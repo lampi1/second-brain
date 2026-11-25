@@ -1,4 +1,4 @@
-// A chat's folder is chosen by whoever opens it (ADR 0358; src/main/agents/worktrees.ts, agents/delegation.ts, chats/
+// A chat's folder is chosen by whoever opens it (ADR 0362; src/main/agents/worktrees.ts, agents/delegation.ts, chats/
 // manager*.ts, appctl/tools.ts): any existing folder, in place unless a copy is asked, the parent's folder never limits the
 // child's; uncommitted changes and another writer are told, never refused nor touched; reuse and «Riprendi» in another
 // folder open a linked chat; a folder that is missing is the one refusal, before anything exists; read-only stays read-only.
@@ -94,7 +94,7 @@ const made = () => git.ran.filter(r => r[0] === 'worktree');
 /** commands that would change a checkout */
 const touched = () => git.ran.filter(r => ['stash', 'checkout', 'reset', 'clean', 'add', 'commit', 'switch', 'restore', 'worktree'].includes(r[0]!));
 
-describe('a chat works where whoever opens it says (ADR 0358)', () => {
+describe('a chat works where whoever opens it says (ADR 0362)', () => {
   it('1 · a Strategist born in the brain opens an Artisan in place in a slot: no new worktree', async () => {
     const w = world(), s = await w.strategist(w.brain);
     const child = await w.delegate(s.id, w.part('artisan', 'Slot', { cwd: w.slot, place: 'here' }));

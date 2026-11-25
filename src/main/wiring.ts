@@ -36,7 +36,7 @@ import { createAgentLoop } from './agents/loop';
 import { delegationTools } from './agents/delegation';
 import { limitSignal } from './agents/credits';
 import { creditLive } from './agents/credit-live';
-import { inheritUserModel } from './agents/catalog';
+import { inheritUserModel, routingFor } from './agents/catalog';
 import { creditWaitWatch } from './agents/credit-wait';
 import { EngineHealth } from './agents/engine-health';
 import { engineNowOf, startElsewhere } from './agents/engine-now';
@@ -243,20 +243,20 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the room of each engine's plan (ADR 0347): the one credit rule over the usage panel's readings and the limit errors
   // the app saw (ADR 0354, agents/credit-live.ts); a change that may free a waiting chat runs its watch again
   const creditWaitRef: { current?: () => void } = {};
-  // an engine whose chats just failed to start (ADR 0357): the next start passes it over for a while
+  // an engine whose chats just failed to start (ADR 0361): the next start passes it over for a while
   const engineHealth = new EngineHealth();
   ctx.emitter.tap((ch, payload) => { if (ch === 'chat:updated') engineHealth.observe(payload as ChatSummary); });
   const credits = creditLive({ file: path.join(ctx.userData, 'credits.json'), usage: brain, changed: () => creditWaitRef.current?.(),
     threshold: engine => brain.settings().engineThresholds?.[engine] ?? null });
   const agents = createAgentCatalog(ctx, brain, engines, () => ({ ...cliCache, ...engineReadiness() }), undefined, {
-    room: (engine, model, asker) => credits.room(engine, model, asker),
+    room: (engine, model, asker, o) => credits.room(engine, model, asker, o),
     claim: (engine, model, owner) => credits.claim(engine, model, owner),
     engineTrouble: engine => engineHealth.trouble(engine),
     engineBlock: engine => openRefusal(brain.settings(), engine),
   });
   const engineNowDeps = { cardNow: agents.cardNow.bind(agents), ordered: (role: string) => agents.followsOrder(role) };
   const engineNow = (c: ChatSummary) => engineNowOf(c, engineNowDeps);
-  /** A role's start, with the user told when no engine of its level can start or every one is spent (ADR 0357): never a
+  /** A role's start, with the user told when no engine of its level can start or every one is spent (ADR 0361): never a
    *  silent refusal, nor a silent start on a spent plan. The same notice is shown once per quarter of an hour. */
   const spentTold = new Map<string, number>();
   const resolveStart: typeof agents.resolve = (req, o) => {
@@ -376,8 +376,17 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       // the user's own model for the work (recorded on the chat the Orchestrator opened with userModel) holds for the
       // chats its Strategist opens for it, when their role's levels have that model (ADR 0354 point 7); an agent never
       // passes one itself (agent_delegate has no such field)
+      // what the user said for the whole tree (ADR 0359): the model per role and the engines left out, from the request's own
+      // record (a root) and the ancestors' records at this launch (so a change made while the tree runs holds); a launch
+      // never opens an excluded engine. The tree's pick comes before an inherited userModel, so a changed record wins.
+      const own = req.routing && !req.orchestrator ? req.routing : null;
+      const up = req.parentId && !req.orchestrator ? routingFor(req.parentId, manager.list()) : null;
+      const tree = own || up ? { picks: { ...(up?.picks ?? {}), ...(own?.picks ?? {}) }, exclude: [...new Set([...(up?.exclude ?? []), ...(own?.exclude ?? [])])] } : null;
+      const treePick = tree && !req.userModel && req.roleId ? tree.picks[req.roleId] : undefined;
+      if (treePick) req = { ...req, userModel: treePick };
       req = inheritUserModel(req, manager.list(), (roleId, m) => agents.namesModel(roleId, m));
-      const resolved = resolveStart(req, { claim: true });
+      // only a pick named at the root is the user's explicit one: children inheriting it never skip a pause (ADR 0359)
+      const resolved = resolveStart(req, { claim: true, ...(tree?.exclude.length ? { exclude: tree.exclude } : {}), ...(treePick ? { freePick: true } : {}), ...(req.parentId ? { inherited: true } : {}) });
       const roleId = req.orchestrator ? 'orchestrator' : req.roleId;
       if (!roleId || (req.orchestrator && !brain.info().brainRoot)) return resolved;
       // only the brain skills this launch gives exist in its plugin
@@ -769,6 +778,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const wakeLater = new WakeLater({ file: path.join(ctx.userData, 'wake-later.json'), chats: () => manager.list(),
     send: (chatId, text) => manager.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }) });
   addChatTools([wakeLater.tool()]);
+  wake.useWakeLater(chatId => wakeLater.list().some(e => e.chatId === chatId)); // a Strategist with its own wake-up set is not stopped
   // single entry (ADR 0239): a work chat's Sì/No question goes to the user through the Orchestrator's conversation, and
   // the user's own «sì» / «no» there (PC, phone, Remote Control) answers it
   // a command a chat left, decided away from the PC (ADR 0259 §4: Telegram's Sì, a relayed «sì»): the same run as Esegui
@@ -816,7 +826,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // a role chat's route says how its active version has done so far
   const agentStats = (agentId: string, version: number) => agentStatsLine(runMetrics(manager.runs.list(), { rollups: manager.runs.rolledUp() }).find(m => m.agentId === agentId)?.versions.find(v => v.version === version));
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
-  // configuration changes not applied yet (ADR 0357): each keeps its panel until the user answers it
+  // configuration changes not applied yet (ADR 0361): each keeps its panel until the user answers it
   const pendingConfig = new PendingConfig({ file: path.join(ctx.userData, 'config-pending.json'), emit: (ch, p) => ctx.emitter.emit(ch, p),
     owner: id => manager.list().find(c => c.isOrchestrator && !c.closedAt)?.id ?? id,
     words: (id, text) => { void chats.send(id, text).catch(e => log.warn('appctl', 'the user\'s words on a held change not delivered', { chat: id, cause: errText(e), hint: 'the panel stays open' })); },
@@ -830,7 +840,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       if (!p) throw new Error(`ruolo sconosciuto: ${c.agentId ?? ''}`);
       agentPacks.learning.save(changedDraft(p, c.key, c.value), p.id, roleReason(c.reason));
     } });
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: req => resolveStart(req), creditOf: (engine, model) => credits.verdict(engine, model), creditFresh: () => credits.freshAll(), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, plans,
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: (req, o) => resolveStart(req, o), creditOf: (engine, model) => credits.verdict(engine, model), creditFresh: () => credits.freshAll(), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, plans,
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       held: pendingConfig,
@@ -922,7 +932,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const creditWait = creditWaitWatch({ chats: manager, card: (roleId, ask, o) => agents.cardNow(roleId, ask, o), claim: (on, owner) => credits.claim(on.engine, on.model, owner), release: (on, owner) => credits.release(on.engine, on.model, owner),
     levelsKey: roleId => { const p = agents.list().profiles.find(x => x.id === roleId); return p ? JSON.stringify(agents.levelsFor(p)) : ''; } });
   creditWaitRef.current = creditWait;
-  // a new order or threshold counts from the next start (ADR 0357): the role pages read it, and a waiting chat may move
+  // a new order or threshold counts from the next start (ADR 0361): the role pages read it, and a waiting chat may move
   ctx.emitter.tap((ch, payload) => { if (ch === 'settings:changed' && ['engineOrder', 'engineThresholds'].includes((payload as SettingChange).key)) agents.refresh(); });
   ctx.emitter.tap((ch, payload) => { if (ch === 'agents:changed' || (ch === 'chat:updated' && (payload as ChatSummary | undefined)?.creditWait)) creditWait(); });
   brainModelRef.current = brainModel;

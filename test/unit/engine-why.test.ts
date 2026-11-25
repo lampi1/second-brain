@@ -1,4 +1,4 @@
-// The line that says which engine a chat started on and why (renderer/lib/engine-why.ts, ADR 0357).
+// The line that says which engine a chat started on and why (renderer/lib/engine-why.ts, ADR 0361).
 import { describe, expect, it } from 'vitest';
 import { engineWhy } from '../../src/renderer/lib/engine-why';
 

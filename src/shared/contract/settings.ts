@@ -35,9 +35,9 @@ export interface Settings {
   engineOn: Partial<Record<Harness, boolean>>;
   /** engines the Orchestrators may open or resume chats on (absent = off); the user's own chats are free */
   engines: Partial<Record<Harness, boolean>>;
-  /** the one order of the engines, for every role (ADR 0357, shared/engine-order.ts); empty = each level's own list order */
+  /** the one order of the engines, for every role (ADR 0361, shared/engine-order.ts); empty = each level's own list order */
   engineOrder?: Harness[];
-  /** % of an engine's plan past which the next engine of the order starts (ADR 0357); an engine absent has none */
+  /** % of an engine's plan past which the next engine of the order starts (ADR 0361); an engine absent has none */
   engineThresholds?: Partial<Record<Harness, number>>;
   budget: BudgetSettings;
   /** context size (tokens) above which a chat's meter turns amber when its engine reports no compaction window (Cursor);

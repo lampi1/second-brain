@@ -37,7 +37,7 @@ export interface CreditWait {
   model: string | null;
   /** the level's model it stopped on, «engine:model» */
   card?: string;
-  /** start = its engine did not start (ADR 0357) and it never worked; absent = its credits ended */
+  /** start = its engine did not start (ADR 0361) and it never worked; absent = its credits ended */
   why?: 'start';
   /** start: its whole first message, sent as it is where it goes on */
   prompt?: string;
@@ -147,11 +147,15 @@ export interface ChatSummary {
   /** the model the user named for this work (app_create_chat userModel, ADR 0296), recorded: the chats its Strategist
    *  opens for the same work use it too, when it is on their role's levels (ADR 0354 point 7); never set by an agent */
   userModel?: UserModelPick;
+  /** what the user said about engines and models for the whole work tree under this chat (ADR 0359): the model per role
+   *  and the engines left out; children at any depth read the nearest ancestors' record at each launch, so a change holds
+   *  while the tree runs. Set only by the Orchestrator (app_create_chat routing, app_set_routing); never by a worker */
+  routing?: WorkRouting;
   /** how its model was picked at the start (ADR 0354): the models of the level passed over, each with why */
   pick?: { at: number; chosen: string; skipped: SkipNote[]; allOut?: true };
   /** the last automatic move of this chat out of a spent plan (ADR 0354): the chat and the recap say it */
   creditMoved?: { at: number; from: string; to: string; level: string; why: string };
-  /** it works in a worktree made for it (asked: place copy, ADR 0358); absent = in the folder itself */
+  /** it works in a worktree made for it (asked: place copy, ADR 0362); absent = in the folder itself */
   place?: 'copy';
   /** what whoever opened it must know of its folder (uncommitted changes, another chat writing there), said once */
   folderNotes?: string[];
@@ -161,6 +165,8 @@ export interface ChatSummary {
   closedAt?: number;
   /** why it was closed: auto = finished and left alone (auto-close), user = closed by hand */
   closedBy?: 'auto' | 'user';
+  /** the user's ✕ cut open work short (ADR 0357): an assignment, a turn, requests, a queued start; app_chats and app_digest say it */
+  closedWith?: string;
   /** its turn was cut by an app restart and the app resumed it by itself at this time ("ripresa dopo il riavvio";
    *  cleared by the user's next message) */
   resumedAt?: number;
@@ -389,6 +395,9 @@ export interface RunDismissed { same?: { runId: string; state: RunInfo['state'];
 
 /** A model the user asked for one run by name (app_create_chat `userModel`, ADR 0296): one of the role card's presets. */
 export interface UserModelPick { engine: Harness; model: string; effort?: Effort }
+/** The user's own choice for a work tree (ADR 0359): the engine and model per role (workers never choose) and the
+ *  engines no chat of the tree may use or be moved to. */
+export interface WorkRouting { picks?: Record<string, UserModelPick>; exclude?: Harness[] }
 export interface NewChat {
   deliveryPolicy?: TaskDeliveryPolicy;
   doneWhen?: string[];
@@ -415,7 +424,7 @@ export interface NewChat {
   delegator?: Delegator;
   harness: Harness;
   cwd: string;
-  /** here (the default) = works in `cwd` itself; copy = a new isolated worktree of its repository, only when asked (ADR 0358) */
+  /** here (the default) = works in `cwd` itself; copy = a new isolated worktree of its repository, only when asked (ADR 0362) */
   place?: 'here' | 'copy';
   prompt?: string;
   title?: string;
@@ -436,6 +445,8 @@ export interface NewChat {
   /** the model the user named for this one run (ADR 0296): engine, model and effort for this chat only, one of the role
    *  card's presets; the card keeps its own. Wins over `preset`; the engine must be on and able to pick a model. */
   userModel?: UserModelPick;
+  /** the user's engine/model per role and excluded engines for the whole tree (ADR 0359); only the Orchestrator passes it */
+  routing?: WorkRouting;
   /** run tags (AGENTS-DESIGN §4.8): the skill ids the chat starts with (`^[a-z0-9][a-z0-9_-]{0,79}$`, at most 16) */
   skills?: string[];
   /** run tags: the product the work is about, up to 40 characters */
@@ -496,7 +507,7 @@ export interface ChatsInvokeMap {
   /** keepQueued: "Invia subito" stops only the turn; messages the engine already holds still run after it */
   'chat:stop': [{ chatId: string; keepQueued?: boolean }, void];
   'chat:stopAll': [void, number];
-  'chat:close': [{ chatId: string }, void];
+  'chat:close': [{ chatId: string; /** the ✕'s final close (ADR 0357): the chat stays among the closed; absent = removed for good */ keep?: boolean }, void];
   /** archive a finished chat (its process ends, its browser tabs close, the env sign-in stays); reopen brings it back */
   /** undoable: the user's ✕ with «Annulla» (#168): the run ends when the close is final */
   'chat:archive': [{ chatId: string; auto?: boolean; undoable?: boolean }, ChatSummary];
@@ -514,7 +525,7 @@ export interface ChatsInvokeMap {
   'chat:handoffRead': [{ chatId: string; session?: string }, HandoffInfo | null];
   /** "Riprendi": a NEW chat, same engine, folder and choices, that starts from the hand-off (written first if missing or
    *  older than the last turn); the old chat's process ends, it stays readable and linked (continuedBy) */
-  /** `cwd`: another folder than the chat's own (ADR 0358); absent = the last one it used */
+  /** `cwd`: another folder than the chat's own (ADR 0362); absent = the last one it used */
   'chat:continue': [{ chatId: string; cwd?: string }, ChatSummary];
   /** ADR 0103: the files back as they were before the chat's last turn (its checkpoint); counts of restored and removed files */
   'chat:undoTurn': [{ chatId: string }, { restored: number; removed: number }];

@@ -56,7 +56,7 @@ export interface CreditWaitDeps {
     creditFailed(chatId: string, f: { card: string; error: string; permanent: boolean; nextAt: number | null; last: boolean }): void;
   };
   /** catalog.cardNow: the level's pick for this chat now (holds the level); throws when no model of it can start */
-  card(roleId: string, ask: PresetAsk, o: { asker: string; skip: readonly string[] }): CardNow;
+  card(roleId: string, ask: PresetAsk, o: { asker: string; skip: readonly string[]; exclude?: readonly Harness[] }): CardNow;
   /** the move runs now on this model: if its pool is on probation, this chat is its one try (credit-live.ts claim) */
   claim?(on: CardNow, owner: string): void;
   /** the move did not run after all: the claim goes */
@@ -99,9 +99,12 @@ export function creditMove(c: ChatSummary, chatOf: (id: string) => ChatSummary |
   const run = c.run?.presetChoice, preset: PresetId = run?.preset ?? 'base';
   const now = (d.now ?? Date.now)();
   const skip = (w.failed ?? []).filter(f => f.permanent).map(f => f.card);
+  // the engines the user left out for this work tree (ADR 0359): the chat never moves onto one
+  const exclude: Harness[] = [];
+  { const seen = new Set<string>(); for (let x: ChatSummary | undefined = c; x && !seen.has(x.id); x = x.parentId ? chatOf(x.parentId) : undefined) { seen.add(x.id); for (const e of x.routing?.exclude ?? []) if (!exclude.includes(e)) exclude.push(e); } }
   let card: CardNow;
   try {
-    card = d.card(role, preset === 'base' ? {} : { preset, presetWhy: run?.presetWhy ?? 'the level the chat runs on' }, { asker: c.id, skip });
+    card = d.card(role, preset === 'base' ? {} : { preset, presetWhy: run?.presetWhy ?? 'the level the chat runs on' }, { asker: c.id, skip, ...(exclude.length ? { exclude } : {}) });
   } catch { return null; } // no model of the level can start (all engines off): the Agenti page says what is wrong
   const key = creditCardKey(card);
   const from = w.card ?? creditCardKey({ engine: c.harness, model: w.model });

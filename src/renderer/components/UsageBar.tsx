@@ -76,11 +76,12 @@ export function cursorText(u: Usage | null, long = false): string {
 /** Pick the primary weekly/plan window for a harness's pinned top-bar indicator. */
 export function primaryWeeklyWindow(h: HarnessUsage | undefined): HarnessUsageWindow | null {
   if (!h || h.status !== 'ok' || !h.windows.length) return null;
-  return h.windows.find(w => w.kind === 'weekly' && !w.model)
-    ?? h.windows.find(w => w.kind === 'plan' && !w.model)
-    ?? h.windows.find(w => w.kind === 'weekly')
+  const own = h.windows.filter(w => w.scope !== '3p'); // the pin never shows Antigravity's Claude/GPT pool
+  return own.find(w => w.kind === 'weekly' && !w.model)
+    ?? own.find(w => w.kind === 'plan' && !w.model)
+    ?? own.find(w => w.kind === 'weekly')
     // never a 5 h or daily window: the pin promises the weekly/plan limit
-    ?? h.windows.find(w => w.kind !== 'five-hour' && w.kind !== 'daily')
+    ?? own.find(w => w.kind !== 'five-hour' && w.kind !== 'daily')
     ?? null;
 }
 

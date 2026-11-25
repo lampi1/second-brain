@@ -34,7 +34,7 @@ export interface StartDeps {
 }
 
 export const strategistStarter = (d: StartDeps) => async (m: Plan, change: string | undefined, by: string, asked?: string): Promise<ChatSummary> => {
-  // the folder the user (or the Orchestrator) named, else the last one it used (ADR 0358)
+  // the folder the user (or the Orchestrator) named, else the last one it used (ADR 0362)
   const cwd = asked?.trim() || d.folderOf(m);
   if (!cwd) throw new Error('Non so in quale cartella lavorare: scegli prima la cartella del cervello.');
   const prompt = startPrompt(m, change);

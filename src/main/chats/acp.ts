@@ -343,6 +343,13 @@ export function acpWhole(tc: Record<string, unknown>, earlier: unknown): Record<
   const raw = own ?? (earlier && typeof earlier === 'object' && !Array.isArray(earlier) && Object.keys(earlier).length ? earlier as Record<string, unknown> : undefined);
   return raw ? { ...raw, ...(tc.locations !== undefined ? { locations: tc.locations } : {}) } : undefined;
 }
+/** Antigravity's Shell fields, as read by the app's permission checks. */
+function antigravityShellInput(value: unknown): Obj {
+  const { CommandLine, Cwd, ...input } = o(value);
+  if (CommandLine !== undefined) input.command = s(CommandLine);
+  if (typeof Cwd === 'string') input.cwd = Cwd;
+  return input;
+}
 /** A folder's long, real path (fs.realpathSync.native: Windows 8.3 short names expanded, junctions followed); the path
  *  as given when it cannot be resolved (a missing folder is reported by start). */
 export function longPath(p: string): string {
@@ -460,8 +467,8 @@ export function contentLines(text: string): string[] {
 /** Title and detail of a permission panel from what the engine sent (display only: the gates read the input). OpenCode
  *  sends kind "other", its permission name as title and an often empty rawInput for MCP tools, skills and outside
  *  folders; the tool_call that came first with the same id carries the real arguments, so both are shown. */
-export function permissionView(tc: Obj, known: { name?: string; summary?: string; input?: unknown } | undefined, kindName: string): { title: string; detail: string } {
-  const raw = o(tc.rawInput), prior = o(known?.input);
+export function permissionView(tc: Obj, known: { name?: string; summary?: string; input?: unknown } | undefined, kindName: string, asInput = o): { title: string; detail: string } {
+  const raw = asInput(tc.rawInput), prior = asInput(known?.input);
   const args: Obj = { ...prior, ...raw };
   const title = stripAnsi(s(tc.title)).trim();
   const bare = kindName === 'Tool' && /^[\w.:-]+$/.test(title);
@@ -692,11 +699,15 @@ export class AcpSession implements HarnessSession {
     let t = this.spawnedAt;
     const step = (k: string) => { const now = Date.now(); lap[k] = now - t; t = now; };
     try {
-      const init = await this.request('initialize', {
+      const initParams = {
         protocolVersion: 1,
         clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false, _meta: { parameterizedModelPicker: true } },
         clientInfo: { name: 'second-brain', version: this.opts.appVersion ?? '0' },
-      }, 60000);
+      };
+      // a loaded PC can keep an engine's first answer past a minute (OpenCode, 2026-11-25: fine on a second start): the
+      // same request waits up to two, with a line in the log after the first
+      const slow = setTimeout(() => log.warn('chats', 'acp initialize unanswered after 60 s: still waiting', { chat: this.opts.chatId, hint: 'a slow start on a loaded PC; the start fails at 120 s', data: { engine: this.engine } }), 60000);
+      const init = await this.request('initialize', initParams, 120000).finally(() => clearTimeout(slow));
       this.caps = o(init.agentCapabilities);
       const v = s(o(init.agentInfo).version);
       if (v && !this.cliVersion) this.cliVersion = v; // Cursor: its version folder, the name doctor checks
@@ -1469,7 +1480,9 @@ export class AcpSession implements HarnessSession {
         log.info('chats', 'acp native tool refused in code mode', { chat: this.opts.chatId, data: { engine: this.engine, tool: kindName } });
         return this.respond(id, { outcome: { outcome: 'selected', optionId: reject.optionId } });
       }
-      const view = permissionView(tc, known, kindName);
+      const asInput = this.engine === 'antigravity' && kindName === 'Shell' ? antigravityShellInput : o;
+      const view = permissionView(tc, known, kindName, asInput);
+      const whole = acpWhole(tc, this.wholeInputs.get(s(tc.toolCallId)));
       this.asks.set(rid, { rpcId: id, method, options });
       this.pending({
         id: rid, type: 'permission', tool: kindName, title: view.title, detail: view.detail,
@@ -1477,10 +1490,10 @@ export class AcpSession implements HarnessSession {
         // An earlier tool update may have no rawInput (stored as {}): its empty input must not hide
         // the permission's locations from the path/role gates. Keep all locations even with raw input.
         // an empty rawInput (OpenCode's shape) falls back to the earlier tool call's input: the rules must read the arguments
-        input: trimInput({ ...o(tc.rawInput && Object.keys(o(tc.rawInput)).length ? tc.rawInput : known?.input ?? tc.rawInput ?? tc), ...(tc.locations !== undefined ? { locations: tc.locations } : {}) }), at, noAlways: true,
+        input: trimInput({ ...asInput(tc.rawInput && Object.keys(o(tc.rawInput)).length ? tc.rawInput : known?.input ?? tc.rawInput ?? tc), ...(tc.locations !== undefined ? { locations: tc.locations } : {}) }), at, noAlways: true,
         // the whole input beside the copy shortened for the screen: the request's own, or the earlier tool call's kept
         // whole (OpenCode's request comes with an empty rawInput). The app's own answer reads what will run (ADR 0294)
-      }, acpWhole(tc, this.wholeInputs.get(s(tc.toolCallId))));
+      }, whole && asInput(whole));
       return;
     }
     if (method === 'cursor/ask_question') {

@@ -48,6 +48,7 @@ export abstract class ManagerPersistence extends ManagerCore {
     delete r.userClosing;
     delete r.s.closedAt;
     delete r.s.closedBy;
+    delete r.s.closedWith;
     this.persist();
     log.info('chats', 'chat reopened', { chat: r.s.id });
     this.updated(r);
@@ -239,7 +240,7 @@ export abstract class ManagerPersistence extends ManagerCore {
         ...(c.parentId ? { parentId: c.parentId } : {}),
         ...(c.delegation ? { delegation: c.delegation } : {}),
         ...(c.plan ? { plan: c.plan } : {}), ...(c.questions?.length ? { questions: c.questions } : {}),
-        ...(c.waitsOn ? { waitsOn: c.waitsOn } : {}), ...(c.waitsOnWork ? { waitsOnWork: true } : {}), ...(c.creditWait ? { creditWait: c.creditWait } : {}), ...(c.creditMoved ? { creditMoved: c.creditMoved } : {}), ...(c.userModel ? { userModel: c.userModel } : {}), ...(c.pick ? { pick: c.pick } : {}),
+        ...(c.waitsOn ? { waitsOn: c.waitsOn } : {}), ...(c.waitsOnWork ? { waitsOnWork: true } : {}), ...(c.creditWait ? { creditWait: c.creditWait } : {}), ...(c.creditMoved ? { creditMoved: c.creditMoved } : {}), ...(c.userModel ? { userModel: c.userModel } : {}), ...(c.routing ? { routing: c.routing } : {}), ...(c.pick ? { pick: c.pick } : {}),
         ...(c.remoteControl ? { remoteControl: pausedState(c.remoteControl)! } : {}),
         ...(c.agentAssets && c.agentSkills?.length ? { loadedSkills: [...c.agentSkills] } : {}),
       },
@@ -322,7 +323,7 @@ export abstract class ManagerPersistence extends ManagerCore {
       ...(r.s.closedAt ? { closedAt: r.s.closedAt, closedBy: r.s.closedBy ?? 'auto' } : {}),
       ...(r.working ? { working: true as const } : {}),
       ...storedResult(r.s.lastResult ?? r.savedResult),
-      ...(r.s.waitsOn ? { waitsOn: r.s.waitsOn } : {}), ...(r.s.waitsOnWork ? { waitsOnWork: true as const } : {}), ...(r.s.creditWait ? { creditWait: r.s.creditWait } : {}), ...(r.s.creditMoved ? { creditMoved: r.s.creditMoved } : {}), ...(r.s.userModel ? { userModel: r.s.userModel } : {}), ...(r.s.pick ? { pick: r.s.pick } : {}),
+      ...(r.s.waitsOn ? { waitsOn: r.s.waitsOn } : {}), ...(r.s.waitsOnWork ? { waitsOnWork: true as const } : {}), ...(r.s.creditWait ? { creditWait: r.s.creditWait } : {}), ...(r.s.creditMoved ? { creditMoved: r.s.creditMoved } : {}), ...(r.s.userModel ? { userModel: r.s.userModel } : {}), ...(r.s.routing ? { routing: r.s.routing } : {}), ...(r.s.pick ? { pick: r.s.pick } : {}),
       ...(r.unfinished ? { unfinished: true as const } : {}),
       ...(r.userTaskEvents ? { userTaskEvents: r.userTaskEvents } : {}),
       ...(r.heldResult ? { heldResult: r.heldResult } : {}),
