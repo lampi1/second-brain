@@ -66,11 +66,13 @@ function pieces(raw: string, shell: CommandShell): Piece[] | null {
 }
 
 /** The words of a piece, quotes removed (a quoted stretch stays in its word). null: quotes it cannot read. */
-function words(text: string): { word: string; quoted: boolean }[] | null {
+function words(text: string, shell: CommandShell): { word: string; quoted: boolean }[] | null {
   const out: { word: string; quoted: boolean }[] = [];
   const re = /(?:"[^"]*"|'[^']*'|[^\s"'])+/g;
-  // the word as the shell looks it up: every quote and backslash gone (`ca""t` and `ca\t` are `cat`)
-  for (const m of text.matchAll(re)) out.push({ word: m[0].replace(/"([^"]*)"|'([^']*)'/g, '$1$2').replace(/\\/g, ''), quoted: /["'\\]/.test(m[0]) });
+  // the word as the shell looks it up: every quote gone, and under bash every backslash (`ca""t` and `ca\t` are `cat`);
+  // PowerShell and cmd keep a backslash, their folder separator
+  const esc = shell === 'bash';
+  for (const m of text.matchAll(re)) out.push({ word: m[0].replace(/"([^"]*)"|'([^']*)'/g, '$1$2').replace(esc ? /\\/g : /(?!)/g, ''), quoted: /["']/.test(m[0]) || (esc && m[0].includes('\\')) });
   return out;
 }
 
@@ -109,7 +111,7 @@ function expand(list: Piece[], shell: CommandShell, fns: Map<string, Fn>, depth:
       // for NAME in v1 v2 …; do …; done
       const loop = /^for\s+([A-Za-z_]\w*)\s+in\s+([\s\S]*)$/.exec(p.text);
       if (loop) {
-        const name = loop[1]!, vals = words(loop[2]!);
+        const name = loop[1]!, vals = words(loop[2]!, shell);
         if (!LOOP_NAME.test(name)) return null;
         if (!vals || !vals.length || vals.length > MAX_VALUES || vals.some(v => !PLAIN_VALUE.test(v.word))) return null;
         const body: Piece[] = [];
@@ -154,7 +156,7 @@ function expand(list: Piece[], shell: CommandShell, fns: Map<string, Fn>, depth:
     }
     // a whole line of comment runs nothing (cmd has no such comment)
     if (shell && p.text.startsWith('#')) continue;
-    const w = words(p.text);
+    const w = words(p.text, shell);
     if (!w || !w.length) return null;
     const head = w[0]!;
     const fn = !head.quoted ? fns.get(head.word) : undefined;

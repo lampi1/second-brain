@@ -16,6 +16,9 @@ describe('commandSteps', () => {
     expect(commandSteps('cd src && ls 2>/dev/null; git status 2>&1', 'bash')).toEqual([{ cd: 'src', certain: true }, { text: 'ls' }, { text: 'git status' }]);
     expect(commandSteps('Get-ChildItem 2>$null; Get-Content a.txt', 'powershell')).toEqual([{ text: 'Get-ChildItem' }, { text: 'Get-Content a.txt' }]);
     expect(commandSteps('# look first\nls', 'bash')).toEqual([{ text: 'ls' }]);
+    // a backslash is PowerShell's folder separator, bash's escape
+    expect(commandSteps('cd C:\\brain && ls', 'powershell')).toEqual([{ cd: 'C:\\brain', certain: true }, { text: 'ls' }]);
+    expect(commandSteps('cd a\\b && ls', 'bash')).toEqual([{ cd: 'ab', certain: true }, { text: 'ls' }]);
   });
   it('gives up on what it cannot follow', () => {
     for (const line of [
@@ -71,15 +74,17 @@ describe('readOnlyCommand reads lines, not only single commands (#485)', () => {
       const script = path.join(brain, 'tools', 'read.mjs');
       fs.writeFileSync(script, '');
       const scripts = { cwd: os.tmpdir(), paths: [script] };
-      expect(readOnlyCommand(`cd ${brain} && node tools/read.mjs a`, scripts, 'bash')).toBe(true);
-      expect(readOnlyCommand(`node ${script} a`, { ...scripts, cwd: '' }, 'bash')).toBe(true);
-      expect(readOnlyCommand(`cd ${brain}; node tools/read.mjs`, scripts, 'bash')).toBe(false);
-      expect(readOnlyCommand(`cd ${brain}; node ${script}`, scripts, 'bash')).toBe(true);
+      // bash reads a backslash as an escape: the forward-slash spelling Git Bash takes on Windows too
+      const b = brain.replace(/\\/g, '/'), s = script.replace(/\\/g, '/');
+      expect(readOnlyCommand(`cd ${b} && node tools/read.mjs a`, scripts, 'bash')).toBe(true);
+      expect(readOnlyCommand(`node ${s} a`, { ...scripts, cwd: '' }, 'bash')).toBe(true);
+      expect(readOnlyCommand(`cd ${b}; node tools/read.mjs`, scripts, 'bash')).toBe(false);
+      expect(readOnlyCommand(`cd ${b}; node ${s}`, scripts, 'bash')).toBe(true);
       expect(readOnlyCommand('cd tools && node read.mjs', { ...scripts, cwd: brain }, 'bash')).toBe(false);   // CDPATH could send it elsewhere
       expect(readOnlyCommand('cd ./tools && node read.mjs', { ...scripts, cwd: brain }, 'bash')).toBe(true);
       // `ls || cd x && node …`: node runs where it was when ls worked
-      expect(readOnlyCommand(`ls || cd ${brain} && node tools/read.mjs`, scripts, 'bash')).toBe(false);
-      expect(readOnlyCommand(`ls && cd ${brain} && node tools/read.mjs`, scripts, 'bash')).toBe(true);
+      expect(readOnlyCommand(`ls || cd ${b} && node tools/read.mjs`, scripts, 'bash')).toBe(false);
+      expect(readOnlyCommand(`ls && cd ${b} && node tools/read.mjs`, scripts, 'bash')).toBe(true);
       expect(readOnlyCommand('# a comment, it\'s fine\nls', undefined, 'bash')).toBe(true);
       expect(shellWithin({ tools: { allow: ['read', 'shell-read'] }, ceiling: null }, 'Bash', { command: 'for b in a b; do git log $b; done' })).toBe(true);
     } finally { fs.rmSync(brain, { recursive: true, force: true }); }
