@@ -1,5 +1,6 @@
 // The shapes behind ChatManager (manager.ts): its options, the per-chat record (Rec) and the small records its layers
 // pass around. Split out of manager.ts (ADR 0200); only the chat manager's files import Rec.
+import type { TaskAssignmentOptions } from '../../shared/delegation';
 import type { OptionMap } from '../../shared/yes-no';
 import type { ChatCommand, ChatItem, ChatSummary, CursorReasoning, Effort, HandoffInfo, Harness, Lang, NewChat, PendingRequest, PermissionMode, RunInfo, SeenModel } from '../../shared/contract';
 import type { Emitter } from '../ipc';
@@ -128,7 +129,13 @@ export interface ChatManagerOptions {
   /** Idle-only budget-based engine freshness; does not infer quality degradation. Default off. */
   freshSessions?: () => boolean;
   /** Host-owned preparation sees the final narrowed policy before any delegated engine can start. */
-  prepareDelegation?: (parent: ChatSummary, req: NewChat, policy: AgentPolicy | null, continuationOf?: string) => Promise<{ cwd: string; parentRunId: string | undefined; parentTaskVersion: number | undefined; bind?: (childId: string) => void }>;
+  prepareDelegation?: (parent: ChatSummary, req: NewChat, policy: AgentPolicy | null, continuationOf?: string) => Promise<{ cwd: string; parentRunId: string | undefined; parentTaskVersion: number | undefined; notes?: string[]; isolated?: boolean; bind?: (childId: string) => void }>;
+  /** a role chat's engine did not start (ADR 0352): whether its role's card now gives another engine (the engine is marked
+   *  in trouble first); then the chat waits and moves there by itself, as for its credits */
+  startFailed?: (chat: ChatSummary) => boolean;
+  /** «Riprendi» and reuse follow the engines as they are now (ADR 0352): the engine and model the chat's role starts on,
+   *  null = the one it has. Throws when nothing may start (every plan spent) */
+  engineNow?: (chat: ChatSummary) => { harness: Harness; model: string | null; effort: Effort | null; route?: string } | null;
   /** A delegated child was made in `cwd`: the folder where the next child of the same repository will work (the
    *  worktree pool's next free slot, ADR 0227), so its warm engine waits there; null = `cwd` itself */
   nextDelegationCwd?: (cwd: string) => string | null;
@@ -438,3 +445,13 @@ export interface ColdStep {
 export interface CleanReportNote { chatId: string; title: string; role: string; summary: string; at: number }
 /** One message the user typed in a work chat (userWrote): what the Orchestrator and the parent learn. */
 export interface UserWroteNote { eventId: string; seq: number; chatId: string; title: string; role: string | null; parentId: string | null; parentTitle: string | null; at: number; text: string }
+
+/** «Riprendi» and the linked chats (manager-continuity.ts continueChat). allowStart false: the old engine is not started
+ *  for its note; ask false: the app writes the note; on: the engine and model it goes on with (ADR 0346, 0352); cwd and
+ *  place: its folder and how (ADR 0353; absent = the last folder); task: a new assignment for the linked chat */
+export interface ContinueOptions {
+  allowStart?: boolean; promptPrefix?: string; ask?: false;
+  on?: { harness: Harness; model: string | null; effort: Effort | null; route?: string };
+  cwd?: string; place?: 'here' | 'copy';
+  task?: { prompt: string; options: TaskAssignmentOptions };
+}

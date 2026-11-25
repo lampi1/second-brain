@@ -363,10 +363,10 @@ describe('agent_delegate', () => {
     await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Cerca', { tools: ['shell-read'] })] })).rejects.toThrow(/shell-read goes beyond your own permissions/);
     // a folder that does not exist is refused, by the tool and again by the manager (the check that counts)
     const missing = path.join(os.tmpdir(), 'sb-no-such-folder-460');
-    await expect(f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Fuori'), cwd: missing }] })).rejects.toThrow(/not an existing absolute folder.*any repository your plan touches/);
+    await expect(f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Fuori'), cwd: missing }] })).rejects.toThrow(/Cartella non valida: .*non esiste/);
     await expect(f.m.create({ harness: 'claude', cwd: missing, roleId: 'scout', parentId: parent.id }, 'agent')).rejects.toThrow(/non esiste/);
     // the schema says where a child may work before any refusal (#186, #460)
-    expect(JSON.stringify(f.tool('agent_delegate').inputSchema)).toMatch(/any other existing folder, also of another repository/);
+    expect(JSON.stringify(f.tool('agent_delegate').inputSchema)).toMatch(/any other existing one/);
     // a planner narrowed to ADR 0083's launches never launches a writing role: the work goes in its report
     await expect(f.call('agent_delegate', parent.id, { tasks: [f.task('artisan', 'Fix')] })).rejects.toThrow(/may not launch Artisan.*your parent launches it/);
     const ok = await f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Leggi'), cwd: sub }] });

@@ -31,6 +31,7 @@ import type { Workflows } from './workflows/service';
 import type { McpServersService } from './mcp-servers/service';
 import type { CommandRunner } from './run/runner';
 import type { CommandAsks } from './run/asks';
+import type { PendingConfig } from './appctl/pending-config';
 import type { OrchestratorWake } from './chats/orchestrator-wake';
 import type { HeldNewsHub } from './chats/held-news';
 import type { AppSourceService } from './update/source';
@@ -109,6 +110,10 @@ export interface Wired {
   runner: CommandRunner;
   /** shell blocks a chat left for the user, as open requests ("Comando da eseguire", run/asks.ts) */
   asks: CommandAsks;
+  /** configuration changes the app holds for the user (ADR 0352) */
+  pendingConfig?: PendingConfig;
+  /** the words of the last brief a chat put on its question (genui/artifacts.ts) */
+  briefText?: (chatId: string) => string;
   /** "Eventi all'Orchestrator": work chats' news wakes the Orchestrator (chats/orchestrator-wake.ts) */
   wake: OrchestratorWake;
   /** "N novità in attesa" (#88): what the delivery rule holds back for the Orchestrators (chats/held-news.ts) */

@@ -179,7 +179,7 @@ export function attachWorkMaps(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Ch
   const maps = new WorkMaps({ store: new WorkMapStore(path.join(ctx.userData, 'work-maps')), chats, emit: id => ctx.emitter.emit('workmap:changed', { id }),
     projectsOf: c => projectMaps.projectsOf(c), projectNamed: name => projectMaps.resolve(name),
     startStrategist: strategistStarter({ chats, harness: () => brain.settings().orchestratorChats.harness,
-      folderOf: m => [m.project, ...m.touches].map(folderOf).find(f => f && fs.existsSync(f)) ?? orchestrator()?.cwd ?? brain.info().brainRoot }), ...(now ? { now } : {}) });
+      folderOf: m => [m.owner?.chatId, ...(m.past ?? []).slice().reverse()].map(id => id && chats.list().find(c => c.id === id)?.cwd).find(f => f && fs.existsSync(f)) || [m.project, ...m.touches].map(folderOf).find(f => f && fs.existsSync(f)) ?? orchestrator()?.cwd ?? brain.info().brainRoot }), ...(now ? { now } : {}) });
   const send = ctx.emitter.emit.bind(ctx.emitter);
   ctx.emitter.emit = (ch, p) => { send(ch, p); maps.observe(ch, p); };
   projectMaps.jobsOf = project => maps.touching(project);
@@ -273,7 +273,7 @@ function templateRegistry(): ModelRegistry | null {
 
 /** Shared by real and demo wiring. */
 export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: EnginesApi, cli: () => Record<Harness, CliStatus> | null, onCustomized?: () => void,
-  route: Pick<AgentCatalogDeps, 'room' | 'engineBlock'> = {}): AgentCatalogService {
+  route: Pick<AgentCatalogDeps, 'room' | 'engineBlock' | 'engineTrouble'> = {}): AgentCatalogService {
   return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}), ...route,
     price: unitPriceOf(tokenPriceOf(() => brain.modelRegistry())),
     tierModel: (engine, tier) => tierModel(engine, tier, brain.modelRegistry()),
@@ -286,6 +286,7 @@ export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: Engin
         modelReason: e.kind === 'acp' && !engineOf(e.id)?.modelFlag && !engineOf(e.id)?.modelOption ? 'Questo adattatore non può applicare una scelta di modello. È disponibile il default CLI.' : null,
         codeMode: codeModeLevel(e.kind) }));
     },
+    engineOrder: () => brain.settings().engineOrder ?? [],
     preferredEngine: () => brain.settings().orchestratorChats.harness ?? null,
     emit: catalog => ctx.emitter.emit('agents:changed', catalog),
   });

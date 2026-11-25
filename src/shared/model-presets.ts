@@ -107,12 +107,17 @@ export interface PresetChoice {
 }
 
 /** The preset part of a run's record (AgentRun.presetChoice): what ran and what decided it, no model (the run has it). */
-export interface RunPresetChoice { preset: PresetId; effort?: Effort; asked?: PresetId; presetWhy?: string; taskKind?: string; delegatorRole?: string }
+export interface RunPresetChoice { preset: PresetId; effort?: Effort; asked?: PresetId; presetWhy?: string; taskKind?: string; delegatorRole?: string;
+  /** which engine it started on and why, one line (ADR 0352: «OpenAI Sol: primo disponibile») */
+  route?: string }
+export const ROUTE_MAX = 400;
+/** How a route ends when the user named the model for that work: «Riprendi» and reuse keep it. */
+export const USER_ASKED = 'chiesto da te per questo lavoro';
 
 /** A choice as the run keeps it. */
 export function runPresetOf(c: PresetChoice): RunPresetChoice {
   return { preset: c.preset, ...(c.effort ? { effort: c.effort } : {}), ...(c.asked ? { asked: c.asked } : {}), ...(c.presetWhy ? { presetWhy: c.presetWhy } : {}),
-    ...(c.taskKind ? { taskKind: c.taskKind } : {}), ...(c.delegatorRole ? { delegatorRole: c.delegatorRole } : {}) };
+    ...(c.taskKind ? { taskKind: c.taskKind } : {}), ...(c.delegatorRole ? { delegatorRole: c.delegatorRole } : {}), ...(c.route ? { route: c.route.slice(0, ROUTE_MAX) } : {}) };
 }
 
 const shortText = (v: unknown, max: number): v is string => typeof v === 'string' && v.length > 0 && v.length <= max && !/[\r\n]/.test(v);
@@ -122,7 +127,7 @@ export function readRunPreset(v: unknown): RunPresetChoice | undefined {
   const r = v as Record<string, unknown>;
   if (!isPresetId(r.preset) || (r.asked !== undefined && !isPresetId(r.asked)) || (r.effort !== undefined && !EFFORT_IDS.includes(r.effort as Effort))
     || (r.presetWhy !== undefined && !shortText(r.presetWhy, PRESET_WHY_MAX)) || (r.taskKind !== undefined && !shortText(r.taskKind, TASK_KIND_MAX))
-    || (r.delegatorRole !== undefined && !shortText(r.delegatorRole, 40))) return undefined;
+    || (r.delegatorRole !== undefined && !shortText(r.delegatorRole, 40)) || (r.route !== undefined && !shortText(r.route, ROUTE_MAX))) return undefined;
   return runPresetOf({ ...(r as unknown as RunPresetChoice), model: null, warnings: [] });
 }
 

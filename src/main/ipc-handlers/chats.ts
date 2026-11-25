@@ -20,7 +20,7 @@ export function chatsHandlers({ s, activity, orchestrator, clip }: HandlerContex
     'run:touch': a => touchRunOf(s.chats, a),
     'chat:list': () => s.chats.list(),
     'chat:items': a => chatItemsReply(s.chats.items(a.chatId), a),
-    'chat:pending': () => [...s.chats.pending(), ...s.asks.pending()].sort((a, b) => a.at - b.at),
+    'chat:pending': () => [...s.chats.pending(), ...s.asks.pending(), ...(s.pendingConfig?.pending() ?? [])].sort((a, b) => a.at - b.at),
     // the delegating agent's model pick is main's own: never taken from the renderer
     'chat:create': a => { const { userModel: _u, ...req } = a; void _u; return s.chats.create(req); },
     // "Nuova chat" and a new Orchestrator: main picks the engine, model and effort from the user's defaults (ADR 0032, 0210)
@@ -38,10 +38,13 @@ export function chatsHandlers({ s, activity, orchestrator, clip }: HandlerContex
     'chat:synthesize': a => { if (!s.chats.synthesizeResult) throw new Error('Result synthesis unavailable.'); return s.chats.synthesizeResult(a.runId, { kind: 'user' }); },
     'chat:answer': async a => {
       activity.answered(a.chatId, a.requestId);
+      // a configuration change the app holds (ADR 0352): its panel is the app's, answered here
+      if (s.pendingConfig?.owns(a.requestId)) { s.pendingConfig.answer(a.requestId, a.answer); return; }
       const req = s.chats.pending().find(r => r.chatId === a.chatId && r.id === a.requestId);
+      const about = req ? [req.title, req.detail, ...(req.questions ?? []).flatMap(q => [q.question, ...q.options.map(o => o.description ?? '')]), s.briefText?.(a.chatId) ?? ''].join('\n') : '';
       try { await s.chats.answer(a.chatId, a.requestId, a.answer); } catch (e) { activity.notAnswered(a.chatId, a.requestId); throw e; }
       // the user's own «Sì» to an Orchestrator's native Sì/No question: app_config takes it as their ask (appctl/user-words.ts)
-      if (saysYes(req, a.answer) && s.chats.list().some(c => c.id === a.chatId && c.isOrchestrator)) noteUserAnswered(a.chatId);
+      if (saysYes(req, a.answer) && s.chats.list().some(c => c.id === a.chatId && c.isOrchestrator)) noteUserAnswered(a.chatId, Date.now(), about);
     },
     'chat:plan': a => s.chats.planDecide(a.chatId, a.decision, a.at, a.text),
     'chat:stop': a => { activity.stopped(a.chatId); return s.chats.stop(a.chatId, a.keepQueued === true); },
@@ -59,7 +62,7 @@ export function chatsHandlers({ s, activity, orchestrator, clip }: HandlerContex
     },
     'chat:handoff': a => s.chats.handoff(a.chatId, { reason: 'manual' }),
     'chat:handoffRead': a => s.chats.readHandoff(a.chatId, typeof a.session === 'string' ? a.session : undefined),
-    'chat:continue': a => s.chats.continueChat(a.chatId),
+    'chat:continue': a => s.chats.continueChat(a.chatId, typeof a.cwd === 'string' && a.cwd.trim() ? { cwd: a.cwd.trim() } : {}),
     'chat:undoTurn': a => s.chats.undoTurn(a.chatId),
     // only the folders of the app's own chats, never a network path (a stat on \\host\share would reach out)
     'chat:branches': a => {

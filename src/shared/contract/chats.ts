@@ -121,7 +121,11 @@ export interface ChatSummary {
    *  («engine:model») this wait already answered: it moves again only when the card names something else */
   /** `next`: the model of the level the chat moves to by itself at `at` (ADR 0348: 8 s to cancel); `stay`: the user
    *  cancelled that move, so the chat waits for its role's levels to change or for a message (ADR 0346) */
-  creditWait?: { at: number; model: string | null; card?: string; next?: { card: string; at: number }; stay?: true };
+  creditWait?: { at: number; model: string | null; card?: string; next?: { card: string; at: number }; stay?: true; /** start = its engine did not start (ADR 0352); absent = its credits ended */ why?: 'start' };
+  /** it works in a worktree made for it (asked: place copy, ADR 0353); absent = in the folder itself */
+  place?: 'copy';
+  /** what whoever opened it must know of its folder (uncommitted changes, another chat writing there), said once */
+  folderNotes?: string[];
   /** Explicit assignment/mailbox hold. A provider result never completes it; no expiration or consent semantics. */
   work?: {status:'assigned'|'waiting-mail'|'completed';updatedAt:number};
   /** closed (archived) at: out of the grid, found with Ctrl+K (the palette's "Chiuse" group); its history stays and a reopen resumes it */
@@ -382,6 +386,8 @@ export interface NewChat {
   delegator?: Delegator;
   harness: Harness;
   cwd: string;
+  /** here (the default) = works in `cwd` itself; copy = a new isolated worktree of its repository, only when asked (ADR 0353) */
+  place?: 'here' | 'copy';
   prompt?: string;
   title?: string;
   model?: string;
@@ -479,7 +485,8 @@ export interface ChatsInvokeMap {
   'chat:handoffRead': [{ chatId: string; session?: string }, HandoffInfo | null];
   /** "Riprendi": a NEW chat, same engine, folder and choices, that starts from the hand-off (written first if missing or
    *  older than the last turn); the old chat's process ends, it stays readable and linked (continuedBy) */
-  'chat:continue': [{ chatId: string }, ChatSummary];
+  /** `cwd`: another folder than the chat's own (ADR 0353); absent = the last one it used */
+  'chat:continue': [{ chatId: string; cwd?: string }, ChatSummary];
   /** ADR 0103: the files back as they were before the chat's last turn (its checkpoint); counts of restored and removed files */
   'chat:undoTurn': [{ chatId: string }, { restored: number; removed: number }];
   /** the "Stato" view: the git branch checked out in each chat folder, read from disk (null = not a git folder) */

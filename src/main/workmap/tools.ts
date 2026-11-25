@@ -14,6 +14,7 @@ export const JOB_PROPS = {
   job: { type: 'string', description: 'the work map: its id (wm_…) or its exact title' },
   query: { type: 'string', description: 'jobs: words to look for, the archive included' },
   archived: { type: 'boolean', description: 'jobs: the archived ones' },
+  cwd: { type: 'string', description: 'resume, start: another existing absolute folder for its Strategist; default: the last one it used' },
 };
 
 const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');

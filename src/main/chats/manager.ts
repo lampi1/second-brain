@@ -43,7 +43,7 @@ import { engineOf, engineOrThrow } from '../engines/registry';
 import { runtimePerformance } from '../runtime-performance';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import { plainOwner, type ResolvedRole } from '../agents/catalog';
-import { delegableFolder } from '../agents/worktrees';
+import { folderProblem } from '../agents/worktrees';
 import { FAIL_CLOSED, aboveCeiling, belowParent, narrowest, type AgentPolicy } from '../agents/tool-policy';
 import type { AgentOwnerSnapshot } from '../../shared/agents';
 import { runPresetOf } from '../../shared/model-presets';
@@ -138,12 +138,16 @@ export class ChatManager extends ManagerRemote implements ChatService {
 
   /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
   /** by: who asks; 'app' = one of the app's own jobs (the sampled Sentinel reviews, agents/judge-sample.ts): like an agent, its run says startedBy 'app' */
-  override async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { boundByOrchestrator?: boolean; intake?: IntakeSource; resumePlan?: StrategyPlan; workMap?: string; continuation?: boolean; continuationOf?: string } = {}): Promise<ChatSummary> {
+  override async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { boundByOrchestrator?: boolean; intake?: IntakeSource; resumePlan?: StrategyPlan; workMap?: string; continuation?: boolean; continuationOf?: string; engineWhy?: string } = {}): Promise<ChatSummary> {
     const createdT0 = Date.now();
     this.deliveryPolicy(req.deliveryPolicy, !!req.parentId);
     if (req.doneWhen && (req.doneWhen.length > 12 || req.doneWhen.some(x => typeof x !== 'string' || !x.trim() || x.length > 300))) throw new Error('Invalid task criteria.');
     updateActivity.assertOpen();
     links = { ...links, ...(req.parentRunId !== undefined ? { parentRunId: req.parentRunId } : {}), ...(req.reviewOf !== undefined ? { reviewOf: req.reviewOf } : {}), ...(req.reworkOf !== undefined ? { reworkOf: req.reworkOf } : {}) };
+    // the only refusal about a folder, before anything exists (ADR 0353): it names the folder and why
+    const noFolder = folderProblem(req.cwd);
+    if (noFolder) throw new Error(noFolder);
+    if (req.place !== undefined && req.place !== 'here' && req.place !== 'copy') throw new Error('place: here (sul posto) o copy (copia isolata).');
     if (req.goal !== undefined && (typeof req.goal !== 'string' || !req.goal.trim() || req.goal.length > 2000)) throw new Error('Run goal must contain 1 to 2000 characters.');
     if (Object.values(links).some(v => v !== undefined)) this.runs.checkLinks(links);
     const asked = startTags(req);
@@ -183,12 +187,21 @@ export class ChatManager extends ManagerRemote implements ChatService {
     const policy = delegator ? narrowest(belowParent(agent.policy, delegator.policy, this.boundMode(delegator)), req.delegation?.tools ? { tools: { allow: req.delegation.tools }, ceiling: null } : null)
       : narrowest(agent.policy, parent === bound && bound ? narrowest(bound.policy, FAIL_CLOSED) : parent?.policy);
     let bindDelegation: ((childId: string) => void) | undefined;
+    let folderNotes: string[] = [], isolated = false;
+    // a root chat the Orchestrator opens gets the same folder handling as a child of a Strategist (ADR 0353)
+    const opener = !delegator && by === 'agent' && !req.orchestrator && !opts.boundByOrchestrator ? this.openOrchestrator() : undefined;
+    if (opener && this.opts.prepareDelegation && agent.owner.source === 'catalog') {
+      const prepared = await this.opts.prepareDelegation(structuredClone(opener.s), req, policy, opts.continuationOf);
+      req = { ...req, cwd: prepared.cwd };
+      folderNotes = prepared.notes ?? []; isolated = !!prepared.isolated; bindDelegation = prepared.bind;
+    }
     if (delegator && this.opts.prepareDelegation) {
       const parentPermissions = JSON.stringify({ policy: delegator.policy, mode: this.modeFor(delegator) });
       const prepared = await this.opts.prepareDelegation(structuredClone(delegator.s), req, policy, opts.continuationOf);
       if (delegator.s.closedAt || this.closedByUser(delegator) || this.chats.get(delegator.s.id) !== delegator || delegator.s.run?.endedAt !== undefined || delegator.s.run?.report?.via === 'agent_report' || delegator.s.delegation?.result || delegator.s.run?.runId !== prepared.parentRunId || delegator.s.run?.taskVersion !== prepared.parentTaskVersion) throw new Error('Parent assignment changed while preparing isolation.');
       if (parentPermissions !== JSON.stringify({ policy: delegator.policy, mode: this.modeFor(delegator) })) throw new Error('Parent permissions changed while preparing isolation.');
       req = { ...req, cwd: prepared.cwd };
+      folderNotes = prepared.notes ?? []; isolated = !!prepared.isolated;
       bindDelegation = id => {
         if (delegator.s.closedAt || this.closedByUser(delegator) || this.chats.get(delegator.s.id) !== delegator || delegator.s.run?.endedAt !== undefined || delegator.s.run?.report?.via === 'agent_report' || delegator.s.delegation?.result || delegator.s.run?.runId !== prepared.parentRunId || delegator.s.run?.taskVersion !== prepared.parentTaskVersion
           || parentPermissions !== JSON.stringify({ policy: delegator.policy, mode: this.modeFor(delegator) })) throw new Error('Parent assignment or permissions changed before delegation started.');
@@ -201,7 +214,8 @@ export class ChatManager extends ManagerRemote implements ChatService {
     this.needOn(engine.id);
     const caps = engine.caps;
     const cwd = typeof req.cwd === 'string' ? req.cwd.trim() : '';
-    if (!cwd || !path.isAbsolute(cwd) || !fs.existsSync(cwd)) throw new Error(`Cartella non valida: ${cwd || '(vuota)'}`);
+    // two chats that write in the same folder never do it in silence (ADR 0353): the second one and who opened it are told
+    if (by === 'agent' && agent.owner.source === 'catalog' && !isolated && this.writesFiles(agent.owner.id, policy)) folderNotes = [...folderNotes, ...this.writersNote(cwd, [req.parentId, opts.continuationOf])];
     if (req.permissionMode && !MODES.includes(req.permissionMode)) throw new Error(`Modalità permessi non valida: ${req.permissionMode}`);
     if (req.effort && !EFFORTS.includes(req.effort)) throw new Error(`Effort non valido: ${req.effort}`);
     if (!caps.effort && req.effort) throw new Error(`L’effort non si imposta con ${engine.label}: scegli il modello.`);
@@ -249,7 +263,8 @@ export class ChatManager extends ManagerRemote implements ChatService {
     // a work map's job goes on in a new chat (ADR 0342): the answers the user already gave are kept
     const plan = asking && resume ? { ...asking, clarified: resume.clarified, ...(resume.pcOnly ? { pcOnly: true as const } : {}), ...(resume.asked ? { asked: resume.asked } : {}), ...(resume.enough ? { enough: true as const } : {}) } : asking;
     const continued = opts.continuationOf ? this.chats.get(opts.continuationOf) : undefined;
-    const prompt = given && pack ? `${given}\n\n${pack}` : given && plan ? `${given}\n\n${strategyPrompt(plan)}` : given;
+    const told = given && folderNotes.length ? `${given}\n\nCartella di lavoro (dall’app):\n${folderNotes.map(n => `- ${n}`).join('\n')}` : given;
+    const prompt = told && pack ? `${told}\n\n${pack}` : told && plan ? `${told}\n\n${strategyPrompt(plan)}` : told;
     // a root chat the Orchestrator opens while answering the user's own message is the user's request: like his own
     // messages (ADR 0036) it never waits for the CPU queue (a start of 10-25 s was then followed by the queue's wait)
     const forUser = by === 'agent' && !delegator && !req.orchestrator && this.orchestratorAnswering();
@@ -275,6 +290,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
         ...(plan ? { plan } : {}),
         // known from the first event on: the job's work map (ADR 0342) moves to this chat instead of a second one
         ...(opts.workMap ? { workMap: opts.workMap } : {}),
+        ...(isolated ? { place: 'copy' as const } : {}), ...(folderNotes.length ? { folderNotes } : {}),
         ...(continued ? { continuedFrom: { id: continued.s.id, title: continued.s.title } } : {}),
         ...(agent.assets && agent.skills?.length ? { loadedSkills: [...agent.skills] } : {}),
       },
@@ -315,6 +331,10 @@ export class ChatManager extends ManagerRemote implements ChatService {
       if (slugTitle(old.s.title) === slugTitle(title)) old.s.title = `Orchestrator precedente · ${old.s.id.slice(2)}`;
     }
     this.ensureHistory(r); // a fork shows the past it starts from
+    // which engine it started on and why, first in the chat (ADR 0352); what it must know of its folder too (ADR 0353)
+    const engineWhy = agent.presetChoice?.route ?? opts.engineWhy;
+    if (engineWhy) this.addItem(r, sysItem('engineStarted', { why: engineWhy }, 'info'), false);
+    for (const note of folderNotes) this.addItem(r, sysItem('folderNote', { note }, 'warn'), false);
     this.persist();
     log.info('chats', 'chat created', { chat: id, data: { harness: req.harness, cwd, fork: !!forkOf, model: r.choice.model, permissionMode: r.choice.permissionMode, orchestrator: r.s.isOrchestrator, warm: !!warm, prepMs: Date.now() - createdT0, queued: viaQueue } });
     this.updated(r);
@@ -334,14 +354,11 @@ export class ChatManager extends ManagerRemote implements ChatService {
   }
 
   /** The live chat a delegated chat starts under (agent_delegate): it exists, is open and is not the Orchestrator (the
-   *  Orchestrator opens root chats with app_create_chat), and the child's folder exists (any repository, ADR 0345). */
+   *  Orchestrator opens root chats with app_create_chat). Its folder never limits the child's (ADR 0353). */
   /** continuation: "Riprendi" of a delegated chat, by whoever clicks it: the successor is the same child of the same parent */
   private async delegator(req: NewChat, by: 'user' | 'agent' | 'app', continuation = false): Promise<Rec> {
     const parent = req.parentId ? this.chats.get(req.parentId) : undefined;
     if ((by !== 'agent' && !continuation) || !parent || parent.s.closedAt || this.closedByUser(parent) || parent.s.isOrchestrator) throw new Error('Delega rifiutata: la chat che delega non è una chat di lavoro aperta.');
-    const cwd = typeof req.cwd === 'string' ? req.cwd.trim() : '';
-    // the parent's folder or any other existing one, also of another repository (ADR 0345, agents/worktrees.ts)
-    if (!delegableFolder(parent.s.cwd, cwd)) throw new Error(`Delega rifiutata: la cartella ${cwd || '(vuota)'} non esiste.`);
     return parent;
   }
 

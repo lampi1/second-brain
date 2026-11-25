@@ -11,6 +11,9 @@ import { waitsForPeople, waitsForWork } from '../../shared/waiting';
 import type { TaskDeliveryPolicy } from '../../shared/agents';
 import { reportOf } from '../agents/run-report';
 import { limitSignal } from '../agents/credits';
+import { needsIsolatedWorktree, overlapping } from '../agents/worktrees';
+import type { AgentPolicy } from '../agents/tool-policy';
+import { engineOf } from '../engines/registry';
 import { creditCardKey } from '../agents/credit-wait';
 import { MAX_CORRECTIONS, RESULT_OUTPUT_MAX, checkResult, resultMessage, type DelegationResult, type TaskSource } from '../../shared/delegation';
 import { finishPlan, afterReport } from '../../shared/strategy';
@@ -149,6 +152,31 @@ export abstract class ManagerDelegation extends ManagerContinuity {
       }
     }
     this.closeWithoutReport(r, why);
+  }
+
+  /** The roles that change files by their work; the others read and report (a Sentinel's builds write outputs only). */
+  protected writesFiles(roleId: string, policy: AgentPolicy | null): boolean {
+    return !['orchestrator', 'strategist', 'scout', 'sentinel'].includes(roleId) && needsIsolatedWorktree(policy);
+  }
+  /** The open chats already writing in `cwd` (or a folder around or inside it), in words for the second one (ADR 0353):
+   *  it waits for them or stays off their files. `except` = its parent and the chat it goes on from. */
+  protected writersNote(cwd: string, except: readonly (string | undefined)[]): string[] {
+    const busy = [...this.chats.values()].filter(x => !except.includes(x.s.id) && !x.s.closedAt && !x.s.continuedBy && !x.s.isOrchestrator && x.s.agent?.source === 'catalog' && x.s.place !== 'copy'
+      && this.writesFiles(x.s.agent.id, x.policy ?? null) && x.s.work?.status !== 'completed' && !x.s.delegation?.result && x.s.run?.endedAt === undefined && overlapping(x.s.cwd, cwd));
+    if (!busy.length) return [];
+    return [`In questa cartella sta già scrivendo ${busy.slice(0, 3).map(x => `«${x.s.title}» (${x.s.id})`).join(', ')}. Non scrivere sugli stessi file: aspetta che abbia finito, o chiedi a chi ti ha aperto.`];
+  }
+
+  /** A role chat's engine did not start (ADR 0352): when its role's card now gives another engine it waits, as for its
+   *  credits, and the watch moves it there (agents/credit-wait.ts); else it is an error as before. */
+  protected startStop(r: Rec): boolean {
+    if (this.quitting || r.s.closedAt || r.s.isOrchestrator || r.s.agent?.source !== 'catalog' || r.s.lastResult || r.lastTurnAt > 0 || r.s.continuedBy) return false;
+    if (r.s.creditWait) return true;
+    if (!this.opts.startFailed?.({ ...r.s })) return false;
+    r.s.creditWait = { at: Date.now(), model: r.s.run?.model ?? r.s.model, card: creditCardKey({ engine: r.s.harness, model: r.s.run?.model ?? null }), why: 'start' };
+    this.addItem(r, sysItem('engineFailed', { engine: engineOf(r.s.harness)?.label ?? r.s.harness }, 'warn'), false);
+    log.info('chats', 'role chat waits: its engine did not start', { chat: r.s.id, data: { role: r.s.agent.id, engine: r.s.harness } });
+    return true;
   }
 
   /** A role chat's turn, or its engine, stopped on the provider's credit or plan limit (credits.ts limitSignal; ADR

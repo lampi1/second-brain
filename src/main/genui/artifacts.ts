@@ -120,6 +120,14 @@ export class Artifacts {
     return p?.yesOption && p.noOption ? { yes: p.yesOption, no: p.noOption } : null;
   }
 
+  /** The words of the newest brief of a chat, as its question card shows them ('' = none): what a yes was about. */
+  briefText(chatId: string): string {
+    const b = this.items(chatId).filter(i => i.ui.component === 'brief').sort((x, y) => y.at - x.at)[0];
+    if (!b) return '';
+    const words = (v: unknown): string[] => typeof v === 'string' ? [v] : Array.isArray(v) ? v.flatMap(words) : v && typeof v === 'object' ? Object.values(v).flatMap(words) : [];
+    return [b.title, b.summary, ...words(b.ui.props)].join('\n');
+  }
+
   /** A chat's items with its visuals put in by time (the chat's own order is kept as it is). */
   merge(chatId: string, base: ChatItem[]): ChatItem[] {
     const arts = this.items(chatId).sort((x, y) => x.at - y.at);

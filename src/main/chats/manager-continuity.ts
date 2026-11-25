@@ -5,7 +5,7 @@ import type { IntakeSource, StrategyPlan } from '../../shared/strategy';
 import crypto from 'node:crypto';
 import type { ModelTier } from '../../shared/roles';
 import type { AgentContextSnapshot } from '../../shared/agent-context';
-import type { ChatSummary, ContextStats, Effort, HandoffInfo, Harness, NewChat } from '../../shared/contract';
+import type { ChatSummary, ContextStats, HandoffInfo, NewChat } from '../../shared/contract';
 import { sysEn } from '../../shared/sys';
 import { errText, log } from '../log';
 import { AFTER_CALLS, CACHE_TTL_MS, coldArmed, coldRoute, continuityStep, type ColdView, ORCHESTRATOR_COMPACT, ORCHESTRATOR_PAUSE_COMPACT, romeDay } from './continuity';
@@ -18,7 +18,9 @@ import { plainOwner } from '../agents/catalog';
 import type { AgentPolicy } from '../agents/tool-policy';
 import type { AgentOwnerSnapshot } from '../../shared/agents';
 import type { RunLinks } from '../agents/runs';
-import type { HandoffOptions, Rec, ColdStep } from './manager-types';
+import type { ContinueOptions, HandoffOptions, Rec, ColdStep } from './manager-types';
+import { goalText } from '../../shared/agent-label';
+import { folderProblem, sameFolder } from '../agents/worktrees';
 import { clearTimeout, workBehind, coldDivider, sysItem } from './manager-helpers';
 import { ManagerRequests } from './manager-requests';
 
@@ -71,9 +73,11 @@ export abstract class ManagerContinuity extends ManagerRequests {
   /** "Riprendi": a NEW chat on the same engine, folder and choices that starts from the hand-off (written first when
    *  missing or older than the last turn). The old chat's process ends; it stays readable, linked both ways.
    *  promptPrefix: a label put before the prompt (an agent's request is marked as not the user's).
+   *  cwd / place (ADR 0353): the folder, by default the last one it used; nothing of the old one is moved. With no `on`,
+   *  the engine its role starts on now (ADR 0352).
    *  ask false + on (ADR 0346, a chat out of credits whose role's card moved to another engine): the hand-off is the
    *  app's own note, since the old engine cannot be asked, and the new chat runs on the card's engine and model. */
-  continueChat(chatId: string, opts: { allowStart?: boolean; promptPrefix?: string; ask?: false; on?: { harness: Harness; model: string | null; effort: Effort | null } } = {}): Promise<ChatSummary> {
+  continueChat(chatId: string, opts: ContinueOptions = {}): Promise<ChatSummary> {
     const running = this.continuing.get(chatId);
     if (running) return running;
     const p = this.doContinue(chatId, opts).finally(() => this.continuing.delete(chatId));
@@ -81,7 +85,7 @@ export abstract class ManagerContinuity extends ManagerRequests {
     return p;
   }
 
-  private async doContinue(chatId: string, opts: { allowStart?: boolean; promptPrefix?: string; ask?: false; on?: { harness: Harness; model: string | null; effort: Effort | null } }): Promise<ChatSummary> {
+  private async doContinue(chatId: string, opts: ContinueOptions): Promise<ChatSummary> {
     const r = this.need(chatId);
     if (r.s.isOrchestrator) throw new Error('L’Orchestrator non si riprende così: usa «Ricomincia da capo» dal suo menu.');
     const next = r.s.continuedBy && this.chats.get(r.s.continuedBy.id);
@@ -89,36 +93,44 @@ export abstract class ManagerContinuity extends ManagerRequests {
     // never two agents on the same files: the old chat must have finished its turn (a fresh note does not cover this one)
     const hasTurns = r.lastTurnAt > 0 || r.items.some(i => i.kind === 'result' || i.kind === 'user');
     if (r.handoffTurn || (hasTurns && (r.session?.busy || r.pending.size > 0))) throw new Error('La chat sta lavorando o ti aspetta: si riprende quando ha finito il turno.');
+    // the engine its role starts on now (ADR 0352): another one only when the order or the limits changed since
+    const on = opts.on ?? this.opts.engineNow?.({ ...r.s }) ?? undefined;
+    const cwd = opts.cwd?.trim() || r.s.cwd, noFolder = folderProblem(cwd);
+    if (noFolder) throw new Error(noFolder);
     const saved = this.handoffs.read(chatId);
     const fresh = saved && saved.at >= r.lastTurnAt ? saved : null;
     r.handoffStopped = false;
-    const h = fresh ?? await this.handoff(chatId, { reason: 'continue', ...(opts.allowStart === false ? { allowStart: false } : {}), ...(opts.ask === false ? { ask: false } : {}) });
-    const on = opts.on, owner = r.s.agent ?? plainOwner(r.s.harness, r.choice.model);
+    const h = fresh ?? await this.handoff(chatId, { reason: 'continue', ...(opts.allowStart === false ? { allowStart: false } : {}), ...(opts.ask === false || (on && on.harness !== r.s.harness) ? { ask: false as const } : {}) });
+    const task = opts.task, owner = r.s.agent ?? plainOwner(r.s.harness, r.choice.model);
     const taken = [...this.chats.values()].map(x => x.s.title);
     // a delegated chat goes on as the same child: under its parent, with its contract, its result still the parent's
     // (never a root chat that escapes the limits or that the Orchestrator could read, ADR 0083)
     const parentRec = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
     if (r.s.parentId && !parentRec) throw new Error('La chat che l’ha delegata non c’è più: questa non si riprende da sola.');
     const c = await this.create({
-      harness: on?.harness ?? r.s.harness, cwd: r.s.cwd, title: nextTitle(r.s.title, taken),
+      harness: on?.harness ?? r.s.harness, cwd, ...(opts.place ? { place: opts.place } : {}), title: nextTitle(r.s.title, taken),
       ...(on ? { ...(on.model ? { model: on.model } : {}), ...(on.effort ? { effort: on.effort } : {}) } : { ...(r.choice.model ? { model: r.choice.model } : {}), ...(r.choice.effort ? { effort: r.choice.effort } : {}) }),
       ...(r.choice.permissionMode ? { permissionMode: r.choice.permissionMode } : {}),
       // a routed job stays one outcome across hand-offs: the new chat writes on the first chat's ledger line
       ...(r.s.route ? { route: { ...r.s.route, ledgerId: r.s.route.ledgerId ?? `app:${r.s.id}`, handoffs: (r.s.route.handoffs ?? 0) + 1 } } : {}),
-      prompt: `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}`,
-      ...(parentRec ? { parentId: parentRec.s.id, ...(r.s.delegation ? { delegation: structuredClone(r.s.delegation) } : {}) } : {}),
+      prompt: `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}${sameFolder(cwd, r.s.cwd) ? '' : `\n\nOra lavori in ${cwd} (la chat precedente lavorava in ${r.s.cwd}): il suo lavoro resta là, niente viene spostato.`}${task ? `\n\nNuovo compito:\n${task.prompt}` : ''}`,
+      ...(task ? { goal: goalText(task.prompt).slice(0, 2000), ...(task.options.doneWhen ? { doneWhen: task.options.doneWhen } : {}), ...(task.options.contractFields ? { contractFields: task.options.contractFields } : {}) } : {}),
+      ...(parentRec ? { parentId: parentRec.s.id, ...(r.s.delegation ? { delegation: task ? (({ result: _r, ...d }) => ({ ...structuredClone(d), goal: goalText(task.prompt), doneWhen: task.options.doneWhen ?? d.doneWhen, at: Date.now() }))(r.s.delegation) : structuredClone(r.s.delegation) } : {}) } : {}),
     }, 'user', { ...(r.s.launchContext ? { launchContext: r.s.launchContext } : {}), ...(r.s.run?.tier ? { tier: r.s.run.tier } : {}), owner: on ? { ...owner, engine: on.harness, model: on.model } : owner, instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.skills ? { skills: [...r.skills] } : {}), ...(r.maxContext ? { maxContext: r.maxContext } : {}) },
-    {}, { continuation: !!parentRec, continuationOf: r.s.id });
+    {}, { continuation: !!parentRec, continuationOf: r.s.id, ...(on?.route ? { engineWhy: on.route } : {}) });
     const nr = this.chats.get(c.id);
     // the worktree hint follows the chain (A → B → C)
     if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; this.updated(nr); }
     // the agent's work goes on in a new run: the old one counts as reworked (§5)
     if (nr?.s.run && r.s.run && this.runs.get(r.s.run.runId)) {
-      nr.s.run.continuedFrom = r.s.run.runId;
+      if (task?.options.mode === 'rework') nr.s.run.reworkOf = r.s.run.runId; else nr.s.run.continuedFrom = r.s.run.runId;
+      if (task?.options.reviewOf) nr.s.run.reviewOf = task.options.reviewOf;
       // the preset it ran on goes on with it (ADR 0346): a later credit wait reads the card for that preset
-      if (r.s.run.presetChoice && !nr.s.run.presetChoice) nr.s.run.presetChoice = r.s.run.presetChoice;
+      if (r.s.run.presetChoice && !nr.s.run.presetChoice) nr.s.run.presetChoice = { ...(task?.options.preset?.choice ?? r.s.run.presetChoice), ...(on?.route ? { route: on.route } : {}) };
       this.runSave();
     }
+    // a job's plan goes on with it as it is, with the user's approval (ADR 0352, ChatManager.planResume)
+    if (nr && r.s.plan && !r.s.parentId && !nr.s.plan) { const { stopped: _s, putAway: _p, ...open } = r.s.plan; nr.s.plan = structuredClone(open); this.updated(nr); }
     r.s.continuedBy = { id: c.id, title: c.title };
     // the plan step it worked for follows it (ADR 0346): the step's chat is now the one that goes on and will report,
     // never the old one, which reports nothing more
@@ -413,5 +425,5 @@ export abstract class ManagerContinuity extends ManagerRequests {
   contextSince(chatId: string): number | undefined { return this.chats.get(chatId)?.ctxSince; }
 
   // ---- implemented in a later layer (ADR 0200: manager.ts and its manager-*.ts layers)
-  abstract create(req: NewChat, by?: 'user' | 'agent' | 'app', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links?: RunLinks, opts?: { boundByOrchestrator?: boolean; intake?: IntakeSource; resumePlan?: StrategyPlan; workMap?: string; continuation?: boolean; continuationOf?: string }): Promise<ChatSummary>;
+  abstract create(req: NewChat, by?: 'user' | 'agent' | 'app', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links?: RunLinks, opts?: { boundByOrchestrator?: boolean; intake?: IntakeSource; resumePlan?: StrategyPlan; workMap?: string; continuation?: boolean; continuationOf?: string; engineWhy?: string }): Promise<ChatSummary>;
 }

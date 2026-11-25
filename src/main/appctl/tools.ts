@@ -73,7 +73,10 @@ import { workflowTools, type WorkAway } from '../workflows/tools';
 import type { Workflows } from '../workflows/service';
 import { guideTool, screenOutline } from './guide';
 import { CONFIG_ASK_MIN, CONFIG_TURN_MIN, configTool, type ConfigDeps } from './config';
-import { lastAnswered, lastTyped, userAsked } from './user-words';
+import { PLACE_SCHEMA, placeOf } from '../agents/delegation';
+import { folderProblem, sameFolder } from '../agents/worktrees';
+import type { TaskAssignmentOptions } from '../../shared/delegation';
+import { answeredText, lastAnswered, lastTyped, userAsked } from './user-words';
 import { recordingTools, type RecordingsRead } from './recordings';
 import { newsTools, type NewsControl } from './news';
 import { imparaTools, type ImparaControl } from './impara';
@@ -136,7 +139,7 @@ export interface AppCtlDeps {
   /** the «Giornale» (ADR 0280): app_news, app_news_edition, app_news_source, app_news_refresh on the Orchestrator's own endpoint */
   news?: NewsControl;
   /** the configuration the Orchestrator changes for the user (app_config, ADR 0149); settings come from `brain` */
-  config?: Omit<ConfigDeps, 'callerId' | 'userAsked' | 'brain'>;
+  config?: Omit<ConfigDeps, 'callerId' | 'userAsked' | 'saidYesTo' | 'brain'>;
 }
 
 
@@ -257,7 +260,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const tools: ToolDef[] = [
     guideTool(guideDeps),
     ...(authed() ? [{ name: 'app_voice_diagnostics', description: 'Read local content-free voice diagnostics: rolling recognition/synthesis timing samples, stale events, cancellations and failures. No audio or transcript content. Coverage explicitly excludes end-to-end latency and accuracy. Unknown values stay null; small-sample p95 is not a reliability claim.', inputSchema: obj(), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }, run: () => { if (!authed()) throw new Error('Authenticated Orchestrator required'); return { diagnostics: voiceDiagnostics() }; } }] : []),
-    ...(d.config && authed() ? [configTool({ ...d.config, brain: d.brain, callerId: callerId!, userAsked: () => configAsked(callerId!) })] : []),
+    ...(d.config && authed() ? [configTool({ ...d.config, brain: d.brain, callerId: callerId!, userAsked: () => configAsked(callerId!), saidYesTo: () => answeredText(callerId!, Date.now() - CONFIG_ASK_MIN * 60_000) })] : []),
     ...(d.workflows && authed() ? workflowTools(d.workflows, id => d.chats.list().some(c => c.id === id && !c.parentId && !c.isOrchestrator), id => d.chats.list().find(c => c.id === id), d.away) : []),
     ...(d.agentLearning ? [learnTool(d, callerId, authed())] : []),
     ...(d.agentLearning && authed() ? [toolDef(lessonReviewTool(d.agentLearning))] : []),
@@ -532,7 +535,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         intakeQuestion: intakeField, reviewOf: str('Run being reviewed'), reworkOf: str('Run being reworked'), goal: str('Run goal, up to 2000 characters'),
         freshReview: { type: 'boolean', description: 'with reviewOf: open a fresh review chat although one already reported on this work; only when the user asked for it or it reviews a part no review chat covers' },
         kind: str(`optional kind of task: ${TASK_KINDS.join(' | ')}; omitted: read from title and prompt`),
-        cwd: str('optional absolute folder (repo or worktree); default: the brain folder'),
+        cwd: str('optional absolute folder: any existing one (the brain, a repository, a worktree, a slot); default: the brain folder. It gives no permission'), place: PLACE_SCHEMA,
         map: MAP_LINK_SCHEMA,
         userModel: { type: 'object', additionalProperties: false, required: ['model'], description: 'only when the user named the model: one of the card\'s presets (agent_catalog presets), see app_guide «model choice»',
           properties: { engine: { type: 'string' }, model: { type: 'string', maxLength: 128 }, effort: { type: 'string', enum: ['low', 'medium', 'high', 'xhigh', 'max'] } } },
@@ -560,6 +563,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         }
         const cwd = typeof a.cwd === 'string' && a.cwd.trim() ? a.cwd.trim() : d.brain.info().brainRoot;
         if (!cwd) throw new Error('nessuna cartella: il brain non è collegato');
+        const place = placeOf(a.place, 'place'); // the folder itself is checked at create, before anything exists
         // the map pieces this work is on (#456): checked before the chat exists, linked once it does
         const mapLink = mapLinkOf(authed() ? d.projectMaps : undefined, a.map);
         if (a.freshReview !== undefined && typeof a.freshReview !== 'boolean') throw new Error('freshReview: true or false.');
@@ -619,7 +623,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const route = userModel ? { ...routed.route, reason: `the user asked for ${userModel.model} on ${engineLabel(userModel.engine)} for this task (one of the card's presets; the card is unchanged)` } : routed.route;
         const refused = openRefusal(s, from, harness);
         if (refused) throw new Error(`bloccato: ${refused}`);
-        const chat = await d.chats.create({ harness, cwd, title, prompt: `${voice()}\n\n${prompt}`, ...links, orchestrator: false, roleId, ...presetFields, ...(skills.length ? { skills } : {}),
+        const chat = await d.chats.create({ harness, cwd, ...(place ? { place } : {}), title, prompt: `${voice()}\n\n${prompt}`, ...links, orchestrator: false, roleId, ...presetFields, ...(skills.length ? { skills } : {}),
           ...(model ? { model } : {}), ...(effort ? { effort } : {}), route, ...(userModel ? { userModel } : {}) }, 'agent', undefined, undefined,
           // the plain /mcp/app mount is open to any local process: its chats run no wider than the Orchestrator
           { boundByOrchestrator: !authed(), ...intake });
@@ -628,22 +632,22 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         log.info('appctl', 'agent created a chat', { chat: chat.id, data: { harness, title, model: model || null, effort, route: route.source, kind: route.kind, area: route.area, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } });
         // a skill whose tools the role lacks (issue #93): said now, so the Orchestrator can pick another role or ask the user
         const known = d.skillTools ? new Map(d.skillTools().map(x => [x.name, x.tools])) : null;
-        const warnings = [...(resolved.presetChoice?.warnings ?? []), ...(known ? gapLines(profile.name, skillGaps([...new Set([...resolved.skills, ...skills])], n => known.get(n), resolved.policy)) : []), ...task.warnings];
+        const warnings = [...(chat.folderNotes ?? []), ...(resolved.presetChoice?.warnings ?? []), ...(known ? gapLines(profile.name, skillGaps([...new Set([...resolved.skills, ...skills])], n => known.get(n), resolved.policy)) : []), ...task.warnings];
         if (warnings.length) log.info('appctl', 'chat started with a skill its role lacks tools for', { chat: chat.id, data: { role: roleId, warnings: warnings.length } });
         // the machine is busy: the chat exists, its first turn waits in the cold-start queue (ADR 0222)
         // the estimate from similar past tasks (ADR 0087): the same figure the strip shows, so the plan is checked with data
         const estimate = d.runFeedback ? estimateTask(new SimilarIndex(d.runFeedback.runList(), d.priceOf ?? null), { text: task.estimate, agentId: roleId, model: model || resolved.request.model || null }) : null;
-        return { chatId: chat.id, title: chat.title, harness, cwd, model: model || null, effort, ...(resolved.presetChoice ? { preset: resolved.presetChoice.preset } : {}), ...(warnings.length ? { warnings } : {}), ...(chat.queued ? { status: queuedLine(chat.queued) } : {}),
+        return { chatId: chat.id, title: chat.title, harness, cwd: chat.cwd ?? cwd, ...(chat.place ? { place: chat.place } : {}), ...(resolved.presetChoice?.route ? { engineWhy: resolved.presetChoice.route } : {}), model: model || null, effort, ...(resolved.presetChoice ? { preset: resolved.presetChoice.preset } : {}), ...(warnings.length ? { warnings } : {}), ...(chat.queued ? { status: queuedLine(chat.queued) } : {}),
           ...(estimate ? { estimate: { timeMs: estimate.timeMs, costUsd: estimate.costUsd, n: estimate.n, confidence: estimate.confidence, parts: estimate.parts, path: estimate.path } } : {}), route: { source: route.source, kind: route.kind, area: route.area, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) },
           ...(mapLink ? { map: mapLink } : unlinked ? { map: unlinked } : {}) };
       },
     },
     {
       name: 'app_assign_task',
-      description: 'Continue a compatible work conversation with a distinct measured run. Use continue for related follow-ups, new-task for a distinct assignment in the same scope, rework only for an explicit correction. Requires the same role and project folder; the current task version (app_chats) is used when expectedVersion is omitted. The user\'s messages and answers in that chat you have not seen come back readable (userInstructions): the chat already has them, so they are not repeated in its prompt; account for them, and correct it or ask the user where your prompt disagrees. expectedEventSeq is optional. Refused only while the chat works or has queued work. A review chat (a Sentinel or Judge opened with reviewOf) is continued the same way for a fix of the work it reviewed (#387): it reviews only the fix delta; reviewOf = the run to review now (default: the current run of the chat it reviews); other work needs its own review chat. Does not change tools or permissions.',
+      description: 'Continue a compatible work conversation with a distinct measured run. Use continue for related follow-ups, new-task for a distinct assignment in the same scope, rework only for an explicit correction. Requires the same role; another folder, or the engine its role starts on now, goes on in a linked chat (the answer\'s chatId); the current task version (app_chats) is used when expectedVersion is omitted. The user\'s messages and answers in that chat you have not seen come back readable (userInstructions): the chat already has them, so they are not repeated in its prompt; account for them, and correct it or ask the user where your prompt disagrees. expectedEventSeq is optional. Refused only while the chat works or has queued work. A review chat (a Sentinel or Judge opened with reviewOf) is continued the same way for a fix of the work it reviewed (#387): it reviews only the fix delta; reviewOf = the run to review now (default: the current run of the chat it reviews); other work needs its own review chat. Does not change tools or permissions.',
       inputSchema: obj({ intakeQuestion: intakeField, chatId: str('Existing conversation ID'), contract: contractField, prompt: { ...str(`Fallback when there is no contract: self-contained assignment, up to ${CHAT_PROMPT_MAX} characters`), maxLength: CHAT_PROMPT_MAX },
         doneWhen: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 300 }, description: 'Checkable criteria for this assignment' },
-        mode: { type: 'string', enum: ['continue', 'new-task', 'rework'] }, roleId: str('Existing work role'), cwd: str('Same absolute project folder'),
+        mode: { type: 'string', enum: ['continue', 'new-task', 'rework'] }, roleId: str('Existing work role'), cwd: str('Its folder; another existing one = the task goes on in a linked chat there, with its context and history; nothing of the old folder is moved'), place: PLACE_SCHEMA,
         expectedVersion: { type: 'integer', minimum: 1, description: 'Current taskVersion from app_chats' },
         expectedEventSeq: { type: 'integer', minimum: 0, description: 'optional: latestSeq from app_task_events you have read' },
         deliveryPolicy: { type: 'string', enum: ['display', 'notify', 'synthesize'] },
@@ -660,7 +664,11 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
           const asked = String(a.roleId).slice(0, 40), runs = target.agent?.id ?? 'no role';
           throw new ToolRefusal(`Role mismatch: this chat runs ${runs}, not ${asked}. Assign ${target.agent?.id ?? 'its role'} work here, or use app_create_chat for ${asked}.`);
         }
-        if (typeof a.cwd !== 'string' || !path.isAbsolute(a.cwd) || path.resolve(a.cwd) !== path.resolve(target.cwd)) throw new ToolRefusal('Project changed: create a fresh chat.');
+        const cwd = typeof a.cwd === 'string' && a.cwd.trim() ? a.cwd.trim() : target.cwd, place = placeOf(a.place, 'place');
+        const moved = !sameFolder(cwd, target.cwd) || place === 'copy', noFolder = moved ? folderProblem(cwd) : null;
+        if (noFolder) throw new ToolRefusal(noFolder);
+        // the engine its role starts on now (ADR 0352): another one goes on in a linked chat, never in place
+        const on = d.chats.engineNow?.(target.id) ?? undefined;
         if (!d.agents) throw new Error('app_assign_task: the role catalog is not available.');
         const profile = d.agents().profiles.find(p => p.id === a.roleId);
         // the revision too: tools, permissions and limits change the version in use in place (ADR 0186)
@@ -678,17 +686,21 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const delta = !!world && a.mode !== 'new-task' && hasReported(world, target);   // a first round, unfinished, reviews it all
         const doneWhen = task.doneWhen ?? (a.doneWhen === undefined ? undefined : Array.isArray(a.doneWhen) && a.doneWhen.length <= 12 && a.doneWhen.every(c => typeof c === 'string' && c.trim() && c.length <= 300) ? a.doneWhen as string[] : null);
         if (doneWhen === null) throw new Error('Invalid doneWhen criteria.');
-        const refused = crossRefusal(d.brain.settings(), orchestrator.harness, target.harness);
+        const refused = on ? openRefusal(d.brain.settings(), orchestrator.harness, on.harness) : crossRefusal(d.brain.settings(), orchestrator.harness, target.harness);
         if (refused) throw new Error(`messaggio bloccato: ${refused}`);
-        if (target.harness !== orchestrator.harness && !['running', 'waiting', 'idle'].includes(target.state)) throw new Error('A stopped engine of another kind requires the user.');
+        if (!on && !moved && target.harness !== orchestrator.harness && !['running', 'waiting', 'idle'].includes(target.state)) throw new Error('A stopped engine of another kind requires the user.');
         if (a.expectedEventSeq !== undefined && (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0)) throw new Error('Invalid user event cursor.');
         if (a.deliveryPolicy !== undefined && !['display', 'notify', 'synthesize'].includes(String(a.deliveryPolicy))) throw new Error('Invalid delivery policy.');
         const userInstructions = d.chats.userEvents ? unreadInstructions(d.chats.userEvents(target.id)) : [];
         const mapLink = mapLinkOf(d.projectMaps, a.map);
-        await d.chats.assignTask(target.id, `${voice()}\n\n${delta ? `${DELTA_REVIEW}\n\n` : ''}${prompt}`, { ...(reviewOf ? { reviewOf } : {}), ...intakeOf(a, a.roleId === 'strategist' && a.mode === 'new-task' && !!target.plan), mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: a.expectedVersion === undefined ? target.run?.taskVersion ?? 1 : Number(a.expectedVersion), ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), ...(a.deliveryPolicy ? { deliveryPolicy: a.deliveryPolicy as 'display' | 'notify' | 'synthesize' } : {}), ...(doneWhen ? { doneWhen } : {}), ...(task.contractFields ? { contractFields: task.contractFields } : {}), source: { kind: 'chat', chatId: orchestrator.id } });
-        if (mapLink) d.projectMaps!.link(mapLink.project, target.id, mapLink.on);
-        const assigned = d.chats.list().find(c => c.id === target.id);
-        return { ...(mapLink ? { map: mapLink } : {}), chatId: target.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions } : {}), ...(task.warnings.length ? { warnings: task.warnings } : {}) };
+        const text = `${voice()}\n\n${delta ? `${DELTA_REVIEW}\n\n` : ''}${prompt}`, options: TaskAssignmentOptions = { ...(reviewOf ? { reviewOf } : {}), ...intakeOf(a, a.roleId === 'strategist' && a.mode === 'new-task' && !!target.plan), mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: a.expectedVersion === undefined ? target.run?.taskVersion ?? 1 : Number(a.expectedVersion), ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), ...(a.deliveryPolicy ? { deliveryPolicy: a.deliveryPolicy as 'display' | 'notify' | 'synthesize' } : {}), ...(doneWhen ? { doneWhen } : {}), ...(task.contractFields ? { contractFields: task.contractFields } : {}), source: { kind: 'chat', chatId: orchestrator.id } };
+        if ((moved || on) && !d.chats.assignElsewhere) throw new ToolRefusal('This chat cannot change folder or engine here: create a fresh chat.');
+        const linked = moved || on ? await d.chats.assignElsewhere!(target.id, text, options, { ...(moved ? { cwd, ...(place ? { place } : {}) } : {}), ...(on ? { on } : {}) }) : null;
+        if (!linked) await d.chats.assignTask(target.id, text, options);
+        const id = linked?.id ?? target.id;
+        if (mapLink) d.projectMaps!.link(mapLink.project, id, mapLink.on);
+        const assigned = d.chats.list().find(c => c.id === id);
+        return { ...(mapLink ? { map: mapLink } : {}), chatId: id, ...(linked ? { continuedFrom: target.id, cwd: linked.cwd, harness: linked.harness, ...(linked.folderNotes?.length ? { folderNotes: linked.folderNotes } : {}) } : {}), taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions } : {}), ...(task.warnings.length ? { warnings: task.warnings } : {}) };
       },
     },
     {
@@ -750,8 +762,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     },
     {
       name: 'app_continue_chat',
-      description: '"Riprendi": explicitly opens a NEW chat on the same engine and folder from the old chat\'s hand-off (written first if missing or stale); the old chat stops and stays readable, linked both ways. Use only for an intentional new task/session or requested handoff, never merely because context is long. The engine manages native compaction. Not for the Orchestrator.',
-      inputSchema: obj({ chatId: str('chat id from app_chats') }, ['chatId']),
+      description: '"Riprendi": explicitly opens a NEW chat in the last folder it used (cwd: another existing one; nothing is moved), on the engine its role starts on now, from the old chat\'s hand-off (written first if missing or stale); the old chat stops and stays readable, linked both ways. Use only for an intentional new task/session or requested handoff, never merely because context is long. The engine manages native compaction. Not for the Orchestrator.',
+      inputSchema: obj({ chatId: str('chat id from app_chats'), cwd: str('optional: another existing absolute folder; default: the last one it used') }, ['chatId']),
       run: async a => {
         // a delegated chat goes on under its parent, which reads its hand-off (ADR 0083): not the Orchestrator's to continue
         const target = need(contentOf(String(a.chatId)));
@@ -759,9 +771,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const st = d.brain.settings();
         if (!agentsMayOpen(st, target.harness)) throw new Error(`bloccato: ${openRefusal(st, target.harness, target.harness)}`);
         const allowStart = crossRule(target, 'riprendere');
-        const chat = await d.chats.continueChat(target.id, { allowStart, promptPrefix: voice() });
+        const chat = await d.chats.continueChat(target.id, { allowStart, promptPrefix: voice(), ...(typeof a.cwd === 'string' && a.cwd.trim() ? { cwd: a.cwd.trim() } : {}) });
         log.info('appctl', 'agent continued a chat in a new one', { chat: target.id, data: { next: chat.id } });
-        return { chatId: chat.id, title: chat.title, harness: chat.harness, continuedFrom: target.id };
+        return { chatId: chat.id, title: chat.title, harness: chat.harness, cwd: chat.cwd, continuedFrom: target.id };
       },
     },
   ];

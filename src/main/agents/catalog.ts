@@ -15,8 +15,9 @@ import { characterOf, isCharacterId } from '../../shared/characters';
 import { readLocal, writeLocal } from './local-store';
 import { AgentHistory, behaviourOf, firstVersion, sameBehaviour, versionedChanges } from './versions';
 import { checkedTools, type AgentPolicy } from './tool-policy';
-import { CARD_MODEL, PRESET_IDS, type PresetId, cardPresets, checkedPresets, choosePreset, presetAskOf, presetOrderProblem, type Delegator, type FullPresets, type PresetAsk, type PresetChoice, type RolePresets, type UnitPrice } from '../../shared/model-presets';
-import { checkedLevels, headPresets, levelNamed, levelsOf, pickInLevel, type FullLevels, type LevelModel, type RoleLevels, type Room } from '../../shared/model-levels';
+import { CARD_MODEL, USER_ASKED, PRESET_IDS, type PresetId, cardPresets, checkedPresets, choosePreset, presetAskOf, presetOrderProblem, type Delegator, type FullPresets, type PresetAsk, type PresetChoice, type RolePresets, type UnitPrice } from '../../shared/model-presets';
+import { checkedLevels, headPresets, levelNamed, levelsOf, pickInLevel, type FullLevels, type LevelModel, type LevelPick, type RoleLevels, type Room } from '../../shared/model-levels';
+import { checkedOrder, roleOrder } from '../../shared/engine-order';
 import { fiveRolesTextFor, fullDefaultsFor, shippedTextFor, skillAlignmentFor } from './role-migrate';
 import { engineOf } from '../engines/registry';
 import { log, errText } from '../log';
@@ -50,6 +51,9 @@ function parkedOf(v: unknown): Record<string, EngineChoice> | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
+/** Nothing of a role's level may start now: every plan spent, or no engine connected (ADR 0352). */
+export class NoEngine extends Error {}
+
 export interface AgentCatalogDeps {
   userData: string;
   models: () => AgentModelChoice[];
@@ -65,6 +69,10 @@ export interface AgentCatalogDeps {
   room?: (engine: Harness, model: string | null) => Room;
   /** why a role chat may not start on an engine now (off, the Orchestrators may not use it); null = it may */
   engineBlock?: (engine: Harness) => string | null;
+  /** the one order of the engines (Settings.engineOrder, ADR 0352); absent or empty = each list's own order */
+  engineOrder?: () => readonly Harness[];
+  /** an engine whose last start failed a moment ago (engine-health.ts): passed over while another one may start */
+  engineTrouble?: (engine: Harness) => boolean;
   emit?: (catalog: AgentCatalog) => void;
   now?: () => number;
   onCustomized?: () => void;
@@ -114,7 +122,7 @@ export function readOwner(v: unknown): AgentOwnerSnapshot | null {
 }
 
 /** The editable fields, validated. Name, purpose and character always come from the role. */
-type Behaviour = Pick<AgentProfile, 'instructions' | 'engine' | 'model' | 'effort' | 'tools' | 'permissionCeiling' | 'knowhow' | 'pack' | 'maxContext' | 'tier' | 'tierMax' | 'presets' | 'levels' | 'codeMode' | 'fast' | 'launches' | 'skills'>;
+type Behaviour = Pick<AgentProfile, 'instructions' | 'engine' | 'model' | 'effort' | 'tools' | 'permissionCeiling' | 'knowhow' | 'pack' | 'maxContext' | 'tier' | 'tierMax' | 'presets' | 'levels' | 'engineOrder' | 'codeMode' | 'fast' | 'launches' | 'skills'>;
 
 export class AgentCatalogService {
   private readonly file: string;
@@ -300,6 +308,9 @@ export class AgentCatalogService {
   private behaviour(value: Record<string, unknown>, id: string, current: boolean, base?: Behaviour, keep = true): Behaviour {
     const p = { ...(base ?? {}), ...Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) } as Record<string, unknown>;
     let levels = checkedLevels(p.levels);
+    // the role's exception to the one engine order (ADR 0352); null or [] = no exception
+    const engineOrder = p.engineOrder === undefined || p.engineOrder === null ? [] : checkedOrder(p.engineOrder);
+    if (current && value.engineOrder !== undefined) for (const id of engineOrder) if (!this.d.models().some(m => m.engine === id)) throw new Error(`Ordine dei motori: ${id} non è disponibile.`);
     if (levels && value.levels !== undefined) {
       // the lists are what the user edits (ADR 0347): the card's engine, model, effort and presets follow their heads,
       // so every reader of the card's own model (the map's «previsto», app_config, the strips) still reads the first
@@ -415,7 +426,7 @@ export class AgentCatalogService {
       ...(p.knowhow !== undefined && p.knowhow !== null ? { knowhow: checkedKnowhow(p.knowhow) } : {}),
       ...(p.pack !== undefined && p.pack !== null ? { pack: checkedPackIdentity(p.pack) } : {}),
       ...(typeof p.maxContext === 'number' ? { maxContext: p.maxContext } : {}),
-      tier: p.tier as ModelTier, tierMax: p.tierMax as ModelTier, ...(presets ? { presets } : {}), ...(levels ? { levels } : {}),
+      tier: p.tier as ModelTier, tierMax: p.tierMax as ModelTier, ...(presets ? { presets } : {}), ...(levels ? { levels } : {}), ...(engineOrder.length ? { engineOrder } : {}),
       ...(p.codeMode === true ? { codeMode: true } : {}), ...(p.fast === true ? { fast: true } : {}), launches: [...p.launches as string[]], skills: [...p.skills as string[]] };
   }
   /** The renderer's draft checked like a save, without saving (the editor's live check). */
@@ -613,16 +624,15 @@ export class AgentCatalogService {
       candidates = [{ ...named.at, ...(effortOf ? { effort: effortOf } : {}) }];
     }
     // the model of the level (ADR 0347): the first whose engine is on and whose plan has room, in the user's order
-    const got = this.pickIn(candidates, user ? undefined : req.delegator);
-    if (!got) throw new Error(user ? `${user.model} non può partire: ${this.unusable(candidates[0]!) ?? 'motore non pronto'}.`
-      : `Nessun modello del livello ${choice.preset} di ${p.name} può partire: ${candidates.map(x => `${x.model ?? 'predefinito'} su ${x.engine} (${this.unusable(x)})`).join(', ')}. Accendi un motore dal menu ⚙ o aggiungi un modello al livello.`);
+    const got = this.pickIn(p, candidates, user ? undefined : req.delegator);
+    if (!got.chosen) throw new NoEngine(user ? `${user.model} non può partire: ${got.reason}.` : this.noStart(p, choice.preset, got));
     const engine = got.chosen.engine;
     const e = this.d.models().find(x => x.engine === engine)!;
     // a review's independence is its clean session (it never sees its parent's reasoning), never another model (ADR 0091)
     const picked = { model: got.chosen.model };
     // the effort the model really takes (ADR 0211): a level it lacks becomes the nearest lower one, none when it takes none
     const effort = effortOn(got.chosen.effort ?? (user ? null : req.effort ?? null), picked.model ? e.models.find(m => m.id === picked.model)?.efforts : undefined) ?? undefined;
-    { const { effort: _h, ...noEffort } = choice; void _h; choice = { ...noEffort, model: picked.model, engine, route: got.reason, ...(effort ? { effort } : {}) }; }
+    { const { effort: _h, ...noEffort } = choice; void _h; choice = { ...noEffort, model: picked.model, engine, route: user ? `${this.modelWords(got.chosen)}: ${USER_ASKED}` : got.reason, ...(effort ? { effort } : {}) }; }
     const { model: _m, effort: _e, userModel: _u, preset: _p, presetWhy: _w, taskKind: _k, delegator: _d, ...rest } = req; void _m; void _e; void _u; void _p; void _w; void _k; void _d;
     const r = ROLE_DEFAULTS[p.id as RoleId];
     const instructions = `${rolePreamble(p.id)}\n\nRole: ${p.name}.\n${p.instructions}\nOutput: ${r.output}`;
@@ -646,42 +656,66 @@ export class AgentCatalogService {
   levelRoute(roleId: string): Record<PresetId, { engine: string; model: string | null; index: number; reason: string; state: Room['state'] } | null> {
     const levels = this.levelsFor(this.find(roleId));
     const one = (id: PresetId) => {
-      const g = this.pickIn(levels[id]);
-      return g ? { engine: g.chosen.engine, model: g.chosen.model, index: levels[id].indexOf(g.chosen), reason: g.reason, state: g.considered.find(c => c.at === g.chosen)?.room.state ?? 'unknown' } : null;
+      const g = this.pickIn(this.find(roleId), levels[id]);
+      return g.chosen ? { engine: g.chosen.engine, model: g.chosen.model, index: levels[id].indexOf(g.chosen), reason: g.reason, state: g.considered.find(c => c.at === g.chosen)?.room.state ?? 'unknown' } : null;
     };
     return { min: one('min'), base: one('base'), max: one('max') };
   }
   /** Why a model of a level may not start now; null = it may. */
   private unusable(x: LevelModel): string | null {
     const e = this.d.models().find(m => m.engine === x.engine);
-    if (!e) return 'motore sconosciuto';
-    if (!e.enabled || !e.trusted) return `${e.label} è spento`;
-    if (x.model !== null && !e.modelSelectable) return e.modelReason ?? `${e.label} non applica una scelta di modello`;
-    return this.d.engineBlock?.(x.engine) ?? null;
+    if (!e) return 'non disponibile';
+    // not installed or not logged in: not connected (the engine's own switch is off too then, engines/policy.ts engineOn)
+    if (e.installed === false || e.authenticated === false) return 'non collegato';
+    if (!e.enabled || !e.trusted) return 'spento';
+    if (x.model !== null && !e.modelSelectable) return 'non applica una scelta di modello';
+    return this.d.engineBlock?.(x.engine) ? 'non permesso agli agenti' : null;
+  }
+  /** How a chat reads a model of a level: the plan it spends and the model's own name («OpenAI GPT Sol»). */
+  private engineWords(x: LevelModel): string {
+    const label = this.d.models().find(m => m.engine === x.engine)?.label ?? x.engine;
+    return /^openai\//i.test(x.model ?? '') ? 'OpenAI' : label;
+  }
+  private modelWords(x: LevelModel): string {
+    const name = this.d.models().find(m => m.engine === x.engine)?.models.find(m => m.id === x.model)?.name || x.model || 'modello predefinito';
+    const engine = this.engineWords(x);
+    return name.toLowerCase().startsWith(engine.toLowerCase()) ? name : `${engine} ${name.replace(/^openai\//i, '')}`;
+  }
+  /** No model of a level may start: every plan spent, or none connected. Never a silent start (ADR 0352). */
+  private noStart(p: AgentProfile, level: PresetId, pick: LevelPick): string {
+    const spent = pick.considered.some(c => c.usable) && pick.considered.filter(c => c.usable).every(c => c.room.state === 'out');
+    return `${spent ? `Tutti i motori di ${p.name} (livello ${level}) sono al limite` : `Nessun modello del livello ${level} di ${p.name} può partire`}: ${pick.reason}. Niente è partito. ${spent ? 'Aspetta il rinnovo, collega un altro motore o cambia l’ordine in Impostazioni → Motori.' : 'Accendi un motore dal menu ⚙ o aggiungi un modello al livello.'}`;
   }
   /** The pick in a level. With a delegator's price ceiling (ADR 0336), a model priced above it is passed over while
    *  another of the level fits (or has no known price): a fallback is held to the ceiling as the head is. */
-  private pickIn(list: readonly LevelModel[], delegator?: Delegator) {
+  private pickIn(p: AgentProfile, list: readonly LevelModel[], delegator?: Delegator): LevelPick {
     const price = this.d.price, own = delegator?.model ?? null, cap = own && price ? price(own) : null;
     const over = (x: LevelModel) => cap !== null && !!x.model && (price!(x.model) ?? -1) > cap;
     const fits = cap !== null && list.some(x => !over(x) && this.unusable(x) === null);
-    return pickInLevel(list, x => this.unusable(x) ?? (fits && over(x) ? `costa più del modello di chi delega (${own})` : null), x => this.d.room?.(x.engine, x.model) ?? { state: 'unknown', why: '', resetsAt: null });
+    const priced = (x: LevelModel) => this.unusable(x) ?? (fits && over(x) ? `costa più del modello di chi delega (${own})` : null);
+    const room = (x: LevelModel): Room => this.d.room?.(x.engine, x.model) ?? { state: 'unknown', why: '', resetsAt: null };
+    // an engine that just failed to start, or one with no tools for a role that needs them (the API engine only reads), is
+    // passed over while another one may start: it is never what leaves the role with nothing
+    const needsTools = isRoleId(p.id) && ROLE_DEFAULTS[p.id].tools.some(c => c !== 'read');
+    const soft = (x: LevelModel): string | null => this.d.engineTrouble?.(x.engine) ? 'in errore' : needsTools && engineOf(x.engine)?.kind === 'api' ? 'senza gli strumenti del ruolo' : null;
+    const other = list.some(x => priced(x) === null && soft(x) === null && room(x).state !== 'out');
+    return pickInLevel(list, x => priced(x) ?? (other ? soft(x) : null), room, { order: roleOrder(p.engineOrder, this.d.engineOrder?.() ?? []), model: x => this.modelWords(x), engine: x => this.engineWords(x) });
   }
   /** What a role's card gives a chat of that role now, for a preset (ADR 0346: a chat that waited on its credits
    *  follows its card): the card's engine and that preset's model and effort, as a launch would get them (resolve's
    *  guards; nothing started). Throws as resolve does: engine off, a model the engine cannot apply. */
-  cardNow(roleId: string, ask: PresetAsk, delegator?: Delegator): { engine: Harness; model: string | null; effort: Effort | null } {
+  cardNow(roleId: string, ask: PresetAsk, delegator?: Delegator): { engine: Harness; model: string | null; effort: Effort | null; route?: string } {
     const p = this.find(roleId);
     const r = this.resolve({ harness: p.engine, cwd: '', roleId, ...ask, ...(delegator ? { delegator } : {}) } as NewChat);
-    return { engine: r.request.harness, model: r.request.model ?? null, effort: r.request.effort ?? null };
+    return { engine: r.request.harness, model: r.request.model ?? null, effort: r.request.effort ?? null, ...(r.presetChoice?.route ? { route: r.presetChoice.route } : {}) };
   }
   /** The preset a delegation of `roleId` would get (resolve's guards, nothing started), with the engine and model its
    *  level would start on now. */
   presetChoice(roleId: string, ask: PresetAsk, delegator?: Delegator): PresetChoice {
     const p = this.find(roleId), levels = this.levelsFor(p);
     const c = choosePreset({ presets: headPresets(levels), ask, ...(delegator ? { delegator } : {}), price: this.d.price ?? (() => null) });
-    const g = this.pickIn(levels[c.preset], delegator);
-    if (!g) return c;
+    const g = this.pickIn(p, levels[c.preset], delegator);
+    if (!g.chosen) return c;
     const { effort: _h, ...rest } = c; void _h;
     return { ...rest, engine: g.chosen.engine, model: g.chosen.model, route: g.reason, ...(g.chosen.effort ? { effort: g.chosen.effort } : {}) };
   }

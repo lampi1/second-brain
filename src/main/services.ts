@@ -34,6 +34,10 @@ export interface ChatService {
   /** Assign a versioned task to a compatible existing conversation. */
   agentPolicy?(chatId: string): AgentPolicy | null;
   assignTask?(chatId: string, text: string, options?: TaskAssignmentOptions): Promise<void>;
+  /** the same task in another folder or on another engine: a linked chat (ADR 0352, 0353) */
+  assignElsewhere?(chatId: string, text: string, options: TaskAssignmentOptions, to: { cwd?: string; place?: 'here' | 'copy'; on?: { harness: Harness; model: string | null; effort: Effort | null; route?: string } }): Promise<ChatSummary>;
+  /** the engine its role starts on now when it is another one than the chat's; throws when nothing may start */
+  engineNow?(chatId: string): { harness: Harness; model: string | null; effort: Effort | null; route?: string } | null;
   userEvents?(chatId: string, afterSeq?: number): UserTaskEvents;
   synthesizeResult?(runId: string, source: TaskSource): Promise<void>;
   answer(chatId: string, requestId: string, answer: Answer, by?: 'pc' | 'phone' | 'relay', byApp?: boolean): Promise<void>;
@@ -54,7 +58,7 @@ export interface ChatService {
   /** a kept plan starts; a job is stopped, resumed, replanned; a plan waiting for the user is put away (ADR 0342) */
   planStart(chatId: string): Promise<void>;
   planStop(chatId: string): Promise<void>;
-  planResume(chatId: string): Promise<void>;
+  planResume(chatId: string, cwd?: string): Promise<void>;
   planReplan(chatId: string, text: string): Promise<void>;
   planPutAway(chatId: string): void;
   stop(chatId: string, keepQueued?: boolean): Promise<void>;
@@ -103,7 +107,7 @@ export interface ChatService {
   handoff(chatId: string, opts?: { reason?: 'manual' | 'threshold' | 'finished' | 'continue'; allowStart?: boolean }): Promise<HandoffInfo>;
   /** ask false: never a turn of the chat, only the token-free note (the automatic closing uses it) */
   ensureHandoff(chatId: string, opts?: { allowStart?: boolean; ask?: boolean }): Promise<HandoffInfo>;
-  continueChat(chatId: string, opts?: { allowStart?: boolean; promptPrefix?: string }): Promise<ChatSummary>;
+  continueChat(chatId: string, opts?: { allowStart?: boolean; promptPrefix?: string; cwd?: string }): Promise<ChatSummary>;
   /** ADR 0103: the files back as they were before the chat's last turn */
   undoTurn(chatId: string): Promise<{ restored: number; removed: number }>;
   /** how the Claude chats used their context since the counters started (ADR 0031); absent in the demo */

@@ -28,12 +28,13 @@ export interface StartDeps {
   chats: Pick<ChatService, 'create'>;
   /** the engine a chat starts on before its role card decides */
   harness(): Harness;
-  /** the folder of a map's project; null = none known */
+  /** the last folder the job used, else its project's; null = none known */
   folderOf(map: WorkMap): string | null;
 }
 
-export const strategistStarter = (d: StartDeps) => async (m: WorkMap, change: string | undefined, by: string): Promise<ChatSummary> => {
-  const cwd = d.folderOf(m);
+export const strategistStarter = (d: StartDeps) => async (m: WorkMap, change: string | undefined, by: string, asked?: string): Promise<ChatSummary> => {
+  // the folder the user (or the Orchestrator) named, else the last one it used (ADR 0353)
+  const cwd = asked?.trim() || d.folderOf(m);
   if (!cwd) throw new Error('Non so in quale cartella lavorare: scegli prima la cartella del cervello.');
   const prompt = startPrompt(m, change);
   return d.chats.create({ harness: d.harness(), cwd, title: m.title, prompt: by === 'user' ? prompt : `${ORCHESTRATOR_USER_LABEL}\n\n${prompt}`, goal: (change ? `${m.title}: ${change}` : m.idea ?? m.title).slice(0, WORK_MAP_LIMITS.change), orchestrator: false, roleId: 'strategist' },

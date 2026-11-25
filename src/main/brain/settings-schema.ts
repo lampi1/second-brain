@@ -12,6 +12,7 @@ import type { Settings, SettingDef, SettingKey, SettingsPatch, WorktreeLimits } 
 import { ENGINE_ID, engineLabel, engineOf, engines } from '../engines/registry';
 import { canonicalRepoRoot } from './adapters/codex-policy';
 import { DELEGATION_DEFAULTS, DELEGATION_RANGE } from '../../shared/roles';
+import { THRESHOLD, checkedOrder } from '../../shared/engine-order';
 
 /** The compaction window of the app's Claude chats (ADR 0031): 200000 since 2026-10-14 (the user: «ripartenza a ~200k
  *  token di contesto»; 300000 before, ADR 0051). */
@@ -113,6 +114,11 @@ const BASE: readonly SettingDef[] = [
     description: 'Nessuna notifica di sistema; tutto resta nel feed.' },
   { key: 'mute.*', type: 'boolean', default: false, protected: true, label: 'Silenzia un tipo di novità',
     description: 'Nessuna notifica per questo tipo (idea, errore, chat finita…); resta nel feed.' },
+  // the one order of the engines (ADR 0352): which engine a role chat tries first; it changes no model, effort or permission
+  { key: 'engineOrder', type: 'engine-order', default: [], protected: true, label: 'Ordine dei motori',
+    description: 'L’ordine in cui ogni ruolo prova i motori (id, dal primo all’ultimo). Vale per tutti i ruoli, salvo l’eccezione scritta nella pagina di un ruolo. Vuoto = l’ordine delle liste di ogni livello.' },
+  { key: 'engineThresholds', type: 'engine-thresholds', default: {}, protected: true, label: 'Soglie dei motori',
+    description: 'Per ogni motore, la percentuale di piano usata oltre la quale si passa al motore successivo (da 10 a 97). Un motore senza soglia si usa fino al limite.' },
   // the engines' own keys (engineOn.<id>, engines.<id>, orchestratorChats.harness) come from engineDefs below
   { key: 'tasks.enabled', type: 'boolean', default: false, protected: true, label: 'Task: importazione automatica',
     description: 'Rilegge da sola i tuoi task dagli strumenti collegati (oggi Azure DevOps: work item, PR e novità sui ticket che segui), con gli script del brain (niente IA, zero token). Spento: solo con «Aggiorna ora».' },
@@ -205,6 +211,19 @@ export function validate(key: unknown, value: unknown): Checked {
   const k = key as SettingKey;
   if (value === null && d.nullable) return { ok: true, key: k, value: null };
   switch (d.type) {
+    case 'engine-order':
+      try { return { ok: true, key: k, value: checkedOrder(value) }; } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+    case 'engine-thresholds': {
+      const bad = { ok: false as const, error: `${d.label}: per ogni motore un numero intero da ${THRESHOLD.min} a ${THRESHOLD.max}` };
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return bad;
+      const out: Record<string, number> = {};
+      for (const [id, n] of Object.entries(value)) {
+        if (n === null) continue; // cleared
+        if (!ENGINE_ID.test(id) || !Number.isInteger(n) || (n as number) < THRESHOLD.min || (n as number) > THRESHOLD.max) return bad;
+        out[id] = n as number;
+      }
+      return { ok: true, key: k, value: out };
+    }
     case 'repo-paths': {
       if (!Array.isArray(value) || value.length > 32) return { ok: false, error: `${d.label}: al massimo 32 cartelle repository o worktree` };
       try { return { ok: true, key: k, value: [...new Set(value.map(canonicalRepoRoot))] }; }
@@ -242,6 +261,7 @@ export function defaults(): Settings {
     contextWarnTokens: 200_000, contextHandoff: false, compactWindowTokens: COMPACT_WINDOW, orchestratorDayCompact: true, quipsDaily: true, launchRulesClaude: false, launchRulesCodex: true, codexAutonomyRoots: [], coldHandoffMin: 50,
     engineOn: Object.fromEntries(engines().map(e => [e.id, e.defaultOn])),
     engines: Object.fromEntries(engines().map(e => [e.id, e.defaultOn])),
+    engineOrder: [], engineThresholds: {},
     messaging: { crossHarness: true },
     tasks: { enabled: false, everyMin: 30, sound: true },
     budget: { enabled: true, claude: { mode: 'warn', dailyUsd: null, perChatUsd: null }, cursor: { mode: 'warn', dailyUsd: null, perChatUsd: null } },

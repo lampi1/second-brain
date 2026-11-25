@@ -75,6 +75,11 @@ export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, 
     'profile:get': () => profile.get(),
     'profile:save': a => profile.save(a),
     'app:info': () => ({ version: app.getVersion(), ...s.brain.info(), mcpUrl: s.browser.mcpUrlFor(null), cli: s.cli(), engines: engineInfos(), health: healthSnapshot(), systemLang: systemLang(), cores: os.availableParallelism?.() ?? os.cpus().length }),
+    'app:pickFolder': async a => {
+      const from = typeof a?.from === 'string' && path.isAbsolute(a.from) ? a.from : undefined;
+      const w = win(), r = w ? await dialog.showOpenDialog(w, { title: 'Scegli la cartella della chat', properties: ['openDirectory'], ...(from ? { defaultPath: from } : {}) }) : null;
+      return r && !r.canceled ? r.filePaths[0] ?? null : null;
+    },
     'app:pickRepo': async () => {
       const w = win(), result = w ? await dialog.showOpenDialog(w, { title: 'Scegli un repository per Codex', properties: ['openDirectory'] }) : null;
       const selected = result && !result.canceled ? result.filePaths[0] : null;

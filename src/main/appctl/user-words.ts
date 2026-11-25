@@ -9,6 +9,8 @@ import type { Answer, PendingRequest } from '../../shared/contract';
 
 const typed = new Map<string, number>();
 const answered = new Map<string, number>();
+/** what the user's last yes was about: the question and its brief, as the card showed them (ADR 0352) */
+const answeredAbout = new Map<string, { at: number; text: string }>();
 const remember = (m: Map<string, number>, chatId: string, at: number) => {
   m.set(chatId, at);
   if (m.size > 200) m.delete(m.keys().next().value!);
@@ -30,7 +32,18 @@ export function saysYes(req: Pick<PendingRequest, 'type' | 'tool' | 'questions'>
   return yesNo && given.length > 0 && given.length >= req.questions.length && given.every(v => typeof v === 'string' && label(v) === YES);
 }
 /** The user clicked yes on a native question of this chat now. */
-export function noteUserAnswered(chatId: string, at = Date.now()): void { remember(answered, chatId, at); }
+export function noteUserAnswered(chatId: string, at = Date.now(), about = ''): void {
+  remember(answered, chatId, at);
+  answeredAbout.set(chatId, { at, text: about });
+  if (answeredAbout.size > 200) answeredAbout.delete(answeredAbout.keys().next().value!);
+}
+/** What the user said yes to in this chat since `since`: the card's own words, or null. A change those words name exactly
+ *  needs no other proof, whatever reached the chat after the yes: news held while the panel was open lands right after
+ *  it (2026-11-24: two yeses in a row lost 0,1 s after the click). */
+export function answeredText(chatId: string, since: number): string | null {
+  const a = answeredAbout.get(chatId);
+  return a && a.at >= since && a.text ? a.text : null;
+}
 export const lastAnswered = (chatId: string): number | undefined => answered.get(chatId);
 
 export interface AskProof {

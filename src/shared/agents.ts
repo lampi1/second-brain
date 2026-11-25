@@ -62,6 +62,8 @@ export interface AgentDraft {
   presets?: RolePresets;
   /** several models per level, across engines, in the user's order (ADR 0347); a level absent = its preset above */
   levels?: RoleLevels;
+  /** this role's exception to the one engine order (Settings.engineOrder, ADR 0352); absent or empty = the one order */
+  engineOrder?: Harness[];
   /** Code Mode for this role's chats (ADR 0331, per role since 2026-11-23): run_code in place of the engine's own file
    *  and shell tools, at the level its engine allows (shared/code-mode-level.ts); absent = off; never the Orchestrator */
   codeMode?: boolean;
@@ -87,7 +89,7 @@ export function effortOn(asked: Effort | null | undefined, efforts: readonly Eff
   return lower.length ? lower.reduce((a, b) => order.indexOf(b) > order.indexOf(a) ? b : a) : efforts[0]!;
 }
 /** Fields that change what a run does. Saving a change to any of them creates a new version. */
-export const BEHAVIOUR_FIELDS = ['instructions', 'engine', 'model', 'effort', 'tools', 'permissionCeiling', 'knowhow', 'maxContext', 'tier', 'tierMax', 'presets', 'levels', 'codeMode', 'fast', 'launches', 'skills'] as const;
+export const BEHAVIOUR_FIELDS = ['instructions', 'engine', 'model', 'effort', 'tools', 'permissionCeiling', 'knowhow', 'maxContext', 'tier', 'tierMax', 'presets', 'levels', 'engineOrder', 'codeMode', 'fast', 'launches', 'skills'] as const;
 export type AgentBehaviour = Pick<AgentDraft, (typeof BEHAVIOUR_FIELDS)[number]>;
 /** What a card names on one engine only. */
 export interface EngineChoice { model: string | null; effort?: Effort; presets?: RolePresets; fast?: boolean }

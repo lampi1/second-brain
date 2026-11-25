@@ -1,11 +1,10 @@
-// The folders a delegated chat may work in (ADR 0083, ADR 0345): its parent's folder, or any other existing folder, also
-// of another repository (a Strategist's plan often spans several projects; before 2026-11-24 a child never left its
-// parent's repository, #460). The folder is no permission: tool classes and the ceiling still only go down
-// (agents/tool-policy.ts). Used by agents/delegation.ts (agent_delegate's early check) and chats/manager.ts (the check
-// at create, the one that counts). A writing child gets its isolated worktree from DelegateWorktrees.prepare, in the
-// repository of its own folder: a reused slot of that repository's pool (worktree-pool.ts, ADR 0227) or a new one, with
-// one GitSession per prepare (the filter policy read once per folder, spawns counted) and each step's ms logged as
-// 'delegation worktree ready'.
+// The folder a chat works in (ADR 0353): whoever opens it names any existing folder (folderProblem is the only refusal)
+// and how: `here`, in that folder itself (the default: nothing is copied, uncommitted changes are only said), or `copy`,
+// an isolated worktree of the folder's repository, made only when asked. The folder is no permission: tool classes and
+// the ceiling still only go down (agents/tool-policy.ts). Used by agents/delegation.ts and appctl/tools.ts (the early
+// check) and chats/manager.ts (the check at create, the one that counts). A copy comes from DelegateWorktrees.prepare: a
+// reused slot of the repository's pool (worktree-pool.ts, ADR 0227) or a new one, with one GitSession per prepare (the
+// filter policy read once per folder, spawns counted) and each step's ms logged as 'delegation worktree ready'.
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import { randomBytes } from 'node:crypto';
@@ -26,11 +25,25 @@ const samePath = (a: string, b: string): boolean => {
   return process.platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y;
 };
 
-/** Whether a delegated chat may work in `cwd`: inside its parent's folder, or any existing absolute folder (another
- *  checkout or repository, ADR 0345). */
-export function delegableFolder(parentCwd: string, cwd: string): boolean {
-  return within(parentCwd, cwd) || (!!cwd && path.isAbsolute(cwd) && isDir(cwd));
+/** Why a chat may not work in a folder, naming it (ADR 0353); null = it may. The only refusal about a folder. */
+export function folderProblem(cwd: unknown): string | null {
+  const f = typeof cwd === 'string' ? cwd.trim() : '';
+  if (!f) return 'Cartella non valida: (vuota).';
+  if (!path.isAbsolute(f)) return `Cartella non valida: ${f}: serve un percorso assoluto.`;
+  let st: fs.Stats;
+  try { st = fs.statSync(f); } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    return `Cartella non valida: ${f}: ${code === 'ENOENT' || code === 'ENOTDIR' ? 'non esiste' : `non è accessibile (${code ?? 'errore'})`}.`;
+  }
+  if (!st.isDirectory()) return `Cartella non valida: ${f}: è un file, non una cartella.`;
+  try { fs.readdirSync(f); } catch (e) { return `Cartella non valida: ${f}: non è accessibile (${(e as NodeJS.ErrnoException).code ?? 'errore'}).`; }
+  return null;
 }
+
+/** Same folder as the file system sees it. */
+export const sameFolder = (a: string, b: string): boolean => samePath(a, b);
+/** One folder is the other or inside it: two chats that write there can touch the same files. */
+export const overlapping = (a: string, b: string): boolean => within(real(a), real(b)) || within(real(b), real(a));
 
 /** A writer is determined by its final narrowed tool classes, never the role's display name. Unknown policies and
  * external MCP tools can write; plan mode alone does not make those external tools read-only. */
@@ -226,37 +239,43 @@ export class DelegateWorktrees {
       && typeof v.branch === 'string' && /^sb\/delegate-(?:[a-f0-9]{12}|[a-f0-9-]{36})$/.test(v.branch) && typeof v.base === 'string' && /^[a-f0-9]{40,64}$/.test(v.base);
   }
 
-  prepare = async (parent: ChatSummary, req: NewChat, policy: AgentPolicy | null, continuationOf?: string): Promise<{ cwd: string; parentRunId: string | undefined; parentTaskVersion: number | undefined; bind?: (childId: string) => void }> => {
+  /** A child that works in a worktree made for it: its changes are integrated; any other child's are already in its folder. */
+  isolated = (child: Pick<ChatSummary, 'id' | 'cwd'>): boolean => this.allocations.get(real(child.cwd))?.childId === child.id;
+
+  /** What a chat that writes in place must know of its folder: the changes nobody committed. Nothing is touched, and a
+   *  folder git cannot read says nothing. */
+  private async uncommitted(cwd: string): Promise<string[]> {
+    const s = await new GitSession().git(cwd, ['status', '--porcelain=v1', '--untracked-files=normal']).catch(() => null);
+    const lines = s?.exit === 0 ? blockingChanges(s.out, false) : [];
+    if (!lines.length) return [];
+    return [`La cartella ${cwd} ha ${lines.length} ${lines.length === 1 ? 'modifica non committata' : 'modifiche non committate'} (${lines.slice(0, 5).map(l => l.slice(3)).join(', ')}${lines.length > 5 ? ', …' : ''}). Restano dove sono: non perderle, non spostarle, niente stash, checkout, reset o clean su di loro.`];
+  }
+
+  prepare = async (parent: ChatSummary, req: NewChat, policy: AgentPolicy | null, continuationOf?: string): Promise<{ cwd: string; parentRunId: string | undefined; parentTaskVersion: number | undefined; notes?: string[]; isolated?: boolean; bind?: (childId: string) => void }> => {
     const provenance = { parentRunId: parent.run?.runId, parentTaskVersion: parent.run?.taskVersion };
     const cwd = req.cwd;
     if (!needsIsolatedWorktree(policy)) return { cwd, ...provenance };
+    // a child that goes on in its own worktree keeps it, with its base and its branch: no second copy
+    const kept = continuationOf === undefined ? undefined : this.allocations.get(real(cwd));
+    if (kept && kept.childId === continuationOf && kept.parentId === parent.id) return { cwd, ...provenance, isolated: true, notes: await this.uncommitted(cwd), bind: childId => {
+      const owned: IsolatedDelegation = { ...kept, childId, ...provenance, parentCwd: parent.cwd };
+      if (!this.valid(owned)) throw new Error('Invalid host-owned isolation provenance.');
+      const next = new Map(this.allocations); next.set(real(cwd), owned);
+      if (this.file) writeLocal(this.file, [...next.values()]);
+      this.allocations.set(real(cwd), owned);
+    } };
+    // in the folder itself (ADR 0353): nothing is copied, nothing is refused
+    if (req.place !== 'copy') return { cwd, ...provenance, notes: await this.uncommitted(cwd) };
     // One checkout is verified once, through one session (each checkout's policy read once): each Git spawn costs up to
     // seconds on Windows with real-time antivirus scanning (ADR 0227 measured the steps)
     const brain = this.brainRoot(), session = new GitSession(), t0 = Date.now();
-    // the child's folder names the repository (ADR 0345): the parent's own, where the parent's checkout must be clean
-    // too, or another one, where only the child's checkout counts (the parent's folder may be no repository at all)
-    let parentRepo: Checkout | null = null, source: Checkout;
-    if (samePath(parent.cwd, cwd)) parentRepo = source = await cleanRepository(cwd, brain, session);
-    else {
-      // a parent folder that is no repository, or one the host policy blocks (the child's own checkout would get the same
-      // refusal just below if it were of that repository), counts as «another repository»; a git that failed is an error
-      const parentId = await repositoryIdentity(parent.cwd, session).catch((e: unknown) => { if (e instanceof NoRepository) return null; throw e; });
-      const sourceId = await repositoryIdentity(cwd, session);
-      if (parentId && samePath(parentId.common, sourceId.common)) parentRepo = await requireClean(parentId, brain, session);
-      source = await requireClean(sourceId, brain, session);
-    }
-    let base = source.head;
-    // the checkout a child of another repository is staged in: its own, or for a continued child (whose folder is its
-    // predecessor's worktree) the one its predecessor was branched from
-    let sourceRoot = source.root;
-    if (continuationOf !== undefined) {
-      const previous = this.allocation(parent, { id: continuationOf, parentId: parent.id, cwd } as ChatSummary);
-      sourceRoot = previous.sourceRoot ?? sourceRoot;
-      if (previous.common !== source.common || !samePath(previous.root, source.root)
-        || await session.required(source.root, ['symbolic-ref', '--short', 'HEAD']) !== previous.branch
-        || (await session.git(source.root, ['merge-base', '--is-ancestor', previous.base, source.head])).exit !== 0) throw new Error('Continuation source no longer matches its original isolated baseline.');
-      base = previous.base;
-    }
+    // the folder names the repository; the parent's own checkout is never read for its state, only to know whether it is
+    // the same repository (where the copy's changes are staged, delegation-integration.ts). A git that failed there is no
+    // reason to refuse: the copy is then staged in its own checkout
+    const sourceId = await repositoryIdentity(cwd, session);
+    const parentId = samePath(parent.cwd, cwd) ? sourceId : await repositoryIdentity(parent.cwd, session).catch((e: unknown) => { if (e instanceof NoRepository) return null; throw e; });
+    const sameRepo = !!parentId && samePath(parentId.common, sourceId.common);
+    const source = await requireClean(sourceId, brain, session), base = source.head, sourceRoot = source.root;
     const relative = path.relative(source.root, real(cwd));
     if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('Delegation folder is outside the repository.');
     const t1 = Date.now();
@@ -267,14 +286,14 @@ export class DelegateWorktrees {
       const childCwd = path.join(isolated.root, relative);
       if (!isDir(childCwd) || !within(isolated.root, childCwd)) throw new Error('Requested project folder is absent from the committed isolated worktree.');
       // Detect source edits made during checkout; do not launch on a stale baseline. A fresh session: the checks must
-      // read the checkout now. status and HEAD are checkout-wide: the parent's folder in the same checkout needs no second probe
+      // read the checkout now
       const again = new GitSession();
-      const after = await cleanRepository(source.root, brain, again), parentAfter = !parentRepo || samePath(parentRepo.root, source.root) ? after : await cleanRepository(parent.cwd, brain, again);
-      if (after.head !== source.head || (parentRepo && parentAfter.head !== parentRepo.head)) throw new Error('Repository changed while preparing isolation; retry delegation.');
+      const after = await cleanRepository(source.root, brain, again);
+      if (after.head !== source.head) throw new Error('Repository changed while preparing isolation; retry delegation.');
       log.info('agents', 'delegation worktree ready', { data: { reused: isolated.reused, statusMs: t1 - t0, takeMs: t2 - t1, verifyMs: Date.now() - t2, spawns: session.spawns + again.spawns } });
-      return { cwd: childCwd, ...provenance, bind: childId => {
+      return { cwd: childCwd, ...provenance, isolated: true, bind: childId => {
         const owned: IsolatedDelegation = { childId, parentId: parent.id, ...provenance, parentCwd: parent.cwd,
-          common: source.common, root: isolated.root, cwd: childCwd, branch: isolated.branch, base, ...(parentRepo ? {} : { sourceRoot }) };
+          common: source.common, root: isolated.root, cwd: childCwd, branch: isolated.branch, base, ...(sameRepo ? {} : { sourceRoot }) };
         if (!this.valid(owned)) throw new Error('Invalid host-owned isolation provenance.');
         // a reused slot belongs to this child only: an earlier child's record of the same worktree goes
         const next = new Map([...this.allocations].filter(([, a]) => !samePath(a.root, isolated.root))); next.set(real(childCwd), owned);
