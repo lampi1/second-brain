@@ -192,6 +192,91 @@ describe('the one order of the engines (ADR 0357)', () => {
     expect(w.c.list().profiles.find(p => p.id === 'artisan')!.levels!.base![0]!.engine).toBe('claude');
   });
 
+  it('a chat that failed mid-turn started: it is not moved as if it never had (finding 4)', async () => {
+    const w = world(); w.order('opencode', 'antigravity', 'claude');
+    const a = await w.start();
+    w.sinks.get(a.id)!.item({ kind: 'tool', id: 't', at: Date.now(), name: 'Write', summary: 'scrive', input: {}, status: 'ok' }, false);
+    w.sinks.get(a.id)!.exit({ code: 1, error: 'processo caduto' });
+    expect(w.get(a.id).creditWait).toBeUndefined();
+    expect(w.get(a.id).state).toBe('error');
+  });
+
+  it('a chat that never started begins on the next engine with its whole first message (finding 5)', async () => {
+    const w = world(); w.order('opencode', 'antigravity', 'claude');
+    const prompt = `Contratto\n${'riga lunga del contratto\n'.repeat(400)}Fatto quando: l'ultima riga arriva intera`;
+    const a = await w.start('artisan', { prompt });
+    w.sinks.get(a.id)!.exit({ code: 1, error: 'login scaduto' });
+    expect(await w.m.creditContinue(a.id, w.c.cardNow('artisan', {}), { from: 'a', to: 'b', level: 'Base', why: 'non è partito' })).toBe(true);
+    const next = w.get(w.get(a.id).continuedBy!.id);
+    expect(w.sent.get(next.id)!.join('\n')).toContain(prompt);
+  });
+
+  it('a new task in a linked chat goes through every check of an assignment and a Strategist asks again (finding 3)', async () => {
+    const w = world();
+    await w.m.create({ harness: 'claude', cwd: w.dir, orchestrator: true } as never, 'user');
+    const s = await w.start('strategist', { title: 'Lavoro' }), other = path.join(w.dir, 'altra'); fs.mkdirSync(other);
+    const old = w.get(s.id).run!.runId;
+    (w.m as unknown as { need(id: string): { s: { plan?: unknown } } }).need(s.id).s.plan = { phase: 'running', at: 1, steps: [{ text: 'a', role: 'artisan' }], clarified: 1, stopped: true };
+    // refused before anything changes: an unknown review, a wrong cursor, a wrong delivery
+    await expect(w.m.assignElsewhere(s.id, 'Nuovo', { mode: 'new-task', reviewOf: 'run_no' }, { cwd: other })).rejects.toThrow();
+    await expect(w.m.assignElsewhere(s.id, 'Nuovo', { mode: 'new-task', deliveryPolicy: 'boh' as never }, { cwd: other })).rejects.toThrow();
+    expect(w.get(s.id).continuedBy).toBeUndefined();
+    const next = await w.m.assignElsewhere(s.id, 'Nuovo lavoro', { mode: 'new-task' }, { cwd: other });
+    expect(next).toMatchObject({ cwd: other, continuedFrom: { id: s.id } });
+    expect(w.get(next.id).plan).toMatchObject({ phase: 'asking' });
+    expect(w.sent.get(next.id)!.join('\n')).toContain('Nuovo lavoro');
+    // one task, one chain of runs: the old run is over, the new one is the next version
+    expect(w.m.runs.get(old)!.endedAt).toBeDefined();
+    expect(w.get(next.id).run).toMatchObject({ taskVersion: 2 });
+    expect(w.m.runs.list().filter(r => r.chatId === next.id)).toHaveLength(1);
+  });
+
+  it('a «Ferma» stays after any move but «Riprendi» (finding 3)', async () => {
+    const w = world(), s = await w.start('strategist', { title: 'Fermo' }), other = path.join(w.dir, 'altra'); fs.mkdirSync(other);
+    const rec = (w.m as unknown as { need(id: string): { s: { plan?: unknown } } }).need(s.id);
+    rec.s.plan = { phase: 'running', at: 1, steps: [{ text: 'a', role: 'artisan' }], clarified: 1, stopped: true };
+    const moved = await w.m.continueChat(s.id, { ask: false, cwd: other });
+    expect(w.get(moved.id).plan).toMatchObject({ phase: 'running', stopped: true });
+    await w.m.planResume(moved.id, w.dir);
+    const again = w.get(w.get(moved.id).continuedBy!.id);
+    expect(again.plan).toMatchObject({ phase: 'running' });
+    expect(again.plan!.stopped).toBeUndefined();
+    // the plan moved: it is not in two chats
+    expect(w.get(s.id).plan).toBeUndefined();
+  });
+
+  it('a chat with chats at work under it stays where they report (finding 9); one already going on takes no second task (finding 10)', async () => {
+    const w = world(), s = await w.start('strategist', { title: 'Padre' }), other = path.join(w.dir, 'altra'); fs.mkdirSync(other);
+    const tools = delegationTools({ chats: w.m, roles: () => w.c.list(), settings: () => DELEGATION_DEFAULTS, engineRefusal: () => null, label: '[agente]', runs: () => w.m.runs.list() });
+    await tools.find(t => t.name === 'agent_delegate')!.run({ tasks: [{ role: 'artisan', title: 'Figlia', contract: { goal: 'g', doneWhen: ['d'] } }] }, { mount: 'chat', params: { chatId: s.id }, sessionId: '', signal: new AbortController().signal } as never);
+    await expect(w.m.assignElsewhere(s.id, 'x', { mode: 'continue' }, { cwd: other })).rejects.toThrow(/chats at work under it/);
+    await expect(w.m.planResume(s.id, other)).rejects.toThrow(/altre chat al lavoro/);
+    w.order('opencode', 'claude');
+    expect((await w.m.continueChat(s.id, { ask: false })).harness).toBe('claude');
+    const a = await w.start('artisan', { title: 'Sola' });
+    const going = w.m.continueChat(a.id, { ask: false });
+    await expect(w.m.assignElsewhere(a.id, 'secondo', { mode: 'continue' }, { cwd: other })).rejects.toThrow(/already going on|goes on in/);
+    await going;
+  });
+
+  it('a reuse in another folder runs on the preset it asks for (finding 11)', async () => {
+    const w = world();
+    const s = await w.start('strategist', { title: 'P' }), other = path.join(w.dir, 'altra'); fs.mkdirSync(other);
+    const tools = delegationTools({ chats: w.m, roles: () => w.c.list(), settings: () => DELEGATION_DEFAULTS, engineRefusal: () => null, label: '[agente]', runs: () => w.m.runs.list(), ordered: r => w.c.followsOrder(r),
+      presetChoice: (_r, a) => ({ preset: a.preset ?? 'base', model: a.preset === 'max' ? 'opus-max' : 'opus', effort: a.preset === 'max' ? 'max' : 'high', engine: 'claude', warnings: [] }) as never });
+    const call = async (name: string, args: Record<string, unknown>, id = s.id) => JSON.parse(await tools.find(t => t.name === name)!.run(args, { mount: 'chat', params: { chatId: id }, sessionId: '', signal: new AbortController().signal } as never) as string);
+    const child = (await call('agent_delegate', { tasks: [{ role: 'artisan', title: 'Parte', contract: { goal: 'g', doneWhen: ['d'] } }] })).children[0];
+    await call('agent_report', { outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'd', met: true, evidence: 'e' }] }, child.chatId);
+    w.sinks.get(child.chatId)!.item({ kind: 'result', id: 'r', at: Date.now(), costUsd: 0, durationMs: 1, turns: 1, isError: false }, false);
+    w.sinks.get(child.chatId)!.changed({ state: 'idle' });
+    const out = await call('agent_assign_task', { chatId: child.chatId, roleId: 'artisan', cwd: other, mode: 'continue', preset: 'max', presetWhy: 'difficile', contract: { goal: 'ancora', doneWhen: ['d2'] } });
+    const next = w.get(out.chatId);
+    expect(next).toMatchObject({ cwd: other, model: 'opus-max', effort: 'max' });
+    expect(next.run).toMatchObject({ model: 'opus-max', presetChoice: { preset: 'max' }, taskVersion: 2 });
+    expect(next.delegation).toMatchObject({ doneWhen: ['d2'] });
+    expect(next.delegation!.result).toBeUndefined();
+  });
+
   it('7 · reuse and «Riprendi» follow the new order; a chat under way never changes engine by itself', async () => {
     const w = world();
     const s = await w.start('strategist', { title: 'Piano' });

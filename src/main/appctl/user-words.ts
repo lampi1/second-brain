@@ -40,9 +40,14 @@ export function noteUserAnswered(chatId: string, at = Date.now(), about = ''): v
 /** What the user said yes to in this chat since `since`: the card's own words, or null. A change those words name exactly
  *  needs no other proof, whatever reached the chat after the yes: news held while the panel was open lands right after
  *  it (2026-11-24: two yeses in a row lost 0,1 s after the click). */
-export function answeredText(chatId: string, since: number): string | null {
+export function answeredText(chatId: string, since: number): { text: string; used(): void } | null {
   const a = answeredAbout.get(chatId);
-  return a && a.at >= since && a.text ? a.text : null;
+  return a && a.at >= since && a.text ? { text: a.text, used: () => { if (answeredAbout.get(chatId) === a) answeredAbout.delete(chatId); } } : null;
+}
+/** What a yes was about: the question, the «Sì» option's own words and the brief's «Se Sì» on this very question. What the
+ *  card says about the «No» is no part of it. */
+export function yesAbout(req: Pick<PendingRequest, 'questions'>, ifYes: string): string {
+  return [...(req.questions ?? []).flatMap(q => [q.question, ...q.options.filter(o => label(o.label) === YES).map(o => o.description ?? '')]), ifYes].filter(x => x.trim()).join('\n');
 }
 export const lastAnswered = (chatId: string): number | undefined => answered.get(chatId);
 

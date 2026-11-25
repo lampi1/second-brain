@@ -121,12 +121,13 @@ describe('parent child task continuity',()=>{
     const tools=delegationTools({chats:f.chats,roles:()=>f.catalog,settings:()=>DELEGATION_DEFAULTS,engineRefusal:()=>null,label:'[agent]',runs:()=>[],ordered:()=>ordered,
       presetChoice:()=>({preset:'base',model:'gpt',engine:'opencode',route:'OpenAI Sol: primo disponibile',warnings:[],...(allOut?{allOut:true as const}:{})})});
     // no engine order: a reuse stays on its engine while that one can run (ADR 0352); nor onto a level with no room
-    const run=()=>tools.find(t=>t.name==='agent_assign_task')!.run(f.args(),{params:{chatId:'parent'}} as never);
+    const {expectedVersion:_v,...again}=f.args() as Record<string,unknown>;void _v;
+    const run=()=>tools.find(t=>t.name==='agent_assign_task')!.run(again,{params:{chatId:'parent'}} as never);
     expect(JSON.parse(await run() as string)).toMatchObject({chatId:'child'});
     ordered=true;allOut=true;
     expect(JSON.parse(await run() as string)).toMatchObject({chatId:'child'});
     expect(elsewhere).not.toHaveBeenCalled();f.assign.mockClear();allOut=false;
-    const out=JSON.parse(await tools.find(t=>t.name==='agent_assign_task')!.run(f.args(),{params:{chatId:'parent'}} as never) as string);
+    const out=JSON.parse(await run() as string);
     expect(out).toMatchObject({chatId:'linked',continuedFrom:'child',harness:'opencode'});
     expect(elsewhere).toHaveBeenCalledWith('child',expect.any(String),expect.any(Object),{on:{harness:'opencode',model:'gpt',effort:null,route:'OpenAI Sol: primo disponibile'}});
     expect(f.assign).not.toHaveBeenCalled();

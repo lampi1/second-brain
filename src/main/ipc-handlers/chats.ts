@@ -6,7 +6,7 @@ import { chatItemsReply } from '../../shared/chat-window';
 import { createRoutedChat } from '../chats/routed';
 import { gitBranches } from '../chats/branch';
 import { markRunOutcome, touchRunOf } from '../run/outcome';
-import { noteUserAnswered, noteUserTyped, saysYes } from '../appctl/user-words';
+import { noteUserAnswered, noteUserTyped, saysYes, yesAbout } from '../appctl/user-words';
 import { readClipboardImage } from '../clipboard-image';
 import type { HandlerContext, HandlersOf } from './context';
 
@@ -41,7 +41,7 @@ export function chatsHandlers({ s, activity, orchestrator, clip }: HandlerContex
       // a configuration change the app holds (ADR 0357): its panel is the app's, answered here
       if (s.pendingConfig?.owns(a.requestId)) { s.pendingConfig.answer(a.requestId, a.answer); return; }
       const req = s.chats.pending().find(r => r.chatId === a.chatId && r.id === a.requestId);
-      const about = req ? [req.title, req.detail, ...(req.questions ?? []).flatMap(q => [q.question, ...q.options.map(o => o.description ?? '')]), s.briefText?.(a.chatId) ?? ''].join('\n') : '';
+      const about = req ? yesAbout(req, s.briefYes?.(a.chatId, a.requestId) ?? '') : '';
       try { await s.chats.answer(a.chatId, a.requestId, a.answer); } catch (e) { activity.notAnswered(a.chatId, a.requestId); throw e; }
       // the user's own «Sì» to an Orchestrator's native Sì/No question: app_config takes it as their ask (appctl/user-words.ts)
       if (saysYes(req, a.answer) && s.chats.list().some(c => c.id === a.chatId && c.isOrchestrator)) noteUserAnswered(a.chatId, Date.now(), about);

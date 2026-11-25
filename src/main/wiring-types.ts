@@ -115,7 +115,7 @@ export interface Wired {
   /** configuration changes the app holds for the user (ADR 0357) */
   pendingConfig?: PendingConfig;
   /** the words of the last brief a chat put on its question (genui/artifacts.ts) */
-  briefText?: (chatId: string) => string;
+  briefYes?: (chatId: string, requestId: string) => string;
   /** "Eventi all'Orchestrator": work chats' news wakes the Orchestrator (chats/orchestrator-wake.ts) */
   wake: OrchestratorWake;
   /** "N novità in attesa" (#88): what the delivery rule holds back for the Orchestrators (chats/held-news.ts) */

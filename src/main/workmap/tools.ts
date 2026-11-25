@@ -38,6 +38,6 @@ export async function jobAction(maps: WorkMaps, action: JobAction, a: Record<str
   if (action === 'job') return workText(maps.view(id)!);
   // the plan that is proposed now: a newer one is refused by the chat itself
   const at = maps.get(id)?.plan?.at;
-  const m = await maps.act(id, action satisfies WorkMapAction, { ...(at !== undefined ? { at } : {}), ...(text(a.text) ? { text: text(a.text) } : {}) }, 'Orchestrator');
+  const m = await maps.act(id, action satisfies WorkMapAction, { ...(at !== undefined ? { at } : {}), ...(text(a.text) ? { text: text(a.text) } : {}), ...(text(a.cwd) ? { cwd: text(a.cwd) } : {}) }, 'Orchestrator');
   return { ok: true, job: m.id, state: m.state, ...(m.owner ? { chatId: m.owner.chatId } : {}) };
 }

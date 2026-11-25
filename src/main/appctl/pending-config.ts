@@ -24,6 +24,8 @@ export interface PendingChange extends HeldChange {
   chatId: string;
   /** the exact change in the user's words, written by the app */
   text: string;
+  /** a long text (a role's instructions), shown whole on the panel */
+  full?: string;
   /** why it is not applied yet */
   why: string;
   reason?: string;
@@ -85,7 +87,7 @@ export class PendingConfig {
 
   private panel(c: PendingChange): PendingRequest {
     const question = `${c.text} Applico?`;
-    return { id: c.id, chatId: this.owner(c), type: 'question', tool: CONFIG_TOOL, title: question, detail: `Da applicare: ${c.why}`, input: {}, at: c.at,
+    return { id: c.id, chatId: this.owner(c), type: 'question', tool: CONFIG_TOOL, title: question, detail: `Da applicare: ${c.why}${c.full !== undefined ? `\n\n${c.full}` : ''}`, input: {}, at: c.at,
       questions: [{ question, header: 'Da applicare', multiSelect: false, options: [
         { label: 'Sì (consigliato)', description: `La applico subito. Non applicata finora: ${c.why}` },
         { label: 'No', description: 'Resta tutto com’è.' }] }] };
@@ -116,5 +118,7 @@ export class PendingConfig {
     const words = given.join(' · ').trim();
     if (!words) throw new Error('Rispondi Sì o No.');
     this.d.words?.(this.owner(c), words);
+    // the page took the panel away when he answered: it is still open
+    this.d.emit('pending:added', this.panel(c));
   }
 }

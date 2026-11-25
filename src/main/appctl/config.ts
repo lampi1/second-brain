@@ -29,7 +29,7 @@ import { parseMcpSnippet, publicDraft } from '../../shared/mcp-paste';
 import { cardPresets, checkedPresets, type FullPresets, type ModelPreset, type RolePresets } from '../../shared/model-presets';
 import { checkedLevels, type FullLevels, type LevelModel, type RoleLevels } from '../../shared/model-levels';
 import { defOf, getAt, validate } from '../brain/settings-schema';
-import { namesInOrder } from '../../shared/engine-order';
+import { namesInOrder, wordsOf } from '../../shared/engine-order';
 import { ToolRefusal } from '../mcp/refusal';
 import type { HeldChange, PendingChange } from './pending-config';
 import { addRedaction, log } from '../log';
@@ -41,7 +41,7 @@ export interface ConfigDeps {
   /** the user wrote to this Orchestrator in the last few minutes (their ask, not an agent's) */
   userAsked(): boolean;
   /** what the user's last «Sì» to this Orchestrator was about, when recent (user-words.ts answeredText); null = none */
-  saidYesTo?(): string | null;
+  saidYesTo?(): { text: string; used(): void } | null;
   /** a change that is not applied stays «da applicare» on its own panel (pending-config.ts, ADR 0357) */
   held?: { hold(c: Omit<PendingChange, 'id' | 'at'>): PendingChange; applied(c: HeldChange): void };
   brain: {
@@ -132,12 +132,14 @@ export function levelsValue(v: unknown, card: AgentProfile): RoleLevels {
   if (!l.base?.length) throw new Error('levels: Base ha almeno un modello.');
   return l;
 }
-/** What a change is called on a panel, and the words a card must hold to have named it. */
-export interface ChangeWords { text: string; all: readonly string[][]; order?: readonly (readonly string[])[] }
-/** Whether a card's words name this change: every needed word (one of its names each) and, for an order, the engines in it. */
+/** A change as its panel says it: the whole change in one canonical sentence (and, for a long text, the text itself), and
+ *  for an order of the engines the words that name it too. */
+export interface ChangeWords { text: string; full?: string; order?: { engines: readonly (readonly string[])[]; others: readonly (readonly string[])[]; and?: readonly string[]; never?: readonly string[] } }
+/** Whether a card's words name this very change: the canonical sentence, word for word, or, for an order, one sentence that
+ *  names those engines in that order and no other. Nothing looser: a yes to a similar card is no yes to this change. */
 export function names(card: string, w: ChangeWords): boolean {
-  const t = card.toLowerCase();
-  return w.all.every(any => any.some(x => t.includes(x.toLowerCase()))) && (!w.order || namesInOrder(card, w.order)) && (w.all.length > 0 || !!w.order);
+  if (w.full !== undefined) return false; // a long text is never named by a short card
+  return wordsOf(card).includes(wordsOf(w.text)) || !!w.order && namesInOrder(card, w.order.engines, w.order);
 }
 /** An engine's names as a person says them: its label, its id, and OpenAI for the engine whose models are OpenAI's. */
 const engineNames = (c: AgentCatalog | undefined) => (id: string): string[] => {
@@ -146,36 +148,43 @@ const engineNames = (c: AgentCatalog | undefined) => (id: string): string[] => {
   return [...(openai ? ['OpenAI'] : []), ...(e ? [e.label] : []), id];
 };
 const shown = (v: unknown): string => typeof v === 'string' ? v : v === true ? 'acceso' : v === false ? 'spento' : JSON.stringify(v);
+const orderWords = (c: AgentCatalog | undefined, ids: readonly string[]) => {
+  const engine = engineNames(c);
+  return { engines: ids.map(engine), others: (c?.models ?? []).map(m => m.engine as string).filter(id => !ids.includes(id)).map(engine).filter(n => !ids.some(id => engine(id).some(x => n.includes(x)))) };
+};
 /** A settings change in words. */
-export function settingWords(key: string, value: unknown, engine: (id: string) => string[]): ChangeWords {
+export function settingWords(key: string, value: unknown, c: AgentCatalog | undefined): ChangeWords {
+  const engine = engineNames(c);
   if (key === 'engineOrder') {
     const ids = value as string[];
-    return { text: ids.length ? `Ordine dei motori per tutti i ruoli: ${ids.map(x => engine(x)[0]).join(', poi ')}.` : 'Ordine dei motori: nessuno, vale quello delle liste di ogni livello.', all: [], order: ids.map(engine) };
+    return ids.length ? { text: `Ordine dei motori per tutti i ruoli: ${ids.map(x => engine(x)[0]).join(', poi ')}.`,
+      // a sentence about one role is that role's exception, never everybody's order
+      order: { ...orderWords(c, ids), and: ['tutti i ruoli', 'ogni ruolo', 'ordine dei motori', 'all roles', 'every role', 'alle Rollen'], never: (c?.profiles ?? []).flatMap(p => [p.name, p.id]) } }
+      : { text: 'Ordine dei motori per tutti i ruoli: nessuno, vale quello delle liste di ogni livello.' };
   }
   if (key === 'engineThresholds') {
     const rows = Object.entries(value as Record<string, number>);
-    return { text: `Soglie dei motori: ${rows.map(([id, n]) => `${engine(id)[0]} ${n}%`).join(', ') || 'nessuna'}.`, all: rows.flatMap(([id, n]) => [engine(id), [`${n}%`, `${n} %`]]) };
+    return { text: `Soglie dei motori: ${rows.map(([id, n]) => `${engine(id)[0]} ${n}%`).join(', ') || 'nessuna'}.` };
   }
-  const label = defOf(key)?.label ?? key;
-  return { text: `${label}: ${shown(value)}.`, all: [[label, key], [shown(value)]] };
+  return { text: `${defOf(key)?.label ?? key}: ${shown(value)}.` };
 }
 /** A role card's change in words. */
 export function agentWords(p: AgentProfile, key: string, value: unknown, c: AgentCatalog): ChangeWords {
-  const engine = engineNames(c), who = [p.name, p.id];
+  const engine = engineNames(c);
   if (key === 'levels') {
     const l = value as RoleLevels, at = (x: LevelModel) => `${engine(x.engine)[0]} ${c.models.find(m => m.engine === x.engine)?.models.find(m => m.id === x.model)?.name ?? x.model ?? 'predefinito'}${x.effort ? ` ${x.effort}` : ''}`;
     const kept = storedLevels(p), changed = (['base', 'min', 'max'] as const).filter(id => JSON.stringify(l[id] ?? []) !== JSON.stringify(kept[id] ?? []));
-    const rows = changed.length ? changed : (['base'] as const);
     const level = { min: 'Minimo', base: 'Base', max: 'Massimo' };
-    return { text: `${p.name}, modelli per livello. ${rows.map(id => `${level[id]}: ${(l[id] ?? []).map(at).join(', poi ') || 'come Base'}`).join('. ')}.`,
-      all: [who, ...rows.flatMap(id => (l[id] ?? []).map(x => [x.model ?? 'predefinito', c.models.find(m => m.engine === x.engine)?.models.find(m => m.id === x.model)?.name ?? x.model ?? 'predefinito']))], order: rows.length === 1 && l[rows[0]!]?.length ? [...new Map(l[rows[0]!]!.map(x => [x.engine, engine(x.engine)])).values()] : undefined };
+    return { text: `${p.name}, modelli per livello. ${(changed.length ? changed : (['base'] as const)).map(id => `${level[id]}: ${(l[id] ?? []).map(at).join(', poi ') || 'come Base'}`).join('. ')}.` };
   }
   if (key === 'engineOrder') {
     const ids = Array.isArray(value) ? value as string[] : [];
-    return ids.length ? { text: `${p.name}, eccezione all’ordine dei motori: ${ids.map(x => engine(x)[0]).join(', poi ')}.`, all: [who], order: ids.map(engine) } : { text: `${p.name}: nessuna eccezione, segue l’ordine dei motori di tutti.`, all: [who, ['nessuna eccezione', 'ordine di tutti', 'ordine comune']] };
+    return ids.length ? { text: `${p.name}, eccezione all’ordine dei motori: ${ids.map(x => engine(x)[0]).join(', poi ')}.`, order: { ...orderWords(c, ids), and: [p.name, p.id], never: c.profiles.filter(x => x.id !== p.id).flatMap(x => [x.name, x.id]) } }
+      : { text: `${p.name}: nessuna eccezione, segue l’ordine dei motori di tutti.` };
   }
-  const v = key === 'instructions' ? 'nuove istruzioni' : shown(value);
-  return { text: `${p.name}, ${key}: ${v.length > 300 ? `${v.slice(0, 300)}…` : v}.`, all: [who, [key === 'model' && value === null ? 'predefinito' : v]] };
+  // the whole text is on the panel: what he reads is what is applied
+  if (key === 'instructions') return { text: `${p.name}, nuove istruzioni (${String(value).length} caratteri).`, full: String(value) };
+  return { text: `${p.name}, ${key}: ${shown(value)}.` };
 }
 /** A role card with one field changed, as its save takes it. */
 export const changedDraft = (p: AgentProfile, key: string, value: unknown): AgentDraft => ({ ...draftOf(p), [key]: value }) as AgentDraft;
@@ -339,16 +348,17 @@ export function configTool(d: ConfigDeps): ToolDef {
       const proven = (c: HeldChange, what: string, words: ChangeWords) => {
         if (d.userAsked()) return;
         const yes = d.saidYesTo?.() ?? null;
-        if (yes !== null && names(yes, words)) return;
+        // one yes, one change: the proof is spent with it
+        if (yes !== null && names(yes.text, words)) { yes.used(); return; }
         const why = 'serviva un tuo messaggio, o un tuo Sì a un pannello che nomina questa modifica';
         if (!d.held) { asked(what); return; }
-        const h = d.held.hold({ ...c, chatId: d.callerId, text: words.text, why, ...(reason ? { reason } : {}) });
+        const h = d.held.hold({ ...c, chatId: d.callerId, text: words.text, ...(words.full !== undefined ? { full: words.full } : {}), why, ...(reason ? { reason } : {}) });
         throw new ToolRefusal(`bloccato: ${why}. Non persa: è «da applicare» (${h.id}) su un pannello dell'app, il suo Sì la applica da solo. Non richiederla e non fargli un'altra domanda; digli in una riga che il pannello lo aspetta.`);
       };
       /** A change the user did ask and the app refused: the reason goes to the user, and the change stays «da applicare». */
       const refused = (c: HeldChange, words: ChangeWords, e: unknown): never => {
         const why = e instanceof Error ? e.message : String(e);
-        if (d.held) { const h = d.held.hold({ ...c, chatId: d.callerId, text: words.text, why, ...(reason ? { reason } : {}) }); throw new Error(`${why} Non persa: è «da applicare» (${h.id}) su un pannello dell'app che dice il motivo.`); }
+        if (d.held) { const h = d.held.hold({ ...c, chatId: d.callerId, text: words.text, ...(words.full !== undefined ? { full: words.full } : {}), why, ...(reason ? { reason } : {}) }); throw new Error(`${why} Non persa: è «da applicare» (${h.id}) su un pannello dell'app che dice il motivo.`); }
         throw e;
       };
       switch (area) {
@@ -372,7 +382,9 @@ export function configTool(d: ConfigDeps): ToolDef {
           const key = String(a.key ?? ''), ok = validate(key, a.value);
           if (!ok.ok) throw new Error(ok.error);
           const held: HeldChange = { area: 'setting', key, value: ok.value };
-          proven(held, 'le impostazioni', settingWords(key, ok.value, engineNames(d.agents?.list())));
+          // folders where Codex runs on its own are checked as they are now, at his own click in Impostazioni: never held
+          if (defOf(key)?.type === 'repo-paths') asked('le impostazioni');
+          else proven(held, 'le impostazioni', settingWords(key, ok.value, d.agents?.list()));
           const r = d.brain.requestSetting(key, a.value, { by: 'agent', chatId: d.callerId, ...(reason ? { reason } : {}), direct: true });
           if ('error' in r) throw new Error(r.error);
           if ('applied' in r) d.held?.applied(held);

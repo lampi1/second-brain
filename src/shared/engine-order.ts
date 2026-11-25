@@ -38,19 +38,26 @@ export function pastThreshold(reading: CreditReading | null, model: string | nul
 /** The order a role follows: its own exception, else the one order. */
 export const roleOrder = (own: readonly Harness[] | undefined, all: readonly Harness[]): readonly Harness[] => own?.length ? own : all;
 
-/** Whether one sentence of a text names these engines, all of them and in this order (their labels or ids, the first
- *  mention of each): a card that says «OpenAI, poi Cursor, Claude per ultimo» names that order. One sentence, so a
- *  mention elsewhere («Claude per ultimo?») neither makes nor breaks it. */
-export function namesInOrder(text: string, engines: readonly (readonly string[])[]): boolean {
+/** A text as whole words: accents, case, punctuation and spaces do not count. */
+export const wordsOf = (text: string): string => ` ${text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9%.+/:_-]+/g, ' ').replace(/[.:-]+(?= |$)/g, '').trim()} `;
+
+/** Whether one sentence of a text names these engines, all of them, in this order and no other known one (their labels or
+ *  ids as whole words, the first mention of each): a card that says «OpenAI, poi Cursor, Claude per ultimo» names that
+ *  order. One sentence, with no «non» or «mai» in it, so a mention elsewhere neither makes nor breaks it. `and` = words
+ *  the same sentence must hold too (one of them), `never` = words it must not. */
+export function namesInOrder(text: string, engines: readonly (readonly string[])[], o: { others?: readonly (readonly string[])[]; and?: readonly string[]; never?: readonly string[] } = {}): boolean {
+  const has = (line: string, name: string) => line.indexOf(wordsOf(name));
   const named = (line: string): boolean => {
+    if (/ (non|mai|senza|not|never|nicht|nie) /.test(line)) return false;
     let last = -1;
     for (const names of engines) {
-      const hits = names.map(n => line.indexOf(n.toLowerCase())).filter(i => i >= 0);
+      const hits = names.map(n => has(line, n)).filter(i => i >= 0);
       const at = hits.length ? Math.min(...hits) : -1;
       if (at <= last) return false;
       last = at;
     }
-    return true;
+    const any = (list: readonly string[]) => list.some(n => has(line, n) >= 0);
+    return !(o.others ?? []).some(any) && !(o.never && any(o.never)) && (!o.and || any(o.and));
   };
-  return engines.length > 0 && text.toLowerCase().split(/[\n?!;]|\.\s/).some(named);
+  return engines.length > 0 && text.split(/[\n?!;]|\.\s/).map(wordsOf).some(named);
 }

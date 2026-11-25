@@ -10,7 +10,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChatManager } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
 import { appControlTools } from '../../../src/main/appctl/tools';
@@ -223,6 +223,12 @@ describe('an open doubt holds the yes on every path (ADR 0344)', () => {
     await expect(f.m.send(s.id, 'parti')).rejects.toThrow(/dubbio aperto/);
     expect(f.mapOf(s.id).state).toBe('planned');
     expect(f.sent.get(s.id)?.length ?? 0).toBe(sent);
+  });
+
+  it('a job the Orchestrator resumes elsewhere gets that folder (review of ADR 0358)', async () => {
+    const maps = { get: () => ({ id: 'wm_1', title: 'x', plan: { at: 3 } }), act: vi.fn(async () => ({ id: 'wm_1', state: 'running' })) };
+    await jobAction(maps as never, 'resume', { job: 'wm_1', cwd: '/altra' });
+    expect(maps.act).toHaveBeenCalledWith('wm_1', 'resume', { at: 3, cwd: '/altra' }, 'Orchestrator');
   });
 
   it('the map is told when a doubt opens and when it closes, with what closed it', async () => {

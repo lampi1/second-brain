@@ -219,6 +219,26 @@ describe('a chat works where whoever opens it says (ADR 0358)', () => {
     expect(touched()).toEqual([]);
   });
 
+  it('a root chat resumed in a folder is told what a new one is told there: uncommitted changes, another writer, a copy when asked (finding 8)', async () => {
+    const w = world(), { run } = await w.orchestrator();
+    const one = await run('app_create_chat', { title: 'Uno', prompt: 'x', roleId: 'artisan', cwd: w.slot });
+    git.dirty.add(w.air);
+    const two = await run('app_create_chat', { title: 'Due', prompt: 'x', roleId: 'artisan', cwd: w.air });
+    // resumed by the user in the dirty folder where another chat writes
+    const next = await w.m.continueChat(one.chatId as string, { ask: false, cwd: w.air });
+    expect(next.folderNotes!.join(' ')).toMatch(/modifiche non committate/);
+    expect(next.folderNotes!.join(' ')).toContain('«Due»');
+    expect(touched()).toEqual([]);
+    // a copy asked for a linked chat is a copy, not ignored; and the next one keeps it
+    git.dirty.clear();
+    const copy = await w.m.continueChat(two.chatId as string, { ask: false, place: 'copy' });
+    expect(copy.place).toBe('copy');
+    expect(made()).toHaveLength(1);
+    const again = await w.m.continueChat(copy.id, { ask: false });
+    expect([again.cwd, again.place]).toEqual([copy.cwd, 'copy']);
+    expect(made()).toHaveLength(1);
+  });
+
   it('8 · a folder that is not there, or is a file, is refused by name, and no chat is left half made', async () => {
     const w = world(), s = await w.strategist(w.brain), before = w.m.list().length, runs = w.m.runs.list().length;
     const missing = path.join(w.root, 'sparita'), file = path.join(w.root, 'file.txt');
