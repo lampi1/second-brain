@@ -1,12 +1,9 @@
-// "Mappa" (G B, ADR 0077): who uses what. It opens on «Lavori», the work maps (ADR 0343), unless the place names another
-// view. «Collegamenti» draws the links graph agent → skills → rules → memory
-// (lib/brain-model-view.ts linkGraph) with an inspector: an agent shows its skills and opens its page, a skill shows
-// who uses it and opens the Skill page, a rule or a memory opens its file. "Note del brain" is the brain's notes map,
-// moved as is from the old Dashboard (dashboard/BrainNotesMap.tsx), with "Esplora in 3D". Both use dashboard/Graph.tsx
-// unchanged. "Progetti" (ADR 0271) draws the user's projects (project-map/ProjectMapView.tsx); its place is the page's
-// arg: progetti/<project>/<system> (app_project_map open lands there). "Lavori" (ADR 0343) is the list of the work maps, or one of
-// them: lavori/<id>. Rendered by App.tsx PageFrame for 'collegamenti'.
-import { useEffect, useMemo, useState } from 'react';
+// «Collegamenti» (G L, ADR 0077): who uses what. «Agenti e skill» draws every agent with its skills, the rules it receives and its
+// memory (lib/brain-model-view.ts linkGraph) with an inspector: an agent shows its skills and opens its page, a skill shows who uses
+// it and opens the Skill page, a rule or a memory opens its file. «Note del brain» is the brain's notes map, moved as is from the old
+// Dashboard (dashboard/BrainNotesMap.tsx), with «Esplora in 3D». Both use dashboard/Graph.tsx. The projects and the work maps are not
+// here any more: the plans' page has them (ADR 0359). Rendered by App.tsx PageFrame for 'collegamenti'.
+import { useMemo, useState } from 'react';
 import { go, goTarget } from '../../actions';
 import { t } from '../../i18n';
 import { useBrainModel } from '../../store/brain-model';
@@ -14,15 +11,10 @@ import { linkGraph, type LinkNode } from '../../lib/brain-model-view';
 import { Seg } from '../../brain/components/ui';
 import { Graph } from '../../dashboard/Graph';
 import { BrainNotesMap } from '../../dashboard/BrainNotesMap';
-import { WORKS, planPlaceOf } from '../../lib/plans';
-import { ui } from '../../store/ui';
-import { ProjectMapView } from '../project-map/ProjectMapView';
-import { PlansPage } from '../plans/PlansPage';
 import '../../dashboard/dashboard.css';
 import '../../styles/brain-model.css';
 
-type View = 'works' | 'links' | 'notes' | 'projects';
-const PROJECTS = 'progetti';
+type View = 'links' | 'notes';
 const KINDS = ['agent', 'skill', 'rule', 'memory'] as const;
 const COLOR: Record<LinkNode['kind'], string> = { agent: '#aa83ed', skill: '#36aaa5', rule: '#e17891', memory: '#659ad5' };
 
@@ -46,25 +38,14 @@ function Inspector({ node, nodes, edges }: { node: LinkNode | undefined; nodes: 
   </aside>;
 }
 
-export function MapPage() {
+export function LinksPage() {
   const { state } = useBrainModel();
-  const arg = ui.use(s => (s.page === 'collegamenti' ? s.pageArg : null));
-  const inProjects = arg === PROJECTS || !!arg?.startsWith(`${PROJECTS}/`);
-  const work = planPlaceOf(arg), inWorks = !!work;
-  const [view, setView] = useState<View>(inProjects ? 'projects' : 'works');
-  useEffect(() => { if (inProjects) setView('projects'); else if (inWorks) setView('works'); }, [inProjects, inWorks]);
-  const pick = (v: View) => {
-    setView(v); setSelected(null);
-    const place = v === 'projects' ? PROJECTS : v === 'works' ? WORKS : null;
-    if (place ? (place === PROJECTS ? !inProjects : arg !== WORKS) : inProjects || inWorks) go({ page: 'collegamenti', arg: place });
-  };
-  const [selected, setSelected] = useState<string | null>(null);
+  const [view, setView] = useState<View>('links'), [selected, setSelected] = useState<string | null>(null);
   const g = useMemo(() => linkGraph(state), [state]);
   return <div className="dashboard bm-dash bm-map" data-testid="bm-map-page">
-    {!(view === 'works' && work?.id) && <header className="dash-header"><div><span className="dash-eyebrow">{t('bm.map.eyebrow')}</span><h1>{t('bm.map.title')}</h1><p>{view === 'works' ? t('plans.lead') : view === 'projects' ? t('pm.lead') : t('bm.map.lead')}</p></div></header>}
-    <div className="bx bm-map-views"><Seg items={[{ id: 'works', label: t('bm.map.view.works') }, { id: 'projects', label: t('bm.map.view.projects') }, { id: 'links', label: t('bm.map.view.links') }, { id: 'notes', label: t('bm.map.view.notes') }]} value={view} onChange={pick} label={t('bm.map.viewLabel')} /></div>
-    {view === 'works' ? <PlansPage id={work?.id ?? null} /> : view === 'projects' ? <ProjectMapView arg={inProjects ? arg!.slice(PROJECTS.length + 1) || null : null} onArg={a => go({ page: 'collegamenti', arg: a ? `${PROJECTS}/${a}` : PROJECTS })} />
-      : view === 'notes' ? <BrainNotesMap /> : <section className="dash-panel" data-testid="bm-map-links">
+    <header className="dash-header"><div><span className="dash-eyebrow">{t('bm.map.eyebrow')}</span><h1>{t('bm.map.title')}</h1><p>{t('bm.map.lead')}</p></div></header>
+    <div className="bx bm-map-views"><Seg items={[{ id: 'links', label: t('bm.map.view.links') }, { id: 'notes', label: t('bm.map.view.notes') }]} value={view} onChange={v => { setView(v); setSelected(null); }} label={t('bm.map.viewLabel')} /></div>
+    {view === 'notes' ? <BrainNotesMap /> : <section className="dash-panel" data-testid="bm-map-links">
       <header><div><h3>{t('bm.map.view.links')}</h3><p>{t('bm.map.lead')}</p></div></header>
       <div className="dash-network">
         <Graph testId="bm-map-graph" label={t('bm.map.title')} nodes={g.nodes.map(n => ({ id: n.id, label: n.label, detail: n.detail || t(`bm.map.legend.${n.kind}`), kind: n.kind === 'memory' ? 'note' : n.kind }))} edges={g.edges}

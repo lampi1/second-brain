@@ -107,7 +107,6 @@ export const treeEn: typeof treeIt = {
   'tree.plan.title': 'Plan',
   'tree.plan.steps': (p: { n: number }) => `${p.n} steps`,
   'tree.plan.progress': (p: { done: number; total: number }) => `${p.done} of ${p.total} steps finished`,
-  'tree.plan.resultBlocked': 'result unavailable',
   'tree.plan.partial': 'partial result',
   'tree.plan.blocked': 'blocked',
   'tree.plan.inWindow': 'The question is below, among those waiting for you.',

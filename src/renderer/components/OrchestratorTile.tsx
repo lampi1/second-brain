@@ -30,7 +30,7 @@ import { ORCHESTRATOR_ROLE_ID } from '@shared/roles';
 import { AgentIdentity } from './AgentIdentity';
 import {AgentAvatar}from'./AgentAvatar';
 import { ChildStrips } from './ChildStrips';
-import { MapsButton } from './MapsButton';
+import { PlansButton } from './PlansButton';
 import { MorningLine } from './MorningBlock';
 import { useFlash } from './ChatTile';
 import { StrategyPanel } from './StrategyPanel';
@@ -138,7 +138,7 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
           <AwayButton />
           <RemoteButton chat={chat} reveal={() => setRemoteHidden(false)} />
           {/* the project maps from the Orchestrator's head too (ADR 0301): they open where the user talks to it */}
-          <MapsButton testid="orchestrator-maps" size={14} />
+          <PlansButton testid="orchestrator-plans" size={14} />
           {busy && <IconButton label={t('dialogs.orchestrator.stopLabel')} shortcut={t('dialogs.orchestrator.stopShortcut')} tone="danger" onClick={() => void stop(chat.id)} testid="orchestrator-stop"><IconStop size={14} /></IconButton>}
           <IconButton label={t('chat.clearContext')} disabled={busy} onClick={() => void clearOrchestratorNow(chat.id)} testid="orchestrator-clear"><IconEraser size={14} /></IconButton>
           <IconButton ref={menuBtn} label={t('dialogs.orchestrator.menuLabel')} onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-haspopup="menu" testid="orchestrator-menu"><IconMore /></IconButton>

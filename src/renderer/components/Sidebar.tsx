@@ -26,14 +26,14 @@ const ICON: Record<BrainPageId, ReactNode> = {
   agenti: <IconLayers />,
   andamento: <IconChart />, script: <IconTerminal />, log: <IconList />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
   registrazioni: <IconMic />, impara: <IconLearn />, scacchi: <IconChess />,
-  memoria: <IconHistory />, collegamenti: <IconMap />,
+  memoria: <IconHistory />, piani: <IconTicket />, collegamenti: <IconMap />,
 };
 
 /** The pages of the two lower groups, in order (Lavoro is built by hand: Task can hide). */
 const BRAIN_GROUP: BrainPageId[] = [];
 /** The Brain section: always shown, whatever the role (ADR 0077; the owner, 2026-10-19: the brain must be visible; its
  *  changelog is on the Log page, ADR 0111). Skill and Script are Memoria's Skill tab (ADR 0122, 0263). */
-const BRAIN_CORE: BrainPageId[] = ['agenti', 'memoria', 'collegamenti'];
+const BRAIN_CORE: BrainPageId[] = ['agenti', 'memoria', 'piani', 'collegamenti'];
 /** Andamento: how the work goes (money, quality, learning, the app's own use) in one page; always shown
  *  (ADR 0101, 0109, 0202), last entry of the Brain group (owner, 2026-10-31: no group of its own for one entry). */
 const TRENDS: BrainPageId[] = ['andamento'];
@@ -97,6 +97,7 @@ export function Sidebar() {
         {TRENDS.map(page1)}
         {title(t('dialogs.sidebar.app'), 'app')}
         {page1('log')}
+        {item('mappa3d', t('brainPages.nav.mappa3d'), <IconBrain />, map, () => go({ page: 'mappa' }), { key: 'G M', testid: 'nav-mappa3d' })}
         {page1('scacchi')}
       </div>
     </nav>

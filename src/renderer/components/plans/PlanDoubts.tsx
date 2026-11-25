@@ -39,7 +39,7 @@ function Question({ a, i, now }: { a: PlanAsk; i: number; now: number }) {
   return <li className="pl-q" data-s={state} data-testid={`pl-q-${i}`}>
     <div className="pl-q-head">
       <button type="button" className="pl-boxchat" onClick={() => openChatRef(a.chatId)} title={a.title} data-testid={`pl-q-chat-${i}`}><IconChat size={11} /><span>{a.title}</span></button>
-      {a.n !== undefined && <small>{t('plans.side.step', { n: a.n })}</small>}
+      {a.n !== undefined && <small>{t('plans.chats.step', { n: a.n })}</small>}
       <small>{ago(q.at, now)}</small>
     </div>
     <b className="pl-pre">{ladderText(q)}</b>
@@ -50,7 +50,7 @@ function Question({ a, i, now }: { a: PlanAsk; i: number; now: number }) {
 }
 
 export function PlanDoubts({ view, now }: { view: View; now: number }) {
-  const { map, questions } = view, doubts = map.plan?.doubts ?? [], over = map.state === 'finished' || map.state === 'archived';
+  const { record: map, questions } = view, doubts = map.plan?.doubts ?? [], over = map.state === 'finished' || map.state === 'archived';
   const open = over ? 0 : doubts.filter(d => d.state === 'open').length, asking = questions.filter(q => !q.question.answered).length;
   if (!doubts.length && !questions.length) return null;
   return <section className="pl-doubts" data-testid="pl-doubts" aria-label={t('plans.doubts.label')}>

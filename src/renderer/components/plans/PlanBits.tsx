@@ -1,29 +1,35 @@
-// The small pieces the work maps' list and page share (ADR 0343): a state chip, one round dot per step, and running an
-// action of a map (its IPC call; a refusal is told with main's own reason). Used by PlansPage.tsx, PlanFull.tsx and
-// project-map/ProjectMapView.tsx.
+// The small pieces the plans' list and page share (ADR 0359): a state chip, the progress bar with its percentage (the share done,
+// «fatto in parte» half), and running an action of a plan (its IPC call; a refusal is told with main's own reason). Used by
+// PlansPage.tsx, PlanView.tsx and PlanSteps.tsx.
 import { useRef, useState } from 'react';
 import type { PlanAction, PlanInfo } from '@shared/plan';
 import { t } from '../../i18n';
 import { errText } from '../../lib/ipc-error';
-import { callOf } from '../../lib/plans';
+import { callOf, type PlanButton } from '../../lib/plans';
 import { toast } from '../../store/ui';
 
-export function StateChip({ info }: { info: Pick<PlanInfo, 'state' | 'planning'> }) {
-  return <span className="pl-chip" data-s={info.state}>{info.planning && info.state === 'idea' ? t('plans.planning') : t(`plans.state.${info.state}`)}</span>;
+export function StateChip({ info }: { info: Pick<PlanInfo, 'state' | 'planning' | 'deleted'> }) {
+  const s = info.deleted ? 'deleted' : info.state;
+  return <span className="pl-chip" data-s={s}>{info.planning && info.state === 'idea' && !info.deleted ? t('plans.planning') : t(`plans.state.${s}`)}</span>;
 }
 
-/** One round dot per step, the finished first: how far it is at a glance (the order of the steps is on the map). */
-export function StepDots({ info }: { info: Pick<PlanInfo, 'steps' | 'done' | 'now' | 'blocked'> }) {
+/** The bar: segments for what is done, done in part, under way and blocked, and the percentage beside it. */
+export function ProgressBar({ info, testid }: { info: Pick<PlanInfo, 'steps' | 'done' | 'partial' | 'now' | 'blocked' | 'percent'>; testid: string }) {
   if (!info.steps) return null;
-  const todo = Math.max(0, info.steps - info.done - info.now - info.blocked);
-  const dots = [...Array<string>(info.done).fill('done'), ...Array<string>(info.now).fill('now'), ...Array<string>(info.blocked).fill('blocked'), ...Array<string>(todo).fill('todo')];
-  return <span className="pl-dots" aria-hidden="true">{dots.map((s, i) => <i key={i} data-s={s} />)}</span>;
+  const share = (n: number) => `${(n / info.steps) * 100}%`;
+  return <span className="pl-progress" data-testid={testid}>
+    <span className="pl-bar-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={info.percent} aria-label={t('plans.bar', { n: info.percent })}>
+      <i data-s="done" style={{ width: share(info.done) }} /><i data-s="partial" style={{ width: share(info.partial) }} /><i data-s="now" style={{ width: share(info.now) }} /><i data-s="blocked" style={{ width: share(info.blocked) }} />
+    </span>
+    <b className="pl-percent" data-testid={`${testid}-percent`}>{t('plans.percent', { n: info.percent })}</b>
+    <span className="pl-of">{t('plans.of', { done: info.done, n: info.steps })}</span>
+  </span>;
 }
 
 /** What a button says: the start of an idea is its plan. */
-export const actionLabel = (a: Exclude<PlanAction, 'seen'>, state: PlanInfo['state']): string => t(a === 'start' && state === 'idea' ? 'plans.do.plan' : `plans.do.${a}`);
+export const actionLabel = (a: PlanButton, state: PlanInfo['state']): string => t(a === 'start' && state === 'idea' ? 'plans.do.plan' : `plans.do.${a}`);
 
-/** Runs an action of a map, once at a time: the map moves by itself at plans:changed. Resolves true when main took it. */
+/** Runs an action of a plan, once at a time: the plan moves by itself at plans:changed. Resolves true when main took it. */
 export function usePlanAction(): { busy: boolean; run: (info: PlanInfo, action: PlanAction, text?: string) => Promise<boolean> } {
   const [busy, setBusy] = useState(false);
   const going = useRef(false);
@@ -37,7 +43,7 @@ export function usePlanAction(): { busy: boolean; run: (info: PlanInfo, action: 
       else await window.sb.invoke(call.channel, call.args);
       return true;
     } catch (e) {
-      toast(action === 'seen' ? errText(e) : t('plans.failedDo', { what: actionLabel(action, info.state), why: errText(e) }), 'err');
+      toast(action === 'seen' ? errText(e) : t('plans.failedDo', { what: actionLabel(action as PlanButton, info.state), why: errText(e) }), 'err');
       return false;
     } finally { going.current = false; setBusy(false); }
   };

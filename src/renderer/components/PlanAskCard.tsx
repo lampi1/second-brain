@@ -19,6 +19,6 @@ export function PlanAskCard({ ask, onEscape, testid }: { ask: PlanAsk; onEscape:
     onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); onEscape(); } }}>
     <b data-testid={`${testid}-title`}>{chatTitle}</b>
     <span data-testid={`${testid}-count`}>{t('tree.plan.steps', { n: steps })} · {t('tree.plan.ask.onMap')}</span>
-    <button type="button" className="btn btn-primary btn-s" onClick={() => void openPlanOf(ask.chatId)} data-testid={`${testid}-map`}><IconMap size={13} />{t('plans.open')}</button>
+    <button type="button" className="btn btn-primary btn-s" onClick={() => void openPlanOf(ask.chatId)} data-testid={`${testid}-map`}><IconMap size={13} />{t('plans.do.open')}</button>
   </div>;
 }

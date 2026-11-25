@@ -5,6 +5,7 @@ export const brainPagesDe: typeof brainPagesIt = {
   // index.tsx - brain page labels
   'brainPages.nav.home': 'Grindhouse',
   'brainPages.nav.dashboard': 'Dashboard',
+  'brainPages.nav.mappa3d': '3D-Karte',
   'brainPages.nav.scacchi': 'Schach',
   'brainPages.nav.registrazioni': 'Aufnahmen',
   'brainPages.registrazioni.subtitle': 'Aufgenommene Calls (PC-Audio + Mikrofon) und importierte Dateien, auf dem PC ohne Tokens transkribiert: «Call aufnehmen», Transkript Du/Andere, «Orchestrator fragen», «Auf dem PC gefunden».',
@@ -17,7 +18,8 @@ export const brainPagesDe: typeof brainPagesIt = {
   'brainPages.nav.skill': 'Skills',
   'brainPages.nav.impostazioni': 'Einstellungen',
   'brainPages.nav.memoria': 'Gedächtnis',
-  'brainPages.nav.collegamenti': 'Karte',
+  'brainPages.nav.piani': 'Pläne',
+  'brainPages.nav.collegamenti': 'Verbindungen',
 
   // Esplora.tsx
 

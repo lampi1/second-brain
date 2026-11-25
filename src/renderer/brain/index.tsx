@@ -29,7 +29,7 @@ export type { DiscussBridge };
 export type { LiveSnapshot, LiveSource, LiveTool } from './lib/live';
 export { FADE_MS } from './lib/live';
 
-export type BrainPageId = 'home' | 'task' | 'andamento' | 'script' | 'log' | 'file' | 'skill' | 'impostazioni' | 'agenti' | 'registrazioni' | 'impara' | 'memoria' | 'collegamenti' | 'scacchi';
+export type BrainPageId = 'home' | 'task' | 'andamento' | 'script' | 'log' | 'file' | 'skill' | 'impostazioni' | 'agenti' | 'registrazioni' | 'impara' | 'memoria' | 'piani' | 'collegamenti' | 'scacchi';
 
 /** label is a getter (ADR 0057): read at use time, so it follows the current language */
 const page = (id: BrainPageId, key: string): { id: BrainPageId; readonly label: string; key: string } => ({ id, key, get label() { return id==='file'?t('viewer.title'):t(`brainPages.nav.${id}`); } });
@@ -53,7 +53,9 @@ export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string
   // the Brain section's own pages (ADR 0077: agents, skills, memory, the map of their links; the classifiers'
   // page is gone, ADR 0291), rendered by App.tsx PageFrame (components/brain-model/)
   page('memoria', 'G Y'),
-  page('collegamenti', 'G B'),
+  // the plans (components/plans/, ADR 0359): every job and idea as one plan; the links of the brain keep their own page
+  page('piani', 'G B'),
+  page('collegamenti', 'G L'),
   // not a brain page either: the call recordings and their local transcripts (components/RecordingsPage.tsx, ADR 0154)
   page('registrazioni', 'G V'),
   // not a brain page either: the lessons the user asks for to master a PR or a topic (components/impara/, ADR 0185)
@@ -109,7 +111,7 @@ export function BrainPage({ id, arg, onNavigate, bridge }: { id: BrainPageId; ar
   switch (cur.id) {
     case 'home': page = <Suspense fallback={null}><Home nav={nav} /></Suspense>; break;
     case 'file': page = <FileViewer arg={cur.arg}/>; break;
-    case 'impostazioni': case 'skill': case 'registrazioni': case 'impara': case 'scacchi': case 'memoria': case 'collegamenti': case 'script': case 'log': page = null; break; // rendered by the app (App.tsx PageFrame)
+    case 'impostazioni': case 'skill': case 'registrazioni': case 'impara': case 'scacchi': case 'memoria': case 'piani': case 'collegamenti': case 'script': case 'log': page = null; break; // rendered by the app (App.tsx PageFrame)
     case 'task': page = <TaskPage />; break;
     // in the app Andamento is App.tsx PageFrame's (components/andamento/); alone (the test route) its two brain tabs show
     // as the full pages they were

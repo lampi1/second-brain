@@ -163,7 +163,7 @@ function AskRow({ ask, open, later, onToggle, onClose }: { ask: Ask; open: boole
           <button type="button" className="oask-yn n" disabled={sent} onClick={() => allow(false)} data-testid="orchestrator-ask-deny">{t('tree.deny')}</button>
         </>}
         {/* a plan is approved on its map (ADR 0343) */}
-        {!isDurable(ask) && ask.type === 'plan' && !open && <button type="button" className="oask-yn y" onClick={() => void openPlanOf(ask.chatId)} data-testid="orchestrator-ask-map">{t('plans.open')}</button>}
+        {!isDurable(ask) && ask.type === 'plan' && !open && <button type="button" className="oask-yn y" onClick={() => void openPlanOf(ask.chatId)} data-testid="orchestrator-ask-map">{t('plans.do.open')}</button>}
         {yn && !open && <>
           <button type="button" className="oask-yn y" disabled={sent} onClick={() => quick(yn.yes)} data-testid="orchestrator-ask-yes">{t('chat.questions.yes')}</button>
           <button type="button" className="oask-yn n" disabled={sent} onClick={() => quick(yn.no)} data-testid="orchestrator-ask-no">{t('chat.questions.no')}</button>
