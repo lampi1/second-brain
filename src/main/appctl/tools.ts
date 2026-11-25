@@ -98,7 +98,7 @@ export interface AppCtlDeps {
   agents?: () => AgentCatalog;
   /** the catalog's resolve (agents/catalog.ts): the engine, model and effort a role chat starts with */
   resolveRole?: (req: NewChat) => ResolvedRole;
-  /** the one credit rule's verdict for an engine and model now (ADR 0353, agents/credit-live.ts) */
+  /** the one credit rule's verdict for an engine and model now (ADR 0354, agents/credit-live.ts) */
   creditOf?: (engine: Harness, model: string | null) => { state: 'free' | 'pace' | 'out' | 'probation' | 'unknown'; why: string; until: number | null };
   /** reads again, before a pick, the engines that look stopped without a valid reading (shared, at most a few seconds) */
   creditFresh?: () => Promise<void>;
@@ -637,7 +637,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         });
         if ('error' in routed) throw new Error(`app_create_chat: ${routed.error}`);
         const { harness, model, effort } = routed;
-        // the reason is the level's real pick (ADR 0353: the models passed over, each with why), not the brain's routing line
+        // the reason is the level's real pick (ADR 0354: the models passed over, each with why), not the brain's routing line
         const route = userModel ? { ...routed.route, reason: `the user asked for ${userModel.model} on ${engineLabel(userModel.engine)} for this task (one of the card's presets; the card is unchanged)` }
           : resolved.presetChoice?.route ? { ...routed.route, reason: resolved.presetChoice.route } : routed.route;
         const refused = openRefusal(s, harness);
@@ -722,7 +722,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         await d.chats.assignTask(target.id, `${voice()}\n\n${delta ? `${DELTA_REVIEW}\n\n` : ''}${prompt}`, { ...(reviewOf ? { reviewOf } : {}), ...intakeOf(a, a.roleId === 'strategist' && a.mode === 'new-task' && !!target.plan), mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: a.expectedVersion === undefined ? target.run?.taskVersion ?? 1 : Number(a.expectedVersion), ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), ...(a.deliveryPolicy ? { deliveryPolicy: a.deliveryPolicy as 'display' | 'notify' | 'synthesize' } : {}), ...(doneWhen ? { doneWhen } : {}), ...(task.contractFields ? { contractFields: task.contractFields } : {}), source: { kind: 'chat', chatId: orchestrator.id } });
         if (mapLink) d.projectMaps!.link(mapLink.project, target.id, mapLink.on);
         const assigned = d.chats.list().find(c => c.id === target.id);
-        // its engine's credit now (ADR 0353): a stopped engine says why and until when, so the Orchestrator tells the user
+        // its engine's credit now (ADR 0354): a stopped engine says why and until when, so the Orchestrator tells the user
         const credit = d.creditOf?.(target.harness, target.model);
         return { ...(mapLink ? { map: mapLink } : {}), ...(credit && credit.state !== 'free' && credit.state !== 'unknown' ? { credit: `${engineLabel(target.harness)}: ${credit.state === 'out' ? 'credito finito' : credit.state === 'pace' ? 'ritmo alto' : 'in prova'}, ${credit.why}` } : {}), chatId: target.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions } : {}), ...(task.warnings.length ? { warnings: task.warnings } : {}) };
       },

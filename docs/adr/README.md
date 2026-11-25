@@ -335,14 +335,15 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0343](0343-the-plan-is-its-map.md) The plan is its map, the maps are a list — not stated; amended by 0346
 - [0344](0344-question-ladder-and-open-doubts.md) A worker's question goes up one level at a time; the Strategist's open doubts block its plan — accepted
 - [0345](0345-a-child-works-in-any-repository.md) A delegated chat works in any folder its parent names, also of another repository — accepted
-- [0346](0346-plan-names-the-preset-a-chat-out-of-credits-waits.md) A plan names the preset, never the model; a chat out of credits waits for its role's card — accepted; amended by 0347, 0348
-- [0347](0347-models-per-level-across-engines.md) Several models per level across engines, picked by the room of each plan; one page per role, no permissions — accepted
-- [0348](0348-a-chat-out-of-credits-moves-to-the-next-model.md) A chat out of credits moves by itself to the next model of its level, with 8 seconds to cancel — accepted
+- [0346](0346-plan-names-the-preset-a-chat-out-of-credits-waits.md) A plan names the preset, never the model; a chat out of credits waits for its role's card — accepted, partly superseded by 0354; amended by 0347, 0348
+- [0347](0347-models-per-level-across-engines.md) Several models per level across engines, picked by the room of each plan; one page per role, no permissions — accepted, partly superseded by 0354
+- [0348](0348-a-chat-out-of-credits-moves-to-the-next-model.md) A chat out of credits moves by itself to the next model of its level, with 8 seconds to cancel — accepted, partly superseded by 0354
 - [0349](0349-pc-load-and-connectors-on-the-top-bar.md) The PC's CPU and free RAM, and the connectors with the MCP servers, on the top bar — accepted
 - [0350](0350-the-orchestrator-sets-model-lists-per-level.md) The Orchestrator sets a role's model lists per level; its own card has an ordered Base list — accepted
 - [0351](0351-a-child-that-answered-without-agent-report-is-partial.md) Antigravity keeps agent_report small; a child that answered without it goes up as partial — accepted
 - [0352](0352-any-engine-reaches-any-engine.md) Any engine reaches any engine; a changed role card never stops the work — accepted
 - [0353](0353-every-helper-at-the-bench-workers-first.md) Every helper at the bench, the ones at work first, and a limit that says what it means — accepted
+- [0354](0354-engine-limits-follow-real-data.md) Engine limits follow the real data: one rule, short pauses, and a stopped chat moves within its level — accepted
 
 ## Replaced
 

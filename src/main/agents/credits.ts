@@ -1,4 +1,4 @@
-// The credit book (ADR 0218, rewritten by ADR 0353 on 2026-11-25: «i limiti dei motori seguono i dati veri»): for each
+// The credit book (ADR 0218, rewritten by ADR 0354 on 2026-11-25: «i limiti dei motori seguono i dati veri»): for each
 // pool the app spends on (an engine, and each provider inside OpenCode: `openai/…` and the free `opencode/…` Zen models are
 // two pools) the facts the one rule needs, and nothing else: the last limit error and the short pause it opened, the
 // start of the last turn that worked, a probe in flight, the account the error was seen on (a hash, never the address).
@@ -52,7 +52,7 @@ export function readOpencodeLog(text: string): Map<string, { limitAt: number | n
   return out;
 }
 
-/** One OpenCode provider's state from its log facts, for the limits panel only (no reading: ADR 0353): exhausted when its last stream ended on a limit error; ok when a
+/** One OpenCode provider's state from its log facts, for the limits panel only (no reading: ADR 0354): exhausted when its last stream ended on a limit error; ok when a
  *  stream started more than two minutes after the last limit error (it would have failed by now); else unknown. */
 export function opencodeState(pool: string, facts: { limitAt: number | null; streamAt: number | null } | undefined, now: number): { pool: string; status: 'exhausted' | 'ok' | 'unknown'; source: 'log'; at: number; note?: string } | null {
   if (!facts) return null;
@@ -201,7 +201,7 @@ export class CreditBook {
           continue;
         }
         // version 1 (ADR 0218): an «exhausted» pool becomes a short pause from when it was written; the rule then reads
-        // its reading again (a saved 24 h cool-down is not kept: ADR 0353 «migrazione»)
+        // its reading again (a saved 24 h cool-down is not kept: ADR 0354 «migrazione»)
         const at = num(s.at);
         if (s.status === 'exhausted' && at !== null) this.pools.set(s.pool, { pool: s.pool, account: null, error: { at, pauseFrom: at, pauseMs: SHORT_PAUSE_MS }, workedFrom: null, probe: null });
       }

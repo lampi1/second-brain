@@ -1023,10 +1023,13 @@ export class DemoBrain implements BrainService {
     const harnesses = this.initial.usage.harnesses?.map(h => h.harness === 'claude'
       ? { ...h, at: now, windows: h.windows.map(w => w.kind === 'five-hour' ? { ...w, usedPercent: pct } : w) }
       : { ...h, at: now });
-    return { ...this.initial.usage, todayUsd: today, fiveHourPct: pct, ...(harnesses ? { harnesses } : {}), costKnown: true, limitsSource: 'stream', limitsAt: now, at: now };
+    const u: Usage = { ...this.initial.usage, todayUsd: today, fiveHourPct: pct, ...(harnesses ? { harnesses } : {}), costKnown: true, limitsSource: 'stream', limitsAt: now, at: now };
+    return this.decorate ? this.decorate(u) : u;
   }
 
   async refreshUsage(): Promise<Usage> { return this.usage(); }
+  /** the credit rule's verdict on the panel (demo-credits.ts, SB_DEMO_CREDITS only) */
+  decorate: ((u: Usage) => Usage) | null = null;
 
   info() { return { brainRoot: this.cfg.get().brainRoot ?? DEMO_BRAIN }; }
 

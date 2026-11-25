@@ -164,11 +164,11 @@ export interface HarnessUsage {
   creditsDetail?: string | null;
   source: 'oauth' | 'stream' | 'cache' | 'dashboard' | 'cli' | 'log' | 'none';
   at: number;
-  /** the credit pool this reading is of (ADR 0353): the engine, or `opencode:<provider>` inside OpenCode */
+  /** the credit pool this reading is of (ADR 0354): the engine, or `opencode:<provider>` inside OpenCode */
   pool?: string;
   /** a short hash of the account the reading is of (never the address): a pause of another account does not apply */
   account?: string | null;
-  /** the app's verdict for this engine (shared/credit-rule.ts): a stopped engine shows why and until when (ADR 0353) */
+  /** the app's verdict for this engine (shared/credit-rule.ts): a stopped engine shows why and until when (ADR 0354) */
   credit?: { state: 'free' | 'pace' | 'out' | 'probation' | 'unknown'; why: string; until: number | null; pool: string };
 }
 

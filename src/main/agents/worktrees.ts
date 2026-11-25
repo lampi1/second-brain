@@ -230,7 +230,7 @@ export class DelegateWorktrees {
     const provenance = { parentRunId: parent.run?.runId, parentTaskVersion: parent.run?.taskVersion };
     const cwd = req.cwd;
     if (!needsIsolatedWorktree(policy)) return { cwd, ...provenance };
-    // a chat stopped on its credit limit goes on in a successor on another engine (ADR 0353): the successor takes the
+    // a chat stopped on its credit limit goes on in a successor on another engine (ADR 0354): the successor takes the
     // same worktree, uncommitted changes included; the predecessor works no more (its process ends), so one writer
     if (inherit && continuationOf !== undefined) {
       const previous = this.allocation(parent, { id: continuationOf, parentId: parent.id, cwd } as ChatSummary);

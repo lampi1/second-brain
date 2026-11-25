@@ -83,7 +83,7 @@ export function digest(inp: DigestInput): string {
       c.contextTokens && c.contextTokens >= inp.warnTokens ? `contesto lungo ${k(c.contextTokens)}` : '',
       c.background ? `${c.background} attività in background` : '',
       c.continuedBy ? `continua in «${c.continuedBy.title}»` : '',
-      // how its model was picked and its last move out of a spent plan (ADR 0353): the same lines the chat shows
+      // how its model was picked and its last move out of a spent plan (ADR 0354): the same lines the chat shows
       c.pick && changed(c) ? one(pickLines(c.pick, now), 300) : '',
       c.creditMoved && changed(c) ? `cambiato modello: da ${c.creditMoved.from} a ${c.creditMoved.to}, livello ${c.creditMoved.level} (${one(c.creditMoved.why, 160)})` : '',
       c.creditWait && !c.creditWait.next ? (c.creditWait.waiting ? `limite finito su tutto il livello (${one(c.creditWait.waiting.out.join(' · '), 240)})${c.creditWait.waiting.first ? `, il primo torna alle ${hhmm(c.creditWait.waiting.first)}` : ''}` : 'limite finito: riparte da sola nel suo livello') : '',

@@ -61,7 +61,7 @@ export function headPresets(levels: FullLevels): FullPresets {
 }
 
 /** How much an engine's plan has left now, as a level's pick reads it: the one rule's verdict (shared/credit-rule.ts,
- *  ADR 0353) mapped to ok · pace · out · probation · unknown, with its reason, source and expected end. */
+ *  ADR 0354) mapped to ok · pace · out · probation · unknown, with its reason, source and expected end. */
 export interface Room { state: 'ok' | 'pace' | 'out' | 'probation' | 'unknown'; why: string; resetsAt: number | null; source?: CreditSource; readingAt?: number | null }
 export { SPENT_PCT };
 
@@ -72,7 +72,7 @@ export function roomOf(v: CreditVerdict): Room {
 
 /** One candidate the pick looked at, and why it was or was not taken. */
 export interface Considered { at: LevelModel; room: Room; usable: boolean; unusable?: string }
-/** A model the pick passed over, as the chat and the tools' answers tell it (ADR 0353). `kind`: off = the engine is off
+/** A model the pick passed over, as the chat and the tools' answers tell it (ADR 0354). `kind`: off = the engine is off
  *  or refused (not a credit matter), price = above the delegator's model, credit = its plan has no room now. */
 export interface SkipNote { engine: Harness; model: string | null; kind: 'off' | 'price' | 'credit'; why: string; state?: Room['state']; source?: CreditSource; readingAt?: number | null; until?: number | null }
 export interface LevelPick { chosen: LevelModel; considered: Considered[]; reason: string; skipped: SkipNote[]; allOut: boolean }
@@ -115,7 +115,7 @@ export function levelEngines(levels: FullLevels): Harness[] {
   return [...new Set(PRESET_IDS.flatMap(id => levels[id].map(x => x.engine)))];
 }
 
-/** One skipped model as the chat, the tools' answers and the digest say it (ADR 0353): «gpt-5.5 (opencode) saltato:
+/** One skipped model as the chat, the tools' answers and the digest say it (ADR 0354): «gpt-5.5 (opencode) saltato:
  *  credito finito, 5h al 100%, torna alle 22:40»; an engine that is off says so, never «credito». */
 export function skipText(s: SkipNote): string {
   const name = `${s.model ?? 'predefinito'} (${s.engine})`;

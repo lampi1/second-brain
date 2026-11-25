@@ -30,7 +30,7 @@ export interface QueuedInfo { kind: 'start' | 'turn'; position: number; since: n
   /** the emergency brake still holds the queue (ADR 0222): over now, or the load fell but not for long enough yet */
   braked?: boolean }
 
-/** A role chat stopped on its provider's credit limit (ADR 0346, 0348, 0353): what it waits on and how its move goes. */
+/** A role chat stopped on its provider's credit limit (ADR 0346, 0348, 0354): what it waits on and how its move goes. */
 export interface CreditWait {
   at: number;
   /** the model it stopped on (no ACP variant) */
@@ -141,11 +141,11 @@ export interface ChatSummary {
    *  cancelled that move, so the chat waits for its role's levels to change or for a message (ADR 0346) */
   creditWait?: CreditWait;
   /** the model the user named for this work (app_create_chat userModel, ADR 0296), recorded: the chats its Strategist
-   *  opens for the same work use it too, when it is on their role's levels (ADR 0353 point 7); never set by an agent */
+   *  opens for the same work use it too, when it is on their role's levels (ADR 0354 point 7); never set by an agent */
   userModel?: UserModelPick;
-  /** how its model was picked at the start (ADR 0353): the models of the level passed over, each with why */
+  /** how its model was picked at the start (ADR 0354): the models of the level passed over, each with why */
   pick?: { at: number; chosen: string; skipped: SkipNote[]; allOut?: true };
-  /** the last automatic move of this chat out of a spent plan (ADR 0353): the chat and the recap say it */
+  /** the last automatic move of this chat out of a spent plan (ADR 0354): the chat and the recap say it */
   creditMoved?: { at: number; from: string; to: string; level: string; why: string };
   /** Explicit assignment/mailbox hold. A provider result never completes it; no expiration or consent semantics. */
   work?: {status:'assigned'|'waiting-mail'|'completed';updatedAt:number};

@@ -1,4 +1,4 @@
-// The one credit rule (ADR 0353, src/shared/credit-rule.ts): the precedence table of the owner's spec, the pause rules
+// The one credit rule (ADR 0354, src/shared/credit-rule.ts): the precedence table of the owner's spec, the pause rules
 // (one pause for errors of turns started before it ended, doubling only on a failed probe, caps), the probe of one chat,
 // and what makes a reading valid. A fake clock only: every time is a number.
 import { describe, expect, it } from 'vitest';

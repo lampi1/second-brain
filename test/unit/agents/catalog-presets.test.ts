@@ -82,7 +82,7 @@ describe('resolve and presetChoice: the guards on a real card', () => {
     expect(capped.warnings[0]).toMatch(/costs more than your own model/);
     expect(c.presetChoice('scout', { preset: 'max', presetWhy: 'x' }, { model: 'gpt-x' })).toMatchObject({ preset: 'min', model: 'm-low', effort: 'low' });
   });
-  it('cardNow: what the card gives a chat of the role now, per preset, and it follows the card (ADR 0346, 0353)', () => {
+  it('cardNow: what the card gives a chat of the role now, per preset, and it follows the card (ADR 0346, 0354)', () => {
     const c = ready();
     expect(c.cardNow('scout', {})).toMatchObject({ engine: 'claude', model: 'm-mid', effort: null, preset: 'base', allOut: false, skipped: [] });
     expect(c.cardNow('scout', { preset: 'max', presetWhy: 'x' })).toMatchObject({ engine: 'claude', model: 'm-top', effort: 'high', preset: 'max' });

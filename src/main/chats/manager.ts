@@ -335,7 +335,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     bindDelegation?.(id);
     if (agent.owner.source === 'catalog' && !req.orchestrator) this.startRun(r, { agentId: agent.owner.id, version: agent.owner.version ?? 1, goal: req.goal ?? prompt ?? title, startedBy: delegator ? 'parent' : by === 'app' ? 'app' : by === 'agent' ? 'orchestrator' : 'user', costKnown: caps.cost, ...links,
       tags: { ...asked, repo: repoOf(cwd) }, ...(agent.tier ? { tier: agent.tier } : {}), model: req.model ?? null, ...(agent.presetChoice ? { presetChoice: runPresetOf(agent.presetChoice) } : {}) });
-    // the user's own model for this work, recorded (ADR 0353 point 7); how its model was picked, said in the chat
+    // the user's own model for this work, recorded (ADR 0354 point 7); how its model was picked, said in the chat
     if (req.userModel && !delegator) r.s.userModel = { ...req.userModel };
     const pc = agent.presetChoice;
     if (pc && (pc.skipped?.length || pc.allOut)) r.s.pick = { at: now, chosen: `${req.model ?? 'predefinito'} (${req.harness})`, skipped: pc.skipped ?? [], ...(pc.allOut ? { allOut: true as const } : {}) };

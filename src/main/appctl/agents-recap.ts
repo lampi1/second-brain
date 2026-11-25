@@ -113,7 +113,7 @@ const creditLine = (c: ChatSummary): string => {
   if (w?.stay) return `${head}: in attesa (hai premuto Annulla); riparte quando cambi i modelli di ${role} o le scrivi`;
   return `${head}: riparte da sola sul primo modello con spazio dello stesso livello di ${role}`;
 };
-/** The last automatic move of a chat out of a spent plan (ADR 0353), in the recap: from, to, level, why. */
+/** The last automatic move of a chat out of a spent plan (ADR 0354), in the recap: from, to, level, why. */
 export const movedLine = (c: ChatSummary): string | null => c.creditMoved ? `cambiato modello: da ${c.creditMoved.from} a ${c.creditMoved.to}, livello ${c.creditMoved.level} (${c.creditMoved.why})` : null;
 export function markOf(c: ChatSummary, asks: PendingRequest[]): Mark {
   // a question still with an agent is not the user's (ADR 0344)

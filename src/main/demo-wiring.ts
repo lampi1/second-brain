@@ -4,6 +4,7 @@
 // wiring.ts's demo branch. Also exposes globalThis.__sbDemo for e2e tests (the last views:layout the UI sent, the
 // views' visibility, a way to open a hand-off, a new question, a tool call, a chat that finished a while ago) and, when frozen, tells the UI the fixed clock after
 // every page load (ui:command 'clock').
+import { applyDemoCredits, demoCreditCase } from './demo-credits';
 import type { CanonicalResult } from '../shared/agents';
 import { newIssueUrl } from './brainmodel/issue-open';
 import { hiddenOpened } from './window';
@@ -90,12 +91,15 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   setDemoLang(lang());
   setUiLangSource(lang);
   const s = seed(now());
+  const creditCase = demoCreditCase();
+  const creditDecorate = creditCase ? applyDemoCredits(s, creditCase, now(), ctx.userData) : null;
   const emit: Emit = (ch, p) => ctx.emitter.emit(ch, p);
   const chats = new DemoChats(emit, { freeze, now }, s);
   const browser = new DemoBrowser(ctx.window, emit, freeze, (chatId, tabIds) => { chats.patch(chatId, { browserTabIds: tabIds }); });
   chats.browser = browser;
   browser.seed(s.tabs, { 'tab-qa': 'nota', 'tab-sms': 'sms' });
   const brain = new DemoBrain(emit, chats, s, config);
+  brain.decorate = creditDecorate;
   chats.start();
   brain.start();
   // the demo brain is no folder: the app's engines only; keys and trust as in the real app (its own userData)

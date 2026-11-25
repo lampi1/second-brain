@@ -468,7 +468,7 @@ export async function collectCodexUsage(o: ProviderCollectorEnv = {}): Promise<H
   return fetchChatGptUsage(accessToken, accountId, email, fetchFn, now, { harness: 'codex', label: 'Codex' });
 }
 
-/** OpenCode's readable plans, one reading per provider pool (ADR 0353): OpenCode Go/Zen (`opencode:zen`) and the
+/** OpenCode's readable plans, one reading per provider pool (ADR 0354): OpenCode Go/Zen (`opencode:zen`) and the
  *  ChatGPT OAuth of its OpenAI provider (`opencode:openai`). The panel shows the first; the credit rule reads each pool's
  *  own, so a limit of one never reads as the other's. */
 export async function collectOpenCodeUsages(o: ProviderCollectorEnv = {}): Promise<HarnessUsage[]> {
@@ -661,7 +661,7 @@ export async function collectAntigravityUsage(o: ProviderCollectorEnv = {}): Pro
   }
 }
 
-/** Collects plan usage for all 5 harnesses in parallel (OpenCode: one reading per readable provider, ADR 0353). Never
+/** Collects plan usage for all 5 harnesses in parallel (OpenCode: one reading per readable provider, ADR 0354). Never
  *  throws; each harness isolates its own errors. Every reading names its credit pool. */
 export async function collectAllProviderUsage(o: ProviderCollectorEnv = {}): Promise<HarnessUsage[]> {
   const results = await Promise.all([

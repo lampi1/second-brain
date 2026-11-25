@@ -100,7 +100,7 @@ export interface PresetChoice {
   engine?: string;
   /** why that model of the level (its room, the ones skipped), one line (ADR 0347) */
   route?: string;
-  /** the models of the level passed over before it, each with its reason, source, reading time and expected end (ADR 0353) */
+  /** the models of the level passed over before it, each with its reason, source, reading time and expected end (ADR 0354) */
   skipped?: SkipNote[];
   /** every model of the level is out: it starts on the first all the same (a launch), the nearest return is in route */
   allOut?: true;

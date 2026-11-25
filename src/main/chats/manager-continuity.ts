@@ -25,7 +25,7 @@ import { ManagerRequests } from './manager-requests';
 
 /** continueChat's options: allowStart false = never start a stopped engine for the hand-off; ask false = the app writes the
  *  note; on = the engine, model and effort of the new chat; assignment = a new task for a continued child (ADR 0352). */
-export interface ContinueOptions { allowStart?: boolean; promptPrefix?: string; ask?: false; /** the successor takes the same worktree, uncommitted changes included (a credit move, ADR 0353) */ sameWorktree?: true; on?: { harness: Harness; model: string | null; effort: Effort | null }; assignment?: { goal: string; doneWhen: string[] } }
+export interface ContinueOptions { allowStart?: boolean; promptPrefix?: string; ask?: false; /** the successor takes the same worktree, uncommitted changes included (a credit move, ADR 0354) */ sameWorktree?: true; on?: { harness: Harness; model: string | null; effort: Effort | null }; assignment?: { goal: string; doneWhen: string[] } }
 
 /** The delegation a continued child carries: the same, or a new task's goal and criteria with no result yet. */
 function nextDelegation(d: ChatDelegation, assignment: ContinueOptions['assignment']): ChatDelegation {

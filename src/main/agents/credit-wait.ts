@@ -1,5 +1,5 @@
 // A role chat whose turn stopped on its provider's credit or plan limit waits (ChatSummary.creditWait, set by the chat
-// manager: manager-delegation.ts creditStop; ADR 0346) and moves by itself (ADR 0348, corrected by ADR 0353 on
+// manager: manager-delegation.ts creditStop; ADR 0346) and moves by itself (ADR 0348, corrected by ADR 0354 on
 // 2026-11-25: «una chat ferma per il limite cambia motore da sola e tiene il suo livello»):
 //  - to the first model with room of the SAME level (Minimo, Base or Massimo) in the order of its role's card, on any
 //    engine, with the effort the card gives that model; never a higher or lower level (no delegator's price ceiling here,
@@ -30,7 +30,7 @@ export const creditCardKey = (c: Pick<CardNow, 'engine' | 'model'>): string => `
 
 /** How long an automatic move is announced before it happens (ADR 0348): time to press «Annulla». */
 export const GRACE_MS = 8000;
-/** Chats that move at the same time start this far apart, at most MAX_MOVING at once (ADR 0353). */
+/** Chats that move at the same time start this far apart, at most MAX_MOVING at once (ADR 0354). */
 export const STAGGER_MS = 5000;
 export const MAX_MOVING = 2;
 /** A temporary failure is retried after these waits; then the model is skipped. */
@@ -144,7 +144,7 @@ export function creditWaitWatch(d: CreditWaitDeps): () => void {
         continue;
       }
       if (w.next.at > now()) { again(w.next.at - now() + 50); continue; }
-      // staggered starts, a few at a time (ADR 0353: ten chats freed together never start together)
+      // staggered starts, a few at a time (ADR 0354: ten chats freed together never start together)
       if (moving.size >= MAX_MOVING || now() - lastStart < STAGGER_MS) { again(Math.max(STAGGER_MS - (now() - lastStart), 500)); continue; }
       lastStart = now();
       moving.add(c.id);

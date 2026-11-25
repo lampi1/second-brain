@@ -4,7 +4,7 @@ Date: 2026-11-24 · Status: accepted (owner, 2026-11-24: «vorrei poter assegnar
 tra minimo base e massimo … togli la balanced mode vorrei proprio che di default scegliesse il modello migliore … la UI
 della modifica agente è terribile deve essere clean … non mi interessano le versioni … anche i permessi degli agenti
 toglili voglio tutto concesso sempre … sul retro delle card non ha senso mostrare il modello»; «da qui voglio poter
-accendere e spegnere in fretta i motori» on the ⚙ menu; picked proposal 1A, the page as one page) · Amends: ADR 0336
+accendere e spegnere in fretta i motori» on the ⚙ menu; picked proposal 1A, the page as one page); partly superseded by [ADR 0354](0354-engine-limits-follow-real-data.md) (point 3: the room of a model is the one credit rule) · Amends: ADR 0336
 (a preset is the head of a list), ADR 0337 (the model lives on the role's page, not on the card back), ADR 0346 (the
 card a waiting chat follows is the level's pick), ADR 0218 (Balanced mode stays retired: the pick by room is always
 on) · Partly supersedes: ADR 0085 (the user no longer narrows a role; every role has every tool), ADR 0082 (no versions

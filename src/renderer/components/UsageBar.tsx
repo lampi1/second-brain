@@ -134,7 +134,7 @@ function Window({ label, pct, resets, now, testid }: { label: string; pct: numbe
 }
 
 function WindowRow({ win, now, stopped }: { win: HarnessUsageWindow; now: number; stopped?: boolean }) {
-  // an engine the app skips never shows a green bar (ADR 0353): its windows read as stopped
+  // an engine the app skips never shows a green bar (ADR 0354): its windows read as stopped
   const tone: Tone = stopped ? 'red' : toneOf(win.usedPercent);
   const resetTip = win.resetsAt
     ? auditText('appText.usageBar.resets', { when: `${dayKey(win.resetsAt) === dayKey(now) ? auditText('auditExpression.UsageBar.text218') : ''}${resetAt(win.resetsAt, now)} · ${inTime(win.resetsAt, now)}` })
@@ -150,7 +150,7 @@ function WindowRow({ win, now, stopped }: { win: HarnessUsageWindow; now: number
   );
 }
 
-/** The app's verdict on an engine (ADR 0353): why it skips it, until when, and «Riprova ora». */
+/** The app's verdict on an engine (ADR 0354): why it skips it, until when, and «Riprova ora». */
 function CreditLine({ credit, now }: { credit: NonNullable<HarnessUsage['credit']>; now: number }) {
   const [busy, setBusy] = useState(false);
   if (credit.state === 'free' || credit.state === 'unknown') return null;
@@ -159,7 +159,7 @@ function CreditLine({ credit, now }: { credit: NonNullable<HarnessUsage['credit'
     : credit.state === 'pace' ? auditText('appText.usageBar.creditPace', { why: credit.why }) : auditText('appText.usageBar.creditProbation');
   return (
     <div className="ub-h-credit" data-state={credit.state} data-testid={`usage-credit-${credit.pool}`}>
-      <span>{text}{credit.until && credit.state === 'out' ? ` · ${auditText('appText.usageBar.creditBack', { when: `${dayKey(credit.until) === dayKey(now) ? '' : `${resetAt(credit.until, now)} `}${hhmm(credit.until)}` })}` : ''}</span>
+      <span>{text}{credit.until && credit.state === 'out' && !/torna alle/i.test(credit.why) ? ` · ${auditText('appText.usageBar.creditBack', { when: `${dayKey(credit.until) === dayKey(now) ? '' : `${resetAt(credit.until, now)} `}${hhmm(credit.until)}` })}` : ''}</span>
       {credit.state !== 'pace' ? <button type="button" className="ub-credit-retry" disabled={busy} onClick={retry} data-testid={`usage-credit-retry-${credit.pool}`}>{busy ? auditText('appText.usageBar.creditRetrying') : auditText('appText.usageBar.creditRetry')}</button> : null}
     </div>
   );

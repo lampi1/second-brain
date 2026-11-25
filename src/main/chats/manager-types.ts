@@ -186,7 +186,7 @@ export interface TurnEndInfo {
   firstPrompt?: string;
   costUsd: number;
   durationMs: number;
-  /** when this turn started (the credit rule: a turn that started after a limit error proves the plan works, ADR 0353) */
+  /** when this turn started (the credit rule: a turn that started after a limit error proves the plan works, ADR 0354) */
   startedAt?: number;
   turns: number;
   isError: boolean;

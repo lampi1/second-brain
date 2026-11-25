@@ -232,7 +232,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // release template's), re-read at most every 30 s; set before the catalog reads its models (issue #96)
   setPriceTable(priceTableSource(() => brain.modelRegistry(), () => { try { return path.join(templateRoot(), 'harness', 'models.json'); } catch { return null; } }));
   // the room of each engine's plan (ADR 0347): the one credit rule over the usage panel's readings and the limit errors
-  // the app saw (ADR 0353, agents/credit-live.ts); a change that may free a waiting chat runs its watch again
+  // the app saw (ADR 0354, agents/credit-live.ts); a change that may free a waiting chat runs its watch again
   const creditWaitRef: { current?: () => void } = {};
   const credits = creditLive({ file: path.join(ctx.userData, 'credits.json'), usage: brain, changed: () => creditWaitRef.current?.() });
   const agents = createAgentCatalog(ctx, brain, engines, () => ({ ...cliCache, ...engineReadiness() }), undefined, {
@@ -337,7 +337,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
     resolveAgent: req => {
       // the user's own model for the work (recorded on the chat the Orchestrator opened with userModel) holds for the
-      // chats its Strategist opens for it, when their role's levels have that model (ADR 0353 point 7); an agent never
+      // chats its Strategist opens for it, when their role's levels have that model (ADR 0354 point 7); an agent never
       // passes one itself (agent_delegate has no such field)
       req = inheritUserModel(req, manager.list(), (roleId, m) => agents.namesModel(roleId, m));
       const resolved = agents.resolve(req, { claim: true });
@@ -406,7 +406,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     acpModelConfig: roleId => ({ reasoning: '', fast: agents.launchFlags(roleId).fast }),
     onTurnEnd: info => {
       replyRules.turnEnded(info.chatId, info.reply, info.isError);
-      credits.observe(info.harness, info.model, info.errorText, info.isError, info.startedAt ?? Date.now() - info.durationMs); // a limit error or a clean turn (ADR 0353)
+      credits.observe(info.harness, info.model, info.errorText, info.isError, info.startedAt ?? Date.now() - info.durationMs); // a limit error or a clean turn (ADR 0354)
       // a limit makes its plan spent: a chat waiting on it may now move to the next model of its level (ADR 0348)
       if (info.isError && limitSignal(info.errorText)) setImmediate(() => creditWaitRef.current?.());
       // an API engine's turn spends the user's API credits: this month's figure in Settings → Motori (engines/spend.ts)
@@ -852,7 +852,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     applied: changes => { const e = maintenanceEvent(changes); if (e) brain.publish([e]); } });
   // its cached state (ADR 0186) is read again after whatever the Brain pages refresh on
   ctx.emitter.tap(ch => { if (ch === 'brainmodel:changed' || ch === 'agents:changed') brainModel.invalidate(); });
-  // a role chat out of credits moves by itself to the first model with room of its level (ADR 0346, 0348, 0353): at each
+  // a role chat out of credits moves by itself to the first model with room of its level (ADR 0346, 0348, 0354): at each
   // change of the catalog, of a waiting chat, of a usage reading and at the end of a pause or a spent window
   const creditWait = creditWaitWatch({ chats: manager, card: (roleId, ask, o) => agents.cardNow(roleId, ask, o),
     levelsKey: roleId => { const p = agents.list().profiles.find(x => x.id === roleId); return p ? JSON.stringify(agents.levelsFor(p)) : ''; } });

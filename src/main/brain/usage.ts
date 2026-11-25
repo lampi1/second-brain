@@ -231,7 +231,7 @@ export interface UsageMonitorOptions {
   cursorEveryMs?: number;        // default 30 s
   providers?: () => Promise<HarnessUsage[]>; // multi-harness collectors (provider-usage.ts); absent in tests
   providersEveryMs?: number;     // default 3 min
-  /** one harness's readings now (provider-usage.ts collectProviderUsage): the credit rule's «rileggi» (ADR 0353) */
+  /** one harness's readings now (provider-usage.ts collectProviderUsage): the credit rule's «rileggi» (ADR 0354) */
   provider?: (h: Harness) => Promise<HarnessUsage[]>;
   /** a new reading of a credit pool, with the one it replaces (the credit book drops a pause of another account) */
   onReading?: (pool: string, next: HarnessUsage, prev: HarnessUsage | undefined) => void;
@@ -241,7 +241,7 @@ export interface UsageMonitorOptions {
   onUsage(u: Usage, spend: Spend): void;
 }
 
-/** The shortest gap between two reads of one vendor's usage (ADR 0353). An assumption, not a documented limit: Claude's
+/** The shortest gap between two reads of one vendor's usage (ADR 0354). An assumption, not a documented limit: Claude's
  *  OAuth usage endpoint answered 429 to frequent reads (provider-usage.ts says so), the others are given a minute. */
 export const READ_MIN_MS: Record<string, number> = { claude: 120e3, default: 60e3 };
 /** A short, stable id of an account (never the address itself), so a pause of one account never stops another. */
@@ -252,7 +252,7 @@ export class UsageMonitor {
   private cursor: CursorDay | null = null;
   private limits: Limits | null = null;
   private harnesses = new Map<Harness, HarnessUsage>();
-  /** the last reading of each credit pool (ADR 0353): OpenCode has one per provider, the panel shows only the first */
+  /** the last reading of each credit pool (ADR 0354): OpenCode has one per provider, the panel shows only the first */
   private readings = new Map<string, HarnessUsage>();
   private readingNow = new Map<Harness, Promise<void>>();
   private readAt = new Map<Harness, number>();
@@ -322,7 +322,7 @@ export class UsageMonitor {
         planLabel: codex.planLabel ?? prev.planLabel, accountEmail: codex.accountEmail ?? prev.accountEmail,
         ...(codex.creditsDetail ?? prev.creditsDetail ? { creditsDetail: codex.creditsDetail ?? prev.creditsDetail } : {}),
       } : codex);
-      // the stream's windows are a reading of the codex pool too (ADR 0353), of the account the OAuth reading found
+      // the stream's windows are a reading of the codex pool too (ADR 0354), of the account the OAuth reading found
       const merged = this.harnesses.get('codex')!;
       this.readings.set('codex', { ...merged, pool: 'codex', account: merged.accountEmail ? accountHash(merged.accountEmail) : this.readings.get('codex')?.account ?? null });
       this.o.onUsage(this.get(), this.spend());
@@ -386,7 +386,7 @@ export class UsageMonitor {
     }
   }
 
-  /** The last reading of a credit pool (ADR 0353); a reading of the panel only (OpenCode's log) has no pool. */
+  /** The last reading of a credit pool (ADR 0354); a reading of the panel only (OpenCode's log) has no pool. */
   reading(pool: string): HarnessUsage | undefined { return this.readings.get(pool); }
 
   /** Reads these harnesses again now: one read per harness at a time (a second caller shares it), never more often than

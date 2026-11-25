@@ -33,7 +33,7 @@ const none = (): undefined => undefined;
 const chatsOf = (...all: ChatSummary[]) => (id: string) => all.find(c => c.id === id);
 const at = (d: { card: ReturnType<typeof cardOf> }) => ({ card: d.card, now: () => 1000 });
 
-describe('creditMove: where a chat stopped on its limit goes now (ADR 0353)', () => {
+describe('creditMove: where a chat stopped on its limit goes now (ADR 0354)', () => {
   it('17. another model of the same level on the same engine: the chat goes on there, with the card\'s effort', () => {
     expect(creditMove(chat(), none, at({ card: free({ model: 'm-new', effort: 'low' }) }))).toMatchObject({ do: 'resume', to: { model: 'm-new', effort: 'low' }, card: 'claude:m-new', note: { from: 'm-old (claude)', to: 'm-new (claude)', level: 'Base' } });
   });
@@ -102,7 +102,7 @@ function fakeChats(all: ChatSummary[], o: { fail?: () => Error | null } = {}) {
 }
 const flush = () => new Promise<void>(r => setImmediate(r));
 
-describe('creditWaitWatch: moves, retries, staggering, no loops (ADR 0353)', () => {
+describe('creditWaitWatch: moves, retries, staggering, no loops (ADR 0354)', () => {
   it('announces the move with where from, the level and why, then moves once after the grace', async () => {
     const clock = { t: 1000 }, later = vi.fn();
     const all = [chat({ id: 'a' })], chats = fakeChats(all);

@@ -1,4 +1,4 @@
-// The credit book's helpers (main/agents/credits.ts, ADR 0218 / 0353): pools per engine and per OpenCode provider,
+// The credit book's helpers (main/agents/credits.ts, ADR 0218 / 0354): pools per engine and per OpenCode provider,
 // which error texts are a limit, and OpenCode's log for the panel. The book's facts and the one rule are tested in
 // test/unit/agents/credit-truth.test.ts.
 import { describe, expect, it } from 'vitest';

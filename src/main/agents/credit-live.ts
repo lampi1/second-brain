@@ -1,4 +1,4 @@
-// The credit rule wired to the app's live data (ADR 0353): the usage panel's readings become the rule's readings (only
+// The credit rule wired to the app's live data (ADR 0354): the usage panel's readings become the rule's readings (only
 // a reading that names its pool: OpenCode's log fallback is shown on the panel and never read here), a level's pick asks
 // the rule through `room` (and starts a reading when the pool looks stopped without a valid one), a new reading of another
 // account or after a new login drops an old pause, the usage snapshot gets each engine's verdict for the limits panel,

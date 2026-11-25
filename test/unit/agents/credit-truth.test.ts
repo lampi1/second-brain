@@ -1,4 +1,4 @@
-// The credit rule on the app's live data (ADR 0353): the owner's real case (six limit errors in 3 minutes on
+// The credit rule on the app's live data (ADR 0354): the owner's real case (six limit errors in 3 minutes on
 // OpenCode/OpenAI, a 24-hour pause, the next morning 5h 0% · 7d 31% and Sol still skipped), the book of facts
 // (main/agents/credits.ts CreditBook), the live wiring (main/agents/credit-live.ts), the usage monitor's per-pool
 // readings and its shared, throttled «read now» (main/brain/usage.ts), the pick's reasons and the user's own model for

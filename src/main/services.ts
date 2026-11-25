@@ -189,7 +189,7 @@ export interface BrainService {
   publish(events: FeedInput[]): void;
   /** Plan windows from a running Claude chat: a stream-json `rate_limit_event` or a `get_usage` control response. */
   ingestRateLimits(msg: unknown): void;
-  /** The last usage reading of a credit pool (ADR 0353: the credit rule's input); undefined = none. */
+  /** The last usage reading of a credit pool (ADR 0354: the credit rule's input); undefined = none. */
   usageReading?(pool: string): HarnessUsage | undefined;
   /** Reads these engines' usage again now (one read per engine at a time, shared; never more often than the vendor allows). */
   usageReadNow?(hs: readonly Harness[]): Promise<void>;

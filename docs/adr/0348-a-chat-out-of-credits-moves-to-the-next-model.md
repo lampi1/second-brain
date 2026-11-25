@@ -2,7 +2,7 @@
 
 Date: 2026-11-24 · Status: accepted (owner, 2026-11-24: «vorrei che fosse facile far ripartire una chat con un altro
 motore se finiscono i limiti con uno … che l'app proprio gestisse in autonomia i limiti dei vari abbonamenti»; picked
-proposal 3A, automatic with a short undo) · Amends: ADR 0346 (a chat out of credits no longer waits only for the user)
+proposal 3A, automatic with a short undo); partly superseded by [ADR 0354](0354-engine-limits-follow-real-data.md) (the move takes the first model with room of the held level, on any engine) · Amends: ADR 0346 (a chat out of credits no longer waits only for the user)
 · Builds on: ADR 0347 (several models per level, the pick by room)
 
 ## Context

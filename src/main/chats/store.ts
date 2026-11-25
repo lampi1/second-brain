@@ -181,7 +181,7 @@ function readCreditWait(value: unknown): StoredChat['creditWait'] | undefined {
   const failed = Array.isArray(w.failed) ? (w.failed as Record<string, unknown>[]).filter(f => f && key(f.card) && fin(f.n) && fin(f.at)).slice(0, 16)
     .map(f => ({ card: f.card as string, n: f.n as number, at: f.at as number, nextAt: fin(f.nextAt) ? f.nextAt : null, permanent: f.permanent === true, error: typeof f.error === 'string' ? f.error.slice(0, 300) : '' })) : [];
   const waiting = w.waiting as Record<string, unknown> | undefined;
-  // the wait survives a restart with its announced move, its «Annulla» and its failures (ADR 0353)
+  // the wait survives a restart with its announced move, its «Annulla» and its failures (ADR 0354)
   return { at: w.at, model: typeof w.model === 'string' && w.model && w.model.length <= 120 ? w.model : null, ...(key(w.card) ? { card: w.card } : {}),
     ...(next && key(next.card) && fin(next.at) ? { next: { card: next.card, at: next.at } } : {}),
     ...(w.stay === true ? { stay: true as const } : key(w.stay) ? { stay: w.stay } : {}),

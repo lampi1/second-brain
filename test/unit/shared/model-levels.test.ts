@@ -1,5 +1,5 @@
 // Several models per level across engines (ADR 0347): the stored shape is checked, a card without lists reads as its
-// presets, a verdict of the one credit rule as a level's room (ADR 0353) and the pick in the user's order.
+// presets, a verdict of the one credit rule as a level's room (ADR 0354) and the pick in the user's order.
 import { describe, expect, it } from 'vitest';
 import { checkedLevels, headPresets, levelEngines, levelNamed, levelsOf, pickInLevel, roomOf, type LevelModel, type Room } from '../../../src/shared/model-levels';
 

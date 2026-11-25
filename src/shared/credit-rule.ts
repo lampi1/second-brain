@@ -1,4 +1,4 @@
-// The one rule that says whether an engine's plan has credit now (ADR 0353, owner 2026-11-25: «i limiti dei motori seguono
+// The one rule that says whether an engine's plan has credit now (ADR 0354, owner 2026-11-25: «i limiti dei motori seguono
 // i dati veri»). Pure: it gets the last usage reading of the pool (with its time), the last limit error and the short
 // pause it opened, the start of the last turn that ended without a limit error, a probe in flight, and the time now; it
 // says free · pace · out · probation · unknown, with the reason, the source and the expected end. Everyone uses it:

@@ -64,7 +64,7 @@ export interface AgentCatalogDeps {
   price?: UnitPrice;
   /** how much an engine's plan has left now (ADR 0347: the usage panel and the credit book); absent = unknown */
   room?: (engine: Harness, model: string | null, asker?: string) => Room;
-  /** a chat starts on (engine, model) whose plan is on probation: this chat is its one try (ADR 0353) */
+  /** a chat starts on (engine, model) whose plan is on probation: this chat is its one try (ADR 0354) */
   claim?: (engine: Harness, model: string | null, owner: string) => void;
   /** why a role chat may not start on an engine now (off, the Orchestrators may not use it); null = it may */
   engineBlock?: (engine: Harness) => string | null;
@@ -632,7 +632,7 @@ export class AgentCatalogService {
     // the effort the model really takes (ADR 0211): a level it lacks becomes the nearest lower one, none when it takes none
     const effort = effortOn(got.chosen.effort ?? (user ? null : req.effort ?? null), picked.model ? e.models.find(m => m.id === picked.model)?.efforts : undefined) ?? undefined;
     { const { effort: _h, ...noEffort } = choice; void _h; choice = { ...noEffort, model: picked.model, engine, route: got.reason, ...(effort ? { effort } : {}), ...(got.skipped.length ? { skipped: got.skipped } : {}), ...(got.allOut ? { allOut: true as const, rooms: got.considered.filter(c => c.usable).map(c => ({ engine: c.at.engine, model: c.at.model, why: c.room.why, until: c.room.resetsAt })) } : {}) }; }
-    // the plan of the chosen model is on probation (ADR 0353): this launch is its one try; the next launches skip it
+    // the plan of the chosen model is on probation (ADR 0354): this launch is its one try; the next launches skip it
     if (o.claim === true && got.considered.find(c => c.at === got.chosen)?.room.state === 'probation') this.d.claim?.(engine, picked.model, o.asker ?? `launch:${randomUUID()}`);
     const { model: _m, effort: _e, userModel: _u, preset: _p, presetWhy: _w, taskKind: _k, delegator: _d, ...rest } = req; void _m; void _e; void _u; void _p; void _w; void _k; void _d;
     const r = ROLE_DEFAULTS[p.id as RoleId];
@@ -688,7 +688,7 @@ export class AgentCatalogService {
    *  guards; nothing started). Throws as resolve does: engine off, a model the engine cannot apply. */
   cardNow(roleId: string, ask: PresetAsk, o: { asker?: string; skip?: readonly string[] } = {}): CardPick {
     const p = this.find(roleId);
-    // a chat that moves keeps its level: no delegator's price ceiling (it could lower the preset, ADR 0353 point 8)
+    // a chat that moves keeps its level: no delegator's price ceiling (it could lower the preset, ADR 0354 point 8)
     const r = this.resolve({ harness: p.engine, cwd: '', roleId, ...ask } as NewChat, { holdLevel: true, claim: true, ...(o.asker ? { asker: o.asker } : {}), ...(o.skip ? { skip: o.skip } : {}) });
     const c = r.presetChoice;
     return { engine: r.request.harness, model: r.request.model ?? null, effort: r.request.effort ?? null, preset: c?.preset ?? 'base', allOut: !!c?.allOut, skipped: c?.skipped ?? [], route: c?.route ?? '', rooms: c?.rooms ?? [] };
@@ -706,7 +706,7 @@ export class AgentCatalogService {
 }
 
 /** The user's own model for a piece of work (`userModel` on the chat the Orchestrator opened, ADR 0296) holds for the
- *  chats opened under it, when their role's levels have that model (ADR 0353): the nearest ancestor that carries one
+ *  chats opened under it, when their role's levels have that model (ADR 0354): the nearest ancestor that carries one
  *  decides. An agent never passes one itself (agent_delegate has no such field). Used by wiring.ts resolveAgent. */
 export function inheritUserModel<R extends Pick<NewChat, 'userModel' | 'parentId' | 'roleId' | 'orchestrator'>>(
   req: R, chats: readonly { id: string; parentId?: string | null; userModel?: NewChat['userModel'] }[], names: (roleId: string, m: NonNullable<NewChat['userModel']>) => boolean): R & Pick<NewChat, 'userModel'> {

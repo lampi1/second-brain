@@ -401,7 +401,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
   /** The chat's settings (ChatManager.set): effort null = back to the engine's default. */
   abstract set(chatId: string, patch: { model?: string; effort?: Effort | null }): Promise<ChatSummary>;
 
-  /** A chat that waits on its credits goes on in its level on the same engine (ADR 0353; when: agents/credit-wait.ts): it
+  /** A chat that waits on its credits goes on in its level on the same engine (ADR 0354; when: agents/credit-wait.ts): it
    *  switches to the level's model (or keeps the one it stopped on, now free) and goes on from where it was, told by
    *  the app. Its run names the model it goes on with. A model the engine refuses is a CreditMoveRefused (that model is
    *  skipped next time); a message that cannot be sent is a temporary failure. False: it does not wait any more, or it
@@ -427,7 +427,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     return true;
   }
 
-  /** A chat that waits on its credits goes on on another engine (ADR 0353): a chat never changes engine, so its work goes
+  /** A chat that waits on its credits goes on on another engine (ADR 0354): a chat never changes engine, so its work goes
    *  on in a new chat of the same role on that engine and model: «Riprendi» with the app's own hand-off note (the old
    *  engine has no credit to write one), the same child of the same parent, contract, worktree and uncommitted changes
    *  (sameWorktree: the successor takes the predecessor's worktree, whose process ends first). The old chat then owes

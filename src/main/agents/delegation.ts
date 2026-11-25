@@ -100,7 +100,7 @@ export interface DelegationDeps {
   /** the preset a delegation of a role would get (catalog.presetChoice, ADR 0336);
    *  absent = Base, no ceiling (tests) */
   presetChoice?: (roleId: string, ask: PresetAsk, delegator?: Delegator) => PresetChoice;
-  /** reads again, before a pick, the engines that look stopped without a valid reading (ADR 0353; shared, a few s at most) */
+  /** reads again, before a pick, the engines that look stopped without a valid reading (ADR 0354; shared, a few s at most) */
   creditFresh?: () => Promise<void>;
   /** the clock (tests) */
   now?: () => number;
@@ -488,10 +488,10 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       ...((qs => qs.length ? { questions: qs.map(q => ({ id: q.id, asks: q.asks, level: q.level, holder: q.holder ?? null, since: q.levelAt })) } : {})(openQuestions(c.questions))),
       ...(c.run ? { costUsd: runs.find(r => r.runId === c.run!.runId)?.costUsd ?? null } : {}),
       ...((m => m === null ? {} : { stalled: true, quietMin: m })(quiet(c))),
-      // how its model was picked (ADR 0353): the models of its level passed over, each with why
+      // how its model was picked (ADR 0354): the models of its level passed over, each with why
       ...(c.pick ? { pick: pickLines(c.pick, now) } : {}),
       ...(c.creditMoved ? { moved: `da ${c.creditMoved.from} a ${c.creditMoved.to}, livello ${c.creditMoved.level}: ${c.creditMoved.why}` } : {}),
-      // out of credits (ADR 0346, 0353): it moves by itself to the next model of its level with room, or waits for one
+      // out of credits (ADR 0346, 0354): it moves by itself to the next model of its level with room, or waits for one
       ...(c.creditWait && !c.closedAt ? { waitsOn: 'credits', creditWait: { model: c.creditWait.model, since: c.creditWait.at, ...(c.creditWait.waiting ? { allOut: c.creditWait.waiting.out, firstBack: c.creditWait.waiting.first } : {}), ...(c.creditWait.next ? { movesAt: c.creditWait.next.at, to: c.creditWait.next.card } : {}) } } : {}),
     })) };
   }
