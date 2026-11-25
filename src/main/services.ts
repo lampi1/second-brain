@@ -2,7 +2,7 @@
 // Keeping them here lets the modules be built and tested apart (chats, browser + MCP, brain + feed).
 import type {
   Answer, AppInfo, ChatCommand, BrainApiResult, CredentialEntry, BrowserEnv, BrowserHandoff, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, ContextStats, LearnResult, Effort, FeedAction, FeedEvent, HandoffInfo, Harness, ImageAttachment, JobRecordInput, ModelRegistry, ModelsSeen, SeenModel,
-  NewChat, PendingRequest, PermissionMode, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncChoice, SyncState, Usage, ViewLayout, TasksState, SkillCatalog, SkillDoc, SkillSave, SkillSaveResult,
+  NewChat, PendingRequest, PermissionMode, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncChoice, SyncState, Usage, HarnessUsage, ViewLayout, TasksState, SkillCatalog, SkillDoc, SkillSave, SkillSaveResult,
 } from '../shared/contract';
 import type { AgentMetrics, AgentRunOutcome, UserTaskEvents } from '../shared/agents';
 import type { AgentPolicy } from './agents/tool-policy';
@@ -189,6 +189,14 @@ export interface BrainService {
   publish(events: FeedInput[]): void;
   /** Plan windows from a running Claude chat: a stream-json `rate_limit_event` or a `get_usage` control response. */
   ingestRateLimits(msg: unknown): void;
+  /** The last usage reading of a credit pool (ADR 0353: the credit rule's input); undefined = none. */
+  usageReading?(pool: string): HarnessUsage | undefined;
+  /** Reads these engines' usage again now (one read per engine at a time, shared; never more often than the vendor allows). */
+  usageReadNow?(hs: readonly Harness[]): Promise<void>;
+  /** Called with each new reading of a credit pool and the one it replaces. */
+  onUsageReading?(fn: (pool: string, next: HarnessUsage, prev: HarnessUsage | undefined) => void): void;
+  /** Adds the app's credit verdict to each engine of the usage snapshot before it is shown (wiring.ts). */
+  decorateUsage?(fn: (u: Usage) => Usage): void;
   /** The brain's domains and their multi-PC sync (brain/sync.ts, ADR 0059): status, a sync now (one domain or all), the
    *  user's choice on a conflict ('both' also opens the two versions). */
   syncState(): SyncState;

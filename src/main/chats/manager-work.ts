@@ -3,7 +3,12 @@
 // the run metrics, the Strategist's plan (ADR 0108: propose, update, approve or change).
 import crypto from 'node:crypto';
 import path from 'node:path';
-import type { ChatSummary, Effort, Harness } from '../../shared/contract';
+import type { ChatSummary, CreditWait, Effort, Harness } from '../../shared/contract';
+import { CreditMoveRefused, type MoveNote } from '../agents/credit-wait';
+import { clock } from '../../shared/credit-rule';
+
+/** «22:40» in the PC's time zone, for the lines the chat shows. */
+const clockLine = (at: number): string => clock(at, Date.now());
 import { errText, log } from '../log';
 import { ToolRefusal } from '../mcp/refusal';
 import type { UserTaskEvents, AgentRun, AgentRunOutcome } from '../../shared/agents';
@@ -396,90 +401,112 @@ export abstract class ManagerWork extends ManagerLifecycle {
   /** The chat's settings (ChatManager.set): effort null = back to the engine's default. */
   abstract set(chatId: string, patch: { model?: string; effort?: Effort | null }): Promise<ChatSummary>;
 
-  /** Its role's card names another model for the preset of a chat that waits on its credits (ADR 0346; when:
-   *  agents/credit-wait.ts): the chat switches to it and goes on from where it was, told by the app. Its run names the
-   *  model it goes on with, so its estimate rests on that model's runs. The wait ends once the app's message is
-   *  delivered; a message that cannot be sent leaves the chat waiting and says why. False: it does not wait any
-   *  more, or it works. */
-  async creditResume(chatId: string, to: { model: string | null; effort: Effort | null }): Promise<boolean> {
+  /** A chat that waits on its credits goes on in its level on the same engine (ADR 0353; when: agents/credit-wait.ts): it
+   *  switches to the level's model (or keeps the one it stopped on, now free) and goes on from where it was, told by
+   *  the app. Its run names the model it goes on with. A model the engine refuses is a CreditMoveRefused (that model is
+   *  skipped next time); a message that cannot be sent is a temporary failure. False: it does not wait any more, or it
+   *  works. */
+  async creditResume(chatId: string, to: { model: string | null; effort: Effort | null }, note: MoveNote): Promise<boolean> {
     const r = this.chats.get(chatId), w = r?.s.creditWait;
     if (!r || !w || r.s.closedAt || r.session?.busy || r.working) return false;
-    const from = w.model ?? '';
-    await this.set(chatId, { model: to.model ?? '' });
-    // the preset's effort, when this model takes it: a refusal keeps the chat's own (set says so) and never holds the work
+    if ((to.model ?? '') !== (r.choice.model ?? '')) {
+      try { await this.set(chatId, { model: to.model ?? '' }); } catch (e) { throw new CreditMoveRefused(errText(e)); }
+    }
+    // the level's effort for this model, when it takes it: a refusal keeps the chat's own (set says so) and never holds the work
     if ((to.effort ?? null) !== (r.choice.effort ?? null)) await this.set(chatId, { effort: to.effort }).catch(e => log.warn('chats', 'preset effort not applied after a credit wait', { chat: chatId, cause: errText(e), hint: 'the chat goes on with its own effort' }));
     if (this.chats.get(chatId) !== r || r.s.closedAt || r.s.creditWait !== w) return false;
     if (r.s.run && r.s.run.endedAt === undefined) { r.s.run.model = to.model; this.runSave(); }
-    this.addItem(r, sysItem('creditResumed', { from, to: to.model ?? '' }, 'info'), false);
+    r.s.creditMoved = { at: Date.now(), ...note };
+    this.addItem(r, sysItem('creditMoved', { ...note }, 'info'), false);
     this.persist();
     this.updated(r);
-    const text = `${APP_EVENT_LABEL}\nIl tuo ultimo turno si è fermato perché i crediti ${from ? `di ${from}` : 'del tuo modello'} erano finiti. L’app ti ha passato al modello successivo del livello del tuo ruolo (o l’utente ha cambiato i suoi modelli): ora giri su ${to.model ?? 'il modello predefinito del motore'}. Riprendi il compito da dove eri, senza rifare quello che è già fatto.${r.s.delegation && !r.s.delegation.result ? ' Quando hai finito consegna con agent_report.' : ''}`;
-    try { await this.send(chatId, text, undefined, false, 'second-brain', false, { kind: 'app' }); }
-    catch (e) { this.creditFailed(r, e); throw e; }
+    const text = `${APP_EVENT_LABEL}\nIl tuo ultimo turno si è fermato perché il limite di ${note.from} era finito. L’app ti ha fatto ripartire su ${note.to}, nello stesso livello (${note.level}) del tuo ruolo: ${note.why}. Riprendi il compito da dove eri, senza rifare quello che è già fatto.${r.s.delegation && !r.s.delegation.result ? ' Quando hai finito consegna con agent_report.' : ''}`;
+    await this.send(chatId, text, undefined, false, 'second-brain', false, { kind: 'app' });
     // delivered: the wait is over (the turn's start usually ended it already)
     if (r.s.creditWait === w) { delete r.s.creditWait; this.persist(); this.updated(r); }
     return true;
   }
 
-  /** The card of a waiting chat's role moved to another engine (ADR 0346): a chat never changes engine, so its work
-   *  goes on in a new chat of the same role on the card's engine and model: «Riprendi» with the app's own hand-off note
-   *  (the old engine has no credit to write one), the same child of the same parent, contract and worktree. The old
-   *  chat then owes nothing (continuedBy): its successor reports. A refusal (a writing child's worktree with uncommitted
-   *  work, a parent that is gone) leaves the chat waiting and says why. */
-  async creditContinue(chatId: string, on: { engine: Harness; model: string | null; effort: Effort | null }): Promise<boolean> {
+  /** A chat that waits on its credits goes on on another engine (ADR 0353): a chat never changes engine, so its work goes
+   *  on in a new chat of the same role on that engine and model: «Riprendi» with the app's own hand-off note (the old
+   *  engine has no credit to write one), the same child of the same parent, contract, worktree and uncommitted changes
+   *  (sameWorktree: the successor takes the predecessor's worktree, whose process ends first). The old chat then owes
+   *  nothing (continuedBy): its successor reports, once. A guard that refuses (a chat the user closed, a parent that is
+   *  gone) is a CreditMoveRefused. */
+  async creditContinue(chatId: string, on: { engine: Harness; model: string | null; effort: Effort | null }, note: MoveNote): Promise<boolean> {
     const r = this.chats.get(chatId), w = r?.s.creditWait;
     if (!r || !w || r.s.closedAt || r.s.continuedBy || r.session?.busy || r.working) return false;
     let next: ChatSummary;
     try {
-      next = await this.continueChat(chatId, { allowStart: false, ask: false, on: { harness: on.engine, model: on.model, effort: on.effort },
-        promptPrefix: `${APP_EVENT_LABEL}\nLa chat «${r.s.title}» si è fermata perché i crediti ${w.model ? `di ${w.model}` : 'del suo modello'} erano finiti. L’app l’ha passata al modello successivo del livello del ruolo, su un altro motore (o l’utente ha cambiato i modelli del ruolo): il lavoro continua qui, da dove era.` });
-    } catch (e) { this.creditFailed(r, e); throw e; }
+      next = await this.continueChat(chatId, { allowStart: false, ask: false, sameWorktree: true, on: { harness: on.engine, model: on.model, effort: on.effort },
+        promptPrefix: `${APP_EVENT_LABEL}\nLa chat «${r.s.title}» si è fermata perché il limite di ${note.from} era finito. L’app ha passato il lavoro a ${note.to}, nello stesso livello (${note.level}) del ruolo, su un altro motore: ${note.why}. Il lavoro continua qui, da dove era: stessa cartella, stesse modifiche non committate.` });
+    } catch (e) {
+      if (/closed this chat|non c’è più|already goes on|Ripresa annullata/i.test(errText(e))) throw new CreditMoveRefused(errText(e));
+      throw e;
+    }
     if (next.id === chatId) return false;
     delete r.s.creditWait;
+    const nr = this.chats.get(next.id);
+    if (nr) { nr.s.creditMoved = { at: Date.now(), ...note }; this.addItem(nr, sysItem('creditMoved', { ...note }, 'info'), false); this.updated(nr); }
+    this.addItem(r, sysItem('creditMoved', { ...note }, 'info'), false);
     this.persist();
     this.updated(r);
     return true;
   }
 
-  /** Announces the automatic move of a waiting chat (ADR 0348, agents/credit-wait.ts): the next model of its level, at
-   *  `next.at`; the chat shows it with «Annulla» (creditStay). */
-  creditPlan(chatId: string, next: { card: string; at: number }, on: { engine: Harness; model: string | null }): void {
+  /** Announces the automatic move of a waiting chat (ADR 0348, agents/credit-wait.ts): to `on` at `next.at`, with where
+   *  from, the level and why; the chat shows it with «Annulla» (creditStay). */
+  creditPlan(chatId: string, next: { card: string; at: number }, on: { engine: Harness; model: string | null }, note: MoveNote): void {
     const r = this.chats.get(chatId), w = r?.s.creditWait;
     if (!r || !w || w.stay || w.next?.card === next.card) return;
     r.s.creditWait = { ...w, next };
-    this.addItem(r, sysItem('creditSwitchSoon', { to: on.model ?? '', engine: engineOf(on.engine)?.label ?? on.engine, secs: Math.round((next.at - Date.now()) / 1000), card: next.card }, 'info'), false);
+    delete r.s.creditWait.waiting;
+    this.addItem(r, sysItem('creditSwitchSoon', { to: on.model ?? '', engine: engineOf(on.engine)?.label ?? on.engine, secs: Math.round((next.at - Date.now()) / 1000), card: next.card, from: note.from, level: note.level, why: note.why }, 'info'), false);
     this.persist();
     this.updated(r);
   }
 
-  /** «Annulla» on an announced move (ADR 0348): the chat keeps waiting; it moves when its role's levels give another
-   *  model, or when the user writes to it. False: no move was announced. */
+  /** «Annulla» on an announced move (ADR 0348): the chat keeps waiting; it moves when its role's levels change, or when
+   *  the user writes to it. False: no move was announced. */
   creditStay(chatId: string): boolean {
     const r = this.chats.get(chatId), w = r?.s.creditWait;
     if (!r || !w?.next) return false;
     const { next, ...rest } = w;
-    r.s.creditWait = { ...rest, card: next.card, stay: true };
+    r.s.creditWait = { ...rest, card: rest.card ?? next.card, stay: true };
     this.addItem(r, sysItem('creditSwitchCancelled', undefined, 'info'), false);
     this.persist();
     this.updated(r);
     return true;
   }
 
-  /** Records the card a waiting chat already answered (agents/credit-wait.ts): it moves again only when the card names
-   *  something else. With `engine`: the card moved to an engine this chat cannot follow (its parent may not start it),
-   *  and the chat says so. */
-  creditCard(chatId: string, card: string, engine?: string): void {
+  /** The key of the role's level lists the «Annulla» holds on (agents/credit-wait.ts). */
+  creditHold(chatId: string, key: string): void {
     const r = this.chats.get(chatId), w = r?.s.creditWait;
-    if (!r || !w || w.card === card) return;
-    r.s.creditWait = { ...w, card };
-    if (engine) this.addItem(r, sysItem('creditOtherEngine', { role: r.s.agent?.name ?? '', engine: engineOf(engine as Harness)?.label ?? engine, own: engineOf(r.s.harness)?.label ?? r.s.harness }, 'warn'), false);
+    if (!r || !w || w.stay !== true) return;
+    r.s.creditWait = { ...w, stay: key };
+    this.persist();
+  }
+
+  /** The whole level of a waiting chat is out: which models and when the first comes back, said once per change. */
+  creditWaiting(chatId: string, waiting: NonNullable<CreditWait['waiting']>): void {
+    const r = this.chats.get(chatId), w = r?.s.creditWait;
+    if (!r || !w) return;
+    const { next: _n, ...rest } = w; void _n;
+    r.s.creditWait = { ...rest, waiting };
+    this.addItem(r, sysItem('creditAllOut', { out: waiting.out.join(' · '), first: waiting.first ? clockLine(waiting.first) : '' }, 'warn'), false);
     this.persist();
     this.updated(r);
   }
 
-  private creditFailed(r: Rec, e: unknown): void {
-    if (this.chats.get(r.s.id) !== r || r.s.closedAt || !r.s.creditWait) return;
-    this.addItem(r, sysItem('creditMoveFailed', { error: errText(e) }, 'warn'), false);
+  /** A move failed (agents/credit-wait.ts): recorded on the wait; the chat says why, and what happens next. */
+  creditFailed(chatId: string, f: { card: string; error: string; permanent: boolean; nextAt: number | null; last: boolean }): void {
+    const r = this.chats.get(chatId), w = r?.s.creditWait;
+    if (!r || r.s.closedAt || !w) return;
+    const was = (w.failed ?? []).find(x => x.card === f.card);
+    const row = { card: f.card, n: (was?.n ?? 0) + 1, at: Date.now(), nextAt: f.nextAt, permanent: f.permanent, error: f.error.slice(0, 300) };
+    const { next: _n, ...rest } = w; void _n;
+    r.s.creditWait = { ...rest, failed: [...(w.failed ?? []).filter(x => x.card !== f.card), row].slice(-16) };
+    this.addItem(r, sysItem('creditMoveFailed', { error: f.error, to: f.card.slice(f.card.indexOf(':') + 1) || f.card, again: f.nextAt ? clockLine(f.nextAt) : '' }, 'warn'), false);
     this.persist();
     this.updated(r);
   }

@@ -6,6 +6,7 @@
 // possibile". Measured on the transcripts of 07-13/10: the Orchestrator read chats one by one 157 times a week (app_chat_items,
 // ~470k tokens of context re-read per call) and a "stato" took ~11 tool calls (~1 $); this answers it in one call.
 // Used by appctl/tools.ts (tool app_digest); pinned by test/unit/appctl-digest.test.ts.
+import { pickLines } from '../../shared/model-levels';
 import type { ChatSummary, TasksState, PendingRequest, RunInfo } from '../../shared/contract';
 import { chatName } from '../../shared/orchestrator';
 import { redact } from '../log';
@@ -82,6 +83,11 @@ export function digest(inp: DigestInput): string {
       c.contextTokens && c.contextTokens >= inp.warnTokens ? `contesto lungo ${k(c.contextTokens)}` : '',
       c.background ? `${c.background} attività in background` : '',
       c.continuedBy ? `continua in «${c.continuedBy.title}»` : '',
+      // how its model was picked and its last move out of a spent plan (ADR 0353): the same lines the chat shows
+      c.pick && changed(c) ? one(pickLines(c.pick, now), 300) : '',
+      c.creditMoved && changed(c) ? `cambiato modello: da ${c.creditMoved.from} a ${c.creditMoved.to}, livello ${c.creditMoved.level} (${one(c.creditMoved.why, 160)})` : '',
+      c.creditWait && !c.creditWait.next ? (c.creditWait.waiting ? `limite finito su tutto il livello (${one(c.creditWait.waiting.out.join(' · '), 240)})${c.creditWait.waiting.first ? `, il primo torna alle ${hhmm(c.creditWait.waiting.first)}` : ''}` : 'limite finito: riparte da sola nel suo livello') : '',
+      c.creditWait?.next ? `limite finito: riparte su ${c.creditWait.next.card} alle ${hhmm(c.creditWait.next.at)}` : '',
     ].filter(Boolean).join(' · ');
   };
   const line = (c: ChatSummary, head: string, last = true) => {

@@ -66,7 +66,8 @@ describe('starting a chat', () => {
     const c = make({ room: { claude: 'pace' } }); withLevels(c);
     const r = start(c);
     expect([r.request.harness, r.request.model, r.owner.engine]).toEqual(['codex', 'gpt-x', 'codex']);
-    expect(r.presetChoice?.route).toContain('saltato m-mid (claude)');
+    expect(r.presetChoice?.route).toContain('m-mid (claude) saltato:');
+    expect(r.presetChoice?.skipped?.[0]).toMatchObject({ engine: 'claude', model: 'm-mid', kind: 'credit' });
   });
   it('an engine off or refused to agents is never picked; none usable is an error that says so', () => {
     expect(start((() => { const c = make({ off: ['claude'] }); withLevels(c); return c; })()).request.harness).toBe('codex');

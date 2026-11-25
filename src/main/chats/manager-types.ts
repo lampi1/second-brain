@@ -128,7 +128,7 @@ export interface ChatManagerOptions {
   /** Idle-only budget-based engine freshness; does not infer quality degradation. Default off. */
   freshSessions?: () => boolean;
   /** Host-owned preparation sees the final narrowed policy before any delegated engine can start. */
-  prepareDelegation?: (parent: ChatSummary, req: NewChat, policy: AgentPolicy | null, continuationOf?: string) => Promise<{ cwd: string; parentRunId: string | undefined; parentTaskVersion: number | undefined; bind?: (childId: string) => void }>;
+  prepareDelegation?: (parent: ChatSummary, req: NewChat, policy: AgentPolicy | null, continuationOf?: string, inherit?: boolean) => Promise<{ cwd: string; parentRunId: string | undefined; parentTaskVersion: number | undefined; bind?: (childId: string) => void }>;
   /** A delegated child was made in `cwd`: the folder where the next child of the same repository will work (the
    *  worktree pool's next free slot, ADR 0227), so its warm engine waits there; null = `cwd` itself */
   nextDelegationCwd?: (cwd: string) => string | null;
@@ -186,6 +186,8 @@ export interface TurnEndInfo {
   firstPrompt?: string;
   costUsd: number;
   durationMs: number;
+  /** when this turn started (the credit rule: a turn that started after a limit error proves the plan works, ADR 0353) */
+  startedAt?: number;
   turns: number;
   isError: boolean;
   /** the assistant's texts of this turn, joined (reply rules: chats/reply-rules.ts) */

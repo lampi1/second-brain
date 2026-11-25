@@ -25,7 +25,7 @@ import { ManagerRequests } from './manager-requests';
 
 /** continueChat's options: allowStart false = never start a stopped engine for the hand-off; ask false = the app writes the
  *  note; on = the engine, model and effort of the new chat; assignment = a new task for a continued child (ADR 0352). */
-export interface ContinueOptions { allowStart?: boolean; promptPrefix?: string; ask?: false; on?: { harness: Harness; model: string | null; effort: Effort | null }; assignment?: { goal: string; doneWhen: string[] } }
+export interface ContinueOptions { allowStart?: boolean; promptPrefix?: string; ask?: false; /** the successor takes the same worktree, uncommitted changes included (a credit move, ADR 0353) */ sameWorktree?: true; on?: { harness: Harness; model: string | null; effort: Effort | null }; assignment?: { goal: string; doneWhen: string[] } }
 
 /** The delegation a continued child carries: the same, or a new task's goal and criteria with no result yet. */
 function nextDelegation(d: ChatDelegation, assignment: ContinueOptions['assignment']): ChatDelegation {
@@ -126,7 +126,7 @@ export abstract class ManagerContinuity extends ManagerRequests {
       prompt: `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}`,
       ...(parentRec ? { parentId: parentRec.s.id, ...(r.s.delegation ? { delegation: nextDelegation(r.s.delegation, opts.assignment) } : {}) } : {}),
     }, 'user', { ...(r.s.launchContext ? { launchContext: r.s.launchContext } : {}), ...(r.s.run?.tier ? { tier: r.s.run.tier } : {}), owner: on ? { ...owner, engine: on.harness, model: on.model } : owner, instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.skills ? { skills: [...r.skills] } : {}), ...(r.maxContext ? { maxContext: r.maxContext } : {}) },
-    {}, { continuation: !!parentRec, continuationOf: r.s.id });
+    {}, { continuation: !!parentRec, continuationOf: r.s.id, ...(opts.sameWorktree ? { sameWorktree: true } : {}) });
     const nr = this.chats.get(c.id);
     // the worktree hint follows the chain (A → B → C)
     if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; this.updated(nr); }

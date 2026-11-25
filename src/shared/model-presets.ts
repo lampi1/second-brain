@@ -7,6 +7,7 @@
 // in a warning. No automatic escalation: a failed task is the delegator's decision. Pure: used by main
 // (agents/catalog.ts resolve and save, agents/delegation.ts, appctl/tools.ts), the renderer
 // (RolePresets.tsx) and the tests (test/unit/agents/model-presets.test.ts).
+import type { SkipNote } from './model-levels';
 import type { Effort } from './contract';
 
 export const PRESET_IDS = ['min', 'base', 'max'] as const;
@@ -99,6 +100,12 @@ export interface PresetChoice {
   engine?: string;
   /** why that model of the level (its room, the ones skipped), one line (ADR 0347) */
   route?: string;
+  /** the models of the level passed over before it, each with its reason, source, reading time and expected end (ADR 0353) */
+  skipped?: SkipNote[];
+  /** every model of the level is out: it starts on the first all the same (a launch), the nearest return is in route */
+  allOut?: true;
+  /** with allOut: each usable model of the level and its room (the waiting chat says which are out and until when) */
+  rooms?: { engine: string; model: string | null; why: string; until: number | null }[];
   /** what the delegator asked, when it differs from the preset used */
   asked?: PresetId;
   presetWhy?: string; taskKind?: string; delegatorRole?: string;

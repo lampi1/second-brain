@@ -7,6 +7,7 @@ import type { AutoClosePresence, AutoCloseStatus } from '../auto-close';
 import type { ChatDelegation, DelegationLimitHit } from '../delegation';
 import type { ChatEffortStatus } from '../effort';
 import type { Delegator, PresetId } from '../model-presets';
+import type { SkipNote } from '../model-levels';
 import type { RuntimeDiagnostic } from '../runtime-performance';
 import type { LadderQuestion } from '../question-ladder';
 import type { StrategyPlan } from '../strategy';
@@ -28,6 +29,23 @@ export type ChatOrigin = 'app';
 export interface QueuedInfo { kind: 'start' | 'turn'; position: number; since: number; cpu: number; freeRam: number; starting?: number; slots?: number;
   /** the emergency brake still holds the queue (ADR 0222): over now, or the load fell but not for long enough yet */
   braked?: boolean }
+
+/** A role chat stopped on its provider's credit limit (ADR 0346, 0348, 0353): what it waits on and how its move goes. */
+export interface CreditWait {
+  at: number;
+  /** the model it stopped on (no ACP variant) */
+  model: string | null;
+  /** the level's model it stopped on, «engine:model» */
+  card?: string;
+  /** the announced move: to this model at this time («Annulla» cancels it) */
+  next?: { card: string; at: number };
+  /** «Annulla»: no automatic move until the role's level lists change (their key then); true = an old wait */
+  stay?: true | string;
+  /** moves that failed: a permanent one skips that model; a temporary one is retried at nextAt */
+  failed?: { card: string; n: number; at: number; nextAt: number | null; permanent: boolean; error: string }[];
+  /** the whole level is out: which models (with why) and when the first comes back */
+  waiting?: { out: string[]; first: number | null };
+}
 
 export interface ChatSummary {
   launchContext?: AgentContextSnapshot;
@@ -121,7 +139,14 @@ export interface ChatSummary {
    *  («engine:model») this wait already answered: it moves again only when the card names something else */
   /** `next`: the model of the level the chat moves to by itself at `at` (ADR 0348: 8 s to cancel); `stay`: the user
    *  cancelled that move, so the chat waits for its role's levels to change or for a message (ADR 0346) */
-  creditWait?: { at: number; model: string | null; card?: string; next?: { card: string; at: number }; stay?: true };
+  creditWait?: CreditWait;
+  /** the model the user named for this work (app_create_chat userModel, ADR 0296), recorded: the chats its Strategist
+   *  opens for the same work use it too, when it is on their role's levels (ADR 0353 point 7); never set by an agent */
+  userModel?: UserModelPick;
+  /** how its model was picked at the start (ADR 0353): the models of the level passed over, each with why */
+  pick?: { at: number; chosen: string; skipped: SkipNote[]; allOut?: true };
+  /** the last automatic move of this chat out of a spent plan (ADR 0353): the chat and the recap say it */
+  creditMoved?: { at: number; from: string; to: string; level: string; why: string };
   /** Explicit assignment/mailbox hold. A provider result never completes it; no expiration or consent semantics. */
   work?: {status:'assigned'|'waiting-mail'|'completed';updatedAt:number};
   /** closed (archived) at: out of the grid, found with Ctrl+K (the palette's "Chiuse" group); its history stays and a reopen resumes it */

@@ -11,6 +11,7 @@
 // Used by brain/index.ts ('app:usage', 'usage' events, budget.ts input).
 import { timersFor } from '../timers';
 const { setInterval, clearInterval } = timersFor('brain/usage');
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -230,17 +231,31 @@ export interface UsageMonitorOptions {
   cursorEveryMs?: number;        // default 30 s
   providers?: () => Promise<HarnessUsage[]>; // multi-harness collectors (provider-usage.ts); absent in tests
   providersEveryMs?: number;     // default 3 min
+  /** one harness's readings now (provider-usage.ts collectProviderUsage): the credit rule's «rileggi» (ADR 0353) */
+  provider?: (h: Harness) => Promise<HarnessUsage[]>;
+  /** a new reading of a credit pool, with the one it replaces (the credit book drops a pause of another account) */
+  onReading?: (pool: string, next: HarnessUsage, prev: HarnessUsage | undefined) => void;
   costTimeoutMs?: number;        // cost.mjs's time limit, default COST_TIMEOUT_MS
   now?: () => number;            // clock (tests)
   costInputs?: InputRevision;    // only known shipped inputs; failed watches retain the normal poll
   onUsage(u: Usage, spend: Spend): void;
 }
 
+/** The shortest gap between two reads of one vendor's usage (ADR 0353). An assumption, not a documented limit: Claude's
+ *  OAuth usage endpoint answered 429 to frequent reads (provider-usage.ts says so), the others are given a minute. */
+export const READ_MIN_MS: Record<string, number> = { claude: 120e3, default: 60e3 };
+/** A short, stable id of an account (never the address itself), so a pause of one account never stops another. */
+export function accountHash(email: string): string { return createHash('sha256').update(email.trim().toLowerCase()).digest('hex').slice(0, 16); }
+
 export class UsageMonitor {
   private cost: CostSnapshot | null = null;
   private cursor: CursorDay | null = null;
   private limits: Limits | null = null;
   private harnesses = new Map<Harness, HarnessUsage>();
+  /** the last reading of each credit pool (ADR 0353): OpenCode has one per provider, the panel shows only the first */
+  private readings = new Map<string, HarnessUsage>();
+  private readingNow = new Map<Harness, Promise<void>>();
+  private readAt = new Map<Harness, number>();
   private timer: NodeJS.Timeout | null = null;
   private cursorTimer: NodeJS.Timeout | null = null;
   private providerTimer: NodeJS.Timeout | null = null;
@@ -307,6 +322,9 @@ export class UsageMonitor {
         planLabel: codex.planLabel ?? prev.planLabel, accountEmail: codex.accountEmail ?? prev.accountEmail,
         ...(codex.creditsDetail ?? prev.creditsDetail ? { creditsDetail: codex.creditsDetail ?? prev.creditsDetail } : {}),
       } : codex);
+      // the stream's windows are a reading of the codex pool too (ADR 0353), of the account the OAuth reading found
+      const merged = this.harnesses.get('codex')!;
+      this.readings.set('codex', { ...merged, pool: 'codex', account: merged.accountEmail ? accountHash(merged.accountEmail) : this.readings.get('codex')?.account ?? null });
       this.o.onUsage(this.get(), this.spend());
       return true;
     }
@@ -324,33 +342,69 @@ export class UsageMonitor {
       try {
         const list = await this.o.providers!();
         if (this.stopped) return;
-        for (const h of list) {
-          const prev = this.harnesses.get(h.harness);
-          // Retain last good reading if a refresh hit a transient error (Cloudroom pattern)
-          if (h.status === 'error' && prev?.status === 'ok' && prev.windows.length) {
-            this.harnesses.set(h.harness, { ...prev, message: h.message });
-          } else {
-            this.harnesses.set(h.harness, h);
-          }
-          if (h.harness === 'claude' && h.status === 'ok' && h.windows.length) {
-            const five = h.windows.find(w => w.kind === 'five-hour');
-            const week = h.windows.find(w => w.kind === 'weekly' && !w.model) ?? h.windows.find(w => w.kind === 'weekly');
-            if (five || week) {
-              const l: Limits = {
-                fiveHourPct: five?.usedPercent ?? null, fiveHourResetsAt: five?.resetsAt ?? null,
-                weekPct: week?.usedPercent ?? null, weekResetsAt: week?.resetsAt ?? null,
-                source: 'oauth', at: h.at, ...(week?.model ? { weekScoped: true } : {}),
-              };
-              this.limits = !this.limits || l.at >= this.limits.at ? mergeLimits(l, this.limits) : mergeLimits(this.limits, l);
-            }
-          }
-        }
+        this.store(list);
         this.o.onUsage(this.get(), this.spend());
       } catch (e) {
         log.warn('brain', 'provider usage refresh failed', { data: { error: String(e) } });
       }
     })().finally(() => { this.providersRunning = null; });
     await this.providersRunning;
+  }
+
+  /** Keeps a set of readings: the panel's per harness (the first of each), the credit rule's per pool. */
+  private store(list: readonly HarnessUsage[]): void {
+    const seen = new Set<Harness>();
+    for (const raw of list) {
+      const h: HarnessUsage = { ...raw, account: raw.accountEmail ? accountHash(raw.accountEmail) : null };
+      if (h.pool) {
+        const prevPool = this.readings.get(h.pool);
+        // a failed read keeps the last good reading (with its own, older time: it frees nothing once 5 minutes old)
+        if (!(h.status !== 'ok' && prevPool?.status === 'ok' && h.status === 'error')) this.readings.set(h.pool, h);
+        this.o.onReading?.(h.pool, h, prevPool);
+      }
+      if (seen.has(h.harness)) continue;
+      seen.add(h.harness);
+      const prev = this.harnesses.get(h.harness);
+      // Retain last good reading if a refresh hit a transient error (Cloudroom pattern); its time stays the good one's
+      if (h.status === 'error' && prev?.status === 'ok' && prev.windows.length) {
+        this.harnesses.set(h.harness, { ...prev, message: h.message });
+      } else {
+        this.harnesses.set(h.harness, h);
+      }
+      if (h.harness === 'claude' && h.status === 'ok' && h.windows.length) {
+        const five = h.windows.find(w => w.kind === 'five-hour');
+        const week = h.windows.find(w => w.kind === 'weekly' && !w.model) ?? h.windows.find(w => w.kind === 'weekly');
+        if (five || week) {
+          const l: Limits = {
+            fiveHourPct: five?.usedPercent ?? null, fiveHourResetsAt: five?.resetsAt ?? null,
+            weekPct: week?.usedPercent ?? null, weekResetsAt: week?.resetsAt ?? null,
+            source: 'oauth', at: h.at, ...(week?.model ? { weekScoped: true } : {}),
+          };
+          this.limits = !this.limits || l.at >= this.limits.at ? mergeLimits(l, this.limits) : mergeLimits(this.limits, l);
+        }
+      }
+    }
+  }
+
+  /** The last reading of a credit pool (ADR 0353); a reading of the panel only (OpenCode's log) has no pool. */
+  reading(pool: string): HarnessUsage | undefined { return this.readings.get(pool); }
+
+  /** Reads these harnesses again now: one read per harness at a time (a second caller shares it), never more often than
+   *  READ_MIN_MS per harness (the vendors' usage endpoints throttle), never throws. */
+  async readNow(hs: readonly Harness[]): Promise<void> {
+    if (!this.o.provider || this.stopped) return;
+    const now = this.o.now?.() ?? Date.now();
+    await Promise.all([...new Set(hs)].map(h => {
+      const running = this.readingNow.get(h);
+      if (running) return running;
+      if (now - (this.readAt.get(h) ?? -Infinity) < (READ_MIN_MS[h] ?? READ_MIN_MS.default!)) return undefined;
+      this.readAt.set(h, now);
+      const p = this.o.provider!(h).then(list => { if (!this.stopped) { this.store(list); this.o.onUsage(this.get(), this.spend()); } })
+        .catch(e => { log.warn('brain', 'provider usage read failed', { data: { harness: h, error: String(e) } }); })
+        .finally(() => this.readingNow.delete(h));
+      this.readingNow.set(h, p);
+      return p;
+    }));
   }
 
   async refreshAll(): Promise<Usage> {

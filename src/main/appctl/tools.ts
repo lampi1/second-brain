@@ -26,6 +26,7 @@ import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { ChatItem, ChatSummary, TasksState, Effort, EventMap, Harness, NewChat, PendingRequest, RunInfo, TaskKind, Usage } from '../../shared/contract';
 import { TASK_KINDS } from '../../shared/contract';
+import { pickLines } from '../../shared/model-levels';
 import { engineLabel, engineOf } from '../engines/registry';
 import { agentsMayOpen, openRefusal } from '../engines/policy';
 import type { BrainService, BrowserService, ChatService } from '../services';
@@ -97,6 +98,10 @@ export interface AppCtlDeps {
   agents?: () => AgentCatalog;
   /** the catalog's resolve (agents/catalog.ts): the engine, model and effort a role chat starts with */
   resolveRole?: (req: NewChat) => ResolvedRole;
+  /** the one credit rule's verdict for an engine and model now (ADR 0353, agents/credit-live.ts) */
+  creditOf?: (engine: Harness, model: string | null) => { state: 'free' | 'pace' | 'out' | 'probation' | 'unknown'; why: string; until: number | null };
+  /** reads again, before a pick, the engines that look stopped without a valid reading (shared, at most a few seconds) */
+  creditFresh?: () => Promise<void>;
   /** agent_metrics for the Orchestrator's own endpoint */
   runFeedback?: RunFeedback;
   /** list prices for the estimates' runs whose engine reported no cost (agents/list-price.ts, ADR 0284) */
@@ -619,6 +624,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const userModel = d.agents ? userModelOf(a.userModel, d.agents().models, d.agents().profiles.find(p => p.id === roleId)?.engine ?? from) : undefined;
         if (userModel && !authed()) throw new Error('userModel: only the authenticated Orchestrator passes the user\'s own pick.');
         if (userModel && a.preset !== undefined) throw new Error('userModel and preset: one or the other (the user\'s pick must be one of the card\'s presets).');
+        await d.creditFresh?.();
         const resolved = d.resolveRole({ harness: from, cwd, roleId, title, prompt, ...presetFields, ...(links.roleVersion ? { roleVersion: links.roleVersion } : {}), ...(userModel ? { userModel } : {}) });
         const profile = d.agents().profiles.find(p => p.id === roleId)!;
         const agent = { id: roleId, name: profile.name, version: profile.activeVersion, harness: resolved.request.harness, model: resolved.request.model ?? null, effort: resolved.request.effort ?? null,
@@ -631,7 +637,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         });
         if ('error' in routed) throw new Error(`app_create_chat: ${routed.error}`);
         const { harness, model, effort } = routed;
-        const route = userModel ? { ...routed.route, reason: `the user asked for ${userModel.model} on ${engineLabel(userModel.engine)} for this task (one of the card's presets; the card is unchanged)` } : routed.route;
+        // the reason is the level's real pick (ADR 0353: the models passed over, each with why), not the brain's routing line
+        const route = userModel ? { ...routed.route, reason: `the user asked for ${userModel.model} on ${engineLabel(userModel.engine)} for this task (one of the card's presets; the card is unchanged)` }
+          : resolved.presetChoice?.route ? { ...routed.route, reason: resolved.presetChoice.route } : routed.route;
         const refused = openRefusal(s, harness);
         if (refused) throw new Error(`bloccato: ${refused}`);
         const chat = await d.chats.create({ harness, cwd, title, prompt: `${voice()}\n\n${prompt}`, ...links, orchestrator: false, roleId, ...presetFields, ...(skills.length ? { skills } : {}),
@@ -648,7 +656,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         // the machine is busy: the chat exists, its first turn waits in the cold-start queue (ADR 0222)
         // the estimate from similar past tasks (ADR 0087): the same figure the strip shows, so the plan is checked with data
         const estimate = d.runFeedback ? estimateTask(new SimilarIndex(d.runFeedback.runList(), d.priceOf ?? null), { text: task.estimate, agentId: roleId, model: model || resolved.request.model || null }) : null;
-        return { chatId: chat.id, title: chat.title, harness, cwd, model: model || null, effort, ...(resolved.presetChoice ? { preset: resolved.presetChoice.preset } : {}), ...(warnings.length ? { warnings } : {}), ...(chat.queued ? { status: queuedLine(chat.queued) } : {}),
+        return { chatId: chat.id, title: chat.title, harness, cwd, model: model || null, effort, ...(resolved.presetChoice ? { preset: resolved.presetChoice.preset } : {}), ...(chat.pick ? { pick: pickLines(chat.pick, Date.now()) } : {}), ...(warnings.length ? { warnings } : {}), ...(chat.queued ? { status: queuedLine(chat.queued) } : {}),
           ...(estimate ? { estimate: { timeMs: estimate.timeMs, costUsd: estimate.costUsd, n: estimate.n, confidence: estimate.confidence, parts: estimate.parts, path: estimate.path } } : {}), route: { source: route.source, kind: route.kind, area: route.area, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) },
           ...(mapLink ? { map: mapLink } : unlinked ? { map: unlinked } : {}) };
       },
@@ -714,7 +722,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         await d.chats.assignTask(target.id, `${voice()}\n\n${delta ? `${DELTA_REVIEW}\n\n` : ''}${prompt}`, { ...(reviewOf ? { reviewOf } : {}), ...intakeOf(a, a.roleId === 'strategist' && a.mode === 'new-task' && !!target.plan), mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: a.expectedVersion === undefined ? target.run?.taskVersion ?? 1 : Number(a.expectedVersion), ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), ...(a.deliveryPolicy ? { deliveryPolicy: a.deliveryPolicy as 'display' | 'notify' | 'synthesize' } : {}), ...(doneWhen ? { doneWhen } : {}), ...(task.contractFields ? { contractFields: task.contractFields } : {}), source: { kind: 'chat', chatId: orchestrator.id } });
         if (mapLink) d.projectMaps!.link(mapLink.project, target.id, mapLink.on);
         const assigned = d.chats.list().find(c => c.id === target.id);
-        return { ...(mapLink ? { map: mapLink } : {}), chatId: target.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions } : {}), ...(task.warnings.length ? { warnings: task.warnings } : {}) };
+        // its engine's credit now (ADR 0353): a stopped engine says why and until when, so the Orchestrator tells the user
+        const credit = d.creditOf?.(target.harness, target.model);
+        return { ...(mapLink ? { map: mapLink } : {}), ...(credit && credit.state !== 'free' && credit.state !== 'unknown' ? { credit: `${engineLabel(target.harness)}: ${credit.state === 'out' ? 'credito finito' : credit.state === 'pace' ? 'ritmo alto' : 'in prova'}, ${credit.why}` } : {}), chatId: target.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions } : {}), ...(task.warnings.length ? { warnings: task.warnings } : {}) };
       },
     },
     {

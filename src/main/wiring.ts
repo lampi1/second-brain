@@ -33,9 +33,10 @@ import { maintenanceEvent, proposalEvent } from './brain/announce';
 import { MorningService } from './morning/service';
 import { createAgentLoop } from './agents/loop';
 import { delegationTools } from './agents/delegation';
-import { CreditBook, limitSignal, opencodeLogTail, poolOf } from './agents/credits';
+import { limitSignal } from './agents/credits';
+import { creditLive } from './agents/credit-live';
+import { inheritUserModel } from './agents/catalog';
 import { creditWaitWatch } from './agents/credit-wait';
-import { roomOf } from '../shared/model-levels';
 import { tierModel } from './agents/model-tier';
 import { markLegacyDone, migratedCards, readLegacy } from './agents/legacy-cards';
 import { workDecisionTools } from './agents/work-decisions';
@@ -230,16 +231,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // live turn costs and the Claude model list at the brain's per-model list prices (harness/models.json, else the
   // release template's), re-read at most every 30 s; set before the catalog reads its models (issue #96)
   setPriceTable(priceTableSource(() => brain.modelRegistry(), () => { try { return path.join(templateRoot(), 'harness', 'models.json'); } catch { return null; } }));
-  // the room of each engine's plan (ADR 0347): the usage panel's windows and a limit the app saw it hit (the credit book,
-  // built further down: read only when a chat starts)
-  const creditsRef: { current?: CreditBook } = {};
+  // the room of each engine's plan (ADR 0347): the one credit rule over the usage panel's readings and the limit errors
+  // the app saw (ADR 0353, agents/credit-live.ts); a change that may free a waiting chat runs its watch again
   const creditWaitRef: { current?: () => void } = {};
+  const credits = creditLive({ file: path.join(ctx.userData, 'credits.json'), usage: brain, changed: () => creditWaitRef.current?.() });
   const agents = createAgentCatalog(ctx, brain, engines, () => ({ ...cliCache, ...engineReadiness() }), undefined, {
-    room: (engine, model) => {
-      const st = creditsRef.current?.state(poolOf(engine, model));
-      const hit = st?.status === 'exhausted' ? { until: st.resetsAt ?? (st.coolMs ? st.at + st.coolMs : null) } : null;
-      return roomOf(brain.usage().harnesses?.find(h => h.harness === engine), hit, Date.now());
-    },
+    room: (engine, model, asker) => credits.room(engine, model, asker),
+    claim: (engine, model, owner) => credits.claim(engine, model, owner),
     engineBlock: engine => openRefusal(brain.settings(), engine),
   });
   // the retired model Settings (tiers, Code Mode, the Orchestrator's models) onto the role cards, once (legacy-cards.ts)
@@ -317,11 +315,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // «Modalità notte» (ADR 0191): the user is away; what the app chooses or parks for them waits for the recap
   const awayLog = new AwayLog(path.join(ctx.userData, 'away-log.json'));
   const awayOn = () => brain.settings().awayMode === true;
-  // the cached credit of each provider (local reads only, ADR 0218): cost data kept after Balanced mode left (2026-11-23)
-  const credits = new CreditBook(path.join(ctx.userData, 'credits.json'), {
-    claudeLimits: () => { const u = brain.usage(); return u.limitsAt ? { fiveHourPct: u.fiveHourPct, fiveHourResetsAt: u.fiveHourResetsAt, weekPct: u.weekPct, weekResetsAt: u.weekResetsAt ?? null, at: u.limitsAt } : null; },
-    opencodeLog: () => opencodeLogTail(os.homedir()) });
-  creditsRef.current = credits;
   // the runs of Esegui, built after the manager (#371, #372): a Yes and a user step are read against them
   const runsRef: { current: CommandRunner | null } = { current: null };
   // list prices for the runs whose engine reported tokens and no cost (ADR 0284): the standings and the estimates
@@ -343,7 +336,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     continuationContext: chatId => workflowsRef ? JSON.stringify(workflowsRef.list().filter(row => row.chatIds.includes(chatId))) : null,
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
     resolveAgent: req => {
-      const resolved = agents.resolve(req);
+      // the user's own model for the work (recorded on the chat the Orchestrator opened with userModel) holds for the
+      // chats its Strategist opens for it, when their role's levels have that model (ADR 0353 point 7); an agent never
+      // passes one itself (agent_delegate has no such field)
+      req = inheritUserModel(req, manager.list(), (roleId, m) => agents.namesModel(roleId, m));
+      const resolved = agents.resolve(req, { claim: true });
       const roleId = req.orchestrator ? 'orchestrator' : req.roleId;
       if (!roleId || (req.orchestrator && !brain.info().brainRoot)) return resolved;
       // only the brain skills this launch gives exist in its plugin
@@ -409,7 +406,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     acpModelConfig: roleId => ({ reasoning: '', fast: agents.launchFlags(roleId).fast }),
     onTurnEnd: info => {
       replyRules.turnEnded(info.chatId, info.reply, info.isError);
-      credits.observe(info.harness, info.model, info.errorText, info.isError); // the engine's limit error or a clean turn (ADR 0218)
+      credits.observe(info.harness, info.model, info.errorText, info.isError, info.startedAt ?? Date.now() - info.durationMs); // a limit error or a clean turn (ADR 0353)
       // a limit makes its plan spent: a chat waiting on it may now move to the next model of its level (ADR 0348)
       if (info.isError && limitSignal(info.errorText)) setImmediate(() => creditWaitRef.current?.());
       // an API engine's turn spends the user's API credits: this month's figure in Settings → Motori (engines/spend.ts)
@@ -664,7 +661,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools(delegationTools({
     integrate: async (parent, child) => stageDelegatedChanges(delegateWorktrees.allocation(parent, child), parent, child, brain.info().brainRoot),
     integrateMany: async (parent, children) => stageDelegatedChangesMany(children.map(child => ({ owned: delegateWorktrees.allocation(parent, child), child })), parent, brain.info().brainRoot), chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
-    engineRefusal: to => openRefusal(brain.settings(), to), presetChoice: (roleId, ask, delegator) => agents.presetChoice(roleId, ask, delegator), label: AGENT_LABEL, runs: () => manager.runs.list(), skillTools,
+    engineRefusal: to => openRefusal(brain.settings(), to), presetChoice: (roleId, ask, delegator) => agents.presetChoice(roleId, ask, delegator), creditFresh: () => credits.freshAll(), label: AGENT_LABEL, runs: () => manager.runs.list(), skillTools,
     remember: (roleId, line, chat) => { skillLessons.propose({ role: portableId(roleId), text: line, chatId: chat.id, ...(chat.run?.runId ? { runId: chat.run.runId } : {}) }); } }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
   // every step's preset, never a model (ADR 0346): a started step's chat, else the one the plan asks of the role's card
@@ -769,7 +766,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // a role chat's route says how its active version has done so far
   const agentStats = (agentId: string, version: number) => agentStatsLine(runMetrics(manager.runs.list(), { rollups: manager.runs.rolledUp() }).find(m => m.agentId === agentId)?.versions.find(v => v.version === version));
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps, workMaps,
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), creditOf: (engine, model) => credits.verdict(engine, model), creditFresh: () => credits.freshAll(), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps, workMaps,
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },
@@ -855,8 +852,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     applied: changes => { const e = maintenanceEvent(changes); if (e) brain.publish([e]); } });
   // its cached state (ADR 0186) is read again after whatever the Brain pages refresh on
   ctx.emitter.tap(ch => { if (ch === 'brainmodel:changed' || ch === 'agents:changed') brainModel.invalidate(); });
-  // a role chat out of credits follows its role's card (ADR 0346): when the card changes, and when the wait begins
-  const creditWait = creditWaitWatch({ chats: manager, card: (roleId, ask, delegator) => agents.cardNow(roleId, ask, delegator), engineRefusal: to => openRefusal(brain.settings(), to) });
+  // a role chat out of credits moves by itself to the first model with room of its level (ADR 0346, 0348, 0353): at each
+  // change of the catalog, of a waiting chat, of a usage reading and at the end of a pause or a spent window
+  const creditWait = creditWaitWatch({ chats: manager, card: (roleId, ask, o) => agents.cardNow(roleId, ask, o),
+    levelsKey: roleId => { const p = agents.list().profiles.find(x => x.id === roleId); return p ? JSON.stringify(agents.levelsFor(p)) : ''; } });
   creditWaitRef.current = creditWait;
   ctx.emitter.tap((ch, payload) => { if (ch === 'agents:changed' || (ch === 'chat:updated' && (payload as ChatSummary | undefined)?.creditWait)) creditWait(); });
   brainModelRef.current = brainModel;
@@ -925,6 +924,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     stallMin: () => checkedDelegation(brain.settings().delegation).stallMin, lastEventAt: id => manager.lastEventAt(id) });
 
   return {
+    creditRetry: pool => credits.retry(pool),
     workflows, brainModel, research, memoryReview, learningReview, queries: brainQueries,
     morning,
     mcpServers,

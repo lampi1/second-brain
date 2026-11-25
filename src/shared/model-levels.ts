@@ -6,8 +6,9 @@
 // A card without lists reads as today's: one model per level on the card's engine (cardPresets), so no file migration.
 // Pure: used by main (agents/catalog.ts resolve and save, the room of each engine from the usage panel and the credit
 // book) and by the renderer (the role page's level rows), tested in test/unit/shared/model-levels.test.ts.
-import type { Effort, Harness, HarnessUsage, HarnessUsageWindow } from './contract';
+import type { Effort, Harness } from './contract';
 import { CARD_MODEL, PRESET_IDS, type FullPresets, type PresetId } from './model-presets';
+import { SPENT_PCT, clock, type CreditSource, type CreditVerdict } from './credit-rule';
 
 /** One model of a level: its engine, the model id (null = the engine's own default), the effort. */
 export interface LevelModel { engine: Harness; model: string | null; effort?: Effort }
@@ -59,59 +60,45 @@ export function headPresets(levels: FullLevels): FullPresets {
   return { min: head('min'), base: head('base'), max: head('max') };
 }
 
-/** How much an engine's plan has left now: ok, `pace` (at today's pace it ends before it renews), `out` (spent), or
- *  unknown (nothing readable: Cursor Enterprise, an engine with no usage reading). */
-export interface Room { state: 'ok' | 'pace' | 'out' | 'unknown'; why: string; resetsAt: number | null }
-const HOUR = 3600e3;
-const WINDOW_MS: Partial<Record<HarnessUsageWindow['kind'], number>> = { 'five-hour': 5 * HOUR, daily: 24 * HOUR, weekly: 7 * 24 * HOUR, plan: 30 * 24 * HOUR };
-/** At or above this a window counts as spent. */
-export const SPENT_PCT = 98;
+/** How much an engine's plan has left now, as a level's pick reads it: the one rule's verdict (shared/credit-rule.ts,
+ *  ADR 0353) mapped to ok · pace · out · probation · unknown, with its reason, source and expected end. */
+export interface Room { state: 'ok' | 'pace' | 'out' | 'probation' | 'unknown'; why: string; resetsAt: number | null; source?: CreditSource; readingAt?: number | null }
+export { SPENT_PCT };
 
-const fmtLeft = (ms: number): string => ms >= 24 * HOUR ? `${Math.floor(ms / (24 * HOUR))}g ${Math.floor(ms % (24 * HOUR) / HOUR)}h` : ms >= HOUR ? `${Math.floor(ms / HOUR)}h ${Math.floor(ms % HOUR / 60e3)}m` : `${Math.max(1, Math.round(ms / 60e3))}m`;
-
-/** One engine's room from its usage reading (the usage panel, ADR 0334) and whether the app saw it hit its limit (the
- *  credit book's limit signal, ADR 0218 §1). Pace: the share used against the share of the window gone by; a window
- *  used under half never counts as pace, and neither does one with less than a tenth of its time gone (too early). */
-export function roomOf(usage: HarnessUsage | undefined, hitLimit: { until: number | null } | null, now: number): Room {
-  if (hitLimit && (hitLimit.until === null || hitLimit.until > now)) return { state: 'out', why: hitLimit.until ? `limite finito, riparte tra ${fmtLeft(hitLimit.until - now)}` : 'limite finito', resetsAt: hitLimit.until };
-  if (!usage || usage.status !== 'ok' || !usage.windows.length) return { state: 'unknown', why: usage?.message ? 'limite non letto' : 'limite non letto', resetsAt: null };
-  let worst: Room = { state: 'ok', why: '', resetsAt: null };
-  for (const w of usage.windows) {
-    if (w.kind === 'spend' || w.model) continue; // on-demand money and model-scoped windows do not stop the plan
-    const left = w.resetsAt !== null ? w.resetsAt - now : null;
-    if (w.usedPercent >= SPENT_PCT) return { state: 'out', why: `${w.label} al ${Math.round(w.usedPercent)}%${left !== null && left > 0 ? `, riparte tra ${fmtLeft(left)}` : ''}`, resetsAt: w.resetsAt };
-    const span = WINDOW_MS[w.kind];
-    if (span && left !== null && left > 0 && w.usedPercent >= 50) {
-      const gone = Math.min(1, Math.max(0, (span - left) / span));
-      if (gone >= 0.1 && w.usedPercent / gone > 100 && worst.state === 'ok') worst = { state: 'pace', why: `${w.label} al ${Math.round(w.usedPercent)}% con ${fmtLeft(left)} al rinnovo: a questo ritmo finisce prima`, resetsAt: w.resetsAt };
-    }
-  }
-  if (worst.state === 'ok') {
-    const top = usage.windows.filter(w => w.kind !== 'spend' && !w.model).reduce<HarnessUsageWindow | null>((a, w) => !a || w.usedPercent > a.usedPercent ? w : a, null);
-    worst = { state: 'ok', why: top ? `${top.label} al ${Math.round(top.usedPercent)}%` : '', resetsAt: top?.resetsAt ?? null };
-  }
-  return worst;
+/** A verdict of the one rule as a level's room: no rule of its own here. */
+export function roomOf(v: CreditVerdict): Room {
+  return { state: v.state === 'free' ? 'ok' : v.state, why: v.why, resetsAt: v.until, source: v.source, readingAt: v.readingAt };
 }
 
 /** One candidate the pick looked at, and why it was or was not taken. */
 export interface Considered { at: LevelModel; room: Room; usable: boolean; unusable?: string }
-export interface LevelPick { chosen: LevelModel; considered: Considered[]; reason: string }
+/** A model the pick passed over, as the chat and the tools' answers tell it (ADR 0353). `kind`: off = the engine is off
+ *  or refused (not a credit matter), price = above the delegator's model, credit = its plan has no room now. */
+export interface SkipNote { engine: Harness; model: string | null; kind: 'off' | 'price' | 'credit'; why: string; state?: Room['state']; source?: CreditSource; readingAt?: number | null; until?: number | null }
+export interface LevelPick { chosen: LevelModel; considered: Considered[]; reason: string; skipped: SkipNote[]; allOut: boolean }
 
-/** The model a level starts on: the first usable one with room (ok or unknown); else the first usable one on pace;
- *  else the first usable one (spent: it starts, hits its limit and the chat waits, #462). No usable model = null. */
-export function pickInLevel(list: readonly LevelModel[], usable: (x: LevelModel) => string | null, room: (x: LevelModel) => Room): LevelPick | null {
-  const considered: Considered[] = list.map(at => { const why = usable(at); return { at, room: room(at), usable: why === null, ...(why ? { unusable: why } : {}) }; });
+const PRICE_WORDS = /^costa più/;
+/** The model a level starts on: the first usable one with room (ok, probation or unknown); else the first usable one on
+ *  pace; else the first usable one (spent: a launch starts there, hits its limit and the chat waits, #462; `allOut`
+ *  says so, with the nearest return). No usable model = null. */
+export function pickInLevel(list: readonly LevelModel[], usable: (x: LevelModel) => string | null, room: (x: LevelModel) => Room, o: { now?: number; fmt?: (at: number) => string } = {}): LevelPick | null {
+  const considered: Considered[] = list.map(at => { const why = usable(at); return { at, room: why === null ? room(at) : { state: 'unknown', why: '', resetsAt: null }, usable: why === null, ...(why ? { unusable: why } : {}) }; });
   const ok = considered.filter(c => c.usable);
   if (!ok.length) return null;
-  const take = ok.find(c => c.room.state === 'ok' || c.room.state === 'unknown') ?? ok.find(c => c.room.state === 'pace') ?? ok[0]!;
-  const skipped = considered.filter(c => c !== take && considered.indexOf(c) < considered.indexOf(take));
+  const take = ok.find(c => c.room.state === 'ok' || c.room.state === 'unknown' || c.room.state === 'probation') ?? ok.find(c => c.room.state === 'pace') ?? ok[0]!;
+  const allOut = take.room.state === 'out';
+  const before = considered.filter(c => c !== take && considered.indexOf(c) < considered.indexOf(take));
   const name = (c: Considered) => `${c.at.model ?? 'predefinito'} (${c.at.engine})`;
+  const skipped: SkipNote[] = before.map(c => c.unusable
+    ? { engine: c.at.engine, model: c.at.model, kind: PRICE_WORDS.test(c.unusable) ? 'price' : 'off', why: c.unusable }
+    : { engine: c.at.engine, model: c.at.model, kind: 'credit', why: c.room.why, state: c.room.state, ...(c.room.source ? { source: c.room.source } : {}), readingAt: c.room.readingAt ?? null, until: c.room.resetsAt });
+  const back = allOut ? ok.map(c => c.room.resetsAt).filter((x): x is number => x !== null).sort((a, b) => a - b)[0] : undefined;
   const reason = [
     `${name(take)}${take.room.why ? `: ${take.room.why}` : ''}`,
-    ...skipped.map(c => `saltato ${name(c)}: ${c.unusable ?? c.room.why}`),
-    ...(take.room.state === 'out' ? ['tutti i modelli del livello hanno finito il limite'] : []),
+    ...skipped.map(skipText),
+    ...(allOut ? [`tutti i modelli del livello hanno finito il limite${back !== undefined ? `; il primo torna alle ${clock(back, o.now ?? back, o.fmt)}` : ''}`] : []),
   ].join(' · ');
-  return { chosen: take.at, considered, reason };
+  return { chosen: take.at, considered, reason, skipped, allOut };
 }
 
 /** Which level and position of a card a model is (the user's own pick of a model for one run, ADR 0296). */
@@ -126,4 +113,18 @@ export function levelNamed(levels: FullLevels, model: string, engine?: Harness):
 /** The engines a card can run on, in order of first appearance (the card back shows them as marks). */
 export function levelEngines(levels: FullLevels): Harness[] {
   return [...new Set(PRESET_IDS.flatMap(id => levels[id].map(x => x.engine)))];
+}
+
+/** One skipped model as the chat, the tools' answers and the digest say it (ADR 0353): «gpt-5.5 (opencode) saltato:
+ *  credito finito, 5h al 100%, torna alle 22:40»; an engine that is off says so, never «credito». */
+export function skipText(s: SkipNote): string {
+  const name = `${s.model ?? 'predefinito'} (${s.engine})`;
+  return `${name} saltato: ${s.kind === 'off' ? `motore spento o non permesso (${s.why})` : s.kind === 'price' ? s.why : s.state === 'pace' ? `ritmo alto, ${s.why}` : `credito finito, ${s.why}`}`;
+}
+/** The line of a chat's pick: each skipped model, and when every model was out, that it started on the first anyway. */
+export function pickLines(p: { chosen: string; skipped: readonly SkipNote[]; allOut?: true }, _now: number): string {
+  const lines = p.skipped.map(skipText);
+  if (p.allOut) lines.push(`tutti i modelli del livello erano finiti: parte su ${p.chosen} e aspetta il rinnovo`);
+  else lines.push(`parte su ${p.chosen}`);
+  return lines.join(' · ');
 }

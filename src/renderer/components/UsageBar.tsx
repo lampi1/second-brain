@@ -16,6 +16,7 @@ import { setPrefs, ui } from '../store/ui';
 import { chatList } from '../lib/chat-derived';
 import { HarnessMark, IconChevronDown, IconChevronRight, IconPin, IconRefresh } from './Icons';
 import { Popover } from './ui';
+import { sb } from '../sb';
 
 type Tone = 'green' | 'amber' | 'red' | 'none';
 const toneOf = (pct: number | null | undefined): Tone => (pct == null ? 'none' : pct >= 90 ? 'red' : pct >= 70 ? 'amber' : 'green');
@@ -132,8 +133,9 @@ function Window({ label, pct, resets, now, testid }: { label: string; pct: numbe
   );
 }
 
-function WindowRow({ win, now }: { win: HarnessUsageWindow; now: number }) {
-  const tone = toneOf(win.usedPercent);
+function WindowRow({ win, now, stopped }: { win: HarnessUsageWindow; now: number; stopped?: boolean }) {
+  // an engine the app skips never shows a green bar (ADR 0353): its windows read as stopped
+  const tone: Tone = stopped ? 'red' : toneOf(win.usedPercent);
   const resetTip = win.resetsAt
     ? auditText('appText.usageBar.resets', { when: `${dayKey(win.resetsAt) === dayKey(now) ? auditText('auditExpression.UsageBar.text218') : ''}${resetAt(win.resetsAt, now)} · ${inTime(win.resetsAt, now)}` })
     : auditText('appText.usageBar.noReset');
@@ -148,14 +150,30 @@ function WindowRow({ win, now }: { win: HarnessUsageWindow; now: number }) {
   );
 }
 
+/** The app's verdict on an engine (ADR 0353): why it skips it, until when, and «Riprova ora». */
+function CreditLine({ credit, now }: { credit: NonNullable<HarnessUsage['credit']>; now: number }) {
+  const [busy, setBusy] = useState(false);
+  if (credit.state === 'free' || credit.state === 'unknown') return null;
+  const retry = () => { setBusy(true); void sb.invoke('agents:creditRetry', { pool: credit.pool }).finally(() => { setBusy(false); void refreshUsage(); }); };
+  const text = credit.state === 'out' ? auditText('appText.usageBar.creditOut', { why: credit.why })
+    : credit.state === 'pace' ? auditText('appText.usageBar.creditPace', { why: credit.why }) : auditText('appText.usageBar.creditProbation');
+  return (
+    <div className="ub-h-credit" data-state={credit.state} data-testid={`usage-credit-${credit.pool}`}>
+      <span>{text}{credit.until && credit.state === 'out' ? ` · ${auditText('appText.usageBar.creditBack', { when: `${dayKey(credit.until) === dayKey(now) ? '' : `${resetAt(credit.until, now)} `}${hhmm(credit.until)}` })}` : ''}</span>
+      {credit.state !== 'pace' ? <button type="button" className="ub-credit-retry" disabled={busy} onClick={retry} data-testid={`usage-credit-retry-${credit.pool}`}>{busy ? auditText('appText.usageBar.creditRetrying') : auditText('appText.usageBar.creditRetry')}</button> : null}
+    </div>
+  );
+}
+
 function HarnessCard({ item, pinned, onTogglePin, now }: { item: HarnessUsage; pinned: boolean; onTogglePin: (h: Harness) => void; now: number }) {
   const [showExtra, setShowExtra] = useState(false);
+  const stopped = item.credit?.state === 'out';
   const primary = item.windows.filter(w => !w.model);
   const extra = item.windows.filter(w => !!w.model);
   const shown = primary.length && extra.length && !showExtra ? primary : item.windows;
   const pinLabel = pinned ? auditText('appText.usageBar.unpin') : auditText('appText.usageBar.pin');
   return (
-    <div className="ub-harness" data-testid={`usage-harness-${item.harness}`} data-status={item.status}>
+    <div className="ub-harness" data-testid={`usage-harness-${item.harness}`} data-status={item.status} data-credit={item.credit?.state ?? 'unknown'}>
       <div className="ub-h-head">
         <span className="ub-h-name" data-tip={item.accountEmail ?? undefined}>
           <HarnessMark harness={item.harness} size={16} />
@@ -174,9 +192,10 @@ function HarnessCard({ item, pinned, onTogglePin, now }: { item: HarnessUsage; p
           <IconPin size={13} filled={pinned} />
         </button>
       </div>
+      {item.credit ? <CreditLine credit={item.credit} now={now} /> : null}
       {shown.length > 0 ? (
         <div className="ub-h-wins">
-          {shown.map(w => <WindowRow key={`${w.kind}-${w.label}`} win={w} now={now} />)}
+          {shown.map(w => <WindowRow key={`${w.kind}-${w.label}`} win={w} now={now} stopped={stopped} />)}
           {primary.length > 0 && extra.length > 0 ? (
             <button type="button" className="ub-extra-btn" onClick={() => setShowExtra(v => !v)}>
               {showExtra ? <IconChevronDown size={11} /> : <IconChevronRight size={11} />}
@@ -309,7 +328,7 @@ export function UsageBar() {
           const w = primaryWeeklyWindow(h);
           const pct = w?.usedPercent ?? null;
           return (
-            <span key={hId} className="ub-pin" data-testid={`usage-pin-${hId}`} data-tone={toneOf(pct)}>
+            <span key={hId} className="ub-pin" data-testid={`usage-pin-${hId}`} data-tone={h?.credit?.state === 'out' ? 'red' : toneOf(pct)}>
               <HarnessMark harness={hId} size={14} />
               <Meter pct={pct} />
               <b className="ub-v">{pct == null ? '—' : pctText(pct)}</b>

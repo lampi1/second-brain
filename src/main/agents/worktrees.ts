@@ -226,10 +226,22 @@ export class DelegateWorktrees {
       && typeof v.branch === 'string' && /^sb\/delegate-(?:[a-f0-9]{12}|[a-f0-9-]{36})$/.test(v.branch) && typeof v.base === 'string' && /^[a-f0-9]{40,64}$/.test(v.base);
   }
 
-  prepare = async (parent: ChatSummary, req: NewChat, policy: AgentPolicy | null, continuationOf?: string): Promise<{ cwd: string; parentRunId: string | undefined; parentTaskVersion: number | undefined; bind?: (childId: string) => void }> => {
+  prepare = async (parent: ChatSummary, req: NewChat, policy: AgentPolicy | null, continuationOf?: string, inherit?: boolean): Promise<{ cwd: string; parentRunId: string | undefined; parentTaskVersion: number | undefined; bind?: (childId: string) => void }> => {
     const provenance = { parentRunId: parent.run?.runId, parentTaskVersion: parent.run?.taskVersion };
     const cwd = req.cwd;
     if (!needsIsolatedWorktree(policy)) return { cwd, ...provenance };
+    // a chat stopped on its credit limit goes on in a successor on another engine (ADR 0353): the successor takes the
+    // same worktree, uncommitted changes included; the predecessor works no more (its process ends), so one writer
+    if (inherit && continuationOf !== undefined) {
+      const previous = this.allocation(parent, { id: continuationOf, parentId: parent.id, cwd } as ChatSummary);
+      if (!isDir(previous.cwd)) throw new Error('The worktree of the chat to continue is gone; delegate a fresh child.');
+      return { cwd: previous.cwd, ...provenance, bind: childId => {
+        const owned: IsolatedDelegation = { ...previous, childId };
+        if (!this.valid(owned)) throw new Error('Invalid host-owned isolation provenance.');
+        this.allocations.set(real(previous.cwd), owned);
+        if (this.file) writeLocal(this.file, [...this.allocations.values()]);
+      } };
+    }
     // One checkout is verified once, through one session (each checkout's policy read once): each Git spawn costs up to
     // seconds on Windows with real-time antivirus scanning (ADR 0227 measured the steps)
     const brain = this.brainRoot(), session = new GitSession(), t0 = Date.now();

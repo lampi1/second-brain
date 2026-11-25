@@ -45,6 +45,8 @@ import type { PhonePort } from '../shared/contract/phone';
 
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
 export interface Wired {
+  /** «Riprova ora» on the limits panel (ADR 0353): reads the pool again; if still stopped by an error, one chat tries */
+  creditRetry?: (pool: string) => Promise<{ state: string; why: string; until: number | null }>;
   /** the verdicts on role runs (a parent's, a sampled Sentinel review's) and the user's Annulla on a change the app applied */
   runFeedback?: RunFeedback;
   /** the agents' "Da approvare" queue: read at /api/agents/lifecycle, decided only through agents:lifecycleDecide */
