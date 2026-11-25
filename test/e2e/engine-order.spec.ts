@@ -12,7 +12,7 @@ test('the engine order is set once, by keyboard too, and reads at 1280 and 375 p
     await box.scrollIntoViewIfNeeded();
     const rows = box.locator('.eo-row');
     await expect(rows.first()).toHaveAttribute('data-testid', 'engine-order-cursor');
-    await expect(page.getByTestId('engine-threshold-cursor')).toHaveValue('80');
+    await expect(page.getByTestId('engine-threshold-cursor')).toContainText('80%');
     await shot(page, 'engine-order-1280');
     // the keyboard does what the mouse does
     await page.getByTestId('engine-order-cursor-down').focus();

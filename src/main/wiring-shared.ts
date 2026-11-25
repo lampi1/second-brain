@@ -179,7 +179,7 @@ export function attachWorkMaps(ctx: Pick<Ctx, 'emitter' | 'userData'>, chats: Ch
   const maps = new WorkMaps({ store: new WorkMapStore(path.join(ctx.userData, 'work-maps')), chats, emit: id => ctx.emitter.emit('workmap:changed', { id }),
     projectsOf: c => projectMaps.projectsOf(c), projectNamed: name => projectMaps.resolve(name),
     startStrategist: strategistStarter({ chats, harness: () => brain.settings().orchestratorChats.harness,
-      folderOf: m => [m.owner?.chatId, ...(m.past ?? []).slice().reverse()].map(id => id && chats.list().find(c => c.id === id)?.cwd).find(f => f && fs.existsSync(f)) || [m.project, ...m.touches].map(folderOf).find(f => f && fs.existsSync(f)) ?? orchestrator()?.cwd ?? brain.info().brainRoot }), ...(now ? { now } : {}) });
+      folderOf: m => [m.owner?.chatId, ...(m.past ?? []).slice().reverse()].map(id => id && chats.list().find(c => c.id === id)?.cwd).find(f => f && fs.existsSync(f)) ?? [m.project, ...m.touches].map(folderOf).find(f => f && fs.existsSync(f)) ?? orchestrator()?.cwd ?? brain.info().brainRoot }), ...(now ? { now } : {}) });
   const send = ctx.emitter.emit.bind(ctx.emitter);
   ctx.emitter.emit = (ch, p) => { send(ch, p); maps.observe(ch, p); };
   projectMaps.jobsOf = project => maps.touching(project);
