@@ -1,4 +1,4 @@
-// A Strategist's plan that waits for the user's ok, opened among the questions (ADR 0343): which job, one line and «Apri la mappa».
+// A Strategist's plan that waits for the user's ok, opened among the questions (ADR 0343): which job, one line and «Apri».
 // The plan is read, approved, kept for later and changed only on its map; an ok typed in the Orchestrator's field while
 // this card is open still counts (lib/field-answer.ts). Used by QuestionsWindow.tsx.
 import { useLayoutEffect, useRef } from 'react';
@@ -18,7 +18,7 @@ export function PlanAskCard({ ask, onEscape, testid }: { ask: PlanAsk; onEscape:
   return <div ref={ref} tabIndex={-1} className="plan-ask" data-request-key={key} data-kind="plan" aria-label={t('tree.plan.ask.label', { chat: chatTitle })} data-testid={testid}
     onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); onEscape(); } }}>
     <b data-testid={`${testid}-title`}>{chatTitle}</b>
-    <span data-testid={`${testid}-count`}>{t('tree.plan.steps', { n: steps })} · {t('tree.plan.ask.onMap')}</span>
+    <span data-testid={`${testid}-count`}>{t('tree.plan.steps', { n: steps })} · {t('tree.plan.ask.inPlan')}</span>
     <button type="button" className="btn btn-primary btn-s" onClick={() => void openPlanOf(ask.chatId)} data-testid={`${testid}-map`}><IconMap size={13} />{t('plans.do.open')}</button>
   </div>;
 }

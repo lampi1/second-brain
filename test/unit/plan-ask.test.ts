@@ -1,6 +1,6 @@
 // A Strategist's plan to approve among the questions (ADR 0121, 0343): which plans wait (proposed, open chats, oldest first;
 // put in among the requests where they came), the key's shape (`${chatId}/plan@${at}`, as reqKey builds keys) and back, and
-// the card's markup in every language: the job, one line and «Apri la mappa», no step and no Sì / No, since the plan is read and
+// the card's markup in every language: the job, one line and «Apri», no step and no Sì / No, since the plan is read and
 // approved on its map; nothing for a plan that no longer waits or a newer proposal than the one asked. Its key is what the
 // Orchestrator's field answers while it is open, so a typed ok still counts. Rendered without a browser.
 import { createElement } from 'react';
@@ -87,13 +87,13 @@ describe('PlanAskCard.tsx', () => {
     expect(html()).toBe('');
     expect(html(101)).toContain('data-testid="qp-map"');
   });
-  it('is one line and «Apri la mappa»: no step, no Sì / No', () => {
+  it('is one line and «Apri»: no step, no Sì / No', () => {
     chats = { 's/1': { id: 's/1', plan: plan() } };
     const out = html();
     expect(out).toContain('data-request-key="s/1/plan@42"');
     expect(out).toContain('3 step');
-    expect(out).toContain('Si legge e si approva sulla sua mappa.');
-    expect(out).toContain('Apri la mappa');
+    expect(out).toContain('Si legge e si approva nel suo piano.');
+    expect(out).toContain('Apri');
     expect(out.match(/<button/g)).toHaveLength(1);
     expect(out).not.toContain('Trovo dove');
     expect(out).not.toContain('<li');
@@ -109,9 +109,9 @@ describe('PlanAskCard.tsx', () => {
   it('speaks the user\'s language', () => {
     chats = { 's/1': { id: 's/1', plan: plan() } };
     setLang('en');
-    expect(html()).toContain('Read it and approve it on its map.');
+    expect(html()).toContain('Read it and approve it in its plan.');
     setLang('de');
-    expect(html()).toContain('Auf seiner Karte lesen und freigeben.');
+    expect(html()).toContain('Im Plan lesen und freigeben.');
   });
   it('renders nothing once the plan no longer waits, or for an older proposal than the one shown', () => {
     chats = { 's/1': { id: 's/1', plan: plan({ phase: 'running' }) } };

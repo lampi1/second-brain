@@ -104,7 +104,7 @@ export class Plans {
   }
 
   private now(): number { return this.d.now?.() ?? Date.now(); }
-  private newId(): string { return this.d.newId?.() ?? `wm_${crypto.randomBytes(6).toString('hex')}`; }
+  private newId(): string { return this.d.newId?.() ?? `pl_${crypto.randomBytes(6).toString('hex')}`; }
 
   /** The chats already there at start: plans of an older version get their map; a map whose chat is gone is stopped. */
   adopt(): void {

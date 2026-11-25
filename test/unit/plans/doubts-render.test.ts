@@ -13,7 +13,7 @@ import type { LadderQuestion, LadderStep } from '../../../src/shared/question-la
 import type { PlanFull } from '../../../src/shared/plan';
 
 const view = (doubts: PlanDoubt[], questions: LadderQuestion[] = [], state = 'toApprove'): PlanFull =>
-  ({ map: { id: 'wm_1', state, plan: { doubts } }, questions: questions.map(question => ({ chatId: 'k', title: 'Prova', n: 2, question })) }) as unknown as PlanFull;
+  ({ record: { id: 'pl_1', state, plan: { doubts } }, questions: questions.map(question => ({ chatId: 'k', title: 'Prova', n: 2, question })) }) as unknown as PlanFull;
 const render = (v: PlanFull) => renderToStaticMarkup(createElement(PlanDoubts, { view: v, now: 100_000 }));
 const step = (level: LadderStep['level'], name: string, action: LadderStep['action'], why?: string): LadderStep => ({ level, name, at: 1, action, ...(why ? { why } : {}) });
 const ask = (p: Partial<LadderQuestion>): LadderQuestion => ({ id: 'q', asks: [{ question: 'Anche i resi?', options: [] }], level: 'strategist', at: 1, levelAt: 1, trail: [], via: 'message', ...p });

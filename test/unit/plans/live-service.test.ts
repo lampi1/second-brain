@@ -32,7 +32,7 @@ function maps(): Plans {
     chats: { list: () => chats, pending: () => asks, planDecide: async () => {}, planStart: async () => {}, planReplan: async () => {}, planPutAway: () => {},
       planStop: async id => { const c = chats.find(x => x.id === id)!; put({ ...c, plan: { ...c.plan!, stopped: true } }); },
       planResume: async id => { const { closedAt: _a, closedBy: _b, ...open } = chats.find(x => x.id === id)!; saw(w, { ...open, state: 'running' } as ChatSummary); } },
-    emit: id => emitted.push(id), now: () => now, newId: () => `wm_live${String(++n).padStart(2, '0')}`,
+    emit: id => emitted.push(id), now: () => now, newId: () => `pl_live${String(++n).padStart(2, '0')}`,
   });
   w.tellTo({ stalledWork: x => { if (takes) told.push(x); return takes; }, unstalled: id => untold.push(id) });
   return w;

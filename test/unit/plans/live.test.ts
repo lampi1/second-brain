@@ -23,7 +23,7 @@ let stepSeq = 0;
 const step = (state: PlanStep['state'], chatIds?: string[], extra: Partial<PlanStep> = {}): PlanStep => ({ id: `s${++stepSeq}`, title: 'Passo', state, ...(state === 'done' ? { proof: { at: 1, by: 'report' as const, text: 'ok' } } : {}), ...(chatIds ? { chatIds } : {}), ...extra });
 function map(steps: PlanStep[], extra: Partial<Plan> = {}): Plan {
   const plan: StrategyPlan = { phase: 'running', at: 100, clarified: [], steps };
-  return settle({ id: 'wm_live01', version: 3, title: 'Sconti', constraints: [], links: [], plan, owner: { chatId: 'own', task: 't' }, createdAt: 1, updatedAt: 500, by: 'app', summary: '', ...extra });
+  return settle({ id: 'pl_live01', version: 3, title: 'Sconti', constraints: [], links: [], plan, owner: { chatId: 'own', task: 't' }, createdAt: 1, updatedAt: 500, by: 'app', summary: '', ...extra });
 }
 const ask = (chatId: string): PendingRequest => ({ id: `q-${chatId}`, chatId, type: 'question', title: '?', at: 1 }) as unknown as PendingRequest;
 function live(m: Plan, chats: ChatSummary[], x: Partial<LiveInput> = {}): { boxes: (StepLive | undefined)[]; map: PlanLive | undefined } {

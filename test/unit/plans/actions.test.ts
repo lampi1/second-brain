@@ -34,7 +34,7 @@ function walk(node: ReactNode): ReactElement<Record<string, unknown>>[] {
   return [el, ...walk(el.props.children as ReactNode)];
 }
 let seq = 0;
-const info = (can: PlanAction[], p: Partial<PlanInfo> = {}): PlanInfo => ({ id: `wm_m${++seq}`, title: 'M', state: 'toApprove', steps: 3, done: 0, now: 0, blocked: 0, partial: 0, check: 0, percent: 0, ready: 0, createdAt: 1, updatedAt: 1, planAt: 42, can, ...p });
+const info = (can: PlanAction[], p: Partial<PlanInfo> = {}): PlanInfo => ({ id: `pl_m${++seq}`, title: 'M', state: 'toApprove', steps: 3, done: 0, now: 0, blocked: 0, partial: 0, check: 0, percent: 0, ready: 0, createdAt: 1, updatedAt: 1, planAt: 42, can, ...p });
 const draw = (i: PlanInfo) => {
   hook.cursor = hook.refCursor = 0;
   const all = walk(PlanButtons({ info: i }) as ReactNode);
@@ -117,7 +117,7 @@ describe('what the state means', () => {
     expect(noteOf(info([], { replanned: true }))).toContain('I passi già partiti vanno avanti');
     expect(noteOf(info([], { state: 'planned' }))).toContain('«Parti»');
     expect(noteOf(info([], { state: 'stopped', stopped: { at: 1, by: 'closed' } }))).toBe('La sua chat è stata chiusa.');
-    expect(noteOf(info([], { state: 'idea' }))).toBe('Nessuno ci lavora ancora.');
+    expect(noteOf(info([], { state: 'idea' }))).toBe('Nessuno ci lavora ancora: «Fai il piano» apre uno Strategist.');
     expect(noteOf(info([], { state: 'idea', planning: true }))).toContain('sta preparando');
     expect(noteOf(info([], { state: 'running', planning: true }))).toContain('sta cambiando');
     expect(noteOf(info([], { state: 'running' }))).toBeNull();

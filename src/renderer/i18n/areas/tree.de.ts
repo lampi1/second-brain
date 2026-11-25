@@ -114,6 +114,6 @@ export const treeDe: typeof treeIt = {
   'tree.plan.ready': 'Plan fertig: gibst du ihn frei?',
   // the plan to approve in the questions window, its row and its card (PlanAskCard.tsx, ADR 0343)
   'tree.plan.ask.kicker': 'Plan zum Freigeben',
-  'tree.plan.ask.onMap': 'Auf seiner Karte lesen und freigeben.',
+  'tree.plan.ask.inPlan': 'Im Plan lesen und freigeben.',
   'tree.plan.ask.label': (p: { chat: string }) => `Plan zum Freigeben von ${p.chat}`,
 };

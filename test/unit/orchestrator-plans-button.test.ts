@@ -44,7 +44,7 @@ describe('the project maps button on the Orchestrator', () => {
     const menu = html.indexOf('data-testid="orchestrator-menu"');
     expect(menu).toBeGreaterThan(0);
     const head = html.slice(0, menu);
-    expect(head).toContain('data-testid="orchestrator-maps"');
+    expect(head).toContain('data-testid="orchestrator-plans"');
   });
   it('opens the maps on click, like the top bar\'s button', () => {
     const el = PlansButton({ testid: 'orchestrator-plans' }) as unknown as { props: { onClick: () => void; testid: string; shortcut: string } };

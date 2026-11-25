@@ -114,6 +114,6 @@ export const treeEn: typeof treeIt = {
   'tree.plan.ready': 'Plan ready: do you approve it?',
   // the plan to approve in the questions window, its row and its card (PlanAskCard.tsx, ADR 0343)
   'tree.plan.ask.kicker': 'Plan to approve',
-  'tree.plan.ask.onMap': 'Read it and approve it on its map.',
+  'tree.plan.ask.inPlan': 'Read it and approve it in its plan.',
   'tree.plan.ask.label': (p: { chat: string }) => `Plan to approve from ${p.chat}`,
 };

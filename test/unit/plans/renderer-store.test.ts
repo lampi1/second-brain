@@ -14,7 +14,7 @@ let store: typeof Store;
 
 beforeEach(async () => {
   vi.resetModules(); invoke.mockClear(); on.mockClear();
-  open = [row('wm_open')]; put = [row('wm_put', { state: 'archived' })]; gate = null;
+  open = [row('pl_open')]; put = [row('pl_put', { state: 'archived' })]; gate = null;
   vi.stubGlobal('window', { sb: { invoke, on } });
   store = await import('../../../src/renderer/store/plans');
 });
@@ -24,7 +24,7 @@ describe('the rows', () => {
     expect(store.plans()).toBeNull();
     store.watchPlans(); store.watchPlans();
     await settle();
-    expect(store.plans()!.map(r => r.id)).toEqual(['wm_open', 'wm_put']);
+    expect(store.plans()!.map(r => r.id)).toEqual(['pl_open', 'pl_put']);
     expect(invoke.mock.calls.map(c => c[0])).toEqual(['plans:list', 'plans:list']);
     expect(on).toHaveBeenCalledTimes(1);
     expect(on.mock.calls[0]![0]).toBe('plans:changed');
@@ -33,21 +33,21 @@ describe('the rows', () => {
     store.watchPlans(); await settle();
     let free = () => {}; gate = new Promise<void>(r => { free = r; });
     changed(); changed(); changed();
-    open = [row('wm_open'), row('wm_new')];
+    open = [row('pl_open'), row('pl_new')];
     free(); gate = null; await settle();
-    expect(store.plans()!.map(r => r.id)).toEqual(['wm_open', 'wm_new', 'wm_put']);
+    expect(store.plans()!.map(r => r.id)).toEqual(['pl_open', 'pl_new', 'pl_put']);
     expect(invoke).toHaveBeenCalledTimes(6); // the first, the one under way, one more for the changes that came meanwhile
   });
   it('stay when a reading fails', async () => {
     store.watchPlans(); await settle();
     invoke.mockRejectedValueOnce(new Error('giù'));
     changed(); await settle();
-    expect(store.plans()!.map(r => r.id)).toEqual(['wm_open', 'wm_put']);
+    expect(store.plans()!.map(r => r.id)).toEqual(['pl_open', 'pl_put']);
   });
   it('a chat\'s map is read now, not from the rows on screen', async () => {
     store.watchPlans(); await settle();
-    open = [row('wm_open', { ownerChatId: 'c1' })];
-    expect((await store.planOfChat('c1'))?.id).toBe('wm_open');
+    open = [row('pl_open', { ownerChatId: 'c1' })];
+    expect((await store.planOfChat('c1'))?.id).toBe('pl_open');
     expect(await store.planOfChat('c2')).toBeNull();
   });
 });
