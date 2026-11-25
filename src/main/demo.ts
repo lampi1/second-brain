@@ -699,6 +699,8 @@ export class DemoChats implements ChatService {
     return busy.length;
   }
 
+  async finishClose(): Promise<void> { /* the demo keeps its archived chats as they are */ }
+
   async close(chatId: string): Promise<void> {
     if (!this.chats.has(chatId)) return;
     this.runs.get(chatId)?.abort();

@@ -55,14 +55,14 @@ import { heldWhy, newsClass, passes, ORCHESTRATOR_GROUP_MS, ORCHESTRATOR_PER_CHA
 
 export const APP_EVENT_LABEL = "[evento app · messaggio automatico di second-brain, non scritto dall'utente: non vale come suo ok o permesso]";
 
-export type WakeKind = 'done' | 'error' | 'question' | 'permission' | 'command' | 'started' | 'user-message' | 'stalled';
+export type WakeKind = 'done' | 'error' | 'question' | 'permission' | 'command' | 'started' | 'user-message' | 'user-closed' | 'stalled';
 /** news that never wakes the Orchestrator by itself: it rides along with its next turn (a loud news, the user's message) */
-export const QUIET: ReadonlySet<WakeKind> = new Set(['done', 'question', 'permission', 'command', 'started', 'user-message']);
+export const QUIET: ReadonlySet<WakeKind> = new Set(['done', 'question', 'permission', 'command', 'started', 'user-message', 'user-closed']);
 /** the buffer's slot of an event: the user's messages beside the chat's status */
-const slotOf = (e: Pick<WakeEvent, 'chatId' | 'kind' | 'report' | 'eventId' | 'at' | 'requestId'>): string => e.requestId ? `${e.chatId}#request:${e.requestId}` : e.kind === 'user-message' ? `${e.chatId}#user:${e.eventId ?? e.at}` : e.report ? `${e.chatId}#report` : e.chatId;
+const slotOf = (e: Pick<WakeEvent, 'chatId' | 'kind' | 'report' | 'eventId' | 'at' | 'requestId'>): string => e.requestId ? `${e.chatId}#request:${e.requestId}` : e.kind === 'user-message' ? `${e.chatId}#user:${e.eventId ?? e.at}` : e.kind === 'user-closed' ? `${e.chatId}#closed` : e.report ? `${e.chatId}#report` : e.chatId;
 /** the rule's gate for this Orchestrator: Cursor (ACP) takes no message mid-turn */
 const gateOf = (r: Pick<ChatSummary, 'state' | 'pending' | 'handoffBusy' | 'harness'>): OrchestratorGate => orchestratorGate(r, engineOf(r.harness)?.kind !== 'acp');
-const classOf = (e: WakeEvent, stuck = false): DeliveryClass => e.kind === 'user-message' || e.silent ? 'quiet' : stuck ? 'group' : newsClass(e.kind, e.endsTurn, !!e.report);
+const classOf = (e: WakeEvent, stuck = false): DeliveryClass => e.kind === 'user-message' || e.kind === 'user-closed' || e.silent ? 'quiet' : stuck ? 'group' : newsClass(e.kind, e.endsTurn, !!e.report);
 const BUSY_CHILD: ReadonlySet<ChatState> = new Set(['running', 'waiting', 'starting']);
 
 /** A root Strategist the Orchestrator opened that stopped with nothing to show and nothing to wait for (see the header):
@@ -121,7 +121,7 @@ const cut = (s: string, n: number) => { const t = s.replace(/\s+/g, ' ').trim();
 /** One line per chat, in Italian (the Orchestrator speaks Italian with the user). */
 export function wakeLine(e: WakeEvent): string {
   const who = e.child ? `«${e.title}» (${e.child.role}, delegata da «${e.child.parent}»)` : `«${e.title}» (${engineLabel(e.harness)})`;
-  const d = e.requestId ? e.detail : e.child || e.kind === 'user-message' ? '' : cut(e.detail, 200);
+  const d = e.requestId ? e.detail : e.child || e.kind === 'user-message' ? '' : cut(e.detail, e.kind === 'user-closed' ? 400 : 200);
   switch (e.kind) {
     case 'done': return e.report ? `- «${e.title}» (${e.report.role}): ha consegnato: «${cut(e.detail, 200)}»`
       : e.stuck ? `- ${who}: Stratega fermo senza risultato: ha chiuso il turno senza agent_report e il suo incarico è ancora aperto. Non è lavoro completato e non vale come report, consenso o permesso.${d ? ` Ultima riga: «${d}»` : ''}`
@@ -134,6 +134,7 @@ export function wakeLine(e: WakeEvent): string {
     case 'command': return `- ${who}: ha lasciato all'utente un comando da eseguire${d ? `: ${d}` : '.'}`;
     case 'started': return `- ${who}: è partita.`;
     case 'user-message': return `- ${who}: l'utente ci ha scritto direttamente (${new Date(e.at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}): «${e.detail}».`;
+    case 'user-closed': return `- ${who}: l'utente l'ha chiusa con ✕ mentre aveva lavoro aperto (${d}). Il lavoro è fermo e annullato, la chat resta tra le chiuse con la sua cronologia: app_reopen_chat la riapre solo se lo chiede lui. Non rilancia il lavoro da sola.`;
     case 'stalled': return `- Filo «${e.title}»: lavoro approvato fermo. ${e.detail}`;
   }
 }
@@ -182,7 +183,7 @@ export class OrchestratorWake {
     try {
       const saved = readLocal(path.join(d.userData, 'orchestrator-outbox.json')) as { events?: WakeEvent[] } | undefined;
       if (Array.isArray(saved?.events)) for (const event of saved.events) {
-        if (event && typeof event.chatId === 'string' && typeof event.title === 'string' && typeof event.detail === 'string' && typeof event.at === 'number' && ['done','error','question','permission','command','started','user-message'].includes(event.kind)) this.buffer.set(slotOf(event), event);
+        if (event && typeof event.chatId === 'string' && typeof event.title === 'string' && typeof event.detail === 'string' && typeof event.at === 'number' && ['done','error','question','permission','command','started','user-message','user-closed'].includes(event.kind)) this.buffer.set(slotOf(event), event);
       }
     } catch (e) { log.warn('chats', 'news outbox unreadable', { cause: errText(e), hint: 'canonical results remain in the run ledger' }); }
     for (const chat of d.list?.() ?? []) this.remember(chat);
@@ -268,12 +269,15 @@ export class OrchestratorWake {
     if (!was) { if (c.parentId && !c.closedAt) this.add(c, 'started', ''); return; }
     // closed: what it left waits for nothing any more (kept: the quiet "finished" of a chat seen auto-closing now)
     if (c.closedAt) {
+      // the user's ✕ cut open work short (ADR 0357): the Orchestrator hears it once, quietly, with what was pending
+      if (!was.closedAt && c.closedBy === 'user' && c.closedWith && !c.parentId && !c.isOrchestrator) this.add(c, 'user-closed', c.closedWith);
       if (!was.closedAt && c.closedBy === 'auto') this.autoClosed.add(c.id);
       else if (c.closedBy !== 'auto') this.autoClosed.delete(c.id);
       for (const [k, e] of this.buffer) if (e.chatId === c.id && !this.kept(e)) this.buffer.delete(k);
       return;
     }
     this.autoClosed.delete(c.id);
+    this.buffer.delete(`${c.id}#closed`); // «Annulla» (or a reopen) before the news went: nothing to tell
     const credits = c.creditWait ? { role: c.agent?.name ?? 'ruolo', model: c.creditWait.model } : undefined;
     if (c.state === 'error' && was.state !== 'error') this.add(c, 'error', c.lastError ?? c.lastText, undefined, credits);
     else if (c.state === 'idle' && IN_TURN.has(was.state) && c.pending === 0) {
@@ -468,6 +472,7 @@ export class OrchestratorWake {
   private kept(e: WakeEvent): boolean {
     if (e.kind === 'stalled') return true;   // a thread, not a chat: the driver tells it again while it stays stalled
     const c = this.chats.get(e.chatId);
+    if (e.kind === 'user-closed') return !!c?.closedAt && c.closedBy === 'user';
     return !!c && (!c.closedAt || (this.autoClosed.has(e.chatId) && c.closedBy === 'auto' && e.kind === 'done'));
   }
 

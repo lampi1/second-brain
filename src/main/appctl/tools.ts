@@ -343,7 +343,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const warn = d.brain.settings().contextWarnTokens;
         return {
           app: all.filter(c => !c.closedAt).map(c => brief(c, warn)),
-          closed: recentClosed(all).map(c => ({ ...brief(c, warn), closedAt: new Date(c.closedAt!).toISOString(), closedBy: c.closedBy ?? 'auto' })),
+          closed: recentClosed(all).map(c => ({ ...brief(c, warn), closedAt: new Date(c.closedAt!).toISOString(), closedBy: c.closedBy ?? 'auto', ...(c.closedWith ? { closedWith: c.closedWith } : {}) })),
         };
       },
     },
