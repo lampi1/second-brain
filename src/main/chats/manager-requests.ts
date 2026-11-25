@@ -560,7 +560,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     if (owner?.source !== 'catalog' || (r.s.isOrchestrator && req.tool !== 'Skill')) return null;
     const verdict = gateRequest(req, { role: { id: owner.id, name: owner.name }, skills: r.skills ?? [],
       rewrite: engineOf(r.s.harness)?.kind === 'claude',
-      policy: r.policy ?? null, brainRoot: this.opts.brainRoot?.() ?? null, readScripts: this.readScripts(r), cwd: r.s.cwd,
+      policy: r.policy ?? null, brainRoot: this.opts.brainRoot?.() ?? null, readScripts: this.permissionReadScripts(r, req), cwd: r.s.cwd,
       ...(r.agentAssets ? { plugin: runtimePluginName(r.agentAssets.pluginDir) } : {}),
       ...(r.s.parentId ? { parent: { policy: parent ? parent.policy ?? null : r.policy ?? null, title: parent?.s.title ?? r.s.parentId } } : {}) });
     if (verdict.kind === 'pass') return null;
@@ -587,7 +587,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     const command = (req.input as { command?: unknown } | null)?.command;
     const parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
     const parentRuns = !!parent && !commandsReadOnly(parent.policy) && allowsClass(parent.policy, 'shell');
-    if (readOnlyCommand(command, this.readScripts(r)) || parentRuns) { req.noAlways = true; delete req.alwaysRules; return null; }
+    if (readOnlyCommand(command, this.permissionReadScripts(r, req)) || parentRuns) { req.noAlways = true; delete req.alwaysRules; return null; }
     const shown = typeof command === 'string' ? command.slice(0, 120) : req.tool;
     log.info('chats', 'command refused: read-only role', { chat: r.s.id, data: { tool: req.tool } });
     return { kind: 'deny', policy: 'read-only-role', item: sysItem('commandReadOnly', { command: shown }, 'warn'),
@@ -617,9 +617,10 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     const c = toolClassOf(req.tool);
     const command = (req.input as { command?: unknown } | null)?.command;
     if (r.policy?.tools && c && !allowsClass(r.policy, c)) return toUser(`tool class not given to the chat: ${c}`);
-    if (COMMAND_TOOLS.includes(req.tool) && commandsReadOnly(r.policy) && !readOnlyCommand(command, this.readScripts(r))) return toUser('the chat may only run commands that read');
+    const readScripts = this.permissionReadScripts(r, req);
+    if (COMMAND_TOOLS.includes(req.tool) && commandsReadOnly(r.policy) && !readOnlyCommand(command, readScripts)) return toUser('the chat may only run commands that read');
     const brainRoot = this.opts.brainRoot?.() ?? null;
-    const v = autoPermit(whole ? { ...req, whole } : req, { cwd: r.s.cwd, ceiling: r.policy?.ceiling ?? null, readScripts: this.readScripts(r), policy, ...(brainRoot ? { rulesFile: path.join(brainRoot, POLICY_FILE) } : {}) });
+    const v = autoPermit(whole ? { ...req, whole } : req, { cwd: r.s.cwd, ceiling: r.policy?.ceiling ?? null, readScripts, policy, ...(brainRoot ? { rulesFile: path.join(brainRoot, POLICY_FILE) } : {}) });
     if (v.kind === 'ask') {
       // held by the user's rule: no «always» (a saved rule would let the next ones through unasked); the phone may answer
       if (v.rule) { req.noAlways = true; delete req.alwaysRules; req.heldBy = { rule: v.rule.id, why: v.rule.why }; }
@@ -678,6 +679,15 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
   /** The brain's declared read-only tools (read-only-tools.md), resolved from the chat's folder (issue #93). */
   protected readScripts(r: Rec): ReadScripts {
     return { cwd: r.s.cwd, paths: readOnlyTools(this.opts.brainRoot?.() ?? null) };
+  }
+
+  /** Resolve an Antigravity Shell script from where it will run, not from the chat's folder. */
+  private permissionReadScripts(r: Rec, req: Omit<PendingRequest, 'chatId'>): ReadScripts {
+    const scripts = this.readScripts(r);
+    if (r.s.harness !== 'antigravity' || req.tool !== 'Shell') return scripts;
+    const input = req.input as { cwd?: unknown; workdir?: unknown; working_directory?: unknown } | undefined;
+    const own = [input?.cwd, input?.workdir, input?.working_directory].find((x): x is string => typeof x === 'string' && !!x);
+    return own ? { ...scripts, cwd: path.resolve(scripts.cwd, own) } : scripts;
   }
 
   /** Each request once per run, by its id: question, permission or command. */
