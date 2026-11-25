@@ -31,6 +31,9 @@ export interface SessionSink {
   models?(list: SeenModel[]): void;
   /** The commands "/<name>" the engine offers in this chat (skills, its own commands), for the input's "/" list. */
   commands?(list: ChatCommand[]): void;
+  /** The tools the engine itself says it loaded in this session (Claude's init `tools`, the app's MCP server connected):
+   *  the required-tools check reads it (chats/tool-check.ts, ADR 0356). Absent = the engine does not say. */
+  toolsLoaded?(names: string[]): void;
   /** Provider observations only: an absent callback or event is not a zero child census. */
   children?(observation: ChildObservation): void;
   childrenCoverage?(coverage: AgentChildren['coverage'], reason?: 'exit'): void;

@@ -3,6 +3,7 @@
 // SB_DEMO=1 swaps in the demo services (demo-wiring.ts: fake chats, brain and browser tabs; SB_DEMO_FREEZE=1 = deterministic).
 // The types (Ctx, Wired) are in wiring-types.ts, the steps shared with the demo in wiring-shared.ts and two
 // a self-contained builder (Impara) in wiring-builders.ts; this file re-exports what others import.
+import { installToolCli } from './chats/tool-cli';
 import { app, powerMonitor, powerSaveBlocker, safeStorage, shell } from 'electron';
 import os from 'node:os';
 import { LearningReviewService } from './brainmodel/learning-review';
@@ -159,7 +160,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   // the brain folder (bound below, once the brain exists) holds the credentials file of login hand-offs
   let brainRoot: () => string | null = () => null;
-  const { service: browser, mcp, addChatTools, setBrowserAccess, setChatToolFilter, setChatToolCompact, chatToolsFor } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
+  const toolCliDir = installToolCli(ctx.userData);
+  if (!toolCliDir) log.warn('chats', 'fallback tool command not written', { cause: 'userData/bin not writable', hint: 'chats have no sb-tool; check the folder permissions' });
+  const { service: browser, mcp, addChatTools, setBrowserAccess, setChatToolFilter, setChatToolCompact, setChatToolNeeds, chatToolsFor } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
   // the brain's chats.mjs poll leaves out the app's own chats (bound below, once the chat manager exists)
   let isOwn: (id: string) => boolean = () => false;
   // Retire the legacy global quiet flag before notifications start; postponement is request-local in the renderer.
@@ -333,6 +336,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     freshSessions: () => true,
     // after a start only chats active within engineIdleMin resume by themselves (ADR 0228)
     resumeWithinMs: () => (brain.settings().engineIdleMin ?? 30) * 60_000,
+    onContinued: (from, to) => workflowsRef?.followChat(from, to),
     continuationContext: chatId => workflowsRef ? JSON.stringify(workflowsRef.list().filter(row => row.chatIds.includes(chatId))) : null,
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
     resolveAgent: req => {
@@ -383,6 +387,15 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // 2026-10-13); never with the fake CLI of the e2e tests; SB_PREWARM=0 turns it off
     prewarm: !process.env.SB_CLAUDE_PATH && process.env.SB_PREWARM !== '0',
     mcpUrlFor: chatId => browser.mcpUrlFor(chatId),
+    // the fallback tool command every chat's shell finds (chats/tool-cli.ts, ADR 0356)
+    toolCliDir,
+    // a chat's own endpoint tool called in process, that chat the caller: a report pasted as text (ADR 0356)
+    callChatTool: async (chatId, name, args) => {
+      const tool = chatToolsFor(chatId).find(t => t.name === name);
+      if (!tool) throw new Error(`${name} is not on this chat's endpoint`);
+      const out = await tool.run(args, { mount: 'browser-chat', params: { chatId }, sessionId: '', signal: new AbortController().signal, progress: () => false });
+      return typeof out === 'string' ? out : 'text' in out ? out.text : JSON.stringify(out.raw.content);
+    },
     extMcp: chatId => mcpServers.launch(chatId, browser.mcpUrlFor(null).replace(/\/mcp$/, '')),
     // agents' cold starts wait for one of cores/2 slots, or the emergency brake (ADR 0222); SB_LOAD_FORCE="cpu,freeRam" fixes the load
     // and SB_COLD_SLOTS the slots
@@ -480,6 +493,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   setBrowserAccess(id => manager.browserAccess(id));
   setChatToolFilter((id, tool) => manager.chatToolShown(id, tool));
   setChatToolCompact(id => manager.chatToolsCompact(id));
+  // the table of required tools: kept in a compact list, checked against what each engine read (ADR 0356)
+  setChatToolNeeds(id => manager.requiredToolsOf(id), (id, names) => manager.toolsServed(id, names));
   wireCodeMode({ addChatTools, chatToolsFor, manager, gateway: mcpServers.gateway });
   // a closed chat's browser tabs go away and its per-chat MCP token stops working
   const closeChat = manager.close.bind(manager);

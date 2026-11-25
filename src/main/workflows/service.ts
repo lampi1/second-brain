@@ -100,6 +100,17 @@ export class Workflows {
     delete row.approvedProposal;
     row.waitingOn = ''; row.nextAction = next ? `Eseguire la fase ${next}` : ''; row.evidence = '';
   }
+  /** A linked chat's work went on in another chat (continueChat, an engine change; ADR 0356): the new chat joins the same
+   *  threads, so the thread sees the chat that works, not only a closed one. Threads already done are left alone. */
+  followChat(from: string, to: string): void {
+    for (const row of this.records) {
+      if (row.status === 'done' || !row.chatIds.includes(from) || row.chatIds.includes(to)) continue;
+      const expected = row.version;
+      row.chatIds = [...row.chatIds, to];
+      row.version++; row.updatedAt = this.now();
+      this.save(row, expected);
+    }
+  }
   report(input: WorkReport): WorkThread {
     const row = this.current(input.id, input.expectedVersion);
     if (row.status === 'done') throw new Error('Filo completato.');

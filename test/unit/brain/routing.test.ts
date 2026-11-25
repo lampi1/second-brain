@@ -164,3 +164,17 @@ describe('routing: the brain files', () => {
     expect(new Routing(() => null).observe(pred)).toBe(false);
   });
 });
+
+// problem 3 of 2026-11-25 (ADR 0356): the card saved claude-opus-5-5 on Cursor from Cursor's live list, app_create_chat
+// refused it from the registry's harness; save and launch now follow the same rule (shared/model-fit.ts)
+describe('a model on the engine\'s live list starts there', () => {
+  const agent = { id: 'strategist', name: 'Strategist', version: 1, harness: 'cursor', model: 'claude-opus-5-5', effort: null, chosenBy: 'orchestrator' } as const;
+  const known = (h: string) => h === 'cursor' ? ['claude-opus-5-5', 'gpt-5.5'] : null;
+  it('a role card on Cursor with claude-opus-5-5 launches', () => {
+    expect(routeChat({ title: 'x', prompt: '', ask: {}, defaults: DEF, agent, known }, REG, null, 1)).toMatchObject({ harness: 'cursor', model: 'claude-opus-5-5' });
+    expect(resolve({ harness: 'cursor', model: 'claude-opus-5-5' }, DEF, REG, () => true, known)).toMatchObject({ harness: 'cursor', model: 'claude-opus-5-5' });
+  });
+  it('off the engine\'s list the registry\'s engine still holds', () => {
+    expect(routeChat({ title: 'x', prompt: '', ask: {}, defaults: DEF, agent, known: () => ['gpt-5.5'] }, REG, null, 1)).toEqual({ error: expect.stringMatching(/gira solo su claude, non su cursor/) });
+  });
+});

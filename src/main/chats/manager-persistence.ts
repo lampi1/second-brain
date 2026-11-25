@@ -86,6 +86,14 @@ export abstract class ManagerPersistence extends ManagerCore {
     return moved;
   }
 
+  /** At load, do not replace a delegated chat's tools with its parent's. The contract's classes and the role's own
+   *  limits (tool classes and MCP servers) are not stored apart, so a saved list can be either. Widening would drop a
+   *  limit the role had, including on a chat this version already saved. The saved limit stays (fail closed). A later
+   *  load sees the same policy. True would mean a policy changed; this does not. */
+  protected override widenDelegated(): boolean {
+    return false;
+  }
+
   /** Only the newest MAX_ARCHIVED archived chats stay in the app. */
   protected pruneArchived(): void {
     // a plan approved and kept for later needs its chat to start (ADR 0342): it is never pruned

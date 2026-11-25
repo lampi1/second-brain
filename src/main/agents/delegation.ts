@@ -7,7 +7,7 @@
 // climbs the ladder one level at a time (ADR 0344, chats/manager-ladder.ts): its parent answers it with
 // agent_answer_child from what it knows or passes it up with askUser, and only what no agent may or can decide reaches
 // the user. What holds whoever asks: permissions only go down (a contract asking for a
-// tool class beyond the parent's is refused, and the child's policy is narrowed by the parent's, chats/manager.ts), the
+// tool class beyond the parent's is refused, and the child's policy is narrowed by the parent's, chats/manager.ts; contract.tools only chooses its folder, ADR 0355), the
 // depth limit of Impostazioni → Ruoli e deleghe is checked and a refusal shows in the parent's chat. A child's folder
 // is any existing one, also of another repository (ADR 0345, #460: a plan often spans several projects); the folder is
 // no permission. Only the Orchestrator and the Strategist delegate (2026-11-23; the Orchestrator through
@@ -15,6 +15,7 @@
 // starts in one agent_delegate call (shared/strategy.ts parallelSplit). There is no limit on children at once (the owner,
 // 2026-11-23): the Strategist checks the real resources when it plans. A child may run on another engine only when the
 // user allows chats across engines. Used by wiring.ts.
+import { successorIn } from '../../shared/role-tools';
 import path from 'node:path';
 import { heldQuestions, openQuestions } from '../../shared/question-ladder';
 import type { ChatSummary, Effort, Harness, NewChat } from '../../shared/contract';
@@ -201,7 +202,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       const beyond = (contract.tools ?? []).filter(c => !allowsClass(parentPolicy, c));
       if (beyond.length) throw new Error(`tasks[${i}].contract.tools refused: ${beyond.join(', ')} goes beyond your own permissions (a child never gets more than its parent).`);
       const outside = (contract.tools ?? []).filter(c => !(profile.tools?.allow ?? []).includes(c));
-      if (outside.length) throw new Error(`tasks[${i}].contract.tools: ${outside.join(', ')} is not among ${profile.name}'s tools; contract.tools only narrows them.`);
+      if (outside.length) throw new Error(`tasks[${i}].contract.tools: ${outside.join(', ')} is not among ${profile.name}'s tools; contract.tools names what the part needs, among them.`);
       const cwd = typeof t.cwd === 'string' && t.cwd.trim() ? t.cwd.trim() : parent.cwd;
       if (t.freshReview !== undefined && typeof t.freshReview !== 'boolean') throw new Error(`tasks[${i}].freshReview: true or false.`);
       // the run this Sentinel reviews (2026-11-23, as app_create_chat's reviewOf): one of your direct children's runs
@@ -270,7 +271,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (!d.chats.assignTask || !d.chats.userEvents) throw new Error('agent_assign_task is unavailable.');
     const extra = Object.keys(a).find(k => !['chatId', 'roleId', 'cwd', 'mode', 'expectedVersion', 'expectedEventSeq', 'contract', 'step', 'preset', 'presetWhy', 'taskKind'].includes(k));
     if (extra) throw new Error(`agent_assign_task: unknown field ${extra}.`);
-    const child = typeof a.chatId === 'string' ? chat(a.chatId) : undefined;
+    // a child that went on in another chat (an engine change): the task goes to the one that works now (ADR 0356)
+    const child = typeof a.chatId === 'string' ? successorIn(d.chats.list(), a.chatId) : undefined;
     if (!child || child.parentId !== callerId || !child.delegation || !child.run || child.isOrchestrator) throw new Error('agent_assign_task: chatId must be one of YOUR direct children (agent_children).');
     if (assigning.has(child.id)) throw new Error('agent_assign_task: this child already has an assignment in progress.');
     // a Sentinel child is continued as any other (#387, ADR 0309): after a fix it reviews only the delta
@@ -559,7 +561,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     } };
   return [{
     name: 'agent_delegate',
-    description: 'Delegate the parts of your task to other roles: each part starts a visible chat under yours, running the role you name (only roles your role may launch: agent_catalog). The child sees only its contract, never this conversation: write it self-contained. Several parts start at once (parallel): a parallel group of your approved plan goes in one call. It never gets more permissions than you, works in the folder you name (cwd: any repository your plan touches), uses an isolated Git worktree when it can write (a clean committed baseline is required), and returns one result with agent_report that reaches you as a message. The depth limit is the user\'s. A Sentinel reviewing a child\'s work: reviewOf = that child\'s runId. One review chat per piece of work: once a Sentinel of yours reported on this task, a new Sentinel is refused; re-review the fix in that chat with agent_assign_task (only the fix delta). Each part runs on its role\'s card: preset picks one of its three (omitted = its plan step\'s preset, else base); the model is the one the card has now.',
+    description: 'Delegate the parts of your task to other roles: each part starts a visible chat under yours, running the role you name (only roles your role may launch: agent_catalog). The child sees only its contract, never this conversation: write it self-contained. Several parts start at once (parallel): a parallel group of your approved plan goes in one call. It never gets more permissions than you, works in the folder you name (cwd: any repository your plan touches), uses an isolated Git worktree when its part needs to write (contract.tools; a clean committed baseline is required), and returns one result with agent_report that reaches you as a message. The depth limit is the user\'s. A Sentinel reviewing a child\'s work: reviewOf = that child\'s runId. One review chat per piece of work: once a Sentinel of yours reported on this task, a new Sentinel is refused; re-review the fix in that chat with agent_assign_task (only the fix delta). Each part runs on its role\'s card: preset picks one of its three (omitted = its plan step\'s preset, else base); the model is the one the card has now.',
     inputSchema: { type: 'object', required: ['tasks'], additionalProperties: false, properties: {
       tasks: { type: 'array', minItems: 1, maxItems: TASKS_MAX, items: { type: 'object', required: ['role', 'title', 'contract'], additionalProperties: false, properties: {
         role: { type: 'string', enum: [...WORK_ROLE_IDS] }, title: { ...str, description: '"Area · what", e.g. "Ordini · Log degli errori"' },
@@ -578,7 +580,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
           steps: { type: 'array', items: str, minItems: 1, maxItems: 5, description: 'only when order matters' },
           askIf: { ...str, description: 'the ambiguous reading that would change the work: ask the parent' },
           context: { ...str, description: 'facts, sources and constraints the child needs' },
-          tools: { type: 'array', items: str, description: 'optional: narrows the role\'s tool classes' },
+          tools: { type: 'array', items: str, description: 'optional: the tool classes the part needs (read, shell-read, web, browser-read = it shares the folder; omitted or one that writes = its own worktree). It only chooses the folder: it does not limit what the child may run, so it never makes it ask for a read. A class beyond yours or the role\'s is refused. A database write, a production release and a cloud write wait for the user whatever it says' },
           skills: { type: 'array', items: str, description: 'brain skills it may use (their SKILL.md names)' },
         } },
       } } },

@@ -14,12 +14,44 @@ import { staleDue } from '../agents/runs';
 import { autoCloseNow, type AutoCloseCandidate } from './auto-close';
 import type { AutoCloseWaiting } from '../../shared/auto-close';
 import type { Rec } from './manager-types';
-import { clearInterval, clearTimeout, RESUME_TEXT, supersededResult, uniqueChildResults, workBehind, WAITING_REASON } from './manager-helpers';
+import { clearInterval, clearTimeout, RESUME_TEXT, supersededResult, sysItem, uniqueChildResults, workBehind, WAITING_REASON } from './manager-helpers';
 import { ManagerDelegation } from './manager-delegation';
 import { stopOrKill } from './stop-kill';
+import { toolCliHint } from './tool-cli';
+import { APP_EVENT_LABEL } from './orchestrator-wake';
 
 /** A chat's life: stop, close, archive and reopen, the automatic close's candidates, stale runs, resume after a restart, shutdown. */
 export abstract class ManagerLifecycle extends ManagerDelegation {
+  /** The chat the work of r goes on in now (continuedBy, followed to its end), or null: none, or one the user closed. */
+  successorOf(r: Rec): Rec | null {
+    let cur = r, hops = 0;
+    while (cur.s.continuedBy && hops++ < 16) {
+      const n = this.chats.get(cur.s.continuedBy.id);
+      if (!n) break;
+      cur = n;
+    }
+    return cur === r || this.closedByUser(cur) ? null : cur;
+  }
+
+  /** A chat's engine lacks required tools (ADR 0356, manager-sessions.ts toolCheck): its session is reloaded once (the
+   *  next turn starts a fresh process on the same session), else the chat is told the fallback command, which calls the
+   *  same tools with the same checks. The agent is never left to find out by itself. */
+  protected override toolGap(r: Rec, a: { kind: 'reload' | 'fallback'; missing: string[]; why: string }): void {
+    const tools = a.missing.join(', ');
+    if (a.kind === 'reload') {
+      this.addItem(r, sysItem('toolsReloaded', { tools }, 'warn'), false);
+      const sess = r.session;
+      if (sess && !sess.busy) void this.closeKeeping(r, sess).catch(e => log.warn('chats', 'session not reloaded for its tools', { chat: r.s.id, cause: errText(e), hint: 'the fallback command is given at the next gap' }));
+      else if (sess) r.reopen = true;
+      this.updated(r);
+      return;
+    }
+    this.addItem(r, sysItem('toolsFallback', { tools }, 'warn'), false);
+    this.updated(r);
+    const text = `${APP_EVENT_LABEL}\nAl tuo motore mancano strumenti dell'app: ${tools}. ${toolCliHint(a.missing)}`;
+    void this.send(r.s.id, text, undefined, false, 'second-brain', false, { kind: 'app' }).catch(e => log.warn('chats', 'fallback command not told', { chat: r.s.id, cause: errText(e), hint: 'the chat sees the line in its transcript; the report reminder names the command too' }));
+  }
+
 
   protected override autoActivity(r: Rec): void {
     r.autoActivityAt = autoCloseNow(); r.activityRevision = (r.activityRevision ?? 0) + 1;
