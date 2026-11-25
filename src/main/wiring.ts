@@ -336,7 +336,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the worktree pool (ADR 0227): writing children reuse a worktree of their repository; inUse = an open chat or a live
   // engine works in it (an archived chat whose engine ended leaves it free); a warm engine waiting there only keeps the
   // cleanup away (a child's warm engine waits in the slot the next child takes)
-  const worktreePool = new WorktreePool({ file: path.join(ctx.userData, 'worktree-pool.json'),
+  const worktreePool: WorktreePool = new WorktreePool({ file: path.join(ctx.userData, 'worktree-pool.json'),
     limits: () => worktreeLimits(brain.settings()),
     inUse: root => manager.list().some(c => within(root, c.cwd) && (!c.closedAt || c.state !== 'closed')),
     warm: root => manager.warmCwds().some(c => within(root, c)),
@@ -353,7 +353,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const runsRef: { current: CommandRunner | null } = { current: null };
   // list prices for the runs whose engine reported tokens and no cost (ADR 0284): the standings and the estimates
   const priceOf = tokenPriceOf(() => brain.modelRegistry());
-  const manager = new ChatManager({
+  const manager: ChatManager = new ChatManager({
     runs: chatId => runsRef.current?.list(chatId) ?? [],
     writeDelayMs: 250, // chats.json and agent-runs.json: one asynchronous write per burst (the main-process freezes, 2026-10-27)
     priceOf,
