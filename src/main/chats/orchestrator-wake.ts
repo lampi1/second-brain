@@ -470,8 +470,9 @@ export class OrchestratorWake {
    *  seen in this run counts: after a restart a closed chat's closedBy may be a legacy default ('auto' when it was
    *  never recorded, store.ts), so its news from the outbox goes; app_digest still lists it as closed and finished. */
   private kept(e: WakeEvent): boolean {
-    if (e.kind === 'stalled' || e.kind === 'user-closed') return true;   // a thread, not a chat: the driver tells it again while it stays stalled
+    if (e.kind === 'stalled') return true;   // a thread, not a chat: the driver tells it again while it stays stalled
     const c = this.chats.get(e.chatId);
+    if (e.kind === 'user-closed') return !!c?.closedAt && c.closedBy === 'user';
     return !!c && (!c.closedAt || (this.autoClosed.has(e.chatId) && c.closedBy === 'auto' && e.kind === 'done'));
   }
 

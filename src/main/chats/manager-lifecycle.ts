@@ -368,7 +368,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     if (this.admission?.drop(chatId)) log.info('chats', 'queued work dropped: the chat was archived', { chat: chatId });
     // what the user's ✕ cuts short, read before the interrupt changes the state (a delegated chat stopped with its parent
     // is not told: the parent's notice says it)
-    const cutShort = !opts.auto && opts.cause !== 'parent' ? closedWithOf(r.s, !!r.session?.busy) : undefined;
+    const cutShort = !opts.auto && opts.cause !== 'parent' ? closedWithOf(r.s, !!r.session?.busy, this.descendantsOf(chatId).filter(k => !k.s.closedAt && ['running', 'waiting', 'starting'].includes(k.s.state)).length) : undefined;
     const sess = r.session;
     const note = opts.auto && r.lastTurnAt > 0;
     // a long Claude chat that still waits for its cold note keeps its engine until it wrote it (never a turn at close:
