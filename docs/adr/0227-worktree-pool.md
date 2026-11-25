@@ -1,7 +1,7 @@
 # 0227. Reused worktree pool per repository, and warm engines in the most used folders
 
 Date: 2026-11-07. Status: accepted (merged 2026-11-08; written as a proposal). Amended by ADR 0345 (2026-11-24: a writing
-child's worktree is of the repository of its own folder, which may not be its parent's) and ADR 0361 (2026-11-25: a
+child's worktree is of the repository of its own folder, which may not be its parent's) and ADR 0362 (2026-11-25: a
 worktree is taken only when a copy is asked).
 
 ## Context

@@ -1,7 +1,7 @@
 // Several models per level, across engines (owner, 2026-11-24, ADR 0347): a role card keeps, for each of its three levels
 // (Minimo / Base / Massimo, the presets of ADR 0336), an ordered list of models, each on its own engine. The order is
 // the user's: the first is the best for that role. When a chat starts, the app takes the first model of the level whose
-// engine is connected and whose plan still has room. With an engine order (ADR 0360) the order decides which engine comes
+// engine is connected and whose plan still has room. With an engine order (ADR 0361) the order decides which engine comes
 // first and a plan past the user's threshold is skipped while another has room; without an order a plan that would run
 // out before it renews at the pace of now is skipped too (ADR 0347). Every plan spent: the launch says
 // so and the chat waits (ADR 0354).
@@ -65,7 +65,7 @@ export function headPresets(levels: FullLevels): FullPresets {
 
 /** How much an engine's plan has left now, as a level's pick reads it: the one rule's verdict (shared/credit-rule.ts,
  *  ADR 0354) mapped to ok · pace · over · out · probation · unknown, with its reason, source and expected end. `over`: past the
- *  threshold the user gave that engine (ADR 0360). */
+ *  threshold the user gave that engine (ADR 0361). */
 export interface Room { state: 'ok' | 'pace' | 'over' | 'out' | 'probation' | 'unknown'; why: string; resetsAt: number | null; source?: CreditSource; readingAt?: number | null }
 export { SPENT_PCT };
 
@@ -81,7 +81,7 @@ export interface Considered { at: LevelModel; room: Room; usable: boolean; unusa
 /** A model the pick passed over, as the chat and the tools' answers tell it (ADR 0354). `kind`: off = the engine is off
  *  or refused (not a credit matter), price = above the delegator's model, credit = its plan has no room now. */
 export interface SkipNote { engine: Harness; model: string | null; kind: 'off' | 'price' | 'credit'; why: string; state?: Room['state']; source?: CreditSource; readingAt?: number | null; until?: number | null }
-/** How the reasons name a model and its engine, and the engine order that decides (ADR 0360; empty = the list's own). */
+/** How the reasons name a model and its engine, and the engine order that decides (ADR 0361; empty = the list's own). */
 export interface PickWords { model?: (x: LevelModel) => string; engine?: (x: LevelModel) => string; order?: readonly Harness[]; now?: number; fmt?: (at: number) => string }
 export interface LevelPick { chosen: LevelModel; considered: Considered[]; reason: string; skipped: SkipNote[]; allOut: boolean }
 
@@ -107,7 +107,7 @@ export function pickInLevel(list: readonly LevelModel[], usable: (x: LevelModel)
     ? { engine: c.at.engine, model: c.at.model, kind: PRICE_WORDS.test(c.unusable) ? 'price' : 'off', why: c.unusable }
     : { engine: c.at.engine, model: c.at.model, kind: 'credit', why: c.room.why, state: c.room.state, ...(c.room.source ? { source: c.room.source } : {}), readingAt: c.room.readingAt ?? null, until: c.room.resetsAt });
   const back = allOut ? ok.map(c => c.room.resetsAt).filter((x): x is number => x !== null).sort((a, b) => a - b)[0] : undefined;
-  // the line every chat shows (ADR 0360): «OpenAI Sol: primo disponibile», «Claude Opus: OpenAI al limite, Antigravity non collegato»
+  // the line every chat shows (ADR 0361): «OpenAI Sol: primo disponibile», «Claude Opus: OpenAI al limite, Antigravity non collegato»
   const whys = [...new Set(before.map(c => `${engine(c.at)} ${passed(c)}`))].join(', ');
   const last = take.room.state === 'over' ? 'oltre la soglia, ma nessun altro è libero'
     : allOut ? `tutti i motori del livello sono al limite${back !== undefined ? `, il primo torna alle ${clock(back, o.now ?? back, o.fmt)}` : ''}` : '';

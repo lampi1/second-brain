@@ -46,7 +46,7 @@ describe('roomOf', () => {
   });
 });
 
-describe('roomOf with the user\'s threshold (ADR 0360)', () => {
+describe('roomOf with the user\'s threshold (ADR 0361)', () => {
   const at = (pct: number, threshold: number | null = 80): Room => {
     const reading = { at: NOW, ok: true, pool: 'codex', account: null, windows: [{ kind: 'weekly' as const, label: '7g', usedPercent: pct, resetsAt: NOW + 10 * H }] };
     return roomOf(creditVerdict({ pool: 'codex', reading, error: null, workedFrom: null }, NOW), pastThreshold(reading, null, threshold, NOW));

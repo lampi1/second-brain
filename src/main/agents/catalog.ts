@@ -52,7 +52,7 @@ function parkedOf(v: unknown): Record<string, EngineChoice> | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
-/** Nothing of a role's level may start now: no engine of it is connected and on (ADR 0360). */
+/** Nothing of a role's level may start now: no engine of it is connected and on (ADR 0361). */
 export class NoEngine extends Error {}
 
 export interface AgentCatalogDeps {
@@ -72,7 +72,7 @@ export interface AgentCatalogDeps {
   claim?: (engine: Harness, model: string | null, owner: string) => void;
   /** why a role chat may not start on an engine now (off, the Orchestrators may not use it); null = it may */
   engineBlock?: (engine: Harness) => string | null;
-  /** the one order of the engines (Settings.engineOrder, ADR 0360); absent or empty = each list's own order */
+  /** the one order of the engines (Settings.engineOrder, ADR 0361); absent or empty = each list's own order */
   engineOrder?: () => readonly Harness[];
   /** an engine whose last start failed a moment ago (engine-health.ts): passed over while another one may start */
   engineTrouble?: (engine: Harness) => boolean;
@@ -323,7 +323,7 @@ export class AgentCatalogService {
   private behaviour(value: Record<string, unknown>, id: string, current: boolean, base?: Behaviour, keep = true): Behaviour {
     const p = { ...(base ?? {}), ...Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) } as Record<string, unknown>;
     let levels = checkedLevels(p.levels);
-    // the role's exception to the one engine order (ADR 0360); null or [] = no exception
+    // the role's exception to the one engine order (ADR 0361); null or [] = no exception
     const engineOrder = p.engineOrder === undefined || p.engineOrder === null ? [] : checkedOrder(p.engineOrder);
     if (current && value.engineOrder !== undefined) for (const id of engineOrder) if (!this.d.models().some(m => m.engine === id)) throw new Error(`Ordine dei motori: ${id} non è disponibile.`);
     if (levels && value.levels !== undefined) {
@@ -703,7 +703,7 @@ export class AgentCatalogService {
     const engine = this.engineWords(x);
     return name.toLowerCase().startsWith(engine.toLowerCase()) ? name : `${engine} ${name.replace(/^openai\//i, '')}`;
   }
-  /** No model of a level may start: every plan spent, or none connected. Never a silent start (ADR 0360). */
+  /** No model of a level may start: every plan spent, or none connected. Never a silent start (ADR 0361). */
   private noStart(p: AgentProfile, level: PresetId, list: readonly LevelModel[], exclude?: readonly Harness[]): string {
     return `Nessun modello del livello ${level} di ${p.name} può partire: ${list.map(x => `${this.modelWords(x)} (${this.unusable(x, exclude) ?? 'non pronto'})`).join(', ') || 'il livello è vuoto'}. Niente è partito: accendi un motore dal menu ⚙ o aggiungi un modello al livello.`;
   }
@@ -723,9 +723,9 @@ export class AgentCatalogService {
     const other = list.some(x => hard(x) === null && soft(x) === null && room(x).state !== 'out');
     return pickInLevel(list, x => hard(x) ?? (other ? soft(x) : null), room, { order: this.orderOf(p), model: x => this.modelWords(x), engine: x => this.engineWords(x), now: this.now() });
   }
-  /** The engine order a role follows now (ADR 0360): its own exception, else everybody's; empty = its lists' own order. */
+  /** The engine order a role follows now (ADR 0361): its own exception, else everybody's; empty = its lists' own order. */
   private orderOf(p: AgentProfile): readonly Harness[] { return roleOrder(p.engineOrder, this.d.engineOrder?.() ?? []); }
-  /** Whether an engine order decides where this role starts (ADR 0360): then a reuse and «Riprendi» follow it too. */
+  /** Whether an engine order decides where this role starts (ADR 0361): then a reuse and «Riprendi» follow it too. */
   followsOrder(roleId: string): boolean { try { return this.orderOf(this.find(roleId)).length > 0; } catch { return false; } }
   /** What a role's card gives a chat of that role now, for a preset (ADR 0346: a chat that waited on its credits
    *  follows its card): the card's engine and that preset's model and effort, as a launch would get them (resolve's

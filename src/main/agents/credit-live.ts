@@ -22,7 +22,7 @@ export interface CreditLiveDeps {
   usage: CreditUsage;
   /** something changed that may free a waiting chat: the credit-wait watch runs again */
   changed: () => void;
-  /** the user's threshold for an engine (Settings.engineThresholds, ADR 0360); absent or null = none */
+  /** the user's threshold for an engine (Settings.engineThresholds, ADR 0361); absent or null = none */
   threshold?: (engine: Harness) => number | null;
   now?: () => number;
   later?: (fn: () => void, ms: number) => { cancel(): void };

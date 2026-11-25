@@ -234,7 +234,7 @@ export interface AppInvokeMap {
   /** native folder chooser for the brain folder; sets brainRoot (by the user) and returns it, null if cancelled */
   'app:pickBrain': [void, string | null];
   'app:pickRepo': [void, string | null];
-  /** native folder chooser for a chat's folder («Riprendi in un'altra cartella», ADR 0361), starting at `from`; saves nothing */
+  /** native folder chooser for a chat's folder («Riprendi in un'altra cartella», ADR 0362), starting at `from`; saves nothing */
   'app:pickFolder': [{ from?: string }, string | null];
   /** the first-run setup's folders: the projects folder saved or found by itself (read only), and where a new memory goes */
   'app:projectsFolder': [void, ProjectsFolderInfo];

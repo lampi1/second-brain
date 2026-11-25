@@ -151,7 +151,7 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents, commands
       }
     } else if (ch === 'pending:added') {
       const p = payload as EventMap['pending:added'], c = chatOf(p.chatId);
-      // a held configuration change is the app's panel on the PC: the phone never answers it (ADR 0360)
+      // a held configuration change is the app's panel on the PC: the phone never answers it (ADR 0361)
       if (c && !closed(c) && p.tool !== CONFIG_TOOL) add(ofRequest(p, c));
     } else if (ch === 'pending:resolved') {
       const p = payload as EventMap['pending:resolved'];

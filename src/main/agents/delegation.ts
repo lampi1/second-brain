@@ -9,7 +9,7 @@
 // the user. What holds whoever asks: permissions only go down (a contract asking for a
 // tool class beyond the parent's is refused, and the child's policy is narrowed by the parent's, chats/manager.ts; contract.tools only chooses its folder, ADR 0355), the
 // depth limit of Impostazioni → Ruoli e deleghe is checked and a refusal shows in the parent's chat. A child's folder
-// is any existing one, its parent's never limits it (ADR 0361), and it works in that folder itself unless the caller asks a
+// is any existing one, its parent's never limits it (ADR 0362), and it works in that folder itself unless the caller asks a
 // copy; the folder is no permission. Only the Orchestrator and the Strategist delegate (2026-11-23; the Orchestrator through
 // app_create_chat): any other role is refused whatever its saved launches say, and a parallel group of an approved plan
 // starts in one agent_delegate call (shared/strategy.ts parallelSplit). There is no limit on children at once (the owner,
@@ -46,7 +46,7 @@ const USER_INSTRUCTIONS_NOTE = 'The user wrote or answered these in the child si
 export interface DelegationChats {
   list(): ChatSummary[];
   assignTask?(chatId: string, prompt: string, options: TaskAssignmentOptions): Promise<void>;
-  /** the same task in another folder or on another engine: a linked chat (ADR 0360, 0361) */
+  /** the same task in another folder or on another engine: a linked chat (ADR 0361, 0362) */
   assignElsewhere?(chatId: string, prompt: string, options: TaskAssignmentOptions, to: { cwd?: string; place?: 'here' | 'copy'; on?: { harness: Harness; model: string | null; effort: Effort | null; route?: string } }): Promise<ChatSummary>;
   /** a reused child's model and effort for its next task's preset (ADR 0336, ChatManager.set); absent = a preset change is refused */
   set?(chatId: string, patch: { model?: string; effort?: Effort }): Promise<unknown>;
@@ -81,7 +81,7 @@ export interface DelegationDeps {
   /** why an agent may not open or wake a chat on `to` (engines/policy.ts openRefusal), null = it may; the asking
    *  chat's own engine plays no part (ADR 0352) */
   engineRefusal: (to: Harness) => string | null;
-  /** an engine order (everybody's or the role's own) decides where this role starts (ADR 0360); absent = none */
+  /** an engine order (everybody's or the role's own) decides where this role starts (ADR 0361); absent = none */
   ordered?: (roleId: string) => boolean;
   /** the label every agent-written first message starts with (appctl AGENT_LABEL) */
   label: string;
@@ -221,7 +221,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       // re-reviews its fix; a new one would review everything again
       const reviewed = role === 'sentinel' && t.freshReview !== true ? childReviewers(reviewWorld(), parent, cwd) : [];
       if (reviewed.length) throw new Error(`tasks[${i}]: one review chat per piece of work. Your Sentinel ${reviewed.slice(0, 3).map(c => `«${c.title}» (chatId ${c.id})`).join(', ')} already reviewed this task: re-review the fix there with agent_assign_task { chatId, roleId: "sentinel", cwd: "${reviewed[0]!.cwd}", mode: "continue", contract } naming only the fix delta (what changed since its review). A fresh Sentinel only when the user asked for one, it checks a part none of them covers, or agent_assign_task refuses that chat (engine, settings, permissions): then add freshReview true to this part.`);
-      // any existing folder (ADR 0361): whoever opens the chat decides where
+      // any existing folder (ADR 0362): whoever opens the chat decides where
       const noFolder = within(parent.cwd, cwd) ? null : folderProblem(cwd); // its own folder: checked at create
       if (noFolder) throw new Error(`tasks[${i}].cwd: ${noFolder}`);
       if (t.step !== undefined && !plan) throw new Error(`tasks[${i}].step: only a plan approved by the user has steps; leave it out.`);
@@ -289,7 +289,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     const catalog = d.roles(), own = catalog.profiles.find(p => p.id === parent.agent!.id), profile = catalog.profiles.find(p => p.id === a.roleId);
     if (!own || !canLaunch(own.id, own.launches, a.roleId)) throw new Error(own && !isDelegatorRole(own.id) ? `agent_assign_task refused: ${own.name} does not delegate (only the Orchestrator and the Strategist do); put the work in your agent_report as a ready contract.` : 'Your current role may not launch this child role.');
     if (!profile) throw new Error(`agent_assign_task: role ${String(a.roleId).slice(0, 40)} is not in the catalog any more; delegate a current role.`);
-    // its own folder (omitted), or any other existing one: there the task goes on in a linked chat (ADR 0361)
+    // its own folder (omitted), or any other existing one: there the task goes on in a linked chat (ADR 0362)
     if (a.cwd !== undefined && typeof a.cwd !== 'string') throw new Error('agent_assign_task: cwd = an absolute folder.');
     const cwd = typeof a.cwd === 'string' && a.cwd.trim() ? a.cwd.trim() : child.cwd, place = placeOf(a.place, 'place');
     const noFolder = within(parent.cwd, cwd) ? null : folderProblem(cwd);
@@ -315,7 +315,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     // a preset without effort is the engine's default: a child left on another effort goes back to it (null). A
     // preset on another engine than the child's names no model of its own: the child keeps its model there
     const sameEngine = levelEngine === child.harness;
-    // with an engine order (ADR 0360) a reuse follows it: a level that starts on another engine now goes on in a linked
+    // with an engine order (ADR 0361) a reuse follows it: a level that starts on another engine now goes on in a linked
     // chat there (a chat never changes engine in place); never off a model the user asked for that work, nor onto a spent plan
     const follows = !sameEngine && !!d.ordered?.(a.roleId) && !preset?.allOut && !child.run.presetChoice?.route?.endsWith(USER_ASKED) && !d.engineRefusal(levelEngine);
     const on = preset && (follows || moved && (move || sameEngine)) ? { harness: levelEngine, model: preset.model, effort: preset.effort ?? null, ...(preset.route ? { route: preset.route } : {}) } : undefined;
@@ -525,7 +525,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (selected.some(c => !c || c.parentId !== callerId)) throw new Error('Integration requires IDs of YOUR direct children.');
     const children = structuredClone(selected as ChatSummary[]), policy = structuredClone(d.chats.agentPolicy(parent.id));
     if (parent.permissionMode === 'plan' || policy?.ceiling === 'plan' || (policy?.tools && !policy.tools.allow.some(c => c === 'edit' || c === 'shell'))) throw new Error('Your current permissions do not allow staging repository changes.');
-    // a child that worked in place left its commits in its folder: never applied a second time (ADR 0361)
+    // a child that worked in place left its commits in its folder: never applied a second time (ADR 0362)
     const inPlace = d.isolated ? children.filter(c => !d.isolated!(c)) : [];
     if (inPlace.length) {
       const named = inPlace.map(c => `${c.id} (${c.cwd})`).join(', ');

@@ -71,7 +71,7 @@ describe('app control tools', () => {
     const tool = tools('o').find(t => t.name === 'app_assign_task')!;
     await tool.run(args);
     expect(assignTask).toHaveBeenCalledWith('w', `${ORCHESTRATOR_USER_LABEL}\n\nExpand the second point`, { mode: 'continue', expectedVersion: 2, source: { kind: 'chat', chatId: 'o' } });
-    // another folder goes on in a linked chat (ADR 0361); the only refusal is a folder that is not there, by name
+    // another folder goes on in a linked chat (ADR 0362); the only refusal is a folder that is not there, by name
     await expect(Promise.resolve().then(() => tool.run({ ...args, cwd: '/different' }))).rejects.toThrow(/Cartella non valida: .*different: non esiste/);
     await expect(Promise.resolve().then(() => tool.run({ ...args, roleId: 'sentinel' }))).rejects.toThrow(/this chat runs scout, not sentinel/);
     // the refusal names the chat's own role (issue #274) and is an expected refusal, not an app failure
