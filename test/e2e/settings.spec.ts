@@ -49,7 +49,6 @@ test('Impostazioni: groups, theme live, messaging always available, no model com
 
   // Chat-to-chat transport has no switch; engine launch controls stay separate.
   await expect(s.getByTestId('st-cross-switch')).toHaveCount(0);
-  await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).messaging.crossHarness)).toBe(true);
 
   // theme: applied at once
   const theme = s.getByTestId('st-theme-select');
@@ -231,14 +230,13 @@ test('Account e strumenti: an engine turns on by the user\'s click, its API key 
 });
 
 test('settings search finds labels, descriptions and sections, preserves drafts and explains no matches', async () => {
-  const { app, page } = await launchDemo({ config: { messaging: { crossHarness: false } } });
+  const { app, page } = await launchDemo();
   try {
     await keyringStandIn(app);
     await page.keyboard.press('Control+Comma');
     const s = page.getByTestId('settings-page');
     const search = s.getByRole('searchbox', { name: 'Cerca nelle impostazioni' });
     await expect(s.getByTestId('st-cross-switch')).toHaveCount(0);
-    expect(await page.evaluate(async () => (await window.sb.invoke('settings:get', undefined)).messaging.crossHarness)).toBe(true);
     // a label, without its accent
     await search.fill('SPAZIATURA');
     await expect(s.getByTestId('st-group-appearance')).toBeVisible();

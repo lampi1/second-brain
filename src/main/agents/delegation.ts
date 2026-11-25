@@ -143,7 +143,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
   const assigning = new Set<string>();
   function activeParent(callerId: string, tool: string): ChatSummary {
     const parent = chat(callerId);
-    const resume = parent?.parentId ? 'tell the user to request continuation of this same chat from your parent, which can use agent_assign_task' : 'tell the user to request continuation of this same chat in the Orchestrator, which can use app_assign_task';
+    const resume = parent?.parentId ? 'ask your parent with agent_ask_parent for a new assignment of this same chat (agent_assign_task)' : 'ask with agent_ask_parent: the Orchestrator assigns this same chat again (app_assign_task)';
     if (!parent || parent.closedAt || parent.state === 'closed') throw new Error(`${tool}: your chat is not open; ${resume}.`);
     if (parent.isOrchestrator || parent.agent?.source !== 'catalog' || !isWorkRole(parent.agent.id)) throw new Error(`${tool}: only a role chat delegates or assigns children.`);
     if (parent.run?.endedAt !== undefined || parent.run?.report?.via === 'agent_report' || parent.delegation?.result || parent.work?.status === 'completed') throw new Error(`${tool}: your assignment is over; ${resume}.`);

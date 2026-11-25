@@ -85,6 +85,11 @@ changed-card and stopped-other-engine cases of `one-review.test.ts`.
 
 ## Left to the owner (Sì / No)
 
+Decided 2026-11-25 (owner, same thread: «si tutto come proponi»): 1, 3, 6 and 7 done; 2, 4 and 5 kept. Item 1 also
+drops the brain-side migration of `crossHarnessMessages` (an installed inbox already ignores it); an old `messaging`
+key leaves `config.json` once (`RETIRED_KEYS`). Item 7 renumbers the helpers record to ADR 0353, and the index script
+now lists the «amended by» records the hand edits had added, so `--check` passes.
+
 1. **Remove the retired setting `messaging.crossHarness`** and its migrations (`src/shared/contract/settings.ts:39`,
    `src/main/brain/settings-schema.ts:245`, `src/main/brain/config.ts:195-200`, `src/main/brain/index.ts:199-201`,
    `src/main/brain/brain-settings.ts:45-52`, `brain-template/ops/tools/inbox.mjs:50`). Kept «for compatibility» since
