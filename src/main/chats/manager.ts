@@ -24,9 +24,7 @@
 // points (list, create, send and deliver, set). Shapes in manager-types.ts, constants in manager-helpers.ts.
 import crypto from 'node:crypto';
 import type { ModelTier } from '../../shared/roles';
-import fs from 'node:fs';
 import type { AgentContextSnapshot } from '../../shared/agent-context';
-import path from 'node:path';
 import type { ChatCommand, ChatItem, ChatSummary, Effort, NewChat, PendingRequest, PermissionMode } from '../../shared/contract';
 import { replyLangTurn } from './reply-lang';
 import { voiceReplyHint } from './voice-reply';
