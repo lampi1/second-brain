@@ -327,6 +327,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   key is gone (ADR 0291).
 
 ### Fixed
+- Strategist chats on Cursor with Gemini delegate again: that engine sends nested objects and lists as null, so a
+  nested argument may come as its JSON text and a tool's error names what arrived as null and how to send it (ADR 0365).
 - An answer written in the Orchestrator's field closes its question. With a question or a plan open in the
   Orchestrator's column, what you write in the field under it goes straight to who asks and the row leaves at once (a
   line over the field says to whom); before, the row closed only if the Orchestrator then chose to pass the words on.
