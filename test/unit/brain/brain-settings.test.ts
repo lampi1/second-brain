@@ -3,45 +3,12 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { migrateCrossHarness, readOrchestratorMail } from '../../../src/main/brain/brain-settings';
+import { readOrchestratorMail } from '../../../src/main/brain/brain-settings';
 import { Live } from '../../../src/main/brain/live';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'sb-bset-'));
 
 describe('brain-settings.json delivery timing', () => {
-  it('migrates only a valid legacy false, preserving other values and becoming a no-op on the next start', () => {
-    const root = tmp();
-    expect(migrateCrossHarness(root)).toBe('unchanged');
-    const file = path.join(root, 'brain-settings.json');
-    expect(fs.existsSync(file)).toBe(false);
-    const original = { other: { value: 7 }, crossHarnessMessages: false, orchestratorMail: { urgent: ['now'] } };
-    for (const raw of [Buffer.from(`\ufeff${JSON.stringify(original)}`),
-      Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(JSON.stringify(original), 'utf16le')])]) {
-      fs.writeFileSync(file, raw);
-      expect(migrateCrossHarness(root)).toBe('migrated');
-      expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toEqual({ ...original, crossHarnessMessages: true });
-      const saved = fs.readFileSync(file, 'utf8');
-      expect(migrateCrossHarness(root)).toBe('unchanged');
-      expect(fs.readFileSync(file, 'utf8')).toBe(saved);
-    }
-    fs.writeFileSync(file, '{broken');
-    expect(migrateCrossHarness(root)).toBe('unreadable');
-    expect(fs.readFileSync(file, 'utf8')).toBe('{broken');
-  });
-
-  it('never follows a preexisting staging hardlink or a linked source file', () => {
-    const root = tmp(), victim = path.join(tmp(), 'keep.json');
-    fs.writeFileSync(victim, 'keep me');
-    fs.linkSync(victim, path.join(root, 'brain-settings.json.messaging-migration.tmp'));
-    const file = path.join(root, 'brain-settings.json');
-    fs.writeFileSync(file, '{"crossHarnessMessages":false}');
-    expect(migrateCrossHarness(root)).toBe('migrated');
-    expect(fs.readFileSync(victim, 'utf8')).toBe('keep me');
-    const linkedRoot = tmp();
-    fs.linkSync(file, path.join(linkedRoot, 'brain-settings.json'));
-    expect(migrateCrossHarness(linkedRoot)).toBe('unreadable');
-  });
-
   it('reads timing words without rewriting a legacy false or other keys', () => {
     const root = tmp();
     expect(readOrchestratorMail(root)).toBeUndefined();

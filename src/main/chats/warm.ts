@@ -40,6 +40,7 @@ export class BufferedSink implements SessionSink {
   rateLimit: NonNullable<SessionSink['rateLimit']> = msg => this.to(s => s.rateLimit?.(msg));
   models: NonNullable<SessionSink['models']> = list => this.to(s => s.models?.(list));
   commands: NonNullable<SessionSink['commands']> = list => this.to(s => s.commands?.(list));
+  toolsLoaded: NonNullable<SessionSink['toolsLoaded']> = names => this.to(s => s.toolsLoaded?.(names));
   children: NonNullable<SessionSink['children']> = observation => this.to(s => s.children?.(observation));
   childrenCoverage: NonNullable<SessionSink['childrenCoverage']> = (coverage, reason) => this.to(s => s.childrenCoverage?.(coverage, reason));
   exit: SessionSink['exit'] = info => {

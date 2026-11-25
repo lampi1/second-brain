@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AgentCatalogService, NoEngine } from '../../../src/main/agents/catalog';
-import { engineNowOf } from '../../../src/main/agents/engine-now';
+import { engineNowOf, startElsewhere } from '../../../src/main/agents/engine-now';
 import { delegationTools } from '../../../src/main/agents/delegation';
 import { configTool, changedDraft, roleReason, type ConfigDeps } from '../../../src/main/appctl/config';
 import { PendingConfig, CONFIG_TOOL } from '../../../src/main/appctl/pending-config';
@@ -39,9 +39,9 @@ function world() {
   const lists = { base: [{ engine: 'claude', model: 'opus', effort: 'high' as const }, { engine: 'antigravity', model: 'neon', effort: 'medium' as const }, { engine: 'opencode', model: 'openai/sol', effort: 'low' as const }] };
   for (const id of ['artisan', 'scout', 'strategist']) { const p = c.list().profiles.find(x => x.id === id)!; c.save(changedDraft(p, 'levels', lists), id); }
   const harnesses = new Map<string, Harness>(), sinks = new Map<string, SessionSink>(), sent = new Map<string, string[]>();
+  const now = { cardNow: c.cardNow.bind(c), ordered: (id: string) => c.followsOrder(id) };
   const m: ChatManager = new ChatManager({ userData: dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0, resolveAgent: req => c.resolve(req),
-    engineNow: x => engineNowOf(x, { cardNow: (r, a, d) => c.cardNow(r, a, d), chat: id => m.list().find(y => y.id === id) }),
-    startFailed: x => { trouble.add(x.harness); try { return engineNowOf(x, { cardNow: (r, a, d) => c.cardNow(r, a, d), chat: id => m.list().find(y => y.id === id) }) !== null; } catch { return false; } },
+    engineNow: x => engineNowOf(x, now), startFailed: x => { trouble.add(x.harness); return startElsewhere(x, now); },
     sessionFactory: (h, o, s) => {
       harnesses.set(o.chatId, h); sinks.set(o.chatId, s);
       return { harness: h, sessionId: null, pid: null, root: null, alive: true, busy: false, start() { s.changed({ state: 'idle' }); }, send(t: string) { sent.set(o.chatId, [...(sent.get(o.chatId) ?? []), t]); },
@@ -63,7 +63,7 @@ function world() {
     agents: { list: () => c.list(), save: (d, id, r) => c.save(d, id, r), history: id => c.history(id), restore: (id, v) => c.restoreVersion(id, v), presetsOf: p => c.presetsOf(p), levelsOf: p => c.levelsFor(p) }, ...over });
   const set = (a: Record<string, unknown>, over?: Partial<ConfigDeps>) => Promise.resolve().then(() => config(over).run({ action: 'set', ...a }));
   const yes: Answer = { kind: 'question', answers: { q: 'Sì (consigliato)' } } as Answer;
-  return { dir, c, m, room, connected, trouble, store, start, get, why, order, harnesses, sinks, sent, pending, events, set, yes, ask: (v: boolean) => { asked = v; } };
+  return { dir, c, m, room, connected, trouble, store, start, get, why, order, harnesses, sinks, sent, pending, events, set, yes, now, ask: (v: boolean) => { asked = v; } };
 }
 
 describe('the one order of the engines (ADR 0357)', () => {
@@ -113,22 +113,30 @@ describe('the one order of the engines (ADR 0357)', () => {
     expect(w.get(a.id).creditWait).toMatchObject({ why: 'start', card: 'opencode:openai/sol' });
     const on = w.c.cardNow('artisan', {});
     expect(on).toMatchObject({ engine: 'antigravity', route: 'Antigravity Neon: OpenAI in errore' });
-    expect(await w.m.creditContinue(a.id, on)).toBe(true);
+    expect(await w.m.creditContinue(a.id, on, { from: 'openai/sol (opencode)', to: 'neon (antigravity)', level: 'Base', why: 'non è partito' })).toBe(true);
     const next = w.get(w.get(a.id).continuedBy!.id);
     expect(next.harness).toBe('antigravity');
     expect(next.run!.presetChoice!.route).toBe('Antigravity Neon: OpenAI in errore');
   });
 
-  it('4 · every engine at its limit: nothing starts, and the refusal says so', async () => {
+  it('4 · every engine at its limit: never in silence, the chat and its reason say it; no engine on: nothing starts', async () => {
     const w = world(); w.order('opencode', 'antigravity', 'claude');
     for (const e of ['opencode', 'antigravity', 'claude']) w.room[e] = 'out';
-    const before = w.m.list().length;
-    await expect(w.start()).rejects.toThrow('Tutti i motori di Artisan (livello base) sono al limite: OpenAI al limite, Antigravity al limite, Claude al limite. Niente è partito.');
+    // the launch waits for the renewal on the first one (ADR 0354): the order's first, with a warning in the chat
+    const a = await w.start();
+    expect(a.harness).toBe('opencode');
+    expect(a.pick).toMatchObject({ allOut: true });
+    expect(w.why(a.id)).toBe('OpenAI Sol: tutti i motori del livello sono al limite');
+    expect((w.m.items(a.id)).some(i => i.kind === 'system' && i.level === 'warn' && i.text.includes('tutti i motori del livello sono al limite'))).toBe(true);
+    // a reuse never jumps onto another spent plan
+    expect(engineNowOf(w.get(a.id), w.now)).toBeNull();
+    // no engine of the level can start: nothing starts, and the refusal names each one
+    for (const e of ['opencode', 'antigravity', 'claude']) w.connected[e] = false;
+    const before = w.m.list().length, started = w.harnesses.size;
+    await expect(w.start()).rejects.toThrow(/Nessun modello del livello base di Artisan può partire: .*non collegato.*Niente è partito/);
     await expect(w.start()).rejects.toBeInstanceOf(NoEngine);
-    expect(w.m.list()).toHaveLength(before);
-    expect(w.harnesses.size).toBe(0);
-    // the user's own pick for one job is refused the same way, never started in silence
-    expect(() => w.c.resolve({ harness: 'claude', cwd: w.dir, roleId: 'artisan', userModel: { engine: 'claude', model: 'opus' } } as never)).toThrow(/opus non può partire: Claude al limite/);
+    expect([w.m.list().length, w.harnesses.size]).toEqual([before, started]);
+    expect(() => w.c.resolve({ harness: 'claude', cwd: w.dir, roleId: 'artisan', userModel: { engine: 'claude', model: 'opus' } } as never)).toThrow(/opus non può partire: non collegato/);
   });
 
   it('5 · yes on the panel: the order is saved and the next start uses it', async () => {
@@ -188,7 +196,7 @@ describe('the one order of the engines (ADR 0357)', () => {
     const w = world();
     const s = await w.start('strategist', { title: 'Piano' });
     const tools = delegationTools({ chats: w.m, roles: () => w.c.list(), settings: () => DELEGATION_DEFAULTS, engineRefusal: () => null, label: '[agente]', runs: () => w.m.runs.list(),
-      presetChoice: (r, a, d) => w.c.presetChoice(r, a, d), roleEngines: p => w.c.levelsFor(p).base.map(x => x.engine) });
+      presetChoice: (r, a, d) => w.c.presetChoice(r, a, d), ordered: r => w.c.followsOrder(r) });
     const call = async (name: string, args: Record<string, unknown>, id = s.id) => JSON.parse(await tools.find(t => t.name === name)!.run(args, { mount: 'chat', params: { chatId: id }, sessionId: '', signal: new AbortController().signal } as never) as string);
     const child = (await call('agent_delegate', { tasks: [{ role: 'artisan', title: 'Parte', contract: { goal: 'g', doneWhen: ['d'] } }] })).children[0];
     expect(child).toMatchObject({ harness: 'claude', engineWhy: 'Claude Opus: primo disponibile' });

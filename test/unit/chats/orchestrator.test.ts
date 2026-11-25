@@ -177,7 +177,7 @@ describe('app control scope', () => {
     const made: Record<string, unknown>[] = [];
     const chats = { list: () => list, create: async (req: Record<string, unknown>) => { made.push(req); return summary({ id: `n${made.length}`, title: String(req.title) }); } } as unknown as ChatService;
     const orchestratorChats = { harness: 'claude', claudeModel: '', cursorModel: '', claudeEffort: '', cursorReasoning: 'medium', cursorFast: false };
-    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true }, orchestratorChats }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
+    const brain = { ...ROUTED, settings: () => ({ engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true }, orchestratorChats }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
     const code = { repo: () => 'C:/repo', inRepo: async (d: string) => d.replace(/\\/g, '/').startsWith('C:/repo') };
     const catalog = new AgentCatalogService({ userData: fs.mkdtempSync(path.join(os.tmpdir(), 'sb-orch-roles-')), models: () => [{ engine: 'claude', label: 'Claude', enabled: true, trusted: true, effort: true, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [], installed: null, authenticated: null }] });
     const all = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', code,

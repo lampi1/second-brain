@@ -54,8 +54,8 @@ describe('settings schema and validate()', () => {
 
 describe('flattenPatch', () => {
   it('turns the nested UI patch of every group into dot keys (the engines and chats across engines too)', () => {
-    expect(flattenPatch({ messaging: { crossHarness: false }, engineOn: { cursor: false }, engines: { cursor: false }, language: 'it' }))
-      .toEqual([['messaging.crossHarness', false], ['engineOn.cursor', false], ['engines.cursor', false], ['language', 'it']]);
+    expect(flattenPatch({ engineOn: { cursor: false }, engines: { cursor: false }, language: 'it' }))
+      .toEqual([['engineOn.cursor', false], ['engines.cursor', false], ['language', 'it']]);
     expect(flattenPatch({ orchestratorChats: { harness: 'cursor', cursorModel: 'grok-4.7' } }))
       .toEqual([['orchestratorChats.harness', 'cursor'], ['orchestratorChats.cursorModel', 'grok-4.7']]);
   });
@@ -63,9 +63,10 @@ describe('flattenPatch', () => {
 
 describe('"Domande all’Orchestrator" removed (the user, 2026-10-13)', () => {
   it('a config from before the engine switches keeps its keys and meaning; every engine starts on', () => {
-    // the user's real file: the Orchestrators may not use Cursor, chats across engines on (older releases read the same keys)
-    expect(fromSaved({ messaging: { crossHarness: true }, engines: { claude: true, cursor: false } })).toMatchObject({
-      engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: false }, messaging: { crossHarness: true } });
+    // the user's real file: the Orchestrators may not use Cursor, chats across engines on (the retired messaging key is dropped)
+    const s = fromSaved({ messaging: { crossHarness: true }, engines: { claude: true, cursor: false } });
+    expect(s).toMatchObject({ engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: false } });
+    expect('messaging' in s).toBe(false);                           // retired (ADR 0352)
   });
 
   it('an older config with orchestratorDriven loads without it; the key is no setting any more', () => {

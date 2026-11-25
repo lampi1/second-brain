@@ -61,6 +61,8 @@ export class WorkDriver {
       // a chat that works (a turn, background tasks) or asked the user in plain text is not stalled; one that says it
       // waits on a colleague or on CI is: that wait may never end (a crashed reviewer, no agent_wake_later)
       if (linked.some(c => !c.closedAt && (BUSY.has(c.state) || c.pending > 0 || !!c.queued || (c.background ?? 0) > 0 || c.waitsOn === 'user'))) continue;
+      // a plan of a linked chat that waits for the user's ok is the user's turn, not a stall (ADR 0356)
+      if (linked.some(c => !c.closedAt && c.plan?.phase === 'proposed')) continue;
       const movedAt = Math.max(w.updatedAt, ...linked.map(c => c.updatedAt ?? 0));
       if (now - movedAt < this.stallMs) continue;
       out.push({ work: w, movedAt, linked });

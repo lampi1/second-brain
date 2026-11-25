@@ -41,6 +41,11 @@ export function agentsHandlers({ s, demo, agentImages, workflows, orchestrator, 
     // the user's click on a "Da approvare" entry: the only way a lifecycle proposal is applied (agents/lifecycle-api.ts)
     'agents:lifecycleDecide': a => { if (!s.agentLifecycle) throw new Error('Coda «Da approvare» non disponibile.'); return s.agentLifecycle.decide(a); },
     'agents:history': a => s.agents.history(a.id),
+    'agents:creditRetry': async a => {
+      const pool = String(a?.pool ?? '');
+      if (!/^[a-z][\w:.-]{0,60}$/.test(pool) || !s.creditRetry) throw new Error('Riprova non disponibile.');
+      return s.creditRetry(pool);
+    },
     'agents:levelRoute': a => s.agents.levelRoute(String(a?.id ?? '')),
     'agents:metrics': a => {
       const tag = (v: unknown) => typeof v === 'string' && v.length <= 120 ? v : undefined;

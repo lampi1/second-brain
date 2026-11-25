@@ -60,19 +60,12 @@ describe('parent child task continuity',()=>{
     expect(prompt).not.toContain('Keep the user requirement');
     expect(prompt).not.toContain('ultimi 7 giorni');
   });
-  it('a parent the app started in «default» still reuses its child: only the mode the user chose bounds a child (ADR 0290)',async()=>{
-    const f=fixture();
-    // the engine reports the mode the app started it with; the user chose none
-    f.parent.permissionMode='default';f.chats.chosenMode=()=>null;
-    expect(await f.call('agent_assign_task',f.args())).toMatchObject({taskVersion:2});
-    // a narrowing mode the user chose (the manager gives «plan» or «acceptEdits», never a picked «default») bounds the child as before
-    const g=fixture();
-    g.parent.permissionMode='acceptEdits';g.chats.chosenMode=()=>'acceptEdits';
-    await expect(g.call('agent_assign_task',g.args())).rejects.toThrow(/exceed your current policy or mode/);
-    // a parent really in plan bounds its child however it got there (its engine's default, EnterPlanMode)
-    const h=fixture();
-    h.parent.permissionMode='plan';h.chats.chosenMode=()=>null;
-    await expect(h.call('agent_assign_task',h.args())).rejects.toThrow(/exceed your current policy or mode/);
+  it('a parent in any mode reuses its child: the manager narrows the child to it, never a refusal (ADR 0290, 0352)',async()=>{
+    for(const mode of ['default','acceptEdits','plan'] as const){
+      const f=fixture();
+      f.parent.permissionMode=mode;
+      expect(await f.call('agent_assign_task',f.args())).toMatchObject({taskVersion:2});
+    }
   });
   it('refuses other parents, bad cursors and changing a reused contract policy',async()=>{
     const f=fixture();
@@ -93,20 +86,14 @@ describe('parent child task continuity',()=>{
     await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/agent_assign_task/);
     expect(f.assign).not.toHaveBeenCalled();
   });
-  it('refuses stale role configuration, another role, scope changes and current permission narrowing',async()=>{
+  it('refuses another role and scope changes; a card changed since the child started does not stop it (ADR 0352)',async()=>{
     const f=fixture();
-    f.catalog.profiles[1]!.activeVersion=2;
-    await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/configuration changed/);
-    f.catalog.profiles[1]!.activeVersion=1;
-    // a change in place (same version, ADR 0186) moves the revision: a fresh chat too
-    (f.catalog.profiles[1] as {updatedAt?:number}).updatedAt=5;
-    await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/configuration changed/);
-    delete (f.catalog.profiles[1] as {updatedAt?:number}).updatedAt;
     await expect(f.call('agent_assign_task',{...f.args(),roleId:'sentinel'})).rejects.toThrow(/Role mismatch/);
     await expect(f.call('agent_assign_task',{...f.args(),cwd:path.resolve('/elsewhere')})).rejects.toThrow(/Cartella non valida: .*elsewhere: non esiste/);
-    f.parent.permissionMode='plan';
-    await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/permissions exceed/);
     expect(f.assign).not.toHaveBeenCalled();
+    f.catalog.profiles[1]!.activeVersion=2;
+    (f.catalog.profiles[1] as {updatedAt?:number}).updatedAt=5;
+    await expect(f.call('agent_assign_task',f.args())).resolves.toMatchObject({chatId:'child'});
   });
   it('its own folder (omitted, or named) reuses the child in place; any other existing folder goes on in a linked chat (ADR 0358)',async()=>{
     const wt=fs.mkdtempSync(path.join(os.tmpdir(),'sb-reuse-wt-')), other=fs.mkdtempSync(path.join(os.tmpdir(),'sb-reuse-to-'));
@@ -130,8 +117,15 @@ describe('parent child task continuity',()=>{
   it('a child whose role now starts on another engine goes on in a linked chat there (ADR 0357)',async()=>{
     const f=fixture(), elsewhere=vi.fn(async()=>({...f.child,id:'linked',harness:'opencode'}) as ChatSummary);
     f.chats.assignElsewhere=elsewhere;
-    const tools=delegationTools({chats:f.chats,roles:()=>f.catalog,settings:()=>DELEGATION_DEFAULTS,engineRefusal:()=>null,label:'[agent]',runs:()=>[],
-      presetChoice:()=>({preset:'base',model:'gpt',engine:'opencode',route:'OpenAI Sol: primo disponibile',warnings:[]})});
+    let ordered=false, allOut=false;
+    const tools=delegationTools({chats:f.chats,roles:()=>f.catalog,settings:()=>DELEGATION_DEFAULTS,engineRefusal:()=>null,label:'[agent]',runs:()=>[],ordered:()=>ordered,
+      presetChoice:()=>({preset:'base',model:'gpt',engine:'opencode',route:'OpenAI Sol: primo disponibile',warnings:[],...(allOut?{allOut:true as const}:{})})});
+    // no engine order: a reuse stays on its engine while that one can run (ADR 0352); nor onto a level with no room
+    const run=()=>tools.find(t=>t.name==='agent_assign_task')!.run(f.args(),{params:{chatId:'parent'}} as never);
+    expect(JSON.parse(await run() as string)).toMatchObject({chatId:'child'});
+    ordered=true;allOut=true;
+    expect(JSON.parse(await run() as string)).toMatchObject({chatId:'child'});
+    expect(elsewhere).not.toHaveBeenCalled();f.assign.mockClear();allOut=false;
     const out=JSON.parse(await tools.find(t=>t.name==='agent_assign_task')!.run(f.args(),{params:{chatId:'parent'}} as never) as string);
     expect(out).toMatchObject({chatId:'linked',continuedFrom:'child',harness:'opencode'});
     expect(elsewhere).toHaveBeenCalledWith('child',expect.any(String),expect.any(Object),{on:{harness:'opencode',model:'gpt',effort:null,route:'OpenAI Sol: primo disponibile'}});

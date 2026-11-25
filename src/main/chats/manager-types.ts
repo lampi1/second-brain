@@ -14,6 +14,11 @@ import type { Checkpoint } from './checkpoints';
 import type { AwayEntry } from './away-log';
 import type { AgentChildrenReducer } from './agent-children';
 import type { Recall } from '../search/hybrid/recall';
+import type { ToolSession } from './tool-check';
+import type { AgentContextSnapshot } from '../../shared/agent-context';
+import type { ModelTier } from '../../shared/roles';
+import type { AgentOwnerSnapshot } from '../../shared/agents';
+import type { IntakeSource, StrategyPlan } from '../../shared/strategy';
 
 /** Internal outbox receipts are tied to engine submission, never CPU queue admission. */
 export interface SubmissionReceipt { beforeSubmit(): void; submitted(): void; failed(error: unknown): void }
@@ -74,6 +79,13 @@ export interface ChatManagerOptions {
   appVersion?: string;
   /** per-chat MCP endpoint of the app (browser tools); null/undefined = none passed */
   mcpUrlFor?: ((chatId: string) => string | null) | null;
+  /** calls one of a chat's own endpoint tools in process, with that chat as the caller (the same checks as the engine's
+   *  call): a report pasted as text goes through the real agent_report (ADR 0356) */
+  callChatTool?: (chatId: string, tool: string, args: Record<string, unknown>) => Promise<string>;
+  /** a chat's work went on in another one (continueChat): the work threads follow it (workflows/service.ts followChat) */
+  onContinued?: (from: string, to: string) => void;
+  /** the folder of the fallback tool command (chats/tool-cli.ts, ADR 0356): put first on every engine's PATH */
+  toolCliDir?: string | null;
   /** the app-control MCP for the Orchestrator only: its own /mcp/app/o/<id>/<token> */
   appMcpUrl?: ((orchestratorId: string) => string | null) | null;
   /** the app-managed MCP servers a chat is given (ADR 0086, mcp-servers/service.ts launch): gateway endpoints, and the
@@ -128,8 +140,9 @@ export interface ChatManagerOptions {
   coldHandoff?: () => boolean;
   /** Idle-only budget-based engine freshness; does not infer quality degradation. Default off. */
   freshSessions?: () => boolean;
-  /** Host-owned preparation sees the final narrowed policy before any delegated engine can start. */
-  prepareDelegation?: (parent: ChatSummary, req: NewChat, policy: AgentPolicy | null, continuationOf?: string) => Promise<{ cwd: string; parentRunId: string | undefined; parentTaskVersion: number | undefined; notes?: string[]; isolated?: boolean; bind?: (childId: string) => void }>;
+  /** Host-owned preparation, before any delegated engine can start: it sees the child's policy narrowed by the contract's
+   *  tool classes, to choose the folder itself or its own worktree. */
+  prepareDelegation?: (parent: ChatSummary, req: NewChat, policy: AgentPolicy | null, continuationOf?: string, inherit?: boolean) => Promise<{ cwd: string; parentRunId: string | undefined; parentTaskVersion: number | undefined; notes?: string[]; isolated?: boolean; bind?: (childId: string) => void }>;
   /** a role chat's engine did not start (ADR 0357): whether its role's card now gives another engine (the engine is marked
    *  in trouble first); then the chat waits and moves there by itself, as for its credits */
   startFailed?: (chat: ChatSummary) => boolean;
@@ -176,7 +189,7 @@ export interface ChatManagerOptions {
 
 export interface HandoffOptions {
   reason?: 'manual' | 'threshold' | 'finished' | 'continue' | 'cold';
-  /** false = never start a stopped engine for it (an agent asking about a Cursor chat): a token-free note instead */
+  /** false = never start a stopped engine for it (its engine cannot run now, or the old engine has no credit): a token-free note instead */
   allowStart?: boolean;
   /** false = never ask the chat, even a running one: always the token-free note (the automatic closing of finished
    *  chats, owner 2026-10-11: no turn and no tokens at close) */
@@ -193,6 +206,8 @@ export interface TurnEndInfo {
   firstPrompt?: string;
   costUsd: number;
   durationMs: number;
+  /** when this turn started (the credit rule: a turn that started after a limit error proves the plan works, ADR 0354) */
+  startedAt?: number;
   turns: number;
   isError: boolean;
   /** the assistant's texts of this turn, joined (reply rules: chats/reply-rules.ts) */
@@ -218,6 +233,8 @@ export interface Rec {
   askedParentAt?: number;
   /** a delegated child was told once that its turn ended without agent_report (#152): the next such end closes it */
   reportNudged?: boolean;
+  /** its last answer's JSON was tried as an agent_report already (ADR 0356): once per assignment */
+  textReportTried?: string;
   /** the run whose done-criteria the engine was already given (taskHint, #170) */
   criteriaTold?: string;
   /** a root chat's agent_report for its current assignment (reportRoot): one per assignment */
@@ -296,7 +313,8 @@ export interface Rec {
   launches?: string[];
   /** the skills its launch gave it (role defaults, linked and the launch's own): the role gate allows only these */
   skills?: string[];
-  /** the agent's tool policy and permission ceiling, frozen at start like its instructions (A2) */
+  /** the agent's tool policy and permission ceiling, set at start like its instructions (A2); a new assignment takes
+   *  its card as it is now, never wider than its parent's (ADR 0352, ChatManager.adoptCard) */
   policy?: AgentPolicy | null;
   /** the in-process PreToolUse hook its engine got at start (Claude: the Orchestrator's budget, a role's sub-agent
    *  gate): run_code's internal calls pass it too (decideFor, ADR 0331) */
@@ -321,6 +339,10 @@ export interface Rec {
   voiceTold?: string;
   /** the role text was compared with rolePrimed since the engine started */
   roleChecked?: boolean;
+  /** this engine session's facts about the chat's required tools (chats/tool-check.ts, ADR 0356); never persisted */
+  toolSession?: ToolSession;
+  /** how many times the session was reloaded for missing tools (one at most, then the fallback command) */
+  toolReloads?: number;
   children?: AgentChildrenReducer;
   deliveryHolds?: number;
   activityRevision?: number;
@@ -358,6 +380,8 @@ export interface Rec {
   /** a job not started yet (a chat created in this run): its first send gets the first prompt */
   jobNew: boolean;
   firstPrompt: string | null;
+  /** the linked chat of a new task, until it is assigned: what it goes on from (assignElsewhere) */
+  taskContext?: string;
   /** a turn ran since the last onDone */
   turnSinceDone: boolean;
   /** a resumed session still opening (sends wait for it) */
@@ -446,12 +470,23 @@ export interface CleanReportNote { chatId: string; title: string; role: string; 
 /** One message the user typed in a work chat (userWrote): what the Orchestrator and the parent learn. */
 export interface UserWroteNote { eventId: string; seq: number; chatId: string; title: string; role: string | null; parentId: string | null; parentTitle: string | null; at: number; text: string }
 
+/** What a chat that goes on from another one inherits at its creation (ChatManager.create; continueChat, ADR 0356). */
+export interface Inherited { launchContext?: AgentContextSnapshot; tier?: ModelTier; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number; launches?: string[] }
+/** ChatManager.create's options. runStartedBy and work: a continued chat's run keeps who started the work and its state
+ *  (ADR 0356: a Strategist the Orchestrator started stays the Orchestrator's work after an engine change). */
+export interface CreateOpts {
+  /** a continuation of an app job that owes its report (ADR 0356) */
+  reportExpected?: boolean; engineWhy?: string; /** the linked chat of a new task (assignElsewhere): its run is the old chat's, the assignment starts the next */ noRun?: boolean; boundByOrchestrator?: boolean; intake?: IntakeSource; resumePlan?: StrategyPlan; workMap?: string; continuation?: boolean; continuationOf?: string; sameWorktree?: boolean; runStartedBy?: 'user' | 'orchestrator' | 'parent' | 'app'; work?: NonNullable<ChatSummary['work']> }
+
 /** «Riprendi» and the linked chats (manager-continuity.ts continueChat). allowStart false: the old engine is not started
- *  for its note; ask false: the app writes the note; on: the engine and model it goes on with (ADR 0346, 0352); cwd and
- *  place: its folder and how (ADR 0358; absent = the last folder); task: a new assignment for the linked chat */
+ *  for its note; ask false: the app writes the note; sameWorktree: the successor takes the same worktree, uncommitted
+ *  changes included (a credit move, ADR 0354); on: the engine and model it goes on with (ADR 0346, 0352); assignment: a new
+ *  task's goal and criteria (ADR 0352); cwd and place: its folder and how (ADR 0358; absent = the last folder); task: the
+ *  linked chat gets a new assignment (assignElsewhere) and starts with it; firstPrompt: it never started, so it begins with
+ *  its own first message */
 export interface ContinueOptions {
-  allowStart?: boolean; promptPrefix?: string; ask?: false;
+  allowStart?: boolean; promptPrefix?: string; ask?: false; sameWorktree?: true;
   on?: { harness: Harness; model: string | null; effort: Effort | null; route?: string };
-  cwd?: string; place?: 'here' | 'copy';
-  task?: { prompt: string; options: TaskAssignmentOptions };
+  assignment?: { goal: string; doneWhen: string[] };
+  cwd?: string; place?: 'here' | 'copy'; task?: true; firstPrompt?: string;
 }

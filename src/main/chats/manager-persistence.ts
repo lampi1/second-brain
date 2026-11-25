@@ -86,6 +86,14 @@ export abstract class ManagerPersistence extends ManagerCore {
     return moved;
   }
 
+  /** At load, do not replace a delegated chat's tools with its parent's. The contract's classes and the role's own
+   *  limits (tool classes and MCP servers) are not stored apart, so a saved list can be either. Widening would drop a
+   *  limit the role had, including on a chat this version already saved. The saved limit stays (fail closed). A later
+   *  load sees the same policy. True would mean a policy changed; this does not. */
+  protected override widenDelegated(): boolean {
+    return false;
+  }
+
   /** Only the newest MAX_ARCHIVED archived chats stay in the app. */
   protected pruneArchived(): void {
     // a plan approved and kept for later needs its chat to start (ADR 0342): it is never pruned
@@ -230,7 +238,7 @@ export abstract class ManagerPersistence extends ManagerCore {
         ...(c.parentId ? { parentId: c.parentId } : {}),
         ...(c.delegation ? { delegation: c.delegation } : {}),
         ...(c.plan ? { plan: c.plan } : {}), ...(c.questions?.length ? { questions: c.questions } : {}),
-        ...(c.waitsOn ? { waitsOn: c.waitsOn } : {}), ...(c.waitsOnWork ? { waitsOnWork: true } : {}), ...(c.creditWait ? { creditWait: c.creditWait } : {}),
+        ...(c.waitsOn ? { waitsOn: c.waitsOn } : {}), ...(c.waitsOnWork ? { waitsOnWork: true } : {}), ...(c.creditWait ? { creditWait: c.creditWait } : {}), ...(c.creditMoved ? { creditMoved: c.creditMoved } : {}), ...(c.userModel ? { userModel: c.userModel } : {}), ...(c.pick ? { pick: c.pick } : {}),
         ...(c.remoteControl ? { remoteControl: pausedState(c.remoteControl)! } : {}),
         ...(c.agentAssets && c.agentSkills?.length ? { loadedSkills: [...c.agentSkills] } : {}),
       },
@@ -313,7 +321,7 @@ export abstract class ManagerPersistence extends ManagerCore {
       ...(r.s.closedAt ? { closedAt: r.s.closedAt, closedBy: r.s.closedBy ?? 'auto' } : {}),
       ...(r.working ? { working: true as const } : {}),
       ...storedResult(r.s.lastResult ?? r.savedResult),
-      ...(r.s.waitsOn ? { waitsOn: r.s.waitsOn } : {}), ...(r.s.waitsOnWork ? { waitsOnWork: true as const } : {}), ...(r.s.creditWait ? { creditWait: r.s.creditWait } : {}),
+      ...(r.s.waitsOn ? { waitsOn: r.s.waitsOn } : {}), ...(r.s.waitsOnWork ? { waitsOnWork: true as const } : {}), ...(r.s.creditWait ? { creditWait: r.s.creditWait } : {}), ...(r.s.creditMoved ? { creditMoved: r.s.creditMoved } : {}), ...(r.s.userModel ? { userModel: r.s.userModel } : {}), ...(r.s.pick ? { pick: r.s.pick } : {}),
       ...(r.unfinished ? { unfinished: true as const } : {}),
       ...(r.userTaskEvents ? { userTaskEvents: r.userTaskEvents } : {}),
       ...(r.heldResult ? { heldResult: r.heldResult } : {}),

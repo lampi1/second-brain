@@ -273,7 +273,7 @@ function templateRegistry(): ModelRegistry | null {
 
 /** Shared by real and demo wiring. */
 export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: EnginesApi, cli: () => Record<Harness, CliStatus> | null, onCustomized?: () => void,
-  route: Pick<AgentCatalogDeps, 'room' | 'engineBlock' | 'engineTrouble'> = {}): AgentCatalogService {
+  route: Pick<AgentCatalogDeps, 'room' | 'claim' | 'engineBlock' | 'engineTrouble'> = {}): AgentCatalogService {
   return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}), ...route,
     price: unitPriceOf(tokenPriceOf(() => brain.modelRegistry())),
     tierModel: (engine, tier) => tierModel(engine, tier, brain.modelRegistry()),

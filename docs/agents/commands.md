@@ -39,6 +39,7 @@ next check can run beside them. `SB_CHECK_LOCK_WAIT_MS=''` counts as 0: the wait
 | Demo data (no CLIs, no tokens) | `npm run demo` (build + fake chats, tabs and a synthetic brain; `-- --frozen` fixed clock, `-- --hidden` for agents); bare: `SB_DEMO=1 npm start` (brain pages empty), deterministic: `SB_DEMO_FREEZE=1` |
 | README screenshots | `npm run shots` (frozen demo → `docs/screenshots/*.webp`, < 300 KB each); look at them before committing. Each shot is mapped in `docs/readme-shots.json` to its test and the UI files it shows: `node scripts/readme-check.mjs [--base <sha>]` (run by `check:branch`, ADR 0208) fails a branch that changed those files without taking the shot again (opt out with a commit message line `shots: unchanged-visually [shot …]`), a README that is not English, a missing image and a page not mentioned |
 | Drive the running app as an agent | MCP `http://127.0.0.1:<mcpPort>/mcp/app` (tools `app_state`, `app_chats`, `app_chat_items`, `app_pending`, `app_feed`, `app_logs`, `app_screenshot`, `app_ui` (`outline` = the screen now), `app_guide` (the app map, read live), `app_send_to_chat`, `app_close_chat`, `app_command_runs`); see ADR 0006. The Orchestrator's own mount also has `app_config` (every configuration, ADR 0149). Each Orchestrator calls its own `/mcp/app/o/<orchestratorId>/<token>` (ADR 0021), the only mount with `app_update_code` (ADR 0074); `/mcp/improve` and "Migliora l'app" are gone (ADR 0079) |
+| A chat's app tool its engine did not give it | In the chat's own shell: `sb-tool list`, `sb-tool <tool> '<json>'`, `sb-tool <tool> --file args.json`, `sb-tool <tool> -` (stdin). The app writes it into `<userData>/bin` at start and puts that folder first on every chat engine's PATH, with the chat's own endpoint in `SB_CHAT_TOOLS`; it calls the same tool with the same checks (ADR 0356, `src/main/chats/tool-cli.ts`) |
 
 ## MCP tools
 
@@ -63,11 +64,11 @@ row and its line here in the same change.
 | `app_screenshot` | Orchestrator, /mcp/app | A screenshot of the app window and of each browser tab on screen. |
 | `app_ui` | Orchestrator, /mcp/app | Steer the UI without taking focus: open a page, maximize a chat, or read the screen outline. |
 | `app_create_chat` | Orchestrator, /mcp/app | Open a work chat that runs one role, started with a self-contained prompt; `map` links it to the pieces of a project map it works on (ADR 0330). |
-| `app_assign_task` | Orchestrator, /mcp/app | Give a finished work chat a new measured task in the same role; another folder (`cwd`, `place`) or the engine its role starts on now goes on in a linked chat (ADR 0357, 0358); `map` moves it to other pieces of the map. |
+| `app_assign_task` | Orchestrator, /mcp/app | Give a finished work chat a new measured task in the same role, on any engine; another folder (`cwd`, `place`) or the engine the user's order starts its role on now goes on in a linked chat (ADR 0357, 0358; a chat whose engine cannot run goes on in a new one on its card's engine, ADR 0352); `map` moves it to other pieces of the map. |
 | `app_task_events` | Orchestrator, /mcp/app | The ordered user decisions of a root task (optional: app_assign_task returns the unread ones). |
-| `app_send_to_chat` | Orchestrator, /mcp/app | Send a message to an active app chat, labelled as not the user's approval. |
+| `app_send_to_chat` | Orchestrator, /mcp/app | Send a message to an app chat on any engine (a stopped or auto-closed one resumes; ADR 0352), labelled as not the user's approval. |
 | `app_close_chat` | Orchestrator, /mcp/app | Close a chat for the user, like ✕: its engine, the tools it started and its delegation tree end; refused while it or an open descendant waits for the user. |
-| `app_reopen_chat` | Orchestrator, /mcp/app | Reopen a closed chat with its whole history. |
+| `app_reopen_chat` | Orchestrator, /mcp/app | Reopen a closed chat with its whole history and engine; `reopened: true` or why not (a chat the user closed: only right after his own ask). |
 | `app_handoff_chat` | Orchestrator, /mcp/app | Have a chat write its hand-off note now. |
 | `app_continue_chat` | Orchestrator, /mcp/app | «Riprendi»: a new chat from the old chat's hand-off, in the last folder it used or in `cwd`, on the engine its role starts on now (ADR 0357, 0358). |
 | `app_set_chat_effort` | Orchestrator, /mcp/app | Pick the reasoning effort of one running chat for this conversation only. |
@@ -101,7 +102,7 @@ row and its line here in the same change.
 | `app_child_output` | Orchestrator only | The latest report of a chat in its tree, delegates included: summary and criteria; full: the output, max 4,000 chars. |
 | `agent_metrics` | Orchestrator only | Success rate, cost, time and corrections per role and version (numbers only). |
 | `task_estimate` | Orchestrator only | Estimate a request: kind of work, size, role, time and cost. |
-| `agent_delegate` | work chats | Delegate independent parts of the task to other roles as visible child chats (Orchestrator and Strategist only; a parallel group starts in one call; a Sentinel takes `reviewOf`; `cwd` = any existing folder, `place` = here by default or copy, ADR 0358). |
+| `agent_delegate` | work chats | Delegate independent parts of the task to other roles as visible child chats (Orchestrator and Strategist only; a parallel group starts in one call; a Sentinel takes `reviewOf`; `cwd` = any existing folder, `place` = here by default or copy, ADR 0358; `contract.tools` never limits what it may run, ADR 0355). |
 | `agent_children` | work chats | The chats you delegated: role, state, goal, result, open requests, cost, why a task was closed early (`endCause`), and `waitsOn: "credits"` for a child whose model ran out of credits (it goes on when the user changes its role's card, ADR 0346). |
 | `agent_ask_parent` | work chats | Ask up the ladder (the chat that delegated you, the Orchestrator, the user; ADR 0344) and go on with the rest. |
 | `run_code` | work chats (Code Mode on) | Run a JavaScript script in a QuickJS sandbox that calls many tools in one go through a typed API (Bash, PowerShell, files, app tools, connectors); each call meets the same permission rules, an Esegui action stops the script (ADR 0331). |

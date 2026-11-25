@@ -1,10 +1,8 @@
 // ChatManager layer (ADR 0200): long chats (ADR 0031, 0051). The hand-off note (handoff.ts) and «Riprendi»
 // (continueChat), the cold note written while the cache is warm and the cold switch to a fresh session, fresh sessions
 // on a context budget, the Orchestrator's day compaction, quiet turns and the context counters.
-import type { IntakeSource, StrategyPlan } from '../../shared/strategy';
+import type { ChatDelegation } from '../../shared/delegation';
 import crypto from 'node:crypto';
-import type { ModelTier } from '../../shared/roles';
-import type { AgentContextSnapshot } from '../../shared/agent-context';
 import type { ChatSummary, ContextStats, HandoffInfo, NewChat } from '../../shared/contract';
 import { sysEn } from '../../shared/sys';
 import { errText, log } from '../log';
@@ -15,14 +13,22 @@ import { forEngine } from './agent-message';
 import { engineOf } from '../engines/registry';
 import { updateActivity } from '../update/activity';
 import { plainOwner } from '../agents/catalog';
-import type { AgentPolicy } from '../agents/tool-policy';
-import type { AgentOwnerSnapshot } from '../../shared/agents';
 import type { RunLinks } from '../agents/runs';
-import type { ContinueOptions, HandoffOptions, Rec, ColdStep } from './manager-types';
+import type { ContinueOptions, CreateOpts, HandoffOptions, Inherited, Rec, ColdStep } from './manager-types';
 import { goalText } from '../../shared/agent-label';
 import { folderProblem, sameFolder } from '../agents/worktrees';
 import { clearTimeout, workBehind, coldDivider, sysItem } from './manager-helpers';
 import { ManagerRequests } from './manager-requests';
+
+/** continueChat's options: allowStart false = never start a stopped engine for the hand-off; ask false = the app writes the
+ *  note; on = the engine, model and effort of the new chat; assignment = a new task for a continued child (ADR 0352). */
+
+/** The delegation a continued child carries: the same, or a new task's goal and criteria with no result yet. */
+function nextDelegation(d: ChatDelegation, assignment: ContinueOptions['assignment']): ChatDelegation {
+  if (!assignment) return structuredClone(d);
+  const { result: _r, originalGoal: _o, ...rest } = structuredClone(d);
+  return { ...rest, goal: assignment.goal, doneWhen: [...assignment.doneWhen], at: Date.now() };
+}
 
 /** Long chats: hand-offs, «Riprendi», cold notes and cold switches, fresh sessions, the Orchestrator's day compaction. */
 export abstract class ManagerContinuity extends ManagerRequests {
@@ -76,7 +82,9 @@ export abstract class ManagerContinuity extends ManagerRequests {
    *  cwd / place (ADR 0358): the folder, by default the last one it used; nothing of the old one is moved. With no `on`,
    *  the engine its role starts on now (ADR 0357).
    *  ask false + on (ADR 0346, a chat out of credits whose role's card moved to another engine): the hand-off is the
-   *  app's own note, since the old engine cannot be asked, and the new chat runs on the card's engine and model. */
+   *  app's own note, since the old engine cannot be asked, and the new chat runs on the card's engine and model.
+   *  assignment (ADR 0352, a reused child whose engine cannot run now): the new child carries this new task's goal and
+   *  criteria instead of the old one's, with no result yet. */
   continueChat(chatId: string, opts: ContinueOptions = {}): Promise<ChatSummary> {
     const running = this.continuing.get(chatId);
     if (running) return running;
@@ -88,50 +96,66 @@ export abstract class ManagerContinuity extends ManagerRequests {
   private async doContinue(chatId: string, opts: ContinueOptions): Promise<ChatSummary> {
     const r = this.need(chatId);
     if (r.s.isOrchestrator) throw new Error('L’Orchestrator non si riprende così: usa «Ricomincia da capo» dal suo menu.');
+    // an app move (another engine, a new task) never brings back what the user closed with ✕ (review of ADR 0352)
+    if ((opts.on || opts.assignment) && (r.userClosing || r.s.closedAt && r.s.closedBy === 'user')) throw new Error('The user closed this chat and cancelled its work: only the user can reopen it. Start a new chat for new work.');
     const next = r.s.continuedBy && this.chats.get(r.s.continuedBy.id);
+    // a new task never lands silently on a chat that already went on: the caller assigns the one that goes on
+    if (next && opts.assignment) throw new Error(`This chat already goes on in «${next.s.title}» (chatId ${next.s.id}): assign the task there.`);
     if (next) return { ...next.s };
     // never two agents on the same files: the old chat must have finished its turn (a fresh note does not cover this one)
     const hasTurns = r.lastTurnAt > 0 || r.items.some(i => i.kind === 'result' || i.kind === 'user');
     if (r.handoffTurn || (hasTurns && (r.session?.busy || r.pending.size > 0))) throw new Error('La chat sta lavorando o ti aspetta: si riprende quando ha finito il turno.');
     // the engine its role starts on now (ADR 0357): another one only when the order or the limits changed since
-    const on = opts.on ?? this.opts.engineNow?.({ ...r.s }) ?? undefined;
+    const on = opts.on ?? (this.openChildren(chatId) ? undefined : this.opts.engineNow?.({ ...r.s }) ?? undefined);
     const cwd = opts.cwd?.trim() || r.s.cwd, noFolder = folderProblem(cwd);
     if (noFolder) throw new Error(noFolder);
     const saved = this.handoffs.read(chatId);
     const fresh = saved && saved.at >= r.lastTurnAt ? saved : null;
     r.handoffStopped = false;
     const h = fresh ?? await this.handoff(chatId, { reason: 'continue', ...(opts.allowStart === false ? { allowStart: false } : {}), ...(opts.ask === false || (on && on.harness !== r.s.harness) ? { ask: false as const } : {}) });
-    const task = opts.task, owner = r.s.agent ?? plainOwner(r.s.harness, r.choice.model);
+    const task = opts.task === true, owner = r.s.agent ?? plainOwner(r.s.harness, r.choice.model);
     const taken = [...this.chats.values()].map(x => x.s.title);
     // a delegated chat goes on as the same child: under its parent, with its contract, its result still the parent's
     // (never a root chat that escapes the limits or that the Orchestrator could read, ADR 0083)
     const parentRec = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
     if (r.s.parentId && !parentRec) throw new Error('La chat che l’ha delegata non c’è più: questa non si riprende da sola.');
+    const assignment = opts.assignment ?? (task ? { goal: r.s.run?.goal ?? r.s.title, doneWhen: [] } : undefined);
+    const context = `${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}${sameFolder(cwd, r.s.cwd) ? '' : `\n\nOra lavori in ${cwd} (la chat precedente lavorava in ${r.s.cwd}): il suo lavoro resta là, niente viene spostato.`}`;
     const c = await this.create({
       harness: on?.harness ?? r.s.harness, cwd, ...(opts.place ? { place: opts.place } : {}), title: nextTitle(r.s.title, taken),
       ...(on ? { ...(on.model ? { model: on.model } : {}), ...(on.effort ? { effort: on.effort } : {}) } : { ...(r.choice.model ? { model: r.choice.model } : {}), ...(r.choice.effort ? { effort: r.choice.effort } : {}) }),
       ...(r.choice.permissionMode ? { permissionMode: r.choice.permissionMode } : {}),
       // a routed job stays one outcome across hand-offs: the new chat writes on the first chat's ledger line
       ...(r.s.route ? { route: { ...r.s.route, ledgerId: r.s.route.ledgerId ?? `app:${r.s.id}`, handoffs: (r.s.route.handoffs ?? 0) + 1 } } : {}),
-      prompt: `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}${sameFolder(cwd, r.s.cwd) ? '' : `\n\nOra lavori in ${cwd} (la chat precedente lavorava in ${r.s.cwd}): il suo lavoro resta là, niente viene spostato.`}${task ? `\n\nNuovo compito:\n${task.prompt}` : ''}`,
-      ...(task ? { goal: goalText(task.prompt).slice(0, 2000), ...(task.options.doneWhen ? { doneWhen: task.options.doneWhen } : {}), ...(task.options.contractFields ? { contractFields: task.options.contractFields } : {}) } : {}),
-      ...(parentRec ? { parentId: parentRec.s.id, ...(r.s.delegation ? { delegation: task ? (({ result: _r, ...d }) => ({ ...structuredClone(d), goal: goalText(task.prompt), doneWhen: task.options.doneWhen ?? d.doneWhen, at: Date.now() }))(r.s.delegation) : structuredClone(r.s.delegation) } : {}) } : {}),
-    }, 'user', { ...(r.s.launchContext ? { launchContext: r.s.launchContext } : {}), ...(r.s.run?.tier ? { tier: r.s.run.tier } : {}), owner: on ? { ...owner, engine: on.harness, model: on.model } : owner, instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.skills ? { skills: [...r.skills] } : {}), ...(r.maxContext ? { maxContext: r.maxContext } : {}) },
-    {}, { continuation: !!parentRec, continuationOf: r.s.id, ...(on?.route ? { engineWhy: on.route } : {}) });
+      // the root task's own contract goes on (a delegated one travels in its delegation)
+      ...(!parentRec && !task && r.s.run?.goal ? { goal: r.s.run.goal.slice(0, 2000) } : {}), ...(!parentRec && !task && r.s.run?.taskContract?.doneWhen?.length ? { doneWhen: [...r.s.run.taskContract.doneWhen] } : {}),
+      ...(r.s.run?.taskContract?.deliveryPolicy ? { deliveryPolicy: r.s.run.taskContract.deliveryPolicy } : {}), ...(r.s.run?.taskContract?.fields?.length ? { contractFields: [...r.s.run.taskContract.fields] } : {}),
+      // a new task is assigned right after (assignElsewhere), with every guard of an assignment; a chat that never started
+      // begins with its own first message (ADR 0357)
+      ...(task ? {} : { prompt: opts.firstPrompt ?? `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${context}` }),
+      ...(parentRec ? { parentId: parentRec.s.id, ...(r.s.delegation ? { delegation: nextDelegation(r.s.delegation, assignment) } : {}) } : {}),
+    }, 'user', { ...(r.s.launchContext ? { launchContext: r.s.launchContext } : {}), ...(r.s.run?.tier ? { tier: r.s.run.tier } : {}), owner: on ? { ...owner, engine: on.harness, model: on.model } : owner, instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.skills ? { skills: [...r.skills] } : {}), ...(r.maxContext ? { maxContext: r.maxContext } : {}), ...(r.launches ? { launches: [...r.launches] } : {}) },
+    // the same contract (ADR 0356): a review it writes, how its result is delivered, and an app job's owed report
+    r.s.run?.reviewOf ? { reviewOf: r.s.run.reviewOf } : {}, { continuation: !!parentRec, continuationOf: r.s.id, ...(opts.sameWorktree ? { sameWorktree: true } : {}), ...(on?.route ? { engineWhy: on.route } : {}), ...(task ? { noRun: true } : {}),
+      ...(r.s.run?.taskContract?.reportExpected ? { reportExpected: true } : {}),
+      // the same work (ADR 0356): who started it, its state and its job's work map go on with it
+      ...(r.s.run?.startedBy ? { runStartedBy: r.s.run.startedBy } : {}), ...(r.s.work && !task ? { work: structuredClone(r.s.work) } : {}), ...(r.s.workMap ? { workMap: r.s.workMap } : {}) });
     const nr = this.chats.get(c.id);
     // the worktree hint follows the chain (A → B → C)
     if (nr) { nr.s.continuedFrom = { id: r.s.id, title: r.s.title }; if (r.inWorktree) nr.inWorktree = true; this.updated(nr); }
-    // the agent's work goes on in a new run: the old one counts as reworked (§5)
-    if (nr?.s.run && r.s.run && this.runs.get(r.s.run.runId)) {
-      if (task?.options.mode === 'rework') nr.s.run.reworkOf = r.s.run.runId; else nr.s.run.continuedFrom = r.s.run.runId;
-      if (task?.options.reviewOf) nr.s.run.reviewOf = task.options.reviewOf;
+    // the agent's work goes on in a new run: the old one counts as reworked (§5). A new task (assignElsewhere) takes the old
+    // run over: the assignment ends it and starts its own, as in the same chat
+    if (nr && task && r.s.run) { nr.s.run = r.s.run; nr.taskContext = context; this.runSave(); }
+    else if (nr?.s.run && r.s.run && this.runs.get(r.s.run.runId)) {
+      nr.s.run.continuedFrom = r.s.run.runId;
       // the preset it ran on goes on with it (ADR 0346): a later credit wait reads the card for that preset
-      if (r.s.run.presetChoice && !nr.s.run.presetChoice) nr.s.run.presetChoice = { ...(task?.options.preset?.choice ?? r.s.run.presetChoice), ...(on?.route ? { route: on.route } : {}) };
+      if (r.s.run.presetChoice && !nr.s.run.presetChoice) nr.s.run.presetChoice = { ...r.s.run.presetChoice, ...(on?.route ? { route: on.route } : {}) };
       this.runSave();
     }
-    // a job's plan goes on with it as it is, with the user's approval (ADR 0357, ChatManager.planResume)
-    if (nr && r.s.plan && !r.s.parentId && !nr.s.plan) { const { stopped: _s, putAway: _p, ...open } = r.s.plan; nr.s.plan = structuredClone(open); this.updated(nr); }
     r.s.continuedBy = { id: c.id, title: c.title };
+    // everything that waits goes on with the work (ADR 0356, owner 2026-11-25: «nessuna richiesta resta in una chat
+    // chiusa»): the plan and its open approval, the user's recorded instructions, the app's questions to the user
+    if (nr) this.carryOver(r, nr);
     // the plan step it worked for follows it (ADR 0346): the step's chat is now the one that goes on and will report,
     // never the old one, which reports nothing more
     const plan = parentRec?.s.plan;
@@ -148,6 +172,31 @@ export abstract class ManagerContinuity extends ManagerRequests {
     log.info('chats', 'chat continued in a new one', { chat: chatId, data: { next: c.id, handoff: h.source, fresh: !!fresh } });
     return { ...(nr?.s ?? c) };
   }
+
+  /** What a chat that goes on in another one hands over (doContinue, ADR 0356): its plan with the user, moved with its
+   *  waiting approval (movePlan), the user's recorded instructions and the app's open questions to the user, which are
+   *  answered to the successor from now on. Messages, mail and command results still addressed to the old chat follow
+   *  continuedBy (ChatManager.send). */
+  protected carryOver(from: Rec, to: Rec): void {
+    this.movePlan(from, to);
+    if (from.userTaskEvents && !to.userTaskEvents) to.userTaskEvents = structuredClone(from.userTaskEvents);
+    for (const [id, req] of this.userAsks) {
+      const input = req.input as { chatId?: unknown } | undefined;
+      if (input?.chatId !== from.s.id) continue;
+      this.userAsks.set(id, { ...req, input: { ...(input as object), chatId: to.s.id } });
+      if (from.userActionAsk === id) { delete from.userActionAsk; to.userActionAsk = id; }
+    }
+    this.hook('onContinued', () => this.opts.onContinued?.(from.s.id, to.s.id));
+    this.persist();
+    this.updated(to);
+    log.info('chats', 'work handed over to the chat that goes on', { chat: from.s.id, data: { next: to.s.id, plan: to.s.plan?.phase ?? null, events: to.userTaskEvents?.events.length ?? 0 } });
+  }
+
+  /** Chats still open under this one (manager-work.ts): they report to it. */
+  protected abstract openChildren(chatId: string): boolean;
+
+  /** The plan with the user goes to the chat that goes on (manager-work.ts): a proposed one waits there for the user. */
+  protected abstract movePlan(from: Rec, to: Rec): void;
 
   /** Writes the hand-off when it is missing or older than the last turn (the auto-close calls it before archiving). */
   async ensureHandoff(chatId: string, opts: HandoffOptions = {}): Promise<HandoffInfo> {
@@ -425,5 +474,5 @@ export abstract class ManagerContinuity extends ManagerRequests {
   contextSince(chatId: string): number | undefined { return this.chats.get(chatId)?.ctxSince; }
 
   // ---- implemented in a later layer (ADR 0200: manager.ts and its manager-*.ts layers)
-  abstract create(req: NewChat, by?: 'user' | 'agent' | 'app', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links?: RunLinks, opts?: { boundByOrchestrator?: boolean; intake?: IntakeSource; resumePlan?: StrategyPlan; workMap?: string; continuation?: boolean; continuationOf?: string; engineWhy?: string }): Promise<ChatSummary>;
+  abstract create(req: NewChat, by?: 'user' | 'agent' | 'app', inherited?: Inherited, links?: RunLinks, opts?: CreateOpts): Promise<ChatSummary>;
 }

@@ -6,6 +6,7 @@
 // main/agents/catalog.ts, main/brain/settings-schema.ts, main/appctl/config.ts and the renderer (EngineOrder.tsx);
 // tests in test/unit/shared/engine-order.test.ts.
 import type { Harness } from './contract';
+import { binding, type CreditReading } from './credit-rule';
 
 /** 98% counts as spent already (model-levels SPENT_PCT): a threshold is below it. */
 export const THRESHOLD = { min: 10, max: 97 } as const;
@@ -24,6 +25,14 @@ export function inOrder<T extends { engine: Harness }>(list: readonly T[], order
   if (!order.length) return [...list];
   const at = (x: T) => { const i = order.indexOf(x.engine); return i < 0 ? order.length : i; };
   return list.map((x, i) => ({ x, i })).sort((a, b) => at(a.x) - at(b.x) || a.i - b.i).map(e => e.x);
+}
+
+/** Why a plan is past the user's threshold (the first window that stops this model, at or above it); null = it is not, it
+ *  has no threshold or nothing was read. */
+export function pastThreshold(reading: CreditReading | null, model: string | null, threshold: number | null | undefined, now: number): string | null {
+  if (!threshold || !reading?.ok) return null;
+  const w = reading.windows.find(x => binding(x, model) && x.usedPercent >= threshold && (x.resetsAt === null || x.resetsAt > now));
+  return w ? `${w.label} al ${Math.round(w.usedPercent)}%, soglia ${threshold}%` : null;
 }
 
 /** The order a role follows: its own exception, else the one order. */

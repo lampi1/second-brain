@@ -17,7 +17,7 @@ import { HarnessMark } from './Icons';
 import { Select } from './Select';
 import { t } from '../i18n';
 
-type Route = Record<PresetId, { engine: string; model: string | null; index: number; reason: string; state: 'ok' | 'pace' | 'over' | 'out' | 'unknown' } | null>;
+type Route = Record<PresetId, { engine: string; model: string | null; index: number; reason: string; state: 'ok' | 'pace' | 'over' | 'out' | 'probation' | 'unknown' } | null>;
 
 const modelName = (e: AgentModelChoice | undefined, id: string | null) => id === null ? t('rolePage.add.default') : e?.models.find(m => m.id === id)?.name || id;
 

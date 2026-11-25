@@ -36,7 +36,7 @@ function fixture(o: { plan?: StrategyPlan; set?: boolean; childModel?: string; c
   const call = async (name: string, args: Record<string, unknown>) => JSON.parse(await tools.find(t => t.name === name)!.run(args, { params: { chatId: 'parent' } } as never) as string);
   const assignArgs = (extra: Record<string, unknown> = {}) => ({ chatId: 'child', roleId: 'scout', cwd, mode: 'continue', expectedVersion: 1, contract: { goal: 'Follow up', output: 'Evidence', doneWhen: ['New criterion'] }, ...extra });
   const delegateArgs = (extra: Record<string, unknown> = {}) => ({ tasks: [{ role: 'scout', title: 'Ordini · Log', cwd, contract: { goal: 'Look', output: 'Evidence', doneWhen: ['Found'] }, ...extra }] });
-  return { child, assign, create, created, set, presetChoice, call, assignArgs, delegateArgs };
+  return { all, child, assign, create, created, set, presetChoice, call, assignArgs, delegateArgs };
 }
 
 describe('agent_delegate with a preset', () => {
@@ -94,12 +94,13 @@ describe('agent_assign_task with a preset', () => {
     await f.call('agent_assign_task', f.assignArgs());
     expect(f.assign.mock.calls[0]![2].preset?.switchTo).toEqual({ model: 'm-mid', effort: null });
   });
-  it('a child on another engine (an old Balanced chat, mode removed 2026-11-23) is never reused: a fresh chat', async () => {
+  it('a child on another engine than its card\'s (an old Balanced chat) is reused there, on its own model (ADR 0352)', async () => {
     const f = fixture({ childHarness: 'codex', childModel: 'gpt-x' });
-    await expect(f.call('agent_assign_task', f.assignArgs({ preset: 'max', presetWhy: 'x' }))).rejects.toThrow(/Role configuration changed/);
-    await expect(f.call('agent_assign_task', f.assignArgs())).rejects.toThrow(/Role configuration changed/);
+    const out = await f.call('agent_assign_task', f.assignArgs());
+    expect(f.assign).toHaveBeenCalledOnce();
+    expect(f.assign.mock.calls[0]![2].preset?.switchTo).toBeUndefined();   // never a Claude model on Codex
+    expect(out.warnings).toEqual(expect.arrayContaining([expect.stringMatching(/stays on codex/)]));
     expect(f.set).not.toHaveBeenCalled();
-    expect(f.assign).not.toHaveBeenCalled();
   });
 });
 
@@ -134,5 +135,19 @@ describe('a part of an approved plan takes its step\'s preset', () => {
     const r = await f.call('agent_assign_task', f.assignArgs({ step: 1 }));
     expect(r.preset).toBe('max');
     expect(f.assign.mock.calls[0]![2].preset).toMatchObject({ model: 'm-top', switchTo: { model: 'm-top', effort: 'high' } });
+  });
+});
+
+// problem 4 of 2026-11-25 (ADR 0356): a reuse of a child whose engine changed went to the old, closed chat
+describe('agent_assign_task on a child that went on in another chat', () => {
+  it('assigns the task to the chat that works now, by the old chatId', async () => {
+    const f = fixture();
+    const next = { ...f.child, id: 'child2', title: 'Child 2', harness: 'cursor', state: 'idle', closedAt: undefined, continuedFrom: { id: 'child', title: 'Child' } } as unknown as ChatSummary;
+    (f.child as { continuedBy?: { id: string; title: string } }).continuedBy = { id: 'child2', title: 'Child 2' };
+    f.all.push(next);
+    f.assign.mockImplementation(async () => { next.run = { ...next.run!, runId: 'new', taskVersion: 2 }; });
+    await f.call('agent_assign_task', f.assignArgs());
+    expect(f.assign).toHaveBeenCalledOnce();
+    expect(f.assign.mock.calls[0]![0]).toBe('child2');
   });
 });

@@ -66,7 +66,8 @@ layer classes in `chats/manager-*.ts` under `chats/manager.ts` (layout: `docs/ag
   A root chat the Orchestrator opened reports with the same `agent_report` (`reportRoot` → the Orchestrator).
 - **Role permissions** (ADR 0085): every role defaults to every tool class and no ceiling (`shared/roles.ts`); the
   role page's Permessi card (`RolePermissions.tsx`) narrows a role through `agents:save` (a version). At launch the
-  catalog's policy goes to the chat, narrowed by its parent's; under shell-read `refusedCommand` and the role gate pass
+  catalog's policy goes to the chat, narrowed by its parent's (a contract's tool classes only choose its folder, and a
+  database write, a production release or a cloud write of a delegated chat waits for the user: ADR 0355); under shell-read `refusedCommand` and the role gate pass
   `node` of a script listed in the brain's `read-only-tools.md` (`agents/read-tools.ts`); `agents/skill-needs.ts` turns a
   passed skill's tools into launch warnings. The role gate runs a granted bare skill name as `<launch plugin>:<name>`
   (an `answer` patch → Claude's `updatedInput`); the Orchestrator's Claude session has a per-turn workspace budget, an

@@ -8,7 +8,7 @@ import { readAgentContext, type AgentContextSnapshot } from '../../shared/agent-
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { isLang, type ChatLink, type ChatSummary, type Effort, type HandoffSource, type Harness, type Lang, type PermissionMode, type RemoteControlState, type RouteDecision } from '../../shared/contract';
+import { isLang, type ChatLink, type ChatSummary, type CreditWait, type Effort, type HandoffSource, type Harness, type Lang, type PermissionMode, type RemoteControlState, type RouteDecision } from '../../shared/contract';
 import { readStoredRemote } from './remote-control';
 import { validRoute } from '../brain/routing';
 import { errText, log } from '../log';
@@ -135,7 +135,10 @@ export interface StoredChat {
   waitsOn?: 'user' | 'colleagues';
   waitsOnWork?: true;
   /** stopped on its provider's credit limit: it waits for another model on its role's card (ADR 0346) */
-  creditWait?: { at: number; model: string | null; card?: string; why?: 'start' };
+  creditWait?: CreditWait;
+  creditMoved?: ChatSummary['creditMoved'];
+  userModel?: ChatSummary['userModel'];
+  pick?: ChatSummary['pick'];
   /** its engine ended with an error or in the middle of a turn: not finished, it never closes by itself */
   unfinished?: true;
   /** how its engine was chosen (role, defaults or override; ADR 0032, 0210) */
@@ -170,9 +173,39 @@ function readChatWork(value:unknown):NonNullable<StoredChat['work']>{
   return {status:'assigned',updatedAt:0};
 }
 function readCreditWait(value: unknown): StoredChat['creditWait'] | undefined {
-  const w = value as { at?: unknown; model?: unknown; card?: unknown; why?: unknown } | null;
+  const w = value as Record<string, unknown> | null;
   if (!w || typeof w !== 'object' || typeof w.at !== 'number' || !Number.isFinite(w.at)) return undefined;
-  return { at: w.at, model: typeof w.model === 'string' && w.model && w.model.length <= 120 ? w.model : null, ...(typeof w.card === 'string' && w.card.length <= 200 ? { card: w.card } : {}), ...(w.why === 'start' ? { why: 'start' as const } : {}) };
+  const fin = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
+  const key = (x: unknown): x is string => typeof x === 'string' && x.length <= 200;
+  const next = w.next as Record<string, unknown> | undefined;
+  const failed = Array.isArray(w.failed) ? (w.failed as Record<string, unknown>[]).filter(f => f && key(f.card) && fin(f.n) && fin(f.at)).slice(0, 16)
+    .map(f => ({ card: f.card as string, n: f.n as number, at: f.at as number, nextAt: fin(f.nextAt) ? f.nextAt : null, permanent: f.permanent === true, error: typeof f.error === 'string' ? f.error.slice(0, 300) : '' })) : [];
+  const waiting = w.waiting as Record<string, unknown> | undefined;
+  // the wait survives a restart with its announced move, its «Annulla» and its failures (ADR 0354)
+  return { at: w.at, model: typeof w.model === 'string' && w.model && w.model.length <= 120 ? w.model : null, ...(key(w.card) ? { card: w.card } : {}), ...(w.why === 'start' ? { why: 'start' as const } : {}), ...(typeof w.prompt === 'string' && w.prompt.length <= 200_000 ? { prompt: w.prompt } : {}),
+    ...(next && key(next.card) && fin(next.at) ? { next: { card: next.card, at: next.at } } : {}),
+    ...(w.stay === true ? { stay: true as const } : key(w.stay) ? { stay: w.stay } : {}),
+    ...(failed.length ? { failed } : {}),
+    ...(waiting && Array.isArray(waiting.out) ? { waiting: { out: (waiting.out as unknown[]).filter(key).slice(0, 8) as string[], first: fin(waiting.first) ? waiting.first : null } } : {}) };
+}
+function readCreditMoved(value: unknown): StoredChat['creditMoved'] | undefined {
+  const m = value as Record<string, unknown> | null;
+  const t = (x: unknown) => typeof x === 'string' && x.length <= 300;
+  return m && typeof m === 'object' && typeof m.at === 'number' && t(m.from) && t(m.to) && t(m.level) && t(m.why) ? { at: m.at, from: m.from as string, to: m.to as string, level: m.level as string, why: m.why as string } : undefined;
+}
+function readUserModel(value: unknown): StoredChat['userModel'] | undefined {
+  const u = value as Record<string, unknown> | null;
+  if (!u || typeof u !== 'object' || typeof u.model !== 'string' || !u.model || u.model.length > 128 || typeof u.engine !== 'string' || u.engine.length > 60) return undefined;
+  return { model: u.model, engine: u.engine as Harness, ...(typeof u.effort === 'string' && u.effort.length <= 10 ? { effort: u.effort as Effort } : {}) };
+}
+function readPick(value: unknown): StoredChat['pick'] | undefined {
+  const p = value as Record<string, unknown> | null;
+  if (!p || typeof p !== 'object' || typeof p.at !== 'number' || typeof p.chosen !== 'string' || !Array.isArray(p.skipped)) return undefined;
+  const skipped = (p.skipped as Record<string, unknown>[]).filter(x => x && typeof x.engine === 'string' && typeof x.why === 'string' && ['off', 'price', 'credit'].includes(String(x.kind))).slice(0, 8)
+    .map(x => ({ engine: x.engine as Harness, model: typeof x.model === 'string' ? x.model : null, kind: x.kind as 'off' | 'price' | 'credit', why: (x.why as string).slice(0, 300),
+      ...(typeof x.until === 'number' ? { until: x.until } : {}), ...(typeof x.readingAt === 'number' ? { readingAt: x.readingAt } : {}), ...(['reading', 'error', 'turn', 'none'].includes(String(x.source)) ? { source: x.source as 'reading' } : {}),
+      ...(['ok', 'pace', 'over', 'out', 'probation', 'unknown'].includes(String(x.state)) ? { state: x.state as 'out' } : {}) }));
+  return { at: p.at, chosen: p.chosen.slice(0, 200), skipped, ...(p.allOut === true ? { allOut: true as const } : {}) };
 }
 function readLastResult(value: unknown): StoredChat['lastResult'] | undefined {
   const v = value as Record<string, unknown> | null | undefined;
@@ -287,6 +320,9 @@ function valid(x: unknown): StoredChat | null {
     ...(c.waitsOn === 'user' || c.waitsOn === 'colleagues' ? { waitsOn: c.waitsOn } : {}),
     ...(c.waitsOnWork === true ? { waitsOnWork: true as const } : {}),
     ...(readCreditWait(c.creditWait) ? { creditWait: readCreditWait(c.creditWait)! } : {}),
+    ...(readCreditMoved(c.creditMoved) ? { creditMoved: readCreditMoved(c.creditMoved)! } : {}),
+    ...(readUserModel(c.userModel) ? { userModel: readUserModel(c.userModel)! } : {}),
+    ...(readPick(c.pick) ? { pick: readPick(c.pick)! } : {}),
     ...(c.unfinished === true ? { unfinished: true as const } : {}),
     ...(heldResults(c.heldResults) ? { heldResults: heldResults(c.heldResults)! } : {}),
   };

@@ -11,7 +11,7 @@ const chat = (id: string, role: string, p: Partial<ChatSummary> = {}): ChatSumma
 const reported = { report: { summary: 'ok' } } as Partial<AgentRun>;
 
 function world(chats: ChatSummary[], runs: AgentRun[], threads: Record<string, string> = {}): ReviewWorld {
-  return { chats, runs, profile: () => ({ activeVersion: 1, updatedAt: 7 }), threadOf: id => threads[id] ?? null };
+  return { chats, runs, threadOf: id => threads[id] ?? null };
 }
 
 describe('one review chat per piece of work', () => {
@@ -19,7 +19,7 @@ describe('one review chat per piece of work', () => {
   const rev = run('r1', 'rev', { agentId: 'sentinel', startedBy: 'app', reviewOf: 'i1', ...reported });
   const reviewer = chat('rev', 'sentinel', { run: rev });
   const implChat = chat('impl', 'artisan', { run: impl2 });
-  const ask = { role: 'sentinel', reviewOf: 'i2', cwd: '/repo', from: 'claude' as const };
+  const ask = { role: 'sentinel', reviewOf: 'i2', cwd: '/repo' };
 
   it('finds the review chat that already reported on the same implementation chat, on a later run of it too', () => {
     const w = world([implChat, reviewer], [impl1, impl2, rev]);
@@ -65,12 +65,10 @@ describe('one review chat per piece of work', () => {
 
   it('a reviewer that could not take the assignment is never named: a fresh one is the only way', () => {
     const runs = [impl1, impl2, rev];
-    // another folder, a changed role card, closed by the user, a stopped engine of another kind
+    // another folder, closed by the user (a changed card or another engine no longer matter, ADR 0352)
     expect(rootReviewer(world([implChat, reviewer], runs), { ...ask, cwd: '/elsewhere' })).toBeNull();
-    expect(rootReviewer({ ...world([implChat, reviewer], runs), profile: () => ({ activeVersion: 2, updatedAt: 7 }) }, ask)).toBeNull();
-    expect(rootReviewer({ ...world([implChat, reviewer], runs), profile: () => ({ activeVersion: 1, updatedAt: 8 }) }, ask)).toBeNull();
     expect(rootReviewer(world([implChat, chat('rev', 'sentinel', { run: rev, closedAt: 9, closedBy: 'user' })], runs), ask)).toBeNull();
-    expect(rootReviewer(world([implChat, chat('rev', 'sentinel', { run: rev, harness: 'codex', closedAt: 9, closedBy: 'auto', state: 'closed' })], runs), ask)).toBeNull();
+    expect(rootReviewer(world([implChat, chat('rev', 'sentinel', { run: rev, harness: 'codex', closedAt: 9, closedBy: 'auto', state: 'closed', agent: { id: 'sentinel', source: 'catalog', version: 9, revision: 99 } } as Partial<ChatSummary>)], runs), ask)?.id).toBe('rev');
     // closed by the app after its report: it reopens with the assignment, so it is still the work's review chat
     expect(rootReviewer(world([implChat, chat('rev', 'sentinel', { run: rev, closedAt: 9, closedBy: 'auto', state: 'closed' })], runs), ask)?.id).toBe('rev');
   });

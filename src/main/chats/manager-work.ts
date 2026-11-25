@@ -3,7 +3,12 @@
 // the run metrics, the Strategist's plan (ADR 0108: propose, update, approve or change).
 import crypto from 'node:crypto';
 import path from 'node:path';
-import type { ChatSummary, Effort, Harness } from '../../shared/contract';
+import type { ChatSummary, CreditWait, Effort, Harness } from '../../shared/contract';
+import { CreditMoveRefused, type MoveNote } from '../agents/credit-wait';
+import { clock } from '../../shared/credit-rule';
+
+/** «22:40» in the PC's time zone, for the lines the chat shows. */
+const clockLine = (at: number): string => clock(at, Date.now());
 import { errText, log } from '../log';
 import { ToolRefusal } from '../mcp/refusal';
 import type { UserTaskEvents, AgentRun, AgentRunOutcome } from '../../shared/agents';
@@ -39,6 +44,29 @@ export abstract class ManagerWork extends ManagerLifecycle {
       runId: r.s.run?.runId ?? null, taskVersion: r.s.run?.taskVersion ?? 1, proposalRevision: plan.at,
       // what is asked for, not how far it got: the started steps of a revision go on while the user decides (ADR 0342)
       proposalHash: proposalHash({ steps: plan.steps.map(({ outcome: _o, chatIds: _c, startedAt: _s, endedAt: _e, ...s }) => ({ ...s, state: 'todo' })), clarified: plan.clarified, doneWhen: plan.doneWhen, pcOnly: plan.pcOnly, ...(plan.doubts ? { doubts: plan.doubts } : {}) }) };
+  }
+
+  /** A plan that goes on in another chat (continueChat, ADR 0356): the successor holds it, with its phase; a proposal
+   *  waiting for the user is cancelled on the old chat and registered on the new one in the same job, so the user's
+   *  «Approva» answers the chat that works and nothing waits on a closed chat. The old chat keeps no plan. */
+  protected override movePlan(from: Rec, to: Rec): void {
+    const plan = from.s.plan;
+    if (!plan || to.s.plan) return;
+    // children still open report to the old chat (their parent), whose plan their reports move: the plan stays there
+    // (review of ADR 0356; neither re-parenting them nor moving the plan after they end is done: a known gap)
+    const open = [...this.chats.values()].filter(c => c.s.parentId === from.s.id && !c.s.closedAt).length;
+    if (open > 0) { log.info('chats', 'plan kept on the chat its children report to', { chat: from.s.id, data: { next: to.s.id, phase: plan.phase, children: open } }); return; }
+    to.s.plan = structuredClone(plan);
+    if (plan.phase === 'proposed') {
+      const store = this.coordination, old = this.planRequestKey(from, plan);
+      const prior = store.original(from.s.id, old.originalRequestId);
+      store.cancelPending(from.s.id, old.originalRequestId);
+      const key = { ...this.planRequestKey(to, plan), jobId: prior?.key.jobId ?? old.jobId };
+      store.register({ key, kind: 'plan', at: plan.at, payload: to.s.plan });
+    }
+    delete from.s.plan;
+    this.updated(from);
+    log.info('chats', 'plan moved to the chat that goes on', { chat: from.s.id, data: { next: to.s.id, phase: plan.phase } });
   }
 
   /** Full instructions plus an optimistic cursor; reading never marks them acknowledged. */
@@ -265,9 +293,16 @@ export abstract class ManagerWork extends ManagerLifecycle {
     const r = this.need(chatId), plan = r.s.plan;
     // the engines as they are now (ADR 0357): a job whose engine is stopped and whose role now starts on another one goes on
     // in a linked chat, its plan with it as it is (the approval too); one with children at work stays where they report
-    const on = plan && !r.session && ![...this.chats.values()].some(x => x.s.parentId === chatId && !x.s.closedAt) ? this.opts.engineNow?.({ ...r.s }) ?? null : null;
-    const moved = !!cwd?.trim() && !sameFolder(cwd, r.s.cwd);
-    if (on || moved) { await this.continueChat(chatId, { ask: false, ...(on ? { on } : {}), ...(moved ? { cwd } : {}), promptPrefix: PLAN_RESUMED }); return; }
+    const children = this.openChildren(chatId), moved = !!cwd?.trim() && !sameFolder(cwd, r.s.cwd);
+    const on = plan && !r.session && !children ? this.opts.engineNow?.({ ...r.s }) ?? null : null;
+    if (moved && children) throw new Error('Questa chat ha altre chat al lavoro che riferiscono a lei: cambia cartella quando hanno finito, oppure riprendi qui.');
+    if (on || moved) {
+      const next = await this.continueChat(chatId, { ask: false, ...(on ? { on } : {}), ...(moved ? { cwd } : {}), promptPrefix: PLAN_RESUMED });
+      const nr = this.chats.get(next.id);
+      // «Riprendi» ends a «Ferma», and only «Riprendi» does: a plan moved by anything else stays stopped
+      if (nr?.s.plan?.stopped) { const { stopped: _s, putAway: _p, ...open } = nr.s.plan; nr.s.plan = open; this.persist(); this.updated(nr); }
+      return;
+    }
     let resumed: StrategyPlan | undefined;
     if (plan?.stopped) { const { stopped: _s, putAway: _p, ...open } = plan; r.s.plan = resumed = open; this.persist(); this.updated(r); }
     try {
@@ -353,8 +388,10 @@ export abstract class ManagerWork extends ManagerLifecycle {
   notesWaiting(chatId: string): readonly string[] { return this.notesFor.get(chatId) ?? []; }
 
   /** An explicit assignment reuses the conversation, but creates a separately accountable task run. */
-  async assignTask(chatId: string, prompt: string, options: TaskAssignmentOptions = {}): Promise<void> {
-    const r = this.need(chatId);
+  /** Every check of an assignment before anything changes (assignTask, assignElsewhere): throws, or answers why the chat
+   *  cannot take it right now (busy); null = it can. */
+  private assignGuards(r: Rec, prompt: string, options: TaskAssignmentOptions): string | null {
+    const chatId = r.s.id;
     if (!prompt.trim()) throw new Error('Task prompt is required.');
     if (options.expectedVersion !== undefined && options.expectedVersion !== (r.s.run?.taskVersion ?? 1)) throw new Error('Task version changed; refresh before assigning.');
     const source = options.source ?? { kind: 'user' as const };
@@ -374,8 +411,23 @@ export abstract class ManagerWork extends ManagerLifecycle {
       const plan = r.s.parentId ? this.chats.get(r.s.parentId)?.s.plan : undefined;
       if (source.kind !== 'chat' || source.chatId !== r.s.parentId || !plan || !['running', 'done'].includes(plan.phase) || plan.stopped || !Number.isSafeInteger(options.planStep) || !plan.steps[options.planStep]) throw new Error('Invalid or unapproved parent plan step.');
     }
-    if (this.midTurn(r) || r.pending.size || r.s.queued || r.opening || r.releasing || r.switching || r.archiving || this.deliveries.has(chatId)) throw new ToolRefusal('The chat is busy or has queued work: nothing was assigned. Assign again once its current work has ended; a retry now gets the same answer.');
     if (options.reviewOf !== undefined) this.runs.checkLinks({ reviewOf: options.reviewOf }); // before the previous run ends
+    this.deliveryPolicy(options.deliveryPolicy, !!r.s.parentId);
+    if (options.doneWhen && (options.doneWhen.length > 12 || options.doneWhen.some(x => typeof x !== 'string' || !x.trim() || x.length > 300))) throw new Error('Invalid task criteria.');
+    return this.midTurn(r) || r.pending.size || r.s.queued || r.opening || r.releasing || r.switching || r.archiving || this.deliveries.has(chatId)
+      ? 'The chat is busy or has queued work: nothing was assigned. Assign again once its current work has ended; a retry now gets the same answer.' : null;
+  }
+
+  async assignTask(chatId: string, prompt: string, options: TaskAssignmentOptions = {}): Promise<void> {
+    const r = this.need(chatId), source = options.source ?? { kind: 'user' as const };
+    const busy = this.assignGuards(r, prompt, options);
+    if (busy) throw new ToolRefusal(busy);
+    // its role's card as it is now (ADR 0352): a card changed since it started never stops the work
+    // held as a switch: no mail tick or message starts a turn while the engine relaunches on the new tools
+    const adopting = this.adoptCard(r).then(() => null);
+    r.switching = adopting;
+    try { await adopting; } finally { if (r.switching === adopting) r.switching = undefined; }
+    if (this.midTurn(r) || r.pending.size || r.s.queued || this.deliveries.has(chatId)) throw new ToolRefusal('The chat is busy or has queued work: nothing was assigned. Assign again once its current work has ended; a retry now gets the same answer.');
     const freshBoundary = this.freshReady(r, Date.now());
     // the task's preset (ADR 0336, agent_assign_task): the switch comes after every guard above, so a refused
     // assignment never leaves the chat on another model; put back when the assignment itself still fails
@@ -390,6 +442,9 @@ export abstract class ManagerWork extends ManagerLifecycle {
     finally { r.freshAssignmentRun = undefined; }
   }
 
+  /** A role chat given new work takes its card as it is now (ChatManager.adoptCard, ADR 0352). */
+  protected abstract adoptCard(r: Rec): Promise<void>;
+
   /** The chat's settings (ChatManager.set): effort null = back to the engine's default. */
   abstract set(chatId: string, patch: { model?: string; effort?: Effort | null }): Promise<ChatSummary>;
 
@@ -400,108 +455,135 @@ export abstract class ManagerWork extends ManagerLifecycle {
    *  task starts in a linked chat that inherits its context (the hand-off), its role, permissions, parent, plan step and
    *  history. The same guards as assignTask. */
   async assignElsewhere(chatId: string, prompt: string, options: TaskAssignmentOptions, to: { cwd?: string; place?: 'here' | 'copy'; on?: { harness: Harness; model: string | null; effort: Effort | null; route?: string } }): Promise<ChatSummary> {
-    const r = this.need(chatId), source = options.source ?? { kind: 'user' as const };
-    if (!prompt.trim()) throw new Error('Task prompt is required.');
+    const r = this.need(chatId);
     if (r.s.continuedBy) throw new ToolRefusal(`This chat goes on in «${r.s.continuedBy.title}» (${r.s.continuedBy.id}): assign there.`);
-    if (options.expectedVersion !== undefined && options.expectedVersion !== (r.s.run?.taskVersion ?? 1)) throw new Error('Task version changed; refresh before assigning.');
-    if (!ownerSource(source) && this.closedByUser(r)) throw new Error('The user closed this chat and cancelled its work: only the user can reopen it. Start a new chat for new work.');
-    if (source.kind === 'chat' && source.chatId !== this.openOrchestrator()?.s.id && source.chatId !== r.s.parentId) throw new Error('Only the owning Orchestrator or parent can assign this chat.');
-    if (this.midTurn(r) || r.pending.size || r.s.queued || r.opening || r.releasing || r.switching || r.archiving || this.deliveries.has(chatId)) throw new ToolRefusal('The chat is busy or has queued work: nothing was assigned. Assign again once its current work has ended; a retry now gets the same answer.');
-    if (options.planStep !== undefined) {
-      const plan = r.s.parentId ? this.chats.get(r.s.parentId)?.s.plan : undefined;
-      if (!plan || !['running', 'done'].includes(plan.phase) || plan.stopped || !plan.steps[options.planStep]) throw new Error('Invalid or unapproved parent plan step.');
-    }
-    const next = await this.continueChat(chatId, { ...to, ask: false, task: { prompt, options } });
-    if (options.planStep !== undefined && r.s.parentId) this.planDelegated(r.s.parentId, options.planStep, [next.id]);
-    if (r.userTaskEvents) { r.userTaskEvents.acknowledgedSeq = r.userTaskEvents.latestSeq; this.persist(true); }
-    return next;
+    if (this.continuing.has(chatId)) throw new ToolRefusal('The chat is already going on in another one: nothing was assigned. Read agent_children or app_chats, then assign to the chat that goes on.');
+    const at = this.assignGuards(r, prompt, options);
+    if (at) throw new ToolRefusal(at);
+    if (!r.s.run) throw new Error('Only role chats can receive tasks.');
+    if (this.openChildren(chatId)) throw new ToolRefusal('This chat has chats at work under it, which report to it: it goes on elsewhere once they have ended. Assign here without another folder, or wait for them.');
+    if (r.heldResult) { this.releaseResult(r); if (r.heldResult) throw new Error('The previous result awaits an Orchestrator; deliver it before assigning again.'); }
+    const route = to.on?.route, was = r.s.run.presetChoice;
+    const next = await this.continueChat(chatId, { ...to, ask: false, task: true });
+    const nr = this.need(next.id), context = nr.taskContext ?? '';
+    delete nr.taskContext;
+    const { expectedVersion: _v, expectedEventSeq: _e, ...rest } = options; void _v; void _e;
+    const preset = options.preset ? (({ switchTo: _s, ...p }) => p)(options.preset) : to.on && was ? { choice: { ...was, ...(route ? { route } : {}) }, model: to.on.model } : undefined;
+    const notes = next.folderNotes?.length ? `\n\nCartella di lavoro (dall’app):\n${next.folderNotes.map(n => `- ${n}`).join('\n')}` : '';
+    await this.assignTask(next.id, `${context}${notes}\n\nNuovo compito:\n${prompt}`, { ...rest, ...(preset ? { preset } : {}) });
+    return { ...nr.s };
   }
+  /** Chats still open under this one: they report to it. */
+  protected openChildren(chatId: string): boolean { return [...this.chats.values()].some(x => x.s.parentId === chatId && !x.s.closedAt); }
 
-  /** Its role's card names another model for the preset of a chat that waits on its credits (ADR 0346; when:
-   *  agents/credit-wait.ts): the chat switches to it and goes on from where it was, told by the app. Its run names the
-   *  model it goes on with, so its estimate rests on that model's runs. The wait ends once the app's message is
-   *  delivered; a message that cannot be sent leaves the chat waiting and says why. False: it does not wait any
-   *  more, or it works. */
-  async creditResume(chatId: string, to: { model: string | null; effort: Effort | null }): Promise<boolean> {
+  /** A chat that waits on its credits goes on in its level on the same engine (ADR 0354; when: agents/credit-wait.ts): it
+   *  switches to the level's model (or keeps the one it stopped on, now free) and goes on from where it was, told by
+   *  the app. Its run names the model it goes on with. A model the engine refuses is a CreditMoveRefused (that model is
+   *  skipped next time); a message that cannot be sent is a temporary failure. False: it does not wait any more, or it
+   *  works. */
+  async creditResume(chatId: string, to: { model: string | null; effort: Effort | null }, note: MoveNote): Promise<boolean> {
     const r = this.chats.get(chatId), w = r?.s.creditWait;
     if (!r || !w || r.s.closedAt || r.session?.busy || r.working) return false;
-    const from = w.model ?? '';
-    await this.set(chatId, { model: to.model ?? '' });
-    // the preset's effort, when this model takes it: a refusal keeps the chat's own (set says so) and never holds the work
+    if ((to.model ?? '') !== (r.choice.model ?? '')) {
+      try { await this.set(chatId, { model: to.model ?? '' }); } catch (e) { throw new CreditMoveRefused(errText(e)); }
+    }
+    // the level's effort for this model, when it takes it: a refusal keeps the chat's own (set says so) and never holds the work
     if ((to.effort ?? null) !== (r.choice.effort ?? null)) await this.set(chatId, { effort: to.effort }).catch(e => log.warn('chats', 'preset effort not applied after a credit wait', { chat: chatId, cause: errText(e), hint: 'the chat goes on with its own effort' }));
     if (this.chats.get(chatId) !== r || r.s.closedAt || r.s.creditWait !== w) return false;
     if (r.s.run && r.s.run.endedAt === undefined) { r.s.run.model = to.model; this.runSave(); }
-    this.addItem(r, sysItem('creditResumed', { from, to: to.model ?? '' }, 'info'), false);
+    r.s.creditMoved = { at: Date.now(), ...note };
+    this.addItem(r, sysItem('creditMoved', { ...note }, 'info'), false);
     this.persist();
     this.updated(r);
-    const text = `${APP_EVENT_LABEL}\nIl tuo ultimo turno si è fermato perché i crediti ${from ? `di ${from}` : 'del tuo modello'} erano finiti. L’app ti ha passato al modello successivo del livello del tuo ruolo (o l’utente ha cambiato i suoi modelli): ora giri su ${to.model ?? 'il modello predefinito del motore'}. Riprendi il compito da dove eri, senza rifare quello che è già fatto.${r.s.delegation && !r.s.delegation.result ? ' Quando hai finito consegna con agent_report.' : ''}`;
-    try { await this.send(chatId, text, undefined, false, 'second-brain', false, { kind: 'app' }); }
-    catch (e) { this.creditFailed(r, e); throw e; }
+    const text = `${APP_EVENT_LABEL}\nIl tuo ultimo turno si è fermato perché il limite di ${note.from} era finito. L’app ti ha fatto ripartire su ${note.to}, nello stesso livello (${note.level}) del tuo ruolo: ${note.why}. Riprendi il compito da dove eri, senza rifare quello che è già fatto.${r.s.delegation && !r.s.delegation.result ? ' Quando hai finito consegna con agent_report.' : ''}`;
+    await this.send(chatId, text, undefined, false, 'second-brain', false, { kind: 'app' });
     // delivered: the wait is over (the turn's start usually ended it already)
     if (r.s.creditWait === w) { delete r.s.creditWait; this.persist(); this.updated(r); }
     return true;
   }
 
-  /** The card of a waiting chat's role moved to another engine (ADR 0346): a chat never changes engine, so its work
-   *  goes on in a new chat of the same role on the card's engine and model: «Riprendi» with the app's own hand-off note
-   *  (the old engine has no credit to write one), the same child of the same parent, contract and worktree. The old
-   *  chat then owes nothing (continuedBy): its successor reports. A refusal (a writing child's worktree with uncommitted
-   *  work, a parent that is gone) leaves the chat waiting and says why. */
-  async creditContinue(chatId: string, on: { engine: Harness; model: string | null; effort: Effort | null; route?: string }): Promise<boolean> {
+  /** A chat that waits on its credits goes on on another engine (ADR 0354): a chat never changes engine, so its work goes
+   *  on in a new chat of the same role on that engine and model: «Riprendi» with the app's own hand-off note (the old
+   *  engine has no credit to write one), the same child of the same parent, contract, worktree and uncommitted changes
+   *  (sameWorktree: the successor takes the predecessor's worktree, whose process ends first). The old chat then owes
+   *  nothing (continuedBy): its successor reports, once. A guard that refuses (a chat the user closed, a parent that is
+   *  gone) is a CreditMoveRefused. */
+  async creditContinue(chatId: string, on: { engine: Harness; model: string | null; effort: Effort | null; route?: string }, note: MoveNote): Promise<boolean> {
     const r = this.chats.get(chatId), w = r?.s.creditWait;
     if (!r || !w || r.s.closedAt || r.s.continuedBy || r.session?.busy || r.working) return false;
     let next: ChatSummary;
     try {
-      next = await this.continueChat(chatId, { allowStart: false, ask: false, on: { harness: on.engine, model: on.model, effort: on.effort, ...(on.route ? { route: on.route } : {}) },
-        promptPrefix: w.why === 'start' ? `${APP_EVENT_LABEL}\nLa chat «${r.s.title}» non è partita: il suo motore ha dato errore. L’app l’ha passata al motore successivo: il lavoro comincia qui.`
-          : `${APP_EVENT_LABEL}\nLa chat «${r.s.title}» si è fermata perché i crediti ${w.model ? `di ${w.model}` : 'del suo modello'} erano finiti. L’app l’ha passata al modello successivo del livello del ruolo, su un altro motore (o l’utente ha cambiato i modelli del ruolo): il lavoro continua qui, da dove era.` });
-    } catch (e) { this.creditFailed(r, e); throw e; }
+      next = await this.continueChat(chatId, { allowStart: false, ask: false, sameWorktree: true, on: { harness: on.engine, model: on.model, effort: on.effort, ...(on.route ? { route: on.route } : {}) },
+        // one that never started begins there with its whole first message (ADR 0357): there is nothing to hand off
+        ...(w.why === 'start' && w.prompt ? { firstPrompt: w.prompt } : {}),
+        promptPrefix: w.why === 'start' ? `${APP_EVENT_LABEL}\nLa chat «${r.s.title}» non è partita: il suo motore (${note.from}) ha dato errore. L’app ha passato il lavoro a ${note.to}: comincia qui.` : `${APP_EVENT_LABEL}\nLa chat «${r.s.title}» si è fermata perché il limite di ${note.from} era finito. L’app ha passato il lavoro a ${note.to}, nello stesso livello (${note.level}) del ruolo, su un altro motore: ${note.why}. Il lavoro continua qui, da dove era: stessa cartella, stesse modifiche non committate.` });
+    } catch (e) {
+      if (/closed this chat|non c’è più|already goes on|Ripresa annullata/i.test(errText(e))) throw new CreditMoveRefused(errText(e));
+      throw e;
+    }
     if (next.id === chatId) return false;
     delete r.s.creditWait;
+    const nr = this.chats.get(next.id);
+    if (nr) { nr.s.creditMoved = { at: Date.now(), ...note }; this.addItem(nr, sysItem('creditMoved', { ...note }, 'info'), false); this.updated(nr); }
+    this.addItem(r, sysItem('creditMoved', { ...note }, 'info'), false);
     this.persist();
     this.updated(r);
     return true;
   }
 
-  /** Announces the automatic move of a waiting chat (ADR 0348, agents/credit-wait.ts): the next model of its level, at
-   *  `next.at`; the chat shows it with «Annulla» (creditStay). */
-  creditPlan(chatId: string, next: { card: string; at: number }, on: { engine: Harness; model: string | null }): void {
+  /** Announces the automatic move of a waiting chat (ADR 0348, agents/credit-wait.ts): to `on` at `next.at`, with where
+   *  from, the level and why; the chat shows it with «Annulla» (creditStay). */
+  creditPlan(chatId: string, next: { card: string; at: number }, on: { engine: Harness; model: string | null }, note: MoveNote): void {
     const r = this.chats.get(chatId), w = r?.s.creditWait;
     if (!r || !w || w.stay || w.next?.card === next.card) return;
     r.s.creditWait = { ...w, next };
-    this.addItem(r, sysItem('creditSwitchSoon', { to: on.model ?? '', engine: engineOf(on.engine)?.label ?? on.engine, secs: Math.round((next.at - Date.now()) / 1000), card: next.card }, 'info'), false);
+    delete r.s.creditWait.waiting;
+    this.addItem(r, sysItem('creditSwitchSoon', { to: on.model ?? '', engine: engineOf(on.engine)?.label ?? on.engine, secs: Math.round((next.at - Date.now()) / 1000), card: next.card, from: note.from, level: note.level, why: note.why }, 'info'), false);
     this.persist();
     this.updated(r);
   }
 
-  /** «Annulla» on an announced move (ADR 0348): the chat keeps waiting; it moves when its role's levels give another
-   *  model, or when the user writes to it. False: no move was announced. */
+  /** «Annulla» on an announced move (ADR 0348): the chat keeps waiting; it moves when its role's levels change, or when
+   *  the user writes to it. False: no move was announced. */
   creditStay(chatId: string): boolean {
     const r = this.chats.get(chatId), w = r?.s.creditWait;
     if (!r || !w?.next) return false;
     const { next, ...rest } = w;
-    r.s.creditWait = { ...rest, card: next.card, stay: true };
+    r.s.creditWait = { ...rest, card: rest.card ?? next.card, stay: true };
     this.addItem(r, sysItem('creditSwitchCancelled', undefined, 'info'), false);
     this.persist();
     this.updated(r);
     return true;
   }
 
-  /** Records the card a waiting chat already answered (agents/credit-wait.ts): it moves again only when the card names
-   *  something else. With `engine`: the card moved to an engine this chat cannot follow (its parent may not start it),
-   *  and the chat says so. */
-  creditCard(chatId: string, card: string, engine?: string): void {
+  /** The key of the role's level lists the «Annulla» holds on (agents/credit-wait.ts). */
+  creditHold(chatId: string, key: string): void {
     const r = this.chats.get(chatId), w = r?.s.creditWait;
-    if (!r || !w || w.card === card) return;
-    r.s.creditWait = { ...w, card };
-    if (engine) this.addItem(r, sysItem('creditOtherEngine', { role: r.s.agent?.name ?? '', engine: engineOf(engine as Harness)?.label ?? engine, own: engineOf(r.s.harness)?.label ?? r.s.harness }, 'warn'), false);
+    if (!r || !w || w.stay !== true) return;
+    r.s.creditWait = { ...w, stay: key };
+    this.persist();
+  }
+
+  /** The whole level of a waiting chat is out: which models and when the first comes back, said once per change. */
+  creditWaiting(chatId: string, waiting: NonNullable<CreditWait['waiting']>): void {
+    const r = this.chats.get(chatId), w = r?.s.creditWait;
+    if (!r || !w) return;
+    const { next: _n, ...rest } = w; void _n;
+    r.s.creditWait = { ...rest, waiting };
+    this.addItem(r, sysItem('creditAllOut', { out: waiting.out.join(' · '), first: waiting.first ? clockLine(waiting.first) : '' }, 'warn'), false);
     this.persist();
     this.updated(r);
   }
 
-  private creditFailed(r: Rec, e: unknown): void {
-    if (this.chats.get(r.s.id) !== r || r.s.closedAt || !r.s.creditWait) return;
-    this.addItem(r, sysItem('creditMoveFailed', { error: errText(e) }, 'warn'), false);
+  /** A move failed (agents/credit-wait.ts): recorded on the wait; the chat says why, and what happens next. */
+  creditFailed(chatId: string, f: { card: string; error: string; permanent: boolean; nextAt: number | null; last: boolean }): void {
+    const r = this.chats.get(chatId), w = r?.s.creditWait;
+    if (!r || r.s.closedAt || !w) return;
+    const was = (w.failed ?? []).find(x => x.card === f.card);
+    const row = { card: f.card, n: (was?.n ?? 0) + 1, at: Date.now(), nextAt: f.nextAt, permanent: f.permanent, error: f.error.slice(0, 300) };
+    const { next: _n, ...rest } = w; void _n;
+    r.s.creditWait = { ...rest, failed: [...(w.failed ?? []).filter(x => x.card !== f.card), row].slice(-16) };
+    this.addItem(r, sysItem('creditMoveFailed', { error: f.error, to: f.card.slice(f.card.indexOf(':') + 1) || f.card, again: f.nextAt ? clockLine(f.nextAt) : '' }, 'warn'), false);
     this.persist();
     this.updated(r);
   }

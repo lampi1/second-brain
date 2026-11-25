@@ -45,7 +45,7 @@ export const sameFolder = (a: string, b: string): boolean => samePath(a, b);
 /** One folder is the other or inside it: two chats that write there can touch the same files. */
 export const overlapping = (a: string, b: string): boolean => within(real(a), real(b)) || within(real(b), real(a));
 
-/** A writer is determined by its final narrowed tool classes, never the role's display name. Unknown policies and
+/** A writer is determined by the tool classes its part needs (the contract's), never the role's display name. Unknown policies and
  * external MCP tools can write; plan mode alone does not make those external tools read-only. */
 export function needsIsolatedWorktree(policy: AgentPolicy | null): boolean {
   return !policy?.tools || policy.tools.allow.some(c => ['edit', 'shell', 'brain-write', 'mcp'].includes(c));
@@ -251,19 +251,24 @@ export class DelegateWorktrees {
     return [`La cartella ${cwd} ha ${lines.length} ${lines.length === 1 ? 'modifica non committata' : 'modifiche non committate'} (${lines.slice(0, 5).map(l => l.slice(3)).join(', ')}${lines.length > 5 ? ', …' : ''}). Restano dove sono: non perderle, non spostarle, niente stash, checkout, reset o clean su di loro.`];
   }
 
-  prepare = async (parent: ChatSummary, req: NewChat, policy: AgentPolicy | null, continuationOf?: string): Promise<{ cwd: string; parentRunId: string | undefined; parentTaskVersion: number | undefined; notes?: string[]; isolated?: boolean; bind?: (childId: string) => void }> => {
+  prepare = async (parent: ChatSummary, req: NewChat, policy: AgentPolicy | null, continuationOf?: string, inherit?: boolean): Promise<{ cwd: string; parentRunId: string | undefined; parentTaskVersion: number | undefined; notes?: string[]; isolated?: boolean; bind?: (childId: string) => void }> => {
     const provenance = { parentRunId: parent.run?.runId, parentTaskVersion: parent.run?.taskVersion };
     const cwd = req.cwd;
     if (!needsIsolatedWorktree(policy)) return { cwd, ...provenance };
-    // a child that goes on in its own worktree keeps it, with its base and its branch: no second copy
+    // a chat that goes on in its own worktree keeps it, with its base and its branch: no second copy. inherit (ADR 0354): a
+    // chat stopped on its credit limit goes on in a successor on another engine with the same worktree, uncommitted
+    // changes included; the predecessor works no more (its process ends), so one writer
     const kept = continuationOf === undefined ? undefined : this.allocations.get(real(cwd));
-    if (kept && kept.childId === continuationOf && kept.parentId === parent.id) return { cwd, ...provenance, isolated: true, notes: await this.uncommitted(cwd), bind: childId => {
-      const owned: IsolatedDelegation = { ...kept, childId, ...provenance, parentCwd: parent.cwd };
-      if (!this.valid(owned)) throw new Error('Invalid host-owned isolation provenance.');
-      const next = new Map(this.allocations); next.set(real(cwd), owned);
-      if (this.file) writeLocal(this.file, [...next.values()]);
-      this.allocations.set(real(cwd), owned);
-    } };
+    if (kept && kept.childId === continuationOf) {
+      if (!isDir(kept.cwd)) throw new Error('The worktree of the chat to continue is gone; delegate a fresh child.');
+      return { cwd: kept.cwd, ...provenance, isolated: true, notes: inherit ? [] : await this.uncommitted(cwd), bind: childId => {
+        const owned: IsolatedDelegation = inherit ? { ...kept, childId } : { ...kept, childId, ...provenance, parentId: parent.id, parentCwd: parent.cwd };
+        if (!this.valid(owned)) throw new Error('Invalid host-owned isolation provenance.');
+        const next = new Map(this.allocations); next.set(real(cwd), owned);
+        if (this.file) writeLocal(this.file, [...next.values()]);
+        this.allocations.set(real(cwd), owned);
+      } };
+    }
     // in the folder itself (ADR 0358): nothing is copied, nothing is refused
     if (req.place !== 'copy') return { cwd, ...provenance, notes: await this.uncommitted(cwd) };
     // One checkout is verified once, through one session (each checkout's policy read once): each Git spawn costs up to

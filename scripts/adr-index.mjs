@@ -27,7 +27,13 @@ function statusOf(header) {
   const by = from < 0 ? [] : [...new Set([...named.matchAll(/\b(0\d{3})\b/g)].map(m => m[1]))];
   const state = /^partly superseded/i.test(own) ? own.slice(own.indexOf(';') + 1).trim() : own;
   const word = /^[A-Za-z]+/.exec(state)?.[0].toLowerCase() ?? 'not stated';
-  return by.length ? `${word}, partly superseded by ${by.join(', ')}` : word;
+  // "amended by 0338", "Amended by: ADR 0316, ADR 0322": the records that amend it, as the index lists them
+  // (every clause; only the numbers in its list, never one inside a note in brackets or an owner's quote)
+  const ITEM = String.raw`(?:ADR\s+)?0\d{3}(?:\s*\([^)]*\))?`;
+  const lists = [...para.matchAll(new RegExp(String.raw`\bamended by:?\s+(${ITEM}(?:\s*(?:,|\band\b)\s*${ITEM})*)`, 'gi'))].map(m => m[1].replace(/\([^)]*\)/g, ''));
+  const amended = [...new Set(lists.flatMap(l => [...l.matchAll(/\b(0\d{3})\b/g)].map(m => m[1])))];
+  const base = by.length ? `${word}, partly superseded by ${by.join(', ')}` : word;
+  return amended.length ? `${base}; amended by ${amended.join(', ')}` : base;
 }
 
 /** The title without its "ADR 0012 · " / "0012 — " / "ADR 0012: " prefix. */

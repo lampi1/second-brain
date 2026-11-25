@@ -1,6 +1,6 @@
 # ADR 0014 · Long chats: context size, hand-off note and "Riprendi" in a new chat
 
-Date: 2026-10-11 · Status: accepted · the automatic hand-off over the threshold is replaced by ADR 0031 (compaction window per process, invisible continuation of cold chats)
+Date: 2026-10-11 · Status: accepted · the automatic hand-off over the threshold is replaced by ADR 0031 (compaction window per process, invisible continuation of cold chats); partly superseded by [ADR 0352](0352-any-engine-reaches-any-engine.md) (an agent asks a stopped chat on any engine for its note, unless that engine cannot run)
 
 ## Context
 The user's costs (07-10/10/2026, `ops/tools/cost.mjs`): about 80% of the Claude spend was re-reading context, and

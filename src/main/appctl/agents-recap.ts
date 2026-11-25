@@ -14,6 +14,7 @@ import type { ChatItem, ChatSummary, PendingRequest } from '../../shared/contrac
 import type { AgentRun } from '../../shared/agents';
 import { heldOnly } from '../../shared/question-ladder';
 import { askLine } from './digest';
+import { clock } from '../../shared/credit-rule';
 
 interface Tool { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(a: Record<string, unknown>): string }
 export interface AgentsRecapDeps {
@@ -104,7 +105,17 @@ export function isAgentsRecap(text: string): boolean {
 
 const creditWaits = (c: ChatSummary): boolean => !!c.creditWait && !c.closedAt && !c.queued && c.state !== 'running' && c.state !== 'starting' && c.state !== 'waiting';
 /** What a chat out of credits waits for, in the user's words. */
-const creditLine = (c: ChatSummary): string => c.creditWait?.why === 'start' ? `il suo motore non è partito: passa da sola al motore successivo di ${c.agent?.name ?? 'questo ruolo'}` : `crediti finiti${c.creditWait?.model ? ` (${c.creditWait.model})` : ''}: riparte da sola su un altro modello del livello di ${c.agent?.name ?? 'questo ruolo'} con limite, o quando ne cambi i modelli`;
+const creditLine = (c: ChatSummary): string => {
+  const w = c.creditWait, role = c.agent?.name ?? 'questo ruolo';
+  if (w?.why === 'start' && !w.next) return `il suo motore non è partito: passa da sola al motore successivo di ${role}`;
+  const head = w?.why === 'start' ? 'il suo motore non è partito' : `limite finito${w?.model ? ` (${w.model})` : ''}`;
+  if (w?.next) return `${head}: riparte da sola su ${w.next.card.slice(w.next.card.indexOf(':') + 1) || 'il predefinito'} (${w.next.card.split(':')[0]}), stesso livello`;
+  if (w?.waiting) return `${head}: tutti i modelli del livello di ${role} sono finiti (${w.waiting.out.join(' · ')})${w.waiting.first ? `; il primo torna alle ${clock(w.waiting.first, Date.now())}, poi riparte da sola` : '; riparte da sola appena se ne libera uno'}`;
+  if (w?.stay) return `${head}: in attesa (hai premuto Annulla); riparte quando cambi i modelli di ${role} o le scrivi`;
+  return `${head}: riparte da sola sul primo modello con spazio dello stesso livello di ${role}`;
+};
+/** The last automatic move of a chat out of a spent plan (ADR 0354), in the recap: from, to, level, why. */
+export const movedLine = (c: ChatSummary): string | null => c.creditMoved ? `cambiato modello: da ${c.creditMoved.from} a ${c.creditMoved.to}, livello ${c.creditMoved.level} (${c.creditMoved.why})` : null;
 export function markOf(c: ChatSummary, asks: PendingRequest[]): Mark {
   // a question still with an agent is not the user's (ADR 0344)
   if (asks.length || c.state === 'waiting' && !heldOnly(c).length) return 'wait';
@@ -160,14 +171,17 @@ export function agentsRecap(d: AgentsRecapDeps, o: { detail?: boolean } = {}): s
     else if (m === 'run' && s.now) rows.push(`- ▸ ora: ${s.now}`);
     else if (m === 'done' && report) rows.push(`- 📄 ${report}`);
     else if (m === 'done' && s.next) rows.push(`- ○ poi: ${s.next}`);
-    const sub = (kids.get(c.id) ?? []).map(k => { const km = markOf(k, asks.get(k.id) ?? []); return `  - ${ICON[km]} ${roleOf(k)}${k.title} — ${LABEL[km]}`; });
+    const moved = movedLine(c);
+    if (moved) rows.push(`- ↪ ${moved}`);
+    const sub = (kids.get(c.id) ?? []).flatMap(k => { const km = markOf(k, asks.get(k.id) ?? []), mv = movedLine(k);
+      return [`  - ${ICON[km]} ${roleOf(k)}${k.title} — ${LABEL[km]}${creditWaits(k) ? `: ${creditLine(k)}` : ''}`, ...(mv ? [`    - ↪ ${mv}`] : [])]; });
     return [head, ...rows, ...sub];
   };
 
   // one line: a delegate waiting for the user makes its parent wait (its question stays the parent's, ADR 0083)
   const lineOf = (c: ChatSummary, m: Mark): string | null => {
     const rs = asks.get(c.id) ?? [];
-    const what = m === 'wait' ? (rs.length && !c.parentId ? `aspetta te: ${one(askLine(rs[0]!), 90)}` : creditWaits(c) ? `aspetta te: ${creditLine(c)}` : 'aspetta te')
+    const what = m === 'wait' ? (rs.length && !c.parentId ? `aspetta te: ${one(askLine(rs[0]!), 90)}` : creditWaits(c) ? creditLine(c) : 'aspetta te')
       : m === 'error' ? 'ferma su un errore'
       : m === 'queue' ? 'in coda'
       : m === 'run' ? (() => { const s = c.parentId ? { done: [] } as Steps : stepsOf(d.items(c.id)); return one(s.now ?? s.done.at(-1), 70) || 'al lavoro'; })()

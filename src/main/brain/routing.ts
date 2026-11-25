@@ -20,6 +20,7 @@ import { engineLabel, engineOf, engines } from '../engines/registry';
 import { availableEngine } from '../../shared/engine-readiness';
 import { engineReadiness } from '../engines/readiness';
 import { brainFile } from '../rules/tools';
+import { modelRefusal } from '../../shared/model-fit';
 
 export const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 /** The app's own areas: their queued work waits behind the other chats' (ADR 0036). */
@@ -59,7 +60,12 @@ const takesEffort = (h: Harness): boolean => !!engineOf(h)?.caps.effort;
 /** The default effort applies to Claude only: another engine that takes an effort (Cursor, through its thought_level)
  *  keeps its own default unless the chat or its role card names one. */
 const defaultEffort = (h: Harness, defaults: { effort: Effort | null }): Effort | null => h === 'claude' ? defaults.effort : null;
-const looksClaude = (m: string | null): boolean => /\b(claude|opus|sonnet|haiku|fable|mythos)\b/i.test(String(m ?? '').replace(/[-_.]/g, ' '));
+/** Why a model cannot start on an engine (shared/model-fit.ts, ADR 0356): the engine's live list decides; the registry's
+ *  harness only when the engine listed nothing yet. */
+const refusalOn = (harness: Harness, model: string | null, m: RegistryModel | null, known?: KnownModels): string | null =>
+  modelRefusal(harness, model, known?.(harness) ?? null, m?.harness ?? null, m ? [m.id, ...(m.aliases ?? [])] : []);
+/** The ids each engine listed live (ADR 0256); null = none yet. */
+export type KnownModels = (h: Harness) => readonly string[] | null;
 
 /** Explicit null selects the engine default; omission takes the user's defaults. Neither grants permission. */
 export interface RouteAsk { harness?: Harness; model?: string | null; effort?: Effort | null; reason?: string }
@@ -71,7 +77,7 @@ export type Resolved = { harness: Harness; model: string | null; effort: Effort 
 /** Harness, model and effort of a new chat that no role decides: the user's defaults (for the engine named, if any)
  *  on an engine this caller may start now, or what was named (an override). The hard rules hold for everything named;
  *  max only when asked, with a reason. */
-export function resolve(ask: RouteAsk, defaults: RouteDefaults, reg: ModelRegistry | null, canRun: (h: Harness) => boolean = () => true): Resolved {
+export function resolve(ask: RouteAsk, defaults: RouteDefaults, reg: ModelRegistry | null, canRun: (h: Harness) => boolean = () => true, known?: KnownModels): Resolved {
   // the user's engine when it may run and is ready, else another ready one (engine off, Claude <-> Cursor off)
   const fallback = availableEngine(engines().map(e => e.id).filter(canRun), defaults.harness, engineReadiness());
   if (!ask.harness && !fallback) return { error: 'Nessun motore disponibile: verifica installazione, accesso e impostazioni.' };
@@ -85,8 +91,8 @@ export function resolve(ask: RouteAsk, defaults: RouteDefaults, reg: ModelRegist
   let effort = ask.effort !== undefined ? ask.effort : (!takesEffort(harness) ? null : sameEngine ? base.effort : defaultEffort(harness, defaults));
   // an effort nobody named that the chosen model lacks is dropped (the CLI's default), never an error
   if (!ask.effort && effort && m && !(m.efforts ?? []).includes(effort)) effort = null;
-  if (model && m && m.harness !== harness) return { error: `${m.id} gira solo su ${m.harness}, non su ${harness}` };
-  if (harness !== 'claude' && looksClaude(model)) return { error: 'un modello Claude gira solo sull’harness claude' };
+  const refused = refusalOn(harness, model, m, known);
+  if (refused) return { error: refused };
   // a model the registry does not know is taken as it is (ADR 0256: models.json only overrides prices, tiers and labels,
   // never an allow-list): the engine's live list offers it, and the CLI itself refuses an id it cannot run
   if (ask.effort && !takesEffort(harness)) return { error: `lo sforzo non vale per ${engineLabel(harness)}: scegli il modello` };
@@ -116,6 +122,8 @@ export interface RouteRequest {
   canRun?: (h: Harness) => boolean;
   /** the role the chat starts from (ADR 0083): it decides; absent = the user's defaults */
   agent?: AgentChoice;
+  /** the ids each engine listed live (shared/model-fit.ts): a model on them runs there, whatever models.json says */
+  known?: KnownModels;
 }
 /** The role a chat starts from, as the catalog resolved it: engine, model (null = the engine's default), effort, tier,
  *  and who launched it; stats = its own results line (agentStatsLine), shown as the route's reason. */
@@ -144,8 +152,8 @@ export function routeAgent(req: RouteRequest & { agent: AgentChoice }, reg: Mode
   let effort = a.effort;
   const from: RouteAgent['modelFrom'] = !model ? 'engine' : a.tier ? 'tier' : 'role';
   const m = modelRow(model, reg);
-  if (model && m && m.harness !== a.harness) return { error: `${m.id} gira solo su ${m.harness}, non su ${a.harness}` };
-  if (a.harness !== 'claude' && looksClaude(model)) return { error: 'un modello Claude gira solo sull’harness claude' };
+  const refused = refusalOn(a.harness, model, m, req.known);
+  if (refused) return { error: refused };
   if (effort && !takesEffort(a.harness)) effort = null;
   const reason = [`ruolo ${a.name} v${a.version}`, CHOSEN_BY[a.chosenBy], a.tier ? `livello ${a.tier}` : null, a.stats ?? null].filter(Boolean).join(' · ').slice(0, 300);
   return { harness: a.harness, model, effort, route: { policy: 'routing', version: null, source: 'agent', reason, kind, area, at: now,
@@ -160,7 +168,7 @@ export function routeChat(req: RouteRequest, reg: ModelRegistry | null, rules: {
   if (req.agent) return routeAgent({ ...req, agent: req.agent }, reg, rules, now);
   const kind = req.kind ?? taskOf(req.title, req.prompt, rules?.tasks);
   const area = req.appCode ? 'App' : req.area?.trim().slice(0, 40) || areaOf(req.title);
-  const r = resolve(req.ask, req.defaults, reg, req.canRun);
+  const r = resolve(req.ask, req.defaults, reg, req.canRun, req.known);
   if ('error' in r) return r;
   return { harness: r.harness, model: r.model, effort: r.effort,
     route: { policy: 'routing', version: null, source: r.source, reason: r.reason, kind, area, at: now } };

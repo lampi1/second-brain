@@ -9,9 +9,8 @@
 // state, never its tracked files). The routing table is gone (ADR 0210).
 import { Notification, shell, type BrowserWindow } from 'electron';
 import fs from 'node:fs';
-import { migrateCrossHarness } from './brain-settings';
 import path from 'node:path';
-import type { BudgetAlert, DomainSyncStatus, FeedEvent, SettingChange, Settings, SyncChoice, Usage } from '../../shared/contract';
+import type { BudgetAlert, DomainSyncStatus, FeedEvent, SettingChange, Settings, SyncChoice, Usage, Harness, HarnessUsage } from '../../shared/contract';
 import type { Emitter } from '../ipc';
 import type { BrainService, FeedInput } from '../services';
 import { log, errText } from '../log';
@@ -19,7 +18,7 @@ import { ConfigStore } from './config';
 import { Live, KINDS, stamp, cut, feedAction, type RawEvent } from './live';
 import { Notifier, type Toast } from './notify';
 import { UsageMonitor, claudeConfigFile } from './usage';
-import { collectAllProviderUsage } from './provider-usage';
+import { collectAllProviderUsage, collectProviderUsage } from './provider-usage';
 import { cursorToday, installHook } from './cursor-ledger';
 import { BudgetWatcher, type Spend } from './budget';
 import { FileJobStore, Ledger } from './estimates';
@@ -169,6 +168,8 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     settleMs: Number(env.SB_SYNC_SETTLE_MS) > 0 ? Number(env.SB_SYNC_SETTLE_MS) : 30_000,
   });
   let lastUsage: Usage | null = null;
+  let decorate: (u: Usage) => Usage = u => u;
+  const readingFns: ((pool: string, next: HarnessUsage, prev: HarnessUsage | undefined) => void)[] = [];
   let backfillTimer: NodeJS.Timeout | null = null;
   let warmTimer: NodeJS.Timeout | null = null;
 
@@ -184,8 +185,9 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
       ...(costScript ? { costInputs: new FileRevision(costInputs(root!, costScript, node.env)) } : {}),
       // tests point it at their own folders (never the user's ledger or Downloads)
       ...(!testing || env.SB_CURSOR_LEDGER ? { cursor: () => cursorToday({ dir: env.SB_CURSOR_LEDGER || undefined, downloads: env.SB_DOWNLOADS || undefined }) } : {}),
-      ...(!testing ? { providers: () => collectAllProviderUsage({ env }) } : {}),
-      onUsage: (u, spend) => { lastUsage = u; ctx.emitter.emit('usage', u); onSpend(spend); },
+      ...(!testing ? { providers: () => collectAllProviderUsage({ env }), provider: (h: Harness) => collectProviderUsage(h, { env }) } : {}),
+      onReading: (pool, next, prev) => { for (const fn of readingFns) fn(pool, next, prev); },
+      onUsage: (u, spend) => { lastUsage = u; ctx.emitter.emit('usage', decorate(u)); onSpend(spend); },
     });
     usage.start();
     api = new BrainApi(root, node, undefined, localApi);
@@ -193,12 +195,6 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     // the domains' first sync runs beside the start (a slow remote never holds the app back); its status says the rest
     sync.refresh();
     void sync.start().catch(e => log.warn('sync', 'first sync failed', { cause: errText(e), hint: 'the sync status says which domain and why' }));
-    // Retire only a valid legacy false, visibly, so an older installed inbox also stops refusing cross-engine mail.
-    try {
-      const migration = migrateCrossHarness(root);
-      if (migration === 'migrated') log.info('settings', 'retired brain messaging switch migrated to always available', { data: { key: 'crossHarnessMessages', from: false, to: true } });
-      else if (migration === 'unreadable') log.warn('settings', 'legacy brain settings unreadable: left unchanged', { hint: 'the app still exchanges messages; update the installed inbox tool to ignore the retired switch outside the app' });
-    } catch (e) { log.warn('settings', 'legacy brain messaging migration not saved', { cause: errText(e), hint: 'the app still exchanges messages; the next start retries, or update the installed inbox tool' }); }
     live = new Live({ root, stateFile: file('live-state.json'), node: bgNode, onEvents: publishRaw, onFile: onBrainFile,
       ...(product ? { chatInputs: new FileRevision(chatInputs(root, node.env)) } : {}), ...(ctx.skipChat ? { skipChat: ctx.skipChat } : {}) });
     try { await live.start(); } catch (e) { log.error('brain', 'live feed failed to start', { cause: errText(e), hint: `check the brain folder ${root}` }); }
@@ -243,8 +239,12 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
 
   return {
     feed: () => feed.slice(),
-    usage: () => lastUsage ?? usage?.get() ?? { todayUsd: 0, fiveHourPct: null, fiveHourResetsAt: null, weekPct: null },
-    refreshUsage: async () => (usage ? usage.refreshAll() : lastUsage ?? { todayUsd: 0, fiveHourPct: null, fiveHourResetsAt: null, weekPct: null }),
+    usage: () => decorate(lastUsage ?? usage?.get() ?? { todayUsd: 0, fiveHourPct: null, fiveHourResetsAt: null, weekPct: null }),
+    usageReading: pool => usage?.reading(pool),
+    usageReadNow: async hs => { await usage?.readNow(hs); },
+    onUsageReading: fn => { readingFns.push(fn); },
+    decorateUsage: fn => { decorate = fn; if (lastUsage) ctx.emitter.emit('usage', decorate(lastUsage)); },
+    refreshUsage: async () => decorate(usage ? await usage.refreshAll() : lastUsage ?? { todayUsd: 0, fiveHourPct: null, fiveHourResetsAt: null, weekPct: null }),
     info: () => {
       const root = cfg.brainRoot();
       if (cfg.loadError || !root) return { brainRoot: root, brainProblem: cfg.loadError ?? 'nessuna cartella del brain scelta' };
@@ -273,7 +273,8 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     onSettingChange: fn => { settingListeners.add(fn); return () => { settingListeners.delete(fn); }; },
     recordJob: job => { const r = ledger.record(job); if (!testing) brainEst.schedule(); return r; },
     modelRegistry: () => routing.registry(),
-    route: req => routeChat(req, routing.registry(), brainEst.table()),
+    // the engines' live lists decide which models run where (ADR 0356), unless the caller passes its own
+    route: req => routeChat({ ...req, known: req.known ?? (h => models.get()[h]?.ids.map(x => x.id) ?? null) }, routing.registry(), brainEst.table()),
     lastRoutingActual: id => { try { return routing.lastActual(id); } catch { return null; } },
     observeRouting: rec => {
       try { routing.observe(rec); } catch (e) { log.warn('brain', 'routing outcome not written', { cause: errText(e), hint: 'check <brain>/ops/state/improve is writable' }); }

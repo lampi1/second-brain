@@ -20,7 +20,7 @@ import { browserTools, type Scope } from './tools';
 import { SHOW_UI_HINT } from '../genui/artifacts';
 import { SCREENSHOT_HINT } from '../ask-image';
 import { BROWSER_READ_TOOLS, type BrowserAccess } from '../agents/tool-policy';
-import { compactMcpTool, toolListSize } from '../chats/tool-visibility';
+import { compactMcpTool, fitCompact, toolListSize } from '../chats/tool-visibility';
 
 export { mcpPortFromEnv } from '../mcp/server';
 
@@ -41,7 +41,7 @@ const INSTRUCTIONS = [
  *  setBrowserAccess: which of the browser tools each chat sees there (all, the reading ones for 'browser-read', or none).
  *  setChatToolFilter: which of the added tools a chat sees (ChatManager.chatToolShown). chatToolsFor: the tools a
  *  chat's endpoint lists now (run_code's in-process forwarding, ADR 0331). */
-export interface BrowserModule { service: BrowserService; mcp: McpServer; addChatTools: (tools: McpTool[]) => void; setBrowserAccess: (access: (chatId: string) => BrowserAccess) => void; setChatToolFilter: (shown: (chatId: string, tool: string) => boolean) => void; setChatToolCompact: (compact: (chatId: string) => boolean) => void; chatToolsFor: (chatId: string) => McpTool[] }
+export interface BrowserModule { service: BrowserService; mcp: McpServer; addChatTools: (tools: McpTool[]) => void; setBrowserAccess: (access: (chatId: string) => BrowserAccess) => void; setChatToolFilter: (shown: (chatId: string, tool: string) => boolean) => void; setChatToolCompact: (compact: (chatId: string) => boolean) => void; setChatToolNeeds: (required: (chatId: string) => readonly string[], served: (chatId: string, names: readonly string[]) => void) => void; chatToolsFor: (chatId: string) => McpTool[] }
 
 /** The clipboard of Copia: the system one, or (SB_TEST=1) an in-memory one the e2e suite reads through
  *  globalThis.__sbClipboard, so a test never overwrites what the user copied. */
@@ -88,6 +88,10 @@ export async function createBrowserModule(o: { emitter: Emitter; window: () => B
   // out of its list: the schema and description cost tokens in every turn and the call would only be refused
   let chatToolShown: (chatId: string, tool: string) => boolean = () => true;
   let chatToolCompact: (chatId: string) => boolean = () => false;
+  /** the tools the chat's role must have (shared/role-tools.ts): never left out of a compact list */
+  let chatToolRequired: (chatId: string) => readonly string[] = () => [];
+  /** every list served on a chat's endpoint, told to the tool check (chats/tool-check.ts, ADR 0356) */
+  let chatToolsServed: (chatId: string, names: readonly string[]) => void = () => {};
   /** the compact chats whose tool list was logged once (#463) */
   const compactLogged = new Set<string>();
   // a chat's own endpoint, also as run_code reaches it in process (Code Mode, ADR 0331)
@@ -104,16 +108,19 @@ ${SCREENSHOT_HINT}`;
     tools: ({ params }) => {
       const id = params.chatId ?? '';
       const list = chatToolsFor(id);
-      if (!chatToolCompact(id)) return list;
-      const compact = list.map(compactMcpTool);
+      if (!chatToolCompact(id)) { chatToolsServed(id, list.map(t => t.name)); return list; }
+      const fit = fitCompact(list.map(compactMcpTool), new Set(chatToolRequired(id)));
+      const compact = fit.tools;
+      chatToolsServed(id, compact.map(t => t.name));
       // what an engine with a tight schema budget was offered, once per chat (#463: which tools it could have dropped)
       if (!compactLogged.has(id)) {
         compactLogged.add(id);
         const big = compact.map(t => ({ name: t.name, size: toolListSize([t]) })).sort((a, b) => b.size - a.size).slice(0, 5);
-        log.info('browser', 'compact chat tools listed', { chat: id, data: { tools: compact.length, bytes: toolListSize(compact), largest: big.map(b => `${b.name} ${b.size}`), report: compact.some(t => t.name === 'agent_report') } });
+        log.info('browser', 'compact chat tools listed', { chat: id, data: { tools: compact.length, bytes: toolListSize(compact), largest: big.map(b => `${b.name} ${b.size}`), report: compact.some(t => t.name === 'agent_report'), leftOut: fit.dropped } });
       }
       return compact;
     },
+    callTools: ({ params }) => chatToolsFor(params.chatId ?? ''),
     authorize: p => !!p.chatId && !!p.token && tokens.check(p.chatId, p.token),
     who: p => p.chatId,
   });
@@ -248,5 +255,5 @@ ${SCREENSHOT_HINT}`;
       await mcp.close();
     },
   };
-  return { service, mcp, addChatTools: tools => { chatTools.push(...tools); }, setBrowserAccess: access => { browserAccess = access; }, setChatToolFilter: shown => { chatToolShown = shown; }, setChatToolCompact: compact => { chatToolCompact = compact; }, chatToolsFor };
+  return { service, mcp, addChatTools: tools => { chatTools.push(...tools); }, setBrowserAccess: access => { browserAccess = access; }, setChatToolFilter: shown => { chatToolShown = shown; }, setChatToolCompact: compact => { chatToolCompact = compact; }, setChatToolNeeds: (required, served) => { chatToolRequired = required; chatToolsServed = served; }, chatToolsFor };
 }

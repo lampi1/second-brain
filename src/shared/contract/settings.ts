@@ -39,8 +39,6 @@ export interface Settings {
   engineOrder?: Harness[];
   /** % of an engine's plan past which the next engine of the order starts (ADR 0357); an engine absent has none */
   engineThresholds?: Partial<Record<Harness, number>>;
-  /** Retired transport switch: always true after loading. Kept as compatibility data for older clients. */
-  messaging: { crossHarness: boolean };
   budget: BudgetSettings;
   /** context size (tokens) above which a chat's meter turns amber when its engine reports no compaction window (Cursor);
    *  a Claude chat turns amber near its own window (compactWindowTokens) instead (ADR 0031) */
@@ -130,12 +128,11 @@ export interface Settings {
 export interface OrchestratorChatDefaults { harness: Harness }
 /** a Cursor chat's reasoning (ACP session config option of category thought_level): its role card's effort */
 export type CursorReasoning = 'low' | 'medium' | 'high' | 'xhigh';
-export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engineOn' | 'engines' | 'messaging' | 'orchestratorChats' | 'tasks' | 'delegation'>> & {
+export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engineOn' | 'engines' | 'orchestratorChats' | 'tasks' | 'delegation'>> & {
   delegation?: Partial<DelegationSettings>;
   engines?: Partial<Settings['engines']>;
   tasks?: Partial<Settings['tasks']>;
   engineOn?: Partial<Settings['engineOn']>;
-  messaging?: Partial<Settings['messaging']>;
   orchestratorChats?: Partial<OrchestratorChatDefaults>;
   budget?: { enabled?: boolean; claude?: Partial<BudgetLimits>; cursor?: Partial<BudgetLimits> };
 };
@@ -143,7 +140,7 @@ export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engine
 /** Every setting is one dot key ("theme", "budget.claude.dailyUsd", "mute.idea"): the unit of validation, history,
  *  undo and agent permissions. The schema (settings:schema) gives type, default, Italian label and description. */
 export type SettingKey =
-  | 'engineOrder' | 'engineThresholds' | 'jobs.fallback' | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'quipsDaily' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
+  | 'engineOrder' | 'engineThresholds' | 'jobs.fallback' | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'quipsDaily' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
   | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'judging' | 'judgingSince' | 'judgingCapUsd' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'coldStartSlots' | 'worktreePoolPerRepo' | 'worktreePoolTotal' | 'worktreeDiskCapGb' | 'codexAutonomyRoots'
   | 'suggestOn' | 'voiceAsr' | 'voiceName' | 'voicePtt' | 'voiceSpeed' | 'awayMode'

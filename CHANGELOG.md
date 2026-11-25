@@ -7,11 +7,20 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ### Added
 - One order of the engines for every role (Settings → Engines), a threshold per engine, an explicit exception per role, the
-  engine in error passed over, nothing started when every plan is spent, the reason on every chat. A configuration change
+  engine in error passed over, a clear warning when every plan is spent, the reason on every chat. A configuration change
   the app does not apply stays «da applicare» on its own panel; a yes that names the change counts whatever news lands
   after it (ADR 0357).
 - Whoever opens a chat chooses its folder and works in it: a copy (isolated worktree) only when asked, uncommitted changes
   and another writer told and never touched, reuse and «Riprendi» in another folder in a linked chat (ADR 0358).
+- Engine limits follow the real data: a chat starts on the first model of the card that really has credit, read from
+  the usage of each engine, provider and account. A limit error opens a 5-minute pause, not a day; a clean turn or a
+  fresh reading under 98% ends it. A skipped model is said in the chat and in the answers («saltato: 5h al 100%, torna
+  alle 22:40»); the limits panel shows why an engine is stopped, until when, and «Riprova ora». A chat stopped by the
+  limit goes on by itself on the first model with room of the same level, on any engine, from where it was (ADR 0354).
+- Any engine reaches any engine: the Orchestrator and the Strategist assign, write to and reopen a chat on any engine
+  that is on and allowed, active, stopped or closed by itself. A changed role card never stops the work: the chat takes
+  the card's tools (never more than its parent's), and when its engine cannot run the app moves the work to a new
+  linked chat by itself. Chats you closed with ✕ stay closed (ADR 0352).
 - A role chat whose model runs out of credits waits instead of failing: its step stays under way, the chat and the map
   say «crediti finiti: cambia il modello nella scheda del ruolo», and it goes on by itself from where it was when you
   change that card (on another engine, in a new chat of the same role). The app never moves to another model or preset
@@ -82,7 +91,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   (ADR 0316).
 - A bench shows every helper, the ones at work first, in a row that scrolls sideways; the name tag never gets cut
   at an edge. The limit on the foot reads «Max 5 insieme» while it matters and says under the pointer what it means
-  (ADR 0314).
+  (ADR 0353, first numbered 0314).
 - Every pull request and every push to `main` is checked on Windows, Linux and macOS: typecheck, lint, every unit
   test, the publish guard, the built app started once in its frozen demo (`scripts/boot-smoke.mjs`) and the stable
   copy started with a new profile (`npm run test:stable`). The e2e suite is started by hand. `npm run check --

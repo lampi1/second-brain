@@ -134,19 +134,13 @@ export function noteHarness(dir: string, box: string, harness: Harness): void {
 
 export class MailError extends Error {}
 
-/** `inbox.mjs send` for the app's send_to_chat tool. refusal = engines/policy.ts crossRefusal on the user's settings. */
-/** chain = the thread of the mail the sender received just before (ChatMail.chainOf): a send without reply_to
+/** `inbox.mjs send` for the app's send_to_chat tool: a chat on any engine writes to a chat on any engine (ADR 0352).
+ *  chain = the thread of the mail the sender received just before (ChatMail.chainOf): a send without reply_to
  *  continues it, so "forward this to everyone" cannot restart the hop count at 1 forever. */
-export function sendMail(dir: string, o: { from: string; fromHarness: Harness; to: string; toHarness: string | null; text: string; kind?: MailKind; replyTo?: string; chain?: { thread: string; hop: number } | null; ownerDelivery?: boolean; refusal: (from: Harness, to: Harness) => string | null; now?: Date }): MailMsg | null {
+export function sendMail(dir: string, o: { from: string; fromHarness: Harness; to: string; text: string; kind?: MailKind; replyTo?: string; chain?: { thread: string; hop: number } | null; ownerDelivery?: boolean; now?: Date }): MailMsg | null {
   const text = o.text.trim();
   if (!text) throw new MailError('messaggio vuoto');
   if (/^NO_REPLY$/.test(text)) { appendLog(dir, { action: 'no-reply', from: o.from, to: o.to, replyTo: o.replyTo ?? null }); return null; }
-  const toH = o.toHarness;
-  const refused = toH && toH !== 'app' && toH !== o.fromHarness ? o.refusal(o.fromHarness, toH) : null;
-  if (refused) {
-    appendLog(dir, { action: 'blocked', from: o.from, to: o.to, fromHarness: o.fromHarness, toHarness: toH });
-    throw new MailError(`messaggio bloccato: ${refused}. Non riprovare: dillo all’Orchestrator o all’utente.`);
-  }
   let thread: string | undefined, hop = 1;
   if (o.replyTo) {
     const orig = findMessage(dir, o.replyTo);
@@ -420,8 +414,6 @@ export class ChatMail {
 export interface MailToolDeps {
   root: () => string | null;
   chats: () => ChatSummary[];
-  /** why a chat on `from` may not write to one on `to` (engines/policy.ts crossRefusal), null = it may */
-  crossRefusal: (from: Harness, to: Harness) => string | null;
   /** may an agent's mail wake a stopped chat on this engine (engines/policy.ts agentsMayOpen); absent = yes */
   agentsMayOpen?: (h: Harness) => boolean;
   /** deliver now (ChatMail.tick): the message reaches a live chat without waiting for the next round */
@@ -496,7 +488,7 @@ export function mailTools(d: MailToolDeps): ChatTool[] {
         if (!target && !fs.existsSync(path.join(dir, box))) throw new MailError(`chat sconosciuta: "${to}" (vedi list_chats)`);
         // a delegate's note upwards is progress unless it says otherwise: it never wakes an idle Orchestrator at once
         const kind = MAIL_KINDS.find(k => k === a.kind) ?? (from.parentId ? 'info' : undefined);
-        const msg = sendMail(dir, { from: from.title, fromHarness: from.harness, to: target?.title ?? to, toHarness: target?.harness ?? harnessOf(dir, box), text, ownerDelivery, ...(kind ? { kind } : {}), ...(typeof a.reply_to === 'string' && a.reply_to ? { replyTo: a.reply_to } : { chain: d.chainOf(slug(from.title)) }), refusal: d.crossRefusal });
+        const msg = sendMail(dir, { from: from.title, fromHarness: from.harness, to: target?.title ?? to, text, ownerDelivery, ...(kind ? { kind } : {}), ...(typeof a.reply_to === 'string' && a.reply_to ? { replyTo: a.reply_to } : { chain: d.chainOf(slug(from.title)) }) });
         if (!ownerDelivery) sends.set(from.id, [...recent, now]);
         if (!msg) return 'NO_REPLY: niente inviato, nessuna chat svegliata';
         log.info('mail', 'chat sent mail', { chat: from.id, data: { to: msg.to, id: msg.id, hop: msg.hop } });

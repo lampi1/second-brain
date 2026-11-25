@@ -23,8 +23,8 @@
 // auto-close) → -work (assignments, user events, plans) → -sink (session reports) → -remote (Remote Control) → this file: the ChatService entry
 // points (list, create, send and deliver, set). Shapes in manager-types.ts, constants in manager-helpers.ts.
 import crypto from 'node:crypto';
-import type { ModelTier } from '../../shared/roles';
-import type { AgentContextSnapshot } from '../../shared/agent-context';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { ChatCommand, ChatItem, ChatSummary, Effort, NewChat, PendingRequest, PermissionMode } from '../../shared/contract';
 import { replyLangTurn } from './reply-lang';
 import { voiceReplyHint } from './voice-reply';
@@ -43,7 +43,6 @@ import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import { plainOwner, type ResolvedRole } from '../agents/catalog';
 import { folderProblem } from '../agents/worktrees';
 import { FAIL_CLOSED, aboveCeiling, belowParent, narrowest, type AgentPolicy } from '../agents/tool-policy';
-import type { AgentOwnerSnapshot } from '../../shared/agents';
 import { runPresetOf } from '../../shared/model-presets';
 import type { RunLinks } from '../agents/runs';
 import { newRequest } from '../agents/task-estimate';
@@ -53,15 +52,16 @@ import { answerableInWords } from '../../shared/answer-in-words';
 import { openQuestions } from '../../shared/question-ladder';
 import { PHONE_REPLY_HINT } from './phone-reply';
 import { forEngine } from './agent-message';
-import { isPlanApproval, stopsQuestions, askingPlan, strategyPrompt, type IntakeSource, type StrategyPlan } from '../../shared/strategy';
+import { isPlanApproval, stopsQuestions, askingPlan, strategyPrompt } from '../../shared/strategy';
 import { isCorrection } from '../../shared/correction';
 import { initialEffort, selectEffort } from './effort';
 import { orchestratorRole, roleFrame } from '../agents/orchestrator-role';
 import { slug as slugTitle } from './mail';
 import { splitMode } from '../../shared/newchat';
 import { recallWarning } from '../search/hybrid/recall';
-import type { SubmissionReceipt, Rec } from './manager-types';
+import type { CreateOpts, Inherited, SubmissionReceipt, Rec } from './manager-types';
 import { sysItem, MODES, RESEARCH_TITLE, RESEARCH_FRAME, FOLLOW_UP_WINDOW_MS, USER_NOTES_LABEL, EFFORTS, MODEL_ID, startTags, repoOf } from './manager-helpers';
+import { pickLines } from '../../shared/model-levels';
 import { ManagerRemote } from './manager-remote';
 export { RESUME_TEXT, turnReply, workBehind, WAITING_REASON, lastAnswer, RESEARCH_TITLE, RUN_SAVE_MS, USER_NOTES_LABEL, userNoteLine, restoredOwner, startTags, repoOf } from './manager-helpers';
 export type { ChatManagerOptions, HandoffOptions, TurnEndInfo, CleanReportNote, UserWroteNote } from './manager-types';
@@ -121,6 +121,40 @@ export class ChatManager extends ManagerRemote implements ChatService {
 
   /** The tool policy and ceiling this chat runs with (null = none: the engine's own gates); agent_delegate bounds a child by it. */
   agentPolicy(chatId: string): AgentPolicy | null { const p = this.chats.get(chatId)?.policy; return p ? structuredClone(p) : null; }
+
+  /** A role chat given new work takes its role's card as it is now (ADR 0352): a card changed since it started never
+   *  stops the work. Its tools and permissions become the card's, below its parent's for a delegated chat (and the
+   *  contract's tool classes); any other chat only narrows to the card, never wider than it runs now. Its engine, model, folder and instructions stay its own (its history already carries them). When
+   *  tools or permissions changed, the engine relaunches on the same history before the next turn (they are fixed at
+   *  launch). A card that cannot be read now leaves the chat as it was. */
+  protected override async adoptCard(r: Rec): Promise<void> {
+    const owner = r.s.agent;
+    if (!owner || owner.source !== 'catalog' || r.s.isOrchestrator || !this.opts.resolveAgent) return;
+    let card: ReturnType<NonNullable<typeof this.opts.resolveAgent>>;
+    try { card = this.opts.resolveAgent({ harness: r.s.harness, cwd: r.s.cwd, roleId: owner.id, title: r.s.title, ...(r.choice.model ? { model: r.choice.model } : {}), ...(r.skills ? { skills: [...r.skills] } : {}) }); }
+    catch (e) { log.warn('chats', 'role card not read for a new assignment', { chat: r.s.id, cause: errText(e), hint: 'the chat goes on with the card it had' }); return; }
+    if (card.owner.source !== 'catalog' || card.owner.id !== owner.id) return;
+    const parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
+    // a child with its parent: the card below the parent's (and the contract's tool classes). Any other chat (a root
+    // chat, a fork, one opened from the unauthenticated mount, a child whose parent is gone) never goes wider than it runs
+    // now: the card only narrows it, since how it was bounded at its start is not kept (review of ADR 0352)
+    const policy = parent ? narrowest(belowParent(card.policy, parent.policy ?? null, this.boundMode(parent)), r.s.delegation?.tools ? { tools: { allow: r.s.delegation.tools }, ceiling: null } : null)
+      : narrowest(card.policy, r.policy ?? null);
+    const relaunch = JSON.stringify(policy ?? null) !== JSON.stringify(r.policy ?? null);
+    if (!relaunch && owner.version === card.owner.version && owner.revision === card.owner.revision) return;
+    // the snapshot of the card it runs now: its version and revision, its engine and model its own
+    r.s.agent = { ...card.owner, engine: owner.engine, model: owner.model };
+    if (relaunch) {
+      r.policy = policy;
+      const sess = r.session;
+      if (sess && !sess.busy) await this.closeKeeping(r, sess);
+      else if (sess) r.reopen = true;
+      this.addItem(r, sysItem('roleCardAdopted', { role: card.owner.name }, 'info'), false);
+    }
+    log.info('chats', 'chat took its role card as it is now', { chat: r.s.id, data: { role: owner.id, version: card.owner.version ?? null, revision: card.owner.revision, relaunch } });
+    this.persist();
+    this.updated(r);
+  }
   /** The mode that bounds a chat's children: the user's own choice or the role's ceiling, never the mode the app
    *  starts a session with by default (manager-sessions.ts launchMode) nor one the engine reports. */
   chosenMode(chatId: string): PermissionMode | null { const r = this.chats.get(chatId); return r ? this.boundMode(r) : null; }
@@ -136,7 +170,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
 
   /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
   /** by: who asks; 'app' = one of the app's own jobs (the sampled Sentinel reviews, agents/judge-sample.ts): like an agent, its run says startedBy 'app' */
-  override async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { boundByOrchestrator?: boolean; intake?: IntakeSource; resumePlan?: StrategyPlan; workMap?: string; continuation?: boolean; continuationOf?: string; engineWhy?: string } = {}): Promise<ChatSummary> {
+  override async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: Inherited, links: RunLinks = {}, opts: CreateOpts = {}): Promise<ChatSummary> {
     const createdT0 = Date.now();
     this.deliveryPolicy(req.deliveryPolicy, !!req.parentId);
     if (req.doneWhen && (req.doneWhen.length > 12 || req.doneWhen.some(x => typeof x !== 'string' || !x.trim() || x.length > 300))) throw new Error('Invalid task criteria.');
@@ -179,23 +213,26 @@ export class ChatManager extends ManagerRemote implements ChatService {
     // it in Agenti, ADR 0085): the old chat's frozen policy bounds it only when the role has none
     const renewed = req.orchestrator && by === 'user' && !!agent.policy;
     const parent = delegator ?? forkSrc ?? (req.replaces && !renewed ? this.chats.get(req.replaces) : undefined) ?? bound;
-    // a delegated chat: its role's policy, below its parent's, narrowed again by the contract's tool classes. A chat from
+    // a delegated chat: its role's policy, below its parent's. The contract's tool classes say what the part needs: they
+    // choose its folder (prepareDelegation), never what it may run (ADR 0355, #472). A chat from
     // the unauthenticated mount reads only, in plan mode, whatever the Orchestrator may (ADR 0085: the Orchestrator's
     // default is every permission, the mount is any local process)
-    const policy = delegator ? narrowest(belowParent(agent.policy, delegator.policy, this.boundMode(delegator)), req.delegation?.tools ? { tools: { allow: req.delegation.tools }, ceiling: null } : null)
+    const policy = delegator ? belowParent(agent.policy, delegator.policy, this.boundMode(delegator))
       : narrowest(agent.policy, parent === bound && bound ? narrowest(bound.policy, FAIL_CLOSED) : parent?.policy);
     let bindDelegation: ((childId: string) => void) | undefined;
     let folderNotes: string[] = [], isolated = false;
     // a root chat the Orchestrator opens gets the same folder handling as a child of a Strategist (ADR 0358)
-    const opener = !delegator && by === 'agent' && !req.orchestrator && !opts.boundByOrchestrator ? this.openOrchestrator() : undefined;
+    const from = opts.continuationOf !== undefined ? this.chats.get(opts.continuationOf) : undefined;
+    const opener = delegator || req.orchestrator || opts.boundByOrchestrator ? undefined : by === 'agent' ? this.openOrchestrator() : from ? this.openOrchestrator() ?? from : undefined;
     if (opener && this.opts.prepareDelegation && agent.owner.source === 'catalog') {
-      const prepared = await this.opts.prepareDelegation(structuredClone(opener.s), req, policy, opts.continuationOf);
+      const prepared = await this.opts.prepareDelegation(structuredClone(opener.s), req, policy, opts.continuationOf, opts.sameWorktree === true);
       req = { ...req, cwd: prepared.cwd };
       folderNotes = prepared.notes ?? []; isolated = !!prepared.isolated; bindDelegation = prepared.bind;
     }
     if (delegator && this.opts.prepareDelegation) {
       const parentPermissions = JSON.stringify({ policy: delegator.policy, mode: this.modeFor(delegator) });
-      const prepared = await this.opts.prepareDelegation(structuredClone(delegator.s), req, policy, opts.continuationOf);
+      const needs = narrowest(policy, req.delegation?.tools ? { tools: { allow: req.delegation.tools }, ceiling: null } : null);
+      const prepared = await this.opts.prepareDelegation(structuredClone(delegator.s), req, needs, opts.continuationOf, opts.sameWorktree === true);
       if (delegator.s.closedAt || this.closedByUser(delegator) || this.chats.get(delegator.s.id) !== delegator || delegator.s.run?.endedAt !== undefined || delegator.s.run?.report?.via === 'agent_report' || delegator.s.delegation?.result || delegator.s.run?.runId !== prepared.parentRunId || delegator.s.run?.taskVersion !== prepared.parentTaskVersion) throw new Error('Parent assignment changed while preparing isolation.');
       if (parentPermissions !== JSON.stringify({ policy: delegator.policy, mode: this.modeFor(delegator) })) throw new Error('Parent permissions changed while preparing isolation.');
       req = { ...req, cwd: prepared.cwd };
@@ -213,7 +250,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     const caps = engine.caps;
     const cwd = typeof req.cwd === 'string' ? req.cwd.trim() : '';
     // two chats that write in the same folder never do it in silence (ADR 0358): the second one and who opened it are told
-    if (by === 'agent' && agent.owner.source === 'catalog' && !isolated && this.writesFiles(agent.owner.id, policy)) folderNotes = [...folderNotes, ...this.writersNote(cwd, [req.parentId, opts.continuationOf])];
+    if ((by === 'agent' || from) && agent.owner.source === 'catalog' && !isolated && this.writesFiles(agent.owner.id, policy)) folderNotes = [...folderNotes, ...this.writersNote(cwd, [req.parentId, opts.continuationOf])];
     if (req.permissionMode && !MODES.includes(req.permissionMode)) throw new Error(`Modalità permessi non valida: ${req.permissionMode}`);
     if (req.effort && !EFFORTS.includes(req.effort)) throw new Error(`Effort non valido: ${req.effort}`);
     if (!caps.effort && req.effort) throw new Error(`L’effort non si imposta con ${engine.label}: scegli il modello.`);
@@ -274,7 +311,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
       s: {
         agent: agent.owner,
         ...(observedContext ? { launchContext: { ...observedContext, instructions: { sha256: crypto.createHash('sha256').update(agent.instructions).digest('hex'), characters: agent.instructions.length, estimatedTokens: Math.ceil(agent.instructions.length / 3) } } } : {}),
-        ...(by !== 'user' ? {work:{status:'assigned' as const,updatedAt:now}} : {}),
+        ...(opts.work ? { work: { ...opts.work } } : by !== 'user' ? {work:{status:'assigned' as const,updatedAt:now}} : {}),
         effortStatus: initialEffort(caps.effort, req.effort ?? null),
         id, harness: req.harness, origin: 'app', title, cwd, sessionId: forkOf || !caps.transcript ? null : warm?.sessionId ?? crypto.randomUUID(),
         model: req.model ?? null, effort: req.effort ?? null, permissionMode: req.permissionMode ?? null,
@@ -312,15 +349,20 @@ export class ChatManager extends ManagerRemote implements ChatService {
     };
     // Finish every await and bind live delegation authority before a durable child run exists.
     bindDelegation?.(id);
-    if (agent.owner.source === 'catalog' && !req.orchestrator) this.startRun(r, { agentId: agent.owner.id, version: agent.owner.version ?? 1, goal: req.goal ?? prompt ?? title, startedBy: delegator ? 'parent' : by === 'app' ? 'app' : by === 'agent' ? 'orchestrator' : 'user', costKnown: caps.cost, ...links,
+    if (agent.owner.source === 'catalog' && !req.orchestrator && !opts.noRun) this.startRun(r, { agentId: agent.owner.id, version: agent.owner.version ?? 1, goal: req.goal ?? prompt ?? title, startedBy: opts.runStartedBy ?? (delegator ? 'parent' : by === 'app' ? 'app' : by === 'agent' ? 'orchestrator' : 'user'), costKnown: caps.cost, ...links,
       tags: { ...asked, repo: repoOf(cwd) }, ...(agent.tier ? { tier: agent.tier } : {}), model: req.model ?? null, ...(agent.presetChoice ? { presetChoice: runPresetOf(agent.presetChoice) } : {}) });
-    if (r.s.run) { r.s.run.taskContract = { ...(by === 'app' && req.doneWhen !== undefined ? { reportExpected: true } : {}), goal: r.s.run.goal, doneWhen: req.doneWhen ?? req.delegation?.doneWhen ?? [], deliveryPolicy: this.deliveryPolicy(req.deliveryPolicy, !!delegator), ...(req.contractFields?.length ? { fields: req.contractFields } : {}) }; this.runSave(); }
+    // the user's own model for this work, recorded (ADR 0354 point 7); how its model was picked, said in the chat
+    if (req.userModel && !delegator) r.s.userModel = { ...req.userModel };
+    const pc = agent.presetChoice;
+    if (pc && (pc.skipped?.length || pc.allOut)) r.s.pick = { at: now, chosen: `${req.model ?? 'predefinito'} (${req.harness})`, skipped: pc.skipped ?? [], ...(pc.allOut ? { allOut: true as const } : {}) };
+    if (r.s.run) { r.s.run.taskContract = { ...((by === 'app' && req.doneWhen !== undefined) || opts.reportExpected ? { reportExpected: true } : {}), goal: r.s.run.goal, doneWhen: req.doneWhen ?? req.delegation?.doneWhen ?? [], deliveryPolicy: this.deliveryPolicy(req.deliveryPolicy, !!delegator), ...(req.contractFields?.length ? { fields: req.contractFields } : {}) }; this.runSave(); }
     if (r.s.run?.startedBy === 'app' && r.s.run.reviewOf && r.s.run.taskContract?.reportExpected && !r.s.work) r.s.work = { status: 'assigned', updatedAt: now };
     // the Orchestrator opened it while answering the user's own message: the user waits for what it finds (#123)
     if (by === 'agent' && !delegator && r.s.run?.startedBy === 'orchestrator') r.userWaits = this.orchestratorAnswering();
     // checked again where the chat joins the list: chats created at once (agent_delegate's children) awaited in between
     if (uniqueOk) r.s.title = this.uniqueTitle(r.s.title);
     this.chats.set(id, r);
+    if (r.s.pick) this.addItem(r, sysItem('modelSkipped', { lines: pickLines(r.s.pick, Date.now()) }, r.s.pick.allOut ? 'warn' : 'info'), false);
     if (plan && opts.intake) delete this.need(opts.intake.chatId).intakeKey;
     if (r.s.isOrchestrator) { this.restoreRootNotices(); this.resumeRootSyntheses(); for (const worker of this.chats.values()) if (worker.heldResult && !this.midTurn(worker)) this.releaseResult(worker); }
     if (old) {
@@ -331,7 +373,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     this.ensureHistory(r); // a fork shows the past it starts from
     // which engine it started on and why, first in the chat (ADR 0357); what it must know of its folder too (ADR 0358)
     const engineWhy = agent.presetChoice?.route ?? opts.engineWhy;
-    if (engineWhy) this.addItem(r, sysItem('engineStarted', { why: engineWhy }, 'info'), false);
+    if (engineWhy && !r.s.pick) this.addItem(r, sysItem('engineStarted', { why: engineWhy }, 'info'), false);
     for (const note of folderNotes) this.addItem(r, sysItem('folderNote', { note }, 'warn'), false);
     this.persist();
     log.info('chats', 'chat created', { chat: id, data: { harness: req.harness, cwd, fork: !!forkOf, model: r.choice.model, permissionMode: r.choice.permissionMode, orchestrator: r.s.isOrchestrator, warm: !!warm, prepMs: Date.now() - createdT0, queued: viaQueue } });
@@ -379,6 +421,12 @@ export class ChatManager extends ManagerRemote implements ChatService {
   override async send(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, source?: TaskSource, receipt?: SubmissionReceipt, appText = false): Promise<void> {
     updateActivity.assertOpen();
     const r = this.need(chatId);
+    // a continued chat (ADR 0356): what an agent, the app or a result sends reaches the chat that works now, not the user's words
+    const next = !resumed && (from !== undefined || !ownerSource(source)) ? this.successorOf(r) : null;
+    if (next) {
+      log.info('chats', 'message for a continued chat sent to its successor', { chat: chatId, data: { next: next.s.id, from: from ?? source?.kind ?? null } });
+      return this.send(next.s.id, text, images, resumed, from, liveOnly, source, receipt, appText);
+    }
     // the user (or the owner of its work) writes to it: a Sì that waited for its command's run is over, the worker goes
     // on with this message (#371); the app's own deliveries (a run's result) leave the wait
     if (!appText && !resumed && source?.kind !== 'app') this.dropAwaitingRun(chatId);

@@ -3,6 +3,7 @@
 // SB_DEMO=1 swaps in the demo services (demo-wiring.ts: fake chats, brain and browser tabs; SB_DEMO_FREEZE=1 = deterministic).
 // The types (Ctx, Wired) are in wiring-types.ts, the steps shared with the demo in wiring-shared.ts and two
 // a self-contained builder (Impara) in wiring-builders.ts; this file re-exports what others import.
+import { installToolCli } from './chats/tool-cli';
 import { app, powerMonitor, powerSaveBlocker, safeStorage, shell } from 'electron';
 import os from 'node:os';
 import { LearningReviewService } from './brainmodel/learning-review';
@@ -33,14 +34,16 @@ import { maintenanceEvent, proposalEvent } from './brain/announce';
 import { MorningService } from './morning/service';
 import { createAgentLoop } from './agents/loop';
 import { delegationTools } from './agents/delegation';
-import { CreditBook, limitSignal, opencodeLogTail, poolOf } from './agents/credits';
+import { limitSignal } from './agents/credits';
+import { creditLive } from './agents/credit-live';
+import { inheritUserModel } from './agents/catalog';
 import { creditWaitWatch } from './agents/credit-wait';
 import { EngineHealth } from './agents/engine-health';
-import { engineNowOf } from './agents/engine-now';
+import { engineNowOf, startElsewhere } from './agents/engine-now';
 import { NoEngine } from './agents/catalog';
 import { PendingConfig } from './appctl/pending-config';
 import { changedDraft, roleReason } from './appctl/config';
-import { levelEngines, roomOf } from '../shared/model-levels';
+import { levelEngines } from '../shared/model-levels';
 import { tierModel } from './agents/model-tier';
 import { markLegacyDone, migratedCards, readLegacy } from './agents/legacy-cards';
 import { workDecisionTools } from './agents/work-decisions';
@@ -52,7 +55,7 @@ import { launchExamples } from './agents/run-examples';
 import { MemoryService } from './rules/memory-service';
 import type { AgentRun } from '../shared/agents';
 import { mountTextTool, TEXT_ENV } from './engines/text-mcp';
-import { agentsMayOpen, crossRefusal, engineOn, openRefusal } from './engines/policy';
+import { agentsMayOpen, engineOn, openRefusal } from './engines/policy';
 import { checkedDelegation } from '../shared/roles';
 import { createEngines } from './engines/service';
 import { safeStorageCipher } from './engines/secrets';
@@ -163,7 +166,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   // the brain folder (bound below, once the brain exists) holds the credentials file of login hand-offs
   let brainRoot: () => string | null = () => null;
-  const { service: browser, mcp, addChatTools, setBrowserAccess, setChatToolFilter, setChatToolCompact, chatToolsFor } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
+  const toolCliDir = installToolCli(ctx.userData);
+  if (!toolCliDir) log.warn('chats', 'fallback tool command not written', { cause: 'userData/bin not writable', hint: 'chats have no sb-tool; check the folder permissions' });
+  const { service: browser, mcp, addChatTools, setBrowserAccess, setChatToolFilter, setChatToolCompact, setChatToolNeeds, chatToolsFor } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
   // the brain's chats.mjs poll leaves out the app's own chats (bound below, once the chat manager exists)
   let isOwn: (id: string) => boolean = () => false;
   // Retire the legacy global quiet flag before notifications start; postponement is request-local in the renderer.
@@ -235,32 +240,37 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // live turn costs and the Claude model list at the brain's per-model list prices (harness/models.json, else the
   // release template's), re-read at most every 30 s; set before the catalog reads its models (issue #96)
   setPriceTable(priceTableSource(() => brain.modelRegistry(), () => { try { return path.join(templateRoot(), 'harness', 'models.json'); } catch { return null; } }));
-  // the room of each engine's plan (ADR 0347): the usage panel's windows and a limit the app saw it hit (the credit book,
-  // built further down: read only when a chat starts)
-  const creditsRef: { current?: CreditBook } = {};
+  // the room of each engine's plan (ADR 0347): the one credit rule over the usage panel's readings and the limit errors
+  // the app saw (ADR 0354, agents/credit-live.ts); a change that may free a waiting chat runs its watch again
   const creditWaitRef: { current?: () => void } = {};
   // an engine whose chats just failed to start (ADR 0357): the next start passes it over for a while
   const engineHealth = new EngineHealth();
   ctx.emitter.tap((ch, payload) => { if (ch === 'chat:updated') engineHealth.observe(payload as ChatSummary); });
+  const credits = creditLive({ file: path.join(ctx.userData, 'credits.json'), usage: brain, changed: () => creditWaitRef.current?.(),
+    threshold: engine => brain.settings().engineThresholds?.[engine] ?? null });
   const agents = createAgentCatalog(ctx, brain, engines, () => ({ ...cliCache, ...engineReadiness() }), undefined, {
-    room: (engine, model) => {
-      const st = creditsRef.current?.state(poolOf(engine, model));
-      const hit = st?.status === 'exhausted' ? { until: st.resetsAt ?? (st.coolMs ? st.at + st.coolMs : null) } : null;
-      return roomOf(brain.usage().harnesses?.find(h => h.harness === engine), hit, Date.now(), brain.settings().engineThresholds?.[engine] ?? null);
-    },
+    room: (engine, model, asker) => credits.room(engine, model, asker),
+    claim: (engine, model, owner) => credits.claim(engine, model, owner),
     engineTrouble: engine => engineHealth.trouble(engine),
-    engineBlock: engine => agentsMayOpen(brain.settings(), engine) ? null : openRefusal(brain.settings(), engine, engine),
+    engineBlock: engine => openRefusal(brain.settings(), engine),
   });
-  const engineNow = (c: ChatSummary) => engineNowOf(c, { cardNow: (role, ask, by) => agents.cardNow(role, ask, by), chat: id => manager.list().find(x => x.id === id) });
-  /** A role's start, with the user told when every engine of its level is spent (ADR 0357): never a silent start, nor a
-   *  silent refusal. The same notice is shown once per quarter of an hour. */
+  const engineNowDeps = { cardNow: agents.cardNow.bind(agents), ordered: (role: string) => agents.followsOrder(role) };
+  const engineNow = (c: ChatSummary) => engineNowOf(c, engineNowDeps);
+  /** A role's start, with the user told when no engine of its level can start or every one is spent (ADR 0357): never a
+   *  silent refusal, nor a silent start on a spent plan. The same notice is shown once per quarter of an hour. */
   const spentTold = new Map<string, number>();
-  const resolveStart: typeof agents.resolve = req => {
-    try { return agents.resolve(req); } catch (e) {
-      if (e instanceof NoEngine && Date.now() - (spentTold.get(e.message) ?? 0) > 15 * 60_000) {
-        spentTold.set(e.message, Date.now());
-        brain.publish([{ kind: 'engines-spent', title: 'Nessun motore libero: la chat non è partita', detail: e.message }]);
-      }
+  const resolveStart: typeof agents.resolve = (req, o) => {
+    const tell = (title: string, detail: string) => {
+      if (Date.now() - (spentTold.get(detail) ?? 0) <= 15 * 60_000) return;
+      spentTold.set(detail, Date.now());
+      brain.publish([{ kind: 'engines-spent', title, detail }]);
+    };
+    try {
+      const r = agents.resolve(req, o), p = r.presetChoice;
+      if (p?.allOut && p.route) tell('Tutti i motori al limite: la chat aspetta', `${r.owner.name}: ${p.route}. Riparte da sola appena un motore torna libero; per partire prima collega un altro motore o cambia l’ordine (Impostazioni → Motori).`);
+      return r;
+    } catch (e) {
+      if (e instanceof NoEngine) tell('Nessun motore disponibile: la chat non è partita', e.message);
       throw e;
     }
   };
@@ -339,11 +349,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // «Modalità notte» (ADR 0191): the user is away; what the app chooses or parks for them waits for the recap
   const awayLog = new AwayLog(path.join(ctx.userData, 'away-log.json'));
   const awayOn = () => brain.settings().awayMode === true;
-  // the cached credit of each provider (local reads only, ADR 0218): cost data kept after Balanced mode left (2026-11-23)
-  const credits = new CreditBook(path.join(ctx.userData, 'credits.json'), {
-    claudeLimits: () => { const u = brain.usage(); return u.limitsAt ? { fiveHourPct: u.fiveHourPct, fiveHourResetsAt: u.fiveHourResetsAt, weekPct: u.weekPct, weekResetsAt: u.weekResetsAt ?? null, at: u.limitsAt } : null; },
-    opencodeLog: () => opencodeLogTail(os.homedir()) });
-  creditsRef.current = credits;
   // the runs of Esegui, built after the manager (#371, #372): a Yes and a user step are read against them
   const runsRef: { current: CommandRunner | null } = { current: null };
   // list prices for the runs whose engine reported tokens and no cost (ADR 0284): the standings and the estimates
@@ -357,17 +362,22 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     briefOptions: chatId => briefRef.current?.briefOptions(chatId) ?? null,
     relayPanel: chatId => relayRef.current?.panelArmed(chatId) ?? false,
     prepareDelegation: delegateWorktrees.prepare,
-    startFailed: c => { engineHealth.fail(c.harness); try { const n = engineNow(c); return n !== null; } catch { return false; } },
+    startFailed: c => { engineHealth.fail(c.harness); return startElsewhere(c, engineNowDeps); },
     engineNow: c => engineNow(c),
     reopenBlocked: delegateWorktrees.reopenBlocked,
     nextDelegationCwd: cwd => worktreePool.nextCwd(cwd),
     freshSessions: () => true,
     // after a start only chats active within engineIdleMin resume by themselves (ADR 0228)
     resumeWithinMs: () => (brain.settings().engineIdleMin ?? 30) * 60_000,
+    onContinued: (from, to) => workflowsRef?.followChat(from, to),
     continuationContext: chatId => workflowsRef ? JSON.stringify(workflowsRef.list().filter(row => row.chatIds.includes(chatId))) : null,
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
     resolveAgent: req => {
-      const resolved = agents.resolve(req);
+      // the user's own model for the work (recorded on the chat the Orchestrator opened with userModel) holds for the
+      // chats its Strategist opens for it, when their role's levels have that model (ADR 0354 point 7); an agent never
+      // passes one itself (agent_delegate has no such field)
+      req = inheritUserModel(req, manager.list(), (roleId, m) => agents.namesModel(roleId, m));
+      const resolved = resolveStart(req, { claim: true });
       const roleId = req.orchestrator ? 'orchestrator' : req.roleId;
       if (!roleId || (req.orchestrator && !brain.info().brainRoot)) return resolved;
       // only the brain skills this launch gives exist in its plugin
@@ -410,6 +420,15 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // 2026-10-13); never with the fake CLI of the e2e tests; SB_PREWARM=0 turns it off
     prewarm: !process.env.SB_CLAUDE_PATH && process.env.SB_PREWARM !== '0',
     mcpUrlFor: chatId => browser.mcpUrlFor(chatId),
+    // the fallback tool command every chat's shell finds (chats/tool-cli.ts, ADR 0356)
+    toolCliDir,
+    // a chat's own endpoint tool called in process, that chat the caller: a report pasted as text (ADR 0356)
+    callChatTool: async (chatId, name, args) => {
+      const tool = chatToolsFor(chatId).find(t => t.name === name);
+      if (!tool) throw new Error(`${name} is not on this chat's endpoint`);
+      const out = await tool.run(args, { mount: 'browser-chat', params: { chatId }, sessionId: '', signal: new AbortController().signal, progress: () => false });
+      return typeof out === 'string' ? out : 'text' in out ? out.text : JSON.stringify(out.raw.content);
+    },
     extMcp: chatId => mcpServers.launch(chatId, browser.mcpUrlFor(null).replace(/\/mcp$/, '')),
     // agents' cold starts wait for one of cores/2 slots, or the emergency brake (ADR 0222); SB_LOAD_FORCE="cpu,freeRam" fixes the load
     // and SB_COLD_SLOTS the slots
@@ -433,7 +452,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     acpModelConfig: roleId => ({ reasoning: '', fast: agents.launchFlags(roleId).fast }),
     onTurnEnd: info => {
       replyRules.turnEnded(info.chatId, info.reply, info.isError);
-      credits.observe(info.harness, info.model, info.errorText, info.isError); // the engine's limit error or a clean turn (ADR 0218)
+      credits.observe(info.harness, info.model, info.errorText, info.isError, info.startedAt ?? Date.now() - info.durationMs); // a limit error or a clean turn (ADR 0354)
       // a limit makes its plan spent: a chat waiting on it may now move to the next model of its level (ADR 0348)
       if (info.isError && limitSignal(info.errorText)) setImmediate(() => creditWaitRef.current?.());
       // an API engine's turn spends the user's API credits: this month's figure in Settings → Motori (engines/spend.ts)
@@ -507,6 +526,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   setBrowserAccess(id => manager.browserAccess(id));
   setChatToolFilter((id, tool) => manager.chatToolShown(id, tool));
   setChatToolCompact(id => manager.chatToolsCompact(id));
+  // the table of required tools: kept in a compact list, checked against what each engine read (ADR 0356)
+  setChatToolNeeds(id => manager.requiredToolsOf(id), (id, names) => manager.toolsServed(id, names));
   wireCodeMode({ addChatTools, chatToolsFor, manager, gateway: mcpServers.gateway });
   // a closed chat's browser tabs go away and its per-chat MCP token stops working
   const closeChat = manager.close.bind(manager);
@@ -550,7 +571,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const classify = brainClassifier(() => { const root = brain.info().brainRoot; return root ? readOrchestratorMail(root) : undefined; });
   const mail = new ChatMail({ root: () => brain.info().brainRoot, chats: manager, instance: path.basename(ctx.userData), classify, holdActivity: id => manager.holdActivity(id) });
   addChatTools(mailTools({ classify,
-    root: () => brain.info().brainRoot, chats: () => chats.list(), crossRefusal: (from, to) => crossRefusal(brain.settings(), from, to),
+    root: () => brain.info().brainRoot, chats: () => chats.list(),
     agentsMayOpen: h => agentsMayOpen(brain.settings(), h),
     deliver: () => { void mail.tick(); }, chainOf: box => mail.chainOf(box),
     sent: (fromId, toId, text) => manager.noteMail(fromId, toId, text), // a worker's report completes its assignment (ADR 0084)
@@ -689,7 +710,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     isolated: child => delegateWorktrees.isolated(child),
     integrate: async (parent, child) => stageDelegatedChanges(delegateWorktrees.allocation(parent, child), parent, child, brain.info().brainRoot),
     integrateMany: async (parent, children) => stageDelegatedChangesMany(children.map(child => ({ owned: delegateWorktrees.allocation(parent, child), child })), parent, brain.info().brainRoot), chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
-    engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), roleEngines: p => levelEngines(agents.levelsFor(p)), presetChoice: (roleId, ask, delegator) => agents.presetChoice(roleId, ask, delegator), label: AGENT_LABEL, runs: () => manager.runs.list(), skillTools,
+    engineRefusal: to => openRefusal(brain.settings(), to), presetChoice: (roleId, ask, delegator) => agents.presetChoice(roleId, ask, delegator), ordered: roleId => agents.followsOrder(roleId), creditFresh: () => credits.freshAll(), label: AGENT_LABEL, runs: () => manager.runs.list(), skillTools,
     remember: (roleId, line, chat) => { skillLessons.propose({ role: portableId(roleId), text: line, chatId: chat.id, ...(chat.run?.runId ? { runId: chat.run.runId } : {}) }); } }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
   // every step's preset, never a model (ADR 0346): a started step's chat, else the one the plan asks of the role's card
@@ -808,7 +829,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       if (!p) throw new Error(`ruolo sconosciuto: ${c.agentId ?? ''}`);
       agentPacks.learning.save(changedDraft(p, c.key, c.value), p.id, roleReason(c.reason));
     } });
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: req => resolveStart(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps, workMaps,
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: req => resolveStart(req), creditOf: (engine, model) => credits.verdict(engine, model), creditFresh: () => credits.freshAll(), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps, workMaps,
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       held: pendingConfig,
@@ -895,8 +916,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     applied: changes => { const e = maintenanceEvent(changes); if (e) brain.publish([e]); } });
   // its cached state (ADR 0186) is read again after whatever the Brain pages refresh on
   ctx.emitter.tap(ch => { if (ch === 'brainmodel:changed' || ch === 'agents:changed') brainModel.invalidate(); });
-  // a role chat out of credits follows its role's card (ADR 0346): when the card changes, and when the wait begins
-  const creditWait = creditWaitWatch({ chats: manager, card: (roleId, ask, delegator) => agents.cardNow(roleId, ask, delegator), engineRefusal: (from, to) => openRefusal(brain.settings(), from, to) });
+  // a role chat out of credits moves by itself to the first model with room of its level (ADR 0346, 0348, 0354): at each
+  // change of the catalog, of a waiting chat, of a usage reading and at the end of a pause or a spent window
+  const creditWait = creditWaitWatch({ chats: manager, card: (roleId, ask, o) => agents.cardNow(roleId, ask, o), claim: (on, owner) => credits.claim(on.engine, on.model, owner), release: (on, owner) => credits.release(on.engine, on.model, owner),
+    levelsKey: roleId => { const p = agents.list().profiles.find(x => x.id === roleId); return p ? JSON.stringify(agents.levelsFor(p)) : ''; } });
   creditWaitRef.current = creditWait;
   // a new order or threshold counts from the next start (ADR 0357): the role pages read it, and a waiting chat may move
   ctx.emitter.tap((ch, payload) => { if (ch === 'settings:changed' && ['engineOrder', 'engineThresholds'].includes((payload as SettingChange).key)) agents.refresh(); });
@@ -967,6 +990,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     stallMin: () => checkedDelegation(brain.settings().delegation).stallMin, lastEventAt: id => manager.lastEventAt(id) });
 
   return {
+    creditRetry: pool => credits.retry(pool),
     workflows, brainModel, research, memoryReview, learningReview, queries: brainQueries,
     morning,
     mcpServers,

@@ -205,11 +205,11 @@ describe('a chat works where whoever opens it says (ADR 0358)', () => {
     expect(w.get(s.id).plan!.steps[0]!.chatIds).toEqual([linked.id]);
   });
 
-  it('7 · a read-only chat writes nowhere, whatever its folder', async () => {
+  it('7 · the folder changes no permission: the same policy everywhere, nothing copied or touched', async () => {
     const w = world(), s = await w.strategist(w.brain);
     for (const cwd of [w.brain, w.air, w.slot]) {
       const child = await w.delegate(s.id, w.part('artisan', `Legge ${path.basename(cwd)}`, { cwd }, { tools: ['read'] }));
-      expect(w.m.agentPolicy(child.chatId as string)).toMatchObject({ tools: { allow: ['read'] } });
+      expect(w.m.agentPolicy(child.chatId as string)).toEqual(w.m.agentPolicy(s.id));
       expect(w.starts.get(child.chatId as string)!.cwd).toBe(cwd);
     }
     // a linked chat in another folder keeps exactly that policy

@@ -1,6 +1,6 @@
 # ADR 0309 · One review chat per piece of work: after a fix it reviews only the delta
 
-Date: 2026-11-14 · Status: accepted (owner, issue #387: «One independent review chat per work thread. After a fix,
+Date: 2026-11-14 · Status: partly superseded by [ADR 0352](0352-any-engine-reaches-any-engine.md) (a review chat on any engine, active, stopped or closed by itself, and on an older card, is reused: point 5's «another engine» and «card changed» cases are gone); accepted (owner, issue #387: «One independent review chat per work thread. After a fix,
 the same review chat re-reviews only the fix delta. A new review chat only when the work thread changes or the user
 asks for a fresh one») · Amends: ADR 0083 (a Sentinel child is continued like any other child), ADR 0091 (a review's
 clean session is its first one, not one per round)

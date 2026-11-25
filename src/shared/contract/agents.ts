@@ -61,7 +61,8 @@ export interface AgentsInvokeMap {
   'agents:reset': [{ id: string }, AgentProfile];
   'agents:history': [{ id: string }, AgentVersion[]];
   /** the model each level of a role would start on now, and why (ADR 0347: its engines on, its plans' room) */
-  'agents:levelRoute': [{ id: string }, Record<'min' | 'base' | 'max', { engine: string; model: string | null; index: number; reason: string; state: 'ok' | 'pace' | 'over' | 'out' | 'unknown' } | null>];
+  'agents:creditRetry': [{ pool: string }, { state: string; why: string; until: number | null }];
+  'agents:levelRoute': [{ id: string }, Record<'min' | 'base' | 'max', { engine: string; model: string | null; index: number; reason: string; state: 'ok' | 'pace' | 'over' | 'out' | 'probation' | 'unknown' } | null>];
   /** the §5 metrics per agent and version (A6); since = only runs ended from then on; skill/app/repo = only runs with that
    *  tag (untagged runs never match) */
   'agents:metrics': [AgentMetricsFilter | undefined, AgentMetrics[]];
