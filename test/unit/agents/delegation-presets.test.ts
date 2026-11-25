@@ -94,12 +94,13 @@ describe('agent_assign_task with a preset', () => {
     await f.call('agent_assign_task', f.assignArgs());
     expect(f.assign.mock.calls[0]![2].preset?.switchTo).toEqual({ model: 'm-mid', effort: null });
   });
-  it('a child on another engine (an old Balanced chat, mode removed 2026-11-23) is never reused: a fresh chat', async () => {
+  it('a child on another engine than its card\'s (an old Balanced chat) is reused there, on its own model (ADR 0352)', async () => {
     const f = fixture({ childHarness: 'codex', childModel: 'gpt-x' });
-    await expect(f.call('agent_assign_task', f.assignArgs({ preset: 'max', presetWhy: 'x' }))).rejects.toThrow(/Role configuration changed/);
-    await expect(f.call('agent_assign_task', f.assignArgs())).rejects.toThrow(/Role configuration changed/);
+    const out = await f.call('agent_assign_task', f.assignArgs());
+    expect(f.assign).toHaveBeenCalledOnce();
+    expect(f.assign.mock.calls[0]![2].preset?.switchTo).toBeUndefined();   // never a Claude model on Codex
+    expect(out.warnings).toEqual(expect.arrayContaining([expect.stringMatching(/stays on codex/)]));
     expect(f.set).not.toHaveBeenCalled();
-    expect(f.assign).not.toHaveBeenCalled();
   });
 });
 

@@ -2,6 +2,7 @@
 // (continueChat), the cold note written while the cache is warm and the cold switch to a fresh session, fresh sessions
 // on a context budget, the Orchestrator's day compaction, quiet turns and the context counters.
 import type { IntakeSource, StrategyPlan } from '../../shared/strategy';
+import type { ChatDelegation } from '../../shared/delegation';
 import crypto from 'node:crypto';
 import type { ModelTier } from '../../shared/roles';
 import type { AgentContextSnapshot } from '../../shared/agent-context';
@@ -21,6 +22,17 @@ import type { RunLinks } from '../agents/runs';
 import type { HandoffOptions, Rec, ColdStep } from './manager-types';
 import { clearTimeout, workBehind, coldDivider, sysItem } from './manager-helpers';
 import { ManagerRequests } from './manager-requests';
+
+/** continueChat's options: allowStart false = never start a stopped engine for the hand-off; ask false = the app writes the
+ *  note; on = the engine, model and effort of the new chat; assignment = a new task for a continued child (ADR 0352). */
+export interface ContinueOptions { allowStart?: boolean; promptPrefix?: string; ask?: false; on?: { harness: Harness; model: string | null; effort: Effort | null }; assignment?: { goal: string; doneWhen: string[] } }
+
+/** The delegation a continued child carries: the same, or a new task's goal and criteria with no result yet. */
+function nextDelegation(d: ChatDelegation, assignment: ContinueOptions['assignment']): ChatDelegation {
+  if (!assignment) return structuredClone(d);
+  const { result: _r, originalGoal: _o, ...rest } = structuredClone(d);
+  return { ...rest, goal: assignment.goal, doneWhen: [...assignment.doneWhen], at: Date.now() };
+}
 
 /** Long chats: hand-offs, «Riprendi», cold notes and cold switches, fresh sessions, the Orchestrator's day compaction. */
 export abstract class ManagerContinuity extends ManagerRequests {
@@ -72,8 +84,10 @@ export abstract class ManagerContinuity extends ManagerRequests {
    *  missing or older than the last turn). The old chat's process ends; it stays readable, linked both ways.
    *  promptPrefix: a label put before the prompt (an agent's request is marked as not the user's).
    *  ask false + on (ADR 0346, a chat out of credits whose role's card moved to another engine): the hand-off is the
-   *  app's own note, since the old engine cannot be asked, and the new chat runs on the card's engine and model. */
-  continueChat(chatId: string, opts: { allowStart?: boolean; promptPrefix?: string; ask?: false; on?: { harness: Harness; model: string | null; effort: Effort | null } } = {}): Promise<ChatSummary> {
+   *  app's own note, since the old engine cannot be asked, and the new chat runs on the card's engine and model.
+   *  assignment (ADR 0352, a reused child whose engine cannot run now): the new child carries this new task's goal and
+   *  criteria instead of the old one's, with no result yet. */
+  continueChat(chatId: string, opts: ContinueOptions = {}): Promise<ChatSummary> {
     const running = this.continuing.get(chatId);
     if (running) return running;
     const p = this.doContinue(chatId, opts).finally(() => this.continuing.delete(chatId));
@@ -81,10 +95,14 @@ export abstract class ManagerContinuity extends ManagerRequests {
     return p;
   }
 
-  private async doContinue(chatId: string, opts: { allowStart?: boolean; promptPrefix?: string; ask?: false; on?: { harness: Harness; model: string | null; effort: Effort | null } }): Promise<ChatSummary> {
+  private async doContinue(chatId: string, opts: ContinueOptions): Promise<ChatSummary> {
     const r = this.need(chatId);
     if (r.s.isOrchestrator) throw new Error('L’Orchestrator non si riprende così: usa «Ricomincia da capo» dal suo menu.');
+    // an app move (another engine, a new task) never brings back what the user closed with ✕ (review of ADR 0352)
+    if ((opts.on || opts.assignment) && (r.userClosing || r.s.closedAt && r.s.closedBy === 'user')) throw new Error('The user closed this chat and cancelled its work: only the user can reopen it. Start a new chat for new work.');
     const next = r.s.continuedBy && this.chats.get(r.s.continuedBy.id);
+    // a new task never lands silently on a chat that already went on: the caller assigns the one that goes on
+    if (next && opts.assignment) throw new Error(`This chat already goes on in «${next.s.title}» (chatId ${next.s.id}): assign the task there.`);
     if (next) return { ...next.s };
     // never two agents on the same files: the old chat must have finished its turn (a fresh note does not cover this one)
     const hasTurns = r.lastTurnAt > 0 || r.items.some(i => i.kind === 'result' || i.kind === 'user');
@@ -106,7 +124,7 @@ export abstract class ManagerContinuity extends ManagerRequests {
       // a routed job stays one outcome across hand-offs: the new chat writes on the first chat's ledger line
       ...(r.s.route ? { route: { ...r.s.route, ledgerId: r.s.route.ledgerId ?? `app:${r.s.id}`, handoffs: (r.s.route.handoffs ?? 0) + 1 } } : {}),
       prompt: `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${continuePrompt({ ...r.s, ...(r.inWorktree ? { inWorktree: true } : {}) }, h)}`,
-      ...(parentRec ? { parentId: parentRec.s.id, ...(r.s.delegation ? { delegation: structuredClone(r.s.delegation) } : {}) } : {}),
+      ...(parentRec ? { parentId: parentRec.s.id, ...(r.s.delegation ? { delegation: nextDelegation(r.s.delegation, opts.assignment) } : {}) } : {}),
     }, 'user', { ...(r.s.launchContext ? { launchContext: r.s.launchContext } : {}), ...(r.s.run?.tier ? { tier: r.s.run.tier } : {}), owner: on ? { ...owner, engine: on.harness, model: on.model } : owner, instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.skills ? { skills: [...r.skills] } : {}), ...(r.maxContext ? { maxContext: r.maxContext } : {}) },
     {}, { continuation: !!parentRec, continuationOf: r.s.id });
     const nr = this.chats.get(c.id);

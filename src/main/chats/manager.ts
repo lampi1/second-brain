@@ -123,6 +123,40 @@ export class ChatManager extends ManagerRemote implements ChatService {
 
   /** The tool policy and ceiling this chat runs with (null = none: the engine's own gates); agent_delegate bounds a child by it. */
   agentPolicy(chatId: string): AgentPolicy | null { const p = this.chats.get(chatId)?.policy; return p ? structuredClone(p) : null; }
+
+  /** A role chat given new work takes its role's card as it is now (ADR 0352): a card changed since it started never
+   *  stops the work. Its tools and permissions become the card's, below its parent's for a delegated chat (and the
+   *  contract's tool classes); any other chat only narrows to the card, never wider than it runs now. Its engine, model, folder and instructions stay its own (its history already carries them). When
+   *  tools or permissions changed, the engine relaunches on the same history before the next turn (they are fixed at
+   *  launch). A card that cannot be read now leaves the chat as it was. */
+  protected override async adoptCard(r: Rec): Promise<void> {
+    const owner = r.s.agent;
+    if (!owner || owner.source !== 'catalog' || r.s.isOrchestrator || !this.opts.resolveAgent) return;
+    let card: ReturnType<NonNullable<typeof this.opts.resolveAgent>>;
+    try { card = this.opts.resolveAgent({ harness: r.s.harness, cwd: r.s.cwd, roleId: owner.id, title: r.s.title, ...(r.choice.model ? { model: r.choice.model } : {}), ...(r.skills ? { skills: [...r.skills] } : {}) }); }
+    catch (e) { log.warn('chats', 'role card not read for a new assignment', { chat: r.s.id, cause: errText(e), hint: 'the chat goes on with the card it had' }); return; }
+    if (card.owner.source !== 'catalog' || card.owner.id !== owner.id) return;
+    const parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
+    // a child with its parent: the card below the parent's (and the contract's tool classes). Any other chat (a root
+    // chat, a fork, one opened from the unauthenticated mount, a child whose parent is gone) never goes wider than it runs
+    // now: the card only narrows it, since how it was bounded at its start is not kept (review of ADR 0352)
+    const policy = parent ? narrowest(belowParent(card.policy, parent.policy ?? null, this.boundMode(parent)), r.s.delegation?.tools ? { tools: { allow: r.s.delegation.tools }, ceiling: null } : null)
+      : narrowest(card.policy, r.policy ?? null);
+    const relaunch = JSON.stringify(policy ?? null) !== JSON.stringify(r.policy ?? null);
+    if (!relaunch && owner.version === card.owner.version && owner.revision === card.owner.revision) return;
+    // the snapshot of the card it runs now: its version and revision, its engine and model its own
+    r.s.agent = { ...card.owner, engine: owner.engine, model: owner.model };
+    if (relaunch) {
+      r.policy = policy;
+      const sess = r.session;
+      if (sess && !sess.busy) await this.closeKeeping(r, sess);
+      else if (sess) r.reopen = true;
+      this.addItem(r, sysItem('roleCardAdopted', { role: card.owner.name }, 'info'), false);
+    }
+    log.info('chats', 'chat took its role card as it is now', { chat: r.s.id, data: { role: owner.id, version: card.owner.version ?? null, revision: card.owner.revision, relaunch } });
+    this.persist();
+    this.updated(r);
+  }
   /** The mode that bounds a chat's children: the user's own choice or the role's ceiling, never the mode the app
    *  starts a session with by default (manager-sessions.ts launchMode) nor one the engine reports. */
   chosenMode(chatId: string): PermissionMode | null { const r = this.chats.get(chatId); return r ? this.boundMode(r) : null; }

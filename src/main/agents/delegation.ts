@@ -17,8 +17,8 @@
 // user allows chats across engines. Used by wiring.ts.
 import path from 'node:path';
 import { heldQuestions, openQuestions } from '../../shared/question-ladder';
-import type { ChatSummary, Effort, Harness, NewChat, PermissionMode } from '../../shared/contract';
-import type { AgentCatalog, AgentProfile, AgentRun, UserTaskEvents } from '../../shared/agents';
+import type { ChatSummary, Effort, Harness, NewChat } from '../../shared/contract';
+import type { AgentCatalog, AgentRun, UserTaskEvents } from '../../shared/agents';
 import { canLaunch, isDelegatorRole, isWorkRole, launchGap, ROLE_DEFAULTS, WORK_ROLE_IDS, type DelegationSettings } from '../../shared/roles';
 import { CRITERION_MAX, EVIDENCE_MAX, MAX_CORRECTIONS, RESULT_OUTPUT_MAX, SUMMARY_MAX, USER_ACTION_COMMAND_MAX, USER_ACTION_KINDS, USER_ACTION_TEXT_MAX, USER_ONLY_BLOCKER, capText, checkContract, checkResult, contractFields, contractWarnings, delegationPrompt, depthOf, type DelegationResult, type DelegationIntegration, type TaskAssignmentOptions } from '../../shared/delegation';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
@@ -26,7 +26,7 @@ import { delegationGate, parallelSplit, stepIndex, type StrategyPlan } from '../
 import type { McpTool } from '../mcp/server';
 import { callerOf } from '../mcp/caller';
 import { ToolRefusal } from '../mcp/refusal';
-import { allowsClass, belowParent, type AgentPolicy } from './tool-policy';
+import { allowsClass, type AgentPolicy } from './tool-policy';
 import { delegableFolder } from './worktrees';
 import { childReviewers, DELTA_REVIEW, type ReviewWorld } from './one-review';
 import { gapLines, skillGaps } from './skill-needs';
@@ -56,8 +56,6 @@ export interface DelegationChats {
   userEvents?(chatId: string, afterSeq?: number): UserTaskEvents;
   create(req: NewChat, by: 'agent'): Promise<ChatSummary>;
   agentPolicy(chatId: string): AgentPolicy | null;
-  /** the mode that bounds a chat's children (its user's choice or its ceiling); absent = the mode the chat shows */
-  chosenMode?(chatId: string): PermissionMode | null;
   reportDelegation(chatId: string, result: DelegationResult): { parentId: string; delivered: boolean };
   /** a root role chat the Orchestrator opened reports to it (issue #93); absent = refused as before */
   reportRoot?(chatId: string, result: DelegationResult): { orchestratorId: string | null; delivered: boolean };
@@ -73,6 +71,9 @@ export interface DelegationChats {
   /** a child's question on the ladder (ADR 0344): who got it, and the holder's answer or askUser = one level up */
   ladderAsk(chatId: string, ask: { question: string; options: string[]; why?: string }): { asked: string };
   ladderReply(callerId: string, a: { chatId: string; requestId?: string; answer?: string; why?: string; askUser?: boolean }): Promise<{ answered: string; askUser: boolean }>;
+  /** a NEW chat that goes on from this one's hand-off (ChatManager.continueChat): a reused child whose engine cannot run
+   *  now goes on, with its new assignment, on the level's engine (ADR 0352); absent = such a reuse is refused */
+  continueChat?(chatId: string, opts: { allowStart?: boolean; ask?: false; promptPrefix?: string; on?: { harness: Harness; model: string | null; effort: Effort | null }; assignment?: { goal: string; doneWhen: string[] } }): Promise<ChatSummary>;
   /** closes a chat and cancels its tree (ChatManager.close, ADR 0217): agent_close_child; absent = the tool refuses */
   close?(chatId: string, by?: 'user' | 'agent'): Promise<void>;
 }
@@ -80,10 +81,9 @@ export interface DelegationDeps {
   chats: DelegationChats;
   roles: () => AgentCatalog;
   settings: () => DelegationSettings;
-  /** why a chat on `from` may not open one on `to` (engines/policy.ts openRefusal), null = it may */
-  engineRefusal: (from: Harness, to: Harness) => string | null;
-  /** the engines a role's levels name (ADR 0347): a reused child must still run on one of them */
-  roleEngines?: (p: AgentProfile) => Harness[];
+  /** why an agent may not open or wake a chat on `to` (engines/policy.ts openRefusal), null = it may; the asking
+   *  chat's own engine plays no part (ADR 0352) */
+  engineRefusal: (to: Harness) => string | null;
   /** the label every agent-written first message starts with (appctl AGENT_LABEL) */
   label: string;
   /** Host-owned staging only: no parent checkout mutation, branch merge, push or arbitrary command. */
@@ -138,7 +138,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
   const askedUserAction = new Set<string>();
   const chat = (id: string) => d.chats.list().find(c => c.id === id);
   /** what the one-review rule reads (#387, one-review.ts) */
-  const reviewWorld = (): ReviewWorld => ({ chats: d.chats.list(), runs: d.runs(), profile: id => d.roles().profiles.find(p => p.id === id) });
+  const reviewWorld = (): ReviewWorld => ({ chats: d.chats.list(), runs: d.runs() });
 
   const assigning = new Set<string>();
   function activeParent(callerId: string, tool: string): ChatSummary {
@@ -220,7 +220,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       // engine of that level is off or refused to agents
       // (none usable: the start itself refuses, with each model and why)
       const engine = cap?.engine ?? profile.engine;
-      const refused = d.engineRefusal(parent.harness, engine);
+      const refused = d.engineRefusal(engine);
       if (refused) throw new Error(`tasks[${i}]: ${profile.name} would start on ${engine}: ${refused}`);
       const presetFields = { ...(ask.preset ? { preset: ask.preset } : {}), ...(ask.presetWhy ? { presetWhy: ask.presetWhy } : {}), ...(ask.taskKind ? { taskKind: ask.taskKind } : {}), delegator };
       return { role, title, contract, cwd, profile, step, cap, presetFields, reviewOf, engine };
@@ -257,7 +257,10 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     }
   }
 
-  /** A parent reuses only its own compatible child; policy changes require a fresh session. */
+  /** A parent reuses its own child of the same role and folder, on any engine (ADR 0352). A card changed since the child
+   *  started does not stop it: the child takes the card's current instructions, tools and permissions, never wider than
+   *  the parent's (ChatManager.assignTask). It stays on its engine while that engine can run; when it cannot, the work
+   *  goes on by itself in a new child on the level's engine, from the hand-off (continueChat). */
   async function assignChild(a: Record<string, unknown>, callerId: string): Promise<unknown> {
     const parent = activeParent(callerId, 'agent_assign_task');
     if (!d.chats.assignTask || !d.chats.userEvents) throw new Error('agent_assign_task is unavailable.');
@@ -270,8 +273,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (!isWorkRole(a.roleId) || child.agent?.source !== 'catalog' || child.agent.id !== a.roleId || child.delegation.role !== a.roleId) throw new Error('Role mismatch: delegate a fresh chat.');
     const catalog = d.roles(), own = catalog.profiles.find(p => p.id === parent.agent!.id), profile = catalog.profiles.find(p => p.id === a.roleId);
     if (!own || !canLaunch(own.id, own.launches, a.roleId)) throw new Error(own && !isDelegatorRole(own.id) ? `agent_assign_task refused: ${own.name} does not delegate (only the Orchestrator and the Strategist do); put the work in your agent_report as a ready contract.` : 'Your current role may not launch this child role.');
-    // the revision too: tools, permissions and limits change the version in use in place (ADR 0186)
-    if (!profile || profile.activeVersion !== child.agent.version || profile.updatedAt !== child.agent.revision || !(d.roleEngines?.(profile) ?? [profile.engine]).includes(child.harness)) throw new Error('Role configuration changed: delegate a fresh chat.');
+    if (!profile) throw new Error(`agent_assign_task: role ${String(a.roleId).slice(0, 40)} is not in the catalog any more; delegate a current role.`);
     // cwd only confirms the project (#427): the child's own folder (its worktree) or yours; omitted = the child's. The
     // folder never changes on a reuse, so a cwd naming another one is refused with the child's folder in the message
     if (a.cwd !== undefined && (typeof a.cwd !== 'string' || !path.isAbsolute(a.cwd) || !(samePath(a.cwd, child.cwd) || samePath(a.cwd, parent.cwd)))) throw new Error(`Project mismatch: this child works in ${child.cwd}; a reuse keeps its folder, so pass that folder (or yours, ${parent.cwd}) as cwd or omit cwd. For another folder delegate a fresh chat.`);
@@ -287,21 +289,20 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     const steps = a.step === undefined ? undefined : d.chats.planOf?.(parent.id)?.steps;
     const ask = stepAsk(presetAskOf(a, ''), steps && Number.isInteger(a.step) ? steps[Number(a.step) - 1]?.preset : undefined);
     const preset = d.presetChoice?.(a.roleId, ask, { role: own.id, model: parent.model || own.model || null }) ?? null;
-    // a preset without effort is the engine's default: a child left on another effort goes back to it (null)
-    const switchTo = preset && ((preset.model ?? null) !== (child.model ?? null) || (preset.effort ?? null) !== (child.effort ?? null)) ? preset : null;
-    // a level that starts on another engine now (ADR 0347): a chat never changes engine in place
-    if (switchTo?.engine && switchTo.engine !== child.harness) throw new Error(`agent_assign_task: ${profile.name}'s level ${switchTo.preset} now starts on ${switchTo.engine} (${switchTo.route ?? 'its first model with room'}), this child runs on ${child.harness}: delegate a fresh chat.`);
-    const presetWarnings = [...(preset?.warnings ?? []), ...(switchTo ? [`the child switches to preset ${switchTo.preset} (${switchTo.model ?? 'the engine default'}${switchTo.effort ? `, effort ${switchTo.effort}` : ''}) from ${child.model ?? 'the engine default'}${child.effort ? `, effort ${child.effort}` : ''}`] : [])];
-    const parentPolicy = d.chats.agentPolicy(parent.id), childPolicy = d.chats.agentPolicy(child.id);
+    // where the level starts now (ADR 0347; absent = the card's own engine). The order on the card is a preference: the
+    // child stays on its own engine while that one can run, and goes to the level's only when its own cannot (ADR 0352)
+    const levelEngine = (preset?.engine ?? profile.engine) as Harness;
+    const blocked = d.engineRefusal(child.harness);
+    const move = blocked ? levelEngine : null;
+    if (move && (move === child.harness || d.engineRefusal(move))) throw new Error(`agent_assign_task: ${blocked}${move !== child.harness ? `, and ${profile.name}'s level starts on ${move}: ${d.engineRefusal(move)}` : ''}. The child goes on once one of its role's engines is on and allowed (Impostazioni → Motori).`);
+    // a preset without effort is the engine's default: a child left on another effort goes back to it (null). A
+    // preset on another engine than the child's names no model of its own: the child keeps its model there
+    const sameEngine = levelEngine === child.harness;
+    const switchTo = !move && preset && sameEngine && ((preset.model ?? null) !== (child.model ?? null) || (preset.effort ?? null) !== (child.effort ?? null)) ? preset : null;
+    const presetWarnings = [...(preset?.warnings ?? []), ...(switchTo ? [`the child switches to preset ${switchTo.preset} (${switchTo.model ?? 'the engine default'}${switchTo.effort ? `, effort ${switchTo.effort}` : ''}) from ${child.model ?? 'the engine default'}${child.effort ? `, effort ${child.effort}` : ''}`] : []),
+      ...(!move && !sameEngine && preset ? [`${profile.name}'s level ${preset.preset} now starts on ${levelEngine}; this child stays on ${child.harness}, which can still run, with its own model`] : [])];
+    const parentPolicy = d.chats.agentPolicy(parent.id);
     if (launchGap(profile.tools?.allow ?? [], parentPolicy?.tools?.allow ?? null).length) throw new Error('Child role needs permissions your current policy does not allow.');
-    const normalized = (policy: AgentPolicy | null) => JSON.stringify({ ceiling: policy?.ceiling ?? null, tools: policy?.tools ? { allow: [...policy.tools.allow].sort(), mcp: policy.tools.mcp ? [...policy.tools.mcp].sort() : null } : null });
-    // the mode that bounds a child: the parent's own choice or ceiling, as when the child was created, not the mode
-    // the app starts every Claude chat with (ADR 0290). A parent really in plan bounds it however it got there
-    const parentMode = parent.permissionMode === 'plan' ? 'plan' : d.chats.chosenMode ? d.chats.chosenMode(parent.id) : parent.permissionMode ?? null;
-    if (normalized(childPolicy) !== normalized(belowParent(childPolicy, parentPolicy, parentMode))) throw new Error('Child permissions exceed your current policy or mode: delegate a fresh narrowed chat.');
-    const refused = d.engineRefusal(parent.harness, child.harness);
-    if (refused) throw new Error(`agent_assign_task: ${refused}`);
-    if (child.harness !== parent.harness && (child.closedAt || !['running', 'waiting', 'idle'].includes(child.state))) throw new Error('A stopped engine of another kind requires the user.');
     const plan = d.chats.planOf?.(parent.id) ?? null;
     const gate = delegationGate(plan, 'agent_assign_task');
     if (gate) throw new Error(gate);
@@ -322,6 +323,16 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       // its next round on the work it already reviewed: only the delta (a new task is reviewed whole)
       const delta = a.roleId === 'sentinel' && a.mode !== 'new-task' && !!child.delegation.result ? `${DELTA_REVIEW}\n\n` : '';
       const prompt = `${d.label}\n\n${delta}${delegationPrompt(contract, { role: a.roleId, parentTitle: parent.title, title: child.title, skills: [] })}`;
+      if (move) {
+        // the child's engine cannot run now: a new child of the same role goes on with this task on the level's engine,
+        // from the app's own hand-off note, under you, in the same folder; the old one owes you nothing more
+        if (!d.chats.continueChat) throw new Error(`agent_assign_task: ${blocked}; moving the child to another engine is unavailable here.`);
+        const next = await d.chats.continueChat(child.id, { allowStart: false, ask: false, on: { harness: move, model: preset?.model ?? null, effort: preset?.effort ?? null },
+          assignment: { goal: contract.goal, doneWhen: contract.doneWhen }, promptPrefix: `La chat «${child.title}» girava su ${child.harness}, che ora non può partire (${blocked}): l’app continua il suo lavoro qui, su ${move}, dal suo passaggio di consegne qui sotto.\n\n${prompt}` });
+        if (step !== null) d.chats.planDelegated?.(parent.id, step, [next.id]);
+        const warned = [...presetWarnings, ...contractWarnings(contract)];
+        return { chatId: next.id, continuedFrom: child.id, harness: next.harness, note: [`${child.harness} cannot run now (${blocked}): the task goes on in «${next.title}» on ${move}, from «${child.title}»'s hand-off; use this chatId from now on.`, ...(userInstructions.length ? [USER_INSTRUCTIONS_NOTE] : [])].join(' '), ...(preset ? { preset: preset.preset } : {}), ...(userInstructions.length ? { userInstructions } : {}), ...(warned.length ? { warnings: warned } : {}) };
+      }
       // the switch itself happens inside assignTask, after its guards (busy, queued, version, held result)
       await d.chats.assignTask(child.id, prompt, { mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: version, ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), doneWhen: contract.doneWhen, contractFields: contractFields(contract), ...(step !== null ? { planStep: step } : {}), source: { kind: 'chat', chatId: parent.id },
           ...(preset ? { preset: { choice: runPresetOf(preset), model: preset.model, ...(switchTo ? { switchTo: { model: switchTo.model ?? '', effort: switchTo.effort ?? null } } : {}) } } : {}) });
@@ -569,7 +580,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: async (a, ctx) => JSON.stringify(await delegate(a, callerOf(ctx.params))),
   }, {
     name: 'agent_assign_task',
-    description: 'Continue YOUR direct child in the same role and project with a separate task run. The user\'s messages and answers in that chat you have not seen come back to you readable (userInstructions): the child already has them, so they are not repeated in its prompt; account for them, and correct the child or ask the user where your contract disagrees. expectedVersion (taskVersion from agent_children) and expectedEventSeq are optional and honoured when given. Refused only while the child works or has queued work. Keeps the session, tools and skills; changed role settings require a fresh child. A Sentinel that reviewed this task is continued here after a fix (mode continue): it reviews only the fix delta. Use rework only for explicit corrections. With an approved plan, step is required. preset: one of the role card\'s three; omitted preset = its plan step\'s, else base. Closed parents must first receive a new assignment from their own parent or Orchestrator.',
+    description: 'Continue YOUR direct child in the same role and project with a separate task run. The user\'s messages and answers in that chat you have not seen come back to you readable (userInstructions): the child already has them, so they are not repeated in its prompt; account for them, and correct the child or ask the user where your contract disagrees. expectedVersion (taskVersion from agent_children) and expectedEventSeq are optional and honoured when given. Refused only while the child works or has queued work. Any engine: a child active, stopped or closed by itself resumes with its history on its own engine (ADR 0352). Keeps the session and skills; the child takes its card\'s current tools and permissions, never wider than yours, so a changed card or level is no reason for a fresh child. When the child\'s engine cannot run now, the task goes on by itself in a new child of the role on the level\'s engine, from the hand-off: use the answer\'s chatId (continuedFrom = the old one). A Sentinel that reviewed this task is continued here after a fix (mode continue): it reviews only the fix delta. Use rework only for explicit corrections. With an approved plan, step is required. preset: one of the role card\'s three; omitted preset = its plan step\'s, else base. Closed parents must first receive a new assignment from their own parent or Orchestrator.',
     inputSchema: { type: 'object', required: ['chatId', 'roleId', 'mode', 'contract'],additionalProperties: false, properties: {
       chatId: str, roleId: { type: 'string', enum: [...WORK_ROLE_IDS] }, cwd: { ...str, description: 'optional: the child\'s folder (agent_children cwd, its worktree) or yours; omitted = the child\'s. A reuse never moves the child to another folder' },
       mode: { type: 'string', enum: ['continue', 'new-task', 'rework'] },

@@ -60,19 +60,12 @@ describe('parent child task continuity',()=>{
     expect(prompt).not.toContain('Keep the user requirement');
     expect(prompt).not.toContain('ultimi 7 giorni');
   });
-  it('a parent the app started in «default» still reuses its child: only the mode the user chose bounds a child (ADR 0290)',async()=>{
-    const f=fixture();
-    // the engine reports the mode the app started it with; the user chose none
-    f.parent.permissionMode='default';f.chats.chosenMode=()=>null;
-    expect(await f.call('agent_assign_task',f.args())).toMatchObject({taskVersion:2});
-    // a narrowing mode the user chose (the manager gives «plan» or «acceptEdits», never a picked «default») bounds the child as before
-    const g=fixture();
-    g.parent.permissionMode='acceptEdits';g.chats.chosenMode=()=>'acceptEdits';
-    await expect(g.call('agent_assign_task',g.args())).rejects.toThrow(/exceed your current policy or mode/);
-    // a parent really in plan bounds its child however it got there (its engine's default, EnterPlanMode)
-    const h=fixture();
-    h.parent.permissionMode='plan';h.chats.chosenMode=()=>null;
-    await expect(h.call('agent_assign_task',h.args())).rejects.toThrow(/exceed your current policy or mode/);
+  it('a parent in any mode reuses its child: the manager narrows the child to it, never a refusal (ADR 0290, 0352)',async()=>{
+    for(const mode of ['default','acceptEdits','plan'] as const){
+      const f=fixture();
+      f.parent.permissionMode=mode;
+      expect(await f.call('agent_assign_task',f.args())).toMatchObject({taskVersion:2});
+    }
   });
   it('refuses other parents, bad cursors and changing a reused contract policy',async()=>{
     const f=fixture();
@@ -93,20 +86,14 @@ describe('parent child task continuity',()=>{
     await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/agent_assign_task/);
     expect(f.assign).not.toHaveBeenCalled();
   });
-  it('refuses stale role configuration, another role, scope changes and current permission narrowing',async()=>{
+  it('refuses another role and scope changes; a card changed since the child started does not stop it (ADR 0352)',async()=>{
     const f=fixture();
-    f.catalog.profiles[1]!.activeVersion=2;
-    await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/configuration changed/);
-    f.catalog.profiles[1]!.activeVersion=1;
-    // a change in place (same version, ADR 0186) moves the revision: a fresh chat too
-    (f.catalog.profiles[1] as {updatedAt?:number}).updatedAt=5;
-    await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/configuration changed/);
-    delete (f.catalog.profiles[1] as {updatedAt?:number}).updatedAt;
     await expect(f.call('agent_assign_task',{...f.args(),roleId:'sentinel'})).rejects.toThrow(/Role mismatch/);
     await expect(f.call('agent_assign_task',{...f.args(),cwd:path.resolve('/elsewhere')})).rejects.toThrow(/Project mismatch: this child works in/);
-    f.parent.permissionMode='plan';
-    await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/permissions exceed/);
     expect(f.assign).not.toHaveBeenCalled();
+    f.catalog.profiles[1]!.activeVersion=2;
+    (f.catalog.profiles[1] as {updatedAt?:number}).updatedAt=5;
+    await expect(f.call('agent_assign_task',f.args())).resolves.toMatchObject({chatId:'child'});
   });
   it('takes cwd as optional: omitted, the child\'s worktree or the parent\'s folder all reuse the child in its own folder (#427)',async()=>{
     const wt=fs.mkdtempSync(path.join(os.tmpdir(),'sb-reuse-wt-'));

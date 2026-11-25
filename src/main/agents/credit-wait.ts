@@ -43,8 +43,8 @@ export interface CreditWaitDeps {
   };
   /** catalog.cardNow: throws when the card cannot start a chat now (engine off, a model it cannot apply) */
   card(roleId: string, ask: PresetAsk, delegator?: Delegator): CardNow;
-  /** why a chat on `from` may not start one on `to` (the user's engine settings), or null */
-  engineRefusal(from: Harness, to: Harness): string | null;
+  /** why an agent may not open a chat on `to` (the user's engine settings), or null */
+  engineRefusal(to: Harness): string | null;
   now?: () => number;
   /** runs the watch again later (the end of a grace) */
   later?: (fn: () => void, ms: number) => void;
@@ -82,8 +82,8 @@ export function creditMove(c: ChatSummary, chatOf: (id: string) => ChatSummary |
   // the run did not say which card the chat started from: the card read now is the one it waits on
   if (w.card === undefined) return { do: 'note', card: key };
   if (card.engine !== c.harness) {
-    // a delegated chat's new engine must be one its parent may start (Impostazioni → Motori): else it stays
-    if (parent && d.engineRefusal(parent.harness, card.engine)) return { do: 'stay', engine: card.engine, card: key };
+    // the new engine must be one agents may open (Impostazioni → Motori): else it stays
+    if (d.engineRefusal(card.engine)) return { do: 'stay', engine: card.engine, card: key };
     return { do: 'continue', on: card, card: key };
   }
   return { do: 'resume', to: { model: card.model, effort: card.effort }, card: key };

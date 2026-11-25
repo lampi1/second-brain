@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- Any engine reaches any engine: the Orchestrator and the Strategist assign, write to and reopen a chat on any engine
+  that is on and allowed, active, stopped or closed by itself. A changed role card never stops the work: the chat takes
+  the card's tools (never more than its parent's), and when its engine cannot run the app moves the work to a new
+  linked chat by itself. Chats you closed with ✕ stay closed (ADR 0352).
 - A role chat whose model runs out of credits waits instead of failing: its step stays under way, the chat and the map
   say «crediti finiti: cambia il modello nella scheda del ruolo», and it goes on by itself from where it was when you
   change that card (on another engine, in a new chat of the same role). The app never moves to another model or preset

@@ -1,6 +1,6 @@
 # 0218. «Balanced mode»: the engine, model and effort of a delegation follow the credits left
 
-Date: 2026-11-01. Status: proposed (waiting for the owner's review).
+Date: 2026-11-01. Status: superseded by ADR 0337 (choice logic retired) and ADR 0347 (Balanced mode removed: «togli la balanced mode»); was proposed.
 
 ## Context
 

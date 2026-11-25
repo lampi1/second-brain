@@ -169,7 +169,7 @@ export interface ChatManagerOptions {
 
 export interface HandoffOptions {
   reason?: 'manual' | 'threshold' | 'finished' | 'continue' | 'cold';
-  /** false = never start a stopped engine for it (an agent asking about a Cursor chat): a token-free note instead */
+  /** false = never start a stopped engine for it (its engine cannot run now, or the old engine has no credit): a token-free note instead */
   allowStart?: boolean;
   /** false = never ask the chat, even a running one: always the token-free note (the automatic closing of finished
    *  chats, owner 2026-10-11: no turn and no tokens at close) */
@@ -289,7 +289,8 @@ export interface Rec {
   launches?: string[];
   /** the skills its launch gave it (role defaults, linked and the launch's own): the role gate allows only these */
   skills?: string[];
-  /** the agent's tool policy and permission ceiling, frozen at start like its instructions (A2) */
+  /** the agent's tool policy and permission ceiling, set at start like its instructions (A2); a new assignment takes
+   *  its card as it is now, never wider than its parent's (ADR 0352, ChatManager.adoptCard) */
   policy?: AgentPolicy | null;
   /** the in-process PreToolUse hook its engine got at start (Claude: the Orchestrator's budget, a role's sub-agent
    *  gate): run_code's internal calls pass it too (decideFor, ADR 0331) */

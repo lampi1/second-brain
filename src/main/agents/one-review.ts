@@ -8,7 +8,7 @@
 // Pure (no Electron, no I/O); pinned by test/unit/agents/one-review.test.ts.
 import path from 'node:path';
 import type { AgentRun } from '../../shared/agents';
-import type { ChatSummary, Harness } from '../../shared/contract';
+import type { ChatSummary } from '../../shared/contract';
 
 /** the roles whose root chats give an independent verdict (run.reviewOf) */
 export const REVIEW_ROLES: readonly string[] = ['sentinel', 'judge'];
@@ -16,8 +16,6 @@ export const REVIEW_ROLES: readonly string[] = ['sentinel', 'judge'];
 export interface ReviewWorld {
   chats: readonly ChatSummary[];
   runs: readonly AgentRun[];
-  /** the role's card as it is now: a chat started on another version or revision cannot take a new assignment */
-  profile: (roleId: string) => { activeVersion: number; updatedAt: number } | undefined;
   /** the open work thread a chat is linked to (workflows/service.ts); absent or null = none */
   threadOf?: (chatId: string) => string | null;
 }
@@ -39,13 +37,13 @@ export function sameWork(w: Pick<ReviewWorld, 'threadOf'>, a: string, b: string)
   return t !== null && t === (w.threadOf?.(b) ?? null);
 }
 
-/** A chat that can take another assignment of its role from `from` (what the assign tools would accept): the same
- *  role card and folder, not closed by the user, and an engine of another kind only while it is still up. */
-function reusable(w: ReviewWorld, c: ChatSummary, role: string, cwd: string, from: Harness): boolean {
+/** A chat that can take another assignment of its role (what the assign tools accept, ADR 0352): the same role and
+ *  folder, not closed by the user. Its engine, active, stopped or closed by itself, and a card changed since it started
+ *  do not matter: it resumes with its history on its own engine (or moves, when that one cannot run) and takes the
+ *  card as it is now. */
+function reusable(c: ChatSummary, role: string, cwd: string): boolean {
   if (c.isOrchestrator || c.agent?.source !== 'catalog' || c.agent.id !== role || (c.closedAt && c.closedBy === 'user')) return false;
-  if (c.harness !== from && (c.closedAt || !['running', 'waiting', 'idle'].includes(c.state))) return false;
-  const p = w.profile(role);
-  return !!p && p.activeVersion === c.agent.version && p.updatedAt === c.agent.revision && sameFolder(c.cwd, cwd);
+  return sameFolder(c.cwd, cwd);
 }
 
 const newestFirst = (a: ChatSummary, b: ChatSummary): number => (b.run?.startedAt ?? 0) - (a.run?.startedAt ?? 0);
@@ -58,14 +56,14 @@ export function runsOf(w: ReviewWorld, c: ChatSummary): AgentRun[] {
 
 /** The root review chat that already reported on the work `reviewOf` belongs to (in any of its rounds, so one busy
  *  with a later round still counts): a new one for that work would be a duplicate. */
-export function rootReviewer(w: ReviewWorld, a: { role: string; reviewOf: string; cwd: string; from: Harness }): ChatSummary | null {
+export function rootReviewer(w: ReviewWorld, a: { role: string; reviewOf: string; cwd: string }): ChatSummary | null {
   const target = reviewedChat(w.runs, a.reviewOf);
   if (!target || !REVIEW_ROLES.includes(a.role)) return null;
   const reviewed = (c: ChatSummary): boolean => runsOf(w, c).some(r => {
     const about = r.report ? reviewedChat(w.runs, r.reviewOf) : null;
     return !!about && sameWork(w, about, target);
   });
-  return w.chats.filter(c => !c.parentId && c.id !== target && !!c.run?.reviewOf && reusable(w, c, a.role, a.cwd, a.from) && reviewed(c)).sort(newestFirst)[0] ?? null;
+  return w.chats.filter(c => !c.parentId && c.id !== target && !!c.run?.reviewOf && reusable(c, a.role, a.cwd) && reviewed(c)).sort(newestFirst)[0] ?? null;
 }
 
 /** A parent's Sentinel children that already reported on its current task (in any of their rounds): a new Sentinel
@@ -78,7 +76,7 @@ export function childReviewers(w: ReviewWorld, parent: ChatSummary, cwd: string)
     return r?.taskId ?? r?.runId;
   };
   const reported = (c: ChatSummary): boolean => runsOf(w, c).some(r => (!!r.report || r.runId === c.run?.runId && !!c.delegation?.result) && taskOf(r.parentRunId) === task);
-  return w.chats.filter(c => c.parentId === parent.id && c.delegation?.role === 'sentinel' && reusable(w, c, 'sentinel', cwd, parent.harness) && reported(c)).sort(newestFirst);
+  return w.chats.filter(c => c.parentId === parent.id && c.delegation?.role === 'sentinel' && reusable(c, 'sentinel', cwd) && reported(c)).sort(newestFirst);
 }
 
 /** Whether a review chat may be given this run to review: only work it reviews or reviewed in any of its rounds (the

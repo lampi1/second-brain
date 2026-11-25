@@ -38,7 +38,8 @@ redundant settings and dead code deleted with a one-off migration; Artisans run 
 - Amends ADR 0336 (no Settings picker; `userModel` must be one of the card's presets), ADR 0331 (per role, not a
   setting) and retires ADR 0218's choice logic (its cost data stays).
 - A chat with no role (a user's plain chat) no longer runs in Code Mode.
-- An old Balanced child on another engine than its role's is not reused: `agent_assign_task` asks for a fresh chat.
+- ~~An old Balanced child on another engine than its role's is not reused: `agent_assign_task` asks for a fresh chat.~~
+  Replaced by [ADR 0352](0352-any-engine-reaches-any-engine.md): it is reused on its own engine and model.
 - Tests: `test/unit/agents/legacy-cards.test.ts` (migration), `test/unit/shared/model-choice-guide.test.ts` (the guide
   reaches who chooses), `test/unit/code-mode/*` (per role, per engine), `test/unit/renderer/agent-card-presets.test.ts`
   (the card).
