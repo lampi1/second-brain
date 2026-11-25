@@ -84,7 +84,7 @@ export function validReading(f: Pick<CreditFacts, 'pool' | 'account' | 'reading'
 }
 
 /** The verdict for a pool now. `asker` = the chat (or launch) that asks: a probe in flight is its own, others wait. */
-export function creditVerdict(f: CreditFacts, now: number, o: { asker?: string; fmt?: (at: number) => string } = {}): CreditVerdict {
+export function creditVerdict(f: CreditFacts, now: number, o: { asker?: string; fmt?: (at: number) => string; ignoreError?: boolean } = {}): CreditVerdict {
   const r = f.reading && f.reading.ok && f.reading.pool === f.pool && !(f.account && f.reading.account && f.account !== f.reading.account) ? f.reading : null;
   const valid = !!r && validReading(f, now);
   const readingAt = r?.at ?? null;
@@ -105,8 +105,9 @@ export function creditVerdict(f: CreditFacts, now: number, o: { asker?: string; 
       return probation(f, now, o.asker, `rinnovo passato alle ${at(until)}: lettura da rifare`, readingAt, true);
     }
   }
-  // 2. a limit error the reading does not cover
-  const e = f.error;
+  // 2. a limit error the reading does not cover; the user's own explicit pick skips this assumed pause once (ADR 0359): a
+  // new refusal sets it again, a clean turn clears it, a spent window of step 1 is real and still stops
+  const e = o.ignoreError ? null : f.error;
   if (e && !(f.workedFrom !== null && f.workedFrom > e.at)) {
     const end = e.pauseFrom + e.pauseMs;
     // a valid reading taken after the pause, all under 98%: the error is over (reading below decides free or pace)
@@ -127,7 +128,7 @@ export function creditVerdict(f: CreditFacts, now: number, o: { asker?: string; 
     const top = r.windows.filter(w => binding(w, f.model, f.pool)).reduce<HarnessUsageWindow | null>((a, w) => !a || w.usedPercent > a.usedPercent ? w : a, null);
     return { state: 'free', why: top ? `${top.label} al ${Math.round(top.usedPercent)}%` : 'nessun limite riportato', source: 'reading', until: null, readingAt };
   }
-  if (e) return { state: 'free', why: 'un turno è andato a buon fine dopo l’errore di limite', source: 'turn', until: null, readingAt: null };
+  if (f.error) return { state: 'free', why: 'un turno è andato a buon fine dopo l’errore di limite', source: 'turn', until: null, readingAt: null };
   return { state: 'unknown', why: 'limite non letto', source: 'none', until: null, readingAt: null };
 }
 
@@ -139,7 +140,9 @@ function probation(f: CreditFacts, now: number, asker: string | undefined, why: 
 
 /** The pause after a new limit error. Errors of turns that started before the current pause ended count as one; a probe
  *  that started after it and failed doubles it (cap: 1 hour on a readable pool, a day on a blind one). */
-export function nextError(prev: CreditError | null, errorAt: number, turnStartedAt: number, readable: boolean, workedFrom: number | null = null): CreditError {
+export function nextError(prev: CreditError | null, errorAt: number, turnStartedAt: number, readable: boolean, workedFrom: number | null = null, providerMs: number | null = null): CreditError {
+  // the provider named its own reset time (ADR 0359): that is the pause, never shorter than the short pause nor longer than a day
+  if (providerMs !== null && providerMs > 0) return { at: errorAt, pauseFrom: errorAt, pauseMs: Math.min(PAUSE_CAP_BLIND_MS, Math.max(SHORT_PAUSE_MS, providerMs)) };
   // a clean turn after the last error proved the pool worked: a new error starts again from the short pause
   if (!prev || (workedFrom !== null && workedFrom > prev.at)) return { at: errorAt, pauseFrom: errorAt, pauseMs: SHORT_PAUSE_MS };
   const end = prev.pauseFrom + prev.pauseMs;
@@ -149,3 +152,24 @@ export function nextError(prev: CreditError | null, errorAt: number, turnStarted
 
 /** The line a skipped model gets in the chat and in the tools' answers: «OpenAI saltato: 5h al 100%, torna alle 22:40». */
 export function skipLine(name: string, v: Pick<CreditVerdict, 'why'>): string { return `${name} saltato: ${v.why}`; }
+
+/** Does a limit error's text say the limit is the whole account's or plan's (ADR 0359)? Otherwise it stops that model only
+ *  (seen: gpt-6.2-astra refused with «The usage limit has been reached», two hours later gpt-6.2-sol answered). */
+export function accountWideLimit(text: string | null | undefined): boolean {
+  return /(credit balance|insufficient[_ ]quota|exceeded your current quota|out of credits|subscribe to |hit your (?:usage )?limit|claude (?:ai )?usage limit|free usage limit|(?:your|account|plan|subscription|weekly|monthly|5-hour|five-hour)[^.]{0,40}\blimit)/i.test(String(text ?? ''));
+}
+
+/** The pause the provider's own words give: «try again in 2 hours», «resets in 45 minutes», «retry after 90 seconds», an
+ *  ISO time after «reset»/«again at». null = none said. */
+export function providerPauseMs(text: string | null | undefined, now: number): number | null {
+  const t = String(text ?? '');
+  const rel = t.match(/(?:try again|retry|resets?|available again|come back)[^0-9]{0,20}?(\d+(?:\.\d+)?)\s*(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d)\b/i);
+  if (rel) {
+    const n = Number(rel[1]), u = rel[2]!.toLowerCase()[0]!;
+    const ms = n * (u === 's' ? 1e3 : u === 'm' ? MIN : u === 'h' ? HOUR : DAY);
+    return Number.isFinite(ms) && ms > 0 ? Math.round(ms) : null;
+  }
+  const iso = t.match(/(?:reset|again|after|until)[^0-9]{0,20}?(\d{4}-\d{2}-\d{2}T[\d:.]+Z?)/i);
+  if (iso) { const at = Date.parse(iso[1]!); if (Number.isFinite(at) && at > now) return at - now; }
+  return null;
+}

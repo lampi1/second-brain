@@ -125,6 +125,8 @@ export abstract class ManagerContinuity extends ManagerRequests {
       ...(on ? { ...(on.model ? { model: on.model } : {}), ...(on.effort ? { effort: on.effort } : {}) } : { ...(r.choice.model ? { model: r.choice.model } : {}), ...(r.choice.effort ? { effort: r.choice.effort } : {}) }),
       ...(r.choice.permissionMode ? { permissionMode: r.choice.permissionMode } : {}),
       // a routed job stays one outcome across hand-offs: the new chat writes on the first chat's ledger line
+      // the user's choice for the work tree goes on with its root (ADR 0359)
+      ...(!parentRec && r.s.routing ? { routing: structuredClone(r.s.routing) } : {}), ...(!parentRec && r.s.userModel ? { userModel: { ...r.s.userModel } } : {}),
       ...(r.s.route ? { route: { ...r.s.route, ledgerId: r.s.route.ledgerId ?? `app:${r.s.id}`, handoffs: (r.s.route.handoffs ?? 0) + 1 } } : {}),
       // the root task's own contract goes on (a delegated one travels in its delegation)
       ...(!parentRec && !task && r.s.run?.goal ? { goal: r.s.run.goal.slice(0, 2000) } : {}), ...(!parentRec && !task && r.s.run?.taskContract?.doneWhen?.length ? { doneWhen: [...r.s.run.taskContract.doneWhen] } : {}),

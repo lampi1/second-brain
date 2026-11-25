@@ -36,7 +36,7 @@ import { createAgentLoop } from './agents/loop';
 import { delegationTools } from './agents/delegation';
 import { limitSignal } from './agents/credits';
 import { creditLive } from './agents/credit-live';
-import { inheritUserModel } from './agents/catalog';
+import { inheritUserModel, routingFor } from './agents/catalog';
 import { creditWaitWatch } from './agents/credit-wait';
 import { EngineHealth } from './agents/engine-health';
 import { engineNowOf, startElsewhere } from './agents/engine-now';
@@ -248,7 +248,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const credits = creditLive({ file: path.join(ctx.userData, 'credits.json'), usage: brain, changed: () => creditWaitRef.current?.(),
     threshold: engine => brain.settings().engineThresholds?.[engine] ?? null });
   const agents = createAgentCatalog(ctx, brain, engines, () => ({ ...cliCache, ...engineReadiness() }), undefined, {
-    room: (engine, model, asker) => credits.room(engine, model, asker),
+    room: (engine, model, asker, o) => credits.room(engine, model, asker, o),
     claim: (engine, model, owner) => credits.claim(engine, model, owner),
     engineTrouble: engine => engineHealth.trouble(engine),
     engineBlock: engine => openRefusal(brain.settings(), engine),
@@ -375,8 +375,17 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       // the user's own model for the work (recorded on the chat the Orchestrator opened with userModel) holds for the
       // chats its Strategist opens for it, when their role's levels have that model (ADR 0354 point 7); an agent never
       // passes one itself (agent_delegate has no such field)
+      // what the user said for the whole tree (ADR 0359): the model per role and the engines left out, from the request's own
+      // record (a root) and the ancestors' records at this launch (so a change made while the tree runs holds); a launch
+      // never opens an excluded engine. The tree's pick comes before an inherited userModel, so a changed record wins.
+      const own = req.routing && !req.orchestrator ? req.routing : null;
+      const up = req.parentId && !req.orchestrator ? routingFor(req.parentId, manager.list()) : null;
+      const tree = own || up ? { picks: { ...(up?.picks ?? {}), ...(own?.picks ?? {}) }, exclude: [...new Set([...(up?.exclude ?? []), ...(own?.exclude ?? [])])] } : null;
+      const treePick = tree && !req.userModel && req.roleId ? tree.picks[req.roleId] : undefined;
+      if (treePick) req = { ...req, userModel: treePick };
       req = inheritUserModel(req, manager.list(), (roleId, m) => agents.namesModel(roleId, m));
-      const resolved = resolveStart(req, { claim: true });
+      // only a pick named at the root is the user's explicit one: children inheriting it never skip a pause (ADR 0359)
+      const resolved = resolveStart(req, { claim: true, ...(tree?.exclude.length ? { exclude: tree.exclude } : {}), ...(treePick ? { freePick: true } : {}), ...(req.parentId ? { inherited: true } : {}) });
       const roleId = req.orchestrator ? 'orchestrator' : req.roleId;
       if (!roleId || (req.orchestrator && !brain.info().brainRoot)) return resolved;
       // only the brain skills this launch gives exist in its plugin
@@ -829,7 +838,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       if (!p) throw new Error(`ruolo sconosciuto: ${c.agentId ?? ''}`);
       agentPacks.learning.save(changedDraft(p, c.key, c.value), p.id, roleReason(c.reason));
     } });
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: req => resolveStart(req), creditOf: (engine, model) => credits.verdict(engine, model), creditFresh: () => credits.freshAll(), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps, workMaps,
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: (req, o) => resolveStart(req, o), creditOf: (engine, model) => credits.verdict(engine, model), creditFresh: () => credits.freshAll(), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps, workMaps,
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       held: pendingConfig,

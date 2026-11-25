@@ -18,7 +18,7 @@ import type { ChatSummary, HarnessUsage, HarnessUsageWindow } from '../../../src
 
 const MIN = 60e3, HOUR = 60 * MIN;
 const T = Date.UTC(2026, 10, 24, 21, 0);
-const LIMIT = 'The usage limit has been reached';
+const LIMIT = 'You have hit your usage limit';
 const dirs: string[] = [];
 const hm = (at: number) => { const d = new Date(at); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 afterEach(() => { vi.useRealTimers(); for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });

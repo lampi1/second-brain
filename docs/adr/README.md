@@ -347,6 +347,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0356](0356-every-chat-has-its-roles-tools-on-every-engine.md) Every chat has its role's app tools on every engine, from the first turn to the last — accepted
 - [0357](0357-claude-and-gpt-on-antigravity-have-their-own-quota-pool.md) Claude and GPT models on Antigravity have their own quota pool — accepted
 - [0358](0358-a-stopped-root-strategist-wakes-the-orchestrator.md) A root Strategist stopped without a result wakes the Orchestrator — accepted
+- [0359](0359-the-users-engine-choice-holds-for-the-whole-tree.md) The user's engine choice holds for the whole work tree, and a limit stops one model — accepted
 - [0360](0360-one-order-of-the-engines.md) One order of the engines, a threshold each, the reason on every chat, and changes that are never lost — accepted
 - [0361](0361-whoever-opens-a-chat-chooses-its-folder.md) Whoever opens a chat chooses its folder, in place by default — accepted
 
