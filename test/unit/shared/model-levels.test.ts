@@ -1,6 +1,8 @@
 // Several models per level across engines (ADR 0347): the stored shape is checked, a card without lists reads as its
 // presets, a verdict of the one credit rule as a level's room (ADR 0354) and the pick in the user's order.
 import { describe, expect, it } from 'vitest';
+import { creditVerdict } from '../../../src/shared/credit-rule';
+import { pastThreshold } from '../../../src/shared/engine-order';
 import { checkedLevels, headPresets, levelEngines, levelNamed, levelsOf, pickInLevel, roomOf, type LevelModel, type Room } from '../../../src/shared/model-levels';
 
 const H = 3600e3, NOW = 1_000 * H;
@@ -44,17 +46,29 @@ describe('roomOf', () => {
   });
 });
 
+describe('roomOf with the user\'s threshold (ADR 0361)', () => {
+  const at = (pct: number, threshold: number | null = 80): Room => {
+    const reading = { at: NOW, ok: true, pool: 'codex', account: null, windows: [{ kind: 'weekly' as const, label: '7g', usedPercent: pct, resetsAt: NOW + 10 * H }] };
+    return roomOf(creditVerdict({ pool: 'codex', reading, error: null, workedFrom: null }, NOW), pastThreshold(reading, null, threshold, NOW));
+  };
+  it('past it the plan is over, before its credits end; spent stays spent', () => {
+    expect(at(79).state).toBe('ok');
+    expect(at(80)).toMatchObject({ state: 'over', why: '7g al 80%, soglia 80%' });
+    expect(at(99).state).toBe('out');
+    expect(at(95, null).state).not.toBe('over');
+  });
+});
+
 describe('pickInLevel', () => {
   const list: LevelModel[] = [{ engine: 'claude', model: 'sonnet' }, { engine: 'antigravity', model: 'gemini' }, { engine: 'opencode', model: 'gpt' }];
   const room = (states: Record<string, Room['state']>) => (x: LevelModel): Room => ({ state: states[x.engine] ?? 'ok', why: states[x.engine] ?? '', resetsAt: null });
-  it('the first with room, in the user\'s order', () => {
-    expect(pickInLevel(list, () => null, room({}))?.chosen.engine).toBe('claude');
+  it('the first with room, in the list\'s order; the reason says so', () => {
+    expect(pickInLevel(list, () => null, room({}))).toMatchObject({ chosen: { engine: 'claude' }, reason: 'claude sonnet: primo disponibile' });
   });
   it('skips a plan on pace or spent while another has room, and says why', () => {
-    const p = pickInLevel(list, () => null, room({ claude: 'pace' }))!;
-    expect(p.chosen.engine).toBe('antigravity');
-    expect(p.reason).toContain('sonnet (claude) saltato: ritmo alto');
-    expect(p.skipped).toEqual([expect.objectContaining({ engine: 'claude', kind: 'credit', state: 'pace' })]);
+    expect(pickInLevel(list, () => null, room({ claude: 'pace' }))).toMatchObject({ chosen: { engine: 'antigravity' }, reason: 'antigravity gemini: claude sta per finire il limite' });
+    expect(pickInLevel(list, () => null, room({ claude: 'out' }))?.reason).toBe('antigravity gemini: claude al limite');
+    expect(pickInLevel(list, () => null, room({ claude: 'pace' }))!.skipped).toEqual([expect.objectContaining({ engine: 'claude', kind: 'credit', state: 'pace' })]);
   });
   it('an engine that is off is never picked', () => {
     expect(pickInLevel(list, x => x.engine === 'claude' ? 'spento' : null, room({}))?.chosen.engine).toBe('antigravity');
@@ -64,7 +78,20 @@ describe('pickInLevel', () => {
     expect(pickInLevel(list, () => null, room({ claude: 'out', antigravity: 'pace', opencode: 'pace' }))?.chosen.engine).toBe('antigravity');
     const all = pickInLevel(list, () => null, room({ claude: 'out', antigravity: 'out', opencode: 'out' }))!;
     expect(all.chosen.engine).toBe('claude');
-    expect(all.reason).toContain('tutti i modelli del livello hanno finito il limite');
+    expect(all.reason).toContain('tutti i motori del livello sono al limite');
     expect(all.allOut).toBe(true);
+  });
+  it('the engine order comes before the list\'s; a plan on pace is no reason to skip it', () => {
+    const order = ['opencode', 'antigravity', 'claude'];
+    expect(pickInLevel(list, () => null, room({}), { order })?.chosen.engine).toBe('opencode');
+    expect(pickInLevel(list, () => null, room({ opencode: 'pace' }), { order })?.chosen.engine).toBe('opencode');
+    expect(pickInLevel(list, x => x.engine === 'antigravity' ? 'non collegato' : null, room({ opencode: 'out' }), { order })).toMatchObject({ chosen: { engine: 'claude' }, reason: 'claude sonnet: opencode al limite, antigravity non collegato' });
+    // an engine the order does not name comes after the named ones
+    expect(pickInLevel(list, () => null, room({}), { order: ['antigravity'] })?.chosen.engine).toBe('antigravity');
+  });
+  it('past the threshold the next one starts; all past it: the first, and it says so', () => {
+    const order = ['opencode', 'antigravity', 'claude'];
+    expect(pickInLevel(list, () => null, room({ opencode: 'over' }), { order })).toMatchObject({ chosen: { engine: 'antigravity' }, reason: 'antigravity gemini: opencode oltre la soglia' });
+    expect(pickInLevel(list, () => null, room({ opencode: 'over', antigravity: 'over', claude: 'over' }), { order })).toMatchObject({ chosen: { engine: 'opencode' }, reason: 'opencode gpt: oltre la soglia, ma nessun altro è libero' });
   });
 });

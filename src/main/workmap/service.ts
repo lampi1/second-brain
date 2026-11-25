@@ -32,7 +32,7 @@ export interface WorkChats {
   planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string, by?: 'pc' | 'phone', keep?: boolean): Promise<void>;
   planStart(chatId: string): Promise<void>;
   planStop(chatId: string): Promise<void>;
-  planResume(chatId: string): Promise<void>;
+  planResume(chatId: string, cwd?: string): Promise<void>;
   planReplan(chatId: string, text: string): Promise<void>;
   planPutAway(chatId: string): void;
   /** the open requests, for whom a chat waits */
@@ -57,7 +57,7 @@ export interface WorkMapsDeps {
   /** a project as the user names it → its map's folder name, or null */
   projectNamed?(name: string): string | null;
   /** opens a Strategist for a map (an idea, or a job whose chat is gone); the chat carries the map's id */
-  startStrategist?(map: WorkMap, change: string | undefined, by: string): Promise<ChatSummary>;
+  startStrategist?(map: WorkMap, change: string | undefined, by: string, cwd?: string): Promise<ChatSummary>;
   now?: () => number;
   newId?: () => string;
 }
@@ -351,7 +351,7 @@ export class WorkMaps {
   }
 
   /** One action on a map, for the user (IPC) or for the Orchestrator; refused when the map does not allow it now. */
-  async act(id: string, action: WorkMapAction, a: { at?: number; text?: string } = {}, by = 'user'): Promise<WorkMap> {
+  async act(id: string, action: WorkMapAction, a: { at?: number; text?: string; cwd?: string } = {}, by = 'user'): Promise<WorkMap> {
     const m = this.maps.get(id);
     if (!m) throw new Error('Questa mappa non c’è.');
     // the screen says it of every map it shows: only a finished one moves
@@ -367,7 +367,7 @@ export class WorkMaps {
     return this.clone(this.maps.get(id)!);
   }
 
-  private async run(m: WorkMap, action: WorkMapAction, a: { at?: number; text?: string }, by: string): Promise<void> {
+  private async run(m: WorkMap, action: WorkMapAction, a: { at?: number; text?: string; cwd?: string }, by: string): Promise<void> {
     const { chats } = this.d, chat = this.ownerChat(m);
     switch (action) {
       case 'approve': case 'keep': {
@@ -376,7 +376,7 @@ export class WorkMaps {
         return this.sync(m.id, by);
       }
       case 'start':
-        if (!m.owner) return this.begin(m, by);
+        if (!m.owner) return this.begin(m, by, undefined, a.cwd);
         await chats.planStart(this.needChat(chat).id);
         return this.sync(m.id, by);
       case 'stop':
@@ -386,8 +386,8 @@ export class WorkMaps {
         return;
       case 'resume':
         // its chat is gone, or works on another job now: the job goes on in a new one
-        if (!chat) return this.begin(m, by);
-        await chats.planResume(chat.id);
+        if (!chat) return this.begin(m, by, undefined, a.cwd);
+        await chats.planResume(chat.id, a.cwd);
         this.memory.alive(chat.id);
         this.dying.delete(chat.id);
         this.sync(m.id, by);
@@ -417,9 +417,9 @@ export class WorkMaps {
     }
   }
 
-  private async begin(m: WorkMap, by: string, change?: string): Promise<void> {
+  private async begin(m: WorkMap, by: string, change?: string, cwd?: string): Promise<void> {
     if (!this.d.startStrategist) throw new Error('Qui non si può avviare uno Strategist.');
-    const chat = await this.d.startStrategist(structuredClone(m), change, by);
+    const chat = await this.d.startStrategist(structuredClone(m), change, by, cwd);
     // its own events linked it already (ChatSummary.workMap); one that did not is linked here
     this.edit(m.id, by, x => (x.owner?.chatId === chat.id ? x : this.moved(x, chat)));
     this.sync(m.id, by);

@@ -14,6 +14,7 @@ export const JOB_PROPS = {
   job: { type: 'string', description: 'the work map: its id (wm_…) or its exact title' },
   query: { type: 'string', description: 'jobs: words to look for, the archive included' },
   archived: { type: 'boolean', description: 'jobs: the archived ones' },
+  cwd: { type: 'string', description: 'resume, start: another existing absolute folder for its Strategist; default: the last one it used' },
 };
 
 const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
@@ -37,6 +38,6 @@ export async function jobAction(maps: WorkMaps, action: JobAction, a: Record<str
   if (action === 'job') return workText(maps.view(id)!);
   // the plan that is proposed now: a newer one is refused by the chat itself
   const at = maps.get(id)?.plan?.at;
-  const m = await maps.act(id, action satisfies WorkMapAction, { ...(at !== undefined ? { at } : {}), ...(text(a.text) ? { text: text(a.text) } : {}) }, 'Orchestrator');
+  const m = await maps.act(id, action satisfies WorkMapAction, { ...(at !== undefined ? { at } : {}), ...(text(a.text) ? { text: text(a.text) } : {}), ...(text(a.cwd) ? { cwd: text(a.cwd) } : {}) }, 'Orchestrator');
   return { ok: true, job: m.id, state: m.state, ...(m.owner ? { chatId: m.owner.chatId } : {}) };
 }

@@ -14,7 +14,7 @@ import { makeLink } from '../lib/notify';
 import { isBusy } from '../store/state';
 import { closeChat, setChat, setSetting, undoTurn, useApp } from '../store/store';
 import { askConfirm, openHandoff, setFocused } from '../store/ui';
-import { askClearOrchestrator, askRenewOrchestrator, copyLink, resumeChat, toggleFocusMode } from '../actions';
+import { askClearOrchestrator, askRenewOrchestrator, copyLink, resumeChat, resumeChatElsewhere, toggleFocusMode } from '../actions';
 import { openNextLabel, resumeLabel, useContinuedBy } from './ContextBar';
 import { MenuItem, MenuLabel, MenuSep, Popover } from './ui';
 import { ModelPicker } from './ModelPicker';
@@ -111,11 +111,12 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, orchestrator }
       <MenuSep />
       <MenuLabel>{t('chat.menu.handoffLabel', { tokens: chat.contextTokens ? t('chat.menu.handoffTokens', { amount: `${chat.contextEstimated ? '~' : ''}${tokensShort(chat.contextTokens)}` }) : undefined })}</MenuLabel>
       <MenuItem onSelect={pick(() => openHandoff(id))} testid={`chat-handoff-${id}`}>{t('chat.menu.handoffRead')}</MenuItem>
-      {!chat.isOrchestrator && (
+      {!chat.isOrchestrator && (<>
         <MenuItem onSelect={pick(() => void resumeChat(id))} disabled={!next && (isBusy(chat) || chat.pending > 0 || !!chat.handoffBusy)} testid={`chat-resume-${id}`}>
           {next ? openNextLabel() : resumeLabel()}
         </MenuItem>
-      )}
+        {!next && <MenuItem onSelect={pick(() => void resumeChatElsewhere(id))} disabled={isBusy(chat) || chat.pending > 0 || !!chat.handoffBusy} testid={`chat-resume-elsewhere-${id}`}>{t('chat.menu.resumeElsewhere')}</MenuItem>}
+      </>)}
       {!!chat.checkpointAt && !chat.isOrchestrator && (
         <MenuItem onSelect={pick(() => askConfirm({ title: t('chat.menu.undoTurnTitle'), body: t('chat.menu.undoTurnBody'), confirmLabel: t('chat.menu.undoTurnConfirm'), danger: true, onConfirm: () => void undoTurn(id) }))} disabled={isBusy(chat) || chat.pending > 0} testid={`chat-undo-turn-${id}`}>{t('chat.menu.undoTurn')}</MenuItem>
       )}

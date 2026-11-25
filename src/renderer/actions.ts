@@ -456,16 +456,24 @@ export function openChatRef(chatId: string): void {
   focusChat(chatId);
 }
 
-/** "Riprendi": the long or finished chat continues in a new one (same engine and folder, from its hand-off), shown at once. */
-export async function resumeChat(chatId: string): Promise<void> {
+/** "Riprendi": the long or finished chat continues in a new one, from its hand-off, in the last folder it used or in `cwd`, on the
+ *  engine its role starts on now (ADR 0361, 0362); shown at once. */
+export async function resumeChat(chatId: string, cwd?: string): Promise<void> {
   // already continued in a chat that is still here: just go there (no IPC, no toast)
   const by = app.get().chats[chatId]?.continuedBy;
   const live = by ? app.get().chats[by.id] : undefined;
-  const c = live ?? await continueChat(chatId);
+  const c = live ?? await continueChat(chatId, cwd);
   if (!c) return;
   if (c.closedAt) await reopenChat(c.id); // the continuation closed by itself meanwhile: back on the grid
   if (ui.get().focusMode === chatId) setFocusMode(c.id);
   focusChat(c.id);
+}
+
+/** «Riprendi in un'altra cartella…»: the native chooser, opened on the last folder it used; cancelled = nothing happens. */
+export async function resumeChatElsewhere(chatId: string): Promise<void> {
+  const from = app.get().chats[chatId]?.cwd;
+  const cwd = await sb.invoke('app:pickFolder', { ...(from ? { from } : {}) });
+  if (cwd) await resumeChat(chatId, cwd);
 }
 
 /** How long a closing tile fades out before it leaves the grid (styles: .chat-tile.closing). */

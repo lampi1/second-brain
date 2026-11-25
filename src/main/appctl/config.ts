@@ -28,7 +28,10 @@ import { runsOf, MCP_ACCESS_ROLES, effectiveAccess, type McpServerDef, type McpS
 import { parseMcpSnippet, publicDraft } from '../../shared/mcp-paste';
 import { cardPresets, checkedPresets, type FullPresets, type ModelPreset, type RolePresets } from '../../shared/model-presets';
 import { checkedLevels, type FullLevels, type LevelModel, type RoleLevels } from '../../shared/model-levels';
-import { getAt } from '../brain/settings-schema';
+import { defOf, getAt, validate } from '../brain/settings-schema';
+import { namesInOrder, sentencesOf, wordsOf } from '../../shared/engine-order';
+import { ToolRefusal } from '../mcp/refusal';
+import type { HeldChange, PendingChange } from './pending-config';
 import { addRedaction, log } from '../log';
 import type { ToolDef } from './tools';
 
@@ -37,6 +40,10 @@ export interface ConfigDeps {
   callerId: string;
   /** the user wrote to this Orchestrator in the last few minutes (their ask, not an agent's) */
   userAsked(): boolean;
+  /** what the user's last «Sì» to this Orchestrator was about, when recent (user-words.ts answeredText); null = none */
+  saidYesTo?(): { text: string; used(): void } | null;
+  /** a change that is not applied stays «da applicare» on its own panel (pending-config.ts, ADR 0361) */
+  held?: { hold(c: Omit<PendingChange, 'id' | 'at'>): PendingChange; applied(c: HeldChange): void };
   brain: {
     settings(): Settings; settingsSchema(): SettingDef[]; settingsHistory(limit?: number): SettingChange[];
     undoSetting(changeId: string, by?: ChangeBy, origin?: { chatId?: string; direct?: boolean }): SettingChange;
@@ -68,7 +75,7 @@ export const CONFIG_TURN_MIN = 120;
 const AREAS = ['setting', 'view', 'agent', 'connector', 'profile', 'later'] as const;
 const PROFILE_FIELDS = ['name', 'role', 'language', 'mainWork', 'replyStyle'] as const;
 /** The role card's fields an edit may set (name, summary and character are the role's own, fixed) */
-export const AGENT_FIELDS = ['instructions', 'engine', 'model', 'effort', 'maxContext', 'skills', 'launches', 'tools', 'permissionCeiling', 'presets', 'levels', 'codeMode', 'fast'] as const;
+export const AGENT_FIELDS = ['instructions', 'engine', 'model', 'effort', 'maxContext', 'skills', 'launches', 'tools', 'permissionCeiling', 'presets', 'levels', 'engineOrder', 'codeMode', 'fast'] as const;
 const VIEW_FIELDS = ['theme', 'density', 'workProfile'] as const;
 
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -125,9 +132,67 @@ export function levelsValue(v: unknown, card: AgentProfile): RoleLevels {
   if (!l.base?.length) throw new Error('levels: Base ha almeno un modello.');
   return l;
 }
+/** A change as its panel says it: the whole change in one canonical sentence (and, for a long text, the text itself), and
+ *  for an order of the engines the words that name it too. */
+export interface ChangeWords { text: string; full?: string; order?: { engines: readonly (readonly string[])[]; others: readonly (readonly string[])[]; and?: readonly string[]; never?: readonly string[] } }
+/** Whether a card's words name this very change: the canonical sentence, word for word, or, for an order, one sentence that
+ *  names those engines in that order and no other. Nothing looser: a yes to a similar card is no yes to this change. */
+export function names(card: string, w: ChangeWords): boolean {
+  if (w.full !== undefined) return false; // a long text is never named by a short card
+  return sentencesOf(card).some(x => x.trim() === wordsOf(w.text).trim()) || !!w.order && namesInOrder(card, w.order.engines, w.order);
+}
+/** An engine's names as a person says them: its label, its id, and OpenAI for the engine whose models are OpenAI's. */
+const engineNames = (c: AgentCatalog | undefined) => (id: string): string[] => {
+  const e = c?.models.find(m => m.engine === id);
+  const openai = !!e?.models.length && e.models.every(m => /^openai\//i.test(m.id));
+  return [...(openai ? ['OpenAI'] : []), ...(e ? [e.label] : []), id];
+};
+const shown = (v: unknown): string => typeof v === 'string' ? v : v === true ? 'acceso' : v === false ? 'spento' : JSON.stringify(v);
+const orderWords = (c: AgentCatalog | undefined, ids: readonly string[]) => {
+  const engine = engineNames(c);
+  return { engines: ids.map(engine), others: (c?.models ?? []).map(m => m.engine as string).filter(id => !ids.includes(id)).map(engine).filter(n => !ids.some(id => engine(id).some(x => n.includes(x)))) };
+};
+/** A settings change in words. */
+export function settingWords(key: string, value: unknown, c: AgentCatalog | undefined): ChangeWords {
+  const engine = engineNames(c);
+  if (key === 'engineOrder') {
+    const ids = value as string[];
+    return ids.length ? { text: `Ordine dei motori per tutti i ruoli: ${ids.map(x => engine(x)[0]).join(', poi ')}.`,
+      // a sentence about one role is that role's exception, never everybody's order
+      order: { ...orderWords(c, ids), and: ['tutti i ruoli', 'ogni ruolo', 'ordine dei motori', 'all roles', 'every role', 'alle Rollen'], never: (c?.profiles ?? []).flatMap(p => [p.name, p.id]) } }
+      : { text: 'Ordine dei motori per tutti i ruoli: nessuno, vale quello delle liste di ogni livello.' };
+  }
+  if (key === 'engineThresholds') {
+    const rows = Object.entries(value as Record<string, number>);
+    return { text: `Soglie dei motori: ${rows.map(([id, n]) => `${engine(id)[0]} ${n}%`).join(', ') || 'nessuna'}.` };
+  }
+  return { text: `${defOf(key)?.label ?? key}: ${shown(value)}.` };
+}
+/** A role card's change in words. */
+export function agentWords(p: AgentProfile, key: string, value: unknown, c: AgentCatalog): ChangeWords {
+  const engine = engineNames(c);
+  if (key === 'levels') {
+    const l = value as RoleLevels, at = (x: LevelModel) => `${engine(x.engine)[0]} ${c.models.find(m => m.engine === x.engine)?.models.find(m => m.id === x.model)?.name ?? x.model ?? 'predefinito'}${x.effort ? ` ${x.effort}` : ''}`;
+    const kept = storedLevels(p), changed = (['base', 'min', 'max'] as const).filter(id => JSON.stringify(l[id] ?? []) !== JSON.stringify(kept[id] ?? []));
+    const level = { min: 'Minimo', base: 'Base', max: 'Massimo' };
+    return { text: `${p.name}, modelli per livello. ${(changed.length ? changed : (['base'] as const)).map(id => `${level[id]}: ${(l[id] ?? []).map(at).join(', poi ') || 'come Base'}`).join('. ')}.` };
+  }
+  if (key === 'engineOrder') {
+    const ids = Array.isArray(value) ? value as string[] : [];
+    return ids.length ? { text: `${p.name}, eccezione all’ordine dei motori: ${ids.map(x => engine(x)[0]).join(', poi ')}.`, order: { ...orderWords(c, ids), and: [p.name, p.id], never: c.profiles.filter(x => x.id !== p.id).flatMap(x => [x.name, x.id]) } }
+      : { text: `${p.name}: nessuna eccezione, segue l’ordine dei motori di tutti.` };
+  }
+  // the whole text is on the panel: what he reads is what is applied
+  if (key === 'instructions') return { text: `${p.name}, nuove istruzioni (${String(value).length} caratteri).`, full: String(value) };
+  return { text: `${p.name}, ${key}: ${shown(value)}.` };
+}
+/** A role card with one field changed, as its save takes it. */
+export const changedDraft = (p: AgentProfile, key: string, value: unknown): AgentDraft => ({ ...draftOf(p), [key]: value }) as AgentDraft;
+export const roleReason = (reason?: string): string => `Modificato dall’Orchestrator su richiesta dell’utente${reason ? `: ${reason}` : ''}`.slice(0, 600);
+
 const roleView = (p: AgentProfile, presets: FullPresets, levels?: FullLevels) => ({ id: p.id, name: p.name, activeVersion: p.activeVersion, engine: p.engine, model: p.model, effort: p.effort ?? null,
   codeMode: p.codeMode === true, ...(p.engine === 'cursor' ? { fast: p.fast === true } : {}), maxContext: p.maxContext ?? null, skills: p.skills, launches: p.launches, tools: p.tools, permissionCeiling: p.permissionCeiling, presets, ...(levels ? { levels: p.id === 'orchestrator' ? { base: levels.base } : levels } : {}), ...(p.trial ? { trial: p.trial } : {}),
-  instructions: p.instructions.length > 400 ? `${p.instructions.slice(0, 400)}… (${p.instructions.length} chars)` : p.instructions });
+  ...(p.engineOrder?.length ? { engineOrder: p.engineOrder } : {}), instructions: p.instructions.length > 400 ? `${p.instructions.slice(0, 400)}… (${p.instructions.length} chars)` : p.instructions });
 
 export function configTool(d: ConfigDeps): ToolDef {
   const asked = (what: string) => { if (!d.userAsked()) throw new Error(`bloccato: cambia ${what} solo quando l'utente te lo chiede: un suo messaggio o un suo «Sì» a una tua domanda, senza altri messaggi dopo, negli ultimi ${CONFIG_ASK_MIN} minuti o nello stesso turno; chiediglielo con una domanda Sì/No`); };
@@ -263,7 +328,7 @@ export function configTool(d: ConfigDeps): ToolDef {
   };
   return {
     name: 'app_config',
-    description: `Read and change the app's configuration for the user, exactly as their own click in the app would (every change is logged with its Annulla). action "get" (read, optional query), "set", "undo", "history"; for connectors also "add", "remove", "test", "form". area: "setting" (every key of Impostazioni and more: key + value; get lists key, label, description, type, current value), "view" (theme system|light|dark, density comfortable|compact, workProfile: key + value), "agent" (a role's card in Brain → Agenti: agentId + key = one of ${AGENT_FIELDS.join('|')} + value; codeMode = true|false, the role's chats work through run_code (not the Orchestrator; full on Claude, partial elsewhere); fast = true|false (Cursor only); presets = the role's Minimo/Base/Massimo (its page, ADR 0336), value {min?, base, max?} each {model, effort?}: base must be the card's current model and effort (change them with key model|effort), min and max only models of the role's one engine, omitted = the same as Base, {base} alone clears them; get returns each role's presets and levels; levels = the role's ordered model lists per level (ADR 0347, the page's «Modelli per livello»), value {min?, base?, max?} each an ordered list (first = best, at most 8, no engine + model twice) of {engine, model (null = the engine's default), effort?} from ANY engine: this is how to put models of several engines in one level; a level left out keeps its list, [] sends min/max back to following base, and the head of base becomes the card's engine, model and effort; the Orchestrator has base only (its chat starts on the first model of the list on its engine); undo of presets or levels = set the undo.value it returned (levels also posts a card with Annulla); undo with agentId + version when set made a new version (text, skills), else set the "before" value back), "connector" (the MCP servers of Impostazioni → Connettori: get = each server, how it runs, its token slots set|missing and who may use it; add = (saved OFF until the user's own «Attiva» on its card, which shows what it runs; so is a change of command|args|env|url; no test before it) snippet (what the user pasted: a Claude Desktop/Cursor "mcpServers" JSON, a command line like "npx -y @x/server", or an http(s) URL; server = which one when the JSON has several) or def {label, transport stdio|http, command, args, env, url, headers, secrets:[{where env|header, name, prefix?}], purpose}; set = server + key enabled (boolean) | access (role ${MCP_ACCESS_ROLES.join('|')} + value all|read|none|{tools:[...]}) | label | purpose | command | args | env | url | headers | tokens (the token variable or header names); remove = server; test = server (opens it as a chat would and lists its tools); form = snippet or def: opens the add form prefilled for the user; undo = changeId from add/set/remove), "profile" (Il mio profilo, the brain's me.md: get, or set key name|role|language|mainWork (array of lines)|replyStyle + value), "later" («Rispondi dopo»: value true|false). Change only what the user asked: their own message, or their «Sì» to your native yes/no question naming the exact change (to ask, use that question), in the last ${CONFIG_ASK_MIN} minutes or the turn it started; then tell them in one line what changed and that Annulla is on the change's card. Never secret values: never put a token in snippet, def, env or headers (a pasted one is dropped before anything is kept); when a server needs a token, say which one and that they type it in its card (form opens it); logins stay the user's. Where a setting is on screen: app_guide / app_ui outline.`,
+    description: `Read and change the app's configuration for the user, exactly as their own click in the app would (every change is logged with its Annulla). action "get" (read, optional query), "set", "undo", "history"; for connectors also "add", "remove", "test", "form". area: "setting" (every key of Impostazioni and more: key + value; get lists key, label, description, type, current value), "view" (theme system|light|dark, density comfortable|compact, workProfile: key + value), "agent" (a role's card in Brain → Agenti: agentId + key = one of ${AGENT_FIELDS.join('|')} + value; codeMode = true|false, the role's chats work through run_code (not the Orchestrator; full on Claude, partial elsewhere); fast = true|false (Cursor only); presets = the role's Minimo/Base/Massimo (its page, ADR 0336), value {min?, base, max?} each {model, effort?}: base must be the card's current model and effort (change them with key model|effort), min and max only models of the role's one engine, omitted = the same as Base, {base} alone clears them; get returns each role's presets and levels; levels = the role's ordered model lists per level (ADR 0347, the page's «Modelli per livello»), value {min?, base?, max?} each an ordered list (first = best, at most 8, no engine + model twice) of {engine, model (null = the engine's default), effort?} from ANY engine: this is how to put models of several engines in one level; a level left out keeps its list, [] sends min/max back to following base, and the head of base becomes the card's engine, model and effort; engineOrder = this role's exception to the one engine order (a list of engine ids, [] = none: the one order is the setting engineOrder, with engineThresholds the % past which the next engine starts; to put an engine first or last for every role set that setting, never every role's lists); the Orchestrator has base only (its chat starts on the first model of the list on its engine); undo of presets or levels = set the undo.value it returned (levels also posts a card with Annulla); undo with agentId + version when set made a new version (text, skills), else set the "before" value back), "connector" (the MCP servers of Impostazioni → Connettori: get = each server, how it runs, its token slots set|missing and who may use it; add = (saved OFF until the user's own «Attiva» on its card, which shows what it runs; so is a change of command|args|env|url; no test before it) snippet (what the user pasted: a Claude Desktop/Cursor "mcpServers" JSON, a command line like "npx -y @x/server", or an http(s) URL; server = which one when the JSON has several) or def {label, transport stdio|http, command, args, env, url, headers, secrets:[{where env|header, name, prefix?}], purpose}; set = server + key enabled (boolean) | access (role ${MCP_ACCESS_ROLES.join('|')} + value all|read|none|{tools:[...]}) | label | purpose | command | args | env | url | headers | tokens (the token variable or header names); remove = server; test = server (opens it as a chat would and lists its tools); form = snippet or def: opens the add form prefilled for the user; undo = changeId from add/set/remove), "profile" (Il mio profilo, the brain's me.md: get, or set key name|role|language|mainWork (array of lines)|replyStyle + value), "later" («Rispondi dopo»: value true|false). Change only what the user asked: their own message, or their «Sì» to your native yes/no question naming the exact change, in the last ${CONFIG_ASK_MIN} minutes or the turn it started (a setting or role change they did not ask yet: just call set; the app keeps it «da applicare» and asks them itself with the exact change, so never ask twice); then tell them in one line what changed and that Annulla is on the change's card. Never secret values: never put a token in snippet, def, env or headers (a pasted one is dropped before anything is kept); when a server needs a token, say which one and that they type it in its card (form opens it); logins stay the user's. Where a setting is on screen: app_guide / app_ui outline.`,
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     inputSchema: { type: 'object', additionalProperties: false, required: ['action', 'area'], properties: {
       action: { type: 'string', enum: ['get', 'set', 'undo', 'history', 'add', 'remove', 'test', 'form'] }, area: { type: 'string', enum: [...AREAS] },
@@ -278,6 +343,24 @@ export function configTool(d: ConfigDeps): ToolDef {
       if (!(AREAS as readonly string[]).includes(area)) throw new Error(`area: ${AREAS.join(' | ')}`);
       const q = typeof a.query === 'string' ? a.query : '';
       const reason = typeof a.reason === 'string' ? a.reason.slice(0, 300) : undefined;
+      /** The proof of a change (ADR 0361): the user's ask as always, or their recent «Sì» to a card that names this very
+       *  change. Else it is not applied and stays «da applicare» on a panel the app writes. */
+      const proven = (c: HeldChange, what: string, words: ChangeWords) => {
+        if (d.userAsked()) return;
+        const yes = d.saidYesTo?.() ?? null;
+        // one yes, one change: the proof is spent with it
+        if (yes !== null && names(yes.text, words)) { yes.used(); return; }
+        const why = 'serviva un tuo messaggio, o un tuo Sì a un pannello che nomina questa modifica';
+        if (!d.held) { asked(what); return; }
+        const h = d.held.hold({ ...c, chatId: d.callerId, text: words.text, ...(words.full !== undefined ? { full: words.full } : {}), why, ...(reason ? { reason } : {}) });
+        throw new ToolRefusal(`bloccato: ${why}. Non persa: è «da applicare» (${h.id}) su un pannello dell'app, il suo Sì la applica da solo. Non richiederla e non fargli un'altra domanda; digli in una riga che il pannello lo aspetta.`);
+      };
+      /** A change the user did ask and the app refused: the reason goes to the user, and the change stays «da applicare». */
+      const refused = (c: HeldChange, words: ChangeWords, e: unknown): never => {
+        const why = e instanceof Error ? e.message : String(e);
+        if (d.held) { const h = d.held.hold({ ...c, chatId: d.callerId, text: words.text, ...(words.full !== undefined ? { full: words.full } : {}), why, ...(reason ? { reason } : {}) }); throw new Error(`${why} Non persa: è «da applicare» (${h.id}) su un pannello dell'app che dice il motivo.`); }
+        throw e;
+      };
       switch (area) {
         case 'setting': {
           if (action === 'get') {
@@ -296,9 +379,16 @@ export function configTool(d: ConfigDeps): ToolDef {
             return { undone: a.changeId, change: { id: ch.id, key: ch.key, value: ch.after } };
           }
           if (action !== 'set') break;
-          asked('le impostazioni');
-          const r = d.brain.requestSetting(String(a.key ?? ''), a.value, { by: 'agent', chatId: d.callerId, ...(reason ? { reason } : {}), direct: true });
-          if ('error' in r) throw new Error(r.error);
+          const key = String(a.key ?? ''), ok = validate(key, a.value);
+          if (!ok.ok) throw new Error(ok.error);
+          const held: HeldChange = { area: 'setting', key, value: ok.value };
+          // folders where Codex runs on its own are checked as they are now, at his own click in Impostazioni: never held
+          if (defOf(key)?.type === 'repo-paths') asked('le impostazioni');
+          else proven(held, 'le impostazioni', settingWords(key, ok.value, d.agents?.list()));
+          const r = d.brain.requestSetting(key, a.value, { by: 'agent', chatId: d.callerId, ...(reason ? { reason } : {}), direct: true });
+          // refused by its own check after the proof: it stays «da applicare» with the reason (ADR 0361 point 8)
+          if ('error' in r) return refused(held, settingWords(key, ok.value, d.agents?.list()), new Error(r.error));
+          if ('applied' in r) d.held?.applied(held);
           if ('proposal' in r) return { proposal: r.proposal.id, note: 'in attesa del clic dell’utente in Memoria → Proposte' };
           log.info('appctl', 'Orchestrator changed a setting', { chat: d.callerId, data: { key: r.applied.key } });
           return { changed: r.applied.key, before: r.applied.before, after: r.applied.after, changeId: r.applied.id, undo: 'app_config undo with this changeId, or Annulla in the change log' };
@@ -332,7 +422,6 @@ export function configTool(d: ConfigDeps): ToolDef {
           if (action !== 'set') break;
           const key = String(a.key ?? '');
           if (!(AGENT_FIELDS as readonly string[]).includes(key)) throw new Error(`key: ${AGENT_FIELDS.join(' | ')}`);
-          asked('i ruoli');
           const old = role(a.agentId);
           // its own tools and permission ceiling stay the user's click on its card: a turn that read untrusted text
           // must not be able to widen the Orchestrator itself
@@ -340,7 +429,12 @@ export function configTool(d: ConfigDeps): ToolDef {
           // "null" or "" for the model: the registry's model (an agent that cannot send a JSON null)
           // presets: { min?, base, max? } with Base the card's own model and effort (ADR 0336)
           const value = key === 'presets' ? presetsValue(a.value, old, presetsOf(old).base) : key === 'levels' ? levelsValue(a.value, old) : key === 'model' && (a.value === '' || a.value === 'null') ? null : a.value;
-          const p = d.agents.save({ ...draftOf(old), [key]: value } as AgentDraft, old.id, `Modificato dall’Orchestrator su richiesta dell’utente${reason ? `: ${reason}` : ''}`.slice(0, 600));
+          const held: HeldChange = { area: 'agent', key, agentId: old.id, value };
+          const words = agentWords(old, key, value, d.agents.list());
+          proven(held, 'i ruoli', words);
+          let p: AgentProfile;
+          try { p = d.agents.save(changedDraft(old, key, value), old.id, roleReason(reason)); } catch (e) { return refused(held, words, e); }
+          d.held?.applied(held);
           if (p.updatedAt === old.updatedAt) return { agentId: p.id, unchanged: true, note: 'già così' };
           log.info('appctl', 'Orchestrator changed a role', { chat: d.callerId, data: { role: p.id, key, version: p.activeVersion } });
           const field = (x: AgentProfile) => key === 'presets' ? presetsOf(x) : key === 'levels' ? storedLevels(x) : (x as unknown as Record<string, unknown>)[key] ?? null;

@@ -69,7 +69,7 @@ const THIRD_PARTY = /\b(claude|opus|sonnet|haiku|fable|mythos|gpt|oss)\b/i;
 export const isThirdPartyModel = (model: string | null | undefined): boolean => THIRD_PARTY.test(String(model ?? '').replace(/[-_.]/g, ' '));
 
 /** A window that stops this model: the plan's own, or one of this model only (spend windows never stop the plan). */
-function binding(w: HarnessUsageWindow, model: string | null | undefined, pool = ''): boolean {
+export function binding(w: HarnessUsageWindow, model: string | null | undefined, pool = ''): boolean {
   if (w.kind === 'spend') return false;
   // a pool of one engine (Antigravity: Gemini apart from Claude/GPT, ADR 0357): it stops only the models of its pool
   if (w.scope) { const third = model ? isThirdPartyModel(model) : pool.endsWith(':3p'); return w.scope === '3p' ? third : !third; }

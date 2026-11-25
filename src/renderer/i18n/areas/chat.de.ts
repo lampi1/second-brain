@@ -122,6 +122,7 @@ export const chatDe: typeof chatIt = {
   'chat.menu.permissionLabel': 'Berechtigungsabfragen',
   'chat.menu.handoffLabel': (p: { tokens?: string }) => `Übergabe${p.tokens ? ` · ${p.tokens}` : ''}`,
   'chat.menu.handoffTokens': (p: { amount: string }) => `${p.amount} Tokens verbraucht`,
+  'chat.menu.resumeElsewhere': 'In einem anderen Ordner fortsetzen…',
   'chat.menu.handoffRead': 'Notiz für die Fortsetzung lesen oder schreiben…',
   'chat.menu.undoTurn': 'Letzten Turn rückgängig machen (Dateien wie vorher)',
   'chat.menu.undoTurnTitle': 'Letzten Turn rückgängig machen?',

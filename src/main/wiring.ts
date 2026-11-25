@@ -8,7 +8,7 @@ import { app, powerMonitor, powerSaveBlocker, safeStorage, shell } from 'electro
 import os from 'node:os';
 import { LearningReviewService } from './brainmodel/learning-review';
 import { replayExecutor } from './brainmodel/replay-executor';
-import type { ChatSummary, CliStatus, EventMap, Harness } from '../shared/contract';
+import type { ChatSummary, CliStatus, EventMap, Harness, SettingChange } from '../shared/contract';
 import { engineStatuses } from './cli';
 import { engineReadiness } from './engines/readiness';
 import { engineInfos, engineOf, enginePathsFromEnv, engines as engineList, priceEnginesOf } from './engines/registry';
@@ -38,6 +38,11 @@ import { limitSignal } from './agents/credits';
 import { creditLive } from './agents/credit-live';
 import { inheritUserModel, routingFor } from './agents/catalog';
 import { creditWaitWatch } from './agents/credit-wait';
+import { EngineHealth } from './agents/engine-health';
+import { engineNowOf, startElsewhere } from './agents/engine-now';
+import { NoEngine } from './agents/catalog';
+import { PendingConfig } from './appctl/pending-config';
+import { changedDraft, roleReason } from './appctl/config';
 import { tierModel } from './agents/model-tier';
 import { markLegacyDone, migratedCards, readLegacy } from './agents/legacy-cards';
 import { workDecisionTools } from './agents/work-decisions';
@@ -237,12 +242,37 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the room of each engine's plan (ADR 0347): the one credit rule over the usage panel's readings and the limit errors
   // the app saw (ADR 0354, agents/credit-live.ts); a change that may free a waiting chat runs its watch again
   const creditWaitRef: { current?: () => void } = {};
-  const credits = creditLive({ file: path.join(ctx.userData, 'credits.json'), usage: brain, changed: () => creditWaitRef.current?.() });
+  // an engine whose chats just failed to start (ADR 0361): the next start passes it over for a while
+  const engineHealth = new EngineHealth();
+  ctx.emitter.tap((ch, payload) => { if (ch === 'chat:updated') engineHealth.observe(payload as ChatSummary); });
+  const credits = creditLive({ file: path.join(ctx.userData, 'credits.json'), usage: brain, changed: () => creditWaitRef.current?.(),
+    threshold: engine => brain.settings().engineThresholds?.[engine] ?? null });
   const agents = createAgentCatalog(ctx, brain, engines, () => ({ ...cliCache, ...engineReadiness() }), undefined, {
     room: (engine, model, asker, o) => credits.room(engine, model, asker, o),
     claim: (engine, model, owner) => credits.claim(engine, model, owner),
+    engineTrouble: engine => engineHealth.trouble(engine),
     engineBlock: engine => openRefusal(brain.settings(), engine),
   });
+  const engineNowDeps = { cardNow: agents.cardNow.bind(agents), ordered: (role: string) => agents.followsOrder(role) };
+  const engineNow = (c: ChatSummary) => engineNowOf(c, engineNowDeps);
+  /** A role's start, with the user told when no engine of its level can start or every one is spent (ADR 0361): never a
+   *  silent refusal, nor a silent start on a spent plan. The same notice is shown once per quarter of an hour. */
+  const spentTold = new Map<string, number>();
+  const resolveStart: typeof agents.resolve = (req, o) => {
+    const tell = (title: string, detail: string) => {
+      if (Date.now() - (spentTold.get(detail) ?? 0) <= 15 * 60_000) return;
+      spentTold.set(detail, Date.now());
+      brain.publish([{ kind: 'engines-spent', title, detail }]);
+    };
+    try {
+      const r = agents.resolve(req, o), p = r.presetChoice;
+      if (p?.allOut && p.route) tell('Tutti i motori al limite: la chat aspetta', `${r.owner.name}: ${p.route}. Riparte da sola appena un motore torna libero; per partire prima collega un altro motore o cambia l’ordine (Impostazioni → Motori).`);
+      return r;
+    } catch (e) {
+      if (e instanceof NoEngine) tell('Nessun motore disponibile: la chat non è partita', e.message);
+      throw e;
+    }
+  };
   // the retired model Settings (tiers, Code Mode, the Orchestrator's models) onto the role cards, once (legacy-cards.ts)
   const legacy = readLegacy(ctx.userData);
   if (legacy) {
@@ -331,6 +361,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     briefOptions: chatId => briefRef.current?.briefOptions(chatId) ?? null,
     relayPanel: chatId => relayRef.current?.panelArmed(chatId) ?? false,
     prepareDelegation: delegateWorktrees.prepare,
+    startFailed: c => { engineHealth.fail(c.harness); return startElsewhere(c, engineNowDeps); },
+    engineNow: c => engineNow(c),
     reopenBlocked: delegateWorktrees.reopenBlocked,
     nextDelegationCwd: cwd => worktreePool.nextCwd(cwd),
     freshSessions: () => true,
@@ -353,7 +385,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       if (treePick) req = { ...req, userModel: treePick };
       req = inheritUserModel(req, manager.list(), (roleId, m) => agents.namesModel(roleId, m));
       // only a pick named at the root is the user's explicit one: children inheriting it never skip a pause (ADR 0359)
-      const resolved = agents.resolve(req, { claim: true, ...(tree?.exclude.length ? { exclude: tree.exclude } : {}), ...(treePick ? { freePick: true } : {}), ...(req.parentId ? { inherited: true } : {}) });
+      const resolved = resolveStart(req, { claim: true, ...(tree?.exclude.length ? { exclude: tree.exclude } : {}), ...(treePick ? { freePick: true } : {}), ...(req.parentId ? { inherited: true } : {}) });
       const roleId = req.orchestrator ? 'orchestrator' : req.roleId;
       if (!roleId || (req.orchestrator && !brain.info().brainRoot)) return resolved;
       // only the brain skills this launch gives exist in its plugin
@@ -683,9 +715,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   mountLifecycleApi(brain, lifecycleApi);
   // parent-to-child delegation between role chats (ADR 0083): every chat's own endpoint, the caller is its token's chat
   addChatTools(delegationTools({
+    isolated: child => delegateWorktrees.isolated(child),
     integrate: async (parent, child) => stageDelegatedChanges(delegateWorktrees.allocation(parent, child), parent, child, brain.info().brainRoot),
     integrateMany: async (parent, children) => stageDelegatedChangesMany(children.map(child => ({ owned: delegateWorktrees.allocation(parent, child), child })), parent, brain.info().brainRoot), chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
-    engineRefusal: to => openRefusal(brain.settings(), to), presetChoice: (roleId, ask, delegator) => agents.presetChoice(roleId, ask, delegator), creditFresh: () => credits.freshAll(), label: AGENT_LABEL, runs: () => manager.runs.list(), skillTools,
+    engineRefusal: to => openRefusal(brain.settings(), to), presetChoice: (roleId, ask, delegator) => agents.presetChoice(roleId, ask, delegator), ordered: roleId => agents.followsOrder(roleId), creditFresh: () => credits.freshAll(), label: AGENT_LABEL, runs: () => manager.runs.list(), skillTools,
     remember: (roleId, line, chat) => { skillLessons.propose({ role: portableId(roleId), text: line, chatId: chat.id, ...(chat.run?.runId ? { runId: chat.run.runId } : {}) }); } }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
   // every step's preset, never a model (ADR 0346): a started step's chat, else the one the plan asks of the role's card
@@ -791,9 +824,24 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // a role chat's route says how its active version has done so far
   const agentStats = (agentId: string, version: number) => agentStatsLine(runMetrics(manager.runs.list(), { rollups: manager.runs.rolledUp() }).find(m => m.agentId === agentId)?.versions.find(v => v.version === version));
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: (req, o) => agents.resolve(req, o), creditOf: (engine, model) => credits.verdict(engine, model), creditFresh: () => credits.freshAll(), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps, workMaps,
+  // configuration changes not applied yet (ADR 0361): each keeps its panel until the user answers it
+  const pendingConfig = new PendingConfig({ file: path.join(ctx.userData, 'config-pending.json'), emit: (ch, p) => ctx.emitter.emit(ch, p),
+    owner: id => manager.list().find(c => c.isOrchestrator && !c.closedAt)?.id ?? id,
+    words: (id, text) => { void chats.send(id, text).catch(e => log.warn('appctl', 'the user\'s words on a held change not delivered', { chat: id, cause: errText(e), hint: 'the panel stays open' })); },
+    apply: c => {
+      if (c.area === 'setting') {
+        const r = brain.requestSetting(c.key, c.value, { by: 'user', chatId: c.chatId, ...(c.reason ? { reason: c.reason } : {}), direct: true });
+        if ('error' in r) throw new Error(r.error);
+        return;
+      }
+      const p = agents.list().profiles.find(x => x.id === c.agentId);
+      if (!p) throw new Error(`ruolo sconosciuto: ${c.agentId ?? ''}`);
+      agentPacks.learning.save(changedDraft(p, c.key, c.value), p.id, roleReason(c.reason));
+    } });
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: (req, o) => resolveStart(req, o), creditOf: (engine, model) => credits.verdict(engine, model), creditFresh: () => credits.freshAll(), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps, workMaps,
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
+      held: pendingConfig,
       view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },
       agents: { list: () => agents.list(), save: (draft, id, reason) => agentPacks.learning.save(draft, id, reason), history: id => agents.history(id), restore: (id, version) => agents.restoreVersion(id, version), presetsOf: p => agents.presetsOf(p), levelsOf: p => agents.levelsFor(p) },
       mcp: { state: () => mcpServers.state(), save: a => mcpServers.save(a), setAccess: a => mcpServers.setAccess(a),
@@ -882,6 +930,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const creditWait = creditWaitWatch({ chats: manager, card: (roleId, ask, o) => agents.cardNow(roleId, ask, o), claim: (on, owner) => credits.claim(on.engine, on.model, owner), release: (on, owner) => credits.release(on.engine, on.model, owner),
     levelsKey: roleId => { const p = agents.list().profiles.find(x => x.id === roleId); return p ? JSON.stringify(agents.levelsFor(p)) : ''; } });
   creditWaitRef.current = creditWait;
+  // a new order or threshold counts from the next start (ADR 0361): the role pages read it, and a waiting chat may move
+  ctx.emitter.tap((ch, payload) => { if (ch === 'settings:changed' && ['engineOrder', 'engineThresholds'].includes((payload as SettingChange).key)) agents.refresh(); });
   ctx.emitter.tap((ch, payload) => { if (ch === 'agents:changed' || (ch === 'chat:updated' && (payload as ChatSummary | undefined)?.creditWait)) creditWait(); });
   brainModelRef.current = brainModel;
   // the skill library (ADR 0241): the Memoria «Skill» tab and the Orchestrator's skill tools; the app's skills are the
@@ -956,7 +1006,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     judging: { estimate: now => judgingEstimate(manager.runs.list(), now, { shares: judgeShares(), capUsd: Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD, lastBatch: judgeSampler.lastBatch() }) },
     phonePort: createPhonePort(manager, ctx.emitter, awayCommands),
     worktreePool,
-    chats, browser, recordings, learn, news, projectMaps, workMaps, brain, mcp, addChatTools, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, modelLists, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, quips, userCorrections,
+    chats, browser, recordings, learn, news, projectMaps, workMaps, brain, mcp, addChatTools, runner, asks, pendingConfig, briefYes: (id: string, ask: string) => artifacts.briefYes(id, ask), wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, modelLists, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, quips, userCorrections,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : null),
       checkpoint: () => manager.checkpointForUpdate(),

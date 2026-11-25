@@ -4,9 +4,11 @@
 // lib/format.ts chatCost reads it: the ledger's for an engine that reports none, nothing when unknown or zero.
 // Before the figures, in plain words, the model the chat runs on and the effort it runs with («Opus 5.5 · high», the
 // owner, 2026-11-13: «voglio vedere il modello e effort nelle striscioline degli agenti»): the effort as the engine
-// reports it or as the last turn sent it, never the one only asked for (lib/format.ts modelWithEffort).
+// reports it or as the last turn sent it, never the one only asked for (lib/format.ts modelWithEffort). Its tip says which
+// engine the chat started on and why (ADR 0361).
 import type { ChatSummary } from '@shared/contract';
 import { chatCost, minutes, modelWithEffort } from '../lib/format';
+import { engineWhy } from '../lib/engine-why';
 import { estimateText, useRunEstimates } from '../lib/run-estimates';
 import { t } from '../i18n';
 
@@ -14,9 +16,9 @@ export function StripMeta({ chat, workMs }: { chat: ChatSummary; workMs: number 
   const estimates = useRunEstimates();
   const estimate = chat.run ? estimates?.runs[chat.run.runId]?.estimate ?? null : null;
   const costNow = chat.costLedgerUsd ?? (chat.costKnown === false ? null : chat.costUsd || null);
-  const name = modelWithEffort(chat);
+  const name = modelWithEffort(chat), why = engineWhy(chat);
   // the tip says it whole: on a narrow strip the text is cut
-  const model = <span className="strip-model" data-testid={`strip-model-${chat.id}`} data-tip={`${name}. ${t('aw.modelTip')}`}>{name}</span>;
+  const model = <span className="strip-model" data-testid={`strip-model-${chat.id}`} data-tip={`${name}. ${why ?? t('aw.modelTip')}`}>{name}</span>;
   if (workMs === null && costNow === null) return model;
   const est = estimate ? estimateText(estimate) : null;
   const overTime = !!estimate && estimate.timeMs !== null && workMs !== null && workMs > estimate.timeMs;

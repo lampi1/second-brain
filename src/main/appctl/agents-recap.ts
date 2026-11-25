@@ -107,7 +107,8 @@ const creditWaits = (c: ChatSummary): boolean => !!c.creditWait && !c.closedAt &
 /** What a chat out of credits waits for, in the user's words. */
 const creditLine = (c: ChatSummary): string => {
   const w = c.creditWait, role = c.agent?.name ?? 'questo ruolo';
-  const head = `limite finito${w?.model ? ` (${w.model})` : ''}`;
+  if (w?.why === 'start' && !w.next) return `il suo motore non è partito: passa da sola al motore successivo di ${role}`;
+  const head = w?.why === 'start' ? 'il suo motore non è partito' : `limite finito${w?.model ? ` (${w.model})` : ''}`;
   if (w?.next) return `${head}: riparte da sola su ${w.next.card.slice(w.next.card.indexOf(':') + 1) || 'il predefinito'} (${w.next.card.split(':')[0]}), stesso livello`;
   if (w?.waiting) return `${head}: tutti i modelli del livello di ${role} sono finiti (${w.waiting.out.join(' · ')})${w.waiting.first ? `; il primo torna alle ${clock(w.waiting.first, Date.now())}, poi riparte da sola` : '; riparte da sola appena se ne libera uno'}`;
   if (w?.stay) return `${head}: in attesa (hai premuto Annulla); riparte quando cambi i modelli di ${role} o le scrivi`;

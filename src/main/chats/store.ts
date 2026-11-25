@@ -137,6 +137,8 @@ export interface StoredChat {
   /** stopped on its provider's credit limit: it waits for another model on its role's card (ADR 0346) */
   creditWait?: CreditWait;
   creditMoved?: ChatSummary['creditMoved'];
+  place?: ChatSummary['place'];
+  folderNotes?: ChatSummary['folderNotes'];
   userModel?: ChatSummary['userModel'];
   routing?: ChatSummary['routing'];
   pick?: ChatSummary['pick'];
@@ -183,7 +185,7 @@ function readCreditWait(value: unknown): StoredChat['creditWait'] | undefined {
     .map(f => ({ card: f.card as string, n: f.n as number, at: f.at as number, nextAt: fin(f.nextAt) ? f.nextAt : null, permanent: f.permanent === true, error: typeof f.error === 'string' ? f.error.slice(0, 300) : '' })) : [];
   const waiting = w.waiting as Record<string, unknown> | undefined;
   // the wait survives a restart with its announced move, its «Annulla» and its failures (ADR 0354)
-  return { at: w.at, model: typeof w.model === 'string' && w.model && w.model.length <= 120 ? w.model : null, ...(key(w.card) ? { card: w.card } : {}),
+  return { at: w.at, model: typeof w.model === 'string' && w.model && w.model.length <= 120 ? w.model : null, ...(key(w.card) ? { card: w.card } : {}), ...(w.why === 'start' ? { why: 'start' as const } : {}), ...(typeof w.prompt === 'string' && w.prompt.length <= 200_000 ? { prompt: w.prompt } : {}),
     ...(next && key(next.card) && fin(next.at) ? { next: { card: next.card, at: next.at } } : {}),
     ...(w.stay === true ? { stay: true as const } : key(w.stay) ? { stay: w.stay } : {}),
     ...(failed.length ? { failed } : {}),
@@ -216,7 +218,7 @@ function readPick(value: unknown): StoredChat['pick'] | undefined {
   const skipped = (p.skipped as Record<string, unknown>[]).filter(x => x && typeof x.engine === 'string' && typeof x.why === 'string' && ['off', 'price', 'credit'].includes(String(x.kind))).slice(0, 8)
     .map(x => ({ engine: x.engine as Harness, model: typeof x.model === 'string' ? x.model : null, kind: x.kind as 'off' | 'price' | 'credit', why: (x.why as string).slice(0, 300),
       ...(typeof x.until === 'number' ? { until: x.until } : {}), ...(typeof x.readingAt === 'number' ? { readingAt: x.readingAt } : {}), ...(['reading', 'error', 'turn', 'none'].includes(String(x.source)) ? { source: x.source as 'reading' } : {}),
-      ...(['ok', 'pace', 'out', 'probation', 'unknown'].includes(String(x.state)) ? { state: x.state as 'out' } : {}) }));
+      ...(['ok', 'pace', 'over', 'out', 'probation', 'unknown'].includes(String(x.state)) ? { state: x.state as 'out' } : {}) }));
   return { at: p.at, chosen: p.chosen.slice(0, 200), skipped, ...(p.allOut === true ? { allOut: true as const } : {}) };
 }
 function readLastResult(value: unknown): StoredChat['lastResult'] | undefined {
@@ -333,6 +335,9 @@ function valid(x: unknown): StoredChat | null {
     ...(c.waitsOnWork === true ? { waitsOnWork: true as const } : {}),
     ...(readCreditWait(c.creditWait) ? { creditWait: readCreditWait(c.creditWait)! } : {}),
     ...(readCreditMoved(c.creditMoved) ? { creditMoved: readCreditMoved(c.creditMoved)! } : {}),
+    // the copy it works in, and what it was told of its folder: kept over a restart (ADR 0362)
+    ...(c.place === 'copy' ? { place: 'copy' as const } : {}),
+    ...(Array.isArray(c.folderNotes) ? (() => { const n = c.folderNotes.filter((x: unknown): x is string => typeof x === 'string' && x.length <= 2000).slice(0, 6); return n.length ? { folderNotes: n } : {}; })() : {}),
     ...(readUserModel(c.userModel) ? { userModel: readUserModel(c.userModel)! } : {}),
     ...(readRouting(c.routing) ? { routing: readRouting(c.routing)! } : {}),
     ...(readPick(c.pick) ? { pick: readPick(c.pick)! } : {}),

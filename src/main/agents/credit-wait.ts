@@ -110,7 +110,7 @@ export function creditMove(c: ChatSummary, chatOf: (id: string) => ChatSummary |
   const from = w.card ?? creditCardKey({ engine: c.harness, model: w.model });
   const level = LEVEL_NAME[card.preset ?? preset];
   const skippedWhy = (card.skipped ?? []).find(s => s.kind === 'credit' && creditCardKey(s) === from)?.why;
-  const note: MoveNote = { from: modelName(from), to: modelName(key), level, why: key === from ? 'il suo limite è tornato libero' : skippedWhy ? `${modelName(from)} è finito: ${skippedWhy}` : `${modelName(from)} ha finito il limite` };
+  const note: MoveNote = { from: modelName(from), to: modelName(key), level, why: w.why === 'start' ? `${modelName(from)} non è partito` : key === from ? 'il suo limite è tornato libero' : skippedWhy ? `${modelName(from)} è finito: ${skippedWhy}` : `${modelName(from)} ha finito il limite` };
   // the whole level is out: wait, never move onto a model with no room; say which and when the first comes back
   if (card.allOut) {
     const out = card.rooms?.length ? card.rooms : [{ engine: card.engine, model: card.model, why: card.route ?? '', until: null }];

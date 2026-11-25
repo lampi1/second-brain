@@ -140,8 +140,14 @@ export interface ChatManagerOptions {
   /** Idle-only budget-based engine freshness; does not infer quality degradation. Default off. */
   freshSessions?: () => boolean;
   /** Host-owned preparation, before any delegated engine can start: it sees the child's policy narrowed by the contract's
-   *  tool classes, to choose a shared folder or its own worktree. */
-  prepareDelegation?: (parent: ChatSummary, req: NewChat, policy: AgentPolicy | null, continuationOf?: string, inherit?: boolean) => Promise<{ cwd: string; parentRunId: string | undefined; parentTaskVersion: number | undefined; bind?: (childId: string) => void }>;
+   *  tool classes, to choose the folder itself or its own worktree. */
+  prepareDelegation?: (parent: ChatSummary, req: NewChat, policy: AgentPolicy | null, continuationOf?: string, inherit?: boolean) => Promise<{ cwd: string; parentRunId: string | undefined; parentTaskVersion: number | undefined; notes?: string[]; isolated?: boolean; bind?: (childId: string) => void }>;
+  /** a role chat's engine did not start (ADR 0361): whether its role's card now gives another engine (the engine is marked
+   *  in trouble first); then the chat waits and moves there by itself, as for its credits */
+  startFailed?: (chat: ChatSummary) => boolean;
+  /** «Riprendi» and reuse follow the engines as they are now (ADR 0361): the engine and model the chat's role starts on,
+   *  null = the one it has. Throws when nothing may start (every plan spent) */
+  engineNow?: (chat: ChatSummary) => { harness: Harness; model: string | null; effort: Effort | null; route?: string } | null;
   /** A delegated child was made in `cwd`: the folder where the next child of the same repository will work (the
    *  worktree pool's next free slot, ADR 0227), so its warm engine waits there; null = `cwd` itself */
   nextDelegationCwd?: (cwd: string) => string | null;
@@ -373,6 +379,8 @@ export interface Rec {
   /** a job not started yet (a chat created in this run): its first send gets the first prompt */
   jobNew: boolean;
   firstPrompt: string | null;
+  /** the linked chat of a new task, until it is assigned: what it goes on from (assignElsewhere) */
+  taskContext?: string;
   /** a turn ran since the last onDone */
   turnSinceDone: boolean;
   /** a resumed session still opening (sends wait for it) */
@@ -467,4 +475,17 @@ export interface Inherited { launchContext?: AgentContextSnapshot; tier?: ModelT
  *  (ADR 0356: a Strategist the Orchestrator started stays the Orchestrator's work after an engine change). */
 export interface CreateOpts {
   /** a continuation of an app job that owes its report (ADR 0356) */
-  reportExpected?: boolean; boundByOrchestrator?: boolean; intake?: IntakeSource; resumePlan?: StrategyPlan; workMap?: string; continuation?: boolean; continuationOf?: string; sameWorktree?: boolean; runStartedBy?: 'user' | 'orchestrator' | 'parent' | 'app'; work?: NonNullable<ChatSummary['work']> }
+  reportExpected?: boolean; engineWhy?: string; /** the linked chat of a new task (assignElsewhere): its run is the old chat's, the assignment starts the next */ noRun?: boolean; boundByOrchestrator?: boolean; intake?: IntakeSource; resumePlan?: StrategyPlan; workMap?: string; continuation?: boolean; continuationOf?: string; sameWorktree?: boolean; runStartedBy?: 'user' | 'orchestrator' | 'parent' | 'app'; work?: NonNullable<ChatSummary['work']> }
+
+/** «Riprendi» and the linked chats (manager-continuity.ts continueChat). allowStart false: the old engine is not started
+ *  for its note; ask false: the app writes the note; sameWorktree: the successor takes the same worktree, uncommitted
+ *  changes included (a credit move, ADR 0354); on: the engine and model it goes on with (ADR 0346, 0352); assignment: a new
+ *  task's goal and criteria (ADR 0352); cwd and place: its folder and how (ADR 0362; absent = the last folder); task: the
+ *  linked chat gets a new assignment (assignElsewhere) and starts with it; firstPrompt: it never started, so it begins with
+ *  its own first message */
+export interface ContinueOptions {
+  allowStart?: boolean; promptPrefix?: string; ask?: false; sameWorktree?: true;
+  on?: { harness: Harness; model: string | null; effort: Effort | null; route?: string };
+  assignment?: { goal: string; doneWhen: string[] };
+  cwd?: string; place?: 'here' | 'copy'; task?: true; firstPrompt?: string;
+}

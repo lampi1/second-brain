@@ -66,7 +66,7 @@ describe('starting a chat', () => {
     const c = make({ room: { claude: 'pace' } }); withLevels(c);
     const r = start(c);
     expect([r.request.harness, r.request.model, r.owner.engine]).toEqual(['codex', 'gpt-x', 'codex']);
-    expect(r.presetChoice?.route).toContain('m-mid (claude) saltato:');
+    expect(r.presetChoice?.route).toBe('codex gpt-x: claude sta per finire il limite');
     expect(r.presetChoice?.skipped?.[0]).toMatchObject({ engine: 'claude', model: 'm-mid', kind: 'credit' });
   });
   it('an engine off or refused to agents is never picked; none usable is an error that says so', () => {
@@ -90,7 +90,8 @@ describe('starting a chat', () => {
     const c = make({ room: { claude: 'out' } }); withLevels(c);
     const r = c.levelRoute('artisan');
     expect(r.base).toMatchObject({ engine: 'codex', model: 'gpt-x', state: 'ok' });
-    expect(r.max).toMatchObject({ engine: 'claude', state: 'out' });
+    // every plan of the level is spent: it would start there and wait for the renewal (ADR 0354), and the page says so
+    expect(r.max).toMatchObject({ engine: 'claude', state: 'out', reason: 'claude m-top: tutti i motori del livello sono al limite' });
   });
 });
 

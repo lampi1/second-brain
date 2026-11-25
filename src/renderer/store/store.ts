@@ -561,13 +561,13 @@ export async function undoTurn(chatId: string): Promise<void> {
   } catch (e) { fail(t('chat.menu.undoTurn'))(e); }
 }
 
-export async function continueChat(chatId: string): Promise<ChatSummary | null> {
+export async function continueChat(chatId: string, cwd?: string): Promise<ChatSummary | null> {
   if (continuing.has(chatId)) return null;
   continuing.add(chatId);
   const old = app.get().chats[chatId];
   if (old) dispatch({ type: 'chat:updated', chat: { ...old, handoffBusy: true } });
   try {
-    const c = await sb.invoke('chat:continue', { chatId });
+    const c = await sb.invoke('chat:continue', { chatId, ...(cwd ? { cwd } : {}) });
     dispatch({ type: 'chat:updated', chat: c });
     void loadItems(c.id);
     toast(t('appText.store.resumedIn', { title: c.title }), 'ok');

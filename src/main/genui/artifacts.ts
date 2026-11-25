@@ -14,6 +14,7 @@ import type { ArtifactTarget, ChatItem, ChatSummary, EventMap } from '../../shar
 import { ARTIFACT_MAX_PER_CHAT, ARTIFACT_TARGETS, BRIEF_EXAMPLE, SUMMARY_MAX, TITLE_MAX, UI_COMPONENTS, checkUi } from '../../shared/genui';
 import type { McpTool } from '../mcp/server';
 import { ToolRefusal } from '../mcp/refusal';
+import { CONFIG_TOOL } from '../appctl/pending-config';
 import { log, errText } from '../log';
 import { renameWithRetry } from '../agents/local-store';
 
@@ -120,6 +121,13 @@ export class Artifacts {
     return p?.yesOption && p.noOption ? { yes: p.yesOption, no: p.noOption } : null;
   }
 
+  /** The «Se Sì» of the brief on this very question, as its card shows it ('' = none): part of what a yes is about. */
+  briefYes(chatId: string, requestId: string): string {
+    const b = this.items(chatId).find(i => i.askId === requestId && i.ui.component === 'brief');
+    const ifYes = (b?.ui.props as { ifYes?: unknown } | undefined)?.ifYes;
+    return typeof ifYes === 'string' ? ifYes : '';
+  }
+
   /** A chat's items with its visuals put in by time (the chat's own order is kept as it is). */
   merge(chatId: string, base: ChatItem[]): ChatItem[] {
     const arts = this.items(chatId).sort((x, y) => x.at - y.at);
@@ -138,7 +146,8 @@ export class Artifacts {
   observe<K extends keyof EventMap>(channel: K, payload: EventMap[K]): void {
     if (channel === 'pending:added') {
       const p = payload as EventMap['pending:added'];
-      if (p.type === 'question') this.link(p.chatId, p.id);
+      // the app's own panel of a held change (appctl/pending-config.ts) is never dressed by an agent's brief
+      if (p.type === 'question' && p.tool !== CONFIG_TOOL) this.link(p.chatId, p.id);
     } else if (channel === 'chat:removed') {
       const { chatId } = payload as EventMap['chat:removed'];
       this.forget(chatId);

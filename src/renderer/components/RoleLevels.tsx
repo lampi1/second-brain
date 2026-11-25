@@ -17,7 +17,7 @@ import { HarnessMark } from './Icons';
 import { Select } from './Select';
 import { t } from '../i18n';
 
-type Route = Record<PresetId, { engine: string; model: string | null; index: number; reason: string; state: 'ok' | 'pace' | 'out' | 'probation' | 'unknown' } | null>;
+type Route = Record<PresetId, { engine: string; model: string | null; index: number; reason: string; state: 'ok' | 'pace' | 'over' | 'out' | 'probation' | 'unknown' } | null>;
 
 const modelName = (e: AgentModelChoice | undefined, id: string | null) => id === null ? t('rolePage.add.default') : e?.models.find(m => m.id === id)?.name || id;
 
@@ -101,9 +101,9 @@ export function RoleLevels({ profile, ids = PRESET_IDS, hint = t('rolePage.level
           {adding === id && <AddModel engines={engines} taken={own(id) ? list : []} busy={busy} onCancel={() => setAdding(null)}
             onAdd={x => { setAdding(null); void save(id, [...(own(id) ? list : []), x]); }} />}
           {showRoute && <p className="rl-now" data-testid={`role-level-${id}-now`}>
-            {now ? <><i className="rl-dot" data-state={now.state === 'out' ? 'out' : now.state === 'pace' || now.reason.includes(' · ') ? 'pace' : 'ok'} aria-hidden="true" />
+            {now ? <><i className="rl-dot" data-state={now.state === 'over' || now.state === 'pace' ? 'pace' : 'ok'} aria-hidden="true" />
               <span>{t('rolePage.now', { model: modelName(engineOf(now.engine), now.model), engine: engineOf(now.engine)?.label ?? now.engine })}</span>
-              {now.reason.includes(' · ') && <small> · {now.reason.split(' · ').slice(1).join(' · ')}</small>}</>
+              <small> · {now.reason}</small></>
               : route ? <span>{t('rolePage.nowNone')}</span> : null}
           </p>}
         </div>

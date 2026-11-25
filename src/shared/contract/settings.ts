@@ -35,6 +35,10 @@ export interface Settings {
   engineOn: Partial<Record<Harness, boolean>>;
   /** engines the Orchestrators may open or resume chats on (absent = off); the user's own chats are free */
   engines: Partial<Record<Harness, boolean>>;
+  /** the one order of the engines, for every role (ADR 0361, shared/engine-order.ts); empty = each level's own list order */
+  engineOrder?: Harness[];
+  /** % of an engine's plan past which the next engine of the order starts (ADR 0361); an engine absent has none */
+  engineThresholds?: Partial<Record<Harness, number>>;
   budget: BudgetSettings;
   /** context size (tokens) above which a chat's meter turns amber when its engine reports no compaction window (Cursor);
    *  a Claude chat turns amber near its own window (compactWindowTokens) instead (ADR 0031) */
@@ -136,14 +140,14 @@ export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engine
 /** Every setting is one dot key ("theme", "budget.claude.dailyUsd", "mute.idea"): the unit of validation, history,
  *  undo and agent permissions. The schema (settings:schema) gives type, default, Italian label and description. */
 export type SettingKey =
-  | 'jobs.fallback' | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'quipsDaily' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
+  | 'engineOrder' | 'engineThresholds' | 'jobs.fallback' | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'quipsDaily' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
   | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'judging' | 'judgingSince' | 'judgingCapUsd' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'coldStartSlots' | 'worktreePoolPerRepo' | 'worktreePoolTotal' | 'worktreeDiskCapGb' | 'codexAutonomyRoots'
   | 'suggestOn' | 'voiceAsr' | 'voiceName' | 'voicePtt' | 'voiceSpeed' | 'awayMode'
   | `delegation.${keyof DelegationSettings}`;
 export interface SettingDef {
   key: SettingKey;            // 'mute.*' stands for every feed kind
-  type: 'path' | 'int' | 'boolean' | 'enum' | 'usd' | 'model' | 'repo-paths';
+  type: 'path' | 'int' | 'boolean' | 'enum' | 'usd' | 'model' | 'repo-paths' | 'engine-order' | 'engine-thresholds';
   default: unknown;
   nullable?: boolean;
   values?: readonly string[]; // enum

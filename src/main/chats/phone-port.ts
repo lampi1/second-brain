@@ -14,6 +14,7 @@ import { isUserQuestion, isYesNo, yesNoOf } from '../../shared/yes-no';
 import { errText, log } from '../log';
 import { briefFor, commandLines, commandShownWhole, questionLines } from './ask-text';
 import type { TurnEndInfo } from './manager-types';
+import { CONFIG_TOOL } from '../appctl/pending-config';
 
 /** What the port needs from the ChatManager (structural, so tests pass a fake). */
 export interface PhoneChats {
@@ -150,7 +151,8 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents, commands
       }
     } else if (ch === 'pending:added') {
       const p = payload as EventMap['pending:added'], c = chatOf(p.chatId);
-      if (c && !closed(c)) add(ofRequest(p, c));
+      // a held configuration change is the app's panel on the PC: the phone never answers it (ADR 0361)
+      if (c && !closed(c) && p.tool !== CONFIG_TOOL) add(ofRequest(p, c));
     } else if (ch === 'pending:resolved') {
       const p = payload as EventMap['pending:resolved'];
       drop(qKey(p.chatId, p.requestId), p.by === 'phone' ? 'phone' : 'pc');

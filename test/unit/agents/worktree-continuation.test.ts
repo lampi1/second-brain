@@ -1,6 +1,6 @@
 // A continued writing child (manager-continuity.ts → ChatManager.create → DelegateWorktrees.prepare with continuationOf;
-// only prepare is driven here) keeps its predecessor's pinned base, so the delta it integrates is the whole chain's, and is refused once the source
-// worktree left its branch or rewrote away the base (src/main/agents/worktrees.ts). Git is a scripted fake: no process,
+// only prepare is driven here) keeps its predecessor's pinned base, so the delta it integrates is the whole chain's (src/main/agents/worktrees.ts). Since ADR 0362 it goes on in the same
+// worktree: no second copy; a branch left or a base rewritten is refused when its changes are staged. Git is a scripted fake: no process,
 // no checkout, no clock, so the pinning is checked in milliseconds whatever the machine's load (the real-Git version
 // took 122 s on a busy PC, docs/agents/rules.md §7).
 import fs from 'node:fs';
@@ -38,11 +38,11 @@ const { DelegateWorktrees } = await import('../../../src/main/agents/worktrees')
 
 const roots: string[] = [];
 afterEach(() => { git.trees.clear(); git.parents.clear(); for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true }); });
-const A = 'a'.repeat(40), B = 'b'.repeat(40), C = 'c'.repeat(40);
+const A = 'a'.repeat(40), B = 'b'.repeat(40);
 const writer = { tools: { allow: ['edit' as const, 'shell' as const] }, ceiling: null };
 
 describe('continued writing child', () => {
-  it('keeps its predecessor\'s base and refuses a source that left its branch or no longer contains that base', async () => {
+  it('goes on in its predecessor\'s worktree with its base, and hands it on', async () => {
     const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-continuation-'))); roots.push(root);
     const repo = path.join(root, 'repo'); fs.mkdirSync(repo);
     git.common = path.join(repo, '.git'); git.trees.set(repo, { head: A, branch: 'main' });
@@ -50,23 +50,22 @@ describe('continued writing child', () => {
     const child = (cwd: string, id: string) => ({ id, parentId: parent.id, cwd }) as ChatSummary;
     const service = new DelegateWorktrees();
 
-    const first = await service.prepare(parent, { cwd: repo } as NewChat, writer); first.bind!('original');
+    const first = await service.prepare(parent, { cwd: repo, place: 'copy' } as NewChat, writer); first.bind!('original');
     const original: Tree = git.trees.get(first.cwd)!;
     original.head = B; git.parents.set(B, A); // the predecessor commits B on its branch
-    const next = await service.prepare(parent, { cwd: first.cwd } as NewChat, writer, 'original'); next.bind!('successor');
-    // the successor works on top of B, but its delta is counted from the predecessor's base A
+    const next = await service.prepare(parent, { cwd: first.cwd, place: 'copy' } as NewChat, writer, 'original'); next.bind!('successor');
+    // the successor goes on in the same worktree, on top of B; its delta is counted from the predecessor's base A
+    expect(next.cwd).toBe(first.cwd);
     expect(git.trees.get(next.cwd)).toMatchObject({ head: B });
     expect(service.allocation(parent, child(next.cwd, 'successor')).base).toBe(A);
-
-    const again = () => service.prepare(parent, { cwd: next.cwd } as NewChat, writer, 'successor');
-    const successor: Tree = git.trees.get(next.cwd)!, branch = successor.branch;
-    successor.branch = 'moved';
-    await expect(again()).rejects.toThrow(/no longer matches its original/);
-    successor.branch = branch; successor.head = C; // same branch, history rewritten without A
-    await expect(again()).rejects.toThrow(/no longer matches its original/);
-    // restored, the chain goes on: a third child still counts from A
-    successor.head = B;
-    const third = await again(); third.bind!('third');
+    // the worktree is the successor's now, never the original's
+    expect(() => service.allocation(parent, child(next.cwd, 'original'))).toThrow(/No host-owned isolated worktree/);
+    const third = await service.prepare(parent, { cwd: next.cwd } as NewChat, writer, 'successor'); third.bind!('third');
+    expect(third.cwd).toBe(first.cwd);
     expect(service.allocation(parent, child(third.cwd, 'third')).base).toBe(A);
+    // a chat that is not its predecessor gets no right on it: it works there in place, with nothing to integrate
+    const stranger = await service.prepare(parent, { cwd: next.cwd } as NewChat, writer, 'someone-else');
+    expect(stranger).toMatchObject({ cwd: next.cwd });
+    expect(stranger.bind).toBeUndefined();
   });
 });

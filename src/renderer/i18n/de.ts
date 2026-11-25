@@ -57,6 +57,7 @@ import { aliveDe } from './areas/alive.de';
 import { modelPickerDe } from './areas/model-picker.de';
 import { awayDe } from './areas/away.de';
 import { queueSettingsDe } from './areas/queue-settings.de';
+import { engineOrderDe } from './areas/engine-order.de';
 import { remoteDe } from './areas/remote.de';
 import { learningDe } from './areas/learning.de';
 import { andamentoDe } from './areas/andamento.de';
@@ -85,7 +86,7 @@ export const de: Dict = {
   ...aliveDe,
   ...modelPickerDe,
   ...awayDe,
-  ...queueSettingsDe,
+  ...queueSettingsDe, ...engineOrderDe,
   ...remoteDe,
   ...learningDe,
   ...andamentoDe,

@@ -3,7 +3,7 @@ import {describe,expect,it,vi} from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {delegationTools, samePath, type DelegationChats} from '../../../src/main/agents/delegation';
+import {delegationTools, type DelegationChats} from '../../../src/main/agents/delegation';
 import type {ChatSummary} from '../../../src/shared/contract';
 import type {AgentCatalog, UserTaskEvents} from '../../../src/shared/agents';
 import type {TaskAssignmentOptions} from '../../../src/shared/delegation';
@@ -31,7 +31,7 @@ describe('parent child task continuity',()=>{
     const {cwd:_cwd,...rest}=f.args();
     await expect(f.call('agent_assign_task',rest)).resolves.toMatchObject({chatId:'child'});
     fs.rmSync(other,{recursive:true,force:true});
-    await expect(f.call('agent_assign_task',rest)).rejects.toThrow(/no longer exists; delegate a fresh chat/);
+    await expect(f.call('agent_assign_task',rest)).rejects.toThrow(/Cartella non valida: .*non esiste/);
     f.child.parentId='other';
     await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/YOUR direct children/);
     expect(f.assign).toHaveBeenCalledOnce();
@@ -89,27 +89,48 @@ describe('parent child task continuity',()=>{
   it('refuses another role and scope changes; a card changed since the child started does not stop it (ADR 0352)',async()=>{
     const f=fixture();
     await expect(f.call('agent_assign_task',{...f.args(),roleId:'sentinel'})).rejects.toThrow(/Role mismatch/);
-    await expect(f.call('agent_assign_task',{...f.args(),cwd:path.resolve('/elsewhere')})).rejects.toThrow(/Project mismatch: this child works in/);
+    await expect(f.call('agent_assign_task',{...f.args(),cwd:path.resolve('/elsewhere')})).rejects.toThrow(/Cartella non valida: .*elsewhere: non esiste/);
     expect(f.assign).not.toHaveBeenCalled();
     f.catalog.profiles[1]!.activeVersion=2;
     (f.catalog.profiles[1] as {updatedAt?:number}).updatedAt=5;
     await expect(f.call('agent_assign_task',f.args())).resolves.toMatchObject({chatId:'child'});
   });
-  it('takes cwd as optional: omitted, the child\'s worktree or the parent\'s folder all reuse the child in its own folder (#427)',async()=>{
-    const wt=fs.mkdtempSync(path.join(os.tmpdir(),'sb-reuse-wt-'));
-    for(const cwd of [undefined,wt+path.sep,'parent']){
+  it('its own folder (omitted, or named) reuses the child in place; any other existing folder goes on in a linked chat (ADR 0362)',async()=>{
+    const wt=fs.mkdtempSync(path.join(os.tmpdir(),'sb-reuse-wt-')), other=fs.mkdtempSync(path.join(os.tmpdir(),'sb-reuse-to-'));
+    for(const cwd of [undefined,wt+path.sep]){
       const f=fixture();f.child.cwd=wt;
       const {cwd:_cwd,...rest}=f.args();
-      const args=cwd===undefined?rest:{...rest,cwd:cwd==='parent'?f.parent.cwd:cwd};
-      await expect(f.call('agent_assign_task',args)).resolves.toMatchObject({chatId:'child'});
+      await expect(f.call('agent_assign_task',cwd===undefined?rest:{...rest,cwd})).resolves.toMatchObject({chatId:'child'});
       expect(f.assign).toHaveBeenCalledOnce();
     }
-    fs.rmSync(wt,{recursive:true,force:true});
+    const f=fixture();f.child.cwd=wt;
+    const linked={...f.child,id:'linked',cwd:other,run:{runId:'r2',taskId:'task',taskVersion:1},folderNotes:['La cartella ha 2 modifiche non committate']} as ChatSummary;
+    const elsewhere=vi.fn(async()=>linked);
+    f.chats.assignElsewhere=elsewhere;
+    const out=await f.call('agent_assign_task',{...f.args(),cwd:other});
+    expect(out).toMatchObject({chatId:'linked',continuedFrom:'child',cwd:other});
+    expect(out.warnings).toContain('La cartella ha 2 modifiche non committate');
+    expect(elsewhere).toHaveBeenCalledWith('child',expect.stringContaining('Follow up'),expect.objectContaining({mode:'continue',doneWhen:['New criterion']}),{cwd:other});
+    expect(f.assign).not.toHaveBeenCalled();
+    for(const d of [wt,other]) fs.rmSync(d,{recursive:true,force:true});
   });
-  it('samePath ignores a trailing separator, and letter case only on Windows',()=>{
-    expect(samePath(path.resolve('/a/b'),path.resolve('/a/b')+path.sep)).toBe(true);
-    expect(samePath('/A/b','/a/b','linux')).toBe(false);
-    expect(samePath('/A/b','/a/b','win32')).toBe(true);
+  it('a child whose role now starts on another engine goes on in a linked chat there (ADR 0361)',async()=>{
+    const f=fixture(), elsewhere=vi.fn(async()=>({...f.child,id:'linked',harness:'opencode'}) as ChatSummary);
+    f.chats.assignElsewhere=elsewhere;
+    let ordered=false, allOut=false;
+    const tools=delegationTools({chats:f.chats,roles:()=>f.catalog,settings:()=>DELEGATION_DEFAULTS,engineRefusal:()=>null,label:'[agent]',runs:()=>[],ordered:()=>ordered,
+      presetChoice:()=>({preset:'base',model:'gpt',engine:'opencode',route:'OpenAI Sol: primo disponibile',warnings:[],...(allOut?{allOut:true as const}:{})})});
+    // no engine order: a reuse stays on its engine while that one can run (ADR 0352); nor onto a level with no room
+    const {expectedVersion:_v,...again}=f.args() as Record<string,unknown>;void _v;
+    const run=()=>tools.find(t=>t.name==='agent_assign_task')!.run(again,{params:{chatId:'parent'}} as never);
+    expect(JSON.parse(await run() as string)).toMatchObject({chatId:'child'});
+    ordered=true;allOut=true;
+    expect(JSON.parse(await run() as string)).toMatchObject({chatId:'child'});
+    expect(elsewhere).not.toHaveBeenCalled();f.assign.mockClear();allOut=false;
+    const out=JSON.parse(await run() as string);
+    expect(out).toMatchObject({chatId:'linked',continuedFrom:'child',harness:'opencode'});
+    expect(elsewhere).toHaveBeenCalledWith('child',expect.any(String),expect.any(Object),{on:{harness:'opencode',model:'gpt',effort:null,route:'OpenAI Sol: primo disponibile'}});
+    expect(f.assign).not.toHaveBeenCalled();
   });
   it('has no slot to reserve: a new child starts while a reuse is pending, and the reuse works again after a failure',async()=>{
     const f=fixture();let reject!:(e:Error)=>void;

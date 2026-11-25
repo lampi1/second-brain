@@ -7,6 +7,7 @@
 import type { Harness, HarnessUsage, Usage } from '../../shared/contract';
 import type { CreditReading, CreditVerdict } from '../../shared/credit-rule';
 import { roomOf, type Room } from '../../shared/model-levels';
+import { pastThreshold } from '../../shared/engine-order';
 import { CreditBook, poolOf } from './credits';
 
 export interface CreditUsage {
@@ -21,6 +22,8 @@ export interface CreditLiveDeps {
   usage: CreditUsage;
   /** something changed that may free a waiting chat: the credit-wait watch runs again */
   changed: () => void;
+  /** the user's threshold for an engine (Settings.engineThresholds, ADR 0361); absent or null = none */
+  threshold?: (engine: Harness) => number | null;
   now?: () => number;
   later?: (fn: () => void, ms: number) => { cancel(): void };
 }
@@ -124,7 +127,7 @@ export function creditLive(d: CreditLiveDeps): CreditLive {
         kicked.set(pool, now());
         void book.fresh([pool]).then(() => { later(() => d.changed(), 0); });
       }
-      return roomOf(v);
+      return roomOf(v, pastThreshold(readingOf(d.usage.usageReading?.(pool)), model, d.threshold?.(engine), now()));
     },
     fresh: async models => book.fresh(models.map(m => poolOf(m.engine, m.model))),
     freshAll: async () => book.fresh(pools()),

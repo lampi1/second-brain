@@ -1,30 +1,27 @@
-// The folders a delegated chat may work in (src/main/agents/worktrees.ts, ADR 0083, ADR 0345): its parent's folder or
-// any other existing folder, also of another repository (#460); and what blocks a writing child's baseline in the
+// The folder a chat works in (src/main/agents/worktrees.ts, ADR 0362): any existing one, and the one refusal; and what blocks a writing child's baseline in the
 // brain folder (the app-owned files do not, #324).
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import os from 'node:os';
-import { blockingChanges, delegableFolder } from '../../../src/main/agents/worktrees';
+import { blockingChanges, folderProblem } from '../../../src/main/agents/worktrees';
 
 const roots: string[] = [];
 afterEach(() => { for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
 describe('worktrees', () => {
-  it('a child may work in its parent\'s folder or in any existing folder, also of another repository (#460)', () => {
+  it('any existing folder is fine; the only refusal names the folder and why (ADR 0362)', () => {
     const outer = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-folders-')); roots.push(outer);
-    const repo = path.join(outer, 'repo'), other = path.join(outer, 'other');
-    // every folder exists: the temp folder is behind a link on macOS, where a missing one cannot be resolved
-    for (const d of [repo, other, path.join(repo, 'src')]) fs.mkdirSync(d);
-    expect(delegableFolder(repo, repo)).toBe(true);
-    expect(delegableFolder(repo, path.join(repo, 'src'))).toBe(true);
-    expect(delegableFolder(repo, other)).toBe(true);
-    expect(delegableFolder(repo, path.join(outer, 'missing'))).toBe(false);
-    expect(delegableFolder(repo, 'other')).toBe(false);
-    expect(delegableFolder(repo, '')).toBe(false);
+    const repo = path.join(outer, 'repo');
+    fs.mkdirSync(repo);
+    expect(folderProblem(repo)).toBeNull();
+    expect(folderProblem(outer)).toBeNull();
+    expect(folderProblem(path.join(outer, 'missing'))).toBe(`Cartella non valida: ${path.join(outer, 'missing')}: non esiste.`);
+    expect(folderProblem('other')).toMatch(/other: serve un percorso assoluto/);
+    expect(folderProblem('')).toMatch(/vuota/);
     fs.writeFileSync(path.join(outer, 'file.txt'), 'x');
-    expect(delegableFolder(repo, path.join(outer, 'file.txt'))).toBe(false);
+    expect(folderProblem(path.join(outer, 'file.txt'))).toMatch(/file\.txt: è un file, non una cartella/);
   });
 
   it('lets only a modified app-owned brain file through a brain baseline', () => {

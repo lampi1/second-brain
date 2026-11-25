@@ -120,6 +120,7 @@ export const chatIt = {
   'chat.menu.permissionLabel': 'Quando chiede il permesso',
   'chat.menu.handoffLabel': (p: { tokens?: string }) => `Passaggio di consegne${p.tokens ? ` · ${p.tokens}` : ''}`,
   'chat.menu.handoffTokens': (p: { amount: string }) => `${p.amount} token usati`,
+  'chat.menu.resumeElsewhere': 'Riprendi in un’altra cartella…',
   'chat.menu.handoffRead': 'Leggi o scrivi la nota per chi continua…',
   'chat.menu.undoTurn': 'Annulla l’ultimo turno (file come prima)',
   'chat.menu.undoTurnTitle': 'Annullare l’ultimo turno?',

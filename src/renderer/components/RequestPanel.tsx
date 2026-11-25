@@ -234,7 +234,8 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
   // a yes/no question (the only kind agents ask, ADR 0135): its answers are the big Sì / No tiles (ChoiceCard yn)
   // MCP booleans are typed field values, not a narrative yes/no decision with a free-text skip.
   const yesNo = !isMcpForm && !!q && isYesNo(q);
-  const formContext = isMcpForm ? <div className="ask-lead" style={{ whiteSpace: 'pre-wrap' }} data-testid={`${testBase}-form-context`}>{req.detail || req.title}</div> : null;
+  // a held configuration change (appctl/pending-config.ts): why it is not applied and, for a long text, the text itself
+  const formContext = isMcpForm || req.tool === 'app_config_change' ? <div className="ask-lead" style={{ whiteSpace: 'pre-wrap' }} data-testid={`${testBase}-form-context`}>{req.detail || req.title}</div> : null;
   const formRefuse = isMcpForm ? <button type="button" className="btn btn-ghost btn-s" disabled={sent} data-testid={`${testBase}-form-refuse`} onClick={() => finish({ kind: 'permission', allow: false })}>{t('genui.request.declineForm')}</button> : null;
   const choiceCards = () => q?.options.map((option, i) => (
     <ChoiceCard key={draft.step + ':' + i} option={option} number={i + 1} recommended={i === recIdx} previewOpen={variant === 'window'}

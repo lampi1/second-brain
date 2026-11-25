@@ -28,6 +28,7 @@ import { ModelStandings } from './ModelStandings';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentImagePicker } from './AgentImagePicker';
 import { RoleLevels } from './RoleLevels';
+import { RoleEngineOrder } from './EngineOrder';
 import { RoleCodeMode } from './RoleCodeMode';
 import { HarnessMark } from './Icons';
 import { Select } from './Select';
@@ -110,6 +111,7 @@ export function AgentStudio({ profile }: { profile: AgentProfile }) {
       {shown.trial && <p role="alert" className="studio-alert">{t('studio.trialOpen')}</p>}
       <div className="ad-grid">
         <div className="ad-main">
+          {work && <RoleEngineOrder profile={shown} />}
           {work ? <RoleLevels profile={shown} /> : <RoleLevels profile={shown} ids={BASE_ONLY} hint={t('rolePage.levels.orchestrator')} route={false} />}
           <Instructions profile={shown} />
         </div>
