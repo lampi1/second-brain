@@ -1,4 +1,4 @@
-// The one order of the engines on real chats (ADR 0355): AgentCatalogService's pick, ChatManager's start, reuse and
+// The one order of the engines on real chats (ADR 0357): AgentCatalogService's pick, ChatManager's start, reuse and
 // «Riprendi» (agents/engine-now.ts, manager-work.ts assignElsewhere), and the settings and panels that change the order
 // (app_config, appctl/pending-config.ts, appctl/user-words.ts). Fake engines; no process, no clock to wait for.
 import fs from 'node:fs';
@@ -66,7 +66,7 @@ function world() {
   return { dir, c, m, room, connected, trouble, store, start, get, why, order, harnesses, sinks, sent, pending, events, set, yes, ask: (v: boolean) => { asked = v; } };
 }
 
-describe('the one order of the engines (ADR 0355)', () => {
+describe('the one order of the engines (ADR 0357)', () => {
   it('1 · OpenAI first and available: the Artisan starts on OpenAI, whatever its list says first', async () => {
     const w = world();
     expect((await w.start()).harness).toBe('claude'); // no order yet: the list's own

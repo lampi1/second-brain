@@ -61,7 +61,7 @@ describe('roomOf', () => {
   });
 });
 
-describe('roomOf with the user\'s threshold (ADR 0355)', () => {
+describe('roomOf with the user\'s threshold (ADR 0357)', () => {
   const at = (pct: number) => usage([{ kind: 'weekly', label: '7g', usedPercent: pct, resetsAt: NOW + 10 * H }]);
   it('past it the plan is over, before its credits end; spent stays spent', () => {
     expect(roomOf(at(79), null, NOW, 80).state).toBe('ok');

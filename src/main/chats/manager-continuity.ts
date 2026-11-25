@@ -73,8 +73,8 @@ export abstract class ManagerContinuity extends ManagerRequests {
   /** "Riprendi": a NEW chat on the same engine, folder and choices that starts from the hand-off (written first when
    *  missing or older than the last turn). The old chat's process ends; it stays readable, linked both ways.
    *  promptPrefix: a label put before the prompt (an agent's request is marked as not the user's).
-   *  cwd / place (ADR 0356): the folder, by default the last one it used; nothing of the old one is moved. With no `on`,
-   *  the engine its role starts on now (ADR 0355).
+   *  cwd / place (ADR 0358): the folder, by default the last one it used; nothing of the old one is moved. With no `on`,
+   *  the engine its role starts on now (ADR 0357).
    *  ask false + on (ADR 0346, a chat out of credits whose role's card moved to another engine): the hand-off is the
    *  app's own note, since the old engine cannot be asked, and the new chat runs on the card's engine and model. */
   continueChat(chatId: string, opts: ContinueOptions = {}): Promise<ChatSummary> {
@@ -93,7 +93,7 @@ export abstract class ManagerContinuity extends ManagerRequests {
     // never two agents on the same files: the old chat must have finished its turn (a fresh note does not cover this one)
     const hasTurns = r.lastTurnAt > 0 || r.items.some(i => i.kind === 'result' || i.kind === 'user');
     if (r.handoffTurn || (hasTurns && (r.session?.busy || r.pending.size > 0))) throw new Error('La chat sta lavorando o ti aspetta: si riprende quando ha finito il turno.');
-    // the engine its role starts on now (ADR 0355): another one only when the order or the limits changed since
+    // the engine its role starts on now (ADR 0357): another one only when the order or the limits changed since
     const on = opts.on ?? this.opts.engineNow?.({ ...r.s }) ?? undefined;
     const cwd = opts.cwd?.trim() || r.s.cwd, noFolder = folderProblem(cwd);
     if (noFolder) throw new Error(noFolder);
@@ -129,7 +129,7 @@ export abstract class ManagerContinuity extends ManagerRequests {
       if (r.s.run.presetChoice && !nr.s.run.presetChoice) nr.s.run.presetChoice = { ...(task?.options.preset?.choice ?? r.s.run.presetChoice), ...(on?.route ? { route: on.route } : {}) };
       this.runSave();
     }
-    // a job's plan goes on with it as it is, with the user's approval (ADR 0355, ChatManager.planResume)
+    // a job's plan goes on with it as it is, with the user's approval (ADR 0357, ChatManager.planResume)
     if (nr && r.s.plan && !r.s.parentId && !nr.s.plan) { const { stopped: _s, putAway: _p, ...open } = r.s.plan; nr.s.plan = structuredClone(open); this.updated(nr); }
     r.s.continuedBy = { id: c.id, title: c.title };
     // the plan step it worked for follows it (ADR 0346): the step's chat is now the one that goes on and will report,

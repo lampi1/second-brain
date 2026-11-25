@@ -135,7 +135,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0136](0136-persistent-developer-work-cockpit.md) Persistent developer work cockpit — accepted, partly superseded by 0141
 - [0137](0137-lesson-evidence-and-selective-memory.md) Evidence before lesson approval; selective launch memory — accepted, partly superseded by 0153
 - [0138](0138-budget-fresh-sessions.md) Fresh engine sessions at an observed idle boundary — accepted
-- [0139](0139-delegated-writer-worktrees.md) Isolate delegated writers and stage integration — superseded by 0356
+- [0139](0139-delegated-writer-worktrees.md) Isolate delegated writers and stage integration — superseded by 0358
 - [0140](0140-deterministic-pr-qa-recap.md) Routine PR and QA recaps use observed data first — accepted, partly superseded by 0141
 - [0141](0141-decision-modal-workflow.md) Agent-only Home and a decision-driven workflow — accepted
 - [0142](0142-orchestrator-owned-reusable-flows.md) Orchestrator-owned reusable flows — accepted
@@ -222,7 +222,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0224](0224-report-corrections-batching-caps.md) Report corrections, a short child-result debounce, caps instead of refusals — accepted
 - [0225](0225-delegates-talk-up-close-children-assign-without-handshake.md) 0225. Delegates write up their tree, parents close their children, assignments without a handshake — accepted
 - [0226](0226-orchestrator-reads-child-reports.md) The Orchestrator reads any report in its tree (app_child_output) — accepted
-- [0227](0227-worktree-pool.md) 0227. Reused worktree pool per repository, and warm engines in the most used folders — accepted; amended by 0345, 0356
+- [0227](0227-worktree-pool.md) 0227. Reused worktree pool per repository, and warm engines in the most used folders — accepted; amended by 0345, 0358
 - [0228](0228-parallel-checkpoint.md) The checkpoint runs while the message goes; the first write waits for it; a restart resumes only recent turns — accepted
 - [0229](0229-orchestrator-remote-control.md) 0229. «Controllo remoto»: Claude Code Remote Control of the Orchestrator — accepted
 - [0230](0230-impara-explain-mode.md) 0230. Impara: «Spiegazione», a lesson with pictures and no quiz — accepted
@@ -337,15 +337,15 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0342](0342-a-work-map-per-job.md) A work map per job — accepted
 - [0343](0343-the-plan-is-its-map.md) The plan is its map, the maps are a list — accepted; amended by 0346
 - [0344](0344-question-ladder-and-open-doubts.md) A worker's question goes up one level at a time; the Strategist's open doubts block its plan — accepted
-- [0345](0345-a-child-works-in-any-repository.md) A delegated chat works in any folder its parent names, also of another repository — accepted, partly superseded by 0356
+- [0345](0345-a-child-works-in-any-repository.md) A delegated chat works in any folder its parent names, also of another repository — accepted, partly superseded by 0358
 - [0346](0346-plan-names-the-preset-a-chat-out-of-credits-waits.md) A plan names the preset, never the model; a chat out of credits waits for its role's card — accepted; amended by 0347, 0348
 - [0347](0347-models-per-level-across-engines.md) Several models per level across engines, picked by the room of each plan; one page per role, no permissions — accepted; amended by 0350
 - [0348](0348-a-chat-out-of-credits-moves-to-the-next-model.md) A chat out of credits moves by itself to the next model of its level, with 8 seconds to cancel — accepted
 - [0349](0349-pc-load-and-connectors-on-the-top-bar.md) The PC's CPU and free RAM, and the connectors with the MCP servers, on the top bar — accepted
 - [0350](0350-the-orchestrator-sets-model-lists-per-level.md) The Orchestrator sets a role's model lists per level; its own card has an ordered Base list — accepted
 - [0351](0351-a-child-that-answered-without-agent-report-is-partial.md) Antigravity keeps agent_report small; a child that answered without it goes up as partial — accepted
-- [0355](0355-one-order-of-the-engines.md) One order of the engines, a threshold each, the reason on every chat, and changes that are never lost — accepted
-- [0356](0356-whoever-opens-a-chat-chooses-its-folder.md) Whoever opens a chat chooses its folder, in place by default — accepted
+- [0357](0357-one-order-of-the-engines.md) One order of the engines, a threshold each, the reason on every chat, and changes that are never lost — accepted
+- [0358](0358-whoever-opens-a-chat-chooses-its-folder.md) Whoever opens a chat chooses its folder, in place by default — accepted
 
 ## Replaced
 

@@ -457,7 +457,7 @@ export function openChatRef(chatId: string): void {
 }
 
 /** "Riprendi": the long or finished chat continues in a new one, from its hand-off, in the last folder it used or in `cwd`, on the
- *  engine its role starts on now (ADR 0355, 0356); shown at once. */
+ *  engine its role starts on now (ADR 0357, 0358); shown at once. */
 export async function resumeChat(chatId: string, cwd?: string): Promise<void> {
   // already continued in a chat that is still here: just go there (no IPC, no toast)
   const by = app.get().chats[chatId]?.continuedBy;

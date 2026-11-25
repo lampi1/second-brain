@@ -239,7 +239,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // built further down: read only when a chat starts)
   const creditsRef: { current?: CreditBook } = {};
   const creditWaitRef: { current?: () => void } = {};
-  // an engine whose chats just failed to start (ADR 0355): the next start passes it over for a while
+  // an engine whose chats just failed to start (ADR 0357): the next start passes it over for a while
   const engineHealth = new EngineHealth();
   ctx.emitter.tap((ch, payload) => { if (ch === 'chat:updated') engineHealth.observe(payload as ChatSummary); });
   const agents = createAgentCatalog(ctx, brain, engines, () => ({ ...cliCache, ...engineReadiness() }), undefined, {
@@ -252,7 +252,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     engineBlock: engine => agentsMayOpen(brain.settings(), engine) ? null : openRefusal(brain.settings(), engine, engine),
   });
   const engineNow = (c: ChatSummary) => engineNowOf(c, { cardNow: (role, ask, by) => agents.cardNow(role, ask, by), chat: id => manager.list().find(x => x.id === id) });
-  /** A role's start, with the user told when every engine of its level is spent (ADR 0355): never a silent start, nor a
+  /** A role's start, with the user told when every engine of its level is spent (ADR 0357): never a silent start, nor a
    *  silent refusal. The same notice is shown once per quarter of an hour. */
   const spentTold = new Map<string, number>();
   const resolveStart: typeof agents.resolve = req => {
@@ -794,7 +794,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // a role chat's route says how its active version has done so far
   const agentStats = (agentId: string, version: number) => agentStatsLine(runMetrics(manager.runs.list(), { rollups: manager.runs.rolledUp() }).find(m => m.agentId === agentId)?.versions.find(v => v.version === version));
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
-  // configuration changes not applied yet (ADR 0355): each keeps its panel until the user answers it
+  // configuration changes not applied yet (ADR 0357): each keeps its panel until the user answers it
   const pendingConfig = new PendingConfig({ file: path.join(ctx.userData, 'config-pending.json'), emit: (ch, p) => ctx.emitter.emit(ch, p),
     owner: id => manager.list().find(c => c.isOrchestrator && !c.closedAt)?.id ?? id,
     words: (id, text) => { void chats.send(id, text).catch(e => log.warn('appctl', 'the user\'s words on a held change not delivered', { chat: id, cause: errText(e), hint: 'the panel stays open' })); },
@@ -898,7 +898,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // a role chat out of credits follows its role's card (ADR 0346): when the card changes, and when the wait begins
   const creditWait = creditWaitWatch({ chats: manager, card: (roleId, ask, delegator) => agents.cardNow(roleId, ask, delegator), engineRefusal: (from, to) => openRefusal(brain.settings(), from, to) });
   creditWaitRef.current = creditWait;
-  // a new order or threshold counts from the next start (ADR 0355): the role pages read it, and a waiting chat may move
+  // a new order or threshold counts from the next start (ADR 0357): the role pages read it, and a waiting chat may move
   ctx.emitter.tap((ch, payload) => { if (ch === 'settings:changed' && ['engineOrder', 'engineThresholds'].includes((payload as SettingChange).key)) agents.refresh(); });
   ctx.emitter.tap((ch, payload) => { if (ch === 'agents:changed' || (ch === 'chat:updated' && (payload as ChatSummary | undefined)?.creditWait)) creditWait(); });
   brainModelRef.current = brainModel;

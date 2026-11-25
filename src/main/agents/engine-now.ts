@@ -1,4 +1,4 @@
-// The engine a chat's role starts on NOW (ADR 0355): the one order, the thresholds and the limits as they are at this
+// The engine a chat's role starts on NOW (ADR 0357): the one order, the thresholds and the limits as they are at this
 // moment, at the level the chat runs on. A running chat never changes engine by itself: this is read only when it is used
 // again («Riprendi», a reuse), and another engine goes on in a linked chat. Null = the engine it has: a chat with no role,
 // the Orchestrator, a model the user asked for that very work, and an order that gives the same engine. Throws when

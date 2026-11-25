@@ -158,7 +158,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
   protected writesFiles(roleId: string, policy: AgentPolicy | null): boolean {
     return !['orchestrator', 'strategist', 'scout', 'sentinel'].includes(roleId) && needsIsolatedWorktree(policy);
   }
-  /** The open chats already writing in `cwd` (or a folder around or inside it), in words for the second one (ADR 0356):
+  /** The open chats already writing in `cwd` (or a folder around or inside it), in words for the second one (ADR 0358):
    *  it waits for them or stays off their files. `except` = its parent and the chat it goes on from. */
   protected writersNote(cwd: string, except: readonly (string | undefined)[]): string[] {
     const busy = [...this.chats.values()].filter(x => !except.includes(x.s.id) && !x.s.closedAt && !x.s.continuedBy && !x.s.isOrchestrator && x.s.agent?.source === 'catalog' && x.s.place !== 'copy'
@@ -167,7 +167,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     return [`In questa cartella sta già scrivendo ${busy.slice(0, 3).map(x => `«${x.s.title}» (${x.s.id})`).join(', ')}. Non scrivere sugli stessi file: aspetta che abbia finito, o chiedi a chi ti ha aperto.`];
   }
 
-  /** A role chat's engine did not start (ADR 0355): when its role's card now gives another engine it waits, as for its
+  /** A role chat's engine did not start (ADR 0357): when its role's card now gives another engine it waits, as for its
    *  credits, and the watch moves it there (agents/credit-wait.ts); else it is an error as before. */
   protected startStop(r: Rec): boolean {
     if (this.quitting || r.s.closedAt || r.s.isOrchestrator || r.s.agent?.source !== 'catalog' || r.s.lastResult || r.lastTurnAt > 0 || r.s.continuedBy) return false;

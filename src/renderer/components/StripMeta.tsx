@@ -5,7 +5,7 @@
 // Before the figures, in plain words, the model the chat runs on and the effort it runs with («Opus 5.5 · high», the
 // owner, 2026-11-13: «voglio vedere il modello e effort nelle striscioline degli agenti»): the effort as the engine
 // reports it or as the last turn sent it, never the one only asked for (lib/format.ts modelWithEffort). Its tip says which
-// engine the chat started on and why (ADR 0355).
+// engine the chat started on and why (ADR 0357).
 import type { ChatSummary } from '@shared/contract';
 import { chatCost, minutes, modelWithEffort } from '../lib/format';
 import { engineWhy } from '../lib/engine-why';

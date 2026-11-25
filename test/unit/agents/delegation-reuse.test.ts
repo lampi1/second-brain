@@ -108,7 +108,7 @@ describe('parent child task continuity',()=>{
     await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/permissions exceed/);
     expect(f.assign).not.toHaveBeenCalled();
   });
-  it('its own folder (omitted, or named) reuses the child in place; any other existing folder goes on in a linked chat (ADR 0356)',async()=>{
+  it('its own folder (omitted, or named) reuses the child in place; any other existing folder goes on in a linked chat (ADR 0358)',async()=>{
     const wt=fs.mkdtempSync(path.join(os.tmpdir(),'sb-reuse-wt-')), other=fs.mkdtempSync(path.join(os.tmpdir(),'sb-reuse-to-'));
     for(const cwd of [undefined,wt+path.sep]){
       const f=fixture();f.child.cwd=wt;
@@ -127,7 +127,7 @@ describe('parent child task continuity',()=>{
     expect(f.assign).not.toHaveBeenCalled();
     for(const d of [wt,other]) fs.rmSync(d,{recursive:true,force:true});
   });
-  it('a child whose role now starts on another engine goes on in a linked chat there (ADR 0355)',async()=>{
+  it('a child whose role now starts on another engine goes on in a linked chat there (ADR 0357)',async()=>{
     const f=fixture(), elsewhere=vi.fn(async()=>({...f.child,id:'linked',harness:'opencode'}) as ChatSummary);
     f.chats.assignElsewhere=elsewhere;
     const tools=delegationTools({chats:f.chats,roles:()=>f.catalog,settings:()=>DELEGATION_DEFAULTS,engineRefusal:()=>null,label:'[agent]',runs:()=>[],

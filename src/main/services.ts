@@ -34,7 +34,7 @@ export interface ChatService {
   /** Assign a versioned task to a compatible existing conversation. */
   agentPolicy?(chatId: string): AgentPolicy | null;
   assignTask?(chatId: string, text: string, options?: TaskAssignmentOptions): Promise<void>;
-  /** the same task in another folder or on another engine: a linked chat (ADR 0355, 0356) */
+  /** the same task in another folder or on another engine: a linked chat (ADR 0357, 0358) */
   assignElsewhere?(chatId: string, text: string, options: TaskAssignmentOptions, to: { cwd?: string; place?: 'here' | 'copy'; on?: { harness: Harness; model: string | null; effort: Effort | null; route?: string } }): Promise<ChatSummary>;
   /** the engine its role starts on now when it is another one than the chat's; throws when nothing may start */
   engineNow?(chatId: string): { harness: Harness; model: string | null; effort: Effort | null; route?: string } | null;

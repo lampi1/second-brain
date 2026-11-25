@@ -9,9 +9,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 - One order of the engines for every role (Settings → Engines), a threshold per engine, an explicit exception per role, the
   engine in error passed over, nothing started when every plan is spent, the reason on every chat. A configuration change
   the app does not apply stays «da applicare» on its own panel; a yes that names the change counts whatever news lands
-  after it (ADR 0355).
+  after it (ADR 0357).
 - Whoever opens a chat chooses its folder and works in it: a copy (isolated worktree) only when asked, uncommitted changes
-  and another writer told and never touched, reuse and «Riprendi» in another folder in a linked chat (ADR 0356).
+  and another writer told and never touched, reuse and «Riprendi» in another folder in a linked chat (ADR 0358).
 - A role chat whose model runs out of credits waits instead of failing: its step stays under way, the chat and the map
   say «crediti finiti: cambia il modello nella scheda del ruolo», and it goes on by itself from where it was when you
   change that card (on another engine, in a new chat of the same role). The app never moves to another model or preset
