@@ -1,4 +1,4 @@
-// The one order of the engines, pure part (src/shared/engine-order.ts, ADR 0359): the saved shape, the order applied to a
+// The one order of the engines, pure part (src/shared/engine-order.ts, ADR 0360): the saved shape, the order applied to a
 // list, a role's exception, the user's threshold, and when a card's words name an order (whole words, one sentence, no
 // other engine, no «non»).
 import { describe, expect, it } from 'vitest';

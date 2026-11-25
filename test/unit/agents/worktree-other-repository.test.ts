@@ -1,4 +1,4 @@
-// A child that asked a copy (place copy, ADR 0360) in another repository than its parent's (#460; src/main/agents/
+// A child that asked a copy (place copy, ADR 0361) in another repository than its parent's (#460; src/main/agents/
 // worktrees.ts DelegateWorktrees.prepare and delegation-integration.ts): its isolated worktree is made in the repository of
 // its own folder, only that checkout must be clean (the parent's folder may be dirty, or no repository at all), and its
 // changes are staged there, never in the parent's repository. A dirty parent checkout never limits the child. Git is a scripted fake (no process, no checkout, no clock), as in

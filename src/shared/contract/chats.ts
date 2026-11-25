@@ -37,7 +37,7 @@ export interface CreditWait {
   model: string | null;
   /** the level's model it stopped on, «engine:model» */
   card?: string;
-  /** start = its engine did not start (ADR 0359) and it never worked; absent = its credits ended */
+  /** start = its engine did not start (ADR 0360) and it never worked; absent = its credits ended */
   why?: 'start';
   /** start: its whole first message, sent as it is where it goes on */
   prompt?: string;
@@ -151,7 +151,7 @@ export interface ChatSummary {
   pick?: { at: number; chosen: string; skipped: SkipNote[]; allOut?: true };
   /** the last automatic move of this chat out of a spent plan (ADR 0354): the chat and the recap say it */
   creditMoved?: { at: number; from: string; to: string; level: string; why: string };
-  /** it works in a worktree made for it (asked: place copy, ADR 0360); absent = in the folder itself */
+  /** it works in a worktree made for it (asked: place copy, ADR 0361); absent = in the folder itself */
   place?: 'copy';
   /** what whoever opened it must know of its folder (uncommitted changes, another chat writing there), said once */
   folderNotes?: string[];
@@ -415,7 +415,7 @@ export interface NewChat {
   delegator?: Delegator;
   harness: Harness;
   cwd: string;
-  /** here (the default) = works in `cwd` itself; copy = a new isolated worktree of its repository, only when asked (ADR 0360) */
+  /** here (the default) = works in `cwd` itself; copy = a new isolated worktree of its repository, only when asked (ADR 0361) */
   place?: 'here' | 'copy';
   prompt?: string;
   title?: string;
@@ -514,7 +514,7 @@ export interface ChatsInvokeMap {
   'chat:handoffRead': [{ chatId: string; session?: string }, HandoffInfo | null];
   /** "Riprendi": a NEW chat, same engine, folder and choices, that starts from the hand-off (written first if missing or
    *  older than the last turn); the old chat's process ends, it stays readable and linked (continuedBy) */
-  /** `cwd`: another folder than the chat's own (ADR 0360); absent = the last one it used */
+  /** `cwd`: another folder than the chat's own (ADR 0361); absent = the last one it used */
   'chat:continue': [{ chatId: string; cwd?: string }, ChatSummary];
   /** ADR 0103: the files back as they were before the chat's last turn (its checkpoint); counts of restored and removed files */
   'chat:undoTurn': [{ chatId: string }, { restored: number; removed: number }];

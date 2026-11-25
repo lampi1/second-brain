@@ -78,8 +78,8 @@ export abstract class ManagerContinuity extends ManagerRequests {
   /** "Riprendi": a NEW chat on the same engine, folder and choices that starts from the hand-off (written first when
    *  missing or older than the last turn). The old chat's process ends; it stays readable, linked both ways.
    *  promptPrefix: a label put before the prompt (an agent's request is marked as not the user's).
-   *  cwd / place (ADR 0360): the folder, by default the last one it used; nothing of the old one is moved. With no `on`,
-   *  the engine its role starts on now (ADR 0359).
+   *  cwd / place (ADR 0361): the folder, by default the last one it used; nothing of the old one is moved. With no `on`,
+   *  the engine its role starts on now (ADR 0360).
    *  ask false + on (ADR 0346, a chat out of credits whose role's card moved to another engine): the hand-off is the
    *  app's own note, since the old engine cannot be asked, and the new chat runs on the card's engine and model.
    *  assignment (ADR 0352, a reused child whose engine cannot run now): the new child carries this new task's goal and
@@ -104,7 +104,7 @@ export abstract class ManagerContinuity extends ManagerRequests {
     // never two agents on the same files: the old chat must have finished its turn (a fresh note does not cover this one)
     const hasTurns = r.lastTurnAt > 0 || r.items.some(i => i.kind === 'result' || i.kind === 'user');
     if (r.handoffTurn || (hasTurns && (r.session?.busy || r.pending.size > 0))) throw new Error('La chat sta lavorando o ti aspetta: si riprende quando ha finito il turno.');
-    // the engine its role starts on now (ADR 0359): another one only when the order or the limits changed since
+    // the engine its role starts on now (ADR 0360): another one only when the order or the limits changed since
     const on = opts.on ?? (this.openChildren(chatId) ? undefined : this.opts.engineNow?.({ ...r.s }) ?? undefined);
     const cwd = opts.cwd?.trim() || r.s.cwd, noFolder = folderProblem(cwd);
     if (noFolder) throw new Error(noFolder);
@@ -130,7 +130,7 @@ export abstract class ManagerContinuity extends ManagerRequests {
       ...(!parentRec && !task && r.s.run?.goal ? { goal: r.s.run.goal.slice(0, 2000) } : {}), ...(!parentRec && !task && r.s.run?.taskContract?.doneWhen?.length ? { doneWhen: [...r.s.run.taskContract.doneWhen] } : {}),
       ...(r.s.run?.taskContract?.deliveryPolicy ? { deliveryPolicy: r.s.run.taskContract.deliveryPolicy } : {}), ...(r.s.run?.taskContract?.fields?.length ? { contractFields: [...r.s.run.taskContract.fields] } : {}),
       // a new task is assigned right after (assignElsewhere), with every guard of an assignment; a chat that never started
-      // begins with its own first message (ADR 0359)
+      // begins with its own first message (ADR 0360)
       ...(task ? {} : { prompt: opts.firstPrompt ?? `${opts.promptPrefix ? `${opts.promptPrefix}\n\n` : ''}${context}` }),
       ...(parentRec ? { parentId: parentRec.s.id, ...(r.s.delegation ? { delegation: nextDelegation(r.s.delegation, assignment) } : {}) } : {}),
     }, 'user', { ...(r.s.launchContext ? { launchContext: r.s.launchContext } : {}), ...(r.s.run?.tier ? { tier: r.s.run.tier } : {}), owner: on ? { ...owner, engine: on.harness, model: on.model } : owner, instructions: r.agentInstructions ?? '', policy: r.policy ?? null, assets: r.agentAssets, ...(r.skills ? { skills: [...r.skills] } : {}), ...(r.maxContext ? { maxContext: r.maxContext } : {}), ...(r.launches ? { launches: [...r.launches] } : {}) },

@@ -38,7 +38,7 @@ export function chatsHandlers({ s, activity, orchestrator, clip }: HandlerContex
     'chat:synthesize': a => { if (!s.chats.synthesizeResult) throw new Error('Result synthesis unavailable.'); return s.chats.synthesizeResult(a.runId, { kind: 'user' }); },
     'chat:answer': async a => {
       activity.answered(a.chatId, a.requestId);
-      // a configuration change the app holds (ADR 0359): its panel is the app's, answered here
+      // a configuration change the app holds (ADR 0360): its panel is the app's, answered here
       if (s.pendingConfig?.owns(a.requestId)) { s.pendingConfig.answer(a.requestId, a.answer); return; }
       const req = s.chats.pending().find(r => r.chatId === a.chatId && r.id === a.requestId);
       const about = req ? yesAbout(req, s.briefYes?.(a.chatId, a.requestId) ?? '') : '';

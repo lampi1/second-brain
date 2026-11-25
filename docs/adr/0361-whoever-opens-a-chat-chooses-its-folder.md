@@ -1,4 +1,4 @@
-# ADR 0360 · Whoever opens a chat chooses its folder, in place by default
+# ADR 0361 · Whoever opens a chat chooses its folder, in place by default
 
 Date: 2026-11-25 · Status: accepted (owner, 2026-11-25: «oggi la cartella di una chat viene decisa dall'app; voglio che la
 scelga chi apre la chat») · Supersedes: ADR 0139 (a writer always gets an isolated worktree; a dirty parent blocks), the

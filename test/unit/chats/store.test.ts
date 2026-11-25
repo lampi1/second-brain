@@ -41,7 +41,7 @@ it('keeps an engine session token (OpenCode ses_…) and drops anything that cou
   expect(new ChatStore(root).load().map(c => c.sessionId)).toEqual(['ses_0123456789abcdefABCDEF', null, null, null, null]);
 });
 
-it('keeps the copy a chat works in and what it was told of its folder over a restart (ADR 0359)', () => {
+it('keeps the copy a chat works in and what it was told of its folder over a restart (ADR 0360)', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-store-place-')); roots.push(root);
   const rows = [{ id: 'a', harness: 'claude', cwd: '/w', place: 'copy', folderNotes: ['La cartella ha 2 modifiche non committate.', 7] }, { id: 'b', harness: 'claude', cwd: '/w', place: 'altro', folderNotes: 'no' }];
   fs.writeFileSync(path.join(root, 'chats.json'), JSON.stringify({ version: 2, chats: rows }));

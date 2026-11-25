@@ -1,4 +1,4 @@
-// Configuration changes «da applicare» (src/main/appctl/pending-config.ts, ADR 0359), what a yes proves (appctl/config.ts
+// Configuration changes «da applicare» (src/main/appctl/pending-config.ts, ADR 0360), what a yes proves (appctl/config.ts
 // names, appctl/user-words.ts yesAbout) and the app's own panel, which no agent's brief dresses (genui/artifacts.ts).
 import fs from 'node:fs';
 import os from 'node:os';

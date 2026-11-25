@@ -174,7 +174,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     if (req.doneWhen && (req.doneWhen.length > 12 || req.doneWhen.some(x => typeof x !== 'string' || !x.trim() || x.length > 300))) throw new Error('Invalid task criteria.');
     updateActivity.assertOpen();
     links = { ...links, ...(req.parentRunId !== undefined ? { parentRunId: req.parentRunId } : {}), ...(req.reviewOf !== undefined ? { reviewOf: req.reviewOf } : {}), ...(req.reworkOf !== undefined ? { reworkOf: req.reworkOf } : {}) };
-    // the only refusal about a folder, before anything exists (ADR 0360): it names the folder and why
+    // the only refusal about a folder, before anything exists (ADR 0361): it names the folder and why
     const noFolder = folderProblem(req.cwd);
     if (noFolder) throw new Error(noFolder);
     if (req.place !== undefined && req.place !== 'here' && req.place !== 'copy') throw new Error('place: here (sul posto) o copy (copia isolata).');
@@ -219,7 +219,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
       : narrowest(agent.policy, parent === bound && bound ? narrowest(bound.policy, FAIL_CLOSED) : parent?.policy);
     let bindDelegation: ((childId: string) => void) | undefined;
     let folderNotes: string[] = [], isolated = false;
-    // a root chat the Orchestrator opens gets the same folder handling as a child of a Strategist (ADR 0360)
+    // a root chat the Orchestrator opens gets the same folder handling as a child of a Strategist (ADR 0361)
     const from = opts.continuationOf !== undefined ? this.chats.get(opts.continuationOf) : undefined;
     const opener = delegator || req.orchestrator || opts.boundByOrchestrator ? undefined : by === 'agent' ? this.openOrchestrator() : from ? this.openOrchestrator() ?? from : undefined;
     if (opener && this.opts.prepareDelegation && agent.owner.source === 'catalog') {
@@ -247,7 +247,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     this.needOn(engine.id);
     const caps = engine.caps;
     const cwd = typeof req.cwd === 'string' ? req.cwd.trim() : '';
-    // two chats that write in the same folder never do it in silence (ADR 0360): the second one and who opened it are told
+    // two chats that write in the same folder never do it in silence (ADR 0361): the second one and who opened it are told
     if ((by === 'agent' || from) && agent.owner.source === 'catalog' && !isolated && this.writesFiles(agent.owner.id, policy)) folderNotes = [...folderNotes, ...this.writersNote(cwd, [req.parentId, opts.continuationOf])];
     if (req.permissionMode && !MODES.includes(req.permissionMode)) throw new Error(`Modalità permessi non valida: ${req.permissionMode}`);
     if (req.effort && !EFFORTS.includes(req.effort)) throw new Error(`Effort non valido: ${req.effort}`);
@@ -369,7 +369,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
       if (slugTitle(old.s.title) === slugTitle(title)) old.s.title = `Orchestrator precedente · ${old.s.id.slice(2)}`;
     }
     this.ensureHistory(r); // a fork shows the past it starts from
-    // which engine it started on and why, first in the chat (ADR 0359); what it must know of its folder too (ADR 0360)
+    // which engine it started on and why, first in the chat (ADR 0360); what it must know of its folder too (ADR 0361)
     const engineWhy = agent.presetChoice?.route ?? opts.engineWhy;
     if (engineWhy && !r.s.pick) this.addItem(r, sysItem('engineStarted', { why: engineWhy }, 'info'), false);
     for (const note of folderNotes) this.addItem(r, sysItem('folderNote', { note }, 'warn'), false);
@@ -392,7 +392,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
   }
 
   /** The live chat a delegated chat starts under (agent_delegate): it exists, is open and is not the Orchestrator (the
-   *  Orchestrator opens root chats with app_create_chat). Its folder never limits the child's (ADR 0360). */
+   *  Orchestrator opens root chats with app_create_chat). Its folder never limits the child's (ADR 0361). */
   /** continuation: "Riprendi" of a delegated chat, by whoever clicks it: the successor is the same child of the same parent */
   private async delegator(req: NewChat, by: 'user' | 'agent' | 'app', continuation = false): Promise<Rec> {
     const parent = req.parentId ? this.chats.get(req.parentId) : undefined;

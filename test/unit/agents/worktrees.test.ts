@@ -1,4 +1,4 @@
-// The folder a chat works in (src/main/agents/worktrees.ts, ADR 0360): any existing one, and the one refusal; and what blocks a writing child's baseline in the
+// The folder a chat works in (src/main/agents/worktrees.ts, ADR 0361): any existing one, and the one refusal; and what blocks a writing child's baseline in the
 // brain folder (the app-owned files do not, #324).
 
 import fs from 'node:fs';
@@ -11,7 +11,7 @@ const roots: string[] = [];
 afterEach(() => { for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
 describe('worktrees', () => {
-  it('any existing folder is fine; the only refusal names the folder and why (ADR 0360)', () => {
+  it('any existing folder is fine; the only refusal names the folder and why (ADR 0361)', () => {
     const outer = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-folders-')); roots.push(outer);
     const repo = path.join(outer, 'repo');
     fs.mkdirSync(repo);

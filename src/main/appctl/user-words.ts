@@ -9,7 +9,7 @@ import type { Answer, PendingRequest } from '../../shared/contract';
 
 const typed = new Map<string, number>();
 const answered = new Map<string, number>();
-/** what the user's last yes was about: the question and its brief, as the card showed them (ADR 0359) */
+/** what the user's last yes was about: the question and its brief, as the card showed them (ADR 0360) */
 const answeredAbout = new Map<string, { at: number; text: string }>();
 const remember = (m: Map<string, number>, chatId: string, at: number) => {
   m.set(chatId, at);
