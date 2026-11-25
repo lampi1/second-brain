@@ -22,13 +22,13 @@ import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { needView, toolShownToChat, toolShownToUnknown, toolShownToWarm } from './tool-visibility';
 import { requiredTools } from '../../shared/role-tools';
-import { toolAction, type ToolAction } from './tool-check';
-import { toolCliEnv } from './tool-cli';
+import { saysToolMissing, toolAction, type ToolAction } from './tool-check';
+import { toolCliEnv, toolCliHint } from './tool-cli';
 import { codeModeFor, CODE_MODE_HIDDEN, RUN_CODE } from '../code-mode/policy';
 import { AgentChildrenReducer } from './agent-children';
 import { initialEffort } from './effort';
 import type { Rec } from './manager-types';
-import { PREWARM_UNUSED_MS, workBehind, subagentGateFor } from './manager-helpers';
+import { PREWARM_UNUSED_MS, workBehind, subagentGateFor, lastAnswer } from './manager-helpers';
 import { ManagerPersistence } from './manager-persistence';
 
 /** The catalog role a chat runs as (its card's launch switches: Code Mode, Cursor's fast); undefined = no role. */
@@ -302,11 +302,22 @@ export abstract class ManagerSessions extends ManagerPersistence {
     this.toolCheck(r);
   }
 
-  /** A turn of this session ended: an engine that never read the endpoint is found now. */
+  /** A turn of this session ended: an engine that never read the endpoint is found now, and so is a model that says a
+   *  required tool is not among its own (agy drops them when its MCP preload times out, with the list served: 2026-11-25) */
   protected toolTurnEnded(r: Rec): void {
-    if (!r.toolSession || r.toolSession.turnEnded) return;
-    r.toolSession.turnEnded = true;
+    const s = r.toolSession;
+    if (!s) return;
+    const said = s.acted === 'fallback' ? [] : saysToolMissing(lastAnswer(r.items), this.requiredToolsOf(r.s.id));
+    if (said.length) s.saidMissing = said;
+    if (s.turnEnded && !said.length) return;
+    s.turnEnded = true;
     this.toolCheck(r);
+  }
+
+  /** On an engine with a tight schema budget (Antigravity) the fallback command goes with the role's text, before any
+   *  tool is missed (ADR 0356): a drop inside the engine is not always seen by the app. */
+  protected compactToolHint(r: Rec): string {
+    return engineOf(r.s.harness)?.mcpCompact ? `${toolCliHint(this.requiredToolsOf(r.s.id))}\n\n` : '';
   }
 
   private toolCheck(r: Rec): void {

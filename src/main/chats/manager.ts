@@ -693,7 +693,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
       runtimePerformance.runtime(chatId, r.s.harness, hadEngine, hadEngine && r.session.busy);
       // what the user did not type goes in the app's envelope to a Claude engine (ADR 0261): a project's prompt hooks
       // (AI-DLC's human-turn record) never take it for the user's turn; the user's own text goes as it is
-      const composed = `${role}${warning}${body}${hint}${langHint}${voiceHint}${phoneHint}${awayHint}`;
+      const composed = `${role}${role ? this.compactToolHint(r) : ''}${warning}${body}${hint}${langHint}${voiceHint}${phoneHint}${awayHint}`;
       r.session.send(forEngine(composed, { claude: engineOf(r.s.harness)?.kind === 'claude', relayed }), imgs);
       r.sentTo = r.session;
       if (awayHint) { if (awayOn) r.awayTold = session; else delete r.awayTold; }

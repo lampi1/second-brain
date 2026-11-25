@@ -79,6 +79,22 @@ ripresa». Four failures were seen on 2026-11-25 (release fc55c02d), each traced
   As in ADR 0355, the hold applies where an engine asks the app's gate: a chat the user put in bypassPermissions, or an
   engine's own allow rule, is not held.
 
+### After the first real-PC checks (2026-11-25, main 77596375)
+
+An Antigravity Strategist (c_f9af98d8fa) was served 38 tools, plan_propose and agent_delegate among them. agy's log then
+said «Failed to preload the session's MCP servers: context deadline exceeded» 5 s after session/new, and its database
+marked agent_assign_task, agent_delegate, plan_propose, plan_update and show_ui as dropped. The model said they were
+missing and stopped. The app saw its full list served and a turn that reached the endpoint, so nothing fired.
+
+- **The model's own words count** (`saysToolMissing`). At every turn end, a required tool named in a sentence that says
+  it is not there leads to the fallback at once: the fallback message also wakes the chat that stopped, which a reload
+  would not. It is a guess from words, so it only ever sends the fallback command, at most once per session.
+- **The fallback command goes with the role's text** on an engine with a tight schema budget (`mcpCompact`), before any
+  tool is missed: a drop inside agy is not always seen by the app.
+- **An ACP engine's initialize is asked once more** on the same process after a minute of silence, before the start
+  fails (OpenCode on a loaded PC answered on the retry).
+- agy's own preload deadline is not the app's to change; the app does not read agy's database or log.
+
 ## Consequences
 
 - A chat can no longer lose its role's tools without the app logging it and acting on it.
