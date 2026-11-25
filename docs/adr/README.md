@@ -349,6 +349,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0357](0357-claude-and-gpt-on-antigravity-have-their-own-quota-pool.md) Claude and GPT models on Antigravity have their own quota pool — accepted
 - [0358](0358-a-stopped-root-strategist-wakes-the-orchestrator.md) A root Strategist stopped without a result wakes the Orchestrator — accepted
 - [0359](0359-the-users-engine-choice-holds-for-the-whole-tree.md) The user's engine choice holds for the whole work tree, and a limit stops one model — accepted
+- [0360](0360-the-users-x-keeps-the-chat-among-the-closed.md) The user's ✕ keeps the chat among the closed, and the Orchestrator hears of it — accepted
 
 ## Replaced
 
