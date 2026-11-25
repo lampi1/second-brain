@@ -23,8 +23,6 @@
 // auto-close) → -work (assignments, user events, plans) → -sink (session reports) → -remote (Remote Control) → this file: the ChatService entry
 // points (list, create, send and deliver, set). Shapes in manager-types.ts, constants in manager-helpers.ts.
 import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
 import type { ChatCommand, ChatItem, ChatSummary, Effort, NewChat, PendingRequest, PermissionMode } from '../../shared/contract';
 import { replyLangTurn } from './reply-lang';
 import { voiceReplyHint } from './voice-reply';

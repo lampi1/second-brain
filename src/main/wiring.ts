@@ -43,7 +43,6 @@ import { engineNowOf, startElsewhere } from './agents/engine-now';
 import { NoEngine } from './agents/catalog';
 import { PendingConfig } from './appctl/pending-config';
 import { changedDraft, roleReason } from './appctl/config';
-import { levelEngines } from '../shared/model-levels';
 import { tierModel } from './agents/model-tier';
 import { markLegacyDone, migratedCards, readLegacy } from './agents/legacy-cards';
 import { workDecisionTools } from './agents/work-decisions';

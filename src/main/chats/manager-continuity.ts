@@ -15,7 +15,6 @@ import { updateActivity } from '../update/activity';
 import { plainOwner } from '../agents/catalog';
 import type { RunLinks } from '../agents/runs';
 import type { ContinueOptions, CreateOpts, HandoffOptions, Inherited, Rec, ColdStep } from './manager-types';
-import { goalText } from '../../shared/agent-label';
 import { folderProblem, sameFolder } from '../agents/worktrees';
 import { clearTimeout, workBehind, coldDivider, sysItem } from './manager-helpers';
 import { ManagerRequests } from './manager-requests';

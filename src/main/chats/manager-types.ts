@@ -1,6 +1,5 @@
 // The shapes behind ChatManager (manager.ts): its options, the per-chat record (Rec) and the small records its layers
 // pass around. Split out of manager.ts (ADR 0200); only the chat manager's files import Rec.
-import type { TaskAssignmentOptions } from '../../shared/delegation';
 import type { OptionMap } from '../../shared/yes-no';
 import type { ChatCommand, ChatItem, ChatSummary, CursorReasoning, Effort, HandoffInfo, Harness, Lang, NewChat, PendingRequest, PermissionMode, RunInfo, SeenModel } from '../../shared/contract';
 import type { Emitter } from '../ipc';
