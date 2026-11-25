@@ -68,7 +68,7 @@ describe('readOnlyCommand reads lines, not only single commands (#485)', () => {
     expect(readOnlyCommand(line, undefined, shell)).toBe(false);
   });
   it('a declared script is found from where the line moved, and only an absolute one after a move that may fail', () => {
-    const brain = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-steps-')));
+    const brain = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-steps-')));   // native: Windows' long names, as the classifier reads them
     try {
       fs.mkdirSync(path.join(brain, 'tools'));
       const script = path.join(brain, 'tools', 'read.mjs');
