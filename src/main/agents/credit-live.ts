@@ -40,7 +40,8 @@ export const KICK_MS = 30e3;
 export interface CreditLive {
   book: CreditBook;
   verdict(engine: Harness, model: string | null, asker?: string): CreditVerdict;
-  room(engine: Harness, model: string | null, asker?: string): Room;
+  /** `ignoreError`: the user's own explicit pick skips an assumed pause once (ADR 0358) */
+  room(engine: Harness, model: string | null, asker?: string, o?: { ignoreError?: boolean }): Room;
   /** before a pick: reads again the pools of these engines that look stopped (shared, at most FRESH_WAIT_MS) */
   fresh(models: readonly { engine: Harness; model: string | null }[]): Promise<void>;
   /** before a pick: the same for every pool the app knows */
@@ -69,7 +70,7 @@ export function creditLive(d: CreditLiveDeps): CreditLive {
   // a pick that finds a stopped pool reads it in the background and wakes the waiting chats: at most once per pool per
   // KICK_MS, on a macrotask (a throttled read resolves at once: without this the watch and the pick would call each other)
   const kicked = new Map<string, number>();
-  const verdict = (engine: Harness, model: string | null, asker?: string) => book.verdict(poolOf(engine, model), model, asker);
+  const verdict = (engine: Harness, model: string | null, asker?: string, ignoreError = false) => book.verdict(poolOf(engine, model), model, asker, undefined, ignoreError);
 
   // the pools the panel and the timer look at: those the book has facts for and those with a reading
   const pools = (): string[] => {
@@ -115,8 +116,8 @@ export function creditLive(d: CreditLiveDeps): CreditLive {
 
   return {
     book, verdict,
-    room: (engine, model, asker) => {
-      const v = verdict(engine, model, asker);
+    room: (engine, model, asker, o) => {
+      const v = verdict(engine, model, asker, o?.ignoreError === true);
       // a stopped pool without a valid reading: read it again now (shared, throttled); this pick goes on with what it knows
       const pool = poolOf(engine, model);
       if (v.reread && now() - (kicked.get(pool) ?? -Infinity) >= KICK_MS) {
@@ -127,8 +128,8 @@ export function creditLive(d: CreditLiveDeps): CreditLive {
     },
     fresh: async models => book.fresh(models.map(m => poolOf(m.engine, m.model))),
     freshAll: async () => book.fresh(pools()),
-    claim: (engine, model, owner) => book.claim(poolOf(engine, model), owner),
-    release: (engine, model, owner) => book.release(poolOf(engine, model), owner),
+    claim: (engine, model, owner) => book.claim(poolOf(engine, model), owner, model),
+    release: (engine, model, owner) => book.release(poolOf(engine, model), owner, model),
     observe: (engine, model, errorText, isError, startedAt) => {
       const pool = book.observe(engine, model, errorText, isError, startedAt);
       // a limit error: read the pool now (it says which window ended and when it comes back)

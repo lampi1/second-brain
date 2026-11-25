@@ -8,7 +8,7 @@
 import type { AgentContextSnapshot } from '../../shared/agent-context';
 import path from 'node:path';
 import { checkedKnowhow, checkedPackIdentity, packName } from '../../shared/agent-pack';
-import type { Effort, Harness, NewChat } from '../../shared/contract';
+import type { Effort, Harness, NewChat, UserModelPick, WorkRouting } from '../../shared/contract';
 import { BEHAVIOUR_FIELDS, MAX_CONTEXT_RANGE, PERMISSION_CEILINGS, effortOn, type AgentAuthor, type AgentCatalog, type AgentDraft, type AgentModelChoice, type AgentOwnerSnapshot, type AgentProfile, type AgentVersion, type EngineChoice, type PermissionCeiling } from '../../shared/agents';
 import { MODEL_TIERS, ROLE_DEFAULTS, ROLE_IDS, currentLaunches, currentRoleId, isDelegatorRole, isRetiredRoleId, isRoleId, isWorkRole, roleName, rolePreamble, tierRank, type ModelTier, type RoleId } from '../../shared/roles';
 import { characterOf, isCharacterId } from '../../shared/characters';
@@ -63,7 +63,7 @@ export interface AgentCatalogDeps {
    *  a delegation (ADR 0336); absent = neither is checked */
   price?: UnitPrice;
   /** how much an engine's plan has left now (ADR 0347: the usage panel and the credit book); absent = unknown */
-  room?: (engine: Harness, model: string | null, asker?: string) => Room;
+  room?: (engine: Harness, model: string | null, asker?: string, o?: { ignoreError?: boolean }) => Room;
   /** a chat starts on (engine, model) whose plan is on probation: this chat is its one try (ADR 0354) */
   claim?: (engine: Harness, model: string | null, owner: string) => void;
   /** why a role chat may not start on an engine now (off, the Orchestrators may not use it); null = it may */
@@ -75,7 +75,11 @@ export interface AgentCatalogDeps {
 /** How a launch reads the levels: `asker` = the chat that asks (its own probe counts as free), `skip` = engine:model keys
  *  a move already failed on, `holdLevel` = no delegator's ceiling (a chat that moves keeps its level), `claim` = this resolve
  *  starts the chat (ChatManager.create's resolveAgent, a credit move): a pool on probation is its one try. */
-export interface ResolveOptions { asker?: string; skip?: readonly string[]; holdLevel?: boolean; claim?: boolean }
+export interface ResolveOptions { asker?: string; skip?: readonly string[]; holdLevel?: boolean; claim?: boolean;
+  /** engines the user left out for this work tree (ADR 0358): never picked, never a fallback; with nothing left the launch is refused */
+  exclude?: readonly Harness[];
+  /** the model of `userModel` is the tree's pick for this role (ADR 0358): it needs not be on the card's levels */
+  freePick?: boolean }
 /** What a role's card gives a chat of that role now, for a preset (credit-wait.ts): its pick and why. */
 export interface CardPick { engine: Harness; model: string | null; effort: Effort | null; preset: PresetId; allOut: boolean; skipped: SkipNote[]; route: string; rooms: NonNullable<PresetChoice['rooms']> }
 /** What a chat starts with: the request with the role's engine, model and effort, its owner snapshot, the composed
@@ -613,7 +617,7 @@ export class AgentCatalogService {
     let choice: PresetChoice = asked;
     let candidates: LevelModel[] = levels[asked.preset];
     if (user) {
-      const named = levelNamed(levels, user.model, user.engine);
+      const named = levelNamed(levels, user.model, user.engine) ?? (o.freePick ? { preset: asked.preset, at: { engine: user.engine, model: user.model, ...(user.effort ? { effort: user.effort } : {}) } as LevelModel } : null);
       if (!named) throw new Error(`${p.name}: ${user.model}${user.engine ? ` su ${user.engine}` : ''} non è tra i modelli dei suoi livelli (${PRESET_IDS.map(id => `${id}: ${levels[id].map(x => x.model ?? `predefinito di ${x.engine}`).join(', ')}`).join(' · ')}). Aggiungilo nella pagina del ruolo (Agenti → ${p.name} → Modelli per livello).`);
       const effortOf = user.effort ?? named.at.effort;
       const { effort: _x, asked: _y, ...kept } = asked; void _x; void _y;
@@ -622,9 +626,9 @@ export class AgentCatalogService {
       candidates = [{ ...named.at, ...(effortOf ? { effort: effortOf } : {}) }];
     }
     // the model of the level (ADR 0347): the first whose engine is on and whose plan has room, in the user's order
-    const got = this.pickIn(candidates, user || o.holdLevel ? undefined : req.delegator, o.asker, o.skip);
-    if (!got) throw new Error(user ? `${user.model} non può partire: ${this.unusable(candidates[0]!) ?? 'motore non pronto'}.`
-      : `Nessun modello del livello ${choice.preset} di ${p.name} può partire: ${candidates.map(x => `${x.model ?? 'predefinito'} su ${x.engine} (${this.unusable(x)})`).join(', ')}. Accendi un motore dal menu ⚙ o aggiungi un modello al livello.`);
+    const got = this.pickIn(candidates, user || o.holdLevel ? undefined : req.delegator, o.asker, o.skip, { ...(o.exclude?.length ? { exclude: o.exclude } : {}), ignoreError: !!user });
+    if (!got) throw new Error(user ? `${user.model} non può partire: ${this.unusable(candidates[0]!, o.exclude) ?? 'motore non pronto'}.`
+      : `Nessun modello del livello ${choice.preset} di ${p.name} può partire: ${candidates.map(x => `${x.model ?? 'predefinito'} su ${x.engine} (${this.unusable(x, o.exclude)})`).join(', ')}. Accendi un motore dal menu ⚙ o aggiungi un modello al livello.`);
     const engine = got.chosen.engine;
     const e = this.d.models().find(x => x.engine === engine)!;
     // a review's independence is its clean session (it never sees its parent's reasoning), never another model (ADR 0091)
@@ -667,7 +671,8 @@ export class AgentCatalogService {
     return { min: one('min'), base: one('base'), max: one('max') };
   }
   /** Why a model of a level may not start now; null = it may. */
-  private unusable(x: LevelModel): string | null {
+  private unusable(x: LevelModel, exclude?: readonly Harness[]): string | null {
+    if (exclude?.includes(x.engine)) return `${x.engine} è escluso dall’utente per questo lavoro`;
     const e = this.d.models().find(m => m.engine === x.engine);
     if (!e) return 'motore sconosciuto';
     if (!e.enabled || !e.trusted) return `${e.label} è spento`;
@@ -676,20 +681,20 @@ export class AgentCatalogService {
   }
   /** The pick in a level. With a delegator's price ceiling (ADR 0336), a model priced above it is passed over while
    *  another of the level fits (or has no known price): a fallback is held to the ceiling as the head is. */
-  private pickIn(list: readonly LevelModel[], delegator?: Delegator, asker?: string, skip?: readonly string[]) {
+  private pickIn(list: readonly LevelModel[], delegator?: Delegator, asker?: string, skip?: readonly string[], o: { exclude?: readonly Harness[]; ignoreError?: boolean } = {}) {
     const price = this.d.price, own = delegator?.model ?? null, cap = own && price ? price(own) : null;
     const over = (x: LevelModel) => cap !== null && !!x.model && (price!(x.model) ?? -1) > cap;
     const skipped = (x: LevelModel) => skip?.includes(`${x.engine}:${x.model ?? ''}`) ? 'non è partito prima: si prova il successivo' : null;
-    const fits = cap !== null && list.some(x => !over(x) && this.unusable(x) === null && !skipped(x));
-    return pickInLevel(list, x => this.unusable(x) ?? skipped(x) ?? (fits && over(x) ? `costa più del modello di chi delega (${own})` : null), x => this.d.room?.(x.engine, x.model, asker) ?? { state: 'unknown', why: '', resetsAt: null }, { now: this.now() });
+    const fits = cap !== null && list.some(x => !over(x) && this.unusable(x, o.exclude) === null && !skipped(x));
+    return pickInLevel(list, x => this.unusable(x, o.exclude) ?? skipped(x) ?? (fits && over(x) ? `costa più del modello di chi delega (${own})` : null), x => this.d.room?.(x.engine, x.model, asker, o.ignoreError ? { ignoreError: true } : undefined) ?? { state: 'unknown', why: '', resetsAt: null }, { now: this.now() });
   }
   /** What a role's card gives a chat of that role now, for a preset (ADR 0346: a chat that waited on its credits
    *  follows its card): the card's engine and that preset's model and effort, as a launch would get them (resolve's
    *  guards; nothing started). Throws as resolve does: engine off, a model the engine cannot apply. */
-  cardNow(roleId: string, ask: PresetAsk, o: { asker?: string; skip?: readonly string[] } = {}): CardPick {
+  cardNow(roleId: string, ask: PresetAsk, o: { asker?: string; skip?: readonly string[]; exclude?: readonly Harness[] } = {}): CardPick {
     const p = this.find(roleId);
     // a chat that moves keeps its level: no delegator's price ceiling (it could lower the preset, ADR 0354 point 8)
-    const r = this.resolve({ harness: p.engine, cwd: '', roleId, ...ask } as NewChat, { holdLevel: true, ...(o.asker ? { asker: o.asker } : {}), ...(o.skip ? { skip: o.skip } : {}) });
+    const r = this.resolve({ harness: p.engine, cwd: '', roleId, ...ask } as NewChat, { holdLevel: true, ...(o.asker ? { asker: o.asker } : {}), ...(o.skip ? { skip: o.skip } : {}), ...(o.exclude?.length ? { exclude: o.exclude } : {}) });
     const c = r.presetChoice;
     return { engine: r.request.harness, model: r.request.model ?? null, effort: r.request.effort ?? null, preset: c?.preset ?? 'base', allOut: !!c?.allOut, skipped: c?.skipped ?? [], route: c?.route ?? '', rooms: c?.rooms ?? [] };
   }
@@ -717,4 +722,18 @@ export function inheritUserModel<R extends Pick<NewChat, 'userModel' | 'parentId
     if (x.userModel) return names(req.roleId, x.userModel) ? { ...req, userModel: x.userModel } : req;
   }
   return req;
+}
+
+/** What the user said about engines and models for a work tree (ADR 0358): the records of the chat's ancestors, the
+ *  nearest first per role, the excluded engines of all of them together. Read at every launch, so a change made while the
+ *  tree runs holds for what starts after it. A worker never writes one: only the Orchestrator's tools do. */
+export function routingFor(parentId: string | null | undefined, chats: readonly { id: string; parentId?: string | null; routing?: WorkRouting }[]): { picks: Record<string, UserModelPick>; exclude: Harness[] } {
+  const out = { picks: {} as Record<string, UserModelPick>, exclude: [] as Harness[] };
+  const byId = new Map(chats.map(c => [c.id, c])), seen = new Set<string>();
+  for (let x = parentId ? byId.get(parentId) : undefined; x && !seen.has(x.id); x = x.parentId ? byId.get(x.parentId) : undefined) {
+    seen.add(x.id);
+    for (const [role, pick] of Object.entries(x.routing?.picks ?? {})) if (!out.picks[role]) out.picks[role] = pick;
+    for (const e of x.routing?.exclude ?? []) if (!out.exclude.includes(e)) out.exclude.push(e);
+  }
+  return out;
 }

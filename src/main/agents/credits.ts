@@ -13,7 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Harness } from '../../shared/contract';
-import { isThirdPartyModel, PROBE_TTL_MS, SHORT_PAUSE_MS, creditVerdict, nextError, type CreditError, type CreditReading, type CreditVerdict } from '../../shared/credit-rule';
+import { accountWideLimit, isThirdPartyModel, providerPauseMs, PROBE_TTL_MS, SHORT_PAUSE_MS, creditVerdict, nextError, type CreditError, type CreditReading, type CreditVerdict } from '../../shared/credit-rule';
 import { errText, log } from '../log';
 import { renameWithRetry } from './local-store';
 
@@ -66,8 +66,15 @@ export function opencodeState(pool: string, facts: { limitAt: number | null; str
 
 
 /** What the book keeps of a pool. */
+/** What the book keeps of one model of a pool whose limit stopped that model only (ADR 0358). */
+export interface ModelFacts { error: CreditError | null; workedFrom: number | null; probe: { owner: string; at: number } | null }
+const MAX_MODELS = 40;
+const mkey = (model: string | null | undefined): string => String(model ?? '').trim().toLowerCase();
+
 export interface PoolFacts {
   pool: string;
+  /** limits of single models of this pool, when the provider's words did not say the whole account is out */
+  models?: Record<string, ModelFacts>;
   account: string | null;
   error: CreditError | null;
   workedFrom: number | null;
@@ -98,39 +105,71 @@ export class CreditBook {
   facts(pool: string): PoolFacts | null { const f = this.pools.get(pool); return f ? structuredClone(f) : null; }
 
   /** The one rule's verdict for a pool now (asker = the chat that asks: a probe is its own). */
-  verdict(pool: string, model: string | null, asker?: string, fmt?: (at: number) => string): CreditVerdict {
+  verdict(pool: string, model: string | null, asker?: string, fmt?: (at: number) => string, ignoreError = false): CreditVerdict {
     const f = this.pools.get(pool);
     const reading = this.d.reading(pool);
-    return creditVerdict({ pool, account: f?.account ?? null, model, reading, error: f?.error ?? null, workedFrom: f?.workedFrom ?? null, probe: f?.probe ?? null }, this.clock(), { ...(asker ? { asker } : {}), ...(fmt ? { fmt } : {}) });
+    const o = { ...(asker ? { asker } : {}), ...(fmt ? { fmt } : {}), ...(ignoreError ? { ignoreError: true as const } : {}) };
+    const whole = creditVerdict({ pool, account: f?.account ?? null, model, reading, error: f?.error ?? null, workedFrom: f?.workedFrom ?? null, probe: f?.probe ?? null }, this.clock(), o);
+    // a limit of this model only (ADR 0358) stops it and no other model of the pool; the worse of the two says
+    const m = model ? f?.models?.[mkey(model)] : undefined;
+    if (!m?.error) return whole;
+    const own = creditVerdict({ pool, account: f?.account ?? null, model, reading, error: m.error, workedFrom: m.workedFrom, probe: m.probe }, this.clock(), o);
+    const rank: Record<string, number> = { out: 0, probation: 1, pace: 2, unknown: 3, free: 4 };
+    return rank[own.state]! < rank[whole.state]! ? own : whole;
   }
 
   /** A chat starts on a pool on probation: it is the one that tries; the others take the next model until it reports. */
-  claim(pool: string, owner: string): void {
+  claim(pool: string, owner: string, model: string | null = null): void {
+    const f = this.pools.get(pool) ?? this.empty(pool), m = model ? f.models?.[mkey(model)] : undefined;
+    // a model whose own limit is on probation: its probe is the model's, not the pool's
+    if (m?.error && this.verdict(pool, model, owner).state === 'probation' && creditVerdict({ pool, account: f.account, model, reading: this.d.reading(pool), error: m.error, workedFrom: m.workedFrom, probe: m.probe }, this.clock(), { asker: owner }).state === 'probation') {
+      if (m.probe && m.probe.owner === owner) return;
+      this.set({ ...f, models: { ...f.models, [mkey(model)]: { ...m, probe: { owner, at: this.clock() } } } });
+      return;
+    }
     if (this.verdict(pool, null, owner).state !== 'probation') return;
-    const f = this.pools.get(pool) ?? this.empty(pool);
     if (f.probe && f.probe.owner === owner) return;
     this.set({ ...f, probe: { owner, at: this.clock() } });
   }
 
   /** A chat that claimed the probe did not start there after all: the next one may try. */
-  release(pool: string, owner: string): void {
+  release(pool: string, owner: string, model: string | null = null): void {
     const f = this.pools.get(pool);
-    if (f?.probe?.owner === owner) this.set({ ...f, probe: null });
+    const m = model ? f?.models?.[mkey(model)] : undefined;
+    if (f && m?.probe?.owner === owner) this.set({ ...f, models: { ...f.models, [mkey(model)]: { ...m, probe: null } } });
+    else if (f?.probe?.owner === owner) this.set({ ...f, probe: null });
   }
 
   /** A limit error seen in a chat's turn (`startedAt` = the turn's start): the pool pauses, see nextError. */
-  signal(pool: string, startedAt: number, text = ''): void {
+  signal(pool: string, startedAt: number, text = '', model: string | null = null): void {
     const now = this.clock(), f = this.pools.get(pool) ?? this.empty(pool);
-    const error = nextError(f.error, now, startedAt, this.d.readable?.(pool) ?? false, f.workedFrom);
+    const readable = this.d.readable?.(pool) ?? false, providerMs = providerPauseMs(text, now);
     const account = this.d.reading(pool)?.account ?? f.account;
+    // the provider did not say the whole account is out: this model only pauses (ADR 0358)
+    if (model && !accountWideLimit(text)) {
+      const k = mkey(model), m = f.models?.[k] ?? { error: null, workedFrom: null, probe: null };
+      const error = nextError(m.error, now, startedAt, readable, m.workedFrom, providerMs);
+      const models = { ...f.models, [k]: { ...m, error, probe: null } };
+      const keys = Object.keys(models);
+      if (keys.length > MAX_MODELS) delete models[keys[0]!];
+      this.set({ ...f, account, models });
+      log.info('agents', 'credit model paused by a limit error', { data: { pool, model: k.slice(0, 60), pauseMin: Math.round(error.pauseMs / 60e3), provider: providerMs !== null, text: String(text).replace(/\s+/g, ' ').slice(0, 80) } });
+      return;
+    }
+    const error = nextError(f.error, now, startedAt, readable, f.workedFrom, providerMs);
     this.set({ ...f, account, error, probe: null });
-    log.info('agents', 'credit pool paused by a limit error', { data: { pool, pauseMin: Math.round(error.pauseMs / 60e3), same: error.pauseFrom !== now, text: String(text).replace(/\s+/g, ' ').slice(0, 80) } });
+    log.info('agents', 'credit pool paused by a limit error', { data: { pool, pauseMin: Math.round(error.pauseMs / 60e3), same: error.pauseFrom !== now, provider: providerMs !== null, text: String(text).replace(/\s+/g, ' ').slice(0, 80) } });
   }
 
   /** A turn on the pool ended without a limit error: it proves the pool works if it started after the last error. */
-  worked(pool: string, startedAt: number): void {
+  worked(pool: string, startedAt: number, model: string | null = null): void {
     const f = this.pools.get(pool);
     if (!f) return;
+    const k = model ? mkey(model) : '', m = k ? f.models?.[k] : undefined;
+    if (m && (m.workedFrom === null || m.workedFrom < startedAt)) {
+      this.set({ ...f, models: { ...f.models, [k]: { ...m, workedFrom: Math.max(m.workedFrom ?? 0, startedAt), probe: m.error && startedAt <= m.error.at ? m.probe : null } } });
+      return this.worked(pool, startedAt);
+    }
     if (f.workedFrom !== null && f.workedFrom >= startedAt && !f.probe) return;
     this.set({ ...f, workedFrom: Math.max(f.workedFrom ?? 0, startedAt), probe: f.error && startedAt <= f.error.at ? f.probe : null });
   }
@@ -139,8 +178,8 @@ export class CreditBook {
   observe(engine: Harness, model: string | null, errorText: string | null | undefined, isError: boolean, startedAt: number): string {
     const pool = poolOf(engine, model);
     // only the engine's own error notices of a failed turn count, never the agent's prose (TurnEndInfo.errorText)
-    if (isError && limitSignal(errorText)) this.signal(pool, startedAt, String(errorText));
-    else if (!isError) this.worked(pool, startedAt);
+    if (isError && limitSignal(errorText)) this.signal(pool, startedAt, String(errorText), model);
+    else if (!isError) this.worked(pool, startedAt, model);
     return pool;
   }
 
@@ -210,8 +249,16 @@ export class CreditBook {
           const e = s.error as Record<string, unknown> | null | undefined;
           const error = e && num(e.at) !== null && num(e.pauseFrom) !== null && num(e.pauseMs) !== null ? { at: num(e.at)!, pauseFrom: num(e.pauseFrom)!, pauseMs: Math.max(SHORT_PAUSE_MS, num(e.pauseMs)!) } : null;
           const p = s.probe as Record<string, unknown> | null | undefined;
+          const models: Record<string, ModelFacts> = {};
+          for (const [k, v] of Object.entries(s.models && typeof s.models === 'object' ? s.models as Record<string, Record<string, unknown>> : {}).slice(0, MAX_MODELS)) {
+            const me = v?.error as Record<string, unknown> | null | undefined;
+            const mp = v?.probe as Record<string, unknown> | null | undefined;
+            if (k !== mkey(k) || !k || k.length > 128 || !me || num(me.at) === null || num(me.pauseFrom) === null || num(me.pauseMs) === null) continue;
+            models[k] = { error: { at: num(me.at)!, pauseFrom: num(me.pauseFrom)!, pauseMs: Math.max(SHORT_PAUSE_MS, num(me.pauseMs)!) }, workedFrom: num(v.workedFrom),
+              probe: mp && typeof mp.owner === 'string' && num(mp.at) !== null ? { owner: mp.owner.slice(0, 80), at: num(mp.at)! } : null };
+          }
           this.pools.set(s.pool, { pool: s.pool, account: typeof s.account === 'string' && /^[a-f0-9]{8,64}$/.test(s.account) ? s.account : null, error, workedFrom: num(s.workedFrom),
-            probe: p && typeof p.owner === 'string' && num(p.at) !== null ? { owner: p.owner.slice(0, 80), at: num(p.at)! } : null });
+            probe: p && typeof p.owner === 'string' && num(p.at) !== null ? { owner: p.owner.slice(0, 80), at: num(p.at)! } : null, ...(Object.keys(models).length ? { models } : {}) });
           continue;
         }
         // version 1 (ADR 0218): an «exhausted» pool becomes a short pause from when it was written; the rule then reads

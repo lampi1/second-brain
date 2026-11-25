@@ -2,7 +2,7 @@
 // Keeping them here lets the modules be built and tested apart (chats, browser + MCP, brain + feed).
 import type {
   Answer, AppInfo, ChatCommand, BrainApiResult, CredentialEntry, BrowserEnv, BrowserHandoff, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, ContextStats, LearnResult, Effort, FeedAction, FeedEvent, HandoffInfo, Harness, ImageAttachment, JobRecordInput, ModelRegistry, ModelsSeen, SeenModel,
-  NewChat, PendingRequest, PermissionMode, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncChoice, SyncState, Usage, HarnessUsage, ViewLayout, TasksState, SkillCatalog, SkillDoc, SkillSave, SkillSaveResult,
+  NewChat, PendingRequest, PermissionMode, WorkRouting, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncChoice, SyncState, Usage, HarnessUsage, ViewLayout, TasksState, SkillCatalog, SkillDoc, SkillSave, SkillSaveResult,
 } from '../shared/contract';
 import type { AgentMetrics, AgentRunOutcome, UserTaskEvents } from '../shared/agents';
 import type { AgentPolicy } from './agents/tool-policy';
@@ -17,6 +17,8 @@ export interface ChatService {
   /** Real engine receipts; demos and mocks acknowledge their simulated sends by promise. */
   readonly submissionReceipts?: boolean;
   list(): ChatSummary[];
+  /** the user's engine/model per role and excluded engines for the tree under a chat (ADR 0358); null clears */
+  setRouting?(chatId: string, routing: WorkRouting | null): ChatSummary;
   /** «Annulla» on the automatic move of a chat out of credits (ADR 0348) */
   creditStay?(chatId: string): boolean;
   items(chatId: string): ChatItem[];

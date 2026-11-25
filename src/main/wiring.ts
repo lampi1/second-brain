@@ -36,7 +36,7 @@ import { createAgentLoop } from './agents/loop';
 import { delegationTools } from './agents/delegation';
 import { limitSignal } from './agents/credits';
 import { creditLive } from './agents/credit-live';
-import { inheritUserModel } from './agents/catalog';
+import { inheritUserModel, routingFor } from './agents/catalog';
 import { creditWaitWatch } from './agents/credit-wait';
 import { tierModel } from './agents/model-tier';
 import { markLegacyDone, migratedCards, readLegacy } from './agents/legacy-cards';
@@ -344,7 +344,12 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       // chats its Strategist opens for it, when their role's levels have that model (ADR 0354 point 7); an agent never
       // passes one itself (agent_delegate has no such field)
       req = inheritUserModel(req, manager.list(), (roleId, m) => agents.namesModel(roleId, m));
-      const resolved = agents.resolve(req, { claim: true });
+      // what the user said for the whole tree (ADR 0358): the model per role and the engines left out, from the nearest
+      // ancestors' records at this launch (so a change made while the tree runs holds); a delegation never opens an excluded engine
+      const tree = req.parentId && !req.orchestrator ? routingFor(req.parentId, manager.list()) : null;
+      const treePick = tree && !req.userModel && req.roleId ? tree.picks[req.roleId] : undefined;
+      if (treePick) req = { ...req, userModel: treePick };
+      const resolved = agents.resolve(req, { claim: true, ...(tree?.exclude.length ? { exclude: tree.exclude } : {}), ...(treePick ? { freePick: true } : {}) });
       const roleId = req.orchestrator ? 'orchestrator' : req.roleId;
       if (!roleId || (req.orchestrator && !brain.info().brainRoot)) return resolved;
       // only the brain skills this launch gives exist in its plugin
@@ -781,7 +786,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // a role chat's route says how its active version has done so far
   const agentStats = (agentId: string, version: number) => agentStatsLine(runMetrics(manager.runs.list(), { rollups: manager.runs.rolledUp() }).find(m => m.agentId === agentId)?.versions.find(v => v.version === version));
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), creditOf: (engine, model) => credits.verdict(engine, model), creditFresh: () => credits.freshAll(), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps, workMaps,
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, news: { state: () => news.state(), editEdition: e => news.editEdition(e), editSources: e => news.editSources(e), testSource: u => news.testSource(u), refresh: id => news.refresh(id), mark: m => news.mark(m) }, runFeedback, priceOf, contextSince: id => manager.contextSince(id), resolveRole: (req, o) => agents.resolve(req, o), creditOf: (engine, model) => credits.verdict(engine, model), creditFresh: () => credits.freshAll(), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog }, projectMaps, workMaps,
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },
