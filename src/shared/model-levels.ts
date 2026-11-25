@@ -1,7 +1,7 @@
 // Several models per level, across engines (owner, 2026-11-24, ADR 0347): a role card keeps, for each of its three levels
 // (Minimo / Base / Massimo, the presets of ADR 0336), an ordered list of models, each on its own engine. The order is
 // the user's: the first is the best for that role. When a chat starts, the app takes the first model of the level whose
-// engine is connected and whose plan still has room. With an engine order (ADR 0352) the order decides which engine comes
+// engine is connected and whose plan still has room. With an engine order (ADR 0355) the order decides which engine comes
 // first and a plan past the user's threshold is skipped while another has room; without an order a plan that would run
 // out before it renews at the pace of now is skipped too (ADR 0347). A spent plan never starts a chat.
 // A card without lists reads as today's: one model per level on the card's engine (cardPresets), so no file migration.
@@ -62,7 +62,7 @@ export function headPresets(levels: FullLevels): FullPresets {
 }
 
 /** How much an engine's plan has left now: ok, `pace` (at today's pace it ends before it renews), `over`
- *  (past the user's threshold, ADR 0352), `out` (spent), or unknown (nothing readable: Cursor Enterprise, an engine with no usage reading). */
+ *  (past the user's threshold, ADR 0355), `out` (spent), or unknown (nothing readable: Cursor Enterprise, an engine with no usage reading). */
 export interface Room { state: 'ok' | 'pace' | 'over' | 'out' | 'unknown'; why: string; resetsAt: number | null }
 const HOUR = 3600e3;
 const WINDOW_MS: Partial<Record<HarnessUsageWindow['kind'], number>> = { 'five-hour': 5 * HOUR, daily: 24 * HOUR, weekly: 7 * 24 * HOUR, plan: 30 * 24 * HOUR };
@@ -102,7 +102,7 @@ export function roomOf(usage: HarnessUsage | undefined, hitLimit: { until: numbe
 export interface Considered { at: LevelModel; room: Room; usable: boolean; unusable?: string }
 /** What a level starts on: chosen null = nothing may start (none usable, or every plan spent); the reason says why. */
 export interface LevelPick { chosen: LevelModel | null; considered: Considered[]; reason: string }
-/** How the reasons name a model and its engine, and the engine order that decides (ADR 0352; empty = the list's own). */
+/** How the reasons name a model and its engine, and the engine order that decides (ADR 0355; empty = the list's own). */
 export interface PickWords { model?: (x: LevelModel) => string; engine?: (x: LevelModel) => string; order?: readonly Harness[] }
 
 /** Why a candidate was passed over, in the few words a chat shows. */

@@ -51,7 +51,7 @@ function parkedOf(v: unknown): Record<string, EngineChoice> | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
-/** Nothing of a role's level may start now: every plan spent, or no engine connected (ADR 0352). */
+/** Nothing of a role's level may start now: every plan spent, or no engine connected (ADR 0355). */
 export class NoEngine extends Error {}
 
 export interface AgentCatalogDeps {
@@ -69,7 +69,7 @@ export interface AgentCatalogDeps {
   room?: (engine: Harness, model: string | null) => Room;
   /** why a role chat may not start on an engine now (off, the Orchestrators may not use it); null = it may */
   engineBlock?: (engine: Harness) => string | null;
-  /** the one order of the engines (Settings.engineOrder, ADR 0352); absent or empty = each list's own order */
+  /** the one order of the engines (Settings.engineOrder, ADR 0355); absent or empty = each list's own order */
   engineOrder?: () => readonly Harness[];
   /** an engine whose last start failed a moment ago (engine-health.ts): passed over while another one may start */
   engineTrouble?: (engine: Harness) => boolean;
@@ -308,7 +308,7 @@ export class AgentCatalogService {
   private behaviour(value: Record<string, unknown>, id: string, current: boolean, base?: Behaviour, keep = true): Behaviour {
     const p = { ...(base ?? {}), ...Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) } as Record<string, unknown>;
     let levels = checkedLevels(p.levels);
-    // the role's exception to the one engine order (ADR 0352); null or [] = no exception
+    // the role's exception to the one engine order (ADR 0355); null or [] = no exception
     const engineOrder = p.engineOrder === undefined || p.engineOrder === null ? [] : checkedOrder(p.engineOrder);
     if (current && value.engineOrder !== undefined) for (const id of engineOrder) if (!this.d.models().some(m => m.engine === id)) throw new Error(`Ordine dei motori: ${id} non è disponibile.`);
     if (levels && value.levels !== undefined) {
@@ -681,7 +681,7 @@ export class AgentCatalogService {
     const engine = this.engineWords(x);
     return name.toLowerCase().startsWith(engine.toLowerCase()) ? name : `${engine} ${name.replace(/^openai\//i, '')}`;
   }
-  /** No model of a level may start: every plan spent, or none connected. Never a silent start (ADR 0352). */
+  /** No model of a level may start: every plan spent, or none connected. Never a silent start (ADR 0355). */
   private noStart(p: AgentProfile, level: PresetId, pick: LevelPick): string {
     const spent = pick.considered.some(c => c.usable) && pick.considered.filter(c => c.usable).every(c => c.room.state === 'out');
     return `${spent ? `Tutti i motori di ${p.name} (livello ${level}) sono al limite` : `Nessun modello del livello ${level} di ${p.name} può partire`}: ${pick.reason}. Niente è partito. ${spent ? 'Aspetta il rinnovo, collega un altro motore o cambia l’ordine in Impostazioni → Motori.' : 'Accendi un motore dal menu ⚙ o aggiungi un modello al livello.'}`;

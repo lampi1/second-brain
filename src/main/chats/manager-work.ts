@@ -263,7 +263,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
    *  before its approval is proposed again. One that does not go out leaves the plan stopped. */
   async planResume(chatId: string, cwd?: string): Promise<void> {
     const r = this.need(chatId), plan = r.s.plan;
-    // the engines as they are now (ADR 0352): a job whose engine is stopped and whose role now starts on another one goes on
+    // the engines as they are now (ADR 0355): a job whose engine is stopped and whose role now starts on another one goes on
     // in a linked chat, its plan with it as it is (the approval too); one with children at work stays where they report
     const on = plan && !r.session && ![...this.chats.values()].some(x => x.s.parentId === chatId && !x.s.closedAt) ? this.opts.engineNow?.({ ...r.s }) ?? null : null;
     const moved = !!cwd?.trim() && !sameFolder(cwd, r.s.cwd);
@@ -393,10 +393,10 @@ export abstract class ManagerWork extends ManagerLifecycle {
   /** The chat's settings (ChatManager.set): effort null = back to the engine's default. */
   abstract set(chatId: string, patch: { model?: string; effort?: Effort | null }): Promise<ChatSummary>;
 
-  /** The engine the chat's role starts on now when it is another one than the chat's (ADR 0352); null = the same. */
+  /** The engine the chat's role starts on now when it is another one than the chat's (ADR 0355); null = the same. */
   engineNow(chatId: string): ReturnType<NonNullable<ChatManagerOptions['engineNow']>> { return this.opts.engineNow?.({ ...this.need(chatId).s }) ?? null; }
 
-  /** A task for this chat in another folder (ADR 0353) or on another engine (ADR 0352): a chat never changes either, so the
+  /** A task for this chat in another folder (ADR 0356) or on another engine (ADR 0355): a chat never changes either, so the
    *  task starts in a linked chat that inherits its context (the hand-off), its role, permissions, parent, plan step and
    *  history. The same guards as assignTask. */
   async assignElsewhere(chatId: string, prompt: string, options: TaskAssignmentOptions, to: { cwd?: string; place?: 'here' | 'copy'; on?: { harness: Harness; model: string | null; effort: Effort | null; route?: string } }): Promise<ChatSummary> {

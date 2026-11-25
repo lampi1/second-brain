@@ -666,7 +666,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const cwd = typeof a.cwd === 'string' && a.cwd.trim() ? a.cwd.trim() : target.cwd, place = placeOf(a.place, 'place');
         const moved = !sameFolder(cwd, target.cwd) || place === 'copy', noFolder = moved ? folderProblem(cwd) : null;
         if (noFolder) throw new ToolRefusal(noFolder);
-        // the engine its role starts on now (ADR 0352): another one goes on in a linked chat, never in place
+        // the engine its role starts on now (ADR 0355): another one goes on in a linked chat, never in place
         const on = d.chats.engineNow?.(target.id) ?? undefined;
         if (!d.agents) throw new Error('app_assign_task: the role catalog is not available.');
         const profile = d.agents().profiles.find(p => p.id === a.roleId);

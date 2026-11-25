@@ -1,4 +1,4 @@
-// Configuration changes «da applicare» (ADR 0352): what the Orchestrator asked and the app did not apply, because it had
+// Configuration changes «da applicare» (ADR 0355): what the Orchestrator asked and the app did not apply, because it had
 // no proof the user asked it or because the change itself was refused (a model the engine does not list yet). Nothing is
 // lost: each one stays an open Sì/No panel that the APP writes, naming the exact change and why it is not applied, until
 // the user answers. Sì applies it (in main, by the app: no agent is in between, so nothing said to the Orchestrator

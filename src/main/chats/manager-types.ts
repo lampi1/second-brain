@@ -130,10 +130,10 @@ export interface ChatManagerOptions {
   freshSessions?: () => boolean;
   /** Host-owned preparation sees the final narrowed policy before any delegated engine can start. */
   prepareDelegation?: (parent: ChatSummary, req: NewChat, policy: AgentPolicy | null, continuationOf?: string) => Promise<{ cwd: string; parentRunId: string | undefined; parentTaskVersion: number | undefined; notes?: string[]; isolated?: boolean; bind?: (childId: string) => void }>;
-  /** a role chat's engine did not start (ADR 0352): whether its role's card now gives another engine (the engine is marked
+  /** a role chat's engine did not start (ADR 0355): whether its role's card now gives another engine (the engine is marked
    *  in trouble first); then the chat waits and moves there by itself, as for its credits */
   startFailed?: (chat: ChatSummary) => boolean;
-  /** «Riprendi» and reuse follow the engines as they are now (ADR 0352): the engine and model the chat's role starts on,
+  /** «Riprendi» and reuse follow the engines as they are now (ADR 0355): the engine and model the chat's role starts on,
    *  null = the one it has. Throws when nothing may start (every plan spent) */
   engineNow?: (chat: ChatSummary) => { harness: Harness; model: string | null; effort: Effort | null; route?: string } | null;
   /** A delegated child was made in `cwd`: the folder where the next child of the same repository will work (the
@@ -448,7 +448,7 @@ export interface UserWroteNote { eventId: string; seq: number; chatId: string; t
 
 /** «Riprendi» and the linked chats (manager-continuity.ts continueChat). allowStart false: the old engine is not started
  *  for its note; ask false: the app writes the note; on: the engine and model it goes on with (ADR 0346, 0352); cwd and
- *  place: its folder and how (ADR 0353; absent = the last folder); task: a new assignment for the linked chat */
+ *  place: its folder and how (ADR 0356; absent = the last folder); task: a new assignment for the linked chat */
 export interface ContinueOptions {
   allowStart?: boolean; promptPrefix?: string; ask?: false;
   on?: { harness: Harness; model: string | null; effort: Effort | null; route?: string };

@@ -282,7 +282,7 @@ export abstract class ManagerSink extends ManagerLadder {
         if (!this.quitting) r.working = false; // a crash while the app runs shows as an error, it is not resumed later
         if (error) r.s.lastError = error;
         // its engine died on the provider's credit limit (ADR 0346): it waits for its role's card, nothing is retried
-        // one that never started goes to the next engine of its level the same way (ADR 0352)
+        // one that never started goes to the next engine of its level the same way (ADR 0355)
         const outOfCredits = (crashed && this.creditStop(r, error)) || (!!error && this.startStop(r));
         if (error) delete r.s.resumedAt; // a resume that failed is no "ripresa": the error shows alone
         if (r.s.state !== 'error') r.s.state = error ? 'error' : r.releasing ? 'idle' : 'closed';
