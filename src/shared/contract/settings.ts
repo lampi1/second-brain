@@ -35,7 +35,6 @@ export interface Settings {
   engineOn: Partial<Record<Harness, boolean>>;
   /** engines the Orchestrators may open or resume chats on (absent = off); the user's own chats are free */
   engines: Partial<Record<Harness, boolean>>;
-  /** Retired transport switch: always true after loading. Kept as compatibility data for older clients. */
   budget: BudgetSettings;
   /** context size (tokens) above which a chat's meter turns amber when its engine reports no compaction window (Cursor);
    *  a Claude chat turns amber near its own window (compactWindowTokens) instead (ADR 0031) */

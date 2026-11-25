@@ -28,9 +28,10 @@ function statusOf(header) {
   const state = /^partly superseded/i.test(own) ? own.slice(own.indexOf(';') + 1).trim() : own;
   const word = /^[A-Za-z]+/.exec(state)?.[0].toLowerCase() ?? 'not stated';
   // "amended by 0338", "Amended by: ADR 0316, ADR 0322": the records that amend it, as the index lists them
-  const amendedAt = para.search(/\bamended by\b/i);
-  const tail = amendedAt < 0 ? '' : para.slice(amendedAt).split(/\b(?:Supersedes|supersedes|Builds on|Amends|Replaces)\b|·/)[0];
-  const amended = [...new Set([...tail.matchAll(/\b(0\d{3})\b/g)].map(m => m[1]))];
+  // (every clause; only the numbers in its list, never one inside a note in brackets or an owner's quote)
+  const ITEM = String.raw`(?:ADR\s+)?0\d{3}(?:\s*\([^)]*\))?`;
+  const lists = [...para.matchAll(new RegExp(String.raw`\bamended by:?\s+(${ITEM}(?:\s*(?:,|\band\b)\s*${ITEM})*)`, 'gi'))].map(m => m[1].replace(/\([^)]*\)/g, ''));
+  const amended = [...new Set(lists.flatMap(l => [...l.matchAll(/\b(0\d{3})\b/g)].map(m => m[1])))];
   const base = by.length ? `${word}, partly superseded by ${by.join(', ')}` : word;
   return amended.length ? `${base}; amended by ${amended.join(', ')}` : base;
 }

@@ -83,7 +83,7 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0079](0079-remove-improve-section-and-rename-devops-to-task.md) "Migliora l'app" removed; DevOps renamed Task; Fatto becomes a log — accepted, partly superseded by 0181
 - [0081](0081-agent-screenshots-everywhere.md) Agent screenshots everywhere: a path is enough, nothing remote ever loads — accepted
 - [0082](0082-orchestrator-agent-changes-apply-and-learned-rules-in-regole.md) The Orchestrator changes agents by itself; learned rules live on the Regole page — accepted, partly superseded by 0243
-- [0083](0083-generic-roles-and-direct-delegation.md) Nine fixed roles, direct parent-to-child delegation in visible chats — accepted, partly superseded by 0125, 0186, 0100; amended by 0085
+- [0083](0083-generic-roles-and-direct-delegation.md) Nine fixed roles, direct parent-to-child delegation in visible chats — accepted, partly superseded by 0125, 0186, 0100; amended by 0085, 0091, 0226, 0097, 0102, 0104, 0224, 0345
 - [0084](0084-finished-workers-close-by-themselves.md) Finished workers close by themselves; held ones say what they wait for — accepted; amended by 0134
 - [0085](0085-full-default-permissions-narrowed-from-the-card.md) Every role may do everything by default; the user narrows it from its card — accepted, partly superseded by 0186, 0347
 - [0086](0086-app-managed-mcp-servers.md) MCP servers managed by the app, given to every engine through a local gateway — accepted; amended by 0273
@@ -284,9 +284,9 @@ Read these for how the app works today. "Partly superseded" records name the lat
 - [0290](0290-claude-chats-start-in-default-the-app-answers.md) A Claude chat starts in «default»: the app answers its requests, not the engine's own default mode — accepted, partly superseded by 0294
 - [0291](0291-remove-kind-by-examples-and-classificatori.md) The kind of work by examples and the Classificatori section are removed — accepted
 - [0292](0292-strip-dot-time-and-cost-always.md) The strip: a state dot in front, time and cost against the estimate always in sight — accepted; amended by 0293, 0311
-- [0293](0293-children-are-rows-face-back-on-the-strip.md) A delegated chat is one row like its parent; the role's face is back on the strip — accepted; amended by 0295, 0311, 0292
+- [0293](0293-children-are-rows-face-back-on-the-strip.md) A delegated chat is one row like its parent; the role's face is back on the strip — accepted; amended by 0295, 0311
 - [0294](0294-no-app-guard-on-settings-and-hooks.md) No permission question outside the brain's rules: the app's guard on settings and hooks is removed — accepted
-- [0295](0295-little-people-as-sprites.md) The roles are little people at work on the strips — accepted; amended by 0311, 0312, 0293
+- [0295](0295-little-people-as-sprites.md) The roles are little people at work on the strips — accepted; amended by 0311, 0312
 - [0296](0296-fast-mode-user-model-per-task-flash-removed.md) «Fast» beside «Plan», one task on the model the user names, Flash removed — accepted
 - [0297](0297-click-reactions-and-touch-nudge.md) A click on a little person: a pat or a whack of the stick, and a nudge on the run — accepted
 - [0298](0298-weekly-limit-on-the-top-bar.md) The weekly limit on the top bar, the 5-hour window from 70% — accepted
